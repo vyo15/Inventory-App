@@ -1,0 +1,17 @@
+.menu-bar {
+  height: 100%;
+  border-right: 0;
+}
+
+.menu-bar .ant-menu-item {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.menu-bar .ant-menu-item:hover {
+  background-color: rgba(24, 144, 255, 0.1);
+}
+
+.menu-bar .ant-menu-submenu-title {
+  font-weight: 600;
+}

@@ -1,0 +1,34 @@
+.main-layout {
+  min-height: 100vh;
+}
+
+/* Header Style */
+.header {
+  background: #fff;
+  padding: 0 16px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Content Style */
+.content {
+  margin: 16px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
+  min-height: 100%;
+}
+
+/* Dark Mode Override */
+.dark .header {
+  background: #001529;
+  color: #fff;
+}
+
+.dark .content {
+  background: #141414;
+  color: #fff;
+}
+

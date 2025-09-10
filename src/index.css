@@ -1,0 +1,44 @@
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+
+body {
+  background-color: #f0f2f5; 
+  color: #000;
+}
+
+
+.container {
+  min-height: 100vh;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+.container.light {
+  background: #f9f9f9;
+  color: #000;
+}
+
+.container.dark {
+  background: #1e1e1e;
+  color: #fff;
+}
+
+.content {
+  padding: 16px;
+}
+
+.theme-btn {
+  cursor: pointer;
+  border-radius: 50%;
+  padding: 12px;
+  font-size: 18px;
+}
