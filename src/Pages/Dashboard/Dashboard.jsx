@@ -45,20 +45,9 @@ const Dashboard = ({ darkTheme }) => {
         </Col>
       </Row>
 
-      <Card style={{ marginTop: 32 }}>
+      <Card style={{ marginTop: 32 }} className="dashboard-card">
         <Typography.Title level={5}>Activity Overview</Typography.Title>
-
-        <div
-          style={{
-            height: 200,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#aaa",
-          }}
-        >
-          [Chart Placeholder]
-        </div>
+        <div className="chart-placeholder">[Chart Placeholder]</div>
       </Card>
     </div>
   );

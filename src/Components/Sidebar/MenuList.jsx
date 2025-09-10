@@ -11,11 +11,6 @@ import {
 } from "@ant-design/icons";
 import "./MenuList.css";
 
-/**
- * Sidebar Menu Navigasi
- * Props:
- * - darkTheme (boolean)
- */
 const { SubMenu, Item } = Menu;
 
 const MenuList = ({ darkTheme }) => {
@@ -23,21 +18,18 @@ const MenuList = ({ darkTheme }) => {
     <Menu
       theme={darkTheme ? "dark" : "light"}
       mode="inline"
-      className="menu-bar"
+      className={`menu-bar ${darkTheme ? "dark" : "light"}`}
     >
       <Item key="Dashboard" icon={<HomeOutlined />}>
         <Link to="/dashboard">Dashboard</Link>
       </Item>
-
       <Item key="Inventory" icon={<DatabaseOutlined />}>
         <Link to="/inventory">Inventory</Link>
       </Item>
-
       <Item key="Transaksi" icon={<ShoppingOutlined />}>
         <Link to="/transaksi">Transaksi</Link>
       </Item>
 
-      {/* Submenu untuk Product */}
       <SubMenu key="Product" icon={<AppstoreOutlined />} title="Product">
         <Item key="ProductIN">
           <Link to="/product-in">Product IN</Link>
