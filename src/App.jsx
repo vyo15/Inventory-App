@@ -16,7 +16,7 @@ import ProductIN from "./Pages/ProductIN";
 import ProductOUT from "./Pages/ProductOUT";
 import Keuangan from "./Pages/Keuangan";
 import Reports from "./Pages/Reports";
-import WeLost from "./Pages/WeLost";
+import WeLost from "./Pages/ErrorPage/WeLost";
 
 import "./App.css";
 
@@ -68,8 +68,9 @@ const App = () => {
               <Route path="/product-out" element={<ProductOUT />} />
               <Route path="/keuangan" element={<Keuangan />} />
               <Route path="/reports" element={<Reports />} />
-              <Route path="/we-lost" element={<WeLost />} />
-              <Route path="*" element={<h1>404 NOT FOUND</h1>} />
+              {/* <Route path="/welost" element={<WeLost />} /> */}
+
+              <Route path="*" element={<WeLost />} />
             </Routes>
           </Content>
         </Layout>
