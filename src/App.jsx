@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Layout, ConfigProvider, theme } from "antd";
-import { Routes, Route } from "react-router";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 // Komponen
 import MenuList from "./Components/Sidebar/MenuList";
@@ -61,6 +61,7 @@ const App = () => {
                 path="/dashboard"
                 element={<Dashboard darkTheme={darkTheme} />}
               />
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/inventory" element={<Inventory />} />
               <Route path="/transaksi" element={<Transaksi />} />
               <Route path="/product-in" element={<ProductIN />} />
