@@ -1,6 +1,7 @@
 import React from "react";
 import { Button, Result } from "antd";
-import Dashboard from "../Dashboard/Dashboard";
+import { Link } from "react-router-dom";
+import "./WeLost.css";
 
 const WeLost = () => {
   return (
@@ -10,8 +11,8 @@ const WeLost = () => {
         title="404 Not Found"
         subTitle="Sorry, the page you visited does not exist."
         extra={[
-          <Button type="primary" key="console" href={<Dashboard />}>
-            Back to Dashboard
+          <Button type="primary" key="console">
+            <Link to="/Dashboard">Back to Dashboard</Link>
           </Button>,
         ]}
       ></Result>

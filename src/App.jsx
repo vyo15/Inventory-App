@@ -12,7 +12,7 @@ import FloatButtonTheme from "./Components/FloatButton/FloatButtonTheme";
 import Dashboard from "./Pages/Dashboard/Dashboard";
 import Inventory from "./Pages/Inventory";
 import Transaksi from "./Pages/Transaksi";
-import ProductIN from "./Pages/ProductIN";
+import ProductIN from "./Pages/Product/ProductIN";
 import ProductOUT from "./Pages/ProductOUT";
 import Keuangan from "./Pages/Keuangan";
 import Reports from "./Pages/Reports";
