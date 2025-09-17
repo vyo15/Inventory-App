@@ -9,6 +9,7 @@ import {
   AppstoreOutlined,
   WalletOutlined,
   PrinterOutlined,
+  BuildOutlined, // 🛠️ ikon produksi
 } from "@ant-design/icons";
 import "./MenuList.css";
 
@@ -55,6 +56,11 @@ const MenuList = ({ darkTheme }) => {
           <Link to="/stock-adjustment">Penyesuaian Stok</Link>
         </Item>
       </SubMenu>
+
+      {/* 👇 Tambahkan menu Produksi */}
+      <Item key="Produksi" icon={<BuildOutlined />}>
+        <Link to="/productions">Produksi</Link>
+      </Item>
 
       {/* Master Data */}
       <SubMenu key="MasterData" icon={<DatabaseOutlined />} title="Master Data">

@@ -20,6 +20,7 @@ import WeLost from "./Pages/ErrorPage/WeLost";
 
 import "./App.css";
 import Categories from "./Pages/MasterData/Categories";
+import Productions from "./Pages/Produksi/Productions";
 
 const { Header, Sider, Content } = Layout;
 
@@ -70,6 +71,7 @@ const App = () => {
               <Route path="/keuangan" element={<Keuangan />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/categories" element={<Categories />} />
+              <Route path="/productions" element={<Productions />} />
               {/* <Route path="/welost" element={<WeLost />} /> */}
 
               <Route path="*" element={<WeLost />} />
