@@ -26,13 +26,15 @@ const { Option } = Select;
 
 const RawMaterials = () => {
   const [materials, setMaterials] = useState([]);
+  const [categories, setCategories] = useState([]); // State untuk kategori
+  const [suppliers, setSuppliers] = useState([]); // State untuk supplier
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form] = Form.useForm();
 
-  // Ambil data bahan baku dari Firestore
+  // Fungsi untuk mengambil data bahan baku
   const fetchMaterials = async () => {
     setLoading(true);
     try {
@@ -47,20 +49,48 @@ const RawMaterials = () => {
     setLoading(false);
   };
 
+  // Fungsi untuk mengambil data kategori
+  const fetchCategories = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, "categories"));
+      const data = snapshot.docs.map((doc) => doc.data().name);
+      setCategories(data);
+    } catch (error) {
+      message.error("Gagal mengambil data kategori");
+      console.error(error);
+    }
+  };
+
+  // Fungsi untuk mengambil data supplier
+  const fetchSuppliers = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, "supplierPurchases"));
+      const supplierNames = new Set();
+      snapshot.forEach((doc) => {
+        if (doc.data().storeName) {
+          supplierNames.add(doc.data().storeName);
+        }
+      });
+      setSuppliers(Array.from(supplierNames));
+    } catch (error) {
+      message.error("Gagal mengambil data supplier");
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     fetchMaterials();
+    fetchCategories();
+    fetchSuppliers();
   }, []);
 
-  // Simpan bahan baku (tambah / edit)
   const handleSaveMaterial = async (values) => {
     try {
       if (isEditing) {
-        // Update
         const docRef = doc(db, "raw_materials", editingId);
         await updateDoc(docRef, values);
         message.success("Bahan baku berhasil diupdate");
       } else {
-        // Tambah baru
         await addDoc(collection(db, "raw_materials"), {
           ...values,
           stock: values.stock || 0,
@@ -79,7 +109,6 @@ const RawMaterials = () => {
     }
   };
 
-  // Hapus bahan baku
   const handleDeleteMaterial = async (id) => {
     try {
       await deleteDoc(doc(db, "raw_materials", id));
@@ -91,7 +120,6 @@ const RawMaterials = () => {
     }
   };
 
-  // Edit bahan baku
   const handleEditMaterial = (record) => {
     setIsEditing(true);
     setModalVisible(true);
@@ -103,7 +131,14 @@ const RawMaterials = () => {
     { title: "Nama Bahan Baku", dataIndex: "name", key: "name" },
     { title: "Kategori", dataIndex: "category", key: "category" },
     { title: "Satuan", dataIndex: "unit", key: "unit" },
+    {
+      title: "Harga Satuan",
+      dataIndex: "price",
+      key: "price",
+      render: (text) => `Rp ${text.toLocaleString()}`,
+    },
     { title: "Stok", dataIndex: "stock", key: "stock" },
+    { title: "Supplier", dataIndex: "supplier", key: "supplier" }, // Kolom baru untuk supplier
     {
       title: "Aksi",
       key: "actions",
@@ -133,8 +168,20 @@ const RawMaterials = () => {
 
   return (
     <div>
-      <h2>Daftar Bahan Baku</h2>
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() => {
+          setModalVisible(true);
+          setIsEditing(false);
+          form.resetFields();
+        }}
+        style={{ marginBottom: 16 }}
+      >
+        Tambah Bahan Baku
+      </Button>
 
+      <h2>Daftar Bahan Baku</h2>
       <Table
         columns={columns}
         dataSource={materials}
@@ -175,9 +222,25 @@ const RawMaterials = () => {
             rules={[{ required: true, message: "Kategori wajib diisi" }]}
           >
             <Select placeholder="Pilih kategori">
-              <Option value="Kayu">Kayu</Option>
-              <Option value="Cat">Cat</Option>
-              <Option value="Besi">Besi</Option>
+              {categories.map((category) => (
+                <Option key={category} value={category}>
+                  {category}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="supplier"
+            label="Supplier"
+            rules={[{ required: true, message: "Supplier wajib diisi" }]}
+          >
+            <Select placeholder="Pilih supplier">
+              {suppliers.map((supplier) => (
+                <Option key={supplier} value={supplier}>
+                  {supplier}
+                </Option>
+              ))}
             </Select>
           </Form.Item>
 
@@ -188,10 +251,24 @@ const RawMaterials = () => {
           >
             <Select placeholder="Pilih satuan">
               <Option value="pcs">Pcs</Option>
-              <Option value="kg">Kg</Option>
-              <Option value="liter">Liter</Option>
+              <Option value="Roll">Roll</Option>
               <Option value="meter">Meter</Option>
             </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="price"
+            label="Harga Satuan (Rp)"
+            rules={[
+              {
+                required: true,
+                message: "Harga wajib diisi",
+                type: "number",
+                min: 0,
+              },
+            ]}
+          >
+            <InputNumber min={0} style={{ width: "100%" }} />
           </Form.Item>
 
           <Form.Item
@@ -203,19 +280,6 @@ const RawMaterials = () => {
           </Form.Item>
         </Form>
       </Modal>
-
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        onClick={() => {
-          setModalVisible(true);
-          setIsEditing(false);
-          form.resetFields();
-        }}
-        style={{ marginTop: 16 }}
-      >
-        Tambah Bahan Baku
-      </Button>
     </div>
   );
 };

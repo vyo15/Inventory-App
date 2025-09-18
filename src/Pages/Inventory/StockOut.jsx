@@ -16,23 +16,36 @@ import { updateStock } from "../../utils/stockService";
 const { Option } = Select;
 
 const StockOut = () => {
-  const [items, setItems] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [rawMaterials, setRawMaterials] = useState([]);
   const [stockOuts, setStockOuts] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [form] = Form.useForm();
+  const [itemType, setItemType] = useState("product"); // State baru untuk tipe item
 
   useEffect(() => {
-    fetchItems();
+    fetchProducts();
+    fetchRawMaterials();
     fetchStockOuts();
   }, []);
 
-  const fetchItems = async () => {
+  const fetchProducts = async () => {
     try {
-      const snap = await getDocs(collection(db, "items"));
-      setItems(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      const snap = await getDocs(collection(db, "products"));
+      setProducts(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
     } catch (err) {
       console.error(err);
-      message.error("Gagal mengambil data items");
+      message.error("Gagal mengambil data produk");
+    }
+  };
+
+  const fetchRawMaterials = async () => {
+    try {
+      const snap = await getDocs(collection(db, "raw_materials"));
+      setRawMaterials(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    } catch (err) {
+      console.error(err);
+      message.error("Gagal mengambil data bahan mentah");
     }
   };
 
@@ -48,18 +61,36 @@ const StockOut = () => {
 
   const handleSubmit = async (values) => {
     try {
-      await updateStock(values.itemId, values.quantity, "stock_out", {
+      let selectedItem;
+      let updateType;
+
+      if (itemType === "product") {
+        selectedItem = products.find((p) => p.id === values.itemId);
+        updateType = "stock_out";
+      } else {
+        selectedItem = rawMaterials.find((m) => m.id === values.itemId);
+        updateType = "stock_out_raw";
+      }
+
+      if (!selectedItem) {
+        throw new Error("Item yang dipilih tidak ditemukan.");
+      }
+
+      await updateStock(values.itemId, values.quantity, updateType, {
+        itemName: selectedItem.name,
         destination: values.destination,
         note: values.note,
       });
 
-      message.success("Stok keluar berhasil");
+      message.success("Stok keluar berhasil dicatat");
       setModalVisible(false);
       form.resetFields();
+      fetchProducts();
+      fetchRawMaterials();
       fetchStockOuts();
     } catch (error) {
       console.error(error);
-      message.error("Gagal mencatat stok keluar");
+      message.error("Gagal mencatat stok keluar: " + error.message);
     }
   };
 
@@ -89,26 +120,47 @@ const StockOut = () => {
       />
       <Modal
         title="Tambah Stok Keluar"
-        visible={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        open={modalVisible}
+        onCancel={() => {
+          setModalVisible(false);
+          form.resetFields();
+        }}
         onOk={() => form.submit()}
         okText="Simpan"
         cancelText="Batal"
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
-          <Form.Item
-            name="itemId"
-            label="Item"
-            rules={[{ required: true, message: "Pilih item!" }]}
-          >
-            <Select placeholder="Pilih item">
-              {items.map((item) => (
-                <Option key={item.id} value={item.id}>
-                  {item.name}
-                </Option>
-              ))}
+          <Form.Item name="itemType" label="Tipe Item" initialValue="product">
+            <Select onChange={(value) => setItemType(value)}>
+              <Option value="product">Produk Jadi</Option>
+              <Option value="raw_material">Bahan Baku</Option>
             </Select>
           </Form.Item>
+
+          <Form.Item
+            name="itemId"
+            label={itemType === "product" ? "Nama Produk" : "Nama Bahan Mentah"}
+            rules={[{ required: true, message: "Pilih item!" }]}
+          >
+            <Select
+              placeholder={`Pilih ${
+                itemType === "product" ? "produk" : "bahan mentah"
+              }`}
+            >
+              {itemType === "product"
+                ? products.map((item) => (
+                    <Option key={item.id} value={item.id}>
+                      {item.name}
+                    </Option>
+                  ))
+                : rawMaterials.map((item) => (
+                    <Option key={item.id} value={item.id}>
+                      {item.name}
+                    </Option>
+                  ))}
+            </Select>
+          </Form.Item>
+
           <Form.Item
             name="quantity"
             label="Jumlah"
@@ -116,6 +168,7 @@ const StockOut = () => {
           >
             <InputNumber min={1} style={{ width: "100%" }} />
           </Form.Item>
+
           <Form.Item
             name="destination"
             label="Tujuan"
@@ -123,6 +176,7 @@ const StockOut = () => {
           >
             <Input />
           </Form.Item>
+
           <Form.Item name="note" label="Catatan">
             <Input.TextArea />
           </Form.Item>

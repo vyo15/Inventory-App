@@ -27,6 +27,46 @@ const MenuList = ({ darkTheme }) => {
         <Link to="/dashboard">Dashboard</Link>
       </Item>
 
+      {/* Master Data */}
+      <SubMenu key="MasterData" icon={<DatabaseOutlined />} title="Data Utama">
+        <Item key="Produk">
+          <Link to="/products">Produk Jadi</Link>
+        </Item>
+        <Item key="RawMaterial">
+          <Link to="/raw-materials">Bahan Baku</Link>
+        </Item>
+        <Item key="Kategori">
+          <Link to="/categories">Kategori</Link>
+        </Item>
+        <Item key="Supplier">
+          <Link to="/suppliers">Supplier</Link>
+        </Item>
+        <Item key="Customer">
+          <Link to="/customers">Pelanggan</Link>
+        </Item>
+      </SubMenu>
+
+      {/* Inventaris */}
+      <SubMenu key="Inventory" icon={<AppstoreOutlined />} title="Inventaris">
+        <Item key="StockManagement">
+          <Link to="/stock-management">Manajemen Stok</Link>
+        </Item>
+        <Item key="StockIn">
+          <Link to="/stock-in">Stok Masuk</Link>
+        </Item>
+        <Item key="StockOut">
+          <Link to="/stock-out">Stok Keluar</Link>
+        </Item>
+        <Item key="StockAdjustment">
+          <Link to="/stock-adjustment">Penyesuaian Stok</Link>
+        </Item>
+      </SubMenu>
+
+      {/* Produksi */}
+      <Item key="Produksi" icon={<BuildOutlined />}>
+        <Link to="/productions">Produksi</Link>
+      </Item>
+
       {/* Pesanan */}
       <SubMenu key="Pesanan" icon={<UnorderedListOutlined />} title="Pesanan">
         <Item key="SemuaPesanan">
@@ -47,7 +87,7 @@ const MenuList = ({ darkTheme }) => {
       <SubMenu
         key="Transaksi"
         icon={<ShoppingCartOutlined />}
-        title="Transaksi"
+        title="Transaksi Keuangan"
       >
         <Item key="Penjualan">
           <Link to="/sales">Penjualan</Link>
@@ -60,48 +100,8 @@ const MenuList = ({ darkTheme }) => {
         </Item>
       </SubMenu>
 
-      {/* Inventory */}
-      <SubMenu key="Inventory" icon={<AppstoreOutlined />} title="Inventory">
-        <Item key="StockManagement">
-          <Link to="/stock-management">Manajemen Stok</Link>
-        </Item>
-        <Item key="StockIn">
-          <Link to="/stock-in">Stok Masuk</Link>
-        </Item>
-        <Item key="StockOut">
-          <Link to="/stock-out">Stok Keluar</Link>
-        </Item>
-        <Item key="StockAdjustment">
-          <Link to="/stock-adjustment">Penyesuaian Stok</Link>
-        </Item>
-      </SubMenu>
-
-      {/* Produksi */}
-      <Item key="Produksi" icon={<BuildOutlined />}>
-        <Link to="/productions">Produksi</Link>
-      </Item>
-
-      {/* Master Data */}
-      <SubMenu key="MasterData" icon={<DatabaseOutlined />} title="Master Data">
-        <Item key="Produk">
-          <Link to="/products">Produk</Link>
-        </Item>
-        <Item key="RawMaterial">
-          <Link to="/raw-materials">Material</Link>
-        </Item>
-        <Item key="Kategori">
-          <Link to="/categories">Kategori</Link>
-        </Item>
-        <Item key="Supplier">
-          <Link to="/suppliers">Supplier Material</Link>
-        </Item>
-        <Item key="Customer">
-          <Link to="/customers">Customer</Link>
-        </Item>
-      </SubMenu>
-
       {/* Keuangan */}
-      <SubMenu key="Keuangan" icon={<WalletOutlined />} title="Keuangan">
+      <SubMenu key="Keuangan" icon={<WalletOutlined />} title="Kas & Biaya">
         <Item key="Pemasukan">
           <Link to="/income">Pemasukan</Link>
         </Item>

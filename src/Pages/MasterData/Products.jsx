@@ -5,20 +5,20 @@ import {
   Modal,
   Form,
   Input,
-  InputNumber,
-  Space,
   Popconfirm,
   message,
+  Space,
   Select,
+  InputNumber,
 } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { EditOutlined, PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import {
   collection,
   addDoc,
-  getDocs,
   updateDoc,
   deleteDoc,
   doc,
+  onSnapshot,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 
@@ -26,133 +26,124 @@ const { Option } = Select;
 
 const Products = () => {
   const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]); // state kategori
-  const [loading, setLoading] = useState(false);
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form] = Form.useForm();
 
-  // Ambil semua produk
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const querySnapshot = await getDocs(collection(db, "products"));
-      const items = querySnapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      }));
-      setProducts(items);
-    } catch (error) {
-      console.error("Gagal ambil produk:", error);
-      message.error("Gagal memuat produk");
-    }
-    setLoading(false);
-  };
-
-  // Ambil data kategori dari Firestore
-  const fetchCategories = async () => {
-    try {
-      const querySnapshot = await getDocs(collection(db, "categories"));
-      const cats = querySnapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-      }));
-      setCategories(cats);
-    } catch (error) {
-      console.error("Gagal ambil kategori:", error);
-      message.error("Gagal memuat kategori");
-    }
-  };
-
   useEffect(() => {
-    fetchProducts();
-    fetchCategories();
+    // Real-time listener untuk koleksi products
+    const unsubscribeProducts = onSnapshot(
+      collection(db, "products"),
+      (snapshot) => {
+        const data = [];
+        snapshot.forEach((doc) =>
+          data.push({ id: doc.id, ...doc.data(), key: doc.id })
+        );
+        setProducts(data);
+        setLoading(false);
+      },
+      (error) => {
+        message.error("Gagal memuat produk.");
+        console.error("Error fetching products: ", error);
+        setLoading(false);
+      }
+    );
+
+    // Real-time listener untuk koleksi categories
+    const unsubscribeCategories = onSnapshot(
+      collection(db, "categories"),
+      (snapshot) => {
+        const data = [];
+        snapshot.forEach((doc) => data.push({ id: doc.id, ...doc.data() }));
+        setCategories(data);
+      },
+      (error) => {
+        message.error("Gagal memuat kategori.");
+        console.error("Error fetching categories: ", error);
+      }
+    );
+
+    // Real-time listener untuk koleksi raw_materials
+    // Real-time listener untuk koleksi raw_materials
+    const unsubscribeRawMaterials = onSnapshot(
+      collection(db, "raw_materials"),
+      () => {},
+      () => {}
+    );
+    return () => {
+      unsubscribeProducts();
+      unsubscribeCategories();
+      unsubscribeRawMaterials();
+    };
   }, []);
 
-  // Simpan produk (tambah/update)
-  const handleSave = async (values) => {
+  const handleSaveProduct = async (values) => {
     try {
-      if (editingProduct) {
-        // Update
-        const docRef = doc(db, "products", editingProduct.id);
-        await updateDoc(docRef, {
-          ...values,
-          category: values.category, // Pastikan kategori adalah ID, bukan nama
-        });
-        message.success("Produk berhasil diperbarui");
+      const productData = { ...values, stock: values.stock || 0 };
+
+      if (isEditing) {
+        const docRef = doc(db, "products", editingId);
+        await updateDoc(docRef, productData);
+        message.success("Produk berhasil diperbarui!");
       } else {
-        // Tambah produk baru
-        await addDoc(collection(db, "products"), {
-          ...values,
-          category: values.category, // Pastikan kategori adalah ID, bukan nama
-        });
-        message.success("Produk berhasil ditambahkan");
+        await addDoc(collection(db, "products"), productData);
+        message.success("Produk berhasil ditambahkan!");
       }
-      setIsModalVisible(false);
+
       form.resetFields();
-      setEditingProduct(null);
-      fetchProducts();
+      setModalVisible(false);
+      setIsEditing(false);
+      setEditingId(null);
     } catch (error) {
-      console.error("Gagal simpan produk:", error);
-      message.error("Gagal menyimpan produk");
+      message.error("Gagal menyimpan produk.");
+      console.error("Error saving product: ", error);
     }
   };
 
-  // Hapus produk
-  const handleDelete = async (id) => {
+  const handleDeleteProduct = async (id) => {
     try {
       await deleteDoc(doc(db, "products", id));
-      message.success("Produk berhasil dihapus");
-      fetchProducts();
+      message.success("Produk berhasil dihapus!");
     } catch (error) {
-      console.error("Gagal hapus produk:", error);
-      message.error("Gagal menghapus produk");
+      message.error("Gagal menghapus produk.");
+      console.error("Error deleting product: ", error);
     }
+  };
+
+  const handleEditProduct = (record) => {
+    setIsEditing(true);
+    setModalVisible(true);
+    setEditingId(record.id);
+    form.setFieldsValue(record);
   };
 
   const columns = [
-    { title: "Nama Produk", dataIndex: "name", key: "name" },
-    {
-      title: "Kategori",
-      dataIndex: "category",
-      key: "category",
-      render: (categoryId) => {
-        const category = categories.find((cat) => cat.id === categoryId);
-        return category ? category.name : "N/A";
-      },
-    },
-    { title: "Supplier", dataIndex: "supplier", key: "supplier" },
+    { title: "Nama", dataIndex: "name", key: "name" },
+    { title: "Kategori", dataIndex: "category", key: "category" },
     { title: "Stok", dataIndex: "stock", key: "stock" },
-    {
-      title: "Harga",
-      dataIndex: "price",
-      key: "price",
-      render: (val) => `Rp ${val?.toLocaleString()}`,
-    },
+    { title: "Harga", dataIndex: "price", key: "price" },
     {
       title: "Aksi",
       key: "actions",
       render: (_, record) => (
-        <Space>
+        <Space size="middle">
           <Button
             icon={<EditOutlined />}
-            type="primary"
+            onClick={() => handleEditProduct(record)}
             size="small"
-            onClick={() => {
-              setEditingProduct(record);
-              setIsModalVisible(true);
-              form.setFieldsValue(record);
-            }}
           >
             Edit
           </Button>
           <Popconfirm
-            title="Yakin hapus produk ini?"
-            onConfirm={() => handleDelete(record.id)}
+            title="Yakin ingin menghapus produk ini?"
+            onConfirm={() => handleDeleteProduct(record.id)}
             okText="Ya"
-            cancelText="Batal"
+            cancelText="Tidak"
           >
-            <Button danger size="small" icon={<DeleteOutlined />}>
+            <Button icon={<DeleteOutlined />} danger size="small">
               Hapus
             </Button>
           </Popconfirm>
@@ -164,84 +155,61 @@ const Products = () => {
   return (
     <div>
       <h2>Daftar Produk</h2>
-
       <Button
         type="primary"
         icon={<PlusOutlined />}
-        style={{ marginBottom: 16 }}
         onClick={() => {
-          setIsModalVisible(true);
-          setEditingProduct(null);
+          setModalVisible(true);
+          setIsEditing(false);
           form.resetFields();
         }}
+        style={{ marginBottom: 16 }}
       >
         Tambah Produk
       </Button>
-
-      <Table
-        columns={columns}
-        dataSource={products}
-        rowKey="id"
-        loading={loading}
-        bordered
-      />
+      <Table columns={columns} dataSource={products} loading={loading} />
 
       <Modal
-        title={editingProduct ? "Edit Produk" : "Tambah Produk"}
-        open={isModalVisible}
+        title={isEditing ? "Edit Produk" : "Tambah Produk"}
+        visible={modalVisible}
         onCancel={() => {
-          setIsModalVisible(false);
-          setEditingProduct(null);
+          setModalVisible(false);
+          setIsEditing(false);
           form.resetFields();
         }}
         onOk={() => form.submit()}
         okText="Simpan"
         cancelText="Batal"
       >
-        <Form form={form} layout="vertical" onFinish={handleSave}>
+        <Form form={form} layout="vertical" onFinish={handleSaveProduct}>
           <Form.Item
             name="name"
             label="Nama Produk"
-            rules={[{ required: true, message: "Nama wajib diisi" }]}
+            rules={[{ required: true, message: "Nama produk wajib diisi!" }]}
           >
-            <Input placeholder="Contoh: Baju Kemeja" />
+            <Input />
           </Form.Item>
-
           <Form.Item
             name="category"
             label="Kategori"
-            rules={[{ required: true, message: "Kategori wajib diisi" }]}
+            rules={[{ required: true, message: "Kategori wajib diisi!" }]}
           >
-            <Select placeholder="Pilih kategori" allowClear>
+            <Select placeholder="Pilih kategori">
               {categories.map((cat) => (
-                <Option key={cat.id} value={cat.id}>
+                <Option key={cat.id} value={cat.name}>
                   {cat.name}
                 </Option>
               ))}
             </Select>
           </Form.Item>
-
           <Form.Item
-            name="supplier"
-            label="Supplier"
-            rules={[{ required: true, message: "Supplier wajib diisi" }]}
-          >
-            <Input placeholder="Contoh: PT Sumber Makmur" />
-          </Form.Item>
-
-          <Form.Item
-            name="stock"
-            label="Stok"
-            rules={[{ required: true, message: "Stok wajib diisi" }]}
+            name="price"
+            label="Harga"
+            rules={[{ required: true, message: "Harga wajib diisi!" }]}
           >
             <InputNumber min={0} style={{ width: "100%" }} />
           </Form.Item>
-
-          <Form.Item
-            name="price"
-            label="Harga (Rp)"
-            rules={[{ required: true, message: "Harga wajib diisi" }]}
-          >
+          <Form.Item name="stock" label="Stok">
             <InputNumber min={0} style={{ width: "100%" }} />
           </Form.Item>
         </Form>

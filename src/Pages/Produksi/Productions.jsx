@@ -15,59 +15,80 @@ import {
 import { PlusOutlined, EditOutlined } from "@ant-design/icons";
 import {
   collection,
-  getDocs,
   addDoc,
   updateDoc,
   deleteDoc,
   doc,
-  getDoc,
+  onSnapshot,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import dayjs from "dayjs";
+import { updateStock } from "../../utils/updateStock";
 
 const { Option } = Select;
 
 const Productions = () => {
   const [productions, setProductions] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [rawMaterials, setRawMaterials] = useState([]); // Daftar khusus bahan baku dari koleksi 'materials'
+  const [finishedProducts, setFinishedProducts] = useState([]); // Daftar khusus produk jadi dari koleksi 'products'
+  const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form] = Form.useForm();
 
-  // Ambil daftar produksi
-  const fetchProductions = async () => {
-    setLoading(true);
-    try {
-      const snapshot = await getDocs(collection(db, "productions"));
-      const data = [];
-      snapshot.forEach((doc) => data.push({ id: doc.id, ...doc.data() }));
-      setProductions(data);
-    } catch (error) {
-      message.error("Gagal mengambil data produksi");
-      console.error(error);
-    }
-    setLoading(false);
-  };
-
-  // Ambil daftar produk untuk bahan baku dan produk jadi
-  const fetchProducts = async () => {
-    try {
-      const snapshot = await getDocs(collection(db, "products"));
-      const data = [];
-      snapshot.forEach((doc) => data.push({ id: doc.id, ...doc.data() }));
-      setProducts(data);
-    } catch (error) {
-      message.error("Gagal mengambil data produk");
-      console.error(error);
-    }
-  };
-
   useEffect(() => {
-    fetchProductions();
-    fetchProducts();
-  }, []);
+    // Listener untuk koleksi productions (sinkronisasi real-time)
+    const unsubscribeProductions = onSnapshot(
+      collection(db, "productions"),
+      (snapshot) => {
+        const data = [];
+        snapshot.forEach((doc) => data.push({ id: doc.id, ...doc.data() }));
+        setProductions(data);
+        setLoading(false);
+      },
+      (error) => {
+        message.error("Gagal sinkronisasi data produksi");
+        console.error("Error fetching productions:", error);
+        setLoading(false);
+      }
+    );
+
+    // Listener untuk koleksi materials (sinkronisasi real-time bahan baku)
+    const unsubscribeMaterials = onSnapshot(
+      collection(db, "raw_materials"),
+      (snapshot) => {
+        const data = [];
+        snapshot.forEach((doc) => data.push({ id: doc.id, ...doc.data() }));
+        setRawMaterials(data);
+      },
+      (error) => {
+        message.error("Gagal sinkronisasi data bahan baku");
+        console.error("Error fetching materials:", error);
+      }
+    );
+
+    // Listener untuk koleksi products (sinkronisasi real-time produk jadi)
+    const unsubscribeProducts = onSnapshot(
+      collection(db, "products"),
+      (snapshot) => {
+        const data = [];
+        snapshot.forEach((doc) => data.push({ id: doc.id, ...doc.data() }));
+        setFinishedProducts(data);
+      },
+      (error) => {
+        message.error("Gagal sinkronisasi data produk jadi");
+        console.error("Error fetching finished products:", error);
+      }
+    );
+
+    // Cleanup function untuk menghentikan semua listener saat komponen di-unmount
+    return () => {
+      unsubscribeProductions();
+      unsubscribeMaterials();
+      unsubscribeProducts();
+    };
+  }, []); // [] agar listener hanya berjalan sekali saat komponen dimuat
 
   // Simpan produksi (tambah / edit)
   const handleSaveProduction = async (values) => {
@@ -75,58 +96,53 @@ const Productions = () => {
       const productionData = {
         ...values,
         date: values.date.format("YYYY-MM-DD"),
+        // Tambahkan nama produk dan bahan baku agar mudah ditampilkan di tabel
+        productResult: {
+          ...values.productResult,
+          name:
+            finishedProducts.find(
+              (p) => p.id === values.productResult.productId
+            )?.name || "N/A",
+        },
+        materials: values.materials.map((mat) => ({
+          ...mat,
+          name: rawMaterials.find((p) => p.id === mat.productId)?.name || "N/A",
+        })),
       };
 
       if (isEditing) {
-        // Update dokumen produksi
         const docRef = doc(db, "productions", editingId);
         await updateDoc(docRef, productionData);
         message.success("Produksi berhasil diupdate");
       } else {
-        // Tambah dokumen produksi baru
         await addDoc(collection(db, "productions"), productionData);
         message.success("Produksi berhasil ditambahkan");
       }
 
-      // Update stok bahan baku (kurangi)
-      for (const material of productionData.materials) {
-        const productRef = doc(db, "products", material.productId);
-        const productSnap = await getDoc(productRef);
-        if (productSnap.exists()) {
-          const currentStock = productSnap.data().stock || 0;
-          const newStock = currentStock - material.quantity;
-          if (newStock < 0) {
-            message.error(
-              `Stok bahan baku ${material.name} tidak cukup (stok: ${currentStock})`
-            );
-            // Bisa batalkan transaksi / rollback di sini jika perlu
-            return;
-          }
-          await updateDoc(productRef, { stock: newStock });
-        }
+      // Perbarui stok bahan baku dari koleksi 'materials' menggunakan updateStock
+      for (const material of values.materials) {
+        await updateStock(
+          material.productId,
+          material.quantity,
+          "stock_out_raw",
+          { note: `Digunakan untuk produksi: ${values.name}` }
+        );
       }
 
-      // Update stok produk jadi (tambah)
-      if (productionData.productResult) {
-        const prodRes = productionData.productResult;
-        if (prodRes.productId) {
-          const prodResRef = doc(db, "products", prodRes.productId);
-          const prodResSnap = await getDoc(prodResRef);
-          if (prodResSnap.exists()) {
-            const currentStock = prodResSnap.data().stock || 0;
-            await updateDoc(prodResRef, {
-              stock: currentStock + prodRes.quantity,
-            });
-          }
-        }
+      // Perbarui stok produk jadi dari koleksi 'products' menggunakan updateStock
+      if (values.productResult && values.productResult.productId) {
+        await updateStock(
+          values.productResult.productId,
+          values.productResult.quantity,
+          "stock_in",
+          { note: `Hasil produksi: ${values.name}` }
+        );
       }
 
       form.resetFields();
       setModalVisible(false);
       setIsEditing(false);
       setEditingId(null);
-      fetchProductions();
-      fetchProducts();
     } catch (error) {
       message.error("Gagal menyimpan produksi");
       console.error(error);
@@ -138,7 +154,6 @@ const Productions = () => {
     try {
       await deleteDoc(doc(db, "productions", id));
       message.success("Produksi berhasil dihapus");
-      fetchProductions();
     } catch (error) {
       message.error("Gagal menghapus produksi");
       console.error(error);
@@ -165,6 +180,16 @@ const Productions = () => {
     { title: "Nama Produksi", dataIndex: "name", key: "name" },
     { title: "Deskripsi", dataIndex: "description", key: "description" },
     { title: "Tanggal", dataIndex: "date", key: "date" },
+    {
+      title: "Produk Jadi",
+      dataIndex: ["productResult", "name"],
+      key: "productResultName",
+      render: (text, record) => (
+        <span>
+          {record.productResult?.name} ({record.productResult?.quantity})
+        </span>
+      ),
+    },
     {
       title: "Status",
       dataIndex: "status",
@@ -288,18 +313,15 @@ const Productions = () => {
                       {...restField}
                       name={[name, "productId"]}
                       rules={[{ required: true, message: "Pilih bahan baku" }]}
+                      style={{ width: 200 }}
                     >
-                      <Select
-                        placeholder="Pilih bahan baku"
-                        style={{ width: 200 }}
-                        options={products.map((p) => ({
-                          label: `${p.name} (stok: ${p.stock || 0})`,
-                          value: p.id,
-                        }))}
-                        // onChange={(value, option) => {
-                        //   // Bisa handle auto-set nama bahan baku jika perlu
-                        // }}
-                      />
+                      <Select placeholder="Pilih bahan baku">
+                        {rawMaterials.map((p) => (
+                          <Option key={p.id} value={p.id}>
+                            {p.name} (stok: {p.stock || 0})
+                          </Option>
+                        ))}
+                      </Select>
                     </Form.Item>
 
                     <Form.Item
@@ -338,14 +360,13 @@ const Productions = () => {
                 rules={[{ required: true, message: "Pilih produk jadi" }]}
                 noStyle
               >
-                <Select
-                  placeholder="Pilih produk jadi"
-                  style={{ width: 250 }}
-                  options={products.map((p) => ({
-                    label: p.name,
-                    value: p.id,
-                  }))}
-                />
+                <Select placeholder="Pilih produk jadi" style={{ width: 250 }}>
+                  {finishedProducts.map((p) => (
+                    <Option key={p.id} value={p.id}>
+                      {p.name}
+                    </Option>
+                  ))}
+                </Select>
               </Form.Item>
 
               <Form.Item

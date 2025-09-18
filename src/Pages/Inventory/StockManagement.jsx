@@ -61,7 +61,7 @@ const StockManagement = () => {
     { title: "Jumlah", dataIndex: "quantity" },
     { title: "Catatan", dataIndex: "note", defaultValue: "-" },
     {
-      title: "Supplier / Tujuan / Alasan",
+      title: "Supplier",
       dataIndex: "supplier",
       defaultValue: "-",
     }, // bisa beda nama
