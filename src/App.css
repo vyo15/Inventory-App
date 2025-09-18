@@ -1,0 +1,48 @@
+/* App.css */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* cegah scroll horizontal */
+}
+
+.main-layout {
+  min-height: 100vh;
+  background-color: #f4f6f8;
+  transition: all 0.3s ease;
+}
+
+.header {
+  background: #ffffff;
+  padding: 0 24px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.content {
+  margin: 24px;
+  padding: 24px;
+  background: #ffffff;
+  border-radius: 12px;
+  min-height: calc(100vh - 64px - 48px); /* header + margin */
+  transition: all 0.3s ease;
+  overflow-y: auto;
+}
+
+.dark .main-layout {
+  background-color: #0d1117;
+}
+
+.dark .header {
+  background: #161b22;
+  color: #e8eaed;
+  box-shadow: none;
+}
+
+.dark .content {
+  background: #161b22;
+  color: #e8eaed;
+}
