@@ -32,7 +32,7 @@ const Customers = () => {
   const fetchCustomers = async () => {
     setLoading(true);
     try {
-      const querySnapshot = await getDocs(collection(db, "customers"));
+      const querySnapshot = await getDocs(collection(db, "Customers"));
       const data = querySnapshot.docs.map((d) => ({
         id: d.id,
         ...d.data(),

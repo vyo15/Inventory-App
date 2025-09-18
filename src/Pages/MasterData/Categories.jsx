@@ -10,7 +10,14 @@ import {
   message,
 } from "antd";
 import { PlusOutlined, EditOutlined } from "@ant-design/icons";
-import { doc, getDoc, setDoc, deleteDoc } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+} from "firebase/firestore";
 import { db } from "../../firebase";
 
 const Categories = () => {
@@ -18,21 +25,18 @@ const Categories = () => {
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [currentId, setCurrentId] = useState(null);
   const [form] = Form.useForm();
 
-  // Fetch data tunggal dari dokumen
   const fetchCategories = async () => {
     setLoading(true);
     try {
-      const docRef = doc(db, "categories", "categories-prod");
-      const docSnap = await getDoc(docRef);
-
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setCategories([{ id: docSnap.id, ...data }]);
-      } else {
-        setCategories([]);
-      }
+      const querySnapshot = await getDocs(collection(db, "categories"));
+      const list = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setCategories(list);
     } catch (error) {
       console.error("Gagal ambil data:", error);
       message.error("Gagal mengambil data kategori.");
@@ -44,18 +48,21 @@ const Categories = () => {
     fetchCategories();
   }, []);
 
-  // Tambah atau update
   const handleAddOrEditCategory = async (values) => {
     try {
-      await setDoc(doc(db, "categories", "categories-prod"), values);
-      message.success(
-        isEditing
-          ? "Kategori berhasil diubah!"
-          : "Kategori berhasil ditambahkan!"
-      );
+      if (isEditing && currentId) {
+        // update dokumen
+        await updateDoc(doc(db, "categories", currentId), values);
+        message.success("Kategori berhasil diubah!");
+      } else {
+        // tambah dokumen baru
+        await addDoc(collection(db, "categories"), values);
+        message.success("Kategori berhasil ditambahkan!");
+      }
       form.resetFields();
       setIsModalVisible(false);
       setIsEditing(false);
+      setCurrentId(null);
       fetchCategories();
     } catch (error) {
       console.error("Gagal simpan kategori:", error);
@@ -63,9 +70,9 @@ const Categories = () => {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (id) => {
     try {
-      await deleteDoc(doc(db, "categories", "categories-prod"));
+      await deleteDoc(doc(db, "categories", id));
       message.success("Kategori dihapus");
       fetchCategories();
     } catch (error) {
@@ -77,6 +84,7 @@ const Categories = () => {
   const handleEdit = (record) => {
     setIsEditing(true);
     setIsModalVisible(true);
+    setCurrentId(record.id);
     form.setFieldsValue({
       name: record.name,
       description: record.description,
@@ -108,7 +116,7 @@ const Categories = () => {
           </Button>
           <Popconfirm
             title="Yakin hapus kategori ini?"
-            onConfirm={() => handleDelete()}
+            onConfirm={() => handleDelete(record.id)}
             okText="Ya"
             cancelText="Batal"
           >
@@ -138,6 +146,7 @@ const Categories = () => {
         onCancel={() => {
           setIsModalVisible(false);
           setIsEditing(false);
+          setCurrentId(null);
           form.resetFields();
         }}
         onOk={() => form.submit()}
@@ -164,6 +173,7 @@ const Categories = () => {
         onClick={() => {
           setIsModalVisible(true);
           setIsEditing(false);
+          setCurrentId(null);
           form.resetFields();
         }}
         style={{

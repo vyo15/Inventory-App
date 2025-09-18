@@ -26,12 +26,13 @@ const { Option } = Select;
 
 const Products = () => {
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]); // state kategori
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [form] = Form.useForm();
 
-  // 🚀 Ambil semua produk dari Firestore
+  // Ambil semua produk
   const fetchProducts = async () => {
     setLoading(true);
     try {
@@ -48,21 +49,43 @@ const Products = () => {
     setLoading(false);
   };
 
+  // Ambil data kategori dari Firestore
+  const fetchCategories = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, "categories"));
+      const cats = querySnapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      }));
+      setCategories(cats);
+    } catch (error) {
+      console.error("Gagal ambil kategori:", error);
+      message.error("Gagal memuat kategori");
+    }
+  };
+
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
   }, []);
 
-  // 🚀 Tambah / Edit Produk
+  // Simpan produk (tambah/update)
   const handleSave = async (values) => {
     try {
       if (editingProduct) {
-        // update
+        // Update
         const docRef = doc(db, "products", editingProduct.id);
-        await updateDoc(docRef, values);
+        await updateDoc(docRef, {
+          ...values,
+          category: values.category, // Pastikan kategori adalah ID, bukan nama
+        });
         message.success("Produk berhasil diperbarui");
       } else {
-        // tambah
-        await addDoc(collection(db, "products"), values);
+        // Tambah produk baru
+        await addDoc(collection(db, "products"), {
+          ...values,
+          category: values.category, // Pastikan kategori adalah ID, bukan nama
+        });
         message.success("Produk berhasil ditambahkan");
       }
       setIsModalVisible(false);
@@ -75,7 +98,7 @@ const Products = () => {
     }
   };
 
-  // 🚀 Hapus produk
+  // Hapus produk
   const handleDelete = async (id) => {
     try {
       await deleteDoc(doc(db, "products", id));
@@ -87,10 +110,17 @@ const Products = () => {
     }
   };
 
-  // 🚀 Kolom tabel
   const columns = [
     { title: "Nama Produk", dataIndex: "name", key: "name" },
-    { title: "Kategori", dataIndex: "category", key: "category" },
+    {
+      title: "Kategori",
+      dataIndex: "category",
+      key: "category",
+      render: (categoryId) => {
+        const category = categories.find((cat) => cat.id === categoryId);
+        return category ? category.name : "N/A";
+      },
+    },
     { title: "Supplier", dataIndex: "supplier", key: "supplier" },
     { title: "Stok", dataIndex: "stock", key: "stock" },
     {
@@ -182,10 +212,12 @@ const Products = () => {
             label="Kategori"
             rules={[{ required: true, message: "Kategori wajib diisi" }]}
           >
-            <Select placeholder="Pilih kategori">
-              <Option value="Pakaian">Pakaian</Option>
-              <Option value="Elektronik">Elektronik</Option>
-              <Option value="Makanan">Makanan</Option>
+            <Select placeholder="Pilih kategori" allowClear>
+              {categories.map((cat) => (
+                <Option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </Option>
+              ))}
             </Select>
           </Form.Item>
 

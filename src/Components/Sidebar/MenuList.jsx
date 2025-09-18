@@ -62,13 +62,16 @@ const MenuList = ({ darkTheme }) => {
 
       {/* Inventory */}
       <SubMenu key="Inventory" icon={<AppstoreOutlined />} title="Inventory">
-        <Item key="StokMasuk">
+        <Item key="StockManagement">
+          <Link to="/stock-management">Manajemen Stok</Link>
+        </Item>
+        <Item key="StockIn">
           <Link to="/stock-in">Stok Masuk</Link>
         </Item>
-        <Item key="StokKeluar">
+        <Item key="StockOut">
           <Link to="/stock-out">Stok Keluar</Link>
         </Item>
-        <Item key="Penyesuaian">
+        <Item key="StockAdjustment">
           <Link to="/stock-adjustment">Penyesuaian Stok</Link>
         </Item>
       </SubMenu>
@@ -90,7 +93,7 @@ const MenuList = ({ darkTheme }) => {
           <Link to="/categories">Kategori</Link>
         </Item>
         <Item key="Supplier">
-          <Link to="/suppliers">Supplier</Link>
+          <Link to="/suppliers">Supplier Material</Link>
         </Item>
         <Item key="Customer">
           <Link to="/customers">Customer</Link>

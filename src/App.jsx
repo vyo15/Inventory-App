@@ -12,14 +12,21 @@ import FloatButtonTheme from "./Components/FloatButton/FloatButtonTheme";
 import Dashboard from "./Pages/Dashboard/Dashboard";
 import WeLost from "./Pages/ErrorPage/WeLost";
 
-import "./App.css";
 import Categories from "./Pages/MasterData/Categories";
 import Productions from "./Pages/Produksi/Productions";
 import Orders from "./Pages/Pesanan/Orders";
-import Supplier from "./Pages/MasterData/Supplier";
 import Customers from "./Pages/MasterData/Customers";
 import Products from "./Pages/MasterData/Products";
 import RawMaterials from "./Pages/MasterData/RawMaterials";
+import SupplierPurchases from "./Pages/MasterData/SupplierPurchases";
+
+// Inventory
+import StockAdjustment from "./Pages/Inventory/StockAdjustment";
+import StockIn from "./Pages/Inventory/StockIn";
+import StockOut from "./Pages/Inventory/StockOut"; // Tambahan
+import StockManagement from "./Pages/Inventory/StockManagement";
+
+import "./App.css";
 
 const { Header, Sider, Content } = Layout;
 
@@ -58,20 +65,27 @@ const App = () => {
 
           <Content className="content">
             <Routes>
+              {/* Redirect to dashboard */}
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              {/* Dashboard */}
               <Route
                 path="/dashboard"
                 element={<Dashboard darkTheme={darkTheme} />}
               />
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              {/* Master Data */}
               <Route path="/categories" element={<Categories />} />
               <Route path="/productions" element={<Productions />} />
               <Route path="/orders" element={<Orders />} />
-              <Route path="/suppliers" element={<Supplier />} />
-              <Route path="customers" element={<Customers />} />
-              <Route path="products" element={<Products />} />
+              <Route path="/suppliers" element={<SupplierPurchases />} />
+              <Route path="/customers" element={<Customers />} />
+              <Route path="/products" element={<Products />} />
               <Route path="/raw-materials" element={<RawMaterials />} />
-              {/* <Route path="/welost" element={<WeLost />} /> */}
-
+              {/* Inventory */}
+              <Route path="/stock-in" element={<StockIn />} />
+              <Route path="/stock-out" element={<StockOut />} />
+              <Route path="/stock-adjustment" element={<StockAdjustment />} />
+              <Route path="/stock-management" element={<StockManagement />} />
+              {/* Halaman Tidak Ditemukan */}
               <Route path="*" element={<WeLost />} />
             </Routes>
           </Content>
