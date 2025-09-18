@@ -5,12 +5,14 @@ import {
   Modal,
   Form,
   Input,
-  DatePicker,
   Space,
   Popconfirm,
   message,
+  Typography,
+  DatePicker,
 } from "antd";
 import { PlusOutlined, EditOutlined } from "@ant-design/icons";
+
 import {
   collection,
   getDocs,
@@ -22,14 +24,6 @@ import {
 import { db } from "../../firebase";
 import dayjs from "dayjs";
 
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(value);
-};
-
 const SupplierPurchases = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,15 +32,21 @@ const SupplierPurchases = () => {
   const [currentId, setCurrentId] = useState(null);
   const [form] = Form.useForm();
 
-  const fetchData = async () => {
+  // Renamed function for clarity
+  const fetchPurchases = async () => {
     setLoading(true);
     try {
       const querySnapshot = await getDocs(collection(db, "supplierPurchases"));
       const purchases = querySnapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
+        // Convert timestamp to Day.js object for the form
+        purchaseDate: doc.data().purchaseDate
+          ? dayjs(doc.data().purchaseDate)
+          : null,
       }));
       setData(purchases);
+      message.success("Data berhasil dimuat.");
     } catch (error) {
       console.error("Gagal mengambil data pembelian supplier:", error);
       message.error("Gagal mengambil data.");
@@ -55,29 +55,32 @@ const SupplierPurchases = () => {
   };
 
   useEffect(() => {
-    fetchData();
+    fetchPurchases();
   }, []);
 
   const handleAddOrEdit = async (values) => {
     try {
+      // Convert Day.js object back to ISO string for Firestore
       const payload = {
         ...values,
-        purchaseDate: values.purchaseDate.toISOString(),
+        purchaseDate: values.purchaseDate
+          ? values.purchaseDate.toISOString()
+          : null,
       };
 
       if (isEditing && currentId) {
         await updateDoc(doc(db, "supplierPurchases", currentId), payload);
-        message.success("Data berhasil diperbarui");
+        message.success("Data berhasil diperbarui.");
       } else {
         await addDoc(collection(db, "supplierPurchases"), payload);
-        message.success("Data berhasil ditambahkan");
+        message.success("Data berhasil ditambahkan.");
       }
 
       form.resetFields();
       setIsModalVisible(false);
       setIsEditing(false);
       setCurrentId(null);
-      fetchData();
+      fetchPurchases();
     } catch (error) {
       console.error("Gagal menyimpan data:", error);
       message.error("Gagal menyimpan data.");
@@ -87,8 +90,8 @@ const SupplierPurchases = () => {
   const handleDelete = async (id) => {
     try {
       await deleteDoc(doc(db, "supplierPurchases", id));
-      message.success("Data berhasil dihapus");
-      fetchData();
+      message.success("Data berhasil dihapus.");
+      fetchPurchases();
     } catch (error) {
       console.error("Gagal menghapus data:", error);
       message.error("Gagal menghapus data.");
@@ -99,9 +102,9 @@ const SupplierPurchases = () => {
     setIsEditing(true);
     setIsModalVisible(true);
     setCurrentId(record.id);
+    // Set form fields with the Day.js object
     form.setFieldsValue({
       ...record,
-      purchaseDate: dayjs(record.purchaseDate),
     });
   };
 
@@ -120,18 +123,6 @@ const SupplierPurchases = () => {
         ) : (
           "-"
         ),
-    },
-    {
-      title: "Harga",
-      dataIndex: "price",
-      key: "price",
-      render: (value) => formatCurrency(value),
-    },
-    {
-      title: "Tanggal Beli",
-      dataIndex: "purchaseDate",
-      key: "purchaseDate",
-      render: (date) => dayjs(date).format("DD MMM YYYY"),
     },
     { title: "Catatan", dataIndex: "note", key: "note" },
     {
@@ -163,7 +154,9 @@ const SupplierPurchases = () => {
 
   return (
     <div>
-      <h2>Riwayat Pembelian Bahan</h2>
+      <Typography.Title level={4} style={{ marginBottom: 16 }}>
+        Data Pembelian Supplier
+      </Typography.Title>
 
       <Button
         type="primary"
@@ -171,6 +164,7 @@ const SupplierPurchases = () => {
         onClick={() => {
           setIsModalVisible(true);
           setIsEditing(false);
+          setCurrentId(null);
           form.resetFields();
         }}
         style={{ marginBottom: 16 }}
@@ -210,7 +204,7 @@ const SupplierPurchases = () => {
 
           <Form.Item
             name="storeName"
-            label="Nama Toko"
+            label="Toko"
             rules={[{ required: true, message: "Wajib diisi" }]}
           >
             <Input placeholder="Contoh: Toko Plastik Online" />
@@ -220,24 +214,8 @@ const SupplierPurchases = () => {
             <Input placeholder="Contoh: https://tokopedia.com/toko" />
           </Form.Item>
 
-          <Form.Item
-            name="price"
-            label="Harga (Rp)"
-            rules={[{ required: true, message: "Wajib diisi" }]}
-          >
-            <Input type="number" placeholder="Contoh: 100000" />
-          </Form.Item>
-
-          <Form.Item
-            name="purchaseDate"
-            label="Tanggal Pembelian"
-            rules={[{ required: true, message: "Wajib diisi" }]}
-          >
-            <DatePicker format="DD-MM-YYYY" style={{ width: "100%" }} />
-          </Form.Item>
-
           <Form.Item name="note" label="Catatan">
-            <Input.TextArea placeholder="Contoh: Beli saat flash sale Tokopedia" />
+            <Input.TextArea placeholder="Contoh: warna merah, ukuran 20cm" />
           </Form.Item>
         </Form>
       </Modal>
