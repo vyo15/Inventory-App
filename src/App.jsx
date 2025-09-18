@@ -27,6 +27,7 @@ import StockOut from "./Pages/Inventory/StockOut"; // Tambahan
 import StockManagement from "./Pages/Inventory/StockManagement";
 
 import "./App.css";
+import StockReport from "./Pages/Laporan/StockReport";
 
 const { Header, Sider, Content } = Layout;
 
@@ -85,6 +86,8 @@ const App = () => {
               <Route path="/stock-out" element={<StockOut />} />
               <Route path="/stock-adjustment" element={<StockAdjustment />} />
               <Route path="/stock-management" element={<StockManagement />} />
+              <Route path="/report-stock" element={<StockReport />} />
+
               {/* Halaman Tidak Ditemukan */}
               <Route path="*" element={<WeLost />} />
             </Routes>
