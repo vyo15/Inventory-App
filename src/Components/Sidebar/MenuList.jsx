@@ -5,11 +5,11 @@ import {
   HomeOutlined,
   DatabaseOutlined,
   ShoppingCartOutlined,
-  UserOutlined,
   AppstoreOutlined,
   WalletOutlined,
   PrinterOutlined,
-  BuildOutlined, // 🛠️ ikon produksi
+  BuildOutlined,
+  UnorderedListOutlined,
 } from "@ant-design/icons";
 import "./MenuList.css";
 
@@ -26,6 +26,22 @@ const MenuList = ({ darkTheme }) => {
       <Item key="Dashboard" icon={<HomeOutlined />}>
         <Link to="/dashboard">Dashboard</Link>
       </Item>
+
+      {/* Pesanan */}
+      <SubMenu key="Pesanan" icon={<UnorderedListOutlined />} title="Pesanan">
+        <Item key="SemuaPesanan">
+          <Link to="/orders">Semua Pesanan</Link>
+        </Item>
+        <Item key="Diproses">
+          <Link to="/orders/processing">Diproses</Link>
+        </Item>
+        <Item key="Dikirim">
+          <Link to="/orders/shipped">Dikirim</Link>
+        </Item>
+        <Item key="Selesai">
+          <Link to="/orders/completed">Selesai</Link>
+        </Item>
+      </SubMenu>
 
       {/* Transaksi */}
       <SubMenu
@@ -57,7 +73,7 @@ const MenuList = ({ darkTheme }) => {
         </Item>
       </SubMenu>
 
-      {/* 👇 Tambahkan menu Produksi */}
+      {/* Produksi */}
       <Item key="Produksi" icon={<BuildOutlined />}>
         <Link to="/productions">Produksi</Link>
       </Item>
@@ -66,6 +82,9 @@ const MenuList = ({ darkTheme }) => {
       <SubMenu key="MasterData" icon={<DatabaseOutlined />} title="Master Data">
         <Item key="Produk">
           <Link to="/products">Produk</Link>
+        </Item>
+        <Item key="RawMaterial">
+          <Link to="/raw-materials">Material</Link>
         </Item>
         <Item key="Kategori">
           <Link to="/categories">Kategori</Link>
@@ -89,7 +108,7 @@ const MenuList = ({ darkTheme }) => {
       </SubMenu>
 
       {/* Reports */}
-      <SubMenu key="Reports" icon={<PrinterOutlined />} title="Reports">
+      <SubMenu key="Reports" icon={<PrinterOutlined />} title="Laporan">
         <Item key="StokReport">
           <Link to="/report-stock">Laporan Stok</Link>
         </Item>

@@ -10,17 +10,16 @@ import FloatButtonTheme from "./Components/FloatButton/FloatButtonTheme";
 
 // Halaman
 import Dashboard from "./Pages/Dashboard/Dashboard";
-import Inventory from "./Pages/Inventory";
-import Transaksi from "./Pages/Transaksi";
-import ProductIN from "./Pages/Product/ProductIN";
-import ProductOUT from "./Pages/ProductOUT";
-import Keuangan from "./Pages/Keuangan";
-import Reports from "./Pages/Reports";
 import WeLost from "./Pages/ErrorPage/WeLost";
 
 import "./App.css";
 import Categories from "./Pages/MasterData/Categories";
 import Productions from "./Pages/Produksi/Productions";
+import Orders from "./Pages/Pesanan/Orders";
+import Supplier from "./Pages/MasterData/Supplier";
+import Customers from "./Pages/MasterData/Customers";
+import Products from "./Pages/MasterData/Products";
+import RawMaterials from "./Pages/MasterData/RawMaterials";
 
 const { Header, Sider, Content } = Layout;
 
@@ -64,14 +63,13 @@ const App = () => {
                 element={<Dashboard darkTheme={darkTheme} />}
               />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/inventory" element={<Inventory />} />
-              <Route path="/transaksi" element={<Transaksi />} />
-              <Route path="/product-in" element={<ProductIN />} />
-              <Route path="/product-out" element={<ProductOUT />} />
-              <Route path="/keuangan" element={<Keuangan />} />
-              <Route path="/reports" element={<Reports />} />
               <Route path="/categories" element={<Categories />} />
               <Route path="/productions" element={<Productions />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/suppliers" element={<Supplier />} />
+              <Route path="customers" element={<Customers />} />
+              <Route path="products" element={<Products />} />
+              <Route path="/raw-materials" element={<RawMaterials />} />
               {/* <Route path="/welost" element={<WeLost />} /> */}
 
               <Route path="*" element={<WeLost />} />
