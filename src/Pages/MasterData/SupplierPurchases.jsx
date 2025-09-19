@@ -9,8 +9,9 @@ import {
   Space,
   Popconfirm,
   message,
+  InputNumber, // Impor InputNumber
 } from "antd";
-import { PlusOutlined, EditOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import {
   collection,
   getDocs,
@@ -21,14 +22,6 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import dayjs from "dayjs";
-
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(value);
-};
 
 const SupplierPurchases = () => {
   const [data, setData] = useState([]);
@@ -62,7 +55,7 @@ const SupplierPurchases = () => {
     try {
       const payload = {
         ...values,
-        purchaseDate: values.purchaseDate.toISOString(),
+        purchaseDate: dayjs().toISOString(), // Simpan tanggal saat ini
       };
 
       if (isEditing && currentId) {
@@ -77,7 +70,7 @@ const SupplierPurchases = () => {
       setIsModalVisible(false);
       setIsEditing(false);
       setCurrentId(null);
-      fetchData();
+      fetchData(); // Muat ulang data
     } catch (error) {
       console.error("Gagal menyimpan data:", error);
       message.error("Gagal menyimpan data.");
@@ -88,7 +81,7 @@ const SupplierPurchases = () => {
     try {
       await deleteDoc(doc(db, "supplierPurchases", id));
       message.success("Data berhasil dihapus");
-      fetchData();
+      fetchData(); // Muat ulang data
     } catch (error) {
       console.error("Gagal menghapus data:", error);
       message.error("Gagal menghapus data.");
@@ -101,7 +94,7 @@ const SupplierPurchases = () => {
     setCurrentId(record.id);
     form.setFieldsValue({
       ...record,
-      purchaseDate: dayjs(record.purchaseDate),
+      //purchaseDate: record.purchaseDate ? dayjs(record.purchaseDate) : null,
     });
   };
 
@@ -122,16 +115,10 @@ const SupplierPurchases = () => {
         ),
     },
     {
-      title: "Harga",
+      title: "Harga", // Tambah kolom Harga
       dataIndex: "price",
       key: "price",
-      render: (value) => formatCurrency(value),
-    },
-    {
-      title: "Tanggal Beli",
-      dataIndex: "purchaseDate",
-      key: "purchaseDate",
-      render: (date) => dayjs(date).format("DD MMM YYYY"),
+      render: (text) => `Rp ${Number(text).toLocaleString("id-ID")}`,
     },
     { title: "Catatan", dataIndex: "note", key: "note" },
     {
@@ -152,7 +139,7 @@ const SupplierPurchases = () => {
             okText="Ya"
             cancelText="Batal"
           >
-            <Button danger size="small">
+            <Button danger size="small" icon={<DeleteOutlined />}>
               Hapus
             </Button>
           </Popconfirm>
@@ -163,8 +150,7 @@ const SupplierPurchases = () => {
 
   return (
     <div>
-      <h2>Riwayat Pembelian Bahan</h2>
-
+      <h2>Supplier Purchases Material</h2>
       <Button
         type="primary"
         icon={<PlusOutlined />}
@@ -177,7 +163,6 @@ const SupplierPurchases = () => {
       >
         Tambah Pembelian
       </Button>
-
       <Table
         columns={columns}
         dataSource={data}
@@ -185,7 +170,6 @@ const SupplierPurchases = () => {
         loading={loading}
         pagination={{ pageSize: 5 }}
       />
-
       <Modal
         title={isEditing ? "Edit Pembelian" : "Tambah Pembelian"}
         open={isModalVisible}
@@ -207,7 +191,6 @@ const SupplierPurchases = () => {
           >
             <Input placeholder="Contoh: Plastik Kemasan" />
           </Form.Item>
-
           <Form.Item
             name="storeName"
             label="Nama Toko"
@@ -215,29 +198,26 @@ const SupplierPurchases = () => {
           >
             <Input placeholder="Contoh: Toko Plastik Online" />
           </Form.Item>
-
           <Form.Item name="storeLink" label="Link Toko">
             <Input placeholder="Contoh: https://tokopedia.com/toko" />
           </Form.Item>
-
           <Form.Item
-            name="price"
-            label="Harga (Rp)"
-            rules={[{ required: true, message: "Wajib diisi" }]}
+            name="price" // Tambah input Harga
+            label="Harga"
+            rules={[{ required: true, message: "Harga wajib diisi!" }]}
           >
-            <Input type="number" placeholder="Contoh: 100000" />
+            <InputNumber
+              min={0}
+              style={{ width: "100%" }}
+              formatter={(value) =>
+                `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+              }
+              parser={(value) => value.replace(/Rp\s?|(,*)/g, "")}
+              placeholder="Contoh: 150000"
+            />
           </Form.Item>
-
-          <Form.Item
-            name="purchaseDate"
-            label="Tanggal Pembelian"
-            rules={[{ required: true, message: "Wajib diisi" }]}
-          >
-            <DatePicker format="DD-MM-YYYY" style={{ width: "100%" }} />
-          </Form.Item>
-
           <Form.Item name="note" label="Catatan">
-            <Input.TextArea placeholder="Contoh: Beli saat flash sale Tokopedia" />
+            <Input.TextArea placeholder="Contoh: Beli saat flash sale" />
           </Form.Item>
         </Form>
       </Modal>

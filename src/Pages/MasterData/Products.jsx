@@ -66,13 +66,14 @@ const Products = () => {
       }
     );
 
-    // Real-time listener untuk koleksi raw_materials
-    // Real-time listener untuk koleksi raw_materials
+    // Listener untuk koleksi raw_materials
     const unsubscribeRawMaterials = onSnapshot(
       collection(db, "raw_materials"),
       () => {},
       () => {}
     );
+
+    // Cleanup function
     return () => {
       unsubscribeProducts();
       unsubscribeCategories();
@@ -123,6 +124,7 @@ const Products = () => {
   const columns = [
     { title: "Nama", dataIndex: "name", key: "name" },
     { title: "Kategori", dataIndex: "category", key: "category" },
+    { title: "Satuan", dataIndex: "unit", key: "unit" }, // Tambahkan kolom unit
     { title: "Stok", dataIndex: "stock", key: "stock" },
     { title: "Harga", dataIndex: "price", key: "price" },
     {
@@ -171,7 +173,7 @@ const Products = () => {
 
       <Modal
         title={isEditing ? "Edit Produk" : "Tambah Produk"}
-        visible={modalVisible}
+        open={modalVisible}
         onCancel={() => {
           setModalVisible(false);
           setIsEditing(false);
@@ -189,6 +191,19 @@ const Products = () => {
           >
             <Input />
           </Form.Item>
+
+          <Form.Item
+            name="unit"
+            label="Satuan"
+            rules={[{ required: true, message: "Satuan wajib diisi" }]}
+          >
+            <Select placeholder="Pilih satuan">
+              <Option value="pcs">Pcs</Option>
+              <Option value="roll">Roll</Option>
+              <Option value="meter">Meter</Option>
+            </Select>
+          </Form.Item>
+
           <Form.Item
             name="category"
             label="Kategori"
