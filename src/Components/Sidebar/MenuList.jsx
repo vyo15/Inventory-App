@@ -68,20 +68,9 @@ const MenuList = ({ darkTheme }) => {
       </Item>
 
       {/* Pesanan */}
-      <SubMenu key="Pesanan" icon={<UnorderedListOutlined />} title="Pesanan">
-        <Item key="SemuaPesanan">
-          <Link to="/orders">Semua Pesanan</Link>
-        </Item>
-        <Item key="Diproses">
-          <Link to="/orders/processing">Diproses</Link>
-        </Item>
-        <Item key="Dikirim">
-          <Link to="/orders/shipped">Dikirim</Link>
-        </Item>
-        <Item key="Selesai">
-          <Link to="/orders/completed">Selesai</Link>
-        </Item>
-      </SubMenu>
+      <Item key="pesanan" icon={<UnorderedListOutlined />}>
+        <Link to="/orders">Pesanan</Link>
+      </Item>
 
       {/* Transaksi */}
       <SubMenu
