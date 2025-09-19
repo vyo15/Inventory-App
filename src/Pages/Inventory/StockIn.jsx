@@ -1,233 +1,244 @@
 import React, { useEffect, useState } from "react";
 import {
+  Table,
+  Button,
+  Modal,
   Form,
   Select,
   InputNumber,
+  DatePicker,
   Input,
-  Button,
-  Modal,
-  Table,
   message,
 } from "antd";
-import { collection, getDocs } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  onSnapshot,
+  updateDoc,
+  doc,
+} from "firebase/firestore";
 import { db } from "../../firebase";
-import { updateStock } from "../../utils/stockService";
+import dayjs from "dayjs";
 
 const { Option } = Select;
 
-
 const StockIn = () => {
-  const [products, setProducts] = useState([]);
-  const [rawMaterials, setRawMaterials] = useState([]); // State untuk bahan baku
-  const [suppliers, setSuppliers] = useState([]); // State untuk supplier
-  const [stockIns, setStockIns] = useState([]);
-  const [modalVisible, setModalVisible] = useState(false);
   const [form] = Form.useForm();
-  const [itemType, setItemType] = useState("product"); // State untuk memilih tipe item
+  const [stockIns, setStockIns] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [materials, setMaterials] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [modalVisible, setModalVisible] = useState(false);
 
-  const fetchProducts = async () => {
-    try {
-      const snap = await getDocs(collection(db, "products"));
-      setProducts(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-    } catch (err) {
-      console.error(err);
-      message.error("Gagal mengambil data produk");
-    }
-  };
-
-  const fetchRawMaterials = async () => {
-    try {
-      const snap = await getDocs(collection(db, "raw_materials"));
-      setRawMaterials(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-    } catch (err) {
-      console.error(err);
-      message.error("Gagal mengambil data bahan baku");
-    }
-  };
-
-  // Fungsi untuk mengambil data supplier
-  const fetchSuppliers = async () => {
-    try {
-      const snapshot = await getDocs(collection(db, "supplierPurchases"));
-      const supplierNames = new Set();
-      snapshot.forEach((doc) => {
-        if (doc.data().storeName) {
-          supplierNames.add(doc.data().storeName);
-        }
-      });
-      setSuppliers(Array.from(supplierNames));
-    } catch (error) {
-      message.error("Gagal mengambil data supplier");
-      console.error(error);
-    }
-  };
-
-  const fetchStockIns = async () => {
-    try {
-      const snap = await getDocs(collection(db, "stock_in"));
-      const stockInsData = snap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setStockIns(stockInsData);
-    } catch (err) {
-      console.error(err);
-      message.error("Gagal mengambil data stok masuk");
-    }
-  };
-
+  // Ambil data realtime
   useEffect(() => {
-    fetchProducts();
-    fetchRawMaterials();
-    fetchSuppliers(); // Panggil fungsi untuk mengambil data supplier
-    fetchStockIns();
+    const unsub = onSnapshot(collection(db, "stock_in"), (snapshot) => {
+      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setStockIns(data);
+    });
+
+    const unsubProducts = onSnapshot(collection(db, "products"), (snapshot) => {
+      setProducts(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
+    const unsubMaterials = onSnapshot(
+      collection(db, "raw_materials"),
+      (snapshot) => {
+        setMaterials(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+      }
+    );
+
+    const unsubSuppliers = onSnapshot(
+      collection(db, "supplierPurchases"),
+      (snapshot) => {
+        setSuppliers(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+      }
+    );
+
+    return () => {
+      unsub();
+      unsubProducts();
+      unsubMaterials();
+      unsubSuppliers();
+    };
   }, []);
 
   const handleSubmit = async (values) => {
     try {
-      let selectedItem;
-      let updateType;
+      const { type, itemId, quantity, date, note, supplierId } = values;
 
-      if (itemType === "product") {
-        selectedItem = products.find((p) => p.id === values.itemId);
-        updateType = "stock_in";
+      // Cari nama item dan nama supplier dari ID yang dipilih
+      let itemName = "";
+      let supplierName = "";
+
+      if (type === "product") {
+        const product = products.find((p) => p.id === itemId);
+        itemName = product?.name || "Produk tidak ditemukan";
       } else {
-        selectedItem = rawMaterials.find((m) => m.id === values.itemId);
-        updateType = "stock_in_raw";
+        const material = materials.find((m) => m.id === itemId);
+        const supplier = suppliers.find((s) => s.id === supplierId);
+        itemName = material?.name || "Bahan Baku tidak ditemukan";
+        supplierName = supplier?.storeName || "Supplier tidak ditemukan";
       }
 
-      if (!selectedItem) {
-        throw new Error("Item yang dipilih tidak ditemukan.");
-      }
-
-      await updateStock(values.itemId, values.quantity, updateType, {
-        itemName: selectedItem.name,
-        unit: selectedItem.unit,
-        price: values.price,
-        supplier: values.supplier,
-        note: values.note,
+      // Simpan transaksi stok masuk dengan data yang lebih lengkap
+      await addDoc(collection(db, "stock_in"), {
+        type,
+        itemId,
+        itemName,
+        supplierId: supplierId || null,
+        supplierName: supplierName || "",
+        quantity: Number(quantity),
+        note: note || "",
+        date: dayjs(date).format("YYYY-MM-DD"),
       });
 
-      message.success("Stok masuk berhasil ditambahkan");
-      setModalVisible(false);
+      // Update stok di produk / material
+      if (type === "product") {
+        const product = products.find((p) => p.id === itemId);
+        if (product) {
+          await updateDoc(doc(db, "products", itemId), {
+            stock: (product.stock || 0) + Number(quantity),
+          });
+        }
+      } else {
+        const material = materials.find((m) => m.id === itemId);
+        if (material) {
+          await updateDoc(doc(db, "raw_materials", itemId), {
+            stock: (material.stock || 0) + Number(quantity),
+          });
+        }
+      }
+
+      message.success("Stok masuk berhasil ditambahkan & sinkron!");
       form.resetFields();
-      fetchStockIns();
-      fetchProducts();
-      fetchRawMaterials();
+      setModalVisible(false);
     } catch (error) {
       console.error(error);
-      message.error("Gagal menambahkan stok masuk: " + error.message);
+      message.error("Gagal menyimpan stok masuk");
     }
   };
 
   const columns = [
+    { title: "Tanggal", dataIndex: "date" },
     {
-      title: "Tanggal",
-      dataIndex: "date",
-      render: (val) => (val ? new Date(val).toLocaleString() : ""),
+      title: "Jenis",
+      dataIndex: "type",
+      render: (type) => (type === "product" ? "Produk" : "Bahan Baku"),
     },
-    { title: "Nama Item", dataIndex: "itemName" },
+    {
+      title: "Nama Item",
+      dataIndex: "itemName",
+      key: "itemName",
+    },
+    {
+      title: "Supplier",
+      dataIndex: "supplierName",
+      key: "supplierName",
+      render: (text) => text || "-",
+    },
     { title: "Jumlah", dataIndex: "quantity" },
-    { title: "Satuan", dataIndex: "unit" },
-    {
-      title: "Harga",
-      dataIndex: "price",
-      render: (val) => (val != null ? `Rp ${val.toLocaleString()}` : "-"),
-    },
-    { title: "Supplier", dataIndex: "supplier" },
     { title: "Catatan", dataIndex: "note" },
   ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div>
       <h2>Stok Masuk</h2>
       <Button type="primary" onClick={() => setModalVisible(true)}>
         Tambah Stok Masuk
       </Button>
+
       <Table
+        style={{ marginTop: 16 }}
         dataSource={stockIns}
         columns={columns}
         rowKey="id"
-        style={{ marginTop: 20 }}
       />
+
       <Modal
         title="Tambah Stok Masuk"
         open={modalVisible}
-        onCancel={() => {
-          setModalVisible(false);
-          form.resetFields();
-        }}
+        onCancel={() => setModalVisible(false)}
         onOk={() => form.submit()}
         okText="Simpan"
         cancelText="Batal"
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
-          <Form.Item name="itemType" label="Tipe Item" initialValue="product">
-            <Select onChange={(value) => setItemType(value)}>
-              <Option value="product">Produk Jadi</Option>
-              <Option value="raw_material">Bahan Baku</Option>
+          <Form.Item
+            name="date"
+            label="Tanggal"
+            rules={[{ required: true, message: "Tanggal wajib diisi" }]}
+          >
+            <DatePicker style={{ width: "100%" }} />
+          </Form.Item>
+
+          <Form.Item
+            name="type"
+            label="Jenis Item"
+            rules={[{ required: true, message: "Jenis wajib dipilih" }]}
+          >
+            <Select placeholder="Pilih jenis item">
+              <Option value="product">Produk</Option>
+              <Option value="material">Bahan Baku</Option>
             </Select>
           </Form.Item>
 
           <Form.Item
-            name="itemId"
-            label={itemType === "product" ? "Nama Produk" : "Nama Bahan Baku"}
-            rules={[{ required: true, message: "Pilih item!" }]}
+            shouldUpdate={(prev, curr) => prev.type !== curr.type}
+            noStyle
           >
-            <Select
-              placeholder={`Pilih ${
-                itemType === "product" ? "produk" : "bahan baku"
-              }`}
-            >
-              {itemType === "product"
-                ? products.map((item) => (
-                    <Option key={item.id} value={item.id}>
-                      {item.name}
-                    </Option>
-                  ))
-                : rawMaterials.map((item) => (
-                    <Option key={item.id} value={item.id}>
-                      {item.name}
-                    </Option>
-                  ))}
-            </Select>
+            {({ getFieldValue }) => {
+              const type = getFieldValue("type");
+              let list = type === "product" ? products : materials;
+
+              return (
+                <>
+                  <Form.Item
+                    name="itemId"
+                    label="Nama Item"
+                    rules={[{ required: true, message: "Item wajib dipilih" }]}
+                  >
+                    <Select placeholder="Pilih item">
+                      {list.map((item) => (
+                        <Option key={item.id} value={item.id}>
+                          {item.name}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+
+                  {type === "material" && (
+                    <Form.Item
+                      name="supplierId"
+                      label="Nama Supplier"
+                      rules={[
+                        { required: true, message: "Supplier wajib dipilih" },
+                      ]}
+                    >
+                      <Select placeholder="Pilih supplier">
+                        {suppliers.map((item) => (
+                          <Option key={item.id} value={item.id}>
+                            {item.storeName}
+                          </Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                  )}
+                </>
+              );
+            }}
           </Form.Item>
+
           <Form.Item
             name="quantity"
             label="Jumlah"
-            rules={[{ required: true, type: "number", min: 1 }]}
+            rules={[{ required: true, message: "Jumlah wajib diisi" }]}
           >
             <InputNumber min={1} style={{ width: "100%" }} />
           </Form.Item>
-          <Form.Item
-            name="price"
-            label="Harga Total (Rp)"
-            rules={[{ required: true, type: "number", min: 0 }]}
-          >
-            <InputNumber min={0} style={{ width: "100%" }} />
-          </Form.Item>
-          <Form.Item
-            name="supplier"
-            label="Supplier"
-            rules={[{ required: true, message: "Supplier wajib diisi!" }]}
-          >
-            <Select
-              showSearch
-              placeholder="Pilih atau cari supplier"
-              optionFilterProp="children"
-              filterOption={(input, option) =>
-                option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
-              }
-            >
-              {suppliers.map((supplier) => (
-                <Option key={supplier} value={supplier}>
-                  {supplier}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
+
           <Form.Item name="note" label="Catatan">
-            <Input.TextArea />
+            <Input.TextArea rows={2} />
           </Form.Item>
         </Form>
       </Modal>

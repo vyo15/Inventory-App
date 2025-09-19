@@ -1,60 +1,51 @@
-import { doc, getDoc, updateDoc, collection, addDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import {
+  doc,
+  updateDoc,
+  getDoc,
+  collection,
+  addDoc,
+  Timestamp,
+} from "firebase/firestore";
 
 export const updateStock = async (
   itemId,
   quantityChange,
-  type, // 'stock_in', 'stock_in_raw', 'stock_out', 'stock_out_raw'
+  type,
   extraData = {}
 ) => {
   try {
-    let itemCollection;
-
-    // Menentukan koleksi item berdasarkan tipe transaksi
-    if (type === "stock_in" || type === "stock_out") {
-      itemCollection = "products";
-    } else if (type === "stock_in_raw" || type === "stock_out_raw") {
-      itemCollection = "raw_materials"; // <-- PERBAIKAN DI SINI
-    } else {
-      console.error("Tipe transaksi stok tidak valid:", type);
-      return;
-    }
-
-    const itemRef = doc(db, itemCollection, itemId);
+    const itemRef = doc(db, "items", itemId);
     const itemSnap = await getDoc(itemRef);
 
     if (!itemSnap.exists()) {
-      console.error("Item tidak ditemukan:", itemId);
-      return;
+      throw new Error("Item tidak ditemukan");
     }
 
     const itemData = itemSnap.data();
-    const currentStock = itemData.stock || 0;
-    let newStock;
+    const newStock = (itemData.stock || 0) + quantityChange;
 
-    if (type === "stock_in" || type === "stock_in_raw") {
-      newStock = currentStock + quantityChange;
-    } else if (type === "stock_out" || type === "stock_out_raw") {
-      newStock = Math.max(0, currentStock - quantityChange);
-    } else {
-      console.error("Tipe transaksi stok tidak valid:", type);
-      return;
-    }
-
+    // update stok di items
     await updateDoc(itemRef, { stock: newStock });
 
-    // Membuat log transaksi (opsional, tapi disarankan)
+    // siapkan log transaksi
+    const logCollection =
+      type === "stock_in" || type === "stock_in_raw" ? "stock_in" : "stock_out";
+
     const logData = {
       itemId,
       itemName: itemData.name || "Tidak diketahui",
       quantity: Math.abs(quantityChange),
-      date: new Date().toISOString(),
-      type,
+      date: Timestamp.now(),
+      movementType: type.includes("in") ? "stock_in" : "stock_out",
+      itemType: type.includes("raw") ? "raw_material" : "product",
       ...extraData,
     };
 
-    await addDoc(collection(db, type), logData);
+    await addDoc(collection(db, logCollection), logData);
+
+    console.log("Stok berhasil diupdate:", logData);
   } catch (error) {
-    console.error("Gagal memperbarui stok:", error);
+    console.error("Gagal update stok:", error);
   }
 };

@@ -9,9 +9,15 @@ import {
   Table,
   message,
 } from "antd";
-import { collection, getDocs } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  doc,
+  onSnapshot,
+} from "firebase/firestore";
 import { db } from "../../firebase";
-import { updateStock } from "../../utils/stockService";
+import dayjs from "dayjs";
 
 const { Option } = Select;
 
@@ -21,73 +27,83 @@ const StockOut = () => {
   const [stockOuts, setStockOuts] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [form] = Form.useForm();
-  const [itemType, setItemType] = useState("product"); // State baru untuk tipe item
+  const [itemType, setItemType] = useState("product");
 
   useEffect(() => {
-    fetchProducts();
-    fetchRawMaterials();
-    fetchStockOuts();
+    // Listener real-time untuk products
+    const unsubProducts = onSnapshot(collection(db, "products"), (snapshot) => {
+      setProducts(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
+    // Listener real-time untuk raw_materials
+    const unsubRawMaterials = onSnapshot(
+      collection(db, "raw_materials"),
+      (snapshot) => {
+        setRawMaterials(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+      }
+    );
+
+    // Listener real-time untuk stock_out
+    const unsubStockOuts = onSnapshot(
+      collection(db, "stock_out"),
+      (snapshot) => {
+        setStockOuts(
+          snapshot.docs.map((d) => ({ id: d.id, ...d.data(), key: d.id }))
+        );
+      }
+    );
+
+    // Cleanup function
+    return () => {
+      unsubProducts();
+      unsubRawMaterials();
+      unsubStockOuts();
+    };
   }, []);
-
-  const fetchProducts = async () => {
-    try {
-      const snap = await getDocs(collection(db, "products"));
-      setProducts(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-    } catch (err) {
-      console.error(err);
-      message.error("Gagal mengambil data produk");
-    }
-  };
-
-  const fetchRawMaterials = async () => {
-    try {
-      const snap = await getDocs(collection(db, "raw_materials"));
-      setRawMaterials(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-    } catch (err) {
-      console.error(err);
-      message.error("Gagal mengambil data bahan mentah");
-    }
-  };
-
-  const fetchStockOuts = async () => {
-    try {
-      const snap = await getDocs(collection(db, "stock_out"));
-      setStockOuts(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
-    } catch (err) {
-      console.error(err);
-      message.error("Gagal mengambil data stok keluar");
-    }
-  };
 
   const handleSubmit = async (values) => {
     try {
-      let selectedItem;
-      let updateType;
+      const { itemType, itemId, quantity, destination, note } = values;
 
+      let selectedItem;
+      let collectionName = "";
       if (itemType === "product") {
-        selectedItem = products.find((p) => p.id === values.itemId);
-        updateType = "stock_out";
+        selectedItem = products.find((p) => p.id === itemId);
+        collectionName = "products";
       } else {
-        selectedItem = rawMaterials.find((m) => m.id === values.itemId);
-        updateType = "stock_out_raw";
+        selectedItem = rawMaterials.find((m) => m.id === itemId);
+        collectionName = "raw_materials";
       }
 
       if (!selectedItem) {
         throw new Error("Item yang dipilih tidak ditemukan.");
       }
 
-      await updateStock(values.itemId, values.quantity, updateType, {
-        itemName: selectedItem.name,
-        destination: values.destination,
-        note: values.note,
+      // Pastikan stok mencukupi
+      if ((selectedItem.stock || 0) < quantity) {
+        message.error("Stok tidak mencukupi!");
+        return;
+      }
+
+      // Tambahkan dokumen baru ke koleksi 'stock_out'
+      await addDoc(collection(db, "stock_out"), {
+        itemId,
+        itemName: selectedItem.name, // Simpan nama item
+        itemType, // Simpan tipe item
+        quantity,
+        destination: destination || "-",
+        note: note || "-",
+        date: new Date(),
+      });
+
+      // Perbarui stok di produk / bahan baku
+      await updateDoc(doc(db, collectionName, itemId), {
+        stock: (selectedItem.stock || 0) - Number(quantity),
       });
 
       message.success("Stok keluar berhasil dicatat");
       setModalVisible(false);
       form.resetFields();
-      fetchProducts();
-      fetchRawMaterials();
-      fetchStockOuts();
     } catch (error) {
       console.error(error);
       message.error("Gagal mencatat stok keluar: " + error.message);
@@ -98,7 +114,16 @@ const StockOut = () => {
     {
       title: "Tanggal",
       dataIndex: "date",
-      render: (val) => (val ? new Date(val).toLocaleString() : ""),
+      render: (val) => {
+        if (!val) return "";
+        const dateObj = val.toDate ? val.toDate() : new Date(val);
+        return dayjs(dateObj).format("DD-MM-YYYY HH:mm");
+      },
+    },
+    {
+      title: "Jenis Item",
+      dataIndex: "itemType",
+      render: (type) => (type === "product" ? "Produk Jadi" : "Bahan Baku"),
     },
     { title: "Item", dataIndex: "itemName" },
     { title: "Jumlah", dataIndex: "quantity" },
@@ -130,7 +155,12 @@ const StockOut = () => {
         cancelText="Batal"
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
-          <Form.Item name="itemType" label="Tipe Item" initialValue="product">
+          <Form.Item
+            name="itemType"
+            label="Tipe Item"
+            initialValue="product"
+            rules={[{ required: true, message: "Pilih tipe item!" }]}
+          >
             <Select onChange={(value) => setItemType(value)}>
               <Option value="product">Produk Jadi</Option>
               <Option value="raw_material">Bahan Baku</Option>
