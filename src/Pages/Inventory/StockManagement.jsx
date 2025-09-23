@@ -1,76 +1,128 @@
 import React, { useEffect, useState } from "react";
-import { Table, message } from "antd";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../../firebase";
+import { Table, message, Tag } from "antd";
+import { getInventoryLogs } from "../../utils/stockService";
+import dayjs from "dayjs";
 
 const StockManagement = () => {
   const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchHistory = async () => {
+    setLoading(true);
+    try {
+      const data = await getInventoryLogs();
+      setHistory(data);
+    } catch (error) {
+      console.error(error);
+      message.error("Gagal mengambil riwayat stok");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchHistory();
   }, []);
 
-  const fetchHistory = async () => {
-    try {
-      const [insSnap, outsSnap, adjSnap] = await Promise.all([
-        getDocs(collection(db, "stock_in")),
-        getDocs(collection(db, "stock_out")),
-        getDocs(collection(db, "stock_adjustments")),
-      ]);
-
-      const mapSnap = (snap, type) =>
-        snap.docs.map((doc) => ({
-          id: doc.id,
-          type,
-          ...doc.data(),
-        }));
-
-      let merged = [
-        ...mapSnap(insSnap, "stock_in"),
-        ...mapSnap(outsSnap, "stock_out"),
-        ...mapSnap(adjSnap, "adjustment"),
-      ];
-
-      // urut berdasarkan tanggal desc
-      merged.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-      setHistory(merged);
-    } catch (error) {
-      console.error(error);
-      message.error("Gagal mengambil riwayat stok");
-    }
-  };
-
   const columns = [
     {
       title: "Tanggal",
-      dataIndex: "date",
-      render: (val) => (val ? new Date(val).toLocaleString() : ""),
+      dataIndex: "timestamp",
+      render: (val) => {
+        if (!val) return "";
+        return dayjs(val.toDate()).format("DD-MM-YYYY HH:mm");
+      },
     },
     {
       title: "Tipe",
       dataIndex: "type",
-      render: (val) => {
-        if (val === "stock_in") return "Masuk";
-        if (val === "stock_out") return "Keluar";
-        if (val === "adjustment") return "Penyesuaian";
-        return val;
+      render: (type, record) => {
+        let tagColor = "blue";
+        let text = "Lainnya";
+        let adjustmentLabel = "";
+
+        if (type.includes("purchase_in")) {
+          text = "Pembelian";
+          tagColor = "green";
+        } else if (type === "sale" || type.includes("sale_revert")) {
+          text = type === "sale" ? "Terjual" : "Batal Jual";
+          tagColor = type === "sale" ? "blue" : "red";
+        } else if (type === "stock_adjustment") {
+          text = "Penyesuaian";
+          tagColor = "orange";
+          if (record.quantityChange > 0) {
+            adjustmentLabel = "(+)";
+          } else {
+            adjustmentLabel = "(-)";
+          }
+        } else if (type === "production_out") {
+          // Menangani log untuk bahan baku produksi
+          text = "Produksi";
+          tagColor = "red";
+        } else if (type === "production_in") {
+          // Menangani log untuk hasil produksi
+          text = "Hasil Produksi";
+          tagColor = "green";
+        } else if (type.includes("out")) {
+          text = "Keluar";
+          tagColor = "red";
+        } else if (type.includes("in")) {
+          text = "Masuk";
+          tagColor = "green";
+        }
+
+        return (
+          <Tag color={tagColor}>
+            {text} {adjustmentLabel}
+          </Tag>
+        );
       },
     },
-    { title: "Item", dataIndex: "itemName" },
-    { title: "Jumlah", dataIndex: "quantity" },
-    { title: "Catatan", dataIndex: "note", defaultValue: "-" },
     {
-      title: "Supplier",
-      dataIndex: "supplier",
-      defaultValue: "-",
-    }, // bisa beda nama
+      title: "Item",
+      dataIndex: "itemName",
+    },
+    {
+      title: "Jenis Item",
+      dataIndex: "collectionName",
+      render: (name) => {
+        if (name === "products") return "Produk Jadi";
+        if (name === "raw_materials") return "Bahan Baku";
+        return "-";
+      },
+    },
+    {
+      title: "Jumlah",
+      dataIndex: "quantityChange",
+      render: (val) => {
+        const quantity = Math.abs(val);
+        return <span>{quantity}</span>;
+      },
+    },
+    {
+      title: "Catatan",
+      dataIndex: "note",
+      render: (text, record) => {
+        if (record.note) {
+          return record.note;
+        }
+        if (record.reason) {
+          return record.reason;
+        }
+        return "-";
+      },
+    },
   ];
 
   return (
     <div style={{ padding: 24 }}>
       <h2>Riwayat Pergerakan Stok</h2>
-      <Table dataSource={history} columns={columns} rowKey="id" />
+      <Table
+        dataSource={history}
+        columns={columns}
+        rowKey="id"
+        loading={loading}
+      />
     </div>
   );
 };

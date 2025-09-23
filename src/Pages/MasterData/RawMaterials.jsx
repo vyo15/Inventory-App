@@ -10,16 +10,15 @@ import {
   Popconfirm,
   message,
   Select,
-  Typography,
 } from "antd";
-import { PlusOutlined, EditOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import {
   collection,
-  getDocs,
   addDoc,
   updateDoc,
   deleteDoc,
   doc,
+  onSnapshot,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 
@@ -27,98 +26,85 @@ const { Option } = Select;
 
 const RawMaterials = () => {
   const [materials, setMaterials] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [suppliers, setSuppliers] = useState([]); // Berisi nama produk dan linknya
+  const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form] = Form.useForm();
 
-  const fetchMaterials = async () => {
-    setLoading(true);
-    try {
-      const snapshot = await getDocs(collection(db, "raw_materials"));
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setMaterials(data);
-    } catch (error) {
-      message.error("Gagal mengambil data bahan baku.");
-      console.error(error);
-    }
-    setLoading(false);
-  };
-
-  const fetchCategories = async () => {
-    try {
-      const snapshot = await getDocs(collection(db, "categories"));
-      const data = snapshot.docs.map((doc) => doc.data().name);
-      setCategories(data);
-    } catch (error) {
-      message.error("Gagal mengambil data kategori.");
-      console.error(error);
-    }
-  };
-
-  // 🔴 PERUBAHAN UTAMA 1: Mengambil nama produk dan linknya dari `supplierPurchases`
-  const fetchSuppliers = async () => {
-    try {
-      const snapshot = await getDocs(collection(db, "supplierPurchases"));
-      const uniqueItems = {};
-      snapshot.forEach((doc) => {
-        const { item, storeLink } = doc.data();
-        if (item && storeLink) {
-          // Gunakan nama item (produk) sebagai kunci untuk memastikan keunikan
-          uniqueItems[item] = storeLink;
-        }
-      });
-      // Ubah objek menjadi array objek agar mudah di-map
-      setSuppliers(
-        Object.keys(uniqueItems).map((key) => ({
-          name: key,
-          link: uniqueItems[key],
-        }))
-      );
-    } catch (error) {
-      message.error("Gagal mengambil data supplier.");
-      console.error(error);
-    }
-  };
-
   useEffect(() => {
-    fetchMaterials();
-    fetchCategories();
-    fetchSuppliers();
+    setLoading(true);
+    const unsubMaterials = onSnapshot(
+      collection(db, "raw_materials"),
+      (snapshot) => {
+        const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setMaterials(data);
+        setLoading(false);
+      },
+      (error) => {
+        message.error("Gagal memuat bahan baku.");
+        console.error("Error fetching materials: ", error);
+        setLoading(false);
+      }
+    );
+
+    const unsubSuppliers = onSnapshot(
+      collection(db, "supplierPurchases"),
+      (snapshot) => {
+        const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setSuppliers(data);
+      },
+      (error) => {
+        message.error("Gagal memuat supplier.");
+        console.error("Error fetching suppliers: ", error);
+      }
+    );
+
+    return () => {
+      unsubMaterials();
+      unsubSuppliers();
+    };
   }, []);
 
   const handleSaveMaterial = async (values) => {
     try {
-      let supplierData = values.supplier;
-      if (typeof supplierData === "string") {
-        supplierData = suppliers.find((s) => s.name === supplierData);
+      const { supplierId, ...materialData } = values;
+
+      let supplierName = null;
+      let supplierLink = null;
+
+      if (supplierId && supplierId !== null) {
+        const selectedSupplier = suppliers.find((s) => s.id === supplierId);
+        if (selectedSupplier) {
+          // Mengambil nama toko dan link dari properti yang benar
+          supplierName = selectedSupplier.storeName;
+          supplierLink = selectedSupplier.storeLink;
+        }
       }
 
-      const payload = {
-        ...values,
-        supplier: supplierData,
-        stock: values.stock || 0,
+      const finalData = {
+        ...materialData,
+        category: "Bahan Baku",
+        supplierId: supplierId || null,
+        supplierName: supplierName || null,
+        supplierLink: supplierLink || null,
+        stock: materialData.stock || 0,
       };
 
       if (isEditing) {
         const docRef = doc(db, "raw_materials", editingId);
-        await updateDoc(docRef, payload);
-        message.success("Bahan baku berhasil diupdate.");
+        await updateDoc(docRef, finalData);
+        message.success("Bahan baku berhasil diupdate!");
       } else {
-        await addDoc(collection(db, "raw_materials"), payload);
-        message.success("Bahan baku berhasil ditambahkan.");
+        await addDoc(collection(db, "raw_materials"), finalData);
+        message.success("Bahan baku berhasil ditambahkan!");
       }
+
       form.resetFields();
       setModalVisible(false);
       setIsEditing(false);
       setEditingId(null);
-      fetchMaterials();
     } catch (error) {
       message.error("Gagal menyimpan bahan baku.");
       console.error(error);
@@ -128,8 +114,7 @@ const RawMaterials = () => {
   const handleDeleteMaterial = async (id) => {
     try {
       await deleteDoc(doc(db, "raw_materials", id));
-      message.success("Bahan baku berhasil dihapus.");
-      fetchMaterials();
+      message.success("Bahan baku berhasil dihapus!");
     } catch (error) {
       message.error("Gagal menghapus bahan baku.");
       console.error(error);
@@ -140,9 +125,10 @@ const RawMaterials = () => {
     setIsEditing(true);
     setModalVisible(true);
     setEditingId(record.id);
+
     form.setFieldsValue({
       ...record,
-      supplier: record.supplier ? record.supplier.name : null,
+      supplierId: record.supplierId || null,
     });
   };
 
@@ -150,22 +136,23 @@ const RawMaterials = () => {
     { title: "Nama Bahan Baku", dataIndex: "name", key: "name" },
     { title: "Kategori", dataIndex: "category", key: "category" },
     { title: "Satuan", dataIndex: "unit", key: "unit" },
+
+    { title: "Stok", dataIndex: "stock", key: "stock" },
+
     {
       title: "Harga Satuan",
       dataIndex: "price",
       key: "price",
-      render: (text) => `Rp ${text.toLocaleString("id-ID")}`,
+      render: (text) => `Rp ${Number(text).toLocaleString("id-ID")}`,
     },
-    { title: "Stok", dataIndex: "stock", key: "stock" },
-    // 🔴 PERUBAHAN UTAMA 2: Kolom Supplier hanya menampilkan tulisan "Link"
     {
       title: "Supplier",
-      dataIndex: "supplier",
-      key: "supplier",
-      render: (supplier) =>
-        supplier && supplier.link ? (
-          <a href={supplier.link} target="_blank" rel="noopener noreferrer">
-            Link
+      dataIndex: "supplierLink",
+      key: "supplierLink",
+      render: (text, record) =>
+        text ? (
+          <a href={text} target="_blank" rel="noopener noreferrer">
+            {record.supplierName || "Link Toko"} {/* <--- Perbaikan di sini */}
           </a>
         ) : (
           "-"
@@ -177,6 +164,7 @@ const RawMaterials = () => {
       render: (_, record) => (
         <Space>
           <Button
+            type="link"
             icon={<EditOutlined />}
             size="small"
             onClick={() => handleEditMaterial(record)}
@@ -189,7 +177,7 @@ const RawMaterials = () => {
             okText="Ya"
             cancelText="Batal"
           >
-            <Button danger size="small">
+            <Button type="link" danger size="small" icon={<DeleteOutlined />}>
               Hapus
             </Button>
           </Popconfirm>
@@ -200,28 +188,25 @@ const RawMaterials = () => {
 
   return (
     <div>
-      <Typography.Title level={4}>Daftar Bahan Baku</Typography.Title>
       <Button
         type="primary"
         icon={<PlusOutlined />}
         onClick={() => {
           setModalVisible(true);
           setIsEditing(false);
-          setEditingId(null);
           form.resetFields();
         }}
         style={{ marginBottom: 16 }}
       >
         Tambah Bahan Baku
       </Button>
-
+      <h2>Daftar Bahan Baku</h2>
       <Table
         columns={columns}
         dataSource={materials}
         rowKey="id"
         loading={loading}
       />
-
       <Modal
         title={isEditing ? "Edit Bahan Baku" : "Tambah Bahan Baku"}
         open={modalVisible}
@@ -248,35 +233,19 @@ const RawMaterials = () => {
           >
             <Input placeholder="Contoh: Kayu Jati" />
           </Form.Item>
-
           <Form.Item
-            name="category"
-            label="Kategori"
-            rules={[{ required: true, message: "Kategori wajib diisi" }]}
+            name="supplierId"
+            label="Supplier"
+            rules={[{ required: true, message: "Supplier wajib diisi" }]}
           >
-            <Select placeholder="Pilih kategori">
-              {categories.map((category) => (
-                <Option key={category} value={category}>
-                  {category}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item
-            name="supplier"
-            label="Produk Supplier"
-            rules={[{ required: true, message: "Produk supplier wajib diisi" }]}
-          >
-            <Select placeholder="Pilih produk supplier">
+            <Select placeholder="Pilih supplier">
               {suppliers.map((supplier) => (
-                <Option key={supplier.name} value={supplier.name}>
-                  {supplier.name}
+                <Option key={supplier.id} value={supplier.id}>
+                  {supplier.item} - {supplier.storeName}
                 </Option>
               ))}
             </Select>
           </Form.Item>
-
           <Form.Item
             name="unit"
             label="Satuan"
@@ -284,9 +253,16 @@ const RawMaterials = () => {
           >
             <Select placeholder="Pilih satuan">
               <Option value="pcs">Pcs</Option>
-              <Option value="Roll">Roll</Option>
+              <Option value="roll">Roll</Option>
               <Option value="meter">Meter</Option>
             </Select>
+          </Form.Item>
+          <Form.Item
+            name="stock"
+            label="Stok Awal"
+            rules={[{ required: true, message: "Stok wajib diisi" }]}
+          >
+            <InputNumber min={0} style={{ width: "100%" }} />
           </Form.Item>
 
           <Form.Item
@@ -300,14 +276,6 @@ const RawMaterials = () => {
                 min: 0,
               },
             ]}
-          >
-            <InputNumber min={0} style={{ width: "100%" }} />
-          </Form.Item>
-
-          <Form.Item
-            name="stock"
-            label="Stok Awal"
-            rules={[{ required: true, message: "Stok wajib diisi" }]}
           >
             <InputNumber min={0} style={{ width: "100%" }} />
           </Form.Item>

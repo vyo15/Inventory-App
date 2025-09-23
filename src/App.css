@@ -1,37 +1,58 @@
-/* App.css */
-html, body, #root {
+/* src/App.css */
+
+/* --- HAPUS BLOK INI DARI APP.CSS jika ada --- */
+/* html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden; /* cegah scroll horizontal */
-}
+  overflow: hidden;
+} */
+/* --- HAPUS BLOK DI ATAS. Ini adalah penyebab utama halaman tidak bisa discroll. --- */
+
 
 .main-layout {
-  min-height: 100vh;
+  min-height: 100vh; /* Memastikan layout utama mengambil tinggi penuh dari viewport */
   background-color: #f4f6f8;
   transition: all 0.3s ease;
+  /* Tambahkan ini untuk mengaktifkan flexbox pada layout Ant Design */
+  display: flex;
+  flex-direction: row; /* Ant Design Layout biasanya sudah row, tapi pastikan */
 }
+
+.main-layout .ant-layout { /* Untuk layout di dalam Sider */
+  display: flex;
+  flex-direction: column; /* Pastikan layout konten Anda adalah kolom agar header, content, footer berurutan */
+  flex-grow: 1; /* Ini akan membuat layout konten mengambil sisa lebar yang tersedia */
+}
+
 
 .header {
   background: #ffffff;
   padding: 0 24px;
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-end; /* Sesuaikan jika CostumHeader memiliki logo/judul di kiri */
   align-items: center;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   transition: all 0.3s ease;
+  height: 64px; /* Tinggi standar Header Ant Design */
+  flex-shrink: 0; /* Pastikan header tidak mengecil */
 }
 
 .content {
-  margin: 24px;
-  padding: 24px;
+  margin: 24px; /* Margin di sekitar area konten */
+  padding: 24px; /* Padding di dalam area konten */
   background: #ffffff;
   border-radius: 12px;
-  min-height: calc(100vh - 64px - 48px); /* header + margin */
   transition: all 0.3s ease;
-  overflow-y: auto;
+
+  /* KUNCI UNTUK SCROLLING DAN RESPONSIVITAS TINGGI */
+  overflow-y: auto; /* Mengaktifkan scrollbar vertikal di dalam area konten jika diperlukan */
+  flex-grow: 1; /* Memungkinkan Content untuk mengisi sisa ruang vertikal yang tersedia */
+  /* Remove any fixed 'height' or 'max-height' here. min-height calc() juga bisa dihilangkan */
+  /* karena flex-grow: 1 sudah akan mengatur tingginya secara otomatis */
 }
 
+/* Gaya untuk dark mode */
 .dark .main-layout {
   background-color: #0d1117;
 }
@@ -45,4 +66,14 @@ html, body, #root {
 .dark .content {
   background: #161b22;
   color: #e8eaed;
+}
+
+/* Floating Theme Button */
+.theme-btn {
+  cursor: pointer;
+  border-radius: 50%;
+  padding: 12px;
+  font-size: 18px;
+  /* Jika FloatButtonTheme memiliki position: fixed, maka gaya ini penting */
+  /* Misal: position: fixed; right: 24px; bottom: 24px; z-index: 1000; */
 }

@@ -12,25 +12,27 @@ import {
   message,
   InputNumber,
 } from "antd";
-import { PlusOutlined, EditOutlined } from "@ant-design/icons";
 import {
   collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
   doc,
   onSnapshot,
+  increment,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import dayjs from "dayjs";
-import { updateStock } from "../../utils/updateStock";
+import { PlusOutlined, EditOutlined } from "@ant-design/icons";
+import {
+  addInventoryLog,
+  performProductionTransaction,
+} from "../../utils/stockService";
 
 const { Option } = Select;
 
 const Productions = () => {
   const [productions, setProductions] = useState([]);
-  const [rawMaterials, setRawMaterials] = useState([]); // Daftar khusus bahan baku dari koleksi 'materials'
-  const [finishedProducts, setFinishedProducts] = useState([]); // Daftar khusus produk jadi dari koleksi 'products'
+  const [rawMaterials, setRawMaterials] = useState([]);
+  const [finishedProducts, setFinishedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -38,7 +40,6 @@ const Productions = () => {
   const [form] = Form.useForm();
 
   useEffect(() => {
-    // Listener untuk koleksi productions (sinkronisasi real-time)
     const unsubscribeProductions = onSnapshot(
       collection(db, "productions"),
       (snapshot) => {
@@ -54,7 +55,6 @@ const Productions = () => {
       }
     );
 
-    // Listener untuk koleksi materials (sinkronisasi real-time bahan baku)
     const unsubscribeMaterials = onSnapshot(
       collection(db, "raw_materials"),
       (snapshot) => {
@@ -68,7 +68,6 @@ const Productions = () => {
       }
     );
 
-    // Listener untuk koleksi products (sinkronisasi real-time produk jadi)
     const unsubscribeProducts = onSnapshot(
       collection(db, "products"),
       (snapshot) => {
@@ -82,90 +81,157 @@ const Productions = () => {
       }
     );
 
-    // Cleanup function untuk menghentikan semua listener saat komponen di-unmount
     return () => {
       unsubscribeProductions();
       unsubscribeMaterials();
       unsubscribeProducts();
     };
-  }, []); // [] agar listener hanya berjalan sekali saat komponen dimuat
+  }, []);
 
-  // Simpan produksi (tambah / edit)
   const handleSaveProduction = async (values) => {
-    try {
-      const productionData = {
-        ...values,
-        date: values.date.format("YYYY-MM-DD"),
-        // Tambahkan nama produk dan bahan baku agar mudah ditampilkan di tabel
-        productResult: {
-          ...values.productResult,
-          name:
-            finishedProducts.find(
-              (p) => p.id === values.productResult.productId
-            )?.name || "N/A",
-        },
-        materials: values.materials.map((mat) => ({
-          ...mat,
-          name: rawMaterials.find((p) => p.id === mat.productId)?.name || "N/A",
-        })),
-      };
+    const productionData = {
+      values,
+      isEditing,
+      editingId,
+      productions,
+      rawMaterials,
+      finishedProducts,
+    };
 
-      if (isEditing) {
-        const docRef = doc(db, "productions", editingId);
-        await updateDoc(docRef, productionData);
-        message.success("Produksi berhasil diupdate");
-      } else {
-        await addDoc(collection(db, "productions"), productionData);
-        message.success("Produksi berhasil ditambahkan");
-      }
+    const success = await performProductionTransaction(productionData);
 
-      // Perbarui stok bahan baku dari koleksi 'materials' menggunakan updateStock
-      for (const material of values.materials) {
-        await updateStock(
+    if (success) {
+      const { productResult, materials, name, description } = values;
+
+      // Ambil nama item dari daftar yang tersedia, bukan dari form
+      const finishedProductName =
+        finishedProducts.find((p) => p.id === productResult.productId)?.name ||
+        "Produk tidak ditemukan";
+
+      // Log untuk penambahan produk jadi
+      await addInventoryLog(
+        productResult.productId,
+        finishedProductName,
+        productResult.quantity,
+        "production_in",
+        "products",
+        {
+          note: `Hasil produksi: ${name || "N/A"} - ${description || "N/A"}`,
+        }
+      );
+
+      // Log untuk pengurangan bahan baku
+      for (const material of materials) {
+        const rawMaterialName =
+          rawMaterials.find((m) => m.id === material.productId)?.name ||
+          "Bahan baku tidak ditemukan";
+
+        await addInventoryLog(
           material.productId,
-          material.quantity,
-          "stock_out_raw",
-          { note: `Digunakan untuk produksi: ${values.name}` }
+          rawMaterialName,
+          -material.quantity,
+          "production_out",
+          "raw_materials",
+          {
+            note: `Bahan baku untuk produksi: ${name || "N/A"} - ${
+              description || "N/A"
+            }`,
+          }
         );
       }
 
-      // Perbarui stok produk jadi dari koleksi 'products' menggunakan updateStock
-      if (values.productResult && values.productResult.productId) {
-        await updateStock(
-          values.productResult.productId,
-          values.productResult.quantity,
-          "stock_in",
-          { note: `Hasil produksi: ${values.name}` }
-        );
-      }
-
+      message.success(
+        `Produksi berhasil di${isEditing ? "update" : "tambahkan"}`
+      );
       form.resetFields();
       setModalVisible(false);
       setIsEditing(false);
       setEditingId(null);
-    } catch (error) {
-      message.error("Gagal menyimpan produksi");
-      console.error(error);
+    } else {
+      message.error("Gagal menyimpan produksi. Silakan coba lagi.");
     }
   };
 
-  // Hapus produksi
   const handleDeleteProduction = async (id) => {
+    const batch = writeBatch(db);
     try {
-      await deleteDoc(doc(db, "productions", id));
+      const productionToDelete = productions.find((p) => p.id === id);
+      if (!productionToDelete) {
+        throw new Error("Data produksi tidak ditemukan.");
+      }
+
+      for (const material of productionToDelete.materials) {
+        const materialRef = doc(db, "raw_materials", material.productId);
+        batch.update(materialRef, { stock: increment(material.quantity) });
+      }
+
+      if (
+        productionToDelete.productResult &&
+        productionToDelete.productResult.productId
+      ) {
+        const productRef = doc(
+          db,
+          "products",
+          productionToDelete.productResult.productId
+        );
+        batch.update(productRef, {
+          stock: increment(-productionToDelete.productResult.quantity),
+        });
+      }
+
+      const productionRef = doc(db, "productions", id);
+      batch.delete(productionRef);
+
+      await batch.commit();
+
+      for (const material of productionToDelete.materials) {
+        const rawMaterialName =
+          rawMaterials.find((m) => m.id === material.productId)?.name ||
+          "Bahan baku tidak ditemukan";
+
+        await addInventoryLog(
+          material.productId,
+          rawMaterialName,
+          material.quantity,
+          "production_out_revert",
+          "raw_materials",
+          {
+            note: `Pembatalan produksi: ${productionToDelete.name || "N/A"}`,
+          }
+        );
+      }
+      if (
+        productionToDelete.productResult &&
+        productionToDelete.productResult.productId
+      ) {
+        const finishedProductName =
+          finishedProducts.find(
+            (p) => p.id === productionToDelete.productResult.productId
+          )?.name || "Produk tidak ditemukan";
+
+        await addInventoryLog(
+          productionToDelete.productResult.productId,
+          finishedProductName,
+          -productionToDelete.productResult.quantity,
+          "production_in_revert",
+          "products",
+          {
+            note: `Pembatalan produksi: ${productionToDelete.name || "N/A"}`,
+          }
+        );
+      }
+
       message.success("Produksi berhasil dihapus");
     } catch (error) {
-      message.error("Gagal menghapus produksi");
+      message.error(`Gagal menghapus produksi: ${error.message}`);
       console.error(error);
     }
   };
 
-  // Edit produksi (isi form)
   const handleEditProduction = (record) => {
     setIsEditing(true);
     setModalVisible(true);
     setEditingId(record.id);
-
     form.setFieldsValue({
       name: record.name,
       description: record.description,
@@ -235,6 +301,23 @@ const Productions = () => {
   return (
     <div>
       <h2>Daftar Produksi</h2>
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() => {
+          setModalVisible(true);
+          setIsEditing(false);
+          form.resetFields();
+          form.setFieldsValue({
+            status: "pending",
+            materials: [],
+            productResult: {},
+          });
+        }}
+        style={{ marginBottom: 16 }}
+      >
+        Tambah Produksi
+      </Button>
 
       <Table
         columns={columns}
@@ -298,7 +381,6 @@ const Productions = () => {
             </Select>
           </Form.Item>
 
-          {/* Input Dinamis Bahan Baku */}
           <Form.List name="materials">
             {(fields, { add, remove }) => (
               <>
@@ -352,7 +434,6 @@ const Productions = () => {
             )}
           </Form.List>
 
-          {/* Produk Jadi */}
           <Form.Item label="Produk Jadi" style={{ marginTop: 16 }}>
             <Space>
               <Form.Item
@@ -380,24 +461,6 @@ const Productions = () => {
           </Form.Item>
         </Form>
       </Modal>
-
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        onClick={() => {
-          setModalVisible(true);
-          setIsEditing(false);
-          form.resetFields();
-          form.setFieldsValue({
-            status: "pending",
-            materials: [],
-            productResult: {},
-          });
-        }}
-        style={{ marginTop: 16 }}
-      >
-        Tambah Produksi
-      </Button>
     </div>
   );
 };

@@ -1,99 +1,47 @@
-import React, { useEffect, useState } from "react";
+// src/Components/Dashboard/ProductManagementTable.jsx
+import React from "react";
 import {
+  Card,
   Table,
   Button,
   Modal,
   Form,
   Input,
   Popconfirm,
-  message,
   Space,
   Select,
   InputNumber,
+  message, // Tambahkan message dari antd
 } from "antd";
 import { EditOutlined, PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import {
-  collection,
   addDoc,
   updateDoc,
   deleteDoc,
+  collection,
   doc,
-  onSnapshot,
-} from "firebase/firestore";
-import { db } from "../../firebase";
+} from "firebase/firestore"; // Import fungsi Firebase
+import { db } from "../../firebase"; // <--- PASTIKAN PATH INI BENAR (relatif ke firebase.js)
 
 const { Option } = Select;
 
-const Products = () => {
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [form] = Form.useForm();
+const ProductManagementTable = ({ products, categories, loading }) => {
+  const [form] = Form.useForm(); // Gunakan useForm di sini untuk mengelola form modal
+  const [modalVisible, setModalVisible] = React.useState(false);
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editingId, setEditingId] = React.useState(null);
 
-  useEffect(() => {
-    // Real-time listener untuk koleksi products
-    const unsubscribeProducts = onSnapshot(
-      collection(db, "products"),
-      (snapshot) => {
-        const data = [];
-        snapshot.forEach((doc) =>
-          data.push({ id: doc.id, ...doc.data(), key: doc.id })
-        );
-        setProducts(data);
-        setLoading(false);
-      },
-      (error) => {
-        message.error("Gagal memuat produk.");
-        console.error("Error fetching products: ", error);
-        setLoading(false);
-      }
-    );
-
-    // Real-time listener untuk koleksi categories
-    const unsubscribeCategories = onSnapshot(
-      collection(db, "categories"),
-      (snapshot) => {
-        const data = [];
-        snapshot.forEach((doc) => data.push({ id: doc.id, ...doc.data() }));
-        setCategories(data);
-      },
-      (error) => {
-        message.error("Gagal memuat kategori.");
-        console.error("Error fetching categories: ", error);
-      }
-    );
-
-    // Listener untuk koleksi raw_materials
-    const unsubscribeRawMaterials = onSnapshot(
-      collection(db, "raw_materials"),
-      () => {},
-      () => {}
-    );
-
-    // Cleanup function
-    return () => {
-      unsubscribeProducts();
-      unsubscribeCategories();
-      unsubscribeRawMaterials();
-    };
-  }, []);
-
+  // --- Fungsi CRUD Produk ---
   const handleSaveProduct = async (values) => {
     try {
       const productData = { ...values, stock: values.stock || 0 };
-
       if (isEditing) {
-        const docRef = doc(db, "products", editingId);
-        await updateDoc(docRef, productData);
+        await updateDoc(doc(db, "products", editingId), productData);
         message.success("Produk berhasil diperbarui!");
       } else {
         await addDoc(collection(db, "products"), productData);
         message.success("Produk berhasil ditambahkan!");
       }
-
       form.resetFields();
       setModalVisible(false);
       setIsEditing(false);
@@ -118,19 +66,33 @@ const Products = () => {
     setIsEditing(true);
     setModalVisible(true);
     setEditingId(record.id);
-    form.setFieldsValue(record);
+    form.setFieldsValue(record); // Isi form dengan data yang akan diedit
   };
 
-  const columns = [
+  const handleAddProduct = () => {
+    setIsEditing(false);
+    setModalVisible(true);
+    setEditingId(null);
+    form.resetFields(); // Bersihkan form
+  };
+
+  const handleModalCancel = () => {
+    setModalVisible(false);
+    setIsEditing(false);
+    setEditingId(null);
+    form.resetFields();
+  };
+
+  const productColumns = [
     { title: "Nama", dataIndex: "name", key: "name" },
     { title: "Kategori", dataIndex: "category", key: "category" },
-    { title: "Satuan", dataIndex: "unit", key: "unit" }, // Tambahkan kolom unit
+    { title: "Satuan", dataIndex: "unit", key: "unit" },
     { title: "Stok", dataIndex: "stock", key: "stock" },
     {
       title: "Harga Satuan",
       dataIndex: "price",
       key: "price",
-      render: (text) => `Rp ${Number(text).toLocaleString("id-ID")}`,
+      render: (text) => `Rp ${Number(text || 0).toLocaleString("id-ID")}`,
     },
     {
       title: "Aksi",
@@ -160,31 +122,28 @@ const Products = () => {
   ];
 
   return (
-    <div>
-      <h2>Daftar Produk</h2>
+    <Card title="Daftar Produk" className="dashboard-card" loading={loading}>
       <Button
         type="primary"
         icon={<PlusOutlined />}
-        onClick={() => {
-          setModalVisible(true);
-          setIsEditing(false);
-          form.resetFields();
-        }}
+        onClick={handleAddProduct}
         style={{ marginBottom: 16 }}
       >
         Tambah Produk
       </Button>
-      <Table columns={columns} dataSource={products} loading={loading} />
+      <Table
+        columns={productColumns}
+        dataSource={products}
+        loading={loading}
+        rowKey="id"
+        locale={{ emptyText: "Tidak ada produk." }}
+      />
 
       <Modal
         title={isEditing ? "Edit Produk" : "Tambah Produk"}
         open={modalVisible}
-        onCancel={() => {
-          setModalVisible(false);
-          setIsEditing(false);
-          form.resetFields();
-        }}
-        onOk={() => form.submit()}
+        onCancel={handleModalCancel}
+        onOk={() => form.submit()} // Trigger form submission
         okText="Simpan"
         cancelText="Batal"
       >
@@ -226,23 +185,25 @@ const Products = () => {
             name="price"
             label="Harga Satuan (Rp)"
             rules={[
-              {
-                required: true,
-                message: "Harga wajib diisi",
-                type: "number",
-                min: 0,
-              },
+              { required: true, message: "Harga wajib diisi", type: "number" },
             ]}
           >
-            <InputNumber min={0} style={{ width: "100%" }} />
+            <InputNumber
+              min={0}
+              style={{ width: "100%" }}
+              formatter={(value) =>
+                `Rp ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+              } // Format saat diketik
+              parser={(value) => value.replace(/Rp\s?|(,*)/g, "")} // Parse kembali ke angka
+            />
           </Form.Item>
           <Form.Item name="stock" label="Stok">
             <InputNumber min={0} style={{ width: "100%" }} />
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </Card>
   );
 };
 
-export default Products;
+export default ProductManagementTable;

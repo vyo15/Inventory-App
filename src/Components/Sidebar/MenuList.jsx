@@ -51,12 +51,7 @@ const MenuList = ({ darkTheme }) => {
         <Item key="StockManagement">
           <Link to="/stock-management">Manajemen Stok</Link>
         </Item>
-        <Item key="StockIn">
-          <Link to="/stock-in">Stok Masuk</Link>
-        </Item>
-        <Item key="StockOut">
-          <Link to="/stock-out">Stok Keluar</Link>
-        </Item>
+
         <Item key="StockAdjustment">
           <Link to="/stock-adjustment">Penyesuaian Stok</Link>
         </Item>
@@ -67,27 +62,11 @@ const MenuList = ({ darkTheme }) => {
         <Link to="/productions">Produksi</Link>
       </Item>
 
-      {/* Pesanan */}
-      <SubMenu key="Pesanan" icon={<UnorderedListOutlined />} title="Pesanan">
-        <Item key="SemuaPesanan">
-          <Link to="/orders">Semua Pesanan</Link>
-        </Item>
-        <Item key="Diproses">
-          <Link to="/orders/processing">Diproses</Link>
-        </Item>
-        <Item key="Dikirim">
-          <Link to="/orders/shipped">Dikirim</Link>
-        </Item>
-        <Item key="Selesai">
-          <Link to="/orders/completed">Selesai</Link>
-        </Item>
-      </SubMenu>
-
       {/* Transaksi */}
       <SubMenu
         key="Transaksi"
         icon={<ShoppingCartOutlined />}
-        title="Transaksi Keuangan"
+        title="Transaksi"
       >
         <Item key="Penjualan">
           <Link to="/sales">Penjualan</Link>
@@ -103,10 +82,10 @@ const MenuList = ({ darkTheme }) => {
       {/* Keuangan */}
       <SubMenu key="Keuangan" icon={<WalletOutlined />} title="Kas & Biaya">
         <Item key="Pemasukan">
-          <Link to="/income">Pemasukan</Link>
+          <Link to="/cash-in">Pemasukan</Link>
         </Item>
         <Item key="Pengeluaran">
-          <Link to="/expenses">Pengeluaran</Link>
+          <Link to="/cash-out">Pengeluaran</Link>
         </Item>
       </SubMenu>
 
@@ -116,13 +95,13 @@ const MenuList = ({ darkTheme }) => {
           <Link to="/report-stock">Laporan Stok</Link>
         </Item>
         <Item key="SalesReport">
-          <Link to="/report-sales">Laporan Penjualan</Link>
+          <Link to="/sales-report">Laporan Penjualan</Link>
         </Item>
         <Item key="PurchaseReport">
-          <Link to="/report-purchases">Laporan Pembelian</Link>
+          <Link to="/purchases-report">Laporan Pembelian</Link>
         </Item>
         <Item key="ProfitReport">
-          <Link to="/report-profit">Laporan Laba Rugi</Link>
+          <Link to="/profit-loss">Laporan Laba Rugi</Link>
         </Item>
       </SubMenu>
     </Menu>

@@ -1,5 +1,6 @@
+// src/App.jsx
 import React, { useState } from "react";
-import { Layout, ConfigProvider, theme } from "antd";
+import { Layout, ConfigProvider, theme } from "antd"; // Import theme dari Ant Design
 import { Routes, Route, Navigate } from "react-router-dom";
 
 // Komponen
@@ -14,7 +15,7 @@ import WeLost from "./Pages/ErrorPage/WeLost";
 
 import Categories from "./Pages/MasterData/Categories";
 import Productions from "./Pages/Produksi/Productions";
-import Orders from "./Pages/Pesanan/Orders";
+import Sales from "./Pages/Transaksi/Sales";
 import Customers from "./Pages/MasterData/Customers";
 import Products from "./Pages/MasterData/Products";
 import RawMaterials from "./Pages/MasterData/RawMaterials";
@@ -22,12 +23,17 @@ import SupplierPurchases from "./Pages/MasterData/SupplierPurchases";
 
 // Inventory
 import StockAdjustment from "./Pages/Inventory/StockAdjustment";
-import StockIn from "./Pages/Inventory/StockIn";
-import StockOut from "./Pages/Inventory/StockOut"; // Tambahan
 import StockManagement from "./Pages/Inventory/StockManagement";
 
-import "./App.css";
+import "./App.css"; // Pastikan App.css diimpor setelah index.css
 import StockReport from "./Pages/Laporan/StockReport";
+import CashIn from "./Pages/Finance/CashIn";
+import CashOut from "./Pages/Finance/CashOut";
+import Purchases from "./Pages/Transaksi/Purchases";
+import Returns from "./Pages/Transaksi/Returns";
+import ProfitLossReport from "./Pages/Laporan/ProfitLossReport";
+import PurchasesReport from "./Pages/Laporan/PurchasesReport";
+import SalesReport from "./Pages/Laporan/SalesReport";
 
 const { Header, Sider, Content } = Layout;
 
@@ -48,22 +54,29 @@ const App = () => {
         },
       }}
     >
-      <Layout className={`main-layout ${darkTheme ? "dark" : "light"}`}>
+      {/* Tambahkan minHeight di sini sebagai penegasan */}
+      <Layout
+        className={`main-layout ${darkTheme ? "dark" : "light"}`}
+        style={{ minHeight: "100vh" }}
+      >
         <Sider
           collapsible
           collapsed={collapsed}
           onCollapse={setCollapsed}
           theme={darkTheme ? "dark" : "light"}
+          // Jika Anda ingin Sider memiliki scrollbar sendiri jika menunya terlalu banyak
+          // style={{ overflowY: 'auto', height: '100vh' }}
         >
           <Logo darkTheme={darkTheme} />
           <MenuList darkTheme={darkTheme} />
         </Sider>
 
         <Layout>
+          {" "}
+          {/* Ini adalah layout untuk Header dan Content */}
           <Header className="header">
             <CostumHeader />
           </Header>
-
           <Content className="content">
             <Routes>
               {/* Redirect to dashboard */}
@@ -76,17 +89,22 @@ const App = () => {
               {/* Master Data */}
               <Route path="/categories" element={<Categories />} />
               <Route path="/productions" element={<Productions />} />
-              <Route path="/orders" element={<Orders />} />
+              <Route path="/sales" element={<Sales />} />
               <Route path="/suppliers" element={<SupplierPurchases />} />
               <Route path="/customers" element={<Customers />} />
               <Route path="/products" element={<Products />} />
               <Route path="/raw-materials" element={<RawMaterials />} />
               {/* Inventory */}
-              <Route path="/stock-in" element={<StockIn />} />
-              <Route path="/stock-out" element={<StockOut />} />
               <Route path="/stock-adjustment" element={<StockAdjustment />} />
               <Route path="/stock-management" element={<StockManagement />} />
               <Route path="/report-stock" element={<StockReport />} />
+              <Route path="/cash-in" element={<CashIn />} />
+              <Route path="/cash-out" element={<CashOut />} />
+              <Route path="/purchases" element={<Purchases />} />
+              <Route path="/returns" element={<Returns />} />
+              <Route path="/profit-loss" element={<ProfitLossReport />} />
+              <Route path="/purchases-report" element={<PurchasesReport />} />
+              <Route path="/sales-report" element={<SalesReport />} />
 
               {/* Halaman Tidak Ditemukan */}
               <Route path="*" element={<WeLost />} />

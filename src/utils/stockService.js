@@ -1,68 +1,156 @@
-import { doc, getDoc, updateDoc, collection, addDoc } from "firebase/firestore";
+import {
+  doc,
+  updateDoc,
+  collection,
+  addDoc,
+  Timestamp,
+  getDocs,
+  query,
+  orderBy,
+  increment,
+  writeBatch,
+} from "firebase/firestore";
 import { db } from "../firebase";
 
-// Fungsi untuk memperbarui stok dan mencatat log transaksi
-export const updateStock = async (
+/**
+ * Mengambil semua log inventaris yang diurutkan dari yang terbaru.
+ */
+export const getInventoryLogs = async () => {
+  try {
+    const logsCollection = collection(db, "inventory_logs");
+    const q = query(logsCollection, orderBy("timestamp", "desc"));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((docItem) => ({
+      id: docItem.id,
+      ...docItem.data(),
+    }));
+  } catch (error) {
+    console.error("Gagal mengambil riwayat stok:", error);
+    return [];
+  }
+};
+
+/**
+ * Mencatat pergerakan stok ke koleksi log inventaris.
+ */
+export const addInventoryLog = async (
   itemId,
+  itemName,
   quantityChange,
-  type, // 'stock_in', 'stock_in_raw', 'stock_out', 'stock_out_raw'
+  type,
+  collectionName,
   extraData = {}
 ) => {
   try {
-    let itemCollection;
-    let logCollection;
-
-    // Menentukan koleksi item dan log berdasarkan tipe transaksi
-    if (type === "stock_in" || type === "stock_out") {
-      itemCollection = "products";
-      logCollection = type;
-    } else if (type === "stock_in_raw" || type === "stock_out_raw") {
-      itemCollection = "materials"; // Menggunakan "materials" sesuai database
-      logCollection = type.replace("_raw", "");
-    } else {
-      console.error("Tipe transaksi stok tidak valid:", type);
-      return;
-    }
-
-    const itemRef = doc(db, itemCollection, itemId);
-    const itemSnap = await getDoc(itemRef);
-
-    if (!itemSnap.exists()) {
-      console.error("Item tidak ditemukan:", itemId);
-      return;
-    }
-
-    const itemData = itemSnap.data();
-    const currentStock = itemData.stock || 0;
-    let newStock;
-
-    // Menentukan apakah stok harus ditambah atau dikurangi
-    if (type === "stock_in" || type === "stock_in_raw") {
-      newStock = currentStock + quantityChange;
-    } else if (type === "stock_out" || type === "stock_out_raw") {
-      newStock = Math.max(0, currentStock - quantityChange);
-    } else {
-      console.error("Tipe transaksi stok tidak valid:", type);
-      return;
-    }
-
-    // Memperbarui stok di koleksi yang sesuai
-    await updateDoc(itemRef, { stock: newStock });
-
-    // Membuat log transaksi
-    const logData = {
+    await addDoc(collection(db, "inventory_logs"), {
       itemId,
-      itemName: itemData.name || "Tidak diketahui",
-      quantity: Math.abs(quantityChange),
-      date: new Date().toISOString(),
+      itemName,
+      quantityChange,
       type,
+      collectionName,
+      timestamp: Timestamp.now(),
       ...extraData,
+    });
+  } catch (error) {
+    console.error("Gagal menambah log inventaris:", error);
+  }
+};
+
+/**
+ * Memperbarui stok produk atau bahan baku dengan aman menggunakan `increment()`.
+ * Digunakan di StockIn, StockOut, dan StockAdjustment.
+ */
+export const updateStock = async (itemId, quantityChange, collectionName) => {
+  try {
+    const itemRef = doc(db, collectionName, itemId);
+    await updateDoc(itemRef, {
+      stock: increment(quantityChange),
+    });
+    console.log(
+      `Stok ${collectionName} dengan ID ${itemId} berhasil diperbarui.`
+    );
+  } catch (error) {
+    console.error("Gagal update stok:", error);
+    throw error;
+  }
+};
+
+/**
+ * Melakukan transaksi produksi secara atomik.
+ */
+export const performProductionTransaction = async (productionData) => {
+  const batch = writeBatch(db);
+  const {
+    values,
+    isEditing,
+    editingId,
+    productions,
+    rawMaterials,
+    finishedProducts,
+  } = productionData;
+
+  let oldProductionData = null;
+  let newProductionDocRef = null;
+
+  try {
+    if (isEditing) {
+      oldProductionData = productions.find((p) => p.id === editingId);
+      if (!oldProductionData) {
+        throw new Error("Data produksi lama tidak ditemukan.");
+      }
+
+      const oldProductRef = doc(
+        db,
+        "products",
+        oldProductionData.productResult.productId
+      );
+      batch.update(oldProductRef, {
+        stock: increment(-oldProductionData.productResult.quantity),
+      });
+
+      for (const material of oldProductionData.materials) {
+        const oldMaterialRef = doc(db, "raw_materials", material.productId);
+        batch.update(oldMaterialRef, { stock: increment(material.quantity) });
+      }
+    }
+
+    const newProductRef = doc(db, "products", values.productResult.productId);
+    batch.update(newProductRef, {
+      stock: increment(values.productResult.quantity),
+    });
+
+    for (const material of values.materials) {
+      const newMaterialRef = doc(db, "raw_materials", material.productId);
+      batch.update(newMaterialRef, { stock: increment(-material.quantity) });
+    }
+
+    const docData = {
+      ...values,
+      date: values.date.format("YYYY-MM-DD"),
+      productResult: {
+        ...values.productResult,
+        name:
+          finishedProducts.find((p) => p.id === values.productResult.productId)
+            ?.name || "N/A",
+      },
+      materials: values.materials.map((mat) => ({
+        ...mat,
+        name: rawMaterials.find((p) => p.id === mat.productId)?.name || "N/A",
+      })),
     };
 
-    // Menambahkan dokumen log ke koleksi yang sesuai
-    await addDoc(collection(db, logCollection), logData);
+    if (isEditing) {
+      newProductionDocRef = doc(db, "productions", editingId);
+      batch.update(newProductionDocRef, docData);
+    } else {
+      newProductionDocRef = doc(collection(db, "productions"));
+      batch.set(newProductionDocRef, docData);
+    }
+
+    await batch.commit();
+    return true;
   } catch (error) {
-    console.error("Gagal memperbarui stok:", error);
-    // Tidak melempar error agar aplikasi tidak crash
+    console.error("Gagal melakukan transaksi produksi:", error);
+    return false;
   }
 };

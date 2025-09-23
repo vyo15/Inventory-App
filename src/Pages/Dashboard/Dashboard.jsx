@@ -1,144 +1,338 @@
-import React from "react";
-import { Card, Row, Col, Table, Tag } from "antd";
-import { Column } from "@ant-design/charts";
+// src/Pages/Dashboard/Dashboard.jsx
+import React, { useState, useEffect } from "react";
+import { Row, Col, message } from "antd"; // Import message dari antd
+import {
+  collection,
+  onSnapshot,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+} from "firebase/firestore";
+import { db } from "../../firebase"; // <--- PASTIKAN PATH INI BENAR (relatif ke firebase.js)
+
+// Import sub-komponen UI yang sudah Anda buat
+import SummaryCards from "../../Components/Dashboard/SummaryCards"; // <--- PASTIKAN PATH INI BENAR
+import MonthlyChart from "../../Components/Dashboard/MonthlyChart"; // <--- PASTIKAN PATH INI BENAR
+import LowStockTable from "../../Components/Dashboard/LowStockTable"; // <--- PASTIKAN PATH INI BENAR
+import RecentTransactionsTable from "../../Components/Dashboard/RecentTransactionsTable"; // <--- PASTIKAN PATH INI BENAR
+import RecentProductionsTable from "../../Components/Dashboard/RecentProductionsTable"; // <--- PASTIKAN PATH INI BENAR
+import ProductManagementTable from "../../Components/Dashboard/ProductManagementTable"; // <--- PASTIKAN PATH INI BENAR
 
 const Dashboard = () => {
-  // Contoh data ringkasan
-  const summaryData = [
-    { title: "Total Penjualan", value: "Rp 120.000.000", color: "green" },
-    { title: "Total Pembelian", value: "Rp 80.000.000", color: "blue" },
-    { title: "Pengeluaran", value: "Rp 15.000.000", color: "red" },
-  ];
+  const [dashboardData, setDashboardData] = useState({
+    totalProducts: 0,
+    totalMaterials: 0,
+    lowStockProducts: [], // Produk dengan stok menipis
+    lowStockMaterials: [], // Bahan baku dengan stok menipis
+    recentTransactions: [],
+    totalRevenue: 0,
+    totalExpenses: 0,
+    monthlyFinancialData: [],
+    recentProductions: [],
+    products: [], // Untuk tabel daftar produk (semua produk)
+    categories: [], // Untuk dropdown kategori di modal produk
+  });
+  const [loading, setLoading] = useState(true);
 
-  // Contoh data chart penjualan bulanan
-  const salesData = [
-    { month: "Jan", sales: 5000000 },
-    { month: "Feb", sales: 7000000 },
-    { month: "Mar", sales: 6000000 },
-    { month: "Apr", sales: 9000000 },
-    { month: "Mei", sales: 12000000 },
-    { month: "Jun", sales: 11000000 },
-  ];
+  useEffect(() => {
+    if (!db) {
+      console.error(
+        "Firebase db is not initialized. Check firebase.js configuration."
+      );
+      setLoading(false);
+      message.error(
+        "Firebase tidak terinisialisasi. Periksa konfigurasi Anda di firebase.js."
+      );
+      return;
+    }
 
-  const config = {
-    data: salesData,
-    xField: "month",
-    yField: "sales",
-    label: {
-      position: "middle",
-      style: {
-        fill: "#FFFFFF",
-        opacity: 0.6,
+    const unsubs = []; // Array untuk menampung fungsi unsubscribe listener onSnapshot
+
+    // --- Listener Realtime untuk Produk ---
+    const unsubProducts = onSnapshot(
+      collection(db, "products"),
+      (snapshot) => {
+        const data = [];
+        snapshot.forEach((doc) =>
+          data.push({ id: doc.id, ...doc.data(), key: doc.id })
+        );
+        setDashboardData((prev) => ({
+          ...prev,
+          products: data,
+          totalProducts: snapshot.size,
+          lowStockProducts: data.filter((item) => item.stock <= 5), // Asumsi stok menipis <= 5
+        }));
       },
-    },
-    xAxis: {
-      label: {
-        autoHide: true,
-        autoRotate: false,
+      (error) => {
+        console.error("Error fetching products: ", error);
+        message.error("Gagal memuat produk.");
+      }
+    );
+    unsubs.push(unsubProducts);
+
+    // --- Listener Realtime untuk Bahan Baku ---
+    const unsubMaterials = onSnapshot(
+      collection(db, "raw_materials"),
+      (snapshot) => {
+        const lowStock = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            collectionName: "raw_materials", // Tambahkan informasi koleksi
+            key: doc.id,
+          }))
+          .filter((item) => item.stock <= 10); // Asumsi stok menipis <= 10
+        setDashboardData((prev) => ({
+          ...prev,
+          lowStockMaterials: lowStock,
+          totalMaterials: snapshot.size,
+        }));
       },
-    },
-    meta: {
-      sales: {
-        alias: "Penjualan (Rp)",
-        formatter: (v) => `Rp ${v.toLocaleString()}`,
+      (error) => {
+        console.error("Error fetching raw materials: ", error);
+        message.error("Gagal memuat bahan baku.");
+      }
+    );
+    unsubs.push(unsubMaterials);
+
+    // --- Listener Realtime untuk Transaksi Terbaru (Inventory Logs) ---
+    const unsubTransactions = onSnapshot(
+      collection(db, "inventory_logs"),
+      (snapshot) => {
+        const data = snapshot.docs.map((doc) => ({
+          ...doc.data(),
+          id: doc.id,
+          key: doc.id,
+          // Konversi timestamp Firebase ke objek Date JavaScript
+          timestamp: doc.data().timestamp
+            ? doc.data().timestamp.toDate()
+            : null,
+        }));
+        const sortedTransactions = data
+          .filter((item) => item.timestamp) // Filter yang memiliki timestamp valid
+          .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+          .slice(0, 5); // Ambil 5 transaksi terbaru
+        setDashboardData((prev) => ({
+          ...prev,
+          recentTransactions: sortedTransactions,
+        }));
       },
-    },
-  };
+      (error) => {
+        console.error("Error fetching transactions: ", error);
+        message.error("Gagal memuat transaksi terbaru.");
+      }
+    );
+    unsubs.push(unsubTransactions);
 
-  // Contoh data transaksi terbaru
-  const transactions = [
-    {
-      key: "1",
-      id: "TRX001",
-      date: "2025-09-01",
-      customer: "Budi",
-      total: 1500000,
-      status: "Lunas",
-    },
-    {
-      key: "2",
-      id: "TRX002",
-      date: "2025-09-02",
-      customer: "Sari",
-      total: 2000000,
-      status: "Pending",
-    },
-  ];
-
-  const transactionColumns = [
-    { title: "ID Transaksi", dataIndex: "id", key: "id" },
-    { title: "Tanggal", dataIndex: "date", key: "date" },
-    { title: "Pelanggan", dataIndex: "customer", key: "customer" },
-    {
-      title: "Total",
-      dataIndex: "total",
-      key: "total",
-      render: (val) => `Rp ${val.toLocaleString()}`,
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      render: (status) => {
-        const color = status === "Lunas" ? "green" : "orange";
-        return <Tag color={color}>{status}</Tag>;
+    // --- Listener Realtime untuk Kategori ---
+    const unsubCategories = onSnapshot(
+      collection(db, "categories"),
+      (snapshot) => {
+        const data = [];
+        snapshot.forEach((doc) =>
+          data.push({ id: doc.id, ...doc.data(), key: doc.id })
+        );
+        setDashboardData((prev) => ({ ...prev, categories: data }));
       },
-    },
-  ];
+      (error) => {
+        console.error("Error fetching categories: ", error);
+        message.error("Gagal memuat kategori.");
+      }
+    );
+    unsubs.push(unsubCategories);
 
-  // Contoh produk stok menipis
-  const lowStockProducts = [
-    { key: "1", name: "Produk A", stock: 3 },
-    { key: "2", name: "Produk B", stock: 1 },
-  ];
+    // --- Mengambil data untuk chart dan produksi terbaru (sekali ambil saja atau refresh berkala) ---
+    // Menggunakan getDocs karena ini mungkin tidak perlu real-time seperti total produk/stok
+    const fetchChartAndProductionData = async () => {
+      try {
+        const [salesSnap, purchasesSnap, productionsSnap] = await Promise.all([
+          getDocs(collection(db, "sales")),
+          getDocs(collection(db, "purchases")),
+          getDocs(
+            query(
+              collection(db, "productions"),
+              orderBy("date", "desc"),
+              limit(5)
+            )
+          ),
+        ]);
 
-  const productColumns = [
-    { title: "Nama Produk", dataIndex: "name", key: "name" },
-    { title: "Stok Tersisa", dataIndex: "stock", key: "stock" },
-  ];
+        const totalRev = salesSnap.docs.reduce(
+          (sum, doc) => sum + (doc.data().total || 0),
+          0
+        );
+        const totalExp = purchasesSnap.docs.reduce(
+          (sum, doc) => sum + (doc.data().total || 0),
+          0
+        );
+
+        const salesData = salesSnap.docs.map((doc) => ({
+          ...doc.data(),
+          date: doc.data().date ? doc.data().date.toDate() : new Date(), // Pastikan date dikonversi
+        }));
+        const purchasesData = purchasesSnap.docs.map((doc) => ({
+          ...doc.data(),
+          date: doc.data().date ? doc.data().date.toDate() : new Date(),
+        }));
+
+        // Logika untuk mengelompokkan data bulanan untuk chart
+        const monthlyDataMap = new Map();
+        const getMonthYear = (date) =>
+          `${date.getFullYear()}-${date.getMonth() + 1}`;
+        const monthNames = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "Mei",
+          "Jun",
+          "Jul",
+          "Agu",
+          "Sep",
+          "Okt",
+          "Nov",
+          "Des",
+        ];
+
+        // Memproses data penjualan
+        salesData.forEach((sale) => {
+          const monthYear = getMonthYear(sale.date);
+          if (!monthlyDataMap.has(monthYear)) {
+            monthlyDataMap.set(monthYear, {
+              month: monthNames[sale.date.getMonth()],
+              sales: 0,
+              expenses: 0,
+            });
+          }
+          monthlyDataMap.get(monthYear).sales += sale.total;
+        });
+
+        // Memproses data pembelian
+        purchasesData.forEach((purchase) => {
+          const monthYear = getMonthYear(purchase.date);
+          if (!monthlyDataMap.has(monthYear)) {
+            monthlyDataMap.set(monthYear, {
+              month: monthNames[purchase.date.getMonth()],
+              sales: 0,
+              expenses: 0,
+            });
+          }
+          monthlyDataMap.get(monthYear).expenses += purchase.total;
+        });
+
+        const combinedData = [];
+        Array.from(monthlyDataMap.entries()).forEach(([, value]) => {
+          combinedData.push({
+            month: value.month,
+            value: value.sales,
+            type: "Penjualan",
+          });
+          combinedData.push({
+            month: value.month,
+            value: value.expenses,
+            type: "Pembelian",
+          });
+        });
+
+        // Urutkan data bulanan
+        const sortedMonthlyData = combinedData.sort((a, b) => {
+          return monthNames.indexOf(a.month) - monthNames.indexOf(b.month);
+        });
+
+        setDashboardData((prev) => ({
+          ...prev,
+          totalRevenue: totalRev,
+          totalExpenses: totalExp,
+          monthlyFinancialData: sortedMonthlyData,
+          recentProductions: productionsSnap.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            key: doc.id,
+          })),
+        }));
+      } catch (error) {
+        console.error("Gagal mengambil data tambahan:", error);
+        message.error("Gagal memuat data chart dan produksi.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChartAndProductionData();
+
+    // Cleanup function untuk unsubscribe dari listener onSnapshot
+    return () => unsubs.forEach((unsub) => unsub());
+  }, []); // Dependensi kosong agar useEffect hanya berjalan sekali saat komponen mount
+
+  const {
+    totalProducts,
+    totalMaterials,
+    lowStockProducts,
+    lowStockMaterials,
+    recentTransactions,
+    totalRevenue,
+    totalExpenses,
+    monthlyFinancialData,
+    recentProductions,
+    products,
+    categories,
+  } = dashboardData;
+
+  const allLowStockProductsCount =
+    lowStockProducts.length + lowStockMaterials.length;
 
   return (
     <div style={{ padding: 24 }}>
-      <Row gutter={16}>
-        {summaryData.map(({ title, value, color }) => (
-          <Col span={8} key={title}>
-            <Card style={{ textAlign: "center" }}>
-              <h3>{title}</h3>
-              <p style={{ fontSize: 24, color }}>{value}</p>
-            </Card>
-          </Col>
-        ))}
-      </Row>
+      <SummaryCards
+        totalProducts={totalProducts}
+        totalMaterials={totalMaterials}
+        lowStockProductsCount={allLowStockProductsCount}
+        totalRevenue={totalRevenue}
+        totalExpenses={totalExpenses}
+        loading={loading}
+      />
 
-      <Row gutter={16} style={{ marginTop: 24 }}>
-        <Col span={16}>
-          <Card title="Grafik Penjualan Bulanan">
-            <Column {...config} />
-          </Card>
+      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+        <Col xs={24} md={16}>
+          <MonthlyChart
+            monthlyFinancialData={monthlyFinancialData}
+            loading={loading}
+          />
         </Col>
 
-        <Col span={8}>
-          <Card title="Produk Stok Menipis">
-            <Table
-              dataSource={lowStockProducts}
-              columns={productColumns}
-              pagination={false}
-              size="small"
-            />
-          </Card>
+        <Col xs={24} md={8}>
+          <LowStockTable
+            lowStockProducts={lowStockProducts}
+            lowStockMaterials={lowStockMaterials}
+            loading={loading}
+          />
         </Col>
       </Row>
 
-      <Row style={{ marginTop: 24 }}>
-        <Col span={24}>
-          <Card title="Transaksi Terbaru">
-            <Table
-              dataSource={transactions}
-              columns={transactionColumns}
-              pagination={{ pageSize: 5 }}
-              size="middle"
-            />
-          </Card>
+      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+        <Col xs={24} md={12}>
+          <RecentTransactionsTable
+            recentTransactions={recentTransactions}
+            loading={loading}
+          />
+        </Col>
+        <Col xs={24} md={12}>
+          <RecentProductionsTable
+            recentProductions={recentProductions}
+            loading={loading}
+          />
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+        <Col xs={24}>
+          <ProductManagementTable
+            products={products}
+            categories={categories}
+            loading={loading}
+            // Props terkait manajemen produk dipass langsung
+          />
         </Col>
       </Row>
     </div>

@@ -1,9 +1,11 @@
+// src/pages/Inventory/StockAdjustment.jsx
+
 import React, { useState, useEffect } from "react";
 import { db } from "../../firebase";
 import { collection, getDocs } from "firebase/firestore";
 
 import { Form, Select, InputNumber, Input, Button, message } from "antd";
-import { updateStock } from "../../utils/stockService";
+import { updateStock, addInventoryLog } from "../../utils/stockService";
 
 const { Option } = Select;
 
@@ -12,7 +14,7 @@ const StockAdjustment = () => {
   const [rawMaterials, setRawMaterials] = useState([]);
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
-  const [itemType, setItemType] = useState("product"); // State untuk tipe item
+  const [itemType, setItemType] = useState("product");
 
   useEffect(() => {
     fetchItems();
@@ -46,14 +48,14 @@ const StockAdjustment = () => {
     setLoading(true);
     try {
       let selectedItem;
-      let updateType;
+      let collectionName;
 
       if (itemType === "product") {
         selectedItem = products.find((p) => p.id === values.itemId);
-        updateType = "stock_adjustments";
+        collectionName = "products";
       } else {
         selectedItem = rawMaterials.find((m) => m.id === values.itemId);
-        updateType = "stock_adjustments_raw";
+        collectionName = "raw_materials";
       }
 
       if (!selectedItem) {
@@ -65,11 +67,20 @@ const StockAdjustment = () => {
           ? Number(values.amount)
           : -Number(values.amount);
 
-      await updateStock(values.itemId, adjustmentValue, updateType, {
-        adjustmentType: values.adjustmentType,
-        reason: values.reason,
-        itemName: selectedItem.name,
-      });
+      await updateStock(values.itemId, adjustmentValue, collectionName);
+
+      // Mengirimkan `reason` sebagai `note` di `addInventoryLog`
+      await addInventoryLog(
+        values.itemId,
+        selectedItem.name,
+        adjustmentValue,
+        "stock_adjustment",
+        collectionName,
+        {
+          note: values.reason, // <-- Perubahan di sini
+          adjustmentType: values.adjustmentType,
+        }
+      );
 
       message.success("Penyesuaian stok berhasil disimpan");
       form.resetFields();
