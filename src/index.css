@@ -1,30 +1,23 @@
-/* src/index.css */
-
-/* Reset dasar */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-/* Pastikan elemen-elemen root mengambil 100% tinggi viewport */
 html,
 body,
 #root {
   height: 100%;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  /* JANGAN tambahkan overflow: hidden di sini, biarkan layout Ant Design yang mengelola */
 }
 
-/* Gaya default body */
 body {
-  background-color: #f0f2f5; /* Warna terang */
+  background-color: #f0f2f5;
   color: #000;
 }
 
-/* Gaya body untuk dark mode */
 .dark body {
-  background-color: #0d1117; /* Warna gelap */
+  background-color: #0d1117;
   color: #e8eaed;
 }
 
@@ -37,5 +30,10 @@ body {
   border-radius: 8px;
 }
 
-/* Floating Theme Button - gaya ini biasanya di App.css atau komponennya */
-/* Saya pindahkan ke App.css untuk konsistensi */
+/* Floating Theme Button */
+.theme-btn {
+  cursor: pointer;
+  border-radius: 50%;
+  padding: 12px;
+  font-size: 18px;
+}

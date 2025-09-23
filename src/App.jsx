@@ -1,6 +1,5 @@
-// src/App.jsx
 import React, { useState } from "react";
-import { Layout, ConfigProvider, theme } from "antd"; // Import theme dari Ant Design
+import { Layout, ConfigProvider, theme } from "antd";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 // Komponen
@@ -25,7 +24,7 @@ import SupplierPurchases from "./Pages/MasterData/SupplierPurchases";
 import StockAdjustment from "./Pages/Inventory/StockAdjustment";
 import StockManagement from "./Pages/Inventory/StockManagement";
 
-import "./App.css"; // Pastikan App.css diimpor setelah index.css
+import "./App.css";
 import StockReport from "./Pages/Laporan/StockReport";
 import CashIn from "./Pages/Finance/CashIn";
 import CashOut from "./Pages/Finance/CashOut";
@@ -54,29 +53,22 @@ const App = () => {
         },
       }}
     >
-      {/* Tambahkan minHeight di sini sebagai penegasan */}
-      <Layout
-        className={`main-layout ${darkTheme ? "dark" : "light"}`}
-        style={{ minHeight: "100vh" }}
-      >
+      <Layout className={`main-layout ${darkTheme ? "dark" : "light"}`}>
         <Sider
           collapsible
           collapsed={collapsed}
           onCollapse={setCollapsed}
           theme={darkTheme ? "dark" : "light"}
-          // Jika Anda ingin Sider memiliki scrollbar sendiri jika menunya terlalu banyak
-          // style={{ overflowY: 'auto', height: '100vh' }}
         >
           <Logo darkTheme={darkTheme} />
           <MenuList darkTheme={darkTheme} />
         </Sider>
 
         <Layout>
-          {" "}
-          {/* Ini adalah layout untuk Header dan Content */}
           <Header className="header">
             <CostumHeader />
           </Header>
+
           <Content className="content">
             <Routes>
               {/* Redirect to dashboard */}

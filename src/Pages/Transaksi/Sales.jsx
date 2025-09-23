@@ -60,7 +60,6 @@ const Sales = () => {
       if (statusFilter === "all") {
         q = query(salesRef, orderBy("createdAt", "desc"));
       } else {
-        // This is the query that requires a composite index in Firestore
         q = query(
           salesRef,
           where("status", "==", statusFilter),
@@ -243,9 +242,13 @@ const Sales = () => {
         }
       }
 
-      // Update local state immediately to remove the item from the current view
+      // --- Perbaikan: Update state sales secara lokal agar data menghilang dari tab saat ini
       setSales((prevSales) => prevSales.filter((sale) => sale.id !== saleId));
-      fetchSales(activeTab); // Then fetch the latest data
+
+      // Tunda pembaruan data dari database untuk menghindari fetch ganda
+      setTimeout(() => {
+        fetchSales(activeTab);
+      }, 500);
     } catch (error) {
       console.error("Gagal update status:", error);
       message.error("Gagal mengubah status penjualan.");
@@ -353,6 +356,7 @@ const Sales = () => {
       key: "action",
       render: (text, record) => (
         <Space size="middle">
+          {/* Perbaikan: Tambahkan Popconfirm untuk setiap tombol aksi */}
           {record.status === "Diproses" &&
             record.platform !== "Offline Store" && (
               <Popconfirm
