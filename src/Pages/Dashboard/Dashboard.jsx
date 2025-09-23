@@ -1,6 +1,6 @@
 // src/Pages/Dashboard/Dashboard.jsx
 import React, { useState, useEffect } from "react";
-import { Row, Col, message } from "antd"; // Import message dari antd
+import { Row, Col, message } from "antd";
 import {
   collection,
   onSnapshot,
@@ -9,59 +9,55 @@ import {
   orderBy,
   limit,
 } from "firebase/firestore";
-import { db } from "../../firebase"; // <--- PASTIKAN PATH INI BENAR (relatif ke firebase.js)
+import { db } from "../../firebase";
 
 // Import sub-komponen UI yang sudah Anda buat
-import SummaryCards from "../../Components/Dashboard/SummaryCards"; // <--- PASTIKAN PATH INI BENAR
-import MonthlyChart from "../../Components/Dashboard/MonthlyChart"; // <--- PASTIKAN PATH INI BENAR
-import LowStockTable from "../../Components/Dashboard/LowStockTable"; // <--- PASTIKAN PATH INI BENAR
-import RecentTransactionsTable from "../../Components/Dashboard/RecentTransactionsTable"; // <--- PASTIKAN PATH INI BENAR
-import RecentProductionsTable from "../../Components/Dashboard/RecentProductionsTable"; // <--- PASTIKAN PATH INI BENAR
-import ProductManagementTable from "../../Components/Dashboard/ProductManagementTable"; // <--- PASTIKAN PATH INI BENAR
+import SummaryCards from "../../Components/Dashboard/SummaryCards";
+import MonthlyChart from "../../Components/Dashboard/MonthlyChart";
+import LowStockTable from "../../Components/Dashboard/LowStockTable";
+import RecentTransactionsTable from "../../Components/Dashboard/RecentTransactionsTable";
+import RecentProductionsTable from "../../Components/Dashboard/RecentProductionsTable";
+import ProductManagementTable from "../../Components/Dashboard/ProductManagementTable";
 
 const Dashboard = () => {
   const [dashboardData, setDashboardData] = useState({
     totalProducts: 0,
     totalMaterials: 0,
-    lowStockProducts: [], // Produk dengan stok menipis
-    lowStockMaterials: [], // Bahan baku dengan stok menipis
+    lowStockProducts: [],
+    lowStockMaterials: [],
     recentTransactions: [],
     totalRevenue: 0,
     totalExpenses: 0,
     monthlyFinancialData: [],
     recentProductions: [],
-    products: [], // Untuk tabel daftar produk (semua produk)
-    categories: [], // Untuk dropdown kategori di modal produk
+    products: [],
+    categories: [],
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Kode untuk mengambil data dari Firebase
     if (!db) {
-      console.error(
-        "Firebase db is not initialized. Check firebase.js configuration."
-      );
+      console.error("Firebase db is not initialized.");
       setLoading(false);
-      message.error(
-        "Firebase tidak terinisialisasi. Periksa konfigurasi Anda di firebase.js."
-      );
+      message.error("Firebase tidak terinisialisasi.");
       return;
     }
 
-    const unsubs = []; // Array untuk menampung fungsi unsubscribe listener onSnapshot
-
-    // --- Listener Realtime untuk Produk ---
+    const unsubs = [];
     const unsubProducts = onSnapshot(
       collection(db, "products"),
       (snapshot) => {
-        const data = [];
-        snapshot.forEach((doc) =>
-          data.push({ id: doc.id, ...doc.data(), key: doc.id })
-        );
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          key: doc.id,
+        }));
         setDashboardData((prev) => ({
           ...prev,
           products: data,
           totalProducts: snapshot.size,
-          lowStockProducts: data.filter((item) => item.stock <= 5), // Asumsi stok menipis <= 5
+          lowStockProducts: data.filter((item) => item.stock <= 5),
         }));
       },
       (error) => {
@@ -71,7 +67,6 @@ const Dashboard = () => {
     );
     unsubs.push(unsubProducts);
 
-    // --- Listener Realtime untuk Bahan Baku ---
     const unsubMaterials = onSnapshot(
       collection(db, "raw_materials"),
       (snapshot) => {
@@ -79,10 +74,10 @@ const Dashboard = () => {
           .map((doc) => ({
             id: doc.id,
             ...doc.data(),
-            collectionName: "raw_materials", // Tambahkan informasi koleksi
+            collectionName: "raw_materials",
             key: doc.id,
           }))
-          .filter((item) => item.stock <= 10); // Asumsi stok menipis <= 10
+          .filter((item) => item.stock <= 10);
         setDashboardData((prev) => ({
           ...prev,
           lowStockMaterials: lowStock,
@@ -96,7 +91,6 @@ const Dashboard = () => {
     );
     unsubs.push(unsubMaterials);
 
-    // --- Listener Realtime untuk Transaksi Terbaru (Inventory Logs) ---
     const unsubTransactions = onSnapshot(
       collection(db, "inventory_logs"),
       (snapshot) => {
@@ -104,15 +98,14 @@ const Dashboard = () => {
           ...doc.data(),
           id: doc.id,
           key: doc.id,
-          // Konversi timestamp Firebase ke objek Date JavaScript
           timestamp: doc.data().timestamp
             ? doc.data().timestamp.toDate()
             : null,
         }));
         const sortedTransactions = data
-          .filter((item) => item.timestamp) // Filter yang memiliki timestamp valid
+          .filter((item) => item.timestamp)
           .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-          .slice(0, 5); // Ambil 5 transaksi terbaru
+          .slice(0, 5);
         setDashboardData((prev) => ({
           ...prev,
           recentTransactions: sortedTransactions,
@@ -125,14 +118,14 @@ const Dashboard = () => {
     );
     unsubs.push(unsubTransactions);
 
-    // --- Listener Realtime untuk Kategori ---
     const unsubCategories = onSnapshot(
       collection(db, "categories"),
       (snapshot) => {
-        const data = [];
-        snapshot.forEach((doc) =>
-          data.push({ id: doc.id, ...doc.data(), key: doc.id })
-        );
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          key: doc.id,
+        }));
         setDashboardData((prev) => ({ ...prev, categories: data }));
       },
       (error) => {
@@ -142,8 +135,6 @@ const Dashboard = () => {
     );
     unsubs.push(unsubCategories);
 
-    // --- Mengambil data untuk chart dan produksi terbaru (sekali ambil saja atau refresh berkala) ---
-    // Menggunakan getDocs karena ini mungkin tidak perlu real-time seperti total produk/stok
     const fetchChartAndProductionData = async () => {
       try {
         const [salesSnap, purchasesSnap, productionsSnap] = await Promise.all([
@@ -169,14 +160,13 @@ const Dashboard = () => {
 
         const salesData = salesSnap.docs.map((doc) => ({
           ...doc.data(),
-          date: doc.data().date ? doc.data().date.toDate() : new Date(), // Pastikan date dikonversi
+          date: doc.data().date ? doc.data().date.toDate() : new Date(),
         }));
         const purchasesData = purchasesSnap.docs.map((doc) => ({
           ...doc.data(),
           date: doc.data().date ? doc.data().date.toDate() : new Date(),
         }));
 
-        // Logika untuk mengelompokkan data bulanan untuk chart
         const monthlyDataMap = new Map();
         const getMonthYear = (date) =>
           `${date.getFullYear()}-${date.getMonth() + 1}`;
@@ -195,7 +185,6 @@ const Dashboard = () => {
           "Des",
         ];
 
-        // Memproses data penjualan
         salesData.forEach((sale) => {
           const monthYear = getMonthYear(sale.date);
           if (!monthlyDataMap.has(monthYear)) {
@@ -208,7 +197,6 @@ const Dashboard = () => {
           monthlyDataMap.get(monthYear).sales += sale.total;
         });
 
-        // Memproses data pembelian
         purchasesData.forEach((purchase) => {
           const monthYear = getMonthYear(purchase.date);
           if (!monthlyDataMap.has(monthYear)) {
@@ -235,7 +223,6 @@ const Dashboard = () => {
           });
         });
 
-        // Urutkan data bulanan
         const sortedMonthlyData = combinedData.sort((a, b) => {
           return monthNames.indexOf(a.month) - monthNames.indexOf(b.month);
         });
@@ -261,9 +248,8 @@ const Dashboard = () => {
 
     fetchChartAndProductionData();
 
-    // Cleanup function untuk unsubscribe dari listener onSnapshot
     return () => unsubs.forEach((unsub) => unsub());
-  }, []); // Dependensi kosong agar useEffect hanya berjalan sekali saat komponen mount
+  }, []);
 
   const {
     totalProducts,
@@ -331,7 +317,6 @@ const Dashboard = () => {
             products={products}
             categories={categories}
             loading={loading}
-            // Props terkait manajemen produk dipass langsung
           />
         </Col>
       </Row>
