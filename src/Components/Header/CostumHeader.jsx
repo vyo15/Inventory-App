@@ -7,7 +7,7 @@ import "./CostumHeader.css";
  */
 const CostumHeader = ({ darkTheme }) => {
   return (
-    <Flex justify="space-between" align="center">
+    <Flex justify="flex-end" align="center">
       <Typography.Title
         level={3}
         type="secondary"

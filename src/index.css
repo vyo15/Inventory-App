@@ -1,39 +1,23 @@
-* {
+/* Reset dasar */
+html, body, #root {
+  height: 100%;
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
 }
 
-html,
-body,
-#root {
-  height: 100%;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-}
-
+/* Light mode (default) */
 body {
-  background-color: #f0f2f5;
+  background-color: #f0f2f5; /* sama kaya background antd light */
   color: #000;
 }
 
-.dark body {
-  background-color: #0d1117;
-  color: #e8eaed;
+/* Dark mode */
+body.dark {
+  background-color: #0d1117; /* warna gelap konsisten */
+  color: #fff;
 }
 
-/* Optional: Scrollbar style for dark mode */
-.dark ::-webkit-scrollbar {
-  width: 8px;
-}
-.dark ::-webkit-scrollbar-thumb {
-  background-color: #2f3542;
-  border-radius: 8px;
-}
-
-/* Floating Theme Button */
-.theme-btn {
-  cursor: pointer;
-  border-radius: 50%;
-  padding: 12px;
-  font-size: 18px;
+/* Pastikan layout utama full height */
+.main-layout {
+  min-height: 100vh;
 }

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Layout, ConfigProvider, theme } from "antd";
 import { Routes, Route, Navigate } from "react-router-dom";
 
@@ -11,7 +11,6 @@ import FloatButtonTheme from "./Components/FloatButton/FloatButtonTheme";
 // Halaman
 import Dashboard from "./Pages/Dashboard/Dashboard";
 import WeLost from "./Pages/ErrorPage/WeLost";
-
 import Categories from "./Pages/MasterData/Categories";
 import Productions from "./Pages/Produksi/Productions";
 import Sales from "./Pages/Transaksi/Sales";
@@ -23,8 +22,6 @@ import SupplierPurchases from "./Pages/MasterData/SupplierPurchases";
 // Inventory
 import StockAdjustment from "./Pages/Inventory/StockAdjustment";
 import StockManagement from "./Pages/Inventory/StockManagement";
-
-import "./App.css";
 import StockReport from "./Pages/Laporan/StockReport";
 import CashIn from "./Pages/Finance/CashIn";
 import CashOut from "./Pages/Finance/CashOut";
@@ -34,6 +31,8 @@ import ProfitLossReport from "./Pages/Laporan/ProfitLossReport";
 import PurchasesReport from "./Pages/Laporan/PurchasesReport";
 import SalesReport from "./Pages/Laporan/SalesReport";
 
+import "./App.css";
+
 const { Header, Sider, Content } = Layout;
 
 const App = () => {
@@ -41,6 +40,15 @@ const App = () => {
   const [collapsed, setCollapsed] = useState(false);
 
   const toggleTheme = () => setDarkTheme(!darkTheme);
+
+  // 🔥 Sync dark/light theme ke body supaya background ikut berubah
+  useEffect(() => {
+    if (darkTheme) {
+      document.body.classList.add("dark");
+    } else {
+      document.body.classList.remove("dark");
+    }
+  }, [darkTheme]);
 
   return (
     <ConfigProvider
@@ -53,7 +61,7 @@ const App = () => {
         },
       }}
     >
-      <Layout className={`main-layout ${darkTheme ? "dark" : "light"}`}>
+      <Layout className="main-layout">
         <Sider
           collapsible
           collapsed={collapsed}
@@ -70,37 +78,39 @@ const App = () => {
           </Header>
 
           <Content className="content">
-            <Routes>
-              {/* Redirect to dashboard */}
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              {/* Dashboard */}
-              <Route
-                path="/dashboard"
-                element={<Dashboard darkTheme={darkTheme} />}
-              />
-              {/* Master Data */}
-              <Route path="/categories" element={<Categories />} />
-              <Route path="/productions" element={<Productions />} />
-              <Route path="/sales" element={<Sales />} />
-              <Route path="/suppliers" element={<SupplierPurchases />} />
-              <Route path="/customers" element={<Customers />} />
-              <Route path="/products" element={<Products />} />
-              <Route path="/raw-materials" element={<RawMaterials />} />
-              {/* Inventory */}
-              <Route path="/stock-adjustment" element={<StockAdjustment />} />
-              <Route path="/stock-management" element={<StockManagement />} />
-              <Route path="/report-stock" element={<StockReport />} />
-              <Route path="/cash-in" element={<CashIn />} />
-              <Route path="/cash-out" element={<CashOut />} />
-              <Route path="/purchases" element={<Purchases />} />
-              <Route path="/returns" element={<Returns />} />
-              <Route path="/profit-loss" element={<ProfitLossReport />} />
-              <Route path="/purchases-report" element={<PurchasesReport />} />
-              <Route path="/sales-report" element={<SalesReport />} />
-
-              {/* Halaman Tidak Ditemukan */}
-              <Route path="*" element={<WeLost />} />
-            </Routes>
+            <div className="content-inner">
+              <Routes>
+                <Route
+                  path="/"
+                  element={<Navigate to="/dashboard" replace />}
+                />
+                <Route
+                  path="/dashboard"
+                  element={<Dashboard darkTheme={darkTheme} />}
+                />
+                {/* Master Data */}
+                <Route path="/categories" element={<Categories />} />
+                <Route path="/productions" element={<Productions />} />
+                <Route path="/sales" element={<Sales />} />
+                <Route path="/suppliers" element={<SupplierPurchases />} />
+                <Route path="/customers" element={<Customers />} />
+                <Route path="/products" element={<Products />} />
+                <Route path="/raw-materials" element={<RawMaterials />} />
+                {/* Inventory */}
+                <Route path="/stock-adjustment" element={<StockAdjustment />} />
+                <Route path="/stock-management" element={<StockManagement />} />
+                <Route path="/report-stock" element={<StockReport />} />
+                <Route path="/cash-in" element={<CashIn />} />
+                <Route path="/cash-out" element={<CashOut />} />
+                <Route path="/purchases" element={<Purchases />} />
+                <Route path="/returns" element={<Returns />} />
+                <Route path="/profit-loss" element={<ProfitLossReport />} />
+                <Route path="/purchases-report" element={<PurchasesReport />} />
+                <Route path="/sales-report" element={<SalesReport />} />
+                {/* Not Found */}
+                <Route path="*" element={<WeLost />} />
+              </Routes>
+            </div>
           </Content>
         </Layout>
 
