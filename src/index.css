@@ -1,0 +1,23 @@
+/* Reset dasar */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Light mode (default) */
+body {
+  background-color: #f0f2f5; /* sama kaya background antd light */
+  color: #000;
+}
+
+/* Dark mode */
+body.dark {
+  background-color: #0d1117; /* warna gelap konsisten */
+  color: #fff;
+}
+
+/* Pastikan layout utama full height */
+.main-layout {
+  min-height: 100vh;
+}

@@ -1,0 +1,14 @@
+.logo {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.logo-icon {
+  font-size: 50px;
+  color: #1890ff;
+}
+
+/* Warna logo saat dark mode */
+.dark .logo-icon {
+  color: #fff;
+}
