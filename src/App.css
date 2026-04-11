@@ -1,0 +1,236 @@
+/* =========================
+   SECTION: App Shell
+========================= */
+.app-shell {
+  height: 100vh;
+  overflow: hidden;
+  background: #f5f7fb;
+  color: #0f172a;
+  transition:
+    background-color 0.22s ease,
+    color 0.22s ease;
+}
+
+.app-shell.dark {
+  background: #0f172a;
+  color: #e6edf3;
+}
+
+/* =========================
+   SECTION: Main Layout
+========================= */
+.app-layout,
+.app-main-layout {
+  height: 100%;
+  min-width: 0;
+  background: transparent !important;
+}
+
+/* =========================
+   SECTION: Sidebar
+========================= */
+.app-sider {
+  height: 100vh;
+  background: transparent !important;
+  border-right: 0 !important;
+  overflow: hidden;
+}
+
+.app-sider .ant-layout-sider-children {
+  height: 100%;
+  background: transparent !important;
+}
+
+.app-sider-inner {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-logo-wrap {
+  flex: 0 0 auto;
+  padding: 14px 12px 8px;
+}
+
+.app-menu-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 8px 14px;
+}
+
+/* Hilangkan garis default AntD */
+.ant-layout-sider {
+  border-right: 0 !important;
+  box-shadow: none !important;
+}
+
+/* =========================
+   SECTION: Header
+========================= */
+.app-header {
+  height: 92px;
+  line-height: normal;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  background: transparent !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+  z-index: 5;
+  transition:
+    background-color 0.22s ease,
+    color 0.22s ease;
+}
+
+.ant-layout-header {
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+/* =========================
+   SECTION: Content Area
+========================= */
+.app-main-content {
+  height: calc(100vh - 92px);
+  padding: 0;
+  background: transparent !important;
+  overflow: hidden;
+}
+
+.app-content-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 20px 20px;
+  background: transparent;
+}
+
+.app-content-card {
+  min-height: 100%;
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 24px 24px 0 0;
+  padding: 28px 24px 24px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+  transition:
+    background-color 0.22s ease,
+    color 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.app-shell.dark .app-content-card {
+  background: #111827;
+  color: #e6edf3;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.22);
+}
+
+/* =========================
+   SECTION: Theme Toggle Button
+========================= */
+.theme-toggle-button .ant-float-btn-body {
+  border-radius: 14px !important;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.18s ease !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+}
+
+.theme-toggle-button.light .ant-float-btn-body {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  color: #0f172a !important;
+}
+
+.theme-toggle-button.dark .ant-float-btn-body {
+  background: #111827 !important;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  color: #e6edf3 !important;
+}
+
+.theme-toggle-button:hover .ant-float-btn-body {
+  transform: translateY(-1px);
+}
+
+.theme-toggle-button.light:hover .ant-float-btn-body {
+  background: #f8fafc !important;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
+}
+
+.theme-toggle-button.dark:hover .ant-float-btn-body {
+  background: #1f2937 !important;
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.3);
+}
+
+/* =========================
+   SECTION: Generic Surface Helper
+========================= */
+.app-shell .ant-card,
+.app-shell .ant-table-wrapper,
+.app-shell .ant-statistic,
+.app-shell .ant-tabs-content-holder {
+  border-radius: 16px;
+}
+
+/* =========================
+   SECTION: Scrollbar
+========================= */
+.app-content-scroll::-webkit-scrollbar,
+.sidebar-menu-scroll::-webkit-scrollbar,
+.sidebar-menu::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-content-scroll::-webkit-scrollbar-thumb,
+.sidebar-menu-scroll::-webkit-scrollbar-thumb,
+.sidebar-menu::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.34);
+  border-radius: 999px;
+}
+
+.app-shell.dark .app-content-scroll::-webkit-scrollbar-thumb,
+.app-shell.dark .sidebar-menu-scroll::-webkit-scrollbar-thumb,
+.app-shell.dark .sidebar-menu::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.22);
+}
+
+/* =========================
+   SECTION: Responsive
+========================= */
+@media (max-width: 992px) {
+  .app-header {
+    height: auto;
+    min-height: 92px;
+    padding: 18px 16px;
+  }
+
+  .app-main-content {
+    height: calc(100vh - 92px);
+  }
+
+  .app-content-scroll {
+    padding: 0 16px 16px;
+  }
+
+  .app-content-card {
+    padding: 20px 18px 18px;
+    border-radius: 20px 20px 0 0;
+  }
+}
+
+@media (max-width: 576px) {
+  .app-content-scroll {
+    padding: 0 12px 12px;
+  }
+
+  .app-content-card {
+    padding: 16px 14px 14px;
+    border-radius: 18px 18px 0 0;
+  }
+}

@@ -1,0 +1,16 @@
+{
+    "nama":[
+        {
+            "id":1,
+            "name":"Baju"
+        },
+        {
+            "id":2,
+            "name":"Celana"
+        },
+        {
+            "id":3,
+            "name":"Sepatu"
+        }
+    ]
+}

@@ -1,0 +1,64 @@
+
+> inv-app@0.0.0 build
+> node ./node_modules/vite/bin/vite.js build
+
+[36mvite v7.1.4 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 5735 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                                    [39m[1m[2m    1.33 kB[22m[1m[22m[2m │ gzip:   0.56 kB[22m
+[2mdist/[22m[2massets/[22m[32mworker-eu1KzgPW.js                     [39m[1m[2m  308.33 kB[22m[1m[22m
+[2mdist/[22m[2massets/[22m[35mWeLost-BRY-YMpN.css                    [39m[1m[2m    0.09 kB[22m[1m[22m[2m │ gzip:   0.09 kB[22m
+[2mdist/[22m[2massets/[22m[35mPageSection-vbhtUR9M.css               [39m[1m[2m    0.95 kB[22m[1m[22m[2m │ gzip:   0.33 kB[22m
+[2mdist/[22m[2massets/[22m[35mDashboard-DCd4KR4q.css                 [39m[1m[2m    1.82 kB[22m[1m[22m[2m │ gzip:   0.64 kB[22m
+[2mdist/[22m[2massets/[22m[35mindex-DE2kQYUc.css                     [39m[1m[2m    8.19 kB[22m[1m[22m[2m │ gzip:   1.94 kB[22m
+[2mdist/[22m[2massets/[22m[36mfirebase-Btpyorxh.js                   [39m[1m[2m    0.37 kB[22m[1m[22m[2m │ gzip:   0.28 kB[22m
+[2mdist/[22m[2massets/[22m[36mWeLost-C9yr-Z0t.js                     [39m[1m[2m    0.46 kB[22m[1m[22m[2m │ gzip:   0.32 kB[22m
+[2mdist/[22m[2massets/[22m[36mexportExcel-5CmWrY7Q.js                [39m[1m[2m    0.65 kB[22m[1m[22m[2m │ gzip:   0.40 kB[22m
+[2mdist/[22m[2massets/[22m[36minventoryService-DwQn-iFp.js           [39m[1m[2m    0.71 kB[22m[1m[22m[2m │ gzip:   0.43 kB[22m
+[2mdist/[22m[2massets/[22m[36mPageSection-7zgLLB9S.js                [39m[1m[2m    1.18 kB[22m[1m[22m[2m │ gzip:   0.48 kB[22m
+[2mdist/[22m[2massets/[22m[36mStockManagement-Dr-4sYjj.js            [39m[1m[2m    1.94 kB[22m[1m[22m[2m │ gzip:   0.99 kB[22m
+[2mdist/[22m[2massets/[22m[36mCategories-BxcHHEvy.js                 [39m[1m[2m    2.52 kB[22m[1m[22m[2m │ gzip:   1.14 kB[22m
+[2mdist/[22m[2massets/[22m[36mCustomers-YLb_CfRJ.js                  [39m[1m[2m    2.85 kB[22m[1m[22m[2m │ gzip:   1.22 kB[22m
+[2mdist/[22m[2massets/[22m[36mSalesReport-D2-IQmSi.js                [39m[1m[2m    3.28 kB[22m[1m[22m[2m │ gzip:   1.46 kB[22m
+[2mdist/[22m[2massets/[22m[36mPurchasesReport-DwNUCxwc.js            [39m[1m[2m    3.42 kB[22m[1m[22m[2m │ gzip:   1.43 kB[22m
+[2mdist/[22m[2massets/[22m[36mReturns-Bd_brxMO.js                    [39m[1m[2m    3.46 kB[22m[1m[22m[2m │ gzip:   1.51 kB[22m
+[2mdist/[22m[2massets/[22m[36mProfitLossReport-C2PfKzWZ.js           [39m[1m[2m    3.55 kB[22m[1m[22m[2m │ gzip:   1.50 kB[22m
+[2mdist/[22m[2massets/[22m[36mproductionStepsService-BCQw1L0Q.js     [39m[1m[2m    3.57 kB[22m[1m[22m[2m │ gzip:   1.29 kB[22m
+[2mdist/[22m[2massets/[22m[36mStockReport-_FNsG0bc.js                [39m[1m[2m    4.17 kB[22m[1m[22m[2m │ gzip:   1.76 kB[22m
+[2mdist/[22m[2massets/[22m[36mProductionHppAnalysis-DkOaJrHd.js      [39m[1m[2m    4.46 kB[22m[1m[22m[2m │ gzip:   1.82 kB[22m
+[2mdist/[22m[2massets/[22m[36mStockAdjustment-CNjabDJN.js            [39m[1m[2m    4.75 kB[22m[1m[22m[2m │ gzip:   1.85 kB[22m
+[2mdist/[22m[2massets/[22m[36mCashIn-CBbfKYq1.js                     [39m[1m[2m    5.59 kB[22m[1m[22m[2m │ gzip:   2.23 kB[22m
+[2mdist/[22m[2massets/[22m[36mproductionOrdersService-BOFnwsa8.js    [39m[1m[2m    6.05 kB[22m[1m[22m[2m │ gzip:   2.08 kB[22m
+[2mdist/[22m[2massets/[22m[36mproductionPayrollsService-CMVodvbX.js  [39m[1m[2m    6.07 kB[22m[1m[22m[2m │ gzip:   1.96 kB[22m
+[2mdist/[22m[2massets/[22m[36mCashOut-BIAeIm_l.js                    [39m[1m[2m    6.15 kB[22m[1m[22m[2m │ gzip:   2.35 kB[22m
+[2mdist/[22m[2massets/[22m[36mDashboard-BnnJUpDB.js                  [39m[1m[2m    7.30 kB[22m[1m[22m[2m │ gzip:   2.95 kB[22m
+[2mdist/[22m[2massets/[22m[36mResetTestData-BtJRlpgb.js              [39m[1m[2m    7.44 kB[22m[1m[22m[2m │ gzip:   2.62 kB[22m
+[2mdist/[22m[2massets/[22m[36mProducts-D1MMKUzA.js                   [39m[1m[2m    8.29 kB[22m[1m[22m[2m │ gzip:   2.94 kB[22m
+[2mdist/[22m[2massets/[22m[36mSupplierPurchases-DUw5XmgA.js          [39m[1m[2m    9.26 kB[22m[1m[22m[2m │ gzip:   3.17 kB[22m
+[2mdist/[22m[2massets/[22m[36mProductionOrders-BHjDvqyr.js           [39m[1m[2m   10.30 kB[22m[1m[22m[2m │ gzip:   3.43 kB[22m
+[2mdist/[22m[2massets/[22m[36mindex-kDQu1cmL.js                      [39m[1m[2m   10.35 kB[22m[1m[22m[2m │ gzip:   3.35 kB[22m
+[2mdist/[22m[2massets/[22m[36mRawMaterials-DpLsi88Q.js               [39m[1m[2m   10.43 kB[22m[1m[22m[2m │ gzip:   3.35 kB[22m
+[2mdist/[22m[2massets/[22m[36mProductionPayrolls-XULct42n.js         [39m[1m[2m   11.06 kB[22m[1m[22m[2m │ gzip:   3.47 kB[22m
+[2mdist/[22m[2massets/[22m[36mSales-DZx6zx8J.js                      [39m[1m[2m   11.98 kB[22m[1m[22m[2m │ gzip:   4.21 kB[22m
+[2mdist/[22m[2massets/[22m[36mPurchases-Ck059P7f.js                  [39m[1m[2m   13.33 kB[22m[1m[22m[2m │ gzip:   3.86 kB[22m
+[2mdist/[22m[2massets/[22m[36mProductionSteps-jFfbUqsB.js            [39m[1m[2m   15.30 kB[22m[1m[22m[2m │ gzip:   4.25 kB[22m
+[2mdist/[22m[2massets/[22m[36mproductionWorkLogsService-C6_rb5d5.js  [39m[1m[2m   15.38 kB[22m[1m[22m[2m │ gzip:   4.46 kB[22m
+[2mdist/[22m[2massets/[22m[36mSemiFinishedMaterials-B90crewS.js      [39m[1m[2m   16.87 kB[22m[1m[22m[2m │ gzip:   4.92 kB[22m
+[2mdist/[22m[2massets/[22m[36mProductionEmployees-oVY2f0YJ.js        [39m[1m[2m   17.16 kB[22m[1m[22m[2m │ gzip:   5.08 kB[22m
+[2mdist/[22m[2massets/[22m[36mPricingRules-SYHQA98z.js               [39m[1m[2m   19.50 kB[22m[1m[22m[2m │ gzip:   5.51 kB[22m
+[2mdist/[22m[2massets/[22m[36mProductionWorkLogs-CdT9c2LR.js         [39m[1m[2m   22.27 kB[22m[1m[22m[2m │ gzip:   5.22 kB[22m
+[2mdist/[22m[2massets/[22m[36mProductionBoms-Dg0CmOWX.js             [39m[1m[2m   31.79 kB[22m[1m[22m[2m │ gzip:   8.03 kB[22m
+[2mdist/[22m[2massets/[22m[36mreact-vendor-cZz7585w.js               [39m[1m[2m  228.01 kB[22m[1m[22m[2m │ gzip:  73.78 kB[22m
+[2mdist/[22m[2massets/[22m[36mfirebase-vendor-5paX9kLU.js            [39m[1m[2m  359.25 kB[22m[1m[22m[2m │ gzip:  88.76 kB[22m
+[2mdist/[22m[2massets/[22m[36mexport-vendor-BmO5NRvx.js              [39m[1m[2m  432.60 kB[22m[1m[22m[2m │ gzip: 144.51 kB[22m
+[2mdist/[22m[2massets/[22m[36mantd-vendor-C4QROP4c.js                [39m[1m[2m  755.68 kB[22m[1m[22m[2m │ gzip: 207.70 kB[22m
+[2mdist/[22m[2massets/[22m[36mvendor-CgkVXi8S.js                     [39m[1m[33m  932.51 kB[39m[22m[2m │ gzip: 316.68 kB[22m
+[2mdist/[22m[2massets/[22m[36mcharts-vendor-CjWZTUV3.js              [39m[1m[33m1,399.24 kB[39m[22m[2m │ gzip: 414.86 kB[22m
+[33m
+(!) Some chunks are larger than 900 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 24.17s[39m

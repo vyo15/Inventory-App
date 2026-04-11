@@ -1,0 +1,41 @@
+.summary-stat-card {
+  border-radius: 16px !important;
+  height: 100%;
+}
+
+.summary-stat-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summary-stat-card-title.ant-typography {
+  font-size: 14px;
+  opacity: 0.78;
+}
+
+.summary-stat-card-value.ant-typography {
+  margin: 0 !important;
+  line-height: 1.1;
+}
+
+.summary-stat-card-subtitle.ant-typography {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.summary-stat-card.primary {
+  border-top: 4px solid #1677ff;
+}
+
+.summary-stat-card.success {
+  border-top: 4px solid #52c41a;
+}
+
+.summary-stat-card.warning {
+  border-top: 4px solid #faad14;
+}
+
+.summary-stat-card.danger {
+  border-top: 4px solid #ff4d4f;
+}

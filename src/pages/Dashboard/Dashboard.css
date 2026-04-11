@@ -1,0 +1,166 @@
+/* =========================
+   SECTION: Dashboard Page
+========================= */
+.dashboard-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* =========================
+   SECTION: Alert
+========================= */
+.dashboard-alert-wrap {
+  margin-top: -4px;
+}
+
+/* =========================
+   SECTION: KPI Cards
+========================= */
+.dashboard-summary-row {
+  margin-top: 2px;
+}
+
+.dashboard-stat-card {
+  height: 100%;
+  border-radius: 18px !important;
+  border: 1px solid rgba(15, 23, 42, 0.06) !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+}
+
+.dashboard-stat-card .ant-card-body {
+  padding: 18px 18px 16px;
+}
+
+.dashboard-stat-card .ant-statistic {
+  min-height: 72px;
+}
+
+.dashboard-stat-card .ant-statistic-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.68);
+}
+
+.dashboard-stat-card .ant-statistic-content {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.dashboard-stat-card .ant-statistic-content-prefix {
+  margin-right: 10px;
+  font-size: 18px;
+}
+
+.dashboard-stat-subtitle {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(15, 23, 42, 0.58);
+}
+
+/* =========================
+   SECTION: Main Grid
+========================= */
+.dashboard-main-grid {
+  align-items: stretch;
+}
+
+/* =========================
+   SECTION: Section Header Helper
+========================= */
+.dashboard-section-extra {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.58);
+}
+
+.dashboard-section-icon {
+  color: rgba(15, 23, 42, 0.5);
+  font-size: 14px;
+}
+
+/* =========================
+   SECTION: Chart
+========================= */
+.dashboard-chart-wrap {
+  min-height: 340px;
+}
+
+.dashboard-chart-wrap .g2-tooltip {
+  border-radius: 12px !important;
+}
+
+/* =========================
+   SECTION: Empty State
+========================= */
+.dashboard-empty-wrap {
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* =========================
+   SECTION: Table Polish
+========================= */
+.dashboard-page .ant-table-wrapper {
+  overflow: hidden;
+}
+
+.dashboard-page .ant-table {
+  background: transparent;
+}
+
+.dashboard-page .ant-table-thead > tr > th {
+  font-weight: 700;
+}
+
+.dashboard-page .ant-tag {
+  border-radius: 999px;
+}
+
+/* =========================
+   SECTION: Dark Mode
+========================= */
+.dark .dashboard-stat-card {
+  border: 1px solid rgba(148, 163, 184, 0.14) !important;
+  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.22);
+}
+
+.dark .dashboard-stat-card .ant-statistic-title {
+  color: rgba(230, 237, 243, 0.68);
+}
+
+.dark .dashboard-stat-subtitle,
+.dark .dashboard-section-extra {
+  color: rgba(230, 237, 243, 0.58);
+}
+
+.dark .dashboard-section-icon {
+  color: rgba(230, 237, 243, 0.5);
+}
+
+/* =========================
+   SECTION: Responsive
+========================= */
+@media (max-width: 1200px) {
+  .dashboard-chart-wrap {
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-page {
+    gap: 14px;
+  }
+
+  .dashboard-chart-wrap {
+    min-height: 260px;
+  }
+
+  .dashboard-stat-card .ant-statistic-content {
+    font-size: 24px;
+  }
+}

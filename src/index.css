@@ -1,0 +1,75 @@
+/* =========================
+   SECTION: Global Reset
+========================= */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* =========================
+   SECTION: Base Typography
+   Menyamakan font dan rendering global.
+========================= */
+:root {
+  font-family: Inter, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color-scheme: light;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: Inter, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f3f6fb;
+  color: #0f172a;
+  overflow: hidden;
+}
+
+/* =========================
+   SECTION: Root App Helper
+========================= */
+#root {
+  isolation: isolate;
+}
+
+/* =========================
+   SECTION: Generic Utility
+========================= */
+img,
+svg,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.theme-btn {
+  cursor: pointer;
+  border-radius: 999px;
+  padding: 12px;
+  font-size: 18px;
+}
+
+/* =========================
+   SECTION: Selection
+========================= */
+::selection {
+  background: rgba(37, 99, 235, 0.18);
+  color: #0f172a;
+}

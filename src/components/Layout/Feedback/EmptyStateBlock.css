@@ -1,0 +1,7 @@
+.empty-state-block {
+  padding: 24px 8px;
+}
+
+.empty-state-text.ant-typography {
+  opacity: 0.75;
+}
