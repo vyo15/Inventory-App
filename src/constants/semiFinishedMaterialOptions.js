@@ -1,76 +1,63 @@
 // =====================================================
 // Semi Finished Material Options
-// Master enum dan helper untuk Semi Finished Materials
+// Fokus untuk komponen semi jadi produksi bunga flanel
 // =====================================================
 
+import {
+  COLOR_VARIANT_MAP,
+  COLOR_VARIANT_OPTIONS,
+  DEFAULT_COLOR_VARIANT,
+  FLOWER_GROUP_MAP,
+  FLOWER_GROUP_OPTIONS,
+  toOptionMap,
+} from './variantOptions';
+import {
+  calculateVariantTotals,
+  formatVariantSummary,
+  normalizeColorVariants,
+} from '../utils/variants/variantHelpers';
+
 export const SEMI_FINISHED_CATEGORIES = [
-  { value: "kelopak", label: "Kelopak" },
-  { value: "daun", label: "Daun" },
-  { value: "kawat", label: "Kawat" },
-  { value: "subassembly", label: "Sub Assembly" },
-  { value: "wrapping", label: "Wrapping" },
-  { value: "aksesoris", label: "Aksesoris" },
-  { value: "lainnya", label: "Lainnya" },
+  { value: 'pola', label: 'Pola' },
+  { value: 'kelopak', label: 'Kelopak' },
+  { value: 'daun', label: 'Daun' },
+  { value: 'kawat', label: 'Kawat' },
+  { value: 'lainnya', label: 'Lainnya' },
 ];
 
-export const SEMI_FINISHED_TYPES = [
-  { value: "component", label: "Component" },
-  { value: "subassembly", label: "Subassembly" },
-  { value: "support_material", label: "Support Material" },
-];
-
-export const SEMI_FINISHED_VALUATION_METHODS = [
-  { value: "average", label: "Average Cost" },
-];
-
-export const toOptionMap = (options = []) =>
-  options.reduce((acc, item) => {
-    acc[item.value] = item.label;
-    return acc;
-  }, {});
+export const SEMI_FINISHED_GROUP_OPTIONS = FLOWER_GROUP_OPTIONS;
 
 export const SEMI_FINISHED_CATEGORY_MAP = toOptionMap(SEMI_FINISHED_CATEGORIES);
-export const SEMI_FINISHED_TYPE_MAP = toOptionMap(SEMI_FINISHED_TYPES);
-export const SEMI_FINISHED_VALUATION_METHOD_MAP = toOptionMap(
-  SEMI_FINISHED_VALUATION_METHODS,
-);
+export const SEMI_FINISHED_GROUP_MAP = FLOWER_GROUP_MAP;
+export const SEMI_FINISHED_COLOR_OPTIONS = COLOR_VARIANT_OPTIONS;
+export const SEMI_FINISHED_COLOR_MAP = COLOR_VARIANT_MAP;
+
+export const DEFAULT_SEMI_FINISHED_VARIANT = DEFAULT_COLOR_VARIANT;
 
 export const DEFAULT_SEMI_FINISHED_FORM = {
-  code: "",
-  name: "",
-  description: "",
-  category: "kelopak",
-  type: "component",
-  unit: "pcs",
-
-  relatedProductIds: [],
-  relatedProductNames: [],
-  tags: [],
-
+  code: '',
+  name: '',
+  description: '',
+  category: 'pola',
+  flowerGroup: 'mawar',
+  unit: 'pcs',
+  variants: [],
   currentStock: 0,
   reservedStock: 0,
   availableStock: 0,
   minStockAlert: 0,
-  maxStockTarget: null,
-
-  referenceCostPerUnit: 0,
-  lastProductionCostPerUnit: 0,
   averageCostPerUnit: 0,
-  valuationMethod: "average",
-
   isActive: true,
-  isSellable: false,
-  notes: "",
 };
 
-export const formatSemiFinishedStockSummary = (item = {}) => {
-  const current = Number(item?.currentStock || 0);
-  const reserved = Number(item?.reservedStock || 0);
-  const available = Number(item?.availableStock || current - reserved);
+export const normalizeSemiFinishedVariants = normalizeColorVariants;
 
-  const fmt = new Intl.NumberFormat("id-ID");
+export const calculateSemiFinishedTotalsFromVariants = calculateVariantTotals;
 
-  return `Stok ${fmt.format(current)} | Reserved ${fmt.format(
-    reserved,
-  )} | Tersedia ${fmt.format(available)}`;
-};
+export const formatSemiFinishedStockSummary = formatVariantSummary;
+
+// Backward-compatible exports for page lama yang belum sepenuhnya dipangkas
+export const SEMI_FINISHED_TYPES = SEMI_FINISHED_GROUP_OPTIONS;
+export const SEMI_FINISHED_TYPE_MAP = SEMI_FINISHED_GROUP_MAP;
+export const SEMI_FINISHED_VALUATION_METHODS = [{ value: "average", label: "Average Cost" }];
+export const SEMI_FINISHED_VALUATION_METHOD_MAP = { average: "Average Cost" };

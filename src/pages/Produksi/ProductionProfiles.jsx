@@ -1,0 +1,407 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Badge,
+  Button,
+  Card,
+  Col,
+  Drawer,
+  Empty,
+  Form,
+  Input,
+  InputNumber,
+  message,
+  Popconfirm,
+  Row,
+  Select,
+  Space,
+  Statistic,
+  Switch,
+  Table,
+  Typography,
+} from 'antd';
+import { PlusOutlined, ReloadOutlined, EditOutlined } from '@ant-design/icons';
+import {
+  DEFAULT_PRODUCTION_PROFILE_FORM,
+  PRODUCTION_PROFILE_TYPES,
+  PRODUCTION_PROFILE_TYPE_MAP,
+  calculateProductionProfileMetrics,
+} from '../../constants/productionProfileOptions';
+import {
+  createProductionProfile,
+  getAllProductionProfiles,
+  toggleProductionProfileActive,
+  updateProductionProfile,
+} from '../../services/Produksi/productionProfilesService';
+import { getDocs, collection } from 'firebase/firestore';
+import { db } from '../../firebase';
+import formatNumber from '../../utils/formatters/numberId';
+
+const ProductionProfiles = () => {
+  const [loading, setLoading] = useState(false);
+  const [profiles, setProfiles] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [formVisible, setFormVisible] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [form] = Form.useForm();
+  const watchedProfileValues = Form.useWatch([], form);
+
+  const productLookup = useMemo(
+    () => (products || []).reduce((acc, item) => ({ ...acc, [item.id]: item }), {}),
+    [products],
+  );
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [profileResult, productsSnap] = await Promise.all([
+        getAllProductionProfiles(),
+        getDocs(collection(db, 'products')),
+      ]);
+
+      const productItems = productsSnap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((item) => item.isActive !== false)
+        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'id-ID'));
+
+      setProfiles(profileResult);
+      setProducts(productItems);
+    } catch (error) {
+      console.error(error);
+      message.error('Gagal memuat profil produksi');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const summary = useMemo(() => {
+    const total = profiles.length;
+    const active = profiles.filter((item) => item.isActive !== false).length;
+    const defaults = profiles.filter((item) => item.isDefault !== false).length;
+    const mappedProducts = new Set(profiles.map((item) => item.productId).filter(Boolean)).size;
+    return { total, active, defaults, mappedProducts };
+  }, [profiles]);
+
+  const filteredData = useMemo(() => {
+    const keyword = String(search || '').trim().toLowerCase();
+    return profiles.filter((item) => {
+      const matchSearch =
+        !keyword ||
+        String(item.profileName || '').toLowerCase().includes(keyword) ||
+        String(item.productName || '').toLowerCase().includes(keyword);
+      const matchStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'active' && item.isActive !== false) ||
+        (statusFilter === 'inactive' && item.isActive === false);
+      return matchSearch && matchStatus;
+    });
+  }, [profiles, search, statusFilter]);
+
+  const currentMetrics = useMemo(() => {
+    return calculateProductionProfileMetrics({
+      ...DEFAULT_PRODUCTION_PROFILE_FORM,
+      ...form.getFieldsValue(),
+    });
+  }, [watchedProfileValues]);
+
+  const resetFormState = () => {
+    setEditingProfile(null);
+    form.resetFields();
+    form.setFieldsValue({ ...DEFAULT_PRODUCTION_PROFILE_FORM });
+  };
+
+  const handleAdd = () => {
+    setEditingProfile(null);
+    form.setFieldsValue({ ...DEFAULT_PRODUCTION_PROFILE_FORM });
+    setFormVisible(true);
+  };
+
+  const handleEdit = (record) => {
+    setEditingProfile(record);
+    form.setFieldsValue({ ...DEFAULT_PRODUCTION_PROFILE_FORM, ...record });
+    setFormVisible(true);
+  };
+
+  const handleSubmit = async () => {
+    try {
+      const values = await form.validateFields();
+      setSubmitting(true);
+      if (editingProfile?.id) {
+        await updateProductionProfile(editingProfile.id, values, null, productLookup);
+        message.success('Profil produksi berhasil diperbarui');
+      } else {
+        await createProductionProfile(values, null, productLookup);
+        message.success('Profil produksi berhasil ditambahkan');
+      }
+      setFormVisible(false);
+      resetFormState();
+      await loadData();
+    } catch (error) {
+      if (error?.errorFields) return;
+      if (error?.type === 'validation' && error?.errors) {
+        form.setFields(
+          Object.entries(error.errors).map(([name, msg]) => ({ name, errors: [msg] })),
+        );
+        return;
+      }
+      console.error(error);
+      message.error('Gagal menyimpan profil produksi');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const columns = [
+    {
+      title: 'Produk',
+      dataIndex: 'productName',
+      key: 'productName',
+      width: 220,
+      render: (_, record) => (
+        <Space direction="vertical" size={0}>
+          <Typography.Text strong>{record.productName || '-'}</Typography.Text>
+          <Typography.Text type="secondary">{record.profileName || '-'}</Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: 'Tipe',
+      dataIndex: 'profileType',
+      key: 'profileType',
+      width: 110,
+      render: (value) => PRODUCTION_PROFILE_TYPE_MAP[value] || '-',
+    },
+    {
+      title: 'Kebutuhan / Unit',
+      key: 'requirements',
+      width: 180,
+      render: (_, record) => (
+        <Space direction="vertical" size={0}>
+          <Typography.Text>Kelopak: {formatNumber(record.petalsPerUnit || 0)}</Typography.Text>
+          <Typography.Text>Daun: {formatNumber(record.leavesPerUnit || 0)}</Typography.Text>
+          <Typography.Text>Tangkai: {formatNumber(record.stemsPerUnit || 0)}</Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: 'Yield Dasar',
+      key: 'yields',
+      width: 200,
+      render: (_, record) => (
+        <Space direction="vertical" size={0}>
+          <Typography.Text>Kelopak/m: {formatNumber(record.petalYieldPerMeter || 0)}</Typography.Text>
+          <Typography.Text>Daun/m: {formatNumber(record.leafYieldPerMeter || 0)}</Typography.Text>
+          <Typography.Text>Kawat/40cm: {formatNumber(record.stemYieldPerRod40cm || 0)}</Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: 'Batch Standar',
+      key: 'batch',
+      width: 180,
+      render: (_, record) => (
+        <Space direction="vertical" size={0}>
+          <Typography.Text>Kelopak: {formatNumber(record.assemblyPetalPackCount || 0)} plastik</Typography.Text>
+          <Typography.Text>Daun: {formatNumber(record.assemblyLeafPackCount || 0)} plastik</Typography.Text>
+          <Typography.Text>Target: {formatNumber(record.assemblyTargetOutput || 0)} bunga</Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: 'Status',
+      dataIndex: 'isActive',
+      key: 'isActive',
+      width: 120,
+      render: (value, record) => (
+        <Space direction="vertical" size={4}>
+          <Badge status={value !== false ? 'success' : 'default'} text={value !== false ? 'Aktif' : 'Nonaktif'} />
+          {record.isDefault !== false ? <Badge color="blue" text="Default" /> : null}
+        </Space>
+      ),
+    },
+    {
+      title: 'Aksi',
+      key: 'actions',
+      width: 180,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space wrap>
+          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            Edit
+          </Button>
+          <Popconfirm
+            title={record.isActive !== false ? 'Nonaktifkan profil ini?' : 'Aktifkan profil ini?'}
+            onConfirm={() => toggleProductionProfileActive(record.id, record.isActive === false, null).then(loadData)}
+          >
+            <Button size="small">{record.isActive !== false ? 'Nonaktifkan' : 'Aktifkan'}</Button>
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Card>
+        <Row justify="space-between" align="middle" gutter={[16, 16]}>
+          <Col xs={24} md={16}>
+            <Typography.Title level={4} style={{ margin: 0 }}>Profil Produksi</Typography.Title>
+            <Typography.Paragraph type="secondary" style={{ margin: '8px 0 0' }}>
+              Simpan rumus hasil, batch assembly, dan batas miss per produk. BOM tetap jadi resep bahan, sedangkan profil produksi menjadi aturan hitung operasional dan monitoring jangka panjang.
+            </Typography.Paragraph>
+          </Col>
+          <Col>
+            <Space>
+              <Button icon={<ReloadOutlined />} onClick={loadData}>Refresh</Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>Tambah Profil</Button>
+            </Space>
+          </Col>
+        </Row>
+      </Card>
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={6}><Card><Statistic title="Total Profil" value={summary.total} /></Card></Col>
+        <Col xs={24} md={6}><Card><Statistic title="Profil Aktif" value={summary.active} /></Card></Col>
+        <Col xs={24} md={6}><Card><Statistic title="Profil Default" value={summary.defaults} /></Card></Col>
+        <Col xs={24} md={6}><Card><Statistic title="Produk Terpetakan" value={summary.mappedProducts} /></Card></Col>
+      </Row>
+
+      <Card>
+        <Row gutter={16}>
+          <Col xs={24} md={14}>
+            <Input.Search
+              placeholder="Cari nama profil atau produk..."
+              allowClear
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </Col>
+          <Col xs={24} md={10}>
+            <Select
+              style={{ width: '100%' }}
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: 'all', label: 'Semua Status' },
+                { value: 'active', label: 'Aktif' },
+                { value: 'inactive', label: 'Nonaktif' },
+              ]}
+            />
+          </Col>
+        </Row>
+      </Card>
+
+      <Card>
+        <Table
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={filteredData}
+          scroll={{ x: 1200 }}
+          pagination={{ pageSize: 10, showSizeChanger: true }}
+          locale={{ emptyText: <Empty description="Belum ada profil produksi" /> }}
+        />
+      </Card>
+
+      <Drawer
+        title={editingProfile?.id ? 'Edit Profil Produksi' : 'Tambah Profil Produksi'}
+        open={formVisible}
+        onClose={() => {
+          setFormVisible(false);
+          resetFormState();
+        }}
+        width={720}
+        destroyOnClose
+        extra={
+          <Space>
+            <Button onClick={() => { setFormVisible(false); resetFormState(); }}>Batal</Button>
+            <Button type="primary" loading={submitting} onClick={handleSubmit}>Simpan</Button>
+          </Space>
+        }
+      >
+        <Form form={form} layout="vertical" initialValues={DEFAULT_PRODUCTION_PROFILE_FORM}>
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item label="Produk" name="productId" rules={[{ required: true, message: 'Produk wajib dipilih' }]}>
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  options={(products || []).map((item) => ({ value: item.id, label: item.name || '-' }))}
+                  placeholder="Pilih produk..."
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="Nama Profil" name="profileName" rules={[{ required: true, message: 'Nama profil wajib diisi' }]}>
+                <Input placeholder="Contoh: Profil Mawar Reguler" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Tipe Profil" name="profileType">
+                <Select options={PRODUCTION_PROFILE_TYPES} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Default" name="isDefault" valuePropName="checked">
+                <Switch checkedChildren="Ya" unCheckedChildren="Tidak" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Status Aktif" name="isActive" valuePropName="checked">
+                <Switch checkedChildren="Aktif" unCheckedChildren="Nonaktif" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Typography.Title level={5}>Kebutuhan per 1 Produk</Typography.Title>
+          <Row gutter={16}>
+            <Col xs={24} md={8}><Form.Item label="Kelopak / Unit" name="petalsPerUnit"><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col>
+            <Col xs={24} md={8}><Form.Item label="Daun / Unit" name="leavesPerUnit"><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col>
+            <Col xs={24} md={8}><Form.Item label="Tangkai / Unit" name="stemsPerUnit"><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col>
+          </Row>
+
+          <Typography.Title level={5}>Yield Dasar Proses</Typography.Title>
+          <Row gutter={16}>
+            <Col xs={24} md={8}><Form.Item label="Kelopak per Meter" name="petalYieldPerMeter"><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col>
+            <Col xs={24} md={8}><Form.Item label="Daun per Meter" name="leafYieldPerMeter"><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col>
+            <Col xs={24} md={8}><Form.Item label="Tangkai per Batang 40 cm" name="stemYieldPerRod40cm"><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col>
+          </Row>
+
+          <Typography.Title level={5}>Batch Assembly Standar</Typography.Title>
+          <Row gutter={16}>
+            <Col xs={24} md={6}><Form.Item label="Plastik Kelopak" name="assemblyPetalPackCount"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+            <Col xs={24} md={6}><Form.Item label="Plastik Daun" name="assemblyLeafPackCount"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+            <Col xs={24} md={6}><Form.Item label="Ikat Kawat" name="assemblyStemBundleCount"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+            <Col xs={24} md={6}><Form.Item label="Kawat Extra pcs" name="assemblyStemExtraQty"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+            <Col xs={24} md={8}><Form.Item label="Target Output Batch" name="assemblyTargetOutput"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+            <Col xs={24} md={8}><Form.Item label="Alert Kuning %" name="missYellowPercent"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+            <Col xs={24} md={8}><Form.Item label="Alert Merah %" name="missRedPercent"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item></Col>
+          </Row>
+
+          <Form.Item label="Catatan" name="notes">
+            <Input.TextArea rows={3} placeholder="Catatan operasional atau asumsi batch" />
+          </Form.Item>
+
+          <Card size="small" type="inner" title="Ringkasan Otomatis">
+            <Row gutter={[16, 16]}>
+              <Col xs={24} md={8}><Statistic title="Bunga / Meter Kelopak" value={Number(currentMetrics.flowerEquivalentPerPetalMeter || 0).toFixed(2)} /></Col>
+              <Col xs={24} md={8}><Statistic title="Bunga / Meter Daun" value={Number(currentMetrics.flowerEquivalentPerLeafMeter || 0).toFixed(2)} /></Col>
+              <Col xs={24} md={8}><Statistic title="Bunga / Batang 40 cm" value={Number(currentMetrics.flowerEquivalentPerRod40cm || 0).toFixed(2)} /></Col>
+              <Col xs={24} md={8}><Statistic title="Kawat Batch (pcs)" value={formatNumber(currentMetrics.assemblyStemQty || 0)} /></Col>
+              <Col xs={24} md={8}><Statistic title="Kapasitas Kelopak Batch" value={Number(currentMetrics.assemblyFlowerEquivalentFromPetal || 0).toFixed(2)} /></Col>
+              <Col xs={24} md={8}><Statistic title="Sisa Teoritis Daun" value={formatNumber(currentMetrics.assemblyLeafTheoreticalLeftover || 0)} /></Col>
+            </Row>
+          </Card>
+        </Form>
+      </Drawer>
+    </div>
+  );
+};
+
+export default ProductionProfiles;

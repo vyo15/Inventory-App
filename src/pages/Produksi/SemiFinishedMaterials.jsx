@@ -3,8 +3,9 @@
 // Master stok internal produksi
 // Tidak dijual ke customer
 // Revisi:
-// - Available Stock dihitung otomatis = Current Stock - Reserved Stock
-// - User tidak input manual availableStock
+// - Master item tetap ringkas
+// - Stok disimpan per varian warna
+// - Total master dihitung otomatis dari seluruh varian
 // =====================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -29,24 +30,27 @@ import {
   Statistic,
   Switch,
   Table,
-  Tag,
   Typography,
 } from "antd";
 import {
+  DeleteOutlined,
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
 import {
+  calculateSemiFinishedTotalsFromVariants,
   DEFAULT_SEMI_FINISHED_FORM,
+  DEFAULT_SEMI_FINISHED_VARIANT,
   formatSemiFinishedStockSummary,
+  normalizeSemiFinishedVariants,
   SEMI_FINISHED_CATEGORIES,
   SEMI_FINISHED_CATEGORY_MAP,
-  SEMI_FINISHED_TYPES,
-  SEMI_FINISHED_TYPE_MAP,
-  SEMI_FINISHED_VALUATION_METHOD_MAP,
-  SEMI_FINISHED_VALUATION_METHODS,
+  SEMI_FINISHED_COLOR_MAP,
+  SEMI_FINISHED_COLOR_OPTIONS,
+  SEMI_FINISHED_GROUP_OPTIONS,
+  SEMI_FINISHED_GROUP_MAP,
 } from "../../constants/semiFinishedMaterialOptions";
 import {
   createSemiFinishedMaterial,
@@ -55,9 +59,6 @@ import {
   updateSemiFinishedMaterial,
 } from "../../services/Produksi/semiFinishedMaterialsService";
 
-// =====================================================
-// Helper formatter
-// =====================================================
 const formatNumber = (value) =>
   new Intl.NumberFormat("id-ID", {
     maximumFractionDigits: 0,
@@ -68,18 +69,40 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 0,
   }).format(Number(value || 0))}`;
 
-// =====================================================
-// Helper hitung available stock
-// =====================================================
-const calculateAvailableStock = (currentStock, reservedStock) => {
-  const current = Number(currentStock || 0);
-  const reserved = Number(reservedStock || 0);
-  return Math.max(current - reserved, 0);
+const normalizeFormVariants = (variants = []) => {
+  const normalized = normalizeSemiFinishedVariants(variants);
+
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  return [{ ...DEFAULT_SEMI_FINISHED_VARIANT }];
 };
 
-// =====================================================
-// Main Component
-// =====================================================
+const buildFormValues = (record = {}) => {
+  const totals = calculateSemiFinishedTotalsFromVariants(record.variants || []);
+
+  return {
+    ...DEFAULT_SEMI_FINISHED_FORM,
+    ...record,
+    variants: normalizeFormVariants(record.variants || []),
+    currentStock: totals.currentStock || Number(record.currentStock || 0),
+    reservedStock: totals.reservedStock || Number(record.reservedStock || 0),
+    availableStock:
+      totals.availableStock !== undefined
+        ? totals.availableStock
+        : Math.max(
+            Number(record.currentStock || 0) - Number(record.reservedStock || 0),
+            0,
+          ),
+    minStockAlert: totals.minStockAlert || Number(record.minStockAlert || 0),
+    averageCostPerUnit:
+      totals.variants.length > 0
+        ? Number(totals.averageCostPerUnit || 0)
+        : Number(record.averageCostPerUnit || 0),
+  };
+};
+
 const SemiFinishedMaterials = () => {
   const [loading, setLoading] = useState(false);
   const [materials, setMaterials] = useState([]);
@@ -87,7 +110,7 @@ const SemiFinishedMaterials = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState("all");
+  const [flowerGroupFilter, setFlowerGroupFilter] = useState("all");
 
   const [formVisible, setFormVisible] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
@@ -98,9 +121,6 @@ const SemiFinishedMaterials = () => {
 
   const [form] = Form.useForm();
 
-  // =====================================================
-  // Load data master semi finished
-  // =====================================================
   const loadData = async () => {
     try {
       setLoading(true);
@@ -118,29 +138,20 @@ const SemiFinishedMaterials = () => {
     loadData();
   }, []);
 
-  // =====================================================
-  // Watch current/reserved stock untuk auto-calc available stock
-  // =====================================================
-  const currentStockValue = Form.useWatch("currentStock", form);
-  const reservedStockValue = Form.useWatch("reservedStock", form);
+  const watchedVariants = Form.useWatch("variants", form) || [];
 
-  const calculatedAvailableStock = useMemo(() => {
-    return calculateAvailableStock(currentStockValue, reservedStockValue);
-  }, [currentStockValue, reservedStockValue]);
+  const calculatedTotals = useMemo(
+    () => calculateSemiFinishedTotalsFromVariants(watchedVariants),
+    [watchedVariants],
+  );
 
-  // =====================================================
-  // Summary cards
-  // =====================================================
   const summary = useMemo(() => {
     const total = materials.length;
     const active = materials.filter((item) => item.isActive).length;
     const inactive = total - active;
 
     const lowStock = materials.filter((item) => {
-      const available = calculateAvailableStock(
-        item.currentStock,
-        item.reservedStock,
-      );
+      const available = Number(item.availableStock || 0);
       const min = Number(item.minStockAlert || 0);
       return available <= min;
     }).length;
@@ -148,24 +159,19 @@ const SemiFinishedMaterials = () => {
     return { total, active, inactive, lowStock };
   }, [materials]);
 
-  // =====================================================
-  // Filter data tabel
-  // =====================================================
   const filteredData = useMemo(() => {
     return materials.filter((item) => {
       const searchText = search.trim().toLowerCase();
+      const variantColorTexts = Array.isArray(item.variants)
+        ? item.variants.map((variant) => SEMI_FINISHED_COLOR_MAP[variant.color] || variant.color)
+        : [];
 
       const matchSearch =
         !searchText ||
-        String(item.code || "")
-          .toLowerCase()
-          .includes(searchText) ||
-        String(item.name || "")
-          .toLowerCase()
-          .includes(searchText) ||
-        String(item.description || "")
-          .toLowerCase()
-          .includes(searchText);
+        String(item.code || "").toLowerCase().includes(searchText) ||
+        String(item.name || "").toLowerCase().includes(searchText) ||
+        String(item.description || "").toLowerCase().includes(searchText) ||
+        variantColorTexts.some((text) => String(text || "").toLowerCase().includes(searchText));
 
       const matchStatus =
         statusFilter === "all" ||
@@ -175,84 +181,43 @@ const SemiFinishedMaterials = () => {
       const matchCategory =
         categoryFilter === "all" || item.category === categoryFilter;
 
-      const matchType = typeFilter === "all" || item.type === typeFilter;
+      const matchFlowerGroup =
+        flowerGroupFilter === "all" || item.flowerGroup === flowerGroupFilter;
 
-      return matchSearch && matchStatus && matchCategory && matchType;
+      return matchSearch && matchStatus && matchCategory && matchFlowerGroup;
     });
-  }, [materials, search, statusFilter, categoryFilter, typeFilter]);
+  }, [materials, search, statusFilter, categoryFilter, flowerGroupFilter]);
 
-  // =====================================================
-  // Reset form state
-  // =====================================================
   const resetFormState = () => {
     setEditingMaterial(null);
     form.resetFields();
-    form.setFieldsValue({
-      ...DEFAULT_SEMI_FINISHED_FORM,
-      availableStock: calculateAvailableStock(
-        DEFAULT_SEMI_FINISHED_FORM.currentStock,
-        DEFAULT_SEMI_FINISHED_FORM.reservedStock,
-      ),
-    });
+    form.setFieldsValue(buildFormValues(DEFAULT_SEMI_FINISHED_FORM));
   };
 
-  // =====================================================
-  // Buka modal tambah
-  // =====================================================
   const handleAdd = () => {
     setEditingMaterial(null);
-    form.setFieldsValue({
-      ...DEFAULT_SEMI_FINISHED_FORM,
-      availableStock: calculateAvailableStock(
-        DEFAULT_SEMI_FINISHED_FORM.currentStock,
-        DEFAULT_SEMI_FINISHED_FORM.reservedStock,
-      ),
-    });
+    form.setFieldsValue(buildFormValues(DEFAULT_SEMI_FINISHED_FORM));
     setFormVisible(true);
   };
 
-  // =====================================================
-  // Buka modal edit
-  // =====================================================
   const handleEdit = (record) => {
     setEditingMaterial(record);
-
-    form.setFieldsValue({
-      ...DEFAULT_SEMI_FINISHED_FORM,
-      ...record,
-      availableStock: calculateAvailableStock(
-        record.currentStock,
-        record.reservedStock,
-      ),
-    });
-
+    form.setFieldsValue(buildFormValues(record));
     setFormVisible(true);
   };
 
-  // =====================================================
-  // Buka detail
-  // =====================================================
   const handleViewDetail = (record) => {
     setSelectedMaterial(record);
     setDetailVisible(true);
   };
 
-  // =====================================================
-  // Submit create / edit
-  // =====================================================
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
 
       const payload = {
         ...values,
-        currentStock: Number(values.currentStock || 0),
-        reservedStock: Number(values.reservedStock || 0),
-        availableStock: calculateAvailableStock(
-          values.currentStock,
-          values.reservedStock,
-        ),
-        minStockAlert: Number(values.minStockAlert || 0),
+        variants: normalizeFormVariants(values.variants || []),
         maxStockTarget:
           values.maxStockTarget === null || values.maxStockTarget === undefined
             ? null
@@ -261,7 +226,6 @@ const SemiFinishedMaterials = () => {
         lastProductionCostPerUnit: Number(
           values.lastProductionCostPerUnit || 0,
         ),
-        averageCostPerUnit: Number(values.averageCostPerUnit || 0),
       };
 
       setSubmitting(true);
@@ -282,7 +246,7 @@ const SemiFinishedMaterials = () => {
 
       if (error?.type === "validation" && error?.errors) {
         const fields = Object.entries(error.errors).map(([name, errors]) => ({
-          name,
+          name: name.startsWith("variants.") ? name.split(".") : name,
           errors: [errors],
         }));
         form.setFields(fields);
@@ -296,9 +260,6 @@ const SemiFinishedMaterials = () => {
     }
   };
 
-  // =====================================================
-  // Toggle aktif/nonaktif
-  // =====================================================
   const handleToggleActive = async (record) => {
     try {
       await toggleSemiFinishedMaterialActive(record.id, !record.isActive, null);
@@ -314,9 +275,6 @@ const SemiFinishedMaterials = () => {
     }
   };
 
-  // =====================================================
-  // Kolom tabel
-  // =====================================================
   const columns = [
     {
       title: "Kode",
@@ -346,42 +304,45 @@ const SemiFinishedMaterials = () => {
       dataIndex: "category",
       key: "category",
       width: 130,
-      render: (value) => <Tag>{SEMI_FINISHED_CATEGORY_MAP[value] || "-"}</Tag>,
+      render: (value) => SEMI_FINISHED_CATEGORY_MAP[value] || "-",
     },
     {
-      title: "Tipe",
-      dataIndex: "type",
-      key: "type",
-      width: 140,
-      render: (value) => (
-        <Tag color="blue">{SEMI_FINISHED_TYPE_MAP[value] || "-"}</Tag>
-      ),
-    },
-    {
-      title: "Stok",
-      key: "stock",
-      width: 220,
+      title: "Varian Warna",
+      key: "variants",
+      width: 260,
       render: (_, record) => {
-        const normalizedRecord = {
-          ...record,
-          availableStock: calculateAvailableStock(
-            record.currentStock,
-            record.reservedStock,
-          ),
-        };
+        const variants = Array.isArray(record.variants) ? record.variants : [];
+
+        if (variants.length === 0) {
+          return <Typography.Text type="secondary">Belum ada</Typography.Text>;
+        }
 
         return (
-          <Space direction="vertical" size={0}>
-            <Typography.Text>
-              {formatSemiFinishedStockSummary(normalizedRecord)}
-            </Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              Min Alert: {formatNumber(record.minStockAlert)}{" "}
-              {record.unit || ""}
-            </Typography.Text>
+          <Space size={[4, 4]} wrap>
+            {variants.map((variant, index) => (
+              <Tag key={`${variant.color}-${index}`} color={variant.isActive ? "blue" : "default"}>
+                {(SEMI_FINISHED_COLOR_MAP[variant.color] || variant.color || "-") +
+                  ` (${formatNumber(variant.currentStock)} ${record.unit || ""})`}
+              </Tag>
+            ))}
           </Space>
         );
       },
+    },
+    {
+      title: "Stok Total",
+      key: "stock",
+      width: 220,
+      render: (_, record) => (
+        <Space direction="vertical" size={0}>
+          <Typography.Text>
+            {formatSemiFinishedStockSummary(record)}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Min Alert Total: {formatNumber(record.minStockAlert)} {record.unit || ""}
+          </Typography.Text>
+        </Space>
+      ),
     },
     {
       title: "Biaya Rata-rata",
@@ -457,7 +418,7 @@ const SemiFinishedMaterials = () => {
               Semi Finished Materials
             </Typography.Title>
             <Typography.Text type="secondary">
-              Master stok internal produksi, tidak dijual ke customer
+              Master stok internal produksi dengan varian warna, tidak dijual ke customer
             </Typography.Text>
           </Col>
 
@@ -505,7 +466,7 @@ const SemiFinishedMaterials = () => {
         <Row gutter={[12, 12]}>
           <Col xs={24} md={8}>
             <Input
-              placeholder="Cari kode, nama, deskripsi..."
+              placeholder="Cari kode, nama, deskripsi, warna..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               allowClear
@@ -540,11 +501,11 @@ const SemiFinishedMaterials = () => {
           <Col xs={24} md={6}>
             <Select
               style={{ width: "100%" }}
-              value={typeFilter}
-              onChange={setTypeFilter}
+              value={flowerGroupFilter}
+              onChange={setFlowerGroupFilter}
               options={[
-                { value: "all", label: "Semua Tipe" },
-                ...SEMI_FINISHED_TYPES,
+                { value: "all", label: "Semua Jenis Bunga" },
+                ...SEMI_FINISHED_GROUP_OPTIONS,
               ]}
             />
           </Col>
@@ -557,7 +518,7 @@ const SemiFinishedMaterials = () => {
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          scroll={{ x: 1400 }}
+          scroll={{ x: 1600 }}
           locale={{
             emptyText: (
               <Empty description="Belum ada data semi finished materials" />
@@ -581,7 +542,7 @@ const SemiFinishedMaterials = () => {
           setFormVisible(false);
           resetFormState();
         }}
-        width={760}
+        width={860}
         destroyOnClose
         extra={
           <Space>
@@ -602,13 +563,7 @@ const SemiFinishedMaterials = () => {
         <Form
           form={form}
           layout="vertical"
-          initialValues={{
-            ...DEFAULT_SEMI_FINISHED_FORM,
-            availableStock: calculateAvailableStock(
-              DEFAULT_SEMI_FINISHED_FORM.currentStock,
-              DEFAULT_SEMI_FINISHED_FORM.reservedStock,
-            ),
-          }}
+          initialValues={buildFormValues(DEFAULT_SEMI_FINISHED_FORM)}
         >
           <Divider orientation="left">Informasi Dasar</Divider>
 
@@ -619,7 +574,7 @@ const SemiFinishedMaterials = () => {
                 name="code"
                 rules={[{ required: true, message: "Kode wajib diisi" }]}
               >
-                <Input placeholder="Contoh: SFM-KELopak-POTONG" />
+                <Input placeholder="Contoh: SFM-KEL-MWR-S" />
               </Form.Item>
             </Col>
 
@@ -629,7 +584,7 @@ const SemiFinishedMaterials = () => {
                 name="name"
                 rules={[{ required: true, message: "Nama wajib diisi" }]}
               >
-                <Input placeholder="Contoh: Kelopak Mawar Potong" />
+                <Input placeholder="Contoh: Kelopak Mawar Potong S" />
               </Form.Item>
             </Col>
 
@@ -651,59 +606,169 @@ const SemiFinishedMaterials = () => {
 
             <Col xs={24} md={8}>
               <Form.Item
-                label="Tipe"
-                name="type"
-                rules={[{ required: true, message: "Tipe wajib dipilih" }]}
+                label="Jenis Bunga"
+                name="flowerGroup"
+                rules={[{ required: true, message: "Jenis bunga wajib dipilih" }]}
               >
-                <Select options={SEMI_FINISHED_TYPES} />
+                <Select options={SEMI_FINISHED_GROUP_OPTIONS} />
               </Form.Item>
             </Col>
 
-            <Col xs={24} md={8}>
-              <Form.Item
-                label="Satuan"
-                name="unit"
-                rules={[{ required: true, message: "Satuan wajib diisi" }]}
-              >
-                <Input placeholder="Contoh: pcs" />
-              </Form.Item>
-            </Col>
           </Row>
 
-          <Divider orientation="left">Stok</Divider>
+          <Divider orientation="left">Varian Warna & Stok</Divider>
 
           <Alert
             style={{ marginBottom: 16 }}
             type="info"
             showIcon
-            message="Available Stock dihitung otomatis dari Current Stock dikurangi Reserved Stock. Reserved Stock dikelola dari Production Order, bukan input manual user."
+            message="Gunakan 1 master item untuk 1 jenis komponen. Tambahkan warna sebagai varian di bawahnya agar data tetap rapi. Total stok item akan dihitung otomatis dari semua varian warna."
+          />
+
+          <Form.List name="variants">
+            {(fields, { add, remove }) => (
+              <Space direction="vertical" style={{ width: "100%" }} size={12}>
+                {fields.map((field, index) => (
+                  <Card
+                    key={field.key}
+                    size="small"
+                    title={`Varian ${index + 1}`}
+                    extra={
+                      fields.length > 1 ? (
+                        <Button
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          onClick={() => remove(field.name)}
+                        >
+                          Hapus Varian
+                        </Button>
+                      ) : null
+                    }
+                  >
+                    <Row gutter={16}>
+                      <Col xs={24} md={8}>
+                        <Form.Item
+                          {...field}
+                          label="Warna"
+                          name={[field.name, "color"]}
+                          rules={[{ required: true, message: "Warna wajib dipilih" }]}
+                        >
+                          <Select
+                            showSearch
+                            options={SEMI_FINISHED_COLOR_OPTIONS}
+                            placeholder="Pilih warna"
+                          />
+                        </Form.Item>
+                      </Col>
+
+                      <Col xs={24} md={8}>
+                        <Form.Item
+                          {...field}
+                          label="Kode Variant"
+                          name={[field.name, "sku"]}
+                        >
+                          <Input placeholder="Opsional: KEL-S-MERAH" />
+                        </Form.Item>
+                      </Col>
+
+                      <Col xs={24} md={8}>
+                        <Form.Item
+                          {...field}
+                          label="Status Varian"
+                          name={[field.name, "isActive"]}
+                          valuePropName="checked"
+                        >
+                          <Switch />
+                        </Form.Item>
+                      </Col>
+
+                      <Col xs={24} md={6}>
+                        <Form.Item
+                          {...field}
+                          label="Current Stock"
+                          name={[field.name, "currentStock"]}
+                        >
+                          <InputNumber min={0} style={{ width: "100%" }} />
+                        </Form.Item>
+                      </Col>
+
+                      <Col xs={24} md={6}>
+                        <Form.Item
+                          {...field}
+                          label="Reserved Stock"
+                          name={[field.name, "reservedStock"]}
+                        >
+                          <InputNumber min={0} style={{ width: "100%" }} disabled />
+                        </Form.Item>
+                      </Col>
+
+                      <Col xs={24} md={6}>
+                        <Form.Item
+                          {...field}
+                          label="Min Stock Alert"
+                          name={[field.name, "minStockAlert"]}
+                        >
+                          <InputNumber min={0} style={{ width: "100%" }} />
+                        </Form.Item>
+                      </Col>
+
+                      <Col xs={24} md={6}>
+                        <Form.Item
+                          {...field}
+                          label="Average Cost / Unit"
+                          name={[field.name, "averageCostPerUnit"]}
+                        >
+                          <InputNumber min={0} style={{ width: "100%" }} />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                  </Card>
+                ))}
+
+                <Button
+                  type="dashed"
+                  icon={<PlusOutlined />}
+                  onClick={() => add({ ...DEFAULT_SEMI_FINISHED_VARIANT })}
+                  block
+                >
+                  Tambah Varian Warna
+                </Button>
+              </Space>
+            )}
+          </Form.List>
+
+          <Divider orientation="left">Ringkasan Stok Master</Divider>
+
+          <Alert
+            style={{ marginBottom: 16 }}
+            type="info"
+            showIcon
+            message="Current Stock, Reserved Stock, Available Stock, dan Min Stock Alert total di bawah ini adalah hasil akumulasi seluruh varian warna."
           />
 
           <Row gutter={16}>
-            <Col xs={24} md={8}>
-              <Form.Item label="Current Stock" name="currentStock">
-                <InputNumber min={0} style={{ width: "100%" }} />
+            <Col xs={24} md={6}>
+              <Form.Item label="Total Current Stock">
+                <Input value={formatNumber(calculatedTotals.currentStock)} disabled />
               </Form.Item>
             </Col>
 
-            <Col xs={24} md={8}>
-              <Form.Item label="Reserved Stock" name="reservedStock">
-                <InputNumber min={0} style={{ width: "100%" }} disabled />
+            <Col xs={24} md={6}>
+              <Form.Item label="Total Reserved Stock">
+                <Input value={formatNumber(calculatedTotals.reservedStock)} disabled />
               </Form.Item>
             </Col>
 
-            <Col xs={24} md={8}>
-              <Form.Item label="Available Stock">
-                <Input
-                  value={formatNumber(calculatedAvailableStock)}
-                  disabled
-                />
+            <Col xs={24} md={6}>
+              <Form.Item label="Total Available Stock">
+                <Input value={formatNumber(calculatedTotals.availableStock)} disabled />
               </Form.Item>
             </Col>
 
-            <Col xs={24} md={8}>
-              <Form.Item label="Min Stock Alert" name="minStockAlert">
-                <InputNumber min={0} style={{ width: "100%" }} />
+            <Col xs={24} md={6}>
+              <Form.Item label="Total Min Stock Alert">
+                <Input value={formatNumber(calculatedTotals.minStockAlert)} disabled />
               </Form.Item>
             </Col>
 
@@ -722,9 +787,18 @@ const SemiFinishedMaterials = () => {
                 <Switch />
               </Form.Item>
             </Col>
+
+            <Col xs={24} md={8}>
+              <Form.Item label="Jumlah Varian Aktif">
+                <Input
+                  value={`${formatNumber(calculatedTotals.activeVariantCount)} dari ${formatNumber(calculatedTotals.variantCount)} varian`}
+                  disabled
+                />
+              </Form.Item>
+            </Col>
           </Row>
 
-          <Divider orientation="left">Biaya</Divider>
+          <Divider orientation="left">Biaya Master</Divider>
 
           <Row gutter={16}>
             <Col xs={24} md={8}>
@@ -746,68 +820,27 @@ const SemiFinishedMaterials = () => {
             </Col>
 
             <Col xs={24} md={8}>
-              <Form.Item label="Average Cost / Unit" name="averageCostPerUnit">
-                <InputNumber min={0} style={{ width: "100%" }} />
+              <Form.Item label="Average Cost / Unit (Otomatis)">
+                <Input value={formatCurrency(calculatedTotals.averageCostPerUnit)} disabled />
               </Form.Item>
             </Col>
 
             <Col xs={24} md={12}>
-              <Form.Item label="Valuation Method" name="valuationMethod">
-                <Select options={SEMI_FINISHED_VALUATION_METHODS} />
-              </Form.Item>
-            </Col>
-
-            <Col xs={24} md={12}>
-              <Form.Item shouldUpdate noStyle>
-                {({ getFieldsValue }) => {
-                  const values = getFieldsValue();
-                  const normalizedValues = {
-                    ...values,
-                    availableStock: calculateAvailableStock(
-                      values.currentStock,
-                      values.reservedStock,
-                    ),
-                  };
-
-                  return (
-                    <Form.Item label="Ringkasan">
-                      <Card size="small">
-                        <Space direction="vertical" size={0}>
-                          <Typography.Text>
-                            {formatSemiFinishedStockSummary(normalizedValues)}
-                          </Typography.Text>
-                          <Typography.Text type="secondary">
-                            Average Cost:{" "}
-                            {formatCurrency(values.averageCostPerUnit)}
-                          </Typography.Text>
-                        </Space>
-                      </Card>
-                    </Form.Item>
-                  );
-                }}
+              <Form.Item label="Ringkasan">
+                <Card size="small">
+                  <Space direction="vertical" size={0}>
+                    <Typography.Text>
+                      {formatSemiFinishedStockSummary(calculatedTotals)}
+                    </Typography.Text>
+                    <Typography.Text type="secondary">
+                      Average Cost: {formatCurrency(calculatedTotals.averageCostPerUnit)}
+                    </Typography.Text>
+                  </Space>
+                </Card>
               </Form.Item>
             </Col>
           </Row>
 
-          <Divider orientation="left">Tag & Catatan</Divider>
-
-          <Row gutter={16}>
-            <Col xs={24}>
-              <Form.Item label="Tags" name="tags">
-                <Select
-                  mode="tags"
-                  placeholder="Contoh: mawar, potong, komponen"
-                  tokenSeparators={[","]}
-                />
-              </Form.Item>
-            </Col>
-
-            <Col xs={24}>
-              <Form.Item label="Catatan Internal" name="notes">
-                <Input.TextArea rows={3} placeholder="Catatan internal..." />
-              </Form.Item>
-            </Col>
-          </Row>
         </Form>
       </Drawer>
 
@@ -815,86 +848,127 @@ const SemiFinishedMaterials = () => {
         title="Detail Semi Finished Material"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={620}
+        width={760}
       >
         {!selectedMaterial ? (
           <Empty description="Tidak ada data" />
         ) : (
-          <Descriptions column={1} bordered size="small">
-            <Descriptions.Item label="Kode">
-              {selectedMaterial.code || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Nama">
-              {selectedMaterial.name || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Deskripsi">
-              {selectedMaterial.description || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Kategori">
-              {SEMI_FINISHED_CATEGORY_MAP[selectedMaterial.category] || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Tipe">
-              {SEMI_FINISHED_TYPE_MAP[selectedMaterial.type] || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Satuan">
-              {selectedMaterial.unit || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Current Stock">
-              {formatNumber(selectedMaterial.currentStock)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Reserved Stock">
-              {formatNumber(selectedMaterial.reservedStock)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Available Stock">
-              {formatNumber(
-                calculateAvailableStock(
-                  selectedMaterial.currentStock,
-                  selectedMaterial.reservedStock,
-                ),
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="Min Stock Alert">
-              {formatNumber(selectedMaterial.minStockAlert)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Max Stock Target">
-              {selectedMaterial.maxStockTarget === null
-                ? "-"
-                : formatNumber(selectedMaterial.maxStockTarget)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Reference Cost / Unit">
-              {formatCurrency(selectedMaterial.referenceCostPerUnit)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Last Production Cost / Unit">
-              {formatCurrency(selectedMaterial.lastProductionCostPerUnit)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Average Cost / Unit">
-              {formatCurrency(selectedMaterial.averageCostPerUnit)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Valuation Method">
-              {SEMI_FINISHED_VALUATION_METHOD_MAP[
-                selectedMaterial.valuationMethod
-              ] || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Tags">
-              {Array.isArray(selectedMaterial.tags) &&
-              selectedMaterial.tags.length > 0 ? (
-                <Space size={[4, 4]} wrap>
-                  {selectedMaterial.tags.map((item) => (
-                    <Tag key={item}>{item}</Tag>
-                  ))}
-                </Space>
-              ) : (
-                "-"
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="Sellable">Tidak</Descriptions.Item>
-            <Descriptions.Item label="Status">
-              {selectedMaterial.isActive ? "Aktif" : "Nonaktif"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Catatan Internal">
-              {selectedMaterial.notes || "-"}
-            </Descriptions.Item>
-          </Descriptions>
+          <Space direction="vertical" style={{ width: "100%" }} size={16}>
+            <Descriptions column={1} bordered size="small">
+              <Descriptions.Item label="Kode">
+                {selectedMaterial.code || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Nama">
+                {selectedMaterial.name || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Deskripsi">
+                {selectedMaterial.description || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Kategori">
+                {SEMI_FINISHED_CATEGORY_MAP[selectedMaterial.category] || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Jenis Bunga">
+                {SEMI_FINISHED_GROUP_MAP[selectedMaterial.flowerGroup] || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Varian Aktif">
+                {formatNumber(selectedMaterial.activeVariantCount)} / {formatNumber(selectedMaterial.variantCount)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Current Stock Total">
+                {formatNumber(selectedMaterial.currentStock)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Reserved Stock Total">
+                {formatNumber(selectedMaterial.reservedStock)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Available Stock Total">
+                {formatNumber(selectedMaterial.availableStock)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Min Stock Alert Total">
+                {formatNumber(selectedMaterial.minStockAlert)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Max Stock Target">
+                {selectedMaterial.maxStockTarget === null
+                  ? "-"
+                  : formatNumber(selectedMaterial.maxStockTarget)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Reference Cost / Unit">
+                {formatCurrency(selectedMaterial.referenceCostPerUnit)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Last Production Cost / Unit">
+                {formatCurrency(selectedMaterial.lastProductionCostPerUnit)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Average Cost / Unit">
+                {formatCurrency(selectedMaterial.averageCostPerUnit)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Status">
+                {selectedMaterial.isActive ? "Aktif" : "Nonaktif"}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Card title="Detail Varian Warna" size="small">
+              <Table
+                rowKey={(record, index) => `${record.color}-${index}`}
+                pagination={false}
+                dataSource={Array.isArray(selectedMaterial.variants) ? selectedMaterial.variants : []}
+                locale={{ emptyText: "Belum ada varian" }}
+                columns={[
+                  {
+                    title: "Warna",
+                    dataIndex: "color",
+                    key: "color",
+                    render: (value) => SEMI_FINISHED_COLOR_MAP[value] || value || "-",
+                  },
+                  {
+                    title: "Kode Variant",
+                    dataIndex: "sku",
+                    key: "sku",
+                    render: (value) => value || "-",
+                  },
+                  {
+                    title: "Current",
+                    dataIndex: "currentStock",
+                    key: "currentStock",
+                    render: (value) => formatNumber(value),
+                  },
+                  {
+                    title: "Reserved",
+                    dataIndex: "reservedStock",
+                    key: "reservedStock",
+                    render: (value) => formatNumber(value),
+                  },
+                  {
+                    title: "Available",
+                    key: "available",
+                    render: (_, record) =>
+                      formatNumber(
+                        Math.max(
+                          Number(record.currentStock || 0) - Number(record.reservedStock || 0),
+                          0,
+                        ),
+                      ),
+                  },
+                  {
+                    title: "Min Alert",
+                    dataIndex: "minStockAlert",
+                    key: "minStockAlert",
+                    render: (value) => formatNumber(value),
+                  },
+                  {
+                    title: "Avg Cost",
+                    dataIndex: "averageCostPerUnit",
+                    key: "averageCostPerUnit",
+                    render: (value) => formatCurrency(value),
+                  },
+                  {
+                    title: "Status",
+                    dataIndex: "isActive",
+                    key: "isActive",
+                    render: (value) => (value ? "Aktif" : "Nonaktif"),
+                  },
+                ]}
+                scroll={{ x: 900 }}
+              />
+            </Card>
+          </Space>
         )}
       </Drawer>
     </div>

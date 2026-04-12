@@ -53,7 +53,7 @@ import {
   buildPricingPreview,
   buildPricingPreviewSummary,
   applyPricingRuleToItems,
-} from "../../utils/pricingService";
+} from "../../services/Pricing/pricingService";
 
 // SECTION: alias komponen select
 const { Option } = Select;

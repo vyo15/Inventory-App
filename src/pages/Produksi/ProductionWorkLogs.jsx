@@ -7,6 +7,13 @@
 // =====================================================
 
 import React, { useEffect, useMemo, useState } from "react";
+import { buildCountSummary, createKeywordMatcher, matchFieldValue } from '../../utils/produksi/productionPageHelpers';
+import { getWorkLogMaterialOptions, getWorkLogTargetOptions, toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
+import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
+import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
+import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
+import EditableLineSection from '../../components/Produksi/shared/EditableLineSection';
+import ReadonlyLineSection from '../../components/Produksi/shared/ReadonlyLineSection';
 import {
   Badge,
   Button,
@@ -26,7 +33,6 @@ import {
   Row,
   Select,
   Space,
-  Statistic,
   Table,
   Tag,
   Typography,
@@ -48,6 +54,7 @@ import {
   WORK_LOG_SOURCE_TYPE_MAP,
   WORK_LOG_STATUS_MAP,
   WORK_LOG_TARGET_TYPE_MAP,
+  calculateProductionMonitoring,
 } from "../../constants/productionWorkLogOptions";
 import {
   buildWorkLogDraftFromBom,
@@ -60,15 +67,10 @@ import {
   updateProductionWorkLog,
 } from "../../services/Produksi/productionWorkLogsService";
 
-const formatNumber = (value) =>
-  new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
-
-const formatCurrency = (value) =>
-  `Rp ${new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0))}`;
+import formatNumber from "../../utils/formatters/numberId";
+import formatCurrency from "../../utils/formatters/currencyId";
+import { getFormArrayValue, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
+import { buildWorkLogMaterialUsageFormLine, buildWorkLogOutputFormLine } from "../../utils/produksi/productionLineBuilders";
 
 const ProductionWorkLogs = () => {
   // SECTION: state utama
@@ -82,6 +84,7 @@ const ProductionWorkLogs = () => {
     semiFinishedMaterials: [],
     products: [],
     productionSteps: [],
+    productionProfiles: [],
   });
 
   // SECTION: state filter
@@ -109,6 +112,14 @@ const ProductionWorkLogs = () => {
 
   // SECTION: watch source
   const targetTypeValue = Form.useWatch("targetType", form);
+  const targetIdValue = Form.useWatch("targetId", form);
+  const stepIdValue = Form.useWatch("stepId", form);
+  const productionProfileIdValue = Form.useWatch("productionProfileId", form);
+  const goodQtyValue = Form.useWatch("goodQty", form);
+  const baseInputQtyValue = Form.useWatch("baseInputQty", form);
+  const leftoverLeafQtyValue = Form.useWatch("leftoverLeafQty", form);
+  const leftoverStemQtyValue = Form.useWatch("leftoverStemQty", form);
+  const leftoverPetalFlowerEquivalentValue = Form.useWatch("leftoverPetalFlowerEquivalent", form);
 
   const loadData = async () => {
     try {
@@ -133,39 +144,22 @@ const ProductionWorkLogs = () => {
   }, []);
 
   const summary = useMemo(() => {
-    const total = workLogs.length;
-    const completed = workLogs.filter(
-      (item) => item.status === "completed",
-    ).length;
-    const draft = workLogs.filter((item) => item.status === "draft").length;
-    const inProgress = workLogs.filter(
-      (item) => item.status === "in_progress",
-    ).length;
-
-    return { total, completed, draft, inProgress };
+    return buildCountSummary(workLogs, {
+      completed: (item) => item.status === "completed",
+      draft: (item) => item.status === "draft",
+      inProgress: (item) => item.status === "in_progress",
+    });
   }, [workLogs]);
 
   const filteredData = useMemo(() => {
     return workLogs.filter((item) => {
-      const searchText = search.trim().toLowerCase();
+      const matchSearch = createKeywordMatcher(
+        item,
+        ["workNumber", "targetName", "stepName", "productionOrderCode"],
+        search,
+      );
 
-      const matchSearch =
-        !searchText ||
-        String(item.workNumber || "")
-          .toLowerCase()
-          .includes(searchText) ||
-        String(item.targetName || "")
-          .toLowerCase()
-          .includes(searchText) ||
-        String(item.stepName || "")
-          .toLowerCase()
-          .includes(searchText) ||
-        String(item.productionOrderCode || "")
-          .toLowerCase()
-          .includes(searchText);
-
-      const matchStatus =
-        statusFilter === "all" || item.status === statusFilter;
+      const matchStatus = matchFieldValue(item, statusFilter, "status");
 
       return matchSearch && matchStatus;
     });
@@ -182,6 +176,7 @@ const ProductionWorkLogs = () => {
       outputs: [],
       workerIds: [],
       productionOrderId: undefined,
+      productionProfileId: undefined,
     });
   };
 
@@ -195,6 +190,7 @@ const ProductionWorkLogs = () => {
       outputs: [],
       workerIds: [],
       productionOrderId: undefined,
+      productionProfileId: undefined,
     });
     setFormVisible(true);
   };
@@ -219,57 +215,91 @@ const ProductionWorkLogs = () => {
   // =====================================================
   // Helper options
   // =====================================================
-  const productionOrderOptions = (referenceData.productionOrders || []).map(
-    (item) => ({
-      value: item.id,
-      label: `${item.code || "-"} - ${item.targetName || "-"}`,
-      raw: item,
-    }),
+  const productionOrderOptions = toReferenceOptions(
+    referenceData.productionOrders || [],
   );
 
-  const employeeOptions = (referenceData.employees || []).map((item) => ({
-    value: item.id,
-    label: `${item.code || "-"} - ${item.name || "-"}`,
-    raw: item,
-  }));
+  const employeeOptions = toReferenceOptions(referenceData.employees || []);
 
-  const stepOptions = (referenceData.productionSteps || []).map((item) => ({
-    value: item.id,
-    label: `${item.code || "-"} - ${item.name || "-"}`,
-    raw: item,
-  }));
+  const stepOptions = toReferenceOptions(referenceData.productionSteps || []);
 
-  const getTargetOptions = (targetType) => {
-    if (targetType === "semi_finished_material") {
-      return (referenceData.semiFinishedMaterials || []).map((item) => ({
+  const getTargetOptions = (targetType) =>
+    getWorkLogTargetOptions(referenceData, targetType);
+
+  const getProductionProfileOptions = (targetId) =>
+    (referenceData.productionProfiles || [])
+      .filter((item) => item.productId === targetId)
+      .map((item) => ({
         value: item.id,
-        label: `${item.code || "-"} - ${item.name || "-"}`,
-        raw: item,
+        label: `${item.profileName || '-'}${item.isDefault !== false ? ' (Default)' : ''}`,
       }));
-    }
 
-    return (referenceData.products || []).map((item) => ({
-      value: item.id,
-      label: `${item.code || "-"} - ${item.name || "-"}`,
-      raw: item,
-    }));
-  };
+  const getMaterialOptions = (itemType) =>
+    getWorkLogMaterialOptions(referenceData, itemType);
 
-  const getMaterialOptions = (itemType) => {
-    if (itemType === "semi_finished_material") {
-      return (referenceData.semiFinishedMaterials || []).map((item) => ({
-        value: item.id,
-        label: `${item.code || "-"} - ${item.name || "-"}`,
-        raw: item,
-      }));
-    }
 
-    return (referenceData.rawMaterials || []).map((item) => ({
-      value: item.id,
-      label: `${item.code || "-"} - ${item.name || "-"}`,
-      raw: item,
-    }));
-  };
+  const selectedProductionProfile = useMemo(
+    () =>
+      (referenceData.productionProfiles || []).find(
+        (item) => item.id === productionProfileIdValue,
+      ) || null,
+    [referenceData.productionProfiles, productionProfileIdValue],
+  );
+
+  const selectedStepForMonitoring = useMemo(
+    () =>
+      (referenceData.productionSteps || []).find(
+        (item) => item.id === stepIdValue,
+      ) || null,
+    [referenceData.productionSteps, stepIdValue],
+  );
+
+  const monitoringPreview = useMemo(
+    () =>
+      calculateProductionMonitoring(
+        {
+          ...(selectedProductionProfile || {}),
+          workBasisType: selectedStepForMonitoring?.workBasisType || '',
+          referenceYieldPerBaseQty:
+            selectedStepForMonitoring?.workBasisType === 'per_meter'
+              ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
+                ? selectedProductionProfile?.leafYieldPerMeter
+                : selectedProductionProfile?.petalYieldPerMeter
+              : selectedStepForMonitoring?.workBasisType === 'per_rod_40cm'
+                ? selectedProductionProfile?.stemYieldPerRod40cm
+                : 0,
+          flowerEquivalentPerBaseQty:
+            selectedStepForMonitoring?.workBasisType === 'per_meter'
+              ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
+                ? selectedProductionProfile?.flowerEquivalentPerLeafMeter
+                : selectedProductionProfile?.flowerEquivalentPerPetalMeter
+              : selectedStepForMonitoring?.workBasisType === 'per_rod_40cm'
+                ? selectedProductionProfile?.flowerEquivalentPerRod40cm
+                : 0,
+          batchLeafQty:
+            (selectedProductionProfile?.assemblyLeafPackCount || 0) *
+            (selectedProductionProfile?.leafYieldPerMeter || 0),
+          batchStemQty: selectedProductionProfile?.assemblyStemQty || 0,
+        },
+        {
+          workBasisType: selectedStepForMonitoring?.workBasisType || '',
+          baseInputQty: baseInputQtyValue,
+          goodQty: goodQtyValue,
+          leftoverLeafQty: leftoverLeafQtyValue,
+          leftoverStemQty: leftoverStemQtyValue,
+          leftoverPetalFlowerEquivalent: leftoverPetalFlowerEquivalentValue,
+        },
+      ),
+    [
+      selectedProductionProfile,
+      selectedStepForMonitoring,
+      baseInputQtyValue,
+      goodQtyValue,
+      leftoverLeafQtyValue,
+      leftoverStemQtyValue,
+      leftoverPetalFlowerEquivalentValue,
+    ],
+  );
 
   // =====================================================
   // Apply draft dari BOM
@@ -355,27 +385,17 @@ const ProductionWorkLogs = () => {
         (item) => item.value === values.itemId,
       )?.raw;
 
-      const line = {
-        ...values,
-        id: values.id || `usage-${Date.now()}`,
-        itemCode: selected?.code || "",
-        itemName: selected?.name || "",
-        unit: values.unit || selected?.unit || "pcs",
-        varianceQty:
-          Number(values.actualQty || 0) - Number(values.plannedQty || 0),
-        totalCostSnapshot:
-          Number(values.actualQty || 0) *
-          Number(values.costPerUnitSnapshot || 0),
-      };
+      const line = buildWorkLogMaterialUsageFormLine({
+        values,
+        selectedItem: selected,
+      });
 
-      const current = form.getFieldValue("materialUsages") || [];
-      const next = [...current];
-
-      if (editingMaterialIndex !== null && editingMaterialIndex >= 0) {
-        next[editingMaterialIndex] = line;
-      } else {
-        next.push(line);
-      }
+      const current = getFormArrayValue(form, "materialUsages");
+      const next = upsertArrayItemByIndex(
+        current,
+        editingMaterialIndex,
+        line,
+      );
 
       form.setFieldValue("materialUsages", next);
       setMaterialModalVisible(false);
@@ -389,10 +409,10 @@ const ProductionWorkLogs = () => {
   };
 
   const handleRemoveMaterialUsage = (index) => {
-    const current = form.getFieldValue("materialUsages") || [];
+    const current = getFormArrayValue(form, "materialUsages");
     form.setFieldValue(
       "materialUsages",
-      current.filter((_, idx) => idx !== index),
+      removeArrayItemByIndex(current, index),
     );
   };
 
@@ -415,24 +435,17 @@ const ProductionWorkLogs = () => {
         (item) => item.value === values.outputIdRef,
       )?.raw;
 
-      const line = {
-        ...values,
-        id: values.id || `output-${Date.now()}`,
-        outputCode: selected?.code || "",
-        outputName: selected?.name || "",
-        unit: values.unit || selected?.unit || "pcs",
-        totalCost:
-          Number(values.goodQty || 0) * Number(values.costPerUnit || 0),
-      };
+      const line = buildWorkLogOutputFormLine({
+        values,
+        selectedOutput: selected,
+      });
 
-      const current = form.getFieldValue("outputs") || [];
-      const next = [...current];
-
-      if (editingOutputIndex !== null && editingOutputIndex >= 0) {
-        next[editingOutputIndex] = line;
-      } else {
-        next.push(line);
-      }
+      const current = getFormArrayValue(form, "outputs");
+      const next = upsertArrayItemByIndex(
+        current,
+        editingOutputIndex,
+        line,
+      );
 
       form.setFieldValue("outputs", next);
       setOutputModalVisible(false);
@@ -446,10 +459,10 @@ const ProductionWorkLogs = () => {
   };
 
   const handleRemoveOutput = (index) => {
-    const current = form.getFieldValue("outputs") || [];
+    const current = getFormArrayValue(form, "outputs");
     form.setFieldValue(
       "outputs",
-      current.filter((_, idx) => idx !== index),
+      removeArrayItemByIndex(current, index),
     );
   };
 
@@ -474,12 +487,41 @@ const ProductionWorkLogs = () => {
         (values.workerIds || []).includes(item.id),
       );
 
+      const selectedProfile = (referenceData.productionProfiles || []).find(
+        (item) => item.id === values.productionProfileId,
+      );
+
       const payload = {
         ...values,
         workDate: values.workDate ? values.workDate.toDate() : null,
         targetCode: selectedTarget?.code || "",
         targetName: selectedTarget?.name || "",
         targetUnit: selectedTarget?.unit || values.targetUnit || "pcs",
+        productionProfileName: selectedProfile?.profileName || '',
+        productionProfile: {
+          ...(selectedProfile || {}),
+          workBasisType: selectedStep?.workBasisType || '',
+          referenceYieldPerBaseQty:
+            selectedStep?.workBasisType === 'per_meter'
+              ? (selectedStep?.name || '').toLowerCase().includes('daun')
+                ? selectedProfile?.leafYieldPerMeter
+                : selectedProfile?.petalYieldPerMeter
+              : selectedStep?.workBasisType === 'per_rod_40cm'
+                ? selectedProfile?.stemYieldPerRod40cm
+                : 0,
+          flowerEquivalentPerBaseQty:
+            selectedStep?.workBasisType === 'per_meter'
+              ? (selectedStep?.name || '').toLowerCase().includes('daun')
+                ? selectedProfile?.flowerEquivalentPerLeafMeter
+                : selectedProfile?.flowerEquivalentPerPetalMeter
+              : selectedStep?.workBasisType === 'per_rod_40cm'
+                ? selectedProfile?.flowerEquivalentPerRod40cm
+                : 0,
+          batchLeafQty:
+            (selectedProfile?.assemblyLeafPackCount || 0) *
+            (selectedProfile?.leafYieldPerMeter || 0),
+          batchStemQty: selectedProfile?.assemblyStemQty || 0,
+        },
         stepCode: selectedStep?.code || "",
         stepName: selectedStep?.name || "",
         sequenceNo: values.sequenceNo || 1,
@@ -680,59 +722,24 @@ const ProductionWorkLogs = () => {
 
   return (
     <div>
-      <Card style={{ marginBottom: 16 }}>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col>
-            <Typography.Title level={3} style={{ margin: 0 }}>
-              Work Log Produksi
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              Realisasi kerja produksi per step
-            </Typography.Text>
-          </Col>
+      <ProductionPageHeader
+        title="Work Log Produksi"
+        description="Realisasi kerja produksi per step"
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Tambah Work Log"
+      />
 
-          <Col>
-            <Space wrap>
-              <Button icon={<ReloadOutlined />} onClick={loadData}>
-                Refresh
-              </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleAdd}
-              >
-                Tambah Work Log
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+      <ProductionSummaryCards
+        items={[
+          { key: "total", title: "Total Work Log", value: summary.total },
+          { key: "completed", title: "Completed", value: summary.completed },
+          { key: "draft", title: "Draft", value: summary.draft },
+          { key: "progress", title: "In Progress", value: summary.inProgress },
+        ]}
+      />
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Total Work Log" value={summary.total} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Completed" value={summary.completed} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Draft" value={summary.draft} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="In Progress" value={summary.inProgress} />
-          </Card>
-        </Col>
-      </Row>
-
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
+      <ProductionFilterCard>
           <Col xs={24} md={12}>
             <Input
               placeholder="Cari nomor, target, step, PO..."
@@ -753,8 +760,7 @@ const ProductionWorkLogs = () => {
               ]}
             />
           </Col>
-        </Row>
-      </Card>
+      </ProductionFilterCard>
 
       <Card>
         <Table
@@ -970,6 +976,17 @@ const ProductionWorkLogs = () => {
               </Form.Item>
             </Col>
 
+            <Col xs={24} md={24}>
+              <Form.Item label="Profil Produksi" name="productionProfileId">
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  options={getProductionProfileOptions(targetIdValue)}
+                  placeholder="Pilih profil produksi untuk target ini..."
+                />
+              </Form.Item>
+            </Col>
+
             <Col xs={24} md={16}>
               <Form.Item
                 label="Production Step"
@@ -1006,6 +1023,24 @@ const ProductionWorkLogs = () => {
             </Col>
 
             <Col xs={24} md={6}>
+              <Form.Item label="Qty Input Dasar" name="baseInputQty">
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={6}>
+              <Form.Item label="Sisa Daun Aktual" name="leftoverLeafQty">
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={6}>
+              <Form.Item label="Sisa Kawat Aktual" name="leftoverStemQty">
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+
+            <Col xs={24} md={6}>
               <Form.Item label="Good Qty" name="goodQty">
                 <InputNumber min={0} style={{ width: "100%" }} />
               </Form.Item>
@@ -1034,38 +1069,40 @@ const ProductionWorkLogs = () => {
                 />
               </Form.Item>
             </Col>
+            <Col xs={24} md={8}>
+              <Form.Item label="Sisa Setara Bunga Kelopak" name="leftoverPetalFlowerEquivalent">
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
           </Row>
 
-          <Divider orientation="left">Material Usages</Divider>
+          {selectedProductionProfile ? (
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={8}><strong>Profil:</strong> {selectedProductionProfile.profileName || '-'}</Col>
+                <Col xs={24} md={8}><strong>Teoritis Bunga:</strong> {formatNumber(monitoringPreview.theoreticalFlowerEquivalent || 0)}</Col>
+                <Col xs={24} md={8}><strong>Miss %:</strong> {Number(monitoringPreview.missPercent || 0).toFixed(2)}%</Col>
+                <Col xs={24} md={8}><strong>Miss Kelopak:</strong> {formatNumber(monitoringPreview.missPetalQty || 0)} pcs</Col>
+                <Col xs={24} md={8}><strong>Miss Daun:</strong> {formatNumber(monitoringPreview.missLeafQty || 0)} pcs</Col>
+                <Col xs={24} md={8}><strong>Miss Kawat:</strong> {formatNumber(monitoringPreview.missStemQty || 0)} pcs</Col>
+              </Row>
+            </Card>
+          ) : null}
 
-          <Space style={{ marginBottom: 12 }}>
-            <Button
-              type="dashed"
-              icon={<PlusOutlined />}
-              onClick={() => openMaterialModal()}
-            >
-              Tambah Material Usage
-            </Button>
-          </Space>
-
-          <Table
-            rowKey={(record) => record.id}
-            pagination={false}
-            size="small"
+          <EditableLineSection
+            title="Material Usages"
+            addButtonText="Tambah Material Usage"
+            onAdd={() => openMaterialModal()}
             dataSource={form.getFieldValue("materialUsages") || []}
-            locale={{ emptyText: "Belum ada material usage" }}
+            emptyText="Belum ada material usage"
             columns={[
               {
                 title: "Item",
                 key: "item",
                 render: (_, record) => (
                   <div>
-                    <div style={{ fontWeight: 600 }}>
-                      {record.itemName || "-"}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                      {record.itemCode || "-"}
-                    </div>
+                    <div style={{ fontWeight: 600 }}>{record.itemName || "-"}</div>
+                    <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.itemCode || "-"}</div>
                   </div>
                 ),
               },
@@ -1095,10 +1132,7 @@ const ProductionWorkLogs = () => {
                 width: 140,
                 render: (_, record, index) => (
                   <Space>
-                    <Button
-                      size="small"
-                      onClick={() => openMaterialModal(index, record)}
-                    >
+                    <Button size="small" onClick={() => openMaterialModal(index, record)}>
                       Edit
                     </Button>
                     <Popconfirm
@@ -1115,36 +1149,20 @@ const ProductionWorkLogs = () => {
             ]}
           />
 
-          <Divider orientation="left">Outputs</Divider>
-
-          <Space style={{ marginBottom: 12 }}>
-            <Button
-              type="dashed"
-              icon={<PlusOutlined />}
-              onClick={() => openOutputModal()}
-            >
-              Tambah Output
-            </Button>
-          </Space>
-
-          <Table
-            rowKey={(record) => record.id}
-            pagination={false}
-            size="small"
+          <EditableLineSection
+            title="Outputs"
+            addButtonText="Tambah Output"
+            onAdd={() => openOutputModal()}
             dataSource={form.getFieldValue("outputs") || []}
-            locale={{ emptyText: "Belum ada output" }}
+            emptyText="Belum ada output"
             columns={[
               {
                 title: "Output",
                 key: "output",
                 render: (_, record) => (
                   <div>
-                    <div style={{ fontWeight: 600 }}>
-                      {record.outputName || "-"}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                      {record.outputCode || "-"}
-                    </div>
+                    <div style={{ fontWeight: 600 }}>{record.outputName || "-"}</div>
+                    <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.outputCode || "-"}</div>
                   </div>
                 ),
               },
@@ -1168,10 +1186,7 @@ const ProductionWorkLogs = () => {
                 width: 140,
                 render: (_, record, index) => (
                   <Space>
-                    <Button
-                      size="small"
-                      onClick={() => openOutputModal(index, record)}
-                    >
+                    <Button size="small" onClick={() => openOutputModal(index, record)}>
                       Edit
                     </Button>
                     <Popconfirm
@@ -1261,6 +1276,9 @@ const ProductionWorkLogs = () => {
               </Descriptions.Item>
               <Descriptions.Item label="Step">
                 {selectedRecord.stepName || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Profil Produksi">
+                {selectedRecord.productionProfileName || '-'}
               </Descriptions.Item>
               <Descriptions.Item label="Status">
                 {WORK_LOG_STATUS_MAP[selectedRecord.status] || "-"}

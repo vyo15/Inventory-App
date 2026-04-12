@@ -32,6 +32,20 @@ export const PRODUCTION_STEP_OUTPUT_TYPES = [
   { value: "none", label: "No Stock Output" },
 ];
 
+export const PRODUCTION_STEP_WORK_BASIS_TYPES = [
+  { value: "per_meter", label: "Per Meter" },
+  { value: "per_rod_40cm", label: "Per Batang 40 cm" },
+  { value: "per_finished_unit", label: "Per Bunga Jadi" },
+  { value: "per_batch", label: "Per Batch" },
+];
+
+export const PRODUCTION_STEP_MONITORING_MODES = [
+  { value: "capacity_primary", label: "Kapasitas Utama" },
+  { value: "leftover_control", label: "Kontrol Sisa" },
+  { value: "finished_output", label: "Output Jadi" },
+  { value: "none", label: "Tanpa Monitoring" },
+];
+
 export const PRODUCTION_STEP_PAYROLL_MODES = [
   { value: "per_qty", label: "Per Qty" },
   { value: "per_batch", label: "Per Batch" },
@@ -55,6 +69,8 @@ export const PROCESS_TYPE_MAP = toOptionMap([
 ]);
 export const INPUT_POLICY_MAP = toOptionMap(PRODUCTION_STEP_INPUT_POLICIES);
 export const OUTPUT_TYPE_MAP = toOptionMap(PRODUCTION_STEP_OUTPUT_TYPES);
+export const WORK_BASIS_TYPE_MAP = toOptionMap(PRODUCTION_STEP_WORK_BASIS_TYPES);
+export const MONITORING_MODE_MAP = toOptionMap(PRODUCTION_STEP_MONITORING_MODES);
 export const PAYROLL_MODE_MAP = toOptionMap(PRODUCTION_STEP_PAYROLL_MODES);
 export const PAYROLL_OUTPUT_BASIS_MAP = toOptionMap(
   PRODUCTION_STEP_PAYROLL_OUTPUT_BASIS,
@@ -65,6 +81,10 @@ export const DEFAULT_PRODUCTION_STEP_FORM = {
   name: "",
   description: "",
   processType: "raw_to_semi",
+  workBasisType: "per_meter",
+  monitoringMode: "capacity_primary",
+  payrollMode: "per_qty",
+  payrollRate: 0,
   isActive: true,
 };
 

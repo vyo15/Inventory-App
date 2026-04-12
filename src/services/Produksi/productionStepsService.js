@@ -46,6 +46,10 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     .toUpperCase();
 
   const processType = values.processType || "raw_to_semi";
+  const workBasisType = values.workBasisType || "per_meter";
+  const monitoringMode = values.monitoringMode || "capacity_primary";
+  const payrollMode = values.payrollMode || "per_qty";
+  const payrollRate = Number(values.payrollRate || 0);
 
   const derivedConfigByProcessType = {
     raw_to_semi: {

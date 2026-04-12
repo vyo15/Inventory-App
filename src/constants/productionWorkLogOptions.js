@@ -105,6 +105,23 @@ export const DEFAULT_PRODUCTION_WORK_LOG_FORM = {
   bomName: "",
   bomVersion: null,
 
+  productionProfileId: "",
+  productionProfileName: "",
+
+  baseInputQty: 0,
+  baseInputUnit: "",
+  theoreticalOutputQty: 0,
+  theoreticalFlowerEquivalent: 0,
+  leftoverLeafQty: 0,
+  leftoverStemQty: 0,
+  leftoverPetalFlowerEquivalent: 0,
+  missPetalFlowerEquivalent: 0,
+  missPetalQty: 0,
+  missLeafQty: 0,
+  missStemQty: 0,
+  missPercent: 0,
+  missStatus: "normal",
+
   targetType: "product",
   targetId: "",
   targetCode: "",
@@ -185,5 +202,66 @@ export const calculateOutputLine = (line = {}) => {
     reworkQty,
     costPerUnit,
     totalCost,
+  };
+};
+
+
+const safeNumber = (value) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+};
+
+export const calculateProductionMonitoring = (profile = {}, values = {}) => {
+  const baseInputQty = safeNumber(values.baseInputQty || 0);
+  const goodQty = safeNumber(values.goodQty || 0);
+  const leftoverLeafQty = Math.max(0, safeNumber(values.leftoverLeafQty || 0));
+  const leftoverStemQty = Math.max(0, safeNumber(values.leftoverStemQty || 0));
+  const leftoverPetalFlowerEquivalent = Math.max(0, safeNumber(values.leftoverPetalFlowerEquivalent || 0));
+
+  const basisType = values.workBasisType || profile.workBasisType || '';
+  let theoreticalOutputQty = 0;
+  let theoreticalFlowerEquivalent = 0;
+
+  if (basisType === 'per_meter') {
+    theoreticalOutputQty = baseInputQty * safeNumber(profile.referenceYieldPerBaseQty || values.referenceYieldPerBaseQty || 0);
+    theoreticalFlowerEquivalent = baseInputQty * safeNumber(profile.flowerEquivalentPerBaseQty || values.flowerEquivalentPerBaseQty || 0);
+  } else if (basisType === 'per_rod_40cm') {
+    theoreticalOutputQty = baseInputQty * safeNumber(profile.referenceYieldPerBaseQty || values.referenceYieldPerBaseQty || 0);
+    theoreticalFlowerEquivalent = baseInputQty * safeNumber(profile.flowerEquivalentPerBaseQty || values.flowerEquivalentPerBaseQty || 0);
+  } else if (basisType === 'per_finished_unit') {
+    theoreticalOutputQty = goodQty;
+    theoreticalFlowerEquivalent = goodQty;
+  } else if (basisType === 'per_batch') {
+    theoreticalOutputQty = safeNumber(profile.assemblyTargetOutput || values.assemblyTargetOutput || 0);
+    theoreticalFlowerEquivalent = theoreticalOutputQty;
+  }
+
+  const theoreticalLeafLeftover = Math.max(0, safeNumber(profile.batchLeafQty || 0) - goodQty * safeNumber(profile.leavesPerUnit || 1));
+  const theoreticalStemLeftover = Math.max(0, safeNumber(profile.batchStemQty || 0) - goodQty * safeNumber(profile.stemsPerUnit || 1));
+  const missPetalFlowerEquivalent = Math.max(0, theoreticalFlowerEquivalent - (goodQty + leftoverPetalFlowerEquivalent));
+  const missPetalQty = missPetalFlowerEquivalent * Math.max(1, safeNumber(profile.petalsPerUnit || 1));
+  const missLeafQty = Math.max(0, theoreticalLeafLeftover - leftoverLeafQty);
+  const missStemQty = Math.max(0, theoreticalStemLeftover - leftoverStemQty);
+  const missPercent = theoreticalFlowerEquivalent > 0 ? (missPetalFlowerEquivalent / theoreticalFlowerEquivalent) * 100 : 0;
+
+  const yellow = safeNumber(profile.missYellowPercent || 2);
+  const red = safeNumber(profile.missRedPercent || 5);
+  let missStatus = 'normal';
+  if (missPercent > red) missStatus = 'critical';
+  else if (missPercent > yellow) missStatus = 'warning';
+
+  return {
+    baseInputQty,
+    theoreticalOutputQty,
+    theoreticalFlowerEquivalent,
+    leftoverLeafQty,
+    leftoverStemQty,
+    leftoverPetalFlowerEquivalent,
+    missPetalFlowerEquivalent,
+    missPetalQty,
+    missLeafQty,
+    missStemQty,
+    missPercent,
+    missStatus,
   };
 };

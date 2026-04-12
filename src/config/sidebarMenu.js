@@ -81,6 +81,12 @@ export const sidebarMenuItems = [
         icon: TeamOutlined,
       },
       {
+        key: "production-profiles",
+        label: "Profil Produksi",
+        path: "/produksi/profil-produksi",
+        icon: FileTextOutlined,
+      },
+      {
         key: "semi-finished-materials",
         label: "Semi Finished Materials",
         path: "/produksi/semi-finished-materials",

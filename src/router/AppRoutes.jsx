@@ -21,6 +21,7 @@ const ProductionSteps = lazy(() => import("../pages/Produksi/ProductionSteps"));
 const ProductionEmployees = lazy(
   () => import("../pages/Produksi/ProductionEmployees"),
 );
+const ProductionProfiles = lazy(() => import("../pages/Produksi/ProductionProfiles"));
 const SemiFinishedMaterials = lazy(
   () => import("../pages/Produksi/SemiFinishedMaterials"),
 );
@@ -110,6 +111,10 @@ const AppRoutes = ({ darkTheme }) => {
         <Route
           path="/produksi/karyawan-produksi"
           element={<ProductionEmployees />}
+        />
+        <Route
+          path="/produksi/profil-produksi"
+          element={<ProductionProfiles />}
         />
         <Route
           path="/produksi/semi-finished-materials"

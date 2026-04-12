@@ -24,8 +24,10 @@ import { db } from "../../firebase";
 import {
   calculateMaterialUsageLine,
   calculateOutputLine,
+  calculateProductionMonitoring,
 } from "../../constants/productionWorkLogOptions";
 import { markProductionOrderInProduction } from "./productionOrdersService";
+import { calculateAvailableStock, calculateWeightedAverage, normalizeStockSnapshot, toNumber } from "../../utils/stock/stockHelpers";
 
 const COLLECTION_NAME = "production_work_logs";
 
@@ -43,13 +45,6 @@ const filterActiveLike = (items = []) =>
 // =====================================================
 const safeTrim = (value) => String(value || "").trim();
 
-const toNumber = (value) => Number(value || 0);
-
-const calculateAvailableStock = (currentStock, reservedStock) => {
-  const current = toNumber(currentStock);
-  const reserved = toNumber(reservedStock);
-  return current - reserved;
-};
 
 const normalizeReferenceItem = (item = {}) => ({
   ...item,
@@ -77,18 +72,6 @@ const getCollectionNameByItemType = (itemType) => {
   return "";
 };
 
-const normalizeStockSnapshot = (item = {}) => {
-  const currentStock = toNumber(item.currentStock ?? item.stock ?? 0);
-  const reservedStock = toNumber(item.reservedStock || 0);
-  const availableStock = calculateAvailableStock(currentStock, reservedStock);
-
-  return {
-    ...item,
-    currentStock,
-    reservedStock,
-    availableStock,
-  };
-};
 
 const getItemUnitCost = (itemType, data = {}) => {
   if (itemType === "raw_material") {
@@ -108,17 +91,6 @@ const getItemUnitCost = (itemType, data = {}) => {
   return 0;
 };
 
-const calculateWeightedAverage = (previousQty, previousCost, incomingQty, incomingCost) => {
-  const prevQty = toNumber(previousQty);
-  const prevCost = toNumber(previousCost);
-  const inQty = toNumber(incomingQty);
-  const inCost = toNumber(incomingCost);
-  const totalQty = prevQty + inQty;
-
-  if (totalQty <= 0) return 0;
-
-  return (prevQty * prevCost + inQty * inCost) / totalQty;
-};
 
 // =====================================================
 // Normalize material usages
@@ -169,6 +141,7 @@ const normalizeOutputs = (lines = []) =>
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const materialUsages = normalizeMaterialUsages(values.materialUsages || []);
   const outputs = normalizeOutputs(values.outputs || []);
+  const monitoring = calculateProductionMonitoring(values.productionProfile || {}, values);
 
   const materialCostActual = materialUsages.reduce(
     (sum, item) => sum + toNumber(item.totalCostSnapshot || 0),
@@ -199,6 +172,23 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     productionOrderStatusSnapshot: safeTrim(
       values.productionOrderStatusSnapshot,
     ),
+
+    productionProfileId: values.productionProfileId || "",
+    productionProfileName: safeTrim(values.productionProfileName),
+
+    baseInputQty: toNumber(monitoring.baseInputQty || values.baseInputQty || 0),
+    baseInputUnit: safeTrim(values.baseInputUnit),
+    theoreticalOutputQty: toNumber(monitoring.theoreticalOutputQty || values.theoreticalOutputQty || 0),
+    theoreticalFlowerEquivalent: toNumber(monitoring.theoreticalFlowerEquivalent || values.theoreticalFlowerEquivalent || 0),
+    leftoverLeafQty: toNumber(monitoring.leftoverLeafQty || values.leftoverLeafQty || 0),
+    leftoverStemQty: toNumber(monitoring.leftoverStemQty || values.leftoverStemQty || 0),
+    leftoverPetalFlowerEquivalent: toNumber(monitoring.leftoverPetalFlowerEquivalent || values.leftoverPetalFlowerEquivalent || 0),
+    missPetalFlowerEquivalent: toNumber(monitoring.missPetalFlowerEquivalent || values.missPetalFlowerEquivalent || 0),
+    missPetalQty: toNumber(monitoring.missPetalQty || values.missPetalQty || 0),
+    missLeafQty: toNumber(monitoring.missLeafQty || values.missLeafQty || 0),
+    missStemQty: toNumber(monitoring.missStemQty || values.missStemQty || 0),
+    missPercent: toNumber(monitoring.missPercent || values.missPercent || 0),
+    missStatus: values.missStatus || monitoring.missStatus || 'normal',
 
     // SECTION: target
     targetType: values.targetType || "product",
@@ -332,6 +322,7 @@ export const getWorkLogReferenceData = async () => {
     semiSnap,
     productsSnap,
     stepsSnap,
+    profilesSnap,
   ] = await Promise.all([
     getDocs(collection(db, "production_boms")),
     getDocs(collection(db, "production_orders")),
@@ -340,6 +331,7 @@ export const getWorkLogReferenceData = async () => {
     getDocs(collection(db, "semi_finished_materials")),
     getDocs(collection(db, "products")),
     getDocs(collection(db, "production_steps")),
+    getDocs(collection(db, "production_profiles")),
   ]);
 
   const productionOrders = ordersSnap.docs
@@ -393,6 +385,9 @@ export const getWorkLogReferenceData = async () => {
           ...d.data(),
         }),
       ),
+    ),
+    productionProfiles: filterActiveLike(
+      profilesSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
     ),
   };
 };

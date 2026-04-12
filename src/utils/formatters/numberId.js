@@ -19,3 +19,6 @@ export const formatPercentId = (value) => {
     maximumFractionDigits: 0,
   }).format(safeValue)}%`;
 };
+
+export const formatNumberID = formatNumberId;
+export default formatNumberId;

@@ -35,6 +35,12 @@ import {
   Typography,
 } from "antd";
 import { EyeOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
+import { buildCountSummary, createKeywordMatcher, matchFieldValue } from '../../utils/produksi/productionPageHelpers';
+import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
+import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
+import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
+import formatNumber from '../../utils/formatters/numberId';
 import {
   createProductionOrder,
   getActiveProductionBomOptions,
@@ -43,11 +49,6 @@ import {
   releaseProductionOrderReservation,
   reserveProductionOrder,
 } from "../../services/Produksi/productionOrdersService";
-
-const formatNumber = (value) =>
-  new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
 
 const PRODUCTION_ORDER_TARGET_TYPES = [
   {
@@ -114,13 +115,7 @@ const ProductionOrders = () => {
     try {
       const result = await getActiveProductionBomOptions(targetType);
 
-      setBomOptions(
-        (result || []).map((item) => ({
-          value: item.id,
-          label: `${item.code || "-"} - ${item.name || "-"}`,
-          raw: item,
-        })),
-      );
+      setBomOptions(toReferenceOptions(result || []));
     } catch (error) {
       console.error(error);
       setBomOptions([]);
@@ -139,35 +134,23 @@ const ProductionOrders = () => {
   }, [targetTypeValue]);
 
   const summary = useMemo(() => {
-    return {
-      total: orders.length,
-      shortage: orders.filter((item) => item.status === "shortage").length,
-      ready: orders.filter((item) => item.status === "ready").length,
-      reserved: orders.filter((item) => item.status === "reserved").length,
-    };
+    return buildCountSummary(orders, {
+      shortage: (item) => item.status === "shortage",
+      ready: (item) => item.status === "ready",
+      reserved: (item) => item.status === "reserved",
+    });
   }, [orders]);
 
   const filteredData = useMemo(() => {
     return orders.filter((item) => {
-      const searchText = search.trim().toLowerCase();
+      const matchSearch = createKeywordMatcher(
+        item,
+        ["code", "targetName", "bomName"],
+        search,
+      );
 
-      const matchSearch =
-        !searchText ||
-        String(item.code || "")
-          .toLowerCase()
-          .includes(searchText) ||
-        String(item.targetName || "")
-          .toLowerCase()
-          .includes(searchText) ||
-        String(item.bomName || "")
-          .toLowerCase()
-          .includes(searchText);
-
-      const matchStatus =
-        statusFilter === "all" || item.status === statusFilter;
-
-      const matchTargetType =
-        targetTypeFilter === "all" || item.targetType === targetTypeFilter;
+      const matchStatus = matchFieldValue(item, statusFilter, "status");
+      const matchTargetType = matchFieldValue(item, targetTypeFilter, "targetType");
 
       return matchSearch && matchStatus && matchTargetType;
     });
@@ -422,8 +405,7 @@ const ProductionOrders = () => {
         </Col>
       </Row>
 
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
+      <ProductionFilterCard>
           <Col xs={24} md={8}>
             <Input
               placeholder="Cari kode, target, BOM..."
@@ -461,8 +443,7 @@ const ProductionOrders = () => {
               ]}
             />
           </Col>
-        </Row>
-      </Card>
+      </ProductionFilterCard>
 
       <Card>
         <Table

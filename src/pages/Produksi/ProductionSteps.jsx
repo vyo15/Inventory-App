@@ -35,6 +35,10 @@ import {
   DEFAULT_PRODUCTION_STEP_FORM,
   PROCESS_TYPE_MAP,
   PRODUCTION_STEP_PROCESS_TYPES,
+  PRODUCTION_STEP_WORK_BASIS_TYPES,
+  PRODUCTION_STEP_MONITORING_MODES,
+  WORK_BASIS_TYPE_MAP,
+  MONITORING_MODE_MAP,
 } from "../../constants/productionStepOptions";
 import {
   createProductionStep,
@@ -367,6 +371,20 @@ const ProductionSteps = () => {
       },
     },
     {
+      title: "Basis Kerja",
+      dataIndex: "workBasisType",
+      key: "workBasisType",
+      width: 170,
+      render: (value) => <Tag color="blue">{WORK_BASIS_TYPE_MAP[value] || value || '-'}</Tag>,
+    },
+    {
+      title: "Monitoring",
+      dataIndex: "monitoringMode",
+      key: "monitoringMode",
+      width: 170,
+      render: (value) => <Tag color="gold">{MONITORING_MODE_MAP[value] || value || '-'}</Tag>,
+    },
+    {
       title: "Fungsi",
       dataIndex: "description",
       key: "description",
@@ -528,7 +546,7 @@ const ProductionSteps = () => {
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          scroll={{ x: 1100 }}
+          scroll={{ x: 1400 }}
           locale={{
             emptyText: <Empty description="Belum ada data tahapan produksi" />,
           }}
@@ -583,6 +601,38 @@ const ProductionSteps = () => {
           >
             <Select options={PRODUCTION_STEP_PROCESS_TYPES} placeholder="Pilih kategori step" />
           </Form.Item>
+
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item label="Basis Kerja" name="workBasisType">
+                <Select options={PRODUCTION_STEP_WORK_BASIS_TYPES} placeholder="Pilih basis kerja" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="Mode Monitoring" name="monitoringMode">
+                <Select options={PRODUCTION_STEP_MONITORING_MODES} placeholder="Pilih mode monitoring" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col xs={24} md={12}>
+              <Form.Item label="Mode Payroll Default" name="payrollMode">
+                <Select
+                  options={[
+                    { value: 'per_qty', label: 'Per Qty' },
+                    { value: 'per_batch', label: 'Per Batch' },
+                    { value: 'fixed', label: 'Fixed' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="Tarif Payroll Default" name="payrollRate">
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Form.Item label="Fungsi / Deskripsi" name="description">
             <Input.TextArea rows={4} placeholder="Jelaskan fungsi step ini secara singkat" />

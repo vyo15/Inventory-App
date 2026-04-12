@@ -34,7 +34,7 @@ import {
 import {
   resetAllTestData,
   TRANSACTION_COLLECTIONS_TO_DELETE,
-} from "../../utils/resetTestDataService";
+} from "../../services/Utilities/resetTestDataService";
 
 // SECTION: alias typography
 const { Title, Paragraph, Text } = Typography;

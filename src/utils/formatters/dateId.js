@@ -1,39 +1,22 @@
-// =========================
-// SECTION: Date Formatter - Indonesia
-// =========================
-export const formatDateId = (value) => {
-  if (!value) return "-";
+const pad = (value) => String(value || 0).padStart(2, '0');
 
-  const parsedDate = new Date(value);
+export const formatDateId = (value, withTime = false) => {
+  if (!value) return '-';
 
-  if (Number.isNaN(parsedDate.getTime())) {
-    return "-";
-  }
+  const date =
+    typeof value?.toDate === 'function'
+      ? value.toDate()
+      : value instanceof Date
+        ? value
+        : new Date(value);
 
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(parsedDate);
+  if (Number.isNaN(date.getTime())) return '-';
+
+  const base = `${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()}`;
+
+  if (!withTime) return base;
+
+  return `${base} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
-// =========================
-// SECTION: Date Time Formatter - Indonesia
-// =========================
-export const formatDateTimeId = (value) => {
-  if (!value) return "-";
-
-  const parsedDate = new Date(value);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(parsedDate);
-};
+export default formatDateId;

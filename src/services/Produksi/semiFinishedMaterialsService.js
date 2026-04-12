@@ -1,6 +1,9 @@
 // =====================================================
 // Semi Finished Materials Service
 // CRUD Firestore untuk collection semi_finished_materials
+// Revisi:
+// - Tambah dukungan varian warna
+// - Total stok master dihitung dari seluruh varian agar menu lain tetap kompatibel
 // =====================================================
 
 import {
@@ -16,8 +19,41 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import {
+  calculateSemiFinishedTotalsFromVariants,
+  normalizeSemiFinishedVariants,
+} from "../../constants/semiFinishedMaterialOptions";
 
 const COLLECTION_NAME = "semi_finished_materials";
+
+const enrichMaterialWithVariantTotals = (item = {}) => {
+  const variants = normalizeSemiFinishedVariants(item.variants || []);
+
+  if (variants.length === 0) {
+    const currentStock = Number(item.currentStock || 0);
+    const reservedStock = Number(item.reservedStock || 0);
+    const availableStock = Math.max(currentStock - reservedStock, 0);
+
+    return {
+      ...item,
+      variants: [],
+      currentStock,
+      reservedStock,
+      availableStock,
+      minStockAlert: Number(item.minStockAlert || 0),
+      averageCostPerUnit: Number(item.averageCostPerUnit || 0),
+      variantCount: 0,
+      activeVariantCount: 0,
+    };
+  }
+
+  const totals = calculateSemiFinishedTotalsFromVariants(variants);
+
+  return {
+    ...item,
+    ...totals,
+  };
+};
 
 const normalizePayload = (
   values = {},
@@ -25,12 +61,7 @@ const normalizePayload = (
   selectedProducts = [],
   isEdit = false,
 ) => {
-  const currentStock = Number(values.currentStock || 0);
-  const reservedStock = Number(values.reservedStock || 0);
-  const availableStock =
-    values.availableStock !== undefined && values.availableStock !== null
-      ? Number(values.availableStock || 0)
-      : currentStock - reservedStock;
+  const variantTotals = calculateSemiFinishedTotalsFromVariants(values.variants);
 
   const payload = {
     code: String(values.code || "")
@@ -39,32 +70,27 @@ const normalizePayload = (
     name: String(values.name || "").trim(),
     description: String(values.description || "").trim(),
     category: values.category || "kelopak",
-    type: values.type || "component",
-    unit: String(values.unit || "").trim() || "pcs",
+    flowerGroup: values.flowerGroup || "mawar",
+    type: "semi_finished",
+    unit: "pcs",
 
     relatedProductIds: selectedProducts.map((item) => item.id),
     relatedProductNames: selectedProducts.map((item) => item.name || ""),
-    tags: Array.isArray(values.tags) ? values.tags : [],
+    variants: variantTotals.variants,
+    variantCount: variantTotals.variantCount,
+    activeVariantCount: variantTotals.activeVariantCount,
 
-    currentStock,
-    reservedStock,
-    availableStock,
-    minStockAlert: Number(values.minStockAlert || 0),
-    maxStockTarget:
-      values.maxStockTarget === null ||
-      values.maxStockTarget === undefined ||
-      values.maxStockTarget === ""
-        ? null
-        : Number(values.maxStockTarget),
-
-    referenceCostPerUnit: Number(values.referenceCostPerUnit || 0),
-    lastProductionCostPerUnit: Number(values.lastProductionCostPerUnit || 0),
-    averageCostPerUnit: Number(values.averageCostPerUnit || 0),
-    valuationMethod: values.valuationMethod || "average",
+    currentStock: variantTotals.currentStock,
+    reservedStock: variantTotals.reservedStock,
+    availableStock: variantTotals.availableStock,
+    minStockAlert: variantTotals.minStockAlert,
+    averageCostPerUnit:
+      variantTotals.variants.length > 0
+        ? Number(variantTotals.averageCostPerUnit || 0)
+        : Number(values.averageCostPerUnit || 0),
 
     isActive: values.isActive !== false,
     isSellable: false,
-    notes: String(values.notes || "").trim(),
 
     updatedAt: serverTimestamp(),
     updatedBy:
@@ -88,6 +114,7 @@ const normalizePayload = (
 
 export const validateSemiFinishedMaterial = (values = {}) => {
   const errors = {};
+  const normalizedVariants = normalizeSemiFinishedVariants(values.variants || []);
 
   if (!String(values.code || "").trim()) {
     errors.code = "Kode semi finished wajib diisi";
@@ -101,38 +128,46 @@ export const validateSemiFinishedMaterial = (values = {}) => {
     errors.category = "Kategori wajib dipilih";
   }
 
-  if (!values.type) {
-    errors.type = "Tipe wajib dipilih";
+  if (!values.flowerGroup) {
+    errors.flowerGroup = "Grup bunga wajib dipilih";
   }
 
-  if (!String(values.unit || "").trim()) {
-    errors.unit = "Satuan wajib diisi";
+  if (normalizedVariants.length === 0) {
+    errors.variants = "Minimal harus ada 1 varian warna";
   }
 
-  if (Number(values.currentStock || 0) < 0) {
-    errors.currentStock = "Stok tidak boleh negatif";
-  }
+  const usedColors = new Set();
 
-  if (Number(values.reservedStock || 0) < 0) {
-    errors.reservedStock = "Reserved stock tidak boleh negatif";
-  }
+  normalizedVariants.forEach((item, index) => {
+    if (!item.color) {
+      errors[`variants.${index}.color`] = "Warna wajib dipilih";
+    }
 
-  if (Number(values.minStockAlert || 0) < 0) {
-    errors.minStockAlert = "Minimum stock alert tidak boleh negatif";
-  }
+    if (usedColors.has(item.color)) {
+      errors[`variants.${index}.color`] = "Warna tidak boleh duplikat";
+    }
+    usedColors.add(item.color);
 
-  if (Number(values.referenceCostPerUnit || 0) < 0) {
-    errors.referenceCostPerUnit = "Reference cost tidak boleh negatif";
-  }
+    if (Number(item.currentStock || 0) < 0) {
+      errors[`variants.${index}.currentStock`] = "Stok tidak boleh negatif";
+    }
 
-  if (Number(values.lastProductionCostPerUnit || 0) < 0) {
-    errors.lastProductionCostPerUnit =
-      "Last production cost tidak boleh negatif";
-  }
+    if (Number(item.reservedStock || 0) < 0) {
+      errors[`variants.${index}.reservedStock`] =
+        "Reserved stock tidak boleh negatif";
+    }
 
-  if (Number(values.averageCostPerUnit || 0) < 0) {
-    errors.averageCostPerUnit = "Average cost tidak boleh negatif";
-  }
+    if (Number(item.minStockAlert || 0) < 0) {
+      errors[`variants.${index}.minStockAlert`] =
+        "Minimum stock alert tidak boleh negatif";
+    }
+
+    if (Number(item.averageCostPerUnit || 0) < 0) {
+      errors[`variants.${index}.averageCostPerUnit`] =
+        "Average cost tidak boleh negatif";
+    }
+  });
+
 
   return errors;
 };
@@ -142,10 +177,12 @@ export const getAllSemiFinishedMaterials = async () => {
 
   const snapshot = await getDocs(q);
 
-  return snapshot.docs.map((item) => ({
-    id: item.id,
-    ...item.data(),
-  }));
+  return snapshot.docs.map((item) =>
+    enrichMaterialWithVariantTotals({
+      id: item.id,
+      ...item.data(),
+    }),
+  );
 };
 
 export const getActiveSemiFinishedMaterials = async () => {
@@ -157,10 +194,12 @@ export const getActiveSemiFinishedMaterials = async () => {
 
   const snapshot = await getDocs(q);
 
-  return snapshot.docs.map((item) => ({
-    id: item.id,
-    ...item.data(),
-  }));
+  return snapshot.docs.map((item) =>
+    enrichMaterialWithVariantTotals({
+      id: item.id,
+      ...item.data(),
+    }),
+  );
 };
 
 export const getSemiFinishedMaterialById = async (id) => {
@@ -171,10 +210,10 @@ export const getSemiFinishedMaterialById = async (id) => {
     throw new Error("Data semi finished material tidak ditemukan");
   }
 
-  return {
+  return enrichMaterialWithVariantTotals({
     id: snapshot.id,
     ...snapshot.data(),
-  };
+  });
 };
 
 export const isSemiFinishedMaterialCodeExists = async (
@@ -260,7 +299,6 @@ export const updateSemiFinishedMaterial = async (
   const ref = doc(db, COLLECTION_NAME, id);
 
   await updateDoc(ref, payload);
-
   return id;
 };
 

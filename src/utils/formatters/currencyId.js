@@ -1,9 +1,10 @@
-import { formatNumberId } from "./numberId";
+export const formatCurrencyId = (value, withPrefix = true) => {
+  const formatted = new Intl.NumberFormat('id-ID', {
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
 
-// =========================
-// SECTION: Currency Formatter - Indonesia
-// =========================
-export const formatCurrencyId = (value, prefix = "Rp") => {
-  const safeValue = Number(value || 0);
-  return `${prefix} ${formatNumberId(safeValue)}`;
+  return withPrefix ? `Rp ${formatted}` : formatted;
 };
+
+export const formatCurrencyIDR = formatCurrencyId;
+export default formatCurrencyId;

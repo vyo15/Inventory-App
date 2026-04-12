@@ -6,6 +6,13 @@
 // =====================================================
 
 import React, { useEffect, useMemo, useState } from "react";
+import { buildCountSummary, createKeywordMatcher, matchActiveStatus, matchFieldValue } from '../../utils/produksi/productionPageHelpers';
+import { getBomMaterialItemOptions, getBomTargetOptions, toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
+import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
+import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
+import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
+import EditableLineSection from '../../components/Produksi/shared/EditableLineSection';
+import ReadonlyLineSection from '../../components/Produksi/shared/ReadonlyLineSection';
 import {
   Alert,
   Badge,
@@ -25,7 +32,6 @@ import {
   Row,
   Select,
   Space,
-  Statistic,
   Switch,
   Table,
   Tag,
@@ -47,7 +53,6 @@ import {
   DEFAULT_PRODUCTION_BOM_FORM,
   PRODUCTION_BOM_MATERIAL_ITEM_TYPES,
   PRODUCTION_BOM_TARGET_TYPES,
-  calculateBomMaterialLine,
 } from "../../constants/productionBomOptions";
 import {
   createProductionBom,
@@ -60,25 +65,14 @@ import {
 // =====================================================
 // SECTION: helper format angka Indonesia
 // =====================================================
-const formatNumber = (value) =>
-  new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
-
-const formatCurrency = (value) =>
-  `Rp ${new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0))}`;
+import formatNumber from "../../utils/formatters/numberId";
+import formatCurrency from "../../utils/formatters/currencyId";
+import { getFormArrayValue, getNextSequenceNumber, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
+import { buildBomMaterialFormLine, buildBomStepFormLine } from "../../utils/produksi/productionLineBuilders";
 
 // =====================================================
 // SECTION: helper label item
 // =====================================================
-const buildItemLabel = (item) => {
-  const code = String(item?.code || "").trim();
-  const name = String(item?.name || "").trim() || "-";
-
-  return code ? `${code} - ${name}` : name;
-};
 
 const compactTagStyle = {
   display: "inline-flex",
@@ -203,12 +197,11 @@ const ProductionBoms = () => {
   // SECTION: summary card
   // =====================================================
   const summary = useMemo(() => {
-    const total = boms.length;
-    const active = boms.filter((item) => item.isActive).length;
-    const inactive = total - active;
-    const defaultCount = boms.filter((item) => item.isDefault).length;
-
-    return { total, active, inactive, defaultCount };
+    return buildCountSummary(boms, {
+      active: (item) => item.isActive,
+      inactive: (item) => !item.isActive,
+      defaultCount: (item) => item.isDefault,
+    });
   }, [boms]);
 
   // =====================================================
@@ -216,27 +209,14 @@ const ProductionBoms = () => {
   // =====================================================
   const filteredData = useMemo(() => {
     return boms.filter((item) => {
-      const searchText = search.trim().toLowerCase();
+      const matchSearch = createKeywordMatcher(
+        item,
+        ["code", "name", "targetName"],
+        search,
+      );
 
-      const matchSearch =
-        !searchText ||
-        String(item.code || "")
-          .toLowerCase()
-          .includes(searchText) ||
-        String(item.name || "")
-          .toLowerCase()
-          .includes(searchText) ||
-        String(item.targetName || "")
-          .toLowerCase()
-          .includes(searchText);
-
-      const matchStatus =
-        statusFilter === "all" ||
-        (statusFilter === "active" && item.isActive) ||
-        (statusFilter === "inactive" && !item.isActive);
-
-      const matchTargetType =
-        targetTypeFilter === "all" || item.targetType === targetTypeFilter;
+      const matchStatus = matchActiveStatus(item, statusFilter);
+      const matchTargetType = matchFieldValue(item, targetTypeFilter, "targetType");
 
       return matchSearch && matchStatus && matchTargetType;
     });
@@ -245,37 +225,10 @@ const ProductionBoms = () => {
   // =====================================================
   // SECTION: option target product / semi finished
   // =====================================================
-  const productTargetOptions = useMemo(() => {
-    return (referenceData.products || []).map((item) => ({
-      value: item.id,
-      label: buildItemLabel(item),
-      raw: item,
-    }));
-  }, [referenceData.products]);
-
-  const semiFinishedTargetOptions = useMemo(() => {
-    return (referenceData.semiFinishedMaterials || []).map((item) => ({
-      value: item.id,
-      label: buildItemLabel(item),
-      raw: item,
-    }));
-  }, [referenceData.semiFinishedMaterials]);
-
-  const rawMaterialOptions = useMemo(() => {
-    return (referenceData.rawMaterials || []).map((item) => ({
-      value: item.id,
-      label: buildItemLabel(item),
-      raw: item,
-    }));
-  }, [referenceData.rawMaterials]);
-
-  const stepOptions = useMemo(() => {
-    return (referenceData.productionSteps || []).map((item) => ({
-      value: item.id,
-      label: buildItemLabel(item),
-      raw: item,
-    }));
-  }, [referenceData.productionSteps]);
+  const stepOptions = useMemo(
+    () => toReferenceOptions(referenceData.productionSteps || []),
+    [referenceData.productionSteps],
+  );
 
   // =====================================================
   // SECTION: helper state form
@@ -294,27 +247,11 @@ const ProductionBoms = () => {
   const getCurrentTargetType = () =>
     form.getFieldValue("targetType") || "product";
 
-  const getTargetOptions = (targetType) => {
-    if (targetType === "semi_finished_material") {
-      return semiFinishedTargetOptions;
-    }
+  const getTargetOptions = (targetType) =>
+    getBomTargetOptions(referenceData, targetType);
 
-    return productTargetOptions;
-  };
-
-  const getMaterialItemOptions = (targetType, itemType) => {
-    // SECTION: BOM product = assembly, material hanya semi finished
-    if (targetType === "product") {
-      return semiFinishedTargetOptions;
-    }
-
-    // SECTION: BOM semi finished = boleh raw atau semi
-    if (itemType === "semi_finished_material") {
-      return semiFinishedTargetOptions;
-    }
-
-    return rawMaterialOptions;
-  };
+  const getMaterialItemOptions = (targetType, itemType) =>
+    getBomMaterialItemOptions(referenceData, targetType, itemType);
 
   // =====================================================
   // SECTION: buka tambah BOM
@@ -395,8 +332,8 @@ const ProductionBoms = () => {
     if (record) {
       stepForm.setFieldsValue({ ...DEFAULT_BOM_STEP_LINE, ...record });
     } else {
-      const currentLines = form.getFieldValue("stepLines") || [];
-      const nextSequenceNo = currentLines.length + 1;
+      const currentLines = getFormArrayValue(form, "stepLines");
+      const nextSequenceNo = getNextSequenceNumber(currentLines);
       stepForm.setFieldsValue({
         ...DEFAULT_BOM_STEP_LINE,
         sequenceNo: nextSequenceNo,
@@ -422,32 +359,18 @@ const ProductionBoms = () => {
         (item) => item.value === values.itemId,
       )?.raw;
 
-      const line = calculateBomMaterialLine({
-        ...values,
-        id: values.id || `material-${Date.now()}`,
+      const line = buildBomMaterialFormLine({
+        values,
+        selectedItem: selected,
         itemType: forcedItemType,
-        itemCode: selected?.code || "",
-        itemName: selected?.name || "",
-        unit: selected?.unit || values.unit || "pcs",
-        costPerUnitSnapshot: Number(
-          selected?.averageCostPerUnit ||
-            selected?.referenceCostPerUnit ||
-            selected?.costPerUnit ||
-            values.costPerUnitSnapshot ||
-            0,
-        ),
-        wastageQty: 0,
-        isOptional: false,
       });
 
-      const currentLines = form.getFieldValue("materialLines") || [];
-      const nextLines = [...currentLines];
-
-      if (editingMaterialIndex !== null && editingMaterialIndex >= 0) {
-        nextLines[editingMaterialIndex] = line;
-      } else {
-        nextLines.push(line);
-      }
+      const currentLines = getFormArrayValue(form, "materialLines");
+      const nextLines = upsertArrayItemByIndex(
+        currentLines,
+        editingMaterialIndex,
+        line,
+      );
 
       form.setFieldValue("materialLines", nextLines);
       setMaterialModalVisible(false);
@@ -464,11 +387,11 @@ const ProductionBoms = () => {
   // SECTION: hapus material line
   // =====================================================
   const handleRemoveMaterialLine = (index) => {
-    const currentLines = form.getFieldValue("materialLines") || [];
-    const nextLines = currentLines.filter(
-      (_, lineIndex) => lineIndex !== index,
+    const currentLines = getFormArrayValue(form, "materialLines");
+    form.setFieldValue(
+      "materialLines",
+      removeArrayItemByIndex(currentLines, index),
     );
-    form.setFieldValue("materialLines", nextLines);
   };
 
   // =====================================================
@@ -482,21 +405,17 @@ const ProductionBoms = () => {
         (item) => item.id === values.stepId,
       );
 
-      const line = {
-        ...values,
-        id: values.id || `step-${Date.now()}`,
-        stepCode: selectedStep?.code || "",
-        stepName: selectedStep?.name || "",
-      };
+      const line = buildBomStepFormLine({
+        values,
+        selectedStep,
+      });
 
-      const currentLines = form.getFieldValue("stepLines") || [];
-      const nextLines = [...currentLines];
-
-      if (editingStepIndex !== null && editingStepIndex >= 0) {
-        nextLines[editingStepIndex] = line;
-      } else {
-        nextLines.push(line);
-      }
+      const currentLines = getFormArrayValue(form, "stepLines");
+      const nextLines = upsertArrayItemByIndex(
+        currentLines,
+        editingStepIndex,
+        line,
+      );
 
       nextLines.sort(
         (a, b) => Number(a.sequenceNo || 0) - Number(b.sequenceNo || 0),
@@ -517,11 +436,11 @@ const ProductionBoms = () => {
   // SECTION: hapus step line
   // =====================================================
   const handleRemoveStepLine = (index) => {
-    const currentLines = form.getFieldValue("stepLines") || [];
-    const nextLines = currentLines.filter(
-      (_, lineIndex) => lineIndex !== index,
+    const currentLines = getFormArrayValue(form, "stepLines");
+    form.setFieldValue(
+      "stepLines",
+      removeArrayItemByIndex(currentLines, index),
     );
-    form.setFieldValue("stepLines", nextLines);
   };
 
   // =====================================================
@@ -756,59 +675,22 @@ const ProductionBoms = () => {
 
   return (
     <div>
-      {/* SECTION: header halaman */}
-      <Card style={{ marginBottom: 16 }}>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col>
-            <Typography.Title level={3} style={{ margin: 0 }}>
-              BOM Produksi
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              Komposisi produksi untuk target semi finished maupun produk jadi,
-              agar PO bisa otomatis menarik kebutuhan bahan dan step
-            </Typography.Text>
-          </Col>
+      <ProductionPageHeader
+        title="BOM Produksi"
+        description="Komposisi produksi untuk target semi finished maupun produk jadi, agar PO bisa otomatis menarik kebutuhan bahan dan step"
+        onRefresh={() => loadData()}
+        onAdd={handleAdd}
+        addLabel="Tambah BOM"
+      />
 
-          <Col>
-            <Space wrap>
-              <Button icon={<ReloadOutlined />} onClick={() => loadData()}>
-                Refresh
-              </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleAdd}
-              >
-                Tambah BOM
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
-
-      {/* SECTION: summary cards */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Total BOM" value={summary.total} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="BOM Aktif" value={summary.active} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="BOM Nonaktif" value={summary.inactive} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="BOM Default" value={summary.defaultCount} />
-          </Card>
-        </Col>
-      </Row>
+      <ProductionSummaryCards
+        items={[
+          { key: "total", title: "Total BOM", value: summary.total },
+          { key: "active", title: "BOM Aktif", value: summary.active },
+          { key: "inactive", title: "BOM Nonaktif", value: summary.inactive },
+          { key: "default", title: "BOM Default", value: summary.defaultCount },
+        ]}
+      />
 
       {/* SECTION: info referensi */}
       <Alert
@@ -827,8 +709,7 @@ const ProductionBoms = () => {
       />
 
       {/* SECTION: filter */}
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
+      <ProductionFilterCard>
           <Col xs={24} md={8}>
             <Input
               placeholder="Cari kode, nama BOM, target..."
@@ -862,8 +743,7 @@ const ProductionBoms = () => {
               ]}
             />
           </Col>
-        </Row>
-      </Card>
+      </ProductionFilterCard>
 
       {/* SECTION: tabel BOM */}
       <Card>
@@ -1066,189 +946,129 @@ const ProductionBoms = () => {
             }}
           </Form.Item>
 
-          <Divider orientation="left">Komposisi Bahan</Divider>
-
           <Form.Item shouldUpdate noStyle>
             {({ getFieldValue }) => {
               const targetType = getFieldValue("targetType") || "product";
               const materialLines = getFieldValue("materialLines") || [];
-
-              return (
-                <>
-                  <Typography.Text
-                    type="secondary"
-                    style={{ display: "block", marginBottom: 8 }}
-                  >
-                    {targetType === "product"
-                      ? "Untuk target produk jadi, komposisi bahan hanya boleh mengambil Semi Finished Materials agar proses assembly tetap rapi."
-                      : "Untuk target semi finished, komposisi bahan boleh mengambil Raw Materials atau Semi Finished Materials sesuai kebutuhan proses."}
-                  </Typography.Text>
-
-                  <Space style={{ marginBottom: 12 }}>
-                    <Button
-                      type="dashed"
-                      icon={<PlusOutlined />}
-                      onClick={() => openMaterialModal()}
-                    >
-                      Tambah Bahan
-                    </Button>
-                  </Space>
-
-                  <Table
-                    rowKey={(record) => record.id}
-                    pagination={false}
-                    size="small"
-                    dataSource={materialLines}
-                    locale={{ emptyText: "Belum ada material line" }}
-                    columns={[
-                      {
-                        title: "Item",
-                        key: "item",
-                        render: (_, record) => (
-                          <div>
-                            <div style={{ fontWeight: 600 }}>
-                              {record.itemName || "-"}
-                            </div>
-                            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                              {record.itemCode || "-"}
-                            </div>
-                          </div>
-                        ),
-                      },
-                      {
-                        title: "Tipe",
-                        dataIndex: "itemType",
-                        width: 160,
-                        render: (value) => (
-                          <Tag>{BOM_MATERIAL_ITEM_TYPE_MAP[value] || "-"}</Tag>
-                        ),
-                      },
-                      {
-                        title: "Kebutuhan per Produksi",
-                        key: "qty",
-                        width: 220,
-                        render: (_, record) => (
-                          <Space direction="vertical" size={0}>
-                            <Typography.Text>
-                              {formatNumber(record.qtyPerBatch)}{" "}
-                              {record.unit || "pcs"}
-                            </Typography.Text>
-                            <Typography.Text type="secondary">
-                              Estimasi biaya:{" "}
-                              {formatCurrency(record.totalCostSnapshot)}
-                            </Typography.Text>
-                          </Space>
-                        ),
-                      },
-                      {
-                        title: "Aksi",
-                        width: 140,
-                        render: (_, record, index) => (
-                          <Space>
-                            <Button
-                              size="small"
-                              onClick={() => openMaterialModal(index, record)}
-                            >
-                              Edit
-                            </Button>
-                            <Popconfirm
-                              title="Hapus material line ini?"
-                              onConfirm={() => handleRemoveMaterialLine(index)}
-                              okText="Ya"
-                              cancelText="Batal"
-                            >
-                              <Button
-                                size="small"
-                                danger
-                                icon={<DeleteOutlined />}
-                              />
-                            </Popconfirm>
-                          </Space>
-                        ),
-                      },
-                    ]}
-                  />
-                </>
-              );
-            }}
-          </Form.Item>
-
-          <Divider orientation="left">Alur Step Produksi</Divider>
-
-          <Form.Item shouldUpdate noStyle>
-            {({ getFieldValue }) => {
               const stepLines = getFieldValue("stepLines") || [];
 
+              const materialColumns = [
+                {
+                  title: "Item",
+                  key: "item",
+                  render: (_, record) => (
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{record.itemName || "-"}</div>
+                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.itemCode || "-"}</div>
+                    </div>
+                  ),
+                },
+                {
+                  title: "Tipe",
+                  dataIndex: "itemType",
+                  width: 160,
+                  render: (value) => <Tag>{BOM_MATERIAL_ITEM_TYPE_MAP[value] || "-"}</Tag>,
+                },
+                {
+                  title: "Kebutuhan per Produksi",
+                  key: "qty",
+                  width: 220,
+                  render: (_, record) => (
+                    <Space direction="vertical" size={0}>
+                      <Typography.Text>
+                        {formatNumber(record.qtyPerBatch)} {record.unit || "pcs"}
+                      </Typography.Text>
+                      <Typography.Text type="secondary">
+                        Estimasi biaya: {formatCurrency(record.totalCostSnapshot)}
+                      </Typography.Text>
+                    </Space>
+                  ),
+                },
+                {
+                  title: "Aksi",
+                  width: 140,
+                  render: (_, record, index) => (
+                    <Space>
+                      <Button size="small" onClick={() => openMaterialModal(index, record)}>
+                        Edit
+                      </Button>
+                      <Popconfirm
+                        title="Hapus material line ini?"
+                        onConfirm={() => handleRemoveMaterialLine(index)}
+                        okText="Ya"
+                        cancelText="Batal"
+                      >
+                        <Button size="small" danger icon={<DeleteOutlined />} />
+                      </Popconfirm>
+                    </Space>
+                  ),
+                },
+              ];
+
+              const stepColumns = [
+                {
+                  title: "Urutan Langkah",
+                  key: "step",
+                  render: (_, record) => (
+                    <div>
+                      <div style={{ fontWeight: 600 }}>
+                        Langkah {formatNumber(record.sequenceNo)} - {record.stepName || "-"}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                        {record.notes || record.stepCode || "Step produksi"}
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  title: "Aksi",
+                  width: 140,
+                  render: (_, record, index) => (
+                    <Space>
+                      <Button size="small" onClick={() => openStepModal(index, record)}>
+                        Edit
+                      </Button>
+                      <Popconfirm
+                        title="Hapus step line ini?"
+                        onConfirm={() => handleRemoveStepLine(index)}
+                        okText="Ya"
+                        cancelText="Batal"
+                      >
+                        <Button size="small" danger icon={<DeleteOutlined />} />
+                      </Popconfirm>
+                    </Space>
+                  ),
+                },
+              ];
+
               return (
                 <>
-                  <Alert
-                    style={{ marginBottom: 12 }}
-                    type="info"
-                    showIcon
-                    message="QC tidak perlu dibuat sebagai step terpisah. Gunakan step produksi nyata saja, lalu pengecekan kualitas dicatat di work log pada setiap proses."
+                  <EditableLineSection
+                    title="Komposisi Bahan"
+                    description={
+                      targetType === "product"
+                        ? "Untuk target produk jadi, komposisi bahan hanya boleh mengambil Semi Finished Materials agar proses assembly tetap rapi."
+                        : "Untuk target semi finished, komposisi bahan boleh mengambil Raw Materials atau Semi Finished Materials sesuai kebutuhan proses."
+                    }
+                    addButtonText="Tambah Bahan"
+                    onAdd={() => openMaterialModal()}
+                    dataSource={materialLines}
+                    columns={materialColumns}
+                    emptyText="Belum ada material line"
                   />
 
-                  <Space style={{ marginBottom: 12 }}>
-                    <Button
-                      type="dashed"
-                      icon={<PlusOutlined />}
-                      onClick={() => openStepModal()}
-                    >
-                      Tambah Step BOM
-                    </Button>
-                  </Space>
-
-                  <Table
-                    rowKey={(record) => record.id}
-                    pagination={false}
-                    size="small"
+                  <EditableLineSection
+                    title="Alur Step Produksi"
+                    alert={{
+                      type: "info",
+                      message:
+                        "QC tidak perlu dibuat sebagai step terpisah. Gunakan step produksi nyata saja, lalu pengecekan kualitas dicatat di work log pada setiap proses.",
+                    }}
+                    addButtonText="Tambah Step BOM"
+                    onAdd={() => openStepModal()}
                     dataSource={stepLines}
-                    locale={{ emptyText: "Belum ada step line" }}
-                    columns={[
-                      {
-                        title: "Urutan Langkah",
-                        key: "step",
-                        render: (_, record) => (
-                          <div>
-                            <div style={{ fontWeight: 600 }}>
-                              Langkah {formatNumber(record.sequenceNo)} -{" "}
-                              {record.stepName || "-"}
-                            </div>
-                            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                              {record.notes ||
-                                record.stepCode ||
-                                "Step produksi"}
-                            </div>
-                          </div>
-                        ),
-                      },
-                      {
-                        title: "Aksi",
-                        width: 140,
-                        render: (_, record, index) => (
-                          <Space>
-                            <Button
-                              size="small"
-                              onClick={() => openStepModal(index, record)}
-                            >
-                              Edit
-                            </Button>
-                            <Popconfirm
-                              title="Hapus step line ini?"
-                              onConfirm={() => handleRemoveStepLine(index)}
-                              okText="Ya"
-                              cancelText="Batal"
-                            >
-                              <Button
-                                size="small"
-                                danger
-                                icon={<DeleteOutlined />}
-                              />
-                            </Popconfirm>
-                          </Space>
-                        ),
-                      },
-                    ]}
+                    columns={stepColumns}
+                    emptyText="Belum ada step line"
                   />
                 </>
               );

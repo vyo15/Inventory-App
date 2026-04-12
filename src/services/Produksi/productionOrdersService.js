@@ -21,6 +21,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { calculateAvailableStock, normalizeStockSnapshot } from "../../utils/stock/stockHelpers";
 
 const COLLECTION_NAME = "production_orders";
 
@@ -29,24 +30,6 @@ const COLLECTION_NAME = "production_orders";
 // =====================================================
 const safeTrim = (value) => String(value || "").trim();
 
-const calculateAvailableStock = (currentStock, reservedStock) => {
-  const current = Number(currentStock || 0);
-  const reserved = Number(reservedStock || 0);
-  return Math.max(current - reserved, 0);
-};
-
-const normalizeStockItem = (item = {}) => {
-  const currentStock = Number(item.currentStock ?? item.stock ?? 0);
-  const reservedStock = Number(item.reservedStock || 0);
-  const availableStock = calculateAvailableStock(currentStock, reservedStock);
-
-  return {
-    ...item,
-    currentStock,
-    reservedStock,
-    availableStock,
-  };
-};
 
 // =====================================================
 // Ambil BOM aktif untuk target type tertentu
@@ -177,7 +160,7 @@ export const buildProductionOrderRequirementLines = async ({
         itemType,
         line.itemId,
       );
-      const stockItem = normalizeStockItem(stockItemRaw || {});
+      const stockItem = normalizeStockSnapshot(stockItemRaw || {});
 
       const qtyPerBatch = Number(line.qtyPerBatch || 0);
       const wastageQty = Number(line.wastageQty || 0);
@@ -428,7 +411,7 @@ export const reserveProductionOrder = async (orderId, currentUser = null) => {
         throw new Error(`Item ${line.itemName} tidak ditemukan`);
       }
 
-      const stockData = normalizeStockItem(stockSnap.data());
+      const stockData = normalizeStockSnapshot(stockSnap.data());
 
       const availableNow = calculateAvailableStock(
         stockData.currentStock,
@@ -514,7 +497,7 @@ export const releaseProductionOrderReservation = async (
 
       if (!stockSnap.exists()) continue;
 
-      const stockData = normalizeStockItem(stockSnap.data());
+      const stockData = normalizeStockSnapshot(stockSnap.data());
 
       const nextReserved = Math.max(
         Number(stockData.reservedStock || 0) - Number(line.qtyRequired || 0),
