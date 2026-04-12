@@ -46,10 +46,6 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     .toUpperCase();
 
   const processType = values.processType || "raw_to_semi";
-  const workBasisType = values.workBasisType || "per_meter";
-  const monitoringMode = values.monitoringMode || "capacity_primary";
-  const payrollMode = values.payrollMode || "per_qty";
-  const payrollRate = Number(values.payrollRate || 0);
 
   const derivedConfigByProcessType = {
     raw_to_semi: {
@@ -154,6 +150,9 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
         ? values.autoCreateOutput
         : Boolean(derivedConfig.autoCreateOutput),
 
+    basisType: values.basisType || "per_meter",
+    monitoringMode: values.monitoringMode || "none",
+
     payrollMode: values.payrollMode || "per_qty",
     payrollRate: Number(values.payrollRate || 0),
     payrollQtyBase:
@@ -204,6 +203,14 @@ export const validateProductionStep = (values = {}) => {
 
   if (!values.processType) {
     errors.processType = "Jenis proses wajib dipilih";
+  }
+
+  if (!values.basisType) {
+    errors.basisType = "Basis kerja wajib dipilih";
+  }
+
+  if (!values.monitoringMode) {
+    errors.monitoringMode = "Mode monitoring wajib dipilih";
   }
 
   return errors;

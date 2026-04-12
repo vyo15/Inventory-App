@@ -8,12 +8,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Button,
+  Divider,
   Card,
   Col,
   Drawer,
   Empty,
   Form,
   Input,
+  InputNumber,
   message,
   Popconfirm,
   Row,
@@ -32,13 +34,18 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import {
+  BASIS_TYPE_MAP,
   DEFAULT_PRODUCTION_STEP_FORM,
-  PROCESS_TYPE_MAP,
-  PRODUCTION_STEP_PROCESS_TYPES,
-  PRODUCTION_STEP_WORK_BASIS_TYPES,
-  PRODUCTION_STEP_MONITORING_MODES,
-  WORK_BASIS_TYPE_MAP,
   MONITORING_MODE_MAP,
+  PAYROLL_MODE_MAP,
+  PAYROLL_OUTPUT_BASIS_MAP,
+  PROCESS_TYPE_MAP,
+  PRODUCTION_STEP_BASIS_TYPES,
+  PRODUCTION_STEP_MONITORING_MODES,
+  PRODUCTION_STEP_PAYROLL_MODES,
+  PRODUCTION_STEP_PAYROLL_OUTPUT_BASIS,
+  PRODUCTION_STEP_PROCESS_TYPES,
+  formatProductionStepPayrollPreview,
 } from "../../constants/productionStepOptions";
 import {
   createProductionStep,
@@ -143,7 +150,9 @@ const ProductionSteps = () => {
         !searchText ||
         String(item.name || "").toLowerCase().includes(searchText) ||
         String(item.description || "").toLowerCase().includes(searchText) ||
-        String(PROCESS_TYPE_MAP[item.processType] || "").toLowerCase().includes(searchText);
+        String(PROCESS_TYPE_MAP[item.processType] || "").toLowerCase().includes(searchText) ||
+        String(BASIS_TYPE_MAP[item.basisType] || "").toLowerCase().includes(searchText) ||
+        String(MONITORING_MODE_MAP[item.monitoringMode] || "").toLowerCase().includes(searchText);
 
       const matchStatus =
         statusFilter === "all" ||
@@ -179,6 +188,12 @@ const ProductionSteps = () => {
     form.setFieldsValue({
       ...DEFAULT_PRODUCTION_STEP_FORM,
       ...record,
+      basisType: record.basisType || DEFAULT_PRODUCTION_STEP_FORM.basisType,
+      monitoringMode: record.monitoringMode || DEFAULT_PRODUCTION_STEP_FORM.monitoringMode,
+      payrollMode: record.payrollMode || DEFAULT_PRODUCTION_STEP_FORM.payrollMode,
+      payrollRate: Number(record.payrollRate || 0),
+      payrollQtyBase: Number(record.payrollQtyBase || 1),
+      payrollOutputBasis: record.payrollOutputBasis || DEFAULT_PRODUCTION_STEP_FORM.payrollOutputBasis,
       isActive: record.isActive !== false,
     });
     setFormVisible(true);
@@ -372,17 +387,27 @@ const ProductionSteps = () => {
     },
     {
       title: "Basis Kerja",
-      dataIndex: "workBasisType",
-      key: "workBasisType",
-      width: 170,
-      render: (value) => <Tag color="blue">{WORK_BASIS_TYPE_MAP[value] || value || '-'}</Tag>,
+      dataIndex: "basisType",
+      key: "basisType",
+      width: 160,
+      render: (value) => <Tag color="blue">{BASIS_TYPE_MAP[value] || "-"}</Tag>,
     },
     {
       title: "Monitoring",
       dataIndex: "monitoringMode",
       key: "monitoringMode",
       width: 170,
-      render: (value) => <Tag color="gold">{MONITORING_MODE_MAP[value] || value || '-'}</Tag>,
+      render: (value) => <Tag color="gold">{MONITORING_MODE_MAP[value] || "-"}</Tag>,
+    },
+    {
+      title: "Sistem Bayar",
+      key: "payrollPreview",
+      width: 220,
+      render: (_, record) => (
+        <Typography.Text type={record.payrollMode ? undefined : "secondary"}>
+          {record.payrollMode ? formatProductionStepPayrollPreview(record) : "-"}
+        </Typography.Text>
+      ),
     },
     {
       title: "Fungsi",
@@ -546,7 +571,7 @@ const ProductionSteps = () => {
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          scroll={{ x: 1400 }}
+          scroll={{ x: 1600 }}
           locale={{
             emptyText: <Empty description="Belum ada data tahapan produksi" />,
           }}
@@ -602,41 +627,58 @@ const ProductionSteps = () => {
             <Select options={PRODUCTION_STEP_PROCESS_TYPES} placeholder="Pilih kategori step" />
           </Form.Item>
 
-          <Row gutter={16}>
+          <Form.Item label="Fungsi / Deskripsi" name="description">
+            <Input.TextArea rows={4} placeholder="Jelaskan fungsi step ini secara singkat" />
+          </Form.Item>
+
+          <Row gutter={12}>
             <Col xs={24} md={12}>
-              <Form.Item label="Basis Kerja" name="workBasisType">
-                <Select options={PRODUCTION_STEP_WORK_BASIS_TYPES} placeholder="Pilih basis kerja" />
+              <Form.Item
+                label="Basis Kerja"
+                name="basisType"
+                rules={[{ required: true, message: "Basis kerja wajib dipilih" }]}
+              >
+                <Select options={PRODUCTION_STEP_BASIS_TYPES} placeholder="Pilih basis kerja" />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label="Mode Monitoring" name="monitoringMode">
+              <Form.Item
+                label="Monitoring"
+                name="monitoringMode"
+                rules={[{ required: true, message: "Mode monitoring wajib dipilih" }]}
+              >
                 <Select options={PRODUCTION_STEP_MONITORING_MODES} placeholder="Pilih mode monitoring" />
               </Form.Item>
             </Col>
           </Row>
 
-          <Row gutter={16}>
+          <Divider orientation="left">Sistem Bayar</Divider>
+
+          <Row gutter={12}>
             <Col xs={24} md={12}>
-              <Form.Item label="Mode Payroll Default" name="payrollMode">
-                <Select
-                  options={[
-                    { value: 'per_qty', label: 'Per Qty' },
-                    { value: 'per_batch', label: 'Per Batch' },
-                    { value: 'fixed', label: 'Fixed' },
-                  ]}
-                />
+              <Form.Item label="Mode Bayar" name="payrollMode">
+                <Select options={PRODUCTION_STEP_PAYROLL_MODES} placeholder="Pilih mode bayar" />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label="Tarif Payroll Default" name="payrollRate">
-                <InputNumber min={0} style={{ width: '100%' }} />
+              <Form.Item label="Tarif Default" name="payrollRate">
+                <InputNumber min={0} style={{ width: "100%" }} placeholder="Contoh: 2000" />
               </Form.Item>
             </Col>
           </Row>
 
-          <Form.Item label="Fungsi / Deskripsi" name="description">
-            <Input.TextArea rows={4} placeholder="Jelaskan fungsi step ini secara singkat" />
-          </Form.Item>
+          <Row gutter={12}>
+            <Col xs={24} md={12}>
+              <Form.Item label="Qty Dasar Bayar" name="payrollQtyBase">
+                <InputNumber min={1} style={{ width: "100%" }} placeholder="Contoh: 1" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="Basis Output Bayar" name="payrollOutputBasis">
+                <Select options={PRODUCTION_STEP_PAYROLL_OUTPUT_BASIS} placeholder="Pilih basis output" />
+              </Form.Item>
+            </Col>
+          </Row>
 
           <Form.Item label="Status Aktif" name="isActive" valuePropName="checked">
             <Switch checkedChildren="Aktif" unCheckedChildren="Nonaktif" />
