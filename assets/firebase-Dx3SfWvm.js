@@ -1,1 +1,0 @@
-import{k as a,m as p}from"./firebase-vendor-Bokjhcr_.js";const e={apiKey:"AIzaSyAGB6rmd80Y-8IARwdv-fGbT6Jtcxww5ik",authDomain:"ziyocraft-inventory-app.firebaseapp.com",projectId:"ziyocraft-inventory-app",storageBucket:"ziyocraft-inventory-app.appspot.com",messagingSenderId:"15690184314",appId:"1:15690184314:web:78a7c31941da5023a1adc3"},o=p(e),i=a(o);export{i as d};

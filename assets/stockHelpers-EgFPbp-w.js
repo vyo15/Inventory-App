@@ -1,0 +1,1 @@
+const c=t=>Number(t||0),k=(t,o)=>Math.max(c(t)-c(o),0),S=(t={},o="currentStock")=>{const e=c(t[o]??t.stock??0),n=c(t.reservedStock||0),r=k(e,n);return{...t,currentStock:e,reservedStock:n,availableStock:r,stock:e}},v=(t,o,e,n)=>{const r=c(t),l=c(o),s=c(e),u=c(n),a=r+s;return a<=0?0:(r*l+s*u)/a};export{v as a,k as c,S as n,c as t};
