@@ -11,9 +11,7 @@ import {
 
 export const buildBomMaterialFormLine = ({ values, selectedItem, itemType }) => {
   const materialHasVariants = inferHasVariants(selectedItem || {});
-  const requestedStrategy = values.materialVariantStrategy || (materialHasVariants ? 'inherit' : 'none');
-  const normalizedStrategy = materialHasVariants ? requestedStrategy : 'none';
-  const fixedVariant = findVariantByKey(selectedItem || {}, values.fixedVariantKey || '');
+  const normalizedStrategy = materialHasVariants ? 'inherit' : 'none';
 
   return calculateBomMaterialLine({
     ...values,
@@ -33,8 +31,8 @@ export const buildBomMaterialFormLine = ({ values, selectedItem, itemType }) => 
     isOptional: false,
     materialHasVariants,
     materialVariantStrategy: normalizedStrategy,
-    fixedVariantKey: normalizedStrategy === 'fixed' ? fixedVariant?.variantKey || values.fixedVariantKey || '' : '',
-    fixedVariantLabel: normalizedStrategy === 'fixed' ? fixedVariant?.variantLabel || values.fixedVariantLabel || '' : '',
+    fixedVariantKey: '',
+    fixedVariantLabel: '',
   });
 };
 

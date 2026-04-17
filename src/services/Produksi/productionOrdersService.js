@@ -177,7 +177,10 @@ const buildRequirementLine = ({ line = {}, stockItem = null, orderQty = 0, batch
 
   const stockResolution = resolveVariantSelection({
     item: stockItem || {},
-    materialVariantStrategy: line.materialVariantStrategy || "none",
+    materialVariantStrategy:
+      line.materialHasVariants === true
+        ? line.materialVariantStrategy || "inherit"
+        : "none",
     targetVariantKey,
     fixedVariantKey: line.fixedVariantKey || "",
   });
@@ -377,7 +380,10 @@ const applyReservationMutation = async ({ transaction, line, mode = "reserve" })
 
   const stockResolution = resolveVariantSelection({
     item: stockItem,
-    materialVariantStrategy: line.materialVariantStrategy || "none",
+    materialVariantStrategy:
+      line.materialHasVariants === true
+        ? line.materialVariantStrategy || "inherit"
+        : "none",
     targetVariantKey: line.resolvedVariantKey || "",
     fixedVariantKey: line.fixedVariantKey || line.resolvedVariantKey || "",
   });

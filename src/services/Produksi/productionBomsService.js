@@ -147,12 +147,9 @@ const normalizeMaterialLines = (materialLines = [], targetType = "") =>
       wastageQty: Number(line.wastageQty || 0),
       costPerUnitSnapshot: Number(line.costPerUnitSnapshot || 0),
       materialHasVariants: line.materialHasVariants === true,
-      materialVariantStrategy:
-        line.materialHasVariants === true
-          ? line.materialVariantStrategy || 'inherit'
-          : 'none',
-      fixedVariantKey: safeTrim(line.fixedVariantKey),
-      fixedVariantLabel: safeTrim(line.fixedVariantLabel),
+      materialVariantStrategy: line.materialHasVariants === true ? 'inherit' : 'none',
+      fixedVariantKey: '',
+      fixedVariantLabel: '',
       isOptional: false,
       notes: safeTrim(line.notes),
     });
@@ -236,22 +233,6 @@ export const validateProductionBom = (values = {}) => {
     }
   }
 
-  (values.materialLines || []).forEach((line, index) => {
-    const hasVariants = line.materialHasVariants === true;
-    const strategy = hasVariants
-      ? line.materialVariantStrategy || 'inherit'
-      : 'none';
-
-    if (hasVariants && !['inherit', 'fixed', 'none'].includes(strategy)) {
-      errors[`materialLines.${index}.materialVariantStrategy`] =
-        'Strategi varian bahan tidak valid';
-    }
-
-    if (hasVariants && strategy === 'fixed' && !safeTrim(line.fixedVariantKey)) {
-      errors[`materialLines.${index}.fixedVariantKey`] =
-        'Pilih varian tetap untuk bahan ini';
-    }
-  });
 
   return errors;
 };
@@ -330,51 +311,80 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
 // - pakai fallback query agar lebih tahan bila orderBy bermasalah
 // =====================================================
 export const getAllProductionBoms = async () => {
-  const snapshot = await getDocs(collection(db, COLLECTION_NAME));
+  try {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      orderBy("targetName", "asc"),
+      orderBy("version", "desc"),
+    );
 
-  return snapshot.docs
-    .map((item) => ({
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs.map((item) => ({
       id: item.id,
       ...item.data(),
-    }))
-    .sort((a, b) => {
-      const targetNameCompare = String(a?.targetName || "").localeCompare(
-        String(b?.targetName || ""),
-        "id",
+    }));
+  } catch (error) {
+    console.error("Query BOM utama gagal, pakai fallback query", error);
+
+    try {
+      const fallbackQuery = query(
+        collection(db, COLLECTION_NAME),
+        orderBy("targetName", "asc"),
       );
 
-      if (targetNameCompare !== 0) {
-        return targetNameCompare;
-      }
+      const snapshot = await getDocs(fallbackQuery);
 
-      return Number(b?.version || 0) - Number(a?.version || 0);
-    });
+      return snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data(),
+      }));
+    } catch (fallbackError) {
+      console.error(
+        "Fallback query BOM gagal, pakai getDocs biasa",
+        fallbackError,
+      );
+
+      const snapshot = await getDocs(collection(db, COLLECTION_NAME));
+
+      return snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data(),
+      }));
+    }
+  }
 };
 
 // =====================================================
 // SECTION: ambil BOM aktif
 // =====================================================
 export const getActiveProductionBoms = async () => {
-  const snapshot = await getDocs(collection(db, COLLECTION_NAME));
+  try {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where("isActive", "==", true),
+      orderBy("targetName", "asc"),
+      orderBy("version", "desc"),
+    );
 
-  return snapshot.docs
-    .map((item) => ({
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs.map((item) => ({
       id: item.id,
       ...item.data(),
-    }))
-    .filter((item) => item?.isActive === true)
-    .sort((a, b) => {
-      const targetNameCompare = String(a?.targetName || "").localeCompare(
-        String(b?.targetName || ""),
-        "id",
-      );
+    }));
+  } catch (error) {
+    console.error("Query BOM aktif gagal, pakai fallback filter lokal", error);
 
-      if (targetNameCompare !== 0) {
-        return targetNameCompare;
-      }
+    const snapshot = await getDocs(collection(db, COLLECTION_NAME));
 
-      return Number(b?.version || 0) - Number(a?.version || 0);
-    });
+    return snapshot.docs
+      .map((item) => ({
+        id: item.id,
+        ...item.data(),
+      }))
+      .filter((item) => item?.isActive === true);
+  }
 };
 
 // =====================================================
