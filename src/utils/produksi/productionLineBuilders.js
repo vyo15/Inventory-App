@@ -3,9 +3,19 @@ import {
   calculateMaterialUsageLine,
   calculateOutputLine,
 } from '../../constants/productionWorkLogOptions';
+import {
+  inferHasVariants,
+  findVariantByKey,
+  buildVariantOptionsFromItem,
+} from '../variants/variantStockHelpers';
 
-export const buildBomMaterialFormLine = ({ values, selectedItem, itemType }) =>
-  calculateBomMaterialLine({
+export const buildBomMaterialFormLine = ({ values, selectedItem, itemType }) => {
+  const materialHasVariants = inferHasVariants(selectedItem || {});
+  const requestedStrategy = values.materialVariantStrategy || (materialHasVariants ? 'inherit' : 'none');
+  const normalizedStrategy = materialHasVariants ? requestedStrategy : 'none';
+  const fixedVariant = findVariantByKey(selectedItem || {}, values.fixedVariantKey || '');
+
+  return calculateBomMaterialLine({
     ...values,
     id: values.id || `material-${Date.now()}`,
     itemType,
@@ -19,9 +29,14 @@ export const buildBomMaterialFormLine = ({ values, selectedItem, itemType }) =>
         values.costPerUnitSnapshot ||
         0,
     ),
-    wastageQty: 0,
+    wastageQty: Number(values.wastageQty || 0),
     isOptional: false,
+    materialHasVariants,
+    materialVariantStrategy: normalizedStrategy,
+    fixedVariantKey: normalizedStrategy === 'fixed' ? fixedVariant?.variantKey || values.fixedVariantKey || '' : '',
+    fixedVariantLabel: normalizedStrategy === 'fixed' ? fixedVariant?.variantLabel || values.fixedVariantLabel || '' : '',
   });
+};
 
 export const buildBomStepFormLine = ({ values, selectedStep }) => ({
   ...values,
@@ -30,20 +45,56 @@ export const buildBomStepFormLine = ({ values, selectedStep }) => ({
   stepName: selectedStep?.name || '',
 });
 
-export const buildWorkLogMaterialUsageFormLine = ({ values, selectedItem }) =>
-  calculateMaterialUsageLine({
+export const buildWorkLogMaterialUsageFormLine = ({ values, selectedItem }) => {
+  const materialHasVariants = inferHasVariants(selectedItem || {});
+  const variantOptions = buildVariantOptionsFromItem(selectedItem || {});
+  const selectedVariant = materialHasVariants
+    ? findVariantByKey(selectedItem || {}, values.resolvedVariantKey || '')
+    : null;
+  const normalizedVariantKey = materialHasVariants
+    ? selectedVariant?.variantKey || values.resolvedVariantKey || ''
+    : '';
+  const normalizedVariantLabel = materialHasVariants
+    ? selectedVariant?.variantLabel || values.resolvedVariantLabel || ''
+    : '';
+
+  return calculateMaterialUsageLine({
     ...values,
     id: values.id || `usage-${Date.now()}`,
     itemCode: selectedItem?.code || '',
     itemName: selectedItem?.name || '',
     unit: values.unit || selectedItem?.unit || 'pcs',
+    materialHasVariants,
+    materialVariantStrategy: materialHasVariants
+      ? values.materialVariantStrategy || (variantOptions.length > 0 ? 'fixed' : 'inherit')
+      : 'none',
+    resolvedVariantKey: normalizedVariantKey,
+    resolvedVariantLabel: normalizedVariantLabel,
+    stockSourceType: materialHasVariants && normalizedVariantKey ? 'variant' : 'master',
   });
+};
 
-export const buildWorkLogOutputFormLine = ({ values, selectedOutput }) =>
-  calculateOutputLine({
+export const buildWorkLogOutputFormLine = ({ values, selectedOutput }) => {
+  const outputHasVariants = inferHasVariants(selectedOutput || {});
+  const selectedVariant = outputHasVariants
+    ? findVariantByKey(selectedOutput || {}, values.outputVariantKey || '')
+    : null;
+  const normalizedVariantKey = outputHasVariants
+    ? selectedVariant?.variantKey || values.outputVariantKey || ''
+    : '';
+  const normalizedVariantLabel = outputHasVariants
+    ? selectedVariant?.variantLabel || values.outputVariantLabel || ''
+    : '';
+
+  return calculateOutputLine({
     ...values,
     id: values.id || `output-${Date.now()}`,
     outputCode: selectedOutput?.code || '',
     outputName: selectedOutput?.name || '',
     unit: values.unit || selectedOutput?.unit || 'pcs',
+    outputHasVariants,
+    outputVariantKey: normalizedVariantKey,
+    outputVariantLabel: normalizedVariantLabel,
+    stockSourceType: outputHasVariants && normalizedVariantKey ? 'variant' : 'master',
   });
+};

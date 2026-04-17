@@ -41,3 +41,7 @@ export const DEFAULT_COLOR_VARIANT = {
   averageCostPerUnit: 0,
   isActive: true,
 };
+
+// Alias kompatibilitas agar file lama yang masih import nama lama tidak jebol.
+export const COLOR_OPTIONS = COLOR_VARIANT_OPTIONS;
+export const COLOR_MAP = COLOR_VARIANT_MAP;

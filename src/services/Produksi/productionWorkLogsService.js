@@ -28,6 +28,11 @@ import {
 } from "../../constants/productionWorkLogOptions";
 import { markProductionOrderInProduction } from "./productionOrdersService";
 import { calculateAvailableStock, calculateWeightedAverage, normalizeStockSnapshot, toNumber } from "../../utils/stock/stockHelpers";
+import {
+  applyStockMutationToItem,
+  inferHasVariants,
+  resolveVariantSelection,
+} from "../../utils/variants/variantStockHelpers";
 
 const COLLECTION_NAME = "production_work_logs";
 
@@ -48,6 +53,7 @@ const safeTrim = (value) => String(value || "").trim();
 
 const normalizeReferenceItem = (item = {}) => ({
   ...item,
+  hasVariants: inferHasVariants(item),
   code:
     safeTrim(item.code) ||
     safeTrim(item.itemCode) ||
@@ -107,6 +113,11 @@ const normalizeMaterialUsages = (lines = []) =>
       plannedQty: toNumber(line.plannedQty || 0),
       actualQty: toNumber(line.actualQty || 0),
       costPerUnitSnapshot: toNumber(line.costPerUnitSnapshot || 0),
+      materialHasVariants: Boolean(line.materialHasVariants),
+      materialVariantStrategy: safeTrim(line.materialVariantStrategy) || (line.materialHasVariants ? "fixed" : "none"),
+      resolvedVariantKey: safeTrim(line.resolvedVariantKey),
+      resolvedVariantLabel: safeTrim(line.resolvedVariantLabel),
+      stockSourceType: safeTrim(line.stockSourceType) || (line.resolvedVariantKey ? "variant" : "master"),
       stockDeducted: Boolean(line.stockDeducted),
       stockDeductedAt: line.stockDeductedAt || null,
       notes: safeTrim(line.notes),
@@ -129,6 +140,10 @@ const normalizeOutputs = (lines = []) =>
       rejectQty: toNumber(line.rejectQty || 0),
       reworkQty: toNumber(line.reworkQty || 0),
       costPerUnit: toNumber(line.costPerUnit || 0),
+      outputHasVariants: Boolean(line.outputHasVariants),
+      outputVariantKey: safeTrim(line.outputVariantKey),
+      outputVariantLabel: safeTrim(line.outputVariantLabel),
+      stockSourceType: safeTrim(line.stockSourceType) || (line.outputVariantKey ? "variant" : "master"),
       stockAdded: Boolean(line.stockAdded),
       stockAddedAt: line.stockAddedAt || null,
       notes: safeTrim(line.notes),
@@ -196,6 +211,9 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     targetCode: safeTrim(values.targetCode),
     targetName: safeTrim(values.targetName),
     targetUnit: safeTrim(values.targetUnit) || "pcs",
+    targetHasVariants: values.targetHasVariants === true,
+    targetVariantKey: safeTrim(values.targetVariantKey),
+    targetVariantLabel: safeTrim(values.targetVariantLabel),
 
     // SECTION: step
     stepId: values.stepId || "",
@@ -470,12 +488,23 @@ export const buildWorkLogDraftFromBom = (bom, selectedStepId = "") => {
       varianceQty: 0,
       costPerUnitSnapshot: toNumber(line.costPerUnitSnapshot || 0),
       totalCostSnapshot: toNumber(line.totalCostSnapshot || 0),
+      materialHasVariants: line.materialHasVariants === true,
+      materialVariantStrategy: line.materialHasVariants === true ? line.materialVariantStrategy || "inherit" : "none",
+      resolvedVariantKey: line.resolvedVariantKey || "",
+      resolvedVariantLabel: line.resolvedVariantLabel || "",
+      stockSourceType: line.resolvedVariantKey ? "variant" : "master",
       stockDeducted: false,
       stockDeductedAt: null,
       notes: line.notes || "",
     })),
 
-    outputs,
+    outputs: outputs.map((line) => ({
+      ...line,
+      outputHasVariants: false,
+      outputVariantKey: "",
+      outputVariantLabel: "",
+      stockSourceType: "master",
+    })),
   };
 };
 
@@ -552,6 +581,9 @@ export const buildWorkLogDraftFromProductionOrder = async (
     targetCode: productionOrder.targetCode || bom.targetCode || "",
     targetName: productionOrder.targetName || bom.targetName || "",
     targetUnit: productionOrder.targetUnit || bom.targetUnit || "pcs",
+    targetHasVariants: productionOrder.targetHasVariants === true,
+    targetVariantKey: productionOrder.targetVariantKey || "",
+    targetVariantLabel: productionOrder.targetVariantLabel || "",
 
     stepId: chosenStep?.stepId || "",
     stepCode: chosenStep?.stepCode || "",
@@ -578,12 +610,23 @@ export const buildWorkLogDraftFromProductionOrder = async (
       varianceQty: 0,
       costPerUnitSnapshot: 0,
       totalCostSnapshot: 0,
+      materialHasVariants: line.materialHasVariants === true,
+      materialVariantStrategy: line.materialVariantStrategy || (line.materialHasVariants ? "inherit" : "none"),
+      resolvedVariantKey: line.resolvedVariantKey || "",
+      resolvedVariantLabel: line.resolvedVariantLabel || "",
+      stockSourceType: line.stockSourceType || (line.resolvedVariantKey ? "variant" : "master"),
       stockDeducted: false,
       stockDeductedAt: null,
       notes: "",
     })),
 
-    outputs,
+    outputs: outputs.map((line) => ({
+      ...line,
+      outputHasVariants: productionOrder.targetHasVariants === true,
+      outputVariantKey: productionOrder.targetVariantKey || "",
+      outputVariantLabel: productionOrder.targetVariantLabel || "",
+      stockSourceType: productionOrder.targetVariantKey ? "variant" : "master",
+    })),
   };
 };
 
@@ -772,6 +815,55 @@ export const updateProductionWorkLog = async (
   return id;
 };
 
+const buildWorkLogReservationMap = (productionOrder = null) => {
+  const reservedQtyMap = new Map();
+
+  if (!productionOrder) return reservedQtyMap;
+
+  const reservationLines = Array.isArray(productionOrder.materialRequirementLines)
+    ? productionOrder.materialRequirementLines
+    : [];
+
+  reservationLines.forEach((line) => {
+    const key = [
+      line.itemType || '',
+      line.itemId || '',
+      line.resolvedVariantKey || '',
+    ].join('::');
+    const existing = reservedQtyMap.get(key) || 0;
+    reservedQtyMap.set(key, existing + toNumber(line.qtyRequired || 0));
+  });
+
+  return reservedQtyMap;
+};
+
+const getResolvedMaterialStock = ({ line = {}, stockItem = {} }) =>
+  resolveVariantSelection({
+    item: stockItem || {},
+    materialVariantStrategy: line.materialHasVariants === true
+      ? line.materialVariantStrategy || (line.resolvedVariantKey ? 'fixed' : 'inherit')
+      : 'none',
+    targetVariantKey: line.resolvedVariantKey || '',
+    fixedVariantKey: line.resolvedVariantKey || '',
+  });
+
+const getOutputStockResolution = ({ line = {}, stockItem = {} }) => {
+  if (line.outputHasVariants !== true) {
+    return {
+      stockSourceType: 'master',
+      resolvedVariantKey: '',
+      resolvedVariantLabel: '',
+    };
+  }
+
+  return resolveVariantSelection({
+    item: stockItem || {},
+    materialVariantStrategy: line.outputVariantKey ? 'fixed' : 'inherit',
+    targetVariantKey: line.outputVariantKey || '',
+    fixedVariantKey: line.outputVariantKey || '',
+  });
+};
+
 // =====================================================
 // Complete work log + apply stock mutation
 // =====================================================
@@ -823,18 +915,7 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
       }
     }
 
-    const reservedQtyMap = new Map();
-    if (productionOrder) {
-      const reservationLines = Array.isArray(productionOrder.materialRequirementLines)
-        ? productionOrder.materialRequirementLines
-        : [];
-
-      reservationLines.forEach((line) => {
-        const key = `${line.itemType || ""}::${line.itemId || ""}`;
-        const existing = reservedQtyMap.get(key) || 0;
-        reservedQtyMap.set(key, existing + toNumber(line.qtyRequired || 0));
-      });
-    }
+    const reservedQtyMap = buildWorkLogReservationMap(productionOrder);
 
     const completedAtValue = new Date();
 
@@ -859,49 +940,51 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
         throw new Error(`Item material ${line.itemName || "-"} tidak ditemukan`);
       }
 
+      const stockItem = normalizeReferenceItem({
+        id: stockSnap.id,
+        ...stockSnap.data(),
+      });
       const stockData = normalizeStockSnapshot(stockSnap.data());
-      const key = `${line.itemType || ""}::${line.itemId || ""}`;
+      const stockResolution = getResolvedMaterialStock({
+        line,
+        stockItem,
+      });
+      const reservationKey = [
+        line.itemType || '',
+        line.itemId || '',
+        stockResolution.resolvedVariantKey || '',
+      ].join('::');
       const reservedReleaseQty = Math.min(
-        toNumber(reservedQtyMap.get(key) || 0),
-        stockData.reservedStock,
+        toNumber(reservedQtyMap.get(reservationKey) || 0),
+        toNumber(stockResolution.reservedStock || 0),
       );
 
-      if (stockData.currentStock < actualQty) {
+      if (toNumber(stockResolution.currentStock || 0) < actualQty) {
         throw new Error(
           `Stok ${line.itemName || "material"} tidak cukup untuk diselesaikan`,
         );
       }
 
-      const nextCurrentStock = stockData.currentStock - actualQty;
-      const nextReservedStock = Math.max(
-        stockData.reservedStock - reservedReleaseQty,
-        0,
-      );
-      const nextAvailableStock = calculateAvailableStock(
-        nextCurrentStock,
-        nextReservedStock,
-      );
+      const updatePayload = applyStockMutationToItem({
+        item: stockItem,
+        variantKey: stockResolution.resolvedVariantKey || '',
+        deltaCurrent: -actualQty,
+        deltaReserved: -reservedReleaseQty,
+      });
 
-      const updatePayload = {
+      transaction.update(stockRef, {
+        ...updatePayload,
         updatedAt: serverTimestamp(),
-      };
-
-      if (collectionName === "semi_finished_materials") {
-        updatePayload.currentStock = nextCurrentStock;
-        updatePayload.reservedStock = nextReservedStock;
-        updatePayload.availableStock = nextAvailableStock;
-      } else {
-        updatePayload.stock = nextCurrentStock;
-        updatePayload.currentStock = nextCurrentStock;
-        updatePayload.reservedStock = nextReservedStock;
-        updatePayload.availableStock = nextAvailableStock;
-      }
-
-      transaction.update(stockRef, updatePayload);
+      });
 
       nextMaterialUsages.push(
         calculateMaterialUsageLine({
           ...line,
+          materialHasVariants: stockResolution.materialHasVariants === true,
+          materialVariantStrategy: stockResolution.materialVariantStrategy || line.materialVariantStrategy || 'none',
+          resolvedVariantKey: stockResolution.resolvedVariantKey || '',
+          resolvedVariantLabel: stockResolution.resolvedVariantLabel || '',
+          stockSourceType: stockResolution.stockSourceType || 'master',
           costPerUnitSnapshot:
             toNumber(line.costPerUnitSnapshot || 0) ||
             getItemUnitCost(line.itemType, stockData),
@@ -937,55 +1020,107 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
         throw new Error(`Item output ${line.outputName || "-"} tidak ditemukan`);
       }
 
+      const stockItem = normalizeReferenceItem({
+        id: stockSnap.id,
+        ...stockSnap.data(),
+      });
       const stockData = normalizeStockSnapshot(stockSnap.data());
+      const outputResolution = getOutputStockResolution({
+        line,
+        stockItem,
+      });
       const unitCost = toNumber(line.costPerUnit || 0) || fallbackUnitCost;
-      const nextCurrentStock = stockData.currentStock + goodQty;
-      const nextAvailableStock = calculateAvailableStock(
-        nextCurrentStock,
-        stockData.reservedStock,
-      );
-
-      const updatePayload = {
-        updatedAt: serverTimestamp(),
-      };
+      const updatePayload = applyStockMutationToItem({
+        item: stockItem,
+        variantKey: outputResolution.resolvedVariantKey || '',
+        deltaCurrent: goodQty,
+      });
 
       if (collectionName === "semi_finished_materials") {
+        const baseCurrentStock =
+          outputResolution.stockSourceType === 'variant'
+            ? toNumber(outputResolution.currentStock || 0)
+            : stockData.currentStock;
+        const baseAverageCost =
+          outputResolution.stockSourceType === 'variant'
+            ? toNumber(
+                (stockItem.variants || []).find(
+                  (variant) => (variant.variantKey || variant.id || variant.name || variant.color || '').toString().trim().toLowerCase() === (outputResolution.resolvedVariantKey || '').toString().trim().toLowerCase(),
+                )?.averageCostPerUnit || 0,
+              )
+            : toNumber(stockData.averageCostPerUnit || 0);
         const nextAverageCost = calculateWeightedAverage(
-          stockData.currentStock,
-          stockData.averageCostPerUnit,
+          baseCurrentStock,
+          baseAverageCost,
           goodQty,
           unitCost,
         );
 
-        updatePayload.currentStock = nextCurrentStock;
-        updatePayload.availableStock = nextAvailableStock;
         updatePayload.lastProductionCostPerUnit = unitCost;
-        updatePayload.averageCostPerUnit = nextAverageCost;
+        updatePayload.averageCostPerUnit =
+          outputResolution.stockSourceType === 'variant'
+            ? toNumber(updatePayload.averageCostPerUnit || stockData.averageCostPerUnit || 0)
+            : nextAverageCost;
+        if (outputResolution.stockSourceType === 'variant') {
+          updatePayload.variants = (updatePayload.variants || []).map((variant) => {
+            const key = (variant.variantKey || variant.id || variant.name || variant.color || '').toString().trim().toLowerCase();
+            if (key !== (outputResolution.resolvedVariantKey || '').toString().trim().toLowerCase()) {
+              return variant;
+            }
+            return {
+              ...variant,
+              averageCostPerUnit: nextAverageCost,
+            };
+          });
+        }
       } else if (collectionName === "products") {
-        const currentProductStock = toNumber(stockSnap.data()?.stock ?? stockData.currentStock);
-        const currentHpp = toNumber(stockSnap.data()?.hppPerUnit || 0);
+        const baseCurrentStock =
+          outputResolution.stockSourceType === 'variant'
+            ? toNumber(outputResolution.currentStock || 0)
+            : toNumber(stockSnap.data()?.stock ?? stockData.currentStock);
+        const currentHpp =
+          outputResolution.stockSourceType === 'variant'
+            ? toNumber(
+                (stockItem.variants || []).find(
+                  (variant) => (variant.variantKey || variant.id || variant.name || variant.color || '').toString().trim().toLowerCase() === (outputResolution.resolvedVariantKey || '').toString().trim().toLowerCase(),
+                )?.hppPerUnit || 0,
+              )
+            : toNumber(stockSnap.data()?.hppPerUnit || 0);
         const nextHpp = calculateWeightedAverage(
-          currentProductStock,
+          baseCurrentStock,
           currentHpp,
           goodQty,
           unitCost,
         );
 
-        updatePayload.stock = currentProductStock + goodQty;
-        updatePayload.currentStock = currentProductStock + goodQty;
-        updatePayload.availableStock = currentProductStock + goodQty;
-        updatePayload.hppPerUnit = nextHpp;
-      } else {
-        updatePayload.stock = nextCurrentStock;
-        updatePayload.currentStock = nextCurrentStock;
-        updatePayload.availableStock = nextAvailableStock;
+        if (outputResolution.stockSourceType === 'variant') {
+          updatePayload.variants = (updatePayload.variants || []).map((variant) => {
+            const key = (variant.variantKey || variant.id || variant.name || variant.color || '').toString().trim().toLowerCase();
+            if (key !== (outputResolution.resolvedVariantKey || '').toString().trim().toLowerCase()) {
+              return variant;
+            }
+            return {
+              ...variant,
+              hppPerUnit: nextHpp,
+            };
+          });
+        } else {
+          updatePayload.hppPerUnit = nextHpp;
+        }
       }
 
-      transaction.update(stockRef, updatePayload);
+      transaction.update(stockRef, {
+        ...updatePayload,
+        updatedAt: serverTimestamp(),
+      });
 
       nextOutputs.push(
         calculateOutputLine({
           ...line,
+          outputHasVariants: outputResolution.materialHasVariants === true || line.outputHasVariants === true,
+          outputVariantKey: outputResolution.resolvedVariantKey || '',
+          outputVariantLabel: outputResolution.resolvedVariantLabel || '',
+          stockSourceType: outputResolution.stockSourceType || 'master',
           costPerUnit: unitCost,
           stockAdded: goodQty > 0,
           stockAddedAt: goodQty > 0 ? completedAtValue : null,

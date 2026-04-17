@@ -1,9 +1,7 @@
 // =====================================================
 // Semi Finished Materials Service
 // CRUD Firestore untuk collection semi_finished_materials
-// Revisi:
-// - Tambah dukungan varian warna
-// - Total stok master dihitung dari seluruh varian agar menu lain tetap kompatibel
+// Mendukung item dengan atau tanpa varian.
 // =====================================================
 
 import {
@@ -26,24 +24,29 @@ import {
 
 const COLLECTION_NAME = "semi_finished_materials";
 
-const enrichMaterialWithVariantTotals = (item = {}) => {
-  const variants = normalizeSemiFinishedVariants(item.variants || []);
+const inferHasVariants = (item = {}) =>
+  item?.hasVariants === true || (Array.isArray(item?.variants) && item.variants.length > 0);
 
-  if (variants.length === 0) {
+const enrichMaterialWithVariantTotals = (item = {}) => {
+  const hasVariants = inferHasVariants(item);
+  const variants = hasVariants ? normalizeSemiFinishedVariants(item.variants || []) : [];
+
+  if (!hasVariants || variants.length === 0) {
     const currentStock = Number(item.currentStock || 0);
     const reservedStock = Number(item.reservedStock || 0);
     const availableStock = Math.max(currentStock - reservedStock, 0);
 
     return {
       ...item,
-      variants: [],
+      hasVariants,
+      variants,
       currentStock,
       reservedStock,
       availableStock,
       minStockAlert: Number(item.minStockAlert || 0),
       averageCostPerUnit: Number(item.averageCostPerUnit || 0),
-      variantCount: 0,
-      activeVariantCount: 0,
+      variantCount: variants.length,
+      activeVariantCount: variants.filter((variant) => variant.isActive !== false).length,
     };
   }
 
@@ -51,6 +54,7 @@ const enrichMaterialWithVariantTotals = (item = {}) => {
 
   return {
     ...item,
+    hasVariants,
     ...totals,
   };
 };
@@ -61,7 +65,23 @@ const normalizePayload = (
   selectedProducts = [],
   isEdit = false,
 ) => {
-  const variantTotals = calculateSemiFinishedTotalsFromVariants(values.variants);
+  const hasVariants = values.hasVariants === true;
+  const normalizedVariants = hasVariants
+    ? normalizeSemiFinishedVariants(values.variants || [])
+    : [];
+  const variantTotals = calculateSemiFinishedTotalsFromVariants(normalizedVariants);
+  const currentStock = hasVariants
+    ? variantTotals.currentStock
+    : Number(values.currentStock || 0);
+  const reservedStock = hasVariants
+    ? variantTotals.reservedStock
+    : Number(values.reservedStock || 0);
+  const minStockAlert = hasVariants
+    ? variantTotals.minStockAlert
+    : Number(values.minStockAlert || 0);
+  const averageCostPerUnit = hasVariants
+    ? Number(variantTotals.averageCostPerUnit || 0)
+    : Number(values.averageCostPerUnit || 0);
 
   const payload = {
     code: String(values.code || "")
@@ -72,22 +92,20 @@ const normalizePayload = (
     category: values.category || "kelopak",
     flowerGroup: values.flowerGroup || "mawar",
     type: "semi_finished",
-    unit: "pcs",
+    unit: values.unit || "pcs",
+    hasVariants,
 
     relatedProductIds: selectedProducts.map((item) => item.id),
     relatedProductNames: selectedProducts.map((item) => item.name || ""),
-    variants: variantTotals.variants,
-    variantCount: variantTotals.variantCount,
-    activeVariantCount: variantTotals.activeVariantCount,
+    variants: normalizedVariants,
+    variantCount: hasVariants ? variantTotals.variantCount : 0,
+    activeVariantCount: hasVariants ? variantTotals.activeVariantCount : 0,
 
-    currentStock: variantTotals.currentStock,
-    reservedStock: variantTotals.reservedStock,
-    availableStock: variantTotals.availableStock,
-    minStockAlert: variantTotals.minStockAlert,
-    averageCostPerUnit:
-      variantTotals.variants.length > 0
-        ? Number(variantTotals.averageCostPerUnit || 0)
-        : Number(values.averageCostPerUnit || 0),
+    currentStock,
+    reservedStock,
+    availableStock: Math.max(currentStock - reservedStock, 0),
+    minStockAlert,
+    averageCostPerUnit,
 
     isActive: values.isActive !== false,
     isSellable: false,
@@ -114,7 +132,10 @@ const normalizePayload = (
 
 export const validateSemiFinishedMaterial = (values = {}) => {
   const errors = {};
-  const normalizedVariants = normalizeSemiFinishedVariants(values.variants || []);
+  const hasVariants = values.hasVariants === true;
+  const normalizedVariants = hasVariants
+    ? normalizeSemiFinishedVariants(values.variants || [])
+    : [];
 
   if (!String(values.code || "").trim()) {
     errors.code = "Kode semi finished wajib diisi";
@@ -132,42 +153,59 @@ export const validateSemiFinishedMaterial = (values = {}) => {
     errors.flowerGroup = "Grup bunga wajib dipilih";
   }
 
-  if (normalizedVariants.length === 0) {
-    errors.variants = "Minimal harus ada 1 varian warna";
+  if (hasVariants) {
+    if (normalizedVariants.length === 0) {
+      errors.variants = "Minimal harus ada 1 varian";
+    }
+
+    const usedColors = new Set();
+
+    normalizedVariants.forEach((item, index) => {
+      if (!item.color) {
+        errors[`variants.${index}.color`] = "Warna wajib dipilih";
+      }
+
+      if (usedColors.has(item.color)) {
+        errors[`variants.${index}.color`] = "Warna tidak boleh duplikat";
+      }
+      usedColors.add(item.color);
+
+      if (Number(item.currentStock || 0) < 0) {
+        errors[`variants.${index}.currentStock`] = "Stok tidak boleh negatif";
+      }
+
+      if (Number(item.reservedStock || 0) < 0) {
+        errors[`variants.${index}.reservedStock`] =
+          "Reserved stock tidak boleh negatif";
+      }
+
+      if (Number(item.minStockAlert || 0) < 0) {
+        errors[`variants.${index}.minStockAlert`] =
+          "Minimum stock alert tidak boleh negatif";
+      }
+
+      if (Number(item.averageCostPerUnit || 0) < 0) {
+        errors[`variants.${index}.averageCostPerUnit`] =
+          "Average cost tidak boleh negatif";
+      }
+    });
+  } else {
+    if (Number(values.currentStock || 0) < 0) {
+      errors.currentStock = "Stok tidak boleh negatif";
+    }
+
+    if (Number(values.reservedStock || 0) < 0) {
+      errors.reservedStock = "Reserved stock tidak boleh negatif";
+    }
+
+    if (Number(values.minStockAlert || 0) < 0) {
+      errors.minStockAlert = "Minimum stock alert tidak boleh negatif";
+    }
+
+    if (Number(values.averageCostPerUnit || 0) < 0) {
+      errors.averageCostPerUnit = "Average cost tidak boleh negatif";
+    }
   }
-
-  const usedColors = new Set();
-
-  normalizedVariants.forEach((item, index) => {
-    if (!item.color) {
-      errors[`variants.${index}.color`] = "Warna wajib dipilih";
-    }
-
-    if (usedColors.has(item.color)) {
-      errors[`variants.${index}.color`] = "Warna tidak boleh duplikat";
-    }
-    usedColors.add(item.color);
-
-    if (Number(item.currentStock || 0) < 0) {
-      errors[`variants.${index}.currentStock`] = "Stok tidak boleh negatif";
-    }
-
-    if (Number(item.reservedStock || 0) < 0) {
-      errors[`variants.${index}.reservedStock`] =
-        "Reserved stock tidak boleh negatif";
-    }
-
-    if (Number(item.minStockAlert || 0) < 0) {
-      errors[`variants.${index}.minStockAlert`] =
-        "Minimum stock alert tidak boleh negatif";
-    }
-
-    if (Number(item.averageCostPerUnit || 0) < 0) {
-      errors[`variants.${index}.averageCostPerUnit`] =
-        "Average cost tidak boleh negatif";
-    }
-  });
-
 
   return errors;
 };

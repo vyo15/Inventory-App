@@ -54,11 +54,19 @@ const PRICING_MODE_TAGS = {
   rule: <Tag color="green">Rule</Tag>,
 };
 
-const buildFormValues = (record = {}) => ({
-  ...PRODUCT_DEFAULT_FORM,
-  ...record,
-  variants: ensureAtLeastOneVariant(record.variants || []),
-});
+const buildFormValues = (record = {}) => {
+  const hasVariants = record?.hasVariants === true || (record?.variants || []).length > 0;
+
+  return {
+    ...PRODUCT_DEFAULT_FORM,
+    ...record,
+    hasVariants,
+    variants: hasVariants ? ensureAtLeastOneVariant(record.variants || []) : [],
+    currentStock: Number(record.currentStock || record.stock || 0),
+    reservedStock: Number(record.reservedStock || 0),
+    minStockAlert: Number(record.minStockAlert || 0),
+  };
+};
 
 const Products = () => {
   const [products, setProducts] = useState([]);
@@ -73,7 +81,11 @@ const Products = () => {
   const [form] = Form.useForm();
 
   const pricingModeValue = Form.useWatch('pricingMode', form);
+  const hasVariantsValue = Form.useWatch('hasVariants', form);
   const watchedVariants = Form.useWatch('variants', form) || [];
+  const watchedCurrentStock = Form.useWatch('currentStock', form) || 0;
+  const watchedReservedStock = Form.useWatch('reservedStock', form) || 0;
+  const watchedMinStockAlert = Form.useWatch('minStockAlert', form) || 0;
 
   useEffect(() => {
     setLoading(true);
@@ -136,6 +148,7 @@ const Products = () => {
       active: products.filter((item) => item.isActive !== false).length,
       inactive: products.filter((item) => item.isActive === false).length,
       totalVariants: products.reduce((sum, item) => sum + Number(item.variantCount || 0), 0),
+      nonVariant: products.filter((item) => item.hasVariants !== true).length,
     };
   }, [products]);
 
@@ -413,14 +426,21 @@ const Products = () => {
             <TextArea rows={3} placeholder="Catatan produk" />
           </Form.Item>
 
-          <Divider orientation="left">Varian Warna & Stok</Divider>
+          <Form.Item name="hasVariants" label="Pakai Varian" valuePropName="checked">
+            <Switch checkedChildren="Ya" unCheckedChildren="Tidak" />
+          </Form.Item>
+
+          <Divider orientation="left">{hasVariantsValue ? 'Varian & Stok' : 'Stok Master'}</Divider>
           <Alert
             type="warning"
             showIcon
             style={{ marginBottom: 16 }}
-            message="Harga produk tetap di master. Di bawah ini hanya mengatur warna, stok, minimum stok, dan status varian."
+            message={hasVariantsValue
+              ? 'Harga produk tetap di master. Di bawah ini mengatur stok, minimum stok, dan status per varian.'
+              : 'Produk tanpa varian memakai stok langsung di master produk.'}
           />
 
+          {hasVariantsValue ? (
           <Form.List name="variants">
             {(fields, { add, remove }) => (
               <Space direction="vertical" style={{ width: '100%' }} size={12}>
@@ -428,7 +448,7 @@ const Products = () => {
                   <Card key={field.key} size="small">
                     <Row gutter={12}>
                       <Col xs={24} md={5}>
-                        <Form.Item {...field} name={[field.name, 'color']} label="Warna" rules={[{ required: true, message: 'Warna wajib dipilih' }]}>
+                        <Form.Item {...field} name={[field.name, 'color']} label="Nama Varian" rules={[{ required: true, message: 'Nama varian wajib dipilih' }]}>
                           <Select options={COLOR_VARIANT_OPTIONS} />
                         </Form.Item>
                       </Col>
@@ -467,18 +487,37 @@ const Products = () => {
                 ))}
 
                 <Button type="dashed" onClick={() => add({ ...DEFAULT_COLOR_VARIANT })} block>
-                  Tambah Varian Warna
+                  Tambah Varian
                 </Button>
               </Space>
             )}
           </Form.List>
+          ) : (
+            <Row gutter={16}>
+              <Col xs={24} md={8}>
+                <Form.Item name="currentStock" label="Stok Master">
+                  <InputNumber style={{ width: '100%' }} min={0} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item name="reservedStock" label="Reserved Stock">
+                  <InputNumber style={{ width: '100%' }} min={0} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item name="minStockAlert" label="Minimum Stok">
+                  <InputNumber style={{ width: '100%' }} min={0} />
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
 
           <Divider />
           <Card size="small">
             <Row gutter={16}>
-              <Col xs={24} md={8}><Statistic title="Jumlah Varian" value={watchedVariants.length} /></Col>
-              <Col xs={24} md={8}><Statistic title="Stok Total" value={watchedVariants.reduce((sum, item) => sum + Number(item?.currentStock || 0), 0)} formatter={(value) => formatNumberID(value)} /></Col>
-              <Col xs={24} md={8}><Statistic title="Reserved Total" value={watchedVariants.reduce((sum, item) => sum + Number(item?.reservedStock || 0), 0)} formatter={(value) => formatNumberID(value)} /></Col>
+              <Col xs={24} md={8}><Statistic title={hasVariantsValue ? 'Jumlah Varian' : 'Mode Stok'} value={hasVariantsValue ? watchedVariants.length : 'Master'} formatter={(value) => value} /></Col>
+              <Col xs={24} md={8}><Statistic title="Stok Total" value={hasVariantsValue ? watchedVariants.reduce((sum, item) => sum + Number(item?.currentStock || 0), 0) : watchedCurrentStock} formatter={(value) => formatNumberID(value)} /></Col>
+              <Col xs={24} md={8}><Statistic title={hasVariantsValue ? 'Reserved Total' : `Min Stok | Reserved ${formatNumberID(watchedReservedStock)}`} value={hasVariantsValue ? watchedVariants.reduce((sum, item) => sum + Number(item?.reservedStock || 0), 0) : watchedMinStockAlert} formatter={(value) => formatNumberID(value)} /></Col>
             </Row>
           </Card>
         </Form>
@@ -503,13 +542,14 @@ const Products = () => {
               <Descriptions.Item label="Deskripsi">{selectedProduct.description || '-'}</Descriptions.Item>
             </Descriptions>
 
-            <Card size="small" title="Varian Warna">
+            <Card size="small" title={selectedProduct.hasVariants ? 'Detail Varian' : 'Stok Master'}>
+              {selectedProduct.hasVariants ? (
               <Table
                 rowKey={(record) => `${selectedProduct.id}-${record.color}`}
                 pagination={false}
                 dataSource={selectedProduct.variants || []}
                 columns={[
-                  { title: 'Warna', dataIndex: 'color', render: (value) => COLOR_VARIANT_MAP[value] || value },
+                  { title: 'Nama Varian', dataIndex: 'color', render: (value) => COLOR_VARIANT_MAP[value] || value },
                   { title: 'SKU', dataIndex: 'sku', render: (value) => value || '-' },
                   { title: 'Stok', dataIndex: 'currentStock', render: (value) => formatNumberID(value) },
                   { title: 'Reserved', dataIndex: 'reservedStock', render: (value) => formatNumberID(value) },
@@ -521,6 +561,14 @@ const Products = () => {
                   },
                 ]}
               />
+              ) : (
+                <Descriptions bordered column={1} size="small">
+                  <Descriptions.Item label="Stok Master">{formatNumberID(selectedProduct.currentStock)}</Descriptions.Item>
+                  <Descriptions.Item label="Reserved Stock">{formatNumberID(selectedProduct.reservedStock)}</Descriptions.Item>
+                  <Descriptions.Item label="Available Stock">{formatNumberID(selectedProduct.availableStock)}</Descriptions.Item>
+                  <Descriptions.Item label="Minimum Stok">{formatNumberID(selectedProduct.minStockAlert)}</Descriptions.Item>
+                </Descriptions>
+              )}
             </Card>
           </Space>
         ) : null}

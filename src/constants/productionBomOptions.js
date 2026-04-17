@@ -13,6 +13,12 @@ export const PRODUCTION_BOM_MATERIAL_ITEM_TYPES = [
   { value: "semi_finished_material", label: "Semi Finished Material" },
 ];
 
+export const BOM_MATERIAL_VARIANT_STRATEGIES = [
+  { value: "inherit", label: "Ikuti Varian Target" },
+  { value: "fixed", label: "Varian Tetap" },
+  { value: "none", label: "Tanpa Varian" },
+];
+
 export const toOptionMap = (options = []) =>
   options.reduce((acc, item) => {
     acc[item.value] = item.label;
@@ -22,6 +28,9 @@ export const toOptionMap = (options = []) =>
 export const BOM_TARGET_TYPE_MAP = toOptionMap(PRODUCTION_BOM_TARGET_TYPES);
 export const BOM_MATERIAL_ITEM_TYPE_MAP = toOptionMap(
   PRODUCTION_BOM_MATERIAL_ITEM_TYPES,
+);
+export const BOM_MATERIAL_VARIANT_STRATEGY_MAP = toOptionMap(
+  BOM_MATERIAL_VARIANT_STRATEGIES,
 );
 
 export const DEFAULT_BOM_MATERIAL_LINE = {
@@ -36,6 +45,10 @@ export const DEFAULT_BOM_MATERIAL_LINE = {
   totalRequiredQty: 1,
   costPerUnitSnapshot: 0,
   totalCostSnapshot: 0,
+  materialHasVariants: false,
+  materialVariantStrategy: "none",
+  fixedVariantKey: "",
+  fixedVariantLabel: "",
   isOptional: false,
   notes: "",
 };

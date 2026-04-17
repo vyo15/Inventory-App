@@ -12,7 +12,7 @@ import {
   Space,
   Tag,
 } from "antd";
-import { collection, addDoc, onSnapshot, Timestamp } from "firebase/firestore";
+import { collection, addDoc, doc, onSnapshot, Timestamp, updateDoc } from "firebase/firestore";
 import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { db } from "../../firebase";
@@ -22,6 +22,10 @@ import {
   updateStock,
   addInventoryLog,
 } from "../../services/Inventory/inventoryService";
+import {
+  applyPurchaseToRawMaterial,
+  enrichRawMaterialWithVariantTotals,
+} from "../../utils/variants/rawMaterialVariantHelpers";
 
 const { Option } = Select;
 
@@ -92,6 +96,7 @@ const Purchases = () => {
   const itemId = Form.useWatch("itemId", form);
   const quantity = Form.useWatch("quantity", form);
   const conversionValue = Form.useWatch("conversionValue", form);
+  const materialVariantId = Form.useWatch("materialVariantId", form);
 
   const subtotalItems = Form.useWatch("subtotalItems", form);
   const shippingCost = Form.useWatch("shippingCost", form);
@@ -105,8 +110,28 @@ const Purchases = () => {
   // SECTION: Bahan terpilih
   // =========================
   const selectedMaterial = useMemo(() => {
-    return materials.find((item) => item.id === itemId);
+    const found = materials.find((item) => item.id === itemId);
+    return found ? enrichRawMaterialWithVariantTotals(found) : null;
   }, [materials, itemId]);
+
+  const selectedMaterialVariant = useMemo(() => {
+    if (!(selectedMaterial?.hasVariantOptions || selectedMaterial?.hasVariants) || !materialVariantId) return null;
+
+    return (selectedMaterial.variants || []).find(
+      (item) => String(item.variantKey) === String(materialVariantId),
+    );
+  }, [selectedMaterial, materialVariantId]);
+
+  const materialVariantOptions = useMemo(() => {
+    if (!selectedMaterial?.hasVariantOptions && !selectedMaterial?.hasVariants) return [];
+
+    return (selectedMaterial.variants || [])
+      .filter((item) => item.isActive !== false)
+      .map((item) => ({
+        value: item.variantKey,
+        label: item.variantName,
+      }));
+  }, [selectedMaterial]);
 
   // =========================
   // SECTION: Supplier difilter berdasarkan bahan baku yang dipilih
@@ -219,17 +244,22 @@ const Purchases = () => {
 
     if (itemType === "material") {
       const material = materials.find((item) => item.id === itemId);
+      const enrichedMaterial = material
+        ? enrichRawMaterialWithVariantTotals(material)
+        : null;
 
-      if (material) {
+      if (enrichedMaterial) {
         form.setFieldsValue({
-          purchaseUnit: material.defaultPurchaseUnit || "",
-          stockUnit: material.stockUnit || material.unit || "",
+          materialVariantId: undefined,
+          purchaseUnit: enrichedMaterial.defaultPurchaseUnit || "",
+          stockUnit: enrichedMaterial.stockUnit || enrichedMaterial.unit || "",
           restockReferencePrice: Math.round(
-            Number(material.restockReferencePrice || 0),
+            Number(enrichedMaterial.restockReferencePrice || 0),
           ),
         });
       } else {
         form.setFieldsValue({
+          materialVariantId: undefined,
           purchaseUnit: null,
           stockUnit: null,
           conversionValue: undefined,
@@ -239,6 +269,27 @@ const Purchases = () => {
       }
     }
   }, [itemId, itemType, products, materials, form, quantity]);
+
+  useEffect(() => {
+    if (itemType !== "material") return;
+
+    if (!selectedMaterial?.hasVariantOptions && !selectedMaterial?.hasVariants) {
+      form.setFieldsValue({
+        restockReferencePrice: Math.round(
+          Number(selectedMaterial?.restockReferencePrice || 0),
+        ),
+      });
+      return;
+    }
+
+    if (selectedMaterialVariant) {
+      form.setFieldsValue({
+        restockReferencePrice: Math.round(
+          Number(selectedMaterial?.restockReferencePrice || 0),
+        ),
+      });
+    }
+  }, [itemType, selectedMaterial, selectedMaterialVariant, form]);
 
   // =========================
   // SECTION: Hitung stok masuk otomatis
@@ -346,6 +397,7 @@ const Purchases = () => {
     form.resetFields();
     form.setFieldsValue({
       type: "material",
+      materialVariantId: undefined,
       quantity: 1,
       subtotalItems: 0,
       shippingCost: 0,
@@ -369,6 +421,7 @@ const Purchases = () => {
       const {
         type,
         itemId,
+        materialVariantId,
         quantity,
         date,
         note,
@@ -398,9 +451,26 @@ const Purchases = () => {
       const selectedItem =
         type === "product"
           ? products.find((item) => item.id === itemId)
-          : materials.find((item) => item.id === itemId);
+          : enrichRawMaterialWithVariantTotals(
+              materials.find((item) => item.id === itemId) || {},
+            );
 
-      const itemName = selectedItem?.name || "Item tidak ditemukan";
+      const selectedVariant =
+        type === "material" && (selectedItem?.hasVariantOptions || selectedItem?.hasVariants)
+          ? (selectedItem.variants || []).find(
+              (item) => String(item.variantKey) === String(materialVariantId),
+            )
+          : null;
+
+      if (type === "material" && (selectedItem?.hasVariantOptions || selectedItem?.hasVariants) && !selectedVariant) {
+        message.error("Pilih varian bahan baku terlebih dahulu");
+        return;
+      }
+
+      const itemName =
+        type === "material" && selectedVariant
+          ? `${selectedItem?.name || "Item"} - ${selectedVariant.variantName}`
+          : selectedItem?.name || "Item tidak ditemukan";
 
       const finalQuantity =
         type === "product"
@@ -413,6 +483,11 @@ const Purchases = () => {
         type,
         itemId,
         itemName,
+        materialVariantId: type === "material" ? materialVariantId || null : null,
+        materialVariantName:
+          type === "material" && selectedVariant
+            ? selectedVariant.variantName || ""
+            : "",
         supplierId: supplierId || null,
         supplierName: supplierName || "",
         quantity: Number(quantity || 0),
@@ -450,7 +525,27 @@ const Purchases = () => {
         purchasePayload,
       );
 
-      await updateStock(itemId, finalQuantity, collectionName);
+      if (type === "material") {
+        if ((selectedItem?.hasVariantOptions || selectedItem?.hasVariants) && selectedVariant) {
+          const nextMaterialPayload = applyPurchaseToRawMaterial({
+            material: selectedItem,
+            quantityChange: finalQuantity,
+            actualUnitCost,
+            restockReferencePrice,
+            variantKey: selectedVariant.variantKey,
+          });
+
+          await updateDoc(doc(db, "raw_materials", itemId), nextMaterialPayload);
+        } else {
+          await updateStock(itemId, finalQuantity, collectionName);
+          await updateDoc(doc(db, "raw_materials", itemId), {
+            averageActualUnitCost: Math.round(Number(actualUnitCost || 0)),
+            restockReferencePrice: Math.round(Number(restockReferencePrice || 0)),
+          });
+        }
+      } else {
+        await updateStock(itemId, finalQuantity, collectionName);
+      }
 
       await addInventoryLog(
         itemId,
@@ -460,6 +555,11 @@ const Purchases = () => {
         collectionName,
         {
           supplierName: supplierName || "",
+          materialVariantId: type === "material" ? materialVariantId || null : null,
+          materialVariantName:
+            type === "material" && selectedVariant
+              ? selectedVariant.variantName || ""
+              : "",
           totalActualPurchase: Math.round(Number(totalActualPurchase || 0)),
           actualUnitCost: Math.round(Number(actualUnitCost || 0)),
           totalReferencePurchase: Math.round(
@@ -471,7 +571,7 @@ const Purchases = () => {
             type === "material"
               ? `${note || ""} | Pembelian ${formatNumberId(quantity)} ${
                   purchaseUnit || ""
-                } = ${formatNumberId(finalQuantity)} ${stockUnit || ""}`
+                } = ${formatNumberId(finalQuantity)} ${stockUnit || ""}${selectedVariant ? ` | Varian ${selectedVariant.variantName}` : ""}`
               : note || "",
         },
       );
@@ -669,6 +769,22 @@ const Purchases = () => {
             </Select>
           </Form.Item>
 
+
+          {itemType === "material" && (selectedMaterial?.hasVariantOptions || selectedMaterial?.hasVariants) ? (
+            <Form.Item
+              name="materialVariantId"
+              label={selectedMaterial?.variantLabel || "Varian Bahan"}
+              rules={[{ required: true, message: "Varian bahan wajib dipilih" }]}
+            >
+              <Select placeholder="Pilih varian bahan">
+                {materialVariantOptions.map((item) => (
+                  <Option key={item.value} value={item.value}>
+                    {item.label}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+          ) : null}
           <Form.Item
             name="supplierId"
             label="Nama Supplier"
@@ -771,8 +887,8 @@ const Purchases = () => {
               return (
                 <Form.Item
                   name="restockReferencePrice"
-                  label="Harga Referensi Restock"
-                  extra={`Harga patokan per ${stockUnit}. Dipakai untuk membandingkan apakah pembelian ini lebih hemat atau lebih mahal.`}
+                  label="Harga Referensi Restock (Master)"
+                  extra={`Harga patokan per ${stockUnit} dari master bahan baku. Dipakai untuk membandingkan apakah pembelian ini lebih hemat atau lebih mahal.`}
                 >
                   <InputNumber
                     min={0}

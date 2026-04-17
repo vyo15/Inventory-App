@@ -47,6 +47,8 @@ import {
 } from "@ant-design/icons";
 import {
   BOM_MATERIAL_ITEM_TYPE_MAP,
+  BOM_MATERIAL_VARIANT_STRATEGY_MAP,
+  BOM_MATERIAL_VARIANT_STRATEGIES,
   BOM_TARGET_TYPE_MAP,
   DEFAULT_BOM_MATERIAL_LINE,
   DEFAULT_BOM_STEP_LINE,
@@ -69,6 +71,7 @@ import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, getNextSequenceNumber, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildBomMaterialFormLine, buildBomStepFormLine } from "../../utils/produksi/productionLineBuilders";
+import { buildVariantOptionsFromItem, inferHasVariants, findVariantByKey } from "../../utils/variants/variantStockHelpers";
 
 // =====================================================
 // SECTION: helper label item
@@ -311,12 +314,19 @@ const ProductionBoms = () => {
           targetType === "product"
             ? "semi_finished_material"
             : record.itemType || "raw_material",
+        materialVariantStrategy:
+          record.materialHasVariants === true
+            ? record.materialVariantStrategy || "inherit"
+            : "none",
       });
     } else {
       materialForm.setFieldsValue({
         ...DEFAULT_BOM_MATERIAL_LINE,
         itemType:
           targetType === "product" ? "semi_finished_material" : "raw_material",
+        materialVariantStrategy: "none",
+        fixedVariantKey: "",
+        fixedVariantLabel: "",
       });
     }
 
@@ -472,6 +482,7 @@ const ProductionBoms = () => {
         targetCode,
         targetName,
         targetUnit: selectedTarget?.unit || values.targetUnit || "pcs",
+        targetHasVariants: inferHasVariants(selectedTarget || {}),
       };
 
       setSubmitting(true);
@@ -1058,13 +1069,13 @@ const ProductionBoms = () => {
                   />
 
                   <EditableLineSection
-                    title="Alur Step Produksi"
+                    title="Alur Step Produksi (Opsional)"
                     alert={{
                       type: "info",
                       message:
                         "QC tidak perlu dibuat sebagai step terpisah. Gunakan step produksi nyata saja, lalu pengecekan kualitas dicatat di work log pada setiap proses.",
                     }}
-                    addButtonText="Tambah Step BOM"
+                    addButtonText="Tambah Step (Opsional) BOM"
                     onAdd={() => openStepModal()}
                     dataSource={stepLines}
                     columns={stepColumns}
@@ -1219,7 +1230,7 @@ const ProductionBoms = () => {
               ]}
             />
 
-            <Divider orientation="left">Alur Step Produksi</Divider>
+            <Divider orientation="left">Alur Step Produksi (Opsional)</Divider>
 
             <Table
               rowKey={(record) => record.id}
@@ -1330,6 +1341,9 @@ const ProductionBoms = () => {
                         (item) => item.value === value,
                       )?.raw;
 
+                      const materialHasVariants = inferHasVariants(selected || {});
+                      const existingFixed = findVariantByKey(selected || {}, materialForm.getFieldValue("fixedVariantKey") || "");
+
                       materialForm.setFieldsValue({
                         unit: selected?.unit || "pcs",
                         costPerUnitSnapshot: Number(
@@ -1338,10 +1352,75 @@ const ProductionBoms = () => {
                             selected?.costPerUnit ||
                             0,
                         ),
+                        materialHasVariants,
+                        materialVariantStrategy: materialHasVariants
+                          ? materialForm.getFieldValue("materialVariantStrategy") || "inherit"
+                          : "none",
+                        fixedVariantKey: existingFixed?.variantKey || "",
+                        fixedVariantLabel: existingFixed?.variantLabel || "",
                       });
                     }}
                   />
                 </Form.Item>
+              );
+            }}
+          </Form.Item>
+
+          <Form.Item shouldUpdate noStyle>
+            {({ getFieldValue }) => {
+              const targetType = getCurrentTargetType();
+              const itemType =
+                targetType === "product"
+                  ? "semi_finished_material"
+                  : getFieldValue("itemType");
+              const options = getMaterialItemOptions(targetType, itemType);
+              const selectedItem = options.find((item) => item.value === getFieldValue("itemId"))?.raw;
+              const hasVariants = inferHasVariants(selectedItem || {});
+              const variantOptions = buildVariantOptionsFromItem(selectedItem || {});
+              const strategy = hasVariants
+                ? getFieldValue("materialVariantStrategy") || "inherit"
+                : "none";
+
+              return (
+                <>
+                  <Form.Item name="materialHasVariants" hidden>
+                    <Input />
+                  </Form.Item>
+
+                  <Form.Item
+                    label="Strategi Varian Bahan"
+                    name="materialVariantStrategy"
+                    extra={
+                      hasVariants
+                        ? "Pilih cara BOM membaca stok varian untuk bahan ini."
+                        : "Item ini tidak memakai varian, jadi stok akan dibaca dari master."
+                    }
+                  >
+                    <Select
+                      options={hasVariants ? BOM_MATERIAL_VARIANT_STRATEGIES : [{ value: "none", label: "Tanpa Varian" }]}
+                      disabled={!hasVariants}
+                    />
+                  </Form.Item>
+
+                  {hasVariants && strategy === "fixed" ? (
+                    <Form.Item
+                      label="Varian Tetap"
+                      name="fixedVariantKey"
+                      rules={[{ required: true, message: "Pilih varian tetap" }]}
+                    >
+                      <Select
+                        showSearch
+                        optionFilterProp="label"
+                        options={variantOptions}
+                        placeholder="Pilih varian tetap..."
+                        onChange={(value) => {
+                          const selectedVariant = variantOptions.find((item) => item.value === value)?.raw;
+                          materialForm.setFieldValue("fixedVariantLabel", selectedVariant?.variantLabel || "");
+                        }}
+                      />
+                    </Form.Item>
+                  ) : null}
+                </>
               );
             }}
           </Form.Item>
@@ -1376,7 +1455,7 @@ const ProductionBoms = () => {
       {/* SECTION: modal step line */}
       <Modal
         title={
-          editingStepIndex !== null ? "Edit Step Line" : "Tambah Step Line"
+          editingStepIndex !== null ? "Edit Step Line" : "Tambah Step (Opsional) Line"
         }
         open={stepModalVisible}
         onCancel={() => {

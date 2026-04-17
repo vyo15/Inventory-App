@@ -69,7 +69,11 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 0,
   }).format(Number(value || 0))}`;
 
-const normalizeFormVariants = (variants = []) => {
+const normalizeFormVariants = (variants = [], hasVariants = true) => {
+  if (!hasVariants) {
+    return [];
+  }
+
   const normalized = normalizeSemiFinishedVariants(variants);
 
   if (normalized.length > 0) {
@@ -80,24 +84,26 @@ const normalizeFormVariants = (variants = []) => {
 };
 
 const buildFormValues = (record = {}) => {
+  const hasVariants = record?.hasVariants === true || (record?.variants || []).length > 0;
   const totals = calculateSemiFinishedTotalsFromVariants(record.variants || []);
 
   return {
     ...DEFAULT_SEMI_FINISHED_FORM,
     ...record,
-    variants: normalizeFormVariants(record.variants || []),
-    currentStock: totals.currentStock || Number(record.currentStock || 0),
-    reservedStock: totals.reservedStock || Number(record.reservedStock || 0),
+    hasVariants,
+    variants: normalizeFormVariants(record.variants || [], hasVariants),
+    currentStock: hasVariants ? totals.currentStock : Number(record.currentStock || 0),
+    reservedStock: hasVariants ? totals.reservedStock : Number(record.reservedStock || 0),
     availableStock:
-      totals.availableStock !== undefined
+      hasVariants
         ? totals.availableStock
         : Math.max(
             Number(record.currentStock || 0) - Number(record.reservedStock || 0),
             0,
           ),
-    minStockAlert: totals.minStockAlert || Number(record.minStockAlert || 0),
+    minStockAlert: hasVariants ? totals.minStockAlert : Number(record.minStockAlert || 0),
     averageCostPerUnit:
-      totals.variants.length > 0
+      hasVariants
         ? Number(totals.averageCostPerUnit || 0)
         : Number(record.averageCostPerUnit || 0),
   };
@@ -138,11 +144,25 @@ const SemiFinishedMaterials = () => {
     loadData();
   }, []);
 
+  const hasVariantsValue = Form.useWatch("hasVariants", form);
   const watchedVariants = Form.useWatch("variants", form) || [];
+  const watchedCurrentStock = Form.useWatch("currentStock", form) || 0;
+  const watchedReservedStock = Form.useWatch("reservedStock", form) || 0;
+  const watchedMinStockAlert = Form.useWatch("minStockAlert", form) || 0;
+  const watchedAverageCost = Form.useWatch("averageCostPerUnit", form) || 0;
 
   const calculatedTotals = useMemo(
-    () => calculateSemiFinishedTotalsFromVariants(watchedVariants),
-    [watchedVariants],
+    () => hasVariantsValue ? calculateSemiFinishedTotalsFromVariants(watchedVariants) : {
+      currentStock: Number(watchedCurrentStock || 0),
+      reservedStock: Number(watchedReservedStock || 0),
+      availableStock: Math.max(Number(watchedCurrentStock || 0) - Number(watchedReservedStock || 0), 0),
+      minStockAlert: Number(watchedMinStockAlert || 0),
+      averageCostPerUnit: Number(watchedAverageCost || 0),
+      variantCount: 0,
+      activeVariantCount: 0,
+      variants: [],
+    },
+    [hasVariantsValue, watchedVariants, watchedCurrentStock, watchedReservedStock, watchedMinStockAlert, watchedAverageCost],
   );
 
   const summary = useMemo(() => {
@@ -217,7 +237,8 @@ const SemiFinishedMaterials = () => {
 
       const payload = {
         ...values,
-        variants: normalizeFormVariants(values.variants || []),
+        hasVariants: values.hasVariants === true,
+        variants: normalizeFormVariants(values.variants || [], values.hasVariants === true),
         maxStockTarget:
           values.maxStockTarget === null || values.maxStockTarget === undefined
             ? null
@@ -616,15 +637,22 @@ const SemiFinishedMaterials = () => {
 
           </Row>
 
-          <Divider orientation="left">Varian Warna & Stok</Divider>
+          <Form.Item label="Pakai Varian" name="hasVariants" valuePropName="checked">
+            <Switch checkedChildren="Ya" unCheckedChildren="Tidak" />
+          </Form.Item>
+
+          <Divider orientation="left">{hasVariantsValue ? "Varian & Stok" : "Stok Master"}</Divider>
 
           <Alert
             style={{ marginBottom: 16 }}
             type="info"
             showIcon
-            message="Gunakan 1 master item untuk 1 jenis komponen. Tambahkan warna sebagai varian di bawahnya agar data tetap rapi. Total stok item akan dihitung otomatis dari semua varian warna."
+            message={hasVariantsValue
+              ? "Gunakan 1 master item untuk 1 jenis komponen. Tambahkan warna sebagai varian di bawahnya agar data tetap rapi. Total stok item akan dihitung otomatis dari semua varian."
+              : "Item tanpa varian memakai stok langsung di master semi finished material."}
           />
 
+          {hasVariantsValue ? (
           <Form.List name="variants">
             {(fields, { add, remove }) => (
               <Space direction="vertical" style={{ width: "100%" }} size={12}>
@@ -650,9 +678,9 @@ const SemiFinishedMaterials = () => {
                       <Col xs={24} md={8}>
                         <Form.Item
                           {...field}
-                          label="Warna"
+                          label="Nama Varian"
                           name={[field.name, "color"]}
-                          rules={[{ required: true, message: "Warna wajib dipilih" }]}
+                          rules={[{ required: true, message: "Nama varian wajib dipilih" }]}
                         >
                           <Select
                             showSearch
@@ -732,11 +760,35 @@ const SemiFinishedMaterials = () => {
                   onClick={() => add({ ...DEFAULT_SEMI_FINISHED_VARIANT })}
                   block
                 >
-                  Tambah Varian Warna
+                  Tambah Varian
                 </Button>
               </Space>
             )}
           </Form.List>
+          ) : (
+            <Row gutter={16}>
+              <Col xs={24} md={6}>
+                <Form.Item label="Current Stock" name="currentStock">
+                  <InputNumber min={0} style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={6}>
+                <Form.Item label="Reserved Stock" name="reservedStock">
+                  <InputNumber min={0} style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={6}>
+                <Form.Item label="Min Stock Alert" name="minStockAlert">
+                  <InputNumber min={0} style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={6}>
+                <Form.Item label="Average Cost / Unit" name="averageCostPerUnit">
+                  <InputNumber min={0} style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+            </Row>
+          )}
 
           <Divider orientation="left">Ringkasan Stok Master</Divider>
 
@@ -744,7 +796,9 @@ const SemiFinishedMaterials = () => {
             style={{ marginBottom: 16 }}
             type="info"
             showIcon
-            message="Current Stock, Reserved Stock, Available Stock, dan Min Stock Alert total di bawah ini adalah hasil akumulasi seluruh varian warna."
+            message={hasVariantsValue
+              ? "Current Stock, Reserved Stock, Available Stock, dan Min Stock Alert total di bawah ini adalah hasil akumulasi seluruh varian."
+              : "Ringkasan di bawah ini adalah nilai stok master langsung karena item ini tidak memakai varian."}
           />
 
           <Row gutter={16}>

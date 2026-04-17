@@ -41,6 +41,7 @@ export const DEFAULT_SEMI_FINISHED_FORM = {
   category: 'pola',
   flowerGroup: 'mawar',
   unit: 'pcs',
+  hasVariants: false,
   variants: [],
   currentStock: 0,
   reservedStock: 0,

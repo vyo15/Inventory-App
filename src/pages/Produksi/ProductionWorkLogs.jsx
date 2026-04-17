@@ -71,6 +71,7 @@ import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildWorkLogMaterialUsageFormLine, buildWorkLogOutputFormLine } from "../../utils/produksi/productionLineBuilders";
+import { buildVariantOptionsFromItem, inferHasVariants } from "../../utils/variants/variantStockHelpers";
 
 const ProductionWorkLogs = () => {
   // SECTION: state utama
@@ -631,6 +632,11 @@ const ProductionWorkLogs = () => {
           <div style={{ fontSize: 12, color: "#8c8c8c" }}>
             {record.stepName || "-"}
           </div>
+          {record.targetVariantLabel ? (
+            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+              Varian: {record.targetVariantLabel}
+            </div>
+          ) : null}
           <div style={{ fontSize: 12, color: "#8c8c8c" }}>
             PO: {record.productionOrderCode || "-"}
           </div>
@@ -1103,6 +1109,11 @@ const ProductionWorkLogs = () => {
                   <div>
                     <div style={{ fontWeight: 600 }}>{record.itemName || "-"}</div>
                     <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.itemCode || "-"}</div>
+                    {record.resolvedVariantLabel ? (
+                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                        Varian: {record.resolvedVariantLabel}
+                      </div>
+                    ) : null}
                   </div>
                 ),
               },
@@ -1163,6 +1174,11 @@ const ProductionWorkLogs = () => {
                   <div>
                     <div style={{ fontWeight: 600 }}>{record.outputName || "-"}</div>
                     <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.outputCode || "-"}</div>
+                    {record.outputVariantLabel ? (
+                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                        Varian: {record.outputVariantLabel}
+                      </div>
+                    ) : null}
                   </div>
                 ),
               },
@@ -1273,6 +1289,7 @@ const ProductionWorkLogs = () => {
               </Descriptions.Item>
               <Descriptions.Item label="Target">
                 {selectedRecord.targetName || "-"}
+                {selectedRecord.targetVariantLabel ? ` | Varian: ${selectedRecord.targetVariantLabel}` : ""}
               </Descriptions.Item>
               <Descriptions.Item label="Step">
                 {selectedRecord.stepName || "-"}
@@ -1314,6 +1331,11 @@ const ProductionWorkLogs = () => {
                       <div style={{ fontSize: 12, color: "#8c8c8c" }}>
                         {record.itemCode || "-"}
                       </div>
+                      {record.resolvedVariantLabel ? (
+                        <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                          Varian: {record.resolvedVariantLabel}
+                        </div>
+                      ) : null}
                     </div>
                   ),
                 },
@@ -1359,6 +1381,11 @@ const ProductionWorkLogs = () => {
                       <div style={{ fontSize: 12, color: "#8c8c8c" }}>
                         {record.outputCode || "-"}
                       </div>
+                      {record.outputVariantLabel ? (
+                        <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                          Varian: {record.outputVariantLabel}
+                        </div>
+                      ) : null}
                     </div>
                   ),
                 },
@@ -1418,7 +1445,7 @@ const ProductionWorkLogs = () => {
           </Form.Item>
 
           <Form.Item shouldUpdate noStyle>
-            {({ getFieldValue }) => {
+            {({ getFieldValue, setFieldValue }) => {
               const itemType = getFieldValue("itemType");
               return (
                 <Form.Item
@@ -1431,6 +1458,41 @@ const ProductionWorkLogs = () => {
                     optionFilterProp="label"
                     options={getMaterialOptions(itemType)}
                     placeholder="Pilih item..."
+                    onChange={() => {
+                      setFieldValue("resolvedVariantKey", undefined);
+                      setFieldValue("resolvedVariantLabel", "");
+                    }}
+                  />
+                </Form.Item>
+              );
+            }}
+          </Form.Item>
+
+          <Form.Item shouldUpdate noStyle>
+            {({ getFieldValue, setFieldValue }) => {
+              const itemType = getFieldValue("itemType");
+              const itemId = getFieldValue("itemId");
+              const selectedItem = getMaterialOptions(itemType).find((item) => item.value === itemId)?.raw;
+              const hasVariants = inferHasVariants(selectedItem || {});
+              const variantOptions = buildVariantOptionsFromItem(selectedItem || {});
+
+              if (!hasVariants) return null;
+
+              return (
+                <Form.Item
+                  label="Varian Material"
+                  name="resolvedVariantKey"
+                  rules={[{ required: true, message: "Varian material wajib dipilih" }]}
+                >
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    options={variantOptions}
+                    placeholder="Pilih varian material..."
+                    onChange={(value) => {
+                      const selectedVariant = variantOptions.find((item) => item.value === value);
+                      setFieldValue("resolvedVariantLabel", selectedVariant?.label || "");
+                    }}
                   />
                 </Form.Item>
               );
@@ -1496,7 +1558,7 @@ const ProductionWorkLogs = () => {
           </Form.Item>
 
           <Form.Item shouldUpdate noStyle>
-            {({ getFieldValue }) => {
+            {({ getFieldValue, setFieldValue }) => {
               const outputType = getFieldValue("outputType");
 
               const options =
@@ -1504,10 +1566,12 @@ const ProductionWorkLogs = () => {
                   ? (referenceData.semiFinishedMaterials || []).map((item) => ({
                       value: item.id,
                       label: `${item.code || "-"} - ${item.name || "-"}`,
+                      raw: item,
                     }))
                   : (referenceData.products || []).map((item) => ({
                       value: item.id,
                       label: `${item.code || "-"} - ${item.name || "-"}`,
+                      raw: item,
                     }));
 
               return (
@@ -1523,6 +1587,45 @@ const ProductionWorkLogs = () => {
                     optionFilterProp="label"
                     options={options}
                     placeholder="Pilih output item..."
+                    onChange={() => {
+                      setFieldValue("outputVariantKey", undefined);
+                      setFieldValue("outputVariantLabel", "");
+                    }}
+                  />
+                </Form.Item>
+              );
+            }}
+          </Form.Item>
+
+          <Form.Item shouldUpdate noStyle>
+            {({ getFieldValue, setFieldValue }) => {
+              const outputType = getFieldValue("outputType");
+              const outputIdRef = getFieldValue("outputIdRef");
+              const selectedOutput = (
+                outputType === "semi_finished_material"
+                  ? (referenceData.semiFinishedMaterials || [])
+                  : (referenceData.products || [])
+              ).find((item) => item.id === outputIdRef);
+              const hasVariants = inferHasVariants(selectedOutput || {});
+              const variantOptions = buildVariantOptionsFromItem(selectedOutput || {});
+
+              if (!hasVariants) return null;
+
+              return (
+                <Form.Item
+                  label="Varian Output"
+                  name="outputVariantKey"
+                  rules={[{ required: true, message: "Varian output wajib dipilih" }]}
+                >
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    options={variantOptions}
+                    placeholder="Pilih varian output..."
+                    onChange={(value) => {
+                      const selectedVariant = variantOptions.find((item) => item.value === value);
+                      setFieldValue("outputVariantLabel", selectedVariant?.label || "");
+                    }}
                   />
                 </Form.Item>
               );

@@ -45,6 +45,7 @@ import {
   createProductionOrder,
   getActiveProductionBomOptions,
   getAllProductionOrders,
+  getProductionOrderTargetVariantOptions,
   refreshProductionOrderRequirements,
   releaseProductionOrderReservation,
   reserveProductionOrder,
@@ -83,6 +84,7 @@ const ProductionOrders = () => {
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [bomOptions, setBomOptions] = useState([]);
+  const [targetVariantOptions, setTargetVariantOptions] = useState([]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -97,6 +99,7 @@ const ProductionOrders = () => {
   const [form] = Form.useForm();
 
   const targetTypeValue = Form.useWatch("targetType", form);
+  const bomIdValue = Form.useWatch("bomId", form);
 
   const loadData = async () => {
     try {
@@ -133,6 +136,30 @@ const ProductionOrders = () => {
     }
   }, [targetTypeValue]);
 
+  useEffect(() => {
+    const loadTargetVariants = async () => {
+      if (!bomIdValue) {
+        setTargetVariantOptions([]);
+        form.setFieldsValue({ targetVariantKey: undefined, targetVariantLabel: "" });
+        return;
+      }
+
+      try {
+        const result = await getProductionOrderTargetVariantOptions(bomIdValue);
+        setTargetVariantOptions(result || []);
+
+        if (!Array.isArray(result) || result.length === 0) {
+          form.setFieldsValue({ targetVariantKey: undefined, targetVariantLabel: "" });
+        }
+      } catch (error) {
+        console.error(error);
+        setTargetVariantOptions([]);
+      }
+    };
+
+    loadTargetVariants();
+  }, [bomIdValue]);
+
   const summary = useMemo(() => {
     return buildCountSummary(orders, {
       shortage: (item) => item.status === "shortage",
@@ -162,6 +189,8 @@ const ProductionOrders = () => {
       code: "",
       targetType: "product",
       bomId: undefined,
+      targetVariantKey: undefined,
+      targetVariantLabel: "",
       orderQty: 1,
       priority: "normal",
       notes: "",
@@ -174,9 +203,13 @@ const ProductionOrders = () => {
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
+      const selectedVariant = targetVariantOptions.find((item) => item.value === values.targetVariantKey);
 
       setSubmitting(true);
-      await createProductionOrder(values, null);
+      await createProductionOrder({
+        ...values,
+        targetVariantLabel: selectedVariant?.label || "",
+      }, null);
       message.success("Production order berhasil dibuat");
 
       setFormVisible(false);
@@ -265,6 +298,11 @@ const ProductionOrders = () => {
           <div style={{ fontSize: 12, color: "#8c8c8c" }}>
             BOM: {record.bomCode || "-"} - {record.bomName || "-"}
           </div>
+          {record.targetVariantLabel ? (
+            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+              Varian: {record.targetVariantLabel}
+            </div>
+          ) : null}
         </div>
       ),
     },
@@ -504,6 +542,8 @@ const ProductionOrders = () => {
               onChange={(value) => {
                 form.setFieldsValue({
                   bomId: undefined,
+                  targetVariantKey: undefined,
+                  targetVariantLabel: "",
                 });
                 loadBomOptions(value);
               }}
@@ -520,8 +560,34 @@ const ProductionOrders = () => {
               optionFilterProp="label"
               options={bomOptions}
               placeholder="Pilih BOM..."
+              onChange={() => {
+                form.setFieldsValue({
+                  targetVariantKey: undefined,
+                  targetVariantLabel: "",
+                });
+              }}
             />
           </Form.Item>
+
+          {targetVariantOptions.length > 0 ? (
+            <Form.Item
+              label="Varian Target"
+              name="targetVariantKey"
+              rules={[{ required: true, message: "Varian target wajib dipilih" }]}
+              extra="Pilih varian target agar material inherit membaca stok varian yang benar."
+            >
+              <Select
+                showSearch
+                optionFilterProp="label"
+                options={targetVariantOptions}
+                placeholder="Pilih varian target..."
+                onChange={(value) => {
+                  const selectedVariant = targetVariantOptions.find((item) => item.value === value);
+                  form.setFieldValue("targetVariantLabel", selectedVariant?.label || "");
+                }}
+              />
+            </Form.Item>
+          ) : null}
 
           <Form.Item
             label="Qty Order / Produksi"
@@ -567,6 +633,9 @@ const ProductionOrders = () => {
               </Descriptions.Item>
               <Descriptions.Item label="Target">
                 {selectedOrder.targetName || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Varian Target">
+                {selectedOrder.targetVariantLabel || "-"}
               </Descriptions.Item>
               <Descriptions.Item label="BOM">
                 {selectedOrder.bomCode || "-"} - {selectedOrder.bomName || "-"}
@@ -633,6 +702,20 @@ const ProductionOrders = () => {
                         ? "Raw Material"
                         : "Semi Finished"}
                     </Tag>
+                  ),
+                },
+                {
+                  title: "Sumber Stok",
+                  key: "stockSourceType",
+                  render: (_, record) => (
+                    <Space direction="vertical" size={0}>
+                      <Tag color={record.stockSourceType === "variant" ? "purple" : "default"}>
+                        {record.stockSourceType === "variant" ? "Variant" : "Master"}
+                      </Tag>
+                      {record.resolvedVariantLabel ? (
+                        <Typography.Text type="secondary">{record.resolvedVariantLabel}</Typography.Text>
+                      ) : null}
+                    </Space>
                   ),
                 },
                 {

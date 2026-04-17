@@ -11,7 +11,11 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { calculateVariantTotals, normalizeColorVariants } from '../../utils/variants/variantHelpers';
+import {
+  calculateVariantTotals,
+  normalizeColorVariants,
+  validateDuplicateVariantColors,
+} from '../../utils/variants/variantHelpers';
 
 const COLLECTION_NAME = 'products';
 
@@ -23,32 +27,46 @@ export const PRODUCT_DEFAULT_FORM = {
   pricingMode: 'rule',
   pricingRuleId: null,
   description: '',
+  hasVariants: false,
   variants: [],
+  currentStock: 0,
+  reservedStock: 0,
+  minStockAlert: 0,
   isActive: true,
 };
 
+const inferHasVariants = (item = {}) =>
+  item?.hasVariants === true || (Array.isArray(item?.variants) && item.variants.length > 0);
+
 const enrichProduct = (item = {}) => {
+  const hasVariants = inferHasVariants(item);
   const totals = calculateVariantTotals(item.variants || []);
+  const currentStock = hasVariants ? totals.currentStock : Number(item.currentStock ?? item.stock ?? 0);
+  const reservedStock = hasVariants ? totals.reservedStock : Number(item.reservedStock || 0);
+  const minStockAlert = hasVariants ? totals.minStockAlert : Number(item.minStockAlert || 0);
 
   return {
     ...item,
-    variants: totals.variants,
-    stock: totals.currentStock || Number(item.stock || 0),
-    currentStock: totals.currentStock || Number(item.currentStock ?? item.stock ?? 0),
-    reservedStock: totals.reservedStock || Number(item.reservedStock || 0),
-    availableStock:
-      totals.variants.length > 0
-        ? totals.availableStock
-        : Math.max(Number(item.stock || 0) - Number(item.reservedStock || 0), 0),
-    minStockAlert: totals.minStockAlert || Number(item.minStockAlert || 0),
-    variantCount: totals.variantCount,
-    activeVariantCount: totals.activeVariantCount,
+    hasVariants,
+    variants: hasVariants ? totals.variants : [],
+    stock: currentStock,
+    currentStock,
+    reservedStock,
+    availableStock: Math.max(currentStock - reservedStock, 0),
+    minStockAlert,
+    variantCount: hasVariants ? totals.variantCount : 0,
+    activeVariantCount: hasVariants ? totals.activeVariantCount : 0,
   };
 };
 
 const normalizePayload = (values = {}, categories = [], isEdit = false) => {
   const selectedCategory = (categories || []).find((item) => item.id === values.categoryId);
-  const variantTotals = calculateVariantTotals(values.variants || []);
+  const hasVariants = values.hasVariants === true;
+  const normalizedVariants = hasVariants ? normalizeColorVariants(values.variants || []) : [];
+  const variantTotals = calculateVariantTotals(normalizedVariants);
+  const currentStock = hasVariants ? variantTotals.currentStock : Math.round(Number(values.currentStock || 0));
+  const reservedStock = hasVariants ? variantTotals.reservedStock : Math.round(Number(values.reservedStock || 0));
+  const minStockAlert = hasVariants ? variantTotals.minStockAlert : Math.round(Number(values.minStockAlert || 0));
 
   const payload = {
     name: String(values.name || '').trim(),
@@ -59,14 +77,15 @@ const normalizePayload = (values = {}, categories = [], isEdit = false) => {
     pricingRuleId: values.pricingMode === 'rule' ? values.pricingRuleId || null : null,
     price: Math.round(Number(values.price || 0)),
     hppPerUnit: Math.round(Number(values.hppPerUnit || 0)),
-    variants: normalizeColorVariants(values.variants || []),
-    variantCount: variantTotals.variantCount,
-    activeVariantCount: variantTotals.activeVariantCount,
-    currentStock: variantTotals.currentStock,
-    reservedStock: variantTotals.reservedStock,
-    availableStock: variantTotals.availableStock,
-    stock: variantTotals.currentStock,
-    minStockAlert: variantTotals.minStockAlert,
+    hasVariants,
+    variants: normalizedVariants,
+    variantCount: hasVariants ? variantTotals.variantCount : 0,
+    activeVariantCount: hasVariants ? variantTotals.activeVariantCount : 0,
+    currentStock,
+    reservedStock,
+    availableStock: Math.max(currentStock - reservedStock, 0),
+    stock: currentStock,
+    minStockAlert,
     isActive: values.isActive !== false,
     updatedAt: serverTimestamp(),
     lastPricingUpdatedAt: values.pricingMode === 'manual' ? serverTimestamp() : null,
@@ -82,6 +101,7 @@ const normalizePayload = (values = {}, categories = [], isEdit = false) => {
 export const validateProductPayload = async (values = {}, editingId = null) => {
   const errors = {};
   const productName = String(values.name || '').trim();
+  const hasVariants = values.hasVariants === true;
 
   if (!productName) {
     errors.name = 'Nama produk wajib diisi';
@@ -95,18 +115,23 @@ export const validateProductPayload = async (values = {}, editingId = null) => {
     errors.hppPerUnit = 'HPP tidak boleh negatif';
   }
 
-  const variants = normalizeColorVariants(values.variants || []);
-  if (variants.length === 0) {
-    errors.variants = 'Minimal harus ada 1 varian warna';
-  }
-
-  const colorSeen = new Set();
-  variants.forEach((item, index) => {
-    if (colorSeen.has(item.color)) {
-      errors[`variants.${index}.color`] = 'Warna tidak boleh duplikat';
+  if (hasVariants) {
+    const variants = normalizeColorVariants(values.variants || []);
+    if (variants.length === 0) {
+      errors.variants = 'Minimal harus ada 1 varian';
     }
-    colorSeen.add(item.color);
-  });
+    Object.assign(errors, validateDuplicateVariantColors(variants));
+  } else {
+    if (Number(values.currentStock || 0) < 0) {
+      errors.currentStock = 'Stok tidak boleh negatif';
+    }
+    if (Number(values.reservedStock || 0) < 0) {
+      errors.reservedStock = 'Reserved stock tidak boleh negatif';
+    }
+    if (Number(values.minStockAlert || 0) < 0) {
+      errors.minStockAlert = 'Minimum stok tidak boleh negatif';
+    }
+  }
 
   if (productName) {
     const q = query(collection(db, COLLECTION_NAME), where('name', '==', productName));

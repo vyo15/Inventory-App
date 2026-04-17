@@ -23,6 +23,7 @@ import {
   calculateBomMaterialLine,
   calculateBomTotals,
 } from "../../constants/productionBomOptions";
+import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
 
 const COLLECTION_NAME = "production_boms";
 
@@ -76,6 +77,7 @@ const normalizeReferenceItem = (docItem) => {
       safeTrim(raw.baseUnit) ||
       "pcs",
 
+    hasVariants: inferHasVariants(raw),
     isActive: raw?.isActive,
   };
 };
@@ -144,6 +146,13 @@ const normalizeMaterialLines = (materialLines = [], targetType = "") =>
       qtyPerBatch: Number(line.qtyPerBatch || 0),
       wastageQty: Number(line.wastageQty || 0),
       costPerUnitSnapshot: Number(line.costPerUnitSnapshot || 0),
+      materialHasVariants: line.materialHasVariants === true,
+      materialVariantStrategy:
+        line.materialHasVariants === true
+          ? line.materialVariantStrategy || 'inherit'
+          : 'none',
+      fixedVariantKey: safeTrim(line.fixedVariantKey),
+      fixedVariantLabel: safeTrim(line.fixedVariantLabel),
       isOptional: false,
       notes: safeTrim(line.notes),
     });
@@ -215,9 +224,6 @@ export const validateProductionBom = (values = {}) => {
     errors.materialLines = "Minimal harus ada 1 material line";
   }
 
-  if (!Array.isArray(values.stepLines) || values.stepLines.length === 0) {
-    errors.stepLines = "Minimal harus ada 1 step line";
-  }
 
   if (values.targetType === "product") {
     const hasInvalidMaterial = (values.materialLines || []).some(
@@ -229,6 +235,23 @@ export const validateProductionBom = (values = {}) => {
         "BOM product hanya boleh menggunakan material dari semi finished materials";
     }
   }
+
+  (values.materialLines || []).forEach((line, index) => {
+    const hasVariants = line.materialHasVariants === true;
+    const strategy = hasVariants
+      ? line.materialVariantStrategy || 'inherit'
+      : 'none';
+
+    if (hasVariants && !['inherit', 'fixed', 'none'].includes(strategy)) {
+      errors[`materialLines.${index}.materialVariantStrategy`] =
+        'Strategi varian bahan tidak valid';
+    }
+
+    if (hasVariants && strategy === 'fixed' && !safeTrim(line.fixedVariantKey)) {
+      errors[`materialLines.${index}.fixedVariantKey`] =
+        'Pilih varian tetap untuk bahan ini';
+    }
+  });
 
   return errors;
 };
@@ -255,6 +278,7 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     targetCode: safeTrim(values.targetCode),
     targetName: safeTrim(values.targetName),
     targetUnit: safeTrim(values.targetUnit) || "pcs",
+    targetHasVariants: values.targetHasVariants === true,
 
     version: Number(values.version || 1),
     isDefault: values.isDefault !== false,
@@ -306,80 +330,51 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
 // - pakai fallback query agar lebih tahan bila orderBy bermasalah
 // =====================================================
 export const getAllProductionBoms = async () => {
-  try {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      orderBy("targetName", "asc"),
-      orderBy("version", "desc"),
-    );
+  const snapshot = await getDocs(collection(db, COLLECTION_NAME));
 
-    const snapshot = await getDocs(q);
-
-    return snapshot.docs.map((item) => ({
+  return snapshot.docs
+    .map((item) => ({
       id: item.id,
       ...item.data(),
-    }));
-  } catch (error) {
-    console.error("Query BOM utama gagal, pakai fallback query", error);
-
-    try {
-      const fallbackQuery = query(
-        collection(db, COLLECTION_NAME),
-        orderBy("targetName", "asc"),
+    }))
+    .sort((a, b) => {
+      const targetNameCompare = String(a?.targetName || "").localeCompare(
+        String(b?.targetName || ""),
+        "id",
       );
 
-      const snapshot = await getDocs(fallbackQuery);
+      if (targetNameCompare !== 0) {
+        return targetNameCompare;
+      }
 
-      return snapshot.docs.map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }));
-    } catch (fallbackError) {
-      console.error(
-        "Fallback query BOM gagal, pakai getDocs biasa",
-        fallbackError,
-      );
-
-      const snapshot = await getDocs(collection(db, COLLECTION_NAME));
-
-      return snapshot.docs.map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }));
-    }
-  }
+      return Number(b?.version || 0) - Number(a?.version || 0);
+    });
 };
 
 // =====================================================
 // SECTION: ambil BOM aktif
 // =====================================================
 export const getActiveProductionBoms = async () => {
-  try {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      where("isActive", "==", true),
-      orderBy("targetName", "asc"),
-      orderBy("version", "desc"),
-    );
+  const snapshot = await getDocs(collection(db, COLLECTION_NAME));
 
-    const snapshot = await getDocs(q);
-
-    return snapshot.docs.map((item) => ({
+  return snapshot.docs
+    .map((item) => ({
       id: item.id,
       ...item.data(),
-    }));
-  } catch (error) {
-    console.error("Query BOM aktif gagal, pakai fallback filter lokal", error);
+    }))
+    .filter((item) => item?.isActive === true)
+    .sort((a, b) => {
+      const targetNameCompare = String(a?.targetName || "").localeCompare(
+        String(b?.targetName || ""),
+        "id",
+      );
 
-    const snapshot = await getDocs(collection(db, COLLECTION_NAME));
+      if (targetNameCompare !== 0) {
+        return targetNameCompare;
+      }
 
-    return snapshot.docs
-      .map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }))
-      .filter((item) => item?.isActive === true);
-  }
+      return Number(b?.version || 0) - Number(a?.version || 0);
+    });
 };
 
 // =====================================================

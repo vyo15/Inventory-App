@@ -72,6 +72,12 @@ export const DEFAULT_WORK_LOG_MATERIAL_USAGE = {
   stockDeducted: false,
   stockDeductedAt: null,
 
+  materialHasVariants: false,
+  materialVariantStrategy: "none",
+  resolvedVariantKey: "",
+  resolvedVariantLabel: "",
+  stockSourceType: "master",
+
   notes: "",
 };
 
@@ -92,6 +98,11 @@ export const DEFAULT_WORK_LOG_OUTPUT = {
 
   stockAdded: false,
   stockAddedAt: null,
+
+  outputHasVariants: false,
+  outputVariantKey: "",
+  outputVariantLabel: "",
+  stockSourceType: "master",
 
   notes: "",
 };
