@@ -85,24 +85,6 @@ const formatStockWithUnit = (value, unit = 'pcs') => `${formatNumberID(value)} $
 const compactCellStyles = {
   stack: { display: 'flex', flexDirection: 'column', gap: 2 },
   meta: { fontSize: 12, lineHeight: 1.35 },
-  variantPillWrap: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 6,
-    maxWidth: '100%',
-  },
-  variantPill: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '2px 8px',
-    border: '1px solid #d9d9d9',
-    borderRadius: 999,
-    background: '#fafafa',
-  },
-  variantPillLabel: { fontSize: 12, lineHeight: 1.35 },
-  variantPillValue: { fontSize: 12, lineHeight: 1.35, fontWeight: 600 },
 };
 
 // -----------------------------------------------------------------------------
@@ -120,13 +102,20 @@ const renderVariantStockPills = (variants = [], unit = 'pcs') => {
   }
 
   return (
-    <div style={compactCellStyles.variantPillWrap}>
-      {normalizedVariants.map((variant, index) => (
-        <span key={`${variant.color || 'variant'}-${index}`} style={compactCellStyles.variantPill}>
-          <Text style={compactCellStyles.variantPillLabel}>{`${COLOR_VARIANT_MAP[variant.color] || variant.color || `Varian ${index + 1}`}:`}</Text>
-          <Text style={compactCellStyles.variantPillValue}>{formatStockWithUnit(variant.currentStock || 0, unit)}</Text>
-        </span>
-      ))}
+    <div className="stock-variant-pill-wrap">
+      {normalizedVariants.map((variant, index) => {
+        const variantLabel =
+          COLOR_VARIANT_MAP[variant.color] || variant.color || `Varian ${index + 1}`;
+
+        return (
+          <span key={`${variant.color || 'variant'}-${index}`} className="stock-variant-pill">
+            <Text className="stock-variant-pill-label">{`${variantLabel}:`}</Text>
+            <Text className="stock-variant-pill-value">
+              {formatStockWithUnit(variant.currentStock || 0, unit)}
+            </Text>
+          </span>
+        );
+      })}
     </div>
   );
 };

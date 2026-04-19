@@ -5,47 +5,37 @@ sidebar_label: Produk Jadi
 
 # Produk Jadi
 
-## Tujuan
-Menu ini dipakai untuk mengelola produk jadi yang siap dijual.
+Menu ini dipakai untuk menyimpan master produk jadi, harga jual, stok, dan varian warna.
 
-## Informasi di Tabel
-- nama produk dan kategori,
-- harga jual, HPP per unit, mode pricing, dan pricing rule,
-- stok total dan stok per varian bila produk memakai varian,
-- status aktif dan status stok,
-- aksi **Detail**, **Edit**, dan **Aktifkan/Nonaktifkan**.
+## Field penting
 
-## Field Form Utama
-- **Nama Produk**
-- **Kategori**
-- **HPP / Unit**
-- **Mode Pricing**
-- **Harga Jual**
-- **Pricing Rule**
-- **Deskripsi**
-- **Pakai Varian**
-- **Varian**:
-  - Nama Varian,
-  - SKU Varian,
-  - Stok,
-  - Reserved,
-  - Min Stok,
-  - Aktif.
+- Nama produk
+- Kode
+- Kategori
+- Harga jual
+- Min. stok
+- Mode varian
+- Daftar varian
+- Status aktif
 
-## Tombol Aksi
-- **Tambah Produk**
-- **Detail**
-- **Edit**
-- **Aktifkan / Nonaktifkan**
+## Rule penting
 
-## Rule Penting
-- produk jadi dipakai di penjualan,
-- HPP per unit akan berhubungan dengan analisis biaya,
-- jika memakai varian, pastikan harga jual dan stok sudah benar di setiap varian.
+- satu master produk bisa menampung banyak warna
+- nama produk tidak perlu dipecah per warna
+- stok produk bervarian dibaca dari varian
+- harga master tetap bisa disimpan walaupun stok berada di varian
 
-## Contoh Skenario
-**Tambah produk bunga mawar flanel**
-1. Buat produk baru.
-2. Isi kategori, HPP awal, dan harga jual.
-3. Jika produk dijual per warna, aktifkan varian.
-4. Simpan dan cek apakah stok serta badge varian tampil di tabel.
+## Tombol yang umum
+
+- Tambah Produk
+- Refresh
+- Detail
+- Edit
+- Aktifkan / Nonaktifkan
+
+## Skenario umum
+
+1. buat master produk
+2. isi varian warna
+3. cek harga dan stok
+4. gunakan master ini untuk transaksi penjualan dan laporan

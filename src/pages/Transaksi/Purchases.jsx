@@ -16,6 +16,12 @@ import { collection, addDoc, doc, onSnapshot, Timestamp, updateDoc } from "fireb
 import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { db } from "../../firebase";
+import {
+  getSupplierDisplayName,
+  getSupplierOptionLabel,
+  getSupplierReferenceId,
+  listenSupplierCatalog,
+} from "../../services/MasterData/suppliersService";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import {
@@ -192,17 +198,13 @@ const Purchases = () => {
       },
     );
 
-    const unsubscribeSuppliers = onSnapshot(
-      collection(db, "supplierPurchases"),
-      (snapshot) => {
-        const nextSuppliers = snapshot.docs.map((documentItem) => ({
-          id: documentItem.id,
-          ...documentItem.data(),
-        }));
-
-        setSuppliers(nextSuppliers);
-      },
-    );
+    const unsubscribeSuppliers = listenSupplierCatalog((nextSuppliers) => {
+      // =========================
+      // SECTION: Supplier dibaca dari katalog gabungan agar supplier lama yang
+      // masih tersimpan di bahan baku tetap muncul di form pembelian.
+      // =========================
+      setSuppliers(nextSuppliers);
+    });
 
     return () => {
       unsubscribePurchases();
@@ -443,10 +445,11 @@ const Purchases = () => {
 
       const collectionName = type === "product" ? "products" : "raw_materials";
       const selectedSupplier = suppliers.find(
-        (supplier) => supplier.id === supplierId,
+        (supplier) => String(supplier.id) === String(supplierId),
       );
+      const resolvedSupplierId = getSupplierReferenceId(selectedSupplier, supplierId);
       const supplierName =
-        selectedSupplier?.storeName || "Supplier tidak ditemukan";
+        getSupplierDisplayName(selectedSupplier) || "Supplier tidak ditemukan";
 
       const selectedItem =
         type === "product"
@@ -488,7 +491,7 @@ const Purchases = () => {
           type === "material" && selectedVariant
             ? selectedVariant.variantName || ""
             : "",
-        supplierId: supplierId || null,
+        supplierId: resolvedSupplierId || null,
         supplierName: supplierName || "",
         quantity: Number(quantity || 0),
         date: Timestamp.fromDate(values.date.toDate()),
@@ -585,7 +588,7 @@ const Purchases = () => {
         savingAmount: Math.round(Number(purchaseSaving || 0)),
         savingStatus: savingMeta.status,
         savingLabel: savingMeta.label,
-        supplierId: supplierId || null,
+        supplierId: resolvedSupplierId || null,
         supplierName: supplierName || "",
         relatedItemId: itemId,
         relatedItemName: itemName,
@@ -802,7 +805,7 @@ const Purchases = () => {
             >
               {filteredSuppliers.map((item) => (
                 <Option key={item.id} value={item.id}>
-                  {item.storeName}
+                  {getSupplierOptionLabel(item)}
                 </Option>
               ))}
             </Select>

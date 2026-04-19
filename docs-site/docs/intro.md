@@ -6,47 +6,47 @@ description: Pengantar dokumentasi IMS Bunga Flanel.
 
 # Intro
 
-Dokumentasi ini disusun agar user dan tim internal bisa memahami **cara kerja sistem terbaru** tanpa harus membaca source code satu per satu.
+Dokumentasi ini dipakai sebagai panduan kerja untuk user operasional dan tim internal saat memakai, mengecek, dan merapikan sistem.
 
-Fokus dokumentasi ini adalah:
+## Fokus dokumentasi
 
-- menjelaskan **fungsi tiap menu**,
-- memperjelas **alur stok dan produksi**,
-- merangkum **rule penting** seperti varian, costing, HPP, dan pricing,
-- serta memberi catatan **maintenance** supaya sistem tetap rapi dan mudah dikembangkan.
+- menjelaskan fungsi tiap menu
+- merangkum rule penting yang memengaruhi stok dan produksi
+- memudahkan testing setelah perubahan
+- menjadi acuan saat bersih-bersih code dan dokumentasi
 
-## Arsitektur utama yang sedang aktif
+## Arsitektur utama yang aktif
 
-Untuk modul produksi, alur final yang dipakai di project ini adalah:
+Alur produksi yang dipakai saat ini:
 
-**BOM Produksi → Production Order → Work Log Produksi → Payroll Produksi → Analisis HPP**
+**BOM Produksi → Order Produksi → Work Log Produksi → Payroll Produksi → Analisis HPP**
 
-Alur ini dipakai untuk menjaga supaya:
+Alur stok yang dijaga sistem:
 
-- kebutuhan material dibaca dulu dari BOM,
-- stok bahan dipotong saat mulai produksi,
-- hasil produksi diposting saat work log selesai,
-- biaya tenaga kerja bisa diposting terpisah,
-- lalu biaya total bisa dianalisa per work log.
+- stok bahan dibaca dari master item dan varian
+- requirement bahan dibentuk dari BOM ke Order Produksi
+- stok bahan dipotong saat mulai produksi
+- output masuk saat work log selesai
+- payroll dan analisis HPP dibaca setelah realisasi kerja tersedia
 
-## Cakupan dokumentasi
+## Struktur menu yang dipakai
 
-Dokumentasi dibagi menjadi beberapa bagian:
+- **Dashboard**
+- **Master Data**
+- **Inventaris**
+- **Produksi**
+- **Transaksi**
+- **Kas & Biaya**
+- **Laporan**
+- **Sistem**
 
-- **Overview** untuk gambaran project.
-- **Business Flow** untuk alur stok, pembelian, penjualan, dan produksi.
-- **System Logic** untuk aturan sistem yang penting.
-- **Menu Documentation** untuk penjelasan per menu.
-- **Maintenance** untuk catatan perbaikan dan roadmap.
+## Urutan membaca dokumentasi
 
-## Cara membaca dokumentasi ini
+Urutan paling aman untuk user baru:
 
-Agar mudah dipahami, bacanya paling enak dengan urutan berikut:
-
-1. **Overview Project**
-2. **Stock Flow**
-3. **Production Flow**
-4. **Stock Rules & Variant Logic**
-5. **Menu Documentation**
-
-Urutan itu membantu user memahami sistem dari sudut pandang operasional dulu, baru masuk ke detail menu.
+1. Overview Project
+2. Alur Stok
+3. Logika Varian
+4. Aturan Produksi
+5. Dokumentasi per Menu
+6. Detail Produksi

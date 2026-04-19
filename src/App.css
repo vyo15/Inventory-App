@@ -234,3 +234,184 @@
     border-radius: 18px 18px 0 0;
   }
 }
+/* =========================
+   SECTION: Shared UI Foundation
+   Fungsi:
+   - merapikan konsistensi drawer, modal, table, filter bar, dan action button
+   - dipakai lintas halaman agar tampilan tidak perlu diatur satu-satu terus
+   Catatan:
+   - blok ini masih dipakai aktif oleh banyak halaman yang memakai komponen Ant Design
+   - sengaja diletakkan global agar mudah dibersihkan / dikembangkan dari satu titik
+========================= */
+
+/* ---------- Filter / Search / Select ---------- */
+.app-content-card .ant-input,
+.app-content-card .ant-input-affix-wrapper,
+.app-content-card .ant-select-selector,
+.app-content-card .ant-picker,
+.app-content-card .ant-input-number {
+  min-height: 42px;
+  border-radius: 12px !important;
+}
+
+.app-content-card .ant-input-affix-wrapper .ant-input {
+  min-height: auto;
+}
+
+.app-content-card .ant-select-single .ant-select-selector {
+  display: flex;
+  align-items: center;
+}
+
+.app-content-card .ant-select-single .ant-select-selection-item,
+.app-content-card .ant-select-single .ant-select-selection-placeholder {
+  line-height: 40px !important;
+}
+
+/* ---------- Action Buttons ---------- */
+.app-content-card .ant-btn {
+  min-height: 38px;
+  border-radius: 12px;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.app-content-card .ant-btn.ant-btn-sm {
+  min-height: 32px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.app-content-card .ant-btn + .ant-btn {
+  margin-inline-start: 0;
+}
+
+/* ---------- Table ---------- */
+.app-content-card .ant-table-wrapper {
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.app-content-card .ant-table-thead > tr > th {
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
+  font-weight: 700;
+  border-bottom-width: 1px !important;
+}
+
+.app-content-card .ant-table-tbody > tr > td {
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
+  vertical-align: top;
+}
+
+.app-content-card .ant-pagination {
+  margin-top: 14px !important;
+}
+
+/* ---------- Drawer ---------- */
+.app-shell .ant-drawer-header {
+  padding: 18px 20px !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+.app-shell .ant-drawer-title {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.app-shell .ant-drawer-body {
+  padding: 18px 20px 20px !important;
+}
+
+.app-shell .ant-drawer-footer {
+  padding: 14px 20px !important;
+  border-top: 1px solid rgba(15, 23, 42, 0.06) !important;
+}
+
+/* ---------- Modal ---------- */
+.app-shell .ant-modal-header {
+  padding-bottom: 14px !important;
+  margin-bottom: 0 !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.app-shell .ant-modal-title {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.app-shell .ant-modal-body {
+  padding-top: 18px !important;
+}
+
+.app-shell .ant-modal-footer {
+  margin-top: 18px !important;
+  padding-top: 14px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+/* ---------- Form ---------- */
+.app-shell .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.app-shell .ant-form-item-label > label {
+  font-weight: 600;
+}
+
+.app-shell .ant-form-item-explain,
+.app-shell .ant-form-item-extra {
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* ---------- Descriptions / Detail Drawer ---------- */
+.app-shell .ant-descriptions .ant-descriptions-header {
+  margin-bottom: 12px;
+}
+
+.app-shell .ant-descriptions .ant-descriptions-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ---------- Dark mode specific polish ---------- */
+.app-shell.dark .ant-drawer-header,
+.app-shell.dark .ant-drawer-footer,
+.app-shell.dark .ant-modal-header,
+.app-shell.dark .ant-modal-footer {
+  border-color: rgba(148, 163, 184, 0.12) !important;
+}
+
+.app-shell.dark .ant-table-wrapper,
+.app-shell.dark .ant-table {
+  box-shadow: none;
+}
+
+.app-shell.dark .ant-btn-primary {
+  box-shadow: none !important;
+}
+
+.app-shell.dark .ant-btn-primary:hover {
+  filter: brightness(1.02);
+}
+
+@media (max-width: 768px) {
+  .app-shell .ant-drawer-header,
+  .app-shell .ant-drawer-body,
+  .app-shell .ant-drawer-footer {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .app-shell .ant-modal-body {
+    padding-top: 16px !important;
+  }
+
+  .app-content-card .ant-table-thead > tr > th,
+  .app-content-card .ant-table-tbody > tr > td {
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+  }
+}

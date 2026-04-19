@@ -4,9 +4,24 @@ import "./PageHeader.css";
 
 const { Title, Text } = Typography;
 
-const PageHeader = ({ title, subtitle, extra, actions = [] }) => {
+// =========================
+// SECTION: Shared Page Header
+// Fungsi:
+// - menjadi header standar untuk halaman operasional
+// - menjaga struktur judul, subtitle, extra, dan action button tetap konsisten
+// Catatan:
+// - komponen ini masih dipakai aktif di beberapa halaman transaksi, stok, dan dashboard
+// - sengaja dibuat generik agar halaman baru bisa memakai pola yang sama
+// =========================
+const PageHeader = ({
+  title,
+  subtitle,
+  extra,
+  actions = [],
+  className = "",
+}) => {
   return (
-    <div className="page-header">
+    <div className={`page-header ${className}`.trim()}>
       <div className="page-header-content">
         <Title level={3} className="page-header-title">
           {title}
@@ -18,10 +33,10 @@ const PageHeader = ({ title, subtitle, extra, actions = [] }) => {
       </div>
 
       <div className="page-header-actions">
-        {extra}
+        {extra ? <div className="page-header-extra">{extra}</div> : null}
 
         {actions.length > 0 ? (
-          <Space wrap>
+          <Space wrap className="page-header-action-group">
             {actions.map((actionItem) => (
               <Button
                 key={actionItem.key}
@@ -29,6 +44,9 @@ const PageHeader = ({ title, subtitle, extra, actions = [] }) => {
                 icon={actionItem.icon}
                 onClick={actionItem.onClick}
                 danger={actionItem.danger}
+                className={`page-header-action-button ${
+                  actionItem.type === "primary" ? "is-primary" : "is-default"
+                }`.trim()}
               >
                 {actionItem.label}
               </Button>

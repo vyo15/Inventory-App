@@ -5,22 +5,32 @@ sidebar_label: Manajemen Stok
 
 # Manajemen Stok
 
-## Tujuan
-Menu ini dipakai untuk melihat histori mutasi stok dari seluruh modul.
+Menu ini dipakai untuk melihat mutasi stok dari berbagai sumber.
 
-## Informasi di Tabel
-- tanggal,
-- arah mutasi: **Masuk** atau **Keluar**,
-- sumber: pembelian, penjualan, retur, produksi, atau penyesuaian,
-- item dan variannya,
-- qty,
-- referensi dokumen seperti PO atau Work Log,
-- catatan.
+## Data yang ditampilkan
 
-## Filter
-- pencarian item, varian, referensi, supplier, atau customer,
-- filter arah mutasi,
-- filter sumber mutasi.
+- tanggal
+- arah masuk/keluar
+- sumber transaksi
+- item
+- qty
+- referensi
+- catatan
 
-## Contoh Skenario
-Untuk cek apakah bahan sudah terpotong saat **Mulai Produksi**, buka menu ini lalu cari nomor PO atau Work Log terkait.
+## Sumber mutasi yang umum
+
+- pembelian
+- penjualan
+- retur
+- penyesuaian
+- produksi
+
+## Kapan dipakai
+
+- audit cepat stok
+- cek kenapa stok berubah
+- cocokkan transaksi dengan mutasi
+
+## Rule penting
+
+Jika stok terlihat aneh, cek menu ini lebih dulu sebelum mengubah master data.

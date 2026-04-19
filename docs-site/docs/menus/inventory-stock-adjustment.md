@@ -5,24 +5,24 @@ sidebar_label: Penyesuaian Stok
 
 # Penyesuaian Stok
 
-## Tujuan
-Menu ini dipakai untuk mengoreksi stok jika hasil hitung fisik berbeda dari sistem.
+Menu ini dipakai untuk koreksi stok saat ada selisih antara data sistem dan kondisi fisik.
 
-## Field Form Umum
-- item yang disesuaikan,
-- jenis item,
-- varian jika ada,
-- qty penyesuaian,
-- arah masuk atau keluar,
-- alasan / catatan.
+## Kapan dipakai
 
-## Tombol Aksi
-- simpan penyesuaian,
-- lihat riwayat penyesuaian.
+- stok fisik tidak sama dengan sistem
+- ada stok rusak atau hilang yang harus dibukukan
+- ada stok masuk/keluar yang belum tercatat
 
-## Rule Penting
-- pakai menu ini untuk koreksi audit stok,
-- jangan pakai untuk menggantikan pembelian, penjualan, atau produksi.
+## Data penting
 
-## Contoh Skenario
-Saat stok fisik lem tembak ternyata 48 pcs tetapi sistem 50 pcs, buat penyesuaian keluar 2 pcs dengan catatan hasil stock opname.
+- item
+- varian bila ada
+- stok lama
+- stok baru
+- selisih
+- alasan penyesuaian
+
+## Rule penting
+
+- menu ini untuk koreksi, bukan untuk transaksi rutin
+- isi alasan dengan jelas agar audit lebih mudah

@@ -5,14 +5,22 @@ sidebar_label: Laporan
 
 # Laporan
 
+Group ini dipakai untuk melihat hasil rekap operasional.
+
+## Isi group
+
+- Laporan Stok
+- Laporan Pembelian
+- Laporan Penjualan
+- Laba Rugi
+
 ## Tujuan
-Kelompok menu ini dipakai untuk membaca ringkasan data operasional dan keuangan.
 
-## Menu di Dalamnya
-- **Laporan Stok**
-- **Laporan Pembelian**
-- **Laporan Penjualan**
-- **Laba Rugi**
+- audit kondisi stok
+- lihat performa pembelian
+- lihat performa penjualan
+- baca laba rugi ringkas
 
-## Saran Pakai
-Gunakan filter tanggal atau pencarian agar hasil laporan lebih fokus dan mudah dibaca.
+## Catatan
+
+Laporan membaca data transaksi dan master yang sudah ada. Jika hasil laporan terasa aneh, cek transaksi sumbernya lebih dulu.

@@ -1,24 +1,32 @@
 ---
-title: Produksi
-sidebar_label: Produksi
+title: Menu Produksi
+sidebar_label: Menu Produksi
 ---
 
-# Produksi
+# Menu Produksi
 
-## Tujuan
-Kelompok menu ini mengatur alur produksi dari master referensi sampai biaya aktual.
+Group Produksi mencakup setup produksi dan operasional produksi.
 
-## Urutan Flow Utama
-1. siapkan **Tahapan Produksi**,
-2. siapkan **Profil Produksi** dan **Semi Finished Materials**,
-3. buat **BOM Produksi**,
-4. buat **Production Order**,
-5. klik **Mulai Produksi** untuk membuat **Work Log**,
-6. selesaikan work log,
-7. buat **Payroll Produksi** bila diperlukan,
-8. baca hasil di **Analisis HPP**.
+## Setup Produksi
 
-## Rule Penting
-- stok bahan dipotong saat **Mulai Produksi**,
-- stok output bertambah saat **Selesaikan Work Log**,
-- one PO = one Work Log.
+- Tahapan Produksi
+- Karyawan Produksi
+- Profil Produksi
+- Bahan Setengah Jadi
+- BOM Produksi
+
+## Operasional Produksi
+
+- Order Produksi
+- Work Log Produksi
+- Payroll Produksi
+- Analisis HPP
+
+## Urutan kerja yang disarankan
+
+1. siapkan tahapan, karyawan, profil, dan bahan setengah jadi
+2. buat BOM
+3. buat Order Produksi
+4. mulai produksi untuk membuat work log
+5. selesaikan work log
+6. proses payroll dan analisis HPP

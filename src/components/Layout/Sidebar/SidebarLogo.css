@@ -1,14 +1,16 @@
 /* =========================
    SECTION: Sidebar Logo Shell
-   Putih clean, tidak dua warna.
+   Fungsi:
+   - logo card dibuat netral agar cocok di light dan dark mode
+   - dark mode tidak lagi terlalu biru, tetapi tetap terasa premium
 ========================= */
 .sidebar-logo {
   width: 100%;
-  min-height: 72px;
+  min-height: 66px;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-radius: 18px;
   background: #ffffff;
   border: 1px solid rgba(15, 23, 42, 0.06);
@@ -26,20 +28,20 @@
    SECTION: Sidebar Logo Icon
 ========================= */
 .sidebar-logo-icon {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 14px;
   background: #f8fafc;
   color: #d97706;
-  font-size: 22px;
+  font-size: 21px;
 }
 
 .sidebar-logo.dark .sidebar-logo-icon {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
   color: #fbbf24;
 }
 
@@ -50,7 +52,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .sidebar-logo-title {
@@ -67,9 +69,34 @@
 }
 
 .sidebar-logo.dark .sidebar-logo-title {
-  color: #e6edf3;
+  color: #e5e7eb;
 }
 
 .sidebar-logo.dark .sidebar-logo-subtitle {
-  color: rgba(230, 237, 243, 0.72);
+  color: rgba(148, 163, 184, 0.92);
+}
+
+/* =========================
+   SECTION: Mobile Polish
+========================= */
+@media (max-width: 768px) {
+  .sidebar-logo {
+    min-height: 62px;
+    padding: 10px 12px;
+  }
+
+  .sidebar-logo-icon {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    font-size: 20px;
+  }
+
+  .sidebar-logo-title {
+    font-size: 14px;
+  }
+
+  .sidebar-logo-subtitle {
+    font-size: 11px;
+  }
 }

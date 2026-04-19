@@ -184,21 +184,13 @@ const ProductionWorkLogs = () => {
     });
   };
 
-  const handleAdd = () => {
-    setEditingRecord(null);
-    form.setFieldsValue({
-      ...DEFAULT_PRODUCTION_WORK_LOG_FORM,
-      workDate: dayjs(),
-      sourceType: "manual",
-      materialUsages: [],
-      outputs: [],
-      workerIds: [],
-      productionOrderId: undefined,
-      productionProfileId: undefined,
-    });
-    setFormVisible(true);
-  };
-
+  // =====================================================
+  // Handler edit work log
+  // Catatan:
+  // - drawer form masih dipakai untuk mode edit
+  // - flow tambah manual saat ini tidak dipakai di UI aktif, jadi handler add
+  //   yang sebelumnya tidak terpakai dihapus agar file lebih rapih
+  // =====================================================
   const handleEdit = (record) => {
     setEditingRecord(record);
     form.setFieldsValue({
@@ -1713,101 +1705,6 @@ const ProductionWorkLogs = () => {
           </>
         )}
       </Drawer>
-
-
-      <Modal
-        title="Selesaikan Work Log"
-        open={completeModalVisible}
-        onCancel={() => {
-          // Reset state popup selesai agar tidak membawa data record sebelumnya.
-          setCompleteModalVisible(false);
-          setCompletingRecord(null);
-          completeForm.resetFields();
-        }}
-        onOk={handleMarkCompleted}
-        okText="Selesaikan"
-        confirmLoading={submitting}
-        destroyOnClose
-      >
-        {/* ------------------------------------------------------------- */}
-        {/* SECTION: popup penyelesaian work log                          */}
-        {/* Tujuan: user isi hasil aktual, operator, dan catatan akhir    */}
-        {/* sebelum service melakukan posting stok output & update status. */}
-        {/* ------------------------------------------------------------- */}
-        <Form
-          form={completeForm}
-          layout="vertical"
-          initialValues={{
-            goodQty: 0,
-            rejectQty: 0,
-            reworkQty: 0,
-            workerIds: [],
-            notes: '',
-          }}
-        >
-          <Card size="small" style={{ marginBottom: 16 }}>
-            <Descriptions size="small" column={1}>
-              <Descriptions.Item label="No. Work Log">
-                {completingRecord?.workNumber || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Target / Step">
-                <Space direction="vertical" size={0}>
-                  <Typography.Text strong>
-                    {completingRecord?.targetName || '-'}
-                  </Typography.Text>
-                  <Typography.Text type="secondary">
-                    {completingRecord?.stepName || '-'}
-                  </Typography.Text>
-                </Space>
-              </Descriptions.Item>
-              <Descriptions.Item label="Estimasi Output">
-                {formatNumber(completingRecord?.theoreticalOutputQty || 0)} {completingRecord?.targetUnit || 'pcs'}
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
-
-          <Row gutter={12}>
-            <Col span={8}>
-              <Form.Item
-                label="Qty Bagus"
-                name="goodQty"
-                rules={[{ required: true, message: 'Qty bagus wajib diisi' }]}
-              >
-                <InputNumber min={0} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-
-            <Col span={8}>
-              <Form.Item label="Qty Reject" name="rejectQty">
-                <InputNumber min={0} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-
-            <Col span={8}>
-              <Form.Item label="Qty Rework" name="reworkQty">
-                <InputNumber min={0} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item label="Operator Produksi" name="workerIds">
-            <Select
-              mode="multiple"
-              showSearch
-              optionFilterProp="label"
-              options={employeeOptions}
-              placeholder="Pilih operator yang mengerjakan..."
-            />
-          </Form.Item>
-
-          <Form.Item label="Catatan Penyelesaian" name="notes">
-            <Input.TextArea
-              rows={3}
-              placeholder="Contoh: hasil sesuai target, ada reject karena lem kurang presisi"
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
 
       <Modal
         title={

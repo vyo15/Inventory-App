@@ -1,33 +1,41 @@
 ---
+sidebar_position: 4
 title: Production Rules
-sidebar_label: Production Rules
+description: Rule utama pada modul produksi dari BOM sampai payroll.
 ---
 
-## Arsitektur Aktif
-Flow resmi produksi adalah **BOM → Production Orders → Start Production → Work Log → Complete**.
+# Aturan Produksi
 
-## Rule BOM
-- target output harus jelas,
-- material lines menyimpan qty per batch dan biaya snapshot,
-- material dapat berupa raw material atau semi finished,
-- strategy varian bahan harus jelas: inherit, fixed, atau none.
+## Alur utama
 
-## Rule Production Order
-- satu pekerjaan wajib dimulai dari Production Order,
-- PO wajib membaca BOM aktif sesuai target type,
-- PO wajib auto generate kode order bila field kode kosong,
-- pembuatan PO tidak mengubah stok,
-- satu PO hanya boleh memiliki satu Work Log,
-- Start Production dari PO adalah titik resmi pemotongan bahan input.
+1. siapkan data setup produksi
+2. buat BOM
+3. buat Order Produksi
+4. mulai produksi untuk membuat Work Log
+5. selesaikan Work Log
+6. proses Payroll Produksi
+7. analisis HPP
 
-## Rule Work Log
-- Work Log adalah catatan produksi aktual dari PO,
-- Work Log pada flow utama tidak dibuat manual,
-- material usage dihitung dengan planned vs actual,
-- output line menyimpan good, reject, dan rework,
-- Complete Work Log adalah titik resmi penambahan output,
-- Complete tidak boleh memotong input lagi bila bahan sudah dipotong saat start.
+## Rule penting
 
-## Rule Cancel
-- cancel dari status `ready` tidak mengubah stok,
-- cancel dari status `in_production` harus melalui pengembalian bahan via adjustment atau flow pengembalian resmi.
+### BOM
+- BOM menentukan bahan, output, dan aturan varian
+- perubahan BOM hanya berlaku aman untuk order baru atau order yang direfresh
+
+### Order Produksi
+- order belum mengubah stok saat dibuat
+- status order bisa `ready`, `shortage`, `in_production`, `completed`, atau `cancelled`
+- satu order dipakai sebagai dasar work log
+
+### Work Log
+- bahan dipotong saat mulai produksi
+- output masuk saat work log selesai
+- qty bagus, reject, dan rework dicatat di tahap penyelesaian
+
+### Payroll Produksi
+- payroll membaca hasil kerja yang sudah tersedia
+- payroll tidak boleh diposting sebelum work log valid
+
+### Analisis HPP
+- HPP membaca biaya material dan tenaga kerja yang sudah tercatat
+- analisis dipakai untuk audit, bukan untuk mengubah histori stok

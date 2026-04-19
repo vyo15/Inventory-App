@@ -16,7 +16,13 @@ import {
 } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { getInventoryLogs } from "../../utils/stockService";
+// =====================================================
+// Import service log stok langsung dari inventory service aktif.
+// Tujuan:
+// - menghindari ketergantungan ke shim utils/stockService
+// - menjaga halaman Stock Management tetap stabil walaupun file shim sudah tidak ada
+// =====================================================
+import { getInventoryLogs } from "../../services/Inventory/inventoryService";
 
 const { Title, Text } = Typography;
 

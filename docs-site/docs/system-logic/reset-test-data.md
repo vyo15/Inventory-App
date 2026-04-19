@@ -1,69 +1,34 @@
 ---
-sidebar_position: 4
-title: Reset Data Uji
-description: Fungsi reset transaksi, baseline stok, dan sinkronisasi stok untuk testing.
+title: Reset Test Data
+sidebar_label: Reset Data Uji
 ---
 
 # Reset Data Uji
 
-## Tujuan menu ini
-
-Menu **Reset Data Uji** dibuat untuk membantu testing berulang tanpa harus membersihkan database secara manual.
+Menu ini dipakai untuk membersihkan data testing tanpa harus menghapus file project.
 
 ## Fungsi utama
 
-Menu ini dipakai untuk:
+- menghapus data transaksi uji
+- menyimpan baseline stok saat ini
+- merestore baseline yang pernah disimpan
+- menjalankan sinkronisasi stok
 
-- melihat preview jumlah data yang akan dibersihkan,
-- reset transaksi berdasarkan modul,
-- menyimpan baseline stok saat ini,
-- restore baseline stok yang sudah disimpan,
-- menolkan stok untuk skenario test dari nol,
-- menjalankan sinkronisasi field stok.
+## Kapan dipakai
 
-## Modul reset yang tercakup
+- sebelum UAT ulang
+- setelah testing produksi yang banyak
+- saat data transaksi uji sudah terlalu bercampur
 
-Secara umum, reset bisa mencakup:
+## Catatan penting
 
-- penjualan,
-- pembelian,
-- retur,
-- produksi,
-- kas & biaya,
-- stock adjustment & inventory logs,
-- pricing logs.
+- reset data **tidak** memperbaiki logic yang salah
+- reset data **tidak** otomatis memperbaiki requirement PO lama
+- jika ada perubahan besar BOM atau varian, buat PO baru setelah reset
 
-## Pilihan mode reset
+## Rekomendasi penggunaan
 
-### 1. Reset Transaksi
-
-Menghapus transaksi dan log, tetapi stok master tetap seperti sekarang.
-
-### 2. Reset + Nolkan Semua Stok
-
-Menghapus transaksi lalu mengatur stok bahan baku, semi finished, dan produk jadi ke nol.
-
-### 3. Reset + Baseline Testing
-
-Menghapus transaksi lalu mengembalikan stok ke baseline yang sudah disimpan sebelumnya.
-
-## Sinkronkan Stok
-
-Fitur **Sinkronkan Stok** dipakai untuk merapikan kembali field stok seperti:
-
-- currentStock,
-- stock,
-- reservedStock,
-- availableStock.
-
-Fitur ini membantu saat data sudah melalui banyak percobaan testing dan perlu dirapikan.
-
-## Batasan menu reset
-
-Reset dan sync stock **tidak mengganti logic requirement PO** yang sudah terlanjur tersimpan.
-
-Artinya, jika PO lama sudah membawa mapping source yang salah, solusinya tetap:
-
-- refresh requirement,
-- atau buat PO baru,
-- lalu test ulang.
+1. pastikan master data sudah benar
+2. reset transaksi uji yang tidak dipakai
+3. sinkronkan stok
+4. lanjut testing ulang dari order baru

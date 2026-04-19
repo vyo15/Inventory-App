@@ -1,6 +1,19 @@
+/* =========================
+   SECTION: Card Surface
+   Fungsi:
+   - menjadi surface standar untuk blok konten
+   - dipakai agar table/filter/chart antar halaman terasa satu sistem
+========================= */
 .page-section {
-  border-radius: 16px !important;
+  border-radius: 18px !important;
   margin-bottom: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
+}
+
+.app-shell.dark .page-section {
+  border-color: rgba(148, 163, 184, 0.12);
+  box-shadow: 0 12px 26px rgba(2, 6, 23, 0.22);
 }
 
 .page-section-header {
@@ -21,11 +34,22 @@
 
 .page-section-title.ant-typography {
   margin: 0 !important;
+  line-height: 1.25;
 }
 
 .page-section-subtitle.ant-typography {
   margin: 0 !important;
-  opacity: 0.75;
+  font-size: 13px;
+  line-height: 1.6;
+  opacity: 0.76;
+  max-width: 860px;
+}
+
+.page-section-extra {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .page-section-body {

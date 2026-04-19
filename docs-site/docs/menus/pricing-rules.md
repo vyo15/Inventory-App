@@ -1,34 +1,27 @@
 ---
-title: Pricing Rules
-sidebar_label: Pricing Rules
+title: Aturan Harga
+sidebar_label: Aturan Harga
 ---
 
-# Pricing Rules
+# Aturan Harga
+
+Menu ini dipakai untuk mengatur harga dari basis biaya yang sudah ada di sistem.
 
 ## Tujuan
-Menu ini dipakai untuk menghitung harga jual otomatis dari base cost.
 
-## Field Form Utama
-- **Nama Rule**
-- **Target Type**
-- **Status Aktif**
-- **Base Cost Source**
-- **Margin Type**
-- **Margin Value**
-- **Gunakan Buffer Marketplace**
-- **Marketplace Buffer Type**
-- **Marketplace Buffer Value**
-- **Rounding Type**
-- **Rounding Unit**
+- membantu membuat harga lebih konsisten
+- memisahkan harga manual dan harga berdasarkan rule
+- menjaga audit perubahan harga tetap rapi
 
-## Tombol Aksi
-- **Tambah Rule**
-- **Preview**
-- **Edit**
-- **Terapkan Rule**
+## Komponen umum
 
-## Hasil Preview
-Sistem menampilkan item target, mode pricing, harga lama, base cost, margin, buffer, harga hitung, harga baru, dan status update.
+- target rule
+- basis biaya
+- margin
+- buffer marketplace
+- pembulatan
+- hasil harga
 
-## Contoh Skenario
-Buat rule khusus marketplace dengan margin dan buffer, preview dulu hasilnya, lalu klik **Terapkan Rule** untuk update harga massal.
+## Catatan
+
+Harga di menu ini adalah alat bantu penetapan harga, bukan transaksi kas.

@@ -5,38 +5,28 @@ sidebar_label: Pembelian
 
 # Pembelian
 
-## Tujuan
-Dipakai untuk mencatat pembelian bahan baku atau item lain dari supplier.
+Menu ini dipakai untuk mencatat pembelian bahan atau barang dari supplier.
 
-## Field Form Utama
-- **Tanggal**
-- **Jenis Item**
-- **Nama Item**
-- **Nama Supplier**
-- **Qty Beli**
-- **Satuan Beli**
-- **Satuan Stok**
-- **Konversi Aktual**
-- **Stok Masuk Otomatis**
-- **Harga Referensi Restock (Master)**
-- **Subtotal Barang**
-- **Ongkir**
-- **Diskon Ongkir**
-- **Voucher / Potongan**
-- **Biaya Layanan**
-- **Total Referensi Pembelian**
-- **Total Aktual Pembelian**
-- **Modal Aktual per Satuan Stok**
-- **Selisih Hemat Pembelian**
-- **Catatan**
+## Field penting
 
-## Tabel Utama
-Menampilkan tanggal, jenis, nama item, supplier, qty beli, stok masuk, total aktual pembelian, modal aktual per satuan, selisih hemat, dan catatan.
+- supplier
+- tanggal
+- item
+- qty
+- harga beli aktual
+- subtotal / total
+- catatan
 
-## Rule Penting
-- pembelian menambah stok,
-- modal aktual per satuan dipakai untuk pembacaan biaya stok,
-- selisih hemat adalah info efisiensi, bukan pengurang kas.
+## Rule penting
 
-## Contoh Skenario
-Beli Kain Flanel 1 roll, isi konversi aktual ke meter, simpan transaksi, lalu cek stok bahan bertambah sesuai stok masuk otomatis.
+- harga pembelian aktual dipakai sebagai dasar biaya aktual
+- stok bertambah saat transaksi valid diposting
+- pembelian memengaruhi costing dan laporan
+
+## Skenario umum
+
+1. pilih supplier
+2. isi item dan qty
+3. isi harga aktual
+4. simpan
+5. cek mutasi stok

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Button,
   Drawer,
@@ -15,36 +15,49 @@ import {
   InputNumber,
   Row,
   Col,
-} from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+  Alert,
+} from 'antd';
 import {
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  onSnapshot,
-} from "firebase/firestore";
-import { db } from "../../firebase";
-import { useLocation, useNavigate } from "react-router-dom";
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  SyncOutlined,
+} from '@ant-design/icons';
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../firebase';
+import { useLocation, useNavigate } from 'react-router-dom';
+import {
+  getSupplierDisplayName,
+  getSupplierStoreLink,
+  isManagedSupplierRecord,
+  listenSuppliers,
+  syncRawMaterialsWithSupplier,
+} from '../../services/MasterData/suppliersService';
 
 const { Option } = Select;
 const { Search } = Input;
 
-// SECTION: format angka Indonesia tanpa desimal
+// -----------------------------------------------------------------------------
+// Format angka Indonesia tanpa desimal.
+// -----------------------------------------------------------------------------
 const formatNumberID = (value) => {
-  return Number(value || 0).toLocaleString("id-ID", {
+  return Number(value || 0).toLocaleString('id-ID', {
     maximumFractionDigits: 0,
   });
 };
 
-// SECTION: format rupiah Indonesia tanpa desimal
+// -----------------------------------------------------------------------------
+// Format rupiah Indonesia tanpa desimal.
+// -----------------------------------------------------------------------------
 const formatCurrencyIDR = (value) => {
   return `Rp ${formatNumberID(value)}`;
 };
 
 const SupplierPurchases = () => {
-  // SECTION: state utama
+  // ---------------------------------------------------------------------------
+  // State utama halaman supplier.
+  // Versi ini disederhanakan lagi: fokus ke master supplier aktif.
+  // ---------------------------------------------------------------------------
   const [suppliers, setSuppliers] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -52,9 +65,13 @@ const SupplierPurchases = () => {
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [syncingRowId, setSyncingRowId] = useState(null);
 
-  // SECTION: state filter UI
-  const [searchText, setSearchText] = useState("");
+  // ---------------------------------------------------------------------------
+  // State filter UI.
+  // ---------------------------------------------------------------------------
+  const [searchText, setSearchText] = useState('');
   const [categoryFilter, setCategoryFilter] = useState(undefined);
   const [materialFilter, setMaterialFilter] = useState(undefined);
 
@@ -63,56 +80,77 @@ const SupplierPurchases = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // SECTION: baca materialId dari query URL
+  // ---------------------------------------------------------------------------
+  // Baca filter material dari query URL agar halaman supplier bisa dibuka dari
+  // bahan baku atau pembelian dengan filter otomatis.
+  // ---------------------------------------------------------------------------
   const searchParams = new URLSearchParams(location.search);
-  const materialIdFromQuery = searchParams.get("materialId");
+  const materialIdFromQuery = searchParams.get('materialId');
 
   const selectedMaterialFromQuery = useMemo(() => {
     return materials.find((item) => item.id === materialIdFromQuery);
   }, [materials, materialIdFromQuery]);
 
-  // SECTION: opsi kategori untuk filter dropdown
+  // ---------------------------------------------------------------------------
+  // Opsi kategori untuk dropdown filter.
+  // ---------------------------------------------------------------------------
   const categoryOptions = useMemo(() => {
-    const unique = [
-      ...new Set(suppliers.map((item) => item.category).filter(Boolean)),
+    const uniqueCategories = [
+      ...new Set((suppliers || []).map((item) => item.category).filter(Boolean)),
     ];
-    return unique.sort((a, b) => a.localeCompare(b, "id-ID"));
+
+    return uniqueCategories.sort((leftCategory, rightCategory) =>
+      leftCategory.localeCompare(rightCategory, 'id-ID'),
+    );
   }, [suppliers]);
 
-  // SECTION: sinkron supplier dan bahan baku dari firestore
+  // ---------------------------------------------------------------------------
+  // Sinkron supplier master dan bahan baku dari Firestore.
+  // Supplier hanya diambil dari master supplierPurchases agar halaman stabil.
+  // ---------------------------------------------------------------------------
   useEffect(() => {
-    const unsubSuppliers = onSnapshot(
-      collection(db, "supplierPurchases"),
-      (snapshot) => {
-        const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setSuppliers(data);
+    const unsubscribeSuppliers = listenSuppliers(
+      (nextSuppliers) => {
+        setSuppliers(nextSuppliers);
+      },
+      (error) => {
+        console.error(error);
+        message.error('Gagal memuat supplier.');
       },
     );
 
-    const unsubMaterials = onSnapshot(
-      collection(db, "raw_materials"),
+    const unsubscribeMaterials = onSnapshot(
+      collection(db, 'raw_materials'),
       (snapshot) => {
-        const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setMaterials(data);
+        const nextMaterials = snapshot.docs.map((documentItem) => ({
+          id: documentItem.id,
+          ...documentItem.data(),
+        }));
+
+        setMaterials(nextMaterials);
+      },
+      (error) => {
+        console.error(error);
+        message.error('Gagal memuat bahan baku untuk referensi supplier.');
       },
     );
 
     return () => {
-      unsubSuppliers();
-      unsubMaterials();
+      unsubscribeSuppliers();
+      unsubscribeMaterials();
     };
   }, []);
 
-  // SECTION: filter supplier dari query URL + filter manual user
+  // ---------------------------------------------------------------------------
+  // Filter supplier dari query URL + filter manual user.
+  // ---------------------------------------------------------------------------
   const filteredSuppliers = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
 
-    return suppliers
+    return (suppliers || [])
       .filter((supplier) => {
         if (!materialIdFromQuery) return true;
-        return (supplier.supportedMaterialIds || []).includes(
-          materialIdFromQuery,
-        );
+        return (supplier.supportedMaterialIds || []).includes(materialIdFromQuery);
       })
       .filter((supplier) => {
         if (!materialFilter) return true;
@@ -120,192 +158,295 @@ const SupplierPurchases = () => {
       })
       .filter((supplier) => {
         if (!categoryFilter) return true;
-        return (supplier.category || "") === categoryFilter;
+        return (supplier.category || '') === categoryFilter;
       })
       .filter((supplier) => {
         if (!keyword) return true;
 
         const searchableText = [
-          supplier.storeName,
+          getSupplierDisplayName(supplier),
           supplier.category,
-          supplier.storeLink,
+          getSupplierStoreLink(supplier),
           ...(supplier.supportedMaterialNames || []),
         ]
           .filter(Boolean)
-          .join(" ")
+          .join(' ')
           .toLowerCase();
 
         return searchableText.includes(keyword);
       })
-      .sort((a, b) =>
-        (a.storeName || "").localeCompare(b.storeName || "", "id-ID"),
+      .sort((leftSupplier, rightSupplier) =>
+        getSupplierDisplayName(leftSupplier).localeCompare(
+          getSupplierDisplayName(rightSupplier),
+          'id-ID',
+        ),
       );
-  }, [
-    suppliers,
-    materialIdFromQuery,
-    materialFilter,
-    categoryFilter,
-    searchText,
-  ]);
+  }, [suppliers, materialIdFromQuery, materialFilter, categoryFilter, searchText]);
 
-  // SECTION: reset filter UI manual
+  // ---------------------------------------------------------------------------
+  // Reset filter UI manual.
+  // ---------------------------------------------------------------------------
   const resetManualFilters = () => {
-    setSearchText("");
+    setSearchText('');
     setCategoryFilter(undefined);
     setMaterialFilter(undefined);
   };
 
-  // SECTION: simpan supplier baru / edit supplier
+  // ---------------------------------------------------------------------------
+  // Reset state modal agar buka/tutup form selalu bersih.
+  // ---------------------------------------------------------------------------
+  const resetSupplierModalState = () => {
+    setModalVisible(false);
+    setIsEditing(false);
+    setEditingId(null);
+    setSaving(false);
+    form.resetFields();
+  };
+
+  // ---------------------------------------------------------------------------
+  // Normalisasi payload supplier sebelum dikirim ke master supplier.
+  // Material yang dipilih akan disimpan sekaligus dipakai untuk sinkron ke bahan.
+  // ---------------------------------------------------------------------------
+  const buildSupplierPayload = (values) => {
+    const materialDetails = (values.materialDetails || [])
+      .filter((item) => item.materialId)
+      .map((item) => {
+        const selectedMaterial = materials.find((material) => material.id === item.materialId);
+
+        return {
+          materialId: item.materialId,
+          materialName: selectedMaterial?.name || item.materialName || '',
+          productLink: item.productLink || '',
+          referencePrice: Math.round(Number(item.referencePrice || 0)),
+          note: item.note || '',
+        };
+      });
+
+    return {
+      category: values.category || '',
+      storeName: values.storeName,
+      storeLink: values.storeLink || '',
+      supportedMaterialIds: materialDetails.map((item) => item.materialId),
+      supportedMaterialNames: materialDetails.map((item) => item.materialName),
+      materialDetails,
+      updatedAt: serverTimestamp(),
+    };
+  };
+
+  // ---------------------------------------------------------------------------
+  // Simpan supplier baru / edit supplier.
+  // Setelah disimpan, bahan yang dipilih di supplier akan langsung disinkronkan.
+  // Jadi user cukup bikin supplier baru lalu pilih material yang terkait.
+  // ---------------------------------------------------------------------------
   const handleSaveSupplier = async (values) => {
     try {
-      const materialDetails = (values.materialDetails || [])
-        .filter((item) => item.materialId)
-        .map((item) => {
-          const selectedMaterial = materials.find(
-            (m) => m.id === item.materialId,
-          );
+      setSaving(true);
 
-          return {
-            materialId: item.materialId,
-            materialName: selectedMaterial?.name || "",
-            productLink: item.productLink || "",
-            referencePrice: Math.round(Number(item.referencePrice || 0)),
-            note: item.note || "",
-          };
-        });
+      const payload = buildSupplierPayload(values);
+      const previousSupplier = suppliers.find((item) => item.id === editingId) || null;
+      let savedSupplierId = editingId;
 
-      const payload = {
-        category: values.category || "",
-        storeName: values.storeName,
-        storeLink: values.storeLink || "",
-        supportedMaterialIds: materialDetails.map((item) => item.materialId),
-        supportedMaterialNames: materialDetails.map(
-          (item) => item.materialName,
-        ),
-        materialDetails,
-      };
-
-      if (isEditing) {
-        await updateDoc(doc(db, "supplierPurchases", editingId), payload);
-        message.success("Supplier berhasil diupdate!");
+      if (isEditing && editingId) {
+        await updateDoc(doc(db, 'supplierPurchases', editingId), payload);
+        message.success('Supplier berhasil diupdate.');
       } else {
-        await addDoc(collection(db, "supplierPurchases"), payload);
-        message.success("Supplier berhasil ditambahkan!");
+        const createdDoc = await addDoc(collection(db, 'supplierPurchases'), {
+          ...payload,
+          createdAt: serverTimestamp(),
+        });
+        savedSupplierId = createdDoc.id;
+        message.success('Supplier berhasil ditambahkan.');
       }
 
-      setModalVisible(false);
-      setIsEditing(false);
-      setEditingId(null);
-      form.resetFields();
+      const syncResult = await syncRawMaterialsWithSupplier(
+        {
+          ...payload,
+          id: savedSupplierId,
+          masterSupplierId: savedSupplierId,
+          sourceCollection: 'supplierPurchases',
+        },
+        previousSupplier,
+      );
+
+      if (syncResult.updatedCount > 0) {
+        message.success(
+          `${formatNumberID(syncResult.updatedCount)} bahan baku berhasil disinkronkan dengan supplier.`,
+        );
+      }
+
+      resetSupplierModalState();
     } catch (error) {
       console.error(error);
-      message.error("Gagal menyimpan supplier.");
+      message.error('Gagal menyimpan supplier.');
+    } finally {
+      setSaving(false);
     }
   };
 
-  // SECTION: isi modal saat edit supplier
+  // ---------------------------------------------------------------------------
+  // Isi modal saat edit supplier.
+  // ---------------------------------------------------------------------------
   const handleEditSupplier = (record) => {
     setIsEditing(true);
     setEditingId(record.id);
     setModalVisible(true);
 
     form.setFieldsValue({
-      category: record.category || "",
-      storeName: record.storeName || "",
-      storeLink: record.storeLink || "",
+      category: record.category || '',
+      storeName: getSupplierDisplayName(record),
+      storeLink: getSupplierStoreLink(record),
       materialDetails:
         (record.materialDetails || []).length > 0
           ? record.materialDetails.map((item) => ({
               materialId: item.materialId,
-              productLink: item.productLink || "",
+              materialName: item.materialName,
+              productLink: item.productLink || '',
               referencePrice: Math.round(Number(item.referencePrice || 0)),
-              note: item.note || "",
+              note: item.note || '',
             }))
           : [],
     });
   };
 
-  // SECTION: hapus supplier
-  const handleDeleteSupplier = async (id) => {
+  // ---------------------------------------------------------------------------
+  // Hapus supplier hanya menghapus master supplier.
+  // Data supplier yang sudah menempel di bahan baku tidak disentuh otomatis,
+  // supaya tidak ada perubahan data mendadak di operasional harian.
+  // ---------------------------------------------------------------------------
+  const handleDeleteSupplier = async (record) => {
+    if (!isManagedSupplierRecord(record)) {
+      message.warning('Supplier ini bukan record master yang bisa dihapus dari halaman ini.');
+      return;
+    }
+
     try {
-      await deleteDoc(doc(db, "supplierPurchases", id));
-      message.success("Supplier berhasil dihapus!");
+      await deleteDoc(doc(db, 'supplierPurchases', record.id));
+      message.success('Supplier berhasil dihapus dari master supplier.');
     } catch (error) {
       console.error(error);
-      message.error("Gagal menghapus supplier.");
+      message.error('Gagal menghapus supplier.');
     }
   };
 
-  // SECTION: buka drawer detail supplier
+  // ---------------------------------------------------------------------------
+  // Buka drawer detail supplier.
+  // ---------------------------------------------------------------------------
   const openSupplierDrawer = (record) => {
     setSelectedSupplier(record);
     setDrawerVisible(true);
   };
 
-  // SECTION: kolom tabel supplier
+  // ---------------------------------------------------------------------------
+  // Sinkron manual supplier ke bahan baku.
+  // Dipakai jika user edit daftar material supplier atau ingin refresh relasi.
+  // ---------------------------------------------------------------------------
+  const handleSyncSupplierMaterials = async (record) => {
+    try {
+      setSyncingRowId(record.id);
+      const result = await syncRawMaterialsWithSupplier(record, record);
+      message.success(
+        `${formatNumberID(result.updatedCount || 0)} bahan baku berhasil disinkronkan.`,
+      );
+    } catch (error) {
+      console.error(error);
+      message.error('Gagal menyinkronkan supplier ke bahan baku.');
+    } finally {
+      setSyncingRowId(null);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Kolom tabel supplier.
+  // ---------------------------------------------------------------------------
   const columns = [
     {
-      title: "Nama Supplier",
-      dataIndex: "storeName",
-      key: "storeName",
-      render: (text, record) => (
-        <Button
-          type="link"
-          onClick={() => openSupplierDrawer(record)}
-          style={{ padding: 0 }}
-        >
-          {text}
-        </Button>
+      title: 'Nama Supplier',
+      dataIndex: 'storeName',
+      key: 'storeName',
+      render: (_, record) => (
+        <Space direction="vertical" size={4}>
+          <Button
+            type="link"
+            onClick={() => openSupplierDrawer(record)}
+            style={{ padding: 0, height: 'auto' }}
+          >
+            {getSupplierDisplayName(record)}
+          </Button>
+          <Tag color="blue">Master Supplier</Tag>
+        </Space>
       ),
     },
     {
-      title: "Kategori / Keterangan",
-      dataIndex: "category",
-      key: "category",
-      render: (val) => val || "-",
+      title: 'Kategori / Keterangan',
+      dataIndex: 'category',
+      key: 'category',
+      render: (value, record) => (
+        <Space direction="vertical" size={2}>
+          <span>{value || '-'}</span>
+          {getSupplierStoreLink(record) ? (
+            <a href={getSupplierStoreLink(record)} target="_blank" rel="noreferrer">
+              Buka Link Supplier
+            </a>
+          ) : null}
+        </Space>
+      ),
     },
     {
-      title: "Material Tersedia",
-      key: "materials",
+      title: 'Material Tersedia',
+      key: 'materials',
       render: (_, record) => {
-        const names = record.supportedMaterialNames || [];
-        if (!names.length) return "-";
+        const materialNames = record.supportedMaterialNames || [];
+        if (!materialNames.length) return '-';
 
         return (
           <Space size={[4, 4]} wrap>
-            {names.slice(0, 2).map((name, index) => (
-              <Tag key={index}>{name}</Tag>
+            {materialNames.slice(0, 2).map((name, index) => (
+              <Tag key={`${name}-${index}`}>{name}</Tag>
             ))}
-            {names.length > 2 && <Tag>+{names.length - 2}</Tag>}
+            {materialNames.length > 2 && <Tag>+{materialNames.length - 2}</Tag>}
           </Space>
         );
       },
     },
     {
-      title: "Aksi",
-      key: "actions",
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEditSupplier(record)}
-          >
-            Edit
-          </Button>
-          <Popconfirm
-            title="Yakin hapus supplier ini?"
-            onConfirm={() => handleDeleteSupplier(record.id)}
-            okText="Ya"
-            cancelText="Batal"
-          >
-            <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-              Hapus
+      title: 'Aksi',
+      key: 'actions',
+      width: 280,
+      render: (_, record) => {
+        const isRowSyncing = syncingRowId === record.id;
+
+        return (
+          <Space wrap>
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEditSupplier(record)}
+            >
+              Edit
             </Button>
-          </Popconfirm>
-        </Space>
-      ),
+            <Button
+              type="link"
+              size="small"
+              icon={<SyncOutlined />}
+              loading={isRowSyncing}
+              onClick={() => handleSyncSupplierMaterials(record)}
+            >
+              Sinkronkan Bahan
+            </Button>
+            <Popconfirm
+              title="Yakin hapus supplier ini?"
+              onConfirm={() => handleDeleteSupplier(record)}
+              okText="Ya"
+              cancelText="Batal"
+            >
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                Hapus
+              </Button>
+            </Popconfirm>
+          </Space>
+        );
+      },
     },
   ];
 
@@ -313,31 +454,30 @@ const SupplierPurchases = () => {
     <div>
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           marginBottom: 16,
           gap: 12,
-          flexWrap: "wrap",
+          flexWrap: 'wrap',
         }}
       >
         <div>
           <h2 style={{ marginBottom: 4 }}>Supplier</h2>
           {materialIdFromQuery && selectedMaterialFromQuery ? (
-            <div style={{ color: "#666" }}>
-              Menampilkan supplier untuk bahan:{" "}
-              <strong>{selectedMaterialFromQuery.name}</strong>{" "}
+            <div style={{ color: '#666' }}>
+              Menampilkan supplier untuk bahan: <strong>{selectedMaterialFromQuery.name}</strong>{' '}
               <Button
                 type="link"
                 size="small"
-                onClick={() => navigate("/suppliers")}
+                onClick={() => navigate('/suppliers')}
                 style={{ paddingInline: 4 }}
               >
                 Reset Filter URL
               </Button>
             </div>
           ) : (
-            <div style={{ color: "#666" }}>Daftar semua supplier</div>
+            <div style={{ color: '#666' }}>Daftar master supplier aktif</div>
           )}
         </div>
 
@@ -358,14 +498,27 @@ const SupplierPurchases = () => {
         </Button>
       </div>
 
-      {/* SECTION: filter supplier manual */}
+      {/* -------------------------------------------------------------------
+          Info singkat arah supplier final yang lebih sederhana.
+      ------------------------------------------------------------------- */}
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message="Alur supplier disederhanakan"
+        description="Buat supplier baru di sini, pilih bahan baku yang terkait, lalu sistem akan menyinkronkan supplier tersebut ke bahan baku yang dipilih."
+      />
+
+      {/* -------------------------------------------------------------------
+          Filter supplier manual.
+      ------------------------------------------------------------------- */}
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         <Col xs={24} md={10}>
           <Search
             placeholder="Cari nama supplier, kategori, bahan, atau link"
             allowClear
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            onChange={(event) => setSearchText(event.target.value)}
           />
         </Col>
 
@@ -375,7 +528,7 @@ const SupplierPurchases = () => {
             allowClear
             value={categoryFilter}
             onChange={setCategoryFilter}
-            style={{ width: "100%" }}
+            style={{ width: '100%' }}
           >
             {categoryOptions.map((item) => (
               <Option key={item} value={item}>
@@ -391,7 +544,7 @@ const SupplierPurchases = () => {
             allowClear
             value={materialFilter}
             onChange={setMaterialFilter}
-            style={{ width: "100%" }}
+            style={{ width: '100%' }}
             showSearch
             optionFilterProp="children"
           >
@@ -424,16 +577,12 @@ const SupplierPurchases = () => {
       />
 
       <Modal
-        title={isEditing ? "Edit Supplier" : "Tambah Supplier"}
+        title={isEditing ? 'Edit Supplier' : 'Tambah Supplier'}
         open={modalVisible}
-        onCancel={() => {
-          setModalVisible(false);
-          setIsEditing(false);
-          setEditingId(null);
-          form.resetFields();
-        }}
+        onCancel={resetSupplierModalState}
         onOk={() => form.submit()}
         okText="Simpan"
+        okButtonProps={{ loading: saving }}
         cancelText="Batal"
         width={820}
       >
@@ -445,7 +594,7 @@ const SupplierPurchases = () => {
           <Form.Item
             name="storeName"
             label="Nama Supplier / Toko"
-            rules={[{ required: true, message: "Nama supplier wajib diisi" }]}
+            rules={[{ required: true, message: 'Nama supplier wajib diisi' }]}
           >
             <Input placeholder="Nama toko / supplier" />
           </Form.Item>
@@ -454,19 +603,20 @@ const SupplierPurchases = () => {
             <Input placeholder="https://..." />
           </Form.Item>
 
-          {/* SECTION: detail bahan yang dijual supplier */}
+          {/* -----------------------------------------------------------------
+              Detail bahan yang dijual supplier.
+              Data ini jadi dasar sinkronisasi supplier ke bahan baku terkait.
+          ----------------------------------------------------------------- */}
           <Form.List name="materialDetails">
             {(fields, { add, remove }) => (
               <>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>
-                  Material + Link Produk
-                </div>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>Material + Link Produk</div>
 
                 {fields.map(({ key, name, ...restField }) => (
                   <div
                     key={key}
                     style={{
-                      border: "1px solid #f0f0f0",
+                      border: '1px solid #f0f0f0',
                       borderRadius: 8,
                       padding: 12,
                       marginBottom: 12,
@@ -474,15 +624,11 @@ const SupplierPurchases = () => {
                   >
                     <Form.Item
                       {...restField}
-                      name={[name, "materialId"]}
+                      name={[name, 'materialId']}
                       label="Bahan"
-                      rules={[{ required: true, message: "Pilih bahan" }]}
+                      rules={[{ required: true, message: 'Pilih bahan' }]}
                     >
-                      <Select
-                        placeholder="Pilih bahan baku"
-                        showSearch
-                        optionFilterProp="children"
-                      >
+                      <Select placeholder="Pilih bahan baku" showSearch optionFilterProp="children">
                         {materials.map((item) => (
                           <Option key={item.id} value={item.id}>
                             {item.name}
@@ -491,34 +637,26 @@ const SupplierPurchases = () => {
                       </Select>
                     </Form.Item>
 
-                    <Form.Item
-                      {...restField}
-                      name={[name, "productLink"]}
-                      label="Link Produk"
-                    >
+                    <Form.Item {...restField} name={[name, 'productLink']} label="Link Produk">
                       <Input placeholder="https://link-produk-spesifik..." />
                     </Form.Item>
 
                     <Form.Item
                       {...restField}
-                      name={[name, "referencePrice"]}
+                      name={[name, 'referencePrice']}
                       label="Harga Catatan"
-                      extra="Opsional. Bisa dipakai untuk catatan harga supplier ini."
+                      extra="Opsional. Dipakai sebagai catatan harga supplier ini."
                     >
                       <InputNumber
                         min={0}
-                        style={{ width: "100%" }}
+                        style={{ width: '100%' }}
                         addonBefore="Rp"
                         formatter={(value) => formatNumberID(value)}
-                        parser={(value) => value?.replace(/\./g, "") || ""}
+                        parser={(value) => value?.replace(/\./g, '') || ''}
                       />
                     </Form.Item>
 
-                    <Form.Item
-                      {...restField}
-                      name={[name, "note"]}
-                      label="Catatan"
-                    >
+                    <Form.Item {...restField} name={[name, 'note']} label="Catatan">
                       <Input placeholder="Contoh: meteran / roll / warna tertentu" />
                     </Form.Item>
 
@@ -535,9 +673,9 @@ const SupplierPurchases = () => {
                   onClick={() =>
                     add({
                       materialId: undefined,
-                      productLink: "",
+                      productLink: '',
                       referencePrice: 0,
-                      note: "",
+                      note: '',
                     })
                   }
                 >
@@ -550,7 +688,7 @@ const SupplierPurchases = () => {
       </Modal>
 
       <Drawer
-        title={`Detail Supplier: ${selectedSupplier?.storeName || "-"}`}
+        title={`Detail Supplier: ${getSupplierDisplayName(selectedSupplier || {}) || '-'}`}
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
@@ -562,8 +700,8 @@ const SupplierPurchases = () => {
           <>
             <table
               style={{
-                width: "100%",
-                borderCollapse: "collapse",
+                width: '100%',
+                borderCollapse: 'collapse',
                 marginBottom: 24,
               }}
             >
@@ -573,97 +711,95 @@ const SupplierPurchases = () => {
                     style={{
                       width: 220,
                       padding: 10,
-                      border: "1px solid #f0f0f0",
+                      border: '1px solid #f0f0f0',
                     }}
                   >
                     Nama Supplier
                   </td>
-                  <td style={{ padding: 10, border: "1px solid #f0f0f0" }}>
-                    {selectedSupplier.storeName || "-"}
+                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>
+                    {getSupplierDisplayName(selectedSupplier)}
                   </td>
                 </tr>
                 <tr>
-                  <td style={{ padding: 10, border: "1px solid #f0f0f0" }}>
+                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>Sumber Data</td>
+                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>Master supplier</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>
                     Kategori / Keterangan
                   </td>
-                  <td style={{ padding: 10, border: "1px solid #f0f0f0" }}>
-                    {selectedSupplier.category || "-"}
+                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>
+                    {selectedSupplier.category || '-'}
                   </td>
                 </tr>
                 <tr>
-                  <td style={{ padding: 10, border: "1px solid #f0f0f0" }}>
-                    Link Toko
-                  </td>
-                  <td style={{ padding: 10, border: "1px solid #f0f0f0" }}>
-                    {selectedSupplier.storeLink ? (
+                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>Link Toko</td>
+                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>
+                    {getSupplierStoreLink(selectedSupplier) ? (
                       <a
-                        href={selectedSupplier.storeLink}
+                        href={getSupplierStoreLink(selectedSupplier)}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        {selectedSupplier.storeLink}
+                        {getSupplierStoreLink(selectedSupplier)}
                       </a>
                     ) : (
-                      "-"
+                      '-'
                     )}
                   </td>
                 </tr>
                 <tr>
-                  <td style={{ padding: 10, border: "1px solid #f0f0f0" }}>
+                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>
                     Material Terdaftar
                   </td>
-                  <td style={{ padding: 10, border: "1px solid #f0f0f0" }}>
+                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>
                     {(selectedSupplier.supportedMaterialNames || []).length ? (
                       <Space size={[6, 6]} wrap>
-                        {(selectedSupplier.supportedMaterialNames || []).map(
-                          (name, index) => (
-                            <Tag key={index}>{name}</Tag>
-                          ),
-                        )}
+                        {(selectedSupplier.supportedMaterialNames || []).map((name, index) => (
+                          <Tag key={`${name}-${index}`}>{name}</Tag>
+                        ))}
                       </Space>
                     ) : (
-                      "Belum ada material terdaftar"
+                      'Belum ada material terdaftar'
                     )}
                   </td>
                 </tr>
               </tbody>
             </table>
 
-            <div style={{ fontWeight: 600, marginBottom: 12 }}>
-              Detail Bahan & Link Produk
-            </div>
+            <div style={{ fontWeight: 600, marginBottom: 12 }}>Detail Bahan & Link Produk</div>
 
             <Table
-              rowKey={(record, index) => `${record.materialId}-${index}`}
+              rowKey={(record, index) => `${record.materialId || record.materialName || 'material'}-${index}`}
               pagination={false}
               dataSource={selectedSupplier.materialDetails || []}
               columns={[
                 {
-                  title: "Bahan",
-                  dataIndex: "materialName",
-                  render: (value) => value || "-",
+                  title: 'Bahan',
+                  dataIndex: 'materialName',
+                  render: (value) => value || '-',
                 },
                 {
-                  title: "Link Produk",
-                  dataIndex: "productLink",
+                  title: 'Link Produk',
+                  dataIndex: 'productLink',
                   render: (value) =>
                     value ? (
                       <a href={value} target="_blank" rel="noopener noreferrer">
                         Buka Link
                       </a>
                     ) : (
-                      "-"
+                      '-'
                     ),
                 },
                 {
-                  title: "Harga Catatan",
-                  dataIndex: "referencePrice",
-                  render: (value) => (value ? formatCurrencyIDR(value) : "-"),
+                  title: 'Harga Catatan',
+                  dataIndex: 'referencePrice',
+                  render: (value) => (value ? formatCurrencyIDR(value) : '-'),
                 },
                 {
-                  title: "Catatan",
-                  dataIndex: "note",
-                  render: (value) => value || "-",
+                  title: 'Catatan',
+                  dataIndex: 'note',
+                  render: (value) => value || '-',
                 },
               ]}
             />

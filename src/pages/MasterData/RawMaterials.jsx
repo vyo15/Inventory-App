@@ -42,6 +42,11 @@ import {
   updateRawMaterial,
 } from '../../services/MasterData/rawMaterialsService';
 import {
+  getSupplierDisplayName,
+  getSupplierOptionLabel,
+  listenSupplierCatalog,
+} from '../../services/MasterData/suppliersService';
+import {
   DEFAULT_RAW_MATERIAL_VARIANT,
   ensureAtLeastOneRawMaterialVariant,
 } from '../../utils/variants/rawMaterialVariantHelpers';
@@ -212,10 +217,13 @@ const RawMaterials = () => {
       },
     );
 
-    const unsubSuppliers = onSnapshot(
-      collection(db, 'supplierPurchases'),
-      (snapshot) => {
-        setSuppliers(snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })));
+    const unsubSuppliers = listenSupplierCatalog(
+      (data) => {
+        // -------------------------------------------------------------------
+        // Supplier dibaca dari katalog gabungan agar supplier lama yang masih
+        // tersimpan di bahan baku tetap muncul dan bisa dipilih kembali.
+        // -------------------------------------------------------------------
+        setSuppliers(data);
       },
       (error) => {
         console.error(error);
@@ -283,6 +291,9 @@ const RawMaterials = () => {
   // Search dibuat ringan supaya user cepat cari bahan, supplier, atau nama varian.
   // ---------------------------------------------------------------------------
   const filteredMaterials = useMemo(() => {
+    const selectedSupplier = (suppliers || []).find((item) => String(item.id) === String(supplierFilter));
+    const selectedSupplierName = String(getSupplierDisplayName(selectedSupplier) || '').trim().toLowerCase();
+
     return materials.filter((item) => {
       const keyword = search.trim().toLowerCase();
       const statusMeta = getRawMaterialStatusMeta(item);
@@ -308,12 +319,19 @@ const RawMaterials = () => {
           : variantModeFilter === 'variant'
             ? item.hasVariants === true
             : item.hasVariants !== true;
+
       const matchesSupplier =
-        supplierFilter === 'all' ? true : String(item.supplierId || '') === supplierFilter;
+        supplierFilter === 'all'
+          ? true
+          : String(item.supplierId || '') === String(supplierFilter)
+            ? true
+            : selectedSupplierName
+              ? String(item.supplierName || '').trim().toLowerCase() === selectedSupplierName
+              : false;
 
       return matchesSearch && matchesStatus && matchesVariantMode && matchesSupplier;
     });
-  }, [materials, search, statusFilter, variantModeFilter, supplierFilter]);
+  }, [materials, search, statusFilter, variantModeFilter, supplierFilter, suppliers]);
 
   // ---------------------------------------------------------------------------
   // Handler buka drawer form create.
@@ -609,7 +627,7 @@ const RawMaterials = () => {
               <Option value="all">Semua Supplier</Option>
               {(suppliers || []).map((supplier) => (
                 <Option key={supplier.id} value={supplier.id}>
-                  {supplier.storeName || '-'}
+                  {getSupplierOptionLabel(supplier)}
                 </Option>
               ))}
             </Select>
@@ -673,7 +691,7 @@ const RawMaterials = () => {
                 <Select allowClear placeholder="Pilih supplier" optionFilterProp="children" showSearch>
                   {(suppliers || []).map((supplier) => (
                     <Option key={supplier.id} value={supplier.id}>
-                      {(supplier.item ? `${supplier.item} - ` : '') + (supplier.storeName || '-')}
+                      {getSupplierOptionLabel(supplier)}
                     </Option>
                   ))}
                 </Select>

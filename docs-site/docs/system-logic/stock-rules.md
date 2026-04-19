@@ -1,58 +1,58 @@
 ---
 sidebar_position: 1
 title: Stock Rules
-description: Aturan inti stok, log, dan status data yang harus dijaga.
+description: Aturan stok utama yang dipakai di master data, transaksi, inventaris, dan produksi.
 ---
 
-# Stock Rules
+# Aturan Stok
 
-## Empat field stok yang perlu dipahami
+## Prinsip umum
 
-Untuk banyak item, sistem menyimpan beberapa field stok berikut:
+- stok harus bisa diaudit dari log
+- item bervarian menyimpan stok per varian
+- total stok adalah ringkasan dari stok item atau stok varian
+- perubahan stok hanya boleh terjadi di titik transaksi yang memang sah
 
-- **currentStock**: stok utama saat ini,
-- **stock**: representasi stok total untuk kompatibilitas dan tampilan,
-- **reservedStock**: stok yang pernah dipakai di flow reservasi lama atau kebutuhan khusus,
-- **availableStock**: stok siap pakai setelah dikurangi reserve.
+## Titik perubahan stok
 
-Secara praktik, angka yang paling penting untuk operasional adalah **currentStock** dan **availableStock**.
+### Pembelian
+Menambah stok bahan atau barang yang dibeli.
 
-## Sumber mutasi stok
+### Penjualan
+Mengurangi stok saat transaksi valid diposting.
 
-Mutasi stok normal datang dari:
+### Retur
+Menambah atau mengurangi stok tergantung jenis retur.
 
-- pembelian,
-- penjualan,
-- retur,
-- produksi,
-- penyesuaian stok.
+### Penyesuaian Stok
+Dipakai untuk koreksi selisih stok fisik.
 
-Agar histori tetap rapi, setiap perubahan stok sebaiknya lewat menu transaksi yang benar, bukan edit angka manual langsung di database.
+### Produksi
+- bahan dipotong saat mulai produksi
+- output masuk saat work log selesai
 
-## Manajemen Stok
+## Aturan item tanpa varian
 
-Menu **Manajemen Stok** adalah tempat audit log keluar-masuk stok.
+Item tanpa varian cukup membaca stok dari master item.
 
-Log dipakai untuk melihat:
+## Aturan item dengan varian
 
-- tanggal mutasi,
-- arah masuk / keluar,
-- sumber mutasi,
-- item,
-- qty,
-- referensi PO, work log, sale, supplier, atau customer.
+Item bervarian membaca stok dari daftar `variants`.
+Tabel master menampilkan total stok dan rincian varian agar audit cepat lebih mudah.
 
-## Penyesuaian stok
+## Mutasi stok produksi
 
-Menu **Penyesuaian Stok** dipakai untuk koreksi manual ketika stok fisik tidak sama dengan stok sistem.
+Saat produksi berjalan, log stok harus menunjukkan:
 
-Gunakan penyesuaian dengan hati-hati karena menu ini bukan pengganti transaksi normal.
+- item yang dipakai sebagai bahan
+- jumlah yang keluar
+- item hasil produksi
+- jumlah yang masuk
+- referensi PO dan work log
 
-## Nonaktif lebih aman daripada hapus
+## Rule aman untuk user
 
-Untuk beberapa master data, terutama yang sudah pernah dipakai di transaksi atau produksi, pendekatan yang lebih aman adalah:
-
-- **nonaktifkan data**,
-- jangan langsung hapus.
-
-Ini penting supaya histori log dan referensi lama tidak rusak.
+- jangan hapus master item yang sudah punya histori
+- pakai status aktif/nonaktif untuk menutup item
+- buat transaksi baru jika ingin testing ulang, jangan edit histori sembarangan
+- jika data tampak tidak sinkron, cek log stok lebih dulu

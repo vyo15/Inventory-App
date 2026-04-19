@@ -5,30 +5,26 @@ sidebar_label: Penjualan
 
 # Penjualan
 
-## Tujuan
-Dipakai untuk mencatat penjualan produk jadi atau bahan.
+Menu ini dipakai untuk mencatat penjualan produk jadi.
 
-## Field Form Utama
-- **Pelanggan**
-- **Items**:
-  - pilih produk / bahan,
-  - jumlah,
-  - harga satuan.
-- **Channel Penjualan**
-- **Status**
-- **No. Resi / No. Order / Referensi**
-- **Tanggal**
-- **Catatan**
+## Data penting
 
-## Tombol Aksi di Tabel
-- **Dikirim**
-- **Selesai**
-- **Batalkan**
-- hapus transaksi bila memang diizinkan flow saat itu.
+- pelanggan
+- tanggal
+- item
+- qty
+- harga jual
+- status transaksi
+- total
 
-## Rule Penting
-- stok berkurang saat transaksi dibuat sesuai flow aktif,
-- status online dan offline perlu dibaca benar karena berpengaruh ke pengakuan kas dan progres order.
+## Rule penting
 
-## Contoh Skenario
-Input penjualan bunga mawar melalui marketplace, isi nomor order, set status sesuai tahap proses, lalu cek stok produk berkurang.
+- status transaksi memengaruhi pengakuan stok dan pendapatan
+- transaksi batal tidak boleh dihitung sebagai penjualan valid
+- stok harus berkurang satu kali untuk transaksi yang sah
+
+## Kapan dipakai
+
+- input transaksi harian
+- audit status penjualan
+- cek performa penjualan bulanan

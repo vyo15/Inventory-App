@@ -3,21 +3,25 @@ title: Change Log
 sidebar_label: Change Log
 ---
 
-## Catatan Utama yang Sudah Ditetapkan
-### Patch 2026-04-07
-- route / menu lama **Product Compositions** dan **Produksi Dasar** dipensiunkan,
-- duplicate route `/productions` dihapus,
-- jalur produksi difokuskan ke **BOM → Production Orders → Work Log**,
-- work log dari flow utama dipusatkan ke source `production_order`,
-- logic reserve / release dipensiunkan dari flow produksi aktif,
-- flow stok produksi aktif diarahkan ke:
-  - start production = consume input stock,
-  - complete work log = add output stock,
-  - close linked production order,
-- reserved stock pada Semi Finished Materials tidak lagi menjadi bagian flow utama.
+# Change Log
 
-### Cleanup Final Notes
-- source of truth stok aktif dipusatkan ke `currentStock`,
-- field `stock` hanya dipertahankan sebagai mirror compatibility,
-- mutasi stok harus melewati helper/service stok pusat,
-- flow produksi dirapikan ke PO dan Work Log dengan rule **1 PO = 1 Work Log**.
+## Update terbaru yang sudah masuk
+
+- struktur sidebar dirapikan agar lebih profesional
+- dark mode diperhalus supaya lebih netral dan nyaman dipakai lama
+- chip stok varian disamakan di light dan dark mode
+- halaman Bahan Baku diperbaiki dari error whitescreen
+- dashboard diarahkan ke prioritas operasional harian
+- fondasi UI bersama dirapikan untuk drawer, modal, tabel, filter, dan button
+- dokumentasi disesuaikan dengan struktur menu dan alur sistem terbaru
+
+## Catatan maintenance
+
+Setelah perubahan UI besar, lakukan cek cepat pada:
+
+- light mode
+- dark mode
+- sidebar
+- tabel master data
+- work log dan order produksi
+- mutasi stok

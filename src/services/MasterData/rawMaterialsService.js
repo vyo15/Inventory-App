@@ -18,9 +18,18 @@ import {
   normalizeRawMaterialVariants,
 } from '../../utils/variants/rawMaterialVariantHelpers';
 import { toNumber } from '../../utils/stock/stockHelpers';
+import {
+  getSupplierDisplayName,
+  getSupplierLink,
+  getSupplierReferenceId,
+} from './suppliersService';
 
 const COLLECTION_NAME = 'raw_materials';
 
+// -----------------------------------------------------------------------------
+// Default form bahan baku.
+// Disatukan di service supaya halaman create/edit memakai struktur data yang sama.
+// -----------------------------------------------------------------------------
 export const RAW_MATERIAL_DEFAULT_FORM = {
   name: '',
   supplierId: null,
@@ -38,28 +47,43 @@ export const RAW_MATERIAL_DEFAULT_FORM = {
   isActive: true,
 };
 
-const enrichRawMaterial = (item = {}) => enrichRawMaterialWithVariantTotals({
-  ...item,
-  isActive: item.isActive !== false,
-});
+// -----------------------------------------------------------------------------
+// Enricher satu pintu agar semua consumer dapat bentuk data stok yang konsisten.
+// -----------------------------------------------------------------------------
+const enrichRawMaterial = (item = {}) =>
+  enrichRawMaterialWithVariantTotals({
+    ...item,
+    isActive: item.isActive !== false,
+  });
 
+// -----------------------------------------------------------------------------
+// Normalizer payload create/update.
+// Helper supplier baru dipakai agar data supplierName dan supplierLink tetap aman,
+// walau supplier berasal dari master baru, collection lama, atau fallback bahan baku.
+// -----------------------------------------------------------------------------
 const normalizePayload = (values = {}, suppliers = [], isEdit = false) => {
-  const selectedSupplier = (suppliers || []).find((item) => item.id === values.supplierId);
+  const selectedSupplier = (suppliers || []).find((item) => String(item.id) === String(values.supplierId));
+  const resolvedSupplierId = getSupplierReferenceId(selectedSupplier, values.supplierId);
+  const resolvedSupplierName = getSupplierDisplayName(selectedSupplier) || null;
+  const resolvedSupplierLink = getSupplierLink(selectedSupplier) || null;
+
   const hasVariants = values.hasVariants === true;
   const variants = normalizeRawMaterialVariants(values.variants || []);
   const variantTotals = calculateRawMaterialVariantTotals(variants);
+
   const stock = hasVariants
     ? Math.round(toNumber(variantTotals.currentStock || 0))
     : Math.round(toNumber(values.stock || 0));
+
   const reservedStock = hasVariants
     ? Math.round(toNumber(variantTotals.reservedStock || 0))
     : Math.round(toNumber(values.reservedStock || 0));
 
   const payload = {
     name: String(values.name || '').trim(),
-    supplierId: values.supplierId || null,
-    supplierName: selectedSupplier?.storeName || null,
-    supplierLink: selectedSupplier?.storeLink || null,
+    supplierId: resolvedSupplierId,
+    supplierName: resolvedSupplierName,
+    supplierLink: resolvedSupplierLink,
     stockUnit: values.stockUnit || 'pcs',
     pricingMode: values.pricingMode || 'rule',
     pricingRuleId: values.pricingMode === 'rule' ? values.pricingRuleId || null : null,
@@ -89,6 +113,10 @@ const normalizePayload = (values = {}, suppliers = [], isEdit = false) => {
   return payload;
 };
 
+// -----------------------------------------------------------------------------
+// Validasi server-side ringan.
+// Semua halaman yang simpan bahan baku tetap lewat pintu ini agar aturan sama.
+// -----------------------------------------------------------------------------
 export const validateRawMaterialPayload = async (values = {}, editingId = null) => {
   const errors = {};
   const materialName = String(values.name || '').trim();
@@ -137,9 +165,7 @@ export const validateRawMaterialPayload = async (values = {}, editingId = null) 
   }
 
   if (materialName) {
-    const snapshot = await getDocs(
-      query(collection(db, COLLECTION_NAME), where('name', '==', materialName)),
-    );
+    const snapshot = await getDocs(query(collection(db, COLLECTION_NAME), where('name', '==', materialName)));
     const duplicate = snapshot.docs.find((item) => item.id !== editingId);
     if (duplicate) {
       errors.name = 'Nama bahan baku sudah digunakan';
@@ -149,6 +175,9 @@ export const validateRawMaterialPayload = async (values = {}, editingId = null) 
   return errors;
 };
 
+// -----------------------------------------------------------------------------
+// Listener master bahan baku.
+// -----------------------------------------------------------------------------
 export const listenRawMaterials = (callback, onError) => {
   const q = query(collection(db, COLLECTION_NAME), orderBy('name', 'asc'));
   return onSnapshot(
@@ -160,6 +189,9 @@ export const listenRawMaterials = (callback, onError) => {
   );
 };
 
+// -----------------------------------------------------------------------------
+// Create bahan baku baru.
+// -----------------------------------------------------------------------------
 export const createRawMaterial = async (values = {}, suppliers = []) => {
   const errors = await validateRawMaterialPayload(values, null);
   if (Object.keys(errors).length > 0) {
@@ -171,6 +203,9 @@ export const createRawMaterial = async (values = {}, suppliers = []) => {
   return result.id;
 };
 
+// -----------------------------------------------------------------------------
+// Update bahan baku.
+// -----------------------------------------------------------------------------
 export const updateRawMaterial = async (id, values = {}, suppliers = []) => {
   const errors = await validateRawMaterialPayload(values, id);
   if (Object.keys(errors).length > 0) {
@@ -182,12 +217,17 @@ export const updateRawMaterial = async (id, values = {}, suppliers = []) => {
   return id;
 };
 
+// -----------------------------------------------------------------------------
+// Hapus bahan baku.
+// -----------------------------------------------------------------------------
 export const removeRawMaterial = async (id) => {
   await deleteDoc(doc(db, COLLECTION_NAME, id));
   return id;
 };
 
-
+// -----------------------------------------------------------------------------
+// Toggle aktif/nonaktif bahan baku.
+// -----------------------------------------------------------------------------
 export const toggleRawMaterialActive = async (id, isActive) => {
   await updateDoc(doc(db, COLLECTION_NAME, id), {
     isActive: Boolean(isActive),

@@ -4,6 +4,15 @@ import "./PageSection.css";
 
 const { Title, Text } = Typography;
 
+// =========================
+// SECTION: Shared Page Section
+// Fungsi:
+// - menjadi pembungkus blok konten seperti tabel, chart, atau ringkasan
+// - menjaga judul section, subtitle, dan extra action tetap satu pola
+// Catatan:
+// - komponen ini masih dipakai aktif di dashboard, transaksi, dan stok
+// - className tetap dibuka agar halaman tertentu bisa menambah style tanpa mengubah fondasi
+// =========================
 const PageSection = ({ title, subtitle, extra, children, className = "" }) => {
   return (
     <Card className={`page-section ${className}`.trim()}>

@@ -5,18 +5,20 @@ sidebar_label: Master Data
 
 # Master Data
 
-## Tujuan
-Kelompok menu ini dipakai untuk menyimpan data referensi utama yang dipakai modul lain.
+Group ini dipakai untuk data referensi yang akan dipakai oleh transaksi, stok, dan produksi.
 
-## Menu di Dalamnya
-- **Produk Jadi**: master barang siap jual.
-- **Bahan Baku**: master bahan input produksi atau penjualan bahan.
-- **Kategori**: kelompok item.
-- **Supplier**: referensi pemasok dan link belanja.
-- **Pelanggan**: referensi customer penjualan.
-- **Pricing Rules**: aturan hitung harga otomatis.
+## Isi group
 
-## Rule Penting
-- ubah master data dulu sebelum membuat transaksi,
-- untuk item bervarian, cek nama varian konsisten antar menu,
-- hindari hapus data yang sudah dipakai transaksi; lebih aman nonaktifkan.
+- Produk Jadi
+- Bahan Baku
+- Kategori
+- Supplier
+- Pelanggan
+- Aturan Harga
+
+## Rule penting
+
+- master item yang sudah punya histori sebaiknya dinonaktifkan, bukan dihapus
+- varian hanya dipakai jika memang perlu
+- harga master bukan pengganti harga aktual pembelian
+- perubahan master bisa memengaruhi menu transaksi dan produksi

@@ -5,52 +5,40 @@ sidebar_label: Bahan Baku
 
 # Bahan Baku
 
-## Tujuan
-Menu ini dipakai untuk membuat dan mengelola master bahan baku yang dipakai di pembelian, produksi, penjualan bahan, dan laporan stok.
+Menu ini dipakai untuk menyimpan master bahan baku, stok, supplier default, harga referensi restock, dan varian bila perlu.
 
-## Informasi di Tabel
-- nama bahan baku dan supplier,
-- badge **Pakai Varian** atau **Tanpa Varian**,
-- stok total dan stok per varian langsung di tabel,
-- harga referensi restock, modal aktual rata-rata, dan harga jual,
-- status stok seperti **Kosong**, **Stok Rendah**, atau **Aman**,
-- aksi **Detail**, **Edit**, dan **Aktifkan/Nonaktifkan**.
+## Field penting
 
-## Field Form Utama
-- **Nama Bahan Baku**: nama item.
-- **Supplier**: pemasok utama.
-- **Satuan Stok**: satuan dasar stok, misalnya meter atau pcs.
-- **Pakai Varian**: aktifkan jika bahan punya turunan seperti warna.
-- **Label Varian**: label kelompok varian, misalnya Warna.
-- **Minimum Stok Master**: alert stok minimum untuk item non-varian.
-- **Mode Pricing**: manual atau mengikuti pricing rule.
-- **Harga Referensi Restock / Satuan**: harga acuan pembelian.
-- **Modal Aktual Rata-rata / Satuan**: rata-rata modal aktual.
-- **Pricing Rule**: rule yang dipakai bila mode pricing otomatis.
-- **Harga Jual / Satuan**: harga jual bahan.
-- **Varian**:
-  - Label Varian,
-  - Kode / SKU Varian,
-  - Aktif,
-  - Stok Varian,
-  - Reserved Stock.
+- Nama bahan
+- Kode
+- Satuan
+- Kategori
+- Supplier
+- Min. stok
+- Harga referensi restock
+- Mode varian
+- Daftar varian bila item bervarian
 
-## Tombol Aksi
-- **Tambah Bahan Baku**: buat master baru.
-- **Detail**: lihat ringkasan item dan stok.
-- **Edit**: ubah master data.
-- **Aktifkan / Nonaktifkan**: menyalakan atau mematikan item tanpa merusak histori.
+## Yang tampil di tabel
 
-## Rule Penting
-- jika item punya varian, stok operasional dibaca dari varian,
-- nama varian sebaiknya konsisten, misalnya Merah, Putih, Ungu,
-- bahan baku tidak dianjurkan dihapus jika sudah pernah dipakai transaksi atau BOM.
+- nama bahan
+- supplier
+- status varian
+- total stok
+- rincian stok varian
+- harga referensi dan modal rata-rata
+- aksi detail, edit, aktif/nonaktif
 
-## Contoh Skenario
-**Tambah kain flanel warna**
-1. Klik **Tambah Bahan Baku**.
-2. Isi nama, supplier, satuan stok = meter.
-3. Aktifkan **Pakai Varian**.
-4. Tambahkan varian Merah, Putih, Ungu, dan stok awal masing-masing.
-5. Simpan.
-6. Cek tabel; stok total dan stok tiap warna harus langsung terlihat.
+## Rule penting
+
+- item yang punya histori lebih aman dinonaktifkan
+- stok total harus sinkron dengan rincian varian
+- dark mode dan light mode memakai chip stok yang sama agar audit cepat tetap mudah
+
+## Skenario umum
+
+1. buat bahan baru
+2. tentukan apakah pakai varian
+3. isi supplier dan min. stok
+4. simpan
+5. cek di tabel apakah stok dan status sudah benar

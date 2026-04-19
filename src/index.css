@@ -18,7 +18,10 @@ body,
 
 /* =========================
    SECTION: Base Typography
-   Menyamakan font dan rendering global.
+   Fungsi:
+   - menjaga font global tetap konsisten
+   - color-scheme tetap light di root karena mode gelap dikendalikan manual oleh app-shell
+   - keputusan ini masih dipakai agar browser native input tidak bentrok dengan theme aplikasi
 ========================= */
 :root {
   font-family: Inter, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -33,6 +36,9 @@ body {
   background-color: #f3f6fb;
   color: #0f172a;
   overflow: hidden;
+  transition:
+    background-color 0.22s ease,
+    color 0.22s ease;
 }
 
 /* =========================
@@ -68,8 +74,15 @@ select {
 
 /* =========================
    SECTION: Selection
+   Fungsi:
+   - light dan dark mode memakai warna seleksi berbeda agar tetap nyaman dilihat
 ========================= */
 ::selection {
   background: rgba(37, 99, 235, 0.18);
   color: #0f172a;
+}
+
+.app-shell.dark ::selection {
+  background: rgba(59, 130, 246, 0.28);
+  color: #f8fafc;
 }

@@ -5,36 +5,24 @@ sidebar_label: Payroll Produksi
 
 # Payroll Produksi
 
-## Tujuan
-Dipakai untuk menghitung biaya tenaga kerja berdasarkan work log yang sudah selesai.
+Menu ini dipakai untuk menghitung dan meninjau biaya tenaga kerja produksi.
 
-## Field Form Utama
-- **No. Payroll**
-- **Tanggal Payroll**
-- **Work Log**
-- **Karyawan**
-- **Payroll Mode**
-- **Payroll Rate**
-- **Payroll Qty Base**
-- **Output Qty Used**
-- **Bonus**
-- **Potongan**
-- **Worked Qty**
-- **Team Worker Count**
-- **Preview Final Amount**
-- **Catatan Perhitungan**
-- **Catatan Internal**
+## Data yang umum
 
-## Tombol Aksi
-- **Tambah Payroll**
-- **Detail**
-- **Edit**
-- **Paid**
-- **Refresh**
+- work log terkait
+- operator / karyawan
+- basis perhitungan
+- nominal payroll
+- status pembayaran
 
-## Rule Penting
-- ambil work log yang statusnya sudah selesai,
-- payroll yang sudah dibayar tidak boleh diedit sembarangan.
+## Rule penting
 
-## Contoh Skenario
-Buat draft payroll dari work log completed, pilih operator, cek hasil hitung, lalu tandai **Paid** setelah pembayaran dilakukan.
+- payroll dibaca setelah work log valid
+- payroll tidak mengubah stok
+- payroll memengaruhi analisis biaya produksi
+
+## Kapan dipakai
+
+- review biaya tenaga kerja
+- cek payroll draft
+- tandai payroll yang sudah dibayar

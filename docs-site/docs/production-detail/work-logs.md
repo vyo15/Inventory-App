@@ -5,77 +5,35 @@ sidebar_label: Work Log Produksi
 
 # Work Log Produksi
 
-## Tujuan
-Dipakai untuk mencatat realisasi produksi yang berasal dari Production Order.
+Work Log adalah realisasi kerja dari Order Produksi.
 
-## Ringkasan Informasi
-Tabel utama menampilkan:
-- no. work log,
-- tanggal,
-- target / step,
-- qty batch, estimasi output, good output,
-- biaya aktual,
-- source,
-- status,
-- aksi.
+## Data penting
 
-Drawer detail menampilkan:
-- qty batch,
-- estimasi output,
-- good output,
-- total biaya,
-- ringkasan work log,
-- tim & catatan,
-- biaya aktual,
-- pemakaian material,
-- hasil produksi.
+- nomor work log
+- order terkait
+- target dan step
+- qty batch
+- estimasi output
+- qty bagus
+- qty reject
+- qty rework
+- operator produksi
+- catatan
 
-## Field Form Utama
-- **No. Work Log**
-- **Tanggal**
-- **Source Type**
-- **Production Order** atau **Production BOM**
-- **Target Type**
-- **Target Item**
-- **Profil Produksi**
-- **Production Step**
-- **Sequence No**
-- **Qty Batch**
-- **Qty Input Dasar**
-- **Sisa Daun Aktual**
-- **Sisa Kawat Aktual**
-- **Good Qty**
-- **Reject Qty**
-- **Rework Qty**
-- **Worker**
-- **Labor Cost**
-- **Overhead Cost**
-- **Scrap Qty**
-- **Catatan**
+## Rule penting
 
-## Tombol Aksi
-- **Detail**
-- **Edit**
-- **Selesaikan**
-- **Apply Draft PO**
-- **Apply Draft BOM**
+- bahan dipotong saat work log dibuat dari order yang dimulai
+- output masuk saat work log selesai
+- item bervarian masuk ke target varian yang sesuai
+- modal penyelesaian dipakai untuk audit hasil produksi
 
-## Modal Selesaikan Work Log
-Field penting:
-- **Qty Bagus**
-- **Qty Reject**
-- **Qty Rework**
-- **Operator Produksi**
-- **Catatan Penyelesaian**
+## Tombol yang umum
 
-## Rule Penting
-- work log utama dibuat dari PO,
-- bahan input sudah dipotong saat **Mulai Produksi**,
-- tombol **Selesaikan** hanya menambah output dan menutup pekerjaan,
-- estimasi output berasal dari **hasil per produksi di BOM x qty batch**.
+- Detail
+- Edit
+- Selesaikan
+- Refresh
 
-## Contoh Skenario
-1. Buka work log dari PO.
-2. Cek pemakaian bahan dan target output.
-3. Saat selesai, isi qty bagus, reject, rework, dan operator.
-4. Simpan; output semi finished atau produk akan bertambah sesuai target dan varian.
+## Catatan
+
+Estimasi output dibaca dari hasil per batch pada BOM yang dibawa ke order lalu work log.

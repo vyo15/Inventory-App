@@ -18,21 +18,38 @@ import {
 
 // =========================
 // SECTION: Sidebar Menu Config
+// Tujuan:
+// - merapikan struktur sidebar agar lebih profesional untuk konteks ERP / IMS
+// - menyamakan penamaan group dan menu dengan bahasa Indonesia yang natural
+// - menjaga route dan key tetap sama agar tidak mengganggu logic yang sudah berjalan
 // Catatan:
-// - Jalur lama Komposisi Produk dan Produksi Dasar tidak ditampilkan lagi
-// - Fokus menu produksi diarahkan ke arsitektur final
+// - perubahan di file ini fokus pada nama group, nama menu, dan urutan tampilan
+// - path, key, dan struktur dasar tetap dipertahankan supaya aman untuk integrasi existing
 // =========================
 export const sidebarMenuItems = [
+  // =========================
+  // GROUP: Dashboard
+  // Fungsi:
+  // - pusat ringkasan operasional dan prioritas kerja harian
+  // =========================
   {
     key: "dashboard",
     icon: HomeOutlined,
     label: "Dashboard",
     path: "/dashboard",
   },
+
+  // =========================
+  // GROUP: Master Data
+  // Fungsi:
+  // - menyimpan data referensi utama yang dipakai menu operasional
+  // - nama group diganti dari "Data Utama" menjadi "Master Data"
+  //   agar lebih profesional dan lebih umum dipakai di ERP / IMS
+  // =========================
   {
     key: "master-data",
     icon: DatabaseOutlined,
-    label: "Data Utama",
+    label: "Master Data",
     children: [
       { key: "products", label: "Produk Jadi", path: "/products" },
       { key: "raw-materials", label: "Bahan Baku", path: "/raw-materials" },
@@ -42,11 +59,17 @@ export const sidebarMenuItems = [
       {
         key: "pricing-rules",
         icon: TagsOutlined,
-        label: "Pricing Rules",
+        label: "Aturan Harga",
         path: "/pricing-rules",
       },
     ],
   },
+
+  // =========================
+  // GROUP: Inventaris
+  // Fungsi:
+  // - memantau dan menyesuaikan kondisi stok aktual di sistem
+  // =========================
   {
     key: "inventory",
     icon: AppstoreOutlined,
@@ -64,6 +87,16 @@ export const sidebarMenuItems = [
       },
     ],
   },
+
+  // =========================
+  // GROUP: Produksi
+  // Fungsi:
+  // - menggabungkan setup produksi dan operasional produksi dalam satu group
+  // - urutan dibuat dari data setup -> eksekusi -> biaya agar lebih mudah dipahami user
+  // Catatan:
+  // - istilah teknis yang sudah lazim seperti BOM, Work Log, Payroll, dan HPP tetap dipakai
+  // - istilah yang terasa terlalu campur disesuaikan ke bahasa Indonesia yang lebih natural
+  // =========================
   {
     key: "productions",
     icon: BuildOutlined,
@@ -89,7 +122,7 @@ export const sidebarMenuItems = [
       },
       {
         key: "semi-finished-materials",
-        label: "Semi Finished Materials",
+        label: "Bahan Setengah Jadi",
         path: "/produksi/semi-finished-materials",
         icon: ClusterOutlined,
       },
@@ -101,7 +134,7 @@ export const sidebarMenuItems = [
       },
       {
         key: "production-orders",
-        label: "Production Orders",
+        label: "Order Produksi",
         path: "/produksi/production-orders",
         icon: FileTextOutlined,
       },
@@ -125,16 +158,30 @@ export const sidebarMenuItems = [
       },
     ],
   },
+
+  // =========================
+  // GROUP: Transaksi
+  // Fungsi:
+  // - menampung transaksi pembelian, penjualan, dan retur
+  // - urutan dibuat lebih natural mengikuti alur bisnis umum:
+  //   pembelian -> penjualan -> retur
+  // =========================
   {
     key: "transactions",
     icon: ShoppingCartOutlined,
     label: "Transaksi",
     children: [
-      { key: "sales", label: "Penjualan", path: "/sales" },
       { key: "purchases", label: "Pembelian", path: "/purchases" },
+      { key: "sales", label: "Penjualan", path: "/sales" },
       { key: "returns", label: "Retur", path: "/returns" },
     ],
   },
+
+  // =========================
+  // GROUP: Kas & Biaya
+  // Fungsi:
+  // - mencatat arus masuk dan arus keluar kas/biaya operasional
+  // =========================
   {
     key: "finance",
     icon: WalletOutlined,
@@ -144,10 +191,17 @@ export const sidebarMenuItems = [
       { key: "cash-out", label: "Pengeluaran", path: "/cash-out" },
     ],
   },
+
+  // =========================
+  // GROUP: Sistem
+  // Fungsi:
+  // - menampung menu maintenance dan utilitas sistem yang bersifat sensitif
+  // - nama group diganti dari "Utilities" menjadi "Sistem" agar lebih profesional
+  // =========================
   {
     key: "utilities",
     icon: ToolOutlined,
-    label: "Utilities",
+    label: "Sistem",
     children: [
       {
         key: "reset-test-data",
@@ -156,6 +210,12 @@ export const sidebarMenuItems = [
       },
     ],
   },
+
+  // =========================
+  // GROUP: Laporan
+  // Fungsi:
+  // - menampilkan hasil rekap operasional untuk audit dan analisis
+  // =========================
   {
     key: "reports",
     icon: PrinterOutlined,
