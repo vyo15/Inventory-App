@@ -105,11 +105,14 @@ const ProductionWorkLogs = () => {
   const [outputModalVisible, setOutputModalVisible] = useState(false);
   const [editingMaterialIndex, setEditingMaterialIndex] = useState(null);
   const [editingOutputIndex, setEditingOutputIndex] = useState(null);
+  const [completeModalVisible, setCompleteModalVisible] = useState(false);
+  const [completingRecord, setCompletingRecord] = useState(null);
 
   // SECTION: form instances
   const [form] = Form.useForm();
   const [materialForm] = Form.useForm();
   const [outputForm] = Form.useForm();
+  const [completeForm] = Form.useForm();
 
   // SECTION: watch source
   const targetTypeValue = Form.useWatch("targetType", form);
@@ -589,18 +592,282 @@ const ProductionWorkLogs = () => {
     }
   };
 
-  const handleMarkCompleted = async (record) => {
+  // =====================================================
+  // Popup selesai produksi
+  // Catatan maintainability:
+  // - User isi actual result, reject, rework, operator, dan catatan dari popup ini
+  // - Setelah update work log, baru service complete menambah stok output dan menutup PO
+  // =====================================================
+  const handleOpenComplete = (record) => {
+    setCompletingRecord(record);
+    completeForm.setFieldsValue({
+      goodQty: record.goodQty || 0,
+      rejectQty: record.rejectQty || 0,
+      reworkQty: record.reworkQty || 0,
+      workerIds: Array.isArray(record.workerIds) ? record.workerIds : [],
+      notes: record.notes || '',
+    });
+    setCompleteModalVisible(true);
+  };
+
+  const handleMarkCompleted = async () => {
     try {
-      await completeProductionWorkLog(record.id, null);
-      message.success(
-        "Work log selesai. Stok input dikurangi, reserve dilepas, output ditambahkan, dan PO ditutup.",
+      const values = await completeForm.validateFields();
+      if (!completingRecord?.id) return;
+
+      await updateProductionWorkLog(
+        completingRecord.id,
+        {
+          ...completingRecord,
+          goodQty: values.goodQty,
+          rejectQty: values.rejectQty,
+          reworkQty: values.reworkQty,
+          workerIds: values.workerIds || [],
+          workerNames: (referenceData.employees || [])
+            .filter((item) => (values.workerIds || []).includes(item.id))
+            .map((item) => item.name || ''),
+          workerCodes: (referenceData.employees || [])
+            .filter((item) => (values.workerIds || []).includes(item.id))
+            .map((item) => item.code || ''),
+          workerCount: Array.isArray(values.workerIds) ? values.workerIds.length : 0,
+          notes: values.notes || '',
+        },
+        null,
       );
+
+      await completeProductionWorkLog(completingRecord.id, null);
+      message.success('Work log selesai. Output ditambahkan dan PO ditutup.');
+      setCompleteModalVisible(false);
+      setCompletingRecord(null);
+      completeForm.resetFields();
       await loadData();
     } catch (error) {
+      if (error?.errorFields) return;
       console.error(error);
-      message.error(error?.message || "Gagal menyelesaikan work log");
+      message.error(error?.message || 'Gagal menyelesaikan work log');
     }
   };
+
+
+  // =====================================================
+  // Helper presentasi daftar & drawer detail
+  // Catatan maintainability:
+  // - Helper di bawah hanya untuk kebutuhan tampilan / readability UI.
+  // - Jangan dipakai untuk mengubah logika transaksi, stok, atau status produksi.
+  // - Tujuannya agar tampilan work log tetap rapi, profesional, dan mudah diaudit.
+  // =====================================================
+  const formatDisplayDate = (value, format = "DD/MM/YYYY") => {
+    const rawValue = value?.toDate ? value.toDate() : value;
+    return rawValue ? dayjs(rawValue).format(format) : "-";
+  };
+
+  const getWorkLogStatusTagColor = (status) => {
+    switch (status) {
+      case "completed":
+        return "green";
+      case "in_progress":
+        return "blue";
+      case "cancelled":
+        return "red";
+      case "draft":
+      default:
+        return "default";
+    }
+  };
+
+  const getWorkLogSourceTagColor = (sourceType) =>
+    sourceType === "production_order" ? "purple" : "blue";
+
+  const getStockSourceTagColor = (stockSourceType) =>
+    stockSourceType === "variant" ? "purple" : "default";
+
+  // =====================================================
+  // Data turunan drawer detail
+  // - Semua data di bawah dibentuk dari selectedRecord aktif.
+  // - Dengan pola ini, drawer detail lebih mudah dirapikan tanpa mencampur
+  //   logika presentasi dengan markup yang terlalu panjang.
+  // =====================================================
+  const detailMetricCards = useMemo(() => {
+    if (!selectedRecord) return [];
+
+    const unitLabel = selectedRecord.targetUnit || "pcs";
+
+    return [
+      {
+        key: "batch",
+        label: "Qty Batch",
+        value: formatNumber(selectedRecord.plannedQty || 0),
+        helper: "Jumlah batch yang dikerjakan",
+      },
+      {
+        key: "estimate",
+        label: "Estimasi Output",
+        value: `${formatNumber(selectedRecord.theoreticalOutputQty || 0)} ${unitLabel}`,
+        helper: `Step: ${selectedRecord.stepName || "-"}`,
+      },
+      {
+        key: "good",
+        label: "Good Output",
+        value: `${formatNumber(selectedRecord.goodQty || 0)} ${unitLabel}`,
+        helper: `Reject ${formatNumber(selectedRecord.rejectQty || 0)} | Rework ${formatNumber(selectedRecord.reworkQty || 0)}`,
+      },
+      {
+        key: "cost",
+        label: "Total Biaya",
+        value: formatCurrency(selectedRecord.totalCostActual || 0),
+        helper: `Cost / good unit ${formatCurrency(selectedRecord.costPerGoodUnit || 0)}`,
+      },
+    ];
+  }, [selectedRecord]);
+
+  const detailWorkerNames = useMemo(() => {
+    if (!selectedRecord || !Array.isArray(selectedRecord.workerNames)) {
+      return [];
+    }
+
+    return selectedRecord.workerNames.filter(Boolean);
+  }, [selectedRecord]);
+
+  const detailMaterialColumns = useMemo(
+    () => [
+      {
+        title: "Material",
+        key: "item",
+        render: (_, record) => (
+          <div>
+            <div style={{ fontWeight: 600 }}>{record.itemName || "-"}</div>
+            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+              {record.itemCode || "-"}
+            </div>
+            {record.resolvedVariantLabel ? (
+              <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                Varian: {record.resolvedVariantLabel}
+              </div>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        title: "Sumber Stok",
+        key: "stockSource",
+        width: 160,
+        render: (_, record) => (
+          <Space direction="vertical" size={4}>
+            <Tag color={getStockSourceTagColor(record.stockSourceType)}>
+              {record.stockSourceType === "variant" ? "Variant" : "Master"}
+            </Tag>
+            {record.stockSourceType === "variant" && record.resolvedVariantLabel ? (
+              <Typography.Text type="secondary">
+                {record.resolvedVariantLabel}
+              </Typography.Text>
+            ) : null}
+          </Space>
+        ),
+      },
+      {
+        title: "Pemakaian",
+        key: "qty",
+        width: 180,
+        render: (_, record) => (
+          <Space direction="vertical" size={0}>
+            <Typography.Text>
+              Plan: {formatNumber(record.plannedQty)} {record.unit || ""}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              Actual: {formatNumber(record.actualQty)} {record.unit || ""}
+            </Typography.Text>
+          </Space>
+        ),
+      },
+      {
+        title: "Biaya",
+        key: "cost",
+        width: 180,
+        render: (_, record) => (
+          <Space direction="vertical" size={0}>
+            <Typography.Text>
+              {formatCurrency(record.totalCostSnapshot || 0)}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              Unit: {formatCurrency(record.unitCostSnapshot || 0)}
+            </Typography.Text>
+          </Space>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const detailOutputColumns = useMemo(
+    () => [
+      {
+        title: "Output",
+        key: "output",
+        render: (_, record) => (
+          <div>
+            <div style={{ fontWeight: 600 }}>{record.outputName || "-"}</div>
+            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+              {record.outputCode || "-"}
+            </div>
+            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+              {WORK_LOG_TARGET_TYPE_MAP[record.outputType] || record.outputType || "-"}
+            </div>
+            {record.outputVariantLabel ? (
+              <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                Varian: {record.outputVariantLabel}
+              </div>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        title: "Target Stok",
+        key: "stockTarget",
+        width: 170,
+        render: (_, record) => (
+          <Space direction="vertical" size={4}>
+            <Tag color={getStockSourceTagColor(record.stockSourceType)}>
+              {record.stockSourceType === "variant" ? "Masuk ke Variant" : "Masuk ke Master"}
+            </Tag>
+            {record.outputVariantLabel ? (
+              <Typography.Text type="secondary">
+                {record.outputVariantLabel}
+              </Typography.Text>
+            ) : null}
+          </Space>
+        ),
+      },
+      {
+        title: "Hasil",
+        key: "result",
+        width: 180,
+        render: (_, record) => (
+          <Space direction="vertical" size={0}>
+            <Typography.Text>
+              Good: {formatNumber(record.goodQty)} {record.unit || ""}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              Reject: {formatNumber(record.rejectQty)} {record.unit || ""}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              Rework: {formatNumber(record.reworkQty)} {record.unit || ""}
+            </Typography.Text>
+          </Space>
+        ),
+      },
+      {
+        title: "Mutasi Stok",
+        key: "stockAdded",
+        width: 150,
+        render: (_, record) => (
+          <Tag color={record.stockAdded ? "green" : "default"}>
+            {record.stockAdded ? "Sudah masuk stok" : "Belum diposting"}
+          </Tag>
+        ),
+      },
+    ],
+    [],
+  );
 
   const columns = [
     {
@@ -617,10 +884,7 @@ const ProductionWorkLogs = () => {
       dataIndex: "workDate",
       key: "workDate",
       width: 130,
-      render: (value) => {
-        const date = value?.toDate ? value.toDate() : value;
-        return date ? dayjs(date).format("DD/MM/YYYY") : "-";
-      },
+      render: (value) => formatDisplayDate(value),
     },
     {
       title: "Target / Step",
@@ -649,12 +913,9 @@ const ProductionWorkLogs = () => {
       width: 150,
       render: (_, record) => (
         <Space direction="vertical" size={0}>
-          <Typography.Text>
-            Plan: {formatNumber(record.plannedQty)}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            Good: {formatNumber(record.goodQty)}
-          </Typography.Text>
+          <Typography.Text>Batch: {formatNumber(record.plannedQty)}</Typography.Text>
+          <Typography.Text type="secondary">Estimasi: {formatNumber(record.theoreticalOutputQty || 0)}</Typography.Text>
+          <Typography.Text type="secondary">Good: {formatNumber(record.goodQty)}</Typography.Text>
         </Space>
       ),
     },
@@ -671,7 +932,7 @@ const ProductionWorkLogs = () => {
       key: "sourceType",
       width: 140,
       render: (value) => (
-        <Tag color={value === "production_order" ? "purple" : "blue"}>
+        <Tag color={getWorkLogSourceTagColor(value)}>
           {WORK_LOG_SOURCE_TYPE_MAP[value] || value || "-"}
         </Tag>
       ),
@@ -682,7 +943,9 @@ const ProductionWorkLogs = () => {
       key: "status",
       width: 120,
       render: (value) => (
-        <Tag color="blue">{WORK_LOG_STATUS_MAP[value] || "-"}</Tag>
+        <Tag color={getWorkLogStatusTagColor(value)}>
+          {WORK_LOG_STATUS_MAP[value] || "-"}
+        </Tag>
       ),
     },
     {
@@ -710,16 +973,13 @@ const ProductionWorkLogs = () => {
           </Button>
 
           {record.status !== "completed" && record.status !== "cancelled" && (
-            <Popconfirm
-              title="Tandai work log ini completed?"
-              onConfirm={() => handleMarkCompleted(record)}
-              okText="Ya"
-              cancelText="Batal"
+            <Button
+              size="small"
+              type="primary"
+              onClick={() => handleOpenComplete(record)}
             >
-              <Button size="small" type="primary">
-                Completed
-              </Button>
-            </Popconfirm>
+              Selesaikan
+            </Button>
           )}
         </Space>
       ),
@@ -730,10 +990,8 @@ const ProductionWorkLogs = () => {
     <div>
       <ProductionPageHeader
         title="Work Log Produksi"
-        description="Realisasi kerja produksi per step"
+        description="Realisasi kerja produksi dari Production Order (1 PO = 1 Work Log)"
         onRefresh={loadData}
-        onAdd={handleAdd}
-        addLabel="Tambah Work Log"
       />
 
       <ProductionSummaryCards
@@ -1020,7 +1278,7 @@ const ProductionWorkLogs = () => {
           <Row gutter={16}>
             <Col xs={24} md={6}>
               <Form.Item
-                label="Planned Qty"
+                label="Qty Batch"
                 name="plannedQty"
                 rules={[{ required: true, message: "Planned qty wajib diisi" }]}
               >
@@ -1253,162 +1511,303 @@ const ProductionWorkLogs = () => {
         title="Detail Work Log Produksi"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={860}
+        width={980}
       >
         {!selectedRecord ? (
           <Empty description="Tidak ada data" />
         ) : (
           <>
-            <Descriptions
-              column={1}
-              bordered
-              size="small"
-              style={{ marginBottom: 16 }}
-            >
-              <Descriptions.Item label="No. Work Log">
-                {selectedRecord.workNumber || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Tanggal">
-                {selectedRecord.workDate
-                  ? dayjs(
-                      selectedRecord.workDate?.toDate?.() ||
-                        selectedRecord.workDate,
-                    ).format("DD/MM/YYYY")
-                  : "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Source">
+            {/* ------------------------------------------------------------- */}
+            {/* SECTION: ringkasan cepat untuk audit work log                 */}
+            {/* Tujuan: user langsung tahu konteks kerja, status, dan hasil.  */}
+            {/* ------------------------------------------------------------- */}
+            <Space wrap size={[8, 8]} style={{ marginBottom: 16 }}>
+              <Tag color={getWorkLogStatusTagColor(selectedRecord.status)}>
+                {WORK_LOG_STATUS_MAP[selectedRecord.status] || "-"}
+              </Tag>
+              <Tag color={getWorkLogSourceTagColor(selectedRecord.sourceType)}>
                 {WORK_LOG_SOURCE_TYPE_MAP[selectedRecord.sourceType] ||
                   selectedRecord.sourceType ||
                   "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Production Order">
-                {selectedRecord.productionOrderCode || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Target Type">
-                {WORK_LOG_TARGET_TYPE_MAP[selectedRecord.targetType] || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Target">
-                {selectedRecord.targetName || "-"}
-                {selectedRecord.targetVariantLabel ? ` | Varian: ${selectedRecord.targetVariantLabel}` : ""}
-              </Descriptions.Item>
-              <Descriptions.Item label="Step">
-                {selectedRecord.stepName || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Profil Produksi">
-                {selectedRecord.productionProfileName || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                {WORK_LOG_STATUS_MAP[selectedRecord.status] || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Total Cost Actual">
-                {formatCurrency(selectedRecord.totalCostActual)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Cost per Good Unit">
-                {formatCurrency(selectedRecord.costPerGoodUnit)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Catatan">
-                {selectedRecord.notes || "-"}
-              </Descriptions.Item>
-            </Descriptions>
+              </Tag>
+              <Tag>{selectedRecord.productionOrderCode || "Tanpa PO"}</Tag>
+            </Space>
 
-            <Divider orientation="left">Material Usages</Divider>
-
-            <Table
-              rowKey={(record) => record.id}
-              pagination={false}
-              size="small"
-              dataSource={selectedRecord.materialUsages || []}
-              locale={{ emptyText: "Belum ada material usage" }}
-              columns={[
-                {
-                  title: "Item",
-                  key: "item",
-                  render: (_, record) => (
-                    <div>
-                      <div style={{ fontWeight: 600 }}>
-                        {record.itemName || "-"}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                        {record.itemCode || "-"}
-                      </div>
-                      {record.resolvedVariantLabel ? (
-                        <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                          Varian: {record.resolvedVariantLabel}
-                        </div>
-                      ) : null}
+            {/* ------------------------------------------------------------- */}
+            {/* SECTION: kartu ringkasan angka utama                          */}
+            {/* Catatan maintainability:                                      */}
+            {/* - kartu ini hanya presentasi cepat untuk user operasional     */}
+            {/* - sumber data tetap berasal dari selectedRecord aktif         */}
+            {/* ------------------------------------------------------------- */}
+            <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+              {detailMetricCards.map((item) => (
+                <Col xs={24} sm={12} xl={6} key={item.key}>
+                  <Card size="small">
+                    <Typography.Text type="secondary">
+                      {item.label}
+                    </Typography.Text>
+                    <div style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>
+                      {item.value}
                     </div>
-                  ),
-                },
-                {
-                  title: "Qty",
-                  key: "qty",
-                  render: (_, record) => (
-                    <Space direction="vertical" size={0}>
-                      <Typography.Text>
-                        Plan: {formatNumber(record.plannedQty)}
-                      </Typography.Text>
-                      <Typography.Text type="secondary">
-                        Actual: {formatNumber(record.actualQty)}
-                      </Typography.Text>
+                    <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 6 }}>
+                      {item.helper}
+                    </div>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+
+            {/* ------------------------------------------------------------- */}
+            {/* SECTION: informasi work log dan konteks produksi              */}
+            {/* Dibagi 2 card agar lebih mudah dibaca daripada satu tabel     */}
+            {/* deskripsi yang terlalu panjang dan padat.                     */}
+            {/* ------------------------------------------------------------- */}
+            <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+              <Col xs={24} xl={14}>
+                <Card size="small" title="Ringkasan Work Log">
+                  <Descriptions bordered size="small" column={1}>
+                    <Descriptions.Item label="No. Work Log">
+                      {selectedRecord.workNumber || "-"}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Tanggal">
+                      {formatDisplayDate(selectedRecord.workDate)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Production Order">
+                      {selectedRecord.productionOrderCode || "-"}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Target Type">
+                      {WORK_LOG_TARGET_TYPE_MAP[selectedRecord.targetType] || "-"}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Target">
+                      <Space direction="vertical" size={0}>
+                        <Typography.Text strong>
+                          {selectedRecord.targetName || "-"}
+                        </Typography.Text>
+                        {selectedRecord.targetVariantLabel ? (
+                          <Typography.Text type="secondary">
+                            Varian: {selectedRecord.targetVariantLabel}
+                          </Typography.Text>
+                        ) : null}
+                      </Space>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Step">
+                      {selectedRecord.stepName || "-"}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Profil Produksi">
+                      {selectedRecord.productionProfileName || "-"}
+                    </Descriptions.Item>
+                  </Descriptions>
+                </Card>
+              </Col>
+
+              <Col xs={24} xl={10}>
+                <Space direction="vertical" size={16} style={{ width: "100%" }}>
+                  <Card size="small" title="Tim & Catatan">
+                    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                      <div>
+                        <Typography.Text type="secondary">
+                          Operator Produksi
+                        </Typography.Text>
+                        <div style={{ marginTop: 8 }}>
+                          {detailWorkerNames.length > 0 ? (
+                            <Space wrap size={[8, 8]}>
+                              {detailWorkerNames.map((name) => (
+                                <Tag key={name} color="blue">
+                                  {name}
+                                </Tag>
+                              ))}
+                            </Space>
+                          ) : (
+                            <Typography.Text type="secondary">
+                              Belum ada operator dipilih.
+                            </Typography.Text>
+                          )}
+                        </div>
+                      </div>
+
+                      <Divider style={{ margin: 0 }} />
+
+                      <div>
+                        <Typography.Text type="secondary">
+                          Catatan Eksekusi
+                        </Typography.Text>
+                        <div style={{ marginTop: 8 }}>
+                          <Typography.Paragraph style={{ marginBottom: 0 }}>
+                            {selectedRecord.notes || "Belum ada catatan work log."}
+                          </Typography.Paragraph>
+                        </div>
+                      </div>
                     </Space>
-                  ),
-                },
-                {
-                  title: "Total Cost",
-                  dataIndex: "totalCostSnapshot",
-                  render: (value) => formatCurrency(value),
-                },
-              ]}
-            />
+                  </Card>
 
-            <Divider orientation="left">Outputs</Divider>
-
-            <Table
-              rowKey={(record) => record.id}
-              pagination={false}
-              size="small"
-              dataSource={selectedRecord.outputs || []}
-              locale={{ emptyText: "Belum ada output" }}
-              columns={[
-                {
-                  title: "Output",
-                  key: "output",
-                  render: (_, record) => (
-                    <div>
-                      <div style={{ fontWeight: 600 }}>
-                        {record.outputName || "-"}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                        {record.outputCode || "-"}
-                      </div>
-                      {record.outputVariantLabel ? (
-                        <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                          Varian: {record.outputVariantLabel}
+                  <Card size="small" title="Biaya Aktual">
+                    <Row gutter={[12, 12]}>
+                      <Col span={12}>
+                        <Typography.Text type="secondary">
+                          Material
+                        </Typography.Text>
+                        <div style={{ fontWeight: 600, marginTop: 4 }}>
+                          {formatCurrency(selectedRecord.materialCostActual || 0)}
                         </div>
-                      ) : null}
-                    </div>
-                  ),
-                },
-                {
-                  title: "Good",
-                  dataIndex: "goodQty",
-                  render: (value) => formatNumber(value),
-                },
-                {
-                  title: "Reject",
-                  dataIndex: "rejectQty",
-                  render: (value) => formatNumber(value),
-                },
-                {
-                  title: "Rework",
-                  dataIndex: "reworkQty",
-                  render: (value) => formatNumber(value),
-                },
-              ]}
-            />
+                      </Col>
+                      <Col span={12}>
+                        <Typography.Text type="secondary">
+                          Labor
+                        </Typography.Text>
+                        <div style={{ fontWeight: 600, marginTop: 4 }}>
+                          {formatCurrency(selectedRecord.laborCostActual || 0)}
+                        </div>
+                      </Col>
+                      <Col span={12}>
+                        <Typography.Text type="secondary">
+                          Overhead
+                        </Typography.Text>
+                        <div style={{ fontWeight: 600, marginTop: 4 }}>
+                          {formatCurrency(selectedRecord.overheadCostActual || 0)}
+                        </div>
+                      </Col>
+                      <Col span={12}>
+                        <Typography.Text type="secondary">
+                          Scrap Qty
+                        </Typography.Text>
+                        <div style={{ fontWeight: 600, marginTop: 4 }}>
+                          {formatNumber(selectedRecord.scrapQty || 0)}
+                        </div>
+                      </Col>
+                    </Row>
+                  </Card>
+                </Space>
+              </Col>
+            </Row>
+
+            {/* ------------------------------------------------------------- */}
+            {/* SECTION: tabel pemakaian material                              */}
+            {/* Fokus ke item, sumber stok, qty pakai, dan biaya snapshot.    */}
+            {/* ------------------------------------------------------------- */}
+            <Card size="small" title="Pemakaian Material" style={{ marginBottom: 16 }}>
+              <Table
+                rowKey={(record, index) => record.id || `material-${index}`}
+                pagination={false}
+                size="small"
+                dataSource={selectedRecord.materialUsages || []}
+                locale={{ emptyText: "Belum ada material usage" }}
+                columns={detailMaterialColumns}
+              />
+            </Card>
+
+            {/* ------------------------------------------------------------- */}
+            {/* SECTION: tabel hasil produksi                                  */}
+            {/* Tujuan: user mudah audit output, variant target, dan status   */}
+            {/* posting stok setelah work log selesai.                        */}
+            {/* ------------------------------------------------------------- */}
+            <Card size="small" title="Hasil Produksi">
+              <Table
+                rowKey={(record, index) => record.id || `output-${index}`}
+                pagination={false}
+                size="small"
+                dataSource={selectedRecord.outputs || []}
+                locale={{ emptyText: "Belum ada output" }}
+                columns={detailOutputColumns}
+              />
+            </Card>
           </>
         )}
       </Drawer>
+
+
+      <Modal
+        title="Selesaikan Work Log"
+        open={completeModalVisible}
+        onCancel={() => {
+          // Reset state popup selesai agar tidak membawa data record sebelumnya.
+          setCompleteModalVisible(false);
+          setCompletingRecord(null);
+          completeForm.resetFields();
+        }}
+        onOk={handleMarkCompleted}
+        okText="Selesaikan"
+        confirmLoading={submitting}
+        destroyOnClose
+      >
+        {/* ------------------------------------------------------------- */}
+        {/* SECTION: popup penyelesaian work log                          */}
+        {/* Tujuan: user isi hasil aktual, operator, dan catatan akhir    */}
+        {/* sebelum service melakukan posting stok output & update status. */}
+        {/* ------------------------------------------------------------- */}
+        <Form
+          form={completeForm}
+          layout="vertical"
+          initialValues={{
+            goodQty: 0,
+            rejectQty: 0,
+            reworkQty: 0,
+            workerIds: [],
+            notes: '',
+          }}
+        >
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <Descriptions size="small" column={1}>
+              <Descriptions.Item label="No. Work Log">
+                {completingRecord?.workNumber || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Target / Step">
+                <Space direction="vertical" size={0}>
+                  <Typography.Text strong>
+                    {completingRecord?.targetName || '-'}
+                  </Typography.Text>
+                  <Typography.Text type="secondary">
+                    {completingRecord?.stepName || '-'}
+                  </Typography.Text>
+                </Space>
+              </Descriptions.Item>
+              <Descriptions.Item label="Estimasi Output">
+                {formatNumber(completingRecord?.theoreticalOutputQty || 0)} {completingRecord?.targetUnit || 'pcs'}
+              </Descriptions.Item>
+            </Descriptions>
+          </Card>
+
+          <Row gutter={12}>
+            <Col span={8}>
+              <Form.Item
+                label="Qty Bagus"
+                name="goodQty"
+                rules={[{ required: true, message: 'Qty bagus wajib diisi' }]}
+              >
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+
+            <Col span={8}>
+              <Form.Item label="Qty Reject" name="rejectQty">
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+
+            <Col span={8}>
+              <Form.Item label="Qty Rework" name="reworkQty">
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item label="Operator Produksi" name="workerIds">
+            <Select
+              mode="multiple"
+              showSearch
+              optionFilterProp="label"
+              options={employeeOptions}
+              placeholder="Pilih operator yang mengerjakan..."
+            />
+          </Form.Item>
+
+          <Form.Item label="Catatan Penyelesaian" name="notes">
+            <Input.TextArea
+              rows={3}
+              placeholder="Contoh: hasil sesuai target, ada reject karena lem kurang presisi"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         title={
@@ -1501,7 +1900,7 @@ const ProductionWorkLogs = () => {
 
           <Row gutter={12}>
             <Col span={8}>
-              <Form.Item label="Planned Qty" name="plannedQty">
+              <Form.Item label="Qty Batch" name="plannedQty">
                 <InputNumber min={0} style={{ width: "100%" }} />
               </Form.Item>
             </Col>

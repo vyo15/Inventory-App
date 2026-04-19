@@ -93,6 +93,13 @@ export const resolveVariantSelection = ({
     ? materialVariantStrategy || 'inherit'
     : 'none';
 
+  // =====================================================
+  // Active flow helper:
+  // - Jika item tidak punya varian, stok selalu dibaca dari master.
+  // - Jika item punya tepat 1 varian aktif dan tidak ada key yang dikirim,
+  //   fallback otomatis ke varian tunggal itu supaya BOM -> PO -> Work Log
+  //   tetap nyambung tanpa user memilih varian manual lagi.
+  // =====================================================
   if (!hasVariants || normalizedStrategy === 'none') {
     const stock = getItemStockSnapshot(item);
     return {
@@ -107,7 +114,12 @@ export const resolveVariantSelection = ({
 
   const candidateKey =
     normalizedStrategy === 'fixed' ? fixedVariantKey : targetVariantKey;
-  const selectedVariant = findVariantByKey(item, candidateKey);
+
+  const activeVariants = buildVariantOptionsFromItem(item);
+  const singleActiveVariant = activeVariants.length === 1 ? activeVariants[0]?.raw || null : null;
+  const selectedVariant =
+    findVariantByKey(item, candidateKey) ||
+    (!safeTrim(candidateKey) && singleActiveVariant ? singleActiveVariant : null);
 
   if (!selectedVariant) {
     const stock = getItemStockSnapshot(item);

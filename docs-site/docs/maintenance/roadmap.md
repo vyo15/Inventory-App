@@ -1,10 +1,14 @@
-# Roadmap
+---
+title: Roadmap
+sidebar_label: Roadmap
+---
 
-## Fokus Pengembangan Berikutnya
-- Payroll masuk ke HPP
-- Pricing Rules
-- Finished Goods HPP
-- Marketplace fee integration
+## Prioritas Tinggi
+- stabilisasi produksi final,
+- validasi semua skenario variant,
+- konsistensi stock flow raw material → semi finished → product.
 
-## Tujuan Roadmap
-Roadmap ini dibuat agar pengembangan sistem tetap terarah dan perubahan logic tidak saling bertabrakan antar menu.
+## Prioritas Menengah
+- integrasi payroll ke HPP,
+- finalisasi finished goods HPP,
+- penguatan analisis biaya produksi.

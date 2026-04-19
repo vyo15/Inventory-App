@@ -1,14 +1,19 @@
-# Costing dan HPP
+---
+title: Costing dan HPP
+sidebar_label: Costing dan HPP
+---
 
-## Tujuan
-Menjelaskan dasar perhitungan biaya dan HPP dalam sistem.
+## Sumber Biaya yang Dipakai
+- average actual unit cost
+- restock reference price
+- hpp per unit
 
-## Rule Dasar
-- Restock reference price dihitung per stock unit
-- Purchasing menggunakan actual price
-- Purchase savings hanya tampil sebagai informasi efisiensi
-- Savings tidak dianggap sebagai pengurang kas langsung
-- Production perlu konsisten terhadap biaya bahan yang dipakai
+## Rule Pembelian
+- Purchase memakai **actual price**.
+- Harga referensi restock dipakai sebagai pembanding / efisiensi.
+- Saving pembelian hanya informasi, bukan pengurang kas langsung.
 
-## Catatan
-Payroll ke HPP dan finished goods HPP masih termasuk roadmap pengembangan berikutnya.
+## Rule Produksi
+- BOM menyimpan snapshot biaya bahan untuk estimasi.
+- Work log membaca biaya aktual material usage dan output.
+- Payroll dan overhead masuk ke pembacaan biaya produksi.

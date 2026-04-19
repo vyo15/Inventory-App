@@ -4,7 +4,8 @@
 // - planning produksi untuk semi finished dan product
 // - hitung kebutuhan material dari BOM master
 // - dukung strategi varian material: inherit / fixed / none
-// - reserve dan release stock sesuai master vs variant
+// - flow aktif: BOM -> PO -> Start Production -> Work Log -> Complete
+// - reserve/release lama dipertahankan hanya untuk kompatibilitas lama, bukan flow utama
 // =====================================================
 
 import {
@@ -40,6 +41,51 @@ const getCollectionNameByItemType = (itemType = "") => {
   return "";
 };
 
+
+// =====================================================
+// Helper sorting daftar production order
+// Catatan maintainability:
+// - Urutan list operasional harus konsisten: terbaru di paling atas.
+// - Prioritas timestamp: updatedAt -> createdAt.
+// - Jika timestamp sama / kosong, pakai nomor PO terbesar.
+// =====================================================
+const toComparableTime = (value) => {
+  if (!value) return 0;
+  if (typeof value?.toMillis === "function") return value.toMillis();
+  if (typeof value?.seconds === "number") return value.seconds * 1000;
+  const date = new Date(value);
+  const time = date.getTime();
+  return Number.isFinite(time) ? time : 0;
+};
+
+const extractTrailingNumber = (value = "") => {
+  const match = String(value || "").match(/(\d+)(?!.*\d)/);
+  return match ? Number(match[1]) : 0;
+};
+
+const sortProductionOrdersNewestFirst = (items = []) =>
+  [...items].sort((a, b) => {
+    const aPrimary = Math.max(
+      toComparableTime(a.updatedAt),
+      toComparableTime(a.createdAt),
+    );
+    const bPrimary = Math.max(
+      toComparableTime(b.updatedAt),
+      toComparableTime(b.createdAt),
+    );
+
+    if (bPrimary !== aPrimary) {
+      return bPrimary - aPrimary;
+    }
+
+    const byNumber = extractTrailingNumber(b.code) - extractTrailingNumber(a.code);
+    if (byNumber !== 0) {
+      return byNumber;
+    }
+
+    return String(b.code || "").localeCompare(String(a.code || ""));
+  });
+
 const normalizeReferenceItem = (snapshot) => {
   if (!snapshot?.exists()) return null;
 
@@ -71,31 +117,48 @@ const normalizeReferenceItem = (snapshot) => {
   };
 };
 
-export const getActiveProductionBomOptions = async (targetType = "product") => {
-  const q = query(
-    collection(db, "production_boms"),
-    where("isActive", "==", true),
-    where("targetType", "==", targetType),
-    orderBy("targetName", "asc"),
-    orderBy("version", "desc"),
-  );
+// =====================================================
+// Ambil BOM aktif untuk dropdown PO
+// Catatan maintainability:
+// - Filter dilakukan lokal agar toleran terhadap variasi data lama targetType
+// - Hindari query Firestore yang terlalu kaku / butuh index tambahan
+// =====================================================
+const normalizeBomTargetType = (value = "") => {
+  const raw = safeTrim(value).toLowerCase().replace(/[_\-]+/g, " ");
+  if (["semi finished", "semi finished material", "semifinished", "semi finishedmaterials"].includes(raw)) {
+    return "semi_finished_material";
+  }
+  if (["product", "finished product"].includes(raw)) {
+    return "product";
+  }
+  return raw || "product";
+};
 
+export const getActiveProductionBomOptions = async (targetType = "product") => {
+  const normalizedTargetType = normalizeBomTargetType(targetType);
+  const q = query(collection(db, "production_boms"), where("isActive", "==", true));
   const snapshot = await getDocs(q);
 
-  return snapshot.docs.map((item) => ({
-    id: item.id,
-    ...item.data(),
-  }));
+  return snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }))
+    .filter((item) => normalizeBomTargetType(item.targetType) === normalizedTargetType)
+    .sort((a, b) => {
+      const aName = safeTrim(a.targetName || a.name).toLowerCase();
+      const bName = safeTrim(b.targetName || b.name).toLowerCase();
+      return aName.localeCompare(bName);
+    });
 };
 
 export const getAllProductionOrders = async () => {
   const q = query(collection(db, COLLECTION_NAME), orderBy("createdAt", "desc"));
   const snapshot = await getDocs(q);
 
-  return snapshot.docs.map((item) => ({
-    id: item.id,
-    ...item.data(),
-  }));
+  return sortProductionOrdersNewestFirst(
+    snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data(),
+    })),
+  );
 };
 
 export const getProductionOrderById = async (id) => {
@@ -169,11 +232,22 @@ const validateOrderVariantInputs = ({ bom, targetVariantKey = "" }) => {
   return errors;
 };
 
-const buildRequirementLine = ({ line = {}, stockItem = null, orderQty = 0, batchOutputQty = 1, index = 0, targetVariantKey = "" }) => {
+// =====================================================
+// Bentuk 1 requirement line dari BOM
+// Catatan maintainability:
+// - Qty PO sekarang dibaca sebagai jumlah batch, bukan jumlah output final
+// - Kebutuhan bahan = (qtyPerBatch + wastage) x qtyBatch
+// =====================================================
+const buildRequirementLine = ({
+  line = {},
+  stockItem = null,
+  batchCount = 0,
+  index = 0,
+  targetVariantKey = "",
+}) => {
   const qtyPerBatch = Number(line.qtyPerBatch || 0);
   const wastageQty = Number(line.wastageQty || 0);
-  const multiplier = batchOutputQty > 0 ? Number(orderQty || 0) / batchOutputQty : 0;
-  const qtyRequired = Math.ceil((qtyPerBatch + wastageQty) * multiplier);
+  const qtyRequired = Math.ceil((qtyPerBatch + wastageQty) * Number(batchCount || 0));
 
   const stockResolution = resolveVariantSelection({
     item: stockItem || {},
@@ -228,8 +302,7 @@ export const buildProductionOrderRequirementLines = async ({
       return buildRequirementLine({
         line,
         stockItem,
-        orderQty,
-        batchOutputQty,
+        batchCount: orderQty,
         index,
         targetVariantKey,
       });
@@ -301,12 +374,11 @@ export const createProductionOrder = async (values = {}, currentUser = null) => 
     targetHasVariants: bom.targetHasVariants === true,
     targetVariantKey: safeTrim(values.targetVariantKey),
     targetVariantLabel: safeTrim(values.targetVariantLabel),
+    // orderQty dipertahankan untuk kompatibilitas data lama, namun maknanya = qty batch produksi
     orderQty,
+    batchCount: orderQty,
     batchOutputQty: Number(bom.batchOutputQty || 1),
-    batchMultiplier:
-      Number(bom.batchOutputQty || 1) > 0
-        ? orderQty / Number(bom.batchOutputQty || 1)
-        : 0,
+    expectedOutputQty: Number(bom.batchOutputQty || 1) * orderQty,
     plannedStartDate: values.plannedStartDate || null,
     plannedEndDate: values.plannedEndDate || null,
     priority: values.priority || "normal",
@@ -405,6 +477,15 @@ const applyReservationMutation = async ({ transaction, line, mode = "reserve" })
   });
 };
 
+// =====================================================
+// LEGACY FLOW - RESERVE / RELEASE
+// Catatan maintainability:
+// - Flow aktif IMS Bunga Flanel TIDAK lagi memakai reserve sebagai jalur utama.
+// - Function di bawah masih dipertahankan sementara untuk kompatibilitas
+//   data lama / migrasi bertahap.
+// - Flow produksi aktif yang dipakai UI sekarang adalah:
+//   Ready -> Start Production -> In Production -> Complete.
+// =====================================================
 export const reserveProductionOrder = async (orderId, currentUser = null) => {
   const orderRef = doc(db, COLLECTION_NAME, orderId);
   const orderSnap = await getDoc(orderRef);
@@ -477,6 +558,14 @@ export const releaseProductionOrderReservation = async (orderId, currentUser = n
   return orderId;
 };
 
+// =====================================================
+// Helper status PO aktif
+// Catatan maintainability:
+// - Dipakai untuk memastikan 1 PO bisa ditandai sedang diproduksi.
+// - Walau createProductionWorkLogFromOrder saat ini update PO langsung
+//   dalam transaction yang sama, helper ini tetap disimpan untuk reuse
+//   di flow lain yang memang butuh ubah status terpisah.
+// =====================================================
 export const markProductionOrderInProduction = async (
   orderId,
   workLogId = null,

@@ -186,3 +186,12 @@ export const removeRawMaterial = async (id) => {
   await deleteDoc(doc(db, COLLECTION_NAME, id));
   return id;
 };
+
+
+export const toggleRawMaterialActive = async (id, isActive) => {
+  await updateDoc(doc(db, COLLECTION_NAME, id), {
+    isActive: Boolean(isActive),
+    updatedAt: serverTimestamp(),
+  });
+  return id;
+};

@@ -43,7 +43,6 @@ const config = {
 
   themeConfig:
     ({
-      image: 'img/docusaurus-social-card.jpg',
       colorMode: {
         defaultMode: 'dark',
         disableSwitch: false,
@@ -69,10 +68,16 @@ const config = {
           },
         ],
       },
+      docs: {
+        sidebar: {
+          hideable: true,
+          autoCollapseCategories: true,
+        },
+      },
       footer: {
         style: 'dark',
         links: [],
-        copyright: `© ${new Date().getFullYear()} IMS Bunga Flanel Documentation. All rights reserved.`,
+        copyright: `© ${new Date().getFullYear()} IMS Bunga Flanel Documentation.`,
       },
       prism: {
         theme: prismThemes.github,

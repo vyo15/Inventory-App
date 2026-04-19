@@ -12,7 +12,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  orderBy,
   query,
   serverTimestamp,
   updateDoc,
@@ -147,9 +146,12 @@ const normalizeMaterialLines = (materialLines = [], targetType = "") =>
       wastageQty: Number(line.wastageQty || 0),
       costPerUnitSnapshot: Number(line.costPerUnitSnapshot || 0),
       materialHasVariants: line.materialHasVariants === true,
-      materialVariantStrategy: line.materialHasVariants === true ? 'inherit' : 'none',
-      fixedVariantKey: '',
-      fixedVariantLabel: '',
+      materialVariantStrategy:
+        line.materialHasVariants === true
+          ? line.materialVariantStrategy || 'inherit'
+          : 'none',
+      fixedVariantKey: safeTrim(line.fixedVariantKey),
+      fixedVariantLabel: safeTrim(line.fixedVariantLabel),
       isOptional: false,
       notes: safeTrim(line.notes),
     });
@@ -311,80 +313,45 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
 // - pakai fallback query agar lebih tahan bila orderBy bermasalah
 // =====================================================
 export const getAllProductionBoms = async () => {
-  try {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      orderBy("targetName", "asc"),
-      orderBy("version", "desc"),
-    );
+  const snapshot = await getDocs(collection(db, COLLECTION_NAME));
 
-    const snapshot = await getDocs(q);
-
-    return snapshot.docs.map((item) => ({
+  return snapshot.docs
+    .map((item) => ({
       id: item.id,
       ...item.data(),
-    }));
-  } catch (error) {
-    console.error("Query BOM utama gagal, pakai fallback query", error);
-
-    try {
-      const fallbackQuery = query(
-        collection(db, COLLECTION_NAME),
-        orderBy("targetName", "asc"),
+    }))
+    .sort((a, b) => {
+      const targetCompare = String(a?.targetName || "").localeCompare(
+        String(b?.targetName || ""),
+        "id",
       );
 
-      const snapshot = await getDocs(fallbackQuery);
-
-      return snapshot.docs.map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }));
-    } catch (fallbackError) {
-      console.error(
-        "Fallback query BOM gagal, pakai getDocs biasa",
-        fallbackError,
-      );
-
-      const snapshot = await getDocs(collection(db, COLLECTION_NAME));
-
-      return snapshot.docs.map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }));
-    }
-  }
+      if (targetCompare !== 0) return targetCompare;
+      return Number(b?.version || 0) - Number(a?.version || 0);
+    });
 };
 
 // =====================================================
 // SECTION: ambil BOM aktif
 // =====================================================
 export const getActiveProductionBoms = async () => {
-  try {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      where("isActive", "==", true),
-      orderBy("targetName", "asc"),
-      orderBy("version", "desc"),
-    );
+  const snapshot = await getDocs(collection(db, COLLECTION_NAME));
 
-    const snapshot = await getDocs(q);
-
-    return snapshot.docs.map((item) => ({
+  return snapshot.docs
+    .map((item) => ({
       id: item.id,
       ...item.data(),
-    }));
-  } catch (error) {
-    console.error("Query BOM aktif gagal, pakai fallback filter lokal", error);
+    }))
+    .filter((item) => item?.isActive === true)
+    .sort((a, b) => {
+      const targetCompare = String(a?.targetName || "").localeCompare(
+        String(b?.targetName || ""),
+        "id",
+      );
 
-    const snapshot = await getDocs(collection(db, COLLECTION_NAME));
-
-    return snapshot.docs
-      .map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }))
-      .filter((item) => item?.isActive === true);
-  }
+      if (targetCompare !== 0) return targetCompare;
+      return Number(b?.version || 0) - Number(a?.version || 0);
+    });
 };
 
 // =====================================================

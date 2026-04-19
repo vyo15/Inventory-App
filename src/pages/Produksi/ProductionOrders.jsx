@@ -6,11 +6,12 @@
 // Fungsi:
 // - planning produksi
 // - shortage check
-// - reserve stock
-// - generate ke work log (tahap berikutnya disambungkan penuh)
+// - flow aktif: BOM -> PO -> Mulai Produksi -> Work Log -> Complete
+// - reserve/release lama dipensiunkan dari UI utama
 // =====================================================
 
 import React, { useEffect, useMemo, useState } from "react";
+import dayjs from "dayjs";
 import {
   Alert,
   Badge,
@@ -25,7 +26,6 @@ import {
   Input,
   InputNumber,
   message,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -35,21 +35,23 @@ import {
   Typography,
 } from "antd";
 import { EyeOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
-import { buildCountSummary, createKeywordMatcher, matchFieldValue } from '../../utils/produksi/productionPageHelpers';
-import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
-import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
-import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
-import formatNumber from '../../utils/formatters/numberId';
+import { toReferenceOptions } from "../../utils/produksi/productionReferenceHelpers";
+import {
+  buildCountSummary,
+  createKeywordMatcher,
+  matchFieldValue,
+} from "../../utils/produksi/productionPageHelpers";
+import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
+import formatNumber from "../../utils/formatters/numberId";
 import {
   createProductionOrder,
+  generateProductionOrderCode,
   getActiveProductionBomOptions,
   getAllProductionOrders,
   getProductionOrderTargetVariantOptions,
   refreshProductionOrderRequirements,
-  releaseProductionOrderReservation,
-  reserveProductionOrder,
 } from "../../services/Produksi/productionOrdersService";
+import { createProductionWorkLogFromOrder } from "../../services/Produksi/productionWorkLogsService";
 
 const PRODUCTION_ORDER_TARGET_TYPES = [
   {
@@ -73,17 +75,42 @@ const ORDER_STATUS_MAP = {
   draft: { text: "Draft", status: "default" },
   shortage: { text: "Shortage", status: "error" },
   ready: { text: "Ready", status: "processing" },
-  reserved: { text: "Reserved", status: "success" },
   in_production: { text: "In Production", status: "processing" },
   completed: { text: "Completed", status: "success" },
   released: { text: "Released", status: "warning" },
   cancelled: { text: "Cancelled", status: "default" },
 };
 
+const PRIORITY_META_MAP = {
+  low: { label: "Low", color: "default" },
+  normal: { label: "Normal", color: "blue" },
+  high: { label: "High", color: "orange" },
+  urgent: { label: "Urgent", color: "red" },
+};
+
+// =====================================================
+// Helper UI order
+// Catatan maintainability:
+// - Priority sengaja dipertahankan karena akan dipakai untuk scheduling.
+// - Format tanggal dipusatkan di helper agar list dan drawer konsisten.
+// =====================================================
+const getPriorityMeta = (value) =>
+  PRIORITY_META_MAP[value] || {
+    label: value ? String(value) : "-",
+    color: "default",
+  };
+
+const formatDateTimeLabel = (value) => {
+  if (!value) return "-";
+  const parsed = dayjs(value?.toDate?.() || value);
+  return parsed.isValid() ? parsed.format("DD/MM/YYYY HH:mm") : "-";
+};
+
 const ProductionOrders = () => {
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [bomOptions, setBomOptions] = useState([]);
+  const [bomLoading, setBomLoading] = useState(false);
   const [targetVariantOptions, setTargetVariantOptions] = useState([]);
 
   const [search, setSearch] = useState("");
@@ -93,6 +120,7 @@ const ProductionOrders = () => {
   const [formVisible, setFormVisible] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [codeLoading, setCodeLoading] = useState(false);
 
   const [selectedOrder, setSelectedOrder] = useState(null);
 
@@ -114,15 +142,36 @@ const ProductionOrders = () => {
     }
   };
 
+  // =====================================================
+  // Muat opsi BOM aktif untuk dropdown PO
+  // Catatan maintainability:
+  // - Dipanggil ulang saat buka form, ganti target type, fokus dropdown, dan buka dropdown
+  // - Tujuannya agar BOM aktif terbaru selalu dipakai oleh menu PO
+  // =====================================================
   const loadBomOptions = async (targetType = "product") => {
     try {
+      setBomLoading(true);
       const result = await getActiveProductionBomOptions(targetType);
-
       setBomOptions(toReferenceOptions(result || []));
     } catch (error) {
       console.error(error);
       setBomOptions([]);
       message.error("Gagal memuat BOM aktif");
+    } finally {
+      setBomLoading(false);
+    }
+  };
+
+  const loadGeneratedCode = async (targetType = "product") => {
+    try {
+      setCodeLoading(true);
+      const nextCode = await generateProductionOrderCode(targetType);
+      form.setFieldValue("code", nextCode || "");
+    } catch (error) {
+      console.error(error);
+      form.setFieldValue("code", "");
+    } finally {
+      setCodeLoading(false);
     }
   };
 
@@ -140,7 +189,10 @@ const ProductionOrders = () => {
     const loadTargetVariants = async () => {
       if (!bomIdValue) {
         setTargetVariantOptions([]);
-        form.setFieldsValue({ targetVariantKey: undefined, targetVariantLabel: "" });
+        form.setFieldsValue({
+          targetVariantKey: undefined,
+          targetVariantLabel: "",
+        });
         return;
       }
 
@@ -149,7 +201,10 @@ const ProductionOrders = () => {
         setTargetVariantOptions(result || []);
 
         if (!Array.isArray(result) || result.length === 0) {
-          form.setFieldsValue({ targetVariantKey: undefined, targetVariantLabel: "" });
+          form.setFieldsValue({
+            targetVariantKey: undefined,
+            targetVariantLabel: "",
+          });
         }
       } catch (error) {
         console.error(error);
@@ -158,13 +213,13 @@ const ProductionOrders = () => {
     };
 
     loadTargetVariants();
-  }, [bomIdValue]);
+  }, [bomIdValue, form]);
 
   const summary = useMemo(() => {
     return buildCountSummary(orders, {
       shortage: (item) => item.status === "shortage",
       ready: (item) => item.status === "ready",
-      reserved: (item) => item.status === "reserved",
+      inProduction: (item) => item.status === "in_production",
     });
   }, [orders]);
 
@@ -177,7 +232,11 @@ const ProductionOrders = () => {
       );
 
       const matchStatus = matchFieldValue(item, statusFilter, "status");
-      const matchTargetType = matchFieldValue(item, targetTypeFilter, "targetType");
+      const matchTargetType = matchFieldValue(
+        item,
+        targetTypeFilter,
+        "targetType",
+      );
 
       return matchSearch && matchStatus && matchTargetType;
     });
@@ -185,6 +244,7 @@ const ProductionOrders = () => {
 
   const handleAdd = async () => {
     form.resetFields();
+
     form.setFieldsValue({
       code: "",
       targetType: "product",
@@ -196,20 +256,30 @@ const ProductionOrders = () => {
       notes: "",
     });
 
+    setTargetVariantOptions([]);
     setFormVisible(true);
+
     await loadBomOptions("product");
+    await loadGeneratedCode("product");
   };
 
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
-      const selectedVariant = targetVariantOptions.find((item) => item.value === values.targetVariantKey);
+      const selectedVariant = targetVariantOptions.find(
+        (item) => item.value === values.targetVariantKey,
+      );
 
       setSubmitting(true);
-      await createProductionOrder({
-        ...values,
-        targetVariantLabel: selectedVariant?.label || "",
-      }, null);
+
+      await createProductionOrder(
+        {
+          ...values,
+          targetVariantLabel: selectedVariant?.label || "",
+        },
+        null,
+      );
+
       message.success("Production order berhasil dibuat");
 
       setFormVisible(false);
@@ -245,73 +315,86 @@ const ProductionOrders = () => {
     }
   };
 
-  const handleReserve = async (record) => {
+  // =====================================================
+  // Mulai Produksi dari PO
+  // Catatan maintainability:
+  // - 1 PO = 1 Work Log
+  // - Saat start, stok bahan dipotong sesuai requirement PO
+  // - Work Log otomatis dibuat dari snapshot BOM/PO
+  // =====================================================
+  const handleStartProduction = async (record) => {
     try {
-      await reserveProductionOrder(record.id, null);
-      message.success("Stock berhasil di-reserve");
+      await createProductionWorkLogFromOrder(record.id, {}, null);
+      message.success("Produksi dimulai. Work Log dibuat dan stok bahan dipotong.");
       await loadData();
     } catch (error) {
       console.error(error);
-      message.error(error?.message || "Gagal reserve order");
+      message.error(error?.message || "Gagal memulai produksi");
     }
   };
 
-  const handleRelease = async (record) => {
-    try {
-      await releaseProductionOrderReservation(record.id, null);
-      message.success("Reservasi berhasil dilepas");
-      await loadData();
-    } catch (error) {
-      console.error(error);
-      message.error(error?.message || "Gagal melepas reservasi");
-    }
-  };
-
+  // =====================================================
+  // Kolom list Production Order
+  // Catatan maintainability:
+  // - Tabel utama dibuat ringkas agar scheduler cepat baca target, priority, qty, dan status.
+  // - Detail stok requirement dipindah ke drawer agar list harian tetap ringan.
+  // =====================================================
   const columns = [
     {
-      title: "Kode",
-      dataIndex: "code",
-      key: "code",
-      width: 150,
-      render: (value) => (
-        <Typography.Text strong>{value || "-"}</Typography.Text>
-      ),
-    },
-    {
-      title: "Target Type",
-      dataIndex: "targetType",
-      key: "targetType",
-      width: 140,
-      render: (value) => (
-        <Tag color={value === "product" ? "blue" : "purple"}>
-          {value === "product" ? "Product" : "Semi Finished"}
-        </Tag>
+      title: "Order",
+      key: "order",
+      width: 220,
+      render: (_, record) => (
+        <Space direction="vertical" size={2}>
+          <Typography.Text strong>{record.code || "-"}</Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Dibuat: {formatDateTimeLabel(record.createdAt)}
+          </Typography.Text>
+        </Space>
       ),
     },
     {
       title: "Target",
       key: "target",
-      width: 240,
+      width: 340,
       render: (_, record) => (
-        <div>
-          <div style={{ fontWeight: 600 }}>{record.targetName || "-"}</div>
-          <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+        <Space direction="vertical" size={2}>
+          <Space wrap size={[8, 4]}>
+            <Typography.Text strong>{record.targetName || "-"}</Typography.Text>
+            <Tag color={record.targetType === "product" ? "blue" : "purple"}>
+              {record.targetType === "product" ? "Product" : "Semi Finished"}
+            </Tag>
+          </Space>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             BOM: {record.bomCode || "-"} - {record.bomName || "-"}
-          </div>
+          </Typography.Text>
           {record.targetVariantLabel ? (
-            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               Varian: {record.targetVariantLabel}
-            </div>
+            </Typography.Text>
           ) : null}
-        </div>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Estimasi Output: {formatNumber(record.expectedOutputQty || 0)} {record.targetUnit || "pcs"}
+          </Typography.Text>
+        </Space>
       ),
     },
     {
-      title: "Qty",
-      dataIndex: "orderQty",
-      key: "orderQty",
-      width: 100,
-      render: (value) => formatNumber(value),
+      title: "Priority",
+      dataIndex: "priority",
+      key: "priority",
+      width: 120,
+      render: (value) => {
+        const meta = getPriorityMeta(value);
+        return <Tag color={meta.color}>{meta.label}</Tag>;
+      },
+    },
+    {
+      title: "Qty Batch",
+      dataIndex: "batchCount",
+      key: "batchCount",
+      width: 110,
+      render: (_, record) => formatNumber(record.batchCount ?? record.orderQty),
     },
     {
       title: "Requirement",
@@ -322,9 +405,8 @@ const ProductionOrders = () => {
           <Typography.Text>
             Line: {formatNumber(record.reservationSummary?.totalLines || 0)}
           </Typography.Text>
-          <Typography.Text>
-            Shortage:{" "}
-            {formatNumber(record.reservationSummary?.shortageLines || 0)}
+          <Typography.Text type="secondary">
+            Shortage: {formatNumber(record.reservationSummary?.shortageLines || 0)}
           </Typography.Text>
         </Space>
       ),
@@ -333,7 +415,7 @@ const ProductionOrders = () => {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 130,
+      width: 140,
       render: (value) => {
         const meta = ORDER_STATUS_MAP[value] || ORDER_STATUS_MAP.draft;
         return <Badge status={meta.status} text={meta.text} />;
@@ -369,26 +451,112 @@ const ProductionOrders = () => {
             <Button
               size="small"
               type="primary"
-              onClick={() => handleReserve(record)}
+              onClick={() => handleStartProduction(record)}
             >
-              Reserve
+              Mulai Produksi
             </Button>
-          )}
-
-          {record.status === "reserved" && (
-            <Popconfirm
-              title="Lepas reservasi order ini?"
-              onConfirm={() => handleRelease(record)}
-              okText="Ya"
-              cancelText="Batal"
-            >
-              <Button size="small">Release</Button>
-            </Popconfirm>
           )}
         </Space>
       ),
     },
   ];
+
+  // =====================================================
+  // Kolom detail requirement pada drawer PO
+  // Catatan maintainability:
+  // - Current / Available tetap ditampilkan karena penting untuk keputusan start produksi.
+  // - Reserved tidak dihapus, namun ditaruh sebagai info sekunder agar drawer lebih rapi.
+  // =====================================================
+  const detailRequirementColumns = useMemo(
+    () => [
+      {
+        title: "Material",
+        key: "item",
+        render: (_, record) => (
+          <Space direction="vertical" size={2}>
+            <Typography.Text strong>{record.itemName || "-"}</Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {record.itemCode || "-"}
+            </Typography.Text>
+          </Space>
+        ),
+      },
+      {
+        title: "Tipe",
+        dataIndex: "itemType",
+        width: 130,
+        render: (value) => (
+          <Tag color={value === "raw_material" ? "orange" : "blue"}>
+            {value === "raw_material" ? "Raw Material" : "Semi Finished"}
+          </Tag>
+        ),
+      },
+      {
+        title: "Varian / Sumber",
+        key: "variantSource",
+        width: 180,
+        render: (_, record) => (
+          <Space direction="vertical" size={2}>
+            <Tag color={record.stockSourceType === "variant" ? "purple" : "default"}>
+              {record.stockSourceType === "variant" ? "Variant" : "Master"}
+            </Tag>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {record.resolvedVariantLabel || "Tanpa varian"}
+            </Typography.Text>
+          </Space>
+        ),
+      },
+      {
+        title: "Kebutuhan",
+        dataIndex: "qtyRequired",
+        width: 140,
+        render: (value, record) => (
+          <Typography.Text strong>
+            {formatNumber(value)} {record.unit || ""}
+          </Typography.Text>
+        ),
+      },
+      {
+        title: "Stok Saat Ini",
+        key: "stockSnapshot",
+        width: 180,
+        render: (_, record) => (
+          <Space direction="vertical" size={0}>
+            <Typography.Text strong>
+              {formatNumber(record.currentStockSnapshot || 0)} {record.unit || ""}
+            </Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              Tersedia: {formatNumber(record.availableStockSnapshot || 0)}
+            </Typography.Text>
+            {Number(record.reservedStockSnapshot || 0) > 0 ? (
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                Reserved: {formatNumber(record.reservedStockSnapshot || 0)}
+              </Typography.Text>
+            ) : null}
+          </Space>
+        ),
+      },
+      {
+        title: "Shortage",
+        dataIndex: "shortageQty",
+        width: 120,
+        render: (value) =>
+          Number(value || 0) > 0 ? (
+            <Tag color="red">{formatNumber(value)}</Tag>
+          ) : (
+            <Tag color="green">0</Tag>
+          ),
+      },
+      {
+        title: "Status",
+        dataIndex: "isSufficient",
+        width: 110,
+        render: (value) =>
+          value ? <Badge status="success" text="Cukup" /> : <Badge status="error" text="Kurang" />,
+      },
+    ],
+    [],
+  );
 
   return (
     <div>
@@ -438,49 +606,47 @@ const ProductionOrders = () => {
         </Col>
         <Col xs={24} md={6}>
           <Card>
-            <Statistic title="Reserved" value={summary.reserved} />
+            <Statistic title="In Production" value={summary.inProduction} />
           </Card>
         </Col>
       </Row>
 
       <ProductionFilterCard>
-          <Col xs={24} md={8}>
-            <Input
-              placeholder="Cari kode, target, BOM..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              allowClear
-            />
-          </Col>
+        <Col xs={24} md={8}>
+          <Input
+            placeholder="Cari kode, target, BOM..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            allowClear
+          />
+        </Col>
 
-          <Col xs={24} md={8}>
-            <Select
-              style={{ width: "100%" }}
-              value={targetTypeFilter}
-              onChange={setTargetTypeFilter}
-              options={[
-                { value: "all", label: "Semua Target Type" },
-                ...PRODUCTION_ORDER_TARGET_TYPES,
-              ]}
-            />
-          </Col>
+        <Col xs={24} md={8}>
+          <Select
+            style={{ width: "100%" }}
+            value={targetTypeFilter}
+            onChange={setTargetTypeFilter}
+            options={[
+              { value: "all", label: "Semua Target Type" },
+              ...PRODUCTION_ORDER_TARGET_TYPES,
+            ]}
+          />
+        </Col>
 
-          <Col xs={24} md={8}>
-            <Select
-              style={{ width: "100%" }}
-              value={statusFilter}
-              onChange={setStatusFilter}
-              options={[
-                { value: "all", label: "Semua Status" },
-                { value: "shortage", label: "Shortage" },
-                { value: "ready", label: "Ready" },
-                { value: "reserved", label: "Reserved" },
-                { value: "in_production", label: "In Production" },
-                { value: "completed", label: "Completed" },
-                { value: "released", label: "Released" },
-              ]}
-            />
-          </Col>
+        <Col xs={24} md={8}>
+          <Select
+            style={{ width: "100%" }}
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: "all", label: "Semua Status" },
+              { value: "shortage", label: "Shortage" },
+              { value: "ready", label: "Ready" },
+                            { value: "in_production", label: "In Production" },
+              { value: "completed", label: "Completed" },
+                          ]}
+          />
+        </Col>
       </ProductionFilterCard>
 
       <Card>
@@ -502,6 +668,7 @@ const ProductionOrders = () => {
         onClose={() => {
           setFormVisible(false);
           form.resetFields();
+          setTargetVariantOptions([]);
         }}
         width={680}
         extra={
@@ -510,6 +677,7 @@ const ProductionOrders = () => {
               onClick={() => {
                 setFormVisible(false);
                 form.resetFields();
+                setTargetVariantOptions([]);
               }}
             >
               Batal
@@ -529,7 +697,10 @@ const ProductionOrders = () => {
 
         <Form form={form} layout="vertical">
           <Form.Item label="Kode Order" name="code">
-            <Input placeholder="Kosongkan untuk auto generate" />
+            <Input
+              placeholder="Auto generate"
+              disabled
+            />
           </Form.Item>
 
           <Form.Item
@@ -539,13 +710,16 @@ const ProductionOrders = () => {
           >
             <Select
               options={PRODUCTION_ORDER_TARGET_TYPES}
-              onChange={(value) => {
+              onChange={async (value) => {
                 form.setFieldsValue({
+                  code: "",
                   bomId: undefined,
                   targetVariantKey: undefined,
                   targetVariantLabel: "",
                 });
-                loadBomOptions(value);
+                setTargetVariantOptions([]);
+                await loadBomOptions(value);
+                await loadGeneratedCode(value);
               }}
             />
           </Form.Item>
@@ -559,7 +733,12 @@ const ProductionOrders = () => {
               showSearch
               optionFilterProp="label"
               options={bomOptions}
+              loading={bomLoading}
               placeholder="Pilih BOM..."
+              onFocus={() => loadBomOptions(targetTypeValue || "product")}
+              onDropdownVisibleChange={(open) => {
+                if (open) loadBomOptions(targetTypeValue || "product");
+              }}
               onChange={() => {
                 form.setFieldsValue({
                   targetVariantKey: undefined,
@@ -573,7 +752,9 @@ const ProductionOrders = () => {
             <Form.Item
               label="Varian Target"
               name="targetVariantKey"
-              rules={[{ required: true, message: "Varian target wajib dipilih" }]}
+              rules={[
+                { required: true, message: "Varian target wajib dipilih" },
+              ]}
               extra="Pilih varian target agar material inherit membaca stok varian yang benar."
             >
               <Select
@@ -582,15 +763,20 @@ const ProductionOrders = () => {
                 options={targetVariantOptions}
                 placeholder="Pilih varian target..."
                 onChange={(value) => {
-                  const selectedVariant = targetVariantOptions.find((item) => item.value === value);
-                  form.setFieldValue("targetVariantLabel", selectedVariant?.label || "");
+                  const selectedVariant = targetVariantOptions.find(
+                    (item) => item.value === value,
+                  );
+                  form.setFieldValue(
+                    "targetVariantLabel",
+                    selectedVariant?.label || "",
+                  );
                 }}
               />
             </Form.Item>
           ) : null}
 
           <Form.Item
-            label="Qty Order / Produksi"
+            label="Qty Batch Produksi"
             name="orderQty"
             rules={[{ required: true, message: "Qty order wajib diisi" }]}
           >
@@ -606,7 +792,6 @@ const ProductionOrders = () => {
           </Form.Item>
         </Form>
       </Drawer>
-
       <Drawer
         title="Detail Production Order"
         open={detailVisible}
@@ -616,20 +801,63 @@ const ProductionOrders = () => {
         {!selectedOrder ? (
           <Empty description="Tidak ada data" />
         ) : (
-          <>
+          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+            <Row gutter={[12, 12]}>
+              <Col xs={24} sm={12} md={6}>
+                <Card size="small">
+                  <Statistic
+                    title="Qty Batch"
+                    value={formatNumber(selectedOrder.batchCount ?? selectedOrder.orderQty)}
+                  />
+                </Card>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Card size="small">
+                  <Statistic
+                    title="Estimasi Output"
+                    value={formatNumber(selectedOrder.expectedOutputQty || 0)}
+                    suffix={selectedOrder.targetUnit || "pcs"}
+                  />
+                </Card>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Card size="small">
+                  <Typography.Text type="secondary">Priority</Typography.Text>
+                  <div style={{ marginTop: 8 }}>
+                    <Tag color={getPriorityMeta(selectedOrder.priority).color}>
+                      {getPriorityMeta(selectedOrder.priority).label}
+                    </Tag>
+                  </div>
+                </Card>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Card size="small">
+                  <Typography.Text type="secondary">Status</Typography.Text>
+                  <div style={{ marginTop: 8 }}>
+                    <Badge
+                      status={(ORDER_STATUS_MAP[selectedOrder.status] || ORDER_STATUS_MAP.draft).status}
+                      text={(ORDER_STATUS_MAP[selectedOrder.status] || ORDER_STATUS_MAP.draft).text}
+                    />
+                  </div>
+                </Card>
+              </Col>
+            </Row>
+
+            {/* =====================================================
+                Ringkasan order.
+                Blok ini dipakai user operasional untuk membaca target, BOM,
+                dan priority tanpa harus memindai tabel requirement. */}
             <Descriptions
               bordered
               size="small"
               column={1}
-              style={{ marginBottom: 16 }}
+              title="Ringkasan Order"
             >
               <Descriptions.Item label="Kode">
                 {selectedOrder.code || "-"}
               </Descriptions.Item>
               <Descriptions.Item label="Target Type">
-                {selectedOrder.targetType === "product"
-                  ? "Product"
-                  : "Semi Finished"}
+                {selectedOrder.targetType === "product" ? "Product" : "Semi Finished"}
               </Descriptions.Item>
               <Descriptions.Item label="Target">
                 {selectedOrder.targetName || "-"}
@@ -637,17 +865,19 @@ const ProductionOrders = () => {
               <Descriptions.Item label="Varian Target">
                 {selectedOrder.targetVariantLabel || "-"}
               </Descriptions.Item>
-              <Descriptions.Item label="BOM">
+              <Descriptions.Item label="BOM / Step">
                 {selectedOrder.bomCode || "-"} - {selectedOrder.bomName || "-"}
               </Descriptions.Item>
-              <Descriptions.Item label="Qty Order">
-                {formatNumber(selectedOrder.orderQty)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                {ORDER_STATUS_MAP[selectedOrder.status]?.text || "-"}
-              </Descriptions.Item>
               <Descriptions.Item label="Priority">
-                {selectedOrder.priority || "-"}
+                <Tag color={getPriorityMeta(selectedOrder.priority).color}>
+                  {getPriorityMeta(selectedOrder.priority).label}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Dibuat Pada">
+                {formatDateTimeLabel(selectedOrder.createdAt)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Mulai Produksi">
+                {formatDateTimeLabel(selectedOrder.startedAt)}
               </Descriptions.Item>
               <Descriptions.Item label="Catatan">
                 {selectedOrder.notes || "-"}
@@ -656,112 +886,32 @@ const ProductionOrders = () => {
 
             {(selectedOrder.reservationSummary?.shortageLines || 0) > 0 ? (
               <Alert
-                style={{ marginBottom: 16 }}
                 type="error"
                 showIcon
                 message={`Ada ${formatNumber(
                   selectedOrder.reservationSummary?.shortageLines,
-                )} item yang stoknya kurang.`}
+                )} item yang stoknya masih kurang.`}
+                description="Cek baris requirement di bawah untuk tahu material mana yang harus disiapkan lebih dulu."
               />
             ) : (
               <Alert
-                style={{ marginBottom: 16 }}
                 type="success"
                 showIcon
-                message="Semua kebutuhan material cukup."
+                message="Semua kebutuhan material cukup dan siap untuk mulai produksi."
+                description="PO ini bisa langsung masuk ke antrian produksi tanpa perlu penyesuaian stok tambahan."
               />
             )}
 
-            <Divider orientation="left">Requirement Lines</Divider>
+            <Divider orientation="left">Requirement Material</Divider>
 
             <Table
               rowKey="id"
               pagination={false}
               dataSource={selectedOrder.materialRequirementLines || []}
-              columns={[
-                {
-                  title: "Item",
-                  key: "item",
-                  render: (_, record) => (
-                    <div>
-                      <div style={{ fontWeight: 600 }}>
-                        {record.itemName || "-"}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                        {record.itemCode || "-"}
-                      </div>
-                    </div>
-                  ),
-                },
-                {
-                  title: "Tipe",
-                  dataIndex: "itemType",
-                  render: (value) => (
-                    <Tag color={value === "raw_material" ? "orange" : "blue"}>
-                      {value === "raw_material"
-                        ? "Raw Material"
-                        : "Semi Finished"}
-                    </Tag>
-                  ),
-                },
-                {
-                  title: "Sumber Stok",
-                  key: "stockSourceType",
-                  render: (_, record) => (
-                    <Space direction="vertical" size={0}>
-                      <Tag color={record.stockSourceType === "variant" ? "purple" : "default"}>
-                        {record.stockSourceType === "variant" ? "Variant" : "Master"}
-                      </Tag>
-                      {record.resolvedVariantLabel ? (
-                        <Typography.Text type="secondary">{record.resolvedVariantLabel}</Typography.Text>
-                      ) : null}
-                    </Space>
-                  ),
-                },
-                {
-                  title: "Need",
-                  dataIndex: "qtyRequired",
-                  render: (value, record) =>
-                    `${formatNumber(value)} ${record.unit || ""}`,
-                },
-                {
-                  title: "Current",
-                  dataIndex: "currentStockSnapshot",
-                  render: (value) => formatNumber(value),
-                },
-                {
-                  title: "Reserved",
-                  dataIndex: "reservedStockSnapshot",
-                  render: (value) => formatNumber(value),
-                },
-                {
-                  title: "Available",
-                  dataIndex: "availableStockSnapshot",
-                  render: (value) => formatNumber(value),
-                },
-                {
-                  title: "Shortage",
-                  dataIndex: "shortageQty",
-                  render: (value) =>
-                    Number(value || 0) > 0 ? (
-                      <Tag color="red">{formatNumber(value)}</Tag>
-                    ) : (
-                      <Tag color="green">0</Tag>
-                    ),
-                },
-                {
-                  title: "Status",
-                  dataIndex: "isSufficient",
-                  render: (value) =>
-                    value ? (
-                      <Badge status="success" text="Cukup" />
-                    ) : (
-                      <Badge status="error" text="Kurang" />
-                    ),
-                },
-              ]}
+              columns={detailRequirementColumns}
+              scroll={{ x: 980 }}
             />
-          </>
+          </Space>
         )}
       </Drawer>
     </div>

@@ -67,7 +67,13 @@ export const updateStock = async (itemId, quantityChange, collectionName) => {
   try {
     const itemReference = doc(db, collectionName, itemId);
 
+    // =====================================================
+    // Active stock helper:
+    // - currentStock adalah source of truth aktif.
+    // - stock tetap ikut disinkronkan untuk kompatibilitas tampilan / logic lama.
+    // =====================================================
     await updateDoc(itemReference, {
+      currentStock: increment(quantityChange),
       stock: increment(quantityChange),
     });
   } catch (error) {

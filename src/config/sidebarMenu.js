@@ -13,6 +13,7 @@ import {
   DeploymentUnitOutlined,
   FileTextOutlined,
   MoneyCollectOutlined,
+  ToolOutlined,
 } from "@ant-design/icons";
 
 // =========================
@@ -141,6 +142,18 @@ export const sidebarMenuItems = [
     children: [
       { key: "cash-in", label: "Pemasukan", path: "/cash-in" },
       { key: "cash-out", label: "Pengeluaran", path: "/cash-out" },
+    ],
+  },
+  {
+    key: "utilities",
+    icon: ToolOutlined,
+    label: "Utilities",
+    children: [
+      {
+        key: "reset-test-data",
+        label: "Reset Data Uji",
+        path: "/utilities/reset-test-data",
+      },
     ],
   },
   {

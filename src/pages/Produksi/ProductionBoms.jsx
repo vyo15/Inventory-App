@@ -47,6 +47,7 @@ import {
 } from "@ant-design/icons";
 import {
   BOM_MATERIAL_ITEM_TYPE_MAP,
+  BOM_MATERIAL_VARIANT_STRATEGY_MAP,
   BOM_TARGET_TYPE_MAP,
   DEFAULT_BOM_MATERIAL_LINE,
   DEFAULT_BOM_STEP_LINE,
@@ -115,6 +116,7 @@ const ProductionBoms = () => {
 
   const [editingBom, setEditingBom] = useState(null);
   const [selectedBom, setSelectedBom] = useState(null);
+  const [formErrorSummary, setFormErrorSummary] = useState("");
 
   // SECTION: state modal line
   const [materialModalVisible, setMaterialModalVisible] = useState(false);
@@ -236,6 +238,7 @@ const ProductionBoms = () => {
   // =====================================================
   const resetFormState = () => {
     setEditingBom(null);
+    setFormErrorSummary("");
     form.resetFields();
     form.setFieldsValue({
       ...DEFAULT_PRODUCTION_BOM_FORM,
@@ -259,6 +262,7 @@ const ProductionBoms = () => {
   // =====================================================
   const handleAdd = () => {
     setEditingBom(null);
+    setFormErrorSummary("");
     form.resetFields();
     form.setFieldsValue({
       ...DEFAULT_PRODUCTION_BOM_FORM,
@@ -276,6 +280,7 @@ const ProductionBoms = () => {
   // =====================================================
   const handleEdit = (record) => {
     setEditingBom(record);
+    setFormErrorSummary("");
 
     form.setFieldsValue({
       ...DEFAULT_PRODUCTION_BOM_FORM,
@@ -313,7 +318,9 @@ const ProductionBoms = () => {
             ? "semi_finished_material"
             : record.itemType || "raw_material",
         materialVariantStrategy:
-          record.materialHasVariants === true ? "inherit" : "none",
+          record.materialHasVariants === true
+            ? record.materialVariantStrategy || "inherit"
+            : "none",
       });
     } else {
       materialForm.setFieldsValue({
@@ -453,8 +460,53 @@ const ProductionBoms = () => {
   // SECTION: submit BOM
   // =====================================================
   const handleSubmit = async () => {
+    setFormErrorSummary("");
+
     try {
-      const values = await form.validateFields();
+      const values = {
+        ...DEFAULT_PRODUCTION_BOM_FORM,
+        ...form.getFieldsValue(true),
+        materialLines: getFormArrayValue(form, "materialLines"),
+        stepLines: getFormArrayValue(form, "stepLines"),
+      };
+
+      const fieldErrors = [];
+
+      if (!String(values.code || "").trim()) {
+        fieldErrors.push({ name: "code", errors: ["Kode BOM wajib diisi"] });
+      }
+
+      if (!String(values.name || "").trim()) {
+        fieldErrors.push({ name: "name", errors: ["Nama BOM wajib diisi"] });
+      }
+
+      if (!String(values.targetType || "").trim()) {
+        fieldErrors.push({ name: "targetType", errors: ["Target type wajib dipilih"] });
+      }
+
+      if (!String(values.targetId || "").trim()) {
+        fieldErrors.push({ name: "targetId", errors: ["Target item wajib dipilih"] });
+      }
+
+      if (Number(values.batchOutputQty || 0) <= 0) {
+        fieldErrors.push({ name: "batchOutputQty", errors: ["Hasil per produksi harus lebih dari 0"] });
+      }
+
+      if (!Array.isArray(values.materialLines) || values.materialLines.length === 0) {
+        setFormErrorSummary("Minimal harus ada 1 bahan di Komposisi Bahan.");
+      }
+
+      if (fieldErrors.length > 0) {
+        form.setFields(fieldErrors);
+        if (!formErrorSummary) {
+          setFormErrorSummary(fieldErrors[0]?.errors?.[0] || "Form belum lengkap.");
+        }
+        return;
+      }
+
+      if (!Array.isArray(values.materialLines) || values.materialLines.length === 0) {
+        return;
+      }
 
       const targetOptions = getTargetOptions(values.targetType);
       const selectedTarget = targetOptions.find(
@@ -495,8 +547,6 @@ const ProductionBoms = () => {
       resetFormState();
       await loadData({ silent: true });
     } catch (error) {
-      if (error?.errorFields) return;
-
       if (error?.type === "validation" && error?.errors) {
         const normalFields = [];
         const globalMessages = [];
@@ -516,15 +566,15 @@ const ProductionBoms = () => {
           form.setFields(normalFields);
         }
 
-        if (globalMessages.length > 0) {
-          message.error(globalMessages[0]);
-        }
-
+        const firstGlobalMessage = globalMessages[0] || normalFields[0]?.errors?.[0] || "Validasi BOM gagal.";
+        setFormErrorSummary(firstGlobalMessage);
+        message.error(firstGlobalMessage);
         return;
       }
 
       console.error(error);
-      message.error("Gagal menyimpan BOM produksi");
+      setFormErrorSummary(error?.message || "Gagal menyimpan BOM produksi.");
+      message.error(error?.message || "Gagal menyimpan BOM produksi");
     } finally {
       setSubmitting(false);
     }
@@ -804,6 +854,14 @@ const ProductionBoms = () => {
             targetType: "product",
           }}
         >
+          {formErrorSummary ? (
+            <Alert
+              style={{ marginBottom: 16 }}
+              type="error"
+              showIcon
+              message={formErrorSummary}
+            />
+          ) : null}
           <Divider orientation="left">Informasi Dasar</Divider>
 
           <Row gutter={16}>
@@ -1375,28 +1433,25 @@ const ProductionBoms = () => {
                   <Form.Item name="materialHasVariants" hidden>
                     <Input />
                   </Form.Item>
-
                   <Form.Item name="materialVariantStrategy" hidden>
                     <Input />
                   </Form.Item>
-
                   <Form.Item name="fixedVariantKey" hidden>
                     <Input />
                   </Form.Item>
-
                   <Form.Item name="fixedVariantLabel" hidden>
                     <Input />
                   </Form.Item>
 
                   <Alert
-                    type={hasVariants ? "info" : "success"}
+                    type="info"
                     showIcon
+                    style={{ marginBottom: 16 }}
                     message={
                       hasVariants
-                        ? "Item ini memakai varian. BOM tetap resep master; varian bahan akan otomatis mengikuti varian target saat Production Order dibuat."
-                        : "Item ini non-varian. Saat Production Order dibuat, stok bahan akan dibaca langsung dari master item."
+                        ? "Item bahan ini punya varian. Variant tidak dipilih di BOM dan akan otomatis mengikuti variant target saat Production Order dibuat."
+                        : "Item bahan ini tidak memakai varian. Saat Production Order dibuat, stok akan dibaca dari master item."
                     }
-                    style={{ marginBottom: 16 }}
                   />
                 </>
               );

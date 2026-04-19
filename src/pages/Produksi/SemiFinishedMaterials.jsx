@@ -11,7 +11,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  Badge,
   Button,
   Card,
   Col,
@@ -30,6 +29,7 @@ import {
   Statistic,
   Switch,
   Table,
+  Tag,
   Typography,
 } from "antd";
 import {
@@ -109,6 +109,88 @@ const buildFormValues = (record = {}) => {
   };
 };
 
+// -----------------------------------------------------------------------------
+// Helper tampilan stok.
+// Dipakai bersama oleh tabel list dan drawer detail supaya format angka, warna,
+// dan ringkasan varian selalu konsisten di seluruh halaman.
+// -----------------------------------------------------------------------------
+const formatStockWithUnit = (value, unit = "pcs") => `${formatNumber(value)} ${unit}`;
+
+const getVariantDisplayLabel = (variant = {}, index = 0) =>
+  SEMI_FINISHED_COLOR_MAP[variant.color] || variant.color || `Varian ${index + 1}`;
+
+// -----------------------------------------------------------------------------
+// Helper tampilan varian pada kolom stok.
+// Semua varian warna ditampilkan langsung dalam bentuk pill supaya user tidak
+// perlu membuka detail hanya untuk membaca rincian stok per warna.
+// -----------------------------------------------------------------------------
+const renderVariantStockPills = (variants = [], unit = "pcs") => {
+  const normalizedVariants = Array.isArray(variants)
+    ? variants.filter((variant) => String(variant?.color || "").trim())
+    : [];
+
+  if (normalizedVariants.length === 0) {
+    return null;
+  }
+
+  return (
+    <div style={compactCellStyles.variantPillWrap}>
+      {normalizedVariants.map((variant, index) => (
+        <span key={`${variant.color || "variant"}-${index}`} style={compactCellStyles.variantPill}>
+          <Typography.Text style={compactCellStyles.variantPillLabel}>
+            {`${getVariantDisplayLabel(variant, index)}:`}
+          </Typography.Text>
+          <Typography.Text style={compactCellStyles.variantPillValue}>
+            {formatStockWithUnit(variant.currentStock || 0, unit)}
+          </Typography.Text>
+        </span>
+      ))}
+    </div>
+  );
+};
+
+const getStockStatusMeta = (record = {}) => {
+  const totalStock = Number(record.currentStock || 0);
+  const minStockAlert = Number(record.minStockAlert || 0);
+
+  if (!record.isActive) {
+    return { color: "default", label: "Nonaktif", alertType: "info" };
+  }
+
+  if (totalStock <= 0) {
+    return { color: "red", label: "Kosong", alertType: "error" };
+  }
+
+  if (totalStock <= minStockAlert) {
+    return { color: "orange", label: "Stok Rendah", alertType: "warning" };
+  }
+
+  return { color: "green", label: "Aman", alertType: "success" };
+};
+
+const compactCellStyles = {
+  stack: { display: "flex", flexDirection: "column", gap: 2 },
+  meta: { fontSize: 12, lineHeight: 1.35 },
+  variantPillWrap: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 6,
+    maxWidth: "100%",
+  },
+  variantPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "2px 8px",
+    border: "1px solid #d9d9d9",
+    borderRadius: 999,
+    background: "#fafafa",
+  },
+  variantPillLabel: { fontSize: 12, lineHeight: 1.35 },
+  variantPillValue: { fontSize: 12, lineHeight: 1.35, fontWeight: 600 },
+};
+
 const SemiFinishedMaterials = () => {
   const [loading, setLoading] = useState(false);
   const [materials, setMaterials] = useState([]);
@@ -127,6 +209,11 @@ const SemiFinishedMaterials = () => {
 
   const [form] = Form.useForm();
 
+  // ---------------------------------------------------------------------------
+  // Loader utama halaman.
+  // Semua data list di-refresh dari service yang sama agar source of truth tetap
+  // satu pintu dan lebih mudah dilacak saat maintenance.
+  // ---------------------------------------------------------------------------
   const loadData = async () => {
     try {
       setLoading(true);
@@ -144,6 +231,10 @@ const SemiFinishedMaterials = () => {
     loadData();
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Watcher form dipakai untuk membuat preview stok di drawer form tetap realtime
+  // tanpa harus menunggu user menekan tombol simpan.
+  // ---------------------------------------------------------------------------
   const hasVariantsValue = Form.useWatch("hasVariants", form);
   const watchedVariants = Form.useWatch("variants", form) || [];
   const watchedCurrentStock = Form.useWatch("currentStock", form) || 0;
@@ -165,6 +256,10 @@ const SemiFinishedMaterials = () => {
     [hasVariantsValue, watchedVariants, watchedCurrentStock, watchedReservedStock, watchedMinStockAlert, watchedAverageCost],
   );
 
+  // ---------------------------------------------------------------------------
+  // Ringkasan card atas halaman.
+  // Fokusnya hanya metrik operasional yang paling sering dipakai user harian.
+  // ---------------------------------------------------------------------------
   const summary = useMemo(() => {
     const total = materials.length;
     const active = materials.filter((item) => item.isActive).length;
@@ -179,6 +274,11 @@ const SemiFinishedMaterials = () => {
     return { total, active, inactive, lowStock };
   }, [materials]);
 
+  // ---------------------------------------------------------------------------
+  // Filter list utama.
+  // Sorting tetap mengikuti urutan data dari service, sedangkan halaman ini hanya
+  // bertugas menyaring data sesuai kebutuhan user.
+  // ---------------------------------------------------------------------------
   const filteredData = useMemo(() => {
     return materials.filter((item) => {
       const searchText = search.trim().toLowerCase();
@@ -208,12 +308,19 @@ const SemiFinishedMaterials = () => {
     });
   }, [materials, search, statusFilter, categoryFilter, flowerGroupFilter]);
 
+  // ---------------------------------------------------------------------------
+  // Helper reset form agar state create/edit tidak saling tercampur.
+  // ---------------------------------------------------------------------------
   const resetFormState = () => {
     setEditingMaterial(null);
     form.resetFields();
     form.setFieldsValue(buildFormValues(DEFAULT_SEMI_FINISHED_FORM));
   };
 
+  // ---------------------------------------------------------------------------
+  // Handler drawer form.
+  // Create dan edit memakai form yang sama agar maintenance lebih ringan.
+  // ---------------------------------------------------------------------------
   const handleAdd = () => {
     setEditingMaterial(null);
     form.setFieldsValue(buildFormValues(DEFAULT_SEMI_FINISHED_FORM));
@@ -231,6 +338,11 @@ const SemiFinishedMaterials = () => {
     setDetailVisible(true);
   };
 
+  // ---------------------------------------------------------------------------
+  // Submit create / edit.
+  // Payload tetap dinormalisasi di sini supaya service menerima struktur data
+  // yang bersih, baik item memakai varian maupun non-varian.
+  // ---------------------------------------------------------------------------
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
@@ -281,6 +393,11 @@ const SemiFinishedMaterials = () => {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Toggle aktif/nonaktif master item.
+  // Flow ini tetap dipakai aktif karena user perlu mengarsipkan item tanpa
+  // menghapus histori stok atau varian yang sudah ada.
+  // ---------------------------------------------------------------------------
   const handleToggleActive = async (record) => {
     try {
       await toggleSemiFinishedMaterialActive(record.id, !record.isActive, null);
@@ -296,102 +413,88 @@ const SemiFinishedMaterials = () => {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Definisi kolom list utama.
+  // Tujuan utamanya membuat halaman lebih padat, rapi, dan mudah dibaca tanpa
+  // harus membuka drawer detail untuk informasi stok yang paling penting.
+  // ---------------------------------------------------------------------------
   const columns = [
     {
-      title: "Kode",
-      dataIndex: "code",
-      key: "code",
-      width: 150,
-      render: (value) => (
-        <Typography.Text strong>{value || "-"}</Typography.Text>
-      ),
-    },
-    {
-      title: "Nama Item",
+      title: "Semi Finished Material",
       dataIndex: "name",
       key: "name",
-      width: 220,
+      width: 260,
       render: (_, record) => (
-        <div>
-          <div style={{ fontWeight: 600 }}>{record.name || "-"}</div>
-          <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-            {record.description || "-"}
-          </div>
+        <div style={compactCellStyles.stack}>
+          <Typography.Text strong>{record.name || "-"}</Typography.Text>
+          <Typography.Text type="secondary" style={compactCellStyles.meta}>
+            {record.code || "-"}
+          </Typography.Text>
         </div>
       ),
     },
     {
       title: "Kategori",
-      dataIndex: "category",
       key: "category",
-      width: 130,
-      render: (value) => SEMI_FINISHED_CATEGORY_MAP[value] || "-",
+      width: 150,
+      render: (_, record) => (
+        <div style={compactCellStyles.stack}>
+          <Typography.Text>
+            {SEMI_FINISHED_CATEGORY_MAP[record.category] || "-"}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={compactCellStyles.meta}>
+            {SEMI_FINISHED_GROUP_MAP[record.flowerGroup] || "-"}
+          </Typography.Text>
+        </div>
+      ),
     },
     {
-      title: "Varian Warna",
-      key: "variants",
-      width: 260,
+      title: "Stok",
+      key: "stock",
+      width: 360,
       render: (_, record) => {
         const variants = Array.isArray(record.variants) ? record.variants : [];
-
-        if (variants.length === 0) {
-          return <Typography.Text type="secondary">Belum ada</Typography.Text>;
-        }
+        const hasVariants = record.hasVariants === true && variants.length > 0;
+        const unitLabel = record.unit || "pcs";
+        const totalStock = Number(record.currentStock || 0);
+        const availableStock = Number(record.availableStock || 0);
 
         return (
-          <Space size={[4, 4]} wrap>
-            {variants.map((variant, index) => (
-              <Tag key={`${variant.color}-${index}`} color={variant.isActive ? "blue" : "default"}>
-                {(SEMI_FINISHED_COLOR_MAP[variant.color] || variant.color || "-") +
-                  ` (${formatNumber(variant.currentStock)} ${record.unit || ""})`}
-              </Tag>
-            ))}
-          </Space>
+          <div style={compactCellStyles.stack}>
+            <Typography.Text strong>
+              Total {formatStockWithUnit(totalStock, unitLabel)}
+            </Typography.Text>
+            <Typography.Text type="secondary" style={compactCellStyles.meta}>
+              Tersedia {formatStockWithUnit(availableStock, unitLabel)}
+            </Typography.Text>
+
+            {hasVariants ? (
+              renderVariantStockPills(variants, unitLabel)
+            ) : (
+              <Typography.Text type="secondary" style={compactCellStyles.meta}>
+                Non-varian
+              </Typography.Text>
+            )}
+          </div>
         );
       },
     },
     {
-      title: "Stok Total",
-      key: "stock",
-      width: 220,
-      render: (_, record) => (
-        <Space direction="vertical" size={0}>
-          <Typography.Text>
-            {formatSemiFinishedStockSummary(record)}
-          </Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            Min Alert Total: {formatNumber(record.minStockAlert)} {record.unit || ""}
-          </Typography.Text>
-        </Space>
-      ),
-    },
-    {
-      title: "Biaya Rata-rata",
-      dataIndex: "averageCostPerUnit",
-      key: "averageCostPerUnit",
-      width: 150,
-      render: (value) => formatCurrency(value),
-    },
-    {
       title: "Status",
-      dataIndex: "isActive",
-      key: "isActive",
-      width: 110,
+      key: "status",
+      width: 120,
       align: "center",
-      render: (value) =>
-        value ? (
-          <Badge status="success" text="Aktif" />
-        ) : (
-          <Badge status="default" text="Nonaktif" />
-        ),
+      render: (_, record) => {
+        const statusMeta = getStockStatusMeta(record);
+        return <Tag color={statusMeta.color}>{statusMeta.label}</Tag>;
+      },
     },
     {
       title: "Aksi",
       key: "actions",
-      width: 220,
-      fixed: "right",
+      width: 210,
       render: (_, record) => (
-        <Space wrap>
+        <Space size={[6, 6]} wrap>
           <Button
             size="small"
             icon={<EyeOutlined />}
@@ -430,9 +533,25 @@ const SemiFinishedMaterials = () => {
     },
   ];
 
+  // ---------------------------------------------------------------------------
+  // State turunan khusus drawer detail.
+  // Dipisah dari JSX agar render drawer lebih mudah dibaca dan tidak dipenuhi
+  // perhitungan kecil yang berulang.
+  // ---------------------------------------------------------------------------
+  const selectedMaterialStatusMeta = selectedMaterial
+    ? getStockStatusMeta(selectedMaterial)
+    : null;
+  const selectedMaterialVariants = Array.isArray(selectedMaterial?.variants)
+    ? selectedMaterial.variants
+    : [];
+  const selectedMaterialUnit = selectedMaterial?.unit || "pcs";
+
   return (
     <div>
-      <Card style={{ marginBottom: 16 }}>
+      {/* ------------------------------------------------------------------ */}
+      {/* Header halaman. Menjadi titik masuk utama user sebelum melihat list. */}
+      {/* ------------------------------------------------------------------ */}
+      <Card size="small" style={{ marginBottom: 16 }}>
         <Row justify="space-between" align="middle" gutter={[16, 16]}>
           <Col>
             <Typography.Title level={3} style={{ margin: 0 }}>
@@ -460,30 +579,38 @@ const SemiFinishedMaterials = () => {
         </Row>
       </Card>
 
+      {/* ------------------------------------------------------------------ */}
+      {/* Summary cards. Tetap dipertahankan karena user produksi butuh ringkasan */}
+      {/* cepat tanpa harus membaca seluruh tabel. */}
+      {/* ------------------------------------------------------------------ */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={12} md={6}>
-          <Card>
+          <Card size="small">
             <Statistic title="Total Item" value={summary.total} />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <Card>
+          <Card size="small">
             <Statistic title="Item Aktif" value={summary.active} />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <Card>
+          <Card size="small">
             <Statistic title="Item Nonaktif" value={summary.inactive} />
           </Card>
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Low Stock Alert" value={summary.lowStock} />
+          <Card size="small">
+            <Statistic title="Perlu Dicek" value={summary.lowStock} />
           </Card>
         </Col>
       </Row>
 
-      <Card style={{ marginBottom: 16 }}>
+      {/* ------------------------------------------------------------------ */}
+      {/* Filter list. Dipisah di card sendiri agar user bisa scan filter dengan */}
+      {/* cepat tanpa mengganggu area tabel utama. */}
+      {/* ------------------------------------------------------------------ */}
+      <Card size="small" style={{ marginBottom: 16 }}>
         <Row gutter={[12, 12]}>
           <Col xs={24} md={8}>
             <Input
@@ -533,13 +660,19 @@ const SemiFinishedMaterials = () => {
         </Row>
       </Card>
 
-      <Card>
+      {/* ------------------------------------------------------------------ */}
+      {/* Tabel list utama. Di-set compact agar jarak antar elemen tidak terlalu */}
+      {/* tinggi dan informasi stok per varian tetap terbaca pada satu layar. */}
+      {/* ------------------------------------------------------------------ */}
+      <Card size="small">
         <Table
           rowKey="id"
+          size="small"
+          tableLayout="fixed"
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          scroll={{ x: 1600 }}
+          scroll={{ x: 980 }}
           locale={{
             emptyText: (
               <Empty description="Belum ada data semi finished materials" />
@@ -548,10 +681,15 @@ const SemiFinishedMaterials = () => {
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
+            showTotal: (total) => `Total ${total} item`,
           }}
         />
       </Card>
 
+      {/* ------------------------------------------------------------------ */}
+      {/* Drawer form create/edit. Tetap satu komponen agar logic form tidak */}
+      {/* terpecah ke banyak tempat dan maintenance lebih ringan. */}
+      {/* ------------------------------------------------------------------ */}
       <Drawer
         title={
           editingMaterial?.id
@@ -898,16 +1036,80 @@ const SemiFinishedMaterials = () => {
         </Form>
       </Drawer>
 
+      {/* ------------------------------------------------------------------ */}
+      {/* Drawer detail. Dipakai aktif untuk audit item, stok total, dan rincian */}
+      {/* varian tanpa menambah kepadatan informasi pada list utama. */}
+      {/* ------------------------------------------------------------------ */}
       <Drawer
         title="Detail Semi Finished Material"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={760}
+        width={820}
       >
         {!selectedMaterial ? (
           <Empty description="Tidak ada data" />
         ) : (
           <Space direction="vertical" style={{ width: "100%" }} size={16}>
+            {/* -------------------------------------------------------------- */}
+            {/* Alert kondisi stok dipakai aktif untuk memberi konteks cepat    */}
+            {/* sebelum user membaca angka detail yang lebih panjang di bawah.  */}
+            {/* -------------------------------------------------------------- */}
+            <Alert
+              type={selectedMaterialStatusMeta?.alertType || "info"}
+              showIcon
+              message={`Status item: ${selectedMaterialStatusMeta?.label || "-"}`}
+              description={
+                selectedMaterial.isActive
+                  ? `Total stok ${formatStockWithUnit(
+                      selectedMaterial.currentStock,
+                      selectedMaterialUnit,
+                    )} dengan stok tersedia ${formatStockWithUnit(
+                      selectedMaterial.availableStock,
+                      selectedMaterialUnit,
+                    )}.`
+                  : "Item sedang nonaktif namun histori stok dan variant tetap disimpan."
+              }
+            />
+
+            {/* -------------------------------------------------------------- */}
+            {/* Summary cards drawer. Fokus ke metrik yang paling sering dicek  */}
+            {/* user saat audit stok semi finished.                             */}
+            {/* -------------------------------------------------------------- */}
+            <Row gutter={[12, 12]}>
+              <Col xs={24} sm={12} md={8}>
+                <Card size="small">
+                  <Statistic
+                    title="Total Stok"
+                    value={formatStockWithUnit(
+                      selectedMaterial.currentStock,
+                      selectedMaterialUnit,
+                    )}
+                  />
+                </Card>
+              </Col>
+              <Col xs={24} sm={12} md={8}>
+                <Card size="small">
+                  <Statistic
+                    title="Stok Tersedia"
+                    value={formatStockWithUnit(
+                      selectedMaterial.availableStock,
+                      selectedMaterialUnit,
+                    )}
+                  />
+                </Card>
+              </Col>
+              <Col xs={24} sm={12} md={8}>
+                <Card size="small">
+                  <Statistic
+                    title="Varian Aktif"
+                    value={`${formatNumber(selectedMaterial.activeVariantCount)} / ${formatNumber(
+                      selectedMaterial.variantCount,
+                    )}`}
+                  />
+                </Card>
+              </Col>
+            </Row>
+
             <Descriptions column={1} bordered size="small">
               <Descriptions.Item label="Kode">
                 {selectedMaterial.code || "-"}
@@ -925,24 +1127,29 @@ const SemiFinishedMaterials = () => {
                 {SEMI_FINISHED_GROUP_MAP[selectedMaterial.flowerGroup] || "-"}
               </Descriptions.Item>
               <Descriptions.Item label="Varian Aktif">
-                {formatNumber(selectedMaterial.activeVariantCount)} / {formatNumber(selectedMaterial.variantCount)}
+                {formatNumber(selectedMaterial.activeVariantCount)} / {formatNumber(
+                  selectedMaterial.variantCount,
+                )}
               </Descriptions.Item>
               <Descriptions.Item label="Current Stock Total">
-                {formatNumber(selectedMaterial.currentStock)}
+                {formatStockWithUnit(selectedMaterial.currentStock, selectedMaterialUnit)}
               </Descriptions.Item>
               <Descriptions.Item label="Reserved Stock Total">
-                {formatNumber(selectedMaterial.reservedStock)}
+                {formatStockWithUnit(selectedMaterial.reservedStock, selectedMaterialUnit)}
               </Descriptions.Item>
               <Descriptions.Item label="Available Stock Total">
-                {formatNumber(selectedMaterial.availableStock)}
+                {formatStockWithUnit(selectedMaterial.availableStock, selectedMaterialUnit)}
               </Descriptions.Item>
               <Descriptions.Item label="Min Stock Alert Total">
-                {formatNumber(selectedMaterial.minStockAlert)}
+                {formatStockWithUnit(selectedMaterial.minStockAlert, selectedMaterialUnit)}
               </Descriptions.Item>
               <Descriptions.Item label="Max Stock Target">
                 {selectedMaterial.maxStockTarget === null
                   ? "-"
-                  : formatNumber(selectedMaterial.maxStockTarget)}
+                  : formatStockWithUnit(
+                      selectedMaterial.maxStockTarget,
+                      selectedMaterialUnit,
+                    )}
               </Descriptions.Item>
               <Descriptions.Item label="Reference Cost / Unit">
                 {formatCurrency(selectedMaterial.referenceCostPerUnit)}
@@ -954,15 +1161,18 @@ const SemiFinishedMaterials = () => {
                 {formatCurrency(selectedMaterial.averageCostPerUnit)}
               </Descriptions.Item>
               <Descriptions.Item label="Status">
-                {selectedMaterial.isActive ? "Aktif" : "Nonaktif"}
+                <Tag color={selectedMaterialStatusMeta?.color || "default"}>
+                  {selectedMaterialStatusMeta?.label || "-"}
+                </Tag>
               </Descriptions.Item>
             </Descriptions>
 
-            <Card title="Detail Varian Warna" size="small">
+            <Card title="Rincian Varian Semi Finished" size="small">
               <Table
+                size="small"
                 rowKey={(record, index) => `${record.color}-${index}`}
                 pagination={false}
-                dataSource={Array.isArray(selectedMaterial.variants) ? selectedMaterial.variants : []}
+                dataSource={selectedMaterialVariants}
                 locale={{ emptyText: "Belum ada varian" }}
                 columns={[
                   {
@@ -981,30 +1191,31 @@ const SemiFinishedMaterials = () => {
                     title: "Current",
                     dataIndex: "currentStock",
                     key: "currentStock",
-                    render: (value) => formatNumber(value),
+                    render: (value) => formatStockWithUnit(value, selectedMaterialUnit),
                   },
                   {
                     title: "Reserved",
                     dataIndex: "reservedStock",
                     key: "reservedStock",
-                    render: (value) => formatNumber(value),
+                    render: (value) => formatStockWithUnit(value, selectedMaterialUnit),
                   },
                   {
                     title: "Available",
                     key: "available",
                     render: (_, record) =>
-                      formatNumber(
+                      formatStockWithUnit(
                         Math.max(
                           Number(record.currentStock || 0) - Number(record.reservedStock || 0),
                           0,
                         ),
+                        selectedMaterialUnit,
                       ),
                   },
                   {
                     title: "Min Alert",
                     dataIndex: "minStockAlert",
                     key: "minStockAlert",
-                    render: (value) => formatNumber(value),
+                    render: (value) => formatStockWithUnit(value, selectedMaterialUnit),
                   },
                   {
                     title: "Avg Cost",
@@ -1019,7 +1230,7 @@ const SemiFinishedMaterials = () => {
                     render: (value) => (value ? "Aktif" : "Nonaktif"),
                   },
                 ]}
-                scroll={{ x: 900 }}
+                scroll={{ x: 980 }}
               />
             </Card>
           </Space>

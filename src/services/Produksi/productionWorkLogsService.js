@@ -3,8 +3,8 @@
 // CRUD + helper generate dari BOM / Production Order
 // Revisi:
 // - Work Log dari PO tetap didukung
-// - Completion Work Log sekarang melakukan mutasi stok end-to-end
-// - Completion akan consume input, release reserve, add output, lalu close PO
+// - Start Production memotong stok bahan dari requirement PO
+// - Complete Work Log hanya menambah stok output dan menutup PO
 // =====================================================
 
 import {
@@ -17,6 +17,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  Timestamp,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -354,7 +355,7 @@ export const getWorkLogReferenceData = async () => {
 
   const productionOrders = ordersSnap.docs
     .map((d) => ({ id: d.id, ...d.data() }))
-    .filter((item) => ["reserved", "in_production", "ready"].includes(item.status));
+    .filter((item) => ["in_production", "ready"].includes(item.status));
 
   return {
     boms: filterActiveLike(
@@ -526,15 +527,9 @@ export const buildWorkLogDraftFromProductionOrder = async (
     throw new Error("BOM dari production order tidak ditemukan");
   }
 
-  const bom = {
-    id: bomSnap.id,
-    ...bomSnap.data(),
-  };
-
+  const bom = { id: bomSnap.id, ...bomSnap.data() };
   const stepLines = Array.isArray(bom.stepLines) ? bom.stepLines : [];
-  const requirementLines = Array.isArray(
-    productionOrder.materialRequirementLines,
-  )
+  const requirementLines = Array.isArray(productionOrder.materialRequirementLines)
     ? productionOrder.materialRequirementLines
     : [];
 
@@ -543,28 +538,16 @@ export const buildWorkLogDraftFromProductionOrder = async (
     stepLines[0] ||
     null;
 
-  const outputs = chosenStep
-    ? [
-        {
-          outputType:
-            chosenStep.outputType || productionOrder.targetType || "product",
-          outputIdRef:
-            chosenStep.outputItemId || productionOrder.targetId || "",
-          outputCode:
-            chosenStep.outputItemCode || productionOrder.targetCode || "",
-          outputName:
-            chosenStep.outputItemName || productionOrder.targetName || "",
-          unit: productionOrder.targetUnit || "pcs",
-          goodQty: toNumber(productionOrder.orderQty || 0),
-          rejectQty: 0,
-          reworkQty: 0,
-          costPerUnit: 0,
-          stockAdded: false,
-          stockAddedAt: null,
-          notes: "",
-        },
-      ]
-    : [];
+  // =====================================================
+  // Qty work log dibedakan jelas:
+  // - plannedQty = qty batch produksi
+  // - theoreticalOutputQty = estimasi output BOM x qty batch
+  // =====================================================
+  const batchCount = toNumber(productionOrder.batchCount || productionOrder.orderQty || 0);
+  const expectedOutputQty = toNumber(
+    productionOrder.expectedOutputQty ||
+      toNumber(productionOrder.batchOutputQty || 0) * batchCount,
+  );
 
   return {
     bomId: bom.id,
@@ -591,7 +574,8 @@ export const buildWorkLogDraftFromProductionOrder = async (
     sequenceNo: toNumber(chosenStep?.sequenceNo || 1),
 
     sourceType: "production_order",
-    plannedQty: toNumber(productionOrder.orderQty || 0),
+    plannedQty: batchCount,
+    theoreticalOutputQty: expectedOutputQty,
     actualOutputQty: 0,
     goodQty: 0,
     rejectQty: 0,
@@ -620,13 +604,27 @@ export const buildWorkLogDraftFromProductionOrder = async (
       notes: "",
     })),
 
-    outputs: outputs.map((line) => ({
-      ...line,
-      outputHasVariants: productionOrder.targetHasVariants === true,
-      outputVariantKey: productionOrder.targetVariantKey || "",
-      outputVariantLabel: productionOrder.targetVariantLabel || "",
-      stockSourceType: productionOrder.targetVariantKey ? "variant" : "master",
-    })),
+    outputs: [
+      {
+        id: `output-po-${Date.now()}`,
+        outputType: productionOrder.targetType || "product",
+        outputIdRef: productionOrder.targetId || "",
+        outputCode: productionOrder.targetCode || "",
+        outputName: productionOrder.targetName || "",
+        unit: productionOrder.targetUnit || "pcs",
+        goodQty: 0,
+        rejectQty: 0,
+        reworkQty: 0,
+        costPerUnit: 0,
+        outputHasVariants: productionOrder.targetHasVariants === true,
+        outputVariantKey: productionOrder.targetVariantKey || "",
+        outputVariantLabel: productionOrder.targetVariantLabel || "",
+        stockSourceType: productionOrder.targetVariantKey ? "variant" : "master",
+        stockAdded: false,
+        stockAddedAt: null,
+        notes: "",
+      },
+    ],
   };
 };
 
@@ -744,77 +742,235 @@ export const createProductionWorkLog = async (values, currentUser = null) => {
 };
 
 // =====================================================
+// Inventory log helper
+// Catatan maintainability:
+// - Dipakai oleh flow aktif produksi untuk jejak mutasi stok.
+// - Start Production = log OUT bahan.
+// - Complete Work Log = log IN output target.
+// =====================================================
+const addInventoryLogInTransaction = (transaction, {
+  itemId = '',
+  itemName = '',
+  quantityChange = 0,
+  type = '',
+  collectionName = '',
+  extraData = {},
+} = {}) => {
+  const logRef = doc(collection(db, 'inventory_logs'));
+  transaction.set(logRef, {
+    itemId,
+    itemName,
+    quantityChange: toNumber(quantityChange || 0),
+    type,
+    collectionName,
+    timestamp: Timestamp.now(),
+    ...extraData,
+  });
+};
+
+// =====================================================
 // Create work log langsung dari Production Order
+// =====================================================
+// =====================================================
+// Create work log dari PO + langsung mulai produksi
+// Catatan maintainability:
+// - 1 PO = 1 Work Log
+// - Start Production memotong stok bahan dari requirement PO
+// - Setelah start, PO -> in_production dan Work Log -> in_progress
 // =====================================================
 export const createProductionWorkLogFromOrder = async (
   orderId,
   extraValues = {},
   currentUser = null,
 ) => {
+  const actor = currentUser?.email || currentUser?.displayName || currentUser?.uid || "system";
   const orderRef = doc(db, "production_orders", orderId);
-  const orderSnap = await getDoc(orderRef);
+  const workNumber = safeTrim(extraValues.workNumber) || (await generateProductionWorkLogNumber());
 
-  if (!orderSnap.exists()) {
-    throw new Error("Production order tidak ditemukan");
-  }
+  return await runTransaction(db, async (transaction) => {
+    const orderSnap = await transaction.get(orderRef);
+    if (!orderSnap.exists()) {
+      throw new Error("Production order tidak ditemukan");
+    }
 
-  const order = {
-    id: orderSnap.id,
-    ...orderSnap.data(),
-  };
+    const order = { id: orderSnap.id, ...orderSnap.data() };
+    if (!["ready", "shortage"].includes(order.status)) {
+      throw new Error("Hanya PO status Ready/Shortage yang bisa mulai produksi");
+    }
+    if (Array.isArray(order.workLogIds) && order.workLogIds.length > 0) {
+      throw new Error("PO ini sudah punya Work Log");
+    }
 
-  const workNumber =
-    safeTrim(extraValues.workNumber) ||
-    (await generateProductionWorkLogNumber());
+    const draft = await buildWorkLogDraftFromProductionOrder(order);
+    const payload = normalizePayload(
+      {
+        ...draft,
+        ...extraValues,
+        workNumber,
+        workDate: extraValues.workDate || new Date(),
+        sourceType: "production_order",
+        status: "in_progress",
+        stockConsumptionStatus: "applied",
+        stockOutputStatus: "pending",
+        startedAt: new Date(),
+      },
+      currentUser,
+      false,
+    );
 
-  const draft = await buildWorkLogDraftFromProductionOrder(order);
+    // SECTION: workLogRef dibuat lebih awal karena id-nya dipakai oleh inventory log
+    // saat mutasi bahan keluar dalam transaksi start production.
+    const workLogRef = doc(collection(db, COLLECTION_NAME));
+    const nextMaterialUsages = [];
+    for (const line of payload.materialUsages || []) {
+      const collectionName = getCollectionNameByItemType(line.itemType);
+      if (!collectionName || !line.itemId) {
+        nextMaterialUsages.push(line);
+        continue;
+      }
 
-  const payload = {
-    ...draft,
-    ...extraValues,
-    workNumber,
-    workDate: extraValues.workDate || new Date(),
-    sourceType: "production_order",
-    status: "draft",
-  };
+      const stockRef = doc(db, collectionName, line.itemId);
+      const stockSnap = await transaction.get(stockRef);
+      if (!stockSnap.exists()) {
+        throw new Error(`Item material ${line.itemName || "-"} tidak ditemukan`);
+      }
 
-  const workLogId = await createProductionWorkLog(payload, currentUser);
+      const stockItem = normalizeReferenceItem({ id: stockSnap.id, ...stockSnap.data() });
+      const stockResolution = getResolvedMaterialStock({ line, stockItem });
+      const consumeQty = toNumber(line.actualQty || line.plannedQty || 0);
+      if (toNumber(stockResolution.currentStock || 0) < consumeQty) {
+        throw new Error(`Stok ${line.itemName || "material"} tidak cukup untuk mulai produksi`);
+      }
 
-  await markProductionOrderInProduction(orderId, workLogId, currentUser);
+      const updatePayload = applyStockMutationToItem({
+        item: stockItem,
+        variantKey: stockResolution.resolvedVariantKey || "",
+        deltaCurrent: -consumeQty,
+      });
+      transaction.update(stockRef, { ...updatePayload, updatedAt: serverTimestamp() });
 
-  return workLogId;
+      // SECTION: tulis log mutasi bahan keluar saat mulai produksi
+      // Catatan maintainability:
+      // - Metadata referensi sengaja dibuat lengkap agar menu Manajemen Stok
+      //   bisa menampilkan jejak Produksi -> PO -> Work Log secara jelas.
+      if (consumeQty > 0) {
+        addInventoryLogInTransaction(transaction, {
+          itemId: line.itemId,
+          itemName: line.itemName || stockItem.name || '-',
+          quantityChange: -consumeQty,
+          type: 'production_material_out',
+          collectionName,
+          extraData: {
+            workLogRefId: workLogRef.id,
+            workNumber: payload.workNumber || '',
+            productionOrderId: order.id,
+            productionOrderCode: order.code || '',
+            stepName: payload.stepName || order.stepName || '',
+            movementSource: 'production',
+            variantKey: stockResolution.resolvedVariantKey || '',
+            variantLabel: stockResolution.resolvedVariantLabel || '',
+          },
+        });
+      }
+
+      nextMaterialUsages.push(
+        calculateMaterialUsageLine({
+          ...line,
+          actualQty: consumeQty,
+          stockDeducted: consumeQty > 0,
+          stockDeductedAt: new Date(),
+          resolvedVariantKey: stockResolution.resolvedVariantKey || "",
+          resolvedVariantLabel: stockResolution.resolvedVariantLabel || "",
+          stockSourceType: stockResolution.stockSourceType || "master",
+        }),
+      );
+    }
+
+    transaction.set(workLogRef, {
+      ...payload,
+      materialUsages: nextMaterialUsages,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      createdBy: actor,
+      updatedBy: actor,
+    });
+
+    transaction.update(orderRef, {
+      status: "in_production",
+      workLogIds: [workLogRef.id],
+      generatedWorkLogCount: 1,
+      startedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      updatedBy: actor,
+    });
+
+    return workLogRef.id;
+  });
 };
 
+// =====================================================
+// Update work log
+// Catatan maintainability:
+// - Data readonly dari PO tetap dipertahankan dari record lama
+// - Summary qty (good/reject/rework) selalu disinkronkan ke output pertama
+// =====================================================
 export const updateProductionWorkLog = async (
   id,
   values,
   currentUser = null,
 ) => {
-  const errors = validateProductionWorkLog(values);
+  const ref = doc(db, COLLECTION_NAME, id);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    throw new Error("Work log tidak ditemukan");
+  }
 
+  const current = { id: snap.id, ...snap.data() };
+  const mergedValues = {
+    ...current,
+    ...values,
+    materialUsages:
+      Array.isArray(values.materialUsages) && values.materialUsages.length > 0
+        ? values.materialUsages
+        : current.materialUsages || [],
+    outputs:
+      Array.isArray(values.outputs) && values.outputs.length > 0
+        ? values.outputs
+        : current.outputs || [],
+  };
+
+  if (Array.isArray(mergedValues.outputs) && mergedValues.outputs.length > 0) {
+    mergedValues.outputs = mergedValues.outputs.map((line, index) =>
+      index === 0
+        ? {
+            ...line,
+            goodQty: toNumber(mergedValues.goodQty || 0),
+            rejectQty: toNumber(mergedValues.rejectQty || 0),
+            reworkQty: toNumber(mergedValues.reworkQty || 0),
+          }
+        : line,
+    );
+  }
+
+  const errors = validateProductionWorkLog(mergedValues);
   if (Object.keys(errors).length > 0) {
     throw { type: "validation", errors };
   }
 
-  const exists = await isProductionWorkLogNumberExists(values.workNumber, id);
-
+  const exists = await isProductionWorkLogNumberExists(mergedValues.workNumber, id);
   if (exists) {
-    throw {
-      type: "validation",
-      errors: {
-        workNumber: "Nomor work log sudah digunakan",
-      },
-    };
+    throw { type: "validation", errors: { workNumber: "Nomor work log sudah digunakan" } };
   }
 
-  const payload = normalizePayload(values, currentUser, true);
-  const ref = doc(db, COLLECTION_NAME, id);
-
+  const payload = normalizePayload(mergedValues, currentUser, true);
   await updateDoc(ref, payload);
-
   return id;
 };
 
+// =====================================================
+// Helper peta kebutuhan PO untuk referensi qty requirement
+// Digunakan saat complete untuk membaca snapshot kebutuhan dari PO
+// =====================================================
 const buildWorkLogReservationMap = (productionOrder = null) => {
   const reservedQtyMap = new Map();
 
@@ -847,21 +1003,52 @@ const getResolvedMaterialStock = ({ line = {}, stockItem = {} }) =>
     fixedVariantKey: line.resolvedVariantKey || '',
   });
 
-const getOutputStockResolution = ({ line = {}, stockItem = {} }) => {
-  if (line.outputHasVariants !== true) {
+const getOutputStockResolution = ({
+  line = {},
+  stockItem = {},
+  fallbackVariantKey = '',
+  fallbackVariantLabel = '',
+}) => {
+  const outputHasVariants =
+    line.outputHasVariants === true || inferHasVariants(stockItem || {});
+  const preferredVariantKey = line.outputVariantKey || fallbackVariantKey || '';
+  const preferredVariantLabel = line.outputVariantLabel || fallbackVariantLabel || '';
+
+  if (!outputHasVariants) {
     return {
       stockSourceType: 'master',
+      materialHasVariants: false,
       resolvedVariantKey: '',
       resolvedVariantLabel: '',
     };
   }
 
-  return resolveVariantSelection({
+  const resolution = resolveVariantSelection({
     item: stockItem || {},
-    materialVariantStrategy: line.outputVariantKey ? 'fixed' : 'inherit',
-    targetVariantKey: line.outputVariantKey || '',
-    fixedVariantKey: line.outputVariantKey || '',
+    materialVariantStrategy: preferredVariantKey ? 'fixed' : 'inherit',
+    targetVariantKey: preferredVariantKey,
+    fixedVariantKey: preferredVariantKey,
   });
+
+  // =====================================================
+  // Guard output varian.
+  // Untuk item semi finished / product yang punya beberapa varian,
+  // stok tidak boleh jatuh ke master karena halaman stok semi finished
+  // menghitung total dari variants. Jika dibiarkan masuk ke master,
+  // inventory log akan terlihat masuk tetapi total stok list tetap 0.
+  // =====================================================
+  if (resolution.stockSourceType !== 'variant') {
+    throw new Error(
+      `Output ${line.outputName || stockItem.name || 'produksi'} wajib punya varian target yang jelas sebelum work log diselesaikan`,
+    );
+  }
+
+  return {
+    ...resolution,
+    materialHasVariants: true,
+    resolvedVariantKey: resolution.resolvedVariantKey || preferredVariantKey,
+    resolvedVariantLabel: resolution.resolvedVariantLabel || preferredVariantLabel,
+  };
 };
 
 // =====================================================
@@ -900,6 +1087,18 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
       : [];
     const outputs = Array.isArray(workLog.outputs) ? workLog.outputs : [];
 
+    // Sinkronkan output pertama dari summary qty agar sumber data hasil produksi tunggal
+    const synchronizedOutputs = outputs.map((line, index) =>
+      index === 0
+        ? {
+            ...line,
+            goodQty: toNumber(workLog.goodQty || 0),
+            rejectQty: toNumber(workLog.rejectQty || 0),
+            reworkQty: toNumber(workLog.reworkQty || 0),
+          }
+        : line,
+    );
+
     const productionOrderRef = workLog.productionOrderId
       ? doc(db, "production_orders", workLog.productionOrderId)
       : null;
@@ -921,6 +1120,10 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
 
     const nextMaterialUsages = [];
     for (const line of materialUsages) {
+      if (workLog.stockConsumptionStatus === "applied" || line.stockDeducted === true) {
+        nextMaterialUsages.push(calculateMaterialUsageLine({ ...line, stockDeducted: true }));
+        continue;
+      }
       const actualQty = toNumber(line.actualQty || 0);
       const collectionName = getCollectionNameByItemType(line.itemType);
 
@@ -994,10 +1197,15 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
       );
     }
 
+    const totalGoodQty = synchronizedOutputs.reduce((sum, line) => sum + toNumber(line.goodQty || 0), 0);
+    if (totalGoodQty <= 0) {
+      throw new Error("Good Qty hasil produksi harus lebih dari 0 sebelum work log diselesaikan");
+    }
+
     const fallbackUnitCost = toNumber(workLog.costPerGoodUnit || 0);
     const nextOutputs = [];
 
-    for (const line of outputs) {
+    for (const line of synchronizedOutputs) {
       const goodQty = toNumber(line.goodQty || 0);
       const collectionName = getCollectionNameByItemType(line.outputType);
 
@@ -1028,6 +1236,8 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
       const outputResolution = getOutputStockResolution({
         line,
         stockItem,
+        fallbackVariantKey: workLog.targetVariantKey || '',
+        fallbackVariantLabel: workLog.targetVariantLabel || '',
       });
       const unitCost = toNumber(line.costPerUnit || 0) || fallbackUnitCost;
       const updatePayload = applyStockMutationToItem({
@@ -1113,6 +1323,30 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
         ...updatePayload,
         updatedAt: serverTimestamp(),
       });
+
+      // SECTION: tulis log mutasi output masuk saat produksi selesai
+      // Catatan maintainability:
+      // - Log output wajib menyimpan referensi yang sama dengan log bahan keluar
+      //   agar audit trial-error bisa melihat siklus produksi secara utuh.
+      if (goodQty > 0) {
+        addInventoryLogInTransaction(transaction, {
+          itemId: line.outputIdRef,
+          itemName: line.outputName || stockItem.name || '-',
+          quantityChange: goodQty,
+          type: 'production_output_in',
+          collectionName,
+          extraData: {
+            workLogRefId: workLog.id,
+            workNumber: workLog.workNumber || '',
+            productionOrderId: productionOrder?.id || workLog.productionOrderId || '',
+            productionOrderCode: productionOrder?.code || workLog.productionOrderCode || '',
+            stepName: workLog.stepName || '',
+            movementSource: 'production',
+            variantKey: outputResolution.resolvedVariantKey || '',
+            variantLabel: outputResolution.resolvedVariantLabel || '',
+          },
+        });
+      }
 
       nextOutputs.push(
         calculateOutputLine({

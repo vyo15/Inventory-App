@@ -7,10 +7,10 @@ import {
   Descriptions,
   Divider,
   Drawer,
+  Empty,
   Form,
   Input,
   InputNumber,
-  message,
   Popconfirm,
   Row,
   Select,
@@ -20,6 +20,7 @@ import {
   Table,
   Tag,
   Typography,
+  message,
 } from 'antd';
 import {
   EditOutlined,
@@ -49,11 +50,19 @@ import {
 const { Text } = Typography;
 const { TextArea } = Input;
 
+// -----------------------------------------------------------------------------
+// Tag mode pricing.
+// Diletakkan di atas file agar mudah dipakai ulang di tabel dan detail drawer.
+// -----------------------------------------------------------------------------
 const PRICING_MODE_TAGS = {
   manual: <Tag color="orange">Manual</Tag>,
   rule: <Tag color="green">Rule</Tag>,
 };
 
+// -----------------------------------------------------------------------------
+// Builder nilai awal form produk.
+// Menjaga form create/edit tetap satu pola dan kompatibel dengan data lama.
+// -----------------------------------------------------------------------------
 const buildFormValues = (record = {}) => {
   const hasVariants = record?.hasVariants === true || (record?.variants || []).length > 0;
 
@@ -68,18 +77,110 @@ const buildFormValues = (record = {}) => {
   };
 };
 
+// -----------------------------------------------------------------------------
+// Helper tampilan stok agar gaya visual konsisten dengan halaman semi finished.
+// -----------------------------------------------------------------------------
+const formatStockWithUnit = (value, unit = 'pcs') => `${formatNumberID(value)} ${unit}`;
+
+const compactCellStyles = {
+  stack: { display: 'flex', flexDirection: 'column', gap: 2 },
+  meta: { fontSize: 12, lineHeight: 1.35 },
+  variantPillWrap: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+    maxWidth: '100%',
+  },
+  variantPill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '2px 8px',
+    border: '1px solid #d9d9d9',
+    borderRadius: 999,
+    background: '#fafafa',
+  },
+  variantPillLabel: { fontSize: 12, lineHeight: 1.35 },
+  variantPillValue: { fontSize: 12, lineHeight: 1.35, fontWeight: 600 },
+};
+
+// -----------------------------------------------------------------------------
+// Helper tampilan varian pada kolom stok.
+// Semua warna langsung ditampilkan sebagai pill agar user bisa membaca stok
+// per varian tanpa jarak terlalu lebar dan tanpa buka detail drawer.
+// -----------------------------------------------------------------------------
+const renderVariantStockPills = (variants = [], unit = 'pcs') => {
+  const normalizedVariants = Array.isArray(variants)
+    ? variants.filter((variant) => String(variant?.color || '').trim())
+    : [];
+
+  if (normalizedVariants.length === 0) {
+    return null;
+  }
+
+  return (
+    <div style={compactCellStyles.variantPillWrap}>
+      {normalizedVariants.map((variant, index) => (
+        <span key={`${variant.color || 'variant'}-${index}`} style={compactCellStyles.variantPill}>
+          <Text style={compactCellStyles.variantPillLabel}>{`${COLOR_VARIANT_MAP[variant.color] || variant.color || `Varian ${index + 1}`}:`}</Text>
+          <Text style={compactCellStyles.variantPillValue}>{formatStockWithUnit(variant.currentStock || 0, unit)}</Text>
+        </span>
+      ))}
+    </div>
+  );
+};
+
+// -----------------------------------------------------------------------------
+// Status stok produk.
+// Disamakan dengan bahasa visual halaman master lain: nonaktif, kosong, rendah, aman.
+// -----------------------------------------------------------------------------
+const getProductStatusMeta = (record = {}) => {
+  const availableStock = Number(record.availableStock ?? record.currentStock ?? record.stock ?? 0);
+  const minStockAlert = Number(record.minStockAlert || 0);
+
+  if (record.isActive === false) {
+    return { color: 'default', label: 'Nonaktif' };
+  }
+
+  if (availableStock <= 0) {
+    return { color: 'red', label: 'Kosong' };
+  }
+
+  if (availableStock <= minStockAlert) {
+    return { color: 'orange', label: 'Stok Rendah' };
+  }
+
+  return { color: 'green', label: 'Aman' };
+};
+
 const Products = () => {
+  // ---------------------------------------------------------------------------
+  // State utama data produk dan tampilan halaman.
+  // ---------------------------------------------------------------------------
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [pricingRules, setPricingRules] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [formVisible, setFormVisible] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
+
+  // ---------------------------------------------------------------------------
+  // State filter untuk menyamakan pengalaman pakai dengan halaman raw dan semi.
+  // ---------------------------------------------------------------------------
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [variantModeFilter, setVariantModeFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+
   const [form] = Form.useForm();
 
+  // ---------------------------------------------------------------------------
+  // Watcher form untuk preview statistik drawer secara realtime.
+  // ---------------------------------------------------------------------------
   const pricingModeValue = Form.useWatch('pricingMode', form);
   const hasVariantsValue = Form.useWatch('hasVariants', form);
   const watchedVariants = Form.useWatch('variants', form) || [];
@@ -87,6 +188,9 @@ const Products = () => {
   const watchedReservedStock = Form.useWatch('reservedStock', form) || 0;
   const watchedMinStockAlert = Form.useWatch('minStockAlert', form) || 0;
 
+  // ---------------------------------------------------------------------------
+  // Loader data master produk, kategori, dan pricing rules.
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     setLoading(true);
 
@@ -135,6 +239,9 @@ const Products = () => {
     };
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Map nama pricing rule agar tampilan list dan detail lebih ringkas.
+  // ---------------------------------------------------------------------------
   const pricingRuleMap = useMemo(() => {
     return pricingRules.reduce((acc, item) => {
       acc[item.id] = item.name;
@@ -142,40 +249,90 @@ const Products = () => {
     }, {});
   }, [pricingRules]);
 
+  // ---------------------------------------------------------------------------
+  // Summary cards halaman produk.
+  // ---------------------------------------------------------------------------
   const summary = useMemo(() => {
-    return {
-      total: products.length,
-      active: products.filter((item) => item.isActive !== false).length,
-      inactive: products.filter((item) => item.isActive === false).length,
-      totalVariants: products.reduce((sum, item) => sum + Number(item.variantCount || 0), 0),
-      nonVariant: products.filter((item) => item.hasVariants !== true).length,
-    };
+    const total = products.length;
+    const active = products.filter((item) => item.isActive !== false).length;
+    const inactive = products.filter((item) => item.isActive === false).length;
+    const lowStock = products.filter((item) => {
+      const statusMeta = getProductStatusMeta(item);
+      return statusMeta.label === 'Kosong' || statusMeta.label === 'Stok Rendah';
+    }).length;
+
+    return { total, active, inactive, lowStock };
   }, [products]);
 
-  const openCreateModal = () => {
+  // ---------------------------------------------------------------------------
+  // Filter data list utama.
+  // ---------------------------------------------------------------------------
+  const filteredProducts = useMemo(() => {
+    return products.filter((item) => {
+      const keyword = search.trim().toLowerCase();
+      const statusMeta = getProductStatusMeta(item);
+      const variantLabels = Array.isArray(item.variants)
+        ? item.variants.map((variant) => COLOR_VARIANT_MAP[variant.color] || variant.color)
+        : [];
+
+      const matchesSearch = !keyword
+        ? true
+        : [item.name, item.category, item.description, ...variantLabels]
+            .filter(Boolean)
+            .some((value) => String(value).toLowerCase().includes(keyword));
+
+      const matchesStatus = statusFilter === 'all' ? true : statusMeta.label === statusFilter;
+      const matchesVariantMode =
+        variantModeFilter === 'all'
+          ? true
+          : variantModeFilter === 'variant'
+            ? item.hasVariants === true
+            : item.hasVariants !== true;
+      const matchesCategory = categoryFilter === 'all' ? true : String(item.categoryId || '') === categoryFilter;
+
+      return matchesSearch && matchesStatus && matchesVariantMode && matchesCategory;
+    });
+  }, [products, search, statusFilter, variantModeFilter, categoryFilter]);
+
+  // ---------------------------------------------------------------------------
+  // Handler buka form create.
+  // ---------------------------------------------------------------------------
+  const openCreateDrawer = () => {
     setEditingProduct(null);
     form.setFieldsValue(buildFormValues(PRODUCT_DEFAULT_FORM));
-    setModalVisible(true);
+    setFormVisible(true);
   };
 
-  const closeModal = () => {
-    setModalVisible(false);
+  // ---------------------------------------------------------------------------
+  // Handler tutup drawer form.
+  // ---------------------------------------------------------------------------
+  const closeFormDrawer = () => {
+    setFormVisible(false);
     setSubmitting(false);
     setEditingProduct(null);
     form.resetFields();
   };
 
+  // ---------------------------------------------------------------------------
+  // Handler edit produk.
+  // ---------------------------------------------------------------------------
   const handleEdit = (record) => {
     setEditingProduct(record);
     form.setFieldsValue(buildFormValues(record));
-    setModalVisible(true);
+    setFormVisible(true);
   };
 
+  // ---------------------------------------------------------------------------
+  // Handler buka detail produk.
+  // ---------------------------------------------------------------------------
   const handleViewDetail = (record) => {
     setSelectedProduct(record);
     setDetailVisible(true);
   };
 
+  // ---------------------------------------------------------------------------
+  // Submit create/update produk.
+  // ---------------------------------------------------------------------------
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
@@ -189,7 +346,7 @@ const Products = () => {
         message.success('Produk berhasil ditambahkan.');
       }
 
-      closeModal();
+      closeFormDrawer();
     } catch (error) {
       if (error?.errorFields) return;
       if (error?.type === 'validation' && error?.errors) {
@@ -209,6 +366,9 @@ const Products = () => {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Toggle aktif/nonaktif produk.
+  // ---------------------------------------------------------------------------
   const handleToggleActive = async (record) => {
     try {
       await toggleProductActive(record.id, !(record.isActive !== false));
@@ -219,84 +379,88 @@ const Products = () => {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Kolom tabel utama.
+  // Varian dipindah menjadi rincian di kolom stok agar lebih padat dan mudah dibaca.
+  // ---------------------------------------------------------------------------
   const columns = [
     {
-      title: 'Nama Produk',
+      title: 'Produk Jadi',
       dataIndex: 'name',
       key: 'name',
-      width: 220,
+      width: 280,
       render: (value, record) => (
-        <Space direction="vertical" size={0}>
+        <div style={compactCellStyles.stack}>
           <Text strong>{value || '-'}</Text>
-          <Text type="secondary">{record.category || 'Produk Jadi'}</Text>
-        </Space>
+          <Text type="secondary" style={compactCellStyles.meta}>{record.category || 'Produk Jadi'}</Text>
+          <Space size={6} wrap>
+            <Tag color={record.hasVariants ? 'blue' : 'default'}>
+              {record.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
+            </Tag>
+            {record.hasVariants ? (
+              <Tag color="purple">{formatNumberID(record.variantCount || 0)} varian</Tag>
+            ) : null}
+          </Space>
+        </div>
       ),
     },
     {
-      title: 'Varian',
-      key: 'variants',
-      width: 220,
-      render: (_, record) => (
-        <Space wrap>
-          {(record.variants || []).length > 0
-            ? record.variants.map((variant) => (
-                <Tag key={`${record.id}-${variant.color}`}>
-                  {COLOR_VARIANT_MAP[variant.color] || variant.color}
-                </Tag>
-              ))
-            : <Text type="secondary">-</Text>}
-        </Space>
-      ),
-    },
-    {
-      title: 'Stok Total',
-      dataIndex: 'stock',
+      title: 'Stok',
       key: 'stock',
-      width: 110,
-      render: (value) => formatNumberID(value),
+      width: 360,
+      render: (_, record) => {
+        const variants = Array.isArray(record.variants) ? record.variants : [];
+        const hasVariants = record.hasVariants === true && variants.length > 0;
+
+        return (
+          <div style={compactCellStyles.stack}>
+            <Text strong>{`Total ${formatStockWithUnit(record.currentStock ?? record.stock ?? 0)}`}</Text>
+            <Text type="secondary" style={compactCellStyles.meta}>
+              {`Tersedia ${formatStockWithUnit(record.availableStock ?? record.currentStock ?? record.stock ?? 0)}`}
+            </Text>
+
+            {hasVariants ? (
+              renderVariantStockPills(variants)
+            ) : (
+              <Text type="secondary" style={compactCellStyles.meta}>Non-varian</Text>
+            )}
+          </div>
+        );
+      },
     },
     {
-      title: 'Harga Jual',
-      dataIndex: 'price',
-      key: 'price',
-      width: 140,
-      render: (value) => formatCurrencyId(value),
-    },
-    {
-      title: 'HPP / Unit',
-      dataIndex: 'hppPerUnit',
-      key: 'hppPerUnit',
-      width: 140,
-      render: (value) => formatCurrencyId(value),
-    },
-    {
-      title: 'Pricing',
-      key: 'pricing',
-      width: 180,
+      title: 'Harga',
+      key: 'priceInfo',
+      width: 250,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
-          {PRICING_MODE_TAGS[record.pricingMode || 'rule']}
-          <Text type="secondary">{pricingRuleMap[record.pricingRuleId] || '-'}</Text>
-        </Space>
+        <div style={compactCellStyles.stack}>
+          <Text strong>{`Jual ${formatCurrencyId(record.price || 0)} / pcs`}</Text>
+          <Text type="secondary" style={compactCellStyles.meta}>
+            {`HPP ${formatCurrencyId(record.hppPerUnit || 0)} / pcs`}
+          </Text>
+          <Text type="secondary" style={compactCellStyles.meta}>
+            {`${record.pricingMode === 'manual' ? 'Manual' : 'Rule'} ${pricingRuleMap[record.pricingRuleId] ? `| ${pricingRuleMap[record.pricingRuleId]}` : ''}`}
+          </Text>
+        </div>
       ),
     },
     {
       title: 'Status',
       key: 'status',
       width: 120,
-      render: (_, record) => (
-        <Tag color={record.isActive === false ? 'default' : 'green'}>
-          {record.isActive === false ? 'Nonaktif' : 'Aktif'}
-        </Tag>
-      ),
+      align: 'center',
+      render: (_, record) => {
+        const statusMeta = getProductStatusMeta(record);
+        return <Tag color={statusMeta.color}>{statusMeta.label}</Tag>;
+      },
     },
     {
       title: 'Aksi',
       key: 'actions',
-      width: 210,
+      width: 230,
       fixed: 'right',
       render: (_, record) => (
-        <Space>
+        <Space size={8} wrap>
           <Button size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
             Detail
           </Button>
@@ -318,90 +482,171 @@ const Products = () => {
 
   return (
     <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        <div>
-          <h2 style={{ margin: 0 }}>Products</h2>
-          <p style={{ margin: '8px 0 0', color: '#666' }}>
-            Master produk jadi dengan harga di master dan stok per varian warna.
-          </p>
-        </div>
+      {/* ---------------------------------------------------------------------
+          Header halaman produk.
+      --------------------------------------------------------------------- */}
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Row justify="space-between" align="middle" gutter={[16, 16]}>
+          <Col>
+            <Typography.Title level={3} style={{ margin: 0 }}>
+              Produk Jadi
+            </Typography.Title>
+            <Typography.Text type="secondary">
+              Master produk jadi dengan harga di master dan stok per varian warna supaya data tetap rapi dan mudah dipantau.
+            </Typography.Text>
+          </Col>
 
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={() => window.location.reload()}>
-            Refresh
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-            Tambah Produk
-          </Button>
-        </Space>
-      </div>
+          <Col>
+            <Space wrap>
+              <Button icon={<ReloadOutlined />} onClick={() => window.location.reload()}>
+                Refresh
+              </Button>
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreateDrawer}>
+                Tambah Produk
+              </Button>
+            </Space>
+          </Col>
+        </Row>
+      </Card>
 
       <Alert
         showIcon
         type="info"
         style={{ marginBottom: 16 }}
-        message="Nama produk tidak perlu dipecah per warna. Cukup 1 master produk lalu stok warna dikelola di tabel varian. Hapus permanen disembunyikan agar histori tetap aman."
+        message="Nama produk tidak perlu dipecah per warna. Cukup 1 master produk lalu stok warna dikelola di varian. Status list akan mengikuti kondisi stok dan status aktif produk."
       />
 
+      {/* ---------------------------------------------------------------------
+          Summary cards produk.
+      --------------------------------------------------------------------- */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} md={6}><Card><Statistic title="Total Produk" value={summary.total} /></Card></Col>
-        <Col xs={24} md={6}><Card><Statistic title="Produk Aktif" value={summary.active} /></Card></Col>
-        <Col xs={24} md={6}><Card><Statistic title="Produk Nonaktif" value={summary.inactive} /></Card></Col>
-        <Col xs={24} md={6}><Card><Statistic title="Total Varian" value={summary.totalVariants} /></Card></Col>
+        <Col xs={24} md={6}><Card size="small"><Statistic title="Total Produk" value={summary.total} /></Card></Col>
+        <Col xs={24} md={6}><Card size="small"><Statistic title="Produk Aktif" value={summary.active} /></Card></Col>
+        <Col xs={24} md={6}><Card size="small"><Statistic title="Produk Nonaktif" value={summary.inactive} /></Card></Col>
+        <Col xs={24} md={6}><Card size="small"><Statistic title="Perlu Dicek" value={summary.lowStock} /></Card></Col>
       </Row>
 
-      <Card>
+      {/* ---------------------------------------------------------------------
+          Filter bar utama.
+      --------------------------------------------------------------------- */}
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Row gutter={[12, 12]}>
+          <Col xs={24} md={8}>
+            <Input
+              allowClear
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Cari nama produk, kategori, atau warna..."
+            />
+          </Col>
+          <Col xs={24} md={5}>
+            <Select value={statusFilter} onChange={setStatusFilter} style={{ width: '100%' }}>
+              <Select.Option value="all">Semua Status</Select.Option>
+              <Select.Option value="Aman">Aman</Select.Option>
+              <Select.Option value="Stok Rendah">Stok Rendah</Select.Option>
+              <Select.Option value="Kosong">Kosong</Select.Option>
+              <Select.Option value="Nonaktif">Nonaktif</Select.Option>
+            </Select>
+          </Col>
+          <Col xs={24} md={5}>
+            <Select value={variantModeFilter} onChange={setVariantModeFilter} style={{ width: '100%' }}>
+              <Select.Option value="all">Semua Mode Varian</Select.Option>
+              <Select.Option value="variant">Pakai Varian</Select.Option>
+              <Select.Option value="single">Tanpa Varian</Select.Option>
+            </Select>
+          </Col>
+          <Col xs={24} md={6}>
+            <Select value={categoryFilter} onChange={setCategoryFilter} style={{ width: '100%' }} allowClear={false}>
+              <Select.Option value="all">Semua Kategori</Select.Option>
+              {(categories || []).map((item) => (
+                <Select.Option key={item.id} value={item.id}>{item.name}</Select.Option>
+              ))}
+            </Select>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* ---------------------------------------------------------------------
+          Tabel utama produk.
+      --------------------------------------------------------------------- */}
+      <Card size="small">
         <Table
           rowKey="id"
           loading={loading}
-          dataSource={products}
+          dataSource={filteredProducts}
           columns={columns}
+          size="small"
           pagination={{ pageSize: 10 }}
-          scroll={{ x: 1400 }}
+          scroll={{ x: 1180 }}
+          locale={{ emptyText: <Empty description="Belum ada data produk" /> }}
         />
       </Card>
 
+      {/* ---------------------------------------------------------------------
+          Drawer form create/edit produk.
+          Ukuran dan pembagian section dibuat seragam dengan raw materials.
+      --------------------------------------------------------------------- */}
       <Drawer
         title={editingProduct ? 'Edit Produk' : 'Tambah Produk'}
-        open={modalVisible}
-        onClose={closeModal}
-        width={920}
+        open={formVisible}
+        onClose={closeFormDrawer}
+        width={860}
         destroyOnClose
         extra={
           <Space>
-            <Button onClick={closeModal}>Batal</Button>
+            <Button onClick={closeFormDrawer}>Batal</Button>
             <Button type="primary" loading={submitting} onClick={handleSubmit}>Simpan</Button>
           </Space>
         }
       >
         <Form form={form} layout="vertical" initialValues={buildFormValues(PRODUCT_DEFAULT_FORM)}>
+          <Divider orientation="left">Informasi Utama</Divider>
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item name="name" label="Nama Produk" rules={[{ required: true, message: 'Nama produk wajib diisi.' }]}>
+              <Form.Item name="name" label="Nama Produk" rules={[{ required: true, message: 'Nama produk wajib diisi.' }]}> 
                 <Input placeholder="Contoh: Bunga Mawar Flanel" />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
               <Form.Item name="categoryId" label="Kategori">
-                <Select allowClear placeholder="Pilih kategori" options={(categories || []).map((item) => ({ value: item.id, label: item.name }))} />
+                <Select
+                  allowClear
+                  placeholder="Pilih kategori"
+                  options={(categories || []).map((item) => ({ value: item.id, label: item.name }))}
+                />
               </Form.Item>
             </Col>
           </Row>
 
+          <Form.Item name="description" label="Deskripsi">
+            <TextArea rows={3} placeholder="Catatan produk" />
+          </Form.Item>
+
+          <Divider orientation="left">Pricing Master</Divider>
           <Row gutter={16}>
             <Col xs={24} md={8}>
-              <Form.Item name="hppPerUnit" label="HPP / Unit" rules={[{ required: true, message: 'HPP wajib diisi.' }]}>
-                <InputNumber style={{ width: '100%' }} min={0} formatter={(value) => formatNumberID(value)} parser={(value) => String(value || '').replace(/\./g, '')} />
+              <Form.Item name="hppPerUnit" label="HPP / Unit" rules={[{ required: true, message: 'HPP wajib diisi.' }]}> 
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  formatter={(value) => formatNumberID(value)}
+                  parser={(value) => String(value || '').replace(/\./g, '')}
+                />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item name="pricingMode" label="Mode Pricing" rules={[{ required: true, message: 'Mode pricing wajib dipilih.' }]}>
+              <Form.Item name="pricingMode" label="Mode Pricing" rules={[{ required: true, message: 'Mode pricing wajib dipilih.' }]}> 
                 <Select options={[{ value: 'rule', label: 'Rule' }, { value: 'manual', label: 'Manual' }]} />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item name="price" label="Harga Jual" rules={[{ required: true, message: 'Harga jual wajib diisi.' }]}>
-                <InputNumber style={{ width: '100%' }} min={0} formatter={(value) => formatNumberID(value)} parser={(value) => String(value || '').replace(/\./g, '')} />
+              <Form.Item name="price" label="Harga Jual" rules={[{ required: true, message: 'Harga jual wajib diisi.' }]}> 
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  formatter={(value) => formatNumberID(value)}
+                  parser={(value) => String(value || '').replace(/\./g, '')}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -422,15 +667,11 @@ const Products = () => {
             />
           </Form.Item>
 
-          <Form.Item name="description" label="Deskripsi">
-            <TextArea rows={3} placeholder="Catatan produk" />
-          </Form.Item>
-
+          <Divider orientation="left">Mode Stok</Divider>
           <Form.Item name="hasVariants" label="Pakai Varian" valuePropName="checked">
             <Switch checkedChildren="Ya" unCheckedChildren="Tidak" />
           </Form.Item>
 
-          <Divider orientation="left">{hasVariantsValue ? 'Varian & Stok' : 'Stok Master'}</Divider>
           <Alert
             type="warning"
             showIcon
@@ -441,57 +682,57 @@ const Products = () => {
           />
 
           {hasVariantsValue ? (
-          <Form.List name="variants">
-            {(fields, { add, remove }) => (
-              <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                {fields.map((field) => (
-                  <Card key={field.key} size="small">
-                    <Row gutter={12}>
-                      <Col xs={24} md={5}>
-                        <Form.Item {...field} name={[field.name, 'color']} label="Nama Varian" rules={[{ required: true, message: 'Nama varian wajib dipilih' }]}>
-                          <Select options={COLOR_VARIANT_OPTIONS} />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={4}>
-                        <Form.Item {...field} name={[field.name, 'sku']} label="SKU Varian">
-                          <Input placeholder="Opsional" />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={4}>
-                        <Form.Item {...field} name={[field.name, 'currentStock']} label="Stok" initialValue={0}>
-                          <InputNumber style={{ width: '100%' }} min={0} />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={4}>
-                        <Form.Item {...field} name={[field.name, 'reservedStock']} label="Reserved" initialValue={0}>
-                          <InputNumber style={{ width: '100%' }} min={0} />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={4}>
-                        <Form.Item {...field} name={[field.name, 'minStockAlert']} label="Min Stok" initialValue={0}>
-                          <InputNumber style={{ width: '100%' }} min={0} />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={2}>
-                        <Form.Item {...field} name={[field.name, 'isActive']} label="Aktif" valuePropName="checked" initialValue>
-                          <Switch />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={1}>
-                        <Button danger style={{ marginTop: 30 }} disabled={fields.length === 1} onClick={() => remove(field.name)}>
-                          X
+            <>
+              <Form.List name="variants">
+                {(fields, { add, remove }) => (
+                  <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                    {fields.map((field) => (
+                      <Card key={field.key} size="small" title="Varian Produk">
+                        <Row gutter={12}>
+                          <Col xs={24} md={6}>
+                            <Form.Item {...field} name={[field.name, 'color']} label="Warna" rules={[{ required: true, message: 'Warna wajib dipilih' }]}> 
+                              <Select options={COLOR_VARIANT_OPTIONS} />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} md={5}>
+                            <Form.Item {...field} name={[field.name, 'sku']} label="SKU Varian">
+                              <Input placeholder="Opsional" />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} md={4}>
+                            <Form.Item {...field} name={[field.name, 'currentStock']} label="Stok" initialValue={0}>
+                              <InputNumber style={{ width: '100%' }} min={0} />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} md={4}>
+                            <Form.Item {...field} name={[field.name, 'reservedStock']} label="Reserved" initialValue={0}>
+                              <InputNumber style={{ width: '100%' }} min={0} />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} md={4}>
+                            <Form.Item {...field} name={[field.name, 'minStockAlert']} label="Min Stok" initialValue={0}>
+                              <InputNumber style={{ width: '100%' }} min={0} />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} md={1}>
+                            <Form.Item {...field} name={[field.name, 'isActive']} label="Aktif" valuePropName="checked" initialValue>
+                              <Switch />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+                        <Button danger size="small" disabled={fields.length === 1} onClick={() => remove(field.name)}>
+                          Hapus Varian
                         </Button>
-                      </Col>
-                    </Row>
-                  </Card>
-                ))}
+                      </Card>
+                    ))}
 
-                <Button type="dashed" onClick={() => add({ ...DEFAULT_COLOR_VARIANT })} block>
-                  Tambah Varian
-                </Button>
-              </Space>
-            )}
-          </Form.List>
+                    <Button type="dashed" onClick={() => add({ ...DEFAULT_COLOR_VARIANT })} block>
+                      Tambah Varian
+                    </Button>
+                  </Space>
+                )}
+              </Form.List>
+            </>
           ) : (
             <Row gutter={16}>
               <Col xs={24} md={8}>
@@ -512,18 +753,39 @@ const Products = () => {
             </Row>
           )}
 
-          <Divider />
+          <Divider orientation="left">Ringkasan Form</Divider>
           <Card size="small">
             <Row gutter={16}>
-              <Col xs={24} md={8}><Statistic title={hasVariantsValue ? 'Jumlah Varian' : 'Mode Stok'} value={hasVariantsValue ? watchedVariants.length : 'Master'} formatter={(value) => value} /></Col>
-              <Col xs={24} md={8}><Statistic title="Stok Total" value={hasVariantsValue ? watchedVariants.reduce((sum, item) => sum + Number(item?.currentStock || 0), 0) : watchedCurrentStock} formatter={(value) => formatNumberID(value)} /></Col>
-              <Col xs={24} md={8}><Statistic title={hasVariantsValue ? 'Reserved Total' : `Min Stok | Reserved ${formatNumberID(watchedReservedStock)}`} value={hasVariantsValue ? watchedVariants.reduce((sum, item) => sum + Number(item?.reservedStock || 0), 0) : watchedMinStockAlert} formatter={(value) => formatNumberID(value)} /></Col>
+              <Col xs={24} md={8}>
+                <Statistic
+                  title={hasVariantsValue ? 'Jumlah Varian' : 'Mode Stok'}
+                  value={hasVariantsValue ? watchedVariants.length : 'Master'}
+                  formatter={(value) => value}
+                />
+              </Col>
+              <Col xs={24} md={8}>
+                <Statistic
+                  title="Stok Total"
+                  value={hasVariantsValue ? watchedVariants.reduce((sum, item) => sum + Number(item?.currentStock || 0), 0) : watchedCurrentStock}
+                  formatter={(value) => formatNumberID(value)}
+                />
+              </Col>
+              <Col xs={24} md={8}>
+                <Statistic
+                  title={hasVariantsValue ? 'Reserved Total' : `Min Stok | Reserved ${formatNumberID(watchedReservedStock)}`}
+                  value={hasVariantsValue ? watchedVariants.reduce((sum, item) => sum + Number(item?.reservedStock || 0), 0) : watchedMinStockAlert}
+                  formatter={(value) => formatNumberID(value)}
+                />
+              </Col>
             </Row>
           </Card>
         </Form>
       </Drawer>
 
-      <Drawer title="Detail Produk" open={detailVisible} onClose={() => setDetailVisible(false)} width={760} destroyOnClose>
+      {/* ---------------------------------------------------------------------
+          Drawer detail produk.
+      --------------------------------------------------------------------- */}
+      <Drawer title="Detail Produk" open={detailVisible} onClose={() => setDetailVisible(false)} width={820} destroyOnClose>
         {selectedProduct ? (
           <Space direction="vertical" style={{ width: '100%' }} size={16}>
             <Descriptions bordered column={1} size="small">
@@ -534,39 +796,49 @@ const Products = () => {
               <Descriptions.Item label="Mode Pricing">{PRICING_MODE_TAGS[selectedProduct.pricingMode || 'rule']}</Descriptions.Item>
               <Descriptions.Item label="Pricing Rule">{pricingRuleMap[selectedProduct.pricingRuleId] || '-'}</Descriptions.Item>
               <Descriptions.Item label="Status">
-                <Tag color={selectedProduct.isActive === false ? 'default' : 'green'}>
-                  {selectedProduct.isActive === false ? 'Nonaktif' : 'Aktif'}
-                </Tag>
+                <Tag color={getProductStatusMeta(selectedProduct).color}>{getProductStatusMeta(selectedProduct).label}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Update Terakhir">{formatDateId(selectedProduct.updatedAt, true)}</Descriptions.Item>
               <Descriptions.Item label="Deskripsi">{selectedProduct.description || '-'}</Descriptions.Item>
             </Descriptions>
 
-            <Card size="small" title={selectedProduct.hasVariants ? 'Detail Varian' : 'Stok Master'}>
+            <Card size="small" title={selectedProduct.hasVariants ? 'Rincian Varian Produk' : 'Rincian Stok Master'}>
               {selectedProduct.hasVariants ? (
-              <Table
-                rowKey={(record) => `${selectedProduct.id}-${record.color}`}
-                pagination={false}
-                dataSource={selectedProduct.variants || []}
-                columns={[
-                  { title: 'Nama Varian', dataIndex: 'color', render: (value) => COLOR_VARIANT_MAP[value] || value },
-                  { title: 'SKU', dataIndex: 'sku', render: (value) => value || '-' },
-                  { title: 'Stok', dataIndex: 'currentStock', render: (value) => formatNumberID(value) },
-                  { title: 'Reserved', dataIndex: 'reservedStock', render: (value) => formatNumberID(value) },
-                  { title: 'Min Stok', dataIndex: 'minStockAlert', render: (value) => formatNumberID(value) },
-                  {
-                    title: 'Status',
-                    dataIndex: 'isActive',
-                    render: (value) => <Tag color={value === false ? 'default' : 'green'}>{value === false ? 'Nonaktif' : 'Aktif'}</Tag>,
-                  },
-                ]}
-              />
+                <Table
+                  rowKey={(record) => `${selectedProduct.id}-${record.color}`}
+                  pagination={false}
+                  size="small"
+                  dataSource={selectedProduct.variants || []}
+                  columns={[
+                    {
+                      title: 'Warna',
+                      dataIndex: 'color',
+                      render: (value) => COLOR_VARIANT_MAP[value] || value,
+                    },
+                    { title: 'SKU', dataIndex: 'sku', render: (value) => value || '-' },
+                    { title: 'Stok', dataIndex: 'currentStock', render: (value) => formatStockWithUnit(value || 0) },
+                    { title: 'Reserved', dataIndex: 'reservedStock', render: (value) => formatStockWithUnit(value || 0) },
+                    {
+                      title: 'Tersedia',
+                      key: 'availableStock',
+                      render: (_, variant) => formatStockWithUnit(
+                        Math.max(Number(variant.currentStock || 0) - Number(variant.reservedStock || 0), 0),
+                      ),
+                    },
+                    { title: 'Min Stok', dataIndex: 'minStockAlert', render: (value) => formatStockWithUnit(value || 0) },
+                    {
+                      title: 'Status',
+                      dataIndex: 'isActive',
+                      render: (value) => <Tag color={value === false ? 'default' : 'green'}>{value === false ? 'Nonaktif' : 'Aktif'}</Tag>,
+                    },
+                  ]}
+                />
               ) : (
                 <Descriptions bordered column={1} size="small">
-                  <Descriptions.Item label="Stok Master">{formatNumberID(selectedProduct.currentStock)}</Descriptions.Item>
-                  <Descriptions.Item label="Reserved Stock">{formatNumberID(selectedProduct.reservedStock)}</Descriptions.Item>
-                  <Descriptions.Item label="Available Stock">{formatNumberID(selectedProduct.availableStock)}</Descriptions.Item>
-                  <Descriptions.Item label="Minimum Stok">{formatNumberID(selectedProduct.minStockAlert)}</Descriptions.Item>
+                  <Descriptions.Item label="Stok Master">{formatStockWithUnit(selectedProduct.currentStock)}</Descriptions.Item>
+                  <Descriptions.Item label="Reserved Stock">{formatStockWithUnit(selectedProduct.reservedStock)}</Descriptions.Item>
+                  <Descriptions.Item label="Available Stock">{formatStockWithUnit(selectedProduct.availableStock)}</Descriptions.Item>
+                  <Descriptions.Item label="Minimum Stok">{formatStockWithUnit(selectedProduct.minStockAlert)}</Descriptions.Item>
                 </Descriptions>
               )}
             </Card>
