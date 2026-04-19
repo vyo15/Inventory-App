@@ -3,40 +3,33 @@ title: Tahapan Produksi
 sidebar_label: Tahapan Produksi
 ---
 
-# Fungsi Menu
+# Tahapan Produksi
 
-Menu **Tahapan Produksi** dipakai untuk menyimpan daftar step kerja yang nantinya dipakai oleh BOM, dipetakan ke tenaga kerja, dan dijadikan dasar monitoring proses produksi.
+## Tujuan
+Dipakai untuk mendefinisikan langkah kerja seperti potong bahan, rakit, finishing, atau QC.
 
-## Data yang Dikelola
+## Field Form Utama
+- **Nama Step**
+- **Kategori**
+- **Fungsi / Deskripsi**
+- **Basis Kerja**
+- **Monitoring**
+- **Mode Bayar**
+- **Tarif Default**
+- **Qty Dasar Bayar**
+- **Basis Output Bayar**
+- **Status Aktif**
 
-Di menu ini, step produksi menyimpan informasi seperti:
-- nama step,
-- deskripsi step,
-- process type,
-- basis type,
-- monitoring mode,
-- payroll mode,
-- output basis payroll,
-- status aktif / nonaktif.
+## Tabel Utama
+Menampilkan nama step, kategori, basis kerja, monitoring, sistem bayar, karyawan terkait, BOM terkait, status, dan aksi.
 
-## Hubungan Dengan Modul Lain
+## Tombol Aksi
+- **Tambah Step**
+- **Edit**
+- **Aktifkan / Nonaktifkan**
+- **Refresh**
+- buka daftar **karyawan terkait**,
+- buka daftar **BOM terkait**.
 
-### Relasi ke Karyawan Produksi
-Setiap step dapat dipakai untuk melihat berapa karyawan yang terhubung ke step tersebut.
-
-### Relasi ke BOM
-Setiap step juga dapat dipakai untuk melihat berapa BOM yang menggunakan step tersebut.
-
-## Fungsi Utama di Halaman
-
-- menambah step baru,
-- edit step,
-- toggle aktif / nonaktif,
-- filter berdasarkan status dan process type,
-- melihat statistik jumlah step, jumlah dipakai karyawan, dan jumlah dipakai BOM.
-
-## Catatan Penting
-
-- Step aktif sebaiknya dipakai sebagai standar, bukan duplikasi step dengan nama berbeda.
-- Jika ada perubahan proses produksi nyata, perbarui step daripada membuat data liar.
-- Jika step terkait payroll atau monitoring berubah, dampaknya bisa memengaruhi BOM dan work log.
+## Contoh Skenario
+Buat step **Potong Kawat** dengan mode bayar dan monitoring yang sesuai, lalu gunakan step tersebut di BOM.

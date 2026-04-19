@@ -1,28 +1,57 @@
-# Maintenance — Improvements Log
+---
+sidebar_position: 1
+title: Improvements
+description: Ringkasan perbaikan penting yang sudah tercermin di file terbaru.
+---
 
-## Arah Improvement yang Sudah Terlihat
+# Improvements
 
-Beberapa improvement penting yang sudah tampak dari source dan catatan patch:
+Dokumen ini merangkum perubahan penting yang perlu diketahui user dan tim saat membaca sistem terbaru.
 
-- jalur produksi lama dipensiunkan,
-- duplicate route produksi dihapus,
-- source type `production_order` ditambahkan ke work log,
-- completion work log diperjelas menjadi titik stock movement final produksi,
-- reserved stock semi finished tidak lagi editable manual,
-- struktur sidebar produksi diarahkan ke arsitektur final.
+## 1. UI master data dibuat lebih seragam
 
-## Dampak Positif Improvement
+Tampilan **Bahan Baku**, **Produk Jadi**, dan **Semi Finished Materials** sudah diarahkan ke satu bahasa desain yang lebih konsisten.
 
-- alur produksi jadi lebih jelas,
-- stok lebih mudah diaudit,
-- reservation dan completion lebih terstruktur,
-- dokumentasi dan maintenance lebih mudah karena menu lama mulai dipangkas.
+Perbaikan yang terasa di UI:
 
-## Prinsip Lanjutan
+- spacing tabel lebih rapi,
+- card filter lebih seragam,
+- tombol aksi lebih konsisten,
+- drawer detail lebih searah,
+- stok varian tampil lebih bersih dan informatif.
 
-Improvement berikutnya sebaiknya tetap mengikuti prinsip:
+## 2. Stok varian ditampilkan langsung di tabel
 
-- satu sumber kebenaran untuk tiap proses,
-- hindari logic ganda antara page dan service,
-- semua perubahan stok penting harus terlacak,
-- semua rule bisnis utama harus terdokumentasi.
+Untuk item yang memakai varian, stok varian sekarang ditampilkan langsung di tabel agar user tidak perlu membuka detail hanya untuk mengecek warna atau spesifikasi tertentu.
+
+## 3. Raw material lebih aman dinonaktifkan daripada dihapus
+
+Flow master data bahan baku diarahkan ke **aktif / nonaktif** supaya histori transaksi dan log sistem tetap aman.
+
+## 4. Complete work log sudah kembali memakai modal penyelesaian
+
+Di halaman Work Log Produksi, user kembali bisa menyelesaikan work log dengan mengisi:
+
+- qty bagus,
+- qty reject,
+- qty rework,
+- operator produksi,
+- catatan penyelesaian.
+
+## 5. Output varian work log sudah diposting lebih aman
+
+Posting output produksi untuk target yang memakai varian sudah diarahkan agar masuk ke varian yang benar, bukan hanya ke stok master.
+
+## 6. Inherit variant lintas item sudah diperbaiki
+
+Requirement material pada PO sekarang lebih aman mewariskan varian berdasarkan makna variannya, bukan hanya key internal.
+
+Ini penting untuk kasus seperti:
+
+- target semi finished **ungu**,
+- bahan baku **ungu**,
+- tetapi key internal varian kedua item berbeda.
+
+## 7. Dokumentasi diarahkan ke bahasa user
+
+Dokumentasi terbaru dibuat supaya lebih mudah dipahami user operasional, bukan hanya tim teknis.

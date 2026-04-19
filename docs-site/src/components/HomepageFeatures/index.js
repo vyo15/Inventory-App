@@ -2,46 +2,53 @@ import React from 'react';
 import Link from '@docusaurus/Link';
 import styles from './styles.module.css';
 
+// =====================================================
+// Homepage feature cards
+// Fungsi:
+// - merangkum struktur dokumentasi utama dalam format yang cepat dipahami
+// - membantu user masuk ke area docs yang paling relevan
+// - menjaga copywriting tetap singkat, profesional, dan tidak melelahkan untuk dibaca
+// =====================================================
 const features = [
   {
     title: 'Overview Project',
     description:
-      'Menjelaskan tujuan sistem, cakupan project, struktur dokumentasi, dan gambaran besar IMS Bunga Flanel.',
+      'Ringkasan tujuan sistem, modul utama, struktur menu, dan gambaran besar arsitektur project aktif.',
     link: '/docs/overview/project-overview',
     linkLabel: 'Buka Overview',
   },
   {
     title: 'Business Flow',
     description:
-      'Menjelaskan alur pembelian, produksi, penjualan, dan perpindahan stok dari raw material sampai finished goods.',
+      'Penjelasan alur stok, pembelian, produksi, work log, hingga hasil produksi masuk ke semi finished atau produk jadi.',
     link: '/docs/business-flow/stock-flow',
     linkLabel: 'Lihat Business Flow',
   },
   {
     title: 'System Logic',
     description:
-      'Membahas aturan stok, costing, HPP, status penjualan, serta rule penting agar antar menu tetap sinkron.',
-    link: '/docs/system-logic/costing-hpp',
+      'Aturan penting terkait stok, varian, costing, HPP, pricing rules, serta reset data uji.',
+    link: '/docs/system-logic/stock-rules',
     linkLabel: 'Lihat System Logic',
   },
   {
     title: 'Menu Documentation',
     description:
-      'Dokumentasi per menu untuk memudahkan audit fungsi, memahami data yang dipakai, dan menjaga maintainability.',
-    link: '/docs/menus/dashboard',
+      'Panduan per kelompok menu untuk memahami fungsi, field penting, tombol aksi, dan skenario penggunaan.',
+    link: '/docs/menus/master-data',
     linkLabel: 'Buka Menu Docs',
   },
   {
     title: 'Maintenance',
     description:
-      'Mencatat improvement, known issues, dan catatan penting agar perubahan project lebih terarah dan terdokumentasi.',
+      'Catatan area penting untuk audit, testing, perbaikan logic, dan konsistensi maintainability project.',
     link: '/docs/maintenance/improvements',
     linkLabel: 'Lihat Maintenance',
   },
   {
     title: 'Roadmap',
     description:
-      'Berisi arah pengembangan lanjutan seperti payroll ke HPP, pricing rules, finished goods HPP, dan integrasi fee.',
+      'Arah pengembangan lanjutan seperti payroll ke costing, HPP produk jadi, dan integrasi biaya marketplace.',
     link: '/docs/maintenance/roadmap',
     linkLabel: 'Lihat Roadmap',
   },
@@ -70,16 +77,17 @@ export default function HomepageFeatures() {
       <div className="container">
         <div className={styles.sectionHeader}>
           <span className={styles.sectionBadge}>Struktur Dokumentasi</span>
-          <h2 className={styles.sectionTitle}>Navigasi dokumentasi yang rapi dan mudah dipahami</h2>
+          <h2 className={styles.sectionTitle}>Navigasi dokumentasi yang lebih terstruktur dan mudah dipahami</h2>
           <p className={styles.sectionSubtitle}>
-            Dokumentasi disusun berdasarkan overview, alur bisnis, aturan sistem,
-            dokumentasi menu, dan maintenance agar mudah dipakai untuk audit dan pengembangan.
+            Dokumentasi disusun berdasarkan overview, business flow, system logic,
+            dokumentasi per menu, dan maintenance agar user maupun tim internal
+            dapat membaca kebutuhan informasi secara cepat dan konsisten.
           </p>
         </div>
 
         <div className={styles.grid}>
-          {features.map((feature, idx) => (
-            <FeatureCard key={idx} {...feature} />
+          {features.map((feature) => (
+            <FeatureCard key={feature.link} {...feature} />
           ))}
         </div>
       </div>

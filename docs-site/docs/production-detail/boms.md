@@ -3,31 +3,44 @@ title: BOM Produksi
 sidebar_label: BOM Produksi
 ---
 
-# Peran Menu
+# BOM Produksi
 
-Production BOMs dipakai untuk mendefinisikan formula produksi.
+## Tujuan
+Dipakai untuk mendefinisikan resep produksi, baik untuk target semi finished maupun produk jadi.
 
-## Update Rule dari Service Terbaru
+## Field Form Utama
+- **Kode BOM**
+- **Nama BOM**
+- **Deskripsi**
+- **Target Type**
+- **Target Item**
+- **Hasil per Produksi**
+- **Status Aktif**
+- estimasi biaya material, tenaga kerja, dan overhead,
+- **Catatan Internal**.
 
-Service terbaru menegaskan rule final berikut:
+## Line Bahan
+Setiap baris bahan minimal memuat:
+- jenis bahan,
+- item bahan,
+- kebutuhan per produksi,
+- satuan bahan,
+- catatan,
+- strategi varian: ikut target, fixed, atau tanpa varian.
 
-### Target Product
-Jika target BOM adalah `product`, material yang boleh dipakai hanya:
-- `semi_finished_material`
+## Line Step
+Setiap baris step memuat:
+- step produksi,
+- urutan langkah,
+- qty / batch atau aturan output sesuai flow yang dipakai.
 
-### Target Semi Finished Material
-Jika target BOM adalah `semi_finished_material`, material yang boleh dipakai:
-- `raw_material`
-- `semi_finished_material`
+## Tombol Aksi
+- **Tambah BOM**
+- **Detail**
+- **Edit**
+- **Aktifkan / Nonaktifkan**
+- **Edit** bahan
+- **Edit** step
 
-## Reference Data
-
-Service terbaru mengambil active reference data dari master yang aktif dan menormalkan reference item agar fallback code, name, unit tetap stabil.
-
-## Variant Awareness
-
-Service memakai helper `inferHasVariants`, yang berarti BOM sudah sadar apakah reference item memakai variant atau tidak.
-
-## Implikasi Bisnis
-
-Rule ini menegaskan bahwa produk jadi adalah tahap assembly dari semi finished, sedangkan semi finished bisa dibentuk dari raw material atau semi finished lain.
+## Contoh Skenario
+Buat BOM **Pola Mawar** yang memakai Kain Flanel sebagai bahan, atur hasil per produksi, lalu tambahkan step **Potong Bahan Dasar**.

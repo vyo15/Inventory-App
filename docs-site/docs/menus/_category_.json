@@ -1,0 +1,8 @@
+{
+  "label": "Menu Documentation",
+  "position": 5,
+  "link": {
+    "type": "generated-index",
+    "description": "Penjelasan per kelompok menu agar user lebih mudah memakai sistem."
+  }
+}

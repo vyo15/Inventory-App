@@ -3,53 +3,32 @@ title: Pricing Rules
 sidebar_label: Pricing Rules
 ---
 
-# Tujuan Menu
+# Pricing Rules
 
-Menu **Pricing Rules** dipakai untuk membuat aturan harga otomatis untuk raw materials dan products.
+## Tujuan
+Menu ini dipakai untuk menghitung harga jual otomatis dari base cost.
 
-## Fungsi Utama
+## Field Form Utama
+- **Nama Rule**
+- **Target Type**
+- **Status Aktif**
+- **Base Cost Source**
+- **Margin Type**
+- **Margin Value**
+- **Gunakan Buffer Marketplace**
+- **Marketplace Buffer Type**
+- **Marketplace Buffer Value**
+- **Rounding Type**
+- **Rounding Unit**
 
-Dari source terbaru, halaman ini mendukung:
-- create rule,
-- update rule,
-- delete rule,
-- preview harga,
-- apply rule ke item target,
-- statistik rule aktif / nonaktif.
+## Tombol Aksi
+- **Tambah Rule**
+- **Preview**
+- **Edit**
+- **Terapkan Rule**
 
-## Target Type
+## Hasil Preview
+Sistem menampilkan item target, mode pricing, harga lama, base cost, margin, buffer, harga hitung, harga baru, dan status update.
 
-Rule saat ini mendukung dua target:
-- `raw_materials`
-- `products`
-
-## Base Cost Source
-
-Base cost source yang sudah dipakai di service terbaru:
-- `averageActualUnitCost`
-- `restockReferencePrice`
-- `hppPerUnit`
-
-## Komponen Formula
-
-Rule dapat memuat:
-- margin,
-- marketplace buffer,
-- rounding type,
-- rounding unit.
-
-## Status Preview
-
-Source terbaru mengenali beberapa status preview seperti:
-- `ready`
-- `skipped_manual`
-- `invalid_base_cost`
-- `invalid_marketplace_buffer`
-- `inactive_rule`
-
-## Dampak ke Modul Lain
-
-- Products
-- Raw Materials
-- pricingMode item target
-- update harga jual / selling price item target
+## Contoh Skenario
+Buat rule khusus marketplace dengan margin dan buffer, preview dulu hasilnya, lalu klik **Terapkan Rule** untuk update harga massal.

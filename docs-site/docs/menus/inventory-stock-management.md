@@ -1,42 +1,26 @@
 ---
-title: Stock Management
-sidebar_label: Stock Management
+title: Manajemen Stok
+sidebar_label: Manajemen Stok
 ---
 
-# Tujuan Menu
+# Manajemen Stok
 
-Menu **Stock Management** dipakai untuk membaca riwayat mutasi stok lintas modul.
+## Tujuan
+Menu ini dipakai untuk melihat histori mutasi stok dari seluruh modul.
 
-## Fungsi Utama
-
-Source terbaru menunjukkan halaman ini membaca collection inventory log lalu menampilkan:
+## Informasi di Tabel
 - tanggal,
-- tipe mutasi,
-- nama item,
-- jenis item,
-- jumlah,
+- arah mutasi: **Masuk** atau **Keluar**,
+- sumber: pembelian, penjualan, retur, produksi, atau penyesuaian,
+- item dan variannya,
+- qty,
+- referensi dokumen seperti PO atau Work Log,
 - catatan.
 
-## Tipe Mutasi yang Sudah Dikenali
+## Filter
+- pencarian item, varian, referensi, supplier, atau customer,
+- filter arah mutasi,
+- filter sumber mutasi.
 
-- `purchase_in`
-- `sale`
-- `sale_revert`
-- `sale_cancel_revert`
-- `stock_adjustment`
-- `production_out_pending`
-- `production_in_completed`
-
-## Kegunaan Praktis
-
-Menu ini sangat penting untuk:
-- audit stok,
-- cek rollback,
-- cek apakah produksi dan sales meninggalkan log mutasi yang benar.
-
-## Titik Perhatian
-
-Jika stok akhir salah, modul ini harus dicek lebih dulu untuk melihat:
-- mutasi apa saja yang sudah terjadi,
-- apakah ada mutasi ganda,
-- apakah rollback tercatat.
+## Contoh Skenario
+Untuk cek apakah bahan sudah terpotong saat **Mulai Produksi**, buka menu ini lalu cari nomor PO atau Work Log terkait.

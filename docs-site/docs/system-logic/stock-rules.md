@@ -1,13 +1,58 @@
 ---
+sidebar_position: 1
 title: Stock Rules
-sidebar_label: Stock Rules
+description: Aturan inti stok, log, dan status data yang harus dijaga.
 ---
 
-## Rule Dasar
-1. **currentStock** adalah source of truth utama untuk stok aktif.
-2. Field `stock` lama hanya berfungsi sebagai mirror compatibility selama masa transisi.
-3. Bila ada varian, total stok harus konsisten dengan penjumlahan stok varian.
-4. Mutasi stok wajib meninggalkan jejak log inventory jika modul log aktif.
-5. Stok bahan baku, semi finished, dan product tidak boleh dicampur.
-6. Semua mutasi stok wajib lewat helper atau service stok pusat.
-7. Page, form, atau menu tidak boleh mutasi stok langsung dengan logic masing-masing.
+# Stock Rules
+
+## Empat field stok yang perlu dipahami
+
+Untuk banyak item, sistem menyimpan beberapa field stok berikut:
+
+- **currentStock**: stok utama saat ini,
+- **stock**: representasi stok total untuk kompatibilitas dan tampilan,
+- **reservedStock**: stok yang pernah dipakai di flow reservasi lama atau kebutuhan khusus,
+- **availableStock**: stok siap pakai setelah dikurangi reserve.
+
+Secara praktik, angka yang paling penting untuk operasional adalah **currentStock** dan **availableStock**.
+
+## Sumber mutasi stok
+
+Mutasi stok normal datang dari:
+
+- pembelian,
+- penjualan,
+- retur,
+- produksi,
+- penyesuaian stok.
+
+Agar histori tetap rapi, setiap perubahan stok sebaiknya lewat menu transaksi yang benar, bukan edit angka manual langsung di database.
+
+## Manajemen Stok
+
+Menu **Manajemen Stok** adalah tempat audit log keluar-masuk stok.
+
+Log dipakai untuk melihat:
+
+- tanggal mutasi,
+- arah masuk / keluar,
+- sumber mutasi,
+- item,
+- qty,
+- referensi PO, work log, sale, supplier, atau customer.
+
+## Penyesuaian stok
+
+Menu **Penyesuaian Stok** dipakai untuk koreksi manual ketika stok fisik tidak sama dengan stok sistem.
+
+Gunakan penyesuaian dengan hati-hati karena menu ini bukan pengganti transaksi normal.
+
+## Nonaktif lebih aman daripada hapus
+
+Untuk beberapa master data, terutama yang sudah pernah dipakai di transaksi atau produksi, pendekatan yang lebih aman adalah:
+
+- **nonaktifkan data**,
+- jangan langsung hapus.
+
+Ini penting supaya histori log dan referensi lama tidak rusak.

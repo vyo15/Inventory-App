@@ -3,39 +3,55 @@ title: Semi Finished Materials
 sidebar_label: Semi Finished Materials
 ---
 
-# Fungsi Menu
+# Semi Finished Materials
 
-Menu **Semi Finished Materials** dipakai untuk menyimpan komponen setengah jadi hasil proses antara yang belum menjadi produk akhir.
+## Tujuan
+Dipakai untuk menyimpan master barang setengah jadi yang menjadi jembatan antara bahan baku dan produk jadi.
 
-## Data yang Dikelola
+## Informasi di Tabel
+- kode dan nama item,
+- kategori dan jenis bunga,
+- stok total dan stok per varian,
+- status stok,
+- aksi **Detail**, **Edit**, dan **Aktifkan/Nonaktifkan**.
 
-Semi finished materials menyimpan:
-- kode item,
-- nama item,
-- kategori,
-- varian warna,
-- stok total,
-- biaya rata-rata,
-- status aktif.
+## Field Form Utama
+- **Kode Item**
+- **Nama Item**
+- **Deskripsi**
+- **Kategori**
+- **Jenis Bunga**
+- **Pakai Varian**
+- **Varian**:
+  - Nama Varian,
+  - Kode Variant,
+  - Status Varian,
+  - Current Stock,
+  - Reserved Stock,
+  - Min Stock Alert,
+  - Average Cost / Unit.
+- jika non-varian:
+  - Current Stock,
+  - Reserved Stock,
+  - Min Stock Alert,
+  - Average Cost / Unit.
+- ringkasan total:
+  - Total Current Stock,
+  - Total Reserved Stock,
+  - Total Available Stock,
+  - Total Min Stock Alert,
+  - Max Stock Target,
+  - Status Aktif,
+  - Jumlah Varian Aktif,
+  - Reference Cost / Unit.
 
-Pada level varian juga ada data:
-- warna,
-- kode variant,
-- current,
-- reserved,
-- available,
-- min alert,
-- average cost,
-- status.
+## Tombol Aksi
+- **Tambah Item**
+- **Detail**
+- **Edit**
+- **Aktifkan / Nonaktifkan**
+- **Tambah Varian**
+- **Hapus Varian**
 
-## Peran Dalam Flow Produksi
-
-Semi finished bisa berperan sebagai:
-- **output** dari satu tahap produksi,
-- lalu menjadi **input** untuk tahap produksi berikutnya.
-
-## Rule Penting
-
-- reserved stock tidak boleh diubah manual sembarangan jika flow final sudah mengaturnya.
-- current, reserved, dan available harus konsisten.
-- jika memakai varian, penambahan atau pengurangan stok harus mengikuti variant key yang benar.
+## Contoh Skenario
+Buat semi finished **Pola Mawar potong** dengan varian Merah, Putih, dan Ungu agar hasil Work Log bisa diposting ke varian yang benar.

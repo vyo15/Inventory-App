@@ -1,72 +1,109 @@
 ---
+sidebar_position: 1
 title: Project Overview
-sidebar_label: Project Overview
+description: Gambaran umum project dan modul utama yang aktif.
 ---
 
-IMS Bunga Flanel adalah aplikasi inventory dan operasional untuk usaha bunga flanel yang menggabungkan **master data**, **inventory**, **produksi**, **transaksi**, **keuangan**, dan **laporan** dalam satu sistem.
+# Project Overview
 
-## Ringkasan Project
-Sistem ini dibangun untuk mengelola:
-- bahan baku,
-- semi finished materials,
-- produk jadi,
-- pembelian,
-- penjualan,
-- kas dan biaya,
-- proses produksi bertahap,
-- laporan operasional dan laba rugi.
+## Tujuan sistem
 
-## Fokus Utama Sistem
-Fokus utama aplikasi saat ini adalah:
-1. membuat alur stok lebih konsisten,
-2. merapikan arsitektur produksi,
-3. menghubungkan pembelian, penjualan, biaya, dan laporan,
-4. mendukung variasi produk / bahan berbasis varian.
+IMS Bunga Flanel dipakai untuk mengelola:
 
-## Struktur Besar Menu
-Menu utama aplikasi terbagi menjadi beberapa domain:
-- Dashboard
-- Data Utama
-- Inventaris
-- Produksi
-- Transaksi
-- Kas & Biaya
-- Laporan
+- **master data** bahan, produk, supplier, customer, dan kategori,
+- **inventaris dan log stok**,
+- **produksi bertahap** dari bahan baku menjadi semi finished lalu produk jadi,
+- **transaksi pembelian, penjualan, retur, kas masuk, dan kas keluar**,
+- **laporan stok, pembelian, penjualan, laba rugi, serta analisis HPP produksi**.
 
-## Arsitektur Produksi yang Aktif
-Arsitektur produksi saat ini diarahkan ke alur final berikut:
-- **Tahapan Produksi** untuk master step,
-- **Profil Produksi** untuk referensi yield / parameter kerja,
-- **Semi Finished Materials** untuk stok komponen semi jadi,
-- **BOM Produksi** untuk formula produksi,
-- **Production Orders** untuk order produksi,
-- **Work Log Produksi** untuk eksekusi produksi,
-- **Payroll Produksi** untuk biaya tenaga kerja,
-- **Analisis HPP** untuk pembacaan biaya produksi.
+Tujuan utamanya adalah membuat satu sistem yang rapi, saling terhubung, dan mudah diaudit.
 
-## Entitas Data Utama
-Entitas yang paling penting di project:
-- products
-- raw_materials
-- suppliers
-- customers
-- purchases
-- sales
-- pricing_rules
-- production_steps
-- production_profiles
-- semi_finished_materials
-- production_boms
-- production_orders
-- production_work_logs
-- payroll related data
-- laporan / agregasi transaksi
+## Teknologi utama
 
-## Keluaran yang Diharapkan dari Sistem
-Sistem diharapkan bisa:
-- menunjukkan stok aktual,
-- membantu kontrol pembelian,
-- menelusuri biaya produksi,
-- memisahkan bahan baku, semi jadi, dan produk jadi,
-- mendukung keputusan harga jual,
-- mendukung evaluasi laba rugi.
+Project menggunakan:
+
+- **React** untuk frontend,
+- **Firebase / Firestore** untuk penyimpanan data,
+- **Ant Design** untuk komponen UI.
+
+## Struktur menu utama
+
+Menu aktif di aplikasi saat ini adalah:
+
+### Data Utama
+
+- Produk Jadi
+- Bahan Baku
+- Kategori
+- Supplier
+- Pelanggan
+- Pricing Rules
+
+### Inventaris
+
+- Manajemen Stok
+- Penyesuaian Stok
+
+### Produksi
+
+- Tahapan Produksi
+- Karyawan Produksi
+- Profil Produksi
+- Semi Finished Materials
+- BOM Produksi
+- Production Orders
+- Work Log Produksi
+- Payroll Produksi
+- Analisis HPP
+
+### Transaksi
+
+- Penjualan
+- Pembelian
+- Retur
+
+### Kas & Biaya
+
+- Pemasukan
+- Pengeluaran
+
+### Utilities
+
+- Reset Data Uji
+
+### Laporan
+
+- Laporan Stok
+- Laporan Pembelian
+- Laporan Penjualan
+- Laba Rugi
+
+## Konsep stok di sistem
+
+Sistem membedakan stok menjadi 3 kelompok utama:
+
+- **Bahan Baku**
+- **Semi Finished Materials**
+- **Produk Jadi**
+
+Setiap item bisa:
+
+- **tanpa varian**, atau
+- **pakai varian** seperti warna, ukuran, atau spesifikasi lain.
+
+## Konsep produksi di sistem
+
+Produksi dibangun untuk flow bertahap:
+
+- bahan baku diproses menjadi **semi finished material**,
+- semi finished material bisa dipakai lagi sebagai bahan untuk proses berikutnya,
+- produk jadi idealnya dibangun dari **semi finished material** melalui BOM produksi.
+
+## Prinsip maintainability
+
+Beberapa prinsip penting yang dipakai saat ini:
+
+- data master lebih aman **dinonaktifkan** daripada dihapus jika sudah pernah dipakai,
+- stok dan log harus tetap sinkron,
+- varian harus diperlakukan konsisten di raw material, semi finished, product, PO, dan work log,
+- istilah dan tampilan UI dibuat seragam agar user tidak bingung.

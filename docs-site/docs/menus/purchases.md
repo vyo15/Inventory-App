@@ -1,37 +1,42 @@
 ---
-title: Purchases
-sidebar_label: Purchases
+title: Pembelian
+sidebar_label: Pembelian
 ---
 
-# Tujuan Menu
+# Pembelian
 
-Menu **Purchases** dipakai untuk mencatat pembelian bahan dan menambah stok bahan baku.
+## Tujuan
+Dipakai untuk mencatat pembelian bahan baku atau item lain dari supplier.
 
-## Fokus Logic pada Source Terbaru
+## Field Form Utama
+- **Tanggal**
+- **Jenis Item**
+- **Nama Item**
+- **Nama Supplier**
+- **Qty Beli**
+- **Satuan Beli**
+- **Satuan Stok**
+- **Konversi Aktual**
+- **Stok Masuk Otomatis**
+- **Harga Referensi Restock (Master)**
+- **Subtotal Barang**
+- **Ongkir**
+- **Diskon Ongkir**
+- **Voucher / Potongan**
+- **Biaya Layanan**
+- **Total Referensi Pembelian**
+- **Total Aktual Pembelian**
+- **Modal Aktual per Satuan Stok**
+- **Selisih Hemat Pembelian**
+- **Catatan**
 
-Walau file purchases belum didokumentasikan ulang secara penuh di zip sebelumnya, source terbaru tetap menunjukkan bahwa raw material aktif memakai:
-- `currentStock`
-- `reservedStock`
-- `availableStock`
-- `averageActualUnitCost`
-- `restockReferencePrice`
-
-Itu berarti transaksi purchase harus dipahami sebagai sumber utama untuk:
-- penambahan stok raw material,
-- pembentukan biaya aktual,
-- pembaruan rata-rata biaya bahan.
+## Tabel Utama
+Menampilkan tanggal, jenis, nama item, supplier, qty beli, stok masuk, total aktual pembelian, modal aktual per satuan, selisih hemat, dan catatan.
 
 ## Rule Penting
+- pembelian menambah stok,
+- modal aktual per satuan dipakai untuk pembacaan biaya stok,
+- selisih hemat adalah info efisiensi, bukan pengurang kas.
 
-- actual price tetap menjadi harga beli aktual,
-- reference price hanya pembanding efisiensi,
-- saving bukan pengurang kas langsung,
-- jika item memakai variant, stok harus bertambah pada variant yang tepat.
-
-## Dampak ke Modul Lain
-
-- Raw Materials
-- Inventory Log
-- Production input cost
-- Purchases Report
-- Profit & Loss bila ada alur biaya yang dibaca laporan
+## Contoh Skenario
+Beli Kain Flanel 1 roll, isi konversi aktual ke meter, simpan transaksi, lalu cek stok bahan bertambah sesuai stok masuk otomatis.

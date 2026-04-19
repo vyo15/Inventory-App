@@ -1,7 +1,29 @@
 import { calculateAvailableStock, toNumber } from '../stock/stockHelpers';
 
+// =====================================================
+// Helper trim aman untuk semua field identitas.
+// Dipakai supaya perbandingan key / label / nama varian konsisten
+// walaupun data lama masih campur null / undefined / string kosong.
+// =====================================================
 const safeTrim = (value) => String(value || '').trim();
 
+// =====================================================
+// Normalisasi token untuk kebutuhan pencocokan.
+// Tujuan:
+// - samakan huruf besar kecil
+// - rapikan multi spasi
+// - bikin compare key/label lebih stabil
+// =====================================================
+const normalizeCompareToken = (value) =>
+  safeTrim(value)
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+
+// =====================================================
+// Ambil key utama varian.
+// Prioritas tetap mempertahankan key eksplisit jika ada,
+// lalu fallback ke field identitas lain untuk kompatibilitas data lama.
+// =====================================================
 export const getVariantKey = (variant = {}) =>
   safeTrim(
     variant.variantKey ||
@@ -13,38 +35,93 @@ export const getVariantKey = (variant = {}) =>
       variant.sku,
   ).toLowerCase();
 
+// =====================================================
+// Ambil label tampilan varian.
+// Label ini dipakai di UI dan juga jadi fallback penting saat
+// inherit variant antar item tidak bisa mengandalkan key internal.
+// =====================================================
 export const getVariantLabel = (variant = {}) =>
   safeTrim(
     variant.variantLabel ||
+      variant.label ||
+      variant.variantName ||
       variant.name ||
       variant.color ||
+      variant.variantCode ||
       variant.code ||
       variant.sku ||
       variant.id,
   );
 
+// =====================================================
+// Deteksi apakah item benar-benar punya varian.
+// Ini dipakai sebagai sumber kebenaran utama agar flow BOM lama
+// tidak lagi hanya bergantung pada snapshot line yang stale.
+// =====================================================
 export const inferHasVariants = (item = {}) =>
   item?.hasVariants === true ||
-  (Array.isArray(item?.variants) && item.variants.length > 0);
+  item?.hasVariantOptions === true ||
+  (Array.isArray(item?.variants) && item.variants.length > 0) ||
+  (Array.isArray(item?.variantOptions) && item.variantOptions.length > 0);
 
+// =====================================================
+// Kumpulkan semua token pencarian yang relevan untuk 1 varian.
+// Dipakai untuk fallback match by label/name/color/code/sku.
+// Ini penting untuk kasus inherit antar item yang labelnya sama
+// (misal: "ungu") tetapi key internal item berbeda.
+// =====================================================
+const buildVariantLookupTokens = (variant = {}) => {
+  const rawTokens = [
+    variant.variantKey,
+    variant.variantLabel,
+    variant.label,
+    variant.variantName,
+    variant.name,
+    variant.color,
+    variant.variantCode,
+    variant.code,
+    variant.sku,
+    variant.id,
+    variant.value,
+    getVariantKey(variant),
+    getVariantLabel(variant),
+  ];
+
+  return Array.from(
+    new Set(rawTokens.map((value) => normalizeCompareToken(value)).filter(Boolean)),
+  );
+};
+
+// =====================================================
+// Normalisasi daftar varian item.
+// Catatan maintainability:
+// - tetap baca field stock lama jika currentStock belum ada
+// - availableStock selalu dihitung ulang agar konsisten
+// - hanya varian yang punya label valid yang dipertahankan
+// =====================================================
 export const normalizeItemVariants = (item = {}) => {
-  if (!Array.isArray(item?.variants)) return [];
+  const rawVariants = Array.isArray(item?.variants)
+    ? item.variants
+    : Array.isArray(item?.variantOptions)
+      ? item.variantOptions
+      : [];
 
-  return item.variants
+  if (!Array.isArray(rawVariants)) return [];
+
+  return rawVariants
     .map((variant, index) => {
       const variantKey = getVariantKey(variant) || `variant-${index}`;
       const variantLabel = getVariantLabel(variant) || variantKey;
+      const currentStock = toNumber(variant.currentStock ?? variant.stock ?? 0);
+      const reservedStock = toNumber(variant.reservedStock || 0);
 
       return {
         ...variant,
         variantKey,
         variantLabel,
-        currentStock: toNumber(variant.currentStock || 0),
-        reservedStock: toNumber(variant.reservedStock || 0),
-        availableStock: calculateAvailableStock(
-          toNumber(variant.currentStock || 0),
-          toNumber(variant.reservedStock || 0),
-        ),
+        currentStock,
+        reservedStock,
+        availableStock: calculateAvailableStock(currentStock, reservedStock),
         isActive: variant?.isActive !== false,
       };
     })
@@ -60,13 +137,34 @@ export const buildVariantOptionsFromItem = (item = {}) =>
       raw: variant,
     }));
 
+// =====================================================
+// Cari varian berdasarkan key internal.
+// Tetap dipisah dari pencarian label supaya jalur exact match
+// masih jadi prioritas pertama sebelum fallback semantik.
+// =====================================================
 export const findVariantByKey = (item = {}, variantKey = '') => {
-  const normalizedKey = safeTrim(variantKey).toLowerCase();
+  const normalizedKey = normalizeCompareToken(variantKey);
   if (!normalizedKey) return null;
 
   return (
     normalizeItemVariants(item).find(
-      (variant) => safeTrim(variant.variantKey).toLowerCase() === normalizedKey,
+      (variant) => normalizeCompareToken(variant.variantKey) === normalizedKey,
+    ) || null
+  );
+};
+
+// =====================================================
+// Cari varian berdasarkan label/nama/warna/kode.
+// Dipakai saat inherit variant lintas item, di mana key internal
+// antar item bisa berbeda tetapi makna variannya sama.
+// =====================================================
+const findVariantByLabel = (item = {}, variantReference = '') => {
+  const normalizedReference = normalizeCompareToken(variantReference);
+  if (!normalizedReference) return null;
+
+  return (
+    normalizeItemVariants(item).find((variant) =>
+      buildVariantLookupTokens(variant).includes(normalizedReference),
     ) || null
   );
 };
@@ -82,24 +180,27 @@ export const getItemStockSnapshot = (item = {}) => {
   };
 };
 
+// =====================================================
+// Resolve sumber stok yang dipakai untuk suatu material/output.
+// Prioritas resolve:
+// 1. key exact match
+// 2. label / nama / warna / kode / sku
+// 3. single active variant fallback jika memang cuma ada 1 varian
+// 4. master stock fallback sebagai last resort
+// =====================================================
 export const resolveVariantSelection = ({
   item = {},
   materialVariantStrategy = 'none',
   targetVariantKey = '',
+  targetVariantLabel = '',
   fixedVariantKey = '',
+  fixedVariantLabel = '',
 } = {}) => {
   const hasVariants = inferHasVariants(item);
   const normalizedStrategy = hasVariants
     ? materialVariantStrategy || 'inherit'
     : 'none';
 
-  // =====================================================
-  // Active flow helper:
-  // - Jika item tidak punya varian, stok selalu dibaca dari master.
-  // - Jika item punya tepat 1 varian aktif dan tidak ada key yang dikirim,
-  //   fallback otomatis ke varian tunggal itu supaya BOM -> PO -> Work Log
-  //   tetap nyambung tanpa user memilih varian manual lagi.
-  // =====================================================
   if (!hasVariants || normalizedStrategy === 'none') {
     const stock = getItemStockSnapshot(item);
     return {
@@ -108,18 +209,37 @@ export const resolveVariantSelection = ({
       materialVariantStrategy: 'none',
       resolvedVariantKey: '',
       resolvedVariantLabel: '',
+      resolutionMatchType: 'master',
       ...stock,
     };
   }
 
   const candidateKey =
     normalizedStrategy === 'fixed' ? fixedVariantKey : targetVariantKey;
+  const candidateLabel =
+    normalizedStrategy === 'fixed' ? fixedVariantLabel : targetVariantLabel;
 
   const activeVariants = buildVariantOptionsFromItem(item);
   const singleActiveVariant = activeVariants.length === 1 ? activeVariants[0]?.raw || null : null;
+
+  // =====================================================
+  // Exact key match tetap didahulukan.
+  // Setelah itu baru fallback ke label/reference text,
+  // termasuk saat ada flow lama yang terlanjur mengirim label di field key.
+  // =====================================================
+  const selectedVariantByKey = findVariantByKey(item, candidateKey);
+  const selectedVariantByLabel =
+    findVariantByLabel(item, candidateLabel) ||
+    findVariantByLabel(item, candidateKey) ||
+    findVariantByLabel(item, fixedVariantLabel) ||
+    findVariantByLabel(item, fixedVariantKey);
+
   const selectedVariant =
-    findVariantByKey(item, candidateKey) ||
-    (!safeTrim(candidateKey) && singleActiveVariant ? singleActiveVariant : null);
+    selectedVariantByKey ||
+    selectedVariantByLabel ||
+    ((!safeTrim(candidateKey) && !safeTrim(candidateLabel) && singleActiveVariant)
+      ? singleActiveVariant
+      : null);
 
   if (!selectedVariant) {
     const stock = getItemStockSnapshot(item);
@@ -130,6 +250,7 @@ export const resolveVariantSelection = ({
       resolvedVariantKey: '',
       resolvedVariantLabel: '',
       resolutionFallback: 'master',
+      resolutionMatchType: 'master-fallback',
       ...stock,
     };
   }
@@ -140,6 +261,11 @@ export const resolveVariantSelection = ({
     materialVariantStrategy: normalizedStrategy,
     resolvedVariantKey: selectedVariant.variantKey,
     resolvedVariantLabel: selectedVariant.variantLabel,
+    resolutionMatchType: selectedVariantByKey
+      ? 'key'
+      : selectedVariantByLabel
+        ? 'label'
+        : 'single-active',
     currentStock: toNumber(selectedVariant.currentStock || 0),
     reservedStock: toNumber(selectedVariant.reservedStock || 0),
     availableStock: calculateAvailableStock(

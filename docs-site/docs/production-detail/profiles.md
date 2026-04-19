@@ -3,41 +3,28 @@ title: Profil Produksi
 sidebar_label: Profil Produksi
 ---
 
-# Fungsi Menu
+# Profil Produksi
 
-Menu **Profil Produksi** dipakai untuk menyimpan referensi parameter dasar hasil produksi. Profil ini lebih dekat ke level aturan dasar proses dibanding level transaksi.
+## Tujuan
+Dipakai untuk menyimpan profil hasil produksi atau asumsi operasional per jenis bunga.
 
-## Data yang Dikelola
+## Field Form Utama
+- **Produk**
+- **Nama Profil**
+- **Tipe Profil**
+- **Default**
+- **Status Aktif**
+- parameter hasil kelopak, daun, tangkai,
+- parameter kebutuhan plastik, ikat kawat, dan kawat extra,
+- **Target Output Batch**,
+- **Alert Kuning %** dan **Alert Merah %**,
+- **Catatan**.
 
-Profil produksi menyimpan data seperti:
-- profile name,
-- product yang terkait,
-- profile type,
-- status aktif,
-- status default,
-- metrik hasil yang dihitung dari parameter input form.
+## Tombol Aksi
+- **Tambah Profil**
+- **Edit**
+- **Aktifkan / Nonaktifkan**
+- **Refresh**
 
-## Kegunaan Praktis
-
-Profil produksi bisa dipakai untuk:
-- menjadi acuan pembuatan BOM,
-- menyimpan parameter standar hasil,
-- mengurangi input manual berulang,
-- membantu konsistensi antar produk yang sejenis.
-
-## Fungsi Utama Halaman
-
-- tambah profil,
-- edit profil,
-- toggle aktif / nonaktif,
-- melihat statistik total profil, profil aktif, profil default, dan jumlah produk yang sudah terhubung.
-
-## Relasi Dengan Product
-
-Halaman ini memuat daftar produk aktif lalu membuat lookup produk. Artinya profil memang dirancang untuk bisa dihubungkan langsung ke produk tertentu.
-
-## Catatan Operasional
-
-- Hanya satu atau sedikit profil default yang benar-benar relevan sebaiknya dijadikan standar.
-- Jika profil terlalu banyak dan mirip, maintenance akan sulit.
-- Profil tidak menggantikan BOM, tetapi menjadi referensi sebelum BOM disusun.
+## Contoh Skenario
+Buat profil mawar reguler untuk menyimpan asumsi hasil potong dan kebutuhan material tambahan agar tim produksi punya patokan tetap.

@@ -244,19 +244,34 @@ const buildRequirementLine = ({
   batchCount = 0,
   index = 0,
   targetVariantKey = "",
+  targetVariantLabel = "",
 }) => {
   const qtyPerBatch = Number(line.qtyPerBatch || 0);
   const wastageQty = Number(line.wastageQty || 0);
   const qtyRequired = Math.ceil((qtyPerBatch + wastageQty) * Number(batchCount || 0));
 
+  // =====================================================
+  // Tentukan apakah material sebenarnya punya varian.
+  // Penting untuk kasus BOM line lama/stale yang metadata variannya
+  // belum terisi benar, tetapi item stok aktual sudah pakai varian.
+  // =====================================================
+  const effectiveMaterialHasVariants =
+    line.materialHasVariants === true || inferHasVariants(stockItem || {});
+
+  // =====================================================
+  // Resolve sumber stok requirement.
+  // Flow baru tidak hanya kirim targetVariantKey, tapi juga label target
+  // supaya inherit antar item bisa match by label seperti "ungu".
+  // =====================================================
   const stockResolution = resolveVariantSelection({
     item: stockItem || {},
-    materialVariantStrategy:
-      line.materialHasVariants === true
-        ? line.materialVariantStrategy || "inherit"
-        : "none",
+    materialVariantStrategy: effectiveMaterialHasVariants
+      ? line.materialVariantStrategy || "inherit"
+      : "none",
     targetVariantKey,
+    targetVariantLabel,
     fixedVariantKey: line.fixedVariantKey || "",
+    fixedVariantLabel: line.fixedVariantLabel || "",
   });
 
   const shortageQty = Math.max(qtyRequired - Number(stockResolution.availableStock || 0), 0);
@@ -271,7 +286,7 @@ const buildRequirementLine = ({
     qtyPerBatch,
     wastageQty,
     qtyRequired,
-    materialHasVariants: line.materialHasVariants === true,
+    materialHasVariants: effectiveMaterialHasVariants,
     materialVariantStrategy: stockResolution.materialVariantStrategy,
     fixedVariantKey: safeTrim(line.fixedVariantKey),
     fixedVariantLabel: safeTrim(line.fixedVariantLabel),
@@ -305,6 +320,7 @@ export const buildProductionOrderRequirementLines = async ({
         batchCount: orderQty,
         index,
         targetVariantKey,
+        targetVariantLabel,
       });
     }),
   );
@@ -457,7 +473,9 @@ const applyReservationMutation = async ({ transaction, line, mode = "reserve" })
         ? line.materialVariantStrategy || "inherit"
         : "none",
     targetVariantKey: line.resolvedVariantKey || "",
+    targetVariantLabel: line.resolvedVariantLabel || "",
     fixedVariantKey: line.fixedVariantKey || line.resolvedVariantKey || "",
+    fixedVariantLabel: line.fixedVariantLabel || line.resolvedVariantLabel || "",
   });
 
   if (mode === "reserve" && Number(stockResolution.availableStock || 0) < mutationQty) {

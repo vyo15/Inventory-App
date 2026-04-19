@@ -3,15 +3,17 @@
     radial-gradient(circle at top left, var(--site-hero-glow) 0, transparent 36%),
     linear-gradient(180deg, var(--site-hero-bg-start) 0%, var(--site-hero-bg-end) 100%);
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .heroSection {
   padding: 72px 0 40px;
+  overflow-x: hidden;
 }
 
 .heroGrid {
   display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   gap: 40px;
   align-items: center;
 }
@@ -20,12 +22,14 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+  min-width: 0;
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
   width: fit-content;
+  max-width: 100%;
   padding: 8px 14px;
   border-radius: 999px;
   background: var(--site-accent-soft);
@@ -42,6 +46,7 @@
   font-weight: 800;
   color: var(--site-home-heading);
   letter-spacing: -0.03em;
+  word-break: break-word;
 }
 
 .heroTitleAccent {
@@ -72,6 +77,7 @@
 }
 
 .metaCard {
+  min-width: 0;
   padding: 16px 18px;
   border-radius: 20px;
   background: var(--site-home-card-bg);
@@ -97,6 +103,7 @@
 .heroPanel {
   display: flex;
   justify-content: center;
+  min-width: 0;
 }
 
 .panelCard {

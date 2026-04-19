@@ -1,26 +1,52 @@
 ---
-title: Dokumentasi IMS Bunga Flanel
-sidebar_label: Dokumentasi IMS Bunga Flanel
+sidebar_position: 1
+title: Intro
+description: Pengantar dokumentasi IMS Bunga Flanel.
 ---
 
-Dokumentasi ini dipakai sebagai **source of truth operasional** untuk project IMS Bunga Flanel. Tujuannya bukan hanya menjelaskan menu, tetapi juga menyimpan keputusan logic, alur data, bug fix, known issues, dan checklist validasi.
+# Intro
 
-## Tujuan Dokumentasi
-1. menjelaskan arsitektur sistem inventory dan produksi,
-2. menyimpan keputusan logic yang sudah dipakai di project,
-3. memudahkan audit saat ada bug atau perubahan flow,
-4. menjadi patokan saat membuka chat baru atau melanjutkan pekerjaan,
-5. memisahkan dokumentasi stabil dari percakapan yang sifatnya sementara.
+Dokumentasi ini disusun agar user dan tim internal bisa memahami **cara kerja sistem terbaru** tanpa harus membaca source code satu per satu.
 
-## Cara Membaca Dokumentasi
-- **Overview** berisi gambaran besar sistem.
-- **Business Flow** berisi alur pembelian, produksi, penjualan, dan stok.
-- **System Logic** berisi aturan penting yang harus tetap konsisten.
-- **Menus** berisi fungsi tiap menu.
-- **Maintenance** berisi perubahan, bug fix, roadmap, dan checklist validasi.
+Fokus dokumentasi ini adalah:
 
-## Prinsip Umum Project
-- Sistem inventory memakai pendekatan **stock aktif di currentStock**.
-- Produksi diarahkan ke alur final **BOM → Production Orders → Work Log**.
-- Stok bahan, semi finished, dan output harus terhubung tanpa double tracking.
-- Dokumentasi harus diupdate jika ada perubahan logic inti.
+- menjelaskan **fungsi tiap menu**,
+- memperjelas **alur stok dan produksi**,
+- merangkum **rule penting** seperti varian, costing, HPP, dan pricing,
+- serta memberi catatan **maintenance** supaya sistem tetap rapi dan mudah dikembangkan.
+
+## Arsitektur utama yang sedang aktif
+
+Untuk modul produksi, alur final yang dipakai di project ini adalah:
+
+**BOM Produksi → Production Order → Work Log Produksi → Payroll Produksi → Analisis HPP**
+
+Alur ini dipakai untuk menjaga supaya:
+
+- kebutuhan material dibaca dulu dari BOM,
+- stok bahan dipotong saat mulai produksi,
+- hasil produksi diposting saat work log selesai,
+- biaya tenaga kerja bisa diposting terpisah,
+- lalu biaya total bisa dianalisa per work log.
+
+## Cakupan dokumentasi
+
+Dokumentasi dibagi menjadi beberapa bagian:
+
+- **Overview** untuk gambaran project.
+- **Business Flow** untuk alur stok, pembelian, penjualan, dan produksi.
+- **System Logic** untuk aturan sistem yang penting.
+- **Menu Documentation** untuk penjelasan per menu.
+- **Maintenance** untuk catatan perbaikan dan roadmap.
+
+## Cara membaca dokumentasi ini
+
+Agar mudah dipahami, bacanya paling enak dengan urutan berikut:
+
+1. **Overview Project**
+2. **Stock Flow**
+3. **Production Flow**
+4. **Stock Rules & Variant Logic**
+5. **Menu Documentation**
+
+Urutan itu membantu user memahami sistem dari sudut pandang operasional dulu, baru masuk ke detail menu.

@@ -3,31 +3,22 @@ title: Dashboard
 sidebar_label: Dashboard
 ---
 
-# Tujuan Menu
+# Dashboard
 
-Menu **Dashboard** dipakai untuk melihat ringkasan kondisi sistem secara cepat.
+## Tujuan
+Dashboard dipakai untuk melihat ringkasan cepat kondisi sistem tanpa membuka menu satu per satu.
 
-## Fokus Dashboard Terbaru
+## Informasi yang Ditampilkan
+- kartu ringkasan utama seperti produk aktif, bahan baku aktif, stok menipis, dan penjualan bulan berjalan,
+- tabel stok item yang perlu diperhatikan,
+- ringkasan aktivitas terakhir seperti pembelian, penjualan, retur, penyesuaian, dan produksi.
 
-Dari source terbaru, dashboard memakai komponen statistik dan chart untuk menampilkan ringkasan operasional. Ini berarti dashboard bukan sekadar halaman sambutan, tetapi menjadi panel monitoring cepat untuk user.
+## Yang Perlu User Cek
+- kartu **Stok Menipis** untuk prioritas restock,
+- aktivitas terakhir untuk memastikan transaksi terbaru sudah tercatat,
+- tabel stok untuk melihat item yang butuh tindakan.
 
-## Fungsi Utama
-
-- menampilkan summary card,
-- menampilkan visual penjualan melalui chart,
-- menjadi pintu masuk ke modul inti.
-
-## Catatan Penting
-
-Dashboard harus dibaca sebagai ringkasan. Jika ada angka yang terasa janggal, validasi tetap dilakukan di modul sumber seperti:
-- Products / Raw Materials
-- Purchases / Sales
-- Production
-- Reports
-
-## Dampak Testing
-
-Saat mengetes dashboard, fokus utamanya:
-- statistik tampil,
-- chart tidak error,
-- data summary konsisten dengan laporan dan transaksi.
+## Contoh Skenario
+1. Buka Dashboard di pagi hari.
+2. Cek apakah ada item stok menipis.
+3. Jika ada, lanjut ke **Pembelian**, **BOM**, atau **Production Order** sesuai kebutuhan.

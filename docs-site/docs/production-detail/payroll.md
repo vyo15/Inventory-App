@@ -3,42 +3,38 @@ title: Payroll Produksi
 sidebar_label: Payroll Produksi
 ---
 
-# Peran Menu
+# Payroll Produksi
 
-Production Payrolls dipakai untuk membaca dan menyimpan biaya tenaga kerja produksi.
+## Tujuan
+Dipakai untuk menghitung biaya tenaga kerja berdasarkan work log yang sudah selesai.
 
-## Update dari Service Terbaru
+## Field Form Utama
+- **No. Payroll**
+- **Tanggal Payroll**
+- **Work Log**
+- **Karyawan**
+- **Payroll Mode**
+- **Payroll Rate**
+- **Payroll Qty Base**
+- **Output Qty Used**
+- **Bonus**
+- **Potongan**
+- **Worked Qty**
+- **Team Worker Count**
+- **Preview Final Amount**
+- **Catatan Perhitungan**
+- **Catatan Internal**
 
-Service terbaru menunjukkan payload payroll mencakup:
-- relasi ke work log,
-- relasi ke BOM,
-- target output,
-- step,
-- worker,
-- payroll mode,
-- payroll rate,
-- payable qty factor,
-- amount calculated,
-- bonus,
-- deduction,
-- final amount,
-- paymentStatus,
-- status.
+## Tombol Aksi
+- **Tambah Payroll**
+- **Detail**
+- **Edit**
+- **Paid**
+- **Refresh**
 
-## Draft Payroll
+## Rule Penting
+- ambil work log yang statusnya sudah selesai,
+- payroll yang sudah dibayar tidak boleh diedit sembarangan.
 
-Draft payroll tetap diambil dari work log completed.
-
-## Kegunaan Praktis
-
-Dengan payload yang lebih kaya, payroll bisa dipakai untuk:
-- membaca biaya tenaga kerja per pekerjaan,
-- menghubungkan biaya ke step dan target,
-- menjadi sumber direct labor cost di analisis HPP.
-
-## Titik Validasi
-
-- payrollNumber terbentuk benar,
-- worker terkait benar,
-- finalAmount mengikuti formula payroll,
-- paymentStatus dan status sinkron.
+## Contoh Skenario
+Buat draft payroll dari work log completed, pilih operator, cek hasil hitung, lalu tandai **Paid** setelah pembayaran dilakukan.

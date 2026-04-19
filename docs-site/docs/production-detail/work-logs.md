@@ -3,58 +3,79 @@ title: Work Log Produksi
 sidebar_label: Work Log Produksi
 ---
 
-# Fungsi Menu
+# Work Log Produksi
 
-Menu **Work Log Produksi** dipakai untuk mencatat realisasi aktual dari pekerjaan produksi yang berasal dari Production Order.
+## Tujuan
+Dipakai untuk mencatat realisasi produksi yang berasal dari Production Order.
 
-## Data yang Dikelola
-
-Work Log menyimpan:
-- nomor work log,
+## Ringkasan Informasi
+Tabel utama menampilkan:
+- no. work log,
 - tanggal,
-- target dan step,
-- qty plan,
-- qty aktual,
+- target / step,
+- qty batch, estimasi output, good output,
 - biaya aktual,
-- source PO,
-- status.
+- source,
+- status,
+- aksi.
 
-### Material Usage
-- item,
-- planned qty,
-- actual qty,
-- total cost.
+Drawer detail menampilkan:
+- qty batch,
+- estimasi output,
+- good output,
+- total biaya,
+- ringkasan work log,
+- tim & catatan,
+- biaya aktual,
+- pemakaian material,
+- hasil produksi.
 
-### Output Lines
-- output,
-- qty,
-- good,
-- reject,
-- rework.
+## Field Form Utama
+- **No. Work Log**
+- **Tanggal**
+- **Source Type**
+- **Production Order** atau **Production BOM**
+- **Target Type**
+- **Target Item**
+- **Profil Produksi**
+- **Production Step**
+- **Sequence No**
+- **Qty Batch**
+- **Qty Input Dasar**
+- **Sisa Daun Aktual**
+- **Sisa Kawat Aktual**
+- **Good Qty**
+- **Reject Qty**
+- **Rework Qty**
+- **Worker**
+- **Labor Cost**
+- **Overhead Cost**
+- **Scrap Qty**
+- **Catatan**
 
-## Peran Dalam Flow Aktif
-Work Log adalah pusat realisasi produksi dari PO.
+## Tombol Aksi
+- **Detail**
+- **Edit**
+- **Selesaikan**
+- **Apply Draft PO**
+- **Apply Draft BOM**
 
-Flow aktif Work Log:
-- dibuat otomatis dari PO saat **Start Production**,
-- tidak dibuat manual pada flow utama,
-- mencatat realisasi good / reject / rework,
-- menyimpan biaya aktual,
-- saat **Complete** menambah output stock,
-- saat **Complete** menutup linked production order.
-
-## Status Utama
-- **draft**
-- **in_progress**
-- **completed**
+## Modal Selesaikan Work Log
+Field penting:
+- **Qty Bagus**
+- **Qty Reject**
+- **Qty Rework**
+- **Operator Produksi**
+- **Catatan Penyelesaian**
 
 ## Rule Penting
-- Source type difokuskan ke `production_order`.
-- Tidak ada mode manual Work Log pada flow utama.
-- Material usage harus mengikuti planned vs actual dari PO.
-- Bahan input **sudah dipotong saat Start Production**, sehingga complete tidak boleh memotong input lagi.
-- Complete hanya boleh:
-  - menyimpan realisasi,
-  - menambah output,
-  - menutup linked order.
-- Tidak ada konsep reserve atau release pada flow aktif.
+- work log utama dibuat dari PO,
+- bahan input sudah dipotong saat **Mulai Produksi**,
+- tombol **Selesaikan** hanya menambah output dan menutup pekerjaan,
+- estimasi output berasal dari **hasil per produksi di BOM x qty batch**.
+
+## Contoh Skenario
+1. Buka work log dari PO.
+2. Cek pemakaian bahan dan target output.
+3. Saat selesai, isi qty bagus, reject, rework, dan operator.
+4. Simpan; output semi finished atau produk akan bertambah sesuai target dan varian.

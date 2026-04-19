@@ -1,38 +1,34 @@
 ---
-title: Sales
-sidebar_label: Sales
+title: Penjualan
+sidebar_label: Penjualan
 ---
 
-# Tujuan Menu
+# Penjualan
 
-Menu **Sales** dipakai untuk mencatat penjualan produk jadi dan mengelola dampaknya ke stok dan laporan.
+## Tujuan
+Dipakai untuk mencatat penjualan produk jadi atau bahan.
 
-## Fokus Logic pada Source Terbaru
+## Field Form Utama
+- **Pelanggan**
+- **Items**:
+  - pilih produk / bahan,
+  - jumlah,
+  - harga satuan.
+- **Channel Penjualan**
+- **Status**
+- **No. Resi / No. Order / Referensi**
+- **Tanggal**
+- **Catatan**
 
-Source terbaru di inventory log menunjukkan tipe mutasi yang sudah dikenali untuk penjualan:
-- `sale`
-- `sale_revert`
-- `sale_cancel_revert`
-
-Ini menunjukkan flow sales terbaru sudah memperhitungkan rollback / cancel secara eksplisit.
+## Tombol Aksi di Tabel
+- **Dikirim**
+- **Selesai**
+- **Batalkan**
+- hapus transaksi bila memang diizinkan flow saat itu.
 
 ## Rule Penting
+- stok berkurang saat transaksi dibuat sesuai flow aktif,
+- status online dan offline perlu dibaca benar karena berpengaruh ke pengakuan kas dan progres order.
 
-- status final / completed harus mengurangi stok product,
-- rollback harus mengembalikan stok dengan tipe log yang jelas,
-- jika memakai varian, pengurangan atau pengembalian harus mengikuti varian yang benar.
-
-## Dampak ke Modul Lain
-
-- Products
-- Inventory / Stock Management
-- Sales Report
-- Profit & Loss
-- Cash In bila dipisah
-
-## Titik Validasi Penting
-
-- status tidak memotong stok terlalu cepat,
-- complete memotong stok sekali,
-- cancel / delete mengembalikan stok sekali,
-- variant stock sinkron setelah transaksi.
+## Contoh Skenario
+Input penjualan bunga mawar melalui marketplace, isi nomor order, set status sesuai tahap proses, lalu cek stok produk berkurang.

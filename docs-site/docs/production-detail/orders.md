@@ -3,43 +3,46 @@ title: Production Orders
 sidebar_label: Production Orders
 ---
 
-# Fungsi Menu
+# Production Orders
 
-Menu **Production Orders** dipakai untuk membuat order kerja produksi berdasarkan BOM aktif.
+## Tujuan
+Dipakai untuk membuat order kerja berdasarkan BOM aktif.
 
-## Data yang Dikelola
+## Field Form Utama
+- **Kode Order**
+- **Target Type**
+- **BOM**
+- **Varian Target**
+- **Qty Batch Produksi**
+- **Priority**
+- **Catatan**
 
-Order menyimpan:
-- kode order,
+## Informasi Detail
+Drawer detail menampilkan:
 - target type,
 - target,
-- qty,
-- requirement,
-- status,
-- linked work log.
+- varian target,
+- BOM / step,
+- priority,
+- tanggal dibuat,
+- mulai produksi,
+- catatan,
+- panel **Requirement Material** berisi material, tipe, varian atau sumber, kebutuhan, stok saat ini, dan shortage.
 
-Di bagian detail requirement, sistem membaca:
-- item,
-- tipe,
-- sumber stok,
-- need,
-- current,
-- available,
-- shortage,
-- status.
-
-## Peran Dalam Flow Aktif
-Production Order adalah titik transisi dari struktur BOM ke order kerja nyata yang akan dijalankan di Work Log.
+## Tombol Aksi
+- **Buat Order**
+- **Detail**
+- **Refresh Need**
+- **Mulai Produksi**
+- **Refresh**
 
 ## Rule Penting
-- PO **wajib membaca BOM aktif** sesuai target type yang dipilih.
-- Dropdown BOM **tidak boleh kosong** bila BOM aktif tersedia untuk target type tersebut.
-- PO **wajib auto generate kode order** bila field kode dibiarkan kosong.
-- Format kode harus konsisten:
-  - Semi Finished: `PO-SFP-YYYYMMDD-XXXX`
-  - Product: `PO-PRD-YYYYMMDD-XXXX`
-- Requirement material harus sinkron dengan BOM yang dipilih.
-- Saat PO dibuat, stok **belum berubah**.
-- Status PO minimal harus jelas: `draft`, `ready`, `shortage`, `in_production`, `completed`, `cancelled`.
-- Satu PO hanya boleh terhubung ke satu Work Log.
-- Start Production dari PO harus membuat Work Log otomatis dan memotong bahan input satu kali.
+- PO belum mengubah stok saat dibuat,
+- stok bahan dipotong saat klik **Mulai Produksi**,
+- requirement material harus dibaca dari BOM aktif,
+- untuk item bervarian, source stok harus cocok dengan varian target atau strategi fixed.
+
+## Contoh Skenario
+1. Buat PO untuk target **Pola Mawar potong** varian Ungu.
+2. Cek detail PO dan pastikan **Requirement Material** tidak lagi membaca **Master** jika bahan memang punya varian Ungu.
+3. Klik **Mulai Produksi** untuk membuat Work Log dan memotong bahan.

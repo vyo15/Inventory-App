@@ -1,32 +1,28 @@
 ---
-title: Stock Adjustment
-sidebar_label: Stock Adjustment
+title: Penyesuaian Stok
+sidebar_label: Penyesuaian Stok
 ---
 
-# Tujuan Menu
+# Penyesuaian Stok
 
-Menu **Stock Adjustment** dipakai untuk penyesuaian stok manual.
+## Tujuan
+Menu ini dipakai untuk mengoreksi stok jika hasil hitung fisik berbeda dari sistem.
 
-## Fungsi Utama
+## Field Form Umum
+- item yang disesuaikan,
+- jenis item,
+- varian jika ada,
+- qty penyesuaian,
+- arah masuk atau keluar,
+- alasan / catatan.
 
-Dari source terbaru, halaman ini memuat:
-- data adjustment records,
-- raw materials,
-- finished products.
-
-Artinya adjustment dipakai untuk dua area utama:
-- bahan baku,
-- produk jadi.
+## Tombol Aksi
+- simpan penyesuaian,
+- lihat riwayat penyesuaian.
 
 ## Rule Penting
+- pakai menu ini untuk koreksi audit stok,
+- jangan pakai untuk menggantikan pembelian, penjualan, atau produksi.
 
-- adjustment harus tercatat di inventory log,
-- currentStock harus berubah sesuai adjustment,
-- variant stock tidak boleh rusak jika item memakai varian.
-
-## Kapan Dipakai
-
-Stock Adjustment dipakai jika ada:
-- selisih opname,
-- koreksi data,
-- penyesuaian manual di luar flow transaksi normal.
+## Contoh Skenario
+Saat stok fisik lem tembak ternyata 48 pcs tetapi sistem 50 pcs, buat penyesuaian keluar 2 pcs dengan catatan hasil stock opname.

@@ -5,6 +5,13 @@ import HomepageFeatures from '@site/src/components/HomepageFeatures';
 
 import styles from './index.module.css';
 
+// =====================================================
+// Homepage dokumentasi
+// Fungsi:
+// - menjadi pintu masuk utama dokumentasi project
+// - menjelaskan posisi dokumentasi secara singkat dan profesional
+// - mengarahkan user ke area docs yang paling penting tanpa membuat halaman terasa ramai
+// =====================================================
 export default function Home() {
   return (
     <Layout
@@ -23,9 +30,9 @@ export default function Home() {
                 </h1>
 
                 <p className={styles.heroSubtitle}>
-                  Pusat dokumentasi untuk memahami alur bisnis, logic sistem,
-                  struktur menu, aturan stok, costing, produksi, dan roadmap
-                  pengembangan project IMS Bunga Flanel.
+                  Pusat dokumentasi untuk memahami arsitektur sistem, alur stok,
+                  produksi, varian, pricing rules, payroll produksi, laporan, dan
+                  aturan maintenance pada project IMS Bunga Flanel.
                 </p>
 
                 <div className={styles.heroActions}>
@@ -40,16 +47,16 @@ export default function Home() {
 
                 <div className={styles.heroMeta}>
                   <div className={styles.metaCard}>
-                    <span className={styles.metaLabel}>Fokus</span>
-                    <strong>Business Flow &amp; System Logic</strong>
+                    <span className={styles.metaLabel}>Arsitektur</span>
+                    <strong>BOM → PO → Work Log → Payroll → HPP</strong>
                   </div>
                   <div className={styles.metaCard}>
-                    <span className={styles.metaLabel}>Tujuan</span>
-                    <strong>Rapi, jelas, mudah maintain</strong>
+                    <span className={styles.metaLabel}>Fokus</span>
+                    <strong>Standar operasional, alur sistem, dan referensi maintenance</strong>
                   </div>
                   <div className={styles.metaCard}>
                     <span className={styles.metaLabel}>Cakupan</span>
-                    <strong>Docs menu, rules, roadmap</strong>
+                    <strong>Menu utama, business flow, system logic, dan panduan penggunaan</strong>
                   </div>
                 </div>
               </div>
@@ -67,10 +74,10 @@ export default function Home() {
                       <p className={styles.panelLabel}>Dokumentasi Utama</p>
                       <ul className={styles.panelList}>
                         <li>Overview Project</li>
-                        <li>Business Flow</li>
-                        <li>System Logic</li>
-                        <li>Menu Documentation</li>
-                        <li>Maintenance &amp; Roadmap</li>
+                        <li>Alur Stok dan Produksi</li>
+                        <li>System Logic dan Variant Rules</li>
+                        <li>Dokumentasi per Menu</li>
+                        <li>Maintenance dan Roadmap</li>
                       </ul>
                     </div>
 
@@ -79,9 +86,10 @@ export default function Home() {
                     <div className={styles.panelSection}>
                       <p className={styles.panelLabel}>Tujuan Dokumentasi</p>
                       <p className={styles.panelText}>
-                        Membantu audit logic, sinkronisasi antar menu,
-                        memperjelas alur sistem, dan mempermudah maintenance
-                        jangka panjang.
+                        Menjadi acuan kerja untuk memahami fungsi setiap menu,
+                        menjaga konsistensi alur sistem, mempercepat proses audit
+                        dan testing, serta membantu pengembangan lanjutan tetap
+                        mengikuti logic project yang sudah disepakati.
                       </p>
                     </div>
                   </div>
