@@ -106,6 +106,26 @@ const formatDateTimeLabel = (value) => {
   return parsed.isValid() ? parsed.format("DD/MM/YYYY HH:mm") : "-";
 };
 
+// =====================================================
+// Helper tampilan batch 1.
+// Dipakai agar metadata baris, tag status, dan action button mengikuti fondasi
+// tabel global tanpa mengulang inline style di setiap render kolom.
+// =====================================================
+const orderUiClassNames = {
+  stack: "ims-cell-stack ims-cell-stack-tight",
+  meta: "ims-cell-meta",
+  title: "ims-cell-title",
+};
+
+const renderOrderCellBlock = (primary, secondaryLines = []) => (
+  <div className={orderUiClassNames.stack}>
+    <div className={orderUiClassNames.title}>{primary || "-"}</div>
+    {secondaryLines.filter(Boolean).map((line, index) => (
+      <div key={index} className={orderUiClassNames.meta}>{line}</div>
+    ))}
+  </div>
+);
+
 const ProductionOrders = () => {
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
@@ -345,12 +365,9 @@ const ProductionOrders = () => {
       key: "order",
       width: 220,
       render: (_, record) => (
-        <Space direction="vertical" size={2}>
-          <Typography.Text strong>{record.code || "-"}</Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            Dibuat: {formatDateTimeLabel(record.createdAt)}
-          </Typography.Text>
-        </Space>
+        renderOrderCellBlock(record.code || "-", [
+          `Dibuat: ${formatDateTimeLabel(record.createdAt)}`,
+        ])
       ),
     },
     {
@@ -358,25 +375,23 @@ const ProductionOrders = () => {
       key: "target",
       width: 340,
       render: (_, record) => (
-        <Space direction="vertical" size={2}>
-          <Space wrap size={[8, 4]}>
+        <div className={orderUiClassNames.stack}>
+          <Space wrap size={[8, 4]} className="ims-cell-tag-list">
             <Typography.Text strong>{record.targetName || "-"}</Typography.Text>
-            <Tag color={record.targetType === "product" ? "blue" : "purple"}>
+            <Tag className="ims-status-tag" color={record.targetType === "product" ? "blue" : "purple"}>
               {record.targetType === "product" ? "Product" : "Semi Finished"}
             </Tag>
           </Space>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <div className={orderUiClassNames.meta}>
             BOM: {record.bomCode || "-"} - {record.bomName || "-"}
-          </Typography.Text>
+          </div>
           {record.targetVariantLabel ? (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              Varian: {record.targetVariantLabel}
-            </Typography.Text>
+            <div className={orderUiClassNames.meta}>Varian: {record.targetVariantLabel}</div>
           ) : null}
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <div className={orderUiClassNames.meta}>
             Estimasi Output: {formatNumber(record.expectedOutputQty || 0)} {record.targetUnit || "pcs"}
-          </Typography.Text>
-        </Space>
+          </div>
+        </div>
       ),
     },
     {
@@ -386,7 +401,7 @@ const ProductionOrders = () => {
       width: 120,
       render: (value) => {
         const meta = getPriorityMeta(value);
-        return <Tag color={meta.color}>{meta.label}</Tag>;
+        return <Tag className="ims-status-tag" color={meta.color}>{meta.label}</Tag>;
       },
     },
     {
@@ -401,47 +416,34 @@ const ProductionOrders = () => {
       key: "requirement",
       width: 180,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <div className={orderUiClassNames.stack}>
           <Typography.Text>
             Line: {formatNumber(record.reservationSummary?.totalLines || 0)}
           </Typography.Text>
-          <Typography.Text type="secondary">
+          <Typography.Text type="secondary" className={orderUiClassNames.meta}>
             Shortage: {formatNumber(record.reservationSummary?.shortageLines || 0)}
           </Typography.Text>
-        </Space>
+        </div>
       ),
     },
     {
-      // =====================================================
-      // SECTION: status sticky
-      // Fungsi:
-      // - menjaga progress order tetap terlihat meski user melihat kolom kiri yang panjang
-      // =====================================================
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 146,
-      fixed: "right",
-      className: "app-table-status-column app-table-fixed-secondary",
+      width: 140,
       render: (value) => {
         const meta = ORDER_STATUS_MAP[value] || ORDER_STATUS_MAP.draft;
-        return <Badge status={meta.status} text={meta.text} />;
+        return <span className="ims-badge-inline"><Badge status={meta.status} text={meta.text} /></span>;
       },
     },
     {
-      // =====================================================
-      // SECTION: aksi sticky
-      // Fungsi:
-      // - tombol detail, refresh need, dan mulai produksi disamakan dengan tabel besar lain
-      // =====================================================
       title: "Aksi",
       key: "actions",
       width: 320,
-      fixed: "right",
-      className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap>
+        <Space wrap className="ims-action-group">
           <Button
+            className="ims-action-button"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => {
@@ -454,6 +456,7 @@ const ProductionOrders = () => {
 
           {(record.status === "shortage" || record.status === "ready") && (
             <Button
+              className="ims-action-button"
               size="small"
               onClick={() => handleRefreshRequirement(record)}
             >
@@ -463,6 +466,7 @@ const ProductionOrders = () => {
 
           {record.status === "ready" && (
             <Button
+              className="ims-action-button"
               size="small"
               type="primary"
               onClick={() => handleStartProduction(record)}
@@ -487,12 +491,7 @@ const ProductionOrders = () => {
         title: "Material",
         key: "item",
         render: (_, record) => (
-          <Space direction="vertical" size={2}>
-            <Typography.Text strong>{record.itemName || "-"}</Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {record.itemCode || "-"}
-            </Typography.Text>
-          </Space>
+          renderOrderCellBlock(record.itemName || "-", [record.itemCode || "-"])
         ),
       },
       {
@@ -500,7 +499,7 @@ const ProductionOrders = () => {
         dataIndex: "itemType",
         width: 130,
         render: (value) => (
-          <Tag color={value === "raw_material" ? "orange" : "blue"}>
+          <Tag className="ims-status-tag" color={value === "raw_material" ? "orange" : "blue"}>
             {value === "raw_material" ? "Raw Material" : "Semi Finished"}
           </Tag>
         ),
@@ -510,14 +509,14 @@ const ProductionOrders = () => {
         key: "variantSource",
         width: 180,
         render: (_, record) => (
-          <Space direction="vertical" size={2}>
-            <Tag color={record.stockSourceType === "variant" ? "purple" : "default"}>
+          <div className={orderUiClassNames.stack}>
+            <Tag className="ims-status-tag" color={record.stockSourceType === "variant" ? "purple" : "default"}>
               {record.stockSourceType === "variant" ? "Variant" : "Master"}
             </Tag>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className={orderUiClassNames.meta}>
               {record.resolvedVariantLabel || "Tanpa varian"}
             </Typography.Text>
-          </Space>
+          </div>
         ),
       },
       {
@@ -535,19 +534,19 @@ const ProductionOrders = () => {
         key: "stockSnapshot",
         width: 180,
         render: (_, record) => (
-          <Space direction="vertical" size={0}>
+          <div className={orderUiClassNames.stack}>
             <Typography.Text strong>
               {formatNumber(record.currentStockSnapshot || 0)} {record.unit || ""}
             </Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className={orderUiClassNames.meta}>
               Tersedia: {formatNumber(record.availableStockSnapshot || 0)}
             </Typography.Text>
             {Number(record.reservedStockSnapshot || 0) > 0 ? (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" className={orderUiClassNames.meta}>
                 Reserved: {formatNumber(record.reservedStockSnapshot || 0)}
               </Typography.Text>
             ) : null}
-          </Space>
+          </div>
         ),
       },
       {
@@ -556,9 +555,9 @@ const ProductionOrders = () => {
         width: 120,
         render: (value) =>
           Number(value || 0) > 0 ? (
-            <Tag color="red">{formatNumber(value)}</Tag>
+            <Tag className="ims-status-tag" color="red">{formatNumber(value)}</Tag>
           ) : (
-            <Tag color="green">0</Tag>
+            <Tag className="ims-status-tag" color="green">0</Tag>
           ),
       },
       {
@@ -573,11 +572,11 @@ const ProductionOrders = () => {
   );
 
   return (
-    <div>
-      <Card style={{ marginBottom: 16 }}>
+    <div className="ims-page">
+      <Card>
         <Row justify="space-between" align="middle" gutter={[16, 16]}>
           <Col>
-            <Typography.Title level={3} style={{ margin: 0 }}>
+            <Typography.Title level={3} className="ims-page-title">
               Production Orders
             </Typography.Title>
             <Typography.Text type="secondary">
@@ -602,7 +601,7 @@ const ProductionOrders = () => {
         </Row>
       </Card>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+      <Row className="ims-summary-row" gutter={[16, 16]}>
         <Col xs={24} md={6}>
           <Card>
             <Statistic title="Total Order" value={summary.total} />
@@ -637,7 +636,7 @@ const ProductionOrders = () => {
 
         <Col xs={24} md={8}>
           <Select
-            style={{ width: "100%" }}
+            className="ims-filter-control"
             value={targetTypeFilter}
             onChange={setTargetTypeFilter}
             options={[
@@ -649,7 +648,7 @@ const ProductionOrders = () => {
 
         <Col xs={24} md={8}>
           <Select
-            style={{ width: "100%" }}
+            className="ims-filter-control"
             value={statusFilter}
             onChange={setStatusFilter}
             options={[
@@ -664,12 +663,8 @@ const ProductionOrders = () => {
       </ProductionFilterCard>
 
       <Card>
-        {/* ===============================================================
-            Tabel order produksi memakai class global agar sticky column dan
-            bentuk action area seragam dengan modul produksi lain.
-        =============================================================== */}
         <Table
-          className="app-data-table"
+          className="ims-table"
           rowKey="id"
           loading={loading}
           columns={columns}
@@ -924,6 +919,7 @@ const ProductionOrders = () => {
             <Divider orientation="left">Requirement Material</Divider>
 
             <Table
+              className="ims-table"
               rowKey="id"
               pagination={false}
               dataSource={selectedOrder.materialRequirementLines || []}

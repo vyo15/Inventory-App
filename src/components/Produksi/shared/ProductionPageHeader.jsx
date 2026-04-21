@@ -11,19 +11,19 @@ const ProductionPageHeader = ({
   extra,
 }) => {
   return (
-    <Card style={{ marginBottom: 16 }}>
-      <Row justify="space-between" align="middle" gutter={[16, 16]}>
+    <Card className="ims-section-card">
+      <Row className="ims-page-toolbar" justify="space-between" align="middle" gutter={[16, 16]}>
         <Col>
-          <Typography.Title level={3} style={{ margin: 0 }}>
+          <Typography.Title level={3} className="ims-page-title">
             {title}
           </Typography.Title>
           {description ? (
-            <Typography.Text type="secondary">{description}</Typography.Text>
+            <Typography.Text className="ims-page-description" type="secondary">{description}</Typography.Text>
           ) : null}
         </Col>
 
         <Col>
-          <Space wrap>
+          <Space wrap className="ims-page-toolbar-actions">
             {onRefresh ? (
               <Button icon={<ReloadOutlined />} onClick={onRefresh}>
                 Refresh

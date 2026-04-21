@@ -244,68 +244,6 @@
    - sengaja diletakkan global agar mudah dibersihkan / dikembangkan dari satu titik
 ========================= */
 
-/* ---------- Shared Stock Variant Pills ---------- */
-/* Dipakai oleh Raw Materials, Semi Finished Materials, dan halaman lain
-   yang menampilkan stok per varian dalam bentuk pill. */
-.stock-variant-pill-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-  max-width: 100%;
-}
-
-.stock-variant-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  min-height: 30px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: #f8fafc;
-  white-space: nowrap;
-  transition:
-    background-color 0.2s ease,
-    border-color 0.2s ease,
-    color 0.2s ease;
-}
-
-.stock-variant-pill-label,
-.stock-variant-pill-value {
-  font-size: 12px;
-  line-height: 1.35;
-  margin: 0 !important;
-}
-
-.stock-variant-pill-label {
-  color: #475569 !important;
-}
-
-.stock-variant-pill-value {
-  color: #0f172a !important;
-  font-weight: 600;
-}
-
-.app-shell.dark .stock-variant-pill {
-  border-color: rgba(148, 163, 184, 0.22);
-  background: #f8fafc;
-}
-
-.app-shell.dark .stock-variant-pill-label {
-  color: #cbd5e1 !important;
-}
-
-.app-shell.dark .stock-variant-pill-value {
-  color: #e2e8f0 !important;
-}
-
-/* Pertegas surface pill di dark mode supaya tidak terlalu putih. */
-.app-shell.dark .stock-variant-pill {
-  background: rgba(30, 41, 59, 0.92);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
-}
-
 /* ---------- Filter / Search / Select ---------- */
 .app-content-card .ant-input,
 .app-content-card .ant-input-affix-wrapper,
@@ -475,5 +413,244 @@
   .app-content-card .ant-table-tbody > tr > td {
     padding-top: 12px !important;
     padding-bottom: 12px !important;
+  }
+}
+
+
+/* =========================
+   SECTION: Batch 1 Shared Page Foundation
+   Fungsi:
+   - menjadi fondasi visual bersama untuk halaman tabel prioritas batch 1
+   - menjaga jarak section, action button, sticky column, dan metadata table tetap seragam
+   Catatan:
+   - blok ini dipakai aktif oleh halaman Products, Production Orders, Production Profiles, dan Work Logs
+   - raw materials dan semi finished yang sudah stabil tidak diubah render-nya, hanya ikut token global yang aman
+========================= */
+.app-shell {
+  --ims-surface-card: #ffffff;
+  --ims-surface-soft: #f8fafc;
+  --ims-surface-muted: #eef2f7;
+  --ims-border-strong: rgba(15, 23, 42, 0.08);
+  --ims-text-primary: #0f172a;
+  --ims-text-secondary: rgba(15, 23, 42, 0.68);
+  --ims-table-hover: rgba(37, 99, 235, 0.05);
+  --ims-sticky-shadow: inset -12px 0 12px -12px rgba(15, 23, 42, 0.18);
+  --ims-shadow-soft: 0 10px 28px rgba(15, 23, 42, 0.05);
+}
+
+.app-shell.dark {
+  --ims-surface-card: #111827;
+  --ims-surface-soft: #162138;
+  --ims-surface-muted: #1b2942;
+  --ims-border-strong: rgba(148, 163, 184, 0.14);
+  --ims-text-primary: #e6edf3;
+  --ims-text-secondary: rgba(148, 163, 184, 0.92);
+  --ims-table-hover: rgba(59, 130, 246, 0.08);
+  --ims-sticky-shadow: inset -12px 0 12px -12px rgba(2, 6, 23, 0.38);
+  --ims-shadow-soft: 0 12px 28px rgba(2, 6, 23, 0.24);
+}
+
+.ims-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ims-page-alert {
+  margin-bottom: 0 !important;
+}
+
+.ims-page > .ant-card,
+.ims-page .ims-section-card.ant-card {
+  margin-bottom: 0 !important;
+  border-radius: 20px;
+  border-color: var(--ims-border-strong);
+  background: var(--ims-surface-card);
+  box-shadow: var(--ims-shadow-soft);
+}
+
+.ims-page > .ant-card > .ant-card-body,
+.ims-page .ims-section-card.ant-card > .ant-card-body {
+  padding: 20px;
+}
+
+.ims-page .ims-summary-row {
+  margin-bottom: 0 !important;
+}
+
+.ims-page .ims-summary-row .ant-card,
+.ims-page .ims-summary-card.ant-card {
+  border-radius: 18px;
+}
+
+.ims-page .ims-summary-row .ant-card .ant-card-body,
+.ims-page .ims-summary-card.ant-card .ant-card-body {
+  padding: 18px 20px;
+}
+
+.ims-page .ims-page-title.ant-typography {
+  margin: 0 !important;
+}
+
+.ims-page .ims-page-description.ant-typography {
+  display: block;
+  margin: 8px 0 0 !important;
+  max-width: 980px;
+}
+
+.ims-page .ims-page-toolbar {
+  align-items: center;
+}
+
+.ims-page .ims-page-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ims-page .ims-filter-row {
+  row-gap: 12px;
+}
+
+.ims-page .ims-filter-control {
+  width: 100%;
+}
+
+.ims-cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ims-cell-stack-tight {
+  gap: 2px;
+}
+
+.ims-cell-title {
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ims-text-primary);
+}
+
+.ims-cell-meta {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ims-text-secondary) !important;
+}
+
+.ims-cell-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ims-badge-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ims-badge-inline .ant-badge-status-text {
+  color: var(--ims-text-primary);
+  font-weight: 500;
+}
+
+.ims-status-tag.ant-tag {
+  margin-inline-end: 0;
+  border-radius: 999px;
+  padding-inline: 10px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.ims-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ims-action-button.ant-btn,
+.ims-action-button.ant-btn.ant-btn-sm {
+  min-height: 32px;
+  height: 32px;
+  padding-inline: 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.ims-action-button.ant-btn-primary {
+  box-shadow: none !important;
+}
+
+.ims-table.ant-table-wrapper,
+.ims-page .ant-table-wrapper {
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.ims-table .ant-table-container,
+.ims-page .ant-table-container {
+  overflow: hidden;
+  border: 1px solid var(--ims-border-strong);
+  border-radius: 18px;
+  background: var(--ims-surface-card);
+}
+
+.ims-table .ant-table-thead > tr > th,
+.ims-page .ant-table-thead > tr > th {
+  background: var(--ims-surface-soft) !important;
+  color: var(--ims-text-primary) !important;
+  border-bottom: 1px solid var(--ims-border-strong) !important;
+}
+
+.ims-table .ant-table-tbody > tr > td,
+.ims-page .ant-table-tbody > tr > td {
+  background: transparent;
+}
+
+.ims-table .ant-table-tbody > tr:hover > td,
+.ims-page .ant-table-tbody > tr:hover > td {
+  background: var(--ims-table-hover) !important;
+}
+
+.ims-table .ant-table-cell-fix-left,
+.ims-table .ant-table-cell-fix-right,
+.ims-page .ant-table-cell-fix-left,
+.ims-page .ant-table-cell-fix-right {
+  background: var(--ims-surface-card) !important;
+}
+
+.ims-table .ant-table-thead > tr > .ant-table-cell-fix-left,
+.ims-table .ant-table-thead > tr > .ant-table-cell-fix-right,
+.ims-page .ant-table-thead > tr > .ant-table-cell-fix-left,
+.ims-page .ant-table-thead > tr > .ant-table-cell-fix-right {
+  background: var(--ims-surface-soft) !important;
+}
+
+.ims-table .ant-table-ping-right .ant-table-cell-fix-right-first::after,
+.ims-page .ant-table-ping-right .ant-table-cell-fix-right-first::after {
+  box-shadow: var(--ims-sticky-shadow);
+}
+
+.ims-table .ant-table-ping-left .ant-table-cell-fix-left-last::after,
+.ims-page .ant-table-ping-left .ant-table-cell-fix-left-last::after {
+  box-shadow: inset 12px 0 12px -12px rgba(15, 23, 42, 0.12);
+}
+
+.app-shell.dark .ims-table .ant-table-ping-left .ant-table-cell-fix-left-last::after,
+.app-shell.dark .ims-page .ant-table-ping-left .ant-table-cell-fix-left-last::after {
+  box-shadow: inset 12px 0 12px -12px rgba(2, 6, 23, 0.36);
+}
+
+@media (max-width: 768px) {
+  .ims-page {
+    gap: 12px;
+  }
+
+  .ims-page > .ant-card > .ant-card-body,
+  .ims-page .ims-section-card.ant-card > .ant-card-body {
+    padding: 16px;
   }
 }

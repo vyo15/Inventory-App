@@ -159,6 +159,15 @@ const ProductionProfiles = () => {
 
   const renderStatisticValue = (value) => formatNumber(value || 0);
 
+  // ---------------------------------------------------------------------------
+  // Helper presentasi batch 1.
+  // Dipakai untuk menyatukan metadata tabel, status badge, dan tombol aksi.
+  // ---------------------------------------------------------------------------
+  const profileUiClassNames = {
+    stack: 'ims-cell-stack ims-cell-stack-tight',
+    meta: 'ims-cell-meta',
+  };
+
   const columns = [
     {
       title: 'Produk',
@@ -166,10 +175,10 @@ const ProductionProfiles = () => {
       key: 'productName',
       width: 220,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <div className={profileUiClassNames.stack}>
           <Typography.Text strong>{record.productName || '-'}</Typography.Text>
-          <Typography.Text type="secondary">{record.profileName || '-'}</Typography.Text>
-        </Space>
+          <Typography.Text type="secondary" className={profileUiClassNames.meta}>{record.profileName || '-'}</Typography.Text>
+        </div>
       ),
     },
     {
@@ -184,11 +193,11 @@ const ProductionProfiles = () => {
       key: 'requirements',
       width: 180,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <div className={profileUiClassNames.stack}>
           <Typography.Text>Kelopak: {formatNumber(record.petalsPerUnit || 0)}</Typography.Text>
           <Typography.Text>Daun: {formatNumber(record.leavesPerUnit || 0)}</Typography.Text>
           <Typography.Text>Tangkai: {formatNumber(record.stemsPerUnit || 0)}</Typography.Text>
-        </Space>
+        </div>
       ),
     },
     {
@@ -196,11 +205,11 @@ const ProductionProfiles = () => {
       key: 'yields',
       width: 200,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <div className={profileUiClassNames.stack}>
           <Typography.Text>Kelopak / 1 meter: {formatNumber(record.petalYieldPerMeter || 0)}</Typography.Text>
           <Typography.Text>Daun / 1 meter: {formatNumber(record.leafYieldPerMeter || 0)}</Typography.Text>
           <Typography.Text>Tangkai / 40 cm: {formatNumber(record.stemYieldPerRod40cm || 0)}</Typography.Text>
-        </Space>
+        </div>
       ),
     },
     {
@@ -208,49 +217,42 @@ const ProductionProfiles = () => {
       key: 'batch',
       width: 180,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <div className={profileUiClassNames.stack}>
           <Typography.Text>Kelopak: {formatNumber(record.assemblyPetalPackCount || 0)} plastik</Typography.Text>
           <Typography.Text>Daun: {formatNumber(record.assemblyLeafPackCount || 0)} plastik</Typography.Text>
           <Typography.Text>Target: {formatNumber(record.assemblyTargetOutput || 0)} bunga</Typography.Text>
-        </Space>
+        </div>
       ),
     },
     {
-      // ---------------------------------------------------------------------
-      // Status dijadikan sticky agar user tetap melihat kondisi profil saat tabel lebar.
-      // ---------------------------------------------------------------------
       title: 'Status',
       dataIndex: 'isActive',
       key: 'isActive',
-      width: 126,
-      fixed: 'right',
-      className: 'app-table-status-column app-table-fixed-secondary',
+      width: 120,
       render: (value, record) => (
-        <Space direction="vertical" size={4}>
-          <Badge status={value !== false ? 'success' : 'default'} text={value !== false ? 'Aktif' : 'Nonaktif'} />
-          {record.isDefault !== false ? <Badge color="blue" text="Default" /> : null}
-        </Space>
+        <div className="ims-badge-stack">
+          <span className="ims-badge-inline">
+            <Badge status={value !== false ? 'success' : 'default'} text={value !== false ? 'Aktif' : 'Nonaktif'} />
+          </span>
+          {record.isDefault !== false ? <span className="ims-badge-inline"><Badge color="blue" text="Default" /></span> : null}
+        </div>
       ),
     },
     {
-      // ---------------------------------------------------------------------
-      // Tombol aksi tetap di kanan agar alur edit / nonaktifkan konsisten.
-      // ---------------------------------------------------------------------
       title: 'Aksi',
       key: 'actions',
       width: 180,
       fixed: 'right',
-      className: 'app-table-action-column',
       render: (_, record) => (
-        <Space wrap>
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+        <Space wrap className="ims-action-group">
+          <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             Edit
           </Button>
           <Popconfirm
             title={record.isActive !== false ? 'Nonaktifkan profil ini?' : 'Aktifkan profil ini?'}
             onConfirm={() => toggleProductionProfileActive(record.id, record.isActive === false, null).then(loadData)}
           >
-            <Button size="small">{record.isActive !== false ? 'Nonaktifkan' : 'Aktifkan'}</Button>
+            <Button className="ims-action-button" size="small">{record.isActive !== false ? 'Nonaktifkan' : 'Aktifkan'}</Button>
           </Popconfirm>
         </Space>
       ),
@@ -258,12 +260,12 @@ const ProductionProfiles = () => {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="ims-page">
       <Card>
         <Row justify="space-between" align="middle" gutter={[16, 16]}>
           <Col xs={24} md={16}>
-            <Typography.Title level={4} style={{ margin: 0 }}>Profil Produksi</Typography.Title>
-            <Typography.Paragraph type="secondary" style={{ margin: '8px 0 0' }}>
+            <Typography.Title level={4} className="ims-page-title">Profil Produksi</Typography.Title>
+            <Typography.Paragraph className="ims-page-description" type="secondary">
               Simpan rumus hasil, batch assembly, dan batas miss per produk. BOM tetap jadi resep bahan, sedangkan profil produksi menjadi aturan hitung operasional dan monitoring jangka panjang.
             </Typography.Paragraph>
           </Col>
@@ -276,7 +278,7 @@ const ProductionProfiles = () => {
         </Row>
       </Card>
 
-      <Row gutter={[16, 16]}>
+      <Row className="ims-summary-row" gutter={[16, 16]}>
         <Col xs={24} md={6}><Card><Statistic title="Total Profil" value={summary.total} /></Card></Col>
         <Col xs={24} md={6}><Card><Statistic title="Profil Aktif" value={summary.active} /></Card></Col>
         <Col xs={24} md={6}><Card><Statistic title="Profil Default" value={summary.defaults} /></Card></Col>
@@ -284,7 +286,7 @@ const ProductionProfiles = () => {
       </Row>
 
       <Card>
-        <Row gutter={16}>
+        <Row className="ims-filter-row" gutter={16}>
           <Col xs={24} md={14}>
             <Input.Search
               placeholder="Cari nama profil atau produk..."
@@ -295,7 +297,7 @@ const ProductionProfiles = () => {
           </Col>
           <Col xs={24} md={10}>
             <Select
-              style={{ width: '100%' }}
+              className="ims-filter-control"
               value={statusFilter}
               onChange={setStatusFilter}
               options={[
@@ -309,11 +311,8 @@ const ProductionProfiles = () => {
       </Card>
 
       <Card>
-        {/* -----------------------------------------------------------------
-            Tabel profil memakai class global supaya card table dan sticky action seragam.
-        ----------------------------------------------------------------- */}
         <Table
-          className="app-data-table"
+          className="ims-table"
           rowKey="id"
           loading={loading}
           columns={columns}

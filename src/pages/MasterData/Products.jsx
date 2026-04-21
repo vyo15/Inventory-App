@@ -82,9 +82,14 @@ const buildFormValues = (record = {}) => {
 // -----------------------------------------------------------------------------
 const formatStockWithUnit = (value, unit = 'pcs') => `${formatNumberID(value)} ${unit}`;
 
-const compactCellStyles = {
-  stack: { display: 'flex', flexDirection: 'column', gap: 2 },
-  meta: { fontSize: 12, lineHeight: 1.35 },
+// -----------------------------------------------------------------------------
+// Class helper presentasi tabel batch 1.
+// Semua metadata tabel diarahkan ke class global agar spacing dan dark mode
+// seragam, tanpa menulis inline style berulang.
+// -----------------------------------------------------------------------------
+const compactCellClassNames = {
+  stack: 'ims-cell-stack ims-cell-stack-tight',
+  meta: 'ims-cell-meta',
 };
 
 // -----------------------------------------------------------------------------
@@ -379,10 +384,10 @@ const Products = () => {
       key: 'name',
       width: 280,
       render: (value, record) => (
-        <div style={compactCellStyles.stack}>
+        <div className={compactCellClassNames.stack}>
           <Text strong>{value || '-'}</Text>
-          <Text type="secondary" style={compactCellStyles.meta}>{record.category || 'Produk Jadi'}</Text>
-          <Space size={6} wrap>
+          <Text type="secondary" className={compactCellClassNames.meta}>{record.category || 'Produk Jadi'}</Text>
+          <Space size={6} wrap className="ims-cell-tag-list">
             <Tag color={record.hasVariants ? 'blue' : 'default'}>
               {record.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
             </Tag>
@@ -402,16 +407,16 @@ const Products = () => {
         const hasVariants = record.hasVariants === true && variants.length > 0;
 
         return (
-          <div style={compactCellStyles.stack}>
+          <div className={compactCellClassNames.stack}>
             <Text strong>{`Total ${formatStockWithUnit(record.currentStock ?? record.stock ?? 0)}`}</Text>
-            <Text type="secondary" style={compactCellStyles.meta}>
+            <Text type="secondary" className={compactCellClassNames.meta}>
               {`Tersedia ${formatStockWithUnit(record.availableStock ?? record.currentStock ?? record.stock ?? 0)}`}
             </Text>
 
             {hasVariants ? (
               renderVariantStockPills(variants)
             ) : (
-              <Text type="secondary" style={compactCellStyles.meta}>Non-varian</Text>
+              <Text type="secondary" className={compactCellClassNames.meta}>Non-varian</Text>
             )}
           </div>
         );
@@ -422,47 +427,38 @@ const Products = () => {
       key: 'priceInfo',
       width: 250,
       render: (_, record) => (
-        <div style={compactCellStyles.stack}>
+        <div className={compactCellClassNames.stack}>
           <Text strong>{`Jual ${formatCurrencyId(record.price || 0)} / pcs`}</Text>
-          <Text type="secondary" style={compactCellStyles.meta}>
+          <Text type="secondary" className={compactCellClassNames.meta}>
             {`HPP ${formatCurrencyId(record.hppPerUnit || 0)} / pcs`}
           </Text>
-          <Text type="secondary" style={compactCellStyles.meta}>
+          <Text type="secondary" className={compactCellClassNames.meta}>
             {`${record.pricingMode === 'manual' ? 'Manual' : 'Rule'} ${pricingRuleMap[record.pricingRuleId] ? `| ${pricingRuleMap[record.pricingRuleId]}` : ''}`}
           </Text>
         </div>
       ),
     },
     {
-      // ---------------------------------------------------------------------
-      // Kolom status dibuat fixed agar saat tabel digeser, status stok tetap terbaca.
-      // ---------------------------------------------------------------------
       title: 'Status',
       key: 'status',
-      width: 128,
+      width: 120,
       align: 'center',
-      fixed: 'right',
-      className: 'app-table-status-column app-table-fixed-secondary',
       render: (_, record) => {
         const statusMeta = getProductStatusMeta(record);
-        return <Tag color={statusMeta.color}>{statusMeta.label}</Tag>;
+        return <Tag className="ims-status-tag" color={statusMeta.color}>{statusMeta.label}</Tag>;
       },
     },
     {
-      // ---------------------------------------------------------------------
-      // Kolom aksi diseragamkan dengan tabel besar lain supaya tombol tetap rapi.
-      // ---------------------------------------------------------------------
       title: 'Aksi',
       key: 'actions',
       width: 230,
       fixed: 'right',
-      className: 'app-table-action-column',
       render: (_, record) => (
-        <Space size={8} wrap>
-          <Button size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
+        <Space size={8} wrap className="ims-action-group">
+          <Button className="ims-action-button" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
             Detail
           </Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             Edit
           </Button>
           <Popconfirm
@@ -471,7 +467,7 @@ const Products = () => {
             cancelText="Batal"
             onConfirm={() => handleToggleActive(record)}
           >
-            <Button size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
+            <Button className="ims-action-button" size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
           </Popconfirm>
         </Space>
       ),
@@ -479,14 +475,14 @@ const Products = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div className="ims-page">
       {/* ---------------------------------------------------------------------
           Header halaman produk.
       --------------------------------------------------------------------- */}
-      <Card size="small" style={{ marginBottom: 16 }}>
+      <Card size="small">
         <Row justify="space-between" align="middle" gutter={[16, 16]}>
           <Col>
-            <Typography.Title level={3} style={{ margin: 0 }}>
+            <Typography.Title level={3} className="ims-page-title">
               Produk Jadi
             </Typography.Title>
             <Typography.Text type="secondary">
@@ -510,14 +506,14 @@ const Products = () => {
       <Alert
         showIcon
         type="info"
-        style={{ marginBottom: 16 }}
+        className="ims-page-alert"
         message="Nama produk tidak perlu dipecah per warna. Cukup 1 master produk lalu stok warna dikelola di varian. Status list akan mengikuti kondisi stok dan status aktif produk."
       />
 
       {/* ---------------------------------------------------------------------
           Summary cards produk.
       --------------------------------------------------------------------- */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+      <Row className="ims-summary-row" gutter={[16, 16]}>
         <Col xs={24} md={6}><Card size="small"><Statistic title="Total Produk" value={summary.total} /></Card></Col>
         <Col xs={24} md={6}><Card size="small"><Statistic title="Produk Aktif" value={summary.active} /></Card></Col>
         <Col xs={24} md={6}><Card size="small"><Statistic title="Produk Nonaktif" value={summary.inactive} /></Card></Col>
@@ -527,7 +523,7 @@ const Products = () => {
       {/* ---------------------------------------------------------------------
           Filter bar utama.
       --------------------------------------------------------------------- */}
-      <Card size="small" style={{ marginBottom: 16 }}>
+      <Card size="small">
         <Row gutter={[12, 12]}>
           <Col xs={24} md={8}>
             <Input
@@ -538,7 +534,7 @@ const Products = () => {
             />
           </Col>
           <Col xs={24} md={5}>
-            <Select value={statusFilter} onChange={setStatusFilter} style={{ width: '100%' }}>
+            <Select className="ims-filter-control" value={statusFilter} onChange={setStatusFilter}>
               <Select.Option value="all">Semua Status</Select.Option>
               <Select.Option value="Aman">Aman</Select.Option>
               <Select.Option value="Stok Rendah">Stok Rendah</Select.Option>
@@ -547,14 +543,14 @@ const Products = () => {
             </Select>
           </Col>
           <Col xs={24} md={5}>
-            <Select value={variantModeFilter} onChange={setVariantModeFilter} style={{ width: '100%' }}>
+            <Select className="ims-filter-control" value={variantModeFilter} onChange={setVariantModeFilter}>
               <Select.Option value="all">Semua Mode Varian</Select.Option>
               <Select.Option value="variant">Pakai Varian</Select.Option>
               <Select.Option value="single">Tanpa Varian</Select.Option>
             </Select>
           </Col>
           <Col xs={24} md={6}>
-            <Select value={categoryFilter} onChange={setCategoryFilter} style={{ width: '100%' }} allowClear={false}>
+            <Select className="ims-filter-control" value={categoryFilter} onChange={setCategoryFilter} allowClear={false}>
               <Select.Option value="all">Semua Kategori</Select.Option>
               {(categories || []).map((item) => (
                 <Select.Option key={item.id} value={item.id}>{item.name}</Select.Option>
@@ -568,12 +564,8 @@ const Products = () => {
           Tabel utama produk.
       --------------------------------------------------------------------- */}
       <Card size="small">
-        {/* -----------------------------------------------------------------
-            Tabel utama memakai class global agar shape, sticky column, dan action button
-            tetap seragam dengan halaman lain.
-        ----------------------------------------------------------------- */}
         <Table
-          className="app-data-table"
+          className="ims-table"
           rowKey="id"
           loading={loading}
           dataSource={filteredProducts}
@@ -799,7 +791,7 @@ const Products = () => {
               <Descriptions.Item label="Mode Pricing">{PRICING_MODE_TAGS[selectedProduct.pricingMode || 'rule']}</Descriptions.Item>
               <Descriptions.Item label="Pricing Rule">{pricingRuleMap[selectedProduct.pricingRuleId] || '-'}</Descriptions.Item>
               <Descriptions.Item label="Status">
-                <Tag color={getProductStatusMeta(selectedProduct).color}>{getProductStatusMeta(selectedProduct).label}</Tag>
+                <Tag className="ims-status-tag" color={getProductStatusMeta(selectedProduct).color}>{getProductStatusMeta(selectedProduct).label}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Update Terakhir">{formatDateId(selectedProduct.updatedAt, true)}</Descriptions.Item>
               <Descriptions.Item label="Deskripsi">{selectedProduct.description || '-'}</Descriptions.Item>
@@ -808,6 +800,7 @@ const Products = () => {
             <Card size="small" title={selectedProduct.hasVariants ? 'Rincian Varian Produk' : 'Rincian Stok Master'}>
               {selectedProduct.hasVariants ? (
                 <Table
+                  className="ims-table"
                   rowKey={(record) => `${selectedProduct.id}-${record.color}`}
                   pagination={false}
                   size="small"
@@ -832,7 +825,7 @@ const Products = () => {
                     {
                       title: 'Status',
                       dataIndex: 'isActive',
-                      render: (value) => <Tag color={value === false ? 'default' : 'green'}>{value === false ? 'Nonaktif' : 'Aktif'}</Tag>,
+                      render: (value) => <Tag className="ims-status-tag" color={value === false ? 'default' : 'green'}>{value === false ? 'Nonaktif' : 'Aktif'}</Tag>,
                     },
                   ]}
                 />

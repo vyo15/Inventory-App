@@ -31,6 +31,11 @@ export const getAntdTheme = (darkTheme = false) => {
       colorBorderSecondary: darkTheme
         ? "rgba(148, 163, 184, 0.10)"
         : "rgba(15, 23, 42, 0.06)",
+      controlHeight: 42,
+      controlHeightSM: 32,
+      boxShadowSecondary: darkTheme
+        ? "0 12px 28px rgba(2, 6, 23, 0.24)"
+        : "0 10px 28px rgba(15, 23, 42, 0.05)",
     },
     components: {
       Layout: {
@@ -83,21 +88,17 @@ export const getAntdTheme = (darkTheme = false) => {
       },
 
       Table: {
-        // =========================
-        // SECTION: Table Tokens
-        // Fungsi:
-        // - menyamakan warna tabel dengan surface halaman
-        // - membantu fixed column kanan/kiri tidak terlihat seperti panel berbeda
-        // =========================
-        headerBorderRadius: 12,
-        headerBg: darkTheme ? "#16233d" : "#f8fafc",
+        headerBorderRadius: 16,
+        headerBg: darkTheme ? "#162138" : "#f8fafc",
         headerColor: darkTheme ? "#e5e7eb" : "#0f172a",
-        rowHoverBg: darkTheme ? "#16233d" : "#f8fafc",
+        rowHoverBg: darkTheme
+          ? "rgba(59, 130, 246, 0.08)"
+          : "rgba(37, 99, 235, 0.05)",
         borderColor: darkTheme
           ? "rgba(148, 163, 184, 0.14)"
           : "rgba(15, 23, 42, 0.08)",
         headerSplitColor: darkTheme
-          ? "rgba(148, 163, 184, 0.12)"
+          ? "rgba(148, 163, 184, 0.10)"
           : "rgba(15, 23, 42, 0.08)",
       },
 

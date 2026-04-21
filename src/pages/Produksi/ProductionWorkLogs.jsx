@@ -674,6 +674,26 @@ const ProductionWorkLogs = () => {
     stockSourceType === "variant" ? "purple" : "default";
 
   // =====================================================
+  // Helper presentasi batch 1.
+  // Dipakai untuk mengganti blok metadata tabel yang sebelumnya banyak inline
+  // style menjadi class shared agar lebih rapi dan mudah di-maintain.
+  // =====================================================
+  const workLogUiClassNames = {
+    stack: "ims-cell-stack ims-cell-stack-tight",
+    meta: "ims-cell-meta",
+    title: "ims-cell-title",
+  };
+
+  const renderWorkLogCellBlock = (primary, secondaryLines = []) => (
+    <div className={workLogUiClassNames.stack}>
+      <div className={workLogUiClassNames.title}>{primary || "-"}</div>
+      {secondaryLines.filter(Boolean).map((line, index) => (
+        <div key={index} className={workLogUiClassNames.meta}>{line}</div>
+      ))}
+    </div>
+  );
+
+  // =====================================================
   // Data turunan drawer detail
   // - Semua data di bawah dibentuk dari selectedRecord aktif.
   // - Dengan pola ini, drawer detail lebih mudah dirapikan tanpa mencampur
@@ -726,17 +746,10 @@ const ProductionWorkLogs = () => {
         title: "Material",
         key: "item",
         render: (_, record) => (
-          <div>
-            <div style={{ fontWeight: 600 }}>{record.itemName || "-"}</div>
-            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-              {record.itemCode || "-"}
-            </div>
-            {record.resolvedVariantLabel ? (
-              <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                Varian: {record.resolvedVariantLabel}
-              </div>
-            ) : null}
-          </div>
+          renderWorkLogCellBlock(record.itemName || "-", [
+            record.itemCode || "-",
+            record.resolvedVariantLabel ? `Varian: ${record.resolvedVariantLabel}` : null,
+          ])
         ),
       },
       {
@@ -744,16 +757,16 @@ const ProductionWorkLogs = () => {
         key: "stockSource",
         width: 160,
         render: (_, record) => (
-          <Space direction="vertical" size={4}>
-            <Tag color={getStockSourceTagColor(record.stockSourceType)}>
+          <div className={workLogUiClassNames.stack}>
+            <Tag className="ims-status-tag" color={getStockSourceTagColor(record.stockSourceType)}>
               {record.stockSourceType === "variant" ? "Variant" : "Master"}
             </Tag>
             {record.stockSourceType === "variant" && record.resolvedVariantLabel ? (
-              <Typography.Text type="secondary">
+              <Typography.Text type="secondary" className={workLogUiClassNames.meta}>
                 {record.resolvedVariantLabel}
               </Typography.Text>
             ) : null}
-          </Space>
+          </div>
         ),
       },
       {
@@ -796,20 +809,11 @@ const ProductionWorkLogs = () => {
         title: "Output",
         key: "output",
         render: (_, record) => (
-          <div>
-            <div style={{ fontWeight: 600 }}>{record.outputName || "-"}</div>
-            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-              {record.outputCode || "-"}
-            </div>
-            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-              {WORK_LOG_TARGET_TYPE_MAP[record.outputType] || record.outputType || "-"}
-            </div>
-            {record.outputVariantLabel ? (
-              <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                Varian: {record.outputVariantLabel}
-              </div>
-            ) : null}
-          </div>
+          renderWorkLogCellBlock(record.outputName || "-", [
+            record.outputCode || "-",
+            WORK_LOG_TARGET_TYPE_MAP[record.outputType] || record.outputType || "-",
+            record.outputVariantLabel ? `Varian: ${record.outputVariantLabel}` : null,
+          ])
         ),
       },
       {
@@ -817,16 +821,16 @@ const ProductionWorkLogs = () => {
         key: "stockTarget",
         width: 170,
         render: (_, record) => (
-          <Space direction="vertical" size={4}>
-            <Tag color={getStockSourceTagColor(record.stockSourceType)}>
+          <div className={workLogUiClassNames.stack}>
+            <Tag className="ims-status-tag" color={getStockSourceTagColor(record.stockSourceType)}>
               {record.stockSourceType === "variant" ? "Masuk ke Variant" : "Masuk ke Master"}
             </Tag>
             {record.outputVariantLabel ? (
-              <Typography.Text type="secondary">
+              <Typography.Text type="secondary" className={workLogUiClassNames.meta}>
                 {record.outputVariantLabel}
               </Typography.Text>
             ) : null}
-          </Space>
+          </div>
         ),
       },
       {
@@ -852,7 +856,7 @@ const ProductionWorkLogs = () => {
         key: "stockAdded",
         width: 150,
         render: (_, record) => (
-          <Tag color={record.stockAdded ? "green" : "default"}>
+          <Tag className="ims-status-tag" color={record.stockAdded ? "green" : "default"}>
             {record.stockAdded ? "Sudah masuk stok" : "Belum diposting"}
           </Tag>
         ),
@@ -883,20 +887,11 @@ const ProductionWorkLogs = () => {
       key: "targetStep",
       width: 280,
       render: (_, record) => (
-        <div>
-          <div style={{ fontWeight: 600 }}>{record.targetName || "-"}</div>
-          <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-            {record.stepName || "-"}
-          </div>
-          {record.targetVariantLabel ? (
-            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-              Varian: {record.targetVariantLabel}
-            </div>
-          ) : null}
-          <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-            PO: {record.productionOrderCode || "-"}
-          </div>
-        </div>
+        renderWorkLogCellBlock(record.targetName || "-", [
+          record.stepName || "-",
+          record.targetVariantLabel ? `Varian: ${record.targetVariantLabel}` : null,
+          `PO: ${record.productionOrderCode || "-"}`,
+        ])
       ),
     },
     {
@@ -924,41 +919,31 @@ const ProductionWorkLogs = () => {
       key: "sourceType",
       width: 140,
       render: (value) => (
-        <Tag color={getWorkLogSourceTagColor(value)}>
+        <Tag className="ims-status-tag" color={getWorkLogSourceTagColor(value)}>
           {WORK_LOG_SOURCE_TYPE_MAP[value] || value || "-"}
         </Tag>
       ),
     },
     {
-      // =====================================================
-      // SECTION: status sticky
-      // Fungsi:
-      // - status work log tetap terbaca walau user fokus ke kolom detail target / qty
-      // =====================================================
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 124,
-      fixed: "right",
-      className: "app-table-status-column app-table-fixed-secondary",
+      width: 120,
       render: (value) => (
-        <Tag color={getWorkLogStatusTagColor(value)}>
+        <Tag className="ims-status-tag" color={getWorkLogStatusTagColor(value)}>
           {WORK_LOG_STATUS_MAP[value] || "-"}
         </Tag>
       ),
     },
     {
-      // =====================================================
-      // SECTION: aksi sticky
-      // =====================================================
       title: "Aksi",
       key: "actions",
       width: 280,
       fixed: "right",
-      className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap>
+        <Space wrap className="ims-action-group">
           <Button
+            className="ims-action-button"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
@@ -967,6 +952,7 @@ const ProductionWorkLogs = () => {
           </Button>
 
           <Button
+            className="ims-action-button"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -977,6 +963,7 @@ const ProductionWorkLogs = () => {
 
           {record.status !== "completed" && record.status !== "cancelled" && (
             <Button
+              className="ims-action-button"
               size="small"
               type="primary"
               onClick={() => handleOpenComplete(record)}
@@ -990,7 +977,7 @@ const ProductionWorkLogs = () => {
   ];
 
   return (
-    <div>
+    <div className="ims-page">
       <ProductionPageHeader
         title="Work Log Produksi"
         description="Realisasi kerja produksi dari Production Order (1 PO = 1 Work Log)"
@@ -1018,7 +1005,7 @@ const ProductionWorkLogs = () => {
 
           <Col xs={24} md={12}>
             <Select
-              style={{ width: "100%" }}
+              className="ims-filter-control"
               value={statusFilter}
               onChange={setStatusFilter}
               options={[
@@ -1029,12 +1016,9 @@ const ProductionWorkLogs = () => {
           </Col>
       </ProductionFilterCard>
 
-      <Card>
-        {/* ===============================================================
-            Tabel work log mengikuti helper global agar layout dark/light tetap rata.
-        =============================================================== */}
+      <Card className="ims-section-card">
         <Table
-          className="app-data-table"
+          className="ims-table"
           rowKey="id"
           loading={loading}
           columns={columns}
@@ -1529,15 +1513,15 @@ const ProductionWorkLogs = () => {
             {/* Tujuan: user langsung tahu konteks kerja, status, dan hasil.  */}
             {/* ------------------------------------------------------------- */}
             <Space wrap size={[8, 8]} style={{ marginBottom: 16 }}>
-              <Tag color={getWorkLogStatusTagColor(selectedRecord.status)}>
+              <Tag className="ims-status-tag" color={getWorkLogStatusTagColor(selectedRecord.status)}>
                 {WORK_LOG_STATUS_MAP[selectedRecord.status] || "-"}
               </Tag>
-              <Tag color={getWorkLogSourceTagColor(selectedRecord.sourceType)}>
+              <Tag className="ims-status-tag" color={getWorkLogSourceTagColor(selectedRecord.sourceType)}>
                 {WORK_LOG_SOURCE_TYPE_MAP[selectedRecord.sourceType] ||
                   selectedRecord.sourceType ||
                   "-"}
               </Tag>
-              <Tag>{selectedRecord.productionOrderCode || "Tanpa PO"}</Tag>
+              <Tag className="ims-status-tag">{selectedRecord.productionOrderCode || "Tanpa PO"}</Tag>
             </Space>
 
             {/* ------------------------------------------------------------- */}
@@ -1693,6 +1677,7 @@ const ProductionWorkLogs = () => {
             {/* ------------------------------------------------------------- */}
             <Card size="small" title="Pemakaian Material" style={{ marginBottom: 16 }}>
               <Table
+                className="ims-table"
                 rowKey={(record, index) => record.id || `material-${index}`}
                 pagination={false}
                 size="small"
@@ -1709,6 +1694,7 @@ const ProductionWorkLogs = () => {
             {/* ------------------------------------------------------------- */}
             <Card size="small" title="Hasil Produksi">
               <Table
+                className="ims-table"
                 rowKey={(record, index) => record.id || `output-${index}`}
                 pagination={false}
                 size="small"
