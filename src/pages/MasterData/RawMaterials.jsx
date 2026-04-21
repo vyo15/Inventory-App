@@ -95,15 +95,13 @@ const compactCellStyles = {
     marginTop: 6,
     maxWidth: '100%',
   },
-  variantPill: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '2px 8px',
-    border: '1px solid #d9d9d9',
-    borderRadius: 999,
-    background: '#fafafa',
-  },
+  // ---------------------------------------------------------------------------
+  // Catatan:
+  // - warna pill tidak disimpan di inline style lagi
+  // - visualnya dipindah ke class CSS agar light/dark mode lebih mudah dirawat
+  // - pendekatan ini masih dipakai karena halaman bahan baku butuh pill yang rapat
+  //   tetapi tetap ikut tema global aplikasi
+  // ---------------------------------------------------------------------------
   variantPillLabel: { fontSize: 12, lineHeight: 1.35 },
   variantPillValue: { fontSize: 12, lineHeight: 1.35, fontWeight: 600 },
 };
@@ -131,10 +129,10 @@ const renderVariantStockPills = (
       {normalizedVariants.map((variant, index) => (
         <span
           key={`${variant.variantKey || variant.sku || variant.name || 'variant'}-${index}`}
-          style={compactCellStyles.variantPill}
+          className="raw-material-variant-pill"
         >
-          <Text style={compactCellStyles.variantPillLabel}>{`${getLabel(variant, index)}:`}</Text>
-          <Text style={compactCellStyles.variantPillValue}>
+          <Text className="raw-material-variant-pill-label" style={compactCellStyles.variantPillLabel}>{`${getLabel(variant, index)}:`}</Text>
+          <Text className="raw-material-variant-pill-value" style={compactCellStyles.variantPillValue}>
             {formatStockWithUnit(variant.currentStock || 0, unit)}
           </Text>
         </span>
@@ -531,7 +529,7 @@ const RawMaterials = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div className="raw-materials-page" style={{ padding: 24 }}>
       {/* ---------------------------------------------------------------------
           Header halaman utama.
           Layout dibuat sama arah visualnya dengan halaman master lain.

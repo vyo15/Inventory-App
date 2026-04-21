@@ -44,9 +44,34 @@ const AppLayout = () => {
 
   // =========================
   // SECTION: Persist Theme
+  // Fungsi:
+  // - menyimpan pilihan theme terakhir user ke localStorage
+  // - saat app dibuka ulang, mode yang dipakai tetap konsisten
   // =========================
   useEffect(() => {
     localStorage.setItem(THEME_STORAGE_KEY, isDarkTheme ? "dark" : "light");
+  }, [isDarkTheme]);
+
+  // =========================
+  // SECTION: Sync Theme Class To HTML / Body
+  // Fungsi:
+  // - menempelkan class global ke html dan body
+  // - class ini dipakai untuk komponen Ant Design yang dirender lewat portal
+  //   seperti dropdown, modal, drawer, tooltip, dan popconfirm
+  // - tanpa sync ini, dark mode sering hanya berubah di area layout utama saja
+  // =========================
+  useEffect(() => {
+    const htmlElement = document.documentElement;
+    const bodyElement = document.body;
+    const nextThemeName = isDarkTheme ? "dark" : "light";
+
+    htmlElement.classList.toggle("theme-dark", isDarkTheme);
+    htmlElement.classList.toggle("theme-light", !isDarkTheme);
+    bodyElement.classList.toggle("theme-dark", isDarkTheme);
+    bodyElement.classList.toggle("theme-light", !isDarkTheme);
+
+    htmlElement.setAttribute("data-theme", nextThemeName);
+    bodyElement.setAttribute("data-theme", nextThemeName);
   }, [isDarkTheme]);
 
   // =========================

@@ -42,6 +42,27 @@ body {
 }
 
 /* =========================
+   SECTION: Global Theme Class
+   Fungsi:
+   - class theme-dark / theme-light ditempel dari AppLayout ke html dan body
+   - dipakai agar portal Ant Design ikut ganti tema secara global
+========================= */
+html.theme-light,
+body.theme-light {
+  color-scheme: light;
+}
+
+html.theme-dark,
+body.theme-dark {
+  color-scheme: dark;
+}
+
+body.theme-dark {
+  background-color: #0b1220;
+  color: #e5e7eb;
+}
+
+/* =========================
    SECTION: Root App Helper
 ========================= */
 #root {
@@ -85,4 +106,68 @@ select {
 .app-shell.dark ::selection {
   background: rgba(59, 130, 246, 0.28);
   color: #f8fafc;
+}
+
+
+/* =========================
+   SECTION: Portal Surface Sync
+   Fungsi:
+   - menjaga dropdown, popconfirm, tooltip, modal, drawer, dan picker ikut theme dark
+   - blok ini masih dipakai karena komponen portal dirender di luar .app-shell
+========================= */
+body.theme-dark .ant-select-dropdown,
+body.theme-dark .ant-dropdown .ant-dropdown-menu,
+body.theme-dark .ant-picker-dropdown .ant-picker-panel-container,
+body.theme-dark .ant-popover .ant-popover-inner,
+body.theme-dark .ant-tooltip .ant-tooltip-inner,
+body.theme-dark .ant-modal .ant-modal-content,
+body.theme-dark .ant-modal .ant-modal-header,
+body.theme-dark .ant-drawer .ant-drawer-content,
+body.theme-dark .ant-drawer .ant-drawer-header {
+  background: #111827 !important;
+  color: #e5e7eb !important;
+  border-color: rgba(148, 163, 184, 0.16) !important;
+}
+
+body.theme-dark .ant-select-dropdown,
+body.theme-dark .ant-dropdown .ant-dropdown-menu,
+body.theme-dark .ant-picker-dropdown .ant-picker-panel-container,
+body.theme-dark .ant-popover .ant-popover-inner,
+body.theme-dark .ant-modal .ant-modal-content,
+body.theme-dark .ant-drawer .ant-drawer-content {
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.36) !important;
+}
+
+body.theme-dark .ant-select-dropdown .ant-select-item,
+body.theme-dark .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item,
+body.theme-dark .ant-picker-dropdown,
+body.theme-dark .ant-popover,
+body.theme-dark .ant-modal,
+body.theme-dark .ant-drawer,
+body.theme-dark .ant-tooltip,
+body.theme-dark .ant-modal .ant-modal-title,
+body.theme-dark .ant-drawer .ant-drawer-title,
+body.theme-dark .ant-drawer .ant-drawer-close,
+body.theme-dark .ant-modal .ant-modal-close,
+body.theme-dark .ant-select-dropdown .ant-select-item-option-content {
+  color: #e5e7eb !important;
+}
+
+body.theme-dark .ant-select-dropdown .ant-select-item-option-selected,
+body.theme-dark .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item-active,
+body.theme-dark .ant-dropdown .ant-dropdown-menu .ant-dropdown-menu-item:hover {
+  background: rgba(59, 130, 246, 0.14) !important;
+}
+
+body.theme-dark .ant-select-dropdown .ant-select-item-option-active,
+body.theme-dark .ant-picker-dropdown .ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner,
+body.theme-dark .ant-picker-dropdown .ant-picker-cell-in-view.ant-picker-cell-range-start .ant-picker-cell-inner,
+body.theme-dark .ant-picker-dropdown .ant-picker-cell-in-view.ant-picker-cell-range-end .ant-picker-cell-inner {
+  background: rgba(59, 130, 246, 0.18) !important;
+}
+
+body.theme-dark .ant-empty-description,
+body.theme-dark .ant-popover .ant-popover-message-title,
+body.theme-dark .ant-popover .ant-popover-description {
+  color: rgba(229, 231, 235, 0.82) !important;
 }
