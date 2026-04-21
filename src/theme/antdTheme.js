@@ -1,44 +1,6 @@
 import { theme } from "antd";
 
 // =========================
-// SECTION: Shared Surface Tokens
-// Fungsi:
-// - menjadi pusat warna dasar yang dipakai lintas token Ant Design
-// - dipisah agar light dan dark mode mudah dirawat dari satu titik
-// Catatan:
-// - helper ini masih dipakai aktif oleh getAntdTheme
-// =========================
-const getThemeSurfaces = (darkTheme = false) => {
-  return darkTheme
-    ? {
-        layout: "#0b1220",
-        shell: "#0f172a",
-        card: "#111827",
-        field: "#0f172a",
-        border: "rgba(148, 163, 184, 0.14)",
-        borderSoft: "rgba(148, 163, 184, 0.10)",
-        text: "#e5e7eb",
-        textSecondary: "rgba(148, 163, 184, 0.92)",
-        subtleFill: "rgba(255, 255, 255, 0.04)",
-        hoverFill: "rgba(255, 255, 255, 0.06)",
-        activeFill: "rgba(59, 130, 246, 0.16)",
-      }
-    : {
-        layout: "#f3f6fb",
-        shell: "#ffffff",
-        card: "#ffffff",
-        field: "#ffffff",
-        border: "rgba(15, 23, 42, 0.08)",
-        borderSoft: "rgba(15, 23, 42, 0.06)",
-        text: "#0f172a",
-        textSecondary: "rgba(15, 23, 42, 0.72)",
-        subtleFill: "#f8fafc",
-        hoverFill: "#eef3f8",
-        activeFill: "rgba(37, 99, 235, 0.14)",
-      };
-};
-
-// =========================
 // SECTION: Ant Design Theme Generator
 // Fungsi:
 // - menjadi pusat token global light/dark mode
@@ -49,36 +11,34 @@ const getThemeSurfaces = (darkTheme = false) => {
 // - semua token di sini berdampak global ke komponen antd yang tidak dioverride manual
 // =========================
 export const getAntdTheme = (darkTheme = false) => {
-  const surface = getThemeSurfaces(darkTheme);
-
   return {
     algorithm: darkTheme ? theme.darkAlgorithm : theme.defaultAlgorithm,
     token: {
       colorPrimary: "#3b82f6",
       fontFamily: 'Inter, "Segoe UI", sans-serif',
       borderRadius: 14,
-      colorBgBase: surface.layout,
-      colorBgLayout: surface.layout,
-      colorBgContainer: surface.card,
-      colorBgElevated: surface.card,
-      colorTextBase: surface.text,
-      colorText: surface.text,
-      colorTextSecondary: surface.textSecondary,
-      colorBorder: surface.border,
-      colorBorderSecondary: surface.borderSoft,
-      colorFillSecondary: surface.subtleFill,
-      colorFillTertiary: surface.hoverFill,
-      boxShadowSecondary: darkTheme
-        ? "0 14px 30px rgba(2, 6, 23, 0.34)"
-        : "0 12px 24px rgba(15, 23, 42, 0.08)",
+      colorBgBase: darkTheme ? "#0b1220" : "#f3f6fb",
+      colorBgLayout: darkTheme ? "#0b1220" : "#f3f6fb",
+      colorBgContainer: darkTheme ? "#111827" : "#ffffff",
+      colorBgElevated: darkTheme ? "#111827" : "#ffffff",
+      colorTextBase: darkTheme ? "#e5e7eb" : "#0f172a",
+      colorTextSecondary: darkTheme
+        ? "rgba(148, 163, 184, 0.92)"
+        : "rgba(15, 23, 42, 0.72)",
+      colorBorder: darkTheme
+        ? "rgba(148, 163, 184, 0.14)"
+        : "rgba(15, 23, 42, 0.08)",
+      colorBorderSecondary: darkTheme
+        ? "rgba(148, 163, 184, 0.10)"
+        : "rgba(15, 23, 42, 0.06)",
     },
     components: {
       Layout: {
         bodyBg: "transparent",
-        siderBg: surface.shell,
+        siderBg: darkTheme ? "#0f172a" : "#ffffff",
         headerBg: "transparent",
-        triggerBg: surface.shell,
-        triggerColor: surface.text,
+        triggerBg: darkTheme ? "#0f172a" : "#ffffff",
+        triggerColor: darkTheme ? "#e5e7eb" : "#0f172a",
       },
 
       // =========================
@@ -92,59 +52,66 @@ export const getAntdTheme = (darkTheme = false) => {
         subMenuItemBorderRadius: 12,
         itemHeight: 44,
         iconSize: 17,
-        itemSelectedBg: surface.activeFill,
-        itemSelectedColor: darkTheme ? "#f8fafc" : surface.text,
-        itemHoverColor: darkTheme ? "#f8fafc" : surface.text,
+        itemSelectedBg: darkTheme
+          ? "rgba(59, 130, 246, 0.16)"
+          : "rgba(37, 99, 235, 0.14)",
+        itemSelectedColor: darkTheme ? "#f8fafc" : "#0f172a",
+        itemHoverColor: darkTheme ? "#f8fafc" : "#0f172a",
       },
 
       Card: {
         borderRadiusLG: 18,
-        colorBgContainer: surface.card,
+        colorBgContainer: darkTheme ? "#111827" : "#ffffff",
       },
 
       Button: {
         borderRadius: 12,
-        defaultBg: surface.card,
-        defaultBorderColor: surface.border,
-        defaultColor: surface.text,
+        defaultBg: darkTheme ? "#111827" : "#ffffff",
+        defaultBorderColor: darkTheme
+          ? "rgba(148, 163, 184, 0.14)"
+          : "rgba(15, 23, 42, 0.08)",
+        defaultColor: darkTheme ? "#e5e7eb" : "#0f172a",
         primaryShadow: "none",
       },
 
       Input: {
         borderRadius: 12,
-        activeBg: surface.field,
-        hoverBg: surface.field,
-      },
-
-      InputNumber: {
-        borderRadius: 12,
       },
 
       Select: {
         borderRadius: 12,
-        optionSelectedBg: surface.activeFill,
-        optionActiveBg: darkTheme ? "rgba(255, 255, 255, 0.06)" : "#eef3f8",
       },
 
       Table: {
+        // =========================
+        // SECTION: Table Tokens
+        // Fungsi:
+        // - menyamakan warna tabel dengan surface halaman
+        // - membantu fixed column kanan/kiri tidak terlihat seperti panel berbeda
+        // =========================
         headerBorderRadius: 12,
-        headerBg: darkTheme ? "rgba(255, 255, 255, 0.04)" : "#f8fafc",
-        headerColor: darkTheme ? "#f8fafc" : surface.text,
-        rowHoverBg: darkTheme ? "rgba(255, 255, 255, 0.03)" : "#f8fafc",
-        borderColor: surface.borderSoft,
+        headerBg: darkTheme ? "#16233d" : "#f8fafc",
+        headerColor: darkTheme ? "#e5e7eb" : "#0f172a",
+        rowHoverBg: darkTheme ? "#16233d" : "#f8fafc",
+        borderColor: darkTheme
+          ? "rgba(148, 163, 184, 0.14)"
+          : "rgba(15, 23, 42, 0.08)",
+        headerSplitColor: darkTheme
+          ? "rgba(148, 163, 184, 0.12)"
+          : "rgba(15, 23, 42, 0.08)",
       },
 
       Drawer: {
-        colorBgElevated: surface.card,
+        colorBgElevated: darkTheme ? "#111827" : "#ffffff",
       },
 
       Modal: {
-        contentBg: surface.card,
-        headerBg: surface.card,
+        contentBg: darkTheme ? "#111827" : "#ffffff",
+        headerBg: darkTheme ? "#111827" : "#ffffff",
       },
 
       Form: {
-        labelColor: surface.text,
+        labelColor: darkTheme ? "#e5e7eb" : "#0f172a",
       },
 
       // =========================

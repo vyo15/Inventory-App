@@ -434,20 +434,29 @@ const Products = () => {
       ),
     },
     {
+      // ---------------------------------------------------------------------
+      // Kolom status dibuat fixed agar saat tabel digeser, status stok tetap terbaca.
+      // ---------------------------------------------------------------------
       title: 'Status',
       key: 'status',
-      width: 120,
+      width: 128,
       align: 'center',
+      fixed: 'right',
+      className: 'app-table-status-column app-table-fixed-secondary',
       render: (_, record) => {
         const statusMeta = getProductStatusMeta(record);
         return <Tag color={statusMeta.color}>{statusMeta.label}</Tag>;
       },
     },
     {
+      // ---------------------------------------------------------------------
+      // Kolom aksi diseragamkan dengan tabel besar lain supaya tombol tetap rapi.
+      // ---------------------------------------------------------------------
       title: 'Aksi',
       key: 'actions',
       width: 230,
       fixed: 'right',
+      className: 'app-table-action-column',
       render: (_, record) => (
         <Space size={8} wrap>
           <Button size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
@@ -559,7 +568,12 @@ const Products = () => {
           Tabel utama produk.
       --------------------------------------------------------------------- */}
       <Card size="small">
+        {/* -----------------------------------------------------------------
+            Tabel utama memakai class global agar shape, sticky column, dan action button
+            tetap seragam dengan halaman lain.
+        ----------------------------------------------------------------- */}
         <Table
+          className="app-data-table"
           rowKey="id"
           loading={loading}
           dataSource={filteredProducts}

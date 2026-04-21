@@ -244,6 +244,68 @@
    - sengaja diletakkan global agar mudah dibersihkan / dikembangkan dari satu titik
 ========================= */
 
+/* ---------- Shared Stock Variant Pills ---------- */
+/* Dipakai oleh Raw Materials, Semi Finished Materials, dan halaman lain
+   yang menampilkan stok per varian dalam bentuk pill. */
+.stock-variant-pill-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  max-width: 100%;
+}
+
+.stock-variant-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  min-height: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #f8fafc;
+  white-space: nowrap;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.stock-variant-pill-label,
+.stock-variant-pill-value {
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 0 !important;
+}
+
+.stock-variant-pill-label {
+  color: #475569 !important;
+}
+
+.stock-variant-pill-value {
+  color: #0f172a !important;
+  font-weight: 600;
+}
+
+.app-shell.dark .stock-variant-pill {
+  border-color: rgba(148, 163, 184, 0.22);
+  background: #f8fafc;
+}
+
+.app-shell.dark .stock-variant-pill-label {
+  color: #cbd5e1 !important;
+}
+
+.app-shell.dark .stock-variant-pill-value {
+  color: #e2e8f0 !important;
+}
+
+/* Pertegas surface pill di dark mode supaya tidak terlalu putih. */
+.app-shell.dark .stock-variant-pill {
+  background: rgba(30, 41, 59, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
 /* ---------- Filter / Search / Select ---------- */
 .app-content-card .ant-input,
 .app-content-card .ant-input-affix-wrapper,
@@ -414,124 +476,4 @@
     padding-top: 12px !important;
     padding-bottom: 12px !important;
   }
-}
-
-
-/* =========================
-   SECTION: Dark Mode Consistency Layer
-   Fungsi:
-   - menyamakan surface, border, dan teks komponen operasional di dark mode
-   - blok ini tetap dibuat global agar halaman lain yang memakai pola card / table yang sama ikut aman
-========================= */
-.app-shell.dark .app-content-card .ant-card,
-.app-shell.dark .app-content-card .ant-table-wrapper,
-.app-shell.dark .app-content-card .ant-statistic,
-.app-shell.dark .app-content-card .ant-alert,
-.app-shell.dark .app-content-card .ant-descriptions,
-.app-shell.dark .app-content-card .ant-empty,
-.app-shell.dark .app-content-card .ant-form,
-.app-shell.dark .app-content-card .ant-divider,
-.app-shell.dark .app-content-card .ant-typography {
-  color: #e5e7eb;
-}
-
-.app-shell.dark .app-content-card .ant-card,
-.app-shell.dark .app-content-card .ant-alert,
-.app-shell.dark .app-content-card .ant-table-container,
-.app-shell.dark .app-content-card .ant-descriptions-view {
-  background: #111827 !important;
-  border-color: rgba(148, 163, 184, 0.14) !important;
-}
-
-.app-shell.dark .app-content-card .ant-alert-info {
-  background: rgba(37, 99, 235, 0.08) !important;
-}
-
-.app-shell.dark .app-content-card .ant-input,
-.app-shell.dark .app-content-card .ant-input-affix-wrapper,
-.app-shell.dark .app-content-card .ant-select-selector,
-.app-shell.dark .app-content-card .ant-picker,
-.app-shell.dark .app-content-card .ant-input-number,
-.app-shell.dark .app-content-card .ant-input-number-group-addon {
-  background: #0f172a !important;
-  color: #e5e7eb !important;
-  border-color: rgba(148, 163, 184, 0.16) !important;
-}
-
-.app-shell.dark .app-content-card .ant-input::placeholder,
-.app-shell.dark .app-content-card .ant-select-selection-placeholder,
-.app-shell.dark .app-content-card .ant-input-number input::placeholder {
-  color: rgba(148, 163, 184, 0.78) !important;
-}
-
-.app-shell.dark .app-content-card .ant-table {
-  background: transparent !important;
-  color: #e5e7eb !important;
-}
-
-.app-shell.dark .app-content-card .ant-table-thead > tr > th {
-  background: rgba(255, 255, 255, 0.04) !important;
-  color: #f8fafc !important;
-  border-bottom-color: rgba(148, 163, 184, 0.14) !important;
-}
-
-.app-shell.dark .app-content-card .ant-table-tbody > tr > td,
-.app-shell.dark .app-content-card .ant-table-tfoot > tr > td,
-.app-shell.dark .app-content-card .ant-descriptions-row > th,
-.app-shell.dark .app-content-card .ant-descriptions-row > td {
-  background: transparent !important;
-  color: #e5e7eb !important;
-  border-color: rgba(148, 163, 184, 0.12) !important;
-}
-
-.app-shell.dark .app-content-card .ant-table-tbody > tr.ant-table-row:hover > td {
-  background: rgba(255, 255, 255, 0.03) !important;
-}
-
-.app-shell.dark .app-content-card .ant-statistic .ant-statistic-content,
-.app-shell.dark .app-content-card .ant-statistic .ant-statistic-title,
-.app-shell.dark .app-content-card .ant-empty-description,
-.app-shell.dark .app-content-card .ant-typography.ant-typography-secondary,
-.app-shell.dark .app-content-card .ant-descriptions-item-label,
-.app-shell.dark .app-content-card .ant-descriptions-item-content,
-.app-shell.dark .app-content-card .ant-divider,
-.app-shell.dark .app-content-card .ant-form-item-label > label {
-  color: rgba(229, 231, 235, 0.82) !important;
-}
-
-/* =========================
-   SECTION: Raw Materials Page Helpers
-   Fungsi:
-   - class helper khusus halaman bahan baku agar chip varian tidak lagi putih di dark mode
-   - dibuat scoped supaya tidak mengganggu halaman lain
-========================= */
-.raw-materials-page .raw-material-variant-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
-  border: 1px solid rgba(15, 23, 42, 0.10);
-  border-radius: 999px;
-  background: #f8fafc;
-}
-
-.raw-materials-page .raw-material-variant-pill-label {
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.raw-materials-page .raw-material-variant-pill-value {
-  font-size: 12px;
-  line-height: 1.35;
-  font-weight: 600;
-}
-
-.app-shell.dark .raw-materials-page .raw-material-variant-pill {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(148, 163, 184, 0.14);
-}
-
-.app-shell.dark .raw-materials-page .raw-material-variant-pill-label,
-.app-shell.dark .raw-materials-page .raw-material-variant-pill-value {
-  color: #e5e7eb !important;
 }

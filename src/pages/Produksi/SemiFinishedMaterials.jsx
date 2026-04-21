@@ -470,6 +470,8 @@ const SemiFinishedMaterials = () => {
       key: "status",
       width: 120,
       align: "center",
+      // Kolom status dibuat menempel di kanan agar perilaku tabel seragam.
+      fixed: "right",
       render: (_, record) => {
         const statusMeta = getStockStatusMeta(record);
         return <Tag color={statusMeta.color}>{statusMeta.label}</Tag>;
@@ -479,6 +481,8 @@ const SemiFinishedMaterials = () => {
       title: "Aksi",
       key: "actions",
       width: 210,
+      // Tombol aksi utama disimpan di sisi kanan seperti halaman bahan baku.
+      fixed: "right",
       render: (_, record) => (
         <Space size={[6, 6]} wrap>
           <Button
@@ -658,7 +662,8 @@ const SemiFinishedMaterials = () => {
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          scroll={{ x: 980 }}
+          // Lebar horizontal sedikit diperluas supaya kolom kanan tetap rapi.
+          scroll={{ x: 1100 }}
           locale={{
             emptyText: (
               <Empty description="Belum ada data semi finished materials" />
@@ -1216,7 +1221,8 @@ const SemiFinishedMaterials = () => {
                     render: (value) => (value ? "Aktif" : "Nonaktif"),
                   },
                 ]}
-                scroll={{ x: 980 }}
+                // Lebar horizontal sedikit diperluas supaya kolom kanan tetap rapi.
+          scroll={{ x: 1100 }}
               />
             </Card>
           </Space>

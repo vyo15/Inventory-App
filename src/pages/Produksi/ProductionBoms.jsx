@@ -672,10 +672,17 @@ const ProductionBoms = () => {
       ),
     },
     {
+      // =====================================================
+      // SECTION: status sticky
+      // Fungsi:
+      // - menjaga status BOM dan label default tetap terlihat saat user scroll horizontal
+      // =====================================================
       title: "Status",
       key: "status",
-      width: 130,
+      width: 138,
       align: "center",
+      fixed: "right",
+      className: "app-table-status-column app-table-fixed-secondary",
       render: (_, record) => (
         <Space direction="vertical" size={0}>
           {record.isActive ? (
@@ -692,9 +699,16 @@ const ProductionBoms = () => {
       ),
     },
     {
+      // =====================================================
+      // SECTION: aksi sticky
+      // Fungsi:
+      // - menyamakan posisi tombol detail, edit, dan toggle aktif dengan tabel utama lain
+      // =====================================================
       title: "Aksi",
       key: "actions",
       width: 220,
+      fixed: "right",
+      className: "app-table-action-column",
       render: (_, record) => (
         <Space wrap>
           <Button
@@ -804,7 +818,12 @@ const ProductionBoms = () => {
 
       {/* SECTION: tabel BOM */}
       <Card>
+        {/* ===============================================================
+            Tabel utama BOM memakai foundation global agar sticky column dan
+            bentuk surface seragam dengan master data serta produksi lainnya.
+        =============================================================== */}
         <Table
+          className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}

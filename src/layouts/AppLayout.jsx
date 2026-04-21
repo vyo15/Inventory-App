@@ -44,34 +44,39 @@ const AppLayout = () => {
 
   // =========================
   // SECTION: Persist Theme
-  // Fungsi:
-  // - menyimpan pilihan theme terakhir user ke localStorage
-  // - saat app dibuka ulang, mode yang dipakai tetap konsisten
   // =========================
   useEffect(() => {
     localStorage.setItem(THEME_STORAGE_KEY, isDarkTheme ? "dark" : "light");
   }, [isDarkTheme]);
 
   // =========================
-  // SECTION: Sync Theme Class To HTML / Body
+  // SECTION: Sync Theme Class To html/body
   // Fungsi:
-  // - menempelkan class global ke html dan body
-  // - class ini dipakai untuk komponen Ant Design yang dirender lewat portal
-  //   seperti dropdown, modal, drawer, tooltip, dan popconfirm
-  // - tanpa sync ini, dark mode sering hanya berubah di area layout utama saja
+  // - memastikan portal Ant Design ikut membaca mode aktif
+  // - membantu dark mode terlihat menyatu pada dropdown, modal, drawer, dan area global
+  // Catatan:
+  // - class ini masih dipakai aktif oleh CSS global di index.css dan App.css
+  // - cleanup wajib dijaga agar tidak meninggalkan class lama saat komponen unmount
   // =========================
   useEffect(() => {
-    const htmlElement = document.documentElement;
+    const rootElement = document.documentElement;
     const bodyElement = document.body;
-    const nextThemeName = isDarkTheme ? "dark" : "light";
+    const nextThemeClass = isDarkTheme ? "app-theme-dark" : "app-theme-light";
+    const staleThemeClass = isDarkTheme ? "app-theme-light" : "app-theme-dark";
 
-    htmlElement.classList.toggle("theme-dark", isDarkTheme);
-    htmlElement.classList.toggle("theme-light", !isDarkTheme);
-    bodyElement.classList.toggle("theme-dark", isDarkTheme);
-    bodyElement.classList.toggle("theme-light", !isDarkTheme);
+    rootElement.classList.remove(staleThemeClass);
+    bodyElement.classList.remove(staleThemeClass);
+    rootElement.classList.add(nextThemeClass);
+    bodyElement.classList.add(nextThemeClass);
+    rootElement.setAttribute("data-app-theme", isDarkTheme ? "dark" : "light");
+    bodyElement.setAttribute("data-app-theme", isDarkTheme ? "dark" : "light");
 
-    htmlElement.setAttribute("data-theme", nextThemeName);
-    bodyElement.setAttribute("data-theme", nextThemeName);
+    return () => {
+      rootElement.classList.remove("app-theme-dark", "app-theme-light");
+      bodyElement.classList.remove("app-theme-dark", "app-theme-light");
+      rootElement.removeAttribute("data-app-theme");
+      bodyElement.removeAttribute("data-app-theme");
+    };
   }, [isDarkTheme]);
 
   // =========================

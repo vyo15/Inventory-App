@@ -103,10 +103,15 @@ const Categories = () => {
       key: "description",
     },
     {
+      // =========================
+      // SECTION: aksi tabel
+      // =========================
       title: "Aksi",
       key: "actions",
+      width: 170,
+      className: "app-table-action-column",
       render: (_, record) => (
-        <Space>
+        <Space wrap>
           <Button
             icon={<EditOutlined />}
             size="small"
@@ -134,6 +139,7 @@ const Categories = () => {
       <h2>Daftar Kategori</h2>
 
       <Table
+        className="app-data-table"
         columns={columns}
         dataSource={categories}
         rowKey="id"

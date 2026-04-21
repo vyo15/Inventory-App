@@ -491,14 +491,31 @@ const PricingRules = () => {
       },
     },
     {
+      // =========================
+      // SECTION: status sticky
+      // Fungsi:
+      // - menjaga status rule tetap terlihat saat tabel pricing digeser ke kanan
+      // =========================
       title: "Status",
       dataIndex: "isActive",
+      key: "isActive",
+      width: 128,
+      fixed: "right",
+      className: "app-table-status-column app-table-fixed-secondary",
       render: (value) =>
         value ? <Tag color="green">Aktif</Tag> : <Tag>Nonaktif</Tag>,
     },
     {
+      // =========================
+      // SECTION: aksi sticky
+      // Fungsi:
+      // - menyamakan group tombol preview, edit, dan hapus dengan tabel besar lain
+      // =========================
       title: "Aksi",
       key: "actions",
+      width: 240,
+      fixed: "right",
+      className: "app-table-action-column",
       render: (_, record) => (
         <Space wrap>
           <Button
@@ -673,7 +690,9 @@ const PricingRules = () => {
 
       {/* SECTION: tabel pricing rules */}
       <Card>
+        {/* SECTION: tabel utama pricing rule memakai foundation global supaya seragam */}
         <Table
+          className="app-data-table"
           rowKey="id"
           loading={pageLoading}
           dataSource={rules}

@@ -930,10 +930,17 @@ const ProductionWorkLogs = () => {
       ),
     },
     {
+      // =====================================================
+      // SECTION: status sticky
+      // Fungsi:
+      // - status work log tetap terbaca walau user fokus ke kolom detail target / qty
+      // =====================================================
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 120,
+      width: 124,
+      fixed: "right",
+      className: "app-table-status-column app-table-fixed-secondary",
       render: (value) => (
         <Tag color={getWorkLogStatusTagColor(value)}>
           {WORK_LOG_STATUS_MAP[value] || "-"}
@@ -941,10 +948,14 @@ const ProductionWorkLogs = () => {
       ),
     },
     {
+      // =====================================================
+      // SECTION: aksi sticky
+      // =====================================================
       title: "Aksi",
       key: "actions",
       width: 280,
       fixed: "right",
+      className: "app-table-action-column",
       render: (_, record) => (
         <Space wrap>
           <Button
@@ -1019,7 +1030,11 @@ const ProductionWorkLogs = () => {
       </ProductionFilterCard>
 
       <Card>
+        {/* ===============================================================
+            Tabel work log mengikuti helper global agar layout dark/light tetap rata.
+        =============================================================== */}
         <Table
+          className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}

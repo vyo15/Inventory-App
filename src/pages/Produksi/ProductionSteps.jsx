@@ -448,18 +448,28 @@ const ProductionSteps = () => {
       ),
     },
     {
+      // =========================
+      // SECTION: status sticky
+      // =========================
       title: "Status",
       dataIndex: "isActive",
       key: "isActive",
-      width: 120,
+      width: 124,
       align: "center",
+      fixed: "right",
+      className: "app-table-status-column app-table-fixed-secondary",
       render: (value) =>
         value ? <Badge status="success" text="Aktif" /> : <Badge status="default" text="Nonaktif" />,
     },
     {
+      // =========================
+      // SECTION: aksi sticky
+      // =========================
       title: "Aksi",
       key: "actions",
       width: 180,
+      fixed: "right",
+      className: "app-table-action-column",
       render: (_, record) => (
         <Space wrap>
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
@@ -566,7 +576,12 @@ const ProductionSteps = () => {
       </Card>
 
       <Card>
+        {/* =========================
+            SECTION: tabel utama step
+            helper global dipakai agar ukuran dan sticky action seragam.
+        ========================= */}
         <Table
+          className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}

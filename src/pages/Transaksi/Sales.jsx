@@ -622,10 +622,18 @@ const Sales = () => {
       key: "date",
     },
     {
+      // =========================
+      // SECTION: aksi sticky
+      // Fungsi:
+      // - menjaga tombol update status penjualan tetap mudah dijangkau pada tabel transaksi
+      // =========================
       title: "Aksi",
       key: "action",
+      width: 220,
+      fixed: "right",
+      className: "app-table-action-column",
       render: (_, record) => (
-        <Space size="middle">
+        <Space size="middle" wrap>
           {record.status === "Diproses" &&
             !isOfflineChannel(record.salesChannel) && (
               <Popconfirm
@@ -741,12 +749,18 @@ const Sales = () => {
         title="Data Penjualan"
         subtitle="Semua transaksi penjualan akan mengurangi stok item yang terjual dan dapat menghasilkan pemasukan saat selesai."
       >
+        {/* =========================
+            SECTION: tabel penjualan
+            Class global dipakai supaya shape tabel dan tombol aksi konsisten.
+        ========================= */}
         <Table
+          className="app-data-table"
           columns={salesTableColumns}
           dataSource={filteredSalesRecords}
           rowKey="id"
           pagination={{ pageSize: 5 }}
           loading={isLoading}
+          scroll={{ x: 1180 }}
         />
       </PageSection>
 

@@ -99,10 +99,15 @@ const Customers = () => {
     { title: "Alamat", dataIndex: "address", key: "address" },
     { title: "Catatan", dataIndex: "note", key: "note" },
     {
+      // =========================
+      // SECTION: aksi tabel
+      // =========================
       title: "Aksi",
       key: "actions",
+      width: 170,
+      className: "app-table-action-column",
       render: (_, record) => (
-        <Space>
+        <Space wrap>
           <Button
             icon={<EditOutlined />}
             size="small"
@@ -143,6 +148,7 @@ const Customers = () => {
       </Button>
 
       <Table
+        className="app-data-table"
         columns={columns}
         dataSource={customers}
         rowKey="id"

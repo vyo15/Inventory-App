@@ -216,10 +216,15 @@ const ProductionProfiles = () => {
       ),
     },
     {
+      // ---------------------------------------------------------------------
+      // Status dijadikan sticky agar user tetap melihat kondisi profil saat tabel lebar.
+      // ---------------------------------------------------------------------
       title: 'Status',
       dataIndex: 'isActive',
       key: 'isActive',
-      width: 120,
+      width: 126,
+      fixed: 'right',
+      className: 'app-table-status-column app-table-fixed-secondary',
       render: (value, record) => (
         <Space direction="vertical" size={4}>
           <Badge status={value !== false ? 'success' : 'default'} text={value !== false ? 'Aktif' : 'Nonaktif'} />
@@ -228,10 +233,14 @@ const ProductionProfiles = () => {
       ),
     },
     {
+      // ---------------------------------------------------------------------
+      // Tombol aksi tetap di kanan agar alur edit / nonaktifkan konsisten.
+      // ---------------------------------------------------------------------
       title: 'Aksi',
       key: 'actions',
       width: 180,
       fixed: 'right',
+      className: 'app-table-action-column',
       render: (_, record) => (
         <Space wrap>
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
@@ -300,7 +309,11 @@ const ProductionProfiles = () => {
       </Card>
 
       <Card>
+        {/* -----------------------------------------------------------------
+            Tabel profil memakai class global supaya card table dan sticky action seragam.
+        ----------------------------------------------------------------- */}
         <Table
+          className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}

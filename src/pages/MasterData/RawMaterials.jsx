@@ -88,26 +88,12 @@ const formatStockWithUnit = (value, unit = 'pcs') => `${formatNumberID(value)} $
 const compactCellStyles = {
   stack: { display: 'flex', flexDirection: 'column', gap: 2 },
   meta: { fontSize: 12, lineHeight: 1.35 },
-  variantPillWrap: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 6,
-    maxWidth: '100%',
-  },
-  // ---------------------------------------------------------------------------
-  // Catatan:
-  // - warna pill tidak disimpan di inline style lagi
-  // - visualnya dipindah ke class CSS agar light/dark mode lebih mudah dirawat
-  // - pendekatan ini masih dipakai karena halaman bahan baku butuh pill yang rapat
-  //   tetapi tetap ikut tema global aplikasi
-  // ---------------------------------------------------------------------------
-  variantPillLabel: { fontSize: 12, lineHeight: 1.35 },
-  variantPillValue: { fontSize: 12, lineHeight: 1.35, fontWeight: 600 },
 };
 
 // -----------------------------------------------------------------------------
 // Helper tampilan varian pada kolom stok.
+// Raw Material dan Semi Finished sengaja memakai class CSS global yang sama
+// agar dua halaman ini tetap seragam dan tidak saling merusak saat ada patch UI.
 // Variant ditampilkan penuh dalam bentuk pill agar lebih rapat, rapi, dan user
 // tidak perlu membuka drawer hanya untuk melihat stok per varian.
 // -----------------------------------------------------------------------------
@@ -125,14 +111,14 @@ const renderVariantStockPills = (
   }
 
   return (
-    <div style={compactCellStyles.variantPillWrap}>
+    <div className="stock-variant-pill-wrap">
       {normalizedVariants.map((variant, index) => (
         <span
           key={`${variant.variantKey || variant.sku || variant.name || 'variant'}-${index}`}
-          className="raw-material-variant-pill"
+          className="stock-variant-pill"
         >
-          <Text className="raw-material-variant-pill-label" style={compactCellStyles.variantPillLabel}>{`${getLabel(variant, index)}:`}</Text>
-          <Text className="raw-material-variant-pill-value" style={compactCellStyles.variantPillValue}>
+          <Text className="stock-variant-pill-label">{`${getLabel(variant, index)}:`}</Text>
+          <Text className="stock-variant-pill-value">
             {formatStockWithUnit(variant.currentStock || 0, unit)}
           </Text>
         </span>
@@ -529,7 +515,7 @@ const RawMaterials = () => {
   ];
 
   return (
-    <div className="raw-materials-page" style={{ padding: 24 }}>
+    <div style={{ padding: 24 }}>
       {/* ---------------------------------------------------------------------
           Header halaman utama.
           Layout dibuat sama arah visualnya dengan halaman master lain.

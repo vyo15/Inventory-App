@@ -412,19 +412,33 @@ const ProductionOrders = () => {
       ),
     },
     {
+      // =====================================================
+      // SECTION: status sticky
+      // Fungsi:
+      // - menjaga progress order tetap terlihat meski user melihat kolom kiri yang panjang
+      // =====================================================
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 140,
+      width: 146,
+      fixed: "right",
+      className: "app-table-status-column app-table-fixed-secondary",
       render: (value) => {
         const meta = ORDER_STATUS_MAP[value] || ORDER_STATUS_MAP.draft;
         return <Badge status={meta.status} text={meta.text} />;
       },
     },
     {
+      // =====================================================
+      // SECTION: aksi sticky
+      // Fungsi:
+      // - tombol detail, refresh need, dan mulai produksi disamakan dengan tabel besar lain
+      // =====================================================
       title: "Aksi",
       key: "actions",
       width: 320,
+      fixed: "right",
+      className: "app-table-action-column",
       render: (_, record) => (
         <Space wrap>
           <Button
@@ -650,7 +664,12 @@ const ProductionOrders = () => {
       </ProductionFilterCard>
 
       <Card>
+        {/* ===============================================================
+            Tabel order produksi memakai class global agar sticky column dan
+            bentuk action area seragam dengan modul produksi lain.
+        =============================================================== */}
         <Table
+          className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}

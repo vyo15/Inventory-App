@@ -323,11 +323,18 @@ const ProductionEmployees = () => {
       },
     },
     {
+      // =====================================================
+      // SECTION: status sticky
+      // Fungsi:
+      // - menjaga status karyawan tetap terbaca pada tabel produksi yang lebar
+      // =====================================================
       title: "Status",
       dataIndex: "isActive",
       key: "isActive",
-      width: 110,
+      width: 124,
       align: "center",
+      fixed: "right",
+      className: "app-table-status-column app-table-fixed-secondary",
       render: (value) =>
         value ? (
           <Badge status="success" text="Aktif" />
@@ -336,10 +343,14 @@ const ProductionEmployees = () => {
         ),
     },
     {
+      // =====================================================
+      // SECTION: aksi sticky
+      // =====================================================
       title: "Aksi",
       key: "actions",
       width: 220,
       fixed: "right",
+      className: "app-table-action-column",
       render: (_, record) => (
         <Space wrap>
           <Button
@@ -499,7 +510,11 @@ const ProductionEmployees = () => {
       </Card>
 
       <Card>
+        {/* ===============================================================
+            Table helper global menjaga ukuran, sticky column, dan dark mode seragam.
+        =============================================================== */}
         <Table
+          className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}

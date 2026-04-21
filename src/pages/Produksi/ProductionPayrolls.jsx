@@ -302,9 +302,16 @@ const ProductionPayrolls = () => {
       render: (value) => formatCurrency(value),
     },
     {
+      // =====================================================
+      // SECTION: status sticky
+      // Fungsi:
+      // - status payroll dan payment state tetap terlihat saat tabel digeser
+      // =====================================================
       title: "Status",
       key: "status",
-      width: 140,
+      width: 146,
+      fixed: "right",
+      className: "app-table-status-column app-table-fixed-secondary",
       render: (_, record) => (
         <Space direction="vertical" size={0}>
           <Tag color="blue">{PAYROLL_STATUS_MAP[record.status] || "-"}</Tag>
@@ -315,10 +322,14 @@ const ProductionPayrolls = () => {
       ),
     },
     {
+      // =====================================================
+      // SECTION: aksi sticky
+      // =====================================================
       title: "Aksi",
       key: "actions",
       width: 240,
       fixed: "right",
+      className: "app-table-action-column",
       render: (_, record) => (
         <Space wrap>
           <Button
@@ -438,7 +449,11 @@ const ProductionPayrolls = () => {
       </Card>
 
       <Card>
+        {/* ===============================================================
+            Tabel payroll mengikuti helper global untuk menjaga konsistensi bentuk.
+        =============================================================== */}
         <Table
+          className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}

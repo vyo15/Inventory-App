@@ -409,9 +409,14 @@ const SupplierPurchases = () => {
       },
     },
     {
+      // ---------------------------------------------------------------------------
+      // Kolom aksi dibuat sticky karena tabel supplier sering bergeser saat nama bahan panjang.
+      // ---------------------------------------------------------------------------
       title: 'Aksi',
       key: 'actions',
       width: 280,
+      fixed: 'right',
+      className: 'app-table-action-column',
       render: (_, record) => {
         const isRowSyncing = syncingRowId === record.id;
 
@@ -563,10 +568,15 @@ const SupplierPurchases = () => {
         </Col>
       </Row>
 
+      {/* -----------------------------------------------------------------------
+          Table supplier memakai class global agar tombol dan sticky column seragam.
+      ----------------------------------------------------------------------- */}
       <Table
+        className="app-data-table"
         columns={columns}
         dataSource={filteredSuppliers}
         rowKey="id"
+        scroll={{ x: 1180 }}
         locale={{
           emptyText: materialIdFromQuery ? (
             <Empty description="Belum ada supplier yang menyediakan bahan ini" />

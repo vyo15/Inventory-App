@@ -248,8 +248,15 @@ const CashIn = () => {
       render: (text) => text || "-",
     },
     {
+      // =========================
+      // SECTION: aksi tabel
+      // Fungsi:
+      // - menyamakan bentuk tombol hapus dengan gaya tabel lain
+      // =========================
       title: "Aksi",
       key: "action",
+      width: 140,
+      className: "app-table-action-column",
       render: (_, record) => (
         <Popconfirm
           title="Yakin hapus transaksi ini?"
@@ -355,6 +362,7 @@ const CashIn = () => {
 
       {/* SECTION: tabel pemasukan */}
       <Table
+        className="app-data-table"
         dataSource={filteredCashIns}
         columns={columns}
         rowKey={(record) => `${record.sourceCollection}-${record.id}`}

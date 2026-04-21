@@ -257,8 +257,15 @@ const CashOut = () => {
       render: (text) => text || "-",
     },
     {
+      // =========================
+      // SECTION: aksi tabel
+      // Fungsi:
+      // - menyamakan tombol hapus transaksi dengan foundation tabel global
+      // =========================
       title: "Aksi",
       key: "action",
+      width: 140,
+      className: "app-table-action-column",
       render: (_, record) => (
         <Popconfirm
           title="Yakin hapus transaksi ini?"
@@ -385,6 +392,7 @@ const CashOut = () => {
 
       {/* SECTION: tabel pengeluaran */}
       <Table
+        className="app-data-table"
         dataSource={filteredCashOuts}
         columns={columns}
         rowKey="id"
