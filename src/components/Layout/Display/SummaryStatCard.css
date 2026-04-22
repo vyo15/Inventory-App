@@ -1,41 +1,95 @@
-.summary-stat-card {
-  border-radius: 16px !important;
+.summary-stat-card.ant-card {
   height: 100%;
+  border-radius: 18px !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.summary-stat-card.ant-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+}
+
+.summary-stat-card .ant-card-body {
+  height: 100%;
+  padding: 18px 18px 16px !important;
 }
 
 .summary-stat-card-content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  min-height: 100%;
+}
+
+.summary-stat-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .summary-stat-card-title.ant-typography {
-  font-size: 14px;
-  opacity: 0.78;
+  margin: 0 !important;
+  font-size: 13px;
+  line-height: 1.55;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.72);
 }
 
 .summary-stat-card-value.ant-typography {
   margin: 0 !important;
   line-height: 1.1;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  color: #0f172a;
 }
 
 .summary-stat-card-subtitle.ant-typography {
-  font-size: 13px;
-  opacity: 0.7;
+  margin: 0 !important;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(15, 23, 42, 0.6);
 }
 
-.summary-stat-card.primary {
-  border-top: 4px solid #1677ff;
+.summary-stat-card-extra {
+  flex: 0 0 auto;
 }
 
-.summary-stat-card.success {
-  border-top: 4px solid #52c41a;
+.app-shell.dark .summary-stat-card.ant-card {
+  border-color: rgba(148, 163, 184, 0.14) !important;
+  background: linear-gradient(180deg, #111827 0%, #0f172a 100%) !important;
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.24);
 }
 
-.summary-stat-card.warning {
-  border-top: 4px solid #faad14;
+.app-shell.dark .summary-stat-card.ant-card:hover {
+  box-shadow: 0 18px 34px rgba(2, 6, 23, 0.3);
 }
 
-.summary-stat-card.danger {
-  border-top: 4px solid #ff4d4f;
+.app-shell.dark .summary-stat-card-title.ant-typography {
+  color: rgba(226, 232, 240, 0.76);
+}
+
+.app-shell.dark .summary-stat-card-value.ant-typography {
+  color: #f8fafc;
+}
+
+.app-shell.dark .summary-stat-card-subtitle.ant-typography {
+  color: rgba(226, 232, 240, 0.62);
+}
+
+@media (max-width: 768px) {
+  .summary-stat-card .ant-card-body {
+    padding: 16px !important;
+  }
+
+  .summary-stat-card-value.ant-typography {
+    font-size: 24px;
+  }
 }

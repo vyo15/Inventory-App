@@ -27,13 +27,20 @@ import {
   calculateOutputLine,
   calculateProductionMonitoring,
 } from "../../constants/productionWorkLogOptions";
-import { markProductionOrderInProduction } from "./productionOrdersService";
-import { calculateAvailableStock, calculateWeightedAverage, normalizeStockSnapshot, toNumber } from "../../utils/stock/stockHelpers";
+import { calculateWeightedAverage, normalizeStockSnapshot, toNumber } from "../../utils/stock/stockHelpers";
 import {
   applyStockMutationToItem,
   inferHasVariants,
   resolveVariantSelection,
 } from "../../utils/variants/variantStockHelpers";
+import {
+  applyLockedWorkLogCoreFields,
+  assertProductionOrderStartable,
+  assertProductionWorkLogCompletable,
+  isProductionOrderVisibleInWorkLogReference,
+  isProductionWorkLogCompleted,
+  sortProductionWorkLogsNewestFirst,
+} from "../../utils/produksi/productionFlowGuards";
 
 const COLLECTION_NAME = "production_work_logs";
 
@@ -79,6 +86,36 @@ const getCollectionNameByItemType = (itemType) => {
   return "";
 };
 
+// =====================================================
+// Safe reader referensi produksi
+// Catatan maintainability:
+// - Menu Work Log tidak boleh ikut gagal total hanya karena 1 koleksi referensi
+//   sedang error / index bermasalah / patch schema lain belum sinkron.
+// - Jika satu referensi gagal dibaca, halaman tetap boleh terbuka dengan
+//   data lainnya yang berhasil dimuat.
+// =====================================================
+const readCollectionDocsSafely = async (
+  collectionName,
+  fallbackItems = [],
+  warningLabel = collectionName,
+) => {
+  try {
+    const snapshot = await getDocs(collection(db, collectionName));
+    return {
+      items: snapshot.docs.map((documentItem) => ({
+        id: documentItem.id,
+        ...documentItem.data(),
+      })),
+      warning: null,
+    };
+  } catch (error) {
+    console.error(`Gagal memuat referensi ${collectionName}`, error);
+    return {
+      items: fallbackItems,
+      warning: `${warningLabel} gagal dimuat. Halaman tetap dibuka dengan data yang tersedia.`,
+    };
+  }
+};
 
 const getItemUnitCost = (itemType, data = {}) => {
   if (itemType === "raw_material") {
@@ -334,80 +371,80 @@ export const validateProductionWorkLog = (values = {}) => {
 // =====================================================
 export const getWorkLogReferenceData = async () => {
   const [
-    bomsSnap,
-    ordersSnap,
-    employeesSnap,
-    rawSnap,
-    semiSnap,
-    productsSnap,
-    stepsSnap,
-    profilesSnap,
+    bomsResult,
+    ordersResult,
+    employeesResult,
+    rawResult,
+    semiResult,
+    productsResult,
+    stepsResult,
+    profilesResult,
   ] = await Promise.all([
-    getDocs(collection(db, "production_boms")),
-    getDocs(collection(db, "production_orders")),
-    getDocs(collection(db, "production_employees")),
-    getDocs(collection(db, "raw_materials")),
-    getDocs(collection(db, "semi_finished_materials")),
-    getDocs(collection(db, "products")),
-    getDocs(collection(db, "production_steps")),
-    getDocs(collection(db, "production_profiles")),
+    readCollectionDocsSafely("production_boms", [], "Referensi BOM produksi"),
+    readCollectionDocsSafely("production_orders", [], "Referensi Production Order"),
+    readCollectionDocsSafely("production_employees", [], "Referensi karyawan produksi"),
+    readCollectionDocsSafely("raw_materials", [], "Referensi bahan baku"),
+    readCollectionDocsSafely("semi_finished_materials", [], "Referensi semi finished"),
+    readCollectionDocsSafely("products", [], "Referensi produk"),
+    readCollectionDocsSafely("production_steps", [], "Referensi step produksi"),
+    readCollectionDocsSafely("production_profiles", [], "Referensi profil produksi"),
   ]);
 
-  const productionOrders = ordersSnap.docs
-    .map((d) => ({ id: d.id, ...d.data() }))
-    .filter((item) => ["in_production", "ready"].includes(item.status));
+  const productionOrders = (ordersResult.items || []).filter(
+    isProductionOrderVisibleInWorkLogReference,
+  );
 
   return {
-    boms: filterActiveLike(
-      bomsSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      })),
-    ),
-    productionOrders,
+    boms: filterActiveLike((bomsResult.items || []).map((item) => ({ ...item }))),
+    productionOrders: productionOrders,
     employees: filterActiveLike(
-      employeesSnap.docs.map((d) =>
+      (employeesResult.items || []).map((item) =>
         normalizeReferenceItem({
-          id: d.id,
-          ...d.data(),
+          ...item,
         }),
       ),
     ),
     rawMaterials: filterActiveLike(
-      rawSnap.docs.map((d) =>
+      (rawResult.items || []).map((item) =>
         normalizeReferenceItem({
-          id: d.id,
-          ...d.data(),
+          ...item,
         }),
       ),
     ),
     semiFinishedMaterials: filterActiveLike(
-      semiSnap.docs.map((d) =>
+      (semiResult.items || []).map((item) =>
         normalizeReferenceItem({
-          id: d.id,
-          ...d.data(),
+          ...item,
         }),
       ),
     ),
     products: filterActiveLike(
-      productsSnap.docs.map((d) =>
+      (productsResult.items || []).map((item) =>
         normalizeReferenceItem({
-          id: d.id,
-          ...d.data(),
+          ...item,
         }),
       ),
     ),
     productionSteps: filterActiveLike(
-      stepsSnap.docs.map((d) =>
+      (stepsResult.items || []).map((item) =>
         normalizeReferenceItem({
-          id: d.id,
-          ...d.data(),
+          ...item,
         }),
       ),
     ),
     productionProfiles: filterActiveLike(
-      profilesSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      (profilesResult.items || []).map((item) => ({ ...item })),
     ),
+    metaWarnings: [
+      bomsResult.warning,
+      ordersResult.warning,
+      employeesResult.warning,
+      rawResult.warning,
+      semiResult.warning,
+      productsResult.warning,
+      stepsResult.warning,
+      profilesResult.warning,
+    ].filter(Boolean),
   };
 };
 
@@ -650,33 +687,52 @@ export const getAllProductionWorkLogs = async () => {
 
     const snapshot = await getDocs(q);
 
-    return snapshot.docs.map((item) => ({
-      id: item.id,
-      ...item.data(),
-    }));
+    return sortProductionWorkLogsNewestFirst(
+      snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data(),
+      })),
+    );
   } catch (error) {
     console.error("Query work log utama gagal, pakai fallback", error);
     const snapshot = await getDocs(collection(db, COLLECTION_NAME));
-    return snapshot.docs.map((item) => ({
-      id: item.id,
-      ...item.data(),
-    }));
+    return sortProductionWorkLogsNewestFirst(
+      snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data(),
+      })),
+    );
   }
 };
 
 export const getCompletedProductionWorkLogs = async () => {
-  const q = query(
-    collection(db, COLLECTION_NAME),
-    where("status", "==", "completed"),
-    orderBy("workDate", "desc"),
-  );
+  try {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where("status", "==", "completed"),
+      orderBy("workDate", "desc"),
+    );
 
-  const snapshot = await getDocs(q);
+    const snapshot = await getDocs(q);
 
-  return snapshot.docs.map((item) => ({
-    id: item.id,
-    ...item.data(),
-  }));
+    return sortProductionWorkLogsNewestFirst(
+      snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data(),
+      })),
+    );
+  } catch (error) {
+    console.error("Query work log completed gagal, pakai fallback", error);
+    const snapshot = await getDocs(collection(db, COLLECTION_NAME));
+    return sortProductionWorkLogsNewestFirst(
+      snapshot.docs
+        .map((item) => ({
+          id: item.id,
+          ...item.data(),
+        }))
+        .filter((item) => item.status === "completed"),
+    );
+  }
 };
 
 export const getProductionWorkLogById = async (id) => {
@@ -794,12 +850,7 @@ export const createProductionWorkLogFromOrder = async (
     }
 
     const order = { id: orderSnap.id, ...orderSnap.data() };
-    if (!["ready", "shortage"].includes(order.status)) {
-      throw new Error("Hanya PO status Ready/Shortage yang bisa mulai produksi");
-    }
-    if (Array.isArray(order.workLogIds) && order.workLogIds.length > 0) {
-      throw new Error("PO ini sudah punya Work Log");
-    }
+    assertProductionOrderStartable(order);
 
     const draft = await buildWorkLogDraftFromProductionOrder(order);
     const payload = normalizePayload(
@@ -926,6 +977,21 @@ export const updateProductionWorkLog = async (
   }
 
   const current = { id: snap.id, ...snap.data() };
+
+  // =====================================================
+  // Guard update work log produksi
+  // Catatan maintainability:
+  // - Work log completed dianggap locked agar stok output / payroll / HPP
+  //   tidak berubah diam-diam oleh patch UI lain.
+  // - Work log yang sudah linked ke PO tetap boleh update biaya/catatan/operator,
+  //   tetapi field inti flow produksi dikunci oleh helper guard.
+  // =====================================================
+  if (isProductionWorkLogCompleted(current)) {
+    throw new Error(
+      "Work log completed sudah terkunci. Jika perlu perubahan, evaluasi khusus flow produksi harus dilakukan terlebih dahulu.",
+    );
+  }
+
   const mergedValues = {
     ...current,
     ...values,
@@ -952,17 +1018,19 @@ export const updateProductionWorkLog = async (
     );
   }
 
-  const errors = validateProductionWorkLog(mergedValues);
+  const guardedValues = applyLockedWorkLogCoreFields(current, mergedValues);
+
+  const errors = validateProductionWorkLog(guardedValues);
   if (Object.keys(errors).length > 0) {
     throw { type: "validation", errors };
   }
 
-  const exists = await isProductionWorkLogNumberExists(mergedValues.workNumber, id);
+  const exists = await isProductionWorkLogNumberExists(guardedValues.workNumber, id);
   if (exists) {
     throw { type: "validation", errors: { workNumber: "Nomor work log sudah digunakan" } };
   }
 
-  const payload = normalizePayload(mergedValues, currentUser, true);
+  const payload = normalizePayload(guardedValues, currentUser, true);
   await updateDoc(ref, payload);
   return id;
 };
@@ -1074,13 +1142,7 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
       ...workLogSnap.data(),
     };
 
-    if (
-      workLog.status === "completed" &&
-      workLog.stockConsumptionStatus === "applied" &&
-      workLog.stockOutputStatus === "applied"
-    ) {
-      throw new Error("Work log ini sudah pernah diselesaikan");
-    }
+    assertProductionWorkLogCompletable(workLog);
 
     const materialUsages = Array.isArray(workLog.materialUsages)
       ? workLog.materialUsages

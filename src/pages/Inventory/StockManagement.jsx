@@ -1,30 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Button,
-  Card,
-  Col,
-  Empty,
-  Input,
-  Row,
-  Select,
-  Space,
-  Statistic,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from "antd";
+import { Button, Col, Input, Select, Space, Table, Tag, Typography, message } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-// =====================================================
-// Import service log stok langsung dari inventory service aktif.
-// Tujuan:
-// - menghindari ketergantungan ke shim utils/stockService
-// - menjaga halaman Stock Management tetap stabil walaupun file shim sudah tidak ada
-// =====================================================
+import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
+import FilterBar from "../../components/Layout/Filters/FilterBar";
+import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
 import { getInventoryLogs } from "../../services/Inventory/inventoryService";
+import { formatNumberId } from "../../utils/formatters/numberId";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const ITEM_COLLECTION_LABELS = {
   raw_materials: "Bahan Baku",
@@ -41,126 +27,67 @@ const STOCK_LOG_SOURCE_META = {
   other: { label: "Lainnya", color: "default" },
 };
 
-// =====================================================
-// Helper format angka tampilan log
-// Dipakai hanya untuk presentasi UI, bukan untuk logic stok.
-// =====================================================
-const formatNumberID = (value) =>
-  Number(value || 0).toLocaleString("id-ID", {
-    maximumFractionDigits: 0,
-  });
-
-// =====================================================
-// Helper tanggal log agar semua kolom dan reference konsisten.
-// =====================================================
 const formatLogDate = (value) => {
   if (!value) return "-";
   const parsed = dayjs(value?.toDate?.() || value);
   return parsed.isValid() ? parsed.format("DD-MM-YYYY HH:mm") : "-";
 };
 
-// =====================================================
-// Helper arah mutasi stok.
-// Catatan maintainability:
-// - Flow produksi wajib terbaca sebagai dua arah: bahan keluar dan output masuk.
-// - Beberapa log lama tidak punya pola type yang rapi, jadi quantity tetap dipakai
-//   sebagai fallback untuk menentukan arah mutasi.
-// =====================================================
-const resolveDirectionMeta = (record = {}) => {
-  const type = String(record.type || "").toLowerCase();
+const resolveItemTypeLabel = (collectionName) =>
+  ITEM_COLLECTION_LABELS[collectionName] || "Item Lainnya";
 
-  if (
-    [
-      "purchase_in",
-      "return_in",
-      "production_output_in",
-      "production_in_completed",
-      "sale_revert",
-      "sale_cancel_revert",
-    ].includes(type)
-  ) {
-    return { value: "in", label: "Masuk", color: "green" };
+const resolveSourceMeta = (record) => {
+  const normalizedType = String(record?.type || "").toLowerCase();
+
+  if (normalizedType.includes("purchase")) return STOCK_LOG_SOURCE_META.purchase;
+  if (normalizedType.includes("sale")) return STOCK_LOG_SOURCE_META.sales;
+  if (normalizedType.includes("return")) return STOCK_LOG_SOURCE_META.return;
+  if (normalizedType.includes("adjustment")) return STOCK_LOG_SOURCE_META.adjustment;
+  if (normalizedType.includes("production") || normalizedType.includes("work_log")) {
+    return STOCK_LOG_SOURCE_META.production;
   }
-
-  if (["sale", "production_material_out", "production_out_pending"].includes(type)) {
-    return { value: "out", label: "Keluar", color: "red" };
-  }
-
-  if (type === "stock_adjustment") {
-    return record.quantityChange >= 0
-      ? { value: "in", label: "Masuk", color: "green" }
-      : { value: "out", label: "Keluar", color: "red" };
-  }
-
-  return record.quantityChange >= 0
-    ? { value: "in", label: "Masuk", color: "green" }
-    : { value: "out", label: "Keluar", color: "red" };
-};
-
-// =====================================================
-// Helper sumber mutasi untuk audit harian.
-// Sumber ditampilkan terpisah dari arah agar user mudah bedakan
-// transaksi pembelian, produksi, penjualan, dan penyesuaian.
-// =====================================================
-const resolveSourceMeta = (record = {}) => {
-  const type = String(record.type || "").toLowerCase();
-
-  if (type.startsWith("purchase")) return STOCK_LOG_SOURCE_META.purchase;
-  if (type.startsWith("sale")) return STOCK_LOG_SOURCE_META.sales;
-  if (type.startsWith("return")) return STOCK_LOG_SOURCE_META.return;
-  if (type.startsWith("production_")) return STOCK_LOG_SOURCE_META.production;
-  if (type === "stock_adjustment") return STOCK_LOG_SOURCE_META.adjustment;
 
   return STOCK_LOG_SOURCE_META.other;
 };
 
-// =====================================================
-// Helper label item / varian / referensi.
-// Semua helper ini murni untuk tampilan agar tabel stok lebih mudah dibaca.
-// =====================================================
-const resolveItemTypeLabel = (collectionName) =>
-  ITEM_COLLECTION_LABELS[collectionName] || "-";
+const resolveDirectionMeta = (record) => {
+  const quantityChange = Number(record?.quantityChange || 0);
 
-const resolveVariantLabel = (record = {}) =>
-  record.variantLabel || record.materialVariantName || "";
+  if (quantityChange > 0) {
+    return { label: "Masuk", value: "in", color: "green" };
+  }
 
-const resolveReferenceLines = (record = {}) => {
+  if (quantityChange < 0) {
+    return { label: "Keluar", value: "out", color: "red" };
+  }
+
+  return { label: "Netral", value: "neutral", color: "default" };
+};
+
+const resolveVariantLabel = (record) =>
+  record?.details?.variantLabel || record?.variantLabel || record?.details?.variantKey || "";
+
+const resolveReferenceLines = (record) => {
+  const details = record?.details || {};
   const lines = [];
 
-  if (record.productionOrderCode) {
-    lines.push(`PO: ${record.productionOrderCode}`);
-  }
-
-  if (record.workNumber) {
-    lines.push(`WL: ${record.workNumber}`);
-  } else if (record.workLogRefId) {
-    lines.push(`Work Log ID: ${record.workLogRefId}`);
-  }
-
-  if (record.referenceNumber) {
-    lines.push(`Ref: ${record.referenceNumber}`);
-  }
-
-  if (record.saleId) {
-    lines.push(`Sale ID: ${record.saleId}`);
-  }
-
-  if (record.supplierName) {
-    lines.push(`Supplier: ${record.supplierName}`);
-  }
-
-  if (record.customerName) {
-    lines.push(`Customer: ${record.customerName}`);
-  }
+  if (details.saleId) lines.push(`Sale: ${details.saleId}`);
+  if (details.returnId) lines.push(`Return: ${details.returnId}`);
+  if (details.purchaseId) lines.push(`Purchase: ${details.purchaseId}`);
+  if (details.productionOrderId) lines.push(`PO: ${details.productionOrderId}`);
+  if (details.workLogId) lines.push(`Work Log: ${details.workLogId}`);
+  if (details.customerName) lines.push(`Customer: ${details.customerName}`);
+  if (details.supplierName) lines.push(`Supplier: ${details.supplierName}`);
+  if (details.reason) lines.push(`Alasan: ${details.reason}`);
 
   return lines;
 };
 
-const resolveNoteText = (record = {}) =>
-  record.note || record.reason || "-";
+const resolveNoteText = (record) =>
+  record?.details?.note || record?.details?.description || record?.details?.remark || "-";
 
-const matchesKeyword = (record = {}, keyword = "") => {
-  const normalizedKeyword = String(keyword || "").trim().toLowerCase();
+const matchesKeyword = (record, keyword) => {
+  const normalizedKeyword = keyword.trim().toLowerCase();
   if (!normalizedKeyword) return true;
 
   const haystacks = [
@@ -180,22 +107,21 @@ const matchesKeyword = (record = {}, keyword = "") => {
 };
 
 const StockManagement = () => {
-  // =====================================================
-  // State utama halaman log stok.
-  // history = hasil mentah dari Firestore.
-  // filter state dipisah agar logic pencarian tetap sederhana.
-  // =====================================================
+  // =========================
+  // SECTION: State utama log stok
+  // =========================
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [directionFilter, setDirectionFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
 
-  // =====================================================
-  // Ambil seluruh riwayat mutasi stok.
-  // Sorting utama tetap dibaca dari service/query, lalu dirapikan ulang lokal
-  // sebagai fallback agar log terbaru selalu muncul di atas.
-  // =====================================================
+  // =========================
+  // SECTION: Load inventory logs
+  // Catatan:
+  // - halaman ini hanya display audit trail
+  // - refactor tidak mengubah service log stok yang menjadi source aktif
+  // =========================
   const fetchHistory = async () => {
     setLoading(true);
     try {
@@ -213,11 +139,9 @@ const StockManagement = () => {
     fetchHistory();
   }, []);
 
-  // =====================================================
-  // Normalisasi data tampilan.
-  // Blok ini sengaja dipusatkan di useMemo agar page hanya menghitung ulang
-  // saat data log berubah, bukan setiap render kecil.
-  // =====================================================
+  // =========================
+  // SECTION: Normalisasi & filter data
+  // =========================
   const normalizedHistory = useMemo(() => {
     return [...history]
       .map((record) => ({
@@ -229,27 +153,23 @@ const StockManagement = () => {
         referenceLines: resolveReferenceLines(record),
         noteText: resolveNoteText(record),
       }))
-      .sort((a, b) => {
-        const aTime = a.timestamp?.toDate?.()?.getTime?.() || 0;
-        const bTime = b.timestamp?.toDate?.()?.getTime?.() || 0;
-        return bTime - aTime;
+      .sort((left, right) => {
+        const leftTime = left.timestamp?.toDate?.()?.getTime?.() || 0;
+        const rightTime = right.timestamp?.toDate?.()?.getTime?.() || 0;
+        return rightTime - leftTime;
       });
   }, [history]);
 
-  // =====================================================
-  // Summary card halaman.
-  // Gunakan jumlah log, bukan total qty lintas item, karena unit antar item bisa beda.
-  // =====================================================
   const summary = useMemo(() => {
     return normalizedHistory.reduce(
-      (acc, item) => {
-        acc.total += 1;
-        if (item.directionMeta?.value === "in") acc.totalIn += 1;
-        if (item.directionMeta?.value === "out") acc.totalOut += 1;
+      (accumulator, item) => {
+        accumulator.total += 1;
+        if (item.directionMeta?.value === "in") accumulator.totalIn += 1;
+        if (item.directionMeta?.value === "out") accumulator.totalOut += 1;
         if (item.sourceMeta?.label === STOCK_LOG_SOURCE_META.production.label) {
-          acc.productionLogs += 1;
+          accumulator.productionLogs += 1;
         }
-        return acc;
+        return accumulator;
       },
       {
         total: 0,
@@ -271,139 +191,156 @@ const StockManagement = () => {
 
       return matchSearch && matchDirection && matchSource;
     });
-  }, [normalizedHistory, search, directionFilter, sourceFilter]);
+  }, [directionFilter, normalizedHistory, search, sourceFilter]);
 
-  // =====================================================
-  // Kolom tabel log stok.
-  // Kolom dibuat fokus ke audit operasional: kapan, arah, sumber,
-  // item apa, qty berapa, dan referensinya dari transaksi mana.
-  // =====================================================
-  const columns = [
-    {
-      title: "Tanggal",
-      dataIndex: "timestamp",
-      key: "timestamp",
-      width: 160,
-      render: (value) => formatLogDate(value),
-    },
-    {
-      title: "Arah",
-      key: "direction",
-      width: 110,
-      render: (_, record) => (
-        <Tag color={record.directionMeta?.color || "default"}>
-          {record.directionMeta?.label || "-"}
-        </Tag>
-      ),
-    },
-    {
-      title: "Sumber",
-      key: "source",
-      width: 130,
-      render: (_, record) => (
-        <Tag color={record.sourceMeta?.color || "default"}>
-          {record.sourceMeta?.label || "-"}
-        </Tag>
-      ),
-    },
-    {
-      title: "Item",
-      key: "item",
-      width: 280,
-      render: (_, record) => (
-        <Space direction="vertical" size={2}>
-          <Text strong>{record.itemName || "-"}</Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {record.itemTypeLabel}
-          </Text>
-          {record.variantLabelResolved ? (
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              Varian: {record.variantLabelResolved}
-            </Text>
-          ) : null}
-        </Space>
-      ),
-    },
-    {
-      title: "Qty",
-      dataIndex: "quantityChange",
-      key: "quantityChange",
-      width: 120,
-      render: (value, record) => (
-        <Text strong style={{ color: record.directionMeta?.value === "in" ? "#389e0d" : "#cf1322" }}>
-          {formatNumberID(Math.abs(value || 0))}
-        </Text>
-      ),
-    },
-    {
-      title: "Referensi",
-      key: "reference",
-      width: 240,
-      render: (_, record) =>
-        Array.isArray(record.referenceLines) && record.referenceLines.length > 0 ? (
-          <Space direction="vertical" size={2}>
-            {record.referenceLines.map((line) => (
-              <Text key={line} type="secondary" style={{ fontSize: 12 }}>
-                {line}
-              </Text>
-            ))}
-          </Space>
-        ) : (
-          <Text type="secondary">-</Text>
+  const summaryItems = useMemo(
+    () => [
+      {
+        key: "stock-log-total",
+        title: "Total Log",
+        value: formatNumberId(summary.total),
+        subtitle: "Jumlah seluruh inventory log yang terbaca.",
+        accent: "primary",
+      },
+      {
+        key: "stock-log-in",
+        title: "Mutasi Masuk",
+        value: formatNumberId(summary.totalIn),
+        subtitle: "Log dengan perubahan quantity positif.",
+        accent: "success",
+      },
+      {
+        key: "stock-log-out",
+        title: "Mutasi Keluar",
+        value: formatNumberId(summary.totalOut),
+        subtitle: "Log dengan perubahan quantity negatif.",
+        accent: "danger",
+      },
+      {
+        key: "stock-log-production",
+        title: "Log Produksi",
+        value: formatNumberId(summary.productionLogs),
+        subtitle: "Log yang berasal dari aktivitas produksi/work log.",
+        accent: "warning",
+      },
+    ],
+    [summary],
+  );
+
+  const columns = useMemo(
+    () => [
+      {
+        title: "Tanggal",
+        dataIndex: "timestamp",
+        key: "timestamp",
+        width: 160,
+        render: (value) => formatLogDate(value),
+      },
+      {
+        title: "Arah",
+        key: "direction",
+        width: 110,
+        render: (_, record) => (
+          <Tag color={record.directionMeta?.color || "default"}>
+            {record.directionMeta?.label || "-"}
+          </Tag>
         ),
-    },
-    {
-      title: "Catatan",
-      key: "note",
-      render: (_, record) => <Text>{record.noteText}</Text>,
-    },
-  ];
+      },
+      {
+        title: "Sumber",
+        key: "source",
+        width: 130,
+        render: (_, record) => (
+          <Tag color={record.sourceMeta?.color || "default"}>
+            {record.sourceMeta?.label || "-"}
+          </Tag>
+        ),
+      },
+      {
+        title: "Item",
+        key: "item",
+        width: 280,
+        render: (_, record) => (
+          <Space direction="vertical" size={2}>
+            <Text strong>{record.itemName || "-"}</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {record.itemTypeLabel}
+            </Text>
+            {record.variantLabelResolved ? (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Varian: {record.variantLabelResolved}
+              </Text>
+            ) : null}
+          </Space>
+        ),
+      },
+      {
+        title: "Qty",
+        dataIndex: "quantityChange",
+        key: "quantityChange",
+        width: 120,
+        render: (value, record) => (
+          <Text
+            strong
+            style={{ color: record.directionMeta?.value === "in" ? "#389e0d" : "#cf1322" }}
+          >
+            {formatNumberId(Math.abs(value || 0))}
+          </Text>
+        ),
+      },
+      {
+        title: "Referensi",
+        key: "reference",
+        width: 240,
+        render: (_, record) =>
+          Array.isArray(record.referenceLines) && record.referenceLines.length > 0 ? (
+            <Space direction="vertical" size={2}>
+              {record.referenceLines.map((line) => (
+                <Text key={line} type="secondary" style={{ fontSize: 12 }}>
+                  {line}
+                </Text>
+              ))}
+            </Space>
+          ) : (
+            <Text type="secondary">-</Text>
+          ),
+      },
+      {
+        title: "Catatan",
+        key: "note",
+        render: (_, record) => <Text>{record.noteText}</Text>,
+      },
+    ],
+    [],
+  );
 
   return (
-    <div>
-      <Card style={{ marginBottom: 16 }}>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col>
-            <Title level={3} style={{ margin: 0 }}>
-              Riwayat Pergerakan Stok
-            </Title>
-            <Text type="secondary">
-              Pantau mutasi barang masuk dan keluar dari pembelian, produksi, penjualan, retur, dan penyesuaian stok.
-            </Text>
-          </Col>
-          <Col>
-            <Button icon={<ReloadOutlined />} onClick={fetchHistory}>
-              Refresh
-            </Button>
-          </Col>
-        </Row>
-      </Card>
+    <>
+      <PageHeader
+        title="Riwayat Pergerakan Stok"
+        subtitle="Pantau mutasi masuk dan keluar dari pembelian, produksi, penjualan, retur, dan penyesuaian stok dengan layout audit yang seragam."
+        actions={[
+          {
+            key: "refresh-stock-history",
+            icon: <ReloadOutlined />,
+            label: "Refresh",
+            onClick: fetchHistory,
+          },
+        ]}
+      />
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} md={6}>
-          <Card>
-            <Statistic title="Total Log" value={summary.total} />
-          </Card>
-        </Col>
-        <Col xs={24} md={6}>
-          <Card>
-            <Statistic title="Mutasi Masuk" value={summary.totalIn} />
-          </Card>
-        </Col>
-        <Col xs={24} md={6}>
-          <Card>
-            <Statistic title="Mutasi Keluar" value={summary.totalOut} />
-          </Card>
-        </Col>
-        <Col xs={24} md={6}>
-          <Card>
-            <Statistic title="Log Produksi" value={summary.productionLogs} />
-          </Card>
-        </Col>
-      </Row>
+      <PageSection
+        title="Ringkasan Log"
+        subtitle="Ringkasan menggunakan jumlah log, bukan total qty lintas item, agar aman untuk item dengan satuan berbeda."
+      >
+        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
+      </PageSection>
 
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
+      <PageSection
+        title="Filter Riwayat"
+        subtitle="Filter membantu audit cepat berdasarkan kata kunci, arah mutasi, dan sumber transaksi."
+      >
+        <FilterBar>
           <Col xs={24} md={10}>
             <Input
               allowClear
@@ -440,10 +377,14 @@ const StockManagement = () => {
               ]}
             />
           </Col>
-        </Row>
-      </Card>
+        </FilterBar>
+      </PageSection>
 
-      <Card>
+      <PageSection
+        title="Tabel Riwayat"
+        subtitle="Tabel tetap fokus pada audit operasional: kapan, dari mana, item apa, qty berapa, dan referensinya dari transaksi mana."
+        extra={<Tag color="purple">{formatNumberId(filteredHistory.length)} baris</Tag>}
+      >
         <Table
           rowKey="id"
           loading={loading}
@@ -452,11 +393,11 @@ const StockManagement = () => {
           scroll={{ x: 1200 }}
           pagination={{ pageSize: 10 }}
           locale={{
-            emptyText: <Empty description="Belum ada riwayat mutasi stok" />,
+            emptyText: <EmptyStateBlock description="Belum ada riwayat mutasi stok." />,
           }}
         />
-      </Card>
-    </div>
+      </PageSection>
+    </>
   );
 };
 

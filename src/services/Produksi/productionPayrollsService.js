@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { calculatePayrollAmounts } from "../../constants/productionPayrollOptions";
+import { getCompletedProductionWorkLogs } from "./productionWorkLogsService";
 
 const COLLECTION_NAME = "production_payrolls";
 
@@ -121,32 +122,27 @@ export const validateProductionPayroll = (values = {}) => {
 };
 
 export const getPayrollReferenceData = async () => {
-  const [completedWorkLogsSnap, employeesSnap] = await Promise.all([
-    getDocs(
-      query(
-        collection(db, "production_work_logs"),
-        where("status", "==", "completed"),
-        orderBy("workDate", "desc"),
-      ),
-    ),
-    getDocs(
-      query(
-        collection(db, "production_employees"),
-        where("isActive", "==", true),
-        orderBy("name", "asc"),
-      ),
-    ),
+  const [completedWorkLogs, employeesResult] = await Promise.all([
+    getCompletedProductionWorkLogs(),
+    (async () => {
+      try {
+        const snapshot = await getDocs(collection(db, "production_employees"));
+        return {
+          items: snapshot.docs
+            .map((documentItem) => ({ id: documentItem.id, ...documentItem.data() }))
+            .filter((item) => item.isActive !== false)
+            .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""))),
+        };
+      } catch (error) {
+        console.error("Gagal memuat referensi karyawan payroll produksi", error);
+        return { items: [] };
+      }
+    })(),
   ]);
 
   return {
-    completedWorkLogs: completedWorkLogsSnap.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    })),
-    employees: employeesSnap.docs.map((d) => ({
-      id: d.id,
-      ...d.data(),
-    })),
+    completedWorkLogs,
+    employees: employeesResult.items,
   };
 };
 

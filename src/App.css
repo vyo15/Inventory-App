@@ -644,6 +644,66 @@
   box-shadow: inset 12px 0 12px -12px rgba(2, 6, 23, 0.36);
 }
 
+
+
+/* =========================
+   SECTION: Shared Stock Variant Pills
+   Fungsi:
+   - menjaga tampilan stok varian di Products, Raw Materials, dan Semi Finished tetap seragam
+   - class ini sengaja dipusatkan di App.css karena dipakai lintas halaman stok
+   Catatan:
+   - blok ini aktif dipakai oleh render stok varian
+   - jangan dihapus atau diganti ke inline style lagi agar tiga halaman stok tidak saling merusak
+========================= */
+.stock-variant-pill-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.stock-variant-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(248, 250, 252, 0.96);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.stock-variant-pill-label,
+.stock-variant-pill-value {
+  margin: 0 !important;
+  line-height: 1.2 !important;
+}
+
+.stock-variant-pill-label {
+  font-size: 12px !important;
+  color: rgba(15, 23, 42, 0.72) !important;
+}
+
+.stock-variant-pill-value {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+}
+
+.app-shell.dark .stock-variant-pill {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.88);
+}
+
+.app-shell.dark .stock-variant-pill-label {
+  color: rgba(191, 219, 254, 0.78) !important;
+}
+
+.app-shell.dark .stock-variant-pill-value {
+  color: #e6edf3 !important;
+}
+
 @media (max-width: 768px) {
   .ims-page {
     gap: 12px;

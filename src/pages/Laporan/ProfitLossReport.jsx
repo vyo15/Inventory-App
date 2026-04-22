@@ -1,70 +1,56 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Card, Table, message, Row, Col, Statistic, Tag, Button } from "antd";
-import { collection, query, getDocs, orderBy } from "firebase/firestore";
-import { db } from "../../firebase";
+import { Button, Table, Tag, message } from "antd";
+import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import dayjs from "dayjs";
+import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
+import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
+import { db } from "../../firebase";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
-
-// SECTION: format angka Indonesia tanpa desimal
-const formatNumberID = (value) => {
-  return Number(value || 0).toLocaleString("id-ID", {
-    maximumFractionDigits: 0,
-  });
-};
-
-// SECTION: format rupiah Indonesia tanpa desimal
-const formatCurrencyIDR = (value) => {
-  return `Rp ${formatNumberID(value)}`;
-};
+import { formatCurrencyId } from "../../utils/formatters/currencyId";
+import { formatDateId } from "../../utils/formatters/dateId";
 
 const ProfitLossReport = () => {
-  // SECTION: state utama laporan laba rugi
   const [reportData, setReportData] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // SECTION: ambil data pemasukan dan pengeluaran
   useEffect(() => {
     const fetchReportData = async () => {
       setLoading(true);
       try {
-        const revenuesRef = collection(db, "revenues");
-        const incomesRef = collection(db, "incomes");
-        const expensesRef = collection(db, "expenses");
-
         const [revenuesSnap, incomesSnap, expensesSnap] = await Promise.all([
-          getDocs(query(revenuesRef, orderBy("date", "desc"))),
-          getDocs(query(incomesRef, orderBy("date", "desc"))),
-          getDocs(query(expensesRef, orderBy("date", "desc"))),
+          getDocs(query(collection(db, "revenues"), orderBy("date", "desc"))),
+          getDocs(query(collection(db, "incomes"), orderBy("date", "desc"))),
+          getDocs(query(collection(db, "expenses"), orderBy("date", "desc"))),
         ]);
 
-        const revenues = revenuesSnap.docs.map((docItem) => ({
-          id: `revenues-${docItem.id}`,
+        const revenues = revenuesSnap.docs.map((documentItem) => ({
+          id: `revenues-${documentItem.id}`,
           sourceCollection: "revenues",
-          ...docItem.data(),
+          ...documentItem.data(),
           flow: "Pemasukan",
         }));
 
-        const incomes = incomesSnap.docs.map((docItem) => ({
-          id: `incomes-${docItem.id}`,
+        const incomes = incomesSnap.docs.map((documentItem) => ({
+          id: `incomes-${documentItem.id}`,
           sourceCollection: "incomes",
-          ...docItem.data(),
+          ...documentItem.data(),
           flow: "Pemasukan",
         }));
 
-        const expenses = expensesSnap.docs.map((docItem) => ({
-          id: `expenses-${docItem.id}`,
+        const expenses = expensesSnap.docs.map((documentItem) => ({
+          id: `expenses-${documentItem.id}`,
           sourceCollection: "expenses",
-          ...docItem.data(),
+          ...documentItem.data(),
           flow: "Pengeluaran",
         }));
 
-        const mergedData = [...revenues, ...incomes, ...expenses].sort(
-          (a, b) => {
-            const aTime = a.date?.toDate ? a.date.toDate().getTime() : 0;
-            const bTime = b.date?.toDate ? b.date.toDate().getTime() : 0;
-            return bTime - aTime;
-          },
-        );
+        const mergedData = [...revenues, ...incomes, ...expenses].sort((left, right) => {
+          const leftTime = left.date?.toDate ? left.date.toDate().getTime() : 0;
+          const rightTime = right.date?.toDate ? right.date.toDate().getTime() : 0;
+          return rightTime - leftTime;
+        });
 
         setReportData(mergedData);
       } catch (error) {
@@ -78,19 +64,18 @@ const ProfitLossReport = () => {
     fetchReportData();
   }, []);
 
-  // SECTION: hitung total pendapatan, biaya, dan laba kotor
   const summary = useMemo(() => {
     return reportData.reduce(
-      (acc, item) => {
+      (accumulator, item) => {
         const amount = Math.round(Number(item.amount || 0));
 
         if (item.flow === "Pemasukan") {
-          acc.totalRevenue += amount;
+          accumulator.totalRevenue += amount;
         } else if (item.flow === "Pengeluaran") {
-          acc.totalCost += amount;
+          accumulator.totalCost += amount;
         }
 
-        return acc;
+        return accumulator;
       },
       {
         totalRevenue: 0,
@@ -101,7 +86,33 @@ const ProfitLossReport = () => {
 
   const grossProfit = summary.totalRevenue - summary.totalCost;
 
-  // SECTION: ekspor excel
+  const summaryItems = useMemo(
+    () => [
+      {
+        key: "revenue-total",
+        title: "Total Pendapatan",
+        value: formatCurrencyId(summary.totalRevenue),
+        subtitle: "Gabungan revenues dan incomes.",
+        accent: "success",
+      },
+      {
+        key: "cost-total",
+        title: "Total Biaya",
+        value: formatCurrencyId(summary.totalCost),
+        subtitle: "Seluruh expenses yang diakui pada laporan.",
+        accent: "danger",
+      },
+      {
+        key: "gross-profit",
+        title: "Laba Kotor",
+        value: formatCurrencyId(grossProfit),
+        subtitle: grossProfit >= 0 ? "Positif" : "Negatif",
+        accent: grossProfit >= 0 ? "primary" : "warning",
+      },
+    ],
+    [grossProfit, summary],
+  );
+
   const exportToExcel = async () => {
     const exportData = reportData.map((item) => ({
       Tanggal: item.date?.toDate
@@ -122,116 +133,96 @@ const ProfitLossReport = () => {
     message.success("Laporan berhasil diekspor ke Excel!");
   };
 
-  // SECTION: kolom tabel
-  const columns = [
-    {
-      title: "Tanggal",
-      dataIndex: "date",
-      render: (val) =>
-        val?.toDate ? dayjs(val.toDate()).format("DD-MM-YYYY HH:mm") : "-",
-    },
-    {
-      title: "Aliran Kas",
-      dataIndex: "flow",
-      render: (flow) => {
-        const color = flow === "Pemasukan" ? "green" : "red";
-        return <Tag color={color}>{flow}</Tag>;
+  const columns = useMemo(
+    () => [
+      {
+        title: "Tanggal",
+        dataIndex: "date",
+        key: "date",
+        render: (value) => formatDateId(value, true),
       },
-    },
-    {
-      title: "Sumber",
-      dataIndex: "sourceCollection",
-      render: (value) => {
-        if (value === "revenues") return <Tag color="blue">revenues</Tag>;
-        if (value === "incomes") return <Tag color="green">incomes</Tag>;
-        if (value === "expenses") return <Tag color="red">expenses</Tag>;
-        return <Tag>-</Tag>;
+      {
+        title: "Aliran Kas",
+        dataIndex: "flow",
+        key: "flow",
+        render: (flow) => {
+          const color = flow === "Pemasukan" ? "green" : "red";
+          return <Tag color={color}>{flow}</Tag>;
+        },
       },
-    },
-    {
-      title: "Tipe",
-      dataIndex: "type",
-      render: (text) => text || "-",
-    },
-    {
-      title: "Deskripsi",
-      dataIndex: "description",
-      render: (text) => text || "-",
-    },
-    {
-      title: "Jumlah",
-      dataIndex: "amount",
-      render: (val, record) => {
-        const amount = Math.round(Number(val || 0));
-        const sign = record.flow === "Pengeluaran" ? "-" : "+";
-        const color = record.flow === "Pemasukan" ? "green" : "red";
+      {
+        title: "Sumber",
+        dataIndex: "sourceCollection",
+        key: "sourceCollection",
+        render: (value) => {
+          if (value === "revenues") return <Tag color="blue">revenues</Tag>;
+          if (value === "incomes") return <Tag color="green">incomes</Tag>;
+          if (value === "expenses") return <Tag color="red">expenses</Tag>;
+          return <Tag>-</Tag>;
+        },
+      },
+      {
+        title: "Tipe",
+        dataIndex: "type",
+        key: "type",
+        render: (value) => value || "-",
+      },
+      {
+        title: "Deskripsi",
+        dataIndex: "description",
+        key: "description",
+        render: (value) => value || "-",
+      },
+      {
+        title: "Jumlah",
+        dataIndex: "amount",
+        key: "amount",
+        render: (value, record) => {
+          const amount = Math.round(Number(value || 0));
+          const sign = record.flow === "Pengeluaran" ? "-" : "+";
+          const color = record.flow === "Pemasukan" ? "green" : "red";
 
-        return (
-          <span style={{ color }}>
-            {sign} {formatCurrencyIDR(amount)}
-          </span>
-        );
+          return <span style={{ color }}>{`${sign} ${formatCurrencyId(amount)}`}</span>;
+        },
       },
-    },
-  ];
+    ],
+    [],
+  );
 
   return (
-    <div>
-      <h2>Laporan Laba Rugi</h2>
+    <>
+      <PageHeader
+        title="Laporan Laba Rugi"
+        subtitle="Laporan ini tetap menggabungkan revenues, incomes, dan expenses sesuai business rule aktif, lalu dirapikan ke UI shared yang seragam."
+      />
 
-      {/* SECTION: ringkasan utama */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} md={8}>
-          <Card>
-            <Statistic
-              title="Total Pendapatan"
-              value={summary.totalRevenue}
-              formatter={(value) => formatCurrencyIDR(value)}
-            />
-          </Card>
-        </Col>
+      <PageSection
+        title="Ringkasan Keuangan"
+        subtitle="Ringkasan membantu membaca total pendapatan, total biaya, dan laba kotor secara cepat."
+      >
+        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} />
+      </PageSection>
 
-        <Col xs={24} md={8}>
-          <Card>
-            <Statistic
-              title="Total Biaya"
-              value={summary.totalCost}
-              formatter={(value) => formatCurrencyIDR(value)}
-            />
-          </Card>
-        </Col>
-
-        <Col xs={24} md={8}>
-          <Card>
-            <Statistic
-              title="Laba Kotor"
-              value={grossProfit}
-              formatter={(value) => formatCurrencyIDR(value)}
-              valueStyle={{ color: grossProfit >= 0 ? "#3f8600" : "#cf1322" }}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      <Card title="Detail Transaksi Keuangan">
-        <div style={{ marginBottom: 16, textAlign: "right" }}>
-          <Button
-            type="primary"
-            onClick={exportToExcel}
-            disabled={reportData.length === 0}
-          >
+      <PageSection
+        title="Detail Transaksi Keuangan"
+        subtitle="Semua baris tetap mengikuti source collection asli tanpa perubahan perhitungan data."
+        extra={
+          <Button type="primary" onClick={exportToExcel} disabled={reportData.length === 0}>
             Ekspor ke Excel
           </Button>
-        </div>
-
+        }
+      >
         <Table
           dataSource={reportData}
           columns={columns}
           rowKey="id"
           loading={loading}
+          locale={{
+            emptyText: <EmptyStateBlock description="Belum ada data laba rugi untuk ditampilkan." />,
+          }}
         />
-      </Card>
-    </div>
+      </PageSection>
+    </>
   );
 };
 

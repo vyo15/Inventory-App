@@ -62,6 +62,7 @@ import {
   createProductionWorkLog,
   completeProductionWorkLog,
   createProductionWorkLogFromOrder,
+  generateProductionWorkLogNumber,
   getAllProductionWorkLogs,
   getWorkLogReferenceData,
   updateProductionWorkLog,
@@ -72,6 +73,7 @@ import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildWorkLogMaterialUsageFormLine, buildWorkLogOutputFormLine } from "../../utils/produksi/productionLineBuilders";
 import { buildVariantOptionsFromItem, inferHasVariants } from "../../utils/variants/variantStockHelpers";
+import { isProductionWorkLogCompleted } from "../../utils/produksi/productionFlowGuards";
 
 const ProductionWorkLogs = () => {
   // SECTION: state utama
@@ -135,6 +137,10 @@ const ProductionWorkLogs = () => {
 
       setWorkLogs(workLogResult);
       setReferenceData(refResult);
+
+      if (Array.isArray(refResult?.metaWarnings) && refResult.metaWarnings.length > 0) {
+        message.warning(refResult.metaWarnings[0]);
+      }
     } catch (error) {
       console.error(error);
       message.error("Gagal memuat work log produksi");
@@ -146,6 +152,47 @@ const ProductionWorkLogs = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+
+  // =====================================================
+  // Handler tambah work log manual
+  // Catatan maintainability:
+  // - Flow aktif tetap mendorong start dari Production Order.
+  // - Namun draft manual/planned tetap dipertahankan agar test checklist
+  //   dan kebutuhan operasional lama tidak putus karena patch UI.
+  // =====================================================
+  const openCreateWorkLogDrawer = async (sourceType = "manual") => {
+    resetFormState();
+    setFormVisible(true);
+
+    try {
+      const generatedWorkNumber = await generateProductionWorkLogNumber();
+      form.setFieldsValue({
+        ...DEFAULT_PRODUCTION_WORK_LOG_FORM,
+        workNumber: generatedWorkNumber,
+        workDate: dayjs(),
+        sourceType,
+        materialUsages: [],
+        outputs: [],
+        workerIds: [],
+        productionOrderId: undefined,
+        productionProfileId: undefined,
+      });
+    } catch (error) {
+      console.error(error);
+      form.setFieldsValue({
+        ...DEFAULT_PRODUCTION_WORK_LOG_FORM,
+        workDate: dayjs(),
+        sourceType,
+        materialUsages: [],
+        outputs: [],
+        workerIds: [],
+        productionOrderId: undefined,
+        productionProfileId: undefined,
+      });
+      message.warning("Nomor work log otomatis gagal dibuat. Silakan isi manual.");
+    }
+  };
 
   const summary = useMemo(() => {
     return buildCountSummary(workLogs, {
@@ -956,12 +1003,12 @@ const ProductionWorkLogs = () => {
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
-            disabled={record.status === "completed"}
+            disabled={isProductionWorkLogCompleted(record) || record.status === "cancelled"}
           >
             Edit
           </Button>
 
-          {record.status !== "completed" && record.status !== "cancelled" && (
+          {!isProductionWorkLogCompleted(record) && record.status !== "cancelled" && (
             <Button
               className="ims-action-button"
               size="small"
@@ -982,6 +1029,8 @@ const ProductionWorkLogs = () => {
         title="Work Log Produksi"
         description="Realisasi kerja produksi dari Production Order (1 PO = 1 Work Log)"
         onRefresh={loadData}
+        onAdd={() => openCreateWorkLogDrawer("manual")}
+        addLabel="Tambah Work Log"
       />
 
       <ProductionSummaryCards
@@ -1962,6 +2011,59 @@ const ProductionWorkLogs = () => {
 
           <Form.Item label="Catatan" name="notes">
             <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Selesaikan Work Log Produksi"
+        open={completeModalVisible}
+        onCancel={() => {
+          setCompleteModalVisible(false);
+          setCompletingRecord(null);
+          completeForm.resetFields();
+        }}
+        onOk={handleMarkCompleted}
+        okText="Selesaikan"
+        destroyOnClose
+      >
+        <Form form={completeForm} layout="vertical">
+          <Row gutter={12}>
+            <Col span={8}>
+              <Form.Item
+                label="Good Qty"
+                name="goodQty"
+                rules={[{ required: true, message: "Good qty wajib diisi" }]}
+              >
+                <InputNumber min={0} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="Reject Qty" name="rejectQty">
+                <InputNumber min={0} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="Rework Qty" name="reworkQty">
+                <InputNumber min={0} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item label="Operator Produksi" name="workerIds">
+            <Select
+              mode="multiple"
+              optionFilterProp="label"
+              options={employeeOptions}
+              placeholder="Pilih operator yang mengerjakan work log ini..."
+            />
+          </Form.Item>
+
+          <Form.Item label="Catatan Penyelesaian" name="notes">
+            <Input.TextArea
+              rows={3}
+              placeholder="Catatan hasil produksi, miss, atau kendala proses..."
+            />
           </Form.Item>
         </Form>
       </Modal>

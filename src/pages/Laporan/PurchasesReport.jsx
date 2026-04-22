@@ -1,36 +1,36 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Card, Table, message, Row, Col, Statistic, Button, Tag } from "antd";
-import { collection, query, getDocs, orderBy } from "firebase/firestore";
-import { db } from "../../firebase";
+import { Button, Table, Tag, message } from "antd";
+import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import dayjs from "dayjs";
+import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
+import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
+import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
+import { db } from "../../firebase";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
+import { formatCurrencyId } from "../../utils/formatters/currencyId";
+import { formatDateId } from "../../utils/formatters/dateId";
+import { formatNumberId } from "../../utils/formatters/numberId";
 
-// SECTION: format angka Indonesia tanpa desimal
-const formatNumberID = (value) => {
-  return Number(value || 0).toLocaleString("id-ID", {
-    maximumFractionDigits: 0,
-  });
-};
-
-// SECTION: format rupiah Indonesia tanpa desimal
-const formatCurrencyIDR = (value) => {
-  return `Rp ${formatNumberID(value)}`;
-};
-
-// SECTION: helper label saving pembelian
+// =========================
+// SECTION: Helper saving pembelian
+// Catatan:
+// - saving tetap dibaca sebagai informasi efisiensi
+// - tidak mengubah fakta bahwa laporan pembelian membaca expenses
+// =========================
 const getSavingMeta = (value) => {
   const amount = Math.round(Number(value || 0));
 
   if (amount > 0) {
     return {
-      label: `Hemat ${formatCurrencyIDR(amount)}`,
+      label: `Hemat ${formatCurrencyId(amount)}`,
       color: "green",
     };
   }
 
   if (amount < 0) {
     return {
-      label: `Lebih Mahal ${formatCurrencyIDR(Math.abs(amount))}`,
+      label: `Lebih Mahal ${formatCurrencyId(Math.abs(amount))}`,
       color: "red",
     };
   }
@@ -42,23 +42,21 @@ const getSavingMeta = (value) => {
 };
 
 const PurchasesReport = () => {
-  // SECTION: state utama laporan pembelian
   const [purchasesData, setPurchasesData] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // SECTION: ambil data pembelian dari expenses agar sesuai requirement terbaru
   useEffect(() => {
     const fetchPurchases = async () => {
       setLoading(true);
       try {
-        const expensesRef = collection(db, "expenses");
-        const q = query(expensesRef, orderBy("date", "desc"));
-        const querySnapshot = await getDocs(q);
+        const querySnapshot = await getDocs(
+          query(collection(db, "expenses"), orderBy("date", "desc")),
+        );
 
         const data = querySnapshot.docs
-          .map((docItem) => ({
-            id: docItem.id,
-            ...docItem.data(),
+          .map((documentItem) => ({
+            id: documentItem.id,
+            ...documentItem.data(),
           }))
           .filter(
             (item) =>
@@ -78,17 +76,14 @@ const PurchasesReport = () => {
     fetchPurchases();
   }, []);
 
-  // SECTION: ringkasan total keseluruhan pembelian
   const summary = useMemo(() => {
     return purchasesData.reduce(
-      (acc, item) => {
-        acc.totalActual += Math.round(Number(item.amount || 0));
-        acc.totalReference += Math.round(
-          Number(item.totalReferenceAmount || 0),
-        );
-        acc.totalSaving += Math.round(Number(item.savingAmount || 0));
-        acc.totalTransactions += 1;
-        return acc;
+      (accumulator, item) => {
+        accumulator.totalActual += Math.round(Number(item.amount || 0));
+        accumulator.totalReference += Math.round(Number(item.totalReferenceAmount || 0));
+        accumulator.totalSaving += Math.round(Number(item.savingAmount || 0));
+        accumulator.totalTransactions += 1;
+        return accumulator;
       },
       {
         totalActual: 0,
@@ -99,7 +94,43 @@ const PurchasesReport = () => {
     );
   }, [purchasesData]);
 
-  // SECTION: ekspor laporan pembelian ke excel
+  const summaryItems = useMemo(
+    () => [
+      {
+        key: "total-actual-purchase",
+        title: "Total Aktual Pembelian",
+        value: formatCurrencyId(summary.totalActual),
+        subtitle: "Total expense pembelian yang benar-benar diakui.",
+        accent: "danger",
+      },
+      {
+        key: "total-reference-purchase",
+        title: "Total Referensi",
+        value: formatCurrencyId(summary.totalReference),
+        subtitle: "Nilai referensi untuk pembanding efisiensi pembelian.",
+        accent: "primary",
+      },
+      {
+        key: "total-saving-purchase",
+        title: "Total Saving",
+        value:
+          summary.totalSaving < 0
+            ? `- ${formatCurrencyId(Math.abs(summary.totalSaving))}`
+            : formatCurrencyId(summary.totalSaving),
+        subtitle: "Saving tetap ditampilkan sebagai info, bukan pengurang kas keluar.",
+        accent: summary.totalSaving >= 0 ? "success" : "danger",
+      },
+      {
+        key: "purchase-transaction-count",
+        title: "Jumlah Transaksi",
+        value: formatNumberId(summary.totalTransactions),
+        subtitle: "Jumlah transaksi pembelian yang terbaca dari expenses.",
+        accent: "warning",
+      },
+    ],
+    [summary],
+  );
+
   const exportToExcel = async () => {
     const exportData = purchasesData.map((purchase) => ({
       "ID Expense": purchase.id,
@@ -123,121 +154,90 @@ const PurchasesReport = () => {
     message.success("Laporan berhasil diekspor ke Excel!");
   };
 
-  // SECTION: kolom tabel laporan pembelian
-  const columns = [
-    {
-      title: "Tanggal",
-      dataIndex: "date",
-      render: (val) =>
-        val?.toDate ? dayjs(val.toDate()).format("DD-MM-YYYY HH:mm") : "-",
-    },
-    {
-      title: "Supplier",
-      dataIndex: "supplierName",
-      render: (text) => text || "-",
-    },
-    {
-      title: "Item",
-      key: "itemName",
-      render: (_, record) =>
-        record.relatedItemName || record.description || "-",
-    },
-    {
-      title: "Aktual Keluar",
-      dataIndex: "amount",
-      render: (val) => formatCurrencyIDR(val),
-    },
-    {
-      title: "Referensi",
-      dataIndex: "totalReferenceAmount",
-      render: (val) => (val ? formatCurrencyIDR(val) : "-"),
-    },
-    {
-      title: "Saving",
-      dataIndex: "savingAmount",
-      render: (val) => {
-        const meta = getSavingMeta(val);
-        return <Tag color={meta.color}>{meta.label}</Tag>;
+  const columns = useMemo(
+    () => [
+      {
+        title: "Tanggal",
+        dataIndex: "date",
+        key: "date",
+        render: (value) => formatDateId(value, true),
       },
-    },
-    {
-      title: "Deskripsi",
-      dataIndex: "description",
-      render: (text) => text || "-",
-    },
-  ];
+      {
+        title: "Supplier",
+        dataIndex: "supplierName",
+        key: "supplierName",
+        render: (value) => value || "-",
+      },
+      {
+        title: "Item",
+        key: "itemName",
+        render: (_, record) => record.relatedItemName || record.description || "-",
+      },
+      {
+        title: "Aktual Keluar",
+        dataIndex: "amount",
+        key: "amount",
+        render: (value) => formatCurrencyId(value),
+      },
+      {
+        title: "Referensi",
+        dataIndex: "totalReferenceAmount",
+        key: "totalReferenceAmount",
+        render: (value) => (value ? formatCurrencyId(value) : "-"),
+      },
+      {
+        title: "Saving",
+        dataIndex: "savingAmount",
+        key: "savingAmount",
+        render: (value) => {
+          const meta = getSavingMeta(value);
+          return <Tag color={meta.color}>{meta.label}</Tag>;
+        },
+      },
+      {
+        title: "Deskripsi",
+        dataIndex: "description",
+        key: "description",
+        render: (value) => value || "-",
+      },
+    ],
+    [],
+  );
 
   return (
-    <div>
-      <h2>Laporan Pembelian</h2>
+    <>
+      <PageHeader
+        title="Laporan Pembelian"
+        subtitle="Laporan ini tetap membaca expenses sesuai business rule aktif, lalu distandardisasi ke pola section dan summary card yang reusable."
+      />
 
-      {/* SECTION: ringkasan total keseluruhan pembelian */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} md={6}>
-          <Card>
-            <Statistic
-              title="Total Aktual Pembelian"
-              value={summary.totalActual}
-              formatter={(value) => formatCurrencyIDR(value)}
-            />
-          </Card>
-        </Col>
+      <PageSection
+        title="Ringkasan Pembelian"
+        subtitle="Ringkasan membantu membaca total aktual, total referensi, dan saving pembelian dengan cepat."
+      >
+        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
+      </PageSection>
 
-        <Col xs={24} md={6}>
-          <Card>
-            <Statistic
-              title="Total Referensi"
-              value={summary.totalReference}
-              formatter={(value) => formatCurrencyIDR(value)}
-            />
-          </Card>
-        </Col>
-
-        <Col xs={24} md={6}>
-          <Card>
-            <Statistic
-              title="Total Saving"
-              value={summary.totalSaving}
-              formatter={(value) => {
-                const amount = Math.round(Number(value || 0));
-                if (amount < 0) {
-                  return `- ${formatCurrencyIDR(Math.abs(amount))}`;
-                }
-                return formatCurrencyIDR(amount);
-              }}
-            />
-          </Card>
-        </Col>
-
-        <Col xs={24} md={6}>
-          <Card>
-            <Statistic
-              title="Jumlah Transaksi"
-              value={summary.totalTransactions}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      <Card title="Detail Pembelian">
-        <div style={{ marginBottom: 16, textAlign: "right" }}>
-          <Button
-            type="primary"
-            onClick={exportToExcel}
-            disabled={purchasesData.length === 0}
-          >
+      <PageSection
+        title="Detail Pembelian"
+        subtitle="Data tabel tetap bersumber dari expenses yang ditandai sebagai pembelian aktif."
+        extra={
+          <Button type="primary" onClick={exportToExcel} disabled={purchasesData.length === 0}>
             Ekspor ke Excel
           </Button>
-        </div>
-
+        }
+      >
         <Table
           dataSource={purchasesData}
           columns={columns}
           rowKey="id"
           loading={loading}
+          locale={{
+            emptyText: <EmptyStateBlock description="Belum ada data pembelian untuk ditampilkan." />,
+          }}
         />
-      </Card>
-    </div>
+      </PageSection>
+    </>
   );
 };
 

@@ -1,0 +1,184 @@
+# TEST CHECKLIST — IMS Bunga Flanel
+
+Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat ini.
+
+## A. Master Data
+
+### Produk Jadi
+- tambah produk tanpa varian
+- tambah produk dengan varian
+- edit produk
+- ubah pricing mode rule/manual
+- toggle aktif/nonaktif
+- cek field stok dan min stock alert tersimpan benar
+
+### Bahan Baku
+- tambah bahan baku tanpa varian
+- tambah bahan baku dengan varian
+- pilih supplier
+- edit harga referensi dan average actual unit cost
+- toggle aktif/nonaktif
+- cek variant totals tersinkron
+
+### Supplier
+- tambah/edit supplier
+- cek dropdown supplier di bahan baku dan pembelian
+
+### Customer
+- tambah customer
+- edit customer
+- hapus customer
+- cek customer baru muncul di modul sales
+- cek tidak ada split data antara `Customers` dan `customers`
+
+### Pricing Rules
+- buat rule untuk raw materials
+- buat rule untuk products
+- tes margin percent
+- tes margin nominal
+- tes marketplace buffer nominal
+- tes marketplace buffer percent
+- tes rounding up/down/nearest
+- apply rule ke item mode `rule`
+- pastikan item mode `manual` tidak ikut berubah
+
+## B. Transaksi
+
+### Pembelian
+- buat pembelian bahan baku non-varian
+- buat pembelian bahan baku varian
+- buat pembelian produk
+- cek `totalStockIn`
+- cek `actualUnitCost`
+- cek `purchaseSaving`
+- cek stok bertambah
+- cek inventory log `purchase_in`
+- cek expense otomatis masuk
+
+### Penjualan
+- buat penjualan status `Diproses`
+- cek stok langsung berkurang
+- pastikan income belum tercatat
+- ubah status menjadi `Selesai`
+- cek income tercatat sekali saja
+- ubah status menjadi `Dibatalkan`
+- cek stok kembali
+- hapus sale yang statusnya belum dibatalkan
+- cek stok kembali satu kali
+- hapus sale yang sudah dibatalkan
+- cek stok tidak double revert
+
+### Retur
+- tambah retur produk
+- tambah retur bahan baku
+- cek stok bertambah
+- cek inventory log `return_in`
+
+## C. Kas & Biaya
+
+### Cash In
+- tambah pemasukan manual
+- cek data masuk ke `revenues`
+- cek penjualan selesai muncul dari `incomes`
+- cek filter bulan/tahun
+
+### Cash Out
+- tambah pengeluaran manual
+- cek data masuk ke `expenses`
+- cek pembelian otomatis tampil sebagai expense
+- cek saving tampil sebagai info, bukan pengurang nilai amount
+
+## D. Inventaris
+
+### Stock Adjustment
+- tambah adjustment masuk bahan baku
+- tambah adjustment keluar produk
+- cek `stock_adjustments`
+- cek inventory log `stock_adjustment`
+- cek sinkronisasi `stock` dan `currentStock`
+
+### Stock Management
+- cek semua sumber mutasi muncul
+- cek filter arah masuk/keluar
+- cek pencarian keyword
+- cek referensi sale/customer/supplier/PO/work log terbaca
+
+## E. Produksi
+
+### Tahapan Produksi
+- tambah step
+- edit step
+- nonaktifkan step
+- cek relasi ke karyawan/BOM
+
+### Karyawan Produksi
+- tambah karyawan
+- assign step
+- nonaktifkan karyawan
+
+### Profil Produksi
+- tambah profil
+- mapping profil ke produk
+- cek perhitungan kapasitas otomatis
+
+### Semi Finished Materials
+- tambah item tanpa varian
+- tambah item dengan varian
+- cek total stock, available stock, active variant count
+
+### BOM Produksi
+- buat BOM target semi finished
+- buat BOM target product
+- pastikan BOM product hanya menerima material semi finished
+- cek material lines dan step lines tersimpan benar
+
+### Production Order
+- generate PO dari BOM
+- cek requirement line
+- cek status `shortage` / `ready`
+- cek target varian bila ada
+
+### Work Log Produksi
+- buka menu Work Log Produksi saat semua referensi produksi normal
+- buka menu Work Log Produksi saat salah satu referensi produksi gagal dimuat lalu pastikan halaman tetap tampil dengan warning
+- cek list work log tetap tampil urut terbaru walau query utama fallback
+- buat work log manual dari tombol tambah
+- buat work log dari PO eligible
+- pastikan PO `ready` / `shortage` bisa dipakai start produksi
+- pastikan PO yang sudah punya work log tidak muncul lagi di referensi Work Log
+- isi material usage
+- isi outputs
+- cek worker dan biaya aktual
+- cek status `draft`, `in_progress`, `completed`
+- cek konsumsi stok material
+- cek penambahan stok output
+- selesaikan work log dari popup complete
+- pastikan work log completed tidak bisa diedit ulang sembarangan
+- cek payroll tetap bisa membaca work log completed
+- cek HPP tetap bisa membaca work log completed
+
+### Payroll Produksi
+- buat payroll dari work log completed
+- cek nilai payroll
+- ubah status unpaid → paid
+
+### Analisis HPP
+- pastikan work log completed terbaca
+- cek total biaya produksi
+- cek total good qty
+- cek rata-rata HPP per unit
+
+## F. Laporan
+- Stock Report tampil benar
+- Purchases Report membaca pengeluaran pembelian
+- Sales Report menampilkan total dan status transaksi
+- Profit Loss menggabungkan revenues + incomes + expenses dengan benar
+- ekspor Excel/CSV berjalan
+
+## G. Utility Reset
+- preview reset sesuai modul terpilih
+- simpan baseline stok
+- reset transaksi saja
+- reset + zero stock
+- reset + restore baseline
+- cek field stok sinkron kembali setelah reset
