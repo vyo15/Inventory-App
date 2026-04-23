@@ -1,3 +1,17 @@
+// =====================================================
+// Production Legacy Service
+//
+// LEGACY / DEPRECATED
+// File ini mewakili flow produksi lama berbasis collection `productions`.
+// Flow operasional aktif payroll/produksi v1 tidak lagi memakai service ini
+// sebagai source of truth utama.
+//
+// Aman dihapus nanti?
+// - Belum langsung, karena masih bisa ada route/data lama yang belum dibersihkan.
+// - Jika reset data produksi dipilih dan route lama sudah dipensiunkan, file ini
+//   bisa masuk kandidat cleanup tahap berikutnya.
+// =====================================================
+
 import { collection, doc, increment, writeBatch } from "firebase/firestore";
 import { db } from "../../firebase";
 

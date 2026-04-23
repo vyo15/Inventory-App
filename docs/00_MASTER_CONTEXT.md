@@ -69,8 +69,10 @@ Aplikasi saat ini memakai pendekatan transisi antara field lama dan field baru:
 
 ## Prinsip UI yang Terlihat Konsisten
 - baseline resmi table/action sekarang dikunci: kolom aksi main table selalu di kanan, dan table lebar wajib memakai sticky/fixed right untuk aksi utama
-- halaman dibagi menjadi tiga klasifikasi UI resmi: detail-capable page, simple config page, dan ledger/simple action page
-- tombol `Detail` hanya dipakai pada halaman yang memang punya drawer/detail read-only yang jelas
+- halaman dibagi menjadi empat klasifikasi UI resmi: detail-capable page, simple config page, ledger/simple action page, dan read-only data table page
+- tombol `Detail` hanya dipakai pada halaman yang memang punya drawer/detail read-only atau modal detail yang jelas
+- global normalization terbaru sudah membawa pola baseline ini ke: Sales, Supplier Purchases, Pricing Rules, Purchases, Returns, Stock Adjustment, Stock Management, report pages, dan Analisis HPP
+- utility page seperti `ResetTestData` boleh tetap berbeda di level page shell selama tabel preview-nya sudah mengikuti baseline table global
 - bahasa UI dominan Bahasa Indonesia
 - angka menggunakan format Indonesia tanpa desimal
 - banyak halaman memakai ringkasan statistik + tabel + modal form

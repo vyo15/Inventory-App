@@ -227,11 +227,20 @@ const PurchasesReport = () => {
           </Button>
         }
       >
+        {/* =========================
+            SECTION: tabel laporan pembelian baseline global
+            Fungsi:
+            - memakai class resmi agar halaman laporan pembelian konsisten dengan baseline table global
+            - tidak menambah aksi row karena laporan ini tetap read-only dan fokus ke ekspor
+            Status: aktif / final
+        ========================= */}
         <Table
+          className="app-data-table"
           dataSource={purchasesData}
           columns={columns}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 1120 }}
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada data pembelian untuk ditampilkan." />,
           }}

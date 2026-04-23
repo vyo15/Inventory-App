@@ -121,3 +121,58 @@ Sebuah task dianggap aman selesai bila:
 - collection sumber laporan tetap benar
 - flow produksi final tidak rusak
 - tidak menambah inkonsistensi schema baru
+
+
+## Update Current State: Global UI Normalization Batch
+Baseline UI final yang sekarang paling aman dianggap resmi:
+- semua main table dengan kolom `Aksi` harus menaruh aksi di paling kanan
+- semua main table lebar atau yang memakai `scroll.x` wajib membuat kolom aksi `fixed: "right"`
+- bila ada kolom `Status` pada table lebar, status boleh ikut sticky di kanan sebelum `Aksi`
+- detail-capable page wajib punya tombol `Detail`
+- simple config page tetap ringan tanpa dipaksa punya `Detail`
+- ledger/simple action page boleh tanpa `Detail`, tetapi action column tetap wajib konsisten bila ada aksi per row
+- read-only data table page tidak perlu action column, tetapi surface table harus tetap memakai class baseline global
+
+Migration matrix singkat setelah batch global ini:
+
+### Sudah sesuai baseline
+- Products
+- RawMaterials
+- SemiFinishedMaterials
+- ProductionBoms
+- ProductionEmployees
+- ProductionOrders
+- ProductionWorkLogs
+- ProductionPayrolls
+- ProductionSteps
+- ProductionProfiles
+- CashIn
+- CashOut
+- Categories
+- Customers
+- Sales
+- SupplierPurchases
+- PricingRules
+- Purchases
+- Returns
+- StockAdjustment
+- StockManagement
+- StockReport
+- PurchasesReport
+- SalesReport
+- ProfitLossReport
+- ProductionHppAnalysis
+
+### Hampir sesuai / transisi sementara
+- ResetTestData
+  - tabel preview sudah migrasi ke baseline global
+  - page shell utility masih manual dan aman dirapikan nanti jika utility page ikut distandardisasi penuh
+
+### Belum sesuai / legacy yang masih tersisa
+- tidak ada lagi main table operasional utama yang sengaja dibiarkan memakai action column manual di batch ini
+- sisa legacy terbesar sekarang ada pada utility shell tertentu dan helper/CSS lama yang hanya relevan untuk halaman yang belum ikut shared page wrapper penuh
+
+Area yang aman dibersihkan setelah migrasi ini stabil:
+- trigger detail manual yang mengandalkan klik nama row tanpa tombol `Detail` eksplisit
+- group tombol aksi lama berbasis `type="link"` yang hanya dipertahankan untuk halaman di luar baseline final
+- wrapper table manual pada utility page yang belum dipindah ke shared page foundation

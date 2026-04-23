@@ -263,10 +263,19 @@ const StockAdjustments = () => {
         title="Riwayat Penyesuaian"
         subtitle="Semua penyesuaian stok akan memperbarui stok item dan tercatat di inventory log."
       >
+        {/* =========================
+            SECTION: tabel penyesuaian stok baseline global
+            Fungsi:
+            - menjaga surface audit adjustment tetap seragam walau halaman ini tidak punya aksi per row
+            - scroll horizontal aman dipasang karena beberapa kolom catatan/alasan bisa memanjang
+            Status: aktif / final
+        ========================= */}
         <Table
+          className="app-data-table"
           rowKey="id"
           columns={stockAdjustmentColumns}
           dataSource={stockAdjustmentRecords}
+          scroll={{ x: 1100 }}
         />
       </PageSection>
 

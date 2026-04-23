@@ -204,6 +204,9 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     payrollRate: values.stepPayrollRate,
     payrollQtyBase: values.stepPayrollQtyBase,
     payrollOutputBasis: values.stepPayrollOutputBasis,
+    payrollClassification: values.stepPayrollClassification,
+    includePayrollInHpp: values.stepPayrollIncludeInHpp,
+    processType: values.stepProcessType,
   });
 
   const materialCostActual = materialUsages.reduce(
@@ -282,6 +285,9 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     stepPayrollRate: stepPayrollSnapshot.payrollRate,
     stepPayrollQtyBase: stepPayrollSnapshot.payrollQtyBase,
     stepPayrollOutputBasis: stepPayrollSnapshot.payrollOutputBasis,
+    stepPayrollClassification: stepPayrollSnapshot.payrollClassification,
+    stepPayrollIncludeInHpp: stepPayrollSnapshot.includePayrollInHpp,
+    stepProcessType: values.stepProcessType || "",
     stepPayrollRuleSource: values.stepPayrollRuleSource || "production_step",
 
     // SECTION: source

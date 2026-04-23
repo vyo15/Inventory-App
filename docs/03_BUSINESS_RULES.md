@@ -193,14 +193,18 @@ Rule final yang sekarang harus dianggap resmi:
 - source of truth payroll adalah rule payroll pada `production_steps`
 - saat work log dibuat / diupdate, rule payroll step disnapshot ke work log
 - saat payroll draft dibuat, service membaca snapshot rule payroll pada work log completed
+- payroll v1 final memakai target **1 payroll line = 1 orang + 1 step + 1 batch/work log**
 - jika work log lama belum punya snapshot, service boleh fallback sekali ke master step dan harus menandainya sebagai legacy/deprecated fallback
 - custom payroll di master karyawan tidak lagi menjadi jalur hitung aktif
-- satu work log hanya boleh punya satu payroll aktif; jika payroll dibatalkan barulah work log boleh dipakai lagi
+- line payroll aktif dijaga per kombinasi `workLogId + workerLineKey`; line yang cancelled boleh dibuat ulang
+- payroll support / fulfillment tetap boleh dibayar, tetapi klasifikasinya harus dibedakan dari direct labor inti
+- payroll baru harus melewati status `draft` -> `confirmed` -> `paid` / `cancelled`
 
 Rumus final:
 - `per_batch` memakai `plannedQty` / qty batch work log sebagai worked qty
 - `per_qty` memakai `good_qty` atau `actual_output_qty` sesuai basis output rule step
-- `fixed` dihitung 1x per work log
+- `fixed` dihitung 1x per line payroll
+- line support / fulfillment default tidak masuk HPP inti kecuali rule step menyatakan sebaliknya
 
 ## 14. Rule Reset Data Uji
 Reset utilitas mendukung mode:

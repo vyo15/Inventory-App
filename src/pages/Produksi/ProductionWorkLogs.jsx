@@ -297,43 +297,47 @@ const ProductionWorkLogs = () => {
     [referenceData.productionSteps, stepIdValue],
   );
 
-  const monitoringPreview = useMemo(
-    () =>
-      calculateProductionMonitoring(
-        {
-          ...(selectedProductionProfile || {}),
-          workBasisType: selectedStepForMonitoring?.workBasisType || '',
-          referenceYieldPerBaseQty:
-            selectedStepForMonitoring?.workBasisType === 'per_meter'
-              ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
-                ? selectedProductionProfile?.leafYieldPerMeter
-                : selectedProductionProfile?.petalYieldPerMeter
-              : selectedStepForMonitoring?.workBasisType === 'per_rod_40cm'
-                ? selectedProductionProfile?.stemYieldPerRod40cm
-                : 0,
-          flowerEquivalentPerBaseQty:
-            selectedStepForMonitoring?.workBasisType === 'per_meter'
-              ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
-                ? selectedProductionProfile?.flowerEquivalentPerLeafMeter
-                : selectedProductionProfile?.flowerEquivalentPerPetalMeter
-              : selectedStepForMonitoring?.workBasisType === 'per_rod_40cm'
-                ? selectedProductionProfile?.flowerEquivalentPerRod40cm
-                : 0,
-          batchLeafQty:
-            (selectedProductionProfile?.assemblyLeafPackCount || 0) *
-            (selectedProductionProfile?.leafYieldPerMeter || 0),
-          batchStemQty: selectedProductionProfile?.assemblyStemQty || 0,
-        },
-        {
-          workBasisType: selectedStepForMonitoring?.workBasisType || '',
-          baseInputQty: baseInputQtyValue,
-          goodQty: goodQtyValue,
-          leftoverLeafQty: leftoverLeafQtyValue,
-          leftoverStemQty: leftoverStemQtyValue,
-          leftoverPetalFlowerEquivalent: leftoverPetalFlowerEquivalentValue,
-        },
-      ),
-    [
+  const monitoringPreview = useMemo(() => {
+    const monitoringBasisType =
+      selectedStepForMonitoring?.basisType ||
+      selectedStepForMonitoring?.workBasisType ||
+      '';
+
+    return calculateProductionMonitoring(
+      {
+        ...(selectedProductionProfile || {}),
+        workBasisType: monitoringBasisType,
+        referenceYieldPerBaseQty:
+          monitoringBasisType === 'per_meter'
+            ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
+              ? selectedProductionProfile?.leafYieldPerMeter
+              : selectedProductionProfile?.petalYieldPerMeter
+            : monitoringBasisType === 'per_rod_40cm'
+              ? selectedProductionProfile?.stemYieldPerRod40cm
+              : 0,
+        flowerEquivalentPerBaseQty:
+          monitoringBasisType === 'per_meter'
+            ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
+              ? selectedProductionProfile?.flowerEquivalentPerLeafMeter
+              : selectedProductionProfile?.flowerEquivalentPerPetalMeter
+            : monitoringBasisType === 'per_rod_40cm'
+              ? selectedProductionProfile?.flowerEquivalentPerRod40cm
+              : 0,
+        batchLeafQty:
+          (selectedProductionProfile?.assemblyLeafPackCount || 0) *
+          (selectedProductionProfile?.leafYieldPerMeter || 0),
+        batchStemQty: selectedProductionProfile?.assemblyStemQty || 0,
+      },
+      {
+        workBasisType: monitoringBasisType,
+        baseInputQty: baseInputQtyValue,
+        goodQty: goodQtyValue,
+        leftoverLeafQty: leftoverLeafQtyValue,
+        leftoverStemQty: leftoverStemQtyValue,
+        leftoverPetalFlowerEquivalent: leftoverPetalFlowerEquivalentValue,
+      },
+    );
+  },    [
       selectedProductionProfile,
       selectedStepForMonitoring,
       baseInputQtyValue,
@@ -534,6 +538,9 @@ const ProductionWorkLogs = () => {
         (item) => item.id === values.productionProfileId,
       );
 
+      const selectedStepBasisType =
+        selectedStep?.basisType || selectedStep?.workBasisType || '';
+
       const payload = {
         ...values,
         workDate: values.workDate ? values.workDate.toDate() : null,
@@ -543,21 +550,21 @@ const ProductionWorkLogs = () => {
         productionProfileName: selectedProfile?.profileName || '',
         productionProfile: {
           ...(selectedProfile || {}),
-          workBasisType: selectedStep?.workBasisType || '',
+          workBasisType: selectedStepBasisType,
           referenceYieldPerBaseQty:
-            selectedStep?.workBasisType === 'per_meter'
+            selectedStepBasisType === 'per_meter'
               ? (selectedStep?.name || '').toLowerCase().includes('daun')
                 ? selectedProfile?.leafYieldPerMeter
                 : selectedProfile?.petalYieldPerMeter
-              : selectedStep?.workBasisType === 'per_rod_40cm'
+              : selectedStepBasisType === 'per_rod_40cm'
                 ? selectedProfile?.stemYieldPerRod40cm
                 : 0,
           flowerEquivalentPerBaseQty:
-            selectedStep?.workBasisType === 'per_meter'
+            selectedStepBasisType === 'per_meter'
               ? (selectedStep?.name || '').toLowerCase().includes('daun')
                 ? selectedProfile?.flowerEquivalentPerLeafMeter
                 : selectedProfile?.flowerEquivalentPerPetalMeter
-              : selectedStep?.workBasisType === 'per_rod_40cm'
+              : selectedStepBasisType === 'per_rod_40cm'
                 ? selectedProfile?.flowerEquivalentPerRod40cm
                 : 0,
           batchLeafQty:
@@ -579,6 +586,12 @@ const ProductionWorkLogs = () => {
         stepPayrollRate: Number(selectedStep?.payrollRate || 0),
         stepPayrollQtyBase: Number(selectedStep?.payrollQtyBase || 1),
         stepPayrollOutputBasis: selectedStep?.payrollOutputBasis || "good_qty",
+        stepPayrollClassification: selectedStep?.payrollClassification || "direct_labor",
+        stepPayrollIncludeInHpp:
+          typeof selectedStep?.includePayrollInHpp === "boolean"
+            ? selectedStep.includePayrollInHpp
+            : true,
+        stepProcessType: selectedStep?.processType || "raw_to_semi",
         stepPayrollRuleSource: "production_step",
 
         workerCodes: selectedEmployees.map((item) => item.code || ""),

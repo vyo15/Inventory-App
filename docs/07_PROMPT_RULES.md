@@ -76,11 +76,15 @@ cek:
 
 ## Saat Menyentuh Baseline UI Table / Action
 - anggap baseline table/action sebagai area presentational yang sudah dijaga konsistensinya
-- jangan menambah tombol `Detail` kecuali halaman itu memang punya drawer/detail read-only yang jelas
+- jangan menambah tombol `Detail` kecuali halaman itu memang punya drawer/detail read-only atau modal detail yang jelas
 - untuk main table yang lebar atau memakai `scroll.x`, kolom `Aksi` wajib di kanan dan `fixed: "right"`
 - jika ada kolom `Status` di table lebar, letakkan sticky di kanan sebelum `Aksi`
+- simple config page tidak perlu dipaksa punya `Detail`
+- ledger/simple action page boleh tanpa `Detail`, tetapi action column dan tombolnya tetap harus mengikuti baseline global
+- read-only data table page tidak perlu action column, tetapi tetap harus memakai surface table global (`app-data-table` / `ims-table`)
 - nested/subtable tidak perlu dipaksa sticky kecuali ada bug horizontal scroll nyata
 - jika ada halaman yang sengaja berbeda, jelaskan alasannya secara eksplisit sebelum coding
+- utility page yang masih transisi harus diberi comment jelas: aktif / transisi / legacy, dan kapan aman dibersihkan
 
 ## Saat Menutup Task
 Selalu beritahu apakah task itu sebaiknya juga mengupdate:

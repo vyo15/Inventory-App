@@ -115,12 +115,14 @@ Tujuan:
 
 Contract final payroll yang sekarang harus dianggap resmi:
 - source of truth rule payroll = master `production_steps`
-- work log menyimpan snapshot rule payroll step (`mode`, `rate`, `qty base`, `output basis`)
+- work log menyimpan snapshot rule payroll step (`mode`, `rate`, `qty base`, `output basis`, `classification`, `include in HPP`)
 - payroll draft membaca snapshot rule dari work log completed
 - sebelum draft dipakai, Work Log completed harus lolos payroll eligibility gate
 - fallback ke master step hanya untuk work log lama yang belum punya snapshot dan harus dianggap legacy/deprecated
 - custom payroll di master karyawan tidak lagi dipakai sebagai jalur hitung aktif
-- satu work log hanya boleh punya satu payroll aktif
+- payroll v1 final = 1 line per 1 operator + 1 step + 1 batch/work log
+- satu work log boleh punya banyak payroll line aktif selama tiap operator line berbeda
+- line payroll support / fulfillment tetap dibayar, tetapi dibedakan dari direct labor dan bisa dikeluarkan dari HPP inti
 
 Status payroll yang terlihat:
 - `draft`

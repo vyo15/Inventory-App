@@ -192,3 +192,14 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - reset + zero stock
 - reset + restore baseline
 - cek field stok sinkron kembali setelah reset
+
+
+### Global UI Normalization Batch
+- cek `Sales` apakah status + aksi tetap konsisten dan tombol row tidak lagi terasa manual/acak
+- cek `SupplierPurchases` apakah tombol `Detail` sekarang muncul jelas di kolom aksi
+- cek `PricingRules` apakah tombol `Detail` membuka modal detail/preview yang benar
+- cek `Purchases`, `Returns`, `StockAdjustment`, `StockManagement`, `StockReport`, `PurchasesReport`, `SalesReport`, `ProfitLossReport`, dan `ProductionHppAnalysis` apakah main table sudah memakai baseline surface global
+- cek halaman lebar tetap nyaman dipakai dengan `scroll.x` dan sticky/fixed right bila ada aksi
+- cek `ResetTestData` apakah tabel preview tetap rapi walau page shell utility masih transisi
+- cek dark mode dan light mode setelah normalisasi batch global
+- cek tidak ada variasi action liar baru di luar baseline final

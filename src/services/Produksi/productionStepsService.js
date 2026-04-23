@@ -166,6 +166,18 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
       values.payrollMode === "per_qty"
         ? values.payrollOutputBasis || "good_qty"
         : "good_qty",
+    // =====================================================
+    // ACTIVE / GUARDED
+    // Klasifikasi payroll membedakan direct labor inti vs support/fulfillment.
+    // Field ini ikut disnapshot ke Work Log dan dipakai lagi saat Payroll & HPP.
+    // =====================================================
+    payrollClassification:
+      values.payrollClassification ||
+      (processType === "support_process" ? "support_fulfillment" : "direct_labor"),
+    includePayrollInHpp:
+      typeof values.includePayrollInHpp === "boolean"
+        ? values.includePayrollInHpp
+        : processType !== "support_process",
     payrollNotes: String(values.payrollNotes || "").trim(),
 
     colorTag: String(values.colorTag || "").trim(),
@@ -234,6 +246,10 @@ export const validateProductionStep = (values = {}) => {
     if (!values.payrollOutputBasis) {
       errors.payrollOutputBasis = "Basis output bayar wajib dipilih";
     }
+  }
+
+  if (!values.payrollClassification) {
+    errors.payrollClassification = "Klasifikasi payroll wajib dipilih";
   }
 
   return errors;

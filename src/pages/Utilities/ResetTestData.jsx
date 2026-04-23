@@ -356,7 +356,15 @@ const ResetTestData = () => {
           </Card>
 
           <Card title="Preview Reset Real-Time" size="small">
+            {/* -----------------------------------------------------------------
+                Tabel preview utility ikut memakai class baseline global.
+                Catatan:
+                - kolom "Aksi Reset" di sini bersifat informasional, bukan action column utama per row
+                - utility page ini masih transisi di level page shell, tetapi tabel preview sudah dimigrasikan
+                Status: transisi sementara / aman dibersihkan lagi saat utility page ikut dinormalisasi penuh
+            ----------------------------------------------------------------- */}
             <Table
+              className="app-data-table"
               size="small"
               loading={loadingPreview}
               pagination={false}
@@ -373,6 +381,7 @@ const ResetTestData = () => {
                   render: (value) => <Tag>{value}</Tag>,
                 },
               ]}
+              scroll={{ x: 820 }}
               locale={{ emptyText: "Tidak ada modul aktif atau belum ada data yang cocok untuk reset." }}
             />
           </Card>

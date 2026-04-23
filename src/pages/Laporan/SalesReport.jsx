@@ -229,11 +229,20 @@ const SalesReport = () => {
           </Button>
         }
       >
+        {/* =========================
+            SECTION: tabel laporan penjualan baseline global
+            Fungsi:
+            - menyamakan surface tabel laporan dengan baseline global tanpa mengubah logic sumber data sales
+            - tidak ada aksi row karena halaman laporan cukup fokus pada baca + ekspor
+            Status: aktif / final
+        ========================= */}
         <Table
+          className="app-data-table"
           dataSource={salesData}
           columns={columns}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 1200 }}
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada data penjualan untuk ditampilkan." />,
           }}

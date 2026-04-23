@@ -717,10 +717,19 @@ const Purchases = () => {
         title="Data Pembelian"
         subtitle="Pembelian akan menambah stok item, mencatat inventory log, dan menghasilkan pengeluaran kas."
       >
+        {/* =========================
+            SECTION: tabel pembelian baseline global
+            Fungsi:
+            - menjaga surface tabel pembelian tetap seragam dengan halaman transaksi lain
+            - tabel ini tidak punya aksi per baris, jadi cukup memakai class global + scroll aman
+            Status: aktif / final
+        ========================= */}
         <Table
+          className="app-data-table"
           dataSource={purchaseRecords}
           columns={purchaseTableColumns}
           rowKey="id"
+          scroll={{ x: 1380 }}
         />
       </PageSection>
 

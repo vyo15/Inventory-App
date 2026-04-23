@@ -509,7 +509,9 @@ const PricingRules = () => {
       // =========================
       // SECTION: aksi sticky
       // Fungsi:
-      // - menyamakan group tombol preview, edit, dan hapus dengan tabel besar lain
+      // - Pricing Rules dianggap detail-capable karena modal preview sekarang diposisikan sebagai detail rule + simulasi dampaknya
+      // - label Preview diganti menjadi Detail agar tidak membuat variasi aksi liar di luar baseline final
+      // Status: aktif / final
       // =========================
       title: "Aksi",
       key: "actions",
@@ -517,15 +519,17 @@ const PricingRules = () => {
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap>
+        <div className="ims-action-group">
           <Button
+            className="ims-action-button"
+            size="small"
             icon={<EyeOutlined />}
             onClick={() => handlePreviewRule(record)}
           >
-            Preview
+            Detail
           </Button>
 
-          <Button icon={<EditOutlined />} onClick={() => openEditModal(record)}>
+          <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)}>
             Edit
           </Button>
 
@@ -536,11 +540,11 @@ const PricingRules = () => {
             cancelText="Batal"
             onConfirm={() => handleDeleteRule(record?.id)}
           >
-            <Button danger icon={<DeleteOutlined />}>
+            <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />}>
               Hapus
             </Button>
           </Popconfirm>
-        </Space>
+        </div>
       ),
     },
   ];
@@ -911,7 +915,7 @@ const PricingRules = () => {
 
       {/* SECTION: modal preview pricing */}
       <Modal
-        title={`Preview Pricing Rule${
+        title={`Detail Pricing Rule${
           previewRule?.name ? ` - ${previewRule.name}` : ""
         }`}
         open={previewVisible}
@@ -938,7 +942,7 @@ const PricingRules = () => {
           style={{ marginBottom: 16 }}
           type="info"
           showIcon
-          message="Preview akan menghitung harga item berdasarkan rule ini. Item dengan mode manual akan dilewati. Item dengan base cost kosong atau buffer marketplace tidak valid tidak akan diupdate."
+          message="Detail rule ini juga menampilkan preview dampak harga pada item terkait. Item dengan mode manual akan dilewati. Item dengan base cost kosong atau buffer marketplace tidak valid tidak akan diupdate."
         />
 
         {/* SECTION: ringkasan preview */}

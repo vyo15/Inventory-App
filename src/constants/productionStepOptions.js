@@ -32,8 +32,6 @@ export const PRODUCTION_STEP_OUTPUT_TYPES = [
   { value: "none", label: "No Stock Output" },
 ];
 
-
-
 export const PRODUCTION_STEP_BASIS_TYPES = [
   { value: "per_meter", label: "Per Meter" },
   { value: "per_rod_40cm", label: "Per Batang 40 cm" },
@@ -55,8 +53,19 @@ export const PRODUCTION_STEP_PAYROLL_MODES = [
 ];
 
 export const PRODUCTION_STEP_PAYROLL_OUTPUT_BASIS = [
-  { value: "good_qty", label: "Good Qty" },
-  { value: "actual_output_qty", label: "Actual Output Qty" },
+  { value: "good_qty", label: "Hasil Bagus" },
+  { value: "actual_output_qty", label: "Total Hasil" },
+];
+
+// =====================================================
+// ACTIVE / GUARDED
+// Klasifikasi payroll dipakai untuk membedakan direct labor produksi inti
+// vs support / fulfillment. Nilai ini ikut disnapshot ke Work Log lalu ke
+// Payroll agar HPP tidak bercampur diam-diam dengan step support.
+// =====================================================
+export const PRODUCTION_STEP_PAYROLL_CLASSIFICATIONS = [
+  { value: "direct_labor", label: "Produksi Inti" },
+  { value: "support_fulfillment", label: "Support / Fulfillment" },
 ];
 
 export const toOptionMap = (options = []) =>
@@ -77,6 +86,9 @@ export const PAYROLL_MODE_MAP = toOptionMap(PRODUCTION_STEP_PAYROLL_MODES);
 export const PAYROLL_OUTPUT_BASIS_MAP = toOptionMap(
   PRODUCTION_STEP_PAYROLL_OUTPUT_BASIS,
 );
+export const PAYROLL_CLASSIFICATION_MAP = toOptionMap(
+  PRODUCTION_STEP_PAYROLL_CLASSIFICATIONS,
+);
 
 export const DEFAULT_PRODUCTION_STEP_FORM = {
   code: "",
@@ -89,6 +101,9 @@ export const DEFAULT_PRODUCTION_STEP_FORM = {
   payrollRate: 0,
   payrollQtyBase: 1,
   payrollOutputBasis: "good_qty",
+  payrollClassification: "direct_labor",
+  includePayrollInHpp: true,
+  payrollNotes: "",
   isActive: true,
 };
 

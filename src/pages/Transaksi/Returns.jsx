@@ -207,10 +207,19 @@ const Returns = () => {
         title="Data Retur"
         subtitle="Setiap retur akan menambah stok item terkait dan tercatat di inventory log."
       >
+        {/* =========================
+            SECTION: tabel retur baseline global
+            Fungsi:
+            - menyamakan surface tabel retur dengan halaman ledger/simple action lain
+            - retur tidak punya detail drawer, jadi tabel cukup fokus ke data inti tanpa aksi tambahan
+            Status: aktif / final
+        ========================= */}
         <Table
+          className="app-data-table"
           dataSource={returnRecords}
           columns={returnTableColumns}
           rowKey="id"
+          scroll={{ x: 920 }}
         />
       </PageSection>
 

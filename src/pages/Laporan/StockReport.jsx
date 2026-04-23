@@ -328,12 +328,21 @@ const StockReport = () => {
         subtitle="Field stok tampilan mengikuti fallback currentStock → stock → availableStock agar aman pada codebase transisional."
         extra={<Tag color="blue">{formatNumberId(filteredData.length)} baris</Tag>}
       >
+        {/* =========================
+            SECTION: tabel laporan stok baseline global
+            Fungsi:
+            - laporan stok ikut memakai surface table resmi tanpa mengubah rule laporan yang masih sederhana
+            - tidak ada aksi row, jadi tabel fokus pada data + filter + ekspor
+            Status: aktif / final
+        ========================= */}
         <Table
+          className="app-data-table"
           columns={columns}
           dataSource={filteredData}
           loading={loading}
           rowKey="id"
           bordered
+          scroll={{ x: 980 }}
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada data stok yang cocok dengan filter saat ini." />,
           }}

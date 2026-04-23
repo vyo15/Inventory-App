@@ -602,9 +602,23 @@ const Sales = () => {
         value != null ? `Rp ${Number(value).toLocaleString("id-ID")}` : "-",
     },
     {
+      title: "Tanggal",
+      dataIndex: "date",
+      key: "date",
+    },
+    {
+      // =========================
+      // SECTION: status sticky
+      // Fungsi:
+      // - Sales diklasifikasikan sebagai ledger/simple action page yang tetap perlu status mudah dibaca
+      // - pada tabel lebar, status ikut sticky di kanan sebelum aksi agar user tidak kehilangan konteks row
+      // =========================
       title: "Status",
       dataIndex: "status",
       key: "status",
+      width: 130,
+      fixed: "right",
+      className: "app-table-status-column app-table-fixed-secondary",
       render: (status) => {
         const statusColors = {
           Selesai: "green",
@@ -615,11 +629,6 @@ const Sales = () => {
 
         return <Tag color={statusColors[status] || "default"}>{status}</Tag>;
       },
-    },
-    {
-      title: "Tanggal",
-      dataIndex: "date",
-      key: "date",
     },
     {
       // =========================
@@ -633,7 +642,7 @@ const Sales = () => {
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space size="middle" wrap>
+        <div className="ims-action-group">
           {record.status === "Diproses" &&
             !isOfflineChannel(record.salesChannel) && (
               <Popconfirm
@@ -642,7 +651,9 @@ const Sales = () => {
                 okText="Ya"
                 cancelText="Tidak"
               >
-                <Button type="link">Dikirim</Button>
+                <Button className="ims-action-button" size="small">
+                  Dikirim
+                </Button>
               </Popconfirm>
             )}
 
@@ -654,7 +665,9 @@ const Sales = () => {
                 okText="Ya"
                 cancelText="Tidak"
               >
-                <Button type="link">Selesai</Button>
+                <Button className="ims-action-button" size="small">
+                  Selesai
+                </Button>
               </Popconfirm>
             )}
 
@@ -662,13 +675,11 @@ const Sales = () => {
             !isOfflineChannel(record.salesChannel) && (
               <Popconfirm
                 title="Yakin batalkan penjualan ini?"
-                onConfirm={() =>
-                  handleUpdateSaleStatus(record.id, "Dibatalkan")
-                }
+                onConfirm={() => handleUpdateSaleStatus(record.id, "Dibatalkan")}
                 okText="Ya"
                 cancelText="Tidak"
               >
-                <Button type="link" danger>
+                <Button className="ims-action-button" size="small" danger>
                   Batalkan
                 </Button>
               </Popconfirm>
@@ -680,9 +691,11 @@ const Sales = () => {
             okText="Ya"
             cancelText="Tidak"
           >
-            <Button type="link" danger icon={<DeleteOutlined />} />
+            <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />}>
+              Hapus
+            </Button>
           </Popconfirm>
-        </Space>
+        </div>
       ),
     },
   ];

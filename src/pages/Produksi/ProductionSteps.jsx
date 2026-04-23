@@ -37,11 +37,13 @@ import {
   BASIS_TYPE_MAP,
   DEFAULT_PRODUCTION_STEP_FORM,
   MONITORING_MODE_MAP,
+  PAYROLL_CLASSIFICATION_MAP,
   PAYROLL_MODE_MAP,
   PAYROLL_OUTPUT_BASIS_MAP,
   PROCESS_TYPE_MAP,
   PRODUCTION_STEP_BASIS_TYPES,
   PRODUCTION_STEP_MONITORING_MODES,
+  PRODUCTION_STEP_PAYROLL_CLASSIFICATIONS,
   PRODUCTION_STEP_PAYROLL_MODES,
   PRODUCTION_STEP_PAYROLL_OUTPUT_BASIS,
   PRODUCTION_STEP_PROCESS_TYPES,
@@ -194,6 +196,12 @@ const ProductionSteps = () => {
       payrollRate: Number(record.payrollRate || 0),
       payrollQtyBase: Number(record.payrollQtyBase || 1),
       payrollOutputBasis: record.payrollOutputBasis || DEFAULT_PRODUCTION_STEP_FORM.payrollOutputBasis,
+      payrollClassification:
+        record.payrollClassification || DEFAULT_PRODUCTION_STEP_FORM.payrollClassification,
+      includePayrollInHpp:
+        typeof record.includePayrollInHpp === "boolean"
+          ? record.includePayrollInHpp
+          : DEFAULT_PRODUCTION_STEP_FORM.includePayrollInHpp,
       isActive: record.isActive !== false,
     });
     setFormVisible(true);
@@ -386,14 +394,14 @@ const ProductionSteps = () => {
       },
     },
     {
-      title: "Basis Kerja",
+      title: "Cara Kerja Step",
       dataIndex: "basisType",
       key: "basisType",
       width: 160,
       render: (value) => <Tag color="blue">{BASIS_TYPE_MAP[value] || "-"}</Tag>,
     },
     {
-      title: "Monitoring",
+      title: "Cara Pantau Hasil",
       dataIndex: "monitoringMode",
       key: "monitoringMode",
       width: 170,
@@ -407,6 +415,22 @@ const ProductionSteps = () => {
         <Typography.Text type={record.payrollMode ? undefined : "secondary"}>
           {record.payrollMode ? formatProductionStepPayrollPreview(record) : "-"}
         </Typography.Text>
+      ),
+    },
+    {
+      title: "Klasifikasi Payroll",
+      dataIndex: "payrollClassification",
+      key: "payrollClassification",
+      width: 190,
+      render: (_, record) => (
+        <Space direction="vertical" size={4}>
+          <Tag color={record.includePayrollInHpp === false ? "orange" : "green"}>
+            {PAYROLL_CLASSIFICATION_MAP[record.payrollClassification] || "-"}
+          </Tag>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {record.includePayrollInHpp === false ? "Tidak masuk HPP inti" : "Masuk HPP inti"}
+          </Typography.Text>
+        </Space>
       ),
     },
     {
@@ -507,7 +531,7 @@ const ProductionSteps = () => {
               Tahapan Produksi
             </Typography.Title>
             <Typography.Text type="secondary">
-              Master step sederhana untuk standarisasi proses, relasi karyawan, dan BOM produksi. QC tidak dijadikan step terpisah, tetapi dicek di setiap proses/work log. Untuk kebutuhan Anda saat ini, assembly adalah proses akhir dan packing bersifat opsional bila memang ada pekerjaan pengemasan terpisah.
+              Master step sederhana untuk standarisasi proses, relasi karyawan, BOM, dan source of truth payroll produksi. QC tidak dijadikan step terpisah, tetapi dicek di setiap proses/work log. Untuk kebutuhan Anda saat ini, assembly adalah proses akhir dan packing bersifat opsional bila memang ada pekerjaan pengemasan terpisah.
             </Typography.Text>
           </Col>
 
@@ -659,20 +683,20 @@ const ProductionSteps = () => {
           <Row gutter={12}>
             <Col xs={24} md={12}>
               <Form.Item
-                label="Basis Kerja"
+                label="Cara Kerja Step"
                 name="basisType"
-                rules={[{ required: true, message: "Basis kerja wajib dipilih" }]}
+                rules={[{ required: true, message: "Cara kerja step wajib dipilih" }]}
               >
-                <Select options={PRODUCTION_STEP_BASIS_TYPES} placeholder="Pilih basis kerja" />
+                <Select options={PRODUCTION_STEP_BASIS_TYPES} placeholder="Pilih cara kerja step" />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
               <Form.Item
-                label="Monitoring"
+                label="Cara Pantau Hasil"
                 name="monitoringMode"
-                rules={[{ required: true, message: "Mode monitoring wajib dipilih" }]}
+                rules={[{ required: true, message: "Cara pantau hasil wajib dipilih" }]}
               >
-                <Select options={PRODUCTION_STEP_MONITORING_MODES} placeholder="Pilih mode monitoring" />
+                <Select options={PRODUCTION_STEP_MONITORING_MODES} placeholder="Pilih cara pantau hasil" />
               </Form.Item>
             </Col>
           </Row>
@@ -698,16 +722,44 @@ const ProductionSteps = () => {
 
           <Row gutter={12}>
             <Col xs={24} md={12}>
-              <Form.Item label="Qty Dasar Bayar" name="payrollQtyBase">
+              <Form.Item label="Dibayar Tiap Berapa Hasil" name="payrollQtyBase">
                 <InputNumber min={1} style={{ width: "100%" }} placeholder="Contoh: 1" />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label="Basis Output Bayar" name="payrollOutputBasis">
+              <Form.Item label="Hitung dari Hasil" name="payrollOutputBasis">
                 <Select options={PRODUCTION_STEP_PAYROLL_OUTPUT_BASIS} placeholder="Pilih basis output" />
               </Form.Item>
             </Col>
           </Row>
+
+          <Divider orientation="left">Klasifikasi Payroll</Divider>
+
+          <Row gutter={12}>
+            <Col xs={24} md={12}>
+              <Form.Item
+                label="Klasifikasi Payroll"
+                name="payrollClassification"
+                rules={[{ required: true, message: "Klasifikasi payroll wajib dipilih" }]}
+              >
+                <Select
+                  options={PRODUCTION_STEP_PAYROLL_CLASSIFICATIONS}
+                  placeholder="Pilih klasifikasi payroll"
+                />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="Masuk ke HPP Produksi Inti" name="includePayrollInHpp" valuePropName="checked">
+                <Switch checkedChildren="Ya" unCheckedChildren="Tidak" />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Divider orientation="left">Catatan Admin</Divider>
+
+          <Form.Item label="Catatan Payroll" name="payrollNotes">
+            <Input.TextArea rows={3} placeholder="Catatan admin untuk payroll step ini" />
+          </Form.Item>
 
           <Form.Item label="Status Aktif" name="isActive" valuePropName="checked">
             <Switch checkedChildren="Aktif" unCheckedChildren="Nonaktif" />

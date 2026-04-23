@@ -385,7 +385,15 @@ const StockManagement = () => {
         subtitle="Tabel tetap fokus pada audit operasional: kapan, dari mana, item apa, qty berapa, dan referensinya dari transaksi mana."
         extra={<Tag color="purple">{formatNumberId(filteredHistory.length)} baris</Tag>}
       >
+        {/* =========================
+            SECTION: tabel audit stok baseline global
+            Fungsi:
+            - halaman ini tidak punya aksi row, tetapi tetap memakai class resmi agar surface table konsisten lintas modul
+            - scroll.x dipertahankan karena tabel audit memang lebar dan berisi referensi transaksi panjang
+            Status: aktif / final
+        ========================= */}
         <Table
+          className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}

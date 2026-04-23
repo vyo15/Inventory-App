@@ -212,11 +212,20 @@ const ProfitLossReport = () => {
           </Button>
         }
       >
+        {/* =========================
+            SECTION: tabel laba rugi baseline global
+            Fungsi:
+            - mengunci surface laporan ke pattern yang sama dengan report lain
+            - tabel tetap read-only dan tidak menambah aksi di luar export
+            Status: aktif / final
+        ========================= */}
         <Table
+          className="app-data-table"
           dataSource={reportData}
           columns={columns}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 980 }}
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada data laba rugi untuk ditampilkan." />,
           }}

@@ -5,23 +5,14 @@
 // =====================================================
 
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Card,
-  Col,
-  Empty,
-  Input,
-  Row,
-  Select,
-  Space,
-  Statistic,
-  Table,
-  Typography,
-  message,
-} from "antd";
+import { Button, Col, Empty, Input, Select, Table, Typography, message, Tag } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
-import { Button } from "antd";
 import { getCompletedProductionWorkLogs } from "../../services/Produksi/productionWorkLogsService";
 import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
+import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
+import FilterBar from "../../components/Layout/Filters/FilterBar";
+import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
 
 const formatNumber = (value) =>
   new Intl.NumberFormat("id-ID").format(Number(value || 0));
@@ -138,6 +129,20 @@ const ProductionHppAnalysis = () => {
     };
   }, [filteredRows]);
 
+  const summaryItems = useMemo(
+    () => [
+      { key: "total-logs", title: "Total Work Log", value: formatNumber(summary.totalLogs) },
+      {
+        key: "total-cost",
+        title: "Total Biaya Produksi",
+        value: formatCurrency(summary.totalProductionCost),
+      },
+      { key: "good-qty", title: "Total Good Qty", value: formatNumber(summary.totalGoodQty) },
+      { key: "avg-hpp", title: "Rata-rata HPP / Unit", value: formatCurrency(summary.averageHpp) },
+    ],
+    [summary],
+  );
+
   const columns = [
     {
       title: "No. Work Log",
@@ -204,88 +209,73 @@ const ProductionHppAnalysis = () => {
   ];
 
   return (
-    <div>
-      <Card style={{ marginBottom: 16 }}>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col>
-            <Typography.Title level={3} style={{ margin: 0 }}>
-              Analisis HPP Produksi
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              Analisa biaya realisasi bahan, tenaga kerja, dan overhead per work
-              log completed
-            </Typography.Text>
+    <>
+      <PageHeader
+        title="Analisis HPP Produksi"
+        subtitle="Analisa biaya realisasi bahan, tenaga kerja, dan overhead per work log completed dengan baseline layout shared yang seragam."
+        actions={[
+          {
+            key: "refresh-hpp-analysis",
+            icon: <ReloadOutlined />,
+            label: "Refresh",
+            onClick: loadData,
+          },
+        ]}
+      />
+
+      <PageSection
+        title="Ringkasan HPP"
+        subtitle="Ringkasan mengikuti hasil filter target type dan pencarian work log agar audit biaya lebih cepat."
+      >
+        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
+      </PageSection>
+
+      <PageSection
+        title="Filter Analisis"
+        subtitle="Filter ini membantu membaca kelompok work log tertentu tanpa mengubah contract HPP aktif."
+      >
+        <FilterBar>
+          <Col xs={24} md={12}>
+            <Input
+              style={{ width: "100%" }}
+              placeholder="Cari work log, target, step..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              allowClear
+            />
           </Col>
-          <Col>
-            <Button icon={<ReloadOutlined />} onClick={loadData}>
-              Refresh
-            </Button>
+          <Col xs={24} md={8}>
+            <Select
+              style={{ width: "100%" }}
+              value={targetTypeFilter}
+              onChange={setTargetTypeFilter}
+              options={[
+                { value: "all", label: "Semua Target Type" },
+                {
+                  value: "semi_finished_material",
+                  label: "Semi Finished Material",
+                },
+                { value: "product", label: "Product" },
+              ]}
+            />
           </Col>
-        </Row>
-      </Card>
+        </FilterBar>
+      </PageSection>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Total Work Log" value={summary.totalLogs} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="Total Biaya Produksi"
-              value={summary.totalProductionCost}
-              formatter={(value) => formatCurrency(value)}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="Total Good Qty"
-              value={summary.totalGoodQty}
-              formatter={(value) => formatNumber(value)}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="Rata-rata HPP / Unit"
-              value={summary.averageHpp}
-              formatter={(value) => formatCurrency(value)}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      <Card style={{ marginBottom: 16 }}>
-        <Space wrap style={{ width: "100%" }}>
-          <Input
-            style={{ width: 320 }}
-            placeholder="Cari work log, target, step..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            allowClear
-          />
-          <Select
-            style={{ width: 220 }}
-            value={targetTypeFilter}
-            onChange={setTargetTypeFilter}
-            options={[
-              { value: "all", label: "Semua Target Type" },
-              {
-                value: "semi_finished_material",
-                label: "Semi Finished Material",
-              },
-              { value: "product", label: "Product" },
-            ]}
-          />
-        </Space>
-      </Card>
-
-      <Card>
+      <PageSection
+        title="Tabel Analisis HPP"
+        subtitle="Tabel tetap membaca Work Log completed dan payroll aktif tanpa mengubah contract biaya produksi yang sudah guarded."
+        extra={<Tag color="purple">{formatNumber(filteredRows.length)} baris</Tag>}
+      >
+        {/* =========================
+            SECTION: tabel HPP baseline global
+            Fungsi:
+            - memigrasikan halaman HPP dari card layout manual ke shared page wrapper resmi
+            - menjaga tabel analisis tetap seragam tanpa menyentuh logic perhitungan biaya
+            Status: aktif / final
+        ========================= */}
         <Table
+          className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}
@@ -299,8 +289,8 @@ const ProductionHppAnalysis = () => {
             showSizeChanger: true,
           }}
         />
-      </Card>
-    </div>
+      </PageSection>
+    </>
   );
 };
 

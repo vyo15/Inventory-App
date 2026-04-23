@@ -3,8 +3,9 @@
 //
 // ACTIVE / GUARDED
 // Flow final payroll produksi sekarang adalah:
-// Work Log completed -> resolve rule payroll step -> buat payroll draft ->
-// simpan payroll -> sinkronkan flag payroll di Work Log.
+// Work Log completed -> resolve rule payroll step -> pilih 1 operator line ->
+// buat payroll draft -> confirm -> paid / cancelled -> sinkronkan flag payroll
+// di Work Log.
 //
 // LEGACY / DEPRECATED
 // - Custom payroll pada master karyawan tidak lagi menjadi jalur hitung aktif.
@@ -33,6 +34,7 @@ import { getCompletedProductionWorkLogs } from "./productionWorkLogsService";
 import {
   buildPayrollCalculationNotes,
   buildPayrollEligibilityNotes,
+  buildWorkLogPayrollWorkerCandidates,
   formatPayrollRuleSourceLabel,
   resolveWorkLogPayrollDraft,
 } from "../../utils/produksi/productionPayrollRuleHelpers";
@@ -41,34 +43,106 @@ const COLLECTION_NAME = "production_payrolls";
 const WORK_LOG_COLLECTION_NAME = "production_work_logs";
 
 const safeTrim = (value) => String(value || "").trim();
-const hasMeaningfulWorkerValue = (value) => {
-  const normalized = safeTrim(value);
-  return Boolean(normalized && normalized !== "-");
+const toNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 };
 
-const buildWorkerSummaryFromWorkLog = (workLog = {}) => {
-  const workerNames = Array.isArray(workLog.workerNames)
-    ? workLog.workerNames.filter(Boolean)
-    : [];
+const resolveSelectedWorkerCandidate = (workLog = {}, selectedWorker = "") => {
+  const candidates = buildWorkLogPayrollWorkerCandidates(workLog);
+  if (candidates.length === 0) return null;
 
-  if (workerNames.length > 0) {
-    return workerNames.join(", ");
+  const normalizedKey = safeTrim(
+    typeof selectedWorker === "string"
+      ? selectedWorker
+      : selectedWorker?.workerLineKey,
+  );
+
+  if (normalizedKey) {
+    return (
+      candidates.find((item) => item.workerLineKey === normalizedKey) || candidates[0]
+    );
   }
 
-  if (safeTrim(workLog.workerName)) {
-    return safeTrim(workLog.workerName);
+  const selectedWorkerId = safeTrim(selectedWorker?.workerId);
+  if (selectedWorkerId) {
+    return candidates.find((item) => item.workerId === selectedWorkerId) || candidates[0];
   }
 
-  const workerCount = Number(workLog.workerCount || 0);
-  if (workerCount > 1) {
-    return `Tim Produksi (${workerCount} orang)`;
+  return candidates[0];
+};
+
+const getAllProductionStepsForPayroll = async () => {
+  try {
+    const snapshot = await getDocs(collection(db, "production_steps"));
+    return snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data(),
+    }));
+  } catch (error) {
+    console.error("Gagal memuat referensi step payroll produksi", error);
+    return [];
+  }
+};
+
+const getAllProductionPayrollDocs = async () => {
+  try {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      orderBy("payrollDate", "desc"),
+      orderBy("payrollNumber", "desc"),
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+  } catch (error) {
+    console.error("Query payroll utama gagal, pakai fallback", error);
+    const snapshot = await getDocs(collection(db, COLLECTION_NAME));
+    return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+  }
+};
+
+const getPayrollDocsByWorkLogId = async (workLogId) => {
+  if (!workLogId) return [];
+
+  const snapshot = await getDocs(
+    query(collection(db, COLLECTION_NAME), where("workLogId", "==", workLogId)),
+  );
+
+  return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+};
+
+const hasActivePayrollLineForWorkLog = async ({
+  workLogId,
+  workerLineKey,
+  excludeId = null,
+} = {}) => {
+  if (!workLogId || !workerLineKey) return false;
+
+  const payrolls = await getPayrollDocsByWorkLogId(workLogId);
+
+  return payrolls.some((item) => {
+    if (item.id === excludeId) return false;
+    if (item.status === "cancelled") return false;
+    return safeTrim(item.workerLineKey) === safeTrim(workerLineKey);
+  });
+};
+
+const deriveWorkLogPayrollSyncState = (activePayrolls = []) => {
+  if (activePayrolls.length === 0) {
+    return {
+      payrollCalculated: false,
+      payrollCalculationStatus: "pending",
+    };
   }
 
-  if (workerCount === 1) {
-    return "Operator Produksi";
-  }
+  const allPaid = activePayrolls.every(
+    (item) => item.status === "paid" && item.paymentStatus === "paid",
+  );
 
-  return "-";
+  return {
+    payrollCalculated: true,
+    payrollCalculationStatus: allPaid ? "posted" : "calculated",
+  };
 };
 
 // =====================================================
@@ -77,34 +151,34 @@ const buildWorkerSummaryFromWorkLog = (workLog = {}) => {
 //
 // Fungsi:
 // - menjaga audit trail Work Log -> Payroll tetap jelas
-// - menghindari flow lama yang mengandalkan tebakan / fallback diam-diam
+// - 1 work log sekarang boleh punya banyak payroll line selama berbeda operator
+//   sehingga sinkronisasi harus membaca summary aktif, bukan satu dokumen payroll
 // =====================================================
-const syncWorkLogPayrollState = async (
-  {
-    workLogId,
-    payrollId,
-    payrollNumber,
-    finalAmount,
-    status,
-    paymentStatus,
-  } = {},
-  actor = "system",
-) => {
+const syncWorkLogPayrollState = async (workLogId, actor = "system") => {
   if (!workLogId) return;
 
-  const isCancelled = status === "cancelled";
-  const normalizedCalculationStatus = isCancelled
-    ? "cancelled"
-    : paymentStatus === "paid"
-      ? "paid"
-      : status || "draft";
+  const payrolls = await getPayrollDocsByWorkLogId(workLogId);
+  const activePayrolls = payrolls.filter((item) => item.status !== "cancelled");
+  const totalFinalAmount = activePayrolls.reduce(
+    (sum, item) => sum + toNumber(item.finalAmount, 0),
+    0,
+  );
+  const paidPayrollLineCount = activePayrolls.filter(
+    (item) => item.status === "paid" && item.paymentStatus === "paid",
+  ).length;
+  const syncState = deriveWorkLogPayrollSyncState(activePayrolls);
+  const singleActivePayroll = activePayrolls.length === 1 ? activePayrolls[0] : null;
 
   await updateDoc(doc(db, WORK_LOG_COLLECTION_NAME, workLogId), {
-    payrollCalculated: !isCancelled,
-    payrollCalculationStatus: normalizedCalculationStatus,
-    payrollId: !isCancelled ? payrollId || "" : "",
-    payrollNumber: !isCancelled ? safeTrim(payrollNumber) : "",
-    payrollFinalAmount: !isCancelled ? Number(finalAmount || 0) : 0,
+    payrollCalculated: syncState.payrollCalculated,
+    payrollCalculationStatus: syncState.payrollCalculationStatus,
+    payrollId: singleActivePayroll?.id || "",
+    payrollNumber: singleActivePayroll?.payrollNumber || "",
+    payrollIds: activePayrolls.map((item) => item.id),
+    payrollNumbers: activePayrolls.map((item) => safeTrim(item.payrollNumber)).filter(Boolean),
+    payrollLineCount: activePayrolls.length,
+    paidPayrollLineCount,
+    payrollFinalAmount: totalFinalAmount,
     updatedAt: serverTimestamp(),
     updatedBy: actor,
   });
@@ -135,10 +209,11 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
 
     // =====================================================
     // ACTIVE / GUARDED
-    // Kolom worker sekarang bersifat summary operator/tim dari Work Log.
-    // workerId/workerCode dipertahankan untuk kompatibilitas schema lama,
-    // tetapi tidak lagi menjadi source of truth hitung payroll.
+    // Payroll v1 wajib menyimpan line operator secara tegas.
+    // 1 payroll line = 1 orang + 1 step + 1 batch/work log.
     // =====================================================
+    workerLineKey: safeTrim(values.workerLineKey),
+    workerSourceType: safeTrim(values.workerSourceType),
     workerId: values.workerId || "",
     workerCode: safeTrim(values.workerCode),
     workerName: safeTrim(values.workerName),
@@ -147,6 +222,11 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     payrollRate: Number(values.payrollRate || 0),
     payrollQtyBase: Number(values.payrollQtyBase || 1),
     payrollOutputBasis: values.payrollOutputBasis || "good_qty",
+    payrollClassification: values.payrollClassification || "direct_labor",
+    includePayrollInHpp:
+      typeof values.includePayrollInHpp === "boolean"
+        ? values.includePayrollInHpp
+        : true,
     payrollRuleSource: values.payrollRuleSource || "work_log_step_snapshot",
     legacyPayrollFallbackUsed: Boolean(values.legacyPayrollFallbackUsed),
 
@@ -165,6 +245,7 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
 
     status: values.status || "draft",
     paymentStatus: values.paymentStatus || "unpaid",
+    confirmedAt: values.confirmedAt || null,
     paidAt: values.paidAt || null,
 
     notes: safeTrim(values.notes),
@@ -213,8 +294,13 @@ export const validateProductionPayroll = (values = {}) => {
     errors.workLogId = "Work log wajib dipilih";
   }
 
-  if (!hasMeaningfulWorkerValue(values.workerName) && !values.workerId) {
-    errors.workerId = "Operator / tim dari work log wajib terbaca";
+  if (!safeTrim(values.workerLineKey)) {
+    errors.workerLineKey =
+      "Line operator payroll wajib dipilih. Payroll v1 tidak lagi memakai ringkasan tim sebagai satu line.";
+  }
+
+  if (!safeTrim(values.workerName)) {
+    errors.workerName = "Nama operator payroll wajib terbaca dari Work Log";
   }
 
   if (!values.stepId) {
@@ -257,49 +343,6 @@ export const validateProductionPayroll = (values = {}) => {
   return errors;
 };
 
-const getAllProductionStepsForPayroll = async () => {
-  try {
-    const snapshot = await getDocs(collection(db, "production_steps"));
-    return snapshot.docs.map((item) => ({
-      id: item.id,
-      ...item.data(),
-    }));
-  } catch (error) {
-    console.error("Gagal memuat referensi step payroll produksi", error);
-    return [];
-  }
-};
-
-const getAllProductionPayrollDocs = async () => {
-  try {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      orderBy("payrollDate", "desc"),
-      orderBy("payrollNumber", "desc"),
-    );
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-  } catch (error) {
-    console.error("Query payroll utama gagal, pakai fallback", error);
-    const snapshot = await getDocs(collection(db, COLLECTION_NAME));
-    return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-  }
-};
-
-const hasActivePayrollForWorkLog = async (workLogId, excludeId = null) => {
-  if (!workLogId) return false;
-
-  const snapshot = await getDocs(
-    query(collection(db, COLLECTION_NAME), where("workLogId", "==", workLogId)),
-  );
-
-  return snapshot.docs.some((item) => {
-    if (item.id === excludeId) return false;
-    const data = item.data() || {};
-    return data.status !== "cancelled";
-  });
-};
-
 // =====================================================
 // ACTIVE / GUARDED
 // Referensi payroll baru hanya menampilkan Work Log completed yang masih
@@ -312,12 +355,21 @@ export const getPayrollReferenceData = async () => {
     getAllProductionPayrollDocs(),
   ]);
 
-  const activePayrollWorkLogIds = new Set(
-    payrolls
-      .filter((item) => item.status !== "cancelled")
-      .map((item) => item.workLogId)
-      .filter(Boolean),
-  );
+  const activePayrollLineKeysByWorkLog = payrolls.reduce((acc, item) => {
+    if (!item?.workLogId || item.status === "cancelled") {
+      return acc;
+    }
+
+    if (!acc[item.workLogId]) {
+      acc[item.workLogId] = new Set();
+    }
+
+    if (safeTrim(item.workerLineKey)) {
+      acc[item.workLogId].add(safeTrim(item.workerLineKey));
+    }
+
+    return acc;
+  }, {});
 
   const stepMap = productionSteps.reduce((acc, item) => {
     acc[item.id] = item;
@@ -328,17 +380,20 @@ export const getPayrollReferenceData = async () => {
   const blockedCompletedWorkLogs = [];
 
   completedWorkLogs.forEach((item) => {
-    if (activePayrollWorkLogIds.has(item.id)) {
-      return;
-    }
-
     const eligibility = resolveWorkLogPayrollDraft({
       workLog: item,
       productionStep: stepMap[item.stepId] || null,
     });
 
+    const activeLineKeys = activePayrollLineKeysByWorkLog[item.id] || new Set();
+    const availableWorkerPayrollCandidates = (eligibility.workerCandidates || []).filter(
+      (candidate) => !activeLineKeys.has(candidate.workerLineKey),
+    );
+
     const enrichedWorkLog = {
       ...item,
+      workerPayrollCandidates: eligibility.workerCandidates,
+      availableWorkerPayrollCandidates,
       payrollEligibilityStatus: eligibility.status,
       payrollEligibilityBlockingReasons: eligibility.blockingReasons,
       payrollEligibilityWarningReasons: eligibility.warningReasons,
@@ -346,14 +401,23 @@ export const getPayrollReferenceData = async () => {
         workLog: item,
         eligibility,
       }),
+      payrollLineProgress: {
+        totalCandidates: (eligibility.workerCandidates || []).length,
+        remainingCandidates: availableWorkerPayrollCandidates.length,
+        activeLineCount: activeLineKeys.size,
+      },
     };
 
-    if (eligibility.isEligible) {
-      eligibleCompletedWorkLogs.push(enrichedWorkLog);
+    if (!eligibility.isEligible) {
+      blockedCompletedWorkLogs.push(enrichedWorkLog);
       return;
     }
 
-    blockedCompletedWorkLogs.push(enrichedWorkLog);
+    if (availableWorkerPayrollCandidates.length === 0) {
+      return;
+    }
+
+    eligibleCompletedWorkLogs.push(enrichedWorkLog);
   });
 
   return {
@@ -370,13 +434,18 @@ export const getPayrollReferenceData = async () => {
 // =====================================================
 // ACTIVE / GUARDED
 // Draft payroll final wajib membaca rule payroll step dari snapshot
-// Work Log. Employee custom payroll tidak lagi dipakai di jalur aktif.
+// Work Log dan memilih 1 operator line. Employee custom payroll tidak lagi
+// dipakai di jalur aktif.
 //
 // LEGACY / DEPRECATED
 // Jika work log lama belum punya snapshot payroll step, service ini masih
 // boleh fallback sekali ke master step dan menandainya eksplisit.
 // =====================================================
-export const buildPayrollDraftFromWorkLog = (workLog, productionStep = null) => {
+export const buildPayrollDraftFromWorkLog = (
+  workLog,
+  productionStep = null,
+  selectedWorker = "",
+) => {
   const eligibility = resolveWorkLogPayrollDraft({
     workLog,
     productionStep,
@@ -384,6 +453,10 @@ export const buildPayrollDraftFromWorkLog = (workLog, productionStep = null) => 
   const resolvedRule = eligibility.resolvedRule;
   const payrollRule = eligibility.payrollRule || DEFAULT_PRODUCTION_PAYROLL_FORM;
   const metrics = eligibility.metrics;
+  const selectedWorkerCandidate = resolveSelectedWorkerCandidate(
+    workLog,
+    selectedWorker,
+  );
   const calculated = calculatePayrollAmounts({
     payrollMode: payrollRule.payrollMode,
     payrollRate: payrollRule.payrollRate,
@@ -411,14 +484,18 @@ export const buildPayrollDraftFromWorkLog = (workLog, productionStep = null) => 
     stepName: workLog?.stepName || payrollRule.stepName || "",
     sequenceNo: Number(workLog?.sequenceNo || 1),
 
-    workerId: "",
-    workerCode: "",
-    workerName: buildWorkerSummaryFromWorkLog(workLog),
+    workerLineKey: selectedWorkerCandidate?.workerLineKey || "",
+    workerSourceType: selectedWorkerCandidate?.workerSourceType || "",
+    workerId: selectedWorkerCandidate?.workerId || "",
+    workerCode: selectedWorkerCandidate?.workerCode || "",
+    workerName: selectedWorkerCandidate?.workerName || "",
 
     payrollMode: payrollRule.payrollMode,
     payrollRate: payrollRule.payrollRate,
     payrollQtyBase: payrollRule.payrollQtyBase,
     payrollOutputBasis: payrollRule.payrollOutputBasis,
+    payrollClassification: payrollRule.payrollClassification,
+    includePayrollInHpp: payrollRule.includePayrollInHpp,
     payrollRuleSource: resolvedRule.source,
     legacyPayrollFallbackUsed: resolvedRule.legacyFallbackUsed,
 
@@ -432,11 +509,12 @@ export const buildPayrollDraftFromWorkLog = (workLog, productionStep = null) => 
     deductionAmount: 0,
     finalAmount: calculated.finalAmount,
 
-    sharedWorkLog: (workLog?.workerIds || []).length > 1,
-    teamWorkerCount: Number(workLog?.workerCount || 1),
+    sharedWorkLog: (eligibility.workerCandidates || []).length > 1,
+    teamWorkerCount: Number(workLog?.workerCount || (eligibility.workerCandidates || []).length || 1),
 
     status: "draft",
     paymentStatus: "unpaid",
+    confirmedAt: null,
     paidAt: null,
 
     notes: "",
@@ -445,6 +523,7 @@ export const buildPayrollDraftFromWorkLog = (workLog, productionStep = null) => 
       payrollRule,
       payrollSource: resolvedRule.source,
       legacyFallbackUsed: resolvedRule.legacyFallbackUsed,
+      workerName: selectedWorkerCandidate?.workerName || "",
     }),
     payrollEligibilityStatus: eligibility.status,
     payrollEligibilityBlockingReasons: eligibility.blockingReasons,
@@ -503,13 +582,16 @@ export const createProductionPayroll = async (values, currentUser = null) => {
     };
   }
 
-  const activePayrollExists = await hasActivePayrollForWorkLog(values.workLogId);
+  const activePayrollExists = await hasActivePayrollLineForWorkLog({
+    workLogId: values.workLogId,
+    workerLineKey: values.workerLineKey,
+  });
   if (activePayrollExists) {
     throw {
       type: "validation",
       errors: {
-        workLogId:
-          "Work log ini sudah memiliki payroll aktif. Cancel payroll lama terlebih dahulu jika ingin membuat ulang.",
+        workerLineKey:
+          "Line operator untuk Work Log ini sudah memiliki payroll aktif. Cancel payroll lama terlebih dahulu jika ingin membuat ulang.",
       },
     };
   }
@@ -517,17 +599,7 @@ export const createProductionPayroll = async (values, currentUser = null) => {
   const payload = normalizePayload(values, currentUser, false);
   const result = await addDoc(collection(db, COLLECTION_NAME), payload);
 
-  await syncWorkLogPayrollState(
-    {
-      workLogId: payload.workLogId,
-      payrollId: result.id,
-      payrollNumber: payload.payrollNumber,
-      finalAmount: payload.finalAmount,
-      status: payload.status,
-      paymentStatus: payload.paymentStatus,
-    },
-    payload.updatedBy,
-  );
+  await syncWorkLogPayrollState(payload.workLogId, payload.updatedBy);
 
   return result.id;
 };
@@ -549,13 +621,17 @@ export const updateProductionPayroll = async (id, values, currentUser = null) =>
     };
   }
 
-  const activePayrollExists = await hasActivePayrollForWorkLog(values.workLogId, id);
+  const activePayrollExists = await hasActivePayrollLineForWorkLog({
+    workLogId: values.workLogId,
+    workerLineKey: values.workerLineKey,
+    excludeId: id,
+  });
   if (activePayrollExists) {
     throw {
       type: "validation",
       errors: {
-        workLogId:
-          "Work log ini sudah memiliki payroll aktif lain. Payroll aktif ganda untuk satu work log tidak diizinkan di flow final.",
+        workerLineKey:
+          "Line operator Work Log ini sudah memiliki payroll aktif lain. Payroll aktif ganda untuk operator yang sama tidak diizinkan.",
       },
     };
   }
@@ -563,23 +639,17 @@ export const updateProductionPayroll = async (id, values, currentUser = null) =>
   const payload = normalizePayload(values, currentUser, true);
   await updateDoc(doc(db, COLLECTION_NAME, id), payload);
 
-  await syncWorkLogPayrollState(
-    {
-      workLogId: payload.workLogId,
-      payrollId: id,
-      payrollNumber: payload.payrollNumber,
-      finalAmount: payload.finalAmount,
-      status: payload.status,
-      paymentStatus: payload.paymentStatus,
-    },
-    payload.updatedBy,
-  );
+  await syncWorkLogPayrollState(payload.workLogId, payload.updatedBy);
 
   return id;
 };
 
 export const updatePayrollStatus = async (id, status, paymentStatus, extra = {}) => {
   const currentPayroll = await getProductionPayrollById(id);
+
+  if (status === "paid" && currentPayroll.status !== "confirmed") {
+    throw new Error("Payroll harus dikonfirmasi dulu sebelum ditandai paid");
+  }
 
   const nextPayload = {
     status,
@@ -589,19 +659,17 @@ export const updatePayrollStatus = async (id, status, paymentStatus, extra = {})
     updatedBy: "system",
   };
 
+  if (status === "confirmed" && !extra.confirmedAt) {
+    nextPayload.confirmedAt = new Date();
+  }
+
+  if (status === "cancelled") {
+    nextPayload.paidAt = null;
+  }
+
   await updateDoc(doc(db, COLLECTION_NAME, id), nextPayload);
 
-  await syncWorkLogPayrollState(
-    {
-      workLogId: currentPayroll.workLogId,
-      payrollId: id,
-      payrollNumber: currentPayroll.payrollNumber,
-      finalAmount: currentPayroll.finalAmount,
-      status,
-      paymentStatus,
-    },
-    "system",
-  );
+  await syncWorkLogPayrollState(currentPayroll.workLogId, "system");
 
   return id;
 };

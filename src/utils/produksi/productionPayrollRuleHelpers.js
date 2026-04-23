@@ -23,7 +23,8 @@ const safeNumber = (value, fallback = 0) => {
 
 const safeString = (value) => String(value || "").trim();
 
-const formatNumber = (value) => new Intl.NumberFormat("id-ID").format(Number(value || 0));
+const formatNumber = (value) =>
+  new Intl.NumberFormat("id-ID").format(Number(value || 0));
 
 const normalizePayrollMode = (value) => {
   if (["per_qty", "per_batch", "fixed"].includes(value)) {
@@ -39,21 +40,103 @@ const normalizePayrollOutputBasis = (value) => {
   return "good_qty";
 };
 
-const hasMeaningfulWorkerSummary = (workLog = {}) => {
-  const workerNames = Array.isArray(workLog.workerNames)
-    ? workLog.workerNames.filter((item) => safeString(item))
-    : [];
-
-  if (workerNames.length > 0) {
-    return true;
+const normalizePayrollClassification = (value, processType = "") => {
+  if (["direct_labor", "support_fulfillment"].includes(value)) {
+    return value;
   }
 
-  if (safeString(workLog.workerName) && safeString(workLog.workerName) !== "-") {
-    return true;
+  if (processType === "support_process") {
+    return "support_fulfillment";
   }
 
-  return safeNumber(workLog.workerCount, 0) > 0;
+  return "direct_labor";
 };
+
+const normalizeIncludePayrollInHpp = (value, payrollClassification = "direct_labor") => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  return payrollClassification === "direct_labor";
+};
+
+const buildWorkerLineKey = ({ workerId = "", workerName = "" } = {}, index = 0) => {
+  const normalizedId = safeString(workerId);
+  if (normalizedId) {
+    return `employee:${normalizedId}`;
+  }
+
+  const normalizedName = safeString(workerName)
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+
+  if (normalizedName) {
+    return `legacy_name:${normalizedName}`;
+  }
+
+  return `unknown:${index + 1}`;
+};
+
+export const buildWorkLogPayrollWorkerCandidates = (workLog = {}) => {
+  const workerIds = Array.isArray(workLog.workerIds) ? workLog.workerIds : [];
+  const workerCodes = Array.isArray(workLog.workerCodes) ? workLog.workerCodes : [];
+  const workerNames = Array.isArray(workLog.workerNames) ? workLog.workerNames : [];
+  const declaredWorkerCount = Math.max(0, safeNumber(workLog.workerCount, 0));
+  const candidateLength = Math.max(
+    workerIds.length,
+    workerCodes.length,
+    workerNames.length,
+  );
+
+  const candidates = [];
+  const seenLineKeys = new Set();
+
+  for (let index = 0; index < candidateLength; index += 1) {
+    const workerId = safeString(workerIds[index]);
+    const workerCode = safeString(workerCodes[index]);
+    const workerName = safeString(workerNames[index]);
+
+    if (!workerId && !workerName) {
+      continue;
+    }
+
+    const workerLineKey = buildWorkerLineKey({ workerId, workerName }, index);
+
+    if (seenLineKeys.has(workerLineKey)) {
+      continue;
+    }
+
+    seenLineKeys.add(workerLineKey);
+    candidates.push({
+      workerLineKey,
+      workerId,
+      workerCode,
+      workerName: workerName || `Operator ${index + 1}`,
+      workerSourceType: workerId ? "employee_master" : "legacy_name",
+      workerIndex: index,
+    });
+  }
+
+  if (candidates.length === 0 && declaredWorkerCount <= 1) {
+    const singleWorkerName = safeString(workLog.workerName);
+    if (singleWorkerName && singleWorkerName !== "-") {
+      candidates.push({
+        workerLineKey: buildWorkerLineKey({ workerName: singleWorkerName }, 0),
+        workerId: "",
+        workerCode: "",
+        workerName: singleWorkerName,
+        workerSourceType: "legacy_name",
+        workerIndex: 0,
+      });
+    }
+  }
+
+  return candidates;
+};
+
+const hasMeaningfulWorkerSummary = (workLog = {}) =>
+  buildWorkLogPayrollWorkerCandidates(workLog).length > 0;
 
 export const getNormalizedProductionPayrollRule = (rule = {}) => {
   const payrollMode = normalizePayrollMode(rule.payrollMode || rule.mode);
@@ -65,12 +148,22 @@ export const getNormalizedProductionPayrollRule = (rule = {}) => {
   const payrollOutputBasis = normalizePayrollOutputBasis(
     rule.payrollOutputBasis || rule.outputBasis,
   );
+  const payrollClassification = normalizePayrollClassification(
+    rule.payrollClassification || rule.classification,
+    rule.processType,
+  );
+  const includePayrollInHpp = normalizeIncludePayrollInHpp(
+    rule.includePayrollInHpp,
+    payrollClassification,
+  );
 
   return {
     payrollMode,
     payrollRate,
     payrollQtyBase,
     payrollOutputBasis,
+    payrollClassification,
+    includePayrollInHpp,
   };
 };
 
@@ -102,6 +195,9 @@ export const getWorkLogPayrollRuleSnapshot = (workLog = {}) => {
       payrollRate: workLog.stepPayrollRate,
       payrollQtyBase: workLog.stepPayrollQtyBase,
       payrollOutputBasis: workLog.stepPayrollOutputBasis,
+      payrollClassification: workLog.stepPayrollClassification,
+      includePayrollInHpp: workLog.stepPayrollIncludeInHpp,
+      processType: workLog.stepProcessType,
     }),
   };
 };
@@ -133,6 +229,7 @@ export const resolveCompletedWorkLogPayrollRule = ({
       stepId: workLog.stepId,
       stepCode: workLog.stepCode,
       stepName: workLog.stepName,
+      processType: workLog.stepProcessType,
     }),
     source: "missing_payroll_rule",
     legacyFallbackUsed: true,
@@ -191,6 +288,8 @@ export const resolveWorkLogPayrollDraft = ({
 
   const payrollRule = resolvedRule.rule || buildProductionStepPayrollSnapshot({});
   const metrics = getWorkLogPayrollMetrics(workLog, payrollRule);
+  const workerCandidates = buildWorkLogPayrollWorkerCandidates(workLog);
+  const declaredWorkerCount = Math.max(0, safeNumber(workLog.workerCount, 0));
   const blockingReasons = [];
   const warningReasons = [];
 
@@ -212,7 +311,19 @@ export const resolveWorkLogPayrollDraft = ({
   }
 
   if (!hasMeaningfulWorkerSummary(workLog)) {
-    blockingReasons.push("Operator / tim pada Work Log belum terisi.");
+    blockingReasons.push(
+      "Operator Work Log belum terbaca satu per satu. Payroll v1 wajib punya 1 line per orang + per step + per batch/work log.",
+    );
+  }
+
+  if (declaredWorkerCount > 0 && workerCandidates.length < declaredWorkerCount) {
+    blockingReasons.push(
+      `Work Log mencatat ${formatNumber(
+        declaredWorkerCount,
+      )} orang, tetapi operator yang terbaca baru ${formatNumber(
+        workerCandidates.length,
+      )}. Lengkapi operator satu per satu sebelum payroll dibuat.`,
+    );
   }
 
   if (resolvedRule.source === "missing_payroll_rule") {
@@ -232,14 +343,18 @@ export const resolveWorkLogPayrollDraft = ({
 
     if (metrics.outputQtyUsed <= 0) {
       blockingReasons.push(
-        `Output qty untuk payroll per qty belum valid. Basis saat ini menghasilkan ${formatNumber(metrics.outputQtyUsed)}.`,
+        `Output qty untuk payroll per qty belum valid. Basis saat ini menghasilkan ${formatNumber(
+          metrics.outputQtyUsed,
+        )}.`,
       );
     }
   }
 
   if (payrollRule.payrollMode === "per_batch" && metrics.workedQty <= 0) {
     blockingReasons.push(
-      `Qty batch Work Log harus lebih besar dari 0 untuk mode per batch. Nilai saat ini ${formatNumber(metrics.workedQty)}.`,
+      `Qty batch Work Log harus lebih besar dari 0 untuk mode per batch. Nilai saat ini ${formatNumber(
+        metrics.workedQty,
+      )}.`,
     );
   }
 
@@ -249,15 +364,14 @@ export const resolveWorkLogPayrollDraft = ({
     );
   }
 
-  if (Boolean(workLog.payrollCalculated) && safeString(workLog.payrollCalculationStatus) !== "cancelled") {
+  if (
+    Boolean(workLog.payrollCalculated) &&
+    !["pending", "reverted", ""].includes(
+      safeString(workLog.payrollCalculationStatus),
+    )
+  ) {
     warningReasons.push(
-      "Work Log ini sudah pernah ditandai memiliki payroll. Pastikan tidak ada payroll aktif ganda.",
-    );
-  }
-
-  if (Boolean(workLog.workerCount) && safeNumber(workLog.workerCount, 0) > 1) {
-    warningReasons.push(
-      `Work Log ini dikerjakan tim (${formatNumber(workLog.workerCount)} orang). Pastikan pembagian upah sesuai kebijakan operasional.`,
+      "Work Log ini sudah pernah ditandai memiliki payroll. Pastikan tidak ada payroll aktif ganda pada line operator yang sama.",
     );
   }
 
@@ -265,6 +379,7 @@ export const resolveWorkLogPayrollDraft = ({
     resolvedRule,
     payrollRule,
     metrics,
+    workerCandidates,
     isEligible: blockingReasons.length === 0,
     status: blockingReasons.length === 0 ? "eligible" : "blocked",
     blockingReasons,
@@ -277,6 +392,7 @@ export const buildPayrollCalculationNotes = ({
   payrollRule = {},
   payrollSource = "",
   legacyFallbackUsed = false,
+  workerName = "",
 } = {}) => {
   const metrics = getWorkLogPayrollMetrics(workLog, payrollRule);
   const sourceLabel = formatPayrollRuleSourceLabel(payrollSource);
@@ -285,7 +401,13 @@ export const buildPayrollCalculationNotes = ({
     `Rule source: ${sourceLabel}.`,
     `Mode: ${payrollRule.payrollMode || "per_qty"}.`,
     `Rate: Rp${formatNumber(safeNumber(payrollRule.payrollRate, 0))}.`,
+    `Klasifikasi: ${payrollRule.payrollClassification || "direct_labor"}.`,
+    `Masuk HPP: ${payrollRule.includePayrollInHpp ? "ya" : "tidak"}.`,
   ];
+
+  if (workerName) {
+    baseText.push(`Line payroll untuk operator: ${workerName}.`);
+  }
 
   if ((payrollRule.payrollMode || "per_qty") === "per_batch") {
     baseText.push(
@@ -300,7 +422,7 @@ export const buildPayrollCalculationNotes = ({
       } = ${formatNumber(metrics.outputQtyUsed)}.`,
     );
   } else {
-    baseText.push("Mode fixed dihitung 1x per work log completed.");
+    baseText.push("Mode fixed dihitung 1x per line payroll operator.");
   }
 
   if (legacyFallbackUsed) {
@@ -327,6 +449,11 @@ export const buildPayrollEligibilityNotes = ({
 
   notes.push(
     `Eligibility: ${formatPayrollEligibilityStatusLabel(resolvedEligibility.status)}.`,
+  );
+  notes.push(
+    `Operator terbaca: ${formatNumber(
+      resolvedEligibility.workerCandidates.length,
+    )}.`,
   );
 
   if (resolvedEligibility.blockingReasons.length > 0) {

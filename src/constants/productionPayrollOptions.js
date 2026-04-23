@@ -26,6 +26,11 @@ export const PRODUCTION_PAYROLL_OUTPUT_BASIS = [
   { value: "actual_output_qty", label: "Actual Output Qty" },
 ];
 
+export const PRODUCTION_PAYROLL_CLASSIFICATIONS = [
+  { value: "direct_labor", label: "Produksi Inti" },
+  { value: "support_fulfillment", label: "Support / Fulfillment" },
+];
+
 export const toOptionMap = (options = []) =>
   options.reduce((acc, item) => {
     acc[item.value] = item.label;
@@ -39,6 +44,9 @@ export const PAYROLL_PAYMENT_STATUS_MAP = toOptionMap(
 export const PAYROLL_MODE_MAP = toOptionMap(PRODUCTION_PAYROLL_MODES);
 export const PAYROLL_OUTPUT_BASIS_MAP = toOptionMap(
   PRODUCTION_PAYROLL_OUTPUT_BASIS,
+);
+export const PAYROLL_CLASSIFICATION_MAP = toOptionMap(
+  PRODUCTION_PAYROLL_CLASSIFICATIONS,
 );
 
 export const DEFAULT_PRODUCTION_PAYROLL_FORM = {
@@ -61,6 +69,8 @@ export const DEFAULT_PRODUCTION_PAYROLL_FORM = {
   stepName: "",
   sequenceNo: 1,
 
+  workerLineKey: "",
+  workerSourceType: "",
   workerId: "",
   workerCode: "",
   workerName: "",
@@ -69,6 +79,8 @@ export const DEFAULT_PRODUCTION_PAYROLL_FORM = {
   payrollRate: 0,
   payrollQtyBase: 1,
   payrollOutputBasis: "good_qty",
+  payrollClassification: "direct_labor",
+  includePayrollInHpp: true,
 
   totalWorkLogOutputQty: 0,
   workedQty: 0,
@@ -85,6 +97,7 @@ export const DEFAULT_PRODUCTION_PAYROLL_FORM = {
 
   status: "draft",
   paymentStatus: "unpaid",
+  confirmedAt: null,
   paidAt: null,
 
   notes: "",

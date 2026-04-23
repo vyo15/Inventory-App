@@ -19,6 +19,7 @@ import {
 } from 'antd';
 import {
   PlusOutlined,
+  EyeOutlined,
   EditOutlined,
   DeleteOutlined,
   SyncOutlined,
@@ -365,13 +366,7 @@ const SupplierPurchases = () => {
       key: 'storeName',
       render: (_, record) => (
         <Space direction="vertical" size={4}>
-          <Button
-            type="link"
-            onClick={() => openSupplierDrawer(record)}
-            style={{ padding: 0, height: 'auto' }}
-          >
-            {getSupplierDisplayName(record)}
-          </Button>
+          <span style={{ fontWeight: 600 }}>{getSupplierDisplayName(record)}</span>
           <Tag color="blue">Master Supplier</Tag>
         </Space>
       ),
@@ -410,20 +405,32 @@ const SupplierPurchases = () => {
     },
     {
       // ---------------------------------------------------------------------------
-      // Kolom aksi dibuat sticky karena tabel supplier sering bergeser saat nama bahan panjang.
+      // Kolom aksi supplier sekarang mengikuti baseline final.
+      // Fungsi:
+      // - Supplier Purchases diperlakukan sebagai detail-capable page karena sudah punya drawer detail read-only
+      // - tombol Detail dipindah ke kolom aksi agar user tidak perlu menebak bahwa nama supplier bisa diklik
+      // Status: aktif / final
       // ---------------------------------------------------------------------------
       title: 'Aksi',
       key: 'actions',
-      width: 280,
+      width: 360,
       fixed: 'right',
       className: 'app-table-action-column',
       render: (_, record) => {
         const isRowSyncing = syncingRowId === record.id;
 
         return (
-          <Space wrap>
+          <div className="ims-action-group">
             <Button
-              type="link"
+              className="ims-action-button"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => openSupplierDrawer(record)}
+            >
+              Detail
+            </Button>
+            <Button
+              className="ims-action-button"
               size="small"
               icon={<EditOutlined />}
               onClick={() => handleEditSupplier(record)}
@@ -431,7 +438,7 @@ const SupplierPurchases = () => {
               Edit
             </Button>
             <Button
-              type="link"
+              className="ims-action-button"
               size="small"
               icon={<SyncOutlined />}
               loading={isRowSyncing}
@@ -445,11 +452,11 @@ const SupplierPurchases = () => {
               okText="Ya"
               cancelText="Batal"
             >
-              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+              <Button className="ims-action-button" danger size="small" icon={<DeleteOutlined />}>
                 Hapus
               </Button>
             </Popconfirm>
-          </Space>
+          </div>
         );
       },
     },
