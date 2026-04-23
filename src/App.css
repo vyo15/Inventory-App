@@ -433,7 +433,10 @@
   --ims-border-strong: rgba(15, 23, 42, 0.08);
   --ims-text-primary: #0f172a;
   --ims-text-secondary: rgba(15, 23, 42, 0.68);
-  --ims-table-hover: rgba(37, 99, 235, 0.05);
+  --ims-table-row: #ffffff;
+  --ims-table-hover: #f5f8ff;
+  --ims-table-selected: #e8eefc;
+  --ims-table-selected-hover: #dee7fb;
   --ims-sticky-shadow: inset -12px 0 12px -12px rgba(15, 23, 42, 0.18);
   --ims-shadow-soft: 0 10px 28px rgba(15, 23, 42, 0.05);
 }
@@ -445,7 +448,10 @@
   --ims-border-strong: rgba(148, 163, 184, 0.14);
   --ims-text-primary: #e6edf3;
   --ims-text-secondary: rgba(148, 163, 184, 0.92);
-  --ims-table-hover: rgba(59, 130, 246, 0.08);
+  --ims-table-row: #111827;
+  --ims-table-hover: #15233a;
+  --ims-table-selected: #1a2b49;
+  --ims-table-selected-hover: #1f3457;
   --ims-sticky-shadow: inset -12px 0 12px -12px rgba(2, 6, 23, 0.38);
   --ims-shadow-soft: 0 12px 28px rgba(2, 6, 23, 0.24);
 }
@@ -584,20 +590,47 @@
   box-shadow: none !important;
 }
 
+/* =========================
+   SECTION: Shared Table Surface Foundation
+   Fungsi:
+   - mengunci background table agar selalu solid di class resmi app-data-table dan ims-table
+   - menyamakan hover, selected row, sticky/fixed cell, empty row, dan summary row lintas halaman
+   Catatan:
+   - jangan override background table ke transparent di CSS per halaman
+   - fixed column wajib memakai warna solid, bukan rgba, agar isi kolom di belakang tidak tembus
+========================= */
+.app-data-table.ant-table-wrapper,
 .ims-table.ant-table-wrapper,
 .ims-page .ant-table-wrapper {
   overflow: hidden;
   border-radius: 18px;
 }
 
+.app-data-table .ant-table,
+.ims-table .ant-table,
+.ims-page .ant-table {
+  background: var(--ims-surface-card) !important;
+}
+
+.app-data-table .ant-table-container,
 .ims-table .ant-table-container,
 .ims-page .ant-table-container {
   overflow: hidden;
   border: 1px solid var(--ims-border-strong);
   border-radius: 18px;
-  background: var(--ims-surface-card);
+  background: var(--ims-surface-card) !important;
 }
 
+.app-data-table .ant-table-content,
+.app-data-table table,
+.ims-table .ant-table-content,
+.ims-table table,
+.ims-page .ant-table-content,
+.ims-page table {
+  background: var(--ims-surface-card) !important;
+}
+
+.app-data-table .ant-table-thead > tr > th,
 .ims-table .ant-table-thead > tr > th,
 .ims-page .ant-table-thead > tr > th {
   background: var(--ims-surface-soft) !important;
@@ -605,23 +638,77 @@
   border-bottom: 1px solid var(--ims-border-strong) !important;
 }
 
-.ims-table .ant-table-tbody > tr > td,
-.ims-page .ant-table-tbody > tr > td {
-  background: transparent;
+.app-data-table .ant-table-tbody > tr,
+.ims-table .ant-table-tbody > tr,
+.ims-page .ant-table-tbody > tr {
+  background: var(--ims-table-row) !important;
 }
 
+.app-data-table .ant-table-tbody > tr > td,
+.app-data-table .ant-table-placeholder > td,
+.ims-table .ant-table-tbody > tr > td,
+.ims-table .ant-table-placeholder > td,
+.ims-page .ant-table-tbody > tr > td,
+.ims-page .ant-table-placeholder > td {
+  background: var(--ims-table-row) !important;
+}
+
+.app-data-table .ant-table-tbody > tr:hover > td,
 .ims-table .ant-table-tbody > tr:hover > td,
 .ims-page .ant-table-tbody > tr:hover > td {
   background: var(--ims-table-hover) !important;
 }
 
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected > td,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected > td,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected > td {
+  background: var(--ims-table-selected) !important;
+}
+
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected:hover > td,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected:hover > td,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected:hover > td {
+  background: var(--ims-table-selected-hover) !important;
+}
+
+.app-data-table .ant-table-cell-fix-left,
+.app-data-table .ant-table-cell-fix-right,
 .ims-table .ant-table-cell-fix-left,
 .ims-table .ant-table-cell-fix-right,
 .ims-page .ant-table-cell-fix-left,
 .ims-page .ant-table-cell-fix-right {
-  background: var(--ims-surface-card) !important;
+  background: var(--ims-table-row) !important;
 }
 
+.app-data-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
+.app-data-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-right,
+.ims-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
+.ims-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-right,
+.ims-page .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
+.ims-page .ant-table-tbody > tr:hover > .ant-table-cell-fix-right {
+  background: var(--ims-table-hover) !important;
+}
+
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-left,
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-right,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-left,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-right,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-left,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-right {
+  background: var(--ims-table-selected) !important;
+}
+
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected:hover > .ant-table-cell-fix-left,
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected:hover > .ant-table-cell-fix-right,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected:hover > .ant-table-cell-fix-left,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected:hover > .ant-table-cell-fix-right,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected:hover > .ant-table-cell-fix-left,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected:hover > .ant-table-cell-fix-right {
+  background: var(--ims-table-selected-hover) !important;
+}
+
+.app-data-table .ant-table-thead > tr > .ant-table-cell-fix-left,
+.app-data-table .ant-table-thead > tr > .ant-table-cell-fix-right,
 .ims-table .ant-table-thead > tr > .ant-table-cell-fix-left,
 .ims-table .ant-table-thead > tr > .ant-table-cell-fix-right,
 .ims-page .ant-table-thead > tr > .ant-table-cell-fix-left,
@@ -629,16 +716,28 @@
   background: var(--ims-surface-soft) !important;
 }
 
+.app-data-table .ant-table-expanded-row > td,
+.app-data-table .ant-table-summary > tr > td,
+.ims-table .ant-table-expanded-row > td,
+.ims-table .ant-table-summary > tr > td,
+.ims-page .ant-table-expanded-row > td,
+.ims-page .ant-table-summary > tr > td {
+  background: var(--ims-surface-soft) !important;
+}
+
+.app-data-table .ant-table-ping-right .ant-table-cell-fix-right-first::after,
 .ims-table .ant-table-ping-right .ant-table-cell-fix-right-first::after,
 .ims-page .ant-table-ping-right .ant-table-cell-fix-right-first::after {
   box-shadow: var(--ims-sticky-shadow);
 }
 
+.app-data-table .ant-table-ping-left .ant-table-cell-fix-left-last::after,
 .ims-table .ant-table-ping-left .ant-table-cell-fix-left-last::after,
 .ims-page .ant-table-ping-left .ant-table-cell-fix-left-last::after {
   box-shadow: inset 12px 0 12px -12px rgba(15, 23, 42, 0.12);
 }
 
+.app-shell.dark .app-data-table .ant-table-ping-left .ant-table-cell-fix-left-last::after,
 .app-shell.dark .ims-table .ant-table-ping-left .ant-table-cell-fix-left-last::after,
 .app-shell.dark .ims-page .ant-table-ping-left .ant-table-cell-fix-left-last::after {
   box-shadow: inset 12px 0 12px -12px rgba(2, 6, 23, 0.36);

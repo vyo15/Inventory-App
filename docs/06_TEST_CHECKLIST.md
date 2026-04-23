@@ -182,3 +182,32 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - reset + zero stock
 - reset + restore baseline
 - cek field stok sinkron kembali setelah reset
+
+
+## H. UI Visual Regression — Table Surface Shared
+
+### Baseline Shared Table
+- cek halaman yang memakai `app-data-table` tampil dengan background table solid
+- cek halaman yang memakai `ims-table` tampil dengan background table solid
+- cek header, body row, cell, empty state, expanded row, dan summary row konsisten
+- cek border dan surface table menyatu dengan card/filter/page wrapper
+
+### Hover / Selected / Fixed Column
+- cek row normal tidak tembus ke layer belakang
+- cek hover row tetap solid dan rapi
+- cek selected row tetap solid dan rapi
+- cek selected + hover tetap konsisten
+- cek fixed/sticky left column ikut warna row aktif
+- cek fixed/sticky right action column ikut warna row aktif
+- cek isi kolom belakang tidak terlihat menembus ke kolom aksi
+
+### Halaman Prioritas Visual
+- cek Work Log Produksi dengan horizontal scroll
+- cek Tahapan Produksi
+- cek halaman produksi lain yang punya kolom aksi
+- cek dashboard bila ada table
+
+### Mode & Guard
+- cek light mode
+- cek dark mode
+- pastikan tidak ada CSS per halaman yang mengoverride table menjadi `transparent` atau semi transparan tanpa kebutuhan khusus

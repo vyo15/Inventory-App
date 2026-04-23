@@ -244,7 +244,7 @@
 }
 
 .dashboard-page .ant-table {
-  background: transparent;
+  background: var(--ims-surface-card) !important;
 }
 
 .dashboard-page .ant-table-thead > tr > th {

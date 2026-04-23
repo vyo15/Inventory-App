@@ -90,8 +90,29 @@ Untuk dokumentasi saat ini, flow aktif yang paling aman dianggap resmi adalah:
 4. dokumentasikan resmi bahwa `productions` adalah legacy flow
 5. rapikan laporan stok agar membaca field stok aktif dan mendukung varian lebih baik
 
+
+## Update Current State: Baseline Visual Table Shared
+Perbaikan terbaru di layer UI menegaskan bahwa baseline visual table sekarang harus dianggap resmi dan guarded.
+
+Status current state yang perlu dianggap final:
+- baseline surface table lintas halaman ada di `src/App.css`
+- class shared table resmi adalah `app-data-table` dan `ims-table`
+- table kecil/shared di modul produksi harus ikut class resmi, tidak dibiarkan polos
+- state `normal`, `hover`, `selected`, dan `fixed/sticky action column` harus selalu memakai background solid yang konsisten
+- CSS per halaman tidak boleh mengoverride `.ant-table`, row, cell, atau fixed column menjadi `transparent`, `opacity`, atau semi transparan tanpa task UI khusus
+
+Risiko bila aturan ini dilanggar:
+- kolom aksi fixed kanan bisa terlihat tembus ke konten belakang
+- row hover/selected jadi tidak clean dan tidak profesional
+- patch UI lain mudah merusak baseline visual yang sebelumnya sudah benar
+
+Implikasi untuk task berikutnya:
+- bila ada halaman baru yang memakai Ant Table, harus mengikuti baseline shared yang sama
+- bila ada kebutuhan custom visual per halaman, ubah spacing atau typography dulu, bukan surface table
+
 ## Definition of Done untuk Perubahan Besar Berikutnya
-## Update Current State: Guard Logic Work Log Produksi
+
+### Update Current State: Guard Logic Work Log Produksi
 Perbaikan terbaru di area produksi menegaskan:
 - Work Log load dibuat lebih tahan gangguan jika salah satu referensi produksi gagal dimuat
 - query Work Log completed punya fallback agar payroll / HPP tidak mudah ikut gagal karena index/query
@@ -109,3 +130,5 @@ Sebuah task dianggap aman selesai bila:
 - collection sumber laporan tetap benar
 - flow produksi final tidak rusak
 - tidak menambah inkonsistensi schema baru
+- baseline visual table shared tetap utuh pada light mode dan dark mode
+- fixed/sticky action column tidak tembus ke konten belakang

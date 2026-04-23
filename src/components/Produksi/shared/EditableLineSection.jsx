@@ -30,6 +30,7 @@ const EditableLineSection = ({
     </Space>
 
     <Table
+      className="app-data-table"
       rowKey={(record) => record.id}
       pagination={false}
       size="small"

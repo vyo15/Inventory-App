@@ -10,6 +10,7 @@ const ReadonlyLineSection = ({
   <>
     <Divider orientation="left">{title}</Divider>
     <Table
+      className="app-data-table"
       rowKey={(record) => record.id}
       pagination={false}
       size="small"
