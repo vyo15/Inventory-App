@@ -985,10 +985,18 @@ const ProductionWorkLogs = () => {
       ),
     },
     {
+      // =====================================================
+      // SECTION: status sticky
+      // Fungsi:
+      // - Work Log adalah detail-capable page dan tabelnya lebar, jadi status ikut di-sticky sebelum aksi
+      // - ini menjaga status proses tetap terlihat saat user fokus ke aksi detail / edit / complete
+      // =====================================================
       title: "Status",
       dataIndex: "status",
       key: "status",
       width: 120,
+      fixed: "right",
+      className: "app-table-status-column app-table-fixed-secondary",
       render: (value) => (
         <Tag className="ims-status-tag" color={getWorkLogStatusTagColor(value)}>
           {WORK_LOG_STATUS_MAP[value] || "-"}
@@ -996,10 +1004,17 @@ const ProductionWorkLogs = () => {
       ),
     },
     {
+      // =====================================================
+      // SECTION: aksi sticky
+      // Fungsi:
+      // - Work Log termasuk detail-capable page, jadi Detail wajib ada sebagai pola resmi tabel utama
+      // - kolom aksi tetap fixed right agar user tidak perlu scroll horizontal dulu untuk menjalankan aksi utama
+      // =====================================================
       title: "Aksi",
       key: "actions",
       width: 280,
       fixed: "right",
+      className: "app-table-action-column",
       render: (_, record) => (
         <Space wrap className="ims-action-group">
           <Button
@@ -1450,11 +1465,13 @@ const ProductionWorkLogs = () => {
                 render: (value) => formatCurrency(value),
               },
               {
+                // Nested editor material usage tetap non-sticky karena berada di dalam modal form dan tidak punya bug horizontal scroll aktif.
                 title: "Aksi",
                 width: 140,
+                className: "app-table-action-column",
                 render: (_, record, index) => (
-                  <Space>
-                    <Button size="small" onClick={() => openMaterialModal(index, record)}>
+                  <Space className="ims-action-group">
+                    <Button className="ims-action-button" size="small" onClick={() => openMaterialModal(index, record)}>
                       Edit
                     </Button>
                     <Popconfirm
@@ -1463,7 +1480,7 @@ const ProductionWorkLogs = () => {
                       okText="Ya"
                       cancelText="Batal"
                     >
-                      <Button size="small" danger icon={<DeleteOutlined />} />
+                      <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
                     </Popconfirm>
                   </Space>
                 ),
@@ -1509,11 +1526,13 @@ const ProductionWorkLogs = () => {
                 ),
               },
               {
+                // Nested editor output tetap non-sticky karena area ini compact dan aksi sudah langsung terlihat tanpa scroll tambahan.
                 title: "Aksi",
                 width: 140,
+                className: "app-table-action-column",
                 render: (_, record, index) => (
-                  <Space>
-                    <Button size="small" onClick={() => openOutputModal(index, record)}>
+                  <Space className="ims-action-group">
+                    <Button className="ims-action-button" size="small" onClick={() => openOutputModal(index, record)}>
                       Edit
                     </Button>
                     <Popconfirm
@@ -1522,7 +1541,7 @@ const ProductionWorkLogs = () => {
                       okText="Ya"
                       cancelText="Batal"
                     >
-                      <Button size="small" danger icon={<DeleteOutlined />} />
+                      <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
                     </Popconfirm>
                   </Space>
                 ),

@@ -74,6 +74,14 @@ cek:
 - payroll status
 - HPP analysis
 
+## Saat Menyentuh Baseline UI Table / Action
+- anggap baseline table/action sebagai area presentational yang sudah dijaga konsistensinya
+- jangan menambah tombol `Detail` kecuali halaman itu memang punya drawer/detail read-only yang jelas
+- untuk main table yang lebar atau memakai `scroll.x`, kolom `Aksi` wajib di kanan dan `fixed: "right"`
+- jika ada kolom `Status` di table lebar, letakkan sticky di kanan sebelum `Aksi`
+- nested/subtable tidak perlu dipaksa sticky kecuali ada bug horizontal scroll nyata
+- jika ada halaman yang sengaja berbeda, jelaskan alasannya secara eksplisit sebelum coding
+
 ## Saat Menutup Task
 Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - `00_MASTER_CONTEXT.md`

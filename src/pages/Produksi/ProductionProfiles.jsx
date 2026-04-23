@@ -225,10 +225,18 @@ const ProductionProfiles = () => {
       ),
     },
     {
+      // =====================================================
+      // SECTION: status sticky
+      // Fungsi:
+      // - simple config page yang tetap butuh status terlihat saat tabel melebar
+      // - mengikuti baseline final: status boleh sticky sebelum aksi untuk tabel dengan scroll.x
+      // =====================================================
       title: 'Status',
       dataIndex: 'isActive',
       key: 'isActive',
       width: 120,
+      fixed: 'right',
+      className: 'app-table-status-column app-table-fixed-secondary',
       render: (value, record) => (
         <div className="ims-badge-stack">
           <span className="ims-badge-inline">
@@ -239,10 +247,17 @@ const ProductionProfiles = () => {
       ),
     },
     {
+      // =====================================================
+      // SECTION: aksi sticky
+      // Fungsi:
+      // - Production Profiles termasuk simple config page, jadi tidak wajib punya Detail
+      // - kolom aksi tetap di-fixed right supaya pola config page seragam dengan Tahapan Produksi
+      // =====================================================
       title: 'Aksi',
       key: 'actions',
       width: 180,
       fixed: 'right',
+      className: 'app-table-action-column',
       render: (_, record) => (
         <Space wrap className="ims-action-group">
           <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>

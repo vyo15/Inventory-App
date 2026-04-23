@@ -91,6 +91,10 @@ export const DEFAULT_PRODUCTION_PAYROLL_FORM = {
   calculationNotes: "",
   payrollRuleSource: "work_log_step_snapshot",
   legacyPayrollFallbackUsed: false,
+  payrollEligibilityStatus: "eligible",
+  payrollEligibilityBlockingReasons: [],
+  payrollEligibilityWarningReasons: [],
+  payrollEligibilityNotes: "",
 };
 
 // =====================================================

@@ -32,15 +32,19 @@ import {
 import { getCompletedProductionWorkLogs } from "./productionWorkLogsService";
 import {
   buildPayrollCalculationNotes,
+  buildPayrollEligibilityNotes,
   formatPayrollRuleSourceLabel,
-  getWorkLogPayrollMetrics,
-  resolveCompletedWorkLogPayrollRule,
+  resolveWorkLogPayrollDraft,
 } from "../../utils/produksi/productionPayrollRuleHelpers";
 
 const COLLECTION_NAME = "production_payrolls";
 const WORK_LOG_COLLECTION_NAME = "production_work_logs";
 
 const safeTrim = (value) => String(value || "").trim();
+const hasMeaningfulWorkerValue = (value) => {
+  const normalized = safeTrim(value);
+  return Boolean(normalized && normalized !== "-");
+};
 
 const buildWorkerSummaryFromWorkLog = (workLog = {}) => {
   const workerNames = Array.isArray(workLog.workerNames)
@@ -165,6 +169,14 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
 
     notes: safeTrim(values.notes),
     calculationNotes: safeTrim(values.calculationNotes),
+    payrollEligibilityStatus: values.payrollEligibilityStatus || "eligible",
+    payrollEligibilityBlockingReasons: Array.isArray(values.payrollEligibilityBlockingReasons)
+      ? values.payrollEligibilityBlockingReasons.filter(Boolean).map((item) => safeTrim(item))
+      : [],
+    payrollEligibilityWarningReasons: Array.isArray(values.payrollEligibilityWarningReasons)
+      ? values.payrollEligibilityWarningReasons.filter(Boolean).map((item) => safeTrim(item))
+      : [],
+    payrollEligibilityNotes: safeTrim(values.payrollEligibilityNotes),
 
     updatedAt: serverTimestamp(),
     updatedBy:
@@ -201,12 +213,16 @@ export const validateProductionPayroll = (values = {}) => {
     errors.workLogId = "Work log wajib dipilih";
   }
 
-  if (!safeTrim(values.workerName) && !values.workerId) {
+  if (!hasMeaningfulWorkerValue(values.workerName) && !values.workerId) {
     errors.workerId = "Operator / tim dari work log wajib terbaca";
   }
 
   if (!values.stepId) {
     errors.stepId = "Step produksi wajib terbaca dari work log";
+  }
+
+  if (Number(values.payrollRate || 0) <= 0) {
+    errors.payrollRate = "Tarif payroll wajib lebih besar dari 0";
   }
 
   if (Number(values.outputQtyUsed || 0) < 0) {
@@ -215,6 +231,27 @@ export const validateProductionPayroll = (values = {}) => {
 
   if (Number(values.workedQty || 0) < 0) {
     errors.workedQty = "Worked qty tidak boleh negatif";
+  }
+
+  if ((values.payrollMode || "per_qty") === "per_qty") {
+    if (Number(values.payrollQtyBase || 0) <= 0) {
+      errors.payrollQtyBase = "Qty dasar payroll per qty wajib lebih besar dari 0";
+    }
+
+    if (Number(values.outputQtyUsed || 0) <= 0) {
+      errors.outputQtyUsed =
+        "Output qty untuk payroll per qty wajib lebih besar dari 0";
+    }
+  }
+
+  if ((values.payrollMode || "per_qty") === "per_batch" && Number(values.workedQty || 0) <= 0) {
+    errors.workedQty =
+      "Qty batch untuk payroll per batch wajib lebih besar dari 0";
+  }
+
+  if (String(values.payrollEligibilityStatus || "eligible") === "blocked") {
+    errors.workLogId =
+      "Draft payroll ini masih blocked. Selesaikan dulu issue eligibility pada Work Log.";
   }
 
   return errors;
@@ -282,12 +319,50 @@ export const getPayrollReferenceData = async () => {
       .filter(Boolean),
   );
 
-  const eligibleCompletedWorkLogs = completedWorkLogs.filter(
-    (item) => !activePayrollWorkLogIds.has(item.id),
-  );
+  const stepMap = productionSteps.reduce((acc, item) => {
+    acc[item.id] = item;
+    return acc;
+  }, {});
+
+  const eligibleCompletedWorkLogs = [];
+  const blockedCompletedWorkLogs = [];
+
+  completedWorkLogs.forEach((item) => {
+    if (activePayrollWorkLogIds.has(item.id)) {
+      return;
+    }
+
+    const eligibility = resolveWorkLogPayrollDraft({
+      workLog: item,
+      productionStep: stepMap[item.stepId] || null,
+    });
+
+    const enrichedWorkLog = {
+      ...item,
+      payrollEligibilityStatus: eligibility.status,
+      payrollEligibilityBlockingReasons: eligibility.blockingReasons,
+      payrollEligibilityWarningReasons: eligibility.warningReasons,
+      payrollEligibilityNotes: buildPayrollEligibilityNotes({
+        workLog: item,
+        eligibility,
+      }),
+    };
+
+    if (eligibility.isEligible) {
+      eligibleCompletedWorkLogs.push(enrichedWorkLog);
+      return;
+    }
+
+    blockedCompletedWorkLogs.push(enrichedWorkLog);
+  });
 
   return {
     completedWorkLogs: eligibleCompletedWorkLogs,
+    blockedCompletedWorkLogs,
+    payrollReadinessSummary: {
+      eligibleCount: eligibleCompletedWorkLogs.length,
+      blockedCount: blockedCompletedWorkLogs.length,
+    },
     productionSteps,
   };
 };
@@ -302,12 +377,13 @@ export const getPayrollReferenceData = async () => {
 // boleh fallback sekali ke master step dan menandainya eksplisit.
 // =====================================================
 export const buildPayrollDraftFromWorkLog = (workLog, productionStep = null) => {
-  const resolvedRule = resolveCompletedWorkLogPayrollRule({
+  const eligibility = resolveWorkLogPayrollDraft({
     workLog,
     productionStep,
   });
-  const payrollRule = resolvedRule.rule || DEFAULT_PRODUCTION_PAYROLL_FORM;
-  const metrics = getWorkLogPayrollMetrics(workLog, payrollRule);
+  const resolvedRule = eligibility.resolvedRule;
+  const payrollRule = eligibility.payrollRule || DEFAULT_PRODUCTION_PAYROLL_FORM;
+  const metrics = eligibility.metrics;
   const calculated = calculatePayrollAmounts({
     payrollMode: payrollRule.payrollMode,
     payrollRate: payrollRule.payrollRate,
@@ -369,6 +445,13 @@ export const buildPayrollDraftFromWorkLog = (workLog, productionStep = null) => 
       payrollRule,
       payrollSource: resolvedRule.source,
       legacyFallbackUsed: resolvedRule.legacyFallbackUsed,
+    }),
+    payrollEligibilityStatus: eligibility.status,
+    payrollEligibilityBlockingReasons: eligibility.blockingReasons,
+    payrollEligibilityWarningReasons: eligibility.warningReasons,
+    payrollEligibilityNotes: buildPayrollEligibilityNotes({
+      workLog,
+      eligibility,
     }),
   };
 };

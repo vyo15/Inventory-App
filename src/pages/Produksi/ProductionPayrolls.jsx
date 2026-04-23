@@ -11,6 +11,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Button,
   Card,
   Col,
@@ -55,6 +56,7 @@ import {
   updatePayrollStatus,
   updateProductionPayroll,
 } from "../../services/Produksi/productionPayrollsService";
+import { formatPayrollEligibilityStatusLabel } from "../../utils/produksi/productionPayrollRuleHelpers";
 
 const formatNumber = (value) =>
   new Intl.NumberFormat("id-ID").format(Number(value || 0));
@@ -67,11 +69,28 @@ const formatDate = (value) => {
   return date ? dayjs(date).format("DD/MM/YYYY") : "-";
 };
 
+const renderReasonList = (reasons = []) => {
+  const normalizedReasons = Array.isArray(reasons) ? reasons.filter(Boolean) : [];
+  if (normalizedReasons.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+      {normalizedReasons.map((item, index) => (
+        <li key={`${item}-${index}`}>{item}</li>
+      ))}
+    </ul>
+  );
+};
+
 const ProductionPayrolls = () => {
   const [loading, setLoading] = useState(false);
   const [payrolls, setPayrolls] = useState([]);
   const [referenceData, setReferenceData] = useState({
     completedWorkLogs: [],
+    blockedCompletedWorkLogs: [],
+    payrollReadinessSummary: { eligibleCount: 0, blockedCount: 0 },
     productionSteps: [],
   });
 
@@ -175,9 +194,14 @@ const ProductionPayrolls = () => {
   };
 
   const handleGenerateFromWorkLog = (workLogId) => {
-    const workLog = referenceData.completedWorkLogs.find(
+    const activeWorkLog = referenceData.completedWorkLogs.find(
       (item) => item.id === workLogId,
     );
+    const blockedWorkLog = referenceData.blockedCompletedWorkLogs.find(
+      (item) => item.id === workLogId,
+    );
+    const workLog = activeWorkLog || blockedWorkLog || null;
+
     if (!workLog) return;
 
     const productionStep = referenceData.productionSteps.find(
@@ -187,10 +211,18 @@ const ProductionPayrolls = () => {
     const draft = buildPayrollDraftFromWorkLog(workLog, productionStep);
 
     form.setFieldsValue({
-      ...form.getFieldsValue(),
+      ...form.getFieldsValue(true),
       ...draft,
       workLogId,
     });
+
+    if (draft.payrollEligibilityStatus === "blocked") {
+      message.error(
+        draft.payrollEligibilityBlockingReasons?.[0] ||
+          "Draft payroll masih blocked. Periksa issue eligibility pada Work Log.",
+      );
+      return;
+    }
 
     if (draft.legacyPayrollFallbackUsed) {
       message.warning(
@@ -199,12 +231,18 @@ const ProductionPayrolls = () => {
       return;
     }
 
+    if ((draft.payrollEligibilityWarningReasons || []).length > 0) {
+      message.warning(draft.payrollEligibilityWarningReasons[0]);
+      return;
+    }
+
     message.success("Draft payroll berhasil dibuat dari Work Log completed");
   };
 
   const handleSubmit = async () => {
     try {
-      const values = await form.validateFields();
+      await form.validateFields();
+      const values = form.getFieldsValue(true);
 
       setSubmitting(true);
 
@@ -270,10 +308,17 @@ const ProductionPayrolls = () => {
   };
 
   const workLogOptions = useMemo(() => {
-    const baseOptions = referenceData.completedWorkLogs.map((item) => ({
+    const eligibleOptions = referenceData.completedWorkLogs.map((item) => ({
       value: item.id,
       label: `${item.workNumber || "-"} - ${item.targetName || "-"} - ${item.stepName || "-"}`,
     }));
+
+    const blockedOptions = referenceData.blockedCompletedWorkLogs.map((item) => ({
+      value: item.id,
+      label: `[BLOCKED] ${item.workNumber || "-"} - ${item.targetName || "-"} - ${item.stepName || "-"}`,
+    }));
+
+    const baseOptions = [...eligibleOptions, ...blockedOptions];
 
     if (editingRecord?.workLogId) {
       const exists = baseOptions.some((item) => item.value === editingRecord.workLogId);
@@ -286,7 +331,7 @@ const ProductionPayrolls = () => {
     }
 
     return baseOptions;
-  }, [referenceData.completedWorkLogs, editingRecord]);
+  }, [referenceData.completedWorkLogs, referenceData.blockedCompletedWorkLogs, editingRecord]);
 
   const columns = [
     {
@@ -460,6 +505,26 @@ const ProductionPayrolls = () => {
           </Col>
         </Row>
 
+        {referenceData.payrollReadinessSummary?.blockedCount > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={`Ada ${referenceData.payrollReadinessSummary.blockedCount} Work Log completed yang belum eligible payroll.`}
+            description={(
+              <div>
+                <div>Work Log yang blocked tidak akan masuk jalur payroll aktif sebelum issue source data diperbaiki.</div>
+                {renderReasonList(
+                  referenceData.blockedCompletedWorkLogs
+                    .slice(0, 3)
+                    .flatMap((item) => item.payrollEligibilityBlockingReasons || [])
+                    .slice(0, 3),
+                )}
+              </div>
+            )}
+          />
+        )}
+
         <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
           <Col xs={24} md={10}>
             <Input
@@ -484,7 +549,7 @@ const ProductionPayrolls = () => {
           </Col>
           <Col xs={24} md={8}>
             <Typography.Text type="secondary">
-              Work Log yang sudah punya payroll aktif tidak ditampilkan lagi di draft baru.
+              Eligible: {referenceData.payrollReadinessSummary?.eligibleCount || 0} | Blocked: {referenceData.payrollReadinessSummary?.blockedCount || 0}. Work Log yang sudah punya payroll aktif tidak ditampilkan lagi di jalur draft aktif.
             </Typography.Text>
           </Col>
         </Row>
@@ -534,6 +599,24 @@ const ProductionPayrolls = () => {
             payrollDate: dayjs(),
           }}
         >
+          <Form.Item name="workNumber" hidden><Input /></Form.Item>
+          <Form.Item name="bomId" hidden><Input /></Form.Item>
+          <Form.Item name="bomCode" hidden><Input /></Form.Item>
+          <Form.Item name="targetType" hidden><Input /></Form.Item>
+          <Form.Item name="targetId" hidden><Input /></Form.Item>
+          <Form.Item name="targetCode" hidden><Input /></Form.Item>
+          <Form.Item name="targetName" hidden><Input /></Form.Item>
+          <Form.Item name="stepId" hidden><Input /></Form.Item>
+          <Form.Item name="stepCode" hidden><Input /></Form.Item>
+          <Form.Item name="stepName" hidden><Input /></Form.Item>
+          <Form.Item name="sequenceNo" hidden><InputNumber /></Form.Item>
+          <Form.Item name="workerId" hidden><Input /></Form.Item>
+          <Form.Item name="workerCode" hidden><Input /></Form.Item>
+          <Form.Item name="totalWorkLogOutputQty" hidden><InputNumber /></Form.Item>
+          <Form.Item name="payableQtyFactor" hidden><InputNumber /></Form.Item>
+          <Form.Item name="status" hidden><Input /></Form.Item>
+          <Form.Item name="paymentStatus" hidden><Input /></Form.Item>
+
           <Row gutter={16}>
             <Col xs={24} md={8}>
               <Form.Item
@@ -596,6 +679,35 @@ const ProductionPayrolls = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          <Form.Item noStyle shouldUpdate>
+            {({ getFieldValue }) => {
+              const eligibilityStatus = getFieldValue("payrollEligibilityStatus");
+              const blockingReasons = getFieldValue("payrollEligibilityBlockingReasons") || [];
+              const warningReasons = getFieldValue("payrollEligibilityWarningReasons") || [];
+              const eligibilityNotes = getFieldValue("payrollEligibilityNotes");
+
+              if (!eligibilityStatus) {
+                return null;
+              }
+
+              return (
+                <Alert
+                  style={{ marginBottom: 16 }}
+                  showIcon
+                  type={eligibilityStatus === "blocked" ? "error" : warningReasons.length > 0 ? "warning" : "info"}
+                  message={`Status Draft Payroll: ${formatPayrollEligibilityStatusLabel(eligibilityStatus)}`}
+                  description={(
+                    <div>
+                      {eligibilityNotes ? <div>{eligibilityNotes}</div> : null}
+                      {renderReasonList(blockingReasons)}
+                      {blockingReasons.length === 0 ? renderReasonList(warningReasons) : null}
+                    </div>
+                  )}
+                />
+              );
+            }}
+          </Form.Item>
 
           <Row gutter={16}>
             <Col xs={24} md={6}>
@@ -774,6 +886,20 @@ const ProductionPayrolls = () => {
                   ? " (legacy/deprecated fallback)"
                   : ""
               }`}
+            </Descriptions.Item>
+            <Descriptions.Item label="Eligibility Status">
+              {formatPayrollEligibilityStatusLabel(
+                selectedRecord.payrollEligibilityStatus || "eligible",
+              )}
+            </Descriptions.Item>
+            <Descriptions.Item label="Eligibility Notes">
+              <div>
+                <div>{selectedRecord.payrollEligibilityNotes || "-"}</div>
+                {renderReasonList(selectedRecord.payrollEligibilityBlockingReasons || [])}
+                {(selectedRecord.payrollEligibilityBlockingReasons || []).length === 0
+                  ? renderReasonList(selectedRecord.payrollEligibilityWarningReasons || [])
+                  : null}
+              </div>
             </Descriptions.Item>
             <Descriptions.Item label="Status">
               {PAYROLL_STATUS_MAP[selectedRecord.status] || "-"}

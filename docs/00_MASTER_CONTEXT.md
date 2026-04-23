@@ -9,8 +9,7 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
 - inventaris dan audit log stok
 - modul produksi modern berbasis BOM → Production Order → Work Log → Payroll → Analisis HPP
 - logic produksi aktif sekarang dianggap **guarded / locked area**
-- boundary sensitif produksi: `productionOrdersService`, `productionWorkLogsService`, `productionPayrollsService`, helper referensi/transform produksi, helper payroll rule produksi, dan docs arsitektur produksi
-- payroll produksi final sekarang mengikuti contract guarded: rule payroll per step -> snapshot ke work log -> generate payroll dari work log completed
+- boundary sensitif produksi: `productionOrdersService`, `productionWorkLogsService`, `productionPayrollsService`, helper referensi/transform produksi, dan docs arsitektur produksi
 - patch UI / shared component / refactor halaman lain tidak boleh mengubah contract flow produksi tanpa evaluasi khusus
 
 - laporan stok, pembelian, penjualan, dan laba rugi
@@ -69,6 +68,9 @@ Aplikasi saat ini memakai pendekatan transisi antara field lama dan field baru:
 - `reservedStock` dan `availableStock` sudah dipakai di beberapa modul baru, terutama produksi dan varian
 
 ## Prinsip UI yang Terlihat Konsisten
+- baseline resmi table/action sekarang dikunci: kolom aksi main table selalu di kanan, dan table lebar wajib memakai sticky/fixed right untuk aksi utama
+- halaman dibagi menjadi tiga klasifikasi UI resmi: detail-capable page, simple config page, dan ledger/simple action page
+- tombol `Detail` hanya dipakai pada halaman yang memang punya drawer/detail read-only yang jelas
 - bahasa UI dominan Bahasa Indonesia
 - angka menggunakan format Indonesia tanpa desimal
 - banyak halaman memakai ringkasan statistik + tabel + modal form

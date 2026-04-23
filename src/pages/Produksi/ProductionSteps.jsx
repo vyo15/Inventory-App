@@ -464,6 +464,9 @@ const ProductionSteps = () => {
     {
       // =========================
       // SECTION: aksi sticky
+      // Fungsi:
+      // - Tahapan Produksi diklasifikasikan sebagai simple config page, jadi cukup Edit + Aktif/Nonaktif
+      // - tombol Detail tidak ditambahkan agar tidak membuat variasi baru yang keluar dari baseline final
       // =========================
       title: "Aksi",
       key: "actions",
@@ -471,8 +474,13 @@ const ProductionSteps = () => {
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap>
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+        <Space wrap className="ims-action-group">
+          <Button
+            className="ims-action-button"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
             Edit
           </Button>
           <Popconfirm
@@ -481,7 +489,9 @@ const ProductionSteps = () => {
             okText="Ya"
             cancelText="Batal"
           >
-            <Button size="small">{record.isActive ? "Nonaktifkan" : "Aktifkan"}</Button>
+            <Button className="ims-action-button" size="small">
+              {record.isActive ? "Nonaktifkan" : "Aktifkan"}
+            </Button>
           </Popconfirm>
         </Space>
       ),

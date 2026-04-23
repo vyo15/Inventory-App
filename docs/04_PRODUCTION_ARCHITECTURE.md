@@ -117,6 +117,7 @@ Contract final payroll yang sekarang harus dianggap resmi:
 - source of truth rule payroll = master `production_steps`
 - work log menyimpan snapshot rule payroll step (`mode`, `rate`, `qty base`, `output basis`)
 - payroll draft membaca snapshot rule dari work log completed
+- sebelum draft dipakai, Work Log completed harus lolos payroll eligibility gate
 - fallback ke master step hanya untuk work log lama yang belum punya snapshot dan harus dianggap legacy/deprecated
 - custom payroll di master karyawan tidak lagi dipakai sebagai jalur hitung aktif
 - satu work log hanya boleh punya satu payroll aktif
@@ -147,6 +148,7 @@ Boundary produksi aktif yang sekarang harus dianggap final/guarded:
 
 Catatan penting:
 - refactor UI, shared component, atau patch modul lain tidak boleh memindahkan logic ini ke layer presentational
+- payroll eligibility gate dan validasi payload form payroll termasuk boundary guarded
 - bila ada task produksi baru, cek selalu boundary ini sebelum mengubah page/component apa pun
 
 Masih ada service legacy:

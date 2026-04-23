@@ -105,14 +105,18 @@ const Categories = () => {
     {
       // =========================
       // SECTION: aksi tabel
+      // Fungsi:
+      // - Categories termasuk simple config page, jadi cukup Edit + Hapus tanpa Detail
+      // - kolom aksi tetap memakai marker baseline final agar visual dan spacing konsisten lintas halaman
       // =========================
       title: "Aksi",
       key: "actions",
       width: 170,
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap>
+        <Space wrap className="ims-action-group">
           <Button
+            className="ims-action-button"
             icon={<EditOutlined />}
             size="small"
             onClick={() => handleEdit(record)}
@@ -125,7 +129,7 @@ const Categories = () => {
             okText="Ya"
             cancelText="Batal"
           >
-            <Button danger size="small">
+            <Button className="ims-action-button" danger size="small">
               Hapus
             </Button>
           </Popconfirm>

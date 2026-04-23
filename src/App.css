@@ -590,6 +590,29 @@
   box-shadow: none !important;
 }
 
+/* ---------- Table Action / Sticky Column Baseline ----------
+   Fungsi:
+   - memberi marker resmi untuk kolom status dan aksi pada main table yang sudah migrasi baseline
+   - menjaga action group tetap rapat, tidak pecah liar, dan siap dipakai dengan fixed/sticky right
+   Catatan:
+   - blok ini aktif dipakai oleh halaman yang sudah dimigrasikan ke baseline final table/action
+   - nested/subtable sengaja tidak dipaksa ikut kecuali memang ada bug horizontal scroll nyata
+*/
+.app-data-table .app-table-action-column,
+.ims-table .app-table-action-column,
+.ims-page .app-table-action-column,
+.app-data-table .app-table-status-column,
+.ims-table .app-table-status-column,
+.ims-page .app-table-status-column {
+  white-space: nowrap;
+}
+
+.app-data-table td.app-table-action-column .ims-action-group,
+.ims-table td.app-table-action-column .ims-action-group,
+.ims-page td.app-table-action-column .ims-action-group {
+  justify-content: flex-start;
+}
+
 /* =========================
    SECTION: Shared Table Surface Foundation
    Fungsi:

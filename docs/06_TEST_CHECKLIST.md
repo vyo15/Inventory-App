@@ -159,19 +159,24 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 
 ### Payroll Produksi
 - buat payroll dari work log completed
-- cek draft payroll membaca rule dari step / snapshot work log, bukan dari custom payroll karyawan
-- cek work log yang sudah punya payroll aktif tidak muncul lagi di draft payroll baru
-- cek mode `per_batch` memakai qty batch work log dengan benar
-- cek mode `per_qty` memakai basis output sesuai rule step (`good_qty` atau `actual_output_qty`)
-- cek fallback legacy hanya muncul pada work log lama yang belum punya snapshot payroll step
-- cek status unpaid → paid menyinkronkan flag payroll di work log
-- cek cancel payroll membuka kembali work log sebagai eligible payroll
+- cek nilai payroll
+- ubah status unpaid → paid
 
 ### Analisis HPP
 - pastikan work log completed terbaca
 - cek total biaya produksi
 - cek total good qty
 - cek rata-rata HPP per unit
+
+### Baseline UI Table / Action
+- cek semua main table prioritas apakah kolom `Aksi` ada di paling kanan
+- cek main table lebar apakah aksi utama tetap terlihat tanpa scroll horizontal dulu
+- cek `ProductionOrders` apakah `Detail / Refresh Need / Mulai Produksi` tetap langsung terlihat
+- cek `ProductionSteps` dan `ProductionProfiles` tetap konsisten sebagai simple config page tanpa tombol `Detail`
+- cek `CashIn` dan `CashOut` tetap rapi sebagai ledger/simple action page tanpa ubah logic handler
+- cek nested/subtable BOM dan Work Log tetap usable walau tidak dipaksa sticky
+- cek dark mode dan light mode
+- cek semua tombol aksi tetap memanggil handler yang benar
 
 ## F. Laporan
 - Stock Report tampil benar

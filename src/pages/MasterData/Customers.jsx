@@ -101,14 +101,18 @@ const Customers = () => {
     {
       // =========================
       // SECTION: aksi tabel
+      // Fungsi:
+      // - Customers juga simple config page, sehingga baseline final-nya cukup Edit + Hapus
+      // - tombol Detail sengaja tidak ditambahkan agar page sejenis tidak membuat pola aksi sendiri
       // =========================
       title: "Aksi",
       key: "actions",
       width: 170,
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap>
+        <Space wrap className="ims-action-group">
           <Button
+            className="ims-action-button"
             icon={<EditOutlined />}
             size="small"
             onClick={() => handleEdit(record)}
@@ -121,7 +125,7 @@ const Customers = () => {
             okText="Ya"
             cancelText="Batal"
           >
-            <Button danger size="small">
+            <Button className="ims-action-button" danger size="small">
               Hapus
             </Button>
           </Popconfirm>

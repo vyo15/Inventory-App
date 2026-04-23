@@ -74,6 +74,18 @@ Risiko:
 - developer baru bisa bingung membedakan flow aktif dan flow lama
 
 ## Current State yang Sebaiknya Dianggap Resmi
+Untuk baseline UI table/action, current state yang sekarang paling aman dianggap resmi adalah:
+- semua main table harus menaruh kolom `Aksi` di paling kanan
+- main table lebar atau yang memakai `scroll.x` wajib memakai `fixed: "right"` pada kolom aksi
+- jika ada kolom `Status` pada table lebar, kolom itu boleh ikut sticky di kanan sebelum `Aksi`
+- halaman detail-capable wajib punya tombol `Detail`
+- halaman simple config page tidak wajib punya `Detail` dan cukup memakai `Edit + Aktif/Nonaktif` atau `Edit + Hapus`
+- nested/subtable tidak wajib sticky kecuali ada bug nyata di area itu
+
+Legacy UI yang masih boleh tersisa sementara:
+- halaman di luar daftar prioritas yang masih menulis action column manual tetapi belum menimbulkan bug usability
+- nested/subtable lama yang belum memakai marker semantic baru selama belum punya masalah horizontal scroll
+
 Untuk dokumentasi saat ini, flow aktif yang paling aman dianggap resmi adalah:
 - master data modern
 - transaksi pembelian/penjualan/retur
@@ -109,17 +121,3 @@ Sebuah task dianggap aman selesai bila:
 - collection sumber laporan tetap benar
 - flow produksi final tidak rusak
 - tidak menambah inkonsistensi schema baru
-
-## Update Current State: Payroll Produksi Final
-Perbaikan payroll produksi menegaskan baseline baru berikut:
-- payroll final sekarang memakai 1 alur utama: `production_steps` -> snapshot rule ke Work Log -> generate Payroll dari Work Log completed
-- mode `per_batch` sekarang benar-benar memakai qty batch work log, bukan lagi membayar 1x rate tanpa pengali
-- custom payroll pada master karyawan dipindah statusnya menjadi legacy/deprecated dan tidak lagi menjadi jalur hitung aktif
-- work log completed yang sudah punya payroll aktif tidak lagi tampil sebagai kandidat draft payroll baru
-- status payroll di work log disinkronkan kembali agar audit trail Work Log -> Payroll lebih jelas
-
-Area guarded tambahan yang sekarang tidak boleh diubah sembarangan:
-- `productionPayrollsService`
-- `productionPayrollRuleHelpers`
-- snapshot payroll rule pada payload `production_work_logs`
-- rumus final `per_batch` / `per_qty` di helper payroll

@@ -710,8 +710,9 @@ const ProductionBoms = () => {
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap>
+        <Space wrap className="ims-action-group">
           <Button
+            className="ims-action-button"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
@@ -720,6 +721,7 @@ const ProductionBoms = () => {
           </Button>
 
           <Button
+            className="ims-action-button"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -735,7 +737,7 @@ const ProductionBoms = () => {
             okText="Ya"
             cancelText="Batal"
           >
-            <Button size="small">
+            <Button className="ims-action-button" size="small">
               {record.isActive ? "Nonaktifkan" : "Aktifkan"}
             </Button>
           </Popconfirm>
@@ -1069,11 +1071,13 @@ const ProductionBoms = () => {
                   ),
                 },
                 {
+                  // Nested/subtable editor sengaja tetap non-sticky karena tidak punya masalah horizontal scroll nyata.
                   title: "Aksi",
                   width: 140,
+                  className: "app-table-action-column",
                   render: (_, record, index) => (
-                    <Space>
-                      <Button size="small" onClick={() => openMaterialModal(index, record)}>
+                    <Space className="ims-action-group">
+                      <Button className="ims-action-button" size="small" onClick={() => openMaterialModal(index, record)}>
                         Edit
                       </Button>
                       <Popconfirm
@@ -1082,7 +1086,7 @@ const ProductionBoms = () => {
                         okText="Ya"
                         cancelText="Batal"
                       >
-                        <Button size="small" danger icon={<DeleteOutlined />} />
+                        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
                       </Popconfirm>
                     </Space>
                   ),
@@ -1105,11 +1109,13 @@ const ProductionBoms = () => {
                   ),
                 },
                 {
+                  // Nested/subtable editor sengaja tetap non-sticky karena aksi masih langsung terlihat di dalam modal BOM.
                   title: "Aksi",
                   width: 140,
+                  className: "app-table-action-column",
                   render: (_, record, index) => (
-                    <Space>
-                      <Button size="small" onClick={() => openStepModal(index, record)}>
+                    <Space className="ims-action-group">
+                      <Button className="ims-action-button" size="small" onClick={() => openStepModal(index, record)}>
                         Edit
                       </Button>
                       <Popconfirm
@@ -1118,7 +1124,7 @@ const ProductionBoms = () => {
                         okText="Ya"
                         cancelText="Batal"
                       >
-                        <Button size="small" danger icon={<DeleteOutlined />} />
+                        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
                       </Popconfirm>
                     </Space>
                   ),

@@ -23,6 +23,8 @@ const safeNumber = (value, fallback = 0) => {
 
 const safeString = (value) => String(value || "").trim();
 
+const formatNumber = (value) => new Intl.NumberFormat("id-ID").format(Number(value || 0));
+
 const normalizePayrollMode = (value) => {
   if (["per_qty", "per_batch", "fixed"].includes(value)) {
     return value;
@@ -37,12 +39,28 @@ const normalizePayrollOutputBasis = (value) => {
   return "good_qty";
 };
 
+const hasMeaningfulWorkerSummary = (workLog = {}) => {
+  const workerNames = Array.isArray(workLog.workerNames)
+    ? workLog.workerNames.filter((item) => safeString(item))
+    : [];
+
+  if (workerNames.length > 0) {
+    return true;
+  }
+
+  if (safeString(workLog.workerName) && safeString(workLog.workerName) !== "-") {
+    return true;
+  }
+
+  return safeNumber(workLog.workerCount, 0) > 0;
+};
+
 export const getNormalizedProductionPayrollRule = (rule = {}) => {
   const payrollMode = normalizePayrollMode(rule.payrollMode || rule.mode);
-  const payrollRate = Math.max(0, safeNumber(rule.payrollRate || rule.rate, 0));
+  const payrollRate = Math.max(0, safeNumber(rule.payrollRate ?? rule.rate, 0));
   const payrollQtyBase =
     payrollMode === "per_qty"
-      ? Math.max(1, safeNumber(rule.payrollQtyBase || rule.qtyBase, 1))
+      ? Math.max(1, safeNumber(rule.payrollQtyBase ?? rule.qtyBase, 1))
       : 1;
   const payrollOutputBasis = normalizePayrollOutputBasis(
     rule.payrollOutputBasis || rule.outputBasis,
@@ -155,6 +173,105 @@ export const formatPayrollRuleSourceLabel = (source = "") => {
   return "Rule payroll tidak lengkap";
 };
 
+export const formatPayrollEligibilityStatusLabel = (status = "blocked") => {
+  if (status === "eligible") {
+    return "Eligible";
+  }
+  return "Blocked";
+};
+
+export const resolveWorkLogPayrollDraft = ({
+  workLog = {},
+  productionStep = null,
+} = {}) => {
+  const resolvedRule = resolveCompletedWorkLogPayrollRule({
+    workLog,
+    productionStep,
+  });
+
+  const payrollRule = resolvedRule.rule || buildProductionStepPayrollSnapshot({});
+  const metrics = getWorkLogPayrollMetrics(workLog, payrollRule);
+  const blockingReasons = [];
+  const warningReasons = [];
+
+  // =====================================================
+  // ACTIVE / GUARDED
+  // Validasi ini dipakai untuk menyaring Work Log completed mana yang benar-benar
+  // aman dijadikan draft payroll operasional.
+  // =====================================================
+  if (!workLog?.id) {
+    blockingReasons.push("Work Log tidak valid atau belum tersimpan.");
+  }
+
+  if (safeString(workLog.status) !== "completed") {
+    blockingReasons.push("Work Log belum berstatus completed.");
+  }
+
+  if (!safeString(workLog.stepId) && !safeString(workLog.stepName)) {
+    blockingReasons.push("Step produksi pada Work Log belum terbaca.");
+  }
+
+  if (!hasMeaningfulWorkerSummary(workLog)) {
+    blockingReasons.push("Operator / tim pada Work Log belum terisi.");
+  }
+
+  if (resolvedRule.source === "missing_payroll_rule") {
+    blockingReasons.push(
+      "Rule payroll step tidak ditemukan pada snapshot Work Log maupun master step.",
+    );
+  }
+
+  if (payrollRule.payrollRate <= 0) {
+    blockingReasons.push("Tarif payroll step harus lebih besar dari 0.");
+  }
+
+  if (payrollRule.payrollMode === "per_qty") {
+    if (payrollRule.payrollQtyBase <= 0) {
+      blockingReasons.push("Qty dasar payroll per qty harus lebih besar dari 0.");
+    }
+
+    if (metrics.outputQtyUsed <= 0) {
+      blockingReasons.push(
+        `Output qty untuk payroll per qty belum valid. Basis saat ini menghasilkan ${formatNumber(metrics.outputQtyUsed)}.`,
+      );
+    }
+  }
+
+  if (payrollRule.payrollMode === "per_batch" && metrics.workedQty <= 0) {
+    blockingReasons.push(
+      `Qty batch Work Log harus lebih besar dari 0 untuk mode per batch. Nilai saat ini ${formatNumber(metrics.workedQty)}.`,
+    );
+  }
+
+  if (resolvedRule.legacyFallbackUsed) {
+    warningReasons.push(
+      "Draft payroll memakai legacy/deprecated fallback ke master step karena snapshot rule payroll lama belum ada di Work Log.",
+    );
+  }
+
+  if (Boolean(workLog.payrollCalculated) && safeString(workLog.payrollCalculationStatus) !== "cancelled") {
+    warningReasons.push(
+      "Work Log ini sudah pernah ditandai memiliki payroll. Pastikan tidak ada payroll aktif ganda.",
+    );
+  }
+
+  if (Boolean(workLog.workerCount) && safeNumber(workLog.workerCount, 0) > 1) {
+    warningReasons.push(
+      `Work Log ini dikerjakan tim (${formatNumber(workLog.workerCount)} orang). Pastikan pembagian upah sesuai kebijakan operasional.`,
+    );
+  }
+
+  return {
+    resolvedRule,
+    payrollRule,
+    metrics,
+    isEligible: blockingReasons.length === 0,
+    status: blockingReasons.length === 0 ? "eligible" : "blocked",
+    blockingReasons,
+    warningReasons,
+  };
+};
+
 export const buildPayrollCalculationNotes = ({
   workLog = {},
   payrollRule = {},
@@ -167,16 +284,12 @@ export const buildPayrollCalculationNotes = ({
   const baseText = [
     `Rule source: ${sourceLabel}.`,
     `Mode: ${payrollRule.payrollMode || "per_qty"}.`,
-    `Rate: Rp${new Intl.NumberFormat("id-ID").format(
-      safeNumber(payrollRule.payrollRate, 0),
-    )}.`,
+    `Rate: Rp${formatNumber(safeNumber(payrollRule.payrollRate, 0))}.`,
   ];
 
   if ((payrollRule.payrollMode || "per_qty") === "per_batch") {
     baseText.push(
-      `Worked Qty memakai Qty Batch Work Log = ${new Intl.NumberFormat("id-ID").format(
-        metrics.workedQty,
-      )}.`,
+      `Worked Qty memakai Qty Batch Work Log = ${formatNumber(metrics.workedQty)}.`,
     );
   } else if ((payrollRule.payrollMode || "per_qty") === "per_qty") {
     baseText.push(
@@ -184,7 +297,7 @@ export const buildPayrollCalculationNotes = ({
         payrollRule.payrollOutputBasis === "actual_output_qty"
           ? "Actual Output Qty"
           : "Good Qty"
-      } = ${new Intl.NumberFormat("id-ID").format(metrics.outputQtyUsed)}.`,
+      } = ${formatNumber(metrics.outputQtyUsed)}.`,
     );
   } else {
     baseText.push("Mode fixed dihitung 1x per work log completed.");
@@ -197,4 +310,32 @@ export const buildPayrollCalculationNotes = ({
   }
 
   return baseText.join(" ");
+};
+
+export const buildPayrollEligibilityNotes = ({
+  workLog = {},
+  eligibility = null,
+} = {}) => {
+  const resolvedEligibility =
+    eligibility ||
+    resolveWorkLogPayrollDraft({
+      workLog,
+      productionStep: null,
+    });
+
+  const notes = [];
+
+  notes.push(
+    `Eligibility: ${formatPayrollEligibilityStatusLabel(resolvedEligibility.status)}.`,
+  );
+
+  if (resolvedEligibility.blockingReasons.length > 0) {
+    notes.push(`Blocking: ${resolvedEligibility.blockingReasons.join(" | ")}.`);
+  }
+
+  if (resolvedEligibility.warningReasons.length > 0) {
+    notes.push(`Warning: ${resolvedEligibility.warningReasons.join(" | ")}.`);
+  }
+
+  return notes.join(" ");
 };

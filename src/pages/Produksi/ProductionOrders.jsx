@@ -427,19 +427,35 @@ const ProductionOrders = () => {
       ),
     },
     {
+      // =====================================================
+      // SECTION: status sticky
+      // Fungsi:
+      // - menjaga status order tetap terlihat pada tabel lebar yang memakai scroll horizontal
+      // - mengikuti baseline final: status boleh sticky sebelum aksi untuk detail-capable page
+      // =====================================================
       title: "Status",
       dataIndex: "status",
       key: "status",
       width: 140,
+      fixed: "right",
+      className: "app-table-status-column app-table-fixed-secondary",
       render: (value) => {
         const meta = ORDER_STATUS_MAP[value] || ORDER_STATUS_MAP.draft;
         return <span className="ims-badge-inline"><Badge status={meta.status} text={meta.text} /></span>;
       },
     },
     {
+      // =====================================================
+      // SECTION: aksi sticky
+      // Fungsi:
+      // - Production Orders diklasifikasikan sebagai detail-capable page, jadi tombol Detail wajib ada
+      // - kolom aksi dibuat fixed right agar user tidak perlu scroll horizontal dulu untuk akses aksi utama
+      // =====================================================
       title: "Aksi",
       key: "actions",
       width: 320,
+      fixed: "right",
+      className: "app-table-action-column",
       render: (_, record) => (
         <Space wrap className="ims-action-group">
           <Button

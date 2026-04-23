@@ -8,6 +8,7 @@ import {
   InputNumber,
   Popconfirm,
   Select,
+  Space,
   Table,
   Tag,
   message,
@@ -291,21 +292,30 @@ const CashIn = () => {
         render: (value) => value || "-",
       },
       {
+        // =====================================================
+        // SECTION: aksi ledger page
+        // Fungsi:
+        // - Cash In termasuk ledger/simple action page, jadi tidak memakai tombol Detail
+        // - aksi delete tetap dibuat di kolom paling kanan dan siap sticky untuk menjaga visibilitas aksi utama
+        // =====================================================
         title: "Aksi",
         key: "action",
         width: 140,
+        fixed: "right",
         className: "app-table-action-column",
         render: (_, record) => (
-          <Popconfirm
-            title="Yakin hapus transaksi ini?"
-            onConfirm={() => handleDeleteTransaction(record)}
-            okText="Ya"
-            cancelText="Tidak"
-          >
-            <Button danger icon={<DeleteOutlined />}>
-              Hapus
-            </Button>
-          </Popconfirm>
+          <Space wrap className="ims-action-group">
+            <Popconfirm
+              title="Yakin hapus transaksi ini?"
+              onConfirm={() => handleDeleteTransaction(record)}
+              okText="Ya"
+              cancelText="Tidak"
+            >
+              <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />}>
+                Hapus
+              </Button>
+            </Popconfirm>
+          </Space>
         ),
       },
     ],
@@ -384,6 +394,8 @@ const CashIn = () => {
           dataSource={filteredCashIns}
           columns={columns}
           loading={loading}
+          // Baseline final: ledger table boleh sederhana, tetapi tetap diberi scroll.x agar fixed action selalu stabil.
+          scroll={{ x: 1180 }}
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada pemasukan pada periode ini." />,
           }}
