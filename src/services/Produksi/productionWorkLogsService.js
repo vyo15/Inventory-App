@@ -41,6 +41,7 @@ import {
   isProductionWorkLogCompleted,
   sortProductionWorkLogsNewestFirst,
 } from "../../utils/produksi/productionFlowGuards";
+import { buildProductionStepPayrollSnapshot } from "../../utils/produksi/productionPayrollRuleHelpers";
 
 const COLLECTION_NAME = "production_work_logs";
 
@@ -195,6 +196,15 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const materialUsages = normalizeMaterialUsages(values.materialUsages || []);
   const outputs = normalizeOutputs(values.outputs || []);
   const monitoring = calculateProductionMonitoring(values.productionProfile || {}, values);
+  const stepPayrollSnapshot = buildProductionStepPayrollSnapshot({
+    stepId: values.stepId,
+    stepCode: values.stepCode,
+    stepName: values.stepName,
+    payrollMode: values.stepPayrollMode,
+    payrollRate: values.stepPayrollRate,
+    payrollQtyBase: values.stepPayrollQtyBase,
+    payrollOutputBasis: values.stepPayrollOutputBasis,
+  });
 
   const materialCostActual = materialUsages.reduce(
     (sum, item) => sum + toNumber(item.totalCostSnapshot || 0),
@@ -258,6 +268,21 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     stepCode: safeTrim(values.stepCode),
     stepName: safeTrim(values.stepName),
     sequenceNo: toNumber(values.sequenceNo || 1),
+
+    // =====================================================
+    // SECTION: snapshot payroll rule step
+    // ACTIVE / GUARDED
+    // Fungsi:
+    // - menyimpan snapshot rule payroll dari master Tahapan Produksi
+    //   ke Work Log saat record dibuat / diupdate.
+    // - payroll baru wajib membaca snapshot ini agar audit stabil walau
+    //   master step berubah di kemudian hari.
+    // =====================================================
+    stepPayrollMode: stepPayrollSnapshot.payrollMode,
+    stepPayrollRate: stepPayrollSnapshot.payrollRate,
+    stepPayrollQtyBase: stepPayrollSnapshot.payrollQtyBase,
+    stepPayrollOutputBasis: stepPayrollSnapshot.payrollOutputBasis,
+    stepPayrollRuleSource: values.stepPayrollRuleSource || "production_step",
 
     // SECTION: source
     sourceType: values.sourceType || "manual",

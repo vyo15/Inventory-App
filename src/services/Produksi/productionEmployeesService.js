@@ -34,6 +34,12 @@ const normalizePayload = (
   const useCustomPayrollRate = Boolean(values.useCustomPayrollRate);
 
   const payload = {
+    // =====================================================
+    // LEGACY / DEPRECATED
+    // Custom payroll karyawan dipertahankan sementara untuk kompatibilitas
+    // data lama, tetapi tidak lagi dipakai di flow payroll final.
+    // Source of truth payroll baru ada di Tahapan Produksi + Work Log.
+    // =====================================================
     code: String(values.code || "")
       .trim()
       .toUpperCase(),
@@ -112,6 +118,11 @@ export const validateProductionEmployee = (values = {}) => {
     errors.role = "Role wajib dipilih";
   }
 
+  // =====================================================
+  // LEGACY / DEPRECATED
+  // Validasi ini dipertahankan selama field custom payroll masih ada
+  // di schema. Tidak lagi dipakai sebagai jalur hitung payroll aktif.
+  // =====================================================
   if (values.useCustomPayrollRate) {
     if (!values.customPayrollMode) {
       errors.customPayrollMode = "Mode payroll custom wajib dipilih";

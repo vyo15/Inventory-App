@@ -89,13 +89,21 @@ export const DEFAULT_PRODUCTION_PAYROLL_FORM = {
 
   notes: "",
   calculationNotes: "",
+  payrollRuleSource: "work_log_step_snapshot",
+  legacyPayrollFallbackUsed: false,
 };
 
+// =====================================================
+// ACTIVE / GUARDED
+// Rumus payroll final wajib lewat helper ini agar per_batch,
+// per_qty, dan fixed selalu konsisten di seluruh modul.
+// =====================================================
 export const calculatePayrollAmounts = (values = {}) => {
   const payrollMode = values.payrollMode || "per_qty";
   const payrollRate = Number(values.payrollRate || 0);
   const payrollQtyBase = Number(values.payrollQtyBase || 1);
   const outputQtyUsed = Number(values.outputQtyUsed || 0);
+  const workedQty = Number(values.workedQty || 0);
   const bonusAmount = Number(values.bonusAmount || 0);
   const deductionAmount = Number(values.deductionAmount || 0);
 
@@ -106,8 +114,14 @@ export const calculatePayrollAmounts = (values = {}) => {
     amountCalculated = payrollRate;
     payableQtyFactor = 1;
   } else if (payrollMode === "per_batch") {
-    amountCalculated = payrollRate;
-    payableQtyFactor = 1;
+    // =====================================================
+    // ACTIVE / GUARDED
+    // Mode per_batch wajib membaca Qty Batch real dari Work Log.
+    // Logic lama yang hanya membayar 1x rate tanpa pengali batch
+    // sudah dinonaktifkan lewat rumus ini.
+    // =====================================================
+    payableQtyFactor = workedQty > 0 ? workedQty : outputQtyUsed;
+    amountCalculated = payableQtyFactor * payrollRate;
   } else {
     payableQtyFactor = payrollQtyBase > 0 ? outputQtyUsed / payrollQtyBase : 0;
     amountCalculated = payableQtyFactor * payrollRate;

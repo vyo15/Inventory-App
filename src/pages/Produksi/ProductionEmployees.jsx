@@ -605,7 +605,7 @@ const ProductionEmployees = () => {
                 name="isActive"
                 valuePropName="checked"
               >
-                <Switch />
+                <Switch disabled />
               </Form.Item>
             </Col>
 
@@ -673,7 +673,11 @@ const ProductionEmployees = () => {
             </Col>
           </Row>
 
-          <Divider orientation="left">Payroll Preference</Divider>
+          <Divider orientation="left">Payroll Preference (Legacy / Deprecated)</Divider>
+
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+            Payroll final sekarang mengikuti rule pada menu Tahapan Produksi. Pengaturan custom payroll karyawan di bawah ini dipertahankan hanya untuk kompatibilitas data lama dan tidak lagi dipakai untuk generate payroll baru.
+          </Typography.Paragraph>
 
           <Row gutter={16}>
             <Col xs={24} md={12}>
@@ -682,7 +686,7 @@ const ProductionEmployees = () => {
                 name="useCustomPayrollRate"
                 valuePropName="checked"
               >
-                <Switch />
+                <Switch disabled />
               </Form.Item>
             </Col>
           </Row>
@@ -697,7 +701,7 @@ const ProductionEmployees = () => {
                 <Row gutter={16}>
                   <Col xs={24} md={8}>
                     <Form.Item
-                      label="Mode Payroll Custom"
+                      label="Mode Payroll Custom (Legacy)"
                       name="customPayrollMode"
                       rules={
                         useCustomPayrollRate
@@ -712,17 +716,17 @@ const ProductionEmployees = () => {
                     >
                       <Select
                         options={PRODUCTION_EMPLOYEE_CUSTOM_PAYROLL_MODES}
-                        disabled={!useCustomPayrollRate}
+                        disabled
                       />
                     </Form.Item>
                   </Col>
 
                   <Col xs={24} md={8}>
-                    <Form.Item label="Tarif Custom" name="customPayrollRate">
+                    <Form.Item label="Tarif Custom (Legacy)" name="customPayrollRate">
                       <InputNumber
                         min={0}
                         style={{ width: "100%" }}
-                        disabled={!useCustomPayrollRate}
+                        disabled
                       />
                     </Form.Item>
                   </Col>
@@ -743,7 +747,7 @@ const ProductionEmployees = () => {
 
                         return (
                           <Form.Item
-                            label="Basis Qty Custom"
+                            label="Basis Qty Custom (Legacy)"
                             name="customPayrollQtyBase"
                             rules={
                               disabled
@@ -759,7 +763,7 @@ const ProductionEmployees = () => {
                             <InputNumber
                               min={1}
                               style={{ width: "100%" }}
-                              disabled={disabled}
+                              disabled
                             />
                           </Form.Item>
                         );
@@ -783,7 +787,7 @@ const ProductionEmployees = () => {
 
                         return (
                           <Form.Item
-                            label="Basis Output Payroll Custom"
+                            label="Basis Output Payroll Custom (Legacy)"
                             name="customPayrollOutputBasis"
                             rules={
                               disabled
@@ -798,7 +802,7 @@ const ProductionEmployees = () => {
                           >
                             <Select
                               options={PRODUCTION_EMPLOYEE_PAYROLL_OUTPUT_BASIS}
-                              disabled={disabled}
+                              disabled
                             />
                           </Form.Item>
                         );
@@ -824,11 +828,11 @@ const ProductionEmployees = () => {
                   </Col>
 
                   <Col xs={24}>
-                    <Form.Item label="Catatan Payroll" name="payrollNotes">
+                    <Form.Item label="Catatan Payroll (Legacy)" name="payrollNotes">
                       <Input.TextArea
                         rows={2}
                         placeholder="Catatan payroll khusus karyawan..."
-                        disabled={!useCustomPayrollRate}
+                        disabled
                       />
                     </Form.Item>
                   </Col>
@@ -892,29 +896,29 @@ const ProductionEmployees = () => {
                 "-"
               )}
             </Descriptions.Item>
-            <Descriptions.Item label="Gunakan Tarif Custom">
+            <Descriptions.Item label="Gunakan Tarif Custom (Legacy)">
               {selectedEmployee.useCustomPayrollRate ? "Ya" : "Tidak"}
             </Descriptions.Item>
-            <Descriptions.Item label="Mode Payroll Custom">
+            <Descriptions.Item label="Mode Payroll Custom (Legacy)">
               {EMPLOYEE_PAYROLL_MODE_MAP[selectedEmployee.customPayrollMode] ||
                 "-"}
             </Descriptions.Item>
-            <Descriptions.Item label="Tarif Custom">
+            <Descriptions.Item label="Tarif Custom (Legacy)">
               {selectedEmployee.useCustomPayrollRate
                 ? `Rp${formatNumber(selectedEmployee.customPayrollRate)}`
                 : "-"}
             </Descriptions.Item>
-            <Descriptions.Item label="Basis Qty Custom">
+            <Descriptions.Item label="Basis Qty Custom (Legacy)">
               {selectedEmployee.useCustomPayrollRate
                 ? formatNumber(selectedEmployee.customPayrollQtyBase)
                 : "-"}
             </Descriptions.Item>
-            <Descriptions.Item label="Basis Output Payroll">
+            <Descriptions.Item label="Basis Output Payroll (Legacy)">
               {EMPLOYEE_PAYROLL_OUTPUT_BASIS_MAP[
                 selectedEmployee.customPayrollOutputBasis
               ] || "-"}
             </Descriptions.Item>
-            <Descriptions.Item label="Preview Payroll">
+            <Descriptions.Item label="Preview Payroll / Status">
               {formatEmployeePayrollPreview(selectedEmployee)}
             </Descriptions.Item>
             <Descriptions.Item label="Skill Tags">

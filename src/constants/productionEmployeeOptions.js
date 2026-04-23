@@ -83,25 +83,9 @@ export const DEFAULT_PRODUCTION_EMPLOYEE_FORM = {
 };
 
 export const formatEmployeePayrollPreview = (employee = {}) => {
-  if (!employee?.useCustomPayrollRate)
-    return "Mengikuti default tahapan produksi";
-
-  const mode = employee?.customPayrollMode || "per_qty";
-  const rate = Number(employee?.customPayrollRate || 0);
-  const qtyBase = Number(employee?.customPayrollQtyBase || 1);
-  const outputBasis = employee?.customPayrollOutputBasis || "good_qty";
-
-  const rateText = new Intl.NumberFormat("id-ID").format(rate);
-
-  if (mode === "fixed") {
-    return `Rp${rateText} per step selesai`;
+  if (!employee?.useCustomPayrollRate) {
+    return "Aktif: mengikuti rule payroll Tahapan Produksi";
   }
 
-  if (mode === "per_batch") {
-    return `Rp${rateText} per batch`;
-  }
-
-  return `Rp${rateText} per ${new Intl.NumberFormat("id-ID").format(
-    qtyBase,
-  )} qty (${outputBasis})`;
+  return "Legacy/deprecated: custom payroll karyawan tidak lagi dipakai dalam flow payroll final. Nilai ini hanya dipertahankan untuk referensi historis.";
 };

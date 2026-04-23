@@ -669,6 +669,10 @@ const ProductionSteps = () => {
 
           <Divider orientation="left">Sistem Bayar</Divider>
 
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+            Rule payroll di section ini adalah source of truth untuk payroll produksi baru. Work Log akan menyimpan snapshot rule ini saat diposting, lalu Payroll membaca snapshot tersebut saat draft dibuat.
+          </Typography.Paragraph>
+
           <Row gutter={12}>
             <Col xs={24} md={12}>
               <Form.Item label="Mode Bayar" name="payrollMode">

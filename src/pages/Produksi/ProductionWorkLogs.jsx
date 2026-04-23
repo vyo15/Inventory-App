@@ -568,6 +568,19 @@ const ProductionWorkLogs = () => {
         stepCode: selectedStep?.code || "",
         stepName: selectedStep?.name || "",
         sequenceNo: values.sequenceNo || 1,
+
+        // =====================================================
+        // ACTIVE / GUARDED
+        // Snapshot payroll rule step dibawa ke Work Log agar flow
+        // Work Log completed -> Payroll tidak lagi membaca fallback lama
+        // secara diam-diam dari master karyawan.
+        // =====================================================
+        stepPayrollMode: selectedStep?.payrollMode || "per_qty",
+        stepPayrollRate: Number(selectedStep?.payrollRate || 0),
+        stepPayrollQtyBase: Number(selectedStep?.payrollQtyBase || 1),
+        stepPayrollOutputBasis: selectedStep?.payrollOutputBasis || "good_qty",
+        stepPayrollRuleSource: "production_step",
+
         workerCodes: selectedEmployees.map((item) => item.code || ""),
         workerNames: selectedEmployees.map((item) => item.name || ""),
         workerCount: selectedEmployees.length,

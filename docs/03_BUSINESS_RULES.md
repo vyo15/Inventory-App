@@ -189,6 +189,19 @@ Implikasi:
 ## 13. Rule Payroll Produksi
 Payroll produksi dibangun dari work log completed.
 
+Rule final yang sekarang harus dianggap resmi:
+- source of truth payroll adalah rule payroll pada `production_steps`
+- saat work log dibuat / diupdate, rule payroll step disnapshot ke work log
+- saat payroll draft dibuat, service membaca snapshot rule payroll pada work log completed
+- jika work log lama belum punya snapshot, service boleh fallback sekali ke master step dan harus menandainya sebagai legacy/deprecated fallback
+- custom payroll di master karyawan tidak lagi menjadi jalur hitung aktif
+- satu work log hanya boleh punya satu payroll aktif; jika payroll dibatalkan barulah work log boleh dipakai lagi
+
+Rumus final:
+- `per_batch` memakai `plannedQty` / qty batch work log sebagai worked qty
+- `per_qty` memakai `good_qty` atau `actual_output_qty` sesuai basis output rule step
+- `fixed` dihitung 1x per work log
+
 ## 14. Rule Reset Data Uji
 Reset utilitas mendukung mode:
 - reset transaksi saja

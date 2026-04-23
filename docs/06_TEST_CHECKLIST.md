@@ -159,8 +159,13 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 
 ### Payroll Produksi
 - buat payroll dari work log completed
-- cek nilai payroll
-- ubah status unpaid → paid
+- cek draft payroll membaca rule dari step / snapshot work log, bukan dari custom payroll karyawan
+- cek work log yang sudah punya payroll aktif tidak muncul lagi di draft payroll baru
+- cek mode `per_batch` memakai qty batch work log dengan benar
+- cek mode `per_qty` memakai basis output sesuai rule step (`good_qty` atau `actual_output_qty`)
+- cek fallback legacy hanya muncul pada work log lama yang belum punya snapshot payroll step
+- cek status unpaid → paid menyinkronkan flag payroll di work log
+- cek cancel payroll membuka kembali work log sebagai eligible payroll
 
 ### Analisis HPP
 - pastikan work log completed terbaca
@@ -182,32 +187,3 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - reset + zero stock
 - reset + restore baseline
 - cek field stok sinkron kembali setelah reset
-
-
-## H. UI Visual Regression — Table Surface Shared
-
-### Baseline Shared Table
-- cek halaman yang memakai `app-data-table` tampil dengan background table solid
-- cek halaman yang memakai `ims-table` tampil dengan background table solid
-- cek header, body row, cell, empty state, expanded row, dan summary row konsisten
-- cek border dan surface table menyatu dengan card/filter/page wrapper
-
-### Hover / Selected / Fixed Column
-- cek row normal tidak tembus ke layer belakang
-- cek hover row tetap solid dan rapi
-- cek selected row tetap solid dan rapi
-- cek selected + hover tetap konsisten
-- cek fixed/sticky left column ikut warna row aktif
-- cek fixed/sticky right action column ikut warna row aktif
-- cek isi kolom belakang tidak terlihat menembus ke kolom aksi
-
-### Halaman Prioritas Visual
-- cek Work Log Produksi dengan horizontal scroll
-- cek Tahapan Produksi
-- cek halaman produksi lain yang punya kolom aksi
-- cek dashboard bila ada table
-
-### Mode & Guard
-- cek light mode
-- cek dark mode
-- pastikan tidak ada CSS per halaman yang mengoverride table menjadi `transparent` atau semi transparan tanpa kebutuhan khusus

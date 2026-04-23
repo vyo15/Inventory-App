@@ -111,11 +111,21 @@ Status work log yang terlihat:
 ## 8. Payroll Produksi
 Tujuan:
 - rekap gaji produksi berbasis work log completed
+- menjaga audit rule payroll per step tetap stabil walau master step berubah di kemudian hari
+
+Contract final payroll yang sekarang harus dianggap resmi:
+- source of truth rule payroll = master `production_steps`
+- work log menyimpan snapshot rule payroll step (`mode`, `rate`, `qty base`, `output basis`)
+- payroll draft membaca snapshot rule dari work log completed
+- fallback ke master step hanya untuk work log lama yang belum punya snapshot dan harus dianggap legacy/deprecated
+- custom payroll di master karyawan tidak lagi dipakai sebagai jalur hitung aktif
+- satu work log hanya boleh punya satu payroll aktif
 
 Status payroll yang terlihat:
 - `draft`
-- `unpaid`
+- `confirmed`
 - `paid`
+- `cancelled`
 
 ## 9. Analisis HPP Produksi
 Tujuan:
@@ -133,6 +143,7 @@ Boundary produksi aktif yang sekarang harus dianggap final/guarded:
 - lock field inti Work Log setelah linked ke PO
 - lock Work Log setelah completed
 - helper query completed work log untuk payroll / HPP
+- helper payroll rule produksi dan sinkronisasi flag payroll pada work log
 
 Catatan penting:
 - refactor UI, shared component, atau patch modul lain tidak boleh memindahkan logic ini ke layer presentational

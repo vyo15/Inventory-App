@@ -1,11 +1,16 @@
 // =====================================================
 // Page: Payroll Produksi
-// Draft payroll diambil dari work log completed
+//
+// ACTIVE / GUARDED
+// Payroll final wajib dibuat dari Work Log completed dengan rule payroll
+// per step sebagai source of truth.
+//
+// LEGACY / DEPRECATED
+// Pemilihan payroll dari tarif custom karyawan tidak lagi menjadi jalur aktif.
 // =====================================================
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Badge,
   Button,
   Card,
   Col,
@@ -35,12 +40,16 @@ import {
 import dayjs from "dayjs";
 import {
   DEFAULT_PRODUCTION_PAYROLL_FORM,
+  PAYROLL_MODE_MAP,
+  PAYROLL_OUTPUT_BASIS_MAP,
   PAYROLL_PAYMENT_STATUS_MAP,
   PAYROLL_STATUS_MAP,
+  calculatePayrollAmounts,
 } from "../../constants/productionPayrollOptions";
 import {
   buildPayrollDraftFromWorkLog,
   createProductionPayroll,
+  formatPayrollRuleSourceLabel,
   getAllProductionPayrolls,
   getPayrollReferenceData,
   updatePayrollStatus,
@@ -53,12 +62,17 @@ const formatNumber = (value) =>
 const formatCurrency = (value) =>
   `Rp${new Intl.NumberFormat("id-ID").format(Number(value || 0))}`;
 
+const formatDate = (value) => {
+  const date = value?.toDate ? value.toDate() : value;
+  return date ? dayjs(date).format("DD/MM/YYYY") : "-";
+};
+
 const ProductionPayrolls = () => {
   const [loading, setLoading] = useState(false);
   const [payrolls, setPayrolls] = useState([]);
   const [referenceData, setReferenceData] = useState({
     completedWorkLogs: [],
-    employees: [],
+    productionSteps: [],
   });
 
   const [search, setSearch] = useState("");
@@ -97,12 +111,8 @@ const ProductionPayrolls = () => {
 
   const summary = useMemo(() => {
     const total = payrolls.length;
-    const paid = payrolls.filter(
-      (item) => item.paymentStatus === "paid",
-    ).length;
-    const unpaid = payrolls.filter(
-      (item) => item.paymentStatus === "unpaid",
-    ).length;
+    const paid = payrolls.filter((item) => item.paymentStatus === "paid").length;
+    const unpaid = payrolls.filter((item) => item.paymentStatus === "unpaid").length;
     const totalAmount = payrolls.reduce(
       (sum, item) => sum + Number(item.finalAmount || 0),
       0,
@@ -117,15 +127,10 @@ const ProductionPayrolls = () => {
 
       const matchSearch =
         !searchText ||
-        String(item.payrollNumber || "")
-          .toLowerCase()
-          .includes(searchText) ||
-        String(item.workerName || "")
-          .toLowerCase()
-          .includes(searchText) ||
-        String(item.workNumber || "")
-          .toLowerCase()
-          .includes(searchText);
+        String(item.payrollNumber || "").toLowerCase().includes(searchText) ||
+        String(item.workerName || "").toLowerCase().includes(searchText) ||
+        String(item.workNumber || "").toLowerCase().includes(searchText) ||
+        String(item.stepName || "").toLowerCase().includes(searchText);
 
       const matchStatus =
         statusFilter === "all" || item.paymentStatus === statusFilter;
@@ -175,19 +180,26 @@ const ProductionPayrolls = () => {
     );
     if (!workLog) return;
 
-    const employee =
-      referenceData.employees.find(
-        (item) => item.id === workLog.workerIds?.[0],
-      ) || null;
+    const productionStep = referenceData.productionSteps.find(
+      (item) => item.id === workLog.stepId,
+    ) || null;
 
-    const draft = buildPayrollDraftFromWorkLog(workLog, employee);
+    const draft = buildPayrollDraftFromWorkLog(workLog, productionStep);
 
     form.setFieldsValue({
       ...form.getFieldsValue(),
       ...draft,
+      workLogId,
     });
 
-    message.success("Draft payroll berhasil dibuat dari work log");
+    if (draft.legacyPayrollFallbackUsed) {
+      message.warning(
+        "Draft payroll memakai legacy fallback ke master step karena Work Log lama belum punya snapshot payroll rule.",
+      );
+      return;
+    }
+
+    message.success("Draft payroll berhasil dibuat dari Work Log completed");
   };
 
   const handleSubmit = async () => {
@@ -244,16 +256,37 @@ const ProductionPayrolls = () => {
     }
   };
 
-  const workLogOptions = referenceData.completedWorkLogs.map((item) => ({
-    value: item.id,
-    label: `${item.workNumber || "-"} - ${item.targetName || "-"} - ${item.stepName || "-"}`,
-  }));
+  const handleCancelPayroll = async (record) => {
+    try {
+      await updatePayrollStatus(record.id, "cancelled", "unpaid", {
+        paidAt: null,
+      });
+      message.success("Payroll ditandai cancelled");
+      await loadData();
+    } catch (error) {
+      console.error(error);
+      message.error("Gagal membatalkan payroll");
+    }
+  };
 
-  const employeeOptions = referenceData.employees.map((item) => ({
-    value: item.id,
-    label: `${item.code || "-"} - ${item.name || "-"}`,
-    raw: item,
-  }));
+  const workLogOptions = useMemo(() => {
+    const baseOptions = referenceData.completedWorkLogs.map((item) => ({
+      value: item.id,
+      label: `${item.workNumber || "-"} - ${item.targetName || "-"} - ${item.stepName || "-"}`,
+    }));
+
+    if (editingRecord?.workLogId) {
+      const exists = baseOptions.some((item) => item.value === editingRecord.workLogId);
+      if (!exists) {
+        baseOptions.unshift({
+          value: editingRecord.workLogId,
+          label: `${editingRecord.workNumber || "-"} - ${editingRecord.targetName || "-"} - ${editingRecord.stepName || "-"}`,
+        });
+      }
+    }
+
+    return baseOptions;
+  }, [referenceData.completedWorkLogs, editingRecord]);
 
   const columns = [
     {
@@ -270,15 +303,12 @@ const ProductionPayrolls = () => {
       dataIndex: "payrollDate",
       key: "payrollDate",
       width: 130,
-      render: (value) => {
-        const date = value?.toDate ? value.toDate() : value;
-        return date ? dayjs(date).format("DD/MM/YYYY") : "-";
-      },
+      render: (value) => formatDate(value),
     },
     {
-      title: "Karyawan / Work Log",
+      title: "Operator / Work Log",
       key: "workerWorkLog",
-      width: 260,
+      width: 280,
       render: (_, record) => (
         <div>
           <div style={{ fontWeight: 600 }}>{record.workerName || "-"}</div>
@@ -293,6 +323,13 @@ const ProductionPayrolls = () => {
       dataIndex: "stepName",
       key: "stepName",
       width: 160,
+    },
+    {
+      title: "Mode",
+      dataIndex: "payrollMode",
+      key: "payrollMode",
+      width: 120,
+      render: (value) => PAYROLL_MODE_MAP[value] || "-",
     },
     {
       title: "Final Amount",
@@ -314,7 +351,9 @@ const ProductionPayrolls = () => {
       className: "app-table-status-column app-table-fixed-secondary",
       render: (_, record) => (
         <Space direction="vertical" size={0}>
-          <Tag color="blue">{PAYROLL_STATUS_MAP[record.status] || "-"}</Tag>
+          <Tag color={record.status === "cancelled" ? "red" : "blue"}>
+            {PAYROLL_STATUS_MAP[record.status] || "-"}
+          </Tag>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {PAYROLL_PAYMENT_STATUS_MAP[record.paymentStatus] || "-"}
           </Typography.Text>
@@ -327,7 +366,7 @@ const ProductionPayrolls = () => {
       // =====================================================
       title: "Aksi",
       key: "actions",
-      width: 240,
+      width: 280,
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
@@ -344,12 +383,12 @@ const ProductionPayrolls = () => {
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
-            disabled={record.paymentStatus === "paid"}
+            disabled={record.paymentStatus === "paid" || record.status === "cancelled"}
           >
             Edit
           </Button>
 
-          {record.paymentStatus !== "paid" && (
+          {record.paymentStatus !== "paid" && record.status !== "cancelled" && (
             <Popconfirm
               title="Tandai payroll ini paid?"
               onConfirm={() => handleMarkPaid(record)}
@@ -361,6 +400,20 @@ const ProductionPayrolls = () => {
               </Button>
             </Popconfirm>
           )}
+
+          {record.status !== "cancelled" && (
+            <Popconfirm
+              title="Batalkan payroll ini?"
+              description="Work Log akan dibuka lagi sebagai eligible payroll."
+              onConfirm={() => handleCancelPayroll(record)}
+              okText="Ya"
+              cancelText="Batal"
+            >
+              <Button size="small" danger>
+                Cancel
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -369,119 +422,94 @@ const ProductionPayrolls = () => {
   return (
     <div>
       <Card style={{ marginBottom: 16 }}>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} md={6}>
+            <Statistic title="Total Payroll" value={summary.total} />
+          </Col>
+          <Col xs={24} md={6}>
+            <Statistic title="Paid" value={summary.paid} />
+          </Col>
+          <Col xs={24} md={6}>
+            <Statistic title="Unpaid" value={summary.unpaid} />
+          </Col>
+          <Col xs={24} md={6}>
+            <Statistic title="Total Nilai" value={formatCurrency(summary.totalAmount)} />
+          </Col>
+        </Row>
+      </Card>
+
+      <Card>
+        <Row justify="space-between" align="middle" gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col>
-            <Typography.Title level={3} style={{ margin: 0 }}>
+            <Typography.Title level={4} style={{ margin: 0 }}>
               Payroll Produksi
             </Typography.Title>
             <Typography.Text type="secondary">
-              Rekap gaji produksi berbasis work log completed
+              Payroll final mengikuti rule Tahapan Produksi yang tersimpan pada Work Log completed.
             </Typography.Text>
           </Col>
           <Col>
             <Space wrap>
               <Button icon={<ReloadOutlined />} onClick={loadData}>
-                Refresh
+                Reload
               </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleAdd}
-              >
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
                 Tambah Payroll
               </Button>
             </Space>
           </Col>
         </Row>
-      </Card>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Total Payroll" value={summary.total} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Sudah Dibayar" value={summary.paid} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Belum Dibayar" value={summary.unpaid} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="Total Nilai Payroll"
-              value={summary.totalAmount}
-              formatter={(value) => formatCurrency(value)}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
-          <Col xs={24} md={12}>
+        <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+          <Col xs={24} md={10}>
             <Input
-              placeholder="Cari nomor payroll, karyawan, work log..."
+              placeholder="Cari nomor payroll, operator, work log, step..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(event) => setSearch(event.target.value)}
               allowClear
             />
           </Col>
-          <Col xs={24} md={12}>
+          <Col xs={24} md={6}>
             <Select
               style={{ width: "100%" }}
               value={statusFilter}
               onChange={setStatusFilter}
               options={[
-                { value: "all", label: "Semua Payment Status" },
+                { value: "all", label: "Semua Status" },
                 { value: "unpaid", label: "Unpaid" },
                 { value: "partial", label: "Partial" },
                 { value: "paid", label: "Paid" },
               ]}
             />
           </Col>
+          <Col xs={24} md={8}>
+            <Typography.Text type="secondary">
+              Work Log yang sudah punya payroll aktif tidak ditampilkan lagi di draft baru.
+            </Typography.Text>
+          </Col>
         </Row>
-      </Card>
 
-      <Card>
-        {/* ===============================================================
-            Tabel payroll mengikuti helper global untuk menjaga konsistensi bentuk.
-        =============================================================== */}
         <Table
-          className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          scroll={{ x: 1300 }}
+          scroll={{ x: 1400 }}
+          pagination={{ pageSize: 10 }}
           locale={{
             emptyText: <Empty description="Belum ada payroll produksi" />,
-          }}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
           }}
         />
       </Card>
 
       <Drawer
-        title={
-          editingRecord?.id
-            ? "Edit Payroll Produksi"
-            : "Tambah Payroll Produksi"
-        }
+        title={editingRecord ? "Edit Payroll Produksi" : "Tambah Payroll Produksi"}
         open={formVisible}
         onClose={() => {
           setFormVisible(false);
           resetFormState();
         }}
         width={860}
-        destroyOnClose
         extra={
           <Space>
             <Button
@@ -513,34 +541,32 @@ const ProductionPayrolls = () => {
                 name="payrollNumber"
                 rules={[{ required: true, message: "No. payroll wajib diisi" }]}
               >
-                <Input placeholder="Contoh: PAY-20260405-001" />
+                <Input placeholder="Contoh: PAY-20260423-001" />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
               <Form.Item
                 label="Tanggal Payroll"
                 name="payrollDate"
-                rules={[
-                  { required: true, message: "Tanggal payroll wajib diisi" },
-                ]}
+                rules={[{ required: true, message: "Tanggal payroll wajib diisi" }]}
               >
                 <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
               <Typography.Text type="secondary">
-                Draft payroll disarankan diambil dari work log completed.
+                Draft payroll wajib diambil dari Work Log completed agar rule step tetap konsisten.
               </Typography.Text>
             </Col>
           </Row>
 
           <Row gutter={16}>
-            <Col xs={24} md={16}>
+            <Col xs={24}>
               <Select
                 style={{ width: "100%", marginBottom: 16 }}
                 showSearch
                 optionFilterProp="label"
-                placeholder="Pilih work log completed untuk generate draft payroll..."
+                placeholder="Pilih Work Log completed untuk generate draft payroll..."
                 options={workLogOptions}
                 onChange={handleGenerateFromWorkLog}
               />
@@ -558,27 +584,15 @@ const ProductionPayrolls = () => {
                   showSearch
                   optionFilterProp="label"
                   options={workLogOptions}
-                  placeholder="Pilih work log..."
+                  placeholder="Pilih Work Log..."
+                  onChange={handleGenerateFromWorkLog}
+                  disabled={Boolean(editingRecord?.id)}
                 />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label="Karyawan" name="workerId">
-                <Select
-                  showSearch
-                  optionFilterProp="label"
-                  options={employeeOptions}
-                  placeholder="Pilih karyawan..."
-                  onChange={(value) => {
-                    const employee = referenceData.employees.find(
-                      (item) => item.id === value,
-                    );
-                    form.setFieldsValue({
-                      workerCode: employee?.code || "",
-                      workerName: employee?.name || "",
-                    });
-                  }}
-                />
+              <Form.Item label="Operator / Tim (dari Work Log)" name="workerName">
+                <Input disabled placeholder="Otomatis dari Work Log" />
               </Form.Item>
             </Col>
           </Row>
@@ -592,22 +606,41 @@ const ProductionPayrolls = () => {
                     { value: "per_batch", label: "Per Batch" },
                     { value: "fixed", label: "Fixed" },
                   ]}
+                  disabled
                 />
               </Form.Item>
             </Col>
             <Col xs={24} md={6}>
               <Form.Item label="Payroll Rate" name="payrollRate">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} style={{ width: "100%" }} disabled />
               </Form.Item>
             </Col>
             <Col xs={24} md={6}>
               <Form.Item label="Payroll Qty Base" name="payrollQtyBase">
-                <InputNumber min={1} style={{ width: "100%" }} />
+                <InputNumber min={1} style={{ width: "100%" }} disabled />
               </Form.Item>
             </Col>
             <Col xs={24} md={6}>
               <Form.Item label="Output Qty Used" name="outputQtyUsed">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} style={{ width: "100%" }} disabled />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col xs={24} md={6}>
+              <Form.Item label="Worked Qty" name="workedQty">
+                <InputNumber min={0} style={{ width: "100%" }} disabled />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={6}>
+              <Form.Item label="Team Worker Count" name="teamWorkerCount">
+                <InputNumber min={1} style={{ width: "100%" }} disabled />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={12}>
+              <Form.Item label="Rule Source" name="payrollRuleSource">
+                <Input disabled placeholder="Otomatis dari Work Log / Step" />
               </Form.Item>
             </Col>
           </Row>
@@ -623,43 +656,44 @@ const ProductionPayrolls = () => {
                 <InputNumber min={0} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
-            <Col xs={24} md={4}>
-              <Form.Item label="Worked Qty" name="workedQty">
-                <InputNumber min={0} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={4}>
-              <Form.Item label="Team Worker Count" name="teamWorkerCount">
-                <InputNumber min={1} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
             <Col xs={24} md={8}>
               <Form.Item shouldUpdate noStyle>
                 {({ getFieldsValue }) => {
                   const values = getFieldsValue();
-                  const rate = Number(values.payrollRate || 0);
-                  const qtyBase = Number(values.payrollQtyBase || 1);
-                  const outputQtyUsed = Number(values.outputQtyUsed || 0);
-                  const bonus = Number(values.bonusAmount || 0);
-                  const deduction = Number(values.deductionAmount || 0);
-
-                  let amountCalculated = 0;
-
-                  if (
-                    values.payrollMode === "fixed" ||
-                    values.payrollMode === "per_batch"
-                  ) {
-                    amountCalculated = rate;
-                  } else {
-                    amountCalculated =
-                      qtyBase > 0 ? (outputQtyUsed / qtyBase) * rate : 0;
-                  }
-
-                  const finalAmount = amountCalculated + bonus - deduction;
+                  const totals = calculatePayrollAmounts({
+                    payrollMode: values.payrollMode,
+                    payrollRate: values.payrollRate,
+                    payrollQtyBase: values.payrollQtyBase,
+                    outputQtyUsed: values.outputQtyUsed,
+                    workedQty: values.workedQty,
+                    bonusAmount: values.bonusAmount,
+                    deductionAmount: values.deductionAmount,
+                  });
 
                   return (
                     <Form.Item label="Preview Final Amount">
-                      <Input value={formatCurrency(finalAmount)} disabled />
+                      <Input value={formatCurrency(totals.finalAmount)} disabled />
+                    </Form.Item>
+                  );
+                }}
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item shouldUpdate noStyle>
+                {({ getFieldValue }) => {
+                  const payrollRuleSource = getFieldValue("payrollRuleSource");
+                  const legacyFallbackUsed = Boolean(
+                    getFieldValue("legacyPayrollFallbackUsed"),
+                  );
+
+                  return (
+                    <Form.Item label="Status Rule">
+                      <Input
+                        value={`${formatPayrollRuleSourceLabel(payrollRuleSource)}${
+                          legacyFallbackUsed ? " (legacy/deprecated fallback)" : ""
+                        }`}
+                        disabled
+                      />
                     </Form.Item>
                   );
                 }}
@@ -670,7 +704,7 @@ const ProductionPayrolls = () => {
           <Row gutter={16}>
             <Col xs={24}>
               <Form.Item label="Catatan Perhitungan" name="calculationNotes">
-                <Input.TextArea rows={2} />
+                <Input.TextArea rows={3} disabled />
               </Form.Item>
             </Col>
             <Col xs={24}>
@@ -686,7 +720,7 @@ const ProductionPayrolls = () => {
         title="Detail Payroll Produksi"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={620}
+        width={680}
       >
         {!selectedRecord ? (
           <Empty description="Tidak ada data" />
@@ -696,15 +730,9 @@ const ProductionPayrolls = () => {
               {selectedRecord.payrollNumber || "-"}
             </Descriptions.Item>
             <Descriptions.Item label="Tanggal">
-              {selectedRecord.payrollDate
-                ? dayjs(
-                    selectedRecord.payrollDate?.toDate
-                      ? selectedRecord.payrollDate.toDate()
-                      : selectedRecord.payrollDate,
-                  ).format("DD/MM/YYYY")
-                : "-"}
+              {formatDate(selectedRecord.payrollDate)}
             </Descriptions.Item>
-            <Descriptions.Item label="Karyawan">
+            <Descriptions.Item label="Operator / Tim">
               {selectedRecord.workerName || "-"}
             </Descriptions.Item>
             <Descriptions.Item label="Work Log">
@@ -717,10 +745,19 @@ const ProductionPayrolls = () => {
               {selectedRecord.stepName || "-"}
             </Descriptions.Item>
             <Descriptions.Item label="Mode">
-              {selectedRecord.payrollMode || "-"}
+              {PAYROLL_MODE_MAP[selectedRecord.payrollMode] || "-"}
             </Descriptions.Item>
             <Descriptions.Item label="Rate">
               {formatCurrency(selectedRecord.payrollRate)}
+            </Descriptions.Item>
+            <Descriptions.Item label="Payroll Qty Base">
+              {formatNumber(selectedRecord.payrollQtyBase)}
+            </Descriptions.Item>
+            <Descriptions.Item label="Basis Output">
+              {PAYROLL_OUTPUT_BASIS_MAP[selectedRecord.payrollOutputBasis] || "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Worked Qty">
+              {formatNumber(selectedRecord.workedQty)}
             </Descriptions.Item>
             <Descriptions.Item label="Output Qty Used">
               {formatNumber(selectedRecord.outputQtyUsed)}
@@ -731,13 +768,23 @@ const ProductionPayrolls = () => {
             <Descriptions.Item label="Final Amount">
               {formatCurrency(selectedRecord.finalAmount)}
             </Descriptions.Item>
+            <Descriptions.Item label="Rule Source">
+              {`${formatPayrollRuleSourceLabel(selectedRecord.payrollRuleSource)}${
+                selectedRecord.legacyPayrollFallbackUsed
+                  ? " (legacy/deprecated fallback)"
+                  : ""
+              }`}
+            </Descriptions.Item>
             <Descriptions.Item label="Status">
               {PAYROLL_STATUS_MAP[selectedRecord.status] || "-"}
             </Descriptions.Item>
             <Descriptions.Item label="Payment Status">
               {PAYROLL_PAYMENT_STATUS_MAP[selectedRecord.paymentStatus] || "-"}
             </Descriptions.Item>
-            <Descriptions.Item label="Catatan">
+            <Descriptions.Item label="Catatan Perhitungan">
+              {selectedRecord.calculationNotes || "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Catatan Internal">
               {selectedRecord.notes || "-"}
             </Descriptions.Item>
           </Descriptions>

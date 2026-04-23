@@ -153,6 +153,11 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     basisType: values.basisType || "per_meter",
     monitoringMode: values.monitoringMode || "none",
 
+    // =====================================================
+    // ACTIVE / GUARDED
+    // Rule payroll di master step adalah source of truth utama untuk
+    // generate payroll produksi.
+    // =====================================================
     payrollMode: values.payrollMode || "per_qty",
     payrollRate: Number(values.payrollRate || 0),
     payrollQtyBase:
@@ -211,6 +216,24 @@ export const validateProductionStep = (values = {}) => {
 
   if (!values.monitoringMode) {
     errors.monitoringMode = "Mode monitoring wajib dipilih";
+  }
+
+  if (!values.payrollMode) {
+    errors.payrollMode = "Mode payroll wajib dipilih";
+  }
+
+  if (Number(values.payrollRate || 0) < 0) {
+    errors.payrollRate = "Tarif payroll tidak boleh negatif";
+  }
+
+  if (values.payrollMode === "per_qty") {
+    if (Number(values.payrollQtyBase || 0) <= 0) {
+      errors.payrollQtyBase = "Qty dasar bayar harus lebih dari 0";
+    }
+
+    if (!values.payrollOutputBasis) {
+      errors.payrollOutputBasis = "Basis output bayar wajib dipilih";
+    }
   }
 
   return errors;
