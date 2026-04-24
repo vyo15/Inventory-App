@@ -155,18 +155,33 @@ export const findVariantByKey = (item = {}, variantKey = '') => {
 
 // =====================================================
 // Cari varian berdasarkan label/nama/warna/kode.
-// Dipakai saat inherit variant lintas item, di mana key internal
-// antar item bisa berbeda tetapi makna variannya sama.
+// ACTIVE / FINAL untuk flow produksi varian:
+// - exact token tetap prioritas utama;
+// - fuzzy contains hanya dipakai jika match unik, agar kasus "Merah"
+//   tetap bisa menemukan "Flanel Merah" tanpa asal pilih varian lain;
+// - jika fuzzy ambigu, helper mengembalikan null dan caller strict akan
+//   menghentikan proses, bukan fallback diam-diam ke master.
 // =====================================================
 const findVariantByLabel = (item = {}, variantReference = '') => {
   const normalizedReference = normalizeCompareToken(variantReference);
   if (!normalizedReference) return null;
 
-  return (
-    normalizeItemVariants(item).find((variant) =>
-      buildVariantLookupTokens(variant).includes(normalizedReference),
-    ) || null
+  const variants = normalizeItemVariants(item);
+  const exactMatch = variants.find((variant) =>
+    buildVariantLookupTokens(variant).includes(normalizedReference),
   );
+
+  if (exactMatch) return exactMatch;
+
+  const fuzzyMatches = variants.filter((variant) =>
+    buildVariantLookupTokens(variant).some((token) =>
+      token.length >= 3 &&
+      normalizedReference.length >= 3 &&
+      (token.includes(normalizedReference) || normalizedReference.includes(token)),
+    ),
+  );
+
+  return fuzzyMatches.length === 1 ? fuzzyMatches[0] : null;
 };
 
 export const getItemStockSnapshot = (item = {}) => {
@@ -182,11 +197,17 @@ export const getItemStockSnapshot = (item = {}) => {
 
 // =====================================================
 // Resolve sumber stok yang dipakai untuk suatu material/output.
+// ACTIVE / FINAL untuk flow PO variant:
+// - caller final wajib mengirim allowMasterFallback=false supaya varian
+//   yang gagal resolve tidak diam-diam kembali ke master;
+// - fallback master hanya tersisa untuk flow manual/legacy yang memang
+//   belum punya contract PO variant.
 // Prioritas resolve:
 // 1. key exact match
 // 2. label / nama / warna / kode / sku
-// 3. single active variant fallback jika memang cuma ada 1 varian
-// 4. master stock fallback sebagai last resort
+// 3. fuzzy label unik untuk naming yang tidak persis sama
+// 4. single active variant fallback jika memang cuma ada 1 varian
+// 5. master stock fallback hanya jika caller mengizinkan
 // =====================================================
 export const resolveVariantSelection = ({
   item = {},
@@ -195,6 +216,8 @@ export const resolveVariantSelection = ({
   targetVariantLabel = '',
   fixedVariantKey = '',
   fixedVariantLabel = '',
+  allowMasterFallback = true,
+  contextLabel = '',
 } = {}) => {
   const hasVariants = inferHasVariants(item);
   const normalizedStrategy = hasVariants
@@ -242,6 +265,17 @@ export const resolveVariantSelection = ({
       : null);
 
   if (!selectedVariant) {
+    if (!allowMasterFallback) {
+      const referenceText = [candidateKey, candidateLabel, fixedVariantKey, fixedVariantLabel]
+        .map((value) => safeTrim(value))
+        .filter(Boolean)
+        .join(' / ');
+      const itemName = safeTrim(item.name || item.productName || item.materialName || item.code);
+      throw new Error(
+        `${contextLabel || 'Varian'} tidak ditemukan pada ${itemName || 'item'}${referenceText ? ` untuk referensi ${referenceText}` : ''}. Proses dihentikan agar stok tidak masuk ke master/default.`,
+      );
+    }
+
     const stock = getItemStockSnapshot(item);
     return {
       stockSourceType: 'master',

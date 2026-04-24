@@ -117,6 +117,7 @@ const ProductionWorkLogs = () => {
   const [completeForm] = Form.useForm();
 
   // SECTION: watch source
+  const sourceTypeValue = Form.useWatch("sourceType", form);
   const targetTypeValue = Form.useWatch("targetType", form);
   const targetIdValue = Form.useWatch("targetId", form);
   const stepIdValue = Form.useWatch("stepId", form);
@@ -296,6 +297,8 @@ const ProductionWorkLogs = () => {
       ) || null,
     [referenceData.productionSteps, stepIdValue],
   );
+
+  const isProductionOrderLinkedForm = sourceTypeValue === "production_order";
 
   const monitoringPreview = useMemo(() => {
     const monitoringBasisType =
@@ -1162,6 +1165,21 @@ const ProductionWorkLogs = () => {
             sourceType: "manual",
           }}
         >
+          {/* =====================================================
+              ACTIVE / FINAL - hidden contract fields PO variant.
+              Field ini sengaja ikut didaftarkan ke Form agar nilai dari
+              Apply Draft PO tetap ikut submit walau tidak diedit manual.
+              Source of truth tetap PO; service akan mengunci ulang. */}
+          <Form.Item name="bomCode" hidden><Input type="hidden" /></Form.Item>
+          <Form.Item name="bomName" hidden><Input type="hidden" /></Form.Item>
+          <Form.Item name="productionOrderCode" hidden><Input type="hidden" /></Form.Item>
+          <Form.Item name="productionOrderStatusSnapshot" hidden><Input type="hidden" /></Form.Item>
+          <Form.Item name="targetCode" hidden><Input type="hidden" /></Form.Item>
+          <Form.Item name="targetName" hidden><Input type="hidden" /></Form.Item>
+          <Form.Item name="targetUnit" hidden><Input type="hidden" /></Form.Item>
+          <Form.Item name="targetVariantKey" hidden><Input type="hidden" /></Form.Item>
+          <Form.Item name="targetVariantLabel" hidden><Input type="hidden" /></Form.Item>
+
           <Divider orientation="left">Informasi Dasar</Divider>
 
           <Row gutter={16}>
@@ -1296,6 +1314,7 @@ const ProductionWorkLogs = () => {
                 ]}
               >
                 <Select
+                  disabled={isProductionOrderLinkedForm}
                   options={[
                     { value: "semi_finished_material", label: "Semi Finished" },
                     { value: "product", label: "Product" },
@@ -1313,6 +1332,7 @@ const ProductionWorkLogs = () => {
                 ]}
               >
                 <Select
+                  disabled={isProductionOrderLinkedForm}
                   showSearch
                   optionFilterProp="label"
                   options={getTargetOptions(targetTypeValue)}
@@ -1353,6 +1373,16 @@ const ProductionWorkLogs = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          {isProductionOrderLinkedForm ? (
+            <Alert
+              style={{ marginBottom: 16 }}
+              type="info"
+              showIcon
+              message="Output mengikuti Varian Target dari Production Order"
+              description={`Source of truth varian: ${form.getFieldValue("targetVariantLabel") || "Tanpa varian / master"}. Untuk flow PO, target dan output dikunci agar tidak kembali ke master/default.`}
+            />
+          ) : null}
 
           <Divider orientation="left">Qty & Operator</Divider>
 
@@ -1437,7 +1467,13 @@ const ProductionWorkLogs = () => {
           <EditableLineSection
             title="Material Usages"
             addButtonText="Tambah Material Usage"
-            onAdd={() => openMaterialModal()}
+            onAdd={() => {
+              if (isProductionOrderLinkedForm) {
+                message.warning("Material usage PO dikunci dari requirement Production Order agar varian tidak berubah.");
+                return;
+              }
+              openMaterialModal();
+            }}
             dataSource={form.getFieldValue("materialUsages") || []}
             emptyText="Belum ada material usage"
             columns={[
@@ -1483,19 +1519,23 @@ const ProductionWorkLogs = () => {
                 width: 140,
                 className: "app-table-action-column",
                 render: (_, record, index) => (
-                  <Space className="ims-action-group">
-                    <Button className="ims-action-button" size="small" onClick={() => openMaterialModal(index, record)}>
-                      Edit
-                    </Button>
-                    <Popconfirm
-                      title="Hapus material usage ini?"
-                      onConfirm={() => handleRemoveMaterialUsage(index)}
-                      okText="Ya"
-                      cancelText="Batal"
-                    >
-                      <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  </Space>
+                  isProductionOrderLinkedForm ? (
+                    <Tag className="ims-status-tag" color="purple">Dikunci PO</Tag>
+                  ) : (
+                    <Space className="ims-action-group">
+                      <Button className="ims-action-button" size="small" onClick={() => openMaterialModal(index, record)}>
+                        Edit
+                      </Button>
+                      <Popconfirm
+                        title="Hapus material usage ini?"
+                        onConfirm={() => handleRemoveMaterialUsage(index)}
+                        okText="Ya"
+                        cancelText="Batal"
+                      >
+                        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
+                      </Popconfirm>
+                    </Space>
+                  )
                 ),
               },
             ]}
@@ -1504,7 +1544,13 @@ const ProductionWorkLogs = () => {
           <EditableLineSection
             title="Outputs"
             addButtonText="Tambah Output"
-            onAdd={() => openOutputModal()}
+            onAdd={() => {
+              if (isProductionOrderLinkedForm) {
+                message.warning("Output PO mengikuti target variant dari Production Order dan tidak boleh diganti manual.");
+                return;
+              }
+              openOutputModal();
+            }}
             dataSource={form.getFieldValue("outputs") || []}
             emptyText="Belum ada output"
             columns={[
@@ -1544,19 +1590,23 @@ const ProductionWorkLogs = () => {
                 width: 140,
                 className: "app-table-action-column",
                 render: (_, record, index) => (
-                  <Space className="ims-action-group">
-                    <Button className="ims-action-button" size="small" onClick={() => openOutputModal(index, record)}>
-                      Edit
-                    </Button>
-                    <Popconfirm
-                      title="Hapus output ini?"
-                      onConfirm={() => handleRemoveOutput(index)}
-                      okText="Ya"
-                      cancelText="Batal"
-                    >
-                      <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  </Space>
+                  isProductionOrderLinkedForm ? (
+                    <Tag className="ims-status-tag" color="purple">Dikunci PO</Tag>
+                  ) : (
+                    <Space className="ims-action-group">
+                      <Button className="ims-action-button" size="small" onClick={() => openOutputModal(index, record)}>
+                        Edit
+                      </Button>
+                      <Popconfirm
+                        title="Hapus output ini?"
+                        onConfirm={() => handleRemoveOutput(index)}
+                        okText="Ya"
+                        cancelText="Batal"
+                      >
+                        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
+                      </Popconfirm>
+                    </Space>
+                  )
                 ),
               },
             ]}

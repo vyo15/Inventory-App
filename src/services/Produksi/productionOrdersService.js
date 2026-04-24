@@ -198,6 +198,65 @@ const getReferenceItemByTypeAndId = async (itemType, itemId) => {
   return normalizeReferenceItem(snapshot);
 };
 
+// =====================================================
+// ACTIVE / FINAL - resolve variant target PO dari master target aktual.
+// Source of truth awal varian produksi adalah pilihan user di Production Order,
+// tetapi validasinya tetap dicek ke master item agar BOM snapshot lama tidak
+// membuat `targetHasVariants` stale. Jika target bervarian, flow final tidak
+// boleh lanjut tanpa varian yang bisa di-resolve jelas.
+// =====================================================
+const resolveProductionOrderTargetVariant = async ({
+  bom = {},
+  targetVariantKey = "",
+  targetVariantLabel = "",
+} = {}) => {
+  const targetItem = await getReferenceItemByTypeAndId(
+    bom.targetType || "product",
+    bom.targetId || "",
+  );
+  const targetHasVariants = inferHasVariants(targetItem || {}) || bom.targetHasVariants === true;
+
+  if (!targetHasVariants) {
+    return {
+      targetHasVariants: false,
+      targetVariantKey: "",
+      targetVariantLabel: "",
+      targetItem,
+    };
+  }
+
+  if (!targetItem) {
+    throw new Error("Target item Production Order tidak ditemukan untuk validasi varian");
+  }
+
+  if (!safeTrim(targetVariantKey) && !safeTrim(targetVariantLabel)) {
+    throw {
+      type: "validation",
+      errors: {
+        targetVariantKey: "Target varian wajib dipilih karena target produksi memiliki varian",
+      },
+    };
+  }
+
+  const resolvedTarget = resolveVariantSelection({
+    item: targetItem,
+    materialVariantStrategy: "fixed",
+    targetVariantKey,
+    targetVariantLabel,
+    fixedVariantKey: targetVariantKey,
+    fixedVariantLabel: targetVariantLabel,
+    allowMasterFallback: false,
+    contextLabel: "Varian target Production Order",
+  });
+
+  return {
+    targetHasVariants: true,
+    targetVariantKey: resolvedTarget.resolvedVariantKey || safeTrim(targetVariantKey),
+    targetVariantLabel: resolvedTarget.resolvedVariantLabel || safeTrim(targetVariantLabel),
+    targetItem,
+  };
+};
+
 const getDateCode = () => {
   const date = new Date();
   const year = date.getFullYear();
@@ -220,16 +279,6 @@ export const generateProductionOrderCode = async (targetType = "product") => {
   const prefix = targetType === "semi_finished_material" ? "PO-SFP" : "PO-PRD";
   const nextSequence = buildOrderSequence(existingOrders, dateCode, prefix);
   return `${prefix}-${dateCode}-${nextSequence}`;
-};
-
-const validateOrderVariantInputs = ({ bom, targetVariantKey = "" }) => {
-  const errors = {};
-
-  if (bom?.targetHasVariants === true && !safeTrim(targetVariantKey)) {
-    errors.targetVariantKey = "Target varian wajib dipilih untuk BOM ini";
-  }
-
-  return errors;
 };
 
 // =====================================================
@@ -263,15 +312,22 @@ const buildRequirementLine = ({
   // Flow baru tidak hanya kirim targetVariantKey, tapi juga label target
   // supaya inherit antar item bisa match by label seperti "ungu".
   // =====================================================
+  const effectiveStrategy = effectiveMaterialHasVariants
+    ? line.materialVariantStrategy || "inherit"
+    : "none";
+
   const stockResolution = resolveVariantSelection({
     item: stockItem || {},
-    materialVariantStrategy: effectiveMaterialHasVariants
-      ? line.materialVariantStrategy || "inherit"
-      : "none",
+    materialVariantStrategy: effectiveStrategy,
     targetVariantKey,
     targetVariantLabel,
     fixedVariantKey: line.fixedVariantKey || "",
     fixedVariantLabel: line.fixedVariantLabel || "",
+    // ACTIVE / FINAL: requirement PO tidak boleh fallback ke master jika
+    // material bervarian dan strategi BOM memang meminta inherit/fixed.
+    // Jika varian tidak match, proses PO diblok agar source of truth PO tetap tunggal.
+    allowMasterFallback: !(effectiveMaterialHasVariants && effectiveStrategy !== "none"),
+    contextLabel: `Varian material requirement ${line.itemName || stockItem?.name || "produksi"}`,
   });
 
   const shortageQty = Math.max(qtyRequired - Number(stockResolution.availableStock || 0), 0);
@@ -359,20 +415,17 @@ export const createProductionOrder = async (values = {}, currentUser = null) => 
   }
 
   const bom = await getProductionBomByIdForOrder(values.bomId);
-  const variantErrors = validateOrderVariantInputs({
+  const targetVariant = await resolveProductionOrderTargetVariant({
     bom,
-    targetVariantKey: values.targetVariantKey,
+    targetVariantKey: values.targetVariantKey || "",
+    targetVariantLabel: values.targetVariantLabel || "",
   });
-
-  if (Object.keys(variantErrors).length > 0) {
-    throw { type: "validation", errors: variantErrors };
-  }
 
   const { requirementLines, reservationSummary } = await buildProductionOrderRequirementLines({
     bomId: values.bomId,
     orderQty,
-    targetVariantKey: values.targetVariantKey || "",
-    targetVariantLabel: values.targetVariantLabel || "",
+    targetVariantKey: targetVariant.targetVariantKey,
+    targetVariantLabel: targetVariant.targetVariantLabel,
   });
 
   const code = safeTrim(values.code) || (await generateProductionOrderCode(targetType));
@@ -387,9 +440,12 @@ export const createProductionOrder = async (values = {}, currentUser = null) => 
     targetCode: safeTrim(bom.targetCode),
     targetName: safeTrim(bom.targetName),
     targetUnit: safeTrim(bom.targetUnit) || "pcs",
-    targetHasVariants: bom.targetHasVariants === true,
-    targetVariantKey: safeTrim(values.targetVariantKey),
-    targetVariantLabel: safeTrim(values.targetVariantLabel),
+    // ACTIVE / FINAL: target variant di PO adalah source of truth awal.
+    // Nilai disimpan dari hasil resolve master target aktual, bukan hanya snapshot BOM,
+    // agar BOM lama tidak membuat PO kembali ke master/default.
+    targetHasVariants: targetVariant.targetHasVariants === true,
+    targetVariantKey: safeTrim(targetVariant.targetVariantKey),
+    targetVariantLabel: safeTrim(targetVariant.targetVariantLabel),
     // orderQty dipertahankan untuk kompatibilitas data lama, namun maknanya = qty batch produksi
     orderQty,
     batchCount: orderQty,
@@ -429,17 +485,27 @@ export const refreshProductionOrderRequirements = async (orderId, currentUser = 
     throw new Error("BOM order tidak ditemukan");
   }
 
+  const bom = await getProductionBomByIdForOrder(order.bomId);
+  const targetVariant = await resolveProductionOrderTargetVariant({
+    bom,
+    targetVariantKey: order.targetVariantKey || "",
+    targetVariantLabel: order.targetVariantLabel || "",
+  });
+
   const { requirementLines, reservationSummary } = await buildProductionOrderRequirementLines({
     bomId: order.bomId,
     orderQty: Number(order.orderQty || 0),
-    targetVariantKey: order.targetVariantKey || "",
-    targetVariantLabel: order.targetVariantLabel || "",
+    targetVariantKey: targetVariant.targetVariantKey,
+    targetVariantLabel: targetVariant.targetVariantLabel,
   });
 
   const ref = doc(db, COLLECTION_NAME, orderId);
   await updateDoc(ref, {
     materialRequirementLines: requirementLines,
     reservationSummary,
+    targetHasVariants: targetVariant.targetHasVariants === true,
+    targetVariantKey: safeTrim(targetVariant.targetVariantKey),
+    targetVariantLabel: safeTrim(targetVariant.targetVariantLabel),
     status: reservationSummary.canReserveFully ? "ready" : "shortage",
     updatedAt: serverTimestamp(),
     updatedBy:
@@ -465,17 +531,21 @@ const applyReservationMutation = async ({ transaction, line, mode = "reserve" })
 
   const stockItem = normalizeReferenceItem(stockSnap);
   const mutationQty = Number(line.qtyRequired || 0);
+  const reservationStrategy = line.materialHasVariants === true
+    ? line.materialVariantStrategy || "inherit"
+    : "none";
 
   const stockResolution = resolveVariantSelection({
     item: stockItem,
-    materialVariantStrategy:
-      line.materialHasVariants === true
-        ? line.materialVariantStrategy || "inherit"
-        : "none",
+    materialVariantStrategy: reservationStrategy,
     targetVariantKey: line.resolvedVariantKey || "",
     targetVariantLabel: line.resolvedVariantLabel || "",
     fixedVariantKey: line.fixedVariantKey || line.resolvedVariantKey || "",
     fixedVariantLabel: line.fixedVariantLabel || line.resolvedVariantLabel || "",
+    // LEGACY RESERVE masih tersedia, tetapi requirement bervarian tetap tidak
+    // boleh silent fallback ke master agar tidak menghidupkan pola lama.
+    allowMasterFallback: !(line.materialHasVariants === true && reservationStrategy !== "none"),
+    contextLabel: `Varian reserve material ${line.itemName || "produksi"}`,
   });
 
   if (mode === "reserve" && Number(stockResolution.availableStock || 0) < mutationQty) {

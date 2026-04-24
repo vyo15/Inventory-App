@@ -43,6 +43,12 @@ export const buildBomStepFormLine = ({ values, selectedStep }) => ({
   stepName: selectedStep?.name || '',
 });
 
+// =====================================================
+// MANUAL / LEGACY EDITOR HELPER.
+// Flow final PO variant tidak memakai helper ini untuk requirement PO;
+// requirement PO sudah resolved di productionOrdersService lalu dikunci di
+// productionWorkLogsService. Helper ini tetap untuk input manual/planned.
+// =====================================================
 export const buildWorkLogMaterialUsageFormLine = ({ values, selectedItem }) => {
   const materialHasVariants = inferHasVariants(selectedItem || {});
   const variantOptions = buildVariantOptionsFromItem(selectedItem || {});
@@ -72,6 +78,12 @@ export const buildWorkLogMaterialUsageFormLine = ({ values, selectedItem }) => {
   });
 };
 
+// =====================================================
+// MANUAL / LEGACY EDITOR HELPER.
+// Flow final PO variant mengunci output dari targetVariantKey PO. Helper ini
+// hanya untuk output manual/planned; jika item bervarian tetapi varian kosong,
+// complete service akan memblok agar tidak masuk master/default.
+// =====================================================
 export const buildWorkLogOutputFormLine = ({ values, selectedOutput }) => {
   const outputHasVariants = inferHasVariants(selectedOutput || {});
   const selectedVariant = outputHasVariants

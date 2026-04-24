@@ -170,3 +170,22 @@ Setiap perubahan di modul produksi sebaiknya selalu diuji terhadap:
 - stock output
 - payroll calculation status
 - HPP analysis result
+
+## 11. Contract Final Varian Produksi
+Flow final varian produksi sekarang dikunci sebagai:
+
+`PO target variant -> Work Log target snapshot -> Work Log output variant -> stock mutation -> inventory log`
+
+Contract per layer:
+- Production Order menyimpan `targetVariantKey` dan `targetVariantLabel` sebagai source of truth varian target.
+- Requirement line menyimpan hasil turunan `resolvedVariantKey`, `resolvedVariantLabel`, dan `stockSourceType` untuk material usage.
+- Work Log root menyimpan snapshot `targetVariantKey` dan `targetVariantLabel` dari PO.
+- Work Log output menyimpan `outputVariantKey`, `outputVariantLabel`, dan `stockSourceType` yang wajib mengikuti target PO untuk flow `production_order`.
+- Inventory log produksi menyimpan `variantKey` dan `variantLabel` sesuai material/output yang benar-benar dimutasi.
+
+Status logic:
+- **Final / guarded**: flow `production_order` dari PO ke Work Log dan output.
+- **Manual / transisi**: draft BOM/manual masih ada, tetapi tidak boleh menjadi acuan flow final PO variant.
+- **Legacy/deprecated**: `productionService.js` dan collection `productions` tetap legacy.
+
+Tidak ada silent fallback untuk flow final PO variant. Jika varian tidak bisa di-resolve, proses wajib berhenti dengan pesan error agar stok tidak masuk ke master/default.

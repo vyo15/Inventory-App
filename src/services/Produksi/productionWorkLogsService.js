@@ -80,6 +80,71 @@ const normalizeReferenceItem = (item = {}) => ({
     "pcs",
 });
 
+const isProductionOrderLinkedValues = (values = {}) =>
+  values.sourceType === "production_order" || Boolean(safeTrim(values.productionOrderId));
+
+// =====================================================
+// ACTIVE / FINAL - contract varian PO untuk Work Log.
+// Source of truth varian setelah PO dibuat adalah field targetVariantKey /
+// targetVariantLabel dari PO. Helper ini memastikan output pertama Work Log
+// mengikuti target PO dan tidak kembali ke master/default karena form drawer,
+// payload extra, atau output line lama.
+// =====================================================
+const applyProductionOrderVariantContractToOutputs = (values = {}) => {
+  if (!isProductionOrderLinkedValues(values)) return values;
+
+  const targetVariantKey = safeTrim(values.targetVariantKey);
+  const targetVariantLabel = safeTrim(values.targetVariantLabel);
+  const targetHasVariants = values.targetHasVariants === true || Boolean(targetVariantKey);
+
+  if (targetHasVariants && !targetVariantKey) {
+    throw new Error(
+      "Work Log dari Production Order wajib membawa target variant. Proses dihentikan agar output tidak masuk ke master/default.",
+    );
+  }
+
+  const outputs = Array.isArray(values.outputs) ? values.outputs : [];
+  const firstOutput = outputs[0] || {};
+  const normalizedFirstOutput = {
+    ...firstOutput,
+    outputType: values.targetType || firstOutput.outputType || "product",
+    outputIdRef: values.targetId || firstOutput.outputIdRef || "",
+    outputCode: safeTrim(values.targetCode || firstOutput.outputCode),
+    outputName: safeTrim(values.targetName || firstOutput.outputName),
+    unit: safeTrim(values.targetUnit || firstOutput.unit) || "pcs",
+    outputHasVariants: targetHasVariants,
+    outputVariantKey: targetVariantKey,
+    outputVariantLabel: targetVariantLabel,
+    stockSourceType: targetVariantKey ? "variant" : "master",
+  };
+
+  return {
+    ...values,
+    targetHasVariants,
+    targetVariantKey,
+    targetVariantLabel,
+    outputs: outputs.length > 0
+      ? [normalizedFirstOutput, ...outputs.slice(1)]
+      : [normalizedFirstOutput],
+  };
+};
+
+// =====================================================
+// ACTIVE / FINAL - requirement PO yang masuk Work Log harus sudah resolved.
+// Jika material bervarian dan strategi BOM inherit/fixed, Work Log tidak boleh
+// membawa line master karena source of truth requirement sudah dihitung di PO.
+// =====================================================
+const assertFinalMaterialVariantLine = (line = {}) => {
+  const strategy = line.materialVariantStrategy || (line.resolvedVariantKey ? "fixed" : "inherit");
+  const requiresVariant = line.materialHasVariants === true && strategy !== "none";
+
+  if (requiresVariant && (!safeTrim(line.resolvedVariantKey) || line.stockSourceType === "master")) {
+    throw new Error(
+      `Material ${line.itemName || "produksi"} wajib punya varian resolved dari PO. Proses dihentikan agar tidak fallback ke master/default.`,
+    );
+  }
+};
+
 const getCollectionNameByItemType = (itemType) => {
   if (itemType === "raw_material") return "raw_materials";
   if (itemType === "semi_finished_material") return "semi_finished_materials";
@@ -193,6 +258,11 @@ const normalizeOutputs = (lines = []) =>
 // Normalize payload work log
 // =====================================================
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
+  // ACTIVE / FINAL: sebelum payload dinormalisasi, kunci lagi contract
+  // PO target variant -> Work Log output variant di service layer.
+  // Ini menjadi guard terakhir jika drawer/form mengirim output master.
+  values = applyProductionOrderVariantContractToOutputs(values);
+
   const materialUsages = normalizeMaterialUsages(values.materialUsages || []);
   const outputs = normalizeOutputs(values.outputs || []);
   const monitoring = calculateProductionMonitoring(values.productionProfile || {}, values);
@@ -481,6 +551,11 @@ export const getWorkLogReferenceData = async () => {
 
 // =====================================================
 // Draft work log dari BOM
+// LEGACY / TRANSISI:
+// - Jalur planned/manual tidak punya pilihan target variant dari PO.
+// - Output default boleh terbentuk tanpa varian, tetapi complete akan tetap
+//   memblok item bervarian sampai user memilih varian output secara eksplisit.
+// - Jangan pakai jalur ini sebagai source of truth flow final PO variant.
 // =====================================================
 export const buildWorkLogDraftFromBom = (bom, selectedStepId = "") => {
   const stepLines = Array.isArray(bom?.stepLines) ? bom.stepLines : [];
@@ -617,6 +692,47 @@ export const buildWorkLogDraftFromProductionOrder = async (
       toNumber(productionOrder.batchOutputQty || 0) * batchCount,
   );
 
+  const targetCollectionName = getCollectionNameByItemType(
+    productionOrder.targetType || bom.targetType || "product",
+  );
+  let targetItem = null;
+
+  if (targetCollectionName && (productionOrder.targetId || bom.targetId)) {
+    const targetRef = doc(db, targetCollectionName, productionOrder.targetId || bom.targetId);
+    const targetSnap = await getDoc(targetRef);
+    if (targetSnap.exists()) {
+      targetItem = normalizeReferenceItem({ id: targetSnap.id, ...targetSnap.data() });
+    }
+  }
+
+  const targetHasVariants =
+    inferHasVariants(targetItem || {}) ||
+    productionOrder.targetHasVariants === true ||
+    Boolean(safeTrim(productionOrder.targetVariantKey));
+
+  let resolvedTargetVariantKey = safeTrim(productionOrder.targetVariantKey);
+  let resolvedTargetVariantLabel = safeTrim(productionOrder.targetVariantLabel);
+
+  if (targetHasVariants) {
+    if (!targetItem) {
+      throw new Error("Target output Production Order tidak ditemukan untuk validasi varian");
+    }
+
+    const targetResolution = resolveVariantSelection({
+      item: targetItem,
+      materialVariantStrategy: "fixed",
+      targetVariantKey: resolvedTargetVariantKey,
+      targetVariantLabel: resolvedTargetVariantLabel,
+      fixedVariantKey: resolvedTargetVariantKey,
+      fixedVariantLabel: resolvedTargetVariantLabel,
+      allowMasterFallback: false,
+      contextLabel: "Varian output Production Order",
+    });
+
+    resolvedTargetVariantKey = targetResolution.resolvedVariantKey || resolvedTargetVariantKey;
+    resolvedTargetVariantLabel = targetResolution.resolvedVariantLabel || resolvedTargetVariantLabel;
+  }
+
   return {
     bomId: bom.id,
     bomCode: bom.code || "",
@@ -632,9 +748,11 @@ export const buildWorkLogDraftFromProductionOrder = async (
     targetCode: productionOrder.targetCode || bom.targetCode || "",
     targetName: productionOrder.targetName || bom.targetName || "",
     targetUnit: productionOrder.targetUnit || bom.targetUnit || "pcs",
-    targetHasVariants: productionOrder.targetHasVariants === true,
-    targetVariantKey: productionOrder.targetVariantKey || "",
-    targetVariantLabel: productionOrder.targetVariantLabel || "",
+    // ACTIVE / FINAL: snapshot target variant Work Log selalu dari PO.
+    // Field ini adalah source of truth turunan untuk output dan audit stok.
+    targetHasVariants,
+    targetVariantKey: resolvedTargetVariantKey,
+    targetVariantLabel: resolvedTargetVariantLabel,
 
     stepId: chosenStep?.stepId || "",
     stepCode: chosenStep?.stepCode || "",
@@ -650,27 +768,31 @@ export const buildWorkLogDraftFromProductionOrder = async (
     reworkQty: 0,
     scrapQty: 0,
 
-    materialUsages: requirementLines.map((line, index) => ({
-      id: line.id || `usage-po-${Date.now()}-${index}`,
-      itemType: line.itemType || "raw_material",
-      itemId: line.itemId || "",
-      itemCode: line.itemCode || "",
-      itemName: line.itemName || "",
-      unit: line.unit || "pcs",
-      plannedQty: toNumber(line.qtyRequired || 0),
-      actualQty: toNumber(line.qtyRequired || 0),
-      varianceQty: 0,
-      costPerUnitSnapshot: 0,
-      totalCostSnapshot: 0,
-      materialHasVariants: line.materialHasVariants === true,
-      materialVariantStrategy: line.materialVariantStrategy || (line.materialHasVariants ? "inherit" : "none"),
-      resolvedVariantKey: line.resolvedVariantKey || "",
-      resolvedVariantLabel: line.resolvedVariantLabel || "",
-      stockSourceType: line.stockSourceType || (line.resolvedVariantKey ? "variant" : "master"),
-      stockDeducted: false,
-      stockDeductedAt: null,
-      notes: "",
-    })),
+    materialUsages: requirementLines.map((line, index) => {
+      assertFinalMaterialVariantLine(line);
+
+      return {
+        id: line.id || `usage-po-${Date.now()}-${index}`,
+        itemType: line.itemType || "raw_material",
+        itemId: line.itemId || "",
+        itemCode: line.itemCode || "",
+        itemName: line.itemName || "",
+        unit: line.unit || "pcs",
+        plannedQty: toNumber(line.qtyRequired || 0),
+        actualQty: toNumber(line.qtyRequired || 0),
+        varianceQty: 0,
+        costPerUnitSnapshot: 0,
+        totalCostSnapshot: 0,
+        materialHasVariants: line.materialHasVariants === true,
+        materialVariantStrategy: line.materialVariantStrategy || (line.materialHasVariants ? "inherit" : "none"),
+        resolvedVariantKey: line.resolvedVariantKey || "",
+        resolvedVariantLabel: line.resolvedVariantLabel || "",
+        stockSourceType: line.stockSourceType || (line.resolvedVariantKey ? "variant" : "master"),
+        stockDeducted: false,
+        stockDeductedAt: null,
+        notes: "",
+      };
+    }),
 
     outputs: [
       {
@@ -684,10 +806,12 @@ export const buildWorkLogDraftFromProductionOrder = async (
         rejectQty: 0,
         reworkQty: 0,
         costPerUnit: 0,
-        outputHasVariants: productionOrder.targetHasVariants === true,
-        outputVariantKey: productionOrder.targetVariantKey || "",
-        outputVariantLabel: productionOrder.targetVariantLabel || "",
-        stockSourceType: productionOrder.targetVariantKey ? "variant" : "master",
+        // ACTIVE / FINAL: output hasil PO wajib mengikuti varian target PO.
+        // Tidak ada fallback master jika targetVariantKey sudah dipilih user.
+        outputHasVariants: targetHasVariants,
+        outputVariantKey: resolvedTargetVariantKey,
+        outputVariantLabel: resolvedTargetVariantLabel,
+        stockSourceType: resolvedTargetVariantKey ? "variant" : "master",
         stockAdded: false,
         stockAddedAt: null,
         notes: "",
@@ -888,6 +1012,26 @@ export const createProductionWorkLogFromOrder = async (
       {
         ...draft,
         ...extraValues,
+        // ACTIVE / FINAL: field inti PO ditulis ulang dari draft PO setelah
+        // extraValues supaya payload drawer tidak bisa mengubah target/output
+        // variant ke master/default secara tidak sengaja.
+        bomId: draft.bomId,
+        bomCode: draft.bomCode,
+        bomName: draft.bomName,
+        bomVersion: draft.bomVersion,
+        productionOrderId: draft.productionOrderId,
+        productionOrderCode: draft.productionOrderCode,
+        productionOrderStatusSnapshot: draft.productionOrderStatusSnapshot,
+        targetType: draft.targetType,
+        targetId: draft.targetId,
+        targetCode: draft.targetCode,
+        targetName: draft.targetName,
+        targetUnit: draft.targetUnit,
+        targetHasVariants: draft.targetHasVariants,
+        targetVariantKey: draft.targetVariantKey,
+        targetVariantLabel: draft.targetVariantLabel,
+        materialUsages: draft.materialUsages,
+        outputs: draft.outputs,
         workNumber,
         workDate: extraValues.workDate || new Date(),
         sourceType: "production_order",
@@ -1092,15 +1236,24 @@ const buildWorkLogReservationMap = (productionOrder = null) => {
   return reservedQtyMap;
 };
 
-const getResolvedMaterialStock = ({ line = {}, stockItem = {} }) =>
-  resolveVariantSelection({
+const getResolvedMaterialStock = ({ line = {}, stockItem = {} }) => {
+  const strategy = line.materialHasVariants === true
+    ? line.materialVariantStrategy || (line.resolvedVariantKey ? 'fixed' : 'inherit')
+    : 'none';
+
+  return resolveVariantSelection({
     item: stockItem || {},
-    materialVariantStrategy: line.materialHasVariants === true
-      ? line.materialVariantStrategy || (line.resolvedVariantKey ? 'fixed' : 'inherit')
-      : 'none',
+    materialVariantStrategy: strategy,
     targetVariantKey: line.resolvedVariantKey || '',
+    targetVariantLabel: line.resolvedVariantLabel || '',
     fixedVariantKey: line.resolvedVariantKey || '',
+    fixedVariantLabel: line.resolvedVariantLabel || '',
+    // ACTIVE / FINAL: material usage yang bervarian tidak boleh jatuh
+    // ke master saat start/complete. Manual legacy harus memilih varian dulu.
+    allowMasterFallback: !(line.materialHasVariants === true && strategy !== 'none'),
+    contextLabel: `Varian material ${line.itemName || 'produksi'}`,
   });
+};
 
 const getOutputStockResolution = ({
   line = {},
@@ -1126,7 +1279,12 @@ const getOutputStockResolution = ({
     item: stockItem || {},
     materialVariantStrategy: preferredVariantKey ? 'fixed' : 'inherit',
     targetVariantKey: preferredVariantKey,
+    targetVariantLabel: preferredVariantLabel,
     fixedVariantKey: preferredVariantKey,
+    fixedVariantLabel: preferredVariantLabel,
+    // ACTIVE / FINAL: output bervarian wajib masuk variant, bukan master.
+    allowMasterFallback: false,
+    contextLabel: `Varian output ${line.outputName || stockItem.name || 'produksi'}`,
   });
 
   // =====================================================
@@ -1329,8 +1487,8 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
       const outputResolution = getOutputStockResolution({
         line,
         stockItem,
-        fallbackVariantKey: workLog.targetVariantKey || '',
-        fallbackVariantLabel: workLog.targetVariantLabel || '',
+        fallbackVariantKey: productionOrder?.targetVariantKey || workLog.targetVariantKey || '',
+        fallbackVariantLabel: productionOrder?.targetVariantLabel || workLog.targetVariantLabel || '',
       });
       const unitCost = toNumber(line.costPerUnit || 0) || fallbackUnitCost;
       const updatePayload = applyStockMutationToItem({
@@ -1465,6 +1623,14 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
       payrollCalculated: false,
       payrollCalculationStatus: "pending",
       productionOrderStatusSnapshot: productionOrder ? "completed" : workLog.productionOrderStatusSnapshot || "",
+      // ACTIVE / FINAL: heal snapshot varian Work Log dari PO saat complete
+      // agar data lama yang sudah in_progress tetap punya root variant yang sama.
+      targetHasVariants:
+        productionOrder?.targetHasVariants === true ||
+        workLog.targetHasVariants === true ||
+        Boolean(productionOrder?.targetVariantKey || workLog.targetVariantKey),
+      targetVariantKey: productionOrder?.targetVariantKey || workLog.targetVariantKey || "",
+      targetVariantLabel: productionOrder?.targetVariantLabel || workLog.targetVariantLabel || "",
       updatedAt: serverTimestamp(),
       updatedBy: actor,
     });

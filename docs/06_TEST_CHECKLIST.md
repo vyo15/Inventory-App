@@ -203,3 +203,19 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - cek `ResetTestData` apakah tabel preview tetap rapi walau page shell utility masih transisi
 - cek dark mode dan light mode setelah normalisasi batch global
 - cek tidak ada variasi action liar baru di luar baseline final
+
+### Final Varian Produksi
+- buat Production Order target `semi_finished_material` dengan varian tertentu
+- pastikan list dan detail PO menampilkan varian target yang benar
+- klik `Mulai Produksi` dari PO dan cek Work Log root membawa `targetVariantKey` / `targetVariantLabel` yang sama
+- cek output line Work Log memakai `outputVariantKey` / `outputVariantLabel` yang sama, bukan `master`
+- complete Work Log dan pastikan stok hasil masuk ke varian yang benar
+- cek `inventory_logs` type `production_output_in` menyimpan `variantKey` dan `variantLabel` yang benar
+- cek `inventory_logs` type `production_material_out` menyimpan varian material hasil resolve requirement
+- buat Production Order target `product` dengan varian tertentu dan ulangi flow sampai complete
+- test material strategy `inherit` dengan naming varian tidak persis sama tetapi masih unik, contoh target `Merah` dan material `Flanel Merah`
+- test material strategy `inherit` yang tidak bisa match; proses harus error/warning jelas dan tidak fallback master
+- test jalur Work Log `Apply Draft PO`; output harus tetap dikunci mengikuti target variant PO
+- test jalur planned/manual dari BOM; pastikan tidak mengganggu flow final PO variant dan item bervarian tidak bisa complete tanpa varian output jelas
+- cek payroll dan HPP tetap membaca Work Log completed tanpa perubahan contract payroll
+- cek tidak ada perubahan tidak sengaja ke sales, purchases, laporan, dan reset utility

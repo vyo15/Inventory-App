@@ -213,3 +213,15 @@ Reset utilitas mendukung mode:
 - reset + restore baseline testing
 
 Utilitas ini juga menyinkronkan kembali field stok agar konsisten.
+
+## 15. Rule Final Varian Produksi
+Patch final varian produksi menetapkan source of truth tunggal:
+- Production Order `targetVariantKey` dan `targetVariantLabel` adalah sumber utama varian target setelah PO dibuat.
+- Work Log dari PO wajib menyimpan snapshot `targetVariantKey` dan `targetVariantLabel` dari PO.
+- Output hasil produksi pertama pada Work Log dari PO wajib mengikuti varian target PO.
+- Jika PO memiliki `targetVariantKey`, output tidak boleh diam-diam kembali ke `master` / tanpa varian.
+- Requirement material yang memakai strategi `inherit` atau `fixed` wajib resolved ke varian material yang jelas. Jika tidak bisa resolved, proses harus diblok dengan error, bukan fallback master.
+- Fallback master hanya boleh tersisa untuk item non-varian atau flow manual/planned legacy yang tidak linked ke PO.
+
+Definition of done varian produksi:
+- `PO target variant = Work Log target variant = output variant = inventory log variant`.

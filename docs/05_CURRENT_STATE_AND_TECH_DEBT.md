@@ -176,3 +176,23 @@ Area yang aman dibersihkan setelah migrasi ini stabil:
 - trigger detail manual yang mengandalkan klik nama row tanpa tombol `Detail` eksplisit
 - group tombol aksi lama berbasis `type="link"` yang hanya dipertahankan untuk halaman di luar baseline final
 - wrapper table manual pada utility page yang belum dipindah ke shared page foundation
+
+## Update Current State: Finalisasi Propagasi Varian Produksi
+Patch terbaru mengunci propagasi varian produksi dari Production Order sampai output hasil.
+
+Yang sekarang dianggap resmi / guarded:
+- Production Order `targetVariantKey` dan `targetVariantLabel` adalah source of truth varian target.
+- Work Log dari PO harus membawa snapshot varian target yang sama.
+- Output hasil produksi dari PO harus memakai varian yang sama dengan target PO.
+- Stock mutation dan `inventory_logs` harus mencatat `variantKey` dan `variantLabel` yang sama.
+- Helper resolve varian tidak boleh silent fallback ke master untuk flow final PO variant.
+
+Tech debt yang masih boleh tersisa sementara:
+- jalur planned/manual dari BOM belum punya target variant PO, sehingga tetap dianggap transisi;
+- fallback master masih boleh untuk item non-varian dan data manual/legacy;
+- `productionService.js` tetap legacy/deprecated dan tidak boleh dipakai sebagai flow produksi final.
+
+Area yang aman dibersihkan setelah reset data:
+- data Work Log lama yang linked PO tetapi output-nya masih master;
+- data PO lama yang targetHasVariants stale akibat snapshot BOM lama;
+- helper/fallback lama yang hanya dipakai untuk mempertahankan data sebelum reset.

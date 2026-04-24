@@ -116,6 +116,12 @@ export const DEFAULT_PRODUCTION_WORK_LOG_FORM = {
   bomName: "",
   bomVersion: null,
 
+  // ACTIVE / FINAL: field link PO didaftarkan di default form agar drawer
+  // Work Log tidak kehilangan snapshot PO saat Apply Draft Production Order.
+  productionOrderId: "",
+  productionOrderCode: "",
+  productionOrderStatusSnapshot: "",
+
   productionProfileId: "",
   productionProfileName: "",
 
@@ -138,6 +144,12 @@ export const DEFAULT_PRODUCTION_WORK_LOG_FORM = {
   targetCode: "",
   targetName: "",
   targetUnit: "pcs",
+
+  // ACTIVE / FINAL: snapshot varian target dari PO.
+  // Untuk flow PO, field ini menjadi contract ke output dan stock log.
+  targetHasVariants: false,
+  targetVariantKey: "",
+  targetVariantLabel: "",
 
   stepId: "",
   stepCode: "",

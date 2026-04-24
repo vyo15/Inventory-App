@@ -91,3 +91,12 @@ Saat membuat perubahan baru, selalu cek apakah perubahan menyentuh salah satu ar
 - jangan menambah flow produksi baru di luar alur final tanpa alasan jelas
 - kalau menyentuh sales, purchases, stock adjustment, dan production, selalu cek efek ke `inventory_logs`
 - kalau menyentuh laporan, cek collection sumber datanya terlebih dahulu
+
+## Update Master Context: Source of Truth Varian Produksi
+Flow varian produksi final sekarang memakai satu source of truth:
+- PO `targetVariantKey` / `targetVariantLabel`
+- Work Log root snapshot dari PO
+- Work Log output variant dari snapshot PO
+- stock mutation dan inventory log mengikuti output variant tersebut
+
+Area ini termasuk guarded production logic. Patch UI atau refactor shared component tidak boleh mengubah contract varian PO -> Work Log -> Output tanpa evaluasi produksi khusus.

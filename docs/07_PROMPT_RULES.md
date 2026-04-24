@@ -92,3 +92,11 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - `03_BUSINESS_RULES.md`
 - `05_CURRENT_STATE_AND_TECH_DEBT.md`
 - `06_TEST_CHECKLIST.md`
+
+## Saat Menyentuh Varian Produksi
+- source of truth varian target adalah Production Order `targetVariantKey` dan `targetVariantLabel`
+- Work Log dari PO wajib menjaga snapshot varian yang sama
+- output hasil produksi dari PO wajib mengikuti varian target PO
+- helper resolve varian tidak boleh silent fallback ke master untuk flow final PO variant
+- jika material inherit/fixed tidak bisa resolve varian, proses harus diblok dengan pesan jelas
+- planned/manual Work Log dianggap transisi dan tidak boleh dijadikan acuan flow final PO variant
