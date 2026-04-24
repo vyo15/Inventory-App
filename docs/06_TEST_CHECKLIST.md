@@ -219,3 +219,25 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - test jalur planned/manual dari BOM; pastikan tidak mengganggu flow final PO variant dan item bervarian tidak bisa complete tanpa varian output jelas
 - cek payroll dan HPP tetap membaca Work Log completed tanpa perubahan contract payroll
 - cek tidak ada perubahan tidak sengaja ke sales, purchases, laporan, dan reset utility
+
+### Display Varian Produksi
+- cek detail Production Order: target variant tampil benar.
+- cek requirement Production Order: material inherit/fixed tampil sebagai variant, bukan `Master` / `Tanpa varian`, jika resolved variant ada.
+- cek list Work Log: target variant tampil dari snapshot Work Log.
+- cek detail Work Log: material usage tampil memakai `resolvedVariantLabel` atau fallback `resolvedVariantKey`.
+- cek detail Work Log: output tampil memakai `outputVariantLabel` atau fallback `outputVariantKey`.
+- cek modal Selesaikan Work Log: target, varian, step, PO, qty batch, estimasi output, Good Qty, Reject Qty, Rework Qty, dan selisih vs estimasi terlihat jelas.
+- cek complete Work Log: inventory log tetap menampilkan varian yang sama dengan output.
+- cek item non-varian: label `Master` masih boleh tampil dan tidak dianggap bug.
+
+### Reset & Maintenance Data
+- klik `Cek Data Produksi` dan pastikan dry run tidak mengubah data apa pun
+- pastikan ringkasan audit menampilkan Data Dicek, Aman Repair, Display Repair, Reset/Manual, dan Plan Eksekusi
+- jalankan `Repair Aman` dan pastikan hanya field turunan/snapshot/display yang berubah
+- pastikan repair aman tidak mengurangi stok, menambah stok, mengubah kas, mengubah payroll, atau mengubah HPP
+- test PO draft/ready tanpa Work Log: requirement line varian bisa disinkronkan aman
+- test Work Log in_progress belum output applied: target/output snapshot bisa disinkronkan
+- test Work Log completed: tidak ada posting stok ulang; hanya display/snapshot repair jika sumber varian jelas
+- klik `Siapkan Reset Terarah Produksi` dan pastikan hanya modul Produksi yang terpilih sebelum user mengetik RESET
+- pastikan dialog destructive tetap meminta teks `RESET`
+- pastikan menu sidebar menampilkan `Reset & Maintenance Data`

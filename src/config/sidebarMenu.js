@@ -205,7 +205,7 @@ export const sidebarMenuItems = [
     children: [
       {
         key: "reset-test-data",
-        label: "Reset Data Uji",
+        label: "Reset & Maintenance Data",
         path: "/utilities/reset-test-data",
       },
     ],

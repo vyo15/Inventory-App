@@ -100,3 +100,19 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - helper resolve varian tidak boleh silent fallback ke master untuk flow final PO variant
 - jika material inherit/fixed tidak bisa resolve varian, proses harus diblok dengan pesan jelas
 - planned/manual Work Log dianggap transisi dan tidak boleh dijadikan acuan flow final PO variant
+
+## Saat Menyentuh Display Varian Produksi
+- UI/detail produksi wajib membaca field display final, bukan hanya `stockSourceType` lama.
+- Untuk target gunakan `targetVariantKey` / `targetVariantLabel`.
+- Untuk requirement/material gunakan `resolvedVariantKey` / `resolvedVariantLabel`.
+- Untuk output gunakan `outputVariantKey` / `outputVariantLabel`.
+- Untuk inventory log gunakan `variantLabel` lalu fallback `variantKey`.
+- Jangan menampilkan `Master` jika key/label varian aktual masih ada di record.
+
+## Saat Menyentuh Reset & Maintenance Data
+- Bedakan `Maintenance / Sinkronisasi Data` dari `Reset Data`.
+- Maintenance hanya boleh audit, repair field turunan, rebuild field yang aman, dan display/snapshot repair.
+- Reset bersifat destructive dan wajib preview + konfirmasi.
+- Jangan mencampur service maintenance dengan service operasional aktif.
+- Untuk produksi completed, jangan posting stok ulang dari maintenance.
+- Jika maintenance diperluas ke modul lain, lakukan bertahap per modul dan update checklist test.

@@ -189,3 +189,29 @@ Status logic:
 - **Legacy/deprecated**: `productionService.js` dan collection `productions` tetap legacy.
 
 Tidak ada silent fallback untuk flow final PO variant. Jika varian tidak bisa di-resolve, proses wajib berhenti dengan pesan error agar stok tidak masuk ke master/default.
+
+## 12. Contract Display Varian Produksi
+Layer tampilan sekarang mengikuti contract yang sama dengan layer data:
+
+`PO display -> Work Log display -> Output display -> Inventory log display`
+
+Field display final:
+- PO target: `targetVariantKey` / `targetVariantLabel`.
+- PO requirement: `resolvedVariantKey` / `resolvedVariantLabel`.
+- Work Log target: `targetVariantKey` / `targetVariantLabel`.
+- Work Log material: `resolvedVariantKey` / `resolvedVariantLabel`.
+- Work Log output: `outputVariantKey` / `outputVariantLabel`.
+- Inventory log: `variantLabel`, fallback `variantKey`.
+
+`stockSourceType` tetap ada sebagai metadata, tetapi tidak boleh menjadi satu-satunya penentu tampilan. Jika key/label varian aktual ada, UI harus menampilkan varian walaupun metadata lama masih `master`.
+
+## Maintenance Produksi Varian Lama
+Untuk data lama yang dibuat sebelum contract varian final stabil, perbaikan dilakukan melalui menu `Reset & Maintenance Data`.
+
+Batas aman:
+- PO yang belum punya Work Log boleh direbuild requirement line-nya dari BOM + target variant PO.
+- Work Log yang belum applied boleh disinkronkan material usage dan output snapshot-nya dari PO.
+- Work Log completed / stock applied hanya boleh display atau snapshot repair dari data yang sudah ada, tanpa posting stok ulang.
+- Inventory log produksi boleh dilengkapi `variantKey` / `variantLabel` jika sumbernya jelas dari Work Log, tetapi quantity dan arah mutasi tidak boleh diubah.
+
+Flow operasional final tetap: BOM → Production Order → Work Log → Payroll → HPP Analysis.

@@ -225,3 +225,22 @@ Patch final varian produksi menetapkan source of truth tunggal:
 
 Definition of done varian produksi:
 - `PO target variant = Work Log target variant = output variant = inventory log variant`.
+
+### 15.1 Rule Display Varian Produksi
+Display produksi wajib mengikuti source of truth varian yang sama dengan mutasi stok:
+- detail PO menampilkan target variant dan requirement resolved variant;
+- detail Work Log menampilkan target snapshot, material resolved variant, dan output variant;
+- inventory log menampilkan variant dari `variantLabel` atau fallback `variantKey`;
+- label `Master` hanya valid untuk item non-varian atau flow manual/legacy yang benar-benar tidak memakai varian.
+
+Jika dokumen lama linked PO masih punya output/material bervarian tetapi display membaca master, data tersebut dianggap mismatch legacy dan perlu reset/recreate, bukan dijadikan pola baru.
+
+## 10. Rule Reset & Maintenance Data
+Maintenance data tidak sama dengan reset data.
+
+Rule wajib:
+- Dry run / audit tidak boleh mengubah data apa pun.
+- Repair aman hanya boleh memperbaiki field turunan, snapshot, dan display yang bisa dihitung ulang dengan jelas.
+- Repair maintenance tidak boleh mengurangi stok, menambah stok, mengubah kas, mengubah payroll final, atau mengubah HPP completed.
+- Reset terarah hanya boleh menyentuh modul yang dipilih user dan wajib melalui preview serta konfirmasi destructive.
+- Data produksi completed yang sudah memutasi stok hanya boleh display/snapshot repair, bukan rebuild mutasi stok.

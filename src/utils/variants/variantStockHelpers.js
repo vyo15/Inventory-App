@@ -196,6 +196,78 @@ export const getItemStockSnapshot = (item = {}) => {
 };
 
 // =====================================================
+// Helper display final varian produksi.
+// ACTIVE / FINAL untuk UI Production Order, Work Log, dan audit stok:
+// - source of truth display varian selalu memakai key/label varian aktual
+//   dari dokumen final, bukan hanya stockSourceType lama.
+// - stockSourceType tetap dibaca sebagai metadata, tetapi tidak boleh
+//   membuat UI menampilkan Master jika key/label varian sebenarnya ada.
+// - Jika item bervarian tetapi tidak punya key/label, UI diberi status
+//   warning agar data lama/mismatch terlihat jelas dan tidak tampak benar.
+// =====================================================
+export const buildVariantDisplayInfo = ({
+  stockSourceType = '',
+  variantKey = '',
+  variantLabel = '',
+  fallbackVariantKey = '',
+  fallbackVariantLabel = '',
+  hasVariants = false,
+  expectsVariant = hasVariants,
+  variantSourceLabel = 'Variant',
+  masterSourceLabel = 'Master',
+  masterVariantLabel = '',
+  missingVariantLabel = 'Varian belum terbaca',
+  missingVariantDescription = 'Cek data lama / legacy master',
+} = {}) => {
+  const normalizedStockSource = safeTrim(stockSourceType).toLowerCase();
+  const normalizedVariantKey = safeTrim(variantKey || fallbackVariantKey);
+  const normalizedVariantLabel = safeTrim(variantLabel || fallbackVariantLabel || normalizedVariantKey);
+  const hasVariantIdentity = Boolean(normalizedVariantKey || normalizedVariantLabel);
+  const shouldReadVariant = expectsVariant === true || normalizedStockSource === 'variant';
+
+  if (normalizedStockSource === 'variant' || hasVariantIdentity) {
+    return {
+      isVariant: true,
+      isMaster: false,
+      isMissingVariant: shouldReadVariant && !normalizedVariantLabel,
+      tagColor: 'purple',
+      sourceLabel: variantSourceLabel,
+      variantKey: normalizedVariantKey,
+      variantLabel: normalizedVariantLabel || missingVariantLabel,
+    };
+  }
+
+  // =====================================================
+  // ACTIVE / FINAL display guard.
+  // Item boleh punya varian, tetapi BOM/Work Log line tertentu bisa
+  // memang diset memakai stok umum/master (materialVariantStrategy=none).
+  // Warning "Varian belum terbaca" hanya muncul jika layer ini memang
+  // diwajibkan membaca varian, bukan sekadar karena master item punya varian.
+  // =====================================================
+  if (shouldReadVariant) {
+    return {
+      isVariant: false,
+      isMaster: false,
+      isMissingVariant: true,
+      tagColor: 'orange',
+      sourceLabel: missingVariantLabel,
+      variantKey: '',
+      variantLabel: missingVariantDescription,
+    };
+  }
+
+  return {
+    isVariant: false,
+    isMaster: true,
+    isMissingVariant: false,
+    tagColor: 'default',
+    sourceLabel: masterSourceLabel,
+    variantKey: '',
+    variantLabel: safeTrim(masterVariantLabel),
+  };
+};
+
+// =====================================================
 // Resolve sumber stok yang dipakai untuk suatu material/output.
 // ACTIVE / FINAL untuk flow PO variant:
 // - caller final wajib mengirim allowMasterFallback=false supaya varian

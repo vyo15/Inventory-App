@@ -196,3 +196,31 @@ Area yang aman dibersihkan setelah reset data:
 - data Work Log lama yang linked PO tetapi output-nya masih master;
 - data PO lama yang targetHasVariants stale akibat snapshot BOM lama;
 - helper/fallback lama yang hanya dipakai untuk mempertahankan data sebelum reset.
+
+## Update Current State: Sinkronisasi Display Varian Produksi
+Patch display terbaru memperbaiki inkonsistensi UI setelah logic stok varian sudah benar.
+
+Yang sekarang dianggap resmi / guarded:
+- helper display varian membaca key/label final lebih dulu, bukan hanya `stockSourceType`;
+- PO detail requirement memakai `resolvedVariantKey` / `resolvedVariantLabel`;
+- Work Log detail memakai target snapshot, material resolved variant, dan output variant;
+- modal Selesaikan Work Log menampilkan target, varian, step, qty batch, estimasi output, dan selisih Good Qty terhadap estimasi;
+- Stock Management membaca `variantLabel` dan fallback `variantKey` untuk log produksi.
+
+Tech debt yang masih boleh tersisa sementara:
+- data lama yang sudah terlanjur menyimpan `stockSourceType: master` padahal linked ke PO variant;
+- flow planned/manual dari BOM yang tidak punya PO target variant;
+- label master untuk item non-varian tetap valid.
+
+## Update Current State: Reset & Maintenance Data
+Menu reset lama sudah dirapikan menjadi `Reset & Maintenance Data`.
+
+Status saat ini:
+- Maintenance produksi varian tersedia untuk dry run dan repair aman.
+- Service maintenance sudah dipisahkan dari service produksi operasional.
+- Reset data masih memakai service utility lama, tetapi UI sudah membedakan reset destructive dengan maintenance non-delete.
+
+Tech debt tersisa:
+- Maintenance baru tahap awal untuk produksi varian; modul transaksi, finance, laporan, dan inventory masih bisa ditambahkan bertahap.
+- Flow manual/planned Work Log tetap transisi dan tidak menjadi sumber final untuk PO variant.
+- Collection legacy `productions` masih ditangani di reset sebagai jejak flow lama.

@@ -15,6 +15,7 @@ import ProductionFilterCard from '../../components/Produksi/shared/ProductionFil
 import EditableLineSection from '../../components/Produksi/shared/EditableLineSection';
 import ReadonlyLineSection from '../../components/Produksi/shared/ReadonlyLineSection';
 import {
+  Alert,
   Badge,
   Button,
   Card,
@@ -72,7 +73,7 @@ import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildWorkLogMaterialUsageFormLine, buildWorkLogOutputFormLine } from "../../utils/produksi/productionLineBuilders";
-import { buildVariantOptionsFromItem, inferHasVariants } from "../../utils/variants/variantStockHelpers";
+import { buildVariantDisplayInfo, buildVariantOptionsFromItem, inferHasVariants } from "../../utils/variants/variantStockHelpers";
 import { isProductionWorkLogCompleted } from "../../utils/produksi/productionFlowGuards";
 
 const ProductionWorkLogs = () => {
@@ -127,6 +128,9 @@ const ProductionWorkLogs = () => {
   const leftoverLeafQtyValue = Form.useWatch("leftoverLeafQty", form);
   const leftoverStemQtyValue = Form.useWatch("leftoverStemQty", form);
   const leftoverPetalFlowerEquivalentValue = Form.useWatch("leftoverPetalFlowerEquivalent", form);
+  const completeGoodQtyValue = Form.useWatch("goodQty", completeForm);
+  const completeRejectQtyValue = Form.useWatch("rejectQty", completeForm);
+  const completeReworkQtyValue = Form.useWatch("reworkQty", completeForm);
 
   const loadData = async () => {
     try {
@@ -746,8 +750,56 @@ const ProductionWorkLogs = () => {
   const getWorkLogSourceTagColor = (sourceType) =>
     sourceType === "production_order" ? "purple" : "blue";
 
-  const getStockSourceTagColor = (stockSourceType) =>
-    stockSourceType === "variant" ? "purple" : "default";
+  // =====================================================
+  // ACTIVE / FINAL - helper display varian Work Log.
+  // Source of truth UI memakai key/label aktual per layer:
+  // - target: targetVariantKey/Label dari snapshot PO
+  // - material: resolvedVariantKey/Label dari requirement PO
+  // - output: outputVariantKey/Label dari output final
+  // stockSourceType lama hanya dipakai sebagai metadata pendukung.
+  // =====================================================
+  const getTargetVariantDisplayInfo = (record = {}) =>
+    buildVariantDisplayInfo({
+      stockSourceType: record.targetVariantKey ? "variant" : "master",
+      variantKey: record.targetVariantKey,
+      variantLabel: record.targetVariantLabel,
+      hasVariants: record.targetHasVariants,
+      variantSourceLabel: "Variant",
+      masterSourceLabel: "Master",
+    });
+
+  const getMaterialVariantDisplayInfo = (record = {}) => {
+    const strategy = String(record.materialVariantStrategy || '').trim().toLowerCase();
+    const stockSourceType = String(record.stockSourceType || '').trim().toLowerCase();
+    const expectsVariant =
+      stockSourceType === 'variant' || ['inherit', 'fixed'].includes(strategy);
+    const usesGeneralMasterStock = record.materialHasVariants === true && strategy === 'none';
+
+    return buildVariantDisplayInfo({
+      stockSourceType: record.stockSourceType,
+      variantKey: record.resolvedVariantKey,
+      variantLabel: record.resolvedVariantLabel,
+      hasVariants: record.materialHasVariants,
+      expectsVariant,
+      variantSourceLabel: "Variant",
+      masterSourceLabel: usesGeneralMasterStock ? "Stok Umum" : "Master",
+      masterVariantLabel: usesGeneralMasterStock ? "Sesuai BOM tanpa varian" : "",
+      missingVariantLabel: "Requirement belum resolved",
+      missingVariantDescription: "Refresh requirement / cek strategi varian BOM",
+    });
+  };
+
+  const getOutputVariantDisplayInfo = (record = {}) =>
+    buildVariantDisplayInfo({
+      stockSourceType: record.stockSourceType,
+      variantKey: record.outputVariantKey,
+      variantLabel: record.outputVariantLabel,
+      hasVariants: record.outputHasVariants,
+      fallbackVariantKey: record.targetVariantKey,
+      fallbackVariantLabel: record.targetVariantLabel,
+      variantSourceLabel: "Masuk ke Variant",
+      masterSourceLabel: "Masuk ke Master",
+    });
 
   // =====================================================
   // Helper presentasi batch 1.
@@ -816,34 +868,77 @@ const ProductionWorkLogs = () => {
     return selectedRecord.workerNames.filter(Boolean);
   }, [selectedRecord]);
 
+  // =====================================================
+  // ACTIVE / FINAL - konteks modal selesai Work Log.
+  // Modal complete tidak mengubah rule bisnis; blok ini hanya membantu user
+  // membaca target, varian, step, qty batch, estimasi output, dan selisih
+  // sebelum Good Qty / Reject Qty / Rework Qty disimpan.
+  // =====================================================
+  const completeContext = useMemo(() => {
+    if (!completingRecord) return null;
+
+    const unitLabel = completingRecord.targetUnit || 'pcs';
+    const estimatedOutputQty = Number(completingRecord.theoreticalOutputQty || 0);
+    const goodQty = Number(completeGoodQtyValue || 0);
+    const rejectQty = Number(completeRejectQtyValue || 0);
+    const reworkQty = Number(completeReworkQtyValue || 0);
+    const varianceQty = goodQty - estimatedOutputQty;
+    const variantDisplay = getTargetVariantDisplayInfo(completingRecord);
+
+    return {
+      unitLabel,
+      estimatedOutputQty,
+      goodQty,
+      rejectQty,
+      reworkQty,
+      varianceQty,
+      targetLabel: completingRecord.targetName || '-',
+      variantLabel: variantDisplay.variantLabel || '-',
+      stepLabel: completingRecord.stepName || '-',
+      batchQty: Number(completingRecord.plannedQty || 0),
+      poCode: completingRecord.productionOrderCode || '-',
+    };
+  }, [
+    completeGoodQtyValue,
+    completeRejectQtyValue,
+    completeReworkQtyValue,
+    completingRecord,
+  ]);
+
   const detailMaterialColumns = useMemo(
     () => [
       {
         title: "Material",
         key: "item",
-        render: (_, record) => (
-          renderWorkLogCellBlock(record.itemName || "-", [
+        render: (_, record) => {
+          const variantDisplay = getMaterialVariantDisplayInfo(record);
+
+          return renderWorkLogCellBlock(record.itemName || "-", [
             record.itemCode || "-",
-            record.resolvedVariantLabel ? `Varian: ${record.resolvedVariantLabel}` : null,
-          ])
-        ),
+            variantDisplay.variantLabel ? `Varian: ${variantDisplay.variantLabel}` : null,
+          ]);
+        },
       },
       {
         title: "Sumber Stok",
         key: "stockSource",
         width: 160,
-        render: (_, record) => (
-          <div className={workLogUiClassNames.stack}>
-            <Tag className="ims-status-tag" color={getStockSourceTagColor(record.stockSourceType)}>
-              {record.stockSourceType === "variant" ? "Variant" : "Master"}
-            </Tag>
-            {record.stockSourceType === "variant" && record.resolvedVariantLabel ? (
-              <Typography.Text type="secondary" className={workLogUiClassNames.meta}>
-                {record.resolvedVariantLabel}
-              </Typography.Text>
-            ) : null}
-          </div>
-        ),
+        render: (_, record) => {
+          const variantDisplay = getMaterialVariantDisplayInfo(record);
+
+          return (
+            <div className={workLogUiClassNames.stack}>
+              <Tag className="ims-status-tag" color={variantDisplay.tagColor}>
+                {variantDisplay.sourceLabel}
+              </Tag>
+              {variantDisplay.variantLabel ? (
+                <Typography.Text type="secondary" className={workLogUiClassNames.meta}>
+                  {variantDisplay.variantLabel}
+                </Typography.Text>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         title: "Pemakaian",
@@ -884,30 +979,36 @@ const ProductionWorkLogs = () => {
       {
         title: "Output",
         key: "output",
-        render: (_, record) => (
-          renderWorkLogCellBlock(record.outputName || "-", [
+        render: (_, record) => {
+          const variantDisplay = getOutputVariantDisplayInfo(record);
+
+          return renderWorkLogCellBlock(record.outputName || "-", [
             record.outputCode || "-",
             WORK_LOG_TARGET_TYPE_MAP[record.outputType] || record.outputType || "-",
-            record.outputVariantLabel ? `Varian: ${record.outputVariantLabel}` : null,
-          ])
-        ),
+            variantDisplay.variantLabel ? `Varian: ${variantDisplay.variantLabel}` : null,
+          ]);
+        },
       },
       {
         title: "Target Stok",
         key: "stockTarget",
         width: 170,
-        render: (_, record) => (
-          <div className={workLogUiClassNames.stack}>
-            <Tag className="ims-status-tag" color={getStockSourceTagColor(record.stockSourceType)}>
-              {record.stockSourceType === "variant" ? "Masuk ke Variant" : "Masuk ke Master"}
-            </Tag>
-            {record.outputVariantLabel ? (
-              <Typography.Text type="secondary" className={workLogUiClassNames.meta}>
-                {record.outputVariantLabel}
-              </Typography.Text>
-            ) : null}
-          </div>
-        ),
+        render: (_, record) => {
+          const variantDisplay = getOutputVariantDisplayInfo(record);
+
+          return (
+            <div className={workLogUiClassNames.stack}>
+              <Tag className="ims-status-tag" color={variantDisplay.tagColor}>
+                {variantDisplay.sourceLabel}
+              </Tag>
+              {variantDisplay.variantLabel ? (
+                <Typography.Text type="secondary" className={workLogUiClassNames.meta}>
+                  {variantDisplay.variantLabel}
+                </Typography.Text>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         title: "Hasil",
@@ -962,13 +1063,15 @@ const ProductionWorkLogs = () => {
       title: "Target / Step",
       key: "targetStep",
       width: 280,
-      render: (_, record) => (
-        renderWorkLogCellBlock(record.targetName || "-", [
+      render: (_, record) => {
+        const variantDisplay = getTargetVariantDisplayInfo(record);
+
+        return renderWorkLogCellBlock(record.targetName || "-", [
           record.stepName || "-",
-          record.targetVariantLabel ? `Varian: ${record.targetVariantLabel}` : null,
+          variantDisplay.variantLabel ? `Varian: ${variantDisplay.variantLabel}` : null,
           `PO: ${record.productionOrderCode || "-"}`,
-        ])
-      ),
+        ]);
+      },
     },
     {
       title: "Qty",
@@ -1177,6 +1280,7 @@ const ProductionWorkLogs = () => {
           <Form.Item name="targetCode" hidden><Input type="hidden" /></Form.Item>
           <Form.Item name="targetName" hidden><Input type="hidden" /></Form.Item>
           <Form.Item name="targetUnit" hidden><Input type="hidden" /></Form.Item>
+          <Form.Item name="targetHasVariants" hidden><Input type="hidden" /></Form.Item>
           <Form.Item name="targetVariantKey" hidden><Input type="hidden" /></Form.Item>
           <Form.Item name="targetVariantLabel" hidden><Input type="hidden" /></Form.Item>
 
@@ -1380,7 +1484,7 @@ const ProductionWorkLogs = () => {
               type="info"
               showIcon
               message="Output mengikuti Varian Target dari Production Order"
-              description={`Source of truth varian: ${form.getFieldValue("targetVariantLabel") || "Tanpa varian / master"}. Untuk flow PO, target dan output dikunci agar tidak kembali ke master/default.`}
+              description={`Source of truth varian: ${getTargetVariantDisplayInfo(form.getFieldsValue()).variantLabel || "Master item"}. Untuk flow PO, target dan output dikunci agar tidak kembali ke master/default.`}
             />
           ) : null}
 
@@ -1484,9 +1588,9 @@ const ProductionWorkLogs = () => {
                   <div>
                     <div style={{ fontWeight: 600 }}>{record.itemName || "-"}</div>
                     <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.itemCode || "-"}</div>
-                    {record.resolvedVariantLabel ? (
+                    {getMaterialVariantDisplayInfo(record).variantLabel ? (
                       <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                        Varian: {record.resolvedVariantLabel}
+                        Varian: {getMaterialVariantDisplayInfo(record).variantLabel}
                       </div>
                     ) : null}
                   </div>
@@ -1506,6 +1610,22 @@ const ProductionWorkLogs = () => {
                     </Typography.Text>
                   </Space>
                 ),
+              },
+              {
+                // ACTIVE / FINAL display: requirement PO yang sudah resolved
+                // harus terlihat sebagai varian di drawer form, bukan Master.
+                title: "Sumber",
+                key: "stockSource",
+                width: 150,
+                render: (_, record) => {
+                  const variantDisplay = getMaterialVariantDisplayInfo(record);
+
+                  return (
+                    <Tag className="ims-status-tag" color={variantDisplay.tagColor}>
+                      {variantDisplay.sourceLabel}
+                    </Tag>
+                  );
+                },
               },
               {
                 title: "Total Cost",
@@ -1561,9 +1681,9 @@ const ProductionWorkLogs = () => {
                   <div>
                     <div style={{ fontWeight: 600 }}>{record.outputName || "-"}</div>
                     <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.outputCode || "-"}</div>
-                    {record.outputVariantLabel ? (
+                    {getOutputVariantDisplayInfo(record).variantLabel ? (
                       <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                        Varian: {record.outputVariantLabel}
+                        Varian: {getOutputVariantDisplayInfo(record).variantLabel}
                       </div>
                     ) : null}
                   </div>
@@ -1583,6 +1703,22 @@ const ProductionWorkLogs = () => {
                     </Typography.Text>
                   </Space>
                 ),
+              },
+              {
+                // ACTIVE / FINAL display: output PO wajib terlihat masuk
+                // ke varian target, mengikuti outputVariantKey/Label final.
+                title: "Target Stok",
+                key: "stockTarget",
+                width: 160,
+                render: (_, record) => {
+                  const variantDisplay = getOutputVariantDisplayInfo(record);
+
+                  return (
+                    <Tag className="ims-status-tag" color={variantDisplay.tagColor}>
+                      {variantDisplay.sourceLabel}
+                    </Tag>
+                  );
+                },
               },
               {
                 // Nested editor output tetap non-sticky karena area ini compact dan aksi sudah langsung terlihat tanpa scroll tambahan.
@@ -1718,9 +1854,9 @@ const ProductionWorkLogs = () => {
                         <Typography.Text strong>
                           {selectedRecord.targetName || "-"}
                         </Typography.Text>
-                        {selectedRecord.targetVariantLabel ? (
+                        {getTargetVariantDisplayInfo(selectedRecord).variantLabel ? (
                           <Typography.Text type="secondary">
-                            Varian: {selectedRecord.targetVariantLabel}
+                            Varian: {getTargetVariantDisplayInfo(selectedRecord).variantLabel}
                           </Typography.Text>
                         ) : null}
                       </Space>
@@ -2122,6 +2258,40 @@ const ProductionWorkLogs = () => {
         okText="Selesaikan"
         destroyOnClose
       >
+        {completeContext ? (
+          <Card size="small" style={{ marginBottom: 16 }}>
+            {/* ACTIVE / FINAL display: context completion memakai snapshot Work Log,
+                bukan hitung ulang dari master, agar patokan sesuai PO yang sedang diselesaikan. */}
+            <Descriptions size="small" column={1}>
+              <Descriptions.Item label="Target">
+                {completeContext.targetLabel}
+              </Descriptions.Item>
+              <Descriptions.Item label="Varian">
+                {completeContext.variantLabel}
+              </Descriptions.Item>
+              <Descriptions.Item label="Step / PO">
+                {completeContext.stepLabel} / {completeContext.poCode}
+              </Descriptions.Item>
+              <Descriptions.Item label="Qty Batch">
+                {formatNumber(completeContext.batchQty)} batch
+              </Descriptions.Item>
+              <Descriptions.Item label="Estimasi Output">
+                {formatNumber(completeContext.estimatedOutputQty)} {completeContext.unitLabel}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Divider style={{ margin: "12px 0" }} />
+            <Space wrap size={[8, 8]}>
+              <Tag color="green">Good: {formatNumber(completeContext.goodQty)} {completeContext.unitLabel}</Tag>
+              <Tag color="red">Reject: {formatNumber(completeContext.rejectQty)} {completeContext.unitLabel}</Tag>
+              <Tag color="orange">Rework: {formatNumber(completeContext.reworkQty)} {completeContext.unitLabel}</Tag>
+              <Tag color={completeContext.varianceQty < 0 ? "orange" : "blue"}>
+                Selisih vs Estimasi: {formatNumber(completeContext.varianceQty)} {completeContext.unitLabel}
+              </Tag>
+            </Space>
+          </Card>
+        ) : null}
+
         <Form form={completeForm} layout="vertical">
           <Row gutter={12}>
             <Col span={8}>

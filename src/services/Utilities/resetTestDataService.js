@@ -11,7 +11,11 @@ import { db } from "../../firebase";
 import { calculateAvailableStock, toNumber } from "../../utils/stock/stockHelpers";
 
 // -----------------------------------------------------------------------------
-// Reset Test Data Service
+// Reset & Maintenance Data Service
+// Tujuan service reset legacy/aktif:
+// - bagian ini khusus reset destructive dan sinkronisasi stok master;
+// - maintenance/repair produksi dipisah ke services/Maintenance agar tidak
+//   bercampur dengan flow operasional produksi aktif.
 // Tujuan service:
 // 1. preview jumlah data uji yang akan dibersihkan
 // 2. reset transaksi sesuai modul yang dipilih user
@@ -81,6 +85,7 @@ const MODULE_DEFINITIONS = {
     collections: [
       { key: "production_orders", label: "Production Order", action: "Hapus PO produksi" },
       { key: "production_work_logs", label: "Production Work Log", action: "Hapus work log produksi" },
+      { key: "production_payrolls", label: "Payroll Produksi", action: "Hapus payroll produksi" },
       { key: "productions", label: "Productions Legacy", action: "Bersihkan jejak flow lama" },
     ],
   },

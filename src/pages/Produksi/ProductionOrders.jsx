@@ -52,6 +52,7 @@ import {
   refreshProductionOrderRequirements,
 } from "../../services/Produksi/productionOrdersService";
 import { createProductionWorkLogFromOrder } from "../../services/Produksi/productionWorkLogsService";
+import { buildVariantDisplayInfo } from "../../utils/variants/variantStockHelpers";
 
 const PRODUCTION_ORDER_TARGET_TYPES = [
   {
@@ -125,6 +126,33 @@ const renderOrderCellBlock = (primary, secondaryLines = []) => (
     ))}
   </div>
 );
+
+// =====================================================
+// ACTIVE / FINAL - helper display varian requirement PO.
+// Source of truth tampilan requirement adalah resolvedVariantKey/Label
+// hasil service PO. stockSourceType hanya metadata legacy pendukung,
+// sehingga UI tidak boleh menampilkan Master jika varian aktual sudah ada.
+// =====================================================
+const getRequirementVariantDisplayInfo = (record = {}) => {
+  const strategy = String(record.materialVariantStrategy || '').trim().toLowerCase();
+  const stockSourceType = String(record.stockSourceType || '').trim().toLowerCase();
+  const expectsVariant =
+    stockSourceType === 'variant' || ['inherit', 'fixed'].includes(strategy);
+  const usesGeneralMasterStock = record.materialHasVariants === true && strategy === 'none';
+
+  return buildVariantDisplayInfo({
+    stockSourceType: record.stockSourceType,
+    variantKey: record.resolvedVariantKey,
+    variantLabel: record.resolvedVariantLabel,
+    hasVariants: record.materialHasVariants,
+    expectsVariant,
+    variantSourceLabel: 'Variant',
+    masterSourceLabel: usesGeneralMasterStock ? 'Stok Umum' : 'Master',
+    masterVariantLabel: usesGeneralMasterStock ? 'Sesuai BOM tanpa varian' : '',
+    missingVariantLabel: 'Requirement belum resolved',
+    missingVariantDescription: 'Refresh requirement / cek strategi varian BOM',
+  });
+};
 
 const ProductionOrders = () => {
   const [loading, setLoading] = useState(false);
@@ -523,17 +551,23 @@ const ProductionOrders = () => {
       {
         title: "Varian / Sumber",
         key: "variantSource",
-        width: 180,
-        render: (_, record) => (
-          <div className={orderUiClassNames.stack}>
-            <Tag className="ims-status-tag" color={record.stockSourceType === "variant" ? "purple" : "default"}>
-              {record.stockSourceType === "variant" ? "Variant" : "Master"}
-            </Tag>
-            <Typography.Text type="secondary" className={orderUiClassNames.meta}>
-              {record.resolvedVariantLabel || "Tanpa varian"}
-            </Typography.Text>
-          </div>
-        ),
+        width: 190,
+        render: (_, record) => {
+          const variantDisplay = getRequirementVariantDisplayInfo(record);
+
+          return (
+            <div className={orderUiClassNames.stack}>
+              <Tag className="ims-status-tag" color={variantDisplay.tagColor}>
+                {variantDisplay.sourceLabel}
+              </Tag>
+              {variantDisplay.variantLabel ? (
+                <Typography.Text type="secondary" className={orderUiClassNames.meta}>
+                  {variantDisplay.variantLabel}
+                </Typography.Text>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         title: "Kebutuhan",

@@ -64,8 +64,20 @@ const resolveDirectionMeta = (record) => {
   return { label: "Netral", value: "neutral", color: "default" };
 };
 
+// =========================
+// SECTION: Display varian inventory log
+// ACTIVE / FINAL untuk audit stok produksi:
+// - productionWorkLogsService menulis variantKey/variantLabel di root log.
+// - details.* tetap dibaca untuk kompatibilitas log lama.
+// - UI tidak boleh menyembunyikan varian hanya karena label kosong, jadi
+//   variantKey ikut menjadi fallback display.
+// =========================
 const resolveVariantLabel = (record) =>
-  record?.details?.variantLabel || record?.variantLabel || record?.details?.variantKey || "";
+  record?.details?.variantLabel ||
+  record?.variantLabel ||
+  record?.details?.variantKey ||
+  record?.variantKey ||
+  "";
 
 const resolveReferenceLines = (record) => {
   const details = record?.details || {};

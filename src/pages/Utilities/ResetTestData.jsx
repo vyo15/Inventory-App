@@ -9,6 +9,7 @@ import {
   Form,
   Input,
   Modal,
+  Popconfirm,
   Radio,
   Row,
   Space,
@@ -27,6 +28,10 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import {
+  getProductionVariantMaintenanceAudit,
+  repairProductionVariantMaintenance,
+} from "../../services/Maintenance/productionVariantMaintenanceService";
+import {
   DEFAULT_RESET_MODULES,
   RESET_MODE_OPTIONS,
   getResetPreview,
@@ -38,11 +43,12 @@ import {
 const { Title, Paragraph, Text } = Typography;
 
 // -----------------------------------------------------------------------------
-// Reset Data Uji Page
-// Tujuan UX halaman ini:
-// 1. preview real count sebelum reset dijalankan
-// 2. alur testing trial-error tetap cepat, tapi aman lewat popup konfirmasi
-// 3. baseline + sinkronisasi stok tetap ada agar pengujian berulang lebih profesional
+// Reset & Maintenance Data Page
+// ACTIVE / TRANSISI:
+// - Reset Data masih memakai service utility lama yang sudah ada.
+// - Maintenance Data memakai service baru terpisah agar audit/repair tidak
+//   bercampur dengan flow operasional produksi aktif.
+// - Route lama tetap dipertahankan agar menu existing tidak rusak.
 // -----------------------------------------------------------------------------
 
 const RESET_MODE_LABELS = {
@@ -51,11 +57,21 @@ const RESET_MODE_LABELS = {
   reset_and_restore_baseline: "Reset + Baseline Testing",
 };
 
+const MAINTENANCE_CATEGORY_META = {
+  ok: { label: "Sesuai", color: "green" },
+  safe_repair: { label: "Aman Diperbaiki", color: "blue" },
+  display_repair: { label: "Display/Snapshot", color: "purple" },
+  manual: { label: "Butuh Reset/Manual", color: "red" },
+  legacy: { label: "Legacy/Transisi", color: "orange" },
+};
+
 const ResetTestData = () => {
   const [confirmForm] = Form.useForm();
 
   // ---------------------------------------------------------------------------
-  // State utama halaman.
+  // State reset data.
+  // Bagian ini tetap kompatibel dengan utility reset lama, tetapi judul UI
+  // dirapikan agar user membedakan reset destructive vs maintenance non-delete.
   // ---------------------------------------------------------------------------
   const [mode, setMode] = useState("transaction_only");
   const [selectedModules, setSelectedModules] = useState([...DEFAULT_RESET_MODULES]);
@@ -65,6 +81,15 @@ const ResetTestData = () => {
   const [loadingBaseline, setLoadingBaseline] = useState(false);
   const [loadingSync, setLoadingSync] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // ---------------------------------------------------------------------------
+  // State maintenance produksi.
+  // ACTIVE / FINAL tahap awal: fokus produksi varian lama.
+  // Service maintenance hanya audit/repair field turunan, tidak posting stok ulang.
+  // ---------------------------------------------------------------------------
+  const [maintenanceAudit, setMaintenanceAudit] = useState(null);
+  const [loadingMaintenanceAudit, setLoadingMaintenanceAudit] = useState(false);
+  const [loadingMaintenanceRepair, setLoadingMaintenanceRepair] = useState(false);
 
   const moduleOptions = useMemo(
     () => [
@@ -142,6 +167,47 @@ const ResetTestData = () => {
     }
   };
 
+  const handleLoadProductionMaintenanceAudit = async () => {
+    try {
+      setLoadingMaintenanceAudit(true);
+      const result = await getProductionVariantMaintenanceAudit();
+      setMaintenanceAudit(result);
+      message.success("Dry run audit produksi selesai. Belum ada data yang diubah.");
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menjalankan audit maintenance produksi.");
+    } finally {
+      setLoadingMaintenanceAudit(false);
+    }
+  };
+
+  const handleRepairProductionMaintenance = async () => {
+    try {
+      setLoadingMaintenanceRepair(true);
+      const result = await repairProductionVariantMaintenance();
+      message.success(result?.message || "Repair varian produksi selesai.");
+      const nextAudit = await getProductionVariantMaintenanceAudit();
+      setMaintenanceAudit(nextAudit);
+      await loadPreview(false);
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menjalankan repair varian produksi.");
+    } finally {
+      setLoadingMaintenanceRepair(false);
+    }
+  };
+
+  const prepareProductionReset = async () => {
+    // -------------------------------------------------------------------------
+    // Reset terarah tidak langsung menghapus data.
+    // Tombol ini hanya menyiapkan modul Produksi di area Reset Data, sehingga
+    // user tetap wajib review preview dan mengetik RESET di dialog destructive.
+    // -------------------------------------------------------------------------
+    setMode("transaction_only");
+    setSelectedModules(["production"]);
+    message.info("Reset terarah Produksi disiapkan. Cek preview lalu jalankan konfirmasi RESET jika sudah yakin.");
+  };
+
   const openResetConfirmation = async () => {
     if (!selectedModules.length) {
       message.warning("Pilih minimal 1 modul sebelum reset dijalankan.");
@@ -169,6 +235,7 @@ const ResetTestData = () => {
       setConfirmOpen(false);
       confirmForm.resetFields();
       await loadPreview(false);
+      await handleLoadProductionMaintenanceAudit();
     } catch (error) {
       console.error(error);
       if (error?.errorFields) return;
@@ -189,6 +256,8 @@ const ResetTestData = () => {
     }));
   }, [preview]);
 
+  const maintenanceRows = useMemo(() => maintenanceAudit?.rows || [], [maintenanceAudit]);
+
   const recommendationText = useMemo(() => {
     if (mode === "transaction_only") {
       return "Paling cepat untuk uji trial-error karena stok master aktif tetap dipertahankan.";
@@ -199,26 +268,135 @@ const ResetTestData = () => {
     return "Mode paling profesional untuk testing berulang: simpan baseline, lakukan tes, lalu restore ke baseline yang sama.";
   }, [mode]);
 
+  const maintenanceSummary = maintenanceAudit?.summary || {};
+
   return (
     <div className="page-container">
       <Card className="content-card">
         <Space direction="vertical" size={20} style={{ width: "100%" }}>
           <div>
             <Title level={2} style={{ marginBottom: 8 }}>
-              Reset Data Uji
+              Reset & Maintenance Data
             </Title>
             <Paragraph style={{ marginBottom: 0 }}>
-              Utilitas untuk trial-error testing yang lebih profesional: preview otomatis,
-              reset transaksi real, baseline stok, dan sinkronisasi field stok.
+              Pusat utilitas untuk audit, repair aman, reset terarah, baseline stok, dan sinkronisasi data testing.
             </Paragraph>
           </div>
 
           <Alert
             type="warning"
             showIcon
-            message="Gunakan hanya untuk database testing"
-            description="Fitur ini sekarang membaca data real Firestore. Jadi preview, reset transaksi, baseline stok, dan sinkronisasi stok benar-benar bekerja pada data uji Anda."
+            message="Pisahkan Maintenance dan Reset"
+            description="Maintenance tidak menghapus data dan tidak posting stok ulang. Reset bersifat destructive dan tetap wajib melalui preview serta konfirmasi RESET."
           />
+
+          <Card
+            title="Maintenance / Sinkronisasi Data Produksi"
+            size="small"
+            extra={<Tag color="purple">Tahap awal: Produksi</Tag>}
+          >
+            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <Alert
+                type="info"
+                showIcon
+                message="Dry run dulu sebelum repair"
+                description="Audit membaca BOM, Production Order, Work Log, output, dan inventory log produksi. Repair aman hanya melengkapi field turunan/snapshot/display yang jelas, tanpa mengurangi/menambah stok, kas, payroll, atau HPP."
+              />
+
+              <Row gutter={[12, 12]}>
+                <Col xs={24} md={8}>
+                  <Button
+                    block
+                    icon={<EyeOutlined />}
+                    onClick={handleLoadProductionMaintenanceAudit}
+                    loading={loadingMaintenanceAudit}
+                  >
+                    Cek Data Produksi
+                  </Button>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Popconfirm
+                    title="Jalankan repair aman?"
+                    description="Repair hanya mengubah field turunan/snapshot/display. Stok, kas, payroll, dan HPP tidak diposting ulang."
+                    okText="Ya, Repair Aman"
+                    cancelText="Batal"
+                    onConfirm={handleRepairProductionMaintenance}
+                  >
+                    <Button
+                      block
+                      type="primary"
+                      icon={<SyncOutlined />}
+                      loading={loadingMaintenanceRepair}
+                    >
+                      Repair Aman
+                    </Button>
+                  </Popconfirm>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Button block danger icon={<DeleteOutlined />} onClick={prepareProductionReset}>
+                    Siapkan Reset Terarah Produksi
+                  </Button>
+                </Col>
+              </Row>
+
+              <Row gutter={[12, 12]}>
+                <Col xs={12} md={4}>
+                  <Card size="small">
+                    <Statistic title="Data Dicek" value={maintenanceSummary.checkedRecords || 0} />
+                  </Card>
+                </Col>
+                <Col xs={12} md={5}>
+                  <Card size="small">
+                    <Statistic title="Aman Repair" value={maintenanceSummary.safeRepairCount || 0} />
+                  </Card>
+                </Col>
+                <Col xs={12} md={5}>
+                  <Card size="small">
+                    <Statistic title="Display Repair" value={maintenanceSummary.displayRepairCount || 0} />
+                  </Card>
+                </Col>
+                <Col xs={12} md={5}>
+                  <Card size="small">
+                    <Statistic title="Reset/Manual" value={maintenanceSummary.resetManualCount || 0} />
+                  </Card>
+                </Col>
+                <Col xs={12} md={5}>
+                  <Card size="small">
+                    <Statistic title="Plan Eksekusi" value={maintenanceSummary.executablePlanCount || 0} />
+                  </Card>
+                </Col>
+              </Row>
+
+              <Table
+                className="app-data-table"
+                size="small"
+                loading={loadingMaintenanceAudit || loadingMaintenanceRepair}
+                dataSource={maintenanceRows}
+                pagination={{ pageSize: 8, showSizeChanger: false }}
+                columns={[
+                  { title: "Area", dataIndex: "scope", key: "scope", width: 150 },
+                  { title: "Kode/Type", dataIndex: "code", key: "code", width: 160 },
+                  { title: "Status", dataIndex: "status", key: "status", width: 120 },
+                  {
+                    title: "Kategori",
+                    dataIndex: "category",
+                    key: "category",
+                    width: 170,
+                    render: (value) => {
+                      const meta = MAINTENANCE_CATEGORY_META[value] || MAINTENANCE_CATEGORY_META.ok;
+                      return <Tag color={meta.color}>{meta.label}</Tag>;
+                    },
+                  },
+                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 260, render: (value) => value || "-" },
+                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 360 },
+                ]}
+                scroll={{ x: 1240 }}
+                locale={{ emptyText: "Klik Cek Data Produksi untuk menjalankan dry run audit." }}
+              />
+            </Space>
+          </Card>
+
+          <Divider orientation="left">Reset Data</Divider>
 
           <Row gutter={[16, 16]}>
             <Col xs={24} md={14}>
@@ -348,10 +526,10 @@ const ResetTestData = () => {
             extra={<Tag color="blue">Testing Flow</Tag>}
           >
             <Space direction="vertical" size={8} style={{ width: "100%" }}>
+              <Text>• Gunakan <Text strong>Maintenance / Sinkronisasi Data</Text> dulu jika masalahnya hanya field varian lama/stale.</Text>
+              <Text>• Gunakan <Text strong>Reset Terarah Produksi</Text> jika data produksi lama terlalu rusak untuk direpair aman.</Text>
               <Text>• Gunakan <Text strong>Reset + Baseline Testing</Text> untuk uji berulang yang konsisten.</Text>
-              <Text>• Simpan baseline setelah master data dan stok awal sudah ideal.</Text>
-              <Text>• Modul <Text strong>Produksi</Text> sekarang membersihkan <Text strong>Production Order</Text> dan <Text strong>Production Work Log</Text>.</Text>
-              <Text>• Jalankan <Text strong>Sinkronkan Stok</Text> jika ada mismatch karena banyak uji start/complete produksi.</Text>
+              <Text>• Jalankan <Text strong>Sinkronkan Stok</Text> hanya untuk merapikan field stok master, bukan untuk repair histori produksi completed.</Text>
             </Space>
           </Card>
 
@@ -390,7 +568,7 @@ const ResetTestData = () => {
 
       <Modal
         open={confirmOpen}
-        title="Konfirmasi Reset Data Uji"
+        title="Konfirmasi Reset Data"
         onCancel={() => {
           if (loadingRun) return;
           setConfirmOpen(false);
@@ -407,7 +585,7 @@ const ResetTestData = () => {
             showIcon
             icon={<WarningOutlined />}
             message="Reset akan dijalankan pada data testing"
-            description="Pastikan preview sudah sesuai. Reset ini benar-benar menghapus transaksi pada modul yang dipilih."
+            description="Pastikan preview sudah sesuai. Reset ini benar-benar menghapus data pada modul yang dipilih. Gunakan Maintenance jika hanya ingin repair field turunan."
           />
 
           <div>

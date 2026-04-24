@@ -100,3 +100,18 @@ Flow varian produksi final sekarang memakai satu source of truth:
 - stock mutation dan inventory log mengikuti output variant tersebut
 
 Area ini termasuk guarded production logic. Patch UI atau refactor shared component tidak boleh mengubah contract varian PO -> Work Log -> Output tanpa evaluasi produksi khusus.
+
+## Update Master Context: Display Varian Produksi
+Tampilan varian produksi sekarang harus mengikuti field final yang sama dengan mutasi stok:
+- PO detail membaca `targetVariantKey` / `targetVariantLabel` dan requirement `resolvedVariantKey` / `resolvedVariantLabel`.
+- Work Log detail membaca snapshot target, material usage resolved variant, dan output variant.
+- Inventory log display membaca `variantLabel` lalu fallback ke `variantKey` agar audit stok tidak terlihat master ketika mutasi aktual sudah varian.
+
+Label `Master` hanya boleh muncul untuk item yang memang tidak memakai varian. Jika item bervarian tetapi field variant kosong, UI harus menandai sebagai mismatch/data lama, bukan menampilkan seolah normal.
+
+## Update Master Context: Reset & Maintenance Data Terpusat
+Menu `Reset & Maintenance Data` sekarang menjadi pusat resmi untuk dua kebutuhan yang berbeda:
+- **Maintenance / Sinkronisasi Data**: audit dan repair field turunan/snapshot/display tanpa menghapus data dan tanpa posting stok/kas/payroll/HPP ulang.
+- **Reset Data**: aksi destructive terarah per modul dengan preview dan konfirmasi.
+
+Implementasi awal maintenance difokuskan ke produksi varian lama. Service maintenance dipisahkan ke `src/services/Maintenance/productionVariantMaintenanceService.js` agar tidak bercampur dengan service operasional produksi aktif.
