@@ -1,3 +1,6 @@
+import formatNumber from "../utils/formatters/numberId";
+import formatCurrency from "../utils/formatters/currencyId";
+
 // =====================================================
 // Production Step Options
 // Master enum dan helper label untuk menu Tahapan Produksi
@@ -114,17 +117,16 @@ export const formatProductionStepPayrollPreview = (step = {}) => {
   const outputBasis = step?.payrollOutputBasis || "good_qty";
   const outputUnit = step?.outputUnit || "pcs";
 
-  const rateText = new Intl.NumberFormat("id-ID").format(rate);
+  // ACTIVE / FINAL: preview payroll step memakai helper formatter shared.
+  const rateText = formatCurrency(rate);
 
   if (mode === "fixed") {
-    return `Rp${rateText} per step selesai`;
+    return `${rateText} per step selesai`;
   }
 
   if (mode === "per_batch") {
-    return `Rp${rateText} per batch`;
+    return `${rateText} per batch`;
   }
 
-  return `Rp${rateText} per ${new Intl.NumberFormat("id-ID").format(
-    qtyBase,
-  )} ${outputUnit} (${outputBasis})`;
+  return `${rateText} per ${formatNumber(qtyBase)} ${outputUnit} (${outputBasis})`;
 };

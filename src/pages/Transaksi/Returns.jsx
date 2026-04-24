@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Table,
-  Button,
   Modal,
   Form,
   Select,
@@ -18,9 +18,16 @@ import { db } from "../../firebase";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import {
-  updateStock,
   addInventoryLog,
+  updateInventoryStock,
 } from "../../services/Inventory/inventoryService";
+import {
+  buildVariantOptionsFromItem,
+  findVariantByKey,
+  getItemStockSnapshot,
+  inferHasVariants,
+} from "../../utils/variants/variantStockHelpers";
+import { formatNumberId } from "../../utils/formatters/numberId";
 
 const { Option } = Select;
 
@@ -39,12 +46,30 @@ const Returns = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedItemType, setSelectedItemType] = useState("product");
 
+  const selectedItemId = Form.useWatch("itemId", form);
+  const selectedVariantKey = Form.useWatch("variantKey", form);
+
   // =========================
   // SECTION: Semua item
   // =========================
   const allItems = useMemo(() => {
     return [...products, ...materials];
   }, [products, materials]);
+
+  const selectedItemsByType = selectedItemType === "product" ? products : materials;
+  const selectedItem = useMemo(
+    () => selectedItemsByType.find((item) => item.id === selectedItemId) || null,
+    [selectedItemId, selectedItemsByType],
+  );
+  const selectedItemHasVariants = inferHasVariants(selectedItem || {});
+  const variantOptions = useMemo(
+    () => (selectedItemHasVariants ? buildVariantOptionsFromItem(selectedItem) : []),
+    [selectedItem, selectedItemHasVariants],
+  );
+  const selectedVariant = useMemo(
+    () => (selectedItemHasVariants ? findVariantByKey(selectedItem, selectedVariantKey) : null),
+    [selectedItem, selectedItemHasVariants, selectedVariantKey],
+  );
 
   // =========================
   // SECTION: Live Data Subscription
@@ -93,6 +118,14 @@ const Returns = () => {
     };
   }, []);
 
+  useEffect(() => {
+    form.setFieldsValue({ itemId: undefined, variantKey: undefined });
+  }, [form, selectedItemType]);
+
+  useEffect(() => {
+    form.setFieldsValue({ variantKey: undefined });
+  }, [form, selectedItemId]);
+
   // =========================
   // SECTION: Modal Helpers
   // =========================
@@ -104,6 +137,7 @@ const Returns = () => {
 
   const openCreateReturnModal = () => {
     form.resetFields();
+    form.setFieldsValue({ date: dayjs(), type: "product" });
     setSelectedItemType("product");
     setIsModalOpen(true);
   };
@@ -113,11 +147,39 @@ const Returns = () => {
   // =========================
   const handleSubmitReturn = async (values) => {
     try {
-      const { type, itemId, quantity, date, note } = values;
+      const { type, itemId, quantity, date, note, variantKey } = values;
       const collectionName = type === "product" ? "products" : "raw_materials";
 
-      const selectedItem = allItems.find((item) => item.id === itemId);
-      const itemName = selectedItem?.name || "Item tidak ditemukan";
+      const item = allItems.find((sourceItem) => sourceItem.id === itemId);
+      const itemName = item?.name || "Item tidak ditemukan";
+
+      if (!item) {
+        message.error("Item tidak ditemukan");
+        return;
+      }
+
+      if (inferHasVariants(item) && !variantKey) {
+        message.error("Pilih varian item terlebih dahulu agar retur masuk ke stok varian yang benar.");
+        return;
+      }
+
+      // =========================
+      // SECTION: Mutasi stok retur final
+      // Source of truth variant berasal dari form variantKey; helper final menjaga variants[] dan aggregate stock sinkron.
+      // =========================
+      const stockMutationResult = await updateInventoryStock({
+        itemId,
+        collectionName,
+        quantityChange: Number(quantity),
+        variantKey: variantKey || "",
+        itemSnapshot: item,
+      });
+
+      const variantPayload = {
+        variantKey: stockMutationResult.variantKey,
+        variantLabel: stockMutationResult.variantLabel,
+        stockSourceType: stockMutationResult.stockSourceType,
+      };
 
       await addDoc(collection(db, "returns"), {
         type,
@@ -126,9 +188,8 @@ const Returns = () => {
         quantity: Number(quantity),
         note: note || "",
         date: Timestamp.fromDate(date.toDate()),
+        ...variantPayload,
       });
-
-      await updateStock(itemId, Number(quantity), collectionName);
 
       await addInventoryLog(
         itemId,
@@ -136,14 +197,14 @@ const Returns = () => {
         Number(quantity),
         "return_in",
         collectionName,
-        { note: note || "" },
+        { note: note || "", ...variantPayload },
       );
 
       message.success("Retur berhasil ditambahkan!");
       resetReturnFormState();
     } catch (error) {
       console.error(error);
-      message.error("Gagal menyimpan retur");
+      message.error(error?.message || "Gagal menyimpan retur");
     }
   };
 
@@ -175,6 +236,16 @@ const Returns = () => {
       key: "itemName",
     },
     {
+      title: "Varian / Sumber",
+      key: "variant",
+      render: (_, record) =>
+        record.variantLabel || record.variantKey ? (
+          <Tag color="purple">{record.variantLabel || record.variantKey}</Tag>
+        ) : (
+          <Tag>Master</Tag>
+        ),
+    },
+    {
       title: "Jumlah",
       dataIndex: "quantity",
       key: "quantity",
@@ -191,7 +262,7 @@ const Returns = () => {
     <>
       <PageHeader
         title="Retur"
-        subtitle="Catat pengembalian item agar stok bertambah kembali dan riwayat inventaris tetap akurat."
+        subtitle="Catat pengembalian item agar stok master/varian bertambah kembali dan riwayat inventaris tetap akurat."
         actions={[
           {
             key: "add-return",
@@ -205,13 +276,13 @@ const Returns = () => {
 
       <PageSection
         title="Data Retur"
-        subtitle="Setiap retur akan menambah stok item terkait dan tercatat di inventory log."
+        subtitle="Setiap retur memakai helper stok variant-aware dan mencatat variantKey/variantLabel pada inventory log."
       >
         {/* =========================
             SECTION: tabel retur baseline global
             Fungsi:
-            - menyamakan surface tabel retur dengan halaman ledger/simple action lain
             - retur tidak punya detail drawer, jadi tabel cukup fokus ke data inti tanpa aksi tambahan
+            - kolom varian memakai schema final dari record retur/log
             Status: aktif / final
         ========================= */}
         <Table
@@ -219,7 +290,7 @@ const Returns = () => {
           dataSource={returnRecords}
           columns={returnTableColumns}
           rowKey="id"
-          scroll={{ x: 920 }}
+          scroll={{ x: 980 }}
         />
       </PageSection>
 
@@ -259,7 +330,7 @@ const Returns = () => {
             label="Nama Item"
             rules={[{ required: true, message: "Item wajib dipilih" }]}
           >
-            <Select placeholder="Pilih item">
+            <Select placeholder="Pilih item" showSearch optionFilterProp="children">
               {selectedItemType === "product"
                 ? products.map((item) => (
                     <Option key={item.id} value={item.id}>
@@ -273,6 +344,36 @@ const Returns = () => {
                   ))}
             </Select>
           </Form.Item>
+
+          {selectedItemHasVariants ? (
+            <Form.Item
+              name="variantKey"
+              label={selectedItem?.variantLabel || "Varian"}
+              rules={[{ required: true, message: "Varian wajib dipilih" }]}
+              extra="Item ini bervarian. Retur harus masuk ke varian yang dipilih, bukan master/default."
+            >
+              <Select placeholder="Pilih varian" showSearch optionFilterProp="children">
+                {variantOptions.map((item) => (
+                  <Option key={item.value} value={item.value}>
+                    {item.label} - Stok: {formatNumberId(item.raw?.currentStock || 0)}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+          ) : null}
+
+          {selectedItem ? (
+            <Alert
+              showIcon
+              type={selectedItemHasVariants ? "info" : "success"}
+              style={{ marginBottom: 16 }}
+              message={
+                selectedItemHasVariants
+                  ? `Stok varian terpilih: ${formatNumberId(selectedVariant?.currentStock || 0)}`
+                  : `Stok master saat ini: ${formatNumberId(getItemStockSnapshot(selectedItem).currentStock)}`
+              }
+            />
+          ) : null}
 
           <Form.Item
             name="quantity"

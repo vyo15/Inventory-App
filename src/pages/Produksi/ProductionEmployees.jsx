@@ -54,12 +54,13 @@ import {
   updateProductionEmployee,
 } from "../../services/Produksi/productionEmployeesService";
 import { getActiveProductionSteps } from "../../services/Produksi/productionStepsService";
+import formatNumber from "../../utils/formatters/numberId";
+import formatCurrency from "../../utils/formatters/currencyId";
 
 // =====================================================
-// Helper formatter
+// Formatter final lintas aplikasi
+// ACTIVE / FINAL: karyawan produksi memakai helper shared untuk semua angka.
 // =====================================================
-const formatNumber = (value) =>
-  new Intl.NumberFormat("id-ID").format(Number(value || 0));
 
 // =====================================================
 // Main Component
@@ -905,7 +906,7 @@ const ProductionEmployees = () => {
             </Descriptions.Item>
             <Descriptions.Item label="Tarif Custom (Legacy)">
               {selectedEmployee.useCustomPayrollRate
-                ? `Rp${formatNumber(selectedEmployee.customPayrollRate)}`
+                ? formatCurrency(selectedEmployee.customPayrollRate)
                 : "-"}
             </Descriptions.Item>
             <Descriptions.Item label="Basis Qty Custom (Legacy)">

@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useMemo } from "react";
 import { Empty, Spin } from "antd";
 import { formatNumberId } from "../../utils/formatters/numberId";
+import { formatCurrencyId } from "../../utils/formatters/currencyId";
 
 const ColumnChart = lazy(() =>
   import("@ant-design/charts").then((module) => ({ default: module.Column })),
@@ -32,13 +33,13 @@ const SalesChart = ({ data }) => {
       meta: {
         sales: {
           alias: "Penjualan",
-          formatter: (value) => `Rp ${formatNumberId(value)}`,
+          formatter: (value) => formatCurrencyId(value),
         },
       },
       tooltip: {
         formatter: (datum) => ({
           name: "Penjualan",
-          value: `Rp ${formatNumberId(datum.sales || 0)}`,
+          value: formatCurrencyId(datum.sales || 0),
         }),
       },
     }),

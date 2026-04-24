@@ -244,3 +244,22 @@ Rule wajib:
 - Repair maintenance tidak boleh mengurangi stok, menambah stok, mengubah kas, mengubah payroll final, atau mengubah HPP completed.
 - Reset terarah hanya boleh menyentuh modul yang dipilih user dan wajib melalui preview serta konfirmasi destructive.
 - Data produksi completed yang sudah memutasi stok hanya boleh display/snapshot repair, bukan rebuild mutasi stok.
+
+## 11. Rule Varian Lintas Modul
+
+### 11.1 Source of truth varian
+Untuk item bervarian, source of truth stok adalah `variants[].variantKey` dan `variants[].currentStock`. Field aggregate `currentStock`, `stock`, `reservedStock`, dan `availableStock` wajib disinkronkan setelah mutasi varian.
+
+### 11.2 Mutasi stok item bervarian
+Semua mutasi stok pada menu final wajib melewati helper variant-aware dan wajib membawa:
+- `variantKey`
+- `variantLabel`
+- `stockSourceType`
+
+Jika item punya varian tetapi form belum memilih varian, proses harus diblok. Stok tidak boleh diam-diam masuk ke master/default.
+
+### 11.3 Inventory log final
+Inventory log final wajib menyimpan `variantKey`, `variantLabel`, dan `stockSourceType` di root log. Field lama seperti `materialVariantId` / `materialVariantName` hanya dibaca sebagai transisi audit data lama.
+
+### 11.4 Penjualan dan retur varian
+Sale item bervarian wajib menyimpan variant snapshot agar cancel/delete/revert mengembalikan stok ke varian yang sama. Retur item bervarian wajib memilih varian sebelum stok ditambah.

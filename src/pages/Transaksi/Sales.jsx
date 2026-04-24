@@ -13,6 +13,7 @@ import {
   Space,
   InputNumber,
   Popconfirm,
+  Alert,
 } from "antd";
 import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -30,12 +31,19 @@ import {
   doc,
   updateDoc,
   writeBatch,
-  increment,
 } from "firebase/firestore";
 import {
   addInventoryLog,
-  updateStock,
+  updateInventoryStock,
 } from "../../services/Inventory/inventoryService";
+import {
+  buildVariantOptionsFromItem,
+  findVariantByKey,
+  getItemStockSnapshot,
+  inferHasVariants,
+} from "../../utils/variants/variantStockHelpers";
+import { formatNumberId } from "../../utils/formatters/numberId";
+import { formatCurrencyId } from "../../utils/formatters/currencyId";
 
 const { Option } = Select;
 
@@ -57,6 +65,8 @@ const salesChannels = [
 // SECTION: Status penjualan online
 // =========================
 const onlineStatuses = ["Diproses", "Dikirim", "Selesai", "Dibatalkan"];
+
+const buildSellableKey = (collectionName, itemId) => `${collectionName}::${itemId}`;
 
 // =========================
 // SECTION: Sales Page
@@ -82,10 +92,28 @@ const Sales = () => {
 
   // =========================
   // SECTION: Semua item yang bisa dijual
+  // ACTIVE / FINAL:
+  // - form menyimpan itemKey berisi collectionName::itemId agar produk dan bahan baku tidak ambigu
+  // - sale payload tetap menyimpan itemId asli + collectionName untuk kompatibilitas laporan lama
   // =========================
   const sellableItems = useMemo(() => {
-    return [...products, ...rawMaterials];
+    return [
+      ...products.map((item) => ({
+        ...item,
+        itemKey: buildSellableKey("products", item.id),
+        collectionName: "products",
+        typeLabel: "Produk Jadi",
+      })),
+      ...rawMaterials.map((item) => ({
+        ...item,
+        itemKey: buildSellableKey("raw_materials", item.id),
+        collectionName: "raw_materials",
+        typeLabel: "Bahan Baku",
+      })),
+    ];
   }, [products, rawMaterials]);
+
+  const findSellableItem = (itemKey) => sellableItems.find((item) => item.itemKey === itemKey);
 
   useEffect(() => {
     fetchSales(activeTabKey);
@@ -199,10 +227,10 @@ const Sales = () => {
   };
 
   // =========================
-  // SECTION: Saat item dipilih, harga otomatis diisi
+  // SECTION: Saat item dipilih, harga otomatis diisi dan varian di-reset
   // =========================
-  const handleSaleItemChange = (itemId, itemIndex) => {
-    const selectedItem = sellableItems.find((item) => item.id === itemId);
+  const handleSaleItemChange = (itemKey, itemIndex) => {
+    const selectedItem = findSellableItem(itemKey);
 
     if (!selectedItem) {
       return;
@@ -214,13 +242,19 @@ const Sales = () => {
     // RULE:
     // - Produk jadi ambil harga dari field price
     // - Bahan baku ambil harga dari field sellingPrice
-    if (products.find((product) => product.id === itemId)) {
+    if (selectedItem.collectionName === "products") {
       autoPrice = Number(selectedItem.price || 0);
     } else {
       autoPrice = Number(selectedItem.sellingPrice || 0);
     }
 
-    currentItems[itemIndex].pricePerUnit = autoPrice;
+    currentItems[itemIndex] = {
+      ...(currentItems[itemIndex] || {}),
+      itemId: itemKey,
+      variantKey: undefined,
+      pricePerUnit: autoPrice,
+    };
+
     form.setFieldsValue({ items: [...currentItems] });
   };
 
@@ -254,8 +288,48 @@ const Sales = () => {
       salesChannel: "Shopee",
       status: "Diproses",
       date: dayjs(),
-      items: [{ itemId: undefined, quantity: 1, pricePerUnit: 0 }],
+      items: [{ itemId: undefined, variantKey: undefined, quantity: 1, pricePerUnit: 0 }],
     });
+  };
+
+  // =========================
+  // SECTION: Normalisasi line penjualan final
+  // =========================
+  const buildSaleLine = (item) => {
+    const selectedItem = findSellableItem(item.itemId);
+
+    if (!selectedItem) {
+      throw new Error("Produk/Bahan baku tidak ditemukan di inventaris.");
+    }
+
+    const hasVariants = inferHasVariants(selectedItem);
+    const selectedVariant = hasVariants ? findVariantByKey(selectedItem, item.variantKey) : null;
+
+    if (hasVariants && !selectedVariant) {
+      throw new Error(`Pilih varian untuk ${selectedItem.name} agar penjualan tidak memotong stok master.`);
+    }
+
+    const availableStock = selectedVariant
+      ? Number(selectedVariant.currentStock || 0)
+      : getItemStockSnapshot(selectedItem).currentStock;
+
+    if (availableStock < Number(item.quantity || 0)) {
+      throw new Error(
+        `Stok ${selectedItem.name}${selectedVariant ? ` - ${selectedVariant.variantLabel}` : ""} tidak mencukupi. Tersisa: ${formatNumberId(availableStock)}`,
+      );
+    }
+
+    return {
+      itemId: selectedItem.id,
+      itemName: selectedItem.name || "-",
+      quantity: Number(item.quantity || 0),
+      pricePerUnit: Number(item.pricePerUnit || 0),
+      subtotal: Number(item.pricePerUnit || 0) * Number(item.quantity || 0),
+      collectionName: selectedItem.collectionName,
+      variantKey: selectedVariant?.variantKey || "",
+      variantLabel: selectedVariant?.variantLabel || "",
+      stockSourceType: selectedVariant ? "variant" : "master",
+    };
   };
 
   // =========================
@@ -275,31 +349,17 @@ const Sales = () => {
         note,
       } = values;
 
-      let totalSaleValue = 0;
-
       // =========================
-      // SECTION: Validasi stok cukup
+      // SECTION: Validasi stok dan bangun item line final
+      // ACTIVE / FINAL:
+      // - item bervarian wajib punya variantKey
+      // - sale line menyimpan variantKey/variantLabel agar cancel/delete mengembalikan varian yang sama
       // =========================
-      for (const item of items) {
-        const selectedItem = sellableItems.find(
-          (sellableItem) => sellableItem.id === item.itemId,
-        );
-
-        if (!selectedItem) {
-          message.error("Produk/Bahan baku tidak ditemukan di inventaris.");
-          return;
-        }
-
-        if (Number(selectedItem.stock || 0) < Number(item.quantity || 0)) {
-          message.error(
-            `Stok ${selectedItem.name} tidak mencukupi. Tersisa: ${selectedItem.stock}`,
-          );
-          return;
-        }
-
-        totalSaleValue +=
-          Number(item.pricePerUnit || 0) * Number(item.quantity || 0);
-      }
+      const saleItems = (items || []).map((item) => buildSaleLine(item));
+      const totalSaleValue = saleItems.reduce(
+        (sum, item) => sum + Number(item.subtotal || 0),
+        0,
+      );
 
       const selectedCustomer = customers.find(
         (customer) => customer.id === customerId,
@@ -308,25 +368,7 @@ const Sales = () => {
       const newSalePayload = {
         customerId: customerId || null,
         customerName: selectedCustomer?.name || "",
-        items: items.map((item) => {
-          const selectedItem = sellableItems.find(
-            (sellableItem) => sellableItem.id === item.itemId,
-          );
-
-          return {
-            itemId: item.itemId,
-            itemName: selectedItem?.name || "-",
-            quantity: Number(item.quantity || 0),
-            pricePerUnit: Number(item.pricePerUnit || 0),
-            subtotal:
-              Number(item.pricePerUnit || 0) * Number(item.quantity || 0),
-            collectionName: products.find(
-              (product) => product.id === item.itemId,
-            )
-              ? "products"
-              : "raw_materials",
-          };
-        }),
+        items: saleItems,
         salesChannel,
         status,
         date: Timestamp.fromDate(date.toDate()),
@@ -336,19 +378,20 @@ const Sales = () => {
         createdAt: Timestamp.now(),
       };
 
-      // =========================
-      // SECTION: Simpan transaksi penjualan
-      // =========================
-      const salesDocument = await addDoc(
-        collection(db, "sales"),
-        newSalePayload,
-      );
+      const salesDocument = await addDoc(collection(db, "sales"), newSalePayload);
 
       // =========================
-      // SECTION: Kurangi stok semua item
+      // SECTION: Kurangi stok item final
+      // Semua mutasi stok penjualan memakai helper variant-aware agar variants[] dan total master tetap sinkron.
       // =========================
       for (const item of newSalePayload.items) {
-        await updateStock(item.itemId, -item.quantity, item.collectionName);
+        await updateInventoryStock({
+          itemId: item.itemId,
+          collectionName: item.collectionName,
+          quantityChange: -item.quantity,
+          variantKey: item.variantKey || "",
+          preventNegative: true,
+        });
 
         await addInventoryLog(
           item.itemId,
@@ -362,6 +405,9 @@ const Sales = () => {
             note: `Penjualan via ${newSalePayload.salesChannel}`,
             subtotal: item.subtotal,
             referenceNumber: newSalePayload.referenceNumber || "",
+            variantKey: item.variantKey || "",
+            variantLabel: item.variantLabel || "",
+            stockSourceType: item.stockSourceType || "master",
           },
         );
       }
@@ -370,7 +416,7 @@ const Sales = () => {
       // Pemasukan kas hanya dicatat saat status Selesai.
       if (status === "Selesai") {
         const itemNames = newSalePayload.items
-          .map((item) => `${item.itemName} (${item.quantity})`)
+          .map((item) => `${item.itemName}${item.variantLabel ? ` - ${item.variantLabel}` : ""} (${item.quantity})`)
           .join(", ");
 
         await addDoc(collection(db, "incomes"), {
@@ -389,7 +435,46 @@ const Sales = () => {
       fetchSales(activeTabKey);
     } catch (error) {
       console.error("Gagal tambah penjualan:", error);
-      message.error("Gagal menambahkan penjualan.");
+      message.error(error?.message || "Gagal menambahkan penjualan.");
+    }
+  };
+
+  // =========================
+  // SECTION: Revert stok sale item
+  // =========================
+  const revertSaleItemsStock = async (selectedSale, logType, saleId) => {
+    for (const item of selectedSale.items || []) {
+      // =========================
+      // SECTION: Legacy guard cancel/delete
+      // Sale baru selalu punya variantKey. allowMasterForVariant hanya untuk data lama yang belum sempat dimigrasi/reset.
+      // Aman dihapus setelah reset terarah sales lama selesai.
+      // =========================
+      await updateInventoryStock({
+        itemId: item.itemId,
+        collectionName: item.collectionName,
+        quantityChange: Number(item.quantity || 0),
+        variantKey: item.variantKey || "",
+        allowMasterForVariant: !item.variantKey,
+      });
+
+      await addInventoryLog(
+        item.itemId,
+        item.itemName,
+        item.quantity,
+        logType,
+        item.collectionName,
+        {
+          saleId,
+          note:
+            logType === "sale_cancel_revert"
+              ? `Pembatalan penjualan via ${selectedSale.salesChannel || "-"}`
+              : `Pembatalan/hapus penjualan ID: ${saleId}`,
+          customerName: selectedSale.customerName || "",
+          variantKey: item.variantKey || "",
+          variantLabel: item.variantLabel || "",
+          stockSourceType: item.stockSourceType || "master",
+        },
+      );
     }
   };
 
@@ -398,10 +483,16 @@ const Sales = () => {
   // =========================
   const handleUpdateSaleStatus = async (saleId, newStatus) => {
     try {
+      const selectedSale = salesRecords.find((sale) => sale.id === saleId);
+
+      // RULE:
+      // Jika dibatalkan, stok dikembalikan sebelum status ditutup agar revert tetap memakai sale item snapshot.
+      if (newStatus === "Dibatalkan" && selectedSale) {
+        await revertSaleItemsStock(selectedSale, "sale_cancel_revert", saleId);
+      }
+
       const saleReference = doc(db, "sales", saleId);
       await updateDoc(saleReference, { status: newStatus });
-
-      const selectedSale = salesRecords.find((sale) => sale.id === saleId);
 
       // RULE:
       // Saat status berubah menjadi Selesai,
@@ -411,7 +502,7 @@ const Sales = () => {
 
         if (!incomeExists) {
           const itemNames = selectedSale.items
-            .map((item) => `${item.itemName} (${item.quantity})`)
+            .map((item) => `${item.itemName}${item.variantLabel ? ` - ${item.variantLabel}` : ""} (${item.quantity})`)
             .join(", ");
 
           await addDoc(collection(db, "incomes"), {
@@ -425,40 +516,11 @@ const Sales = () => {
         }
       }
 
-      // RULE:
-      // Jika dibatalkan, stok dikembalikan lagi.
-      if (newStatus === "Dibatalkan" && selectedSale) {
-        const revertBatch = writeBatch(db);
-
-        for (const item of selectedSale.items || []) {
-          const itemReference = doc(db, item.collectionName, item.itemId);
-
-          revertBatch.update(itemReference, {
-            stock: increment(item.quantity),
-          });
-
-          await addInventoryLog(
-            item.itemId,
-            item.itemName,
-            item.quantity,
-            "sale_cancel_revert",
-            item.collectionName,
-            {
-              saleId,
-              note: `Pembatalan penjualan via ${selectedSale.salesChannel || "-"}`,
-              customerName: selectedSale.customerName || "",
-            },
-          );
-        }
-
-        await revertBatch.commit();
-      }
-
       message.success(`Status penjualan berhasil diubah menjadi ${newStatus}.`);
       fetchSales(activeTabKey);
     } catch (error) {
       console.error("Gagal update status:", error);
-      message.error("Gagal mengubah status penjualan.");
+      message.error(error?.message || "Gagal mengubah status penjualan.");
     }
   };
 
@@ -475,37 +537,12 @@ const Sales = () => {
         throw new Error("Penjualan tidak ditemukan.");
       }
 
-      // RULE:
-      // Jika status sudah Dibatalkan, stok jangan dikembalikan lagi
-      // karena sebelumnya sudah direvert saat ubah status.
       const shouldReturnStock = selectedSale.status !== "Dibatalkan";
 
       if (shouldReturnStock) {
-        for (const item of selectedSale.items || []) {
-          const itemReference = doc(db, item.collectionName, item.itemId);
-
-          deleteBatch.update(itemReference, {
-            stock: increment(item.quantity),
-          });
-
-          await addInventoryLog(
-            item.itemId,
-            item.itemName,
-            item.quantity,
-            "sale_revert",
-            item.collectionName,
-            {
-              note: `Pembatalan/hapus penjualan ID: ${saleId}`,
-              saleId,
-              customerName: selectedSale.customerName || "",
-            },
-          );
-        }
+        await revertSaleItemsStock(selectedSale, "sale_revert", saleId);
       }
 
-      // =========================
-      // SECTION: Hapus pemasukan terkait jika ada
-      // =========================
       const incomesCollection = collection(db, "incomes");
       const incomeQuery = query(
         incomesCollection,
@@ -517,9 +554,6 @@ const Sales = () => {
         deleteBatch.delete(incomeDocument.ref);
       });
 
-      // =========================
-      // SECTION: Hapus penjualan
-      // =========================
       const saleReference = doc(db, "sales", saleId);
       deleteBatch.delete(saleReference);
 
@@ -534,7 +568,7 @@ const Sales = () => {
       fetchSales(activeTabKey);
     } catch (error) {
       console.error("Gagal menghapus penjualan:", error);
-      message.error("Gagal menghapus penjualan.");
+      message.error(error?.message || "Gagal menghapus penjualan.");
     }
   };
 
@@ -574,8 +608,8 @@ const Sales = () => {
           <ul style={{ paddingLeft: 18, margin: 0 }}>
             {items.map((item, index) => (
               <li key={index}>
-                {item.itemName} ({item.quantity}) - Rp{" "}
-                {Number(item.subtotal || 0).toLocaleString("id-ID")}
+                {item.itemName}
+                {item.variantLabel ? ` - ${item.variantLabel}` : ""} ({formatNumberId(item.quantity)}) - {formatCurrencyId(item.subtotal || 0)}
               </li>
             ))}
           </ul>
@@ -598,8 +632,7 @@ const Sales = () => {
       title: "Total",
       dataIndex: "total",
       key: "total",
-      render: (value) =>
-        value != null ? `Rp ${Number(value).toLocaleString("id-ID")}` : "-",
+      render: (value) => (value != null ? formatCurrencyId(value) : "-"),
     },
     {
       title: "Tanggal",
@@ -607,12 +640,6 @@ const Sales = () => {
       key: "date",
     },
     {
-      // =========================
-      // SECTION: status sticky
-      // Fungsi:
-      // - Sales diklasifikasikan sebagai ledger/simple action page yang tetap perlu status mudah dibaca
-      // - pada tabel lebar, status ikut sticky di kanan sebelum aksi agar user tidak kehilangan konteks row
-      // =========================
       title: "Status",
       dataIndex: "status",
       key: "status",
@@ -631,11 +658,6 @@ const Sales = () => {
       },
     },
     {
-      // =========================
-      // SECTION: aksi sticky
-      // Fungsi:
-      // - menjaga tombol update status penjualan tetap mudah dijangkau pada tabel transaksi
-      // =========================
       title: "Aksi",
       key: "action",
       width: 220,
@@ -700,9 +722,6 @@ const Sales = () => {
     },
   ];
 
-  // =========================
-  // SECTION: Tab filter penjualan
-  // =========================
   const salesTabItems = [
     { key: "all", label: "Semua Penjualan" },
     { key: "Diproses", label: "Diproses" },
@@ -711,9 +730,6 @@ const Sales = () => {
     { key: "Dibatalkan", label: "Dibatalkan" },
   ];
 
-  // =========================
-  // SECTION: Saat channel berubah, atur status default
-  // =========================
   const handleSalesChannelChange = (channel) => {
     if (isOfflineChannel(channel)) {
       form.setFieldsValue({ status: "Selesai" });
@@ -726,7 +742,7 @@ const Sales = () => {
     <>
       <PageHeader
         title="Daftar Penjualan"
-        subtitle="Kelola transaksi penjualan offline dan online, termasuk status pemrosesan serta pencatatan kas masuk."
+        subtitle="Kelola transaksi penjualan offline dan online, termasuk pemotongan stok varian serta pencatatan kas masuk."
         actions={[
           {
             key: "add-sale",
@@ -751,21 +767,13 @@ const Sales = () => {
           />
         </div>
 
-        <Tabs
-          items={salesTabItems}
-          activeKey={activeTabKey}
-          onChange={(key) => setActiveTabKey(key)}
-        />
+        <Tabs items={salesTabItems} activeKey={activeTabKey} onChange={(key) => setActiveTabKey(key)} />
       </PageSection>
 
       <PageSection
         title="Data Penjualan"
-        subtitle="Semua transaksi penjualan akan mengurangi stok item yang terjual dan dapat menghasilkan pemasukan saat selesai."
+        subtitle="Semua transaksi penjualan akan mengurangi stok item/varian yang terjual dan dapat menghasilkan pemasukan saat selesai."
       >
-        {/* =========================
-            SECTION: tabel penjualan
-            Class global dipakai supaya shape tabel dan tombol aksi konsisten.
-        ========================= */}
         <Table
           className="app-data-table"
           columns={salesTableColumns}
@@ -773,7 +781,7 @@ const Sales = () => {
           rowKey="id"
           pagination={{ pageSize: 5 }}
           loading={isLoading}
-          scroll={{ x: 1180 }}
+          scroll={{ x: 1240 }}
         />
       </PageSection>
 
@@ -784,20 +792,11 @@ const Sales = () => {
         onCancel={() => setIsModalOpen(false)}
         okText="Simpan"
         cancelText="Batal"
-        width={820}
+        width={860}
       >
         <Form form={form} layout="vertical" onFinish={handleAddSale}>
-          <Form.Item
-            label="Pelanggan"
-            name="customerId"
-            extra="Opsional. Boleh dikosongkan untuk pembeli offline umum atau marketplace."
-          >
-            <Select
-              placeholder="Pilih pelanggan"
-              allowClear
-              showSearch
-              optionFilterProp="children"
-            >
+          <Form.Item label="Pelanggan" name="customerId" extra="Opsional. Boleh dikosongkan untuk pembeli offline umum atau marketplace.">
+            <Select placeholder="Pilih pelanggan" allowClear showSearch optionFilterProp="children">
               {customers.map((customer) => (
                 <Option key={customer.id} value={customer.id}>
                   {customer.name}
@@ -810,89 +809,76 @@ const Sales = () => {
             {(fields, { add, remove }) => (
               <>
                 {fields.map(({ key, name, ...restField }) => (
-                  <div
-                    key={key}
-                    style={{
-                      border: "1px solid #d9d9d9",
-                      padding: "12px",
-                      marginBottom: "16px",
-                      borderRadius: "8px",
-                    }}
-                  >
-                    <Form.Item
-                      {...restField}
-                      name={[name, "itemId"]}
-                      rules={[{ required: true, message: "Pilih item!" }]}
-                      style={{ marginBottom: "12px" }}
-                    >
-                      <Select
-                        placeholder="Pilih produk / bahan baku"
-                        onChange={(itemId) =>
-                          handleSaleItemChange(itemId, name)
-                        }
-                        showSearch
-                        optionFilterProp="children"
-                      >
-                        {products.map((item) => (
-                          <Option key={item.id} value={item.id}>
-                            {item.name} (Produk Jadi - Stok: {item.stock})
-                          </Option>
-                        ))}
-                        {rawMaterials.map((item) => (
-                          <Option key={item.id} value={item.id}>
-                            {item.name} (Bahan Baku - Stok: {item.stock})
+                  <div key={key} style={{ border: "1px solid #d9d9d9", padding: 12, marginBottom: 16, borderRadius: 8 }}>
+                    <Form.Item {...restField} name={[name, "itemId"]} rules={[{ required: true, message: "Pilih item!" }]} style={{ marginBottom: 12 }}>
+                      <Select placeholder="Pilih produk / bahan baku" onChange={(itemId) => handleSaleItemChange(itemId, name)} showSearch optionFilterProp="children">
+                        {sellableItems.map((item) => (
+                          <Option key={item.itemKey} value={item.itemKey}>
+                            {item.name} ({item.typeLabel} - Stok: {formatNumberId(getItemStockSnapshot(item).currentStock)})
                           </Option>
                         ))}
                       </Select>
                     </Form.Item>
 
+                    <Form.Item shouldUpdate noStyle>
+                      {({ getFieldValue }) => {
+                        const selectedItemKey = getFieldValue(["items", name, "itemId"]);
+                        const selectedItem = findSellableItem(selectedItemKey);
+                        const hasVariants = inferHasVariants(selectedItem || {});
+                        const currentVariantKey = getFieldValue(["items", name, "variantKey"]);
+                        const selectedVariant = hasVariants ? findVariantByKey(selectedItem, currentVariantKey) : null;
+
+                        return selectedItem ? (
+                          <>
+                            {hasVariants ? (
+                              <Form.Item
+                                {...restField}
+                                name={[name, "variantKey"]}
+                                label={selectedItem.variantLabel || "Varian"}
+                                rules={[{ required: true, message: "Pilih varian!" }]}
+                                extra="Item ini bervarian. Penjualan wajib memotong stok varian yang dipilih."
+                              >
+                                <Select placeholder="Pilih varian" showSearch optionFilterProp="children">
+                                  {buildVariantOptionsFromItem(selectedItem).map((item) => (
+                                    <Option key={item.value} value={item.value}>
+                                      {item.label} - Stok: {formatNumberId(item.raw?.currentStock || 0)}
+                                    </Option>
+                                  ))}
+                                </Select>
+                              </Form.Item>
+                            ) : null}
+
+                            <Alert
+                              showIcon
+                              type={hasVariants ? "info" : "success"}
+                              style={{ marginBottom: 12 }}
+                              message={
+                                hasVariants
+                                  ? `Stok varian terpilih: ${formatNumberId(selectedVariant?.currentStock || 0)}`
+                                  : `Stok master saat ini: ${formatNumberId(getItemStockSnapshot(selectedItem).currentStock)}`
+                              }
+                            />
+                          </>
+                        ) : null;
+                      }}
+                    </Form.Item>
+
                     <Space style={{ marginBottom: 12 }} align="baseline" wrap>
-                      <Form.Item
-                        {...restField}
-                        name={[name, "quantity"]}
-                        rules={[{ required: true, message: "Jumlah!" }]}
-                      >
-                        <InputNumber
-                          min={1}
-                          placeholder="Jumlah"
-                          style={{ width: 120 }}
-                        />
+                      <Form.Item {...restField} name={[name, "quantity"]} rules={[{ required: true, message: "Jumlah!" }]}>
+                        <InputNumber min={1} placeholder="Jumlah" style={{ width: 120 }} />
                       </Form.Item>
 
-                      <Form.Item
-                        {...restField}
-                        name={[name, "pricePerUnit"]}
-                        rules={[{ required: true, message: "Harga!" }]}
-                      >
-                        <InputNumber
-                          min={0}
-                          placeholder="Harga Satuan"
-                          style={{ width: 180 }}
-                        />
+                      <Form.Item {...restField} name={[name, "pricePerUnit"]} rules={[{ required: true, message: "Harga!" }]}>
+                        <InputNumber min={0} placeholder="Harga Satuan" style={{ width: 180 }} />
                       </Form.Item>
 
-                      <Button
-                        danger
-                        onClick={() => remove(name)}
-                        icon={<DeleteOutlined />}
-                      />
+                      <Button danger onClick={() => remove(name)} icon={<DeleteOutlined />} />
                     </Space>
                   </div>
                 ))}
 
                 <Form.Item>
-                  <Button
-                    type="dashed"
-                    onClick={() =>
-                      add({
-                        itemId: undefined,
-                        quantity: 1,
-                        pricePerUnit: 0,
-                      })
-                    }
-                    block
-                    icon={<PlusOutlined />}
-                  >
+                  <Button type="dashed" onClick={() => add({ itemId: undefined, variantKey: undefined, quantity: 1, pricePerUnit: 0 })} block icon={<PlusOutlined />}>
                     Tambah Item
                   </Button>
                 </Form.Item>
@@ -900,16 +886,8 @@ const Sales = () => {
             )}
           </Form.List>
 
-          <Form.Item
-            label="Channel Penjualan"
-            name="salesChannel"
-            rules={[{ required: true, message: "Harap pilih channel!" }]}
-            initialValue="Shopee"
-          >
-            <Select
-              placeholder="Pilih channel penjualan"
-              onChange={handleSalesChannelChange}
-            >
+          <Form.Item label="Channel Penjualan" name="salesChannel" rules={[{ required: true, message: "Harap pilih channel!" }]} initialValue="Shopee">
+            <Select placeholder="Pilih channel penjualan" onChange={handleSalesChannelChange}>
               {salesChannels.map((channel) => (
                 <Option key={channel.value} value={channel.value}>
                   {channel.label}
@@ -924,12 +902,7 @@ const Sales = () => {
               const isOffline = isOfflineChannel(salesChannel);
 
               return (
-                <Form.Item
-                  label="Status"
-                  name="status"
-                  rules={[{ required: true, message: "Harap pilih status!" }]}
-                  initialValue={isOffline ? "Selesai" : "Diproses"}
-                >
+                <Form.Item label="Status" name="status" rules={[{ required: true, message: "Harap pilih status!" }]} initialValue={isOffline ? "Selesai" : "Diproses"}>
                   <Select placeholder="Pilih status" disabled={isOffline}>
                     {isOffline ? (
                       <Option value="Selesai">Selesai</Option>
@@ -946,19 +919,11 @@ const Sales = () => {
             }}
           </Form.Item>
 
-          <Form.Item
-            label="No. Resi / No. Order / Referensi"
-            name="referenceNumber"
-          >
+          <Form.Item label="No. Resi / No. Order / Referensi" name="referenceNumber">
             <Input placeholder="Opsional: Masukkan nomor resi / order / referensi" />
           </Form.Item>
 
-          <Form.Item
-            label="Tanggal"
-            name="date"
-            rules={[{ required: true, message: "Harap pilih tanggal!" }]}
-            initialValue={dayjs()}
-          >
+          <Form.Item label="Tanggal" name="date" rules={[{ required: true, message: "Harap pilih tanggal!" }]} initialValue={dayjs()}>
             <DatePicker format="YYYY-MM-DD" style={{ width: "100%" }} />
           </Form.Item>
 

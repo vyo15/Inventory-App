@@ -1,3 +1,6 @@
+import formatNumber from "../formatters/numberId";
+import formatCurrency from "../formatters/currencyId";
+
 // =====================================================
 // Production Payroll Rule Helpers
 // Boundary helper final/guarded untuk payroll produksi.
@@ -23,9 +26,8 @@ const safeNumber = (value, fallback = 0) => {
 
 const safeString = (value) => String(value || "").trim();
 
-const formatNumber = (value) =>
-  new Intl.NumberFormat("id-ID").format(Number(value || 0));
-
+// Formatter final lintas aplikasi: helper ini dipakai untuk pesan validasi payroll
+// agar tidak ada formatter lokal di area guarded payroll produksi.
 const normalizePayrollMode = (value) => {
   if (["per_qty", "per_batch", "fixed"].includes(value)) {
     return value;
@@ -400,7 +402,7 @@ export const buildPayrollCalculationNotes = ({
   const baseText = [
     `Rule source: ${sourceLabel}.`,
     `Mode: ${payrollRule.payrollMode || "per_qty"}.`,
-    `Rate: Rp${formatNumber(safeNumber(payrollRule.payrollRate, 0))}.`,
+    `Rate: ${formatCurrency(safeNumber(payrollRule.payrollRate, 0))}.`,
     `Klasifikasi: ${payrollRule.payrollClassification || "direct_labor"}.`,
     `Masuk HPP: ${payrollRule.includePayrollInHpp ? "ya" : "tidak"}.`,
   ];

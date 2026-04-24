@@ -26,6 +26,8 @@ import { calculateAvailableStock } from "../../utils/stock/stockHelpers";
 import {
   applyStockMutationToItem,
   buildVariantOptionsFromItem,
+  findVariantByKey,
+  getItemStockSnapshot,
   inferHasVariants,
   resolveVariantSelection,
 } from "../../utils/variants/variantStockHelpers";
@@ -682,6 +684,95 @@ export const markProductionOrderInProduction = async (
 
   return orderId;
 };
+
+// =====================================================
+// ACTIVE / FINAL - snapshot stok target untuk form Buat PO.
+// Blok ini hanya informational/read-only dan tidak dipakai untuk mutasi stok.
+// Source of truth tetap master target terbaru: currentStock untuk non-varian
+// dan variants[].currentStock untuk target bervarian yang dipilih user.
+// =====================================================
+export const getProductionOrderTargetStockInfo = async ({
+  bomId = "",
+  targetVariantKey = "",
+} = {}) => {
+  if (!bomId) return null;
+
+  const bom = await getProductionBomByIdForOrder(bomId);
+  const targetItem = await getReferenceItemByTypeAndId(
+    bom.targetType || "product",
+    bom.targetId || "",
+  );
+
+  if (!targetItem) {
+    return {
+      hasTarget: false,
+      warning: "Target item BOM tidak ditemukan",
+    };
+  }
+
+  const targetHasVariants = inferHasVariants(targetItem);
+
+  if (!targetHasVariants) {
+    const stock = getItemStockSnapshot(targetItem);
+    return {
+      hasTarget: true,
+      hasVariants: false,
+      stockSourceType: "master",
+      targetName: targetItem.name || bom.targetName || "-",
+      targetCode: targetItem.code || bom.targetCode || "",
+      unit: targetItem.unit || bom.targetUnit || "pcs",
+      currentStock: stock.currentStock,
+      reservedStock: stock.reservedStock,
+      availableStock: stock.availableStock,
+    };
+  }
+
+  if (!safeTrim(targetVariantKey)) {
+    return {
+      hasTarget: true,
+      hasVariants: true,
+      requiresVariant: true,
+      stockSourceType: "variant",
+      targetName: targetItem.name || bom.targetName || "-",
+      targetCode: targetItem.code || bom.targetCode || "",
+      unit: targetItem.unit || bom.targetUnit || "pcs",
+      warning: "Pilih varian target untuk melihat stok aktual varian",
+    };
+  }
+
+  const selectedVariant = findVariantByKey(targetItem, targetVariantKey);
+
+  if (!selectedVariant) {
+    return {
+      hasTarget: true,
+      hasVariants: true,
+      requiresVariant: true,
+      stockSourceType: "variant",
+      targetName: targetItem.name || bom.targetName || "-",
+      targetCode: targetItem.code || bom.targetCode || "",
+      unit: targetItem.unit || bom.targetUnit || "pcs",
+      warning: "Variant target tidak ditemukan pada master item terbaru",
+    };
+  }
+
+  return {
+    hasTarget: true,
+    hasVariants: true,
+    stockSourceType: "variant",
+    targetName: targetItem.name || bom.targetName || "-",
+    targetCode: targetItem.code || bom.targetCode || "",
+    unit: targetItem.unit || bom.targetUnit || "pcs",
+    variantKey: selectedVariant.variantKey,
+    variantLabel: selectedVariant.variantLabel,
+    currentStock: Number(selectedVariant.currentStock || 0),
+    reservedStock: Number(selectedVariant.reservedStock || 0),
+    availableStock: calculateAvailableStock(
+      Number(selectedVariant.currentStock || 0),
+      Number(selectedVariant.reservedStock || 0),
+    ),
+  };
+};
+
 
 export const getProductionOrderTargetVariantOptions = async (bomId = "") => {
   if (!bomId) return [];

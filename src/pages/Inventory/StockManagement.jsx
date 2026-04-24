@@ -67,16 +67,21 @@ const resolveDirectionMeta = (record) => {
 // =========================
 // SECTION: Display varian inventory log
 // ACTIVE / FINAL untuk audit stok produksi:
-// - productionWorkLogsService menulis variantKey/variantLabel di root log.
-// - details.* tetap dibaca untuk kompatibilitas log lama.
-// - UI tidak boleh menyembunyikan varian hanya karena label kosong, jadi
-//   variantKey ikut menjadi fallback display.
+// - semua modul final menulis variantKey/variantLabel di root log.
+// - materialVariantId/materialVariantName lama tetap dibaca sebagai transisi agar pembelian lama masih bisa diaudit.
+// - UI tidak boleh menyembunyikan varian hanya karena label kosong, jadi variantKey ikut menjadi fallback display.
 // =========================
 const resolveVariantLabel = (record) =>
-  record?.details?.variantLabel ||
   record?.variantLabel ||
-  record?.details?.variantKey ||
+  record?.details?.variantLabel ||
+  record?.materialVariantName ||
+  record?.details?.materialVariantName ||
+  record?.productVariantName ||
+  record?.details?.productVariantName ||
   record?.variantKey ||
+  record?.details?.variantKey ||
+  record?.materialVariantId ||
+  record?.details?.materialVariantId ||
   "";
 
 const resolveReferenceLines = (record) => {

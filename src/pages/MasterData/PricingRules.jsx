@@ -46,6 +46,8 @@ import {
 
 // SECTION: import firebase db
 import { db } from "../../firebase";
+import { formatNumberID } from "../../utils/formatters/numberId";
+import { formatCurrencyIDR } from "../../utils/formatters/currencyId";
 
 // SECTION: import pricing service
 import {
@@ -59,17 +61,9 @@ import {
 const { Option } = Select;
 const { TextArea } = Input;
 
-// SECTION: format angka Indonesia tanpa desimal
-const formatNumberID = (value) => {
-  return Number(value || 0).toLocaleString("id-ID", {
-    maximumFractionDigits: 0,
-  });
-};
-
-// SECTION: format rupiah Indonesia tanpa desimal
-const formatCurrencyIDR = (value) => {
-  return `Rp ${formatNumberID(value)}`;
-};
+// SECTION: formatter final lintas aplikasi
+// ACTIVE / FINAL: semua angka dan Rupiah di Pricing Rules memakai helper shared
+// agar tidak ada lagi formatter lokal yang beda aturan.
 
 // SECTION: label target type
 const getTargetTypeLabel = (value) => {

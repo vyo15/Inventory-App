@@ -241,3 +241,40 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - klik `Siapkan Reset Terarah Produksi` dan pastikan hanya modul Produksi yang terpilih sebelum user mengetik RESET
 - pastikan dialog destructive tetap meminta teks `RESET`
 - pastikan menu sidebar menampilkan `Reset & Maintenance Data`
+
+## G. Checklist Varian Lintas Modul
+
+### Stock Adjustment
+- tambah adjustment masuk bahan baku bervarian dan pastikan varian wajib dipilih
+- tambah adjustment keluar produk bervarian dan pastikan stok varian berkurang, bukan master
+- tambah adjustment bahan setengah jadi bervarian dan pastikan aggregate stok tersinkron
+- cek `stock_adjustments` dan `inventory_logs` punya `variantKey`, `variantLabel`, `stockSourceType`
+
+### Purchases
+- pembelian bahan baku bervarian menambah stok varian yang dipilih
+- pembelian produk bervarian wajib memilih varian dan tidak masuk master
+- inventory log purchase memakai schema varian final
+- expense pembelian tetap dibuat dengan amount aktual, bukan nilai saving
+
+### Sales
+- penjualan produk/bahan bervarian wajib memilih varian
+- stok varian berkurang saat sale dibuat
+- status `Selesai` tetap hanya membuat income sekali
+- status `Dibatalkan` mengembalikan stok ke varian yang sama
+- delete sale mengembalikan varian yang sama jika belum dibatalkan
+
+### Returns
+- retur produk/bahan bervarian wajib memilih varian
+- stok varian bertambah dan inventory log menulis schema final
+
+### Report dan Audit
+- Stock Management menampilkan varian dari `variantLabel`/`variantKey`
+- Stock Report membaca raw material, product, dan semi finished material
+- tidak ada mutasi stok yang hanya mengubah `stock` tanpa `currentStock` / `variants[]`
+
+## G. Formatter Angka & Currency
+- cek qty/stok di inventory tidak menampilkan `.00` jika nilainya bulat
+- cek qty produksi, payroll qty, dan HPP qty tampil konsisten memakai format Indonesia
+- cek nominal pembelian, penjualan, kas masuk, kas keluar, payroll, pricing rules, dan HPP tampil dengan format `Rp` Indonesia
+- cek summary card, table, drawer, modal, dan chart dashboard tidak memakai format angka yang berbeda
+- cek tidak ada perubahan logic hitung; perubahan hanya pada display formatter

@@ -38,6 +38,7 @@ import { db } from "../../firebase";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import { formatNumberId } from "../../utils/formatters/numberId";
+import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import SalesChart from "../../components/Dashboard/SalesChart";
 import "./Dashboard.css";
 
@@ -530,7 +531,7 @@ const Dashboard = () => {
         subtitle: "Akumulasi transaksi bulan berjalan",
         prefix: <ShoppingCartOutlined />,
         color: "#7c3aed",
-        formatter: (value) => `Rp ${formatNumberId(value)}`,
+        formatter: (value) => formatCurrencyId(value),
       },
     ],
     [

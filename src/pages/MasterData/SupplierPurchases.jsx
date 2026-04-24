@@ -26,6 +26,8 @@ import {
 } from '@ant-design/icons';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { formatNumberID } from '../../utils/formatters/numberId';
+import { formatCurrencyIDR } from '../../utils/formatters/currencyId';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   getSupplierDisplayName,
@@ -39,20 +41,9 @@ const { Option } = Select;
 const { Search } = Input;
 
 // -----------------------------------------------------------------------------
-// Format angka Indonesia tanpa desimal.
+// Formatter final lintas aplikasi.
+// ACTIVE / FINAL: supplier memakai helper shared agar format angka/Rupiah seragam.
 // -----------------------------------------------------------------------------
-const formatNumberID = (value) => {
-  return Number(value || 0).toLocaleString('id-ID', {
-    maximumFractionDigits: 0,
-  });
-};
-
-// -----------------------------------------------------------------------------
-// Format rupiah Indonesia tanpa desimal.
-// -----------------------------------------------------------------------------
-const formatCurrencyIDR = (value) => {
-  return `Rp ${formatNumberID(value)}`;
-};
 
 const SupplierPurchases = () => {
   // ---------------------------------------------------------------------------

@@ -215,3 +215,9 @@ Batas aman:
 - Inventory log produksi boleh dilengkapi `variantKey` / `variantLabel` jika sumbernya jelas dari Work Log, tetapi quantity dan arah mutasi tidak boleh diubah.
 
 Flow operasional final tetap: BOM → Production Order → Work Log → Payroll → HPP Analysis.
+
+## Update: Boundary Produksi terhadap Variant Support Lintas Modul
+Standardisasi varian lintas modul tidak mengubah flow produksi guarded. Produksi tetap memakai contract:
+`Production Order targetVariantKey/targetVariantLabel → Work Log snapshot → outputVariantKey/outputVariantLabel → inventory log variantKey/variantLabel`.
+
+Helper stok final lintas modul boleh dipakai untuk inventory/transaksi umum, tetapi perubahan pada `productionOrdersService` dan `productionWorkLogsService` tetap harus dievaluasi khusus karena flow produksi sudah guarded.

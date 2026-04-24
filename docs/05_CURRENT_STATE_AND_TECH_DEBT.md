@@ -224,3 +224,36 @@ Tech debt tersisa:
 - Maintenance baru tahap awal untuk produksi varian; modul transaksi, finance, laporan, dan inventory masih bisa ditambahkan bertahap.
 - Flow manual/planned Work Log tetap transisi dan tidak menjadi sumber final untuk PO variant.
 - Collection legacy `productions` masih ditangani di reset sebagai jejak flow lama.
+
+## Update Current State: Standardisasi Varian Lintas Modul
+
+### Sudah final / guarded awal
+- `updateInventoryStock` menjadi helper final mutasi stok umum yang variant-aware.
+- Stock Adjustment sudah mendukung raw material, product, dan semi finished material bervarian.
+- Purchases sudah menulis schema log final untuk varian dan product bervarian tidak lagi masuk master diam-diam.
+- Sales menyimpan variant snapshot di item line dan cancel/delete/revert mengembalikan varian yang sama.
+- Returns sudah memilih varian untuk item bervarian.
+- Stock Management membaca `variantKey` / `variantLabel` final dan field legacy pembelian lama.
+
+### Legacy / deprecated
+- `updateStock()` di inventory service hanya wrapper legacy agar import lama tidak langsung error.
+- Direct `updateDoc(... stock: increment(...))` hanya boleh tersisa di flow legacy yang belum dimigrasi dan harus diaudit sebelum dipakai lagi.
+- `productionService.js` tetap legacy dan bukan acuan flow produksi final.
+
+### Transisi
+- Data sales/returns/adjustment lama yang belum punya variant snapshot mungkin perlu reset terarah atau migration maintenance.
+- Inventory log lama yang hanya punya `materialVariantId/materialVariantName` masih dibaca untuk audit, tetapi schema final tetap `variantKey/variantLabel/stockSourceType`.
+
+## Formatter Display — Status Final
+Formatter display sudah distandardkan sebagai area **guarded/final**:
+- angka/qty/stok: `src/utils/formatters/numberId.js`
+- nominal Rupiah: `src/utils/formatters/currencyId.js`
+- tanggal: `src/utils/formatters/dateId.js`
+
+Tech debt yang sudah dibersihkan:
+- formatter lokal manual di Pricing Rules, Supplier, Purchases, Sales, Semi Finished, HPP Produksi, Karyawan Produksi, Payroll Produksi, helper varian, dan helper preview step/payroll.
+- display Rupiah manual seperti `Rp ${formatNumber(...)}` diganti ke helper currency final pada area yang diaudit.
+
+Catatan maintenance:
+- `Intl.NumberFormat` hanya boleh hidup di file helper formatter shared.
+- Jika nanti ada format khusus baru, tambahkan opsi ke helper shared, bukan membuat helper lokal per page.

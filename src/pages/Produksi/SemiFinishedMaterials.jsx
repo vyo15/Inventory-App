@@ -58,16 +58,13 @@ import {
   toggleSemiFinishedMaterialActive,
   updateSemiFinishedMaterial,
 } from "../../services/Produksi/semiFinishedMaterialsService";
+import formatNumber from "../../utils/formatters/numberId";
+import formatCurrency from "../../utils/formatters/currencyId";
 
-const formatNumber = (value) =>
-  new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
-
-const formatCurrency = (value) =>
-  `Rp ${new Intl.NumberFormat("id-ID", {
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0))}`;
+// =====================================================
+// Formatter final lintas aplikasi
+// ACTIVE / FINAL: master semi finished memakai helper shared untuk qty dan Rupiah.
+// =====================================================
 
 const normalizeFormVariants = (variants = [], hasVariants = true) => {
   if (!hasVariants) {

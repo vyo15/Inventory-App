@@ -116,3 +116,20 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Jangan mencampur service maintenance dengan service operasional aktif.
 - Untuk produksi completed, jangan posting stok ulang dari maintenance.
 - Jika maintenance diperluas ke modul lain, lakukan bertahap per modul dan update checklist test.
+
+## Saat Menyentuh Varian Lintas Modul
+- gunakan `updateInventoryStock` untuk mutasi stok umum yang menyentuh raw material, product, atau semi finished material
+- item bervarian wajib memilih `variantKey`; jangan fallback ke master/default
+- inventory log final harus menyimpan `variantKey`, `variantLabel`, dan `stockSourceType`
+- `updateStock()` adalah legacy/deprecated wrapper; jangan dipakai pada implementasi baru
+- saat mengubah Sales, Returns, Purchases, atau Stock Adjustment, cek cancel/delete/revert agar kembali ke varian yang sama
+- jika data lama tidak punya jejak variant, gunakan reset terarah atau maintenance migration; jangan membuat fallback permanen yang menutupi data salah
+
+## Saat Menyentuh Formatter Display
+- helper final angka adalah `src/utils/formatters/numberId.js`
+- helper final uang adalah `src/utils/formatters/currencyId.js`
+- helper final tanggal adalah `src/utils/formatters/dateId.js`
+- jangan membuat formatter lokal/manual di page jika helper shared sudah cukup
+- angka umum/qty/stok tidak boleh menampilkan `.00` jika tidak perlu
+- nominal uang wajib memakai format Indonesia dari helper currency shared
+- jika butuh format baru, tambahkan opsi/helper di folder `utils/formatters`, bukan di page individual

@@ -48,6 +48,7 @@ import {
   generateProductionOrderCode,
   getActiveProductionBomOptions,
   getAllProductionOrders,
+  getProductionOrderTargetStockInfo,
   getProductionOrderTargetVariantOptions,
   refreshProductionOrderRequirements,
 } from "../../services/Produksi/productionOrdersService";
@@ -160,6 +161,8 @@ const ProductionOrders = () => {
   const [bomOptions, setBomOptions] = useState([]);
   const [bomLoading, setBomLoading] = useState(false);
   const [targetVariantOptions, setTargetVariantOptions] = useState([]);
+  const [targetStockInfo, setTargetStockInfo] = useState(null);
+  const [targetStockLoading, setTargetStockLoading] = useState(false);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -176,6 +179,7 @@ const ProductionOrders = () => {
 
   const targetTypeValue = Form.useWatch("targetType", form);
   const bomIdValue = Form.useWatch("bomId", form);
+  const targetVariantKeyValue = Form.useWatch("targetVariantKey", form);
 
   const loadData = async () => {
     try {
@@ -241,6 +245,7 @@ const ProductionOrders = () => {
           targetVariantKey: undefined,
           targetVariantLabel: "",
         });
+        setTargetStockInfo(null);
         return;
       }
 
@@ -262,6 +267,53 @@ const ProductionOrders = () => {
 
     loadTargetVariants();
   }, [bomIdValue, form]);
+
+  // =====================================================
+  // ACTIVE / FINAL - preview stok target di form Buat PO.
+  // Data ini hanya read-only untuk membantu user melihat stok aktual target.
+  // Source of truth tetap master item terbaru dari BOM: currentStock untuk
+  // target non-varian dan variants[].currentStock untuk varian yang dipilih.
+  // =====================================================
+  useEffect(() => {
+    let isActive = true;
+
+    const loadTargetStockInfo = async () => {
+      if (!bomIdValue) {
+        setTargetStockInfo(null);
+        return;
+      }
+
+      try {
+        setTargetStockLoading(true);
+        const result = await getProductionOrderTargetStockInfo({
+          bomId: bomIdValue,
+          targetVariantKey: targetVariantKeyValue || "",
+        });
+
+        if (isActive) {
+          setTargetStockInfo(result);
+        }
+      } catch (error) {
+        console.error(error);
+        if (isActive) {
+          setTargetStockInfo({
+            hasTarget: false,
+            warning: error?.message || "Gagal membaca stok target",
+          });
+        }
+      } finally {
+        if (isActive) {
+          setTargetStockLoading(false);
+        }
+      }
+    };
+
+    loadTargetStockInfo();
+
+    return () => {
+      isActive = false;
+    };
+  }, [bomIdValue, targetVariantKeyValue]);
 
   const summary = useMemo(() => {
     return buildCountSummary(orders, {
@@ -305,10 +357,95 @@ const ProductionOrders = () => {
     });
 
     setTargetVariantOptions([]);
+    setTargetStockInfo(null);
     setFormVisible(true);
 
     await loadBomOptions("product");
     await loadGeneratedCode("product");
+  };
+
+  // =====================================================
+  // ACTIVE / FINAL - kartu stok target pada drawer Buat PO.
+  // Blok ini hanya display helper dan tidak mengubah requirement, mutasi stok,
+  // atau flow final produksi. Jika target bervarian tetapi belum dipilih,
+  // UI menampilkan state jelas tanpa fallback diam-diam ke master.
+  // =====================================================
+  const renderTargetStockPreview = () => {
+    if (!bomIdValue) return null;
+
+    if (targetStockLoading) {
+      return (
+        <Alert
+          style={{ marginBottom: 16 }}
+          type="info"
+          showIcon
+          message="Memuat stok aktual target..."
+        />
+      );
+    }
+
+    if (targetStockInfo?.warning) {
+      return (
+        <Alert
+          style={{ marginBottom: 16 }}
+          type={targetStockInfo?.requiresVariant ? "warning" : "error"}
+          showIcon
+          message={targetStockInfo.warning}
+          description={
+            targetStockInfo?.requiresVariant
+              ? "Stok target bervarian baru ditampilkan setelah varian target dipilih."
+              : "Cek master target atau BOM jika informasi stok tidak muncul."
+          }
+        />
+      );
+    }
+
+    if (!targetStockInfo?.hasTarget) return null;
+
+    const sourceLabel = targetStockInfo.hasVariants
+      ? `Variant: ${targetStockInfo.variantLabel || targetStockInfo.variantKey || "-"}`
+      : "Stok item utama";
+
+    return (
+      <Card size="small" style={{ marginBottom: 16 }}>
+        <Row gutter={[12, 12]} align="middle">
+          <Col xs={24} md={10}>
+            <Typography.Text type="secondary">Stok Aktual Target</Typography.Text>
+            <div style={{ marginTop: 4 }}>
+              <Typography.Text strong>{targetStockInfo.targetName || "-"}</Typography.Text>
+            </div>
+            <Typography.Text type="secondary" className={orderUiClassNames.meta}>
+              {sourceLabel}
+            </Typography.Text>
+          </Col>
+          <Col xs={24} md={14}>
+            <Row gutter={[12, 12]}>
+              <Col xs={24} sm={8}>
+                <Statistic
+                  title="Stok Saat Ini"
+                  value={formatNumber(targetStockInfo.currentStock || 0)}
+                  suffix={targetStockInfo.unit || "pcs"}
+                />
+              </Col>
+              <Col xs={24} sm={8}>
+                <Statistic
+                  title="Tersedia"
+                  value={formatNumber(targetStockInfo.availableStock || 0)}
+                  suffix={targetStockInfo.unit || "pcs"}
+                />
+              </Col>
+              <Col xs={24} sm={8}>
+                <Statistic
+                  title="Reserved"
+                  value={formatNumber(targetStockInfo.reservedStock || 0)}
+                  suffix={targetStockInfo.unit || "pcs"}
+                />
+              </Col>
+            </Row>
+          </Col>
+        </Row>
+      </Card>
+    );
   };
 
   const handleSubmit = async () => {
@@ -782,6 +919,7 @@ const ProductionOrders = () => {
                   targetVariantLabel: "",
                 });
                 setTargetVariantOptions([]);
+                setTargetStockInfo(null);
                 await loadBomOptions(value);
                 await loadGeneratedCode(value);
               }}
@@ -808,6 +946,7 @@ const ProductionOrders = () => {
                   targetVariantKey: undefined,
                   targetVariantLabel: "",
                 });
+                setTargetStockInfo(null);
               }}
             />
           </Form.Item>
@@ -838,6 +977,8 @@ const ProductionOrders = () => {
               />
             </Form.Item>
           ) : null}
+
+          {renderTargetStockPreview()}
 
           <Form.Item
             label="Qty Batch Produksi"

@@ -7,6 +7,7 @@ import {
   calculateAvailableStock,
   toNumber,
 } from '../stock/stockHelpers';
+import formatNumber from '../formatters/numberId';
 
 const normalizeBoolean = (value, defaultValue = true) =>
   value === undefined || value === null ? defaultValue : value !== false;
@@ -159,12 +160,13 @@ export const validateDuplicateVariantColors = (variants = []) =>
 
 export const formatVariantSummary = (item = {}, options = {}) => {
   const totals = calculateVariantTotals(item.variants || [], options);
-  const formatter = new Intl.NumberFormat('id-ID');
+  // ACTIVE / FINAL: ringkasan varian memakai formatter shared agar stok tidak
+  // kembali memakai formatter lokal/manual.
   const label = options.label || 'Varian';
 
-  return `${label} ${formatter.format(totals.variantCount)} | Stok ${formatter.format(
+  return `${label} ${formatNumber(totals.variantCount)} | Stok ${formatNumber(
     totals.currentStock,
-  )} | Tersedia ${formatter.format(totals.availableStock)}`;
+  )} | Tersedia ${formatNumber(totals.availableStock)}`;
 };
 
 export const buildColorTagList = (variants = []) =>

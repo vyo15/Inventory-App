@@ -115,3 +115,26 @@ Menu `Reset & Maintenance Data` sekarang menjadi pusat resmi untuk dua kebutuhan
 - **Reset Data**: aksi destructive terarah per modul dengan preview dan konfirmasi.
 
 Implementasi awal maintenance difokuskan ke produksi varian lama. Service maintenance dipisahkan ke `src/services/Maintenance/productionVariantMaintenanceService.js` agar tidak bercampur dengan service operasional produksi aktif.
+
+## Update Master Context: Variant Support Lintas Modul
+Dukungan varian lintas aplikasi sekarang distandardisasi ke helper stok final `updateInventoryStock` di `src/services/Inventory/inventoryService.js`.
+
+Contract final lintas modul:
+- item bervarian wajib memilih `variantKey` sebelum mutasi stok manual/transaksi umum
+- mutasi stok final menyinkronkan `variants[]`, `currentStock`, `stock`, `reservedStock`, dan `availableStock`
+- inventory log final menulis `variantKey`, `variantLabel`, dan `stockSourceType`
+- `updateStock()` tetap ada hanya sebagai wrapper legacy/deprecated untuk import lama dan tidak boleh dipakai pada menu baru/final
+
+Menu yang sudah ikut contract final awal:
+- Stock Adjustment untuk raw material, product, dan semi finished material
+- Purchases untuk raw material variant dan product variant
+- Sales untuk pemotongan stok variant dan revert cancel/delete ke variant yang sama
+- Returns untuk penambahan stok variant
+- Stock Management membaca schema log final plus field legacy pembelian lama
+- Stock Report membaca aggregate final dan semi finished material
+
+## Formatter Display Final
+- Formatter shared resmi berada di `src/utils/formatters/numberId.js`, `src/utils/formatters/currencyId.js`, dan `src/utils/formatters/dateId.js`.
+- Angka umum, qty, stok, summary count, dan persentase harus memakai helper number formatter shared agar angka bulat tidak menampilkan `.00`.
+- Nominal uang harus memakai `formatCurrencyId` / `formatCurrencyIDR` agar tampilan Rupiah konsisten di seluruh aplikasi.
+- Page baru tidak boleh membuat `Intl.NumberFormat("id-ID")`, `toLocaleString("id-ID")`, atau `toFixed()` lokal untuk kebutuhan display jika helper shared sudah cukup.

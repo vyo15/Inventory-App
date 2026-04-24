@@ -58,12 +58,14 @@ import {
   updateProductionPayroll,
 } from "../../services/Produksi/productionPayrollsService";
 import { formatPayrollEligibilityStatusLabel } from "../../utils/produksi/productionPayrollRuleHelpers";
+import formatNumber from "../../utils/formatters/numberId";
+import formatCurrency from "../../utils/formatters/currencyId";
 
-const formatNumber = (value) =>
-  new Intl.NumberFormat("id-ID").format(Number(value || 0));
-
-const formatCurrency = (value) =>
-  `Rp${new Intl.NumberFormat("id-ID").format(Number(value || 0))}`;
+// =====================================================
+// Formatter final lintas aplikasi
+// ACTIVE / FINAL: payroll produksi memakai helper shared agar nilai dan qty
+// konsisten dengan modul produksi/laporan lain.
+// =====================================================
 
 const formatDate = (value) => {
   const date = value?.toDate ? value.toDate() : value;

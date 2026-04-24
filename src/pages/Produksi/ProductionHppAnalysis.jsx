@@ -13,12 +13,13 @@ import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import formatNumber from "../../utils/formatters/numberId";
+import formatCurrency from "../../utils/formatters/currencyId";
 
-const formatNumber = (value) =>
-  new Intl.NumberFormat("id-ID").format(Number(value || 0));
-
-const formatCurrency = (value) =>
-  `Rp${new Intl.NumberFormat("id-ID").format(Number(value || 0))}`;
+// =====================================================
+// Formatter final lintas aplikasi
+// ACTIVE / FINAL: HPP produksi hanya memakai helper shared untuk display.
+// =====================================================
 
 const ProductionHppAnalysis = () => {
   const [loading, setLoading] = useState(false);

@@ -69,7 +69,7 @@ import {
   updateProductionWorkLog,
 } from "../../services/Produksi/productionWorkLogsService";
 
-import formatNumber from "../../utils/formatters/numberId";
+import formatNumber, { formatPercentId } from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildWorkLogMaterialUsageFormLine, buildWorkLogOutputFormLine } from "../../utils/produksi/productionLineBuilders";
@@ -1560,7 +1560,7 @@ const ProductionWorkLogs = () => {
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={8}><strong>Profil:</strong> {selectedProductionProfile.profileName || '-'}</Col>
                 <Col xs={24} md={8}><strong>Teoritis Bunga:</strong> {formatNumber(monitoringPreview.theoreticalFlowerEquivalent || 0)}</Col>
-                <Col xs={24} md={8}><strong>Miss %:</strong> {Number(monitoringPreview.missPercent || 0).toFixed(2)}%</Col>
+                <Col xs={24} md={8}><strong>Miss %:</strong> {formatPercentId(monitoringPreview.missPercent || 0)}</Col>
                 <Col xs={24} md={8}><strong>Miss Kelopak:</strong> {formatNumber(monitoringPreview.missPetalQty || 0)} pcs</Col>
                 <Col xs={24} md={8}><strong>Miss Daun:</strong> {formatNumber(monitoringPreview.missLeafQty || 0)} pcs</Col>
                 <Col xs={24} md={8}><strong>Miss Kawat:</strong> {formatNumber(monitoringPreview.missStemQty || 0)} pcs</Col>

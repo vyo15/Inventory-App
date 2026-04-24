@@ -122,7 +122,7 @@ export const enrichRawMaterialWithVariantTotals = (item = {}) => {
 
 export const applyPurchaseToRawMaterial = (
   material = {},
-  { qty = 0, unitCost = 0, variantKey = '', variantName = '', variantCode = '' } = {},
+  { qty = 0, unitCost = 0, variantKey = '', variantName = '', variantCode = '', restockReferencePrice = material?.restockReferencePrice || 0 } = {},
 ) => {
   const normalizedQty = toNumber(qty);
   const normalizedCost = toNumber(unitCost);
@@ -153,6 +153,7 @@ export const applyPurchaseToRawMaterial = (
       ...material,
       variants: nextVariants,
       averageActualUnitCost,
+      restockReferencePrice: Math.round(toNumber(restockReferencePrice || 0)),
     });
   }
 
@@ -169,5 +170,6 @@ export const applyPurchaseToRawMaterial = (
     stock: nextStock,
     availableStock: calculateAvailableStock(nextStock, toNumber(material?.reservedStock || 0)),
     averageActualUnitCost,
+    restockReferencePrice: Math.round(toNumber(restockReferencePrice || 0)),
   };
 };
