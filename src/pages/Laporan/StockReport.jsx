@@ -169,6 +169,7 @@ const StockReport = () => {
   // - menjaga helper export reusable lintas laporan batch berikutnya
   // Status:
   // - aktif dipakai di laporan stok
+  // - sheet name distandarkan untuk Task 5 agar XLSX mudah dikenali user
   // - kandidat cleanup hanya jika nanti seluruh laporan pindah ke report/export engine yang lebih besar
   // =========================
   const exportToExcel = async () => {
@@ -181,7 +182,7 @@ const StockReport = () => {
       title: "Laporan Stok IMS Bunga Flanel",
       subtitle: "Snapshot stok item sesuai filter aktif di halaman laporan stok.",
       fileName: "laporan-stok",
-      sheetName: "Laporan Stok",
+      sheetName: "Stock Report",
       filters: [
         `Kategori: ${selectedCategory === "all" ? "Semua" : selectedCategory}`,
         `Status: ${selectedStatus === "all" ? "Semua" : selectedStatus}`,

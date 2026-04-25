@@ -12,15 +12,19 @@ import {
   query,
   where,
   orderBy,
+  runTransaction,
   setDoc,
   updateDoc,
   serverTimestamp,
+  Timestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { calculatePayrollAmounts } from "../../constants/productionPayrollOptions";
 import { getCompletedProductionWorkLogs } from "./productionWorkLogsService";
 
 const COLLECTION_NAME = "production_payrolls";
+const EXPENSE_COLLECTION_NAME = "expenses";
+const PAYROLL_EXPENSE_SOURCE_MODULE = "production_payroll";
 const WORK_LOG_COLLECTION_NAME = "production_work_logs";
 const PRODUCTION_STEPS_COLLECTION_NAME = "production_steps";
 const PRODUCTION_EMPLOYEES_COLLECTION_NAME = "production_employees";
@@ -791,6 +795,97 @@ export const updateProductionPayroll = async (
   return id;
 };
 
+// =====================================================
+// ACTIVE / GUARDED - expense otomatis dari payroll paid
+// Fungsi blok:
+// - menyiapkan Cash Out/Expense ketika payroll produksi ditandai paid;
+// - memakai sourceModule + sourceId + doc id deterministik agar tidak double expense.
+// Alasan blok ini dipakai:
+// - integrasi IMS final mengharuskan payroll paid otomatis masuk expenses,
+//   sehingga Profit Loss cukup membaca collection expenses tanpa menghitung payroll dua kali.
+// Status:
+// - aktif dipakai oleh updatePayrollStatus; guarded karena menyentuh kas & laporan.
+// =====================================================
+const buildPayrollExpenseDocId = (payrollId) =>
+  PAYROLL_EXPENSE_SOURCE_MODULE + "__" + sanitizePayrollKeySegment(payrollId, "payroll");
+
+const normalizePaidAtDate = (value) => {
+  if (value?.toDate) return value.toDate();
+  if (value instanceof Date) return value;
+
+  const parsed = value ? new Date(value) : new Date();
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
+const findExistingPayrollExpense = async (payrollId) => {
+  if (!payrollId) return null;
+
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(db, EXPENSE_COLLECTION_NAME),
+        where("sourceModule", "==", PAYROLL_EXPENSE_SOURCE_MODULE),
+        where("sourceId", "==", payrollId),
+      ),
+    );
+
+    if (!snapshot.empty) {
+      const first = snapshot.docs[0];
+      return { id: first.id, ...first.data() };
+    }
+  } catch (error) {
+    // Legacy/fallback guard:
+    // - aktif hanya jika query sourceModule+sourceId butuh index/terganggu;
+    // - plain collection dipakai agar idempotent tetap berjalan sebelum auto expense dibuat.
+    console.error("Query expense payroll by source gagal, pakai fallback plain collection", error);
+    const snapshot = await getDocs(collection(db, EXPENSE_COLLECTION_NAME));
+    const found = snapshot.docs
+      .map((item) => ({ id: item.id, ...item.data() }))
+      .find(
+        (item) =>
+          item.sourceModule === PAYROLL_EXPENSE_SOURCE_MODULE &&
+          String(item.sourceId || "") === String(payrollId || ""),
+      );
+
+    return found || null;
+  }
+
+  return null;
+};
+
+const buildPayrollExpensePayload = ({ payroll = {}, payrollId = "", paidAtDate = new Date() }) => {
+  const amount = Math.round(Number(payroll.finalAmount || 0));
+  const sourceRef = payroll.payrollNumber || payrollId;
+  const workerName = payroll.workerName || "Operator Produksi";
+
+  return {
+    amount,
+    description: "Payroll Produksi - " + sourceRef + " - " + workerName,
+    date: Timestamp.fromDate(paidAtDate),
+    type: "Payroll Produksi",
+    totalReferenceAmount: amount,
+    savingAmount: 0,
+    savingStatus: "normal",
+    savingLabel: "Sesuai Payroll",
+    sourceModule: PAYROLL_EXPENSE_SOURCE_MODULE,
+    sourceId: payrollId,
+    sourceRef,
+    sourceType: "auto_generated",
+    createdByAutomation: true,
+    payrollId,
+    payrollNumber: sourceRef,
+    workerId: payroll.workerId || "",
+    workerName,
+    workLogId: payroll.workLogId || "",
+    workNumber: payroll.workNumber || "",
+    stepId: payroll.stepId || "",
+    stepName: payroll.stepName || "",
+    notes: "Expense otomatis dibuat saat Payroll Produksi ditandai paid. Jangan input manual lagi untuk payroll line ini agar tidak double expense.",
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+};
+
 export const updatePayrollStatus = async (
   id,
   status,
@@ -798,15 +893,81 @@ export const updatePayrollStatus = async (
   extra = {},
 ) => {
   const currentRecord = await getProductionPayrollById(id);
-  await updateDoc(doc(db, COLLECTION_NAME, id), {
-    status,
-    paymentStatus,
-    ...extra,
-    updatedAt: serverTimestamp(),
-    updatedBy: "system",
+  const shouldCreatePayrollExpense = status === "paid" && paymentStatus === "paid";
+  const paidAtDate = shouldCreatePayrollExpense
+    ? normalizePaidAtDate(extra.paidAt || currentRecord.paidAt || new Date())
+    : null;
+  const legacyExistingExpense = shouldCreatePayrollExpense
+    ? await findExistingPayrollExpense(id)
+    : null;
+  let expenseSyncResult = { status: "not_applicable", expenseId: "" };
+
+  await runTransaction(db, async (transaction) => {
+    const payrollRef = doc(db, COLLECTION_NAME, id);
+    const payrollSnap = await transaction.get(payrollRef);
+
+    if (!payrollSnap.exists()) {
+      throw new Error("Data payroll produksi tidak ditemukan");
+    }
+
+    const latestPayroll = {
+      id: payrollSnap.id,
+      ...payrollSnap.data(),
+    };
+    const updatePayload = {
+      status,
+      paymentStatus,
+      ...extra,
+      updatedAt: serverTimestamp(),
+      updatedBy: "system",
+    };
+
+    if (shouldCreatePayrollExpense) {
+      const finalAmount = Math.round(Number(latestPayroll.finalAmount || 0));
+      const expenseDocId = buildPayrollExpenseDocId(id);
+      const expenseRef = doc(db, EXPENSE_COLLECTION_NAME, expenseDocId);
+      const expenseSnap = await transaction.get(expenseRef);
+
+      if (finalAmount <= 0) {
+        updatePayload.expenseSyncStatus = "skipped_zero_amount";
+        updatePayload.expenseSyncNotes = "Payroll paid tidak membuat Cash Out karena finalAmount <= 0.";
+        expenseSyncResult = { status: "skipped_zero_amount", expenseId: "" };
+      } else if (expenseSnap.exists() || legacyExistingExpense) {
+        const expenseId = expenseSnap.exists() ? expenseRef.id : legacyExistingExpense.id;
+        updatePayload.expenseId = expenseId;
+        updatePayload.expenseSourceModule = PAYROLL_EXPENSE_SOURCE_MODULE;
+        updatePayload.expenseSourceId = id;
+        updatePayload.expenseSourceRef = latestPayroll.payrollNumber || id;
+        updatePayload.expenseSyncStatus = "already_exists";
+        updatePayload.expenseSyncNotes = "Cash Out payroll sudah ada, tidak dibuat ulang.";
+        expenseSyncResult = { status: "already_exists", expenseId };
+      } else {
+        const expensePayload = buildPayrollExpensePayload({
+          payroll: latestPayroll,
+          payrollId: id,
+          paidAtDate,
+        });
+
+        transaction.set(expenseRef, expensePayload);
+        updatePayload.expenseId = expenseRef.id;
+        updatePayload.expenseSourceModule = PAYROLL_EXPENSE_SOURCE_MODULE;
+        updatePayload.expenseSourceId = id;
+        updatePayload.expenseSourceRef = expensePayload.sourceRef;
+        updatePayload.expenseSyncStatus = "created";
+        updatePayload.expenseSyncNotes = "Cash Out otomatis dibuat dari payroll paid.";
+        updatePayload.expenseCreatedAt = serverTimestamp();
+        expenseSyncResult = { status: "created", expenseId: expenseRef.id };
+      }
+    }
+
+    transaction.update(payrollRef, updatePayload);
   });
 
   await syncWorkLogPayrollSummary(currentRecord.workLogId || "");
 
-  return id;
+  return {
+    id,
+    expenseSyncStatus: expenseSyncResult.status,
+    expenseId: expenseSyncResult.expenseId,
+  };
 };

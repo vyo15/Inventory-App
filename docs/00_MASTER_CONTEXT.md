@@ -89,9 +89,9 @@ Saat membuat perubahan baru, selalu cek apakah perubahan menyentuh salah satu ar
 
 
 ## Catatan Batch Prioritas Terbaru
-- Work Log costing final perlu dihitung ulang saat complete agar summary biaya tidak berhenti di 0
-- Payroll paid saat ini masih status internal payroll dan belum otomatis membuat cash out/expense
-- export laporan stok sedang diarahkan ke format XLSX reusable yang lebih profesional
+- Work Log costing final sudah diarahkan agar completed Work Log menyimpan `materialCostActual`, `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit` sebagai read model HPP.
+- Payroll paid sekarang menjadi flow integrasi aktif: payroll `paid` otomatis membuat Cash Out/Expense dengan guard `sourceModule/sourceId` agar tidak double.
+- Export laporan final diarahkan ke XLSX siap baca melalui helper reusable, dengan header manusiawi, format Rupiah, tanggal Indonesia, dan sheet name jelas.
 
 ## Update Cleanup Stok & Customer — 2026-04-25
 - Source of truth mutasi stok umum adalah `src/services/Inventory/inventoryService.js` melalui `updateInventoryStock()`.
@@ -107,3 +107,22 @@ Saat membuat perubahan baru, selalu cek apakah perubahan menyentuh salah satu ar
 - Area Penyesuaian Stok aktif berada di halaman Manajemen Stok supaya user bisa melihat audit log dan melakukan koreksi stok dalam satu konteks.
 - Route lama `/stock-adjustment` dipertahankan sebagai legacy redirect ke `/stock-management`, bukan halaman adjustment aktif.
 - File lama `src/pages/Inventory/StockAdjustment.jsx` dihapus dari source patch karena logic submit adjustment sudah dipindahkan ke `src/pages/Inventory/components/StockAdjustmentPanel.jsx`.
+
+## Update Integrasi IMS Otomatis — 2026-04-25
+- Flow final IMS aktif: **Work Log completed → Payroll Produksi → Payroll paid → Cash Out/Expense → Profit Loss**.
+- Payroll Produksi yang ditandai `paid` sekarang otomatis membuat expense di collection `expenses` dengan source reference `production_payroll`.
+- Expense payroll wajib punya `sourceModule`, `sourceId`, `sourceRef`, `sourceType`, dan `createdByAutomation` agar audit jelas dan tidak double.
+- Profit Loss tetap membaca collection final `expenses`; payroll tidak dihitung langsung dari `production_payrolls` supaya biaya payroll tidak dobel.
+- Backfill Work Log/payroll lama tetap tidak otomatis dilakukan; jika diperlukan harus dibuat task terpisah dengan preview.
+
+
+## Final Documentation Lock — Task 6
+Status cleanup bertahap yang dikunci di docs:
+- **Aktif:** Stock Management adalah satu entry point inventory; Stock Adjustment berada di dalamnya dan wajib memakai format angka Indonesia tanpa trailing `.00`.
+- **Aktif:** Kolom Referensi Audit di Stock Management adalah audit source, bukan kolom tidak berguna; tampilannya harus manusiawi dan ID teknis hanya detail sekunder.
+- **Aktif:** Production Order create drawer memakai preview compact read-only untuk stok target, varian target, qty batch, estimasi output, kebutuhan material, stok material, dan status cukup/kurang.
+- **Guarded:** Completed Work Log harus menjaga material cost, labor cost, total cost, cost per good unit, output stock posting, dan auto payroll agar tidak diproses dua kali.
+- **Aktif:** Work Log completed membuat payroll line otomatis; payroll `paid` membuat Cash Out/Expense otomatis dengan guard idempotent.
+- **Legacy/compatibility:** payroll preference custom di master karyawan hanya data lama/compatibility; payroll final mengikuti rule Tahapan Produksi dan Work Log completed.
+- **Aktif:** Profit Loss membaca biaya payroll dari `expenses`, bukan dari `production_payrolls`, agar tidak double counting.
+- **Aktif:** Export laporan final memakai XLSX rapi, bukan data mentah.

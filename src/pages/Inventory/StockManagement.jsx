@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Col, Input, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Col, Input, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
@@ -24,7 +24,7 @@ const STOCK_LOG_SOURCE_META = {
   sales: { label: "Penjualan", color: "volcano" },
   production: { label: "Produksi", color: "purple" },
   return: { label: "Retur", color: "cyan" },
-  adjustment: { label: "Penyesuaian", color: "orange" },
+  adjustment: { label: "Penyesuaian Stok", color: "orange" },
   other: { label: "Lainnya", color: "default" },
 };
 
@@ -90,17 +90,56 @@ const readLogField = (record, fieldName, fallback = "") => {
 const resolveVariantLabel = (record) =>
   readLogField(record, "variantLabel") || readLogField(record, "variantKey") || "";
 
-const resolveReferenceLines = (record) => {
-  const lines = [];
+const REFERENCE_TYPE_LABELS = {
+  sale: "Penjualan",
+  sales: "Penjualan",
+  purchase: "Pembelian",
+  purchases: "Pembelian",
+  return: "Retur",
+  returns: "Retur",
+  stock_adjustment: "Penyesuaian Stok",
+  adjustment: "Penyesuaian Stok",
+  production: "Produksi / Work Log",
+  production_order: "Production Order",
+  work_log: "Produksi / Work Log",
+};
+
+const compactReferenceId = (referenceId = "") => {
+  const normalizedReferenceId = String(referenceId || "").trim();
+  if (!normalizedReferenceId) return "";
+  return normalizedReferenceId.length > 12
+    ? `${normalizedReferenceId.slice(0, 8)}...${normalizedReferenceId.slice(-4)}`
+    : normalizedReferenceId;
+};
+
+const buildReferenceItem = ({ label, referenceId = "", detail = "" }) => {
+  const compactId = compactReferenceId(referenceId);
+  return {
+    label,
+    referenceId,
+    detail: detail || (compactId ? `ID: ${compactId}` : ""),
+    searchText: [label, referenceId, detail, compactId].filter(Boolean).join(" "),
+  };
+};
+
+const resolveReferenceTypeLabel = (referenceType = "") => {
+  const normalizedReferenceType = String(referenceType || "").toLowerCase();
+  return REFERENCE_TYPE_LABELS[normalizedReferenceType] || "Referensi Stok";
+};
+
+const resolveReferenceItems = (record) => {
+  const items = [];
 
   // =========================
-  // SECTION: Referensi mutasi stok yang lebih manusiawi
+  // SECTION: Referensi audit stok yang lebih manusiawi
   // Fungsi:
-  // - menerjemahkan ID referensi mentah menjadi konteks sumber transaksi
-  // - membaca schema baru (details/referenceId) dan schema lama (top-level) secara aman
+  // - menampilkan sumber mutasi stok sebagai label bisnis, bukan ID mentah sebagai teks utama
+  // - ID teknis tetap disimpan sebagai detail kecil/tooltip agar audit dan pencarian tetap bisa dilakukan
+  // Alasan:
+  // - kolom Referensi masih berguna untuk audit, tetapi user lebih mudah membaca label seperti Penjualan/Pembelian/Penyesuaian Stok
   // Status:
   // - aktif dipakai di UI Stock Management
-  // - fallback top-level dipertahankan supaya log lama tetap terbaca
+  // - fallback top-level dipertahankan sebagai kompatibilitas log legacy
   // =========================
   const saleId = readLogField(record, "saleId");
   const returnId = readLogField(record, "returnId");
@@ -114,20 +153,62 @@ const resolveReferenceLines = (record) => {
   const referenceId = readLogField(record, "referenceId");
   const referenceType = readLogField(record, "referenceType");
 
-  if (saleId) lines.push(`Penjualan: ${saleId}`);
-  if (returnId) lines.push(`Retur: ${returnId}`);
-  if (purchaseId) lines.push(`Pembelian: ${purchaseId}`);
-  if (adjustmentId) lines.push(`Adjustment: ${adjustmentId}`);
-  if (productionOrderId) lines.push(`PO: ${productionOrderId}`);
-  if (workLogId) lines.push(`Work Log: ${workLogId}`);
-  if (!saleId && !returnId && !purchaseId && !adjustmentId && !productionOrderId && !workLogId && referenceId) {
-    lines.push(`${referenceType || "Referensi"}: ${referenceId}`);
+  if (saleId) {
+    items.push(
+      buildReferenceItem({
+        label: "Penjualan",
+        referenceId: saleId,
+        detail: customerName ? `Pelanggan: ${customerName}` : "",
+      }),
+    );
   }
-  if (customerName) lines.push(`Pelanggan: ${customerName}`);
-  if (supplierName) lines.push(`Supplier: ${supplierName}`);
-  if (reason) lines.push(`Alasan: ${reason}`);
 
-  return lines;
+  if (returnId) {
+    items.push(buildReferenceItem({ label: "Retur", referenceId: returnId }));
+  }
+
+  if (purchaseId) {
+    items.push(
+      buildReferenceItem({
+        label: "Pembelian",
+        referenceId: purchaseId,
+        detail: supplierName ? `Supplier: ${supplierName}` : "",
+      }),
+    );
+  }
+
+  if (adjustmentId) {
+    items.push(
+      buildReferenceItem({
+        label: "Penyesuaian Stok",
+        referenceId: adjustmentId,
+        detail: reason ? `Alasan: ${reason}` : "",
+      }),
+    );
+  }
+
+  if (productionOrderId) {
+    items.push(buildReferenceItem({ label: "Production Order", referenceId: productionOrderId }));
+  }
+
+  if (workLogId) {
+    items.push(buildReferenceItem({ label: "Produksi / Work Log", referenceId: workLogId }));
+  }
+
+  if (!items.length && referenceId) {
+    items.push(
+      buildReferenceItem({
+        label: resolveReferenceTypeLabel(referenceType),
+        referenceId,
+      }),
+    );
+  }
+
+  if (reason && !adjustmentId) {
+    items.push(buildReferenceItem({ label: "Keterangan", detail: reason }));
+  }
+
+  return items;
 };
 
 const resolveNoteText = (record) =>
@@ -187,7 +268,7 @@ const matchesKeyword = (record, keyword) => {
     resolveNoteText(record),
     readLogField(record, "referenceId"),
     readLogField(record, "referenceType"),
-    ...(resolveReferenceLines(record) || []),
+    ...(resolveReferenceItems(record).map((item) => item.searchText) || []),
     ...(resolveStockLevelLines(record) || []),
   ]
     .filter(Boolean)
@@ -255,7 +336,7 @@ const StockManagement = () => {
         sourceMeta: resolveSourceMeta(record),
         itemTypeLabel: resolveItemTypeLabel(record.collectionName),
         variantLabelResolved: resolveVariantLabel(record),
-        referenceLines: resolveReferenceLines(record),
+        referenceItems: resolveReferenceItems(record),
         stockLevelLines: resolveStockLevelLines(record),
         noteText: resolveNoteText(record),
       }))
@@ -412,16 +493,28 @@ const StockManagement = () => {
           ),
       },
       {
-        title: "Sumber / Referensi",
+        title: "Referensi Audit",
         key: "reference",
-        width: 260,
+        width: 230,
         render: (_, record) =>
-          Array.isArray(record.referenceLines) && record.referenceLines.length > 0 ? (
-            <Space direction="vertical" size={2}>
-              {record.referenceLines.map((line) => (
-                <Text key={line} type="secondary" style={{ fontSize: 12 }}>
-                  {line}
-                </Text>
+          Array.isArray(record.referenceItems) && record.referenceItems.length > 0 ? (
+            <Space direction="vertical" size={4}>
+              {record.referenceItems.map((item) => (
+                <Tooltip
+                  key={`${item.label}-${item.referenceId || item.detail}`}
+                  title={item.referenceId ? `ID referensi: ${item.referenceId}` : item.detail}
+                >
+                  <Space direction="vertical" size={0}>
+                    <Text strong style={{ fontSize: 12 }}>
+                      {item.label}
+                    </Text>
+                    {item.detail ? (
+                      <Text type="secondary" style={{ fontSize: 11 }}>
+                        {item.detail}
+                      </Text>
+                    ) : null}
+                  </Space>
+                </Tooltip>
               ))}
             </Space>
           ) : (
@@ -467,7 +560,7 @@ const StockManagement = () => {
           <Col xs={24} md={10}>
             <Input
               allowClear
-              placeholder="Cari item, varian, referensi, supplier, customer..."
+              placeholder="Cari item, varian, sumber audit, supplier, customer..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -505,7 +598,7 @@ const StockManagement = () => {
 
       <PageSection
         title="Tabel Riwayat Pergerakan Stok"
-        subtitle="Tabel tetap fokus pada audit operasional: kapan, dari mana, item apa, qty berapa, dan referensinya dari transaksi mana."
+        subtitle="Tabel fokus pada audit operasional. Kolom Referensi Audit menampilkan label bisnis, sementara ID teknis hanya menjadi detail kecil untuk penelusuran."
         extra={<Tag color="purple">{formatNumberId(filteredHistory.length)} baris</Tag>}
       >
         <Table
@@ -513,7 +606,6 @@ const StockManagement = () => {
           loading={loading}
           columns={columns}
           dataSource={filteredHistory}
-          scroll={{ x: 1380 }}
           pagination={{ pageSize: 10 }}
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada riwayat mutasi stok." />,

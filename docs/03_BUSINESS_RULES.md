@@ -100,9 +100,17 @@ Pemasukan manual baru disimpan ke `revenues` agar kompatibel dengan laporan lama
 ## 5. Rule Kas Keluar
 Modul Cash Out membaca `expenses`.
 
-Sumber pengeluaran:
+Sumber pengeluaran aktif:
 - pembelian otomatis dari modul purchases
+- payroll produksi otomatis saat line payroll ditandai `paid`
 - pengeluaran manual dari halaman cash out
+
+Expense otomatis wajib memiliki source reference agar tidak double:
+- `sourceModule`
+- `sourceId`
+- `sourceRef` jika tersedia
+- `sourceType` jika auto-generated
+- `createdByAutomation` jika dibuat sistem
 
 ## 6. Rule Laporan Pembelian
 Laporan pembelian membaca `expenses`, bukan `purchases` langsung.
@@ -209,9 +217,10 @@ Utilitas ini juga menyinkronkan kembali field stok agar konsisten.
 - sinkronisasi payroll ke Work Log boleh memperbarui `laborCostActual` sebagai ringkasan display, tetapi tidak mengubah source of truth payroll line
 
 ### Payroll Paid vs Cash Out
-- status `paid` pada payroll produksi saat ini **masih status internal payroll**
-- `paid` belum otomatis membuat record `expenses` baru sampai guard anti double expense benar-benar dikunci
-- pencatatan expense payroll masih dianggap keputusan batch lanjutan, bukan behavior aktif default
+- status `paid` pada payroll produksi sekarang adalah trigger integrasi ke Cash Out/Expense.
+- Saat payroll berubah menjadi `paid` dan `paymentStatus` menjadi `paid`, sistem membuat expense otomatis dengan guard idempotent.
+- Guard wajib memakai `sourceModule: production_payroll` dan `sourceId: payrollId`; jika expense dengan source yang sama sudah ada, sistem tidak boleh membuat expense baru.
+- Jika payroll `finalAmount <= 0`, expense otomatis boleh dilewati dan status sync dicatat agar audit tetap jelas.
 
 ### Export Laporan
 - laporan stok aktif sebaiknya memakai ekspor XLSX yang lebih rapi, bukan CSV mentah
@@ -268,5 +277,53 @@ Collection customer final adalah `customers` lowercase. Modul Master Customer da
 - Operator Produksi wajib dipilih saat menyelesaikan Work Log agar payroll line bisa dibuat per operator.
 - Guard idempotent wajib memakai kombinasi Work Log + Step + Operator agar klik Selesaikan berulang tidak membuat payroll dobel.
 - Status awal line payroll otomatis adalah `draft` dan `paymentStatus` awal adalah `unpaid`.
-- Payroll paid tetap status internal payroll dan tidak otomatis membuat Cash Out/Expense.
-- Work Log completed tetap guarded: posting stok output dan material tidak boleh diproses ulang hanya karena payroll line dibuat.
+- Payroll paid membuat Cash Out/Expense otomatis hanya lewat guard `sourceModule/sourceId` agar tidak double expense.
+- Work Log completed tetap guarded: posting stok output dan material tidak boleh diproses ulang hanya karena payroll line dibuat atau payroll dibayar.
+
+## Business Rule Final — Integrasi Payroll Paid ke Cash Out
+- Work Log completed otomatis membuat payroll line per operator berdasarkan rule Tahapan Produksi.
+- Payroll line otomatis tetap memakai guard idempotent Work Log + Step + Operator agar tidak double payroll.
+- Saat payroll ditandai `paid` dan `paymentStatus` menjadi `paid`, sistem otomatis membuat Cash Out/Expense.
+- Expense payroll wajib memakai `sourceModule: production_payroll`, `sourceId: payrollId`, dan `sourceRef: payrollNumber`.
+- Expense payroll tidak boleh dibuat ulang jika source payroll yang sama sudah punya expense.
+- Payroll dengan `finalAmount <= 0` boleh ditandai paid, tetapi Cash Out otomatis dilewati dan dicatat sebagai `skipped_zero_amount`.
+- Profit Loss membaca biaya payroll dari collection `expenses`, bukan dari `production_payrolls`, agar tidak double counting.
+- Jika payroll paid dibatalkan/diubah ulang, expense tidak dihapus otomatis sebelum ada business rule rollback yang jelas.
+
+
+## Final Lock Cleanup Task 1–5 — 2026-04-25
+
+### Inventory / Stock Management
+- Kolom Referensi Audit adalah audit source untuk menjelaskan asal mutasi stok: Penyesuaian Stok, Pembelian, Penjualan, Retur, Produksi / Work Log, atau Production Order.
+- Referensi harus tampil manusiawi; ID teknis boleh ada sebagai detail kecil/tooltip, bukan teks utama.
+- Stock Adjustment aktif hanya melalui halaman Manajemen Stok; route lama bila ada hanya legacy redirect.
+- Angka pada Stock Adjustment wajib memakai format Indonesia tanpa trailing `.00` untuk angka bulat, dan maksimal 2 desimal untuk pecahan.
+- Riwayat adjustment harus terbaru di atas, prioritas `createdAt` lalu fallback `date` untuk data lama.
+
+### Production Order Preview
+- Drawer Buat Production Order wajib menampilkan preview compact read-only: stok target, varian target jika ada, qty batch, estimasi output, kebutuhan material, stok material, dan status cukup/kurang.
+- Preview tidak boleh mengubah stok, status PO, BOM, Work Log, payroll, atau HPP.
+- Production Order final tetap dihitung ulang dari BOM/helper requirement final saat submit.
+
+### Work Log Actual Cost / HPP
+- Completed Work Log wajib menyimpan `materialCostActual`, `laborCostActual`, `overheadCostActual`, `totalCostActual`, dan `costPerGoodUnit`.
+- Biaya tidak boleh diisi asal; material cost harus berasal dari cost snapshot atau source cost item yang aman, bukan harga jual.
+- `totalCostActual = materialCostActual + laborCostActual + overheadCostActual`.
+- `costPerGoodUnit = totalCostActual / goodQty` hanya jika `goodQty > 0`; jangan membagi 0.
+- HPP Analysis membaca completed Work Log sebagai source cost final.
+
+### Payroll Produksi
+- Work Log completed wajib membuat payroll line otomatis berdasarkan rule Tahapan Produksi.
+- Guard payroll wajib mencegah duplikasi per kombinasi Work Log + Step + Operator.
+- Status payroll yang dipakai: `draft`, `confirmed` jika flow approval dipakai, dan `paid`.
+- `paymentStatus` menjelaskan status pembayaran internal line payroll; saat paid, sistem membuat expense otomatis dengan guard.
+- Payroll preference/custom payroll di master karyawan adalah legacy/compatibility, bukan source utama payroll baru.
+
+### Cash Out / Expense Payroll
+- Payroll paid otomatis membuat expense di Cash Out dengan `sourceModule=production_payroll`, `sourceId=payrollId`, dan `sourceRef=payrollNumber`.
+- Expense payroll tidak boleh dibuat dobel ketika user klik Paid ulang, reload, atau update status berulang.
+- Jika payroll paid dibatalkan, expense tidak dihapus otomatis sebelum ada business rule rollback yang jelas.
+
+### Export Laporan
+- Export final laporan harus XLSX rapi dengan title, filter/periode, header manusiawi, format Rupiah, format tanggal Indonesia, format angka Indonesia, sheet name jelas, dan auto width.
+- Jangan export object mentah, JSON string panjang, atau field teknis yang tidak dibutuhkan user.

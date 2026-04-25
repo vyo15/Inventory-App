@@ -59,6 +59,15 @@ const formatQuantityId = (value, unit = "") => {
   const numericValue = Number(value || 0);
   const isDiscrete = isWholeNumberUnit(unit);
 
+  // =========================
+  // SECTION: Format qty adjustment tanpa trailing .00
+  // Fungsi:
+  // - menampilkan qty bulat tanpa desimal dan qty pecahan maksimal 2 desimal dengan format Indonesia
+  // Alasan:
+  // - panel Penyesuaian Stok tidak boleh membingungkan user dengan tampilan 1.00 untuk item pcs/bulat
+  // Status:
+  // - aktif dipakai pada preview stok, warning validasi, dan tabel riwayat adjustment
+  // =========================
   const formatted = new Intl.NumberFormat("id-ID", {
     minimumFractionDigits: 0,
     maximumFractionDigits: isDiscrete ? 0 : 2,
@@ -464,9 +473,11 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // =========================
   // SECTION: Riwayat adjustment terbaru
   // Fungsi:
-  // - menampilkan record terbaru di paling atas
+  // - menampilkan record terbaru di paling atas setelah submit adjustment
+  // Alasan:
+  // - createdAt adalah waktu input sebenarnya, sedangkan date adalah tanggal bisnis yang bisa diisi mundur/maju oleh user
   // Hubungan flow:
-  // - fallback sorting date/createdAt menjaga data lama tetap tampil wajar
+  // - fallback ke date menjaga data lama yang belum punya createdAt tetap tampil wajar
   // Status:
   // - aktif dipakai; kandidat cleanup hanya bila sorting dipindah ke service layer
   // =========================
@@ -480,8 +491,8 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
     };
 
     return [...stockAdjustmentRecords].sort((left, right) => {
-      const leftPrimary = Math.max(toMillis(left.date), toMillis(left.createdAt));
-      const rightPrimary = Math.max(toMillis(right.date), toMillis(right.createdAt));
+      const leftPrimary = toMillis(left.createdAt) || toMillis(left.date);
+      const rightPrimary = toMillis(right.createdAt) || toMillis(right.date);
       return rightPrimary - leftPrimary;
     });
   }, [stockAdjustmentRecords]);
@@ -581,13 +592,13 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               type={selectedAdjustmentType === "out" ? "warning" : "info"}
               style={{ marginBottom: 16 }}
               message={`Stok tersedia ${selectedStockSnapshot.label || "item"}`}
-              description={`Current: ${formatQuantityId(
+              description={`Stok saat ini: ${formatQuantityId(
                 selectedStockSnapshot.currentStock,
                 quantityUnitLabel,
-              )} | Reserved: ${formatQuantityId(
+              )} | Dipesan: ${formatQuantityId(
                 selectedStockSnapshot.reservedStock,
                 quantityUnitLabel,
-              )} | Available: ${formatQuantityId(
+              )} | Tersedia: ${formatQuantityId(
                 selectedStockSnapshot.availableStock,
                 quantityUnitLabel,
               )}`}

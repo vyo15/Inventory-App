@@ -54,6 +54,40 @@ const formatNumber = (value) =>
 const formatCurrency = (value) =>
   `Rp${new Intl.NumberFormat("id-ID").format(Number(value || 0))}`;
 
+// =====================================================
+// ACTIVE / UI HELP TEXT
+// Fungsi blok:
+// - menjelaskan arti field detail payroll dengan bahasa user-friendly;
+// - menjaga detail payroll tetap read-only dan tidak mengubah nominal/status.
+// Alasan perubahan:
+// - Task 3 hanya memperjelas UI, bukan mengubah kalkulasi atau flow payroll.
+// Status:
+// - aktif dipakai di drawer Detail Payroll; bukan kandidat cleanup.
+// =====================================================
+const PAYROLL_STATUS_HELP = {
+  draft: "Payroll belum final dan masih perlu dicek sebelum dibayar.",
+  confirmed: "Payroll sudah disetujui tetapi belum ditandai dibayar.",
+  paid: "Payroll sudah ditandai dibayar dan akan membuat Cash Out otomatis bila nominal > 0.",
+  cancelled: "Payroll dibatalkan dan tidak dipakai sebagai pembayaran aktif.",
+};
+
+const PAYROLL_PAYMENT_STATUS_HELP = {
+  unpaid: "Belum dibayar secara internal payroll.",
+  partial: "Sebagian pembayaran sudah dicatat secara internal payroll.",
+  paid: "Sudah dibayar; Cash Out otomatis dibuat dengan source Payroll Produksi jika nominal > 0.",
+};
+
+const PayrollDetailValue = ({ children, help }) => (
+  <Space direction="vertical" size={0}>
+    <span>{children}</span>
+    {help ? (
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        {help}
+      </Typography.Text>
+    ) : null}
+  </Space>
+);
+
 const ProductionPayrolls = () => {
   const [loading, setLoading] = useState(false);
   const [payrolls, setPayrolls] = useState([]);
@@ -234,10 +268,30 @@ const ProductionPayrolls = () => {
 
   const handleMarkPaid = async (record) => {
     try {
-      await updatePayrollStatus(record.id, "paid", "paid", {
+      // =====================================================
+      // ACTIVE / GUARDED - Paid payroll otomatis membuat Cash Out
+      // Fungsi blok:
+      // - menandai payroll paid dan meminta service membuat expense payroll idempotent;
+      // - menampilkan status sync agar user tahu Cash Out dibuat / sudah ada / dilewati.
+      // Alasan blok ini dipakai:
+      // - integrasi IMS final mengalirkan Payroll Produksi paid ke Kas & Biaya tanpa input ulang.
+      // Status:
+      // - aktif dipakai; guarded karena tidak boleh membuat double expense.
+      // =====================================================
+      const result = await updatePayrollStatus(record.id, "paid", "paid", {
         paidAt: new Date(),
       });
-      message.success("Payroll ditandai paid");
+
+      if (result?.expenseSyncStatus === "created") {
+        message.success("Payroll paid dan Cash Out otomatis dibuat.");
+      } else if (result?.expenseSyncStatus === "already_exists") {
+        message.info("Payroll paid. Cash Out payroll sudah ada, tidak dibuat ulang.");
+      } else if (result?.expenseSyncStatus === "skipped_zero_amount") {
+        message.warning("Payroll paid, tetapi Cash Out tidak dibuat karena nominal payroll 0.");
+      } else {
+        message.success("Payroll ditandai paid.");
+      }
+
       await loadData();
     } catch (error) {
       console.error(error);
@@ -401,7 +455,7 @@ const ProductionPayrolls = () => {
         type="info"
         showIcon
         message="Halaman ini menampilkan line payroll, bukan batch payroll baru. Satu line mewakili satu operator pada satu work log/tahap kerja."
-        description="Nomor payroll tetap unik per line. Jika beberapa row terlihat mirip, bedakan lewat Work Log dan nama operator pada baris yang sama."
+        description="Saat line ditandai Paid, sistem membuat Cash Out otomatis dengan source Payroll Produksi dan guard sourceModule/sourceId agar tidak double expense."
       />
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
@@ -695,75 +749,122 @@ const ProductionPayrolls = () => {
         title="Detail Payroll Produksi"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={620}
+        width={640}
       >
         {!selectedRecord ? (
           <Empty description="Tidak ada data" />
         ) : (
-          <Descriptions column={1} bordered size="small">
-            <Descriptions.Item label="No. Payroll">
-              {/* Detail ini bersifat read-only. Fokusnya membantu user membaca arti field final payroll tanpa mengubah source of truth line payroll. */}
-              {selectedRecord.payrollNumber || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Tanggal">
-              {selectedRecord.payrollDate
-                ? dayjs(
-                    selectedRecord.payrollDate?.toDate
-                      ? selectedRecord.payrollDate.toDate()
-                      : selectedRecord.payrollDate,
-                  ).format("DD/MM/YYYY")
-                : "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Karyawan">
-              {selectedRecord.workerName || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Work Log">
-              {selectedRecord.workNumber || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Target">
-              {selectedRecord.targetName || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Step">
-              {selectedRecord.stepName || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Sistem Bayar">
-              {selectedRecord.payrollMode || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Tarif Payroll">
-              {formatCurrency(selectedRecord.payrollRate)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Qty Dasar yang Dibayar">
-              {formatNumber(selectedRecord.outputQtyUsed)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Amount Calculated">
-              {formatCurrency(selectedRecord.amountCalculated)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Final Amount">
-              {formatCurrency(selectedRecord.finalAmount)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Status Payroll">
-              {PAYROLL_STATUS_MAP[selectedRecord.status] || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Payment Status">
-              {PAYROLL_PAYMENT_STATUS_MAP[selectedRecord.paymentStatus] || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Catatan Penjelasan">
-              <Space direction="vertical" size={0}>
-                <Typography.Text type="secondary">
-                  Amount Calculated = hasil hitung dasar dari mode, rate, dan qty dasar.
-                </Typography.Text>
-                <Typography.Text type="secondary">
-                  Final Amount = Amount Calculated + bonus - potongan.
-                </Typography.Text>
-                <Typography.Text type="secondary">
-                  Payment Status Paid saat ini masih status internal payroll. Cash Out belum otomatis membuat expense baru kecuali ada guard idempotent khusus.
-                </Typography.Text>
-              </Space>
-            </Descriptions.Item>
-            <Descriptions.Item label="Catatan">
-              {selectedRecord.notes || "-"}
-            </Descriptions.Item>
-          </Descriptions>
+          <>
+            {/* =====================================================
+                ACTIVE / READ-ONLY CONTEXT
+                Fungsi blok:
+                - memberi konteks singkat agar user memahami detail payroll sebagai
+                  line pembayaran per operator dari Work Log completed.
+                Alasan perubahan:
+                - Task 3 meminta help text tanpa mengubah status, nominal, atau service.
+                Status:
+                - aktif dipakai; bukan legacy dan bukan kandidat cleanup.
+            ===================================================== */}
+            <Alert
+              showIcon
+              type="info"
+              style={{ marginBottom: 16 }}
+              message="Detail ini adalah line payroll per operator"
+              description="Payroll final aktif berasal dari Work Log completed dan rule Tahapan Produksi. Drawer ini hanya membantu membaca arti field; nominal, status, dan payment state tidak dihitung ulang di sini."
+            />
+
+            <Descriptions column={1} bordered size="small">
+              <Descriptions.Item label="No. Line Payroll">
+                <PayrollDetailValue help="Nomor unik untuk satu baris payroll. Satu Work Log bisa menghasilkan beberapa line jika ada lebih dari satu operator.">
+                  {selectedRecord.payrollNumber || "-"}
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Tanggal Payroll">
+                <PayrollDetailValue help="Tanggal pencatatan line payroll di modul Payroll Produksi.">
+                  {selectedRecord.payrollDate
+                    ? dayjs(
+                        selectedRecord.payrollDate?.toDate
+                          ? selectedRecord.payrollDate.toDate()
+                          : selectedRecord.payrollDate,
+                      ).format("DD/MM/YYYY")
+                    : "-"}
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Operator / Karyawan">
+                <PayrollDetailValue help="Karyawan produksi yang menerima payroll dari line ini.">
+                  {selectedRecord.workerName || "-"}
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Work Log Asal">
+                <PayrollDetailValue help="Pekerjaan produksi yang menjadi sumber payroll. Dipakai untuk audit ke hasil produksi.">
+                  {selectedRecord.workNumber || "-"}
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Target Produksi">
+                <PayrollDetailValue help="Produk/semi finished yang dikerjakan pada Work Log terkait.">
+                  {selectedRecord.targetName || "-"}
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Step / Tahapan">
+                <PayrollDetailValue help="Tahapan produksi yang menentukan rule, mode, dan tarif payroll.">
+                  {selectedRecord.stepName || "-"}
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Sistem Bayar">
+                <PayrollDetailValue help="Mode payroll dari rule tahapan, misalnya per qty, per batch, atau fixed.">
+                  {selectedRecord.payrollMode || "-"}
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Payroll Rate / Tarif">
+                <PayrollDetailValue help="Tarif dasar dari rule Tahapan Produksi yang dipakai untuk menghitung payroll.">
+                  {formatCurrency(selectedRecord.payrollRate)}
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Qty Dasar / Output Qty Used">
+                <PayrollDetailValue help="Jumlah output yang dipakai sebagai dasar hitung payroll. Biasanya dari Good Qty atau basis output sesuai rule tahapan.">
+                  {formatNumber(selectedRecord.outputQtyUsed)}
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Amount Calculated / Hasil Hitung Sistem">
+                <PayrollDetailValue help="Nominal hasil hitung otomatis dari sistem sebelum bonus dan potongan manual.">
+                  {formatCurrency(selectedRecord.amountCalculated)}
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Final Amount / Nominal Akhir">
+                <PayrollDetailValue help="Nominal akhir line payroll setelah bonus dan potongan. Nilai ini yang dipakai sebagai nilai payroll final.">
+                  {formatCurrency(selectedRecord.finalAmount)}
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Status Payroll">
+                <PayrollDetailValue
+                  help={PAYROLL_STATUS_HELP[selectedRecord.status] || "Status lifecycle payroll internal."}
+                >
+                  <Tag color={selectedRecord.status === "paid" ? "green" : "blue"}>
+                    {PAYROLL_STATUS_MAP[selectedRecord.status] || "-"}
+                  </Tag>
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Payment Status">
+                <PayrollDetailValue
+                  help={PAYROLL_PAYMENT_STATUS_HELP[selectedRecord.paymentStatus] || "Status pembayaran internal line payroll."}
+                >
+                  <Tag color={selectedRecord.paymentStatus === "paid" ? "green" : "orange"}>
+                    {PAYROLL_PAYMENT_STATUS_MAP[selectedRecord.paymentStatus] || "-"}
+                  </Tag>
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Calculation Notes / Catatan Sistem">
+                <PayrollDetailValue help="Catatan otomatis dari sistem tentang cara payroll dihitung. Berguna untuk audit jika nominal perlu dicek ulang.">
+                  {selectedRecord.calculationNotes || "-"}
+                </PayrollDetailValue>
+              </Descriptions.Item>
+              <Descriptions.Item label="Notes / Catatan Manual">
+                <PayrollDetailValue help="Catatan manual dari user/admin. Tidak mengubah nominal payroll kecuali ada penyesuaian bonus atau potongan yang disimpan di field terkait.">
+                  {selectedRecord.notes || "-"}
+                </PayrollDetailValue>
+              </Descriptions.Item>
+            </Descriptions>
+          </>
         )}
       </Drawer>
     </div>

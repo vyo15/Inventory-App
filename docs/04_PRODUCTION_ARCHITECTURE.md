@@ -113,9 +113,13 @@ Tujuan:
 - rekap gaji produksi berbasis work log completed
 
 Status payroll yang terlihat:
-- `draft`
-- `unpaid`
-- `paid`
+- `draft` = line payroll hasil sistem belum final/masih bisa dicek.
+- `confirmed` = line payroll sudah disetujui bila flow approval dipakai.
+- `paid` = payroll sudah dibayar dan menjadi trigger Cash Out/Expense otomatis.
+
+Payment status yang terlihat:
+- `unpaid` = belum dibayar.
+- `paid` = pembayaran internal payroll sudah ditandai selesai.
 
 ## 9. Analisis HPP Produksi
 Tujuan:
@@ -189,3 +193,23 @@ Catatan boundary:
 - Id dokumen payroll dibuat deterministik dari Work Log + Step + Operator untuk mencegah duplikasi.
 - Rule payroll diambil dari master Tahapan Produksi, bukan dari custom payroll karyawan legacy.
 - Sinkronisasi labor cost ke Work Log hanya ringkasan display untuk HPP/read model, bukan pengganti source of truth line payroll.
+
+## Integration Map Produksi → Payroll → Kas → Laporan
+1. Production Order menghasilkan Work Log.
+2. Work Log completed memposting output stok satu kali dan menghitung `materialCostActual`.
+3. Work Log completed memanggil auto payroll untuk membuat payroll line per operator.
+4. Payroll line menyimpan `workLogId`, `workNumber`, `stepId`, `stepName`, `workerId`, dan `workerName`.
+5. Payroll summary disinkronkan kembali ke Work Log sebagai `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit`.
+6. Payroll paid membuat expense otomatis dengan guard `sourceModule/sourceId`.
+7. Cash Out membaca expense payroll dari collection `expenses`.
+8. Profit Loss membaca expense payroll dari `expenses`, sedangkan Payroll Report tetap membaca `production_payrolls`.
+
+
+## Final Guard Produksi Setelah Task 6
+- **Production Order preview aktif:** drawer create PO memakai preview compact read-only. Preview boleh membantu user melihat stok target dan kebutuhan material, tetapi tidak boleh menjadi source final submit.
+- **Work Log completed guarded:** complete Work Log tidak boleh memproses stok/output dua kali, tidak boleh membuat payroll dobel, dan tidak boleh mengubah completed data tanpa evaluasi khusus.
+- **Actual cost aktif:** completed Work Log wajib menyimpan ringkasan material/labor/total/cost per good unit untuk HPP Analysis.
+- **Payroll otomatis aktif:** Work Log completed membuat payroll line per operator berdasarkan rule Tahapan Produksi.
+- **Cash Out otomatis aktif:** payroll `paid` membuat expense otomatis dengan source reference dan guard idempotent.
+- **Legacy:** custom payroll preference di master karyawan tetap dibaca sebagai compatibility/info lama, bukan rule utama payroll baru.
+- **Rollback guarded:** membatalkan payroll paid tidak boleh otomatis menghapus expense sebelum business rule rollback disepakati.

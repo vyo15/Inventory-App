@@ -191,9 +191,11 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 ## Tambahan Checklist Batch Prioritas
 
 ### Inventory UX
+- kolom Referensi Audit di Manajemen Stok menampilkan label manusiawi seperti Penyesuaian Stok, Pembelian, Penjualan, Retur, Produksi / Work Log, atau Production Order
+- ID teknis inventory log hanya tampil sebagai detail kecil/tooltip, bukan teks utama yang membingungkan user
 - popup Stock Adjustment item berbasis pcs/bulat tidak memaksa tampilan `.00`
-- riwayat adjustment terbaru tampil paling atas
-- kolom sumber/referensi mutasi stok lebih mudah dipahami
+- angka pecahan di Penyesuaian Stok tampil format Indonesia maksimal 2 desimal tanpa trailing nol berlebih
+- riwayat adjustment terbaru tampil paling atas setelah submit berdasarkan `createdAt`, dengan fallback ke `date` untuk data lama
 
 ### Production Order
 - preview kebutuhan material tampil sebelum submit PO
@@ -206,7 +208,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 
 ### Payroll / Cash Out
 - detail Payroll Produksi lebih mudah dipahami user
-- `paid` payroll belum otomatis membuat expense baru
+- `paid` payroll membuat expense otomatis dengan guard `sourceModule/sourceId` agar tidak double
 
 ### Export
 - Stock Report ekspor ke XLSX
@@ -341,3 +343,102 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - pastikan Payroll Produksi filter status tetap jalan
 - pastikan tidak ada error console
 - jalankan `npm run build`
+
+## Checklist Task 2 - Work Log Actual Cost / HPP Safety
+- buat PO `ready`, lalu start menjadi Work Log dari PO
+- pastikan material usage yang berasal dari PO menyimpan `costPerUnitSnapshot` dan `totalCostSnapshot` saat material punya cost aktual
+- complete Work Log dengan `goodQty > 0`
+- pastikan `materialCostActual` tidak tetap 0 jika material punya `averageActualUnitCost`, `averageCostPerUnit`, `costPerUnit`, `lastPurchasePrice`, `lastProductionCostPerUnit`, atau `hppPerUnit`
+- pastikan `laborCostActual` tersinkron setelah payroll line otomatis dibuat
+- pastikan `totalCostActual = materialCostActual + laborCostActual + overheadCostActual`
+- pastikan `costPerGoodUnit = totalCostActual / goodQty` dan tidak membagi 0 saat `goodQty` tidak valid
+- pastikan output stok hanya bertambah satu kali saat Work Log completed
+- pastikan payroll line tidak dobel saat tombol Selesaikan ditekan ulang / halaman refresh
+- pastikan HPP Analysis membaca material cost dan labor cost dari Work Log completed tanpa mengubah data lama massal
+- pastikan Work Log lama yang sudah completed tetapi cost 0 tidak di-backfill otomatis tanpa task terpisah
+
+## Checklist Task 3 — Clarify Payroll dan Detail Karyawan Produksi
+
+### Payroll Produksi — Detail Line Payroll
+- buka menu Payroll Produksi
+- buka detail salah satu line payroll
+- pastikan label `No. Line Payroll` menjelaskan bahwa nomor ini unik per line/operator
+- pastikan field Work Log menjelaskan sumber pekerjaan produksi asal payroll
+- pastikan field Step/Tahapan menjelaskan bahwa rule/tarif payroll berasal dari tahapan produksi
+- pastikan field Operator/Karyawan menjelaskan penerima payroll
+- pastikan status `draft`, `confirmed`, dan `paid` memiliki help text yang mudah dipahami
+- pastikan `Payment Status` menjelaskan status pembayaran internal payroll; saat `paid`, sistem membuat Cash Out otomatis dengan guard sourceModule/sourceId
+- pastikan `Payroll Rate`, `Qty Dasar / Output Qty Used`, `Amount Calculated`, dan `Final Amount` punya penjelasan fungsi
+- pastikan `Calculation Notes` dan `Notes` jelas bedanya antara catatan sistem dan catatan manual
+- pastikan tidak ada perubahan nominal, status, atau payment status hanya karena membuka detail
+
+### Karyawan Produksi — Detail Master Operator
+- buka menu Karyawan Produksi
+- buka detail salah satu karyawan
+- pastikan informasi dasar karyawan mudah dibaca
+- pastikan status aktif/nonaktif menjelaskan bahwa data lama tidak dihapus
+- pastikan jenis kerja, role, skill tags, dan assignment tahapan memiliki konteks pemakaian
+- pastikan ringkasan Work Log dan Payroll bersifat read-only
+- pastikan histori payroll singkat membaca payroll final
+- pastikan histori work log singkat membaca Work Log final
+- pastikan section Payroll Preference Legacy / Deprecated jelas sebagai data lama/compatibility
+- pastikan user paham payroll final mengikuti rule Tahapan Produksi dan Work Log completed, bukan custom payroll employee
+- pastikan tidak ada perubahan perhitungan payroll, Work Log, Cash Out, atau HPP
+- pastikan build berhasil dan tidak ada error console
+
+## Checklist Integrasi IMS Produksi → Payroll → Kas → HPP → Laporan
+- [ ] Buat PO ready lalu start Work Log.
+- [ ] Complete Work Log dengan `goodQty > 0` dan operator valid.
+- [ ] Pastikan output stok bertambah satu kali saja.
+- [ ] Pastikan Work Log status completed.
+- [ ] Pastikan `materialCostActual` terisi jika material punya cost source.
+- [ ] Pastikan payroll line otomatis dibuat per operator.
+- [ ] Pastikan `laborCostActual` tersinkron dari payroll line.
+- [ ] Pastikan `totalCostActual = materialCostActual + laborCostActual + overheadCostActual`.
+- [ ] Pastikan `costPerGoodUnit` benar jika `goodQty > 0`.
+- [ ] Klik Paid di Payroll Produksi.
+- [ ] Pastikan payroll berubah `status=paid` dan `paymentStatus=paid`.
+- [ ] Pastikan expense otomatis muncul di Kas & Biaya > Pengeluaran.
+- [ ] Pastikan expense payroll punya `sourceModule=production_payroll`, `sourceId`, dan `sourceRef`.
+- [ ] Klik Paid ulang/reload, pastikan expense tidak dobel.
+- [ ] Pastikan Profit Loss membaca expense payroll sebagai pengeluaran.
+- [ ] Pastikan Payroll Report menampilkan referensi Cash Out tanpa menghitung expense sebagai source payroll.
+- [ ] Pastikan HPP Analysis membaca Work Log completed dengan material/labor/total cost final.
+- [ ] Pastikan pembelian tetap membuat expense, penjualan selesai tetap membuat income, dan stock adjustment tetap membuat inventory log.
+- [ ] Pastikan build berhasil dan tidak ada error console.
+
+## Checklist Task 5 - Standardisasi Export Laporan
+
+### Export XLSX Final
+- export Sales Report dan pastikan file `.xlsx` memiliki sheet `Sales Report`
+- export Purchases Report dan pastikan file `.xlsx` memiliki sheet `Purchases Report`
+- export Stock Report dan pastikan file `.xlsx` memiliki sheet `Stock Report`
+- export Profit Loss Report dan pastikan file `.xlsx` memiliki sheet `Profit Loss`
+- export Payroll Report detail dan pastikan file `.xlsx` memiliki sheet `Payroll Report`
+- export Payroll Report rekap operator dan pastikan file `.xlsx` memiliki sheet `Payroll Recap`
+- pastikan setiap file memiliki title laporan dan subtitle/periode/filter aktif
+- pastikan header kolom manusiawi, bukan key teknis mentah
+- pastikan nominal tampil format Rupiah Indonesia
+- pastikan tanggal tampil format Indonesia
+- pastikan angka jumlah/qty tidak memaksa trailing `.00` jika bulat
+- pastikan kolom auto width dan file bisa langsung dibaca tanpa olah ulang manual
+- pastikan export CSV Payroll Detail dipahami sebagai legacy/compatibility, bukan export final utama
+- pastikan build berhasil dan tidak ada error console
+
+
+## Checklist Final Task 6 — Docs & Regression Lock
+- [ ] Stock Management reference jelas sebagai audit source dan tampil manusiawi.
+- [ ] Stock Adjustment format angka bersih tanpa trailing `.00` untuk angka bulat.
+- [ ] Adjustment terbaru tampil di atas setelah submit.
+- [ ] PO preview compact menampilkan stok target, varian target, qty batch, estimasi output, kebutuhan material, stok material, dan status cukup/kurang.
+- [ ] PO preview tetap read-only dan tidak mengubah stok/status/PO/BOM.
+- [ ] Work Log actual cost benar: material, labor, total, dan cost per good unit tersimpan pada completed Work Log.
+- [ ] HPP Analysis membaca completed Work Log cost final.
+- [ ] Detail Payroll punya penjelasan field, status, payment status, rate, qty dasar, amount calculated, final amount, notes, dan calculation notes.
+- [ ] Detail Karyawan Produksi menjelaskan data dasar, status, jenis kerja, role, skill, assignment, work log, payroll summary, dan legacy payroll preference.
+- [ ] Payroll paid business rule jelas: paid membuat Cash Out/Expense otomatis hanya dengan guard idempotent.
+- [ ] Cash Out payroll rule jelas: expense payroll punya `sourceModule=production_payroll`, `sourceId`, dan `sourceRef`.
+- [ ] Profit Loss membaca payroll paid dari `expenses` dan tidak menghitung payroll langsung dari `production_payrolls`.
+- [ ] Export laporan rapi dalam XLSX dengan title, periode/filter, header manusiawi, Rupiah, tanggal Indonesia, sheet name jelas, dan auto width.
+- [ ] UI regression guard tertulis: tabel utama tidak boleh butuh scroll horizontal hanya untuk tombol aksi; modal complete Work Log wajib menampilkan estimasi output.
+- [ ] Build/test manual final selesai tanpa error console.

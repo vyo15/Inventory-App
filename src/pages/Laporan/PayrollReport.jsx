@@ -313,6 +313,34 @@ const PayrollReport = () => {
           </div>
         ),
       },
+      {
+        title: "Cash Out Ref",
+        key: "expenseRef",
+        width: 180,
+        render: (_, record) => {
+          // ACTIVE / FINAL - audit link payroll paid ke expense.
+          // Fungsi blok:
+          // - menampilkan referensi Cash Out otomatis dari payroll paid;
+          // - laporan payroll tetap membaca production_payrolls, bukan expenses sebagai source utama.
+          // Status: aktif dipakai; guarded agar payroll tidak dihitung ulang sebagai expense di report ini.
+          if (record.expenseSyncStatus === "created" || record.expenseSyncStatus === "already_exists") {
+            return (
+              <div>
+                <Tag color="purple">Cash Out</Tag>
+                <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                  {record.expenseSourceRef || record.expenseId || "-"}
+                </div>
+              </div>
+            );
+          }
+
+          if (record.expenseSyncStatus === "skipped_zero_amount") {
+            return <Tag color="orange">Nominal 0</Tag>;
+          }
+
+          return <Tag>Belum dibuat</Tag>;
+        },
+      },
     ],
     [],
   );
@@ -320,10 +348,20 @@ const PayrollReport = () => {
   // =====================================================
   // ACTIVE / FINAL
   // Export minimum yang dibutuhkan: detail lines dan rekap operator.
-  // CSV/XLSX dibuka di level laporan agar tidak membebani Payroll Produksi.
+  // XLSX menjadi export final Task 5; CSV dipertahankan sebagai legacy/compatibility manual.
+  // Blok ini aktif dipakai dan tidak mengubah source/perhitungan payroll.
   // =====================================================
   const exportDetailXlsx = async () => {
     await exportJsonToExcel({
+      title: "Laporan Payroll IMS Bunga Flanel",
+      subtitle: "Detail payroll line sesuai filter periode dan status yang sedang tampil.",
+      sheetName: "Payroll Report",
+      fileName: "Laporan-Payroll-Detail",
+      filters: [
+        `Periode: ${formatDateId(dateRange?.[0]?.toDate?.(), false)} - ${formatDateId(dateRange?.[1]?.toDate?.(), false)}`,
+        `Status: ${statusFilter === "all" ? "Semua" : PAYROLL_STATUS_MAP[statusFilter] || statusFilter}`,
+        `Operator: ${workerFilter === "all" ? "Semua" : workerFilter}`,
+      ],
       data: filteredPayrolls.map((item) => ({
         "No. Payroll": item.payrollNumber || "-",
         "Tanggal Payroll": formatDateId(item.payrollDate, true),
@@ -331,17 +369,17 @@ const PayrollReport = () => {
         Operator: item.workerName || "-",
         Step: item.stepName || "-",
         Mode: PAYROLL_MODE_MAP[item.payrollMode] || item.payrollMode || "-",
-        "Worked Qty": Number(item.workedQty || 0),
-        "Output Qty": Number(item.outputQtyUsed || 0),
-        Nominal: Number(item.finalAmount || 0),
+        "Worked Qty": formatNumberId(item.workedQty || 0),
+        "Output Qty": formatNumberId(item.outputQtyUsed || 0),
+        Nominal: formatCurrencyId(item.finalAmount || 0),
         Status: PAYROLL_STATUS_MAP[item.status] || item.status || "-",
         Klasifikasi: PAYROLL_CLASSIFICATION_MAP[item.payrollClassification] || item.payrollClassification || "-",
         "Masuk HPP": item.includePayrollInHpp === false ? "Tidak" : "Ya",
         "Confirmed At": formatDateId(item.confirmedAt, true),
         "Paid At": formatDateId(item.paidAt, true),
+        "Cash Out Ref": item.expenseSourceRef || item.expenseId || "-",
+        "Expense Sync": item.expenseSyncStatus || "-",
       })),
-      sheetName: "Payroll Detail",
-      fileName: "Laporan-Payroll-Detail",
     });
     message.success("Detail payroll berhasil diekspor ke Excel.");
   };
@@ -363,6 +401,8 @@ const PayrollReport = () => {
         "Masuk HPP",
         "Confirmed At",
         "Paid At",
+        "Cash Out Ref",
+        "Expense Sync",
       ],
       ...filteredPayrolls.map((item) => [
         item.payrollNumber || "-",
@@ -379,6 +419,8 @@ const PayrollReport = () => {
         item.includePayrollInHpp === false ? "Tidak" : "Ya",
         formatDateId(item.confirmedAt, true),
         formatDateId(item.paidAt, true),
+        item.expenseSourceRef || item.expenseId || "-",
+        item.expenseSyncStatus || "-",
       ]),
     ];
 
@@ -414,17 +456,23 @@ const PayrollReport = () => {
     }, {});
 
     await exportJsonToExcel({
+      title: "Rekap Payroll per Operator",
+      subtitle: "Ringkasan payroll operator sesuai filter periode dan status yang sedang tampil.",
+      sheetName: "Payroll Recap",
+      fileName: "Laporan-Payroll-Rekap-Operator",
+      filters: [
+        `Periode: ${formatDateId(dateRange?.[0]?.toDate?.(), false)} - ${formatDateId(dateRange?.[1]?.toDate?.(), false)}`,
+        `Status: ${statusFilter === "all" ? "Semua" : PAYROLL_STATUS_MAP[statusFilter] || statusFilter}`,
+      ],
       data: Object.values(recapMap).map((item) => ({
         Operator: item.operator,
-        "Total Line": item.totalLines,
-        Draft: item.totalDraft,
-        Confirmed: item.totalConfirmed,
-        Paid: item.totalPaid,
-        Cancelled: item.totalCancelled,
-        "Total Nominal": item.totalNominal,
+        "Total Line": formatNumberId(item.totalLines),
+        Draft: formatNumberId(item.totalDraft),
+        Confirmed: formatNumberId(item.totalConfirmed),
+        Paid: formatNumberId(item.totalPaid),
+        Cancelled: formatNumberId(item.totalCancelled),
+        "Total Nominal": formatCurrencyId(item.totalNominal),
       })),
-      sheetName: "Payroll Rekap Operator",
-      fileName: "Laporan-Payroll-Rekap-Operator",
     });
     message.success("Rekap payroll per operator berhasil diekspor ke Excel.");
   };
@@ -433,7 +481,7 @@ const PayrollReport = () => {
     <>
       <PageHeader
         title="Laporan Payroll"
-        subtitle="Area laporan periode untuk membaca payroll lines final, nominal per periode, direct labor vs support, dan export detail maupun rekap operator."
+        subtitle="Area laporan periode untuk membaca payroll lines final. Cash Out payroll paid ditampilkan sebagai referensi audit, bukan source utama laporan payroll."
       />
 
       <PageSection
@@ -447,7 +495,7 @@ const PayrollReport = () => {
                 Export Detail XLSX
               </Button>
               <Button onClick={exportDetailCsv} disabled={filteredPayrolls.length === 0}>
-                Export Detail CSV
+                Export Detail CSV (Legacy)
               </Button>
               <Button type="primary" onClick={exportOperatorRecapXlsx} disabled={filteredPayrolls.length === 0}>
                 Export Rekap Operator

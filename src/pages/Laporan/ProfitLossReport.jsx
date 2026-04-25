@@ -10,6 +10,20 @@ import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 
+// =========================
+// ACTIVE / FINAL - label source IMS untuk Profit Loss
+// Fungsi blok:
+// - membuat source reference payroll/pembelian/penjualan lebih mudah diaudit;
+// - Profit Loss tetap membaca expenses/incomes, bukan menghitung payroll langsung agar tidak double.
+// Status: aktif dipakai; guarded untuk mencegah double counting payroll.
+// =========================
+const resolveFinancialSourceLabel = (item = {}) => {
+  if (item.sourceModule === "production_payroll") return "Payroll Produksi";
+  if (item.sourceModule === "purchases") return "Pembelian";
+  if (item.sourceModule === "sales") return "Penjualan";
+  return item.sourceModule || item.sourceCollection || "-";
+};
+
 const ProfitLossReport = () => {
   const [reportData, setReportData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -119,17 +133,19 @@ const ProfitLossReport = () => {
   // - tetap menjaga source collection asli agar audit laporan tetap mudah ditelusuri
   // Status:
   // - aktif dipakai sebagai jalur export final laporan laba rugi
+  // - sheet name distandarkan untuk Task 5 agar XLSX mudah dikenali user
   // =========================
   const exportToExcel = async () => {
     await exportJsonToExcel({
       title: "Laporan Laba Rugi IMS Bunga Flanel",
       subtitle: "Ekspor mengikuti gabungan revenues, incomes, dan expenses pada halaman ini.",
-      sheetName: "Laporan Laba Rugi",
+      sheetName: "Profit Loss",
       fileName: "Laporan-Laba-Rugi",
       columns: [
         { header: "Tanggal", key: "transactionDate", width: 18 },
         { header: "Aliran Kas", key: "cashFlowType", width: 16 },
-        { header: "Sumber Collection", key: "sourceCollection", width: 18 },
+        { header: "Sumber", key: "sourceCollection", width: 22 },
+        { header: "Referensi", key: "sourceReference", width: 24 },
         { header: "Tipe", key: "transactionType", width: 24 },
         { header: "Deskripsi", key: "transactionDescription", width: 42 },
         { header: "Jumlah", key: "transactionAmount", width: 18 },
@@ -137,7 +153,8 @@ const ProfitLossReport = () => {
       data: reportData.map((item) => ({
         transactionDate: formatDateId(item.date, true),
         cashFlowType: item.flow || "-",
-        sourceCollection: item.sourceCollection || "-",
+        sourceCollection: resolveFinancialSourceLabel(item),
+        sourceReference: item.sourceRef || item.sourceId || "-",
         transactionType: item.type || "-",
         transactionDescription: item.description || "-",
         transactionAmount: formatCurrencyId(item.amount),
@@ -165,13 +182,20 @@ const ProfitLossReport = () => {
       },
       {
         title: "Sumber",
-        dataIndex: "sourceCollection",
         key: "sourceCollection",
-        render: (value) => {
-          if (value === "revenues") return <Tag color="blue">revenues</Tag>;
-          if (value === "incomes") return <Tag color="green">incomes</Tag>;
-          if (value === "expenses") return <Tag color="red">expenses</Tag>;
-          return <Tag>-</Tag>;
+        render: (_, record) => {
+          const label = resolveFinancialSourceLabel(record);
+          const color = record.flow === "Pengeluaran" ? "red" : "green";
+          return (
+            <div>
+              <Tag color={color}>{label}</Tag>
+              {record.sourceRef ? (
+                <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 4 }}>
+                  Ref: {record.sourceRef}
+                </div>
+              ) : null}
+            </div>
+          );
         },
       },
       {
@@ -206,7 +230,7 @@ const ProfitLossReport = () => {
     <>
       <PageHeader
         title="Laporan Laba Rugi"
-        subtitle="Laporan ini tetap menggabungkan revenues, incomes, dan expenses sesuai business rule aktif, lalu dirapikan ke UI shared yang seragam."
+        subtitle="Laporan ini membaca revenues, incomes, dan expenses sebagai source final. Payroll paid masuk melalui expenses agar tidak dihitung dobel dari production_payrolls."
       />
 
       <PageSection

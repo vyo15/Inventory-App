@@ -116,7 +116,7 @@ Sebuah task dianggap aman selesai bila:
 
 ## Tambahan Current State Batch Prioritas
 - `StockReport.jsx` sekarang sebaiknya dianggap kandidat upgrade ke ekspor XLSX profesional, karena CSV mentah terlalu sederhana untuk kebutuhan owner/admin
-- `CashOut.jsx` masih menempatkan payroll paid sebagai status internal payroll; auto expense payroll belum aktif dan masih butuh guard anti double expense
+- `CashOut.jsx` sekarang menerima expense payroll otomatis dari payroll paid dengan guard `sourceModule/sourceId`; rollback otomatis expense payroll masih belum dibuat dan harus diputuskan terpisah
 - detail Payroll Produksi dan Work Log masih butuh microcopy agar user tidak salah paham terhadap arti field biaya dan status pembayaran
 
 ## Update Cleanup Architecture — 2026-04-25
@@ -185,9 +185,49 @@ Temuan/fix:
 - `ProductionWorkLogs.jsx` sekarang memanggil auto payroll setelah `completeProductionWorkLog()` sukses;
 - `productionPayrollsService.js` menyediakan `generatePayrollLinesFromCompletedWorkLog()` dengan guard idempotent per Work Log + Step + Operator;
 - Operator Produksi di modal Selesaikan Work Log sekarang wajib dipilih agar payroll tidak kehilangan relasi employee;
-- payroll otomatis tetap memakai status awal `draft` + `unpaid` dan tidak otomatis membuat expense/cash out.
+- payroll otomatis tetap memakai status awal `draft` + `unpaid`; saat line payroll ditandai paid, expense/Cash Out otomatis dibuat lewat guard `sourceModule/sourceId`.
 
 Risiko tersisa:
 - Work Log lama yang sudah completed sebelum patch tidak otomatis di-backfill pada bug ini;
 - jika butuh backfill payroll lama, buat task terpisah dengan preview/audit terlebih dahulu;
 - jika master Tahapan Produksi memiliki payroll rate 0, line payroll tetap bisa dibuat dengan nominal 0 untuk audit.
+
+## Update Integrasi IMS — 2026-04-25
+Yang sudah dirapikan:
+- Auto payroll dari Work Log completed sudah menjadi bagian flow aktif.
+- Payroll paid sekarang membuat expense payroll otomatis dengan guard idempotent `sourceModule/sourceId`.
+- Cash Out menampilkan source Payroll Produksi dan `sourceRef` agar audit mudah.
+- Profit Loss tetap memakai source final `expenses`, sehingga payroll paid masuk laporan melalui expense.
+- Payroll Report tetap membaca `production_payrolls` dan hanya menampilkan referensi Cash Out sebagai audit.
+
+Tech debt tersisa:
+- Backfill untuk Work Log completed lama yang belum punya payroll/cost belum dijalankan otomatis.
+- Rollback otomatis expense payroll saat payroll paid dibatalkan belum dibuat karena butuh business rule terpisah.
+- Jika master material tidak punya cost source, material cost bisa tetap 0 dan harus diperbaiki di master data/purchase flow, bukan diisi manual asal.
+
+
+## Final Cleanup Status Task 1–5 — 2026-04-25
+
+### Status aktif yang sudah dikunci
+- Stock Management menjadi satu entry point inventory; Stock Adjustment berada di panel halaman tersebut.
+- Kolom Referensi Audit tetap aktif sebagai audit source dan harus tampil manusiawi.
+- Format angka inventory memakai format Indonesia tanpa trailing `.00` untuk angka bulat.
+- Riwayat adjustment terbaru di atas berdasarkan `createdAt` dengan fallback `date`.
+- Production Order create drawer memakai preview compact read-only untuk stok target dan kebutuhan material.
+- Completed Work Log menyimpan cost actual untuk HPP: material, labor, total, dan cost per good unit.
+- Work Log completed membuat payroll line otomatis dengan guard Work Log + Step + Operator.
+- Payroll paid membuat expense payroll otomatis dengan guard `sourceModule/sourceId`.
+- Profit Loss membaca expense payroll dari `expenses`, bukan langsung dari `production_payrolls`.
+- Export laporan final diarahkan ke XLSX rapi dan siap baca.
+
+### Legacy / kandidat cleanup
+- Route `/stock-adjustment` bila masih ada hanya legacy redirect, bukan entry point aktif.
+- Payroll preference/custom payroll di employee adalah legacy/compatibility.
+- CSV payroll export boleh dipertahankan sebagai compatibility, tetapi XLSX adalah export final utama.
+- Data lama yang belum punya `sourceModule/sourceId` tetap dibaca fallback; jangan backfill otomatis tanpa preview.
+
+### Guarded / belum boleh diubah sembarangan
+- Completed Work Log, posting output, material usage, cost actual, auto payroll, dan HPP adalah guarded.
+- Auto expense payroll tidak boleh dibuat tanpa source reference idempotent.
+- Rollback otomatis expense payroll saat payroll paid dibatalkan belum punya rule final.
+- Jika material cost tetap 0 karena master item tidak punya source cost, perbaiki master data/purchase cost; jangan isi angka asal.

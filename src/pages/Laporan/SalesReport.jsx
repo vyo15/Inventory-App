@@ -119,12 +119,13 @@ const SalesReport = () => {
   // - tetap mengikuti source laporan penjualan dari collection sales
   // Status:
   // - aktif dipakai sebagai jalur export final laporan penjualan
+  // - sheet name distandarkan untuk Task 5 agar XLSX mudah dikenali user
   // =========================
   const exportToExcel = async () => {
     await exportJsonToExcel({
       title: "Laporan Penjualan IMS Bunga Flanel",
       subtitle: "Ekspor mengikuti data penjualan yang sedang tampil di halaman ini.",
-      sheetName: "Laporan Penjualan",
+      sheetName: "Sales Report",
       fileName: "Laporan-Penjualan",
       columns: [
         { header: "ID Transaksi", key: "salesId", width: 24 },

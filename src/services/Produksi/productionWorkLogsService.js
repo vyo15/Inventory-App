@@ -120,24 +120,82 @@ const readCollectionDocsSafely = async (
   }
 };
 
-const getItemUnitCost = (itemType, data = {}) => {
+// =====================================================
+// ACTIVE / GUARDED - resolver snapshot biaya material produksi
+// Fungsi:
+// - mengambil unit cost dari field cost aktual item/varian tanpa memakai harga jual;
+// - menjaga Work Log dari PO tidak lagi menyimpan biaya material 0 saat item punya cost.
+// Alasan blok ini dipakai:
+// - Start Production bisa langsung memotong stok dan menandai line sebagai stockDeducted,
+//   sehingga Complete Work Log tidak boleh memutasi stok ulang hanya demi mengisi cost.
+// Status:
+// - aktif dipakai di Start Production dan Complete Work Log; guarded karena memengaruhi HPP.
+// =====================================================
+const getCostCandidate = (data = {}, keys = []) => {
+  for (const key of keys) {
+    const value = toNumber(data?.[key] || 0);
+    if (value > 0) {
+      return { unitCost: value, costSource: key };
+    }
+  }
+
+  return { unitCost: 0, costSource: "missing_cost_snapshot" };
+};
+
+const findCostVariantSnapshot = (stockItem = {}, resolvedVariantKey = "") => {
+  const normalizedKey = safeTrim(resolvedVariantKey).toLowerCase();
+  if (!normalizedKey || !Array.isArray(stockItem?.variants)) return null;
+
+  return stockItem.variants.find((variant) => {
+    const key = safeTrim(
+      variant.variantKey ||
+        variant.id ||
+        variant.variantId ||
+        variant.name ||
+        variant.color ||
+        variant.code ||
+        variant.sku,
+    ).toLowerCase();
+
+    return key === normalizedKey;
+  }) || null;
+};
+
+const getItemUnitCostSnapshot = ({ itemType = "", stockItem = {}, stockResolution = {} } = {}) => {
+  const variantSnapshot =
+    stockResolution.stockSourceType === "variant"
+      ? findCostVariantSnapshot(stockItem, stockResolution.resolvedVariantKey)
+      : null;
+  const sourceData = variantSnapshot || stockItem || {};
+
   if (itemType === "raw_material") {
-    return toNumber(data.averageActualUnitCost || data.costPerUnit || 0);
+    return getCostCandidate(sourceData, [
+      "averageActualUnitCost",
+      "purchaseAverageUnitCost",
+      "averageCostPerUnit",
+      "costPerUnit",
+      "lastPurchasePrice",
+    ]);
   }
 
   if (itemType === "semi_finished_material") {
-    return toNumber(
-      data.averageCostPerUnit || data.lastProductionCostPerUnit || 0,
-    );
+    return getCostCandidate(sourceData, [
+      "averageCostPerUnit",
+      "lastProductionCostPerUnit",
+      "costPerUnit",
+    ]);
   }
 
   if (itemType === "product") {
-    return toNumber(data.hppPerUnit || 0);
+    return getCostCandidate(sourceData, [
+      "hppPerUnit",
+      "averageCostPerUnit",
+      "costPerUnit",
+    ]);
   }
 
-  return 0;
+  return { unitCost: 0, costSource: "unsupported_item_type" };
 };
-
 
 // =====================================================
 // Normalize material usages
@@ -933,10 +991,33 @@ export const createProductionWorkLogFromOrder = async (
         });
       }
 
+      // =====================================================
+      // ACTIVE / GUARDED - snapshot cost material saat Start Production.
+      // Fungsi:
+      // - mengunci biaya material dari dokumen stok yang benar saat bahan benar-benar keluar;
+      // - menghindari Work Log dari PO membawa costPerUnitSnapshot 0 sampai selesai.
+      // Alasan blok ini dipakai:
+      // - complete flow tidak boleh memotong stok ulang hanya untuk memperbaiki cost.
+      // Status:
+      // - aktif dipakai; guarded karena nilai ini menjadi dasar material cost dan HPP.
+      // =====================================================
+      const costSnapshot = getItemUnitCostSnapshot({
+        itemType: line.itemType,
+        stockItem,
+        stockResolution,
+      });
+      const unitCostSnapshot =
+        toNumber(line.costPerUnitSnapshot || 0) || costSnapshot.unitCost;
+
       nextMaterialUsages.push(
         calculateMaterialUsageLine({
           ...line,
           actualQty: consumeQty,
+          costPerUnitSnapshot: unitCostSnapshot,
+          costSourceSnapshot:
+            unitCostSnapshot > 0
+              ? (toNumber(line.costPerUnitSnapshot || 0) > 0 ? 'existing_line_snapshot' : costSnapshot.costSource)
+              : costSnapshot.costSource,
           stockDeducted: consumeQty > 0,
           stockDeductedAt: new Date(),
           resolvedVariantKey: stockResolution.resolvedVariantKey || "",
@@ -1191,12 +1272,59 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
 
     const nextMaterialUsages = [];
     for (const line of materialUsages) {
-      if (workLog.stockConsumptionStatus === "applied" || line.stockDeducted === true) {
-        nextMaterialUsages.push(calculateMaterialUsageLine({ ...line, stockDeducted: true }));
-        continue;
-      }
       const actualQty = toNumber(line.actualQty || 0);
       const collectionName = getCollectionNameByItemType(line.itemType);
+
+      if (workLog.stockConsumptionStatus === "applied" || line.stockDeducted === true) {
+        // =====================================================
+        // ACTIVE / GUARDED - hydrate cost untuk material yang sudah dipotong saat Start Production.
+        // Fungsi:
+        // - mengisi costPerUnitSnapshot/totalCostSnapshot yang masih 0 tanpa memutasi stok ulang;
+        // - menjaga completed Work Log tidak tetap material cost 0 jika item punya cost.
+        // Alasan blok ini dipakai:
+        // - Work Log dari Production Order menandai stockDeducted=true sejak start,
+        //   sehingga cabang complete normal tidak lagi membaca cost dari item stok.
+        // Status:
+        // - aktif dipakai; guarded karena tidak boleh double posting stok/output.
+        // =====================================================
+        if (collectionName && line.itemId && toNumber(line.costPerUnitSnapshot || 0) <= 0) {
+          const stockRef = doc(db, collectionName, line.itemId);
+          const stockSnap = await transaction.get(stockRef);
+
+          if (stockSnap.exists()) {
+            const stockItem = normalizeReferenceItem({
+              id: stockSnap.id,
+              ...stockSnap.data(),
+            });
+            const stockResolution = getResolvedMaterialStock({ line, stockItem });
+            const costSnapshot = getItemUnitCostSnapshot({
+              itemType: line.itemType,
+              stockItem,
+              stockResolution,
+            });
+
+            nextMaterialUsages.push(
+              calculateMaterialUsageLine({
+                ...line,
+                actualQty,
+                materialHasVariants: stockResolution.materialHasVariants === true,
+                materialVariantStrategy: stockResolution.materialVariantStrategy || line.materialVariantStrategy || 'none',
+                resolvedVariantKey: stockResolution.resolvedVariantKey || line.resolvedVariantKey || '',
+                resolvedVariantLabel: stockResolution.resolvedVariantLabel || line.resolvedVariantLabel || '',
+                stockSourceType: stockResolution.stockSourceType || line.stockSourceType || 'master',
+                costPerUnitSnapshot: costSnapshot.unitCost,
+                costSourceSnapshot: costSnapshot.costSource,
+                stockDeducted: true,
+                stockDeductedAt: line.stockDeductedAt || completedAtValue,
+              }),
+            );
+            continue;
+          }
+        }
+
+        nextMaterialUsages.push(calculateMaterialUsageLine({ ...line, actualQty, stockDeducted: true }));
+        continue;
+      }
 
       if (!collectionName || !line.itemId) {
         nextMaterialUsages.push({
@@ -1218,7 +1346,6 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
         id: stockSnap.id,
         ...stockSnap.data(),
       });
-      const stockData = normalizeStockSnapshot(stockSnap.data());
       const stockResolution = getResolvedMaterialStock({
         line,
         stockItem,
@@ -1251,6 +1378,24 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
         updatedAt: serverTimestamp(),
       });
 
+      // =====================================================
+      // ACTIVE / GUARDED - snapshot cost material saat Complete Work Log.
+      // Fungsi:
+      // - mengisi biaya aktual dari dokumen material/output cost source yang valid;
+      // - tidak memakai harga jual dan tidak menambah overhead tanpa business rule.
+      // Alasan blok ini dipakai:
+      // - material usage manual atau legacy bisa belum punya cost snapshot saat form dibuat.
+      // Status:
+      // - aktif dipakai; guarded karena menjadi dasar material cost dan HPP.
+      // =====================================================
+      const costSnapshot = getItemUnitCostSnapshot({
+        itemType: line.itemType,
+        stockItem,
+        stockResolution,
+      });
+      const unitCostSnapshot =
+        toNumber(line.costPerUnitSnapshot || 0) || costSnapshot.unitCost;
+
       nextMaterialUsages.push(
         calculateMaterialUsageLine({
           ...line,
@@ -1259,9 +1404,11 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
           resolvedVariantKey: stockResolution.resolvedVariantKey || '',
           resolvedVariantLabel: stockResolution.resolvedVariantLabel || '',
           stockSourceType: stockResolution.stockSourceType || 'master',
-          costPerUnitSnapshot:
-            toNumber(line.costPerUnitSnapshot || 0) ||
-            getItemUnitCost(line.itemType, stockData),
+          costPerUnitSnapshot: unitCostSnapshot,
+          costSourceSnapshot:
+            unitCostSnapshot > 0
+              ? (toNumber(line.costPerUnitSnapshot || 0) > 0 ? 'existing_line_snapshot' : costSnapshot.costSource)
+              : costSnapshot.costSource,
           stockDeducted: actualQty > 0,
           stockDeductedAt: actualQty > 0 ? completedAtValue : null,
         }),

@@ -137,12 +137,13 @@ const PurchasesReport = () => {
   // - tetap memakai sumber data laporan yang sama tanpa mengubah perhitungan kas keluar
   // Status:
   // - aktif dipakai sebagai jalur export final laporan pembelian
+  // - sheet name distandarkan untuk Task 5 agar XLSX mudah dikenali user
   // =========================
   const exportToExcel = async () => {
     await exportJsonToExcel({
       title: "Laporan Pembelian IMS Bunga Flanel",
       subtitle: "Ekspor mengikuti data expenses pembelian yang tampil di halaman ini.",
-      sheetName: "Laporan Pembelian",
+      sheetName: "Purchases Report",
       fileName: "Laporan-Pembelian",
       columns: [
         { header: "ID Expense", key: "expenseId", width: 24 },

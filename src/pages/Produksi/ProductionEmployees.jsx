@@ -68,6 +68,28 @@ import formatCurrency from "../../utils/formatters/currencyId";
 // =====================================================
 
 // =====================================================
+// ACTIVE / UI HELP TEXT
+// Fungsi blok:
+// - menambahkan penjelasan singkat pada detail karyawan produksi;
+// - menjaga drawer tetap read-only dan tidak mengubah relasi Work Log/Payroll.
+// Alasan perubahan:
+// - Task 3 hanya memperjelas field aktif vs legacy agar user tidak salah membaca
+//   custom payroll employee sebagai rule payroll final.
+// Status:
+// - aktif dipakai di drawer Detail Karyawan Produksi; bukan kandidat cleanup.
+// =====================================================
+const EmployeeDetailValue = ({ children, help }) => (
+  <Space direction="vertical" size={0}>
+    <span>{children}</span>
+    {help ? (
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        {help}
+      </Typography.Text>
+    ) : null}
+  </Space>
+);
+
+// =====================================================
 // Main Component
 // =====================================================
 const ProductionEmployees = () => {
@@ -1204,73 +1226,115 @@ const ProductionEmployees = () => {
           <Empty description="Tidak ada data" />
         ) : (
           <>
+            {/* =====================================================
+                ACTIVE / READ-ONLY CONTEXT
+                Fungsi blok:
+                - menjelaskan fungsi drawer detail karyawan sebagai master operator
+                  dan ringkasan baca-saja;
+                - menegaskan payroll final tidak diatur dari custom payroll employee.
+                Alasan perubahan:
+                - Task 3 meminta label/help text agar user mudah membedakan field
+                  aktif dengan field legacy.
+                Status:
+                - aktif dipakai; bukan legacy.
+            ===================================================== */}
             <Alert
               showIcon
               type="info"
               style={{ marginBottom: 16 }}
-              message="Halaman ini menampilkan summary payroll read-only per orang"
-              description="Semua angka di bawah dibaca dari payroll final dan work log final. Drawer ini tidak menjadi source of truth payroll baru dan tidak dipakai untuk finalisasi payroll."
+              message="Detail karyawan = master operator + ringkasan produksi"
+              description="Data dasar, status, role, skill, dan assignment masih aktif dipakai untuk Work Log. Ringkasan payroll/work log di bawah bersifat read-only dari transaksi final, bukan tempat menghitung payroll baru."
             />
 
             <Descriptions column={1} bordered size="small" style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="Kode">
-                {selectedEmployee.code || "-"}
+              <Descriptions.Item label="Kode Karyawan">
+                <EmployeeDetailValue help="Kode display karyawan produksi. Relasi utama tetap memakai ID dokumen Firestore bila sudah tersimpan di Work Log/Payroll.">
+                  {selectedEmployee.code || "-"}
+                </EmployeeDetailValue>
               </Descriptions.Item>
-              <Descriptions.Item label="Nama">
-                {selectedEmployee.name || "-"}
+              <Descriptions.Item label="Nama Karyawan">
+                <EmployeeDetailValue help="Nama operator yang muncul di Work Log, payroll, dan assignment tahapan.">
+                  {selectedEmployee.name || "-"}
+                </EmployeeDetailValue>
               </Descriptions.Item>
               <Descriptions.Item label="Gender">
-                {EMPLOYEE_GENDER_MAP[selectedEmployee.gender] || "-"}
+                <EmployeeDetailValue help="Informasi identitas dasar untuk administrasi internal.">
+                  {EMPLOYEE_GENDER_MAP[selectedEmployee.gender] || "-"}
+                </EmployeeDetailValue>
               </Descriptions.Item>
               <Descriptions.Item label="No. HP">
-                {selectedEmployee.phone || "-"}
+                <EmployeeDetailValue help="Kontak operator produksi. Tidak dipakai untuk kalkulasi payroll.">
+                  {selectedEmployee.phone || "-"}
+                </EmployeeDetailValue>
               </Descriptions.Item>
               <Descriptions.Item label="Alamat">
-                {selectedEmployee.address || "-"}
+                <EmployeeDetailValue help="Alamat administrasi. Tidak memengaruhi Work Log atau payroll.">
+                  {selectedEmployee.address || "-"}
+                </EmployeeDetailValue>
               </Descriptions.Item>
               <Descriptions.Item label="Jenis Kerja">
-                {EMPLOYEE_TYPE_MAP[selectedEmployee.employmentType] || "-"}
+                <EmployeeDetailValue help="Klasifikasi kerja seperti tetap/harian/borongan. Dipakai untuk informasi master, bukan pengganti rule payroll tahapan.">
+                  {EMPLOYEE_TYPE_MAP[selectedEmployee.employmentType] || "-"}
+                </EmployeeDetailValue>
               </Descriptions.Item>
-              <Descriptions.Item label="Role">
-                {EMPLOYEE_ROLE_MAP[selectedEmployee.role] || "-"}
+              <Descriptions.Item label="Role Produksi">
+                <EmployeeDetailValue help="Peran operator, misalnya operator/supervisor/helper. Membantu filter dan assignment produksi.">
+                  {EMPLOYEE_ROLE_MAP[selectedEmployee.role] || "-"}
+                </EmployeeDetailValue>
               </Descriptions.Item>
               <Descriptions.Item label="Tahapan Assignment">
-                {Array.isArray(selectedEmployee.assignedStepNames) &&
-                selectedEmployee.assignedStepNames.length > 0 ? (
-                  <Space size={[4, 4]} wrap>
-                    {selectedEmployee.assignedStepNames.map((item) => (
-                      <Tag key={item}>{item}</Tag>
-                    ))}
-                  </Space>
-                ) : (
-                  "-"
-                )}
+                <EmployeeDetailValue help="Tahapan produksi yang boleh dikerjakan operator ini. Dipakai saat memilih operator di flow Work Log.">
+                  {Array.isArray(selectedEmployee.assignedStepNames) &&
+                  selectedEmployee.assignedStepNames.length > 0 ? (
+                    <Space size={[4, 4]} wrap>
+                      {selectedEmployee.assignedStepNames.map((item) => (
+                        <Tag key={item}>{item}</Tag>
+                      ))}
+                    </Space>
+                  ) : (
+                    "-"
+                  )}
+                </EmployeeDetailValue>
               </Descriptions.Item>
               <Descriptions.Item label="Skill Tags">
-                {Array.isArray(selectedEmployee.skillTags) &&
-                selectedEmployee.skillTags.length > 0 ? (
-                  <Space size={[4, 4]} wrap>
-                    {selectedEmployee.skillTags.map((item) => (
-                      <Tag key={item}>{item}</Tag>
-                    ))}
-                  </Space>
-                ) : (
-                  "-"
-                )}
+                <EmployeeDetailValue help="Tag kemampuan operator untuk membantu pencarian/penjadwalan. Tidak menjadi payroll rule.">
+                  {Array.isArray(selectedEmployee.skillTags) &&
+                  selectedEmployee.skillTags.length > 0 ? (
+                    <Space size={[4, 4]} wrap>
+                      {selectedEmployee.skillTags.map((item) => (
+                        <Tag key={item}>{item}</Tag>
+                      ))}
+                    </Space>
+                  ) : (
+                    "-"
+                  )}
+                </EmployeeDetailValue>
               </Descriptions.Item>
               <Descriptions.Item label="Catatan Internal">
-                {selectedEmployee.notes || "-"}
+                <EmployeeDetailValue help="Catatan administrasi untuk karyawan. Tidak mengubah status, assignment, atau payroll.">
+                  {selectedEmployee.notes || "-"}
+                </EmployeeDetailValue>
               </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                {selectedEmployee.isActive ? "Aktif" : "Nonaktif"}
+              <Descriptions.Item label="Status Aktif">
+                <EmployeeDetailValue help="Aktif berarti karyawan dapat dipakai di flow produksi. Nonaktif tidak menghapus histori Work Log/Payroll lama.">
+                  <Tag color={selectedEmployee.isActive ? "green" : "default"}>
+                    {selectedEmployee.isActive ? "Aktif" : "Nonaktif"}
+                  </Tag>
+                </EmployeeDetailValue>
               </Descriptions.Item>
             </Descriptions>
 
             <Divider orientation="left">Ringkasan Payroll Read-only</Divider>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+              Ringkasan ini dibaca dari line payroll final dan Work Log final. Nilai di sini hanya membantu audit per operator dan tidak menjadi sumber kalkulasi baru.
+            </Typography.Paragraph>
 
             <SummaryStatGrid items={selectedEmployeeSummaryItems} columns={{ xs: 24, sm: 12, lg: 8 }} />
 
             <Divider orientation="left">Histori Payroll Singkat</Divider>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+              Menampilkan beberapa line payroll terakhir yang terhubung ke operator ini. Nominal berasal dari Payroll Produksi, bukan dari field custom payroll employee.
+            </Typography.Paragraph>
             <Table
               className="app-data-table"
               size="small"
@@ -1286,6 +1350,9 @@ const ProductionEmployees = () => {
             />
 
             <Divider orientation="left">Histori Work Log Singkat</Divider>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+              Menampilkan Work Log terakhir yang melibatkan operator ini. Data ini membantu mengecek aktivitas produksi tanpa mengubah histori.
+            </Typography.Paragraph>
             <Table
               className="app-data-table"
               size="small"
@@ -1300,13 +1367,13 @@ const ProductionEmployees = () => {
               style={{ marginBottom: 16 }}
             />
 
-            <Divider orientation="left">Legacy Payroll Fields</Divider>
+            <Divider orientation="left">Payroll Preference Legacy / Deprecated</Divider>
             <Alert
               showIcon
               type="warning"
               style={{ marginBottom: 16 }}
               message="Field custom payroll karyawan hanya legacy / compatibility"
-              description="Field di bawah ini dipertahankan untuk data lama. Payroll final aktif tetap lahir dari Work Log completed dan line payroll final, bukan dari custom payroll employee."
+              description="Field di bawah dipertahankan untuk membaca data lama. Payroll final aktif sekarang mengikuti rule Tahapan Produksi dan Work Log completed, bukan custom payroll employee."
             />
 
             <Descriptions column={1} bordered size="small">

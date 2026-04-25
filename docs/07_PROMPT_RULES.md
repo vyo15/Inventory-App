@@ -84,7 +84,7 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 
 ## Tambahan Guard Batch Prioritas
 - jika task menyentuh `productionWorkLogsService`, perlakukan summary costing saat complete sebagai area sensitif
-- jangan otomatis membuat expense payroll saat `paid` tanpa guard idempotent yang jelas (`sourceModule` + `sourceId`)
+- payroll `paid` boleh membuat expense otomatis hanya jika guard idempotent `sourceModule` + `sourceId` tetap dipakai
 - jika task menyentuh export laporan, utamakan helper XLSX reusable dan jangan merusak filter/source data laporan
 
 ## Update Prompt Guard Setelah Cleanup — 2026-04-25
@@ -116,5 +116,27 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Setelah Work Log completed, sistem wajib memanggil generator payroll idempotent per Work Log + Step + Operator.
 - Jangan membuat payroll dobel saat user klik Selesaikan dua kali, refresh, atau reload data.
 - Jangan mengubah posting stok/output Work Log hanya untuk memperbaiki payroll.
-- Jangan otomatis membuat Cash Out/Expense dari payroll `paid` tanpa task dan guard idempotent khusus.
+- Jangan memutus flow payroll `paid` -> Cash Out/Expense otomatis yang sudah memakai guard idempotent khusus.
 - Jangan memakai custom payroll karyawan legacy sebagai source utama payroll baru; rule final tetap Tahapan Produksi.
+
+## Prompt Guard — Integrasi IMS Otomatis
+- Jangan memutus flow Work Log completed → payroll line otomatis.
+- Jangan membuat payroll line dobel; guard wajib berbasis Work Log + Step + Operator.
+- Payroll `paid` sekarang otomatis membuat Cash Out/Expense, tetapi wajib memakai guard `sourceModule=production_payroll` dan `sourceId=payrollId`.
+- Jangan membuat expense payroll tanpa source reference.
+- Jangan membuat Profit Loss menghitung payroll langsung dari `production_payrolls` jika payroll paid sudah menjadi expense, karena akan double counting.
+- Jangan membuat rollback/delete expense otomatis saat payroll paid dibatalkan sebelum business rule rollback diputuskan.
+- Jangan backfill data lama otomatis tanpa task khusus dan preview.
+
+
+## Prompt Guard Final Cleanup Task 6
+- Jika task menyentuh Stock Management, jangan hapus kolom Referensi Audit; rapikan labelnya agar manusiawi dan pertahankan ID teknis sebagai detail sekunder.
+- Jika task menyentuh Stock Adjustment, angka bulat tidak boleh tampil `.00`, adjustment keluar wajib berbasis `availableStock`, dan riwayat terbaru harus di atas.
+- Jika task menyentuh Production Order create drawer, jangan hilangkan preview compact stok target dan kebutuhan material; preview tetap read-only dan PO final tetap dihitung dari BOM/helper final.
+- Jika task menyentuh Work Log complete/cost, perlakukan area ini guarded: jangan double posting stok, jangan double payroll, jangan isi cost asal, dan jangan ubah HPP tanpa cek completed Work Log cost final.
+- Jika task menyentuh Payroll Produksi, pertahankan auto payroll dari Work Log completed dan auto expense dari payroll paid dengan guard idempotent.
+- Jika task menyentuh Karyawan Produksi, jelaskan payroll preference legacy sebagai compatibility; rule payroll final tetap Tahapan Produksi + Work Log completed.
+- Jika task menyentuh Cash Out, payroll expense otomatis harus punya `sourceModule=production_payroll`, `sourceId`, dan `sourceRef`; jangan buat expense dobel.
+- Jika task menyentuh Profit Loss, jangan hitung payroll dari `production_payrolls` jika payroll paid sudah masuk `expenses`.
+- Jika task menyentuh report export, pertahankan XLSX final yang siap baca; jangan kembalikan export ke data mentah/JSON/CSV sebagai output utama.
+- Jika task UI produksi, tabel utama tidak boleh butuh scroll horizontal hanya untuk tombol aksi dan modal complete Work Log wajib menampilkan estimasi output.

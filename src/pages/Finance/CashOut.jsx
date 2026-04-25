@@ -178,6 +178,15 @@ const CashOut = () => {
           accumulator.totalPurchaseExpense += amount;
         }
 
+        // ACTIVE / FINAL - payroll expense otomatis.
+        // Fungsi blok:
+        // - memisahkan pengeluaran payroll otomatis agar owner tahu Cash Out ini dari payroll paid;
+        // - tidak mengubah total expense karena totalActualExpense tetap source of truth.
+        // Status: aktif dipakai; guarded karena payroll tidak boleh double expense.
+        if (item.sourceModule === "production_payroll") {
+          accumulator.totalPayrollExpense += amount;
+        }
+
         return accumulator;
       },
       {
@@ -185,6 +194,7 @@ const CashOut = () => {
         totalReferenceExpense: 0,
         totalSaving: 0,
         totalPurchaseExpense: 0,
+        totalPayrollExpense: 0,
       },
     );
   }, [filteredCashOuts]);
@@ -206,10 +216,10 @@ const CashOut = () => {
         accent: "warning",
       },
       {
-        key: "reference-expense",
-        title: "Total Referensi Pembelian",
-        value: formatCurrencyId(summary.totalReferenceExpense),
-        subtitle: "Nilai referensi pembelian untuk pembanding efisiensi.",
+        key: "payroll-expense",
+        title: "Total Payroll Produksi",
+        value: formatCurrencyId(summary.totalPayrollExpense),
+        subtitle: "Cash Out otomatis dari payroll produksi yang ditandai paid.",
         accent: "primary",
       },
       {
@@ -290,7 +300,16 @@ const CashOut = () => {
         key: "sourceModule",
         render: (_, record) => {
           const sourceMeta = resolveExpenseSourceMeta(record);
-          return <Tag color={sourceMeta.color}>{sourceMeta.label}</Tag>;
+          return (
+            <div>
+              <Tag color={sourceMeta.color}>{sourceMeta.label}</Tag>
+              {record.sourceRef ? (
+                <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 4 }}>
+                  Ref: {record.sourceRef}
+                </div>
+              ) : null}
+            </div>
+          );
         },
       },
       {
@@ -376,7 +395,7 @@ const CashOut = () => {
     <>
       <PageHeader
         title="Pengeluaran Kas"
-        subtitle="Pantau expense manual dan expense otomatis dari purchases dalam pola halaman yang seragam tanpa mengubah source of truth collection expenses."
+        subtitle="Pantau expense manual, pembelian otomatis, dan payroll produksi paid yang otomatis masuk expenses dengan source reference."
         actions={[
           {
             key: "add-cash-out",
@@ -392,8 +411,8 @@ const CashOut = () => {
         style={{ marginBottom: 16 }}
         type="info"
         showIcon
-        message="Payroll paid saat ini belum otomatis menjadi expense. Jika nanti payroll dibuat otomatis ke Cash Out, sistem harus memakai sourceModule dan sourceId agar tidak double expense."
-        description="Baris dengan sumber Pembelian atau Payroll Produksi diperlakukan sebagai turunan modul lain dan sebaiknya read-only di halaman ini."
+        message="Payroll Produksi paid otomatis masuk Cash Out dengan guard sourceModule/sourceId."
+        description="Baris sumber Payroll Produksi dibuat otomatis dari payroll paid, memakai sourceRef nomor payroll, dan read-only agar tidak double expense."
       />
 
       <PageSection
