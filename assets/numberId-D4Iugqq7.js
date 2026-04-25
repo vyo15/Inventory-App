@@ -1,1 +1,0 @@
-const a=(t,m=0)=>{const r=Number(t);return Number.isFinite(r)?r:m},i=(t,m={})=>{const r=a(t),{minimumFractionDigits:n=0,maximumFractionDigits:e=2}=m;return new Intl.NumberFormat("id-ID",{minimumFractionDigits:n,maximumFractionDigits:e}).format(r)},o=(t,m={})=>`${i(t,{maximumFractionDigits:2,...m})}%`,s=i;export{s as a,o as b,i as f};
