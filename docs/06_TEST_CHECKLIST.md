@@ -462,3 +462,81 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Catatan payroll paid/expense tampil agar user tidak menghitung payroll dobel.
 - [ ] Jika salah satu collection gagal dibaca, Dashboard tetap tampil dengan fallback aman.
 - [ ] Build berhasil dan tidak ada error console.
+
+
+## Checklist Final Hardening Fase A-G - 2026-04-26
+
+### Fase A - Sales Stock Safety
+- [ ] Buat sale stok cukup dan pastikan sale tersimpan.
+- [ ] Pastikan stok master/varian berkurang setelah sale dibuat.
+- [ ] Buat sale stok tidak cukup dan pastikan sale tidak tersimpan.
+- [ ] Buat sale item bervarian stok cukup dan pastikan varian yang benar berkurang.
+- [ ] Buat sale item bervarian stok tidak cukup dan pastikan sale tidak tersimpan.
+- [ ] Input item yang sama di dua baris dengan total melebihi `availableStock`, lalu pastikan sale tidak tersimpan.
+- [ ] Status `Selesai` membuat income sekali saja.
+- [ ] Status selain `Selesai` tidak membuat income.
+- [ ] Cancel sale revert stok satu kali.
+- [ ] Delete sale yang sudah `Dibatalkan` tidak double revert.
+
+### Fase B - Purchase Expense Metadata
+- [ ] Buat purchase baru.
+- [ ] Pastikan stok bertambah.
+- [ ] Pastikan inventory log `purchase_in` tetap muncul.
+- [ ] Pastikan expense otomatis dibuat.
+- [ ] Pastikan amount expense sama dengan total pembelian aktual.
+- [ ] Pastikan saving pembelian tetap hanya info efisiensi.
+- [ ] Pastikan expense punya `sourceModule: purchases`.
+- [ ] Pastikan expense punya `sourceId` berisi purchase id.
+- [ ] Pastikan expense punya `sourceRef` reference pembelian.
+- [ ] Pastikan expense punya `sourceType: auto_generated`.
+- [ ] Pastikan expense punya `createdByAutomation: true`.
+- [ ] Pastikan Profit Loss tetap membaca expense.
+
+### Fase C - HPP dan Work Log Cost 0 Warning
+- [ ] Buka HPP Analysis.
+- [ ] Pastikan Work Log completed dengan `materialCostActual = 0` menampilkan warning material.
+- [ ] Pastikan Work Log completed dengan `laborCostActual = 0` menampilkan warning payroll/tenaga kerja.
+- [ ] Pastikan Work Log completed dengan `totalCostActual = 0` menampilkan warning HPP belum valid.
+- [ ] Pastikan `costPerGoodUnit = 0` dan `goodQty > 0` menampilkan warning.
+- [ ] Pastikan Work Log cost valid tidak menampilkan warning berlebihan.
+- [ ] Buka detail Work Log dan pastikan warning cost 0 tampil jika ada.
+- [ ] Pastikan rumus HPP tidak berubah.
+
+### Fase D - Dashboard Cleanup
+- [ ] Buka Dashboard.
+- [ ] Pastikan Dashboard hanya memiliki 5 section utama.
+- [ ] Pastikan tidak ada horizontal scroll.
+- [ ] Pastikan Prioritas Hari Ini jelas dan actionable.
+- [ ] Pastikan Fokus Produksi ringkas dan planning prioritas maksimal 3 item.
+- [ ] Pastikan Stok Kritis compact dan maksimal 5 item.
+- [ ] Pastikan Keuangan Ringkas tidak terlihat sebagai Profit Loss final.
+- [ ] Pastikan Aktivitas Terbaru compact dan maksimal 5 item.
+- [ ] Pastikan last updated tampil.
+- [ ] Klik Refresh dan pastikan hanya reload data summary.
+- [ ] Pastikan Dashboard tidak membuat/mengubah data apa pun.
+
+### Fase E - Report dan Export Standard
+- [ ] Export Stock Report.
+- [ ] Pastikan Stock Report mencakup bahan baku, semi-finished, dan produk jadi jika datanya ada.
+- [ ] Buka XLSX Stock Report dan pastikan header jelas.
+- [ ] Pastikan angka stok rapi dan tidak menampilkan `.00` berlebihan.
+- [ ] Export HPP Analysis ke XLSX.
+- [ ] Pastikan XLSX HPP punya header jelas, Rupiah rapi, tanggal rapi, dan sheet name jelas.
+- [ ] Pastikan kolom Validasi Cost ikut masuk ke export HPP.
+- [ ] Export Payroll Report XLSX dan pastikan filter operator tidak error.
+- [ ] Pastikan tidak ada object mentah/JSON teknis yang membingungkan user.
+
+### Fase F - Legacy Duplicate Cleanup
+- [ ] Jalankan grep/import check dan pastikan tidak ada reference ke `src/src`.
+- [ ] Pastikan route Dashboard memakai `src/pages/Dashboard/Dashboard.jsx`.
+- [ ] Pastikan service Planning aktif memakai `src/services/Produksi/productionPlanningService.js`.
+- [ ] Pastikan folder/file duplicate `src/src/**` tidak ada atau sudah tercatat sebagai legacy yang tidak dipakai.
+- [ ] Jika ada penghapusan, pastikan `DELETE_LIST.md` jelas.
+
+### Final Regression Check
+- [ ] `npm run build` berhasil.
+- [ ] Tidak ada error console di Dashboard, Sales, Purchases, HPP Analysis, Work Logs, Stock Report, dan Payroll Report.
+- [ ] Business rules docs sinkron dengan source terbaru.
+- [ ] Tech debt terbaru tercatat.
+- [ ] Prompt rules mencegah regression untuk Sales, Purchase Expense, HPP, Dashboard, Export, dan Legacy Cleanup.
+- [ ] Integration Map sesuai flow aktual.

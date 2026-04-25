@@ -884,6 +884,46 @@ const ProductionWorkLogs = () => {
     return Number(selectedRecord.laborCostActual || 0);
   }, [selectedRecord]);
 
+  // =====================================================
+  // ACTIVE / GUARDED - warning cost 0 pada detail Work Log.
+  // Fungsi blok:
+  // - menjelaskan kenapa nilai biaya 0 perlu dicek tanpa mengubah angka cost;
+  // - membantu user membedakan cost benar-benar kosong vs HPP sudah valid.
+  // Hubungan dengan flow Work Log/HPP:
+  // - hanya membaca selectedRecord completed/in-progress yang sedang dibuka;
+  // - tidak menjalankan ulang complete, tidak backfill, dan tidak mengubah payroll/stok.
+  // Status:
+  // - aktif dipakai pada drawer detail; bukan legacy dan bukan kandidat cleanup.
+  // =====================================================
+  const detailCostWarnings = useMemo(() => {
+    if (!selectedRecord) return [];
+
+    const warnings = [];
+    const materialCost = Number(selectedRecord.materialCostActual || 0);
+    const laborCost = Number(detailLaborDisplay || 0);
+    const totalCost = Number(selectedRecord.totalCostActual || 0);
+    const costPerGoodUnit = Number(selectedRecord.costPerGoodUnit || 0);
+    const goodQty = Number(selectedRecord.goodQty || 0);
+
+    if (materialCost === 0) {
+      warnings.push("Biaya material 0. Cek cost bahan atau snapshot material.");
+    }
+
+    if (laborCost === 0) {
+      warnings.push("Biaya tenaga kerja 0. Cek payroll Work Log.");
+    }
+
+    if (totalCost === 0) {
+      warnings.push("Total biaya 0. HPP belum valid untuk analisis.");
+    }
+
+    if (costPerGoodUnit === 0 && goodQty > 0) {
+      warnings.push("Cost per good unit 0 walaupun good qty ada. Cek total biaya Work Log.");
+    }
+
+    return warnings;
+  }, [selectedRecord, detailLaborDisplay]);
+
   const detailMaterialColumns = useMemo(
     () => [
       {
@@ -1794,6 +1834,31 @@ const ProductionWorkLogs = () => {
                       showIcon
                       message="Biaya labor mengikuti ringkasan payroll final jika line payroll sudah terbentuk. Jika payroll belum ada, sistem masih memakai labor cost manual pada Work Log."
                     />
+                    {/* =====================================================
+                        ACTIVE / GUARDED - alert warning detail cost 0.
+                        Fungsi blok:
+                        - menampilkan penjelasan cost 0 pada detail Work Log agar user tidak salah membaca HPP;
+                        - tidak mengubah angka, tidak menjalankan ulang complete, dan tidak membuat payroll otomatis.
+                        Hubungan dengan flow Work Log/HPP: visibility dari selectedRecord aktif.
+                        Status: aktif dipakai; bukan legacy/kandidat cleanup.
+                    ===================================================== */}
+                    {detailCostWarnings.length > 0 ? (
+                      <Alert
+                        style={{ marginBottom: 12 }}
+                        type="warning"
+                        showIcon
+                        message="Cost Work Log perlu dicek"
+                        description={
+                          <Space direction="vertical" size={2}>
+                            {detailCostWarnings.map((warning) => (
+                              <Typography.Text key={warning}>
+                                {warning}
+                              </Typography.Text>
+                            ))}
+                          </Space>
+                        }
+                      />
+                    ) : null}
                     <Row gutter={[12, 12]}>
                       <Col span={12}>
                         <Typography.Text type="secondary">

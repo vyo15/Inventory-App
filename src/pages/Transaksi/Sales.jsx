@@ -23,6 +23,8 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import {
   collection,
   addDoc,
+  deleteDoc,
+  getDoc,
   getDocs,
   Timestamp,
   query,
@@ -295,6 +297,14 @@ const Sales = () => {
 
   // =========================
   // SECTION: Normalisasi line penjualan final
+  // Fungsi:
+  // - membentuk snapshot item yang akan disimpan ke dokumen sales
+  // - melakukan guard awal memakai availableStock dari cache UI agar user langsung mendapat feedback
+  // Hubungan flow Sales/stok:
+  // - sale line menyimpan collectionName + variantKey supaya mutasi stok dan revert cancel/delete kembali ke sumber stok yang sama
+  // Status:
+  // - aktif/final; validasi final tetap dilakukan ulang ke Firestore oleh validateSaleStockAvailability sebelum sale dibuat
+  // - bukan legacy dan bukan kandidat cleanup
   // =========================
   const buildSaleLine = (item) => {
     const selectedItem = findSellableItem(item.itemId);
@@ -311,26 +321,142 @@ const Sales = () => {
     }
 
     const availableStock = selectedVariant
-      ? Number(selectedVariant.currentStock || 0)
-      : getItemStockSnapshot(selectedItem).currentStock;
+      ? Number(selectedVariant.availableStock || 0)
+      : Number(getItemStockSnapshot(selectedItem).availableStock || 0);
+    const requestedQuantity = Number(item.quantity || 0);
 
-    if (availableStock < Number(item.quantity || 0)) {
+    if (availableStock < requestedQuantity) {
       throw new Error(
-        `Stok ${selectedItem.name}${selectedVariant ? ` - ${selectedVariant.variantLabel}` : ""} tidak mencukupi. Tersisa: ${formatNumberId(availableStock)}`,
+        `Stok tersedia ${selectedItem.name}${selectedVariant ? ` - ${selectedVariant.variantLabel}` : ""} tidak mencukupi. Tersisa: ${formatNumberId(availableStock)}`,
       );
     }
 
     return {
       itemId: selectedItem.id,
       itemName: selectedItem.name || "-",
-      quantity: Number(item.quantity || 0),
+      quantity: requestedQuantity,
       pricePerUnit: Number(item.pricePerUnit || 0),
-      subtotal: Number(item.pricePerUnit || 0) * Number(item.quantity || 0),
+      subtotal: Number(item.pricePerUnit || 0) * requestedQuantity,
       collectionName: selectedItem.collectionName,
       variantKey: selectedVariant?.variantKey || "",
       variantLabel: selectedVariant?.variantLabel || "",
       stockSourceType: selectedVariant ? "variant" : "master",
     };
+  };
+
+  // =========================
+  // SECTION: Key agregasi kebutuhan stok per sumber final
+  // Fungsi:
+  // - menggabungkan kebutuhan item yang sama pada beberapa baris sale
+  // Hubungan flow Sales/stok:
+  // - mencegah kasus dua baris item yang sama masing-masing terlihat cukup, tetapi totalnya melebihi availableStock
+  // Status:
+  // - aktif/final untuk Fase A Sales stock safety
+  // - bukan legacy dan bukan kandidat cleanup
+  // =========================
+  const buildSaleStockBucketKey = (item) =>
+    `${item.collectionName}::${item.itemId}::${item.variantKey || "master"}`;
+
+  // =========================
+  // SECTION: Validasi final available stock dari Firestore sebelum create sale
+  // Fungsi:
+  // - membaca ulang dokumen item terbaru langsung dari Firestore
+  // - memvalidasi availableStock master atau varian, bukan currentStock mentah
+  // Hubungan flow Sales/stok:
+  // - memastikan sale tidak dibuat jika stok tersedia sudah berubah/kurang sebelum user menekan Simpan
+  // Status:
+  // - aktif/final untuk Fase A Sales stock safety
+  // - bukan legacy dan bukan kandidat cleanup
+  // =========================
+  const validateSaleStockAvailability = async (saleItems = []) => {
+    const stockNeedsByBucket = new Map();
+
+    saleItems.forEach((item) => {
+      const bucketKey = buildSaleStockBucketKey(item);
+      const existingNeed = stockNeedsByBucket.get(bucketKey);
+
+      stockNeedsByBucket.set(bucketKey, {
+        ...item,
+        quantity: Number(existingNeed?.quantity || 0) + Number(item.quantity || 0),
+      });
+    });
+
+    for (const item of stockNeedsByBucket.values()) {
+      const itemReference = doc(db, item.collectionName, item.itemId);
+      const itemSnapshotDocument = await getDoc(itemReference);
+
+      if (!itemSnapshotDocument.exists()) {
+        throw new Error(`Item ${item.itemName || item.itemId} tidak ditemukan. Penjualan dibatalkan agar stok tidak salah.`);
+      }
+
+      const latestItem = {
+        id: itemSnapshotDocument.id,
+        ...itemSnapshotDocument.data(),
+      };
+      const hasVariants = inferHasVariants(latestItem);
+      const latestVariant = hasVariants && item.variantKey
+        ? findVariantByKey(latestItem, item.variantKey)
+        : null;
+
+      if (hasVariants && !latestVariant) {
+        throw new Error(`Varian ${item.variantLabel || item.variantKey || "item"} untuk ${item.itemName} tidak ditemukan. Penjualan dibatalkan agar stok tidak masuk ke master/default.`);
+      }
+
+      const stockSnapshot = latestVariant
+        ? {
+            availableStock: Number(latestVariant.availableStock || 0),
+          }
+        : getItemStockSnapshot(latestItem);
+      const availableStock = Number(stockSnapshot.availableStock || 0);
+
+      if (availableStock < Number(item.quantity || 0)) {
+        throw new Error(
+          `Stok tersedia ${item.itemName}${latestVariant ? ` - ${latestVariant.variantLabel}` : ""} tidak mencukupi. Dibutuhkan: ${formatNumberId(item.quantity)}, tersedia: ${formatNumberId(availableStock)}. Penjualan belum disimpan.`,
+        );
+      }
+    }
+  };
+
+  // =========================
+  // SECTION: Rollback sale jika mutasi stok gagal setelah dokumen sale dibuat
+  // Fungsi:
+  // - mengembalikan stok item yang sudah sempat terpotong
+  // - menghapus dokumen sale yang baru dibuat agar tidak ada sale tersimpan tanpa stok keluar lengkap
+  // Hubungan flow Sales/stok:
+  // - menjaga atomic-like behavior di sisi UI tanpa mengubah service inventory global
+  // Status:
+  // - aktif/final guard Fase A
+  // - bukan legacy; kandidat cleanup hanya jika nanti flow dipindah ke transaction/cloud function resmi
+  // =========================
+  const rollbackSaleAfterStockMutationFailure = async ({
+    saleId,
+    appliedStockItems = [],
+  }) => {
+    const rollbackErrors = [];
+
+    for (const item of appliedStockItems) {
+      try {
+        await updateInventoryStock({
+          itemId: item.itemId,
+          collectionName: item.collectionName,
+          quantityChange: Number(item.quantity || 0),
+          variantKey: item.variantKey || "",
+          allowMasterForVariant: !item.variantKey,
+        });
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError);
+      }
+    }
+
+    if (saleId) {
+      await deleteDoc(doc(db, "sales", saleId));
+    }
+
+    if (rollbackErrors.length > 0) {
+      throw new Error(
+        "Mutasi stok gagal dan rollback stok perlu dicek manual. Sale baru sudah dihapus agar tidak tersimpan tanpa stok keluar lengkap.",
+      );
+    }
   };
 
   // =========================
@@ -352,11 +478,18 @@ const Sales = () => {
 
       // =========================
       // SECTION: Validasi stok dan bangun item line final
-      // ACTIVE / FINAL:
-      // - item bervarian wajib punya variantKey
-      // - sale line menyimpan variantKey/variantLabel agar cancel/delete mengembalikan varian yang sama
+      // Fungsi:
+      // - membangun saleItems final dari form
+      // - menjalankan validasi awal dan validasi final Firestore sebelum dokumen sale dibuat
+      // Hubungan flow Sales/stok:
+      // - sale hanya boleh dibuat jika availableStock master/varian cukup untuk total kebutuhan semua line
+      // Status:
+      // - aktif/final untuk Fase A Sales stock safety
+      // - bukan legacy dan bukan kandidat cleanup
       // =========================
       const saleItems = (items || []).map((item) => buildSaleLine(item));
+      await validateSaleStockAvailability(saleItems);
+
       const totalSaleValue = saleItems.reduce(
         (sum, item) => sum + Number(item.subtotal || 0),
         0,
@@ -380,20 +513,53 @@ const Sales = () => {
       };
 
       const salesDocument = await addDoc(collection(db, "sales"), newSalePayload);
+      const appliedStockItems = [];
 
       // =========================
-      // SECTION: Kurangi stok item final
-      // Semua mutasi stok penjualan memakai helper variant-aware agar variants[] dan total master tetap sinkron.
+      // SECTION: Kurangi stok item final dengan rollback jika gagal
+      // Fungsi:
+      // - memotong stok melalui updateInventoryStock yang sudah variant-aware dan preventNegative
+      // - menunda inventory log sampai semua mutasi stok berhasil agar tidak ada log sale untuk transaksi yang dibatalkan
+      // Hubungan flow Sales/stok:
+      // - jika salah satu mutasi gagal, stok yang sudah sempat terpotong dikembalikan dan dokumen sale baru dihapus
+      // Status:
+      // - aktif/final untuk Fase A Sales stock safety
+      // - bukan legacy; kandidat cleanup hanya jika nanti diganti transaction/cloud function
       // =========================
-      for (const item of newSalePayload.items) {
-        await updateInventoryStock({
-          itemId: item.itemId,
-          collectionName: item.collectionName,
-          quantityChange: -item.quantity,
-          variantKey: item.variantKey || "",
-          preventNegative: true,
+      try {
+        for (const item of newSalePayload.items) {
+          await updateInventoryStock({
+            itemId: item.itemId,
+            collectionName: item.collectionName,
+            quantityChange: -item.quantity,
+            variantKey: item.variantKey || "",
+            preventNegative: true,
+          });
+
+          appliedStockItems.push(item);
+        }
+      } catch (stockMutationError) {
+        await rollbackSaleAfterStockMutationFailure({
+          saleId: salesDocument.id,
+          appliedStockItems,
         });
 
+        throw new Error(
+          stockMutationError?.message ||
+            "Mutasi stok penjualan gagal. Penjualan dibatalkan dan belum disimpan.",
+        );
+      }
+
+      // =========================
+      // SECTION: Catat log stok setelah mutasi stok berhasil semua
+      // Fungsi:
+      // - menulis audit trail penjualan hanya setelah stok benar-benar terpotong lengkap
+      // Hubungan flow Sales/stok:
+      // - mencegah inventory_logs berisi sale yang dokumen transaksinya sudah dihapus karena rollback
+      // Status:
+      // - aktif/final; bukan legacy dan bukan kandidat cleanup
+      // =========================
+      for (const item of newSalePayload.items) {
         await addInventoryLog(
           item.itemId,
           item.itemName,
@@ -813,9 +979,10 @@ const Sales = () => {
                   <div key={key} style={{ border: "1px solid #d9d9d9", padding: 12, marginBottom: 16, borderRadius: 8 }}>
                     <Form.Item {...restField} name={[name, "itemId"]} rules={[{ required: true, message: "Pilih item!" }]} style={{ marginBottom: 12 }}>
                       <Select placeholder="Pilih produk / bahan baku" onChange={(itemId) => handleSaleItemChange(itemId, name)} showSearch optionFilterProp="children">
+                        {/* ACTIVE / FINAL: opsi item menampilkan availableStock agar UI Sales sejalan dengan validasi stok final. Bukan legacy/kandidat cleanup. */}
                         {sellableItems.map((item) => (
                           <Option key={item.itemKey} value={item.itemKey}>
-                            {item.name} ({item.typeLabel} - Stok: {formatNumberId(getItemStockSnapshot(item).currentStock)})
+                            {item.name} ({item.typeLabel} - Stok tersedia: {formatNumberId(getItemStockSnapshot(item).availableStock)})
                           </Option>
                         ))}
                       </Select>
@@ -842,21 +1009,22 @@ const Sales = () => {
                                 <Select placeholder="Pilih varian" showSearch optionFilterProp="children">
                                   {buildVariantOptionsFromItem(selectedItem).map((item) => (
                                     <Option key={item.value} value={item.value}>
-                                      {item.label} - Stok: {formatNumberId(item.raw?.currentStock || 0)}
+                                      {item.label} - Stok tersedia: {formatNumberId(item.raw?.availableStock || 0)}
                                     </Option>
                                   ))}
                                 </Select>
                               </Form.Item>
                             ) : null}
 
+                            {/* ACTIVE / FINAL: alert stok memakai availableStock master/varian supaya user melihat angka yang sama dengan guard submit. Bukan legacy/kandidat cleanup. */}
                             <Alert
                               showIcon
                               type={hasVariants ? "info" : "success"}
                               style={{ marginBottom: 12 }}
                               message={
                                 hasVariants
-                                  ? `Stok varian terpilih: ${formatNumberId(selectedVariant?.currentStock || 0)}`
-                                  : `Stok master saat ini: ${formatNumberId(getItemStockSnapshot(selectedItem).currentStock)}`
+                                  ? `Stok tersedia varian terpilih: ${formatNumberId(selectedVariant?.availableStock || 0)}`
+                                  : `Stok tersedia master saat ini: ${formatNumberId(getItemStockSnapshot(selectedItem).availableStock)}`
                               }
                             />
                           </>

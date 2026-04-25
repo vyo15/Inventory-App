@@ -1,76 +1,25 @@
 /* =========================
    SECTION: Dashboard Page
+   Fungsi:
+   - menjaga Dashboard menjadi control center compact sesuai docs project;
+   - mencegah horizontal scroll dan tampilan terlalu ramai.
+   Hubungan flow:
+   - CSS ini hanya styling read-only, tidak menyentuh stok, kas, produksi, payroll, HPP, atau laporan.
+   Status:
+   - aktif dipakai; bukan legacy.
 ========================= */
 .dashboard-page {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
-/* =========================
-   SECTION: Alert
-========================= */
-.dashboard-alert-wrap {
-  margin-top: -4px;
+.dashboard-full-width {
+  width: 100%;
 }
 
-/* =========================
-   SECTION: KPI Cards
-========================= */
-.dashboard-summary-row {
-  margin-top: 2px;
-}
-
-.dashboard-stat-card {
-  height: 100%;
-  border-radius: 18px !important;
-  border: 1px solid rgba(15, 23, 42, 0.06) !important;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
-}
-
-.dashboard-stat-card .ant-card-body {
-  padding: 18px 18px 16px;
-}
-
-.dashboard-stat-card .ant-statistic {
-  min-height: 72px;
-}
-
-.dashboard-stat-card .ant-statistic-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(15, 23, 42, 0.68);
-}
-
-.dashboard-stat-card .ant-statistic-content {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.dashboard-stat-card .ant-statistic-content-prefix {
-  margin-right: 10px;
-  font-size: 18px;
-}
-
-.dashboard-stat-subtitle {
-  display: block;
-  margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: rgba(15, 23, 42, 0.58);
-}
-
-/* =========================
-   SECTION: Main Grid
-========================= */
-.dashboard-main-grid {
-  align-items: stretch;
-}
-
-/* =========================
-   SECTION: Section Header Helper
-========================= */
 .dashboard-section-extra {
   font-size: 12px;
   color: rgba(15, 23, 42, 0.58);
@@ -81,46 +30,16 @@
   font-size: 14px;
 }
 
-/* =========================
-   SECTION: Action Center
-========================= */
-.dashboard-action-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.dashboard-action-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 14px 16px;
-  border-radius: 16px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.72);
-  text-decoration: none;
-  transition: all 0.18s ease;
-}
-
-.dashboard-action-item:hover {
-  transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.18);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
-}
-
-.dashboard-action-content {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  flex: 1;
-}
-
-.dashboard-action-description {
+.dashboard-muted-text {
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.55;
   color: rgba(15, 23, 42, 0.58);
+}
+
+.dashboard-date-text {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.52);
+  white-space: nowrap;
 }
 
 .dashboard-action-arrow {
@@ -129,52 +48,52 @@
   flex-shrink: 0;
 }
 
-.dashboard-quick-grid {
+/* =========================
+   SECTION: Compact cards & lists
+   Fungsi:
+   - mengganti table/chart besar Dashboard lama menjadi card/list compact;
+   - seluruh card hanya navigasi atau read-only summary.
+   Hubungan flow:
+   - action card memakai Link ke halaman terkait, bukan write otomatis.
+   Status:
+   - aktif dipakai; bukan kandidat cleanup.
+========================= */
+.dashboard-priority-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 
-.dashboard-quick-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 96px;
-  padding: 14px 16px;
+.dashboard-priority-card,
+.dashboard-list-card,
+.dashboard-compact-card,
+.dashboard-metric-card {
+  box-sizing: border-box;
   border-radius: 16px;
   border: 1px solid rgba(15, 23, 42, 0.08);
-  background: #ffffff;
-  text-decoration: none;
-  transition: all 0.18s ease;
+  background: rgba(248, 250, 252, 0.74);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
-.dashboard-quick-card:hover {
+.dashboard-priority-card,
+.dashboard-list-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.dashboard-priority-card:hover,
+.dashboard-list-card:hover {
   transform: translateY(-1px);
-  border-color: rgba(45, 212, 191, 0.24);
+  border-color: rgba(37, 99, 235, 0.18);
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
 }
 
-.dashboard-quick-description {
-  font-size: 12px;
-  line-height: 1.6;
-  color: rgba(15, 23, 42, 0.58);
-}
-
-.dashboard-mini-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.dashboard-mini-summary-card {
-  padding: 14px 16px;
-  border-radius: 16px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.72);
-}
-
-.dashboard-mini-summary-icon {
+.dashboard-priority-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -183,72 +102,114 @@
   border-radius: 12px;
   background: rgba(37, 99, 235, 0.08);
   color: #2563eb;
-  font-size: 18px;
+  font-size: 17px;
   flex-shrink: 0;
 }
 
-.dashboard-mini-summary-body {
+.dashboard-priority-content,
+.dashboard-list-card-content {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex: 1;
   min-width: 0;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.dashboard-mini-summary-label {
+.dashboard-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashboard-section-gap {
+  margin-top: 14px;
+}
+
+.dashboard-readonly-card:hover {
+  transform: none;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: none;
+}
+
+/* =========================
+   SECTION: Metrics
+   Fungsi:
+   - menampilkan ringkasan keuangan dan produksi tanpa angka dobel;
+   - card ringkas ini bukan pengganti report final.
+   Status:
+   - aktif sebagai UI summary read-only.
+========================= */
+.dashboard-compact-card {
+  height: 100%;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+}
+
+.dashboard-compact-card .ant-card-body {
+  height: 100%;
+  padding: 16px;
+}
+
+.dashboard-risk-card {
+  background: linear-gradient(135deg, rgba(255, 251, 235, 0.96), rgba(255, 255, 255, 0.98));
+}
+
+.dashboard-card-label {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: rgba(15, 23, 42, 0.68);
 }
 
-.dashboard-mini-summary-value.ant-typography {
+.dashboard-card-value.ant-typography {
   margin: 0 !important;
   line-height: 1.2;
 }
 
-.dashboard-mini-summary-subtitle {
-  font-size: 12px;
-  line-height: 1.5;
-  color: rgba(15, 23, 42, 0.58);
+.dashboard-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-/* =========================
-   SECTION: Chart
-========================= */
-.dashboard-chart-wrap {
-  min-height: 320px;
+.dashboard-status-chip.ant-tag {
+  margin-inline-end: 0;
+  border-radius: 999px;
 }
 
-.dashboard-chart-wrap .g2-tooltip {
-  border-radius: 12px !important;
+.dashboard-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dashboard-metric-card {
+  padding: 14px 16px;
+  background: #ffffff;
+}
+
+.dashboard-note-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 /* =========================
    SECTION: Empty State
+   Fungsi:
+   - menjaga section kosong tetap rapi dan tidak mengambil tinggi berlebihan.
+   Status:
+   - aktif untuk semua section Dashboard compact.
 ========================= */
 .dashboard-empty-wrap {
-  min-height: 220px;
+  min-height: 180px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .dashboard-empty-compact {
-  min-height: 160px;
-}
-
-/* =========================
-   SECTION: Table Polish
-========================= */
-.dashboard-page .ant-table-wrapper {
-  overflow: hidden;
-}
-
-.dashboard-page .ant-table {
-  background: var(--ims-surface-card) !important;
-}
-
-.dashboard-page .ant-table-thead > tr > th {
-  font-weight: 700;
+  min-height: 120px;
 }
 
 .dashboard-page .ant-tag {
@@ -257,65 +218,83 @@
 
 /* =========================
    SECTION: Dark Mode
+   Fungsi:
+   - menjaga card Dashboard tetap solid di dark mode;
+   - menghindari regression card putih/transparan.
+   Hubungan flow:
+   - styling saja, tidak menyentuh data/business rules.
+   Status:
+   - aktif dipakai.
 ========================= */
-.dark .dashboard-stat-card,
-.dark .dashboard-action-item,
-.dark .dashboard-quick-card,
-.dark .dashboard-mini-summary-card {
-  border: 1px solid rgba(148, 163, 184, 0.14) !important;
+.dark .dashboard-priority-card,
+.app-theme-dark .dashboard-priority-card,
+[data-app-theme="dark"] .dashboard-priority-card,
+.dark .dashboard-list-card,
+.app-theme-dark .dashboard-list-card,
+[data-app-theme="dark"] .dashboard-list-card,
+.dark .dashboard-compact-card,
+.app-theme-dark .dashboard-compact-card,
+[data-app-theme="dark"] .dashboard-compact-card,
+.dark .dashboard-metric-card,
+.app-theme-dark .dashboard-metric-card,
+[data-app-theme="dark"] .dashboard-metric-card {
+  border-color: rgba(148, 163, 184, 0.14) !important;
+  background: rgba(15, 23, 42, 0.5);
   box-shadow: 0 10px 28px rgba(2, 6, 23, 0.22);
 }
 
-.dark .dashboard-action-item,
-.dark .dashboard-mini-summary-card {
-  background: rgba(15, 23, 42, 0.38);
+.dark .dashboard-risk-card,
+.app-theme-dark .dashboard-risk-card,
+[data-app-theme="dark"] .dashboard-risk-card {
+  background: linear-gradient(135deg, rgba(113, 63, 18, 0.22), rgba(15, 23, 42, 0.5));
 }
 
-.dark .dashboard-quick-card {
-  background: rgba(15, 23, 42, 0.5);
-}
-
-.dark .dashboard-stat-card .ant-statistic-title,
-.dark .dashboard-mini-summary-label {
-  color: rgba(230, 237, 243, 0.68);
-}
-
-.dark .dashboard-stat-subtitle,
-.dark .dashboard-section-extra,
-.dark .dashboard-action-description,
-.dark .dashboard-quick-description,
-.dark .dashboard-mini-summary-subtitle {
-  color: rgba(230, 237, 243, 0.58);
-}
-
-.dark .dashboard-section-icon,
-.dark .dashboard-action-arrow {
-  color: rgba(230, 237, 243, 0.5);
-}
-
-.dark .dashboard-mini-summary-icon {
+.dark .dashboard-priority-icon,
+.app-theme-dark .dashboard-priority-icon,
+[data-app-theme="dark"] .dashboard-priority-icon {
   background: rgba(96, 165, 250, 0.12);
   color: #60a5fa;
 }
 
+.dark .dashboard-section-extra,
+.app-theme-dark .dashboard-section-extra,
+[data-app-theme="dark"] .dashboard-section-extra,
+.dark .dashboard-section-icon,
+.app-theme-dark .dashboard-section-icon,
+[data-app-theme="dark"] .dashboard-section-icon,
+.dark .dashboard-action-arrow,
+.app-theme-dark .dashboard-action-arrow,
+[data-app-theme="dark"] .dashboard-action-arrow,
+.dark .dashboard-muted-text,
+.app-theme-dark .dashboard-muted-text,
+[data-app-theme="dark"] .dashboard-muted-text,
+.dark .dashboard-date-text,
+.app-theme-dark .dashboard-date-text,
+[data-app-theme="dark"] .dashboard-date-text {
+  color: rgba(230, 237, 243, 0.58);
+}
+
+.dark .dashboard-card-label,
+.app-theme-dark .dashboard-card-label,
+[data-app-theme="dark"] .dashboard-card-label {
+  color: rgba(230, 237, 243, 0.72);
+}
+
 /* =========================
    SECTION: Responsive
+   Fungsi:
+   - memastikan Dashboard tetap compact tanpa horizontal scroll di layar kecil.
+   Status:
+   - aktif untuk UI responsive.
 ========================= */
 @media (max-width: 1400px) {
-  .dashboard-mini-summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .dashboard-priority-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 1200px) {
-  .dashboard-chart-wrap {
-    min-height: 300px;
-  }
-}
-
-@media (max-width: 992px) {
-  .dashboard-quick-grid,
-  .dashboard-mini-summary-grid {
+  .dashboard-metric-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -325,121 +304,22 @@
     gap: 14px;
   }
 
-  .dashboard-chart-wrap {
-    min-height: 260px;
+  .dashboard-priority-grid {
+    grid-template-columns: 1fr;
   }
 
-  .dashboard-stat-card .ant-statistic-content {
-    font-size: 24px;
-  }
-
-  .dashboard-action-item,
-  .dashboard-quick-card,
-  .dashboard-mini-summary-card {
-    border-radius: 14px;
-  }
-}
-
-/* =========================
-   SECTION: Production Planning Focus
-   Fungsi:
-   - menambahkan tampilan target produksi ke Dashboard lama tanpa merombak layout utama;
-   - seluruh blok ini read-only dan hanya mendukung navigasi ke halaman Production Planning.
-   Status:
-   - aktif dipakai untuk monitoring planning; bukan logic stok/PO/Work Log.
-========================= */
-.dashboard-planning-card {
-  height: 100%;
-  padding: 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: #ffffff;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
-}
-
-.dashboard-planning-risk-card {
-  background: linear-gradient(135deg, rgba(255, 251, 235, 0.96), rgba(255, 255, 255, 0.98));
-}
-
-.dashboard-planning-card-body {
-  width: 100%;
-}
-
-.dashboard-planning-value.ant-typography {
-  margin: 0 !important;
-  line-height: 1.2;
-}
-
-.dashboard-planning-focus-list {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
-}
-
-.dashboard-planning-focus-header {
-  width: 100%;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.dashboard-planning-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.dashboard-planning-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.72);
-  text-decoration: none;
-  transition: all 0.18s ease;
-}
-
-.dashboard-planning-item:hover {
-  transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.18);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
-}
-
-.dashboard-planning-item-main {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.dark .dashboard-planning-card {
-  border-color: rgba(148, 163, 184, 0.14);
-  background: rgba(15, 23, 42, 0.5);
-  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.22);
-}
-
-.dark .dashboard-planning-risk-card {
-  background: linear-gradient(135deg, rgba(113, 63, 18, 0.22), rgba(15, 23, 42, 0.5));
-}
-
-.dark .dashboard-planning-focus-list,
-.dark .dashboard-planning-item {
-  border-color: rgba(148, 163, 184, 0.14);
-}
-
-.dark .dashboard-planning-item {
-  background: rgba(15, 23, 42, 0.38);
-}
-
-@media (max-width: 768px) {
-  .dashboard-planning-card,
-  .dashboard-planning-item {
-    border-radius: 14px;
-  }
-
-  .dashboard-planning-item {
+  .dashboard-priority-card,
+  .dashboard-list-card {
     align-items: flex-start;
+    border-radius: 14px;
+  }
+
+  .dashboard-compact-card,
+  .dashboard-metric-card {
+    border-radius: 14px;
+  }
+
+  .dashboard-date-text {
+    white-space: normal;
   }
 }

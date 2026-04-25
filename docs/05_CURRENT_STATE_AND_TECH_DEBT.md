@@ -20,15 +20,15 @@ Temuan:
 Risiko:
 - tampilan atau logic modul baru dan modul lama bisa berbeda hasil
 
-### 2. Customer collection inkonsisten
-Temuan:
-- halaman Customers membaca `Customers`
-- halaman Customers menambah data ke `customers`
-- halaman Sales membaca `customers`
+### 2. Customer collection sudah disatukan
+Temuan terkini:
+- collection final customer adalah `customers` lowercase
+- Master Customer dan Sales membaca sumber yang sama
+- `Customers` uppercase harus dianggap legacy/test data, bukan source aktif baru
 
-Risiko:
-- data customer bisa terpencar di dua collection
-- halaman customer dan halaman sales bisa tidak sepenuhnya sinkron
+Risiko tersisa:
+- jika masih ada data lama di `Customers` uppercase, data tersebut tidak otomatis dimigrasi
+- migrasi customer lama harus menjadi task terpisah dengan preview agar tidak merusak relasi Sales
 
 ### 3. Stock Adjustment final sudah memakai helper stok
 Temuan terkini:
@@ -41,22 +41,26 @@ Risiko tersisa:
 - log/data adjustment lama yang dibuat sebelum patch bisa belum punya snapshot `availableStockBefore/After`
 - route lama atau file lama jangan dihidupkan lagi agar logic adjustment tidak bercabang
 
-### 4. Revert sale juga hanya update `stock`
-Temuan:
-- saat cancel / delete sale, revert stok dilakukan dengan `stock: increment(...)`
-- tidak ikut update `currentStock`
+### 4. Sales stock safety sudah di-hardening
+Temuan terkini:
+- create sale memvalidasi `availableStock` master/varian sebelum transaksi disimpan
+- kebutuhan item yang sama digabung dulu agar multi-line tidak melewati stok tersedia
+- mutasi stok Sales memakai helper stok aktif dan mencegah stok negatif
+- jika mutasi stok gagal setelah dokumen sale dibuat, flow melakukan rollback/delete sale baru agar tidak ada sale orphan
 
-Risiko:
-- sinkronisasi stok bisa tidak penuh
+Risiko tersisa:
+- flow ini masih client-side/best-effort, belum Cloud Function transaction end-to-end
+- cancel/delete tetap area guarded karena berhubungan dengan stock revert dan income cleanup
 
-### 5. Laporan stok masih sederhana
-Temuan:
-- `StockReport.jsx` memakai threshold tetap `10`
-- membaca `stock` dan bukan pendekatan stok baru yang lebih lengkap
-- belum terlihat mempertimbangkan varian/reserved stock secara penuh
+### 5. Laporan/export sudah lebih siap data real
+Temuan terkini:
+- Stock Report sudah membaca bahan baku, semi-finished, dan produk jadi
+- HPP Analysis sudah memiliki export XLSX dengan header manusiawi dan kolom validasi cost
+- Payroll Report XLSX memakai filter operator aktif; CSV lama tetap compatibility/legacy
 
-Risiko:
-- laporan stok bisa berbeda dengan kebutuhan operasional produksi yang lebih detail
+Risiko tersisa:
+- laporan stok masih belum menjadi kartu analitik varian/reserved stock yang sangat detail
+- export harus tetap dijaga agar tidak kembali menjadi data mentah/object teknis
 
 ### 6. Firebase Functions tampak legacy
 Temuan:
@@ -87,11 +91,11 @@ Untuk dokumentasi saat ini, flow aktif yang paling aman dianggap resmi adalah:
 - reset utilitas dengan baseline
 
 ## Prioritas Tech Debt yang Paling Layak Dibereskan Dulu
-1. satukan semua mutasi stok agar selalu update `currentStock`, `stock`, dan bila perlu `availableStock`
-2. rapikan `Customers` vs `customers`
-3. audit ulang Firebase Functions apakah masih dipakai atau sebaiknya dipensiunkan
-4. dokumentasikan resmi bahwa `productions` adalah legacy flow
-5. rapikan laporan stok agar membaca field stok aktif dan mendukung varian lebih baik
+1. audit ulang Firebase Functions apakah masih dipakai atau sebaiknya dipensiunkan
+2. dokumentasikan resmi bahwa `productions` adalah legacy flow bila masih ditemukan di source lama
+3. pertimbangkan Cloud Function/transaction untuk Sales stock safety jika data real sudah besar dan multi-user aktif
+4. buat keputusan business rule rollback untuk payroll paid yang sudah membuat expense
+5. tingkatkan laporan stok varian/reserved stock jika owner membutuhkan analisis lebih detail
 
 ## Definition of Done untuk Perubahan Besar Berikutnya
 ## Update Current State: Guard Logic Work Log Produksi
@@ -257,3 +261,31 @@ Tech debt tersisa:
 - Dashboard summary planning saat ini agregat unit sebagai `pcs`; jika nanti ada unit target berbeda, perlu grouping per unit.
 - Belum ada calendar view kompleks; sengaja ditunda karena list/card sudah cukup untuk scope aman.
 - Belum ada migration/backfill planning untuk PO lama; jika perlu harus task terpisah dengan preview.
+
+
+## Final Current State Hardening Fase A-G - 2026-04-26
+
+### Status Fase A-F berdasarkan source terbaru
+- Fase A Sales stock safety: sudah tercermin di source melalui validasi `availableStock`, agregasi kebutuhan item, dan rollback sale jika mutasi stok gagal.
+- Fase B Purchase expense metadata: sudah tercermin di source melalui metadata expense otomatis pembelian `sourceId`, `sourceRef`, `sourceType`, `createdByAutomation`, dan kompatibilitas `relatedPurchaseId`.
+- Fase C HPP/Work Log cost 0 warning: sudah tercermin di source melalui warning validasi cost di HPP Analysis dan detail Work Log.
+- Fase D Dashboard cleanup: sudah tercermin di source dengan Dashboard read-only 5 section, last updated, refresh, list compact, dan tanpa table besar sebagai layout utama.
+- Fase E Report/export gap: sudah tercermin di source melalui Stock Report yang membaca semi-finished stock, export HPP XLSX, dan fix filter export Payroll Report.
+- Fase F legacy duplicate cleanup: status bersih pada upload terbaru karena folder `src/src/**` tidak ditemukan lagi dan grep reference `src/src` tidak menemukan import aktif.
+- Fase G docs/checklist: fase dokumentasi; tidak mengubah source aplikasi.
+
+### Tech debt yang masih terbuka setelah hardening
+- Sales stock safety masih client-side/best-effort; untuk multi-user padat, pertimbangkan transaction/cloud function khusus.
+- Payroll paid reversal belum diputuskan: expense payroll tidak dihapus otomatis saat status paid dibatalkan.
+- HPP cost 0 sekarang diberi warning, tetapi data lama tidak di-backfill otomatis.
+- Firebase Functions legacy tidak bisa dipastikan dari upload ini bila folder functions tidak disertakan.
+- Analisis stok varian/reserved stock di report masih bisa ditingkatkan jika dibutuhkan, tetapi source data laporan sudah lebih lengkap.
+
+### Area yang sekarang guarded
+- `src/pages/Transaksi/Sales.jsx`: jangan ubah urutan safety create sale tanpa audit stok/income.
+- `src/pages/Transaksi/Purchases.jsx`: jangan hapus metadata expense otomatis pembelian.
+- `src/pages/Produksi/ProductionHppAnalysis.jsx`: jangan hilangkan warning cost 0 atau export HPP tanpa pengganti.
+- `src/pages/Produksi/ProductionWorkLogs.jsx`: jangan proses ulang completed Work Log hanya untuk memperbaiki tampilan cost.
+- `src/pages/Dashboard/Dashboard.jsx` dan `.css`: Dashboard harus tetap read-only dan compact.
+- `src/pages/Laporan/StockReport.jsx`: jangan hilangkan semi-finished stock dari laporan.
+- `src/services/Produksi/productionPayrollsService.js`: guard anti double payroll expense wajib dipertahankan.

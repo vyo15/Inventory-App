@@ -10,6 +10,7 @@ import {
   Button,
   Card,
   Col,
+  Collapse,
   Descriptions,
   Divider,
   Drawer,
@@ -58,7 +59,6 @@ import {
 import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
 import { getAllProductionWorkLogs } from "../../services/Produksi/productionWorkLogsService";
 import { getActiveProductionSteps } from "../../services/Produksi/productionStepsService";
-import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 
@@ -66,28 +66,6 @@ import formatCurrency from "../../utils/formatters/currencyId";
 // Formatter final lintas aplikasi
 // ACTIVE / FINAL: karyawan produksi memakai helper shared untuk semua angka.
 // =====================================================
-
-// =====================================================
-// ACTIVE / UI HELP TEXT
-// Fungsi blok:
-// - menambahkan penjelasan singkat pada detail karyawan produksi;
-// - menjaga drawer tetap read-only dan tidak mengubah relasi Work Log/Payroll.
-// Alasan perubahan:
-// - Task 3 hanya memperjelas field aktif vs legacy agar user tidak salah membaca
-//   custom payroll employee sebagai rule payroll final.
-// Status:
-// - aktif dipakai di drawer Detail Karyawan Produksi; bukan kandidat cleanup.
-// =====================================================
-const EmployeeDetailValue = ({ children, help }) => (
-  <Space direction="vertical" size={0}>
-    <span>{children}</span>
-    {help ? (
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        {help}
-      </Typography.Text>
-    ) : null}
-  </Space>
-);
 
 // =====================================================
 // Main Component
@@ -457,12 +435,12 @@ const ProductionEmployees = () => {
         const leftTime = new Date(left.payrollDate?.toDate?.() || left.payrollDate || 0).getTime() || 0;
         const rightTime = new Date(right.payrollDate?.toDate?.() || right.payrollDate || 0).getTime() || 0;
         return rightTime - leftTime;
-      }).slice(0, 5);
+      }).slice(0, 3);
       const recentWorkLogs = [...employeeWorkLogs].sort((left, right) => {
         const leftTime = new Date(left.completedAt?.toDate?.() || left.completedAt || left.workDate?.toDate?.() || left.workDate || 0).getTime() || 0;
         const rightTime = new Date(right.completedAt?.toDate?.() || right.completedAt || right.workDate?.toDate?.() || right.workDate || 0).getTime() || 0;
         return rightTime - leftTime;
-      }).slice(0, 5);
+      }).slice(0, 3);
 
       acc[employee.id] = {
         totalWorkLogs: employeeWorkLogs.length,
@@ -490,114 +468,102 @@ const ProductionEmployees = () => {
     ? employeeSummaryMap[selectedEmployee.id] || null
     : null;
 
-  const selectedEmployeeSummaryItems = useMemo(() => {
-    if (!selectedEmployeeSummary) return [];
+  // =====================================================
+  // ACTIVE / UI DETAIL COMPACT SUMMARY
+  // Fungsi blok:
+  // - menyiapkan ringkasan kecil untuk drawer Detail Karyawan Produksi;
+  // - hanya membaca data Work Log/Payroll yang sudah dimuat, tanpa menulis data.
+  // Alasan blok ini dipakai:
+  // - bug UI terjadi karena detail lama terlalu penuh dan menampilkan tabel/help text panjang.
+  // Status:
+  // - aktif dipakai sebagai ringkasan operasional; bukan legacy dan bukan kandidat cleanup.
+  // =====================================================
+  const selectedEmployeeActivitySummary = useMemo(() => {
+    if (!selectedEmployeeSummary) {
+      return {
+        totalWorkLogs: 0,
+        payrollPending: 0,
+        totalPaid: 0,
+        totalPaidAmount: 0,
+        recentPayrolls: [],
+        recentWorkLogs: [],
+      };
+    }
 
-    return [
-      {
-        key: "employee-worklogs",
-        title: "Total Work Log",
-        value: formatNumber(selectedEmployeeSummary.totalWorkLogs),
-        subtitle: "Jumlah Work Log final yang melibatkan operator ini.",
-        accent: "primary",
-      },
-      {
-        key: "employee-draft",
-        title: "Draft",
-        value: formatNumber(selectedEmployeeSummary.totalDraft),
-        subtitle: "Line payroll yang masih perlu finalisasi.",
-        accent: "warning",
-      },
-      {
-        key: "employee-confirmed",
-        title: "Confirmed",
-        value: formatNumber(selectedEmployeeSummary.totalConfirmed),
-        subtitle: "Line payroll siap pembayaran.",
-        accent: "primary",
-      },
-      {
-        key: "employee-paid",
-        title: "Paid",
-        value: formatNumber(selectedEmployeeSummary.totalPaid),
-        subtitle: "Line payroll yang sudah dibayar.",
-        accent: "success",
-      },
-      {
-        key: "employee-paid-amount",
-        title: "Total Paid",
-        value: formatCurrency(selectedEmployeeSummary.totalPaidAmount),
-        subtitle: `Step tersering: ${selectedEmployeeSummary.favoriteStep}`,
-        accent: "success",
-        columns: { xs: 24, sm: 12, md: 12, lg: 8 },
-      },
-      {
-        key: "employee-confirmed-amount",
-        title: "Total Confirmed",
-        value: formatCurrency(selectedEmployeeSummary.totalConfirmedAmount),
-        subtitle: "Nominal payroll confirmed yang belum ditandai paid.",
-        accent: "warning",
-        columns: { xs: 24, sm: 12, md: 12, lg: 8 },
-      },
-    ];
+    return {
+      totalWorkLogs: selectedEmployeeSummary.totalWorkLogs || 0,
+      payrollPending:
+        Number(selectedEmployeeSummary.totalDraft || 0) +
+        Number(selectedEmployeeSummary.totalConfirmed || 0),
+      totalPaid: selectedEmployeeSummary.totalPaid || 0,
+      totalPaidAmount: selectedEmployeeSummary.totalPaidAmount || 0,
+      recentPayrolls: selectedEmployeeSummary.recentPayrolls || [],
+      recentWorkLogs: selectedEmployeeSummary.recentWorkLogs || [],
+    };
   }, [selectedEmployeeSummary]);
 
-  const payrollHistoryColumns = [
-    {
-      title: "No. Payroll",
-      dataIndex: "payrollNumber",
-      key: "payrollNumber",
-      render: (value, record) => (
-        <div>
-          <div style={{ fontWeight: 600 }}>{value || "-"}</div>
-          <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.workNumber || "-"}</div>
-        </div>
-      ),
-    },
-    {
-      title: "Step",
-      dataIndex: "stepName",
-      key: "stepName",
-      render: (value) => value || "-",
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      render: (value) => <Tag>{value || "-"}</Tag>,
-    },
-    {
-      title: "Nominal",
-      dataIndex: "finalAmount",
-      key: "finalAmount",
-      render: (value) => formatCurrency(value),
-    },
-  ];
+  // =====================================================
+  // ACTIVE / UI DETAIL OPTIONAL SECTIONS
+  // Fungsi blok:
+  // - mendeteksi apakah info tambahan dan field legacy perlu ditampilkan di Collapse;
+  // - field legacy tetap dibaca untuk audit, tetapi tidak ditampilkan sebagai fitur utama.
+  // Alasan blok ini dipakai:
+  // - payroll baru mengikuti Tahapan Produksi + Work Log completed, bukan custom payroll employee.
+  // Status:
+  // - aktif dipakai untuk UI detail; bagian payroll legacy adalah compatibility dan kandidat cleanup
+  //   hanya jika data lama sudah diputuskan tidak dibutuhkan lagi.
+  // =====================================================
+  const hasValue = (value) => String(value || "").trim() !== "";
 
-  const workLogHistoryColumns = [
-    {
-      title: "Work Log",
-      dataIndex: "workNumber",
-      key: "workNumber",
-      render: (value, record) => (
-        <div>
-          <div style={{ fontWeight: 600 }}>{value || "-"}</div>
-          <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.stepName || "-"}</div>
-        </div>
-      ),
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      render: (value) => <Tag>{value || "-"}</Tag>,
-    },
-    {
-      title: "Good Qty",
-      dataIndex: "goodQty",
-      key: "goodQty",
-      render: (value) => formatNumber(value),
-    },
-  ];
+  const hasAdditionalEmployeeInfo = (employee = {}) => {
+    return Boolean(
+      hasValue(employee.gender) ||
+        hasValue(employee.phone) ||
+        hasValue(employee.address) ||
+        (Array.isArray(employee.skillTags) && employee.skillTags.length > 0) ||
+        hasValue(employee.notes),
+    );
+  };
+
+  const hasLegacyPayrollInfo = (employee = {}) => {
+    const customModeActive = employee.useCustomPayrollRate && hasValue(employee.customPayrollMode);
+    const customOutputActive =
+      employee.useCustomPayrollRate && hasValue(employee.customPayrollOutputBasis);
+    const customQtyActive =
+      employee.useCustomPayrollRate && Number(employee.customPayrollQtyBase || 0) > 0;
+
+    return Boolean(
+      employee.useCustomPayrollRate ||
+        customModeActive ||
+        Number(employee.customPayrollRate || 0) > 0 ||
+        customQtyActive ||
+        customOutputActive ||
+        hasValue(employee.payrollNotes),
+    );
+  };
+
+  const formatShortDate = (value) => {
+    const rawDate = value?.toDate?.() || value;
+    if (!rawDate) return "-";
+
+    const parsedDate = new Date(rawDate);
+    if (Number.isNaN(parsedDate.getTime())) return "-";
+
+    return parsedDate.toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const renderCompactInfo = (label, value) => (
+    <Space direction="vertical" size={0} style={{ width: "100%" }}>
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        {label}
+      </Typography.Text>
+      <Typography.Text strong>{value || "-"}</Typography.Text>
+    </Space>
+  );
 
   const columns = [
     {
@@ -1227,184 +1193,297 @@ const ProductionEmployees = () => {
         ) : (
           <>
             {/* =====================================================
-                ACTIVE / READ-ONLY CONTEXT
+                ACTIVE / READ-ONLY COMPACT DETAIL
                 Fungsi blok:
-                - menjelaskan fungsi drawer detail karyawan sebagai master operator
-                  dan ringkasan baca-saja;
-                - menegaskan payroll final tidak diatur dari custom payroll employee.
-                Alasan perubahan:
-                - Task 3 meminta label/help text agar user mudah membedakan field
-                  aktif dengan field legacy.
+                - merapikan drawer Detail Karyawan Produksi menjadi ringkasan operasional;
+                - hanya menampilkan info utama, assignment, ringkasan aktivitas, histori singkat,
+                  info tambahan, dan legacy payroll dalam Collapse.
+                Alasan blok ini dipakai:
+                - detail lama terlalu panjang karena help text per field, tabel besar, dan payroll
+                  legacy tampil terbuka seperti fitur utama.
                 Status:
-                - aktif dipakai; bukan legacy.
+                - aktif dipakai untuk UI detail; tidak menulis data dan bukan refactor flow bisnis.
             ===================================================== */}
             <Alert
               showIcon
               type="info"
               style={{ marginBottom: 16 }}
-              message="Detail karyawan = master operator + ringkasan produksi"
-              description="Data dasar, status, role, skill, dan assignment masih aktif dipakai untuk Work Log. Ringkasan payroll/work log di bawah bersifat read-only dari transaksi final, bukan tempat menghitung payroll baru."
+              message="Karyawan Produksi dipakai sebagai operator Work Log dan referensi payroll produksi."
             />
 
-            <Descriptions column={1} bordered size="small" style={{ marginBottom: 16 }}>
-              <Descriptions.Item label="Kode Karyawan">
-                <EmployeeDetailValue help="Kode display karyawan produksi. Relasi utama tetap memakai ID dokumen Firestore bila sudah tersimpan di Work Log/Payroll.">
-                  {selectedEmployee.code || "-"}
-                </EmployeeDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Nama Karyawan">
-                <EmployeeDetailValue help="Nama operator yang muncul di Work Log, payroll, dan assignment tahapan.">
-                  {selectedEmployee.name || "-"}
-                </EmployeeDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Gender">
-                <EmployeeDetailValue help="Informasi identitas dasar untuk administrasi internal.">
-                  {EMPLOYEE_GENDER_MAP[selectedEmployee.gender] || "-"}
-                </EmployeeDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="No. HP">
-                <EmployeeDetailValue help="Kontak operator produksi. Tidak dipakai untuk kalkulasi payroll.">
-                  {selectedEmployee.phone || "-"}
-                </EmployeeDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Alamat">
-                <EmployeeDetailValue help="Alamat administrasi. Tidak memengaruhi Work Log atau payroll.">
-                  {selectedEmployee.address || "-"}
-                </EmployeeDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Jenis Kerja">
-                <EmployeeDetailValue help="Klasifikasi kerja seperti tetap/harian/borongan. Dipakai untuk informasi master, bukan pengganti rule payroll tahapan.">
-                  {EMPLOYEE_TYPE_MAP[selectedEmployee.employmentType] || "-"}
-                </EmployeeDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Role Produksi">
-                <EmployeeDetailValue help="Peran operator, misalnya operator/supervisor/helper. Membantu filter dan assignment produksi.">
-                  {EMPLOYEE_ROLE_MAP[selectedEmployee.role] || "-"}
-                </EmployeeDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Tahapan Assignment">
-                <EmployeeDetailValue help="Tahapan produksi yang boleh dikerjakan operator ini. Dipakai saat memilih operator di flow Work Log.">
-                  {Array.isArray(selectedEmployee.assignedStepNames) &&
-                  selectedEmployee.assignedStepNames.length > 0 ? (
-                    <Space size={[4, 4]} wrap>
-                      {selectedEmployee.assignedStepNames.map((item) => (
-                        <Tag key={item}>{item}</Tag>
-                      ))}
-                    </Space>
-                  ) : (
-                    "-"
+            <Card size="small" title="Ringkasan Karyawan" style={{ marginBottom: 16 }}>
+              <Row gutter={[12, 12]}>
+                <Col xs={24} md={12}>
+                  {renderCompactInfo("Kode", selectedEmployee.code)}
+                </Col>
+                <Col xs={24} md={12}>
+                  {renderCompactInfo("Nama", selectedEmployee.name)}
+                </Col>
+                <Col xs={12} md={6}>
+                  <Space direction="vertical" size={0}>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      Status
+                    </Typography.Text>
+                    <Tag color={selectedEmployee.isActive ? "green" : "default"}>
+                      {selectedEmployee.isActive ? "Aktif" : "Nonaktif"}
+                    </Tag>
+                  </Space>
+                </Col>
+                <Col xs={12} md={6}>
+                  {renderCompactInfo(
+                    "Jenis Kerja",
+                    EMPLOYEE_TYPE_MAP[selectedEmployee.employmentType],
                   )}
-                </EmployeeDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Skill Tags">
-                <EmployeeDetailValue help="Tag kemampuan operator untuk membantu pencarian/penjadwalan. Tidak menjadi payroll rule.">
-                  {Array.isArray(selectedEmployee.skillTags) &&
-                  selectedEmployee.skillTags.length > 0 ? (
-                    <Space size={[4, 4]} wrap>
-                      {selectedEmployee.skillTags.map((item) => (
-                        <Tag key={item}>{item}</Tag>
-                      ))}
-                    </Space>
-                  ) : (
-                    "-"
-                  )}
-                </EmployeeDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Catatan Internal">
-                <EmployeeDetailValue help="Catatan administrasi untuk karyawan. Tidak mengubah status, assignment, atau payroll.">
-                  {selectedEmployee.notes || "-"}
-                </EmployeeDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Status Aktif">
-                <EmployeeDetailValue help="Aktif berarti karyawan dapat dipakai di flow produksi. Nonaktif tidak menghapus histori Work Log/Payroll lama.">
-                  <Tag color={selectedEmployee.isActive ? "green" : "default"}>
-                    {selectedEmployee.isActive ? "Aktif" : "Nonaktif"}
-                  </Tag>
-                </EmployeeDetailValue>
-              </Descriptions.Item>
-            </Descriptions>
+                </Col>
+                <Col xs={12} md={6}>
+                  {renderCompactInfo("Role", EMPLOYEE_ROLE_MAP[selectedEmployee.role])}
+                </Col>
+                {selectedEmployee.phone ? (
+                  <Col xs={12} md={6}>
+                    {renderCompactInfo("No. HP", selectedEmployee.phone)}
+                  </Col>
+                ) : null}
+              </Row>
+            </Card>
 
-            <Divider orientation="left">Ringkasan Payroll Read-only</Divider>
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-              Ringkasan ini dibaca dari line payroll final dan Work Log final. Nilai di sini hanya membantu audit per operator dan tidak menjadi sumber kalkulasi baru.
-            </Typography.Paragraph>
+            {/* =====================================================
+                ACTIVE / ASSIGNMENT COMPACT
+                Fungsi blok:
+                - menampilkan assignment tahapan sebagai tag kecil;
+                - tidak mengubah assignedStepIds/Names/Codes agar relasi Work Log tetap aman.
+                Alasan blok ini dipakai:
+                - assignment adalah info penting produksi, tetapi detail lama terlalu ramai dengan help text.
+                Status:
+                - aktif dipakai; bukan legacy.
+            ===================================================== */}
+            <Card size="small" title="Assignment Produksi" style={{ marginBottom: 16 }}>
+              {Array.isArray(selectedEmployee.assignedStepNames) &&
+              selectedEmployee.assignedStepNames.length > 0 ? (
+                <Space size={[4, 4]} wrap>
+                  {selectedEmployee.assignedStepNames.map((item) => (
+                    <Tag key={item}>{item}</Tag>
+                  ))}
+                </Space>
+              ) : (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="Belum ada tahapan assignment."
+                />
+              )}
+            </Card>
 
-            <SummaryStatGrid items={selectedEmployeeSummaryItems} columns={{ xs: 24, sm: 12, lg: 8 }} />
+            {/* =====================================================
+                ACTIVE / READ-ONLY ACTIVITY SUMMARY
+                Fungsi blok:
+                - menampilkan ringkasan Work Log dan Payroll secara compact;
+                - data dibaca dari transaksi final, tanpa kalkulasi ulang payroll.
+                Alasan blok ini dipakai:
+                - user butuh ringkasan cepat, bukan tabel panjang di drawer detail.
+                Status:
+                - aktif dipakai; bukan legacy.
+            ===================================================== */}
+            <Card size="small" title="Ringkasan Work Log & Payroll" style={{ marginBottom: 16 }}>
+              <Row gutter={[12, 12]}>
+                <Col xs={12} md={6}>
+                  <Statistic
+                    title="Total Work Log"
+                    value={selectedEmployeeActivitySummary.totalWorkLogs}
+                  />
+                </Col>
+                <Col xs={12} md={6}>
+                  <Statistic
+                    title="Payroll Pending / Draft"
+                    value={selectedEmployeeActivitySummary.payrollPending}
+                  />
+                </Col>
+                <Col xs={12} md={6}>
+                  <Statistic
+                    title="Paid"
+                    value={selectedEmployeeActivitySummary.totalPaid}
+                  />
+                </Col>
+                <Col xs={12} md={6}>
+                  <Statistic
+                    title="Total Paid"
+                    value={formatCurrency(selectedEmployeeActivitySummary.totalPaidAmount)}
+                  />
+                </Col>
+              </Row>
 
-            <Divider orientation="left">Histori Payroll Singkat</Divider>
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-              Menampilkan beberapa line payroll terakhir yang terhubung ke operator ini. Nominal berasal dari Payroll Produksi, bukan dari field custom payroll employee.
-            </Typography.Paragraph>
-            <Table
-              className="app-data-table"
-              size="small"
-              rowKey="id"
-              pagination={false}
-              columns={payrollHistoryColumns}
-              dataSource={selectedEmployeeSummary?.recentPayrolls || []}
-              locale={{
-                emptyText: <Empty description="Belum ada line payroll untuk operator ini" />,
-              }}
-              scroll={{ x: 720 }}
-              style={{ marginBottom: 16 }}
-            />
+              {selectedEmployeeSummary?.totalPayrollLines ? null : (
+                <Typography.Text type="secondary" style={{ display: "block", marginTop: 12 }}>
+                  Belum ada payroll untuk operator ini.
+                </Typography.Text>
+              )}
+            </Card>
 
-            <Divider orientation="left">Histori Work Log Singkat</Divider>
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-              Menampilkan Work Log terakhir yang melibatkan operator ini. Data ini membantu mengecek aktivitas produksi tanpa mengubah histori.
-            </Typography.Paragraph>
-            <Table
-              className="app-data-table"
-              size="small"
-              rowKey="id"
-              pagination={false}
-              columns={workLogHistoryColumns}
-              dataSource={selectedEmployeeSummary?.recentWorkLogs || []}
-              locale={{
-                emptyText: <Empty description="Belum ada Work Log untuk operator ini" />,
-              }}
-              scroll={{ x: 680 }}
-              style={{ marginBottom: 16 }}
-            />
+            {/* =====================================================
+                ACTIVE / COMPACT HISTORY
+                Fungsi blok:
+                - menampilkan maksimal 3 Work Log dan 3 Payroll terakhir;
+                - mengganti tabel detail lama agar drawer tidak horizontal scroll.
+                Alasan blok ini dipakai:
+                - histori lengkap tetap ada di menu Work Log Produksi dan Payroll Produksi.
+                Status:
+                - aktif dipakai; bukan legacy.
+            ===================================================== */}
+            <Card size="small" title="Histori Singkat" style={{ marginBottom: 16 }}>
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={12}>
+                  <Typography.Text strong>Work Log Terakhir</Typography.Text>
+                  <Space direction="vertical" size={8} style={{ width: "100%", marginTop: 8 }}>
+                    {selectedEmployeeActivitySummary.recentWorkLogs.length > 0 ? (
+                      selectedEmployeeActivitySummary.recentWorkLogs.map((item) => (
+                        <Card key={item.id} size="small" bodyStyle={{ padding: 10 }}>
+                          <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                            <Typography.Text strong>{item.workNumber || "-"}</Typography.Text>
+                            <Typography.Text type="secondary">
+                              {item.stepName || "-"} · {formatShortDate(item.completedAt || item.workDate)}
+                            </Typography.Text>
+                            <Space size={[4, 4]} wrap>
+                              <Tag>{item.status || "-"}</Tag>
+                              <Tag>Good Qty: {formatNumber(item.goodQty || 0)}</Tag>
+                            </Space>
+                          </Space>
+                        </Card>
+                      ))
+                    ) : (
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description="Belum ada Work Log untuk operator ini."
+                      />
+                    )}
+                  </Space>
+                </Col>
 
-            <Divider orientation="left">Payroll Preference Legacy / Deprecated</Divider>
-            <Alert
-              showIcon
-              type="warning"
-              style={{ marginBottom: 16 }}
-              message="Field custom payroll karyawan hanya legacy / compatibility"
-              description="Field di bawah dipertahankan untuk membaca data lama. Payroll final aktif sekarang mengikuti rule Tahapan Produksi dan Work Log completed, bukan custom payroll employee."
-            />
+                <Col xs={24} md={12}>
+                  <Typography.Text strong>Payroll Terakhir</Typography.Text>
+                  <Space direction="vertical" size={8} style={{ width: "100%", marginTop: 8 }}>
+                    {selectedEmployeeActivitySummary.recentPayrolls.length > 0 ? (
+                      selectedEmployeeActivitySummary.recentPayrolls.map((item) => (
+                        <Card key={item.id} size="small" bodyStyle={{ padding: 10 }}>
+                          <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                            <Typography.Text strong>{item.payrollNumber || "-"}</Typography.Text>
+                            <Typography.Text type="secondary">
+                              {item.stepName || "-"} · {formatShortDate(item.payrollDate)}
+                            </Typography.Text>
+                            <Space size={[4, 4]} wrap>
+                              <Tag>{item.status || "-"}</Tag>
+                              <Tag>{formatCurrency(item.finalAmount || 0)}</Tag>
+                            </Space>
+                          </Space>
+                        </Card>
+                      ))
+                    ) : (
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description="Belum ada line payroll untuk operator ini."
+                      />
+                    )}
+                  </Space>
+                </Col>
+              </Row>
 
-            <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label="Gunakan Tarif Custom (Legacy)">
-                {selectedEmployee.useCustomPayrollRate ? "Ya" : "Tidak"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Mode Payroll Custom (Legacy)">
-                {EMPLOYEE_PAYROLL_MODE_MAP[selectedEmployee.customPayrollMode] || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Tarif Custom (Legacy)">
-                {selectedEmployee.useCustomPayrollRate
-                  ? formatCurrency(selectedEmployee.customPayrollRate)
-                  : "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Basis Qty Custom (Legacy)">
-                {selectedEmployee.useCustomPayrollRate
-                  ? formatNumber(selectedEmployee.customPayrollQtyBase)
-                  : "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Basis Output Payroll (Legacy)">
-                {EMPLOYEE_PAYROLL_OUTPUT_BASIS_MAP[
-                  selectedEmployee.customPayrollOutputBasis
-                ] || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Preview Payroll / Status Legacy">
-                {formatEmployeePayrollPreview(selectedEmployee)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Catatan Payroll Legacy">
-                {selectedEmployee.payrollNotes || "-"}
-              </Descriptions.Item>
-            </Descriptions>
+              <Typography.Text type="secondary" style={{ display: "block", marginTop: 12 }}>
+                Untuk histori lengkap, buka menu Work Log Produksi atau Payroll Produksi.
+              </Typography.Text>
+            </Card>
+
+            {hasAdditionalEmployeeInfo(selectedEmployee) ? (
+              <Collapse size="small" style={{ marginBottom: 16 }}>
+                <Collapse.Panel header="Info Tambahan" key="additional-info">
+                  <Descriptions column={1} size="small">
+                    <Descriptions.Item label="Gender">
+                      {EMPLOYEE_GENDER_MAP[selectedEmployee.gender] || "-"}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="No. HP">
+                      {selectedEmployee.phone || "-"}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Alamat">
+                      <Typography.Paragraph
+                        ellipsis={{ rows: 2, expandable: true, symbol: "Lihat lengkap" }}
+                        style={{ marginBottom: 0 }}
+                      >
+                        {selectedEmployee.address || "-"}
+                      </Typography.Paragraph>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Skill Tags">
+                      {Array.isArray(selectedEmployee.skillTags) &&
+                      selectedEmployee.skillTags.length > 0 ? (
+                        <Space size={[4, 4]} wrap>
+                          {selectedEmployee.skillTags.map((item) => (
+                            <Tag key={item}>{item}</Tag>
+                          ))}
+                        </Space>
+                      ) : (
+                        "-"
+                      )}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Catatan Internal">
+                      <Typography.Paragraph
+                        ellipsis={{ rows: 2, expandable: true, symbol: "Lihat lengkap" }}
+                        style={{ marginBottom: 0 }}
+                      >
+                        {selectedEmployee.notes || "-"}
+                      </Typography.Paragraph>
+                    </Descriptions.Item>
+                  </Descriptions>
+                </Collapse.Panel>
+              </Collapse>
+            ) : null}
+
+            {hasLegacyPayrollInfo(selectedEmployee) ? (
+              <Collapse size="small">
+                <Collapse.Panel header="Data Legacy / Kompatibilitas" key="legacy-payroll">
+                  {/* =====================================================
+                      LEGACY / COMPATIBILITY ONLY
+                      Fungsi blok:
+                      - tetap menyediakan audit field payroll legacy tanpa menjadikannya fitur utama;
+                      - tidak menghapus field lama dari Firestore.
+                      Alasan blok ini dipakai:
+                      - source payroll baru mengikuti Tahapan Produksi dan Work Log completed.
+                      Status:
+                      - legacy/compatibility; kandidat cleanup hanya setelah keputusan migrasi data lama.
+                  ===================================================== */}
+                  <Alert
+                    showIcon
+                    type="warning"
+                    style={{ marginBottom: 12 }}
+                    message="Legacy, tidak dipakai untuk payroll baru."
+                    description="Data ini dipertahankan untuk kompatibilitas data lama. Payroll baru mengikuti Tahapan Produksi dan Work Log completed."
+                  />
+                  <Descriptions column={1} size="small">
+                    <Descriptions.Item label="Gunakan Tarif Custom">
+                      {selectedEmployee.useCustomPayrollRate ? "Ya" : "Tidak"}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Mode Payroll Custom">
+                      {EMPLOYEE_PAYROLL_MODE_MAP[selectedEmployee.customPayrollMode] || "-"}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Tarif Custom">
+                      {selectedEmployee.useCustomPayrollRate
+                        ? formatCurrency(selectedEmployee.customPayrollRate)
+                        : "-"}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Basis Qty Custom">
+                      {selectedEmployee.useCustomPayrollRate
+                        ? formatNumber(selectedEmployee.customPayrollQtyBase)
+                        : "-"}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Basis Output Payroll">
+                      {EMPLOYEE_PAYROLL_OUTPUT_BASIS_MAP[
+                        selectedEmployee.customPayrollOutputBasis
+                      ] || "-"}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Preview / Status Legacy">
+                      {formatEmployeePayrollPreview(selectedEmployee)}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Catatan Payroll Legacy">
+                      {selectedEmployee.payrollNotes || "-"}
+                    </Descriptions.Item>
+                  </Descriptions>
+                </Collapse.Panel>
+              </Collapse>
+            ) : null}
           </>
         )}
       </Drawer>

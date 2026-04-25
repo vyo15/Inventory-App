@@ -33,6 +33,30 @@ const resolveStatus = (stockValue) => {
   return "Normal";
 };
 
+// =========================
+// ACTIVE / FINAL - normalisasi row stok untuk laporan/export.
+// Fungsi blok:
+// - menyatukan raw material, semi finished, dan produk jadi ke format row laporan yang sama;
+// - menjaga Stock Report membaca source stok final tanpa menulis/mengubah data bisnis.
+// Hubungan dengan flow laporan/export:
+// - dipakai oleh tabel dan XLSX agar semi-finished stock ikut terbaca untuk data real produksi.
+// Status: aktif dipakai; bukan legacy dan bukan kandidat cleanup.
+// =========================
+const mapInventorySnapshotToReportRows = (snapshot, typeLabel) =>
+  snapshot.docs.map((documentItem) => {
+    const payload = documentItem.data();
+    const stockValue = resolveDisplayStock(payload);
+
+    return {
+      id: documentItem.id,
+      ...payload,
+      stockDisplay: stockValue,
+      unitDisplay: resolveDisplayUnit(payload),
+      type: typeLabel,
+      status: resolveStatus(stockValue),
+    };
+  });
+
 const StockReport = () => {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,19 +69,7 @@ const StockReport = () => {
     const unsubscribeRawMaterials = onSnapshot(
       collection(db, "raw_materials"),
       (snapshot) => {
-        const rawMaterialsData = snapshot.docs.map((documentItem) => {
-          const payload = documentItem.data();
-          const stockValue = resolveDisplayStock(payload);
-
-          return {
-            id: documentItem.id,
-            ...payload,
-            stockDisplay: stockValue,
-            unitDisplay: resolveDisplayUnit(payload),
-            type: "Bahan Baku",
-            status: resolveStatus(stockValue),
-          };
-        });
+        const rawMaterialsData = mapInventorySnapshotToReportRows(snapshot, "Bahan Baku");
 
         setInventory((previousInventory) => [
           ...previousInventory.filter((item) => item.type !== "Bahan Baku"),
@@ -75,19 +87,7 @@ const StockReport = () => {
     const unsubscribeProducts = onSnapshot(
       collection(db, "products"),
       (snapshot) => {
-        const productsData = snapshot.docs.map((documentItem) => {
-          const payload = documentItem.data();
-          const stockValue = resolveDisplayStock(payload);
-
-          return {
-            id: documentItem.id,
-            ...payload,
-            stockDisplay: stockValue,
-            unitDisplay: resolveDisplayUnit(payload),
-            type: "Produk Jadi",
-            status: resolveStatus(stockValue),
-          };
-        });
+        const productsData = mapInventorySnapshotToReportRows(snapshot, "Produk Jadi");
 
         setInventory((previousInventory) => [
           ...previousInventory.filter((item) => item.type !== "Produk Jadi"),
@@ -97,6 +97,31 @@ const StockReport = () => {
       (error) => {
         message.error("Gagal memuat data produk jadi.");
         console.error("Error fetching products:", error);
+      },
+    );
+
+    // =========================
+    // ACTIVE / FINAL - subscription semi finished stock untuk Stock Report.
+    // Fungsi blok:
+    // - menambahkan collection semi_finished_materials ke laporan stok tanpa mengubah source of truth stok;
+    // - menjaga export Stock Report siap data real karena produksi memakai semi-finished sebagai stok internal.
+    // Hubungan dengan flow laporan/export:
+    // - hanya membaca data, tidak melakukan update stok/produksi.
+    // Status: aktif dipakai; bukan legacy dan bukan kandidat cleanup.
+    // =========================
+    const unsubscribeSemiFinished = onSnapshot(
+      collection(db, "semi_finished_materials"),
+      (snapshot) => {
+        const semiFinishedData = mapInventorySnapshotToReportRows(snapshot, "Semi Finished");
+
+        setInventory((previousInventory) => [
+          ...previousInventory.filter((item) => item.type !== "Semi Finished"),
+          ...semiFinishedData,
+        ]);
+      },
+      (error) => {
+        message.error("Gagal memuat data semi finished.");
+        console.error("Error fetching semi finished materials:", error);
       },
     );
 
@@ -115,6 +140,7 @@ const StockReport = () => {
     return () => {
       unsubscribeRawMaterials();
       unsubscribeProducts();
+      unsubscribeSemiFinished();
     };
   }, []);
 
@@ -130,6 +156,25 @@ const StockReport = () => {
       return matchesSearch && matchesCategory && matchesStatus;
     });
   }, [inventory, searchTerm, selectedCategory, selectedStatus]);
+
+  // =========================
+  // ACTIVE / FINAL - opsi kategori laporan dari master + stok tampil.
+  // Fungsi blok:
+  // - menjaga kategori semi-finished tetap bisa dipilih walaupun tidak ada di collection categories lama;
+  // - tidak mengubah data kategori, hanya memperkaya pilihan filter UI/export.
+  // Hubungan dengan flow laporan/export: filter aktif ikut tercatat di XLSX.
+  // Status: aktif dipakai; bukan legacy dan bukan kandidat cleanup.
+  // =========================
+  const categoryOptions = useMemo(() => {
+    const mergedCategories = new Set([
+      ...categories.filter(Boolean),
+      ...inventory.map((item) => item.category).filter(Boolean),
+    ]);
+
+    return Array.from(mergedCategories).sort((left, right) =>
+      String(left).localeCompare(String(right)),
+    );
+  }, [categories, inventory]);
 
   const totalItems = filteredData.length;
   const lowStockItems = filteredData.filter((item) => item.stockDisplay < LOW_STOCK_THRESHOLD);
@@ -180,7 +225,7 @@ const StockReport = () => {
 
     await exportJsonToExcel({
       title: "Laporan Stok IMS Bunga Flanel",
-      subtitle: "Snapshot stok item sesuai filter aktif di halaman laporan stok.",
+      subtitle: "Snapshot stok bahan baku, semi finished, dan produk jadi sesuai filter aktif.",
       fileName: "laporan-stok",
       sheetName: "Stock Report",
       filters: [
@@ -223,6 +268,7 @@ const StockReport = () => {
         key: "type",
         filters: [
           { text: "Bahan Baku", value: "Bahan Baku" },
+          { text: "Semi Finished", value: "Semi Finished" },
           { text: "Produk Jadi", value: "Produk Jadi" },
         ],
         onFilter: (value, record) => record.type === value,
@@ -275,7 +321,7 @@ const StockReport = () => {
     <>
       <PageHeader
         title="Laporan Stok"
-        subtitle="Halaman ini distandardisasi ke layout shared tanpa mengubah karakter laporan stok yang masih sederhana pada current state project."
+        subtitle="Laporan stok membaca bahan baku, semi finished, dan produk jadi tanpa mengubah source of truth stok."
       />
 
       <PageSection
@@ -312,7 +358,7 @@ const StockReport = () => {
               onChange={setSelectedCategory}
             >
               <Option value="all">Semua Kategori</Option>
-              {categories.map((category) => (
+              {categoryOptions.map((category) => (
                 <Option key={category} value={category}>
                   {category}
                 </Option>
@@ -333,7 +379,7 @@ const StockReport = () => {
 
       <PageSection
         title="Tabel Laporan Stok"
-        subtitle="Field stok tampilan mengikuti fallback currentStock → stock → availableStock agar aman pada codebase transisional."
+        subtitle="Field stok tampilan mengikuti fallback currentStock → stock → availableStock dan sudah mencakup semi-finished stock produksi."
         extra={<Tag color="blue">{formatNumberId(filteredData.length)} baris</Tag>}
       >
         <Table

@@ -392,3 +392,70 @@ Dashboard hanya membaca summary planning:
 - jumlah kurang target.
 
 Dashboard tidak boleh mengubah data planning, PO, Work Log, stok, payroll, atau HPP.
+
+
+## Final Lock Hardening Fase A-G - 2026-04-26
+
+Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan utama untuk patch berikutnya. Fase G hanya dokumentasi, tidak mengubah source aplikasi.
+
+### Fase A - Sales Stock Safety
+- Penjualan wajib melakukan validasi stok sebelum transaksi disimpan.
+- Validasi penjualan wajib memakai `availableStock` master atau varian, bukan hanya `currentStock` atau snapshot UI lama.
+- Jika item yang sama muncul lebih dari satu baris, kebutuhan qty wajib dihitung total sebelum create sale agar stok tidak minus.
+- Item bervarian wajib memvalidasi `variantKey` dan stok varian yang benar.
+- Sale tidak boleh tersimpan jika stok tersedia tidak cukup.
+- Jika mutasi stok gagal setelah sale dibuat, sale baru wajib dibatalkan/rollback agar tidak ada transaksi orphan tanpa stok keluar.
+- Income rule tidak berubah: income hanya dibuat saat sale berstatus `Selesai` dan tidak boleh dobel.
+- Cancel/delete sale tetap guarded: cancel revert stok satu kali, delete sale yang sudah `Dibatalkan` tidak revert ulang.
+
+### Fase B - Metadata Expense Pembelian
+- Pembelian tetap membuat expense otomatis dengan amount mengikuti logic existing pembelian.
+- Saving pembelian tetap hanya informasi efisiensi dan bukan pengurang kas.
+- Expense otomatis pembelian wajib menyimpan reference audit:
+  - `sourceModule` mengikuti schema aktif project, yaitu `purchases`;
+  - `sourceId` berisi purchase id;
+  - `sourceRef` berisi nomor/reference pembelian yang tersedia;
+  - `sourceType: auto_generated`;
+  - `createdByAutomation: true`;
+  - field kompatibilitas lama seperti `relatedPurchaseId` tetap boleh dipertahankan.
+- Expense pembelian tidak boleh dibuat dobel untuk transaksi purchase yang sama.
+
+### Fase C - HPP dan Work Log Cost 0 Visibility
+- HPP tidak boleh mengisi angka cost asal jika sumber cost belum valid.
+- `materialCostActual = 0` wajib diberi penjelasan: cek cost bahan atau snapshot material.
+- `laborCostActual = 0` wajib diberi penjelasan: cek payroll Work Log.
+- `totalCostActual = 0` wajib diberi penjelasan bahwa HPP belum valid untuk analisis.
+- Jika `costPerGoodUnit = 0` sementara `goodQty > 0`, tampilkan warning agar user tidak membaca HPP/unit sebagai valid.
+- Draft payroll tidak boleh dihitung sebagai biaya tenaga kerja final untuk HPP.
+- Work Log completed tetap tidak boleh diproses ulang hanya untuk memperbaiki display cost.
+
+### Fase D - Dashboard Read-only Control Center
+- Dashboard adalah read-only operational control center.
+- Dashboard tidak boleh menulis/mengubah stok, sales, PO, Work Log, payroll, expense, income, HPP, planning, atau laporan.
+- Struktur Dashboard final maksimal 5 section: Prioritas Hari Ini, Fokus Produksi, Stok Kritis, Keuangan Ringkas, dan Aktivitas Terbaru.
+- Dashboard tidak boleh memakai table besar atau horizontal scroll sebagai layout utama.
+- List Dashboard maksimal 5 item, kecuali planning prioritas maksimal 3 item.
+- Keuangan Dashboard hanya ringkasan monitoring; Profit Loss tetap source final laporan laba/rugi.
+- Dashboard wajib punya last updated dan refresh yang hanya reload data summary.
+- Jika payroll paid sudah masuk expense atau ada cost 0, Dashboard hanya menampilkan catatan/warning, bukan angka final yang misleading.
+
+### Fase E - Report dan Export Standard
+- Export final laporan harus XLSX, bukan data mentah.
+- Header harus manusiawi, sheet name jelas, tanggal rapi, Rupiah rapi, dan angka memakai format Indonesia.
+- Stock Report wajib mencakup sumber stok aktif yang relevan: bahan baku, semi-finished, dan produk jadi.
+- HPP Analysis boleh diekspor ke XLSX tanpa mengubah rumus HPP.
+- Export HPP wajib membawa kolom validasi cost agar warning cost 0 tetap terlihat saat file dibuka.
+- Payroll Report boleh mempertahankan CSV legacy untuk compatibility, tetapi XLSX adalah output final yang lebih rapi.
+
+### Fase F - Legacy Duplicate Cleanup
+- Folder/file duplicate seperti `src/src/**` tidak boleh diedit untuk patch baru.
+- File duplicate legacy hanya boleh dihapus setelah grep/import/route check membuktikan tidak dipakai runtime.
+- Route aktif Dashboard harus tetap memakai `src/pages/Dashboard/*`.
+- Service aktif Planning harus tetap memakai `src/services/Produksi/productionPlanningService.js`.
+- Jika ada penghapusan legacy, wajib ada catatan `DELETE_LIST.md` atau dokumentasi setara yang menjelaskan bukti dan file yang dihapus.
+
+### Final Guard Anti Double Payroll / Expense
+- Work Log completed wajib membuat payroll line secara idempotent per Work Log + Step + Operator.
+- Payroll paid wajib membuat expense secara idempotent dengan `sourceModule=production_payroll` dan `sourceId=payrollId`.
+- Profit Loss membaca payroll lewat `expenses`, bukan langsung dari `production_payrolls`, agar tidak double count.
+- Expense payroll tidak boleh dihapus otomatis saat payroll paid dibatalkan sebelum business rule rollback disepakati.

@@ -19,19 +19,23 @@ import {
 
 // =========================
 // SECTION: Sidebar Menu Config
-// Tujuan:
-// - merapikan struktur sidebar agar lebih profesional untuk konteks ERP / IMS
-// - menyamakan penamaan group dan menu dengan bahasa Indonesia yang natural
-// - menjaga route dan key tetap sama agar tidak mengganggu logic yang sudah berjalan
-// Catatan:
-// - perubahan di file ini fokus pada nama group, nama menu, dan urutan tampilan
-// - path, key, dan struktur dasar tetap dipertahankan supaya aman untuk integrasi existing
+// Fungsi:
+// - menjadi sumber utama label, urutan, dan grouping menu aplikasi.
+// Alasan dipakai:
+// - patch ini hanya merapikan UX navigasi sidebar tanpa mengubah route/path/business logic.
+// Status:
+// - aktif dipakai oleh SidebarMenu.jsx; bukan legacy dan bukan kandidat cleanup.
+// Catatan penting:
+// - key dan path menu existing tetap dipertahankan agar active menu, route, dan bookmark tidak rusak.
+// - subgroup Produksi dibuat untuk memisahkan operation, setup, dan cost analysis tanpa menyentuh halaman/service.
 // =========================
 export const sidebarMenuItems = [
   // =========================
   // GROUP: Dashboard
   // Fungsi:
-  // - pusat ringkasan operasional dan prioritas kerja harian
+  // - pusat ringkasan operasional dan prioritas kerja harian.
+  // Status:
+  // - aktif dipakai; label dan route tidak berubah.
   // =========================
   {
     key: "dashboard",
@@ -43,9 +47,11 @@ export const sidebarMenuItems = [
   // =========================
   // GROUP: Master Data
   // Fungsi:
-  // - menyimpan data referensi utama yang dipakai menu operasional
-  // - nama group diganti dari "Data Utama" menjadi "Master Data"
-  //   agar lebih profesional dan lebih umum dipakai di ERP / IMS
+  // - menyimpan data referensi utama yang dipakai transaksi, stock, dan produksi.
+  // Alasan dipakai:
+  // - label dibuat hybrid agar lebih profesional tetapi route/path tetap sama.
+  // Status:
+  // - aktif dipakai; perubahan hanya label tampilan, bukan data/schema.
   // =========================
   {
     key: "master-data",
@@ -53,36 +59,37 @@ export const sidebarMenuItems = [
     label: "Master Data",
     children: [
       { key: "products", label: "Produk Jadi", path: "/products" },
-      { key: "raw-materials", label: "Bahan Baku", path: "/raw-materials" },
+      { key: "raw-materials", label: "Raw Materials", path: "/raw-materials" },
       { key: "categories", label: "Kategori", path: "/categories" },
       { key: "suppliers", label: "Supplier", path: "/suppliers" },
-      { key: "customers", label: "Pelanggan", path: "/customers" },
+      { key: "customers", label: "Customer", path: "/customers" },
       {
         key: "pricing-rules",
         icon: TagsOutlined,
-        label: "Aturan Harga",
+        label: "Pricing Rules",
         path: "/pricing-rules",
       },
     ],
   },
 
   // =========================
-  // GROUP: Inventaris
+  // GROUP: Stock Control
   // Fungsi:
-  // - menjadi satu entry point untuk audit riwayat stok dan penyesuaian stok manual
-  // Hubungan flow:
-  // - Penyesuaian Stok sudah digabung ke halaman Manajemen Stok agar tidak ada menu/logic ganda
+  // - entry point untuk manajemen stok, stock adjustment, dan audit riwayat stok.
+  // Alasan dipakai:
+  // - mengganti label "Inventaris" karena istilah itu bisa rancu dengan aset kantor.
+  // - "Stock Control" lebih tepat untuk flow stock/currentStock/availableStock/variants.
   // Status:
-  // - aktif/final; menu Penyesuaian Stok lama sudah dihapus dari sidebar
+  // - aktif dipakai; route Stock Management tetap sama dan tidak ada logic stok yang diubah.
   // =========================
   {
     key: "inventory",
     icon: AppstoreOutlined,
-    label: "Inventaris",
+    label: "Stock Control",
     children: [
       {
         key: "stock-management",
-        label: "Manajemen Stok",
+        label: "Stock Management",
         path: "/stock-management",
       },
     ],
@@ -91,84 +98,124 @@ export const sidebarMenuItems = [
   // =========================
   // GROUP: Produksi
   // Fungsi:
-  // - menggabungkan setup produksi dan operasional produksi dalam satu group
-  // - urutan dibuat dari data setup -> eksekusi -> biaya agar lebih mudah dipahami user
-  // Catatan:
-  // - istilah teknis yang sudah lazim seperti BOM, Work Log, Payroll, dan HPP tetap dipakai
-  // - istilah yang terasa terlalu campur disesuaikan ke bahasa Indonesia yang lebih natural
+  // - menampung seluruh flow produksi, tetapi dipisah menjadi subgroup agar user tidak bingung.
+  // Alasan dipakai:
+  // - menu produksi sudah terlalu panjang jika semua item flat.
+  // - subgroup membedakan pekerjaan harian, setup master produksi, dan biaya/analisis.
+  // Status:
+  // - aktif dipakai; subgroup hanya struktur navigasi, bukan route baru dan bukan business logic baru.
   // =========================
   {
     key: "productions",
     icon: BuildOutlined,
     label: "Produksi",
     children: [
-      {
-        key: "production-steps",
-        label: "Tahapan Produksi",
-        path: "/produksi/tahapan-produksi",
-        icon: ApartmentOutlined,
-      },
-      {
-        key: "production-employees",
-        label: "Karyawan Produksi",
-        path: "/produksi/karyawan-produksi",
-        icon: TeamOutlined,
-      },
-      {
-        key: "production-profiles",
-        label: "Profil Produksi",
-        path: "/produksi/profil-produksi",
-        icon: FileTextOutlined,
-      },
-      {
-        key: "semi-finished-materials",
-        label: "Bahan Setengah Jadi",
-        path: "/produksi/semi-finished-materials",
-        icon: ClusterOutlined,
-      },
-      {
-        key: "production-boms",
-        label: "BOM Produksi",
-        path: "/produksi/bom-produksi",
-        icon: DeploymentUnitOutlined,
-      },
       // =========================
-      // ACTIVE - menu planning produksi.
+      // SUBGROUP: Production Operation
       // Fungsi:
-      // - layer target sebelum PO agar user bisa membuat target mingguan/bulanan;
-      // - tidak digabung dengan Order Produksi supaya planning tidak dianggap stok nyata.
+      // - menu kerja harian produksi: planning, order, lalu work log.
+      // Alasan dipakai:
+      // - item ini paling sering dipakai operator/admin produksi sehingga ditempatkan di atas.
       // Status:
-      // - aktif dipakai; bukan legacy dan bukan mutasi stok.
+      // - aktif dipakai; path existing tidak diubah.
       // =========================
       {
-        key: "production-planning",
-        label: "Production Planning",
-        path: "/produksi/production-planning",
-        icon: CalendarOutlined,
+        key: "production-operation",
+        label: "Production Operation",
+        children: [
+          {
+            key: "production-planning",
+            label: "Production Planning",
+            path: "/produksi/production-planning",
+            icon: CalendarOutlined,
+          },
+          {
+            key: "production-orders",
+            label: "Order Produksi",
+            path: "/produksi/production-orders",
+            icon: FileTextOutlined,
+          },
+          {
+            key: "production-work-logs",
+            label: "Work Log Produksi",
+            path: "/produksi/work-log-produksi",
+            icon: FileTextOutlined,
+          },
+        ],
       },
-            {
-        key: "production-orders",
-        label: "Order Produksi",
-        path: "/produksi/production-orders",
-        icon: FileTextOutlined,
-      },
+
+      // =========================
+      // SUBGROUP: Production Setup
+      // Fungsi:
+      // - data/setup dasar yang dipakai sebelum produksi berjalan.
+      // Alasan dipakai:
+      // - memisahkan master setup dari flow operasional harian agar sidebar lebih mudah dipahami.
+      // Status:
+      // - aktif dipakai; tidak mengubah schema, service, atau route.
+      // =========================
       {
-        key: "production-work-logs",
-        label: "Work Log Produksi",
-        path: "/produksi/work-log-produksi",
-        icon: FileTextOutlined,
+        key: "production-setup",
+        label: "Production Setup",
+        children: [
+          {
+            key: "production-steps",
+            label: "Tahapan Produksi",
+            path: "/produksi/tahapan-produksi",
+            icon: ApartmentOutlined,
+          },
+          {
+            key: "production-employees",
+            label: "Karyawan Produksi",
+            path: "/produksi/karyawan-produksi",
+            icon: TeamOutlined,
+          },
+          {
+            key: "production-profiles",
+            label: "Production Profile / Template",
+            path: "/produksi/profil-produksi",
+            icon: FileTextOutlined,
+          },
+          {
+            key: "semi-finished-materials",
+            label: "Semi Product",
+            path: "/produksi/semi-finished-materials",
+            icon: ClusterOutlined,
+          },
+          {
+            key: "production-boms",
+            label: "BOM / Resep Produksi",
+            path: "/produksi/bom-produksi",
+            icon: DeploymentUnitOutlined,
+          },
+        ],
       },
+
+      // =========================
+      // SUBGROUP: Cost & Analysis
+      // Fungsi:
+      // - memisahkan payroll dan HPP dari proses eksekusi produksi harian.
+      // Alasan dipakai:
+      // - payroll dan HPP adalah area biaya/analisis, bukan menu setup atau eksekusi stok langsung.
+      // Status:
+      // - aktif dipakai; tidak mengubah kalkulasi payroll maupun rumus HPP.
+      // =========================
       {
-        key: "production-payrolls",
-        label: "Payroll Produksi",
-        path: "/produksi/payroll-produksi",
-        icon: MoneyCollectOutlined,
-      },
-      {
-        key: "production-hpp-analysis",
-        label: "Analisis HPP",
-        path: "/produksi/analisis-hpp",
-        icon: AppstoreOutlined,
+        key: "production-cost-analysis",
+        label: "Cost & Analysis",
+        children: [
+          {
+            key: "production-payrolls",
+            label: "Payroll Produksi",
+            path: "/produksi/payroll-produksi",
+            icon: MoneyCollectOutlined,
+          },
+          {
+            key: "production-hpp-analysis",
+            label: "Analisis HPP Produksi",
+            path: "/produksi/analisis-hpp",
+            icon: AppstoreOutlined,
+          },
+        ],
       },
     ],
   },
@@ -176,9 +223,9 @@ export const sidebarMenuItems = [
   // =========================
   // GROUP: Transaksi
   // Fungsi:
-  // - menampung transaksi pembelian, penjualan, dan retur
-  // - urutan dibuat lebih natural mengikuti alur bisnis umum:
-  //   pembelian -> penjualan -> retur
+  // - menampung transaksi pembelian, penjualan, dan retur.
+  // Status:
+  // - aktif dipakai; tidak diubah karena label sudah jelas untuk user operasional.
   // =========================
   {
     key: "transactions",
@@ -194,7 +241,9 @@ export const sidebarMenuItems = [
   // =========================
   // GROUP: Kas & Biaya
   // Fungsi:
-  // - mencatat arus masuk dan arus keluar kas/biaya operasional
+  // - mencatat arus masuk dan arus keluar kas/biaya operasional.
+  // Status:
+  // - aktif dipakai; tidak diubah agar user tetap familiar.
   // =========================
   {
     key: "finance",
@@ -209,8 +258,11 @@ export const sidebarMenuItems = [
   // =========================
   // GROUP: Sistem
   // Fungsi:
-  // - menampung menu maintenance dan utilitas sistem yang bersifat sensitif
-  // - nama group diganti dari "Utilities" menjadi "Sistem" agar lebih profesional
+  // - menampung menu maintenance/reset yang sensitif.
+  // Alasan dipakai:
+  // - label dibuat lebih pendek, tetapi tetap jelas bahwa menu ini bukan menu harian.
+  // Status:
+  // - aktif dipakai; route tetap sama dan tidak ada logic maintenance yang diubah.
   // =========================
   {
     key: "utilities",
@@ -219,7 +271,7 @@ export const sidebarMenuItems = [
     children: [
       {
         key: "reset-maintenance-data",
-        label: "Reset & Maintenance Data",
+        label: "Reset & Maintenance",
         path: "/utilities/reset-maintenance-data",
       },
     ],
@@ -228,7 +280,11 @@ export const sidebarMenuItems = [
   // =========================
   // GROUP: Laporan
   // Fungsi:
-  // - menampilkan hasil rekap operasional untuk audit dan analisis
+  // - menampilkan rekap operasional dan export untuk audit/analisis.
+  // Alasan dipakai:
+  // - urutan dibuat dari laporan operasional ke ringkasan finansial.
+  // Status:
+  // - aktif dipakai; hanya label/urutan yang dirapikan tanpa mengubah report logic.
   // =========================
   {
     key: "reports",
@@ -251,20 +307,14 @@ export const sidebarMenuItems = [
         path: "/sales-report",
       },
       {
-        key: "profit-loss",
-        label: "Laba Rugi",
-        path: "/profit-loss",
-      },
-      // =========================
-      // MENU: Laporan Payroll
-      // Fungsi:
-      // - memisahkan rekap periode dan export payroll dari menu Payroll Produksi
-      // - tetap membaca payroll line final tanpa membuat source of truth baru
-      // =========================
-      {
         key: "payroll-report",
         label: "Laporan Payroll",
         path: "/payroll-report",
+      },
+      {
+        key: "profit-loss",
+        label: "Laba Rugi",
+        path: "/profit-loss",
       },
     ],
   },

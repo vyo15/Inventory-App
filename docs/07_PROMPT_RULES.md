@@ -24,7 +24,7 @@ Selalu jelaskan singkat:
 - purchases report membaca `expenses`, bukan `purchases`
 - profit loss membaca `revenues + incomes + expenses`
 - flow produksi aktif adalah BOM → Production Order → Work Log → Payroll → HPP Analysis
-- collection `Customers` vs `customers` harus dianggap temuan penting setiap kali menyentuh module customer/sales
+- collection customer final adalah `customers` lowercase; `Customers` uppercase harus dianggap legacy/test data kecuali ada task migrasi khusus
 
 ## Format Jawaban yang Diinginkan
 Untuk task pengembangan:
@@ -155,3 +155,55 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Jika Work Log completed punya actual cost 0, tampilkan warning untuk cek HPP/cost material; jangan isi cost otomatis dari Dashboard.
 - Dashboard harus punya last updated dan refresh yang hanya reload data summary.
 - Jika salah satu service/collection gagal, Dashboard wajib fallback aman dan tidak white screen.
+
+
+## Prompt Guard Final Hardening Fase A-G - 2026-04-26
+
+### Guard Fase A - Sales Stock Safety
+- Jika task menyentuh Sales create/update/cancel/delete, audit dulu dampak ke stok, income, dan inventory log.
+- Jangan membuat sale tersimpan jika `availableStock` master/varian tidak cukup.
+- Jangan kembali memakai `currentStock` saja untuk validasi sale.
+- Jika item sama muncul beberapa baris, total kebutuhan harus dihitung sebelum create sale.
+- Item bervarian wajib memakai `variantKey` yang valid.
+- Income tetap hanya dibuat saat status `Selesai` dan tidak boleh dobel.
+- Cancel/delete sale tetap guarded agar stok tidak double revert.
+
+### Guard Fase B - Purchase Expense Metadata
+- Jika task menyentuh Purchases, jangan hapus expense otomatis.
+- Jangan ubah amount expense pembelian tanpa alasan bisnis eksplisit.
+- Saving pembelian tetap info efisiensi, bukan pengurang kas.
+- Expense pembelian wajib punya reference audit: `sourceModule`, `sourceId`, `sourceRef`, `sourceType`, dan `createdByAutomation`.
+- Pertahankan schema aktif `sourceModule: purchases` jika reader Cash Out/Report masih memakai plural.
+
+### Guard Fase C - HPP / Work Log Cost 0
+- Jangan mengisi cost 0 dengan angka perkiraan.
+- Jika sumber material/payroll belum lengkap, tampilkan warning, bukan menghitung asal.
+- Draft payroll tidak boleh dianggap final untuk HPP.
+- Jangan proses ulang Work Log completed hanya untuk memperbaiki display cost.
+- Warning cost 0 harus tetap terlihat di HPP Analysis, detail Work Log, dan export HPP jika ada.
+
+### Guard Fase D - Dashboard
+- Dashboard wajib read-only; tidak boleh ada write ke Firestore dari Dashboard.
+- Dashboard maksimal 5 section utama dan tidak boleh kembali menjadi laporan besar penuh table.
+- Jangan tampilkan angka keuangan Dashboard sebagai Profit Loss final.
+- Stok kritis Dashboard harus memakai `availableStock` bila tersedia agar tidak misleading.
+- Dashboard harus punya last updated dan refresh yang hanya reload data.
+
+### Guard Fase E - Report / Export
+- Export final wajib XLSX rapi dengan header manusiawi, bukan object mentah.
+- Jangan ubah source data bisnis hanya untuk mempercantik laporan.
+- Stock Report harus tetap mencakup semi-finished stock jika data produksi memakai semi-finished.
+- HPP export tidak boleh mengubah rumus HPP dan harus membawa warning/validasi cost.
+- Payroll CSV boleh legacy compatibility, tetapi XLSX adalah output utama yang siap baca.
+
+### Guard Fase F - Legacy Duplicate Cleanup
+- Jangan edit file di `src/src/**` sebagai patch aktif.
+- Jika menemukan duplicate legacy, buktikan dulu dengan grep/import/route check.
+- Jangan hapus file tanpa `DELETE_LIST.md` atau catatan jelas berisi bukti.
+- Jangan menyentuh file aktif di `src/pages`, `src/services`, `src/router`, atau `src/config` saat task hanya cleanup legacy.
+
+### Guard Fase G - Docs Final
+- Fase docs hanya boleh mengubah file docs dalam scope.
+- Jangan klaim source selesai jika belum ada bukti dari source terbaru.
+- Jika docs dan source konflik, tulis status sebenarnya dan catat sebagai tech debt.
+- ZIP final docs hanya boleh berisi file docs yang berubah.

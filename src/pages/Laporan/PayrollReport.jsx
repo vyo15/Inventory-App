@@ -360,7 +360,7 @@ const PayrollReport = () => {
       filters: [
         `Periode: ${formatDateId(dateRange?.[0]?.toDate?.(), false)} - ${formatDateId(dateRange?.[1]?.toDate?.(), false)}`,
         `Status: ${statusFilter === "all" ? "Semua" : PAYROLL_STATUS_MAP[statusFilter] || statusFilter}`,
-        `Operator: ${workerFilter === "all" ? "Semua" : workerFilter}`,
+        `Operator: ${operatorFilter === "all" ? "Semua" : operatorFilter}`,
       ],
       data: filteredPayrolls.map((item) => ({
         "No. Payroll": item.payrollNumber || "-",

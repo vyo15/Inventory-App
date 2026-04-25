@@ -12,7 +12,7 @@ import {
   Space,
   Tag,
 } from "antd";
-import { collection, addDoc, doc, onSnapshot, Timestamp, updateDoc } from "firebase/firestore";
+import { collection, addDoc, doc, onSnapshot, setDoc, Timestamp, updateDoc } from "firebase/firestore";
 import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { db } from "../../firebase";
@@ -74,6 +74,70 @@ const getPurchaseSavingMeta = (value) => {
     status: "normal",
     label: "Sesuai Referensi",
     color: "default",
+  };
+};
+
+// =========================
+// SECTION: Metadata expense otomatis dari Purchases
+// Fungsi blok:
+// - membuat payload Cash Out/Expense otomatis yang punya reference jelas ke transaksi purchase;
+// - menjaga amount tetap memakai totalActualPurchase agar saving pembelian tetap hanya info efisiensi.
+// Hubungan flow Purchases/stok:
+// - tidak menyentuh stok dan tidak mengubah rumus pembelian; blok ini hanya dipakai setelah purchase tersimpan.
+// Status: aktif dipakai oleh handleSubmitPurchase.
+// Legacy/kandidat cleanup:
+// - sourceModule tetap "purchases" karena Cash Out, Purchases Report, dan Profit Loss existing membaca schema plural ini.
+// =========================
+const PURCHASE_EXPENSE_SOURCE_MODULE = "purchases";
+const PURCHASE_EXPENSE_SOURCE_TYPE = "auto_generated";
+
+const buildPurchaseExpenseDocumentId = (purchaseId) =>
+  `${PURCHASE_EXPENSE_SOURCE_MODULE}__${String(purchaseId || "purchase").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+
+const buildPurchaseExpensePayload = ({
+  date,
+  itemId,
+  itemName,
+  itemType,
+  purchaseId,
+  purchasePayload,
+  resolvedSupplierId,
+  savingMeta,
+  selectedSupplierName,
+  totalActualPurchase,
+  totalReferencePurchase,
+  purchaseSaving,
+  variantKey,
+  variantLabel,
+  stockSourceType,
+}) => {
+  const sourceRef = purchasePayload?.purchaseNumber || purchasePayload?.referenceNumber || purchaseId;
+
+  return {
+    date: Timestamp.fromDate(date.toDate()),
+    type: "Pembelian Bahan/Barang",
+    description: `Pembelian ${itemName} dari ${selectedSupplierName}`,
+    amount: Math.round(Number(totalActualPurchase || 0)),
+    totalReferenceAmount: Math.round(Number(totalReferencePurchase || 0)),
+    savingAmount: Math.round(Number(purchaseSaving || 0)),
+    savingStatus: savingMeta.status,
+    savingLabel: savingMeta.label,
+    supplierId: resolvedSupplierId || null,
+    supplierName: selectedSupplierName || "",
+    relatedItemId: itemId,
+    relatedItemName: itemName,
+    relatedPurchaseId: purchaseId,
+    itemType,
+    variantKey,
+    variantLabel,
+    stockSourceType,
+    sourceModule: PURCHASE_EXPENSE_SOURCE_MODULE,
+    sourceId: purchaseId,
+    sourceRef,
+    sourceType: PURCHASE_EXPENSE_SOURCE_TYPE,
+    createdByAutomation: true,
+    sourceCollection: "purchases",
+    createdAt: Timestamp.now(),
   };
 };
 
@@ -647,27 +711,40 @@ const Purchases = () => {
         },
       );
 
-      await addDoc(collection(db, "expenses"), {
-        date: Timestamp.fromDate(date.toDate()),
-        type: "Pembelian Bahan/Barang",
-        description: `Pembelian ${itemName} dari ${supplierName}`,
-        amount: Math.round(Number(totalActualPurchase || 0)),
-        totalReferenceAmount: Math.round(Number(totalReferencePurchase || 0)),
-        savingAmount: Math.round(Number(purchaseSaving || 0)),
-        savingStatus: savingMeta.status,
-        savingLabel: savingMeta.label,
-        supplierId: resolvedSupplierId || null,
-        supplierName: supplierName || "",
-        relatedItemId: itemId,
-        relatedItemName: itemName,
-        relatedPurchaseId: purchaseDocument.id,
+      // =========================
+      // SECTION: Expense otomatis pembelian dengan source reference final
+      // Fungsi blok:
+      // - membuat Cash Out/Expense otomatis yang bisa ditelusuri balik ke purchaseId;
+      // - memakai doc id deterministik dari purchaseId agar transaksi purchase yang sama tidak membuat expense dobel.
+      // Hubungan flow Purchases/stok:
+      // - dijalankan setelah stok pembelian berhasil ditambahkan dan inventory log tercatat;
+      // - tidak mengubah totalActualPurchase, saving, quantity, varian, atau mutasi stok.
+      // Status: aktif dipakai untuk semua pembelian baru.
+      // Legacy/kandidat cleanup:
+      // - relatedPurchaseId tetap disimpan untuk kompatibilitas data lama/report lama; sourceId/sourceRef menjadi metadata audit baru.
+      // =========================
+      const purchaseExpensePayload = buildPurchaseExpensePayload({
+        date,
+        itemId,
+        itemName,
         itemType: type,
+        purchaseId: purchaseDocument.id,
+        purchasePayload,
+        resolvedSupplierId,
+        savingMeta,
+        selectedSupplierName: supplierName,
+        totalActualPurchase,
+        totalReferencePurchase,
+        purchaseSaving,
         variantKey,
         variantLabel,
         stockSourceType: variantPayload.stockSourceType,
-        sourceModule: "purchases",
-        createdAt: Timestamp.now(),
       });
+
+      await setDoc(
+        doc(db, "expenses", buildPurchaseExpenseDocumentId(purchaseDocument.id)),
+        purchaseExpensePayload,
+      );
 
       message.success("Pembelian berhasil ditambahkan!");
       form.resetFields();
