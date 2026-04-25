@@ -51,3 +51,43 @@ Semua data otomatis harus menyimpan referensi:
 - Data lama yang belum punya `sourceModule/sourceId` tetap dibaca sebagai fallback.
 - Work Log lama yang cost/payroll-nya masih kosong perlu task backfill terpisah.
 - Expense payroll yang dibuat otomatis tidak boleh dihapus otomatis saat payroll dibatalkan sampai rule rollback disepakati.
+
+## Flow Production Planning
+
+```text
+Production Planning
+→ user action: Buat PO
+→ Production Order berbasis BOM
+→ user action: Mulai Produksi
+→ Work Log in_progress
+→ user action: Complete Work Log
+→ output stock + payroll/HPP existing
+→ Dashboard membaca progress planning
+```
+
+| Flow | Source aktif | Output otomatis | Guard anti-double |
+|---|---|---|---|
+| Planning dibuat | production_plans | target monitoring | tidak ada mutasi stok |
+| PO dari Planning | production_plans + production_boms | production_orders dengan planning reference | user action wajib, tetap lewat BOM |
+| Progress Planning | completed production_work_logs | actual/remaining/progress read model realtime | hitung Work Log completed sekali per id |
+| Dashboard Planning | production_plans + PO + Work Log completed | summary target minggu/bulan | read-only, tidak update data |
+
+## Source reference Planning ke PO
+PO yang dibuat dari planning wajib menyimpan:
+- `planningId`
+- `planningCode`
+- `planningTitle`
+
+Planning dapat menyimpan:
+- `linkedProductionOrderIds`
+- `linkedProductionOrderCodes`
+
+Jika array link planning belum lengkap, service tetap bisa membaca PO berdasarkan `planningId`.
+
+## Guard Tambahan
+1. Planning tidak mengubah stok.
+2. Planning tidak menggantikan BOM.
+3. PO dari planning tetap harus memakai requirement helper existing.
+4. Progress tidak boleh dihitung dari PO created saja.
+5. Work Log selain `completed` tidak dihitung.
+6. Dashboard planning tidak boleh menjadi tempat edit/update data.

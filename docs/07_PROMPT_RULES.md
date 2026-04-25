@@ -140,3 +140,18 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Jika task menyentuh Profit Loss, jangan hitung payroll dari `production_payrolls` jika payroll paid sudah masuk `expenses`.
 - Jika task menyentuh report export, pertahankan XLSX final yang siap baca; jangan kembalikan export ke data mentah/JSON/CSV sebagai output utama.
 - Jika task UI produksi, tabel utama tidak boleh butuh scroll horizontal hanya untuk tombol aksi dan modal complete Work Log wajib menampilkan estimasi output.
+
+## Prompt Guard Dashboard Operational Control Center — 2026-04-26
+- Dashboard adalah read-only operational control center; jangan membuat Dashboard melakukan write data ke stok, PO, Work Log, Payroll, Cash Out, Income, Expense, atau laporan.
+- Dashboard boleh menampilkan link/action card, tetapi semua action hanya navigasi ke menu terkait.
+- Dashboard tidak boleh memakai table besar atau horizontal scroll sebagai layout utama.
+- Prioritas Hari Ini wajib actionable dan ringkas: stok menipis, PO shortage, PO siap, Work Log berjalan, Planning overdue, dan Payroll pending.
+- Dashboard Planning tidak boleh hanya angka agregat; wajib menampilkan maksimal 3 planning urgent berdasarkan overdue, deadline dekat, progress rendah, dan remaining target besar.
+- Progress planning di Dashboard harus mengikuti summary Production Planning yang berbasis Work Log completed/PO terkait, bukan PO created atau input manual.
+- Planning completed/cancelled tidak boleh tampil sebagai urgent.
+- Keuangan Dashboard bersifat ringkas; Profit Loss tetap source final untuk laporan laba/rugi.
+- Jika payroll paid sudah/sedang terhubung ke Expense, tampilkan catatan agar tidak terjadi double counting.
+- Status Integrasi IMS harus menjadi warning/read-only guard, bukan proses auto posting.
+- Jika Work Log completed punya actual cost 0, tampilkan warning untuk cek HPP/cost material; jangan isi cost otomatis dari Dashboard.
+- Dashboard harus punya last updated dan refresh yang hanya reload data summary.
+- Jika salah satu service/collection gagal, Dashboard wajib fallback aman dan tidak white screen.

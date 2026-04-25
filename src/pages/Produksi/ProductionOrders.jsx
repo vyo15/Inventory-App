@@ -518,6 +518,17 @@ const ProductionOrders = () => {
           {record.targetVariantLabel ? (
             <div className={orderUiClassNames.meta}>Varian: {record.targetVariantLabel}</div>
           ) : null}
+          {/* =====================================================
+              ACTIVE - referensi planning pada PO.
+              Fungsi:
+              - membantu user melihat PO ini berasal dari planning mana;
+              - hanya info monitoring dan tidak mengubah flow stok/BOM.
+          ===================================================== */}
+          {record.planningCode ? (
+            <div className={orderUiClassNames.meta}>
+              Planning: {record.planningCode}{record.planningTitle ? ` - ${record.planningTitle}` : ""}
+            </div>
+          ) : null}
           <div className={orderUiClassNames.meta}>
             Estimasi Output: {formatNumber(record.expectedOutputQty || 0)} {record.targetUnit || "pcs"}
           </div>
@@ -1121,6 +1132,17 @@ const ProductionOrders = () => {
               </Descriptions.Item>
               <Descriptions.Item label="Varian Target">
                 {selectedOrder.targetVariantLabel || "-"}
+              </Descriptions.Item>
+              {/* =====================================================
+                  ACTIVE - display planning reference.
+                  Fungsi:
+                  - PO manual lama tetap menampilkan tanda "-";
+                  - PO dari planning punya jejak balik tanpa mengubah lifecycle PO.
+              ===================================================== */}
+              <Descriptions.Item label="Planning Reference">
+                {selectedOrder.planningCode
+                  ? `${selectedOrder.planningCode}${selectedOrder.planningTitle ? ` - ${selectedOrder.planningTitle}` : ""}`
+                  : "-"}
               </Descriptions.Item>
               <Descriptions.Item label="BOM / Step">
                 {selectedOrder.bomCode || "-"} - {selectedOrder.bomName || "-"}

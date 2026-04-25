@@ -327,3 +327,68 @@ Collection customer final adalah `customers` lowercase. Modul Master Customer da
 ### Export Laporan
 - Export final laporan harus XLSX rapi dengan title, filter/periode, header manusiawi, format Rupiah, format tanggal Indonesia, format angka Indonesia, sheet name jelas, dan auto width.
 - Jangan export object mentah, JSON string panjang, atau field teknis yang tidak dibutuhkan user.
+
+## 9. Rule Production Planning / Planning Schedule
+
+### 9.1 Scope Production Planning
+Production Planning adalah layer rencana sebelum Production Order. Data aktif disimpan di collection `production_plans`.
+
+Planning boleh menyimpan:
+- kode planning;
+- periode mingguan, bulanan, atau custom;
+- deadline;
+- target type `product` atau `semi_finished_material`;
+- target item;
+- target varian jika item punya varian;
+- target qty;
+- priority;
+- catatan;
+- referensi PO terkait.
+
+### 9.2 Efek Planning
+Production Planning **tidak boleh**:
+- mengubah stok;
+- memotong bahan;
+- menambah output;
+- membuat payroll;
+- membuat expense/cash out;
+- mengubah HPP;
+- otomatis membuat PO tanpa aksi user.
+
+### 9.3 Link Planning ke PO
+PO yang dibuat dari planning wajib menyimpan:
+- `planningId`;
+- `planningCode`;
+- `planningTitle`.
+
+PO manual tanpa planning tetap valid.
+
+### 9.4 Progress Planning
+Progress planning wajib dihitung dari data aktual:
+- sumber utama: Work Log `completed` milik PO yang terhubung ke planning;
+- jika Work Log punya output line, gunakan `outputs[].goodQty` yang cocok dengan target item;
+- fallback hanya untuk data lama: `workLog.goodQty` jika target Work Log cocok;
+- Work Log `draft`, `in_progress`, `cancelled`, atau status lain tidak dihitung.
+
+Jika target punya varian, progress wajib cocok dengan `targetVariantKey`. Jika target tidak punya varian, progress cukup cocok dengan item master.
+
+### 9.5 Status Planning
+Status planning final:
+- `draft`: periode belum mulai dan target belum tercapai;
+- `active`: periode berjalan / belum overdue dan target belum tercapai;
+- `completed`: actual completed qty >= target qty;
+- `overdue`: due date lewat dan target belum tercapai;
+- `cancelled`: dibatalkan manual.
+
+Planning `completed` atau `cancelled` tidak boleh menghapus PO/Work Log yang sudah ada.
+
+### 9.6 Dashboard Planning
+Dashboard hanya membaca summary planning:
+- target minggu ini;
+- progress minggu ini;
+- target bulan ini;
+- progress bulan ini;
+- jumlah overdue;
+- jumlah kurang target.
+
+Dashboard tidak boleh mengubah data planning, PO, Work Log, stok, payroll, atau HPP.

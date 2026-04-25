@@ -14,6 +14,7 @@ import {
   FileTextOutlined,
   MoneyCollectOutlined,
   ToolOutlined,
+  CalendarOutlined,
 } from "@ant-design/icons";
 
 // =========================
@@ -131,7 +132,21 @@ export const sidebarMenuItems = [
         path: "/produksi/bom-produksi",
         icon: DeploymentUnitOutlined,
       },
+      // =========================
+      // ACTIVE - menu planning produksi.
+      // Fungsi:
+      // - layer target sebelum PO agar user bisa membuat target mingguan/bulanan;
+      // - tidak digabung dengan Order Produksi supaya planning tidak dianggap stok nyata.
+      // Status:
+      // - aktif dipakai; bukan legacy dan bukan mutasi stok.
+      // =========================
       {
+        key: "production-planning",
+        label: "Production Planning",
+        path: "/produksi/production-planning",
+        icon: CalendarOutlined,
+      },
+            {
         key: "production-orders",
         label: "Order Produksi",
         path: "/produksi/production-orders",

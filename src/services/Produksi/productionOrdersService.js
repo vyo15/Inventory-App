@@ -510,6 +510,17 @@ export const createProductionOrder = async (values = {}, currentUser = null) => 
     expectedOutputQty: Number(bom.batchOutputQty || 1) * orderQty,
     plannedStartDate: values.plannedStartDate || null,
     plannedEndDate: values.plannedEndDate || null,
+    // =====================================================
+    // ACTIVE - reference Production Planning.
+    // Fungsi:
+    // - menghubungkan PO ke planning yang membuatnya;
+    // - field ini hanya referensi monitoring, bukan trigger stok/payroll/HPP.
+    // Status:
+    // - aktif untuk flow Planning -> PO; PO manual lama tetap valid tanpa field ini.
+    // =====================================================
+    planningId: safeTrim(values.planningId),
+    planningCode: safeTrim(values.planningCode),
+    planningTitle: safeTrim(values.planningTitle),
     priority: values.priority || "normal",
     status: reservationSummary.canReserveFully ? "ready" : "shortage",
     materialRequirementLines: requirementLines,

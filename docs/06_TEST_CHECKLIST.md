@@ -442,3 +442,23 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Export laporan rapi dalam XLSX dengan title, periode/filter, header manusiawi, Rupiah, tanggal Indonesia, sheet name jelas, dan auto width.
 - [ ] UI regression guard tertulis: tabel utama tidak boleh butuh scroll horizontal hanya untuk tombol aksi; modal complete Work Log wajib menampilkan estimasi output.
 - [ ] Build/test manual final selesai tanpa error console.
+
+## Checklist Dashboard Operational Control Center — 2026-04-26
+- [ ] Buka `/dashboard` dan pastikan halaman tampil tanpa white screen atau error console.
+- [ ] Pastikan Dashboard tetap read-only: tidak ada tombol yang membuat PO, Work Log, Payroll, Cash Out, Income, Expense, atau mutasi stok langsung dari Dashboard.
+- [ ] Pastikan `Terakhir diperbarui` tampil dan tombol `Refresh` hanya reload data summary.
+- [ ] Pastikan tidak ada table besar atau horizontal scroll di Dashboard pada laptop/desktop normal.
+- [ ] Prioritas Hari Ini tampil sebagai action card/chip: Stok Menipis, PO Shortage, PO Siap, Work Log Berjalan, Planning Overdue, dan Payroll Pending.
+- [ ] Setiap action card/chip hanya navigasi ke menu terkait dan tidak mengubah data.
+- [ ] Fokus Target Produksi menampilkan Target Minggu Ini, Target Bulan Ini, sisa target, progress, dan maksimal 3 Planning Perlu Dikejar.
+- [ ] Planning completed/cancelled tidak tampil sebagai urgent.
+- [ ] Planning overdue dan deadline terdekat tampil sebagai prioritas.
+- [ ] Status Produksi menampilkan PO Shortage, PO Ready, Work Log Berjalan, Work Log Completed Minggu Ini, dan Payroll Pending.
+- [ ] Stok & Operasional tampil sebagai compact list maksimal 5 item stok paling kritis, bukan table besar.
+- [ ] Keuangan Ringkas menampilkan penjualan bulan ini, pengeluaran bulan ini, payroll pending, dan indikator selisih dengan catatan bahwa Profit Loss tetap source final.
+- [ ] Aktivitas Terbaru tampil sebagai activity feed compact dari inventory log, bukan table besar.
+- [ ] Status Integrasi IMS menampilkan Work Log completed, Payroll generated, Payroll pending, Payroll paid, Expense Payroll, dan HPP Cost Issue.
+- [ ] Jika ada Work Log completed dengan biaya aktual 0, warning HPP/cost material tampil.
+- [ ] Catatan payroll paid/expense tampil agar user tidak menghitung payroll dobel.
+- [ ] Jika salah satu collection gagal dibaca, Dashboard tetap tampil dengan fallback aman.
+- [ ] Build berhasil dan tidak ada error console.

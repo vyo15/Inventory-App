@@ -212,6 +212,210 @@
 }
 
 /* =========================
+   SECTION: Production Planning Focus
+   Fungsi:
+   - style aktif untuk section Dashboard Planning agar menjadi control center compact;
+   - hanya mengatur tampilan summary dan priority list, tidak menyentuh data planning.
+   Hubungan Dashboard / Planning:
+   - dipakai oleh Dashboard.jsx untuk target minggu/bulan dan planning perlu dikejar.
+   Status:
+   - aktif; bukan legacy dan bukan kandidat cleanup.
+========================= */
+.dashboard-section-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.dashboard-planning-focus {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.dashboard-planning-summary-stack,
+.dashboard-planning-priority-panel {
+  min-width: 0;
+}
+
+.dashboard-planning-summary-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dashboard-planning-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dashboard-planning-summary-card,
+.dashboard-planning-priority-panel,
+.dashboard-planning-alert-card,
+.dashboard-planning-empty-state {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
+}
+
+.dashboard-planning-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 164px;
+  padding: 16px;
+  border-radius: 18px;
+}
+
+.dashboard-planning-card-head,
+.dashboard-planning-priority-head,
+.dashboard-planning-action-row,
+.dashboard-planning-priority-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-planning-main-value.ant-typography,
+.dashboard-planning-alert-value.ant-typography {
+  margin: 0 !important;
+  line-height: 1.2;
+}
+
+.dashboard-planning-card-note {
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(15, 23, 42, 0.58);
+}
+
+.dashboard-planning-alert-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dashboard-planning-alert-card {
+  padding: 14px 16px;
+  border-radius: 16px;
+}
+
+.dashboard-planning-alert-card--danger {
+  background: rgba(254, 242, 242, 0.95);
+  border-color: rgba(239, 68, 68, 0.16);
+}
+
+.dashboard-planning-alert-card--warning {
+  background: rgba(255, 251, 235, 0.95);
+  border-color: rgba(245, 158, 11, 0.18);
+}
+
+.dashboard-planning-alert-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(15, 23, 42, 0.64);
+}
+
+.dashboard-planning-priority-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+  padding: 16px;
+  border-radius: 18px;
+}
+
+.dashboard-planning-priority-head {
+  align-items: flex-start;
+}
+
+.dashboard-planning-priority-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashboard-planning-priority-item {
+  align-items: flex-start;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  background: rgba(248, 250, 252, 0.78);
+}
+
+.dashboard-planning-priority-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dashboard-planning-priority-title {
+  max-width: 100%;
+}
+
+.dashboard-planning-priority-meta {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  text-align: right;
+}
+
+.dashboard-planning-priority-empty {
+  display: flex;
+  min-height: 132px;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-planning-action-row {
+  margin-top: auto;
+  padding-top: 2px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.dashboard-planning-action-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.09);
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.dashboard-planning-action-link--muted {
+  background: rgba(15, 23, 42, 0.06);
+  color: rgba(15, 23, 42, 0.72);
+}
+
+.dashboard-planning-empty-state {
+  display: flex;
+  min-height: 190px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 18px;
+}
+
+/* =========================
    SECTION: Chart
 ========================= */
 .dashboard-chart-wrap {
@@ -298,6 +502,49 @@
   color: #60a5fa;
 }
 
+.dark .dashboard-section-link {
+  color: #60a5fa;
+}
+
+.dark .dashboard-planning-summary-card,
+.dark .dashboard-planning-priority-panel,
+.dark .dashboard-planning-alert-card,
+.dark .dashboard-planning-empty-state {
+  border-color: rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.5);
+  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.22);
+}
+
+.dark .dashboard-planning-priority-item {
+  border-color: rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.dark .dashboard-planning-alert-card--danger {
+  background: rgba(127, 29, 29, 0.18);
+  border-color: rgba(248, 113, 113, 0.2);
+}
+
+.dark .dashboard-planning-alert-card--warning {
+  background: rgba(120, 53, 15, 0.18);
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+.dark .dashboard-planning-card-note,
+.dark .dashboard-planning-alert-label {
+  color: rgba(230, 237, 243, 0.58);
+}
+
+.dark .dashboard-planning-action-link {
+  background: rgba(96, 165, 250, 0.14);
+  color: #93c5fd;
+}
+
+.dark .dashboard-planning-action-link--muted {
+  background: rgba(148, 163, 184, 0.12);
+  color: rgba(230, 237, 243, 0.72);
+}
+
 /* =========================
    SECTION: Responsive
 ========================= */
@@ -311,11 +558,17 @@
   .dashboard-chart-wrap {
     min-height: 300px;
   }
+
+  .dashboard-planning-focus {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 992px) {
   .dashboard-quick-grid,
-  .dashboard-mini-summary-grid {
+  .dashboard-mini-summary-grid,
+  .dashboard-planning-summary-grid,
+  .dashboard-planning-alert-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -335,111 +588,19 @@
 
   .dashboard-action-item,
   .dashboard-quick-card,
-  .dashboard-mini-summary-card {
-    border-radius: 14px;
-  }
-}
-
-/* =========================
-   SECTION: Production Planning Focus
-   Fungsi:
-   - menambahkan tampilan target produksi ke Dashboard lama tanpa merombak layout utama;
-   - seluruh blok ini read-only dan hanya mendukung navigasi ke halaman Production Planning.
-   Status:
-   - aktif dipakai untuk monitoring planning; bukan logic stok/PO/Work Log.
-========================= */
-.dashboard-planning-card {
-  height: 100%;
-  padding: 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: #ffffff;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
-}
-
-.dashboard-planning-risk-card {
-  background: linear-gradient(135deg, rgba(255, 251, 235, 0.96), rgba(255, 255, 255, 0.98));
-}
-
-.dashboard-planning-card-body {
-  width: 100%;
-}
-
-.dashboard-planning-value.ant-typography {
-  margin: 0 !important;
-  line-height: 1.2;
-}
-
-.dashboard-planning-focus-list {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
-}
-
-.dashboard-planning-focus-header {
-  width: 100%;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.dashboard-planning-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.dashboard-planning-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.72);
-  text-decoration: none;
-  transition: all 0.18s ease;
-}
-
-.dashboard-planning-item:hover {
-  transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.18);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
-}
-
-.dashboard-planning-item-main {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.dark .dashboard-planning-card {
-  border-color: rgba(148, 163, 184, 0.14);
-  background: rgba(15, 23, 42, 0.5);
-  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.22);
-}
-
-.dark .dashboard-planning-risk-card {
-  background: linear-gradient(135deg, rgba(113, 63, 18, 0.22), rgba(15, 23, 42, 0.5));
-}
-
-.dark .dashboard-planning-focus-list,
-.dark .dashboard-planning-item {
-  border-color: rgba(148, 163, 184, 0.14);
-}
-
-.dark .dashboard-planning-item {
-  background: rgba(15, 23, 42, 0.38);
-}
-
-@media (max-width: 768px) {
-  .dashboard-planning-card,
-  .dashboard-planning-item {
+  .dashboard-mini-summary-card,
+  .dashboard-planning-summary-card,
+  .dashboard-planning-priority-panel,
+  .dashboard-planning-alert-card {
     border-radius: 14px;
   }
 
-  .dashboard-planning-item {
+  .dashboard-planning-priority-item {
+    flex-direction: column;
+  }
+
+  .dashboard-planning-priority-meta {
     align-items: flex-start;
+    text-align: left;
   }
 }

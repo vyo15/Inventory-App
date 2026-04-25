@@ -231,3 +231,29 @@ Tech debt tersisa:
 - Auto expense payroll tidak boleh dibuat tanpa source reference idempotent.
 - Rollback otomatis expense payroll saat payroll paid dibatalkan belum punya rule final.
 - Jika material cost tetap 0 karena master item tidak punya source cost, perbaiki master data/purchase cost; jangan isi angka asal.
+
+## Update State — Production Planning / Planning Schedule
+
+### Aktif
+- Menu baru `Production Planning` aktif di grup Produksi.
+- Route baru `/produksi/production-planning` aktif.
+- Service baru `productionPlanningService.js` aktif membaca/menulis `production_plans`.
+- Dashboard aktif membaca summary planning minggu/bulan secara read-only.
+- Production Order aktif menyimpan optional reference `planningId`, `planningCode`, dan `planningTitle` saat dibuat dari planning.
+
+### Guarded
+- Planning tidak boleh memotong stok.
+- Planning tidak boleh membuat payroll atau expense.
+- Progress tidak boleh dihitung dari PO yang baru dibuat saja; progress harus berasal dari Work Log completed.
+- Create PO dari planning tetap wajib lewat BOM dan helper `createProductionOrder()` existing.
+- Work Log complete/payroll/HPP tetap guarded dan tidak disentuh oleh fitur planning.
+
+### Legacy / Compatibility
+- PO manual tanpa planning tetap valid.
+- Work Log lama tanpa planning tetap valid.
+- Field `linkedProductionOrderIds` di planning menjadi link tambahan; jika array tidak lengkap, service juga membaca PO yang memiliki `planningId`.
+
+### Potensi Tech Debt Berikutnya
+- Dashboard summary planning saat ini agregat unit sebagai `pcs`; jika nanti ada unit target berbeda, perlu grouping per unit.
+- Belum ada calendar view kompleks; sengaja ditunda karena list/card sudah cukup untuk scope aman.
+- Belum ada migration/backfill planning untuk PO lama; jika perlu harus task terpisah dengan preview.

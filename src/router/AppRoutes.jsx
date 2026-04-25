@@ -26,6 +26,15 @@ const SemiFinishedMaterials = lazy(
   () => import("../pages/Produksi/SemiFinishedMaterials"),
 );
 const ProductionBoms = lazy(() => import("../pages/Produksi/ProductionBoms"));
+// =========================
+// SECTION: Production Planning
+// Fungsi:
+// - route target planning sebelum Production Order;
+// - aktif dipakai untuk monitoring target, bukan mutasi stok.
+// =========================
+const ProductionPlanning = lazy(
+  () => import("../pages/Produksi/ProductionPlanning"),
+);
 const ProductionWorkLogs = lazy(
   () => import("../pages/Produksi/ProductionWorkLogs"),
 );
@@ -123,6 +132,10 @@ const AppRoutes = ({ darkTheme }) => {
         <Route
           path="/produksi/semi-finished-materials"
           element={<SemiFinishedMaterials />}
+        />
+        <Route
+          path="/produksi/production-planning"
+          element={<ProductionPlanning />}
         />
         <Route
           path="/produksi/production-orders"

@@ -213,3 +213,65 @@ Catatan boundary:
 - **Cash Out otomatis aktif:** payroll `paid` membuat expense otomatis dengan source reference dan guard idempotent.
 - **Legacy:** custom payroll preference di master karyawan tetap dibaca sebagai compatibility/info lama, bukan rule utama payroll baru.
 - **Rollback guarded:** membatalkan payroll paid tidak boleh otomatis menghapus expense sebelum business rule rollback disepakati.
+
+## Production Planning Architecture — 2026-04-25
+
+### Posisi dalam Flow Produksi
+Flow produksi aktif sekarang:
+
+```text
+Production Planning
+→ Production Order
+→ Work Log
+→ Payroll Produksi / HPP Analysis
+→ Dashboard / Laporan
+```
+
+Planning berada sebelum PO dan hanya menjadi target monitoring. Planning bukan pengganti BOM, bukan mutasi stok, dan bukan transaksi biaya.
+
+### Collection Baru: `production_plans`
+Field aktif:
+- `planCode`
+- `title`
+- `periodType`
+- `periodStartDate`
+- `periodEndDate`
+- `dueDate`
+- `targetType`
+- `targetItemId`
+- `targetItemName`
+- `targetItemCode`
+- `targetUnit`
+- `targetHasVariants`
+- `targetVariantKey`
+- `targetVariantLabel`
+- `targetQty`
+- `status`
+- `priority`
+- `linkedProductionOrderIds`
+- `linkedProductionOrderCodes`
+- `notes`
+- `createdAt`
+- `updatedAt`
+- `createdBy`
+- `updatedBy`
+
+### Service Aktif
+`src/services/Produksi/productionPlanningService.js` bertugas untuk:
+- CRUD `production_plans`;
+- generate `planCode`;
+- membaca reference product/semi finished/BOM;
+- menghitung progress dari Work Log completed;
+- membuat PO dari planning melalui `createProductionOrder()` existing;
+- menyajikan summary planning untuk Dashboard.
+
+### Guard Integrasi PO
+`productionOrdersService.js` ditambah field reference planning. Perubahan ini hanya menambah metadata `planningId/planningCode/planningTitle` dan tidak mengubah requirement BOM, reservation, start, complete, payroll, atau HPP.
+
+### Guard Progress
+Progress planning dihitung read-only dari Work Log completed. Perhitungan tidak menyimpan stok, tidak update Work Log, dan tidak update PO lifecycle.
+
+### Area Legacy / Compatibility
+- PO lama tanpa planning tetap dianggap PO manual aktif.
+- Work Log lama tanpa planning tetap valid.
+- Tidak ada migrasi data lama otomatis.

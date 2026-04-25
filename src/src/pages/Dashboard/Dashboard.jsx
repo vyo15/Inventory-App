@@ -18,6 +18,7 @@ import {
   ArrowRightOutlined,
   BarChartOutlined,
   BuildOutlined,
+  CalendarOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   DatabaseOutlined,
@@ -38,7 +39,13 @@ import {
 import { db } from "../../firebase";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
-import { formatNumberId } from "../../utils/formatters/numberId";
+import {
+  formatNumberId,
+  formatPercentId,
+  formatQuantityId,
+} from "../../utils/formatters/numberId";
+import { formatCurrencyId } from "../../utils/formatters/currencyId";
+import { formatDateId } from "../../utils/formatters/dateId";
 import SalesChart from "../../components/Dashboard/SalesChart";
 import { getProductionPlanningDashboardSummary } from "../../services/Produksi/productionPlanningService";
 import "./Dashboard.css";
@@ -46,11 +53,42 @@ import "./Dashboard.css";
 const { Text, Title } = Typography;
 
 // =========================
-// SECTION: Constants
+// SECTION: Default summary Production Planning
 // Fungsi:
-// - daftar label bulan untuk chart penjualan tahunan
-// - daftar quick action yang muncul di dashboard agar user tidak perlu
-//   bolak-balik buka sidebar saat pekerjaan harian sedang padat
+// - menjaga Dashboard tetap aman saat collection production_plans belum ada;
+// - dipakai sebagai fallback sebelum service planning selesai load.
+// Status:
+// - aktif; read-only untuk Dashboard dan tidak mengubah stok/PO/Work Log.
+// =========================
+const EMPTY_PLANNING_SUMMARY = {
+  weekly: {
+    count: 0,
+    targetQty: 0,
+    actualCompletedQty: 0,
+    remainingQty: 0,
+    progressPercent: 0,
+  },
+  monthly: {
+    count: 0,
+    targetQty: 0,
+    actualCompletedQty: 0,
+    remainingQty: 0,
+    progressPercent: 0,
+  },
+  overdueCount: 0,
+  behindTargetCount: 0,
+  activePlanningCount: 0,
+  overduePlans: [],
+  priorityPlans: [],
+};
+
+// =========================
+// SECTION: Constants Dashboard
+// Fungsi:
+// - daftar label bulan untuk chart penjualan;
+// - daftar shortcut operasional harian.
+// Status:
+// - aktif dipakai di Dashboard.
 // =========================
 const MONTH_LABELS = [
   "Jan",
@@ -80,6 +118,18 @@ const QUICK_ACTIONS = [
     description: "Pantau stok bahan, semi finished, dan produk jadi.",
     to: "/stock-management",
   },
+  // =========================
+  // ACTIVE - shortcut Production Planning.
+  // Fungsi:
+  // - mengarahkan user membuat target sebelum PO;
+  // - tidak menggantikan shortcut PO existing.
+  // =========================
+  {
+    key: "open-planning",
+    label: "Production Planning",
+    description: "Buat target mingguan/bulanan sebelum Production Order.",
+    to: "/produksi/production-planning",
+  },
   {
     key: "open-po",
     label: "Buat / Cek PO",
@@ -107,35 +157,12 @@ const QUICK_ACTIONS = [
 ];
 
 // =========================
-// SECTION: Production Planning fallback
+// SECTION: Helpers angka dan tanggal
 // Fungsi:
-// - menjaga dashboard lama tetap aman saat summary planning belum ada atau gagal dibaca;
-// - hanya dipakai untuk tampilan read-only, bukan untuk mutasi stok/PO/Work Log.
+// - menjaga parsing angka/tanggal tetap toleran terhadap data lama;
+// - helper ini tidak melakukan mutasi Firestore.
 // Status:
-// - aktif sebagai guard UI Dashboard; bukan schema Firestore baru.
-// =========================
-const EMPTY_PLANNING_PERIOD_SUMMARY = {
-  count: 0,
-  targetQty: 0,
-  actualCompletedQty: 0,
-  remainingQty: 0,
-  progressPercent: 0,
-  priorityPlans: [],
-};
-
-const EMPTY_PLANNING_SUMMARY = {
-  weekly: EMPTY_PLANNING_PERIOD_SUMMARY,
-  monthly: EMPTY_PLANNING_PERIOD_SUMMARY,
-  overdueCount: 0,
-  behindTargetCount: 0,
-  priorityPlans: [],
-};
-
-// =========================
-// SECTION: Helpers - angka & tanggal
-// Fungsi:
-// - menjaga parsing angka/tanggal tetap konsisten walaupun format data
-//   dari firestore bisa sedikit berbeda antar collection lama dan baru
+// - aktif dipakai untuk Dashboard.
 // =========================
 const getNumericValue = (value) => {
   if (typeof value === "number" && !Number.isNaN(value)) return value;
@@ -147,6 +174,27 @@ const getNumericValue = (value) => {
   }
 
   return 0;
+};
+
+const getTransactionDate = (record) => {
+  const candidates = [
+    record?.date,
+    record?.transactionDate,
+    record?.createdAt,
+    record?.timestamp,
+    record?.updatedAt,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if (typeof candidate?.toDate === "function") return candidate.toDate();
+    if (candidate instanceof Date) return candidate;
+
+    const parsed = new Date(candidate);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  return null;
 };
 
 const getSalesTotal = (sale) => {
@@ -166,64 +214,14 @@ const getSalesTotal = (sale) => {
   return 0;
 };
 
-const getTransactionDate = (record) => {
-  const candidates = [
-    record?.date,
-    record?.transactionDate,
-    record?.createdAt,
-    record?.timestamp,
-    record?.updatedAt,
-  ];
-
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-
-    if (typeof candidate?.toDate === "function") {
-      return candidate.toDate();
-    }
-
-    if (candidate instanceof Date) {
-      return candidate;
-    }
-
-    if (typeof candidate === "string" || typeof candidate === "number") {
-      const parsed = new Date(candidate);
-      if (!Number.isNaN(parsed.getTime())) return parsed;
-    }
-  }
-
-  return null;
-};
-
-// =========================
-// SECTION: Helpers - sales status
-// Fungsi:
-// - memastikan chart dan ringkasan penjualan tidak ikut menghitung transaksi
-//   yang sudah dibatalkan atau dianggap tidak valid
-// =========================
 const isValidSalesStatus = (sale) => {
-  const status = String(sale?.status || "")
-    .trim()
-    .toLowerCase();
-
-  const invalidStatuses = [
-    "cancelled",
-    "canceled",
-    "dibatalkan",
-    "batal",
-    "void",
-  ];
-
-  return !invalidStatuses.includes(status);
+  const status = String(sale?.status || "").trim().toLowerCase();
+  return !["cancelled", "canceled", "dibatalkan", "batal", "void"].includes(status);
 };
 
 const buildMonthlySalesChart = (salesList) => {
   const currentYear = new Date().getFullYear();
-
-  const result = MONTH_LABELS.map((month) => ({
-    month,
-    sales: 0,
-  }));
+  const result = MONTH_LABELS.map((month) => ({ month, sales: 0 }));
 
   salesList.forEach((sale) => {
     if (!isValidSalesStatus(sale)) return;
@@ -257,10 +255,12 @@ const getCurrentMonthSalesTotal = (salesList) => {
 };
 
 // =========================
-// SECTION: Helpers - inventory / stock
+// SECTION: Helper stok Dashboard
 // Fungsi:
-// - membaca stok aktual dan minimum stok dari field yang berbeda antar master
-// - menjaga dashboard tetap akurat walaupun nama field lama dan baru bercampur
+// - membaca stok dari field baru/lama;
+// - hanya untuk indikator stok menipis, tidak melakukan update stok.
+// Status:
+// - aktif; tidak menyentuh guarded production stock flow.
 // =========================
 const getItemDisplayName = (item = {}) =>
   item?.name || item?.productName || item?.materialName || "-";
@@ -277,7 +277,6 @@ const isLowStockItem = (item = {}) => {
 
   if (stock <= 0) return true;
   if (minStock > 0 && stock <= minStock) return true;
-
   return false;
 };
 
@@ -285,14 +284,8 @@ const getLowStockSeverity = (item = {}) => {
   const stock = getItemStock(item);
   const minStock = getItemMinStock(item);
 
-  if (stock <= 0) {
-    return { label: "Kosong", color: "red" };
-  }
-
-  if (minStock > 0 && stock <= minStock) {
-    return { label: "Menipis", color: "gold" };
-  }
-
+  if (stock <= 0) return { label: "Kosong", color: "red" };
+  if (minStock > 0 && stock <= minStock) return { label: "Menipis", color: "gold" };
   return { label: "Aman", color: "green" };
 };
 
@@ -316,112 +309,87 @@ const buildLowStockRows = (products = [], materials = []) => {
       type: "Bahan Baku",
       severity: getLowStockSeverity(item),
     })),
-  ]
+  ];
+
+  return rows
     .filter((item) => isLowStockItem(item))
     .sort((left, right) => {
       const leftGap = left.stock - Math.max(left.minStock, 0);
       const rightGap = right.stock - Math.max(right.minStock, 0);
       return leftGap - rightGap;
     });
-
-  return rows;
 };
 
 // =========================
-// SECTION: Helpers - activity tag
+// SECTION: Helper label aktivitas
 // Fungsi:
-// - mengubah type dari inventory log menjadi label visual yang lebih mudah
-//   dipahami user operasional di dashboard
+// - mengubah type inventory log menjadi label manusiawi;
+// - hanya untuk tampilan aktivitas terbaru.
+// Status:
+// - aktif dipakai Dashboard.
 // =========================
 const formatActivityType = (type) => {
   const normalized = String(type || "").toLowerCase();
 
-  if (normalized.includes("purchase")) {
-    return { label: "Pembelian", color: "green" };
-  }
-
-  if (normalized.includes("sale")) {
-    return { label: "Penjualan", color: "blue" };
-  }
-
-  if (normalized.includes("return")) {
-    return { label: "Retur", color: "orange" };
-  }
-
-  if (normalized.includes("adjust")) {
-    return { label: "Penyesuaian", color: "gold" };
-  }
-
-  if (normalized.includes("production")) {
-    return { label: "Produksi", color: "purple" };
-  }
-
-  if (normalized.includes("in")) {
-    return { label: type || "Masuk", color: "green" };
-  }
-
-  if (normalized.includes("out")) {
-    return { label: type || "Keluar", color: "red" };
-  }
+  if (normalized.includes("purchase")) return { label: "Pembelian", color: "green" };
+  if (normalized.includes("sale")) return { label: "Penjualan", color: "blue" };
+  if (normalized.includes("return")) return { label: "Retur", color: "orange" };
+  if (normalized.includes("adjust")) return { label: "Penyesuaian", color: "gold" };
+  if (normalized.includes("production")) return { label: "Produksi", color: "purple" };
+  if (normalized.includes("in")) return { label: type || "Masuk", color: "green" };
+  if (normalized.includes("out")) return { label: type || "Keluar", color: "red" };
 
   return { label: type || "-", color: "default" };
 };
 
 // =========================
-// SECTION: Helpers - Production Planning dashboard
+// SECTION: Helper visual Production Planning Focus
 // Fungsi:
-// - menormalkan summary planning agar Dashboard lama tetap stabil;
-// - menampilkan target mingguan/bulanan tanpa mengubah flow planning, PO, atau Work Log.
+// - menerjemahkan status planning menjadi label dashboard yang mudah dipahami;
+// - menjaga Dashboard tetap read-only karena helper hanya membaca summary service.
+// Hubungan Dashboard / Planning:
+// - dipakai oleh list Planning Perlu Dikejar agar user tahu deadline dan sisa target.
 // Status:
-// - aktif untuk UI read-only; tidak menulis data dan bukan kandidat cleanup.
+// - aktif; bukan logic stok, bukan logic PO, dan bukan kandidat cleanup.
 // =========================
-const normalizePlanningPeriodSummary = (summary = {}) => ({
-  count: getNumericValue(summary.count),
-  targetQty: getNumericValue(summary.targetQty),
-  actualCompletedQty: getNumericValue(summary.actualCompletedQty),
-  remainingQty: getNumericValue(summary.remainingQty),
-  progressPercent: Math.max(0, Math.min(getNumericValue(summary.progressPercent), 999)),
-  priorityPlans: Array.isArray(summary.priorityPlans) ? summary.priorityPlans : [],
-});
+const getPlanningFocusStatusMeta = (plan = {}) => {
+  const status = String(plan?.status || "").toLowerCase();
+  const remainingQty = getNumericValue(plan?.remainingQty);
 
-const normalizePlanningDashboardSummary = (summary = EMPTY_PLANNING_SUMMARY) => ({
-  weekly: normalizePlanningPeriodSummary(summary.weekly),
-  monthly: normalizePlanningPeriodSummary(summary.monthly),
-  overdueCount: getNumericValue(summary.overdueCount),
-  behindTargetCount: getNumericValue(summary.behindTargetCount),
-  priorityPlans: Array.isArray(summary.priorityPlans) ? summary.priorityPlans : [],
-});
+  if (status === "completed" || remainingQty <= 0) {
+    return { label: "Selesai", color: "green" };
+  }
 
-const getPlanningStatusMeta = (status) => {
-  const normalized = String(status || "active").toLowerCase();
+  if (status === "overdue") {
+    return { label: "Overdue", color: "red" };
+  }
 
-  if (normalized === "completed") return { label: "Selesai", color: "green" };
-  if (normalized === "overdue") return { label: "Overdue", color: "red" };
-  if (normalized === "cancelled") return { label: "Dibatalkan", color: "default" };
-  if (normalized === "draft") return { label: "Draft", color: "blue" };
+  if (status === "draft") {
+    return { label: "On Track", color: "blue" };
+  }
 
-  return { label: "Kurang Target", color: "gold" };
+  return { label: "Kurang Target", color: "orange" };
 };
 
-const formatDashboardDate = (value) => {
-  const date = getTransactionDate({ date: value });
-  if (!date) return "-";
+const getPlanningTargetLabel = (plan = {}) => {
+  const targetName =
+    plan?.targetItemName ||
+    plan?.targetName ||
+    plan?.title ||
+    plan?.planCode ||
+    "Target produksi";
+  const variantLabel = plan?.targetVariantLabel || plan?.variantLabel;
 
-  return date.toLocaleDateString("id-ID", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return variantLabel ? [targetName, variantLabel].join(" · ") : targetName;
 };
 
-const getPlanningItemName = (plan = {}) =>
-  plan.targetItemName || plan.title || plan.planCode || "Planning produksi";
-
 // =========================
-// SECTION: Dashboard
-// Fokus:
-// - menampilkan prioritas kerja harian, bukan hanya angka total master
-// - membantu user langsung tahu apa yang perlu dicek, dikerjakan, dan dibuka
+// SECTION: Dashboard Page
+// Fungsi:
+// - pusat ringkasan stok, produksi, penjualan, payroll, dan planning;
+// - Dashboard hanya membaca data, tidak mengubah transaksi.
+// Status:
+// - aktif.
 // =========================
 const Dashboard = () => {
   const [totalProducts, setTotalProducts] = useState(0);
@@ -443,9 +411,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   const lowStockTotal = lowStockRows.length;
-  const planningPriorityItems = productionPlanningSummary.priorityPlans.slice(0, 3);
-  const planningOverdueCount = productionPlanningSummary.overdueCount || 0;
-  const planningBehindTargetCount = productionPlanningSummary.behindTargetCount || 0;
 
   useEffect(() => {
     const initDashboard = async () => {
@@ -479,9 +444,12 @@ const Dashboard = () => {
           getDocs(collection(db, "production_orders")),
           getDocs(collection(db, "production_work_logs")),
           getDocs(collection(db, "production_payrolls")),
+          // ACTIVE / GUARDED - summary planning dibuat fallback lokal.
+          // Fungsi:
+          // - Dashboard tetap tampil walau query production_plans gagal;
+          // - hanya membaca data planning, tidak mengubah Planning/PO/Work Log/stok.
           getProductionPlanningDashboardSummary().catch((error) => {
-            // ACTIVE GUARD: summary planning hanya read-only; jika gagal, Dashboard lama tetap tampil.
-            console.warn("Gagal memuat summary production planning:", error);
+            console.error("Gagal memuat summary production planning:", error);
             return EMPTY_PLANNING_SUMMARY;
           }),
         ]);
@@ -490,27 +458,22 @@ const Dashboard = () => {
           id: docItem.id,
           ...docItem.data(),
         }));
-
         const materialsList = materialsSnap.docs.map((docItem) => ({
           id: docItem.id,
           ...docItem.data(),
         }));
-
         const salesList = salesSnap.docs.map((docItem) => ({
           id: docItem.id,
           ...docItem.data(),
         }));
-
         const ordersList = productionOrdersSnap.docs.map((docItem) => ({
           id: docItem.id,
           ...docItem.data(),
         }));
-
         const workLogsList = workLogsSnap.docs.map((docItem) => ({
           id: docItem.id,
           ...docItem.data(),
         }));
-
         const payrollsList = payrollsSnap.docs.map((docItem) => ({
           id: docItem.id,
           ...docItem.data(),
@@ -519,17 +482,14 @@ const Dashboard = () => {
         setTotalProducts(productCountSnap.data().count || 0);
         setTotalMaterials(materialCountSnap.data().count || 0);
         setLowStockRows(buildLowStockRows(productsList, materialsList).slice(0, 8));
-
         setRecentTransactions(
           recentTransactionsSnap.docs.map((docItem) => ({
             id: docItem.id,
             ...docItem.data(),
           })),
         );
-
         setSalesChartData(buildMonthlySalesChart(salesList));
         setSalesThisMonth(getCurrentMonthSalesTotal(salesList));
-
         setShortageOrdersCount(
           ordersList.filter((item) => item?.status === "shortage").length,
         );
@@ -549,7 +509,7 @@ const Dashboard = () => {
               String(item?.status || "").toLowerCase() === "draft",
           ).length,
         );
-        setProductionPlanningSummary(normalizePlanningDashboardSummary(planningSummary));
+        setProductionPlanningSummary(planningSummary || EMPTY_PLANNING_SUMMARY);
       } catch (error) {
         console.error("Gagal memuat dashboard:", error);
       } finally {
@@ -563,8 +523,10 @@ const Dashboard = () => {
   // =========================
   // SECTION: KPI utama
   // Fungsi:
-  // - kartu teratas diprioritaskan untuk operasional harian
-  // - user bisa langsung lihat stok, produksi, payroll, dan penjualan bulan berjalan
+  // - kartu teratas diprioritaskan untuk indikator harian;
+  // - planning tetap punya widget sendiri agar tidak mencampur target dengan stok.
+  // Status:
+  // - aktif untuk Dashboard.
   // =========================
   const summaryData = useMemo(
     () => [
@@ -620,7 +582,7 @@ const Dashboard = () => {
         subtitle: "Akumulasi transaksi bulan berjalan",
         prefix: <ShoppingCartOutlined />,
         color: "#7c3aed",
-        formatter: (value) => `Rp ${formatNumberId(value)}`,
+        formatter: (value) => formatCurrencyId(value),
       },
     ],
     [
@@ -636,8 +598,10 @@ const Dashboard = () => {
   // =========================
   // SECTION: Action items
   // Fungsi:
-  // - menyusun daftar hal yang perlu diperhatikan user hari ini
-  // - setiap item diberi link tujuan agar dashboard tidak berhenti di informasi saja
+  // - menyusun prioritas kerja yang punya count > 0;
+  // - planning overdue/kurang target muncul di daftar tindakan.
+  // Status:
+  // - aktif; link hanya navigasi, bukan mutasi data.
   // =========================
   const actionItems = useMemo(() => {
     const items = [
@@ -658,11 +622,19 @@ const Dashboard = () => {
         to: "/produksi/production-orders",
       },
       {
-        key: "planning-target",
-        label: "Planning produksi perlu dikejar",
-        count: planningOverdueCount || planningBehindTargetCount,
-        description: "Cek target mingguan/bulanan yang belum tercapai atau overdue.",
-        color: planningOverdueCount > 0 ? "red" : "gold",
+        key: "planning-overdue",
+        label: "Planning produksi overdue",
+        count: productionPlanningSummary.overdueCount || 0,
+        description: "Cek target produksi yang melewati deadline dan belum selesai.",
+        color: "red",
+        to: "/produksi/production-planning",
+      },
+      {
+        key: "planning-behind",
+        label: "Planning kurang target",
+        count: productionPlanningSummary.behindTargetCount || 0,
+        description: "Pantau target mingguan/bulanan yang belum tercapai.",
+        color: "orange",
         to: "/produksi/production-planning",
       },
       {
@@ -695,8 +667,8 @@ const Dashboard = () => {
   }, [
     inProgressWorkLogsCount,
     lowStockTotal,
-    planningBehindTargetCount,
-    planningOverdueCount,
+    productionPlanningSummary.behindTargetCount,
+    productionPlanningSummary.overdueCount,
     readyOrdersCount,
     shortageOrdersCount,
     unpaidPayrollCount,
@@ -705,8 +677,10 @@ const Dashboard = () => {
   // =========================
   // SECTION: Secondary summary
   // Fungsi:
-  // - memberi konteks tambahan tentang master aktif dan status produksi
-  // - dibuat ringkas supaya tidak menyaingi KPI utama di atas
+  // - memberi konteks tambahan tentang master aktif dan status produksi;
+  // - planning overdue ikut muncul sebagai ringkasan tambahan.
+  // Status:
+  // - aktif; hanya membaca data.
   // =========================
   const secondarySummary = useMemo(
     () => [
@@ -731,15 +705,53 @@ const Dashboard = () => {
         subtitle: "Order yang sudah dimulai",
         icon: <BuildOutlined />,
       },
+      {
+        key: "planning-overdue",
+        title: "Planning Overdue",
+        value: productionPlanningSummary.overdueCount || 0,
+        subtitle: "Target lewat deadline",
+        icon: <CalendarOutlined />,
+      },
     ],
-    [inProductionOrdersCount, totalMaterials, totalProducts],
+    [inProductionOrdersCount, productionPlanningSummary.overdueCount, totalMaterials, totalProducts],
   );
 
   // =========================
-  // SECTION: Low stock table
+  // SECTION: Production Planning Focus data
   // Fungsi:
-  // - menampilkan item stok terendah yang paling perlu dilihat cepat
-  // - kolom dibuat ringkas agar user tidak perlu scroll terlalu jauh
+  // - menyiapkan summary dan list urgent dari service planning;
+  // - Dashboard tetap read-only, semua progress tetap dihitung oleh service existing.
+  // Hubungan Dashboard / Planning:
+  // - dipakai untuk section Fokus Target Produksi agar user melihat target yang perlu dikejar.
+  // Status:
+  // - aktif; tidak mengubah stok, PO, Work Log, payroll, HPP, atau schema Firestore.
+  // =========================
+  const planningPriorityItems = useMemo(
+    () => (Array.isArray(productionPlanningSummary.priorityPlans)
+      ? productionPlanningSummary.priorityPlans.slice(0, 3)
+      : []),
+    [productionPlanningSummary.priorityPlans],
+  );
+
+  const hasActiveProductionPlanning = useMemo(() => {
+    const activeCount = Number(productionPlanningSummary.activePlanningCount || 0);
+    const weeklyCount = Number(productionPlanningSummary.weekly?.count || 0);
+    const monthlyCount = Number(productionPlanningSummary.monthly?.count || 0);
+
+    return activeCount > 0 || weeklyCount > 0 || monthlyCount > 0 || planningPriorityItems.length > 0;
+  }, [
+    planningPriorityItems.length,
+    productionPlanningSummary.activePlanningCount,
+    productionPlanningSummary.monthly?.count,
+    productionPlanningSummary.weekly?.count,
+  ]);
+
+  // =========================
+  // SECTION: Kolom tabel
+  // Fungsi:
+  // - kolom stok dan aktivitas terbaru dibuat ringkas agar dashboard tetap ringan.
+  // Status:
+  // - aktif untuk tampilan dashboard.
   // =========================
   const lowStockColumns = [
     {
@@ -778,12 +790,6 @@ const Dashboard = () => {
     },
   ];
 
-  // =========================
-  // SECTION: Recent activity table
-  // Fungsi:
-  // - menjaga user bisa audit log terakhir tanpa harus buka halaman stok dulu
-  // - cocok untuk melihat apakah mutasi terbaru sesuai dengan aktivitas operasional
-  // =========================
   const activityColumns = [
     {
       title: "Aktivitas",
@@ -801,11 +807,7 @@ const Dashboard = () => {
       key: "itemName",
       ellipsis: true,
       render: (value, record) =>
-        value ||
-        record?.name ||
-        record?.productName ||
-        record?.materialName ||
-        "-",
+        value || record?.name || record?.productName || record?.materialName || "-",
     },
     {
       title: "Jumlah",
@@ -835,6 +837,8 @@ const Dashboard = () => {
         )} PO shortage, ${formatNumberId(
           readyOrdersCount,
         )} PO siap, ${formatNumberId(
+          productionPlanningSummary.overdueCount || 0,
+        )} planning overdue, ${formatNumberId(
           inProgressWorkLogsCount,
         )} work log berjalan, dan ${formatNumberId(
           unpaidPayrollCount,
@@ -845,7 +849,7 @@ const Dashboard = () => {
     <div className="dashboard-page">
       <PageHeader
         title="Dashboard"
-        subtitle="Pusat ringkasan operasional untuk membantu user melihat prioritas kerja harian, status produksi, stok, dan penjualan."
+        subtitle="Pusat ringkasan operasional untuk membantu user melihat prioritas kerja harian, status produksi, stok, target planning, dan penjualan."
       />
 
       <div className="dashboard-alert-wrap">
@@ -858,10 +862,175 @@ const Dashboard = () => {
       </div>
 
       {/* =========================
+          SECTION: Production Planning Focus
+          Fungsi:
+          - membuat Dashboard Planning lebih actionable, bukan hanya angka agregat;
+          - menampilkan target minggu/bulan dan maksimal 3 planning paling urgent.
+          Hubungan Dashboard / Planning:
+          - data tetap berasal dari productionPlanningSummary service;
+          - link hanya navigasi ke Production Planning / Production Orders.
+          Status:
+          - aktif; read-only dan tidak mengubah stok, PO, Work Log, payroll, HPP, atau laporan.
+      ========================= */}
+      <PageSection
+        title="Fokus Target Produksi"
+        subtitle="Pantau target mingguan/bulanan dan planning yang perlu dikejar."
+        extra={
+          <Link to="/produksi/production-planning" className="dashboard-section-link">
+            Buka Production Planning <ArrowRightOutlined />
+          </Link>
+        }
+      >
+        {hasActiveProductionPlanning ? (
+          <div className="dashboard-planning-focus">
+            <div className="dashboard-planning-summary-stack">
+              <div className="dashboard-planning-summary-grid">
+                <div className="dashboard-planning-summary-card">
+                  <div className="dashboard-planning-card-head">
+                    <Space size={8}>
+                      <CalendarOutlined />
+                      <Text strong>Target Minggu Ini</Text>
+                    </Space>
+                    <Tag color="blue">
+                      {formatNumberId(productionPlanningSummary.weekly?.count || 0)} planning
+                    </Tag>
+                  </div>
+
+                  <Title level={4} className="dashboard-planning-main-value">
+                    {formatQuantityId(productionPlanningSummary.weekly?.actualCompletedQty || 0)} / {formatQuantityId(productionPlanningSummary.weekly?.targetQty || 0)} pcs
+                  </Title>
+
+                  <Progress
+                    percent={Math.min(Number(productionPlanningSummary.weekly?.progressPercent || 0), 100)}
+                    size="small"
+                    format={(percent) => formatPercentId(percent)}
+                  />
+
+                  <Text className="dashboard-planning-card-note">
+                    Sisa {formatQuantityId(productionPlanningSummary.weekly?.remainingQty || 0)} pcs untuk periode minggu berjalan.
+                  </Text>
+                </div>
+
+                <div className="dashboard-planning-summary-card">
+                  <div className="dashboard-planning-card-head">
+                    <Space size={8}>
+                      <CalendarOutlined />
+                      <Text strong>Target Bulan Ini</Text>
+                    </Space>
+                    <Tag color="purple">
+                      {formatNumberId(productionPlanningSummary.monthly?.count || 0)} planning
+                    </Tag>
+                  </div>
+
+                  <Title level={4} className="dashboard-planning-main-value">
+                    {formatQuantityId(productionPlanningSummary.monthly?.actualCompletedQty || 0)} / {formatQuantityId(productionPlanningSummary.monthly?.targetQty || 0)} pcs
+                  </Title>
+
+                  <Progress
+                    percent={Math.min(Number(productionPlanningSummary.monthly?.progressPercent || 0), 100)}
+                    size="small"
+                    format={(percent) => formatPercentId(percent)}
+                  />
+
+                  <Text className="dashboard-planning-card-note">
+                    Sisa {formatQuantityId(productionPlanningSummary.monthly?.remainingQty || 0)} pcs untuk periode bulan berjalan.
+                  </Text>
+                </div>
+              </div>
+
+              <div className="dashboard-planning-alert-grid">
+                <div className="dashboard-planning-alert-card dashboard-planning-alert-card--danger">
+                  <Text className="dashboard-planning-alert-label">Overdue Planning</Text>
+                  <Title level={4} className="dashboard-planning-alert-value">
+                    {formatNumberId(productionPlanningSummary.overdueCount || 0)}
+                  </Title>
+                </div>
+
+                <div className="dashboard-planning-alert-card dashboard-planning-alert-card--warning">
+                  <Text className="dashboard-planning-alert-label">Kurang Target</Text>
+                  <Title level={4} className="dashboard-planning-alert-value">
+                    {formatNumberId(productionPlanningSummary.behindTargetCount || 0)}
+                  </Title>
+                </div>
+              </div>
+            </div>
+
+            <div className="dashboard-planning-priority-panel">
+              <div className="dashboard-planning-priority-head">
+                <Space direction="vertical" size={2}>
+                  <Text strong>Planning Perlu Dikejar</Text>
+                  <Text className="dashboard-planning-card-note">
+                    Diurutkan dari overdue, deadline terdekat, progress terkecil.
+                  </Text>
+                </Space>
+                <Tag color={planningPriorityItems.length > 0 ? "orange" : "green"}>
+                  {formatNumberId(planningPriorityItems.length)} prioritas
+                </Tag>
+              </div>
+
+              {planningPriorityItems.length > 0 ? (
+                <div className="dashboard-planning-priority-list">
+                  {planningPriorityItems.map((plan) => {
+                    const statusMeta = getPlanningFocusStatusMeta(plan);
+
+                    return (
+                      <div key={plan.id || plan.planCode} className="dashboard-planning-priority-item">
+                        <div className="dashboard-planning-priority-main">
+                          <Text strong ellipsis className="dashboard-planning-priority-title">
+                            {getPlanningTargetLabel(plan)}
+                          </Text>
+                          <Text className="dashboard-planning-card-note">
+                            Sisa {formatQuantityId(plan.remainingQty || 0)} {plan.targetUnit || "pcs"} · Progress {formatPercentId(plan.progressPercent || 0)}
+                          </Text>
+                        </div>
+
+                        <div className="dashboard-planning-priority-meta">
+                          <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
+                          <Text className="dashboard-planning-card-note">
+                            Deadline {formatDateId(plan.dueDate)}
+                          </Text>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="dashboard-planning-priority-empty">
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description="Tidak ada planning urgent. Target aktif masih aman atau sudah selesai."
+                  />
+                </div>
+              )}
+
+              <div className="dashboard-planning-action-row">
+                <Link to="/produksi/production-planning" className="dashboard-planning-action-link">
+                  Buka Production Planning <ArrowRightOutlined />
+                </Link>
+                <Link to="/produksi/production-orders" className="dashboard-planning-action-link dashboard-planning-action-link--muted">
+                  Buat / cek PO <ArrowRightOutlined />
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="dashboard-planning-empty-state">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="Belum ada target produksi aktif. Buat planning mingguan/bulanan untuk memantau progress produksi."
+            />
+            <Link to="/produksi/production-planning" className="dashboard-planning-action-link">
+              Buka Production Planning <ArrowRightOutlined />
+            </Link>
+          </div>
+        )}
+      </PageSection>
+
+      {/* =========================
           SECTION: KPI Cards
           Tujuan:
-          - menampilkan indikator utama yang paling sering dicek user
-          - urutan kartu mengikuti prioritas operasional harian
+          - menampilkan indikator utama yang paling sering dicek user;
+          - urutan kartu mengikuti prioritas operasional harian.
       ========================= */}
       <Row gutter={[16, 16]} className="dashboard-summary-row">
         {summaryData.map((item) => (
@@ -883,8 +1052,8 @@ const Dashboard = () => {
       {/* =========================
           SECTION: Action Center
           Tujuan:
-          - blok kiri fokus ke prioritas kerja hari ini
-          - blok kanan fokus ke akses cepat dan ringkasan master
+          - blok kiri fokus prioritas tindakan;
+          - blok kanan shortcut operasional dan summary master.
       ========================= */}
       <Row gutter={[16, 16]} className="dashboard-main-grid">
         <Col xs={24} xl={10}>
@@ -957,108 +1126,10 @@ const Dashboard = () => {
       </Row>
 
       {/* =========================
-          SECTION: Production Planning Focus
-          Tujuan:
-          - menambahkan layer target produksi mingguan/bulanan ke Dashboard lama;
-          - hanya membaca summary planning dan tidak mengubah stok, PO, Work Log, payroll, atau HPP;
-          - aktif dipakai sebagai monitoring target sebelum user membuka halaman Production Planning.
-      ========================= */}
-      <PageSection
-        title="Target Produksi Minggu & Bulan Ini"
-        subtitle="Ringkasan Production Planning agar user tahu target mana yang perlu dikejar."
-        extra={
-          <Link to="/produksi/production-planning" className="dashboard-section-extra">
-            Buka Production Planning <ArrowRightOutlined />
-          </Link>
-        }
-      >
-        <Row gutter={[16, 16]} className="dashboard-main-grid">
-          {[
-            { key: "weekly", label: "Target Minggu Ini", data: productionPlanningSummary.weekly },
-            { key: "monthly", label: "Target Bulan Ini", data: productionPlanningSummary.monthly },
-          ].map((item) => (
-            <Col xs={24} lg={8} key={item.key}>
-              <div className="dashboard-planning-card">
-                <Space direction="vertical" size={8} className="dashboard-planning-card-body">
-                  <Text className="dashboard-mini-summary-label">{item.label}</Text>
-                  <Title level={4} className="dashboard-planning-value">
-                    {formatNumberId(item.data.actualCompletedQty)} / {formatNumberId(item.data.targetQty)} pcs
-                  </Title>
-                  <Progress
-                    percent={Math.min(Math.round(item.data.progressPercent || 0), 100)}
-                    size="small"
-                    status={item.data.progressPercent >= 100 ? "success" : "active"}
-                  />
-                  <Text className="dashboard-mini-summary-subtitle">
-                    Sisa {formatNumberId(item.data.remainingQty)} pcs dari {formatNumberId(item.data.count)} planning
-                  </Text>
-                </Space>
-              </div>
-            </Col>
-          ))}
-
-          <Col xs={24} lg={8}>
-            <div className="dashboard-planning-card dashboard-planning-risk-card">
-              <Space direction="vertical" size={8} className="dashboard-planning-card-body">
-                <Text className="dashboard-mini-summary-label">Risiko Target</Text>
-                <Title level={4} className="dashboard-planning-value">
-                  {formatNumberId(planningOverdueCount)} overdue
-                </Title>
-                <Text className="dashboard-mini-summary-subtitle">
-                  {formatNumberId(planningBehindTargetCount)} planning masih punya sisa target.
-                </Text>
-                <Link to="/produksi/production-planning">Cek planning <ArrowRightOutlined /></Link>
-              </Space>
-            </div>
-          </Col>
-        </Row>
-
-        <div className="dashboard-planning-focus-list">
-          <Space align="center" className="dashboard-planning-focus-header">
-            <Text strong>Planning Perlu Dikejar</Text>
-            <Tag color={planningPriorityItems.length > 0 ? "gold" : "green"}>
-              {formatNumberId(planningPriorityItems.length)} prioritas
-            </Tag>
-          </Space>
-
-          {planningPriorityItems.length > 0 ? (
-            <div className="dashboard-planning-list">
-              {planningPriorityItems.map((plan) => {
-                const statusMeta = getPlanningStatusMeta(plan.status);
-                return (
-                  <Link
-                    key={plan.id || plan.planCode}
-                    to="/produksi/production-planning"
-                    className="dashboard-planning-item"
-                  >
-                    <div className="dashboard-planning-item-main">
-                      <Space size={8} wrap>
-                        <Text strong>{getPlanningItemName(plan)}</Text>
-                        {plan.targetVariantLabel ? <Tag>{plan.targetVariantLabel}</Tag> : null}
-                        <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
-                      </Space>
-                      <Text className="dashboard-action-description">
-                        Sisa {formatNumberId(plan.remainingQty)} {plan.targetUnit || "pcs"} - Progress {formatNumberId(Math.round(plan.progressPercent || 0))}% - Deadline {formatDashboardDate(plan.dueDate)}
-                      </Text>
-                    </div>
-                    <ArrowRightOutlined className="dashboard-action-arrow" />
-                  </Link>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="dashboard-empty-wrap dashboard-empty-compact">
-              <Empty description="Belum ada planning produksi yang perlu dikejar." />
-            </div>
-          )}
-        </div>
-      </PageSection>
-
-      {/* =========================
           SECTION: Insight Panels
           Tujuan:
-          - kiri untuk tren penjualan
-          - kanan untuk daftar item stok yang paling perlu diprioritaskan
+          - kiri untuk tren penjualan;
+          - kanan untuk daftar item stok yang paling perlu diprioritaskan.
       ========================= */}
       <Row gutter={[16, 16]} className="dashboard-main-grid">
         <Col xs={24} xl={14}>
@@ -1111,8 +1182,8 @@ const Dashboard = () => {
       {/* =========================
           SECTION: Recent Activities
           Tujuan:
-          - memberi jejak audit cepat atas transaksi inventaris terbaru
-          - user bisa cocokkan perubahan sistem dengan aktivitas nyata di lapangan
+          - memberi jejak audit cepat atas transaksi inventaris terbaru;
+          - user bisa cocokkan perubahan sistem dengan aktivitas nyata di lapangan.
       ========================= */}
       <PageSection
         title="Aktivitas Terbaru"
