@@ -12,16 +12,11 @@ import { calculateAvailableStock, toNumber } from "../../utils/stock/stockHelper
 
 // -----------------------------------------------------------------------------
 // Reset & Maintenance Data Service
-// Tujuan service reset legacy/aktif:
-// - bagian ini khusus reset destructive dan sinkronisasi stok master;
-// - maintenance/repair produksi dipisah ke services/Maintenance agar tidak
-//   bercampur dengan flow operasional produksi aktif.
-// Tujuan service:
-// 1. preview jumlah data uji yang akan dibersihkan
-// 2. reset transaksi sesuai modul yang dipilih user
-// 3. simpan baseline stok agar trial-error bisa diulang cepat
-// 4. restore baseline / nolkan stok master testing
-// 5. sinkronkan stock fields agar currentStock / stock / availableStock konsisten
+// ACTIVE / FINAL FOUNDATION:
+// - service final ini khusus reset destructive, preview reset, baseline, dan sync stok;
+// - repair/audit non-destructive tetap dipisah ke service Maintenance lain;
+// - reset scoped dipakai agar modul sensitif seperti sales/purchases/production
+//   tidak menghapus data lintas modul secara membabi buta.
 // -----------------------------------------------------------------------------
 
 export const DEFAULT_RESET_MODULES = [
@@ -59,12 +54,74 @@ const BASELINE_DOC_ID = "inventory_reset_baseline";
 const STOCK_COLLECTIONS = ["raw_materials", "semi_finished_materials", "products"];
 const BATCH_LIMIT = 400;
 
+const safeTrim = (value) => String(value || "").trim();
+const normalizeType = (value) => safeTrim(value).toLowerCase();
+
+const hasTruthyReference = (value) => Boolean(safeTrim(value));
+
+// -----------------------------------------------------------------------------
+// Scoped filter reset.
+// ACTIVE / FINAL FOUNDATION: filter ini menjaga reset terarah agar data bersama
+// seperti incomes, expenses, dan inventory_logs tidak dihapus seluruhnya saat
+// user hanya memilih modul spesifik.
+// -----------------------------------------------------------------------------
+const SCOPED_FILTERS = {
+  salesIncome: (data = {}) =>
+    normalizeType(data.sourceModule) === "sales" ||
+    normalizeType(data.type).includes("penjualan") ||
+    hasTruthyReference(data.saleId) ||
+    hasTruthyReference(data.salesChannel),
+  purchaseExpense: (data = {}) =>
+    normalizeType(data.sourceModule) === "purchases" ||
+    hasTruthyReference(data.relatedPurchaseId) ||
+    normalizeType(data.type).includes("pembelian"),
+  productionInventoryLog: (data = {}) => {
+    const type = normalizeType(data.type || data.actionType);
+    return (
+      type.includes("production") ||
+      hasTruthyReference(data.productionOrderId || data.details?.productionOrderId) ||
+      hasTruthyReference(data.workLogRefId || data.workLogId || data.details?.workLogRefId || data.details?.workLogId)
+    );
+  },
+  salesInventoryLog: (data = {}) => {
+    const type = normalizeType(data.type || data.actionType);
+    return type.includes("sale") || hasTruthyReference(data.saleId || data.details?.saleId);
+  },
+  purchaseInventoryLog: (data = {}) => {
+    const type = normalizeType(data.type || data.actionType);
+    return type.includes("purchase") || hasTruthyReference(data.purchaseId || data.details?.purchaseId);
+  },
+  returnInventoryLog: (data = {}) => {
+    const type = normalizeType(data.type || data.actionType);
+    return type.includes("return") || hasTruthyReference(data.returnId || data.details?.returnId);
+  },
+  adjustmentInventoryLog: (data = {}) => {
+    const type = normalizeType(data.type || data.actionType);
+    return type.includes("adjustment") || hasTruthyReference(data.adjustmentId || data.details?.adjustmentId);
+  },
+};
+
 const MODULE_DEFINITIONS = {
   sales: {
     label: "Penjualan",
     collections: [
       { key: "sales", label: "Penjualan", action: "Hapus transaksi penjualan" },
-      { key: "incomes", label: "Pemasukan Penjualan", action: "Hapus catatan pemasukan" },
+      {
+        key: "incomes",
+        label: "Pemasukan Penjualan",
+        action: "Hapus pemasukan yang bersumber dari sales saja",
+        scopeKey: "sales_income",
+        scopeLabel: "Hanya income penjualan",
+        filter: SCOPED_FILTERS.salesIncome,
+      },
+      {
+        key: "inventory_logs",
+        label: "Inventory Log Penjualan",
+        action: "Hapus log stok penjualan saja",
+        scopeKey: "sales_inventory_log",
+        scopeLabel: "Hanya log penjualan",
+        filter: SCOPED_FILTERS.salesInventoryLog,
+      },
     ],
   },
   purchases: {
@@ -72,12 +129,36 @@ const MODULE_DEFINITIONS = {
     collections: [
       { key: "purchases", label: "Pembelian", action: "Hapus transaksi pembelian" },
       { key: "supplierPurchases", label: "Supplier Purchases", action: "Hapus relasi pembelian supplier" },
+      {
+        key: "expenses",
+        label: "Expense Pembelian",
+        action: "Hapus expense yang bersumber dari purchases saja",
+        scopeKey: "purchase_expense",
+        scopeLabel: "Hanya expense pembelian",
+        filter: SCOPED_FILTERS.purchaseExpense,
+      },
+      {
+        key: "inventory_logs",
+        label: "Inventory Log Pembelian",
+        action: "Hapus log stok pembelian saja",
+        scopeKey: "purchase_inventory_log",
+        scopeLabel: "Hanya log pembelian",
+        filter: SCOPED_FILTERS.purchaseInventoryLog,
+      },
     ],
   },
   returns: {
     label: "Retur",
     collections: [
       { key: "returns", label: "Retur", action: "Hapus transaksi retur" },
+      {
+        key: "inventory_logs",
+        label: "Inventory Log Retur",
+        action: "Hapus log stok retur saja",
+        scopeKey: "return_inventory_log",
+        scopeLabel: "Hanya log retur",
+        filter: SCOPED_FILTERS.returnInventoryLog,
+      },
     ],
   },
   production: {
@@ -87,21 +168,36 @@ const MODULE_DEFINITIONS = {
       { key: "production_work_logs", label: "Production Work Log", action: "Hapus work log produksi" },
       { key: "production_payrolls", label: "Payroll Produksi", action: "Hapus payroll produksi" },
       { key: "productions", label: "Productions Legacy", action: "Bersihkan jejak flow lama" },
+      {
+        key: "inventory_logs",
+        label: "Inventory Log Produksi",
+        action: "Hapus log stok produksi saja agar tidak orphan",
+        scopeKey: "production_inventory_log",
+        scopeLabel: "Hanya log produksi",
+        filter: SCOPED_FILTERS.productionInventoryLog,
+      },
     ],
   },
   cash_and_expenses: {
     label: "Kas & Biaya",
     collections: [
-      { key: "expenses", label: "Pengeluaran", action: "Hapus transaksi pengeluaran" },
+      { key: "expenses", label: "Pengeluaran", action: "Hapus semua transaksi pengeluaran" },
       { key: "revenues", label: "Pendapatan", action: "Hapus pendapatan non-penjualan" },
-      { key: "incomes", label: "Pemasukan", action: "Hapus pemasukan umum" },
+      { key: "incomes", label: "Pemasukan", action: "Hapus semua pemasukan" },
     ],
   },
   stock_adjustment_and_logs: {
     label: "Penyesuaian & Log Stok",
     collections: [
       { key: "stock_adjustments", label: "Stock Adjustment", action: "Hapus penyesuaian stok" },
-      { key: "inventory_logs", label: "Inventory Log", action: "Hapus log mutasi stok" },
+      {
+        key: "inventory_logs",
+        label: "Inventory Log Adjustment",
+        action: "Hapus log stok penyesuaian saja",
+        scopeKey: "adjustment_inventory_log",
+        scopeLabel: "Hanya log adjustment",
+        filter: SCOPED_FILTERS.adjustmentInventoryLog,
+      },
     ],
   },
   pricing_logs: {
@@ -112,11 +208,14 @@ const MODULE_DEFINITIONS = {
   },
 };
 
-const safeTrim = (value) => String(value || "").trim();
+const buildTargetKey = (item = {}) => `${item.key}::${item.scopeKey || "all"}`;
+
+const isFullCollectionTarget = (item = {}) => !item.filter;
 
 // -----------------------------------------------------------------------------
-// Helper daftar collection aktif dari modul yang dipilih.
-// include helpers dipakai agar collection bersama seperti incomes tidak dobel.
+// Target reset dipisah per scope. Jika modul Cash & Biaya dipilih, target full
+// incomes/expenses akan mengalahkan target scoped dari sales/purchases agar tidak
+// ada operasi dobel pada collection yang sama.
 // -----------------------------------------------------------------------------
 const getCollectionTargetsFromModules = (modules = []) => {
   const map = new Map();
@@ -125,23 +224,34 @@ const getCollectionTargetsFromModules = (modules = []) => {
     const definition = MODULE_DEFINITIONS[moduleKey];
     if (!definition) return;
 
-    definition.collections.forEach((item) => {
-      if (!map.has(item.key)) {
-        map.set(item.key, {
-          ...item,
-          moduleKey,
-          moduleLabel: definition.label,
-        });
-      }
+    definition.collections.forEach((rawItem) => {
+      const item = {
+        ...rawItem,
+        moduleKey,
+        moduleLabel: definition.label,
+        targetKey: buildTargetKey(rawItem),
+      };
+      map.set(item.targetKey, item);
     });
   });
 
-  return Array.from(map.values());
+  const targets = Array.from(map.values());
+  const fullCollectionKeys = new Set(targets.filter(isFullCollectionTarget).map((item) => item.key));
+
+  return targets.filter((item) => isFullCollectionTarget(item) || !fullCollectionKeys.has(item.key));
 };
 
-const countCollectionDocuments = async (collectionName) => {
-  const snapshot = await getDocs(collection(db, collectionName));
-  return snapshot.size;
+const readFilteredDocuments = async (target = {}) => {
+  const snapshot = await getDocs(collection(db, target.key));
+  const docs = target.filter
+    ? snapshot.docs.filter((itemDoc) => target.filter(itemDoc.data()))
+    : snapshot.docs;
+  return docs;
+};
+
+const countCollectionDocuments = async (target) => {
+  const docs = await readFilteredDocuments(target);
+  return docs.length;
 };
 
 const getBaselineSnapshotDoc = async () => {
@@ -159,7 +269,7 @@ const buildStockFieldsFromItem = (item = {}) => {
       const reservedStock = toNumber(variant.reservedStock || 0);
       return {
         ...variant,
-        variantKey: safeTrim(variant.variantKey || variant.id || variant.name || `variant-${index}`),
+        variantKey: safeTrim(variant.variantKey || variant.id || variant.name || variant.variantName || variant.color || `variant-${index}`),
         currentStock,
         stock: currentStock,
         reservedStock,
@@ -196,7 +306,7 @@ const buildZeroStockFieldsFromItem = (item = {}) => {
   if (hasVariants) {
     const variants = item.variants.map((variant, index) => ({
       ...variant,
-      variantKey: safeTrim(variant.variantKey || variant.id || variant.name || `variant-${index}`),
+      variantKey: safeTrim(variant.variantKey || variant.id || variant.name || variant.variantName || variant.color || `variant-${index}`),
       currentStock: 0,
       stock: 0,
       reservedStock: 0,
@@ -238,15 +348,15 @@ const buildBaselineStockPayload = async () => {
   return stockItems;
 };
 
-const commitDeleteCollection = async (collectionName) => {
-  const snapshot = await getDocs(collection(db, collectionName));
-  if (!snapshot.size) return 0;
+const commitDeleteTarget = async (target) => {
+  const docs = await readFilteredDocuments(target);
+  if (!docs.length) return 0;
 
   let batch = writeBatch(db);
   let operationCount = 0;
   let deletedCount = 0;
 
-  for (const itemDoc of snapshot.docs) {
+  for (const itemDoc of docs) {
     batch.delete(itemDoc.ref);
     operationCount += 1;
     deletedCount += 1;
@@ -258,9 +368,7 @@ const commitDeleteCollection = async (collectionName) => {
     }
   }
 
-  if (operationCount > 0) {
-    await batch.commit();
-  }
+  if (operationCount > 0) await batch.commit();
 
   return deletedCount;
 };
@@ -320,9 +428,7 @@ const applyStockModeToMasterItems = async (resetMode) => {
     }
   }
 
-  if (operationCount > 0) {
-    await batch.commit();
-  }
+  if (operationCount > 0) await batch.commit();
 
   return {
     affectedItems,
@@ -340,7 +446,7 @@ export const getResetPreview = async ({ resetMode, modules }) => {
   const collections = await Promise.all(
     collectionTargets.map(async (item) => ({
       ...item,
-      count: await countCollectionDocuments(item.key),
+      count: await countCollectionDocuments(item),
     })),
   );
 
@@ -409,9 +515,7 @@ export const syncAllStocks = async () => {
     }
   }
 
-  if (operationCount > 0) {
-    await batch.commit();
-  }
+  if (operationCount > 0) await batch.commit();
 
   return {
     message: `Sinkronisasi stok selesai untuk ${syncedCount} item master.`,
@@ -431,7 +535,7 @@ export const runResetDataTest = async ({ resetMode, modules }) => {
   let totalDeletedRecords = 0;
 
   for (const item of collectionTargets) {
-    const deletedCount = await commitDeleteCollection(item.key);
+    const deletedCount = await commitDeleteTarget(item);
     totalDeletedRecords += deletedCount;
     deletedCollections.push({
       ...item,
@@ -442,7 +546,7 @@ export const runResetDataTest = async ({ resetMode, modules }) => {
   const stockResult = await applyStockModeToMasterItems(resetMode);
 
   return {
-    message: `Reset data uji selesai. ${totalDeletedRecords} record transaksi dibersihkan. ${stockResult.message}`,
+    message: `Reset data selesai. ${totalDeletedRecords} record dibersihkan. ${stockResult.message}`,
     totalDeletedRecords,
     deletedCollections,
     stockResult,

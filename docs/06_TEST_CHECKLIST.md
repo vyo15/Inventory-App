@@ -158,9 +158,12 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - cek HPP tetap bisa membaca work log completed
 
 ### Payroll Produksi
-- buat payroll dari work log completed
-- cek nilai payroll
-- ubah status unpaid → paid
+- selesaikan work log eligible dan pastikan draft payroll langsung terbentuk otomatis per operator
+- cek operator produksi langsung muncul di menu Payroll tanpa generate manual
+- cek nilai payroll per line sesuai step rule snapshot pada Work Log
+- confirm payroll draft
+- ubah status confirmed → paid
+- cancel payroll draft/confirmed dan pastikan line tidak aktif lagi
 
 ### Analisis HPP
 - pastikan work log completed terbaca
@@ -172,7 +175,8 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - cek semua main table prioritas apakah kolom `Aksi` ada di paling kanan
 - cek main table lebar apakah aksi utama tetap terlihat tanpa scroll horizontal dulu
 - cek `ProductionOrders` apakah `Detail / Refresh Need / Mulai Produksi` tetap langsung terlihat
-- cek `ProductionSteps` dan `ProductionProfiles` tetap konsisten sebagai simple config page tanpa tombol `Detail`
+- cek `ProductionSteps` sekarang tampil sebagai detail-capable page ringan: tabel utama ringkas, tombol `Detail` ada, dan drawer Detail read-only tampil benar
+- cek `ProductionProfiles` tetap konsisten sebagai simple config page tanpa tombol `Detail`
 - cek `CashIn` dan `CashOut` tetap rapi sebagai ledger/simple action page tanpa ubah logic handler
 - cek nested/subtable BOM dan Work Log tetap usable walau tidak dipaksa sticky
 - cek dark mode dan light mode
@@ -200,81 +204,42 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - cek `PricingRules` apakah tombol `Detail` membuka modal detail/preview yang benar
 - cek `Purchases`, `Returns`, `StockAdjustment`, `StockManagement`, `StockReport`, `PurchasesReport`, `SalesReport`, `ProfitLossReport`, dan `ProductionHppAnalysis` apakah main table sudah memakai baseline surface global
 - cek halaman lebar tetap nyaman dipakai dengan `scroll.x` dan sticky/fixed right bila ada aksi
-- cek `ResetTestData` apakah tabel preview tetap rapi walau page shell utility masih transisi
+- cek `ResetMaintenanceData` apakah tabel preview tetap rapi walau page shell utility masih transisi
 - cek dark mode dan light mode setelah normalisasi batch global
 - cek tidak ada variasi action liar baru di luar baseline final
 
-### Final Varian Produksi
-- buat Production Order target `semi_finished_material` dengan varian tertentu
-- pastikan list dan detail PO menampilkan varian target yang benar
-- klik `Mulai Produksi` dari PO dan cek Work Log root membawa `targetVariantKey` / `targetVariantLabel` yang sama
-- cek output line Work Log memakai `outputVariantKey` / `outputVariantLabel` yang sama, bukan `master`
-- complete Work Log dan pastikan stok hasil masuk ke varian yang benar
-- cek `inventory_logs` type `production_output_in` menyimpan `variantKey` dan `variantLabel` yang benar
-- cek `inventory_logs` type `production_material_out` menyimpan varian material hasil resolve requirement
-- buat Production Order target `product` dengan varian tertentu dan ulangi flow sampai complete
-- test material strategy `inherit` dengan naming varian tidak persis sama tetapi masih unik, contoh target `Merah` dan material `Flanel Merah`
-- test material strategy `inherit` yang tidak bisa match; proses harus error/warning jelas dan tidak fallback master
-- test jalur Work Log `Apply Draft PO`; output harus tetap dikunci mengikuti target variant PO
-- test jalur planned/manual dari BOM; pastikan tidak mengganggu flow final PO variant dan item bervarian tidak bisa complete tanpa varian output jelas
-- cek payroll dan HPP tetap membaca Work Log completed tanpa perubahan contract payroll
-- cek tidak ada perubahan tidak sengaja ke sales, purchases, laporan, dan reset utility
+## Checklist Cleanup File Legacy / Wrapper
 
-### Display Varian Produksi
-- cek detail Production Order: target variant tampil benar.
-- cek requirement Production Order: material inherit/fixed tampil sebagai variant, bukan `Master` / `Tanpa varian`, jika resolved variant ada.
-- cek list Work Log: target variant tampil dari snapshot Work Log.
-- cek detail Work Log: material usage tampil memakai `resolvedVariantLabel` atau fallback `resolvedVariantKey`.
-- cek detail Work Log: output tampil memakai `outputVariantLabel` atau fallback `outputVariantKey`.
-- cek modal Selesaikan Work Log: target, varian, step, PO, qty batch, estimasi output, Good Qty, Reject Qty, Rework Qty, dan selisih vs estimasi terlihat jelas.
-- cek complete Work Log: inventory log tetap menampilkan varian yang sama dengan output.
-- cek item non-varian: label `Master` masih boleh tampil dan tidak dianggap bug.
+Setelah menjalankan script penghapusan file legacy:
 
-### Reset & Maintenance Data
-- klik `Cek Data Produksi` dan pastikan dry run tidak mengubah data apa pun
-- pastikan ringkasan audit menampilkan Data Dicek, Aman Repair, Display Repair, Reset/Manual, dan Plan Eksekusi
-- jalankan `Repair Aman` dan pastikan hanya field turunan/snapshot/display yang berubah
-- pastikan repair aman tidak mengurangi stok, menambah stok, mengubah kas, mengubah payroll, atau mengubah HPP
-- test PO draft/ready tanpa Work Log: requirement line varian bisa disinkronkan aman
-- test Work Log in_progress belum output applied: target/output snapshot bisa disinkronkan
-- test Work Log completed: tidak ada posting stok ulang; hanya display/snapshot repair jika sumber varian jelas
-- klik `Siapkan Reset Terarah Produksi` dan pastikan hanya modul Produksi yang terpilih sebelum user mengetik RESET
-- pastikan dialog destructive tetap meminta teks `RESET`
-- pastikan menu sidebar menampilkan `Reset & Maintenance Data`
+- jalankan `npm run dev` dan hard refresh browser;
+- buka Dashboard;
+- buka Produk Jadi dan pastikan form produk/varian tetap normal;
+- buka Penjualan dan pastikan status/tab sales tetap normal;
+- buka semua menu produksi final: BOM, Production Order, Work Log, Payroll, Analisis HPP;
+- pastikan tidak ada import error untuk `StatusBadge`, `productOptions`, `salesStatusOptions`, `useAppRole`, atau `productionService`;
+- pastikan route/sidebar tetap menuju halaman aktif yang benar;
+- jalankan pencarian import: tidak boleh ada import ke file yang sudah dihapus;
+- jangan menghapus data Firestore hanya karena file legacy dihapus;
+- jika perlu sinkronisasi data lama, gunakan menu Reset & Maintenance Data dengan dry run terlebih dulu.
 
-## G. Checklist Varian Lintas Modul
+## Checklist Cleanup Structure Batch 2
 
-### Stock Adjustment
-- tambah adjustment masuk bahan baku bervarian dan pastikan varian wajib dipilih
-- tambah adjustment keluar produk bervarian dan pastikan stok varian berkurang, bukan master
-- tambah adjustment bahan setengah jadi bervarian dan pastikan aggregate stok tersinkron
-- cek `stock_adjustments` dan `inventory_logs` punya `variantKey`, `variantLabel`, `stockSourceType`
+- buka menu `Sistem → Reset & Maintenance Data` dan pastikan path final `/utilities/reset-maintenance-data` terbuka;
+- buka path lama `/utilities/reset-test-data` dan pastikan redirect ke path final;
+- jalankan script `scripts/maintenance/delete-transition-cleanup-batch2.sh` atau `.bat` setelah patch diekstrak;
+- pastikan `src/pages/Utilities/ResetTestData.jsx` dan `src/services/Utilities/resetTestDataService.js` sudah terhapus;
+- jalankan `npm run dev` dan hard refresh;
+- test tombol Cek Data Produksi, Cek Stok Umum, Cek Schema Inventory Log, Preview Reset, dan dialog konfirmasi RESET;
+- pastikan tidak ada import error ke `ResetTestData` atau `resetTestDataService`;
+- pastikan tidak ada perubahan stok/kas/payroll/HPP hanya karena cleanup struktur.
 
-### Purchases
-- pembelian bahan baku bervarian menambah stok varian yang dipilih
-- pembelian produk bervarian wajib memilih varian dan tidak masuk master
-- inventory log purchase memakai schema varian final
-- expense pembelian tetap dibuat dengan amount aktual, bukan nilai saving
-
-### Sales
-- penjualan produk/bahan bervarian wajib memilih varian
-- stok varian berkurang saat sale dibuat
-- status `Selesai` tetap hanya membuat income sekali
-- status `Dibatalkan` mengembalikan stok ke varian yang sama
-- delete sale mengembalikan varian yang sama jika belum dibatalkan
-
-### Returns
-- retur produk/bahan bervarian wajib memilih varian
-- stok varian bertambah dan inventory log menulis schema final
-
-### Report dan Audit
-- Stock Management menampilkan varian dari `variantLabel`/`variantKey`
-- Stock Report membaca raw material, product, dan semi finished material
-- tidak ada mutasi stok yang hanya mengubah `stock` tanpa `currentStock` / `variants[]`
-
-## G. Formatter Angka & Currency
-- cek qty/stok di inventory tidak menampilkan `.00` jika nilainya bulat
-- cek qty produksi, payroll qty, dan HPP qty tampil konsisten memakai format Indonesia
-- cek nominal pembelian, penjualan, kas masuk, kas keluar, payroll, pricing rules, dan HPP tampil dengan format `Rp` Indonesia
-- cek summary card, table, drawer, modal, dan chart dashboard tidak memakai format angka yang berbeda
-- cek tidak ada perubahan logic hitung; perubahan hanya pada display formatter
+## Checklist Batch 3 — Cleanup Data Legacy
+- Buka `Reset & Maintenance Data`.
+- Klik `Cek Data Legacy` dan pastikan tidak ada data domain yang berubah.
+- Pastikan hasil audit membagi data menjadi OK, Aman Repair, Display Repair, Reset Scoped, dan Manual.
+- Jika ada `productions` legacy, siapkan reset produksi scoped lalu cek preview sebelum mengetik `RESET`.
+- Jika ada sales/returns/adjustments/purchases lama tanpa variant snapshot, gunakan reset transaksi varian scoped hanya untuk data testing.
+- Pastikan completed/final data tidak berubah otomatis.
+- Pastikan reset sales tidak menghapus income non-sales, dan reset purchases tidak menghapus expense manual.
+- Pastikan maintenance log mencatat dry run legacy.

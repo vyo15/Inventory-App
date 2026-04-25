@@ -130,6 +130,7 @@ Baseline UI final yang sekarang paling aman dianggap resmi:
 - bila ada kolom `Status` pada table lebar, status boleh ikut sticky di kanan sebelum `Aksi`
 - detail-capable page wajib punya tombol `Detail`
 - simple config page tetap ringan tanpa dipaksa punya `Detail`
+- khusus `ProductionSteps`, baseline terbaru mengubah halaman ini menjadi detail-capable page ringan karena konfigurasi step sudah terlalu kaya untuk dipadatkan di tabel utama
 - ledger/simple action page boleh tanpa `Detail`, tetapi action column tetap wajib konsisten bila ada aksi per row
 - read-only data table page tidak perlu action column, tetapi surface table harus tetap memakai class baseline global
 
@@ -144,7 +145,7 @@ Migration matrix singkat setelah batch global ini:
 - ProductionOrders
 - ProductionWorkLogs
 - ProductionPayrolls
-- ProductionSteps
+- ProductionSteps *(detail-capable page ringan: tabel ringkas + drawer Detail read-only)*
 - ProductionProfiles
 - CashIn
 - CashOut
@@ -177,83 +178,58 @@ Area yang aman dibersihkan setelah migrasi ini stabil:
 - group tombol aksi lama berbasis `type="link"` yang hanya dipertahankan untuk halaman di luar baseline final
 - wrapper table manual pada utility page yang belum dipindah ke shared page foundation
 
-## Update Current State: Finalisasi Propagasi Varian Produksi
-Patch terbaru mengunci propagasi varian produksi dari Production Order sampai output hasil.
+## Update Current State: Cleanup File Legacy / Wrapper Tipis
 
-Yang sekarang dianggap resmi / guarded:
-- Production Order `targetVariantKey` dan `targetVariantLabel` adalah source of truth varian target.
-- Work Log dari PO harus membawa snapshot varian target yang sama.
-- Output hasil produksi dari PO harus memakai varian yang sama dengan target PO.
-- Stock mutation dan `inventory_logs` harus mencatat `variantKey` dan `variantLabel` yang sama.
-- Helper resolve varian tidak boleh silent fallback ke master untuk flow final PO variant.
+Audit import tree terbaru menemukan beberapa file yang tidak lagi diimport oleh route, page, service, helper, atau CSS aktif.
 
-Tech debt yang masih boleh tersisa sementara:
-- jalur planned/manual dari BOM belum punya target variant PO, sehingga tetap dianggap transisi;
-- fallback master masih boleh untuk item non-varian dan data manual/legacy;
-- `productionService.js` tetap legacy/deprecated dan tidak boleh dipakai sebagai flow produksi final.
+### Final / Aktif
+- `src/services/MasterData/productsService.js` menjadi source form/payload produk aktif.
+- `src/utils/variants/variantHelpers.js` menjadi helper varian warna/produk aktif.
+- `src/pages/Transaksi/Sales.jsx` masih menjadi source aktif status penjualan sampai status option dipisah dalam task khusus.
+- Flow produksi final tetap berada di `productionBomsService.js`, `productionOrdersService.js`, `productionWorkLogsService.js`, `productionPayrollsService.js`, dan halaman produksi terkait.
 
-Area yang aman dibersihkan setelah reset data:
-- data Work Log lama yang linked PO tetapi output-nya masih master;
-- data PO lama yang targetHasVariants stale akibat snapshot BOM lama;
-- helper/fallback lama yang hanya dipakai untuk mempertahankan data sebelum reset.
+### Legacy / Aman Dihapus Manual
+- `src/components/Layout/Display/StatusBadge.jsx` dan `.css`: file kosong, tidak diimport.
+- `src/constants/productOptions.js`: tidak diimport; logic final produk sudah di service produk dan helper varian.
+- `src/constants/salesStatusOptions.js`: tidak diimport; belum menjadi source aktif status sales.
+- `src/hooks/useAppRole.js`: tidak diimport; role aktif masih memakai util akses langsung.
+- `src/services/Produksi/productionService.js`: tidak diimport; flow `productions` lama sudah legacy dan tidak boleh dipakai sebagai flow produksi final.
 
-## Update Current State: Sinkronisasi Display Varian Produksi
-Patch display terbaru memperbaiki inkonsistensi UI setelah logic stok varian sudah benar.
+### Transisi yang Masih Perlu Dipantau
+- route lama `/utilities/reset-test-data` sudah menjadi redirect; entry final adalah `/utilities/reset-maintenance-data` dan `ResetMaintenanceData.jsx` masih dipertahankan agar navigasi tidak rusak, meskipun label menu sudah mengarah ke reset/maintenance.
+- data legacy collection `productions` masih bisa ada di Firestore dan harus dibersihkan lewat reset terarah, bukan lewat import service lama.
 
-Yang sekarang dianggap resmi / guarded:
-- helper display varian membaca key/label final lebih dulu, bukan hanya `stockSourceType`;
-- PO detail requirement memakai `resolvedVariantKey` / `resolvedVariantLabel`;
-- Work Log detail memakai target snapshot, material resolved variant, dan output variant;
-- modal Selesaikan Work Log menampilkan target, varian, step, qty batch, estimasi output, dan selisih Good Qty terhadap estimasi;
-- Stock Management membaca `variantLabel` dan fallback `variantKey` untuk log produksi.
+### Catatan Cleanup
+Penghapusan file di atas aman terhadap runtime karena tidak ada import aktif. Jika file dihapus secara manual, jalankan dev server dan pastikan route utama tetap terbuka. Jika ada data lama yang perlu disesuaikan, gunakan Reset & Maintenance Data untuk dry run / repair aman / reset terarah, bukan delete database manual.
 
-Tech debt yang masih boleh tersisa sementara:
-- data lama yang sudah terlanjur menyimpan `stockSourceType: master` padahal linked ke PO variant;
-- flow planned/manual dari BOM yang tidak punya PO target variant;
-- label master untuk item non-varian tetap valid.
+## Update Current State: Cleanup Structure Batch 2
 
-## Update Current State: Reset & Maintenance Data
-Menu reset lama sudah dirapikan menjadi `Reset & Maintenance Data`.
+### Final / Aktif
+- `src/pages/Utilities/ResetMaintenanceData.jsx` menjadi entry page final untuk menu Reset & Maintenance Data.
+- `src/services/Maintenance/resetMaintenanceDataService.js` menjadi service final untuk reset destructive, preview reset, baseline, dan sync stok.
+- `src/services/Maintenance/productionVariantMaintenanceService.js`, `inventoryMaintenanceService.js`, dan `maintenanceLogService.js` tetap menjadi service maintenance non-operasional.
+- Sidebar sekarang mengarah ke `/utilities/reset-maintenance-data`.
 
-Status saat ini:
-- Maintenance produksi varian tersedia untuk dry run dan repair aman.
-- Service maintenance sudah dipisahkan dari service produksi operasional.
-- Reset data masih memakai service utility lama, tetapi UI sudah membedakan reset destructive dengan maintenance non-delete.
+### Wrapper / Redirect Transisi
+- Route lama `/utilities/reset-test-data` masih dipertahankan sebagai redirect ke `/utilities/reset-maintenance-data` agar bookmark lama tidak blank.
+- Redirect ini aman dihapus setelah semua dokumentasi, bookmark, dan referensi internal sudah memakai path baru.
 
-Tech debt tersisa:
-- Maintenance baru tahap awal untuk produksi varian; modul transaksi, finance, laporan, dan inventory masih bisa ditambahkan bertahap.
-- Flow manual/planned Work Log tetap transisi dan tidak menjadi sumber final untuk PO variant.
-- Collection legacy `productions` masih ditangani di reset sebagai jejak flow lama.
+### Aman Dihapus Setelah Patch Divalidasi
+- `src/pages/Utilities/ResetTestData.jsx`
+- `src/services/Utilities/resetTestDataService.js`
 
-## Update Current State: Standardisasi Varian Lintas Modul
+Kedua file tersebut sudah tidak menjadi entry/import aktif setelah route dan page final dipindahkan.
 
-### Sudah final / guarded awal
-- `updateInventoryStock` menjadi helper final mutasi stok umum yang variant-aware.
-- Stock Adjustment sudah mendukung raw material, product, dan semi finished material bervarian.
-- Purchases sudah menulis schema log final untuk varian dan product bervarian tidak lagi masuk master diam-diam.
-- Sales menyimpan variant snapshot di item line dan cancel/delete/revert mengembalikan varian yang sama.
-- Returns sudah memilih varian untuk item bervarian.
-- Stock Management membaca `variantKey` / `variantLabel` final dan field legacy pembelian lama.
+## Update Batch 3: Legacy Data Cleanup Status
+- `Reset & Maintenance Data` sekarang memiliki dry run khusus `Audit Data Legacy Batch 3`.
+- Area yang dipetakan: `productions` legacy, PO/Work Log stale, orphan inventory log, sales/returns/adjustments/purchases lama tanpa variant snapshot, serta income/expense tanpa source reference yang cukup.
+- `productions` tetap legacy dan target utamanya adalah reset produksi scoped, bukan migrasi ke flow final.
+- Transaksi lama item bervarian tanpa `variantKey/variantLabel` tidak aman ditebak otomatis. Untuk data testing, gunakan reset scoped; untuk data final historical, lakukan manual review.
+- Cleanup code berikutnya boleh dilakukan setelah audit legacy menunjukkan tidak ada data lama yang masih menahan source of truth final.
 
-### Legacy / deprecated
-- `updateStock()` di inventory service hanya wrapper legacy agar import lama tidak langsung error.
-- Direct `updateDoc(... stock: increment(...))` hanya boleh tersisa di flow legacy yang belum dimigrasi dan harus diaudit sebelum dipakai lagi.
-- `productionService.js` tetap legacy dan bukan acuan flow produksi final.
-
-### Transisi
-- Data sales/returns/adjustment lama yang belum punya variant snapshot mungkin perlu reset terarah atau migration maintenance.
-- Inventory log lama yang hanya punya `materialVariantId/materialVariantName` masih dibaca untuk audit, tetapi schema final tetap `variantKey/variantLabel/stockSourceType`.
-
-## Formatter Display — Status Final
-Formatter display sudah distandardkan sebagai area **guarded/final**:
-- angka/qty/stok: `src/utils/formatters/numberId.js`
-- nominal Rupiah: `src/utils/formatters/currencyId.js`
-- tanggal: `src/utils/formatters/dateId.js`
-
-Tech debt yang sudah dibersihkan:
-- formatter lokal manual di Pricing Rules, Supplier, Purchases, Sales, Semi Finished, HPP Produksi, Karyawan Produksi, Payroll Produksi, helper varian, dan helper preview step/payroll.
-- display Rupiah manual seperti `Rp ${formatNumber(...)}` diganti ke helper currency final pada area yang diaudit.
-
-Catatan maintenance:
-- `Intl.NumberFormat` hanya boleh hidup di file helper formatter shared.
-- Jika nanti ada format khusus baru, tambahkan opsi ke helper shared, bukan membuat helper lokal per page.
+## Update Current State: Finalisasi Handoff Work Log -> Payroll
+- Flow payroll final tidak boleh berhenti di Work Log completed sebagai candidate manual.
+- Handoff resmi sekarang adalah: Work Log completed -> auto-create payroll draft per operator -> review di menu Payroll -> confirmed -> paid/cancelled.
+- Menu Payroll bukan lagi tempat generate manual dari completed Work Log; candidate manual lama harus dianggap transisi yang sudah ditutup.
+- Jika completed Work Log lama belum punya draft payroll, rekonsiliasi boleh dilakukan sekali saat load menu Payroll tanpa membuka jalur manual baru.
+- Custom payroll employee tetap legacy/deprecated dan tidak boleh dihidupkan lagi sebagai source utama.

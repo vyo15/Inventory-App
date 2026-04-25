@@ -30,7 +30,10 @@ import {
   DEFAULT_PRODUCTION_PAYROLL_FORM,
   calculatePayrollAmounts,
 } from "../../constants/productionPayrollOptions";
-import { getCompletedProductionWorkLogs } from "./productionWorkLogsService";
+import {
+  getCompletedProductionWorkLogs,
+  getProductionWorkLogById,
+} from "./productionWorkLogsService";
 import {
   buildPayrollCalculationNotes,
   buildPayrollEligibilityNotes,
@@ -47,6 +50,24 @@ const toNumber = (value, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+
+const toDateValue = (value) => {
+  const rawValue = value?.toDate ? value.toDate() : value;
+  if (!rawValue) return null;
+
+  return rawValue instanceof Date ? rawValue : new Date(rawValue);
+};
+
+const getPayrollDateCode = (value = new Date()) => {
+  const dateValue = toDateValue(value) || new Date();
+  const year = dateValue.getFullYear();
+  const month = String(dateValue.getMonth() + 1).padStart(2, "0");
+  const day = String(dateValue.getDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+};
+
+const resolvePayrollDraftDate = (workLog = {}) =>
+  toDateValue(workLog.completedAt) || toDateValue(workLog.workDate) || new Date();
 
 const resolveSelectedWorkerCandidate = (workLog = {}, selectedWorker = "") => {
   const candidates = buildWorkLogPayrollWorkerCandidates(workLog);
@@ -109,6 +130,33 @@ const getPayrollDocsByWorkLogId = async (workLogId) => {
   );
 
   return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+};
+
+const buildPayrollWorkerLineKeySet = (payrolls = [], { includeCancelled = true } = {}) => {
+  const lineKeys = new Set();
+
+  payrolls.forEach((item) => {
+    if (!includeCancelled && item?.status === "cancelled") {
+      return;
+    }
+
+    const workerLineKey = safeTrim(item?.workerLineKey);
+    if (workerLineKey) {
+      lineKeys.add(workerLineKey);
+    }
+  });
+
+  return lineKeys;
+};
+
+const generateProductionPayrollNumberFromPool = (payrolls = [], payrollDate = new Date()) => {
+  const dateCode = getPayrollDateCode(payrollDate);
+  const sameDayPayrolls = payrolls.filter((item) =>
+    safeTrim(item?.payrollNumber).startsWith(`PAY-${dateCode}-`),
+  );
+  const nextSequence = String(sameDayPayrolls.length + 1).padStart(4, "0");
+
+  return `PAY-${dateCode}-${nextSequence}`;
 };
 
 const hasActivePayrollLineForWorkLog = async ({
@@ -344,19 +392,202 @@ export const validateProductionPayroll = (values = {}) => {
 };
 
 // =====================================================
+// ACTIVE / FINAL
+// Helper ini menjadi titik handoff resmi Work Log completed -> payroll draft.
+// Source of truth rule tetap dibaca dari snapshot payroll pada Work Log.
+// Fallback master step hanya dipertahankan untuk data lama yang belum punya
+// snapshot payroll dan harus tetap ditandai legacy/deprecated.
+//
+// Catatan penting:
+// - includeCancelled=true dipakai untuk reconciliation agar line yang sudah
+//   pernah dicancel tidak otomatis dibuat ulang diam-diam.
+// - createProductionPayroll tetap dipakai sebagai boundary write final agar
+//   validasi line operator dan sinkronisasi Work Log tidak tersebar.
+// =====================================================
+const createMissingPayrollDraftsForCompletedWorkLog = async ({
+  workLog,
+  productionStep = null,
+  existingPayrolls = [],
+  currentUser = null,
+} = {}) => {
+  const normalizedWorkLog = workLog?.id ? workLog : null;
+  if (!normalizedWorkLog?.id) {
+    return {
+      status: "blocked",
+      createdCount: 0,
+      blockingReasons: ["Work Log completed tidak valid untuk auto-create payroll draft."],
+      warningReasons: [],
+      createdPayrollIds: [],
+      createdPayrollNumbers: [],
+      createdWorkerNames: [],
+    };
+  }
+
+  const eligibility = resolveWorkLogPayrollDraft({
+    workLog: normalizedWorkLog,
+    productionStep,
+  });
+
+  if (!eligibility.isEligible) {
+    return {
+      status: "blocked",
+      createdCount: 0,
+      blockingReasons: eligibility.blockingReasons,
+      warningReasons: eligibility.warningReasons,
+      createdPayrollIds: [],
+      createdPayrollNumbers: [],
+      createdWorkerNames: [],
+    };
+  }
+
+  const processedWorkerLineKeys = buildPayrollWorkerLineKeySet(existingPayrolls, {
+    includeCancelled: true,
+  });
+  const missingWorkerCandidates = (eligibility.workerCandidates || []).filter(
+    (candidate) => !processedWorkerLineKeys.has(safeTrim(candidate.workerLineKey)),
+  );
+
+  if (missingWorkerCandidates.length === 0) {
+    return {
+      status: existingPayrolls.length > 0 ? "already_exists" : "no_candidates",
+      createdCount: 0,
+      blockingReasons: [],
+      warningReasons: eligibility.warningReasons,
+      createdPayrollIds: [],
+      createdPayrollNumbers: [],
+      createdWorkerNames: [],
+    };
+  }
+
+  const payrollPool = await getAllProductionPayrollDocs();
+  const payrollDate = resolvePayrollDraftDate(normalizedWorkLog);
+  const createdPayrollIds = [];
+  const createdPayrollNumbers = [];
+  const createdWorkerNames = [];
+
+  for (const candidate of missingWorkerCandidates) {
+    const draft = buildPayrollDraftFromWorkLog(
+      normalizedWorkLog,
+      productionStep,
+      candidate.workerLineKey,
+    );
+
+    if (draft.payrollEligibilityStatus === "blocked") {
+      return {
+        status: "blocked",
+        createdCount: createdPayrollIds.length,
+        blockingReasons: draft.payrollEligibilityBlockingReasons || [
+          "Draft payroll otomatis masih blocked.",
+        ],
+        warningReasons: draft.payrollEligibilityWarningReasons || [],
+        createdPayrollIds,
+        createdPayrollNumbers,
+        createdWorkerNames,
+      };
+    }
+
+    const payrollNumber = generateProductionPayrollNumberFromPool(payrollPool, payrollDate);
+    const payrollId = await createProductionPayroll(
+      {
+        ...draft,
+        payrollNumber,
+        payrollDate,
+      },
+      currentUser,
+    );
+
+    payrollPool.push({
+      id: payrollId,
+      payrollNumber,
+      payrollDate,
+      workLogId: normalizedWorkLog.id,
+      workerLineKey: draft.workerLineKey,
+      status: "draft",
+      paymentStatus: "unpaid",
+    });
+    createdPayrollIds.push(payrollId);
+    createdPayrollNumbers.push(payrollNumber);
+    createdWorkerNames.push(draft.workerName || candidate.workerName || "-");
+  }
+
+  return {
+    status: "draft_created",
+    createdCount: createdPayrollIds.length,
+    blockingReasons: [],
+    warningReasons: eligibility.warningReasons,
+    createdPayrollIds,
+    createdPayrollNumbers,
+    createdWorkerNames,
+  };
+};
+
+export const ensurePayrollDraftsForCompletedWorkLog = async (
+  workLogOrId,
+  currentUser = null,
+) => {
+  const workLog =
+    typeof workLogOrId === "string"
+      ? await getProductionWorkLogById(workLogOrId)
+      : workLogOrId;
+
+  if (!workLog?.id) {
+    return {
+      status: "blocked",
+      createdCount: 0,
+      blockingReasons: ["Work Log untuk auto-create payroll draft tidak ditemukan."],
+      warningReasons: [],
+      createdPayrollIds: [],
+      createdPayrollNumbers: [],
+      createdWorkerNames: [],
+    };
+  }
+
+  if (safeTrim(workLog.status) !== "completed") {
+    return {
+      status: "skipped_not_completed",
+      createdCount: 0,
+      blockingReasons: ["Work Log belum completed sehingga draft payroll belum boleh dibuat."],
+      warningReasons: [],
+      createdPayrollIds: [],
+      createdPayrollNumbers: [],
+      createdWorkerNames: [],
+    };
+  }
+
+  const [productionSteps, existingPayrolls] = await Promise.all([
+    getAllProductionStepsForPayroll(),
+    getPayrollDocsByWorkLogId(workLog.id),
+  ]);
+  const productionStep = productionSteps.find((item) => item.id === workLog.stepId) || null;
+
+  return createMissingPayrollDraftsForCompletedWorkLog({
+    workLog,
+    productionStep,
+    existingPayrolls,
+    currentUser,
+  });
+};
+
+// =====================================================
 // ACTIVE / GUARDED
-// Referensi payroll baru hanya menampilkan Work Log completed yang masih
-// eligible untuk dibuat payroll aktif.
+// Referensi payroll sekarang berfungsi sebagai halaman review draft final.
+// Completed Work Log yang eligible akan direkonsiliasi sekali di sini agar
+// draft payroll otomatis tetap lengkap untuk data completed lama.
+// Halaman Payroll tidak lagi menjadi tempat generate candidate manual.
 // =====================================================
 export const getPayrollReferenceData = async () => {
-  const [completedWorkLogs, productionSteps, payrolls] = await Promise.all([
+  const [completedWorkLogs, productionSteps, payrollsBeforeSync] = await Promise.all([
     getCompletedProductionWorkLogs(),
     getAllProductionStepsForPayroll(),
     getAllProductionPayrollDocs(),
   ]);
 
-  const activePayrollLineKeysByWorkLog = payrolls.reduce((acc, item) => {
-    if (!item?.workLogId || item.status === "cancelled") {
+  const stepMap = productionSteps.reduce((acc, item) => {
+    acc[item.id] = item;
+    return acc;
+  }, {});
+  const processedLineKeysByWorkLog = payrollsBeforeSync.reduce((acc, item) => {
+    if (!item?.workLogId) {
       return acc;
     }
 
@@ -364,70 +595,81 @@ export const getPayrollReferenceData = async () => {
       acc[item.workLogId] = new Set();
     }
 
-    if (safeTrim(item.workerLineKey)) {
-      acc[item.workLogId].add(safeTrim(item.workerLineKey));
+    const workerLineKey = safeTrim(item.workerLineKey);
+    if (workerLineKey) {
+      acc[item.workLogId].add(workerLineKey);
     }
 
     return acc;
   }, {});
 
-  const stepMap = productionSteps.reduce((acc, item) => {
-    acc[item.id] = item;
-    return acc;
-  }, {});
-
-  const eligibleCompletedWorkLogs = [];
   const blockedCompletedWorkLogs = [];
+  const autoCreateQueue = [];
 
   completedWorkLogs.forEach((item) => {
     const eligibility = resolveWorkLogPayrollDraft({
       workLog: item,
       productionStep: stepMap[item.stepId] || null,
     });
-
-    const activeLineKeys = activePayrollLineKeysByWorkLog[item.id] || new Set();
-    const availableWorkerPayrollCandidates = (eligibility.workerCandidates || []).filter(
-      (candidate) => !activeLineKeys.has(candidate.workerLineKey),
+    const processedLineKeys = processedLineKeysByWorkLog[item.id] || new Set();
+    const missingWorkerCandidates = (eligibility.workerCandidates || []).filter(
+      (candidate) => !processedLineKeys.has(candidate.workerLineKey),
     );
 
-    const enrichedWorkLog = {
-      ...item,
-      workerPayrollCandidates: eligibility.workerCandidates,
-      availableWorkerPayrollCandidates,
-      payrollEligibilityStatus: eligibility.status,
-      payrollEligibilityBlockingReasons: eligibility.blockingReasons,
-      payrollEligibilityWarningReasons: eligibility.warningReasons,
-      payrollEligibilityNotes: buildPayrollEligibilityNotes({
-        workLog: item,
-        eligibility,
-      }),
-      payrollLineProgress: {
-        totalCandidates: (eligibility.workerCandidates || []).length,
-        remainingCandidates: availableWorkerPayrollCandidates.length,
-        activeLineCount: activeLineKeys.size,
-      },
-    };
-
     if (!eligibility.isEligible) {
-      blockedCompletedWorkLogs.push(enrichedWorkLog);
+      blockedCompletedWorkLogs.push({
+        ...item,
+        workerPayrollCandidates: eligibility.workerCandidates,
+        payrollEligibilityStatus: eligibility.status,
+        payrollEligibilityBlockingReasons: eligibility.blockingReasons,
+        payrollEligibilityWarningReasons: eligibility.warningReasons,
+        payrollEligibilityNotes: buildPayrollEligibilityNotes({
+          workLog: item,
+          eligibility,
+        }),
+      });
       return;
     }
 
-    if (availableWorkerPayrollCandidates.length === 0) {
-      return;
+    if (missingWorkerCandidates.length > 0) {
+      autoCreateQueue.push({
+        workLog: item,
+        productionStep: stepMap[item.stepId] || null,
+      });
     }
-
-    eligibleCompletedWorkLogs.push(enrichedWorkLog);
   });
 
+  const autoDraftSummary = {
+    affectedWorkLogCount: 0,
+    createdLineCount: 0,
+    blockedWorkLogCount: blockedCompletedWorkLogs.length,
+  };
+
+  for (const queueItem of autoCreateQueue) {
+    const existingPayrolls = payrollsBeforeSync.filter(
+      (item) => item.workLogId === queueItem.workLog.id,
+    );
+    const result = await createMissingPayrollDraftsForCompletedWorkLog({
+      ...queueItem,
+      existingPayrolls,
+      currentUser: null,
+    });
+
+    if (result.status === "draft_created") {
+      autoDraftSummary.affectedWorkLogCount += 1;
+      autoDraftSummary.createdLineCount += Number(result.createdCount || 0);
+    }
+  }
+
   return {
-    completedWorkLogs: eligibleCompletedWorkLogs,
+    completedWorkLogs: [],
     blockedCompletedWorkLogs,
     payrollReadinessSummary: {
-      eligibleCount: eligibleCompletedWorkLogs.length,
+      eligibleCount: Math.max(0, completedWorkLogs.length - blockedCompletedWorkLogs.length),
       blockedCount: blockedCompletedWorkLogs.length,
     },
     productionSteps,
+    autoDraftSummary,
   };
 };
 
@@ -647,8 +889,16 @@ export const updateProductionPayroll = async (id, values, currentUser = null) =>
 export const updatePayrollStatus = async (id, status, paymentStatus, extra = {}) => {
   const currentPayroll = await getProductionPayrollById(id);
 
+  if (status === "confirmed" && currentPayroll.status !== "draft") {
+    throw new Error("Payroll hanya boleh dikonfirmasi dari status draft");
+  }
+
   if (status === "paid" && currentPayroll.status !== "confirmed") {
     throw new Error("Payroll harus dikonfirmasi dulu sebelum ditandai paid");
+  }
+
+  if (status === "cancelled" && currentPayroll.status === "paid") {
+    throw new Error("Payroll yang sudah paid tidak boleh langsung dibatalkan");
   }
 
   const nextPayload = {

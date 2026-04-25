@@ -59,7 +59,7 @@ const ProfitLossReport = lazy(
 const PurchasesReport = lazy(() => import("../pages/Laporan/PurchasesReport"));
 const SalesReport = lazy(() => import("../pages/Laporan/SalesReport"));
 const StockReport = lazy(() => import("../pages/Laporan/StockReport"));
-const ResetTestData = lazy(() => import("../pages/Utilities/ResetTestData"));
+const ResetMaintenanceData = lazy(() => import("../pages/Utilities/ResetMaintenanceData"));
 
 // =========================
 // SECTION: Route Loader
@@ -153,9 +153,14 @@ const AppRoutes = ({ darkTheme }) => {
         <Route path="/sales-report" element={<SalesReport />} />
         <Route path="/report-stock" element={<StockReport />} />
 
+        {/* Final route maintenance. Path lama reset-test-data di-redirect agar bookmark lama tetap aman. */}
+        <Route
+          path="/utilities/reset-maintenance-data"
+          element={<ResetMaintenanceData darkTheme={darkTheme} />}
+        />
         <Route
           path="/utilities/reset-test-data"
-          element={<ResetTestData darkTheme={darkTheme} />}
+          element={<Navigate to="/utilities/reset-maintenance-data" replace />}
         />
 
         <Route path="*" element={<WeLost />} />

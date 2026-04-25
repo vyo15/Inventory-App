@@ -707,8 +707,30 @@ const ProductionWorkLogs = () => {
         null,
       );
 
-      await completeProductionWorkLog(completingRecord.id, null);
-      message.success('Work log selesai. Output ditambahkan dan PO ditutup.');
+      const completionResult = await completeProductionWorkLog(completingRecord.id, null);
+      const autoPayrollResult = completionResult?.autoPayrollResult || null;
+
+      if (autoPayrollResult?.status === 'draft_created') {
+        message.success(
+          `Work log selesai. Output ditambahkan, PO ditutup, dan ${formatNumber(autoPayrollResult.createdCount || 0)} draft payroll dibuat otomatis.`,
+        );
+      } else if (autoPayrollResult?.status === 'already_exists') {
+        message.success('Work log selesai. Output ditambahkan, PO ditutup, dan draft payroll aktif sudah tersedia.');
+      } else if (autoPayrollResult?.status === 'blocked') {
+        message.warning(
+          autoPayrollResult.blockingReasons?.[0]
+            ? `Work log selesai, tetapi draft payroll belum dibuat: ${autoPayrollResult.blockingReasons[0]}`
+            : 'Work log selesai, tetapi draft payroll belum bisa dibuat karena data payroll masih blocked.',
+        );
+      } else if (autoPayrollResult?.status === 'error') {
+        message.warning(
+          autoPayrollResult.warningReasons?.[0] ||
+            'Work log selesai, tetapi auto-create payroll draft gagal. Cek menu Payroll dan log error.',
+        );
+      } else {
+        message.success('Work log selesai. Output ditambahkan dan PO ditutup.');
+      }
+
       setCompleteModalVisible(false);
       setCompletingRecord(null);
       completeForm.resetFields();

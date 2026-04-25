@@ -35,7 +35,6 @@ import {
 import {
   EditOutlined,
   EyeOutlined,
-  PlusOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -49,8 +48,6 @@ import {
   calculatePayrollAmounts,
 } from "../../constants/productionPayrollOptions";
 import {
-  buildPayrollDraftFromWorkLog,
-  createProductionPayroll,
   formatPayrollRuleSourceLabel,
   getAllProductionPayrolls,
   getPayrollReferenceData,
@@ -95,6 +92,11 @@ const ProductionPayrolls = () => {
     blockedCompletedWorkLogs: [],
     payrollReadinessSummary: { eligibleCount: 0, blockedCount: 0 },
     productionSteps: [],
+    autoDraftSummary: {
+      affectedWorkLogCount: 0,
+      createdLineCount: 0,
+      blockedWorkLogCount: 0,
+    },
   });
 
   const [search, setSearch] = useState("");
@@ -108,15 +110,19 @@ const ProductionPayrolls = () => {
   const [selectedRecord, setSelectedRecord] = useState(null);
 
   const [form] = Form.useForm();
-  const selectedWorkLogId = Form.useWatch("workLogId", form);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [payrollResult, refResult] = await Promise.all([
-        getAllProductionPayrolls(),
-        getPayrollReferenceData(),
-      ]);
+
+      // =====================================================
+      // ACTIVE / FINAL
+      // Menu Payroll sekarang me-reload reference setelah auto-create draft
+      // completed Work Log. Urutan load dibuat serial agar daftar payroll yang
+      // ditampilkan selalu sudah termasuk draft otomatis terbaru.
+      // =====================================================
+      const refResult = await getPayrollReferenceData();
+      const payrollResult = await getAllProductionPayrolls();
 
       setPayrolls(payrollResult);
       setReferenceData(refResult);
@@ -157,7 +163,7 @@ const ProductionPayrolls = () => {
         String(item.stepName || "").toLowerCase().includes(searchText);
 
       const matchStatus =
-        statusFilter === "all" || item.paymentStatus === statusFilter;
+        statusFilter === "all" || item.status === statusFilter;
 
       return matchSearch && matchStatus;
     });
@@ -172,14 +178,6 @@ const ProductionPayrolls = () => {
     });
   };
 
-  const handleAdd = () => {
-    setEditingRecord(null);
-    form.setFieldsValue({
-      ...DEFAULT_PRODUCTION_PAYROLL_FORM,
-      payrollDate: dayjs(),
-    });
-    setFormVisible(true);
-  };
 
   const handleEdit = (record) => {
     setEditingRecord(record);
@@ -198,67 +196,17 @@ const ProductionPayrolls = () => {
     setDetailVisible(true);
   };
 
-  const handleGenerateFromWorkLog = (workLogId, selectedWorkerLineKey = "") => {
-    const activeWorkLog = referenceData.completedWorkLogs.find(
-      (item) => item.id === workLogId,
-    );
-    const blockedWorkLog = referenceData.blockedCompletedWorkLogs.find(
-      (item) => item.id === workLogId,
-    );
-    const workLog = activeWorkLog || blockedWorkLog || null;
-
-    if (!workLog) return;
-
-    const productionStep = referenceData.productionSteps.find(
-      (item) => item.id === workLog.stepId,
-    ) || null;
-
-    const draft = buildPayrollDraftFromWorkLog(
-      workLog,
-      productionStep,
-      selectedWorkerLineKey,
-    );
-
-    form.setFieldsValue({
-      ...form.getFieldsValue(true),
-      ...draft,
-      workLogId,
-      workerLineKey: draft.workerLineKey,
-    });
-
-    if (draft.payrollEligibilityStatus === "blocked") {
-      message.error(
-        draft.payrollEligibilityBlockingReasons?.[0] ||
-          "Draft payroll masih blocked. Periksa issue eligibility pada Work Log.",
-      );
-      return;
-    }
-
-    if (draft.legacyPayrollFallbackUsed) {
-      message.warning(
-        "Draft payroll memakai legacy fallback ke master step karena Work Log lama belum punya snapshot payroll rule.",
-      );
-      return;
-    }
-
-    if ((draft.payrollEligibilityWarningReasons || []).length > 0) {
-      message.warning(draft.payrollEligibilityWarningReasons[0]);
-      return;
-    }
-
-    message.success("Draft payroll berhasil dibuat dari Work Log completed");
-  };
-
-  const handleSelectWorkerLine = (workerLineKey) => {
-    const workLogId = form.getFieldValue("workLogId");
-    if (!workLogId) return;
-    handleGenerateFromWorkLog(workLogId, workerLineKey);
-  };
 
   const handleSubmit = async () => {
     try {
       await form.validateFields();
       const values = form.getFieldsValue(true);
+
+      if (!editingRecord?.id) {
+        throw new Error(
+          "Draft payroll final sekarang dibuat otomatis saat Work Log completed. Menu Payroll hanya untuk review / edit draft yang sudah ada.",
+        );
+      }
 
       setSubmitting(true);
 
@@ -267,13 +215,8 @@ const ProductionPayrolls = () => {
         payrollDate: values.payrollDate ? values.payrollDate.toDate() : null,
       };
 
-      if (editingRecord?.id) {
-        await updateProductionPayroll(editingRecord.id, payload, null);
-        message.success("Payroll produksi berhasil diperbarui");
-      } else {
-        await createProductionPayroll(payload, null);
-        message.success("Payroll produksi berhasil ditambahkan");
-      }
+      await updateProductionPayroll(editingRecord.id, payload, null);
+      message.success("Draft payroll produksi berhasil diperbarui");
 
       setFormVisible(false);
       resetFormState();
@@ -336,89 +279,6 @@ const ProductionPayrolls = () => {
     }
   };
 
-  const workLogOptions = useMemo(() => {
-    const eligibleOptions = referenceData.completedWorkLogs.map((item) => ({
-      value: item.id,
-      label: `${item.workNumber || "-"} - ${item.targetName || "-"} - ${item.stepName || "-"} • sisa line ${item.payrollLineProgress?.remainingCandidates || item.availableWorkerPayrollCandidates?.length || 0}`,
-    }));
-
-    const blockedOptions = referenceData.blockedCompletedWorkLogs.map((item) => ({
-      value: item.id,
-      label: `[BLOCKED] ${item.workNumber || "-"} - ${item.targetName || "-"} - ${item.stepName || "-"}`,
-    }));
-
-    const baseOptions = [...eligibleOptions, ...blockedOptions];
-
-    if (editingRecord?.workLogId) {
-      const exists = baseOptions.some((item) => item.value === editingRecord.workLogId);
-      if (!exists) {
-        baseOptions.unshift({
-          value: editingRecord.workLogId,
-          label: `${editingRecord.workNumber || "-"} - ${editingRecord.targetName || "-"} - ${editingRecord.stepName || "-"}`,
-        });
-      }
-    }
-
-    return baseOptions;
-  }, [referenceData.completedWorkLogs, referenceData.blockedCompletedWorkLogs, editingRecord]);
-
-  const selectedWorkLog = useMemo(() => {
-    const foundInEligible = referenceData.completedWorkLogs.find(
-      (item) => item.id === selectedWorkLogId,
-    );
-    if (foundInEligible) return foundInEligible;
-
-    const foundInBlocked = referenceData.blockedCompletedWorkLogs.find(
-      (item) => item.id === selectedWorkLogId,
-    );
-    if (foundInBlocked) return foundInBlocked;
-
-    if (editingRecord?.workLogId && editingRecord.workLogId === selectedWorkLogId) {
-      return {
-        id: editingRecord.workLogId,
-        workNumber: editingRecord.workNumber,
-        targetName: editingRecord.targetName,
-        stepName: editingRecord.stepName,
-        availableWorkerPayrollCandidates: [
-          {
-            workerLineKey: editingRecord.workerLineKey,
-            workerName: editingRecord.workerName,
-            workerCode: editingRecord.workerCode,
-            workerId: editingRecord.workerId,
-          },
-        ],
-      };
-    }
-
-    return null;
-  }, [referenceData.completedWorkLogs, referenceData.blockedCompletedWorkLogs, selectedWorkLogId, editingRecord]);
-
-  const workerLineOptions = useMemo(() => {
-    const baseCandidates = Array.isArray(selectedWorkLog?.availableWorkerPayrollCandidates)
-      ? selectedWorkLog.availableWorkerPayrollCandidates
-      : [];
-
-    const baseOptions = baseCandidates.map((item) => ({
-      value: item.workerLineKey,
-      label: item.workerCode
-        ? `${item.workerName || "-"} (${item.workerCode})`
-        : item.workerName || "-",
-    }));
-
-    if (editingRecord?.workerLineKey) {
-      const exists = baseOptions.some((item) => item.value === editingRecord.workerLineKey);
-      if (!exists) {
-        baseOptions.unshift({
-          value: editingRecord.workerLineKey,
-          label: editingRecord.workerCode
-            ? `${editingRecord.workerName || "-"} (${editingRecord.workerCode})`
-            : editingRecord.workerName || "-",
-        });
-      }
-    }
-
-    return baseOptions;
-  }, [selectedWorkLog, editingRecord]);
 
   const columns = [
     {
@@ -525,7 +385,7 @@ const ProductionPayrolls = () => {
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
-            disabled={record.paymentStatus === "paid" || record.status === "cancelled"}
+            disabled={record.status !== "draft"}
           >
             Edit
           </Button>
@@ -555,7 +415,7 @@ const ProductionPayrolls = () => {
             </Popconfirm>
           )}
 
-          {record.status !== "cancelled" && (
+          {["draft", "confirmed"].includes(record.status) && (
             <Popconfirm
               title="Batalkan payroll ini?"
               description="Work Log akan dibuka lagi sebagai eligible payroll."
@@ -599,7 +459,7 @@ const ProductionPayrolls = () => {
               Payroll Produksi
             </Typography.Title>
             <Typography.Text type="secondary">
-              Payroll final mengikuti rule Tahapan Produksi yang tersimpan pada Work Log completed.
+              Payroll final mengikuti rule Tahapan Produksi yang tersimpan pada Work Log completed dan draft line dibuat otomatis saat Work Log selesai.
             </Typography.Text>
           </Col>
           <Col>
@@ -607,12 +467,19 @@ const ProductionPayrolls = () => {
               <Button icon={<ReloadOutlined />} onClick={loadData}>
                 Reload
               </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-                Tambah Payroll
-              </Button>
             </Space>
           </Col>
         </Row>
+
+        {referenceData.autoDraftSummary?.createdLineCount > 0 && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={`Sistem merekonsiliasi ${formatNumber(referenceData.autoDraftSummary.createdLineCount)} draft payroll dari ${formatNumber(referenceData.autoDraftSummary.affectedWorkLogCount)} Work Log completed.`}
+            description="Menu Payroll sekarang membaca draft final yang dibuat otomatis saat Work Log completed atau saat rekonsiliasi data completed lama yang belum punya draft payroll."
+          />
+        )}
 
         {referenceData.payrollReadinessSummary?.blockedCount > 0 && (
           <Alert
@@ -649,16 +516,17 @@ const ProductionPayrolls = () => {
               value={statusFilter}
               onChange={setStatusFilter}
               options={[
-                { value: "all", label: "Semua Status" },
-                { value: "unpaid", label: "Unpaid" },
-                { value: "partial", label: "Partial" },
+                { value: "all", label: "Semua Status Payroll" },
+                { value: "draft", label: "Draft" },
+                { value: "confirmed", label: "Confirmed" },
                 { value: "paid", label: "Paid" },
+                { value: "cancelled", label: "Cancelled" },
               ]}
             />
           </Col>
           <Col xs={24} md={8}>
             <Typography.Text type="secondary">
-              Eligible: {referenceData.payrollReadinessSummary?.eligibleCount || 0} | Blocked: {referenceData.payrollReadinessSummary?.blockedCount || 0}. Work Log tetap bisa dipakai selama masih ada line operator yang belum punya payroll aktif.
+              Auto Draft: {formatNumber(referenceData.autoDraftSummary?.createdLineCount || 0)} line | Blocked: {referenceData.payrollReadinessSummary?.blockedCount || 0}. Completed Work Log tidak lagi digenerate manual dari halaman Payroll.
             </Typography.Text>
           </Col>
         </Row>
@@ -677,7 +545,7 @@ const ProductionPayrolls = () => {
       </Card>
 
       <Drawer
-        title={editingRecord ? "Edit Payroll Produksi" : "Tambah Payroll Produksi"}
+        title={editingRecord ? "Review / Edit Draft Payroll Produksi" : "Draft Payroll Produksi"}
         open={formVisible}
         onClose={() => {
           setFormVisible(false);
@@ -761,50 +629,23 @@ const ProductionPayrolls = () => {
             </Col>
           </Row>
 
-          <Row gutter={16}>
-            <Col xs={24}>
-              <Select
-                style={{ width: "100%", marginBottom: 16 }}
-                showSearch
-                optionFilterProp="label"
-                placeholder="Pilih Work Log completed untuk generate draft payroll..."
-                options={workLogOptions}
-                onChange={(value) => handleGenerateFromWorkLog(value)}
-              />
-            </Col>
-          </Row>
+          <Alert
+            style={{ marginBottom: 16 }}
+            type="info"
+            showIcon
+            message="Draft payroll dibuat otomatis dari Work Log completed"
+            description="Menu Payroll sekarang hanya dipakai untuk review, penyesuaian bonus/potongan, confirm, paid, atau cancel. Work Log dan operator line tidak boleh diganti manual dari sini."
+          />
 
           <Row gutter={16}>
             <Col xs={24} md={12}>
-              <Form.Item
-                label="Work Log"
-                name="workLogId"
-                rules={[{ required: true, message: "Work log wajib dipilih" }]}
-              >
-                <Select
-                  showSearch
-                  optionFilterProp="label"
-                  options={workLogOptions}
-                  placeholder="Pilih Work Log..."
-                  onChange={(value) => handleGenerateFromWorkLog(value)}
-                  disabled={Boolean(editingRecord?.id)}
-                />
+              <Form.Item label="Work Log" name="workLogId">
+                <Input disabled placeholder="Otomatis dari Work Log completed" />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item
-                label="Line Operator Payroll"
-                name="workerLineKey"
-                rules={[{ required: true, message: "Pilih operator untuk line payroll ini" }]}
-              >
-                <Select
-                  showSearch
-                  optionFilterProp="label"
-                  options={workerLineOptions}
-                  placeholder="Pilih operator dari Work Log"
-                  onChange={handleSelectWorkerLine}
-                  disabled={Boolean(editingRecord?.id) || !selectedWorkLogId}
-                />
+              <Form.Item label="Line Operator Payroll" name="workerLineKey">
+                <Input disabled placeholder="Otomatis dari line operator Work Log" />
               </Form.Item>
             </Col>
           </Row>

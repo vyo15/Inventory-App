@@ -116,8 +116,9 @@ Tujuan:
 Contract final payroll yang sekarang harus dianggap resmi:
 - source of truth rule payroll = master `production_steps`
 - work log menyimpan snapshot rule payroll step (`mode`, `rate`, `qty base`, `output basis`, `classification`, `include in HPP`)
-- payroll draft membaca snapshot rule dari work log completed
-- sebelum draft dipakai, Work Log completed harus lolos payroll eligibility gate
+- saat work log completed, service payroll harus auto-create payroll draft per operator dari snapshot rule pada work log
+- menu Payroll hanya membaca draft final untuk review, confirm, paid, atau cancelled; bukan lagi generator candidate manual
+- sebelum draft dibuat, Work Log completed harus lolos payroll eligibility gate
 - fallback ke master step hanya untuk work log lama yang belum punya snapshot dan harus dianggap legacy/deprecated
 - custom payroll di master karyawan tidak lagi dipakai sebagai jalur hitung aktif
 - payroll v1 final = 1 line per 1 operator + 1 step + 1 batch/work log
@@ -171,53 +172,24 @@ Setiap perubahan di modul produksi sebaiknya selalu diuji terhadap:
 - payroll calculation status
 - HPP analysis result
 
-## 11. Contract Final Varian Produksi
-Flow final varian produksi sekarang dikunci sebagai:
+## Update Architecture: Produksi Legacy Setelah Cleanup File
 
-`PO target variant -> Work Log target snapshot -> Work Log output variant -> stock mutation -> inventory log`
+Flow produksi aktif tetap:
 
-Contract per layer:
-- Production Order menyimpan `targetVariantKey` dan `targetVariantLabel` sebagai source of truth varian target.
-- Requirement line menyimpan hasil turunan `resolvedVariantKey`, `resolvedVariantLabel`, dan `stockSourceType` untuk material usage.
-- Work Log root menyimpan snapshot `targetVariantKey` dan `targetVariantLabel` dari PO.
-- Work Log output menyimpan `outputVariantKey`, `outputVariantLabel`, dan `stockSourceType` yang wajib mengikuti target PO untuk flow `production_order`.
-- Inventory log produksi menyimpan `variantKey` dan `variantLabel` sesuai material/output yang benar-benar dimutasi.
+```text
+BOM → Production Order → Work Log → Payroll → HPP Analysis
+```
 
-Status logic:
-- **Final / guarded**: flow `production_order` dari PO ke Work Log dan output.
-- **Manual / transisi**: draft BOM/manual masih ada, tetapi tidak boleh menjadi acuan flow final PO variant.
-- **Legacy/deprecated**: `productionService.js` dan collection `productions` tetap legacy.
+Service lama `src/services/Produksi/productionService.js` sudah tidak mempunyai import aktif di source tree terbaru. Karena service tersebut hanya mengatur collection legacy `productions` dan mutasi stok master-only, file tersebut masuk kategori aman dihapus dari codebase setelah dipastikan route/import lama tidak lagi menunjuk ke flow produksi dasar.
 
-Tidak ada silent fallback untuk flow final PO variant. Jika varian tidak bisa di-resolve, proses wajib berhenti dengan pesan error agar stok tidak masuk ke master/default.
+Catatan penting:
+- menghapus file service legacy tidak berarti menghapus data Firestore secara otomatis;
+- jika masih ada data `productions` lama, bersihkan lewat menu Reset & Maintenance Data / reset terarah produksi;
+- jangan menghidupkan kembali flow `productions` sebagai jalur produksi aktif;
+- production final tetap guarded di service BOM, Production Order, Work Log, Payroll, dan HPP.
 
-## 12. Contract Display Varian Produksi
-Layer tampilan sekarang mengikuti contract yang sama dengan layer data:
-
-`PO display -> Work Log display -> Output display -> Inventory log display`
-
-Field display final:
-- PO target: `targetVariantKey` / `targetVariantLabel`.
-- PO requirement: `resolvedVariantKey` / `resolvedVariantLabel`.
-- Work Log target: `targetVariantKey` / `targetVariantLabel`.
-- Work Log material: `resolvedVariantKey` / `resolvedVariantLabel`.
-- Work Log output: `outputVariantKey` / `outputVariantLabel`.
-- Inventory log: `variantLabel`, fallback `variantKey`.
-
-`stockSourceType` tetap ada sebagai metadata, tetapi tidak boleh menjadi satu-satunya penentu tampilan. Jika key/label varian aktual ada, UI harus menampilkan varian walaupun metadata lama masih `master`.
-
-## Maintenance Produksi Varian Lama
-Untuk data lama yang dibuat sebelum contract varian final stabil, perbaikan dilakukan melalui menu `Reset & Maintenance Data`.
-
-Batas aman:
-- PO yang belum punya Work Log boleh direbuild requirement line-nya dari BOM + target variant PO.
-- Work Log yang belum applied boleh disinkronkan material usage dan output snapshot-nya dari PO.
-- Work Log completed / stock applied hanya boleh display atau snapshot repair dari data yang sudah ada, tanpa posting stok ulang.
-- Inventory log produksi boleh dilengkapi `variantKey` / `variantLabel` jika sumbernya jelas dari Work Log, tetapi quantity dan arah mutasi tidak boleh diubah.
-
-Flow operasional final tetap: BOM → Production Order → Work Log → Payroll → HPP Analysis.
-
-## Update: Boundary Produksi terhadap Variant Support Lintas Modul
-Standardisasi varian lintas modul tidak mengubah flow produksi guarded. Produksi tetap memakai contract:
-`Production Order targetVariantKey/targetVariantLabel → Work Log snapshot → outputVariantKey/outputVariantLabel → inventory log variantKey/variantLabel`.
-
-Helper stok final lintas modul boleh dipakai untuk inventory/transaksi umum, tetapi perubahan pada `productionOrdersService` dan `productionWorkLogsService` tetap harus dievaluasi khusus karena flow produksi sudah guarded.
+## Maintenance Produksi dan Data Legacy
+- Flow produksi final tetap `BOM → Production Order → Work Log → Payroll → HPP Analysis`.
+- Collection `productions` adalah data legacy dan tidak menjadi source of truth produksi final.
+- Jika data legacy produksi mengganggu cleanup, gunakan `Reset & Maintenance Data → Cek Data Legacy` lalu `Reset Produksi + Log` secara scoped.
+- Completed Work Log tidak boleh diposting ulang oleh maintenance. Yang boleh diperbaiki hanya snapshot/display jika sumbernya jelas.

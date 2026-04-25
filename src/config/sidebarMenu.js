@@ -204,9 +204,9 @@ export const sidebarMenuItems = [
     label: "Sistem",
     children: [
       {
-        key: "reset-test-data",
+        key: "reset-maintenance-data",
         label: "Reset & Maintenance Data",
-        path: "/utilities/reset-test-data",
+        path: "/utilities/reset-maintenance-data",
       },
     ],
   },

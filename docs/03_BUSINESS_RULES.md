@@ -192,7 +192,8 @@ Payroll produksi dibangun dari work log completed.
 Rule final yang sekarang harus dianggap resmi:
 - source of truth payroll adalah rule payroll pada `production_steps`
 - saat work log dibuat / diupdate, rule payroll step disnapshot ke work log
-- saat payroll draft dibuat, service membaca snapshot rule payroll pada work log completed
+- saat work log completed, sistem harus auto-create payroll draft per operator dengan membaca snapshot rule payroll pada work log completed
+- menu Payroll dipakai untuk review draft, confirm, lalu paid / cancelled; bukan lagi untuk generate candidate manual dari work log completed
 - payroll v1 final memakai target **1 payroll line = 1 orang + 1 step + 1 batch/work log**
 - jika work log lama belum punya snapshot, service boleh fallback sekali ke master step dan harus menandainya sebagai legacy/deprecated fallback
 - custom payroll di master karyawan tidak lagi menjadi jalur hitung aktif
@@ -214,52 +215,9 @@ Reset utilitas mendukung mode:
 
 Utilitas ini juga menyinkronkan kembali field stok agar konsisten.
 
-## 15. Rule Final Varian Produksi
-Patch final varian produksi menetapkan source of truth tunggal:
-- Production Order `targetVariantKey` dan `targetVariantLabel` adalah sumber utama varian target setelah PO dibuat.
-- Work Log dari PO wajib menyimpan snapshot `targetVariantKey` dan `targetVariantLabel` dari PO.
-- Output hasil produksi pertama pada Work Log dari PO wajib mengikuti varian target PO.
-- Jika PO memiliki `targetVariantKey`, output tidak boleh diam-diam kembali ke `master` / tanpa varian.
-- Requirement material yang memakai strategi `inherit` atau `fixed` wajib resolved ke varian material yang jelas. Jika tidak bisa resolved, proses harus diblok dengan error, bukan fallback master.
-- Fallback master hanya boleh tersisa untuk item non-varian atau flow manual/planned legacy yang tidak linked ke PO.
-
-Definition of done varian produksi:
-- `PO target variant = Work Log target variant = output variant = inventory log variant`.
-
-### 15.1 Rule Display Varian Produksi
-Display produksi wajib mengikuti source of truth varian yang sama dengan mutasi stok:
-- detail PO menampilkan target variant dan requirement resolved variant;
-- detail Work Log menampilkan target snapshot, material resolved variant, dan output variant;
-- inventory log menampilkan variant dari `variantLabel` atau fallback `variantKey`;
-- label `Master` hanya valid untuk item non-varian atau flow manual/legacy yang benar-benar tidak memakai varian.
-
-Jika dokumen lama linked PO masih punya output/material bervarian tetapi display membaca master, data tersebut dianggap mismatch legacy dan perlu reset/recreate, bukan dijadikan pola baru.
-
-## 10. Rule Reset & Maintenance Data
-Maintenance data tidak sama dengan reset data.
-
-Rule wajib:
-- Dry run / audit tidak boleh mengubah data apa pun.
-- Repair aman hanya boleh memperbaiki field turunan, snapshot, dan display yang bisa dihitung ulang dengan jelas.
-- Repair maintenance tidak boleh mengurangi stok, menambah stok, mengubah kas, mengubah payroll final, atau mengubah HPP completed.
-- Reset terarah hanya boleh menyentuh modul yang dipilih user dan wajib melalui preview serta konfirmasi destructive.
-- Data produksi completed yang sudah memutasi stok hanya boleh display/snapshot repair, bukan rebuild mutasi stok.
-
-## 11. Rule Varian Lintas Modul
-
-### 11.1 Source of truth varian
-Untuk item bervarian, source of truth stok adalah `variants[].variantKey` dan `variants[].currentStock`. Field aggregate `currentStock`, `stock`, `reservedStock`, dan `availableStock` wajib disinkronkan setelah mutasi varian.
-
-### 11.2 Mutasi stok item bervarian
-Semua mutasi stok pada menu final wajib melewati helper variant-aware dan wajib membawa:
-- `variantKey`
-- `variantLabel`
-- `stockSourceType`
-
-Jika item punya varian tetapi form belum memilih varian, proses harus diblok. Stok tidak boleh diam-diam masuk ke master/default.
-
-### 11.3 Inventory log final
-Inventory log final wajib menyimpan `variantKey`, `variantLabel`, dan `stockSourceType` di root log. Field lama seperti `materialVariantId` / `materialVariantName` hanya dibaca sebagai transisi audit data lama.
-
-### 11.4 Penjualan dan retur varian
-Sale item bervarian wajib menyimpan variant snapshot agar cancel/delete/revert mengembalikan stok ke varian yang sama. Retur item bervarian wajib memilih varian sebelum stok ditambah.
+## Business Rule Maintenance Data Legacy
+- Dry run legacy tidak boleh mengubah stok, kas, payroll, HPP, atau data completed/final.
+- Repair aman hanya boleh memperbaiki field turunan, snapshot, atau display yang sumbernya jelas.
+- Data completed/final yang tidak punya source reference jelas tidak boleh ditebak otomatis; gunakan manual review atau reset scoped jika data testing.
+- Reset produksi harus scoped dan ikut memperhatikan inventory log produksi agar tidak meninggalkan orphan log.
+- Reset sales/purchases harus scoped terhadap income/expense yang benar-benar terkait modul tersebut.

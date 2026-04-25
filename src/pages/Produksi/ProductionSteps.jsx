@@ -11,6 +11,7 @@ import {
   Divider,
   Card,
   Col,
+  Descriptions,
   Drawer,
   Empty,
   Form,
@@ -30,6 +31,7 @@ import {
 } from "antd";
 import {
   EditOutlined,
+  EyeOutlined,
   PlusOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
@@ -38,8 +40,6 @@ import {
   DEFAULT_PRODUCTION_STEP_FORM,
   MONITORING_MODE_MAP,
   PAYROLL_CLASSIFICATION_MAP,
-  PAYROLL_MODE_MAP,
-  PAYROLL_OUTPUT_BASIS_MAP,
   PROCESS_TYPE_MAP,
   PRODUCTION_STEP_BASIS_TYPES,
   PRODUCTION_STEP_MONITORING_MODES,
@@ -73,13 +73,6 @@ const categoryTagStyle = {
   maxWidth: 170,
 };
 
-const softClampStyle = {
-  display: "-webkit-box",
-  WebkitLineClamp: 3,
-  WebkitBoxOrient: "vertical",
-  overflow: "hidden",
-  lineHeight: 1.5,
-};
 
 const ProductionSteps = () => {
   const [loading, setLoading] = useState(false);
@@ -92,6 +85,7 @@ const ProductionSteps = () => {
   const [processFilter, setProcessFilter] = useState("all");
 
   const [formVisible, setFormVisible] = useState(false);
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [employeeDrawerVisible, setEmployeeDrawerVisible] = useState(false);
   const [bomDrawerVisible, setBomDrawerVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -205,6 +199,19 @@ const ProductionSteps = () => {
       isActive: record.isActive !== false,
     });
     setFormVisible(true);
+  };
+
+  // =========================
+  // SECTION: detail drawer read-only
+  // Fungsi:
+  // - menjadikan Tahapan Produksi sebagai detail-capable page ringan
+  // - audit konfigurasi step dipindah ke drawer agar tabel utama tetap ringkas
+  // Status:
+  // - aktif dipakai untuk baseline UI terbaru halaman step
+  // =========================
+  const handleOpenDetailDrawer = (record) => {
+    setSelectedStep(record);
+    setDetailDrawerVisible(true);
   };
 
   const handleOpenEmployeeDrawer = (record) => {
@@ -371,6 +378,14 @@ const ProductionSteps = () => {
     },
   ];
 
+  // =========================
+  // SECTION: kolom tabel utama
+  // Fungsi:
+  // - main table hanya menampilkan info inti agar halaman step tidak terlalu padat
+  // - detail konfigurasi lengkap dipindah ke drawer Detail read-only
+  // Status:
+  // - aktif dipakai sebagai baseline final untuk ProductionSteps
+  // =========================
   const columns = [
     {
       title: "Nama Step",
@@ -394,20 +409,6 @@ const ProductionSteps = () => {
       },
     },
     {
-      title: "Cara Kerja Step",
-      dataIndex: "basisType",
-      key: "basisType",
-      width: 160,
-      render: (value) => <Tag color="blue">{BASIS_TYPE_MAP[value] || "-"}</Tag>,
-    },
-    {
-      title: "Cara Pantau Hasil",
-      dataIndex: "monitoringMode",
-      key: "monitoringMode",
-      width: 170,
-      render: (value) => <Tag color="gold">{MONITORING_MODE_MAP[value] || "-"}</Tag>,
-    },
-    {
       title: "Sistem Bayar",
       key: "payrollPreview",
       width: 220,
@@ -418,62 +419,11 @@ const ProductionSteps = () => {
       ),
     },
     {
-      title: "Klasifikasi Payroll",
-      dataIndex: "payrollClassification",
-      key: "payrollClassification",
-      width: 190,
-      render: (_, record) => (
-        <Space direction="vertical" size={4}>
-          <Tag color={record.includePayrollInHpp === false ? "orange" : "green"}>
-            {PAYROLL_CLASSIFICATION_MAP[record.payrollClassification] || "-"}
-          </Tag>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {record.includePayrollInHpp === false ? "Tidak masuk HPP inti" : "Masuk HPP inti"}
-          </Typography.Text>
-        </Space>
-      ),
-    },
-    {
-      title: "Fungsi",
-      dataIndex: "description",
-      key: "description",
-      width: 300,
-      render: (value) => {
-        const textValue = value || "Belum ada deskripsi fungsi";
-        return (
-          <Tooltip title={textValue}>
-            <Typography.Text type={value ? undefined : "secondary"} style={softClampStyle}>
-              {textValue}
-            </Typography.Text>
-          </Tooltip>
-        );
-      },
-    },
-    {
-      title: "Karyawan Terkait",
-      key: "employeeCount",
-      width: 160,
-      align: "center",
-      render: (_, record) => (
-        <Button type="link" style={{ padding: 0 }} onClick={() => handleOpenEmployeeDrawer(record)}>
-          {record.employeeCount} karyawan
-        </Button>
-      ),
-    },
-    {
-      title: "Dipakai di BOM",
-      key: "bomCount",
-      width: 150,
-      align: "center",
-      render: (_, record) => (
-        <Button type="link" style={{ padding: 0 }} onClick={() => handleOpenBomDrawer(record)}>
-          {record.bomCount} BOM
-        </Button>
-      ),
-    },
-    {
       // =========================
       // SECTION: status sticky
+      // Fungsi:
+      // - menjaga kolom status tetap terlihat saat table discroll horizontal
+      // - mengikuti baseline global table/action untuk table lebar
       // =========================
       title: "Status",
       dataIndex: "isActive",
@@ -489,16 +439,27 @@ const ProductionSteps = () => {
       // =========================
       // SECTION: aksi sticky
       // Fungsi:
-      // - Tahapan Produksi diklasifikasikan sebagai simple config page, jadi cukup Edit + Aktif/Nonaktif
-      // - tombol Detail tidak ditambahkan agar tidak membuat variasi baru yang keluar dari baseline final
+      // - ProductionSteps sekarang diperlakukan sebagai detail-capable page ringan
+      // - Detail dipakai untuk audit baca cepat, Edit tetap untuk ubah data
+      // Status:
+      // - aktif dipakai sebagai baseline baru halaman step
+      // - menggantikan pola lama simple config tanpa Detail
       // =========================
       title: "Aksi",
       key: "actions",
-      width: 180,
+      width: 260,
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
         <Space wrap className="ims-action-group">
+          <Button
+            className="ims-action-button"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => handleOpenDetailDrawer(record)}
+          >
+            Detail
+          </Button>
           <Button
             className="ims-action-button"
             size="small"
@@ -521,6 +482,10 @@ const ProductionSteps = () => {
       ),
     },
   ];
+
+  const selectedStepPayrollPreview = selectedStep?.payrollMode
+    ? formatProductionStepPayrollPreview(selectedStep)
+    : "Belum ada rule payroll";
 
   return (
     <div>
@@ -620,7 +585,13 @@ const ProductionSteps = () => {
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          scroll={{ x: 1600 }}
+          // =========================
+          // SECTION: scroll table utama
+          // Fungsi:
+          // - tetap memberi ruang aman untuk sticky status + aksi
+          // - ukuran diperkecil karena kolom utama sudah diringkas
+          // =========================
+          scroll={{ x: 980 }}
           locale={{
             emptyText: <Empty description="Belum ada data tahapan produksi" />,
           }}
@@ -630,6 +601,74 @@ const ProductionSteps = () => {
           }}
         />
       </Card>
+
+      <Drawer
+        title={`Detail Step Produksi: ${selectedStep?.name || "-"}`}
+        open={detailDrawerVisible}
+        onClose={() => setDetailDrawerVisible(false)}
+        width={720}
+      >
+        {/* =========================
+            SECTION: drawer detail read-only
+            Fungsi:
+            - memindahkan informasi konfigurasi step yang berat dari tabel utama ke drawer audit
+            - menjaga source data tetap dari row step yang sama tanpa mengubah business logic
+            Status:
+            - aktif dipakai untuk baseline UI terbaru ProductionSteps
+        ========================= */}
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <Descriptions bordered column={1} size="middle">
+            <Descriptions.Item label="Nama Step">{selectedStep?.name || "-"}</Descriptions.Item>
+            <Descriptions.Item label="Kategori">
+              {PROCESS_TYPE_MAP[selectedStep?.processType] || selectedStep?.processType || "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Cara Kerja Step">
+              {BASIS_TYPE_MAP[selectedStep?.basisType] || "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Cara Pantau Hasil">
+              {MONITORING_MODE_MAP[selectedStep?.monitoringMode] || "-"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Sistem Bayar">{selectedStepPayrollPreview}</Descriptions.Item>
+            <Descriptions.Item label="Klasifikasi Payroll">
+              <Space direction="vertical" size={4}>
+                <Tag color={selectedStep?.includePayrollInHpp === false ? "orange" : "green"}>
+                  {PAYROLL_CLASSIFICATION_MAP[selectedStep?.payrollClassification] || "-"}
+                </Tag>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {selectedStep?.includePayrollInHpp === false
+                    ? "Tidak masuk HPP inti"
+                    : "Masuk HPP inti"}
+                </Typography.Text>
+              </Space>
+            </Descriptions.Item>
+            <Descriptions.Item label="Fungsi / Deskripsi">
+              {selectedStep?.description || "Belum ada deskripsi fungsi"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Catatan Payroll">
+              {selectedStep?.payrollNotes || "Belum ada catatan payroll"}
+            </Descriptions.Item>
+            <Descriptions.Item label="Karyawan Terkait">
+              <Space direction="vertical" size={4}>
+                <Typography.Text>{selectedStep?.employeeCount || 0} karyawan</Typography.Text>
+                <Button type="link" style={{ padding: 0 }} onClick={() => handleOpenEmployeeDrawer(selectedStep)}>
+                  Lihat karyawan terkait
+                </Button>
+              </Space>
+            </Descriptions.Item>
+            <Descriptions.Item label="Dipakai di BOM">
+              <Space direction="vertical" size={4}>
+                <Typography.Text>{selectedStep?.bomCount || 0} BOM</Typography.Text>
+                <Button type="link" style={{ padding: 0 }} onClick={() => handleOpenBomDrawer(selectedStep)}>
+                  Lihat BOM terkait
+                </Button>
+              </Space>
+            </Descriptions.Item>
+            <Descriptions.Item label="Status">
+              {selectedStep?.isActive ? <Badge status="success" text="Aktif" /> : <Badge status="default" text="Nonaktif" />}
+            </Descriptions.Item>
+          </Descriptions>
+        </Space>
+      </Drawer>
 
       <Drawer
         title={editingStep?.id ? "Edit Step Produksi" : "Tambah Step Produksi"}

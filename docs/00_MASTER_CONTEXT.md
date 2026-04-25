@@ -8,6 +8,7 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
 - transaksi pembelian, penjualan, retur, pemasukan, dan pengeluaran
 - inventaris dan audit log stok
 - modul produksi modern berbasis BOM → Production Order → Work Log → Payroll → Analisis HPP
+- payroll produksi final sekarang dikunci ke flow: Work Log completed → auto-create payroll draft per operator → review/confirm → paid/cancelled
 - logic produksi aktif sekarang dianggap **guarded / locked area**
 - boundary sensitif produksi: `productionOrdersService`, `productionWorkLogsService`, `productionPayrollsService`, helper referensi/transform produksi, dan docs arsitektur produksi
 - patch UI / shared component / refactor halaman lain tidak boleh mengubah contract flow produksi tanpa evaluasi khusus
@@ -72,7 +73,7 @@ Aplikasi saat ini memakai pendekatan transisi antara field lama dan field baru:
 - halaman dibagi menjadi empat klasifikasi UI resmi: detail-capable page, simple config page, ledger/simple action page, dan read-only data table page
 - tombol `Detail` hanya dipakai pada halaman yang memang punya drawer/detail read-only atau modal detail yang jelas
 - global normalization terbaru sudah membawa pola baseline ini ke: Sales, Supplier Purchases, Pricing Rules, Purchases, Returns, Stock Adjustment, Stock Management, report pages, dan Analisis HPP
-- utility page seperti `ResetTestData` boleh tetap berbeda di level page shell selama tabel preview-nya sudah mengikuti baseline table global
+- utility page seperti `ResetMaintenanceData` boleh tetap berbeda di level page shell selama tabel preview-nya sudah mengikuti baseline table global
 - bahasa UI dominan Bahasa Indonesia
 - angka menggunakan format Indonesia tanpa desimal
 - banyak halaman memakai ringkasan statistik + tabel + modal form
@@ -92,49 +93,37 @@ Saat membuat perubahan baru, selalu cek apakah perubahan menyentuh salah satu ar
 - kalau menyentuh sales, purchases, stock adjustment, dan production, selalu cek efek ke `inventory_logs`
 - kalau menyentuh laporan, cek collection sumber datanya terlebih dahulu
 
-## Update Master Context: Source of Truth Varian Produksi
-Flow varian produksi final sekarang memakai satu source of truth:
-- PO `targetVariantKey` / `targetVariantLabel`
-- Work Log root snapshot dari PO
-- Work Log output variant dari snapshot PO
-- stock mutation dan inventory log mengikuti output variant tersebut
+## Update Master Context: Cleanup File Legacy / Wrapper
 
-Area ini termasuk guarded production logic. Patch UI atau refactor shared component tidak boleh mengubah contract varian PO -> Work Log -> Output tanpa evaluasi produksi khusus.
+Batch cleanup terbaru menegaskan struktur aktif berikut:
+- flow produksi aktif tetap memakai BOM → Production Order → Work Log → Payroll → HPP Analysis;
+- helper/service produksi lama berbasis collection `productions` tidak lagi menjadi jalur operasional;
+- file kosong, helper tidak terimpor, dan wrapper/testing-only yang tidak punya import aktif harus dipetakan sebelum dihapus;
+- penghapusan file legacy tidak boleh mengubah business rules, stok, kas, payroll, HPP, atau flow produksi final.
 
-## Update Master Context: Display Varian Produksi
-Tampilan varian produksi sekarang harus mengikuti field final yang sama dengan mutasi stok:
-- PO detail membaca `targetVariantKey` / `targetVariantLabel` dan requirement `resolvedVariantKey` / `resolvedVariantLabel`.
-- Work Log detail membaca snapshot target, material usage resolved variant, dan output variant.
-- Inventory log display membaca `variantLabel` lalu fallback ke `variantKey` agar audit stok tidak terlihat master ketika mutasi aktual sudah varian.
+File yang sudah teridentifikasi aman untuk penghapusan manual di batch cleanup ini:
+- `src/components/Layout/Display/StatusBadge.jsx` dan `src/components/Layout/Display/StatusBadge.css` karena kosong dan tidak diimport;
+- `src/constants/productOptions.js` karena tidak diimport dan source final produk sudah berada di `productsService.js` + `variantHelpers.js`;
+- `src/constants/salesStatusOptions.js` karena tidak diimport dan status sales aktif masih dikelola di halaman Sales saat ini;
+- `src/hooks/useAppRole.js` karena tidak diimport oleh layout/route aktif;
+- `src/services/Produksi/productionService.js` karena flow produksi final tidak lagi memakainya dan collection `productions` hanya dipertahankan sebagai data legacy yang dapat dibersihkan melalui reset terarah.
 
-Label `Master` hanya boleh muncul untuk item yang memang tidak memakai varian. Jika item bervarian tetapi field variant kosong, UI harus menandai sebagai mismatch/data lama, bukan menampilkan seolah normal.
+## Update Master Context: Cleanup Structure Batch 2
 
-## Update Master Context: Reset & Maintenance Data Terpusat
-Menu `Reset & Maintenance Data` sekarang menjadi pusat resmi untuk dua kebutuhan yang berbeda:
-- **Maintenance / Sinkronisasi Data**: audit dan repair field turunan/snapshot/display tanpa menghapus data dan tanpa posting stok/kas/payroll/HPP ulang.
-- **Reset Data**: aksi destructive terarah per modul dengan preview dan konfirmasi.
+Batch cleanup structure berikutnya memindahkan entry final menu sistem dari nama testing lama ke struktur final:
+- route utama sekarang: `/utilities/reset-maintenance-data`;
+- halaman utama sekarang: `src/pages/Utilities/ResetMaintenanceData.jsx`;
+- service reset/preview/baseline destructive sekarang: `src/services/Maintenance/resetMaintenanceDataService.js`;
+- route lama `/utilities/reset-test-data` hanya redirect kompatibilitas untuk bookmark lama.
 
-Implementasi awal maintenance difokuskan ke produksi varian lama. Service maintenance dipisahkan ke `src/services/Maintenance/productionVariantMaintenanceService.js` agar tidak bercampur dengan service operasional produksi aktif.
+File transisi yang aman dihapus setelah patch ini tervalidasi:
+- `src/pages/Utilities/ResetTestData.jsx` karena route/import final sudah pindah ke `ResetMaintenanceData.jsx`;
+- `src/services/Utilities/resetTestDataService.js` karena import final sudah pindah ke `services/Maintenance/resetMaintenanceDataService.js`.
 
-## Update Master Context: Variant Support Lintas Modul
-Dukungan varian lintas aplikasi sekarang distandardisasi ke helper stok final `updateInventoryStock` di `src/services/Inventory/inventoryService.js`.
+Catatan penting: perubahan ini hanya merapikan entry/import/route maintenance. Tidak ada perubahan business rules, stok, kas, payroll, HPP, atau flow produksi final.
 
-Contract final lintas modul:
-- item bervarian wajib memilih `variantKey` sebelum mutasi stok manual/transaksi umum
-- mutasi stok final menyinkronkan `variants[]`, `currentStock`, `stock`, `reservedStock`, dan `availableStock`
-- inventory log final menulis `variantKey`, `variantLabel`, dan `stockSourceType`
-- `updateStock()` tetap ada hanya sebagai wrapper legacy/deprecated untuk import lama dan tidak boleh dipakai pada menu baru/final
-
-Menu yang sudah ikut contract final awal:
-- Stock Adjustment untuk raw material, product, dan semi finished material
-- Purchases untuk raw material variant dan product variant
-- Sales untuk pemotongan stok variant dan revert cancel/delete ke variant yang sama
-- Returns untuk penambahan stok variant
-- Stock Management membaca schema log final plus field legacy pembelian lama
-- Stock Report membaca aggregate final dan semi finished material
-
-## Formatter Display Final
-- Formatter shared resmi berada di `src/utils/formatters/numberId.js`, `src/utils/formatters/currencyId.js`, dan `src/utils/formatters/dateId.js`.
-- Angka umum, qty, stok, summary count, dan persentase harus memakai helper number formatter shared agar angka bulat tidak menampilkan `.00`.
-- Nominal uang harus memakai `formatCurrencyId` / `formatCurrencyIDR` agar tampilan Rupiah konsisten di seluruh aplikasi.
-- Page baru tidak boleh membuat `Intl.NumberFormat("id-ID")`, `toLocaleString("id-ID")`, atau `toFixed()` lokal untuk kebutuhan display jika helper shared sudah cukup.
+## Update Batch 3 — Cleanup Data Legacy via Reset & Maintenance
+- Menu `Reset & Maintenance Data` sekarang menjadi fondasi resmi untuk dry run data legacy sebelum cleanup file/logic berikutnya.
+- Audit legacy memetakan `productions`, orphan `inventory_logs`, PO/Work Log stale, transaksi bervarian lama tanpa snapshot variant, dan income/expense yang source reference-nya tidak jelas.
+- Dry run legacy tidak mengubah data domain; hasilnya hanya membagi data menjadi OK, aman repair, display repair, aman reset scoped, atau butuh manual review.
+- Reset scoped tetap harus melalui preview dan konfirmasi `RESET`; tidak boleh ada delete database manual tanpa audit.

@@ -1652,7 +1652,39 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
     }
   });
 
-  return id;
+  // =====================================================
+  // ACTIVE / FINAL
+  // Setelah stock posting Work Log selesai, flow payroll final tidak boleh
+  // berhenti di status pending saja. Service ini langsung memicu handoff ke
+  // payroll draft per operator agar Work Log completed masuk ke menu Payroll
+  // sebagai draft final, bukan candidate manual.
+  // =====================================================
+  try {
+    const { ensurePayrollDraftsForCompletedWorkLog } = await import("./productionPayrollsService");
+    const autoPayrollResult = await ensurePayrollDraftsForCompletedWorkLog(id, currentUser);
+
+    return {
+      id,
+      autoPayrollResult,
+    };
+  } catch (error) {
+    console.error("Gagal auto-create payroll draft setelah Work Log completed", error);
+
+    return {
+      id,
+      autoPayrollResult: {
+        status: "error",
+        createdCount: 0,
+        blockingReasons: [],
+        warningReasons: [
+          "Work Log selesai, tetapi auto-create payroll draft gagal. Buka menu Payroll untuk review dan cek log error.",
+        ],
+        createdPayrollIds: [],
+        createdPayrollNumbers: [],
+        createdWorkerNames: [],
+      },
+    };
+  }
 };
 
 export const updateWorkLogStatus = async (

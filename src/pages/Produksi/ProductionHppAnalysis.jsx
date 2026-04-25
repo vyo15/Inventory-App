@@ -53,8 +53,19 @@ const ProductionHppAnalysis = () => {
 
   const rows = useMemo(() => {
     return workLogs.map((workLog) => {
+      // =====================================================
+      // ACTIVE / FINAL
+      // HPP inti tidak boleh menarik semua payroll non-cancelled secara longgar.
+      // Setelah flow payroll difinalkan, direct labor HPP hanya membaca payroll
+      // yang sudah lolos review minimal confirmed/paid dan memang diizinkan masuk
+      // HPP melalui rule step snapshot pada payroll line.
+      // =====================================================
       const relatedPayrolls = payrolls.filter(
-        (item) => item.workLogId === workLog.id && item.status !== "cancelled",
+        (item) =>
+          item.workLogId === workLog.id &&
+          ["confirmed", "paid"].includes(item.status) &&
+          item.status !== "cancelled" &&
+          item.includePayrollInHpp !== false,
       );
 
       const payrollTotal = relatedPayrolls.reduce(
