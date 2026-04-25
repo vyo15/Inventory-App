@@ -44,16 +44,15 @@ import {
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import formatNumber from "../../utils/formatters/numberId";
 import {
+  buildProductionOrderRequirementLines,
   createProductionOrder,
   generateProductionOrderCode,
   getActiveProductionBomOptions,
   getAllProductionOrders,
-  getProductionOrderTargetStockInfo,
   getProductionOrderTargetVariantOptions,
   refreshProductionOrderRequirements,
 } from "../../services/Produksi/productionOrdersService";
 import { createProductionWorkLogFromOrder } from "../../services/Produksi/productionWorkLogsService";
-import { buildVariantDisplayInfo } from "../../utils/variants/variantStockHelpers";
 
 const PRODUCTION_ORDER_TARGET_TYPES = [
   {
@@ -129,30 +128,39 @@ const renderOrderCellBlock = (primary, secondaryLines = []) => (
 );
 
 // =====================================================
-// ACTIVE / FINAL - helper display varian requirement PO.
-// Source of truth tampilan requirement adalah resolvedVariantKey/Label
-// hasil service PO. stockSourceType hanya metadata legacy pendukung,
-// sehingga UI tidak boleh menampilkan Master jika varian aktual sudah ada.
+// ACTIVE / FINAL - helper teks preview compact Buat PO.
+// Fungsi:
+// - menyamakan format qty + satuan pada target produksi dan material;
+// - menjaga preview tetap ringkas tanpa tabel besar.
+// Alasan perubahan:
+// - drawer Buat PO harus lebih kecil dan hanya menampilkan info penting.
+// Status:
+// - aktif dipakai untuk UI read-only preview;
+// - kandidat cleanup jika nanti dibuat komponen shared requirement preview.
 // =====================================================
-const getRequirementVariantDisplayInfo = (record = {}) => {
-  const strategy = String(record.materialVariantStrategy || '').trim().toLowerCase();
-  const stockSourceType = String(record.stockSourceType || '').trim().toLowerCase();
-  const expectsVariant =
-    stockSourceType === 'variant' || ['inherit', 'fixed'].includes(strategy);
-  const usesGeneralMasterStock = record.materialHasVariants === true && strategy === 'none';
+const formatQtyWithUnit = (value, unit = "") => {
+  const normalizedUnit = String(unit || "").trim();
+  return `${formatNumber(Number(value || 0))}${normalizedUnit ? ` ${normalizedUnit}` : ""}`;
+};
 
-  return buildVariantDisplayInfo({
-    stockSourceType: record.stockSourceType,
-    variantKey: record.resolvedVariantKey,
-    variantLabel: record.resolvedVariantLabel,
-    hasVariants: record.materialHasVariants,
-    expectsVariant,
-    variantSourceLabel: 'Variant',
-    masterSourceLabel: usesGeneralMasterStock ? 'Stok Umum' : 'Master',
-    masterVariantLabel: usesGeneralMasterStock ? 'Sesuai BOM tanpa varian' : '',
-    missingVariantLabel: 'Requirement belum resolved',
-    missingVariantDescription: 'Refresh requirement / cek strategi varian BOM',
-  });
+const getCompactVariantLabel = (line = {}) => {
+  if (line.stockSourceType !== "variant") return "";
+  return line.resolvedVariantLabel || line.fixedVariantLabel || "";
+};
+
+const getCompactLineStatus = (line = {}) => {
+  const shortageQty = Number(line.shortageQty || 0);
+  if (shortageQty > 0) {
+    return {
+      color: "red",
+      label: `Kurang ${formatQtyWithUnit(shortageQty, line.unit)}`,
+    };
+  }
+
+  return {
+    color: "green",
+    label: "Cukup",
+  };
 };
 
 const ProductionOrders = () => {
@@ -161,8 +169,8 @@ const ProductionOrders = () => {
   const [bomOptions, setBomOptions] = useState([]);
   const [bomLoading, setBomLoading] = useState(false);
   const [targetVariantOptions, setTargetVariantOptions] = useState([]);
-  const [targetStockInfo, setTargetStockInfo] = useState(null);
-  const [targetStockLoading, setTargetStockLoading] = useState(false);
+  const [requirementPreview, setRequirementPreview] = useState(null);
+  const [requirementPreviewLoading, setRequirementPreviewLoading] = useState(false);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -179,7 +187,9 @@ const ProductionOrders = () => {
 
   const targetTypeValue = Form.useWatch("targetType", form);
   const bomIdValue = Form.useWatch("bomId", form);
+  const orderQtyValue = Form.useWatch("orderQty", form);
   const targetVariantKeyValue = Form.useWatch("targetVariantKey", form);
+  const targetVariantLabelValue = Form.useWatch("targetVariantLabel", form);
 
   const loadData = async () => {
     try {
@@ -245,7 +255,6 @@ const ProductionOrders = () => {
           targetVariantKey: undefined,
           targetVariantLabel: "",
         });
-        setTargetStockInfo(null);
         return;
       }
 
@@ -268,52 +277,89 @@ const ProductionOrders = () => {
     loadTargetVariants();
   }, [bomIdValue, form]);
 
-  // =====================================================
-  // ACTIVE / FINAL - preview stok target di form Buat PO.
-  // Data ini hanya read-only untuk membantu user melihat stok aktual target.
-  // Source of truth tetap master item terbaru dari BOM: currentStock untuk
-  // target non-varian dan variants[].currentStock untuk varian yang dipilih.
-  // =====================================================
   useEffect(() => {
-    let isActive = true;
+    let cancelled = false;
 
-    const loadTargetStockInfo = async () => {
-      if (!bomIdValue) {
-        setTargetStockInfo(null);
+    const loadRequirementPreview = async () => {
+      if (!bomIdValue || Number(orderQtyValue || 0) <= 0) {
+        setRequirementPreview(null);
         return;
       }
 
       try {
-        setTargetStockLoading(true);
-        const result = await getProductionOrderTargetStockInfo({
+        setRequirementPreviewLoading(true);
+        const result = await buildProductionOrderRequirementLines({
           bomId: bomIdValue,
+          orderQty: Number(orderQtyValue || 0),
           targetVariantKey: targetVariantKeyValue || "",
+          targetVariantLabel: targetVariantLabelValue || "",
         });
 
-        if (isActive) {
-          setTargetStockInfo(result);
-        }
+        if (cancelled) return;
+
+        const requirementLines = Array.isArray(result?.requirementLines)
+          ? result.requirementLines
+          : [];
+        const totalRequired = requirementLines.reduce(
+          (sum, line) => sum + Number(line.qtyRequired || 0),
+          0,
+        );
+        const totalAvailable = requirementLines.reduce(
+          (sum, line) => sum + Number(line.availableStockSnapshot || 0),
+          0,
+        );
+        const totalShortage = requirementLines.reduce(
+          (sum, line) => sum + Number(line.shortageQty || 0),
+          0,
+        );
+        const topShortageLine = [...requirementLines]
+          .filter((line) => Number(line.shortageQty || 0) > 0)
+          .sort((left, right) => Number(right.shortageQty || 0) - Number(left.shortageQty || 0))[0];
+
+        setRequirementPreview({
+          // =====================================================
+          // ACTIVE / FINAL - preview read-only Buat PO.
+          // Fungsi:
+          // - menyimpan line material dan snapshot stok target dari helper final;
+          // - dipakai hanya untuk tampilan compact sebelum submit.
+          // Alasan perubahan:
+          // - kotak summary agregat terlalu penuh dan tidak memberi info stok target.
+          // Status:
+          // - aktif dipakai untuk drawer Buat Production Order;
+          // - createProductionOrder tetap menghitung ulang requirement final saat simpan.
+          // =====================================================
+          requirementLines,
+          targetStockPreview: result?.targetStockPreview || null,
+          targetHasVariants: result?.bom?.targetHasVariants === true,
+          totalLines: Number(result?.reservationSummary?.totalLines || 0),
+          sufficientLines: Number(result?.reservationSummary?.sufficientLines || 0),
+          shortageLines: Number(result?.reservationSummary?.shortageLines || 0),
+          canReserveFully: result?.reservationSummary?.canReserveFully === true,
+          totalRequired,
+          totalAvailable,
+          totalShortage,
+          topShortageLabel: topShortageLine
+            ? `${topShortageLine.itemName || "Material"} kurang ${formatNumber(topShortageLine.shortageQty || 0)} ${topShortageLine.unit || ""}`
+            : "",
+        });
       } catch (error) {
         console.error(error);
-        if (isActive) {
-          setTargetStockInfo({
-            hasTarget: false,
-            warning: error?.message || "Gagal membaca stok target",
-          });
+        if (!cancelled) {
+          setRequirementPreview(null);
         }
       } finally {
-        if (isActive) {
-          setTargetStockLoading(false);
+        if (!cancelled) {
+          setRequirementPreviewLoading(false);
         }
       }
     };
 
-    loadTargetStockInfo();
+    loadRequirementPreview();
 
     return () => {
-      isActive = false;
+      cancelled = true;
     };
-  }, [bomIdValue, targetVariantKeyValue]);
+  }, [bomIdValue, orderQtyValue, targetVariantKeyValue, targetVariantLabelValue]);
 
   const summary = useMemo(() => {
     return buildCountSummary(orders, {
@@ -357,95 +403,10 @@ const ProductionOrders = () => {
     });
 
     setTargetVariantOptions([]);
-    setTargetStockInfo(null);
     setFormVisible(true);
 
     await loadBomOptions("product");
     await loadGeneratedCode("product");
-  };
-
-  // =====================================================
-  // ACTIVE / FINAL - kartu stok target pada drawer Buat PO.
-  // Blok ini hanya display helper dan tidak mengubah requirement, mutasi stok,
-  // atau flow final produksi. Jika target bervarian tetapi belum dipilih,
-  // UI menampilkan state jelas tanpa fallback diam-diam ke master.
-  // =====================================================
-  const renderTargetStockPreview = () => {
-    if (!bomIdValue) return null;
-
-    if (targetStockLoading) {
-      return (
-        <Alert
-          style={{ marginBottom: 16 }}
-          type="info"
-          showIcon
-          message="Memuat stok aktual target..."
-        />
-      );
-    }
-
-    if (targetStockInfo?.warning) {
-      return (
-        <Alert
-          style={{ marginBottom: 16 }}
-          type={targetStockInfo?.requiresVariant ? "warning" : "error"}
-          showIcon
-          message={targetStockInfo.warning}
-          description={
-            targetStockInfo?.requiresVariant
-              ? "Stok target bervarian baru ditampilkan setelah varian target dipilih."
-              : "Cek master target atau BOM jika informasi stok tidak muncul."
-          }
-        />
-      );
-    }
-
-    if (!targetStockInfo?.hasTarget) return null;
-
-    const sourceLabel = targetStockInfo.hasVariants
-      ? `Variant: ${targetStockInfo.variantLabel || targetStockInfo.variantKey || "-"}`
-      : "Stok item utama";
-
-    return (
-      <Card size="small" style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]} align="middle">
-          <Col xs={24} md={10}>
-            <Typography.Text type="secondary">Stok Aktual Target</Typography.Text>
-            <div style={{ marginTop: 4 }}>
-              <Typography.Text strong>{targetStockInfo.targetName || "-"}</Typography.Text>
-            </div>
-            <Typography.Text type="secondary" className={orderUiClassNames.meta}>
-              {sourceLabel}
-            </Typography.Text>
-          </Col>
-          <Col xs={24} md={14}>
-            <Row gutter={[12, 12]}>
-              <Col xs={24} sm={8}>
-                <Statistic
-                  title="Stok Saat Ini"
-                  value={formatNumber(targetStockInfo.currentStock || 0)}
-                  suffix={targetStockInfo.unit || "pcs"}
-                />
-              </Col>
-              <Col xs={24} sm={8}>
-                <Statistic
-                  title="Tersedia"
-                  value={formatNumber(targetStockInfo.availableStock || 0)}
-                  suffix={targetStockInfo.unit || "pcs"}
-                />
-              </Col>
-              <Col xs={24} sm={8}>
-                <Statistic
-                  title="Reserved"
-                  value={formatNumber(targetStockInfo.reservedStock || 0)}
-                  suffix={targetStockInfo.unit || "pcs"}
-                />
-              </Col>
-            </Row>
-          </Col>
-        </Row>
-      </Card>
-    );
   };
 
   const handleSubmit = async () => {
@@ -520,15 +481,19 @@ const ProductionOrders = () => {
 
   // =====================================================
   // Kolom list Production Order
-  // Catatan maintainability:
-  // - Tabel utama dibuat ringkas agar scheduler cepat baca target, priority, qty, dan status.
-  // - Detail stok requirement dipindah ke drawer agar list harian tetap ringan.
+  // Fungsi blok:
+  // - menampilkan PO aktif dalam layout tabel yang compact;
+  // - menjaga tombol aksi tetap langsung terlihat tanpa scroll horizontal.
+  // Alasan perubahan:
+  // - regression UI sebelumnya memakai scroll x besar sehingga tombol aksi terdorong ke kanan.
+  // Status:
+  // - aktif dipakai; bukan kandidat cleanup karena ini tabel utama Production Orders.
   // =====================================================
   const columns = [
     {
       title: "Order",
       key: "order",
-      width: 220,
+      width: 170,
       render: (_, record) => (
         renderOrderCellBlock(record.code || "-", [
           `Dibuat: ${formatDateTimeLabel(record.createdAt)}`,
@@ -538,7 +503,7 @@ const ProductionOrders = () => {
     {
       title: "Target",
       key: "target",
-      width: 340,
+      width: 250,
       render: (_, record) => (
         <div className={orderUiClassNames.stack}>
           <Space wrap size={[8, 4]} className="ims-cell-tag-list">
@@ -563,7 +528,7 @@ const ProductionOrders = () => {
       title: "Priority",
       dataIndex: "priority",
       key: "priority",
-      width: 120,
+      width: 92,
       render: (value) => {
         const meta = getPriorityMeta(value);
         return <Tag className="ims-status-tag" color={meta.color}>{meta.label}</Tag>;
@@ -573,13 +538,13 @@ const ProductionOrders = () => {
       title: "Qty Batch",
       dataIndex: "batchCount",
       key: "batchCount",
-      width: 110,
+      width: 90,
       render: (_, record) => formatNumber(record.batchCount ?? record.orderQty),
     },
     {
       title: "Requirement",
       key: "requirement",
-      width: 180,
+      width: 120,
       render: (_, record) => (
         <div className={orderUiClassNames.stack}>
           <Typography.Text>
@@ -592,37 +557,22 @@ const ProductionOrders = () => {
       ),
     },
     {
-      // =====================================================
-      // SECTION: status sticky
-      // Fungsi:
-      // - menjaga status order tetap terlihat pada tabel lebar yang memakai scroll horizontal
-      // - mengikuti baseline final: status boleh sticky sebelum aksi untuk detail-capable page
-      // =====================================================
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 140,
-      fixed: "right",
-      className: "app-table-status-column app-table-fixed-secondary",
+      width: 110,
       render: (value) => {
         const meta = ORDER_STATUS_MAP[value] || ORDER_STATUS_MAP.draft;
         return <span className="ims-badge-inline"><Badge status={meta.status} text={meta.text} /></span>;
       },
     },
     {
-      // =====================================================
-      // SECTION: aksi sticky
-      // Fungsi:
-      // - Production Orders diklasifikasikan sebagai detail-capable page, jadi tombol Detail wajib ada
-      // - kolom aksi dibuat fixed right agar user tidak perlu scroll horizontal dulu untuk akses aksi utama
-      // =====================================================
       title: "Aksi",
       key: "actions",
-      width: 320,
-      fixed: "right",
-      className: "app-table-action-column",
+      width: 170,
       render: (_, record) => (
-        <Space wrap className="ims-action-group">
+        // Aktif dipakai: aksi dibuat vertical compact agar Detail/Refresh/Mulai tetap terlihat tanpa scroll kanan.
+        <Space direction="vertical" size={4} className="ims-action-group">
           <Button
             className="ims-action-button"
             size="small"
@@ -688,23 +638,17 @@ const ProductionOrders = () => {
       {
         title: "Varian / Sumber",
         key: "variantSource",
-        width: 190,
-        render: (_, record) => {
-          const variantDisplay = getRequirementVariantDisplayInfo(record);
-
-          return (
-            <div className={orderUiClassNames.stack}>
-              <Tag className="ims-status-tag" color={variantDisplay.tagColor}>
-                {variantDisplay.sourceLabel}
-              </Tag>
-              {variantDisplay.variantLabel ? (
-                <Typography.Text type="secondary" className={orderUiClassNames.meta}>
-                  {variantDisplay.variantLabel}
-                </Typography.Text>
-              ) : null}
-            </div>
-          );
-        },
+        width: 180,
+        render: (_, record) => (
+          <div className={orderUiClassNames.stack}>
+            <Tag className="ims-status-tag" color={record.stockSourceType === "variant" ? "purple" : "default"}>
+              {record.stockSourceType === "variant" ? "Variant" : "Master"}
+            </Tag>
+            <Typography.Text type="secondary" className={orderUiClassNames.meta}>
+              {record.resolvedVariantLabel || "Tanpa varian"}
+            </Typography.Text>
+          </div>
+        ),
       },
       {
         title: "Kebutuhan",
@@ -850,13 +794,13 @@ const ProductionOrders = () => {
       </ProductionFilterCard>
 
       <Card>
+        {/* Aktif dipakai: scroll x besar dihapus agar tombol aksi terlihat pada desktop/laptop normal. */}
         <Table
           className="ims-table"
           rowKey="id"
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          scroll={{ x: 1500 }}
           locale={{
             emptyText: <Empty description="Belum ada production order" />,
           }}
@@ -919,7 +863,6 @@ const ProductionOrders = () => {
                   targetVariantLabel: "",
                 });
                 setTargetVariantOptions([]);
-                setTargetStockInfo(null);
                 await loadBomOptions(value);
                 await loadGeneratedCode(value);
               }}
@@ -946,7 +889,6 @@ const ProductionOrders = () => {
                   targetVariantKey: undefined,
                   targetVariantLabel: "",
                 });
-                setTargetStockInfo(null);
               }}
             />
           </Form.Item>
@@ -978,8 +920,6 @@ const ProductionOrders = () => {
             </Form.Item>
           ) : null}
 
-          {renderTargetStockPreview()}
-
           <Form.Item
             label="Qty Batch Produksi"
             name="orderQty"
@@ -987,6 +927,118 @@ const ProductionOrders = () => {
           >
             <InputNumber min={1} style={{ width: "100%" }} />
           </Form.Item>
+
+          {/* =====================================================
+              ACTIVE / FINAL - preview compact Buat Production Order.
+              Fungsi:
+              - mengganti kotak summary hijau besar dengan info target produksi
+                dan kebutuhan material yang lebih berguna;
+              - membaca requirementLines dan targetStockPreview dari helper final.
+              Alasan perubahan:
+              - drawer PO sebelumnya terlalu penuh oleh summary agregat.
+              Status:
+              - aktif dipakai sebagai preview read-only;
+              - tidak menyimpan Firestore, tidak mengubah stok, dan tidak mengubah status PO.
+          ===================================================== */}
+          {bomIdValue && Number(orderQtyValue || 0) > 0 ? (
+            <div style={{ marginBottom: 16 }}>
+              {requirementPreview?.targetHasVariants === true && !targetVariantKeyValue ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message="Pilih varian target untuk melihat stok target dan kebutuhan material."
+                />
+              ) : requirementPreview ? (
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  <Card size="small" title="Target Produksi">
+                    {(() => {
+                      const targetPreview = requirementPreview.targetStockPreview || {};
+                      const targetVariantLabel = targetPreview.targetVariantLabel || "";
+                      const targetName = targetPreview.targetName || "-";
+                      const targetUnit = targetPreview.targetUnit || "pcs";
+                      const currentStockLabel =
+                        targetPreview.currentStockSnapshot === null ||
+                        targetPreview.currentStockSnapshot === undefined
+                          ? targetPreview.note || "Stok target belum terbaca"
+                          : formatQtyWithUnit(targetPreview.currentStockSnapshot, targetUnit);
+
+                      return (
+                        <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                          <Typography.Text strong>
+                            {targetName}
+                            {targetVariantLabel ? ` · ${targetVariantLabel}` : ""}
+                          </Typography.Text>
+                          <Typography.Text type="secondary">
+                            Stok saat ini {currentStockLabel} · Qty batch {formatNumber(orderQtyValue || 0)} · Output {formatQtyWithUnit(targetPreview.expectedOutputQty || 0, targetUnit)}
+                          </Typography.Text>
+                        </Space>
+                      );
+                    })()}
+                  </Card>
+
+                  <Card
+                    size="small"
+                    title="Kebutuhan Material"
+                    bodyStyle={{ padding: 12 }}
+                  >
+                    {requirementPreviewLoading ? (
+                      <Typography.Text type="secondary">
+                        Memuat preview kebutuhan material...
+                      </Typography.Text>
+                    ) : (requirementPreview.requirementLines || []).length === 0 ? (
+                      <Typography.Text type="secondary">
+                        BOM belum memiliki material.
+                      </Typography.Text>
+                    ) : (
+                      <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                        {(requirementPreview.requirementLines || []).map((line, index) => {
+                          const variantLabel = getCompactVariantLabel(line);
+                          const statusMeta = getCompactLineStatus(line);
+
+                          return (
+                            <div
+                              key={line.id || `${line.itemId || "material"}-${index}`}
+                              style={{
+                                padding: "8px 0",
+                                borderBottom:
+                                  index === requirementPreview.requirementLines.length - 1
+                                    ? "none"
+                                    : "1px solid #f0f0f0",
+                              }}
+                            >
+                              <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                                <Typography.Text strong>
+                                  {line.itemName || "Material"}
+                                  {variantLabel ? ` · ${variantLabel}` : ""}
+                                </Typography.Text>
+                                <Space size={6} wrap>
+                                  <Typography.Text type="secondary">
+                                    Butuh {formatQtyWithUnit(line.qtyRequired, line.unit)}
+                                  </Typography.Text>
+                                  <Typography.Text type="secondary">·</Typography.Text>
+                                  <Typography.Text type="secondary">
+                                    Stok {formatQtyWithUnit(line.availableStockSnapshot, line.unit)}
+                                  </Typography.Text>
+                                  <Tag className="ims-status-tag" color={statusMeta.color}>
+                                    {statusMeta.label}
+                                  </Tag>
+                                </Space>
+                              </Space>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </Card>
+                </Space>
+              ) : (
+                <Typography.Text type="secondary">
+                  Memuat preview kebutuhan material...
+                </Typography.Text>
+              )}
+            </div>
+          ) : null}
 
           <Form.Item label="Priority" name="priority">
             <Select options={PRIORITY_OPTIONS} />

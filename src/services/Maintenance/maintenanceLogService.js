@@ -26,11 +26,14 @@ export const createMaintenanceLog = async ({
   mode = "dry_run",
   modules = [],
   summary = {},
+  planSummary = {},
+  resultBuckets = {},
   affectedCollections = [],
   affectedCount = 0,
   dryRun = true,
   status = "success",
   note = "",
+  executedBy = "client-ui",
 } = {}) => {
   const logRef = doc(collection(db, MAINTENANCE_LOG_COLLECTION));
   const normalizedModules = Array.isArray(modules) ? modules.filter(Boolean) : [];
@@ -48,8 +51,10 @@ export const createMaintenanceLog = async ({
     dryRun: Boolean(dryRun),
     status: safeTrim(status) || "success",
     note: safeTrim(note),
+    planSummary: planSummary || {},
+    resultBuckets: resultBuckets || {},
     executedAt: serverTimestamp(),
-    executedBy: "client-ui",
+    executedBy: safeTrim(executedBy) || "client-ui",
   });
 
   return logRef.id;

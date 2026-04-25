@@ -68,12 +68,13 @@ import {
   getWorkLogReferenceData,
   updateProductionWorkLog,
 } from "../../services/Produksi/productionWorkLogsService";
+import { generatePayrollLinesFromCompletedWorkLog } from "../../services/Produksi/productionPayrollsService";
 
-import formatNumber, { formatPercentId } from "../../utils/formatters/numberId";
+import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildWorkLogMaterialUsageFormLine, buildWorkLogOutputFormLine } from "../../utils/produksi/productionLineBuilders";
-import { buildVariantDisplayInfo, buildVariantOptionsFromItem, inferHasVariants } from "../../utils/variants/variantStockHelpers";
+import { buildVariantOptionsFromItem, inferHasVariants } from "../../utils/variants/variantStockHelpers";
 import { isProductionWorkLogCompleted } from "../../utils/produksi/productionFlowGuards";
 
 const ProductionWorkLogs = () => {
@@ -118,7 +119,6 @@ const ProductionWorkLogs = () => {
   const [completeForm] = Form.useForm();
 
   // SECTION: watch source
-  const sourceTypeValue = Form.useWatch("sourceType", form);
   const targetTypeValue = Form.useWatch("targetType", form);
   const targetIdValue = Form.useWatch("targetId", form);
   const stepIdValue = Form.useWatch("stepId", form);
@@ -128,9 +128,6 @@ const ProductionWorkLogs = () => {
   const leftoverLeafQtyValue = Form.useWatch("leftoverLeafQty", form);
   const leftoverStemQtyValue = Form.useWatch("leftoverStemQty", form);
   const leftoverPetalFlowerEquivalentValue = Form.useWatch("leftoverPetalFlowerEquivalent", form);
-  const completeGoodQtyValue = Form.useWatch("goodQty", completeForm);
-  const completeRejectQtyValue = Form.useWatch("rejectQty", completeForm);
-  const completeReworkQtyValue = Form.useWatch("reworkQty", completeForm);
 
   const loadData = async () => {
     try {
@@ -302,49 +299,43 @@ const ProductionWorkLogs = () => {
     [referenceData.productionSteps, stepIdValue],
   );
 
-  const isProductionOrderLinkedForm = sourceTypeValue === "production_order";
-
-  const monitoringPreview = useMemo(() => {
-    const monitoringBasisType =
-      selectedStepForMonitoring?.basisType ||
-      selectedStepForMonitoring?.workBasisType ||
-      '';
-
-    return calculateProductionMonitoring(
-      {
-        ...(selectedProductionProfile || {}),
-        workBasisType: monitoringBasisType,
-        referenceYieldPerBaseQty:
-          monitoringBasisType === 'per_meter'
-            ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
-              ? selectedProductionProfile?.leafYieldPerMeter
-              : selectedProductionProfile?.petalYieldPerMeter
-            : monitoringBasisType === 'per_rod_40cm'
-              ? selectedProductionProfile?.stemYieldPerRod40cm
-              : 0,
-        flowerEquivalentPerBaseQty:
-          monitoringBasisType === 'per_meter'
-            ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
-              ? selectedProductionProfile?.flowerEquivalentPerLeafMeter
-              : selectedProductionProfile?.flowerEquivalentPerPetalMeter
-            : monitoringBasisType === 'per_rod_40cm'
-              ? selectedProductionProfile?.flowerEquivalentPerRod40cm
-              : 0,
-        batchLeafQty:
-          (selectedProductionProfile?.assemblyLeafPackCount || 0) *
-          (selectedProductionProfile?.leafYieldPerMeter || 0),
-        batchStemQty: selectedProductionProfile?.assemblyStemQty || 0,
-      },
-      {
-        workBasisType: monitoringBasisType,
-        baseInputQty: baseInputQtyValue,
-        goodQty: goodQtyValue,
-        leftoverLeafQty: leftoverLeafQtyValue,
-        leftoverStemQty: leftoverStemQtyValue,
-        leftoverPetalFlowerEquivalent: leftoverPetalFlowerEquivalentValue,
-      },
-    );
-  },    [
+  const monitoringPreview = useMemo(
+    () =>
+      calculateProductionMonitoring(
+        {
+          ...(selectedProductionProfile || {}),
+          workBasisType: selectedStepForMonitoring?.workBasisType || '',
+          referenceYieldPerBaseQty:
+            selectedStepForMonitoring?.workBasisType === 'per_meter'
+              ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
+                ? selectedProductionProfile?.leafYieldPerMeter
+                : selectedProductionProfile?.petalYieldPerMeter
+              : selectedStepForMonitoring?.workBasisType === 'per_rod_40cm'
+                ? selectedProductionProfile?.stemYieldPerRod40cm
+                : 0,
+          flowerEquivalentPerBaseQty:
+            selectedStepForMonitoring?.workBasisType === 'per_meter'
+              ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
+                ? selectedProductionProfile?.flowerEquivalentPerLeafMeter
+                : selectedProductionProfile?.flowerEquivalentPerPetalMeter
+              : selectedStepForMonitoring?.workBasisType === 'per_rod_40cm'
+                ? selectedProductionProfile?.flowerEquivalentPerRod40cm
+                : 0,
+          batchLeafQty:
+            (selectedProductionProfile?.assemblyLeafPackCount || 0) *
+            (selectedProductionProfile?.leafYieldPerMeter || 0),
+          batchStemQty: selectedProductionProfile?.assemblyStemQty || 0,
+        },
+        {
+          workBasisType: selectedStepForMonitoring?.workBasisType || '',
+          baseInputQty: baseInputQtyValue,
+          goodQty: goodQtyValue,
+          leftoverLeafQty: leftoverLeafQtyValue,
+          leftoverStemQty: leftoverStemQtyValue,
+          leftoverPetalFlowerEquivalent: leftoverPetalFlowerEquivalentValue,
+        },
+      ),
+    [
       selectedProductionProfile,
       selectedStepForMonitoring,
       baseInputQtyValue,
@@ -545,9 +536,6 @@ const ProductionWorkLogs = () => {
         (item) => item.id === values.productionProfileId,
       );
 
-      const selectedStepBasisType =
-        selectedStep?.basisType || selectedStep?.workBasisType || '';
-
       const payload = {
         ...values,
         workDate: values.workDate ? values.workDate.toDate() : null,
@@ -557,21 +545,21 @@ const ProductionWorkLogs = () => {
         productionProfileName: selectedProfile?.profileName || '',
         productionProfile: {
           ...(selectedProfile || {}),
-          workBasisType: selectedStepBasisType,
+          workBasisType: selectedStep?.workBasisType || '',
           referenceYieldPerBaseQty:
-            selectedStepBasisType === 'per_meter'
+            selectedStep?.workBasisType === 'per_meter'
               ? (selectedStep?.name || '').toLowerCase().includes('daun')
                 ? selectedProfile?.leafYieldPerMeter
                 : selectedProfile?.petalYieldPerMeter
-              : selectedStepBasisType === 'per_rod_40cm'
+              : selectedStep?.workBasisType === 'per_rod_40cm'
                 ? selectedProfile?.stemYieldPerRod40cm
                 : 0,
           flowerEquivalentPerBaseQty:
-            selectedStepBasisType === 'per_meter'
+            selectedStep?.workBasisType === 'per_meter'
               ? (selectedStep?.name || '').toLowerCase().includes('daun')
                 ? selectedProfile?.flowerEquivalentPerLeafMeter
                 : selectedProfile?.flowerEquivalentPerPetalMeter
-              : selectedStepBasisType === 'per_rod_40cm'
+              : selectedStep?.workBasisType === 'per_rod_40cm'
                 ? selectedProfile?.flowerEquivalentPerRod40cm
                 : 0,
           batchLeafQty:
@@ -582,25 +570,6 @@ const ProductionWorkLogs = () => {
         stepCode: selectedStep?.code || "",
         stepName: selectedStep?.name || "",
         sequenceNo: values.sequenceNo || 1,
-
-        // =====================================================
-        // ACTIVE / GUARDED
-        // Snapshot payroll rule step dibawa ke Work Log agar flow
-        // Work Log completed -> Payroll tidak lagi membaca fallback lama
-        // secara diam-diam dari master karyawan.
-        // =====================================================
-        stepPayrollMode: selectedStep?.payrollMode || "per_qty",
-        stepPayrollRate: Number(selectedStep?.payrollRate || 0),
-        stepPayrollQtyBase: Number(selectedStep?.payrollQtyBase || 1),
-        stepPayrollOutputBasis: selectedStep?.payrollOutputBasis || "good_qty",
-        stepPayrollClassification: selectedStep?.payrollClassification || "direct_labor",
-        stepPayrollIncludeInHpp:
-          typeof selectedStep?.includePayrollInHpp === "boolean"
-            ? selectedStep.includePayrollInHpp
-            : true,
-        stepProcessType: selectedStep?.processType || "raw_to_semi",
-        stepPayrollRuleSource: "production_step",
-
         workerCodes: selectedEmployees.map((item) => item.code || ""),
         workerNames: selectedEmployees.map((item) => item.name || ""),
         workerCount: selectedEmployees.length,
@@ -707,30 +676,49 @@ const ProductionWorkLogs = () => {
         null,
       );
 
-      const completionResult = await completeProductionWorkLog(completingRecord.id, null);
-      const autoPayrollResult = completionResult?.autoPayrollResult || null;
+      await completeProductionWorkLog(completingRecord.id, null);
+      // =====================================================
+      // ACTIVE / GUARDED - auto payroll setelah Work Log selesai
+      // Fungsi blok:
+      // - membuat payroll line otomatis dari Work Log completed;
+      // - menjaga flow lama output stok tetap selesai dulu, lalu payroll dibuat dengan guard idempotent.
+      // Alasan blok ini dipakai:
+      // - regression sebelumnya Work Log selesai tetapi Payroll Produksi tetap kosong.
+      // Status:
+      // - aktif dipakai; bukan legacy dan tidak mengubah business rule stok/HPP.
+      // =====================================================
+      let payrollMessageHandled = false;
+      try {
+        const payrollResult = await generatePayrollLinesFromCompletedWorkLog(completingRecord.id, null);
+        const createdPayrollCount = Number(payrollResult?.createdCount || 0);
+        const skippedPayrollCount = Number(payrollResult?.skippedCount || 0);
 
-      if (autoPayrollResult?.status === 'draft_created') {
-        message.success(
-          `Work log selesai. Output ditambahkan, PO ditutup, dan ${formatNumber(autoPayrollResult.createdCount || 0)} draft payroll dibuat otomatis.`,
-        );
-      } else if (autoPayrollResult?.status === 'already_exists') {
-        message.success('Work log selesai. Output ditambahkan, PO ditutup, dan draft payroll aktif sudah tersedia.');
-      } else if (autoPayrollResult?.status === 'blocked') {
-        message.warning(
-          autoPayrollResult.blockingReasons?.[0]
-            ? `Work log selesai, tetapi draft payroll belum dibuat: ${autoPayrollResult.blockingReasons[0]}`
-            : 'Work log selesai, tetapi draft payroll belum bisa dibuat karena data payroll masih blocked.',
-        );
-      } else if (autoPayrollResult?.status === 'error') {
-        message.warning(
-          autoPayrollResult.warningReasons?.[0] ||
-            'Work log selesai, tetapi auto-create payroll draft gagal. Cek menu Payroll dan log error.',
-        );
-      } else {
-        message.success('Work log selesai. Output ditambahkan dan PO ditutup.');
+        if (createdPayrollCount > 0) {
+          payrollMessageHandled = true;
+          message.success(`Work log selesai dan ${createdPayrollCount} line payroll dibuat.`);
+        } else if (skippedPayrollCount > 0) {
+          payrollMessageHandled = true;
+          message.info('Work log selesai. Payroll sudah pernah dibuat, tidak dibuat dobel.');
+        }
+      } catch (payrollError) {
+        // =====================================================
+        // ACTIVE / GUARDED - fallback error payroll setelah complete
+        // Fungsi blok:
+        // - menjaga user tahu bahwa Work Log sudah selesai meski auto payroll gagal;
+        // - tidak menjalankan ulang complete agar output stok tidak dobel.
+        // Alasan blok ini dipakai:
+        // - complete Work Log adalah guarded stock flow, sedangkan payroll bisa diperbaiki via task terpisah/manual.
+        // Status:
+        // - aktif sebagai guard; bukan legacy.
+        // =====================================================
+        console.error(payrollError);
+        payrollMessageHandled = true;
+        message.warning(payrollError?.message || 'Work log selesai, tetapi payroll otomatis gagal dibuat.');
       }
 
+      if (!payrollMessageHandled) {
+        message.success('Work log selesai. Output ditambahkan dan PO ditutup.');
+      }
       setCompleteModalVisible(false);
       setCompletingRecord(null);
       completeForm.resetFields();
@@ -772,56 +760,8 @@ const ProductionWorkLogs = () => {
   const getWorkLogSourceTagColor = (sourceType) =>
     sourceType === "production_order" ? "purple" : "blue";
 
-  // =====================================================
-  // ACTIVE / FINAL - helper display varian Work Log.
-  // Source of truth UI memakai key/label aktual per layer:
-  // - target: targetVariantKey/Label dari snapshot PO
-  // - material: resolvedVariantKey/Label dari requirement PO
-  // - output: outputVariantKey/Label dari output final
-  // stockSourceType lama hanya dipakai sebagai metadata pendukung.
-  // =====================================================
-  const getTargetVariantDisplayInfo = (record = {}) =>
-    buildVariantDisplayInfo({
-      stockSourceType: record.targetVariantKey ? "variant" : "master",
-      variantKey: record.targetVariantKey,
-      variantLabel: record.targetVariantLabel,
-      hasVariants: record.targetHasVariants,
-      variantSourceLabel: "Variant",
-      masterSourceLabel: "Master",
-    });
-
-  const getMaterialVariantDisplayInfo = (record = {}) => {
-    const strategy = String(record.materialVariantStrategy || '').trim().toLowerCase();
-    const stockSourceType = String(record.stockSourceType || '').trim().toLowerCase();
-    const expectsVariant =
-      stockSourceType === 'variant' || ['inherit', 'fixed'].includes(strategy);
-    const usesGeneralMasterStock = record.materialHasVariants === true && strategy === 'none';
-
-    return buildVariantDisplayInfo({
-      stockSourceType: record.stockSourceType,
-      variantKey: record.resolvedVariantKey,
-      variantLabel: record.resolvedVariantLabel,
-      hasVariants: record.materialHasVariants,
-      expectsVariant,
-      variantSourceLabel: "Variant",
-      masterSourceLabel: usesGeneralMasterStock ? "Stok Umum" : "Master",
-      masterVariantLabel: usesGeneralMasterStock ? "Sesuai BOM tanpa varian" : "",
-      missingVariantLabel: "Requirement belum resolved",
-      missingVariantDescription: "Refresh requirement / cek strategi varian BOM",
-    });
-  };
-
-  const getOutputVariantDisplayInfo = (record = {}) =>
-    buildVariantDisplayInfo({
-      stockSourceType: record.stockSourceType,
-      variantKey: record.outputVariantKey,
-      variantLabel: record.outputVariantLabel,
-      hasVariants: record.outputHasVariants,
-      fallbackVariantKey: record.targetVariantKey,
-      fallbackVariantLabel: record.targetVariantLabel,
-      variantSourceLabel: "Masuk ke Variant",
-      masterSourceLabel: "Masuk ke Master",
-    });
+  const getStockSourceTagColor = (stockSourceType) =>
+    stockSourceType === "variant" ? "purple" : "default";
 
   // =====================================================
   // Helper presentasi batch 1.
@@ -842,6 +782,44 @@ const ProductionWorkLogs = () => {
       ))}
     </div>
   );
+
+  // =====================================================
+  // ACTIVE UI GUARD - konteks estimasi modal complete Work Log.
+  // Fungsi blok:
+  // - memberi acuan target, step, batch, dan estimasi hasil sebelum user mengisi Good/Reject/Rework Qty.
+  // Alasan perubahan:
+  // - regression UI sebelumnya menghapus konteks output sehingga user tidak punya acuan cepat saat menyelesaikan work log.
+  // Status:
+  // - aktif dipakai hanya sebagai preview read-only; bukan business rule dan bukan kandidat cleanup.
+  // =====================================================
+  const renderCompleteWorkLogEstimateInfo = (record) => {
+    if (!record) return null;
+
+    const unitLabel = record.targetUnit || record.unit || "";
+    const targetLabel = [record.targetName || "-", record.targetVariantLabel ? `Varian: ${record.targetVariantLabel}` : null]
+      .filter(Boolean)
+      .join(" · ");
+
+    return (
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message="Acuan estimasi hasil"
+        description={
+          <Space direction="vertical" size={2} style={{ width: "100%" }}>
+            <Typography.Text strong>{targetLabel}</Typography.Text>
+            <Typography.Text type="secondary">
+              Step: {record.stepName || "-"} · PO: {record.productionOrderCode || "-"}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              Qty batch: {formatNumber(record.plannedQty || 0)} · Estimasi hasil: {formatNumber(record.theoreticalOutputQty || 0)} {unitLabel}
+            </Typography.Text>
+          </Space>
+        }
+      />
+    );
+  };
 
   // =====================================================
   // Data turunan drawer detail
@@ -891,76 +869,49 @@ const ProductionWorkLogs = () => {
   }, [selectedRecord]);
 
   // =====================================================
-  // ACTIVE / FINAL - konteks modal selesai Work Log.
-  // Modal complete tidak mengubah rule bisnis; blok ini hanya membantu user
-  // membaca target, varian, step, qty batch, estimasi output, dan selisih
-  // sebelum Good Qty / Reject Qty / Rework Qty disimpan.
+  // Source display labor final di drawer detail.
+  // Fungsi:
+  // - memprioritaskan ringkasan payroll final jika payroll line sudah ada
+  // - fallback ke laborCostActual untuk data lama/manual yang belum punya sync payroll
+  // Status:
+  // - aktif dipakai di detail Work Log
+  // - kandidat cleanup jika nanti seluruh data lama sudah tersinkron penuh ke payrollFinalAmount
   // =====================================================
-  const completeContext = useMemo(() => {
-    if (!completingRecord) return null;
-
-    const unitLabel = completingRecord.targetUnit || 'pcs';
-    const estimatedOutputQty = Number(completingRecord.theoreticalOutputQty || 0);
-    const goodQty = Number(completeGoodQtyValue || 0);
-    const rejectQty = Number(completeRejectQtyValue || 0);
-    const reworkQty = Number(completeReworkQtyValue || 0);
-    const varianceQty = goodQty - estimatedOutputQty;
-    const variantDisplay = getTargetVariantDisplayInfo(completingRecord);
-
-    return {
-      unitLabel,
-      estimatedOutputQty,
-      goodQty,
-      rejectQty,
-      reworkQty,
-      varianceQty,
-      targetLabel: completingRecord.targetName || '-',
-      variantLabel: variantDisplay.variantLabel || '-',
-      stepLabel: completingRecord.stepName || '-',
-      batchQty: Number(completingRecord.plannedQty || 0),
-      poCode: completingRecord.productionOrderCode || '-',
-    };
-  }, [
-    completeGoodQtyValue,
-    completeRejectQtyValue,
-    completeReworkQtyValue,
-    completingRecord,
-  ]);
+  const detailLaborDisplay = useMemo(() => {
+    if (!selectedRecord) return 0;
+    const payrollFinalAmount = Number(selectedRecord.payrollFinalAmount || 0);
+    if (payrollFinalAmount > 0) return payrollFinalAmount;
+    return Number(selectedRecord.laborCostActual || 0);
+  }, [selectedRecord]);
 
   const detailMaterialColumns = useMemo(
     () => [
       {
         title: "Material",
         key: "item",
-        render: (_, record) => {
-          const variantDisplay = getMaterialVariantDisplayInfo(record);
-
-          return renderWorkLogCellBlock(record.itemName || "-", [
+        render: (_, record) => (
+          renderWorkLogCellBlock(record.itemName || "-", [
             record.itemCode || "-",
-            variantDisplay.variantLabel ? `Varian: ${variantDisplay.variantLabel}` : null,
-          ]);
-        },
+            record.resolvedVariantLabel ? `Varian: ${record.resolvedVariantLabel}` : null,
+          ])
+        ),
       },
       {
         title: "Sumber Stok",
         key: "stockSource",
         width: 160,
-        render: (_, record) => {
-          const variantDisplay = getMaterialVariantDisplayInfo(record);
-
-          return (
-            <div className={workLogUiClassNames.stack}>
-              <Tag className="ims-status-tag" color={variantDisplay.tagColor}>
-                {variantDisplay.sourceLabel}
-              </Tag>
-              {variantDisplay.variantLabel ? (
-                <Typography.Text type="secondary" className={workLogUiClassNames.meta}>
-                  {variantDisplay.variantLabel}
-                </Typography.Text>
-              ) : null}
-            </div>
-          );
-        },
+        render: (_, record) => (
+          <div className={workLogUiClassNames.stack}>
+            <Tag className="ims-status-tag" color={getStockSourceTagColor(record.stockSourceType)}>
+              {record.stockSourceType === "variant" ? "Variant" : "Master"}
+            </Tag>
+            {record.stockSourceType === "variant" && record.resolvedVariantLabel ? (
+              <Typography.Text type="secondary" className={workLogUiClassNames.meta}>
+                {record.resolvedVariantLabel}
+              </Typography.Text>
+            ) : null}
+          </div>
+        ),
       },
       {
         title: "Pemakaian",
@@ -987,7 +938,7 @@ const ProductionWorkLogs = () => {
               {formatCurrency(record.totalCostSnapshot || 0)}
             </Typography.Text>
             <Typography.Text type="secondary">
-              Unit: {formatCurrency(record.unitCostSnapshot || 0)}
+              Unit: {formatCurrency(record.costPerUnitSnapshot || 0)}
             </Typography.Text>
           </Space>
         ),
@@ -1001,36 +952,30 @@ const ProductionWorkLogs = () => {
       {
         title: "Output",
         key: "output",
-        render: (_, record) => {
-          const variantDisplay = getOutputVariantDisplayInfo(record);
-
-          return renderWorkLogCellBlock(record.outputName || "-", [
+        render: (_, record) => (
+          renderWorkLogCellBlock(record.outputName || "-", [
             record.outputCode || "-",
             WORK_LOG_TARGET_TYPE_MAP[record.outputType] || record.outputType || "-",
-            variantDisplay.variantLabel ? `Varian: ${variantDisplay.variantLabel}` : null,
-          ]);
-        },
+            record.outputVariantLabel ? `Varian: ${record.outputVariantLabel}` : null,
+          ])
+        ),
       },
       {
         title: "Target Stok",
         key: "stockTarget",
         width: 170,
-        render: (_, record) => {
-          const variantDisplay = getOutputVariantDisplayInfo(record);
-
-          return (
-            <div className={workLogUiClassNames.stack}>
-              <Tag className="ims-status-tag" color={variantDisplay.tagColor}>
-                {variantDisplay.sourceLabel}
-              </Tag>
-              {variantDisplay.variantLabel ? (
-                <Typography.Text type="secondary" className={workLogUiClassNames.meta}>
-                  {variantDisplay.variantLabel}
-                </Typography.Text>
-              ) : null}
-            </div>
-          );
-        },
+        render: (_, record) => (
+          <div className={workLogUiClassNames.stack}>
+            <Tag className="ims-status-tag" color={getStockSourceTagColor(record.stockSourceType)}>
+              {record.stockSourceType === "variant" ? "Masuk ke Variant" : "Masuk ke Master"}
+            </Tag>
+            {record.outputVariantLabel ? (
+              <Typography.Text type="secondary" className={workLogUiClassNames.meta}>
+                {record.outputVariantLabel}
+              </Typography.Text>
+            ) : null}
+          </div>
+        ),
       },
       {
         title: "Hasil",
@@ -1064,12 +1009,22 @@ const ProductionWorkLogs = () => {
     [],
   );
 
+  // =====================================================
+  // Kolom list Work Log Produksi
+  // Fungsi blok:
+  // - menampilkan work log aktif dalam tabel utama yang ringkas;
+  // - menjaga tombol Detail/Edit/Selesaikan langsung terlihat tanpa scroll horizontal.
+  // Alasan perubahan:
+  // - regression UI sebelumnya memakai scroll x besar dan fixed action sehingga aksi terdorong ke kanan.
+  // Status:
+  // - aktif dipakai; handler aksi tetap sama dan tidak mengubah flow produksi.
+  // =====================================================
   const columns = [
     {
       title: "No. Work Log",
       dataIndex: "workNumber",
       key: "workNumber",
-      width: 160,
+      width: 105,
       render: (value) => (
         <Typography.Text strong>{value || "-"}</Typography.Text>
       ),
@@ -1084,21 +1039,19 @@ const ProductionWorkLogs = () => {
     {
       title: "Target / Step",
       key: "targetStep",
-      width: 280,
-      render: (_, record) => {
-        const variantDisplay = getTargetVariantDisplayInfo(record);
-
-        return renderWorkLogCellBlock(record.targetName || "-", [
+      width: 240,
+      render: (_, record) => (
+        renderWorkLogCellBlock(record.targetName || "-", [
           record.stepName || "-",
-          variantDisplay.variantLabel ? `Varian: ${variantDisplay.variantLabel}` : null,
+          record.targetVariantLabel ? `Varian: ${record.targetVariantLabel}` : null,
           `PO: ${record.productionOrderCode || "-"}`,
-        ]);
-      },
+        ])
+      ),
     },
     {
       title: "Qty",
       key: "qty",
-      width: 150,
+      width: 130,
       render: (_, record) => (
         <Space direction="vertical" size={0}>
           <Typography.Text>Batch: {formatNumber(record.plannedQty)}</Typography.Text>
@@ -1111,14 +1064,14 @@ const ProductionWorkLogs = () => {
       title: "Biaya Aktual",
       dataIndex: "totalCostActual",
       key: "totalCostActual",
-      width: 150,
+      width: 95,
       render: (value) => formatCurrency(value),
     },
     {
       title: "Source",
       dataIndex: "sourceType",
       key: "sourceType",
-      width: 140,
+      width: 105,
       render: (value) => (
         <Tag className="ims-status-tag" color={getWorkLogSourceTagColor(value)}>
           {WORK_LOG_SOURCE_TYPE_MAP[value] || value || "-"}
@@ -1126,18 +1079,10 @@ const ProductionWorkLogs = () => {
       ),
     },
     {
-      // =====================================================
-      // SECTION: status sticky
-      // Fungsi:
-      // - Work Log adalah detail-capable page dan tabelnya lebar, jadi status ikut di-sticky sebelum aksi
-      // - ini menjaga status proses tetap terlihat saat user fokus ke aksi detail / edit / complete
-      // =====================================================
       title: "Status",
       dataIndex: "status",
       key: "status",
       width: 120,
-      fixed: "right",
-      className: "app-table-status-column app-table-fixed-secondary",
       render: (value) => (
         <Tag className="ims-status-tag" color={getWorkLogStatusTagColor(value)}>
           {WORK_LOG_STATUS_MAP[value] || "-"}
@@ -1145,19 +1090,12 @@ const ProductionWorkLogs = () => {
       ),
     },
     {
-      // =====================================================
-      // SECTION: aksi sticky
-      // Fungsi:
-      // - Work Log termasuk detail-capable page, jadi Detail wajib ada sebagai pola resmi tabel utama
-      // - kolom aksi tetap fixed right agar user tidak perlu scroll horizontal dulu untuk menjalankan aksi utama
-      // =====================================================
       title: "Aksi",
       key: "actions",
-      width: 280,
-      fixed: "right",
-      className: "app-table-action-column",
+      width: 160,
       render: (_, record) => (
-        <Space wrap className="ims-action-group">
+        // Aktif dipakai: tombol aksi disusun vertical compact agar tidak butuh scroll kanan.
+        <Space direction="vertical" size={4} className="ims-action-group">
           <Button
             className="ims-action-button"
             size="small"
@@ -1235,13 +1173,13 @@ const ProductionWorkLogs = () => {
       </ProductionFilterCard>
 
       <Card className="ims-section-card">
+        {/* Aktif dipakai: scroll x besar dihapus agar aksi Work Log terlihat pada desktop/laptop normal. */}
         <Table
           className="ims-table"
           rowKey="id"
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          scroll={{ x: 1650 }}
           locale={{
             emptyText: <Empty description="Belum ada data work log produksi" />,
           }}
@@ -1290,22 +1228,6 @@ const ProductionWorkLogs = () => {
             sourceType: "manual",
           }}
         >
-          {/* =====================================================
-              ACTIVE / FINAL - hidden contract fields PO variant.
-              Field ini sengaja ikut didaftarkan ke Form agar nilai dari
-              Apply Draft PO tetap ikut submit walau tidak diedit manual.
-              Source of truth tetap PO; service akan mengunci ulang. */}
-          <Form.Item name="bomCode" hidden><Input type="hidden" /></Form.Item>
-          <Form.Item name="bomName" hidden><Input type="hidden" /></Form.Item>
-          <Form.Item name="productionOrderCode" hidden><Input type="hidden" /></Form.Item>
-          <Form.Item name="productionOrderStatusSnapshot" hidden><Input type="hidden" /></Form.Item>
-          <Form.Item name="targetCode" hidden><Input type="hidden" /></Form.Item>
-          <Form.Item name="targetName" hidden><Input type="hidden" /></Form.Item>
-          <Form.Item name="targetUnit" hidden><Input type="hidden" /></Form.Item>
-          <Form.Item name="targetHasVariants" hidden><Input type="hidden" /></Form.Item>
-          <Form.Item name="targetVariantKey" hidden><Input type="hidden" /></Form.Item>
-          <Form.Item name="targetVariantLabel" hidden><Input type="hidden" /></Form.Item>
-
           <Divider orientation="left">Informasi Dasar</Divider>
 
           <Row gutter={16}>
@@ -1440,7 +1362,6 @@ const ProductionWorkLogs = () => {
                 ]}
               >
                 <Select
-                  disabled={isProductionOrderLinkedForm}
                   options={[
                     { value: "semi_finished_material", label: "Semi Finished" },
                     { value: "product", label: "Product" },
@@ -1458,7 +1379,6 @@ const ProductionWorkLogs = () => {
                 ]}
               >
                 <Select
-                  disabled={isProductionOrderLinkedForm}
                   showSearch
                   optionFilterProp="label"
                   options={getTargetOptions(targetTypeValue)}
@@ -1499,16 +1419,6 @@ const ProductionWorkLogs = () => {
               </Form.Item>
             </Col>
           </Row>
-
-          {isProductionOrderLinkedForm ? (
-            <Alert
-              style={{ marginBottom: 16 }}
-              type="info"
-              showIcon
-              message="Output mengikuti Varian Target dari Production Order"
-              description={`Source of truth varian: ${getTargetVariantDisplayInfo(form.getFieldsValue()).variantLabel || "Master item"}. Untuk flow PO, target dan output dikunci agar tidak kembali ke master/default.`}
-            />
-          ) : null}
 
           <Divider orientation="left">Qty & Operator</Divider>
 
@@ -1582,7 +1492,7 @@ const ProductionWorkLogs = () => {
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={8}><strong>Profil:</strong> {selectedProductionProfile.profileName || '-'}</Col>
                 <Col xs={24} md={8}><strong>Teoritis Bunga:</strong> {formatNumber(monitoringPreview.theoreticalFlowerEquivalent || 0)}</Col>
-                <Col xs={24} md={8}><strong>Miss %:</strong> {formatPercentId(monitoringPreview.missPercent || 0)}</Col>
+                <Col xs={24} md={8}><strong>Miss %:</strong> {Number(monitoringPreview.missPercent || 0).toFixed(2)}%</Col>
                 <Col xs={24} md={8}><strong>Miss Kelopak:</strong> {formatNumber(monitoringPreview.missPetalQty || 0)} pcs</Col>
                 <Col xs={24} md={8}><strong>Miss Daun:</strong> {formatNumber(monitoringPreview.missLeafQty || 0)} pcs</Col>
                 <Col xs={24} md={8}><strong>Miss Kawat:</strong> {formatNumber(monitoringPreview.missStemQty || 0)} pcs</Col>
@@ -1593,13 +1503,7 @@ const ProductionWorkLogs = () => {
           <EditableLineSection
             title="Material Usages"
             addButtonText="Tambah Material Usage"
-            onAdd={() => {
-              if (isProductionOrderLinkedForm) {
-                message.warning("Material usage PO dikunci dari requirement Production Order agar varian tidak berubah.");
-                return;
-              }
-              openMaterialModal();
-            }}
+            onAdd={() => openMaterialModal()}
             dataSource={form.getFieldValue("materialUsages") || []}
             emptyText="Belum ada material usage"
             columns={[
@@ -1610,9 +1514,9 @@ const ProductionWorkLogs = () => {
                   <div>
                     <div style={{ fontWeight: 600 }}>{record.itemName || "-"}</div>
                     <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.itemCode || "-"}</div>
-                    {getMaterialVariantDisplayInfo(record).variantLabel ? (
+                    {record.resolvedVariantLabel ? (
                       <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                        Varian: {getMaterialVariantDisplayInfo(record).variantLabel}
+                        Varian: {record.resolvedVariantLabel}
                       </div>
                     ) : null}
                   </div>
@@ -1634,50 +1538,28 @@ const ProductionWorkLogs = () => {
                 ),
               },
               {
-                // ACTIVE / FINAL display: requirement PO yang sudah resolved
-                // harus terlihat sebagai varian di drawer form, bukan Master.
-                title: "Sumber",
-                key: "stockSource",
-                width: 150,
-                render: (_, record) => {
-                  const variantDisplay = getMaterialVariantDisplayInfo(record);
-
-                  return (
-                    <Tag className="ims-status-tag" color={variantDisplay.tagColor}>
-                      {variantDisplay.sourceLabel}
-                    </Tag>
-                  );
-                },
-              },
-              {
                 title: "Total Cost",
                 dataIndex: "totalCostSnapshot",
                 width: 150,
                 render: (value) => formatCurrency(value),
               },
               {
-                // Nested editor material usage tetap non-sticky karena berada di dalam modal form dan tidak punya bug horizontal scroll aktif.
                 title: "Aksi",
                 width: 140,
-                className: "app-table-action-column",
                 render: (_, record, index) => (
-                  isProductionOrderLinkedForm ? (
-                    <Tag className="ims-status-tag" color="purple">Dikunci PO</Tag>
-                  ) : (
-                    <Space className="ims-action-group">
-                      <Button className="ims-action-button" size="small" onClick={() => openMaterialModal(index, record)}>
-                        Edit
-                      </Button>
-                      <Popconfirm
-                        title="Hapus material usage ini?"
-                        onConfirm={() => handleRemoveMaterialUsage(index)}
-                        okText="Ya"
-                        cancelText="Batal"
-                      >
-                        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
-                      </Popconfirm>
-                    </Space>
-                  )
+                  <Space>
+                    <Button size="small" onClick={() => openMaterialModal(index, record)}>
+                      Edit
+                    </Button>
+                    <Popconfirm
+                      title="Hapus material usage ini?"
+                      onConfirm={() => handleRemoveMaterialUsage(index)}
+                      okText="Ya"
+                      cancelText="Batal"
+                    >
+                      <Button size="small" danger icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                  </Space>
                 ),
               },
             ]}
@@ -1686,13 +1568,7 @@ const ProductionWorkLogs = () => {
           <EditableLineSection
             title="Outputs"
             addButtonText="Tambah Output"
-            onAdd={() => {
-              if (isProductionOrderLinkedForm) {
-                message.warning("Output PO mengikuti target variant dari Production Order dan tidak boleh diganti manual.");
-                return;
-              }
-              openOutputModal();
-            }}
+            onAdd={() => openOutputModal()}
             dataSource={form.getFieldValue("outputs") || []}
             emptyText="Belum ada output"
             columns={[
@@ -1703,9 +1579,9 @@ const ProductionWorkLogs = () => {
                   <div>
                     <div style={{ fontWeight: 600 }}>{record.outputName || "-"}</div>
                     <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.outputCode || "-"}</div>
-                    {getOutputVariantDisplayInfo(record).variantLabel ? (
+                    {record.outputVariantLabel ? (
                       <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                        Varian: {getOutputVariantDisplayInfo(record).variantLabel}
+                        Varian: {record.outputVariantLabel}
                       </div>
                     ) : null}
                   </div>
@@ -1727,44 +1603,22 @@ const ProductionWorkLogs = () => {
                 ),
               },
               {
-                // ACTIVE / FINAL display: output PO wajib terlihat masuk
-                // ke varian target, mengikuti outputVariantKey/Label final.
-                title: "Target Stok",
-                key: "stockTarget",
-                width: 160,
-                render: (_, record) => {
-                  const variantDisplay = getOutputVariantDisplayInfo(record);
-
-                  return (
-                    <Tag className="ims-status-tag" color={variantDisplay.tagColor}>
-                      {variantDisplay.sourceLabel}
-                    </Tag>
-                  );
-                },
-              },
-              {
-                // Nested editor output tetap non-sticky karena area ini compact dan aksi sudah langsung terlihat tanpa scroll tambahan.
                 title: "Aksi",
                 width: 140,
-                className: "app-table-action-column",
                 render: (_, record, index) => (
-                  isProductionOrderLinkedForm ? (
-                    <Tag className="ims-status-tag" color="purple">Dikunci PO</Tag>
-                  ) : (
-                    <Space className="ims-action-group">
-                      <Button className="ims-action-button" size="small" onClick={() => openOutputModal(index, record)}>
-                        Edit
-                      </Button>
-                      <Popconfirm
-                        title="Hapus output ini?"
-                        onConfirm={() => handleRemoveOutput(index)}
-                        okText="Ya"
-                        cancelText="Batal"
-                      >
-                        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
-                      </Popconfirm>
-                    </Space>
-                  )
+                  <Space>
+                    <Button size="small" onClick={() => openOutputModal(index, record)}>
+                      Edit
+                    </Button>
+                    <Popconfirm
+                      title="Hapus output ini?"
+                      onConfirm={() => handleRemoveOutput(index)}
+                      okText="Ya"
+                      cancelText="Batal"
+                    >
+                      <Button size="small" danger icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                  </Space>
                 ),
               },
             ]}
@@ -1876,9 +1730,9 @@ const ProductionWorkLogs = () => {
                         <Typography.Text strong>
                           {selectedRecord.targetName || "-"}
                         </Typography.Text>
-                        {getTargetVariantDisplayInfo(selectedRecord).variantLabel ? (
+                        {selectedRecord.targetVariantLabel ? (
                           <Typography.Text type="secondary">
-                            Varian: {getTargetVariantDisplayInfo(selectedRecord).variantLabel}
+                            Varian: {selectedRecord.targetVariantLabel}
                           </Typography.Text>
                         ) : null}
                       </Space>
@@ -1934,6 +1788,12 @@ const ProductionWorkLogs = () => {
                   </Card>
 
                   <Card size="small" title="Biaya Aktual">
+                    <Alert
+                      style={{ marginBottom: 12 }}
+                      type="info"
+                      showIcon
+                      message="Biaya labor mengikuti ringkasan payroll final jika line payroll sudah terbentuk. Jika payroll belum ada, sistem masih memakai labor cost manual pada Work Log."
+                    />
                     <Row gutter={[12, 12]}>
                       <Col span={12}>
                         <Typography.Text type="secondary">
@@ -1948,7 +1808,7 @@ const ProductionWorkLogs = () => {
                           Labor
                         </Typography.Text>
                         <div style={{ fontWeight: 600, marginTop: 4 }}>
-                          {formatCurrency(selectedRecord.laborCostActual || 0)}
+                          {formatCurrency(detailLaborDisplay)}
                         </div>
                       </Col>
                       <Col span={12}>
@@ -2280,39 +2140,8 @@ const ProductionWorkLogs = () => {
         okText="Selesaikan"
         destroyOnClose
       >
-        {completeContext ? (
-          <Card size="small" style={{ marginBottom: 16 }}>
-            {/* ACTIVE / FINAL display: context completion memakai snapshot Work Log,
-                bukan hitung ulang dari master, agar patokan sesuai PO yang sedang diselesaikan. */}
-            <Descriptions size="small" column={1}>
-              <Descriptions.Item label="Target">
-                {completeContext.targetLabel}
-              </Descriptions.Item>
-              <Descriptions.Item label="Varian">
-                {completeContext.variantLabel}
-              </Descriptions.Item>
-              <Descriptions.Item label="Step / PO">
-                {completeContext.stepLabel} / {completeContext.poCode}
-              </Descriptions.Item>
-              <Descriptions.Item label="Qty Batch">
-                {formatNumber(completeContext.batchQty)} batch
-              </Descriptions.Item>
-              <Descriptions.Item label="Estimasi Output">
-                {formatNumber(completeContext.estimatedOutputQty)} {completeContext.unitLabel}
-              </Descriptions.Item>
-            </Descriptions>
-
-            <Divider style={{ margin: "12px 0" }} />
-            <Space wrap size={[8, 8]}>
-              <Tag color="green">Good: {formatNumber(completeContext.goodQty)} {completeContext.unitLabel}</Tag>
-              <Tag color="red">Reject: {formatNumber(completeContext.rejectQty)} {completeContext.unitLabel}</Tag>
-              <Tag color="orange">Rework: {formatNumber(completeContext.reworkQty)} {completeContext.unitLabel}</Tag>
-              <Tag color={completeContext.varianceQty < 0 ? "orange" : "blue"}>
-                Selisih vs Estimasi: {formatNumber(completeContext.varianceQty)} {completeContext.unitLabel}
-              </Tag>
-            </Space>
-          </Card>
-        ) : null}
+        {/* Aktif dipakai: konteks estimasi output ditampilkan kembali sebelum input hasil produksi. */}
+        {renderCompleteWorkLogEstimateInfo(completingRecord)}
 
         <Form form={completeForm} layout="vertical">
           <Row gutter={12}>
@@ -2337,7 +2166,18 @@ const ProductionWorkLogs = () => {
             </Col>
           </Row>
 
-          <Form.Item label="Operator Produksi" name="workerIds">
+          <Form.Item
+            label="Operator Produksi"
+            name="workerIds"
+            rules={[
+              {
+                required: true,
+                type: "array",
+                min: 1,
+                message: "Operator Produksi wajib dipilih agar payroll otomatis bisa dibuat",
+              },
+            ]}
+          >
             <Select
               mode="multiple"
               optionFilterProp="label"

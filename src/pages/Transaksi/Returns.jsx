@@ -181,7 +181,7 @@ const Returns = () => {
         stockSourceType: stockMutationResult.stockSourceType,
       };
 
-      await addDoc(collection(db, "returns"), {
+      const returnDocument = await addDoc(collection(db, "returns"), {
         type,
         itemId,
         itemName,
@@ -197,7 +197,14 @@ const Returns = () => {
         Number(quantity),
         "return_in",
         collectionName,
-        { note: note || "", ...variantPayload },
+        {
+          // ACTIVE: reference retur membuat inventory log bisa ditelusuri dari Stock Management.
+          returnId: returnDocument.id,
+          referenceId: returnDocument.id,
+          referenceType: "return",
+          note: note || "",
+          ...variantPayload,
+        },
       );
 
       message.success("Retur berhasil ditambahkan!");

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button, Table, Tag, message } from "antd";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import PageHeader from "../../components/Layout/Page/PageHeader";
@@ -131,27 +130,44 @@ const PurchasesReport = () => {
     [summary],
   );
 
+  // =========================
+  // SECTION: Export laporan pembelian
+  // Fungsi:
+  // - mengekspor data expenses pembelian aktif ke XLSX yang lebih rapi untuk owner/admin
+  // - tetap memakai sumber data laporan yang sama tanpa mengubah perhitungan kas keluar
+  // Status:
+  // - aktif dipakai sebagai jalur export final laporan pembelian
+  // =========================
   const exportToExcel = async () => {
-    const exportData = purchasesData.map((purchase) => ({
-      "ID Expense": purchase.id,
-      Tanggal: purchase.date?.toDate
-        ? dayjs(purchase.date.toDate()).format("DD-MM-YYYY HH:mm")
-        : "-",
-      Supplier: purchase.supplierName || "-",
-      Item: purchase.relatedItemName || purchase.description || "-",
-      "Aktual Keluar": Math.round(Number(purchase.amount || 0)),
-      Referensi: Math.round(Number(purchase.totalReferenceAmount || 0)),
-      Saving: Math.round(Number(purchase.savingAmount || 0)),
-      Tipe: purchase.type || "-",
-      Deskripsi: purchase.description || "-",
-    }));
-
     await exportJsonToExcel({
-      data: exportData,
+      title: "Laporan Pembelian IMS Bunga Flanel",
+      subtitle: "Ekspor mengikuti data expenses pembelian yang tampil di halaman ini.",
       sheetName: "Laporan Pembelian",
       fileName: "Laporan-Pembelian",
+      columns: [
+        { header: "ID Expense", key: "expenseId", width: 24 },
+        { header: "Tanggal", key: "expenseDate", width: 18 },
+        { header: "Supplier", key: "supplierName", width: 24 },
+        { header: "Item", key: "itemName", width: 32 },
+        { header: "Aktual Keluar", key: "actualAmount", width: 18 },
+        { header: "Referensi", key: "referenceAmount", width: 18 },
+        { header: "Saving", key: "savingAmount", width: 18 },
+        { header: "Tipe", key: "expenseType", width: 24 },
+        { header: "Deskripsi", key: "description", width: 40 },
+      ],
+      data: purchasesData.map((purchase) => ({
+        expenseId: purchase.id,
+        expenseDate: formatDateId(purchase.date, true),
+        supplierName: purchase.supplierName || "-",
+        itemName: purchase.relatedItemName || purchase.description || "-",
+        actualAmount: formatCurrencyId(purchase.amount),
+        referenceAmount: purchase.totalReferenceAmount ? formatCurrencyId(purchase.totalReferenceAmount) : "-",
+        savingAmount: formatCurrencyId(purchase.savingAmount || 0),
+        expenseType: purchase.type || "-",
+        description: purchase.description || "-",
+      })),
     });
-    message.success("Laporan berhasil diekspor ke Excel!");
+    message.success("Laporan pembelian berhasil diekspor ke Excel.");
   };
 
   const columns = useMemo(
@@ -227,20 +243,11 @@ const PurchasesReport = () => {
           </Button>
         }
       >
-        {/* =========================
-            SECTION: tabel laporan pembelian baseline global
-            Fungsi:
-            - memakai class resmi agar halaman laporan pembelian konsisten dengan baseline table global
-            - tidak menambah aksi row karena laporan ini tetap read-only dan fokus ke ekspor
-            Status: aktif / final
-        ========================= */}
         <Table
-          className="app-data-table"
           dataSource={purchasesData}
           columns={columns}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 1120 }}
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada data pembelian untuk ditampilkan." />,
           }}

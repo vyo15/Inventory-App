@@ -130,12 +130,15 @@ Codebase memperlihatkan dua lapis field stok:
 - baru: `currentStock`, `reservedStock`, `availableStock`
 
 ### 8.2 Helper update stok umum
-`inventoryService.updateStock()` mengupdate:
-- `currentStock`
+`inventoryService.updateInventoryStock()` adalah helper aktif untuk mutasi stok umum. Helper ini wajib menjaga sinkronisasi:
 - `stock`
+- `currentStock`
+- `reservedStock`
+- `availableStock`
+- `variants[]` untuk item bervarian
 
 ### 8.3 Konsekuensi penting
-Kalau ada modul yang mengubah hanya `stock`, ada risiko sinkronisasi tidak penuh terhadap modul baru yang membaca `currentStock` dan `availableStock`.
+Kalau ada modul yang mengubah hanya `stock`, ada risiko sinkronisasi tidak penuh terhadap modul baru yang membaca `currentStock`, `reservedStock`, `availableStock`, dan `variants[]`.
 
 ## 9. Rule Produksi Umum
 Flow produksi final yang terlihat di codebase adalah:
@@ -189,24 +192,6 @@ Implikasi:
 ## 13. Rule Payroll Produksi
 Payroll produksi dibangun dari work log completed.
 
-Rule final yang sekarang harus dianggap resmi:
-- source of truth payroll adalah rule payroll pada `production_steps`
-- saat work log dibuat / diupdate, rule payroll step disnapshot ke work log
-- saat work log completed, sistem harus auto-create payroll draft per operator dengan membaca snapshot rule payroll pada work log completed
-- menu Payroll dipakai untuk review draft, confirm, lalu paid / cancelled; bukan lagi untuk generate candidate manual dari work log completed
-- payroll v1 final memakai target **1 payroll line = 1 orang + 1 step + 1 batch/work log**
-- jika work log lama belum punya snapshot, service boleh fallback sekali ke master step dan harus menandainya sebagai legacy/deprecated fallback
-- custom payroll di master karyawan tidak lagi menjadi jalur hitung aktif
-- line payroll aktif dijaga per kombinasi `workLogId + workerLineKey`; line yang cancelled boleh dibuat ulang
-- payroll support / fulfillment tetap boleh dibayar, tetapi klasifikasinya harus dibedakan dari direct labor inti
-- payroll baru harus melewati status `draft` -> `confirmed` -> `paid` / `cancelled`
-
-Rumus final:
-- `per_batch` memakai `plannedQty` / qty batch work log sebagai worked qty
-- `per_qty` memakai `good_qty` atau `actual_output_qty` sesuai basis output rule step
-- `fixed` dihitung 1x per line payroll
-- line support / fulfillment default tidak masuk HPP inti kecuali rule step menyatakan sebaliknya
-
 ## 14. Rule Reset Data Uji
 Reset utilitas mendukung mode:
 - reset transaksi saja
@@ -215,9 +200,73 @@ Reset utilitas mendukung mode:
 
 Utilitas ini juga menyinkronkan kembali field stok agar konsisten.
 
-## Business Rule Maintenance Data Legacy
-- Dry run legacy tidak boleh mengubah stok, kas, payroll, HPP, atau data completed/final.
-- Repair aman hanya boleh memperbaiki field turunan, snapshot, atau display yang sumbernya jelas.
-- Data completed/final yang tidak punya source reference jelas tidak boleh ditebak otomatis; gunakan manual review atau reset scoped jika data testing.
-- Reset produksi harus scoped dan ikut memperhatikan inventory log produksi agar tidak meninggalkan orphan log.
-- Reset sales/purchases harus scoped terhadap income/expense yang benar-benar terkait modul tersebut.
+
+## Tambahan Rule Terkini (Batch Prioritas)
+
+### Work Log Costing saat Complete
+- saat Work Log diselesaikan, summary costing final harus dihitung ulang dari snapshot material terbaru
+- `materialCostActual`, `totalCostActual`, dan `costPerGoodUnit` tidak boleh dibiarkan hanya mengikuti draft awal jika snapshot material berubah saat complete
+- sinkronisasi payroll ke Work Log boleh memperbarui `laborCostActual` sebagai ringkasan display, tetapi tidak mengubah source of truth payroll line
+
+### Payroll Paid vs Cash Out
+- status `paid` pada payroll produksi saat ini **masih status internal payroll**
+- `paid` belum otomatis membuat record `expenses` baru sampai guard anti double expense benar-benar dikunci
+- pencatatan expense payroll masih dianggap keputusan batch lanjutan, bukan behavior aktif default
+
+### Export Laporan
+- laporan stok aktif sebaiknya memakai ekspor XLSX yang lebih rapi, bukan CSV mentah
+- helper export reusable boleh dipakai lintas laporan selama tidak mengubah source data laporan
+
+## Update Rule Stok & Audit Log — 2026-04-25
+
+### 8.4 Source of truth mutasi stok umum
+Mutasi stok umum wajib lewat `updateInventoryStock()` agar field berikut tetap sinkron:
+- `stock`
+- `currentStock`
+- `reservedStock`
+- `availableStock`
+- `variants[]` untuk item bervarian
+
+Pengecualian yang dijaga adalah flow produksi final karena `productionWorkLogsService` membutuhkan transaction atomic untuk konsumsi material dan posting output.
+
+### 8.5 Stock Adjustment
+Stock Adjustment tidak boleh lagi update field `stock` secara langsung dari page. Adjustment harus:
+- memakai `updateInventoryStock()` sebagai source of truth mutasi stok umum
+- memilih item dari `raw_materials` atau `products`
+- memilih varian jika item bervarian
+- mencegah adjustment keluar melebihi `availableStock`, bukan hanya mengecek `currentStock`
+- menjaga `stock`, `currentStock`, `reservedStock`, `availableStock`, dan total `variants[]` tetap sinkron
+- membuat record `stock_adjustments`
+- membuat `inventory_logs` dengan `adjustmentId`, `referenceId`, `referenceType`, dan snapshot stok sebelum/sesudah
+
+### 8.6 Inventory Log Reference
+Inventory log baru wajib menyimpan reference audit di field standar:
+- `referenceId`
+- `referenceType`
+- `details`
+
+Field lama di top-level tetap boleh dipertahankan untuk kompatibilitas reader lama.
+
+### 2.7 Customer Collection
+Collection customer final adalah `customers` lowercase. Modul Master Customer dan Sales harus membaca sumber yang sama agar data pelanggan tidak terpencar.
+
+## Update Rule Karyawan Produksi — 2026-04-25
+
+### Kode karyawan produksi otomatis
+- Karyawan produksi baru wajib memakai kode otomatis format `DDMMYYYY-XXX`.
+- Prefix `DDMMYYYY` memakai tanggal lokal saat data karyawan dibuat.
+- Nomor urut `XXX` selalu 3 digit dan naik per tanggal pembuatan.
+- User tidak boleh mengetik kode karyawan manual saat tambah data baru.
+- Service karyawan produksi wajib generate ulang kode saat submit agar preview di form tidak menjadi source final bila ada input paralel.
+- Field `code` tetap dipakai sebagai display reference di Work Log/Payroll, tetapi Firestore document id tetap menjadi relasi utama.
+- Kode lama seperti `EMP-...` dianggap legacy data dan tidak dimigrasi otomatis saat edit.
+
+## Update Rule Auto Payroll Work Log Completed — 2026-04-25
+
+- Work Log Produksi yang berubah ke status `completed` wajib membuat line Payroll Produksi otomatis.
+- Source of truth payroll baru tetap mengikuti rule pada Tahapan Produksi: `payrollMode`, `payrollRate`, `payrollQtyBase`, `payrollOutputBasis`, `payrollClassification`, dan `includePayrollInHpp`.
+- Operator Produksi wajib dipilih saat menyelesaikan Work Log agar payroll line bisa dibuat per operator.
+- Guard idempotent wajib memakai kombinasi Work Log + Step + Operator agar klik Selesaikan berulang tidak membuat payroll dobel.
+- Status awal line payroll otomatis adalah `draft` dan `paymentStatus` awal adalah `unpaid`.
+- Payroll paid tetap status internal payroll dan tidak otomatis membuat Cash Out/Expense.
+- Work Log completed tetap guarded: posting stok output dan material tidak boleh diproses ulang hanya karena payroll line dibuat.

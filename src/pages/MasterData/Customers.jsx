@@ -11,16 +11,22 @@ import {
 } from "antd";
 import { PlusOutlined, EditOutlined } from "@ant-design/icons";
 import {
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-} from "firebase/firestore";
-import { db } from "../../firebase";
+  createCustomer,
+  deleteCustomer,
+  getCustomers,
+  updateCustomer,
+} from "../../services/MasterData/customersService";
 
 const Customers = () => {
+  // =========================
+  // SECTION: State halaman customer
+  // Fungsi:
+  // - menyimpan data tabel, loading, modal, mode edit, dan form
+  // Hubungan flow:
+  // - data dari halaman ini menjadi referensi dropdown customer di Sales
+  // Status:
+  // - aktif dipakai melalui route /customers
+  // =========================
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -28,15 +34,20 @@ const Customers = () => {
   const [currentId, setCurrentId] = useState(null);
   const [form] = Form.useForm();
 
-  // Fetch semua customer
+  // =========================
+  // SECTION: Fetch customer final
+  // Fungsi:
+  // - membaca semua customer lewat customersService sebagai satu pintu data
+  // Hubungan flow:
+  // - Master Customer dan Sales memakai helper yang sama agar tidak ada source of truth ganda
+  // Status:
+  // - aktif/final
+  // - collection `Customers` uppercase adalah legacy/data uji dan tidak lagi dibaca
+  // =========================
   const fetchCustomers = async () => {
     setLoading(true);
     try {
-      const querySnapshot = await getDocs(collection(db, "Customers"));
-      const data = querySnapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
+      const data = await getCustomers();
       setCustomers(data);
     } catch (error) {
       console.error("Gagal ambil data customer:", error);
@@ -49,14 +60,22 @@ const Customers = () => {
     fetchCustomers();
   }, []);
 
-  // Tambah atau update
+  // =========================
+  // SECTION: Tambah atau update customer
+  // Fungsi:
+  // - menyimpan customer baru atau perubahan customer ke collection final yang sama
+  // Hubungan flow:
+  // - memastikan customer yang dibuat di master langsung bisa dibaca Sales
+  // Status:
+  // - aktif/final
+  // =========================
   const handleAddOrEditCustomer = async (values) => {
     try {
       if (isEditing && currentId) {
-        await updateDoc(doc(db, "customers", currentId), values);
+        await updateCustomer(currentId, values);
         message.success("Customer berhasil diubah!");
       } else {
-        await addDoc(collection(db, "customers"), values);
+        await createCustomer(values);
         message.success("Customer berhasil ditambahkan!");
       }
       form.resetFields();
@@ -70,9 +89,18 @@ const Customers = () => {
     }
   };
 
+  // =========================
+  // SECTION: Hapus customer
+  // Fungsi:
+  // - menghapus customer lewat customersService dari collection final `customers`
+  // Hubungan flow:
+  // - tidak menyentuh sales lama; sale tetap menyimpan snapshot customerName agar histori tidak rusak
+  // Status:
+  // - aktif dipakai
+  // =========================
   const handleDelete = async (id) => {
     try {
-      await deleteDoc(doc(db, "customers", id));
+      await deleteCustomer(id);
       message.success("Customer dihapus");
       fetchCustomers();
     } catch (error) {
@@ -81,6 +109,15 @@ const Customers = () => {
     }
   };
 
+  // =========================
+  // SECTION: Masuk mode edit
+  // Fungsi:
+  // - mengisi form dengan data customer yang dipilih
+  // Hubungan flow:
+  // - hanya mengubah master customer, tidak mengubah snapshot customerName pada transaksi lama
+  // Status:
+  // - aktif dipakai
+  // =========================
   const handleEdit = (record) => {
     setIsEditing(true);
     setIsModalVisible(true);
@@ -93,18 +130,21 @@ const Customers = () => {
     });
   };
 
+  // =========================
+  // SECTION: Kolom tabel customer
+  // Fungsi:
+  // - menampilkan data master customer dan aksi edit/hapus
+  // Hubungan flow:
+  // - customer adalah master referensi untuk Sales, bukan transaksi kas/stok
+  // Status:
+  // - aktif dipakai
+  // =========================
   const columns = [
     { title: "Nama Customer", dataIndex: "name", key: "name" },
     { title: "Kontak", dataIndex: "contact", key: "contact" },
     { title: "Alamat", dataIndex: "address", key: "address" },
     { title: "Catatan", dataIndex: "note", key: "note" },
     {
-      // =========================
-      // SECTION: aksi tabel
-      // Fungsi:
-      // - Customers juga simple config page, sehingga baseline final-nya cukup Edit + Hapus
-      // - tombol Detail sengaja tidak ditambahkan agar page sejenis tidak membuat pola aksi sendiri
-      // =========================
       title: "Aksi",
       key: "actions",
       width: 170,

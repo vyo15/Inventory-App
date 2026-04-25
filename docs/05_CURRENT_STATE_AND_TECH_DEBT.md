@@ -30,13 +30,16 @@ Risiko:
 - data customer bisa terpencar di dua collection
 - halaman customer dan halaman sales bisa tidak sepenuhnya sinkron
 
-### 3. Stock Adjustment hanya update `stock`
-Temuan:
-- `StockAdjustment.jsx` melakukan `updateDoc(..., { stock: increment(...) })`
-- tidak ikut update `currentStock`
+### 3. Stock Adjustment final sudah memakai helper stok
+Temuan terkini:
+- form adjustment aktif berada di `StockAdjustmentPanel.jsx`
+- submit adjustment memakai `updateInventoryStock()`, bukan `updateDoc(... stock ...)` langsung dari page
+- item bervarian wajib memilih varian sebelum submit
+- adjustment keluar divalidasi terhadap `availableStock` agar tidak menggerus stok yang sudah reserved
 
-Risiko:
-- item yang dibaca modul baru berbasis `currentStock` bisa tidak konsisten setelah adjustment manual
+Risiko tersisa:
+- log/data adjustment lama yang dibuat sebelum patch bisa belum punya snapshot `availableStockBefore/After`
+- route lama atau file lama jangan dihidupkan lagi agar logic adjustment tidak bercabang
 
 ### 4. Revert sale juga hanya update `stock`
 Temuan:
@@ -74,18 +77,6 @@ Risiko:
 - developer baru bisa bingung membedakan flow aktif dan flow lama
 
 ## Current State yang Sebaiknya Dianggap Resmi
-Untuk baseline UI table/action, current state yang sekarang paling aman dianggap resmi adalah:
-- semua main table harus menaruh kolom `Aksi` di paling kanan
-- main table lebar atau yang memakai `scroll.x` wajib memakai `fixed: "right"` pada kolom aksi
-- jika ada kolom `Status` pada table lebar, kolom itu boleh ikut sticky di kanan sebelum `Aksi`
-- halaman detail-capable wajib punya tombol `Detail`
-- halaman simple config page tidak wajib punya `Detail` dan cukup memakai `Edit + Aktif/Nonaktif` atau `Edit + Hapus`
-- nested/subtable tidak wajib sticky kecuali ada bug nyata di area itu
-
-Legacy UI yang masih boleh tersisa sementara:
-- halaman di luar daftar prioritas yang masih menulis action column manual tetapi belum menimbulkan bug usability
-- nested/subtable lama yang belum memakai marker semantic baru selama belum punya masalah horizontal scroll
-
 Untuk dokumentasi saat ini, flow aktif yang paling aman dianggap resmi adalah:
 - master data modern
 - transaksi pembelian/penjualan/retur
@@ -123,113 +114,80 @@ Sebuah task dianggap aman selesai bila:
 - tidak menambah inkonsistensi schema baru
 
 
-## Update Current State: Global UI Normalization Batch
-Baseline UI final yang sekarang paling aman dianggap resmi:
-- semua main table dengan kolom `Aksi` harus menaruh aksi di paling kanan
-- semua main table lebar atau yang memakai `scroll.x` wajib membuat kolom aksi `fixed: "right"`
-- bila ada kolom `Status` pada table lebar, status boleh ikut sticky di kanan sebelum `Aksi`
-- detail-capable page wajib punya tombol `Detail`
-- simple config page tetap ringan tanpa dipaksa punya `Detail`
-- khusus `ProductionSteps`, baseline terbaru mengubah halaman ini menjadi detail-capable page ringan karena konfigurasi step sudah terlalu kaya untuk dipadatkan di tabel utama
-- ledger/simple action page boleh tanpa `Detail`, tetapi action column tetap wajib konsisten bila ada aksi per row
-- read-only data table page tidak perlu action column, tetapi surface table harus tetap memakai class baseline global
+## Tambahan Current State Batch Prioritas
+- `StockReport.jsx` sekarang sebaiknya dianggap kandidat upgrade ke ekspor XLSX profesional, karena CSV mentah terlalu sederhana untuk kebutuhan owner/admin
+- `CashOut.jsx` masih menempatkan payroll paid sebagai status internal payroll; auto expense payroll belum aktif dan masih butuh guard anti double expense
+- detail Payroll Produksi dan Work Log masih butuh microcopy agar user tidak salah paham terhadap arti field biaya dan status pembayaran
 
-Migration matrix singkat setelah batch global ini:
+## Update Cleanup Architecture — 2026-04-25
 
-### Sudah sesuai baseline
-- Products
-- RawMaterials
-- SemiFinishedMaterials
-- ProductionBoms
-- ProductionEmployees
-- ProductionOrders
-- ProductionWorkLogs
-- ProductionPayrolls
-- ProductionSteps *(detail-capable page ringan: tabel ringkas + drawer Detail read-only)*
-- ProductionProfiles
-- CashIn
-- CashOut
-- Categories
-- Customers
-- Sales
-- SupplierPurchases
-- PricingRules
-- Purchases
-- Returns
-- StockAdjustment
-- StockManagement
-- StockReport
-- PurchasesReport
-- SalesReport
-- ProfitLossReport
-- ProductionHppAnalysis
+### Sudah dibereskan pada batch ini
+- `StockAdjustmentPanel.jsx` tidak lagi melakukan `updateDoc(... stock: increment(...))` langsung dari page.
+- Adjustment keluar sekarang divalidasi terhadap `availableStock`, sehingga reserved stock tidak ikut terpakai oleh koreksi manual.
+- Stock Adjustment sekarang memakai `updateInventoryStock()` dan mendukung item bervarian dengan `variantKey` wajib.
+- Collection customer sudah disatukan ke `customers` lowercase di Master Customer agar sinkron dengan Sales.
+- `inventory_logs` baru memiliki `referenceId`, `referenceType`, dan `details` untuk memudahkan audit trail.
+- Stock Management membaca reference dari `details` dan fallback top-level agar log lama tetap tampil.
+- File kandidat cleanup yang terbukti tidak di-import sudah ditandai/dihapus dari source patch.
 
-### Hampir sesuai / transisi sementara
-- ResetTestData
-  - tabel preview sudah migrasi ke baseline global
-  - page shell utility masih manual dan aman dirapikan nanti jika utility page ikut distandardisasi penuh
+### Status tech debt yang masih perlu diperhatikan
+- `StockReport.jsx` masih kandidat upgrade tahap lanjut agar membaca varian/reserved stock lebih detail.
+- `updateStock()` dan `updateMasterStockLegacy()` di `inventoryService.js` masih dipertahankan sebagai compatibility wrapper, bukan jalur final baru.
+- Flow produksi final tetap guarded dan tidak ikut direfactor pada cleanup stok umum.
+- Audit Firebase Functions tidak bisa diverifikasi dari upload `src.zip` dan `docs.zip` ini karena folder functions tidak disertakan.
 
-### Belum sesuai / legacy yang masih tersisa
-- tidak ada lagi main table operasional utama yang sengaja dibiarkan memakai action column manual di batch ini
-- sisa legacy terbesar sekarang ada pada utility shell tertentu dan helper/CSS lama yang hanya relevan untuk halaman yang belum ikut shared page wrapper penuh
+### Koreksi dokumen lama
+Poin lama yang menyebut revert sale masih hanya update `stock` sudah tidak sesuai dengan source terbaru. Sales sekarang memakai `updateInventoryStock()` untuk create sale dan revert cancel/delete.
 
-Area yang aman dibersihkan setelah migrasi ini stabil:
-- trigger detail manual yang mengandalkan klik nama row tanpa tombol `Detail` eksplisit
-- group tombol aksi lama berbasis `type="link"` yang hanya dipertahankan untuk halaman di luar baseline final
-- wrapper table manual pada utility page yang belum dipindah ke shared page foundation
+## Update Karyawan Produksi — 2026-04-25
 
-## Update Current State: Cleanup File Legacy / Wrapper Tipis
+### Kode karyawan produksi sudah otomatis
+Temuan/fix:
+- form tambah Karyawan Produksi tidak lagi memakai input manual placeholder `EMP-...`;
+- preview kode dibuat otomatis dengan format `DDMMYYYY-XXX`;
+- service `productionEmployeesService.js` generate ulang kode saat create untuk menjaga uniqueness;
+- counter teknis `production_employee_code_sequences` dipakai untuk mengurangi risiko kode dobel saat ada create paralel.
 
-Audit import tree terbaru menemukan beberapa file yang tidak lagi diimport oleh route, page, service, helper, atau CSS aktif.
+Risiko tersisa:
+- data lama dengan kode `EMP-...` tetap dipertahankan sebagai legacy agar Work Log/Payroll lama tidak rusak;
+- edit karyawan tidak melakukan regenerate kode;
+- bila ada kebutuhan migrasi kode lama, harus dibuat task migrasi terpisah dan tidak boleh mengubah relasi Work Log/Payroll existing.
 
-### Final / Aktif
-- `src/services/MasterData/productsService.js` menjadi source form/payload produk aktif.
-- `src/utils/variants/variantHelpers.js` menjadi helper varian warna/produk aktif.
-- `src/pages/Transaksi/Sales.jsx` masih menjadi source aktif status penjualan sampai status option dipisah dalam task khusus.
-- Flow produksi final tetap berada di `productionBomsService.js`, `productionOrdersService.js`, `productionWorkLogsService.js`, `productionPayrollsService.js`, dan halaman produksi terkait.
 
-### Legacy / Aman Dihapus Manual
-- `src/components/Layout/Display/StatusBadge.jsx` dan `.css`: file kosong, tidak diimport.
-- `src/constants/productOptions.js`: tidak diimport; logic final produk sudah di service produk dan helper varian.
-- `src/constants/salesStatusOptions.js`: tidak diimport; belum menjadi source aktif status sales.
-- `src/hooks/useAppRole.js`: tidak diimport; role aktif masih memakai util akses langsung.
-- `src/services/Produksi/productionService.js`: tidak diimport; flow `productions` lama sudah legacy dan tidak boleh dipakai sebagai flow produksi final.
+## Update Bug Karyawan Produksi Tidak Tampil — 2026-04-25
 
-### Transisi yang Masih Perlu Dipantau
-- route lama `/utilities/reset-test-data` sudah menjadi redirect; entry final adalah `/utilities/reset-maintenance-data` dan `ResetMaintenanceData.jsx` masih dipertahankan agar navigasi tidak rusak, meskipun label menu sudah mengarah ke reset/maintenance.
-- data legacy collection `productions` masih bisa ada di Firestore dan harus dibersihkan lewat reset terarah, bukan lewat import service lama.
+### Employee tetap data utama halaman
+Temuan/fix:
+- data karyawan produksi tetap berada di collection `production_employees`;
+- halaman Karyawan Produksi sebelumnya rawan kosong bila query pendukung steps/payroll/worklog gagal karena Firestore composite index;
+- `ProductionEmployees.jsx` sekarang memuat employee sebagai data utama terlebih dahulu, lalu memuat data pendukung dengan guard `Promise.allSettled()`;
+- jika data pendukung gagal, tabel employee tetap tampil dan user mendapat warning bahwa ringkasan pendukung belum lengkap;
+- `productionPayrollsService.js` memiliki fallback plain collection untuk query payroll dua `orderBy` yang bisa membutuhkan composite index;
+- `productionEmployeesService.js` memiliki fallback plain collection untuk memastikan list employee lama tetap tampil bila order query bermasalah.
 
-### Catatan Cleanup
-Penghapusan file di atas aman terhadap runtime karena tidak ada import aktif. Jika file dihapus secara manual, jalankan dev server dan pastikan route utama tetap terbuka. Jika ada data lama yang perlu disesuaikan, gunakan Reset & Maintenance Data untuk dry run / repair aman / reset terarah, bukan delete database manual.
+Risiko tersisa:
+- summary payroll/worklog/assignment bisa terbatas jika data pendukung gagal dimuat;
+- composite index Firestore tetap sebaiknya dibuat sesuai link error Firebase agar query utama lebih efisien ketika data sudah besar;
+- kode lama seperti `11042026-01` atau `EMP-...` tetap dipertahankan sebagai legacy display code dan tidak dimigrasi otomatis.
 
-## Update Current State: Cleanup Structure Batch 2
+## Update UI Regression Produksi — 2026-04-25
 
-### Final / Aktif
-- `src/pages/Utilities/ResetMaintenanceData.jsx` menjadi entry page final untuk menu Reset & Maintenance Data.
-- `src/services/Maintenance/resetMaintenanceDataService.js` menjadi service final untuk reset destructive, preview reset, baseline, dan sync stok.
-- `src/services/Maintenance/productionVariantMaintenanceService.js`, `inventoryMaintenanceService.js`, dan `maintenanceLogService.js` tetap menjadi service maintenance non-operasional.
-- Sidebar sekarang mengarah ke `/utilities/reset-maintenance-data`.
+- Tabel utama `Production Orders` dan `Work Log Produksi` harus tetap compact agar tombol aksi tidak terdorong ke kanan pada desktop/laptop normal.
+- `scroll x` besar pada tabel produksi adalah tech debt UI karena membuat aksi seperti Detail, Refresh Need, Mulai Produksi, Edit, dan Selesaikan sulit dijangkau user.
+- Modal `Selesaikan Work Log Produksi` wajib menampilkan konteks estimasi output/hasil sebelum user mengisi Good Qty, Reject Qty, dan Rework Qty.
+- Patch UI produksi tidak boleh mengubah handler produksi, status lifecycle, posting stok, payroll, HPP, atau completed guard.
 
-### Wrapper / Redirect Transisi
-- Route lama `/utilities/reset-test-data` masih dipertahankan sebagai redirect ke `/utilities/reset-maintenance-data` agar bookmark lama tidak blank.
-- Redirect ini aman dihapus setelah semua dokumentasi, bookmark, dan referensi internal sudah memakai path baru.
+## Update Regression Auto Payroll Produksi — 2026-04-25
 
-### Aman Dihapus Setelah Patch Divalidasi
-- `src/pages/Utilities/ResetTestData.jsx`
-- `src/services/Utilities/resetTestDataService.js`
+Temuan/fix:
+- regression sebelumnya membuat Work Log bisa completed tetapi line Payroll Produksi tidak otomatis terbentuk;
+- akar masalahnya flow complete hanya posting output/status Work Log, belum memanggil generator payroll;
+- `ProductionWorkLogs.jsx` sekarang memanggil auto payroll setelah `completeProductionWorkLog()` sukses;
+- `productionPayrollsService.js` menyediakan `generatePayrollLinesFromCompletedWorkLog()` dengan guard idempotent per Work Log + Step + Operator;
+- Operator Produksi di modal Selesaikan Work Log sekarang wajib dipilih agar payroll tidak kehilangan relasi employee;
+- payroll otomatis tetap memakai status awal `draft` + `unpaid` dan tidak otomatis membuat expense/cash out.
 
-Kedua file tersebut sudah tidak menjadi entry/import aktif setelah route dan page final dipindahkan.
-
-## Update Batch 3: Legacy Data Cleanup Status
-- `Reset & Maintenance Data` sekarang memiliki dry run khusus `Audit Data Legacy Batch 3`.
-- Area yang dipetakan: `productions` legacy, PO/Work Log stale, orphan inventory log, sales/returns/adjustments/purchases lama tanpa variant snapshot, serta income/expense tanpa source reference yang cukup.
-- `productions` tetap legacy dan target utamanya adalah reset produksi scoped, bukan migrasi ke flow final.
-- Transaksi lama item bervarian tanpa `variantKey/variantLabel` tidak aman ditebak otomatis. Untuk data testing, gunakan reset scoped; untuk data final historical, lakukan manual review.
-- Cleanup code berikutnya boleh dilakukan setelah audit legacy menunjukkan tidak ada data lama yang masih menahan source of truth final.
-
-## Update Current State: Finalisasi Handoff Work Log -> Payroll
-- Flow payroll final tidak boleh berhenti di Work Log completed sebagai candidate manual.
-- Handoff resmi sekarang adalah: Work Log completed -> auto-create payroll draft per operator -> review di menu Payroll -> confirmed -> paid/cancelled.
-- Menu Payroll bukan lagi tempat generate manual dari completed Work Log; candidate manual lama harus dianggap transisi yang sudah ditutup.
-- Jika completed Work Log lama belum punya draft payroll, rekonsiliasi boleh dilakukan sekali saat load menu Payroll tanpa membuka jalur manual baru.
-- Custom payroll employee tetap legacy/deprecated dan tidak boleh dihidupkan lagi sebagai source utama.
+Risiko tersisa:
+- Work Log lama yang sudah completed sebelum patch tidak otomatis di-backfill pada bug ini;
+- jika butuh backfill payroll lama, buat task terpisah dengan preview/audit terlebih dahulu;
+- jika master Tahapan Produksi memiliki payroll rate 0, line payroll tetap bisa dibuat dengan nominal 0 untuk audit.

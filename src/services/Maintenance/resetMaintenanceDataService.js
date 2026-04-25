@@ -162,7 +162,7 @@ const MODULE_DEFINITIONS = {
     ],
   },
   production: {
-    label: "Produksi",
+    label: "Produksi (Lengkap)",
     collections: [
       { key: "production_orders", label: "Production Order", action: "Hapus PO produksi" },
       { key: "production_work_logs", label: "Production Work Log", action: "Hapus work log produksi" },
@@ -176,6 +176,33 @@ const MODULE_DEFINITIONS = {
         scopeLabel: "Hanya log produksi",
         filter: SCOPED_FILTERS.productionInventoryLog,
       },
+    ],
+  },
+  production_core_and_logs: {
+    label: "Produksi + Log Produksi",
+    collections: [
+      { key: "production_orders", label: "Production Order", action: "Hapus PO produksi" },
+      { key: "production_work_logs", label: "Production Work Log", action: "Hapus work log produksi" },
+      {
+        key: "inventory_logs",
+        label: "Inventory Log Produksi",
+        action: "Hapus log stok produksi saja agar tidak orphan",
+        scopeKey: "production_inventory_log",
+        scopeLabel: "Hanya log produksi",
+        filter: SCOPED_FILTERS.productionInventoryLog,
+      },
+    ],
+  },
+  production_payroll_only: {
+    label: "Payroll Produksi Saja",
+    collections: [
+      { key: "production_payrolls", label: "Payroll Produksi", action: "Hapus payroll produksi saja" },
+    ],
+  },
+  productions_legacy_only: {
+    label: "Productions Legacy Saja",
+    collections: [
+      { key: "productions", label: "Productions Legacy", action: "Bersihkan jejak flow lama saja" },
     ],
   },
   cash_and_expenses: {

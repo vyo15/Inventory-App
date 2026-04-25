@@ -620,6 +620,10 @@ const Purchases = () => {
         "purchase_in",
         collectionName,
         {
+          // ACTIVE: reference pembelian membuat inventory log mudah dilacak dari Stock Management.
+          purchaseId: purchaseDocument.id,
+          referenceId: purchaseDocument.id,
+          referenceType: "purchase",
           supplierName: supplierName || "",
           ...variantPayload,
           materialVariantId: type === "material" ? materialVariantId || null : null,

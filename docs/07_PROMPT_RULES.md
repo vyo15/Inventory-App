@@ -65,8 +65,6 @@ cek:
 - jangan ubah contract Work Log / PO / Payroll hanya karena refactor UI atau shared component
 - jika task menyentuh `productionWorkLogsService`, `productionOrdersService`, `productionPayrollsService`, atau helper produksi, sebutkan bahwa ini area sensitif
 - jika ingin mengubah status flow, contract 1 PO = 1 Work Log, stock posting start/complete, atau completed log editability, wajib evaluasi khusus dan update docs produksi
-- jika task menyentuh payroll produksi, anggap contract finalnya adalah: Work Log completed -> auto-create payroll draft per operator -> review/confirm -> paid/cancelled
-- jangan menghidupkan lagi flow candidate manual dari completed Work Log kecuali sedang menangani data legacy secara eksplisit
 
 cek:
 - BOM
@@ -76,19 +74,6 @@ cek:
 - payroll status
 - HPP analysis
 
-## Saat Menyentuh Baseline UI Table / Action
-- anggap baseline table/action sebagai area presentational yang sudah dijaga konsistensinya
-- jangan menambah tombol `Detail` kecuali halaman itu memang punya drawer/detail read-only atau modal detail yang jelas
-- untuk main table yang lebar atau memakai `scroll.x`, kolom `Aksi` wajib di kanan dan `fixed: "right"`
-- jika ada kolom `Status` di table lebar, letakkan sticky di kanan sebelum `Aksi`
-- simple config page tidak perlu dipaksa punya `Detail`
-- jika beban informasi halaman konfigurasi sudah terlalu kaya untuk tabel utama, halaman boleh dinaikkan menjadi detail-capable page ringan; `ProductionSteps` adalah contoh resmi untuk pola ini
-- ledger/simple action page boleh tanpa `Detail`, tetapi action column dan tombolnya tetap harus mengikuti baseline global
-- read-only data table page tidak perlu action column, tetapi tetap harus memakai surface table global (`app-data-table` / `ims-table`)
-- nested/subtable tidak perlu dipaksa sticky kecuali ada bug horizontal scroll nyata
-- jika ada halaman yang sengaja berbeda, jelaskan alasannya secara eksplisit sebelum coding
-- utility page yang masih transisi harus diberi comment jelas: aktif / transisi / legacy, dan kapan aman dibersihkan
-
 ## Saat Menutup Task
 Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - `00_MASTER_CONTEXT.md`
@@ -96,27 +81,40 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - `05_CURRENT_STATE_AND_TECH_DEBT.md`
 - `06_TEST_CHECKLIST.md`
 
-## Prompt Rule: Cleanup File Legacy
 
-Untuk task cleanup berikutnya:
-- cek import tree terlebih dahulu, jangan menghapus file hanya karena nama file terlihat lama;
-- file kosong dan tidak diimport boleh masuk daftar aman hapus;
-- service legacy yang tidak diimport boleh dihapus dari codebase, tetapi data Firestore lama tetap harus dibersihkan lewat Reset & Maintenance Data;
-- wrapper transisi harus diberi alasan kenapa belum dihapus;
-- jika pengiriman patch memakai zip, sertakan daftar file yang harus dihapus manual atau script cleanup karena ekstrak zip biasa tidak dapat menghapus file lama secara otomatis;
-- setelah cleanup valid, jangan membuat import baru ke file yang sudah dipensiunkan.
+## Tambahan Guard Batch Prioritas
+- jika task menyentuh `productionWorkLogsService`, perlakukan summary costing saat complete sebagai area sensitif
+- jangan otomatis membuat expense payroll saat `paid` tanpa guard idempotent yang jelas (`sourceModule` + `sourceId`)
+- jika task menyentuh export laporan, utamakan helper XLSX reusable dan jangan merusak filter/source data laporan
 
-## Prompt Rule: Cleanup Structure Batch 2
+## Update Prompt Guard Setelah Cleanup — 2026-04-25
+- Untuk mutasi stok umum, prioritaskan `updateInventoryStock()` dan jangan update `stock/currentStock/variants[]` langsung dari page.
+- Jika item bervarian, caller wajib mengirim `variantKey` kecuali sedang menangani data legacy dengan alasan eksplisit.
+- Stock Adjustment wajib memakai `updateInventoryStock()` dan validasi keluar harus berbasis `availableStock`, bukan hanya `currentStock`.
+- `customers` lowercase adalah collection final customer. `Customers` uppercase harus dianggap legacy/test data kecuali ada bukti baru.
+- Inventory log baru sebaiknya mengirim `referenceId`, `referenceType`, dan detail transaksi agar Stock Management bisa menampilkan audit trail jelas.
+- Produksi final tetap guarded exception dan tidak boleh dipaksa memakai helper stok umum jika transaction produksi memang dibutuhkan.
+- File unused boleh dihapus hanya setelah grep/import check membuktikan tidak dipakai route/runtime.
 
-Untuk task berikutnya:
-- gunakan `ResetMaintenanceData.jsx` sebagai entry final menu maintenance;
-- gunakan `resetMaintenanceDataService.js` di folder `services/Maintenance` sebagai service final untuk preview/reset/baseline/sync stok;
-- jangan membuat import baru ke `ResetTestData.jsx` atau `services/Utilities/resetTestDataService.js`;
-- route lama `/utilities/reset-test-data` hanya redirect transisi dan boleh dihapus setelah semua referensi memakai `/utilities/reset-maintenance-data`;
-- jika cleanup menyentuh data, tetap gunakan Reset & Maintenance Data untuk dry run / repair aman / reset terarah.
+## Update Prompt Guard Karyawan Produksi — 2026-04-25
+- Jika task menyentuh Karyawan Produksi, jangan kembalikan field `code` menjadi input manual.
+- Kode karyawan baru wajib mengikuti format `DDMMYYYY-XXX` dan digenerate oleh `productionEmployeesService.js`.
+- Preview kode di UI hanya bantuan tampilan; kode final tetap harus digenerate ulang saat create.
+- Edit karyawan tidak boleh regenerate kode existing karena Work Log/Payroll bisa menyimpan display reference lama.
+- Kode lama seperti `EMP-...` dianggap legacy data dan jangan dimigrasi otomatis tanpa task khusus.
 
-## Prompt Rule Batch 3 — Legacy Data Cleanup
-- Sebelum cleanup file/logic legacy berikutnya, jalankan atau minta user menjalankan `Cek Data Legacy` di menu Reset & Maintenance Data.
-- Jangan menyarankan hapus database manual jika reset scoped atau repair aman tersedia.
-- Jika audit menemukan transaksi lama tanpa snapshot variant, jangan buat fallback master baru. Tandai sebagai reset scoped untuk data testing atau manual review untuk data final.
-- Completed/final data hanya boleh display/snapshot repair jika sumbernya jelas.
+## Update Prompt Guard UI Produksi — 2026-04-25
+
+- Patch UI produksi tidak boleh mengembalikan tabel utama Production Orders atau Work Log Produksi ke `scroll x` besar hanya untuk mengakses tombol aksi.
+- Kolom aksi produksi harus langsung terlihat pada desktop/laptop normal, atau diringkas tanpa menghapus handler Detail, Refresh Need, Mulai Produksi, Edit, dan Selesaikan.
+- Modal `Selesaikan Work Log Produksi` wajib mempertahankan konteks estimasi output/hasil sebagai acuan user sebelum mengisi Good Qty, Reject Qty, dan Rework Qty.
+- Perubahan UI produksi tidak boleh mengubah flow produksi, posting stok, payroll, HPP, status lifecycle, atau completed guard.
+
+## Prompt Guard Auto Payroll Produksi — 2026-04-25
+
+- Jika task menyentuh Work Log complete, jangan putus flow auto payroll.
+- Setelah Work Log completed, sistem wajib memanggil generator payroll idempotent per Work Log + Step + Operator.
+- Jangan membuat payroll dobel saat user klik Selesaikan dua kali, refresh, atau reload data.
+- Jangan mengubah posting stok/output Work Log hanya untuk memperbaiki payroll.
+- Jangan otomatis membuat Cash Out/Expense dari payroll `paid` tanpa task dan guard idempotent khusus.
+- Jangan memakai custom payroll karyawan legacy sebagai source utama payroll baru; rule final tetap Tahapan Produksi.

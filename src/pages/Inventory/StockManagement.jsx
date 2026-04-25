@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Col, Input, Select, Space, Table, Tag, Typography, message } from "antd";
+import { Col, Input, Select, Space, Table, Tag, Typography, message } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
@@ -7,6 +7,7 @@ import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import StockAdjustmentPanel from "./components/StockAdjustmentPanel";
 import { getInventoryLogs } from "../../services/Inventory/inventoryService";
 import { formatNumberId } from "../../utils/formatters/numberId";
 
@@ -65,43 +66,113 @@ const resolveDirectionMeta = (record) => {
 };
 
 // =========================
-// SECTION: Display varian inventory log
-// ACTIVE / FINAL untuk audit stok produksi:
-// - semua modul final menulis variantKey/variantLabel di root log.
-// - materialVariantId/materialVariantName lama tetap dibaca sebagai transisi agar pembelian lama masih bisa diaudit.
-// - UI tidak boleh menyembunyikan varian hanya karena label kosong, jadi variantKey ikut menjadi fallback display.
+// SECTION: Helper baca field log kompatibel lama/baru
+// Fungsi:
+// - membaca value dari details terlebih dahulu lalu fallback ke top-level record
+// - menjaga inventory log lama tetap tampil walau writer baru sudah menyimpan details/referenceId standar
+// Hubungan flow:
+// - dipakai semua resolver tampilan Stock Management agar audit trail tidak putus setelah schema log dirapikan
+// Status:
+// - aktif/final untuk UI reader; fallback top-level adalah kompatibilitas legacy
 // =========================
+const readLogField = (record, fieldName, fallback = "") => {
+  if (record?.details && record.details[fieldName] !== undefined && record.details[fieldName] !== null) {
+    return record.details[fieldName];
+  }
+
+  if (record?.[fieldName] !== undefined && record?.[fieldName] !== null) {
+    return record[fieldName];
+  }
+
+  return fallback;
+};
+
 const resolveVariantLabel = (record) =>
-  record?.variantLabel ||
-  record?.details?.variantLabel ||
-  record?.materialVariantName ||
-  record?.details?.materialVariantName ||
-  record?.productVariantName ||
-  record?.details?.productVariantName ||
-  record?.variantKey ||
-  record?.details?.variantKey ||
-  record?.materialVariantId ||
-  record?.details?.materialVariantId ||
-  "";
+  readLogField(record, "variantLabel") || readLogField(record, "variantKey") || "";
 
 const resolveReferenceLines = (record) => {
-  const details = record?.details || {};
   const lines = [];
 
-  if (details.saleId) lines.push(`Sale: ${details.saleId}`);
-  if (details.returnId) lines.push(`Return: ${details.returnId}`);
-  if (details.purchaseId) lines.push(`Purchase: ${details.purchaseId}`);
-  if (details.productionOrderId) lines.push(`PO: ${details.productionOrderId}`);
-  if (details.workLogId) lines.push(`Work Log: ${details.workLogId}`);
-  if (details.customerName) lines.push(`Customer: ${details.customerName}`);
-  if (details.supplierName) lines.push(`Supplier: ${details.supplierName}`);
-  if (details.reason) lines.push(`Alasan: ${details.reason}`);
+  // =========================
+  // SECTION: Referensi mutasi stok yang lebih manusiawi
+  // Fungsi:
+  // - menerjemahkan ID referensi mentah menjadi konteks sumber transaksi
+  // - membaca schema baru (details/referenceId) dan schema lama (top-level) secara aman
+  // Status:
+  // - aktif dipakai di UI Stock Management
+  // - fallback top-level dipertahankan supaya log lama tetap terbaca
+  // =========================
+  const saleId = readLogField(record, "saleId");
+  const returnId = readLogField(record, "returnId");
+  const purchaseId = readLogField(record, "purchaseId");
+  const adjustmentId = readLogField(record, "adjustmentId");
+  const productionOrderId = readLogField(record, "productionOrderId");
+  const workLogId = readLogField(record, "workLogId") || readLogField(record, "workLogRefId");
+  const customerName = readLogField(record, "customerName");
+  const supplierName = readLogField(record, "supplierName");
+  const reason = readLogField(record, "reason");
+  const referenceId = readLogField(record, "referenceId");
+  const referenceType = readLogField(record, "referenceType");
+
+  if (saleId) lines.push(`Penjualan: ${saleId}`);
+  if (returnId) lines.push(`Retur: ${returnId}`);
+  if (purchaseId) lines.push(`Pembelian: ${purchaseId}`);
+  if (adjustmentId) lines.push(`Adjustment: ${adjustmentId}`);
+  if (productionOrderId) lines.push(`PO: ${productionOrderId}`);
+  if (workLogId) lines.push(`Work Log: ${workLogId}`);
+  if (!saleId && !returnId && !purchaseId && !adjustmentId && !productionOrderId && !workLogId && referenceId) {
+    lines.push(`${referenceType || "Referensi"}: ${referenceId}`);
+  }
+  if (customerName) lines.push(`Pelanggan: ${customerName}`);
+  if (supplierName) lines.push(`Supplier: ${supplierName}`);
+  if (reason) lines.push(`Alasan: ${reason}`);
 
   return lines;
 };
 
 const resolveNoteText = (record) =>
-  record?.details?.note || record?.details?.description || record?.details?.remark || "-";
+  readLogField(record, "note") ||
+  readLogField(record, "description") ||
+  readLogField(record, "remark") ||
+  "-";
+
+// =========================
+// SECTION: Helper stok sebelum/sesudah untuk audit log
+// Fungsi:
+// - membaca currentStockBefore/currentStockAfter dan availableStockBefore/availableStockAfter dari schema baru
+// - fallback aman untuk log lama yang belum menyimpan detail stok
+// Hubungan flow:
+// - membuat log adjustment lebih mudah diaudit setelah mutasi memakai updateInventoryStock()
+// Status:
+// - aktif/final untuk reader; fallback kosong adalah kompatibilitas legacy
+// =========================
+const resolveStockLevelLines = (record) => {
+  const currentStockBefore = readLogField(record, "currentStockBefore", null);
+  const currentStockAfter =
+    readLogField(record, "currentStockAfter", null) ?? readLogField(record, "newStock", null);
+  const availableStockBefore = readLogField(record, "availableStockBefore", null);
+  const availableStockAfter = readLogField(record, "availableStockAfter", null);
+
+  const lines = [];
+
+  if (currentStockBefore !== null || currentStockAfter !== null) {
+    lines.push(
+      `Current: ${formatNumberId(currentStockBefore || 0)} -> ${formatNumberId(
+        currentStockAfter || 0,
+      )}`,
+    );
+  }
+
+  if (availableStockBefore !== null || availableStockAfter !== null) {
+    lines.push(
+      `Available: ${formatNumberId(availableStockBefore || 0)} -> ${formatNumberId(
+        availableStockAfter || 0,
+      )}`,
+    );
+  }
+
+  return lines;
+};
 
 const matchesKeyword = (record, keyword) => {
   const normalizedKeyword = keyword.trim().toLowerCase();
@@ -114,7 +185,10 @@ const matchesKeyword = (record, keyword) => {
     resolveItemTypeLabel(record.collectionName),
     resolveVariantLabel(record),
     resolveNoteText(record),
+    readLogField(record, "referenceId"),
+    readLogField(record, "referenceType"),
     ...(resolveReferenceLines(record) || []),
+    ...(resolveStockLevelLines(record) || []),
   ]
     .filter(Boolean)
     .join(" ")
@@ -126,6 +200,12 @@ const matchesKeyword = (record, keyword) => {
 const StockManagement = () => {
   // =========================
   // SECTION: State utama log stok
+  // Fungsi:
+  // - menyimpan list inventory log, status loading, dan filter tampilan
+  // Hubungan flow:
+  // - halaman ini membaca audit trail dan menjadi container final untuk panel penyesuaian stok
+  // Status:
+  // - aktif dipakai
   // =========================
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -135,9 +215,12 @@ const StockManagement = () => {
 
   // =========================
   // SECTION: Load inventory logs
-  // Catatan:
-  // - halaman ini hanya display audit trail
-  // - refactor tidak mengubah service log stok yang menjadi source aktif
+  // Fungsi:
+  // - membaca collection inventory_logs via service inventory
+  // Hubungan flow:
+  // - service tetap menjadi source pembacaan; page hanya presenter/filter
+  // Status:
+  // - aktif dipakai
   // =========================
   const fetchHistory = async () => {
     setLoading(true);
@@ -158,6 +241,11 @@ const StockManagement = () => {
 
   // =========================
   // SECTION: Normalisasi & filter data
+  // Fungsi:
+  // - memperkaya row log dengan label arah, sumber, jenis item, varian, reference, dan note
+  // - sorting newest first tetap dilakukan di UI sebagai fallback meski service sudah orderBy timestamp
+  // Status:
+  // - aktif dipakai; fallback sorting aman untuk log lama
   // =========================
   const normalizedHistory = useMemo(() => {
     return [...history]
@@ -168,6 +256,7 @@ const StockManagement = () => {
         itemTypeLabel: resolveItemTypeLabel(record.collectionName),
         variantLabelResolved: resolveVariantLabel(record),
         referenceLines: resolveReferenceLines(record),
+        stockLevelLines: resolveStockLevelLines(record),
         noteText: resolveNoteText(record),
       }))
       .sort((left, right) => {
@@ -306,9 +395,26 @@ const StockManagement = () => {
         ),
       },
       {
-        title: "Referensi",
+        title: "Stok",
+        key: "stockLevels",
+        width: 190,
+        render: (_, record) =>
+          Array.isArray(record.stockLevelLines) && record.stockLevelLines.length > 0 ? (
+            <Space direction="vertical" size={2}>
+              {record.stockLevelLines.map((line) => (
+                <Text key={line} type="secondary" style={{ fontSize: 12 }}>
+                  {line}
+                </Text>
+              ))}
+            </Space>
+          ) : (
+            <Text type="secondary">-</Text>
+          ),
+      },
+      {
+        title: "Sumber / Referensi",
         key: "reference",
-        width: 240,
+        width: 260,
         render: (_, record) =>
           Array.isArray(record.referenceLines) && record.referenceLines.length > 0 ? (
             <Space direction="vertical" size={2}>
@@ -334,8 +440,8 @@ const StockManagement = () => {
   return (
     <>
       <PageHeader
-        title="Riwayat Pergerakan Stok"
-        subtitle="Pantau mutasi masuk dan keluar dari pembelian, produksi, penjualan, retur, dan penyesuaian stok dengan layout audit yang seragam."
+        title="Manajemen Stok"
+        subtitle="Satu halaman utama inventaris untuk audit riwayat pergerakan stok dan melakukan penyesuaian stok manual."
         actions={[
           {
             key: "refresh-stock-history",
@@ -355,7 +461,7 @@ const StockManagement = () => {
 
       <PageSection
         title="Filter Riwayat"
-        subtitle="Filter membantu audit cepat berdasarkan kata kunci, arah mutasi, dan sumber transaksi."
+        subtitle="Filter membantu audit cepat berdasarkan kata kunci, arah mutasi, dan sumber transaksi. Kolom Sumber / Referensi membaca schema log baru dan fallback log lama."
       >
         <FilterBar>
           <Col xs={24} md={10}>
@@ -398,29 +504,37 @@ const StockManagement = () => {
       </PageSection>
 
       <PageSection
-        title="Tabel Riwayat"
+        title="Tabel Riwayat Pergerakan Stok"
         subtitle="Tabel tetap fokus pada audit operasional: kapan, dari mana, item apa, qty berapa, dan referensinya dari transaksi mana."
         extra={<Tag color="purple">{formatNumberId(filteredHistory.length)} baris</Tag>}
       >
-        {/* =========================
-            SECTION: tabel audit stok baseline global
-            Fungsi:
-            - halaman ini tidak punya aksi row, tetapi tetap memakai class resmi agar surface table konsisten lintas modul
-            - scroll.x dipertahankan karena tabel audit memang lebar dan berisi referensi transaksi panjang
-            Status: aktif / final
-        ========================= */}
         <Table
-          className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}
           dataSource={filteredHistory}
-          scroll={{ x: 1200 }}
+          scroll={{ x: 1380 }}
           pagination={{ pageSize: 10 }}
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada riwayat mutasi stok." />,
           }}
         />
+      </PageSection>
+
+      <PageSection
+        title="Area Penyesuaian Stok"
+        subtitle="Form adjustment sekarang berada di Manajemen Stok agar audit log dan koreksi stok manual berada dalam satu konteks. Logic submit adjustment hanya aktif dari panel ini."
+      >
+        {/* =========================
+            SECTION: Panel Penyesuaian Stok final
+            Fungsi:
+            - menampilkan riwayat stock_adjustments dan modal tambah adjustment di halaman Manajemen Stok
+            Hubungan flow:
+            - menggantikan halaman/menu Penyesuaian Stok lama agar tidak ada dua entry point inventory
+            Status:
+            - aktif/final; route lama /stock-adjustment hanya redirect ke halaman ini
+        ========================= */}
+        <StockAdjustmentPanel onAdjustmentSaved={fetchHistory} />
       </PageSection>
     </>
   );

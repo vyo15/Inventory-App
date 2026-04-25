@@ -4,13 +4,16 @@ import {
   doc,
   getDoc,
   getDocs,
-  increment,
   orderBy,
   query,
-  Timestamp,
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { calculateAvailableStock } from "../../utils/stock/stockHelpers";
+import {
+  buildInventoryLogPayload,
+  INVENTORY_LOG_COLLECTION,
+} from "./inventoryLogService";
 import {
   applyStockMutationToItem,
   findVariantByKey,
@@ -20,10 +23,15 @@ import {
 
 // =========================
 // SECTION: Ambil riwayat log inventaris
+// Fungsi:
+// - membaca audit trail mutasi stok dari Firestore
+// - dipakai oleh halaman Stock Management untuk menampilkan riwayat stok lintas modul
+// Status:
+// - aktif dipakai; bukan legacy
 // =========================
 export const getInventoryLogs = async () => {
   try {
-    const inventoryLogsCollection = collection(db, "inventory_logs");
+    const inventoryLogsCollection = collection(db, INVENTORY_LOG_COLLECTION);
     const inventoryLogsQuery = query(
       inventoryLogsCollection,
       orderBy("timestamp", "desc"),
@@ -43,6 +51,13 @@ export const getInventoryLogs = async () => {
 
 // =========================
 // SECTION: Tambah log inventaris
+// Fungsi:
+// - mencatat semua mutasi stok dari purchase, sale, return, adjustment, dan produksi
+// - menyimpan extraData di top-level sekaligus details agar writer baru dan reader lama tetap kompatibel
+// Hubungan flow:
+// - menjadi audit trail utama di halaman Stock Management
+// Status:
+// - aktif/final; bukan source mutasi stok, hanya pencatatan log
 // =========================
 export const addInventoryLog = async (
   itemId,
@@ -53,15 +68,17 @@ export const addInventoryLog = async (
   extraData = {},
 ) => {
   try {
-    await addDoc(collection(db, "inventory_logs"), {
-      itemId,
-      itemName,
-      quantityChange,
-      type,
-      collectionName,
-      timestamp: Timestamp.now(),
-      ...extraData,
-    });
+    await addDoc(
+      collection(db, INVENTORY_LOG_COLLECTION),
+      buildInventoryLogPayload({
+        itemId,
+        itemName,
+        quantityChange,
+        type,
+        collectionName,
+        extraData,
+      }),
+    );
   } catch (error) {
     console.error("Gagal menambah log inventaris:", error);
   }
@@ -73,9 +90,12 @@ export const addInventoryLog = async (
 // - menjadi satu jalur aktif/final untuk mutasi stok inventory umum
 // - item bervarian wajib mengirim variantKey agar stok tidak masuk master/default
 // - payload tetap menyinkronkan currentStock, stock, reservedStock, availableStock, dan variants[]
+// Hubungan flow:
+// - dipakai oleh sales, return, purchase umum, dan stock adjustment
+// - produksi tetap guarded exception karena butuh transaction sendiri saat start/complete work log
 // Catatan legacy:
-// - allowMasterForVariant hanya dipakai oleh wrapper updateStock lama agar modul yang belum dimigrasi tidak langsung crash
-// - semua menu utama yang disentuh patch ini memakai mode strict default: allowMasterForVariant=false
+// - allowMasterForVariant hanya boleh dipakai bila ada data lama yang memang belum punya variantKey
+// - wrapper legacy updateStock/updateMasterStockLegacy sudah dihapus karena tidak punya caller aktif
 // =========================
 export const updateInventoryStock = async ({
   itemId,
@@ -121,13 +141,33 @@ export const updateInventoryStock = async ({
     throw new Error(`Varian item ${item?.name || itemId} tidak ditemukan.`);
   }
 
-  const currentStockBefore = selectedVariant
-    ? Number(selectedVariant.currentStock || 0)
-    : getItemStockSnapshot(item).currentStock;
+  // =========================
+  // SECTION: Snapshot stok sebelum mutasi
+  // Fungsi:
+  // - membaca current/reserved/available dari master atau varian yang dipilih
+  // Hubungan flow:
+  // - dipakai Stock Adjustment untuk mencegah stok keluar melebihi stok tersedia, bukan hanya currentStock mentah
+  // Status:
+  // - aktif/final; validasi lama yang hanya membandingkan currentStock sudah tidak dipakai
+  // =========================
+  const stockSnapshotBefore = selectedVariant
+    ? {
+        currentStock: Number(selectedVariant.currentStock || 0),
+        reservedStock: Number(selectedVariant.reservedStock || 0),
+        availableStock: calculateAvailableStock(
+          selectedVariant.currentStock || 0,
+          selectedVariant.reservedStock || 0,
+        ),
+      }
+    : getItemStockSnapshot(item);
 
-  if (preventNegative && currentStockBefore + normalizedQuantityChange < 0) {
+  if (
+    preventNegative &&
+    normalizedQuantityChange < 0 &&
+    stockSnapshotBefore.availableStock + normalizedQuantityChange < 0
+  ) {
     throw new Error(
-      `Stok ${selectedVariant?.variantLabel || item?.name || "item"} tidak mencukupi. Tersedia: ${currentStockBefore}`,
+      `Stok tersedia ${selectedVariant?.variantLabel || item?.name || "item"} tidak mencukupi. Tersedia: ${stockSnapshotBefore.availableStock}`,
     );
   }
 
@@ -139,49 +179,23 @@ export const updateInventoryStock = async ({
 
   await updateDoc(itemReference, stockUpdatePayload);
 
+  const currentStockAfter = stockSnapshotBefore.currentStock + normalizedQuantityChange;
+  const availableStockAfter = calculateAvailableStock(
+    currentStockAfter,
+    stockSnapshotBefore.reservedStock,
+  );
+
   return {
     item,
     updatePayload: stockUpdatePayload,
     stockSourceType: selectedVariant ? "variant" : "master",
     variantKey: selectedVariant?.variantKey || "",
     variantLabel: selectedVariant?.variantLabel || "",
-    currentStockBefore,
-    currentStockAfter: currentStockBefore + normalizedQuantityChange,
+    currentStockBefore: stockSnapshotBefore.currentStock,
+    currentStockAfter,
+    reservedStockBefore: stockSnapshotBefore.reservedStock,
+    reservedStockAfter: stockSnapshotBefore.reservedStock,
+    availableStockBefore: stockSnapshotBefore.availableStock,
+    availableStockAfter,
   };
-};
-
-// =========================
-// SECTION: Update stok item legacy/deprecated
-// Status:
-// - dipertahankan sementara agar import lama tidak langsung error
-// - modul baru/final wajib memakai updateInventoryStock dengan variantKey eksplisit
-// - aman dihapus setelah semua caller master-only lama dibersihkan lewat audit grep
-// =========================
-export const updateStock = async (itemId, quantityChange, collectionName) => {
-  try {
-    await updateInventoryStock({
-      itemId,
-      collectionName,
-      quantityChange,
-      allowMasterForVariant: true,
-    });
-  } catch (error) {
-    console.error("Gagal update stok:", error);
-    throw error;
-  }
-};
-
-// =========================
-// SECTION: Direct stock increment legacy
-// Status:
-// - hanya tersisa untuk kompatibilitas call site lama yang belum dimigrasi
-// - jangan dipakai pada menu final karena tidak variant-aware
-// =========================
-export const updateMasterStockLegacy = async (itemId, quantityChange, collectionName) => {
-  const itemReference = doc(db, collectionName, itemId);
-
-  await updateDoc(itemReference, {
-    currentStock: increment(quantityChange),
-    stock: increment(quantityChange),
-  });
 };

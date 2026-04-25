@@ -111,25 +111,11 @@ Status work log yang terlihat:
 ## 8. Payroll Produksi
 Tujuan:
 - rekap gaji produksi berbasis work log completed
-- menjaga audit rule payroll per step tetap stabil walau master step berubah di kemudian hari
-
-Contract final payroll yang sekarang harus dianggap resmi:
-- source of truth rule payroll = master `production_steps`
-- work log menyimpan snapshot rule payroll step (`mode`, `rate`, `qty base`, `output basis`, `classification`, `include in HPP`)
-- saat work log completed, service payroll harus auto-create payroll draft per operator dari snapshot rule pada work log
-- menu Payroll hanya membaca draft final untuk review, confirm, paid, atau cancelled; bukan lagi generator candidate manual
-- sebelum draft dibuat, Work Log completed harus lolos payroll eligibility gate
-- fallback ke master step hanya untuk work log lama yang belum punya snapshot dan harus dianggap legacy/deprecated
-- custom payroll di master karyawan tidak lagi dipakai sebagai jalur hitung aktif
-- payroll v1 final = 1 line per 1 operator + 1 step + 1 batch/work log
-- satu work log boleh punya banyak payroll line aktif selama tiap operator line berbeda
-- line payroll support / fulfillment tetap dibayar, tetapi dibedakan dari direct labor dan bisa dikeluarkan dari HPP inti
 
 Status payroll yang terlihat:
 - `draft`
-- `confirmed`
+- `unpaid`
 - `paid`
-- `cancelled`
 
 ## 9. Analisis HPP Produksi
 Tujuan:
@@ -147,11 +133,9 @@ Boundary produksi aktif yang sekarang harus dianggap final/guarded:
 - lock field inti Work Log setelah linked ke PO
 - lock Work Log setelah completed
 - helper query completed work log untuk payroll / HPP
-- helper payroll rule produksi dan sinkronisasi flag payroll pada work log
 
 Catatan penting:
 - refactor UI, shared component, atau patch modul lain tidak boleh memindahkan logic ini ke layer presentational
-- payroll eligibility gate dan validasi payload form payroll termasuk boundary guarded
 - bila ada task produksi baru, cek selalu boundary ini sebelum mengubah page/component apa pun
 
 Masih ada service legacy:
@@ -172,24 +156,36 @@ Setiap perubahan di modul produksi sebaiknya selalu diuji terhadap:
 - payroll calculation status
 - HPP analysis result
 
-## Update Architecture: Produksi Legacy Setelah Cleanup File
 
-Flow produksi aktif tetap:
+## Tambahan Flow Produksi yang Perlu Dianggap Aktif
+- saat Work Log `completed`, posting stok tetap mengikuti flow aktif yang ada
+- setelah posting stok, summary costing Work Log harus dihitung ulang dari snapshot material final agar detail biaya tidak berhenti di 0
+- sinkronisasi payroll ke Work Log hanya dipakai sebagai **ringkasan display labor**, bukan mengganti source of truth line payroll
 
-```text
-BOM → Production Order → Work Log → Payroll → HPP Analysis
-```
+## Update Boundary Produksi Setelah Cleanup Stok — 2026-04-25
+- Cleanup stok umum tidak memindahkan logic posting stok produksi ke helper page.
+- Flow produksi final tetap guarded: BOM → Production Order → Work Log → Payroll → HPP Analysis.
+- `productionWorkLogsService` tetap boleh melakukan transaction sendiri untuk start/complete Work Log karena proses tersebut harus memotong material, menambah output, menutup status, dan mencatat log secara atomic.
+- Collection `productions` tetap dianggap legacy data layer yang hanya disentuh maintenance/reset scoped. File service legacy `productionService.js` tidak ditemukan di source `src.zip` terbaru, sehingga docs lama yang menyebut file tersebut harus dianggap outdated.
 
-Service lama `src/services/Produksi/productionService.js` sudah tidak mempunyai import aktif di source tree terbaru. Karena service tersebut hanya mengatur collection legacy `productions` dan mutasi stok master-only, file tersebut masuk kategori aman dihapus dari codebase setelah dipastikan route/import lama tidak lagi menunjuk ke flow produksi dasar.
+## Update Guarded Integration Stok & Log — 2026-04-25
+- Produksi tetap dianggap guarded area.
+- `productionWorkLogsService.js` tetap melakukan mutasi bahan keluar dan output masuk di dalam `runTransaction`.
+- Mutasi stok produksi memakai `applyStockMutationToItem()` supaya field master dan varian tetap sinkron.
+- Inventory log produksi memakai `buildInventoryLogPayload()` dari inventory log service final sehingga format log produksi sama dengan transaksi umum.
+- Reserve/release Production Order masih dicatat sebagai flow legacy/guarded; jika dipakai, variant key hasil resolve helper final harus dipakai agar reserved stock tidak jatuh ke master/default.
+- Business rules BOM, lifecycle Production Order, completed Work Log, HPP, dan payroll tidak diubah oleh cleanup ini.
 
-Catatan penting:
-- menghapus file service legacy tidak berarti menghapus data Firestore secara otomatis;
-- jika masih ada data `productions` lama, bersihkan lewat menu Reset & Maintenance Data / reset terarah produksi;
-- jangan menghidupkan kembali flow `productions` sebagai jalur produksi aktif;
-- production final tetap guarded di service BOM, Production Order, Work Log, Payroll, dan HPP.
+## Update Auto Payroll Setelah Complete Work Log — 2026-04-25
 
-## Maintenance Produksi dan Data Legacy
-- Flow produksi final tetap `BOM → Production Order → Work Log → Payroll → HPP Analysis`.
-- Collection `productions` adalah data legacy dan tidak menjadi source of truth produksi final.
-- Jika data legacy produksi mengganggu cleanup, gunakan `Reset & Maintenance Data → Cek Data Legacy` lalu `Reset Produksi + Log` secara scoped.
-- Completed Work Log tidak boleh diposting ulang oleh maintenance. Yang boleh diperbaiki hanya snapshot/display jika sumbernya jelas.
+Flow aktif produksi setelah patch ini:
+
+`Production Order -> Work Log -> Complete Work Log -> Auto Payroll Line -> Payroll Produksi -> HPP Analysis`
+
+Catatan boundary:
+- `productionWorkLogsService` tetap menangani complete Work Log dan posting stok/output secara guarded.
+- Auto payroll dijalankan setelah Work Log sukses completed, memakai `generatePayrollLinesFromCompletedWorkLog()`.
+- Payroll line dibuat per operator yang tersimpan di Work Log.
+- Id dokumen payroll dibuat deterministik dari Work Log + Step + Operator untuk mencegah duplikasi.
+- Rule payroll diambil dari master Tahapan Produksi, bukan dari custom payroll karyawan legacy.
+- Sinkronisasi labor cost ke Work Log hanya ringkasan display untuk HPP/read model, bukan pengganti source of truth line payroll.

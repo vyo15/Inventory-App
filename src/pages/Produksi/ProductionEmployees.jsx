@@ -5,6 +5,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Badge,
   Button,
   Card,
@@ -50,10 +51,14 @@ import {
 import {
   createProductionEmployee,
   getAllProductionEmployees,
+  getNextProductionEmployeeCodePreview,
   toggleProductionEmployeeActive,
   updateProductionEmployee,
 } from "../../services/Produksi/productionEmployeesService";
+import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
+import { getAllProductionWorkLogs } from "../../services/Produksi/productionWorkLogsService";
 import { getActiveProductionSteps } from "../../services/Produksi/productionStepsService";
+import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 
@@ -69,6 +74,8 @@ const ProductionEmployees = () => {
   const [loading, setLoading] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [stepOptions, setStepOptions] = useState([]);
+  const [payrolls, setPayrolls] = useState([]);
+  const [workLogs, setWorkLogs] = useState([]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -79,6 +86,7 @@ const ProductionEmployees = () => {
   const [formVisible, setFormVisible] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [employeeCodeLoading, setEmployeeCodeLoading] = useState(false);
 
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [editingEmployee, setEditingEmployee] = useState(null);
@@ -88,16 +96,101 @@ const ProductionEmployees = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [employeeResult, stepResult] = await Promise.all([
-        getAllProductionEmployees(),
+
+      // =====================================================
+      // ACTIVE / FINAL - DATA UTAMA KARYAWAN
+      // Fungsi blok:
+      // - memuat master karyawan produksi dari collection `production_employees`;
+      // - langsung mengisi state `employees` ketika berhasil.
+      // Alasan blok ini dipakai:
+      // - data employee adalah data utama halaman, sehingga tidak boleh ikut kosong
+      //   hanya karena query pendukung steps/payroll/worklogs terkena index Firestore.
+      // Status:
+      // - aktif dipakai; bukan legacy dan bukan kandidat cleanup.
+      // =====================================================
+      const employeeResult = await getAllProductionEmployees();
+      setEmployees(Array.isArray(employeeResult) ? employeeResult : []);
+
+      // =====================================================
+      // ACTIVE / GUARDED - DATA PENDUKUNG HALAMAN
+      // Fungsi blok:
+      // - memuat tahapan, payroll, dan work log untuk filter/summary read-only;
+      // - memakai Promise.allSettled agar satu query pendukung yang gagal karena
+      //   composite index Firestore tidak menjatuhkan tabel karyawan.
+      // Alasan blok ini dipakai:
+      // - bug lama muncul karena Promise.all membuat `setEmployees()` tidak jalan
+      //   saat salah satu query pendukung reject.
+      // Status:
+      // - aktif dipakai sebagai guard; bukan legacy.
+      // =====================================================
+      const [stepResult, payrollResult, workLogResult] = await Promise.allSettled([
         getActiveProductionSteps(),
+        getAllProductionPayrolls(),
+        getAllProductionWorkLogs(),
       ]);
 
-      setEmployees(employeeResult);
-      setStepOptions(stepResult);
+      const failedSupportingData = [];
+
+      if (stepResult.status === "fulfilled") {
+        setStepOptions(Array.isArray(stepResult.value) ? stepResult.value : []);
+      } else {
+        console.warn("Data tahapan produksi pendukung gagal dimuat", stepResult.reason);
+        setStepOptions([]);
+        failedSupportingData.push("tahapan produksi");
+      }
+
+      if (payrollResult.status === "fulfilled") {
+        setPayrolls(Array.isArray(payrollResult.value) ? payrollResult.value : []);
+      } else {
+        console.warn("Data payroll produksi pendukung gagal dimuat", payrollResult.reason);
+        setPayrolls([]);
+        failedSupportingData.push("payroll produksi");
+      }
+
+      if (workLogResult.status === "fulfilled") {
+        setWorkLogs(Array.isArray(workLogResult.value) ? workLogResult.value : []);
+      } else {
+        console.warn("Data work log produksi pendukung gagal dimuat", workLogResult.reason);
+        setWorkLogs([]);
+        failedSupportingData.push("work log produksi");
+      }
+
+      // =====================================================
+      // ACTIVE / FINAL - WARNING PENDUKUNG
+      // Fungsi blok:
+      // - memberi tahu user/dev bahwa tabel karyawan tetap tampil, tetapi summary
+      //   pendukung bisa belum lengkap karena query/index Firestore.
+      // Alasan blok ini dipakai:
+      // - pesan error lama membuat user mengira data employee hilang, padahal hanya
+      //   data pendukung yang gagal dimuat.
+      // Status:
+      // - aktif dipakai; kandidat cleanup hanya jika seluruh composite index sudah
+      //   stabil dan halaman tidak lagi membutuhkan guard ini.
+      // =====================================================
+      if (failedSupportingData.length > 0) {
+        message.warning(
+          `Data karyawan tampil, tetapi data pendukung ${failedSupportingData.join(
+            ", ",
+          )} belum lengkap. Cek index Firestore atau fallback query.`,
+        );
+      }
     } catch (error) {
-      console.error(error);
-      message.error("Gagal memuat data karyawan produksi");
+      // =====================================================
+      // ACTIVE / FINAL - ERROR FATAL DATA UTAMA
+      // Fungsi blok:
+      // - hanya dianggap fatal jika query utama employee gagal;
+      // - data pendukung tidak boleh membuat tabel employee kosong.
+      // Alasan blok ini dipakai:
+      // - menjaga pesan error sesuai sumber masalah sebenarnya.
+      // Status:
+      // - aktif dipakai; bukan legacy.
+      // =====================================================
+      console.error("Gagal memuat data utama karyawan produksi", error);
+      setEmployees([]);
+      setStepOptions([]);
+      setPayrolls([]);
+      setWorkLogs([]);
+      message.error("Gagal memuat data utama karyawan produksi");
     } finally {
       setLoading(false);
     }
@@ -174,14 +267,33 @@ const ProductionEmployees = () => {
 
   const resetFormState = () => {
     setEditingEmployee(null);
+    setEmployeeCodeLoading(false);
     form.resetFields();
     form.setFieldsValue(DEFAULT_PRODUCTION_EMPLOYEE_FORM);
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
+    // =====================================================
+    // ACTIVE / FINAL
+    // Saat modal tambah dibuka, kode karyawan digenerate sebagai preview
+    // DDMMYYYY-XXX supaya user tidak mengetik manual. Service tetap
+    // generate ulang saat submit untuk menjaga uniqueness jika ada user lain
+    // menambah karyawan di waktu bersamaan.
+    // =====================================================
     setEditingEmployee(null);
     form.setFieldsValue(DEFAULT_PRODUCTION_EMPLOYEE_FORM);
     setFormVisible(true);
+    setEmployeeCodeLoading(true);
+
+    try {
+      const previewCode = await getNextProductionEmployeeCodePreview();
+      form.setFieldsValue({ code: previewCode });
+    } catch (error) {
+      console.error(error);
+      message.error("Gagal membuat preview kode karyawan produksi");
+    } finally {
+      setEmployeeCodeLoading(false);
+    }
   };
 
   const handleEdit = (record) => {
@@ -221,8 +333,14 @@ const ProductionEmployees = () => {
         );
         message.success("Karyawan produksi berhasil diperbarui");
       } else {
-        await createProductionEmployee(values, selectedSteps, null);
-        message.success("Karyawan produksi berhasil ditambahkan");
+        const createdEmployee = await createProductionEmployee(
+          values,
+          selectedSteps,
+          null,
+        );
+        message.success(
+          `Karyawan produksi berhasil ditambahkan dengan kode ${createdEmployee.code}`,
+        );
       }
 
       setFormVisible(false);
@@ -259,6 +377,205 @@ const ProductionEmployees = () => {
       message.error("Gagal mengubah status karyawan");
     }
   };
+
+
+
+  const matchesEmployeePayrollLine = (employee = {}, payroll = {}) => {
+    const employeeId = String(employee.id || "").trim();
+    const employeeCode = String(employee.code || "").trim().toLowerCase();
+    const employeeName = String(employee.name || "").trim().toLowerCase();
+    const workerId = String(payroll.workerId || "").trim();
+    const workerCode = String(payroll.workerCode || "").trim().toLowerCase();
+    const workerName = String(payroll.workerName || "").trim().toLowerCase();
+
+    if (employeeId && workerId && employeeId === workerId) return true;
+    if (employeeCode && workerCode && employeeCode === workerCode) return true;
+    return Boolean(employeeName && workerName && employeeName === workerName);
+  };
+
+  const matchesEmployeeWorkLog = (employee = {}, workLog = {}) => {
+    const employeeId = String(employee.id || "").trim();
+    const employeeCode = String(employee.code || "").trim().toLowerCase();
+    const employeeName = String(employee.name || "").trim().toLowerCase();
+    const workerIds = Array.isArray(workLog.workerIds)
+      ? workLog.workerIds.map((item) => String(item || "").trim())
+      : [];
+    const workerCodes = Array.isArray(workLog.workerCodes)
+      ? workLog.workerCodes.map((item) => String(item || "").trim().toLowerCase())
+      : [];
+    const workerNames = Array.isArray(workLog.workerNames)
+      ? workLog.workerNames.map((item) => String(item || "").trim().toLowerCase())
+      : [];
+
+    if (employeeId && workerIds.includes(employeeId)) return true;
+    if (employeeCode && workerCodes.includes(employeeCode)) return true;
+    return Boolean(employeeName && workerNames.includes(employeeName));
+  };
+
+  // =====================================================
+  // ACTIVE / FINAL
+  // Ringkasan payroll per orang dibaca dari payroll final dan work log final.
+  // Halaman karyawan tidak menjadi source of truth payroll baru.
+  // =====================================================
+  const employeeSummaryMap = useMemo(() => {
+    return employees.reduce((acc, employee) => {
+      const employeePayrolls = payrolls.filter((item) => matchesEmployeePayrollLine(employee, item));
+      const employeeWorkLogs = workLogs.filter((item) => matchesEmployeeWorkLog(employee, item));
+      const stepCounter = {};
+
+      employeePayrolls.forEach((item) => {
+        if (item.stepName) stepCounter[item.stepName] = (stepCounter[item.stepName] || 0) + 1;
+      });
+      employeeWorkLogs.forEach((item) => {
+        if (item.stepName) stepCounter[item.stepName] = (stepCounter[item.stepName] || 0) + 1;
+      });
+
+      const favoriteStep = Object.entries(stepCounter).sort((left, right) => right[1] - left[1])[0]?.[0] || "-";
+      const recentPayrolls = [...employeePayrolls].sort((left, right) => {
+        const leftTime = new Date(left.payrollDate?.toDate?.() || left.payrollDate || 0).getTime() || 0;
+        const rightTime = new Date(right.payrollDate?.toDate?.() || right.payrollDate || 0).getTime() || 0;
+        return rightTime - leftTime;
+      }).slice(0, 5);
+      const recentWorkLogs = [...employeeWorkLogs].sort((left, right) => {
+        const leftTime = new Date(left.completedAt?.toDate?.() || left.completedAt || left.workDate?.toDate?.() || left.workDate || 0).getTime() || 0;
+        const rightTime = new Date(right.completedAt?.toDate?.() || right.completedAt || right.workDate?.toDate?.() || right.workDate || 0).getTime() || 0;
+        return rightTime - leftTime;
+      }).slice(0, 5);
+
+      acc[employee.id] = {
+        totalWorkLogs: employeeWorkLogs.length,
+        totalPayrollLines: employeePayrolls.length,
+        totalDraft: employeePayrolls.filter((item) => item.status === "draft").length,
+        totalConfirmed: employeePayrolls.filter((item) => item.status === "confirmed").length,
+        totalPaid: employeePayrolls.filter((item) => item.status === "paid").length,
+        totalCancelled: employeePayrolls.filter((item) => item.status === "cancelled").length,
+        totalPaidAmount: employeePayrolls
+          .filter((item) => item.status === "paid" && item.paymentStatus === "paid")
+          .reduce((sum, item) => sum + Number(item.finalAmount || 0), 0),
+        totalConfirmedAmount: employeePayrolls
+          .filter((item) => item.status === "confirmed")
+          .reduce((sum, item) => sum + Number(item.finalAmount || 0), 0),
+        favoriteStep,
+        recentPayrolls,
+        recentWorkLogs,
+      };
+
+      return acc;
+    }, {});
+  }, [employees, payrolls, workLogs]);
+
+  const selectedEmployeeSummary = selectedEmployee
+    ? employeeSummaryMap[selectedEmployee.id] || null
+    : null;
+
+  const selectedEmployeeSummaryItems = useMemo(() => {
+    if (!selectedEmployeeSummary) return [];
+
+    return [
+      {
+        key: "employee-worklogs",
+        title: "Total Work Log",
+        value: formatNumber(selectedEmployeeSummary.totalWorkLogs),
+        subtitle: "Jumlah Work Log final yang melibatkan operator ini.",
+        accent: "primary",
+      },
+      {
+        key: "employee-draft",
+        title: "Draft",
+        value: formatNumber(selectedEmployeeSummary.totalDraft),
+        subtitle: "Line payroll yang masih perlu finalisasi.",
+        accent: "warning",
+      },
+      {
+        key: "employee-confirmed",
+        title: "Confirmed",
+        value: formatNumber(selectedEmployeeSummary.totalConfirmed),
+        subtitle: "Line payroll siap pembayaran.",
+        accent: "primary",
+      },
+      {
+        key: "employee-paid",
+        title: "Paid",
+        value: formatNumber(selectedEmployeeSummary.totalPaid),
+        subtitle: "Line payroll yang sudah dibayar.",
+        accent: "success",
+      },
+      {
+        key: "employee-paid-amount",
+        title: "Total Paid",
+        value: formatCurrency(selectedEmployeeSummary.totalPaidAmount),
+        subtitle: `Step tersering: ${selectedEmployeeSummary.favoriteStep}`,
+        accent: "success",
+        columns: { xs: 24, sm: 12, md: 12, lg: 8 },
+      },
+      {
+        key: "employee-confirmed-amount",
+        title: "Total Confirmed",
+        value: formatCurrency(selectedEmployeeSummary.totalConfirmedAmount),
+        subtitle: "Nominal payroll confirmed yang belum ditandai paid.",
+        accent: "warning",
+        columns: { xs: 24, sm: 12, md: 12, lg: 8 },
+      },
+    ];
+  }, [selectedEmployeeSummary]);
+
+  const payrollHistoryColumns = [
+    {
+      title: "No. Payroll",
+      dataIndex: "payrollNumber",
+      key: "payrollNumber",
+      render: (value, record) => (
+        <div>
+          <div style={{ fontWeight: 600 }}>{value || "-"}</div>
+          <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.workNumber || "-"}</div>
+        </div>
+      ),
+    },
+    {
+      title: "Step",
+      dataIndex: "stepName",
+      key: "stepName",
+      render: (value) => value || "-",
+    },
+    {
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      render: (value) => <Tag>{value || "-"}</Tag>,
+    },
+    {
+      title: "Nominal",
+      dataIndex: "finalAmount",
+      key: "finalAmount",
+      render: (value) => formatCurrency(value),
+    },
+  ];
+
+  const workLogHistoryColumns = [
+    {
+      title: "Work Log",
+      dataIndex: "workNumber",
+      key: "workNumber",
+      render: (value, record) => (
+        <div>
+          <div style={{ fontWeight: 600 }}>{value || "-"}</div>
+          <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.stepName || "-"}</div>
+        </div>
+      ),
+    },
+    {
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      render: (value) => <Tag>{value || "-"}</Tag>,
+    },
+    {
+      title: "Good Qty",
+      dataIndex: "goodQty",
+      key: "goodQty",
+      render: (value) => formatNumber(value),
+    },
+  ];
 
   const columns = [
     {
@@ -424,6 +741,14 @@ const ProductionEmployees = () => {
         </Row>
       </Card>
 
+      <Alert
+        showIcon
+        type="info"
+        style={{ marginBottom: 16 }}
+        message="Karyawan Produksi = master operator + summary payroll read-only"
+        description="Ringkasan payroll di halaman ini dibaca dari payroll final dan work log final. Pengaturan custom payroll karyawan tetap legacy dan tidak lagi menjadi source of truth payroll."
+      />
+
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={12} md={6}>
           <Card>
@@ -554,7 +879,12 @@ const ProductionEmployees = () => {
             >
               Batal
             </Button>
-            <Button type="primary" loading={submitting} onClick={handleSubmit}>
+            <Button
+              type="primary"
+              loading={submitting}
+              disabled={!editingEmployee?.id && employeeCodeLoading}
+              onClick={handleSubmit}
+            >
               Simpan
             </Button>
           </Space>
@@ -572,9 +902,19 @@ const ProductionEmployees = () => {
               <Form.Item
                 label="Kode Karyawan"
                 name="code"
-                rules={[{ required: true, message: "Kode wajib diisi" }]}
+                extra={
+                  editingEmployee?.id
+                    ? "Kode lama dipertahankan saat edit agar relasi Work Log/Payroll existing tetap aman."
+                    : "Kode dibuat otomatis dengan format DDMMYYYY-XXX dan dikunci ulang saat simpan."
+                }
+                rules={[{ required: true, message: "Kode wajib digenerate" }]}
               >
-                <Input placeholder="Contoh: EMP-ANI" />
+                <Input
+                  disabled
+                  placeholder={
+                    employeeCodeLoading ? "Membuat kode otomatis..." : "Contoh: 25042026-001"
+                  }
+                />
               </Form.Item>
             </Col>
 
@@ -858,92 +1198,147 @@ const ProductionEmployees = () => {
         title="Detail Karyawan Produksi"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={620}
+        width={760}
       >
         {!selectedEmployee ? (
           <Empty description="Tidak ada data" />
         ) : (
-          <Descriptions column={1} bordered size="small">
-            <Descriptions.Item label="Kode">
-              {selectedEmployee.code || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Nama">
-              {selectedEmployee.name || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Gender">
-              {EMPLOYEE_GENDER_MAP[selectedEmployee.gender] || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="No. HP">
-              {selectedEmployee.phone || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Alamat">
-              {selectedEmployee.address || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Jenis Kerja">
-              {EMPLOYEE_TYPE_MAP[selectedEmployee.employmentType] || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Role">
-              {EMPLOYEE_ROLE_MAP[selectedEmployee.role] || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Tahapan Assignment">
-              {Array.isArray(selectedEmployee.assignedStepNames) &&
-              selectedEmployee.assignedStepNames.length > 0 ? (
-                <Space size={[4, 4]} wrap>
-                  {selectedEmployee.assignedStepNames.map((item) => (
-                    <Tag key={item}>{item}</Tag>
-                  ))}
-                </Space>
-              ) : (
-                "-"
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="Gunakan Tarif Custom (Legacy)">
-              {selectedEmployee.useCustomPayrollRate ? "Ya" : "Tidak"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Mode Payroll Custom (Legacy)">
-              {EMPLOYEE_PAYROLL_MODE_MAP[selectedEmployee.customPayrollMode] ||
-                "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Tarif Custom (Legacy)">
-              {selectedEmployee.useCustomPayrollRate
-                ? formatCurrency(selectedEmployee.customPayrollRate)
-                : "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Basis Qty Custom (Legacy)">
-              {selectedEmployee.useCustomPayrollRate
-                ? formatNumber(selectedEmployee.customPayrollQtyBase)
-                : "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Basis Output Payroll (Legacy)">
-              {EMPLOYEE_PAYROLL_OUTPUT_BASIS_MAP[
-                selectedEmployee.customPayrollOutputBasis
-              ] || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Preview Payroll / Status">
-              {formatEmployeePayrollPreview(selectedEmployee)}
-            </Descriptions.Item>
-            <Descriptions.Item label="Skill Tags">
-              {Array.isArray(selectedEmployee.skillTags) &&
-              selectedEmployee.skillTags.length > 0 ? (
-                <Space size={[4, 4]} wrap>
-                  {selectedEmployee.skillTags.map((item) => (
-                    <Tag key={item}>{item}</Tag>
-                  ))}
-                </Space>
-              ) : (
-                "-"
-              )}
-            </Descriptions.Item>
-            <Descriptions.Item label="Catatan Payroll">
-              {selectedEmployee.payrollNotes || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Catatan Internal">
-              {selectedEmployee.notes || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Status">
-              {selectedEmployee.isActive ? "Aktif" : "Nonaktif"}
-            </Descriptions.Item>
-          </Descriptions>
+          <>
+            <Alert
+              showIcon
+              type="info"
+              style={{ marginBottom: 16 }}
+              message="Halaman ini menampilkan summary payroll read-only per orang"
+              description="Semua angka di bawah dibaca dari payroll final dan work log final. Drawer ini tidak menjadi source of truth payroll baru dan tidak dipakai untuk finalisasi payroll."
+            />
+
+            <Descriptions column={1} bordered size="small" style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="Kode">
+                {selectedEmployee.code || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Nama">
+                {selectedEmployee.name || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Gender">
+                {EMPLOYEE_GENDER_MAP[selectedEmployee.gender] || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="No. HP">
+                {selectedEmployee.phone || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Alamat">
+                {selectedEmployee.address || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Jenis Kerja">
+                {EMPLOYEE_TYPE_MAP[selectedEmployee.employmentType] || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Role">
+                {EMPLOYEE_ROLE_MAP[selectedEmployee.role] || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Tahapan Assignment">
+                {Array.isArray(selectedEmployee.assignedStepNames) &&
+                selectedEmployee.assignedStepNames.length > 0 ? (
+                  <Space size={[4, 4]} wrap>
+                    {selectedEmployee.assignedStepNames.map((item) => (
+                      <Tag key={item}>{item}</Tag>
+                    ))}
+                  </Space>
+                ) : (
+                  "-"
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="Skill Tags">
+                {Array.isArray(selectedEmployee.skillTags) &&
+                selectedEmployee.skillTags.length > 0 ? (
+                  <Space size={[4, 4]} wrap>
+                    {selectedEmployee.skillTags.map((item) => (
+                      <Tag key={item}>{item}</Tag>
+                    ))}
+                  </Space>
+                ) : (
+                  "-"
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="Catatan Internal">
+                {selectedEmployee.notes || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Status">
+                {selectedEmployee.isActive ? "Aktif" : "Nonaktif"}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Divider orientation="left">Ringkasan Payroll Read-only</Divider>
+
+            <SummaryStatGrid items={selectedEmployeeSummaryItems} columns={{ xs: 24, sm: 12, lg: 8 }} />
+
+            <Divider orientation="left">Histori Payroll Singkat</Divider>
+            <Table
+              className="app-data-table"
+              size="small"
+              rowKey="id"
+              pagination={false}
+              columns={payrollHistoryColumns}
+              dataSource={selectedEmployeeSummary?.recentPayrolls || []}
+              locale={{
+                emptyText: <Empty description="Belum ada line payroll untuk operator ini" />,
+              }}
+              scroll={{ x: 720 }}
+              style={{ marginBottom: 16 }}
+            />
+
+            <Divider orientation="left">Histori Work Log Singkat</Divider>
+            <Table
+              className="app-data-table"
+              size="small"
+              rowKey="id"
+              pagination={false}
+              columns={workLogHistoryColumns}
+              dataSource={selectedEmployeeSummary?.recentWorkLogs || []}
+              locale={{
+                emptyText: <Empty description="Belum ada Work Log untuk operator ini" />,
+              }}
+              scroll={{ x: 680 }}
+              style={{ marginBottom: 16 }}
+            />
+
+            <Divider orientation="left">Legacy Payroll Fields</Divider>
+            <Alert
+              showIcon
+              type="warning"
+              style={{ marginBottom: 16 }}
+              message="Field custom payroll karyawan hanya legacy / compatibility"
+              description="Field di bawah ini dipertahankan untuk data lama. Payroll final aktif tetap lahir dari Work Log completed dan line payroll final, bukan dari custom payroll employee."
+            />
+
+            <Descriptions column={1} bordered size="small">
+              <Descriptions.Item label="Gunakan Tarif Custom (Legacy)">
+                {selectedEmployee.useCustomPayrollRate ? "Ya" : "Tidak"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Mode Payroll Custom (Legacy)">
+                {EMPLOYEE_PAYROLL_MODE_MAP[selectedEmployee.customPayrollMode] || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Tarif Custom (Legacy)">
+                {selectedEmployee.useCustomPayrollRate
+                  ? formatCurrency(selectedEmployee.customPayrollRate)
+                  : "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Basis Qty Custom (Legacy)">
+                {selectedEmployee.useCustomPayrollRate
+                  ? formatNumber(selectedEmployee.customPayrollQtyBase)
+                  : "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Basis Output Payroll (Legacy)">
+                {EMPLOYEE_PAYROLL_OUTPUT_BASIS_MAP[
+                  selectedEmployee.customPayrollOutputBasis
+                ] || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Preview Payroll / Status Legacy">
+                {formatEmployeePayrollPreview(selectedEmployee)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Catatan Payroll Legacy">
+                {selectedEmployee.payrollNotes || "-"}
+              </Descriptions.Item>
+            </Descriptions>
+          </>
         )}
       </Drawer>
     </div>

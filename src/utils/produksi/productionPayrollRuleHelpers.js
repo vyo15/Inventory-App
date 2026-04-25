@@ -180,6 +180,55 @@ export const buildProductionStepPayrollSnapshot = (step = {}) => {
   };
 };
 
+// =====================================================
+// ACTIVE / GUARDED
+// Helper ini dipakai untuk mendeteksi snapshot payroll Work Log yang stale
+// dibandingkan master Tahapan Produksi.
+//
+// Catatan:
+// - Patch ini tidak mengubah business rule payroll.
+// - Helper hanya menyiapkan patch rekonsiliasi yang jelas sumbernya dari
+//   master step aktif. Caller tetap menentukan kapan patch aman diterapkan.
+// =====================================================
+export const getWorkLogPayrollSnapshotReconcilePatch = ({
+  workLog = {},
+  productionStep = null,
+} = {}) => {
+  if (!productionStep?.id) {
+    return null;
+  }
+
+  const workLogSnapshot = getWorkLogPayrollRuleSnapshot(workLog);
+  const masterSnapshot = buildProductionStepPayrollSnapshot(productionStep);
+  const hasMismatch =
+    safeString(workLog.stepCode) !== safeString(productionStep.code) ||
+    safeString(workLog.stepName) !== safeString(productionStep.name) ||
+    safeString(workLog.stepProcessType) !== safeString(productionStep.processType) ||
+    workLogSnapshot.payrollMode !== masterSnapshot.payrollMode ||
+    safeNumber(workLogSnapshot.payrollRate, 0) !== safeNumber(masterSnapshot.payrollRate, 0) ||
+    safeNumber(workLogSnapshot.payrollQtyBase, 1) !== safeNumber(masterSnapshot.payrollQtyBase, 1) ||
+    safeString(workLogSnapshot.payrollOutputBasis) !== safeString(masterSnapshot.payrollOutputBasis) ||
+    safeString(workLogSnapshot.payrollClassification) !== safeString(masterSnapshot.payrollClassification) ||
+    Boolean(workLogSnapshot.includePayrollInHpp) !== Boolean(masterSnapshot.includePayrollInHpp);
+
+  if (!hasMismatch) {
+    return null;
+  }
+
+  return {
+    stepCode: safeString(productionStep.code || workLog.stepCode),
+    stepName: safeString(productionStep.name || workLog.stepName),
+    stepProcessType: safeString(productionStep.processType || workLog.stepProcessType),
+    stepPayrollMode: masterSnapshot.payrollMode,
+    stepPayrollRate: masterSnapshot.payrollRate,
+    stepPayrollQtyBase: masterSnapshot.payrollQtyBase,
+    stepPayrollOutputBasis: masterSnapshot.payrollOutputBasis,
+    stepPayrollClassification: masterSnapshot.payrollClassification,
+    stepPayrollIncludeInHpp: masterSnapshot.includePayrollInHpp,
+    stepPayrollRuleSource: "production_step",
+  };
+};
+
 export const getWorkLogPayrollRuleSnapshot = (workLog = {}) => {
   const hasSnapshot =
     safeString(workLog.stepPayrollMode) ||

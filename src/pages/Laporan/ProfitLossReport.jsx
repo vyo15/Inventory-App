@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button, Table, Tag, message } from "antd";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import PageHeader from "../../components/Layout/Page/PageHeader";
@@ -113,24 +112,38 @@ const ProfitLossReport = () => {
     [grossProfit, summary],
   );
 
+  // =========================
+  // SECTION: Export laporan laba rugi
+  // Fungsi:
+  // - mengekspor gabungan revenues, incomes, dan expenses ke XLSX profesional
+  // - tetap menjaga source collection asli agar audit laporan tetap mudah ditelusuri
+  // Status:
+  // - aktif dipakai sebagai jalur export final laporan laba rugi
+  // =========================
   const exportToExcel = async () => {
-    const exportData = reportData.map((item) => ({
-      Tanggal: item.date?.toDate
-        ? dayjs(item.date.toDate()).format("DD-MM-YYYY HH:mm")
-        : "-",
-      "Aliran Kas": item.flow,
-      Sumber: item.sourceCollection || "-",
-      Tipe: item.type || "-",
-      Deskripsi: item.description || "-",
-      Jumlah: Math.round(Number(item.amount || 0)),
-    }));
-
     await exportJsonToExcel({
-      data: exportData,
+      title: "Laporan Laba Rugi IMS Bunga Flanel",
+      subtitle: "Ekspor mengikuti gabungan revenues, incomes, dan expenses pada halaman ini.",
       sheetName: "Laporan Laba Rugi",
       fileName: "Laporan-Laba-Rugi",
+      columns: [
+        { header: "Tanggal", key: "transactionDate", width: 18 },
+        { header: "Aliran Kas", key: "cashFlowType", width: 16 },
+        { header: "Sumber Collection", key: "sourceCollection", width: 18 },
+        { header: "Tipe", key: "transactionType", width: 24 },
+        { header: "Deskripsi", key: "transactionDescription", width: 42 },
+        { header: "Jumlah", key: "transactionAmount", width: 18 },
+      ],
+      data: reportData.map((item) => ({
+        transactionDate: formatDateId(item.date, true),
+        cashFlowType: item.flow || "-",
+        sourceCollection: item.sourceCollection || "-",
+        transactionType: item.type || "-",
+        transactionDescription: item.description || "-",
+        transactionAmount: formatCurrencyId(item.amount),
+      })),
     });
-    message.success("Laporan berhasil diekspor ke Excel!");
+    message.success("Laporan laba rugi berhasil diekspor ke Excel.");
   };
 
   const columns = useMemo(
@@ -212,20 +225,11 @@ const ProfitLossReport = () => {
           </Button>
         }
       >
-        {/* =========================
-            SECTION: tabel laba rugi baseline global
-            Fungsi:
-            - mengunci surface laporan ke pattern yang sama dengan report lain
-            - tabel tetap read-only dan tidak menambah aksi di luar export
-            Status: aktif / final
-        ========================= */}
         <Table
-          className="app-data-table"
           dataSource={reportData}
           columns={columns}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 980 }}
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada data laba rugi untuk ditampilkan." />,
           }}

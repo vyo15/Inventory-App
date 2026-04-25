@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Button,
   Col,
   DatePicker,
@@ -8,7 +9,6 @@ import {
   InputNumber,
   Popconfirm,
   Select,
-  Space,
   Table,
   Tag,
   message,
@@ -42,6 +42,30 @@ const MONTH_OPTIONS = Array.from({ length: 12 }).map((_, index) => ({
   label: dayjs().month(index).format("MMMM"),
   value: index,
 }));
+
+// =========================
+// SECTION: Sumber expense
+// Fungsi:
+// - membedakan pengeluaran manual vs pengeluaran turunan dari modul lain
+// - membantu user memahami apakah row boleh dihapus atau hanya dibaca
+// Status:
+// - aktif dipakai di UI Cash Out
+// - kandidat cleanup hanya jika nanti ada source registry global untuk expenses
+// =========================
+const EXPENSE_SOURCE_META = {
+  cash_out_manual: { label: "Manual", color: "default", deletable: true },
+  purchases: { label: "Pembelian", color: "blue", deletable: false },
+  production_payroll: { label: "Payroll Produksi", color: "purple", deletable: false },
+};
+
+const resolveExpenseSourceMeta = (record = {}) => {
+  const key = String(record.sourceModule || "").trim();
+  return EXPENSE_SOURCE_META[key] || {
+    label: key ? key : "Manual",
+    color: "default",
+    deletable: key === "",
+  };
+};
 
 // =========================
 // SECTION: Helper meta saving pembelian
@@ -262,6 +286,14 @@ const CashOut = () => {
         render: (value) => formatDateId(value),
       },
       {
+        title: "Sumber",
+        key: "sourceModule",
+        render: (_, record) => {
+          const sourceMeta = resolveExpenseSourceMeta(record);
+          return <Tag color={sourceMeta.color}>{sourceMeta.label}</Tag>;
+        },
+      },
+      {
         title: "Tipe",
         dataIndex: "type",
         key: "type",
@@ -311,31 +343,30 @@ const CashOut = () => {
         render: (value) => value || "-",
       },
       {
-        // =====================================================
-        // SECTION: aksi ledger page
-        // Fungsi:
-        // - Cash Out tetap simple action page tanpa Detail agar tidak mengubah flow kas yang sudah aktif
-        // - kolom aksi diposisikan di kanan dan dibuat sticky untuk tabel expense yang relatif lebar
-        // =====================================================
         title: "Aksi",
         key: "action",
         width: 140,
-        fixed: "right",
         className: "app-table-action-column",
-        render: (_, record) => (
-          <Space wrap className="ims-action-group">
+        render: (_, record) => {
+          const sourceMeta = resolveExpenseSourceMeta(record);
+
+          if (!sourceMeta.deletable) {
+            return <Tag color={sourceMeta.color}>Read Only</Tag>;
+          }
+
+          return (
             <Popconfirm
               title="Yakin hapus transaksi ini?"
               onConfirm={() => handleDeleteTransaction(record.id)}
               okText="Ya"
               cancelText="Tidak"
             >
-              <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />}>
+              <Button danger icon={<DeleteOutlined />}>
                 Hapus
               </Button>
             </Popconfirm>
-          </Space>
-        ),
+          );
+        },
       },
     ],
     [],
@@ -355,6 +386,14 @@ const CashOut = () => {
             onClick: openCreateModal,
           },
         ]}
+      />
+
+      <Alert
+        style={{ marginBottom: 16 }}
+        type="info"
+        showIcon
+        message="Payroll paid saat ini belum otomatis menjadi expense. Jika nanti payroll dibuat otomatis ke Cash Out, sistem harus memakai sourceModule dan sourceId agar tidak double expense."
+        description="Baris dengan sumber Pembelian atau Payroll Produksi diperlakukan sebagai turunan modul lain dan sebaiknya read-only di halaman ini."
       />
 
       <PageSection
@@ -413,8 +452,6 @@ const CashOut = () => {
           dataSource={filteredCashOuts}
           columns={columns}
           loading={loading}
-          // Baseline final: ledger table boleh sederhana, tetapi tetap diberi scroll.x agar fixed action selalu stabil.
-          scroll={{ x: 1320 }}
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada pengeluaran pada periode ini." />,
           }}

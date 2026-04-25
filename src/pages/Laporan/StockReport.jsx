@@ -8,8 +8,8 @@ import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import { db } from "../../firebase";
+import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatNumberId } from "../../utils/formatters/numberId";
-import { inferHasVariants, normalizeItemVariants } from "../../utils/variants/variantStockHelpers";
 
 const { Search } = Input;
 const { Option } = Select;
@@ -26,21 +26,6 @@ const resolveDisplayStock = (item = {}) =>
   Number(item.currentStock ?? item.stock ?? item.availableStock ?? 0);
 
 const resolveDisplayUnit = (item = {}) => item.unit || item.stockUnit || "pcs";
-
-// =========================
-// SECTION: Ringkasan varian laporan stok
-// ACTIVE / FINAL:
-// - laporan tetap aggregate agar tidak mengubah arsitektur report besar
-// - tetapi item bervarian menampilkan jumlah varian dan total stok dari variants[] sebagai display contract final
-// =========================
-const resolveVariantSummary = (item = {}) => {
-  if (!inferHasVariants(item)) return "Master";
-
-  const variants = normalizeItemVariants(item);
-  const activeVariants = variants.filter((variant) => variant.isActive !== false);
-
-  return `${activeVariants.length} varian aktif`;
-};
 
 const resolveStatus = (stockValue) => {
   if (stockValue === 0) return "Habis";
@@ -69,7 +54,6 @@ const StockReport = () => {
             ...payload,
             stockDisplay: stockValue,
             unitDisplay: resolveDisplayUnit(payload),
-            variantSummary: resolveVariantSummary(payload),
             type: "Bahan Baku",
             status: resolveStatus(stockValue),
           };
@@ -100,7 +84,6 @@ const StockReport = () => {
             ...payload,
             stockDisplay: stockValue,
             unitDisplay: resolveDisplayUnit(payload),
-            variantSummary: resolveVariantSummary(payload),
             type: "Produk Jadi",
             status: resolveStatus(stockValue),
           };
@@ -114,35 +97,6 @@ const StockReport = () => {
       (error) => {
         message.error("Gagal memuat data produk jadi.");
         console.error("Error fetching products:", error);
-      },
-    );
-
-    const unsubscribeSemiFinished = onSnapshot(
-      collection(db, "semi_finished_materials"),
-      (snapshot) => {
-        const semiFinishedData = snapshot.docs.map((documentItem) => {
-          const payload = documentItem.data();
-          const stockValue = resolveDisplayStock(payload);
-
-          return {
-            id: documentItem.id,
-            ...payload,
-            stockDisplay: stockValue,
-            unitDisplay: resolveDisplayUnit(payload),
-            variantSummary: resolveVariantSummary(payload),
-            type: "Bahan Setengah Jadi",
-            status: resolveStatus(stockValue),
-          };
-        });
-
-        setInventory((previousInventory) => [
-          ...previousInventory.filter((item) => item.type !== "Bahan Setengah Jadi"),
-          ...semiFinishedData,
-        ]);
-      },
-      (error) => {
-        message.error("Gagal memuat data bahan setengah jadi.");
-        console.error("Error fetching semi finished materials:", error);
       },
     );
 
@@ -161,7 +115,6 @@ const StockReport = () => {
     return () => {
       unsubscribeRawMaterials();
       unsubscribeProducts();
-      unsubscribeSemiFinished();
     };
   }, []);
 
@@ -209,39 +162,44 @@ const StockReport = () => {
     [criticalStockItems.length, lowStockItems.length, totalItems],
   );
 
-  const exportToCSV = () => {
+  // =========================
+  // SECTION: Export laporan stok ke XLSX
+  // Fungsi:
+  // - mengganti export CSV mentah menjadi file Excel yang lebih rapi
+  // - menjaga helper export reusable lintas laporan batch berikutnya
+  // Status:
+  // - aktif dipakai di laporan stok
+  // - kandidat cleanup hanya jika nanti seluruh laporan pindah ke report/export engine yang lebih besar
+  // =========================
+  const exportToExcel = async () => {
     if (filteredData.length === 0) {
       message.warning("Tidak ada data untuk diekspor.");
       return;
     }
 
-    const headers = [
-      "Nama Item",
-      "Kategori",
-      "Jenis",
-      "Stok",
-      "Satuan",
-      "Varian",
-      "Status",
-    ];
-
-    const csvContent = [
-      headers.join(","),
-      ...filteredData.map(
-        (item) =>
-          `${item.name},${item.category || "N/A"},${item.type},${item.stockDisplay},${item.unitDisplay},${item.variantSummary},${item.status}`,
-      ),
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "laporan_stok.csv");
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    await exportJsonToExcel({
+      title: "Laporan Stok IMS Bunga Flanel",
+      subtitle: "Snapshot stok item sesuai filter aktif di halaman laporan stok.",
+      fileName: "laporan-stok",
+      sheetName: "Laporan Stok",
+      filters: [
+        `Kategori: ${selectedCategory === "all" ? "Semua" : selectedCategory}`,
+        `Status: ${selectedStatus === "all" ? "Semua" : selectedStatus}`,
+        `Pencarian: ${searchTerm || "-"}`,
+      ],
+      columns: [
+        { key: "name", label: "Nama Item" },
+        { key: "category", label: "Kategori" },
+        { key: "type", label: "Jenis" },
+        { key: "stockDisplay", label: "Stok" },
+        { key: "unitDisplay", label: "Satuan" },
+        { key: "status", label: "Status" },
+      ],
+      data: filteredData.map((item) => ({
+        ...item,
+        category: item.category || "-",
+      })),
+    });
   };
 
   const columns = useMemo(
@@ -265,7 +223,6 @@ const StockReport = () => {
         filters: [
           { text: "Bahan Baku", value: "Bahan Baku" },
           { text: "Produk Jadi", value: "Produk Jadi" },
-          { text: "Bahan Setengah Jadi", value: "Bahan Setengah Jadi" },
         ],
         onFilter: (value, record) => record.type === value,
       },
@@ -279,12 +236,6 @@ const StockReport = () => {
         title: "Satuan",
         dataIndex: "unitDisplay",
         key: "unitDisplay",
-      },
-      {
-        title: "Varian",
-        dataIndex: "variantSummary",
-        key: "variantSummary",
-        render: (value) => (value === "Master" ? <Tag>Master</Tag> : <Tag color="purple">{value}</Tag>),
       },
       {
         title: "Status",
@@ -335,12 +286,12 @@ const StockReport = () => {
 
       <PageSection
         title="Filter Laporan"
-        subtitle="Gunakan filter untuk mempersempit tampilan laporan sebelum ekspor CSV."
+        subtitle="Gunakan filter untuk mempersempit tampilan laporan sebelum ekspor XLSX."
       >
         <FilterBar
           actions={
-            <Button type="primary" icon={<FileExcelOutlined />} onClick={exportToCSV}>
-              Ekspor ke CSV
+            <Button type="primary" icon={<FileExcelOutlined />} onClick={exportToExcel}>
+              Ekspor ke XLSX
             </Button>
           }
         >
@@ -381,24 +332,15 @@ const StockReport = () => {
 
       <PageSection
         title="Tabel Laporan Stok"
-        subtitle="Field stok tampilan mengikuti currentStock/variants[] final; semi finished ikut terbaca agar laporan stok selaras dengan produksi."
+        subtitle="Field stok tampilan mengikuti fallback currentStock → stock → availableStock agar aman pada codebase transisional."
         extra={<Tag color="blue">{formatNumberId(filteredData.length)} baris</Tag>}
       >
-        {/* =========================
-            SECTION: tabel laporan stok baseline global
-            Fungsi:
-            - laporan stok ikut memakai surface table resmi tanpa mengubah rule laporan yang masih sederhana
-            - tidak ada aksi row, jadi tabel fokus pada data + filter + ekspor
-            Status: aktif / final
-        ========================= */}
         <Table
-          className="app-data-table"
           columns={columns}
           dataSource={filteredData}
           loading={loading}
           rowKey="id"
           bordered
-          scroll={{ x: 980 }}
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada data stok yang cocok dengan filter saat ini." />,
           }}

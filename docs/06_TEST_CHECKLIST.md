@@ -91,11 +91,15 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 ## D. Inventaris
 
 ### Stock Adjustment
-- tambah adjustment masuk bahan baku
-- tambah adjustment keluar produk
+- tambah adjustment masuk bahan baku non-varian
+- tambah adjustment keluar produk non-varian
+- pastikan adjustment keluar tidak boleh melebihi `availableStock`
+- tambah adjustment masuk item bervarian
+- tambah adjustment keluar item bervarian
+- pastikan item bervarian wajib memilih varian
 - cek `stock_adjustments`
 - cek inventory log `stock_adjustment`
-- cek sinkronisasi `stock` dan `currentStock`
+- cek sinkronisasi `stock`, `currentStock`, `reservedStock`, `availableStock`, dan total `variants[]`
 
 ### Stock Management
 - cek semua sumber mutasi muncul
@@ -158,29 +162,15 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - cek HPP tetap bisa membaca work log completed
 
 ### Payroll Produksi
-- selesaikan work log eligible dan pastikan draft payroll langsung terbentuk otomatis per operator
-- cek operator produksi langsung muncul di menu Payroll tanpa generate manual
-- cek nilai payroll per line sesuai step rule snapshot pada Work Log
-- confirm payroll draft
-- ubah status confirmed → paid
-- cancel payroll draft/confirmed dan pastikan line tidak aktif lagi
+- buat payroll dari work log completed
+- cek nilai payroll
+- ubah status unpaid → paid
 
 ### Analisis HPP
 - pastikan work log completed terbaca
 - cek total biaya produksi
 - cek total good qty
 - cek rata-rata HPP per unit
-
-### Baseline UI Table / Action
-- cek semua main table prioritas apakah kolom `Aksi` ada di paling kanan
-- cek main table lebar apakah aksi utama tetap terlihat tanpa scroll horizontal dulu
-- cek `ProductionOrders` apakah `Detail / Refresh Need / Mulai Produksi` tetap langsung terlihat
-- cek `ProductionSteps` sekarang tampil sebagai detail-capable page ringan: tabel utama ringkas, tombol `Detail` ada, dan drawer Detail read-only tampil benar
-- cek `ProductionProfiles` tetap konsisten sebagai simple config page tanpa tombol `Detail`
-- cek `CashIn` dan `CashOut` tetap rapi sebagai ledger/simple action page tanpa ubah logic handler
-- cek nested/subtable BOM dan Work Log tetap usable walau tidak dipaksa sticky
-- cek dark mode dan light mode
-- cek semua tombol aksi tetap memanggil handler yang benar
 
 ## F. Laporan
 - Stock Report tampil benar
@@ -198,48 +188,156 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - cek field stok sinkron kembali setelah reset
 
 
-### Global UI Normalization Batch
-- cek `Sales` apakah status + aksi tetap konsisten dan tombol row tidak lagi terasa manual/acak
-- cek `SupplierPurchases` apakah tombol `Detail` sekarang muncul jelas di kolom aksi
-- cek `PricingRules` apakah tombol `Detail` membuka modal detail/preview yang benar
-- cek `Purchases`, `Returns`, `StockAdjustment`, `StockManagement`, `StockReport`, `PurchasesReport`, `SalesReport`, `ProfitLossReport`, dan `ProductionHppAnalysis` apakah main table sudah memakai baseline surface global
-- cek halaman lebar tetap nyaman dipakai dengan `scroll.x` dan sticky/fixed right bila ada aksi
-- cek `ResetMaintenanceData` apakah tabel preview tetap rapi walau page shell utility masih transisi
-- cek dark mode dan light mode setelah normalisasi batch global
-- cek tidak ada variasi action liar baru di luar baseline final
+## Tambahan Checklist Batch Prioritas
 
-## Checklist Cleanup File Legacy / Wrapper
+### Inventory UX
+- popup Stock Adjustment item berbasis pcs/bulat tidak memaksa tampilan `.00`
+- riwayat adjustment terbaru tampil paling atas
+- kolom sumber/referensi mutasi stok lebih mudah dipahami
 
-Setelah menjalankan script penghapusan file legacy:
+### Production Order
+- preview kebutuhan material tampil sebelum submit PO
+- info shortage utama muncul saat bahan kurang
 
-- jalankan `npm run dev` dan hard refresh browser;
-- buka Dashboard;
-- buka Produk Jadi dan pastikan form produk/varian tetap normal;
-- buka Penjualan dan pastikan status/tab sales tetap normal;
-- buka semua menu produksi final: BOM, Production Order, Work Log, Payroll, Analisis HPP;
-- pastikan tidak ada import error untuk `StatusBadge`, `productOptions`, `salesStatusOptions`, `useAppRole`, atau `productionService`;
-- pastikan route/sidebar tetap menuju halaman aktif yang benar;
-- jalankan pencarian import: tidak boleh ada import ke file yang sudah dihapus;
-- jangan menghapus data Firestore hanya karena file legacy dihapus;
-- jika perlu sinkronisasi data lama, gunakan menu Reset & Maintenance Data dengan dry run terlebih dulu.
+### Work Log Costing
+- complete Work Log menghitung ulang `materialCostActual`
+- complete Work Log menghitung ulang `totalCostActual` dan `costPerGoodUnit`
+- detail labor Work Log membaca ringkasan payroll final bila tersedia
 
-## Checklist Cleanup Structure Batch 2
+### Payroll / Cash Out
+- detail Payroll Produksi lebih mudah dipahami user
+- `paid` payroll belum otomatis membuat expense baru
 
-- buka menu `Sistem → Reset & Maintenance Data` dan pastikan path final `/utilities/reset-maintenance-data` terbuka;
-- buka path lama `/utilities/reset-test-data` dan pastikan redirect ke path final;
-- jalankan script `scripts/maintenance/delete-transition-cleanup-batch2.sh` atau `.bat` setelah patch diekstrak;
-- pastikan `src/pages/Utilities/ResetTestData.jsx` dan `src/services/Utilities/resetTestDataService.js` sudah terhapus;
-- jalankan `npm run dev` dan hard refresh;
-- test tombol Cek Data Produksi, Cek Stok Umum, Cek Schema Inventory Log, Preview Reset, dan dialog konfirmasi RESET;
-- pastikan tidak ada import error ke `ResetTestData` atau `resetTestDataService`;
-- pastikan tidak ada perubahan stok/kas/payroll/HPP hanya karena cleanup struktur.
+### Export
+- Stock Report ekspor ke XLSX
+- file hasil memiliki header, filter, dan lebar kolom yang lebih rapi
 
-## Checklist Batch 3 — Cleanup Data Legacy
-- Buka `Reset & Maintenance Data`.
-- Klik `Cek Data Legacy` dan pastikan tidak ada data domain yang berubah.
-- Pastikan hasil audit membagi data menjadi OK, Aman Repair, Display Repair, Reset Scoped, dan Manual.
-- Jika ada `productions` legacy, siapkan reset produksi scoped lalu cek preview sebelum mengetik `RESET`.
-- Jika ada sales/returns/adjustments/purchases lama tanpa variant snapshot, gunakan reset transaksi varian scoped hanya untuk data testing.
-- Pastikan completed/final data tidak berubah otomatis.
-- Pastikan reset sales tidak menghapus income non-sales, dan reset purchases tidak menghapus expense manual.
-- Pastikan maintenance log mencatat dry run legacy.
+## Checklist Tambahan Cleanup Stok & Customer — 2026-04-25
+
+### Stock Adjustment Final
+- tambah adjustment masuk bahan baku non-varian
+- tambah adjustment keluar bahan baku non-varian dan pastikan stok tidak boleh melebihi `availableStock`
+- tambah adjustment masuk produk non-varian
+- tambah adjustment keluar produk non-varian dan pastikan stok tidak boleh melebihi `availableStock`
+- tambah adjustment item bervarian dan pastikan varian wajib dipilih
+- cek `stock`, `currentStock`, `reservedStock`, `availableStock`, dan total `variants[]` tetap sinkron
+- cek record `stock_adjustments` menyimpan `variantKey`, `variantLabel`, `currentStockBefore`, `currentStockAfter`, `availableStockBefore`, dan `availableStockAfter`
+- cek `inventory_logs` menyimpan `adjustmentId`, `referenceId`, `referenceType`, `details`, dan snapshot stok sebelum/sesudah
+
+### Customer Collection Final
+- tambah customer dari Master Customer
+- refresh halaman Master Customer dan pastikan customer tetap muncul
+- edit customer
+- hapus customer
+- buka Sales dan pastikan customer dari Master Customer muncul di dropdown
+- pastikan tidak ada flow aktif yang masih membaca `Customers` uppercase
+
+### Inventory Log Audit
+- buat pembelian dan cek log menampilkan `purchaseId`
+- buat penjualan dan cek log menampilkan `saleId`
+- buat retur dan cek log menampilkan `returnId`
+- buat stock adjustment dan cek log menampilkan `adjustmentId`
+- cek log lama tetap tampil walau belum punya `details`
+
+## Checklist Tambahan Kode Karyawan Produksi Otomatis — 2026-04-25
+
+### Karyawan Produksi
+- buka halaman Karyawan Produksi
+- klik Tambah Karyawan Produksi
+- pastikan field Kode Karyawan otomatis terisi
+- pastikan format kode `DDMMYYYY-001`
+- pastikan field kode disabled/read-only dan tidak bisa diedit manual
+- simpan karyawan pertama
+- tambah karyawan kedua di tanggal yang sama dan pastikan kode menjadi `DDMMYYYY-002`
+- tambah karyawan ketiga di tanggal yang sama dan pastikan kode menjadi `DDMMYYYY-003`
+- pastikan data tersimpan ke Firestore field `code`
+- pastikan tabel Karyawan Produksi menampilkan kode baru
+- edit karyawan lama dan pastikan kode tidak berubah otomatis
+- pastikan kode lama format `EMP-...` tetap aman saat edit data existing
+- pastikan Work Log tetap bisa memilih/membaca karyawan
+- pastikan Payroll tetap bisa membaca karyawan dari Work Log completed
+- pastikan tidak ada error console
+- jalankan `npm run build`
+
+
+## Checklist Bug Karyawan Produksi Tidak Tampil — 2026-04-25
+
+### Load halaman Karyawan Produksi
+- buka route `/produksi/karyawan-produksi`
+- pastikan data lama di collection `production_employees` muncul di tabel
+- pastikan summary Total Karyawan tidak 0 jika Firestore memiliki data employee
+- pastikan employee lama dengan kode seperti `11042026-01` tetap tampil
+- pastikan kolom `name`, `employmentType`, `role`, `assignedStepNames`, dan `isActive` terbaca benar
+- tambah karyawan baru, lalu pastikan setelah save langsung muncul di tabel
+- refresh halaman dan pastikan data tetap muncul
+
+### Guard query pendukung
+- test ketika query tahapan produksi gagal karena index, data employee tetap tampil
+- test ketika query work log gagal karena index, data employee tetap tampil
+- test ketika query payroll gagal karena index, data employee tetap tampil
+- pastikan warning data pendukung muncul tanpa mengosongkan tabel employee
+- pastikan filter status aktif/nonaktif tetap jalan
+- pastikan filter jenis kerja tetap jalan
+- pastikan filter role tetap jalan
+- pastikan filter assignment tetap jalan jika data tahapan berhasil dimuat
+
+### Integrasi produksi
+- pastikan Work Log Produksi tetap bisa membaca karyawan aktif
+- pastikan Payroll Produksi tetap bisa membaca karyawan dari Work Log completed
+- pastikan tidak ada perubahan ke payroll calculation, HPP, lifecycle PO, atau completed guard Work Log
+- pastikan tidak ada error fatal di console
+- jalankan `npm run build`
+
+## Checklist UI Regression Produksi — 2026-04-25
+
+### Production Orders
+- buka `/produksi/production-orders`
+- pastikan tabel utama tidak memaksa scroll horizontal hanya untuk melihat tombol aksi pada desktop/laptop normal
+- pastikan tombol Detail langsung terlihat
+- pastikan tombol Refresh Need tetap terlihat dan berjalan pada order shortage/ready
+- pastikan tombol Mulai Produksi tetap terlihat dan berjalan pada order ready
+- pastikan target/BOM panjang tetap wrap atau compact dan tidak mendorong aksi keluar layar
+- pastikan drawer detail tetap terbuka normal
+- pastikan status ready/shortage/in production/completed tidak berubah karena patch UI
+
+### Work Log Produksi
+- buka `/produksi/work-log-produksi`
+- pastikan tabel utama tidak memaksa scroll horizontal hanya untuk melihat tombol aksi pada desktop/laptop normal
+- pastikan tombol Detail langsung terlihat
+- pastikan tombol Edit langsung terlihat untuk work log yang masih editable
+- pastikan tombol Selesaikan langsung terlihat untuk work log yang belum completed/cancelled
+- klik Selesaikan dan pastikan modal menampilkan target produksi
+- pastikan modal menampilkan step produksi
+- pastikan modal menampilkan qty batch
+- pastikan modal menampilkan estimasi hasil/output dan satuan output
+- pastikan Good Qty, Reject Qty, Rework Qty, Operator Produksi, dan Catatan Penyelesaian tetap bisa diisi
+- pastikan flow Selesaikan tetap memakai handler lama dan output stock/payroll/HPP tidak berubah
+
+### General UI Regression Guard
+- pastikan tidak ada error console
+- pastikan build berhasil
+
+## Checklist Regression Auto Payroll Work Log Completed — 2026-04-25
+
+- buka `/produksi/work-log-produksi`
+- pilih Work Log status aktif/proses
+- klik `Selesaikan`
+- pastikan modal menampilkan estimasi hasil/output
+- isi Good Qty lebih dari 0
+- pilih minimal satu Operator Produksi
+- klik `Selesaikan`
+- pastikan Work Log berubah status menjadi `completed`
+- buka `/produksi/payroll-produksi`
+- pastikan payroll line baru muncul
+- pastikan Total Payroll bertambah
+- pastikan Draft/Belum Dibayar bertambah sesuai status awal `draft` dan `unpaid`
+- pastikan nominal payroll mengikuti rule Tahapan Produksi
+- buka Detail Karyawan Produksi
+- pastikan Ringkasan Payroll tidak lagi 0 bila payroll line dibuat
+- pastikan Histori Payroll Singkat menampilkan line payroll
+- klik Selesaikan ulang/refresh flow dan pastikan payroll tidak dobel
+- test Good Qty 0 sesuai rule: line boleh audit 0 atau service menolak complete jika total good output 0
+- pastikan operator kosong tidak boleh submit modal complete
+- pastikan Payroll Produksi filter status tetap jalan
+- pastikan tidak ada error console
+- jalankan `npm run build`

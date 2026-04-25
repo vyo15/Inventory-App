@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button, Table, Tag, message } from "antd";
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import PageHeader from "../../components/Layout/Page/PageHeader";
@@ -113,29 +112,46 @@ const SalesReport = () => {
   // =========================
   // SECTION: Export helper
   // =========================
+  // =========================
+  // SECTION: Export laporan penjualan
+  // Fungsi:
+  // - mengekspor data penjualan aktif ke XLSX dengan format yang lebih siap pakai
+  // - tetap mengikuti source laporan penjualan dari collection sales
+  // Status:
+  // - aktif dipakai sebagai jalur export final laporan penjualan
+  // =========================
   const exportToExcel = async () => {
-    const exportData = salesData.map((sale) => ({
-      "ID Transaksi": sale.id,
-      Tanggal: sale.date?.toDate
-        ? dayjs(sale.date.toDate()).format("DD-MM-YYYY HH:mm")
-        : "-",
-      Pelanggan: sale.customerName || "-",
-      Channel: sale.salesChannel || "-",
-      Resi: sale.referenceNumber || "-",
-      "Item Terjual": (sale.items || [])
-        .map((item) => `${item.itemName} (${item.quantity})`)
-        .join(", "),
-      Total: Math.round(Number(sale.total || 0)),
-      Status: sale.status || "-",
-      Catatan: sale.note || "-",
-    }));
-
     await exportJsonToExcel({
-      data: exportData,
+      title: "Laporan Penjualan IMS Bunga Flanel",
+      subtitle: "Ekspor mengikuti data penjualan yang sedang tampil di halaman ini.",
       sheetName: "Laporan Penjualan",
       fileName: "Laporan-Penjualan",
+      columns: [
+        { header: "ID Transaksi", key: "salesId", width: 24 },
+        { header: "Tanggal", key: "salesDate", width: 18 },
+        { header: "Pelanggan", key: "customerName", width: 24 },
+        { header: "Channel", key: "salesChannel", width: 18 },
+        { header: "Resi / Referensi", key: "referenceNumber", width: 24 },
+        { header: "Item Terjual", key: "soldItems", width: 42 },
+        { header: "Total", key: "salesTotal", width: 18 },
+        { header: "Status", key: "salesStatus", width: 16 },
+        { header: "Catatan", key: "salesNote", width: 40 },
+      ],
+      data: salesData.map((sale) => ({
+        salesId: sale.id,
+        salesDate: formatDateId(sale.date, true),
+        customerName: sale.customerName || "-",
+        salesChannel: sale.salesChannel || "-",
+        referenceNumber: sale.referenceNumber || "-",
+        soldItems: (sale.items || [])
+          .map((item) => `${item.itemName} (${formatNumberId(item.quantity)} ${item.unit || "pcs"})`)
+          .join("; ") || "-",
+        salesTotal: formatCurrencyId(sale.total),
+        salesStatus: sale.status || "-",
+        salesNote: sale.note || "-",
+      })),
     });
-    message.success("Laporan berhasil diekspor ke Excel!");
+    message.success("Laporan penjualan berhasil diekspor ke Excel.");
   };
 
   const columns = useMemo(
@@ -229,20 +245,11 @@ const SalesReport = () => {
           </Button>
         }
       >
-        {/* =========================
-            SECTION: tabel laporan penjualan baseline global
-            Fungsi:
-            - menyamakan surface tabel laporan dengan baseline global tanpa mengubah logic sumber data sales
-            - tidak ada aksi row karena halaman laporan cukup fokus pada baca + ekspor
-            Status: aktif / final
-        ========================= */}
         <Table
-          className="app-data-table"
           dataSource={salesData}
           columns={columns}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 1200 }}
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada data penjualan untuk ditampilkan." />,
           }}

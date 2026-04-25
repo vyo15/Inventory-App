@@ -39,9 +39,6 @@ const ProductionOrders = lazy(
   () => import("../pages/Produksi/ProductionOrders"),
 );
 
-const StockAdjustment = lazy(
-  () => import("../pages/Inventory/StockAdjustment"),
-);
 const StockManagement = lazy(
   () => import("../pages/Inventory/StockManagement"),
 );
@@ -59,6 +56,13 @@ const ProfitLossReport = lazy(
 const PurchasesReport = lazy(() => import("../pages/Laporan/PurchasesReport"));
 const SalesReport = lazy(() => import("../pages/Laporan/SalesReport"));
 const StockReport = lazy(() => import("../pages/Laporan/StockReport"));
+// =========================
+// SECTION: Payroll Report
+// Fungsi:
+// - memberi area laporan payroll periode yang terpisah dari transaksi payroll harian
+// - menjaga Payroll Produksi tetap fokus ke finalisasi line payroll
+// =========================
+const PayrollReport = lazy(() => import("../pages/Laporan/PayrollReport"));
 const ResetMaintenanceData = lazy(() => import("../pages/Utilities/ResetMaintenanceData"));
 
 // =========================
@@ -138,7 +142,16 @@ const AppRoutes = ({ darkTheme }) => {
           element={<ProductionHppAnalysis />}
         />
 
-        <Route path="/stock-adjustment" element={<StockAdjustment />} />
+        {/* =========================
+            SECTION: Legacy Inventory Redirect
+            Fungsi:
+            - menjaga bookmark lama /stock-adjustment tidak error
+            Hubungan flow:
+            - Penyesuaian Stok sudah digabung ke Manajemen Stok sebagai satu entry point inventory
+            Status:
+            - legacy bridge; bukan halaman adjustment aktif dan kandidat cleanup jika bookmark lama sudah tidak dibutuhkan
+        ========================= */}
+        <Route path="/stock-adjustment" element={<Navigate to="/stock-management" replace />} />
         <Route path="/stock-management" element={<StockManagement />} />
 
         <Route path="/purchases" element={<Purchases />} />
@@ -152,6 +165,13 @@ const AppRoutes = ({ darkTheme }) => {
         <Route path="/purchases-report" element={<PurchasesReport />} />
         <Route path="/sales-report" element={<SalesReport />} />
         <Route path="/report-stock" element={<StockReport />} />
+        {/* =========================
+            SECTION: Laporan Payroll
+            Fungsi:
+            - memisahkan rekap periode / export dari halaman Payroll Produksi
+            - route ini hanya membaca payroll final dan tidak mengubah transaksi
+        ========================= */}
+        <Route path="/payroll-report" element={<PayrollReport />} />
 
         {/* Final route maintenance. Path lama reset-test-data di-redirect agar bookmark lama tetap aman. */}
         <Route

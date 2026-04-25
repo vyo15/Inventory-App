@@ -68,7 +68,11 @@ export const sidebarMenuItems = [
   // =========================
   // GROUP: Inventaris
   // Fungsi:
-  // - memantau dan menyesuaikan kondisi stok aktual di sistem
+  // - menjadi satu entry point untuk audit riwayat stok dan penyesuaian stok manual
+  // Hubungan flow:
+  // - Penyesuaian Stok sudah digabung ke halaman Manajemen Stok agar tidak ada menu/logic ganda
+  // Status:
+  // - aktif/final; menu Penyesuaian Stok lama sudah dihapus dari sidebar
   // =========================
   {
     key: "inventory",
@@ -79,11 +83,6 @@ export const sidebarMenuItems = [
         key: "stock-management",
         label: "Manajemen Stok",
         path: "/stock-management",
-      },
-      {
-        key: "stock-adjustment",
-        label: "Penyesuaian Stok",
-        path: "/stock-adjustment",
       },
     ],
   },
@@ -240,6 +239,17 @@ export const sidebarMenuItems = [
         key: "profit-loss",
         label: "Laba Rugi",
         path: "/profit-loss",
+      },
+      // =========================
+      // MENU: Laporan Payroll
+      // Fungsi:
+      // - memisahkan rekap periode dan export payroll dari menu Payroll Produksi
+      // - tetap membaca payroll line final tanpa membuat source of truth baru
+      // =========================
+      {
+        key: "payroll-report",
+        label: "Laporan Payroll",
+        path: "/payroll-report",
       },
     ],
   },

@@ -43,6 +43,14 @@ import {
 } from "../../services/Maintenance/maintenanceLogService";
 import { getLegacyDataMaintenanceAudit } from "../../services/Maintenance/legacyDataMaintenanceService";
 import {
+  getPayrollSnapshotMaintenanceAudit,
+  repairPayrollSnapshotMaintenance,
+} from "../../services/Maintenance/payrollMaintenanceService";
+import {
+  getTransactionVariantMaintenanceAudit,
+  repairTransactionVariantMaintenance,
+} from "../../services/Maintenance/transactionVariantMaintenanceService";
+import {
   DEFAULT_RESET_MODULES,
   RESET_MODE_OPTIONS,
   getResetPreview,
@@ -118,6 +126,21 @@ const ResetMaintenanceData = () => {
   const [loadingLegacyDataAudit, setLoadingLegacyDataAudit] = useState(false);
 
   // ---------------------------------------------------------------------------
+  // State maintenance payroll snapshot dan varian lintas modul.
+  // ACTIVE / TRANSITION TO FINAL:
+  // - payroll snapshot stale wajib punya jalur audit + repair aman sendiri sebelum
+  //   cleanup besar logic payroll dilakukan;
+  // - variant lintas modul dipisah agar reset scoped tidak menjadi satu-satunya
+  //   opsi untuk sales/returns/purchases/adjustment lama.
+  // ---------------------------------------------------------------------------
+  const [payrollAudit, setPayrollAudit] = useState(null);
+  const [transactionVariantAudit, setTransactionVariantAudit] = useState(null);
+  const [loadingPayrollAudit, setLoadingPayrollAudit] = useState(false);
+  const [loadingPayrollRepair, setLoadingPayrollRepair] = useState(false);
+  const [loadingTransactionVariantAudit, setLoadingTransactionVariantAudit] = useState(false);
+  const [loadingTransactionVariantRepair, setLoadingTransactionVariantRepair] = useState(false);
+
+  // ---------------------------------------------------------------------------
   // State audit trail maintenance/reset.
   // Log ini hanya mencatat metadata aksi admin, bukan sumber mutasi operasional.
   // ---------------------------------------------------------------------------
@@ -126,12 +149,15 @@ const ResetMaintenanceData = () => {
 
   const moduleOptions = useMemo(
     () => [
-      { label: "Penjualan", value: "sales" },
-      { label: "Pembelian", value: "purchases" },
+      { label: "Penjualan + Income Sales", value: "sales" },
+      { label: "Pembelian + Expense Purchases", value: "purchases" },
       { label: "Retur", value: "returns" },
-      { label: "Produksi", value: "production" },
+      { label: "Produksi (Lengkap)", value: "production" },
+      { label: "Produksi + Inventory Log Produksi", value: "production_core_and_logs" },
+      { label: "Payroll Produksi Saja", value: "production_payroll_only" },
+      { label: "Productions Legacy Saja", value: "productions_legacy_only" },
       { label: "Kas & Biaya", value: "cash_and_expenses" },
-      { label: "Penyesuaian & Log Stok", value: "stock_adjustment_and_logs" },
+      { label: "Penyesuaian + Log Adjustment", value: "stock_adjustment_and_logs" },
       { label: "Pricing Log", value: "pricing_logs" },
     ],
     [],
@@ -422,6 +448,143 @@ const ResetMaintenanceData = () => {
     }
   };
 
+  // -------------------------------------------------------------------------
+  // Audit payroll snapshot stale.
+  // ACTIVE / TRANSITION TO FINAL:
+  // - dipakai sebelum cleanup besar payroll/Work Log;
+  // - hanya membaca mismatch master Step vs snapshot Work Log;
+  // - belum mengubah payroll final atau posting ulang stok.
+  // -------------------------------------------------------------------------
+  const handleLoadPayrollAudit = async () => {
+    try {
+      setLoadingPayrollAudit(true);
+      const result = await getPayrollSnapshotMaintenanceAudit();
+      setPayrollAudit(result);
+      await createMaintenanceLog({
+        actionType: "payroll_snapshot_audit",
+        mode: "dry_run",
+        modules: ["production", "production_payroll_only"],
+        summary: result?.summary || {},
+        planSummary: result?.summary || {},
+        affectedCollections: ["production_steps", "production_work_logs", "production_payrolls"],
+        affectedCount: result?.summary?.checkedRecords || 0,
+        dryRun: true,
+        note: "Dry run payroll snapshot hanya membaca mismatch Step vs Work Log tanpa mengubah payroll final.",
+      });
+      await loadMaintenanceLogs();
+      message.success("Dry run payroll/work log stale snapshot selesai. Belum ada data yang diubah.");
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menjalankan audit payroll/work log stale snapshot.");
+    } finally {
+      setLoadingPayrollAudit(false);
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Repair snapshot payroll stale.
+  // ACTIVE / GUARDED:
+  // - hanya berjalan untuk record yang sumber Step-nya jelas dan belum punya
+  //   history payroll yang mengunci;
+  // - dipakai agar cleanup fallback payroll bisa dilakukan bertahap dengan aman.
+  // -------------------------------------------------------------------------
+  const handleRepairPayrollAudit = async () => {
+    try {
+      setLoadingPayrollRepair(true);
+      const result = await repairPayrollSnapshotMaintenance();
+      await createMaintenanceLog({
+        actionType: "payroll_snapshot_repair",
+        mode: "repair",
+        modules: ["production", "production_payroll_only"],
+        summary: result?.summary || {},
+        resultBuckets: {
+          repaired: result?.updatedCount || 0,
+          skipped: result?.skippedCount || 0,
+        },
+        affectedCollections: ["production_work_logs"],
+        affectedCount: result?.updatedCount || 0,
+        dryRun: false,
+        note: "Repair payroll/work log stale snapshot hanya berjalan bila master Step jelas dan belum ada history payroll yang mengunci.",
+      });
+      message.success(result?.message || "Repair snapshot payroll selesai.");
+      const nextAudit = await getPayrollSnapshotMaintenanceAudit();
+      setPayrollAudit(nextAudit);
+      await loadMaintenanceLogs();
+      await loadPreview(false);
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menjalankan repair payroll snapshot.");
+    } finally {
+      setLoadingPayrollRepair(false);
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Audit variant lintas modul.
+  // ACTIVE / TRANSITION:
+  // - memetakan transaksi lama yang masih memakai field variant legacy;
+  // - dipakai untuk memisahkan record aman repair vs reset scoped/manual review.
+  // -------------------------------------------------------------------------
+  const handleLoadTransactionVariantAudit = async () => {
+    try {
+      setLoadingTransactionVariantAudit(true);
+      const result = await getTransactionVariantMaintenanceAudit();
+      setTransactionVariantAudit(result);
+      await createMaintenanceLog({
+        actionType: "transaction_variant_audit",
+        mode: "dry_run",
+        modules: ["sales", "purchases", "returns", "stock_adjustment_and_logs", "inventory_logs"],
+        summary: result?.summary || {},
+        planSummary: result?.summary || {},
+        affectedCollections: ["sales", "returns", "purchases", "stock_adjustments", "inventory_logs"],
+        affectedCount: result?.summary?.checkedRecords || 0,
+        dryRun: true,
+        note: "Audit variant lintas modul memetakan transaksi lama yang masih memakai field legacy tanpa membuat fallback baru ke master.",
+      });
+      await loadMaintenanceLogs();
+      message.success("Dry run variant lintas modul selesai. Belum ada data yang diubah.");
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menjalankan audit variant lintas modul.");
+    } finally {
+      setLoadingTransactionVariantAudit(false);
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Repair variant lintas modul.
+  // ACTIVE / GUARDED:
+  // - hanya melengkapi snapshot variant dari source legacy yang sudah jelas;
+  // - tidak mengubah qty, stok, atau kas final.
+  // -------------------------------------------------------------------------
+  const handleRepairTransactionVariantAudit = async () => {
+    try {
+      setLoadingTransactionVariantRepair(true);
+      const result = await repairTransactionVariantMaintenance();
+      await createMaintenanceLog({
+        actionType: "transaction_variant_repair",
+        mode: "repair",
+        modules: ["sales", "purchases", "returns", "stock_adjustment_and_logs"],
+        summary: result?.summary || {},
+        resultBuckets: { repaired: result?.updatedCount || 0 },
+        affectedCollections: ["sales", "returns", "purchases", "stock_adjustments"],
+        affectedCount: result?.updatedCount || 0,
+        dryRun: false,
+        note: "Repair variant lintas modul hanya mengisi snapshot/field turunan yang sudah punya source legacy jelas; qty dan kas tidak berubah.",
+      });
+      message.success(result?.message || "Repair variant lintas modul selesai.");
+      const nextAudit = await getTransactionVariantMaintenanceAudit();
+      setTransactionVariantAudit(nextAudit);
+      await loadMaintenanceLogs();
+      await loadPreview(false);
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menjalankan repair variant lintas modul.");
+    } finally {
+      setLoadingTransactionVariantRepair(false);
+    }
+  };
+
   const prepareVariantTransactionReset = () => {
     // -------------------------------------------------------------------------
     // Batch 3 helper: hanya menyiapkan reset scoped transaksi varian lama.
@@ -510,6 +673,10 @@ const ResetMaintenanceData = () => {
   const stockSummary = stockAudit?.summary || {};
   const logSchemaSummary = logSchemaAudit?.summary || {};
   const legacyDataSummary = legacyDataAudit?.summary || {};
+  const payrollAuditRows = useMemo(() => payrollAudit?.rows || [], [payrollAudit]);
+  const transactionVariantRows = useMemo(() => transactionVariantAudit?.rows || [], [transactionVariantAudit]);
+  const payrollAuditSummary = payrollAudit?.summary || {};
+  const transactionVariantSummary = transactionVariantAudit?.summary || {};
 
   const recommendationText = useMemo(() => {
     if (mode === "transaction_only") {
@@ -842,6 +1009,142 @@ const ResetMaintenanceData = () => {
           </Card>
 
 
+          <Card
+            title="Maintenance / Payroll & Work Log Snapshot"
+            size="small"
+            extra={<Tag color="geekblue">Payroll Snapshot</Tag>}
+          >
+            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <Alert
+                type="info"
+                showIcon
+                message="Audit stale snapshot payroll sebelum cleanup besar payroll"
+                description="Section ini khusus memeriksa mismatch master Production Step vs snapshot payroll di Work Log. Repair aman hanya boleh berjalan jika source Step jelas dan belum ada history payroll yang mengunci Work Log tersebut."
+              />
+
+              <Row gutter={[12, 12]}>
+                <Col xs={24} md={12}>
+                  <Button block icon={<EyeOutlined />} onClick={handleLoadPayrollAudit} loading={loadingPayrollAudit}>
+                    Cek Snapshot Payroll
+                  </Button>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Popconfirm
+                    title="Repair snapshot payroll?"
+                    description="Repair hanya menyinkronkan field snapshot Work Log dari master Step aktif. Payroll final, stok, dan kas tidak diubah."
+                    okText="Ya, Repair Snapshot"
+                    cancelText="Batal"
+                    onConfirm={handleRepairPayrollAudit}
+                  >
+                    <Button block type="primary" icon={<SyncOutlined />} loading={loadingPayrollRepair}>
+                      Repair Snapshot Payroll
+                    </Button>
+                  </Popconfirm>
+                </Col>
+              </Row>
+
+              <Row gutter={[12, 12]}>
+                <Col xs={12} md={6}><Card size="small"><Statistic title="Dicek" value={payrollAuditSummary.checkedRecords || 0} /></Card></Col>
+                <Col xs={12} md={6}><Card size="small"><Statistic title="Aman Repair" value={payrollAuditSummary.safeRepairCount || 0} /></Card></Col>
+                <Col xs={12} md={6}><Card size="small"><Statistic title="Manual" value={payrollAuditSummary.manualReviewCount || 0} /></Card></Col>
+                <Col xs={12} md={6}><Card size="small"><Statistic title="Plan" value={payrollAuditSummary.executablePlanCount || 0} /></Card></Col>
+              </Row>
+
+              <Table
+                className="app-data-table"
+                size="small"
+                loading={loadingPayrollAudit || loadingPayrollRepair}
+                dataSource={payrollAuditRows}
+                pagination={{ pageSize: 6, showSizeChanger: false }}
+                columns={[
+                  { title: "Work Log", dataIndex: "code", key: "code", width: 150 },
+                  { title: "Step Snapshot", dataIndex: "stepName", key: "stepName", width: 180, render: (value, record) => value || record.masterStepName || "-" },
+                  { title: "Kategori", dataIndex: "category", key: "category", width: 160, render: (value) => {
+                    const meta = MAINTENANCE_CATEGORY_META[value] || MAINTENANCE_CATEGORY_META.ok;
+                    return <Tag color={meta.color}>{meta.label}</Tag>;
+                  }},
+                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 420 },
+                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 360 },
+                  { title: "Scope Reset", dataIndex: "resetScope", key: "resetScope", width: 180, render: (value) => value ? <Tag>{value}</Tag> : "-" },
+                ]}
+                scroll={{ x: 1320 }}
+                locale={{ emptyText: "Klik Cek Snapshot Payroll untuk menjalankan dry run stale snapshot payroll." }}
+              />
+            </Space>
+          </Card>
+
+          <Card
+            title="Maintenance / Variant Lintas Modul"
+            size="small"
+            extra={<Tag color="magenta">Variant Transactions</Tag>}
+          >
+            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <Alert
+                type="info"
+                showIcon
+                message="Audit transaksi lama tanpa variant snapshot final"
+                description="Section ini membantu membedakan record yang aman direpair dari field legacy yang sudah jelas vs record yang harus di-reset scoped/manual review. Repair aman tidak mengubah qty, stok, atau kas; hanya melengkapi snapshot variant final."
+              />
+
+              <Row gutter={[12, 12]}>
+                <Col xs={24} md={12}>
+                  <Button block icon={<EyeOutlined />} onClick={handleLoadTransactionVariantAudit} loading={loadingTransactionVariantAudit}>
+                    Cek Variant Lintas Modul
+                  </Button>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Popconfirm
+                    title="Repair snapshot variant lintas modul?"
+                    description="Repair aman hanya mengisi variantKey/variantLabel dari source legacy yang sudah jelas. Record yang masih ambigu tetap manual/reset scoped."
+                    okText="Ya, Repair Variant"
+                    cancelText="Batal"
+                    onConfirm={handleRepairTransactionVariantAudit}
+                  >
+                    <Button block type="primary" icon={<SyncOutlined />} loading={loadingTransactionVariantRepair}>
+                      Repair Variant Lintas Modul
+                    </Button>
+                  </Popconfirm>
+                </Col>
+              </Row>
+
+              <Row gutter={[12, 12]}>
+                <Col xs={12} md={6}><Card size="small"><Statistic title="Dicek" value={transactionVariantSummary.checkedRecords || 0} /></Card></Col>
+                <Col xs={12} md={6}><Card size="small"><Statistic title="Aman Repair" value={transactionVariantSummary.safeRepairCount || 0} /></Card></Col>
+                <Col xs={12} md={6}><Card size="small"><Statistic title="Display Repair" value={transactionVariantSummary.displayRepairCount || 0} /></Card></Col>
+                <Col xs={12} md={6}><Card size="small"><Statistic title="Manual/Reset" value={transactionVariantSummary.manualReviewCount || 0} /></Card></Col>
+              </Row>
+
+              <Table
+                className="app-data-table"
+                size="small"
+                loading={loadingTransactionVariantAudit || loadingTransactionVariantRepair}
+                dataSource={transactionVariantRows}
+                pagination={{ pageSize: 6, showSizeChanger: false }}
+                columns={[
+                  { title: "Area", dataIndex: "scope", key: "scope", width: 170 },
+                  { title: "Kode/Ref", dataIndex: "code", key: "code", width: 180 },
+                  { title: "Kategori", dataIndex: "category", key: "category", width: 160, render: (value) => {
+                    const meta = MAINTENANCE_CATEGORY_META[value] || MAINTENANCE_CATEGORY_META.ok;
+                    return <Tag color={meta.color}>{meta.label}</Tag>;
+                  }},
+                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 420 },
+                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 360 },
+                  { title: "Scope Reset", dataIndex: "resetScope", key: "resetScope", width: 180, render: (value) => value ? <Tag>{value}</Tag> : "-" },
+                ]}
+                scroll={{ x: 1320 }}
+                locale={{ emptyText: "Klik Cek Variant Lintas Modul untuk menjalankan dry run transaksi lama bervarian." }}
+              />
+            </Space>
+          </Card>
+
+          <Card title="Saran Scope Reset yang Lebih Presisi" size="small" extra={<Tag color="purple">Scoped Reset</Tag>}>
+            <Space direction="vertical" size={8} style={{ width: "100%" }}>
+              <Text>• Gunakan <Text strong>Produksi + Inventory Log Produksi</Text> jika ingin membersihkan domain produksi tanpa menghapus payroll produksi.</Text>
+              <Text>• Gunakan <Text strong>Payroll Produksi Saja</Text> bila perlu men-trim payroll testing tanpa menyentuh Work Log/PO.</Text>
+              <Text>• Gunakan <Text strong>Productions Legacy Saja</Text> jika target cleanup hanya jejak flow lama.</Text>
+              <Text>• Modul <Text strong>Penjualan + Income Sales</Text> dan <Text strong>Pembelian + Expense Purchases</Text> tetap menjadi pasangan reset scoped resmi agar kas tidak terhapus membabi buta.</Text>
+            </Space>
+          </Card>
 
           <Divider orientation="left">Reset Data</Divider>
 
@@ -1028,8 +1331,10 @@ const ResetMaintenanceData = () => {
               columns={[
                 { title: "Aksi", dataIndex: "actionType", key: "actionType", width: 210 },
                 { title: "Mode", dataIndex: "mode", key: "mode", width: 130, render: (value, record) => <Tag color={record.dryRun ? "blue" : "orange"}>{value}</Tag> },
+                { title: "Pelaksana", dataIndex: "executedBy", key: "executedBy", width: 150, render: (value) => value || "client-ui" },
                 { title: "Modul", dataIndex: "modules", key: "modules", width: 220, render: (values) => Array.isArray(values) && values.length ? values.join(", ") : "-" },
                 { title: "Terdampak", dataIndex: "affectedCount", key: "affectedCount", width: 120 },
+                { title: "Plan", dataIndex: "planSummary", key: "planSummary", width: 220, render: (value) => value?.checkedRecords ? `Dicek ${value.checkedRecords}` : value?.safeRepairCount ? `Plan ${value.safeRepairCount}` : "-" },
                 { title: "Status", dataIndex: "status", key: "status", width: 120, render: (value) => <Tag color={value === "success" ? "green" : "red"}>{value || "-"}</Tag> },
                 { title: "Catatan", dataIndex: "note", key: "note", width: 360, render: (value) => value || "-" },
               ]}

@@ -36,6 +36,7 @@ import {
   addInventoryLog,
   updateInventoryStock,
 } from "../../services/Inventory/inventoryService";
+import { getCustomers } from "../../services/MasterData/customersService";
 import {
   buildVariantOptionsFromItem,
   findVariantByKey,
@@ -208,17 +209,17 @@ const Sales = () => {
 
   // =========================
   // SECTION: Ambil customer
+  // Fungsi:
+  // - membaca customer lewat customersService sebagai source final yang sama dengan Master Customer
+  // Hubungan flow:
+  // - dropdown Sales tidak boleh query collection sendiri supaya tidak kembali bercabang
+  // Status:
+  // - aktif/final
+  // - tetap menyimpan snapshot customerName saat sale dibuat agar transaksi lama aman
   // =========================
   const fetchCustomers = async () => {
     try {
-      const customersCollection = collection(db, "customers");
-      const customersSnapshot = await getDocs(customersCollection);
-
-      const customerList = customersSnapshot.docs.map((documentItem) => ({
-        id: documentItem.id,
-        ...documentItem.data(),
-      }));
-
+      const customerList = await getCustomers();
       setCustomers(customerList);
     } catch (error) {
       console.error("Gagal mengambil data pelanggan:", error);
