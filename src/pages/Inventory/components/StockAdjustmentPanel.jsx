@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -10,19 +10,24 @@ import {
   Select,
   Table,
   Tag,
+  Tooltip,
   message,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
-import { addDoc, collection, onSnapshot, Timestamp } from "firebase/firestore";
+import { collection, doc, onSnapshot, runTransaction, Timestamp } from "firebase/firestore";
 import dayjs from "dayjs";
 import { db } from "../../../firebase";
-import { addInventoryLog, updateInventoryStock } from "../../../services/Inventory/inventoryService";
+import {
+  buildInventoryLogPayload,
+  INVENTORY_LOG_COLLECTION,
+} from "../../../services/Inventory/inventoryLogService";
 import { formatNumberId } from "../../../utils/formatters/numberId";
 import {
   buildVariantOptionsFromItem,
   findVariantByKey,
   getItemStockSnapshot,
   inferHasVariants,
+  applyStockMutationToItem,
 } from "../../../utils/variants/variantStockHelpers";
 
 const { Option } = Select;
@@ -77,12 +82,43 @@ const formatQuantityId = (value, unit = "") => {
 };
 
 // =========================
+// SECTION: Tampilan ringkas catatan adjustment
+// Fungsi:
+// - membatasi catatan di tabel adjustment agar row tidak terlalu tinggi.
+// Hubungan flow aplikasi:
+// - hanya memengaruhi tampilan audit; tidak mengubah data stock_adjustments atau inventory_logs.
+// Status:
+// - AKTIF untuk UI Stock Adjustment Panel.
+// - GUARDED karena catatan lengkap tetap tersedia di tooltip.
+// - LEGACY: tidak ada logic legacy yang dipakai di blok ini.
+// - CLEANUP CANDIDATE: tidak perlu dibersihkan selama tabel masih menampilkan catatan bebas.
+// =========================
+const NOTE_PREVIEW_STYLE = {
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+  whiteSpace: "normal",
+  lineHeight: 1.35,
+};
+
+const renderCompactNote = (value) => {
+  const noteText = String(value || "-").trim() || "-";
+
+  return (
+    <Tooltip title={noteText !== "-" ? noteText : ""}>
+      <span style={NOTE_PREVIEW_STYLE}>{noteText}</span>
+    </Tooltip>
+  );
+};
+
+// =========================
 // SECTION: Stock Adjustment Panel
 // Fungsi:
 // - memindahkan form dan riwayat Penyesuaian Stok ke dalam halaman Manajemen Stok
 // Hubungan flow:
 // - menjadi satu-satunya UI aktif untuk adjustment manual setelah menu / halaman lama dihapus
-// - mutasi stok tetap lewat updateInventoryStock agar stock/currentStock/availableStock/variants[] sinkron
+// - mutasi stok sekarang memakai Firestore transaction dan applyStockMutationToItem agar stock/currentStock/availableStock/variants[] sinkron
 // Status:
 // - aktif/final untuk adjustment stok manual
 // - bukan halaman route mandiri; route lama /stock-adjustment hanya redirect ke /stock-management
@@ -93,15 +129,20 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // Fungsi:
   // - menyimpan riwayat stock_adjustments, master item, dan status modal form
   // Hubungan flow:
-  // - master item hanya dipakai sebagai pilihan form; source of truth mutasi tetap inventoryService
+  // - master item hanya dipakai sebagai pilihan form; source of truth mutasi final ada di Firestore transaction dan helper stok varian aktif
+  // - isSubmittingRef menjadi guard teknis agar submit dobel tidak membuat double stock/log sebelum state React sempat update
   // Status:
-  // - aktif dipakai di halaman Manajemen Stok
+  // - AKTIF dipakai di halaman Manajemen Stok.
+  // - GUARDED karena submit state/ref mencegah double submit.
+  // - LEGACY: tidak ada state legacy yang dipakai untuk mutasi stok.
+  // - CLEANUP CANDIDATE jika orkestrasi adjustment dipindah ke service khusus.
   // =========================
   const [stockAdjustmentRecords, setStockAdjustmentRecords] = useState([]);
   const [rawMaterials, setRawMaterials] = useState([]);
   const [finishedProducts, setFinishedProducts] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   const [form] = Form.useForm();
   const selectedItemType = Form.useWatch("itemType", form);
@@ -174,6 +215,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   const resetAdjustmentFormState = () => {
     form.resetFields();
     setIsModalOpen(false);
+    isSubmittingRef.current = false;
     setIsSubmitting(false);
   };
 
@@ -187,7 +229,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // Fungsi:
   // - menentukan list item berdasarkan itemType dan membangun opsi varian dari helper final
   // Hubungan flow:
-  // - variantKey yang dipilih dikirim ke updateInventoryStock supaya stok varian dan total master tetap sinkron
+  // - variantKey yang dipilih dipakai transaction untuk update stok varian dan total master tetap sinkron
   // Status:
   // - aktif dipakai; bukan legacy
   // =========================
@@ -246,156 +288,167 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   const quantityUsesWholeNumber = isWholeNumberUnit(quantityUnitLabel);
 
   // =========================
-  // SECTION: Submit penyesuaian stok
+  // SECTION: Submit penyesuaian stok atomik
   // Fungsi:
-  // - menyimpan stock_adjustments
-  // - melakukan mutasi stok lewat updateInventoryStock
-  // - membuat inventory_logs standar agar langsung tampil di tabel Manajemen Stok
-  // Hubungan flow:
-  // - ini satu-satunya logic submit adjustment aktif; file route lama StockAdjustment.jsx sudah dihapus
+  // - menyimpan stock_adjustments, mutasi stok master/varian, dan inventory_logs dalam satu Firestore transaction.
+  // Hubungan flow aplikasi:
+  // - Stock Management adalah audit log + adjustment resmi; stok tidak boleh berubah tanpa record adjustment dan log audit.
   // Status:
-  // - aktif/final untuk adjustment manual
-  // - guarded terhadap stok negatif melalui preventNegative pada adjustment keluar
+  // - AKTIF sebagai satu-satunya submit adjustment manual di UI.
+  // - GUARDED karena transaksi dibatalkan jika item/varian tidak valid atau stok keluar melebihi availableStock.
+  // - LEGACY: flow lama updateInventoryStock -> addDoc adjustment -> addInventoryLog terpisah tidak dipakai lagi di panel ini.
+  // - CLEANUP CANDIDATE: orkestrasi transaction masih di component; boleh dipindah ke service khusus jika nanti ada task refactor inventory.
   // =========================
   const handleSubmitStockAdjustment = async (values) => {
-    if (isSubmitting) return;
+    if (isSubmittingRef.current) return;
 
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
 
     try {
       const isRawMaterial = values.itemType === "raw_material";
       const sourceCollectionName = isRawMaterial ? "raw_materials" : "products";
       const sourceItems = isRawMaterial ? rawMaterials : finishedProducts;
-
       const selectedSourceItem = sourceItems.find((item) => item.id === values.itemId);
-
-      if (!selectedSourceItem) {
-        message.error("Item tidak ditemukan");
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (inferHasVariants(selectedSourceItem) && !values.variantKey) {
-        message.error("Pilih varian item agar penyesuaian stok masuk ke stok varian yang benar.");
-        setIsSubmitting(false);
-        return;
-      }
-
       const adjustmentQuantity = Number(values.quantity || 0);
       const finalQuantityChange =
         values.adjustmentType === "out" ? -adjustmentQuantity : adjustmentQuantity;
 
-      const selectedSourceVariant = values.variantKey
-        ? findVariantByKey(selectedSourceItem, values.variantKey)
-        : null;
-      const sourceStockSnapshot = selectedSourceVariant
-        ? {
-            currentStock: Number(selectedSourceVariant.currentStock || 0),
-            reservedStock: Number(selectedSourceVariant.reservedStock || 0),
-            availableStock: Number(selectedSourceVariant.availableStock || 0),
-          }
-        : getItemStockSnapshot(selectedSourceItem);
-
-      if (values.adjustmentType === "out" && adjustmentQuantity > sourceStockSnapshot.availableStock) {
-        message.error(
-          `Jumlah keluar melebihi stok tersedia. Tersedia: ${formatQuantityId(
-            sourceStockSnapshot.availableStock,
-            selectedSourceItem.stockUnit || selectedSourceItem.unit || "",
-          )}`,
-        );
-        setIsSubmitting(false);
-        return;
+      if (!selectedSourceItem) {
+        throw new Error("Item tidak ditemukan");
       }
 
-      // =========================
-      // SECTION: Mutasi stok final via service inventory
-      // Fungsi:
-      // - update stock, currentStock, reservedStock, availableStock, dan variants[] dalam satu payload final
-      // Hubungan flow:
-      // - menjaga adjustment manual memakai source of truth stok yang sama dengan transaksi umum
-      // Status:
-      // - aktif/final; logic updateDoc langsung ke stock tidak dipakai lagi
-      // =========================
-      const stockMutationResult = await updateInventoryStock({
-        itemId: values.itemId,
-        collectionName: sourceCollectionName,
-        quantityChange: finalQuantityChange,
-        variantKey: values.variantKey || "",
-        preventNegative: values.adjustmentType === "out",
-      });
+      if (!values.date?.toDate) {
+        throw new Error("Tanggal penyesuaian wajib diisi dengan benar.");
+      }
 
-      const variantPayload = {
-        variantKey: stockMutationResult.variantKey,
-        variantLabel: stockMutationResult.variantLabel,
-        stockSourceType: stockMutationResult.stockSourceType,
-      };
+      if (!Number.isFinite(adjustmentQuantity) || adjustmentQuantity <= 0) {
+        throw new Error("Jumlah penyesuaian wajib lebih dari 0.");
+      }
 
-      // =========================
-      // SECTION: Simpan record stock_adjustments
-      // Fungsi:
-      // - menyimpan jejak bisnis adjustment sebagai catatan operasional terpisah dari inventory_logs
-      // Hubungan flow:
-      // - adjustmentId dari dokumen ini dipakai sebagai referenceId inventory_logs
-      // Status:
-      // - aktif/final sesuai business rule adjustment wajib mencatat stock_adjustments
-      // =========================
-      const adjustmentDocument = await addDoc(collection(db, "stock_adjustments"), {
-        date: Timestamp.fromDate(values.date.toDate()),
-        itemType: values.itemType,
-        collectionName: sourceCollectionName,
-        itemId: values.itemId,
-        itemName: selectedSourceItem.name,
-        adjustmentType: values.adjustmentType,
-        quantity: adjustmentQuantity,
-        finalQuantity: finalQuantityChange,
-        finalQuantityChange,
-        reason: values.reason || "",
-        note: values.note || "",
-        unit: selectedSourceItem.stockUnit || selectedSourceItem.unit || "",
-        currentStockBefore: stockMutationResult.currentStockBefore,
-        currentStockAfter: stockMutationResult.currentStockAfter,
-        reservedStockBefore: stockMutationResult.reservedStockBefore,
-        reservedStockAfter: stockMutationResult.reservedStockAfter,
-        availableStockBefore: stockMutationResult.availableStockBefore,
-        availableStockAfter: stockMutationResult.availableStockAfter,
-        variantId: stockMutationResult.variantKey,
-        ...variantPayload,
-        createdAt: Timestamp.now(),
-      });
+      if (inferHasVariants(selectedSourceItem) && !values.variantKey) {
+        throw new Error("Pilih varian item agar penyesuaian stok masuk ke stok varian yang benar.");
+      }
 
-      // =========================
-      // SECTION: Simpan inventory log
-      // Fungsi:
-      // - membuat audit trail lintas modul dengan referenceId/referenceType standar
-      // Hubungan flow:
-      // - setelah log dibuat, StockManagement refresh agar tabel riwayat langsung menampilkan adjustment terbaru
-      // Status:
-      // - aktif/final untuk log adjustment
-      // =========================
-      await addInventoryLog(
-        values.itemId,
-        selectedSourceItem.name,
-        finalQuantityChange,
-        "stock_adjustment",
-        sourceCollectionName,
-        {
-          adjustmentId: adjustmentDocument.id,
-          referenceId: adjustmentDocument.id,
-          referenceType: "stock_adjustment",
+      const itemReference = doc(db, sourceCollectionName, values.itemId);
+      const adjustmentReference = doc(collection(db, "stock_adjustments"));
+      const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
+      const adjustmentTimestamp = Timestamp.now();
+
+      await runTransaction(db, async (transaction) => {
+        const itemSnapshot = await transaction.get(itemReference);
+
+        if (!itemSnapshot.exists()) {
+          throw new Error("Item stok tidak ditemukan saat menyimpan penyesuaian.");
+        }
+
+        const latestSourceItem = {
+          id: itemSnapshot.id,
+          ...itemSnapshot.data(),
+        };
+
+        const latestHasVariants = inferHasVariants(latestSourceItem);
+        const selectedSourceVariant = values.variantKey
+          ? findVariantByKey(latestSourceItem, values.variantKey)
+          : null;
+
+        if (latestHasVariants && !selectedSourceVariant) {
+          throw new Error(
+            `Varian item ${latestSourceItem.name || values.itemId} tidak ditemukan. Proses dihentikan agar stok tidak masuk ke master/default.`,
+          );
+        }
+
+        const sourceStockSnapshot = selectedSourceVariant
+          ? {
+              currentStock: Number(selectedSourceVariant.currentStock || 0),
+              reservedStock: Number(selectedSourceVariant.reservedStock || 0),
+              availableStock: Number(
+                selectedSourceVariant.availableStock ??
+                  Math.max(
+                    Number(selectedSourceVariant.currentStock || 0) -
+                      Number(selectedSourceVariant.reservedStock || 0),
+                    0,
+                  ),
+              ),
+            }
+          : getItemStockSnapshot(latestSourceItem);
+
+        if (values.adjustmentType === "out" && adjustmentQuantity > sourceStockSnapshot.availableStock) {
+          throw new Error(
+            `Jumlah keluar melebihi stok tersedia. Tersedia: ${formatQuantityId(
+              sourceStockSnapshot.availableStock,
+              latestSourceItem.stockUnit || latestSourceItem.unit || "",
+            )}`,
+          );
+        }
+
+        const stockUpdatePayload = applyStockMutationToItem({
+          item: latestSourceItem,
+          variantKey: selectedSourceVariant?.variantKey || "",
+          deltaCurrent: finalQuantityChange,
+        });
+        const currentStockAfter = sourceStockSnapshot.currentStock + finalQuantityChange;
+        const availableStockAfter = Math.max(
+          currentStockAfter - sourceStockSnapshot.reservedStock,
+          0,
+        );
+        const variantPayload = {
+          variantId: selectedSourceVariant?.variantKey || "",
+          variantKey: selectedSourceVariant?.variantKey || "",
+          variantLabel: selectedSourceVariant?.variantLabel || "",
+          stockSourceType: selectedSourceVariant ? "variant" : "master",
+        };
+        const adjustmentPayload = {
+          date: Timestamp.fromDate(values.date.toDate()),
+          itemType: values.itemType,
+          collectionName: sourceCollectionName,
+          itemId: values.itemId,
+          itemName: latestSourceItem.name,
+          adjustmentType: values.adjustmentType,
+          quantity: adjustmentQuantity,
+          finalQuantity: finalQuantityChange,
+          finalQuantityChange,
           reason: values.reason || "",
           note: values.note || "",
-          currentStockBefore: stockMutationResult.currentStockBefore,
-          currentStockAfter: stockMutationResult.currentStockAfter,
-          previousStock: stockMutationResult.currentStockBefore,
-          newStock: stockMutationResult.currentStockAfter,
-          reservedStockBefore: stockMutationResult.reservedStockBefore,
-          reservedStockAfter: stockMutationResult.reservedStockAfter,
-          availableStockBefore: stockMutationResult.availableStockBefore,
-          availableStockAfter: stockMutationResult.availableStockAfter,
-          variantId: stockMutationResult.variantKey,
+          unit: latestSourceItem.stockUnit || latestSourceItem.unit || "",
+          currentStockBefore: sourceStockSnapshot.currentStock,
+          currentStockAfter,
+          reservedStockBefore: sourceStockSnapshot.reservedStock,
+          reservedStockAfter: sourceStockSnapshot.reservedStock,
+          availableStockBefore: sourceStockSnapshot.availableStock,
+          availableStockAfter,
           ...variantPayload,
-        },
-      );
+          createdAt: adjustmentTimestamp,
+        };
+        const inventoryLogPayload = buildInventoryLogPayload({
+          itemId: values.itemId,
+          itemName: latestSourceItem.name,
+          quantityChange: finalQuantityChange,
+          type: "stock_adjustment",
+          collectionName: sourceCollectionName,
+          timestamp: adjustmentTimestamp,
+          extraData: {
+            adjustmentId: adjustmentReference.id,
+            referenceId: adjustmentReference.id,
+            referenceType: "stock_adjustment",
+            reason: values.reason || "",
+            note: values.note || "",
+            currentStockBefore: sourceStockSnapshot.currentStock,
+            currentStockAfter,
+            previousStock: sourceStockSnapshot.currentStock,
+            newStock: currentStockAfter,
+            reservedStockBefore: sourceStockSnapshot.reservedStock,
+            reservedStockAfter: sourceStockSnapshot.reservedStock,
+            availableStockBefore: sourceStockSnapshot.availableStock,
+            availableStockAfter,
+            ...variantPayload,
+          },
+        });
+
+        transaction.update(itemReference, stockUpdatePayload);
+        transaction.set(adjustmentReference, adjustmentPayload);
+        transaction.set(inventoryLogReference, inventoryLogPayload);
+      });
 
       message.success("Penyesuaian stok berhasil disimpan");
       resetAdjustmentFormState();
@@ -403,6 +456,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
     } catch (error) {
       console.error(error);
       message.error(error?.message || "Gagal menyimpan penyesuaian stok");
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -465,7 +519,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         title: "Catatan",
         dataIndex: "note",
         key: "note",
-        render: (value) => value || "-",
+        render: renderCompactNote,
       },
     ];
   }, []);

@@ -24,7 +24,7 @@ import {
   ToolOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
+import { collection, getDocs, limit, orderBy, query, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
@@ -336,6 +336,43 @@ const buildRestockRoute = (basePath, params = {}) => {
 };
 
 // =========================
+// SECTION: AKTIF + GUARDED - targeted purchase lookup Dashboard
+// Fungsi:
+// - mengambil histori purchases hanya untuk bahan baku stok kritis yang tampil di Restock Assistant;
+// - mengganti full read collection purchases agar Dashboard lebih ringan saat data real mulai banyak.
+// Hubungan flow:
+// - Dashboard tetap read-only; data ini hanya untuk supplier/link/harga terakhir sebagai bantuan navigasi;
+// - tidak membuat purchase otomatis, tidak mengubah stok, kas, supplier, laporan, atau expense.
+// Status:
+// - AKTIF dipakai oleh loadDashboardData.
+// - GUARDED karena hanya membaca itemId dari baris stok kritis yang sudah terpilih.
+// - LEGACY: purchase lama yang belum menyimpan itemId standar bisa tidak ikut lookup ringan ini.
+// - CLEANUP CANDIDATE jika nanti dibuat read model/latest purchase service khusus Dashboard.
+// =========================
+const fetchPurchaseRecordsForRestockRows = async (lowStockRows = []) => {
+  const materialIds = [...new Set(
+    lowStockRows
+      .filter((item) => item.sourceType === "material")
+      .map((item) => String(item.id || "").trim())
+      .filter(Boolean),
+  )].slice(0, MAX_DASHBOARD_LIST_ITEMS);
+
+  if (!materialIds.length) return [];
+
+  const purchaseRecordsQuery = query(
+    collection(db, "purchases"),
+    where("itemId", "in", materialIds),
+  );
+
+  const purchaseRecordsSnapshot = await getDocs(purchaseRecordsQuery);
+
+  return purchaseRecordsSnapshot.docs.map((docItem) => ({
+    id: docItem.id,
+    ...docItem.data(),
+  }));
+};
+
+// =========================
 // SECTION: Helpers - HPP/cost guard
 // Fungsi:
 // - mendeteksi Work Log completed yang punya cost 0 supaya Dashboard memberi catatan kecil;
@@ -470,7 +507,6 @@ const Dashboard = () => {
       const [
         productsSnap,
         materialsSnap,
-        purchasesSnap,
         recentActivitiesSnap,
         productionOrdersSnap,
         workLogsSnap,
@@ -482,7 +518,6 @@ const Dashboard = () => {
       ] = await Promise.all([
         getDocs(collection(db, "products")),
         getDocs(collection(db, "raw_materials")),
-        getDocs(collection(db, "purchases")),
         getDocs(recentActivitiesQuery),
         getDocs(collection(db, "production_orders")),
         getDocs(collection(db, "production_work_logs")),
@@ -506,12 +541,14 @@ const Dashboard = () => {
         ...docItem.data(),
       }));
 
+      const lowStockRows = buildLowStockRows(products, materials);
+      const purchaseRecords = await fetchPurchaseRecordsForRestockRows(
+        lowStockRows.slice(0, MAX_DASHBOARD_LIST_ITEMS),
+      );
+
       setDashboardData({
-        lowStockRows: buildLowStockRows(products, materials),
-        purchaseRecords: purchasesSnap.docs.map((docItem) => ({
-          id: docItem.id,
-          ...docItem.data(),
-        })),
+        lowStockRows,
+        purchaseRecords,
         recentActivities: recentActivitiesSnap.docs.map((docItem) => ({
           id: docItem.id,
           ...docItem.data(),

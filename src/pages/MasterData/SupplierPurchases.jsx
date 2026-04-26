@@ -24,7 +24,7 @@ import {
   EyeOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, limit as firestoreLimit, orderBy, query } from 'firebase/firestore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { formatNumberID } from '../../utils/formatters/numberId';
@@ -50,6 +50,19 @@ const { Search } = Input;
 // STATUS: aktif dipakai; bukan business rule stok.
 // -----------------------------------------------------------------------------
 const PURCHASE_UNIT_OPTIONS = ['pcs', 'meter', 'roll', 'pack', 'ikat', 'dus', 'lainnya'];
+
+// -----------------------------------------------------------------------------
+// AKTIF + GUARDED: batas histori purchase untuk pembanding Supplier.
+// FUNGSI: mencegah halaman Supplier membaca seluruh collection purchases saat
+// data real mulai banyak.
+// HUBUNGAN FLOW: hanya memengaruhi pembanding read-only; tidak membuat purchase,
+// tidak mengubah stok, kas, expense, Supplier, atau Raw Material.
+// LEGACY: purchase lama yang sangat tua bisa tidak muncul di pembanding ringkas;
+// laporan lengkap tetap berada di menu Laporan/Purchases.
+// CLEANUP CANDIDATE: ganti ke lookup per material jika nanti service latest
+// purchase dan index Firestore sudah final.
+// -----------------------------------------------------------------------------
+const SUPPLIER_PURCHASE_LOOKUP_LIMIT = 500;
 
 // -----------------------------------------------------------------------------
 // Helper format tanggal purchase terakhir.
@@ -152,9 +165,25 @@ const SupplierPurchases = () => {
       },
     );
 
-    const unsubscribePurchases = onSnapshot(
+    const purchaseHistoryQuery = query(
       collection(db, 'purchases'),
+      orderBy('date', 'desc'),
+      firestoreLimit(SUPPLIER_PURCHASE_LOOKUP_LIMIT),
+    );
+
+    const unsubscribePurchases = onSnapshot(
+      purchaseHistoryQuery,
       (snapshot) => {
+        // -------------------------------------------------------------------
+        // AKTIF + GUARDED: histori purchase dibaca terbatas dan terbaru dulu.
+        // FUNGSI: pembanding harga Supplier tetap cepat saat data real banyak.
+        // HUBUNGAN FLOW: read-only; tidak membuat purchase, tidak mengubah stok,
+        // kas, Supplier, Raw Material, expense, atau laporan.
+        // LEGACY: pembanding untuk purchase sangat lama tetap bukan source of truth
+        // laporan; laporan lengkap tetap di menu Laporan.
+        // CLEANUP CANDIDATE: pindahkan ke service latest purchase per material
+        // jika nanti index Firestore final sudah dikunci.
+        // -------------------------------------------------------------------
         setPurchaseRecords(snapshot.docs.map((documentItem) => ({ id: documentItem.id, ...documentItem.data() })));
       },
       (error) => {
@@ -219,8 +248,11 @@ const SupplierPurchases = () => {
     if (!materialId) return null;
 
     return (purchaseRecords || [])
-      .filter((purchase) => purchase.itemType === 'material')
-      .filter((purchase) => String(purchase.itemId || purchase.materialId || '') === String(materialId))
+      .filter((purchase) => {
+        const purchaseType = String(purchase.itemType || purchase.type || '').toLowerCase();
+        return purchaseType === 'material';
+      })
+      .filter((purchase) => String(purchase.itemId || purchase.materialId || purchase.rawMaterialId || '') === String(materialId))
       .sort((leftPurchase, rightPurchase) => getPurchaseTime(rightPurchase) - getPurchaseTime(leftPurchase))[0] || null;
   };
 
@@ -476,73 +508,66 @@ const SupplierPurchases = () => {
       title: 'Nama Supplier',
       dataIndex: 'storeName',
       key: 'storeName',
+      width: '24%',
       render: (_, record) => (
-        <Space direction="vertical" size={4}>
+        <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Space size={6} wrap>
             <span style={{ fontWeight: 600 }}>{getSupplierDisplayName(record)}</span>
             {supplierIdFromQuery && String(record.id) === String(supplierIdFromQuery) ? (
               <Tag color="green">Dipilih</Tag>
             ) : null}
           </Space>
-          {getSupplierStoreLink(record) ? (
-            <a href={getSupplierStoreLink(record)} target="_blank" rel="noreferrer">
-              Buka Link Toko
-            </a>
-          ) : (
-            <span style={{ color: '#999' }}>Belum ada link toko</span>
-          )}
+          <span style={{ color: '#666' }}>
+            {(record.materialDetails || []).length || 0} katalog restock
+          </span>
         </Space>
       ),
     },
     {
-      title: 'Katalog Restock',
+      title: 'Link Toko',
+      key: 'storeLink',
+      width: '18%',
+      render: (_, record) => (
+        getSupplierStoreLink(record) ? (
+          <a href={getSupplierStoreLink(record)} target="_blank" rel="noreferrer">
+            Buka Link Toko
+          </a>
+        ) : (
+          <span style={{ color: '#999' }}>Belum ada link</span>
+        )
+      ),
+    },
+    {
+      title: 'Katalog Restock Ringkas',
       key: 'materials',
+      width: '28%',
       render: (_, record) => {
+        const detail = getSupplierTableSummaryDetail(record);
         const materialNames = record.supportedMaterialNames || [];
+
         if (!materialNames.length) return '-';
 
         return (
-          <Space size={[4, 4]} wrap>
-            {materialNames.slice(0, 3).map((name, index) => (
-              <Tag key={`${name}-${index}`}>{name}</Tag>
-            ))}
-            {materialNames.length > 3 && <Tag>+{materialNames.length - 3} katalog lain</Tag>}
-          </Space>
-        );
-      },
-    },
-    {
-      title: 'Paket / Konversi',
-      key: 'packageConversion',
-      render: (_, record) => {
-        const detail = getSupplierTableSummaryDetail(record);
-        if (!detail) return '-';
-
-        return (
-          <Space direction="vertical" size={2}>
-            <span>
-              {formatNumberID(detail.purchaseQty || 1)} {detail.purchaseUnit || 'satuan beli'} × {formatNumberID(detail.conversionValue || 0)} {detail.stockUnit || 'satuan stok'}
-            </span>
-            {(record.materialDetails || []).length > 1 ? (
-              <span style={{ color: '#999' }}>Ringkasan harga termurah</span>
+          <Space direction="vertical" size={4} style={{ width: '100%' }}>
+            <Space size={[4, 4]} wrap>
+              {materialNames.slice(0, 2).map((name, index) => (
+                <Tag key={`${name}-${index}`}>{name}</Tag>
+              ))}
+              {materialNames.length > 2 && <Tag>+{materialNames.length - 2} lainnya</Tag>}
+            </Space>
+            {detail ? (
+              <span style={{ color: '#666' }}>
+                Qty Beli {formatNumberID(detail.purchaseQty || 1)} {detail.purchaseUnit || 'satuan'} · Konversi Supplier {formatNumberID(detail.conversionValue || 0)} {detail.stockUnit || 'stok'}
+              </span>
             ) : null}
           </Space>
         );
       },
     },
     {
-      title: 'Tipe',
-      key: 'purchaseType',
-      render: (_, record) => {
-        const detail = getSupplierTableSummaryDetail(record);
-        if (!detail) return '-';
-        const isOfflinePurchase = detail.purchaseType === 'offline';
-        return <Tag color={isOfflinePurchase ? 'default' : 'blue'}>{isOfflinePurchase ? 'Offline' : 'Online'}</Tag>;
-      },
-    },
-    {
-      title: 'Harga Estimasi',
+      title: 'Harga Estimasi Ringkas',
       key: 'estimatedPrice',
+      width: '20%',
       render: (_, record) => {
         const detail = getSupplierTableSummaryDetail(record);
         if (!detail) return '-';
@@ -551,9 +576,14 @@ const SupplierPurchases = () => {
         if (!metrics.estimatedUnitPrice) return '-';
 
         return (
-          <Space direction="vertical" size={2}>
-            <span>Mulai {formatCurrencyIDR(metrics.estimatedUnitPrice)} / {detail.stockUnit || 'satuan'}</span>
-            <span style={{ color: '#999' }}>Total {formatCurrencyIDR(metrics.totalEstimatedSupplier || 0)}</span>
+          <Space direction="vertical" size={2} style={{ width: '100%' }}>
+            <span style={{ fontWeight: 600 }}>{formatCurrencyIDR(metrics.estimatedUnitPrice)} / {detail.stockUnit || 'satuan'}</span>
+            <span style={{ color: '#666' }}>
+              Harga Supplier Tercatat: {formatCurrencyIDR(metrics.totalEstimatedSupplier || 0)}
+            </span>
+            <Tag color={detail.purchaseType === 'offline' ? 'default' : 'blue'}>
+              {detail.purchaseType === 'offline' ? 'Offline' : 'Online'}
+            </Tag>
           </Space>
         );
       },
@@ -561,28 +591,32 @@ const SupplierPurchases = () => {
     {
       title: 'Aksi',
       key: 'actions',
-      width: 180,
+      width: 150,
       // ---------------------------------------------------------------------
-      // ACTION COLUMN TANPA FIXED.
-      // FUNGSI: tombol Detail/Edit/Hapus tetap mudah diklik tanpa sticky/fixed
-      // column yang sebelumnya bisa terlihat transparan saat table melebar.
-      // STATUS: aktif dipakai; hanya perubahan UI, handler lama tetap dipakai.
+      // AKTIF + GUARDED: action column tanpa fixed/sticky.
+      // FUNGSI: tombol Detail/Edit/Hapus tetap mudah diklik tanpa horizontal
+      // scroll kanan yang berlebihan dan tanpa efek transparan/menumpuk.
+      // HUBUNGAN FLOW: hanya UI; handler lama tetap dipakai dan tidak mengubah
+      // Supplier schema, Purchases prefill, stok, kas, expense, atau Raw Material.
+      // LEGACY: fixed action column lama tidak dipakai karena rawan overlap.
+      // CLEANUP CANDIDATE: pindahkan styling ke CSS khusus jika nanti ada file
+      // style Supplier yang terpisah.
       // ---------------------------------------------------------------------
       className: 'app-table-action-column',
       render: (_, record) => (
-        <div className="ims-action-group">
-          <Button className="ims-action-button" size="small" icon={<EyeOutlined />} onClick={() => openSupplierDrawer(record)}>
+        <Space direction="vertical" size={6} style={{ width: '100%' }}>
+          <Button block size="small" icon={<EyeOutlined />} onClick={() => openSupplierDrawer(record)}>
             Detail
           </Button>
-          <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => handleEditSupplier(record)}>
+          <Button block size="small" icon={<EditOutlined />} onClick={() => handleEditSupplier(record)}>
             Edit
           </Button>
           <Popconfirm title="Yakin hapus supplier ini?" onConfirm={() => handleDeleteSupplier(record)} okText="Ya" cancelText="Batal">
-            <Button className="ims-action-button" danger size="small" icon={<DeleteOutlined />}>
+            <Button block danger size="small" icon={<DeleteOutlined />}>
               Hapus
             </Button>
           </Popconfirm>
-        </div>
+        </Space>
       ),
     },
   ];
@@ -619,7 +653,7 @@ const SupplierPurchases = () => {
         ),
     },
     {
-      title: 'Paket / Konversi',
+      title: 'Qty Beli / Konversi Supplier',
       key: 'unitConversion',
       render: (_, record) => (
         <Space direction="vertical" size={2}>
@@ -633,7 +667,7 @@ const SupplierPurchases = () => {
       ),
     },
     {
-      title: 'Estimasi Supplier',
+      title: 'Harga Supplier Tercatat',
       key: 'supplierEstimate',
       render: (_, record) => {
         const metrics = calculateSupplierMaterialRestockMetrics(record);
@@ -686,7 +720,23 @@ const SupplierPurchases = () => {
     {
       title: 'Catatan',
       dataIndex: 'note',
-      render: (value) => value || '-',
+      render: (value) => (
+        value ? (
+          <span
+            title={value}
+            style={{
+              display: 'inline-block',
+              maxWidth: 180,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              verticalAlign: 'bottom',
+            }}
+          >
+            {value}
+          </span>
+        ) : '-'
+      ),
     },
   ];
 
@@ -712,7 +762,7 @@ const SupplierPurchases = () => {
               </Button>
             </div>
           ) : (
-            <div style={{ color: '#666' }}>Katalog vendor/restock dan pembanding harga supplier</div>
+            <div style={{ color: '#666' }}>Katalog Restock Supplier dan pembanding harga</div>
           )}
         </div>
 
@@ -736,7 +786,7 @@ const SupplierPurchases = () => {
         showIcon
         style={{ marginBottom: 16 }}
         message="Supplier adalah katalog restock, bukan transaksi pembelian"
-        description="Supplier menyimpan link produk, satuan beli, konversi, dan harga estimasi untuk pembanding. Stok, kas, expense, dan harga aktual tetap berubah hanya lewat Purchases saat user klik Simpan."
+        description="Supplier hanya menyimpan katalog restock dan pembanding. Stok, kas, expense, dan harga aktual tetap berubah lewat Purchases saat user klik Simpan."
       />
 
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
@@ -942,7 +992,7 @@ const SupplierPurchases = () => {
                         <Form.Item
                           {...restField}
                           name={[name, 'purchaseQty']}
-                          label="Qty per Pembelian"
+                          label="Qty Beli"
                           initialValue={1}
                           extra="Contoh: beli 1 pack, 1 roll, 1 ikat, atau 1 dus."
                         >
@@ -954,8 +1004,8 @@ const SupplierPurchases = () => {
                         <Form.Item
                           {...restField}
                           name={[name, 'conversionValue']}
-                          label="Konversi ke Stok"
-                          extra="Contoh: beli 1 pack isi 6 pcs, maka konversi ke stok = 6."
+                          label="Konversi Supplier"
+                          extra="Contoh: beli 1 pack isi 6 pcs, maka Konversi Supplier = 6."
                         >
                           <InputNumber min={0} step={0.01} style={{ width: '100%' }} formatter={(value) => formatNumberID(value)} parser={(value) => value?.replace(/\./g, '') || ''} />
                         </Form.Item>
@@ -1004,19 +1054,19 @@ const SupplierPurchases = () => {
                                   estimasi tidak membawa nilai lama. STATUS: aktif dipakai.
                               --------------------------------------------------------- */}
                               <Col xs={24} md={12}>
-                                <Form.Item {...restField} name={[name, 'estimatedShippingCost']} label="Ongkir Estimasi">
+                                <Form.Item {...restField} name={[name, 'estimatedShippingCost']} label="Ongkir Default">
                                   <InputNumber min={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={(value) => value?.replace(/\./g, '') || ''} />
                                 </Form.Item>
                               </Col>
 
                               <Col xs={24} md={12}>
-                                <Form.Item {...restField} name={[name, 'serviceFee']} label="Biaya Admin / Layanan">
+                                <Form.Item {...restField} name={[name, 'serviceFee']} label="Biaya Layanan Default">
                                   <InputNumber min={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={(value) => value?.replace(/\./g, '') || ''} />
                                 </Form.Item>
                               </Col>
 
                               <Col xs={24} md={12}>
-                                <Form.Item {...restField} name={[name, 'discount']} label="Diskon / Voucher">
+                                <Form.Item {...restField} name={[name, 'discount']} label="Voucher Default">
                                   <InputNumber min={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={(value) => value?.replace(/\./g, '') || ''} />
                                 </Form.Item>
                               </Col>
@@ -1041,12 +1091,12 @@ const SupplierPurchases = () => {
                           <Alert
                             type="success"
                             showIcon
-                            message="Estimasi Harga Supplier"
+                            message="Harga Supplier Tercatat"
                             description={
                               <Space direction="vertical" size={2}>
                                 <span>Total Estimasi Supplier: <strong>{formatCurrencyIDR(metrics.totalEstimatedSupplier || 0)}</strong></span>
                                 <span>Total Stok dari Konversi: <strong>{formatNumberID(metrics.totalStockQty || 0)} {detail.stockUnit || 'satuan stok'}</strong></span>
-                                <span>Harga Estimasi Supplier / Satuan Stok: <strong>{formatCurrencyIDR(metrics.estimatedUnitPrice || 0)}</strong></span>
+                                <span>Harga Supplier Tercatat / Satuan Stok: <strong>{formatCurrencyIDR(metrics.estimatedUnitPrice || 0)}</strong></span>
                               </Space>
                             }
                           />
@@ -1094,7 +1144,7 @@ const SupplierPurchases = () => {
           setDrawerVisible(false);
           setSelectedSupplier(null);
         }}
-        width={1040}
+        width={960}
       >
         {selectedSupplier && (
           <>
@@ -1143,7 +1193,7 @@ const SupplierPurchases = () => {
               pagination={false}
               dataSource={selectedSupplier.materialDetails || []}
               columns={materialDetailColumns}
-              scroll={{ x: 1200 }}
+              scroll={{ x: 960 }}
               locale={{ emptyText: <Empty description="Belum ada katalog restock supplier" /> }}
             />
           </>

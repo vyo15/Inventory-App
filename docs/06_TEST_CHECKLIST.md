@@ -697,3 +697,40 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Pastikan Catatan tampil ringkas 1-2 baris dan detail panjang tetap bisa dibaca lewat tooltip/hover.
 - [ ] Pastikan membuka halaman Stock Management tidak mengubah stok.
 - [ ] Pastikan submit Penyesuaian Stok tetap melalui panel resmi dan inventory log tetap terbentuk normal.
+
+## Checklist Retur & Inventory Log Guarded — 2026-04-26
+
+- [ ] Buat retur produk non-varian dan pastikan stok master bertambah sesuai jumlah retur.
+- [ ] Buat retur bahan baku non-varian dan pastikan stok master bertambah sesuai jumlah retur.
+- [ ] Buat retur produk bervarian dan pastikan varian wajib dipilih.
+- [ ] Buat retur bahan baku bervarian dan pastikan varian wajib dipilih.
+- [ ] Pastikan `stock`, `currentStock`, `reservedStock`, `availableStock`, dan total `variants[]` tetap sinkron setelah retur varian.
+- [ ] Pastikan dokumen `returns` terbentuk sekali untuk satu submit.
+- [ ] Pastikan `inventory_logs` terbentuk sekali dengan `type = return_in`, `returnId`, `referenceId`, dan `referenceType = return`.
+- [ ] Pastikan tidak ada stok berubah jika validasi item, tanggal, jumlah, atau varian gagal.
+- [ ] Pastikan tidak ada double stock dan tidak ada double inventory log saat submit normal.
+- [ ] Pastikan data retur tampil benar di tabel Retur.
+- [ ] Pastikan log retur tampil di Stock Management / Manajemen Stok sebagai sumber Retur.
+- [ ] Pastikan tidak ada error console setelah submit retur.
+- [ ] Jalankan `npm run build` setelah `npm install` bersih di environment lokal.
+
+## Checklist Stock Management & Adjustment Guarded — 2026-04-26
+
+- [ ] Buka Stock Management / Manajemen Stok.
+- [ ] Pastikan riwayat inventory log terbaru tampil di atas.
+- [ ] Pastikan tidak ada kolom generik `Stok` yang kosong/membingungkan.
+- [ ] Pastikan tabel menampilkan Tanggal, Arah, Sumber, Item, Qty, Referensi Audit, dan Catatan.
+- [ ] Pastikan Qty tidak tampil dengan trailing `.00` untuk angka bulat.
+- [ ] Pastikan Sumber terbaca sebagai Pembelian, Penjualan, Retur, Produksi, atau Penyesuaian Stok.
+- [ ] Pastikan Referensi Audit menampilkan label bisnis dan ID teknis sebagai detail kecil/tooltip.
+- [ ] Pastikan Catatan ringkas 1-2 baris dan detail panjang tetap bisa dilihat lewat tooltip.
+- [ ] Pastikan membuka halaman Stock Management tidak mengubah stok.
+- [ ] Buat adjustment masuk item non-varian dan pastikan stok bertambah.
+- [ ] Buat adjustment keluar item non-varian dan pastikan stok berkurang sesuai `availableStock`.
+- [ ] Buat adjustment masuk/keluar item varian dan pastikan varian wajib dipilih.
+- [ ] Pastikan `stock`, `currentStock`, `reservedStock`, `availableStock`, dan total `variants[]` tetap sinkron setelah adjustment varian.
+- [ ] Pastikan dokumen `stock_adjustments` terbentuk sekali untuk satu submit.
+- [ ] Pastikan `inventory_logs` terbentuk sekali dengan `referenceType = stock_adjustment` dan `referenceId` sama dengan `adjustmentId`.
+- [ ] Pastikan tidak ada double stock dan tidak ada double log saat submit normal.
+- [ ] Pastikan tidak ada error console.
+- [ ] Jalankan `npm run build` setelah `npm install` bersih di environment lokal.

@@ -353,7 +353,9 @@ Supplier table
 Stock Management
 -> reads latest inventory_logs with a UI/service limit
 -> displays audit history read-only
+-> hides generic Stok column while snapshot before/after is not reliable for all logs
 -> Stock Adjustment panel remains the only manual adjustment submit flow
+-> Stock Adjustment transaction commits stock_adjustments + stock mutation + inventory_logs together
 -> no stock mutation when page opens
 ```
 
@@ -361,3 +363,77 @@ Catatan guard:
 - Jangan isi riwayat stok dengan stok saat ini jika maksudnya snapshot historis.
 - Jika butuh full history, gunakan pagination/query lanjutan; jangan kembalikan full collection read tanpa batas.
 - Latest purchase lookup untuk restock masih kandidat optimasi terpisah bila index/read model sudah diputuskan.
+
+## Integrasi Guarded — Simpan Pembelian
+
+Flow aktif saat user klik **Simpan Pembelian**:
+
+1. Validasi form Purchases.
+2. Buat reference `purchaseId`.
+3. Jalankan Firestore transaction.
+4. Baca item stok terbaru dari Firestore.
+5. Validasi ulang varian jika item bervarian.
+6. Commit bersama:
+   - `purchases/{purchaseId}`;
+   - update stok `raw_materials` atau `products`;
+   - `inventory_logs/{logId}` dengan reference purchase;
+   - `expenses/{purchases__purchaseId}` sebagai Cash Out otomatis.
+
+Batas integrasi:
+- Supplier hanya menjadi sumber prefill dan metadata vendor.
+- Raw Material berubah karena transaksi stok/cost, bukan karena sync otomatis dari Supplier.
+- Cash Out mengikuti Total Aktual Pembelian, bukan Selisih Hemat.
+- Reports tetap membaca expense/cash flow sesuai source final.
+
+## Integrasi Guarded — Stock Management & Adjustment
+
+Flow aktif Stock Management:
+
+1. Page membaca `inventory_logs` terbaru dengan limit.
+2. UI menampilkan audit read-only: Tanggal, Arah, Sumber, Item, Qty, Referensi Audit, dan Catatan.
+3. Kolom `Stok` generic tidak ditampilkan selama snapshot belum reliable.
+4. Panel Penyesuaian Stok menjadi entry point adjustment manual resmi.
+5. Saat adjustment disimpan, Firestore transaction melakukan commit bersama:
+   - update item di `raw_materials` atau `products`;
+   - set `stock_adjustments/{adjustmentId}`;
+   - set `inventory_logs/{logId}` dengan `referenceType: stock_adjustment`.
+
+Batas integrasi:
+- Purchases, Sales, Returns, Production, Payroll, Dashboard, dan Reports tidak ikut diubah saat task hanya Stock Management.
+- `variantStockNormalizer` tidak boleh disentuh kecuali ada bug varian yang jelas.
+- Reset/Maintenance tetap bukan flow harian untuk memperbaiki stok.
+
+## Integrasi Supplier UI dan Lookup Performance Ringan
+
+```text
+Supplier
+-> reads supplierPurchases as master katalog restock
+-> reads raw_materials for pilihan bahan/satuan stok
+-> reads recent purchases with a guarded limit for price comparison only
+-> shows compact table summary
+-> opens drawer for complete supplier catalog details
+-> does not write Purchases, stock, cash, expense, reports, or Raw Material from materialDetails
+```
+
+```text
+Dashboard Restock Assistant
+-> reads products + raw_materials to find low stock rows
+-> reads recent inventory_logs with limit for activity feed
+-> reads purchases only for low-stock material IDs shown in Restock Assistant
+-> builds restock navigation/prefill hints
+-> remains read-only and does not create purchase or mutate stock/cash
+```
+
+```text
+Raw Material Detail
+-> reads raw_materials as master bahan baku
+-> reads supplier catalog for manual supplier display
+-> reads recent purchases with a guarded limit for last purchase/link restock display
+-> does not auto-sync Supplier catalog into Raw Material
+-> does not mutate stock when drawer/detail is opened
+```
+
+Guard:
+- Lookup purchase ringan hanya untuk ringkasan/restock helper, bukan source histori lengkap.
+- Jangan limit Dashboard summary penting jika limit bisa menyembunyikan PO, payroll, expense, atau status produksi aktif.
+- Jika butuh histori penuh atau presisi lintas data lama, gunakan laporan atau buat service/index khusus pada task terpisah.

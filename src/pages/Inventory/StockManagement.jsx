@@ -236,7 +236,10 @@ const resolveNoteText = (record) =>
 // - inventory_logs lama dan sebagian writer lintas modul belum selalu punya snapshot before/after yang lengkap
 // - menampilkan stok saat ini sebagai pengganti akan menyesatkan audit historis
 // Status:
-// - aktif sebagai guard UI; kandidat cleanup jika semua writer inventory log sudah menyimpan snapshot stok reliable
+// - AKTIF sebagai guard UI agar kolom "Stok" generik tidak menyesatkan audit.
+// - GUARDED karena snapshot lama belum reliable untuk semua writer inventory log.
+// - LEGACY: sebagian log lama belum punya before/after sehingga tidak boleh dipaksa tampil sebagai stok historis.
+// - CLEANUP CANDIDATE jika semua writer inventory log sudah menyimpan snapshot stok reliable.
 // =========================
 const STOCK_SNAPSHOT_COLUMN_NOTE =
   "Snapshot stok tidak ditampilkan sebagai kolom utama karena tidak semua log lama menyimpan before/after yang reliable.";
@@ -248,7 +251,10 @@ const STOCK_SNAPSHOT_COLUMN_NOTE =
 // Hubungan flow:
 // - Stock Management tetap menjadi audit log operasional, bukan halaman detail panjang
 // Status:
-// - aktif dipakai di tabel riwayat; bukan legacy
+// - AKTIF dipakai di tabel riwayat.
+// - GUARDED agar catatan panjang tidak membuat row terlalu tinggi.
+// - LEGACY: tidak ada logic legacy di style ini.
+// - CLEANUP CANDIDATE jika nanti ada komponen table text clamp global.
 // =========================
 const NOTE_PREVIEW_STYLE = {
   display: "-webkit-box",
@@ -329,7 +335,10 @@ const StockManagement = () => {
   // - memperkaya row log dengan label arah, sumber, jenis item, varian, reference, dan note
   // - sorting newest first tetap dilakukan di UI sebagai fallback meski service sudah orderBy timestamp
   // Status:
-  // - aktif dipakai; fallback sorting aman untuk log lama
+  // - AKTIF dipakai untuk memastikan riwayat terbaru di atas.
+  // - GUARDED karena sorting UI hanya tampilan, bukan hitung ulang stok.
+  // - LEGACY: fallback sorting tetap menjaga log lama yang timestamp-nya belum seragam.
+  // - CLEANUP CANDIDATE jika service sudah punya pagination server-side final.
   // =========================
   const normalizedHistory = useMemo(() => {
     return [...history]
@@ -484,7 +493,10 @@ const StockManagement = () => {
       // Alasan:
       // - tidak semua inventory_logs punya snapshot before/after yang reliable; menampilkan stok saat ini akan misleading
       // Status:
-      // - aktif sebagai keputusan UI; jika semua writer log sudah konsisten, kolom bisa dibuat ulang sebagai "Stok Setelah"
+      // - AKTIF sebagai keputusan UI untuk menghapus kolom stok generic/kosong.
+      // - GUARDED karena tabel tidak boleh mengisi stok historis dengan stok saat ini.
+      // - LEGACY: inventory log lama belum selalu punya snapshot stok reliable.
+      // - CLEANUP CANDIDATE jika semua writer log sudah konsisten dan kolom bisa dibuat ulang sebagai "Stok Setelah".
       // =========================
       {
         title: "Referensi Audit",

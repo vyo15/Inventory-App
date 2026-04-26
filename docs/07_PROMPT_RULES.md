@@ -90,7 +90,7 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 ## Update Prompt Guard Setelah Cleanup — 2026-04-25
 - Untuk mutasi stok umum, prioritaskan `updateInventoryStock()` dan jangan update `stock/currentStock/variants[]` langsung dari page.
 - Jika item bervarian, caller wajib mengirim `variantKey` kecuali sedang menangani data legacy dengan alasan eksplisit.
-- Stock Adjustment wajib memakai `updateInventoryStock()` dan validasi keluar harus berbasis `availableStock`, bukan hanya `currentStock`.
+- Stock Adjustment wajib memakai Firestore transaction atau guard setara agar record adjustment, mutasi stok, dan inventory log tidak partial; validasi keluar harus berbasis `availableStock`, bukan hanya `currentStock`.
 - `customers` lowercase adalah collection final customer. `Customers` uppercase harus dianggap legacy/test data kecuali ada bukti baru.
 - Inventory log baru sebaiknya mengirim `referenceId`, `referenceType`, dan detail transaksi agar Stock Management bisa menampilkan audit trail jelas.
 - Produksi final tetap guarded exception dan tidak boleh dipaksa memakai helper stok umum jika transaction produksi memang dibutuhkan.
@@ -268,7 +268,7 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 ## Guard Purchases Stok Masuk Total
 
 - Jika task menyentuh form Purchases, tampilkan Stok Masuk total sebagai informasi utama: `Qty Beli × Konversi Supplier`.
-- Jangan mengembalikan Konversi ke Stok sebagai input utama/editable di Purchases.
+- Jangan mengembalikan Konversi Supplier sebagai input utama/editable di Purchases.
 - Jangan membuat perubahan Qty Beli memicu reset item/supplier/link/purchaseType/harga pembanding.
 - Jangan menghapus guard manual subtotal; harga barang supplier hanya default, bukan pemaksa harga aktual.
 - Jangan membuat shipping tier / ongkir bertingkat tanpa task khusus; ongkir, voucher, diskon ongkir, dan biaya layanan aktual tetap editable di Purchases.
@@ -280,4 +280,26 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Jangan mengisi kolom stok audit dengan stok saat ini karena itu menyesatkan untuk riwayat historis.
 - Jika semua writer inventory log nanti sudah menyimpan snapshot yang konsisten, kolom boleh dibuat ulang dengan label eksplisit seperti `Stok Setelah` atau `Stok Sebelum/Sesudah`.
 - Kolom Catatan di tabel inventory log harus ringkas; catatan panjang boleh dipotong/ellipsis, bukan membuat row terlalu tinggi.
-- Jangan mengubah `updateInventoryStock`, `variantStockNormalizer`, atau submit Stock Adjustment hanya untuk merapikan tabel riwayat.
+- Jangan mengubah `variantStockNormalizer` hanya untuk merapikan tabel riwayat. Submit Stock Adjustment boleh disentuh hanya jika tujuannya menjaga adjustment, stok, dan inventory log tetap konsisten.
+
+## Prompt Guard — Simpan Pembelian
+
+Untuk task yang menyentuh `src/pages/Transaksi/Purchases.jsx`:
+- jangan mengembalikan flow lama yang membuat purchase terlebih dahulu lalu update stok/log/expense secara terpisah;
+- jangan mengubah rumus Stok Masuk, Total Aktual, actualUnitCost, atau saving tanpa persetujuan business rule;
+- jangan menyentuh Supplier catalog, Raw Material master UI, Sales, Returns, Production, Payroll, HPP, Dashboard, atau Reports jika task hanya hardening Purchases;
+- setiap patch wajib menjaga expense idempotent dengan `sourceModule: purchases` dan `sourceId: purchaseId`;
+- setiap blok yang menyentuh purchase, stok, log, atau expense wajib diberi comment `AKTIF` dan `GUARDED`.
+
+## Prompt Guard — Stock Management & Adjustment
+
+Untuk task yang menyentuh `src/pages/Inventory/StockManagement.jsx` atau `src/pages/Inventory/components/StockAdjustmentPanel.jsx`:
+- jangan membuat mutasi stok saat halaman Stock Management dibuka;
+- jangan menghitung ulang stok dari seluruh transaksi hanya untuk mengisi tabel;
+- jangan menampilkan kolom `Stok` generik jika snapshot before/after belum reliable;
+- jangan mengisi audit history dengan stok saat ini;
+- pertahankan kolom Tanggal, Arah, Sumber, Item, Qty, Referensi Audit, dan Catatan;
+- Catatan wajib ringkas di tabel, detail panjang boleh lewat tooltip;
+- submit adjustment harus guarded terhadap double submit, stok negatif, item bervarian tanpa varian, dan partial write log;
+- setiap blok penting wajib diberi comment `AKTIF`, `GUARDED`, `LEGACY`, dan `CLEANUP CANDIDATE` jika relevan;
+- output patch tetap ZIP berisi file berubah saja.

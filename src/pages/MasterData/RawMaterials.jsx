@@ -29,7 +29,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, limit as firestoreLimit, orderBy, query } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { formatNumberID } from '../../utils/formatters/numberId';
@@ -61,6 +61,19 @@ const { Text } = Typography;
 // Tetap disimpan lokal di halaman agar form edit/create mudah dibaca dan dirawat.
 // -----------------------------------------------------------------------------
 const unitOptions = ['pcs', 'meter', 'yard', 'kg', 'gram', 'liter', 'ml', 'roll', 'pack', 'batang'];
+
+// -----------------------------------------------------------------------------
+// AKTIF + GUARDED: batas lookup purchase terakhir Raw Material.
+// FUNGSI: drawer detail bahan tetap bisa membaca link/supplier terakhir beli tanpa
+// membuka seluruh collection purchases saat data real membesar.
+// HUBUNGAN FLOW: read-only; tidak mengubah Raw Material, Supplier, Purchases,
+// stok, kas, expense, harga, saving, atau laporan.
+// LEGACY: purchase yang sangat tua di luar jendela lookup tidak dipakai sebagai
+// pembanding ringkas; source of truth histori tetap laporan pembelian.
+// CLEANUP CANDIDATE: ganti ke service latest purchase per material jika index
+// Firestore final sudah dibuat.
+// -----------------------------------------------------------------------------
+const RAW_MATERIAL_PURCHASE_LOOKUP_LIMIT = 500;
 
 // -----------------------------------------------------------------------------
 // Builder nilai awal form.
@@ -325,10 +338,14 @@ const getLatestPurchaseForMaterial = (purchaseList = [], materialId = null) => {
   if (!normalizedMaterialId || !Array.isArray(purchaseList)) return null;
 
   return purchaseList
-    .filter((purchase) => (
-      purchase?.type === 'material' &&
-      normalizeRecordId(purchase?.itemId) === normalizedMaterialId
-    ))
+    .filter((purchase) => {
+      const purchaseType = String(purchase?.itemType || purchase?.type || '').toLowerCase();
+      const purchaseMaterialId = normalizeRecordId(
+        purchase?.itemId || purchase?.materialId || purchase?.rawMaterialId,
+      );
+
+      return purchaseType === 'material' && purchaseMaterialId === normalizedMaterialId;
+    })
     .sort((leftItem, rightItem) => getPurchaseSortMillis(rightItem) - getPurchaseSortMillis(leftItem))[0] || null;
 };
 
@@ -496,13 +513,25 @@ const RawMaterials = () => {
       },
     );
 
-    const unsubPurchases = onSnapshot(
+    const purchaseLookupQuery = query(
       collection(db, 'purchases'),
+      orderBy('date', 'desc'),
+      firestoreLimit(RAW_MATERIAL_PURCHASE_LOOKUP_LIMIT),
+    );
+
+    const unsubPurchases = onSnapshot(
+      purchaseLookupQuery,
       (snapshot) => {
         // -------------------------------------------------------------------
-        // ACTIVE: pembelian dibaca read-only untuk mencari link produk terakhir
-        // pada drawer Detail Raw Material. Listener ini tidak mengubah stok,
-        // kas, harga, saving, atau data purchase apa pun.
+        // AKTIF + GUARDED: pembelian dibaca terbatas untuk link produk terakhir
+        // pada drawer Detail Raw Material.
+        // FUNGSI: menjaga lookup restock tetap ringan saat data real membesar.
+        // HUBUNGAN FLOW: read-only; tidak mengubah stok, kas, harga, saving,
+        // Supplier, Raw Material, Purchases, expense, atau laporan.
+        // LEGACY: purchase sangat lama di luar limit tidak dipakai di ringkasan
+        // drawer; laporan pembelian tetap source histori lengkap.
+        // CLEANUP CANDIDATE: service latest purchase per material jika index
+        // Firestore final sudah dikunci.
         // -------------------------------------------------------------------
         setPurchaseRecords(
           snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })),

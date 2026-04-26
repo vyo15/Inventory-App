@@ -12,16 +12,17 @@ import {
   Tag,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
-import { collection, addDoc, onSnapshot, Timestamp } from "firebase/firestore";
+import { collection, doc, onSnapshot, runTransaction, Timestamp } from "firebase/firestore";
 import dayjs from "dayjs";
 import { db } from "../../firebase";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import {
-  addInventoryLog,
-  updateInventoryStock,
-} from "../../services/Inventory/inventoryService";
+  buildInventoryLogPayload,
+  INVENTORY_LOG_COLLECTION,
+} from "../../services/Inventory/inventoryLogService";
 import {
+  applyStockMutationToItem,
   buildVariantOptionsFromItem,
   findVariantByKey,
   getItemStockSnapshot,
@@ -45,6 +46,14 @@ const Returns = () => {
   const [materials, setMaterials] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedItemType, setSelectedItemType] = useState("product");
+
+  // =========================
+  // SECTION: Submit loading guard
+  // AKTIF + GUARDED:
+  // - mencegah user menekan Simpan Retur berkali-kali saat transaction masih berjalan;
+  // - menjaga satu klik submit tidak membuat double stock atau double inventory log.
+  // =========================
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
 
   const selectedItemId = Form.useWatch("itemId", form);
   const selectedVariantKey = Form.useWatch("variantKey", form);
@@ -144,14 +153,54 @@ const Returns = () => {
 
   // =========================
   // SECTION: Submit Return
+  // AKTIF + GUARDED:
+  // - flow ini adalah jalur resmi retur yang menambah stok kembali;
+  // - dokumen retur, update stok, dan inventory log wajib commit bersama dalam Firestore transaction;
+  // - tidak memakai addInventoryLog/updateInventoryStock langsung agar tidak ada stok berubah tanpa audit log.
+  // LEGACY:
+  // - flow lama melakukan update stok lebih dulu, lalu addDoc returns, lalu addInventoryLog; jika addDoc/log gagal, stok bisa sudah berubah.
+  // CLEANUP CANDIDATE:
+  // - jika nanti ada service khusus retur, orkestrasi transaction ini bisa dipindah dari page ke service tanpa mengubah business rule.
   // =========================
   const handleSubmitReturn = async (values) => {
+    if (isSubmittingReturn) return;
+
+    setIsSubmittingReturn(true);
+
     try {
       const { type, itemId, quantity, date, note, variantKey } = values;
       const collectionName = type === "product" ? "products" : "raw_materials";
+      const normalizedQuantity = Number(quantity || 0);
+      const normalizedNote = String(note || "").trim();
+
+      // =========================
+      // SECTION: Validasi awal sebelum write pertama
+      // AKTIF + GUARDED:
+      // - memastikan data wajib valid sebelum Firestore transaction dibuat;
+      // - menjaga retur tidak menghasilkan dokumen/log/stok dengan item, tanggal, atau qty kosong;
+      // - validasi ini tidak mengubah business rule retur, hanya mencegah partial write dan data rusak.
+      // =========================
+      if (!type || !["product", "material"].includes(type)) {
+        message.error("Jenis item retur tidak valid.");
+        return;
+      }
+
+      if (!itemId) {
+        message.error("Item retur wajib dipilih.");
+        return;
+      }
+
+      if (!Number.isFinite(normalizedQuantity) || normalizedQuantity <= 0) {
+        message.error("Jumlah retur harus lebih dari 0.");
+        return;
+      }
+
+      if (!date?.toDate || !dayjs(date.toDate()).isValid()) {
+        message.error("Tanggal retur tidak valid.");
+        return;
+      }
 
       const item = allItems.find((sourceItem) => sourceItem.id === itemId);
-      const itemName = item?.name || "Item tidak ditemukan";
 
       if (!item) {
         message.error("Item tidak ditemukan");
@@ -163,55 +212,113 @@ const Returns = () => {
         return;
       }
 
-      // =========================
-      // SECTION: Mutasi stok retur final
-      // Source of truth variant berasal dari form variantKey; helper final menjaga variants[] dan aggregate stock sinkron.
-      // =========================
-      const stockMutationResult = await updateInventoryStock({
-        itemId,
-        collectionName,
-        quantityChange: Number(quantity),
-        variantKey: variantKey || "",
-        itemSnapshot: item,
-      });
+      const returnReference = doc(collection(db, "returns"));
+      const itemReference = doc(db, collectionName, itemId);
+      const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
+      const returnTimestamp = Timestamp.fromDate(date.toDate());
 
-      const variantPayload = {
-        variantKey: stockMutationResult.variantKey,
-        variantLabel: stockMutationResult.variantLabel,
-        stockSourceType: stockMutationResult.stockSourceType,
-      };
+      await runTransaction(db, async (transaction) => {
+        const itemDocument = await transaction.get(itemReference);
 
-      const returnDocument = await addDoc(collection(db, "returns"), {
-        type,
-        itemId,
-        itemName,
-        quantity: Number(quantity),
-        note: note || "",
-        date: Timestamp.fromDate(date.toDate()),
-        ...variantPayload,
-      });
+        if (!itemDocument.exists()) {
+          throw new Error("Item stok tidak ditemukan. Retur dibatalkan agar stok dan log tidak partial.");
+        }
 
-      await addInventoryLog(
-        itemId,
-        itemName,
-        Number(quantity),
-        "return_in",
-        collectionName,
-        {
-          // ACTIVE: reference retur membuat inventory log bisa ditelusuri dari Stock Management.
-          returnId: returnDocument.id,
-          referenceId: returnDocument.id,
-          referenceType: "return",
-          note: note || "",
+        const latestItem = {
+          id: itemDocument.id,
+          ...itemDocument.data(),
+        };
+        const latestItemName = latestItem?.name || item?.name || "Item tanpa nama";
+        const latestItemHasVariants = inferHasVariants(latestItem);
+        const selectedVariant = latestItemHasVariants
+          ? findVariantByKey(latestItem, variantKey)
+          : null;
+
+        // =========================
+        // SECTION: Validasi ulang varian di dalam transaction
+        // AKTIF + GUARDED:
+        // - membaca item terbaru dari Firestore, bukan hanya state UI;
+        // - mencegah retur masuk ke master/default ketika item sebenarnya bervarian;
+        // - menjaga stock/currentStock/availableStock varian tetap sinkron lewat helper final.
+        // =========================
+        if (latestItemHasVariants && !variantKey) {
+          throw new Error("Item memiliki varian. Pilih varian agar stok retur masuk ke sumber yang benar.");
+        }
+
+        if (latestItemHasVariants && !selectedVariant) {
+          throw new Error("Varian item tidak ditemukan. Retur dibatalkan agar stok tidak masuk ke master/default.");
+        }
+
+        const stockSnapshotBefore = selectedVariant
+          ? getItemStockSnapshot(selectedVariant)
+          : getItemStockSnapshot(latestItem);
+        const stockUpdatePayload = applyStockMutationToItem({
+          item: latestItem,
+          variantKey: selectedVariant?.variantKey || "",
+          deltaCurrent: normalizedQuantity,
+        });
+        const currentStockAfter = stockSnapshotBefore.currentStock + normalizedQuantity;
+        const availableStockAfter = currentStockAfter - stockSnapshotBefore.reservedStock;
+        const variantPayload = {
+          variantKey: selectedVariant?.variantKey || "",
+          variantLabel: selectedVariant?.variantLabel || "",
+          stockSourceType: selectedVariant ? "variant" : "master",
+        };
+
+        // =========================
+        // SECTION: Commit atomik retur + stok + inventory log
+        // AKTIF + GUARDED:
+        // - ketiga write ini berada dalam satu Firestore transaction;
+        // - jika salah satu gagal, tidak ada stok berubah tanpa dokumen retur/log;
+        // - inventory log memakai buildInventoryLogPayload agar schema audit sama dengan writer aktif lain.
+        // =========================
+        transaction.set(returnReference, {
+          type,
+          itemId,
+          itemName: latestItemName,
+          quantity: normalizedQuantity,
+          note: normalizedNote,
+          date: returnTimestamp,
           ...variantPayload,
-        },
-      );
+        });
+
+        transaction.update(itemReference, stockUpdatePayload);
+
+        transaction.set(
+          inventoryLogReference,
+          buildInventoryLogPayload({
+            itemId,
+            itemName: latestItemName,
+            quantityChange: normalizedQuantity,
+            type: "return_in",
+            collectionName,
+            timestamp: Timestamp.now(),
+            extraData: {
+              returnId: returnReference.id,
+              referenceId: returnReference.id,
+              referenceType: "return",
+              note: normalizedNote,
+              currentStockBefore: stockSnapshotBefore.currentStock,
+              currentStockAfter,
+              previousStock: stockSnapshotBefore.currentStock,
+              newStock: currentStockAfter,
+              reservedStockBefore: stockSnapshotBefore.reservedStock,
+              reservedStockAfter: stockSnapshotBefore.reservedStock,
+              availableStockBefore: stockSnapshotBefore.availableStock,
+              availableStockAfter,
+              ...variantPayload,
+            },
+          }),
+        );
+      });
 
       message.success("Retur berhasil ditambahkan!");
       resetReturnFormState();
     } catch (error) {
       console.error(error);
       message.error(error?.message || "Gagal menyimpan retur");
+    } finally {
+      setIsSubmittingReturn(false);
     }
   };
 
@@ -306,6 +413,7 @@ const Returns = () => {
         open={isModalOpen}
         onOk={form.submit}
         onCancel={resetReturnFormState}
+        confirmLoading={isSubmittingReturn}
         okText="Simpan"
         cancelText="Batal"
       >

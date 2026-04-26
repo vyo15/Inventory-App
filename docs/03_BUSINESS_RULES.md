@@ -240,13 +240,14 @@ Pengecualian yang dijaga adalah flow produksi final karena `productionWorkLogsSe
 
 ### 8.5 Stock Adjustment
 Stock Adjustment tidak boleh lagi update field `stock` secara langsung dari page. Adjustment harus:
-- memakai `updateInventoryStock()` sebagai source of truth mutasi stok umum
-- memilih item dari `raw_materials` atau `products`
-- memilih varian jika item bervarian
-- mencegah adjustment keluar melebihi `availableStock`, bukan hanya mengecek `currentStock`
-- menjaga `stock`, `currentStock`, `reservedStock`, `availableStock`, dan total `variants[]` tetap sinkron
-- membuat record `stock_adjustments`
-- membuat `inventory_logs` dengan `adjustmentId`, `referenceId`, `referenceType`, dan snapshot stok sebelum/sesudah
+- memakai Firestore transaction agar update stok, record `stock_adjustments`, dan `inventory_logs` tidak commit setengah jalan;
+- memakai helper stok varian aktif seperti `applyStockMutationToItem()` agar `stock/currentStock/reservedStock/availableStock/variants[]` tetap sinkron;
+- memilih item dari `raw_materials` atau `products`;
+- memilih varian jika item bervarian;
+- mencegah adjustment keluar melebihi `availableStock`, bukan hanya mengecek `currentStock`;
+- membuat record `stock_adjustments`;
+- membuat `inventory_logs` dengan `adjustmentId`, `referenceId`, `referenceType`, dan snapshot stok sebelum/sesudah;
+- tidak mengubah stok jika record adjustment atau inventory log gagal dibuat.
 
 ### 8.6 Inventory Log Reference
 Inventory log baru wajib menyimpan reference audit di field standar:
@@ -544,10 +545,44 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 
 ## 21. Rule Stok Masuk Purchases dari Konversi Supplier
 
-- Purchases wajib menampilkan **Stok Masuk total** sebagai informasi utama, bukan menjadikan Konversi ke Stok sebagai input utama.
+- Purchases wajib menampilkan **Stok Masuk total** sebagai informasi utama, bukan menjadikan **Konversi Supplier** sebagai input utama/editable.
 - Untuk bahan baku, rumus final tetap: `Stok Masuk = Qty Beli × Konversi Supplier`.
 - Konversi Supplier berasal dari katalog Supplier `materialDetails.conversionValue`, bersifat read-only di Purchases, dan hanya menjadi sumber hitung stok masuk.
 - Qty Beli boleh diubah user dan hanya boleh mengubah Stok Masuk, subtotal default jika belum diedit manual, dan ringkasan pembanding.
 - Perubahan Qty Beli tidak boleh mereset Supplier, Link Produk Restock, purchaseType, biaya supplier, atau Harga Supplier Tercatat.
 - Reject/selisih barang setelah diterima ditangani lewat Penyesuaian Stok agar audit stok tetap jelas, bukan dengan mengubah konversi di Purchases.
 - Selisih Hemat tetap dihitung dari `Total Pembanding Supplier - Total Aktual Pembelian` dan hanya menjadi informasi efisiensi, bukan pengurang kas.
+
+## 22. Rule Atomic Save Pembelian
+
+Status: **AKTIF + GUARDED**.
+
+Saat user klik **Simpan Pembelian**, flow aktif wajib menjaga purchase, stok masuk, inventory log, dan expense/cash out sebagai satu rangkaian konsisten.
+
+Ketentuan wajib:
+- validasi item, supplier, varian, tanggal, Qty Beli, Stok Masuk, dan Total Aktual dilakukan sebelum write pertama;
+- Stok Masuk tetap memakai rule final `Qty Beli × Konversi Supplier`;
+- Total Aktual tetap memakai `Subtotal Barang + Ongkir + Biaya Layanan - Diskon Ongkir - Voucher/Potongan`;
+- `actualUnitCost = Total Aktual / Stok Masuk`;
+- saving/selisih hemat tetap hanya metadata efisiensi dan tidak mengurangi cash out;
+- expense pembelian wajib memakai source reference `sourceModule: purchases` dan `sourceId: purchaseId` agar tidak double;
+- inventory log pembelian wajib punya `referenceType: purchase` dan `referenceId` dari purchase yang sama;
+- jika transaksi gagal sebelum commit, data tidak boleh tersimpan sebagian.
+
+Catatan legacy:
+- flow lama yang menyimpan purchase terlebih dahulu lalu update stok/log/expense satu per satu dianggap rawan partial write;
+- flow tersebut tidak boleh dihidupkan kembali tanpa alasan teknis kuat dan test regression.
+
+## 23. Rule Stock Management & Adjustment Guarded — 2026-04-26
+
+Status: **AKTIF + GUARDED**.
+
+- Stock Management adalah halaman audit log + Penyesuaian Stok resmi.
+- Membuka Stock Management tidak boleh membuat mutasi stok apa pun.
+- Tabel Riwayat Pergerakan Stok wajib fokus pada: Tanggal, Arah, Sumber, Item, Qty, Referensi Audit, dan Catatan.
+- Kolom generik `Stok` tidak boleh ditampilkan jika snapshot before/after belum reliable untuk semua log.
+- Jangan mengisi kolom stok historis memakai stok saat ini, karena itu bukan audit history.
+- Jika semua writer inventory log nanti sudah konsisten menyimpan snapshot, kolom boleh kembali dengan label eksplisit seperti `Stok Setelah` atau `Stok Sebelum/Sesudah`.
+- Catatan log harus ringkas di tabel; catatan lengkap boleh tersedia lewat tooltip/detail.
+- Submit Penyesuaian Stok wajib menjaga stock adjustment, mutasi stok, dan inventory log sebagai satu rangkaian konsisten.
+- Area ini tidak boleh dipakai untuk hitung ulang stok dari semua transaksi saat halaman dibuka.

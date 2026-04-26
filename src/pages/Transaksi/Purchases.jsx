@@ -12,7 +12,7 @@ import {
   Switch,
   Tag,
 } from "antd";
-import { collection, addDoc, doc, onSnapshot, setDoc, Timestamp, updateDoc } from "firebase/firestore";
+import { collection, doc, onSnapshot, runTransaction, Timestamp } from "firebase/firestore";
 import { PlusOutlined } from "@ant-design/icons";
 import { useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
@@ -36,14 +36,15 @@ import {
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import {
-  addInventoryLog,
-  updateInventoryStock,
-} from "../../services/Inventory/inventoryService";
-import {
   applyPurchaseToRawMaterial,
   enrichRawMaterialWithVariantTotals,
 } from "../../utils/variants/rawMaterialVariantHelpers";
 import {
+  buildInventoryLogPayload,
+  INVENTORY_LOG_COLLECTION,
+} from "../../services/Inventory/inventoryLogService";
+import {
+  applyStockMutationToItem,
   buildVariantOptionsFromItem,
   findVariantByKey,
   inferHasVariants,
@@ -346,11 +347,11 @@ const Purchases = () => {
   // =========================
   // SECTION: Snapshot katalog Supplier untuk prefill Pembelian
   // Fungsi blok:
-  // - mengambil default Satuan Beli, Konversi ke Stok, tipe online/offline, dan harga pembanding
+  // - mengambil default Satuan Beli, Konversi Supplier, tipe online/offline, dan harga pembanding
   //   dari materialDetails supplier yang cocok dengan bahan baku terpilih.
   // Hubungan flow aplikasi:
   // - Supplier hanya menjadi sumber default; Purchases tetap transaksi aktual dan user tetap harus Simpan sendiri.
-  // Status: aktif dipakai; bukan auto-sync dan tidak menulis balik ke Supplier/Raw Material.
+  // Status: AKTIF + GUARDED; bukan auto-sync dan tidak menulis balik ke Supplier/Raw Material.
   // =========================
   // =========================
   // SECTION: Supplier difilter ketat berdasarkan bahan baku yang dipilih
@@ -359,7 +360,7 @@ const Purchases = () => {
   // Alasan perubahan:
   // - mencegah user salah pilih supplier saat data supplier banyak; fallback semua supplier
   //   tidak dipakai lagi secara default agar flow restock lebih jelas.
-  // Status: aktif dipakai; filtering ini read-only dan tidak mengubah data Supplier/Raw Material.
+  // Status: AKTIF + GUARDED; filtering ini read-only dan tidak mengubah data Supplier/Raw Material.
   // =========================
   const filteredSuppliers = useMemo(() => {
     if (itemType !== "material" || !itemId) {
@@ -900,7 +901,18 @@ const Purchases = () => {
   };
 
   // =========================
-  // SECTION: Submit pembelian + sinkron ke stok + sinkron ke pengeluaran
+  // SECTION: Submit pembelian atomik + sinkron ke stok + sinkron ke pengeluaran
+  // Fungsi blok:
+  // - memvalidasi seluruh input penting sebelum write pertama;
+  // - menyimpan purchase, mutasi stok, inventory log, dan expense dalam 1 Firestore transaction;
+  // - memakai reference deterministic untuk expense agar purchase yang sama tidak membuat cash out dobel.
+  // Hubungan flow aplikasi:
+  // - Supplier tetap hanya katalog/prefill; perubahan stok/kas/laporan baru terjadi setelah user klik Simpan;
+  // - rumus Purchases tetap sama: Stok Masuk = Qty Beli x Konversi Supplier dan Total Aktual menjadi dasar expense.
+  // Status:
+  // - AKTIF + GUARDED untuk data real karena menyentuh purchases, stok, inventory_logs, dan expenses.
+  // - LEGACY: tidak ada jalur addDoc purchase lalu update stok terpisah; flow lama diganti transaction agar tidak partial.
+  // - CLEANUP CANDIDATE: jika kelak ada service transaksi pembelian khusus, orkestrasi ini bisa dipindah ke service tanpa ubah rule.
   // =========================
   const handleSubmitPurchase = async (values) => {
     try {
@@ -923,269 +935,351 @@ const Purchases = () => {
         voucherDiscount,
         serviceFee,
         purchaseType,
-        totalActualPurchase,
-        actualUnitCost,
         restockReferencePrice,
         totalReferencePurchase,
         purchaseSaving,
       } = values;
 
-      const collectionName = type === "product" ? "products" : "raw_materials";
+      // =========================
+      // SECTION: Guard input sebelum write pertama
+      // Fungsi blok:
+      // - menghentikan submit sebelum Firestore disentuh jika data utama belum valid;
+      // - mencegah purchase doc tersimpan tanpa stok/log/expense karena error validasi terlambat.
+      // Hubungan flow aplikasi:
+      // - menjaga business rule Purchases tanpa mengubah Supplier, Raw Material, Sales, Returns, Production, Payroll, atau Reports.
+      // Status:
+      // - AKTIF + GUARDED; validasi ini wajib lolos sebelum transaksi atomik berjalan.
+      // =========================
+      const normalizedType = type === "product" ? "product" : type === "material" ? "material" : "";
+      if (!normalizedType) {
+        message.error("Jenis item pembelian tidak valid.");
+        return;
+      }
+
+      if (!itemId) {
+        message.error("Pilih item yang akan dibeli terlebih dahulu.");
+        return;
+      }
+
+      if (!date?.toDate) {
+        message.error("Tanggal pembelian wajib diisi.");
+        return;
+      }
+
+      const normalizedQuantity = Number(quantity || 0);
+      if (normalizedQuantity <= 0) {
+        message.error("Qty Beli harus lebih dari 0.");
+        return;
+      }
+
       const selectedSupplier = suppliers.find(
         (supplier) => String(supplier.id) === String(supplierId),
       );
       const resolvedSupplierId = getSupplierReferenceId(selectedSupplier, supplierId);
-      const supplierName =
-        getSupplierDisplayName(selectedSupplier) || "Supplier tidak ditemukan";
 
-      const selectedItem =
-        type === "product"
+      if (!selectedSupplier || !resolvedSupplierId) {
+        message.error("Supplier tidak valid. Pilih supplier dari katalog yang tersedia.");
+        return;
+      }
+
+      const collectionName = normalizedType === "product" ? "products" : "raw_materials";
+      const selectedItemFromState =
+        normalizedType === "product"
           ? products.find((item) => item.id === itemId)
           : enrichRawMaterialWithVariantTotals(
               materials.find((item) => item.id === itemId) || {},
             );
 
-      const selectedVariant =
-        type === "material" && (selectedItem?.hasVariantOptions || selectedItem?.hasVariants)
-          ? (selectedItem.variants || []).find(
-              (item) => String(item.variantKey) === String(materialVariantId),
-            )
-          : type === "product" && inferHasVariants(selectedItem || {})
-            ? findVariantByKey(selectedItem, productVariantKey)
-            : null;
-
-      if (type === "material" && (selectedItem?.hasVariantOptions || selectedItem?.hasVariants) && !selectedVariant) {
-        message.error("Pilih varian bahan baku terlebih dahulu");
+      if (!selectedItemFromState?.id) {
+        message.error("Item pembelian tidak ditemukan. Muat ulang data lalu pilih item kembali.");
         return;
       }
 
-      if (type === "product" && inferHasVariants(selectedItem || {}) && !selectedVariant) {
-        message.error("Pilih varian produk terlebih dahulu agar stok tidak masuk master.");
-        return;
-      }
-
-      const variantLabel =
-        type === "material"
-          ? selectedVariant?.variantName || selectedVariant?.name || ""
-          : selectedVariant?.variantLabel || selectedVariant?.color || selectedVariant?.name || "";
-      const variantKey = selectedVariant?.variantKey || "";
-      const variantPayload = {
-        variantKey,
-        variantLabel,
-        stockSourceType: selectedVariant ? "variant" : "master",
-      };
-
-      const itemName =
-        selectedVariant
-          ? `${selectedItem?.name || "Item"} - ${variantLabel}`
-          : selectedItem?.name || "Item tidak ditemukan";
-
+      const normalizedConversionValue = normalizedType === "material" ? Number(conversionValue || 0) : 1;
       const finalQuantity =
-        type === "product"
-          ? Number(quantity || 0)
-          : Number(quantity || 0) * Number(conversionValue || 0);
+        normalizedType === "product"
+          ? normalizedQuantity
+          : normalizedQuantity * normalizedConversionValue;
+      const normalizedFinalQuantity = Math.round(Number(finalQuantity || 0));
 
-      // =========================
-      // SECTION: Validasi stok masuk dari konversi Supplier
-      // Fungsi blok:
-      // - mencegah purchase bahan baku tersimpan saat Konversi ke Stok kosong/0;
-      // - menjaga actualUnitCost tidak dibagi 0 dan stok masuk tetap mengikuti Qty Beli x Konversi ke Stok.
-      // Hubungan flow aplikasi:
-      // - Konversi ke Stok read-only dari katalog Supplier; jika ada reject/selisih barang, koreksi dilakukan lewat Penyesuaian Stok.
-      // Status: aktif dipakai saat submit; bukan auto-sync dan bukan perubahan stok sebelum user klik Simpan.
-      // =========================
-      if (type === "material" && finalQuantity <= 0) {
-        message.error("Konversi ke Stok belum valid. Lengkapi katalog Supplier atau pilih supplier yang punya konversi.");
+      if (normalizedType === "material" && normalizedConversionValue <= 0) {
+        message.error("Konversi Supplier belum valid. Lengkapi katalog Supplier atau pilih supplier yang punya konversi.");
         return;
       }
 
-      // =========================
-      // SECTION: Snapshot biaya aktual sesuai online/offline
-      // Fungsi blok:
-      // - memastikan purchase offline tidak menyimpan ongkir/admin/voucher lama yang tersembunyi di UI.
-      // Hubungan flow:
-      // - nilai ini hanya dipakai saat user benar-benar menyimpan purchase; stok/kas tetap mengikuti flow submit existing.
-      // Status: aktif dipakai; bukan auto-purchase.
-      // =========================
+      if (normalizedFinalQuantity <= 0) {
+        message.error("Stok Masuk harus lebih dari 0 sebelum pembelian disimpan.");
+        return;
+      }
+
       const normalizedPurchaseType = purchaseType === "offline" ? "offline" : "online";
+      const normalizedSubtotalItems = Math.round(Number(subtotalItems || 0));
       const normalizedShippingCost = normalizedPurchaseType === "offline" ? 0 : Math.round(Number(shippingCost || 0));
       const normalizedShippingDiscount = normalizedPurchaseType === "offline" ? 0 : Math.round(Number(shippingDiscount || 0));
       const normalizedVoucherDiscount = normalizedPurchaseType === "offline" ? 0 : Math.round(Number(voucherDiscount || 0));
       const normalizedServiceFee = normalizedPurchaseType === "offline" ? 0 : Math.round(Number(serviceFee || 0));
-
-      const savingMeta = getPurchaseSavingMeta(purchaseSaving);
-
-      const purchasePayload = {
-        type,
-        itemId,
-        itemName,
-        ...variantPayload,
-        materialVariantId: type === "material" ? materialVariantId || null : null,
-        materialVariantName:
-          type === "material" && selectedVariant
-            ? variantLabel
-            : "",
-        supplierId: resolvedSupplierId || null,
-        supplierName: supplierName || "",
-        // ACTIVE: link produk hanya referensi restock berikutnya.
-        // Tidak dipakai untuk hitung harga, stok, kas, saving, expense, atau laporan.
-        productLink: String(productLink || "").trim(),
-        purchaseProductLink: String(productLink || "").trim(),
-        restockProductLink: String(productLink || "").trim(),
-        quantity: Number(quantity || 0),
-        date: Timestamp.fromDate(values.date.toDate()),
-        note: note || "",
-        subtotalItems: Math.round(Number(subtotalItems || 0)),
-        purchaseType: normalizedPurchaseType,
-        shippingCost: normalizedShippingCost,
-        shippingDiscount: normalizedShippingDiscount,
-        voucherDiscount: normalizedVoucherDiscount,
-        serviceFee: normalizedServiceFee,
-        totalActualPurchase: Math.round(Number(totalActualPurchase || 0)),
-        actualUnitCost: Math.round(Number(actualUnitCost || 0)),
-        restockReferencePrice: Math.round(Number(restockReferencePrice || 0)),
-        totalReferencePurchase: Math.round(Number(totalReferencePurchase || 0)),
-        purchaseSaving: Math.round(Number(purchaseSaving || 0)),
-        purchaseSavingStatus: savingMeta.status,
-        purchaseSavingLabel: savingMeta.label,
-      };
-
-      if (type === "material") {
-        Object.assign(purchasePayload, {
-          purchaseUnit,
-          stockUnit,
-          conversionValue: Number(conversionValue || 0),
-          totalStockIn: Math.round(finalQuantity),
-        });
-      } else {
-        Object.assign(purchasePayload, {
-          totalStockIn: Math.round(finalQuantity),
-        });
-      }
-
-      const purchaseDocument = await addDoc(
-        collection(db, "purchases"),
-        purchasePayload,
+      const normalizedTotalActualPurchase = Math.round(
+        normalizedSubtotalItems +
+          normalizedShippingCost +
+          normalizedServiceFee -
+          normalizedShippingDiscount -
+          normalizedVoucherDiscount,
       );
+      const normalizedActualUnitCost =
+        normalizedFinalQuantity > 0
+          ? Math.round(normalizedTotalActualPurchase / normalizedFinalQuantity)
+          : 0;
+      const normalizedRestockReferencePrice = Math.round(Number(restockReferencePrice || 0));
+      const normalizedTotalReferencePurchase = Math.round(Number(totalReferencePurchase || 0));
+      const normalizedPurchaseSaving = Math.round(Number(purchaseSaving || 0));
 
-      if (type === "material") {
-        if ((selectedItem?.hasVariantOptions || selectedItem?.hasVariants) && selectedVariant) {
-          // =========================
-          // SECTION: Mutasi pembelian bahan baku bervarian
-          // ACTIVE / FINAL:
-          // - raw material tetap memakai helper cost khusus agar averageActualUnitCost ikut terhitung
-          // - variantKey tetap menjadi source of truth stok dan inventory log final
-          // =========================
-          const nextMaterialPayload = applyPurchaseToRawMaterial(selectedItem, {
-            qty: finalQuantity,
-            unitCost: actualUnitCost,
-            variantKey: selectedVariant.variantKey,
-            variantName: variantLabel,
-            restockReferencePrice,
-          });
-
-          await updateDoc(doc(db, "raw_materials", itemId), nextMaterialPayload);
-        } else {
-          await updateInventoryStock({
-            itemId,
-            collectionName,
-            quantityChange: finalQuantity,
-            itemSnapshot: selectedItem,
-          });
-          await updateDoc(doc(db, "raw_materials", itemId), {
-            averageActualUnitCost: Math.round(Number(actualUnitCost || 0)),
-            restockReferencePrice: Math.round(Number(restockReferencePrice || 0)),
-          });
-        }
-      } else {
-        // =========================
-        // SECTION: Mutasi pembelian produk final
-        // Produk bervarian wajib memakai productVariantKey agar pembelian tidak diam-diam masuk master/default.
-        // =========================
-        await updateInventoryStock({
-          itemId,
-          collectionName,
-          quantityChange: finalQuantity,
-          variantKey: productVariantKey || "",
-          itemSnapshot: selectedItem,
-        });
+      if (normalizedSubtotalItems < 0 || normalizedTotalActualPurchase < 0) {
+        message.error("Total Aktual Pembelian tidak valid. Cek subtotal, ongkir, diskon, voucher, dan biaya layanan.");
+        return;
       }
 
-      await addInventoryLog(
-        itemId,
-        itemName,
-        finalQuantity,
-        "purchase_in",
-        collectionName,
-        {
-          // ACTIVE: reference pembelian membuat inventory log mudah dilacak dari Stock Management.
-          purchaseId: purchaseDocument.id,
-          referenceId: purchaseDocument.id,
-          referenceType: "purchase",
-          supplierName: supplierName || "",
+      const savingMeta = getPurchaseSavingMeta(normalizedPurchaseSaving);
+      const purchaseReference = doc(collection(db, "purchases"));
+      const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
+      const expenseReference = doc(db, "expenses", buildPurchaseExpenseDocumentId(purchaseReference.id));
+      const itemReference = doc(db, collectionName, itemId);
+
+      // =========================
+      // SECTION: Firestore transaction pembelian
+      // Fungsi blok:
+      // - memastikan purchase doc, stok item, inventory log, dan expense commit bersama;
+      // - jika salah satu write gagal, seluruh transaksi dibatalkan oleh Firestore.
+      // Hubungan flow aplikasi:
+      // - mengurangi risiko stok/kas/laporan berbeda saat Simpan Pembelian gagal di tengah;
+      // - tidak mengubah rumus harga, Supplier catalog, Raw Material master, atau laporan.
+      // Status:
+      // - AKTIF + GUARDED untuk flow Simpan Pembelian.
+      // - CLEANUP CANDIDATE: helper transaksi ini bisa diekstrak ke service khusus jika Purchases nanti dipisah lebih lanjut.
+      // =========================
+      await runTransaction(db, async (transaction) => {
+        const itemSnapshot = await transaction.get(itemReference);
+
+        if (!itemSnapshot.exists()) {
+          throw new Error("Item stok tidak ditemukan di database.");
+        }
+
+        const latestItem =
+          normalizedType === "material"
+            ? enrichRawMaterialWithVariantTotals({
+                id: itemSnapshot.id,
+                ...itemSnapshot.data(),
+              })
+            : {
+                id: itemSnapshot.id,
+                ...itemSnapshot.data(),
+              };
+
+        const latestSelectedVariant =
+          normalizedType === "material" && (latestItem?.hasVariantOptions || latestItem?.hasVariants)
+            ? (latestItem.variants || []).find(
+                (item) => String(item.variantKey) === String(materialVariantId),
+              )
+            : normalizedType === "product" && inferHasVariants(latestItem || {})
+              ? findVariantByKey(latestItem, productVariantKey)
+              : null;
+
+        if (normalizedType === "material" && (latestItem?.hasVariantOptions || latestItem?.hasVariants) && !latestSelectedVariant) {
+          throw new Error("Pilih varian bahan baku terlebih dahulu agar stok tidak masuk master/default.");
+        }
+
+        if (normalizedType === "product" && inferHasVariants(latestItem || {}) && !latestSelectedVariant) {
+          throw new Error("Pilih varian produk terlebih dahulu agar stok tidak masuk master/default.");
+        }
+
+        const variantLabel =
+          normalizedType === "material"
+            ? latestSelectedVariant?.variantName || latestSelectedVariant?.name || ""
+            : latestSelectedVariant?.variantLabel || latestSelectedVariant?.color || latestSelectedVariant?.name || "";
+        const variantKey = latestSelectedVariant?.variantKey || "";
+        const variantPayload = {
+          variantKey,
+          variantLabel,
+          stockSourceType: latestSelectedVariant ? "variant" : "master",
+        };
+        const itemName = latestSelectedVariant
+          ? `${latestItem?.name || "Item"} - ${variantLabel}`
+          : latestItem?.name || "Item tidak ditemukan";
+
+        const purchasePayload = {
+          type: normalizedType,
+          itemId,
+          itemName,
           ...variantPayload,
-          materialVariantId: type === "material" ? materialVariantId || null : null,
+          materialVariantId: normalizedType === "material" ? materialVariantId || null : null,
           materialVariantName:
-            type === "material" && selectedVariant
+            normalizedType === "material" && latestSelectedVariant
               ? variantLabel
               : "",
-          totalActualPurchase: Math.round(Number(totalActualPurchase || 0)),
-          actualUnitCost: Math.round(Number(actualUnitCost || 0)),
-          totalReferencePurchase: Math.round(
-            Number(totalReferencePurchase || 0),
-          ),
-          purchaseSaving: Math.round(Number(purchaseSaving || 0)),
+          supplierId: resolvedSupplierId || null,
+          supplierName: getSupplierDisplayName(selectedSupplier) || "Supplier tidak ditemukan",
+          // AKTIF: link produk hanya referensi restock berikutnya.
+          // Hubungan flow: tidak dipakai untuk hitung harga, stok, kas, saving, expense, atau laporan.
+          productLink: String(productLink || "").trim(),
+          purchaseProductLink: String(productLink || "").trim(),
+          restockProductLink: String(productLink || "").trim(),
+          quantity: normalizedQuantity,
+          date: Timestamp.fromDate(date.toDate()),
+          note: note || "",
+          subtotalItems: normalizedSubtotalItems,
+          purchaseType: normalizedPurchaseType,
+          shippingCost: normalizedShippingCost,
+          shippingDiscount: normalizedShippingDiscount,
+          voucherDiscount: normalizedVoucherDiscount,
+          serviceFee: normalizedServiceFee,
+          totalActualPurchase: normalizedTotalActualPurchase,
+          actualUnitCost: normalizedActualUnitCost,
+          restockReferencePrice: normalizedRestockReferencePrice,
+          totalReferencePurchase: normalizedTotalReferencePurchase,
+          purchaseSaving: normalizedPurchaseSaving,
           purchaseSavingStatus: savingMeta.status,
-          note:
-            type === "material"
-              ? `${note || ""} | Pembelian ${formatNumberId(quantity)} ${
-                  purchaseUnit || ""
-                } = ${formatNumberId(finalQuantity)} ${stockUnit || ""}${selectedVariant ? ` | Varian ${variantLabel}` : ""}`
-              : note || "",
-        },
-      );
+          purchaseSavingLabel: savingMeta.label,
+          purchaseTransactionStatus: "committed",
+        };
 
-      // =========================
-      // SECTION: Expense otomatis pembelian dengan source reference final
-      // Fungsi blok:
-      // - membuat Cash Out/Expense otomatis yang bisa ditelusuri balik ke purchaseId;
-      // - memakai doc id deterministik dari purchaseId agar transaksi purchase yang sama tidak membuat expense dobel.
-      // Hubungan flow Purchases/stok:
-      // - dijalankan setelah stok pembelian berhasil ditambahkan dan inventory log tercatat;
-      // - tidak mengubah totalActualPurchase, saving, quantity, varian, atau mutasi stok.
-      // Status: aktif dipakai untuk semua pembelian baru.
-      // Legacy/kandidat cleanup:
-      // - relatedPurchaseId tetap disimpan untuk kompatibilitas data lama/report lama; sourceId/sourceRef menjadi metadata audit baru.
-      // =========================
-      const purchaseExpensePayload = buildPurchaseExpensePayload({
-        date,
-        itemId,
-        itemName,
-        itemType: type,
-        purchaseId: purchaseDocument.id,
-        purchasePayload,
-        resolvedSupplierId,
-        savingMeta,
-        selectedSupplierName: supplierName,
-        totalActualPurchase,
-        totalReferencePurchase,
-        purchaseSaving,
-        variantKey,
-        variantLabel,
-        stockSourceType: variantPayload.stockSourceType,
+        if (normalizedType === "material") {
+          Object.assign(purchasePayload, {
+            purchaseUnit: purchaseUnit || "",
+            stockUnit: stockUnit || "",
+            conversionValue: normalizedConversionValue,
+            totalStockIn: normalizedFinalQuantity,
+          });
+        } else {
+          Object.assign(purchasePayload, {
+            totalStockIn: normalizedFinalQuantity,
+          });
+        }
+
+        if (normalizedType === "material") {
+          if ((latestItem?.hasVariantOptions || latestItem?.hasVariants) && latestSelectedVariant) {
+            // =========================
+            // SECTION: Mutasi atomik bahan baku bervarian
+            // Fungsi blok: memakai helper Raw Material agar stock/currentStock varian dan averageActualUnitCost tetap konsisten.
+            // Hubungan flow: hanya berjalan di dalam transaction setelah purchase reference siap.
+            // Status: AKTIF + GUARDED; bukan sync Supplier dan bukan perubahan business rule.
+            // =========================
+            const nextMaterialPayload = applyPurchaseToRawMaterial(latestItem, {
+              qty: normalizedFinalQuantity,
+              unitCost: normalizedActualUnitCost,
+              variantKey: latestSelectedVariant.variantKey,
+              variantName: variantLabel,
+              restockReferencePrice: normalizedRestockReferencePrice,
+            });
+
+            transaction.update(itemReference, nextMaterialPayload);
+          } else {
+            // =========================
+            // SECTION: Mutasi atomik bahan baku non-varian
+            // Fungsi blok: menambah stok master dan menjaga field cost/reference yang sudah dipakai laporan/master data.
+            // Hubungan flow: mengikuti logic existing non-varian tanpa mengubah Raw Material dari data Supplier.
+            // Status: AKTIF + GUARDED; averageActualUnitCost tetap memakai unit cost transaksi saat ini sesuai flow existing.
+            // =========================
+            const stockUpdatePayload = applyStockMutationToItem({
+              item: latestItem,
+              deltaCurrent: normalizedFinalQuantity,
+            });
+
+            transaction.update(itemReference, {
+              ...stockUpdatePayload,
+              averageActualUnitCost: normalizedActualUnitCost,
+              restockReferencePrice: normalizedRestockReferencePrice,
+            });
+          }
+        } else {
+          // =========================
+          // SECTION: Mutasi atomik produk final
+          // Fungsi blok: menambah stok produk master/varian sesuai pilihan user.
+          // Hubungan flow: produk bervarian wajib memakai variantKey agar stok tidak masuk master/default.
+          // Status: AKTIF + GUARDED; tidak menyentuh flow produksi/HPP.
+          // =========================
+          const stockUpdatePayload = applyStockMutationToItem({
+            item: latestItem,
+            variantKey: productVariantKey || "",
+            deltaCurrent: normalizedFinalQuantity,
+          });
+
+          transaction.update(itemReference, stockUpdatePayload);
+        }
+
+        transaction.set(purchaseReference, purchasePayload);
+
+        transaction.set(
+          inventoryLogReference,
+          buildInventoryLogPayload({
+            itemId,
+            itemName,
+            quantityChange: normalizedFinalQuantity,
+            type: "purchase_in",
+            collectionName,
+            extraData: {
+              // AKTIF: reference pembelian membuat inventory log mudah dilacak dari Stock Management.
+              purchaseId: purchaseReference.id,
+              referenceId: purchaseReference.id,
+              referenceType: "purchase",
+              supplierName: purchasePayload.supplierName || "",
+              ...variantPayload,
+              materialVariantId: normalizedType === "material" ? materialVariantId || null : null,
+              materialVariantName:
+                normalizedType === "material" && latestSelectedVariant
+                  ? variantLabel
+                  : "",
+              totalActualPurchase: normalizedTotalActualPurchase,
+              actualUnitCost: normalizedActualUnitCost,
+              totalReferencePurchase: normalizedTotalReferencePurchase,
+              purchaseSaving: normalizedPurchaseSaving,
+              purchaseSavingStatus: savingMeta.status,
+              note:
+                normalizedType === "material"
+                  ? `${note || ""} | Pembelian ${formatNumberId(normalizedQuantity)} ${
+                      purchaseUnit || ""
+                    } = ${formatNumberId(normalizedFinalQuantity)} ${stockUnit || ""}${latestSelectedVariant ? ` | Varian ${variantLabel}` : ""}`
+                  : note || "",
+            },
+          }),
+        );
+
+        // =========================
+        // SECTION: Expense otomatis atomik pembelian
+        // Fungsi blok:
+        // - membuat Cash Out/Expense otomatis dalam transaksi yang sama dengan purchase dan stok;
+        // - memakai doc id deterministik dari purchaseId agar idempotent untuk source purchase yang sama.
+        // Hubungan flow Purchases/stok:
+        // - amount tetap total aktual, bukan saving; saving hanya metadata efisiensi.
+        // Status:
+        // - AKTIF + GUARDED.
+        // - LEGACY: relatedPurchaseId dipertahankan untuk kompatibilitas laporan lama.
+        // =========================
+        const purchaseExpensePayload = buildPurchaseExpensePayload({
+          date,
+          itemId,
+          itemName,
+          itemType: normalizedType,
+          purchaseId: purchaseReference.id,
+          purchasePayload,
+          resolvedSupplierId,
+          savingMeta,
+          selectedSupplierName: purchasePayload.supplierName,
+          totalActualPurchase: normalizedTotalActualPurchase,
+          totalReferencePurchase: normalizedTotalReferencePurchase,
+          purchaseSaving: normalizedPurchaseSaving,
+          variantKey,
+          variantLabel,
+          stockSourceType: variantPayload.stockSourceType,
+        });
+
+        transaction.set(expenseReference, purchaseExpensePayload);
       });
-
-      await setDoc(
-        doc(db, "expenses", buildPurchaseExpenseDocumentId(purchaseDocument.id)),
-        purchaseExpensePayload,
-      );
 
       message.success("Pembelian berhasil ditambahkan!");
       form.resetFields();
       setIsModalOpen(false);
     } catch (error) {
       console.error(error);
-      message.error("Gagal menyimpan pembelian");
+      message.error(error?.message || "Gagal menyimpan pembelian. Tidak ada data parsial yang disimpan.");
     }
   };
 
@@ -1537,7 +1631,7 @@ const Purchases = () => {
                     validator: (_, value) =>
                       Number(value || 0) > 0
                         ? Promise.resolve()
-                        : Promise.reject(new Error("Konversi ke Stok harus lebih dari 0")),
+                        : Promise.reject(new Error("Konversi Supplier harus lebih dari 0")),
                   },
                 ]}
               >

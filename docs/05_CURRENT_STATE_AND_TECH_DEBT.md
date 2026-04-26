@@ -33,7 +33,7 @@ Risiko tersisa:
 ### 3. Stock Adjustment final sudah memakai helper stok
 Temuan terkini:
 - form adjustment aktif berada di `StockAdjustmentPanel.jsx`
-- submit adjustment memakai `updateInventoryStock()`, bukan `updateDoc(... stock ...)` langsung dari page
+- submit adjustment memakai Firestore transaction dan helper stok varian aktif, bukan `updateDoc(... stock ...)` langsung dari page
 - item bervarian wajib memilih varian sebelum submit
 - adjustment keluar divalidasi terhadap `availableStock` agar tidak menggerus stok yang sudah reserved
 
@@ -128,7 +128,7 @@ Sebuah task dianggap aman selesai bila:
 ### Sudah dibereskan pada batch ini
 - `StockAdjustmentPanel.jsx` tidak lagi melakukan `updateDoc(... stock: increment(...))` langsung dari page.
 - Adjustment keluar sekarang divalidasi terhadap `availableStock`, sehingga reserved stock tidak ikut terpakai oleh koreksi manual.
-- Stock Adjustment sekarang memakai `updateInventoryStock()` dan mendukung item bervarian dengan `variantKey` wajib.
+- Stock Adjustment sekarang memakai Firestore transaction di panel resmi dan helper stok varian aktif, sehingga record adjustment, mutasi stok, dan inventory log tidak mudah partial.
 - Collection customer sudah disatukan ke `customers` lowercase di Master Customer agar sinkron dengan Sales.
 - `inventory_logs` baru memiliki `referenceId`, `referenceType`, dan `details` untuk memudahkan audit trail.
 - Stock Management membaca reference dari `details` dan fallback top-level agar log lama tetap tampil.
@@ -136,7 +136,7 @@ Sebuah task dianggap aman selesai bila:
 
 ### Status tech debt yang masih perlu diperhatikan
 - `StockReport.jsx` masih kandidat upgrade tahap lanjut agar membaca varian/reserved stock lebih detail.
-- `updateStock()` dan `updateMasterStockLegacy()` di `inventoryService.js` masih dipertahankan sebagai compatibility wrapper, bukan jalur final baru.
+- Jalur helper stok lama/compatibility masih perlu diaudit sebelum dihapus; jangan hapus helper legacy tanpa grep/import check.
 - Flow produksi final tetap guarded dan tidak ikut direfactor pada cleanup stok umum.
 - Audit Firebase Functions tidak bisa diverifikasi dari upload `src.zip` dan `docs.zip` ini karena folder functions tidak disertakan.
 
@@ -373,7 +373,7 @@ Tech debt / guard:
 
 Status source terbaru:
 - Form Purchases menampilkan Stok Masuk total sebagai field utama pada area jumlah barang.
-- Konversi ke Stok tetap disimpan di form sebagai data read-only dari katalog Supplier dan dipakai untuk hitung `totalStockIn`.
+- Konversi Supplier tetap disimpan di form sebagai data read-only dari katalog Supplier dan dipakai untuk hitung `totalStockIn`.
 - Effect item/type change tidak boleh bergantung pada Qty Beli agar perubahan Qty tidak mereset Supplier, Link Produk, purchaseType, atau Harga Supplier Tercatat.
 - Total Pembanding Supplier memakai komponen katalog supplier agar ongkir/admin/diskon default tidak terlihat ikut dikali per satuan stok saat Qty Beli lebih dari 1.
 
@@ -396,5 +396,51 @@ Guard tersisa:
 - Jika kebutuhan audit penuh dibutuhkan, buat pagination/arsip log sebagai task terpisah, bukan membaca seluruh collection sekaligus.
 
 ### Performance tech debt yang masih terbuka
-- Lookup purchase terakhir di Raw Material/Supplier/Dashboard masih perlu desain query/index atau read model agar tidak bergantung pada full collection read saat data sudah besar.
+- Lookup purchase terakhir di Raw Material/Supplier/Dashboard sudah diberi guard ringan, tetapi masih perlu desain query/index atau read model jika data historis makin besar dan butuh presisi penuh.
 - Dashboard summary masih kandidat optimasi range/limit per collection, tetapi tidak boleh mengubah angka summary tanpa regression test.
+
+## Update Retur & Inventory Log Guarded — 2026-04-26
+
+### Status source terbaru
+- AKTIF: `Returns.jsx` tetap menjadi halaman operasional untuk mencatat retur produk dan bahan baku.
+- GUARDED: submit retur sekarang menjalankan dokumen retur, mutasi stok, dan `inventory_logs` dalam satu Firestore transaction.
+- AKTIF: item bervarian tetap wajib memilih `variantKey` agar stok retur masuk ke varian yang benar, bukan master/default.
+- AKTIF: payload log retur memakai `buildInventoryLogPayload()` agar schema audit sama dengan writer inventory aktif lain.
+- LEGACY: flow lama yang mengubah stok lebih dulu lalu membuat dokumen retur/log harus dianggap tidak aman karena bisa membuat stok berubah tanpa audit lengkap.
+- CLEANUP CANDIDATE: orkestrasi transaction retur masih berada di page `Returns.jsx`; jika modul Retur makin kompleks, logic ini bisa dipindahkan ke service khusus tanpa mengubah business rule.
+
+### Risiko tersisa
+- Retur belum memiliki flow cancel/delete/revert di UI aktif; jika nanti ditambahkan, harus memakai guard idempotent agar tidak double posting stok.
+- `addInventoryLog()` di `inventoryService.js` masih dipertahankan untuk caller lain dan masih best-effort; task ini hanya mengunci flow Retur agar audit log tidak silent hilang.
+- Multi-user conflict sudah lebih aman karena transaction membaca item terbaru sebelum update, tetapi regression varian tetap wajib diuji setelah patch.
+
+## Update Stock Management Guarded - 2026-04-26
+
+### Status source terbaru
+- `StockManagement.jsx` tetap read-only untuk riwayat inventory log dan tidak membuat mutasi stok saat halaman dibuka.
+- Kolom generik `Stok` tidak ditampilkan karena snapshot before/after belum reliable untuk semua writer log lama/baru.
+- Tabel fokus pada Tanggal, Arah, Sumber, Item, Qty, Referensi Audit, dan Catatan ringkas.
+- `StockAdjustmentPanel.jsx` sekarang memakai Firestore transaction untuk menyimpan `stock_adjustments`, update stok master/varian, dan `inventory_logs` bersama.
+- Submit adjustment tetap memakai validasi `availableStock` untuk adjustment keluar dan varian wajib untuk item bervarian.
+
+### Tech debt tersisa
+- Orkestrasi transaction adjustment masih berada di component, bukan service khusus inventory adjustment. Ini diterima sementara agar patch tidak melebar.
+- Pagination server-side inventory log masih kandidat optimasi jika data real sudah besar.
+- Kolom `Stok Setelah` baru boleh ditambahkan jika semua writer inventory log sudah punya snapshot before/after konsisten.
+
+## Update Supplier UI dan Query Performance Ringan - 2026-04-26
+
+### Status source terbaru
+- AKTIF: tabel utama Supplier sekarang difokuskan ke informasi inti: Nama Supplier, Link Toko, Katalog Restock Ringkas, Harga Estimasi Ringkas, dan Aksi.
+- GUARDED: kolom Aksi Supplier tidak memakai fixed/sticky right agar tidak transparan, tidak menumpuk, dan tidak memaksa user scroll kanan hanya untuk klik aksi.
+- AKTIF: detail lengkap tetap berada di drawer Supplier, termasuk Qty Beli, Satuan Beli, Konversi Supplier, Harga Barang Supplier, Ongkir Default, Biaya Layanan Default, Voucher Default, dan Harga Supplier Tercatat.
+- AKTIF: Supplier tetap katalog restock/pembanding; tidak membuat purchase, tidak mengubah stok, tidak mengubah kas/expense, dan tidak memasang Supplier ke Raw Material berdasarkan `materialDetails`.
+- GUARDED: Dashboard tidak lagi membaca seluruh collection `purchases` hanya untuk Restock Assistant; lookup purchase dibatasi ke material stok kritis yang sedang tampil.
+- GUARDED: Supplier dan Raw Material membaca histori purchase terbaru dengan batas lookup ringan untuk pembanding/link restock read-only.
+- LEGACY: purchase lama yang belum punya `itemId` standar atau berada di luar jendela lookup ringan bisa tidak muncul di ringkasan. Histori lengkap tetap harus dibaca dari laporan/transaksi, bukan dari drawer ringkas.
+- CLEANUP CANDIDATE: buat service `latestPurchaseLookup` atau read model khusus jika data purchase sudah besar dan index Firestore final sudah diputuskan.
+
+### Risiko tersisa
+- Dashboard masih membaca beberapa collection operasional penuh untuk summary produksi, payroll, income, expense, dan stok. Ini sengaja belum di-limit karena limit yang salah bisa menyembunyikan status penting.
+- Raw Material dan Supplier lookup terbaru masih memakai jendela baca ringan, bukan lookup per material yang benar-benar presisi untuk semua data historis.
+- Jika nanti muncul error Firestore index pada query baru, buat index sesuai pesan Firebase dan jangan ubah business rule.
