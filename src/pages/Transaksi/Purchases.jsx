@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Table,
-  Button,
   Modal,
   Form,
   Select,
@@ -10,6 +9,7 @@ import {
   Input,
   message,
   Space,
+  Switch,
   Tag,
 } from "antd";
 import { collection, addDoc, doc, onSnapshot, setDoc, Timestamp, updateDoc } from "firebase/firestore";
@@ -20,9 +20,17 @@ import { db } from "../../firebase";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { formatCurrencyId as formatCurrencyIdr } from "../../utils/formatters/currencyId";
 import {
+  doesSupplierProvideMaterial,
   getSupplierDisplayName,
+  getSupplierMaterialDetail,
+  getSupplierMaterialNoteForMaterial,
   getSupplierOptionLabel,
+  getSupplierPurchaseUnitForMaterial,
+  getSupplierConversionValueForMaterial,
+  getSupplierStockUnitForMaterial,
+  getSupplierProductLinkForMaterial,
   getSupplierReferenceId,
+  getSupplierReferencePriceForMaterial,
   listenSupplierCatalog,
 } from "../../services/MasterData/suppliersService";
 import PageHeader from "../../components/Layout/Page/PageHeader";
@@ -150,6 +158,13 @@ const Purchases = () => {
   const [searchParams] = useSearchParams();
   const restockPrefillAppliedRef = useRef(false);
   const restockPrefillMaterialIdRef = useRef("");
+  const subtotalManualOverrideRef = useRef(false);
+  const supplierSubtotalBaselineRef = useRef({
+    itemId: "",
+    supplierId: "",
+    supplierItemPrice: 0,
+    subtotalItems: 0,
+  });
 
   // =========================
   // SECTION: State utama
@@ -169,6 +184,8 @@ const Purchases = () => {
   const conversionValue = Form.useWatch("conversionValue", form);
   const materialVariantId = Form.useWatch("materialVariantId", form);
   const productVariantKey = Form.useWatch("productVariantKey", form);
+  const supplierId = Form.useWatch("supplierId", form);
+  const purchaseType = Form.useWatch("purchaseType", form);
 
   const subtotalItems = Form.useWatch("subtotalItems", form);
   const shippingCost = Form.useWatch("shippingCost", form);
@@ -177,6 +194,17 @@ const Purchases = () => {
   const serviceFee = Form.useWatch("serviceFee", form);
 
   const totalStockIn = Form.useWatch("totalStockIn", form);
+  const restockReferencePrice = Form.useWatch("restockReferencePrice", form);
+
+  // =========================
+  // SECTION: Status pembelian online/offline dari form
+  // Fungsi blok:
+  // - membaca konteks biaya online agar field ongkir/admin/voucher bisa disembunyikan saat offline.
+  // Hubungan flow Purchases:
+  // - hanya memengaruhi UI dan biaya transaksi yang user simpan; tidak membuat transaksi otomatis.
+  // Status: aktif dipakai; bukan legacy dan bukan auto-sync Supplier.
+  // =========================
+  const isOfflinePurchase = purchaseType === "offline";
 
   // =========================
   // SECTION: Item dan varian terpilih
@@ -225,23 +253,129 @@ const Purchases = () => {
   }, [selectedMaterial]);
 
   // =========================
-  // SECTION: Supplier difilter berdasarkan bahan baku yang dipilih
+  // SECTION: Supplier dan detail katalog supplier terpilih
+  // Fungsi blok:
+  // - membaca supplier terpilih dan materialDetails yang cocok dengan bahan baku.
+  // Hubungan flow Purchases:
+  // - data ini hanya dipakai untuk prefill Link Produk dan Harga Supplier Tercatat;
+  // - tidak menulis ke raw_materials dan tidak mengembalikan auto-sync Supplier.
+  // Status: aktif dipakai oleh form Pembelian.
   // =========================
-  const filteredSuppliers = useMemo(() => {
-    if (itemType !== "material") {
-      return suppliers;
+  const selectedSupplier = useMemo(() => {
+    return suppliers.find((supplier) => String(supplier.id) === String(supplierId)) || null;
+  }, [suppliers, supplierId]);
+
+  const selectedSupplierMaterialDetail = useMemo(() => {
+    if (itemType !== "material" || !itemId || !selectedSupplier) return null;
+    return getSupplierMaterialDetail(selectedSupplier, itemId);
+  }, [itemId, itemType, selectedSupplier]);
+
+  const selectedSupplierMaterialNote = useMemo(() => {
+    if (itemType !== "material" || !itemId || !selectedSupplier) return "";
+    return getSupplierMaterialNoteForMaterial(selectedSupplier, itemId);
+  }, [itemId, itemType, selectedSupplier]);
+
+  // =========================
+  // SECTION: Snapshot biaya katalog Supplier untuk default Purchases
+  // Fungsi blok:
+  // - membaca harga barang, ongkir, admin, voucher, dan harga estimasi supplier dari materialDetails yang cocok.
+  // Hubungan flow aplikasi:
+  // - Supplier hanya sumber default transaksi; nilai ini tidak menulis balik ke Supplier/Raw Material dan tidak membuat purchase otomatis.
+  // Status: aktif dipakai untuk prefill form Pembelian; bukan legacy dan bukan auto-sync supplier.
+  // =========================
+  const selectedSupplierCatalogCost = useMemo(() => {
+    const detail = selectedSupplierMaterialDetail || {};
+    const purchaseTypeFromSupplier = detail.purchaseType === "offline" ? "offline" : "online";
+    const isOfflineSupplier = purchaseTypeFromSupplier === "offline";
+
+    return {
+      purchaseType: purchaseTypeFromSupplier,
+      supplierItemPrice: Math.round(Number(detail.supplierItemPrice || 0)),
+      estimatedShippingCost: isOfflineSupplier ? 0 : Math.round(Number(detail.estimatedShippingCost || 0)),
+      serviceFee: isOfflineSupplier ? 0 : Math.round(Number(detail.serviceFee || 0)),
+      discount: isOfflineSupplier ? 0 : Math.round(Number(detail.discount || 0)),
+      estimatedUnitPrice: Math.round(Number(detail.estimatedUnitPrice || detail.referencePrice || 0)),
+    };
+  }, [selectedSupplierMaterialDetail]);
+
+  const calculateSupplierSubtotal = (qty, supplierItemPrice) => {
+    return Math.round(Math.max(Number(qty || 0), 0) * Math.max(Number(supplierItemPrice || 0), 0));
+  };
+
+  // =========================
+  // SECTION: Hitung Total Pembanding Supplier berbasis komponen katalog
+  // Fungsi blok:
+  // - menghitung nilai pembanding dari komponen Supplier: Qty Beli x Harga Barang Supplier
+  //   + Ongkir Default + Biaya Layanan Default - Diskon Default.
+  // Alasan perubahan:
+  // - Harga Supplier Tercatat / Satuan Stok bisa sudah memuat ongkir/admin/diskon untuk 1 paket;
+  //   jika langsung dikali Stok Masuk, ongkir/admin bisa terlihat ikut dikali per satuan stok.
+  // Hubungan flow aplikasi:
+  // - hasil ini hanya dipakai sebagai pembanding dan Selisih Hemat; tidak mengubah stok, kas,
+  //   expense, actualUnitCost, Supplier, atau Raw Material.
+  // Status: aktif dipakai; fallback lama berbasis harga per satuan stok tetap ada untuk data legacy
+  // yang belum punya Harga Barang Supplier di katalog Supplier.
+  // =========================
+  const calculateSupplierReferenceTotal = ({
+    qty,
+    supplierItemPrice,
+    defaultShippingCost,
+    defaultServiceFee,
+    defaultDiscount,
+    fallbackStockIn,
+    fallbackReferencePerStockUnit,
+  }) => {
+    const safeQty = Math.max(Number(qty || 0), 0);
+    const safeSupplierItemPrice = Math.max(Number(supplierItemPrice || 0), 0);
+
+    if (safeSupplierItemPrice > 0) {
+      return Math.round(
+        safeQty * safeSupplierItemPrice +
+          Math.max(Number(defaultShippingCost || 0), 0) +
+          Math.max(Number(defaultServiceFee || 0), 0) -
+          Math.max(Number(defaultDiscount || 0), 0),
+      );
     }
 
-    if (!itemId) {
+    return Math.round(
+      Math.max(Number(fallbackStockIn || 0), 0) *
+        Math.max(Number(fallbackReferencePerStockUnit || 0), 0),
+    );
+  };
+
+  // =========================
+  // SECTION: Snapshot katalog Supplier untuk prefill Pembelian
+  // Fungsi blok:
+  // - mengambil default Satuan Beli, Konversi ke Stok, tipe online/offline, dan harga pembanding
+  //   dari materialDetails supplier yang cocok dengan bahan baku terpilih.
+  // Hubungan flow aplikasi:
+  // - Supplier hanya menjadi sumber default; Purchases tetap transaksi aktual dan user tetap harus Simpan sendiri.
+  // Status: aktif dipakai; bukan auto-sync dan tidak menulis balik ke Supplier/Raw Material.
+  // =========================
+  // =========================
+  // SECTION: Supplier difilter ketat berdasarkan bahan baku yang dipilih
+  // Fungsi blok:
+  // - hanya menampilkan supplier yang memang menyediakan bahan ini di katalog Supplier.
+  // Alasan perubahan:
+  // - mencegah user salah pilih supplier saat data supplier banyak; fallback semua supplier
+  //   tidak dipakai lagi secara default agar flow restock lebih jelas.
+  // Status: aktif dipakai; filtering ini read-only dan tidak mengubah data Supplier/Raw Material.
+  // =========================
+  const filteredSuppliers = useMemo(() => {
+    if (itemType !== "material" || !itemId) {
       return suppliers;
     }
 
     const matchedSuppliers = suppliers.filter((supplier) =>
-      (supplier.supportedMaterialIds || []).includes(itemId),
+      doesSupplierProvideMaterial(supplier, itemId),
     );
 
-    return matchedSuppliers.length ? matchedSuppliers : suppliers;
-  }, [suppliers, itemId, itemType]);
+    if (supplierId && selectedSupplier && !matchedSuppliers.some((supplier) => String(supplier.id) === String(supplierId))) {
+      return [selectedSupplier, ...matchedSuppliers];
+    }
+
+    return matchedSuppliers;
+  }, [suppliers, itemId, itemType, supplierId, selectedSupplier]);
 
   // =========================
   // SECTION: Sinkron data utama dari firestore
@@ -316,10 +450,17 @@ const Purchases = () => {
       restockPrefillMaterialIdRef.current &&
       String(itemId || "") === restockPrefillMaterialIdRef.current;
 
+    // ACTIVE: perubahan Jenis/Nama Item mengawali konteks purchase baru, sehingga guard manual subtotal di-reset.
+    // ALASAN: default harga Supplier berikutnya boleh mengisi ulang Subtotal Barang untuk item baru, tetapi Qty Beli tidak boleh memicu reset ini.
+    // STATUS: aktif dipakai; bukan legacy.
+    subtotalManualOverrideRef.current = false;
+    supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
+
     if (!shouldKeepPrefilledSupplier) {
       restockPrefillMaterialIdRef.current = "";
       form.setFieldsValue({
         supplierId: undefined,
+        productLink: "",
       });
     }
 
@@ -332,7 +473,8 @@ const Purchases = () => {
           purchaseUnit: undefined,
           stockUnit: undefined,
           conversionValue: undefined,
-          totalStockIn: Math.round(Number(quantity || 0) || 0),
+          purchaseType: "online",
+          totalStockIn: undefined,
           restockReferencePrice: 0,
         });
       } else {
@@ -341,6 +483,7 @@ const Purchases = () => {
           purchaseUnit: undefined,
           stockUnit: undefined,
           conversionValue: undefined,
+          purchaseType: "online",
           totalStockIn: undefined,
           restockReferencePrice: 0,
         });
@@ -359,9 +502,11 @@ const Purchases = () => {
           productVariantKey: undefined,
           purchaseUnit: enrichedMaterial.defaultPurchaseUnit || "",
           stockUnit: enrichedMaterial.stockUnit || enrichedMaterial.unit || "",
-          restockReferencePrice: Math.round(
-            Number(enrichedMaterial.restockReferencePrice || 0),
-          ),
+          purchaseType: "online",
+          // ACTIVE: harga pembanding supplier diisi setelah user memilih supplier.
+          // ALASAN: referensi restock sekarang datang dari katalog Supplier materialDetails,
+          // bukan input manual/master bahan baku di form pembelian.
+          restockReferencePrice: 0,
         });
       } else {
         form.setFieldsValue({
@@ -370,33 +515,112 @@ const Purchases = () => {
           purchaseUnit: null,
           stockUnit: null,
           conversionValue: undefined,
+          purchaseType: "online",
           totalStockIn: undefined,
           restockReferencePrice: 0,
         });
       }
     }
-  }, [itemId, itemType, products, materials, form, quantity]);
+  }, [itemId, itemType, products, materials, form]);
 
   useEffect(() => {
     if (itemType !== "material") return;
 
-    if (!selectedMaterial?.hasVariantOptions && !selectedMaterial?.hasVariants) {
+    // ACTIVE: varian bahan tidak lagi mengambil harga pembanding dari master bahan.
+    // ALASAN: Harga Supplier Tercatat harus berasal dari katalog Supplier yang dipilih,
+    // sedangkan harga aktual tetap dari subtotal transaksi.
+    // Kandidat cleanup: blok ini bisa dihapus jika di masa depan semua reset harga dipusatkan
+    // pada effect pemilihan supplier.
+    if ((selectedMaterial?.hasVariantOptions || selectedMaterial?.hasVariants) && !selectedMaterialVariant) {
+      form.setFieldsValue({ restockReferencePrice: 0 });
+    }
+  }, [itemType, selectedMaterial, selectedMaterialVariant, form]);
+
+  // =========================
+  // SECTION: Auto-fill Link Produk dan Harga Supplier Tercatat
+  // Fungsi blok:
+  // - saat user memilih supplier untuk bahan baku, form membaca katalog Supplier
+  //   yang cocok dengan itemId lalu mengisi Link Produk, Harga Supplier Tercatat,
+  //   dan catatan sebagai referensi restock.
+  // Hubungan flow Purchases:
+  // - ini hanya prefill/read-only reference; stok, kas, expense, saving, dan
+  //   actualUnitCost tetap dihitung dari transaksi aktual ketika user klik Simpan.
+  // Status: aktif dipakai; bukan auto-sync Supplier ke Raw Material.
+  // =========================
+  useEffect(() => {
+    if (itemType !== "material") return;
+
+    if (!itemId || !supplierId) {
       form.setFieldsValue({
-        restockReferencePrice: Math.round(
-          Number(selectedMaterial?.restockReferencePrice || 0),
-        ),
+        productLink: "",
+        restockReferencePrice: 0,
       });
       return;
     }
 
-    if (selectedMaterialVariant) {
-      form.setFieldsValue({
-        restockReferencePrice: Math.round(
-          Number(selectedMaterial?.restockReferencePrice || 0),
-        ),
-      });
+    const supplierProductLink = getSupplierProductLinkForMaterial(selectedSupplier || {}, itemId);
+    const supplierReferencePrice = getSupplierReferencePriceForMaterial(selectedSupplier || {}, itemId);
+    const supplierPurchaseUnit = getSupplierPurchaseUnitForMaterial(selectedSupplier || {}, itemId);
+    const supplierConversionValue = getSupplierConversionValueForMaterial(selectedSupplier || {}, itemId);
+    const supplierStockUnit = getSupplierStockUnitForMaterial(selectedSupplier || {}, itemId);
+    const supplierPurchaseType = selectedSupplierCatalogCost.purchaseType;
+    const isSupplierOffline = supplierPurchaseType === "offline";
+
+    // =========================
+    // SECTION: Prefill katalog Supplier ke form Purchases
+    // Fungsi blok:
+    // - mengisi Link Produk, satuan/konversi, tipe online/offline, Harga Supplier Tercatat,
+    //   Subtotal Barang, dan biaya online dari materialDetails supplier yang cocok.
+    // Hubungan flow:
+    // - prefill ini hanya mempercepat input restock; user tetap bisa menyesuaikan
+    //   harga aktual dan klik Simpan sendiri. Tidak ada stok/kas/expense yang berubah di sini.
+    // Status: aktif dipakai; bukan auto-sync Supplier ke Raw Material dan bukan auto-purchase.
+    // =========================
+    subtotalManualOverrideRef.current = false;
+
+    const supplierItemPrice = selectedSupplierCatalogCost.supplierItemPrice;
+    const nextSubtotal = calculateSupplierSubtotal(form.getFieldValue("quantity"), supplierItemPrice);
+
+    const nextValues = {
+      productLink: supplierProductLink || "",
+      restockReferencePrice: selectedSupplierCatalogCost.estimatedUnitPrice || supplierReferencePrice || 0,
+      purchaseType: supplierPurchaseType,
+      subtotalItems: supplierItemPrice > 0 ? nextSubtotal : 0,
+    };
+
+    supplierSubtotalBaselineRef.current = {
+      itemId: String(itemId || ""),
+      supplierId: String(supplierId || ""),
+      supplierItemPrice,
+      subtotalItems: supplierItemPrice > 0 ? nextSubtotal : 0,
+    };
+
+    if (supplierPurchaseUnit) {
+      nextValues.purchaseUnit = supplierPurchaseUnit;
     }
-  }, [itemType, selectedMaterial, selectedMaterialVariant, form]);
+
+    if (supplierConversionValue > 0) {
+      nextValues.conversionValue = supplierConversionValue;
+    }
+
+    if (supplierStockUnit) {
+      nextValues.stockUnit = supplierStockUnit;
+    }
+
+    if (isSupplierOffline) {
+      nextValues.shippingCost = 0;
+      nextValues.shippingDiscount = 0;
+      nextValues.voucherDiscount = 0;
+      nextValues.serviceFee = 0;
+    } else {
+      nextValues.shippingCost = selectedSupplierCatalogCost.estimatedShippingCost || 0;
+      nextValues.shippingDiscount = 0;
+      nextValues.voucherDiscount = selectedSupplierCatalogCost.discount || 0;
+      nextValues.serviceFee = selectedSupplierCatalogCost.serviceFee || 0;
+    }
+
+    form.setFieldsValue(nextValues);
+  }, [form, itemId, itemType, selectedSupplier, selectedSupplierCatalogCost, supplierId]);
 
   // =========================
   // SECTION: Hitung stok masuk otomatis
@@ -413,14 +637,77 @@ const Purchases = () => {
   }, [quantity, conversionValue, itemType, form]);
 
   // =========================
-  // SECTION: Hitung total aktual pembelian
+  // SECTION: Auto subtotal dari Qty x Harga Barang Supplier
+  // Fungsi blok:
+  // - menjaga Subtotal Barang mengikuti default katalog Supplier saat Qty Beli berubah.
+  // Alasan perubahan:
+  // - harga barang supplier sudah tersedia di materialDetails, sehingga user tidak perlu menghitung ulang manual.
+  // Batasan aktif:
+  // - jika user sudah mengubah Subtotal Barang manual, effect ini tidak menimpa nilai tersebut diam-diam;
+  // - tombol reset harga supplier sengaja tidak ditampilkan agar default Supplier tidak terasa seperti mode tambahan.
+  // =========================
+  useEffect(() => {
+    if (itemType !== "material") return;
+
+    const supplierItemPrice = selectedSupplierCatalogCost.supplierItemPrice;
+    if (!supplierId || !supplierItemPrice) return;
+
+    const nextSubtotal = calculateSupplierSubtotal(quantity, supplierItemPrice);
+    const currentSubtotal = Math.round(Number(form.getFieldValue("subtotalItems") || 0));
+    const previousBaseline = supplierSubtotalBaselineRef.current;
+    const canAutoApplySubtotal =
+      !subtotalManualOverrideRef.current ||
+      currentSubtotal === Math.round(Number(previousBaseline.subtotalItems || 0)) ||
+      currentSubtotal === 0;
+
+    if (!canAutoApplySubtotal) return;
+
+    supplierSubtotalBaselineRef.current = {
+      itemId: String(itemId || ""),
+      supplierId: String(supplierId || ""),
+      supplierItemPrice,
+      subtotalItems: nextSubtotal,
+    };
+
+    form.setFieldsValue({ subtotalItems: nextSubtotal });
+  }, [form, itemId, itemType, quantity, selectedSupplierCatalogCost.supplierItemPrice, supplierId]);
+
+  // =========================
+  // SECTION: Guard biaya online saat Pembelian Offline
+  // Fungsi blok:
+  // - saat toggle Pembelian Offline aktif, ongkir/admin/voucher/potongan di-reset ke 0
+  //   agar nilai online lama tidak diam-diam ikut menghitung Total Aktual.
+  // Hubungan flow Purchases:
+  // - hanya membersihkan field biaya di form; tidak membuat transaksi otomatis dan tidak
+  //   mengubah stok/kas sebelum user klik Simpan.
+  // Status: aktif dipakai; bukan legacy.
+  // =========================
+  useEffect(() => {
+    if (purchaseType !== "offline") return;
+
+    form.setFieldsValue({
+      shippingCost: 0,
+      shippingDiscount: 0,
+      voucherDiscount: 0,
+      serviceFee: 0,
+    });
+  }, [form, purchaseType]);
+
+  // =========================
+  // SECTION: Hitung Total Aktual Pembelian
+  // Fungsi blok:
+  // - menghitung total biaya aktual yang benar-benar menjadi dasar expense pembelian.
+  // Hubungan flow aplikasi:
+  // - Total Aktual tetap berasal dari input transaksi Purchases: Subtotal, Ongkir, Diskon Ongkir,
+  //   Voucher/Potongan, dan Biaya Layanan; bukan dari Harga Supplier Tercatat.
+  // Status: aktif dipakai oleh ringkasan, payload purchase, actualUnitCost, dan expense otomatis.
   // =========================
   useEffect(() => {
     const subtotal = Number(subtotalItems || 0);
-    const shipping = Number(shippingCost || 0);
-    const shippingDiscountAmount = Number(shippingDiscount || 0);
-    const voucherAmount = Number(voucherDiscount || 0);
-    const serviceFeeAmount = Number(serviceFee || 0);
+    const shipping = purchaseType === "offline" ? 0 : Number(shippingCost || 0);
+    const shippingDiscountAmount = purchaseType === "offline" ? 0 : Number(shippingDiscount || 0);
+    const voucherAmount = purchaseType === "offline" ? 0 : Number(voucherDiscount || 0);
+    const serviceFeeAmount = purchaseType === "offline" ? 0 : Number(serviceFee || 0);
 
     const totalActualPurchase =
       subtotal +
@@ -438,11 +725,17 @@ const Purchases = () => {
     shippingDiscount,
     voucherDiscount,
     serviceFee,
+    purchaseType,
     form,
   ]);
 
   // =========================
-  // SECTION: Hitung modal aktual per satuan stok
+  // SECTION: Hitung Modal Aktual / Satuan Stok
+  // Fungsi blok:
+  // - membagi Total Aktual Pembelian dengan Stok Masuk total untuk menentukan modal aktual per satuan stok.
+  // Hubungan flow aplikasi:
+  // - nilai ini dipakai untuk payload purchase dan laporan, tetapi tidak mengambil harga supplier sebagai harga aktual.
+  // Status: aktif dipakai; guard stockIn > 0 mencegah pembagian nol pada data supplier yang belum punya konversi.
   // =========================
   useEffect(() => {
     const totalActualPurchase = Number(
@@ -462,6 +755,7 @@ const Purchases = () => {
     shippingDiscount,
     voucherDiscount,
     serviceFee,
+    purchaseType,
     quantity,
     conversionValue,
     itemType,
@@ -469,18 +763,35 @@ const Purchases = () => {
   ]);
 
   // =========================
-  // SECTION: Hitung total referensi dan selisih hemat pembelian
+  // SECTION: Hitung Total Pembanding Supplier dan Selisih Hemat
+  // Fungsi blok:
+  // - menghitung pembanding Supplier dari komponen katalog Supplier, bukan langsung dari
+  //   Stok Masuk x Harga Supplier Tercatat / Satuan Stok.
+  // Alasan perubahan:
+  // - ongkir/admin/voucher marketplace biasanya berlaku per checkout, sehingga tidak aman
+  //   jika selalu dianggap proporsional per satuan stok saat Qty Beli > 1.
+  // Hubungan flow aplikasi:
+  // - Total Pembanding dan Selisih Hemat hanya informasi efisiensi; tidak mengubah kas,
+  //   expense, actualUnitCost, stok, Supplier, atau Raw Material.
+  // Status: aktif dipakai; fallback lama berbasis harga per satuan stok hanya untuk data legacy
+  // yang belum memiliki supplierItemPrice di katalog Supplier.
   // =========================
   useEffect(() => {
-    const referencePerStockUnit = Number(
-      form.getFieldValue("restockReferencePrice") || 0,
-    );
+    const referencePerStockUnit = Number(restockReferencePrice || 0);
     const stockIn = Number(totalStockIn || 0);
     const totalActualPurchase = Number(
       form.getFieldValue("totalActualPurchase") || 0,
     );
 
-    const totalReferencePurchase = stockIn * referencePerStockUnit;
+    const totalReferencePurchase = calculateSupplierReferenceTotal({
+      qty: quantity,
+      supplierItemPrice: selectedSupplierCatalogCost.supplierItemPrice,
+      defaultShippingCost: selectedSupplierCatalogCost.estimatedShippingCost,
+      defaultServiceFee: selectedSupplierCatalogCost.serviceFee,
+      defaultDiscount: selectedSupplierCatalogCost.discount,
+      fallbackStockIn: stockIn,
+      fallbackReferencePerStockUnit: referencePerStockUnit,
+    });
     const purchaseSaving = totalReferencePurchase - totalActualPurchase;
 
     form.setFieldsValue({
@@ -494,6 +805,13 @@ const Purchases = () => {
     shippingDiscount,
     voucherDiscount,
     serviceFee,
+    purchaseType,
+    quantity,
+    restockReferencePrice,
+    selectedSupplierCatalogCost.discount,
+    selectedSupplierCatalogCost.estimatedShippingCost,
+    selectedSupplierCatalogCost.serviceFee,
+    selectedSupplierCatalogCost.supplierItemPrice,
     form,
   ]);
 
@@ -519,6 +837,8 @@ const Purchases = () => {
 
     restockPrefillAppliedRef.current = true;
     restockPrefillMaterialIdRef.current = String(materialId);
+    subtotalManualOverrideRef.current = false;
+    supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
 
     form.resetFields();
     form.setFieldsValue({
@@ -534,6 +854,7 @@ const Purchases = () => {
       shippingDiscount: 0,
       voucherDiscount: 0,
       serviceFee: 0,
+      purchaseType: "online",
       totalActualPurchase: 0,
       actualUnitCost: 0,
       restockReferencePrice: 0,
@@ -554,6 +875,8 @@ const Purchases = () => {
     // Status: aktif dipakai oleh tombol Tambah Pembelian; bukan legacy.
     // =========================
     restockPrefillMaterialIdRef.current = "";
+    subtotalManualOverrideRef.current = false;
+    supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
     form.resetFields();
     form.setFieldsValue({
       type: "material",
@@ -565,6 +888,7 @@ const Purchases = () => {
       shippingDiscount: 0,
       voucherDiscount: 0,
       serviceFee: 0,
+      purchaseType: "online",
       totalActualPurchase: 0,
       actualUnitCost: 0,
       restockReferencePrice: 0,
@@ -598,6 +922,7 @@ const Purchases = () => {
         shippingDiscount,
         voucherDiscount,
         serviceFee,
+        purchaseType,
         totalActualPurchase,
         actualUnitCost,
         restockReferencePrice,
@@ -660,6 +985,34 @@ const Purchases = () => {
           ? Number(quantity || 0)
           : Number(quantity || 0) * Number(conversionValue || 0);
 
+      // =========================
+      // SECTION: Validasi stok masuk dari konversi Supplier
+      // Fungsi blok:
+      // - mencegah purchase bahan baku tersimpan saat Konversi ke Stok kosong/0;
+      // - menjaga actualUnitCost tidak dibagi 0 dan stok masuk tetap mengikuti Qty Beli x Konversi ke Stok.
+      // Hubungan flow aplikasi:
+      // - Konversi ke Stok read-only dari katalog Supplier; jika ada reject/selisih barang, koreksi dilakukan lewat Penyesuaian Stok.
+      // Status: aktif dipakai saat submit; bukan auto-sync dan bukan perubahan stok sebelum user klik Simpan.
+      // =========================
+      if (type === "material" && finalQuantity <= 0) {
+        message.error("Konversi ke Stok belum valid. Lengkapi katalog Supplier atau pilih supplier yang punya konversi.");
+        return;
+      }
+
+      // =========================
+      // SECTION: Snapshot biaya aktual sesuai online/offline
+      // Fungsi blok:
+      // - memastikan purchase offline tidak menyimpan ongkir/admin/voucher lama yang tersembunyi di UI.
+      // Hubungan flow:
+      // - nilai ini hanya dipakai saat user benar-benar menyimpan purchase; stok/kas tetap mengikuti flow submit existing.
+      // Status: aktif dipakai; bukan auto-purchase.
+      // =========================
+      const normalizedPurchaseType = purchaseType === "offline" ? "offline" : "online";
+      const normalizedShippingCost = normalizedPurchaseType === "offline" ? 0 : Math.round(Number(shippingCost || 0));
+      const normalizedShippingDiscount = normalizedPurchaseType === "offline" ? 0 : Math.round(Number(shippingDiscount || 0));
+      const normalizedVoucherDiscount = normalizedPurchaseType === "offline" ? 0 : Math.round(Number(voucherDiscount || 0));
+      const normalizedServiceFee = normalizedPurchaseType === "offline" ? 0 : Math.round(Number(serviceFee || 0));
+
       const savingMeta = getPurchaseSavingMeta(purchaseSaving);
 
       const purchasePayload = {
@@ -683,10 +1036,11 @@ const Purchases = () => {
         date: Timestamp.fromDate(values.date.toDate()),
         note: note || "",
         subtotalItems: Math.round(Number(subtotalItems || 0)),
-        shippingCost: Math.round(Number(shippingCost || 0)),
-        shippingDiscount: Math.round(Number(shippingDiscount || 0)),
-        voucherDiscount: Math.round(Number(voucherDiscount || 0)),
-        serviceFee: Math.round(Number(serviceFee || 0)),
+        purchaseType: normalizedPurchaseType,
+        shippingCost: normalizedShippingCost,
+        shippingDiscount: normalizedShippingDiscount,
+        voucherDiscount: normalizedVoucherDiscount,
+        serviceFee: normalizedServiceFee,
         totalActualPurchase: Math.round(Number(totalActualPurchase || 0)),
         actualUnitCost: Math.round(Number(actualUnitCost || 0)),
         restockReferencePrice: Math.round(Number(restockReferencePrice || 0)),
@@ -1058,7 +1412,9 @@ const Purchases = () => {
             rules={[{ required: true, message: "Supplier wajib dipilih" }]}
             extra={
               itemType === "material" && itemId
-                ? "Supplier sudah difilter berdasarkan bahan baku yang dipilih"
+                ? filteredSuppliers.length
+                  ? "Supplier difilter dari katalog Supplier yang menyediakan bahan ini."
+                  : "Belum ada supplier yang menyediakan bahan ini. Tambahkan material ini di menu Supplier terlebih dahulu."
                 : "Pilih supplier"
             }
           >
@@ -1066,6 +1422,11 @@ const Purchases = () => {
               placeholder="Pilih supplier"
               showSearch
               optionFilterProp="children"
+              notFoundContent={
+                itemType === "material" && itemId
+                  ? "Belum ada supplier relevan untuk bahan ini"
+                  : "Supplier tidak ditemukan"
+              }
             >
               {filteredSuppliers.map((item) => (
                 <Option key={item.id} value={item.id}>
@@ -1078,101 +1439,271 @@ const Purchases = () => {
           {/* ===============================================================
               Field Link Produk untuk referensi restock berikutnya.
               Fungsi: menyimpan URL produk dari transaksi pembelian terakhir.
-              Alasan: Detail Raw Material memakai link ini sebagai tombol
-              "Buka Produk Terakhir Dibeli" tanpa mengambil link toko umum.
-              Status: aktif dipakai sebagai data referensi read-only; tidak
-              dipakai untuk perhitungan harga, stok, kas, saving, expense,
-              atau laporan.
+              Alasan perubahan: saat supplier dipilih, default link dibaca dari
+              materialDetails supplier yang cocok dengan bahan ini agar user tidak
+              perlu copy-paste ulang dari menu Supplier.
+              Status: aktif dipakai sebagai data referensi; field tetap boleh
+              disesuaikan untuk histori purchase ini, tetapi tidak dipakai untuk
+              perhitungan harga, stok, kas, saving, expense, atau laporan.
           =============================================================== */}
           <Form.Item
             name="productLink"
-            label="Link Produk"
-            extra="Opsional. Dipakai untuk referensi restock berikutnya, bukan untuk perhitungan pembelian."
+            label="Link Produk Restock"
+            extra={
+              itemType === "material" && supplierId
+                ? getSupplierProductLinkForMaterial(selectedSupplier || {}, itemId)
+                  ? "Default dari katalog Supplier. Jika link marketplace berubah saat pembelian, boleh disesuaikan untuk histori purchase ini."
+                  : "Supplier ini belum punya link produk untuk bahan ini."
+                : "Opsional. Dipakai untuk referensi restock berikutnya, bukan untuk perhitungan pembelian."
+            }
           >
             <Input placeholder="Link produk marketplace / supplier" />
           </Form.Item>
 
+          {itemType === "material" ? (
+            <>
+              {/* ===============================================================
+                  Baris Qty Beli + Satuan Beli.
+                  Fungsi: memisahkan input aktual dan referensi supplier dalam satu baris yang ringkas.
+                  Hubungan flow Purchases: Qty Beli tetap diedit user, sedangkan Satuan Beli hanya snapshot read-only dari katalog Supplier.
+                  Status: aktif dipakai; bukan kandidat cleanup karena menjaga form Pembelian tidak terasa dobel.
+              =============================================================== */}
+              <Form.Item name="purchaseUnit" hidden>
+                <Input />
+              </Form.Item>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: 12,
+                  alignItems: "start",
+                }}
+              >
+                <Form.Item
+                  name="quantity"
+                  label="Qty Beli"
+                  rules={[{ required: true, message: "Qty wajib diisi" }]}
+                  extra="Jumlah aktual yang dibeli."
+                >
+                  <InputNumber
+                    min={0.01}
+                    step={0.01}
+                    style={{ width: "100%" }}
+                    formatter={(value) => formatNumberId(value)}
+                    parser={(value) => value?.replace(/\./g, "") || ""}
+                  />
+                </Form.Item>
+
+                <Form.Item
+                  label="Satuan Beli"
+                  extra="Satuan beli mengikuti katalog Supplier."
+                >
+                  <Form.Item shouldUpdate noStyle>
+                    {({ getFieldValue }) => (
+                      <div
+                        style={{
+                          minHeight: 32,
+                          display: "flex",
+                          alignItems: "center",
+                          border: "1px solid #f0f0f0",
+                          borderRadius: 8,
+                          padding: "4px 11px",
+                          background: "var(--surface-muted, #fafafa)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {getFieldValue("purchaseUnit") || "-"}
+                      </div>
+                    )}
+                  </Form.Item>
+                </Form.Item>
+              </div>
+
+              {/* ===============================================================
+                  Baris Stok Masuk + Satuan Stok.
+                  Fungsi: menonjolkan total stok yang benar-benar akan masuk dari transaksi ini.
+                  Hubungan flow Purchases: Stok Masuk tetap dihitung dari Qty Beli x Konversi Supplier,
+                  sementara Konversi Supplier disimpan hidden/read-only sebagai sumber hitung katalog restock.
+                  Status: aktif dipakai; jika ada reject/selisih barang, koreksi dilakukan lewat Penyesuaian Stok,
+                  bukan edit konversi langsung di Purchases.
+              =============================================================== */}
+              <Form.Item
+                name="conversionValue"
+                hidden
+                rules={[
+                  { required: true, message: "Konversi wajib diisi dari katalog Supplier" },
+                  {
+                    validator: (_, value) =>
+                      Number(value || 0) > 0
+                        ? Promise.resolve()
+                        : Promise.reject(new Error("Konversi ke Stok harus lebih dari 0")),
+                  },
+                ]}
+              >
+                <InputNumber />
+              </Form.Item>
+              <Form.Item name="stockUnit" hidden>
+                <Input />
+              </Form.Item>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: 12,
+                  alignItems: "start",
+                }}
+              >
+                <Form.Item
+                  label="Stok Masuk"
+                  validateStatus={Number(conversionValue || 0) > 0 ? "" : "warning"}
+                  help={
+                    Number(conversionValue || 0) > 0
+                      ? "Nilai akhir stok yang akan masuk."
+                      : "Konversi belum diisi di katalog Supplier."
+                  }
+                >
+                  <Form.Item shouldUpdate noStyle>
+                    {({ getFieldValue }) => {
+                      // ACTIVE: UI Stok Masuk hanya menampilkan hasil akhir agar form Pembelian tidak ramai.
+                      // ALASAN: rumus Qty Beli x Konversi Supplier tetap dipakai di logic, tetapi detail formula tidak perlu ditampilkan ke user.
+                      // CLEANUP: bukan kandidat cleanup; blok ini menjaga tampilan ringkas tanpa mengubah perhitungan stok/kas.
+                      const stockInValue = Math.round(Number(getFieldValue("totalStockIn") || 0));
+                      const unit = getFieldValue("stockUnit") || "satuan stok";
+
+                      return (
+                        <div
+                          style={{
+                            minHeight: 42,
+                            display: "flex",
+                            alignItems: "center",
+                            border: "1px solid #f0f0f0",
+                            borderRadius: 8,
+                            padding: "6px 11px",
+                            background: "var(--surface-muted, #fafafa)",
+                          }}
+                        >
+                          <strong style={{ fontSize: 16 }}>
+                            {formatNumberId(stockInValue)} {unit}
+                          </strong>
+                        </div>
+                      );
+                    }}
+                  </Form.Item>
+                </Form.Item>
+
+                <Form.Item label="Satuan Stok" extra="Satuan stok mengikuti Raw Material.">
+                  <Form.Item shouldUpdate noStyle>
+                    {({ getFieldValue }) => (
+                      <div
+                        style={{
+                          minHeight: 42,
+                          display: "flex",
+                          alignItems: "center",
+                          border: "1px solid #f0f0f0",
+                          borderRadius: 8,
+                          padding: "6px 11px",
+                          background: "var(--surface-muted, #fafafa)",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {getFieldValue("stockUnit") || "-"}
+                      </div>
+                    )}
+                  </Form.Item>
+                </Form.Item>
+              </div>
+            </>
+          ) : (
+            <Form.Item
+              name="quantity"
+              label="Qty Beli"
+              rules={[{ required: true, message: "Qty wajib diisi" }]}
+            >
+              <InputNumber
+                min={0.01}
+                step={0.01}
+                style={{ width: "100%" }}
+                formatter={(value) => formatNumberId(value)}
+                parser={(value) => value?.replace(/\./g, "") || ""}
+              />
+            </Form.Item>
+          )}
+
+          {/* ===============================================================
+              Toggle Pembelian Offline.
+              Fungsi: menentukan apakah biaya online dipakai di transaksi aktual.
+              Alasan perubahan: katalog Supplier sudah punya tipe online/offline, sehingga Purchases perlu mengikuti default tersebut namun tetap bisa disesuaikan user.
+              Status: aktif dipakai; tidak membuat transaksi otomatis dan tidak mengubah stok/kas sebelum user klik Simpan.
+          =============================================================== */}
+          <Form.Item name="purchaseType" hidden>
+            <Input />
+          </Form.Item>
+
           <Form.Item
-            name="quantity"
-            label="Qty Beli"
-            rules={[{ required: true, message: "Qty wajib diisi" }]}
+            label="Pembelian Offline"
+            extra={
+              isOfflinePurchase
+                ? "Offline: biaya online tidak dipakai."
+                : "Online: ongkir, voucher, dan biaya layanan ikut menghitung total aktual."
+            }
           >
-            <InputNumber
-              min={0.01}
-              step={0.01}
-              style={{ width: "100%" }}
-              formatter={(value) => formatNumberId(value)}
-              parser={(value) => value?.replace(/\./g, "") || ""}
+            <Switch
+              checked={isOfflinePurchase}
+              checkedChildren="Offline"
+              unCheckedChildren="Online"
+              onChange={(checked) => {
+                form.setFieldsValue({
+                  purchaseType: checked ? "offline" : "online",
+                  ...(checked
+                    ? {
+                        shippingCost: 0,
+                        shippingDiscount: 0,
+                        voucherDiscount: 0,
+                        serviceFee: 0,
+                      }
+                    : {}),
+                });
+              }}
             />
           </Form.Item>
 
-          {itemType === "material" && (
+          {/* ===============================================================
+              Subtotal Barang aktual.
+              Fungsi: menyimpan harga aktual barang untuk transaksi purchase yang sedang dibuat.
+              Alasan perubahan: default boleh berasal dari Qty x Harga Barang Supplier, tetapi user tetap bisa mengedit jika harga marketplace/toko berubah.
+              Status: aktif dipakai; bukan kandidat cleanup karena menjaga Supplier sebagai default, bukan transaksi final.
+          =============================================================== */}
+          <Form.Item
+            name="subtotalItems"
+            label="Subtotal Barang"
+            rules={[{ required: true, message: "Subtotal barang wajib diisi" }]}
+            extra={
+              selectedSupplierCatalogCost.supplierItemPrice > 0
+                ? "Default dari Supplier. Tetap bisa diedit jika harga aktual berbeda."
+                : "Isi harga aktual barang yang dibeli."
+            }
+          >
+            <InputNumber
+              min={0}
+              style={{ width: "100%" }}
+              addonBefore="Rp"
+              formatter={(value) => formatNumberId(value)}
+              parser={(value) => value?.replace(/\./g, "") || ""}
+              onChange={() => {
+                subtotalManualOverrideRef.current = true;
+              }}
+            />
+          </Form.Item>
+
+          {!isOfflinePurchase ? (
             <>
               <Space style={{ display: "flex", width: "100%" }} size={12} wrap>
                 <Form.Item
-                  name="purchaseUnit"
-                  label="Satuan Beli"
-                  rules={[
-                    { required: true, message: "Satuan beli wajib diisi" },
-                  ]}
+                  name="shippingCost"
+                  label="Ongkir"
                   style={{ flex: 1, minWidth: 180 }}
-                >
-                  <Input placeholder="Contoh: roll / pack / ikat" />
-                </Form.Item>
-
-                <Form.Item
-                  name="stockUnit"
-                  label="Satuan Stok"
-                  rules={[
-                    { required: true, message: "Satuan stok wajib diisi" },
-                  ]}
-                  style={{ flex: 1, minWidth: 180 }}
-                >
-                  <Input disabled />
-                </Form.Item>
-              </Space>
-
-              <Form.Item
-                name="conversionValue"
-                label="Konversi Aktual"
-                rules={[{ required: true, message: "Konversi wajib diisi" }]}
-                extra={`Isi berapa ${selectedMaterial?.stockUnit || "satuan stok"} untuk 1 ${
-                  form.getFieldValue("purchaseUnit") || "satuan beli"
-                }. Contoh: 1 roll = 45 meter, isi 45.`}
-              >
-                <InputNumber
-                  min={0.01}
-                  step={0.01}
-                  style={{ width: "100%" }}
-                  formatter={(value) => formatNumberId(value)}
-                  parser={(value) => value?.replace(/\./g, "") || ""}
-                />
-              </Form.Item>
-            </>
-          )}
-
-          <Form.Item label="Stok Masuk Otomatis" name="totalStockIn">
-            <InputNumber
-              style={{ width: "100%" }}
-              readOnly
-              formatter={(value) => formatNumberId(value)}
-            />
-          </Form.Item>
-
-          <Form.Item
-            shouldUpdate={(prev, curr) =>
-              prev.stockUnit !== curr.stockUnit || prev.itemId !== curr.itemId
-            }
-            noStyle
-          >
-            {({ getFieldValue }) => {
-              const stockUnit = getFieldValue("stockUnit") || "satuan stok";
-
-              return (
-                <Form.Item
-                  name="restockReferencePrice"
-                  label="Harga Referensi Restock (Master)"
-                  extra={`Harga patokan per ${stockUnit} dari master bahan baku. Dipakai untuk membandingkan apakah pembelian ini lebih hemat atau lebih mahal.`}
                 >
                   <InputNumber
                     min={0}
@@ -1182,170 +1713,118 @@ const Purchases = () => {
                     parser={(value) => value?.replace(/\./g, "") || ""}
                   />
                 </Form.Item>
-              );
-            }}
-          </Form.Item>
 
-          <Form.Item
-            name="subtotalItems"
-            label="Subtotal Barang"
-            rules={[{ required: true, message: "Subtotal barang wajib diisi" }]}
-            extra="Nilai harga barang sebelum ongkir, diskon, voucher, dan biaya layanan."
-          >
-            <InputNumber
-              min={0}
-              style={{ width: "100%" }}
-              addonBefore="Rp"
-              formatter={(value) => formatNumberId(value)}
-              parser={(value) => value?.replace(/\./g, "") || ""}
-            />
-          </Form.Item>
-
-          <Space style={{ display: "flex", width: "100%" }} size={12} wrap>
-            <Form.Item
-              name="shippingCost"
-              label="Ongkir"
-              style={{ flex: 1, minWidth: 180 }}
-            >
-              <InputNumber
-                min={0}
-                style={{ width: "100%" }}
-                addonBefore="Rp"
-                formatter={(value) => formatNumberId(value)}
-                parser={(value) => value?.replace(/\./g, "") || ""}
-              />
-            </Form.Item>
-
-            <Form.Item
-              name="shippingDiscount"
-              label="Diskon Ongkir"
-              style={{ flex: 1, minWidth: 180 }}
-            >
-              <InputNumber
-                min={0}
-                style={{ width: "100%" }}
-                addonBefore="Rp"
-                formatter={(value) => formatNumberId(value)}
-                parser={(value) => value?.replace(/\./g, "") || ""}
-              />
-            </Form.Item>
-          </Space>
-
-          <Space style={{ display: "flex", width: "100%" }} size={12} wrap>
-            <Form.Item
-              name="voucherDiscount"
-              label="Voucher / Potongan"
-              style={{ flex: 1, minWidth: 180 }}
-            >
-              <InputNumber
-                min={0}
-                style={{ width: "100%" }}
-                addonBefore="Rp"
-                formatter={(value) => formatNumberId(value)}
-                parser={(value) => value?.replace(/\./g, "") || ""}
-              />
-            </Form.Item>
-
-            <Form.Item
-              name="serviceFee"
-              label="Biaya Layanan"
-              style={{ flex: 1, minWidth: 180 }}
-            >
-              <InputNumber
-                min={0}
-                style={{ width: "100%" }}
-                addonBefore="Rp"
-                formatter={(value) => formatNumberId(value)}
-                parser={(value) => value?.replace(/\./g, "") || ""}
-              />
-            </Form.Item>
-          </Space>
-
-          <Form.Item
-            shouldUpdate={(prev, curr) =>
-              prev.stockUnit !== curr.stockUnit || prev.itemId !== curr.itemId
-            }
-            noStyle
-          >
-            {({ getFieldValue }) => {
-              const stockUnit = getFieldValue("stockUnit") || "satuan stok";
-
-              return (
-                <>
-                  <Form.Item
-                    label="Total Referensi Pembelian"
-                    name="totalReferencePurchase"
-                  >
-                    <InputNumber
-                      style={{ width: "100%" }}
-                      readOnly
-                      addonBefore="Rp"
-                      formatter={(value) => formatNumberId(value)}
-                    />
-                  </Form.Item>
-
-                  <div
-                    style={{
-                      marginTop: -18,
-                      marginBottom: 16,
-                      color: "#999",
-                      fontSize: 12,
-                    }}
-                  >
-                    Dihitung dari total stok masuk × harga referensi per{" "}
-                    {stockUnit}.
-                  </div>
-                </>
-              );
-            }}
-          </Form.Item>
-
-          <Form.Item label="Total Aktual Pembelian" name="totalActualPurchase">
-            <InputNumber
-              style={{ width: "100%" }}
-              readOnly
-              addonBefore="Rp"
-              formatter={(value) => formatNumberId(value)}
-            />
-          </Form.Item>
-
-          <Form.Item
-            shouldUpdate={(prev, curr) =>
-              prev.stockUnit !== curr.stockUnit || prev.itemId !== curr.itemId
-            }
-            noStyle
-          >
-            {({ getFieldValue }) => {
-              const stockUnit = getFieldValue("stockUnit") || "satuan stok";
-
-              return (
                 <Form.Item
-                  label="Modal Aktual per Satuan Stok"
-                  name="actualUnitCost"
-                  extra={`Dipakai untuk menghitung modal nyata per ${stockUnit} setelah pembelian ini.`}
+                  name="shippingDiscount"
+                  label="Diskon Ongkir"
+                  style={{ flex: 1, minWidth: 180 }}
                 >
                   <InputNumber
+                    min={0}
                     style={{ width: "100%" }}
-                    readOnly
                     addonBefore="Rp"
                     formatter={(value) => formatNumberId(value)}
+                    parser={(value) => value?.replace(/\./g, "") || ""}
                   />
                 </Form.Item>
-              );
-            }}
+              </Space>
+
+              <Space style={{ display: "flex", width: "100%" }} size={12} wrap>
+                <Form.Item
+                  name="voucherDiscount"
+                  label="Voucher / Potongan"
+                  style={{ flex: 1, minWidth: 180 }}
+                >
+                  <InputNumber
+                    min={0}
+                    style={{ width: "100%" }}
+                    addonBefore="Rp"
+                    formatter={(value) => formatNumberId(value)}
+                    parser={(value) => value?.replace(/\./g, "") || ""}
+                  />
+                </Form.Item>
+
+                <Form.Item
+                  name="serviceFee"
+                  label="Biaya Layanan"
+                  style={{ flex: 1, minWidth: 180 }}
+                >
+                  <InputNumber
+                    min={0}
+                    style={{ width: "100%" }}
+                    addonBefore="Rp"
+                    formatter={(value) => formatNumberId(value)}
+                    parser={(value) => value?.replace(/\./g, "") || ""}
+                  />
+                </Form.Item>
+              </Space>
+            </>
+          ) : null}
+
+          {/* ===============================================================
+              Ringkasan Perbandingan Supplier.
+              Fungsi: menggabungkan stok masuk, harga pembanding Supplier, total aktual, modal aktual, dan selisih hemat dalam satu card ringkas.
+              Hubungan flow: semua nilai read-only; stok/kas/expense baru berubah saat handleSubmitPurchase berjalan setelah user klik Simpan.
+              Status: aktif dipakai; menggantikan field read-only besar agar form tidak terasa dobel.
+          =============================================================== */}
+          <Form.Item name="totalStockIn" hidden>
+            <InputNumber />
+          </Form.Item>
+          <Form.Item name="restockReferencePrice" hidden>
+            <InputNumber />
+          </Form.Item>
+          <Form.Item name="totalReferencePurchase" hidden>
+            <InputNumber />
+          </Form.Item>
+          <Form.Item name="totalActualPurchase" hidden>
+            <InputNumber />
+          </Form.Item>
+          <Form.Item name="actualUnitCost" hidden>
+            <InputNumber />
+          </Form.Item>
+          <Form.Item name="purchaseSaving" hidden>
+            <InputNumber />
           </Form.Item>
 
-          <Form.Item
-            label="Selisih Hemat Pembelian"
-            name="purchaseSaving"
-            extra="Nilai positif berarti pembelian ini lebih hemat dari harga referensi. Nilai negatif berarti lebih mahal dari harga referensi."
-          >
-            <InputNumber
-              style={{ width: "100%" }}
-              readOnly
-              addonBefore="Rp"
-              formatter={(value) => formatNumberId(value)}
-            />
+          <Form.Item shouldUpdate noStyle>
+            {({ getFieldValue }) => {
+              const stockUnit = getFieldValue("stockUnit") || "satuan stok";
+              const stockInValue = Number(getFieldValue("totalStockIn") || 0);
+              const supplierPriceValue = Number(getFieldValue("restockReferencePrice") || 0);
+              const totalReferenceValue = Number(getFieldValue("totalReferencePurchase") || 0);
+              const totalActualValue = Number(getFieldValue("totalActualPurchase") || 0);
+              const actualUnitCostValue = Number(getFieldValue("actualUnitCost") || 0);
+              const purchaseSavingValue = Number(getFieldValue("purchaseSaving") || 0);
+              const savingMeta = getPurchaseSavingMeta(purchaseSavingValue);
+              const hasSupplierReference = totalReferenceValue > 0;
+
+              return (
+                <div
+                  style={{
+                    border: "1px solid #f0f0f0",
+                    borderRadius: 12,
+                    padding: 14,
+                    marginBottom: 16,
+                    background: "var(--surface-card, #fff)",
+                  }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: 10 }}>
+                    Ringkasan Perbandingan Supplier
+                  </div>
+                  <Space direction="vertical" size={6} style={{ width: "100%" }}>
+                    <div>Stok Masuk: <strong>{formatNumberId(stockInValue)} {stockUnit}</strong></div>
+                    <div>
+                      Harga Supplier Tercatat / Satuan Stok:{" "}
+                      <strong>{supplierPriceValue > 0 ? `${formatCurrencyIdr(supplierPriceValue)} / ${stockUnit}` : "Belum ada harga supplier tercatat"}</strong>
+                    </div>
+                    <div>Total Pembanding Supplier: <strong>{hasSupplierReference ? formatCurrencyIdr(totalReferenceValue) : "-"}</strong></div>
+                    <div>Total Aktual Pembelian: <strong>{formatCurrencyIdr(totalActualValue)}</strong></div>
+                    <div>Modal Aktual / Satuan Stok: <strong>{formatCurrencyIdr(actualUnitCostValue)} / {stockUnit}</strong></div>
+                    <div>Selisih Hemat: <Tag color={savingMeta.color}>{hasSupplierReference ? savingMeta.label : "-"}</Tag></div>
+                  </Space>
+                </div>
+              );
+            }}
           </Form.Item>
 
           <Form.Item name="note" label="Catatan">

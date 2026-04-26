@@ -41,6 +41,9 @@ const enrichMaterialWithVariantTotals = (item = {}) => {
       hasVariants,
       variants,
       currentStock,
+      // ACTIVE: master semi finished wajib menyimpan stock alias currentStock.
+      // ALASAN: kompatibilitas audit stok lama tanpa mengubah flow produksi.
+      stock: currentStock,
       reservedStock,
       availableStock,
       minStockAlert: Number(item.minStockAlert || 0),
@@ -100,8 +103,11 @@ const normalizePayload = (
     variants: normalizedVariants,
     variantCount: hasVariants ? variantTotals.variantCount : 0,
     activeVariantCount: hasVariants ? variantTotals.activeVariantCount : 0,
+    // ACTIVE: payload create/edit semi finished menjaga stock = currentStock.
+    // ALASAN: semua master item harus lolos audit tanpa perlu Reset/Maintenance.
 
     currentStock,
+    stock: currentStock,
     reservedStock,
     availableStock: Math.max(currentStock - reservedStock, 0),
     minStockAlert,

@@ -4,9 +4,11 @@ import {
   DEFAULT_COLOR_VARIANT,
 } from '../../constants/variantOptions';
 import {
-  calculateAvailableStock,
-  toNumber,
-} from '../stock/stockHelpers';
+  calculateVariantAvailableStock,
+  calculateVariantStockTotals,
+  normalizeNumberStock,
+  normalizeVariantStockShape,
+} from './variantStockNormalizer';
 import formatNumber from '../formatters/numberId';
 
 const normalizeBoolean = (value, defaultValue = true) =>
@@ -39,30 +41,58 @@ export const normalizeVariants = (variants = [], options = {}) => {
   } = options;
 
   return variants
-    .map((item) => {
+    .map((item, index) => {
       const variantName = pickVariantLabel(item, keyField);
-      const normalized = {
+      const baseVariant = {
+        ...item,
         [keyField]: variantName,
         [skuField]: String(item?.[skuField] || '').trim().toUpperCase(),
-        [stockField]: toNumber(item?.[stockField] || 0),
+        currentStock: item?.[stockField] ?? item?.currentStock ?? item?.stock ?? 0,
+        reservedStock: item?.[reservedField] ?? item?.reservedStock ?? 0,
+        variantLabel: item?.variantLabel || item?.label || variantName,
+        isActive: normalizeBoolean(item?.isActive, true),
+      };
+
+      // ACTIVE: helper product/semi finished tetap mempertahankan field UI lama
+      // seperti color/name/code, tetapi stok final diserahkan ke normalizer pusat
+      // agar variant.stock selalu sama dengan variant.currentStock.
+      const normalizedStock = normalizeVariantStockShape(baseVariant, {
+        fallbackIndex: index,
+        currentStockField: 'currentStock',
+        reservedStockField: 'reservedStock',
+        keyFields: ['variantKey', skuField, keyField, 'color', 'name', 'code'],
+        labelFields: ['variantLabel', 'label', keyField, 'color', 'name', skuField, 'code'],
+      });
+
+      const normalized = {
+        ...normalizedStock,
+        [keyField]: variantName,
+        [skuField]: String(item?.[skuField] || '').trim().toUpperCase(),
+        [stockField]: normalizedStock.currentStock,
+        stock: normalizedStock.currentStock,
         isActive: normalizeBoolean(item?.isActive, true),
       };
 
       if (includeReserved) {
-        normalized[reservedField] = toNumber(item?.[reservedField] || 0);
+        normalized[reservedField] = normalizedStock.reservedStock;
       }
 
       if (includeMinStock) {
-        normalized[minStockField] = toNumber(item?.[minStockField] || 0);
+        normalized[minStockField] = normalizeNumberStock(item?.[minStockField] || 0);
       }
 
       if (includeAverageCost) {
-        normalized[averageCostField] = toNumber(item?.[averageCostField] || 0);
+        normalized[averageCostField] = normalizeNumberStock(item?.[averageCostField] || 0);
       }
 
       if (includeLegacyColorAlias) {
         normalized.color = variantName;
       }
+
+      normalized.availableStock = calculateVariantAvailableStock(
+        normalizedStock.currentStock,
+        normalizedStock.reservedStock,
+      );
 
       return normalized;
     })
@@ -112,23 +142,28 @@ export const calculateVariantTotals = (variants = [], options = {}) => {
     includeLegacyColorAlias: true,
   });
 
-  const currentStock = normalized.reduce((sum, item) => sum + toNumber(item[stockField]), 0);
-  const reservedStock = includeReserved
-    ? normalized.reduce((sum, item) => sum + toNumber(item[reservedField]), 0)
-    : 0;
+  // ACTIVE: total produk/semi memakai helper pusat supaya master stock/currentStock
+  // mengikuti total varian yang sudah dinormalisasi.
+  const stockTotals = calculateVariantStockTotals(normalized, {
+    keyFields: ['variantKey', keyField, 'color', 'name', 'sku', 'code'],
+    labelFields: ['variantLabel', 'label', keyField, 'color', 'name', 'sku', 'code'],
+  });
+  const currentStock = stockTotals.currentStock;
+  const reservedStock = includeReserved ? stockTotals.reservedStock : 0;
   const minStockAlert = includeMinStock
-    ? normalized.reduce((sum, item) => sum + toNumber(item[minStockField]), 0)
+    ? normalized.reduce((sum, item) => sum + normalizeNumberStock(item[minStockField]), 0)
     : 0;
   const activeVariants = normalized.filter((item) => item.isActive);
   const averageCostPerUnit = includeAverageCost && activeVariants.length > 0
-    ? activeVariants.reduce((sum, item) => sum + toNumber(item[averageCostField]), 0) / activeVariants.length
+    ? activeVariants.reduce((sum, item) => sum + normalizeNumberStock(item[averageCostField]), 0) / activeVariants.length
     : 0;
 
   return {
     variants: normalized,
     currentStock,
+    stock: currentStock,
     reservedStock,
-    availableStock: calculateAvailableStock(currentStock, reservedStock),
+    availableStock: calculateVariantAvailableStock(currentStock, reservedStock),
     minStockAlert,
     averageCostPerUnit,
     variantCount: normalized.length,

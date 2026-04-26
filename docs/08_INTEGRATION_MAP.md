@@ -247,3 +247,117 @@ Guard:
 - Dashboard tidak mengubah stok/kas/expense;
 - link produk terakhir berasal dari Purchases;
 - Supplier tetap katalog vendor/restock dan tidak memasang supplier otomatis ke Raw Material.
+
+## Flow Helper Pusat Stok Varian
+
+```text
+Form/Edit Master + Transaksi + Produksi
+-> helper lama sesuai modul
+-> variantStockNormalizer
+-> output variant final: currentStock + stock + reservedStock + availableStock + variantKey
+-> output master final: currentStock + stock + reservedStock + availableStock
+-> audit Reset/Maintenance hanya mengecek/repair data lama, bukan flow harian
+```
+
+Guard:
+- Raw Material, Product, Semi Finished, Stock Adjustment, Sales, Returns, Purchases, dan Production tidak boleh punya rumus stok varian sendiri-sendiri.
+- Helper lama boleh tetap ada untuk import lama, tetapi harus delegasi ke helper pusat.
+- `stock` dipertahankan sebagai alias kompatibilitas; `currentStock` tetap stok utama.
+
+## Flow Reset & Maintenance Aman
+
+```text
+Reset & Maintenance
+-> preview target reset
+-> tampilkan collection yang akan dihapus
+-> tampilkan protected master data termasuk supplierPurchases
+-> user wajib konfirmasi RESET
+-> reset hanya menghapus target non-protected
+```
+
+```text
+Hapus Data Test Saja
+-> scan collection transaksi/testing
+-> filter marker isTestData=true + sourceModule=dev_test_seed + createdBy=dev_seed
+-> hapus hanya dokumen bermarker
+-> protected master data tidak ikut target default
+```
+
+Guard:
+- Supplier/vendor restock (`supplierPurchases`) tidak boleh dihapus reset default;
+- reset transaksi tidak boleh menghapus master Supplier;
+- test cleanup tidak boleh menghapus data normal tanpa marker;
+- reset Supplier hanya boleh dibuat sebagai flow destructive khusus developer.
+
+## Purchases Supplier Restock Prefill
+
+```text
+Supplier materialDetails
+  -> Purchases supplier dropdown filtered by materialId
+  -> Link Produk Restock prefill from materialDetails.productLink
+  -> Harga Supplier Tercatat prefill from materialDetails.referencePrice / estimatedUnitPrice
+  -> Total Pembanding Supplier dihitung dari komponen supplier catalog
+  -> Selisih Hemat display
+  -> User manually saves Purchase
+  -> Stock, expense, and inventory log follow existing Purchases flow
+```
+
+Notes:
+- Flow ini read-only terhadap Supplier dan Raw Material.
+- Supplier tetap katalog vendor/restock.
+- Purchases tetap satu-satunya tempat transaksi pembelian aktual.
+
+## Supplier Katalog Restock -> Purchases Prefill
+
+```text
+Supplier materialDetails
+  -> link produk + tipe pembelian + satuan beli + konversi + estimasi biaya
+  -> hitung Harga Estimasi Supplier / Satuan Stok
+  -> Purchases membaca read-only untuk prefill Link Produk, Satuan Beli, Konversi, dan Harga Supplier Tercatat
+  -> User mengisi harga aktual dan menyimpan purchase
+  -> stok/kas/expense berubah hanya lewat flow Purchases existing
+```
+
+Guard:
+- Supplier tidak membuat purchase otomatis;
+- Supplier tidak menulis Raw Material otomatis berdasarkan katalog material;
+- harga supplier adalah pembanding, bukan harga aktual.
+
+## Purchases Stok Masuk Total
+
+```text
+Supplier materialDetails.conversionValue
+  -> Purchases read-only conversion source
+  -> Qty Beli x Konversi Supplier
+  -> Stok Masuk total ditampilkan sebagai field utama
+  -> user klik Simpan Purchase
+  -> stok/inventory log/expense mengikuti flow Purchases existing
+```
+
+Guard:
+- Qty Beli hanya menghitung Stok Masuk, ringkasan, Total Pembanding Supplier berbasis komponen katalog, dan subtotal default jika belum manual;
+- Qty Beli tidak boleh mereset Supplier, Link Produk, purchaseType, atau Harga Supplier Tercatat;
+- Total Pembanding Supplier tidak boleh menggandakan ongkir/admin default sebagai biaya per satuan stok;
+- koreksi reject/selisih dilakukan lewat Penyesuaian Stok.
+
+### Supplier Table dan Inventory Log Performance Map
+```text
+Supplier table
+-> reads supplierPurchases + raw_materials + purchase history read-only
+-> shows compact restock catalog summary
+-> actions are non-fixed UI buttons
+-> no stock/cash/purchase mutation
+```
+
+```text
+Stock Management
+-> reads latest inventory_logs with a UI/service limit
+-> displays audit history read-only
+-> Stock Adjustment panel remains the only manual adjustment submit flow
+-> no stock mutation when page opens
+```
+
+Catatan guard:
+- Jangan isi riwayat stok dengan stok saat ini jika maksudnya snapshot historis.
+- Jika butuh full history, gunakan pagination/query lanjutan; jangan kembalikan full collection read tanpa batas.
+- Latest purchase lookup untuk restock masih kandidat optimasi terpisah bila index/read model sudah diputuskan.

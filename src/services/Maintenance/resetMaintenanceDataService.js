@@ -52,12 +52,71 @@ export const RESET_MODE_OPTIONS = [
 const BASELINE_COLLECTION = "testing_baselines";
 const BASELINE_DOC_ID = "inventory_reset_baseline";
 const STOCK_COLLECTIONS = ["raw_materials", "semi_finished_materials", "products"];
+
+// -----------------------------------------------------------------------------
+// Protected master data.
+// ACTIVE / GUARDED:
+// - daftar ini menjadi pagar terakhir agar reset transaksi/testing tidak
+//   menghapus master penting seperti Supplier secara default;
+// - collection supplierPurchases adalah master Supplier/vendor restock, bukan
+//   transaksi pembelian, sehingga tidak boleh ikut reset module Purchases.
+// -----------------------------------------------------------------------------
+export const PROTECTED_MASTER_COLLECTIONS = [
+  { key: "supplierPurchases", label: "Supplier / Vendor Restock", reason: "Master Supplier dilindungi dari reset default." },
+  { key: "raw_materials", label: "Raw Materials", reason: "Master stok bahan baku tidak dihapus oleh reset transaksi." },
+  { key: "products", label: "Products", reason: "Master produk tidak dihapus oleh reset transaksi." },
+  { key: "customers", label: "Customers", reason: "Master customer tetap dipertahankan." },
+  { key: "production_steps", label: "Production Steps", reason: "Master step produksi tetap dipertahankan." },
+  { key: "production_employees", label: "Production Employees", reason: "Master karyawan produksi tetap dipertahankan." },
+  { key: "semi_finished_materials", label: "Semi Finished Materials", reason: "Master bahan setengah jadi tidak dihapus oleh reset transaksi." },
+  { key: "production_boms", label: "Production BOMs", reason: "Master BOM/setup produksi tetap dipertahankan." },
+];
+
+const PROTECTED_COLLECTION_KEYS = new Set(PROTECTED_MASTER_COLLECTIONS.map((item) => item.key));
+
+// -----------------------------------------------------------------------------
+// Data test marker.
+// ACTIVE / DEV TOOL:
+// - fitur hapus data test hanya boleh menghapus dokumen yang punya marker ini;
+// - dokumen normal tanpa marker tidak boleh ikut terhapus.
+// -----------------------------------------------------------------------------
+export const DEV_TEST_DATA_MARKER = {
+  isTestData: true,
+  sourceModule: "dev_test_seed",
+  createdBy: "dev_seed",
+};
+
+const TEST_DATA_CLEANUP_COLLECTIONS = [
+  "purchases",
+  "sales",
+  "returns",
+  "expenses",
+  "incomes",
+  "revenues",
+  "stock_adjustments",
+  "inventory_logs",
+  "production_orders",
+  "production_work_logs",
+  "production_payrolls",
+  "production_plans",
+  "pricing_logs",
+];
+
 const BATCH_LIMIT = 400;
 
 const safeTrim = (value) => String(value || "").trim();
 const normalizeType = (value) => safeTrim(value).toLowerCase();
 
 const hasTruthyReference = (value) => Boolean(safeTrim(value));
+
+const isProtectedCollection = (collectionKey) => PROTECTED_COLLECTION_KEYS.has(collectionKey);
+
+const hasDevTestMarker = (data = {}) => (
+  data?.isTestData === DEV_TEST_DATA_MARKER.isTestData &&
+  data?.sourceModule === DEV_TEST_DATA_MARKER.sourceModule &&
+  data?.createdBy === DEV_TEST_DATA_MARKER.createdBy
+);
+
 
 // -----------------------------------------------------------------------------
 // Scoped filter reset.
@@ -128,7 +187,6 @@ const MODULE_DEFINITIONS = {
     label: "Pembelian",
     collections: [
       { key: "purchases", label: "Pembelian", action: "Hapus transaksi pembelian" },
-      { key: "supplierPurchases", label: "Supplier Purchases", action: "Hapus relasi pembelian supplier" },
       {
         key: "expenses",
         label: "Expense Pembelian",
@@ -265,7 +323,17 @@ const getCollectionTargetsFromModules = (modules = []) => {
   const targets = Array.from(map.values());
   const fullCollectionKeys = new Set(targets.filter(isFullCollectionTarget).map((item) => item.key));
 
-  return targets.filter((item) => isFullCollectionTarget(item) || !fullCollectionKeys.has(item.key));
+  return targets
+    .filter((item) => isFullCollectionTarget(item) || !fullCollectionKeys.has(item.key))
+    .filter((item) => {
+      // -----------------------------------------------------------------------
+      // Protected reset guard.
+      // ACTIVE / GUARDED: walaupun ada developer menambahkan protected collection
+      // ke MODULE_DEFINITIONS di masa depan, reset default tetap menolak target
+      // tersebut agar master Supplier dan master lain tidak terhapus diam-diam.
+      // -----------------------------------------------------------------------
+      return !isProtectedCollection(item.key);
+    });
 };
 
 const readFilteredDocuments = async (target = {}) => {
@@ -376,6 +444,15 @@ const buildBaselineStockPayload = async () => {
 };
 
 const commitDeleteTarget = async (target) => {
+  if (isProtectedCollection(target?.key)) {
+    // -------------------------------------------------------------------------
+    // Last-line destructive guard.
+    // ACTIVE / GUARDED: delete collection target tidak boleh berjalan untuk
+    // protected master data, termasuk Supplier (supplierPurchases).
+    // -------------------------------------------------------------------------
+    throw new Error(`Collection ${target.key} dilindungi dan tidak boleh dihapus oleh reset default.`);
+  }
+
   const docs = await readFilteredDocuments(target);
   if (!docs.length) return 0;
 
@@ -466,6 +543,20 @@ const applyStockModeToMasterItems = async (resetMode) => {
   };
 };
 
+
+const buildProtectedCollectionPreview = async () => {
+  return Promise.all(
+    PROTECTED_MASTER_COLLECTIONS.map(async (item) => ({
+      ...item,
+      moduleLabel: "Master Dilindungi",
+      name: item.label,
+      count: await countCollectionDocuments({ key: item.key }),
+      action: "Dilindungi dari reset default",
+      status: "protected",
+    })),
+  );
+};
+
 export const getResetPreview = async ({ resetMode, modules }) => {
   const selectedModules = Array.isArray(modules) ? modules : [];
   const collectionTargets = getCollectionTargetsFromModules(selectedModules);
@@ -474,17 +565,22 @@ export const getResetPreview = async ({ resetMode, modules }) => {
     collectionTargets.map(async (item) => ({
       ...item,
       count: await countCollectionDocuments(item),
+      status: "delete",
     })),
   );
 
+  const protectedCollections = await buildProtectedCollectionPreview();
   const totalRecords = collections.reduce((sum, item) => sum + Number(item.count || 0), 0);
+  const protectedRecords = protectedCollections.reduce((sum, item) => sum + Number(item.count || 0), 0);
   const baselineDoc = await getBaselineSnapshotDoc();
 
   return {
     resetMode,
     modules: selectedModules,
     totalRecords,
+    protectedRecords,
     collections,
+    protectedCollections,
     baselineSummary: {
       exists: Boolean(baselineDoc?.items?.length),
       itemCount: Number(baselineDoc?.items?.length || 0),
@@ -547,6 +643,61 @@ export const syncAllStocks = async () => {
   return {
     message: `Sinkronisasi stok selesai untuk ${syncedCount} item master.`,
     syncedCount,
+  };
+};
+
+
+const buildDevTestTargets = () => TEST_DATA_CLEANUP_COLLECTIONS.map((collectionKey) => ({
+  key: collectionKey,
+  label: collectionKey,
+  moduleLabel: "Data Test",
+  action: "Hapus hanya dokumen bermarker dev_test_seed",
+  status: "test_data",
+  filter: hasDevTestMarker,
+}));
+
+export const getDevTestDataPreview = async () => {
+  // ---------------------------------------------------------------------------
+  // Preview hapus data test.
+  // ACTIVE / DEV TOOL: hanya menghitung dokumen dengan marker dev_test_seed.
+  // Supplier tetap tidak masuk target agar master vendor/restock aman secara
+  // default selama development.
+  // ---------------------------------------------------------------------------
+  const collections = await Promise.all(
+    buildDevTestTargets().map(async (item) => ({
+      ...item,
+      count: await countCollectionDocuments(item),
+    })),
+  );
+  const totalRecords = collections.reduce((sum, item) => sum + Number(item.count || 0), 0);
+  return {
+    totalRecords,
+    collections,
+    marker: DEV_TEST_DATA_MARKER,
+    protectedCollections: await buildProtectedCollectionPreview(),
+  };
+};
+
+export const deleteDevTestData = async () => {
+  // ---------------------------------------------------------------------------
+  // Delete data test.
+  // ACTIVE / GUARDED: hanya menghapus dokumen bermarker test. Dokumen normal
+  // tanpa marker tidak tersentuh, dan protected master data tidak menjadi target.
+  // ---------------------------------------------------------------------------
+  const targets = buildDevTestTargets();
+  const deletedCollections = [];
+  let totalDeletedRecords = 0;
+
+  for (const item of targets) {
+    const deletedCount = await commitDeleteTarget(item);
+    totalDeletedRecords += deletedCount;
+    deletedCollections.push({ ...item, deletedCount });
+  }
+
+  return {
+    message: `Hapus data test selesai. ${totalDeletedRecords} record bermarker dev_test_seed dibersihkan.`,
+    totalDeletedRecords,
+    deletedCollections,
   };
 };
 

@@ -606,3 +606,94 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Pastikan modal Purchases terbuka dan tidak auto-submit.
 - [ ] Pastikan user tetap wajib mengisi qty/harga aktual sebelum Simpan.
 - [ ] Simpan purchase dan pastikan stok/expense/saving tetap mengikuti flow Purchases existing.
+
+## Checklist Regression Stok Varian Final
+
+- Edit Raw Material bervarian lalu simpan; audit Reset/Maintenance harus OK tanpa klik Repair.
+- Purchase Raw Material varian; audit harus tetap OK dan master `stock/currentStock` sama dengan total varian.
+- Stock Adjustment masuk/keluar untuk varian; audit harus tetap OK dan inventory log tetap normal.
+- Edit Product bervarian; audit harus tetap OK.
+- Sales produk varian dan cancel/delete jika relevan; stok revert harus aman dan audit tetap OK.
+- Return item varian; audit harus OK dan stok tidak double.
+- Edit Semi Finished bervarian; master `stock/currentStock` harus sama dengan total varian.
+- Start/Complete Work Log yang memakai varian; audit harus OK dan tidak double posting.
+- Reset/Maintenance tidak boleh diperlukan untuk menjaga data baru tetap sinkron.
+
+## Checklist Reset & Maintenance Aman
+
+### Supplier Protection
+- [ ] Buat Supplier real dan Supplier test manual.
+- [ ] Buka Reset & Maintenance.
+- [ ] Pastikan preview reset menampilkan `supplierPurchases` sebagai Dilindungi.
+- [ ] Jalankan reset transaksi.
+- [ ] Pastikan Supplier tidak terhapus.
+- [ ] Pastikan Raw Material supplier manual tetap tampil.
+- [ ] Pastikan dropdown Supplier di Purchases tetap jalan.
+
+### Hapus Data Test Saja
+- [ ] Buat dokumen test dengan marker `isTestData=true`, `sourceModule=dev_test_seed`, dan `createdBy=dev_seed`.
+- [ ] Refresh preview Data Test Aman.
+- [ ] Pastikan hanya data bermarker yang masuk preview.
+- [ ] Jalankan Hapus Data Test Saja.
+- [ ] Pastikan data normal tanpa marker tidak terhapus.
+- [ ] Pastikan Supplier protected tidak ikut target default.
+
+### Regression Reset
+- [ ] Reset/Maintenance tidak white screen.
+- [ ] Preview reset tetap menampilkan jumlah data yang akan dihapus.
+- [ ] Modal konfirmasi RESET tetap wajib diketik sebelum reset destructive.
+- [ ] Maintenance repair stok tidak membuat inventory log baru.
+
+## Purchases Supplier Restock Prefill
+
+- [ ] Buka menu Supplier dan pastikan supplier punya `materialDetails` untuk bahan terkait.
+- [ ] Isi Link Produk dan Harga Supplier Tercatat pada material supplier.
+- [ ] Simpan Supplier dan pastikan tidak otomatis memasang supplier ke Raw Material baru.
+- [ ] Buka Purchases, pilih Jenis Item = Bahan Baku, lalu pilih bahan.
+- [ ] Pastikan dropdown Supplier hanya menampilkan supplier yang menyediakan bahan tersebut.
+- [ ] Pilih supplier dan pastikan Link Produk Restock otomatis terisi dari Supplier.
+- [ ] Ganti supplier lain dan pastikan Link Produk ikut berubah sesuai supplier tersebut.
+- [ ] Pastikan Harga Supplier Tercatat / Satuan Stok otomatis terisi dan read-only.
+- [ ] Pastikan Total Pembanding Supplier dihitung dari komponen supplier: Qty Beli × Harga Barang Supplier + Ongkir Default + Biaya Layanan Default - Diskon Default.
+- [ ] Pastikan Selisih Hemat berubah dari Total Pembanding Supplier - Total Aktual Pembelian.
+- [ ] Pastikan Modal Aktual per Satuan Stok tetap dihitung dari Total Aktual / Stok Masuk total.
+- [ ] Isi Qty Beli dan pastikan Stok Masuk total = Qty Beli × Konversi Supplier.
+- [ ] Simpan purchase dan pastikan stok, inventory log, expense, dan saving tetap mengikuti flow Purchases existing.
+- [ ] Pastikan tidak ada tombol/logic “Sinkronkan Bahan” yang kembali.
+
+## Supplier Katalog Restock Lengkap
+
+- [ ] Buka menu Supplier dan pastikan field Kategori/Keterangan Supplier tidak lagi tampil sebagai field utama.
+- [ ] Tambah supplier baru dan isi Katalog Restock Supplier.
+- [ ] Pilih bahan, isi Link Produk, Tipe Pembelian, Satuan Beli, Qty per Pembelian, Konversi, Harga Barang, Ongkir, Admin, Diskon, dan Catatan.
+- [ ] Pastikan Total Estimasi Supplier, Total Stok dari Konversi, dan Harga Estimasi Supplier / Satuan Stok terhitung otomatis.
+- [ ] Simpan Supplier dan buka detail supplier.
+- [ ] Pastikan katalog tampil jelas: bahan, link produk, tipe pembelian, satuan/konversi, estimasi harga, dan catatan.
+- [ ] Buka supplier lama yang belum punya field baru dan pastikan tidak error.
+- [ ] Di Purchases, pilih bahan dan supplier tersebut lalu pastikan Link Produk, Satuan Beli, Konversi, dan Harga Supplier Tercatat terisi awal dari katalog.
+- [ ] Pastikan harga aktual, stok, expense, dan saving tetap mengikuti transaksi Purchases saat Simpan.
+- [ ] Pastikan Supplier tidak mengubah Raw Material otomatis dan tombol/logic Sinkronkan Bahan tidak kembali.
+
+## Checklist Purchases Stok Masuk Total
+
+- [ ] Supplier catalog punya `conversionValue = 50` dan satuan stok `pcs`.
+- [ ] Buka Purchases, pilih bahan, lalu pilih supplier tersebut.
+- [ ] Qty Beli = 1 menampilkan Stok Masuk 50 pcs sebagai field utama.
+- [ ] Qty Beli = 5 menampilkan Stok Masuk 250 pcs sebagai field utama.
+- [ ] Konversi Supplier tidak bisa diedit di Purchases.
+- [ ] Perubahan Qty Beli tidak menghapus Supplier, Link Produk Restock, purchaseType, biaya supplier, atau Harga Supplier Tercatat.
+- [ ] Subtotal Barang mengikuti Qty × Harga Barang Supplier selama belum diedit manual.
+- [ ] Total Pembanding Supplier untuk Qty > 1 tidak menggandakan ongkir/admin secara salah; ongkir/admin/diskon default dihitung sebagai komponen katalog, bukan dikali per satuan stok.
+- [ ] Subtotal manual tidak dioverwrite saat Qty berubah lagi.
+- [ ] Supplier tanpa konversi valid menampilkan warning dan tidak bisa disimpan dengan Stok Masuk 0.
+- [ ] Purchase tersimpan menambah stok sesuai Stok Masuk total dan expense tetap mengikuti Total Aktual.
+
+## Checklist Stock Management Inventory Log Final
+- [ ] Buka menu Stock Management / Manajemen Stok.
+- [ ] Pastikan tabel Riwayat Pergerakan Stok urut terbaru ke terlama.
+- [ ] Pastikan kolom generik `Stok` yang kosong/`-` tidak tampil membingungkan.
+- [ ] Jika snapshot stok belum reliable untuk semua log, jangan isi kolom dengan stok saat ini karena itu bukan snapshot audit historis.
+- [ ] Pastikan tabel tetap menampilkan Tanggal, Arah, Sumber, Item, Qty, Referensi Audit, dan Catatan.
+- [ ] Pastikan Catatan tampil ringkas 1-2 baris dan detail panjang tetap bisa dibaca lewat tooltip/hover.
+- [ ] Pastikan membuka halaman Stock Management tidak mengubah stok.
+- [ ] Pastikan submit Penyesuaian Stok tetap melalui panel resmi dan inventory log tetap terbentuk normal.

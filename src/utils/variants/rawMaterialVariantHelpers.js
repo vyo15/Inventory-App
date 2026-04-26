@@ -1,16 +1,30 @@
 import { calculateAvailableStock, toNumber } from '../stock/stockHelpers';
+import {
+  calculateVariantStockTotals,
+  normalizeVariantStockShape,
+} from './variantStockNormalizer';
 
 export const DEFAULT_RAW_MATERIAL_VARIANT = {
   name: '',
   sku: '',
   currentStock: 0,
+  stock: 0,
   reservedStock: 0,
+  availableStock: 0,
   isActive: true,
 };
 
 const safeTrim = (value) => String(value || '').trim();
 const toVariantKey = (value) => safeTrim(value).toLowerCase();
 
+// =====================================================
+// Normalisasi varian Raw Material.
+// ACTIVE: helper ini masih dipakai create/edit Raw Material dan purchase bahan,
+// tetapi bentuk stok final didelegasikan ke variantStockNormalizer agar
+// `variant.stock` selalu sama dengan `variant.currentStock`.
+// CLEANUP: logic lokal hanya menjaga field khusus Raw Material seperti name,
+// sku, variantName, dan variantCode.
+// =====================================================
 export const normalizeRawMaterialVariants = (variants = []) => {
   if (!Array.isArray(variants)) return [];
 
@@ -18,21 +32,27 @@ export const normalizeRawMaterialVariants = (variants = []) => {
     .map((item, index) => {
       const variantName = safeTrim(item?.variantName || item?.name);
       const variantCode = safeTrim(item?.variantCode || item?.sku).toUpperCase();
-      const variantKey =
-        toVariantKey(item?.variantKey) ||
-        toVariantKey(variantCode) ||
-        toVariantKey(variantName) ||
-        `variant-${index}`;
-
-      return {
+      const rawVariant = {
+        ...item,
         name: variantName,
         sku: variantCode,
-        currentStock: toNumber(item?.currentStock || 0),
-        reservedStock: toNumber(item?.reservedStock || 0),
-        isActive: item?.isActive !== false,
         variantName,
         variantCode,
-        variantKey,
+        variantLabel: variantName,
+      };
+      const normalized = normalizeVariantStockShape(rawVariant, {
+        fallbackIndex: index,
+        keyFields: ['variantKey', 'variantCode', 'sku', 'variantName', 'name'],
+        labelFields: ['variantLabel', 'variantName', 'name', 'variantCode', 'sku'],
+      });
+
+      return {
+        ...normalized,
+        name: variantName,
+        sku: variantCode,
+        variantName,
+        variantCode,
+        variantLabel: variantName,
       };
     })
     .filter((item) => item.name);
@@ -44,20 +64,14 @@ export const ensureAtLeastOneRawMaterialVariant = (variants = []) => {
 };
 
 export const calculateRawMaterialVariantTotals = (variants = []) => {
+  // ACTIVE: totals Raw Material memakai helper pusat agar master stock/currentStock
+  // selalu berasal dari varian final yang sudah punya stock, currentStock,
+  // reservedStock, dan availableStock konsisten.
   const normalized = normalizeRawMaterialVariants(variants);
-  const activeVariants = normalized.filter((item) => item.isActive !== false);
-
-  const currentStock = normalized.reduce((sum, item) => sum + toNumber(item.currentStock), 0);
-  const reservedStock = normalized.reduce((sum, item) => sum + toNumber(item.reservedStock), 0);
-
-  return {
-    variants: normalized,
-    currentStock,
-    reservedStock,
-    availableStock: calculateAvailableStock(currentStock, reservedStock),
-    variantCount: normalized.length,
-    activeVariantCount: activeVariants.length,
-  };
+  return calculateVariantStockTotals(normalized, {
+    keyFields: ['variantKey', 'variantCode', 'sku', 'variantName', 'name'],
+    labelFields: ['variantLabel', 'variantName', 'name', 'variantCode', 'sku'],
+  });
 };
 
 export const buildRawMaterialVariantSummary = (item = {}) => {
@@ -139,8 +153,22 @@ export const applyPurchaseToRawMaterial = (
 
     const nextVariants = [...variants];
     const currentVariant = { ...nextVariants[targetIndex] };
-    currentVariant.currentStock = toNumber(currentVariant.currentStock || 0) + normalizedQty;
-    nextVariants[targetIndex] = currentVariant;
+    const nextCurrentStock = toNumber(currentVariant.currentStock || 0) + normalizedQty;
+    // ACTIVE: purchase bahan bervarian harus menulis stock dan currentStock sekaligus.
+    // ALASAN: Reset/Maintenance tidak boleh menjadi flow harian hanya karena
+    // varian hasil purchase kehilangan alias stock kompatibilitas lama.
+    nextVariants[targetIndex] = normalizeVariantStockShape(
+      {
+        ...currentVariant,
+        currentStock: nextCurrentStock,
+        stock: nextCurrentStock,
+      },
+      {
+        fallbackIndex: targetIndex,
+        keyFields: ['variantKey', 'variantCode', 'sku', 'variantName', 'name'],
+        labelFields: ['variantLabel', 'variantName', 'name', 'variantCode', 'sku'],
+      },
+    );
 
     const previousTotalStock = variants.reduce((sum, item) => sum + toNumber(item.currentStock || 0), 0);
     const nextTotalStock = previousTotalStock + normalizedQty;

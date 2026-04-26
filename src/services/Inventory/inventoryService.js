@@ -4,6 +4,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit as firestoreLimit,
   orderBy,
   query,
   updateDoc,
@@ -24,17 +25,23 @@ import {
 // =========================
 // SECTION: Ambil riwayat log inventaris
 // Fungsi:
-// - membaca audit trail mutasi stok dari Firestore
-// - dipakai oleh halaman Stock Management untuk menampilkan riwayat stok lintas modul
+// - membaca audit trail mutasi stok dari Firestore dengan urutan terbaru;
+// - membatasi jumlah dokumen agar Stock Management tidak membaca seluruh log saat data real membesar.
+// Hubungan flow:
+// - hanya untuk tampilan audit log; tidak mengubah stok dan tidak membuat mutasi baru.
 // Status:
-// - aktif dipakai; bukan legacy
+// - aktif dipakai; limit adalah guard performa, bukan perubahan business rule.
 // =========================
-export const getInventoryLogs = async () => {
+const DEFAULT_INVENTORY_LOG_LIMIT = 300;
+
+export const getInventoryLogs = async ({ limit = DEFAULT_INVENTORY_LOG_LIMIT } = {}) => {
   try {
+    const normalizedLimit = Math.max(1, Number(limit || DEFAULT_INVENTORY_LOG_LIMIT));
     const inventoryLogsCollection = collection(db, INVENTORY_LOG_COLLECTION);
     const inventoryLogsQuery = query(
       inventoryLogsCollection,
       orderBy("timestamp", "desc"),
+      firestoreLimit(normalizedLimit),
     );
 
     const inventoryLogsSnapshot = await getDocs(inventoryLogsQuery);

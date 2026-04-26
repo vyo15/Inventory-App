@@ -19,6 +19,17 @@ const ITEM_COLLECTION_LABELS = {
   products: "Produk Jadi",
 };
 
+// =========================
+// SECTION: Batas baca inventory log
+// Fungsi:
+// - membatasi jumlah log yang dibaca untuk tabel riwayat agar halaman tetap ringan.
+// Hubungan flow:
+// - hanya tampilan audit; stok tetap berubah hanya lewat flow resmi atau submit adjustment.
+// Status:
+// - aktif dipakai; jika butuh riwayat penuh, nanti dibuat pagination khusus.
+// =========================
+const INVENTORY_LOG_TABLE_LIMIT = 300;
+
 const STOCK_LOG_SOURCE_META = {
   purchase: { label: "Pembelian", color: "blue" },
   sales: { label: "Penjualan", color: "volcano" },
@@ -218,41 +229,34 @@ const resolveNoteText = (record) =>
   "-";
 
 // =========================
-// SECTION: Helper stok sebelum/sesudah untuk audit log
+// SECTION: Keputusan kolom stok snapshot legacy
 // Fungsi:
-// - membaca currentStockBefore/currentStockAfter dan availableStockBefore/availableStockAfter dari schema baru
-// - fallback aman untuk log lama yang belum menyimpan detail stok
+// - mendokumentasikan kenapa tabel riwayat tidak lagi menampilkan kolom "Stok" generik
 // Hubungan flow:
-// - membuat log adjustment lebih mudah diaudit setelah mutasi memakai updateInventoryStock()
+// - inventory_logs lama dan sebagian writer lintas modul belum selalu punya snapshot before/after yang lengkap
+// - menampilkan stok saat ini sebagai pengganti akan menyesatkan audit historis
 // Status:
-// - aktif/final untuk reader; fallback kosong adalah kompatibilitas legacy
+// - aktif sebagai guard UI; kandidat cleanup jika semua writer inventory log sudah menyimpan snapshot stok reliable
 // =========================
-const resolveStockLevelLines = (record) => {
-  const currentStockBefore = readLogField(record, "currentStockBefore", null);
-  const currentStockAfter =
-    readLogField(record, "currentStockAfter", null) ?? readLogField(record, "newStock", null);
-  const availableStockBefore = readLogField(record, "availableStockBefore", null);
-  const availableStockAfter = readLogField(record, "availableStockAfter", null);
+const STOCK_SNAPSHOT_COLUMN_NOTE =
+  "Snapshot stok tidak ditampilkan sebagai kolom utama karena tidak semua log lama menyimpan before/after yang reliable.";
 
-  const lines = [];
-
-  if (currentStockBefore !== null || currentStockAfter !== null) {
-    lines.push(
-      `Current: ${formatNumberId(currentStockBefore || 0)} -> ${formatNumberId(
-        currentStockAfter || 0,
-      )}`,
-    );
-  }
-
-  if (availableStockBefore !== null || availableStockAfter !== null) {
-    lines.push(
-      `Available: ${formatNumberId(availableStockBefore || 0)} -> ${formatNumberId(
-        availableStockAfter || 0,
-      )}`,
-    );
-  }
-
-  return lines;
+// =========================
+// SECTION: Style ringkas catatan inventory log
+// Fungsi:
+// - menjaga kolom Catatan tetap terbaca 1-2 baris tanpa membuat row table terlalu tinggi
+// Hubungan flow:
+// - Stock Management tetap menjadi audit log operasional, bukan halaman detail panjang
+// Status:
+// - aktif dipakai di tabel riwayat; bukan legacy
+// =========================
+const NOTE_PREVIEW_STYLE = {
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+  whiteSpace: "normal",
+  lineHeight: 1.35,
 };
 
 const matchesKeyword = (record, keyword) => {
@@ -269,7 +273,6 @@ const matchesKeyword = (record, keyword) => {
     readLogField(record, "referenceId"),
     readLogField(record, "referenceType"),
     ...(resolveReferenceItems(record).map((item) => item.searchText) || []),
-    ...(resolveStockLevelLines(record) || []),
   ]
     .filter(Boolean)
     .join(" ")
@@ -297,16 +300,16 @@ const StockManagement = () => {
   // =========================
   // SECTION: Load inventory logs
   // Fungsi:
-  // - membaca collection inventory_logs via service inventory
+  // - membaca collection inventory_logs via service inventory dengan limit performa
   // Hubungan flow:
-  // - service tetap menjadi source pembacaan; page hanya presenter/filter
+  // - service tetap menjadi source pembacaan; page hanya presenter/filter dan tidak melakukan write
   // Status:
-  // - aktif dipakai
+  // - aktif dipakai; limit ini bukan mutation dan bukan perubahan business rule
   // =========================
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const data = await getInventoryLogs();
+      const data = await getInventoryLogs({ limit: INVENTORY_LOG_TABLE_LIMIT });
       setHistory(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error(error);
@@ -337,7 +340,6 @@ const StockManagement = () => {
         itemTypeLabel: resolveItemTypeLabel(record.collectionName),
         variantLabelResolved: resolveVariantLabel(record),
         referenceItems: resolveReferenceItems(record),
-        stockLevelLines: resolveStockLevelLines(record),
         noteText: resolveNoteText(record),
       }))
       .sort((left, right) => {
@@ -475,23 +477,15 @@ const StockManagement = () => {
           </Text>
         ),
       },
-      {
-        title: "Stok",
-        key: "stockLevels",
-        width: 190,
-        render: (_, record) =>
-          Array.isArray(record.stockLevelLines) && record.stockLevelLines.length > 0 ? (
-            <Space direction="vertical" size={2}>
-              {record.stockLevelLines.map((line) => (
-                <Text key={line} type="secondary" style={{ fontSize: 12 }}>
-                  {line}
-                </Text>
-              ))}
-            </Space>
-          ) : (
-            <Text type="secondary">-</Text>
-          ),
-      },
+      // =========================
+      // SECTION: Kolom stok snapshot legacy dinonaktifkan
+      // Fungsi:
+      // - tabel tidak lagi menampilkan kolom "Stok" generik yang sering kosong/"-"
+      // Alasan:
+      // - tidak semua inventory_logs punya snapshot before/after yang reliable; menampilkan stok saat ini akan misleading
+      // Status:
+      // - aktif sebagai keputusan UI; jika semua writer log sudah konsisten, kolom bisa dibuat ulang sebagai "Stok Setelah"
+      // =========================
       {
         title: "Referensi Audit",
         key: "reference",
@@ -524,7 +518,12 @@ const StockManagement = () => {
       {
         title: "Catatan",
         key: "note",
-        render: (_, record) => <Text>{record.noteText}</Text>,
+        width: 280,
+        render: (_, record) => (
+          <Tooltip title={record.noteText && record.noteText !== "-" ? record.noteText : ""}>
+            <Text style={NOTE_PREVIEW_STYLE}>{record.noteText}</Text>
+          </Tooltip>
+        ),
       },
     ],
     [],
@@ -598,7 +597,7 @@ const StockManagement = () => {
 
       <PageSection
         title="Tabel Riwayat Pergerakan Stok"
-        subtitle="Tabel fokus pada audit operasional. Kolom Referensi Audit menampilkan label bisnis, sementara ID teknis hanya menjadi detail kecil untuk penelusuran."
+        subtitle={`Tabel fokus pada audit operasional. Kolom Referensi Audit menampilkan label bisnis, sementara ID teknis hanya menjadi detail kecil. ${STOCK_SNAPSHOT_COLUMN_NOTE}`}
         extra={<Tag color="purple">{formatNumberId(filteredHistory.length)} baris</Tag>}
       >
         <Table

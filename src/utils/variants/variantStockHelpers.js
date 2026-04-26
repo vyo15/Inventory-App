@@ -1,4 +1,9 @@
 import { calculateAvailableStock, toNumber } from '../stock/stockHelpers';
+import {
+  calculateVariantStockTotals,
+  normalizeVariantStockList,
+  normalizeVariantStockShape,
+} from './variantStockNormalizer';
 
 // =====================================================
 // Helper trim aman untuk semua field identitas.
@@ -94,10 +99,9 @@ const buildVariantLookupTokens = (variant = {}) => {
 
 // =====================================================
 // Normalisasi daftar varian item.
-// Catatan maintainability:
-// - tetap baca field stock lama jika currentStock belum ada
-// - availableStock selalu dihitung ulang agar konsisten
-// - hanya varian yang punya label valid yang dipertahankan
+// ACTIVE: helper ini masih dipakai oleh import lama di transaksi, produksi,
+// dan adjustment, tetapi bentuk stok final sekarang didelegasikan ke
+// variantStockNormalizer agar stock/currentStock tidak bercabang.
 // =====================================================
 export const normalizeItemVariants = (item = {}) => {
   const rawVariants = Array.isArray(item?.variants)
@@ -108,24 +112,9 @@ export const normalizeItemVariants = (item = {}) => {
 
   if (!Array.isArray(rawVariants)) return [];
 
-  return rawVariants
-    .map((variant, index) => {
-      const variantKey = getVariantKey(variant) || `variant-${index}`;
-      const variantLabel = getVariantLabel(variant) || variantKey;
-      const currentStock = toNumber(variant.currentStock ?? variant.stock ?? 0);
-      const reservedStock = toNumber(variant.reservedStock || 0);
-
-      return {
-        ...variant,
-        variantKey,
-        variantLabel,
-        currentStock,
-        reservedStock,
-        availableStock: calculateAvailableStock(currentStock, reservedStock),
-        isActive: variant?.isActive !== false,
-      };
-    })
-    .filter((variant) => safeTrim(variant.variantLabel));
+  return normalizeVariantStockList(rawVariants, {
+    filterEmptyLabel: true,
+  });
 };
 
 export const buildVariantOptionsFromItem = (item = {}) =>
@@ -393,9 +382,9 @@ export const applyStockMutationToItem = ({
   const normalizedVariantKey = safeTrim(variantKey).toLowerCase();
 
   if (hasVariants && normalizedVariantKey) {
-    const variants = normalizeItemVariants(item).map((variant) => {
+    const variants = normalizeItemVariants(item).map((variant, index) => {
       if (safeTrim(variant.variantKey).toLowerCase() !== normalizedVariantKey) {
-        return variant;
+        return normalizeVariantStockShape(variant, { fallbackIndex: index });
       }
 
       const nextCurrentStock = toNumber(variant.currentStock || 0) + currentDelta;
@@ -404,29 +393,28 @@ export const applyStockMutationToItem = ({
         0,
       );
 
-      return {
-        ...variant,
-        currentStock: nextCurrentStock,
-        reservedStock: nextReservedStock,
-        availableStock: calculateAvailableStock(nextCurrentStock, nextReservedStock),
-      };
+      // ACTIVE: mutasi stok varian wajib menulis stock dan currentStock sekaligus.
+      // ALASAN: helper ini dipakai purchase, sales, return, adjustment, dan produksi,
+      // sehingga hasilnya harus langsung lolos audit tanpa perlu Reset/Maintenance.
+      return normalizeVariantStockShape(
+        {
+          ...variant,
+          currentStock: nextCurrentStock,
+          stock: nextCurrentStock,
+          reservedStock: nextReservedStock,
+        },
+        { fallbackIndex: index },
+      );
     });
 
-    const totalCurrentStock = variants.reduce(
-      (sum, variant) => sum + toNumber(variant.currentStock || 0),
-      0,
-    );
-    const totalReservedStock = variants.reduce(
-      (sum, variant) => sum + toNumber(variant.reservedStock || 0),
-      0,
-    );
+    const totals = calculateVariantStockTotals(variants);
 
     return {
-      variants,
-      currentStock: totalCurrentStock,
-      reservedStock: totalReservedStock,
-      availableStock: calculateAvailableStock(totalCurrentStock, totalReservedStock),
-      stock: totalCurrentStock,
+      variants: totals.variants,
+      currentStock: totals.currentStock,
+      reservedStock: totals.reservedStock,
+      availableStock: totals.availableStock,
+      stock: totals.stock,
     };
   }
 

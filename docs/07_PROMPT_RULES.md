@@ -230,3 +230,54 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Purchases prefill dari query tidak boleh mengubah rumus `actualUnitCost`, `restockReferencePrice`, saving, expense, atau stok.
 - Jangan tampilkan semua supplier di Dashboard atau Detail Raw Material; semua perbandingan supplier tetap di menu Supplier.
 - Jangan mengembalikan tombol/logic “Sinkronkan Bahan” atau pemasangan supplier otomatis berdasarkan `materialDetails`.
+
+## Guard Stok Varian Final
+
+- Jangan membuat normalisasi stok varian baru yang tidak memakai `variantStockNormalizer`.
+- Jangan menghapus field `stock` atau `currentStock`; keduanya wajib dipertahankan untuk kompatibilitas.
+- Jangan melemahkan audit Reset/Maintenance agar mismatch terlihat OK.
+- Jangan membuat inventory log hanya untuk normalisasi field turunan stok.
+- Jika task menyentuh writer varian, pastikan output variant punya `stock`, `currentStock`, `reservedStock`, `availableStock`, `variantKey`, dan `isActive`.
+- Jika task menyentuh master item bervarian, pastikan master `stock === currentStock` berdasarkan total varian.
+
+## Guard Reset & Maintenance Aman
+
+- Jangan menambahkan `supplierPurchases` ke reset default atau reset transaksi.
+- Supplier adalah protected master data; reset Supplier harus task destructive khusus dengan preview dan konfirmasi eksplisit.
+- Jangan membuat Hapus Data Test menghapus dokumen tanpa marker `isTestData=true`, `sourceModule=dev_test_seed`, dan `createdBy=dev_seed`.
+- Jangan memakai Reset/Maintenance sebagai flow harian user.
+- Jangan mengubah flow Supplier, Raw Material, Purchases, stok, produksi, payroll, HPP, dashboard, atau reports saat task hanya mengamankan reset.
+
+## Guard Purchases Supplier Restock Prefill
+
+- Jika task menyentuh Purchases, Link Produk boleh diprefill dari Supplier `materialDetails`, tetapi tidak boleh membuat purchase otomatis.
+- Harga Supplier Tercatat dari Supplier hanya pembanding; jangan jadikan sebagai harga aktual pembelian atau `actualUnitCost`.
+- Jangan mengubah rumus `totalStockIn = Qty Beli × Konversi Supplier` untuk bahan baku.
+- Total Pembanding Supplier harus memakai komponen katalog supplier agar ongkir/admin/diskon default tidak otomatis dikali per satuan stok saat Qty Beli lebih dari 1.
+- Jangan fallback diam-diam ke semua supplier saat bahan baku sudah dipilih; tampilkan empty state jika belum ada supplier relevan.
+- Jangan mengembalikan auto-sync Supplier ke Raw Material dan jangan menulis `raw_materials` dari form Supplier/Purchases.
+
+## Guard Katalog Restock Supplier
+
+- Jangan mengembalikan field Kategori/Keterangan Supplier sebagai input utama jika task membahas restock supplier.
+- Supplier `materialDetails` boleh menyimpan konteks satuan/konversi/estimasi biaya, tetapi tidak boleh menjadi transaksi pembelian.
+- Harga Estimasi Supplier / Satuan Stok hanya pembanding; jangan pakai sebagai harga aktual pembelian atau `actualUnitCost`.
+- Purchases boleh prefill dari Supplier, tetapi user tetap harus mengisi dan menyimpan transaksi aktual sendiri.
+- Jangan menulis `raw_materials`, stok, kas, expense, atau laporan dari menu Supplier.
+
+## Guard Purchases Stok Masuk Total
+
+- Jika task menyentuh form Purchases, tampilkan Stok Masuk total sebagai informasi utama: `Qty Beli × Konversi Supplier`.
+- Jangan mengembalikan Konversi ke Stok sebagai input utama/editable di Purchases.
+- Jangan membuat perubahan Qty Beli memicu reset item/supplier/link/purchaseType/harga pembanding.
+- Jangan menghapus guard manual subtotal; harga barang supplier hanya default, bukan pemaksa harga aktual.
+- Jangan membuat shipping tier / ongkir bertingkat tanpa task khusus; ongkir, voucher, diskon ongkir, dan biaya layanan aktual tetap editable di Purchases.
+- Reject/selisih barang harus diarahkan ke Penyesuaian Stok, bukan edit konversi di Purchases.
+
+## Guard Stock Management Inventory Log
+- Stock Management adalah halaman audit log + Penyesuaian Stok dalam satu konteks; membuka halaman tidak boleh membuat mutasi stok.
+- Jangan menampilkan kolom generik `Stok` jika data snapshot before/after tidak reliable untuk semua inventory log.
+- Jangan mengisi kolom stok audit dengan stok saat ini karena itu menyesatkan untuk riwayat historis.
+- Jika semua writer inventory log nanti sudah menyimpan snapshot yang konsisten, kolom boleh dibuat ulang dengan label eksplisit seperti `Stok Setelah` atau `Stok Sebelum/Sesudah`.
+- Kolom Catatan di tabel inventory log harus ringkas; catatan panjang boleh dipotong/ellipsis, bukan membuat row terlalu tinggi.
+- Jangan mengubah `updateInventoryStock`, `variantStockNormalizer`, atau submit Stock Adjustment hanya untuk merapikan tabel riwayat.

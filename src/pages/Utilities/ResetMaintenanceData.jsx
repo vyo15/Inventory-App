@@ -53,6 +53,8 @@ import {
 import {
   DEFAULT_RESET_MODULES,
   RESET_MODE_OPTIONS,
+  deleteDevTestData,
+  getDevTestDataPreview,
   getResetPreview,
   runResetDataTest,
   saveCurrentStockAsTestingBaseline,
@@ -98,6 +100,9 @@ const ResetMaintenanceData = () => {
   const [preview, setPreview] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [loadingRun, setLoadingRun] = useState(false);
+  const [testDataPreview, setTestDataPreview] = useState(null);
+  const [loadingTestDataPreview, setLoadingTestDataPreview] = useState(false);
+  const [loadingDeleteTestData, setLoadingDeleteTestData] = useState(false);
   const [loadingBaseline, setLoadingBaseline] = useState(false);
   const [loadingSync, setLoadingSync] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -207,12 +212,64 @@ const ResetMaintenanceData = () => {
   }, [mode, selectedModules]);
 
   // ---------------------------------------------------------------------------
+  // Preview data test bermarker.
+  // ACTIVE / DEV TOOL: hanya membaca dokumen dengan marker dev_test_seed, bukan
+  // data normal dan bukan master Supplier. Dipakai agar development/testing bisa
+  // dibersihkan tanpa merusak master penting.
+  // ---------------------------------------------------------------------------
+  const loadDevTestDataPreview = useCallback(async (showSuccessMessage = false) => {
+    try {
+      setLoadingTestDataPreview(true);
+      const result = await getDevTestDataPreview();
+      setTestDataPreview(result);
+      if (showSuccessMessage) {
+        message.success("Preview data test berhasil dimuat.");
+      }
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal memuat preview data test.");
+    } finally {
+      setLoadingTestDataPreview(false);
+    }
+  }, []);
+
+  // ---------------------------------------------------------------------------
   // Auto-preview membuat halaman reset terasa hidup dan cocok untuk trial-error.
   // User tidak wajib klik preview terus setiap kali mengganti mode atau modul.
   // ---------------------------------------------------------------------------
   useEffect(() => {
     loadPreview(false);
   }, [loadPreview]);
+
+  useEffect(() => {
+    loadDevTestDataPreview(false);
+  }, [loadDevTestDataPreview]);
+
+  const handleDeleteDevTestData = async () => {
+    try {
+      setLoadingDeleteTestData(true);
+      const result = await deleteDevTestData();
+      await createMaintenanceLog({
+        actionType: "delete_dev_test_data",
+        mode: "test_data_cleanup",
+        modules: ["dev_test_seed"],
+        summary: { totalDeletedRecords: result?.totalDeletedRecords || 0 },
+        affectedCollections: (result?.deletedCollections || []).map((item) => item.label || item.key),
+        affectedCount: result?.totalDeletedRecords || 0,
+        dryRun: false,
+        note: "Hapus Data Test hanya menghapus dokumen bermarker isTestData/dev_test_seed/dev_seed. Supplier protected tidak ikut target default.",
+      });
+      message.success(result?.message || "Data test berhasil dibersihkan.");
+      await loadDevTestDataPreview(false);
+      await loadPreview(false);
+      await loadMaintenanceLogs();
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menghapus data test.");
+    } finally {
+      setLoadingDeleteTestData(false);
+    }
+  };
 
   const handleSaveBaseline = async () => {
     try {
@@ -644,6 +701,7 @@ const ResetMaintenanceData = () => {
       setConfirmOpen(false);
       confirmForm.resetFields();
       await loadPreview(false);
+      await loadDevTestDataPreview(false);
       await handleLoadProductionMaintenanceAudit();
       await loadMaintenanceLogs();
     } catch (error) {
@@ -656,15 +714,37 @@ const ResetMaintenanceData = () => {
   };
 
   const previewRows = useMemo(() => {
-    if (!preview?.collections) return [];
-    return preview.collections.map((item) => ({
+    if (!preview) return [];
+
+    const deleteRows = (preview.collections || []).map((item) => ({
       key: item.targetKey || item.key,
       moduleLabel: item.moduleLabel,
       name: item.scopeLabel ? `${item.label} (${item.scopeLabel})` : item.label,
       count: item.count,
       action: item.action,
+      status: "delete",
     }));
+
+    const protectedRows = (preview.protectedCollections || []).map((item) => ({
+      key: `protected::${item.key}`,
+      moduleLabel: item.moduleLabel || "Master Dilindungi",
+      name: item.label || item.name || item.key,
+      count: item.count,
+      action: item.reason || item.action || "Dilindungi dari reset default",
+      status: "protected",
+    }));
+
+    return [...deleteRows, ...protectedRows];
   }, [preview]);
+
+  const testDataRows = useMemo(() => (testDataPreview?.collections || []).map((item) => ({
+    key: item.key,
+    moduleLabel: item.moduleLabel,
+    name: item.label || item.key,
+    count: item.count,
+    action: item.action,
+    status: item.status,
+  })), [testDataPreview]);
 
   const maintenanceRows = useMemo(() => maintenanceAudit?.rows || [], [maintenanceAudit]);
   const stockMaintenanceRows = useMemo(() => stockAudit?.rows || [], [stockAudit]);
@@ -708,6 +788,13 @@ const ResetMaintenanceData = () => {
             showIcon
             message="Pisahkan Maintenance dan Reset"
             description="Maintenance tidak menghapus data dan tidak posting stok ulang. Reset bersifat destructive dan tetap wajib melalui preview serta konfirmasi RESET."
+          />
+
+          <Alert
+            type="success"
+            showIcon
+            message="Supplier dilindungi dari reset default"
+            description="Collection supplierPurchases adalah master Supplier/vendor restock. Reset transaksi/testing tidak menghapus Supplier secara default agar Raw Material dan Purchases tetap punya referensi vendor."
           />
 
           <Card
@@ -1256,7 +1343,16 @@ const ResetMaintenanceData = () => {
             </Col>
             <Col xs={24} md={6}>
               <Card size="small">
-                <Statistic title="Data Terdeteksi" value={preview?.totalRecords || 0} />
+                <Statistic title="Data Akan Dihapus" value={preview?.totalRecords || 0} />
+              </Card>
+            </Col>
+            <Col xs={24} md={6}>
+              <Card size="small">
+                <Statistic
+                  title="Master Dilindungi"
+                  value={preview?.protectedRecords || 0}
+                  valueStyle={{ fontSize: 20 }}
+                />
               </Card>
             </Col>
             <Col xs={24} md={6}>
@@ -1281,6 +1377,7 @@ const ResetMaintenanceData = () => {
               <Text>• Gunakan <Text strong>Reset + Baseline Testing</Text> untuk uji berulang yang konsisten.</Text>
               <Text>• Jalankan <Text strong>Cek Stok Umum</Text> sebelum Sinkronkan Stok agar mismatch stok bisa direview dulu.</Text>
               <Text>• Reset Sales/Purchases memakai scope income/expense terkait agar tidak membersihkan kas lintas modul secara diam-diam.</Text>
+              <Text>• Supplier/vendor restock dilindungi dari reset default. Jika perlu reset Supplier, buat task developer destructive terpisah dengan konfirmasi khusus.</Text>
               <Text>• Gunakan <Text strong>Cek Data Legacy</Text> sebelum cleanup file/logic berikutnya agar orphan log dan transaksi lama punya status jelas.</Text>
             </Space>
           </Card>
@@ -1304,6 +1401,13 @@ const ResetMaintenanceData = () => {
                 { title: "Koleksi / Scope", dataIndex: "name", key: "name" },
                 { title: "Jumlah Data", dataIndex: "count", key: "count", width: 140 },
                 {
+                  title: "Status",
+                  dataIndex: "status",
+                  key: "status",
+                  width: 150,
+                  render: (value) => value === "protected" ? <Tag color="green">Dilindungi</Tag> : <Tag color="red">Akan Dihapus</Tag>,
+                },
+                {
                   title: "Aksi Reset",
                   dataIndex: "action",
                   key: "action",
@@ -1311,9 +1415,57 @@ const ResetMaintenanceData = () => {
                   render: (value) => <Tag>{value}</Tag>,
                 },
               ]}
-              scroll={{ x: 820 }}
+              scroll={{ x: 980 }}
               locale={{ emptyText: "Tidak ada modul aktif atau belum ada data yang cocok untuk reset." }}
             />
+          </Card>
+
+          <Card title="Data Test Aman" size="small" extra={<Tag color="cyan">dev_test_seed</Tag>}>
+            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              <Alert
+                type="info"
+                showIcon
+                message="Hapus hanya data test bermarker"
+                description="Fitur ini hanya menghapus dokumen dengan isTestData=true, sourceModule=dev_test_seed, dan createdBy=dev_seed. Data normal dan Supplier protected tidak menjadi target default."
+              />
+
+              <Row gutter={[12, 12]}>
+                <Col xs={24} md={12}>
+                  <Button block icon={<EyeOutlined />} onClick={() => loadDevTestDataPreview(true)} loading={loadingTestDataPreview}>
+                    Refresh Preview Data Test
+                  </Button>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Popconfirm
+                    title="Hapus data test bermarker?"
+                    description="Hanya dokumen bermarker dev_test_seed yang dihapus. Supplier protected dan data normal tidak tersentuh."
+                    okText="Ya, Hapus Data Test"
+                    cancelText="Batal"
+                    onConfirm={handleDeleteDevTestData}
+                  >
+                    <Button block danger icon={<DeleteOutlined />} loading={loadingDeleteTestData}>
+                      Hapus Data Test Saja
+                    </Button>
+                  </Popconfirm>
+                </Col>
+              </Row>
+
+              <Table
+                className="app-data-table"
+                size="small"
+                loading={loadingTestDataPreview || loadingDeleteTestData}
+                pagination={false}
+                dataSource={testDataRows}
+                columns={[
+                  { title: "Collection", dataIndex: "name", key: "name" },
+                  { title: "Data Test", dataIndex: "count", key: "count", width: 140 },
+                  { title: "Marker", dataIndex: "status", key: "status", width: 160, render: () => <Tag color="cyan">dev_test_seed</Tag> },
+                  { title: "Aksi", dataIndex: "action", key: "action", width: 320, render: (value) => <Tag>{value}</Tag> },
+                ]}
+                scroll={{ x: 920 }}
+                locale={{ emptyText: "Belum ada data test bermarker dev_test_seed." }}
+              />
+            </Space>
           </Card>
 
           <Card title="Riwayat Maintenance & Reset" size="small" extra={<Tag color="green">Audit Trail</Tag>}>
@@ -1365,7 +1517,7 @@ const ResetMaintenanceData = () => {
             showIcon
             icon={<WarningOutlined />}
             message="Reset akan dijalankan pada data testing"
-            description="Pastikan preview sudah sesuai. Reset ini benar-benar menghapus data pada modul/scope yang dipilih. Gunakan Maintenance jika hanya ingin repair field turunan."
+            description="Pastikan preview sudah sesuai. Reset ini menghapus data pada modul/scope yang dipilih, tetapi Supplier/master protected tidak ikut reset default. Gunakan Maintenance jika hanya ingin repair field turunan."
           />
 
           <div>

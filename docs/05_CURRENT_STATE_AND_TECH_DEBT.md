@@ -317,3 +317,84 @@ Guard tersisa:
 - data purchase lama mungkin belum memiliki `productLink`, sehingga tombol link produk tidak selalu tampil;
 - action Dashboard tidak boleh berubah menjadi auto-purchase atau auto-expense;
 - link toko supplier hanya fallback informasi, bukan link produk utama restock.
+
+## Update Stok Varian - Helper Pusat
+
+Status terkini:
+- logic bentuk final stok varian dipusatkan di `src/utils/variants/variantStockNormalizer.js`;
+- helper lama Raw Material, Product/Semi, dan mutasi stok umum tetap ada untuk compatibility import, tetapi stok finalnya didelegasikan ke helper pusat;
+- standar final: `variant.stock === variant.currentStock` dan master `stock === currentStock`;
+- Reset/Maintenance tetap dipakai sebagai audit/repair data lama, bukan solusi flow harian.
+
+Risiko tersisa:
+- data lama yang sudah telanjur mismatch masih perlu repair satu kali;
+- flow baru setelah patch harus diuji lewat edit varian, purchase, adjustment, sales/return, dan produksi agar mismatch tidak muncul lagi.
+
+## Reset & Maintenance - Supplier Protected
+
+Status terkini:
+- collection `supplierPurchases` sudah diperlakukan sebagai protected master data;
+- reset transaksi/default tidak lagi menargetkan Supplier;
+- preview reset menampilkan master protected agar developer tahu Supplier tidak ikut dihapus;
+- fitur Hapus Data Test Saja hanya menghapus dokumen bermarker `isTestData=true`, `sourceModule=dev_test_seed`, dan `createdBy=dev_seed`.
+
+Risiko tersisa:
+- jika suatu saat diperlukan reset Supplier, harus dibuat task destructive khusus dengan konfirmasi terpisah;
+- seed test transaksi masih perlu task khusus jika ingin dibuat otomatis, karena seed yang mengubah stok/kas harus mengikuti flow Purchases/Sales resmi.
+
+## Purchases - Supplier Restock Prefill
+
+Status source terbaru:
+- Purchases membaca supplier dari katalog `supplierPurchases`.
+- Untuk pembelian bahan baku, dropdown Supplier difilter berdasarkan `supportedMaterialIds` atau `materialDetails[].materialId`.
+- Setelah supplier dipilih, Link Produk dan Harga Supplier Tercatat diprefill dari `materialDetails` supplier yang cocok dengan bahan tersebut.
+- Harga Supplier Tercatat bersifat read-only di Purchases dan hanya dipakai sebagai pembanding efisiensi.
+- Harga aktual, `actualUnitCost`, stock mutation, expense, dan saving tetap mengikuti flow transaksi Purchases existing.
+
+Tech debt yang tetap perlu dijaga:
+- Data supplier lama mungkin belum memiliki `materialDetails`, `productLink`, atau `referencePrice`.
+- UI harus tetap aman ketika tidak ada supplier relevan atau harga/link supplier kosong.
+- Jangan mengembalikan auto-sync Supplier ke Raw Material.
+
+## Supplier - Katalog Restock Lebih Lengkap
+
+Status source terbaru:
+- Menu Supplier difokuskan sebagai katalog vendor/restock dan pembanding harga.
+- Field kategori/keterangan supplier lama tidak lagi menjadi input utama UI, tetapi data lama tetap aman dibaca sebagai legacy.
+- `materialDetails` supplier kini mendukung konteks satuan dan biaya estimasi: tipe pembelian, satuan beli, qty per pembelian, konversi ke satuan stok, harga barang, ongkir, biaya admin, diskon, total estimasi, dan harga estimasi per satuan stok.
+- Purchases membaca katalog ini secara read-only untuk prefill Link Produk, Satuan Beli, Konversi, dan Harga Supplier Tercatat.
+
+Tech debt / guard:
+- Data supplier lama mungkin hanya memiliki `productLink` dan `referencePrice`; UI dan helper harus tetap null-safe.
+- Perbandingan dengan Purchases terakhir di Supplier bersifat read-only dan tidak boleh membuat purchase otomatis.
+- Harga supplier tetap estimasi/pembanding; harga aktual tetap dari Purchases.
+
+## Purchases - Stok Masuk Total dan Pembanding Supplier
+
+Status source terbaru:
+- Form Purchases menampilkan Stok Masuk total sebagai field utama pada area jumlah barang.
+- Konversi ke Stok tetap disimpan di form sebagai data read-only dari katalog Supplier dan dipakai untuk hitung `totalStockIn`.
+- Effect item/type change tidak boleh bergantung pada Qty Beli agar perubahan Qty tidak mereset Supplier, Link Produk, purchaseType, atau Harga Supplier Tercatat.
+- Total Pembanding Supplier memakai komponen katalog supplier agar ongkir/admin/diskon default tidak terlihat ikut dikali per satuan stok saat Qty Beli lebih dari 1.
+
+Guard tersisa:
+- Supplier lama yang belum punya `conversionValue` harus memunculkan warning dan tidak boleh menghasilkan purchase dengan Stok Masuk 0.
+- Jangan membuat input konversi manual di Purchases; koreksi reject/selisih tetap lewat Penyesuaian Stok.
+- Jangan membuat shipping tier / ongkir bertingkat di Purchases; ongkir, voucher, diskon ongkir, dan biaya layanan aktual tetap editable saat checkout.
+
+## Update UI/Performance Ringan - 2026-04-26
+
+### Supplier table cleanup
+- Tabel utama Supplier dirapikan agar tidak bergantung pada horizontal scroll paksa untuk membuka tombol aksi.
+- Kolom aksi Supplier tidak boleh memakai fixed/sticky right jika membuat efek transparan atau menumpuk.
+- Detail katalog restock lengkap tetap berada di drawer Detail Supplier; tabel utama hanya menampilkan ringkasan katalog, paket/konversi, tipe, dan harga estimasi.
+- Flow Supplier tetap reference-only: tidak membuat purchase, tidak mengubah stok/kas, dan tidak memasang Supplier ke Raw Material berdasarkan `materialDetails`.
+
+### Inventory log read limit
+- Stock Management membaca riwayat `inventory_logs` terbaru dengan limit performa agar halaman tetap ringan saat data real bertambah.
+- Riwayat stok tetap audit log read-only; membuka Stock Management tidak boleh mengubah stok.
+- Jika kebutuhan audit penuh dibutuhkan, buat pagination/arsip log sebagai task terpisah, bukan membaca seluruh collection sekaligus.
+
+### Performance tech debt yang masih terbuka
+- Lookup purchase terakhir di Raw Material/Supplier/Dashboard masih perlu desain query/index atau read model agar tidak bergantung pada full collection read saat data sudah besar.
+- Dashboard summary masih kandidat optimasi range/limit per collection, tetapi tidak boleh mengubah angka summary tanpa regression test.

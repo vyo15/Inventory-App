@@ -498,3 +498,56 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Supplier terakhir dibeli dan link produk terakhir wajib berasal dari transaksi Purchases terakhir untuk bahan tersebut.
 - Jika belum ada purchase/link produk, UI harus menampilkan fallback/empty state aman dan tidak boleh memakai link toko supplier sebagai link produk utama.
 - Menu Supplier tetap menjadi tempat melihat semua supplier, harga referensi, link produk katalog, dan catatan supplier.
+
+## 15. Rule Final Stok Varian
+
+- `currentStock` adalah stok utama yang dipakai per varian.
+- `stock` tetap wajib disimpan sebagai alias kompatibilitas dan nilainya harus sama dengan `currentStock`.
+- `reservedStock` wajib angka aman dan tidak boleh membuat available negatif.
+- `availableStock` wajib dihitung dari `currentStock - reservedStock` dengan batas minimum 0.
+- Semua writer varian wajib memakai helper pusat `variantStockNormalizer` atau helper lama yang sudah delegasi ke helper pusat.
+- Master item bervarian wajib menyimpan `currentStock`, `stock`, `reservedStock`, dan `availableStock` berdasarkan total varian.
+- Reset/Maintenance hanya alat audit/repair/development, bukan flow harian user untuk menjaga stok tetap sinkron.
+
+## 17. Rule Reset & Maintenance Data Aman
+
+- Supplier adalah protected master data dan collection `supplierPurchases` tidak boleh ikut reset default.
+- Reset/Maintenance hanya untuk admin/development/testing, bukan flow harian user.
+- Reset transaksi boleh menghapus data transaksi/testing sesuai scope, tetapi tidak boleh menghapus Supplier, Raw Material, Product, Customer, BOM/setup, atau master penting lain secara default.
+- Reset Supplier hanya boleh dibuat sebagai opsi destructive developer terpisah dengan preview, warning, dan konfirmasi eksplisit; tidak boleh menjadi bagian dari reset default.
+- Preview reset wajib menampilkan collection yang akan dihapus dan master yang dilindungi.
+- Data test wajib memakai marker `isTestData: true`, `sourceModule: "dev_test_seed"`, dan `createdBy: "dev_seed"`.
+- Hapus Data Test hanya boleh menghapus dokumen bermarker test; data normal tanpa marker tidak boleh ikut terhapus.
+- Repair stok tetap hanya menyamakan field turunan dan tidak boleh membuat inventory log palsu.
+
+## 19. Rule Purchases Supplier Restock Prefill
+
+- Form Purchases boleh membaca katalog Supplier `materialDetails` secara read-only untuk mengisi awal Link Produk dan Harga Supplier Tercatat.
+- Link Produk di Purchases berasal dari `materialDetails[].productLink` supplier yang dipilih dan materialId yang cocok; link produk bahan lain tidak boleh dipakai.
+- Harga Supplier Tercatat berasal dari katalog Supplier yang dipilih dan hanya menjadi harga pembanding per satuan stok.
+- Harga Supplier Tercatat tidak boleh menjadi harga aktual pembelian, tidak boleh menjadi `actualUnitCost`, dan tidak boleh mengubah kas/expense secara langsung.
+- Harga aktual pembelian tetap berasal dari subtotal transaksi, ongkir, diskon ongkir, voucher/potongan, dan biaya layanan.
+- `totalStockIn` tetap dihitung dari `Qty Beli × Konversi Supplier` untuk bahan baku.
+- Total Pembanding Supplier di Purchases memakai komponen katalog supplier: `Qty Beli × Harga Barang Supplier + Ongkir Default Supplier + Biaya Layanan Default Supplier - Diskon Default Supplier`; jangan menggandakan ongkir/admin dengan mengalikan harga per satuan stok saat Qty Beli lebih dari 1.
+- Supplier dropdown pada pembelian bahan baku harus memprioritaskan supplier yang menyediakan material tersebut; jangan fallback diam-diam ke semua supplier.
+- Supplier tetap katalog vendor/restock dan tidak otomatis menulis ke Raw Material.
+
+## 20. Rule Katalog Restock Supplier
+
+- Supplier adalah katalog vendor/restock, bukan transaksi pembelian.
+- Field kategori/keterangan supplier lama hanya legacy read-only dan bukan input utama flow restock.
+- Setiap `materialDetails` supplier boleh menyimpan konteks restock: link produk, tipe pembelian, satuan beli, qty per pembelian, konversi ke satuan stok, satuan stok, harga barang supplier, ongkir estimasi, biaya admin, diskon, dan catatan.
+- Harga Estimasi Supplier / Satuan Stok dihitung dari katalog supplier sebagai pembanding: `(harga barang + ongkir + biaya admin - diskon) / total stok hasil konversi`.
+- Harga Estimasi Supplier bukan harga aktual pembelian, bukan `actualUnitCost`, dan tidak boleh membuat kas/expense/laporan berubah.
+- Purchases boleh memakai katalog Supplier untuk prefill Link Produk, Satuan Beli, Konversi, dan Harga Supplier Tercatat, tetapi user tetap wajib mengisi transaksi aktual dan klik Simpan.
+- Supplier tetap tidak boleh otomatis memasang supplier ke Raw Material berdasarkan `materialDetails`.
+
+## 21. Rule Stok Masuk Purchases dari Konversi Supplier
+
+- Purchases wajib menampilkan **Stok Masuk total** sebagai informasi utama, bukan menjadikan Konversi ke Stok sebagai input utama.
+- Untuk bahan baku, rumus final tetap: `Stok Masuk = Qty Beli × Konversi Supplier`.
+- Konversi Supplier berasal dari katalog Supplier `materialDetails.conversionValue`, bersifat read-only di Purchases, dan hanya menjadi sumber hitung stok masuk.
+- Qty Beli boleh diubah user dan hanya boleh mengubah Stok Masuk, subtotal default jika belum diedit manual, dan ringkasan pembanding.
+- Perubahan Qty Beli tidak boleh mereset Supplier, Link Produk Restock, purchaseType, biaya supplier, atau Harga Supplier Tercatat.
+- Reject/selisih barang setelah diterima ditangani lewat Penyesuaian Stok agar audit stok tetap jelas, bukan dengan mengubah konversi di Purchases.
+- Selisih Hemat tetap dihitung dari `Total Pembanding Supplier - Total Aktual Pembelian` dan hanya menjadi informasi efisiensi, bukan pengurang kas.
