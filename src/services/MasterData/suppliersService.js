@@ -1,11 +1,11 @@
 import {
-  addDoc,
   collection,
   doc,
   getDocs,
   onSnapshot,
+  query,
   serverTimestamp,
-  updateDoc,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -15,7 +15,6 @@ import { db } from '../../firebase';
 // Kita sederhanakan lagi: supplier aktif hanya datang dari supplierPurchases.
 // -----------------------------------------------------------------------------
 const SUPPLIER_MASTER_COLLECTION = 'supplierPurchases';
-const RAW_MATERIAL_COLLECTION = 'raw_materials';
 
 // -----------------------------------------------------------------------------
 // Helper trim aman supaya semua normalisasi string tetap konsisten.
@@ -130,7 +129,7 @@ export const isMasterSupplierRecord = isManagedSupplierRecord;
 export const isLegacyMaterialSupplierRecord = () => false;
 
 // -----------------------------------------------------------------------------
-// Ambil supplierId aman untuk disimpan ke bahan baku / transaksi.
+// Ambil supplierId aman untuk snapshot manual raw material / transaksi.
 // -----------------------------------------------------------------------------
 export const getSupplierReferenceId = (supplier = {}, fallbackId = null) => {
   return (
@@ -278,177 +277,98 @@ export const listenSuppliers = (callback, onError) => {
 export const listenSupplierCatalog = listenSuppliers;
 
 // -----------------------------------------------------------------------------
-// Builder payload supplier master yang rapi.
-// Dipakai untuk create, edit, dan sinkron ulang bahan baku.
+// SUPPLIER SNAPSHOT CASCADE GUARD.
+// FUNGSI: helper di bawah hanya menjaga snapshot nama/link supplier pada Raw Material
+// yang sudah memilih supplierId tersebut secara manual.
+// ALASAN: ketika master Supplier diedit atau dihapus, tampilan Raw Material perlu
+// tetap konsisten tanpa memasang supplier baru berdasarkan katalog materialDetails.
+// STATUS: aktif dipakai oleh halaman Supplier; bukan kandidat cleanup selama Raw
+// Material masih menyimpan snapshot supplierId/supplierName/supplierLink.
+// BATASAN: helper ini tidak mengubah stok, harga, purchase, maupun daftar material.
 // -----------------------------------------------------------------------------
-const buildMasterSupplierPayload = (supplier = {}) => {
-  const materialDetails = uniqueMaterialDetails(supplier.materialDetails || []).map((item) => ({
-    materialId: item.materialId || '',
-    materialName: item.materialName || '',
-    productLink: item.productLink || '',
-    referencePrice: Math.round(Number(item.referencePrice || 0)),
-    note: item.note || '',
-  }));
+const RAW_MATERIAL_COLLECTION = 'raw_materials';
+const BATCH_LIMIT = 450;
 
-  return {
-    category: supplier.category || '',
-    storeName: getSupplierDisplayName(supplier),
-    storeLink: getSupplierLink(supplier),
-    supportedMaterialIds: uniqueStrings([
-      ...(supplier.supportedMaterialIds || []),
-      ...materialDetails.map((item) => item.materialId),
-    ]),
-    supportedMaterialNames: uniqueStrings([
-      ...(supplier.supportedMaterialNames || []),
-      ...materialDetails.map((item) => item.materialName),
-    ]),
-    materialDetails,
-    updatedAt: serverTimestamp(),
-  };
+// -----------------------------------------------------------------------------
+// Commit operasi batch secara bertahap agar aman terhadap batas maksimal batch
+// Firestore.
+// FUNGSI: dipakai oleh cascade update/clear snapshot supplier.
+// STATUS: aktif dan spesifik untuk helper snapshot supplier.
+// -----------------------------------------------------------------------------
+const commitBatches = async (operations = []) => {
+  for (let startIndex = 0; startIndex < operations.length; startIndex += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    const chunk = operations.slice(startIndex, startIndex + BATCH_LIMIT);
+
+    chunk.forEach((operation) => operation(batch));
+    await batch.commit();
+  }
 };
 
 // -----------------------------------------------------------------------------
-// Sinkronkan supplier ke bahan baku yang dipilih di master supplier.
-// Ini inti versi sederhana: user cukup buat supplier baru lalu pilih bahan terkait.
+// Update snapshot supplier pada Raw Material yang memang sudah memilih supplierId
+// ini.
+// FUNGSI: menjaga nama/link supplier di raw material tetap sama dengan master
+// Supplier setelah user mengedit master Supplier.
+// ALASAN: ini bukan pemasangan supplier otomatis; raw material yang disentuh hanya
+// dokumen yang sudah memiliki supplierId sama hasil pilihan manual user.
+// STATUS: aktif dipakai saat edit Supplier.
 // -----------------------------------------------------------------------------
-export const syncRawMaterialsWithSupplier = async (supplier = {}, previousSupplier = null) => {
-  const supplierId = getSupplierReferenceId(supplier);
-  if (!supplierId) {
-    return { attachedCount: 0, detachedCount: 0, updatedCount: 0 };
-  }
+export const cascadeSupplierSnapshotToRawMaterials = async (supplierId, supplier = {}) => {
+  const normalizedSupplierId = safeTrim(supplierId);
+  if (!normalizedSupplierId) return 0;
 
-  const selectedMaterialIds = new Set(
-    uniqueStrings([
-      ...(supplier.supportedMaterialIds || []),
-      ...((supplier.materialDetails || []).map((item) => item.materialId)),
-    ]),
+  const supplierName = getSupplierDisplayName(supplier);
+  const supplierLink = getSupplierLink(supplier);
+
+  const rawMaterialSnapshot = await getDocs(
+    query(
+      collection(db, RAW_MATERIAL_COLLECTION),
+      where('supplierId', '==', normalizedSupplierId),
+    ),
   );
 
-  const previousMaterialIds = new Set(uniqueStrings(previousSupplier?.supportedMaterialIds || []));
-  const removedMaterialIds = [...previousMaterialIds].filter((materialId) => !selectedMaterialIds.has(materialId));
-
-  const batch = writeBatch(db);
-  let attachedCount = 0;
-  let detachedCount = 0;
-
-  // ---------------------------------------------------------------------------
-  // Pasang supplier ke semua bahan yang sekarang dipilih di master supplier.
-  // ---------------------------------------------------------------------------
-  selectedMaterialIds.forEach((materialId) => {
-    batch.update(doc(db, RAW_MATERIAL_COLLECTION, materialId), {
-      supplierId,
-      supplierName: getSupplierDisplayName(supplier),
-      supplierLink: getSupplierLink(supplier),
+  const operations = rawMaterialSnapshot.docs.map((materialDocument) => (batch) => {
+    batch.update(doc(db, RAW_MATERIAL_COLLECTION, materialDocument.id), {
+      supplierName,
+      supplierLink,
       updatedAt: serverTimestamp(),
     });
-    attachedCount += 1;
   });
 
-  // ---------------------------------------------------------------------------
-  // Lepaskan supplier dari bahan yang dulu terhubung tetapi sekarang tidak dipilih.
-  // Hanya dibersihkan jika supplierId pada bahan memang milik supplier yang sedang diedit.
-  // ---------------------------------------------------------------------------
-  if (removedMaterialIds.length > 0) {
-    const rawMaterialsSnapshot = await getDocs(collection(db, RAW_MATERIAL_COLLECTION));
-    const rawMaterials = rawMaterialsSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+  await commitBatches(operations);
+  return operations.length;
+};
 
-    removedMaterialIds.forEach((materialId) => {
-      const currentMaterial = rawMaterials.find((item) => item.id === materialId);
-      if (!currentMaterial) return;
-      if (safeTrim(currentMaterial.supplierId) !== supplierId) return;
+// -----------------------------------------------------------------------------
+// Bersihkan snapshot supplier pada Raw Material yang masih menunjuk supplierId
+// yang dihapus.
+// FUNGSI: mencegah Raw Material menampilkan supplier yang sudah tidak ada di master
+// Supplier.
+// ALASAN: data supplier manual dihapus hanya jika supplierId dokumen cocok, sehingga
+// tidak menyentuh bahan yang memilih supplier lain.
+// STATUS: aktif dipakai saat hapus Supplier.
+// -----------------------------------------------------------------------------
+export const clearSupplierSnapshotFromRawMaterials = async (supplierId) => {
+  const normalizedSupplierId = safeTrim(supplierId);
+  if (!normalizedSupplierId) return 0;
 
-      batch.update(doc(db, RAW_MATERIAL_COLLECTION, materialId), {
-        supplierId: '',
-        supplierName: '',
-        supplierLink: '',
-        updatedAt: serverTimestamp(),
-      });
-      detachedCount += 1;
+  const rawMaterialSnapshot = await getDocs(
+    query(
+      collection(db, RAW_MATERIAL_COLLECTION),
+      where('supplierId', '==', normalizedSupplierId),
+    ),
+  );
+
+  const operations = rawMaterialSnapshot.docs.map((materialDocument) => (batch) => {
+    batch.update(doc(db, RAW_MATERIAL_COLLECTION, materialDocument.id), {
+      supplierId: null,
+      supplierName: '',
+      supplierLink: '',
+      updatedAt: serverTimestamp(),
     });
-  }
-
-  await batch.commit();
-
-  return {
-    attachedCount,
-    detachedCount,
-    updatedCount: attachedCount + detachedCount,
-  };
-};
-
-// -----------------------------------------------------------------------------
-// Alias lama tetap disediakan agar halaman lain tidak perlu diubah banyak.
-// -----------------------------------------------------------------------------
-export const relinkRawMaterialsToSupplier = async (supplier = {}, supplierId = null, previousSupplier = null) => {
-  return syncRawMaterialsWithSupplier(
-    {
-      ...supplier,
-      id: supplierId || supplier.id,
-      masterSupplierId: supplierId || supplier.masterSupplierId || supplier.id,
-    },
-    previousSupplier,
-  );
-};
-
-// -----------------------------------------------------------------------------
-// Restore helper dipertahankan untuk kompatibilitas,
-// tapi sekarang arahnya sederhana: create/update ke master lalu sinkron bahan.
-// -----------------------------------------------------------------------------
-export const restoreLegacySupplierToMaster = async (supplier = {}) => {
-  const payload = buildMasterSupplierPayload(supplier);
-  const supplierId = getSupplierReferenceId(supplier);
-
-  if (supplierId) {
-    await updateDoc(doc(db, SUPPLIER_MASTER_COLLECTION, supplierId), payload);
-    return { supplierId, isCreated: false };
-  }
-
-  const createdDoc = await addDoc(collection(db, SUPPLIER_MASTER_COLLECTION), {
-    ...payload,
-    createdAt: serverTimestamp(),
   });
 
-  return { supplierId: createdDoc.id, isCreated: true };
-};
-
-// -----------------------------------------------------------------------------
-// Wrapper kompatibilitas lama.
-// -----------------------------------------------------------------------------
-export const restoreAndRelinkSupplier = async (supplier = {}) => {
-  const restoreResult = await restoreLegacySupplierToMaster(supplier);
-  const syncResult = await syncRawMaterialsWithSupplier(
-    {
-      ...supplier,
-      id: restoreResult.supplierId,
-      masterSupplierId: restoreResult.supplierId,
-      sourceCollection: SUPPLIER_MASTER_COLLECTION,
-    },
-    null,
-  );
-
-  return {
-    supplierId: restoreResult.supplierId,
-    isCreated: restoreResult.isCreated,
-    updatedCount: syncResult.updatedCount,
-  };
-};
-
-// -----------------------------------------------------------------------------
-// Wrapper kompatibilitas lama untuk aksi massal.
-// Tidak dipakai di mode sederhana, tetapi tetap ada agar import aman.
-// -----------------------------------------------------------------------------
-export const bulkRestoreAndRelinkLegacySuppliers = async (suppliers = []) => {
-  let restoredCount = 0;
-  let relinkedMaterialsCount = 0;
-
-  for (const supplier of suppliers || []) {
-    const result = await restoreAndRelinkSupplier(supplier);
-    restoredCount += 1;
-    relinkedMaterialsCount += Number(result.updatedCount || 0);
-  }
-
-  return {
-    restoredCount,
-    relinkedMaterialsCount,
-  };
+  await commitBatches(operations);
+  return operations.length;
 };

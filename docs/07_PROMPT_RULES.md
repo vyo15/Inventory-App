@@ -207,3 +207,26 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Jangan klaim source selesai jika belum ada bukti dari source terbaru.
 - Jika docs dan source konflik, tulis status sebenarnya dan catat sebagai tech debt.
 - ZIP final docs hanya boleh berisi file docs yang berubah.
+
+## Guard Supplier Restock Catalog Manual
+
+- Jika task menyentuh Supplier atau Raw Material, jangan membuat flow yang memasang supplier ke Raw Material berdasarkan `materialDetails`.
+- Supplier adalah katalog vendor/restock, bukan sumber pemasangan supplier otomatis ke bahan.
+- Raw Material memilih supplier manual dari form Raw Material.
+- Snapshot `supplierName` dan `supplierLink` boleh diperbarui/dibersihkan hanya untuk raw material yang sudah memiliki `supplierId` sama dengan master Supplier yang diedit/dihapus.
+- Jangan menghapus field manual `supplierId`, `supplierName`, dan `supplierLink` dari raw material tanpa migrasi eksplisit.
+- Jangan mengembalikan tombol “Sinkronkan Bahan”.
+- Jangan menghidupkan lagi helper yang memasang Supplier ke collection `raw_materials` berdasarkan katalog material.
+- `productLink`, `referencePrice`, dan `note` di Supplier hanya referensi restock.
+- Harga aktual pembelian tetap dari Purchases; jangan auto-fill atau override dari harga referensi supplier.
+- Jangan sentuh stok, Purchases mutation, Sales, Production, HPP, Cash Out, atau Reports jika task hanya Supplier katalog.
+
+## Prompt Guard Restock Assistant
+
+- Restock Assistant hanya boleh berupa navigasi/prefill dan tidak boleh membuat purchase otomatis.
+- Dashboard tidak boleh melakukan write ke Firestore saat user klik action restock.
+- Tombol internal dari Dashboard/Raw Material wajib memakai React Router navigation yang aman untuk HashRouter.
+- Link produk utama restock harus berasal dari Purchases terakhir, bukan dari link toko supplier umum.
+- Purchases prefill dari query tidak boleh mengubah rumus `actualUnitCost`, `restockReferencePrice`, saving, expense, atau stok.
+- Jangan tampilkan semua supplier di Dashboard atau Detail Raw Material; semua perbandingan supplier tetap di menu Supplier.
+- Jangan mengembalikan tombol/logic “Sinkronkan Bahan” atau pemasangan supplier otomatis berdasarkan `materialDetails`.

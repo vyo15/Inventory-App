@@ -323,3 +323,29 @@
     white-space: normal;
   }
 }
+
+/* =========================
+   SECTION: Restock Assistant actions
+   Fungsi:
+   - menata tombol restock cepat pada Stok Kritis agar tetap compact;
+   - tombol hanya navigasi/prefill atau membuka link produk eksternal.
+   Hubungan flow:
+   - styling ini tidak mengubah stok, purchases, kas, supplier, produksi, payroll, HPP, atau laporan.
+   Status:
+   - aktif dipakai oleh Dashboard Restock Assistant; bukan legacy.
+========================= */
+.dashboard-restock-card {
+  align-items: flex-start;
+}
+
+.dashboard-restock-actions {
+  margin-top: 2px;
+}
+
+.dark .dashboard-restock-actions .ant-btn-default[disabled],
+.app-theme-dark .dashboard-restock-actions .ant-btn-default[disabled],
+[data-app-theme="dark"] .dashboard-restock-actions .ant-btn-default[disabled] {
+  color: rgba(230, 237, 243, 0.32);
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.36);
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Table,
   Button,
@@ -14,6 +14,7 @@ import {
 } from "antd";
 import { collection, addDoc, doc, onSnapshot, setDoc, Timestamp, updateDoc } from "firebase/firestore";
 import { PlusOutlined } from "@ant-design/icons";
+import { useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
 import { db } from "../../firebase";
 import { formatNumberId } from "../../utils/formatters/numberId";
@@ -146,6 +147,9 @@ const buildPurchaseExpensePayload = ({
 // =========================
 const Purchases = () => {
   const [form] = Form.useForm();
+  const [searchParams] = useSearchParams();
+  const restockPrefillAppliedRef = useRef(false);
+  const restockPrefillMaterialIdRef = useRef("");
 
   // =========================
   // SECTION: State utama
@@ -299,9 +303,25 @@ const Purchases = () => {
   // SECTION: Isi field otomatis saat item berubah
   // =========================
   useEffect(() => {
-    form.setFieldsValue({
-      supplierId: undefined,
-    });
+    // =========================
+    // SECTION: Guard prefill Restock Assistant
+    // Fungsi blok:
+    // - item change normal tetap mengosongkan supplier agar user memilih ulang;
+    // - khusus pembukaan dari Dashboard Restock Assistant, supplier query dipertahankan sekali.
+    // Hubungan flow:
+    // - prefill hanya membantu form Purchases; tidak auto-submit, tidak mengubah stok/kas sebelum Simpan.
+    // Status: aktif dipakai; bukan legacy dan bukan auto-purchase.
+    // =========================
+    const shouldKeepPrefilledSupplier =
+      restockPrefillMaterialIdRef.current &&
+      String(itemId || "") === restockPrefillMaterialIdRef.current;
+
+    if (!shouldKeepPrefilledSupplier) {
+      restockPrefillMaterialIdRef.current = "";
+      form.setFieldsValue({
+        supplierId: undefined,
+      });
+    }
 
     if (itemType === "product") {
       const selectedProduct = products.find((item) => item.id === itemId);
@@ -478,9 +498,62 @@ const Purchases = () => {
   ]);
 
   // =========================
+  // SECTION: Restock Assistant query prefill
+  // Fungsi blok:
+  // - membaca query dari Dashboard/Raw Material agar form Purchases terbuka dengan bahan, supplier, dan Link Produk terisi awal;
+  // - user tetap wajib input qty/harga aktual dan klik Simpan sendiri.
+  // Hubungan flow:
+  // - ini hanya navigasi/prefill, bukan transaksi otomatis; stok/kas/expense baru berubah setelah handleSubmitPurchase selesai.
+  // Status: aktif dipakai oleh Restock Assistant; kandidat cleanup hanya jika route prefill tidak dipakai lagi.
+  // =========================
+  useEffect(() => {
+    if (restockPrefillAppliedRef.current) return;
+
+    const source = searchParams.get("source");
+    const materialId = searchParams.get("materialId");
+
+    if (source !== "dashboard-restock" || !materialId) return;
+
+    const supplierId = searchParams.get("supplierId") || undefined;
+    const productLink = searchParams.get("productLink") || "";
+
+    restockPrefillAppliedRef.current = true;
+    restockPrefillMaterialIdRef.current = String(materialId);
+
+    form.resetFields();
+    form.setFieldsValue({
+      type: "material",
+      itemId: materialId,
+      supplierId,
+      productLink,
+      materialVariantId: undefined,
+      productVariantKey: undefined,
+      quantity: 1,
+      subtotalItems: 0,
+      shippingCost: 0,
+      shippingDiscount: 0,
+      voucherDiscount: 0,
+      serviceFee: 0,
+      totalActualPurchase: 0,
+      actualUnitCost: 0,
+      restockReferencePrice: 0,
+      totalReferencePurchase: 0,
+      purchaseSaving: 0,
+    });
+    setIsModalOpen(true);
+  }, [form, searchParams]);
+
+  // =========================
   // SECTION: Modal Helpers
   // =========================
   const openCreatePurchaseModal = () => {
+    // =========================
+    // SECTION: Reset prefill saat user membuat pembelian manual
+    // Fungsi blok: memastikan tombol Tambah Pembelian biasa tidak membawa state prefill Dashboard sebelumnya.
+    // Hubungan flow: pembelian manual tetap bersih; transaksi hanya tersimpan saat user klik Simpan.
+    // Status: aktif dipakai oleh tombol Tambah Pembelian; bukan legacy.
+    // =========================
+    restockPrefillMaterialIdRef.current = "";
     form.resetFields();
     form.setFieldsValue({
       type: "material",
@@ -497,6 +570,7 @@ const Purchases = () => {
       restockReferencePrice: 0,
       totalReferencePurchase: 0,
       purchaseSaving: 0,
+      productLink: '',
     });
     setIsModalOpen(true);
   };
@@ -515,6 +589,7 @@ const Purchases = () => {
         date,
         note,
         supplierId,
+        productLink,
         purchaseUnit,
         stockUnit,
         conversionValue,
@@ -599,6 +674,11 @@ const Purchases = () => {
             : "",
         supplierId: resolvedSupplierId || null,
         supplierName: supplierName || "",
+        // ACTIVE: link produk hanya referensi restock berikutnya.
+        // Tidak dipakai untuk hitung harga, stok, kas, saving, expense, atau laporan.
+        productLink: String(productLink || "").trim(),
+        purchaseProductLink: String(productLink || "").trim(),
+        restockProductLink: String(productLink || "").trim(),
         quantity: Number(quantity || 0),
         date: Timestamp.fromDate(values.date.toDate()),
         note: note || "",
@@ -993,6 +1073,23 @@ const Purchases = () => {
                 </Option>
               ))}
             </Select>
+          </Form.Item>
+
+          {/* ===============================================================
+              Field Link Produk untuk referensi restock berikutnya.
+              Fungsi: menyimpan URL produk dari transaksi pembelian terakhir.
+              Alasan: Detail Raw Material memakai link ini sebagai tombol
+              "Buka Produk Terakhir Dibeli" tanpa mengambil link toko umum.
+              Status: aktif dipakai sebagai data referensi read-only; tidak
+              dipakai untuk perhitungan harga, stok, kas, saving, expense,
+              atau laporan.
+          =============================================================== */}
+          <Form.Item
+            name="productLink"
+            label="Link Produk"
+            extra="Opsional. Dipakai untuk referensi restock berikutnya, bukan untuk perhitungan pembelian."
+          >
+            <Input placeholder="Link produk marketplace / supplier" />
           </Form.Item>
 
           <Form.Item

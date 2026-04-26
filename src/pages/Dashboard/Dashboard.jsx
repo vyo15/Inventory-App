@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Alert,
+  Button,
   Card,
   Col,
   Empty,
@@ -19,6 +20,7 @@ import {
   DollarCircleOutlined,
   HistoryOutlined,
   ReloadOutlined,
+  ShoppingCartOutlined,
   ToolOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
@@ -201,23 +203,29 @@ const buildLowStockRows = (products = [], materials = []) => {
   const rows = [
     ...products.map((item) => ({
       key: `product-${item.id}`,
+      id: item.id,
       name: getItemDisplayName(item),
       stock: getItemStock(item),
       minStock: getItemMinStock(item),
       unit: item?.unit || "pcs",
       type: "Produk Jadi",
+      sourceType: "product",
       severity: getLowStockSeverity(item),
       to: "/stock-management",
+      snapshot: item,
     })),
     ...materials.map((item) => ({
       key: `material-${item.id}`,
+      id: item.id,
       name: getItemDisplayName(item),
       stock: getItemStock(item),
       minStock: getItemMinStock(item),
-      unit: item?.unit || "pcs",
+      unit: item?.stockUnit || item?.unit || "pcs",
       type: "Bahan Baku",
+      sourceType: "material",
       severity: getLowStockSeverity(item),
       to: "/stock-management",
+      snapshot: item,
     })),
   ].filter((item) => item.stock <= 0 || (item.minStock > 0 && item.stock <= item.minStock));
 
@@ -226,6 +234,105 @@ const buildLowStockRows = (products = [], materials = []) => {
     const rightGap = right.stock - Math.max(right.minStock, 0);
     return leftGap - rightGap;
   });
+};
+
+// =========================
+// SECTION: Helpers - Restock Assistant
+// Fungsi:
+// - membaca purchase terakhir untuk bahan baku stok kritis secara null-safe;
+// - menyediakan supplier terakhir, harga terakhir, dan link produk terakhir untuk action Dashboard.
+// Hubungan flow:
+// - Dashboard hanya membaca purchases/raw_materials dan menyiapkan navigasi/prefill;
+// - tidak membuat purchase otomatis, tidak mengubah stok, kas, supplier, atau laporan.
+// Status:
+// - aktif dipakai oleh section Stok Kritis; bukan legacy.
+// =========================
+const getRestockLink = (...values) => {
+  const validValue = values.find((value) => String(value || "").trim());
+  return validValue ? String(validValue).trim() : "";
+};
+
+const getLatestPurchaseForMaterial = (purchases = [], materialId = "") => {
+  const targetId = String(materialId || "").trim();
+  if (!targetId || !Array.isArray(purchases)) return null;
+
+  return purchases
+    .filter((purchase) => (
+      normalizeStatus(purchase?.type) === "material" &&
+      String(purchase?.itemId || "").trim() === targetId
+    ))
+    .sort((left, right) => {
+      const rightDate = getTransactionDate(right)?.getTime() || 0;
+      const leftDate = getTransactionDate(left)?.getTime() || 0;
+      return rightDate - leftDate;
+    })[0] || null;
+};
+
+const getPurchaseProductLink = (purchase = null) => {
+  if (!purchase || typeof purchase !== "object") return "";
+
+  return getRestockLink(
+    purchase?.productLink,
+    purchase?.purchaseProductLink,
+    purchase?.restockProductLink,
+  );
+};
+
+const getPurchaseLastUnitPrice = (purchase = null) => {
+  if (!purchase || typeof purchase !== "object") return 0;
+
+  return getNumericValue(
+    purchase?.actualUnitCost ??
+      purchase?.unitCost ??
+      purchase?.lastPurchasePrice ??
+      purchase?.restockReferencePrice ??
+      0,
+  );
+};
+
+const buildRestockAssistantRows = (lowStockRows = [], purchases = []) => (
+  lowStockRows.map((item) => {
+    if (item.sourceType !== "material") return item;
+
+    const latestPurchase = getLatestPurchaseForMaterial(purchases, item.id);
+    const supplierId = String(
+      latestPurchase?.supplierId ||
+        latestPurchase?.supplierRefId ||
+        latestPurchase?.supplierReferenceId ||
+        item.snapshot?.supplierId ||
+        "",
+    ).trim();
+    const supplierName = String(
+      latestPurchase?.supplierName ||
+        latestPurchase?.supplierLabel ||
+        latestPurchase?.supplierStoreName ||
+        item.snapshot?.supplierName ||
+        "",
+    ).trim();
+    const productLink = getPurchaseProductLink(latestPurchase);
+
+    return {
+      ...item,
+      latestPurchase,
+      restockSupplierId: supplierId,
+      restockSupplierName: supplierName,
+      restockProductLink: productLink,
+      lastPurchasePrice: getPurchaseLastUnitPrice(latestPurchase),
+    };
+  })
+);
+
+const buildRestockRoute = (basePath, params = {}) => {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (String(value || "").trim()) {
+      searchParams.set(key, String(value).trim());
+    }
+  });
+
+  const queryString = searchParams.toString();
+  return queryString ? `${basePath}?${queryString}` : basePath;
 };
 
 // =========================
@@ -322,11 +429,13 @@ const formatDashboardDate = (value) => {
 };
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [loadWarning, setLoadWarning] = useState("");
   const [dashboardData, setDashboardData] = useState({
     lowStockRows: [],
+    purchaseRecords: [],
     recentActivities: [],
     productionOrders: [],
     workLogs: [],
@@ -361,6 +470,7 @@ const Dashboard = () => {
       const [
         productsSnap,
         materialsSnap,
+        purchasesSnap,
         recentActivitiesSnap,
         productionOrdersSnap,
         workLogsSnap,
@@ -372,6 +482,7 @@ const Dashboard = () => {
       ] = await Promise.all([
         getDocs(collection(db, "products")),
         getDocs(collection(db, "raw_materials")),
+        getDocs(collection(db, "purchases")),
         getDocs(recentActivitiesQuery),
         getDocs(collection(db, "production_orders")),
         getDocs(collection(db, "production_work_logs")),
@@ -397,6 +508,10 @@ const Dashboard = () => {
 
       setDashboardData({
         lowStockRows: buildLowStockRows(products, materials),
+        purchaseRecords: purchasesSnap.docs.map((docItem) => ({
+          id: docItem.id,
+          ...docItem.data(),
+        })),
         recentActivities: recentActivitiesSnap.docs.map((docItem) => ({
           id: docItem.id,
           ...docItem.data(),
@@ -444,6 +559,7 @@ const Dashboard = () => {
 
   const {
     lowStockRows,
+    purchaseRecords,
     recentActivities,
     productionOrders,
     workLogs,
@@ -455,7 +571,24 @@ const Dashboard = () => {
   } = dashboardData;
 
   const lowStockTotal = lowStockRows.length;
-  const criticalStockPreview = lowStockRows.slice(0, MAX_DASHBOARD_LIST_ITEMS);
+
+  // =========================
+  // SECTION: Restock Assistant - stok kritis
+  // Fungsi:
+  // - memperkaya item stok menipis dengan purchase terakhir untuk tombol restock cepat;
+  // - action hanya navigasi/prefill atau membuka link eksternal.
+  // Hubungan flow:
+  // - Dashboard tetap read-only; stok/kas hanya berubah setelah user menyimpan transaksi di Purchases.
+  // Status:
+  // - aktif dipakai oleh section Stok Kritis; bukan legacy dan bukan auto-purchase.
+  // =========================
+  const criticalStockPreview = useMemo(
+    () => buildRestockAssistantRows(
+      lowStockRows.slice(0, MAX_DASHBOARD_LIST_ITEMS),
+      purchaseRecords,
+    ),
+    [lowStockRows, purchaseRecords],
+  );
   const planningPriorityItems = planningSummary.priorityPlans
     .filter((plan) => !["completed", "cancelled"].includes(normalizeStatus(plan.status)))
     .slice(0, MAX_PLANNING_PRIORITY_ITEMS);
@@ -610,6 +743,37 @@ const Dashboard = () => {
           minute: "2-digit",
         })
       : "Belum dimuat";
+
+  // =========================
+  // SECTION: Restock Assistant Actions
+  // Fungsi:
+  // - membuka link produk terakhir, prefill halaman Purchases, dan membuka Supplier terfilter;
+  // - semua action aman untuk HashRouter karena route internal memakai useNavigate.
+  // Hubungan flow:
+  // - action Dashboard hanya navigasi/prefill, tidak menulis Firestore dan tidak membuat transaksi otomatis.
+  // Status:
+  // - aktif dipakai oleh Stok Kritis; bukan kandidat cleanup selama Restock Assistant aktif.
+  // =========================
+  const openRestockProductLink = (productLink) => {
+    if (!productLink) return;
+    window.open(productLink, "_blank", "noopener,noreferrer");
+  };
+
+  const goToRestockPurchase = (item) => {
+    navigate(buildRestockRoute("/purchases", {
+      materialId: item.id,
+      supplierId: item.restockSupplierId,
+      productLink: item.restockProductLink,
+      source: "dashboard-restock",
+    }));
+  };
+
+  const goToSupplierComparison = (item) => {
+    navigate(buildRestockRoute("/suppliers", {
+      materialId: item.id,
+      supplierId: item.restockSupplierId,
+    }));
+  };
 
   return (
     <div className="dashboard-page">
@@ -771,21 +935,76 @@ const Dashboard = () => {
           >
             {criticalStockPreview.length > 0 ? (
               <div className="dashboard-card-list">
-                {criticalStockPreview.map((item) => (
-                  <Link key={item.key} to={item.to} className="dashboard-list-card">
-                    <div className="dashboard-list-card-content">
-                      <Space size={8} wrap>
-                        <Text strong>{item.name}</Text>
-                        <Tag color={item.severity.color}>{item.severity.label}</Tag>
-                        <Tag>{item.type}</Tag>
-                      </Space>
-                      <Text className="dashboard-muted-text">
-                        Available {formatNumberId(item.stock)} {item.unit} - Min {formatNumberId(item.minStock)} {item.unit}
-                      </Text>
+                {criticalStockPreview.map((item) => {
+                  const isMaterialRestock = item.sourceType === "material";
+
+                  if (!isMaterialRestock) {
+                    return (
+                      <Link key={item.key} to={item.to} className="dashboard-list-card">
+                        <div className="dashboard-list-card-content">
+                          <Space size={8} wrap>
+                            <Text strong>{item.name}</Text>
+                            <Tag color={item.severity.color}>{item.severity.label}</Tag>
+                            <Tag>{item.type}</Tag>
+                          </Space>
+                          <Text className="dashboard-muted-text">
+                            Available {formatNumberId(item.stock)} {item.unit} - Min {formatNumberId(item.minStock)} {item.unit}
+                          </Text>
+                        </div>
+                        <ArrowRightOutlined className="dashboard-action-arrow" />
+                      </Link>
+                    );
+                  }
+
+                  return (
+                    <div key={item.key} className="dashboard-list-card dashboard-readonly-card dashboard-restock-card">
+                      <div className="dashboard-list-card-content">
+                        <Space size={8} wrap>
+                          <Text strong>{item.name}</Text>
+                          <Tag color={item.severity.color}>{item.severity.label}</Tag>
+                          <Tag>{item.type}</Tag>
+                        </Space>
+                        <Text className="dashboard-muted-text">
+                          Available {formatNumberId(item.stock)} {item.unit} - Min {formatNumberId(item.minStock)} {item.unit}
+                        </Text>
+                        <Space size={8} wrap>
+                          <Text className="dashboard-muted-text">
+                            {item.restockSupplierName ? `Supplier terakhir: ${item.restockSupplierName}` : "Belum ada supplier terakhir"}
+                          </Text>
+                          {item.lastPurchasePrice > 0 ? (
+                            <Tag color="blue">Harga terakhir {formatCurrency(item.lastPurchasePrice)}</Tag>
+                          ) : null}
+                        </Space>
+                        {/* =========================
+                            SECTION: Restock Assistant Actions per bahan
+                            Fungsi: memberi shortcut buka link produk, buat pembelian, dan bandingkan supplier.
+                            Hubungan flow: tombol hanya membuka link/navigasi; transaksi baru tetap dibuat manual di Purchases.
+                            Status: aktif dipakai; bukan auto-purchase dan bukan mutasi stok.
+                        ========================= */}
+                        <Space size={8} wrap className="dashboard-restock-actions">
+                          <Button
+                            size="small"
+                            disabled={!item.restockProductLink}
+                            onClick={() => openRestockProductLink(item.restockProductLink)}
+                          >
+                            Buka Link Produk
+                          </Button>
+                          <Button
+                            size="small"
+                            type="primary"
+                            icon={<ShoppingCartOutlined />}
+                            onClick={() => goToRestockPurchase(item)}
+                          >
+                            Buat Pembelian
+                          </Button>
+                          <Button size="small" onClick={() => goToSupplierComparison(item)}>
+                            Bandingkan Supplier
+                          </Button>
+                        </Space>
+                      </div>
                     </div>
-                    <ArrowRightOutlined className="dashboard-action-arrow" />
-                  </Link>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="dashboard-empty-wrap dashboard-empty-compact">

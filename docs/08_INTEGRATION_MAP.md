@@ -183,3 +183,67 @@ Payroll paid
 ```
 
 Profit Loss tidak boleh membaca payroll langsung dari `production_payrolls` jika payroll paid sudah menjadi expense, karena akan double counting.
+
+## Flow Supplier Restock Catalog Manual
+
+```text
+Supplier
+-> menyimpan master vendor
+-> menyimpan katalog material yang dijual (`materialDetails`)
+-> productLink/referencePrice/note hanya referensi restock
+-> tidak memasang supplier otomatis ke raw_materials berdasarkan materialDetails
+-> edit/hapus supplier boleh cascade snapshot hanya ke raw material yang supplierId-nya sama
+```
+
+```text
+Raw Material
+-> user memilih supplier manual di form Raw Material
+-> raw material menyimpan snapshot supplierId/supplierName/supplierLink
+-> snapshot nama/link bisa ikut update/clear saat master supplier yang sama diedit/dihapus
+-> raw material tetap source utama stok bahan
+```
+
+```text
+Purchases
+-> memakai supplier sebagai referensi vendor
+-> harga aktual pembelian berasal dari transaksi
+-> stock masuk dan expense tetap dari flow Purchases
+-> tidak ada purchase otomatis dari supplier link
+```
+
+Guard:
+- tidak ada tombol/logic “Sinkronkan Bahan” dari Supplier ke Raw Material;
+- Supplier edit/delete hanya boleh mengubah snapshot raw material yang sudah menunjuk `supplierId` supplier tersebut;
+- filter supplier berdasarkan material boleh memakai katalog `materialDetails/supportedMaterialIds` sebagai read-only reference;
+- data snapshot supplier lama di raw material tetap dibaca sebagai kompatibilitas.
+
+## Flow Restock Assistant
+
+```text
+Dashboard Stok Kritis
+-> baca raw_materials + purchases terakhir
+-> action: Buka Link Produk / Buat Pembelian / Bandingkan Supplier
+-> tidak ada write data dari Dashboard
+```
+
+```text
+Buat Pembelian dari Restock Assistant
+-> route /purchases?source=dashboard-restock&materialId=...
+-> form Purchases prefill material/supplier/link produk jika tersedia
+-> user tetap input qty/harga aktual
+-> user klik Simpan
+-> flow Purchases existing membuat stock masuk + expense
+```
+
+```text
+Bandingkan Supplier
+-> route /suppliers?materialId=...
+-> Supplier menampilkan katalog vendor yang menyediakan bahan tersebut
+-> tidak menulis otomatis ke Raw Material
+```
+
+Guard:
+- Restock Assistant tidak membuat purchase otomatis;
+- Dashboard tidak mengubah stok/kas/expense;
+- link produk terakhir berasal dari Purchases;
+- Supplier tetap katalog vendor/restock dan tidak memasang supplier otomatis ke Raw Material.

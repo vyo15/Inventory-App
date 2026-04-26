@@ -540,3 +540,69 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Tech debt terbaru tercatat.
 - [ ] Prompt rules mencegah regression untuk Sales, Purchase Expense, HPP, Dashboard, Export, dan Legacy Cleanup.
 - [ ] Integration Map sesuai flow aktual.
+
+## Supplier Restock Catalog Manual
+
+### Supplier
+- [ ] Buka menu Supplier.
+- [ ] Pastikan alert/info tidak menyebut sinkronisasi otomatis ke bahan baku.
+- [ ] Pastikan tombol “Sinkronkan Bahan” tidak ada.
+- [ ] Tambah supplier baru.
+- [ ] Pilih beberapa material di katalog supplier.
+- [ ] Isi `productLink`, `referencePrice`, dan `note` per material.
+- [ ] Simpan supplier dan pastikan data supplier tersimpan.
+- [ ] Pastikan `materialDetails` tetap tersimpan di detail supplier.
+- [ ] Pastikan Raw Material yang belum memilih supplier tersebut tidak berubah setelah supplier disimpan.
+- [ ] Edit nama/link supplier dan pastikan hanya Raw Material dengan `supplierId` yang sama ikut memperbarui snapshot nama/link.
+- [ ] Edit `materialDetails` supplier dan pastikan tidak memasang supplier baru ke Raw Material.
+- [ ] Hapus supplier dan pastikan hanya Raw Material dengan `supplierId` yang sama dikosongkan data suppliernya.
+
+### Raw Material
+- [ ] Buka Raw Materials.
+- [ ] Tambah/edit raw material.
+- [ ] Pilih supplier secara manual dari form Raw Material.
+- [ ] Simpan dan pastikan supplier tampil di table/detail Raw Material.
+- [ ] Pastikan label detail memakai “Link Toko Supplier”.
+- [ ] Pastikan data lama dengan `supplierId`, `supplierName`, dan `supplierLink` tetap terbaca.
+- [ ] Pastikan bahan tanpa supplier tetap aman dan tidak error.
+
+### Purchases
+- [ ] Buka Purchases.
+- [ ] Pilih raw material.
+- [ ] Pastikan dropdown supplier tetap bisa digunakan sebagai referensi vendor.
+- [ ] Pastikan harga aktual pembelian tetap dari transaksi.
+- [ ] Pastikan stok masuk tetap berjalan dari flow Purchases.
+- [ ] Pastikan expense pembelian tetap dibuat dari flow Purchases.
+- [ ] Pastikan saving tetap hanya info efisiensi.
+
+### Build / Regression
+- [ ] Pastikan tidak ada flow yang memasang supplier ke Raw Material berdasarkan `materialDetails`.
+- [ ] Pastikan tidak ada reference `handleSyncSupplierMaterials`.
+- [ ] Pastikan tidak ada state `syncingRowId` di halaman Supplier.
+- [ ] Pastikan tidak ada tombol “Sinkronkan Bahan” di UI Supplier.
+- [ ] Pastikan build berhasil dan tidak ada error console.
+- [ ] Pastikan Dashboard, Reports, Sales, Production, HPP, dan Cash Out tidak berubah.
+
+## Checklist Restock Assistant
+
+### Raw Material Detail
+- [ ] Buka Detail Raw Material dan pastikan tidak ada section Restock besar/list semua supplier.
+- [ ] Pastikan row Supplier menampilkan supplier terakhir dibeli jika ada purchase.
+- [ ] Jika belum ada purchase, pastikan Supplier fallback ke supplier manual/snapshot.
+- [ ] Pastikan row Link Produk menampilkan tombol dari purchase terakhir jika `productLink` ada.
+- [ ] Jika link produk tidak ada, pastikan empty state aman dan tidak white screen.
+- [ ] Pastikan tombol Lihat Supplier Lain membuka `#/suppliers?materialId=...`.
+
+### Dashboard Restock Assistant
+- [ ] Buka Dashboard dan cek Stok Kritis tetap compact.
+- [ ] Pastikan bahan baku stok kritis menampilkan supplier terakhir/harga terakhir jika ada purchase.
+- [ ] Klik Buka Link Produk dan pastikan link eksternal terbuka tanpa mengubah data.
+- [ ] Klik Buat Pembelian dan pastikan masuk ke Purchases dengan material/supplier/link produk terisi awal jika tersedia.
+- [ ] Klik Bandingkan Supplier dan pastikan masuk ke Supplier dengan filter material.
+- [ ] Pastikan Dashboard tidak membuat purchase, expense, atau mutasi stok otomatis.
+
+### Purchases Prefill
+- [ ] Dari Dashboard klik Buat Pembelian.
+- [ ] Pastikan modal Purchases terbuka dan tidak auto-submit.
+- [ ] Pastikan user tetap wajib mengisi qty/harga aktual sebelum Simpan.
+- [ ] Simpan purchase dan pastikan stok/expense/saving tetap mengikuti flow Purchases existing.

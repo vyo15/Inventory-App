@@ -30,6 +30,7 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons';
 import { collection, onSnapshot } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { formatNumberID } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
@@ -43,6 +44,7 @@ import {
 } from '../../services/MasterData/rawMaterialsService';
 import {
   getSupplierDisplayName,
+  getSupplierLink,
   getSupplierOptionLabel,
   listenSupplierCatalog,
 } from '../../services/MasterData/suppliersService';
@@ -52,7 +54,7 @@ import {
 } from '../../utils/variants/rawMaterialVariantHelpers';
 
 const { Option } = Select;
-const { Text, Link } = Typography;
+const { Text } = Typography;
 
 // -----------------------------------------------------------------------------
 // Opsi satuan bahan baku.
@@ -92,10 +94,11 @@ const compactCellStyles = {
 
 // -----------------------------------------------------------------------------
 // Helper tampilan varian pada kolom stok.
-// Raw Material dan Semi Finished sengaja memakai class CSS global yang sama
-// agar dua halaman ini tetap seragam dan tidak saling merusak saat ada patch UI.
-// Variant ditampilkan penuh dalam bentuk pill agar lebih rapat, rapi, dan user
-// tidak perlu membuka drawer hanya untuk melihat stok per varian.
+// FUNGSI: menampilkan semua chip stok varian langsung di tabel utama.
+// ALASAN: user perlu melihat stok per varian tanpa membuka drawer Detail; chip
+// tetap memakai flex-wrap sehingga tabel desktop tidak perlu horizontal scroll.
+// STATUS: aktif dipakai oleh tabel utama Raw Materials dan bukan kandidat cleanup;
+// logic ini hanya mengubah presentasi UI, bukan perhitungan stok atau data varian.
 // -----------------------------------------------------------------------------
 const renderVariantStockPills = (
   variants = [],
@@ -128,6 +131,274 @@ const renderVariantStockPills = (
 };
 
 // -----------------------------------------------------------------------------
+// Helper filter supplier untuk form Raw Material.
+// FUNGSI: membatasi opsi supplier secara read-only berdasarkan katalog material
+// yang dijual supplier, lalu tetap menyertakan supplier yang sudah tersimpan di
+// Raw Material agar data lama tidak terlihat hilang dari form.
+// ALASAN: user perlu melihat supplier yang relevan dengan bahan tersebut tanpa
+// mengembalikan auto-sync Supplier ke Raw Material.
+// STATUS: aktif dipakai oleh dropdown Supplier pada drawer create/edit; bukan
+// kandidat cleanup selama Supplier tetap menyimpan materialDetails/support ids.
+// BATASAN: blok ini tidak menulis ke raw_materials, tidak mengubah supplier,
+// tidak mengubah stok, dan tidak membuat purchase otomatis.
+// -----------------------------------------------------------------------------
+const normalizeRecordId = (value) => String(value || '').trim();
+
+const doesSupplierProvideMaterial = (supplier = {}, materialId = null) => {
+  const normalizedMaterialId = normalizeRecordId(materialId);
+  if (!normalizedMaterialId) return false;
+
+  const supportedMaterialIds = Array.isArray(supplier.supportedMaterialIds)
+    ? supplier.supportedMaterialIds
+    : [];
+  const materialDetails = Array.isArray(supplier.materialDetails) ? supplier.materialDetails : [];
+
+  return (
+    supportedMaterialIds.some((item) => normalizeRecordId(item) === normalizedMaterialId) ||
+    materialDetails.some((detail) => normalizeRecordId(detail?.materialId) === normalizedMaterialId)
+  );
+};
+
+const buildStoredSupplierSnapshotOption = (materialRecord = {}) => {
+  const supplierId = normalizeRecordId(materialRecord.supplierId);
+  const supplierName = String(materialRecord.supplierName || '').trim();
+
+  if (!supplierId || !supplierName) return null;
+
+  return {
+    id: supplierId,
+    storeName: supplierName,
+    name: supplierName,
+    supplierName,
+    storeLink: materialRecord.supplierLink || '',
+    supplierLink: materialRecord.supplierLink || '',
+    category: 'Supplier tersimpan',
+    supportedMaterialIds: materialRecord.id ? [materialRecord.id] : [],
+    materialDetails: [],
+    isStoredSupplierSnapshot: true,
+  };
+};
+
+const getSupplierOptionsForMaterial = (supplierList = [], materialRecord = null) => {
+  const normalizedSuppliers = Array.isArray(supplierList) ? supplierList : [];
+  const materialId = normalizeRecordId(materialRecord?.id);
+
+  if (!materialId) {
+    return normalizedSuppliers;
+  }
+
+  const currentSupplierId = normalizeRecordId(materialRecord?.supplierId);
+  const filteredSuppliers = normalizedSuppliers.filter((supplier) => {
+    const supplierId = normalizeRecordId(supplier?.id);
+
+    return (
+      doesSupplierProvideMaterial(supplier, materialId) ||
+      (currentSupplierId && supplierId === currentSupplierId)
+    );
+  });
+
+  const hasCurrentSupplier = filteredSuppliers.some(
+    (supplier) => normalizeRecordId(supplier?.id) === currentSupplierId,
+  );
+  const storedSupplierSnapshot = buildStoredSupplierSnapshotOption(materialRecord);
+
+  if (storedSupplierSnapshot && !hasCurrentSupplier) {
+    return [...filteredSuppliers, storedSupplierSnapshot];
+  }
+
+  return filteredSuppliers;
+};
+
+const getSupplierOptionSearchText = (supplier = {}) => {
+  const materialNames = Array.isArray(supplier.supportedMaterialNames)
+    ? supplier.supportedMaterialNames
+    : [];
+  const detailMaterialNames = Array.isArray(supplier.materialDetails)
+    ? supplier.materialDetails.map((detail) => detail?.materialName)
+    : [];
+
+  return [
+    getSupplierOptionLabel(supplier),
+    supplier.storeName,
+    supplier.name,
+    supplier.supplierName,
+    supplier.category,
+    supplier.storeLink,
+    supplier.link,
+    supplier.url,
+    supplier.shopLink,
+    supplier.supplierLink,
+    ...materialNames,
+    ...detailMaterialNames,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+};
+
+
+// -----------------------------------------------------------------------------
+// Helper restock inline untuk drawer Detail Raw Material.
+// FUNGSI: mengambil purchase terakhir untuk raw material yang sedang dibuka dan
+// membaca link produk yang tersimpan di transaksi pembelian tersebut.
+// ALASAN: Detail Raw Material tidak lagi menampilkan semua supplier; link restock
+// utama harus berasal dari pembelian terakhir, bukan dari link toko supplier umum.
+// STATUS: aktif dipakai oleh row Supplier dan Link Produk; read-only, tidak menulis ke
+// raw_materials, tidak mengubah Purchases, tidak mengubah stok/kas/laporan.
+// -----------------------------------------------------------------------------
+const getTimestampMillis = (value) => {
+  if (!value) return 0;
+
+  if (typeof value?.toDate === 'function') {
+    return value.toDate().getTime();
+  }
+
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const getPurchaseSortMillis = (purchase = {}) => (
+  getTimestampMillis(purchase.date) ||
+  getTimestampMillis(purchase.purchaseDate) ||
+  getTimestampMillis(purchase.createdAt) ||
+  getTimestampMillis(purchase.updatedAt)
+);
+
+const getSafeRestockLink = (...values) => {
+  const validValue = values.find((value) => String(value || '').trim());
+  return validValue ? String(validValue).trim() : null;
+};
+
+const getPurchaseLineItems = (purchase = null) => {
+  if (!purchase || typeof purchase !== 'object') return [];
+
+  return [
+    purchase.items,
+    purchase.purchaseItems,
+    purchase.materialItems,
+    purchase.details,
+  ].find((candidate) => Array.isArray(candidate)) || [];
+};
+
+const getPurchaseProductLink = (purchase = null, materialId = null) => {
+  // ---------------------------------------------------------------------------
+  // Helper link produk purchase terakhir.
+  // FUNGSI: membaca link produk restock secara null-safe dari header purchase
+  // atau item purchase yang cocok dengan raw material aktif.
+  // ALASAN: data purchase lama bisa null/undefined atau belum punya productLink,
+  // sehingga akses langsung ke .productLink dapat membuat halaman white screen.
+  // STATUS: aktif dipakai oleh drawer detail Raw Material; read-only dan tidak
+  // mengubah stok, harga, kas, laporan, Purchases, maupun supplier.
+  // ---------------------------------------------------------------------------
+  if (!purchase || typeof purchase !== 'object') return null;
+
+  const directLink = getSafeRestockLink(
+    purchase?.productLink,
+    purchase?.purchaseProductLink,
+    purchase?.restockProductLink,
+  );
+
+  if (directLink) return directLink;
+
+  const normalizedMaterialId = normalizeRecordId(materialId);
+  const matchedPurchaseItem = getPurchaseLineItems(purchase).find((item) => {
+    if (!item || typeof item !== 'object') return false;
+
+    return [item.itemId, item.materialId, item.rawMaterialId].some(
+      (value) => normalizeRecordId(value) === normalizedMaterialId,
+    );
+  });
+
+  return getSafeRestockLink(
+    matchedPurchaseItem?.productLink,
+    matchedPurchaseItem?.purchaseProductLink,
+    matchedPurchaseItem?.restockProductLink,
+  );
+};
+
+const getLatestPurchaseForMaterial = (purchaseList = [], materialId = null) => {
+  const normalizedMaterialId = normalizeRecordId(materialId);
+  if (!normalizedMaterialId || !Array.isArray(purchaseList)) return null;
+
+  return purchaseList
+    .filter((purchase) => (
+      purchase?.type === 'material' &&
+      normalizeRecordId(purchase?.itemId) === normalizedMaterialId
+    ))
+    .sort((leftItem, rightItem) => getPurchaseSortMillis(rightItem) - getPurchaseSortMillis(leftItem))[0] || null;
+};
+
+const resolvePrimarySupplierForMaterial = (supplierList = [], materialRecord = {}) => {
+  const supplierId = normalizeRecordId(materialRecord?.supplierId);
+  const activeSupplier = Array.isArray(supplierList)
+    ? supplierList.find((supplier) => normalizeRecordId(supplier?.id) === supplierId)
+    : null;
+
+  /*
+   * Guard anti-white-screen supplier snapshot.
+   * Fungsi: helper display supplier hanya dipanggil saat master Supplier aktif ditemukan.
+   * Alasan: raw material lama bisa punya supplierId orphan sehingga harus fallback ke snapshot lama.
+   * Status: aktif dipakai; read-only dan bukan kandidat cleanup selama data lama masih ada.
+   */
+  return {
+    id: supplierId,
+    name: (activeSupplier ? getSupplierDisplayName(activeSupplier) : '') || String(materialRecord?.supplierName || '').trim() || '-',
+    link: (activeSupplier ? getSupplierLink(activeSupplier) : '') || String(materialRecord?.supplierLink || '').trim(),
+    isActiveMaster: Boolean(activeSupplier),
+  };
+};
+
+const resolveRestockSupplierDisplay = (purchase = null, supplierList = [], fallbackSupplier = {}) => {
+  // ---------------------------------------------------------------------------
+  // Helper supplier terakhir dibeli.
+  // FUNGSI: menentukan nama supplier yang tampil pada row Supplier di detail
+  // bahan baku dengan prioritas supplier dari transaksi Purchases terakhir.
+  // ALASAN: detail restock harus mencerminkan pembelian aktual terakhir; jika
+  // data purchase lama belum punya supplier, UI fallback ke supplier manual
+  // Raw Material tanpa menulis ulang database.
+  // STATUS: aktif dipakai oleh drawer detail Raw Material; read-only, bukan
+  // auto-sync, tidak mengubah raw_materials, supplier, stok, harga, kas, atau
+  // laporan. Kandidat cleanup hanya jika schema purchase sudah distandarkan.
+  // ---------------------------------------------------------------------------
+  const purchaseSupplierId = normalizeRecordId(
+    purchase?.supplierId || purchase?.supplierRefId || purchase?.supplierReferenceId,
+  );
+  const activeSupplier = purchaseSupplierId && Array.isArray(supplierList)
+    ? supplierList.find((supplier) => normalizeRecordId(supplier?.id) === purchaseSupplierId)
+    : null;
+  const purchaseSupplierName = String(
+    purchase?.supplierName || purchase?.supplierLabel || purchase?.supplierStoreName || '',
+  ).trim();
+  const activeSupplierName = activeSupplier ? getSupplierDisplayName(activeSupplier) : '';
+
+  if (purchaseSupplierId || purchaseSupplierName) {
+    return {
+      id: purchaseSupplierId || normalizeRecordId(fallbackSupplier?.id),
+      name: purchaseSupplierName || activeSupplierName || fallbackSupplier?.name || '-',
+      source: 'purchase',
+    };
+  }
+
+  return {
+    id: normalizeRecordId(fallbackSupplier?.id),
+    name: fallbackSupplier?.name || '-',
+    source: fallbackSupplier?.id ? 'manual' : 'empty',
+  };
+};
+
+const buildSupplierDetailRoute = (materialId, supplierId) => {
+  const params = new URLSearchParams();
+  if (materialId) params.set('materialId', materialId);
+  if (supplierId) params.set('supplierId', supplierId);
+
+  return `/suppliers?${params.toString()}`;
+};
+
+// -----------------------------------------------------------------------------
 // Status stok bahan baku.
 // Disamakan arahnya dengan Semi Finished Materials: nonaktif, kosong, rendah, aman.
 // -----------------------------------------------------------------------------
@@ -156,6 +427,7 @@ const RawMaterials = () => {
   // ---------------------------------------------------------------------------
   const [materials, setMaterials] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [purchaseRecords, setPurchaseRecords] = useState([]);
   const [pricingRules, setPricingRules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [formVisible, setFormVisible] = useState(false);
@@ -173,6 +445,15 @@ const RawMaterials = () => {
   const [supplierFilter, setSupplierFilter] = useState('all');
 
   const [form] = Form.useForm();
+  const navigate = useNavigate();
+
+  // ---------------------------------------------------------------------------
+  // Navigasi internal aplikasi.
+  // FUNGSI: dipakai tombol Lihat Supplier Lain dari drawer detail Raw Material.
+  // ALASAN: aplikasi memakai HashRouter, jadi internal route harus memakai
+  // React Router agar tidak keluar dari hash route dan memicu white screen.
+  // STATUS: aktif dipakai untuk navigasi UI; bukan logic data dan bukan kandidat cleanup.
+  // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
   // Watcher form dipakai untuk preview ringkasan varian secara realtime.
@@ -204,14 +485,32 @@ const RawMaterials = () => {
     const unsubSuppliers = listenSupplierCatalog(
       (data) => {
         // -------------------------------------------------------------------
-        // Supplier dibaca dari katalog gabungan agar supplier lama yang masih
-        // tersimpan di bahan baku tetap muncul dan bisa dipilih kembali.
+        // Supplier dibaca sebagai katalog vendor/restock untuk pilihan manual.
+        // ACTIVE: Raw Material tetap menjadi tempat user memilih supplier; halaman Supplier hanya boleh cascade snapshot untuk supplierId yang sudah dipilih manual.
         // -------------------------------------------------------------------
         setSuppliers(data);
       },
       (error) => {
         console.error(error);
         message.error('Gagal memuat supplier.');
+      },
+    );
+
+    const unsubPurchases = onSnapshot(
+      collection(db, 'purchases'),
+      (snapshot) => {
+        // -------------------------------------------------------------------
+        // ACTIVE: pembelian dibaca read-only untuk mencari link produk terakhir
+        // pada drawer Detail Raw Material. Listener ini tidak mengubah stok,
+        // kas, harga, saving, atau data purchase apa pun.
+        // -------------------------------------------------------------------
+        setPurchaseRecords(
+          snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })),
+        );
+      },
+      (error) => {
+        console.error(error);
+        message.error('Gagal memuat data pembelian untuk link restock.');
       },
     );
 
@@ -233,6 +532,7 @@ const RawMaterials = () => {
     return () => {
       unsubMaterials();
       unsubSuppliers();
+      unsubPurchases();
       unsubPricingRules();
     };
   }, []);
@@ -269,6 +569,49 @@ const RawMaterials = () => {
       { count: 0, stock: 0 },
     );
   }, [watchedVariants]);
+
+  // ---------------------------------------------------------------------------
+  // Opsi supplier untuk drawer form.
+  // FUNGSI: create mode tetap menampilkan semua supplier, sedangkan edit mode
+  // hanya menampilkan supplier yang menyediakan bahan terkait atau supplier yang
+  // sudah tersimpan pada raw material tersebut.
+  // ALASAN: filter ini membantu user memilih supplier yang relevan tanpa menulis
+  // otomatis ke raw_materials dan tanpa mengubah flow supplier manual.
+  // STATUS: aktif dipakai oleh Select supplier pada form Raw Material.
+  // ---------------------------------------------------------------------------
+  const formSupplierOptions = useMemo(
+    () => getSupplierOptionsForMaterial(suppliers, editingRecord),
+    [suppliers, editingRecord],
+  );
+
+  // ---------------------------------------------------------------------------
+  // Restock inline untuk drawer detail.
+  // FUNGSI: menyiapkan supplier utama dan purchase terakhir untuk bahan yang
+  // sedang dibuka tanpa menampilkan section/list supplier terpisah di drawer.
+  // ALASAN: detail bahan harus tetap ringkas; daftar supplier lengkap cukup
+  // dibuka melalui tombol Lihat Supplier.
+  // STATUS: aktif dipakai; read-only dan tidak mengubah Raw Material, Supplier,
+  // Purchases, stok, kas, saving, atau laporan.
+  // ---------------------------------------------------------------------------
+  const detailPrimarySupplier = useMemo(
+    () => resolvePrimarySupplierForMaterial(suppliers, selectedMaterial),
+    [suppliers, selectedMaterial],
+  );
+
+  const detailLatestPurchase = useMemo(
+    () => getLatestPurchaseForMaterial(purchaseRecords, selectedMaterial?.id),
+    [purchaseRecords, selectedMaterial?.id],
+  );
+
+  const detailLatestPurchaseLink = useMemo(
+    () => getPurchaseProductLink(detailLatestPurchase, selectedMaterial?.id),
+    [detailLatestPurchase, selectedMaterial?.id],
+  );
+
+  const detailRestockSupplier = useMemo(
+    () => resolveRestockSupplierDisplay(detailLatestPurchase, suppliers, detailPrimarySupplier),
+    [detailLatestPurchase, suppliers, detailPrimarySupplier],
+  );
 
   // ---------------------------------------------------------------------------
   // Filter list utama.
@@ -370,7 +713,8 @@ const RawMaterials = () => {
 
   // ---------------------------------------------------------------------------
   // Submit create/update bahan baku.
-  // Validasi backend tetap dipakai agar aturan data tetap satu pintu.
+  // ACTIVE: jika user memilih supplier di form ini, raw material menyimpan snapshot manual supplierId/supplierName/supplierLink.
+  // Supplier page tidak boleh menulis snapshot ini secara otomatis.
   // ---------------------------------------------------------------------------
   const handleSubmit = async () => {
     try {
@@ -378,10 +722,10 @@ const RawMaterials = () => {
       setSubmitting(true);
 
       if (editingRecord?.id) {
-        await updateRawMaterial(editingRecord.id, values, suppliers);
+        await updateRawMaterial(editingRecord.id, values, formSupplierOptions);
         message.success('Bahan baku berhasil diupdate.');
       } else {
-        await createRawMaterial(values, suppliers);
+        await createRawMaterial(values, formSupplierOptions);
         message.success('Bahan baku berhasil ditambahkan.');
       }
 
@@ -406,8 +750,12 @@ const RawMaterials = () => {
   };
 
   // ---------------------------------------------------------------------------
-  // Kolom tabel utama.
-  // Struktur tabel disamakan dengan semi finished: nama, stok, harga, status, aksi.
+  // Kolom tabel utama Raw Materials.
+  // FUNGSI: menjaga table tetap 4 kolom inti (Bahan, Stok, Harga, Aksi).
+  // ALASAN: status dipindahkan ke kolom Bahan dan fixed action dihapus agar area
+  // aksi tidak transparan/tembus serta tidak memaksa horizontal scroll desktop.
+  // STATUS: aktif dipakai untuk UI list; handler detail/edit/nonaktif tetap sama
+  // sehingga tidak menyentuh stok, supplier manual, atau flow transaksi.
   // ---------------------------------------------------------------------------
   const columns = [
     {
@@ -415,27 +763,32 @@ const RawMaterials = () => {
       dataIndex: 'name',
       key: 'name',
       width: 280,
-      render: (value, record) => (
-        <div style={compactCellStyles.stack}>
-          <Text strong>{value || '-'}</Text>
-          <Text type="secondary" style={compactCellStyles.meta}>
-            {record.supplierName || '-'}
-          </Text>
-          <Space size={6} wrap>
-            <Tag color={record.hasVariants ? 'blue' : 'default'}>
-              {record.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
-            </Tag>
-            {record.hasVariants ? (
-              <Tag color="purple">{formatNumberID(record.variantCount || 0)} varian</Tag>
-            ) : null}
-          </Space>
-        </div>
-      ),
+      render: (value, record) => {
+        const statusMeta = getRawMaterialStatusMeta(record);
+
+        return (
+          <div style={compactCellStyles.stack}>
+            <Text strong>{value || '-'}</Text>
+            <Text type="secondary" style={compactCellStyles.meta}>
+              {record.supplierName || '-'}
+            </Text>
+            <Space size={6} wrap>
+              <Tag color={record.hasVariants ? 'blue' : 'default'}>
+                {record.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
+              </Tag>
+              {record.hasVariants ? (
+                <Tag color="purple">{formatNumberID(record.variantCount || 0)} varian</Tag>
+              ) : null}
+              <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
+            </Space>
+          </div>
+        );
+      },
     },
     {
       title: 'Stok',
       key: 'stock',
-      width: 360,
+      width: 320,
       render: (_, record) => {
         const unit = record.stockUnit || 'pcs';
         const variants = Array.isArray(record.variants) ? record.variants : [];
@@ -460,7 +813,7 @@ const RawMaterials = () => {
     {
       title: 'Harga',
       key: 'priceInfo',
-      width: 260,
+      width: 220,
       render: (_, record) => (
         <div style={compactCellStyles.stack}>
           <Text strong>{`Restock ${formatCurrencyId(record.restockReferencePrice || 0)} / ${record.stockUnit || '-'}`}</Text>
@@ -474,28 +827,20 @@ const RawMaterials = () => {
       ),
     },
     {
-      title: 'Status',
-      key: 'status',
-      width: 120,
-      align: 'center',
-      render: (_, record) => {
-        const statusMeta = getRawMaterialStatusMeta(record);
-        return <Tag color={statusMeta.color}>{statusMeta.label}</Tag>;
-      },
-    },
-    {
       title: 'Aksi',
       key: 'action',
-      width: 230,
-      fixed: 'right',
+      width: 170,
+      className: 'app-table-action-column',
       render: (_, record) => (
-        <Space size={8} wrap>
-          <Button size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
-            Detail
-          </Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            Edit
-          </Button>
+        <Space direction="vertical" size={6} className="ims-action-group">
+          <Space size={6} wrap={false}>
+            <Button size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
+              Detail
+            </Button>
+            <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              Edit
+            </Button>
+          </Space>
           <Popconfirm
             title={record.isActive === false ? 'Aktifkan kembali bahan baku?' : 'Nonaktifkan bahan baku?'}
             description={
@@ -621,17 +966,22 @@ const RawMaterials = () => {
 
       {/* ---------------------------------------------------------------------
           Tabel utama daftar bahan baku.
-          size small dipakai supaya jarak cell lebih rapat dan tidak terlalu renggang.
+          FUNGSI: memakai class standar app-data-table dan tableLayout fixed agar
+          surface table solid, kolom aksi tidak sticky/transparan, serta desktop
+          normal tidak perlu geser horizontal.
+          ALASAN: bug UI sebelumnya muncul dari scroll x besar dan fixed action.
+          STATUS: aktif dipakai; hanya presentasi UI, tidak mengubah handler data.
       --------------------------------------------------------------------- */}
       <Card size="small">
         <Table
+          className="app-data-table"
           rowKey="id"
           loading={loading}
           dataSource={filteredMaterials}
           columns={columns}
           size="small"
+          tableLayout="fixed"
           pagination={{ pageSize: 10 }}
-          scroll={{ x: 1200 }}
           locale={{ emptyText: <Empty description="Belum ada data bahan baku" /> }}
         />
       </Card>
@@ -672,12 +1022,53 @@ const RawMaterials = () => {
             </Col>
             <Col xs={24} md={12}>
               <Form.Item name="supplierId" label="Supplier">
-                <Select allowClear placeholder="Pilih supplier" optionFilterProp="children" showSearch>
-                  {(suppliers || []).map((supplier) => (
-                    <Option key={supplier.id} value={supplier.id}>
-                      {getSupplierOptionLabel(supplier)}
-                    </Option>
-                  ))}
+                {/* ---------------------------------------------------------
+                    Supplier dropdown filter.
+                    FUNGSI: menampilkan supplier yang menyediakan bahan ini pada
+                    mode edit, tetap menampilkan semua supplier pada mode create,
+                    dan tetap menyertakan supplier tersimpan untuk data lama.
+                    ALASAN: kebutuhan bug hanya filter opsi read-only; blok ini
+                    tidak mengembalikan auto-sync Supplier ke Raw Material.
+                    STATUS: aktif dipakai oleh form Raw Material.
+                --------------------------------------------------------- */}
+                <Select
+                  allowClear
+                  placeholder="Pilih supplier"
+                  showSearch
+                  optionFilterProp="searchText"
+                  filterOption={(input, option) =>
+                    String(option?.searchText || '')
+                      .toLowerCase()
+                      .includes(String(input || '').toLowerCase())
+                  }
+                  notFoundContent={
+                    editingRecord?.id ? (
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description="Belum ada supplier yang terhubung dengan bahan ini"
+                      />
+                    ) : null
+                  }
+                >
+                  {(formSupplierOptions || []).map((supplier) => {
+                    const optionLabel = getSupplierOptionLabel(supplier);
+
+                    return (
+                      <Option
+                        key={supplier.id}
+                        value={supplier.id}
+                        label={optionLabel}
+                        searchText={getSupplierOptionSearchText(supplier)}
+                      >
+                        <Space size={6} wrap>
+                          <span>{optionLabel}</span>
+                          {supplier.isStoredSupplierSnapshot ? (
+                            <Tag color="default">Supplier tersimpan</Tag>
+                          ) : null}
+                        </Space>
+                      </Option>
+                    );
+                  })}
                 </Select>
               </Form.Item>
             </Col>
@@ -987,13 +1378,50 @@ const RawMaterials = () => {
           <Space direction="vertical" style={{ width: '100%' }} size={16}>
             <Descriptions bordered column={1} size="small">
               <Descriptions.Item label="Nama Bahan Baku">{selectedMaterial.name || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Supplier">{selectedMaterial.supplierName || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Link Supplier">
-                {selectedMaterial.supplierLink ? (
-                  <Link href={selectedMaterial.supplierLink} target="_blank" rel="noreferrer">
-                    Buka Link Supplier
-                  </Link>
-                ) : '-'}
+              <Descriptions.Item label="Supplier">
+                <Space size={8} wrap>
+                  <Text strong>{detailRestockSupplier.name}</Text>
+                  {detailRestockSupplier.source === 'purchase' ? <Tag color="green">Terakhir dibeli</Tag> : null}
+                  {detailRestockSupplier.source === 'manual' ? <Tag color="blue">Supplier manual</Tag> : null}
+                  {detailPrimarySupplier.id && !detailPrimarySupplier.isActiveMaster ? <Tag color="orange">Snapshot lama</Tag> : null}
+                  {/* ---------------------------------------------------------
+                      Tombol internal ke menu Supplier.
+                      Fungsi: membuka supplier lain yang menyediakan bahan ini.
+                      Alasan: aplikasi memakai HashRouter, jadi gunakan
+                      useNavigate; jangan pakai href path biasa agar tidak
+                      keluar dari hash route dan menyebabkan white screen.
+                      Status: aktif dipakai sebagai navigasi read-only, tidak
+                      menulis raw_materials dan tidak mengembalikan auto-sync.
+                  --------------------------------------------------------- */}
+                  <Button
+                    size="small"
+                    onClick={() => navigate(buildSupplierDetailRoute(selectedMaterial.id, detailRestockSupplier.id))}
+                  >
+                    Lihat Supplier Lain
+                  </Button>
+                </Space>
+              </Descriptions.Item>
+              <Descriptions.Item label="Link Produk">
+                <Space direction="vertical" size={4}>
+                  {detailLatestPurchase ? (
+                    <Text type="secondary" style={compactCellStyles.meta}>
+                      {`Pembelian terakhir: ${formatDateId(detailLatestPurchase.date || detailLatestPurchase.purchaseDate || detailLatestPurchase.createdAt, true)}`}
+                    </Text>
+                  ) : null}
+                  {detailLatestPurchaseLink ? (
+                    <Button
+                      size="small"
+                      type="primary"
+                      href={detailLatestPurchaseLink}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Buka Link Produk Terakhir
+                    </Button>
+                  ) : (
+                    <Text type="secondary">Belum ada link produk dari pembelian terakhir.</Text>
+                  )}
+                </Space>
               </Descriptions.Item>
               <Descriptions.Item label="Mode Varian">
                 <Tag color={selectedMaterial.hasVariants ? 'blue' : 'default'}>
@@ -1021,6 +1449,17 @@ const RawMaterials = () => {
                 {formatDateId(selectedMaterial.updatedAt, true)}
               </Descriptions.Item>
             </Descriptions>
+
+            {/* -----------------------------------------------------------------
+                Section Restock terpisah sudah dihapus.
+                Fungsi: menjaga drawer Detail Bahan Baku tetap ringkas dengan
+                menaruh supplier terakhir dibeli dan link produk terakhir pada
+                tabel utama Descriptions di atas.
+                Alasan: daftar semua supplier dan perbandingan harga cukup
+                dibuka melalui menu Supplier, bukan dirender penuh di drawer.
+                Status: cleanup UI aktif; tidak mengubah save flow, stok,
+                purchase calculation, Supplier sync, atau database schema.
+            ----------------------------------------------------------------- */}
 
             <Card size="small" title={selectedMaterial.hasVariants ? 'Rincian Varian Bahan Baku' : 'Rincian Stok Master'}>
               {selectedMaterial.hasVariants ? (

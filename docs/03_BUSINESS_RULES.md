@@ -459,3 +459,42 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Payroll paid wajib membuat expense secara idempotent dengan `sourceModule=production_payroll` dan `sourceId=payrollId`.
 - Profit Loss membaca payroll lewat `expenses`, bukan langsung dari `production_payrolls`, agar tidak double count.
 - Expense payroll tidak boleh dihapus otomatis saat payroll paid dibatalkan sebelum business rule rollback disepakati.
+
+## 15. Rule Supplier & Raw Material
+
+### 15.1 Supplier sebagai katalog vendor/restock
+- Supplier adalah master/katalog vendor untuk referensi restock.
+- Supplier boleh menyimpan daftar material yang dijual melalui `materialDetails`.
+- `materialDetails.productLink`, `materialDetails.referencePrice`, dan `materialDetails.note` hanya informasi restock.
+- Supplier tidak boleh memasang supplier baru ke Raw Material berdasarkan katalog `materialDetails`.
+- Saat master Supplier diedit, sistem boleh memperbarui snapshot `supplierName` dan `supplierLink` hanya pada Raw Material yang sudah memiliki `supplierId` sama.
+- Saat master Supplier dihapus, sistem boleh mengosongkan snapshot supplier hanya pada Raw Material yang masih menunjuk `supplierId` tersebut.
+- Tidak ada tombol atau flow aktif “Sinkronkan Bahan” dari Supplier ke Raw Material.
+
+### 15.2 Raw Material memilih supplier manual
+- Raw Material tetap source utama stok bahan.
+- Supplier pada Raw Material dipilih manual dari form Raw Material.
+- Snapshot manual yang boleh disimpan di raw material:
+  - `supplierId`
+  - `supplierName`
+  - `supplierLink`
+- Data lama dengan snapshot supplier tetap aman dibaca; snapshot boleh ikut diperbarui/dibersihkan hanya melalui cascade berdasarkan `supplierId` yang sudah dipilih manual.
+
+### 15.3 Batas ke Purchases
+- Purchases boleh memakai supplier sebagai referensi vendor.
+- Harga aktual pembelian tetap berasal dari transaksi pembelian.
+- Harga referensi supplier tidak boleh menggantikan `actualUnitCost` atau harga aktual pembelian.
+- Klik link supplier/product restock tidak membuat purchase dan tidak mengubah stok.
+
+## 16. Rule Restock Assistant
+
+- Restock Assistant hanya membantu navigasi dan prefill data, bukan membuat transaksi otomatis.
+- Dashboard boleh menampilkan action cepat untuk bahan baku stok menipis/kritis:
+  - buka link produk terakhir dari Purchases terakhir;
+  - buka form Purchases dengan material/supplier/link produk terisi awal;
+  - buka menu Supplier dengan filter material untuk membandingkan supplier.
+- Klik action Restock Assistant tidak boleh mengubah stok, kas, expense, saving, laporan, atau supplier.
+- Stok/kas/expense hanya berubah setelah user menyimpan transaksi di halaman Purchases.
+- Supplier terakhir dibeli dan link produk terakhir wajib berasal dari transaksi Purchases terakhir untuk bahan tersebut.
+- Jika belum ada purchase/link produk, UI harus menampilkan fallback/empty state aman dan tidak boleh memakai link toko supplier sebagai link produk utama.
+- Menu Supplier tetap menjadi tempat melihat semua supplier, harga referensi, link produk katalog, dan catatan supplier.

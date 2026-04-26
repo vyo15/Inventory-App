@@ -289,3 +289,31 @@ Tech debt tersisa:
 - `src/pages/Dashboard/Dashboard.jsx` dan `.css`: Dashboard harus tetap read-only dan compact.
 - `src/pages/Laporan/StockReport.jsx`: jangan hilangkan semi-finished stock dari laporan.
 - `src/services/Produksi/productionPayrollsService.js`: guard anti double payroll expense wajib dipertahankan.
+
+### 13. Supplier Restock Catalog manual dengan cascade snapshot terbatas
+Temuan terkini:
+- halaman Supplier dipakai sebagai master/katalog vendor dan daftar barang restock;
+- auto-pasang Supplier ke `raw_materials` berdasarkan `materialDetails` sudah bukan flow aktif;
+- tombol “Sinkronkan Bahan” tidak boleh ada lagi di halaman Supplier;
+- Raw Material tetap memilih supplier secara manual dan menyimpan snapshot `supplierId`, `supplierName`, `supplierLink`;
+- saat master Supplier diedit, snapshot `supplierName` dan `supplierLink` boleh diperbarui hanya pada Raw Material yang sudah menunjuk `supplierId` yang sama;
+- saat master Supplier dihapus, snapshot supplier boleh dibersihkan hanya pada Raw Material yang masih menunjuk `supplierId` tersebut;
+- `materialDetails` di Supplier tetap dipakai sebagai katalog restock/reference-only.
+
+Risiko tersisa:
+- data raw material lama bisa masih memiliki snapshot supplier dari flow lama;
+- snapshot lama tetap dibaca agar data historis aman;
+- cascade snapshot terbatas hanya menjaga konsistensi nama/link supplier yang sudah dipilih manual, bukan memasang supplier baru ke bahan;
+- jika ingin membersihkan data lama di luar supplierId yang cocok, perlu task migrasi/backfill terpisah dengan preview, bukan patch UI biasa.
+
+## Restock Assistant - Current State
+
+Temuan terkini:
+- Detail Raw Material menampilkan informasi restock ringkas di tabel utama, bukan list semua supplier.
+- Dashboard Stok Kritis dapat memberi action restock cepat untuk bahan baku menipis/kritis.
+- Purchases mendukung prefill dari query Restock Assistant, tetapi transaksi tetap wajib disimpan manual oleh user.
+
+Guard tersisa:
+- data purchase lama mungkin belum memiliki `productLink`, sehingga tombol link produk tidak selalu tampil;
+- action Dashboard tidak boleh berubah menjadi auto-purchase atau auto-expense;
+- link toko supplier hanya fallback informasi, bukan link produk utama restock.

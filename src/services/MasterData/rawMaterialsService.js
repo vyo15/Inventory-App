@@ -58,8 +58,8 @@ const enrichRawMaterial = (item = {}) =>
 
 // -----------------------------------------------------------------------------
 // Normalizer payload create/update.
-// Helper supplier baru dipakai agar data supplierName dan supplierLink tetap aman,
-// walau supplier berasal dari master baru, collection lama, atau fallback bahan baku.
+// ACTIVE: snapshot supplierId/supplierName/supplierLink hanya berasal dari pilihan manual user di form Raw Material.
+// Supplier page tidak boleh memanggil service ini atau menulis raw_materials secara otomatis.
 // -----------------------------------------------------------------------------
 const normalizePayload = (values = {}, suppliers = [], isEdit = false) => {
   const selectedSupplier = (suppliers || []).find((item) => String(item.id) === String(values.supplierId));

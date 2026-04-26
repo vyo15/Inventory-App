@@ -22,7 +22,6 @@ import {
   EyeOutlined,
   EditOutlined,
   DeleteOutlined,
-  SyncOutlined,
 } from '@ant-design/icons';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -30,11 +29,12 @@ import { formatNumberID } from '../../utils/formatters/numberId';
 import { formatCurrencyIDR } from '../../utils/formatters/currencyId';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
+  cascadeSupplierSnapshotToRawMaterials,
+  clearSupplierSnapshotFromRawMaterials,
   getSupplierDisplayName,
   getSupplierStoreLink,
   isManagedSupplierRecord,
   listenSuppliers,
-  syncRawMaterialsWithSupplier,
 } from '../../services/MasterData/suppliersService';
 
 const { Option } = Select;
@@ -58,7 +58,6 @@ const SupplierPurchases = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [syncingRowId, setSyncingRowId] = useState(null);
 
   // ---------------------------------------------------------------------------
   // State filter UI.
@@ -97,8 +96,8 @@ const SupplierPurchases = () => {
   }, [suppliers]);
 
   // ---------------------------------------------------------------------------
-  // Sinkron supplier master dan bahan baku dari Firestore.
-  // Supplier hanya diambil dari master supplierPurchases agar halaman stabil.
+  // Load master supplier dan referensi bahan baku dari Firestore.
+  // ACTIVE: halaman Supplier membaca katalog vendor/restock dan hanya melakukan cascade snapshot terbatas saat supplier diedit atau dihapus.
   // ---------------------------------------------------------------------------
   useEffect(() => {
     const unsubscribeSuppliers = listenSuppliers(
@@ -197,7 +196,7 @@ const SupplierPurchases = () => {
 
   // ---------------------------------------------------------------------------
   // Normalisasi payload supplier sebelum dikirim ke master supplier.
-  // Material yang dipilih akan disimpan sekaligus dipakai untuk sinkron ke bahan.
+  // ACTIVE: materialDetails disimpan sebagai katalog restock read-only untuk referensi, bukan untuk menulis otomatis ke raw material.
   // ---------------------------------------------------------------------------
   const buildSupplierPayload = (values) => {
     const materialDetails = (values.materialDetails || [])
@@ -227,43 +226,49 @@ const SupplierPurchases = () => {
 
   // ---------------------------------------------------------------------------
   // Simpan supplier baru / edit supplier.
-  // Setelah disimpan, bahan yang dipilih di supplier akan langsung disinkronkan.
-  // Jadi user cukup bikin supplier baru lalu pilih material yang terkait.
+  // FUNGSI: menyimpan master vendor dan katalog restock di collection Supplier.
+  // ALASAN: saat edit, snapshot nama/link di Raw Material yang sudah memilih
+  // supplierId ini ikut diperbarui agar tampilan tetap konsisten dengan master.
+  // STATUS: aktif; cascade ini hanya menyentuh snapshot supplierId yang cocok dan
+  // tidak memasang supplier baru dari materialDetails.
   // ---------------------------------------------------------------------------
   const handleSaveSupplier = async (values) => {
     try {
       setSaving(true);
 
       const payload = buildSupplierPayload(values);
-      const previousSupplier = suppliers.find((item) => item.id === editingId) || null;
-      let savedSupplierId = editingId;
 
       if (isEditing && editingId) {
         await updateDoc(doc(db, 'supplierPurchases', editingId), payload);
-        message.success('Supplier berhasil diupdate.');
+
+        // -------------------------------------------------------------------
+        // Cascade snapshot setelah edit master Supplier.
+        // FUNGSI: memperbarui nama/link di Raw Material yang supplierId-nya sama.
+        // ALASAN: jika cascade gagal, master Supplier tetap tersimpan dan user
+        // diberi warning agar tidak salah mengira perubahan supplier gagal total.
+        // STATUS: aktif; bukan kandidat cleanup selama snapshot supplier dipakai.
+        // -------------------------------------------------------------------
+        try {
+          const affectedMaterials = await cascadeSupplierSnapshotToRawMaterials(editingId, {
+            id: editingId,
+            ...payload,
+          });
+
+          message.success(
+            affectedMaterials > 0
+              ? `Supplier berhasil diupdate. Snapshot ${affectedMaterials} bahan ikut diperbarui.`
+              : 'Supplier berhasil diupdate.',
+          );
+        } catch (snapshotError) {
+          console.error('Gagal memperbarui snapshot supplier di Raw Material.', snapshotError);
+          message.warning('Supplier berhasil diupdate, tetapi snapshot bahan belum ikut diperbarui. Coba simpan ulang supplier.');
+        }
       } else {
-        const createdDoc = await addDoc(collection(db, 'supplierPurchases'), {
+        await addDoc(collection(db, 'supplierPurchases'), {
           ...payload,
           createdAt: serverTimestamp(),
         });
-        savedSupplierId = createdDoc.id;
         message.success('Supplier berhasil ditambahkan.');
-      }
-
-      const syncResult = await syncRawMaterialsWithSupplier(
-        {
-          ...payload,
-          id: savedSupplierId,
-          masterSupplierId: savedSupplierId,
-          sourceCollection: 'supplierPurchases',
-        },
-        previousSupplier,
-      );
-
-      if (syncResult.updatedCount > 0) {
-        message.success(
-          `${formatNumberID(syncResult.updatedCount)} bahan baku berhasil disinkronkan dengan supplier.`,
-        );
       }
 
       resetSupplierModalState();
@@ -301,9 +306,12 @@ const SupplierPurchases = () => {
   };
 
   // ---------------------------------------------------------------------------
-  // Hapus supplier hanya menghapus master supplier.
-  // Data supplier yang sudah menempel di bahan baku tidak disentuh otomatis,
-  // supaya tidak ada perubahan data mendadak di operasional harian.
+  // Hapus supplier dari master dan bersihkan snapshot pada Raw Material terkait.
+  // FUNGSI: Raw Material yang supplierId-nya sama tidak lagi menampilkan supplier
+  // yang sudah dihapus dari master Supplier.
+  // ALASAN: data supplier manual harus tetap konsisten, tetapi pembersihan hanya
+  // dilakukan pada supplierId yang cocok agar tidak menimpa bahan lain.
+  // STATUS: aktif; tidak mengubah stok, harga, purchase, atau katalog material.
   // ---------------------------------------------------------------------------
   const handleDeleteSupplier = async (record) => {
     if (!isManagedSupplierRecord(record)) {
@@ -313,7 +321,28 @@ const SupplierPurchases = () => {
 
     try {
       await deleteDoc(doc(db, 'supplierPurchases', record.id));
-      message.success('Supplier berhasil dihapus dari master supplier.');
+
+      // -------------------------------------------------------------------
+      // Clear snapshot setelah master Supplier dihapus.
+      // FUNGSI: mengosongkan supplier di Raw Material yang masih menunjuk
+      // supplierId yang sama.
+      // ALASAN: jika clear gagal, supplier tetap sudah terhapus dan user diberi
+      // warning agar data bahan bisa dicek ulang tanpa menyentuh stok/purchase.
+      // STATUS: aktif; bukan kandidat cleanup selama delete Supplier perlu
+      // membersihkan snapshot manual terkait.
+      // -------------------------------------------------------------------
+      try {
+        const clearedMaterials = await clearSupplierSnapshotFromRawMaterials(record.id);
+
+        message.success(
+          clearedMaterials > 0
+            ? `Supplier berhasil dihapus. Snapshot supplier di ${clearedMaterials} bahan ikut dibersihkan.`
+            : 'Supplier berhasil dihapus dari master supplier.',
+        );
+      } catch (snapshotError) {
+        console.error('Gagal membersihkan snapshot supplier di Raw Material.', snapshotError);
+        message.warning('Supplier berhasil dihapus, tetapi snapshot di bahan belum ikut dibersihkan. Cek Raw Material terkait.');
+      }
     } catch (error) {
       console.error(error);
       message.error('Gagal menghapus supplier.');
@@ -326,25 +355,6 @@ const SupplierPurchases = () => {
   const openSupplierDrawer = (record) => {
     setSelectedSupplier(record);
     setDrawerVisible(true);
-  };
-
-  // ---------------------------------------------------------------------------
-  // Sinkron manual supplier ke bahan baku.
-  // Dipakai jika user edit daftar material supplier atau ingin refresh relasi.
-  // ---------------------------------------------------------------------------
-  const handleSyncSupplierMaterials = async (record) => {
-    try {
-      setSyncingRowId(record.id);
-      const result = await syncRawMaterialsWithSupplier(record, record);
-      message.success(
-        `${formatNumberID(result.updatedCount || 0)} bahan baku berhasil disinkronkan.`,
-      );
-    } catch (error) {
-      console.error(error);
-      message.error('Gagal menyinkronkan supplier ke bahan baku.');
-    } finally {
-      setSyncingRowId(null);
-    }
   };
 
   // ---------------------------------------------------------------------------
@@ -371,7 +381,7 @@ const SupplierPurchases = () => {
           <span>{value || '-'}</span>
           {getSupplierStoreLink(record) ? (
             <a href={getSupplierStoreLink(record)} target="_blank" rel="noreferrer">
-              Buka Link Supplier
+              Buka Link Toko
             </a>
           ) : null}
         </Space>
@@ -404,12 +414,10 @@ const SupplierPurchases = () => {
       // ---------------------------------------------------------------------------
       title: 'Aksi',
       key: 'actions',
-      width: 360,
+      width: 280,
       fixed: 'right',
       className: 'app-table-action-column',
       render: (_, record) => {
-        const isRowSyncing = syncingRowId === record.id;
-
         return (
           <div className="ims-action-group">
             <Button
@@ -427,15 +435,6 @@ const SupplierPurchases = () => {
               onClick={() => handleEditSupplier(record)}
             >
               Edit
-            </Button>
-            <Button
-              className="ims-action-button"
-              size="small"
-              icon={<SyncOutlined />}
-              loading={isRowSyncing}
-              onClick={() => handleSyncSupplierMaterials(record)}
-            >
-              Sinkronkan Bahan
             </Button>
             <Popconfirm
               title="Yakin hapus supplier ini?"
@@ -503,13 +502,14 @@ const SupplierPurchases = () => {
 
       {/* -------------------------------------------------------------------
           Info singkat arah supplier final yang lebih sederhana.
+          ACTIVE: wording ini mengunci bahwa Supplier hanya memperbarui/membersihkan snapshot bahan yang sudah memilih supplierId sama, bukan memasang supplier baru dari katalog material.
       ------------------------------------------------------------------- */}
       <Alert
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="Alur supplier disederhanakan"
-        description="Buat supplier baru di sini, pilih bahan baku yang terkait, lalu sistem akan menyinkronkan supplier tersebut ke bahan baku yang dipilih."
+        message="Supplier adalah katalog vendor/restock"
+        description="Supplier menyimpan katalog barang untuk referensi restock. Supplier pada Raw Material tetap dipilih manual; jika master supplier diedit atau dihapus, hanya snapshot bahan yang sudah memilih supplier tersebut yang diperbarui/dibersihkan."
       />
 
       {/* -------------------------------------------------------------------
@@ -613,12 +613,12 @@ const SupplierPurchases = () => {
 
           {/* -----------------------------------------------------------------
               Detail bahan yang dijual supplier.
-              Data ini jadi dasar sinkronisasi supplier ke bahan baku terkait.
+              ACTIVE: data ini hanya katalog restock reference-only; tidak menulis otomatis ke raw material.
           ----------------------------------------------------------------- */}
           <Form.List name="materialDetails">
             {(fields, { add, remove }) => (
               <>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>Material + Link Produk</div>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>Katalog Material + Link Produk</div>
 
                 {fields.map(({ key, name, ...restField }) => (
                   <div
@@ -652,8 +652,8 @@ const SupplierPurchases = () => {
                     <Form.Item
                       {...restField}
                       name={[name, 'referencePrice']}
-                      label="Harga Catatan"
-                      extra="Opsional. Dipakai sebagai catatan harga supplier ini."
+                      label="Harga Referensi Supplier"
+                      extra="Opsional. Hanya sebagai referensi restock, bukan harga aktual pembelian."
                     >
                       <InputNumber
                         min={0}
@@ -775,7 +775,7 @@ const SupplierPurchases = () => {
               </tbody>
             </table>
 
-            <div style={{ fontWeight: 600, marginBottom: 12 }}>Detail Bahan & Link Produk</div>
+            <div style={{ fontWeight: 600, marginBottom: 12 }}>Katalog Bahan & Link Produk Restock</div>
 
             <Table
               rowKey={(record, index) => `${record.materialId || record.materialName || 'material'}-${index}`}
@@ -800,7 +800,7 @@ const SupplierPurchases = () => {
                     ),
                 },
                 {
-                  title: 'Harga Catatan',
+                  title: 'Harga Referensi Supplier',
                   dataIndex: 'referencePrice',
                   render: (value) => (value ? formatCurrencyIDR(value) : '-'),
                 },
