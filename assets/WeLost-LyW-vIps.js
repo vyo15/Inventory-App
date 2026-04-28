@@ -1,0 +1,1 @@
+import{j as t,i as s,B as o,L as e}from"./index-Dl6uc11p.js";const a=()=>t.jsx("div",{className:"not-found",children:t.jsx(s,{status:"error",title:"404 Not Found",subTitle:"Sorry, the page you visited does not exist.",extra:[t.jsx(o,{type:"primary",children:t.jsx(e,{to:"/Dashboard",children:"Back to Dashboard"})},"console")]})});export{a as default};

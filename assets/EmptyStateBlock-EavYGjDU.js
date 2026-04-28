@@ -1,1 +1,0 @@
-import{j as t,T as e}from"./index-DSnS7pW0.js";import{E as a}from"./firebase-DMCtvbZU.js";const{Text:r}=e,p=({description:s="Data belum tersedia."})=>t.jsx("div",{className:"empty-state-block",children:t.jsx(a,{description:t.jsx(r,{className:"empty-state-text",children:s})})});export{p as E};
