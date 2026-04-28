@@ -444,3 +444,156 @@ Guard tersisa:
 - Dashboard masih membaca beberapa collection operasional penuh untuk summary produksi, payroll, income, expense, dan stok. Ini sengaja belum di-limit karena limit yang salah bisa menyembunyikan status penting.
 - Raw Material dan Supplier lookup terbaru masih memakai jendela baca ringan, bukan lookup per material yang benar-benar presisi untuk semua data historis.
 - Jika nanti muncul error Firestore index pada query baru, buat index sesuai pesan Firebase dan jangan ubah business rule.
+
+## Auth, Role, dan Manajemen User Internal - Fase A Docs Only
+
+Status: **BELUM DIIMPLEMENTASIKAN + GUARDED**.
+
+Fase ini hanya mengunci desain akses awal. Tidak ada perubahan source code, tidak ada Login page, tidak ada AuthProvider, tidak ada ProtectedRoute, tidak ada User Management page, dan tidak ada perubahan Firestore Rules.
+
+### Current state
+
+- Aplikasi belum punya login.
+- `src/firebase.js` masih berperan sebagai inisialisasi Firebase app dan Firestore; Firebase Auth belum menjadi flow aktif.
+- `App.jsx` masih langsung render layout aplikasi tanpa auth gate.
+- `AppRoutes.jsx` masih membuka route aplikasi tanpa ProtectedRoute.
+- `sidebarMenu.js` belum punya metadata role/access.
+- Header belum punya info user dan logout.
+- Reset & Maintenance masih perlu guard role karena area ini destructive/repair.
+- Firestore Rules sebelumnya pernah menjadi sumber error permission saat rules expired; artinya desain Auth/Role dan rules perlu dibuat bertahap dan guarded.
+- Akun internal belum ada. Desain yang disepakati untuk fase berikutnya: username/password internal, bukan Google login, bukan email asli sebagai identitas utama.
+
+### Tech debt yang dikunci
+
+- Belum ada `AuthProvider` / `useAuth`.
+- Belum ada Login page.
+- Belum ada `ProtectedRoute`.
+- Belum ada role-based sidebar filtering.
+- Belum ada collection profile role seperti `system_users/{uid}`.
+- Belum ada seed `super_admin` pertama.
+- Belum ada flow user `inactive`.
+- Belum ada menu Manajemen User.
+- Firestore Rules belum final production untuk Auth/Role.
+- Direct Firestore write di halaman bisnis masih mengandalkan permission global; role UI saja tidak cukup untuk data real.
+- Folder `functions` ada, tetapi `functions/index.js` harus dianggap **LEGACY/GUARDED** karena berisi trigger stok lama. Jangan dipakai/deploy untuk Auth sebelum audit functions terpisah.
+
+### Risiko utama jika langsung coding besar
+
+- Owner bisa terkunci jika route guard aktif sebelum seed `super_admin` dibuat.
+- App bisa kembali `Missing or insufficient permissions` jika Firestore Rules dikunci sebelum Auth/profile stabil.
+- User biasa bisa terlalu bebas jika access matrix tidak dikunci.
+- Hide menu saja tidak aman tanpa route guard dan Firestore Rules.
+- Password internal berisiko bocor jika disimpan plaintext di Firestore atau divalidasi frontend.
+- Menggabungkan Auth dengan cleanup besar, Sales hardening, Reports rewrite, Production refactor, atau offline database akan membuat bug sulit dilacak.
+
+### Fase lanjutan yang disepakati
+
+1. **Fase A - Access Matrix + docs only**: selesai ketika docs mengunci role, access matrix, risiko, dan fase implementasi.
+2. **Fase B - Auth foundation**: tambah Firebase Auth/export, AuthProvider, useAuth, Login page, logout, dan auth loading state.
+3. **Fase C - Route guard**: login public, app protected, Unauthorized page, no-role/inactive handling.
+4. **Fase D - Sidebar/menu guard**: metadata role/access di menu dan filter berdasarkan role.
+5. **Fase E - User Management**: `super_admin` dan `administrator` mengelola user sesuai batasan.
+6. **Fase F - Firestore Rules/Auth alignment**: rules berbasis `request.auth`, `system_users`, role, dan status active.
+7. **Fase G - Cleanup kecil terkait Auth**: hanya cleanup helper/guard yang relevan; jangan refactor besar.
+8. **Fase H - Docs final sync**: update docs setelah source dan rules benar-benar berubah.
+
+
+---
+
+## Update Auth Foundation Fase B — 2026-04-28
+
+### Status implementasi aktif
+- **AKTIF:** Firebase Auth foundation sudah ditambahkan sebagai gerbang awal aplikasi.
+- **AKTIF:** `src/firebase.js` sekarang export `auth` dan `db`, sehingga Firestore flow existing tetap berjalan dan Auth bisa dipakai oleh provider.
+- **AKTIF:** `AuthProvider` membaca Firebase Auth session lalu memverifikasi profile internal dari collection `system_users/{uid}`.
+- **AKTIF:** halaman Login memakai label **Username** dan **Password**; username dikonversi menjadi email internal sistem di belakang layar.
+- **AKTIF:** App utama hanya render `AppLayout` setelah user punya session Firebase Auth, profile, role valid, dan status `active`.
+- **AKTIF:** Header menampilkan info user/role dan tombol logout.
+
+### Guarded decisions
+- **GUARDED:** User Management belum dibuat pada Fase B.
+- **GUARDED:** Firestore Rules belum difinalkan pada Fase B agar app tidak terkunci sebelum data user/profile stabil.
+- **GUARDED:** Role/menu guard detail belum dibuat; Fase B hanya login gate awal.
+- **GUARDED:** User tanpa profile, tanpa role valid, atau berstatus inactive tidak boleh masuk ke app utama.
+- **GUARDED:** Password tidak disimpan di Firestore dan tidak divalidasi dari frontend terhadap dokumen Firestore.
+
+### Manual seed sementara
+Sebelum User Management dibuat, akun awal harus dibuat manual:
+1. Aktifkan Firebase Authentication Email/Password.
+2. Buat user Auth dengan email internal hasil pola `username@ims-bunga-flanel.local`.
+3. Buat dokumen Firestore `system_users/{uid}`.
+4. Isi minimal: `authUid`, `username`, `displayName`, `role`, `status: active`, `createdAt`, `updatedAt`.
+5. Role valid awal: `super_admin`, `administrator`, `user`.
+
+### Risiko tersisa
+- Firestore Rules masih perlu alignment pada fase terpisah.
+- Sidebar/menu masih belum difilter role; route detail per role tetap fase berikutnya.
+- User Management belum tersedia, sehingga create/reset password user masih manual dari Firebase Console.
+- Domain email internal harus konsisten dengan normalizer login.
+- Jika profile `system_users/{uid}` belum dibuat, login Firebase Auth berhasil tetapi user tidak masuk app utama.
+
+### Legacy / cleanup candidate
+- **LEGACY/GUARDED:** `functions/index.js` lama tetap tidak boleh dipakai untuk Auth atau dideploy ulang tanpa audit karena berisi trigger stok legacy.
+- **CLEANUP CANDIDATE:** strategi email internal bisa diganti Cloud Functions custom token jika kebutuhan production makin ketat.
+---
+
+## Update Sidebar/Menu Guard Fase D — 2026-04-28
+
+### Status implementasi aktif
+- **AKTIF:** Sidebar/menu guard berbasis role sudah ditambahkan pada konfigurasi menu dan renderer sidebar.
+- **AKTIF:** `src/config/sidebarMenu.js` sekarang memiliki metadata `allowedRoles` per menu/child.
+- **AKTIF:** `src/utils/auth/roleAccess.js` menjadi single source of truth awal untuk role, route access, dan filter menu.
+- **AKTIF:** `src/components/Layout/Sidebar/SidebarMenu.jsx` memfilter menu berdasarkan role dari `AuthContext`.
+- **AKTIF:** Parent menu tanpa child yang boleh diakses otomatis disembunyikan agar UI tidak membingungkan.
+- **AKTIF:** Karena source terbaru yang diaudit belum membawa file Route Guard Fase C, patch ini juga menyertakan sinkron minimal `ProtectedRoute`, `Unauthorized`, dan route wrapper di `AppRoutes.jsx` agar hide menu tidak menjadi satu-satunya guard.
+
+### Guarded decisions
+- **GUARDED:** Route guard tetap pengaman utama untuk URL langsung; menu guard hanya mengatur tampilan.
+- **GUARDED:** Reset & Maintenance hanya boleh terlihat dan diakses `super_admin`.
+- **GUARDED:** Role tidak dikenal default deny.
+- **GUARDED:** Firestore Rules final belum dibuat pada Fase D.
+- **GUARDED:** User Management belum dibuat pada Fase D.
+- **GUARDED:** Business pages dan transaction logic tidak diubah.
+
+### Risiko tersisa
+- Firestore Rules masih harus diselaraskan pada fase khusus agar user tidak bisa bypass dari API/console.
+- User Management belum tersedia, sehingga user masih harus diseed manual.
+- Action-level permission seperti create/edit/delete per modul belum dibuat; Fase D masih menu/route-level.
+- Jika access matrix berubah, `roleAccess.js`, `sidebarMenu.js`, dan docs harus disesuaikan bersama.
+
+### Legacy / cleanup candidate
+- **LEGACY/CLEANUP CANDIDATE:** route `/stock-adjustment` masih menjadi redirect legacy ke `/stock-management`.
+- **CLEANUP CANDIDATE:** action-level permission dapat ditambahkan pada fase lanjutan jika role `user` perlu dibatasi lebih detail.
+
+---
+
+## Update Final Auth/Role/User Management Fase E-H — 2026-04-28
+
+### Status implementasi aktif
+- **AKTIF:** Manajemen User internal sudah ditambahkan sebagai halaman `src/pages/System/UserManagement.jsx`.
+- **AKTIF:** Service `src/services/System/userService.js` mengelola profile `system_users` tanpa menyimpan password.
+- **AKTIF:** `roleAccess.js` menjadi single source of truth untuk role constants, route/menu access, dan batas manajemen user.
+- **AKTIF:** Menu Manajemen User tersedia untuk `super_admin` dan `administrator`.
+- **AKTIF:** Reset & Maintenance tetap `super_admin` only di route dan menu.
+- **AKTIF:** `firestore.rules` ditambahkan sebagai template Rules/Auth alignment untuk dipublish manual setelah diverifikasi.
+
+### Guarded decisions
+- **GUARDED:** Halaman Manajemen User tidak membuat Firebase Auth user/password dari frontend.
+- **GUARDED:** Auth user baru masih dibuat manual di Firebase Console sampai Cloud Functions/Admin SDK create-user dibuat aman.
+- **GUARDED:** Administrator hanya boleh membuat/mengelola user biasa.
+- **GUARDED:** User biasa tidak boleh membuka Manajemen User.
+- **GUARDED:** Tidak ada role yang boleh mengubah role/status dirinya sendiri dari Manajemen User.
+- **GUARDED:** Firestore Rules final tetap harus diuji di Firebase Console; file `firestore.rules` adalah baseline yang perlu dipublish manual.
+- **GUARDED:** UI role guard tidak menggantikan Firestore Rules.
+
+### Risiko tersisa
+- Create Firebase Auth user dari aplikasi belum dibuat karena butuh backend trusted/Admin SDK.
+- Reset password dari aplikasi belum dibuat.
+- Action-level permission per tombol transaksi belum dibuat.
+- Firestore Rules baseline masih luas untuk data aplikasi agar flow existing tidak rusak; granular collection rules bisa menjadi task lanjutan.
+- Build tetap wajib dijalankan setelah patch diaplikasikan di project lokal.
+
+### Legacy / cleanup candidate
+- **LEGACY/GUARDED:** `functions/index.js` stok lama tidak disentuh dan tidak boleh dideploy ulang tanpa audit.
+- **CLEANUP CANDIDATE:** input manual Auth UID di Manajemen User dapat diganti callable Cloud Function create-user.
+- **CLEANUP CANDIDATE:** rules granular per collection dapat dibuat setelah action-level permission disepakati.

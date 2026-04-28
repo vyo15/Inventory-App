@@ -1,10 +1,40 @@
-import React from "react";
-import { Typography } from "antd";
+import React, { useState } from "react";
+import { Button, Space, Tag, Typography } from "antd";
+import { LogoutOutlined, UserOutlined } from "@ant-design/icons";
+import useAuth from "../../../hooks/useAuth";
 import "./AppHeader.css";
 
 const { Title, Text } = Typography;
 
+// =========================
+// SECTION: App Header — AKTIF / GUARDED
+// Fungsi:
+// - menampilkan identitas workspace, user aktif, role, dan tombol logout.
+// Hubungan flow aplikasi:
+// - header hanya tampil setelah Auth Gate mengizinkan AppLayout terbuka.
+// Status:
+// - AKTIF untuk layout utama.
+// - GUARDED: logout hanya menghapus session, tidak menyentuh stok/kas/transaksi/produksi/laporan.
+// Legacy / cleanup:
+// - tidak ada legacy; role menu guard detail tetap fase berikutnya.
+// =========================
 const AppHeader = () => {
+  const { logout, profile } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const displayName = profile?.displayName || profile?.username || "User IMS";
+  const displayRole = profile?.role || "user";
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+
+    try {
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   return (
     <div className="app-header-content">
       <div className="app-header-left">
@@ -17,8 +47,33 @@ const AppHeader = () => {
           yang rapi dan efisien.
         </Text>
       </div>
+
+      <div style={styles.userArea}>
+        <Space size={10} wrap>
+          <Tag icon={<UserOutlined />} color="blue">
+            {displayName}
+          </Tag>
+          <Tag>{displayRole}</Tag>
+          <Button
+            icon={<LogoutOutlined />}
+            loading={isLoggingOut}
+            onClick={handleLogout}
+          >
+            Logout
+          </Button>
+        </Space>
+      </div>
     </div>
   );
+};
+
+const styles = {
+  userArea: {
+    marginLeft: "auto",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
 };
 
 export default AppHeader;

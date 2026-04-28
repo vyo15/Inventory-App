@@ -1,14 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Menu } from "antd";
+import { Empty, Menu } from "antd";
 import { Link, useLocation } from "react-router-dom";
 import { sidebarMenuItems } from "../../../config/sidebarMenu";
+import useAuth from "../../../hooks/useAuth";
+import { filterSidebarMenuItemsByRole } from "../../../utils/auth/roleAccess";
 import "./SidebarMenu.css";
 
 // =========================
-// SECTION: Helper - Find open parent keys by current path
+// SECTION: Helper - Find open parent keys by current path — AKTIF
 // Fungsi:
-// - mencari parent menu aktif berdasarkan pathname saat ini
-// - dipakai agar saat user pindah halaman, grup menu yang relevan tetap terbuka
+// - mencari parent menu aktif berdasarkan pathname saat ini;
+// - dipakai agar saat user pindah halaman, grup menu yang relevan tetap terbuka.
+// Hubungan flow aplikasi:
+// - bekerja pada menu yang sudah difilter role sehingga parent kosong tidak terbuka.
+// Status:
+// - AKTIF untuk sidebar role-aware.
 // =========================
 const findOpenParentKeysByPath = (
   menuItems,
@@ -37,10 +43,16 @@ const findOpenParentKeysByPath = (
 };
 
 // =========================
-// SECTION: Helper - Build Ant Design menu items
+// SECTION: Helper - Build Ant Design menu items — AKTIF / GUARDED
 // Fungsi:
-// - level group utama tetap memakai icon
-// - submenu sengaja tanpa icon agar sidebar lebih rapi dan tidak terlalu ramai
+// - mengubah config menu yang sudah difilter menjadi format Ant Design Menu;
+// - level group utama tetap memakai icon;
+// - submenu sengaja tanpa icon agar sidebar lebih rapi.
+// Hubungan flow aplikasi:
+// - hanya item yang lolos role guard yang akan dirender.
+// Status:
+// - AKTIF.
+// - GUARDED: jangan bypass filter role dengan langsung memakai sidebarMenuItems mentah.
 // =========================
 const buildAntdMenuItems = (menuItems, level = 0) => {
   return menuItems.map((menuItem) => {
@@ -64,41 +76,61 @@ const buildAntdMenuItems = (menuItems, level = 0) => {
 };
 
 // =========================
-// SECTION: Sidebar Menu
+// SECTION: Sidebar Menu — AKTIF / GUARDED
+// Fungsi:
+// - menampilkan menu berdasarkan role user aktif;
+// - menyembunyikan parent menu jika tidak ada child yang boleh diakses;
+// - menjaga route guard tetap menjadi pengaman utama untuk akses langsung lewat URL.
+// Hubungan flow aplikasi:
+// - role berasal dari AuthContext/profile `system_users/{uid}`;
+// - matrix role berasal dari roleAccess.js dan metadata sidebarMenu.js.
+// Status:
+// - AKTIF untuk Fase D Sidebar/Menu Guard.
+// - GUARDED: hide menu bukan security final; ProtectedRoute dan Firestore Rules tetap wajib.
+// Legacy / cleanup:
+// - tidak ada legacy; menu User Management belum ditambahkan karena Fase E belum dibuat.
 // =========================
 const SidebarMenu = ({ darkTheme }) => {
   const location = useLocation();
+  const { profile } = useAuth();
+  const activeRole = profile?.role;
+
+  const roleAwareMenuItems = useMemo(() => {
+    return filterSidebarMenuItemsByRole(sidebarMenuItems, activeRole);
+  }, [activeRole]);
 
   // =========================
-  // SECTION: Derived Menu State
+  // SECTION: Derived Menu State — AKTIF / GUARDED
   // Fungsi:
-  // - selectedMenuKeys menjaga halaman aktif tetap tersorot
-  // - defaultOpenParentKeys membuka parent dari route yang sedang aktif
-  // - rootSubmenuKeys dipakai untuk mode accordion pada menu level utama
+  // - selectedMenuKeys menjaga halaman aktif tetap tersorot;
+  // - defaultOpenParentKeys membuka parent dari route yang sedang aktif;
+  // - rootSubmenuKeys dipakai untuk mode accordion pada menu level utama.
+  // Hubungan flow aplikasi:
+  // - semua state dihitung dari menu yang sudah difilter role.
   // =========================
   const selectedMenuKeys = useMemo(() => {
     return [location.pathname];
   }, [location.pathname]);
 
   const defaultOpenParentKeys = useMemo(() => {
-    return findOpenParentKeysByPath(sidebarMenuItems, location.pathname);
-  }, [location.pathname]);
+    return findOpenParentKeysByPath(roleAwareMenuItems, location.pathname);
+  }, [roleAwareMenuItems, location.pathname]);
 
   const rootSubmenuKeys = useMemo(() => {
-    return sidebarMenuItems
+    return roleAwareMenuItems
       .filter((menuItem) => menuItem.children?.length)
       .map((menuItem) => menuItem.key);
-  }, []);
+  }, [roleAwareMenuItems]);
 
   const antdMenuItems = useMemo(() => {
-    return buildAntdMenuItems(sidebarMenuItems);
-  }, []);
+    return buildAntdMenuItems(roleAwareMenuItems);
+  }, [roleAwareMenuItems]);
 
   // =========================
-  // SECTION: Controlled Open Keys
+  // SECTION: Controlled Open Keys — AKTIF
   // Fungsi:
-  // - sidebar dibuat terkontrol agar perilaku buka/tutup konsisten
-  // - saat route berubah, parent aktif otomatis ikut terbuka
+  // - sidebar dibuat terkontrol agar perilaku buka/tutup konsisten;
+  // - saat route atau role berubah, parent aktif otomatis ikut terbuka.
   // =========================
   const [openMenuKeys, setOpenMenuKeys] = useState(defaultOpenParentKeys);
 
@@ -107,10 +139,10 @@ const SidebarMenu = ({ darkTheme }) => {
   }, [defaultOpenParentKeys]);
 
   // =========================
-  // SECTION: Event Handlers
+  // SECTION: Event Handlers — AKTIF
   // Fungsi:
-  // - hanya satu group utama yang terbuka dalam satu waktu
-  // - saat user buka group lain, group sebelumnya otomatis tertutup
+  // - hanya satu group utama yang terbuka dalam satu waktu;
+  // - saat user buka group lain, group sebelumnya otomatis tertutup.
   // =========================
   const handleOpenMenuChange = (nextOpenKeys) => {
     const latestOpenedKey = nextOpenKeys.find(
@@ -129,6 +161,17 @@ const SidebarMenu = ({ darkTheme }) => {
 
     setOpenMenuKeys(nextOpenKeys);
   };
+
+  if (roleAwareMenuItems.length === 0) {
+    return (
+      <div className="sidebar-menu-scroll">
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description="Tidak ada menu untuk role ini"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="sidebar-menu-scroll">

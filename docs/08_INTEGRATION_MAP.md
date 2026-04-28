@@ -437,3 +437,260 @@ Guard:
 - Lookup purchase ringan hanya untuk ringkasan/restock helper, bukan source histori lengkap.
 - Jangan limit Dashboard summary penting jika limit bisa menyembunyikan PO, payroll, expense, atau status produksi aktif.
 - Jika butuh histori penuh atau presisi lintas data lama, gunakan laporan atau buat service/index khusus pada task terpisah.
+
+## Integrasi Login + Role + Manajemen User Internal - Fase A
+
+Status: **DESAIN + GUARDED**. Source code Auth, route guard, menu guard, User Management, dan Firestore Rules belum diubah pada fase ini.
+
+### Flow akses target
+
+```text
+User membuka aplikasi
+-> Auth loading state mengecek sesi
+-> Jika belum login: tampilkan Login
+-> User login dengan username/password internal
+-> Auth menghasilkan authUid
+-> App membaca profile system_users/{authUid}
+-> App cek role dan status active
+-> App render layout, sidebar, dan route sesuai role
+-> Firestore Rules memvalidasi request.auth + role/status
+```
+
+### Flow Manajemen User target
+
+```text
+super_admin / administrator membuka Manajemen User
+-> route guard memastikan role boleh akses
+-> form membuat user internal
+-> backend trusted / Cloud Functions membuat akun Auth jika strategi itu dipilih
+-> system_users/{authUid} dibuat/diupdate dengan role dan status
+-> user baru login dengan username/password internal
+```
+
+Batasan role:
+- `super_admin` boleh membuat `administrator` dan `user`.
+- `administrator` hanya boleh membuat/mengelola `user` biasa.
+- `administrator` tidak boleh membuat/mengubah `super_admin`.
+- `user` tidak boleh membuka Manajemen User.
+
+### Collection profile role yang disarankan
+
+```text
+system_users/{uid}
+-> authUid
+-> username
+-> usernameLower
+-> displayName
+-> role: super_admin | administrator | user
+-> status: active | inactive
+-> createdAt / updatedAt
+-> createdBy / updatedBy
+-> lastLoginAt
+-> mustChangePassword (opsional)
+```
+
+Larangan integrasi:
+- Jangan simpan password plaintext di Firestore.
+- Jangan simpan secret Firebase/Admin SDK di frontend.
+- Jangan validasi password dari Firestore di frontend untuk production.
+- Jangan gunakan email asli sebagai identitas utama user.
+
+### Access control layer
+
+| Layer | Tanggung jawab | Catatan guard |
+|---|---|---|
+| Login/Auth | Memastikan user punya sesi valid. | Belum ada pada source saat Fase A. |
+| `system_users` profile | Menentukan role dan status active/inactive. | User tidak boleh update role/status sendiri. |
+| Route guard | Mencegah akses langsung dari URL. | Wajib untuk Reset & Maintenance dan Manajemen User. |
+| Sidebar/menu guard | Menampilkan menu sesuai role. | Hide menu tidak cukup tanpa route guard. |
+| Firestore Rules | Security final data. | Wajib sebelum data real production. |
+
+### Integrasi Reset & Maintenance
+
+```text
+Reset & Maintenance
+-> hanya muncul untuk super_admin
+-> route langsung ditolak untuk administrator/user
+-> tetap memakai preview dan konfirmasi RESET
+-> tetap melindungi Supplier dan master data protected
+```
+
+### Catatan functions legacy
+
+`functions/index.js` tidak boleh langsung dipakai untuk Auth sebelum audit. Jika Cloud Functions diperlukan untuk create user atau custom token, gunakan fase terpisah dan pastikan trigger stok legacy tidak ikut aktif tanpa validasi.
+
+### Fase implementasi target
+
+1. Fase A - Access Matrix + docs only.
+2. Fase B - Auth foundation.
+3. Fase C - Route guard.
+4. Fase D - Sidebar/menu guard.
+5. Fase E - User Management.
+6. Fase F - Firestore Rules/Auth alignment.
+7. Fase G - Cleanup kecil terkait Auth.
+8. Fase H - Docs final sync.
+
+
+---
+
+## Integration Map Auth Foundation Fase B — 2026-04-28
+
+### Flow login aktif Fase B
+```text
+Login.jsx
+→ useAuth().loginWithUsername(username, password)
+→ AuthProvider build username@ims-bunga-flanel.local
+→ Firebase Auth Email/Password
+→ onAuthStateChanged
+→ Firestore system_users/{uid}
+→ validasi status active + role valid
+→ App.jsx membuka AppLayout
+→ AppHeader menampilkan user/role + logout
+```
+
+### Collection profile internal
+```text
+system_users/{uid}
+```
+
+Field minimal yang dibaca AuthProvider:
+- `authUid`
+- `username`
+- `displayName`
+- `role`
+- `status`
+
+Role valid awal:
+- `super_admin`
+- `administrator`
+- `user`
+
+Status valid:
+- `active`
+
+### Boundary integrasi
+- **AKTIF:** Firebase Auth menjadi sumber session login.
+- **AKTIF:** Firestore `system_users` menjadi sumber profile/role/status.
+- **GUARDED:** Firestore Rules final belum diselaraskan pada Fase B.
+- **GUARDED:** Sidebar/menu filtering dan route guard per role belum dibuat pada Fase B.
+- **GUARDED:** User Management belum dibuat pada Fase B.
+- **LEGACY/GUARDED:** `functions/index.js` lama tidak menjadi bagian flow Auth Foundation.
+
+### Dampak ke flow bisnis
+Auth Foundation hanya menentukan boleh/tidaknya app utama terbuka. Patch ini tidak mengubah:
+- Purchases
+- Returns
+- Sales
+- Stock Management / Stock Adjustment
+- Supplier business rule
+- Production
+- Payroll
+- HPP
+- Reports/export
+---
+
+## Integration Map Sidebar/Menu Guard Fase D — 2026-04-28
+
+### Flow menu aktif Fase D
+```text
+AuthProvider
+→ profile system_users/{uid}
+→ role user aktif
+→ SidebarMenu.jsx
+→ filterSidebarMenuItemsByRole(sidebarMenuItems, role)
+→ menu tampil sesuai allowedRoles
+```
+
+### Flow route guard sinkron
+```text
+User membuka route
+→ AppRoutes.jsx
+→ ProtectedRoute routeKey
+→ roleAccess.canAccessRoute(routeKey, role)
+→ route tampil atau Unauthorized
+```
+
+### Boundary integrasi
+- **AKTIF:** `sidebarMenu.js` menyimpan metadata `allowedRoles`.
+- **AKTIF:** `roleAccess.js` menyimpan role constants, route access matrix, dan helper filter menu.
+- **AKTIF:** `SidebarMenu.jsx` hanya render menu yang lolos role filter.
+- **AKTIF:** `ProtectedRoute` menjaga URL langsung agar tidak bypass menu.
+- **GUARDED:** Hide menu bukan security final; Firestore Rules final tetap fase terpisah.
+- **GUARDED:** User Management belum ada.
+- **GUARDED:** Reset & Maintenance hanya `super_admin`.
+
+### Dampak ke flow bisnis
+Fase D hanya memengaruhi navigasi dan akses route. Patch ini tidak mengubah:
+- Purchases
+- Returns
+- Sales
+- Stock Management / Stock Adjustment
+- Supplier business rule
+- Production
+- Payroll
+- HPP
+- Reports/export
+- Firebase Rules final
+
+---
+
+## Integration Map Final Auth/Role/User Management Fase E-H — 2026-04-28
+
+### Flow login dan profile aktif
+```text
+Login.jsx
+→ useAuth().loginWithUsername(username, password)
+→ Firebase Auth Email/Password internal alias
+→ AuthProvider onAuthStateChanged
+→ Firestore system_users/{uid}
+→ cek role/status
+→ AppLayout / Login blocked state
+```
+
+### Flow Manajemen User aktif
+```text
+UserManagement.jsx
+→ useAuth().profile sebagai actor
+→ userService.js
+→ roleAccess.js cek hak actor
+→ Firestore system_users/{authUid}
+→ AuthProvider membaca profile saat user login/refresh
+```
+
+### Flow route/menu guard
+```text
+AuthProvider profile.role
+→ roleAccess.js
+→ SidebarMenu filter menu
+→ AppRoutes ProtectedRoute
+→ halaman tampil atau Unauthorized
+```
+
+### Flow Firestore Rules/Auth alignment
+```text
+Firebase Auth request.auth.uid
+→ Firestore Rules get system_users/{uid}
+→ status harus active
+→ role menentukan akses system_users dan data aplikasi
+```
+
+### Boundary integrasi
+- **AKTIF:** Firebase Auth tetap sumber session/password.
+- **AKTIF:** `system_users` menjadi sumber profile, role, dan status.
+- **AKTIF:** User Management mengelola profile/role/status, bukan password.
+- **AKTIF:** `roleAccess.js` menjadi single source of truth untuk role/menu/route/user-management guard.
+- **GUARDED:** Firestore Rules tetap harus dipublish manual dan diuji.
+- **GUARDED:** Create Auth user dari aplikasi butuh Cloud Functions/Admin SDK sebagai task lanjutan.
+- **LEGACY/GUARDED:** `functions/index.js` stok lama tidak menjadi bagian flow Auth/Role.
+
+### Dampak ke flow bisnis
+Fase E-H hanya memengaruhi akses user dan security boundary. Patch ini tidak mengubah:
+- Purchases
+- Returns
+- Sales
+- Stock Management / Stock Adjustment
+- Supplier business rule
+- Production
+- Payroll
+- HPP
+- Reports/export

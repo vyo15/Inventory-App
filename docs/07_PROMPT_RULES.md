@@ -303,3 +303,123 @@ Untuk task yang menyentuh `src/pages/Inventory/StockManagement.jsx` atau `src/pa
 - submit adjustment harus guarded terhadap double submit, stok negatif, item bervarian tanpa varian, dan partial write log;
 - setiap blok penting wajib diberi comment `AKTIF`, `GUARDED`, `LEGACY`, dan `CLEANUP CANDIDATE` jika relevan;
 - output patch tetap ZIP berisi file berubah saja.
+
+## Prompt Guard - Login + Role + Manajemen User Internal
+
+Status: **GUARDED**. Gunakan section ini untuk semua task yang menyentuh Auth, role, route guard, sidebar guard, User Management, Firestore Rules, atau Reset & Maintenance access.
+
+### Aturan umum
+
+- Jangan mengubah business rules stok, kas, Purchases, Returns, Sales, Stock Adjustment, Production, Payroll, HPP, Dashboard, atau Reports saat task hanya Login/Role.
+- Jangan membuat Login page, AuthProvider, User Management, atau Firestore Rules final sebelum access matrix disetujui.
+- Jangan memakai Google login untuk konsep akun internal IMS.
+- Jangan memakai email asli sebagai identitas utama user.
+- Jangan menyimpan password plaintext di Firestore.
+- Jangan validasi password langsung di frontend untuk production.
+- Jangan hanya menyembunyikan menu; route guard dan Firestore Rules tetap harus dirancang.
+- Jangan mengaktifkan Firestore Rules terlalu ketat sebelum Auth/profile/seed `super_admin` siap.
+- Jangan membiarkan Firestore Rules production terlalu terbuka tanpa warning.
+- Jangan mengerjakan offline database bersamaan dengan Login/Role.
+
+### Role guard wajib
+
+- `super_admin` boleh akses semua menu, Reset & Maintenance, dan Manajemen User.
+- `administrator` boleh mengelola user biasa, tetapi tidak boleh membuat/mengubah `super_admin`.
+- `administrator` tidak boleh menaikkan dirinya sendiri menjadi `super_admin`.
+- `user` tidak boleh akses Reset & Maintenance, Manajemen User, atau halaman admin via URL langsung.
+- User `inactive` tidak boleh masuk aplikasi.
+
+### Guard untuk functions
+
+- `functions/index.js` saat ini harus dianggap `LEGACY/GUARDED` sebelum diaudit.
+- Jangan langsung memakai/deploy functions lama untuk Auth karena file tersebut dapat berisi trigger stok legacy.
+- Jika Auth butuh Cloud Functions/Admin SDK, buat fase khusus dan pastikan trigger stok lama tidak ikut aktif tanpa audit.
+
+### Output patch wajib
+
+- Untuk fase docs-only, ubah docs saja.
+- Untuk fase coding, kirim hanya file yang berubah dalam ZIP.
+- ZIP tidak boleh berisi `node_modules`, `dist`, `build`, `.git`, `.env`, secret, atau full project.
+- Setiap file source yang nanti disentuh wajib diberi comment blok penting dengan status `AKTIF`, `GUARDED`, `LEGACY`, atau `CLEANUP CANDIDATE` jika relevan.
+
+
+---
+
+## Prompt Rules Auth Foundation Fase B — 2026-04-28
+
+### Aturan wajib untuk patch setelah Fase B
+- Jangan membuat User Management kecuali task eksplisit Fase E.
+- Jangan mengubah Firestore Rules final kecuali task eksplisit Fase F.
+- Jangan membuat role/menu guard detail kecuali task eksplisit Fase C/D.
+- Jangan menyimpan password plaintext di Firestore.
+- Jangan validasi password dengan membaca dokumen Firestore dari frontend.
+- Jangan mengubah flow stok, kas, pembelian, retur, produksi, payroll, HPP, atau laporan untuk memperbaiki Auth.
+- Jangan deploy atau memakai `functions/index.js` legacy untuk Auth tanpa audit khusus functions.
+
+### Guard Auth yang harus dipertahankan
+- User tanpa profile `system_users/{uid}` tidak boleh masuk app utama.
+- User dengan `status` selain `active` tidak boleh masuk app utama.
+- User tanpa role valid tidak boleh masuk app utama.
+- Login UI tetap memakai konsep Username + Password internal, bukan Google login dan bukan email asli sebagai identitas user.
+- AuthProvider harus punya loading state agar Dashboard tidak tampil sebelum session/profile selesai diverifikasi.
+
+### File scope yang harus dijaga
+- Auth foundation boleh menyentuh `firebase.js`, `AuthContext`, `useAuth`, `Login`, `App`, dan header logout.
+- Role/menu guard detail nanti harus dipisah ke fase berikutnya.
+- Business pages tidak boleh disentuh untuk perubahan Auth foundation.
+---
+
+## Prompt Rules Sidebar/Menu Guard Fase D — 2026-04-28
+
+### Aturan wajib setelah Fase D
+- Jangan menampilkan menu tanpa metadata `allowedRoles`.
+- Jangan memakai `sidebarMenuItems` mentah untuk render menu tanpa filter role.
+- Jangan hanya hide menu untuk security; route guard dan Firestore Rules tetap wajib.
+- Jangan membuka Reset & Maintenance untuk `administrator` atau `user`.
+- Jangan menambah menu User Management sebelum Fase E dibuat.
+- Jangan mengubah business pages untuk memperbaiki menu guard.
+- Jangan mengubah transaction logic Firestore/stok/kas/produksi/laporan untuk task sidebar/menu.
+- Role tidak dikenal harus default deny.
+
+### Guard route/menu yang harus dipertahankan
+- `roleAccess.js` menjadi single source of truth awal untuk route/menu matrix.
+- `ProtectedRoute` wajib tetap ada untuk mencegah akses langsung lewat URL.
+- `Unauthorized` harus tampil saat role tidak berhak, bukan white screen.
+- Parent menu tanpa child allowed harus disembunyikan.
+- Reset & Maintenance harus `super_admin` only di menu dan route.
+
+### Batas fase berikutnya
+- Firestore Rules final tetap Fase F.
+- User Management tetap Fase E.
+- Action-level permission create/edit/delete per modul harus dibuat sebagai task terpisah jika dibutuhkan.
+- Offline database tidak boleh digabung dengan task auth/role/menu.
+
+---
+
+## Prompt Rules Final Auth/Role/User Management Fase E-H — 2026-04-28
+
+### Aturan wajib setelah Fase E-H
+- Jangan menyimpan password plaintext di Firestore.
+- Jangan validasi password langsung dari Firestore/frontend.
+- Jangan membuat Firebase Auth user dari frontend tanpa backend trusted/Admin SDK.
+- Jangan memberi akses Manajemen User kepada role `user`.
+- Jangan membuka Reset & Maintenance untuk `administrator` atau `user`.
+- Jangan mengubah role/status user sendiri dari halaman Manajemen User.
+- Jangan mengizinkan administrator membuat/mengubah `super_admin`.
+- Jangan menganggap UI role guard sebagai pengganti Firestore Rules.
+- Jangan publish Firestore Rules sebelum `system_users/{uid}` super_admin pertama siap.
+- Jangan deploy `functions/index.js` stok legacy untuk kebutuhan Auth tanpa audit khusus.
+- Jangan mengubah flow stok/kas/transaksi/produksi/payroll/HPP/laporan saat task hanya Auth/Role.
+
+### Scope yang boleh disentuh untuk patch lanjutan Auth/Role
+- `src/pages/System/UserManagement.jsx`
+- `src/services/System/userService.js`
+- `src/utils/auth/roleAccess.js`
+- route/menu/auth guard terkait
+- `firestore.rules` atau Firebase Console Rules
+- docs auth/role/checklist/map
+
+### Scope yang tetap guarded
+- Purchases, Returns, Sales, Stock Management, Stock Adjustment, Supplier business rule, Production, Payroll, HPP, Reports/export.
+- `functions/index.js` stok lama tetap **LEGACY/GUARDED**.
+- Offline database tetap roadmap terpisah.
