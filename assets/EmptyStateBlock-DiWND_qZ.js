@@ -1,1 +1,0 @@
-import{j as t}from"./react-vendor-Ckn_4J1M.js";import{E as e,T as a}from"./antd-vendor-MR7vScIa.js";const{Text:r}=a,p=({description:s="Data belum tersedia."})=>t.jsx("div",{className:"empty-state-block",children:t.jsx(e,{description:t.jsx(r,{className:"empty-state-text",children:s})})});export{p as E};
