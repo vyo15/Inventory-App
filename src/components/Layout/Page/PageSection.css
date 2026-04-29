@@ -55,3 +55,26 @@
 .page-section-body {
   min-width: 0;
 }
+
+/* =========================
+   SECTION: Floral Page Section Theme Override - AKTIF DIPAKAI
+   Fungsi:
+   - surface section/card standar mengikuti token warm floral.
+   Hubungan flow aplikasi:
+   - styling wrapper section saja; data/table/form di dalamnya tidak berubah.
+========================= */
+.page-section,
+.app-shell.dark .page-section {
+  border-color: var(--ims-border-color-soft) !important;
+  background: var(--ims-bg-card) !important;
+  box-shadow: var(--ims-shadow-soft);
+}
+
+.page-section-title.ant-typography {
+  color: var(--ims-text-primary);
+}
+
+.page-section-subtitle.ant-typography {
+  color: var(--ims-text-secondary);
+  opacity: 1;
+}

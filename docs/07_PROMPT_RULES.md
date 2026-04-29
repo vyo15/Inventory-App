@@ -317,15 +317,15 @@ Status: **GUARDED**. Gunakan section ini untuk semua task yang menyentuh Auth, r
 - Jangan menyimpan password plaintext di Firestore.
 - Jangan validasi password langsung di frontend untuk production.
 - Jangan hanya menyembunyikan menu; route guard dan Firestore Rules tetap harus dirancang.
-- Jangan mengaktifkan Firestore Rules terlalu ketat sebelum Auth/profile/seed `super_admin` siap.
+- Jangan mengaktifkan Firestore Rules terlalu ketat sebelum Auth/profile/seed `administrator` siap; `super_admin` lama hanya legacy compatibility.
 - Jangan membiarkan Firestore Rules production terlalu terbuka tanpa warning.
 - Jangan mengerjakan offline database bersamaan dengan Login/Role.
 
 ### Role guard wajib
 
-- `super_admin` boleh akses semua menu, Reset & Maintenance, dan Manajemen User.
-- `administrator` boleh mengelola user biasa, tetapi tidak boleh membuat/mengubah `super_admin`.
-- `administrator` tidak boleh menaikkan dirinya sendiri menjadi `super_admin`.
+- `administrator` adalah role aktif admin utama dan boleh akses semua menu admin, Reset & Maintenance, dan Manajemen User.
+- `administrator` boleh membuat/mengelola role aktif `administrator` dan `user`, tetapi tidak boleh membuat role `super_admin` baru.
+- `administrator` tidak boleh mengubah role/status dirinya sendiri.
 - `user` tidak boleh akses Reset & Maintenance, Manajemen User, atau halaman admin via URL langsung.
 - User `inactive` tidak boleh masuk aplikasi.
 
@@ -375,7 +375,7 @@ Status: **GUARDED**. Gunakan section ini untuk semua task yang menyentuh Auth, r
 - Jangan menampilkan menu tanpa metadata `allowedRoles`.
 - Jangan memakai `sidebarMenuItems` mentah untuk render menu tanpa filter role.
 - Jangan hanya hide menu untuk security; route guard dan Firestore Rules tetap wajib.
-- Jangan membuka Reset & Maintenance untuk `administrator` atau `user`.
+- Jangan membuka Reset & Maintenance untuk `user`; Administrator adalah role admin utama.
 - Jangan menambah menu User Management sebelum Fase E dibuat.
 - Jangan mengubah business pages untuk memperbaiki menu guard.
 - Jangan mengubah transaction logic Firestore/stok/kas/produksi/laporan untuk task sidebar/menu.
@@ -386,7 +386,7 @@ Status: **GUARDED**. Gunakan section ini untuk semua task yang menyentuh Auth, r
 - `ProtectedRoute` wajib tetap ada untuk mencegah akses langsung lewat URL.
 - `Unauthorized` harus tampil saat role tidak berhak, bukan white screen.
 - Parent menu tanpa child allowed harus disembunyikan.
-- Reset & Maintenance harus `super_admin` only di menu dan route.
+- Reset & Maintenance harus Administrator-only di menu dan route; `super_admin` lama hanya ikut sebagai legacy compatibility.
 
 ### Batas fase berikutnya
 - Firestore Rules final tetap Fase F.
@@ -403,11 +403,11 @@ Status: **GUARDED**. Gunakan section ini untuk semua task yang menyentuh Auth, r
 - Jangan validasi password langsung dari Firestore/frontend.
 - Jangan membuat Firebase Auth user dari frontend tanpa backend trusted/Admin SDK.
 - Jangan memberi akses Manajemen User kepada role `user`.
-- Jangan membuka Reset & Maintenance untuk `administrator` atau `user`.
+- Jangan membuka Reset & Maintenance untuk `user`; Administrator adalah role admin utama.
 - Jangan mengubah role/status user sendiri dari halaman Manajemen User.
-- Jangan mengizinkan administrator membuat/mengubah `super_admin`.
+- Jangan mengizinkan pembuatan role `super_admin` baru; role ini hanya legacy compatibility.
 - Jangan menganggap UI role guard sebagai pengganti Firestore Rules.
-- Jangan publish Firestore Rules sebelum `system_users/{uid}` super_admin pertama siap.
+- Jangan publish Firestore Rules sebelum `system_users/{uid}` Administrator pertama siap.
 - Jangan deploy `functions/index.js` stok legacy untuk kebutuhan Auth tanpa audit khusus.
 - Jangan mengubah flow stok/kas/transaksi/produksi/payroll/HPP/laporan saat task hanya Auth/Role.
 
@@ -423,3 +423,82 @@ Status: **GUARDED**. Gunakan section ini untuk semua task yang menyentuh Auth, r
 - Purchases, Returns, Sales, Stock Management, Stock Adjustment, Supplier business rule, Production, Payroll, HPP, Reports/export.
 - `functions/index.js` stok lama tetap **LEGACY/GUARDED**.
 - Offline database tetap roadmap terpisah.
+
+
+---
+
+## Prompt Rules Auth UID Otomatis via Cloud Functions - 2026-04-29
+
+Status: **AKTIF + GUARDED**. Gunakan section ini untuk semua task lanjutan yang menyentuh create user, Cloud Functions Auth, role, atau `system_users`.
+
+### Aturan wajib
+- Jangan membuat Firebase Auth user langsung dari frontend biasa.
+- Create user harus lewat backend trusted, saat ini HTTP Cloud Function `createSystemUser`.
+- Jangan menyimpan password sementara, password plaintext, password hash frontend, token, atau credential Admin SDK di Firestore.
+- Jangan menaruh Admin SDK atau service account di `src` frontend.
+- Jangan mengubah domain internal login `ims-bunga-flanel.local` tanpa update AuthProvider, Cloud Function, docs, dan data Auth existing.
+- Jangan mengizinkan pembuatan role `super_admin` baru; role aktif baru hanya `administrator` dan `user`.
+- Jangan mengizinkan user mengubah role/status dirinya sendiri dari Manajemen User.
+- Jangan menganggap UI guard sebagai pengganti backend guard dan Firestore Rules.
+- Jangan deploy ulang `functions/index.js` legacy yang berisi trigger stok/transaksi tanpa audit khusus.
+- Jangan mengubah stok, purchases, sales, returns, production, payroll, HPP, reports, dashboard, pricing rules, atau reset maintenance untuk task Auth create user.
+
+### File yang boleh disentuh untuk task sejenis
+- `src/pages/System/UserManagement.jsx`
+- `src/services/System/userService.js`
+- `src/firebase.js` jika butuh client Firebase Functions/region
+- `functions/index.js` atau struktur functions khusus Auth
+- `functions/package.json`
+- docs Auth/Role/User Management/checklist/integration map
+
+### File/area guarded
+- `src/services/Inventory/**`
+- `src/services/MasterData/**` kecuali ada task eksplisit non-Auth
+- `src/services/Produksi/**`
+- `src/pages/Transaksi/**`
+- `src/pages/Laporan/**`
+- dashboard dan pricing rules
+- Firestore business collections selain `system_users`
+- offline database implementation
+
+### Definition of Done Auth create user
+- Admin bisa tambah user tanpa input Auth UID manual.
+- Firebase Authentication membuat UID otomatis.
+- Cloud Function membuat `system_users/{uid}` dengan field profile yang disepakati.
+- Password tidak tersimpan di Firestore.
+- Role/status guard bekerja untuk administrator, user, super_admin legacy, inactive, dan missing profile.
+- ZIP patch hanya berisi file berubah dan tidak membawa secret/node_modules/dist.
+---
+
+## Prompt Guard - Penyederhanaan Role Aktif Administrator/User
+
+Status: **AKTIF + GUARDED**. Gunakan section ini untuk task yang menyentuh role, route guard, sidebar guard, User Management, atau Cloud Function create user setelah penyederhanaan role.
+
+### Aturan wajib
+- Role aktif baru hanya `administrator` dan `user`.
+- Jangan menampilkan `Super Admin` sebagai pilihan role baru di UI Manajemen User.
+- Jangan menerima payload role `super_admin` di Cloud Function `createSystemUser`.
+- `administrator` adalah role admin utama dan harus mendapat akses penuh ke menu/route admin sesuai matrix.
+- `user` tetap akses terbatas dan tidak boleh membuka Manajemen User atau Reset & Maintenance.
+- `super_admin` hanya legacy compatibility agar data lama tidak langsung terkunci; tandai sebagai kandidat cleanup/migration ke `administrator`.
+- Jangan mengubah stok, purchases, sales, production, payroll, HPP, reports, dashboard bisnis, pricing rules, atau offline database saat task hanya role/access.
+
+
+## Prompt Rules Bug Fix createSystemUser HTTP CORS — 2026-04-29
+
+Status: **AKTIF + GUARDED** untuk task lanjutan auth/user-management.
+
+- Jika create user gagal dengan CORS, cek dulu apakah frontend memanggil endpoint HTTP `createSystemUser` dengan `fetch` dan Firebase ID token.
+- Jangan mengembalikan flow create user ke frontend Firebase Auth langsung.
+- Jangan menyimpan password sementara di Firestore.
+- Jangan membuka role target selain `administrator` dan `user`.
+- `super_admin` hanya legacy compatibility actor; jangan tampilkan sebagai pilihan user baru.
+- Jangan menyentuh stok, purchases, sales, production, payroll, HPP, reports, dashboard, atau reset maintenance untuk bug create user.
+- Jika production custom domain berubah, tambahkan origin HTTPS resmi ke allowlist CORS di `functions/index.js`.
+
+## Prompt Rules Follow-up createSystemUser CORS Runtime Option - 2026-04-29
+
+- Saat memperbaiki `createSystemUser`, cek dua lapis CORS: runtime option `cors` pada `onRequest` dan header manual `OPTIONS`.
+- Jangan hanya menambah origin localhost; masukkan production origin yang benar, saat ini Firebase Hosting dan GitHub Pages `https://vyo15.github.io`.
+- Jika browser masih menunjukkan `No Access-Control-Allow-Origin` setelah kode benar, prioritaskan cek deploy versi terbaru dan public invoker Cloud Run/Functions v2.
+- Jangan membuka role target selain `administrator` dan `user`; `super_admin` tetap legacy compatibility actor saja.

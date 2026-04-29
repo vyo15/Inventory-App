@@ -596,60 +596,60 @@ Status: **DESAIN DOKUMENTASI + GUARDED**. Source code login, route guard, sideba
 - Login/role hanya mengatur akses aplikasi; tidak boleh mengubah rumus stok, kas, pembelian, retur, penjualan, produksi, payroll, HPP, atau laporan.
 - Dashboard tetap read-only untuk semua role yang diizinkan masuk.
 - Supplier tetap katalog restock/vendor, bukan transaksi dan tidak boleh membuat purchase otomatis.
-- Reset & Maintenance adalah area destructive/repair dan hanya boleh untuk `super_admin`.
+- Reset & Maintenance adalah area destructive/repair dan hanya boleh untuk `administrator`; `super_admin` lama hanya compatibility legacy sampai dimigrasikan.
 - User biasa tidak boleh membuka halaman admin lewat URL langsung; hide menu saja tidak cukup.
 - User inactive tidak boleh masuk aplikasi.
-- Administrator tidak boleh menaikkan role dirinya sendiri menjadi `super_admin` dan tidak boleh mengubah user `super_admin`.
+- Role aktif baru hanya `administrator` dan `user`; `super_admin` tidak boleh dibuat dari UI/Cloud Function dan hanya diperlakukan sebagai legacy compatibility.
 - Firestore Rules production wajib mengikuti Auth/Role; UI guard saja tidak cukup untuk keamanan data real.
 
 ### 24.2 Role awal
 
 | Role | Scope utama | Batasan wajib |
 |---|---|---|
-| `super_admin` | Akses semua menu, semua fitur, semua master, semua laporan, Reset & Maintenance, dan Manajemen User. | Tetap wajib mengikuti business rules transaksi/stok/kas/produksi. |
-| `administrator` | Akses operasional dan laporan sesuai matrix; boleh membuat/mengelola user biasa. | Tidak boleh membuat/mengubah `super_admin`, tidak boleh akses Reset & Maintenance, tidak boleh menghapus data sistem sensitif. |
-| `user` | Akses operasional harian sesuai matrix. | Tidak boleh Manajemen User, Reset & Maintenance, pengaturan role, atau akses admin langsung dari URL. |
+| `administrator` | Role aktif admin utama. Akses semua menu/route admin, termasuk Manajemen User dan Reset & Maintenance. | Tetap wajib mengikuti business rules transaksi/stok/kas/produksi dan tidak boleh mengubah role/status dirinya sendiri lewat Manajemen User. |
+| `user` | Role aktif operasional. Akses operasional harian sesuai matrix. | Tidak boleh Manajemen User, Reset & Maintenance, pengaturan role, atau akses admin langsung dari URL. |
+| `super_admin` | **LEGACY/COMPATIBILITY** untuk data lama. Dipetakan sementara seperti Administrator agar akun lama tidak terkunci. | Tidak boleh jadi pilihan role baru di UI/Cloud Function; kandidat migrasi manual ke `administrator`. |
 
 ### 24.3 Konsep akun internal
 
 - User tidak login dengan Google.
 - User tidak perlu memakai email asli sebagai identitas utama.
-- Akun dibuat dari dalam sistem oleh `super_admin` atau `administrator` melalui menu Manajemen User pada fase implementasi berikutnya.
+- Akun dibuat dari dalam sistem oleh `administrator`; `super_admin` lama boleh tetap diperlakukan sebagai actor legacy sampai dimigrasikan.
 - User login memakai username dan password internal sistem.
 - Password tidak boleh disimpan plaintext di Firestore.
 - Password tidak boleh divalidasi langsung dari frontend untuk production.
 - Strategi teknis yang direkomendasikan untuk fase coding berikutnya adalah Firebase Auth Email/Password dengan identifier internal tersembunyi, misalnya `username@ims.local`, ditambah profile role di Firestore `system_users/{uid}`.
-- Jika nanti create user dari aplikasi butuh backend trusted, gunakan Cloud Functions callable/Admin SDK pada fase terpisah; jangan memakai `functions/index.js` lama tanpa audit karena file tersebut berisi trigger stok legacy.
+- Jika nanti create user dari aplikasi butuh backend trusted, gunakan Cloud Functions HTTP endpoint/Admin SDK pada fase terpisah; jangan memakai `functions/index.js` lama tanpa audit karena file tersebut berisi trigger stok legacy.
 
 ### 24.4 Access matrix awal menu/route
 
 Matrix ini adalah desain awal sebelum implementasi. Jika ada kebutuhan operasional berbeda, ubah dokumen ini dulu sebelum coding.
 
-| Area menu/route | `super_admin` | `administrator` | `user` | Catatan guard |
+| Area menu/route | `administrator` | `user` | `super_admin` legacy | Catatan guard |
 |---|---|---|---|---|
 | Dashboard | Read | Read | Read | Tetap read-only, tidak menulis Firestore. |
-| Master Data - Products | Full CRUD | Create/Edit/Read | Read / limited edit | Delete destructive sebaiknya `super_admin`. |
-| Master Data - Raw Materials | Full CRUD | Create/Edit/Read | Read | Stok/cost rawan regression; delete guarded. |
-| Master Data - Categories | Full CRUD | Create/Edit/Read | Read | Delete guarded. |
-| Master Data - Supplier | Full CRUD | Create/Edit/Read | Read | Supplier tetap katalog restock, bukan transaksi. |
-| Master Data - Customers | Full CRUD | Create/Edit/Read | Create/Edit/Read | User operasional boleh input customer. |
-| Pricing Rules | Full CRUD | Read only / no access | No access | Berpengaruh ke harga; guarded. |
-| Stock Management | Full access | Read | Read | Audit log, tidak boleh mutasi saat dibuka. |
-| Stock Adjustment | Allowed | Optional setelah disetujui | No access | Awal paling aman: `super_admin` only. |
-| Purchases | Full CRUD | Create/Edit/Read | Create/Edit/Read | Delete/cancel destructive harus guarded. |
-| Sales | Full CRUD | Create/Edit/Read | Create/Edit/Read | Delete/cancel destructive harus guarded. |
-| Returns | Full CRUD | Create/Edit/Read | Create/Edit/Read terbatas | Retur mengubah stok/log; destructive guarded. |
-| Cash In | Full CRUD | Create manual + Read | Create manual + Read terbatas | Income otomatis dari sales tidak boleh dihapus manual oleh user biasa. |
-| Cash Out | Full CRUD | Create manual + Read | Create manual + Read terbatas | Expense otomatis dari purchases/payroll guarded. |
-| Production Planning | Full CRUD | Create/Edit/Read | Read / input terbatas | Planning tidak mutasi stok. |
-| Production Orders | Full CRUD | Create/Edit/Read | Create/Edit/Read terbatas | Lifecycle produksi tetap mengikuti rule existing. |
-| Work Log Produksi | Full CRUD | Create/Edit/Read | Create/Edit/Read | Complete Work Log tetap guarded anti-double. |
-| Production Setup/BOM/Step | Full CRUD | Read / limited edit | No access | Setup memengaruhi produksi dan HPP. |
-| Payroll Produksi | Full CRUD | Read only / no access | No access | Payroll memengaruhi expense/HPP. |
-| HPP Analysis | Full access | Read only / no access | No access | Cost sensitif dan harus final payroll only. |
-| Reports | Full access | Read sesuai modul | Read terbatas | Laba rugi/payroll/HPP sebaiknya admin guarded. |
-| Reset & Maintenance | Full access | No access | No access | `super_admin` only; bukan flow harian. |
-| Manajemen User | Full access | Kelola user biasa | No access | Administrator tidak boleh ubah `super_admin` atau dirinya menjadi `super_admin`. |
+| Master Data - Products | Full CRUD | Read / limited edit | Sama seperti Administrator sementara | Delete destructive tetap guarded oleh business rules. |
+| Master Data - Raw Materials | Full CRUD | Read | Sama seperti Administrator sementara | Stok/cost rawan regression; delete guarded. |
+| Master Data - Categories | Full CRUD | Read | Sama seperti Administrator sementara | Delete guarded. |
+| Master Data - Supplier | Full CRUD | Read | Sama seperti Administrator sementara | Supplier tetap katalog restock, bukan transaksi. |
+| Master Data - Customers | Full CRUD | Create/Edit/Read | Sama seperti Administrator sementara | User operasional boleh input customer. |
+| Pricing Rules | Full CRUD | No access | Sama seperti Administrator sementara | Berpengaruh ke harga; guarded. |
+| Stock Management | Full access | Read | Sama seperti Administrator sementara | Audit log, tidak boleh mutasi saat dibuka. |
+| Stock Adjustment | Allowed | No access | Sama seperti Administrator sementara | Tetap guarded karena mutasi stok. |
+| Purchases | Full CRUD | Create/Edit/Read | Sama seperti Administrator sementara | Delete/cancel destructive harus guarded. |
+| Sales | Full CRUD | Create/Edit/Read | Sama seperti Administrator sementara | Delete/cancel destructive harus guarded. |
+| Returns | Full CRUD | Create/Edit/Read terbatas | Sama seperti Administrator sementara | Retur mengubah stok/log; destructive guarded. |
+| Cash In | Full CRUD | Create manual + Read terbatas | Sama seperti Administrator sementara | Income otomatis dari sales tidak boleh dihapus manual oleh user biasa. |
+| Cash Out | Full CRUD | Create manual + Read terbatas | Sama seperti Administrator sementara | Expense otomatis dari purchases/payroll guarded. |
+| Production Planning | Full CRUD | Read / input terbatas | Sama seperti Administrator sementara | Planning tidak mutasi stok. |
+| Production Orders | Full CRUD | Create/Edit/Read terbatas | Sama seperti Administrator sementara | Lifecycle produksi tetap mengikuti rule existing. |
+| Work Log Produksi | Full CRUD | Create/Edit/Read | Sama seperti Administrator sementara | Complete Work Log tetap guarded anti-double. |
+| Production Setup/BOM/Step | Full CRUD | No access | Sama seperti Administrator sementara | Setup memengaruhi produksi dan HPP. |
+| Payroll Produksi | Full CRUD | No access | Sama seperti Administrator sementara | Payroll memengaruhi expense/HPP. |
+| HPP Analysis | Full access | No access | Sama seperti Administrator sementara | Cost sensitif dan harus final payroll only. |
+| Reports | Full access | Read terbatas | Sama seperti Administrator sementara | Laba rugi/payroll/HPP tetap admin guarded. |
+| Reset & Maintenance | Full access | No access | Sama seperti Administrator sementara | Bukan flow harian dan tetap guarded. |
+| Manajemen User | Full access | No access | Sama seperti Administrator sementara | Role baru hanya Administrator/User; tidak boleh ubah role/status diri sendiri. |
 
 ### 24.5 Field profile user yang disarankan
 
@@ -660,7 +660,7 @@ Field minimal:
 - `username`
 - `usernameLower`
 - `displayName`
-- `role`: `super_admin`, `administrator`, atau `user`
+- `role`: role aktif `administrator` atau `user`; `super_admin` hanya legacy compatibility untuk data lama
 - `status`: `active` atau `inactive`
 - `createdAt`
 - `updatedAt`
@@ -675,15 +675,15 @@ Field yang tidak boleh disimpan:
 - token rahasia
 - secret Firebase/Admin SDK
 
-### 24.6 Seed super_admin pertama
+### 24.6 Seed administrator pertama
 
-Sebelum route guard dan Firestore Rules final diaktifkan, `super_admin` pertama wajib dibuat dulu agar owner tidak terkunci.
+Sebelum route guard dan Firestore Rules final diaktifkan, `administrator` pertama wajib dibuat dulu agar owner tidak terkunci. Jika project lama sudah punya `super_admin`, role itu tetap legacy compatibility dan sebaiknya dimigrasikan manual ke `administrator`.
 
 Urutan desain:
 1. Aktifkan strategi Auth yang dipilih pada fase coding.
 2. Buat akun Auth internal pertama untuk owner.
 3. Buat dokumen `system_users/{uid}` untuk UID tersebut.
-4. Set `role = "super_admin"` dan `status = "active"`.
+4. Set `role = "administrator"` dan `status = "active"`.
 5. Baru aktifkan route/menu guard dan Firestore Rules berbasis role.
 
 
@@ -697,16 +697,16 @@ Status: **AKTIF + GUARDED**. Source Auth/Role/User Management sudah memiliki pon
 
 | Role | Akses utama | Batasan wajib |
 |---|---|---|
-| `super_admin` | Semua menu, semua route, Reset & Maintenance, dan Manajemen User. | Tidak boleh mengabaikan business rules transaksi/stok/kas/produksi. Tidak boleh menonaktifkan dirinya sendiri lewat Manajemen User. |
-| `administrator` | Operasional, laporan sesuai matrix, dan Manajemen User untuk user biasa. | Tidak boleh membuat/mengubah `super_admin`, tidak boleh mengubah administrator lain, tidak boleh akses Reset & Maintenance. |
-| `user` | Operasional dasar sesuai matrix. | Tidak boleh Manajemen User, Reset & Maintenance, route admin/sistem sensitif, finance/report sensitif sesuai matrix awal. |
+| `administrator` | Role aktif admin utama. Semua menu, semua route admin, Reset & Maintenance, dan Manajemen User. | Tidak boleh mengabaikan business rules transaksi/stok/kas/produksi. Tidak boleh mengubah role/status dirinya sendiri lewat Manajemen User. |
+| `user` | Role aktif operasional dasar sesuai matrix. | Tidak boleh Manajemen User, Reset & Maintenance, route admin/sistem sensitif, finance/report sensitif sesuai matrix awal. |
+| `super_admin` | **LEGACY/COMPATIBILITY** untuk user lama. Dipetakan sementara seperti Administrator agar tidak terkunci. | Tidak boleh dibuat sebagai role baru dari UI/Cloud Function dan kandidat cleanup/migration ke `administrator`. |
 
 ### 25.2 Manajemen User internal
 
 - Manajemen User memakai collection `system_users/{uid}` sebagai profile internal.
 - Firebase Auth tetap menjadi sumber session/password.
-- Halaman Manajemen User pada Fase E mengelola **profile, role, dan status**, bukan membuat password Auth secara langsung.
-- Untuk sementara, Auth user baru masih dibuat manual di Firebase Console lalu UID-nya dimasukkan ke profile `system_users`.
+- Halaman Manajemen User membuat user baru lewat HTTP Cloud Function `createSystemUser`, bukan membuat Firebase Auth user langsung dari frontend.
+- Flow manual membuat Auth user di Firebase Console lalu menempel UID ke form menjadi **legacy sementara** hanya untuk seed/perbaikan darurat, bukan flow harian create user.
 - Password tidak boleh disimpan plaintext di Firestore.
 - Password tidak boleh divalidasi langsung dari Firestore/frontend.
 - User inactive tidak boleh masuk aplikasi utama.
@@ -715,11 +715,11 @@ Status: **AKTIF + GUARDED**. Source Auth/Role/User Management sudah memiliki pon
 
 ### 25.3 Guard role yang wajib dipertahankan
 
-- Reset & Maintenance hanya `super_admin`.
-- User Management hanya `super_admin` dan `administrator`.
-- Administrator hanya boleh membuat/mengelola user biasa.
-- Administrator tidak boleh membuat/mengubah `super_admin`.
-- Administrator tidak boleh menaikkan dirinya sendiri menjadi `super_admin`.
+- Reset & Maintenance hanya `administrator`; `super_admin` lama dipetakan sebagai legacy compatibility.
+- User Management hanya `administrator`; `super_admin` lama dipetakan sebagai legacy compatibility.
+- Administrator boleh membuat/mengelola role aktif `administrator` dan `user` sesuai kebutuhan admin.
+- Administrator tidak boleh membuat role `super_admin`; profile `super_admin` lama hanya boleh dimigrasikan ke `administrator` atau `user`.
+- Administrator tidak boleh mengubah role/status dirinya sendiri dari Manajemen User.
 - Tidak ada role yang boleh mengubah role/status dirinya sendiri lewat Manajemen User.
 - Delete user tidak dibuat pada fase ini; gunakan status `inactive` agar audit profile tetap ada.
 
@@ -727,8 +727,8 @@ Status: **AKTIF + GUARDED**. Source Auth/Role/User Management sudah memiliki pon
 
 - Firestore Rules final harus membaca `request.auth.uid` dan profile `system_users/{uid}`.
 - User harus punya profile `system_users/{uid}` dengan `status = active` agar bisa read/write data aplikasi.
-- `system_users` harus guarded: user tidak boleh menaikkan role sendiri, administrator tidak boleh mengubah `super_admin`, dan delete profile user harus diblok.
-- Rules baseline Fase F boleh mengizinkan read/create/update data aplikasi untuk user aktif agar flow existing tidak langsung rusak, tetapi delete destructive sebaiknya hanya `super_admin`.
+- `system_users` harus guarded: user tidak boleh menaikkan role sendiri, role `super_admin` tidak boleh dibuat baru, dan delete profile user harus diblok.
+- Rules baseline Fase F boleh mengizinkan read/create/update data aplikasi untuk user aktif agar flow existing tidak langsung rusak, tetapi delete destructive harus tetap admin-guarded.
 - Role guard UI tidak menggantikan Firestore Rules.
 - Rules tetap perlu dipublish manual melalui Firebase Console atau Firebase CLI setelah diverifikasi.
 
@@ -750,5 +750,87 @@ Patch Auth/Role/User Management tidak boleh mengubah:
 ### 25.6 Legacy / cleanup candidate
 
 - `functions/index.js` lama tetap **LEGACY/GUARDED** sampai diaudit karena berpotensi berisi trigger stok lama.
-- Input manual Auth UID pada Manajemen User adalah **CLEANUP CANDIDATE** setelah Cloud Functions/Admin SDK create-user aman dibuat.
+- Input manual Auth UID pada Manajemen User menjadi **LEGACY/CLEANUP** karena create user normal sudah memakai HTTP Cloud Function `createSystemUser`.
 - Action-level permission per tombol create/edit/delete masih bisa diperketat sebagai task terpisah.
+
+
+---
+
+## 26. Rule Auth UID Otomatis via Cloud Functions - 2026-04-29
+
+Status: **AKTIF + GUARDED**. Flow tambah user internal sekarang diarahkan melalui backend trusted Cloud Functions dan Firebase Admin SDK.
+
+### 26.1 Flow create user aktif
+
+```text
+UserManagement.jsx
+-> createSystemUserWithAuth()
+-> HTTP Cloud Function createSystemUser
+-> Firebase Admin SDK createUser()
+-> Firebase Auth menghasilkan uid otomatis
+-> Cloud Function membuat system_users/{uid}
+-> tabel Manajemen User refresh
+-> AuthProvider membaca system_users/{uid} saat user login
+```
+
+### 26.2 Field dan data sensitif
+
+Field profile yang tetap disimpan di `system_users/{uid}`:
+- `authUid`
+- `username`
+- `usernameLower`
+- `displayName`
+- `role`
+- `status`
+- `createdAt`
+- `updatedAt`
+- `createdBy`
+- `updatedBy`
+- `lastLoginAt`
+
+Field yang tetap tidak boleh disimpan di Firestore:
+- password sementara
+- password plaintext
+- password hash buatan frontend
+- token rahasia
+- credential Admin SDK
+
+### 26.3 Guard role create user
+
+- `administrator` boleh membuat role aktif `administrator` dan `user`.
+- `super_admin` lama hanya compatibility actor dan tidak boleh membuat role `super_admin` baru.
+- `user` tidak boleh membuka Manajemen User dan tidak boleh memanggil create user.
+- Actor harus punya profile `system_users/{uid}` dengan `status = active`.
+- User inactive dan user tanpa profile tidak boleh membuat user baru.
+- UI guard tetap bukan pengganti backend guard dan Firestore Rules.
+
+### 26.4 Penyederhanaan role aktif - 2026-04-29
+
+- Role aktif baru hanya `administrator` dan `user`.
+- Dropdown Manajemen User tidak boleh menampilkan `Super Admin` sebagai pilihan baru.
+- Cloud Function `createSystemUser` hanya menerima role target `administrator` atau `user`.
+- `super_admin` hanya legacy compatibility untuk profile lama agar user existing tidak langsung terkunci; role ini kandidat migrasi manual ke `administrator`.
+- Administrator memiliki akses penuh ke menu/route admin, termasuk Manajemen User dan Reset & Maintenance.
+- User tetap akses terbatas sesuai `roleAccess.js`, sidebar guard, dan route guard.
+
+### 26.5 Boundary bisnis
+
+Patch Auth UID otomatis tidak boleh mengubah:
+- stok;
+- purchases;
+- sales;
+- returns;
+- production;
+- payroll;
+- HPP;
+- reports;
+- dashboard;
+- pricing rules;
+- reset maintenance.
+
+### 26.6 Legacy dan cleanup
+
+- Input manual Auth UID pada form create user dianggap **legacy** dan tidak dipakai lagi oleh flow create normal.
+- `functions/index.js` lama yang berisi trigger stok tetap **LEGACY/GUARDED** jika ada di repo asli. Jangan deploy ulang trigger stok legacy untuk kebutuhan Auth tanpa audit terpisah.
+- Cloud Function baru harus tetap fokus pada `createSystemUser` dan tidak digabung dengan trigger transaksi/stok.
+- Offline database tetap roadmap terpisah; flow sekarang menjaga boundary agar profile user tetap bisa dimigrasikan nanti.

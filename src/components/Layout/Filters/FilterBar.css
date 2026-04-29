@@ -31,3 +31,16 @@
     justify-content: flex-start;
   }
 }
+
+/* =========================
+   SECTION: Floral Filter Bar Theme Override - AKTIF DIPAKAI
+   Fungsi:
+   - filter/search surface mengikuti token app agar tidak belang di dark mode.
+   Hubungan flow aplikasi:
+   - styling wrapper filter saja; query/filter data tetap tidak berubah.
+========================= */
+.filter-bar-surface,
+.app-shell.dark .filter-bar-surface {
+  border-color: var(--ims-border-color-soft);
+  background: linear-gradient(180deg, var(--ims-bg-card) 0%, var(--ims-bg-card-soft) 100%);
+}

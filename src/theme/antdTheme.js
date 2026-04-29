@@ -1,129 +1,189 @@
 import { theme } from "antd";
 
 // =========================
-// SECTION: Ant Design Theme Generator
+// SECTION: Brand Palette Source - AKTIF DIPAKAI / THEME CENTER
 // Fungsi:
-// - menjadi pusat token global light/dark mode
-// - menjaga drawer, modal, table, input, dan button punya bahasa visual yang konsisten
-// - dark mode dibuat netral dan tenang agar cocok untuk ERP / IMS yang dipakai lama
-// Catatan:
-// - fungsi ini masih dipakai langsung oleh ConfigProvider di AppLayout
-// - semua token di sini berdampak global ke komponen antd yang tidak dioverride manual
+// - menjadi pusat warna React/Ant Design untuk light dan dark mode.
+// - palet ini menyelaraskan aplikasi utama dengan arah visual login floral/pastel.
+// Hubungan flow aplikasi:
+// - dipakai oleh getAntdTheme() dan ConfigProvider di AppLayout.
+// - tidak menyentuh auth, route guard, stok, kas, produksi, payroll, HPP, atau laporan.
+// Aman diubah:
+// - boleh tuning warna di object ini jika ingin mengganti mood desain.
+// - ubah hati-hati karena berdampak global ke Button, Menu, Card, Table, Modal, Drawer, Input, Select, dan Form.
+// =========================
+const IMS_BRAND_THEME = {
+  light: {
+    primary: "#b8687c",
+    primaryHover: "#a85a70",
+    primarySoft: "rgba(184, 104, 124, 0.14)",
+    sage: "#7f9f72",
+    bgBase: "#f9f1e7",
+    bgLayout: "#f7eadf",
+    bgContainer: "#fffaf5",
+    bgElevated: "#fffdf9",
+    bgSoft: "#f8efe6",
+    tableHeader: "#f5e7dd",
+    tableHover: "#fff3ed",
+    textPrimary: "#3f312c",
+    textSecondary: "rgba(63, 49, 44, 0.68)",
+    border: "rgba(132, 91, 78, 0.16)",
+    borderSoft: "rgba(132, 91, 78, 0.10)",
+    shadow: "0 14px 34px rgba(96, 61, 52, 0.08)",
+    sider: "#fff7ef",
+  },
+  dark: {
+    primary: "#d88a9c",
+    primaryHover: "#e59aad",
+    primarySoft: "rgba(216, 138, 156, 0.18)",
+    sage: "#a7c296",
+    bgBase: "#171112",
+    bgLayout: "#1d1518",
+    bgContainer: "#241a1d",
+    bgElevated: "#2a2024",
+    bgSoft: "#31252a",
+    tableHeader: "#32262b",
+    tableHover: "#3a2b31",
+    textPrimary: "#fff5ef",
+    textSecondary: "rgba(255, 239, 230, 0.72)",
+    border: "rgba(236, 184, 184, 0.16)",
+    borderSoft: "rgba(236, 184, 184, 0.10)",
+    shadow: "0 16px 36px rgba(0, 0, 0, 0.32)",
+    sider: "#21171a",
+  },
+};
+
+// =========================
+// SECTION: Ant Design Theme Generator - AKTIF DIPAKAI / GUARDED UI
+// Fungsi:
+// - menjadi pusat token global light/dark mode untuk Ant Design.
+// - menyelaraskan komponen default Ant Design dengan token floral warm IMS.
+// Hubungan flow aplikasi:
+// - dipanggil AppLayout melalui ConfigProvider.
+// - hanya mengubah tampilan komponen UI, bukan business rules atau service data.
+// Legacy / kandidat cleanup:
+// - token biru lama sudah diganti ke dusty rose/sage agar konsisten dengan login baru.
 // =========================
 export const getAntdTheme = (darkTheme = false) => {
+  const palette = darkTheme ? IMS_BRAND_THEME.dark : IMS_BRAND_THEME.light;
+
   return {
     algorithm: darkTheme ? theme.darkAlgorithm : theme.defaultAlgorithm,
     token: {
-      colorPrimary: "#3b82f6",
+      // THEME TOKEN - AKTIF DIPAKAI: primary brand color untuk Button, link, active state, dan highlight Ant Design.
+      colorPrimary: palette.primary,
+      colorPrimaryHover: palette.primaryHover,
+      colorInfo: palette.sage,
       fontFamily: 'Inter, "Segoe UI", sans-serif',
       borderRadius: 14,
-      colorBgBase: darkTheme ? "#0b1220" : "#f3f6fb",
-      colorBgLayout: darkTheme ? "#0b1220" : "#f3f6fb",
-      colorBgContainer: darkTheme ? "#111827" : "#ffffff",
-      colorBgElevated: darkTheme ? "#111827" : "#ffffff",
-      colorTextBase: darkTheme ? "#e5e7eb" : "#0f172a",
-      colorTextSecondary: darkTheme
-        ? "rgba(148, 163, 184, 0.92)"
-        : "rgba(15, 23, 42, 0.72)",
-      colorBorder: darkTheme
-        ? "rgba(148, 163, 184, 0.14)"
-        : "rgba(15, 23, 42, 0.08)",
-      colorBorderSecondary: darkTheme
-        ? "rgba(148, 163, 184, 0.10)"
-        : "rgba(15, 23, 42, 0.06)",
+
+      // SURFACE TOKEN - AKTIF DIPAKAI: mengontrol background layout, card, modal, drawer, dropdown, dan container Ant Design.
+      colorBgBase: palette.bgBase,
+      colorBgLayout: palette.bgLayout,
+      colorBgContainer: palette.bgContainer,
+      colorBgElevated: palette.bgElevated,
+
+      // TEXT / BORDER TOKEN - AKTIF DIPAKAI: jaga kontras table/form/modal di light dan dark mode.
+      colorTextBase: palette.textPrimary,
+      colorTextSecondary: palette.textSecondary,
+      colorBorder: palette.border,
+      colorBorderSecondary: palette.borderSoft,
+      colorSplit: palette.borderSoft,
+
       controlHeight: 42,
       controlHeightSM: 32,
-      boxShadowSecondary: darkTheme
-        ? "0 12px 28px rgba(2, 6, 23, 0.24)"
-        : "0 10px 28px rgba(15, 23, 42, 0.05)",
+      boxShadowSecondary: palette.shadow,
     },
     components: {
       Layout: {
         bodyBg: "transparent",
-        siderBg: darkTheme ? "#0f172a" : "#ffffff",
+        siderBg: palette.sider,
         headerBg: "transparent",
-        triggerBg: darkTheme ? "#0f172a" : "#ffffff",
-        triggerColor: darkTheme ? "#e5e7eb" : "#0f172a",
+        triggerBg: palette.sider,
+        triggerColor: palette.textPrimary,
       },
 
       // =========================
-      // SECTION: Menu
-      // Catatan:
-      // - token deprecated lama sengaja tidak dipakai lagi
-      // - diganti ke token baru agar console lebih bersih
+      // SECTION: Menu Tokens - AKTIF DIPAKAI
+      // Fungsi:
+      // - mengontrol active/hover menu sidebar agar memakai aksen floral, bukan biru lama.
+      // Efek:
+      // - berdampak ke menu utama dan submenu Ant Design.
       // =========================
       Menu: {
         itemBorderRadius: 14,
         subMenuItemBorderRadius: 12,
         itemHeight: 44,
         iconSize: 17,
-        itemSelectedBg: darkTheme
-          ? "rgba(59, 130, 246, 0.16)"
-          : "rgba(37, 99, 235, 0.14)",
-        itemSelectedColor: darkTheme ? "#f8fafc" : "#0f172a",
-        itemHoverColor: darkTheme ? "#f8fafc" : "#0f172a",
+        itemSelectedBg: palette.primarySoft,
+        itemSelectedColor: palette.textPrimary,
+        itemHoverColor: palette.textPrimary,
+        itemHoverBg: darkTheme ? "rgba(255, 245, 239, 0.06)" : "rgba(184, 104, 124, 0.08)",
       },
 
+      // THEME TOKEN - AKTIF DIPAKAI: Card mengikuti surface warm agar halaman data tidak belang dengan background app.
       Card: {
         borderRadiusLG: 18,
-        colorBgContainer: darkTheme ? "#111827" : "#ffffff",
+        colorBgContainer: palette.bgContainer,
+        colorBorderSecondary: palette.borderSoft,
       },
 
+      // THEME TOKEN - AKTIF DIPAKAI: Button primary memakai dusty rose; default button tetap solid dan readable.
       Button: {
         borderRadius: 12,
-        defaultBg: darkTheme ? "#111827" : "#ffffff",
-        defaultBorderColor: darkTheme
-          ? "rgba(148, 163, 184, 0.14)"
-          : "rgba(15, 23, 42, 0.08)",
-        defaultColor: darkTheme ? "#e5e7eb" : "#0f172a",
+        defaultBg: palette.bgElevated,
+        defaultBorderColor: palette.border,
+        defaultColor: palette.textPrimary,
         primaryShadow: "none",
       },
 
+      // THEME TOKEN - AKTIF DIPAKAI: Form control radius disamakan dengan desain card/table.
       Input: {
         borderRadius: 12,
+        activeBorderColor: palette.primary,
+        hoverBorderColor: palette.primary,
       },
 
       Select: {
         borderRadius: 12,
       },
 
-      Table: {
-        headerBorderRadius: 16,
-        headerBg: darkTheme ? "#162138" : "#f8fafc",
-        headerColor: darkTheme ? "#e5e7eb" : "#0f172a",
-        rowHoverBg: darkTheme
-          ? "rgba(59, 130, 246, 0.08)"
-          : "rgba(37, 99, 235, 0.05)",
-        borderColor: darkTheme
-          ? "rgba(148, 163, 184, 0.14)"
-          : "rgba(15, 23, 42, 0.08)",
-        headerSplitColor: darkTheme
-          ? "rgba(148, 163, 184, 0.10)"
-          : "rgba(15, 23, 42, 0.08)",
+      DatePicker: {
+        borderRadius: 12,
       },
 
+      InputNumber: {
+        borderRadius: 12,
+      },
+
+      // TABLE TOKEN - AKTIF DIPAKAI: table tetap serius/readable dengan header warm dan hover subtle.
+      Table: {
+        headerBorderRadius: 16,
+        headerBg: palette.tableHeader,
+        headerColor: palette.textPrimary,
+        rowHoverBg: palette.tableHover,
+        borderColor: palette.border,
+        headerSplitColor: palette.borderSoft,
+      },
+
+      // DARK/LIGHT SURFACE TOKEN - AKTIF DIPAKAI: Drawer/Modal memakai surface elevated agar portal tidak belang.
       Drawer: {
-        colorBgElevated: darkTheme ? "#111827" : "#ffffff",
+        colorBgElevated: palette.bgElevated,
       },
 
       Modal: {
-        contentBg: darkTheme ? "#111827" : "#ffffff",
-        headerBg: darkTheme ? "#111827" : "#ffffff",
+        contentBg: palette.bgElevated,
+        headerBg: palette.bgElevated,
       },
 
       Form: {
-        labelColor: darkTheme ? "#e5e7eb" : "#0f172a",
+        labelColor: palette.textPrimary,
       },
 
-      // =========================
-      // SECTION: Tag Tokens
-      // Fungsi:
-      // - memperbaiki label/tag default agar tetap menyatu dengan dark mode
-      // - terutama untuk tag default ant design, bukan chip stok custom
-      // =========================
+      // TAG TOKEN - AKTIF DIPAKAI: tag default menyatu dengan surface warm, terutama di table/list.
       Tag: {
-        defaultBg: darkTheme ? "rgba(255, 255, 255, 0.04)" : "#ffffff",
-        defaultColor: darkTheme ? "#dbe4ee" : "#334155",
+        defaultBg: darkTheme ? "rgba(255, 245, 239, 0.06)" : "#fffaf5",
+        defaultColor: palette.textPrimary,
       },
     },
   };

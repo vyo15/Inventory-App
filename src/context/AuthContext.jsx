@@ -18,7 +18,7 @@ import { ALL_ROLES, USER_STATUS } from "../utils/auth/roleAccess";
 // - username user diubah menjadi email internal Firebase Auth agar user tidak perlu memakai email asli.
 // Status:
 // - AKTIF dipakai oleh login internal IMS.
-// - GUARDED: domain internal harus konsisten dengan akun Auth yang diseed manual di Firebase Console.
+// - GUARDED: domain internal harus konsisten dengan akun Auth yang dibuat oleh Cloud Function createSystemUser; seed manual hanya untuk akun pertama/emergency.
 // Legacy / cleanup:
 // - tidak ada legacy; jika nanti memakai Cloud Functions custom token, blok ini bisa menjadi CLEANUP CANDIDATE.
 // =========================
@@ -205,7 +205,7 @@ export const AuthProvider = ({ children }) => {
   // - user tetap melihat field Username, bukan email asli.
   // Status:
   // - AKTIF untuk login internal IMS.
-  // - GUARDED: User creation belum ada; akun awal harus diseed manual.
+  // - GUARDED: User creation normal sudah lewat Cloud Function createSystemUser; seed manual hanya untuk akun pertama/emergency.
   // =========================
   const loginWithUsername = useCallback(async (username, password) => {
     const internalEmail = buildInternalAuthEmail(username);

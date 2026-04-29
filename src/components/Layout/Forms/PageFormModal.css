@@ -94,3 +94,46 @@
     padding: 14px 18px 18px !important;
   }
 }
+
+/* =========================
+   SECTION: Floral Page Form Modal Override - AKTIF DIPAKAI
+   Fungsi:
+   - modal form shared mengikuti surface global agar light/dark mode konsisten.
+   Hubungan flow aplikasi:
+   - styling modal saja; submit handler, validation, dan service data tidak berubah.
+   Aman diubah:
+   - surface/border mengikuti token di src/index.css.
+========================= */
+.page-form-modal-root .ant-modal-mask,
+.app-shell.dark .page-form-modal-root .ant-modal-mask {
+  background: color-mix(in srgb, var(--ims-bg-page) 62%, rgba(15, 23, 42, 0.5)) !important;
+}
+
+.page-form-modal-root .ant-modal-content,
+.page-form-modal-root .ant-modal-header,
+.page-form-modal-root .ant-modal-body,
+.page-form-modal-root .ant-modal-footer,
+.app-shell.dark .page-form-modal-root .ant-modal-content,
+.app-shell.dark .page-form-modal-root .ant-modal-header,
+.app-shell.dark .page-form-modal-root .ant-modal-body,
+.app-shell.dark .page-form-modal-root .ant-modal-footer {
+  background: var(--ims-bg-elevated) !important;
+}
+
+.page-form-modal-root .ant-modal-content,
+.app-shell.dark .page-form-modal-root .ant-modal-content {
+  border-color: var(--ims-border-color-soft);
+  box-shadow: var(--ims-shadow-elevated);
+}
+
+.page-form-modal-root .ant-modal-header,
+.page-form-modal-root .ant-modal-footer,
+.app-shell.dark .page-form-modal-root .ant-modal-header,
+.app-shell.dark .page-form-modal-root .ant-modal-footer {
+  border-color: var(--ims-border-color-soft) !important;
+}
+
+.page-form-modal-root .ant-modal-title,
+.app-shell.dark .page-form-modal-root .ant-modal-title {
+  color: var(--ims-text-primary);
+}

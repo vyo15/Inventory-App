@@ -837,3 +837,229 @@
     padding: 16px;
   }
 }
+
+/* =========================
+   SECTION: IMS Floral Global Theme Overrides - AKTIF DIPAKAI / THEME SYSTEM
+   Fungsi:
+   - menyelaraskan shell aplikasi, content card, control, table, modal/drawer, dan stock pill dengan token floral global.
+   - override diletakkan di akhir file agar aman menimpa warna hardcoded lama tanpa refactor besar.
+   Hubungan flow aplikasi:
+   - styling global saja; tidak menyentuh route guard, auth, stok, sales, purchases, produksi, payroll, HPP, laporan, atau reset data.
+   Aman diubah:
+   - untuk mengganti desain, ubah token di src/index.css terlebih dahulu.
+   KANDIDAT CLEANUP:
+   - beberapa warna lama di atas masih dipertahankan sebagai compatibility. Jangan hapus sebelum audit semua halaman.
+========================= */
+.app-shell,
+.app-shell.light,
+.app-shell.dark {
+  background: var(--ims-floral-gradient);
+  color: var(--ims-text-primary);
+}
+
+.app-content-card,
+.app-shell.dark .app-content-card {
+  background: color-mix(in srgb, var(--ims-bg-card) 92%, transparent);
+  color: var(--ims-text-primary);
+  border-color: var(--ims-border-color-soft);
+  box-shadow: var(--ims-shadow-soft);
+  backdrop-filter: blur(14px);
+}
+
+.theme-toggle-button.light .ant-float-btn-body,
+.theme-toggle-button.dark .ant-float-btn-body {
+  background: var(--ims-bg-elevated) !important;
+  border: 1px solid var(--ims-border-color);
+  color: var(--ims-text-primary) !important;
+  box-shadow: var(--ims-shadow-soft);
+}
+
+.theme-toggle-button.light:hover .ant-float-btn-body,
+.theme-toggle-button.dark:hover .ant-float-btn-body {
+  background: var(--ims-bg-card-soft) !important;
+  box-shadow: var(--ims-shadow-elevated);
+}
+
+.app-content-scroll::-webkit-scrollbar-thumb,
+.sidebar-menu-scroll::-webkit-scrollbar-thumb,
+.sidebar-menu::-webkit-scrollbar-thumb {
+  background: var(--ims-color-primary-soft);
+}
+
+.app-shell.dark .app-content-scroll::-webkit-scrollbar-thumb,
+.app-shell.dark .sidebar-menu-scroll::-webkit-scrollbar-thumb,
+.app-shell.dark .sidebar-menu::-webkit-scrollbar-thumb {
+  background: rgba(216, 138, 156, 0.26);
+}
+
+/* =========================
+   SECTION: IMS Shared Component Surface Overrides - AKTIF DIPAKAI
+   Fungsi:
+   - menjaga Ant Design Card/Table/Modal/Drawer/Form terlihat satu tema warm floral.
+   - tetap mengutamakan readability halaman data, bukan dekorasi bunga besar.
+   Efek:
+   - berdampak ke halaman operasional yang memakai Ant Design di dalam AppLayout.
+========================= */
+.app-shell .ant-card,
+.app-shell .ant-modal-content,
+.app-shell .ant-drawer-content,
+.app-shell .ant-popover-inner,
+.app-shell .ant-dropdown-menu {
+  background: var(--ims-bg-card) !important;
+  color: var(--ims-text-primary);
+  border-color: var(--ims-border-color-soft) !important;
+}
+
+.app-shell .ant-card {
+  box-shadow: var(--ims-shadow-soft);
+}
+
+.app-shell .ant-drawer-header,
+.app-shell .ant-drawer-footer,
+.app-shell .ant-modal-header,
+.app-shell .ant-modal-footer {
+  border-color: var(--ims-border-color-soft) !important;
+}
+
+.app-shell .ant-form-item-label > label,
+.app-shell .ant-modal-title,
+.app-shell .ant-drawer-title,
+.app-shell .ant-typography {
+  color: var(--ims-text-primary);
+}
+
+.app-shell .ant-typography-secondary,
+.app-shell .ant-form-item-explain,
+.app-shell .ant-form-item-extra {
+  color: var(--ims-text-secondary) !important;
+}
+
+.app-content-card .ant-input,
+.app-content-card .ant-input-affix-wrapper,
+.app-content-card .ant-select-selector,
+.app-content-card .ant-picker,
+.app-content-card .ant-input-number {
+  background: var(--ims-bg-elevated) !important;
+  border-color: var(--ims-border-color) !important;
+  color: var(--ims-text-primary) !important;
+}
+
+.app-content-card .ant-input:hover,
+.app-content-card .ant-input-affix-wrapper:hover,
+.app-content-card .ant-select-selector:hover,
+.app-content-card .ant-picker:hover,
+.app-content-card .ant-input-number:hover,
+.app-content-card .ant-input-affix-wrapper-focused,
+.app-content-card .ant-picker-focused {
+  border-color: var(--ims-color-primary) !important;
+  box-shadow: 0 0 0 3px var(--ims-color-primary-softer) !important;
+}
+
+/* =========================
+   SECTION: IMS Table Surface Overrides - AKTIF DIPAKAI / GUARDED UI
+   Fungsi:
+   - mengunci table, fixed column, selected row, dan hover agar solid di light/dark mode.
+   - mencegah bug lama: cell transparan/tembus layer belakang.
+   Efek:
+   - berdampak ke table halaman Master Data, Stock, Transaksi, Produksi, Laporan, dan Sistem.
+========================= */
+.app-data-table .ant-table,
+.ims-table .ant-table,
+.ims-page .ant-table,
+.app-data-table .ant-table-container,
+.ims-table .ant-table-container,
+.ims-page .ant-table-container,
+.app-data-table .ant-table-content,
+.ims-table .ant-table-content,
+.ims-page .ant-table-content,
+.app-data-table table,
+.ims-table table,
+.ims-page table {
+  background: var(--ims-bg-card) !important;
+}
+
+.app-data-table .ant-table-container,
+.ims-table .ant-table-container,
+.ims-page .ant-table-container {
+  border-color: var(--ims-border-strong) !important;
+}
+
+.app-data-table .ant-table-thead > tr > th,
+.ims-table .ant-table-thead > tr > th,
+.ims-page .ant-table-thead > tr > th {
+  background: var(--ims-bg-table-header) !important;
+  color: var(--ims-text-primary) !important;
+  border-color: var(--ims-border-strong) !important;
+}
+
+.app-data-table .ant-table-tbody > tr,
+.ims-table .ant-table-tbody > tr,
+.ims-page .ant-table-tbody > tr,
+.app-data-table .ant-table-tbody > tr > td,
+.app-data-table .ant-table-placeholder > td,
+.ims-table .ant-table-tbody > tr > td,
+.ims-table .ant-table-placeholder > td,
+.ims-page .ant-table-tbody > tr > td,
+.ims-page .ant-table-placeholder > td,
+.app-data-table .ant-table-cell-fix-left,
+.app-data-table .ant-table-cell-fix-right,
+.ims-table .ant-table-cell-fix-left,
+.ims-table .ant-table-cell-fix-right,
+.ims-page .ant-table-cell-fix-left,
+.ims-page .ant-table-cell-fix-right {
+  background: var(--ims-table-row) !important;
+  color: var(--ims-text-primary);
+}
+
+.app-data-table .ant-table-tbody > tr:hover > td,
+.ims-table .ant-table-tbody > tr:hover > td,
+.ims-page .ant-table-tbody > tr:hover > td,
+.app-data-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
+.app-data-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-right,
+.ims-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
+.ims-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-right,
+.ims-page .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
+.ims-page .ant-table-tbody > tr:hover > .ant-table-cell-fix-right {
+  background: var(--ims-table-hover) !important;
+}
+
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected > td,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected > td,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected > td,
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-left,
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-right,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-left,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-right,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-left,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-right {
+  background: var(--ims-table-selected) !important;
+}
+
+.app-data-table .ant-table-ping-right .ant-table-cell-fix-right-first::after,
+.ims-table .ant-table-ping-right .ant-table-cell-fix-right-first::after,
+.ims-page .ant-table-ping-right .ant-table-cell-fix-right-first::after {
+  box-shadow: var(--ims-table-fixed-shadow);
+}
+
+/* =========================
+   SECTION: Stock Variant Pills - AKTIF DIPAKAI
+   Fungsi:
+   - menyatukan chip stok varian dengan token floral global.
+   Hubungan flow:
+   - styling display saja; tidak mengubah stock/currentStock/reservedStock/availableStock.
+========================= */
+.stock-variant-pill,
+.app-shell.dark .stock-variant-pill {
+  border-color: var(--ims-border-color);
+  background: var(--ims-bg-card-soft);
+}
+
+.stock-variant-pill-label,
+.app-shell.dark .stock-variant-pill-label {
+  color: var(--ims-text-secondary) !important;
+}
+
+.stock-variant-pill-value,
+.app-shell.dark .stock-variant-pill-value {
+  color: var(--ims-text-primary) !important;
+}

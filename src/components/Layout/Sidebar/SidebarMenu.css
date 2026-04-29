@@ -233,3 +233,51 @@
     background: rgba(59, 130, 246, 0.14) !important;
   }
 }
+
+/* =========================
+   SECTION: Floral Sidebar Menu Theme Override - AKTIF DIPAKAI
+   Fungsi:
+   - mengganti aksen biru lama menjadi dusty rose/sage yang konsisten dengan login.
+   Hubungan flow aplikasi:
+   - hanya styling menu; tidak mengubah role access, route guard, atau sidebarMenu config.
+   Aman diubah:
+   - active/hover mengikuti token global di index.css.
+========================= */
+.sidebar-menu.light.ant-menu .ant-menu-item,
+.sidebar-menu.light.ant-menu .ant-menu-submenu-title,
+.sidebar-menu.light.ant-menu .ant-menu-item a,
+.sidebar-menu.dark.ant-menu .ant-menu-item,
+.sidebar-menu.dark.ant-menu .ant-menu-submenu-title,
+.sidebar-menu.dark.ant-menu .ant-menu-item a {
+  color: var(--ims-text-primary);
+}
+
+.sidebar-menu.light.ant-menu .ant-menu-item:hover,
+.sidebar-menu.light.ant-menu .ant-menu-submenu-title:hover,
+.sidebar-menu.dark.ant-menu .ant-menu-item:hover,
+.sidebar-menu.dark.ant-menu .ant-menu-submenu-title:hover {
+  color: var(--ims-text-primary);
+  background: var(--ims-sidebar-hover) !important;
+}
+
+.sidebar-menu.light.ant-menu .ant-menu-item-selected,
+.sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected,
+.sidebar-menu.dark.ant-menu .ant-menu-item-selected,
+.sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
+  color: var(--ims-text-primary) !important;
+  background: var(--ims-sidebar-active) !important;
+  box-shadow: inset 0 0 0 1px var(--ims-border-color);
+}
+
+.sidebar-menu.light.ant-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
+.sidebar-menu.light.ant-menu .ant-menu-submenu-open > .ant-menu-submenu-title,
+.sidebar-menu.dark.ant-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
+.sidebar-menu.dark.ant-menu .ant-menu-submenu-open > .ant-menu-submenu-title {
+  color: var(--ims-text-primary) !important;
+  background: var(--ims-color-primary-softer) !important;
+}
+
+.sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected::before,
+.sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected::before {
+  background: var(--ims-color-primary);
+}

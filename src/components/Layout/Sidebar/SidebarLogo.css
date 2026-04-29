@@ -100,3 +100,35 @@
     font-size: 11px;
   }
 }
+
+/* =========================
+   SECTION: Floral Sidebar Logo Theme Override - AKTIF DIPAKAI
+   Fungsi:
+   - menyatukan logo sidebar dengan token floral global tanpa mengubah komponen JSX.
+   Hubungan flow aplikasi:
+   - branding visual saja; tidak menyentuh menu role, route guard, atau permission.
+   Aman diubah:
+   - warna mengikuti token di src/index.css; ubah token untuk tuning global.
+========================= */
+.sidebar-logo,
+.sidebar-logo.dark {
+  background: color-mix(in srgb, var(--ims-bg-card) 92%, transparent);
+  border-color: var(--ims-border-color-soft);
+  box-shadow: var(--ims-shadow-soft);
+}
+
+.sidebar-logo-icon,
+.sidebar-logo.dark .sidebar-logo-icon {
+  background: linear-gradient(135deg, var(--ims-color-primary-soft), var(--ims-color-sage-soft));
+  color: var(--ims-color-primary);
+}
+
+.sidebar-logo-title,
+.sidebar-logo.dark .sidebar-logo-title {
+  color: var(--ims-text-primary);
+}
+
+.sidebar-logo-subtitle,
+.sidebar-logo.dark .sidebar-logo-subtitle {
+  color: var(--ims-text-secondary);
+}

@@ -49,3 +49,19 @@
     font-size: 13px;
   }
 }
+/* =========================
+   SECTION: Floral Header Theme Override - AKTIF DIPAKAI
+   Fungsi:
+   - header/topbar mengikuti text token warm floral.
+   Hubungan flow aplikasi:
+   - styling text saja; tidak mengubah route, auth, atau data module.
+========================= */
+.app-header-title.ant-typography,
+.dark .app-header-title.ant-typography {
+  color: var(--ims-text-primary);
+}
+
+.app-header-subtitle.ant-typography,
+.dark .app-header-subtitle.ant-typography {
+  color: var(--ims-text-secondary);
+}

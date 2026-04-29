@@ -741,15 +741,15 @@ Status: **DOCS ONLY**. Source code, Firestore Rules, Login page, dan User Manage
 
 ### Checklist dokumen
 
-- [ ] `docs/03_BUSINESS_RULES.md` memuat role awal: `super_admin`, `administrator`, dan `user`.
+- [ ] `docs/03_BUSINESS_RULES.md` memuat role aktif `administrator` dan `user`, dengan `super_admin` sebagai legacy compatibility.
 - [ ] Access matrix menu/route sudah jelas dan mudah direview sebelum coding.
 - [ ] Konsep akun internal tertulis: bukan Google login dan bukan email asli sebagai identitas utama.
 - [ ] Dokumen menegaskan password tidak boleh plaintext di Firestore.
 - [ ] Dokumen menegaskan password tidak boleh divalidasi langsung dari frontend untuk production.
-- [ ] Reset & Maintenance tertulis sebagai `super_admin` only.
-- [ ] Manajemen User tertulis hanya untuk `super_admin` dan `administrator` sesuai batasan.
-- [ ] Administrator tidak boleh membuat/mengubah `super_admin`.
-- [ ] Administrator tidak boleh menaikkan role dirinya sendiri menjadi `super_admin`.
+- [ ] Reset & Maintenance tertulis sebagai akses Administrator, dengan `super_admin` lama sebagai legacy compatibility.
+- [ ] Manajemen User tertulis hanya untuk Administrator, dengan `super_admin` lama sebagai legacy compatibility.
+- [ ] Administrator tidak boleh membuat role `super_admin` baru.
+- [ ] Administrator tidak boleh mengubah role/status dirinya sendiri.
 - [ ] User inactive tidak boleh masuk aplikasi pada fase implementasi berikutnya.
 - [ ] Business rules stok, kas, Purchases, Returns, Sales, Production, Payroll, HPP, Dashboard, dan Reports tidak berubah.
 - [ ] Offline database tetap ditandai roadmap terpisah, bukan bagian dari Login/Role.
@@ -771,8 +771,8 @@ Status: **DOCS ONLY**. Source code, Firestore Rules, Login page, dan User Manage
 - [ ] Route aplikasi bersifat protected.
 - [ ] User biasa tidak bisa membuka Reset & Maintenance dari URL langsung.
 - [ ] User biasa tidak melihat menu Reset & Maintenance.
-- [ ] Administrator tidak melihat/akses fitur untuk mengubah `super_admin`.
-- [ ] `super_admin` tetap melihat semua menu.
+- [ ] Administrator tidak melihat pilihan role `super_admin` sebagai role baru.
+- [ ] User lama `super_admin`, jika masih ada, tetap mendapat akses setara Administrator sampai dimigrasikan.
 - [ ] Unauthorized page jelas dan tidak menyebabkan redirect loop.
 
 ### Checklist fase berikutnya - Firestore Rules/Auth alignment
@@ -782,7 +782,7 @@ Status: **DOCS ONLY**. Source code, Firestore Rules, Login page, dan User Manage
 - [ ] Rules final membaca profile `system_users/{uid}` atau strategi role final lain.
 - [ ] User `inactive` ditolak read/write.
 - [ ] User tidak bisa mengubah role/status miliknya sendiri.
-- [ ] Administrator tidak bisa membuat/mengubah `super_admin`.
+- [ ] Rules/guard tidak mengizinkan pembuatan role `super_admin` baru.
 - [ ] Rules tidak dibuka public untuk data real tanpa warning.
 
 ### Checklist packaging patch
@@ -804,7 +804,7 @@ Status: **DOCS ONLY**. Source code, Firestore Rules, Login page, dan User Manage
 - [ ] User Auth awal sudah dibuat dengan email internal, contoh `admin@ims-bunga-flanel.local`.
 - [ ] Dokumen `system_users/{uid}` sudah dibuat sesuai UID Auth.
 - [ ] `system_users/{uid}.status` bernilai `active`.
-- [ ] `system_users/{uid}.role` bernilai salah satu dari `super_admin`, `administrator`, atau `user`.
+- [ ] `system_users/{uid}.role` bernilai role aktif `administrator`/`user`, atau `super_admin` hanya untuk data legacy.
 - [ ] Password tidak pernah disimpan di Firestore.
 
 ### Checklist Auth
@@ -845,8 +845,8 @@ Status: **DOCS ONLY**. Source code, Firestore Rules, Login page, dan User Manage
 
 ## Checklist Sidebar/Menu Guard Fase D — 2026-04-28
 
-### Checklist menu super_admin
-- [ ] Login sebagai `super_admin`.
+### Checklist menu administrator akses penuh
+- [ ] Login sebagai `administrator`.
 - [ ] Pastikan semua menu utama tampil.
 - [ ] Pastikan menu Sistem tampil.
 - [ ] Pastikan Reset & Maintenance tampil.
@@ -857,9 +857,9 @@ Status: **DOCS ONLY**. Source code, Firestore Rules, Login page, dan User Manage
 - [ ] Login sebagai `administrator`.
 - [ ] Pastikan menu operasional tampil sesuai access matrix.
 - [ ] Pastikan menu finance/report yang diizinkan tampil.
-- [ ] Pastikan menu Sistem tidak tampil jika hanya berisi Reset & Maintenance.
+- [ ] Pastikan menu Sistem tampil untuk Administrator karena berisi Manajemen User dan Reset & Maintenance.
 - [ ] Buka `/utilities/reset-maintenance-data` langsung dari URL.
-- [ ] Pastikan diarahkan ke Unauthorized, bukan white screen.
+- [ ] Pastikan route Reset & Maintenance terbuka untuk Administrator, bukan Unauthorized.
 - [ ] Pastikan tidak ada parent menu kosong.
 
 ### Checklist menu user
@@ -873,8 +873,8 @@ Status: **DOCS ONLY**. Source code, Firestore Rules, Login page, dan User Manage
 - [ ] Pastikan tidak ada parent menu kosong.
 
 ### Checklist route/menu sync
-- [ ] Klik semua menu yang tampil untuk `super_admin`.
 - [ ] Klik semua menu yang tampil untuk `administrator`.
+- [ ] Jika masih ada user lama `super_admin`, klik semua menu yang tampil dan pastikan akses setara Administrator.
 - [ ] Klik semua menu yang tampil untuk `user`.
 - [ ] Pastikan semua path menu sesuai `AppRoutes.jsx`.
 - [ ] Pastikan HashRouter GitHub Pages tetap aman.
@@ -900,28 +900,28 @@ Status: **DOCS ONLY**. Source code, Firestore Rules, Login page, dan User Manage
 ## Checklist Final Auth/Role/User Management Fase E-H — 2026-04-28
 
 ### Checklist User Management
-- [ ] Login sebagai `super_admin`.
+- [ ] Login sebagai `administrator`.
 - [ ] Pastikan menu **Sistem > Manajemen User** tampil.
 - [ ] Buat Auth user manual di Firebase Console untuk user test.
 - [ ] Copy UID Auth user dan buat profile dari Manajemen User.
 - [ ] Tambah profile role `user`.
-- [ ] Tambah profile role `administrator` sebagai `super_admin` jika diperlukan.
+- [ ] Tambah profile role `administrator` dari Manajemen User bila diperlukan.
 - [ ] Nonaktifkan user biasa.
 - [ ] Pastikan inactive user tidak bisa masuk app utama.
-- [ ] Pastikan `super_admin` tidak bisa menonaktifkan dirinya sendiri dari halaman Manajemen User.
+- [ ] Pastikan user tidak bisa menonaktifkan dirinya sendiri dari halaman Manajemen User.
 - [ ] Login sebagai `administrator`.
-- [ ] Pastikan administrator hanya melihat/mengelola user biasa.
-- [ ] Pastikan administrator tidak bisa membuat/mengubah `super_admin`.
+- [ ] Pastikan Administrator bisa melihat/mengelola role aktif `administrator` dan `user`, kecuali dirinya sendiri.
+- [ ] Pastikan Administrator tidak bisa membuat role `super_admin` baru.
 - [ ] Login sebagai `user`.
 - [ ] Pastikan menu Manajemen User tidak tampil.
 - [ ] Buka `/system/user-management` langsung sebagai `user` dan pastikan Unauthorized.
 
 ### Checklist Firestore Rules/Auth
 - [ ] Review `firestore.rules` sebelum publish.
-- [ ] Pastikan `system_users/{uid}` untuk `super_admin` pertama sudah ada dan `status = active`.
+- [ ] Pastikan `system_users/{uid}` untuk Administrator pertama sudah ada dan `status = active`.
 - [ ] Publish rules lewat Firebase Console atau Firebase CLI hanya setelah seed user siap.
-- [ ] Login sebagai `super_admin` dan baca data utama.
-- [ ] Login sebagai `administrator` dan pastikan tidak bisa mengubah `super_admin`.
+- [ ] Login sebagai `administrator` dan baca data utama.
+- [ ] Login sebagai `administrator` dan pastikan tidak bisa membuat role `super_admin` baru.
 - [ ] Login sebagai `user` dan pastikan tidak bisa akses Manajemen User.
 - [ ] Test user inactive.
 - [ ] Test user tanpa role valid.
@@ -929,7 +929,7 @@ Status: **DOCS ONLY**. Source code, Firestore Rules, Login page, dan User Manage
 - [ ] Pastikan permission denied muncul untuk flow yang memang dilarang.
 
 ### Checklist cleanup Auth/Role
-- [ ] Role constants hanya memakai `super_admin`, `administrator`, dan `user`.
+- [ ] Role aktif hanya `administrator` dan `user`; `super_admin` hanya legacy compatibility.
 - [ ] Status user hanya memakai `active` dan `inactive`.
 - [ ] Route/menu guard memakai `roleAccess.js`.
 - [ ] Role tidak dikenal default deny.
@@ -938,10 +938,10 @@ Status: **DOCS ONLY**. Source code, Firestore Rules, Login page, dan User Manage
 - [ ] Tidak ada business page yang ikut berubah.
 
 ### Checklist route/menu
-- [ ] Klik semua menu yang tampil untuk `super_admin`.
 - [ ] Klik semua menu yang tampil untuk `administrator`.
+- [ ] Jika masih ada user lama `super_admin`, klik semua menu yang tampil dan pastikan akses setara Administrator.
 - [ ] Klik semua menu yang tampil untuk `user`.
-- [ ] Pastikan Reset & Maintenance hanya tampil untuk `super_admin`.
+- [ ] Pastikan Reset & Maintenance tampil untuk `administrator` dan tidak tampil untuk `user`.
 - [ ] Pastikan route forbidden langsung dari URL diarahkan ke Unauthorized.
 
 ### Checklist build
@@ -949,3 +949,124 @@ Status: **DOCS ONLY**. Source code, Firestore Rules, Login page, dan User Manage
 - [ ] Jalankan `npm run preview`.
 - [ ] Pastikan tidak white screen.
 - [ ] Pastikan tidak ada error console terkait `UserManagement`, `userService`, `roleAccess`, atau `firestore.rules`.
+
+
+---
+
+## Checklist Auth UID Otomatis via Cloud Functions - 2026-04-29
+
+### Checklist setup Functions
+- [ ] Pastikan folder `functions` tidak berisi trigger stok legacy yang ikut aktif tanpa audit.
+- [ ] Jalankan `cd functions && npm install`.
+- [ ] Jalankan `npm run lint` atau `node --check index.js` dari folder `functions`.
+- [ ] Deploy hanya function baru: `firebase deploy --only functions:createSystemUser`.
+- [ ] Jika deploy memakai region khusus, samakan region di frontend Firebase Functions client.
+
+### Checklist create user dari Manajemen User
+- [ ] Login sebagai `administrator`.
+- [ ] Buka Manajemen User.
+- [ ] Klik Tambah Profile User.
+- [ ] Pastikan field Auth UID tidak diminta saat create.
+- [ ] Isi username, nama tampilan, role, status, dan password sementara.
+- [ ] Simpan dan pastikan tidak ada password yang masuk ke `system_users`.
+- [ ] Pastikan Firebase Authentication punya user baru dengan email internal `username@ims-bunga-flanel.local`.
+- [ ] Pastikan Firestore membuat dokumen `system_users/{uid}` sesuai UID Auth.
+- [ ] Pastikan tabel Manajemen User refresh dan Auth UID tampil/copyable.
+- [ ] Logout lalu login memakai username dan password sementara user baru.
+
+### Checklist guard role create user
+- [ ] Login sebagai `administrator` dan pastikan pilihan role create hanya `administrator` dan `user`.
+- [ ] Coba membuat `super_admin` dari payload langsung/function emulator dan pastikan ditolak.
+- [ ] Login sebagai `user` dan pastikan Manajemen User tidak bisa dibuka dari menu maupun URL langsung.
+- [ ] Nonaktifkan actor lalu pastikan actor inactive tidak bisa memanggil endpoint HTTP create user.
+- [ ] Test user tanpa profile `system_users/{uid}` dan pastikan tidak bisa memanggil endpoint HTTP create user.
+
+### Checklist data dan keamanan
+- [ ] Firestore `system_users/{uid}` hanya berisi profile: authUid, username, usernameLower, displayName, role, status, createdAt, updatedAt, createdBy, updatedBy, lastLoginAt.
+- [ ] Pastikan password sementara tidak muncul di Firestore, console log, docs, atau ZIP patch.
+- [ ] Pastikan credential Admin SDK tidak ada di `src` frontend.
+- [ ] Pastikan duplicate username ditolak.
+- [ ] Pastikan create profile gagal melakukan rollback Auth user atau minimal tercatat di log function.
+
+### Checklist non-regression bisnis
+- [ ] Buka Dashboard setelah login.
+- [ ] Buka Supplier, Purchases, Sales, Returns, Stock Management, dan Production menu utama.
+- [ ] Pastikan tidak ada perubahan flow stok, kas, purchases, sales, production, payroll, HPP, reports, pricing rules, atau reset maintenance.
+- [ ] Jalankan `npm run build` untuk frontend.
+- [ ] Jalankan preview/manual smoke test setelah build.
+
+### Checklist packaging patch
+- [ ] ZIP patch hanya berisi file yang berubah.
+- [ ] ZIP patch tidak berisi `node_modules`.
+- [ ] ZIP patch tidak berisi `dist` atau `build`.
+- [ ] ZIP patch tidak berisi `.git`.
+- [ ] ZIP patch tidak berisi `.env` atau secret.
+---
+
+## Checklist Penyederhanaan Role Aktif - 2026-04-29
+
+### Checklist UI Manajemen User
+- [ ] Dropdown role create hanya menampilkan `Administrator` dan `User`.
+- [ ] Dropdown role create tidak menampilkan `Super Admin`.
+- [ ] Administrator bisa tambah user dengan role `administrator`.
+- [ ] Administrator bisa tambah user dengan role `user`.
+- [ ] Role `super_admin` lama, jika ada di tabel, tampil sebagai legacy dan bisa dimigrasikan manual ke `administrator` atau `user`.
+
+### Checklist route/menu guard
+- [ ] Administrator bisa membuka semua menu admin, termasuk Manajemen User dan Reset & Maintenance.
+- [ ] User tidak melihat Manajemen User.
+- [ ] User tidak melihat Reset & Maintenance.
+- [ ] User yang mencoba URL admin-only diarahkan ke Unauthorized.
+- [ ] User lama `super_admin`, jika masih ada, tidak langsung terkunci dan tetap mendapat akses setara Administrator sampai dimigrasikan.
+
+### Checklist Cloud Function createSystemUser
+- [ ] Payload role `administrator` diterima dari actor Administrator aktif.
+- [ ] Payload role `user` diterima dari actor Administrator aktif.
+- [ ] Payload role `super_admin` ditolak dari UI maupun emulator/direct HTTP.
+- [ ] Jika error CORS/Internal masih muncul, cek deploy/region/log Cloud Function sebagai isu terpisah dari role dropdown.
+
+## Checklist Fix CORS Callable createSystemUser - 2026-04-29
+
+- [ ] Jalankan `cd functions && npm install` jika dependency belum terpasang.
+- [ ] Jalankan `npm run lint` dari folder `functions`.
+- [ ] Deploy `firebase deploy --only functions:createSystemUser`.
+- [ ] Jalankan frontend di `http://localhost:5173`.
+- [ ] Login sebagai Administrator dengan profile `system_users/{uid}` status `active`.
+- [ ] Tambah user role `administrator` dan pastikan tidak ada CORS preflight blocked.
+- [ ] Tambah user role `user` dan pastikan tidak ada CORS preflight blocked.
+- [ ] Pastikan Firebase Authentication membuat user baru.
+- [ ] Pastikan Firestore membuat `system_users/{uid}` sesuai UID Auth.
+- [ ] Pastikan password sementara tidak tersimpan di Firestore.
+- [ ] Jika masih muncul `FirebaseError: internal`, cek Firebase Functions logs karena frontend sudah memakai fetch HTTP dan function sudah menjawab CORS manual.
+- [ ] Catat warning Ant Design deprecated, React 19 compatibility, dan favicon 404 sebagai non-blocker/kandidat cleanup terpisah.
+
+## Checklist Bug Fix createSystemUser HTTP CORS — 2026-04-29
+
+Status: **WAJIB TEST setelah deploy function**.
+
+- [ ] Deploy function dengan `firebase deploy --only functions:createSystemUser`.
+- [ ] Jalankan frontend di `http://localhost:5173`.
+- [ ] Login sebagai `administrator` active.
+- [ ] Buka `/system/user-management`.
+- [ ] Tambah user role `administrator`.
+- [ ] Tambah user role `user`.
+- [ ] Pastikan request `OPTIONS` ke `createSystemUser` mendapat response aman dan tidak ada CORS blocked.
+- [ ] Pastikan request `POST` membawa header `Authorization: Bearer <token>`.
+- [ ] Pastikan user baru muncul di Firebase Authentication.
+- [ ] Pastikan profile baru muncul di Firestore `system_users/{uid}`.
+- [ ] Pastikan password sementara tidak tersimpan di Firestore.
+- [ ] Pastikan role tersimpan hanya `administrator` atau `user`.
+- [ ] Pastikan payload role `super_admin` ditolak jika dicoba manual.
+- [ ] Pastikan user baru bisa login sesuai role/status.
+- [ ] Pastikan warning Ant Design deprecated dan favicon 404 dicatat sebagai non-blocker jika masih ada.
+
+## Checklist Follow-up createSystemUser CORS Runtime Option - 2026-04-29
+
+- [ ] Deploy ulang function: `firebase deploy --only functions:createSystemUser`.
+- [ ] Buka frontend dari `http://localhost:5173` lalu tambah user role `administrator`.
+- [ ] Tambah user role `user`.
+- [ ] Pastikan preflight `OPTIONS` mendapat header `Access-Control-Allow-Origin`.
+- [ ] Pastikan endpoint HTTP tetap mengembalikan JSON saat error validasi/permission.
+- [ ] Jika hosting production memakai GitHub Pages, test dari `https://vyo15.github.io` dan pastikan CORS tidak terblokir.
+- [ ] Pastikan password sementara tidak muncul di dokumen `system_users/{uid}`.
+- [ ] Pastikan payload role `super_admin` tetap ditolak sebagai role target baru.

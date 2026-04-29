@@ -470,7 +470,7 @@ Fase ini hanya mengunci desain akses awal. Tidak ada perubahan source code, tida
 - Belum ada `ProtectedRoute`.
 - Belum ada role-based sidebar filtering.
 - Belum ada collection profile role seperti `system_users/{uid}`.
-- Belum ada seed `super_admin` pertama.
+- Belum ada seed Administrator pertama. Catatan lama `super_admin` sekarang menjadi legacy compatibility.
 - Belum ada flow user `inactive`.
 - Belum ada menu Manajemen User.
 - Firestore Rules belum final production untuk Auth/Role.
@@ -479,7 +479,7 @@ Fase ini hanya mengunci desain akses awal. Tidak ada perubahan source code, tida
 
 ### Risiko utama jika langsung coding besar
 
-- Owner bisa terkunci jika route guard aktif sebelum seed `super_admin` dibuat.
+- Owner bisa terkunci jika route guard aktif sebelum seed `administrator` dibuat.
 - App bisa kembali `Missing or insufficient permissions` jika Firestore Rules dikunci sebelum Auth/profile stabil.
 - User biasa bisa terlalu bebas jika access matrix tidak dikunci.
 - Hide menu saja tidak aman tanpa route guard dan Firestore Rules.
@@ -492,7 +492,7 @@ Fase ini hanya mengunci desain akses awal. Tidak ada perubahan source code, tida
 2. **Fase B - Auth foundation**: tambah Firebase Auth/export, AuthProvider, useAuth, Login page, logout, dan auth loading state.
 3. **Fase C - Route guard**: login public, app protected, Unauthorized page, no-role/inactive handling.
 4. **Fase D - Sidebar/menu guard**: metadata role/access di menu dan filter berdasarkan role.
-5. **Fase E - User Management**: `super_admin` dan `administrator` mengelola user sesuai batasan.
+5. **Fase E - User Management**: `administrator` mengelola user; `super_admin` lama hanya compatibility legacy.
 6. **Fase F - Firestore Rules/Auth alignment**: rules berbasis `request.auth`, `system_users`, role, dan status active.
 7. **Fase G - Cleanup kecil terkait Auth**: hanya cleanup helper/guard yang relevan; jangan refactor besar.
 8. **Fase H - Docs final sync**: update docs setelah source dan rules benar-benar berubah.
@@ -523,7 +523,7 @@ Sebelum User Management dibuat, akun awal harus dibuat manual:
 2. Buat user Auth dengan email internal hasil pola `username@ims-bunga-flanel.local`.
 3. Buat dokumen Firestore `system_users/{uid}`.
 4. Isi minimal: `authUid`, `username`, `displayName`, `role`, `status: active`, `createdAt`, `updatedAt`.
-5. Role valid awal: `super_admin`, `administrator`, `user`.
+5. Role aktif baru: `administrator`, `user`; `super_admin` hanya legacy compatibility untuk data lama.
 
 ### Risiko tersisa
 - Firestore Rules masih perlu alignment pada fase terpisah.
@@ -549,7 +549,7 @@ Sebelum User Management dibuat, akun awal harus dibuat manual:
 
 ### Guarded decisions
 - **GUARDED:** Route guard tetap pengaman utama untuk URL langsung; menu guard hanya mengatur tampilan.
-- **GUARDED:** Reset & Maintenance hanya boleh terlihat dan diakses `super_admin`.
+- **GUARDED:** Reset & Maintenance hanya boleh terlihat dan diakses `administrator`; `super_admin` lama ikut sebagai legacy compatibility.
 - **GUARDED:** Role tidak dikenal default deny.
 - **GUARDED:** Firestore Rules final belum dibuat pada Fase D.
 - **GUARDED:** User Management belum dibuat pada Fase D.
@@ -557,7 +557,7 @@ Sebelum User Management dibuat, akun awal harus dibuat manual:
 
 ### Risiko tersisa
 - Firestore Rules masih harus diselaraskan pada fase khusus agar user tidak bisa bypass dari API/console.
-- User Management belum tersedia, sehingga user masih harus diseed manual.
+- User Management sudah tersedia; seed manual hanya untuk kondisi emergency/migration jika Cloud Function belum siap.
 - Action-level permission seperti create/edit/delete per modul belum dibuat; Fase D masih menu/route-level.
 - Jika access matrix berubah, `roleAccess.js`, `sidebarMenu.js`, dan docs harus disesuaikan bersama.
 
@@ -573,27 +573,98 @@ Sebelum User Management dibuat, akun awal harus dibuat manual:
 - **AKTIF:** Manajemen User internal sudah ditambahkan sebagai halaman `src/pages/System/UserManagement.jsx`.
 - **AKTIF:** Service `src/services/System/userService.js` mengelola profile `system_users` tanpa menyimpan password.
 - **AKTIF:** `roleAccess.js` menjadi single source of truth untuk role constants, route/menu access, dan batas manajemen user.
-- **AKTIF:** Menu Manajemen User tersedia untuk `super_admin` dan `administrator`.
-- **AKTIF:** Reset & Maintenance tetap `super_admin` only di route dan menu.
+- **AKTIF:** Menu Manajemen User tersedia untuk `administrator`; `super_admin` lama dipetakan sebagai legacy compatibility.
+- **AKTIF:** Reset & Maintenance sekarang mengikuti akses penuh Administrator; `super_admin` lama hanya legacy compatibility.
 - **AKTIF:** `firestore.rules` ditambahkan sebagai template Rules/Auth alignment untuk dipublish manual setelah diverifikasi.
 
 ### Guarded decisions
-- **GUARDED:** Halaman Manajemen User tidak membuat Firebase Auth user/password dari frontend.
-- **GUARDED:** Auth user baru masih dibuat manual di Firebase Console sampai Cloud Functions/Admin SDK create-user dibuat aman.
-- **GUARDED:** Administrator hanya boleh membuat/mengelola user biasa.
+- **AKTIF:** Halaman Manajemen User membuat user baru lewat HTTP Cloud Function `createSystemUser`, bukan dari frontend langsung.
+- **AKTIF:** Auth UID otomatis dibuat oleh Firebase Authentication melalui Admin SDK, lalu Cloud Function membuat dokumen `system_users/{uid}`.
+- **GUARDED:** Password sementara tidak disimpan di Firestore dan credential Admin SDK tidak masuk frontend.
+- **GUARDED:** Administrator boleh membuat/mengelola role aktif `administrator` dan `user`, tetapi tidak boleh membuat `super_admin` baru.
 - **GUARDED:** User biasa tidak boleh membuka Manajemen User.
 - **GUARDED:** Tidak ada role yang boleh mengubah role/status dirinya sendiri dari Manajemen User.
 - **GUARDED:** Firestore Rules final tetap harus diuji di Firebase Console; file `firestore.rules` adalah baseline yang perlu dipublish manual.
 - **GUARDED:** UI role guard tidak menggantikan Firestore Rules.
 
 ### Risiko tersisa
-- Create Firebase Auth user dari aplikasi belum dibuat karena butuh backend trusted/Admin SDK.
+- Create Firebase Auth user dari aplikasi sudah dibuat lewat Cloud Function focused `createSystemUser`, tetapi deployment function tetap harus diuji manual di Firebase project.
 - Reset password dari aplikasi belum dibuat.
 - Action-level permission per tombol transaksi belum dibuat.
 - Firestore Rules baseline masih luas untuk data aplikasi agar flow existing tidak rusak; granular collection rules bisa menjadi task lanjutan.
 - Build tetap wajib dijalankan setelah patch diaplikasikan di project lokal.
 
 ### Legacy / cleanup candidate
-- **LEGACY/GUARDED:** `functions/index.js` stok lama tidak disentuh dan tidak boleh dideploy ulang tanpa audit.
-- **CLEANUP CANDIDATE:** input manual Auth UID di Manajemen User dapat diganti callable Cloud Function create-user.
+- **LEGACY/GUARDED:** `functions/index.js` stok lama tidak boleh dideploy ulang tanpa audit jika repo asli masih punya trigger legacy.
+- **LEGACY/CLEANUP:** input manual Auth UID saat create user sudah diganti HTTP Cloud Function dan hanya boleh dipakai sebagai emergency/seed jika flow function belum tersedia.
 - **CLEANUP CANDIDATE:** rules granular per collection dapat dibuat setelah action-level permission disepakati.
+
+
+## Update Auth UID Otomatis via Cloud Functions - 2026-04-29
+
+### Status aktif
+- **AKTIF:** `src/pages/System/UserManagement.jsx` sekarang meminta password sementara saat create user dan tidak lagi meminta Auth UID manual.
+- **AKTIF:** `src/services/System/userService.js` memanggil HTTP Cloud Function `createSystemUser` melalui fetch dan Firebase ID token.
+- **AKTIF:** `src/firebase.js` hanya mengekspor `auth` dan `db`; create user memakai endpoint HTTP langsung.
+- **AKTIF:** `functions/index.js` baru hanya berisi HTTP endpoint `createSystemUser` untuk membuat Firebase Auth user dan profile `system_users/{uid}`.
+- **AKTIF:** `functions/package.json` menyiapkan dependency backend `firebase-admin` dan `firebase-functions` tanpa membawa secret ke frontend.
+
+### Guard yang sudah diterapkan
+- Caller harus login dan punya profile `system_users/{uid}`.
+- Caller harus `status = active`.
+- Caller harus `administrator`; `super_admin` lama ikut sebagai compatibility actor sampai dimigrasikan.
+- `administrator` boleh membuat role aktif `administrator` dan `user`.
+- Username divalidasi dan dibuat sebagai email internal `username@ims-bunga-flanel.local` agar tetap cocok dengan AuthProvider.
+- Cloud Function melakukan rollback Auth user jika penulisan profile Firestore gagal.
+- Password sementara hanya dikirim ke Firebase Auth dan tidak ditulis ke `system_users`.
+
+### Risiko / tech debt tersisa
+- Folder `functions` legacy tidak ada di upload ini, sehingga trigger lama tidak bisa diaudit dari file yang tersedia.
+- Jika repo asli sudah punya `functions/index.js` berisi trigger stok legacy, jangan overwrite/deploy tanpa audit; merge hanya HTTP endpoint `createSystemUser` atau pisahkan file functions dengan hati-hati.
+- Firestore Rules tetap harus dipublish dan diuji sebagai guard utama agar UI guard tidak menjadi satu-satunya keamanan.
+- Reset password, delete Auth user, disable Auth user, dan force must-change-password belum diimplementasikan pada fase ini.
+- Jika function dideploy ke region khusus, frontend `getFunctions(app)` harus disamakan dengan region deploy.
+---
+
+## Update Penyederhanaan Role Aktif - 2026-04-29
+
+### Status aktif
+- **AKTIF:** Role aktif baru hanya `administrator` dan `user`.
+- **AKTIF:** Dropdown Manajemen User tidak lagi menampilkan Super Admin sebagai pilihan baru.
+- **AKTIF:** Administrator dipakai sebagai role akses penuh untuk menu/route admin, termasuk Manajemen User dan Reset & Maintenance.
+- **AKTIF:** Cloud Function `createSystemUser` hanya menerima role target `administrator` atau `user`.
+
+### Legacy / cleanup candidate
+- **LEGACY:** Profile lama dengan `role = super_admin` tetap dikenali agar user existing tidak langsung terkunci.
+- **CLEANUP CANDIDATE:** Migrasikan profile `super_admin` lama ke `administrator` setelah owner/admin utama sudah aman.
+
+### Risiko tersisa
+- Firestore Rules production harus diselaraskan dengan role aktif baru agar `administrator` benar-benar admin utama dan `super_admin` tidak bisa dibuat baru dari client/API.
+- Jika error CORS/Internal pada `createSystemUser` masih muncul, itu perlu dicek sebagai isu deploy/region/log Cloud Function, bukan hanya dropdown role.
+
+## Update Fix CORS Callable createSystemUser - 2026-04-29
+
+- **AKTIF:** `functions/index.js` sekarang memberi handler HTTP eksplisit untuk `createSystemUser`: `region = us-central1`, CORS manual untuk localhost Vite dan domain Firebase Hosting project, serta verifikasi Firebase ID token.
+- **GUARDED:** `invoker = public` tidak berarti semua orang bisa membuat user, karena function tetap memvalidasi `request.auth.uid`, profile `system_users/{uid}`, status `active`, dan role actor `administrator` atau `super_admin` legacy.
+- **AKTIF:** `src/services/System/userService.js` menormalkan error HTTP create user agar admin mendapat pesan yang jelas ketika masalahnya deploy, region, CORS, atau function logs.
+- **NON-BLOCKER:** warning Ant Design deprecated props, React 19 compatibility warning, dan `favicon.ico` 404 tidak memblokir create user; catat sebagai kandidat cleanup UI terpisah.
+- **RISIKO:** jika hosting memakai custom domain baru, domain itu perlu ditambahkan ke allowlist CORS function tanpa mengubah flow Auth/role.
+
+## Update Bug Fix createSystemUser HTTP CORS — 2026-04-29
+
+Status: **AKTIF + GUARDED**.
+
+- `createSystemUser` sekarang memakai HTTPS `onRequest` dengan handler CORS manual untuk menjawab preflight `OPTIONS` dari `http://localhost:5173`.
+- Frontend Manajemen User memanggil endpoint HTTPS menggunakan `fetch` dan `Authorization: Bearer <Firebase ID token>`.
+- Backend tetap memverifikasi ID token dengan Firebase Admin SDK sebelum membuat Auth user dan dokumen `system_users/{uid}`.
+- Password sementara tetap hanya dipakai untuk Firebase Auth dan tidak disimpan di Firestore.
+- Role target tetap hanya `administrator` dan `user`; `super_admin` hanya legacy compatibility actor sampai data lama dimigrasikan.
+- Warning Ant Design deprecated dan `favicon.ico` 404 tetap non-blocker/kandidat cleanup karena tidak memblokir create user.
+
+## Update Follow-up createSystemUser CORS Runtime Option - 2026-04-29
+
+- **AKTIF:** `functions/index.js` sekarang memakai dua lapis CORS untuk HTTP endpoint `createSystemUser`: runtime option `cors: HTTP_CORS_ORIGINS` dan header manual untuk `OPTIONS`/response JSON.
+- **ALASAN:** error browser masih menunjukkan preflight tanpa `Access-Control-Allow-Origin`; runtime option diperlukan sebagai guard tambahan karena HTTP Functions v2 default tidak mengaktifkan CORS jika tidak diset eksplisit.
+- **AKTIF:** allowlist production sekarang juga memasukkan origin GitHub Pages `https://vyo15.github.io`, selain Firebase Hosting dan localhost Vite.
+- **GUARDED:** public invoker hanya membuka endpoint HTTP, bukan izin membuat user; operasi create tetap wajib lolos Firebase ID token, profile `system_users/{uid}`, status `active`, dan role `administrator` atau `super_admin` legacy.
+- **RISIKO TERSISA:** jika CORS masih muncul setelah patch ini, cek apakah function yang terdeploy memang versi terbaru dan apakah Cloud Run Invoker sudah public untuk function generasi 2.

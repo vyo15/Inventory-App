@@ -1,5 +1,9 @@
 /* =========================
-   SECTION: Global Reset
+   SECTION: Global Reset - AKTIF DIPAKAI
+   Fungsi:
+   - reset dasar agar sizing seluruh aplikasi konsisten.
+   Hubungan flow aplikasi:
+   - styling global saja; tidak menyentuh auth, route guard, stok, kas, produksi, payroll, HPP, atau laporan.
 ========================= */
 *,
 *::before,
@@ -17,13 +21,16 @@ body,
 }
 
 /* =========================
-   SECTION: Base Typography + Theme Tokens
+   SECTION: IMS Floral Theme Tokens - AKTIF DIPAKAI / THEME CENTER
    Fungsi:
-   - menyimpan token light / dark paling dasar di level global
-   - dipakai oleh App.css dan komponen portal Ant Design agar warna konsisten
-   - sengaja tetap ringan supaya mudah dirawat dari satu file
-   Catatan:
-   - token di bawah masih dipakai aktif oleh layout, table, modal, dropdown, dan tombol tabel
+   - pusat CSS variable untuk light mode IMS Bunga Flanel.
+   - warna dibuat warm floral: cream, blush, peach, sage, dan warm brown.
+   Dipakai untuk area:
+   - App.css, sidebar/header CSS, dashboard CSS, shared component CSS, dan login CSS.
+   Aman diubah:
+   - boleh tuning warna di blok ini jika ingin mengganti mood desain.
+   Efek ke halaman lain:
+   - berdampak global ke background, card, table, modal, drawer, button, menu, dan text.
 ========================= */
 :root {
   font-family: Inter, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -32,32 +39,113 @@ body,
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  --ims-bg-page: #f3f6fb;
-  --ims-bg-card: #ffffff;
-  --ims-bg-card-soft: #f8fafc;
-  --ims-bg-elevated: #ffffff;
-  --ims-bg-table-header: #f8fafc;
-  --ims-bg-table-hover: #f8fafc;
-  --ims-border-color: rgba(15, 23, 42, 0.08);
-  --ims-border-color-soft: rgba(15, 23, 42, 0.06);
-  --ims-text-primary: #0f172a;
-  --ims-text-secondary: rgba(15, 23, 42, 0.72);
+  /* THEME TOKEN - AKTIF DIPAKAI: ubah ini untuk mengganti accent utama button, active menu, link, dan highlight. */
+  --ims-color-primary: #b8687c;
+  --ims-color-primary-hover: #a85a70;
+  --ims-color-primary-soft: rgba(184, 104, 124, 0.14);
+  --ims-color-primary-softer: rgba(184, 104, 124, 0.08);
+
+  /* FLORAL ACCENT - AKTIF DIPAKAI: aksen bunga/sage/peach. Aman diubah selama kontras tetap nyaman. */
+  --ims-color-sage: #7f9f72;
+  --ims-color-sage-soft: rgba(127, 159, 114, 0.16);
+  --ims-color-peach: #d89275;
+  --ims-color-beige: #ead8c8;
+
+  /* BACKGROUND TOKEN - AKTIF DIPAKAI: background aplikasi light mode. Ubah hati-hati karena terasa di semua halaman. */
+  --ims-bg-page: #f9f1e7;
+  --ims-bg-shell: #f7eadf;
+  --ims-bg-card: #fffaf5;
+  --ims-bg-card-soft: #f8efe6;
+  --ims-bg-elevated: #fffdf9;
+  --ims-bg-table-header: #f5e7dd;
+  --ims-bg-table-hover: #fff3ed;
+
+  /* BORDER / SHADOW TOKEN - AKTIF DIPAKAI: menjaga surface tetap clean dan tidak transparan. */
+  --ims-border-color: rgba(132, 91, 78, 0.16);
+  --ims-border-color-soft: rgba(132, 91, 78, 0.10);
+  --ims-border-strong: rgba(132, 91, 78, 0.18);
+  --ims-shadow-soft: 0 14px 34px rgba(96, 61, 52, 0.08);
+  --ims-shadow-elevated: 0 24px 58px rgba(96, 61, 52, 0.13);
+
+  /* TEXT TOKEN - AKTIF DIPAKAI: warna text utama dan sekunder untuk readability. */
+  --ims-text-primary: #3f312c;
+  --ims-text-secondary: rgba(63, 49, 44, 0.68);
+  --ims-text-muted: rgba(63, 49, 44, 0.54);
+
+  /* TABLE TOKEN - AKTIF DIPAKAI: table tetap solid agar tidak mengulang bug transparansi. */
+  --ims-table-row: #fffaf5;
+  --ims-table-hover: #fff3ed;
+  --ims-table-selected: #f7e0e5;
+  --ims-table-selected-hover: #f2d3dc;
+  --ims-table-fixed-shadow: inset -12px 0 12px -12px rgba(96, 61, 52, 0.22);
+
+  /* SIDEBAR TOKEN - AKTIF DIPAKAI: nuansa brand di shell aplikasi tanpa dekorasi ramai. */
+  --ims-sidebar-bg: #fff7ef;
+  --ims-sidebar-hover: rgba(184, 104, 124, 0.08);
+  --ims-sidebar-active: rgba(184, 104, 124, 0.14);
+
+  /* FLORAL BACKDROP - AKTIF DIPAKAI: gradient lembut untuk shell/login. Aman diubah untuk mood visual. */
+  --ims-floral-gradient: radial-gradient(circle at top left, rgba(255, 211, 226, 0.56), transparent 34%), radial-gradient(circle at bottom right, rgba(187, 211, 177, 0.44), transparent 36%), linear-gradient(135deg, #f9f1e7 0%, #f7eadf 50%, #f1e3d3 100%);
 }
 
+/* =========================
+   SECTION: Dark Mode Tokens - AKTIF DIPAKAI
+   Fungsi:
+   - dark mode warm floral, bukan hitam polos.
+   - selector dibuat lengkap karena AppLayout memakai app-theme-dark dan data-app-theme.
+   Dipakai untuk area:
+   - app shell, portal Ant Design, table, modal, drawer, sidebar, dashboard, dan login jika class theme tersedia.
+   Aman diubah:
+   - boleh tuning warna, tetapi wajib cek kontras text/table/form setelah perubahan.
+========================= */
 html.dark,
-body.dark {
+body.dark,
+html.app-theme-dark,
+body.app-theme-dark,
+html[data-app-theme="dark"],
+body[data-app-theme="dark"] {
   color-scheme: dark;
 
-  --ims-bg-page: #08111f;
-  --ims-bg-card: #101a2b;
-  --ims-bg-card-soft: #0f1a2d;
-  --ims-bg-elevated: #162338;
-  --ims-bg-table-header: #17263b;
-  --ims-bg-table-hover: #142238;
-  --ims-border-color: rgba(148, 163, 184, 0.16);
-  --ims-border-color-soft: rgba(148, 163, 184, 0.12);
-  --ims-text-primary: #e6edf3;
-  --ims-text-secondary: rgba(203, 213, 225, 0.78);
+  --ims-color-primary: #d88a9c;
+  --ims-color-primary-hover: #e59aad;
+  --ims-color-primary-soft: rgba(216, 138, 156, 0.18);
+  --ims-color-primary-softer: rgba(216, 138, 156, 0.10);
+
+  --ims-color-sage: #a7c296;
+  --ims-color-sage-soft: rgba(167, 194, 150, 0.16);
+  --ims-color-peach: #d99a82;
+  --ims-color-beige: #3e3034;
+
+  /* DARK MODE SURFACE - AKTIF DIPAKAI: warna app/card/modal/table. Ubah hati-hati agar kontras tetap aman. */
+  --ims-bg-page: #171112;
+  --ims-bg-shell: #1d1518;
+  --ims-bg-card: #241a1d;
+  --ims-bg-card-soft: #31252a;
+  --ims-bg-elevated: #2a2024;
+  --ims-bg-table-header: #32262b;
+  --ims-bg-table-hover: #3a2b31;
+
+  --ims-border-color: rgba(236, 184, 184, 0.16);
+  --ims-border-color-soft: rgba(236, 184, 184, 0.10);
+  --ims-border-strong: rgba(236, 184, 184, 0.18);
+  --ims-shadow-soft: 0 16px 36px rgba(0, 0, 0, 0.32);
+  --ims-shadow-elevated: 0 28px 70px rgba(0, 0, 0, 0.44);
+
+  --ims-text-primary: #fff5ef;
+  --ims-text-secondary: rgba(255, 239, 230, 0.72);
+  --ims-text-muted: rgba(255, 239, 230, 0.56);
+
+  --ims-table-row: #241a1d;
+  --ims-table-hover: #3a2b31;
+  --ims-table-selected: #4a313a;
+  --ims-table-selected-hover: #573843;
+  --ims-table-fixed-shadow: inset -12px 0 12px -12px rgba(0, 0, 0, 0.48);
+
+  --ims-sidebar-bg: #21171a;
+  --ims-sidebar-hover: rgba(255, 245, 239, 0.06);
+  --ims-sidebar-active: rgba(216, 138, 156, 0.18);
+
+  --ims-floral-gradient: radial-gradient(circle at top left, rgba(216, 138, 156, 0.18), transparent 34%), radial-gradient(circle at bottom right, rgba(167, 194, 150, 0.13), transparent 36%), linear-gradient(135deg, #171112 0%, #1d1518 52%, #261c20 100%);
 }
 
 body {
@@ -71,14 +159,14 @@ body {
 }
 
 /* =========================
-   SECTION: Root App Helper
+   SECTION: Root App Helper - AKTIF DIPAKAI
 ========================= */
 #root {
   isolation: isolate;
 }
 
 /* =========================
-   SECTION: Generic Utility
+   SECTION: Generic Utility - AKTIF DIPAKAI
 ========================= */
 img,
 svg,
@@ -102,16 +190,20 @@ select {
 }
 
 /* =========================
-   SECTION: Selection
+   SECTION: Selection - AKTIF DIPAKAI
    Fungsi:
-   - light dan dark mode memakai warna seleksi berbeda agar tetap nyaman dilihat
+   - memakai accent floral agar text selection tidak kembali ke biru lama.
 ========================= */
 ::selection {
-  background: rgba(37, 99, 235, 0.18);
-  color: #0f172a;
+  background: var(--ims-color-primary-soft);
+  color: var(--ims-text-primary);
 }
 
-.app-shell.dark ::selection {
-  background: rgba(59, 130, 246, 0.28);
-  color: #f8fafc;
+.app-shell.dark ::selection,
+html.app-theme-dark ::selection,
+body.app-theme-dark ::selection,
+html[data-app-theme="dark"] ::selection,
+body[data-app-theme="dark"] ::selection {
+  background: rgba(216, 138, 156, 0.28);
+  color: var(--ims-text-primary);
 }

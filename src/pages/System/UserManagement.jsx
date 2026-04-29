@@ -30,7 +30,7 @@ import {
   canManageUserProfile,
 } from "../../utils/auth/roleAccess";
 import {
-  createSystemUserProfile,
+  createSystemUserWithAuth,
   listSystemUsers,
   updateSystemUserProfile,
   updateSystemUserStatus,
@@ -39,11 +39,12 @@ import {
 const { Text, Title } = Typography;
 
 // =========================
-// SECTION: Form Mode Constants — AKTIF
+// SECTION: Form Mode Constants - AKTIF
 // Fungsi:
-// - membedakan modal tambah profile dan edit profile.
+// - membedakan modal tambah user Auth + profile dan edit profile.
 // Hubungan flow aplikasi:
-// - Fase E hanya membuat/mengelola profile `system_users`, bukan membuat password/Auth user.
+// - mode create memanggil Cloud Function untuk membuat Firebase Auth user dan `system_users/{uid}`;
+// - mode edit hanya mengubah profile role/status/display name yang sudah ada.
 // Status:
 // - AKTIF untuk halaman Manajemen User.
 // =========================
@@ -53,7 +54,7 @@ const FORM_MODE = {
 };
 
 const getRoleColor = (role) => {
-  if (role === ROLES.SUPER_ADMIN) return "red";
+  if (role === ROLES.SUPER_ADMIN) return "default";
   if (role === ROLES.ADMINISTRATOR) return "blue";
   return "green";
 };
@@ -63,17 +64,19 @@ const getStatusColor = (status) => {
 };
 
 // =========================
-// SECTION: User Management Page — AKTIF / GUARDED
+// SECTION: User Management Page - AKTIF / GUARDED
 // Fungsi:
-// - menampilkan dan mengelola profile internal user dari collection `system_users`.
+// - menampilkan dan mengelola profile internal user dari collection `system_users`;
+// - membuat user baru lewat backend trusted agar Auth UID otomatis dari Firebase Authentication.
 // Hubungan flow aplikasi:
 // - AuthProvider memakai profile ini untuk memutuskan user boleh masuk aplikasi;
-// - Route/Menu Guard membatasi halaman ini hanya untuk super_admin dan administrator.
+// - Route/Menu Guard membatasi halaman ini untuk Administrator dan super_admin legacy;
+// - Cloud Function `createSystemUser` memakai Admin SDK, bukan credential di frontend.
 // Status:
-// - AKTIF untuk Fase E.
-// - GUARDED: halaman ini tidak membuat Firebase Auth user/password karena perlu Admin SDK/Cloud Functions.
+// - AKTIF untuk Auth User Creation Phase.
+// - GUARDED: password sementara tidak pernah disimpan di Firestore.
 // Legacy / cleanup:
-// - CLEANUP CANDIDATE: input manual Auth UID bisa diganti otomatis setelah Cloud Functions create-user aman dibuat.
+// - flow lama input manual Auth UID saat create user sudah tidak dipakai oleh form create.
 // =========================
 const UserManagement = () => {
   const { profile, firebaseUser, reloadProfile } = useAuth();
@@ -96,12 +99,12 @@ const UserManagement = () => {
   }, [actorRole]);
 
   // =========================
-  // SECTION: Load Users — AKTIF / GUARDED
+  // SECTION: Load Users - AKTIF / GUARDED
   // Fungsi:
   // - mengambil daftar user sesuai hak role aktif.
   // Hubungan flow aplikasi:
-  // - super_admin melihat semua user;
-  // - administrator hanya melihat user biasa sesuai rule service.
+  // - Administrator melihat profile semua role yang dikenal;
+  // - super_admin legacy dipetakan ke akses Administrator agar data lama tidak terkunci.
   // Status:
   // - AKTIF.
   // =========================
@@ -130,8 +133,15 @@ const UserManagement = () => {
     setFormMode(FORM_MODE.CREATE);
     setSelectedUser(null);
     form.resetFields();
+    const defaultCreateRole = assignableRoleOptions.some(
+      (option) => option.value === ROLES.USER,
+    )
+      ? ROLES.USER
+      : assignableRoleOptions[0]?.value;
+
     form.setFieldsValue({
-      role: assignableRoleOptions[0]?.value || ROLES.USER,
+      // AKTIF/GUARDED: default dibuat sebagai User agar admin tidak tidak sengaja membuat akun admin baru.
+      role: defaultCreateRole || ROLES.USER,
       status: USER_STATUS.ACTIVE,
     });
     setIsModalOpen(true);
@@ -158,23 +168,24 @@ const UserManagement = () => {
   };
 
   // =========================
-  // SECTION: Save User Profile — AKTIF / GUARDED
+  // SECTION: Save User - AKTIF / GUARDED
   // Fungsi:
-  // - menyimpan profile user tanpa menyimpan password;
-  // - create profile membutuhkan Auth UID yang sudah dibuat manual di Firebase Authentication.
+  // - create: memanggil Cloud Function untuk membuat Firebase Auth user + profile `system_users/{uid}`;
+  // - edit: mengubah profile yang sudah ada tanpa mengubah password/Auth user.
   // Hubungan flow aplikasi:
+  // - user baru mendapat UID otomatis dari Firebase Auth;
   // - profile yang dibuat akan dibaca AuthProvider saat user login.
   // Status:
   // - AKTIF.
-  // - GUARDED: jangan mengubah ini menjadi validasi password Firestore/frontend.
+  // - GUARDED: jangan menyimpan password sementara ke Firestore atau state permanen.
   // =========================
   const handleSaveProfile = async (values) => {
     setIsSaving(true);
 
     try {
       if (formMode === FORM_MODE.CREATE) {
-        await createSystemUserProfile(values, profile);
-        message.success("Profile user berhasil dibuat.");
+        await createSystemUserWithAuth(values, profile);
+        message.success("User Auth dan profile system_users berhasil dibuat.");
       } else if (selectedUser) {
         await updateSystemUserProfile(selectedUser.authUid, values, profile);
         message.success("Profile user berhasil diperbarui.");
@@ -185,7 +196,7 @@ const UserManagement = () => {
       await reloadProfile();
     } catch (error) {
       console.error("[UserManagement] Gagal menyimpan user.", error);
-      message.error(error.message || "Gagal menyimpan profile user.");
+      message.error(error.message || "Gagal menyimpan user.");
     } finally {
       setIsSaving(false);
     }
@@ -303,7 +314,7 @@ const UserManagement = () => {
               Manajemen User
             </Title>
             <Text type="secondary">
-              Kelola profile, role, dan status user internal IMS Bunga Flanel.
+              Kelola Auth user, profile, role aktif Administrator/User, dan status user internal IMS Bunga Flanel.
             </Text>
           </div>
           <Space wrap>
@@ -317,10 +328,10 @@ const UserManagement = () => {
         </div>
 
         <Alert
-          type="warning"
+          type="info"
           showIcon
-          message="Fase E: profile user, bukan create Auth password"
-          description="Untuk sementara, akun Firebase Auth masih dibuat manual dari Firebase Console. Halaman ini hanya membuat/mengelola profile system_users, role, dan status. Password tidak disimpan di Firestore."
+          message="Auth UID otomatis via Cloud Function"
+          description="Saat tambah user, sistem membuat Firebase Auth user lewat backend trusted lalu membuat profile system_users/{uid}. Password sementara hanya dikirim ke Firebase Auth dan tidak disimpan di Firestore."
         />
 
         <Card>
@@ -338,7 +349,7 @@ const UserManagement = () => {
       <Modal
         title={
           formMode === FORM_MODE.CREATE
-            ? "Tambah Profile User"
+            ? "Tambah User Auth + Profile"
             : "Edit Profile User"
         }
         open={isModalOpen}
@@ -350,11 +361,19 @@ const UserManagement = () => {
         destroyOnClose
       >
         <Alert
-          type="info"
+          type={formMode === FORM_MODE.CREATE ? "info" : "warning"}
           showIcon
           style={{ marginBottom: 16 }}
-          message="Auth UID wajib sesuai Firebase Authentication"
-          description="Buat user Auth manual dulu di Firebase Console, lalu copy UID ke form ini. Jangan isi atau menyimpan password di Firestore."
+          message={
+            formMode === FORM_MODE.CREATE
+              ? "Auth UID akan dibuat otomatis"
+              : "Edit profile tidak mengubah password Auth"
+          }
+          description={
+            formMode === FORM_MODE.CREATE
+              ? "Isi username, nama tampilan, role, status, dan password sementara. Cloud Function akan membuat Firebase Auth user dan dokumen system_users/{uid}."
+              : "Perubahan hanya berlaku pada profile, role, dan status di Firestore. Password tetap dikelola oleh Firebase Authentication."
+          }
         />
 
         <Form
@@ -363,19 +382,17 @@ const UserManagement = () => {
           requiredMark={false}
           onFinish={handleSaveProfile}
         >
-          <Form.Item
-            label="Auth UID"
-            name="authUid"
-            rules={[{ required: true, message: "Auth UID wajib diisi." }]}
-          >
-            <Input disabled={formMode === FORM_MODE.EDIT} placeholder="UID dari Firebase Authentication" />
-          </Form.Item>
+          {formMode === FORM_MODE.EDIT ? (
+            <Form.Item label="Auth UID" name="authUid">
+              <Input disabled />
+            </Form.Item>
+          ) : null}
 
           <Form.Item
             label="Username"
             name="username"
             rules={[{ required: true, message: "Username wajib diisi." }]}
-            extra="Username harus sama dengan identifier login internal, contoh admin untuk admin@ims-bunga-flanel.local."
+            extra="Username akan dipakai sebagai login internal, contoh admin untuk admin@ims-bunga-flanel.local."
           >
             <Input disabled={formMode === FORM_MODE.EDIT} placeholder="contoh: admin" />
           </Form.Item>
@@ -385,7 +402,7 @@ const UserManagement = () => {
             name="displayName"
             rules={[{ required: true, message: "Nama tampilan wajib diisi." }]}
           >
-            <Input placeholder="contoh: Super Admin" />
+            <Input placeholder="contoh: Admin Toko" />
           </Form.Item>
 
           <Form.Item
@@ -393,7 +410,10 @@ const UserManagement = () => {
             name="role"
             rules={[{ required: true, message: "Role wajib dipilih." }]}
           >
-            <Select options={assignableRoleOptions} />
+            <Select
+              options={assignableRoleOptions}
+              placeholder="Pilih Administrator atau User"
+            />
           </Form.Item>
 
           <Form.Item
@@ -408,6 +428,23 @@ const UserManagement = () => {
               ]}
             />
           </Form.Item>
+
+          {formMode === FORM_MODE.CREATE ? (
+            <Form.Item
+              label="Password Sementara"
+              name="temporaryPassword"
+              rules={[
+                { required: true, message: "Password sementara wajib diisi." },
+                { min: 6, message: "Password sementara minimal 6 karakter." },
+              ]}
+              extra="Password ini dikirim ke Firebase Auth melalui Cloud Function dan tidak disimpan di Firestore."
+            >
+              <Input.Password
+                autoComplete="new-password"
+                placeholder="Minimal 6 karakter"
+              />
+            </Form.Item>
+          ) : null}
         </Form>
       </Modal>
     </div>

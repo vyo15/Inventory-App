@@ -37,7 +37,7 @@ const Unauthorized = () => {
           </Text>
           <Tag color="orange">Role aktif: {displayRole}</Tag>
           <Text type="secondary">
-            Jika menu ini seharusnya bisa diakses, hubungi super_admin untuk
+            Jika menu ini seharusnya bisa diakses, hubungi Administrator untuk
             mengecek access matrix dan profile user.
           </Text>
         </Space>

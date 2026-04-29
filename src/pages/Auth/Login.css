@@ -1,0 +1,626 @@
+/* =========================
+   SECTION: Login Page Scope — AKTIF / UI ONLY
+   Fungsi:
+   - membatasi seluruh styling redesign hanya pada halaman login.
+   Hubungan flow aplikasi:
+   - dipakai oleh src/pages/Auth/Login.jsx dan tidak menyentuh AppLayout, dashboard, sidebar, atau modul bisnis.
+   Status:
+   - AKTIF untuk UI login IMS Bunga Flanel.
+   - SAFE: prefix .ims-login-* dipakai agar style tidak bocor ke halaman lain.
+   Legacy / cleanup:
+   - menggantikan inline style lama di Login.jsx agar styling lebih mudah dirawat.
+   ========================= */
+.ims-login-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  padding: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at top left, rgba(255, 211, 226, 0.78), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(187, 211, 177, 0.72), transparent 34%),
+    linear-gradient(135deg, #fff8ef 0%, #fdecef 48%, #f3eadc 100%);
+}
+
+/* =========================
+   SECTION: Decorative Background — AKTIF / UI ONLY
+   Fungsi:
+   - memberi nuansa pastel/floral tanpa gambar eksternal dan tanpa library tambahan.
+   Hubungan flow aplikasi:
+   - dekorasi visual murni; tidak memengaruhi form submit, auth, Firestore, role, atau permission.
+   Status:
+   - AKTIF untuk branding login.
+   ========================= */
+.ims-login-background-glow {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(6px);
+  pointer-events: none;
+  opacity: 0.62;
+}
+
+.ims-login-background-glow-one {
+  width: 260px;
+  height: 260px;
+  top: -72px;
+  right: 9%;
+  background: rgba(247, 174, 191, 0.38);
+}
+
+.ims-login-background-glow-two {
+  width: 320px;
+  height: 320px;
+  left: -96px;
+  bottom: -120px;
+  background: rgba(165, 194, 151, 0.34);
+}
+
+/* =========================
+   SECTION: Main Layout — AKTIF / UI ONLY
+   Fungsi:
+   - membagi login menjadi panel brand floral dan panel form.
+   Hubungan flow aplikasi:
+   - hanya membungkus state login existing; tidak mengubah route guard atau AppLayout.
+   Status:
+   - AKTIF di desktop dan mobile.
+   ========================= */
+.ims-login-layout {
+  position: relative;
+  z-index: 1;
+  width: min(1080px, 100%);
+  min-height: 620px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+/* =========================
+   SECTION: Brand Panel — AKTIF / UI ONLY
+   Fungsi:
+   - menampilkan identitas IMS Bunga Flanel dengan visual hangat dan elegan.
+   Hubungan flow aplikasi:
+   - membantu konteks user sebelum login tanpa menyentuh data atau business rules.
+   Status:
+   - AKTIF; pada mobile panel ini diringkas agar form tetap prioritas.
+   ========================= */
+.ims-login-brand-panel {
+  position: relative;
+  overflow: hidden;
+  padding: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: 34px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(255, 244, 232, 0.48)),
+    linear-gradient(180deg, rgba(255, 220, 229, 0.48), rgba(226, 237, 218, 0.42));
+  box-shadow: 0 30px 90px rgba(110, 69, 75, 0.16);
+  backdrop-filter: blur(16px);
+}
+
+.ims-login-brand-panel::before,
+.ims-login-brand-panel::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.ims-login-brand-panel::before {
+  width: 220px;
+  height: 220px;
+  right: -80px;
+  top: -70px;
+  background: rgba(255, 193, 209, 0.46);
+}
+
+.ims-login-brand-panel::after {
+  width: 180px;
+  height: 180px;
+  left: -72px;
+  bottom: 86px;
+  background: rgba(177, 202, 164, 0.42);
+}
+
+.ims-login-badge {
+  width: fit-content;
+  padding: 8px 14px;
+  border: 1px solid rgba(127, 97, 66, 0.16);
+  border-radius: 999px;
+  color: #7f6142;
+  background: rgba(255, 252, 247, 0.78);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ims-login-brand-copy {
+  max-width: 480px;
+}
+
+.ims-login-brand-title.ant-typography {
+  margin: 0;
+  color: #5c3f34;
+  font-size: clamp(34px, 5vw, 58px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+}
+
+.ims-login-brand-description.ant-typography {
+  max-width: 440px;
+  color: #725b4d;
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.ims-login-brand-note {
+  position: relative;
+  z-index: 1;
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(114, 91, 77, 0.14);
+  border-radius: 18px;
+  background: rgba(255, 252, 247, 0.7);
+  color: #725b4d;
+}
+
+.ims-login-note-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #8fa87f;
+  box-shadow: 0 0 0 6px rgba(143, 168, 127, 0.18);
+}
+
+/* =========================
+   SECTION: CSS Floral Illustration — AKTIF / UI ONLY
+   Fungsi:
+   - membentuk ilustrasi bunga, daun, dan orbit dekoratif dari CSS.
+   Hubungan flow aplikasi:
+   - visual non-interaktif; tidak memengaruhi form dan state auth.
+   Status:
+   - AKTIF; tidak memakai asset eksternal agar patch tetap ringan.
+   ========================= */
+.ims-login-flower-stage {
+  position: relative;
+  z-index: 1;
+  height: 250px;
+  margin: 18px 0 10px;
+}
+
+.ims-login-orbit {
+  position: absolute;
+  border: 1px dashed rgba(126, 91, 67, 0.2);
+  border-radius: 999px;
+  transform: rotate(-12deg);
+}
+
+.ims-login-orbit-a {
+  width: 310px;
+  height: 180px;
+  left: 60px;
+  top: 36px;
+}
+
+.ims-login-orbit-b {
+  width: 230px;
+  height: 132px;
+  left: 140px;
+  top: 80px;
+  transform: rotate(16deg);
+}
+
+.ims-login-flower {
+  position: absolute;
+  width: 124px;
+  height: 124px;
+  border-radius: 999px;
+}
+
+.ims-login-flower-main {
+  left: 126px;
+  top: 54px;
+}
+
+.ims-login-flower-small {
+  right: 68px;
+  top: 16px;
+  width: 84px;
+  height: 84px;
+  transform: rotate(18deg);
+  opacity: 0.92;
+}
+
+.ims-login-petal,
+.ims-login-flower-core {
+  position: absolute;
+  inset: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.ims-login-petal {
+  width: 62px;
+  height: 78px;
+  border-radius: 58% 58% 48% 48%;
+  background: linear-gradient(180deg, #f7a9bc 0%, #f5c0c9 100%);
+  box-shadow: 0 14px 28px rgba(198, 108, 130, 0.18);
+}
+
+.ims-login-flower-small .ims-login-petal {
+  width: 42px;
+  height: 52px;
+  background: linear-gradient(180deg, #ffd1bd 0%, #f4aebd 100%);
+}
+
+.ims-login-petal-top {
+  transform: translate(-50%, -92%);
+}
+
+.ims-login-petal-right {
+  transform: translate(-8%, -50%) rotate(90deg);
+}
+
+.ims-login-petal-bottom {
+  transform: translate(-50%, -8%) rotate(180deg);
+}
+
+.ims-login-petal-left {
+  transform: translate(-92%, -50%) rotate(-90deg);
+}
+
+.ims-login-flower-core {
+  width: 42px;
+  height: 42px;
+  border: 6px solid rgba(255, 255, 255, 0.68);
+  border-radius: 999px;
+  background: #f6c76b;
+  box-shadow: inset 0 -7px 0 rgba(137, 93, 45, 0.1);
+}
+
+.ims-login-flower-small .ims-login-flower-core {
+  width: 30px;
+  height: 30px;
+  border-width: 4px;
+}
+
+.ims-login-leaf {
+  position: absolute;
+  width: 88px;
+  height: 42px;
+  border-radius: 999px 0 999px 0;
+  background: linear-gradient(135deg, #99b88a, #c8d9b8);
+  box-shadow: 0 16px 30px rgba(111, 139, 95, 0.18);
+}
+
+.ims-login-leaf-left {
+  left: 92px;
+  bottom: 28px;
+  transform: rotate(18deg);
+}
+
+.ims-login-leaf-right {
+  right: 96px;
+  bottom: 50px;
+  transform: scaleX(-1) rotate(16deg);
+}
+
+/* =========================
+   SECTION: Form Panel and Card — AKTIF / GUARDED UI
+   Fungsi:
+   - menjaga card login tetap solid, readable, dan profesional.
+   Hubungan flow aplikasi:
+   - form di dalamnya tetap memanggil handleLogin existing di Login.jsx.
+   Status:
+   - AKTIF untuk semua state login.
+   ========================= */
+.ims-login-form-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ims-login-card.ant-card {
+  width: min(100%, 460px);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 30px 80px rgba(92, 63, 52, 0.16);
+  backdrop-filter: blur(18px);
+}
+
+.ims-login-card .ant-card-body {
+  padding: 32px;
+}
+
+.ims-login-card--compact.ant-card {
+  max-width: 380px;
+  text-align: center;
+}
+
+.ims-login-card--blocked.ant-card {
+  max-width: 520px;
+}
+
+.ims-login-heading {
+  width: 100%;
+}
+
+.ims-login-eyebrow.ant-typography {
+  color: #c06f86;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ims-login-title.ant-typography {
+  margin: 0;
+  color: #4f3b33;
+  letter-spacing: -0.02em;
+}
+
+.ims-login-muted-text.ant-typography {
+  color: #7b6a60;
+  line-height: 1.65;
+}
+
+.ims-login-info-box.ant-alert {
+  margin-top: 24px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(143, 168, 127, 0.28);
+  border-radius: 18px;
+  background: rgba(246, 250, 241, 0.92);
+}
+
+.ims-login-error-box.ant-alert {
+  margin-bottom: 18px;
+  border-radius: 16px;
+}
+
+.ims-login-form .ant-form-item-label > label {
+  color: #5f4d43;
+  font-weight: 700;
+}
+
+.ims-login-form .ant-input-affix-wrapper,
+.ims-login-form .ant-input {
+  border-radius: 14px;
+}
+
+.ims-login-form .ant-input-affix-wrapper {
+  border-color: rgba(127, 97, 66, 0.16);
+  background: #fffdf9;
+}
+
+.ims-login-form .ant-input-affix-wrapper:hover,
+.ims-login-form .ant-input-affix-wrapper-focused {
+  border-color: #c06f86;
+  box-shadow: 0 0 0 3px rgba(192, 111, 134, 0.12);
+}
+
+.ims-login-submit.ant-btn-primary {
+  height: 46px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #c06f86 0%, #d98b78 100%);
+  box-shadow: 0 14px 28px rgba(192, 111, 134, 0.24);
+  font-weight: 800;
+}
+
+.ims-login-submit.ant-btn-primary:hover,
+.ims-login-submit.ant-btn-primary:focus {
+  background: linear-gradient(135deg, #b95f78 0%, #cf7f6a 100%);
+}
+
+.ims-login-loading-content {
+  width: 100%;
+}
+
+/* =========================
+   SECTION: Responsive Layout — AKTIF / UI ONLY
+   Fungsi:
+   - memastikan halaman login nyaman di tablet dan mobile.
+   Hubungan flow aplikasi:
+   - hanya mengubah susunan visual, bukan logic auth.
+   Status:
+   - AKTIF untuk menjaga usability mobile.
+   ========================= */
+@media (max-width: 920px) {
+  .ims-login-page {
+    padding: 22px;
+  }
+
+  .ims-login-layout {
+    min-height: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .ims-login-brand-panel {
+    min-height: 320px;
+    padding: 30px;
+  }
+
+  .ims-login-flower-stage {
+    height: 150px;
+    margin: 8px 0 0;
+  }
+
+  .ims-login-orbit-a {
+    left: 10%;
+    top: 8px;
+    width: 250px;
+    height: 140px;
+  }
+
+  .ims-login-orbit-b {
+    left: 30%;
+    top: 36px;
+  }
+
+  .ims-login-flower-main {
+    left: 30%;
+    top: 18px;
+    transform: scale(0.78);
+  }
+
+  .ims-login-flower-small {
+    right: 18%;
+    top: 0;
+    transform: scale(0.78) rotate(18deg);
+  }
+
+  .ims-login-leaf-left {
+    left: 24%;
+    bottom: 0;
+  }
+
+  .ims-login-leaf-right {
+    right: 20%;
+    bottom: 14px;
+  }
+}
+
+@media (max-width: 560px) {
+  .ims-login-page {
+    padding: 14px;
+    align-items: flex-start;
+  }
+
+  .ims-login-layout {
+    gap: 14px;
+  }
+
+  .ims-login-brand-panel {
+    min-height: auto;
+    padding: 22px;
+    border-radius: 24px;
+  }
+
+  .ims-login-brand-title.ant-typography {
+    font-size: 32px;
+  }
+
+  .ims-login-brand-description.ant-typography {
+    font-size: 14px;
+  }
+
+  .ims-login-brand-note {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .ims-login-flower-stage {
+    display: none;
+  }
+
+  .ims-login-card.ant-card {
+    border-radius: 22px;
+  }
+
+  .ims-login-card .ant-card-body {
+    padding: 22px;
+  }
+}
+/* =========================
+   SECTION: Login Theme Token Sync - AKTIF DIPAKAI / UI ONLY
+   Fungsi:
+   - menyambungkan login floral ke token global agar tidak berbeda sendiri dari app utama.
+   Hubungan flow aplikasi:
+   - styling login saja; handleLogin, Firebase Auth, profile status, role check, dan logout blocked user tidak berubah.
+   Aman diubah:
+   - ubah token di src/index.css untuk tuning global; blok ini hanya mapping visual login.
+========================= */
+.ims-login-page {
+  background: var(--ims-floral-gradient);
+  color: var(--ims-text-primary);
+}
+
+.ims-login-background-glow-one {
+  background: var(--ims-color-primary-soft);
+}
+
+.ims-login-background-glow-two {
+  background: var(--ims-color-sage-soft);
+}
+
+.ims-login-brand-panel {
+  border-color: var(--ims-border-color-soft);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--ims-bg-card) 82%, transparent), color-mix(in srgb, var(--ims-bg-card-soft) 62%, transparent)),
+    linear-gradient(180deg, var(--ims-color-primary-softer), var(--ims-color-sage-soft));
+  box-shadow: var(--ims-shadow-elevated);
+}
+
+.ims-login-badge,
+.ims-login-brand-note {
+  border-color: var(--ims-border-color-soft);
+  background: color-mix(in srgb, var(--ims-bg-elevated) 78%, transparent);
+  color: var(--ims-text-secondary);
+}
+
+.ims-login-brand-title.ant-typography,
+.ims-login-title.ant-typography {
+  color: var(--ims-text-primary);
+}
+
+.ims-login-brand-description.ant-typography,
+.ims-login-muted-text.ant-typography {
+  color: var(--ims-text-secondary);
+}
+
+.ims-login-eyebrow.ant-typography {
+  color: var(--ims-color-primary);
+}
+
+.ims-login-note-dot {
+  background: var(--ims-color-sage);
+  box-shadow: 0 0 0 6px var(--ims-color-sage-soft);
+}
+
+.ims-login-card.ant-card {
+  border-color: var(--ims-border-color-soft);
+  background: color-mix(in srgb, var(--ims-bg-elevated) 92%, transparent);
+  box-shadow: var(--ims-shadow-elevated);
+}
+
+.ims-login-info-box.ant-alert {
+  border-color: var(--ims-color-sage-soft);
+  background: color-mix(in srgb, var(--ims-bg-card-soft) 86%, transparent);
+}
+
+.ims-login-form .ant-form-item-label > label {
+  color: var(--ims-text-primary);
+}
+
+.ims-login-form .ant-input-affix-wrapper {
+  border-color: var(--ims-border-color);
+  background: var(--ims-bg-elevated);
+}
+
+.ims-login-form .ant-input-affix-wrapper:hover,
+.ims-login-form .ant-input-affix-wrapper-focused {
+  border-color: var(--ims-color-primary);
+  box-shadow: 0 0 0 3px var(--ims-color-primary-softer);
+}
+
+.ims-login-submit.ant-btn-primary,
+.ims-login-submit.ant-btn-primary:hover,
+.ims-login-submit.ant-btn-primary:focus {
+  background: linear-gradient(135deg, var(--ims-color-primary) 0%, var(--ims-color-peach) 100%);
+  box-shadow: 0 14px 28px var(--ims-color-primary-soft);
+}
+
+html.app-theme-dark .ims-login-page,
+body.app-theme-dark .ims-login-page,
+html[data-app-theme="dark"] .ims-login-page,
+body[data-app-theme="dark"] .ims-login-page {
+  background: var(--ims-floral-gradient);
+}

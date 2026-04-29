@@ -1,14 +1,17 @@
 // =========================
 // SECTION: Auth Role Constants — AKTIF / GUARDED
 // Fungsi:
-// - menjadi single source of truth untuk nama role aplikasi.
+// - menjadi single source of truth untuk nama role aplikasi;
+// - menjaga hanya 2 role aktif baru: administrator dan user;
+// - mempertahankan super_admin sebagai role legacy agar data lama tidak langsung terkunci.
 // Hubungan flow aplikasi:
 // - dipakai AuthProvider, Route Guard, Sidebar/Menu Guard, dan Manajemen User.
 // Status:
 // - AKTIF untuk Login + Role internal IMS.
-// - GUARDED: role baru tidak boleh ditambah tanpa update access matrix docs, route guard, menu guard, User Management, dan Firestore Rules.
+// - GUARDED: role baru tidak boleh ditambah tanpa update access matrix docs, route guard, menu guard, User Management, Cloud Function, dan Firestore Rules.
 // Legacy / cleanup:
-// - tidak ada legacy; jika nanti custom claims dipakai, mapping role tetap bisa dipertahankan.
+// - ROLES.SUPER_ADMIN adalah LEGACY COMPATIBILITY untuk profile lama dan kandidat migration manual ke administrator;
+// - super_admin tidak boleh menjadi pilihan role baru di UI/Cloud Function.
 // =========================
 export const ROLES = {
   SUPER_ADMIN: "super_admin",
@@ -17,16 +20,16 @@ export const ROLES = {
 };
 
 export const ROLE_LABELS = {
-  [ROLES.SUPER_ADMIN]: "Super Admin",
+  [ROLES.SUPER_ADMIN]: "Super Admin (Legacy)",
   [ROLES.ADMINISTRATOR]: "Administrator",
-  [ROLES.USER]: "User Operasional",
+  [ROLES.USER]: "User",
 };
 
-export const ALL_ROLES = [
-  ROLES.SUPER_ADMIN,
-  ROLES.ADMINISTRATOR,
-  ROLES.USER,
-];
+export const ACTIVE_ROLES = [ROLES.ADMINISTRATOR, ROLES.USER];
+
+export const LEGACY_ROLES = [ROLES.SUPER_ADMIN];
+
+export const ALL_ROLES = [...LEGACY_ROLES, ...ACTIVE_ROLES];
 
 export const USER_STATUS = {
   ACTIVE: "active",
@@ -93,17 +96,22 @@ export const ROUTE_ACCESS_KEYS = {
 // =========================
 // SECTION: Role Groups — AKTIF / GUARDED
 // Fungsi:
-// - membuat deklarasi access matrix lebih mudah dibaca dan dirawat.
+// - membuat deklarasi access matrix lebih mudah dibaca dan dirawat;
+// - memberi Administrator akses penuh sesuai target role baru;
+// - tetap memasukkan super_admin sebagai legacy alias agar akun lama tidak langsung terkunci.
 // Hubungan flow aplikasi:
 // - dipakai oleh route, sidebar, dan Manajemen User agar tidak ada duplikasi matrix.
 // Status:
 // - AKTIF.
-// - GUARDED: user biasa sengaja tidak diberi menu finance/report sensitif pada fase awal.
+// - GUARDED: user biasa sengaja tidak diberi menu finance/report/sistem sensitif pada fase awal.
+// Legacy / cleanup:
+// - ADMIN_AND_SUPER berarti akses admin penuh untuk administrator + super_admin legacy;
+// - SUPER_ADMIN_ONLY dipertahankan sebagai alias legacy, jangan dipakai untuk rule baru.
 // =========================
 export const ROLE_GROUPS = {
   ALL_AUTHENTICATED: [ROLES.SUPER_ADMIN, ROLES.ADMINISTRATOR, ROLES.USER],
   ADMIN_AND_SUPER: [ROLES.SUPER_ADMIN, ROLES.ADMINISTRATOR],
-  SUPER_ADMIN_ONLY: [ROLES.SUPER_ADMIN],
+  SUPER_ADMIN_ONLY: [ROLES.SUPER_ADMIN, ROLES.ADMINISTRATOR],
 };
 
 // =========================
@@ -117,7 +125,7 @@ export const ROLE_GROUPS = {
 // - AKTIF untuk Route/Menu Guard dan User Management.
 // - GUARDED: UI guard ini belum menggantikan Firestore Rules final.
 // Legacy / cleanup:
-// - tidak ada legacy; jika permission dibuat lebih granular, matrix ini bisa dipecah per action.
+// - super_admin masih dipetakan ke akses Administrator sebagai compatibility sampai data lama dimigrasikan.
 // =========================
 export const ROUTE_ROLE_ACCESS = {
   [ROUTE_ACCESS_KEYS.DASHBOARD]: ROLE_GROUPS.ALL_AUTHENTICATED,
@@ -156,14 +164,14 @@ export const ROUTE_ROLE_ACCESS = {
   [ROUTE_ACCESS_KEYS.PROFIT_LOSS]: ROLE_GROUPS.ADMIN_AND_SUPER,
 
   [ROUTE_ACCESS_KEYS.USER_MANAGEMENT]: ROLE_GROUPS.ADMIN_AND_SUPER,
-  [ROUTE_ACCESS_KEYS.RESET_MAINTENANCE]: ROLE_GROUPS.SUPER_ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.RESET_MAINTENANCE]: ROLE_GROUPS.ADMIN_AND_SUPER,
 };
 
 // =========================
 // SECTION: Role Check Helpers — AKTIF / GUARDED
 // Fungsi:
 // - default deny untuk role tidak dikenal;
-// - memastikan Reset/Maintenance dan User Management tidak terbuka ke role yang salah.
+// - memastikan Reset/Maintenance dan User Management tidak terbuka ke role user biasa.
 // Hubungan flow aplikasi:
 // - helper ini dipakai bersama oleh ProtectedRoute, SidebarMenu, dan UserManagement.
 // Status:
@@ -171,6 +179,10 @@ export const ROUTE_ROLE_ACCESS = {
 // - GUARDED: jika role undefined/null, akses harus ditolak.
 // =========================
 export const isKnownRole = (role) => ALL_ROLES.includes(role);
+
+export const isActiveRole = (role) => ACTIVE_ROLES.includes(role);
+
+export const isLegacyRole = (role) => LEGACY_ROLES.includes(role);
 
 export const isKnownUserStatus = (status) => ALL_USER_STATUSES.includes(status);
 
@@ -198,23 +210,20 @@ export const canAccessUserManagement = (role) => {
 // SECTION: User Management Role Rules — AKTIF / GUARDED
 // Fungsi:
 // - menjaga batas pengelolaan user internal di sisi UI/service;
-// - administrator hanya boleh mengelola user biasa;
+// - role baru yang boleh dibuat hanya administrator dan user;
 // - tidak ada role yang boleh mengubah role/status dirinya sendiri lewat halaman Manajemen User.
 // Hubungan flow aplikasi:
-// - dipakai UserManagement dan userService sebelum menulis `system_users`.
+// - dipakai UserManagement dan userService sebelum menulis `system_users`;
+// - Cloud Function createSystemUser wajib mengikuti aturan yang sama.
 // Status:
-// - AKTIF untuk Fase E.
+// - AKTIF untuk penyederhanaan role 2 level.
 // - GUARDED: aturan ini harus diselaraskan dengan Firestore Rules; UI guard saja tidak cukup.
 // Legacy / cleanup:
-// - tidak ada legacy; jika nanti custom claims/Admin SDK aktif, helper ini tetap dipakai untuk UX guard.
+// - super_admin lama tetap bisa login dan punya akses admin, tetapi tidak bisa dipilih sebagai role baru.
 // =========================
 export const getAssignableRolesForActor = (actorRole) => {
-  if (actorRole === ROLES.SUPER_ADMIN) {
-    return [ROLES.SUPER_ADMIN, ROLES.ADMINISTRATOR, ROLES.USER];
-  }
-
-  if (actorRole === ROLES.ADMINISTRATOR) {
-    return [ROLES.USER];
+  if (ROLE_GROUPS.ADMIN_AND_SUPER.includes(actorRole)) {
+    return ACTIVE_ROLES;
   }
 
   return [];
@@ -225,12 +234,8 @@ export const canAssignUserRole = (actorRole, targetRole) => {
 };
 
 export const canViewUserProfile = (actorRole, targetRole) => {
-  if (actorRole === ROLES.SUPER_ADMIN) {
+  if (ROLE_GROUPS.ADMIN_AND_SUPER.includes(actorRole)) {
     return isKnownRole(targetRole);
-  }
-
-  if (actorRole === ROLES.ADMINISTRATOR) {
-    return targetRole === ROLES.USER;
   }
 
   return false;
@@ -255,11 +260,7 @@ export const canManageUserProfile = ({
     return false;
   }
 
-  if (actorRole === ROLES.SUPER_ADMIN) {
-    return true;
-  }
-
-  return actorRole === ROLES.ADMINISTRATOR && targetRole === ROLES.USER;
+  return ROLE_GROUPS.ADMIN_AND_SUPER.includes(actorRole);
 };
 
 export const canChangeUserStatus = (params) => canManageUserProfile(params);
@@ -280,7 +281,7 @@ export const canCreateUserProfile = (actorRole, targetRole) => {
 // - AKTIF.
 // - GUARDED: hide menu bukan security final; route guard dan Firestore Rules tetap wajib.
 // Legacy / cleanup:
-// - tidak ada legacy; action-level permission dapat ditambah di fase berikutnya jika diperlukan.
+// - super_admin diperlakukan seperti Administrator sampai data legacy dimigrasikan.
 // =========================
 export const filterSidebarMenuItemsByRole = (menuItems = [], role) => {
   if (!isKnownRole(role)) {

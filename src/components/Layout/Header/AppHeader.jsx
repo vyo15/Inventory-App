@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Button, Space, Tag, Typography } from "antd";
 import { LogoutOutlined, UserOutlined } from "@ant-design/icons";
 import useAuth from "../../../hooks/useAuth";
+import { ROLE_LABELS } from "../../../utils/auth/roleAccess";
 import "./AppHeader.css";
 
 const { Title, Text } = Typography;
@@ -16,14 +17,14 @@ const { Title, Text } = Typography;
 // - AKTIF untuk layout utama.
 // - GUARDED: logout hanya menghapus session, tidak menyentuh stok/kas/transaksi/produksi/laporan.
 // Legacy / cleanup:
-// - tidak ada legacy; role menu guard detail tetap fase berikutnya.
+// - super_admin hanya tampil sebagai label legacy jika profile lama belum dimigrasikan.
 // =========================
 const AppHeader = () => {
   const { logout, profile } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const displayName = profile?.displayName || profile?.username || "User IMS";
-  const displayRole = profile?.role || "user";
+  const displayRole = ROLE_LABELS[profile?.role] || profile?.role || "User";
 
   const handleLogout = async () => {
     setIsLoggingOut(true);

@@ -13,6 +13,7 @@ import {
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import useAuth from "../../hooks/useAuth";
 import { AUTH_PROFILE_STATUS } from "../../context/AuthContext";
+import "./Login.css";
 
 const { Text, Title } = Typography;
 
@@ -33,7 +34,7 @@ const getBlockedAccessMessage = (profileStatus) => {
         status: "warning",
         title: "Akses belum aktif",
         description:
-          "Akun Auth sudah valid, tetapi profile internal belum dibuat di system_users. Hubungi super_admin untuk aktivasi manual sementara.",
+          "Akun Auth sudah valid, tetapi profile internal belum dibuat di system_users. Hubungi Administrator untuk aktivasi profile internal.",
       };
     case AUTH_PROFILE_STATUS.INACTIVE:
       return {
@@ -47,7 +48,7 @@ const getBlockedAccessMessage = (profileStatus) => {
         status: "warning",
         title: "Role belum valid",
         description:
-          "Profile user belum memiliki role valid: super_admin, administrator, atau user.",
+          "Profile user belum memiliki role valid: administrator atau user. Role super_admin hanya legacy compatibility untuk data lama.",
       };
     case AUTH_PROFILE_STATUS.ERROR:
       return {
@@ -62,6 +63,99 @@ const getBlockedAccessMessage = (profileStatus) => {
 };
 
 // =========================
+// SECTION: Floral Illustration — AKTIF / UI ONLY
+// Fungsi:
+// - membuat dekorasi bunga ringan dengan CSS murni tanpa asset dan tanpa library baru.
+// Hubungan flow aplikasi:
+// - hanya visual halaman login; tidak terhubung ke auth, Firestore, role, stok, kas, atau modul bisnis.
+// Status:
+// - AKTIF untuk identitas visual login IMS Bunga Flanel.
+// - SAFE: seluruh class memakai prefix ims-login agar tidak bocor ke halaman lain.
+// Legacy / cleanup:
+// - bukan legacy; jika kelak ada asset brand resmi, blok ini bisa menjadi kandidat cleanup visual saja.
+// =========================
+const FloralIllustration = () => (
+  <div className="ims-login-flower-stage" aria-hidden="true">
+    <div className="ims-login-orbit ims-login-orbit-a" />
+    <div className="ims-login-orbit ims-login-orbit-b" />
+
+    <div className="ims-login-flower ims-login-flower-main">
+      <span className="ims-login-petal ims-login-petal-top" />
+      <span className="ims-login-petal ims-login-petal-right" />
+      <span className="ims-login-petal ims-login-petal-bottom" />
+      <span className="ims-login-petal ims-login-petal-left" />
+      <span className="ims-login-flower-core" />
+    </div>
+
+    <div className="ims-login-flower ims-login-flower-small">
+      <span className="ims-login-petal ims-login-petal-top" />
+      <span className="ims-login-petal ims-login-petal-right" />
+      <span className="ims-login-petal ims-login-petal-bottom" />
+      <span className="ims-login-petal ims-login-petal-left" />
+      <span className="ims-login-flower-core" />
+    </div>
+
+    <span className="ims-login-leaf ims-login-leaf-left" />
+    <span className="ims-login-leaf ims-login-leaf-right" />
+  </div>
+);
+
+// =========================
+// SECTION: Brand Panel — AKTIF / UI ONLY
+// Fungsi:
+// - menampilkan identitas IMS Bunga Flanel dan konteks aplikasi internal.
+// Hubungan flow aplikasi:
+// - mendampingi form login tanpa mengubah input, submit, Firebase Auth, atau profile validation.
+// Status:
+// - AKTIF untuk halaman login.
+// - SAFE: copywriting bersifat branding dan tidak mengubah business rule.
+// =========================
+const BrandPanel = () => (
+  <section className="ims-login-brand-panel">
+    <div className="ims-login-badge">Internal Management System</div>
+
+    <Space direction="vertical" size={12} className="ims-login-brand-copy">
+      <Title level={1} className="ims-login-brand-title">
+        IMS Bunga Flanel
+      </Title>
+      <Text className="ims-login-brand-description">
+        Kelola produksi, stok, pembelian, dan penjualan bunga flanel dalam satu
+        ruang kerja yang rapi, hangat, dan terkontrol.
+      </Text>
+    </Space>
+
+    <FloralIllustration />
+
+    <div className="ims-login-brand-note">
+      <span className="ims-login-note-dot" />
+      <Text>Login khusus user internal yang sudah dibuat di sistem.</Text>
+    </div>
+  </section>
+);
+
+// =========================
+// SECTION: Login Shell — AKTIF / UI ONLY
+// Fungsi:
+// - wrapper visual halaman login untuk state loading, blocked access, dan form normal.
+// Hubungan flow aplikasi:
+// - tidak menjalankan logic auth; hanya menyediakan layout agar semua state login konsisten.
+// Status:
+// - AKTIF untuk login internal IMS.
+// - SAFE: wrapper lokal, tidak menyentuh AppLayout/dashboard/sidebar.
+// =========================
+const LoginShell = ({ children, variant = "default" }) => (
+  <main className={`ims-login-page ims-login-page--${variant}`}>
+    <div className="ims-login-background-glow ims-login-background-glow-one" />
+    <div className="ims-login-background-glow ims-login-background-glow-two" />
+
+    <div className="ims-login-layout">
+      <BrandPanel />
+      <section className="ims-login-form-panel">{children}</section>
+    </div>
+  </main>
+);
+
+// =========================
 // SECTION: Login Page — AKTIF / GUARDED
 // Fungsi:
 // - halaman login internal IMS memakai Username + Password.
@@ -70,9 +164,9 @@ const getBlockedAccessMessage = (profileStatus) => {
 // - password tetap divalidasi Firebase Auth, bukan Firestore/frontend manual.
 // Status:
 // - AKTIF untuk login internal IMS.
-// - GUARDED: create Auth user/password masih manual sampai Cloud Functions/Admin SDK dibuat aman.
+// - GUARDED: create Auth user/password normal sudah lewat Cloud Function createSystemUser, bukan frontend langsung.
 // Legacy / cleanup:
-// - tidak ada legacy; jika nanti custom token dipilih, login action bisa menjadi CLEANUP CANDIDATE.
+// - inline style lama sudah dipindah ke Login.css agar styling login lebih mudah dirawat.
 // =========================
 const Login = () => {
   const {
@@ -91,6 +185,15 @@ const Login = () => {
     [profileStatus],
   );
 
+  // =========================
+  // SECTION: Submit Login — AKTIF / GUARDED
+  // Fungsi:
+  // - meneruskan username dan password ke AuthProvider tanpa mengubah format input.
+  // Hubungan flow aplikasi:
+  // - AuthProvider tetap bertanggung jawab mengubah username menjadi email internal Firebase Auth.
+  // Status:
+  // - AKTIF dan tidak diubah business logic-nya pada redesign UI ini.
+  // =========================
   const handleLogin = async (values) => {
     setIsSubmitting(true);
     setLoginError("");
@@ -100,13 +203,22 @@ const Login = () => {
     } catch (error) {
       console.error("[Login] Gagal login.", error);
       setLoginError(
-        "Username atau password tidak sesuai. Pastikan akun internal sudah dibuat oleh super_admin/administrator.",
+        "Username atau password tidak sesuai. Pastikan akun internal sudah dibuat oleh Administrator.",
       );
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // =========================
+  // SECTION: Logout Blocked User — AKTIF / GUARDED
+  // Fungsi:
+  // - mengeluarkan akun Firebase Auth yang valid tetapi profile internalnya belum boleh masuk.
+  // Hubungan flow aplikasi:
+  // - menjaga user blocked tidak tersangkut di state login dan tidak masuk AppLayout.
+  // Status:
+  // - AKTIF dan tidak mengubah permission/role/status.
+  // =========================
   const handleLogoutBlockedUser = async () => {
     setLoginError("");
     await logout();
@@ -114,21 +226,28 @@ const Login = () => {
 
   if (authLoading || profileStatus === AUTH_PROFILE_STATUS.LOADING_PROFILE) {
     return (
-      <div style={styles.pageWrap}>
-        <Card style={styles.loadingCard}>
-          <Space direction="vertical" align="center" size={16} style={{ width: "100%" }}>
+      <LoginShell variant="loading">
+        <Card className="ims-login-card ims-login-card--compact">
+          <Space
+            direction="vertical"
+            align="center"
+            size={16}
+            className="ims-login-loading-content"
+          >
             <Spin size="large" />
-            <Text>Memeriksa session dan profile user...</Text>
+            <Text className="ims-login-muted-text">
+              Memeriksa session dan profile user...
+            </Text>
           </Space>
         </Card>
-      </div>
+      </LoginShell>
     );
   }
 
   if (firebaseUser && blockedAccessMessage) {
     return (
-      <div style={styles.pageWrap}>
-        <Card style={styles.card}>
+      <LoginShell variant="blocked">
+        <Card className="ims-login-card ims-login-card--blocked">
           <Result
             status={blockedAccessMessage.status}
             title={blockedAccessMessage.title}
@@ -140,24 +259,25 @@ const Login = () => {
             }
           />
         </Card>
-      </div>
+      </LoginShell>
     );
   }
 
   return (
-    <div style={styles.pageWrap}>
-      <Card style={styles.card}>
-        <Space direction="vertical" size={4} style={{ width: "100%" }}>
-          <Title level={3} style={styles.title}>
-            IMS Bunga Flanel
+    <LoginShell>
+      <Card className="ims-login-card">
+        <Space direction="vertical" size={6} className="ims-login-heading">
+          <Text className="ims-login-eyebrow">Selamat datang kembali</Text>
+          <Title level={3} className="ims-login-title">
+            Masuk ke IMS Bunga Flanel
           </Title>
-          <Text type="secondary">
-            Masuk dengan username internal yang dibuat dari sistem.
+          <Text className="ims-login-muted-text">
+            Gunakan username internal yang sudah dibuat dari sistem.
           </Text>
         </Space>
 
         <Alert
-          style={styles.infoBox}
+          className="ims-login-info-box"
           type="info"
           showIcon
           message="Login internal IMS"
@@ -166,7 +286,7 @@ const Login = () => {
 
         {loginError ? (
           <Alert
-            style={styles.errorBox}
+            className="ims-login-error-box"
             type="error"
             showIcon
             message={loginError}
@@ -178,6 +298,7 @@ const Login = () => {
           layout="vertical"
           onFinish={handleLogin}
           requiredMark={false}
+          className="ims-login-form"
         >
           <Form.Item
             label="Username"
@@ -211,47 +332,14 @@ const Login = () => {
             loading={isSubmitting}
             size="large"
             type="primary"
+            className="ims-login-submit"
           >
             Masuk
           </Button>
         </Form>
       </Card>
-    </div>
+    </LoginShell>
   );
-};
-
-const styles = {
-  pageWrap: {
-    minHeight: "100vh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    background:
-      "linear-gradient(135deg, rgba(250, 219, 226, 0.36), rgba(245, 245, 245, 0.98))",
-  },
-  card: {
-    width: "100%",
-    maxWidth: 460,
-    borderRadius: 18,
-    boxShadow: "0 18px 48px rgba(15, 23, 42, 0.12)",
-  },
-  loadingCard: {
-    width: "100%",
-    maxWidth: 360,
-    borderRadius: 18,
-    textAlign: "center",
-  },
-  title: {
-    marginBottom: 0,
-  },
-  infoBox: {
-    marginTop: 24,
-    marginBottom: 16,
-  },
-  errorBox: {
-    marginBottom: 16,
-  },
 };
 
 export default Login;

@@ -349,3 +349,93 @@
   border-color: rgba(148, 163, 184, 0.16);
   background: rgba(15, 23, 42, 0.36);
 }
+
+/* =========================
+   SECTION: Floral Dashboard Theme Override - AKTIF DIPAKAI / READ ONLY
+   Fungsi:
+   - menyelaraskan Dashboard dengan theme floral global tanpa membuat halaman operasional terlalu ramai.
+   - aksen bunga hanya berupa warna/gradient lembut pada card dan icon, bukan dekorasi besar.
+   Hubungan flow:
+   - CSS ini tetap read-only; tidak menyentuh stok, kas, produksi, payroll, HPP, laporan, atau query Dashboard.
+   Aman diubah:
+   - tuning warna cukup dari token di src/index.css.
+========================= */
+.dashboard-section-extra,
+.dashboard-section-icon,
+.dashboard-muted-text,
+.dashboard-date-text,
+.dashboard-action-arrow,
+.dark .dashboard-section-extra,
+.app-theme-dark .dashboard-section-extra,
+[data-app-theme="dark"] .dashboard-section-extra,
+.dark .dashboard-section-icon,
+.app-theme-dark .dashboard-section-icon,
+[data-app-theme="dark"] .dashboard-section-icon,
+.dark .dashboard-action-arrow,
+.app-theme-dark .dashboard-action-arrow,
+[data-app-theme="dark"] .dashboard-action-arrow,
+.dark .dashboard-muted-text,
+.app-theme-dark .dashboard-muted-text,
+[data-app-theme="dark"] .dashboard-muted-text,
+.dark .dashboard-date-text,
+.app-theme-dark .dashboard-date-text,
+[data-app-theme="dark"] .dashboard-date-text {
+  color: var(--ims-text-muted);
+}
+
+.dashboard-priority-card,
+.dashboard-list-card,
+.dashboard-compact-card,
+.dashboard-metric-card,
+.dark .dashboard-priority-card,
+.app-theme-dark .dashboard-priority-card,
+[data-app-theme="dark"] .dashboard-priority-card,
+.dark .dashboard-list-card,
+.app-theme-dark .dashboard-list-card,
+[data-app-theme="dark"] .dashboard-list-card,
+.dark .dashboard-compact-card,
+.app-theme-dark .dashboard-compact-card,
+[data-app-theme="dark"] .dashboard-compact-card,
+.dark .dashboard-metric-card,
+.app-theme-dark .dashboard-metric-card,
+[data-app-theme="dark"] .dashboard-metric-card {
+  border-color: var(--ims-border-color-soft) !important;
+  background: color-mix(in srgb, var(--ims-bg-card) 88%, transparent);
+  box-shadow: var(--ims-shadow-soft);
+}
+
+.dashboard-priority-card:hover,
+.dashboard-list-card:hover {
+  border-color: var(--ims-color-primary-soft);
+  box-shadow: var(--ims-shadow-elevated);
+}
+
+.dashboard-priority-icon,
+.dark .dashboard-priority-icon,
+.app-theme-dark .dashboard-priority-icon,
+[data-app-theme="dark"] .dashboard-priority-icon {
+  background: linear-gradient(135deg, var(--ims-color-primary-soft), var(--ims-color-sage-soft));
+  color: var(--ims-color-primary);
+}
+
+.dashboard-risk-card,
+.dark .dashboard-risk-card,
+.app-theme-dark .dashboard-risk-card,
+[data-app-theme="dark"] .dashboard-risk-card {
+  background: linear-gradient(135deg, var(--ims-color-primary-softer), var(--ims-bg-card));
+}
+
+.dashboard-card-label,
+.dark .dashboard-card-label,
+.app-theme-dark .dashboard-card-label,
+[data-app-theme="dark"] .dashboard-card-label {
+  color: var(--ims-text-secondary);
+}
+
+.dark .dashboard-restock-actions .ant-btn-default[disabled],
+.app-theme-dark .dashboard-restock-actions .ant-btn-default[disabled],
+[data-app-theme="dark"] .dashboard-restock-actions .ant-btn-default[disabled] {
+  color: var(--ims-text-muted);
+  border-color: var(--ims-border-color-soft);
+  background: var(--ims-bg-card-soft);
+}

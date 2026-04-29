@@ -54,7 +54,7 @@ export const sidebarMenuItems = [
   // - data referensi utama yang dipakai transaksi, stock, dan produksi.
   // Akses:
   // - role operasional boleh melihat master dasar;
-  // - Pricing Rules dibatasi admin/super_admin karena memengaruhi harga.
+  // - Pricing Rules dibatasi Administrator dan super_admin legacy karena memengaruhi harga.
   // =========================
   {
     key: "master-data",
@@ -130,7 +130,7 @@ export const sidebarMenuItems = [
   // - menampung flow produksi dan memisahkan operation, setup, dan cost analysis.
   // Akses:
   // - operation boleh tampil untuk semua role login;
-  // - setup/cost analysis dibatasi admin/super_admin karena berdampak pada master produksi, payroll, dan HPP.
+  // - setup/cost analysis dibatasi Administrator dan super_admin legacy karena berdampak pada master produksi, payroll, dan HPP.
   // =========================
   {
     key: "productions",
@@ -271,7 +271,7 @@ export const sidebarMenuItems = [
   // Fungsi:
   // - mencatat arus masuk dan keluar kas/biaya operasional.
   // Akses:
-  // - dibatasi admin/super_admin karena berkaitan dengan finance dan laporan.
+  // - dibatasi Administrator dan super_admin legacy karena berkaitan dengan finance dan laporan.
   // =========================
   {
     key: "finance",
@@ -299,8 +299,8 @@ export const sidebarMenuItems = [
   // Fungsi:
   // - menampung Manajemen User dan maintenance/reset yang sensitif.
   // Akses:
-  // - Manajemen User boleh tampil untuk super_admin dan administrator sesuai guard;
-  // - Reset & Maintenance hanya super_admin.
+  // - Manajemen User boleh tampil untuk Administrator dan super_admin legacy sesuai guard;
+  // - Reset & Maintenance ikut akses penuh Administrator sesuai penyederhanaan 2 role aktif.
   // Status:
   // - GUARDED: user biasa tidak boleh melihat parent Sistem; child sensitif tetap punya allowedRoles sendiri.
   // =========================
@@ -321,7 +321,7 @@ export const sidebarMenuItems = [
         key: "reset-maintenance-data",
         label: "Reset & Maintenance",
         path: "/utilities/reset-maintenance-data",
-        allowedRoles: ROLE_GROUPS.SUPER_ADMIN_ONLY,
+        allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
       },
     ],
   },
@@ -331,7 +331,7 @@ export const sidebarMenuItems = [
   // Fungsi:
   // - menampilkan rekap operasional dan export untuk audit/analisis.
   // Akses:
-  // - dibatasi admin/super_admin pada fase awal karena laporan bisa memuat finance, payroll, HPP, dan laba rugi.
+  // - dibatasi Administrator dan super_admin legacy karena laporan bisa memuat finance, payroll, HPP, dan laba rugi.
   // =========================
   {
     key: "reports",

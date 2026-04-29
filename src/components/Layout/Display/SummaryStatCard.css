@@ -93,3 +93,36 @@
     font-size: 24px;
   }
 }
+
+/* =========================
+   SECTION: Floral Summary Card Theme Override - AKTIF DIPAKAI
+   Fungsi:
+   - menyatukan KPI/stat card dengan token floral global.
+   Hubungan flow aplikasi:
+   - styling card saja; nilai statistik tetap berasal dari logic halaman masing-masing.
+   Aman diubah:
+   - tuning warna cukup dari token di src/index.css.
+========================= */
+.summary-stat-card.ant-card,
+.app-shell.dark .summary-stat-card.ant-card {
+  border-color: var(--ims-border-color-soft) !important;
+  background: linear-gradient(180deg, var(--ims-bg-card) 0%, var(--ims-bg-card-soft) 100%) !important;
+  box-shadow: var(--ims-shadow-soft);
+}
+
+.summary-stat-card.ant-card:hover,
+.app-shell.dark .summary-stat-card.ant-card:hover {
+  box-shadow: var(--ims-shadow-elevated);
+}
+
+.summary-stat-card-title.ant-typography,
+.app-shell.dark .summary-stat-card-title.ant-typography,
+.summary-stat-card-subtitle.ant-typography,
+.app-shell.dark .summary-stat-card-subtitle.ant-typography {
+  color: var(--ims-text-secondary);
+}
+
+.summary-stat-card-value.ant-typography,
+.app-shell.dark .summary-stat-card-value.ant-typography {
+  color: var(--ims-text-primary);
+}
