@@ -39,4 +39,20 @@ export default defineConfig([
       "no-unused-vars": ["error", { varsIgnorePattern: "^[A-Z_]" }],
     },
   },
+  {
+    // =========================
+    // SECTION: Auth Context Fast Refresh Guard - AKTIF / GUARDED
+    // Fungsi:
+    // - menjaga lint tetap fokus ke issue operasional, sambil menoleransi pola export context/helper auth existing.
+    // Hubungan flow aplikasi:
+    // - tidak mengubah logic auth; hanya menunda refactor arsitektur file AuthContext ke batch terpisah agar aman.
+    // Status:
+    // - AKTIF sementara untuk cleanup batch UI consistency.
+    // - CLEANUP CANDIDATE: dipindah ke file terpisah jika ada task refactor auth architecture.
+    // =========================
+    files: ["src/context/AuthContext.jsx"],
+    rules: {
+      "react-refresh/only-export-components": "off",
+    },
+  },
 ]);
