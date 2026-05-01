@@ -42,6 +42,7 @@ import {
   updateSystemUserProfile,
   updateSystemUserStatus,
 } from "../../services/System/userService";
+import PageHeader from "../../components/Layout/Page/PageHeader";
 
 const { Text, Title } = Typography;
 
@@ -482,8 +483,9 @@ const UserManagement = () => {
         const canDelete = !deleteGuardReason;
 
         return (
-          <Space wrap size={[8, 8]}>
+          <Space wrap size={[8, 8]} className="ims-action-group">
             <Button
+              className="ims-action-button"
               icon={<EditOutlined />}
               disabled={!canManage}
               onClick={() => openEditModal(record)}
@@ -491,6 +493,7 @@ const UserManagement = () => {
               Edit
             </Button>
             <Button
+              className="ims-action-button"
               icon={
                 record.status === USER_STATUS.ACTIVE ? (
                   <StopOutlined />
@@ -511,6 +514,7 @@ const UserManagement = () => {
             <Tooltip title={deleteGuardReason || "Hapus hanya profile Firestore, bukan Firebase Auth user."}>
               <span>
                 <Button
+                  className="ims-action-button"
                   danger
                   icon={<DeleteOutlined />}
                   disabled={!canDelete}
@@ -530,24 +534,25 @@ const UserManagement = () => {
   return (
     <div style={styles.pageWrap}>
       <Space direction="vertical" size={16} style={{ width: "100%" }}>
-        <div style={styles.headerRow}>
-          <div>
-            <Title level={3} style={styles.title}>
-              Manajemen User
-            </Title>
-            <Text type="secondary">
-              Kelola Auth user, profile, role aktif Administrator/User, dan status user internal IMS ZiyoCraft.
-            </Text>
-          </div>
-          <Space wrap>
-            <Button icon={<ReloadOutlined />} onClick={loadUsers} loading={isLoading}>
-              Refresh
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-              Tambah Profile User
-            </Button>
-          </Space>
-        </div>
+        <PageHeader
+          title="Manajemen User"
+          subtitle="Kelola Auth user, profile, role aktif Administrator/User, dan status user internal IMS ZiyoCraft."
+          actions={[
+            {
+              key: "refresh-users",
+              icon: <ReloadOutlined />,
+              label: "Refresh",
+              onClick: loadUsers,
+            },
+            {
+              key: "add-user-profile",
+              type: "primary",
+              icon: <PlusOutlined />,
+              label: "Tambah Profile User",
+              onClick: openCreateModal,
+            },
+          ]}
+        />
 
         <Alert
           type="info"

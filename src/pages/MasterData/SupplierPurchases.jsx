@@ -39,6 +39,7 @@ import {
   isManagedSupplierRecord,
   listenSuppliers,
 } from '../../services/MasterData/suppliersService';
+import PageHeader from '../../components/Layout/Page/PageHeader';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -604,15 +605,15 @@ const SupplierPurchases = () => {
       // ---------------------------------------------------------------------
       className: 'app-table-action-column',
       render: (_, record) => (
-        <Space direction="vertical" size={6} style={{ width: '100%' }}>
-          <Button block size="small" icon={<EyeOutlined />} onClick={() => openSupplierDrawer(record)}>
+        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+          <Button className="ims-action-button ims-action-button--block" block size="small" icon={<EyeOutlined />} onClick={() => openSupplierDrawer(record)}>
             Detail
           </Button>
-          <Button block size="small" icon={<EditOutlined />} onClick={() => handleEditSupplier(record)}>
+          <Button className="ims-action-button ims-action-button--block" block size="small" icon={<EditOutlined />} onClick={() => handleEditSupplier(record)}>
             Edit
           </Button>
           <Popconfirm title="Yakin hapus supplier ini?" onConfirm={() => handleDeleteSupplier(record)} okText="Ya" cancelText="Batal">
-            <Button block danger size="small" icon={<DeleteOutlined />}>
+            <Button className="ims-action-button ims-action-button--block" block danger size="small" icon={<DeleteOutlined />}>
               Hapus
             </Button>
           </Popconfirm>
@@ -742,44 +743,34 @@ const SupplierPurchases = () => {
 
   return (
     <div>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 16,
-          gap: 12,
-          flexWrap: 'wrap',
-        }}
-      >
-        <div>
-          <h2 style={{ marginBottom: 4 }}>Supplier</h2>
-          {materialIdFromQuery && selectedMaterialFromQuery ? (
-            <div style={{ color: '#666' }}>
-              Menampilkan supplier untuk bahan: <strong>{selectedMaterialFromQuery.name}</strong>{' '}
-              <Button type="link" size="small" onClick={() => navigate('/suppliers')} style={{ paddingInline: 4 }}>
-                Reset Filter URL
-              </Button>
-            </div>
-          ) : (
-            <div style={{ color: '#666' }}>Katalog Restock Supplier dan pembanding harga</div>
-          )}
-        </div>
-
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            setModalVisible(true);
-            setIsEditing(false);
-            setEditingId(null);
-            form.resetFields();
-            form.setFieldsValue({ materialDetails: [] });
-          }}
-        >
-          Tambah Supplier
-        </Button>
-      </div>
+      <PageHeader
+        title="Supplier"
+        subtitle={materialIdFromQuery && selectedMaterialFromQuery ? (
+          <span>
+            Menampilkan supplier untuk bahan: <strong>{selectedMaterialFromQuery.name}</strong>{" "}
+            <Button type="link" size="small" onClick={() => navigate('/suppliers')} style={{ paddingInline: 4 }}>
+              Reset Filter URL
+            </Button>
+          </span>
+        ) : (
+          "Katalog restock supplier dan pembanding harga"
+        )}
+        actions={[
+          {
+            key: 'add-supplier',
+            type: 'primary',
+            icon: <PlusOutlined />,
+            label: 'Tambah Supplier',
+            onClick: () => {
+              setModalVisible(true);
+              setIsEditing(false);
+              setEditingId(null);
+              form.resetFields();
+              form.setFieldsValue({ materialDetails: [] });
+            },
+          },
+        ]}
+      />
 
       <Alert
         type="info"

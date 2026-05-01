@@ -57,6 +57,7 @@ import {
 } from "../../services/Produksi/productionStepsService";
 import { getAllProductionEmployees } from "../../services/Produksi/productionEmployeesService";
 import { getAllProductionBoms } from "../../services/Produksi/productionBomsService";
+import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 
 const getStepEmployeeCount = (stepId, employees = []) =>
   employees.filter((item) => Array.isArray(item.assignedStepIds) && item.assignedStepIds.includes(stepId)).length;
@@ -497,29 +498,13 @@ const ProductionSteps = () => {
 
   return (
     <div>
-      <Card style={{ marginBottom: 16 }}>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col>
-            <Typography.Title level={3} style={{ margin: 0 }}>
-              Tahapan Produksi
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              Master step sederhana untuk standarisasi proses, relasi karyawan, BOM, dan source of truth payroll produksi. QC tidak dijadikan step terpisah, tetapi dicek di setiap proses/work log. Untuk kebutuhan Anda saat ini, assembly adalah proses akhir dan packing bersifat opsional bila memang ada pekerjaan pengemasan terpisah.
-            </Typography.Text>
-          </Col>
-
-          <Col>
-            <Space wrap>
-              <Button icon={<ReloadOutlined />} onClick={loadData}>
-                Refresh
-              </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-                Tambah Step
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+      <ProductionPageHeader
+        title="Tahapan Produksi"
+        description="Master step sederhana untuk standarisasi proses, relasi karyawan, BOM, dan source of truth payroll produksi. QC tidak dijadikan step terpisah, tetapi dicek di setiap proses/work log. Untuk kebutuhan Anda saat ini, assembly adalah proses akhir dan packing bersifat opsional bila memang ada pekerjaan pengemasan terpisah."
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Tambah Step"
+      />
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={12} md={6}>

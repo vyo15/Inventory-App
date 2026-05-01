@@ -35,6 +35,7 @@ import {
 import { getDocs, collection } from 'firebase/firestore';
 import { db } from '../../firebase';
 import formatNumber from '../../utils/formatters/numberId';
+import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
 
 const ProductionProfiles = () => {
   const [loading, setLoading] = useState(false);
@@ -276,22 +277,13 @@ const ProductionProfiles = () => {
 
   return (
     <div className="ims-page">
-      <Card>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col xs={24} md={16}>
-            <Typography.Title level={4} className="ims-page-title">Profil Produksi</Typography.Title>
-            <Typography.Paragraph className="ims-page-description" type="secondary">
-              Simpan rumus hasil, batch assembly, dan batas miss per produk. BOM tetap jadi resep bahan, sedangkan profil produksi menjadi aturan hitung operasional dan monitoring jangka panjang.
-            </Typography.Paragraph>
-          </Col>
-          <Col>
-            <Space>
-              <Button icon={<ReloadOutlined />} onClick={loadData}>Refresh</Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>Tambah Profil</Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+      <ProductionPageHeader
+        title="Profil Produksi"
+        description="Simpan rumus hasil, batch assembly, dan batas miss per produk. BOM tetap jadi resep bahan, sedangkan profil produksi menjadi aturan hitung operasional dan monitoring jangka panjang."
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Tambah Profil"
+      />
 
       <Row className="ims-summary-row" gutter={[16, 16]}>
         <Col xs={24} md={6}><Card><Statistic title="Total Profil" value={summary.total} /></Card></Col>

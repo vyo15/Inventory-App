@@ -47,6 +47,7 @@ import {
   updatePayrollStatus,
   updateProductionPayroll,
 } from "../../services/Produksi/productionPayrollsService";
+import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 
 const formatNumber = (value) =>
   new Intl.NumberFormat("id-ID").format(Number(value || 0));
@@ -386,8 +387,9 @@ const ProductionPayrolls = () => {
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap>
+        <Space wrap className="ims-action-group">
           <Button
+            className="ims-action-button"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
@@ -396,6 +398,7 @@ const ProductionPayrolls = () => {
           </Button>
 
           <Button
+            className="ims-action-button"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -411,7 +414,7 @@ const ProductionPayrolls = () => {
               okText="Ya"
               cancelText="Batal"
             >
-              <Button size="small" type="primary">
+              <Button className="ims-action-button" size="small" type="primary">
                 Paid
               </Button>
             </Popconfirm>
@@ -423,32 +426,13 @@ const ProductionPayrolls = () => {
 
   return (
     <div>
-      <Card style={{ marginBottom: 16 }}>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col>
-            <Typography.Title level={3} style={{ margin: 0 }}>
-              Payroll Produksi
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              Rekap line payroll produksi berbasis work log completed
-            </Typography.Text>
-          </Col>
-          <Col>
-            <Space wrap>
-              <Button icon={<ReloadOutlined />} onClick={loadData}>
-                Refresh
-              </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleAdd}
-              >
-                Tambah Payroll
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+      <ProductionPageHeader
+        title="Payroll Produksi"
+        description="Rekap line payroll produksi berbasis work log completed."
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Tambah Payroll"
+      />
 
       <Alert
         style={{ marginBottom: 16 }}

@@ -53,6 +53,7 @@ import {
   refreshProductionOrderRequirements,
 } from "../../services/Produksi/productionOrdersService";
 import { createProductionWorkLogFromOrder } from "../../services/Produksi/productionWorkLogsService";
+import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 
 const PRODUCTION_ORDER_TARGET_TYPES = [
   {
@@ -715,33 +716,13 @@ const ProductionOrders = () => {
 
   return (
     <div className="ims-page">
-      <Card>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col>
-            <Typography.Title level={3} className="ims-page-title">
-              Production Orders
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              Planning produksi untuk semi finished dan product
-            </Typography.Text>
-          </Col>
-
-          <Col>
-            <Space wrap>
-              <Button icon={<ReloadOutlined />} onClick={loadData}>
-                Refresh
-              </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleAdd}
-              >
-                Buat Order
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+      <ProductionPageHeader
+        title="Production Orders"
+        description="Planning produksi untuk semi finished dan product."
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Buat Order"
+      />
 
       <Row className="ims-summary-row" gutter={[16, 16]}>
         <Col xs={24} md={6}>

@@ -46,6 +46,7 @@ import {
   toggleProductActive,
   updateProduct,
 } from '../../services/MasterData/productsService';
+import PageHeader from '../../components/Layout/Page/PageHeader';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -479,29 +480,25 @@ const Products = () => {
       {/* ---------------------------------------------------------------------
           Header halaman produk.
       --------------------------------------------------------------------- */}
-      <Card size="small">
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col>
-            <Typography.Title level={3} className="ims-page-title">
-              Produk Jadi
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              Master produk jadi dengan harga di master dan stok per varian warna supaya data tetap rapi dan mudah dipantau.
-            </Typography.Text>
-          </Col>
-
-          <Col>
-            <Space wrap>
-              <Button icon={<ReloadOutlined />} onClick={() => window.location.reload()}>
-                Refresh
-              </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={openCreateDrawer}>
-                Tambah Produk
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+      <PageHeader
+        title="Produk Jadi"
+        subtitle="Master produk jadi dengan harga di master dan stok per varian warna supaya data tetap rapi dan mudah dipantau."
+        actions={[
+          {
+            key: 'refresh-products',
+            icon: <ReloadOutlined />,
+            label: 'Refresh',
+            onClick: () => window.location.reload(),
+          },
+          {
+            key: 'add-product',
+            type: 'primary',
+            icon: <PlusOutlined />,
+            label: 'Tambah Produk',
+            onClick: openCreateDrawer,
+          },
+        ]}
+      />
 
       <Alert
         showIcon

@@ -61,6 +61,7 @@ import { getAllProductionWorkLogs } from "../../services/Produksi/productionWork
 import { getActiveProductionSteps } from "../../services/Produksi/productionStepsService";
 import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
+import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -658,8 +659,9 @@ const ProductionEmployees = () => {
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap>
+        <Space wrap className="ims-action-group">
           <Button
+            className="ims-action-button"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
@@ -668,6 +670,7 @@ const ProductionEmployees = () => {
           </Button>
 
           <Button
+            className="ims-action-button"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -690,7 +693,7 @@ const ProductionEmployees = () => {
             okText="Ya"
             cancelText="Batal"
           >
-            <Button size="small">
+            <Button className="ims-action-button" size="small">
               {record.isActive ? "Nonaktifkan" : "Aktifkan"}
             </Button>
           </Popconfirm>
@@ -701,33 +704,13 @@ const ProductionEmployees = () => {
 
   return (
     <div>
-      <Card style={{ marginBottom: 16 }}>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col>
-            <Typography.Title level={3} style={{ margin: 0 }}>
-              Karyawan Produksi
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              Master operator produksi untuk work log dan payroll
-            </Typography.Text>
-          </Col>
-
-          <Col>
-            <Space wrap>
-              <Button icon={<ReloadOutlined />} onClick={loadData}>
-                Refresh
-              </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleAdd}
-              >
-                Tambah Karyawan
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+      <ProductionPageHeader
+        title="Karyawan Produksi"
+        description="Master operator produksi untuk work log dan payroll."
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Tambah Karyawan"
+      />
 
       <Alert
         showIcon

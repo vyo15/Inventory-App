@@ -19,6 +19,7 @@ import {
   doc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import PageHeader from "../../components/Layout/Page/PageHeader";
 
 const Categories = () => {
   const [categories, setCategories] = useState([]);
@@ -140,7 +141,24 @@ const Categories = () => {
 
   return (
     <div>
-      <h2>Daftar Kategori</h2>
+      <PageHeader
+        title="Kategori"
+        subtitle="Kelola kategori master sebagai referensi pengelompokan data operasional."
+        actions={[
+          {
+            key: "add-category",
+            type: "primary",
+            icon: <PlusOutlined />,
+            label: "Tambah Kategori",
+            onClick: () => {
+              setIsModalVisible(true);
+              setIsEditing(false);
+              setCurrentId(null);
+              form.resetFields();
+            },
+          },
+        ]}
+      />
 
       <Table
         className="app-data-table"
@@ -177,22 +195,6 @@ const Categories = () => {
         </Form>
       </Modal>
 
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        onClick={() => {
-          setIsModalVisible(true);
-          setIsEditing(false);
-          setCurrentId(null);
-          form.resetFields();
-        }}
-        style={{
-          marginTop: 16,
-          marginBottom: 16,
-        }}
-      >
-        Tambah Kategori
-      </Button>
     </div>
   );
 };

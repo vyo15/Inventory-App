@@ -16,6 +16,7 @@ import {
   getCustomers,
   updateCustomer,
 } from "../../services/MasterData/customersService";
+import PageHeader from "../../components/Layout/Page/PageHeader";
 
 const Customers = () => {
   // =========================
@@ -176,20 +177,24 @@ const Customers = () => {
 
   return (
     <div>
-      <h2>Daftar Customer</h2>
-
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        onClick={() => {
-          setIsModalVisible(true);
-          setIsEditing(false);
-          form.resetFields();
-        }}
-        style={{ marginBottom: 16 }}
-      >
-        Tambah Customer
-      </Button>
+      <PageHeader
+        title="Customer"
+        subtitle="Kelola master customer yang dipakai sebagai referensi transaksi penjualan aktif."
+        actions={[
+          {
+            key: "add-customer",
+            type: "primary",
+            icon: <PlusOutlined />,
+            label: "Tambah Customer",
+            onClick: () => {
+              setIsModalVisible(true);
+              setIsEditing(false);
+              setCurrentId(null);
+              form.resetFields();
+            },
+          },
+        ]}
+      />
 
       <Table
         className="app-data-table"

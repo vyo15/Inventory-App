@@ -58,6 +58,7 @@ import {
   toggleSemiFinishedMaterialActive,
   updateSemiFinishedMaterial,
 } from "../../services/Produksi/semiFinishedMaterialsService";
+import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 
@@ -481,8 +482,9 @@ const SemiFinishedMaterials = () => {
       // Tombol aksi utama disimpan di sisi kanan seperti halaman bahan baku.
       fixed: "right",
       render: (_, record) => (
-        <Space size={[6, 6]} wrap>
+        <Space size={[6, 6]} wrap className="ims-action-group">
           <Button
+            className="ims-action-button"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
@@ -491,6 +493,7 @@ const SemiFinishedMaterials = () => {
           </Button>
 
           <Button
+            className="ims-action-button"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -511,7 +514,7 @@ const SemiFinishedMaterials = () => {
             okText="Ya"
             cancelText="Batal"
           >
-            <Button size="small">
+            <Button className="ims-action-button" size="small">
               {record.isActive ? "Nonaktifkan" : "Aktifkan"}
             </Button>
           </Popconfirm>
@@ -538,33 +541,13 @@ const SemiFinishedMaterials = () => {
       {/* ------------------------------------------------------------------ */}
       {/* Header halaman. Menjadi titik masuk utama user sebelum melihat list. */}
       {/* ------------------------------------------------------------------ */}
-      <Card size="small" style={{ marginBottom: 16 }}>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col>
-            <Typography.Title level={3} style={{ margin: 0 }}>
-              Semi Finished Materials
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              Master stok internal produksi dengan varian warna, tidak dijual ke customer
-            </Typography.Text>
-          </Col>
-
-          <Col>
-            <Space wrap>
-              <Button icon={<ReloadOutlined />} onClick={loadData}>
-                Refresh
-              </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleAdd}
-              >
-                Tambah Item
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+      <ProductionPageHeader
+        title="Semi Finished Materials"
+        description="Master stok internal produksi dengan varian warna, tidak dijual ke customer."
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Tambah Item"
+      />
 
       {/* ------------------------------------------------------------------ */}
       {/* Summary cards. Tetap dipertahankan karena user produksi butuh ringkasan */}
