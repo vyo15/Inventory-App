@@ -23,7 +23,6 @@ import {
   doesSupplierProvideMaterial,
   getSupplierDisplayName,
   getSupplierMaterialDetail,
-  getSupplierMaterialNoteForMaterial,
   getSupplierOptionLabel,
   getSupplierPurchaseUnitForMaterial,
   getSupplierConversionValueForMaterial,
@@ -185,7 +184,6 @@ const Purchases = () => {
   const quantity = Form.useWatch("quantity", form);
   const conversionValue = Form.useWatch("conversionValue", form);
   const materialVariantId = Form.useWatch("materialVariantId", form);
-  const productVariantKey = Form.useWatch("productVariantKey", form);
   const supplierId = Form.useWatch("supplierId", form);
   const purchaseType = Form.useWatch("purchaseType", form);
 
@@ -219,11 +217,6 @@ const Purchases = () => {
   }, [products, itemId]);
 
   const selectedProductHasVariants = itemType === "product" && inferHasVariants(selectedProduct || {});
-
-  const selectedProductVariant = useMemo(() => {
-    if (!selectedProductHasVariants || !productVariantKey) return null;
-    return findVariantByKey(selectedProduct, productVariantKey);
-  }, [productVariantKey, selectedProduct, selectedProductHasVariants]);
 
   const productVariantOptions = useMemo(() => {
     if (!selectedProductHasVariants) return [];
@@ -270,11 +263,6 @@ const Purchases = () => {
   const selectedSupplierMaterialDetail = useMemo(() => {
     if (itemType !== "material" || !itemId || !selectedSupplier) return null;
     return getSupplierMaterialDetail(selectedSupplier, itemId);
-  }, [itemId, itemType, selectedSupplier]);
-
-  const selectedSupplierMaterialNote = useMemo(() => {
-    if (itemType !== "material" || !itemId || !selectedSupplier) return "";
-    return getSupplierMaterialNoteForMaterial(selectedSupplier, itemId);
   }, [itemId, itemType, selectedSupplier]);
 
   // =========================
@@ -1587,6 +1575,11 @@ const Purchases = () => {
                   alignItems: "start",
                 }}
               >
+                {/* ===============================================================
+                    AKTIF / GUARDED UI CLEANUP:
+                    - read-only field memakai class shared agar token warna/border konsisten.
+                    - perubahan ini presentational only; tidak mengubah value, validasi, atau payload Purchases.
+                =============================================================== */}
                 <Form.Item
                   name="quantity"
                   label="Qty Beli"
@@ -1608,18 +1601,7 @@ const Purchases = () => {
                 >
                   <Form.Item shouldUpdate noStyle>
                     {({ getFieldValue }) => (
-                      <div
-                        style={{
-                          minHeight: 32,
-                          display: "flex",
-                          alignItems: "center",
-                          border: "1px solid #f0f0f0",
-                          borderRadius: 8,
-                          padding: "4px 11px",
-                          background: "var(--surface-muted, #fafafa)",
-                          fontWeight: 600,
-                        }}
-                      >
+                      <div className="ims-readonly-field ims-readonly-field--compact">
                         {getFieldValue("purchaseUnit") || "-"}
                       </div>
                     )}
@@ -1680,17 +1662,7 @@ const Purchases = () => {
                       const unit = getFieldValue("stockUnit") || "satuan stok";
 
                       return (
-                        <div
-                          style={{
-                            minHeight: 42,
-                            display: "flex",
-                            alignItems: "center",
-                            border: "1px solid #f0f0f0",
-                            borderRadius: 8,
-                            padding: "6px 11px",
-                            background: "var(--surface-muted, #fafafa)",
-                          }}
-                        >
+                        <div className="ims-readonly-field">
                           <strong style={{ fontSize: 16 }}>
                             {formatNumberId(stockInValue)} {unit}
                           </strong>
@@ -1703,18 +1675,7 @@ const Purchases = () => {
                 <Form.Item label="Satuan Stok" extra="Satuan stok mengikuti Raw Material.">
                   <Form.Item shouldUpdate noStyle>
                     {({ getFieldValue }) => (
-                      <div
-                        style={{
-                          minHeight: 42,
-                          display: "flex",
-                          alignItems: "center",
-                          border: "1px solid #f0f0f0",
-                          borderRadius: 8,
-                          padding: "6px 11px",
-                          background: "var(--surface-muted, #fafafa)",
-                          fontWeight: 600,
-                        }}
-                      >
+                      <div className="ims-readonly-field ims-readonly-field--compact">
                         {getFieldValue("stockUnit") || "-"}
                       </div>
                     )}
