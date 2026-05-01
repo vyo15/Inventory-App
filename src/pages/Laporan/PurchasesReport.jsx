@@ -40,6 +40,17 @@ const getSavingMeta = (value) => {
   };
 };
 
+// =========================
+// SECTION: Helper label varian laporan pembelian
+// Fungsi:
+// - menampilkan metadata varian/sumber stok dari expense purchase jika tersedia.
+// Status: AKTIF; read-only dan tidak mengubah source data Purchases Report.
+// =========================
+const getPurchaseVariantLabel = (record = {}) => {
+  if (record.variantLabel || record.variantKey) return record.variantLabel || record.variantKey;
+  return record.stockSourceType === "variant" ? "Varian" : "Master";
+};
+
 const PurchasesReport = () => {
   const [purchasesData, setPurchasesData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -150,6 +161,7 @@ const PurchasesReport = () => {
         { header: "Tanggal", key: "expenseDate", width: 18 },
         { header: "Supplier", key: "supplierName", width: 24 },
         { header: "Item", key: "itemName", width: 32 },
+        { header: "Varian / Sumber", key: "variantLabel", width: 22 },
         { header: "Aktual Keluar", key: "actualAmount", width: 18 },
         { header: "Referensi", key: "referenceAmount", width: 18 },
         { header: "Saving", key: "savingAmount", width: 18 },
@@ -161,6 +173,7 @@ const PurchasesReport = () => {
         expenseDate: formatDateId(purchase.date, true),
         supplierName: purchase.supplierName || "-",
         itemName: purchase.relatedItemName || purchase.description || "-",
+        variantLabel: getPurchaseVariantLabel(purchase),
         actualAmount: formatCurrencyId(purchase.amount),
         referenceAmount: purchase.totalReferenceAmount ? formatCurrencyId(purchase.totalReferenceAmount) : "-",
         savingAmount: formatCurrencyId(purchase.savingAmount || 0),
@@ -189,6 +202,19 @@ const PurchasesReport = () => {
         title: "Item",
         key: "itemName",
         render: (_, record) => record.relatedItemName || record.description || "-",
+      },
+      {
+        title: "Varian / Sumber",
+        key: "variantLabel",
+        render: (_, record) => {
+          const label = getPurchaseVariantLabel(record);
+          const isVariant = record.stockSourceType === "variant" || record.variantLabel || record.variantKey;
+          return (
+            <Tag color={isVariant ? "purple" : "default"}>
+              {label}
+            </Tag>
+          );
+        },
       },
       {
         title: "Aktual Keluar",

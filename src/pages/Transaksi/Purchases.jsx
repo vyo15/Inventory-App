@@ -159,6 +159,7 @@ const Purchases = () => {
   const [searchParams] = useSearchParams();
   const restockPrefillAppliedRef = useRef(false);
   const restockPrefillMaterialIdRef = useRef("");
+  const itemChangeContextRef = useRef("");
   const subtotalManualOverrideRef = useRef(false);
   const supplierSubtotalBaselineRef = useRef({
     itemId: "",
@@ -451,13 +452,24 @@ const Purchases = () => {
       restockPrefillMaterialIdRef.current &&
       String(itemId || "") === restockPrefillMaterialIdRef.current;
 
-    // ACTIVE: perubahan Jenis/Nama Item mengawali konteks purchase baru, sehingga guard manual subtotal di-reset.
-    // ALASAN: default harga Supplier berikutnya boleh mengisi ulang Subtotal Barang untuk item baru, tetapi Qty Beli tidak boleh memicu reset ini.
-    // STATUS: aktif dipakai; bukan legacy.
-    subtotalManualOverrideRef.current = false;
-    supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
+    // AKTIF + GUARDED: reset konteks item hanya boleh terjadi saat Jenis/Nama Item berubah.
+    // ALASAN: Qty Beli, refresh listener products/materials, atau kalkulasi turunan tidak boleh
+    // menghapus supplier/link/purchaseType/harga pembanding yang sedang dipilih user.
+    // Hubungan flow: tidak mengubah rumus stok, expense otomatis, actualUnitCost, saving,
+    // Supplier catalog, Raw Material, Sales, Returns, Production, HPP, Dashboard, atau Reports.
+    const nextItemChangeContext = `${String(itemType || "")}::${String(itemId || "")}`;
+    const isItemContextChanged = itemChangeContextRef.current !== nextItemChangeContext;
+    itemChangeContextRef.current = nextItemChangeContext;
 
-    if (!shouldKeepPrefilledSupplier) {
+    if (isItemContextChanged) {
+      // ACTIVE: perubahan Jenis/Nama Item mengawali konteks purchase baru, sehingga guard manual subtotal di-reset.
+      // ALASAN: default harga Supplier berikutnya boleh mengisi ulang Subtotal Barang untuk item baru, tetapi Qty Beli tidak boleh memicu reset ini.
+      // STATUS: aktif dipakai; bukan legacy.
+      subtotalManualOverrideRef.current = false;
+      supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
+    }
+
+    if (isItemContextChanged && !shouldKeepPrefilledSupplier) {
       restockPrefillMaterialIdRef.current = "";
       form.setFieldsValue({
         supplierId: undefined,
@@ -876,6 +888,7 @@ const Purchases = () => {
     // Status: aktif dipakai oleh tombol Tambah Pembelian; bukan legacy.
     // =========================
     restockPrefillMaterialIdRef.current = "";
+    itemChangeContextRef.current = "";
     subtotalManualOverrideRef.current = false;
     supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
     form.resetFields();

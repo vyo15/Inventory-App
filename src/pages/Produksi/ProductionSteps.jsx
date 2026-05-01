@@ -447,38 +447,46 @@ const ProductionSteps = () => {
       // =========================
       title: "Aksi",
       key: "actions",
-      width: 260,
+      width: 170,
       fixed: "right",
+      // ---------------------------------------------------------------------
+      // IMS NOTE [AKTIF / GUARDED / BEHAVIOR-PRESERVING]
+      // Fungsi: menyamakan visual tombol aksi Tahapan Produksi dengan baseline Raw Materials.
+      // Hubungan flow: hanya layout tombol Detail/Edit/Aktifkan/Nonaktifkan; handler dan data step tidak berubah.
+      // Alasan: menjaga tombol aksi tetap mudah dijangkau tanpa menyentuh rule payroll, BOM, Work Log, atau HPP.
+      // ---------------------------------------------------------------------
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap className="ims-action-group">
-          <Button
-            className="ims-action-button"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleOpenDetailDrawer(record)}
-          >
-            Detail
-          </Button>
-          <Button
-            className="ims-action-button"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            Edit
-          </Button>
+        <div className="ims-action-group ims-action-group--vertical">
+          <div className="ims-action-group ims-action-group--inline">
+            <Button
+              className="ims-action-button"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => handleOpenDetailDrawer(record)}
+            >
+              Detail
+            </Button>
+            <Button
+              className="ims-action-button"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            >
+              Edit
+            </Button>
+          </div>
           <Popconfirm
             title={record.isActive ? "Nonaktifkan step ini?" : "Aktifkan step ini?"}
             onConfirm={() => handleToggleActive(record)}
             okText="Ya"
             cancelText="Batal"
           >
-            <Button className="ims-action-button" size="small">
+            <Button block className="ims-action-button ims-action-button--block" size="small">
               {record.isActive ? "Nonaktifkan" : "Aktifkan"}
             </Button>
           </Popconfirm>
-        </Space>
+        </div>
       ),
     },
   ];
