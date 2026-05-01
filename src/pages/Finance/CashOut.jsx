@@ -417,7 +417,7 @@ const CashOut = () => {
       />
 
       <Alert
-        style={{ marginBottom: 16 }}
+        className="ims-mb-16"
         type="info"
         showIcon
         message="Payroll Produksi paid otomatis masuk Cash Out dengan guard sourceModule/sourceId."
@@ -440,7 +440,7 @@ const CashOut = () => {
             <Select
               value={selectedYear}
               onChange={setSelectedYear}
-              style={{ width: "100%" }}
+              className="ims-filter-control"
               placeholder="Pilih tahun"
             >
               {yearOptions.map((year) => (
@@ -455,7 +455,7 @@ const CashOut = () => {
             <Select
               value={selectedMonth}
               onChange={setSelectedMonth}
-              style={{ width: "100%" }}
+              className="ims-filter-control"
               placeholder="Pilih bulan"
             >
               <Option value="all">Semua Bulan</Option>
@@ -512,9 +512,10 @@ const CashOut = () => {
           label="Jumlah"
           rules={[{ required: true, message: "Harap masukkan jumlah!" }]}
         >
+          {/* AKTIF/GUARDED: class shared menjaga lebar field form kas keluar tetap konsisten tanpa ubah payload transaksi. */}
           <InputNumber
             min={0}
-            style={{ width: "100%" }}
+            className="ims-filter-control"
             addonBefore="Rp"
             formatter={(value) => formatNumberId(value)}
             parser={(value) => value?.replace(/\./g, "") || ""}
@@ -535,7 +536,7 @@ const CashOut = () => {
           rules={[{ required: true, message: "Harap pilih tanggal!" }]}
           initialValue={dayjs()}
         >
-          <DatePicker style={{ width: "100%" }} />
+          <DatePicker className="ims-filter-control" />
         </Form.Item>
       </PageFormModal>
     </>

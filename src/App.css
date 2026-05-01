@@ -501,6 +501,19 @@
   width: 100%;
 }
 
+/* =========================
+   SECTION: Shared Utility Spacing - AKTIF / GUARDED
+   Fungsi:
+   - utilitas spacing ringan untuk mengurangi inline style berulang pada halaman operasional.
+   Hubungan flow aplikasi:
+   - hanya presentational; tidak mengubah event handler, payload, atau alur data.
+   Status:
+   - AKTIF untuk batch cleanup UI consistency.
+========================= */
+.ims-mb-16 {
+  margin-bottom: 16px !important;
+}
+
 .ims-cell-stack {
   display: flex;
   flex-direction: column;
