@@ -1435,7 +1435,7 @@ const Purchases = () => {
             label="Tanggal"
             rules={[{ required: true, message: "Tanggal wajib diisi" }]}
           >
-            <DatePicker style={{ width: "100%" }} />
+            <DatePicker className="ims-filter-control" />
           </Form.Item>
 
           <Form.Item
@@ -1589,7 +1589,7 @@ const Purchases = () => {
                   <InputNumber
                     min={0.01}
                     step={0.01}
-                    style={{ width: "100%" }}
+                    className="ims-filter-control"
                     formatter={(value) => formatNumberId(value)}
                     parser={(value) => value?.replace(/\./g, "") || ""}
                   />
@@ -1692,7 +1692,7 @@ const Purchases = () => {
               <InputNumber
                 min={0.01}
                 step={0.01}
-                style={{ width: "100%" }}
+                className="ims-filter-control"
                 formatter={(value) => formatNumberId(value)}
                 parser={(value) => value?.replace(/\./g, "") || ""}
               />
@@ -1755,7 +1755,7 @@ const Purchases = () => {
           >
             <InputNumber
               min={0}
-              style={{ width: "100%" }}
+              className="ims-filter-control"
               addonBefore="Rp"
               formatter={(value) => formatNumberId(value)}
               parser={(value) => value?.replace(/\./g, "") || ""}
@@ -1775,7 +1775,7 @@ const Purchases = () => {
                 >
                   <InputNumber
                     min={0}
-                    style={{ width: "100%" }}
+                    className="ims-filter-control"
                     addonBefore="Rp"
                     formatter={(value) => formatNumberId(value)}
                     parser={(value) => value?.replace(/\./g, "") || ""}
@@ -1789,7 +1789,7 @@ const Purchases = () => {
                 >
                   <InputNumber
                     min={0}
-                    style={{ width: "100%" }}
+                    className="ims-filter-control"
                     addonBefore="Rp"
                     formatter={(value) => formatNumberId(value)}
                     parser={(value) => value?.replace(/\./g, "") || ""}
@@ -1805,7 +1805,7 @@ const Purchases = () => {
                 >
                   <InputNumber
                     min={0}
-                    style={{ width: "100%" }}
+                    className="ims-filter-control"
                     addonBefore="Rp"
                     formatter={(value) => formatNumberId(value)}
                     parser={(value) => value?.replace(/\./g, "") || ""}
@@ -1819,7 +1819,7 @@ const Purchases = () => {
                 >
                   <InputNumber
                     min={0}
-                    style={{ width: "100%" }}
+                    className="ims-filter-control"
                     addonBefore="Rp"
                     formatter={(value) => formatNumberId(value)}
                     parser={(value) => value?.replace(/\./g, "") || ""}
@@ -1879,7 +1879,8 @@ const Purchases = () => {
                   <div style={{ fontWeight: 600, marginBottom: 10 }}>
                     Ringkasan Perbandingan Supplier
                   </div>
-                  <Space direction="vertical" size={6} style={{ width: "100%" }}>
+                  {/* AKTIF/GUARDED: lebar ringkasan diseragamkan via class shared; nilai tetap read-only dan tidak ubah flow submit purchase. */}
+                  <Space direction="vertical" size={6} className="ims-filter-control">
                     <div>Stok Masuk: <strong>{formatNumberId(stockInValue)} {stockUnit}</strong></div>
                     <div>
                       Harga Supplier Tercatat / Satuan Stok:{" "}
