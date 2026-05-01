@@ -6,7 +6,7 @@
 // - Produksi lebih fokus ke eksekusi, bukan planning dari nol
 // =====================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { buildCountSummary, createKeywordMatcher, matchFieldValue } from '../../utils/produksi/productionPageHelpers';
 import { getWorkLogMaterialOptions, getWorkLogTargetOptions, toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
@@ -760,27 +760,35 @@ const ProductionWorkLogs = () => {
   const getWorkLogSourceTagColor = (sourceType) =>
     sourceType === "production_order" ? "purple" : "blue";
 
-  const getStockSourceTagColor = (stockSourceType) =>
-    stockSourceType === "variant" ? "purple" : "default";
+  const getStockSourceTagColor = useCallback(
+    (stockSourceType) => (stockSourceType === "variant" ? "purple" : "default"),
+    [],
+  );
 
   // =====================================================
   // Helper presentasi batch 1.
   // Dipakai untuk mengganti blok metadata tabel yang sebelumnya banyak inline
   // style menjadi class shared agar lebih rapi dan mudah di-maintain.
   // =====================================================
-  const workLogUiClassNames = {
-    stack: "ims-cell-stack ims-cell-stack-tight",
-    meta: "ims-cell-meta",
-    title: "ims-cell-title",
-  };
+  const workLogUiClassNames = useMemo(
+    () => ({
+      stack: "ims-cell-stack ims-cell-stack-tight",
+      meta: "ims-cell-meta",
+      title: "ims-cell-title",
+    }),
+    [],
+  );
 
-  const renderWorkLogCellBlock = (primary, secondaryLines = []) => (
-    <div className={workLogUiClassNames.stack}>
-      <div className={workLogUiClassNames.title}>{primary || "-"}</div>
-      {secondaryLines.filter(Boolean).map((line, index) => (
-        <div key={index} className={workLogUiClassNames.meta}>{line}</div>
-      ))}
-    </div>
+  const renderWorkLogCellBlock = useCallback(
+    (primary, secondaryLines = []) => (
+      <div className={workLogUiClassNames.stack}>
+        <div className={workLogUiClassNames.title}>{primary || "-"}</div>
+        {secondaryLines.filter(Boolean).map((line, index) => (
+          <div key={index} className={workLogUiClassNames.meta}>{line}</div>
+        ))}
+      </div>
+    ),
+    [workLogUiClassNames.meta, workLogUiClassNames.stack, workLogUiClassNames.title],
   );
 
   // =====================================================
@@ -984,7 +992,7 @@ const ProductionWorkLogs = () => {
         ),
       },
     ],
-    [],
+    [getStockSourceTagColor, renderWorkLogCellBlock, workLogUiClassNames.meta, workLogUiClassNames.stack],
   );
 
   const detailOutputColumns = useMemo(
@@ -1046,7 +1054,7 @@ const ProductionWorkLogs = () => {
         ),
       },
     ],
-    [],
+    [getStockSourceTagColor, renderWorkLogCellBlock, workLogUiClassNames.meta, workLogUiClassNames.stack],
   );
 
   // =====================================================
@@ -1550,12 +1558,17 @@ const ProductionWorkLogs = () => {
               {
                 title: "Item",
                 key: "item",
+                // =====================================================
+                // AKTIF / GUARDED:
+                // - metadata code/variant memakai class token global agar warna netral konsisten light/dark.
+                // - hanya perubahan presentational; tidak mengubah payload work log, status, payroll, atau HPP.
+                // =====================================================
                 render: (_, record) => (
                   <div>
                     <div style={{ fontWeight: 600 }}>{record.itemName || "-"}</div>
-                    <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.itemCode || "-"}</div>
+                    <div className="ims-cell-meta">{record.itemCode || "-"}</div>
                     {record.resolvedVariantLabel ? (
-                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                      <div className="ims-cell-meta">
                         Varian: {record.resolvedVariantLabel}
                       </div>
                     ) : null}
@@ -1618,9 +1631,9 @@ const ProductionWorkLogs = () => {
                 render: (_, record) => (
                   <div>
                     <div style={{ fontWeight: 600 }}>{record.outputName || "-"}</div>
-                    <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.outputCode || "-"}</div>
+                    <div className="ims-cell-meta">{record.outputCode || "-"}</div>
                     {record.outputVariantLabel ? (
-                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                      <div className="ims-cell-meta">
                         Varian: {record.outputVariantLabel}
                       </div>
                     ) : null}
@@ -1736,7 +1749,7 @@ const ProductionWorkLogs = () => {
                     <div style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>
                       {item.value}
                     </div>
-                    <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 6 }}>
+                    <div className="ims-cell-meta" style={{ marginTop: 6 }}>
                       {item.helper}
                     </div>
                   </Card>
