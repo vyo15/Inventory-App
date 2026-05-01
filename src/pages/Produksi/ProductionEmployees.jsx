@@ -61,10 +61,10 @@ import { getAllProductionWorkLogs } from "../../services/Produksi/productionWork
 import { getActiveProductionSteps } from "../../services/Produksi/productionStepsService";
 import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
-import FilterBar from "../../components/Layout/Filters/FilterBar";
-import PageHeader from "../../components/Layout/Page/PageHeader";
+import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
+import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
-import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
+import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -736,24 +736,13 @@ const ProductionEmployees = () => {
 
   return (
     <div className="page-container">
-      <PageHeader
+      {/* AKTIF / GUARDED: header dimigrasikan ke shared produksi untuk konsistensi UX lintas halaman tanpa mengubah flow submit master karyawan. */}
+      <ProductionPageHeader
         title="Karyawan Produksi"
-        subtitle="Kelola master operator produksi yang dipakai oleh work log dan ringkasan payroll read-only."
-        actions={[
-          {
-            key: "refresh-employees",
-            icon: <ReloadOutlined />,
-            label: "Refresh",
-            onClick: loadData,
-          },
-          {
-            key: "create-employee",
-            type: "primary",
-            icon: <PlusOutlined />,
-            label: "Tambah Karyawan",
-            onClick: handleAdd,
-          },
-        ]}
+        description="Kelola master operator produksi yang dipakai oleh work log dan ringkasan payroll read-only."
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Tambah Karyawan"
       />
 
       <Alert
@@ -764,9 +753,11 @@ const ProductionEmployees = () => {
         description="Ringkasan payroll di halaman ini dibaca dari payroll final dan work log final. Pengaturan custom payroll karyawan tetap legacy dan tidak lagi menjadi source of truth payroll."
       />
 
-      <SummaryStatGrid items={summaryItems} />
+      {/* AKTIF / GUARDED: summary hanya ganti wrapper presentational, nilai tetap dari kalkulasi existing. */}
+      <ProductionSummaryCards items={summaryItems} />
 
-      <FilterBar className="production-filter-bar">
+      {/* AKTIF / GUARDED: filter card shared menjaga layout seragam, state/filter logic tidak diubah. */}
+      <ProductionFilterCard>
           <Col xs={24} md={6}>
             <Input
               placeholder="Cari kode, nama, no HP..."
@@ -825,7 +816,7 @@ const ProductionEmployees = () => {
               ]}
             />
           </Col>
-      </FilterBar>
+      </ProductionFilterCard>
 
       <PageSection
         title="Daftar Karyawan Produksi"
