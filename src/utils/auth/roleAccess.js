@@ -1,35 +1,28 @@
 // =========================
 // SECTION: Auth Role Constants — AKTIF / GUARDED
 // Fungsi:
-// - menjadi single source of truth untuk nama role aplikasi;
-// - menjaga hanya 2 role aktif baru: administrator dan user;
-// - mempertahankan super_admin sebagai role legacy agar data lama tidak langsung terkunci.
+// - menjadi single source of truth role aktif IMS setelah cleanup migrasi @ziyocraft.com;
+// - mengunci role runtime hanya `administrator` dan `user`.
 // Hubungan flow aplikasi:
 // - dipakai AuthProvider, Route Guard, Sidebar/Menu Guard, dan Manajemen User.
 // Status:
 // - AKTIF untuk Login + Role internal IMS.
-// - GUARDED: role baru tidak boleh ditambah tanpa update access matrix docs, route guard, menu guard, User Management, Cloud Function, dan Firestore Rules.
+// - GUARDED: role baru tidak boleh ditambah tanpa update access matrix docs, route guard, menu guard, User Management, dan Firestore Rules.
 // Legacy / cleanup:
-// - ROLES.SUPER_ADMIN adalah LEGACY COMPATIBILITY untuk profile lama dan kandidat migration manual ke administrator;
-// - super_admin tidak boleh menjadi pilihan role baru di UI/Cloud Function.
+// - compatibility role lama sudah dihapus dari role aktif; data Firestore lama wajib sudah dibersihkan sebelum patch ini dipakai.
 // =========================
 export const ROLES = {
-  SUPER_ADMIN: "super_admin",
   ADMINISTRATOR: "administrator",
   USER: "user",
 };
 
 export const ROLE_LABELS = {
-  [ROLES.SUPER_ADMIN]: "Super Admin (Legacy)",
   [ROLES.ADMINISTRATOR]: "Administrator",
   [ROLES.USER]: "User",
 };
 
 export const ACTIVE_ROLES = [ROLES.ADMINISTRATOR, ROLES.USER];
-
-export const LEGACY_ROLES = [ROLES.SUPER_ADMIN];
-
-export const ALL_ROLES = [...LEGACY_ROLES, ...ACTIVE_ROLES];
+export const ALL_ROLES = ACTIVE_ROLES;
 
 export const USER_STATUS = {
   ACTIVE: "active",
@@ -96,22 +89,23 @@ export const ROUTE_ACCESS_KEYS = {
 // =========================
 // SECTION: Role Groups — AKTIF / GUARDED
 // Fungsi:
-// - membuat deklarasi access matrix lebih mudah dibaca dan dirawat;
-// - memberi Administrator akses penuh sesuai target role baru;
-// - tetap memasukkan super_admin sebagai legacy alias agar akun lama tidak langsung terkunci.
+// - membuat access matrix konsisten untuk dua role aktif;
+// - menyediakan group Administrator-only yang dipakai route guard dan sidebar/menu guard.
 // Hubungan flow aplikasi:
 // - dipakai oleh route, sidebar, dan Manajemen User agar tidak ada duplikasi matrix.
 // Status:
-// - AKTIF.
-// - GUARDED: user biasa sengaja tidak diberi menu finance/report/sistem sensitif pada fase awal.
-// Legacy / cleanup:
-// - ADMIN_AND_SUPER berarti akses admin penuh untuk administrator + super_admin legacy;
-// - SUPER_ADMIN_ONLY dipertahankan sebagai alias legacy, jangan dipakai untuk rule baru.
+// - AKTIF untuk akses role aktif.
+// - GUARDED: user biasa sengaja tidak diberi menu master setup, finance, report, sistem, pricing, dan setup produksi.
+// Cleanup:
+// - IMS NOTE [AKTIF / BEHAVIOR-PRESERVING]: nama alias sudah disesuaikan dengan kondisi final; value tetap hanya Administrator.
 // =========================
 export const ROLE_GROUPS = {
-  ALL_AUTHENTICATED: [ROLES.SUPER_ADMIN, ROLES.ADMINISTRATOR, ROLES.USER],
-  ADMIN_AND_SUPER: [ROLES.SUPER_ADMIN, ROLES.ADMINISTRATOR],
-  SUPER_ADMIN_ONLY: [ROLES.SUPER_ADMIN, ROLES.ADMINISTRATOR],
+  // IMS NOTE [AKTIF / BEHAVIOR-PRESERVING]: semua user login tetap boleh mengakses route yang memang shared.
+  ALL_AUTHENTICATED: ACTIVE_ROLES,
+  // IMS NOTE [AKTIF / GUARDED]: menu operasional harian boleh dibuka Administrator dan User.
+  OPERATIONAL_DAILY: ACTIVE_ROLES,
+  // IMS NOTE [AKTIF / GUARDED]: menu konfigurasi, finance, reports, dan sistem hanya untuk Administrator.
+  ADMIN_ONLY: [ROLES.ADMINISTRATOR],
 };
 
 // =========================
@@ -124,47 +118,45 @@ export const ROLE_GROUPS = {
 // Status:
 // - AKTIF untuk Route/Menu Guard dan User Management.
 // - GUARDED: UI guard ini belum menggantikan Firestore Rules final.
-// Legacy / cleanup:
-// - super_admin masih dipetakan ke akses Administrator sebagai compatibility sampai data lama dimigrasikan.
 // =========================
 export const ROUTE_ROLE_ACCESS = {
   [ROUTE_ACCESS_KEYS.DASHBOARD]: ROLE_GROUPS.ALL_AUTHENTICATED,
 
-  [ROUTE_ACCESS_KEYS.PRODUCTS]: ROLE_GROUPS.ALL_AUTHENTICATED,
-  [ROUTE_ACCESS_KEYS.RAW_MATERIALS]: ROLE_GROUPS.ALL_AUTHENTICATED,
-  [ROUTE_ACCESS_KEYS.CATEGORIES]: ROLE_GROUPS.ALL_AUTHENTICATED,
-  [ROUTE_ACCESS_KEYS.SUPPLIERS]: ROLE_GROUPS.ALL_AUTHENTICATED,
-  [ROUTE_ACCESS_KEYS.CUSTOMERS]: ROLE_GROUPS.ALL_AUTHENTICATED,
-  [ROUTE_ACCESS_KEYS.PRICING_RULES]: ROLE_GROUPS.ADMIN_AND_SUPER,
+  [ROUTE_ACCESS_KEYS.PRODUCTS]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.RAW_MATERIALS]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.CATEGORIES]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.SUPPLIERS]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.CUSTOMERS]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.PRICING_RULES]: ROLE_GROUPS.ADMIN_ONLY,
 
-  [ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT]: ROLE_GROUPS.ALL_AUTHENTICATED,
+  [ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT]: ROLE_GROUPS.OPERATIONAL_DAILY,
 
-  [ROUTE_ACCESS_KEYS.PRODUCTION_PLANNING]: ROLE_GROUPS.ALL_AUTHENTICATED,
-  [ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS]: ROLE_GROUPS.ALL_AUTHENTICATED,
-  [ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS]: ROLE_GROUPS.ALL_AUTHENTICATED,
-  [ROUTE_ACCESS_KEYS.PRODUCTION_STEPS]: ROLE_GROUPS.ADMIN_AND_SUPER,
-  [ROUTE_ACCESS_KEYS.PRODUCTION_EMPLOYEES]: ROLE_GROUPS.ADMIN_AND_SUPER,
-  [ROUTE_ACCESS_KEYS.PRODUCTION_PROFILES]: ROLE_GROUPS.ADMIN_AND_SUPER,
-  [ROUTE_ACCESS_KEYS.SEMI_FINISHED_MATERIALS]: ROLE_GROUPS.ADMIN_AND_SUPER,
-  [ROUTE_ACCESS_KEYS.PRODUCTION_BOMS]: ROLE_GROUPS.ADMIN_AND_SUPER,
-  [ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS]: ROLE_GROUPS.ADMIN_AND_SUPER,
-  [ROUTE_ACCESS_KEYS.PRODUCTION_HPP_ANALYSIS]: ROLE_GROUPS.ADMIN_AND_SUPER,
+  [ROUTE_ACCESS_KEYS.PRODUCTION_PLANNING]: ROLE_GROUPS.OPERATIONAL_DAILY,
+  [ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS]: ROLE_GROUPS.OPERATIONAL_DAILY,
+  [ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS]: ROLE_GROUPS.OPERATIONAL_DAILY,
+  [ROUTE_ACCESS_KEYS.PRODUCTION_STEPS]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.PRODUCTION_EMPLOYEES]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.PRODUCTION_PROFILES]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.SEMI_FINISHED_MATERIALS]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.PRODUCTION_BOMS]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.PRODUCTION_HPP_ANALYSIS]: ROLE_GROUPS.ADMIN_ONLY,
 
-  [ROUTE_ACCESS_KEYS.PURCHASES]: ROLE_GROUPS.ALL_AUTHENTICATED,
-  [ROUTE_ACCESS_KEYS.SALES]: ROLE_GROUPS.ALL_AUTHENTICATED,
-  [ROUTE_ACCESS_KEYS.RETURNS]: ROLE_GROUPS.ALL_AUTHENTICATED,
+  [ROUTE_ACCESS_KEYS.PURCHASES]: ROLE_GROUPS.OPERATIONAL_DAILY,
+  [ROUTE_ACCESS_KEYS.SALES]: ROLE_GROUPS.OPERATIONAL_DAILY,
+  [ROUTE_ACCESS_KEYS.RETURNS]: ROLE_GROUPS.OPERATIONAL_DAILY,
 
-  [ROUTE_ACCESS_KEYS.CASH_IN]: ROLE_GROUPS.ADMIN_AND_SUPER,
-  [ROUTE_ACCESS_KEYS.CASH_OUT]: ROLE_GROUPS.ADMIN_AND_SUPER,
+  [ROUTE_ACCESS_KEYS.CASH_IN]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.CASH_OUT]: ROLE_GROUPS.ADMIN_ONLY,
 
-  [ROUTE_ACCESS_KEYS.STOCK_REPORT]: ROLE_GROUPS.ADMIN_AND_SUPER,
-  [ROUTE_ACCESS_KEYS.PURCHASES_REPORT]: ROLE_GROUPS.ADMIN_AND_SUPER,
-  [ROUTE_ACCESS_KEYS.SALES_REPORT]: ROLE_GROUPS.ADMIN_AND_SUPER,
-  [ROUTE_ACCESS_KEYS.PAYROLL_REPORT]: ROLE_GROUPS.ADMIN_AND_SUPER,
-  [ROUTE_ACCESS_KEYS.PROFIT_LOSS]: ROLE_GROUPS.ADMIN_AND_SUPER,
+  [ROUTE_ACCESS_KEYS.STOCK_REPORT]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.PURCHASES_REPORT]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.SALES_REPORT]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.PAYROLL_REPORT]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.PROFIT_LOSS]: ROLE_GROUPS.ADMIN_ONLY,
 
-  [ROUTE_ACCESS_KEYS.USER_MANAGEMENT]: ROLE_GROUPS.ADMIN_AND_SUPER,
-  [ROUTE_ACCESS_KEYS.RESET_MAINTENANCE]: ROLE_GROUPS.ADMIN_AND_SUPER,
+  [ROUTE_ACCESS_KEYS.USER_MANAGEMENT]: ROLE_GROUPS.ADMIN_ONLY,
+  [ROUTE_ACCESS_KEYS.RESET_MAINTENANCE]: ROLE_GROUPS.ADMIN_ONLY,
 };
 
 // =========================
@@ -176,13 +168,11 @@ export const ROUTE_ROLE_ACCESS = {
 // - helper ini dipakai bersama oleh ProtectedRoute, SidebarMenu, dan UserManagement.
 // Status:
 // - AKTIF.
-// - GUARDED: jika role undefined/null, akses harus ditolak.
+// - GUARDED: jika role undefined/null atau role lama/tidak dikenal, akses harus ditolak.
 // =========================
 export const isKnownRole = (role) => ALL_ROLES.includes(role);
 
 export const isActiveRole = (role) => ACTIVE_ROLES.includes(role);
-
-export const isLegacyRole = (role) => LEGACY_ROLES.includes(role);
 
 export const isKnownUserStatus = (status) => ALL_USER_STATUSES.includes(status);
 
@@ -203,26 +193,24 @@ export const canAccessRoute = (routeKey, role) => {
 };
 
 export const canAccessUserManagement = (role) => {
-  return isRoleAllowed(ROLE_GROUPS.ADMIN_AND_SUPER, role);
+  return isRoleAllowed(ROLE_GROUPS.ADMIN_ONLY, role);
 };
 
 // =========================
 // SECTION: User Management Role Rules — AKTIF / GUARDED
 // Fungsi:
 // - menjaga batas pengelolaan user internal di sisi UI/service;
-// - role baru yang boleh dibuat hanya administrator dan user;
+// - role yang boleh dibuat hanya administrator dan user;
 // - tidak ada role yang boleh mengubah role/status dirinya sendiri lewat halaman Manajemen User.
 // Hubungan flow aplikasi:
 // - dipakai UserManagement dan userService sebelum menulis `system_users`;
-// - Cloud Function createSystemUser wajib mengikuti aturan yang sama.
+// - service create profile manual dan Firestore Rules wajib mengikuti aturan yang sama.
 // Status:
 // - AKTIF untuk penyederhanaan role 2 level.
 // - GUARDED: aturan ini harus diselaraskan dengan Firestore Rules; UI guard saja tidak cukup.
-// Legacy / cleanup:
-// - super_admin lama tetap bisa login dan punya akses admin, tetapi tidak bisa dipilih sebagai role baru.
 // =========================
 export const getAssignableRolesForActor = (actorRole) => {
-  if (ROLE_GROUPS.ADMIN_AND_SUPER.includes(actorRole)) {
+  if (actorRole === ROLES.ADMINISTRATOR) {
     return ACTIVE_ROLES;
   }
 
@@ -234,11 +222,7 @@ export const canAssignUserRole = (actorRole, targetRole) => {
 };
 
 export const canViewUserProfile = (actorRole, targetRole) => {
-  if (ROLE_GROUPS.ADMIN_AND_SUPER.includes(actorRole)) {
-    return isKnownRole(targetRole);
-  }
-
-  return false;
+  return actorRole === ROLES.ADMINISTRATOR && isKnownRole(targetRole);
 };
 
 export const canManageUserProfile = ({
@@ -260,7 +244,7 @@ export const canManageUserProfile = ({
     return false;
   }
 
-  return ROLE_GROUPS.ADMIN_AND_SUPER.includes(actorRole);
+  return actorRole === ROLES.ADMINISTRATOR;
 };
 
 export const canChangeUserStatus = (params) => canManageUserProfile(params);
@@ -276,12 +260,10 @@ export const canCreateUserProfile = (actorRole, targetRole) => {
 // - parent menu tanpa child allowed otomatis disembunyikan;
 // - role tidak dikenal default deny.
 // Hubungan flow aplikasi:
-// - dipakai SidebarMenu Fase D agar user tidak melihat menu yang route-nya ditolak.
+// - dipakai SidebarMenu agar user tidak melihat menu yang route-nya ditolak.
 // Status:
 // - AKTIF.
 // - GUARDED: hide menu bukan security final; route guard dan Firestore Rules tetap wajib.
-// Legacy / cleanup:
-// - super_admin diperlakukan seperti Administrator sampai data legacy dimigrasikan.
 // =========================
 export const filterSidebarMenuItemsByRole = (menuItems = [], role) => {
   if (!isKnownRole(role)) {

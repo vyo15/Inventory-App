@@ -1,12 +1,16 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
+  query,
   serverTimestamp,
+  setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
-import { auth, db } from "../../firebase";
+import { db } from "../../firebase";
 import {
   ROLE_LABELS,
   ROLES,
@@ -21,93 +25,133 @@ import {
 } from "../../utils/auth/roleAccess";
 
 const SYSTEM_USERS_COLLECTION = "system_users";
+export const USERNAME_ALREADY_USED_ERROR_CODE = "USERNAME_ALREADY_USED";
+export const DELETE_PROFILE_PERMISSION_ERROR_CODE =
+  "DELETE_PROFILE_PERMISSION_DENIED";
+export const DELETE_PROFILE_NOT_FOUND_ERROR_CODE = "DELETE_PROFILE_NOT_FOUND";
+export const DELETE_PROFILE_GUARD_ERROR_CODE = "DELETE_PROFILE_GUARD_REJECTED";
+const USERNAME_ALREADY_USED_MESSAGE =
+  "Username sudah dipakai profile user lain.";
+const AUTH_UID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 // =========================
-// SECTION: Create System User HTTP Endpoint — AKTIF / GUARDED
+// SECTION: User Management Error Helpers — AKTIF / GUARDED
 // Fungsi:
-// - menyiapkan URL Cloud Function HTTP `createSystemUser` di region us-central1;
-// - memakai Firebase ID token dari user login sebagai Authorization Bearer.
+// - memberi code error stabil agar UI Manajemen User bisa membedakan guard aplikasi, profile tidak ditemukan, dan permission Firestore Rules.
 // Hubungan flow aplikasi:
-// - UserManagement memanggil service ini saat tambah user agar Auth UID dibuat oleh backend trusted;
-// - frontend tidak lagi bergantung pada CORS otomatis callable karena environment terbaru masih memblokir preflight.
+// - UserManagement menampilkan pesan yang mudah dipahami saat create/update/delete profile gagal.
 // Status:
-// - AKTIF untuk bug fix createSystemUser CORS.
-// - GUARDED: frontend tidak pernah memakai Admin SDK atau membuat Firebase Auth user langsung.
-// Legacy / cleanup:
-// - flow callable `httpsCallable` menjadi legacy teknis untuk task ini; endpoint HTTP tetap memakai backend trusted.
+// - AKTIF untuk User Management final setelah cleanup legacy.
+// - GUARDED: error code hanya memperjelas failure state, bukan melonggarkan rules.
 // =========================
-const FUNCTIONS_REGION = "us-central1";
+const createUserManagementError = (message, code, originalError = null) => {
+  const error = new Error(message);
 
-const getCreateSystemUserEndpoint = () => {
-  const projectId = auth.app.options.projectId;
+  error.code = code;
+  error.errorCode = code;
+  error.originalError = originalError;
 
-  if (!projectId) {
-    throw new Error("Firebase projectId tidak ditemukan untuk memanggil createSystemUser.");
-  }
-
-  return `https://${FUNCTIONS_REGION}-${projectId}.cloudfunctions.net/createSystemUser`;
+  return error;
 };
 
-const getCurrentUserIdToken = async () => {
-  const currentUser = auth.currentUser;
+const isFirestorePermissionError = (error = {}) => {
+  const code = String(error.code || error.errorCode || "").toLowerCase();
+  const errorMessage = String(error.message || "").toLowerCase();
 
-  if (!currentUser) {
-    throw new Error("Login diperlukan sebelum membuat user baru.");
-  }
-
-  // AKTIF/GUARDED: token ini diverifikasi ulang di Cloud Function; jangan ganti dengan role dari local state saja.
-  return currentUser.getIdToken();
+  return (
+    code.includes("permission-denied") ||
+    code.includes("permission_denied") ||
+    errorMessage.includes("permission") ||
+    errorMessage.includes("missing or insufficient permissions")
+  );
 };
 
-// =========================
-// SECTION: HTTP Error Normalizer — AKTIF / GUARDED
-// Fungsi:
-// - membuat error create user lebih jelas ketika endpoint gagal karena CORS, deploy, region, atau validasi backend;
-// - tetap meneruskan pesan validasi backend seperti invalid-argument/already-exists.
-// Hubungan flow aplikasi:
-// - UserManagement menampilkan error.message dari service ini saat tambah user gagal.
-// Status:
-// - AKTIF untuk bug fix createSystemUser.
-// - GUARDED: helper ini tidak mengubah payload, role, password, atau penulisan Firestore.
-// Legacy / cleanup:
-// - kandidat cleanup jika nanti observability function sudah punya error mapping global.
-// =========================
-const normalizeCreateUserHttpError = (error) => {
-  const message = error?.message || "";
-
-  if (/cors|failed to fetch|networkerror|load failed|err_failed|unexpected token/i.test(message)) {
-    return new Error(
-      "Cloud Function createSystemUser gagal dipanggil. Cek deploy function HTTP, public invoker, region us-central1, CORS localhost/production, dan Firebase Functions logs.",
-    );
-  }
-
-  return new Error(message || "Gagal membuat user Auth dan profile system_users.");
+const validateAuthUid = (authUid) => {
+  return Boolean(authUid) && AUTH_UID_PATTERN.test(authUid);
 };
 
-const parseCreateSystemUserResponse = async (response) => {
-  const responseText = await response.text();
-  let body = {};
-
-  try {
-    // AKTIF DIPAKAI: response normal dari createSystemUser berbentuk JSON { data } atau { error }.
-    // Alasan perubahan: jika IAM/deploy/proxy mengembalikan HTML/non-JSON, error tetap dibuat jelas dan tidak berhenti di SyntaxError.
-    // Status: aktif dipakai untuk debugging create user; kandidat cleanup hanya jika sudah ada error mapping global.
-    body = responseText ? JSON.parse(responseText) : {};
-  } catch (parseError) {
-    body = {
-      error: {
-        message: `Cloud Function createSystemUser mengembalikan response non-JSON (HTTP ${response.status}). Cek deploy, public invoker, region, dan logs.`,
-      },
-    };
-  }
-
-  if (!response.ok) {
-    const backendMessage = body?.error?.message || body?.message;
-    throw new Error(backendMessage || "Cloud Function createSystemUser mengembalikan error.");
-  }
-
-  return body?.data || body;
+const validateUsername = (username) => {
+  return Boolean(username) && /^[a-z0-9._-]+$/i.test(username);
 };
+
+const getActorUid = (actorProfile = {}) => {
+  return actorProfile.authUid || actorProfile.id || "unknown_actor";
+};
+
+const assertActorCanAccessUserManagement = (actorProfile = {}) => {
+  if (!canAccessUserManagement(actorProfile.role)) {
+    throw new Error("Role ini tidak boleh membuka Manajemen User.");
+  }
+};
+
+const getProfilesByUsernameLower = async (usernameLower) => {
+  const usernameQuery = query(
+    collection(db, SYSTEM_USERS_COLLECTION),
+    where("usernameLower", "==", usernameLower),
+  );
+  const usernameSnapshot = await getDocs(usernameQuery);
+
+  return usernameSnapshot.docs.map(normalizeSystemUser);
+};
+
+const toSafeDuplicateProfile = (duplicateProfile = {}) => {
+  const authUid = duplicateProfile.authUid || duplicateProfile.id || "";
+  const username = duplicateProfile.username || "";
+  const usernameLower =
+    duplicateProfile.usernameLower || String(username).toLowerCase();
+  const role = duplicateProfile.role || "";
+  const status = duplicateProfile.status || "";
+
+  return {
+    id: duplicateProfile.id || authUid,
+    authUid,
+    username,
+    usernameLower,
+    displayName: duplicateProfile.displayName || username || "Profile lama",
+    role,
+    roleLabel: ROLE_LABELS[role] || role,
+    status,
+    statusLabel: USER_STATUS_LABELS[status] || status,
+  };
+};
+
+const createUsernameAlreadyUsedError = (duplicateProfile) => {
+  // GUARDED:
+  // Duplicate username tetap ditolak secara global agar tidak ada dua profile aktif memakai username login yang sama.
+  // Setelah cleanup legacy, error ini hanya menjadi guard normal, bukan lagi trigger flow migrasi UID lama.
+  const safeDuplicateProfile = toSafeDuplicateProfile(duplicateProfile);
+  const error = new Error(USERNAME_ALREADY_USED_MESSAGE);
+
+  error.name = "UsernameAlreadyUsedError";
+  error.code = USERNAME_ALREADY_USED_ERROR_CODE;
+  error.errorCode = USERNAME_ALREADY_USED_ERROR_CODE;
+  error.isUsernameAlreadyUsed = true;
+  error.duplicateProfile = safeDuplicateProfile;
+  error.details = { duplicateProfile: safeDuplicateProfile };
+
+  return error;
+};
+
+export const isUsernameAlreadyUsedError = (error) => {
+  return Boolean(
+    error &&
+    (error.code === USERNAME_ALREADY_USED_ERROR_CODE ||
+      error.errorCode === USERNAME_ALREADY_USED_ERROR_CODE ||
+      error.isUsernameAlreadyUsed ||
+      error.message === USERNAME_ALREADY_USED_MESSAGE),
+  );
+};
+
+const ensureUsernameIsAvailable = async (usernameLower, authUid) => {
+  const duplicateProfile = (
+    await getProfilesByUsernameLower(usernameLower)
+  ).find((userProfile) => userProfile.authUid !== authUid);
+
+  if (duplicateProfile) {
+    throw createUsernameAlreadyUsedError(duplicateProfile);
+  }
+};
+
 // =========================
 // SECTION: System User Normalizer — AKTIF / GUARDED
 // Fungsi:
@@ -117,8 +161,8 @@ const parseCreateSystemUserResponse = async (response) => {
 // Status:
 // - AKTIF untuk User Management.
 // - GUARDED: password tidak pernah disimpan/dibaca dari Firestore.
-// Legacy / cleanup:
-// - tidak ada legacy; jika nanti memakai custom claims, profile ini tetap bisa dipakai sebagai data tampilan.
+// Cleanup:
+// - role lama/tidak dikenal tidak dianggap valid role aktif dan akan tertolak oleh guard akses.
 // =========================
 export const normalizeSystemUser = (docSnapshot) => {
   const data = docSnapshot.data() || {};
@@ -129,7 +173,8 @@ export const normalizeSystemUser = (docSnapshot) => {
     id: docSnapshot.id,
     authUid: data.authUid || docSnapshot.id,
     username: data.username || "",
-    usernameLower: data.usernameLower || String(data.username || "").toLowerCase(),
+    usernameLower:
+      data.usernameLower || String(data.username || "").toLowerCase(),
     displayName: data.displayName || data.username || "User IMS",
     role,
     roleLabel: ROLE_LABELS[role] || role,
@@ -143,18 +188,39 @@ export const normalizeSystemUser = (docSnapshot) => {
   };
 };
 
-const getActorUid = (actorProfile = {}) => {
-  return actorProfile.authUid || actorProfile.id || "unknown_actor";
-};
-
-const assertActorCanAccessUserManagement = (actorProfile = {}) => {
-  if (!canAccessUserManagement(actorProfile.role)) {
-    throw new Error("Role ini tidak boleh membuka Manajemen User.");
+// =========================
+// SECTION: Last Active Administrator Guard — AKTIF / GUARDED
+// Fungsi:
+// - mencegah profile administrator aktif terakhir terhapus dari Firestore.
+// Hubungan flow aplikasi:
+// - AuthProvider butuh minimal satu profile administrator aktif agar Manajemen User tetap bisa memulihkan akses.
+// Status:
+// - AKTIF untuk delete profile manual.
+// - GUARDED: guard ini membaca system_users langsung agar tidak bergantung pada disable button di UI.
+// =========================
+const assertTargetIsNotLastActiveAdministrator = async (targetProfile) => {
+  if (
+    targetProfile.role !== ROLES.ADMINISTRATOR ||
+    targetProfile.status !== USER_STATUS.ACTIVE
+  ) {
+    return;
   }
-};
 
-const validateUsername = (username) => {
-  return Boolean(username) && /^[a-z0-9._-]+$/i.test(username);
+  const snapshot = await getDocs(collection(db, SYSTEM_USERS_COLLECTION));
+  const activeAdministratorCount = snapshot.docs
+    .map(normalizeSystemUser)
+    .filter(
+      (userProfile) =>
+        userProfile.role === ROLES.ADMINISTRATOR &&
+        userProfile.status === USER_STATUS.ACTIVE,
+    ).length;
+
+  if (activeAdministratorCount <= 1) {
+    throw createUserManagementError(
+      "Profile administrator aktif terakhir tidak boleh dihapus.",
+      DELETE_PROFILE_GUARD_ERROR_CODE,
+    );
+  }
 };
 
 // =========================
@@ -162,10 +228,10 @@ const validateUsername = (username) => {
 // Fungsi:
 // - mengambil profile `system_users` untuk halaman Manajemen User.
 // Hubungan flow aplikasi:
-// - Administrator melihat semua profile yang dikenal sesuai target akses penuh;
-// - super_admin legacy dipetakan ke akses Administrator agar data lama tidak langsung terkunci.
+// - hanya Administrator role aktif yang boleh melihat daftar profile user;
+// - data dengan role lama/tidak dikenal tidak ditampilkan agar role nonaktif tidak hidup kembali dari UI.
 // Status:
-// - AKTIF untuk User Management.
+// - AKTIF untuk User Management final.
 // - GUARDED: filtering UI/service ini wajib tetap diselaraskan dengan Firestore Rules.
 // =========================
 export const listSystemUsers = async (actorProfile) => {
@@ -174,13 +240,13 @@ export const listSystemUsers = async (actorProfile) => {
   const snapshot = await getDocs(collection(db, SYSTEM_USERS_COLLECTION));
   const normalizedUsers = snapshot.docs
     .map(normalizeSystemUser)
+    .filter((userProfile) => isKnownRole(userProfile.role))
     .filter((userProfile) =>
       canViewUserProfile(actorProfile.role, userProfile.role),
     );
 
   return normalizedUsers.sort((a, b) => {
-    // AKTIF/GUARDED: role aktif ditampilkan lebih dulu; super_admin hanya legacy/kandidat migration.
-    const roleOrder = [ROLES.ADMINISTRATOR, ROLES.USER, ROLES.SUPER_ADMIN];
+    const roleOrder = [ROLES.ADMINISTRATOR, ROLES.USER];
     const getRoleOrder = (role) => {
       const index = roleOrder.indexOf(role);
       return index === -1 ? roleOrder.length : index;
@@ -195,32 +261,39 @@ export const listSystemUsers = async (actorProfile) => {
   });
 };
 
-
 // =========================
-// SECTION: Create System User With Auth — AKTIF / GUARDED
+// SECTION: Create System User Profile Manual UID — AKTIF / GUARDED
 // Fungsi:
-// - membuat Firebase Auth user dan profile `system_users/{uid}` lewat Cloud Function trusted.
+// - membuat profile `system_users/{authUid}` berdasarkan UID Firebase Auth yang ditempel manual dari Firebase Console;
+// - menyimpan username internal, nama tampilan, role, status, dan audit ringan.
 // Hubungan flow aplikasi:
-// - UserManagement mengirim username, displayName, role, status, dan password sementara;
-// - Cloud Function memakai Admin SDK untuk membuat Auth UID otomatis;
-// - AuthProvider tetap membaca profile `system_users/{uid}` saat user login.
+// - Admin membuat Auth user dulu di Firebase Console dengan email `username@ziyocraft.com`;
+// - halaman Manajemen User hanya membuat profile Firestore agar AuthProvider bisa membaca role/status saat user login.
 // Status:
-// - AKTIF untuk Auth User Creation Phase.
-// - GUARDED: password hanya dikirim ke endpoint backend trusted dan tidak disimpan di Firestore.
-// Legacy / cleanup:
-// - flow lama input manual Auth UID saat create user sudah tidak dipakai oleh form create.
+// - AKTIF untuk flow user management final.
+// - GUARDED: frontend tidak membuat password/Auth user dan tidak mematikan duplicate username guard.
 // =========================
-export const createSystemUserWithAuth = async (values, actorProfile) => {
+export const createManualUserProfile = async (values, actorProfile) => {
   assertActorCanAccessUserManagement(actorProfile);
 
+  const actorUid = getActorUid(actorProfile);
+  const authUid = String(values.authUid || "").trim();
   const username = String(values.username || "").trim();
+  const usernameLower = username.toLowerCase();
   const displayName = String(values.displayName || username).trim();
   const role = values.role;
   const status = values.status || USER_STATUS.ACTIVE;
-  const temporaryPassword = String(values.temporaryPassword || "");
+
+  if (!validateAuthUid(authUid)) {
+    throw new Error(
+      "Auth UID wajib diisi dari Firebase Authentication dan hanya boleh huruf, angka, underscore, atau strip.",
+    );
+  }
 
   if (!validateUsername(username)) {
-    throw new Error("Username wajib diisi dan hanya boleh huruf, angka, titik, underscore, atau strip.");
+    throw new Error(
+      "Username wajib diisi dan hanya boleh huruf, angka, titik, underscore, atau strip.",
+    );
   }
 
   if (!displayName) {
@@ -235,50 +308,52 @@ export const createSystemUserWithAuth = async (values, actorProfile) => {
     throw new Error("Status user tidak valid.");
   }
 
-  if (temporaryPassword.length < 6) {
-    throw new Error("Password sementara minimal 6 karakter sesuai standar Firebase Auth.");
+  const userRef = doc(db, SYSTEM_USERS_COLLECTION, authUid);
+  const existingProfile = await getDoc(userRef);
+
+  if (existingProfile.exists()) {
+    throw new Error("Auth UID ini sudah punya profile system_users.");
   }
 
+  await ensureUsernameIsAvailable(usernameLower, authUid);
+
   try {
-    const endpoint = getCreateSystemUserEndpoint();
-    const idToken = await getCurrentUserIdToken();
-
-    // AKTIF DIPAKAI: request HTTP eksplisit agar preflight OPTIONS dijawab oleh function. Password hanya lewat payload ini dan tidak disimpan di Firestore.
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${idToken}`,
-      },
-      body: JSON.stringify({
-        data: {
-          username,
-          displayName,
-          role,
-          status,
-          temporaryPassword,
-        },
-      }),
+    await setDoc(userRef, {
+      authUid,
+      username,
+      usernameLower,
+      displayName,
+      role,
+      status,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      createdBy: actorUid,
+      updatedBy: actorUid,
+      lastLoginAt: null,
     });
-
-    return parseCreateSystemUserResponse(response);
   } catch (error) {
-    throw normalizeCreateUserHttpError(error);
+    if (isFirestorePermissionError(error)) {
+      throw createUserManagementError(
+        "Permission Firestore menolak create profile. Cek rules system_users agar Administrator boleh membuat profile.",
+        DELETE_PROFILE_PERMISSION_ERROR_CODE,
+        error,
+      );
+    }
+
+    throw error;
   }
 };
 
 // =========================
 // SECTION: Update User Profile — AKTIF / GUARDED
 // Fungsi:
-// - mengubah display name, role aktif, dan status profile internal user;
-// - membantu migrasi super_admin legacy ke administrator/user saat profile lama diedit.
+// - mengubah display name, role aktif, dan status profile internal user.
 // Hubungan flow aplikasi:
 // - user inactive akan ditolak oleh AuthProvider saat login/refresh;
 // - perubahan ini tidak membuat/menghapus Firebase Auth user.
 // Status:
-// - AKTIF untuk Manajemen User.
-// - GUARDED: tidak ada user yang boleh mengubah role/status dirinya sendiri lewat halaman ini;
-// - GUARDED: super_admin legacy tidak boleh ditetapkan ulang sebagai role aktif.
+// - AKTIF untuk Manajemen User final.
+// - GUARDED: tidak ada user yang boleh mengubah role/status dirinya sendiri lewat halaman ini.
 // =========================
 export const updateSystemUserProfile = async (userId, values, actorProfile) => {
   assertActorCanAccessUserManagement(actorProfile);
@@ -288,7 +363,10 @@ export const updateSystemUserProfile = async (userId, values, actorProfile) => {
   const currentSnapshot = await getDoc(userRef);
 
   if (!currentSnapshot.exists()) {
-    throw new Error("Profile user tidak ditemukan.");
+    throw createUserManagementError(
+      "Profile user tidak ditemukan atau sudah terhapus. Refresh daftar user.",
+      DELETE_PROFILE_NOT_FOUND_ERROR_CODE,
+    );
   }
 
   const currentProfile = normalizeSystemUser(currentSnapshot);
@@ -303,7 +381,10 @@ export const updateSystemUserProfile = async (userId, values, actorProfile) => {
       actorUid,
     })
   ) {
-    throw new Error("Role aktif tidak boleh mengelola profile user ini.");
+    throw createUserManagementError(
+      "Role aktif tidak boleh mengelola profile user ini.",
+      DELETE_PROFILE_GUARD_ERROR_CODE,
+    );
   }
 
   if (!canCreateUserProfile(actorProfile.role, nextRole)) {
@@ -314,13 +395,111 @@ export const updateSystemUserProfile = async (userId, values, actorProfile) => {
     throw new Error("Status user tidak valid.");
   }
 
-  await updateDoc(userRef, {
-    displayName: String(values.displayName || currentProfile.displayName).trim(),
-    role: nextRole,
-    status: nextStatus,
-    updatedAt: serverTimestamp(),
-    updatedBy: actorUid,
-  });
+  try {
+    await updateDoc(userRef, {
+      displayName: String(
+        values.displayName || currentProfile.displayName,
+      ).trim(),
+      role: nextRole,
+      status: nextStatus,
+      updatedAt: serverTimestamp(),
+      updatedBy: actorUid,
+    });
+  } catch (error) {
+    if (isFirestorePermissionError(error)) {
+      throw createUserManagementError(
+        "Permission Firestore menolak update profile. Cek rules system_users agar Administrator boleh update profile.",
+        DELETE_PROFILE_PERMISSION_ERROR_CODE,
+        error,
+      );
+    }
+
+    throw error;
+  }
+};
+
+// =========================
+// SECTION: Delete User Profile — AKTIF / GUARDED
+// Fungsi:
+// - menghapus hanya dokumen profile Firestore `system_users/{uid}`.
+// Hubungan flow aplikasi:
+// - Firebase Auth user/password tidak ikut dihapus dan tetap harus dikelola dari Firebase Console/backend trusted;
+// - jika Auth user masih ada tetapi profile dihapus, AuthProvider akan menolak login karena profile hilang.
+// Status:
+// - AKTIF untuk cleanup manual profile target aman.
+// - GUARDED: ada validasi role actor, target exists, self-delete, role target, dan administrator aktif terakhir.
+// =========================
+export const deleteSystemUserProfile = async (userId, actorProfile) => {
+  if (!canAccessUserManagement(actorProfile?.role)) {
+    throw createUserManagementError(
+      "Role ini tidak boleh menghapus profile user.",
+      DELETE_PROFILE_GUARD_ERROR_CODE,
+    );
+  }
+
+  const actorUid = getActorUid(actorProfile);
+  const targetUid = String(userId || "").trim();
+
+  if (!validateAuthUid(targetUid)) {
+    throw createUserManagementError(
+      "Auth UID target tidak valid.",
+      DELETE_PROFILE_GUARD_ERROR_CODE,
+    );
+  }
+
+  const userRef = doc(db, SYSTEM_USERS_COLLECTION, targetUid);
+  const currentSnapshot = await getDoc(userRef);
+
+  if (!currentSnapshot.exists()) {
+    throw createUserManagementError(
+      "Profile user tidak ditemukan atau sudah terhapus. Refresh daftar user sebelum cleanup ulang.",
+      DELETE_PROFILE_NOT_FOUND_ERROR_CODE,
+    );
+  }
+
+  const currentProfile = normalizeSystemUser(currentSnapshot);
+
+  if (currentProfile.authUid === actorUid) {
+    throw createUserManagementError(
+      "Anda tidak boleh menghapus profile yang sedang dipakai login.",
+      DELETE_PROFILE_GUARD_ERROR_CODE,
+    );
+  }
+
+  if (
+    !canManageUserProfile({
+      actorRole: actorProfile.role,
+      targetRole: currentProfile.role,
+      targetUid: currentProfile.authUid,
+      actorUid,
+    })
+  ) {
+    throw createUserManagementError(
+      "Role aktif tidak boleh menghapus profile user ini.",
+      DELETE_PROFILE_GUARD_ERROR_CODE,
+    );
+  }
+
+  await assertTargetIsNotLastActiveAdministrator(currentProfile);
+
+  try {
+    await deleteDoc(userRef);
+
+    return {
+      deletedAuthUid: targetUid,
+      deletedUsername: currentProfile.username,
+    };
+  } catch (error) {
+    if (isFirestorePermissionError(error)) {
+      throw createUserManagementError(
+        "Permission Firestore menolak delete profile. Cek rules system_users agar Administrator boleh menghapus profile lain yang aman.",
+        DELETE_PROFILE_PERMISSION_ERROR_CODE,
+        error,
+      );
+    }
+
+    throw error;
+  }
 };
 
 // =========================
@@ -331,9 +510,13 @@ export const updateSystemUserProfile = async (userId, values, actorProfile) => {
 // - status inactive akan memblokir akses app utama dari AuthProvider.
 // Status:
 // - AKTIF.
-// - GUARDED: delete user tidak dibuat untuk mencegah kehilangan audit profile.
+// - GUARDED: delete profile dipisah dari toggle status dan tetap tidak menghapus Firebase Auth user.
 // =========================
-export const updateSystemUserStatus = async (userProfile, nextStatus, actorProfile) => {
+export const updateSystemUserStatus = async (
+  userProfile,
+  nextStatus,
+  actorProfile,
+) => {
   return updateSystemUserProfile(
     userProfile.authUid || userProfile.id,
     {

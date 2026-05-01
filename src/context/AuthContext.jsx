@@ -18,11 +18,11 @@ import { ALL_ROLES, USER_STATUS } from "../utils/auth/roleAccess";
 // - username user diubah menjadi email internal Firebase Auth agar user tidak perlu memakai email asli.
 // Status:
 // - AKTIF dipakai oleh login internal IMS.
-// - GUARDED: domain internal harus konsisten dengan akun Auth yang dibuat oleh Cloud Function createSystemUser; seed manual hanya untuk akun pertama/emergency.
+// - GUARDED: domain internal harus konsisten dengan akun Auth yang dibuat manual di Firebase Console.
 // Legacy / cleanup:
-// - tidak ada legacy; jika nanti memakai Cloud Functions custom token, blok ini bisa menjadi CLEANUP CANDIDATE.
+// - tidak ada legacy; jika nanti memakai strategi custom token/offline auth, blok ini bisa menjadi CLEANUP CANDIDATE.
 // =========================
-const INTERNAL_AUTH_DOMAIN = "ims-bunga-flanel.local";
+const INTERNAL_AUTH_DOMAIN = "ziyocraft.com";
 const SYSTEM_USERS_COLLECTION = "system_users";
 const ACTIVE_STATUS = USER_STATUS.ACTIVE;
 
@@ -48,7 +48,7 @@ export const AuthContext = createContext(null);
 // - AKTIF dipakai saat login.
 // - GUARDED: jangan mengizinkan spasi/karakter bebas karena bisa membuat email internal tidak valid.
 // Legacy / cleanup:
-// - bukan legacy; bisa diganti saat Fase Cloud Functions custom token jika dipilih.
+// - bukan legacy; bisa diganti saat strategi custom token/offline auth dipilih.
 // =========================
 export const normalizeInternalUsername = (username = "") => {
   return username.trim().toLowerCase();
@@ -205,7 +205,7 @@ export const AuthProvider = ({ children }) => {
   // - user tetap melihat field Username, bukan email asli.
   // Status:
   // - AKTIF untuk login internal IMS.
-  // - GUARDED: User creation normal sudah lewat Cloud Function createSystemUser; seed manual hanya untuk akun pertama/emergency.
+  // - GUARDED: user Auth dibuat manual di Firebase Console, lalu profile dibuat di Manajemen User memakai Auth UID.
   // =========================
   const loginWithUsername = useCallback(async (username, password) => {
     const internalEmail = buildInternalAuthEmail(username);

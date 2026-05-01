@@ -62,7 +62,8 @@
 /* =========================
    SECTION: Submenu Layout
    Fungsi:
-   - submenu tetap minimalis tanpa icon tambahan
+   - level 1 submenu yang punya child boleh menampilkan icon kecil dari config
+   - level 2 leaf child tetap tanpa icon atau bullet agar tidak ramai
    - dark mode dibedakan dengan indent dan active bar tipis, bukan panel biru
 ========================= */
 .sidebar-menu.ant-menu .ant-menu-sub.ant-menu-inline {
@@ -280,4 +281,84 @@
 .sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected::before,
 .sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected::before {
   background: var(--ims-color-primary);
+}
+
+/* =========================
+   SECTION: Nested Sidebar Hierarchy Polish — AKTIF / GUARDED
+   Fungsi:
+   - membuat submenu level 1 yang punya child terlihat punya identitas visual lewat icon kecil;
+   - menjaga child level terdalam tetap clean tanpa bullet/titik dan tanpa icon;
+   - mempertahankan active bar halus untuk navigasi aktif.
+   Hubungan flow aplikasi:
+   - hanya styling visual Ant Design Menu; route, open key, selected key, dan role access tidak berubah.
+   Status:
+   - AKTIF untuk visual sidebar bertingkat.
+   - GUARDED: tidak dipakai sebagai security guard; role tetap dari roleAccess.js dan route guard.
+========================= */
+.sidebar-menu.ant-menu .sidebar-menu-config-icon-level-1 {
+  font-size: 14px !important;
+  opacity: 0.72;
+}
+
+.sidebar-menu.ant-menu
+  .ant-menu-sub.ant-menu-inline
+  > .ant-menu-submenu
+  > .ant-menu-submenu-title {
+  height: 42px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.sidebar-menu.ant-menu
+  .ant-menu-sub.ant-menu-inline
+  > .ant-menu-submenu
+  > .ant-menu-submenu-title
+  .ant-menu-title-content {
+  padding-left: 2px;
+}
+
+.sidebar-menu.ant-menu
+  .ant-menu-sub.ant-menu-inline
+  .ant-menu-sub.ant-menu-inline {
+  margin-top: 0;
+  margin-bottom: 6px;
+  padding: 2px 0 2px 12px;
+}
+
+.sidebar-menu.ant-menu
+  .ant-menu-sub.ant-menu-inline
+  .ant-menu-sub.ant-menu-inline
+  .ant-menu-item {
+  height: 40px;
+  margin: 3px 0;
+  border-radius: 11px;
+  font-weight: 500;
+}
+
+.sidebar-menu.ant-menu
+  .ant-menu-sub.ant-menu-inline
+  .ant-menu-sub.ant-menu-inline
+  .ant-menu-item
+  .ant-menu-title-content {
+  padding-left: 0;
+}
+
+.sidebar-menu.ant-menu
+  .ant-menu-sub.ant-menu-inline
+  .ant-menu-sub.ant-menu-inline
+  .ant-menu-item
+  .ant-menu-item-icon,
+.sidebar-menu.ant-menu
+  .ant-menu-sub.ant-menu-inline
+  .ant-menu-sub.ant-menu-inline
+  .ant-menu-item
+  .anticon {
+  display: none !important;
+}
+
+.sidebar-menu.ant-menu
+  .ant-menu-sub.ant-menu-inline
+  .ant-menu-sub.ant-menu-inline
+  .ant-menu-item::after {
+  display: none !important;
 }

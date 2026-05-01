@@ -48,7 +48,7 @@ const getBlockedAccessMessage = (profileStatus) => {
         status: "warning",
         title: "Role belum valid",
         description:
-          "Profile user belum memiliki role valid: administrator atau user. Role super_admin hanya legacy compatibility untuk data lama.",
+          "Profile user belum memiliki role valid: administrator atau user. Hubungi Administrator untuk perbaikan profile internal.",
       };
     case AUTH_PROFILE_STATUS.ERROR:
       return {
@@ -164,7 +164,7 @@ const LoginShell = ({ children, variant = "default" }) => (
 // - password tetap divalidasi Firebase Auth, bukan Firestore/frontend manual.
 // Status:
 // - AKTIF untuk login internal IMS.
-// - GUARDED: create Auth user/password normal sudah lewat Cloud Function createSystemUser, bukan frontend langsung.
+// - GUARDED: create Auth user/password dikelola manual di Firebase Console; frontend login hanya memakai Firebase Auth.
 // Legacy / cleanup:
 // - inline style lama sudah dipindah ke Login.css agar styling login lebih mudah dirawat.
 // =========================

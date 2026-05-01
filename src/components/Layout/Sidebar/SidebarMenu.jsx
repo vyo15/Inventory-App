@@ -46,22 +46,50 @@ const findOpenParentKeysByPath = (
 // SECTION: Helper - Build Ant Design menu items — AKTIF / GUARDED
 // Fungsi:
 // - mengubah config menu yang sudah difilter menjadi format Ant Design Menu;
-// - level group utama tetap memakai icon;
-// - submenu sengaja tanpa icon agar sidebar lebih rapi.
+// - level 0 tetap memakai icon utama;
+// - level 1 yang punya child boleh memakai icon kecil dari config;
+// - level 2 / leaf child tidak diberi icon agar sidebar tidak ramai.
 // Hubungan flow aplikasi:
-// - hanya item yang lolos role guard yang akan dirender.
+// - hanya item yang lolos role guard yang akan dirender;
+// - perubahan ini visual-only dan tidak mengubah route, label, selected/open key, atau allowedRoles.
 // Status:
-// - AKTIF.
+// - AKTIF untuk rendering sidebar bertingkat.
 // - GUARDED: jangan bypass filter role dengan langsung memakai sidebarMenuItems mentah.
 // =========================
+const shouldRenderConfiguredIcon = (menuItem, level) => {
+  const hasConfiguredIcon = Boolean(menuItem.icon);
+
+  if (!hasConfiguredIcon) {
+    return false;
+  }
+
+  if (level === 0) {
+    return true;
+  }
+
+  return level === 1 && Boolean(menuItem.children?.length);
+};
+
+const buildSidebarIcon = (menuItem, level) => {
+  if (!shouldRenderConfiguredIcon(menuItem, level)) {
+    return null;
+  }
+
+  const IconComponent = menuItem.icon;
+
+  return (
+    <IconComponent
+      className={`sidebar-menu-config-icon sidebar-menu-config-icon-level-${level}`}
+    />
+  );
+};
+
 const buildAntdMenuItems = (menuItems, level = 0) => {
   return menuItems.map((menuItem) => {
-    const IconComponent = menuItem.icon;
-
     if (menuItem.children?.length) {
       return {
         key: menuItem.key,
-        icon: level === 0 && IconComponent ? <IconComponent /> : null,
+        icon: buildSidebarIcon(menuItem, level),
         label: menuItem.label,
         children: buildAntdMenuItems(menuItem.children, level + 1),
       };
@@ -69,7 +97,7 @@ const buildAntdMenuItems = (menuItems, level = 0) => {
 
     return {
       key: menuItem.path,
-      icon: level === 0 && IconComponent ? <IconComponent /> : null,
+      icon: buildSidebarIcon(menuItem, level),
       label: <Link to={menuItem.path}>{menuItem.label}</Link>,
     };
   });

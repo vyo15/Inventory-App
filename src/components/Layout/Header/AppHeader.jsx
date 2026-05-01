@@ -8,7 +8,7 @@ import "./AppHeader.css";
 const { Title, Text } = Typography;
 
 // =========================
-// SECTION: App Header — AKTIF / GUARDED
+// SECTION: App Header - AKTIF / GUARDED
 // Fungsi:
 // - menampilkan identitas workspace, user aktif, role, dan tombol logout.
 // Hubungan flow aplikasi:
@@ -16,8 +16,7 @@ const { Title, Text } = Typography;
 // Status:
 // - AKTIF untuk layout utama.
 // - GUARDED: logout hanya menghapus session, tidak menyentuh stok/kas/transaksi/produksi/laporan.
-// Legacy / cleanup:
-// - super_admin hanya tampil sebagai label legacy jika profile lama belum dimigrasikan.
+// IMS NOTE [AKTIF / BEHAVIOR-PRESERVING]: role label mengikuti ROLE_LABELS final administrator/user; role tidak dikenal tetap tampil mentah hanya untuk troubleshooting profile.
 // =========================
 const AppHeader = () => {
   const { logout, profile } = useAuth();

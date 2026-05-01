@@ -19,6 +19,10 @@ import {
 } from "@ant-design/icons";
 import { ROLE_GROUPS } from "../utils/auth/roleAccess";
 
+// IMS NOTE [AKTIF / GUARDED]:
+// Sidebar memakai ROLE_GROUPS.ADMIN_ONLY untuk menu sensitif Administrator dan ROLE_GROUPS.OPERATIONAL_DAILY untuk menu operasional harian.
+// Perubahan access matrix ini hanya mengatur visibility/menu guard; route, label, path, dan business flow tidak berubah.
+
 // =========================
 // SECTION: Sidebar Menu Config — AKTIF / GUARDED
 // Fungsi:
@@ -53,51 +57,51 @@ export const sidebarMenuItems = [
   // Fungsi:
   // - data referensi utama yang dipakai transaksi, stock, dan produksi.
   // Akses:
-  // - role operasional boleh melihat master dasar;
-  // - Pricing Rules dibatasi Administrator dan super_admin legacy karena memengaruhi harga.
+  // - Master Data dibatasi Administrator karena dapat mengubah setup referensi bisnis;
+  // - user operasional tetap memakai data referensi dari halaman transaksi/produksi tanpa membuka menu setup.
   // =========================
   {
     key: "master-data",
     icon: DatabaseOutlined,
     label: "Master Data",
-    allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+    allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
     children: [
       {
         key: "products",
         label: "Produk Jadi",
         path: "/products",
-        allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "raw-materials",
         label: "Raw Materials",
         path: "/raw-materials",
-        allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "categories",
         label: "Kategori",
         path: "/categories",
-        allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "suppliers",
         label: "Supplier",
         path: "/suppliers",
-        allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "customers",
         label: "Customer",
         path: "/customers",
-        allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "pricing-rules",
         icon: TagsOutlined,
         label: "Pricing Rules",
         path: "/pricing-rules",
-        allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
     ],
   },
@@ -113,13 +117,13 @@ export const sidebarMenuItems = [
     key: "inventory",
     icon: AppstoreOutlined,
     label: "Stock Control",
-    allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+    allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
     children: [
       {
         key: "stock-management",
         label: "Stock Management",
         path: "/stock-management",
-        allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+        allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
       },
     ],
   },
@@ -129,103 +133,106 @@ export const sidebarMenuItems = [
   // Fungsi:
   // - menampung flow produksi dan memisahkan operation, setup, dan cost analysis.
   // Akses:
-  // - operation boleh tampil untuk semua role login;
-  // - setup/cost analysis dibatasi Administrator dan super_admin legacy karena berdampak pada master produksi, payroll, dan HPP.
+  // - operation boleh tampil untuk Administrator dan User;
+  // - setup/cost analysis dibatasi Administrator karena berdampak pada master produksi, payroll, dan HPP.
   // =========================
   {
     key: "productions",
     icon: BuildOutlined,
     label: "Produksi",
-    allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+    allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
     children: [
       {
         key: "production-operation",
+        icon: CalendarOutlined,
         label: "Production Operation",
-        allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+        allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
         children: [
           {
             key: "production-planning",
             label: "Production Planning",
             path: "/produksi/production-planning",
             icon: CalendarOutlined,
-            allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+            allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
           },
           {
             key: "production-orders",
             label: "Order Produksi",
             path: "/produksi/production-orders",
             icon: FileTextOutlined,
-            allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+            allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
           },
           {
             key: "production-work-logs",
             label: "Work Log Produksi",
             path: "/produksi/work-log-produksi",
             icon: FileTextOutlined,
-            allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+            allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
           },
         ],
       },
       {
         key: "production-setup",
+        icon: ToolOutlined,
         label: "Production Setup",
-        allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
         children: [
           {
             key: "production-steps",
             label: "Tahapan Produksi",
             path: "/produksi/tahapan-produksi",
             icon: ApartmentOutlined,
-            allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+            allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "production-employees",
             label: "Karyawan Produksi",
             path: "/produksi/karyawan-produksi",
             icon: TeamOutlined,
-            allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+            allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "production-profiles",
             label: "Production Profile / Template",
             path: "/produksi/profil-produksi",
             icon: FileTextOutlined,
-            allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+            allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "semi-finished-materials",
             label: "Semi Product",
             path: "/produksi/semi-finished-materials",
             icon: ClusterOutlined,
-            allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+            allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "production-boms",
             label: "BOM / Resep Produksi",
             path: "/produksi/bom-produksi",
             icon: DeploymentUnitOutlined,
-            allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+            allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
         ],
       },
       {
         key: "production-cost-analysis",
+        icon: MoneyCollectOutlined,
         label: "Cost & Analysis",
-        allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
         children: [
           {
             key: "production-payrolls",
             label: "Payroll Produksi",
             path: "/produksi/payroll-produksi",
             icon: MoneyCollectOutlined,
-            allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+            allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "production-hpp-analysis",
             label: "Analisis HPP Produksi",
             path: "/produksi/analisis-hpp",
             icon: AppstoreOutlined,
-            allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+            allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
         ],
       },
@@ -237,31 +244,31 @@ export const sidebarMenuItems = [
   // Fungsi:
   // - menampung transaksi pembelian, penjualan, dan retur.
   // Akses:
-  // - semua role login boleh melihat menu operasional transaksi pada fase awal.
+  // - Administrator dan User boleh melihat transaksi operasional harian sesuai access matrix.
   // =========================
   {
     key: "transactions",
     icon: ShoppingCartOutlined,
     label: "Transaksi",
-    allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+    allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
     children: [
       {
         key: "purchases",
         label: "Pembelian",
         path: "/purchases",
-        allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+        allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
       },
       {
         key: "sales",
         label: "Penjualan",
         path: "/sales",
-        allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+        allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
       },
       {
         key: "returns",
         label: "Retur",
         path: "/returns",
-        allowedRoles: ROLE_GROUPS.ALL_AUTHENTICATED,
+        allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
       },
     ],
   },
@@ -271,25 +278,25 @@ export const sidebarMenuItems = [
   // Fungsi:
   // - mencatat arus masuk dan keluar kas/biaya operasional.
   // Akses:
-  // - dibatasi Administrator dan super_admin legacy karena berkaitan dengan finance dan laporan.
+  // - dibatasi Administrator karena berkaitan dengan finance dan laporan.
   // =========================
   {
     key: "finance",
     icon: WalletOutlined,
     label: "Kas & Biaya",
-    allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+    allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
     children: [
       {
         key: "cash-in",
         label: "Pemasukan",
         path: "/cash-in",
-        allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "cash-out",
         label: "Pengeluaran",
         path: "/cash-out",
-        allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
     ],
   },
@@ -299,7 +306,7 @@ export const sidebarMenuItems = [
   // Fungsi:
   // - menampung Manajemen User dan maintenance/reset yang sensitif.
   // Akses:
-  // - Manajemen User boleh tampil untuk Administrator dan super_admin legacy sesuai guard;
+  // - Manajemen User hanya boleh tampil untuk Administrator sesuai guard;
   // - Reset & Maintenance ikut akses penuh Administrator sesuai penyederhanaan 2 role aktif.
   // Status:
   // - GUARDED: user biasa tidak boleh melihat parent Sistem; child sensitif tetap punya allowedRoles sendiri.
@@ -308,20 +315,20 @@ export const sidebarMenuItems = [
     key: "utilities",
     icon: ToolOutlined,
     label: "Sistem",
-    allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+    allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
     children: [
       {
         key: "user-management",
         icon: UserSwitchOutlined,
         label: "Manajemen User",
         path: "/system/user-management",
-        allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "reset-maintenance-data",
         label: "Reset & Maintenance",
         path: "/utilities/reset-maintenance-data",
-        allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
     ],
   },
@@ -331,43 +338,43 @@ export const sidebarMenuItems = [
   // Fungsi:
   // - menampilkan rekap operasional dan export untuk audit/analisis.
   // Akses:
-  // - dibatasi Administrator dan super_admin legacy karena laporan bisa memuat finance, payroll, HPP, dan laba rugi.
+  // - dibatasi Administrator karena laporan bisa memuat finance, payroll, HPP, dan laba rugi.
   // =========================
   {
     key: "reports",
     icon: PrinterOutlined,
     label: "Laporan",
-    allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+    allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
     children: [
       {
         key: "report-stock",
         label: "Laporan Stok",
         path: "/report-stock",
-        allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "purchases-report",
         label: "Laporan Pembelian",
         path: "/purchases-report",
-        allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "sales-report",
         label: "Laporan Penjualan",
         path: "/sales-report",
-        allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "payroll-report",
         label: "Laporan Payroll",
         path: "/payroll-report",
-        allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
       {
         key: "profit-loss",
         label: "Laba Rugi",
         path: "/profit-loss",
-        allowedRoles: ROLE_GROUPS.ADMIN_AND_SUPER,
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
     ],
   },

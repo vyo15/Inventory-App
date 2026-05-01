@@ -10,6 +10,7 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from "antd";
@@ -19,6 +20,7 @@ import {
   ReloadOutlined,
   StopOutlined,
   CheckCircleOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import useAuth from "../../hooks/useAuth";
 import {
@@ -30,7 +32,12 @@ import {
   canManageUserProfile,
 } from "../../utils/auth/roleAccess";
 import {
-  createSystemUserWithAuth,
+  DELETE_PROFILE_GUARD_ERROR_CODE,
+  DELETE_PROFILE_NOT_FOUND_ERROR_CODE,
+  DELETE_PROFILE_PERMISSION_ERROR_CODE,
+  createManualUserProfile,
+  deleteSystemUserProfile,
+  isUsernameAlreadyUsedError,
   listSystemUsers,
   updateSystemUserProfile,
   updateSystemUserStatus,
@@ -41,12 +48,12 @@ const { Text, Title } = Typography;
 // =========================
 // SECTION: Form Mode Constants - AKTIF
 // Fungsi:
-// - membedakan modal tambah user Auth + profile dan edit profile.
+// - membedakan modal tambah profile manual UID dan edit profile.
 // Hubungan flow aplikasi:
-// - mode create memanggil Cloud Function untuk membuat Firebase Auth user dan `system_users/{uid}`;
+// - mode create membuat profile `system_users/{authUid}` dari UID Auth yang ditempel manual;
 // - mode edit hanya mengubah profile role/status/display name yang sudah ada.
 // Status:
-// - AKTIF untuk halaman Manajemen User.
+// - AKTIF untuk halaman Manajemen User final setelah cleanup legacy.
 // =========================
 const FORM_MODE = {
   CREATE: "create",
@@ -54,7 +61,6 @@ const FORM_MODE = {
 };
 
 const getRoleColor = (role) => {
-  if (role === ROLES.SUPER_ADMIN) return "default";
   if (role === ROLES.ADMINISTRATOR) return "blue";
   return "green";
 };
@@ -64,19 +70,63 @@ const getStatusColor = (status) => {
 };
 
 // =========================
+// SECTION: Delete Guard UI Reason — AKTIF / GUARDED
+// Fungsi:
+// - menjelaskan kenapa tombol Hapus Profile disabled sebelum service dipanggil.
+// Hubungan flow aplikasi:
+// - service delete tetap menjadi guard utama; helper ini hanya feedback UI.
+// Status:
+// - AKTIF untuk tombol Hapus Profile.
+// - GUARDED: self-delete dan administrator aktif terakhir tetap divalidasi ulang di service.
+// =========================
+const getDeleteGuardReason = ({ canManage, isLastActiveAdministrator, isSelfProfile }) => {
+  if (isSelfProfile) {
+    return "Profile yang sedang dipakai login tidak boleh dihapus.";
+  }
+
+  if (isLastActiveAdministrator) {
+    return "Administrator aktif terakhir tidak boleh dihapus.";
+  }
+
+  if (!canManage) {
+    return "Role aktif tidak boleh menghapus profile ini.";
+  }
+
+  return "";
+};
+
+const getUserManagementActionErrorMessage = (error = {}) => {
+  const errorCode = error.code || error.errorCode;
+
+  if (errorCode === DELETE_PROFILE_PERMISSION_ERROR_CODE) {
+    return "Permission Firestore menolak aksi profile. Cek rules system_users.";
+  }
+
+  if (errorCode === DELETE_PROFILE_NOT_FOUND_ERROR_CODE) {
+    return "Profile sudah tidak ada di Firestore. Refresh daftar user.";
+  }
+
+  if (errorCode === DELETE_PROFILE_GUARD_ERROR_CODE) {
+    return error.message || "Guard aplikasi menolak aksi ini agar admin tidak terkunci.";
+  }
+
+  return error.message || "Aksi User Management gagal.";
+};
+
+// =========================
 // SECTION: User Management Page - AKTIF / GUARDED
 // Fungsi:
 // - menampilkan dan mengelola profile internal user dari collection `system_users`;
-// - membuat user baru lewat backend trusted agar Auth UID otomatis dari Firebase Authentication.
+// - membuat profile baru memakai Auth UID yang dibuat manual di Firebase Console.
 // Hubungan flow aplikasi:
 // - AuthProvider memakai profile ini untuk memutuskan user boleh masuk aplikasi;
-// - Route/Menu Guard membatasi halaman ini untuk Administrator dan super_admin legacy;
-// - Cloud Function `createSystemUser` memakai Admin SDK, bukan credential di frontend.
+// - Route/Menu Guard membatasi halaman ini untuk Administrator;
+// - Firebase Auth user/password tetap dikelola manual di Firebase Console, bukan dari frontend.
 // Status:
-// - AKTIF untuk Auth User Creation Phase.
-// - GUARDED: password sementara tidak pernah disimpan di Firestore.
-// Legacy / cleanup:
-// - flow lama input manual Auth UID saat create user sudah tidak dipakai oleh form create.
+// - AKTIF untuk flow manual Auth UID final setelah migrasi @ziyocraft.com.
+// - GUARDED: password tidak pernah disimpan atau dikirim dari halaman ini.
+// Cleanup:
+// - flow migrasi UID/domain lama dan indikator legacy/orphan sudah dihapus; pastikan data Firestore lama sudah bersih sebelum memakai patch ini.
 // =========================
 const UserManagement = () => {
   const { profile, firebaseUser, reloadProfile } = useAuth();
@@ -87,6 +137,12 @@ const UserManagement = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formMode, setFormMode] = useState(FORM_MODE.CREATE);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeletingProfile, setIsDeletingProfile] = useState(false);
+  const [statusChangeRequest, setStatusChangeRequest] = useState(null);
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const actorRole = profile?.role;
   const actorUid = profile?.authUid || profile?.id || firebaseUser?.uid;
@@ -99,12 +155,28 @@ const UserManagement = () => {
   }, [actorRole]);
 
   // =========================
+  // SECTION: Active Administrator Count - AKTIF / GUARDED
+  // Fungsi:
+  // - menghitung profile administrator aktif untuk guard tombol Hapus Profile.
+  // Hubungan flow aplikasi:
+  // - Manajemen User tidak boleh menghapus administrator aktif terakhir agar akses pemulihan tetap ada.
+  // Status:
+  // - AKTIF untuk UI guard; service tetap melakukan validasi ulang sebelum delete Firestore.
+  // =========================
+  const activeAdministratorCount = useMemo(() => {
+    return users.filter(
+      (userProfile) =>
+        userProfile.role === ROLES.ADMINISTRATOR &&
+        userProfile.status === USER_STATUS.ACTIVE,
+    ).length;
+  }, [users]);
+
+  // =========================
   // SECTION: Load Users - AKTIF / GUARDED
   // Fungsi:
   // - mengambil daftar user sesuai hak role aktif.
   // Hubungan flow aplikasi:
-  // - Administrator melihat profile semua role yang dikenal;
-  // - super_admin legacy dipetakan ke akses Administrator agar data lama tidak terkunci.
+  // - hanya Administrator yang boleh melihat/manajemen profile user.
   // Status:
   // - AKTIF.
   // =========================
@@ -170,22 +242,22 @@ const UserManagement = () => {
   // =========================
   // SECTION: Save User - AKTIF / GUARDED
   // Fungsi:
-  // - create: memanggil Cloud Function untuk membuat Firebase Auth user + profile `system_users/{uid}`;
+  // - create: membuat profile `system_users/{authUid}` dari UID Auth yang sudah dibuat manual di Firebase Console;
   // - edit: mengubah profile yang sudah ada tanpa mengubah password/Auth user.
   // Hubungan flow aplikasi:
-  // - user baru mendapat UID otomatis dari Firebase Auth;
+  // - admin wajib menyalin UID dari Firebase Authentication ke field Auth UID;
   // - profile yang dibuat akan dibaca AuthProvider saat user login.
   // Status:
   // - AKTIF.
-  // - GUARDED: jangan menyimpan password sementara ke Firestore atau state permanen.
+  // - GUARDED: jangan menyimpan password, token, atau credential Auth ke Firestore/state.
   // =========================
   const handleSaveProfile = async (values) => {
     setIsSaving(true);
 
     try {
       if (formMode === FORM_MODE.CREATE) {
-        await createSystemUserWithAuth(values, profile);
-        message.success("User Auth dan profile system_users berhasil dibuat.");
+        await createManualUserProfile(values, profile);
+        message.success("Profile system_users berhasil dibuat dari Auth UID manual.");
       } else if (selectedUser) {
         await updateSystemUserProfile(selectedUser.authUid, values, profile);
         message.success("Profile user berhasil diperbarui.");
@@ -196,48 +268,166 @@ const UserManagement = () => {
       await reloadProfile();
     } catch (error) {
       console.error("[UserManagement] Gagal menyimpan user.", error);
-      message.error(error.message || "Gagal menyimpan user.");
+
+      if (formMode === FORM_MODE.CREATE && isUsernameAlreadyUsedError(error)) {
+        message.error("Username sudah dipakai profile user lain. Gunakan username unik atau bersihkan profile lama secara manual sebelum membuat profile baru.");
+        return;
+      }
+
+      message.error(getUserManagementActionErrorMessage(error));
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleToggleStatus = async (userRecord) => {
-    const nextStatus =
-      userRecord.status === USER_STATUS.ACTIVE
-        ? USER_STATUS.INACTIVE
-        : USER_STATUS.ACTIVE;
-
-    Modal.confirm({
-      title:
-        nextStatus === USER_STATUS.INACTIVE
-          ? "Nonaktifkan user?"
-          : "Aktifkan user?",
-      content:
-        nextStatus === USER_STATUS.INACTIVE
-          ? "User inactive tidak boleh masuk aplikasi utama. Firebase Auth user tidak dihapus."
-          : "User akan bisa masuk lagi jika Auth user dan password masih valid.",
-      okText: nextStatus === USER_STATUS.INACTIVE ? "Nonaktifkan" : "Aktifkan",
-      cancelText: "Batal",
-      onOk: async () => {
-        try {
-          await updateSystemUserStatus(userRecord, nextStatus, profile);
-          message.success("Status user berhasil diperbarui.");
-          await loadUsers();
-        } catch (error) {
-          console.error("[UserManagement] Gagal mengubah status user.", error);
-          message.error(error.message || "Gagal mengubah status user.");
-        }
-      },
+  // =========================
+  // SECTION: Row Action Guard Helpers - AKTIF / GUARDED
+  // Fungsi:
+  // - menghitung alasan aksi Edit/Nonaktifkan/Hapus Profile diblokir dari data terbaru tabel.
+  // Hubungan flow aplikasi:
+  // - UI memberi feedback cepat, tetapi service tetap memvalidasi ulang sebelum write/delete Firestore.
+  // Status:
+  // - AKTIF untuk Manajemen User final.
+  // - GUARDED: self-profile dan administrator aktif terakhir tetap tidak boleh dihapus.
+  // =========================
+  const getDeleteGuardReasonForRecord = (userRecord = {}) => {
+    const canManage = canManageUserProfile({
+      actorRole,
+      targetRole: userRecord.role,
+      targetUid: userRecord.authUid,
+      actorUid,
     });
+    const isSelfProfile = Boolean(actorUid && userRecord.authUid === actorUid);
+    const isLastActiveAdministrator =
+      userRecord.role === ROLES.ADMINISTRATOR &&
+      userRecord.status === USER_STATUS.ACTIVE &&
+      activeAdministratorCount <= 1;
+
+    return getDeleteGuardReason({
+      canManage,
+      isLastActiveAdministrator,
+      isSelfProfile,
+    });
+  };
+
+  // =========================
+  // SECTION: Controlled Status Modal - AKTIF / GUARDED
+  // Fungsi:
+  // - memakai modal berbasis state agar kompatibel dengan theme AntD v5.
+  // Hubungan flow aplikasi:
+  // - toggle status tetap hanya mengubah profile Firestore; Firebase Authentication user tidak ikut berubah.
+  // Status:
+  // - AKTIF untuk aksi Aktifkan/Nonaktifkan.
+  // =========================
+  const handleOpenStatusModal = (userRecord) => {
+    const canManage = canManageUserProfile({
+      actorRole,
+      targetRole: userRecord.role,
+      targetUid: userRecord.authUid,
+      actorUid,
+    });
+
+    if (!canManage) {
+      message.warning("Role aktif tidak boleh mengubah status profile ini.");
+      return;
+    }
+
+    setStatusChangeRequest({
+      userRecord,
+      nextStatus:
+        userRecord.status === USER_STATUS.ACTIVE
+          ? USER_STATUS.INACTIVE
+          : USER_STATUS.ACTIVE,
+    });
+    setIsStatusModalOpen(true);
+  };
+
+  const handleCloseStatusModal = () => {
+    if (isUpdatingStatus) return;
+
+    setIsStatusModalOpen(false);
+    setStatusChangeRequest(null);
+  };
+
+  const handleConfirmStatusChange = async () => {
+    if (!statusChangeRequest?.userRecord) return;
+
+    setIsUpdatingStatus(true);
+
+    try {
+      await updateSystemUserStatus(
+        statusChangeRequest.userRecord,
+        statusChangeRequest.nextStatus,
+        profile,
+      );
+      message.success("Status user berhasil diperbarui.");
+      setIsStatusModalOpen(false);
+      setStatusChangeRequest(null);
+      await loadUsers();
+    } catch (error) {
+      console.error("[UserManagement] Gagal mengubah status user.", error);
+      message.error(getUserManagementActionErrorMessage(error));
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // =========================
+  // SECTION: Controlled Delete Profile Modal - AKTIF / GUARDED
+  // Fungsi:
+  // - membuka modal konfirmasi berbasis state sebelum delete Firestore system_users/{uid};
+  // - memastikan tombol Hapus Profile memanggil handler dan reload data setelah sukses.
+  // Hubungan flow aplikasi:
+  // - tombol ini hanya membersihkan profile di IMS; Firebase Authentication user tidak ikut dihapus.
+  // Status:
+  // - AKTIF untuk delete profile target aman.
+  // - GUARDED: service tetap menolak self-delete dan administrator aktif terakhir.
+  // =========================
+  const handleOpenDeleteModal = (userRecord) => {
+    const deleteGuardReason = getDeleteGuardReasonForRecord(userRecord);
+
+    if (deleteGuardReason) {
+      message.warning(deleteGuardReason);
+      return;
+    }
+
+    setDeleteTarget(userRecord);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    if (isDeletingProfile) return;
+
+    setIsDeleteModalOpen(false);
+    setDeleteTarget(null);
+  };
+
+  const handleConfirmDeleteProfile = async () => {
+    if (!deleteTarget?.authUid) return;
+
+    setIsDeletingProfile(true);
+
+    try {
+      await deleteSystemUserProfile(deleteTarget.authUid, profile);
+      message.success("Profile Firestore berhasil dihapus. Firebase Auth user tidak ikut terhapus.");
+      setIsDeleteModalOpen(false);
+      setDeleteTarget(null);
+      await loadUsers();
+    } catch (error) {
+      console.error("[UserManagement] Gagal menghapus profile user.", error);
+      message.error(getUserManagementActionErrorMessage(error));
+    } finally {
+      setIsDeletingProfile(false);
+    }
   };
 
   const columns = [
     {
       title: "User",
       key: "user",
+      width: 240,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <Space direction="vertical" size={2}>
           <Text strong>{record.displayName}</Text>
           <Text type="secondary">@{record.username}</Text>
         </Space>
@@ -247,12 +437,14 @@ const UserManagement = () => {
       title: "Role",
       dataIndex: "role",
       key: "role",
+      width: 180,
       render: (role) => <Tag color={getRoleColor(role)}>{ROLE_LABELS[role] || role}</Tag>,
     },
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
+      width: 140,
       render: (status) => (
         <Tag color={getStatusColor(status)}>{USER_STATUS_LABELS[status] || status}</Tag>
       ),
@@ -261,13 +453,15 @@ const UserManagement = () => {
       title: "Auth UID",
       dataIndex: "authUid",
       key: "authUid",
+      width: 260,
       ellipsis: true,
       render: (authUid) => <Text copyable>{authUid}</Text>,
     },
     {
       title: "Aksi",
       key: "actions",
-      width: 220,
+      width: 390,
+      fixed: "right",
       render: (_, record) => {
         const canManage = canManageUserProfile({
           actorRole,
@@ -275,9 +469,20 @@ const UserManagement = () => {
           targetUid: record.authUid,
           actorUid,
         });
+        const isSelfProfile = Boolean(actorUid && record.authUid === actorUid);
+        const isLastActiveAdministrator =
+          record.role === ROLES.ADMINISTRATOR &&
+          record.status === USER_STATUS.ACTIVE &&
+          activeAdministratorCount <= 1;
+        const deleteGuardReason = getDeleteGuardReason({
+          canManage,
+          isLastActiveAdministrator,
+          isSelfProfile,
+        });
+        const canDelete = !deleteGuardReason;
 
         return (
-          <Space wrap>
+          <Space wrap size={[8, 8]}>
             <Button
               icon={<EditOutlined />}
               disabled={!canManage}
@@ -295,10 +500,27 @@ const UserManagement = () => {
               }
               disabled={!canManage}
               danger={record.status === USER_STATUS.ACTIVE}
-              onClick={() => handleToggleStatus(record)}
+              loading={
+                isUpdatingStatus &&
+                statusChangeRequest?.userRecord?.authUid === record.authUid
+              }
+              onClick={() => handleOpenStatusModal(record)}
             >
               {record.status === USER_STATUS.ACTIVE ? "Nonaktifkan" : "Aktifkan"}
             </Button>
+            <Tooltip title={deleteGuardReason || "Hapus hanya profile Firestore, bukan Firebase Auth user."}>
+              <span>
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  disabled={!canDelete}
+                  loading={isDeletingProfile && deleteTarget?.authUid === record.authUid}
+                  onClick={() => handleOpenDeleteModal(record)}
+                >
+                  Hapus Profile
+                </Button>
+              </span>
+            </Tooltip>
           </Space>
         );
       },
@@ -314,7 +536,7 @@ const UserManagement = () => {
               Manajemen User
             </Title>
             <Text type="secondary">
-              Kelola Auth user, profile, role aktif Administrator/User, dan status user internal IMS Bunga Flanel.
+              Kelola Auth user, profile, role aktif Administrator/User, dan status user internal IMS ZiyoCraft.
             </Text>
           </div>
           <Space wrap>
@@ -330,8 +552,8 @@ const UserManagement = () => {
         <Alert
           type="info"
           showIcon
-          message="Auth UID otomatis via Cloud Function"
-          description="Saat tambah user, sistem membuat Firebase Auth user lewat backend trusted lalu membuat profile system_users/{uid}. Password sementara hanya dikirim ke Firebase Auth dan tidak disimpan di Firestore."
+          message="Flow aktif: Auth UID manual dari Firebase Console"
+          description="Buat user dulu di Firebase Authentication dengan email username@ziyocraft.com, salin UID Auth, lalu tempel di form Tambah Profile User. Tabel ini membaca Firestore system_users, bukan daftar Firebase Authentication. Tombol Hapus Profile hanya menghapus profile Firestore, bukan Firebase Auth user."
         />
 
         <Card>
@@ -341,7 +563,7 @@ const UserManagement = () => {
             dataSource={users}
             loading={isLoading}
             pagination={{ pageSize: 10 }}
-            scroll={{ x: 980 }}
+            scroll={{ x: 1210 }}
           />
         </Card>
       </Space>
@@ -349,7 +571,7 @@ const UserManagement = () => {
       <Modal
         title={
           formMode === FORM_MODE.CREATE
-            ? "Tambah User Auth + Profile"
+            ? "Tambah Profile User Manual UID"
             : "Edit Profile User"
         }
         open={isModalOpen}
@@ -358,7 +580,7 @@ const UserManagement = () => {
         confirmLoading={isSaving}
         okText="Simpan"
         cancelText="Batal"
-        destroyOnClose
+        destroyOnHidden
       >
         <Alert
           type={formMode === FORM_MODE.CREATE ? "info" : "warning"}
@@ -366,12 +588,12 @@ const UserManagement = () => {
           style={{ marginBottom: 16 }}
           message={
             formMode === FORM_MODE.CREATE
-              ? "Auth UID akan dibuat otomatis"
+              ? "Tempel Auth UID dari Firebase Console"
               : "Edit profile tidak mengubah password Auth"
           }
           description={
             formMode === FORM_MODE.CREATE
-              ? "Isi username, nama tampilan, role, status, dan password sementara. Cloud Function akan membuat Firebase Auth user dan dokumen system_users/{uid}."
+              ? "Pastikan user Auth sudah dibuat manual di Firebase Console dengan email username@ziyocraft.com. Form ini hanya membuat dokumen system_users/{uid}."
               : "Perubahan hanya berlaku pada profile, role, dan status di Firestore. Password tetap dikelola oleh Firebase Authentication."
           }
         />
@@ -382,17 +604,27 @@ const UserManagement = () => {
           requiredMark={false}
           onFinish={handleSaveProfile}
         >
-          {formMode === FORM_MODE.EDIT ? (
-            <Form.Item label="Auth UID" name="authUid">
-              <Input disabled />
-            </Form.Item>
-          ) : null}
+          <Form.Item
+            label="Auth UID"
+            name="authUid"
+            rules={[{ required: true, message: "Auth UID wajib diisi dari Firebase Authentication." }]}
+            extra={
+              formMode === FORM_MODE.CREATE
+                ? "Copy UID dari Firebase Console > Authentication > Users setelah membuat Auth user manual."
+                : "Auth UID dikunci agar profile tetap sesuai dokumen system_users/{uid}."
+            }
+          >
+            <Input
+              disabled={formMode === FORM_MODE.EDIT}
+              placeholder="Tempel UID Firebase Auth"
+            />
+          </Form.Item>
 
           <Form.Item
             label="Username"
             name="username"
             rules={[{ required: true, message: "Username wajib diisi." }]}
-            extra="Username akan dipakai sebagai login internal, contoh admin untuk admin@ims-bunga-flanel.local."
+            extra="Username akan dipakai sebagai login internal, contoh admin untuk admin@ziyocraft.com."
           >
             <Input disabled={formMode === FORM_MODE.EDIT} placeholder="contoh: admin" />
           </Form.Item>
@@ -428,24 +660,66 @@ const UserManagement = () => {
               ]}
             />
           </Form.Item>
-
-          {formMode === FORM_MODE.CREATE ? (
-            <Form.Item
-              label="Password Sementara"
-              name="temporaryPassword"
-              rules={[
-                { required: true, message: "Password sementara wajib diisi." },
-                { min: 6, message: "Password sementara minimal 6 karakter." },
-              ]}
-              extra="Password ini dikirim ke Firebase Auth melalui Cloud Function dan tidak disimpan di Firestore."
-            >
-              <Input.Password
-                autoComplete="new-password"
-                placeholder="Minimal 6 karakter"
-              />
-            </Form.Item>
-          ) : null}
         </Form>
+      </Modal>
+
+      <Modal
+        title={
+          statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE
+            ? "Nonaktifkan user?"
+            : "Aktifkan user?"
+        }
+        open={isStatusModalOpen}
+        onCancel={handleCloseStatusModal}
+        onOk={handleConfirmStatusChange}
+        confirmLoading={isUpdatingStatus}
+        okText={
+          statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE
+            ? "Nonaktifkan"
+            : "Aktifkan"
+        }
+        okButtonProps={{ danger: statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE }}
+        cancelText="Batal"
+        destroyOnHidden
+      >
+        <Space direction="vertical" size={8}>
+          <Text>
+            Profile: <Text strong>{statusChangeRequest?.userRecord?.displayName || "User"}</Text>{" "}
+            (<Text code>@{statusChangeRequest?.userRecord?.username || "-"}</Text>)
+          </Text>
+          <Text>
+            {statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE
+              ? "User inactive tidak boleh masuk aplikasi utama. Firebase Authentication user tidak dihapus."
+              : "User akan bisa masuk lagi jika Auth user dan password masih valid."}
+          </Text>
+        </Space>
+      </Modal>
+
+      <Modal
+        title={`Hapus profile ${deleteTarget?.displayName || "user"}?`}
+        open={isDeleteModalOpen}
+        onCancel={handleCloseDeleteModal}
+        onOk={handleConfirmDeleteProfile}
+        confirmLoading={isDeletingProfile}
+        okText="Hapus Profile"
+        okButtonProps={{ danger: true }}
+        cancelText="Batal"
+        destroyOnHidden
+      >
+        <Space direction="vertical" size={8}>
+          <Text>
+            Target: <Text strong>{deleteTarget?.displayName || "User IMS"}</Text>{" "}
+            (<Text code>@{deleteTarget?.username || "-"}</Text>)
+          </Text>
+          <Text>
+            Aksi ini hanya menghapus dokumen profile Firestore{" "}
+            <Text code>{`system_users/${deleteTarget?.authUid || "uid-target"}`}</Text>.
+          </Text>
+          <Text>Firebase Authentication user tidak ikut terhapus dari Firebase Console.</Text>
+          <Text type="warning">
+            Jika Auth user masih ada, user tersebut tidak bisa login ke IMS sampai profile Firestore dibuat lagi.
+          </Text>
+        </Space>
       </Modal>
     </div>
   );

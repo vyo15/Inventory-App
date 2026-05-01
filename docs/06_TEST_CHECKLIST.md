@@ -735,338 +735,81 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Pastikan tidak ada error console.
 - [ ] Jalankan `npm run build` setelah `npm install` bersih di environment lokal.
 
-## Checklist Fase A - Access Matrix Login + Role + Manajemen User Internal
+## Checklist Final Auth/User Management dan Firestore Rules — 2026-05-01
 
-Status: **DOCS ONLY**. Source code, Firestore Rules, Login page, dan User Management belum berubah pada fase ini.
+Status: **AKTIF + GUARDED**. Checklist ini menggantikan checklist Auth/Role lama setelah domain aktif menjadi `@ziyocraft.com` dan role aktif final hanya `administrator` / `user`.
 
-### Checklist dokumen
+### Checklist setup Auth final
 
-- [ ] `docs/03_BUSINESS_RULES.md` memuat role aktif `administrator` dan `user`, dengan `super_admin` sebagai legacy compatibility.
-- [ ] Access matrix menu/route sudah jelas dan mudah direview sebelum coding.
-- [ ] Konsep akun internal tertulis: bukan Google login dan bukan email asli sebagai identitas utama.
-- [ ] Dokumen menegaskan password tidak boleh plaintext di Firestore.
-- [ ] Dokumen menegaskan password tidak boleh divalidasi langsung dari frontend untuk production.
-- [ ] Reset & Maintenance tertulis sebagai akses Administrator, dengan `super_admin` lama sebagai legacy compatibility.
-- [ ] Manajemen User tertulis hanya untuk Administrator, dengan `super_admin` lama sebagai legacy compatibility.
-- [ ] Administrator tidak boleh membuat role `super_admin` baru.
-- [ ] Administrator tidak boleh mengubah role/status dirinya sendiri.
-- [ ] User inactive tidak boleh masuk aplikasi pada fase implementasi berikutnya.
-- [ ] Business rules stok, kas, Purchases, Returns, Sales, Production, Payroll, HPP, Dashboard, dan Reports tidak berubah.
-- [ ] Offline database tetap ditandai roadmap terpisah, bukan bagian dari Login/Role.
+- [ ] Firebase Authentication memiliki user aktif `admin@ziyocraft.com`.
+- [ ] Firebase Authentication memiliki user aktif `user@ziyocraft.com`.
+- [ ] Firestore `system_users/{uid-admin}` memiliki `usernameLower = admin`, `role = administrator`, dan `status = active`.
+- [ ] Firestore `system_users/{uid-user}` memiliki `usernameLower = user`, `role = user`, dan `status = active`.
+- [ ] Tidak ada dokumen aktif dengan `role = super_admin`.
+- [ ] Tidak ada profile lama/orphan seperti `admin_legacy` atau `user_legacy`.
 
-### Checklist fase berikutnya - Auth foundation
+### Checklist login dan profile gate
 
-- [ ] Firebase Auth dipilih dan diekspor dari `src/firebase.js` tanpa memutus Firestore existing.
-- [ ] AuthProvider punya state `loading`, `authUser`, `profile`, `role`, dan `status`.
-- [ ] Login memakai username/password internal, bukan Google login.
-- [ ] Username internal tidak menampilkan email asli sebagai identitas utama.
-- [ ] Logout tersedia di header.
-- [ ] Refresh browser tetap mempertahankan sesi jika Auth masih aktif.
-- [ ] User tanpa profile diarahkan ke halaman akses belum aktif, bukan white screen.
-- [ ] User inactive tidak bisa masuk app.
+- [ ] Stop dev server lalu jalankan ulang `npm run dev`.
+- [ ] Login `admin` memakai mapping internal `admin@ziyocraft.com`.
+- [ ] `admin` berhasil masuk sebagai Administrator.
+- [ ] Login `user` memakai mapping internal `user@ziyocraft.com`.
+- [ ] `user` berhasil masuk sebagai User.
+- [ ] User tanpa profile Firestore ditolak masuk.
+- [ ] User inactive ditolak masuk.
+- [ ] Role tidak dikenal ditolak/default deny.
 
-### Checklist fase berikutnya - Route dan menu guard
+### Checklist Role-Based Menu dan Direct Route Access
 
-- [ ] Route login bersifat public.
-- [ ] Route aplikasi bersifat protected.
-- [ ] User biasa tidak bisa membuka Reset & Maintenance dari URL langsung.
-- [ ] User biasa tidak melihat menu Reset & Maintenance.
-- [ ] Administrator tidak melihat pilihan role `super_admin` sebagai role baru.
-- [ ] User lama `super_admin`, jika masih ada, tetap mendapat akses setara Administrator sampai dimigrasikan.
-- [ ] Unauthorized page jelas dan tidak menyebabkan redirect loop.
+- [ ] Login sebagai `admin`; pastikan semua menu aktif terlihat: Dashboard, Master Data, Stock Control, Produksi, Transaksi, Kas & Biaya, Sistem, Laporan, Pricing Rules, dan Reset & Maintenance.
+- [ ] Login sebagai `user`; pastikan hanya menu operasional harian yang terlihat: Dashboard, Stock Control, Production Operation, dan Transaksi.
+- [ ] User tidak melihat Master Data, Pricing Rules, Production Setup, Cost & Analysis, Kas & Biaya, Sistem, Reset & Maintenance, dan Laporan.
+- [ ] User mencoba membuka `/system/user-management` lewat URL langsung dan harus diarahkan ke unauthorized/akses ditolak sesuai ProtectedRoute.
+- [ ] User mencoba membuka route sensitif lain seperti `/pricing-rules`, `/cash-in`, `/profit-loss`, atau `/utilities/reset-maintenance-data` dan akses harus ditolak.
+- [ ] Administrator tetap bisa membuka semua route aktif.
 
-### Checklist fase berikutnya - Firestore Rules/Auth alignment
+### Checklist Manajemen User
 
-- [ ] Rules development diberi warning dan batas waktu jika masih sementara.
-- [ ] Rules final mewajibkan `request.auth != null`.
-- [ ] Rules final membaca profile `system_users/{uid}` atau strategi role final lain.
-- [ ] User `inactive` ditolak read/write.
-- [ ] User tidak bisa mengubah role/status miliknya sendiri.
-- [ ] Rules/guard tidak mengizinkan pembuatan role `super_admin` baru.
-- [ ] Rules tidak dibuka public untuk data real tanpa warning.
+- [ ] Manajemen User hanya bisa diakses administrator.
+- [ ] User biasa tidak bisa membuka Manajemen User, termasuk lewat URL langsung.
+- [ ] Form tambah/edit profile hanya menyediakan role `administrator` dan `user`.
+- [ ] Tidak ada opsi role `super_admin`.
+- [ ] Tambah profile baru role `administrator` berhasil untuk UID valid dan username unik.
+- [ ] Tambah profile baru role `user` berhasil untuk UID valid dan username unik.
+- [ ] Duplicate username tetap ditolak.
+- [ ] Edit profile tetap berjalan untuk target aman.
+- [ ] Aktif/nonaktif profile tetap berjalan untuk target aman.
+- [ ] Hapus Profile target aman berhasil menghapus dokumen Firestore `system_users/{uid}`.
+- [ ] Hapus Profile untuk profile sendiri disabled/ditolak.
+- [ ] Hapus administrator aktif terakhir ditolak.
+- [ ] Firebase Authentication user tidak berubah saat Hapus Profile.
 
-### Checklist packaging patch
+### Checklist Firestore Rules final/staged-final
 
-- [ ] ZIP patch hanya berisi file yang berubah.
-- [ ] ZIP patch tidak berisi `node_modules`.
-- [ ] ZIP patch tidak berisi `dist` atau `build`.
-- [ ] ZIP patch tidak berisi `.git`.
-- [ ] ZIP patch tidak berisi `.env` atau secret.
-- [ ] Jika fase docs-only, ZIP hanya berisi file docs yang berubah.
+- [ ] Publish `firestore.rules` hasil patch.
+- [ ] Rules memakai `rules_version = '2';`.
+- [ ] Semua akses penting berbasis `request.auth != null`.
+- [ ] Actor profile dibaca dari `system_users/{request.auth.uid}`.
+- [ ] Role Rules aktif hanya `administrator` dan `user`.
+- [ ] `system_users` guarded: user baca profile sendiri, administrator manage profile user lain.
+- [ ] User biasa tidak bisa create/update/delete profile user lain.
+- [ ] Fallback collection tidak dikenal deny.
+- [ ] Tidak ada rules cleanup sementara `allow read, write: if true`.
+- [ ] Tidak ada rules expiry sementara `request.time < ...` sebagai rules final.
 
+### Checklist regression modul utama setelah Rules publish
 
----
-
-## Checklist Auth Foundation Fase B — 2026-04-28
-
-### Checklist setup manual sementara
-- [ ] Firebase Authentication Email/Password sudah aktif.
-- [ ] User Auth awal sudah dibuat dengan email internal, contoh `admin@ims-bunga-flanel.local`.
-- [ ] Dokumen `system_users/{uid}` sudah dibuat sesuai UID Auth.
-- [ ] `system_users/{uid}.status` bernilai `active`.
-- [ ] `system_users/{uid}.role` bernilai role aktif `administrator`/`user`, atau `super_admin` hanya untuk data legacy.
-- [ ] Password tidak pernah disimpan di Firestore.
-
-### Checklist Auth
-- [ ] Buka aplikasi tanpa login dan pastikan halaman Login tampil.
-- [ ] Login dengan username/password valid.
-- [ ] Pastikan user masuk ke Dashboard.
-- [ ] Logout dari header.
-- [ ] Pastikan kembali ke halaman Login.
-- [ ] Refresh halaman saat sudah login dan pastikan session tetap terbaca.
-- [ ] Test user tanpa dokumen `system_users/{uid}` dan pastikan app utama tidak terbuka.
-- [ ] Test user dengan `status: inactive` dan pastikan app utama tidak terbuka.
-- [ ] Test user tanpa role valid dan pastikan app utama tidak terbuka.
-- [ ] Pastikan tidak ada error console yang menyebabkan white screen.
-
-### Checklist route utama setelah login
-- [ ] Buka route Dashboard langsung saat belum login dan pastikan app utama tidak terbuka.
-- [ ] Setelah login, buka Dashboard.
-- [ ] Buka Supplier.
-- [ ] Buka Purchases.
-- [ ] Buka Stock Management.
-- [ ] Buka Production menu yang biasa dipakai.
-- [ ] Pastikan business page tetap berjalan dan tidak ada perubahan flow data.
-
-### Checklist business rules tidak berubah
-- [ ] Pembelian tetap memakai flow transaksi existing.
-- [ ] Retur tetap memakai flow existing.
-- [ ] Sales tidak berubah oleh patch Auth.
-- [ ] Stock Adjustment tidak berubah oleh patch Auth.
-- [ ] Produksi, Payroll, HPP, dan Reports tidak berubah.
-- [ ] Dashboard tetap read-only.
-- [ ] Reset/Maintenance tetap dianggap guarded, meskipun role guard detail belum dibuat pada Fase B.
-
-### Checklist build
-- [ ] Jalankan `npm run build`.
-- [ ] Jalankan `npm run preview` jika memungkinkan.
-- [ ] Pastikan tidak white screen di localhost dan deploy.
----
-
-## Checklist Sidebar/Menu Guard Fase D — 2026-04-28
-
-### Checklist menu administrator akses penuh
-- [ ] Login sebagai `administrator`.
-- [ ] Pastikan semua menu utama tampil.
-- [ ] Pastikan menu Sistem tampil.
-- [ ] Pastikan Reset & Maintenance tampil.
-- [ ] Klik semua menu yang tampil dan pastikan route valid.
-- [ ] Pastikan tidak ada parent menu kosong.
-
-### Checklist menu administrator
-- [ ] Login sebagai `administrator`.
-- [ ] Pastikan menu operasional tampil sesuai access matrix.
-- [ ] Pastikan menu finance/report yang diizinkan tampil.
-- [ ] Pastikan menu Sistem tampil untuk Administrator karena berisi Manajemen User dan Reset & Maintenance.
-- [ ] Buka `/utilities/reset-maintenance-data` langsung dari URL.
-- [ ] Pastikan route Reset & Maintenance terbuka untuk Administrator, bukan Unauthorized.
-- [ ] Pastikan tidak ada parent menu kosong.
-
-### Checklist menu user
-- [ ] Login sebagai `user`.
-- [ ] Pastikan hanya menu operasional dasar yang tampil.
-- [ ] Pastikan Pricing Rules tidak tampil.
-- [ ] Pastikan Kas & Biaya tidak tampil.
-- [ ] Pastikan Laporan tidak tampil pada matrix awal.
-- [ ] Pastikan Sistem/Reset tidak tampil.
-- [ ] Buka route forbidden langsung dari URL dan pastikan diarahkan ke Unauthorized.
-- [ ] Pastikan tidak ada parent menu kosong.
-
-### Checklist route/menu sync
-- [ ] Klik semua menu yang tampil untuk `administrator`.
-- [ ] Jika masih ada user lama `super_admin`, klik semua menu yang tampil dan pastikan akses setara Administrator.
-- [ ] Klik semua menu yang tampil untuk `user`.
-- [ ] Pastikan semua path menu sesuai `AppRoutes.jsx`.
-- [ ] Pastikan HashRouter GitHub Pages tetap aman.
-- [ ] Pastikan route legacy `/stock-adjustment` tetap redirect ke `/stock-management` jika role diizinkan.
-
-### Checklist build
-- [ ] Jalankan `npm run build`.
-- [ ] Jalankan `npm run preview`.
-- [ ] Pastikan tidak white screen.
-- [ ] Pastikan tidak ada error console terkait `roleAccess`, `ProtectedRoute`, `Unauthorized`, atau `SidebarMenu`.
-
-### Checklist business rules tidak berubah
-- [ ] Purchases tidak berubah.
-- [ ] Returns tidak berubah.
-- [ ] Sales tidak berubah.
-- [ ] Stock Management / Stock Adjustment tidak berubah.
-- [ ] Supplier tetap katalog restock.
-- [ ] Production, Payroll, HPP, dan Reports/export tidak berubah.
-- [ ] Dashboard tetap read-only.
-
----
-
-## Checklist Final Auth/Role/User Management Fase E-H — 2026-04-28
-
-### Checklist User Management
-- [ ] Login sebagai `administrator`.
-- [ ] Pastikan menu **Sistem > Manajemen User** tampil.
-- [ ] Buat Auth user manual di Firebase Console untuk user test.
-- [ ] Copy UID Auth user dan buat profile dari Manajemen User.
-- [ ] Tambah profile role `user`.
-- [ ] Tambah profile role `administrator` dari Manajemen User bila diperlukan.
-- [ ] Nonaktifkan user biasa.
-- [ ] Pastikan inactive user tidak bisa masuk app utama.
-- [ ] Pastikan user tidak bisa menonaktifkan dirinya sendiri dari halaman Manajemen User.
-- [ ] Login sebagai `administrator`.
-- [ ] Pastikan Administrator bisa melihat/mengelola role aktif `administrator` dan `user`, kecuali dirinya sendiri.
-- [ ] Pastikan Administrator tidak bisa membuat role `super_admin` baru.
-- [ ] Login sebagai `user`.
-- [ ] Pastikan menu Manajemen User tidak tampil.
-- [ ] Buka `/system/user-management` langsung sebagai `user` dan pastikan Unauthorized.
-
-### Checklist Firestore Rules/Auth
-- [ ] Review `firestore.rules` sebelum publish.
-- [ ] Pastikan `system_users/{uid}` untuk Administrator pertama sudah ada dan `status = active`.
-- [ ] Publish rules lewat Firebase Console atau Firebase CLI hanya setelah seed user siap.
-- [ ] Login sebagai `administrator` dan baca data utama.
-- [ ] Login sebagai `administrator` dan pastikan tidak bisa membuat role `super_admin` baru.
-- [ ] Login sebagai `user` dan pastikan tidak bisa akses Manajemen User.
-- [ ] Test user inactive.
-- [ ] Test user tanpa role valid.
-- [ ] Pastikan tidak ada `Missing or insufficient permissions` untuk flow yang memang diizinkan.
-- [ ] Pastikan permission denied muncul untuk flow yang memang dilarang.
-
-### Checklist cleanup Auth/Role
-- [ ] Role aktif hanya `administrator` dan `user`; `super_admin` hanya legacy compatibility.
-- [ ] Status user hanya memakai `active` dan `inactive`.
-- [ ] Route/menu guard memakai `roleAccess.js`.
-- [ ] Role tidak dikenal default deny.
-- [ ] Unauthorized page tampil, bukan white screen.
-- [ ] No-profile dan inactive state tetap jelas di Login/AuthProvider.
-- [ ] Tidak ada business page yang ikut berubah.
-
-### Checklist route/menu
-- [ ] Klik semua menu yang tampil untuk `administrator`.
-- [ ] Jika masih ada user lama `super_admin`, klik semua menu yang tampil dan pastikan akses setara Administrator.
-- [ ] Klik semua menu yang tampil untuk `user`.
-- [ ] Pastikan Reset & Maintenance tampil untuk `administrator` dan tidak tampil untuk `user`.
-- [ ] Pastikan route forbidden langsung dari URL diarahkan ke Unauthorized.
-
-### Checklist build
-- [ ] Jalankan `npm run build`.
-- [ ] Jalankan `npm run preview`.
-- [ ] Pastikan tidak white screen.
-- [ ] Pastikan tidak ada error console terkait `UserManagement`, `userService`, `roleAccess`, atau `firestore.rules`.
-
-
----
-
-## Checklist Auth UID Otomatis via Cloud Functions - 2026-04-29
-
-### Checklist setup Functions
-- [ ] Pastikan folder `functions` tidak berisi trigger stok legacy yang ikut aktif tanpa audit.
-- [ ] Jalankan `cd functions && npm install`.
-- [ ] Jalankan `npm run lint` atau `node --check index.js` dari folder `functions`.
-- [ ] Deploy hanya function baru: `firebase deploy --only functions:createSystemUser`.
-- [ ] Jika deploy memakai region khusus, samakan region di frontend Firebase Functions client.
-
-### Checklist create user dari Manajemen User
-- [ ] Login sebagai `administrator`.
-- [ ] Buka Manajemen User.
-- [ ] Klik Tambah Profile User.
-- [ ] Pastikan field Auth UID tidak diminta saat create.
-- [ ] Isi username, nama tampilan, role, status, dan password sementara.
-- [ ] Simpan dan pastikan tidak ada password yang masuk ke `system_users`.
-- [ ] Pastikan Firebase Authentication punya user baru dengan email internal `username@ims-bunga-flanel.local`.
-- [ ] Pastikan Firestore membuat dokumen `system_users/{uid}` sesuai UID Auth.
-- [ ] Pastikan tabel Manajemen User refresh dan Auth UID tampil/copyable.
-- [ ] Logout lalu login memakai username dan password sementara user baru.
-
-### Checklist guard role create user
-- [ ] Login sebagai `administrator` dan pastikan pilihan role create hanya `administrator` dan `user`.
-- [ ] Coba membuat `super_admin` dari payload langsung/function emulator dan pastikan ditolak.
-- [ ] Login sebagai `user` dan pastikan Manajemen User tidak bisa dibuka dari menu maupun URL langsung.
-- [ ] Nonaktifkan actor lalu pastikan actor inactive tidak bisa memanggil endpoint HTTP create user.
-- [ ] Test user tanpa profile `system_users/{uid}` dan pastikan tidak bisa memanggil endpoint HTTP create user.
-
-### Checklist data dan keamanan
-- [ ] Firestore `system_users/{uid}` hanya berisi profile: authUid, username, usernameLower, displayName, role, status, createdAt, updatedAt, createdBy, updatedBy, lastLoginAt.
-- [ ] Pastikan password sementara tidak muncul di Firestore, console log, docs, atau ZIP patch.
-- [ ] Pastikan credential Admin SDK tidak ada di `src` frontend.
-- [ ] Pastikan duplicate username ditolak.
-- [ ] Pastikan create profile gagal melakukan rollback Auth user atau minimal tercatat di log function.
-
-### Checklist non-regression bisnis
-- [ ] Buka Dashboard setelah login.
-- [ ] Buka Supplier, Purchases, Sales, Returns, Stock Management, dan Production menu utama.
-- [ ] Pastikan tidak ada perubahan flow stok, kas, purchases, sales, production, payroll, HPP, reports, pricing rules, atau reset maintenance.
-- [ ] Jalankan `npm run build` untuk frontend.
-- [ ] Jalankan preview/manual smoke test setelah build.
+- [ ] Dashboard bisa dibuka tanpa permission error.
+- [ ] Supplier/master data bisa dibuka sesuai role aktif.
+- [ ] Purchases bisa dibuka dan flow aktif utama tidak permission denied.
+- [ ] Sales bisa dibuka dan flow aktif utama tidak permission denied.
+- [ ] Produksi bisa dibuka dan flow aktif utama tidak permission denied.
+- [ ] Cashflow/Reports bisa dibuka sesuai akses role aktif.
+- [ ] Tidak ada error permission yang memutus flow utama di console.
+- [ ] Tidak ada perubahan angka, stok, kas, laporan, HPP, atau produksi akibat patch docs/rules.
 
 ### Checklist packaging patch
-- [ ] ZIP patch hanya berisi file yang berubah.
-- [ ] ZIP patch tidak berisi `node_modules`.
-- [ ] ZIP patch tidak berisi `dist` atau `build`.
-- [ ] ZIP patch tidak berisi `.git`.
-- [ ] ZIP patch tidak berisi `.env` atau secret.
----
 
-## Checklist Penyederhanaan Role Aktif - 2026-04-29
-
-### Checklist UI Manajemen User
-- [ ] Dropdown role create hanya menampilkan `Administrator` dan `User`.
-- [ ] Dropdown role create tidak menampilkan `Super Admin`.
-- [ ] Administrator bisa tambah user dengan role `administrator`.
-- [ ] Administrator bisa tambah user dengan role `user`.
-- [ ] Role `super_admin` lama, jika ada di tabel, tampil sebagai legacy dan bisa dimigrasikan manual ke `administrator` atau `user`.
-
-### Checklist route/menu guard
-- [ ] Administrator bisa membuka semua menu admin, termasuk Manajemen User dan Reset & Maintenance.
-- [ ] User tidak melihat Manajemen User.
-- [ ] User tidak melihat Reset & Maintenance.
-- [ ] User yang mencoba URL admin-only diarahkan ke Unauthorized.
-- [ ] User lama `super_admin`, jika masih ada, tidak langsung terkunci dan tetap mendapat akses setara Administrator sampai dimigrasikan.
-
-### Checklist Cloud Function createSystemUser
-- [ ] Payload role `administrator` diterima dari actor Administrator aktif.
-- [ ] Payload role `user` diterima dari actor Administrator aktif.
-- [ ] Payload role `super_admin` ditolak dari UI maupun emulator/direct HTTP.
-- [ ] Jika error CORS/Internal masih muncul, cek deploy/region/log Cloud Function sebagai isu terpisah dari role dropdown.
-
-## Checklist Fix CORS Callable createSystemUser - 2026-04-29
-
-- [ ] Jalankan `cd functions && npm install` jika dependency belum terpasang.
-- [ ] Jalankan `npm run lint` dari folder `functions`.
-- [ ] Deploy `firebase deploy --only functions:createSystemUser`.
-- [ ] Jalankan frontend di `http://localhost:5173`.
-- [ ] Login sebagai Administrator dengan profile `system_users/{uid}` status `active`.
-- [ ] Tambah user role `administrator` dan pastikan tidak ada CORS preflight blocked.
-- [ ] Tambah user role `user` dan pastikan tidak ada CORS preflight blocked.
-- [ ] Pastikan Firebase Authentication membuat user baru.
-- [ ] Pastikan Firestore membuat `system_users/{uid}` sesuai UID Auth.
-- [ ] Pastikan password sementara tidak tersimpan di Firestore.
-- [ ] Jika masih muncul `FirebaseError: internal`, cek Firebase Functions logs karena frontend sudah memakai fetch HTTP dan function sudah menjawab CORS manual.
-- [ ] Catat warning Ant Design deprecated, React 19 compatibility, dan favicon 404 sebagai non-blocker/kandidat cleanup terpisah.
-
-## Checklist Bug Fix createSystemUser HTTP CORS — 2026-04-29
-
-Status: **WAJIB TEST setelah deploy function**.
-
-- [ ] Deploy function dengan `firebase deploy --only functions:createSystemUser`.
-- [ ] Jalankan frontend di `http://localhost:5173`.
-- [ ] Login sebagai `administrator` active.
-- [ ] Buka `/system/user-management`.
-- [ ] Tambah user role `administrator`.
-- [ ] Tambah user role `user`.
-- [ ] Pastikan request `OPTIONS` ke `createSystemUser` mendapat response aman dan tidak ada CORS blocked.
-- [ ] Pastikan request `POST` membawa header `Authorization: Bearer <token>`.
-- [ ] Pastikan user baru muncul di Firebase Authentication.
-- [ ] Pastikan profile baru muncul di Firestore `system_users/{uid}`.
-- [ ] Pastikan password sementara tidak tersimpan di Firestore.
-- [ ] Pastikan role tersimpan hanya `administrator` atau `user`.
-- [ ] Pastikan payload role `super_admin` ditolak jika dicoba manual.
-- [ ] Pastikan user baru bisa login sesuai role/status.
-- [ ] Pastikan warning Ant Design deprecated dan favicon 404 dicatat sebagai non-blocker jika masih ada.
-
-## Checklist Follow-up createSystemUser CORS Runtime Option - 2026-04-29
-
-- [ ] Deploy ulang function: `firebase deploy --only functions:createSystemUser`.
-- [ ] Buka frontend dari `http://localhost:5173` lalu tambah user role `administrator`.
-- [ ] Tambah user role `user`.
-- [ ] Pastikan preflight `OPTIONS` mendapat header `Access-Control-Allow-Origin`.
-- [ ] Pastikan endpoint HTTP tetap mengembalikan JSON saat error validasi/permission.
-- [ ] Jika hosting production memakai GitHub Pages, test dari `https://vyo15.github.io` dan pastikan CORS tidak terblokir.
-- [ ] Pastikan password sementara tidak muncul di dokumen `system_users/{uid}`.
-- [ ] Pastikan payload role `super_admin` tetap ditolak sebagai role target baru.
+- [ ] ZIP hanya berisi file docs/rules yang berubah.
+- [ ] ZIP tidak berisi full project.
+- [ ] ZIP tidak berisi `node_modules`, `dist`, `build`, `.git`, `.env`, credential, service account, atau secret.
