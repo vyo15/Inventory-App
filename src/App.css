@@ -524,6 +524,32 @@
   color: var(--ims-text-secondary) !important;
 }
 
+/* =========================
+   SECTION: Shared Readonly Field Surface - AKTIF / GUARDED
+   Fungsi:
+   - menyatukan style tampilan read-only info field pada form operasional (purchases/produksi/finance).
+   Hubungan flow aplikasi:
+   - presentational only; tidak mengubah value form, validasi, ataupun payload transaksi.
+   Status:
+   - AKTIF untuk cleanup inline style berulang batch-1.
+   - GUARDED: jangan dipakai untuk mengganti status bisnis/warna semantik.
+========================= */
+.ims-readonly-field {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 8px;
+  padding: 6px 11px;
+  background: var(--ims-surface-muted);
+}
+
+.ims-readonly-field--compact {
+  min-height: 32px;
+  padding: 4px 11px;
+  font-weight: 600;
+}
+
 .ims-cell-tag-list {
   display: flex;
   flex-wrap: wrap;
