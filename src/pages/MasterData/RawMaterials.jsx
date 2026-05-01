@@ -858,18 +858,34 @@ const RawMaterials = () => {
     {
       title: 'Aksi',
       key: 'action',
-      width: 170,
+      width: 150,
+      // ---------------------------------------------------------------------
+      // IMS NOTE [AKTIF / GUARDED / BEHAVIOR-PRESERVING]
+      // Fungsi: menyamakan visual tombol aksi Raw Materials dengan baseline Supplier.
+      // Hubungan flow: hanya layout tombol Detail/Edit/Aktifkan/Nonaktifkan; handler dan data bahan baku tidak berubah.
+      // Alasan: menghindari action column terlihat padat/menumpuk tanpa membuat reusable component besar terlalu dini.
+      // ---------------------------------------------------------------------
       className: 'app-table-action-column',
       render: (_, record) => (
-        <Space direction="vertical" size={6} className="ims-action-group">
-          <Space size={6} wrap={false}>
-            <Button size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
+        <div className="ims-action-group ims-action-group--vertical">
+          <div className="ims-action-group ims-action-group--inline">
+            <Button
+              size="small"
+              className="ims-action-button"
+              icon={<EyeOutlined />}
+              onClick={() => handleViewDetail(record)}
+            >
               Detail
             </Button>
-            <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button
+              size="small"
+              className="ims-action-button"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            >
               Edit
             </Button>
-          </Space>
+          </div>
           <Popconfirm
             title={record.isActive === false ? 'Aktifkan kembali bahan baku?' : 'Nonaktifkan bahan baku?'}
             description={
@@ -881,11 +897,13 @@ const RawMaterials = () => {
             cancelText="Batal"
             onConfirm={() => handleToggleActive(record)}
           >
-            <Button size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
+            <Button block size="small" className="ims-action-button ims-action-button--block">
+              {record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}
+            </Button>
           </Popconfirm>
-        </Space>
+        </div>
       ),
-    },
+    }
   ];
 
   return (

@@ -570,11 +570,40 @@
   line-height: 22px;
 }
 
+/* =========================
+   SECTION: Shared Table Action Utilities — AKTIF / GUARDED
+   Fungsi:
+   - menyamakan layout tombol aksi table/list tanpa mengubah handler action.
+   Hubungan flow aplikasi:
+   - dipakai halaman master/transaksi/produksi yang memiliki kolom Aksi; perubahan ini hanya visual dan behavior-preserving.
+   Status:
+   - AKTIF untuk baseline action button table.
+   - GUARDED: jangan ubah handler/data/business rules dari class CSS ini.
+========================= */
 .ims-action-group {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+.ims-action-group--vertical {
+  width: 100%;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.ims-action-group--inline {
+  width: 100%;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ims-action-group--inline > .ims-action-button.ant-btn {
+  flex: 1 1 0;
 }
 
 .ims-action-button.ant-btn,
@@ -585,6 +614,10 @@
   border-radius: 10px;
   font-weight: 600;
   box-shadow: none;
+}
+
+.ims-action-button--block.ant-btn {
+  width: 100%;
 }
 
 .ims-action-button.ant-btn-primary {
