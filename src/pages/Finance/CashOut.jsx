@@ -287,6 +287,15 @@ const CashOut = () => {
     }
   };
 
+  // =========================
+  // SECTION: Cash Out Table Meta UI - AKTIF / GUARDED
+  // Fungsi:
+  // - menyamakan style metadata referensi sumber kas keluar dengan class token global.
+  // Hubungan flow aplikasi:
+  // - perubahan presentational only; tidak mengubah sourceRef, perhitungan kas, atau payload transaksi.
+  // Status:
+  // - AKTIF untuk konsistensi UI batch cleanup.
+  // =========================
   const columns = useMemo(
     () => [
       {
@@ -304,7 +313,7 @@ const CashOut = () => {
             <div>
               <Tag color={sourceMeta.color}>{sourceMeta.label}</Tag>
               {record.sourceRef ? (
-                <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 4 }}>
+                <div className="ims-cell-meta" style={{ marginTop: 4 }}>
                   Ref: {record.sourceRef}
                 </div>
               ) : null}
@@ -408,7 +417,7 @@ const CashOut = () => {
       />
 
       <Alert
-        style={{ marginBottom: 16 }}
+        className="ims-mb-16"
         type="info"
         showIcon
         message="Payroll Produksi paid otomatis masuk Cash Out dengan guard sourceModule/sourceId."
@@ -431,7 +440,7 @@ const CashOut = () => {
             <Select
               value={selectedYear}
               onChange={setSelectedYear}
-              style={{ width: "100%" }}
+              className="ims-filter-control"
               placeholder="Pilih tahun"
             >
               {yearOptions.map((year) => (
@@ -446,7 +455,7 @@ const CashOut = () => {
             <Select
               value={selectedMonth}
               onChange={setSelectedMonth}
-              style={{ width: "100%" }}
+              className="ims-filter-control"
               placeholder="Pilih bulan"
             >
               <Option value="all">Semua Bulan</Option>
@@ -503,9 +512,10 @@ const CashOut = () => {
           label="Jumlah"
           rules={[{ required: true, message: "Harap masukkan jumlah!" }]}
         >
+          {/* AKTIF/GUARDED: class shared menjaga lebar field form kas keluar tetap konsisten tanpa ubah payload transaksi. */}
           <InputNumber
             min={0}
-            style={{ width: "100%" }}
+            className="ims-filter-control"
             addonBefore="Rp"
             formatter={(value) => formatNumberId(value)}
             parser={(value) => value?.replace(/\./g, "") || ""}
@@ -526,7 +536,7 @@ const CashOut = () => {
           rules={[{ required: true, message: "Harap pilih tanggal!" }]}
           initialValue={dayjs()}
         >
-          <DatePicker style={{ width: "100%" }} />
+          <DatePicker className="ims-filter-control" />
         </Form.Item>
       </PageFormModal>
     </>
