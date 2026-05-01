@@ -42,9 +42,9 @@ import {
   matchFieldValue,
 } from "../../utils/produksi/productionPageHelpers";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
-import PageHeader from "../../components/Layout/Page/PageHeader";
+import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
-import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
+import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import formatNumber from "../../utils/formatters/numberId";
 import {
   buildProductionOrderRequirementLines,
@@ -749,27 +749,17 @@ const ProductionOrders = () => {
 
   return (
     <div className="page-container ims-page">
-      <PageHeader
+      {/* AKTIF / GUARDED: header shared produksi dipakai untuk konsistensi, flow order dan status transition tetap existing. */}
+      <ProductionPageHeader
         title="Production Orders"
-        subtitle="Planning produksi untuk semi finished dan product, tetap mengikuti flow aktif BOM → Production Order → Work Log."
-        actions={[
-          {
-            key: "refresh-orders",
-            icon: <ReloadOutlined />,
-            label: "Refresh",
-            onClick: loadData,
-          },
-          {
-            key: "create-order",
-            type: "primary",
-            icon: <PlusOutlined />,
-            label: "Buat Order",
-            onClick: handleAdd,
-          },
-        ]}
+        description="Planning produksi untuk semi finished dan product, tetap mengikuti flow aktif BOM → Production Order → Work Log."
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Buat Order"
       />
 
-      <SummaryStatGrid items={summaryItems} className="ims-summary-row" />
+      {/* AKTIF / GUARDED: summary hanya migrasi wrapper presentational, tanpa ubah kalkulasi readiness/shortage. */}
+      <ProductionSummaryCards items={summaryItems} />
 
       <ProductionFilterCard>
         <Col xs={24} md={8}>

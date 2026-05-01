@@ -45,9 +45,9 @@ import {
   ReloadOutlined,
   StopOutlined,
 } from "@ant-design/icons";
-import PageHeader from "../../components/Layout/Page/PageHeader";
+import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
-import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
+import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import {
   cancelProductionPlan,
   createProductionOrderFromPlan,
@@ -718,24 +718,13 @@ const ProductionPlanning = () => {
 
   return (
     <div className="ims-page">
-      <PageHeader
+      {/* AKTIF / GUARDED: header migrated ke shared produksi; flow planning -> order tetap sama tanpa ubah data contract. */}
+      <ProductionPageHeader
         title="Production Planning"
-        subtitle="Layer target sebelum Production Order untuk memantau target mingguan/bulanan tanpa mengubah stok."
-        actions={[
-          {
-            key: "refresh",
-            label: "Refresh",
-            icon: <ReloadOutlined />,
-            onClick: loadData,
-          },
-          {
-            key: "add",
-            label: "Tambah Planning",
-            type: "primary",
-            icon: <PlusOutlined />,
-            onClick: handleAdd,
-          },
-        ]}
+        description="Layer target sebelum Production Order untuk memantau target mingguan/bulanan tanpa mengubah stok."
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Tambah Planning"
       />
 
       <Alert
@@ -753,11 +742,7 @@ const ProductionPlanning = () => {
           Status:
           - aktif untuk UI read-only; tidak menggantikan detail PO atau Work Log.
       ===================================================== */}
-      <SummaryStatGrid
-        items={summaryItems}
-        columns={{ xs: 24, sm: 12, md: 12, lg: 6 }}
-        className="ims-summary-row"
-      />
+      <ProductionSummaryCards items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
 
       <PageSection
         title="Daftar Production Planning"

@@ -35,10 +35,10 @@ import {
 import { getDocs, collection } from 'firebase/firestore';
 import { db } from '../../firebase';
 import formatNumber from '../../utils/formatters/numberId';
-import FilterBar from '../../components/Layout/Filters/FilterBar';
-import PageHeader from '../../components/Layout/Page/PageHeader';
+import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
+import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
-import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
+import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
 
 const ProductionProfiles = () => {
   const [loading, setLoading] = useState(false);
@@ -287,18 +287,20 @@ const ProductionProfiles = () => {
 
   return (
     <div className="page-container ims-page">
-      <PageHeader
+      {/* AKTIF / GUARDED: migrasi header ke shared produksi, menjaga konsistensi tampilan tanpa mengubah rule profil produksi. */}
+      <ProductionPageHeader
         title="Profil Produksi"
-        subtitle="Simpan rumus hasil, batch assembly, dan batas miss per produk. BOM tetap jadi resep bahan, sedangkan profil produksi menjadi aturan hitung operasional."
-        actions={[
-          { key: 'refresh-profiles', icon: <ReloadOutlined />, label: 'Refresh', onClick: loadData },
-          { key: 'create-profile', type: 'primary', icon: <PlusOutlined />, label: 'Tambah Profil', onClick: handleAdd },
-        ]}
+        description="Simpan rumus hasil, batch assembly, dan batas miss per produk. BOM tetap jadi resep bahan, sedangkan profil produksi menjadi aturan hitung operasional."
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Tambah Profil"
       />
 
-      <SummaryStatGrid items={summaryItems} className="ims-summary-row" />
+      {/* AKTIF / GUARDED: summary cards shared dipakai untuk merapikan UI, sumber data tetap sama. */}
+      <ProductionSummaryCards items={summaryItems} />
 
-      <FilterBar className="ims-filter-row">
+      {/* AKTIF / GUARDED: kartu filter shared hanya ubah presentasi, tidak ubah state filter/query. */}
+      <ProductionFilterCard>
           <Col xs={24} md={14}>
             <Input.Search
               placeholder="Cari nama profil atau produk..."
@@ -319,7 +321,7 @@ const ProductionProfiles = () => {
               ]}
             />
           </Col>
-      </FilterBar>
+      </ProductionFilterCard>
 
       <PageSection
         title="Daftar Profil Produksi"

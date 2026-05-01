@@ -60,10 +60,10 @@ import {
 } from "../../services/Produksi/semiFinishedMaterialsService";
 import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
-import FilterBar from "../../components/Layout/Filters/FilterBar";
-import PageHeader from "../../components/Layout/Page/PageHeader";
+import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
+import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
-import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
+import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -549,26 +549,28 @@ const SemiFinishedMaterials = () => {
       {/* ------------------------------------------------------------------ */}
       {/* Header halaman. Menjadi titik masuk utama user sebelum melihat list. */}
       {/* ------------------------------------------------------------------ */}
-      <PageHeader
+      {/* AKTIF / GUARDED: migrasi header ke shared produksi agar konsisten, tanpa ubah flow CRUD semi finished material. */}
+      <ProductionPageHeader
         title="Semi Finished Materials"
-        subtitle="Master stok internal produksi dengan varian warna, tidak dijual ke customer."
-        actions={[
-          { key: "refresh-semi", icon: <ReloadOutlined />, label: "Refresh", onClick: loadData },
-          { key: "create-semi", type: "primary", icon: <PlusOutlined />, label: "Tambah Item", onClick: handleAdd },
-        ]}
+        description="Master stok internal produksi dengan varian warna, tidak dijual ke customer."
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Tambah Item"
       />
 
       {/* ------------------------------------------------------------------ */}
       {/* Summary cards. Tetap dipertahankan karena user produksi butuh ringkasan */}
       {/* cepat tanpa harus membaca seluruh tabel. */}
       {/* ------------------------------------------------------------------ */}
-      <SummaryStatGrid items={summaryItems} />
+      {/* AKTIF / GUARDED: summary card shared menjaga konsistensi visual, nilai tetap dari helper existing. */}
+      <ProductionSummaryCards items={summaryItems} />
 
       {/* ------------------------------------------------------------------ */}
       {/* Filter list. Dipisah di card sendiri agar user bisa scan filter dengan */}
       {/* cepat tanpa mengganggu area tabel utama. */}
       {/* ------------------------------------------------------------------ */}
-      <FilterBar>
+      {/* AKTIF / GUARDED: filter card shared dipakai untuk keseragaman layout; behavior filter tidak diubah. */}
+      <ProductionFilterCard>
           <Col xs={24} md={8}>
             <Input
               placeholder="Cari kode, nama, deskripsi, warna..."
@@ -614,7 +616,7 @@ const SemiFinishedMaterials = () => {
               ]}
             />
           </Col>
-      </FilterBar>
+      </ProductionFilterCard>
 
       {/* ------------------------------------------------------------------ */}
       {/* Tabel list utama. Di-set compact agar jarak antar elemen tidak terlalu */}
