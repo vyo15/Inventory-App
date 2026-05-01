@@ -287,6 +287,15 @@ const CashOut = () => {
     }
   };
 
+  // =========================
+  // SECTION: Cash Out Table Meta UI - AKTIF / GUARDED
+  // Fungsi:
+  // - menyamakan style metadata referensi sumber kas keluar dengan class token global.
+  // Hubungan flow aplikasi:
+  // - perubahan presentational only; tidak mengubah sourceRef, perhitungan kas, atau payload transaksi.
+  // Status:
+  // - AKTIF untuk konsistensi UI batch cleanup.
+  // =========================
   const columns = useMemo(
     () => [
       {
@@ -304,7 +313,7 @@ const CashOut = () => {
             <div>
               <Tag color={sourceMeta.color}>{sourceMeta.label}</Tag>
               {record.sourceRef ? (
-                <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 4 }}>
+                <div className="ims-cell-meta" style={{ marginTop: 4 }}>
                   Ref: {record.sourceRef}
                 </div>
               ) : null}
