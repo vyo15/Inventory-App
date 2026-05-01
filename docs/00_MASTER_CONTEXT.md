@@ -108,6 +108,23 @@ Saat membuat perubahan baru, selalu cek apakah perubahan menyentuh salah satu ar
 - Route lama `/stock-adjustment` dipertahankan sebagai legacy redirect ke `/stock-management`, bukan halaman adjustment aktif.
 - File lama `src/pages/Inventory/StockAdjustment.jsx` dihapus dari source patch karena logic submit adjustment sudah dipindahkan ke `src/pages/Inventory/components/StockAdjustmentPanel.jsx`.
 
+## Update Migrasi UI Produksi Shared — 2026-05-01
+- Migrasi presentational/layout ke `src/components/Produksi/shared/*` sudah diterapkan bertahap untuk halaman:
+  - `ProductionEmployees.jsx`
+  - `ProductionProfiles.jsx`
+  - `ProductionSteps.jsx`
+  - `SemiFinishedMaterials.jsx`
+  - `ProductionOrders.jsx`
+  - `ProductionPayrolls.jsx`
+  - `ProductionPlanning.jsx`
+  - `ProductionHppAnalysis.jsx`
+- Halaman baseline referensi tetap:
+  - `ProductionWorkLogs.jsx`
+  - `ProductionBoms.jsx`
+- Guardrail tetap aktif:
+  - perubahan hanya wrapper UI (header/summary/filter/section visual),
+  - tidak mengubah service, query/mutation, payload submit, status transition, kalkulasi stok/payroll/HPP, atau posting flow produksi.
+
 ## Update Integrasi IMS Otomatis — 2026-04-25
 - Flow final IMS aktif: **Work Log completed → Payroll Produksi → Payroll paid → Cash Out/Expense → Profit Loss**.
 - Payroll Produksi yang ditandai `paid` sekarang otomatis membuat expense di collection `expenses` dengan source reference `production_payroll`.
