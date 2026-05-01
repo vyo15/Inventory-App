@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import {
   Table,
   Button,
-  Modal,
   Form,
   Input,
   Space,
@@ -19,7 +18,9 @@ import {
   doc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
 
 const Categories = () => {
   const [categories, setCategories] = useState([]);
@@ -140,13 +141,13 @@ const Categories = () => {
   ];
 
   return (
-    <div>
+    <div className="page-container">
       <PageHeader
         title="Kategori"
-        subtitle="Kelola kategori master sebagai referensi pengelompokan data operasional."
+        subtitle="Kelola master kategori agar pengelompokan item tetap konsisten di seluruh IMS."
         actions={[
           {
-            key: "add-category",
+            key: "create-category",
             type: "primary",
             icon: <PlusOutlined />,
             label: "Tambah Kategori",
@@ -160,15 +161,21 @@ const Categories = () => {
         ]}
       />
 
-      <Table
-        className="app-data-table"
-        columns={columns}
-        dataSource={categories}
-        rowKey="id"
-        loading={loading}
-      />
+      <PageSection
+        title="Daftar Kategori"
+        subtitle="Halaman ini hanya mengelola master kategori dan tidak mengubah stok, kas, atau transaksi aktif."
+      >
+        <Table
+          className="app-data-table"
+          columns={columns}
+          dataSource={categories}
+          rowKey="id"
+          loading={loading}
+          pagination={{ pageSize: 10 }}
+        />
+      </PageSection>
 
-      <Modal
+      <PageFormModal
         title={isEditing ? "Edit Kategori" : "Tambah Kategori"}
         open={isModalVisible}
         onCancel={() => {
@@ -177,24 +184,22 @@ const Categories = () => {
           setCurrentId(null);
           form.resetFields();
         }}
-        onOk={() => form.submit()}
         okText="Simpan"
         cancelText="Batal"
+        form={form}
+        onFinish={handleAddOrEditCategory}
       >
-        <Form form={form} layout="vertical" onFinish={handleAddOrEditCategory}>
-          <Form.Item
-            name="name"
-            label="Nama Kategori"
-            rules={[{ required: true, message: "Nama wajib diisi" }]}
-          >
-            <Input placeholder="Contoh: Makanan, Elektronik" />
-          </Form.Item>
-          <Form.Item name="description" label="Deskripsi">
-            <Input.TextArea placeholder="Deskripsi kategori (opsional)" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
+        <Form.Item
+          name="name"
+          label="Nama Kategori"
+          rules={[{ required: true, message: "Nama wajib diisi" }]}
+        >
+          <Input placeholder="Contoh: Bouquet, Aksesoris, Dekorasi" />
+        </Form.Item>
+        <Form.Item name="description" label="Deskripsi">
+          <Input.TextArea placeholder="Deskripsi kategori jika perlu" />
+        </Form.Item>
+      </PageFormModal>
     </div>
   );
 };

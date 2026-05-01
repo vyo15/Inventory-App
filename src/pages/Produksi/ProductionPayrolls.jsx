@@ -34,6 +34,10 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import FilterBar from "../../components/Layout/Filters/FilterBar";
+import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
+import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import {
   DEFAULT_PRODUCTION_PAYROLL_FORM,
   PAYROLL_PAYMENT_STATUS_MAP,
@@ -47,7 +51,6 @@ import {
   updatePayrollStatus,
   updateProductionPayroll,
 } from "../../services/Produksi/productionPayrollsService";
-import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 
 const formatNumber = (value) =>
   new Intl.NumberFormat("id-ID").format(Number(value || 0));
@@ -146,6 +149,37 @@ const ProductionPayrolls = () => {
 
     return { total, paid, unpaid, totalAmount };
   }, [payrolls]);
+
+  const summaryItems = [
+    {
+      key: "payroll-total",
+      title: "Total Payroll",
+      value: summary.total,
+      subtitle: "Seluruh line payroll produksi yang tercatat.",
+      accent: "primary",
+    },
+    {
+      key: "payroll-paid",
+      title: "Sudah Dibayar",
+      value: summary.paid,
+      subtitle: "Line payroll yang sudah berstatus paid.",
+      accent: "success",
+    },
+    {
+      key: "payroll-unpaid",
+      title: "Belum Dibayar",
+      value: summary.unpaid,
+      subtitle: "Line payroll yang masih menunggu pembayaran.",
+      accent: "warning",
+    },
+    {
+      key: "payroll-total-amount",
+      title: "Total Nilai Payroll",
+      value: formatCurrency(summary.totalAmount),
+      subtitle: "Akumulasi nominal payroll produksi yang tercatat.",
+      accent: "default",
+    },
+  ];
 
   const filteredData = useMemo(() => {
     return payrolls.filter((item) => {
@@ -387,9 +421,8 @@ const ProductionPayrolls = () => {
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap className="ims-action-group">
+        <Space wrap>
           <Button
-            className="ims-action-button"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
@@ -398,7 +431,6 @@ const ProductionPayrolls = () => {
           </Button>
 
           <Button
-            className="ims-action-button"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -414,7 +446,7 @@ const ProductionPayrolls = () => {
               okText="Ya"
               cancelText="Batal"
             >
-              <Button className="ims-action-button" size="small" type="primary">
+              <Button size="small" type="primary">
                 Paid
               </Button>
             </Popconfirm>
@@ -425,13 +457,25 @@ const ProductionPayrolls = () => {
   ];
 
   return (
-    <div>
-      <ProductionPageHeader
+    <div className="page-container">
+      <PageHeader
         title="Payroll Produksi"
-        description="Rekap line payroll produksi berbasis work log completed."
-        onRefresh={loadData}
-        onAdd={handleAdd}
-        addLabel="Tambah Payroll"
+        subtitle="Rekap line payroll produksi berbasis work log completed, tetap guarded terhadap pembuatan Cash Out otomatis."
+        actions={[
+          {
+            key: "refresh-payroll",
+            icon: <ReloadOutlined />,
+            label: "Refresh",
+            onClick: loadData,
+          },
+          {
+            key: "create-payroll",
+            type: "primary",
+            icon: <PlusOutlined />,
+            label: "Tambah Payroll",
+            onClick: handleAdd,
+          },
+        ]}
       />
 
       <Alert
@@ -442,35 +486,9 @@ const ProductionPayrolls = () => {
         description="Saat line ditandai Paid, sistem membuat Cash Out otomatis dengan source Payroll Produksi dan guard sourceModule/sourceId agar tidak double expense."
       />
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Total Payroll" value={summary.total} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Sudah Dibayar" value={summary.paid} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Belum Dibayar" value={summary.unpaid} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="Total Nilai Payroll"
-              value={summary.totalAmount}
-              formatter={(value) => formatCurrency(value)}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <SummaryStatGrid items={summaryItems} />
 
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
+      <FilterBar>
           <Col xs={24} md={12}>
             <Input
               placeholder="Cari nomor payroll, karyawan, work log..."
@@ -492,10 +510,12 @@ const ProductionPayrolls = () => {
               ]}
             />
           </Col>
-        </Row>
-      </Card>
+      </FilterBar>
 
-      <Card>
+      <PageSection
+        title="Daftar Payroll Produksi"
+        subtitle="Tabel ini tetap menjadi rekap line payroll. Perubahan status dibaca oleh flow expense otomatis yang sudah dijaga service."
+      >
         {/* ===============================================================
             Tabel payroll mengikuti helper global untuk menjaga konsistensi bentuk.
         =============================================================== */}
@@ -514,7 +534,7 @@ const ProductionPayrolls = () => {
             showSizeChanger: true,
           }}
         />
-      </Card>
+      </PageSection>
 
       <Drawer
         title={

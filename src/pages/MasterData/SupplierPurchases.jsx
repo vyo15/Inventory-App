@@ -29,6 +29,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { formatNumberID } from '../../utils/formatters/numberId';
 import { formatCurrencyIDR } from '../../utils/formatters/currencyId';
+import FilterBar from '../../components/Layout/Filters/FilterBar';
+import PageHeader from '../../components/Layout/Page/PageHeader';
+import PageSection from '../../components/Layout/Page/PageSection';
 import {
   calculateSupplierMaterialRestockMetrics,
   cascadeSupplierSnapshotToRawMaterials,
@@ -39,7 +42,6 @@ import {
   isManagedSupplierRecord,
   listenSuppliers,
 } from '../../services/MasterData/suppliersService';
-import PageHeader from '../../components/Layout/Page/PageHeader';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -605,15 +607,15 @@ const SupplierPurchases = () => {
       // ---------------------------------------------------------------------
       className: 'app-table-action-column',
       render: (_, record) => (
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          <Button className="ims-action-button ims-action-button--block" block size="small" icon={<EyeOutlined />} onClick={() => openSupplierDrawer(record)}>
+        <Space direction="vertical" size={6} style={{ width: '100%' }}>
+          <Button block size="small" icon={<EyeOutlined />} onClick={() => openSupplierDrawer(record)}>
             Detail
           </Button>
-          <Button className="ims-action-button ims-action-button--block" block size="small" icon={<EditOutlined />} onClick={() => handleEditSupplier(record)}>
+          <Button block size="small" icon={<EditOutlined />} onClick={() => handleEditSupplier(record)}>
             Edit
           </Button>
           <Popconfirm title="Yakin hapus supplier ini?" onConfirm={() => handleDeleteSupplier(record)} okText="Ya" cancelText="Batal">
-            <Button className="ims-action-button ims-action-button--block" block danger size="small" icon={<DeleteOutlined />}>
+            <Button block danger size="small" icon={<DeleteOutlined />}>
               Hapus
             </Button>
           </Popconfirm>
@@ -742,22 +744,24 @@ const SupplierPurchases = () => {
   ];
 
   return (
-    <div>
+    <div className="page-container">
       <PageHeader
         title="Supplier"
-        subtitle={materialIdFromQuery && selectedMaterialFromQuery ? (
-          <span>
-            Menampilkan supplier untuk bahan: <strong>{selectedMaterialFromQuery.name}</strong>{" "}
-            <Button type="link" size="small" onClick={() => navigate('/suppliers')} style={{ paddingInline: 4 }}>
+        subtitle={
+          materialIdFromQuery && selectedMaterialFromQuery
+            ? `Menampilkan supplier untuk bahan ${selectedMaterialFromQuery.name}.`
+            : 'Katalog restock supplier dan pembanding harga yang tetap terpisah dari transaksi pembelian.'
+        }
+        extra={
+          materialIdFromQuery && selectedMaterialFromQuery ? (
+            <Button type="link" size="small" onClick={() => navigate('/suppliers')}>
               Reset Filter URL
             </Button>
-          </span>
-        ) : (
-          "Katalog restock supplier dan pembanding harga"
-        )}
+          ) : null
+        }
         actions={[
           {
-            key: 'add-supplier',
+            key: 'create-supplier',
             type: 'primary',
             icon: <PlusOutlined />,
             label: 'Tambah Supplier',
@@ -780,7 +784,7 @@ const SupplierPurchases = () => {
         description="Supplier hanya menyimpan katalog restock dan pembanding. Stok, kas, expense, dan harga aktual tetap berubah lewat Purchases saat user klik Simpan."
       />
 
-      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+      <FilterBar>
         <Col xs={24} md={12}>
           <Search
             placeholder="Cari nama supplier, bahan, link, atau catatan"
@@ -813,7 +817,7 @@ const SupplierPurchases = () => {
             Reset Filter
           </Button>
         </Col>
-      </Row>
+      </FilterBar>
 
       {/* -------------------------------------------------------------------
           TABLE UTAMA TANPA HORIZONTAL SCROLL PAKSA.
@@ -821,20 +825,25 @@ const SupplierPurchases = () => {
           perlu digeser ke kanan. Detail katalog panjang tetap dibuka di drawer.
           STATUS: aktif sebagai UI cleanup; tidak mengubah save Supplier.
       ------------------------------------------------------------------- */}
-      <Table
-        className="app-data-table"
-        columns={columns}
-        dataSource={filteredSuppliers}
-        rowKey="id"
-        tableLayout="fixed"
-        locale={{
-          emptyText: materialIdFromQuery ? (
-            <Empty description="Belum ada supplier yang menyediakan bahan ini" />
-          ) : (
-            <Empty description="Belum ada data supplier" />
-          ),
-        }}
-      />
+      <PageSection
+        title="Daftar Supplier"
+        subtitle="Supplier tetap menjadi katalog restock. Detail bahan, link toko, dan pembanding harga dibuka dari drawer."
+      >
+        <Table
+          className="app-data-table"
+          columns={columns}
+          dataSource={filteredSuppliers}
+          rowKey="id"
+          tableLayout="fixed"
+          locale={{
+            emptyText: materialIdFromQuery ? (
+              <Empty description="Belum ada supplier yang menyediakan bahan ini" />
+            ) : (
+              <Empty description="Belum ada data supplier" />
+            ),
+          }}
+        />
+      </PageSection>
 
       <Modal
         title={isEditing ? 'Edit Supplier' : 'Tambah Supplier'}

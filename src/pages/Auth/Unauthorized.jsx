@@ -26,31 +26,35 @@ const Unauthorized = () => {
   const displayRole = profile?.role || "role tidak dikenal";
 
   return (
-    <Result
-      status="403"
-      icon={<SafetyOutlined />}
-      title="Akses tidak diizinkan"
-      subTitle={
-        <Space direction="vertical" size={8}>
-          <Text>
-            Role kamu tidak memiliki akses ke <b>{blockedPath}</b>.
-          </Text>
-          <Tag color="orange">Role aktif: {displayRole}</Tag>
-          <Text type="secondary">
-            Jika menu ini seharusnya bisa diakses, hubungi Administrator untuk
-            mengecek access matrix dan profile user.
-          </Text>
-        </Space>
-      }
-      extra={[
-        <Button key="dashboard" type="primary" icon={<HomeOutlined />}>
-          <Link to="/dashboard">Kembali ke Dashboard</Link>
-        </Button>,
-        <Button key="logout" icon={<LogoutOutlined />} onClick={logout}>
-          Logout
-        </Button>,
-      ]}
-    />
+    <div className="page-container">
+      <Result
+        status="403"
+        icon={<SafetyOutlined />}
+        title="Akses tidak diizinkan"
+        subTitle={
+          <Space direction="vertical" size={8}>
+            <Text>
+              Role kamu tidak memiliki akses ke <b>{blockedPath}</b>.
+            </Text>
+            <Tag color="orange">Role aktif: {displayRole}</Tag>
+            <Text type="secondary">
+              Jika menu ini seharusnya bisa diakses, hubungi Administrator untuk
+              mengecek access matrix dan profile user.
+            </Text>
+          </Space>
+        }
+        extra={[
+          <Link key="dashboard" to="/dashboard">
+            <Button type="primary" icon={<HomeOutlined />}>
+              Kembali ke Dashboard
+            </Button>
+          </Link>,
+          <Button key="logout" icon={<LogoutOutlined />} onClick={logout}>
+            Logout
+          </Button>,
+        ]}
+      />
+    </div>
   );
 };
 

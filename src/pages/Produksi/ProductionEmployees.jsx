@@ -61,7 +61,10 @@ import { getAllProductionWorkLogs } from "../../services/Produksi/productionWork
 import { getActiveProductionSteps } from "../../services/Produksi/productionStepsService";
 import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
-import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
+import FilterBar from "../../components/Layout/Filters/FilterBar";
+import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
+import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -659,9 +662,8 @@ const ProductionEmployees = () => {
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap className="ims-action-group">
+        <Space wrap>
           <Button
-            className="ims-action-button"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
@@ -670,7 +672,6 @@ const ProductionEmployees = () => {
           </Button>
 
           <Button
-            className="ims-action-button"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -693,7 +694,7 @@ const ProductionEmployees = () => {
             okText="Ya"
             cancelText="Batal"
           >
-            <Button className="ims-action-button" size="small">
+            <Button size="small">
               {record.isActive ? "Nonaktifkan" : "Aktifkan"}
             </Button>
           </Popconfirm>
@@ -702,14 +703,57 @@ const ProductionEmployees = () => {
     },
   ];
 
+  const summaryItems = [
+    {
+      key: "employees-total",
+      title: "Total Karyawan",
+      value: summary.total,
+      subtitle: "Seluruh master operator produksi yang tercatat.",
+      accent: "primary",
+    },
+    {
+      key: "employees-active",
+      title: "Karyawan Aktif",
+      value: summary.active,
+      subtitle: "Masih bisa dipilih untuk work log baru.",
+      accent: "success",
+    },
+    {
+      key: "employees-inactive",
+      title: "Karyawan Nonaktif",
+      value: summary.inactive,
+      subtitle: "Disimpan untuk histori tetapi tidak aktif dipakai.",
+      accent: "warning",
+    },
+    {
+      key: "employees-assigned",
+      title: "Sudah Assign Step",
+      value: summary.assigned,
+      subtitle: "Sudah punya tahapan produksi terkait.",
+      accent: "default",
+    },
+  ];
+
   return (
-    <div>
-      <ProductionPageHeader
+    <div className="page-container">
+      <PageHeader
         title="Karyawan Produksi"
-        description="Master operator produksi untuk work log dan payroll."
-        onRefresh={loadData}
-        onAdd={handleAdd}
-        addLabel="Tambah Karyawan"
+        subtitle="Kelola master operator produksi yang dipakai oleh work log dan ringkasan payroll read-only."
+        actions={[
+          {
+            key: "refresh-employees",
+            icon: <ReloadOutlined />,
+            label: "Refresh",
+            onClick: loadData,
+          },
+          {
+            key: "create-employee",
+            type: "primary",
+            icon: <PlusOutlined />,
+            label: "Tambah Karyawan",
+            onClick: handleAdd,
+          },
+        ]}
       />
 
       <Alert
@@ -720,31 +764,9 @@ const ProductionEmployees = () => {
         description="Ringkasan payroll di halaman ini dibaca dari payroll final dan work log final. Pengaturan custom payroll karyawan tetap legacy dan tidak lagi menjadi source of truth payroll."
       />
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Total Karyawan" value={summary.total} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Karyawan Aktif" value={summary.active} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Karyawan Nonaktif" value={summary.inactive} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Sudah Assign Step" value={summary.assigned} />
-          </Card>
-        </Col>
-      </Row>
+      <SummaryStatGrid items={summaryItems} />
 
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
+      <FilterBar className="production-filter-bar">
           <Col xs={24} md={6}>
             <Input
               placeholder="Cari kode, nama, no HP..."
@@ -803,10 +825,12 @@ const ProductionEmployees = () => {
               ]}
             />
           </Col>
-        </Row>
-      </Card>
+      </FilterBar>
 
-      <Card>
+      <PageSection
+        title="Daftar Karyawan Produksi"
+        subtitle="Tabel ini tetap menjadi master operator. Ringkasan payroll dan work log hanya dibaca sebagai konteks operasional."
+      >
         {/* ===============================================================
             Table helper global menjaga ukuran, sticky column, dan dark mode seragam.
         =============================================================== */}
@@ -825,7 +849,7 @@ const ProductionEmployees = () => {
             showSizeChanger: true,
           }}
         />
-      </Card>
+      </PageSection>
 
       <Drawer
         title={

@@ -33,6 +33,10 @@ import { db } from '../../firebase';
 import { formatNumberID } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import { formatDateId } from '../../utils/formatters/dateId';
+import FilterBar from '../../components/Layout/Filters/FilterBar';
+import PageHeader from '../../components/Layout/Page/PageHeader';
+import PageSection from '../../components/Layout/Page/PageSection';
+import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import {
   COLOR_VARIANT_MAP,
   COLOR_VARIANT_OPTIONS,
@@ -46,7 +50,6 @@ import {
   toggleProductActive,
   updateProduct,
 } from '../../services/MasterData/productsService';
-import PageHeader from '../../components/Layout/Page/PageHeader';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -258,6 +261,13 @@ const Products = () => {
 
     return { total, active, inactive, lowStock };
   }, [products]);
+
+  const summaryItems = [
+    { key: 'products-total', title: 'Total Produk', value: summary.total, subtitle: 'Semua master produk jadi yang tersimpan.', accent: 'primary' },
+    { key: 'products-active', title: 'Produk Aktif', value: summary.active, subtitle: 'Masih aktif dijual atau dipakai di flow utama.', accent: 'success' },
+    { key: 'products-inactive', title: 'Produk Nonaktif', value: summary.inactive, subtitle: 'Disimpan untuk histori tetapi tidak aktif dipakai.', accent: 'warning' },
+    { key: 'products-low-stock', title: 'Perlu Dicek', value: summary.lowStock, subtitle: 'Produk yang kosong atau mendekati batas minimum.', accent: 'default' },
+  ];
 
   // ---------------------------------------------------------------------------
   // Filter data list utama.
@@ -476,7 +486,7 @@ const Products = () => {
   ];
 
   return (
-    <div className="ims-page">
+    <div className="page-container ims-page">
       {/* ---------------------------------------------------------------------
           Header halaman produk.
       --------------------------------------------------------------------- */}
@@ -484,19 +494,8 @@ const Products = () => {
         title="Produk Jadi"
         subtitle="Master produk jadi dengan harga di master dan stok per varian warna supaya data tetap rapi dan mudah dipantau."
         actions={[
-          {
-            key: 'refresh-products',
-            icon: <ReloadOutlined />,
-            label: 'Refresh',
-            onClick: () => window.location.reload(),
-          },
-          {
-            key: 'add-product',
-            type: 'primary',
-            icon: <PlusOutlined />,
-            label: 'Tambah Produk',
-            onClick: openCreateDrawer,
-          },
+          { key: 'refresh-products', icon: <ReloadOutlined />, label: 'Refresh', onClick: () => window.location.reload() },
+          { key: 'create-product', type: 'primary', icon: <PlusOutlined />, label: 'Tambah Produk', onClick: openCreateDrawer },
         ]}
       />
 
@@ -510,18 +509,12 @@ const Products = () => {
       {/* ---------------------------------------------------------------------
           Summary cards produk.
       --------------------------------------------------------------------- */}
-      <Row className="ims-summary-row" gutter={[16, 16]}>
-        <Col xs={24} md={6}><Card size="small"><Statistic title="Total Produk" value={summary.total} /></Card></Col>
-        <Col xs={24} md={6}><Card size="small"><Statistic title="Produk Aktif" value={summary.active} /></Card></Col>
-        <Col xs={24} md={6}><Card size="small"><Statistic title="Produk Nonaktif" value={summary.inactive} /></Card></Col>
-        <Col xs={24} md={6}><Card size="small"><Statistic title="Perlu Dicek" value={summary.lowStock} /></Card></Col>
-      </Row>
+      <SummaryStatGrid items={summaryItems} className="ims-summary-row" />
 
       {/* ---------------------------------------------------------------------
           Filter bar utama.
       --------------------------------------------------------------------- */}
-      <Card size="small">
-        <Row gutter={[12, 12]}>
+      <FilterBar>
           <Col xs={24} md={8}>
             <Input
               allowClear
@@ -554,13 +547,15 @@ const Products = () => {
               ))}
             </Select>
           </Col>
-        </Row>
-      </Card>
+      </FilterBar>
 
       {/* ---------------------------------------------------------------------
           Tabel utama produk.
       --------------------------------------------------------------------- */}
-      <Card size="small">
+      <PageSection
+        title="Daftar Produk Jadi"
+        subtitle="Tabel ini merangkum stok, kategori, mode pricing, dan varian warna produk jadi."
+      >
         <Table
           className="ims-table"
           rowKey="id"
@@ -572,7 +567,7 @@ const Products = () => {
           scroll={{ x: 1180 }}
           locale={{ emptyText: <Empty description="Belum ada data produk" /> }}
         />
-      </Card>
+      </PageSection>
 
       {/* ---------------------------------------------------------------------
           Drawer form create/edit produk.

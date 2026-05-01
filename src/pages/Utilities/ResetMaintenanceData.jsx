@@ -60,6 +60,7 @@ import {
   saveCurrentStockAsTestingBaseline,
   syncAllStocks,
 } from "../../services/Maintenance/resetMaintenanceDataService";
+import PageHeader from "../../components/Layout/Page/PageHeader";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -774,14 +775,10 @@ const ResetMaintenanceData = () => {
     <div className="page-container">
       <Card className="content-card">
         <Space direction="vertical" size={20} style={{ width: "100%" }}>
-          <div>
-            <Title level={2} style={{ marginBottom: 8 }}>
-              Reset & Maintenance Data
-            </Title>
-            <Paragraph style={{ marginBottom: 0 }}>
-              Pusat utilitas untuk audit, repair aman, reset terarah, baseline stok, dan sinkronisasi data testing.
-            </Paragraph>
-          </div>
+          <PageHeader
+            title="Reset & Maintenance Data"
+            subtitle="Pusat utilitas untuk audit, repair aman, reset terarah, baseline stok, dan sinkronisasi data testing."
+          />
 
           <Alert
             type="warning"

@@ -42,6 +42,9 @@ import {
   matchFieldValue,
 } from "../../utils/produksi/productionPageHelpers";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
+import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
+import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import formatNumber from "../../utils/formatters/numberId";
 import {
   buildProductionOrderRequirementLines,
@@ -53,7 +56,6 @@ import {
   refreshProductionOrderRequirements,
 } from "../../services/Produksi/productionOrdersService";
 import { createProductionWorkLogFromOrder } from "../../services/Produksi/productionWorkLogsService";
-import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 
 const PRODUCTION_ORDER_TARGET_TYPES = [
   {
@@ -180,7 +182,7 @@ const ProductionOrders = () => {
   const [formVisible, setFormVisible] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [codeLoading, setCodeLoading] = useState(false);
+  const [, setCodeLoading] = useState(false);
 
   const [selectedOrder, setSelectedOrder] = useState(null);
 
@@ -369,6 +371,37 @@ const ProductionOrders = () => {
       inProduction: (item) => item.status === "in_production",
     });
   }, [orders]);
+
+  const summaryItems = [
+    {
+      key: "production-orders-total",
+      title: "Total Order",
+      value: summary.total,
+      subtitle: "Semua production order yang tersimpan.",
+      accent: "primary",
+    },
+    {
+      key: "production-orders-shortage",
+      title: "Shortage",
+      value: summary.shortage,
+      subtitle: "Masih kurang material untuk mulai produksi.",
+      accent: "warning",
+    },
+    {
+      key: "production-orders-ready",
+      title: "Ready",
+      value: summary.ready,
+      subtitle: "Sudah siap diproses menjadi work log produksi.",
+      accent: "success",
+    },
+    {
+      key: "production-orders-active",
+      title: "In Production",
+      value: summary.inProduction,
+      subtitle: "Sedang berjalan di flow produksi aktif.",
+      accent: "default",
+    },
+  ];
 
   const filteredData = useMemo(() => {
     return orders.filter((item) => {
@@ -715,37 +748,28 @@ const ProductionOrders = () => {
   );
 
   return (
-    <div className="ims-page">
-      <ProductionPageHeader
+    <div className="page-container ims-page">
+      <PageHeader
         title="Production Orders"
-        description="Planning produksi untuk semi finished dan product."
-        onRefresh={loadData}
-        onAdd={handleAdd}
-        addLabel="Buat Order"
+        subtitle="Planning produksi untuk semi finished dan product, tetap mengikuti flow aktif BOM → Production Order → Work Log."
+        actions={[
+          {
+            key: "refresh-orders",
+            icon: <ReloadOutlined />,
+            label: "Refresh",
+            onClick: loadData,
+          },
+          {
+            key: "create-order",
+            type: "primary",
+            icon: <PlusOutlined />,
+            label: "Buat Order",
+            onClick: handleAdd,
+          },
+        ]}
       />
 
-      <Row className="ims-summary-row" gutter={[16, 16]}>
-        <Col xs={24} md={6}>
-          <Card>
-            <Statistic title="Total Order" value={summary.total} />
-          </Card>
-        </Col>
-        <Col xs={24} md={6}>
-          <Card>
-            <Statistic title="Shortage" value={summary.shortage} />
-          </Card>
-        </Col>
-        <Col xs={24} md={6}>
-          <Card>
-            <Statistic title="Ready" value={summary.ready} />
-          </Card>
-        </Col>
-        <Col xs={24} md={6}>
-          <Card>
-            <Statistic title="In Production" value={summary.inProduction} />
-          </Card>
-        </Col>
-      </Row>
+      <SummaryStatGrid items={summaryItems} className="ims-summary-row" />
 
       <ProductionFilterCard>
         <Col xs={24} md={8}>
@@ -785,7 +809,10 @@ const ProductionOrders = () => {
         </Col>
       </ProductionFilterCard>
 
-      <Card>
+      <PageSection
+        title="Daftar Production Orders"
+        subtitle="Tabel ini membantu cek shortage, readiness, dan akses cepat ke detail atau pembuatan work log."
+      >
         {/* Aktif dipakai: scroll x besar dihapus agar tombol aksi terlihat pada desktop/laptop normal. */}
         <Table
           className="ims-table"
@@ -797,7 +824,7 @@ const ProductionOrders = () => {
             emptyText: <Empty description="Belum ada production order" />,
           }}
         />
-      </Card>
+      </PageSection>
 
       <Drawer
         title="Buat Production Order"

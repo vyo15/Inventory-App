@@ -5,17 +5,17 @@ import "./WeLost.css";
 
 const WeLost = () => {
   return (
-    <div className="not-found">
+    <div className="page-container not-found">
       <Result
         status="error"
-        title="404 Not Found"
-        subTitle="Sorry, the page you visited does not exist."
+        title="404 - Halaman Tidak Ditemukan"
+        subTitle="Halaman yang kamu buka tidak tersedia atau alamatnya sudah berubah."
         extra={[
-          <Button type="primary" key="console">
-            <Link to="/Dashboard">Back to Dashboard</Link>
-          </Button>,
+          <Link key="dashboard" to="/dashboard">
+            <Button type="primary">Kembali ke Dashboard</Button>
+          </Link>,
         ]}
-      ></Result>
+      />
     </div>
   );
 };

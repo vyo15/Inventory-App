@@ -48,6 +48,9 @@ import {
 import { db } from "../../firebase";
 import { formatNumberID } from "../../utils/formatters/numberId";
 import { formatCurrencyIDR } from "../../utils/formatters/currencyId";
+import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
+import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 
 // SECTION: import pricing service
 import {
@@ -622,34 +625,45 @@ const PricingRules = () => {
     },
   ];
 
-  return (
-    <div style={{ padding: 24 }}>
-      {/* SECTION: header halaman */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 12,
-          alignItems: "center",
-          flexWrap: "wrap",
-          marginBottom: 16,
-        }}
-      >
-        <div>
-          <h2 style={{ margin: 0 }}>Pricing Rules</h2>
-          <p style={{ margin: "8px 0 0 0", color: "#666" }}>
-            Aturan harga jual otomatis untuk bahan baku dan produk jadi
-          </p>
-        </div>
+  const summaryItems = [
+    {
+      key: "pricing-rules-total",
+      title: "Total Pricing Rules",
+      value: rules.length,
+      subtitle: "Semua rule harga yang tersimpan di master pricing.",
+      accent: "primary",
+    },
+    {
+      key: "pricing-rules-active",
+      title: "Rule Aktif",
+      value: rules.filter((item) => item?.isActive).length,
+      subtitle: "Rule yang masih aktif dipakai untuk preview dan apply.",
+      accent: "success",
+    },
+    {
+      key: "pricing-rules-targets",
+      title: "Target Item Tersedia",
+      value: rawMaterials.length + products.length,
+      subtitle: "Gabungan bahan baku dan produk jadi yang bisa jadi target rule.",
+      accent: "warning",
+    },
+  ];
 
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={openCreateModal}
-        >
-          Tambah Rule
-        </Button>
-      </div>
+  return (
+    <div className="page-container">
+      <PageHeader
+        title="Pricing Rules"
+        subtitle="Aturan harga jual otomatis untuk bahan baku dan produk jadi, tanpa mengubah item yang masih memakai mode manual."
+        actions={[
+          {
+            key: "create-pricing-rule",
+            type: "primary",
+            icon: <PlusOutlined />,
+            label: "Tambah Rule",
+            onClick: openCreateModal,
+          },
+        ]}
+      />
 
       {/* SECTION: informasi penting aturan pricing */}
       <Alert
@@ -659,35 +673,13 @@ const PricingRules = () => {
         message="Harga dihitung dari base cost + margin + buffer marketplace + pembulatan. Item dengan pricingMode manual akan dilewati saat apply."
       />
 
-      {/* SECTION: ringkasan data utama */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} md={8}>
-          <Card>
-            <Statistic title="Total Pricing Rules" value={rules.length} />
-          </Card>
-        </Col>
-
-        <Col xs={24} md={8}>
-          <Card>
-            <Statistic
-              title="Rule Aktif"
-              value={rules.filter((item) => item?.isActive).length}
-            />
-          </Card>
-        </Col>
-
-        <Col xs={24} md={8}>
-          <Card>
-            <Statistic
-              title="Target Item Tersedia"
-              value={rawMaterials.length + products.length}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} />
 
       {/* SECTION: tabel pricing rules */}
-      <Card>
+      <PageSection
+        title="Daftar Pricing Rules"
+        subtitle="Rule tetap menjadi layer pricing. Apply rule hanya memengaruhi item yang memang memakai mode rule."
+      >
         {/* SECTION: tabel utama pricing rule memakai foundation global supaya seragam */}
         <Table
           className="app-data-table"
@@ -698,7 +690,7 @@ const PricingRules = () => {
           pagination={{ pageSize: 10 }}
           scroll={{ x: 1200 }}
         />
-      </Card>
+      </PageSection>
 
       {/* SECTION: modal tambah / edit rule */}
       <Modal

@@ -57,7 +57,10 @@ import {
 } from "../../services/Produksi/productionStepsService";
 import { getAllProductionEmployees } from "../../services/Produksi/productionEmployeesService";
 import { getAllProductionBoms } from "../../services/Produksi/productionBomsService";
-import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
+import FilterBar from "../../components/Layout/Filters/FilterBar";
+import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
+import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 
 const getStepEmployeeCount = (stepId, employees = []) =>
   employees.filter((item) => Array.isArray(item.assignedStepIds) && item.assignedStepIds.includes(stepId)).length;
@@ -220,6 +223,13 @@ const ProductionSteps = () => {
     setEmployeeDrawerSearch("");
     setEmployeeDrawerVisible(true);
   };
+
+  const summaryItems = [
+    { key: "steps-total", title: "Total Step", value: summary.total, subtitle: "Semua tahapan produksi yang tersimpan.", accent: "primary" },
+    { key: "steps-active", title: "Step Aktif", value: summary.active, subtitle: "Masih aktif dipakai untuk produksi dan payroll.", accent: "success" },
+    { key: "steps-employees", title: "Terhubung Karyawan", value: summary.usedByEmployees, subtitle: "Step yang sudah dipakai di assignment karyawan.", accent: "warning" },
+    { key: "steps-boms", title: "Dipakai di BOM", value: summary.usedByBoms, subtitle: "Step yang sudah dipakai di recipe BOM aktif.", accent: "default" },
+  ];
 
   const handleOpenBomDrawer = (record) => {
     setSelectedStep(record);
@@ -448,46 +458,38 @@ const ProductionSteps = () => {
       // =========================
       title: "Aksi",
       key: "actions",
-      width: 170,
+      width: 260,
       fixed: "right",
-      // ---------------------------------------------------------------------
-      // IMS NOTE [AKTIF / GUARDED / BEHAVIOR-PRESERVING]
-      // Fungsi: menyamakan visual tombol aksi Tahapan Produksi dengan baseline Raw Materials.
-      // Hubungan flow: hanya layout tombol Detail/Edit/Aktifkan/Nonaktifkan; handler dan data step tidak berubah.
-      // Alasan: menjaga tombol aksi tetap mudah dijangkau tanpa menyentuh rule payroll, BOM, Work Log, atau HPP.
-      // ---------------------------------------------------------------------
       className: "app-table-action-column",
       render: (_, record) => (
-        <div className="ims-action-group ims-action-group--vertical">
-          <div className="ims-action-group ims-action-group--inline">
-            <Button
-              className="ims-action-button"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => handleOpenDetailDrawer(record)}
-            >
-              Detail
-            </Button>
-            <Button
-              className="ims-action-button"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            >
-              Edit
-            </Button>
-          </div>
+        <Space wrap className="ims-action-group">
+          <Button
+            className="ims-action-button"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => handleOpenDetailDrawer(record)}
+          >
+            Detail
+          </Button>
+          <Button
+            className="ims-action-button"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            Edit
+          </Button>
           <Popconfirm
             title={record.isActive ? "Nonaktifkan step ini?" : "Aktifkan step ini?"}
             onConfirm={() => handleToggleActive(record)}
             okText="Ya"
             cancelText="Batal"
           >
-            <Button block className="ims-action-button ims-action-button--block" size="small">
+            <Button className="ims-action-button" size="small">
               {record.isActive ? "Nonaktifkan" : "Aktifkan"}
             </Button>
           </Popconfirm>
-        </div>
+        </Space>
       ),
     },
   ];
@@ -497,40 +499,19 @@ const ProductionSteps = () => {
     : "Belum ada rule payroll";
 
   return (
-    <div>
-      <ProductionPageHeader
+    <div className="page-container">
+      <PageHeader
         title="Tahapan Produksi"
-        description="Master step sederhana untuk standarisasi proses, relasi karyawan, BOM, dan source of truth payroll produksi. QC tidak dijadikan step terpisah, tetapi dicek di setiap proses/work log. Untuk kebutuhan Anda saat ini, assembly adalah proses akhir dan packing bersifat opsional bila memang ada pekerjaan pengemasan terpisah."
-        onRefresh={loadData}
-        onAdd={handleAdd}
-        addLabel="Tambah Step"
+        subtitle="Master step sederhana untuk standarisasi proses, relasi karyawan, BOM, dan source of truth payroll produksi."
+        actions={[
+          { key: "refresh-steps", icon: <ReloadOutlined />, label: "Refresh", onClick: loadData },
+          { key: "create-step", type: "primary", icon: <PlusOutlined />, label: "Tambah Step", onClick: handleAdd },
+        ]}
       />
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Total Step" value={summary.total} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Step Aktif" value={summary.active} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Terhubung Karyawan" value={summary.usedByEmployees} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic title="Dipakai di BOM" value={summary.usedByBoms} />
-          </Card>
-        </Col>
-      </Row>
+      <SummaryStatGrid items={summaryItems} />
 
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
+      <FilterBar>
           <Col xs={24} md={10}>
             <Input
               placeholder="Cari nama step, kategori, atau fungsi..."
@@ -564,10 +545,12 @@ const ProductionSteps = () => {
               ]}
             />
           </Col>
-        </Row>
-      </Card>
+      </FilterBar>
 
-      <Card>
+      <PageSection
+        title="Daftar Tahapan Produksi"
+        subtitle="Step tetap menjadi master referensi untuk assignment karyawan, BOM, dan payroll rule produksi."
+      >
         {/* =========================
             SECTION: tabel utama step
             helper global dipakai agar ukuran dan sticky action seragam.
@@ -593,7 +576,7 @@ const ProductionSteps = () => {
             showSizeChanger: true,
           }}
         />
-      </Card>
+      </PageSection>
 
       <Drawer
         title={`Detail Step Produksi: ${selectedStep?.name || "-"}`}

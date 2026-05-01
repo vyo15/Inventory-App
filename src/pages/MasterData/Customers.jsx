@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import {
   Table,
   Button,
-  Modal,
   Form,
   Input,
   Space,
@@ -16,7 +15,9 @@ import {
   getCustomers,
   updateCustomer,
 } from "../../services/MasterData/customersService";
+import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
 
 const Customers = () => {
   // =========================
@@ -176,13 +177,13 @@ const Customers = () => {
   ];
 
   return (
-    <div>
+    <div className="page-container">
       <PageHeader
         title="Customer"
-        subtitle="Kelola master customer yang dipakai sebagai referensi transaksi penjualan aktif."
+        subtitle="Kelola master customer yang dipakai oleh modul Sales tanpa memecah source data customer aktif."
         actions={[
           {
-            key: "add-customer",
+            key: "create-customer",
             type: "primary",
             icon: <PlusOutlined />,
             label: "Tambah Customer",
@@ -196,15 +197,21 @@ const Customers = () => {
         ]}
       />
 
-      <Table
-        className="app-data-table"
-        columns={columns}
-        dataSource={customers}
-        rowKey="id"
-        loading={loading}
-      />
+      <PageSection
+        title="Daftar Customer"
+        subtitle="Data di sini menjadi referensi dropdown customer pada flow penjualan aktif."
+      >
+        <Table
+          className="app-data-table"
+          columns={columns}
+          dataSource={customers}
+          rowKey="id"
+          loading={loading}
+          pagination={{ pageSize: 10 }}
+        />
+      </PageSection>
 
-      <Modal
+      <PageFormModal
         title={isEditing ? "Edit Customer" : "Tambah Customer"}
         open={isModalVisible}
         onCancel={() => {
@@ -213,33 +220,32 @@ const Customers = () => {
           setCurrentId(null);
           form.resetFields();
         }}
-        onOk={() => form.submit()}
         okText="Simpan"
         cancelText="Batal"
+        form={form}
+        onFinish={handleAddOrEditCustomer}
       >
-        <Form form={form} layout="vertical" onFinish={handleAddOrEditCustomer}>
-          <Form.Item
-            name="name"
-            label="Nama Customer"
-            rules={[{ required: true, message: "Nama wajib diisi" }]}
-          >
-            <Input placeholder="Contoh: Budi Santoso" />
-          </Form.Item>
-          <Form.Item
-            name="contact"
-            label="Kontak"
-            rules={[{ required: true, message: "Kontak wajib diisi" }]}
-          >
-            <Input placeholder="Nomor HP / Email" />
-          </Form.Item>
-          <Form.Item name="address" label="Alamat">
-            <Input.TextArea placeholder="Alamat lengkap" />
-          </Form.Item>
-          <Form.Item name="note" label="Catatan">
-            <Input.TextArea placeholder="Catatan tambahan (opsional)" />
-          </Form.Item>
-        </Form>
-      </Modal>
+        <Form.Item
+          name="name"
+          label="Nama Customer"
+          rules={[{ required: true, message: "Nama wajib diisi" }]}
+        >
+          <Input placeholder="Contoh: Budi Santoso" />
+        </Form.Item>
+        <Form.Item
+          name="contact"
+          label="Kontak"
+          rules={[{ required: true, message: "Kontak wajib diisi" }]}
+        >
+          <Input placeholder="Nomor HP / Email" />
+        </Form.Item>
+        <Form.Item name="address" label="Alamat">
+          <Input.TextArea placeholder="Alamat lengkap" />
+        </Form.Item>
+        <Form.Item name="note" label="Catatan">
+          <Input.TextArea placeholder="Catatan tambahan (opsional)" />
+        </Form.Item>
+      </PageFormModal>
     </div>
   );
 };

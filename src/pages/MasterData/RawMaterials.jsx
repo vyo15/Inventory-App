@@ -35,6 +35,10 @@ import { db } from '../../firebase';
 import { formatNumberID } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import { formatDateId } from '../../utils/formatters/dateId';
+import FilterBar from '../../components/Layout/Filters/FilterBar';
+import PageHeader from '../../components/Layout/Page/PageHeader';
+import PageSection from '../../components/Layout/Page/PageSection';
+import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import {
   createRawMaterial,
   listenRawMaterials,
@@ -478,7 +482,7 @@ const RawMaterials = () => {
   const pricingModeValue = Form.useWatch('pricingMode', form);
   const hasVariantsValue = Form.useWatch('hasVariants', form);
   const variantLabelValue = Form.useWatch('variantLabel', form);
-  const watchedVariants = Form.useWatch('variants', form) || [];
+  const watchedVariants = Form.useWatch('variants', form);
 
   // ---------------------------------------------------------------------------
   // Loader data master.
@@ -581,6 +585,13 @@ const RawMaterials = () => {
 
     return { total, withVariants, noVariants, lowStock };
   }, [materials]);
+
+  const summaryItems = [
+    { key: 'raw-total', title: 'Total Bahan Baku', value: summary.total, subtitle: 'Semua master bahan baku yang tersimpan.', accent: 'primary' },
+    { key: 'raw-variants', title: 'Pakai Varian', value: summary.withVariants, subtitle: 'Bahan baku yang memakai stok per varian.', accent: 'success' },
+    { key: 'raw-single', title: 'Tanpa Varian', value: summary.noVariants, subtitle: 'Bahan baku yang cukup disimpan di stok master.', accent: 'warning' },
+    { key: 'raw-low', title: 'Perlu Dicek', value: summary.lowStock, subtitle: 'Bahan yang kosong atau mendekati batas minimum.', accent: 'default' },
+  ];
 
   // ---------------------------------------------------------------------------
   // Ringkasan realtime isi form saat mode varian aktif.
@@ -858,34 +869,18 @@ const RawMaterials = () => {
     {
       title: 'Aksi',
       key: 'action',
-      width: 150,
-      // ---------------------------------------------------------------------
-      // IMS NOTE [AKTIF / GUARDED / BEHAVIOR-PRESERVING]
-      // Fungsi: menyamakan visual tombol aksi Raw Materials dengan baseline Supplier.
-      // Hubungan flow: hanya layout tombol Detail/Edit/Aktifkan/Nonaktifkan; handler dan data bahan baku tidak berubah.
-      // Alasan: menghindari action column terlihat padat/menumpuk tanpa membuat reusable component besar terlalu dini.
-      // ---------------------------------------------------------------------
+      width: 170,
       className: 'app-table-action-column',
       render: (_, record) => (
-        <div className="ims-action-group ims-action-group--vertical">
-          <div className="ims-action-group ims-action-group--inline">
-            <Button
-              size="small"
-              className="ims-action-button"
-              icon={<EyeOutlined />}
-              onClick={() => handleViewDetail(record)}
-            >
+        <Space direction="vertical" size={6} className="ims-action-group">
+          <Space size={6} wrap={false}>
+            <Button size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
               Detail
             </Button>
-            <Button
-              size="small"
-              className="ims-action-button"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            >
+            <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               Edit
             </Button>
-          </div>
+          </Space>
           <Popconfirm
             title={record.isActive === false ? 'Aktifkan kembali bahan baku?' : 'Nonaktifkan bahan baku?'}
             description={
@@ -897,44 +892,27 @@ const RawMaterials = () => {
             cancelText="Batal"
             onConfirm={() => handleToggleActive(record)}
           >
-            <Button block size="small" className="ims-action-button ims-action-button--block">
-              {record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}
-            </Button>
+            <Button size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
           </Popconfirm>
-        </div>
+        </Space>
       ),
-    }
+    },
   ];
 
   return (
-    <div style={{ padding: 24 }}>
+    <div className="page-container">
       {/* ---------------------------------------------------------------------
           Header halaman utama.
           Layout dibuat sama arah visualnya dengan halaman master lain.
       --------------------------------------------------------------------- */}
-      <Card size="small" style={{ marginBottom: 16 }}>
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col>
-            <Typography.Title level={3} style={{ margin: 0 }}>
-              Bahan Baku
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              Master bahan baku dengan stok master atau stok per varian agar tampilan lebih rapi dan mudah dipantau.
-            </Typography.Text>
-          </Col>
-
-          <Col>
-            <Space wrap>
-              <Button icon={<ReloadOutlined />} onClick={() => window.location.reload()}>
-                Refresh
-              </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={openCreateDrawer}>
-                Tambah Bahan Baku
-              </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
+      <PageHeader
+        title="Bahan Baku"
+        subtitle="Master bahan baku dengan stok master atau stok per varian agar tampilan lebih rapi dan mudah dipantau."
+        actions={[
+          { key: 'refresh-raw-materials', icon: <ReloadOutlined />, label: 'Refresh', onClick: () => window.location.reload() },
+          { key: 'create-raw-material', type: 'primary', icon: <PlusOutlined />, label: 'Tambah Bahan Baku', onClick: openCreateDrawer },
+        ]}
+      />
 
       <Alert
         style={{ marginBottom: 16 }}
@@ -946,34 +924,12 @@ const RawMaterials = () => {
       {/* ---------------------------------------------------------------------
           Summary cards atas halaman.
       --------------------------------------------------------------------- */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} md={6}>
-          <Card size="small">
-            <Statistic title="Total Bahan Baku" value={summary.total} />
-          </Card>
-        </Col>
-        <Col xs={24} md={6}>
-          <Card size="small">
-            <Statistic title="Pakai Varian" value={summary.withVariants} />
-          </Card>
-        </Col>
-        <Col xs={24} md={6}>
-          <Card size="small">
-            <Statistic title="Tanpa Varian" value={summary.noVariants} />
-          </Card>
-        </Col>
-        <Col xs={24} md={6}>
-          <Card size="small">
-            <Statistic title="Perlu Dicek" value={summary.lowStock} />
-          </Card>
-        </Col>
-      </Row>
+      <SummaryStatGrid items={summaryItems} />
 
       {/* ---------------------------------------------------------------------
           Filter bar utama.
       --------------------------------------------------------------------- */}
-      <Card size="small" style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
+      <FilterBar>
           <Col xs={24} md={8}>
             <Input
               allowClear
@@ -1008,8 +964,7 @@ const RawMaterials = () => {
               ))}
             </Select>
           </Col>
-        </Row>
-      </Card>
+      </FilterBar>
 
       {/* ---------------------------------------------------------------------
           Tabel utama daftar bahan baku.
@@ -1019,7 +974,10 @@ const RawMaterials = () => {
           ALASAN: bug UI sebelumnya muncul dari scroll x besar dan fixed action.
           STATUS: aktif dipakai; hanya presentasi UI, tidak mengubah handler data.
       --------------------------------------------------------------------- */}
-      <Card size="small">
+      <PageSection
+        title="Daftar Bahan Baku"
+        subtitle="Tabel ini merangkum stok, supplier, mode varian, dan status bahan baku aktif."
+      >
         <Table
           className="app-data-table"
           rowKey="id"
@@ -1031,7 +989,7 @@ const RawMaterials = () => {
           pagination={{ pageSize: 10 }}
           locale={{ emptyText: <Empty description="Belum ada data bahan baku" /> }}
         />
-      </Card>
+      </PageSection>
 
       {/* ---------------------------------------------------------------------
           Drawer form create/edit.

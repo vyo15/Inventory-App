@@ -58,9 +58,12 @@ import {
   toggleSemiFinishedMaterialActive,
   updateSemiFinishedMaterial,
 } from "../../services/Produksi/semiFinishedMaterialsService";
-import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
+import FilterBar from "../../components/Layout/Filters/FilterBar";
+import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
+import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -220,7 +223,7 @@ const SemiFinishedMaterials = () => {
   // tanpa harus menunggu user menekan tombol simpan.
   // ---------------------------------------------------------------------------
   const hasVariantsValue = Form.useWatch("hasVariants", form);
-  const watchedVariants = Form.useWatch("variants", form) || [];
+  const watchedVariants = Form.useWatch("variants", form);
   const watchedCurrentStock = Form.useWatch("currentStock", form) || 0;
   const watchedReservedStock = Form.useWatch("reservedStock", form) || 0;
   const watchedMinStockAlert = Form.useWatch("minStockAlert", form) || 0;
@@ -257,6 +260,13 @@ const SemiFinishedMaterials = () => {
 
     return { total, active, inactive, lowStock };
   }, [materials]);
+
+  const summaryItems = [
+    { key: "semi-total", title: "Total Item", value: summary.total, subtitle: "Seluruh item semi finished yang tersimpan.", accent: "primary" },
+    { key: "semi-active", title: "Item Aktif", value: summary.active, subtitle: "Masih aktif dipakai dalam flow produksi.", accent: "success" },
+    { key: "semi-inactive", title: "Item Nonaktif", value: summary.inactive, subtitle: "Disimpan untuk histori tetapi tidak aktif dipakai.", accent: "warning" },
+    { key: "semi-low", title: "Perlu Dicek", value: summary.lowStock, subtitle: "Item yang kosong atau mendekati batas minimum.", accent: "default" },
+  ];
 
   // ---------------------------------------------------------------------------
   // Filter list utama.
@@ -482,9 +492,8 @@ const SemiFinishedMaterials = () => {
       // Tombol aksi utama disimpan di sisi kanan seperti halaman bahan baku.
       fixed: "right",
       render: (_, record) => (
-        <Space size={[6, 6]} wrap className="ims-action-group">
+        <Space size={[6, 6]} wrap>
           <Button
-            className="ims-action-button"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
@@ -493,7 +502,6 @@ const SemiFinishedMaterials = () => {
           </Button>
 
           <Button
-            className="ims-action-button"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -514,7 +522,7 @@ const SemiFinishedMaterials = () => {
             okText="Ya"
             cancelText="Batal"
           >
-            <Button className="ims-action-button" size="small">
+            <Button size="small">
               {record.isActive ? "Nonaktifkan" : "Aktifkan"}
             </Button>
           </Popconfirm>
@@ -537,51 +545,30 @@ const SemiFinishedMaterials = () => {
   const selectedMaterialUnit = selectedMaterial?.unit || "pcs";
 
   return (
-    <div>
+    <div className="page-container">
       {/* ------------------------------------------------------------------ */}
       {/* Header halaman. Menjadi titik masuk utama user sebelum melihat list. */}
       {/* ------------------------------------------------------------------ */}
-      <ProductionPageHeader
+      <PageHeader
         title="Semi Finished Materials"
-        description="Master stok internal produksi dengan varian warna, tidak dijual ke customer."
-        onRefresh={loadData}
-        onAdd={handleAdd}
-        addLabel="Tambah Item"
+        subtitle="Master stok internal produksi dengan varian warna, tidak dijual ke customer."
+        actions={[
+          { key: "refresh-semi", icon: <ReloadOutlined />, label: "Refresh", onClick: loadData },
+          { key: "create-semi", type: "primary", icon: <PlusOutlined />, label: "Tambah Item", onClick: handleAdd },
+        ]}
       />
 
       {/* ------------------------------------------------------------------ */}
       {/* Summary cards. Tetap dipertahankan karena user produksi butuh ringkasan */}
       {/* cepat tanpa harus membaca seluruh tabel. */}
       {/* ------------------------------------------------------------------ */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} md={6}>
-          <Card size="small">
-            <Statistic title="Total Item" value={summary.total} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card size="small">
-            <Statistic title="Item Aktif" value={summary.active} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card size="small">
-            <Statistic title="Item Nonaktif" value={summary.inactive} />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card size="small">
-            <Statistic title="Perlu Dicek" value={summary.lowStock} />
-          </Card>
-        </Col>
-      </Row>
+      <SummaryStatGrid items={summaryItems} />
 
       {/* ------------------------------------------------------------------ */}
       {/* Filter list. Dipisah di card sendiri agar user bisa scan filter dengan */}
       {/* cepat tanpa mengganggu area tabel utama. */}
       {/* ------------------------------------------------------------------ */}
-      <Card size="small" style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]}>
+      <FilterBar>
           <Col xs={24} md={8}>
             <Input
               placeholder="Cari kode, nama, deskripsi, warna..."
@@ -627,14 +614,16 @@ const SemiFinishedMaterials = () => {
               ]}
             />
           </Col>
-        </Row>
-      </Card>
+      </FilterBar>
 
       {/* ------------------------------------------------------------------ */}
       {/* Tabel list utama. Di-set compact agar jarak antar elemen tidak terlalu */}
       {/* tinggi dan informasi stok per varian tetap terbaca pada satu layar. */}
       {/* ------------------------------------------------------------------ */}
-      <Card size="small">
+      <PageSection
+        title="Daftar Semi Finished Materials"
+        subtitle="Tabel ini merangkum stok master dan varian warna untuk kebutuhan produksi internal."
+      >
         <Table
           rowKey="id"
           size="small"
@@ -655,7 +644,7 @@ const SemiFinishedMaterials = () => {
             showTotal: (total) => `Total ${total} item`,
           }}
         />
-      </Card>
+      </PageSection>
 
       {/* ------------------------------------------------------------------ */}
       {/* Drawer form create/edit. Tetap satu komponen agar logic form tidak */}

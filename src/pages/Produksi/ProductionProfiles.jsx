@@ -35,7 +35,10 @@ import {
 import { getDocs, collection } from 'firebase/firestore';
 import { db } from '../../firebase';
 import formatNumber from '../../utils/formatters/numberId';
-import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
+import FilterBar from '../../components/Layout/Filters/FilterBar';
+import PageHeader from '../../components/Layout/Page/PageHeader';
+import PageSection from '../../components/Layout/Page/PageSection';
+import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 
 const ProductionProfiles = () => {
   const [loading, setLoading] = useState(false);
@@ -107,7 +110,7 @@ const ProductionProfiles = () => {
   const currentMetrics = useMemo(() => {
     return calculateProductionProfileMetrics({
       ...DEFAULT_PRODUCTION_PROFILE_FORM,
-      ...form.getFieldsValue(),
+      ...(watchedProfileValues || {}),
     });
   }, [watchedProfileValues]);
 
@@ -159,6 +162,13 @@ const ProductionProfiles = () => {
   };
 
   const renderStatisticValue = (value) => formatNumber(value || 0);
+
+  const summaryItems = [
+    { key: 'profiles-total', title: 'Total Profil', value: summary.total, subtitle: 'Semua profil produksi yang tersimpan.', accent: 'primary' },
+    { key: 'profiles-active', title: 'Profil Aktif', value: summary.active, subtitle: 'Masih aktif dipakai sebagai referensi produksi.', accent: 'success' },
+    { key: 'profiles-default', title: 'Profil Default', value: summary.defaults, subtitle: 'Menjadi acuan utama untuk produk terkait.', accent: 'warning' },
+    { key: 'profiles-mapped', title: 'Produk Terpetakan', value: summary.mappedProducts, subtitle: 'Jumlah produk yang sudah punya profil.', accent: 'default' },
+  ];
 
   // ---------------------------------------------------------------------------
   // Helper presentasi batch 1.
@@ -276,24 +286,19 @@ const ProductionProfiles = () => {
   ];
 
   return (
-    <div className="ims-page">
-      <ProductionPageHeader
+    <div className="page-container ims-page">
+      <PageHeader
         title="Profil Produksi"
-        description="Simpan rumus hasil, batch assembly, dan batas miss per produk. BOM tetap jadi resep bahan, sedangkan profil produksi menjadi aturan hitung operasional dan monitoring jangka panjang."
-        onRefresh={loadData}
-        onAdd={handleAdd}
-        addLabel="Tambah Profil"
+        subtitle="Simpan rumus hasil, batch assembly, dan batas miss per produk. BOM tetap jadi resep bahan, sedangkan profil produksi menjadi aturan hitung operasional."
+        actions={[
+          { key: 'refresh-profiles', icon: <ReloadOutlined />, label: 'Refresh', onClick: loadData },
+          { key: 'create-profile', type: 'primary', icon: <PlusOutlined />, label: 'Tambah Profil', onClick: handleAdd },
+        ]}
       />
 
-      <Row className="ims-summary-row" gutter={[16, 16]}>
-        <Col xs={24} md={6}><Card><Statistic title="Total Profil" value={summary.total} /></Card></Col>
-        <Col xs={24} md={6}><Card><Statistic title="Profil Aktif" value={summary.active} /></Card></Col>
-        <Col xs={24} md={6}><Card><Statistic title="Profil Default" value={summary.defaults} /></Card></Col>
-        <Col xs={24} md={6}><Card><Statistic title="Produk Terpetakan" value={summary.mappedProducts} /></Card></Col>
-      </Row>
+      <SummaryStatGrid items={summaryItems} className="ims-summary-row" />
 
-      <Card>
-        <Row className="ims-filter-row" gutter={16}>
+      <FilterBar className="ims-filter-row">
           <Col xs={24} md={14}>
             <Input.Search
               placeholder="Cari nama profil atau produk..."
@@ -314,10 +319,12 @@ const ProductionProfiles = () => {
               ]}
             />
           </Col>
-        </Row>
-      </Card>
+      </FilterBar>
 
-      <Card>
+      <PageSection
+        title="Daftar Profil Produksi"
+        subtitle="Profil membantu standarisasi hitung kapasitas dan target operasional per produk."
+      >
         <Table
           className="ims-table"
           rowKey="id"
@@ -328,7 +335,7 @@ const ProductionProfiles = () => {
           pagination={{ pageSize: 10, showSizeChanger: true }}
           locale={{ emptyText: <Empty description="Belum ada profil produksi" /> }}
         />
-      </Card>
+      </PageSection>
 
       <Drawer
         title={editingProfile?.id ? 'Edit Profil Produksi' : 'Tambah Profil Produksi'}

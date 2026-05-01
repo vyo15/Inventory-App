@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Button,
-  Card,
   Form,
   Input,
   Modal,
@@ -42,9 +41,12 @@ import {
   updateSystemUserProfile,
   updateSystemUserStatus,
 } from "../../services/System/userService";
+import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
+import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 // =========================
 // SECTION: Form Mode Constants - AKTIF
@@ -483,9 +485,8 @@ const UserManagement = () => {
         const canDelete = !deleteGuardReason;
 
         return (
-          <Space wrap size={[8, 8]} className="ims-action-group">
+          <Space wrap size={[8, 8]}>
             <Button
-              className="ims-action-button"
               icon={<EditOutlined />}
               disabled={!canManage}
               onClick={() => openEditModal(record)}
@@ -493,7 +494,6 @@ const UserManagement = () => {
               Edit
             </Button>
             <Button
-              className="ims-action-button"
               icon={
                 record.status === USER_STATUS.ACTIVE ? (
                   <StopOutlined />
@@ -514,7 +514,6 @@ const UserManagement = () => {
             <Tooltip title={deleteGuardReason || "Hapus hanya profile Firestore, bukan Firebase Auth user."}>
               <span>
                 <Button
-                  className="ims-action-button"
                   danger
                   icon={<DeleteOutlined />}
                   disabled={!canDelete}
@@ -531,29 +530,60 @@ const UserManagement = () => {
     },
   ];
 
-  return (
-    <div style={styles.pageWrap}>
-      <Space direction="vertical" size={16} style={{ width: "100%" }}>
-        <PageHeader
-          title="Manajemen User"
-          subtitle="Kelola Auth user, profile, role aktif Administrator/User, dan status user internal IMS ZiyoCraft."
-          actions={[
-            {
-              key: "refresh-users",
-              icon: <ReloadOutlined />,
-              label: "Refresh",
-              onClick: loadUsers,
-            },
-            {
-              key: "add-user-profile",
-              type: "primary",
-              icon: <PlusOutlined />,
-              label: "Tambah Profile User",
-              onClick: openCreateModal,
-            },
-          ]}
-        />
+  const summaryItems = [
+    {
+      key: "total-users",
+      title: "Total Profile",
+      value: users.length,
+      subtitle: "Jumlah profile internal di collection system_users.",
+      accent: "primary",
+    },
+    {
+      key: "active-users",
+      title: "User Aktif",
+      value: users.filter((item) => item.status === USER_STATUS.ACTIVE).length,
+      subtitle: "Profile yang masih boleh masuk ke aplikasi utama.",
+      accent: "success",
+    },
+    {
+      key: "active-admins",
+      title: "Administrator Aktif",
+      value: activeAdministratorCount,
+      subtitle: "Dijaga agar administrator aktif terakhir tidak ikut hilang.",
+      accent: "warning",
+    },
+    {
+      key: "role-users",
+      title: "Role User",
+      value: users.filter((item) => item.role === ROLES.USER).length,
+      subtitle: "Profile operasional non-administrator.",
+      accent: "default",
+    },
+  ];
 
+  return (
+    <div className="page-container">
+      <PageHeader
+        title="Manajemen User"
+        subtitle="Kelola profile internal, role aktif, dan status akses user IMS tanpa menyentuh password Firebase Authentication."
+        actions={[
+          {
+            key: "refresh-users",
+            icon: <ReloadOutlined />,
+            label: "Refresh",
+            onClick: loadUsers,
+          },
+          {
+            key: "create-user-profile",
+            type: "primary",
+            icon: <PlusOutlined />,
+            label: "Tambah Profile User",
+            onClick: openCreateModal,
+          },
+        ]}
+      />
+
+      <Space direction="vertical" size={16} style={{ width: "100%" }}>
         <Alert
           type="info"
           showIcon
@@ -561,8 +591,14 @@ const UserManagement = () => {
           description="Buat user dulu di Firebase Authentication dengan email username@ziyocraft.com, salin UID Auth, lalu tempel di form Tambah Profile User. Tabel ini membaca Firestore system_users, bukan daftar Firebase Authentication. Tombol Hapus Profile hanya menghapus profile Firestore, bukan Firebase Auth user."
         />
 
-        <Card>
+        <SummaryStatGrid items={summaryItems} />
+
+        <PageSection
+          title="Daftar Profile User"
+          subtitle="Aksi di bawah hanya mengelola profile internal dan tetap dijaga oleh guard role serta status."
+        >
           <Table
+            className="app-data-table"
             rowKey="authUid"
             columns={columns}
             dataSource={users}
@@ -570,10 +606,10 @@ const UserManagement = () => {
             pagination={{ pageSize: 10 }}
             scroll={{ x: 1210 }}
           />
-        </Card>
+        </PageSection>
       </Space>
 
-      <Modal
+      <PageFormModal
         title={
           formMode === FORM_MODE.CREATE
             ? "Tambah Profile User Manual UID"
@@ -581,11 +617,13 @@ const UserManagement = () => {
         }
         open={isModalOpen}
         onCancel={closeModal}
-        onOk={() => form.submit()}
-        confirmLoading={isSaving}
         okText="Simpan"
         cancelText="Batal"
-        destroyOnHidden
+        form={form}
+        onFinish={handleSaveProfile}
+        confirmLoading={isSaving}
+        modalProps={{ destroyOnHidden: true }}
+        formProps={{ requiredMark: false }}
       >
         <Alert
           type={formMode === FORM_MODE.CREATE ? "info" : "warning"}
@@ -602,71 +640,63 @@ const UserManagement = () => {
               : "Perubahan hanya berlaku pada profile, role, dan status di Firestore. Password tetap dikelola oleh Firebase Authentication."
           }
         />
-
-        <Form
-          form={form}
-          layout="vertical"
-          requiredMark={false}
-          onFinish={handleSaveProfile}
+        <Form.Item
+          label="Auth UID"
+          name="authUid"
+          rules={[{ required: true, message: "Auth UID wajib diisi dari Firebase Authentication." }]}
+          extra={
+            formMode === FORM_MODE.CREATE
+              ? "Copy UID dari Firebase Console > Authentication > Users setelah membuat Auth user manual."
+              : "Auth UID dikunci agar profile tetap sesuai dokumen system_users/{uid}."
+          }
         >
-          <Form.Item
-            label="Auth UID"
-            name="authUid"
-            rules={[{ required: true, message: "Auth UID wajib diisi dari Firebase Authentication." }]}
-            extra={
-              formMode === FORM_MODE.CREATE
-                ? "Copy UID dari Firebase Console > Authentication > Users setelah membuat Auth user manual."
-                : "Auth UID dikunci agar profile tetap sesuai dokumen system_users/{uid}."
-            }
-          >
-            <Input
-              disabled={formMode === FORM_MODE.EDIT}
-              placeholder="Tempel UID Firebase Auth"
-            />
-          </Form.Item>
+          <Input
+            disabled={formMode === FORM_MODE.EDIT}
+            placeholder="Tempel UID Firebase Auth"
+          />
+        </Form.Item>
 
-          <Form.Item
-            label="Username"
-            name="username"
-            rules={[{ required: true, message: "Username wajib diisi." }]}
-            extra="Username akan dipakai sebagai login internal, contoh admin untuk admin@ziyocraft.com."
-          >
-            <Input disabled={formMode === FORM_MODE.EDIT} placeholder="contoh: admin" />
-          </Form.Item>
+        <Form.Item
+          label="Username"
+          name="username"
+          rules={[{ required: true, message: "Username wajib diisi." }]}
+          extra="Username akan dipakai sebagai login internal, contoh admin untuk admin@ziyocraft.com."
+        >
+          <Input disabled={formMode === FORM_MODE.EDIT} placeholder="contoh: admin" />
+        </Form.Item>
 
-          <Form.Item
-            label="Nama Tampilan"
-            name="displayName"
-            rules={[{ required: true, message: "Nama tampilan wajib diisi." }]}
-          >
-            <Input placeholder="contoh: Admin Toko" />
-          </Form.Item>
+        <Form.Item
+          label="Nama Tampilan"
+          name="displayName"
+          rules={[{ required: true, message: "Nama tampilan wajib diisi." }]}
+        >
+          <Input placeholder="contoh: Admin Toko" />
+        </Form.Item>
 
-          <Form.Item
-            label="Role"
-            name="role"
-            rules={[{ required: true, message: "Role wajib dipilih." }]}
-          >
-            <Select
-              options={assignableRoleOptions}
-              placeholder="Pilih Administrator atau User"
-            />
-          </Form.Item>
+        <Form.Item
+          label="Role"
+          name="role"
+          rules={[{ required: true, message: "Role wajib dipilih." }]}
+        >
+          <Select
+            options={assignableRoleOptions}
+            placeholder="Pilih Administrator atau User"
+          />
+        </Form.Item>
 
-          <Form.Item
-            label="Status"
-            name="status"
-            rules={[{ required: true, message: "Status wajib dipilih." }]}
-          >
-            <Select
-              options={[
-                { label: USER_STATUS_LABELS[USER_STATUS.ACTIVE], value: USER_STATUS.ACTIVE },
-                { label: USER_STATUS_LABELS[USER_STATUS.INACTIVE], value: USER_STATUS.INACTIVE },
-              ]}
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
+        <Form.Item
+          label="Status"
+          name="status"
+          rules={[{ required: true, message: "Status wajib dipilih." }]}
+        >
+          <Select
+            options={[
+              { label: USER_STATUS_LABELS[USER_STATUS.ACTIVE], value: USER_STATUS.ACTIVE },
+              { label: USER_STATUS_LABELS[USER_STATUS.INACTIVE], value: USER_STATUS.INACTIVE },
+            ]}
+          />
+        </Form.Item>
+      </PageFormModal>
 
       <Modal
         title={
@@ -728,22 +758,6 @@ const UserManagement = () => {
       </Modal>
     </div>
   );
-};
-
-const styles = {
-  pageWrap: {
-    padding: 24,
-  },
-  headerRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-  },
-  title: {
-    marginBottom: 4,
-  },
 };
 
 export default UserManagement;
