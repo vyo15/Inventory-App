@@ -34,10 +34,10 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import FilterBar from "../../components/Layout/Filters/FilterBar";
-import PageHeader from "../../components/Layout/Page/PageHeader";
+import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
+import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
-import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
+import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import {
   DEFAULT_PRODUCTION_PAYROLL_FORM,
   PAYROLL_PAYMENT_STATUS_MAP,
@@ -458,24 +458,13 @@ const ProductionPayrolls = () => {
 
   return (
     <div className="page-container">
-      <PageHeader
+      {/* AKTIF / GUARDED: migrasi header ke shared produksi; submit payroll dan integrasi cash-out tetap mengikuti flow existing. */}
+      <ProductionPageHeader
         title="Payroll Produksi"
-        subtitle="Rekap line payroll produksi berbasis work log completed, tetap guarded terhadap pembuatan Cash Out otomatis."
-        actions={[
-          {
-            key: "refresh-payroll",
-            icon: <ReloadOutlined />,
-            label: "Refresh",
-            onClick: loadData,
-          },
-          {
-            key: "create-payroll",
-            type: "primary",
-            icon: <PlusOutlined />,
-            label: "Tambah Payroll",
-            onClick: handleAdd,
-          },
-        ]}
+        description="Rekap line payroll produksi berbasis work log completed, tetap guarded terhadap pembuatan Cash Out otomatis."
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Tambah Payroll"
       />
 
       <Alert
@@ -486,9 +475,11 @@ const ProductionPayrolls = () => {
         description="Saat line ditandai Paid, sistem membuat Cash Out otomatis dengan source Payroll Produksi dan guard sourceModule/sourceId agar tidak double expense."
       />
 
-      <SummaryStatGrid items={summaryItems} />
+      {/* AKTIF / GUARDED: summary cards shared hanya ubah presentasi, nominal payroll tetap dari data existing. */}
+      <ProductionSummaryCards items={summaryItems} />
 
-      <FilterBar>
+      {/* AKTIF / GUARDED: filter card shared menjaga konsistensi layout, filter state dan query logic tidak berubah. */}
+      <ProductionFilterCard>
           <Col xs={24} md={12}>
             <Input
               placeholder="Cari nomor payroll, karyawan, work log..."
@@ -510,7 +501,7 @@ const ProductionPayrolls = () => {
               ]}
             />
           </Col>
-      </FilterBar>
+      </ProductionFilterCard>
 
       <PageSection
         title="Daftar Payroll Produksi"
