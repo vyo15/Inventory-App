@@ -560,6 +560,8 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
       </div>
 
       <Table
+        // AKTIF / GUARDED UI: class standar menjaga table adjustment solid di light/dark tanpa mengubah submit adjustment atau mutasi stok.
+        className="app-data-table"
         rowKey="id"
         columns={stockAdjustmentColumns}
         dataSource={sortedAdjustmentRecords}

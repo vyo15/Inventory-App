@@ -613,6 +613,8 @@ const StockManagement = () => {
         extra={<Tag color="purple">{formatNumberId(filteredHistory.length)} baris</Tag>}
       >
         <Table
+          // AKTIF / GUARDED UI: class standar hanya menyamakan surface riwayat stok; dataSource, columns, dan flow inventory log tidak diubah.
+          className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}

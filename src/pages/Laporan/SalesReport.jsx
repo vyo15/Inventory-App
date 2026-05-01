@@ -247,6 +247,8 @@ const SalesReport = () => {
         }
       >
         <Table
+          // AKTIF / GUARDED UI: class standar hanya visual; sales status, income recognition, dan report calculation tidak diubah.
+          className="app-data-table"
           dataSource={salesData}
           columns={columns}
           rowKey="id"

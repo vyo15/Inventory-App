@@ -271,6 +271,8 @@ const PurchasesReport = () => {
         }
       >
         <Table
+          // AKTIF / GUARDED UI: class standar hanya visual; pembacaan report pembelian/expense flow tidak diubah.
+          className="app-data-table"
           dataSource={purchasesData}
           columns={columns}
           rowKey="id"

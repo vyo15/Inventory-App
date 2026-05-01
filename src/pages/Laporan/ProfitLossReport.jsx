@@ -250,6 +250,8 @@ const ProfitLossReport = () => {
         }
       >
         <Table
+          // AKTIF / GUARDED UI: class standar hanya visual; kalkulasi laba rugi dan sumber revenues/incomes/expenses tetap sama.
+          className="app-data-table"
           dataSource={reportData}
           columns={columns}
           rowKey="id"

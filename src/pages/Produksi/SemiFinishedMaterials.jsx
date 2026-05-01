@@ -625,6 +625,8 @@ const SemiFinishedMaterials = () => {
         subtitle="Tabel ini merangkum stok master dan varian warna untuk kebutuhan produksi internal."
       >
         <Table
+          // AKTIF / GUARDED UI: class standar hanya menyamakan surface table; flow semi finished material dan produksi tidak diubah.
+          className="app-data-table"
           rowKey="id"
           size="small"
           tableLayout="fixed"

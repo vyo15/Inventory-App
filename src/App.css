@@ -1,19 +1,25 @@
 /* =========================
-   SECTION: App Shell
+   SECTION: App Shell - AKTIF / THEME CENTER
+   Fungsi:
+   - shell aplikasi membaca token global dari index.css agar light/dark tidak bentrok antar file.
+   Hubungan flow aplikasi:
+   - styling container saja; tidak menyentuh route, auth, stok, kas, produksi, payroll, HPP, atau laporan.
+   Status:
+   - AKTIF sebagai baseline visual global. Warna hardcoded lama dipindah ke token untuk mencegah drift tema.
 ========================= */
 .app-shell {
   height: 100vh;
   overflow: hidden;
-  background: #f5f7fb;
-  color: #0f172a;
+  background: var(--ims-floral-gradient);
+  color: var(--ims-text-primary);
   transition:
     background-color 0.22s ease,
     color 0.22s ease;
 }
 
 .app-shell.dark {
-  background: #0f172a;
-  color: #e6edf3;
+  background: var(--ims-floral-gradient);
+  color: var(--ims-text-primary);
 }
 
 /* =========================
@@ -109,11 +115,12 @@
 
 .app-content-card {
   min-height: 100%;
-  background: #f8fafc;
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: color-mix(in srgb, var(--ims-bg-card) 92%, transparent);
+  border: 1px solid var(--ims-border-color-soft);
   border-radius: 24px 24px 0 0;
   padding: 28px 24px 24px;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
+  box-shadow: var(--ims-shadow-soft);
+  backdrop-filter: blur(14px);
   transition:
     background-color 0.22s ease,
     color 0.22s ease,
@@ -122,10 +129,10 @@
 }
 
 .app-shell.dark .app-content-card {
-  background: #111827;
-  color: #e6edf3;
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.22);
+  background: color-mix(in srgb, var(--ims-bg-card) 92%, transparent);
+  color: var(--ims-text-primary);
+  border: 1px solid var(--ims-border-color-soft);
+  box-shadow: var(--ims-shadow-soft);
 }
 
 /* =========================
@@ -139,19 +146,19 @@
     border-color 0.2s ease,
     box-shadow 0.2s ease,
     transform 0.18s ease !important;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+  box-shadow: var(--ims-shadow-soft);
 }
 
 .theme-toggle-button.light .ant-float-btn-body {
-  background: #ffffff !important;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  color: #0f172a !important;
+  background: var(--ims-bg-elevated) !important;
+  border: 1px solid var(--ims-border-color);
+  color: var(--ims-text-primary) !important;
 }
 
 .theme-toggle-button.dark .ant-float-btn-body {
-  background: #111827 !important;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  color: #e6edf3 !important;
+  background: var(--ims-bg-elevated) !important;
+  border: 1px solid var(--ims-border-color);
+  color: var(--ims-text-primary) !important;
 }
 
 .theme-toggle-button:hover .ant-float-btn-body {
@@ -159,13 +166,13 @@
 }
 
 .theme-toggle-button.light:hover .ant-float-btn-body {
-  background: #f8fafc !important;
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
+  background: var(--ims-bg-card-soft) !important;
+  box-shadow: var(--ims-shadow-elevated);
 }
 
 .theme-toggle-button.dark:hover .ant-float-btn-body {
-  background: #1f2937 !important;
-  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.3);
+  background: var(--ims-bg-card-soft) !important;
+  box-shadow: var(--ims-shadow-elevated);
 }
 
 /* =========================
@@ -190,14 +197,14 @@
 .app-content-scroll::-webkit-scrollbar-thumb,
 .sidebar-menu-scroll::-webkit-scrollbar-thumb,
 .sidebar-menu::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.34);
+  background: var(--ims-scrollbar-thumb);
   border-radius: 999px;
 }
 
 .app-shell.dark .app-content-scroll::-webkit-scrollbar-thumb,
 .app-shell.dark .sidebar-menu-scroll::-webkit-scrollbar-thumb,
 .app-shell.dark .sidebar-menu::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.22);
+  background: var(--ims-scrollbar-thumb);
 }
 
 /* =========================
@@ -312,7 +319,7 @@
 /* ---------- Drawer ---------- */
 .app-shell .ant-drawer-header {
   padding: 18px 20px !important;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+  border-bottom: 1px solid var(--ims-border-color-soft) !important;
 }
 
 .app-shell .ant-drawer-title {
@@ -326,14 +333,14 @@
 
 .app-shell .ant-drawer-footer {
   padding: 14px 20px !important;
-  border-top: 1px solid rgba(15, 23, 42, 0.06) !important;
+  border-top: 1px solid var(--ims-border-color-soft) !important;
 }
 
 /* ---------- Modal ---------- */
 .app-shell .ant-modal-header {
   padding-bottom: 14px !important;
   margin-bottom: 0 !important;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  border-bottom: 1px solid var(--ims-border-color-soft);
 }
 
 .app-shell .ant-modal-title {
@@ -348,7 +355,7 @@
 .app-shell .ant-modal-footer {
   margin-top: 18px !important;
   padding-top: 14px;
-  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  border-top: 1px solid var(--ims-border-color-soft);
 }
 
 /* ---------- Form ---------- */
@@ -377,13 +384,6 @@
 }
 
 /* ---------- Dark mode specific polish ---------- */
-.app-shell.dark .ant-drawer-header,
-.app-shell.dark .ant-drawer-footer,
-.app-shell.dark .ant-modal-header,
-.app-shell.dark .ant-modal-footer {
-  border-color: rgba(148, 163, 184, 0.12) !important;
-}
-
 .app-shell.dark .ant-table-wrapper,
 .app-shell.dark .ant-table {
   box-shadow: none;
@@ -418,42 +418,21 @@
 
 
 /* =========================
-   SECTION: Batch 1 Shared Page Foundation
+   SECTION: Batch 1 Shared Page Foundation - AKTIF / CLEANUP CANDIDATE
    Fungsi:
-   - menjadi fondasi visual bersama untuk halaman tabel prioritas batch 1
-   - menjaga jarak section, action button, sticky column, dan metadata table tetap seragam
-   Catatan:
-   - blok ini dipakai aktif oleh halaman Products, Production Orders, Production Profiles, dan Work Logs
-   - raw materials dan semi finished yang sudah stabil tidak diubah render-nya, hanya ikut token global yang aman
+   - alias token lama ke token floral global supaya halaman batch lama tetap stabil tanpa warna biru/navy lama.
+   Hubungan flow aplikasi:
+   - class ini hanya mengatur spacing/surface table/action; tidak mengubah handler, query, kalkulasi, atau mutasi data.
+   Status:
+   - AKTIF karena masih dipakai halaman migrasi awal.
+   - CLEANUP CANDIDATE: setelah semua halaman sudah memakai token global langsung, alias ini bisa dirapikan bertahap.
 ========================= */
-.app-shell {
-  --ims-surface-card: #ffffff;
-  --ims-surface-soft: #f8fafc;
-  --ims-surface-muted: #eef2f7;
-  --ims-border-strong: rgba(15, 23, 42, 0.08);
-  --ims-text-primary: #0f172a;
-  --ims-text-secondary: rgba(15, 23, 42, 0.68);
-  --ims-table-row: #ffffff;
-  --ims-table-hover: #f5f8ff;
-  --ims-table-selected: #e8eefc;
-  --ims-table-selected-hover: #dee7fb;
-  --ims-sticky-shadow: inset -12px 0 12px -12px rgba(15, 23, 42, 0.18);
-  --ims-shadow-soft: 0 10px 28px rgba(15, 23, 42, 0.05);
-}
-
+.app-shell,
 .app-shell.dark {
-  --ims-surface-card: #111827;
-  --ims-surface-soft: #162138;
-  --ims-surface-muted: #1b2942;
-  --ims-border-strong: rgba(148, 163, 184, 0.14);
-  --ims-text-primary: #e6edf3;
-  --ims-text-secondary: rgba(148, 163, 184, 0.92);
-  --ims-table-row: #111827;
-  --ims-table-hover: #15233a;
-  --ims-table-selected: #1a2b49;
-  --ims-table-selected-hover: #1f3457;
-  --ims-sticky-shadow: inset -12px 0 12px -12px rgba(2, 6, 23, 0.38);
-  --ims-shadow-soft: 0 12px 28px rgba(2, 6, 23, 0.24);
+  --ims-surface-card: var(--ims-bg-card);
+  --ims-surface-soft: var(--ims-bg-card-soft);
+  --ims-surface-muted: var(--ims-bg-elevated);
+  --ims-sticky-shadow: var(--ims-table-fixed-shadow);
 }
 
 .ims-page {
@@ -791,13 +770,7 @@
 .app-data-table .ant-table-ping-left .ant-table-cell-fix-left-last::after,
 .ims-table .ant-table-ping-left .ant-table-cell-fix-left-last::after,
 .ims-page .ant-table-ping-left .ant-table-cell-fix-left-last::after {
-  box-shadow: inset 12px 0 12px -12px rgba(15, 23, 42, 0.12);
-}
-
-.app-shell.dark .app-data-table .ant-table-ping-left .ant-table-cell-fix-left-last::after,
-.app-shell.dark .ims-table .ant-table-ping-left .ant-table-cell-fix-left-last::after,
-.app-shell.dark .ims-page .ant-table-ping-left .ant-table-cell-fix-left-last::after {
-  box-shadow: inset 12px 0 12px -12px rgba(2, 6, 23, 0.36);
+  box-shadow: inset 12px 0 12px -12px color-mix(in srgb, var(--ims-table-fixed-shadow) 80%, transparent);
 }
 
 
@@ -883,6 +856,16 @@
    KANDIDAT CLEANUP:
    - beberapa warna lama di atas masih dipertahankan sebagai compatibility. Jangan hapus sebelum audit semua halaman.
 ========================= */
+/* =========================
+   SECTION: Phase 1 Global Surface Guard - AKTIF / GUARDED
+   Fungsi:
+   - mengunci token surface light/dark untuk shell, card, control, portal, dan overlay supaya fondasi UI konsisten lintas halaman.
+   Hubungan flow aplikasi:
+   - styling global saja; tidak mengubah route, auth, stok, kas, produksi, transaksi, payroll, HPP, laporan, atau reset.
+   Status:
+   - AKTIF sebagai fondasi visual Phase 1.
+   - GUARDED karena override ini ikut terbaca area sensitif yang memakai Modal, Drawer, Table, dan Form.
+========================= */
 .app-shell,
 .app-shell.light,
 .app-shell.dark {
@@ -916,13 +899,13 @@
 .app-content-scroll::-webkit-scrollbar-thumb,
 .sidebar-menu-scroll::-webkit-scrollbar-thumb,
 .sidebar-menu::-webkit-scrollbar-thumb {
-  background: var(--ims-color-primary-soft);
+  background: var(--ims-scrollbar-thumb);
 }
 
 .app-shell.dark .app-content-scroll::-webkit-scrollbar-thumb,
 .app-shell.dark .sidebar-menu-scroll::-webkit-scrollbar-thumb,
 .app-shell.dark .sidebar-menu::-webkit-scrollbar-thumb {
-  background: rgba(216, 138, 156, 0.26);
+  background: var(--ims-scrollbar-thumb);
 }
 
 /* =========================
@@ -972,7 +955,7 @@
 .app-content-card .ant-select-selector,
 .app-content-card .ant-picker,
 .app-content-card .ant-input-number {
-  background: var(--ims-bg-elevated) !important;
+  background: var(--ims-bg-field) !important;
   border-color: var(--ims-border-color) !important;
   color: var(--ims-text-primary) !important;
 }
@@ -985,7 +968,176 @@
 .app-content-card .ant-input-affix-wrapper-focused,
 .app-content-card .ant-picker-focused {
   border-color: var(--ims-color-primary) !important;
-  box-shadow: 0 0 0 3px var(--ims-color-primary-softer) !important;
+  box-shadow: var(--ims-focus-ring) !important;
+}
+
+.app-content-card .ant-input::placeholder,
+.app-content-card .ant-input-number input::placeholder,
+.app-content-card .ant-select-selection-placeholder,
+.app-content-card .ant-picker-input > input::placeholder,
+.app-content-card .ant-input-affix-wrapper input::placeholder {
+  color: var(--ims-text-muted) !important;
+}
+
+
+/* =========================
+   SECTION: AntD Portal Surface Baseline - AKTIF / GUARDED UI
+   Fungsi:
+   - memastikan Modal, Drawer, Popover, Dropdown, dan Select portal tetap solid ketika dirender di luar .app-shell.
+   Hubungan flow aplikasi:
+   - styling portal Ant Design saja; tidak mengubah submit flow, action handler, query Firestore, atau business rules.
+   Status:
+   - AKTIF untuk konsistensi light/dark.
+   - GUARDED karena dipakai halaman transaksi, produksi, laporan, auth, dan reset.
+========================= */
+body.app-theme-light .ant-modal-content,
+body.app-theme-light .ant-modal-header,
+body.app-theme-light .ant-modal-footer,
+body.app-theme-light .ant-modal-body,
+body.app-theme-light .ant-drawer-content,
+body.app-theme-light .ant-drawer-header,
+body.app-theme-light .ant-drawer-footer,
+body.app-theme-light .ant-drawer-body,
+body.app-theme-light .ant-popover-inner,
+body.app-theme-light .ant-dropdown-menu,
+body.app-theme-light .ant-select-dropdown,
+body.app-theme-light .ant-picker-dropdown .ant-picker-panel-container,
+body.app-theme-dark .ant-modal-content,
+body.app-theme-dark .ant-modal-header,
+body.app-theme-dark .ant-modal-footer,
+body.app-theme-dark .ant-modal-body,
+body.app-theme-dark .ant-drawer-content,
+body.app-theme-dark .ant-drawer-header,
+body.app-theme-dark .ant-drawer-footer,
+body.app-theme-dark .ant-drawer-body,
+body.app-theme-dark .ant-popover-inner,
+body.app-theme-dark .ant-dropdown-menu,
+body.app-theme-dark .ant-select-dropdown,
+body.app-theme-dark .ant-picker-dropdown .ant-picker-panel-container {
+  background: var(--ims-bg-elevated) !important;
+  color: var(--ims-text-primary) !important;
+  border-color: var(--ims-border-color-soft) !important;
+}
+
+body.app-theme-light .ant-modal-mask,
+body.app-theme-light .ant-drawer-mask,
+body.app-theme-dark .ant-modal-mask,
+body.app-theme-dark .ant-drawer-mask {
+  background: var(--ims-bg-overlay-mask) !important;
+}
+
+body.app-theme-light .ant-modal-title,
+body.app-theme-light .ant-drawer-title,
+body.app-theme-light .ant-select-item,
+body.app-theme-light .ant-dropdown-menu-title-content,
+body.app-theme-light .ant-picker-header,
+body.app-theme-light .ant-picker-content th,
+body.app-theme-dark .ant-modal-title,
+body.app-theme-dark .ant-drawer-title,
+body.app-theme-dark .ant-select-item,
+body.app-theme-dark .ant-dropdown-menu-title-content,
+body.app-theme-dark .ant-picker-header,
+body.app-theme-dark .ant-picker-content th {
+  color: var(--ims-text-primary) !important;
+}
+
+body.app-theme-light .ant-select-item-option-active:not(.ant-select-item-option-disabled),
+body.app-theme-light .ant-dropdown-menu-item:hover,
+body.app-theme-light .ant-dropdown-menu-submenu-title:hover,
+body.app-theme-light .ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-cell-inner::before,
+body.app-theme-dark .ant-select-item-option-active:not(.ant-select-item-option-disabled),
+body.app-theme-dark .ant-dropdown-menu-item:hover,
+body.app-theme-dark .ant-dropdown-menu-submenu-title:hover,
+body.app-theme-dark .ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-cell-inner::before {
+  background: var(--ims-bg-card-soft) !important;
+}
+
+body.app-theme-light .ant-select-item-option-selected:not(.ant-select-item-option-disabled),
+body.app-theme-dark .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+  background: var(--ims-table-selected) !important;
+}
+
+body.app-theme-light .ant-modal-header,
+body.app-theme-light .ant-modal-footer,
+body.app-theme-light .ant-drawer-header,
+body.app-theme-light .ant-drawer-footer,
+body.app-theme-dark .ant-modal-header,
+body.app-theme-dark .ant-modal-footer,
+body.app-theme-dark .ant-drawer-header,
+body.app-theme-dark .ant-drawer-footer {
+  border-color: var(--ims-border-color-soft) !important;
+}
+
+body.app-theme-light .ant-modal .ant-input,
+body.app-theme-light .ant-modal .ant-input-affix-wrapper,
+body.app-theme-light .ant-modal .ant-select-selector,
+body.app-theme-light .ant-modal .ant-picker,
+body.app-theme-light .ant-modal .ant-input-number,
+body.app-theme-light .ant-drawer .ant-input,
+body.app-theme-light .ant-drawer .ant-input-affix-wrapper,
+body.app-theme-light .ant-drawer .ant-select-selector,
+body.app-theme-light .ant-drawer .ant-picker,
+body.app-theme-light .ant-drawer .ant-input-number,
+body.app-theme-dark .ant-modal .ant-input,
+body.app-theme-dark .ant-modal .ant-input-affix-wrapper,
+body.app-theme-dark .ant-modal .ant-select-selector,
+body.app-theme-dark .ant-modal .ant-picker,
+body.app-theme-dark .ant-modal .ant-input-number,
+body.app-theme-dark .ant-drawer .ant-input,
+body.app-theme-dark .ant-drawer .ant-input-affix-wrapper,
+body.app-theme-dark .ant-drawer .ant-select-selector,
+body.app-theme-dark .ant-drawer .ant-picker,
+body.app-theme-dark .ant-drawer .ant-input-number {
+  background: var(--ims-bg-field) !important;
+  border-color: var(--ims-border-color) !important;
+  color: var(--ims-text-primary) !important;
+}
+
+body.app-theme-light .ant-modal .ant-input::placeholder,
+body.app-theme-light .ant-modal .ant-select-selection-placeholder,
+body.app-theme-light .ant-modal .ant-picker-input > input::placeholder,
+body.app-theme-light .ant-drawer .ant-input::placeholder,
+body.app-theme-light .ant-drawer .ant-select-selection-placeholder,
+body.app-theme-light .ant-drawer .ant-picker-input > input::placeholder,
+body.app-theme-dark .ant-modal .ant-input::placeholder,
+body.app-theme-dark .ant-modal .ant-select-selection-placeholder,
+body.app-theme-dark .ant-modal .ant-picker-input > input::placeholder,
+body.app-theme-dark .ant-drawer .ant-input::placeholder,
+body.app-theme-dark .ant-drawer .ant-select-selection-placeholder,
+body.app-theme-dark .ant-drawer .ant-picker-input > input::placeholder {
+  color: var(--ims-text-muted) !important;
+}
+
+body.app-theme-light .ant-modal .ant-input:hover,
+body.app-theme-light .ant-modal .ant-input-affix-wrapper:hover,
+body.app-theme-light .ant-modal .ant-select-selector:hover,
+body.app-theme-light .ant-modal .ant-picker:hover,
+body.app-theme-light .ant-modal .ant-input-number:hover,
+body.app-theme-light .ant-drawer .ant-input:hover,
+body.app-theme-light .ant-drawer .ant-input-affix-wrapper:hover,
+body.app-theme-light .ant-drawer .ant-select-selector:hover,
+body.app-theme-light .ant-drawer .ant-picker:hover,
+body.app-theme-light .ant-drawer .ant-input-number:hover,
+body.app-theme-dark .ant-modal .ant-input:hover,
+body.app-theme-dark .ant-modal .ant-input-affix-wrapper:hover,
+body.app-theme-dark .ant-modal .ant-select-selector:hover,
+body.app-theme-dark .ant-modal .ant-picker:hover,
+body.app-theme-dark .ant-modal .ant-input-number:hover,
+body.app-theme-dark .ant-drawer .ant-input:hover,
+body.app-theme-dark .ant-drawer .ant-input-affix-wrapper:hover,
+body.app-theme-dark .ant-drawer .ant-select-selector:hover,
+body.app-theme-dark .ant-drawer .ant-picker:hover,
+body.app-theme-dark .ant-drawer .ant-input-number:hover,
+body.app-theme-light .ant-modal .ant-input-affix-wrapper-focused,
+body.app-theme-light .ant-modal .ant-picker-focused,
+body.app-theme-light .ant-drawer .ant-input-affix-wrapper-focused,
+body.app-theme-light .ant-drawer .ant-picker-focused,
+body.app-theme-dark .ant-modal .ant-input-affix-wrapper-focused,
+body.app-theme-dark .ant-modal .ant-picker-focused,
+body.app-theme-dark .ant-drawer .ant-input-affix-wrapper-focused,
+body.app-theme-dark .ant-drawer .ant-picker-focused {
+  border-color: var(--ims-color-primary) !important;
+  box-shadow: var(--ims-focus-ring) !important;
 }
 
 /* =========================

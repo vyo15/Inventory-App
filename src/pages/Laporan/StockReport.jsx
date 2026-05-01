@@ -383,6 +383,8 @@ const StockReport = () => {
         extra={<Tag color="blue">{formatNumberId(filteredData.length)} baris</Tag>}
       >
         <Table
+          // AKTIF / GUARDED UI: class standar hanya visual; sumber stok/currentStock/reservedStock/availableStock tidak diubah.
+          className="app-data-table"
           columns={columns}
           dataSource={filteredData}
           loading={loading}
