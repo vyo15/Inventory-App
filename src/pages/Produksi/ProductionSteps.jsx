@@ -57,10 +57,10 @@ import {
 } from "../../services/Produksi/productionStepsService";
 import { getAllProductionEmployees } from "../../services/Produksi/productionEmployeesService";
 import { getAllProductionBoms } from "../../services/Produksi/productionBomsService";
-import FilterBar from "../../components/Layout/Filters/FilterBar";
-import PageHeader from "../../components/Layout/Page/PageHeader";
+import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
+import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
-import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
+import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 
 const getStepEmployeeCount = (stepId, employees = []) =>
   employees.filter((item) => Array.isArray(item.assignedStepIds) && item.assignedStepIds.includes(stepId)).length;
@@ -500,18 +500,20 @@ const ProductionSteps = () => {
 
   return (
     <div className="page-container">
-      <PageHeader
+      {/* AKTIF / GUARDED: header shared dipakai agar pola halaman produksi konsisten, flow data step tetap existing. */}
+      <ProductionPageHeader
         title="Tahapan Produksi"
-        subtitle="Master step sederhana untuk standarisasi proses, relasi karyawan, BOM, dan source of truth payroll produksi."
-        actions={[
-          { key: "refresh-steps", icon: <ReloadOutlined />, label: "Refresh", onClick: loadData },
-          { key: "create-step", type: "primary", icon: <PlusOutlined />, label: "Tambah Step", onClick: handleAdd },
-        ]}
+        description="Master step sederhana untuk standarisasi proses, relasi karyawan, BOM, dan source of truth payroll produksi."
+        onRefresh={loadData}
+        onAdd={handleAdd}
+        addLabel="Tambah Step"
       />
 
-      <SummaryStatGrid items={summaryItems} />
+      {/* AKTIF / GUARDED: summary hanya migrasi layout card, perhitungan statistik tidak diubah. */}
+      <ProductionSummaryCards items={summaryItems} />
 
-      <FilterBar>
+      {/* AKTIF / GUARDED: filter section memakai card shared; state filter tetap mengikuti logic lama. */}
+      <ProductionFilterCard>
           <Col xs={24} md={10}>
             <Input
               placeholder="Cari nama step, kategori, atau fungsi..."
@@ -545,7 +547,7 @@ const ProductionSteps = () => {
               ]}
             />
           </Col>
-      </FilterBar>
+      </ProductionFilterCard>
 
       <PageSection
         title="Daftar Tahapan Produksi"

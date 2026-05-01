@@ -6,12 +6,12 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Col, Empty, Input, Select, Space, Table, Typography, message, Tag } from "antd";
-import { FileExcelOutlined, ReloadOutlined } from "@ant-design/icons";
+import { FileExcelOutlined } from "@ant-design/icons";
 import { getCompletedProductionWorkLogs } from "../../services/Produksi/productionWorkLogsService";
 import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
-import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
-import FilterBar from "../../components/Layout/Filters/FilterBar";
-import PageHeader from "../../components/Layout/Page/PageHeader";
+import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
+import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
+import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatDateId } from "../../utils/formatters/dateId";
@@ -408,42 +408,36 @@ const ProductionHppAnalysis = () => {
 
   return (
     <>
-      <PageHeader
+      {/* AKTIF / GUARDED: header dimigrasikan ke shared produksi agar konsisten, tanpa mengubah mapping/calc HPP. */}
+      <ProductionPageHeader
         title="Analisis HPP Produksi"
-        subtitle="Analisa biaya realisasi bahan, tenaga kerja, dan overhead per work log completed dengan baseline layout shared yang seragam."
-        actions={[
-          {
-            key: "refresh-hpp-analysis",
-            icon: <ReloadOutlined />,
-            label: "Refresh",
-            onClick: loadData,
-          },
-        ]}
+        description="Analisa biaya realisasi bahan, tenaga kerja, dan overhead per work log completed dengan baseline layout shared yang seragam."
+        onRefresh={loadData}
+        extra={(
+          <Button
+            type="primary"
+            icon={<FileExcelOutlined />}
+            onClick={exportHppToExcel}
+            disabled={filteredRows.length === 0}
+          >
+            Ekspor HPP XLSX
+          </Button>
+        )}
       />
 
       <PageSection
         title="Ringkasan HPP"
         subtitle="Ringkasan mengikuti hasil filter target type dan pencarian work log agar audit biaya lebih cepat."
       >
-        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
+        <ProductionSummaryCards items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
       </PageSection>
 
       <PageSection
         title="Filter Analisis"
         subtitle="Filter ini membantu membaca kelompok work log tertentu tanpa mengubah contract HPP aktif."
       >
-        <FilterBar
-          actions={
-            <Button
-              type="primary"
-              icon={<FileExcelOutlined />}
-              onClick={exportHppToExcel}
-              disabled={filteredRows.length === 0}
-            >
-              Ekspor HPP XLSX
-            </Button>
-          }
-        >
+        {/* AKTIF / GUARDED: filter card shared dipakai untuk konsistensi visual; state/filter logic tidak diubah. */}
+        <ProductionFilterCard>
           <Col xs={24} md={12}>
             <Input
               style={{ width: "100%" }}
@@ -468,7 +462,7 @@ const ProductionHppAnalysis = () => {
               ]}
             />
           </Col>
-        </FilterBar>
+        </ProductionFilterCard>
       </PageSection>
 
       <PageSection
