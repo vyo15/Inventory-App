@@ -382,6 +382,20 @@ Guard tersisa:
 - Jangan membuat input konversi manual di Purchases; koreksi reject/selisih tetap lewat Penyesuaian Stok.
 - Jangan membuat shipping tier / ongkir bertingkat di Purchases; ongkir, voucher, diskon ongkir, dan biaya layanan aktual tetap editable saat checkout.
 
+## Purchases - Preview Stok Aktual dan Breakdown Ringkasan Pembelian
+
+Status source terbaru:
+- Modal Purchases menampilkan preview stok aktual sebelum restock setelah item dan/atau varian dipilih.
+- Item non-varian menampilkan stok master `currentStock`, `reservedStock`, dan `availableStock`.
+- Item bervarian menampilkan stok varian terpilih; jika varian belum dipilih, UI menampilkan pesan agar user memilih varian dulu.
+- Ringkasan Perbandingan Supplier menampilkan breakdown subtotal barang/harga awal, ongkir, admin/service fee, potongan ongkir, voucher/potongan, total aktual, total pembanding supplier, modal aktual per satuan stok, dan selisih hemat.
+
+Guard tersisa:
+- Preview stok hanya read-only dan tidak boleh menjadi sumber mutasi stok.
+- `handleSubmitPurchase`, `runTransaction`, stock mutation, inventory log, expense otomatis, rumus `totalStockIn`, `totalActualPurchase`, `actualUnitCost`, dan `purchaseSaving` tetap guarded.
+- Fallback legacy `currentStock ?? stock` masih dipertahankan untuk data lama.
+- Ringkasan breakdown tidak boleh mengubah supplier catalog, prefill supplier, atau menjadikan harga supplier sebagai harga aktual wajib.
+
 ## Update UI/Performance Ringan - 2026-04-26
 
 ### Supplier table cleanup

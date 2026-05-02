@@ -137,3 +137,13 @@ Status cleanup bertahap yang dikunci di docs:
 - **Aktif:** Dashboard membaca summary planning mingguan/bulanan, overdue, dan kurang target secara read-only.
 - **Compatibility:** PO lama tanpa `planningId` tetap valid sebagai PO manual; Work Log lama tanpa planning tetap valid dan tidak dimigrasi otomatis.
 - **Docs lock:** patch berikutnya tidak boleh menganggap planning sebagai stok nyata atau shortcut untuk memotong bahan.
+
+## Update Lock Stok Master Edit — 2026-05-02
+- **Aktif:** stok awal hanya boleh diinput saat create pertama kali di master Product, Raw Material, dan Semi Finished Material, baik non-variant maupun variant.
+- **Guarded:** setelah data master dibuat, field stok fisik tidak boleh diedit langsung dari form edit master. Mutasi stok wajib lewat Stock Management / Stock Adjustment / flow transaksi resmi agar audit trail, `stock_adjustments`, dan `inventory_logs` tetap jelas.
+- **Guarded:** field yang dikunci dari edit master mencakup `stock`, `currentStock`, `reservedStock`, `availableStock`, serta `variants[].stock`, `variants[].currentStock`, `variants[].reservedStock`, dan `variants[].availableStock`.
+- **Aktif:** edit master tetap boleh mengubah metadata non-stok seperti nama, kategori, harga, supplier manual/reference non-stok, SKU/kode/label, deskripsi, status aktif, dan `minStock` / `minStockAlert`.
+- **Guarded:** mode `hasVariants` dikunci saat edit karena perubahan mode varian setelah ada data dapat menghapus atau memindahkan bucket stok tanpa audit.
+- **Legacy:** field `stock` tetap disimpan sebagai alias/compatibility dan tidak boleh dihapus dari dokumen.
+- **Cleanup candidate:** Semi Finished Material belum masuk Stock Adjustment manual; koreksi manual semi finished perlu task terpisah bila owner ingin menjadikannya flow resmi.
+- **Docs lock:** task berikutnya tidak boleh membuka kembali direct edit stok master kecuali ada business rule baru, audit trail baru, dan approval eksplisit.

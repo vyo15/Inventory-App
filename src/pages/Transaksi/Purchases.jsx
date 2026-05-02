@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Table,
   Modal,
@@ -83,6 +83,33 @@ const getPurchaseSavingMeta = (value) => {
     status: "normal",
     label: "Sesuai Referensi",
     color: "default",
+  };
+};
+
+// =========================
+// SECTION: Snapshot stok preview pembelian
+// Fungsi blok:
+// - menormalisasi currentStock, reservedStock, dan availableStock untuk card stok read-only di modal pembelian.
+// Hubungan flow Purchases:
+// - hanya dipakai untuk display sebelum restock; tidak dipakai untuk menghitung stok masuk,
+//   cash out, expense, inventory log, supplier catalog, atau payload submit.
+// Alasan logic:
+// - data legacy masih bisa memakai field stock, sedangkan data final memakai currentStock;
+// - availableStock boleh dihitung dari currentStock - reservedStock jika field belum tersedia.
+// Status: AKTIF untuk UI preview, LEGACY untuk fallback currentStock ?? stock, GUARDED karena tidak boleh menjadi sumber mutasi stok.
+// =========================
+const buildPurchaseStockPreviewSnapshot = (stockSource = {}) => {
+  const parsedCurrentStock = Number(stockSource?.currentStock ?? stockSource?.stock ?? 0);
+  const parsedReservedStock = Number(stockSource?.reservedStock || 0);
+  const currentStock = Number.isFinite(parsedCurrentStock) ? parsedCurrentStock : 0;
+  const reservedStock = Number.isFinite(parsedReservedStock) ? parsedReservedStock : 0;
+  const calculatedAvailableStock = Math.max(currentStock - reservedStock, 0);
+  const availableStock = Number(stockSource?.availableStock ?? calculatedAvailableStock);
+
+  return {
+    currentStock,
+    reservedStock,
+    availableStock: Number.isFinite(availableStock) ? availableStock : calculatedAvailableStock,
   };
 };
 
@@ -184,6 +211,7 @@ const Purchases = () => {
   const quantity = Form.useWatch("quantity", form);
   const conversionValue = Form.useWatch("conversionValue", form);
   const materialVariantId = Form.useWatch("materialVariantId", form);
+  const productVariantKey = Form.useWatch("productVariantKey", form);
   const supplierId = Form.useWatch("supplierId", form);
   const purchaseType = Form.useWatch("purchaseType", form);
 
@@ -223,6 +251,21 @@ const Purchases = () => {
     return buildVariantOptionsFromItem(selectedProduct);
   }, [selectedProduct, selectedProductHasVariants]);
 
+  // =========================
+  // SECTION: Varian produk terpilih untuk preview stok
+  // Fungsi blok:
+  // - membaca productVariantKey secara reactive agar card stok produk bervarian berubah real-time.
+  // Hubungan flow Purchases:
+  // - memakai field name existing yang sudah dipakai submit; tidak mengubah validasi atau payload pembelian.
+  // Alasan logic:
+  // - produk bervarian harus menampilkan stok varian yang dipilih, bukan total master.
+  // Status: AKTIF untuk modal pembelian; CLEANUP CANDIDATE sebelumnya karena productVariantKey belum reactive di UI preview.
+  // =========================
+  const selectedProductVariant = useMemo(() => {
+    if (!selectedProductHasVariants || !productVariantKey) return null;
+    return findVariantByKey(selectedProduct || {}, productVariantKey);
+  }, [productVariantKey, selectedProduct, selectedProductHasVariants]);
+
   const selectedMaterial = useMemo(() => {
     const found = materials.find((item) => item.id === itemId);
     return found ? enrichRawMaterialWithVariantTotals(found) : null;
@@ -246,6 +289,115 @@ const Purchases = () => {
         label: item.variantName,
       }));
   }, [selectedMaterial]);
+
+  // =========================
+  // SECTION: Preview stok aktual sebelum restock
+  // Fungsi blok:
+  // - menentukan sumber stok read-only yang akan tampil di modal pembelian setelah item/varian dipilih;
+  // - non-varian memakai stok master, sedangkan item bervarian wajib memakai stok varian terpilih.
+  // Hubungan flow Purchases:
+  // - preview ini muncul sebelum supplier/qty/biaya agar user memahami posisi stok sebelum klik Simpan;
+  // - tidak mengubah totalStockIn, totalActualPurchase, actualUnitCost, purchaseSaving, save flow, atau services.
+  // Alasan logic:
+  // - item bervarian tidak boleh menampilkan total master sebagai angka utama karena mutasi pembelian masuk ke varian.
+  // Status: AKTIF untuk UI modal pembelian, GUARDED agar tidak menjadi sumber mutasi stok, LEGACY untuk fallback field stock.
+  // =========================
+  const selectedPurchaseStockPreview = useMemo(() => {
+    if (!itemType || !itemId) return null;
+
+    const buildReadyPreview = ({ itemName, sourceLabel, sourceType, stockSource }) => ({
+      status: "ready",
+      itemName,
+      sourceLabel,
+      sourceType,
+      ...buildPurchaseStockPreviewSnapshot(stockSource),
+    });
+
+    const buildNeedsVariantPreview = ({ itemName, variantLabel }) => ({
+      status: "needs_variant",
+      itemName,
+      variantLabel: variantLabel || "Varian",
+      message: "Pilih varian untuk melihat stok aktual varian.",
+    });
+
+    if (itemType === "material") {
+      if (!selectedMaterial) return null;
+
+      const materialHasVariants = selectedMaterial?.hasVariantOptions || selectedMaterial?.hasVariants;
+      if (materialHasVariants) {
+        if (!materialVariantId || !selectedMaterialVariant) {
+          return buildNeedsVariantPreview({
+            itemName: selectedMaterial.name,
+            variantLabel: selectedMaterial.variantLabel || "Varian Bahan",
+          });
+        }
+
+        return buildReadyPreview({
+          itemName: selectedMaterial.name,
+          sourceLabel:
+            selectedMaterialVariant.variantName ||
+            selectedMaterialVariant.variantLabel ||
+            selectedMaterialVariant.name ||
+            selectedMaterialVariant.variantKey ||
+            "Varian terpilih",
+          sourceType: "variant",
+          stockSource: selectedMaterialVariant,
+        });
+      }
+
+      return buildReadyPreview({
+        itemName: selectedMaterial.name,
+        sourceLabel: "Master / non-varian",
+        sourceType: "master",
+        stockSource: selectedMaterial,
+      });
+    }
+
+    if (itemType === "product") {
+      if (!selectedProduct) return null;
+
+      if (selectedProductHasVariants) {
+        if (!productVariantKey || !selectedProductVariant) {
+          return buildNeedsVariantPreview({
+            itemName: selectedProduct.name,
+            variantLabel: selectedProduct.variantLabel || "Varian Produk",
+          });
+        }
+
+        return buildReadyPreview({
+          itemName: selectedProduct.name,
+          sourceLabel:
+            selectedProductVariant.variantLabel ||
+            selectedProductVariant.label ||
+            selectedProductVariant.name ||
+            selectedProductVariant.color ||
+            selectedProductVariant.variantKey ||
+            "Varian terpilih",
+          sourceType: "variant",
+          stockSource: selectedProductVariant,
+        });
+      }
+
+      return buildReadyPreview({
+        itemName: selectedProduct.name,
+        sourceLabel: "Master / non-varian",
+        sourceType: "master",
+        stockSource: selectedProduct,
+      });
+    }
+
+    return null;
+  }, [
+    itemId,
+    itemType,
+    materialVariantId,
+    productVariantKey,
+    selectedMaterial,
+    selectedMaterialVariant,
+    selectedProduct,
+    selectedProductHasVariants,
+    selectedProductVariant,
+  ]);
 
   // =========================
   // SECTION: Supplier dan detail katalog supplier terpilih
@@ -1501,6 +1653,90 @@ const Purchases = () => {
               </Select>
             </Form.Item>
           ) : null}
+
+          {/* ===============================================================
+              SECTION: Preview stok aktual sebelum restock.
+              Fungsi blok:
+              - memberi user konteks current/reserved/available stock setelah item dan/atau varian dipilih.
+              Hubungan flow Purchases:
+              - tampil sebelum Supplier agar keputusan restock membaca stok aktual lebih dulu;
+              - hanya display read-only dan tidak mengubah rumus stok, cash out, expense, inventory log, atau supplier catalog.
+              Alasan logic:
+              - item bervarian menampilkan stok varian terpilih, bukan total stok master yang menjumlah semua varian.
+              Status: AKTIF untuk modal pembelian, GUARDED terhadap mutasi stok, LEGACY untuk fallback currentStock ?? stock.
+          =============================================================== */}
+          {selectedPurchaseStockPreview ? (
+            <div
+              style={{
+                border: "1px solid #f0f0f0",
+                borderRadius: 12,
+                padding: 14,
+                marginBottom: 16,
+                background: "var(--surface-muted, #fafafa)",
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                Stok Aktual Sebelum Restock
+              </div>
+              <div style={{ color: "#777", fontSize: 12, marginBottom: 10 }}>
+                Info ini hanya snapshot stok saat ini sebelum pembelian disimpan.
+              </div>
+
+              {selectedPurchaseStockPreview.status === "needs_variant" ? (
+                <div
+                  style={{
+                    border: "1px dashed #d9d9d9",
+                    borderRadius: 10,
+                    padding: 12,
+                    background: "#fff",
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>
+                    {selectedPurchaseStockPreview.itemName || "Item bervarian"}
+                  </div>
+                  <div style={{ color: "#777", marginTop: 4 }}>
+                    {selectedPurchaseStockPreview.message}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ marginBottom: 10 }}>
+                    <Tag color={selectedPurchaseStockPreview.sourceType === "variant" ? "purple" : "default"}>
+                      {selectedPurchaseStockPreview.sourceType === "variant" ? "Varian" : "Master"}
+                    </Tag>
+                    <span style={{ fontWeight: 600 }}>
+                      {selectedPurchaseStockPreview.itemName}
+                    </span>
+                    <span style={{ color: "#777" }}>
+                      {` — ${selectedPurchaseStockPreview.sourceLabel}`}
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                      gap: 8,
+                    }}
+                  >
+                    <div className="ims-readonly-field ims-readonly-field--compact">
+                      <div style={{ color: "#777", fontSize: 12 }}>Current Stock</div>
+                      <strong>{formatNumberId(selectedPurchaseStockPreview.currentStock)}</strong>
+                    </div>
+                    <div className="ims-readonly-field ims-readonly-field--compact">
+                      <div style={{ color: "#777", fontSize: 12 }}>Reserved Stock</div>
+                      <strong>{formatNumberId(selectedPurchaseStockPreview.reservedStock)}</strong>
+                    </div>
+                    <div className="ims-readonly-field ims-readonly-field--compact">
+                      <div style={{ color: "#777", fontSize: 12 }}>Available Stock</div>
+                      <strong>{formatNumberId(selectedPurchaseStockPreview.availableStock)}</strong>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
+
           <Form.Item
             name="supplierId"
             label="Nama Supplier"
@@ -1831,9 +2067,11 @@ const Purchases = () => {
 
           {/* ===============================================================
               Ringkasan Perbandingan Supplier.
-              Fungsi: menggabungkan stok masuk, harga pembanding Supplier, total aktual, modal aktual, dan selisih hemat dalam satu card ringkas.
-              Hubungan flow: semua nilai read-only; stok/kas/expense baru berubah saat handleSubmitPurchase berjalan setelah user klik Simpan.
-              Status: aktif dipakai; menggantikan field read-only besar agar form tidak terasa dobel.
+              Fungsi: menampilkan breakdown subtotal, ongkir, admin/service fee, potongan, total aktual,
+              total pembanding supplier, modal aktual per satuan stok, dan selisih hemat dalam satu card ringkas.
+              Hubungan flow: semua nilai read-only dari field existing; stok/kas/expense baru berubah saat handleSubmitPurchase berjalan setelah user klik Simpan.
+              Alasan logic: label lama terlalu agregat, sehingga user sulit membaca komponen biaya sebelum Simpan.
+              Status: AKTIF untuk UI pembelian, GUARDED karena formula effect/submit tidak dipindah, CLEANUP CANDIDATE untuk ringkasan lama yang terlalu agregat.
           =============================================================== */}
           <Form.Item name="totalStockIn" hidden>
             <InputNumber />
@@ -1863,8 +2101,17 @@ const Purchases = () => {
               const totalActualValue = Number(getFieldValue("totalActualPurchase") || 0);
               const actualUnitCostValue = Number(getFieldValue("actualUnitCost") || 0);
               const purchaseSavingValue = Number(getFieldValue("purchaseSaving") || 0);
+              const summaryPurchaseType = getFieldValue("purchaseType") || "online";
+              const summaryIsOfflinePurchase = summaryPurchaseType === "offline";
+              const subtotalItemsValue = Number(getFieldValue("subtotalItems") || 0);
+              const shippingCostValue = summaryIsOfflinePurchase ? 0 : Number(getFieldValue("shippingCost") || 0);
+              const shippingDiscountValue = summaryIsOfflinePurchase ? 0 : Number(getFieldValue("shippingDiscount") || 0);
+              const voucherDiscountValue = summaryIsOfflinePurchase ? 0 : Number(getFieldValue("voucherDiscount") || 0);
+              const serviceFeeValue = summaryIsOfflinePurchase ? 0 : Number(getFieldValue("serviceFee") || 0);
               const savingMeta = getPurchaseSavingMeta(purchaseSavingValue);
               const hasSupplierReference = totalReferenceValue > 0;
+              const formatDiscountValue = (value) =>
+                Number(value || 0) > 0 ? `- ${formatCurrencyIdr(value)}` : formatCurrencyIdr(0);
 
               return (
                 <div
@@ -1876,20 +2123,80 @@ const Purchases = () => {
                     background: "var(--surface-card, #fff)",
                   }}
                 >
-                  <div style={{ fontWeight: 600, marginBottom: 10 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>
                     Ringkasan Perbandingan Supplier
                   </div>
-                  {/* AKTIF/GUARDED: lebar ringkasan diseragamkan via class shared; nilai tetap read-only dan tidak ubah flow submit purchase. */}
-                  <Space direction="vertical" size={6} className="ims-filter-control">
-                    <div>Stok Masuk: <strong>{formatNumberId(stockInValue)} {stockUnit}</strong></div>
-                    <div>
-                      Harga Supplier Tercatat / Satuan Stok:{" "}
-                      <strong>{supplierPriceValue > 0 ? `${formatCurrencyIdr(supplierPriceValue)} / ${stockUnit}` : "Belum ada harga supplier tercatat"}</strong>
+                  <div style={{ color: "#777", fontSize: 12, marginBottom: 12 }}>
+                    Breakdown ini read-only dari field pembelian yang sudah ada. Total aktual tetap menjadi dasar expense/cash out.
+                  </div>
+                  {summaryIsOfflinePurchase ? (
+                    <div style={{ color: "#777", fontSize: 12, marginBottom: 10 }}>
+                      Pembelian offline: ongkir, admin/service fee, potongan ongkir, dan voucher dihitung 0.
                     </div>
-                    <div>Total Pembanding Supplier: <strong>{hasSupplierReference ? formatCurrencyIdr(totalReferenceValue) : "-"}</strong></div>
-                    <div>Total Aktual Pembelian: <strong>{formatCurrencyIdr(totalActualValue)}</strong></div>
-                    <div>Modal Aktual / Satuan Stok: <strong>{formatCurrencyIdr(actualUnitCostValue)} / {stockUnit}</strong></div>
-                    <div>Selisih Hemat: <Tag color={savingMeta.color}>{hasSupplierReference ? savingMeta.label : "-"}</Tag></div>
+                  ) : null}
+
+                  {/* AKTIF/GUARDED: rincian biaya hanya display dari field existing; formula effect dan submit tidak dipindahkan atau diubah. */}
+                  <Space direction="vertical" size={8} className="ims-filter-control">
+                    <div style={{ fontWeight: 600 }}>Breakdown biaya aktual</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span>Subtotal Barang / Harga Awal</span>
+                      <strong>{formatCurrencyIdr(subtotalItemsValue)}</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span>Ongkir</span>
+                      <strong>{formatCurrencyIdr(shippingCostValue)}</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span>Admin / Service Fee</span>
+                      <strong>{formatCurrencyIdr(serviceFeeValue)}</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span>Potongan Ongkir</span>
+                      <strong>{formatDiscountValue(shippingDiscountValue)}</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span>Voucher / Potongan</span>
+                      <strong>{formatDiscountValue(voucherDiscountValue)}</strong>
+                    </div>
+                    <div
+                      style={{
+                        borderTop: "1px solid #f0f0f0",
+                        marginTop: 4,
+                        paddingTop: 8,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                      }}
+                    >
+                      <span>Total Aktual Pembelian</span>
+                      <strong>{formatCurrencyIdr(totalActualValue)}</strong>
+                    </div>
+
+                    <div style={{ fontWeight: 600, marginTop: 8 }}>Pembanding Supplier dan modal stok</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span>Stok Masuk</span>
+                      <strong>{formatNumberId(stockInValue)} {stockUnit}</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span>Harga Supplier Tercatat / Satuan Stok</span>
+                      <strong>
+                        {supplierPriceValue > 0
+                          ? `${formatCurrencyIdr(supplierPriceValue)} / ${stockUnit}`
+                          : "Belum ada harga supplier tercatat"}
+                      </strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span>Total Pembanding Supplier</span>
+                      <strong>{hasSupplierReference ? formatCurrencyIdr(totalReferenceValue) : "-"}</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span>Modal Aktual / Satuan Stok</span>
+                      <strong>{formatCurrencyIdr(actualUnitCostValue)} / {stockUnit}</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                      <span>Selisih Hemat</span>
+                      <Tag color={savingMeta.color}>{hasSupplierReference ? savingMeta.label : "-"}</Tag>
+                    </div>
                   </Space>
                 </div>
               );

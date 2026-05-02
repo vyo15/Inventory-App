@@ -557,6 +557,18 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Reject/selisih barang setelah diterima ditangani lewat Penyesuaian Stok agar audit stok tetap jelas, bukan dengan mengubah konversi di Purchases.
 - Selisih Hemat tetap dihitung dari `Total Pembanding Supplier - Total Aktual Pembelian` dan hanya menjadi informasi efisiensi, bukan pengurang kas.
 
+## 21.1 Rule UI Preview Stok Aktual dan Breakdown Purchases
+
+Status: **AKTIF + GUARDED**.
+
+- Modal Purchases wajib menampilkan preview stok aktual sebelum restock setelah user memilih item dan/atau varian.
+- Untuk item non-varian, preview stok membaca stok master: `currentStock`, `reservedStock`, dan `availableStock`.
+- Untuk item bervarian, preview stok wajib memakai stok varian yang dipilih, bukan total master yang menjumlah semua varian.
+- Jika item bervarian belum memilih varian, UI wajib meminta user memilih varian terlebih dahulu sebelum menampilkan stok aktual varian.
+- Preview stok hanya read-only untuk membantu keputusan restock dan tidak boleh menjadi sumber mutasi stok, expense, inventory log, supplier catalog, atau payload submit.
+- Ringkasan perbandingan supplier boleh menampilkan breakdown `subtotalItems`, `shippingCost`, `serviceFee`, `shippingDiscount`, `voucherDiscount`, `totalActualPurchase`, `totalReferencePurchase`, `actualUnitCost`, dan `purchaseSaving`, tetapi tidak boleh memindahkan atau mengubah formula kalkulasi existing.
+- `totalActualPurchase` tetap dasar expense/cash-out; `purchaseSaving` tetap informasi efisiensi dan bukan pengurang kas.
+
 ## 22. Rule Atomic Save Pembelian
 
 Status: **AKTIF + GUARDED**.

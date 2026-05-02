@@ -274,6 +274,17 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Jangan membuat shipping tier / ongkir bertingkat tanpa task khusus; ongkir, voucher, diskon ongkir, dan biaya layanan aktual tetap editable di Purchases.
 - Reject/selisih barang harus diarahkan ke Penyesuaian Stok, bukan edit konversi di Purchases.
 
+## Guard Purchases Preview Stok dan Breakdown Ringkasan
+
+- Jika task menyentuh modal Purchases, preview stok aktual hanya boleh bersifat read-only dan tidak boleh dipakai sebagai sumber mutasi stok.
+- Untuk item non-varian, preview stok boleh membaca stok master `currentStock`, `reservedStock`, dan `availableStock`.
+- Untuk item bervarian, preview stok wajib membaca varian yang dipilih; jangan menampilkan total master sebagai angka utama.
+- Jika item bervarian belum memilih varian, tampilkan pesan pilih varian dan jangan fallback diam-diam ke stok master.
+- Ringkasan pembelian boleh menampilkan breakdown subtotal, ongkir, admin/service fee, potongan ongkir, voucher, total aktual, total pembanding supplier, modal aktual per satuan stok, dan selisih hemat.
+- Jangan memindahkan atau mengubah effect kalkulasi `totalStockIn`, `totalActualPurchase`, `actualUnitCost`, `totalReferencePurchase`, atau `purchaseSaving` hanya untuk memperbaiki tampilan ringkasan.
+- Jangan menyentuh `handleSubmitPurchase`, `runTransaction`, stock mutation, inventory log, expense otomatis, supplier catalog service, raw material service, product service, Stock Management, Reports, Dashboard, Sales, Returns, Production, Payroll, atau HPP jika task hanya UI preview dan breakdown Purchases.
+
+
 ## Guard Stock Management Inventory Log
 - Stock Management adalah halaman audit log + Penyesuaian Stok dalam satu konteks; membuka halaman tidak boleh membuat mutasi stok.
 - Jangan menampilkan kolom generik `Stok` jika data snapshot before/after tidak reliable untuk semua inventory log.

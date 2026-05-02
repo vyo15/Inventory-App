@@ -348,6 +348,26 @@ Guard:
 - Total Pembanding Supplier tidak boleh menggandakan ongkir/admin default sebagai biaya per satuan stok;
 - koreksi reject/selisih dilakukan lewat Penyesuaian Stok.
 
+## Purchases Preview Stok Aktual dan Breakdown Ringkasan
+
+```text
+User memilih item di modal Purchases
+  -> jika item non-varian, preview membaca stok master
+  -> jika item bervarian dan varian belum dipilih, UI meminta pilih varian
+  -> jika item bervarian dan varian dipilih, preview membaca stok varian terpilih
+  -> user mengisi supplier, Qty Beli, subtotal, ongkir, admin, potongan, dan voucher
+  -> Ringkasan Perbandingan Supplier menampilkan breakdown biaya aktual + pembanding supplier
+  -> user klik Simpan Purchase
+  -> stok/inventory log/expense tetap mengikuti flow Purchases existing
+```
+
+Guard:
+- preview stok aktual hanya display read-only sebelum restock;
+- item bervarian tidak boleh menampilkan total master sebagai stok utama;
+- breakdown ringkasan memakai field existing dan tidak mengubah formula submit;
+- Total Aktual tetap dasar expense/cash-out dan Selisih Hemat tetap informasi efisiensi.
+
+
 ### Supplier Table dan Inventory Log Performance Map
 ```text
 Supplier table

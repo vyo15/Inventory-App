@@ -688,6 +688,22 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Supplier tanpa konversi valid menampilkan warning dan tidak bisa disimpan dengan Stok Masuk 0.
 - [ ] Purchase tersimpan menambah stok sesuai Stok Masuk total dan expense tetap mengikuti Total Aktual.
 
+## Checklist Purchases Preview Stok Aktual dan Breakdown Ringkasan
+
+- [ ] Buka Purchases lalu klik tambah pembelian.
+- [ ] Pilih bahan baku non-varian dan pastikan preview stok aktual menampilkan `currentStock`, `reservedStock`, dan `availableStock` dari stok master.
+- [ ] Ubah supplier, Qty Beli, subtotal, ongkir, admin/service fee, potongan ongkir, dan voucher; pastikan preview stok tetap read-only dan tidak error.
+- [ ] Pilih bahan baku bervarian tanpa memilih varian; pastikan UI menampilkan pesan untuk memilih varian terlebih dahulu.
+- [ ] Pilih varian bahan baku dan pastikan stok yang tampil adalah stok varian terpilih, bukan total master.
+- [ ] Pilih produk non-varian dan pastikan preview stok aktual menampilkan stok master.
+- [ ] Pilih produk bervarian tanpa memilih varian; pastikan UI menampilkan pesan untuk memilih varian terlebih dahulu.
+- [ ] Pilih varian produk dan pastikan stok berubah real-time mengikuti `productVariantKey`.
+- [ ] Pastikan Ringkasan Perbandingan Supplier menampilkan Subtotal Barang / Harga Awal, Ongkir, Admin / Service Fee, Potongan Ongkir, Voucher / Potongan, Total Aktual Pembelian, Total Pembanding Supplier, Modal Aktual / Satuan Stok, dan Selisih Hemat.
+- [ ] Pastikan Total Aktual Pembelian tetap sama dengan formula existing `subtotalItems + shippingCost + serviceFee - shippingDiscount - voucherDiscount`.
+- [ ] Pastikan Total Pembanding Supplier tetap mengikuti logic supplier catalog existing dan tidak mengubah harga aktual pembelian.
+- [ ] Simpan purchase kecil dan pastikan stok bertambah, inventory log tercatat, expense otomatis tercatat, dan `purchaseSaving` tetap informasi efisiensi.
+
+
 ## Checklist Stock Management Inventory Log Final
 - [ ] Buka menu Stock Management / Manajemen Stok.
 - [ ] Pastikan tabel Riwayat Pergerakan Stok urut terbaru ke terlama.
