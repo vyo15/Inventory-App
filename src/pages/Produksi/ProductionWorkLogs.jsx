@@ -6,17 +6,15 @@
 // - Produksi lebih fokus ke eksekusi, bukan planning dari nol
 // =====================================================
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildCountSummary, createKeywordMatcher, matchFieldValue } from '../../utils/produksi/productionPageHelpers';
 import { getWorkLogMaterialOptions, getWorkLogTargetOptions, toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
 import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
 import EditableLineSection from '../../components/Produksi/shared/EditableLineSection';
-import ReadonlyLineSection from '../../components/Produksi/shared/ReadonlyLineSection';
 import {
   Alert,
-  Badge,
   Button,
   Card,
   Col,
@@ -42,8 +40,6 @@ import {
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
-  PlusOutlined,
-  ReloadOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import {

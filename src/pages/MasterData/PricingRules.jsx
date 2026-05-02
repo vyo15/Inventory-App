@@ -1,7 +1,7 @@
 // src/Pages/MasterData/PricingRules.jsx
 
-// SECTION: import React dan hooks
-import React, { useEffect, useMemo, useState } from "react";
+// SECTION: import hooks React
+import { useEffect, useMemo, useState } from "react";
 
 // SECTION: import komponen Ant Design
 import {
@@ -13,7 +13,6 @@ import {
   Select,
   InputNumber,
   Switch,
-  Space,
   Tag,
   message,
   Popconfirm,
@@ -512,13 +511,14 @@ const PricingRules = () => {
       // =========================
       title: "Aksi",
       key: "actions",
-      width: 240,
+      width: 170,
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
-        <div className="ims-action-group">
+        <div className="ims-action-group ims-action-group--vertical">
+          {/* AKTIF / GUARDED: action Pricing Rules dibuat 3 baris konsisten; preview/edit/hapus tetap memakai handler lama dan tidak menyentuh kalkulasi pricing. */}
           <Button
-            className="ims-action-button"
+            className="ims-action-button ims-action-button--block"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handlePreviewRule(record)}
@@ -526,7 +526,7 @@ const PricingRules = () => {
             Detail
           </Button>
 
-          <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)}>
+          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)}>
             Edit
           </Button>
 
@@ -537,7 +537,7 @@ const PricingRules = () => {
             cancelText="Batal"
             onConfirm={() => handleDeleteRule(record?.id)}
           >
-            <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />}>
+            <Button className="ims-action-button ims-action-button--block" size="small" danger icon={<DeleteOutlined />}>
               Hapus
             </Button>
           </Popconfirm>

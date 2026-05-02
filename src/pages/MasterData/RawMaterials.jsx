@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
@@ -15,7 +15,6 @@ import {
   Row,
   Select,
   Space,
-  Statistic,
   Switch,
   Table,
   Tag,
@@ -468,6 +467,14 @@ const RawMaterials = () => {
   const [form] = Form.useForm();
   const navigate = useNavigate();
 
+  // GUARDED: mode edit master hanya boleh mengubah metadata non-stok.
+  // ALASAN: stok Raw Material setelah create wajib lewat purchases, Stock Adjustment, atau transaksi resmi agar inventory log tetap sinkron.
+  // STATUS: AKTIF untuk mengunci field stok di UI; service update tetap menjadi guard utama.
+  // IMS NOTE [GUARDED | behavior-preserving]: flag edit dipakai untuk mengunci stok dan mode varian.
+  // Hubungan flow: raw material stock harus berubah lewat purchase, adjustment, atau transaksi resmi.
+  const isEditingMaterial = Boolean(editingRecord?.id);
+  const stockEditHelpText = 'Ubah stok lewat Stock Management / Stock Adjustment / transaksi resmi.';
+
   // ---------------------------------------------------------------------------
   // Navigasi internal aplikasi.
   // FUNGSI: dipakai tombol Lihat Supplier Lain dari drawer detail Raw Material.
@@ -872,15 +879,14 @@ const RawMaterials = () => {
       width: 170,
       className: 'app-table-action-column',
       render: (_, record) => (
-        <Space direction="vertical" size={6} className="ims-action-group">
-          <Space size={6} wrap={false}>
-            <Button size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
-              Detail
-            </Button>
-            <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-              Edit
-            </Button>
-          </Space>
+        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+          {/* AKTIF / GUARDED: action bahan baku disusun 3 baris agar mudah diklik; handler detail/edit/toggle tetap flow existing. */}
+          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
+            Detail
+          </Button>
+          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            Edit
+          </Button>
           <Popconfirm
             title={record.isActive === false ? 'Aktifkan kembali bahan baku?' : 'Nonaktifkan bahan baku?'}
             description={
@@ -892,7 +898,7 @@ const RawMaterials = () => {
             cancelText="Batal"
             onConfirm={() => handleToggleActive(record)}
           >
-            <Button size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
+            <Button className="ims-action-button ims-action-button--block" size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
           </Popconfirm>
         </Space>
       ),
@@ -1096,11 +1102,18 @@ const RawMaterials = () => {
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item name="hasVariants" label="Pakai Varian" valuePropName="checked">
+              <Form.Item
+                name="hasVariants"
+                label="Pakai Varian"
+                valuePropName="checked"
+                extra={isEditingMaterial ? 'Mode varian dikunci setelah bahan baku dibuat agar struktur stok tidak berubah tanpa audit.' : undefined}
+              >
                 <Switch
                   checkedChildren="Ya"
                   unCheckedChildren="Tidak"
+                  disabled={isEditingMaterial}
                   onChange={(checked) => {
+                    if (isEditingMaterial) return;
                     if (checked) {
                       form.setFieldsValue({
                         stock: 0,
@@ -1131,7 +1144,9 @@ const RawMaterials = () => {
             />
           </Card>
 
-          {/* -----------------------------------------------------------------
+          {/* IMS NOTE [GUARDED | behavior-preserving]: section stok/pricing tetap satu UI,
+              tetapi field stock dikunci saat edit; minStock dan pricing tetap metadata editable.
+              -----------------------------------------------------------------
               Section aturan stok dan pricing master.
           ----------------------------------------------------------------- */}
           <Divider orientation="left">Stok & Pricing Master</Divider>
@@ -1141,13 +1156,15 @@ const RawMaterials = () => {
                 name="stock"
                 label={hasVariantsValue ? 'Stok Master (Otomatis)' : 'Stok Awal'}
                 extra={
-                  hasVariantsValue
-                    ? 'Kalau pakai varian, stok master dihitung otomatis dari total semua varian.'
-                    : 'Stok awal hanya dipakai untuk item tanpa varian.'
+                  isEditingMaterial
+                    ? stockEditHelpText
+                    : hasVariantsValue
+                      ? 'Kalau pakai varian, stok master dihitung otomatis dari total semua varian.'
+                      : 'Stok awal hanya dipakai untuk item tanpa varian.'
                 }
               >
                 <InputNumber
-                  disabled={hasVariantsValue || Boolean(editingRecord)}
+                  disabled={hasVariantsValue || isEditingMaterial}
                   style={{ width: '100%' }}
                   min={0}
                   precision={0}
@@ -1278,7 +1295,9 @@ const RawMaterials = () => {
                 style={{ marginBottom: 16 }}
                 type="info"
                 showIcon
-                message={`Gunakan varian untuk ${variantLabelValue || 'turunan bahan'} seperti warna, ukuran, atau spesifikasi lain. Pada tahap ini varian hanya menyimpan identitas dan stok.`}
+                message={isEditingMaterial
+                  ? stockEditHelpText
+                  : `Gunakan varian untuk ${variantLabelValue || 'turunan bahan'} seperti warna, ukuran, atau spesifikasi lain. Pada tahap ini varian hanya menyimpan identitas dan stok awal.`}
               />
 
               <Form.List name="variants">
@@ -1290,7 +1309,13 @@ const RawMaterials = () => {
                         size="small"
                         title={`${variantLabelValue || 'Varian'} ${index + 1}`}
                         extra={
-                          <Button danger type="text" icon={<DeleteOutlined />} onClick={() => remove(field.name)}>
+                          <Button
+                            danger
+                            type="text"
+                            icon={<DeleteOutlined />}
+                            disabled={isEditingMaterial}
+                            onClick={() => remove(field.name)}
+                          >
                             Hapus
                           </Button>
                         }
@@ -1314,8 +1339,14 @@ const RawMaterials = () => {
                             </Form.Item>
                           </Col>
                           <Col xs={24} md={5}>
-                            <Form.Item {...field} name={[field.name, 'currentStock']} label="Stok Varian">
+                            <Form.Item
+                              {...field}
+                              name={[field.name, 'currentStock']}
+                              label="Stok Varian"
+                              extra={isEditingMaterial ? stockEditHelpText : undefined}
+                            >
                               <InputNumber
+                                disabled={isEditingMaterial}
                                 style={{ width: '100%' }}
                                 min={0}
                                 precision={0}
@@ -1336,6 +1367,7 @@ const RawMaterials = () => {
                     <Button
                       type="dashed"
                       icon={<PlusOutlined />}
+                      disabled={isEditingMaterial}
                       onClick={() => {
                         const current = form.getFieldValue('variants') || [];
                         form.setFieldsValue({
@@ -1354,7 +1386,9 @@ const RawMaterials = () => {
                 style={{ marginTop: 16 }}
                 type="success"
                 showIcon
-                message={`Ringkasan varian: ${formatNumberID(variantStats.count)} varian | total stok ${formatNumberID(variantStats.stock)}`}
+                message={isEditingMaterial
+                ? `Ringkasan varian read-only: ${formatNumberID(variantStats.count)} varian | total stok ${formatNumberID(variantStats.stock)}`
+                : `Ringkasan varian: ${formatNumberID(variantStats.count)} varian | total stok ${formatNumberID(variantStats.stock)}`}
               />
             </>
           ) : null}

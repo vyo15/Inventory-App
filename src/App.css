@@ -613,6 +613,15 @@
   gap: 6px;
 }
 
+.ims-action-group--vertical > .ant-space-item {
+  /* AKTIF / GUARDED:
+     Fungsi: memastikan setiap item Ant Design Space di kolom Aksi vertical mengambil lebar penuh.
+     Hubungan flow: hanya mengunci layout tombol table agar 3 baris rapi; handler dan data flow tetap milik halaman masing-masing.
+     Alasan: tanpa width pada item Space, tombol block bisa tetap mengikuti lebar konten dan terlihat tidak sejajar.
+  */
+  width: 100%;
+}
+
 .ims-action-group--inline {
   width: 100%;
   flex-wrap: nowrap;

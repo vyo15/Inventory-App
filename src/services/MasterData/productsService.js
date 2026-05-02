@@ -6,6 +6,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
   where,
@@ -38,6 +39,11 @@ export const PRODUCT_DEFAULT_FORM = {
 const inferHasVariants = (item = {}) =>
   item?.hasVariants === true || (Array.isArray(item?.variants) && item.variants.length > 0);
 
+const toStockNumber = (value = 0) => {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) ? Math.round(number) : 0;
+};
+
 const enrichProduct = (item = {}) => {
   const hasVariants = inferHasVariants(item);
   const totals = calculateVariantTotals(item.variants || []);
@@ -59,24 +65,36 @@ const enrichProduct = (item = {}) => {
   };
 };
 
-const normalizePayload = (values = {}, categories = [], isEdit = false) => {
+const resolveProductMetadata = (values = {}, categories = []) => {
   const selectedCategory = (categories || []).find((item) => item.id === values.categoryId);
-  const hasVariants = values.hasVariants === true;
-  const normalizedVariants = hasVariants ? normalizeColorVariants(values.variants || []) : [];
-  const variantTotals = calculateVariantTotals(normalizedVariants);
-  const currentStock = hasVariants ? variantTotals.currentStock : Math.round(Number(values.currentStock || 0));
-  const reservedStock = hasVariants ? variantTotals.reservedStock : Math.round(Number(values.reservedStock || 0));
-  const minStockAlert = hasVariants ? variantTotals.minStockAlert : Math.round(Number(values.minStockAlert || 0));
 
-  const payload = {
+  return {
     name: String(values.name || '').trim(),
     categoryId: values.categoryId || null,
     category: selectedCategory?.name || 'Produk Jadi',
     description: String(values.description || '').trim(),
     pricingMode: values.pricingMode || 'rule',
     pricingRuleId: values.pricingMode === 'rule' ? values.pricingRuleId || null : null,
-    price: Math.round(Number(values.price || 0)),
-    hppPerUnit: Math.round(Number(values.hppPerUnit || 0)),
+    price: toStockNumber(values.price || 0),
+    hppPerUnit: toStockNumber(values.hppPerUnit || 0),
+    isActive: values.isActive !== false,
+    updatedAt: serverTimestamp(),
+    lastPricingUpdatedAt: values.pricingMode === 'manual' ? serverTimestamp() : null,
+  };
+};
+
+const normalizeProductCreatePayload = (values = {}, categories = []) => {
+  const hasVariants = values.hasVariants === true;
+  const normalizedVariants = hasVariants ? normalizeColorVariants(values.variants || []) : [];
+  const variantTotals = calculateVariantTotals(normalizedVariants);
+  const currentStock = hasVariants ? variantTotals.currentStock : toStockNumber(values.currentStock || 0);
+  const reservedStock = hasVariants ? variantTotals.reservedStock : toStockNumber(values.reservedStock || 0);
+  const minStockAlert = hasVariants ? variantTotals.minStockAlert : toStockNumber(values.minStockAlert || 0);
+
+  // IMS NOTE [AKTIF | behavior-preserving]: jalur create tetap menulis stok awal.
+  // Hubungan flow: stok awal hanya boleh dibentuk saat master product pertama dibuat.
+  return {
+    ...resolveProductMetadata(values, categories),
     hasVariants,
     variants: normalizedVariants,
     variantCount: hasVariants ? variantTotals.variantCount : 0,
@@ -84,18 +102,130 @@ const normalizePayload = (values = {}, categories = [], isEdit = false) => {
     currentStock,
     reservedStock,
     availableStock: Math.max(currentStock - reservedStock, 0),
+    // IMS NOTE [LEGACY | behavior-preserving]: field stock tetap alias currentStock untuk data lama.
     stock: currentStock,
     minStockAlert,
-    isActive: values.isActive !== false,
-    updatedAt: serverTimestamp(),
-    lastPricingUpdatedAt: values.pricingMode === 'manual' ? serverTimestamp() : null,
+    createdAt: serverTimestamp(),
   };
+};
 
-  if (!isEdit) {
-    payload.createdAt = serverTimestamp();
+// IMS NOTE [GUARDED | behavior-preserving]: variant matching memakai key/kode/nama, bukan index.
+// Alasan cleanup: index bisa salah memindahkan stok jika urutan varian berubah.
+const buildProductVariantKeyCandidates = (variant = {}) => [
+  variant.variantKey,
+  variant.sku,
+  variant.color,
+  variant.name,
+]
+  .map((value) => String(value || '').trim().toLowerCase())
+  .filter(Boolean);
+
+const buildProductVariantLookup = (variants = []) => {
+  const lookup = new Map();
+  normalizeColorVariants(variants).forEach((variant, index) => {
+    buildProductVariantKeyCandidates(variant, index).forEach((key) => {
+      if (!lookup.has(key)) lookup.set(key, variant);
+    });
+  });
+  return lookup;
+};
+
+const hasProtectedVariantStock = (variant = {}) =>
+  toStockNumber(variant.currentStock ?? variant.stock ?? 0) > 0 || toStockNumber(variant.reservedStock || 0) > 0;
+
+const assertNoProductVariantWithStockRemoved = (editedVariants = [], existingVariants = []) => {
+  const editedLookup = buildProductVariantLookup(editedVariants);
+
+  normalizeColorVariants(existingVariants).forEach((variant, index) => {
+    const stillExists = buildProductVariantKeyCandidates(variant, index).some((key) => editedLookup.has(key));
+
+    if (!stillExists && hasProtectedVariantStock(variant)) {
+      throw {
+        type: 'validation',
+        errors: {
+          variants: 'Varian yang masih punya stock/reserved tidak boleh dihapus dari master. Nolkan lewat flow resmi lebih dulu.',
+        },
+      };
+    }
+  });
+};
+
+const mergeProductVariantMetadataWithExistingStock = (editedVariants = [], existingVariants = []) => {
+  const normalizedEdited = normalizeColorVariants(editedVariants);
+  const normalizedExisting = normalizeColorVariants(existingVariants);
+
+  if (normalizedEdited.length === 0) {
+    throw { type: 'validation', errors: { variants: 'Minimal harus ada 1 varian' } };
   }
 
-  return payload;
+  const duplicateErrors = validateDuplicateVariantColors(normalizedEdited);
+  if (Object.keys(duplicateErrors).length > 0) {
+    throw { type: 'validation', errors: duplicateErrors };
+  }
+
+  assertNoProductVariantWithStockRemoved(normalizedEdited, normalizedExisting);
+
+  const existingLookup = buildProductVariantLookup(normalizedExisting);
+
+  return normalizedEdited.map((variant, index) => {
+    const existingVariant = buildProductVariantKeyCandidates(variant, index)
+      .map((key) => existingLookup.get(key))
+      .find(Boolean);
+    const currentStock = toStockNumber(existingVariant?.currentStock ?? existingVariant?.stock ?? 0);
+    const reservedStock = toStockNumber(existingVariant?.reservedStock || 0);
+
+    // IMS NOTE [GUARDED | behavior-preserving]: metadata varian boleh berubah,
+    // tetapi stok varian selalu dipreserve dari dokumen latest di transaction.
+    return {
+      ...variant,
+      currentStock,
+      stock: currentStock,
+      reservedStock,
+      availableStock: Math.max(currentStock - reservedStock, 0),
+      minStockAlert: toStockNumber(variant.minStockAlert || 0),
+    };
+  });
+};
+
+const normalizeProductMetadataPayload = (values = {}, categories = [], existingProduct = {}) => {
+  const hasVariants = inferHasVariants(existingProduct);
+  const payload = {
+    ...resolveProductMetadata(values, categories),
+    hasVariants,
+  };
+
+  if (!hasVariants) {
+    // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: update non-varian
+    // sengaja tidak mengirim stock/currentStock/reservedStock/availableStock.
+    // Hubungan flow: stok setelah create hanya boleh berubah lewat adjustment/transaksi resmi.
+    return {
+      ...payload,
+      variants: [],
+      variantCount: 0,
+      activeVariantCount: 0,
+      minStockAlert: toStockNumber(values.minStockAlert || 0),
+    };
+  }
+
+  const mergedVariants = mergeProductVariantMetadataWithExistingStock(
+    values.variants || [],
+    existingProduct.variants || [],
+  );
+  const variantTotals = calculateVariantTotals(mergedVariants);
+
+  // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: array variants harus
+  // ditulis ulang untuk metadata, jadi total master dihitung dari stok existing/latest.
+  return {
+    ...payload,
+    variants: variantTotals.variants,
+    variantCount: variantTotals.variantCount,
+    activeVariantCount: variantTotals.activeVariantCount,
+    currentStock: variantTotals.currentStock,
+    reservedStock: variantTotals.reservedStock,
+    availableStock: variantTotals.availableStock,
+    stock: variantTotals.currentStock,
+    minStockAlert: variantTotals.minStockAlert,
+  };
 };
 
 export const validateProductPayload = async (values = {}, editingId = null) => {
@@ -162,7 +292,7 @@ export const createProduct = async (values = {}, categories = []) => {
     throw { type: 'validation', errors };
   }
 
-  const payload = normalizePayload(values, categories, false);
+  const payload = normalizeProductCreatePayload(values, categories);
   const result = await addDoc(collection(db, COLLECTION_NAME), payload);
   return result.id;
 };
@@ -173,8 +303,21 @@ export const updateProduct = async (id, values = {}, categories = []) => {
     throw { type: 'validation', errors };
   }
 
-  const payload = normalizePayload(values, categories, true);
-  await updateDoc(doc(db, COLLECTION_NAME, id), payload);
+  const ref = doc(db, COLLECTION_NAME, id);
+
+  // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: update metadata
+  // memakai transaction supaya merge variant tidak menimpa Stock Adjustment terbaru.
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) {
+      throw new Error('Produk tidak ditemukan.');
+    }
+
+    const existingProduct = enrichProduct({ id: snapshot.id, ...snapshot.data() });
+    const payload = normalizeProductMetadataPayload(values, categories, existingProduct);
+    transaction.update(ref, payload);
+  });
+
   return id;
 };
 

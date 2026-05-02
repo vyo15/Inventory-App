@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
@@ -185,6 +185,14 @@ const Products = () => {
   const watchedCurrentStock = Form.useWatch('currentStock', form) || 0;
   const watchedReservedStock = Form.useWatch('reservedStock', form) || 0;
   const watchedMinStockAlert = Form.useWatch('minStockAlert', form) || 0;
+
+  // GUARDED: mode edit master hanya boleh mengubah metadata non-stok.
+  // ALASAN: stok setelah create wajib berubah lewat Stock Management / Stock Adjustment / transaksi resmi agar audit log tetap utuh.
+  // STATUS: AKTIF untuk mengunci field stok di UI; service update tetap menjadi guard utama.
+  // IMS NOTE [GUARDED | behavior-preserving]: flag edit dipakai hanya untuk mengunci input stok master.
+  // Hubungan flow: stok setelah create wajib berubah lewat Stock Management / Stock Adjustment / transaksi resmi.
+  const isEditingProduct = Boolean(editingProduct?.id);
+  const stockEditHelpText = 'Ubah stok lewat Stock Management / Stock Adjustment / transaksi resmi.';
 
   // ---------------------------------------------------------------------------
   // Loader data master produk, kategori, dan pricing rules.
@@ -462,14 +470,16 @@ const Products = () => {
     {
       title: 'Aksi',
       key: 'actions',
-      width: 230,
+      width: 170,
       fixed: 'right',
+      className: 'app-table-action-column',
       render: (_, record) => (
-        <Space size={8} wrap className="ims-action-group">
-          <Button className="ims-action-button" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
+        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+          {/* AKTIF / GUARDED: kolom Aksi produk dibuat 3 baris fixed agar Detail/Edit/Status rapi; handler produk dan flow stok tetap tidak diubah. */}
+          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
             Detail
           </Button>
-          <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             Edit
           </Button>
           <Popconfirm
@@ -478,7 +488,7 @@ const Products = () => {
             cancelText="Batal"
             onConfirm={() => handleToggleActive(record)}
           >
-            <Button className="ims-action-button" size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
+            <Button className="ims-action-button ims-action-button--block" size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
           </Popconfirm>
         </Space>
       ),
@@ -654,18 +664,27 @@ const Products = () => {
             />
           </Form.Item>
 
+          {/* IMS NOTE [GUARDED | behavior-preserving]: section stok tetap tampil untuk konteks,
+              tetapi input stok dikunci saat edit agar payload master tidak menjadi jalur mutasi stok. */}
           <Divider orientation="left">Mode Stok</Divider>
-          <Form.Item name="hasVariants" label="Pakai Varian" valuePropName="checked">
-            <Switch checkedChildren="Ya" unCheckedChildren="Tidak" />
+          <Form.Item
+            name="hasVariants"
+            label="Pakai Varian"
+            valuePropName="checked"
+            extra={isEditingProduct ? 'Mode varian dikunci setelah produk dibuat agar bucket stok tidak berubah tanpa audit.' : undefined}
+          >
+            <Switch checkedChildren="Ya" unCheckedChildren="Tidak" disabled={isEditingProduct} />
           </Form.Item>
 
           <Alert
-            type="warning"
+            type={isEditingProduct ? 'info' : 'warning'}
             showIcon
             style={{ marginBottom: 16 }}
-            message={hasVariantsValue
-              ? 'Harga produk tetap di master. Di bawah ini mengatur stok, minimum stok, dan status per varian.'
-              : 'Produk tanpa varian memakai stok langsung di master produk.'}
+            message={isEditingProduct
+              ? stockEditHelpText
+              : hasVariantsValue
+                ? 'Harga produk tetap di master. Di bawah ini mengatur stok awal, minimum stok, dan status per varian.'
+                : 'Produk tanpa varian memakai stok awal langsung di master produk.'}
           />
 
           {hasVariantsValue ? (
@@ -687,13 +706,25 @@ const Products = () => {
                             </Form.Item>
                           </Col>
                           <Col xs={24} md={4}>
-                            <Form.Item {...field} name={[field.name, 'currentStock']} label="Stok" initialValue={0}>
-                              <InputNumber style={{ width: '100%' }} min={0} />
+                            <Form.Item
+                              {...field}
+                              name={[field.name, 'currentStock']}
+                              label="Stok"
+                              initialValue={0}
+                              extra={isEditingProduct ? stockEditHelpText : undefined}
+                            >
+                              <InputNumber style={{ width: '100%' }} min={0} disabled={isEditingProduct} />
                             </Form.Item>
                           </Col>
                           <Col xs={24} md={4}>
-                            <Form.Item {...field} name={[field.name, 'reservedStock']} label="Reserved" initialValue={0}>
-                              <InputNumber style={{ width: '100%' }} min={0} />
+                            <Form.Item
+                              {...field}
+                              name={[field.name, 'reservedStock']}
+                              label="Reserved"
+                              initialValue={0}
+                              extra={isEditingProduct ? 'Reserved stock dikunci saat edit karena memengaruhi available stock.' : undefined}
+                            >
+                              <InputNumber style={{ width: '100%' }} min={0} disabled={isEditingProduct} />
                             </Form.Item>
                           </Col>
                           <Col xs={24} md={4}>
@@ -707,13 +738,18 @@ const Products = () => {
                             </Form.Item>
                           </Col>
                         </Row>
-                        <Button danger size="small" disabled={fields.length === 1} onClick={() => remove(field.name)}>
+                        <Button
+                          danger
+                          size="small"
+                          disabled={fields.length === 1 || isEditingProduct}
+                          onClick={() => remove(field.name)}
+                        >
                           Hapus Varian
                         </Button>
                       </Card>
                     ))}
 
-                    <Button type="dashed" onClick={() => add({ ...DEFAULT_COLOR_VARIANT })} block>
+                    <Button type="dashed" onClick={() => add({ ...DEFAULT_COLOR_VARIANT })} disabled={isEditingProduct} block>
                       Tambah Varian
                     </Button>
                   </Space>
@@ -723,13 +759,13 @@ const Products = () => {
           ) : (
             <Row gutter={16}>
               <Col xs={24} md={8}>
-                <Form.Item name="currentStock" label="Stok Master">
-                  <InputNumber style={{ width: '100%' }} min={0} />
+                <Form.Item name="currentStock" label="Stok Master" extra={isEditingProduct ? stockEditHelpText : undefined}>
+                  <InputNumber style={{ width: '100%' }} min={0} disabled={isEditingProduct} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item name="reservedStock" label="Reserved Stock">
-                  <InputNumber style={{ width: '100%' }} min={0} />
+                <Form.Item name="reservedStock" label="Reserved Stock" extra={isEditingProduct ? 'Reserved stock dikunci saat edit karena memengaruhi available stock.' : undefined}>
+                  <InputNumber style={{ width: '100%' }} min={0} disabled={isEditingProduct} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>

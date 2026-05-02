@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
@@ -607,15 +607,16 @@ const SupplierPurchases = () => {
       // ---------------------------------------------------------------------
       className: 'app-table-action-column',
       render: (_, record) => (
-        <Space direction="vertical" size={6} style={{ width: '100%' }}>
-          <Button block size="small" icon={<EyeOutlined />} onClick={() => openSupplierDrawer(record)}>
+        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+          {/* AKTIF / GUARDED: action supplier tetap 3 baris memakai utility shared; drawer, edit, dan Popconfirm hapus tetap handler existing. */}
+          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EyeOutlined />} onClick={() => openSupplierDrawer(record)}>
             Detail
           </Button>
-          <Button block size="small" icon={<EditOutlined />} onClick={() => handleEditSupplier(record)}>
+          <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => handleEditSupplier(record)}>
             Edit
           </Button>
           <Popconfirm title="Yakin hapus supplier ini?" onConfirm={() => handleDeleteSupplier(record)} okText="Ya" cancelText="Batal">
-            <Button block danger size="small" icon={<DeleteOutlined />}>
+            <Button className="ims-action-button ims-action-button--block" danger size="small" icon={<DeleteOutlined />}>
               Hapus
             </Button>
           </Popconfirm>

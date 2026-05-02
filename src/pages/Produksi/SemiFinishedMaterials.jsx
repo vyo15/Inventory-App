@@ -8,7 +8,7 @@
 // - Total master dihitung otomatis dari seluruh varian
 // =====================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Button,
@@ -37,7 +37,6 @@ import {
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
-  ReloadOutlined,
 } from "@ant-design/icons";
 import {
   calculateSemiFinishedTotalsFromVariants,
@@ -195,6 +194,14 @@ const SemiFinishedMaterials = () => {
   const [editingMaterial, setEditingMaterial] = useState(null);
 
   const [form] = Form.useForm();
+
+  // GUARDED: mode edit master hanya boleh mengubah metadata non-stok.
+  // ALASAN: stok semi finished dipakai flow produksi/Work Log, sehingga edit master tidak boleh menimpa stok tanpa audit.
+  // STATUS: AKTIF untuk mengunci field stok di UI; service update tetap menjadi guard utama.
+  // IMS NOTE [GUARDED | behavior-preserving]: flag edit dipakai untuk mengunci stok semi finished.
+  // Hubungan flow: stok semi finished dipakai produksi, jadi edit master tidak boleh menjadi jalur mutasi.
+  const isEditingMaterial = Boolean(editingMaterial?.id);
+  const stockEditHelpText = 'Ubah stok lewat Stock Management / Stock Adjustment / transaksi resmi.';
 
   // ---------------------------------------------------------------------------
   // Loader utama halaman.
@@ -488,12 +495,15 @@ const SemiFinishedMaterials = () => {
     {
       title: "Aksi",
       key: "actions",
-      width: 210,
+      width: 170,
       // Tombol aksi utama disimpan di sisi kanan seperti halaman bahan baku.
       fixed: "right",
+      className: "app-table-action-column",
       render: (_, record) => (
-        <Space size={[6, 6]} wrap>
+        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+          {/* AKTIF / GUARDED: action semi finished dibuat 3 baris visual-only; logic produksi, stok varian, PO, Work Log, payroll, dan HPP tidak disentuh. */}
           <Button
+            className="ims-action-button ims-action-button--block"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
@@ -502,6 +512,7 @@ const SemiFinishedMaterials = () => {
           </Button>
 
           <Button
+            className="ims-action-button ims-action-button--block"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -522,7 +533,7 @@ const SemiFinishedMaterials = () => {
             okText="Ya"
             cancelText="Batal"
           >
-            <Button size="small">
+            <Button className="ims-action-button ims-action-button--block" size="small">
               {record.isActive ? "Nonaktifkan" : "Aktifkan"}
             </Button>
           </Popconfirm>
@@ -739,8 +750,15 @@ const SemiFinishedMaterials = () => {
 
           </Row>
 
-          <Form.Item label="Pakai Varian" name="hasVariants" valuePropName="checked">
-            <Switch checkedChildren="Ya" unCheckedChildren="Tidak" />
+          {/* IMS NOTE [GUARDED | behavior-preserving]: mode varian dikunci saat edit
+              agar bucket stok produksi tidak berubah tanpa audit. */}
+          <Form.Item
+            label="Pakai Varian"
+            name="hasVariants"
+            valuePropName="checked"
+            extra={isEditingMaterial ? 'Mode varian dikunci setelah item dibuat agar bucket stok produksi tidak berubah tanpa audit.' : undefined}
+          >
+            <Switch checkedChildren="Ya" unCheckedChildren="Tidak" disabled={isEditingMaterial} />
           </Form.Item>
 
           <Divider orientation="left">{hasVariantsValue ? "Varian & Stok" : "Stok Master"}</Divider>
@@ -749,9 +767,11 @@ const SemiFinishedMaterials = () => {
             style={{ marginBottom: 16 }}
             type="info"
             showIcon
-            message={hasVariantsValue
-              ? "Gunakan 1 master item untuk 1 jenis komponen. Tambahkan warna sebagai varian di bawahnya agar data tetap rapi. Total stok item akan dihitung otomatis dari semua varian."
-              : "Item tanpa varian memakai stok langsung di master semi finished material."}
+            message={isEditingMaterial
+              ? stockEditHelpText
+              : hasVariantsValue
+                ? "Gunakan 1 master item untuk 1 jenis komponen. Tambahkan warna sebagai varian di bawahnya agar data tetap rapi. Total stok item akan dihitung otomatis dari semua varian."
+                : "Item tanpa varian memakai stok awal langsung di master semi finished material."}
           />
 
           {hasVariantsValue ? (
@@ -769,6 +789,7 @@ const SemiFinishedMaterials = () => {
                           danger
                           size="small"
                           icon={<DeleteOutlined />}
+                          disabled={isEditingMaterial}
                           onClick={() => remove(field.name)}
                         >
                           Hapus Varian
@@ -818,8 +839,9 @@ const SemiFinishedMaterials = () => {
                           {...field}
                           label="Current Stock"
                           name={[field.name, "currentStock"]}
+                          extra={isEditingMaterial ? stockEditHelpText : undefined}
                         >
-                          <InputNumber min={0} style={{ width: "100%" }} />
+                          <InputNumber min={0} style={{ width: "100%" }} disabled={isEditingMaterial} />
                         </Form.Item>
                       </Col>
 
@@ -828,6 +850,7 @@ const SemiFinishedMaterials = () => {
                           {...field}
                           label="Reserved Stock"
                           name={[field.name, "reservedStock"]}
+                          extra={isEditingMaterial ? 'Reserved stock dikunci karena memengaruhi available stock.' : undefined}
                         >
                           <InputNumber min={0} style={{ width: "100%" }} disabled />
                         </Form.Item>
@@ -859,6 +882,7 @@ const SemiFinishedMaterials = () => {
                 <Button
                   type="dashed"
                   icon={<PlusOutlined />}
+                  disabled={isEditingMaterial}
                   onClick={() => add({ ...DEFAULT_SEMI_FINISHED_VARIANT })}
                   block
                 >
@@ -870,13 +894,13 @@ const SemiFinishedMaterials = () => {
           ) : (
             <Row gutter={16}>
               <Col xs={24} md={6}>
-                <Form.Item label="Current Stock" name="currentStock">
-                  <InputNumber min={0} style={{ width: "100%" }} />
+                <Form.Item label="Current Stock" name="currentStock" extra={isEditingMaterial ? stockEditHelpText : undefined}>
+                  <InputNumber min={0} style={{ width: "100%" }} disabled={isEditingMaterial} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={6}>
-                <Form.Item label="Reserved Stock" name="reservedStock">
-                  <InputNumber min={0} style={{ width: "100%" }} />
+                <Form.Item label="Reserved Stock" name="reservedStock" extra={isEditingMaterial ? 'Reserved stock dikunci karena memengaruhi available stock.' : undefined}>
+                  <InputNumber min={0} style={{ width: "100%" }} disabled={isEditingMaterial} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={6}>
