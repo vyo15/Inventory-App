@@ -832,13 +832,16 @@ const Sales = () => {
       },
     },
     {
+      // IMS NOTE [AKTIF/GUARDED] - Action button Sales.
+      // Fungsi blok: menyusun aksi status/hapus secara vertical agar tidak wrap liar.
+      // Hubungan flow: hanya layout; lifecycle sales, income, stock revert, dan handler existing tidak diubah.
       title: "Aksi",
       key: "action",
       width: 220,
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
-        <div className="ims-action-group">
+        <div className="ims-action-group ims-action-group--vertical">
           {record.status === "Diproses" &&
             !isOfflineChannel(record.salesChannel) && (
               <Popconfirm

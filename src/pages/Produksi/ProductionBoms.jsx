@@ -716,7 +716,7 @@ const ProductionBoms = () => {
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap className="ims-action-group">
+        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
           <Button
             className="ims-action-button"
             size="small"
@@ -1082,7 +1082,7 @@ const ProductionBoms = () => {
                   width: 140,
                   className: "app-table-action-column",
                   render: (_, record, index) => (
-                    <Space className="ims-action-group">
+                    <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
                       <Button className="ims-action-button" size="small" onClick={() => openMaterialModal(index, record)}>
                         Edit
                       </Button>
@@ -1120,7 +1120,7 @@ const ProductionBoms = () => {
                   width: 140,
                   className: "app-table-action-column",
                   render: (_, record, index) => (
-                    <Space className="ims-action-group">
+                    <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
                       <Button className="ims-action-button" size="small" onClick={() => openStepModal(index, record)}>
                         Edit
                       </Button>

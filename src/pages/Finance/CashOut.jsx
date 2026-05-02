@@ -9,6 +9,7 @@ import {
   InputNumber,
   Popconfirm,
   Select,
+  Space,
   Table,
   Tag,
   message,
@@ -378,6 +379,9 @@ const CashOut = () => {
         render: (value) => value || "-",
       },
       {
+        // IMS NOTE [AKTIF/GUARDED] - Action button ledger Cash Out.
+        // Fungsi blok: menampilkan aksi hapus dalam layout vertical agar sejajar dengan tabel lain.
+        // Hubungan flow: hanya UI; Popconfirm dan handler delete tetap sama.
         title: "Aksi",
         key: "action",
         width: 140,
@@ -390,16 +394,18 @@ const CashOut = () => {
           }
 
           return (
-            <Popconfirm
-              title="Yakin hapus transaksi ini?"
-              onConfirm={() => handleDeleteTransaction(record.id)}
-              okText="Ya"
-              cancelText="Tidak"
-            >
-              <Button danger icon={<DeleteOutlined />}>
-                Hapus
-              </Button>
-            </Popconfirm>
+            <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+              <Popconfirm
+                title="Yakin hapus transaksi ini?"
+                onConfirm={() => handleDeleteTransaction(record.id)}
+                okText="Ya"
+                cancelText="Tidak"
+              >
+                <Button className="ims-action-button" danger icon={<DeleteOutlined />}>
+                  Hapus
+                </Button>
+              </Popconfirm>
+            </Space>
           );
         },
       },

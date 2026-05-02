@@ -31,7 +31,7 @@ import {
 import { collection, onSnapshot, limit as firestoreLimit, orderBy, query } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
-import { formatNumberID } from '../../utils/formatters/numberId';
+import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import { formatDateId } from '../../utils/formatters/dateId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
@@ -96,7 +96,11 @@ const buildFormValues = (record = {}) => ({
 // Parser angka integer format Indonesia.
 // Menghapus separator titik sebelum nilai dikirim ke InputNumber.
 // -----------------------------------------------------------------------------
-const integerParser = (value) => value?.replace(/\./g, '') || '';
+// IMS NOTE [AKTIF/GUARDED] - Parser angka bulat shared.
+// Fungsi blok: memakai parser global agar input stok/harga Raw Material konsisten dengan halaman lain.
+// Hubungan flow: hanya parser UI InputNumber; service lock stok dan mutasi resmi tetap berada di service/Stock Management.
+// Alasan logic: menghapus parser lokal yang bisa berbeda dari standar no-decimal IMS.
+const integerParser = parseIntegerIdInput;
 
 // -----------------------------------------------------------------------------
 // Helper tampilan stok supaya format di tabel dan drawer seragam.

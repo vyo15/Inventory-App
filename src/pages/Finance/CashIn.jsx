@@ -311,7 +311,7 @@ const CashIn = () => {
         fixed: "right",
         className: "app-table-action-column",
         render: (_, record) => (
-          <Space wrap className="ims-action-group">
+          <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
             <Popconfirm
               title="Yakin hapus transaksi ini?"
               onConfirm={() => handleDeleteTransaction(record)}

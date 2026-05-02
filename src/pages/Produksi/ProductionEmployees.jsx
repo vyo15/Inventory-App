@@ -668,8 +668,8 @@ const ProductionEmployees = () => {
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap>
-          <Button
+        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+          <Button className="ims-action-button"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
@@ -678,6 +678,7 @@ const ProductionEmployees = () => {
           </Button>
 
           <Button
+            className="ims-action-button"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -700,7 +701,7 @@ const ProductionEmployees = () => {
             okText="Ya"
             cancelText="Batal"
           >
-            <Button size="small">
+            <Button className="ims-action-button" size="small">
               {record.isActive ? "Nonaktifkan" : "Aktifkan"}
             </Button>
           </Popconfirm>

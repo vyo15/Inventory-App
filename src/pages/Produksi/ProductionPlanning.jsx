@@ -684,11 +684,14 @@ const ProductionPlanning = () => {
       },
     },
     {
+      // IMS NOTE [AKTIF/GUARDED] - Action button Production Planning.
+      // Fungsi blok: menyusun Detail/Buat PO/Lainnya menjadi kolom vertical konsisten.
+      // Hubungan flow: hanya layout; planning tidak mengubah stok dan handler PO existing tidak diubah.
       title: "Aksi",
       key: "action",
       className: "app-table-action-column",
       render: (_, record) => (
-        <div className="ims-action-group">
+        <div className="ims-action-group ims-action-group--vertical">
           <Button
             size="small"
             className="ims-action-button"

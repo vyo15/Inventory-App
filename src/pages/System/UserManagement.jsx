@@ -461,10 +461,14 @@ const UserManagement = () => {
       render: (authUid) => <Text copyable>{authUid}</Text>,
     },
     {
+      // IMS NOTE [AKTIF/GUARDED] - Action button Manajemen User.
+      // Fungsi blok: menyusun Edit/Aktif-Nonaktif/Hapus Profile menjadi 3 baris konsisten.
+      // Hubungan flow: hanya layout kolom; guard RBAC, disabled, loading, dan modal existing tidak diubah.
       title: "Aksi",
       key: "actions",
-      width: 390,
+      width: 230,
       fixed: "right",
+      className: "app-table-action-column",
       render: (_, record) => {
         const canManage = canManageUserProfile({
           actorRole,
@@ -485,8 +489,9 @@ const UserManagement = () => {
         const canDelete = !deleteGuardReason;
 
         return (
-          <Space wrap size={[8, 8]}>
+          <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
             <Button
+              className="ims-action-button"
               icon={<EditOutlined />}
               disabled={!canManage}
               onClick={() => openEditModal(record)}
@@ -494,6 +499,7 @@ const UserManagement = () => {
               Edit
             </Button>
             <Button
+              className="ims-action-button"
               icon={
                 record.status === USER_STATUS.ACTIVE ? (
                   <StopOutlined />
@@ -512,8 +518,9 @@ const UserManagement = () => {
               {record.status === USER_STATUS.ACTIVE ? "Nonaktifkan" : "Aktifkan"}
             </Button>
             <Tooltip title={deleteGuardReason || "Hapus hanya profile Firestore, bukan Firebase Auth user."}>
-              <span>
+              <span style={{ display: "block", width: "100%" }}>
                 <Button
+                  className="ims-action-button"
                   danger
                   icon={<DeleteOutlined />}
                   disabled={!canDelete}

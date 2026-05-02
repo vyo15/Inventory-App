@@ -430,8 +430,8 @@ const ProductionPayrolls = () => {
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => (
-        <Space wrap>
-          <Button
+        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+          <Button className="ims-action-button"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
@@ -440,6 +440,7 @@ const ProductionPayrolls = () => {
           </Button>
 
           <Button
+            className="ims-action-button"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -455,7 +456,7 @@ const ProductionPayrolls = () => {
               okText="Ya"
               cancelText="Batal"
             >
-              <Button size="small" type="primary">
+              <Button className="ims-action-button" size="small" type="primary">
                 Paid
               </Button>
             </Popconfirm>

@@ -56,6 +56,7 @@ import {
   refreshProductionOrderRequirements,
 } from "../../services/Produksi/productionOrdersService";
 import { createProductionWorkLogFromOrder } from "../../services/Produksi/productionWorkLogsService";
+import useAuth from "../../hooks/useAuth";
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -216,6 +217,20 @@ const getCompactLineStatus = (line = {}) => {
 };
 
 const ProductionOrders = () => {
+  const { profile, firebaseUser } = useAuth();
+
+  // =====================================================
+  // IMS NOTE [AKTIF/GUARDED] - Actor audit Start Production dari PO.
+  // Fungsi blok: mengirim user login ke service pembuatan Work Log agar metadata audit tidak jatuh ke "system".
+  // Hubungan flow: hanya actor metadata; tidak mengubah requirement material, posting stok, PO lifecycle, payroll, atau HPP.
+  // Alasan logic: Start Production dari halaman PO adalah jalur resmi yang membuat Work Log dan memotong material.
+  // =====================================================
+  const currentUser = useMemo(() => ({
+    email: profile?.email || firebaseUser?.email || "",
+    displayName: profile?.displayName || profile?.name || firebaseUser?.displayName || "",
+    uid: profile?.authUid || profile?.uid || profile?.id || firebaseUser?.uid || "",
+  }), [firebaseUser, profile]);
+
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [bomOptions, setBomOptions] = useState([]);
@@ -562,7 +577,7 @@ const ProductionOrders = () => {
   // =====================================================
   const handleStartProduction = async (record) => {
     try {
-      await createProductionWorkLogFromOrder(record.id, {}, null);
+      await createProductionWorkLogFromOrder(record.id, {}, currentUser);
       message.success("Produksi dimulai. Work Log dibuat dan stok bahan dipotong.");
       await loadData();
     } catch (error) {
@@ -675,7 +690,7 @@ const ProductionOrders = () => {
       width: 170,
       render: (_, record) => (
         // Aktif dipakai: aksi dibuat vertical compact agar Detail/Refresh/Mulai tetap terlihat tanpa scroll kanan.
-        <Space direction="vertical" size={4} className="ims-action-group">
+        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
           <Button
             className="ims-action-button"
             size="small"
