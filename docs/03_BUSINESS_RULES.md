@@ -520,6 +520,10 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Data test wajib memakai marker `isTestData: true`, `sourceModule: "dev_test_seed"`, dan `createdBy: "dev_seed"`.
 - Hapus Data Test hanya boleh menghapus dokumen bermarker test; data normal tanpa marker tidak boleh ikut terhapus.
 - Repair stok tetap hanya menyamakan field turunan dan tidak boleh membuat inventory log palsu.
+- Reset destructive wajib membuat audit log awal sebelum delete; jika log awal gagal karena rules/permission, reset tidak boleh dijalankan.
+- Reset destructive wajib melakukan preflight sebelum write pertama: validasi mode, module, allowlist collection rules, protected master data, baseline restore, keberadaan item baseline, dan estimasi jumlah operasi.
+- Reset destructive dari client hanya boleh berjalan jika seluruh delete transaksi dan update stok bisa masuk satu batch aman; jika melebihi batas aman client, reset wajib diblokir agar tidak partial delete.
+- Jika reset berhasil tetapi update audit log akhir gagal, UI harus memisahkan error audit dari hasil reset dan tidak boleh menampilkan reset seolah gagal.
 
 ## 19. Rule Purchases Supplier Restock Prefill
 

@@ -59,7 +59,8 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
 - `/sales-report`
 - `/report-stock`
 - `/profit-loss`
-- `/utilities/reset-test-data`
+- `/utilities/reset-maintenance-data`
+- `/utilities/reset-test-data` sekarang legacy redirect ke `/utilities/reset-maintenance-data`
 
 ## Prinsip Stok Aktif yang Terlihat di Kode
 Aplikasi saat ini memakai pendekatan transisi antara field lama dan field baru:

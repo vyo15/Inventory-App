@@ -103,6 +103,42 @@ const TEST_DATA_CLEANUP_COLLECTIONS = [
 ];
 
 const BATCH_LIMIT = 400;
+const SAFE_CLIENT_BATCH_OPERATION_LIMIT = BATCH_LIMIT;
+const VALID_RESET_MODES = new Set(RESET_MODE_OPTIONS.map((item) => item.value));
+const STOCK_COLLECTION_KEYS = new Set(STOCK_COLLECTIONS);
+
+// -----------------------------------------------------------------------------
+// Reset target collections.
+// IMS NOTE [AKTIF/GUARDED] — daftar ini dipakai sebagai kontrak lokal dengan
+// Firestore Rules staged-final. Collection baru wajib ditambahkan eksplisit
+// setelah diaudit agar reset tidak menyentuh scope yang tidak dikenal.
+// Behavior-preserving cleanup: hanya merapikan grouping allowlist, bukan mengubah
+// target reset, role, schema, atau business rules.
+// -----------------------------------------------------------------------------
+const RESET_TRANSACTION_COLLECTIONS = [
+  "purchases",
+  "sales",
+  "returns",
+  "expenses",
+  "incomes",
+  "revenues",
+  "stock_adjustments",
+  "inventory_logs",
+  "production_orders",
+  "production_work_logs",
+  "production_payrolls",
+  "production_plans",
+  "pricing_logs",
+];
+
+// IMS NOTE [LEGACY/GUARDED] — collection produksi lama tetap diizinkan hanya
+// karena reset service masih punya opsi cleanup legacy. Jangan jadikan flow aktif.
+const RESET_LEGACY_COLLECTIONS = ["productions"];
+
+const RESET_ALLOWED_DELETE_COLLECTIONS = new Set([
+  ...RESET_TRANSACTION_COLLECTIONS,
+  ...RESET_LEGACY_COLLECTIONS,
+]);
 
 const safeTrim = (value) => String(value || "").trim();
 const normalizeType = (value) => safeTrim(value).toLowerCase();
@@ -110,6 +146,43 @@ const normalizeType = (value) => safeTrim(value).toLowerCase();
 const hasTruthyReference = (value) => Boolean(safeTrim(value));
 
 const isProtectedCollection = (collectionKey) => PROTECTED_COLLECTION_KEYS.has(collectionKey);
+const isResetDeleteAllowedCollection = (collectionKey) => RESET_ALLOWED_DELETE_COLLECTIONS.has(collectionKey);
+
+const assertValidResetMode = (resetMode) => {
+  if (!VALID_RESET_MODES.has(resetMode)) {
+    throw new Error("Mode reset tidak valid. Pilih mode reset dari opsi yang tersedia.");
+  }
+};
+
+const assertSelectedModulesAllowed = (modules = []) => {
+  const selectedModules = Array.isArray(modules) ? modules : [];
+  const unknownModules = selectedModules.filter((moduleKey) => !MODULE_DEFINITIONS[moduleKey]);
+
+  if (unknownModules.length) {
+    throw new Error(`Modul reset tidak dikenal: ${unknownModules.join(", ")}. Reset dibatalkan agar tidak menyentuh scope yang salah.`);
+  }
+};
+
+const assertResetTargetsSafe = (targets = []) => {
+  const protectedTargets = targets.filter((target) => isProtectedCollection(target.key));
+  if (protectedTargets.length) {
+    throw new Error(`Reset dibatalkan karena target berisi protected master data: ${protectedTargets.map((item) => item.key).join(", ")}.`);
+  }
+
+  const unknownTargets = targets.filter((target) => !isResetDeleteAllowedCollection(target.key));
+  if (unknownTargets.length) {
+    throw new Error(`Reset dibatalkan karena collection belum masuk allowlist rules reset: ${unknownTargets.map((item) => item.key).join(", ")}.`);
+  }
+};
+
+const assertClientBatchOperationLimit = (operationCount = 0) => {
+  if (operationCount > SAFE_CLIENT_BATCH_OPERATION_LIMIT) {
+    throw new Error(
+      `Reset dibatalkan karena ada ${operationCount} operasi tulis, melebihi batas aman ${SAFE_CLIENT_BATCH_OPERATION_LIMIT} operasi dari browser. Perkecil scope modul atau gunakan jalur maintenance/server terpisah agar tidak partial delete.`,
+    );
+  }
+};
+
 
 const hasDevTestMarker = (data = {}) => (
   data?.isTestData === DEV_TEST_DATA_MARKER.isTestData &&
@@ -225,7 +298,12 @@ const MODULE_DEFINITIONS = {
       { key: "production_orders", label: "Production Order", action: "Hapus PO produksi" },
       { key: "production_work_logs", label: "Production Work Log", action: "Hapus work log produksi" },
       { key: "production_payrolls", label: "Payroll Produksi", action: "Hapus payroll produksi" },
-      { key: "productions", label: "Productions Legacy", action: "Bersihkan jejak flow lama" },
+      {
+        key: "productions",
+        label: "Productions Legacy",
+        action: "Bersihkan jejak flow lama",
+        legacyNote: "LEGACY: collection lama hanya ikut reset/cleanup, bukan flow produksi aktif.",
+      },
       {
         key: "inventory_logs",
         label: "Inventory Log Produksi",
@@ -260,7 +338,12 @@ const MODULE_DEFINITIONS = {
   productions_legacy_only: {
     label: "Productions Legacy Saja",
     collections: [
-      { key: "productions", label: "Productions Legacy", action: "Bersihkan jejak flow lama saja" },
+      {
+        key: "productions",
+        label: "Productions Legacy",
+        action: "Bersihkan jejak flow lama saja",
+        legacyNote: "LEGACY: opsi ini dipertahankan untuk cleanup data lama, bukan mengaktifkan flow productions.",
+      },
     ],
   },
   cash_and_expenses: {
@@ -443,106 +526,181 @@ const buildBaselineStockPayload = async () => {
   return stockItems;
 };
 
-const commitDeleteTarget = async (target) => {
+const buildDeletePlanForTarget = async (target) => {
   if (isProtectedCollection(target?.key)) {
     // -------------------------------------------------------------------------
     // Last-line destructive guard.
-    // ACTIVE / GUARDED: delete collection target tidak boleh berjalan untuk
+    // AKTIF / GUARDED: delete collection target tidak boleh berjalan untuk
     // protected master data, termasuk Supplier (supplierPurchases).
     // -------------------------------------------------------------------------
     throw new Error(`Collection ${target.key} dilindungi dan tidak boleh dihapus oleh reset default.`);
   }
 
-  const docs = await readFilteredDocuments(target);
-  if (!docs.length) return 0;
-
-  let batch = writeBatch(db);
-  let operationCount = 0;
-  let deletedCount = 0;
-
-  for (const itemDoc of docs) {
-    batch.delete(itemDoc.ref);
-    operationCount += 1;
-    deletedCount += 1;
-
-    if (operationCount >= BATCH_LIMIT) {
-      await batch.commit();
-      batch = writeBatch(db);
-      operationCount = 0;
-    }
+  if (!isResetDeleteAllowedCollection(target?.key)) {
+    // -------------------------------------------------------------------------
+    // Firestore rules compatibility guard.
+    // AKTIF / GUARDED: reset hanya boleh menyasar collection yang memang masuk
+    // allowlist reset dan seharusnya ada di isKnownBusinessCollection rules.
+    // -------------------------------------------------------------------------
+    throw new Error(`Collection ${target.key} belum masuk allowlist reset yang aman.`);
   }
 
-  if (operationCount > 0) await batch.commit();
-
-  return deletedCount;
+  const docs = await readFilteredDocuments(target);
+  return {
+    target,
+    docs,
+    deletedCount: docs.length,
+  };
 };
 
-const applyStockModeToMasterItems = async (resetMode) => {
+const buildDeletePlans = async (targets = []) => {
+  assertResetTargetsSafe(targets);
+  return Promise.all(targets.map((target) => buildDeletePlanForTarget(target)));
+};
+
+const validateBaselineItemShape = (item = {}, index = 0) => {
+  const collectionName = safeTrim(item.collectionName);
+  const itemId = safeTrim(item.itemId);
+
+  if (!STOCK_COLLECTION_KEYS.has(collectionName)) {
+    throw new Error(`Baseline item #${index + 1} memakai collection tidak valid: ${collectionName || "(kosong)"}.`);
+  }
+
+  if (!itemId) {
+    throw new Error(`Baseline item #${index + 1} tidak punya itemId. Restore baseline dibatalkan sebelum delete.`);
+  }
+
+  if (!item.stockData || typeof item.stockData !== "object") {
+    throw new Error(`Baseline item #${index + 1} tidak punya stockData valid. Restore baseline dibatalkan sebelum delete.`);
+  }
+
+  return { collectionName, itemId, stockData: item.stockData };
+};
+
+const buildStockOperationPlan = async (resetMode) => {
   if (resetMode === "transaction_only") {
-    return { affectedItems: 0, message: "Stok master dipertahankan." };
+    return {
+      updates: [],
+      affectedItems: 0,
+      message: "Stok master dipertahankan.",
+    };
   }
 
-  const baselineDoc =
-    resetMode === "reset_and_restore_baseline" ? await getBaselineSnapshotDoc() : null;
-
-  if (resetMode === "reset_and_restore_baseline" && !baselineDoc?.items?.length) {
-    throw new Error("Baseline testing belum ada. Simpan baseline dulu sebelum restore baseline.");
-  }
-
-  let batch = writeBatch(db);
-  let operationCount = 0;
-  let affectedItems = 0;
+  const updates = [];
 
   if (resetMode === "reset_and_restore_baseline") {
-    for (const item of baselineDoc.items) {
-      const itemRef = doc(db, item.collectionName, item.itemId);
-      batch.update(itemRef, {
-        ...item.stockData,
-        stockResetMode: resetMode,
-        stockResetAt: serverTimestamp(),
-      });
-      operationCount += 1;
-      affectedItems += 1;
+    const baselineDoc = await getBaselineSnapshotDoc();
 
-      if (operationCount >= BATCH_LIMIT) {
-        await batch.commit();
-        batch = writeBatch(db);
-        operationCount = 0;
-      }
+    if (!baselineDoc?.items?.length) {
+      throw new Error("Baseline testing belum ada. Simpan baseline dulu sebelum restore baseline.");
     }
-  } else if (resetMode === "reset_and_zero_stock") {
+
+    for (const [index, rawItem] of baselineDoc.items.entries()) {
+      // -----------------------------------------------------------------------
+      // Baseline restore preflight.
+      // AKTIF / GUARDED: validasi dilakukan sebelum operasi destructive supaya
+      // reset tidak menghapus transaksi dulu lalu gagal ketika restore stok.
+      // -----------------------------------------------------------------------
+      const item = validateBaselineItemShape(rawItem, index);
+      const itemRef = doc(db, item.collectionName, item.itemId);
+      const itemSnap = await getDoc(itemRef);
+
+      if (!itemSnap.exists()) {
+        throw new Error(`Baseline item ${item.collectionName}/${item.itemId} tidak ditemukan. Restore baseline dibatalkan sebelum delete.`);
+      }
+
+      updates.push({
+        ref: itemRef,
+        payload: {
+          ...item.stockData,
+          stockResetMode: resetMode,
+          stockResetAt: serverTimestamp(),
+        },
+      });
+    }
+
+    return {
+      updates,
+      affectedItems: updates.length,
+      message: `Stok ${updates.length} item berhasil dikembalikan ke baseline testing.`,
+    };
+  }
+
+  if (resetMode === "reset_and_zero_stock") {
     for (const collectionName of STOCK_COLLECTIONS) {
       const snapshot = await getDocs(collection(db, collectionName));
       for (const itemDoc of snapshot.docs) {
         const stockPayload = buildZeroStockFieldsFromItem(itemDoc.data());
-        batch.update(itemDoc.ref, {
-          ...stockPayload,
-          stockResetMode: resetMode,
-          stockResetAt: serverTimestamp(),
+        updates.push({
+          ref: itemDoc.ref,
+          payload: {
+            ...stockPayload,
+            stockResetMode: resetMode,
+            stockResetAt: serverTimestamp(),
+          },
         });
-        operationCount += 1;
-        affectedItems += 1;
-
-        if (operationCount >= BATCH_LIMIT) {
-          await batch.commit();
-          batch = writeBatch(db);
-          operationCount = 0;
-        }
       }
     }
+
+    return {
+      updates,
+      affectedItems: updates.length,
+      message: `Stok ${updates.length} item berhasil dinolkan.`,
+    };
   }
 
-  if (operationCount > 0) await batch.commit();
-
   return {
-    affectedItems,
-    message:
-      resetMode === "reset_and_zero_stock"
-        ? `Stok ${affectedItems} item berhasil dinolkan.`
-        : `Stok ${affectedItems} item berhasil dikembalikan ke baseline testing.`,
+    updates: [],
+    affectedItems: 0,
+    message: "Tidak ada perubahan stok master.",
   };
 };
 
+const commitResetWritePlan = async ({ deletePlans = [], stockUpdates = [] }) => {
+  const deleteOperationCount = deletePlans.reduce((sum, item) => sum + item.docs.length, 0);
+  const stockOperationCount = stockUpdates.length;
+  const totalWriteOperations = deleteOperationCount + stockOperationCount;
+
+  assertClientBatchOperationLimit(totalWriteOperations);
+
+  if (!totalWriteOperations) return { totalWriteOperations };
+
+  // ---------------------------------------------------------------------------
+  // Single batch destructive commit.
+  // AKTIF / GUARDED: seluruh delete transaksi dan update stok master dipasang
+  // dalam satu batch agar Firestore melakukan commit all-or-nothing. Jika lebih
+  // dari batas aman, proses diblokir sebelum write pertama untuk mencegah partial.
+  // ---------------------------------------------------------------------------
+  const batch = writeBatch(db);
+
+  deletePlans.forEach((deletePlan) => {
+    deletePlan.docs.forEach((itemDoc) => {
+      batch.delete(itemDoc.ref);
+    });
+  });
+
+  stockUpdates.forEach((item) => {
+    batch.update(item.ref, item.payload);
+  });
+
+  await batch.commit();
+  return { totalWriteOperations };
+};
+
+const countStockOperationsForPreview = async (resetMode, baselineDoc) => {
+  if (resetMode === "transaction_only") return 0;
+  if (resetMode === "reset_and_restore_baseline") return Number(baselineDoc?.items?.length || 0);
+
+  if (resetMode === "reset_and_zero_stock") {
+    let total = 0;
+    for (const collectionName of STOCK_COLLECTIONS) {
+      total += await countCollectionDocuments({ key: collectionName });
+    }
+    return total;
+  }
+
+  return 0;
+};
 
 const buildProtectedCollectionPreview = async () => {
   return Promise.all(
@@ -558,8 +716,12 @@ const buildProtectedCollectionPreview = async () => {
 };
 
 export const getResetPreview = async ({ resetMode, modules }) => {
+  assertValidResetMode(resetMode);
   const selectedModules = Array.isArray(modules) ? modules : [];
+  assertSelectedModulesAllowed(selectedModules);
+
   const collectionTargets = getCollectionTargetsFromModules(selectedModules);
+  assertResetTargetsSafe(collectionTargets);
 
   const collections = await Promise.all(
     collectionTargets.map(async (item) => ({
@@ -573,6 +735,8 @@ export const getResetPreview = async ({ resetMode, modules }) => {
   const totalRecords = collections.reduce((sum, item) => sum + Number(item.count || 0), 0);
   const protectedRecords = protectedCollections.reduce((sum, item) => sum + Number(item.count || 0), 0);
   const baselineDoc = await getBaselineSnapshotDoc();
+  const estimatedStockOperations = await countStockOperationsForPreview(resetMode, baselineDoc);
+  const estimatedTotalOperations = totalRecords + estimatedStockOperations;
 
   return {
     resetMode,
@@ -588,6 +752,22 @@ export const getResetPreview = async ({ resetMode, modules }) => {
       label: baselineDoc?.items?.length
         ? `Tersimpan (${baselineDoc.items.length} item)`
         : "Belum ada baseline",
+    },
+    executionPlan: {
+      // -----------------------------------------------------------------------
+      // Preview safety plan.
+      // AKTIF / GUARDED: UI memakai ringkasan ini untuk memblokir reset besar
+      // dari browser sebelum masuk dialog destructive.
+      // -----------------------------------------------------------------------
+      deleteOperations: totalRecords,
+      stockOperations: estimatedStockOperations,
+      totalWriteOperations: estimatedTotalOperations,
+      safeClientLimit: SAFE_CLIENT_BATCH_OPERATION_LIMIT,
+      isClientBatchSafe: estimatedTotalOperations <= SAFE_CLIENT_BATCH_OPERATION_LIMIT,
+    },
+    rulesCompatibility: {
+      allowedDeleteCollections: Array.from(RESET_ALLOWED_DELETE_COLLECTIONS),
+      adminOnlyCollections: [BASELINE_COLLECTION, "maintenance_logs"],
     },
     recommendations: {
       transaction_only: "Cocok untuk trial-error cepat saat stok master aktif ingin dipertahankan.",
@@ -681,52 +861,68 @@ export const getDevTestDataPreview = async () => {
 export const deleteDevTestData = async () => {
   // ---------------------------------------------------------------------------
   // Delete data test.
-  // ACTIVE / GUARDED: hanya menghapus dokumen bermarker test. Dokumen normal
-  // tanpa marker tidak tersentuh, dan protected master data tidak menjadi target.
+  // AKTIF / GUARDED: hanya menghapus dokumen bermarker test. Dokumen normal
+  // tanpa marker tidak tersentuh, protected master data tidak menjadi target,
+  // dan commit dibatasi satu batch agar tidak partial delete dari browser.
   // ---------------------------------------------------------------------------
   const targets = buildDevTestTargets();
-  const deletedCollections = [];
-  let totalDeletedRecords = 0;
+  const deletePlans = await buildDeletePlans(targets);
+  const totalDeletedRecords = deletePlans.reduce((sum, item) => sum + item.deletedCount, 0);
 
-  for (const item of targets) {
-    const deletedCount = await commitDeleteTarget(item);
-    totalDeletedRecords += deletedCount;
-    deletedCollections.push({ ...item, deletedCount });
-  }
+  await commitResetWritePlan({ deletePlans });
 
   return {
     message: `Hapus data test selesai. ${totalDeletedRecords} record bermarker dev_test_seed dibersihkan.`,
     totalDeletedRecords,
-    deletedCollections,
+    deletedCollections: deletePlans.map((item) => ({
+      ...item.target,
+      deletedCount: item.deletedCount,
+    })),
   };
 };
 
 export const runResetDataTest = async ({ resetMode, modules }) => {
+  assertValidResetMode(resetMode);
   const selectedModules = Array.isArray(modules) ? modules : [];
-  const collectionTargets = getCollectionTargetsFromModules(selectedModules);
 
   if (!selectedModules.length) {
     throw new Error("Pilih minimal 1 modul yang ingin diproses.");
   }
 
-  const deletedCollections = [];
-  let totalDeletedRecords = 0;
+  assertSelectedModulesAllowed(selectedModules);
 
-  for (const item of collectionTargets) {
-    const deletedCount = await commitDeleteTarget(item);
-    totalDeletedRecords += deletedCount;
-    deletedCollections.push({
-      ...item,
-      deletedCount,
-    });
-  }
+  const collectionTargets = getCollectionTargetsFromModules(selectedModules);
+  assertResetTargetsSafe(collectionTargets);
 
-  const stockResult = await applyStockModeToMasterItems(resetMode);
+  // ---------------------------------------------------------------------------
+  // Destructive reset preflight.
+  // AKTIF / GUARDED: semua dokumen target dan rencana update stok dibaca +
+  // divalidasi dulu. Tidak ada delete yang berjalan sebelum resetMode, target,
+  // baseline, item baseline, allowlist rules, dan batas operasi aman lolos.
+  // ---------------------------------------------------------------------------
+  const deletePlans = await buildDeletePlans(collectionTargets);
+  const stockPlan = await buildStockOperationPlan(resetMode);
+  const totalDeletedRecords = deletePlans.reduce((sum, item) => sum + item.deletedCount, 0);
+  const totalWriteOperations = totalDeletedRecords + stockPlan.updates.length;
+
+  assertClientBatchOperationLimit(totalWriteOperations);
+
+  await commitResetWritePlan({
+    deletePlans,
+    stockUpdates: stockPlan.updates,
+  });
 
   return {
-    message: `Reset data selesai. ${totalDeletedRecords} record dibersihkan. ${stockResult.message}`,
+    message: `Reset data selesai. ${totalDeletedRecords} record dibersihkan. ${stockPlan.message}`,
     totalDeletedRecords,
-    deletedCollections,
-    stockResult,
+    totalWriteOperations,
+    deletedCollections: deletePlans.map((item) => ({
+      ...item.target,
+      deletedCount: item.deletedCount,
+    })),
+    stockResult: {
+      affectedItems: stockPlan.affectedItems,
+      message: stockPlan.message,
+    },
   };
 };

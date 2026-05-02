@@ -40,6 +40,7 @@ import {
 import {
   createMaintenanceLog,
   getLatestMaintenanceLogs,
+  updateMaintenanceLogStatus,
 } from "../../services/Maintenance/maintenanceLogService";
 import { getLegacyDataMaintenanceAudit } from "../../services/Maintenance/legacyDataMaintenanceService";
 import {
@@ -87,6 +88,17 @@ const MAINTENANCE_CATEGORY_META = {
   legacy: { label: "Legacy/Transisi", color: "orange" },
   scoped_reset: { label: "Aman Reset Scoped", color: "volcano" },
 };
+
+// -----------------------------------------------------------------------------
+// IMS NOTE [AKTIF/CLEANUP CANDIDATE] — helper lokal untuk label collection.
+// Fungsi blok: menjaga audit log reset/dev-test memakai bentuk label yang sama.
+// Alasan cleanup: mengurangi map duplikatif tanpa membuat abstraction global.
+// Hubungan flow: hanya metadata UI/audit, tidak mengubah target reset atau data.
+// Behavior-preserving cleanup.
+// -----------------------------------------------------------------------------
+const getCollectionLabels = (collections = []) => (
+  Array.isArray(collections) ? collections.map((item) => item.label || item.key).filter(Boolean) : []
+);
 
 const ResetMaintenanceData = () => {
   const [confirmForm] = Form.useForm();
@@ -174,6 +186,29 @@ const ResetMaintenanceData = () => {
     return selectedModules.map((value) => labelMap.get(value) || value);
   }, [moduleOptions, selectedModules]);
 
+
+  const resetBlockedReason = useMemo(() => {
+    // -------------------------------------------------------------------------
+    // Destructive reset UI preflight.
+    // AKTIF / GUARDED: blokir konfirmasi sebelum service dipanggil jika baseline
+    // belum siap atau jumlah write melebihi batas aman single-batch client.
+    // Service tetap menjadi guard utama, blok UI ini hanya early warning admin.
+    // -------------------------------------------------------------------------
+    if (!selectedModules.length) {
+      return "Pilih minimal 1 modul sebelum reset dijalankan.";
+    }
+
+    if (mode === "reset_and_restore_baseline" && preview && !preview?.baselineSummary?.exists) {
+      return "Baseline testing belum ada. Simpan baseline dulu sebelum menjalankan Reset + Baseline Testing.";
+    }
+
+    if (preview?.executionPlan?.isClientBatchSafe === false) {
+      return `Reset diblokir karena estimasi ${preview.executionPlan.totalWriteOperations} operasi tulis melebihi batas aman ${preview.executionPlan.safeClientLimit} operasi dari browser. Perkecil scope modul agar tidak partial delete.`;
+    }
+
+    return "";
+  }, [mode, preview, selectedModules.length]);
+
   const loadMaintenanceLogs = useCallback(async () => {
     try {
       setLoadingMaintenanceLogs(true);
@@ -247,26 +282,71 @@ const ResetMaintenanceData = () => {
   }, [loadDevTestDataPreview]);
 
   const handleDeleteDevTestData = async () => {
+    let testCleanupLogId = "";
+    let cleanupCompleted = false;
+
     try {
       setLoadingDeleteTestData(true);
-      const result = await deleteDevTestData();
-      await createMaintenanceLog({
+
+      // -----------------------------------------------------------------------
+      // Audit log pre-write untuk Hapus Data Test.
+      // AKTIF / GUARDED: walau hanya data bermarker dev_test_seed, aksi ini tetap
+      // destructive sehingga log awal wajib berhasil sebelum batch delete jalan.
+      // -----------------------------------------------------------------------
+      testCleanupLogId = await createMaintenanceLog({
         actionType: "delete_dev_test_data",
         mode: "test_data_cleanup",
         modules: ["dev_test_seed"],
-        summary: { totalDeletedRecords: result?.totalDeletedRecords || 0 },
-        affectedCollections: (result?.deletedCollections || []).map((item) => item.label || item.key),
-        affectedCount: result?.totalDeletedRecords || 0,
+        summary: { plannedDeleteRecords: testDataPreview?.totalRecords || 0 },
+        affectedCollections: getCollectionLabels(testDataPreview?.collections),
+        affectedCount: testDataPreview?.totalRecords || 0,
         dryRun: false,
-        note: "Hapus Data Test hanya menghapus dokumen bermarker isTestData/dev_test_seed/dev_seed. Supplier protected tidak ikut target default.",
+        status: "started",
+        note: "Hapus Data Test dimulai. Log dibuat sebelum delete agar cleanup bermarker tetap punya audit trail.",
       });
-      message.success(result?.message || "Data test berhasil dibersihkan.");
+
+      const result = await deleteDevTestData();
+      cleanupCompleted = true;
+
+      try {
+        await updateMaintenanceLogStatus(testCleanupLogId, {
+          status: "success",
+          summary: { totalDeletedRecords: result?.totalDeletedRecords || 0 },
+          affectedCollections: getCollectionLabels(result?.deletedCollections),
+          affectedCount: result?.totalDeletedRecords || 0,
+          note: "Hapus Data Test hanya menghapus dokumen bermarker isTestData/dev_test_seed/dev_seed. Supplier protected tidak ikut target default.",
+        });
+        message.success(result?.message || "Data test berhasil dibersihkan.");
+      } catch (auditError) {
+        console.error(auditError);
+        message.warning("Data test berhasil dibersihkan, tetapi update audit log akhir gagal. Cek akses maintenance_logs.");
+      }
+
       await loadDevTestDataPreview(false);
       await loadPreview(false);
       await loadMaintenanceLogs();
     } catch (error) {
       console.error(error);
-      message.error(error?.message || "Gagal menghapus data test.");
+
+      if (testCleanupLogId && !cleanupCompleted) {
+        try {
+          await updateMaintenanceLogStatus(testCleanupLogId, {
+            status: "failed",
+            errorMessage: error?.message || "Hapus Data Test gagal sebelum batch delete selesai.",
+            note: "Hapus Data Test gagal. Service memakai single batch agar tidak partial delete.",
+          });
+          await loadMaintenanceLogs();
+        } catch (auditError) {
+          console.error(auditError);
+          message.warning("Hapus Data Test gagal, dan update audit log gagal. Cek akses maintenance_logs.");
+        }
+      }
+
+      if (!testCleanupLogId) {
+        message.error(error?.message || "Audit log awal gagal dibuat. Hapus Data Test tidak dijalankan.");
+      } else {
+        message.error(error?.message || "Gagal menghapus data test.");
+      }
     } finally {
       setLoadingDeleteTestData(false);
     }
@@ -666,8 +746,8 @@ const ResetMaintenanceData = () => {
   };
 
   const openResetConfirmation = async () => {
-    if (!selectedModules.length) {
-      message.warning("Pilih minimal 1 modul sebelum reset dijalankan.");
+    if (resetBlockedReason) {
+      message.error(resetBlockedReason);
       return;
     }
 
@@ -676,6 +756,9 @@ const ResetMaintenanceData = () => {
   };
 
   const handleRunReset = async () => {
+    let resetLogId = "";
+    let resetCompleted = false;
+
     try {
       const values = await confirmForm.validateFields();
       if ((values.confirmationText || "").trim().toUpperCase() !== "RESET") {
@@ -683,22 +766,64 @@ const ResetMaintenanceData = () => {
         return;
       }
 
+      if (resetBlockedReason) {
+        message.error(resetBlockedReason);
+        return;
+      }
+
       setLoadingRun(true);
+
+      // -----------------------------------------------------------------------
+      // Audit log pre-write sebelum reset destructive.
+      // AKTIF / GUARDED: jika log awal gagal dibuat karena Firestore Rules,
+      // reset tidak dilanjutkan. Ini menjaga destructive action tetap tercatat.
+      // -----------------------------------------------------------------------
+      resetLogId = await createMaintenanceLog({
+        actionType: "reset_data",
+        mode,
+        modules: selectedModules,
+        summary: {
+          plannedDeleteRecords: preview?.totalRecords || 0,
+          plannedStockOperations: preview?.executionPlan?.stockOperations || 0,
+        },
+        planSummary: preview?.executionPlan || {},
+        affectedCollections: getCollectionLabels(preview?.collections),
+        affectedCount: preview?.executionPlan?.totalWriteOperations || preview?.totalRecords || 0,
+        dryRun: false,
+        status: "started",
+        note: "Reset destructive dimulai setelah preview dan konfirmasi RESET. Log ini dibuat sebelum delete agar reset tidak berjalan tanpa audit.",
+      });
+
       const result = await runResetDataTest({
         resetMode: mode,
         modules: selectedModules,
       });
-      await createMaintenanceLog({
-        actionType: "reset_data",
-        mode,
-        modules: selectedModules,
-        summary: { totalDeletedRecords: result?.totalDeletedRecords || 0, stockResult: result?.stockResult || {} },
-        affectedCollections: (result?.deletedCollections || []).map((item) => item.label || item.key),
-        affectedCount: result?.totalDeletedRecords || 0,
-        dryRun: false,
-        note: "Reset destructive dijalankan setelah preview dan konfirmasi RESET.",
-      });
-      message.success(result?.message || "Reset data berhasil dijalankan.");
+      resetCompleted = true;
+
+      try {
+        await updateMaintenanceLogStatus(resetLogId, {
+          status: "success",
+          summary: {
+            totalDeletedRecords: result?.totalDeletedRecords || 0,
+            totalWriteOperations: result?.totalWriteOperations || 0,
+            stockResult: result?.stockResult || {},
+          },
+          resultBuckets: {
+            deleted: result?.totalDeletedRecords || 0,
+            stockUpdated: result?.stockResult?.affectedItems || 0,
+          },
+          affectedCollections: getCollectionLabels(result?.deletedCollections),
+          affectedCount: result?.totalWriteOperations || result?.totalDeletedRecords || 0,
+          note: "Reset destructive berhasil. Delete transaksi dan update stok dijalankan dalam satu batch aman dari client.",
+        });
+        message.success(result?.message || "Reset data berhasil dijalankan.");
+      } catch (auditError) {
+        console.error(auditError);
+        message.warning(
+          "Reset data berhasil, tetapi update audit log akhir gagal. Cek koneksi/Firestore Rules untuk maintenance_logs; data reset tidak dianggap gagal.",
+        );
+      }
+
       setConfirmOpen(false);
       confirmForm.resetFields();
       await loadPreview(false);
@@ -708,7 +833,26 @@ const ResetMaintenanceData = () => {
     } catch (error) {
       console.error(error);
       if (error?.errorFields) return;
-      message.error(error?.message || "Gagal menjalankan reset data uji.");
+
+      if (resetLogId && !resetCompleted) {
+        try {
+          await updateMaintenanceLogStatus(resetLogId, {
+            status: "failed",
+            errorMessage: error?.message || "Reset gagal sebelum batch destructive selesai.",
+            note: "Reset destructive gagal. Karena service memakai preflight + single batch, kegagalan sebelum commit tidak boleh menghasilkan partial delete.",
+          });
+          await loadMaintenanceLogs();
+        } catch (auditError) {
+          console.error(auditError);
+          message.warning("Reset gagal, dan update audit log gagal. Cek akses maintenance_logs di Firestore Rules.");
+        }
+      }
+
+      if (!resetLogId) {
+        message.error(error?.message || "Audit log awal gagal dibuat. Reset tidak dijalankan.");
+      } else {
+        message.error(error?.message || "Gagal menjalankan reset data uji.");
+      }
     } finally {
       setLoadingRun(false);
     }
@@ -1320,12 +1464,30 @@ const ResetMaintenanceData = () => {
                 icon={<DeleteOutlined />}
                 onClick={openResetConfirmation}
                 loading={loadingRun}
-                disabled={!selectedModules.length}
+                disabled={Boolean(resetBlockedReason) || loadingPreview}
               >
                 Reset Sekarang
               </Button>
             </Col>
           </Row>
+
+          {resetBlockedReason ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="Reset belum bisa dijalankan aman"
+              description={resetBlockedReason}
+            />
+          ) : null}
+
+          {preview?.executionPlan ? (
+            <Alert
+              type="info"
+              showIcon
+              message="Rencana eksekusi reset"
+              description={`Estimasi ${preview.executionPlan.totalWriteOperations} operasi tulis (${preview.executionPlan.deleteOperations} delete + ${preview.executionPlan.stockOperations} update stok). Batas aman client: ${preview.executionPlan.safeClientLimit} operasi dalam satu batch.`}
+            />
+          ) : null}
 
           <Row gutter={[16, 16]}>
             <Col xs={24} md={6}>
@@ -1483,8 +1645,11 @@ const ResetMaintenanceData = () => {
                 { title: "Pelaksana", dataIndex: "executedBy", key: "executedBy", width: 150, render: (value) => value || "client-ui" },
                 { title: "Modul", dataIndex: "modules", key: "modules", width: 220, render: (values) => Array.isArray(values) && values.length ? values.join(", ") : "-" },
                 { title: "Terdampak", dataIndex: "affectedCount", key: "affectedCount", width: 120 },
-                { title: "Plan", dataIndex: "planSummary", key: "planSummary", width: 220, render: (value) => value?.checkedRecords ? `Dicek ${value.checkedRecords}` : value?.safeRepairCount ? `Plan ${value.safeRepairCount}` : "-" },
-                { title: "Status", dataIndex: "status", key: "status", width: 120, render: (value) => <Tag color={value === "success" ? "green" : "red"}>{value || "-"}</Tag> },
+                { title: "Plan", dataIndex: "planSummary", key: "planSummary", width: 220, render: (value) => value?.totalWriteOperations ? `Batch ${value.totalWriteOperations}` : value?.checkedRecords ? `Dicek ${value.checkedRecords}` : value?.safeRepairCount ? `Plan ${value.safeRepairCount}` : "-" },
+                { title: "Status", dataIndex: "status", key: "status", width: 120, render: (value) => {
+                    const colorMap = { success: "green", started: "blue", failed: "red" };
+                    return <Tag color={colorMap[value] || "default"}>{value || "-"}</Tag>;
+                  } },
                 { title: "Catatan", dataIndex: "note", key: "note", width: 360, render: (value) => value || "-" },
               ]}
               scroll={{ x: 1160 }}
@@ -1539,6 +1704,13 @@ const ResetMaintenanceData = () => {
               <Text>{preview?.totalRecords || 0} record</Text>
             </div>
           </div>
+
+          <Alert
+            type="warning"
+            showIcon
+            message="Audit log dibuat sebelum reset berjalan"
+            description="Jika audit log awal gagal dibuat karena permission maintenance_logs, reset dibatalkan dan tidak ada delete yang dijalankan."
+          />
 
           <Form form={confirmForm} layout="vertical">
             <Form.Item

@@ -271,8 +271,13 @@ Reset & Maintenance
 -> preview target reset
 -> tampilkan collection yang akan dihapus
 -> tampilkan protected master data termasuk supplierPurchases
+-> preflight resetMode + modules + allowlist rules + protected target
+-> jika mode baseline: validasi baseline dan keberadaan item baseline sebelum delete
+-> blokir dari client jika estimasi operasi melebihi batas single-batch aman
 -> user wajib konfirmasi RESET
--> reset hanya menghapus target non-protected
+-> create maintenance_logs status started sebelum delete
+-> commit delete transaksi + update stok dalam satu batch aman
+-> update maintenance_logs menjadi success / failed
 ```
 
 ```text
@@ -288,6 +293,9 @@ Guard:
 - reset transaksi tidak boleh menghapus master Supplier;
 - test cleanup tidak boleh menghapus data normal tanpa marker;
 - reset Supplier hanya boleh dibuat sebagai flow destructive khusus developer.
+- `maintenance_logs` dan `testing_baselines` tetap admin-only; user biasa tidak boleh membaca/menulis log/baseline reset.
+- Collection target reset harus masuk allowlist rules bisnis/admin-delete; fallback deny tidak boleh dibuka menjadi allow-all.
+- Error audit log akhir tidak boleh membuat UI mengklaim reset gagal jika batch reset sudah berhasil.
 
 ## Purchases Supplier Restock Prefill
 

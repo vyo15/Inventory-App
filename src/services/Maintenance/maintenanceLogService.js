@@ -7,14 +7,24 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 
 const MAINTENANCE_LOG_COLLECTION = "maintenance_logs";
 
 const safeTrim = (value) => String(value || "").trim();
-
 const normalizeCount = (value) => Number(value || 0);
+
+// -----------------------------------------------------------------------------
+// IMS NOTE [AKTIF/CLEANUP CANDIDATE] — normalisasi array metadata audit.
+// Fungsi blok: menjaga modules/affectedCollections selalu array string bersih.
+// Alasan cleanup: menghapus filter duplikatif di create/update audit log tanpa
+// mengubah schema maintenance_logs. Behavior-preserving cleanup.
+// -----------------------------------------------------------------------------
+const normalizeTextArray = (items = []) => (
+  Array.isArray(items) ? items.map(safeTrim).filter(Boolean) : []
+);
 
 // -----------------------------------------------------------------------------
 // ACTIVE / FINAL: audit trail resmi untuk semua aksi Reset & Maintenance Data.
@@ -36,10 +46,8 @@ export const createMaintenanceLog = async ({
   executedBy = "client-ui",
 } = {}) => {
   const logRef = doc(collection(db, MAINTENANCE_LOG_COLLECTION));
-  const normalizedModules = Array.isArray(modules) ? modules.filter(Boolean) : [];
-  const normalizedCollections = Array.isArray(affectedCollections)
-    ? affectedCollections.filter(Boolean)
-    : [];
+  const normalizedModules = normalizeTextArray(modules);
+  const normalizedCollections = normalizeTextArray(affectedCollections);
 
   await setDoc(logRef, {
     actionType: safeTrim(actionType) || "maintenance",
@@ -58,6 +66,46 @@ export const createMaintenanceLog = async ({
   });
 
   return logRef.id;
+};
+
+// -----------------------------------------------------------------------------
+// ACTIVE / GUARDED: update status audit reset destructive.
+// Dipakai agar reset membuat log "started" sebelum delete berjalan, lalu log yang
+// sama diubah menjadi success/failed. Jika update akhir gagal, data reset tetap
+// tidak diklaim gagal oleh UI karena error audit dipisah dari error reset.
+// -----------------------------------------------------------------------------
+export const updateMaintenanceLogStatus = async (logId, {
+  status = "success",
+  summary,
+  planSummary,
+  resultBuckets,
+  affectedCollections,
+  affectedCount,
+  note,
+  errorMessage,
+} = {}) => {
+  const safeLogId = safeTrim(logId);
+  if (!safeLogId) {
+    throw new Error("ID maintenance log tidak valid.");
+  }
+
+  const payload = {
+    status: safeTrim(status) || "success",
+    updatedAt: serverTimestamp(),
+  };
+
+  if (summary !== undefined) payload.summary = summary || {};
+  if (planSummary !== undefined) payload.planSummary = planSummary || {};
+  if (resultBuckets !== undefined) payload.resultBuckets = resultBuckets || {};
+  if (affectedCollections !== undefined) {
+    payload.affectedCollections = normalizeTextArray(affectedCollections);
+  }
+  if (affectedCount !== undefined) payload.affectedCount = normalizeCount(affectedCount);
+  if (note !== undefined) payload.note = safeTrim(note);
+  if (errorMessage !== undefined) payload.errorMessage = safeTrim(errorMessage);
+
+  await updateDoc(doc(db, MAINTENANCE_LOG_COLLECTION, safeLogId), payload);
+  return safeLogId;
 };
 
 // -----------------------------------------------------------------------------
