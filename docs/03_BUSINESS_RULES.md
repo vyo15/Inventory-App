@@ -726,3 +726,32 @@ Field yang tidak boleh disimpan di Firestore:
 ### 24.8 Boundary yang tidak berubah
 
 Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases, Returns, Sales, Stock Management / Stock Adjustment, Supplier sebagai katalog restock, Production, Payroll, HPP, Reports/export, Dashboard read-only, Pricing Rules, atau Reset & Maintenance business flow.
+
+## 11. Rule Batch Fix Bug Merge — 2026-05-03
+
+### 11.1 Format angka tanpa desimal
+- Tampilan angka, qty, stok, Rupiah, summary, report, dan input UI aktif diarahkan tanpa decimal.
+- `formatNumberId`, `formatQuantityId`, `formatPercentId`, dan parser input integer menjadi standar UI.
+- Perubahan ini tidak mengubah rumus transaksi, schema Firestore, atau migrasi/backfill data lama.
+- Jika suatu hari ada satuan yang wajib decimal secara bisnis, pengecualian harus dibahas eksplisit sebagai business rule baru.
+
+### 11.2 Production Order dan material variant strict
+- Jika target/BOM/material memakai varian, preview kebutuhan PO wajib membaca bucket stok varian yang dipilih/terselesaikan.
+- Material bervarian tidak boleh fallback diam-diam ke master/default ketika varian tidak ditemukan.
+- Start Production dari PO memakai `materialRequirementLines` sebagai kontrak final ke `materialUsages` Work Log.
+- Jika kontrak varian PO tidak valid, user harus refresh need/perbaiki BOM sebelum produksi dimulai.
+
+### 11.3 Work Log output stock audit
+- Complete Work Log tetap menjaga guard agar output stock tidak diposting dobel.
+- Inventory log `production_output_in` baru menyimpan metadata Work Log, PO, step, varian, dan worker/operator jika tersedia.
+- Log lama tanpa worker metadata tetap valid dan tidak di-backfill otomatis.
+
+### 11.4 Semi Finished variant color rename
+- Edit warna varian existing hanya mengganti label tampilan/metadata.
+- `variantKey` tetap menjadi identitas bucket stok/reference.
+- `stock`, `currentStock`, `reservedStock`, dan `availableStock` varian tetap dipreserve dari data existing/latest.
+- Rename warna tidak membuat inventory log palsu, tidak memigrasi PO/Work Log lama, dan tidak membuka edit stok langsung dari master.
+
+### 11.5 UI non-business-flow cleanup
+- Sidebar nested accordion dan Login UI copy cleanup adalah perubahan UI; keduanya tidak mengubah stok, transaksi, produksi, laporan, AuthContext, role access, Firestore rules, atau schema.
+

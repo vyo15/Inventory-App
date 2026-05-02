@@ -45,8 +45,15 @@ import {
   getItemStockSnapshot,
   inferHasVariants,
 } from "../../utils/variants/variantStockHelpers";
-import { formatNumberId } from "../../utils/formatters/numberId";
+import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
+
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const { Option } = Select;
 
@@ -1034,11 +1041,11 @@ const Sales = () => {
 
                     <Space style={{ marginBottom: 12 }} align="baseline" wrap>
                       <Form.Item {...restField} name={[name, "quantity"]} rules={[{ required: true, message: "Jumlah!" }]}>
-                        <InputNumber min={1} placeholder="Jumlah" style={{ width: 120 }} />
+                        <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} placeholder="Jumlah" style={{ width: 120 }} />
                       </Form.Item>
 
                       <Form.Item {...restField} name={[name, "pricePerUnit"]} rules={[{ required: true, message: "Harga!" }]}>
-                        <InputNumber min={0} placeholder="Harga Satuan" style={{ width: 180 }} />
+                        <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} placeholder="Harga Satuan" style={{ width: 180 }} />
                       </Form.Item>
 
                       <Button danger onClick={() => remove(name)} icon={<DeleteOutlined />} />

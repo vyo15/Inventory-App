@@ -829,3 +829,49 @@ Status: **AKTIF + GUARDED**. Checklist ini menggantikan checklist Auth/Role lama
 - [ ] ZIP hanya berisi file docs/rules yang berubah.
 - [ ] ZIP tidak berisi full project.
 - [ ] ZIP tidak berisi `node_modules`, `dist`, `build`, `.git`, `.env`, credential, service account, atau secret.
+
+## Checklist Regression — Batch Fix Bug Merge 2026-05-03
+
+### General
+- Jalankan `npm run build` di project lengkap.
+- Buka halaman yang berubah dan pastikan tidak ada runtime error.
+- Pastikan angka tidak menampilkan trailing `.00` pada qty, stok, Rupiah, summary, dan report yang masuk scope patch.
+
+### No-decimal number format
+- Test Purchases: qty, conversion, stock preview, dan ringkasan tetap angka bulat; rumus `quantity × conversionValue` tetap benar.
+- Test Stock Adjustment: input qty integer, stock berubah lewat flow resmi, dan inventory log tetap dibuat.
+- Test Sales/Returns: input qty integer, stok/income/return flow tidak berubah.
+- Test Finance Cash In/Cash Out: nominal input/display tetap tanpa desimal.
+- Test report Sales/Stock: quantity/stok tampil tanpa decimal.
+
+### Production Order strict variant requirement
+- Buat PO target bervarian dan pilih varian: preview target dan kebutuhan material membaca stok varian yang dipilih.
+- Buat PO target non-varian: preview memakai stok master/non-variant.
+- Material bervarian dengan strategy fixed/inherit harus menampilkan Variant atau error jelas, bukan Master diam-diam.
+- Klik Refresh Need pada PO lama lalu pastikan material requirement tersimpan dengan resolved variant yang benar.
+- Start Production dari PO bervarian harus memotong bucket varian yang sama dengan preview PO.
+
+### Work Log worker stock audit
+- Complete Work Log dengan satu operator: output stock bertambah satu kali, inventory log `production_output_in` dibuat, dan Stock Management menampilkan operator.
+- Complete Work Log dengan beberapa operator: operator tampil ringkas dan payroll tidak dobel.
+- Complete Work Log output bervarian: varian dan operator sama-sama tampil di Stock Management.
+- Cek log legacy tanpa worker metadata: halaman tidak error dan fallback tetap aman.
+
+### Semi Finished variant color rename
+- Edit warna varian Semi Finished dengan stok > 0: `variantKey` tetap, label warna berubah, stok tidak berubah.
+- Edit warna varian dengan `reservedStock` > 0: reserved dan available tetap benar.
+- Coba warna duplikat: validasi harus menolak.
+- Buat PO baru setelah rename: dropdown varian menampilkan label baru tanpa mengubah reference lama.
+
+### Sidebar nested accordion
+- Buka root menu lain lalu Produksi; root sebelumnya harus tertutup.
+- Di Produksi, buka Production Operation lalu Production Setup; sibling harus tertutup.
+- Refresh di route nested seperti `/produksi/production-orders`; parent aktif tetap terbuka dan highlight benar.
+- Login sebagai role user/administrator; menu tetap role-aware.
+
+### Login UI copy cleanup
+- Buka Login normal: teks `Login internal IMS` dan keterangan teknis Firebase/Auth/Firestore tidak tampil.
+- Login gagal tetap menampilkan Alert error.
+- Login valid tetap masuk sesuai role/status.
+- User inactive/invalid role tetap diblokir oleh flow existing.
+

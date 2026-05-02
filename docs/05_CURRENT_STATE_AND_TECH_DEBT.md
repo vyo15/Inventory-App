@@ -520,3 +520,21 @@ Data berikut adalah **LEGACY** dan seharusnya tidak ada lagi setelah cleanup: pr
 ### Boundary yang tidak disentuh
 
 Cleanup Auth/User Management tidak mengubah business rules stok, pembelian, penjualan, retur, produksi, payroll, HPP, laporan, dashboard, pricing rules, atau reset maintenance.
+
+## Update Current State — Batch Fix Bug Merge 2026-05-03
+- **AKTIF:** `src/utils/formatters/numberId.js` menjadi standar no-decimal untuk display dan parser input integer Indonesia.
+- **AKTIF:** halaman-halaman transaksi, master, inventory, produksi, finance, dan laporan yang masuk scope patch diarahkan memakai input/display angka bulat.
+- **GUARDED:** `src/pages/Produksi/ProductionOrders.jsx` dan `src/services/Produksi/productionOrdersService.js` sudah diperketat agar requirement material bervarian menampilkan/memakai stok varian, bukan fallback master.
+- **GUARDED:** `src/services/Produksi/productionWorkLogsService.js` membawa kontrak resolved variant dari PO ke Work Log, dan menambahkan metadata operator pada inventory log output produksi baru.
+- **AKTIF:** `src/pages/Inventory/StockManagement.jsx` membaca catatan operator/worker dari metadata inventory log produksi baru dengan fallback aman untuk log lama.
+- **GUARDED:** `src/pages/Produksi/SemiFinishedMaterials.jsx` dan `src/services/Produksi/semiFinishedMaterialsService.js` menjaga rename warna varian agar tidak mengganti `variantKey` / bucket stok.
+- **AKTIF:** `src/components/Layout/Sidebar/SidebarMenu.jsx` menerapkan accordion nested menu role-aware.
+- **AKTIF:** `src/pages/Auth/Login.jsx` dan `Login.css` membersihkan teks teknis internal pada login normal.
+
+### Legacy / cleanup candidate
+- **LEGACY:** data angka lama yang sudah decimal tetap mungkin ada di Firestore; patch ini tidak melakukan migrasi/backfill.
+- **LEGACY:** inventory log produksi lama tanpa worker metadata tetap tampil dengan fallback.
+- **LEGACY:** PO/Work Log lama tanpa kontrak varian lengkap tetap perlu diperlakukan hati-hati; gunakan refresh need/perbaikan BOM untuk data baru.
+- **CLEANUP CANDIDATE:** audit actor `currentUser` null/system pada caller Work Log bisa dirapikan pada task terpisah.
+- **CLEANUP CANDIDATE:** jika diperlukan, buat backfill manual dengan preview untuk log produksi lama, bukan otomatis.
+

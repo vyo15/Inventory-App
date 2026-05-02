@@ -45,7 +45,7 @@ import ProductionFilterCard from "../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
-import formatNumber from "../../utils/formatters/numberId";
+import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import {
   buildProductionOrderRequirementLines,
   createProductionOrder,
@@ -56,6 +56,12 @@ import {
   refreshProductionOrderRequirements,
 } from "../../services/Produksi/productionOrdersService";
 import { createProductionWorkLogFromOrder } from "../../services/Produksi/productionWorkLogsService";
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const PRODUCTION_ORDER_TARGET_TYPES = [
   {
@@ -146,9 +152,52 @@ const formatQtyWithUnit = (value, unit = "") => {
   return `${formatNumber(Number(value || 0))}${normalizedUnit ? ` ${normalizedUnit}` : ""}`;
 };
 
-const getCompactVariantLabel = (line = {}) => {
-  if (line.stockSourceType !== "variant") return "";
-  return line.resolvedVariantLabel || line.fixedVariantLabel || "";
+const normalizeRequirementVariantStrategy = (line = {}) => {
+  const rawStrategy = String(line.materialVariantStrategy || "none").trim().toLowerCase();
+  return ["inherit", "fixed", "none"].includes(rawStrategy) ? rawStrategy : "none";
+};
+
+const lineRequiresVariantStock = (line = {}) => {
+  const strategy = normalizeRequirementVariantStrategy(line);
+  return line.materialHasVariants === true && strategy !== "none";
+};
+
+// =====================================================
+// SECTION: Label sumber stok requirement PO.
+// Fungsi blok:
+// - membedakan material yang benar-benar membaca Variant, Master, atau invalid;
+// - dipakai oleh preview create PO dan drawer detail PO.
+// Hubungan flow aplikasi:
+// - hanya presentasi read-only dari materialRequirementLines hasil service strict;
+// - tidak mengubah submit PO, refresh need, Start Production, stok, payroll, atau HPP.
+// Alasan logic:
+// - material bervarian wajib tidak boleh terlihat normal sebagai Master bila resolver strict gagal/legacy mismatch.
+// Status: AKTIF untuk preview/detail PO, GUARDED terhadap data legacy material requirement.
+// =====================================================
+const getRequirementStockSourceMeta = (line = {}) => {
+  const variantLabel = line.resolvedVariantLabel || line.fixedVariantLabel || "";
+
+  if (line.stockSourceType === "variant" || line.resolvedVariantKey || variantLabel) {
+    return {
+      color: "purple",
+      label: "Variant",
+      variantLabel: variantLabel || "Varian terpilih",
+    };
+  }
+
+  if (lineRequiresVariantStock(line)) {
+    return {
+      color: "orange",
+      label: "Varian tidak ditemukan",
+      variantLabel: "Refresh Need / cek BOM",
+    };
+  }
+
+  return {
+    color: "default",
+    label: "Master",
+    variantLabel: "Tanpa varian",
+  };
 };
 
 const getCompactLineStatus = (line = {}) => {
@@ -174,6 +223,7 @@ const ProductionOrders = () => {
   const [targetVariantOptions, setTargetVariantOptions] = useState([]);
   const [requirementPreview, setRequirementPreview] = useState(null);
   const [requirementPreviewLoading, setRequirementPreviewLoading] = useState(false);
+  const [requirementPreviewError, setRequirementPreviewError] = useState("");
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -286,11 +336,13 @@ const ProductionOrders = () => {
     const loadRequirementPreview = async () => {
       if (!bomIdValue || Number(orderQtyValue || 0) <= 0) {
         setRequirementPreview(null);
+        setRequirementPreviewError("");
         return;
       }
 
       try {
         setRequirementPreviewLoading(true);
+        setRequirementPreviewError("");
         const result = await buildProductionOrderRequirementLines({
           bomId: bomIdValue,
           orderQty: Number(orderQtyValue || 0),
@@ -333,7 +385,10 @@ const ProductionOrders = () => {
           // =====================================================
           requirementLines,
           targetStockPreview: result?.targetStockPreview || null,
-          targetHasVariants: result?.bom?.targetHasVariants === true,
+          targetHasVariants:
+            result?.targetHasVariants === true ||
+            result?.targetStockPreview?.targetHasVariants === true ||
+            result?.bom?.targetHasVariants === true,
           totalLines: Number(result?.reservationSummary?.totalLines || 0),
           sufficientLines: Number(result?.reservationSummary?.sufficientLines || 0),
           shortageLines: Number(result?.reservationSummary?.shortageLines || 0),
@@ -349,6 +404,9 @@ const ProductionOrders = () => {
         console.error(error);
         if (!cancelled) {
           setRequirementPreview(null);
+          setRequirementPreviewError(
+            error?.message || "Preview kebutuhan material gagal dimuat.",
+          );
         }
       } finally {
         if (!cancelled) {
@@ -683,17 +741,21 @@ const ProductionOrders = () => {
       {
         title: "Varian / Sumber",
         key: "variantSource",
-        width: 180,
-        render: (_, record) => (
-          <div className={orderUiClassNames.stack}>
-            <Tag className="ims-status-tag" color={record.stockSourceType === "variant" ? "purple" : "default"}>
-              {record.stockSourceType === "variant" ? "Variant" : "Master"}
-            </Tag>
-            <Typography.Text type="secondary" className={orderUiClassNames.meta}>
-              {record.resolvedVariantLabel || "Tanpa varian"}
-            </Typography.Text>
-          </div>
-        ),
+        width: 200,
+        render: (_, record) => {
+          const sourceMeta = getRequirementStockSourceMeta(record);
+
+          return (
+            <div className={orderUiClassNames.stack}>
+              <Tag className="ims-status-tag" color={sourceMeta.color}>
+                {sourceMeta.label}
+              </Tag>
+              <Typography.Text type="secondary" className={orderUiClassNames.meta}>
+                {sourceMeta.variantLabel}
+              </Typography.Text>
+            </div>
+          );
+        },
       },
       {
         title: "Kebutuhan",
@@ -934,7 +996,7 @@ const ProductionOrders = () => {
             name="orderQty"
             rules={[{ required: true, message: "Qty order wajib diisi" }]}
           >
-            <InputNumber min={1} style={{ width: "100%" }} />
+            <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
           </Form.Item>
 
           {/* =====================================================
@@ -951,7 +1013,15 @@ const ProductionOrders = () => {
           ===================================================== */}
           {bomIdValue && Number(orderQtyValue || 0) > 0 ? (
             <div style={{ marginBottom: 16 }}>
-              {requirementPreview?.targetHasVariants === true && !targetVariantKeyValue ? (
+              {requirementPreviewError ? (
+                <Alert
+                  type="error"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message="Preview kebutuhan material tidak valid"
+                  description={requirementPreviewError}
+                />
+              ) : requirementPreview?.targetHasVariants === true && !targetVariantKeyValue ? (
                 <Alert
                   type="info"
                   showIcon
@@ -1002,7 +1072,7 @@ const ProductionOrders = () => {
                     ) : (
                       <div style={{ maxHeight: 220, overflowY: "auto" }}>
                         {(requirementPreview.requirementLines || []).map((line, index) => {
-                          const variantLabel = getCompactVariantLabel(line);
+                          const sourceMeta = getRequirementStockSourceMeta(line);
                           const statusMeta = getCompactLineStatus(line);
 
                           return (
@@ -1019,9 +1089,15 @@ const ProductionOrders = () => {
                               <Space direction="vertical" size={2} style={{ width: "100%" }}>
                                 <Typography.Text strong>
                                   {line.itemName || "Material"}
-                                  {variantLabel ? ` · ${variantLabel}` : ""}
                                 </Typography.Text>
                                 <Space size={6} wrap>
+                                  <Tag className="ims-status-tag" color={sourceMeta.color}>
+                                    {sourceMeta.label}
+                                  </Tag>
+                                  <Typography.Text type="secondary">
+                                    {sourceMeta.variantLabel}
+                                  </Typography.Text>
+                                  <Typography.Text type="secondary">·</Typography.Text>
                                   <Typography.Text type="secondary">
                                     Butuh {formatQtyWithUnit(line.qtyRequired, line.unit)}
                                   </Typography.Text>

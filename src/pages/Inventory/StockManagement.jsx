@@ -101,6 +101,56 @@ const readLogField = (record, fieldName, fallback = "") => {
 const resolveVariantLabel = (record) =>
   readLogField(record, "variantLabel") || readLogField(record, "variantKey") || "";
 
+// =========================
+// SECTION: Helper audit worker produksi
+// Fungsi:
+// - membaca snapshot worker/operator dari inventory log produksi baru;
+// - memberi fallback aman untuk log legacy yang belum punya metadata worker.
+// Hubungan flow:
+// - Stock Management hanya reader audit, tidak fetch Work Log per row dan tidak melakukan write.
+// Alasan logic dipakai:
+// - worker sudah disalin ke `details` inventory log saat complete Work Log, sehingga kolom Catatan
+//   bisa menampilkan operator tanpa mengubah stock mutation, payroll, atau HPP.
+// Status:
+// - AKTIF untuk log produksi baru.
+// - LEGACY fallback: log lama tanpa worker metadata tetap tampil `-`.
+// =========================
+const normalizeLogStringArray = (value = []) =>
+  Array.isArray(value) ? value.map((item) => String(item || "").trim()).filter(Boolean) : [];
+
+const resolveProductionWorkerSummary = (record) => {
+  const workerSummary = String(readLogField(record, "workerSummary") || readLogField(record, "operatorText") || "").trim();
+  if (workerSummary) return workerSummary;
+
+  const workerNames = normalizeLogStringArray(readLogField(record, "workerNames", []));
+  const workerCodes = normalizeLogStringArray(readLogField(record, "workerCodes", []));
+  const workerIds = normalizeLogStringArray(readLogField(record, "workerIds", []));
+  const workerCount = Number(readLogField(record, "workerCount", 0) || 0);
+  const readableWorkers = workerNames.length ? workerNames : workerCodes.length ? workerCodes : workerIds;
+
+  if (readableWorkers.length) {
+    return `Operator: ${readableWorkers.join(", ")}`;
+  }
+
+  if (workerCount > 0) {
+    return `Operator: ${formatNumberId(workerCount)} orang`;
+  }
+
+  return "";
+};
+
+const resolveProductionAuditContextText = (record) => {
+  const workNumber = String(readLogField(record, "workNumber") || "").trim();
+  const productionOrderCode = String(readLogField(record, "productionOrderCode") || "").trim();
+  const stepName = String(readLogField(record, "stepName") || "").trim();
+
+  return [
+    workNumber ? `Work Log: ${workNumber}` : "",
+    productionOrderCode ? `PO: ${productionOrderCode}` : "",
+    stepName ? `Step: ${stepName}` : "",
+  ].filter(Boolean).join(" | ");
+};
+
 const REFERENCE_TYPE_LABELS = {
   sale: "Penjualan",
   sales: "Penjualan",
@@ -157,7 +207,10 @@ const resolveReferenceItems = (record) => {
   const purchaseId = readLogField(record, "purchaseId");
   const adjustmentId = readLogField(record, "adjustmentId");
   const productionOrderId = readLogField(record, "productionOrderId");
+  const productionOrderCode = readLogField(record, "productionOrderCode");
   const workLogId = readLogField(record, "workLogId") || readLogField(record, "workLogRefId");
+  const workNumber = readLogField(record, "workNumber");
+  const stepName = readLogField(record, "stepName");
   const customerName = readLogField(record, "customerName");
   const supplierName = readLogField(record, "supplierName");
   const reason = readLogField(record, "reason");
@@ -199,11 +252,28 @@ const resolveReferenceItems = (record) => {
   }
 
   if (productionOrderId) {
-    items.push(buildReferenceItem({ label: "Production Order", referenceId: productionOrderId }));
+    items.push(
+      buildReferenceItem({
+        label: "Production Order",
+        referenceId: productionOrderId,
+        detail: productionOrderCode ? `Kode: ${productionOrderCode}` : "",
+      }),
+    );
   }
 
   if (workLogId) {
-    items.push(buildReferenceItem({ label: "Produksi / Work Log", referenceId: workLogId }));
+    const workLogDetails = [
+      workNumber ? `Nomor: ${workNumber}` : "",
+      stepName ? `Step: ${stepName}` : "",
+    ].filter(Boolean).join(" | ");
+
+    items.push(
+      buildReferenceItem({
+        label: "Produksi / Work Log",
+        referenceId: workLogId,
+        detail: workLogDetails,
+      }),
+    );
   }
 
   if (!items.length && referenceId) {
@@ -222,11 +292,30 @@ const resolveReferenceItems = (record) => {
   return items;
 };
 
-const resolveNoteText = (record) =>
-  readLogField(record, "note") ||
-  readLogField(record, "description") ||
-  readLogField(record, "remark") ||
-  "-";
+const resolveNoteText = (record) => {
+  const explicitNote =
+    readLogField(record, "note") ||
+    readLogField(record, "description") ||
+    readLogField(record, "remark");
+
+  if (explicitNote) return explicitNote;
+
+  if (resolveSourceMeta(record).label !== STOCK_LOG_SOURCE_META.production.label) {
+    return "-";
+  }
+
+  const workerSummary = resolveProductionWorkerSummary(record);
+  if (!workerSummary) {
+    return "-";
+  }
+
+  const productionNote = [
+    workerSummary,
+    resolveProductionAuditContextText(record),
+  ].filter(Boolean).join(" | ");
+
+  return productionNote || "-";
+};
 
 // =========================
 // SECTION: Keputusan kolom stok snapshot legacy

@@ -90,6 +90,49 @@ const getCollectionNameByItemType = (itemType) => {
 };
 
 // =====================================================
+// SECTION: Guard strict variant material dari PO
+// Fungsi blok:
+// - menilai apakah line material Work Log dari PO wajib membaca bucket variant;
+// - menjaga Start Production tidak fallback ke master/default saat PO final sudah membawa resolved variant.
+// Hubungan flow aplikasi:
+// - dipakai saat createProductionWorkLogFromOrder memotong stok bahan dalam transaction yang sama.
+// Alasan logic:
+// - materialRequirementLines PO menjadi contract final ke materialUsages Work Log.
+// Status: AKTIF/GUARDED untuk Start Production; manual/legacy tetap dapat memakai resolver permissive jika tidak dipanggil strict.
+// =====================================================
+const normalizeMaterialVariantStrategy = ({ line = {}, stockItem = {} } = {}) => {
+  const materialHasVariants = line.materialHasVariants === true || inferHasVariants(stockItem || {});
+  if (!materialHasVariants) return "none";
+
+  const normalized = safeTrim(line.materialVariantStrategy).toLowerCase();
+  if (["inherit", "fixed", "none"].includes(normalized)) return normalized;
+  return line.resolvedVariantKey || line.resolvedVariantLabel ? "fixed" : "inherit";
+};
+
+const shouldLineReadVariantStrictly = ({ line = {}, stockItem = {}, strictVariant = false } = {}) => {
+  if (!strictVariant) return false;
+  const materialHasVariants = line.materialHasVariants === true || inferHasVariants(stockItem || {});
+  const strategy = normalizeMaterialVariantStrategy({ line, stockItem });
+  const hasResolvedVariantContract =
+    line.stockSourceType === "variant" || safeTrim(line.resolvedVariantKey) || safeTrim(line.resolvedVariantLabel);
+  const inheritedTargetRequiresVariant =
+    strategy === "inherit" && line.sourceTargetHasVariants === true && safeTrim(line.sourceTargetVariantKey);
+
+  if (!materialHasVariants || strategy === "none") return false;
+  if (strategy === "fixed") return true;
+  return Boolean(hasResolvedVariantContract || inheritedTargetRequiresVariant);
+};
+
+const assertResolvedVariantContract = ({ line = {}, stockItem = {}, stockResolution = {} } = {}) => {
+  if (stockResolution.stockSourceType === "variant") return;
+
+  const itemName = safeTrim(line.itemName || stockItem?.name || stockItem?.code) || "material";
+  throw new Error(
+    `Material ${itemName} pada Production Order wajib memakai varian tersimpan, tetapi varian tidak ditemukan. Refresh Need/perbaiki BOM sebelum Start Production agar stok tidak fallback ke master/default.`,
+  );
+};
+
+// =====================================================
 // Safe reader referensi produksi
 // Catatan maintainability:
 // - Menu Work Log tidak boleh ikut gagal total hanya karena 1 koleksi referensi
@@ -694,6 +737,20 @@ export const buildWorkLogDraftFromProductionOrder = async (
       totalCostSnapshot: 0,
       materialHasVariants: line.materialHasVariants === true,
       materialVariantStrategy: line.materialVariantStrategy || (line.materialHasVariants ? "inherit" : "none"),
+      sourceTargetHasVariants: productionOrder.targetHasVariants === true,
+      sourceTargetVariantKey: productionOrder.targetVariantKey || "",
+      sourceTargetVariantLabel: productionOrder.targetVariantLabel || "",
+      // =====================================================
+      // SECTION: Contract varian PO -> Work Log
+      // Fungsi blok:
+      // - menyalin resolved variant dari materialRequirementLines PO final ke materialUsages;
+      // - tidak menghitung ulang strategy di UI Work Log.
+      // Hubungan flow aplikasi:
+      // - Start Production memakai field ini untuk memotong stok bucket variant yang sama dengan preview PO.
+      // Alasan logic:
+      // - PO final adalah sumber kebenaran requirement; Work Log hanya mengeksekusi.
+      // Status: AKTIF/GUARDED untuk 1 PO = 1 Work Log.
+      // =====================================================
       resolvedVariantKey: line.resolvedVariantKey || "",
       resolvedVariantLabel: line.resolvedVariantLabel || "",
       stockSourceType: line.stockSourceType || (line.resolvedVariantKey ? "variant" : "master"),
@@ -892,6 +949,87 @@ const addInventoryLogInTransaction = (transaction, {
 };
 
 // =====================================================
+// Helper metadata audit output produksi
+// Fungsi:
+// - membuat snapshot worker/operator untuk inventory log `production_output_in`;
+// - menyimpan label manusiawi Work Log/PO/step/varian tanpa mengubah transaksi stok.
+// Hubungan flow aplikasi:
+// - Worker sudah dipilih dan disimpan di Work Log sebelum complete; helper ini hanya
+//   menyalin snapshot tersebut ke inventory log output supaya Stock Management bisa audit.
+// Alasan logic dipakai:
+// - Stock Management tidak boleh fetch Work Log per row dan tidak boleh backfill log lama,
+//   sehingga metadata audit harus ikut tersimpan saat log produksi baru dibuat.
+// Status:
+// - AKTIF untuk log produksi baru.
+// - GUARDED karena tidak menyentuh quantityChange, stock mutation, HPP, payroll, atau guard complete.
+// - LEGACY: log lama yang belum punya worker metadata tetap valid dan dibaca fallback di UI.
+// =====================================================
+const normalizeAuditStringArray = (value = []) =>
+  Array.isArray(value) ? value.map((item) => safeTrim(item)).filter(Boolean) : [];
+
+const buildProductionWorkerSummary = ({ workerNames = [], workerCodes = [], workerIds = [], workerCount = 0 } = {}) => {
+  const readableWorkers = workerNames.length ? workerNames : workerCodes.length ? workerCodes : workerIds;
+
+  if (readableWorkers.length) {
+    return `Operator: ${readableWorkers.join(', ')}`;
+  }
+
+  if (toNumber(workerCount) > 0) {
+    return `Operator: ${toNumber(workerCount)} orang`;
+  }
+
+  return '';
+};
+
+const buildProductionOutputAuditMetadata = ({ workLog = {}, productionOrder = null, outputResolution = {} } = {}) => {
+  const workerIds = normalizeAuditStringArray(workLog.workerIds);
+  const workerNames = normalizeAuditStringArray(workLog.workerNames);
+  const workerCodes = normalizeAuditStringArray(workLog.workerCodes);
+  const workerCount = toNumber(
+    workLog.workerCount || workerNames.length || workerCodes.length || workerIds.length || 0,
+  );
+  const workerSummary = buildProductionWorkerSummary({
+    workerIds,
+    workerNames,
+    workerCodes,
+    workerCount,
+  });
+  const workNumber = safeTrim(workLog.workNumber);
+  const productionOrderCode = safeTrim(productionOrder?.code || workLog.productionOrderCode);
+  const stepName = safeTrim(workLog.stepName);
+  const workLogNote = safeTrim(workLog.notes);
+  const productionContextParts = [
+    workNumber ? `Work Log: ${workNumber}` : '',
+    productionOrderCode ? `PO: ${productionOrderCode}` : '',
+    stepName ? `Step: ${stepName}` : '',
+  ].filter(Boolean);
+  const noteParts = [
+    workerSummary,
+    ...(workerSummary ? productionContextParts : []),
+    workLogNote ? `Catatan WL: ${workLogNote}` : '',
+  ].filter(Boolean);
+
+  return {
+    workLogRefId: workLog.id || '',
+    workNumber,
+    productionOrderId: productionOrder?.id || workLog.productionOrderId || '',
+    productionOrderCode,
+    stepName,
+    movementSource: 'production',
+    variantKey: outputResolution.resolvedVariantKey || '',
+    variantLabel: outputResolution.resolvedVariantLabel || '',
+    workerIds,
+    workerNames,
+    workerCodes,
+    workerCount,
+    workerSummary,
+    operatorText: workerSummary,
+    workLogNote,
+    note: noteParts.join(' | '),
+  };
+};
+
+// =====================================================
 // Create work log langsung dari Production Order
 // =====================================================
 // =====================================================
@@ -954,7 +1092,11 @@ export const createProductionWorkLogFromOrder = async (
       }
 
       const stockItem = normalizeReferenceItem({ id: stockSnap.id, ...stockSnap.data() });
-      const stockResolution = getResolvedMaterialStock({ line, stockItem });
+      const stockResolution = getResolvedMaterialStock({
+        line,
+        stockItem,
+        strictVariant: payload.sourceType === "production_order",
+      });
       const consumeQty = toNumber(line.actualQty || line.plannedQty || 0);
       if (toNumber(stockResolution.currentStock || 0) < consumeQty) {
         throw new Error(`Stok ${line.itemName || "material"} tidak cukup untuk mulai produksi`);
@@ -1151,15 +1293,45 @@ const buildWorkLogReservationMap = (productionOrder = null) => {
   return reservedQtyMap;
 };
 
-const getResolvedMaterialStock = ({ line = {}, stockItem = {} }) =>
-  resolveVariantSelection({
+const getResolvedMaterialStock = ({ line = {}, stockItem = {}, strictVariant = false } = {}) => {
+  const materialVariantStrategy = normalizeMaterialVariantStrategy({ line, stockItem });
+  const shouldReadVariant = shouldLineReadVariantStrictly({ line, stockItem, strictVariant });
+
+  if (shouldReadVariant && !safeTrim(line.resolvedVariantKey) && !safeTrim(line.resolvedVariantLabel)) {
+    const itemName = safeTrim(line.itemName || stockItem?.name || stockItem?.code) || "material";
+    throw new Error(
+      `Material ${itemName} membutuhkan varian dari PO, tetapi resolvedVariantKey/resolvedVariantLabel kosong. Refresh Need/perbaiki BOM sebelum Start Production.`,
+    );
+  }
+
+  // =====================================================
+  // SECTION: Resolve stok material Start Production
+  // Fungsi blok:
+  // - memakai resolvedVariantKey/resolvedVariantLabel dari line PO final sebagai sumber utama;
+  // - mengirim allowMasterFallback=false hanya saat Start Production dari PO membutuhkan variant.
+  // Hubungan flow aplikasi:
+  // - hasil resolver langsung dipakai untuk applyStockMutationToItem dan inventory log material keluar.
+  // Alasan logic:
+  // - preview PO, PO final, dan pemotongan stok Start Production harus membaca bucket variant yang sama.
+  // Status: AKTIF/GUARDED untuk production_order start; LEGACY/manual tetap permissive saat strictVariant=false.
+  // =====================================================
+  const stockResolution = resolveVariantSelection({
     item: stockItem || {},
-    materialVariantStrategy: line.materialHasVariants === true
-      ? line.materialVariantStrategy || (line.resolvedVariantKey ? 'fixed' : 'inherit')
-      : 'none',
-    targetVariantKey: line.resolvedVariantKey || '',
-    fixedVariantKey: line.resolvedVariantKey || '',
+    materialVariantStrategy,
+    targetVariantKey: line.resolvedVariantKey || "",
+    targetVariantLabel: line.resolvedVariantLabel || "",
+    fixedVariantKey: line.resolvedVariantKey || "",
+    fixedVariantLabel: line.resolvedVariantLabel || "",
+    allowMasterFallback: !shouldReadVariant,
+    contextLabel: `Varian material ${safeTrim(line.itemName || stockItem?.name || "material")}`,
   });
+
+  if (shouldReadVariant) {
+    assertResolvedVariantContract({ line, stockItem, stockResolution });
+  }
+
+  return stockResolution;
+};
 
 const getOutputStockResolution = ({
   line = {},
@@ -1574,16 +1746,11 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
           quantityChange: goodQty,
           type: 'production_output_in',
           collectionName,
-          extraData: {
-            workLogRefId: workLog.id,
-            workNumber: workLog.workNumber || '',
-            productionOrderId: productionOrder?.id || workLog.productionOrderId || '',
-            productionOrderCode: productionOrder?.code || workLog.productionOrderCode || '',
-            stepName: workLog.stepName || '',
-            movementSource: 'production',
-            variantKey: outputResolution.resolvedVariantKey || '',
-            variantLabel: outputResolution.resolvedVariantLabel || '',
-          },
+          extraData: buildProductionOutputAuditMetadata({
+            workLog,
+            productionOrder,
+            outputResolution,
+          }),
         });
       }
 

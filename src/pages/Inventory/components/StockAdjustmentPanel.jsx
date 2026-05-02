@@ -21,7 +21,7 @@ import {
   buildInventoryLogPayload,
   INVENTORY_LOG_COLLECTION,
 } from "../../../services/Inventory/inventoryLogService";
-import { formatNumberId } from "../../../utils/formatters/numberId";
+import { formatNumberId, parseIntegerIdInput } from "../../../utils/formatters/numberId";
 import {
   buildVariantOptionsFromItem,
   findVariantByKey,
@@ -29,6 +29,13 @@ import {
   inferHasVariants,
   applyStockMutationToItem,
 } from "../../../utils/variants/variantStockHelpers";
+
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const { Option } = Select;
 
@@ -62,21 +69,15 @@ const isWholeNumberUnit = (unit = "") => {
 
 const formatQuantityId = (value, unit = "") => {
   const numericValue = Number(value || 0);
-  const isDiscrete = isWholeNumberUnit(unit);
 
   // =========================
-  // SECTION: Format qty adjustment tanpa trailing .00
-  // Fungsi:
-  // - menampilkan qty bulat tanpa desimal dan qty pecahan maksimal 2 desimal dengan format Indonesia
-  // Alasan:
-  // - panel Penyesuaian Stok tidak boleh membingungkan user dengan tampilan 1.00 untuk item pcs/bulat
-  // Status:
-  // - aktif dipakai pada preview stok, warning validasi, dan tabel riwayat adjustment
+  // IMS NOTE [AKTIF/GUARDED] - Format qty adjustment tanpa desimal
+  // Fungsi blok: menampilkan qty adjustment sebagai angka bulat di Manajemen Stok.
+  // Hubungan flow: hanya display/input panel; transaction stock dan inventory log tetap di handler existing.
+  // Alasan logic: rule IMS tahap ini tidak membuka input decimal baru, termasuk unit lama non-discrete.
+  // Behavior: tampilan/input berubah ke no-decimal; data lama pecahan tidak dimigrasi.
   // =========================
-  const formatted = new Intl.NumberFormat("id-ID", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: isDiscrete ? 0 : 2,
-  }).format(numericValue);
+  const formatted = formatNumberId(numericValue);
 
   return `${formatted}${unit ? ` ${unit}` : ""}`.trim();
 };
@@ -706,33 +707,18 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
                 ? `Satuan item: ${quantityUnitLabel}. ${
                     quantityUsesWholeNumber
                       ? "Qty dibulatkan tanpa desimal."
-                      : "Qty boleh desimal jika memang satuannya pecahan."
+                      : "Qty lama non-discrete tetap ditampilkan bulat; data lama tidak dimigrasi."
                   }${selectedVariant ? ` Varian aktif: ${selectedVariant.variantLabel}.` : ""}`
                 : "Pilih item dulu agar format qty mengikuti satuan stok item."
             }
           >
             <InputNumber
-              min={quantityUsesWholeNumber ? 1 : 0.01}
-              step={quantityUsesWholeNumber ? 1 : 0.01}
-              precision={quantityUsesWholeNumber ? 0 : 2}
+              min={1}
+              step={1}
+              precision={0}
               style={{ width: "100%" }}
-              formatter={(value) => {
-                const rawNumber = Number(value || 0);
-                if (!Number.isFinite(rawNumber)) return value;
-                return quantityUsesWholeNumber
-                  ? formatNumberId(rawNumber)
-                  : new Intl.NumberFormat("id-ID", {
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 2,
-                    }).format(rawNumber);
-              }}
-              parser={(value) => {
-                const normalized = String(value || "")
-                  .replace(/\./g, "")
-                  .replace(",", ".")
-                  .replace(/[^\d.-]/g, "");
-                return normalized ? Number(normalized) : 0;
-              }}
+              formatter={(value) => formatNumberId(value)}
+              parser={parseIntegerIdInput}
             />
           </Form.Item>
 

@@ -277,6 +277,8 @@ const StockReport = () => {
         title: "Stok",
         dataIndex: "stockDisplay",
         key: "stockDisplay",
+        // AKTIF / GUARDED: format display stok report no-decimal tanpa mengubah source/formula laporan.
+        render: (value) => formatNumberId(value),
         sorter: (left, right) => left.stockDisplay - right.stockDisplay,
       },
       {

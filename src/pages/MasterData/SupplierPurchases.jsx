@@ -27,7 +27,7 @@ import {
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, limit as firestoreLimit, orderBy, query } from 'firebase/firestore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
-import { formatNumberID } from '../../utils/formatters/numberId';
+import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyIDR } from '../../utils/formatters/currencyId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
@@ -42,6 +42,13 @@ import {
   isManagedSupplierRecord,
   listenSuppliers,
 } from '../../services/MasterData/suppliersService';
+
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const { Option } = Select;
 const { Search } = Input;
@@ -997,7 +1004,7 @@ const SupplierPurchases = () => {
                           initialValue={1}
                           extra="Contoh: beli 1 pack, 1 roll, 1 ikat, atau 1 dus."
                         >
-                          <InputNumber min={0.01} step={0.01} style={{ width: '100%' }} formatter={(value) => formatNumberID(value)} parser={(value) => value?.replace(/\./g, '') || ''} />
+                          <InputNumber min={1} step={1} precision={0} style={{ width: '100%' }} formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
                         </Form.Item>
                       </Col>
 
@@ -1008,7 +1015,7 @@ const SupplierPurchases = () => {
                           label="Konversi Supplier"
                           extra="Contoh: beli 1 pack isi 6 pcs, maka Konversi Supplier = 6."
                         >
-                          <InputNumber min={0} step={0.01} style={{ width: '100%' }} formatter={(value) => formatNumberID(value)} parser={(value) => value?.replace(/\./g, '') || ''} />
+                          <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
                         </Form.Item>
                       </Col>
 
@@ -1034,7 +1041,7 @@ const SupplierPurchases = () => {
 
                       <Col xs={24} md={12}>
                         <Form.Item {...restField} name={[name, 'supplierItemPrice']} label="Harga Barang Supplier">
-                          <InputNumber min={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={(value) => value?.replace(/\./g, '') || ''} />
+                          <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
                         </Form.Item>
                       </Col>
 
@@ -1056,19 +1063,19 @@ const SupplierPurchases = () => {
                               --------------------------------------------------------- */}
                               <Col xs={24} md={12}>
                                 <Form.Item {...restField} name={[name, 'estimatedShippingCost']} label="Ongkir Default">
-                                  <InputNumber min={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={(value) => value?.replace(/\./g, '') || ''} />
+                                  <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
                                 </Form.Item>
                               </Col>
 
                               <Col xs={24} md={12}>
                                 <Form.Item {...restField} name={[name, 'serviceFee']} label="Biaya Layanan Default">
-                                  <InputNumber min={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={(value) => value?.replace(/\./g, '') || ''} />
+                                  <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
                                 </Form.Item>
                               </Col>
 
                               <Col xs={24} md={12}>
                                 <Form.Item {...restField} name={[name, 'discount']} label="Voucher Default">
-                                  <InputNumber min={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={(value) => value?.replace(/\./g, '') || ''} />
+                                  <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
                                 </Form.Item>
                               </Col>
                             </>

@@ -66,7 +66,7 @@ import {
 // =====================================================
 // SECTION: helper format angka Indonesia
 // =====================================================
-import formatNumber from "../../utils/formatters/numberId";
+import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, getNextSequenceNumber, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildBomMaterialFormLine, buildBomStepFormLine } from "../../utils/produksi/productionLineBuilders";
@@ -75,6 +75,12 @@ import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
 // =====================================================
 // SECTION: helper label item
 // =====================================================
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const compactTagStyle = {
   display: "inline-flex",
@@ -1012,7 +1018,7 @@ const ProductionBoms = () => {
                         name="batchOutputQty"
                         extra="Isi jumlah output yang dihasilkan untuk 1 resep BOM ini. Contoh: 1 bunga, 10 tangkai, atau 20 potong komponen."
                       >
-                        <InputNumber min={1} style={{ width: "100%" }} />
+                        <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
                       </Form.Item>
                     </Col>
 
@@ -1209,7 +1215,7 @@ const ProductionBoms = () => {
                 label="Estimasi Biaya Overhead"
                 name="overheadCostEstimate"
               >
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
           </Row>
@@ -1490,7 +1496,7 @@ const ProductionBoms = () => {
                 name="qtyPerBatch"
                 extra="Isi jumlah bahan yang dibutuhkan untuk 1 kali produksi sesuai output BOM ini."
               >
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -1554,7 +1560,7 @@ const ProductionBoms = () => {
                 name="sequenceNo"
                 extra="Terisi otomatis sesuai urutan penambahan step."
               >
-                <InputNumber min={1} style={{ width: "100%" }} />
+                <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
           </Row>

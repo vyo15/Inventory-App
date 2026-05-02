@@ -17,7 +17,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import { useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
 import { db } from "../../firebase";
-import { formatNumberId } from "../../utils/formatters/numberId";
+import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { formatCurrencyId as formatCurrencyIdr } from "../../utils/formatters/currencyId";
 import {
   doesSupplierProvideMaterial,
@@ -48,6 +48,13 @@ import {
   findVariantByKey,
   inferHasVariants,
 } from "../../utils/variants/variantStockHelpers";
+
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const { Option } = Select;
 
@@ -1823,11 +1830,12 @@ const Purchases = () => {
                   extra="Jumlah aktual yang dibeli."
                 >
                   <InputNumber
-                    min={0.01}
-                    step={0.01}
+                    min={1}
+                    step={1}
+                    precision={0}
                     className="ims-filter-control"
                     formatter={(value) => formatNumberId(value)}
-                    parser={(value) => value?.replace(/\./g, "") || ""}
+                    parser={parseIntegerIdInput}
                   />
                 </Form.Item>
 
@@ -1926,11 +1934,12 @@ const Purchases = () => {
               rules={[{ required: true, message: "Qty wajib diisi" }]}
             >
               <InputNumber
-                min={0.01}
-                step={0.01}
+                min={1}
+                step={1}
+                precision={0}
                 className="ims-filter-control"
                 formatter={(value) => formatNumberId(value)}
-                parser={(value) => value?.replace(/\./g, "") || ""}
+                parser={parseIntegerIdInput}
               />
             </Form.Item>
           )}
@@ -1991,10 +2000,12 @@ const Purchases = () => {
           >
             <InputNumber
               min={0}
+              step={1}
+              precision={0}
               className="ims-filter-control"
               addonBefore="Rp"
               formatter={(value) => formatNumberId(value)}
-              parser={(value) => value?.replace(/\./g, "") || ""}
+              parser={parseIntegerIdInput}
               onChange={() => {
                 subtotalManualOverrideRef.current = true;
               }}
@@ -2011,10 +2022,12 @@ const Purchases = () => {
                 >
                   <InputNumber
                     min={0}
+                    step={1}
+                    precision={0}
                     className="ims-filter-control"
                     addonBefore="Rp"
                     formatter={(value) => formatNumberId(value)}
-                    parser={(value) => value?.replace(/\./g, "") || ""}
+                    parser={parseIntegerIdInput}
                   />
                 </Form.Item>
 
@@ -2025,10 +2038,12 @@ const Purchases = () => {
                 >
                   <InputNumber
                     min={0}
+                    step={1}
+                    precision={0}
                     className="ims-filter-control"
                     addonBefore="Rp"
                     formatter={(value) => formatNumberId(value)}
-                    parser={(value) => value?.replace(/\./g, "") || ""}
+                    parser={parseIntegerIdInput}
                   />
                 </Form.Item>
               </Space>
@@ -2041,10 +2056,12 @@ const Purchases = () => {
                 >
                   <InputNumber
                     min={0}
+                    step={1}
+                    precision={0}
                     className="ims-filter-control"
                     addonBefore="Rp"
                     formatter={(value) => formatNumberId(value)}
-                    parser={(value) => value?.replace(/\./g, "") || ""}
+                    parser={parseIntegerIdInput}
                   />
                 </Form.Item>
 
@@ -2055,10 +2072,12 @@ const Purchases = () => {
                 >
                   <InputNumber
                     min={0}
+                    step={1}
+                    precision={0}
                     className="ims-filter-control"
                     addonBefore="Rp"
                     formatter={(value) => formatNumberId(value)}
-                    parser={(value) => value?.replace(/\./g, "") || ""}
+                    parser={parseIntegerIdInput}
                   />
                 </Form.Item>
               </Space>

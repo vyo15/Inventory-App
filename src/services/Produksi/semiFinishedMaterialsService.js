@@ -135,15 +135,20 @@ const normalizeSemiFinishedCreatePayload = (
   };
 };
 
-// IMS NOTE [GUARDED | behavior-preserving]: variant matching memakai key/kode/nama, bukan index.
-// Alasan cleanup: index bisa salah memindahkan stok jika urutan varian berubah.
+const normalizeSemiVariantLookupKey = (value = "") =>
+  String(value || "").trim().toLowerCase();
+
+// IMS NOTE [GUARDED | identity-safe]: matching varian semi finished tetap
+// memprioritaskan variantKey lama. Hubungan flow: variantKey adalah bucket
+// stok/reference PO/Work Log, sedangkan color boleh berubah sebagai metadata
+// display. STATUS: AKTIF untuk update metadata varian tanpa migrasi transaksi.
 const buildSemiVariantKeyCandidates = (variant = {}) => [
   variant.variantKey,
   variant.sku,
   variant.color,
   variant.name,
 ]
-  .map((value) => String(value || "").trim().toLowerCase())
+  .map(normalizeSemiVariantLookupKey)
   .filter(Boolean);
 
 const buildSemiVariantLookup = (variants = []) => {
@@ -155,6 +160,16 @@ const buildSemiVariantLookup = (variants = []) => {
   });
   return lookup;
 };
+
+const findExistingSemiVariant = (variant = {}, existingLookup = new Map(), index = 0) =>
+  buildSemiVariantKeyCandidates(variant, index)
+    .map((key) => existingLookup.get(key))
+    .find(Boolean);
+
+const resolveSemiVariantDisplayColor = (variant = {}, existingVariant = {}) =>
+  String(variant.color || variant.name || existingVariant.color || existingVariant.name || "")
+    .trim()
+    .toLowerCase();
 
 const hasProtectedVariantStock = (variant = {}) =>
   toStockNumber(variant.currentStock ?? variant.stock ?? 0) > 0 || toStockNumber(variant.reservedStock || 0) > 0;
@@ -199,34 +214,53 @@ const mergeSemiVariantMetadataWithExistingStock = (editedVariants = [], existing
     throw { type: "validation", errors: { variants: "Minimal harus ada 1 varian" } };
   }
 
-  const duplicateErrors = validateDuplicateSemiVariantColors(normalizedEdited);
-  if (Object.keys(duplicateErrors).length > 0) {
-    throw { type: "validation", errors: duplicateErrors };
-  }
-
   assertNoSemiVariantWithStockRemoved(normalizedEdited, normalizedExisting);
 
   const existingLookup = buildSemiVariantLookup(normalizedExisting);
 
-  return normalizedEdited.map((variant, index) => {
-    const existingVariant = buildSemiVariantKeyCandidates(variant, index)
-      .map((key) => existingLookup.get(key))
-      .find(Boolean);
-    const currentStock = toNumberValue(existingVariant?.currentStock ?? existingVariant?.stock ?? 0);
-    const reservedStock = toNumberValue(existingVariant?.reservedStock || 0);
+  const mergedVariants = normalizedEdited.map((variant, index) => {
+    const existingVariant = findExistingSemiVariant(variant, existingLookup, index);
 
-    // IMS NOTE [GUARDED | behavior-preserving]: metadata varian semi finished
-    // boleh berubah, tetapi stok varian selalu dipreserve dari dokumen latest.
+    if (!existingVariant && normalizedExisting.length > 0) {
+      throw {
+        type: "validation",
+        errors: {
+          variants: "Varian tidak cocok dengan data existing. Jangan membuat bucket stok baru dari edit warna; buka ulang form dan coba simpan kembali.",
+        },
+      };
+    }
+
+    const displayColor = resolveSemiVariantDisplayColor(variant, existingVariant);
+    const currentStock = toNumberValue(existingVariant?.currentStock ?? existingVariant?.stock ?? variant.currentStock ?? variant.stock ?? 0);
+    const reservedStock = toNumberValue(existingVariant?.reservedStock ?? variant.reservedStock ?? 0);
+
+    // IMS NOTE [GUARDED | identity-safe]: edit warna semi finished adalah rename
+    // display/metadata. variantKey existing tetap dipakai agar bucket stok, PO,
+    // Work Log, HPP, dan inventory log lama tidak perlu dimigrasi. STATUS: AKTIF.
     return {
       ...variant,
+      variantKey: existingVariant?.variantKey || variant.variantKey,
+      color: displayColor,
+      name: displayColor,
+      variantLabel: displayColor,
+      label: displayColor,
       currentStock,
       stock: currentStock,
       reservedStock,
       availableStock: Math.max(currentStock - reservedStock, 0),
-      minStockAlert: toStockNumber(variant.minStockAlert || 0),
-      averageCostPerUnit: toNumberValue(variant.averageCostPerUnit || 0),
+      minStockAlert: toStockNumber(variant.minStockAlert ?? existingVariant?.minStockAlert ?? 0),
+      averageCostPerUnit: toNumberValue(
+        variant.averageCostPerUnit ?? existingVariant?.averageCostPerUnit ?? 0,
+      ),
     };
   });
+
+  const duplicateErrors = validateDuplicateSemiVariantColors(mergedVariants);
+  if (Object.keys(duplicateErrors).length > 0) {
+    throw { type: "validation", errors: duplicateErrors };
+  }
+
+  return mergedVariants;
 };
 
 const normalizeSemiFinishedMetadataPayload = (

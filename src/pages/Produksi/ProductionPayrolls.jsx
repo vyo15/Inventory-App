@@ -43,6 +43,8 @@ import {
   PAYROLL_PAYMENT_STATUS_MAP,
   PAYROLL_STATUS_MAP,
 } from "../../constants/productionPayrollOptions";
+import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
+import formatCurrency from "../../utils/formatters/currencyId";
 import {
   buildPayrollDraftFromWorkLog,
   createProductionPayroll,
@@ -52,12 +54,13 @@ import {
   updateProductionPayroll,
 } from "../../services/Produksi/productionPayrollsService";
 
-const formatNumber = (value) =>
-  new Intl.NumberFormat("id-ID").format(Number(value || 0));
-
-const formatCurrency = (value) =>
-  `Rp${new Intl.NumberFormat("id-ID").format(Number(value || 0))}`;
-
+// =====================================================
+// IMS NOTE [AKTIF/GUARDED] - Formatter angka payroll
+// Fungsi blok: memakai formatter global tanpa desimal untuk tampilan payroll.
+// Hubungan flow: hanya display/input UI; rumus payroll dan payment to expense tetap di service.
+// Alasan logic: menghapus formatter lokal agar halaman Payroll mengikuti standar angka IMS.
+// Behavior: behavior-preserving untuk kalkulasi, mengubah tampilan menjadi no-decimal.
+// =====================================================
 // =====================================================
 // ACTIVE / UI HELP TEXT
 // Fungsi blok:
@@ -68,6 +71,12 @@ const formatCurrency = (value) =>
 // Status:
 // - aktif dipakai di drawer Detail Payroll; bukan kandidat cleanup.
 // =====================================================
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+
 const PAYROLL_STATUS_HELP = {
   draft: "Payroll belum final dan masih perlu dicek sebelum dibayar.",
   confirmed: "Payroll sudah disetujui tetapi belum ditandai dibayar.",
@@ -655,17 +664,17 @@ const ProductionPayrolls = () => {
             </Col>
             <Col xs={24} md={6}>
               <Form.Item label="Payroll Rate" name="payrollRate">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col xs={24} md={6}>
               <Form.Item label="Payroll Qty Base" name="payrollQtyBase">
-                <InputNumber min={1} style={{ width: "100%" }} />
+                <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col xs={24} md={6}>
               <Form.Item label="Output Qty Used" name="outputQtyUsed">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
           </Row>
@@ -673,22 +682,22 @@ const ProductionPayrolls = () => {
           <Row gutter={16}>
             <Col xs={24} md={4}>
               <Form.Item label="Bonus" name="bonusAmount">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col xs={24} md={4}>
               <Form.Item label="Potongan" name="deductionAmount">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col xs={24} md={4}>
               <Form.Item label="Worked Qty" name="workedQty">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col xs={24} md={4}>
               <Form.Item label="Team Worker Count" name="teamWorkerCount">
-                <InputNumber min={1} style={{ width: "100%" }} />
+                <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>

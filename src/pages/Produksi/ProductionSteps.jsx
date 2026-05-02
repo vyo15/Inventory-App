@@ -49,6 +49,7 @@ import {
   PRODUCTION_STEP_PROCESS_TYPES,
   formatProductionStepPayrollPreview,
 } from "../../constants/productionStepOptions";
+import { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import {
   createProductionStep,
   getAllProductionSteps,
@@ -61,6 +62,12 @@ import ProductionFilterCard from "../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const getStepEmployeeCount = (stepId, employees = []) =>
   employees.filter((item) => Array.isArray(item.assignedStepIds) && item.assignedStepIds.includes(stepId)).length;
@@ -732,7 +739,7 @@ const ProductionSteps = () => {
             </Col>
             <Col xs={24} md={12}>
               <Form.Item label="Tarif Default" name="payrollRate">
-                <InputNumber min={0} style={{ width: "100%" }} placeholder="Contoh: 2000" />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} placeholder="Contoh: 2000" />
               </Form.Item>
             </Col>
           </Row>
@@ -740,7 +747,7 @@ const ProductionSteps = () => {
           <Row gutter={12}>
             <Col xs={24} md={12}>
               <Form.Item label="Dibayar Tiap Berapa Hasil" name="payrollQtyBase">
-                <InputNumber min={1} style={{ width: "100%" }} placeholder="Contoh: 1" />
+                <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} placeholder="Contoh: 1" />
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>

@@ -45,7 +45,7 @@ import {
 
 // SECTION: import firebase db
 import { db } from "../../firebase";
-import { formatNumberID } from "../../utils/formatters/numberId";
+import { formatNumberID, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { formatCurrencyIDR } from "../../utils/formatters/currencyId";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
@@ -60,6 +60,13 @@ import {
 } from "../../services/Pricing/pricingService";
 
 // SECTION: alias komponen select
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+
 const { Option } = Select;
 const { TextArea } = Input;
 
@@ -796,8 +803,10 @@ const PricingRules = () => {
                 <InputNumber
                   style={{ width: "100%" }}
                   min={0}
+                  step={1}
+                  precision={0}
                   formatter={(value) => formatNumberID(value)}
-                  parser={(value) => value?.replace(/\./g, "") || ""}
+                  parser={parseIntegerIdInput}
                 />
               </Form.Item>
             </Col>
@@ -846,8 +855,10 @@ const PricingRules = () => {
                   <InputNumber
                     style={{ width: "100%" }}
                     min={0}
+                    step={1}
+                    precision={0}
                     formatter={(value) => formatNumberID(value)}
-                    parser={(value) => value?.replace(/\./g, "") || ""}
+                    parser={parseIntegerIdInput}
                   />
                 </Form.Item>
               </Col>
@@ -883,8 +894,10 @@ const PricingRules = () => {
                 <InputNumber
                   style={{ width: "100%" }}
                   min={1}
+                  step={1}
+                  precision={0}
                   formatter={(value) => formatNumberID(value)}
-                  parser={(value) => value?.replace(/\./g, "") || ""}
+                  parser={parseIntegerIdInput}
                 />
               </Form.Item>
             </Col>

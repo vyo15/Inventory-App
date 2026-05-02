@@ -392,3 +392,11 @@ Status: **AKTIF + GUARDED**. Gunakan section ini untuk semua task yang menyentuh
 - Hapus Profile tidak mengubah Firebase Authentication.
 - `firestore.rules` final/staged-final sudah dipublish dan modul utama tidak permission denied.
 - Docs tidak lagi memberi instruksi ganda antara domain lama dan domain baru.
+
+## Update Prompt Rules — Batch Fix Bug Merge 2026-05-03
+- Untuk task berikutnya, default format angka IMS adalah tanpa decimal. Jangan menambahkan `precision={2}`, `step={0.01}`, `toFixed(2)`, atau `maximumFractionDigits: 2` tanpa business rule eksplisit.
+- Jika task menyentuh Production Order, BOM, Work Log, atau material bervarian, wajib cek `targetVariantKey`, `targetVariantLabel`, `materialVariantStrategy`, `resolvedVariantKey`, `resolvedVariantLabel`, dan larangan fallback master/default.
+- Jika task menyentuh complete Work Log atau Stock Management, wajib cek idempotency output stock, `production_output_in`, dan metadata audit worker/operator.
+- Jika task menyentuh Semi Finished variant, `variantKey` harus diperlakukan sebagai identitas bucket stok/reference. Rename warna hanya boleh mengubah label/metadata.
+- Untuk merge beberapa ZIP patch, jangan overwrite file overlap mentah. Bandingkan patch terhadap baseline terbaru, merge manual file konflik, dan hasil akhir tetap ZIP berisi changed files only.
+

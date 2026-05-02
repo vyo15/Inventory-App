@@ -34,7 +34,14 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import { db } from "../../firebase";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
-import { formatNumberId } from "../../utils/formatters/numberId";
+import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
+
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const { Option } = Select;
 
@@ -515,10 +522,12 @@ const CashOut = () => {
           {/* AKTIF/GUARDED: class shared menjaga lebar field form kas keluar tetap konsisten tanpa ubah payload transaksi. */}
           <InputNumber
             min={0}
+            step={1}
+            precision={0}
             className="ims-filter-control"
             addonBefore="Rp"
             formatter={(value) => formatNumberId(value)}
-            parser={(value) => value?.replace(/\./g, "") || ""}
+            parser={parseIntegerIdInput}
           />
         </Form.Item>
 

@@ -43,6 +43,63 @@ const findOpenParentKeysByPath = (
 };
 
 // =========================
+// SECTION: Helper - Sidebar submenu relation map — AKTIF / GUARDED
+// Fungsi:
+// - membuat peta relasi submenu berdasarkan parent yang sama pada semua level;
+// - dipakai agar accordion tidak lagi hanya berlaku di root menu, tetapi juga nested menu seperti Produksi.
+// Hubungan flow aplikasi:
+// - sumber data wajib dari roleAwareMenuItems agar menu tersembunyi oleh role tidak ikut dihitung sebagai sibling;
+// - hanya mengatur state openKeys Ant Design Menu, bukan route, role, label, atau business flow.
+// Alasan logic dipakai:
+// - Ant Design onOpenChange hanya memberi daftar key yang terbuka, sehingga kita perlu tahu sibling dan descendant mana
+//   yang harus dibersihkan saat user membuka submenu lain pada parent yang sama.
+// Status:
+// - AKTIF untuk sidebar nested accordion.
+// - GUARDED: jangan ganti input helper ini menjadi sidebarMenuItems mentah karena bisa bypass role-aware filtering.
+// =========================
+const collectSubmenuDescendantKeys = (menuItem) => {
+  if (!menuItem.children?.length) {
+    return [];
+  }
+
+  return menuItem.children.flatMap((childItem) => {
+    if (!childItem.children?.length) {
+      return [];
+    }
+
+    return [
+      childItem.key,
+      ...collectSubmenuDescendantKeys(childItem),
+    ];
+  });
+};
+
+const buildSubmenuRelationMap = (menuItems, relationMap = new Map()) => {
+  const submenuSiblings = menuItems.filter((menuItem) => menuItem.children?.length);
+
+  submenuSiblings.forEach((menuItem) => {
+    const siblingKeys = submenuSiblings
+      .filter((siblingItem) => siblingItem.key !== menuItem.key)
+      .map((siblingItem) => siblingItem.key);
+
+    const siblingDescendantKeys = submenuSiblings
+      .filter((siblingItem) => siblingItem.key !== menuItem.key)
+      .flatMap((siblingItem) => collectSubmenuDescendantKeys(siblingItem));
+
+    relationMap.set(menuItem.key, {
+      siblingAndDescendantKeysToClose: [
+        ...siblingKeys,
+        ...siblingDescendantKeys,
+      ],
+    });
+
+    buildSubmenuRelationMap(menuItem.children, relationMap);
+  });
+
+  return relationMap;
+};
+
+// =========================
 // SECTION: Helper - Build Ant Design menu items — AKTIF / GUARDED
 // Fungsi:
 // - mengubah config menu yang sudah difilter menjadi format Ant Design Menu;
@@ -132,9 +189,12 @@ const SidebarMenu = ({ darkTheme }) => {
   // Fungsi:
   // - selectedMenuKeys menjaga halaman aktif tetap tersorot;
   // - defaultOpenParentKeys membuka parent dari route yang sedang aktif;
-  // - rootSubmenuKeys dipakai untuk mode accordion pada menu level utama.
+  // - submenuRelationMap mengatur accordion per sibling group pada semua level menu.
   // Hubungan flow aplikasi:
-  // - semua state dihitung dari menu yang sudah difilter role.
+  // - semua state dihitung dari menu yang sudah difilter role agar visibility role tetap aman.
+  // Status:
+  // - AKTIF untuk selected/open state sidebar.
+  // - GUARDED: roleAwareMenuItems tetap menjadi basis kalkulasi, bukan sidebarMenuItems mentah.
   // =========================
   const selectedMenuKeys = useMemo(() => {
     return [location.pathname];
@@ -144,10 +204,8 @@ const SidebarMenu = ({ darkTheme }) => {
     return findOpenParentKeysByPath(roleAwareMenuItems, location.pathname);
   }, [roleAwareMenuItems, location.pathname]);
 
-  const rootSubmenuKeys = useMemo(() => {
-    return roleAwareMenuItems
-      .filter((menuItem) => menuItem.children?.length)
-      .map((menuItem) => menuItem.key);
+  const submenuRelationMap = useMemo(() => {
+    return buildSubmenuRelationMap(roleAwareMenuItems);
   }, [roleAwareMenuItems]);
 
   const antdMenuItems = useMemo(() => {
@@ -167,10 +225,19 @@ const SidebarMenu = ({ darkTheme }) => {
   }, [defaultOpenParentKeys]);
 
   // =========================
-  // SECTION: Event Handlers — AKTIF
+  // SECTION: Event Handlers — AKTIF / GUARDED
   // Fungsi:
-  // - hanya satu group utama yang terbuka dalam satu waktu;
-  // - saat user buka group lain, group sebelumnya otomatis tertutup.
+  // - menjaga root menu tetap accordion;
+  // - menjaga nested submenu pada parent yang sama juga accordion;
+  // - membersihkan descendant openKeys dari sibling yang ditutup agar tidak ada stale hidden openKeys saat parent dibuka lagi.
+  // Hubungan flow aplikasi:
+  // - handler ini hanya mengubah controlled openKeys sidebar;
+  // - selected route, route config, role access, dan business flow tidak diubah.
+  // Alasan logic dipakai:
+  // - satu helper relasi membuat behavior root dan nested konsisten tanpa hardcode key Produksi.
+  // Status:
+  // - AKTIF untuk sidebar nested accordion.
+  // - GUARDED: jangan tambahkan leaf click handler jika onOpenChange sudah cukup, agar navigasi route tetap natural.
   // =========================
   const handleOpenMenuChange = (nextOpenKeys) => {
     const latestOpenedKey = nextOpenKeys.find(
@@ -182,12 +249,19 @@ const SidebarMenu = ({ darkTheme }) => {
       return;
     }
 
-    if (rootSubmenuKeys.includes(latestOpenedKey)) {
-      setOpenMenuKeys([latestOpenedKey]);
+    const submenuRelation = submenuRelationMap.get(latestOpenedKey);
+
+    if (!submenuRelation) {
+      setOpenMenuKeys(nextOpenKeys);
       return;
     }
 
-    setOpenMenuKeys(nextOpenKeys);
+    const keysToClose = new Set(submenuRelation.siblingAndDescendantKeysToClose);
+    const synchronizedOpenKeys = nextOpenKeys.filter(
+      (menuKey) => !keysToClose.has(menuKey),
+    );
+
+    setOpenMenuKeys(synchronizedOpenKeys);
   };
 
   if (roleAwareMenuItems.length === 0) {

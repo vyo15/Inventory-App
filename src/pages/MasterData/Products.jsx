@@ -30,7 +30,7 @@ import {
 } from '@ant-design/icons';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { formatNumberID } from '../../utils/formatters/numberId';
+import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import { formatDateId } from '../../utils/formatters/dateId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
@@ -50,6 +50,12 @@ import {
   toggleProductActive,
   updateProduct,
 } from '../../services/MasterData/productsService';
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -626,8 +632,10 @@ const Products = () => {
                 <InputNumber
                   style={{ width: '100%' }}
                   min={0}
+                  step={1}
+                  precision={0}
                   formatter={(value) => formatNumberID(value)}
-                  parser={(value) => String(value || '').replace(/\./g, '')}
+                  parser={parseIntegerIdInput}
                 />
               </Form.Item>
             </Col>
@@ -641,8 +649,10 @@ const Products = () => {
                 <InputNumber
                   style={{ width: '100%' }}
                   min={0}
+                  step={1}
+                  precision={0}
                   formatter={(value) => formatNumberID(value)}
-                  parser={(value) => String(value || '').replace(/\./g, '')}
+                  parser={parseIntegerIdInput}
                 />
               </Form.Item>
             </Col>
@@ -713,7 +723,7 @@ const Products = () => {
                               initialValue={0}
                               extra={isEditingProduct ? stockEditHelpText : undefined}
                             >
-                              <InputNumber style={{ width: '100%' }} min={0} disabled={isEditingProduct} />
+                              <InputNumber style={{ width: '100%' }} min={0} step={1} precision={0} parser={parseIntegerIdInput} disabled={isEditingProduct} />
                             </Form.Item>
                           </Col>
                           <Col xs={24} md={4}>
@@ -724,12 +734,12 @@ const Products = () => {
                               initialValue={0}
                               extra={isEditingProduct ? 'Reserved stock dikunci saat edit karena memengaruhi available stock.' : undefined}
                             >
-                              <InputNumber style={{ width: '100%' }} min={0} disabled={isEditingProduct} />
+                              <InputNumber style={{ width: '100%' }} min={0} step={1} precision={0} parser={parseIntegerIdInput} disabled={isEditingProduct} />
                             </Form.Item>
                           </Col>
                           <Col xs={24} md={4}>
                             <Form.Item {...field} name={[field.name, 'minStockAlert']} label="Min Stok" initialValue={0}>
-                              <InputNumber style={{ width: '100%' }} min={0} />
+                              <InputNumber style={{ width: '100%' }} min={0} step={1} precision={0} parser={parseIntegerIdInput} />
                             </Form.Item>
                           </Col>
                           <Col xs={24} md={1}>
@@ -760,17 +770,17 @@ const Products = () => {
             <Row gutter={16}>
               <Col xs={24} md={8}>
                 <Form.Item name="currentStock" label="Stok Master" extra={isEditingProduct ? stockEditHelpText : undefined}>
-                  <InputNumber style={{ width: '100%' }} min={0} disabled={isEditingProduct} />
+                  <InputNumber style={{ width: '100%' }} min={0} step={1} precision={0} parser={parseIntegerIdInput} disabled={isEditingProduct} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
                 <Form.Item name="reservedStock" label="Reserved Stock" extra={isEditingProduct ? 'Reserved stock dikunci saat edit karena memengaruhi available stock.' : undefined}>
-                  <InputNumber style={{ width: '100%' }} min={0} disabled={isEditingProduct} />
+                  <InputNumber style={{ width: '100%' }} min={0} step={1} precision={0} parser={parseIntegerIdInput} disabled={isEditingProduct} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
                 <Form.Item name="minStockAlert" label="Minimum Stok">
-                  <InputNumber style={{ width: '100%' }} min={0} />
+                  <InputNumber style={{ width: '100%' }} min={0} step={1} precision={0} parser={parseIntegerIdInput} />
                 </Form.Item>
               </Col>
             </Row>

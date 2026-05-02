@@ -28,7 +28,14 @@ import {
   getItemStockSnapshot,
   inferHasVariants,
 } from "../../utils/variants/variantStockHelpers";
-import { formatNumberId } from "../../utils/formatters/numberId";
+import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
+
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const { Option } = Select;
 
@@ -495,7 +502,7 @@ const Returns = () => {
             label="Jumlah"
             rules={[{ required: true, message: "Jumlah wajib diisi" }]}
           >
-            <InputNumber min={1} style={{ width: "100%" }} />
+            <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
           </Form.Item>
 
           <Form.Item name="note" label="Catatan">

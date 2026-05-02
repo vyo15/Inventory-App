@@ -147,3 +147,13 @@ Status cleanup bertahap yang dikunci di docs:
 - **Legacy:** field `stock` tetap disimpan sebagai alias/compatibility dan tidak boleh dihapus dari dokumen.
 - **Cleanup candidate:** Semi Finished Material belum masuk Stock Adjustment manual; koreksi manual semi finished perlu task terpisah bila owner ingin menjadikannya flow resmi.
 - **Docs lock:** task berikutnya tidak boleh membuka kembali direct edit stok master kecuali ada business rule baru, audit trail baru, dan approval eksplisit.
+
+## Update Batch Fix Bug Merge — 2026-05-03
+- **Aktif:** patch gabungan ini menggabungkan perbaikan no-decimal number format, sidebar nested accordion, login UI copy cleanup, Production Order strict variant requirement, Work Log worker stock audit, dan Semi Finished variant color rename ke baseline `src.zip` + `docs.zip` terbaru yang diunggah.
+- **Aktif:** format angka operasional diarahkan tanpa desimal melalui formatter dan input UI aktif; data lama yang sudah memiliki decimal tidak dimigrasi otomatis.
+- **Guarded:** Production Order bervarian tidak boleh fallback diam-diam ke stok master/default. Preview PO dan Start Production harus memakai kontrak varian material yang sama.
+- **Guarded:** completed Work Log tetap hanya boleh posting output stock satu kali, tetapi inventory log output produksi baru menyimpan snapshot operator/worker agar audit di Stock Management lebih jelas.
+- **Guarded:** edit warna varian Semi Finished adalah rename label/metadata; `variantKey` tetap menjadi identitas bucket stok/reference dan stok varian tidak boleh reset.
+- **Aktif:** sidebar memakai nested accordion agar sibling submenu otomatis tertutup tanpa mengubah route, role access, atau business flow.
+- **Aktif:** login normal tidak lagi menampilkan copy teknis internal Firebase/Auth/Firestore, tanpa mengubah flow Auth dan `system_users`.
+

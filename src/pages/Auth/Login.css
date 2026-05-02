@@ -372,17 +372,28 @@
   line-height: 1.65;
 }
 
-.ims-login-info-box.ant-alert {
+/* =========================
+   SECTION: Login Form Spacing After Info Cleanup — AKTIF / GUARDED UI
+   Fungsi:
+   - menjaga jarak heading ke form/error tetap nyaman setelah info alert teknis legacy dihapus dari DOM.
+   Hubungan flow aplikasi:
+   - presentational only; tidak mengubah handleLogin, validation, AuthContext, Firebase Auth, atau profile gate.
+   Status:
+   - AKTIF untuk Login UI normal.
+   - CLEANUP CANDIDATE: spacing bisa ditinjau ulang jika desain login berubah total.
+========================= */
+.ims-login-error-box.ant-alert {
   margin-top: 24px;
   margin-bottom: 18px;
-  border: 1px solid rgba(143, 168, 127, 0.28);
-  border-radius: 18px;
-  background: rgba(246, 250, 241, 0.92);
+  border-radius: 16px;
 }
 
-.ims-login-error-box.ant-alert {
-  margin-bottom: 18px;
-  border-radius: 16px;
+.ims-login-form {
+  margin-top: 24px;
+}
+
+.ims-login-error-box.ant-alert + .ims-login-form {
+  margin-top: 0;
 }
 
 .ims-login-form .ant-form-item-label > label {
@@ -590,12 +601,6 @@
   background: color-mix(in srgb, var(--ims-bg-elevated) 92%, transparent);
   box-shadow: var(--ims-shadow-elevated);
 }
-
-.ims-login-info-box.ant-alert {
-  border-color: var(--ims-color-sage-soft);
-  background: color-mix(in srgb, var(--ims-bg-card-soft) 86%, transparent);
-}
-
 .ims-login-form .ant-form-item-label > label {
   color: var(--ims-text-primary);
 }

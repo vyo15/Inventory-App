@@ -173,12 +173,16 @@ const SalesReport = () => {
         title: "Item",
         dataIndex: "items",
         key: "items",
+        // IMS NOTE [AKTIF/GUARDED] - Display quantity laporan sales
+        // Fungsi blok: memastikan qty item laporan memakai formatter global no-decimal.
+        // Hubungan flow: hanya display report; source data dan formula sales report tidak diubah.
+        // Behavior: behavior-preserving untuk kalkulasi, tampilan qty menjadi konsisten tanpa decimal.
         render: (items) =>
           Array.isArray(items) && items.length > 0 ? (
             <ul style={{ paddingLeft: 18, margin: 0 }}>
               {items.map((item, index) => (
                 <li key={`${item.itemName}-${index}`}>
-                  {item.itemName} ({item.quantity}) - {formatCurrencyId(item.pricePerUnit)}
+                  {item.itemName} ({formatNumberId(item.quantity)} {item.unit || "pcs"}) - {formatCurrencyId(item.pricePerUnit)}
                 </li>
               ))}
             </ul>

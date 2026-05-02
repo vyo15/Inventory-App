@@ -276,14 +276,9 @@ const Login = () => {
           </Text>
         </Space>
 
-        <Alert
-          className="ims-login-info-box"
-          type="info"
-          showIcon
-          message="Login internal IMS"
-          description="Akun Auth tetap dikelola Firebase Authentication. Manajemen User mengelola profile, role, dan status di Firestore system_users; password tidak disimpan di Firestore."
-        />
-
+        {/* AKTIF / GUARDED:
+            Login normal hanya menampilkan copy user-facing, form, dan error login.
+            Info teknis internal legacy dihapus dari DOM tanpa mengubah handleLogin, AuthContext, atau profile gate. */}
         {loginError ? (
           <Alert
             className="ims-login-error-box"

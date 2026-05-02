@@ -66,12 +66,18 @@ import {
 } from "../../services/Produksi/productionWorkLogsService";
 import { generatePayrollLinesFromCompletedWorkLog } from "../../services/Produksi/productionPayrollsService";
 
-import formatNumber from "../../utils/formatters/numberId";
+import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildWorkLogMaterialUsageFormLine, buildWorkLogOutputFormLine } from "../../utils/produksi/productionLineBuilders";
 import { buildVariantOptionsFromItem, inferHasVariants } from "../../utils/variants/variantStockHelpers";
 import { isProductionWorkLogCompleted } from "../../utils/produksi/productionFlowGuards";
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const ProductionWorkLogs = () => {
   // SECTION: state utama
@@ -1459,7 +1465,7 @@ const ProductionWorkLogs = () => {
 
             <Col xs={24} md={8}>
               <Form.Item label="Sequence No" name="sequenceNo">
-                <InputNumber min={1} style={{ width: "100%" }} />
+                <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
           </Row>
@@ -1473,43 +1479,43 @@ const ProductionWorkLogs = () => {
                 name="plannedQty"
                 rules={[{ required: true, message: "Planned qty wajib diisi" }]}
               >
-                <InputNumber min={1} style={{ width: "100%" }} />
+                <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
 
             <Col xs={24} md={6}>
               <Form.Item label="Qty Input Dasar" name="baseInputQty">
-                <InputNumber min={0} style={{ width: '100%' }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
 
             <Col xs={24} md={6}>
               <Form.Item label="Sisa Daun Aktual" name="leftoverLeafQty">
-                <InputNumber min={0} style={{ width: '100%' }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
 
             <Col xs={24} md={6}>
               <Form.Item label="Sisa Kawat Aktual" name="leftoverStemQty">
-                <InputNumber min={0} style={{ width: '100%' }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
 
             <Col xs={24} md={6}>
               <Form.Item label="Good Qty" name="goodQty">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
 
             <Col xs={24} md={6}>
               <Form.Item label="Reject Qty" name="rejectQty">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
 
             <Col xs={24} md={6}>
               <Form.Item label="Rework Qty" name="reworkQty">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
 
@@ -1526,7 +1532,7 @@ const ProductionWorkLogs = () => {
             </Col>
             <Col xs={24} md={8}>
               <Form.Item label="Sisa Setara Bunga Kelopak" name="leftoverPetalFlowerEquivalent">
-                <InputNumber min={0} style={{ width: '100%' }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
           </Row>
@@ -1536,7 +1542,7 @@ const ProductionWorkLogs = () => {
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={8}><strong>Profil:</strong> {selectedProductionProfile.profileName || '-'}</Col>
                 <Col xs={24} md={8}><strong>Teoritis Bunga:</strong> {formatNumber(monitoringPreview.theoreticalFlowerEquivalent || 0)}</Col>
-                <Col xs={24} md={8}><strong>Miss %:</strong> {Number(monitoringPreview.missPercent || 0).toFixed(2)}%</Col>
+                <Col xs={24} md={8}><strong>Miss %:</strong> {formatNumber(monitoringPreview.missPercent || 0)}%</Col>
                 <Col xs={24} md={8}><strong>Miss Kelopak:</strong> {formatNumber(monitoringPreview.missPetalQty || 0)} pcs</Col>
                 <Col xs={24} md={8}><strong>Miss Daun:</strong> {formatNumber(monitoringPreview.missLeafQty || 0)} pcs</Col>
                 <Col xs={24} md={8}><strong>Miss Kawat:</strong> {formatNumber(monitoringPreview.missStemQty || 0)} pcs</Col>
@@ -1678,19 +1684,19 @@ const ProductionWorkLogs = () => {
           <Row gutter={16}>
             <Col xs={24} md={4}>
               <Form.Item label="Labor Cost" name="laborCostActual">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
 
             <Col xs={24} md={4}>
               <Form.Item label="Overhead Cost" name="overheadCostActual">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
 
             <Col xs={24} md={4}>
               <Form.Item label="Scrap Qty" name="scrapQty">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
 
@@ -2035,12 +2041,12 @@ const ProductionWorkLogs = () => {
           <Row gutter={12}>
             <Col span={8}>
               <Form.Item label="Qty Batch" name="plannedQty">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item label="Actual Qty" name="actualQty">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -2051,7 +2057,7 @@ const ProductionWorkLogs = () => {
           </Row>
 
           <Form.Item label="Cost / Unit Snapshot" name="costPerUnitSnapshot">
-            <InputNumber min={0} style={{ width: "100%" }} />
+            <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
           </Form.Item>
 
           <Form.Item label="Catatan" name="notes">
@@ -2168,17 +2174,17 @@ const ProductionWorkLogs = () => {
           <Row gutter={12}>
             <Col span={8}>
               <Form.Item label="Good Qty" name="goodQty">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item label="Reject Qty" name="rejectQty">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item label="Rework Qty" name="reworkQty">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
           </Row>
@@ -2186,7 +2192,7 @@ const ProductionWorkLogs = () => {
           <Row gutter={12}>
             <Col span={12}>
               <Form.Item label="Cost / Unit" name="costPerUnit">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -2225,17 +2231,17 @@ const ProductionWorkLogs = () => {
                 name="goodQty"
                 rules={[{ required: true, message: "Good qty wajib diisi" }]}
               >
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item label="Reject Qty" name="rejectQty">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={8}>
               <Form.Item label="Rework Qty" name="reworkQty">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
           </Row>

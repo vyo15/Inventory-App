@@ -61,7 +61,14 @@ import {
   formatNumberId,
   formatPercentId,
   formatQuantityId,
+  parseIntegerIdInput,
 } from "../../utils/formatters/numberId";
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const { Text } = Typography;
 
@@ -903,7 +910,7 @@ const ProductionPlanning = () => {
           ) : null}
 
           <Form.Item label="Jumlah Target Produksi" name="targetQty" rules={[{ required: true, message: "Target qty wajib diisi" }]}>
-            <InputNumber min={1} style={{ width: "100%" }} addonAfter={selectedTargetItem?.unit || "pcs"} />
+            <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} addonAfter={selectedTargetItem?.unit || "pcs"} />
           </Form.Item>
 
           <Form.Item label="Catatan" name="notes">
@@ -1025,7 +1032,7 @@ const ProductionPlanning = () => {
               </Form.Item>
 
               <Form.Item label="Qty Batch Produksi" name="orderQty" rules={[{ required: true, message: "Qty batch wajib diisi" }]}>
-                <InputNumber min={1} style={{ width: "100%" }} />
+                <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
 
               <Row gutter={12}>

@@ -59,7 +59,7 @@ import {
 import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
 import { getAllProductionWorkLogs } from "../../services/Produksi/productionWorkLogsService";
 import { getActiveProductionSteps } from "../../services/Produksi/productionStepsService";
-import formatNumber from "../../utils/formatters/numberId";
+import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
@@ -74,6 +74,12 @@ import ProductionSummaryCards from "../../components/Produksi/shared/ProductionS
 // =====================================================
 // Main Component
 // =====================================================
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+
 const ProductionEmployees = () => {
   const [loading, setLoading] = useState(false);
   const [employees, setEmployees] = useState([]);
@@ -1051,7 +1057,7 @@ const ProductionEmployees = () => {
                   <Col xs={24} md={8}>
                     <Form.Item label="Tarif Custom (Legacy)" name="customPayrollRate">
                       <InputNumber
-                        min={0}
+                        min={0} step={1} precision={0} parser={parseIntegerIdInput}
                         style={{ width: "100%" }}
                         disabled
                       />
@@ -1088,7 +1094,7 @@ const ProductionEmployees = () => {
                             }
                           >
                             <InputNumber
-                              min={1}
+                              min={1} step={1} precision={0} parser={parseIntegerIdInput}
                               style={{ width: "100%" }}
                               disabled
                             />

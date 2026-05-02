@@ -57,7 +57,7 @@ import {
   toggleSemiFinishedMaterialActive,
   updateSemiFinishedMaterial,
 } from "../../services/Produksi/semiFinishedMaterialsService";
-import formatNumber from "../../utils/formatters/numberId";
+import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
@@ -68,6 +68,12 @@ import ProductionSummaryCards from "../../components/Produksi/shared/ProductionS
 // Formatter final lintas aplikasi
 // ACTIVE / FINAL: master semi finished memakai helper shared untuk qty dan Rupiah.
 // =====================================================
+
+// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
+// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
+// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const normalizeFormVariants = (variants = [], hasVariants = true) => {
   if (!hasVariants) {
@@ -772,6 +778,9 @@ const SemiFinishedMaterials = () => {
               : hasVariantsValue
                 ? "Gunakan 1 master item untuk 1 jenis komponen. Tambahkan warna sebagai varian di bawahnya agar data tetap rapi. Total stok item akan dihitung otomatis dari semua varian."
                 : "Item tanpa varian memakai stok awal langsung di master semi finished material."}
+            description={isEditingMaterial && hasVariantsValue
+              ? "Mengubah warna hanya mengganti label tampilan varian. Bucket stok/reference tetap dijaga melalui variantKey existing."
+              : undefined}
           />
 
           {hasVariantsValue ? (
@@ -798,6 +807,20 @@ const SemiFinishedMaterials = () => {
                     }
                   >
                     <Row gutter={16}>
+                      {/* IMS NOTE [GUARDED | identity-safe]: hidden identity field
+                          menjaga variantKey lama tetap terkirim saat warna diganti.
+                          Hubungan flow: service memakai key ini untuk preserve bucket
+                          stok/reference PO/Work Log. STATUS: AKTIF. */}
+                      <Form.Item name={[field.name, "variantKey"]} hidden>
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name={[field.name, "variantLabel"]} hidden>
+                        <Input />
+                      </Form.Item>
+                      <Form.Item name={[field.name, "name"]} hidden>
+                        <Input />
+                      </Form.Item>
+
                       <Col xs={24} md={8}>
                         <Form.Item
                           {...field}
@@ -841,7 +864,7 @@ const SemiFinishedMaterials = () => {
                           name={[field.name, "currentStock"]}
                           extra={isEditingMaterial ? stockEditHelpText : undefined}
                         >
-                          <InputNumber min={0} style={{ width: "100%" }} disabled={isEditingMaterial} />
+                          <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} disabled={isEditingMaterial} />
                         </Form.Item>
                       </Col>
 
@@ -852,7 +875,7 @@ const SemiFinishedMaterials = () => {
                           name={[field.name, "reservedStock"]}
                           extra={isEditingMaterial ? 'Reserved stock dikunci karena memengaruhi available stock.' : undefined}
                         >
-                          <InputNumber min={0} style={{ width: "100%" }} disabled />
+                          <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} disabled />
                         </Form.Item>
                       </Col>
 
@@ -862,7 +885,7 @@ const SemiFinishedMaterials = () => {
                           label="Min Stock Alert"
                           name={[field.name, "minStockAlert"]}
                         >
-                          <InputNumber min={0} style={{ width: "100%" }} />
+                          <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
                         </Form.Item>
                       </Col>
 
@@ -872,7 +895,7 @@ const SemiFinishedMaterials = () => {
                           label="Average Cost / Unit"
                           name={[field.name, "averageCostPerUnit"]}
                         >
-                          <InputNumber min={0} style={{ width: "100%" }} />
+                          <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
                         </Form.Item>
                       </Col>
                     </Row>
@@ -895,22 +918,22 @@ const SemiFinishedMaterials = () => {
             <Row gutter={16}>
               <Col xs={24} md={6}>
                 <Form.Item label="Current Stock" name="currentStock" extra={isEditingMaterial ? stockEditHelpText : undefined}>
-                  <InputNumber min={0} style={{ width: "100%" }} disabled={isEditingMaterial} />
+                  <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} disabled={isEditingMaterial} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={6}>
                 <Form.Item label="Reserved Stock" name="reservedStock" extra={isEditingMaterial ? 'Reserved stock dikunci karena memengaruhi available stock.' : undefined}>
-                  <InputNumber min={0} style={{ width: "100%" }} disabled={isEditingMaterial} />
+                  <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} disabled={isEditingMaterial} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={6}>
                 <Form.Item label="Min Stock Alert" name="minStockAlert">
-                  <InputNumber min={0} style={{ width: "100%" }} />
+                  <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={6}>
                 <Form.Item label="Average Cost / Unit" name="averageCostPerUnit">
-                  <InputNumber min={0} style={{ width: "100%" }} />
+                  <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
                 </Form.Item>
               </Col>
             </Row>
@@ -954,7 +977,7 @@ const SemiFinishedMaterials = () => {
 
             <Col xs={24} md={8}>
               <Form.Item label="Max Stock Target" name="maxStockTarget">
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
 
@@ -986,7 +1009,7 @@ const SemiFinishedMaterials = () => {
                 label="Reference Cost / Unit"
                 name="referenceCostPerUnit"
               >
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
 
@@ -995,7 +1018,7 @@ const SemiFinishedMaterials = () => {
                 label="Last Production Cost / Unit"
                 name="lastProductionCostPerUnit"
               >
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
 
