@@ -242,8 +242,8 @@ Pengecualian yang dijaga adalah flow produksi final karena `productionWorkLogsSe
 Stock Adjustment tidak boleh lagi update field `stock` secara langsung dari page. Adjustment harus:
 - memakai Firestore transaction agar update stok, record `stock_adjustments`, dan `inventory_logs` tidak commit setengah jalan;
 - memakai helper stok varian aktif seperti `applyStockMutationToItem()` agar `stock/currentStock/reservedStock/availableStock/variants[]` tetap sinkron;
-- memilih item dari `raw_materials` atau `products`;
-- memilih varian jika item bervarian;
+- memilih item dari `raw_materials`, `semi_finished_materials`, atau `products`;
+- memilih varian jika item bervarian, termasuk Semi Finished bervarian agar stok masuk ke bucket `variantKey` dan tidak fallback ke master/default;
 - mencegah adjustment keluar melebihi `availableStock`, bukan hanya mengecek `currentStock`;
 - membuat record `stock_adjustments`;
 - membuat `inventory_logs` dengan `adjustmentId`, `referenceId`, `referenceType`, dan snapshot stok sebelum/sesudah;
@@ -510,6 +510,22 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Master item bervarian wajib menyimpan `currentStock`, `stock`, `reservedStock`, dan `availableStock` berdasarkan total varian.
 - Reset/Maintenance hanya alat audit/repair/development, bukan flow harian user untuk menjaga stok tetap sinkron.
 
+### 15.1 Variant conversion aman
+
+- Edit master biasa tetap tidak boleh menjadi jalur mutasi stok.
+- Data lama non-varian boleh mulai memakai varian hanya jika `stock/currentStock`, `reservedStock`, dan `availableStock` semuanya 0.
+- Varian baru pada item existing wajib dibuat dengan `stock/currentStock/reservedStock/availableStock = 0`.
+- Item lama yang masih punya stok master atau reserved stock tidak boleh dikonversi otomatis ke varian; user harus memakai Stock Management / Stock Adjustment / transaksi resmi bila stok perlu dialihkan.
+- `variantKey` existing tidak boleh berubah saat nama/label varian diganti karena itu adalah identitas bucket stok/reference transaksi.
+- Hapus varian wajib ditolak jika varian masih punya `stock`, `currentStock`, `reservedStock`, atau `availableStock` yang belum aman.
+
+### 15.2 Pricing Rules optional
+
+- Pricing Rules adalah fitur harga opsional, bukan blocker create master Product/Raw Material.
+- Mode create default adalah `manual`.
+- `pricingRuleId` hanya wajib jika user memilih `pricingMode = rule`.
+- Jika `pricingMode = manual`, `pricingRuleId` boleh kosong/null dan harga manual tetap valid.
+
 ## 17. Rule Reset & Maintenance Data Aman
 
 - Supplier adalah protected master data dan collection `supplierPurchases` tidak boleh ikut reset default.
@@ -746,11 +762,11 @@ Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases,
 - Inventory log `production_output_in` baru menyimpan metadata Work Log, PO, step, varian, dan worker/operator jika tersedia.
 - Log lama tanpa worker metadata tetap valid dan tidak di-backfill otomatis.
 
-### 11.4 Semi Finished variant color rename
-- Edit warna varian existing hanya mengganti label tampilan/metadata.
+### 11.4 Generic variant label and rename
+- Edit nama/label varian existing hanya mengganti label tampilan/metadata.
 - `variantKey` tetap menjadi identitas bucket stok/reference.
 - `stock`, `currentStock`, `reservedStock`, dan `availableStock` varian tetap dipreserve dari data existing/latest.
-- Rename warna tidak membuat inventory log palsu, tidak memigrasi PO/Work Log lama, dan tidak membuka edit stok langsung dari master.
+- Rename nama/label varian tidak membuat inventory log palsu, tidak memigrasi PO/Work Log lama, dan tidak membuka edit stok langsung dari master.
 
 ### 11.5 UI non-business-flow cleanup
 - Sidebar nested accordion dan Login UI copy cleanup adalah perubahan UI; keduanya tidak mengubah stok, transaksi, produksi, laporan, AuthContext, role access, Firestore rules, atau schema.

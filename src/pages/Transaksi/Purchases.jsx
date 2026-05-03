@@ -2190,27 +2190,28 @@ const Purchases = () => {
                       <span>Total Aktual Pembelian</span>
                       <strong>{formatCurrencyIdr(totalActualValue)}</strong>
                     </div>
+                    {/* AKTIF/GUARDED: modal aktual ditaruh langsung setelah total aktual agar user paham nilai ini berasal dari transaksi pembelian berjalan, bukan dari harga acuan Supplier. */}
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span>Modal Aktual Pembelian Ini / Satuan Stok</span>
+                      <strong>{formatCurrencyIdr(actualUnitCostValue)} / {stockUnit}</strong>
+                    </div>
 
-                    <div style={{ fontWeight: 600, marginTop: 8 }}>Pembanding Supplier dan modal stok</div>
+                    <div style={{ fontWeight: 600, marginTop: 8 }}>Pembanding Supplier</div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                       <span>Stok Masuk</span>
                       <strong>{formatNumberId(stockInValue)} {stockUnit}</strong>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                      <span>Harga Supplier Tercatat / Satuan Stok</span>
+                      <span>Harga Acuan Supplier Tersimpan / Satuan Stok</span>
                       <strong>
                         {supplierPriceValue > 0
                           ? `${formatCurrencyIdr(supplierPriceValue)} / ${stockUnit}`
-                          : "Belum ada harga supplier tercatat"}
+                          : "Belum ada harga acuan supplier tersimpan"}
                       </strong>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                       <span>Total Pembanding Supplier</span>
                       <strong>{hasSupplierReference ? formatCurrencyIdr(totalReferenceValue) : "-"}</strong>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                      <span>Modal Aktual / Satuan Stok</span>
-                      <strong>{formatCurrencyIdr(actualUnitCostValue)} / {stockUnit}</strong>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                       <span>Selisih Hemat</span>

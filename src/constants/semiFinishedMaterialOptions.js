@@ -32,7 +32,15 @@ export const SEMI_FINISHED_GROUP_MAP = FLOWER_GROUP_MAP;
 export const SEMI_FINISHED_COLOR_OPTIONS = COLOR_VARIANT_OPTIONS;
 export const SEMI_FINISHED_COLOR_MAP = COLOR_VARIANT_MAP;
 
-export const DEFAULT_SEMI_FINISHED_VARIANT = DEFAULT_COLOR_VARIANT;
+export const DEFAULT_SEMI_FINISHED_VARIANT = {
+  ...DEFAULT_COLOR_VARIANT,
+  // IMS NOTE [AKTIF | generic-variant]: default Semi Product tidak lagi memaksa
+  // Merah. Hubungan flow: user boleh memakai label varian fleksibel seperti
+  // Ukuran, Tipe, Motif, atau Spesifikasi; color tetap alias legacy kompatibel.
+  color: '',
+  name: '',
+  variantLabel: '',
+};
 
 export const DEFAULT_SEMI_FINISHED_FORM = {
   code: '',
@@ -42,6 +50,7 @@ export const DEFAULT_SEMI_FINISHED_FORM = {
   flowerGroup: 'mawar',
   unit: 'pcs',
   hasVariants: false,
+  variantLabel: 'Varian',
   variants: [],
   currentStock: 0,
   reservedStock: 0,

@@ -38,10 +38,10 @@ export const RAW_MATERIAL_DEFAULT_FORM = {
   restockReferencePrice: 0,
   averageActualUnitCost: 0,
   sellingPrice: 0,
-  pricingMode: 'rule',
+  pricingMode: 'manual',
   pricingRuleId: null,
   hasVariants: false,
-  variantLabel: '',
+  variantLabel: 'Varian',
   variants: [],
   isActive: true,
 };
@@ -74,7 +74,9 @@ const resolveRawMaterialMetadata = (values = {}, suppliers = [], existingMateria
   name: String(values.name || '').trim(),
   ...resolveSupplierSnapshot(values, suppliers),
   stockUnit: values.stockUnit || existingMaterial.stockUnit || 'pcs',
-  pricingMode: values.pricingMode || 'rule',
+  // IMS NOTE [AKTIF | pricing-optional]: Raw Material baru default Manual agar
+  // tambah bahan tidak wajib punya Pricing Rule. Mode Rule tetap mewajibkan rule.
+  pricingMode: values.pricingMode === 'rule' ? 'rule' : 'manual',
   pricingRuleId: values.pricingMode === 'rule' ? values.pricingRuleId || null : null,
   minStock: toStockNumber(values.minStock || 0),
   restockReferencePrice: toStockNumber(values.restockReferencePrice || 0),
@@ -114,6 +116,29 @@ const normalizeRawMaterialCreatePayload = (values = {}, suppliers = []) => {
 
 // IMS NOTE [GUARDED | behavior-preserving]: variant matching memakai key/kode/nama, bukan index.
 // Alasan cleanup: index bisa salah memindahkan stok jika urutan varian berubah.
+
+const hasProtectedMasterStock = (item = {}) => {
+  const currentStock = toStockNumber(item.currentStock ?? item.stock ?? 0);
+  const reservedStock = toStockNumber(item.reservedStock || 0);
+  const availableStock = toStockNumber(
+    item.availableStock ?? Math.max(currentStock - reservedStock, 0),
+  );
+
+  return currentStock > 0 || reservedStock > 0 || availableStock > 0;
+};
+
+const normalizeZeroStockRawVariants = (variants = []) =>
+  normalizeRawMaterialVariants(variants).map((variant) => ({
+    ...variant,
+    // IMS NOTE [GUARDED | stok-awal-existing]: varian baru dari raw material
+    // existing selalu mulai 0. Hubungan flow: stok bahan setelah create harus
+    // lewat Purchase, Stock Adjustment, atau transaksi resmi.
+    currentStock: 0,
+    stock: 0,
+    reservedStock: 0,
+    availableStock: 0,
+  }));
+
 const buildRawVariantKeyCandidates = (variant = {}) => [
   variant.variantKey,
   variant.variantCode,
@@ -134,8 +159,16 @@ const buildRawVariantLookup = (variants = []) => {
   return lookup;
 };
 
-const hasProtectedVariantStock = (variant = {}) =>
-  toStockNumber(variant.currentStock ?? variant.stock ?? 0) > 0 || toStockNumber(variant.reservedStock || 0) > 0;
+const hasProtectedVariantStock = (variant = {}) => {
+  const currentStock = toStockNumber(variant.currentStock ?? variant.stock ?? 0);
+  const reservedStock = toStockNumber(variant.reservedStock || 0);
+  const availableStock = toStockNumber(variant.availableStock ?? Math.max(currentStock - reservedStock, 0));
+
+  // IMS NOTE [GUARDED | stok-varian]: hapus varian ditolak bila salah satu
+  // bucket stok masih bernilai. Hubungan flow: mencegah bucket stok/reference
+  // hilang dari master tanpa Stock Adjustment/transaksi resmi. STATUS: AKTIF.
+  return currentStock > 0 || reservedStock > 0 || availableStock > 0;
+};
 
 const assertNoRawVariantWithStockRemoved = (editedVariants = [], existingVariants = []) => {
   const editedLookup = buildRawVariantLookup(editedVariants);
@@ -206,13 +239,54 @@ const mergeRawVariantMetadataWithExistingStock = (editedVariants = [], existingV
 };
 
 const normalizeRawMaterialMetadataPayload = (values = {}, suppliers = [], existingMaterial = {}) => {
-  const hasVariants = inferHasVariants(existingMaterial);
+  const existingHasVariants = inferHasVariants(existingMaterial);
+  const wantsVariants = values.hasVariants === true;
+  const canActivateVariants = !existingHasVariants && wantsVariants;
+  const hasVariants = existingHasVariants || canActivateVariants;
   const payload = {
     ...resolveRawMaterialMetadata(values, suppliers, existingMaterial),
     hasVariants,
     hasVariantOptions: hasVariants,
-    variantLabel: hasVariants ? String(values.variantLabel || existingMaterial.variantLabel || '').trim() : '',
+    variantLabel: hasVariants ? String(values.variantLabel || existingMaterial.variantLabel || 'Varian').trim() : '',
   };
+
+  if (canActivateVariants) {
+    if (hasProtectedMasterStock(existingMaterial)) {
+      throw {
+        type: 'validation',
+        errors: {
+          hasVariants: 'Aktifkan varian hanya untuk bahan lama dengan stok, reserved, dan available stock 0. Nolkan/alokasikan stok lewat Purchase/Stock Adjustment resmi lebih dulu.',
+        },
+      };
+    }
+
+    const convertedVariants = normalizeZeroStockRawVariants(values.variants || []);
+    if (convertedVariants.length === 0) {
+      throw { type: 'validation', errors: { variants: 'Minimal harus ada 1 varian' } };
+    }
+
+    const duplicateErrors = validateDuplicateRawVariantNames(convertedVariants);
+    if (Object.keys(duplicateErrors).length > 0) {
+      throw { type: 'validation', errors: duplicateErrors };
+    }
+
+    const totals = calculateRawMaterialVariantTotals(convertedVariants);
+
+    // IMS NOTE [GUARDED | konversi-varian-zero-stock]: raw material lama non-varian
+    // boleh mulai memakai varian hanya saat stok master aman 0. Tidak ada stok
+    // yang dipindah otomatis; semua varian baru mulai dari 0.
+    return {
+      ...payload,
+      variants: totals.variants,
+      variantOptions: totals.variants,
+      variantCount: totals.variantCount,
+      activeVariantCount: totals.activeVariantCount,
+      stock: 0,
+      currentStock: 0,
+      reservedStock: 0,
+      availableStock: 0,
+    };
+  }
 
   if (!hasVariants) {
     // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: update metadata
@@ -251,6 +325,7 @@ export const validateRawMaterialPayload = async (values = {}, editingId = null) 
   const errors = {};
   const materialName = String(values.name || '').trim();
   const hasVariants = values.hasVariants === true;
+  const pricingMode = values.pricingMode === 'rule' ? 'rule' : 'manual';
 
   if (!materialName) {
     errors.name = 'Nama bahan baku wajib diisi';
@@ -284,6 +359,10 @@ export const validateRawMaterialPayload = async (values = {}, editingId = null) 
 
   if (toNumber(values.sellingPrice || 0) < 0) {
     errors.sellingPrice = 'Harga jual tidak boleh negatif';
+  }
+
+  if (pricingMode === 'rule' && !values.pricingRuleId) {
+    errors.pricingRuleId = 'Pricing rule wajib dipilih untuk mode Rule';
   }
 
   if (materialName) {

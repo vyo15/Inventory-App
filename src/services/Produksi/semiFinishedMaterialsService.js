@@ -41,6 +41,29 @@ const toNumberValue = (value = 0) => {
 const resolveAuditUser = (currentUser = null) =>
   currentUser?.email || currentUser?.displayName || currentUser?.uid || "system";
 
+
+const hasProtectedMasterStock = (item = {}) => {
+  const currentStock = toStockNumber(item.currentStock ?? item.stock ?? 0);
+  const reservedStock = toStockNumber(item.reservedStock || 0);
+  const availableStock = toStockNumber(
+    item.availableStock ?? Math.max(currentStock - reservedStock, 0),
+  );
+
+  return currentStock > 0 || reservedStock > 0 || availableStock > 0;
+};
+
+const normalizeZeroStockSemiVariants = (variants = []) =>
+  normalizeSemiFinishedVariants(variants).map((variant) => ({
+    ...variant,
+    // IMS NOTE [GUARDED | stok-awal-existing]: varian baru dari Semi Product
+    // existing selalu mulai 0. Hubungan flow: stok semi setelah create harus
+    // lewat Stock Adjustment/produksi/transaksi resmi, bukan edit master.
+    currentStock: 0,
+    stock: 0,
+    reservedStock: 0,
+    availableStock: 0,
+  }));
+
 const enrichMaterialWithVariantTotals = (item = {}) => {
   const hasVariants = inferHasVariants(item);
   const variants = hasVariants ? normalizeSemiFinishedVariants(item.variants || []) : [];
@@ -96,6 +119,7 @@ const resolveSemiFinishedMetadata = (
   averageCostPerUnit: toNumberValue(values.averageCostPerUnit || 0),
   isActive: values.isActive !== false,
   isSellable: false,
+  variantLabel: values.hasVariants === true ? String(values.variantLabel || 'Varian').trim() || 'Varian' : '',
   updatedAt: serverTimestamp(),
   updatedBy: resolveAuditUser(currentUser),
 });
@@ -166,13 +190,20 @@ const findExistingSemiVariant = (variant = {}, existingLookup = new Map(), index
     .map((key) => existingLookup.get(key))
     .find(Boolean);
 
-const resolveSemiVariantDisplayColor = (variant = {}, existingVariant = {}) =>
-  String(variant.color || variant.name || existingVariant.color || existingVariant.name || "")
-    .trim()
-    .toLowerCase();
+const resolveSemiVariantDisplayValue = (variant = {}, existingVariant = {}) =>
+  String(variant.color || variant.name || variant.variantLabel || existingVariant.color || existingVariant.name || "")
+    .trim();
 
-const hasProtectedVariantStock = (variant = {}) =>
-  toStockNumber(variant.currentStock ?? variant.stock ?? 0) > 0 || toStockNumber(variant.reservedStock || 0) > 0;
+const hasProtectedVariantStock = (variant = {}) => {
+  const currentStock = toStockNumber(variant.currentStock ?? variant.stock ?? 0);
+  const reservedStock = toStockNumber(variant.reservedStock || 0);
+  const availableStock = toStockNumber(variant.availableStock ?? Math.max(currentStock - reservedStock, 0));
+
+  // IMS NOTE [GUARDED | stok-varian]: hapus varian ditolak bila salah satu
+  // bucket stok masih bernilai. Hubungan flow: mencegah bucket stok/reference
+  // hilang dari master tanpa Stock Adjustment/transaksi resmi. STATUS: AKTIF.
+  return currentStock > 0 || reservedStock > 0 || availableStock > 0;
+};
 
 const assertNoSemiVariantWithStockRemoved = (editedVariants = [], existingVariants = []) => {
   const editedLookup = buildSemiVariantLookup(editedVariants);
@@ -191,16 +222,16 @@ const assertNoSemiVariantWithStockRemoved = (editedVariants = [], existingVarian
   });
 };
 
-const validateDuplicateSemiVariantColors = (variants = []) => {
+const validateDuplicateSemiVariantNames = (variants = []) => {
   const errors = {};
-  const usedColors = new Set();
+  const usedNames = new Set();
 
   normalizeSemiFinishedVariants(variants).forEach((item, index) => {
-    const key = String(item.color || "").trim().toLowerCase();
-    if (usedColors.has(key)) {
-      errors[`variants.${index}.color`] = "Warna tidak boleh duplikat";
+    const key = String(item.color || item.name || "").trim().toLowerCase();
+    if (usedNames.has(key)) {
+      errors[`variants.${index}.color`] = "Nama varian tidak boleh duplikat";
     }
-    usedColors.add(key);
+    usedNames.add(key);
   });
 
   return errors;
@@ -221,18 +252,13 @@ const mergeSemiVariantMetadataWithExistingStock = (editedVariants = [], existing
   const mergedVariants = normalizedEdited.map((variant, index) => {
     const existingVariant = findExistingSemiVariant(variant, existingLookup, index);
 
-    if (!existingVariant && normalizedExisting.length > 0) {
-      throw {
-        type: "validation",
-        errors: {
-          variants: "Varian tidak cocok dengan data existing. Jangan membuat bucket stok baru dari edit warna; buka ulang form dan coba simpan kembali.",
-        },
-      };
-    }
-
-    const displayColor = resolveSemiVariantDisplayColor(variant, existingVariant);
-    const currentStock = toNumberValue(existingVariant?.currentStock ?? existingVariant?.stock ?? variant.currentStock ?? variant.stock ?? 0);
-    const reservedStock = toNumberValue(existingVariant?.reservedStock ?? variant.reservedStock ?? 0);
+    const displayValue = resolveSemiVariantDisplayValue(variant, existingVariant);
+    const currentStock = existingVariant
+      ? toNumberValue(existingVariant.currentStock ?? existingVariant.stock ?? 0)
+      : 0;
+    const reservedStock = existingVariant
+      ? toNumberValue(existingVariant.reservedStock || 0)
+      : 0;
 
     // IMS NOTE [GUARDED | identity-safe]: edit warna semi finished adalah rename
     // display/metadata. variantKey existing tetap dipakai agar bucket stok, PO,
@@ -240,10 +266,10 @@ const mergeSemiVariantMetadataWithExistingStock = (editedVariants = [], existing
     return {
       ...variant,
       variantKey: existingVariant?.variantKey || variant.variantKey,
-      color: displayColor,
-      name: displayColor,
-      variantLabel: displayColor,
-      label: displayColor,
+      color: displayValue,
+      name: displayValue,
+      variantLabel: displayValue,
+      label: displayValue,
       currentStock,
       stock: currentStock,
       reservedStock,
@@ -255,7 +281,7 @@ const mergeSemiVariantMetadataWithExistingStock = (editedVariants = [], existing
     };
   });
 
-  const duplicateErrors = validateDuplicateSemiVariantColors(mergedVariants);
+  const duplicateErrors = validateDuplicateSemiVariantNames(mergedVariants);
   if (Object.keys(duplicateErrors).length > 0) {
     throw { type: "validation", errors: duplicateErrors };
   }
@@ -269,11 +295,57 @@ const normalizeSemiFinishedMetadataPayload = (
   selectedProducts = [],
   existingMaterial = {},
 ) => {
-  const hasVariants = inferHasVariants(existingMaterial);
+  const existingHasVariants = inferHasVariants(existingMaterial);
+  const wantsVariants = values.hasVariants === true;
+  const canActivateVariants = !existingHasVariants && wantsVariants;
+  const hasVariants = existingHasVariants || canActivateVariants;
   const payload = {
-    ...resolveSemiFinishedMetadata(values, currentUser, selectedProducts),
+    ...resolveSemiFinishedMetadata(
+      { ...values, hasVariants, variantLabel: values.variantLabel || existingMaterial.variantLabel || 'Varian' },
+      currentUser,
+      selectedProducts,
+    ),
     hasVariants,
   };
+
+  if (canActivateVariants) {
+    if (hasProtectedMasterStock(existingMaterial)) {
+      throw {
+        type: "validation",
+        errors: {
+          hasVariants: "Aktifkan varian hanya untuk Semi Product lama dengan stok, reserved, dan available stock 0. Nolkan stok lewat flow resmi lebih dulu.",
+        },
+      };
+    }
+
+    const convertedVariants = normalizeZeroStockSemiVariants(values.variants || []);
+    if (convertedVariants.length === 0) {
+      throw { type: "validation", errors: { variants: "Minimal harus ada 1 varian" } };
+    }
+
+    const duplicateErrors = validateDuplicateSemiVariantNames(convertedVariants);
+    if (Object.keys(duplicateErrors).length > 0) {
+      throw { type: "validation", errors: duplicateErrors };
+    }
+
+    const variantTotals = calculateSemiFinishedTotalsFromVariants(convertedVariants);
+
+    // IMS NOTE [GUARDED | konversi-varian-zero-stock]: Semi Product lama non-varian
+    // boleh mulai memakai varian hanya saat stok master aman 0. Tidak ada stok
+    // yang dipindah otomatis; semua varian baru mulai dari 0.
+    return {
+      ...payload,
+      variants: variantTotals.variants,
+      variantCount: variantTotals.variantCount,
+      activeVariantCount: variantTotals.activeVariantCount,
+      currentStock: 0,
+      stock: 0,
+      reservedStock: 0,
+      availableStock: 0,
+      minStockAlert: variantTotals.minStockAlert,
+      averageCostPerUnit: toNumberValue(variantTotals.averageCostPerUnit || 0),
+    };
+  }
 
   if (!hasVariants) {
     // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: update metadata
@@ -336,17 +408,18 @@ export const validateSemiFinishedMaterial = (values = {}) => {
       errors.variants = "Minimal harus ada 1 varian";
     }
 
-    const usedColors = new Set();
+    const usedNames = new Set();
 
     normalizedVariants.forEach((item, index) => {
       if (!item.color) {
-        errors[`variants.${index}.color`] = "Warna wajib dipilih";
+        errors[`variants.${index}.color`] = "Nama varian wajib diisi";
       }
 
-      if (usedColors.has(item.color)) {
-        errors[`variants.${index}.color`] = "Warna tidak boleh duplikat";
+      const variantNameKey = String(item.color || item.name || "").trim().toLowerCase();
+      if (usedNames.has(variantNameKey)) {
+        errors[`variants.${index}.color`] = "Nama varian tidak boleh duplikat";
       }
-      usedColors.add(item.color);
+      usedNames.add(variantNameKey);
 
       if (Number(item.currentStock || 0) < 0) {
         errors[`variants.${index}.currentStock`] = "Stok tidak boleh negatif";

@@ -86,6 +86,7 @@ const buildFormValues = (record = {}) => ({
   ...RAW_MATERIAL_DEFAULT_FORM,
   ...record,
   hasVariants: record.hasVariants === true,
+  variantLabel: record.variantLabel || 'Varian',
   variants:
     record.hasVariants === true
       ? ensureAtLeastOneRawMaterialVariant(record.variants || [])
@@ -106,6 +107,15 @@ const integerParser = parseIntegerIdInput;
 // Helper tampilan stok supaya format di tabel dan drawer seragam.
 // -----------------------------------------------------------------------------
 const formatStockWithUnit = (value, unit = 'pcs') => `${formatNumberID(value)} ${unit}`;
+
+
+const hasSafeZeroMasterStock = (record = {}) => {
+  const currentStock = Number(record.currentStock ?? record.stock ?? 0);
+  const reservedStock = Number(record.reservedStock || 0);
+  const availableStock = Number(record.availableStock ?? Math.max(currentStock - reservedStock, 0));
+
+  return currentStock <= 0 && reservedStock <= 0 && availableStock <= 0;
+};
 
 const compactCellStyles = {
   stack: { display: 'flex', flexDirection: 'column', gap: 2 },
@@ -477,6 +487,9 @@ const RawMaterials = () => {
   // IMS NOTE [GUARDED | behavior-preserving]: flag edit dipakai untuk mengunci stok dan mode varian.
   // Hubungan flow: raw material stock harus berubah lewat purchase, adjustment, atau transaksi resmi.
   const isEditingMaterial = Boolean(editingRecord?.id);
+  const editingMaterialHasVariants = Boolean(editingRecord?.hasVariants || (editingRecord?.variants || []).length > 0);
+  const canActivateVariantsForEditing = isEditingMaterial && !editingMaterialHasVariants && hasSafeZeroMasterStock(editingRecord);
+  const hasVariantModeSwitchLocked = isEditingMaterial && !canActivateVariantsForEditing;
   const stockEditHelpText = 'Ubah stok lewat Stock Management / Stock Adjustment / transaksi resmi.';
 
   // ---------------------------------------------------------------------------
@@ -1110,23 +1123,28 @@ const RawMaterials = () => {
                 name="hasVariants"
                 label="Pakai Varian"
                 valuePropName="checked"
-                extra={isEditingMaterial ? 'Mode varian dikunci setelah bahan baku dibuat agar struktur stok tidak berubah tanpa audit.' : undefined}
+                extra={isEditingMaterial
+                  ? canActivateVariantsForEditing
+                    ? 'Bahan lama dengan stok 0 boleh mulai memakai varian. Semua varian baru tetap stok 0.'
+                    : 'Mode varian dikunci setelah bahan baku dibuat agar struktur stok tidak berubah tanpa audit.'
+                  : undefined}
               >
                 <Switch
                   checkedChildren="Ya"
                   unCheckedChildren="Tidak"
-                  disabled={isEditingMaterial}
+                  disabled={hasVariantModeSwitchLocked}
                   onChange={(checked) => {
-                    if (isEditingMaterial) return;
+                    if (hasVariantModeSwitchLocked) return;
                     if (checked) {
                       form.setFieldsValue({
-                        stock: 0,
+                        stock: isEditingMaterial ? 0 : form.getFieldValue('stock'),
+                        variantLabel: form.getFieldValue('variantLabel') || 'Varian',
                         variants: ensureAtLeastOneRawMaterialVariant(form.getFieldValue('variants') || []),
                       });
                     } else {
                       form.setFieldsValue({
                         variants: [],
-                        variantLabel: '',
+                        variantLabel: 'Varian',
                       });
                     }
                   }}
@@ -1206,8 +1224,8 @@ const RawMaterials = () => {
                     }
                   }}
                 >
-                  <Option value="rule">Rule</Option>
                   <Option value="manual">Manual</Option>
+                  <Option value="rule">Rule</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -1300,7 +1318,9 @@ const RawMaterials = () => {
                 type="info"
                 showIcon
                 message={isEditingMaterial
-                  ? stockEditHelpText
+                  ? canActivateVariantsForEditing
+                    ? 'Bahan lama ini stoknya 0, jadi boleh mulai memakai varian. Stok tiap varian baru tetap 0 sampai diubah lewat Purchase/Stock Adjustment/transaksi resmi.'
+                    : stockEditHelpText
                   : `Gunakan varian untuk ${variantLabelValue || 'turunan bahan'} seperti warna, ukuran, atau spesifikasi lain. Pada tahap ini varian hanya menyimpan identitas dan stok awal.`}
               />
 
@@ -1317,7 +1337,7 @@ const RawMaterials = () => {
                             danger
                             type="text"
                             icon={<DeleteOutlined />}
-                            disabled={isEditingMaterial}
+                            disabled={fields.length === 1}
                             onClick={() => remove(field.name)}
                           >
                             Hapus
@@ -1325,6 +1345,10 @@ const RawMaterials = () => {
                         }
                       >
                         <Row gutter={12}>
+                          {/* IMS NOTE [GUARDED | identity-safe]: hidden identity field menjaga variantKey existing tetap terkirim saat nama varian diganti. Hubungan flow: variantKey adalah bucket stok/reference transaksi. STATUS: AKTIF. */}
+                          <Form.Item name={[field.name, 'variantKey']} hidden>
+                            <Input />
+                          </Form.Item>
                           <Col xs={24} md={8}>
                             <Form.Item
                               {...field}
@@ -1371,7 +1395,6 @@ const RawMaterials = () => {
                     <Button
                       type="dashed"
                       icon={<PlusOutlined />}
-                      disabled={isEditingMaterial}
                       onClick={() => {
                         const current = form.getFieldValue('variants') || [];
                         form.setFieldsValue({

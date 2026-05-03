@@ -58,6 +58,11 @@ Tujuan:
 - stok internal untuk kebutuhan produksi
 - bisa punya varian
 - tidak ditujukan untuk dijual ke customer
+- koreksi stok manual resmi dilakukan lewat Stock Management / Stock Adjustment, bukan dari edit master
+
+Guard integrasi:
+- Stock Adjustment Semi Finished hanya mengoreksi stok dan audit inventory; tidak mengubah BOM, Production Order, Work Log, Payroll, atau HPP.
+- Semi Finished bervarian wajib memakai `variantKey` saat adjustment agar bucket stok produksi tetap konsisten.
 
 ## 5. BOM Produksi
 Tujuan:

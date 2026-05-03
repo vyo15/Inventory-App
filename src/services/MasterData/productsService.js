@@ -25,10 +25,11 @@ export const PRODUCT_DEFAULT_FORM = {
   categoryId: null,
   price: 0,
   hppPerUnit: 0,
-  pricingMode: 'rule',
+  pricingMode: 'manual',
   pricingRuleId: null,
   description: '',
   hasVariants: false,
+  variantLabel: 'Varian',
   variants: [],
   currentStock: 0,
   reservedStock: 0,
@@ -73,11 +74,15 @@ const resolveProductMetadata = (values = {}, categories = []) => {
     categoryId: values.categoryId || null,
     category: selectedCategory?.name || 'Produk Jadi',
     description: String(values.description || '').trim(),
-    pricingMode: values.pricingMode || 'rule',
+    // IMS NOTE [AKTIF | pricing-optional]: default service dibuat Manual agar
+    // create Product tidak diblokir Pricing Rules. Hubungan flow: Pricing Rule
+    // tetap valid saat user memilih mode Rule, tetapi mode Manual boleh kosong.
+    pricingMode: values.pricingMode === 'rule' ? 'rule' : 'manual',
     pricingRuleId: values.pricingMode === 'rule' ? values.pricingRuleId || null : null,
     price: toStockNumber(values.price || 0),
     hppPerUnit: toStockNumber(values.hppPerUnit || 0),
     isActive: values.isActive !== false,
+    variantLabel: String(values.variantLabel || 'Varian').trim() || 'Varian',
     updatedAt: serverTimestamp(),
     lastPricingUpdatedAt: values.pricingMode === 'manual' ? serverTimestamp() : null,
   };
@@ -111,6 +116,29 @@ const normalizeProductCreatePayload = (values = {}, categories = []) => {
 
 // IMS NOTE [GUARDED | behavior-preserving]: variant matching memakai key/kode/nama, bukan index.
 // Alasan cleanup: index bisa salah memindahkan stok jika urutan varian berubah.
+
+const hasProtectedMasterStock = (item = {}) => {
+  const currentStock = toStockNumber(item.currentStock ?? item.stock ?? 0);
+  const reservedStock = toStockNumber(item.reservedStock || 0);
+  const availableStock = toStockNumber(
+    item.availableStock ?? Math.max(currentStock - reservedStock, 0),
+  );
+
+  return currentStock > 0 || reservedStock > 0 || availableStock > 0;
+};
+
+const normalizeZeroStockProductVariants = (variants = []) =>
+  normalizeColorVariants(variants).map((variant) => ({
+    ...variant,
+    // IMS NOTE [GUARDED | stok-awal-existing]: varian baru dari item existing
+    // selalu mulai 0. Hubungan flow: stok setelah create tidak boleh ditulis
+    // dari master; user bisa isi stok lewat Stock Adjustment/transaksi resmi.
+    currentStock: 0,
+    stock: 0,
+    reservedStock: 0,
+    availableStock: 0,
+  }));
+
 const buildProductVariantKeyCandidates = (variant = {}) => [
   variant.variantKey,
   variant.sku,
@@ -130,8 +158,16 @@ const buildProductVariantLookup = (variants = []) => {
   return lookup;
 };
 
-const hasProtectedVariantStock = (variant = {}) =>
-  toStockNumber(variant.currentStock ?? variant.stock ?? 0) > 0 || toStockNumber(variant.reservedStock || 0) > 0;
+const hasProtectedVariantStock = (variant = {}) => {
+  const currentStock = toStockNumber(variant.currentStock ?? variant.stock ?? 0);
+  const reservedStock = toStockNumber(variant.reservedStock || 0);
+  const availableStock = toStockNumber(variant.availableStock ?? Math.max(currentStock - reservedStock, 0));
+
+  // IMS NOTE [GUARDED | stok-varian]: hapus varian ditolak bila salah satu
+  // bucket stok masih bernilai. Hubungan flow: mencegah bucket stok/reference
+  // hilang dari master tanpa Stock Adjustment/transaksi resmi. STATUS: AKTIF.
+  return currentStock > 0 || reservedStock > 0 || availableStock > 0;
+};
 
 const assertNoProductVariantWithStockRemoved = (editedVariants = [], existingVariants = []) => {
   const editedLookup = buildProductVariantLookup(editedVariants);
@@ -188,11 +224,52 @@ const mergeProductVariantMetadataWithExistingStock = (editedVariants = [], exist
 };
 
 const normalizeProductMetadataPayload = (values = {}, categories = [], existingProduct = {}) => {
-  const hasVariants = inferHasVariants(existingProduct);
+  const existingHasVariants = inferHasVariants(existingProduct);
+  const wantsVariants = values.hasVariants === true;
+  const canActivateVariants = !existingHasVariants && wantsVariants;
+  const hasVariants = existingHasVariants || canActivateVariants;
   const payload = {
     ...resolveProductMetadata(values, categories),
     hasVariants,
   };
+
+  if (canActivateVariants) {
+    if (hasProtectedMasterStock(existingProduct)) {
+      throw {
+        type: 'validation',
+        errors: {
+          hasVariants: 'Aktifkan varian hanya untuk produk lama dengan stok, reserved, dan available stock 0. Nolkan/alokasikan stok lewat flow Stock Adjustment resmi lebih dulu.',
+        },
+      };
+    }
+
+    const convertedVariants = normalizeZeroStockProductVariants(values.variants || []);
+    if (convertedVariants.length === 0) {
+      throw { type: 'validation', errors: { variants: 'Minimal harus ada 1 varian' } };
+    }
+
+    const duplicateErrors = validateDuplicateVariantColors(convertedVariants);
+    if (Object.keys(duplicateErrors).length > 0) {
+      throw { type: 'validation', errors: duplicateErrors };
+    }
+
+    const variantTotals = calculateVariantTotals(convertedVariants);
+
+    // IMS NOTE [GUARDED | konversi-varian-zero-stock]: item lama non-varian
+    // boleh mulai memakai varian hanya saat stok master aman 0. Tidak ada stok
+    // yang dipindah otomatis; semua varian existing baru mulai dari 0.
+    return {
+      ...payload,
+      variants: variantTotals.variants,
+      variantCount: variantTotals.variantCount,
+      activeVariantCount: variantTotals.activeVariantCount,
+      currentStock: 0,
+      reservedStock: 0,
+      availableStock: 0,
+      stock: 0,
+      minStockAlert: variantTotals.minStockAlert,
+    };
+  }
 
   if (!hasVariants) {
     // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: update non-varian
@@ -232,6 +309,7 @@ export const validateProductPayload = async (values = {}, editingId = null) => {
   const errors = {};
   const productName = String(values.name || '').trim();
   const hasVariants = values.hasVariants === true;
+  const pricingMode = values.pricingMode === 'rule' ? 'rule' : 'manual';
 
   if (!productName) {
     errors.name = 'Nama produk wajib diisi';
@@ -243,6 +321,10 @@ export const validateProductPayload = async (values = {}, editingId = null) => {
 
   if (Number(values.hppPerUnit || 0) < 0) {
     errors.hppPerUnit = 'HPP tidak boleh negatif';
+  }
+
+  if (pricingMode === 'rule' && !values.pricingRuleId) {
+    errors.pricingRuleId = 'Pricing rule wajib dipilih untuk mode Rule';
   }
 
   if (hasVariants) {

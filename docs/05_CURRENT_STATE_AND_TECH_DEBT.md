@@ -126,7 +126,7 @@ Sebuah task dianggap aman selesai bila:
 ## Update Cleanup Architecture — 2026-04-25
 
 ### Sudah dibereskan pada batch ini
-- `StockAdjustmentPanel.jsx` tidak lagi melakukan `updateDoc(... stock: increment(...))` langsung dari page.
+- `StockAdjustmentPanel.jsx` tidak lagi melakukan `updateDoc(... stock: increment(...))` langsung dari page dan sekarang mendukung Bahan Baku, Semi Finished, serta Produk Jadi.
 - Adjustment keluar sekarang divalidasi terhadap `availableStock`, sehingga reserved stock tidak ikut terpakai oleh koreksi manual.
 - Stock Adjustment sekarang memakai Firestore transaction di panel resmi dan helper stok varian aktif, sehingga record adjustment, mutasi stok, dan inventory log tidak mudah partial.
 - Collection customer sudah disatukan ke `customers` lowercase di Master Customer agar sinkron dengan Sales.
@@ -538,3 +538,12 @@ Cleanup Auth/User Management tidak mengubah business rules stok, pembelian, penj
 - **CLEANUP CANDIDATE:** audit actor `currentUser` null/system pada caller Work Log bisa dirapikan pada task terpisah.
 - **CLEANUP CANDIDATE:** jika diperlukan, buat backfill manual dengan preview untuk log produksi lama, bukan otomatis.
 
+### 8. Variant generic masih transisi
+Temuan terkini:
+- Product dan Semi Finished sudah diarahkan memakai nama/label varian generic, bukan hanya warna.
+- Field `color` tetap dipertahankan sebagai alias legacy agar modul lama yang masih membaca warna tidak langsung rusak.
+- Aktivasi varian untuk data lama sudah guarded: stok/reserved master harus aman terlebih dahulu.
+
+Risiko tersisa:
+- Data lama dengan stok master > 0 belum punya flow alokasi stok master ke beberapa varian dengan audit. Itu harus menjadi task terpisah jika dibutuhkan.
+- Semi Finished masih area produksi guarded; Stock Adjustment resmi sudah mendukung koreksi stok Semi Finished, tetapi konversi stok lama ke varian tetap tidak boleh dilakukan otomatis tanpa desain audit produksi.

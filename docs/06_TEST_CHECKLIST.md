@@ -91,13 +91,16 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 ## D. Inventaris
 
 ### Stock Adjustment
+- pastikan pilihan Jenis Item menampilkan Bahan Baku, Semi Finished, dan Produk Jadi
 - tambah adjustment masuk bahan baku non-varian
 - tambah adjustment keluar produk non-varian
+- tambah adjustment masuk Semi Finished non-varian
+- tambah adjustment keluar Semi Finished non-varian
 - pastikan adjustment keluar tidak boleh melebihi `availableStock`
 - tambah adjustment masuk item bervarian
 - tambah adjustment keluar item bervarian
-- pastikan item bervarian wajib memilih varian
-- cek `stock_adjustments`
+- pastikan item bervarian wajib memilih varian, termasuk Semi Finished bervarian
+- cek `stock_adjustments` menyimpan `collectionName` sesuai source item
 - cek inventory log `stock_adjustment`
 - cek sinkronisasi `stock`, `currentStock`, `reservedStock`, `availableStock`, dan total `variants[]`
 
@@ -219,11 +222,14 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 ### Stock Adjustment Final
 - tambah adjustment masuk bahan baku non-varian
 - tambah adjustment keluar bahan baku non-varian dan pastikan stok tidak boleh melebihi `availableStock`
+- tambah adjustment masuk Semi Finished non-varian
+- tambah adjustment keluar Semi Finished non-varian dan pastikan stok tidak boleh melebihi `availableStock`
 - tambah adjustment masuk produk non-varian
 - tambah adjustment keluar produk non-varian dan pastikan stok tidak boleh melebihi `availableStock`
 - tambah adjustment item bervarian dan pastikan varian wajib dipilih
+- tambah adjustment Semi Finished bervarian dan pastikan `variantKey` / `variantLabel` masuk ke `stock_adjustments` dan `inventory_logs`
 - cek `stock`, `currentStock`, `reservedStock`, `availableStock`, dan total `variants[]` tetap sinkron
-- cek record `stock_adjustments` menyimpan `variantKey`, `variantLabel`, `currentStockBefore`, `currentStockAfter`, `availableStockBefore`, dan `availableStockAfter`
+- cek record `stock_adjustments` menyimpan `collectionName`, `variantKey`, `variantLabel`, `currentStockBefore`, `currentStockAfter`, `availableStockBefore`, dan `availableStockAfter`
 - cek `inventory_logs` menyimpan `adjustmentId`, `referenceId`, `referenceType`, `details`, dan snapshot stok sebelum/sesudah
 
 ### Customer Collection Final
@@ -857,11 +863,23 @@ Status: **AKTIF + GUARDED**. Checklist ini menggantikan checklist Auth/Role lama
 - Complete Work Log output bervarian: varian dan operator sama-sama tampil di Stock Management.
 - Cek log legacy tanpa worker metadata: halaman tidak error dan fallback tetap aman.
 
-### Semi Finished variant color rename
-- Edit warna varian Semi Finished dengan stok > 0: `variantKey` tetap, label warna berubah, stok tidak berubah.
-- Edit warna varian dengan `reservedStock` > 0: reserved dan available tetap benar.
-- Coba warna duplikat: validasi harus menolak.
+### Semi Finished generic variant rename
+- Edit nama/label varian Semi Finished dengan stok > 0: `variantKey` tetap, label berubah, stok tidak berubah.
+- Edit nama/label varian dengan `reservedStock` > 0: reserved dan available tetap benar.
+- Coba nama varian duplikat: validasi harus menolak.
 - Buat PO baru setelah rename: dropdown varian menampilkan label baru tanpa mengubah reference lama.
+
+### Variant conversion & Pricing optional
+- [ ] Tambah Product baru tanpa Pricing Rule; default mode Manual dan simpan berhasil tanpa `pricingRuleId`.
+- [ ] Tambah Raw Material baru tanpa Pricing Rule; default mode Manual dan simpan berhasil tanpa `pricingRuleId`.
+- [ ] Pilih mode Rule pada Product/Raw Material; simpan wajib menolak jika Pricing Rule kosong.
+- [ ] Edit Product/Raw/Semi non-varian lama dengan stok 0, reserved 0, available 0; aktifkan varian dan simpan, semua varian baru mulai stok 0.
+- [ ] Edit Product/Raw/Semi non-varian lama dengan stok atau reserved > 0; mode varian tetap terkunci/validasi service menolak konversi.
+- [ ] Tambah varian baru pada item existing bervarian; varian baru tersimpan dengan stok 0 tanpa mengubah stok varian lama.
+- [ ] Rename nama/label varian existing dengan stok > 0; `variantKey`, stok, reserved, dan available tetap sama.
+- [ ] Hapus varian dengan stok/reserved/available > 0; simpan ditolak.
+- [ ] Hapus varian yang stok/reserved/available 0; simpan berhasil dan total master tetap sinkron.
+- [ ] Search/list/detail menampilkan label varian fleksibel seperti Warna, Ukuran, Tipe, Motif, atau Spesifikasi.
 
 ### Sidebar nested accordion
 - Buka root menu lain lalu Produksi; root sebelumnya harus tertutup.

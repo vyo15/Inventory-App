@@ -4,7 +4,7 @@
 // Tidak dijual ke customer
 // Revisi:
 // - Master item tetap ringkas
-// - Stok disimpan per varian warna
+// - Stok disimpan per varian fleksibel
 // - Total master dihitung otomatis dari seluruh varian
 // =====================================================
 
@@ -47,7 +47,6 @@ import {
   SEMI_FINISHED_CATEGORIES,
   SEMI_FINISHED_CATEGORY_MAP,
   SEMI_FINISHED_COLOR_MAP,
-  SEMI_FINISHED_COLOR_OPTIONS,
   SEMI_FINISHED_GROUP_OPTIONS,
   SEMI_FINISHED_GROUP_MAP,
 } from "../../constants/semiFinishedMaterialOptions";
@@ -97,6 +96,7 @@ const buildFormValues = (record = {}) => {
     ...DEFAULT_SEMI_FINISHED_FORM,
     ...record,
     hasVariants,
+    variantLabel: record.variantLabel || 'Varian',
     variants: normalizeFormVariants(record.variants || [], hasVariants),
     currentStock: hasVariants ? totals.currentStock : Number(record.currentStock || 0),
     reservedStock: hasVariants ? totals.reservedStock : Number(record.reservedStock || 0),
@@ -117,22 +117,22 @@ const buildFormValues = (record = {}) => {
 
 // -----------------------------------------------------------------------------
 // Helper tampilan stok.
-// Dipakai bersama oleh tabel list dan drawer detail supaya format angka, warna,
+// Dipakai bersama oleh tabel list dan drawer detail supaya format angka, varian,
 // dan ringkasan varian selalu konsisten di seluruh halaman.
 // -----------------------------------------------------------------------------
 const formatStockWithUnit = (value, unit = "pcs") => `${formatNumber(value)} ${unit}`;
 
 const getVariantDisplayLabel = (variant = {}, index = 0) =>
-  SEMI_FINISHED_COLOR_MAP[variant.color] || variant.color || `Varian ${index + 1}`;
+  variant.variantLabel || variant.label || variant.name || SEMI_FINISHED_COLOR_MAP[variant.color] || variant.color || `Varian ${index + 1}`;
 
 // -----------------------------------------------------------------------------
 // Helper tampilan varian pada kolom stok.
-// Semua varian warna ditampilkan langsung dalam bentuk pill supaya user tidak
-// perlu membuka detail hanya untuk membaca rincian stok per warna.
+// Semua varian ditampilkan langsung dalam bentuk pill supaya user tidak
+// perlu membuka detail hanya untuk membaca rincian stok per varian.
 // -----------------------------------------------------------------------------
 const renderVariantStockPills = (variants = [], unit = "pcs") => {
   const normalizedVariants = Array.isArray(variants)
-    ? variants.filter((variant) => String(variant?.color || "").trim())
+    ? variants.filter((variant) => String(variant?.variantLabel || variant?.name || variant?.color || "").trim())
     : [];
 
   if (normalizedVariants.length === 0) {
@@ -145,7 +145,7 @@ const renderVariantStockPills = (variants = [], unit = "pcs") => {
         const variantLabel = getVariantDisplayLabel(variant, index);
 
         return (
-          <span key={`${variant.color || "variant"}-${index}`} className="stock-variant-pill">
+          <span key={`${variant.variantKey || variant.color || "variant"}-${index}`} className="stock-variant-pill">
             <Typography.Text className="stock-variant-pill-label">
               {`${variantLabel}:`}
             </Typography.Text>
@@ -207,6 +207,13 @@ const SemiFinishedMaterials = () => {
   // IMS NOTE [GUARDED | behavior-preserving]: flag edit dipakai untuk mengunci stok semi finished.
   // Hubungan flow: stok semi finished dipakai produksi, jadi edit master tidak boleh menjadi jalur mutasi.
   const isEditingMaterial = Boolean(editingMaterial?.id);
+  const editingMaterialHasVariants = Boolean(editingMaterial?.hasVariants || (editingMaterial?.variants || []).length > 0);
+  const canActivateVariantsForEditing = isEditingMaterial
+    && !editingMaterialHasVariants
+    && Number(editingMaterial?.currentStock ?? editingMaterial?.stock ?? 0) <= 0
+    && Number(editingMaterial?.reservedStock || 0) <= 0
+    && Number(editingMaterial?.availableStock ?? 0) <= 0;
+  const hasVariantModeSwitchLocked = isEditingMaterial && !canActivateVariantsForEditing;
   const stockEditHelpText = 'Ubah stok lewat Stock Management / Stock Adjustment / transaksi resmi.';
 
   // ---------------------------------------------------------------------------
@@ -236,6 +243,7 @@ const SemiFinishedMaterials = () => {
   // tanpa harus menunggu user menekan tombol simpan.
   // ---------------------------------------------------------------------------
   const hasVariantsValue = Form.useWatch("hasVariants", form);
+  const variantLabelValue = Form.useWatch("variantLabel", form);
   const watchedVariants = Form.useWatch("variants", form);
   const watchedCurrentStock = Form.useWatch("currentStock", form) || 0;
   const watchedReservedStock = Form.useWatch("reservedStock", form) || 0;
@@ -290,7 +298,7 @@ const SemiFinishedMaterials = () => {
     return materials.filter((item) => {
       const searchText = search.trim().toLowerCase();
       const variantColorTexts = Array.isArray(item.variants)
-        ? item.variants.map((variant) => SEMI_FINISHED_COLOR_MAP[variant.color] || variant.color)
+        ? item.variants.map((variant, index) => getVariantDisplayLabel(variant, index))
         : [];
 
       const matchSearch =
@@ -357,6 +365,7 @@ const SemiFinishedMaterials = () => {
       const payload = {
         ...values,
         hasVariants: values.hasVariants === true,
+        variantLabel: values.hasVariants === true ? values.variantLabel || 'Varian' : '',
         variants: normalizeFormVariants(values.variants || [], values.hasVariants === true),
         maxStockTarget:
           values.maxStockTarget === null || values.maxStockTarget === undefined
@@ -569,7 +578,7 @@ const SemiFinishedMaterials = () => {
       {/* AKTIF / GUARDED: migrasi header ke shared produksi agar konsisten, tanpa ubah flow CRUD semi finished material. */}
       <ProductionPageHeader
         title="Semi Finished Materials"
-        description="Master stok internal produksi dengan varian warna, tidak dijual ke customer."
+        description="Master stok internal produksi dengan varian fleksibel, tidak dijual ke customer."
         onRefresh={loadData}
         onAdd={handleAdd}
         addLabel="Tambah Item"
@@ -590,7 +599,7 @@ const SemiFinishedMaterials = () => {
       <ProductionFilterCard>
           <Col xs={24} md={8}>
             <Input
-              placeholder="Cari kode, nama, deskripsi, warna..."
+              placeholder="Cari kode, nama, deskripsi, varian..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               allowClear
@@ -641,7 +650,7 @@ const SemiFinishedMaterials = () => {
       {/* ------------------------------------------------------------------ */}
       <PageSection
         title="Daftar Semi Finished Materials"
-        subtitle="Tabel ini merangkum stok master dan varian warna untuk kebutuhan produksi internal."
+        subtitle="Tabel ini merangkum stok master dan varian fleksibel untuk kebutuhan produksi internal."
       >
         <Table
           // AKTIF / GUARDED UI: class standar hanya menyamakan surface table; flow semi finished material dan produksi tidak diubah.
@@ -762,10 +771,41 @@ const SemiFinishedMaterials = () => {
             label="Pakai Varian"
             name="hasVariants"
             valuePropName="checked"
-            extra={isEditingMaterial ? 'Mode varian dikunci setelah item dibuat agar bucket stok produksi tidak berubah tanpa audit.' : undefined}
+            extra={isEditingMaterial
+              ? canActivateVariantsForEditing
+                ? 'Semi Product lama dengan stok 0 boleh mulai memakai varian. Semua varian baru tetap stok 0.'
+                : 'Mode varian dikunci setelah item dibuat agar bucket stok produksi tidak berubah tanpa audit.'
+              : undefined}
           >
-            <Switch checkedChildren="Ya" unCheckedChildren="Tidak" disabled={isEditingMaterial} />
+            <Switch
+              checkedChildren="Ya"
+              unCheckedChildren="Tidak"
+              disabled={hasVariantModeSwitchLocked}
+              onChange={(checked) => {
+                if (hasVariantModeSwitchLocked) return;
+                if (checked) {
+                  form.setFieldsValue({
+                    variantLabel: form.getFieldValue('variantLabel') || 'Varian',
+                    variants: normalizeFormVariants(form.getFieldValue('variants') || [], true),
+                    currentStock: isEditingMaterial ? 0 : form.getFieldValue('currentStock'),
+                    reservedStock: isEditingMaterial ? 0 : form.getFieldValue('reservedStock'),
+                  });
+                } else {
+                  form.setFieldsValue({ variants: [], variantLabel: 'Varian' });
+                }
+              }}
+            />
           </Form.Item>
+
+          {hasVariantsValue ? (
+            <Form.Item
+              label="Label Varian"
+              name="variantLabel"
+              extra="AKTIF: label ini hanya metadata tampilan. Contoh: Warna, Ukuran, Tipe, Motif, Spesifikasi."
+            >
+              <Input placeholder="Contoh: Warna" />
+            </Form.Item>
+          ) : null}
 
           <Divider orientation="left">{hasVariantsValue ? "Varian & Stok" : "Stok Master"}</Divider>
 
@@ -774,12 +814,14 @@ const SemiFinishedMaterials = () => {
             type="info"
             showIcon
             message={isEditingMaterial
-              ? stockEditHelpText
+              ? canActivateVariantsForEditing
+                ? 'Semi Product lama ini stoknya 0, jadi boleh mulai memakai varian. Stok tiap varian baru tetap 0 sampai diubah lewat Stock Adjustment/produksi/transaksi resmi.'
+                : stockEditHelpText
               : hasVariantsValue
-                ? "Gunakan 1 master item untuk 1 jenis komponen. Tambahkan warna sebagai varian di bawahnya agar data tetap rapi. Total stok item akan dihitung otomatis dari semua varian."
+                ? "Gunakan 1 master item untuk 1 jenis komponen. Tambahkan nama varian sesuai label seperti Warna, Ukuran, Tipe, Motif, atau Spesifikasi. Total stok item dihitung otomatis dari semua varian."
                 : "Item tanpa varian memakai stok awal langsung di master semi finished material."}
             description={isEditingMaterial && hasVariantsValue
-              ? "Mengubah warna hanya mengganti label tampilan varian. Bucket stok/reference tetap dijaga melalui variantKey existing."
+              ? "Mengubah nama varian hanya mengganti label tampilan. Bucket stok/reference tetap dijaga melalui variantKey existing."
               : undefined}
           />
 
@@ -791,14 +833,14 @@ const SemiFinishedMaterials = () => {
                   <Card
                     key={field.key}
                     size="small"
-                    title={`Varian ${index + 1}`}
+                    title={`${variantLabelValue || 'Varian'} ${index + 1}`}
                     extra={
                       fields.length > 1 ? (
                         <Button
                           danger
                           size="small"
                           icon={<DeleteOutlined />}
-                          disabled={isEditingMaterial}
+                          disabled={fields.length === 1}
                           onClick={() => remove(field.name)}
                         >
                           Hapus Varian
@@ -808,31 +850,20 @@ const SemiFinishedMaterials = () => {
                   >
                     <Row gutter={16}>
                       {/* IMS NOTE [GUARDED | identity-safe]: hidden identity field
-                          menjaga variantKey lama tetap terkirim saat warna diganti.
+                          menjaga variantKey lama tetap terkirim saat nama varian diganti.
                           Hubungan flow: service memakai key ini untuk preserve bucket
                           stok/reference PO/Work Log. STATUS: AKTIF. */}
                       <Form.Item name={[field.name, "variantKey"]} hidden>
                         <Input />
                       </Form.Item>
-                      <Form.Item name={[field.name, "variantLabel"]} hidden>
-                        <Input />
-                      </Form.Item>
-                      <Form.Item name={[field.name, "name"]} hidden>
-                        <Input />
-                      </Form.Item>
-
                       <Col xs={24} md={8}>
                         <Form.Item
                           {...field}
-                          label="Nama Varian"
+                          label={`Nama ${variantLabelValue || 'Varian'}`}
                           name={[field.name, "color"]}
-                          rules={[{ required: true, message: "Nama varian wajib dipilih" }]}
+                          rules={[{ required: true, message: "Nama varian wajib diisi" }]}
                         >
-                          <Select
-                            showSearch
-                            options={SEMI_FINISHED_COLOR_OPTIONS}
-                            placeholder="Pilih warna"
-                          />
+                          <Input placeholder="Contoh: Merah, Ukuran S, Motif Polkadot" />
                         </Form.Item>
                       </Col>
 
@@ -905,7 +936,6 @@ const SemiFinishedMaterials = () => {
                 <Button
                   type="dashed"
                   icon={<PlusOutlined />}
-                  disabled={isEditingMaterial}
                   onClick={() => add({ ...DEFAULT_SEMI_FINISHED_VARIANT })}
                   block
                 >
@@ -1137,7 +1167,7 @@ const SemiFinishedMaterials = () => {
               <Descriptions.Item label="Jenis Bunga">
                 {SEMI_FINISHED_GROUP_MAP[selectedMaterial.flowerGroup] || "-"}
               </Descriptions.Item>
-              <Descriptions.Item label="Varian Aktif">
+              <Descriptions.Item label={selectedMaterial.variantLabel || "Varian Aktif"}>
                 {formatNumber(selectedMaterial.activeVariantCount)} / {formatNumber(
                   selectedMaterial.variantCount,
                 )}
@@ -1181,16 +1211,16 @@ const SemiFinishedMaterials = () => {
             <Card title="Rincian Varian Semi Finished" size="small">
               <Table
                 size="small"
-                rowKey={(record, index) => `${record.color}-${index}`}
+                rowKey={(record, index) => `${record.variantKey || record.color}-${index}`}
                 pagination={false}
                 dataSource={selectedMaterialVariants}
                 locale={{ emptyText: "Belum ada varian" }}
                 columns={[
                   {
-                    title: "Warna",
+                    title: selectedMaterial.variantLabel || "Varian",
                     dataIndex: "color",
                     key: "color",
-                    render: (value) => SEMI_FINISHED_COLOR_MAP[value] || value || "-",
+                    render: (_, variant, index) => getVariantDisplayLabel(variant, index),
                   },
                   {
                     title: "Kode Variant",

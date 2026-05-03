@@ -90,7 +90,7 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 ## Update Prompt Guard Setelah Cleanup — 2026-04-25
 - Untuk mutasi stok umum, prioritaskan `updateInventoryStock()` dan jangan update `stock/currentStock/variants[]` langsung dari page.
 - Jika item bervarian, caller wajib mengirim `variantKey` kecuali sedang menangani data legacy dengan alasan eksplisit.
-- Stock Adjustment wajib memakai Firestore transaction atau guard setara agar record adjustment, mutasi stok, dan inventory log tidak partial; validasi keluar harus berbasis `availableStock`, bukan hanya `currentStock`.
+- Stock Adjustment wajib memakai Firestore transaction atau guard setara agar record adjustment, mutasi stok, dan inventory log tidak partial; validasi keluar harus berbasis `availableStock`, bukan hanya `currentStock`; source item wajib dicek untuk `raw_materials`, `semi_finished_materials`, dan `products`.
 - `customers` lowercase adalah collection final customer. `Customers` uppercase harus dianggap legacy/test data kecuali ada bukti baru.
 - Inventory log baru sebaiknya mengirim `referenceId`, `referenceType`, dan detail transaksi agar Stock Management bisa menampilkan audit trail jelas.
 - Produksi final tetap guarded exception dan tidak boleh dipaksa memakai helper stok umum jika transaction produksi memang dibutuhkan.
@@ -131,7 +131,7 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 
 ## Prompt Guard Final Cleanup Task 6
 - Jika task menyentuh Stock Management, jangan hapus kolom Referensi Audit; rapikan labelnya agar manusiawi dan pertahankan ID teknis sebagai detail sekunder.
-- Jika task menyentuh Stock Adjustment, angka bulat tidak boleh tampil `.00`, adjustment keluar wajib berbasis `availableStock`, dan riwayat terbaru harus di atas.
+- Jika task menyentuh Stock Adjustment, angka bulat tidak boleh tampil `.00`, adjustment keluar wajib berbasis `availableStock`, riwayat terbaru harus di atas, dan item bervarian dari Bahan Baku/Semi Finished/Produk Jadi wajib memilih `variantKey`.
 - Jika task menyentuh Production Order create drawer, jangan hilangkan preview compact stok target dan kebutuhan material; preview tetap read-only dan PO final tetap dihitung dari BOM/helper final.
 - Jika task menyentuh Work Log complete/cost, perlakukan area ini guarded: jangan double posting stok, jangan double payroll, jangan isi cost asal, dan jangan ubah HPP tanpa cek completed Work Log cost final.
 - Jika task menyentuh Payroll Produksi, pertahankan auto payroll dari Work Log completed dan auto expense dari payroll paid dengan guard idempotent.
@@ -397,6 +397,8 @@ Status: **AKTIF + GUARDED**. Gunakan section ini untuk semua task yang menyentuh
 - Untuk task berikutnya, default format angka IMS adalah tanpa decimal. Jangan menambahkan `precision={2}`, `step={0.01}`, `toFixed(2)`, atau `maximumFractionDigits: 2` tanpa business rule eksplisit.
 - Jika task menyentuh Production Order, BOM, Work Log, atau material bervarian, wajib cek `targetVariantKey`, `targetVariantLabel`, `materialVariantStrategy`, `resolvedVariantKey`, `resolvedVariantLabel`, dan larangan fallback master/default.
 - Jika task menyentuh complete Work Log atau Stock Management, wajib cek idempotency output stock, `production_output_in`, dan metadata audit worker/operator.
-- Jika task menyentuh Semi Finished variant, `variantKey` harus diperlakukan sebagai identitas bucket stok/reference. Rename warna hanya boleh mengubah label/metadata.
+- Jika task menyentuh variant Product/Raw/Semi, `variantKey` harus diperlakukan sebagai identitas bucket stok/reference. Rename nama/label varian hanya boleh mengubah metadata.
+- Jangan membuka toggle `hasVariants` edit biasa tanpa guard. Data lama non-varian hanya boleh aktif varian jika stok/reserved/available 0; stok lama yang masih ada harus dialihkan lewat flow audit resmi.
+- Pricing Rules harus tetap opsional: default create Product/Raw Material Manual, dan `pricingRuleId` hanya wajib saat mode Rule.
 - Untuk merge beberapa ZIP patch, jangan overwrite file overlap mentah. Bandingkan patch terhadap baseline terbaru, merge manual file konflik, dan hasil akhir tetap ZIP berisi changed files only.
 

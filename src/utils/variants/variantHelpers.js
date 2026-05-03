@@ -190,7 +190,9 @@ export const validateDuplicateVariantValues = (variants = [], options = {}) => {
 export const validateDuplicateVariantColors = (variants = []) =>
   validateDuplicateVariantValues(variants, {
     keyField: 'color',
-    duplicateMessage: 'Warna tidak boleh duplikat',
+    // IMS NOTE [AKTIF | generic-variant]: helper legacy color kini memakai
+    // pesan generic karena Product/Semi dapat memakai label varian fleksibel.
+    duplicateMessage: 'Nama varian tidak boleh duplikat',
   });
 
 export const formatVariantSummary = (item = {}, options = {}) => {

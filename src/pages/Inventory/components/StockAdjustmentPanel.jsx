@@ -39,6 +39,66 @@ import {
 
 const { Option } = Select;
 
+
+// =========================
+// SECTION: Konfigurasi sumber item Stock Adjustment
+// Fungsi blok:
+// - menyatukan mapping itemType UI ke collection Firestore dan label riwayat adjustment.
+// Hubungan flow aplikasi:
+// - Stock Adjustment resmi sekarang mendukung Bahan Baku, Semi Finished, dan Produk Jadi tanpa mengubah flow produksi/HPP/transaksi lain.
+// Alasan logic dipakai:
+// - mapping terpusat mencegah item Semi Finished jatuh ke fallback Produk/default saat transaction membuat stock_adjustments dan inventory_logs.
+// Status logic: AKTIF / GUARDED untuk submit Stock Adjustment lintas source.
+// =========================
+const STOCK_ADJUSTMENT_ITEM_TYPE_CONFIG = {
+  raw_material: {
+    label: "Bahan Baku",
+    tagColor: "gold",
+    collectionName: "raw_materials",
+  },
+  semi_finished: {
+    label: "Semi Finished",
+    tagColor: "purple",
+    collectionName: "semi_finished_materials",
+  },
+  product: {
+    label: "Produk Jadi",
+    tagColor: "blue",
+    collectionName: "products",
+  },
+};
+
+const resolveStockAdjustmentItemTypeConfig = ({ itemType = "", collectionName = "" } = {}) => {
+  if (STOCK_ADJUSTMENT_ITEM_TYPE_CONFIG[itemType]) {
+    return STOCK_ADJUSTMENT_ITEM_TYPE_CONFIG[itemType];
+  }
+
+  return (
+    Object.values(STOCK_ADJUSTMENT_ITEM_TYPE_CONFIG).find(
+      (config) => config.collectionName === collectionName,
+    ) || {
+      label: "Item Lainnya",
+      tagColor: "default",
+      collectionName: collectionName || "",
+    }
+  );
+};
+
+const buildVariantStockSnapshot = (variant = {}) => {
+  const currentStock = Number(variant.currentStock ?? variant.stock ?? 0);
+  const reservedStock = Number(variant.reservedStock || 0);
+  const availableStock = Number(
+    variant.availableStock ?? Math.max(currentStock - reservedStock, 0),
+  );
+
+  return {
+    label: variant.variantLabel,
+    currentStock,
+    reservedStock,
+    availableStock,
+  };
+};
+
 // =========================
 // SECTION: Helper satuan qty bulat
 // Fungsi:
@@ -140,6 +200,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // =========================
   const [stockAdjustmentRecords, setStockAdjustmentRecords] = useState([]);
   const [rawMaterials, setRawMaterials] = useState([]);
+  const [semiFinishedMaterials, setSemiFinishedMaterials] = useState([]);
   const [finishedProducts, setFinishedProducts] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -154,7 +215,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // =========================
   // SECTION: Live data subscription
   // Fungsi:
-  // - membaca stock_adjustments, raw_materials, dan products secara realtime
+  // - membaca stock_adjustments, raw_materials, semi_finished_materials, dan products secara realtime
   // Hubungan flow:
   // - panel adjustment selalu memakai data master terbaru yang juga dipakai audit Manajemen Stok
   // Status:
@@ -185,6 +246,18 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
       },
     );
 
+    const unsubscribeSemiFinishedMaterials = onSnapshot(
+      collection(db, "semi_finished_materials"),
+      (snapshot) => {
+        const nextSemiFinishedMaterials = snapshot.docs.map((documentItem) => ({
+          id: documentItem.id,
+          ...documentItem.data(),
+        }));
+
+        setSemiFinishedMaterials(nextSemiFinishedMaterials);
+      },
+    );
+
     const unsubscribeFinishedProducts = onSnapshot(
       collection(db, "products"),
       (snapshot) => {
@@ -200,6 +273,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
     return () => {
       unsubscribeAdjustments();
       unsubscribeRawMaterials();
+      unsubscribeSemiFinishedMaterials();
       unsubscribeFinishedProducts();
     };
   }, []);
@@ -234,7 +308,16 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // Status:
   // - aktif dipakai; bukan legacy
   // =========================
-  const availableItems = selectedItemType === "product" ? finishedProducts : rawMaterials;
+  const stockSourceItemsByType = useMemo(
+    () => ({
+      raw_material: rawMaterials,
+      semi_finished: semiFinishedMaterials,
+      product: finishedProducts,
+    }),
+    [finishedProducts, rawMaterials, semiFinishedMaterials],
+  );
+
+  const availableItems = stockSourceItemsByType[selectedItemType] || [];
 
   const selectedItem = useMemo(
     () => availableItems.find((item) => item.id === selectedItemId) || null,
@@ -271,12 +354,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
     if (selectedItemHasVariants) {
       if (!selectedVariant) return null;
 
-      return {
-        label: selectedVariant.variantLabel,
-        currentStock: Number(selectedVariant.currentStock || 0),
-        reservedStock: Number(selectedVariant.reservedStock || 0),
-        availableStock: Number(selectedVariant.availableStock || 0),
-      };
+      return buildVariantStockSnapshot(selectedVariant);
     }
 
     return {
@@ -307,13 +385,19 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
     setIsSubmitting(true);
 
     try {
-      const isRawMaterial = values.itemType === "raw_material";
-      const sourceCollectionName = isRawMaterial ? "raw_materials" : "products";
-      const sourceItems = isRawMaterial ? rawMaterials : finishedProducts;
+      const selectedItemTypeConfig = resolveStockAdjustmentItemTypeConfig({
+        itemType: values.itemType,
+      });
+      const sourceCollectionName = selectedItemTypeConfig.collectionName;
+      const sourceItems = stockSourceItemsByType[values.itemType] || [];
       const selectedSourceItem = sourceItems.find((item) => item.id === values.itemId);
       const adjustmentQuantity = Number(values.quantity || 0);
       const finalQuantityChange =
         values.adjustmentType === "out" ? -adjustmentQuantity : adjustmentQuantity;
+
+      if (!sourceCollectionName) {
+        throw new Error("Jenis item penyesuaian stok tidak valid.");
+      }
 
       if (!selectedSourceItem) {
         throw new Error("Item tidak ditemukan");
@@ -360,18 +444,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         }
 
         const sourceStockSnapshot = selectedSourceVariant
-          ? {
-              currentStock: Number(selectedSourceVariant.currentStock || 0),
-              reservedStock: Number(selectedSourceVariant.reservedStock || 0),
-              availableStock: Number(
-                selectedSourceVariant.availableStock ??
-                  Math.max(
-                    Number(selectedSourceVariant.currentStock || 0) -
-                      Number(selectedSourceVariant.reservedStock || 0),
-                    0,
-                  ),
-              ),
-            }
+          ? buildVariantStockSnapshot(selectedSourceVariant)
           : getItemStockSnapshot(latestSourceItem);
 
         if (values.adjustmentType === "out" && adjustmentQuantity > sourceStockSnapshot.availableStock) {
@@ -402,6 +475,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         const adjustmentPayload = {
           date: Timestamp.fromDate(values.date.toDate()),
           itemType: values.itemType,
+          itemTypeLabel: selectedItemTypeConfig.label,
           collectionName: sourceCollectionName,
           itemId: values.itemId,
           itemName: latestSourceItem.name,
@@ -432,6 +506,9 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
             adjustmentId: adjustmentReference.id,
             referenceId: adjustmentReference.id,
             referenceType: "stock_adjustment",
+            itemType: values.itemType,
+            itemTypeLabel: selectedItemTypeConfig.label,
+            collectionName: sourceCollectionName,
             reason: values.reason || "",
             note: values.note || "",
             currentStockBefore: sourceStockSnapshot.currentStock,
@@ -483,8 +560,14 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         title: "Jenis Item",
         dataIndex: "itemType",
         key: "itemType",
-        render: (value) =>
-          value === "raw_material" ? <Tag color="gold">Bahan Baku</Tag> : <Tag color="blue">Produk</Tag>,
+        render: (value, record) => {
+          const itemTypeConfig = resolveStockAdjustmentItemTypeConfig({
+            itemType: value,
+            collectionName: record.collectionName,
+          });
+
+          return <Tag color={itemTypeConfig.tagColor}>{itemTypeConfig.label}</Tag>;
+        },
       },
       {
         title: "Nama Item",
@@ -601,6 +684,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               }}
             >
               <Option value="raw_material">Bahan Baku</Option>
+              <Option value="semi_finished">Semi Finished</Option>
               <Option value="product">Produk Jadi</Option>
             </Select>
           </Form.Item>

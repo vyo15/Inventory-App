@@ -422,9 +422,10 @@ Flow aktif Stock Management:
 3. Kolom `Stok` generic tidak ditampilkan selama snapshot belum reliable.
 4. Panel Penyesuaian Stok menjadi entry point adjustment manual resmi.
 5. Saat adjustment disimpan, Firestore transaction melakukan commit bersama:
-   - update item di `raw_materials` atau `products`;
+   - update item di `raw_materials`, `semi_finished_materials`, atau `products`;
    - set `stock_adjustments/{adjustmentId}`;
    - set `inventory_logs/{logId}` dengan `referenceType: stock_adjustment`.
+6. Semi Finished bervarian wajib mengirim `variantKey` agar update stok masuk ke bucket varian, bukan master/default.
 
 Batas integrasi:
 - Purchases, Sales, Returns, Production, Payroll, Dashboard, dan Reports tidak ikut diubah saat task hanya Stock Management.
@@ -569,7 +570,9 @@ Setelah publish `firestore.rules` atau mengubah role access, wajib test login ad
 - `productionOrdersService.js` → `productionWorkLogsService.js`: `materialRequirementLines` PO menjadi kontrak `materialUsages` saat Start Production.
 - `productionWorkLogsService.js` → `inventory_logs`: complete Work Log output menulis `production_output_in` beserta metadata Work Log/PO/step/varian/operator.
 - `inventory_logs` → `StockManagement.jsx`: Stock Management menampilkan audit operator produksi dari metadata log baru, dengan fallback untuk log lama.
-- `SemiFinishedMaterials.jsx` → `semiFinishedMaterialsService.js`: form edit mengirim identity varian existing supaya rename warna tidak membuat bucket stok baru.
+- `Products.jsx` / `RawMaterials.jsx` / `SemiFinishedMaterials.jsx` → service master masing-masing: data lama non-varian hanya boleh aktif varian saat stok/reserved/available 0; varian baru existing mulai stok 0; `variantKey` existing dipreserve.
+- `Products.jsx` / `RawMaterials.jsx` → service master masing-masing: Pricing Rules opsional, default create Manual, `pricingRuleId` hanya wajib saat mode Rule.
+- `SemiFinishedMaterials.jsx` → `semiFinishedMaterialsService.js`: form edit mengirim identity varian existing supaya rename nama/label varian tidak membuat bucket stok baru.
 - `SidebarMenu.jsx`: hanya mengatur openKeys nested accordion di UI, tidak menyentuh route, role access, atau service.
 - `Login.jsx` / `Login.css`: hanya cleanup copy teknis login, tidak menyentuh AuthContext, Firebase Auth, `system_users`, atau RBAC.
 

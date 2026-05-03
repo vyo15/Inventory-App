@@ -119,7 +119,7 @@ Saat membuat perubahan baru, selalu cek apakah perubahan menyentuh salah satu ar
 
 ## Final Documentation Lock — Task 6
 Status cleanup bertahap yang dikunci di docs:
-- **Aktif:** Stock Management adalah satu entry point inventory; Stock Adjustment berada di dalamnya dan wajib memakai format angka Indonesia tanpa trailing `.00`.
+- **Aktif:** Stock Management adalah satu entry point inventory; Stock Adjustment berada di dalamnya, mendukung Bahan Baku, Semi Finished, dan Produk Jadi, serta wajib memakai format angka Indonesia tanpa trailing `.00`.
 - **Aktif:** Kolom Referensi Audit di Stock Management adalah audit source, bukan kolom tidak berguna; tampilannya harus manusiawi dan ID teknis hanya detail sekunder.
 - **Aktif:** Production Order create drawer memakai preview compact read-only untuk stok target, varian target, qty batch, estimasi output, kebutuhan material, stok material, dan status cukup/kurang.
 - **Guarded:** Completed Work Log harus menjaga material cost, labor cost, total cost, cost per good unit, output stock posting, dan auto payroll agar tidak diproses dua kali.
@@ -143,9 +143,11 @@ Status cleanup bertahap yang dikunci di docs:
 - **Guarded:** setelah data master dibuat, field stok fisik tidak boleh diedit langsung dari form edit master. Mutasi stok wajib lewat Stock Management / Stock Adjustment / flow transaksi resmi agar audit trail, `stock_adjustments`, dan `inventory_logs` tetap jelas.
 - **Guarded:** field yang dikunci dari edit master mencakup `stock`, `currentStock`, `reservedStock`, `availableStock`, serta `variants[].stock`, `variants[].currentStock`, `variants[].reservedStock`, dan `variants[].availableStock`.
 - **Aktif:** edit master tetap boleh mengubah metadata non-stok seperti nama, kategori, harga, supplier manual/reference non-stok, SKU/kode/label, deskripsi, status aktif, dan `minStock` / `minStockAlert`.
-- **Guarded:** mode `hasVariants` dikunci saat edit karena perubahan mode varian setelah ada data dapat menghapus atau memindahkan bucket stok tanpa audit.
+- **Guarded:** mode `hasVariants` tetap dikunci untuk edit biasa, tetapi data lama non-varian boleh mulai memakai varian lewat flow aman hanya jika `stock/currentStock`, `reservedStock`, dan `availableStock` semuanya 0.
+- **Guarded:** varian baru pada item existing wajib mulai dari stok 0; stok fisik tetap harus masuk lewat Stock Management / Stock Adjustment / transaksi resmi.
+- **Guarded:** item lama yang masih punya stok master atau reserved stock tidak boleh dikonversi otomatis ke varian karena itu akan memindahkan bucket stok tanpa audit.
 - **Legacy:** field `stock` tetap disimpan sebagai alias/compatibility dan tidak boleh dihapus dari dokumen.
-- **Cleanup candidate:** Semi Finished Material belum masuk Stock Adjustment manual; koreksi manual semi finished perlu task terpisah bila owner ingin menjadikannya flow resmi.
+- **Aktif:** Stock Adjustment resmi mendukung `raw_materials`, `semi_finished_materials`, dan `products`. Semi Finished non-varian/bervarian dapat dikoreksi lewat Stock Management dengan transaction, `stock_adjustments`, dan `inventory_logs`.
 - **Docs lock:** task berikutnya tidak boleh membuka kembali direct edit stok master kecuali ada business rule baru, audit trail baru, dan approval eksplisit.
 
 ## Update Batch Fix Bug Merge — 2026-05-03
@@ -153,7 +155,8 @@ Status cleanup bertahap yang dikunci di docs:
 - **Aktif:** format angka operasional diarahkan tanpa desimal melalui formatter dan input UI aktif; data lama yang sudah memiliki decimal tidak dimigrasi otomatis.
 - **Guarded:** Production Order bervarian tidak boleh fallback diam-diam ke stok master/default. Preview PO dan Start Production harus memakai kontrak varian material yang sama.
 - **Guarded:** completed Work Log tetap hanya boleh posting output stock satu kali, tetapi inventory log output produksi baru menyimpan snapshot operator/worker agar audit di Stock Management lebih jelas.
-- **Guarded:** edit warna varian Semi Finished adalah rename label/metadata; `variantKey` tetap menjadi identitas bucket stok/reference dan stok varian tidak boleh reset.
+- **Guarded:** edit nama/label varian Product, Raw Material, dan Semi Finished hanya mengganti metadata tampilan; `variantKey` tetap menjadi identitas bucket stok/reference dan stok varian tidak boleh reset.
+- **Aktif:** Pricing Rules opsional saat create Product/Raw Material. Mode default create adalah Manual; `pricingRuleId` hanya wajib saat user memilih mode Rule.
 - **Aktif:** sidebar memakai nested accordion agar sibling submenu otomatis tertutup tanpa mengubah route, role access, atau business flow.
 - **Aktif:** login normal tidak lagi menampilkan copy teknis internal Firebase/Auth/Firestore, tanpa mengubah flow Auth dan `system_users`.
 
