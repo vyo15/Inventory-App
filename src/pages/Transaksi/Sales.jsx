@@ -13,13 +13,13 @@ import {
   Space,
   InputNumber,
   Popconfirm,
-  Alert,
 } from "antd";
 import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { db } from "../../firebase";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import {
   collection,
   addDoc,
@@ -32,7 +32,6 @@ import {
   orderBy,
   doc,
   updateDoc,
-  writeBatch,
 } from "firebase/firestore";
 import {
   addInventoryLog,
@@ -144,32 +143,32 @@ const Sales = () => {
     sellableItems.filter((item) => item.collectionName === itemType);
 
   useEffect(() => {
-    fetchSales(activeTabKey);
+    fetchSales();
     fetchProducts();
     fetchRawMaterials();
     fetchCustomers();
-  }, [activeTabKey]);
+  }, []);
 
   // =========================
-  // SECTION: Ambil data penjualan berdasarkan tab/status
+  // SECTION: Ambil semua data penjualan
   // =========================
-  const fetchSales = async (statusFilter) => {
+  const fetchSales = async () => {
     setIsLoading(true);
+
+    // IMS NOTE [GUARDED] - Clear state sebelum fetch ulang Sales.
+    // Fungsi blok: mencegah row lama terlihat saat data penjualan dimuat ulang.
+    // Hubungan flow Sales: hanya menjaga tampilan tabel; status transition, stock mutation, income timing, dan cancel/delete tidak diubah.
+    // Alasan logic: Sales tab harus menjadi source UX yang aman agar Dikirim/Selesai/Dibatalkan tidak saling tampil karena state stale.
+    setSalesRecords([]);
 
     try {
       const salesCollection = collection(db, "sales");
-      let salesQuery;
 
-      if (statusFilter === "all") {
-        salesQuery = query(salesCollection, orderBy("createdAt", "desc"));
-      } else {
-        salesQuery = query(
-          salesCollection,
-          where("status", "==", statusFilter),
-          orderBy("createdAt", "desc"),
-        );
-      }
-
+      // IMS NOTE [AKTIF/GUARDED] - Sales difetch satu source lalu difilter client-side.
+      // Fungsi blok: menghindari tab status kosong karena query per-status/index Firestore gagal.
+      // Hubungan flow: hanya strategi read tabel/summary; status transition, stok, income, cancel, dan payload Firestore tidak berubah.
+      // Alasan logic: semua tab membaca dataset yang sama, lalu activeTabKey menjaga row sesuai status aktif. Behavior official accounting tetap dari status Selesai.
+      const salesQuery = query(salesCollection, orderBy("createdAt", "desc"));
       const salesSnapshot = await getDocs(salesQuery);
 
       const fetchedSalesRecords = salesSnapshot.docs.map((documentItem) => {
@@ -189,6 +188,7 @@ const Sales = () => {
     } catch (error) {
       console.error("Gagal mengambil data penjualan:", error);
       message.error("Gagal mengambil data penjualan.");
+      setSalesRecords([]);
     } finally {
       setIsLoading(false);
     }
@@ -655,7 +655,7 @@ const Sales = () => {
       message.success("Penjualan berhasil ditambahkan!");
       setIsModalOpen(false);
       form.resetFields();
-      fetchSales(activeTabKey);
+      fetchSales();
     } catch (error) {
       console.error("Gagal tambah penjualan:", error);
       message.error(error?.message || "Gagal menambahkan penjualan.");
@@ -740,7 +740,7 @@ const Sales = () => {
       }
 
       message.success(`Status penjualan berhasil diubah menjadi ${newStatus}.`);
-      fetchSales(activeTabKey);
+      fetchSales();
     } catch (error) {
       console.error("Gagal update status:", error);
       message.error(error?.message || "Gagal mengubah status penjualan.");
@@ -748,69 +748,80 @@ const Sales = () => {
   };
 
   // =========================
-  // SECTION: Hapus penjualan
-  // =========================
-  const handleDeleteSale = async (saleId) => {
-    const deleteBatch = writeBatch(db);
-
-    try {
-      const selectedSale = salesRecords.find((sale) => sale.id === saleId);
-
-      if (!selectedSale) {
-        throw new Error("Penjualan tidak ditemukan.");
-      }
-
-      const shouldReturnStock = selectedSale.status !== "Dibatalkan";
-
-      if (shouldReturnStock) {
-        await revertSaleItemsStock(selectedSale, "sale_revert", saleId);
-      }
-
-      const incomesCollection = collection(db, "incomes");
-      const incomeQuery = query(
-        incomesCollection,
-        where("relatedId", "==", saleId),
-      );
-      const incomesSnapshot = await getDocs(incomeQuery);
-
-      incomesSnapshot.forEach((incomeDocument) => {
-        deleteBatch.delete(incomeDocument.ref);
-      });
-
-      const saleReference = doc(db, "sales", saleId);
-      deleteBatch.delete(saleReference);
-
-      await deleteBatch.commit();
-
-      message.success(
-        shouldReturnStock
-          ? "Penjualan berhasil dihapus dan stok dikembalikan."
-          : "Penjualan berhasil dihapus tanpa retur stok ulang karena status sudah dibatalkan.",
-      );
-
-      fetchSales(activeTabKey);
-    } catch (error) {
-      console.error("Gagal menghapus penjualan:", error);
-      message.error(error?.message || "Gagal menghapus penjualan.");
-    }
-  };
-
-  // =========================
-  // SECTION: Filter berdasarkan nomor referensi
+  // SECTION: Filter tabel berdasarkan tab status dan nomor referensi
   // =========================
   const filteredSalesRecords = useMemo(() => {
     const searchKeyword = receiptSearch.trim().toLowerCase();
 
+    // IMS NOTE [AKTIF/GUARDED] - Client-side guard tab status Sales.
+    // Fungsi blok: menjaga tabel selalu sesuai activeTabKey walaupun query Firestore gagal, loading ulang, atau state lama masih tersisa.
+    // Hubungan flow Sales: hanya filter tampilan tabel; status transition, stock mutation, income timing, dan cancel/delete tidak diubah.
+    // Alasan logic: owner tidak boleh membaca status Selesai di tab Dikirim atau status lain yang tidak sesuai tab aktif.
+    const statusMatchedRecords =
+      activeTabKey === "all"
+        ? salesRecords
+        : salesRecords.filter((sale) => sale.status === activeTabKey);
+
     if (!searchKeyword) {
-      return salesRecords;
+      return statusMatchedRecords;
     }
 
-    return salesRecords.filter((sale) =>
+    return statusMatchedRecords.filter((sale) =>
       String(sale.referenceNumber || "")
         .toLowerCase()
         .includes(searchKeyword),
     );
-  }, [salesRecords, receiptSearch]);
+  }, [activeTabKey, salesRecords, receiptSearch]);
+
+
+  // =========================
+  // SECTION: Summary monitoring penjualan
+  // =========================
+  const salesSummaryItems = useMemo(() => {
+    // IMS NOTE [AKTIF/GUARDED] - Pending income hanya monitoring di halaman Sales.
+    // Fungsi blok: menghitung estimasi uang dari sales Diproses/Dikirim tanpa menulis ke revenues/incomes.
+    // Hubungan flow: Cash In dan Profit Loss tetap membaca pemasukan resmi dari revenues + incomes; pending tidak masuk kas resmi.
+    // Alasan logic: marketplace/online belum menjadi income resmi sebelum status Selesai, tetapi owner tetap butuh estimasi uang tertahan.
+    const pendingSalesRecords = salesRecords.filter((sale) => {
+      const status = sale.status || "";
+      const channel = sale.salesChannel || "";
+
+      return ["Diproses", "Dikirim"].includes(status) && !isOfflineChannel(channel);
+    });
+
+    const pendingAmount = pendingSalesRecords.reduce(
+      (total, sale) => total + Number(sale.total || 0),
+      0,
+    );
+
+    const completedAmount = salesRecords
+      .filter((sale) => sale.status === "Selesai")
+      .reduce((total, sale) => total + Number(sale.total || 0), 0);
+
+    return [
+      {
+        key: "sales-pending-income",
+        title: "Pemasukan Pending",
+        value: formatCurrencyId(pendingAmount),
+        subtitle: `${formatNumberId(pendingSalesRecords.length)} penjualan Diproses/Dikirim. Belum masuk pemasukan resmi.`,
+        accent: "warning",
+      },
+      {
+        key: "sales-official-completed",
+        title: "Penjualan Selesai",
+        value: formatCurrencyId(completedAmount),
+        subtitle: "Nilai sales berstatus Selesai yang menjadi dasar income resmi.",
+        accent: "success",
+      },
+      {
+        key: "sales-active-tab-count",
+        title: "Data Tab Aktif",
+        value: formatNumberId(filteredSalesRecords.length),
+        subtitle: activeTabKey === "all" ? "Semua status penjualan." : `Hanya status ${activeTabKey}.`,
+        accent: "primary",
+      },
+    ];
+  }, [activeTabKey, filteredSalesRecords.length, salesRecords]);
 
   // =========================
   // SECTION: Kolom tabel utama
@@ -881,18 +892,27 @@ const Sales = () => {
       },
     },
     {
-      // IMS NOTE [AKTIF/GUARDED] - Action button Sales.
-      // Fungsi blok: menyusun aksi status/hapus secara vertical agar tidak wrap liar.
-      // Hubungan flow: hanya layout; lifecycle sales, income, stock revert, dan handler existing tidak diubah.
+      // IMS NOTE [AKTIF/GUARDED] - Action button Sales tanpa hard delete user biasa.
+      // Fungsi blok: hanya memberi aksi status resmi; penjualan tidak jadi harus lewat Batalkan agar record audit tetap ada.
+      // Hubungan flow: stok, income, cancel stock revert, dan inventory log tetap memakai handler existing; hard delete tidak tampil di tabel.
+      // Alasan logic: Sales adalah transaksi auditable, sehingga tombol Hapus tidak boleh menjadi aksi operasional biasa.
       title: "Aksi",
       key: "action",
       width: 220,
       fixed: "right",
       className: "app-table-action-column",
-      render: (_, record) => (
-        <div className="ims-action-group ims-action-group--vertical">
-          {record.status === "Diproses" &&
-            !isOfflineChannel(record.salesChannel) && (
+      render: (_, record) => {
+        const canMoveToShipped = record.status === "Diproses" && !isOfflineChannel(record.salesChannel);
+        const canComplete = record.status === "Dikirim" && !isOfflineChannel(record.salesChannel);
+        const canCancel = ["Diproses", "Dikirim"].includes(record.status) && !isOfflineChannel(record.salesChannel);
+
+        if (!canMoveToShipped && !canComplete && !canCancel) {
+          return "-";
+        }
+
+        return (
+          <div className="ims-action-group ims-action-group--vertical">
+            {canMoveToShipped ? (
               <Popconfirm
                 title="Yakin ubah status menjadi Dikirim?"
                 onConfirm={() => handleUpdateSaleStatus(record.id, "Dikirim")}
@@ -903,10 +923,9 @@ const Sales = () => {
                   Dikirim
                 </Button>
               </Popconfirm>
-            )}
+            ) : null}
 
-          {record.status === "Dikirim" &&
-            !isOfflineChannel(record.salesChannel) && (
+            {canComplete ? (
               <Popconfirm
                 title="Yakin ubah status menjadi Selesai?"
                 onConfirm={() => handleUpdateSaleStatus(record.id, "Selesai")}
@@ -917,10 +936,9 @@ const Sales = () => {
                   Selesai
                 </Button>
               </Popconfirm>
-            )}
+            ) : null}
 
-          {(record.status === "Diproses" || record.status === "Dikirim") &&
-            !isOfflineChannel(record.salesChannel) && (
+            {canCancel ? (
               <Popconfirm
                 title="Yakin batalkan penjualan ini?"
                 onConfirm={() => handleUpdateSaleStatus(record.id, "Dibatalkan")}
@@ -931,20 +949,10 @@ const Sales = () => {
                   Batalkan
                 </Button>
               </Popconfirm>
-            )}
-
-          <Popconfirm
-            title="Yakin hapus penjualan ini?"
-            onConfirm={() => handleDeleteSale(record.id)}
-            okText="Ya"
-            cancelText="Tidak"
-          >
-            <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />}>
-              Hapus
-            </Button>
-          </Popconfirm>
-        </div>
-      ),
+            ) : null}
+          </div>
+        );
+      },
     },
   ];
 
@@ -987,6 +995,13 @@ const Sales = () => {
           },
         ]}
       />
+
+      <PageSection
+        title="Ringkasan Penjualan"
+        subtitle="Pemasukan Pending hanya estimasi monitoring, belum masuk Cash In atau Profit Loss sampai status Selesai."
+      >
+        <SummaryStatGrid items={salesSummaryItems} columns={{ xs: 24, md: 8 }} />
+      </PageSection>
 
       <PageSection
         title="Filter Penjualan"
@@ -1086,10 +1101,10 @@ const Sales = () => {
                                 showSearch
                                 optionFilterProp="children"
                               >
-                                {/* IMS NOTE [AKTIF] - opsi item difilter per collection agar Produk Jadi dan Bahan Baku tidak bercampur. */}
+                                {/* IMS NOTE [AKTIF] - opsi item difilter per collection dan label stok disederhanakan karena detail stok sudah tampil di panel read-only. */}
                                 {filteredSellableItems.map((item) => (
                                   <Option key={item.itemKey} value={item.itemKey}>
-                                    {item.name} ({item.typeLabel} - Stok tersedia: {formatNumberId(getItemStockSnapshot(item).availableStock)})
+                                    {item.name} ({item.typeLabel})
                                   </Option>
                                 ))}
                               </Select>
@@ -1120,24 +1135,71 @@ const Sales = () => {
                                 <Select placeholder="Pilih varian" showSearch optionFilterProp="children">
                                   {buildVariantOptionsFromItem(selectedItem).map((item) => (
                                     <Option key={item.value} value={item.value}>
-                                      {item.label} - Stok tersedia: {formatNumberId(item.raw?.availableStock || 0)}
+                                      {item.label}
                                     </Option>
                                   ))}
                                 </Select>
                               </Form.Item>
                             ) : null}
 
-                            {/* ACTIVE / FINAL: alert stok memakai availableStock master/varian supaya user melihat angka yang sama dengan guard submit. Bukan legacy/kandidat cleanup. */}
-                            <Alert
-                              showIcon
-                              type={hasVariants ? "info" : "success"}
-                              style={{ marginBottom: 12 }}
-                              message={
-                                hasVariants
-                                  ? `Stok tersedia varian terpilih: ${formatNumberId(selectedVariant?.availableStock || 0)}`
-                                  : `Stok tersedia master saat ini: ${formatNumberId(getItemStockSnapshot(selectedItem).availableStock)}`
-                              }
-                            />
+                            {/* IMS NOTE [AKTIF/GUARDED] - Snapshot stok Sales.
+                                Fungsi blok: menampilkan stok current/reserved/available item terpilih sebagai panel read-only pasif.
+                                Hubungan flow: hanya mengganti tampilan Alert lama; validasi stok, create sale, stock reduction, income timing, cancel/delete, dan payload Firestore tetap memakai logic existing.
+                                Alasan logic: stok tersedia sebelum penjualan adalah info snapshot, bukan warning/error, sehingga mengikuti pola clean panel seperti Purchases/Stock Adjustment.
+                                Status: AKTIF untuk UI Sales, GUARDED terhadap business rule stok dan transaksi. */}
+                            <div className="ims-readonly-panel">
+                              <div className="ims-readonly-panel-header">
+                                <div>
+                                  <div className="ims-readonly-panel-title">
+                                    Stok Tersedia Sebelum Penjualan
+                                  </div>
+                                  <div className="ims-readonly-panel-description">
+                                    Snapshot ini hanya membantu membaca stok. Pengurangan stok tetap terjadi saat penjualan disimpan.
+                                  </div>
+                                </div>
+                                <Tag color={hasVariants ? "purple" : "default"}>
+                                  {hasVariants ? "Varian" : "Master"}
+                                </Tag>
+                              </div>
+
+                              <div style={{ marginBottom: 10 }}>
+                                <span style={{ fontWeight: 600 }}>
+                                  {selectedItem.name || "Item"}
+                                </span>
+                                {hasVariants ? (
+                                  <span style={{ color: "var(--ims-text-secondary)" }}>
+                                    {` — ${selectedVariant?.variantLabel || selectedVariant?.name || "Pilih varian"}`}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <div className="ims-readonly-stat-grid">
+                                <div className="ims-readonly-stat-field">
+                                  <div className="ims-readonly-stat-label">Current Stock</div>
+                                  <div className="ims-readonly-stat-value">
+                                    {formatNumberId((hasVariants ? selectedVariant?.currentStock : getItemStockSnapshot(selectedItem).currentStock) || 0)}
+                                  </div>
+                                </div>
+                                <div className="ims-readonly-stat-field">
+                                  <div className="ims-readonly-stat-label">Reserved Stock</div>
+                                  <div className="ims-readonly-stat-value">
+                                    {formatNumberId((hasVariants ? selectedVariant?.reservedStock : getItemStockSnapshot(selectedItem).reservedStock) || 0)}
+                                  </div>
+                                </div>
+                                <div className="ims-readonly-stat-field">
+                                  <div className="ims-readonly-stat-label">Available Stock</div>
+                                  <div className="ims-readonly-stat-value">
+                                    {formatNumberId((hasVariants ? selectedVariant?.availableStock : getItemStockSnapshot(selectedItem).availableStock) || 0)}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {hasVariants ? (
+                                <div className="ims-readonly-panel-note">
+                                  Item bervarian wajib memilih varian agar stok yang terpotong berasal dari bucket variantKey yang benar.
+                                </div>
+                              ) : null}
+                            </div>
                           </>
                         ) : null;
                       }}

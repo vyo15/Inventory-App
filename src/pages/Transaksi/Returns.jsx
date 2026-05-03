@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Table,
   Modal,
   Form,
@@ -485,16 +484,64 @@ const Returns = () => {
           ) : null}
 
           {selectedItem ? (
-            <Alert
-              showIcon
-              type={selectedItemHasVariants ? "info" : "success"}
-              style={{ marginBottom: 16 }}
-              message={
-                selectedItemHasVariants
-                  ? `Stok varian terpilih: ${formatNumberId(selectedVariant?.currentStock || 0)}`
-                  : `Stok master saat ini: ${formatNumberId(getItemStockSnapshot(selectedItem).currentStock)}`
-              }
-            />
+            /* IMS NOTE [AKTIF/GUARDED] - Snapshot stok Returns.
+               Fungsi blok: menampilkan stok current/reserved/available item retur sebagai panel read-only pasif.
+               Hubungan flow: hanya mengganti tampilan Alert lama; transaction retur, stock revert, inventory log, validasi, dan payload Firestore tidak berubah.
+               Alasan logic: stok sebelum retur adalah info kontekstual, bukan warning/error, sehingga mengikuti panel clean seperti Purchases/Stock Adjustment.
+               Status: AKTIF untuk UI Returns, GUARDED terhadap business rule retur dan stok. */
+            <div className="ims-readonly-panel">
+              <div className="ims-readonly-panel-header">
+                <div>
+                  <div className="ims-readonly-panel-title">
+                    Stok Item Sebelum Retur
+                  </div>
+                  <div className="ims-readonly-panel-description">
+                    Snapshot ini hanya membantu membaca stok sebelum retur disimpan. Pengembalian stok tetap mengikuti transaction retur resmi.
+                  </div>
+                </div>
+                <Tag color={selectedItemHasVariants ? "purple" : "default"}>
+                  {selectedItemHasVariants ? "Varian" : "Master"}
+                </Tag>
+              </div>
+
+              <div style={{ marginBottom: 10 }}>
+                <span style={{ fontWeight: 600 }}>
+                  {selectedItem.name || "Item"}
+                </span>
+                {selectedItemHasVariants ? (
+                  <span style={{ color: "var(--ims-text-secondary)" }}>
+                    {` — ${selectedVariant?.variantLabel || selectedVariant?.name || "Pilih varian"}`}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="ims-readonly-stat-grid">
+                <div className="ims-readonly-stat-field">
+                  <div className="ims-readonly-stat-label">Current Stock</div>
+                  <div className="ims-readonly-stat-value">
+                    {formatNumberId((selectedItemHasVariants ? selectedVariant?.currentStock : getItemStockSnapshot(selectedItem).currentStock) || 0)}
+                  </div>
+                </div>
+                <div className="ims-readonly-stat-field">
+                  <div className="ims-readonly-stat-label">Reserved Stock</div>
+                  <div className="ims-readonly-stat-value">
+                    {formatNumberId((selectedItemHasVariants ? selectedVariant?.reservedStock : getItemStockSnapshot(selectedItem).reservedStock) || 0)}
+                  </div>
+                </div>
+                <div className="ims-readonly-stat-field">
+                  <div className="ims-readonly-stat-label">Available Stock</div>
+                  <div className="ims-readonly-stat-value">
+                    {formatNumberId((selectedItemHasVariants ? selectedVariant?.availableStock : getItemStockSnapshot(selectedItem).availableStock) || 0)}
+                  </div>
+                </div>
+              </div>
+
+              {selectedItemHasVariants ? (
+                <div className="ims-readonly-panel-note">
+                  Item bervarian wajib memilih varian agar retur masuk ke bucket variantKey yang benar.
+                </div>
+              ) : null}
+            </div>
           ) : null}
 
           <Form.Item

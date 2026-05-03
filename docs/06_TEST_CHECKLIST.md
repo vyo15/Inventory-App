@@ -914,5 +914,92 @@ Status: **AKTIF + GUARDED**. Checklist ini menggantikan checklist Auth/Role lama
 - [ ] Snapshot Stock Adjustment menampilkan nama item, nama varian bila ada, Current Stock, Reserved Stock, Available Stock, dan satuan stok dengan format Indonesia tanpa `.00`.
 - [ ] Item bervarian tetap menampilkan helper bahwa penyesuaian wajib masuk ke varian agar total master sinkron.
 - [ ] Submit adjustment masuk/keluar tetap membuat `stock_adjustments`, mutasi stok, dan `inventory_logs` seperti sebelum perubahan UI.
+- [ ] Sales form menampilkan snapshot stok master/varian sebagai panel read-only clean dan create sale tetap mengurangi stok sesuai flow aktif.
+- [ ] Sales income timing tetap hanya mengikuti status `Selesai`; perubahan panel tidak boleh membuat income lebih awal.
+- [ ] Returns form menampilkan snapshot stok master/varian sebagai panel read-only clean dan retur tetap memakai transaction resmi tanpa double revert.
+- [ ] Raw Material ringkasan varian dan Semi Finished ringkasan stok master tampil sebagai panel read-only clean tanpa membuka edit stok langsung dari master.
 - [ ] Warning/error/destructive/security/reset/auth alert tetap memakai `Alert` agar semantik guard tidak hilang.
 - [ ] Purchases “Stok Aktual Sebelum Restock” tetap rapi dan tidak berubah logic.
+
+## Checklist — Cash In delete lock dan Sales status tab — 2026-05-03
+
+### Cash In / Pemasukan
+- [ ] Buka halaman Pemasukan dan pastikan tidak ada tombol Hapus.
+- [ ] Pastikan tidak ada kolom Aksi jika tidak ada aksi lain yang tampil.
+- [ ] Pastikan data Auto Penjualan dari `incomes` tetap tampil.
+- [ ] Pastikan data Manual / Lama dari `revenues` tetap tampil.
+- [ ] Pastikan tambah pemasukan manual masih tersimpan ke `revenues`.
+- [ ] Pastikan filter tahun/bulan tetap berjalan.
+- [ ] Pastikan nominal tetap format Rupiah Indonesia tanpa trailing `.00`.
+- [ ] Pastikan user tidak bisa menghapus pemasukan dari UI Pemasukan.
+
+### Sales status tabs
+- [ ] Buka halaman Penjualan dan klik tab Semua Penjualan; semua status boleh tampil.
+- [ ] Klik tab Diproses dan pastikan hanya status `Diproses` yang tampil.
+- [ ] Klik tab Dikirim dan pastikan hanya status `Dikirim` yang tampil.
+- [ ] Klik tab Selesai dan pastikan hanya status `Selesai` yang tampil.
+- [ ] Klik tab Dibatalkan dan pastikan hanya status `Dibatalkan` yang tampil.
+- [ ] Pastikan status `Selesai` tidak muncul di tab `Dikirim`.
+- [ ] Pastikan status `Dikirim` tidak muncul di tab `Selesai`.
+- [ ] Cari resi/order/reference di tab Dikirim dan pastikan hasil search tetap terbatas pada status `Dikirim`.
+- [ ] Cari resi/order/reference di tab Selesai dan pastikan hasil search tetap terbatas pada status `Selesai`.
+- [ ] Simulasikan fetch gagal atau reload lambat; tabel tidak boleh menampilkan data status lama sebagai data tab aktif.
+
+### Regression bisnis
+- [ ] Sales tetap mengurangi stok saat dibuat.
+- [ ] Sales tetap membuat income hanya saat status `Selesai`.
+- [ ] Cancel/delete Sales tetap tidak double revert stok dan tidak double delete income.
+- [ ] Cash In tetap membaca pemasukan dari `revenues + incomes`.
+- [ ] Profit Loss tetap membaca `revenues + incomes + expenses`.
+- [ ] Dashboard/Reports tidak berubah.
+
+
+## Checklist — Sales pending income, status tab, dan no-delete action — 2026-05-03
+
+### Sales pending income card
+- Buka halaman Sales dan pastikan ada card `Pemasukan Pending`.
+- Buat sales status `Diproses`; nilai total masuk ke Pemasukan Pending.
+- Ubah status ke `Dikirim`; nilai tetap masuk Pemasukan Pending.
+- Ubah status ke `Selesai`; nilai keluar dari Pemasukan Pending dan income resmi tetap dibuat sesuai flow aktif.
+- Batalkan sales; nilai keluar dari Pemasukan Pending.
+- Pastikan Pemasukan Pending tidak muncul di menu Pemasukan / Cash In.
+- Pastikan Pemasukan Pending tidak menulis dokumen ke `revenues` atau `incomes`.
+
+### Cash In official income boundary
+- Buka halaman Pemasukan dan pastikan tidak ada card Pemasukan Pending.
+- Pastikan Pemasukan hanya menghitung data resmi `revenues + incomes`.
+- Pastikan Auto Penjualan dari sales `Selesai` tetap tampil.
+- Pastikan sales `Diproses`/`Dikirim` tidak tampil sebagai pemasukan resmi.
+- Pastikan tombol Hapus Cash In tetap tidak ada.
+
+### Sales status tabs dan search
+- Tab Semua Penjualan menampilkan semua status.
+- Tab Diproses hanya menampilkan `Diproses`.
+- Tab Dikirim hanya menampilkan `Dikirim`.
+- Tab Selesai hanya menampilkan `Selesai`.
+- Tab Dibatalkan hanya menampilkan `Dibatalkan`.
+- Search resi/order/reference di setiap tab hanya mencari dalam status aktif.
+- Clear search dan pastikan tab tetap menampilkan status yang benar.
+
+### Sales action column
+- Row `Diproses` menampilkan `Dikirim` dan `Batalkan`.
+- Row `Dikirim` menampilkan `Selesai` dan `Batalkan`.
+- Row `Selesai` tidak menampilkan Delete/Hapus.
+- Row `Dibatalkan` tidak menampilkan Delete/Hapus.
+- Tidak ada tombol Delete/Hapus di tabel Sales.
+- `Batalkan` tetap membuat status `Dibatalkan` dan stock revert satu kali.
+
+### Sales selector dan stock snapshot
+- Buka Tambah Penjualan dan pilih Jenis Item.
+- Dropdown item hanya menampilkan nama item + jenis item, tanpa teks stok panjang.
+- Dropdown varian hanya menampilkan label varian, tanpa teks stok panjang.
+- Panel read-only stok tetap tampil setelah item/varian dipilih.
+- Submit sales tetap berhasil jika `availableStock` cukup.
+- Submit sales tetap ditolak jika `availableStock` tidak cukup.
+
+### Regression business flow
+- Sales tetap mengurangi stok saat dibuat.
+- Income tetap hanya dibuat saat status `Selesai`.
+- Profit Loss tetap membaca `revenues + incomes + expenses`.
+- Cash In tetap membaca `revenues + incomes`.
+- Dashboard/Reports tidak berubah.

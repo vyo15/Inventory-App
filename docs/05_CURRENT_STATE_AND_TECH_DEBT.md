@@ -552,7 +552,41 @@ Risiko tersisa:
 
 ### Status aktif
 - Stock Adjustment snapshot stok terpilih memakai panel read-only clean, bukan bubble `Alert`, agar info pasif tidak terlihat seperti warning.
-- Perubahan ini presentational-only: validasi `availableStock`, pilihan `variantKey`, transaction `stock_adjustments`, mutasi stok, dan `inventory_logs` tetap mengikuti flow existing.
+- Sales dan Returns stock snapshot pasif memakai panel read-only clean agar stok master/varian terbaca konsisten tanpa mengubah validasi stok, payload transaksi, atau flow income/retur.
+- Raw Material ringkasan varian dan Semi Finished ringkasan stok master memakai panel read-only clean karena keduanya hanya summary pasif, bukan warning.
+- Perubahan ini presentational-only: validasi `availableStock`, pilihan `variantKey`, transaction `stock_adjustments`, mutasi stok, `inventory_logs`, Sales stock reduction, income timing, dan Returns stock revert tetap mengikuti flow existing.
 
 ### Cleanup candidate
-- Beberapa page-level explanation atau detail read-only di modul produksi/master/transaksi masih memakai `Alert` info. Area tersebut boleh dirapikan bertahap jika terbukti pasif, tetapi jangan mengganti warning/error/destructive/security guard.
+- Beberapa page-level explanation atau detail read-only di Supplier Purchases dan modul produksi masih memakai `Alert` info. Area tersebut boleh dirapikan bertahap jika terbukti pasif, tetapi jangan mengganti warning/error/destructive/security guard.
+
+## Update Current State — Cash In delete lock dan Sales tab guard — 2026-05-03
+
+### Status aktif
+- **AKTIF/GUARDED:** `src/pages/Finance/CashIn.jsx` tidak lagi menyediakan tombol/kolom Hapus di tabel Pemasukan.
+- **AKTIF:** halaman Pemasukan tetap membaca gabungan `revenues` dan `incomes` serta tetap mendukung create pemasukan manual ke `revenues`.
+- **GUARDED:** `incomes` auto Sales income tetap read-only dari sudut UI Pemasukan; flow auto income Sales tidak diubah.
+- **AKTIF/GUARDED:** `src/pages/Transaksi/Sales.jsx` menerapkan client-side guard status tab agar tabel tidak menampilkan row dari status lain saat query ulang, fetch gagal, atau state lama masih tertahan.
+- **AKTIF:** search `referenceNumber` tetap bekerja setelah filter status aktif.
+
+### Legacy / cleanup candidate
+- **LEGACY:** data lama di `revenues` dan `incomes` tetap valid dan tidak dimigrasi.
+- **LEGACY:** sales lama dengan status/reference lama tetap tampil sesuai status yang tersimpan.
+- **CLEANUP CANDIDATE:** jika suatu hari diperlukan delete ledger, harus dibuat flow khusus dengan approval, audit trail, dan alasan bisnis, bukan tombol Hapus biasa di Cash In.
+- **CLEANUP CANDIDATE:** hardening atomic cancel/delete Sales tetap task terpisah; patch ini hanya menjaga tampilan tab status dan tidak mengubah revert stok/income delete.
+
+
+## Update Current State — Sales pending income dan no-delete action — 2026-05-03
+
+### Current state
+- **AKTIF:** halaman Sales menampilkan summary read-only **Pemasukan Pending** dari sales status `Diproses` dan `Dikirim`.
+- **GUARDED:** Pemasukan Pending hanya derived value di UI Sales; tidak menulis `revenues`, tidak menulis `incomes`, tidak masuk Cash In, dan tidak masuk Profit Loss.
+- **AKTIF:** tabel Sales membaca satu dataset sales lalu memfilter client-side sesuai `activeTabKey` agar tab status tidak kosong karena query per-status/index Firestore.
+- **AKTIF:** tombol Delete/Hapus tidak lagi tampil sebagai aksi user biasa di tabel Sales; flow tidak jadi tetap melalui `Batalkan`.
+- **AKTIF:** dropdown item/varian Sales disederhanakan karena detail stok sudah tampil di panel read-only.
+- **GUARDED:** mutasi stok, income timing, cancel stock revert, inventory log, Cash In, Profit Loss, Dashboard, dan Reports tidak diubah oleh patch ini.
+
+### Legacy / cleanup candidate
+- **LEGACY:** sales lama dengan status/reference lama tetap ditampilkan sesuai data tersimpan; tidak ada migrasi otomatis.
+- **LEGACY:** rollback create sale masih memakai `deleteDoc` untuk menghapus sale baru jika mutasi stok gagal; ini bukan tombol Hapus user biasa dan tetap dipertahankan sebagai guard.
+- **CLEANUP CANDIDATE:** hard delete Sales dapat dirancang sebagai maintenance/admin guarded flow terpisah jika benar-benar dibutuhkan.
+- **CLEANUP CANDIDATE:** bila data Sales membesar, strategi fetch all + client filter dapat diganti pagination/query server-side yang tetap menjaga fallback aman.

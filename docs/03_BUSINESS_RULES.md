@@ -780,3 +780,42 @@ Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases,
 ### 11.5 UI non-business-flow cleanup
 - Sidebar nested accordion dan Login UI copy cleanup adalah perubahan UI; keduanya tidak mengubah stok, transaksi, produksi, laporan, AuthContext, role access, Firestore rules, atau schema.
 
+## Update Business Rules — Cash In delete lock dan Sales status tab — 2026-05-03
+
+### Cash In / Pemasukan sebagai ledger aman
+- Halaman Pemasukan membaca gabungan `revenues` dan `incomes` sebagai tampilan ledger pemasukan aktif.
+- `revenues` tetap menjadi sumber pemasukan manual/lama, sedangkan `incomes` tetap menjadi pemasukan otomatis dari Sales berstatus `Selesai`.
+- Menu Pemasukan tidak menyediakan tombol Hapus untuk mengurangi risiko penyalahgunaan dan menjaga audit kas.
+- Penghapusan pemasukan tidak boleh dilakukan dari UI Pemasukan biasa tanpa task khusus, audit, dan approval eksplisit.
+- Perubahan ini tidak menghapus data lama, tidak mengubah `revenues`, tidak mengubah `incomes`, dan tidak mengubah Profit Loss yang membaca `revenues + incomes + expenses`.
+
+### Sales status tab
+- Tabel Sales wajib menampilkan row sesuai tab status aktif.
+- Tab `Semua Penjualan` boleh menampilkan semua status.
+- Tab `Diproses`, `Dikirim`, `Selesai`, dan `Dibatalkan` hanya boleh menampilkan row dengan status yang sama.
+- Search resi/order/reference harus tetap bekerja di dalam batas status tab aktif.
+- Guard tab status adalah guard tampilan; tidak boleh mengubah status transition, mutasi stok, income timing, cancel/delete, retur, dashboard, atau reports.
+
+
+## Update Business Rules — Sales pending income, no-delete Sales, dan selector stok ringkas — 2026-05-03
+
+### Sales pending income display-only
+- Sales berstatus `Diproses` dan `Dikirim` boleh dihitung sebagai **Pemasukan Pending** hanya untuk monitoring di halaman Sales.
+- Pemasukan Pending adalah estimasi/potensi uang yang belum masuk resmi; nilai ini **tidak boleh** ditulis ke `revenues`, `incomes`, atau collection baru.
+- Pemasukan Pending **tidak boleh** tampil sebagai pemasukan resmi di menu Pemasukan / Cash In dan **tidak boleh** masuk Profit Loss.
+- Sales berstatus `Selesai` tetap menjadi dasar income resmi sesuai flow aktif.
+- Sales berstatus `Dibatalkan` tidak boleh masuk pending income maupun income resmi.
+- Offline tetap mengikuti flow aktif yang biasanya otomatis `Selesai`; WhatsApp boleh masuk pending jika statusnya `Diproses`/`Dikirim`, tetapi WhatsApp tidak boleh otomatis dianggap Offline tanpa keputusan business rule terpisah.
+
+### Sales no-delete user action
+- Tabel Sales tidak menyediakan tombol **Delete/Hapus** sebagai aksi operasional biasa.
+- Jika penjualan tidak jadi, user wajib memakai **Batalkan** agar record transaksi tetap ada dan stok bisa diaudit.
+- Row `Diproses` boleh menampilkan aksi `Dikirim` dan `Batalkan`.
+- Row `Dikirim` boleh menampilkan aksi `Selesai` dan `Batalkan`.
+- Row `Selesai` dan `Dibatalkan` tidak boleh menampilkan aksi Delete/Hapus biasa.
+- Hard delete Sales, jika suatu hari dibutuhkan, harus menjadi maintenance flow guarded dengan approval dan audit trail, bukan tombol tabel reguler.
+
+### Sales selector dan info stok
+- Selector item Sales boleh memisahkan Produk Jadi dan Bahan Baku melalui field UI **Jenis Item**, tetapi payload akhir tetap memakai `collectionName`, `itemId`, `variantKey`, dan `stockSourceType`.
+- Dropdown item/varian cukup menampilkan nama item/varian dan jenis item; detail stok tersedia cukup tampil di panel read-only stok.
+- Panel stok read-only hanya informasi snapshot; validasi dan mutasi stok tetap memakai guard `availableStock` dan helper stok aktif.

@@ -1409,14 +1409,39 @@ const RawMaterials = () => {
                 )}
               </Form.List>
 
-              <Alert
-                style={{ marginTop: 16 }}
-                type="success"
-                showIcon
-                message={isEditingMaterial
-                ? `Ringkasan varian read-only: ${formatNumberID(variantStats.count)} varian | total stok ${formatNumberID(variantStats.stock)}`
-                : `Ringkasan varian: ${formatNumberID(variantStats.count)} varian | total stok ${formatNumberID(variantStats.stock)}`}
-              />
+              {/* IMS NOTE [AKTIF/GUARDED] - Ringkasan varian pasif.
+                  Fungsi blok: menampilkan jumlah varian dan total stok form sebagai panel read-only, bukan Alert.
+                  Hubungan flow: hanya mengganti tampilan summary; guard stok master, variantKey, pricing, conversion, dan service update tetap tidak berubah.
+                  Alasan logic: ringkasan varian adalah snapshot pasif agar user membaca struktur varian tanpa merasa ada warning.
+                  Status: AKTIF untuk UI master Raw Material, GUARDED terhadap business rule stok dan varian. */}
+              <div className="ims-readonly-panel" style={{ marginTop: 16 }}>
+                <div className="ims-readonly-panel-header">
+                  <div>
+                    <div className="ims-readonly-panel-title">
+                      {isEditingMaterial ? 'Ringkasan Varian Read-only' : 'Ringkasan Varian'}
+                    </div>
+                    <div className="ims-readonly-panel-description">
+                      Summary ini hanya membaca isi form. Perubahan stok fisik setelah create tetap lewat Purchases, Stock Adjustment, atau transaksi resmi.
+                    </div>
+                  </div>
+                  <Tag color="green">Varian</Tag>
+                </div>
+
+                <div className="ims-readonly-stat-grid">
+                  <div className="ims-readonly-stat-field">
+                    <div className="ims-readonly-stat-label">Jumlah Varian</div>
+                    <div className="ims-readonly-stat-value">
+                      {formatNumberID(variantStats.count)}
+                    </div>
+                  </div>
+                  <div className="ims-readonly-stat-field">
+                    <div className="ims-readonly-stat-label">Total Stok</div>
+                    <div className="ims-readonly-stat-value">
+                      {formatNumberID(variantStats.stock)}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </>
           ) : null}
 

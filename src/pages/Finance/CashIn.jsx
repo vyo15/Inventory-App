@@ -1,24 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Button,
   Col,
   DatePicker,
   Form,
   Input,
   InputNumber,
-  Popconfirm,
   Select,
-  Space,
   Table,
   Tag,
   message,
 } from "antd";
-import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { PlusOutlined } from "@ant-design/icons";
 import {
   addDoc,
   collection,
-  deleteDoc,
-  doc,
   onSnapshot,
   orderBy,
   query,
@@ -248,16 +243,7 @@ const CashIn = () => {
     }
   };
 
-  const handleDeleteTransaction = async (record) => {
-    try {
-      const targetCollection = record.sourceCollection || "revenues";
-      await deleteDoc(doc(db, targetCollection, record.id));
-      message.success("Transaksi berhasil dihapus.");
-    } catch (error) {
-      console.error("Gagal menghapus transaksi:", error);
-      message.error("Gagal menghapus transaksi.");
-    }
-  };
+
 
   // =========================
   // SECTION: Kolom tabel
@@ -293,37 +279,14 @@ const CashIn = () => {
         },
       },
       {
+        // IMS NOTE [AKTIF/GUARDED] - Cash In adalah ledger read page tanpa aksi delete.
+        // Fungsi blok: menampilkan deskripsi transaksi dari revenues + incomes tanpa tombol destructive.
+        // Hubungan flow: Auto Penjualan dari incomes dan Manual/Lama dari revenues tetap dibaca seperti sebelumnya.
+        // Alasan logic: penghapusan pemasukan tidak disediakan di UI Pemasukan agar audit kas tidak mudah disalahgunakan.
         title: "Deskripsi",
         dataIndex: "description",
         key: "description",
         render: (value) => value || "-",
-      },
-      {
-        // =====================================================
-        // SECTION: aksi ledger page
-        // Fungsi:
-        // - Cash In termasuk ledger/simple action page, jadi tidak memakai tombol Detail
-        // - aksi delete tetap dibuat di kolom paling kanan dan siap sticky untuk menjaga visibilitas aksi utama
-        // =====================================================
-        title: "Aksi",
-        key: "action",
-        width: 140,
-        fixed: "right",
-        className: "app-table-action-column",
-        render: (_, record) => (
-          <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-            <Popconfirm
-              title="Yakin hapus transaksi ini?"
-              onConfirm={() => handleDeleteTransaction(record)}
-              okText="Ya"
-              cancelText="Tidak"
-            >
-              <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />}>
-                Hapus
-              </Button>
-            </Popconfirm>
-          </Space>
-        ),
       },
     ],
     [],
@@ -401,8 +364,8 @@ const CashIn = () => {
           dataSource={filteredCashIns}
           columns={columns}
           loading={loading}
-          // Baseline final: ledger table boleh sederhana, tetapi tetap diberi scroll.x agar fixed action selalu stabil.
-          scroll={{ x: 1180 }}
+          // IMS NOTE [AKTIF] - tabel ledger tetap scroll ringan tanpa kolom aksi destructive.
+          scroll={{ x: 960 }}
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada pemasukan pada periode ini." />,
           }}

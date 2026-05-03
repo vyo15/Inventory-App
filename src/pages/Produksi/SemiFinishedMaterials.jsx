@@ -971,14 +971,28 @@ const SemiFinishedMaterials = () => {
 
           <Divider orientation="left">Ringkasan Stok Master</Divider>
 
-          <Alert
-            style={{ marginBottom: 16 }}
-            type="info"
-            showIcon
-            message={hasVariantsValue
-              ? "Current Stock, Reserved Stock, Available Stock, dan Min Stock Alert total di bawah ini adalah hasil akumulasi seluruh varian."
-              : "Ringkasan di bawah ini adalah nilai stok master langsung karena item ini tidak memakai varian."}
-          />
+          {/* IMS NOTE [AKTIF/GUARDED] - Ringkasan stok master pasif.
+              Fungsi blok: mengganti Alert info menjadi panel read-only untuk menjelaskan total master/akumulasi varian.
+              Hubungan flow: hanya presentational; perhitungan calculatedTotals, stock guard, variantKey, dan service semi finished tetap tidak berubah.
+              Alasan logic: ringkasan stok master adalah snapshot pasif, bukan warning/error produksi.
+              Status: AKTIF untuk UI Semi Finished Material, GUARDED terhadap flow produksi dan stok. */}
+          <div className="ims-readonly-panel">
+            <div className="ims-readonly-panel-header">
+              <div>
+                <div className="ims-readonly-panel-title">
+                  Ringkasan Stok Master
+                </div>
+                <div className="ims-readonly-panel-description">
+                  {hasVariantsValue
+                    ? "Current Stock, Reserved Stock, Available Stock, dan Min Stock Alert total di bawah ini adalah hasil akumulasi seluruh varian."
+                    : "Ringkasan di bawah ini adalah nilai stok master langsung karena item ini tidak memakai varian."}
+                </div>
+              </div>
+              <Tag color={hasVariantsValue ? "purple" : "default"}>
+                {hasVariantsValue ? "Akumulasi Varian" : "Master"}
+              </Tag>
+            </div>
+          </div>
 
           <Row gutter={16}>
             <Col xs={24} md={6}>

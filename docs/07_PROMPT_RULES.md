@@ -410,6 +410,28 @@ Status: **AKTIF + GUARDED**. Gunakan section ini untuk semua task yang menyentuh
 
 ## Prompt Guard — Read-only Panel dan Alert Semantik
 - Snapshot/read-only info pasif seperti stok terpilih, summary stok, detail biaya pasif, atau preview item tidak boleh memakai bubble `Alert` besar jika bukan warning/error.
-- `Alert` tetap dipertahankan untuk warning, error, validation, blocked action, destructive flow, reset, auth, security, maintenance, atau risk notice.
+- Sales/Returns stock snapshot master atau varian harus memakai clean read-only panel bila hanya menampilkan current/reserved/available stock; jangan ubah stock reduction, income timing, retur transaction, atau payload Firestore.
+- Ringkasan varian/stok master di Product/Raw Material/Semi Finished boleh memakai panel read-only clean jika sifatnya summary pasif; guard stok, variant conversion, dan warning risiko tetap memakai `Alert`.
+- `Alert` tetap dipertahankan untuk warning, error, validation, blocked action, destructive flow, reset, auth, security, maintenance, cost issue, payroll issue, partial data warning, atau risk notice.
 - Perubahan read-only panel harus presentational-only: jangan ubah payload form, validasi, transaksi Firestore, formula stok/kas/produksi/HPP, formatter angka, atau schema.
 - Jika task menyentuh Stock Adjustment UI, snapshot stok harus tetap menampilkan current/reserved/available stock dan helper varian, tetapi transaction `stock_adjustments` + `inventory_logs` tidak boleh berubah.
+
+## Prompt Guard — Cash In delete lock dan Sales status tab
+- Jangan menambahkan tombol Hapus di halaman Pemasukan / Cash In tanpa task eksplisit, approval owner, dan desain audit trail.
+- Halaman Pemasukan wajib tetap membaca `revenues + incomes`; jangan mengubah source read Cash In saat task hanya UI keamanan.
+- Jangan menghapus data `revenues` atau `incomes` dari UI Pemasukan biasa.
+- Jika task menyentuh Cash In, jangan ubah auto income dari Sales, Cash Out, Profit Loss, Dashboard, atau Reports tanpa analisis lintas modul.
+- Jika task menyentuh Sales tab/status, tabel harus tetap difilter sesuai `activeTabKey`; tab `Dikirim` tidak boleh menampilkan `Selesai`, dan tab `Selesai` tidak boleh menampilkan `Diproses`/`Dikirim`.
+- Search reference Sales harus berjalan setelah filter status aktif, bukan mengganti filter status.
+- Jangan mengubah status transition, stock mutation, income timing, cancel/delete, atau return compatibility hanya untuk memperbaiki tampilan tab.
+
+
+## Prompt Guard — Sales pending income dan no-delete action
+- Jangan menaruh Pemasukan Pending di halaman Pemasukan / Cash In; pending income hanya monitoring read-only di halaman Sales.
+- Jangan menulis pending income ke `revenues`, `incomes`, atau collection baru tanpa task accounting resmi.
+- Jangan memasukkan pending income ke Profit Loss, Cash In, Dashboard, atau Reports resmi.
+- Sales status `Diproses`/`Dikirim` boleh dihitung sebagai pending display-only; status `Selesai` menjadi income resmi; status `Dibatalkan` tidak masuk keduanya.
+- Jangan menambahkan tombol Delete/Hapus di tabel Sales tanpa approval eksplisit dan desain maintenance/audit trail.
+- Flow penjualan tidak jadi harus tetap memakai `Batalkan`, bukan hard delete user biasa.
+- Perubahan Sales summary/tab/dropdown tidak boleh mengubah stock mutation, income timing, cancel stock revert, return compatibility, atau payload Firestore.
+- Dropdown item/varian Sales tidak perlu menampilkan teks stok panjang jika panel read-only stok sudah tampil; cukup tampilkan nama item/varian dan jenis item.

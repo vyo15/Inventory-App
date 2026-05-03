@@ -576,3 +576,56 @@ Setelah publish `firestore.rules` atau mengubah role access, wajib test login ad
 - `SidebarMenu.jsx`: hanya mengatur openKeys nested accordion di UI, tidak menyentuh route, role access, atau service.
 - `Login.jsx` / `Login.css`: hanya cleanup copy teknis login, tidak menyentuh AuthContext, Firebase Auth, `system_users`, atau RBAC.
 
+## Integration Update — Cash In ledger dan Sales status tab — 2026-05-03
+
+```text
+Sales status Selesai
+-> creates/keeps income in incomes
+-> Cash In reads incomes as Auto Penjualan
+-> Profit Loss reads incomes together with revenues and expenses
+```
+
+```text
+Manual Cash In
+-> user creates manual income from Pemasukan page
+-> saves to revenues
+-> Cash In reads revenues as Manual / Lama
+-> Profit Loss reads revenues together with incomes and expenses
+```
+
+Guard integrasi:
+- Cash In adalah read/create ledger untuk pemasukan, bukan tempat delete destructive.
+- Cash In tetap membaca `revenues + incomes`; patch UI tidak mengubah collection atau schema.
+- Sales status tab adalah filter tampilan atas `sales.status`; patch tab tidak mengubah status transition, stock mutation, income timing, cancel/delete, returns, dashboard, atau reports.
+
+
+## Integration Update — Sales pending income display-only — 2026-05-03
+
+```text
+Sales status Diproses/Dikirim
+-> counted in Sales Pemasukan Pending summary only
+-> no write to revenues
+-> no write to incomes
+-> no Cash In official income
+-> no Profit Loss official income
+```
+
+```text
+Sales status Selesai
+-> creates/keeps income in incomes
+-> Cash In reads incomes as Auto Penjualan
+-> Profit Loss reads incomes together with revenues and expenses
+```
+
+```text
+Sales status Dibatalkan
+-> kept as transaction record for audit
+-> excluded from pending income
+-> excluded from official income
+```
+
+Guard integrasi:
+- Sales Pemasukan Pending adalah derived UI value dari collection `sales`, bukan posting akuntansi.
+- Cash In tetap membaca `revenues + incomes` sebagai pemasukan resmi.
+- Tombol Delete/Hapus tidak tampil di tabel Sales; aksi tidak jadi tetap melalui `Batalkan` agar stock/audit trail tetap terlacak.
+- Dropdown item/varian Sales disederhanakan secara UI; payload item, `collectionName`, `variantKey`, stock mutation, income timing, returns, dashboard, dan reports tidak berubah.
