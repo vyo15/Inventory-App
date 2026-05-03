@@ -59,6 +59,13 @@ Penjualan bisa menjual:
 ### 2.2 Validasi stok
 Sebelum penjualan disimpan, stok item harus cukup.
 
+### 2.2A UX pemilihan item dan referensi channel
+- Form Penjualan tetap boleh menjual produk jadi dan bahan baku, tetapi UI wajib memisahkan pilihan Jenis Item agar dua sumber item tidak tercampur dalam satu dropdown panjang.
+- Pilihan Jenis Item hanya untuk filter UI; payload final sale tetap menyimpan `collectionName`, `itemId`, `itemName`, `typeLabel`, `variantKey`, `variantLabel`, dan `stockSourceType` sesuai flow aktif.
+- `referenceNumber` bersifat opsional dan relevan untuk channel online/marketplace seperti Shopee, Tokopedia, TikTok Shop, Lazada, Instagram, dan Lainnya.
+- Offline dan WhatsApp tidak wajib memakai resi/order/reference; saat channel berubah ke Offline/WhatsApp, field reference harus dikosongkan dan tidak aktif.
+- WhatsApp hanya dianggap non-reference channel; jangan otomatis mengubah status/income timing WhatsApp menjadi Offline tanpa keputusan business rule terpisah.
+
 ### 2.3 Efek saat penjualan dibuat
 Saat transaksi penjualan disimpan:
 - simpan transaksi ke `sales`
@@ -404,6 +411,8 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Validasi penjualan wajib memakai `availableStock` master atau varian, bukan hanya `currentStock` atau snapshot UI lama.
 - Jika item yang sama muncul lebih dari satu baris, kebutuhan qty wajib dihitung total sebelum create sale agar stok tidak minus.
 - Item bervarian wajib memvalidasi `variantKey` dan stok varian yang benar.
+- Selector item Sales boleh difilter per Jenis Item, tetapi filter UI tidak boleh mengubah payload final atau source stok (`collectionName` + `itemId`).
+- Field reference/resi wajib tetap opsional dan hanya aktif untuk channel yang relevan; Offline/WhatsApp tidak boleh memaksa reference tersimpan.
 - Sale tidak boleh tersimpan jika stok tersedia tidak cukup.
 - Jika mutasi stok gagal setelah sale dibuat, sale baru wajib dibatalkan/rollback agar tidak ada transaksi orphan tanpa stok keluar.
 - Income rule tidak berubah: income hanya dibuat saat sale berstatus `Selesai` dan tidak boleh dobel.

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Button,
   DatePicker,
   Form,
@@ -727,23 +726,72 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
             </Form.Item>
           ) : null}
 
-          {selectedStockSnapshot ? (
-            <Alert
-              showIcon
-              type={selectedAdjustmentType === "out" ? "warning" : "info"}
-              style={{ marginBottom: 16 }}
-              message={`Stok tersedia ${selectedStockSnapshot.label || "item"}`}
-              description={`Stok saat ini: ${formatQuantityId(
-                selectedStockSnapshot.currentStock,
-                quantityUnitLabel,
-              )} | Dipesan: ${formatQuantityId(
-                selectedStockSnapshot.reservedStock,
-                quantityUnitLabel,
-              )} | Tersedia: ${formatQuantityId(
-                selectedStockSnapshot.availableStock,
-                quantityUnitLabel,
-              )}`}
-            />
+          {/* =====================================================
+              SECTION: Snapshot stok terpilih - AKTIF / GUARDED
+              Fungsi blok:
+              - menampilkan current/reserved/available stock sebagai panel read-only pasif, bukan Alert warning.
+              Hubungan flow Stock Adjustment:
+              - hanya mengganti tampilan snapshot sebelum submit; validasi availableStock, variantKey, transaction, stock_adjustments, dan inventory_logs tetap memakai logic existing.
+              Alasan logic:
+              - info stok bukan warning/error, sehingga lebih aman secara UX ditampilkan sebagai panel clean seperti Purchases.
+              Status: AKTIF untuk UI Stock Adjustment, GUARDED terhadap mutasi stok dan payload Firestore.
+          ===================================================== */}
+          {selectedItem ? (
+            <div className="ims-readonly-panel">
+              <div className="ims-readonly-panel-header">
+                <div>
+                  <div className="ims-readonly-panel-title">
+                    Stok Terpilih Sebelum Penyesuaian
+                  </div>
+                  <div className="ims-readonly-panel-description">
+                    Snapshot ini hanya membantu membaca stok saat ini. Perubahan stok tetap terjadi saat submit penyesuaian resmi.
+                  </div>
+                </div>
+                <Tag color={selectedItemHasVariants ? "purple" : "default"}>
+                  {selectedItemHasVariants ? "Varian" : "Master"}
+                </Tag>
+              </div>
+
+              <div style={{ marginBottom: selectedStockSnapshot ? 10 : 0 }}>
+                <span style={{ fontWeight: 600 }}>
+                  {selectedItem.name || "Item"}
+                </span>
+                {selectedStockSnapshot?.label ? (
+                  <span style={{ color: "var(--ims-text-secondary)" }}>
+                    {` — ${selectedStockSnapshot.label}`}
+                  </span>
+                ) : null}
+              </div>
+
+              {selectedStockSnapshot ? (
+                <div className="ims-readonly-stat-grid">
+                  <div className="ims-readonly-stat-field">
+                    <div className="ims-readonly-stat-label">Current Stock</div>
+                    <div className="ims-readonly-stat-value">
+                      {formatQuantityId(selectedStockSnapshot.currentStock, quantityUnitLabel)}
+                    </div>
+                  </div>
+                  <div className="ims-readonly-stat-field">
+                    <div className="ims-readonly-stat-label">Reserved Stock</div>
+                    <div className="ims-readonly-stat-value">
+                      {formatQuantityId(selectedStockSnapshot.reservedStock, quantityUnitLabel)}
+                    </div>
+                  </div>
+                  <div className="ims-readonly-stat-field">
+                    <div className="ims-readonly-stat-label">Available Stock</div>
+                    <div className="ims-readonly-stat-value">
+                      {formatQuantityId(selectedStockSnapshot.availableStock, quantityUnitLabel)}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {selectedItemHasVariants ? (
+                <div className="ims-readonly-panel-note">
+                  Item bervarian wajib masuk ke varian yang dipilih agar stok bucket varian dan total master tetap sinkron.
+                </div>
+              ) : null}
+            </div>
           ) : null}
 
           <Form.Item

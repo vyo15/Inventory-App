@@ -165,6 +165,11 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Jangan kembali memakai `currentStock` saja untuk validasi sale.
 - Jika item sama muncul beberapa baris, total kebutuhan harus dihitung sebelum create sale.
 - Item bervarian wajib memakai `variantKey` yang valid.
+- Sales item selector tidak boleh kembali mencampur semua Produk Jadi dan Bahan Baku dalam satu dropdown panjang tanpa filter Jenis Item.
+- Field Jenis Item di Sales adalah filter UI-only; payload final tetap wajib memakai `collectionName`, `itemId`, `itemName`, `typeLabel`, `variantKey`, `variantLabel`, dan `stockSourceType`.
+- Saat Jenis Item berubah, reset `itemId`, `variantKey`, `quantity`, dan `pricePerUnit` agar tidak memakai data stale dari source item lama.
+- WhatsApp boleh diperlakukan sebagai non-reference channel, tetapi jangan otomatis disamakan dengan Offline untuk status `Selesai` atau timing income.
+- Offline/WhatsApp tidak perlu menyimpan `referenceNumber`; channel marketplace/online boleh menyimpan reference opsional.
 - Income tetap hanya dibuat saat status `Selesai` dan tidak boleh dobel.
 - Cancel/delete sale tetap guarded agar stok tidak double revert.
 
@@ -402,3 +407,9 @@ Status: **AKTIF + GUARDED**. Gunakan section ini untuk semua task yang menyentuh
 - Pricing Rules harus tetap opsional: default create Product/Raw Material Manual, dan `pricingRuleId` hanya wajib saat mode Rule.
 - Untuk merge beberapa ZIP patch, jangan overwrite file overlap mentah. Bandingkan patch terhadap baseline terbaru, merge manual file konflik, dan hasil akhir tetap ZIP berisi changed files only.
 
+
+## Prompt Guard — Read-only Panel dan Alert Semantik
+- Snapshot/read-only info pasif seperti stok terpilih, summary stok, detail biaya pasif, atau preview item tidak boleh memakai bubble `Alert` besar jika bukan warning/error.
+- `Alert` tetap dipertahankan untuk warning, error, validation, blocked action, destructive flow, reset, auth, security, maintenance, atau risk notice.
+- Perubahan read-only panel harus presentational-only: jangan ubah payload form, validasi, transaksi Firestore, formula stok/kas/produksi/HPP, formatter angka, atau schema.
+- Jika task menyentuh Stock Adjustment UI, snapshot stok harus tetap menampilkan current/reserved/available stock dan helper varian, tetapi transaction `stock_adjustments` + `inventory_logs` tidak boleh berubah.

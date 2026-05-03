@@ -547,3 +547,12 @@ Temuan terkini:
 Risiko tersisa:
 - Data lama dengan stok master > 0 belum punya flow alokasi stok master ke beberapa varian dengan audit. Itu harus menjadi task terpisah jika dibutuhkan.
 - Semi Finished masih area produksi guarded; Stock Adjustment resmi sudah mendukung koreksi stok Semi Finished, tetapi konversi stok lama ke varian tetap tidak boleh dilakukan otomatis tanpa desain audit produksi.
+
+## UI Read-only Panel / Alert Semantics — 2026-05-03
+
+### Status aktif
+- Stock Adjustment snapshot stok terpilih memakai panel read-only clean, bukan bubble `Alert`, agar info pasif tidak terlihat seperti warning.
+- Perubahan ini presentational-only: validasi `availableStock`, pilihan `variantKey`, transaction `stock_adjustments`, mutasi stok, dan `inventory_logs` tetap mengikuti flow existing.
+
+### Cleanup candidate
+- Beberapa page-level explanation atau detail read-only di modul produksi/master/transaksi masih memakai `Alert` info. Area tersebut boleh dirapikan bertahap jika terbukti pasif, tetapi jangan mengganti warning/error/destructive/security guard.

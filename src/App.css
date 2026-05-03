@@ -563,6 +563,90 @@
   font-weight: 600;
 }
 
+
+/* =========================
+   SECTION: Shared Readonly Panel Surface - AKTIF / GUARDED
+   Fungsi:
+   - menyatukan panel snapshot/read-only pasif agar tidak memakai Alert besar yang terasa seperti warning.
+   Hubungan flow aplikasi:
+   - presentational only untuk info stok/summary; tidak mengubah value form, validasi, payload, atau transaksi Firestore.
+   Status:
+   - AKTIF untuk snapshot stok dan info read-only.
+   - GUARDED: jangan dipakai untuk warning/error/destructive/security alert.
+========================= */
+.ims-readonly-panel {
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 16px;
+  background: var(--ims-surface-muted);
+}
+
+.ims-readonly-panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ims-readonly-panel-title {
+  font-weight: 600;
+  color: var(--ims-text-primary);
+  line-height: 1.35;
+}
+
+.ims-readonly-panel-description {
+  margin-top: 4px;
+  color: var(--ims-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ims-readonly-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ims-readonly-stat-field {
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--ims-bg-card);
+}
+
+.ims-readonly-stat-label {
+  color: var(--ims-text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ims-readonly-stat-value {
+  margin-top: 2px;
+  font-weight: 700;
+  color: var(--ims-text-primary);
+  line-height: 1.35;
+}
+
+.ims-readonly-panel-note {
+  margin-top: 10px;
+  color: var(--ims-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@media (max-width: 575px) {
+  .ims-readonly-stat-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .ims-cell-tag-list {
   display: flex;
   flex-wrap: wrap;

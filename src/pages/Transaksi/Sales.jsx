@@ -71,6 +71,17 @@ const salesChannels = [
   { value: "Lainnya", label: "Lainnya" },
 ];
 
+// IMS NOTE [AKTIF] - Filter sumber item Sales.
+// Fungsi blok: menyediakan pilihan Jenis Item per line agar Produk Jadi dan Bahan Baku tidak tercampur dalam satu dropdown panjang.
+// Hubungan flow: ini hanya helper UI; payload final sale tetap memakai collectionName + itemId dari item terpilih.
+// Alasan logic: user memilih sumber item dulu, lalu Select item difilter tanpa mengubah business rule penjualan.
+const sellableItemTypeOptions = [
+  { value: "products", label: "Produk Jadi" },
+  { value: "raw_materials", label: "Bahan Baku" },
+];
+
+const defaultSaleLineItemType = "products";
+
 // =========================
 // SECTION: Status penjualan online
 // =========================
@@ -124,6 +135,13 @@ const Sales = () => {
   }, [products, rawMaterials]);
 
   const findSellableItem = (itemKey) => sellableItems.find((item) => item.itemKey === itemKey);
+
+  // IMS NOTE [AKTIF] - Item dropdown difilter berdasarkan Jenis Item.
+  // Fungsi blok: menampilkan hanya item dari collection yang dipilih user pada line Sales.
+  // Hubungan flow: buildSellableKey tetap dipakai sehingga payload final lama tetap kompatibel.
+  // Alasan logic: mengurangi risiko salah pilih item saat products dan raw_materials sudah banyak.
+  const getSellableItemsByType = (itemType) =>
+    sellableItems.filter((item) => item.collectionName === itemType);
 
   useEffect(() => {
     fetchSales(activeTabKey);
@@ -237,6 +255,28 @@ const Sales = () => {
   };
 
   // =========================
+  // SECTION: Saat jenis item berubah, reset line agar tidak memakai item/varian/harga stale
+  // =========================
+  const handleSaleItemTypeChange = (itemType, itemIndex) => {
+    const currentItems = form.getFieldValue("items") || [];
+
+    // IMS NOTE [GUARDED] - Reset field line saat sumber item berubah.
+    // Fungsi blok: menghapus itemId, variantKey, qty, dan harga yang mungkin berasal dari collection lama.
+    // Hubungan flow Sales/stok: mencegah payload final memakai collectionName/item/variant yang tidak sesuai filter UI.
+    // Alasan logic: itemType adalah field UI-only; source final tetap dibangun dari selectedItem.collectionName.
+    currentItems[itemIndex] = {
+      ...(currentItems[itemIndex] || {}),
+      itemType,
+      itemId: undefined,
+      variantKey: undefined,
+      quantity: 1,
+      pricePerUnit: 0,
+    };
+
+    form.setFieldsValue({ items: [...currentItems] });
+  };
+
+  // =========================
   // SECTION: Saat item dipilih, harga otomatis diisi dan varian di-reset
   // =========================
   const handleSaleItemChange = (itemKey, itemIndex) => {
@@ -269,9 +309,16 @@ const Sales = () => {
   };
 
   // =========================
-  // SECTION: Helper channel offline
+  // SECTION: Helper channel offline dan reference
   // =========================
   const isOfflineChannel = (channel) => channel === "Offline";
+
+  // IMS NOTE [AKTIF/GUARDED] - WhatsApp hanya non-reference, bukan offline status.
+  // Fungsi blok: menentukan apakah input No. Resi/Order/Referensi boleh aktif.
+  // Hubungan flow: Offline tetap otomatis Selesai; WhatsApp tidak diubah status/income timing-nya.
+  // Alasan logic: mencegah resi marketplace terisi pada channel yang biasanya tidak memakai reference.
+  const isReferenceNumberEnabledChannel = (channel) =>
+    !["Offline", "WhatsApp"].includes(channel);
 
   // =========================
   // SECTION: Cek apakah income sale sudah pernah dibuat
@@ -298,7 +345,7 @@ const Sales = () => {
       salesChannel: "Shopee",
       status: "Diproses",
       date: dayjs(),
-      items: [{ itemId: undefined, variantKey: undefined, quantity: 1, pricePerUnit: 0 }],
+      items: [{ itemType: defaultSaleLineItemType, itemId: undefined, variantKey: undefined, quantity: 1, pricePerUnit: 0 }],
     });
   };
 
@@ -513,7 +560,9 @@ const Sales = () => {
         salesChannel,
         status,
         date: Timestamp.fromDate(date.toDate()),
-        referenceNumber: referenceNumber || null,
+        referenceNumber: isReferenceNumberEnabledChannel(salesChannel)
+          ? referenceNumber || null
+          : null,
         total: totalSaleValue,
         note: note || "",
         createdAt: Timestamp.now(),
@@ -797,7 +846,7 @@ const Sales = () => {
       key: "salesChannel",
     },
     {
-      title: "No. Resi / Order / Referensi",
+      title: "Resi / Order / Referensi",
       dataIndex: "referenceNumber",
       key: "referenceNumber",
       render: (value) => value || "-",
@@ -908,11 +957,19 @@ const Sales = () => {
   ];
 
   const handleSalesChannelChange = (channel) => {
-    if (isOfflineChannel(channel)) {
-      form.setFieldsValue({ status: "Selesai" });
-    } else {
-      form.setFieldsValue({ status: "Diproses" });
+    const nextValues = isOfflineChannel(channel)
+      ? { status: "Selesai" }
+      : { status: "Diproses" };
+
+    // IMS NOTE [AKTIF/GUARDED] - Reference dikosongkan untuk channel non-reference.
+    // Fungsi blok: menghapus nilai resi/order lama saat user mengganti channel ke Offline/WhatsApp.
+    // Hubungan flow: field reference tetap opsional dan tidak mengubah status/income timing WhatsApp.
+    // Alasan logic: mencegah data reference marketplace tersimpan pada channel yang tidak relevan.
+    if (!isReferenceNumberEnabledChannel(channel)) {
+      nextValues.referenceNumber = undefined;
     }
+
+    form.setFieldsValue(nextValues);
   };
 
   return (
@@ -937,7 +994,7 @@ const Sales = () => {
       >
         <div style={{ marginBottom: 12, maxWidth: 360 }}>
           <Input.Search
-            placeholder="Cari nomor resi / order / referensi"
+            placeholder="Cari resi / order marketplace / referensi"
             allowClear
             value={receiptSearch}
             onChange={(event) => setReceiptSearch(event.target.value)}
@@ -987,16 +1044,60 @@ const Sales = () => {
               <>
                 {fields.map(({ key, name, ...restField }) => (
                   <div key={key} style={{ border: "1px solid #d9d9d9", padding: 12, marginBottom: 16, borderRadius: 8 }}>
-                    <Form.Item {...restField} name={[name, "itemId"]} rules={[{ required: true, message: "Pilih item!" }]} style={{ marginBottom: 12 }}>
-                      <Select placeholder="Pilih produk / bahan baku" onChange={(itemId) => handleSaleItemChange(itemId, name)} showSearch optionFilterProp="children">
-                        {/* ACTIVE / FINAL: opsi item menampilkan availableStock agar UI Sales sejalan dengan validasi stok final. Bukan legacy/kandidat cleanup. */}
-                        {sellableItems.map((item) => (
-                          <Option key={item.itemKey} value={item.itemKey}>
-                            {item.name} ({item.typeLabel} - Stok tersedia: {formatNumberId(getItemStockSnapshot(item).availableStock)})
-                          </Option>
-                        ))}
-                      </Select>
-                    </Form.Item>
+                    <Space style={{ width: "100%" }} align="baseline" wrap>
+                      <Form.Item
+                        {...restField}
+                        label="Jenis Item"
+                        name={[name, "itemType"]}
+                        rules={[{ required: true, message: "Pilih jenis item!" }]}
+                        style={{ width: 180, marginBottom: 12 }}
+                      >
+                        <Select placeholder="Pilih jenis" onChange={(itemType) => handleSaleItemTypeChange(itemType, name)}>
+                          {sellableItemTypeOptions.map((option) => (
+                            <Option key={option.value} value={option.value}>
+                              {option.label}
+                            </Option>
+                          ))}
+                        </Select>
+                      </Form.Item>
+
+                      <Form.Item shouldUpdate noStyle>
+                        {({ getFieldValue }) => {
+                          const selectedItemType = getFieldValue(["items", name, "itemType"]);
+                          const filteredSellableItems = getSellableItemsByType(selectedItemType);
+
+                          return (
+                            <Form.Item
+                              {...restField}
+                              label="Item Penjualan"
+                              name={[name, "itemId"]}
+                              rules={[{ required: true, message: "Pilih item!" }]}
+                              extra={
+                                selectedItemType
+                                  ? "Daftar item sudah difilter berdasarkan Jenis Item."
+                                  : "Pilih Jenis Item terlebih dahulu."
+                              }
+                              style={{ flex: 1, minWidth: 320, marginBottom: 12 }}
+                            >
+                              <Select
+                                placeholder={selectedItemType ? "Pilih item sesuai jenis" : "Pilih Jenis Item dulu"}
+                                disabled={!selectedItemType}
+                                onChange={(itemId) => handleSaleItemChange(itemId, name)}
+                                showSearch
+                                optionFilterProp="children"
+                              >
+                                {/* IMS NOTE [AKTIF] - opsi item difilter per collection agar Produk Jadi dan Bahan Baku tidak bercampur. */}
+                                {filteredSellableItems.map((item) => (
+                                  <Option key={item.itemKey} value={item.itemKey}>
+                                    {item.name} ({item.typeLabel} - Stok tersedia: {formatNumberId(getItemStockSnapshot(item).availableStock)})
+                                  </Option>
+                                ))}
+                              </Select>
+                            </Form.Item>
+                          );
+                        }}
+                      </Form.Item>
+                    </Space>
 
                     <Form.Item shouldUpdate noStyle>
                       {({ getFieldValue }) => {
@@ -1057,7 +1158,7 @@ const Sales = () => {
                 ))}
 
                 <Form.Item>
-                  <Button type="dashed" onClick={() => add({ itemId: undefined, variantKey: undefined, quantity: 1, pricePerUnit: 0 })} block icon={<PlusOutlined />}>
+                  <Button type="dashed" onClick={() => add({ itemType: defaultSaleLineItemType, itemId: undefined, variantKey: undefined, quantity: 1, pricePerUnit: 0 })} block icon={<PlusOutlined />}>
                     Tambah Item
                   </Button>
                 </Form.Item>
@@ -1098,8 +1199,32 @@ const Sales = () => {
             }}
           </Form.Item>
 
-          <Form.Item label="No. Resi / No. Order / Referensi" name="referenceNumber">
-            <Input placeholder="Opsional: Masukkan nomor resi / order / referensi" />
+          <Form.Item shouldUpdate noStyle>
+            {({ getFieldValue }) => {
+              const salesChannel = getFieldValue("salesChannel");
+              const referenceEnabled = isReferenceNumberEnabledChannel(salesChannel);
+
+              return (
+                <Form.Item
+                  label="No. Resi / No. Order Marketplace"
+                  name="referenceNumber"
+                  extra={
+                    referenceEnabled
+                      ? "Opsional untuk marketplace/online. Isi jika ada nomor resi, order, atau reference transaksi."
+                      : "Tidak diperlukan untuk Offline/WhatsApp. Nilai akan dikosongkan otomatis."
+                  }
+                >
+                  <Input
+                    disabled={!referenceEnabled}
+                    placeholder={
+                      referenceEnabled
+                        ? "Opsional: masukkan nomor resi / order marketplace"
+                        : "Tidak diperlukan untuk channel ini"
+                    }
+                  />
+                </Form.Item>
+              );
+            }}
           </Form.Item>
 
           <Form.Item label="Tanggal" name="date" rules={[{ required: true, message: "Harap pilih tanggal!" }]} initialValue={dayjs()}>

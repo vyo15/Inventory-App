@@ -56,11 +56,21 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - cek expense otomatis masuk
 
 ### Penjualan
+- buka form Tambah Penjualan dan pastikan ada field Jenis Item per line
+- pilih Jenis Item Produk Jadi dan pastikan dropdown item hanya menampilkan produk dari `products`
+- pilih Jenis Item Bahan Baku dan pastikan dropdown item hanya menampilkan bahan dari `raw_materials`
+- ganti Jenis Item setelah item dipilih, lalu pastikan `itemId`, `variantKey`, `quantity`, dan `pricePerUnit` reset aman
+- pilih Produk Jadi dan pastikan harga otomatis memakai `price`
+- pilih Bahan Baku dan pastikan harga otomatis memakai `sellingPrice`
+- pilih item bervarian dan pastikan `variantKey` wajib sebelum submit
 - buat penjualan status `Diproses`
 - cek stok langsung berkurang
 - pastikan income belum tercatat
 - ubah status menjadi `Selesai`
 - cek income tercatat sekali saja
+- pilih channel Shopee/Tokopedia/TikTok Shop/Lazada/Instagram/Lainnya dan pastikan field reference aktif tetapi opsional
+- pilih channel Offline dan pastikan reference disabled serta value dikosongkan
+- pilih channel WhatsApp dan pastikan reference disabled serta value dikosongkan tanpa mengubah status/income timing menjadi Offline
 - ubah status menjadi `Dibatalkan`
 - cek stok kembali
 - hapus sale yang statusnya belum dibatalkan
@@ -473,6 +483,11 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 ## Checklist Final Hardening Fase A-G - 2026-04-26
 
 ### Fase A - Sales Stock Safety
+- [ ] Buka form Sales dan pastikan Jenis Item memfilter dropdown: Produk Jadi hanya `products`, Bahan Baku hanya `raw_materials`.
+- [ ] Ganti Jenis Item setelah item dipilih dan pastikan item, varian, quantity, dan harga reset agar tidak stale.
+- [ ] Pilih channel Offline/WhatsApp dan pastikan `referenceNumber` disabled serta dikosongkan.
+- [ ] Pilih channel marketplace/online dan pastikan `referenceNumber` aktif tetapi tetap opsional.
+- [ ] Pastikan WhatsApp tidak otomatis diperlakukan seperti Offline untuk status/income timing.
 - [ ] Buat sale stok cukup dan pastikan sale tersimpan.
 - [ ] Pastikan stok master/varian berkurang setelah sale dibuat.
 - [ ] Buat sale stok tidak cukup dan pastikan sale tidak tersimpan.
@@ -893,3 +908,11 @@ Status: **AKTIF + GUARDED**. Checklist ini menggantikan checklist Auth/Role lama
 - Login valid tetap masuk sesuai role/status.
 - User inactive/invalid role tetap diblokir oleh flow existing.
 
+
+### UI Read-only Panel / Alert Semantics
+- [ ] Stock Management > Tambah Penyesuaian menampilkan snapshot stok terpilih sebagai panel read-only clean, bukan bubble `Alert` besar.
+- [ ] Snapshot Stock Adjustment menampilkan nama item, nama varian bila ada, Current Stock, Reserved Stock, Available Stock, dan satuan stok dengan format Indonesia tanpa `.00`.
+- [ ] Item bervarian tetap menampilkan helper bahwa penyesuaian wajib masuk ke varian agar total master sinkron.
+- [ ] Submit adjustment masuk/keluar tetap membuat `stock_adjustments`, mutasi stok, dan `inventory_logs` seperti sebelum perubahan UI.
+- [ ] Warning/error/destructive/security/reset/auth alert tetap memakai `Alert` agar semantik guard tidak hilang.
+- [ ] Purchases “Stok Aktual Sebelum Restock” tetap rapi dan tidak berubah logic.
