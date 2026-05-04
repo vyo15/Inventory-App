@@ -1,20 +1,19 @@
 /* =========================
    SECTION: Login Page Scope — AKTIF / UI ONLY
    Fungsi:
-   - membatasi redesign Login modern minimalis hanya pada halaman login agar tidak bocor ke layout aplikasi utama.
+   - membatasi redesign hanya pada halaman login agar tidak bocor ke layout aplikasi utama.
    Hubungan flow aplikasi:
-   - dipakai oleh src/pages/Auth/Login.jsx dan tidak menyentuh AppLayout, Sidebar, AuthContext, Dashboard, route guard, atau modul bisnis.
+   - dipakai oleh src/pages/Auth/Login.jsx dan tidak menyentuh AppLayout, Sidebar, AuthContext, Dashboard, atau modul bisnis.
    Alasan logic dipakai:
-   - halaman login perlu terasa clean corporate tanpa gradasi dan tanpa dekorasi besar yang mengganggu logo/form.
+   - menjaga tampilan login modern tetap scoped dengan prefix .ims-login-*.
    Status logic:
    - AKTIF untuk UI Login IMS Bunga Flanel.
-   - GUARDED secara scope karena semua selector tetap memakai prefix .ims-login-*.
    ========================= */
 .ims-login-page {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
-  padding: clamp(18px, 3vw, 36px);
+  padding: clamp(18px, 3vw, 34px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -25,11 +24,11 @@
 /* =========================
    SECTION: Main Login Canvas — AKTIF / UI ONLY
    Fungsi:
-   - membangun layout dua panel: brand logo di kiri dan form login di kanan.
+   - membangun container utama dua panel: brand kiri dan form kanan.
    Hubungan flow aplikasi:
-   - hanya membungkus BrandPanel dan form panel; tidak mengubah AuthContext, Firebase Auth, route, role, atau business data.
+   - hanya membungkus BrandPanel dan form login; tidak mengubah AuthContext, route guard, role, atau data.
    Alasan logic dipakai:
-   - visual dibuat flat/solid tanpa gradasi supaya lebih minimalist modern dan tidak terlihat seperti template ramai.
+   - container putih dengan shadow soft membuat login terasa lebih proper tanpa gradient berat.
    Status logic:
    - AKTIF untuk desktop dan mobile.
    ========================= */
@@ -46,18 +45,12 @@
   border: 1px solid var(--ims-border-color);
   border-radius: 34px;
   background: var(--ims-bg-card);
-  box-shadow: 0 28px 70px color-mix(in srgb, var(--ims-color-primary-soft) 34%, transparent);
+  box-shadow: 0 34px 92px rgba(16, 32, 51, 0.13);
   overflow: hidden;
 }
 
 .ims-login-layout::before {
-  content: "";
-  position: absolute;
-  inset: 0 50% 0 0;
-  z-index: 0;
-  background: color-mix(in srgb, var(--ims-color-accent-yellow-soft) 20%, var(--ims-bg-card));
-  border-right: 1px solid color-mix(in srgb, var(--ims-color-primary) 8%, transparent);
-  pointer-events: none;
+  content: none;
 }
 
 .ims-login-layout::after {
@@ -65,25 +58,28 @@
   position: absolute;
   width: 150px;
   height: 150px;
-  left: 51%;
   top: 74px;
+  left: 51%;
   z-index: 0;
-  background-image: radial-gradient(color-mix(in srgb, var(--ims-color-accent-yellow) 28%, transparent) 1.1px, transparent 1.1px);
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--ims-color-accent-yellow) 28%, transparent) 1.1px,
+    transparent 1.1px
+  );
   background-size: 16px 16px;
   opacity: 0.7;
   pointer-events: none;
 }
 
 /* =========================
-   SECTION: Brand Panel — AKTIF / UI ONLY
+   SECTION: Brand Panel Surface — AKTIF / UI ONLY
    Fungsi:
-   - menampilkan badge, logo utama, motif hiasan pinggir, dan note internal dalam komposisi brand panel.
+   - membuat area kiri berwarna cream rata, soft, dan tidak membentuk warp/garis tengah.
    Hubungan flow aplikasi:
-   - konteks visual sebelum login tanpa menyentuh input, submit, Firebase Auth, role, route, stok, kas, atau modul bisnis.
+   - panel brand hanya visual; tidak menyentuh username, password, handleLogin, profile gate, atau route guard.
    Alasan logic dipakai:
-   - headline dan deskripsi panjang dihapus agar logo resmi Flanel Karawang Industries menjadi focal point tunggal.
+   - warna cream dipasang langsung pada panel kiri agar hasilnya merata seperti preview, bukan pseudo layer setengah container.
    Status logic:
-   - AKTIF untuk branding login modern minimalis.
+   - AKTIF untuk visual Login.
    ========================= */
 .ims-login-brand-panel {
   position: relative;
@@ -91,31 +87,61 @@
   min-height: 520px;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  align-items: center;
   gap: 28px;
+  align-items: center;
+  padding: clamp(32px, 3.6vw, 46px);
+  border: 1px solid color-mix(in srgb, var(--ims-color-accent-yellow) 8%, transparent);
+  border-radius: 30px;
+  background: #fffdf6;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
 }
 
-.ims-login-brand-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
+.ims-login-brand-panel::before {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  z-index: -1;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.34);
+  pointer-events: none;
 }
 
+/* =========================
+   SECTION: Brand Badge — AKTIF / UI ONLY
+   Fungsi:
+   - menampilkan label kecil Inventory Management System di panel kiri.
+   Hubungan flow aplikasi:
+   - copy visual saja; tidak mengubah auth, role, route, stok, kas, atau modul bisnis.
+   Alasan logic dipakai:
+   - badge dibuat sedikit lebih besar dari note agar hierarchy jelas.
+   Status logic:
+   - AKTIF untuk branding login.
+   ========================= */
 .ims-login-badge {
   width: fit-content;
-  padding: 8px 16px;
-  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 20%, var(--ims-border-color));
+  padding: 9px 18px;
+  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 20%, transparent);
   border-radius: 999px;
   background: var(--ims-bg-card);
-  color: var(--ims-color-primary-hover);
-  box-shadow: 0 12px 24px color-mix(in srgb, var(--ims-color-primary-soft) 22%, transparent);
-  font-size: 12px;
+  color: var(--ims-color-primary-active);
+  box-shadow: 0 12px 24px rgba(44, 109, 176, 0.08);
+  font-size: 12.5px;
   font-weight: 900;
-  letter-spacing: 0.16em;
-  line-height: 1;
+  letter-spacing: 0.17em;
   text-transform: uppercase;
 }
 
+/* =========================
+   SECTION: Brand Stage and Motif — AKTIF / UI ONLY
+   Fungsi:
+   - menempatkan logo sebagai focal point dengan pemanis pill/dot biru-kuning di pinggir.
+   Hubungan flow aplikasi:
+   - dekorasi murni; tidak menyentuh input, submit, Firebase Auth, role, route, atau data bisnis.
+   Alasan logic dipakai:
+   - menghindari garis/shape besar yang terlihat seperti bug dan menjaga logo tidak tertimpa hiasan.
+   Status logic:
+   - AKTIF untuk visual Login modern.
+   ========================= */
 .ims-login-brand-stage {
   position: relative;
   min-height: 380px;
@@ -130,17 +156,6 @@
   content: none;
 }
 
-/* =========================
-   SECTION: Brand Motif — AKTIF / UI ONLY
-   Fungsi:
-   - memberi hiasan pill/dot biru-kuning di pinggir logo agar halaman tidak polos.
-   Hubungan flow aplikasi:
-   - dekorasi murni; tidak memengaruhi auth flow, route guard, role access, atau data bisnis.
-   Alasan logic dipakai:
-   - motif diposisikan jauh dari logo agar tidak menabrak logo dan tidak membuat efek warp/shape menyatu.
-   Status logic:
-   - AKTIF untuk polish visual Login.
-   ========================= */
 .ims-login-brand-motif {
   position: absolute;
   inset: 0;
@@ -221,67 +236,118 @@
   background: color-mix(in srgb, var(--ims-color-primary) 72%, transparent);
 }
 
+.ims-login-motif-pill--blue-three {
+  left: 1%;
+  top: 57%;
+  width: 58px;
+  background: color-mix(in srgb, var(--ims-color-primary) 12%, transparent);
+  transform: rotate(14deg);
+}
+
+.ims-login-motif-pill--yellow-three {
+  right: 1%;
+  bottom: 47%;
+  width: 62px;
+  background: color-mix(in srgb, var(--ims-color-accent-yellow) 18%, transparent);
+  transform: rotate(-14deg);
+}
+
+.ims-login-motif-dot--five {
+  left: 4%;
+  bottom: 42%;
+  width: 9px;
+  height: 9px;
+  background: color-mix(in srgb, var(--ims-color-accent-yellow) 82%, transparent);
+}
+
+.ims-login-motif-dot--six {
+  right: 4%;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  background: color-mix(in srgb, var(--ims-color-primary) 68%, transparent);
+}
+
+/* =========================
+   SECTION: Main Brand Logo — AKTIF / UI ONLY
+   Fungsi:
+   - menampilkan logo resmi Flanel Karawang Industries besar, bersih, dan sedikit turun dari center.
+   Hubungan flow aplikasi:
+   - visual non-interaktif; tidak terhubung ke auth, route, role, Firestore, stok, kas, atau modul bisnis.
+   Alasan logic dipakai:
+   - logo menjadi focal point utama, sementara motif tetap berada di pinggir.
+   Status logic:
+   - AKTIF untuk branding utama Login.
+   ========================= */
 .ims-login-logo-showcase {
-  position: relative;
-  z-index: 1;
-  width: min(560px, 88%);
-  margin: 0;
+  width: min(600px, 92%);
   display: flex;
   align-items: center;
   justify-content: center;
-  justify-self: center;
-  background: transparent;
+  z-index: 1;
+  transform: translateY(16px);
 }
 
 .ims-login-brand-logo {
+  width: min(560px, 100%);
+  max-height: 360px;
+  object-fit: contain;
   position: relative;
   z-index: 2;
-  width: min(520px, 100%);
-  max-height: 330px;
-  object-fit: contain;
-  filter: drop-shadow(0 20px 24px color-mix(in srgb, var(--ims-color-primary-soft) 22%, transparent));
+  filter: drop-shadow(0 20px 24px rgba(16, 32, 51, 0.07));
 }
 
+/* =========================
+   SECTION: Internal Login Note — AKTIF / UI ONLY
+   Fungsi:
+   - menampilkan catatan kecil bahwa login hanya untuk user internal.
+   Hubungan flow aplikasi:
+   - microcopy visual saja; tidak mengubah flow login, role, permission, atau route.
+   Alasan logic dipakai:
+   - note dibuat lebih kecil daripada badge agar tidak mengambil fokus dari logo.
+   Status logic:
+   - AKTIF sebagai helper text login.
+   ========================= */
 .ims-login-brand-note {
-  position: relative;
-  z-index: 2;
   width: fit-content;
-  max-width: min(440px, 100%);
-  align-self: end;
-  justify-self: start;
+  max-width: min(390px, 100%);
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 11px 15px;
-  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 16%, var(--ims-border-color));
-  border-radius: 16px;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 12%, transparent);
+  border-radius: 12px;
   background: var(--ims-bg-card);
   color: var(--ims-text-secondary);
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--ims-color-primary-soft) 18%, transparent);
+  box-shadow: 0 8px 18px rgba(44, 109, 176, 0.06);
+  font-size: 9.2px;
+  font-weight: 650;
+  transform: translateY(14px);
 }
 
 .ims-login-brand-note .ant-typography {
-  font-size: 12px;
-  font-weight: 650;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
 }
 
 .ims-login-note-dot {
-  flex: 0 0 auto;
-  width: 10px;
-  height: 10px;
+  width: 5px;
+  height: 5px;
   border-radius: 999px;
   background: var(--ims-color-primary);
-  box-shadow: 15px 0 0 -3px var(--ims-color-accent-yellow);
+  box-shadow: 8px 0 0 -2px var(--ims-color-accent-yellow);
+  flex: 0 0 auto;
 }
 
 /* =========================
    SECTION: Form Panel and Card — AKTIF / GUARDED UI
    Fungsi:
-   - menjaga form login tetap fokus di card kanan yang modern, solid, dan tidak ramai.
+   - menjaga form login tetap fokus di dalam card modern kanan.
    Hubungan flow aplikasi:
    - form di dalamnya tetap memanggil handleLogin existing di Login.jsx.
    Alasan logic dipakai:
-   - card memakai surface putih, border, shadow halus, dan dot aksen kecil tanpa mengubah logic submit.
+   - memperbaiki presentasi login tanpa mengubah validasi, submit, AuthContext, Firebase Auth, atau profile gate.
    Status logic:
    - AKTIF untuk semua state login.
    - GUARDED: jangan ubah validation/auth logic dari CSS refinement.
@@ -297,10 +363,10 @@
 .ims-login-card.ant-card {
   position: relative;
   width: min(100%, 410px);
-  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 18%, var(--ims-border-color));
+  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 18%, transparent);
   border-radius: 28px;
   background: var(--ims-bg-card);
-  box-shadow: 0 26px 62px color-mix(in srgb, var(--ims-color-primary-soft) 30%, transparent);
+  box-shadow: 0 26px 62px rgba(16, 32, 51, 0.1);
   overflow: hidden;
 }
 
@@ -309,7 +375,6 @@
   position: absolute;
   top: 24px;
   right: 28px;
-  z-index: 1;
   width: 10px;
   height: 10px;
   border-radius: 999px;
@@ -320,9 +385,7 @@
 }
 
 .ims-login-card .ant-card-body {
-  position: relative;
-  z-index: 2;
-  padding: clamp(34px, 4vw, 46px) clamp(28px, 3.8vw, 38px) clamp(30px, 3.6vw, 38px);
+  padding: 46px 38px 38px;
 }
 
 .ims-login-card--compact.ant-card {
@@ -339,7 +402,7 @@
 }
 
 .ims-login-eyebrow.ant-typography {
-  color: var(--ims-color-primary-hover);
+  color: var(--ims-color-primary-active);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.15em;
@@ -367,7 +430,7 @@
    Hubungan flow aplikasi:
    - presentational only; tidak mengubah handleLogin, validation, AuthContext, Firebase Auth, atau profile gate.
    Alasan logic dipakai:
-   - input dan button tetap memakai Ant Design existing dengan polish lokal agar terlihat modern dan readable.
+   - membuat form kanan lebih readable dan konsisten dengan visual modern.
    Status logic:
    - AKTIF untuk Login UI normal.
    ========================= */
@@ -391,7 +454,6 @@
 
 .ims-login-form .ant-form-item-label > label {
   color: var(--ims-text-primary);
-  font-size: 13px;
   font-weight: 850;
 }
 
@@ -403,7 +465,7 @@
 .ims-login-form .ant-input-affix-wrapper {
   min-height: 50px;
   border-color: var(--ims-border-color);
-  background: var(--ims-bg-elevated);
+  background: var(--ims-bg-card);
 }
 
 .ims-login-form .ant-input-affix-wrapper:hover,
@@ -431,13 +493,33 @@
 }
 
 /* =========================
+   SECTION: Legacy Class Guard — CLEANUP CANDIDATE / UI ONLY
+   Fungsi:
+   - menjaga class lama tidak memunculkan dekorasi/card logo lama jika masih tersisa dari cache atau branch lain.
+   Hubungan flow aplikasi:
+   - visual guard saja; tidak menyentuh auth, route, role, data, atau modul bisnis.
+   Alasan logic dipakai:
+   - transisi aman dari desain lama ke desain final tanpa harus refactor besar.
+   Status logic:
+   - CLEANUP CANDIDATE: bisa dihapus setelah tidak ada class lama di Login.jsx.
+   ========================= */
+.ims-login-background-glow,
+.ims-login-card-brand,
+.ims-login-brand-header,
+.ims-login-brand-copy,
+.ims-login-brand-title,
+.ims-login-brand-description {
+  display: none;
+}
+
+/* =========================
    SECTION: Responsive Layout — AKTIF / UI ONLY
    Fungsi:
    - memastikan halaman login nyaman di tablet dan mobile dengan form-first priority.
    Hubungan flow aplikasi:
-   - hanya mengubah susunan visual, bukan logic auth, route, role, atau data bisnis.
+   - hanya mengubah susunan visual, bukan logic auth.
    Alasan logic dipakai:
-   - di layar kecil form ditampilkan lebih dulu agar user langsung bisa login, brand panel tetap rapi di bawahnya.
+   - mobile harus tetap mudah login dan tidak terlalu panjang.
    Status logic:
    - AKTIF untuk menjaga usability mobile.
    ========================= */
@@ -456,15 +538,14 @@
   }
 
   .ims-login-layout::before {
-    inset: 48% 0 0 0;
-    border-right: 0;
-    border-top: 1px solid color-mix(in srgb, var(--ims-color-primary) 8%, transparent);
+    content: none;
   }
 
   .ims-login-layout::after {
     left: auto;
-    right: 10%;
-    top: 56%;
+    right: 12%;
+    top: 52%;
+    opacity: 0.42;
   }
 
   .ims-login-form-panel {
@@ -474,12 +555,11 @@
   .ims-login-brand-panel {
     order: 2;
     min-height: auto;
-    padding: 16px 4px 4px;
+    padding: 24px 18px;
+    border-radius: 24px;
     text-align: center;
-    gap: 18px;
   }
 
-  .ims-login-brand-header,
   .ims-login-badge,
   .ims-login-brand-note {
     justify-self: center;
@@ -487,15 +567,19 @@
   }
 
   .ims-login-brand-stage {
-    min-height: 280px;
+    min-height: 290px;
+  }
+
+  .ims-login-logo-showcase {
+    transform: translateY(10px);
   }
 
   .ims-login-brand-logo {
-    max-height: 230px;
+    max-height: 245px;
   }
 
-  .ims-login-brand-note {
-    align-self: start;
+  .ims-login-motif-pill {
+    opacity: 0.7;
   }
 }
 
@@ -505,7 +589,7 @@
   }
 
   .ims-login-layout {
-    gap: 14px;
+    gap: 16px;
     padding: 14px;
     border-radius: 24px;
   }
@@ -519,25 +603,25 @@
     padding: 36px 22px 24px;
   }
 
-  .ims-login-card.ant-card::before {
-    top: 18px;
-    right: 24px;
-  }
-
   .ims-login-title.ant-typography {
     font-size: 24px;
   }
 
   .ims-login-brand-panel {
-    padding: 8px 0 0;
+    padding: 18px 12px;
+    border-radius: 20px;
   }
 
   .ims-login-brand-stage {
-    min-height: 220px;
+    min-height: 230px;
+  }
+
+  .ims-login-logo-showcase {
+    transform: translateY(8px);
   }
 
   .ims-login-brand-logo {
-    max-height: 175px;
+    max-height: 188px;
   }
 
   .ims-login-brand-note {

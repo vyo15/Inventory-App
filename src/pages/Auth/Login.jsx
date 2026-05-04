@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Button,
@@ -12,6 +12,7 @@ import {
 } from "antd";
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import flanelKarawangLogo from "../../assets/branding/flanel-karawang-logo.png";
+import flanelKarawangMark from "../../assets/branding/flanel-karawang-mark.png";
 import useAuth from "../../hooks/useAuth";
 import { AUTH_PROFILE_STATUS } from "../../context/AuthContext";
 import "./Login.css";
@@ -24,7 +25,9 @@ const { Text, Title } = Typography;
 // - menerjemahkan status profile auth menjadi pesan yang mudah dipahami user.
 // Hubungan flow aplikasi:
 // - dipakai ketika user valid Firebase Auth tetapi belum boleh masuk karena profile/role/status belum valid.
-// Status:
+// Alasan logic dipakai:
+// - menjaga user yang profile internalnya belum valid tetap tertahan di halaman login.
+// Status logic:
 // - AKTIF untuk login internal IMS.
 // - GUARDED: jangan melewatkan user missing profile/inactive ke AppLayout.
 // =========================
@@ -64,14 +67,67 @@ const getBlockedAccessMessage = (profileStatus) => {
 };
 
 // =========================
+// SECTION: Browser Branding — AKTIF / UI ONLY
+// Fungsi:
+// - memasang title tab dan favicon Flanel pada halaman login.
+// Hubungan flow aplikasi:
+// - hanya menyentuh metadata browser saat Login dirender; tidak menyentuh AuthContext, route guard, role, atau Firestore.
+// Alasan logic dipakai:
+// - memenuhi kebutuhan logo tab tanpa mengubah index.html atau dependency baru.
+// Status logic:
+// - AKTIF untuk branding Login.
+// - CLEANUP CANDIDATE: jika nanti ingin title/favicon global seluruh aplikasi, pindahkan ke level App/index.html.
+// =========================
+const useLoginBrowserBranding = () => {
+  useEffect(() => {
+    const previousTitle = document.title;
+    const faviconSelector = "link[rel~='icon']";
+    let faviconElement = document.querySelector(faviconSelector);
+    const previousFaviconHref = faviconElement?.getAttribute("href") || "";
+    const previousFaviconType = faviconElement?.getAttribute("type") || "";
+    const isCreatedFavicon = !faviconElement;
+
+    if (!faviconElement) {
+      faviconElement = document.createElement("link");
+      faviconElement.setAttribute("rel", "icon");
+      document.head.appendChild(faviconElement);
+    }
+
+    document.title = "IMS Bunga Flanel | Inventory Management System";
+    faviconElement.setAttribute("type", "image/png");
+    faviconElement.setAttribute("href", flanelKarawangMark);
+
+    return () => {
+      document.title = previousTitle;
+
+      if (isCreatedFavicon) {
+        faviconElement?.remove();
+        return;
+      }
+
+      if (previousFaviconHref) {
+        faviconElement?.setAttribute("href", previousFaviconHref);
+      }
+
+      if (previousFaviconType) {
+        faviconElement?.setAttribute("type", previousFaviconType);
+      } else {
+        faviconElement?.removeAttribute("type");
+      }
+    };
+  }, []);
+};
+
+// =========================
 // SECTION: Brand Logo Lockup — AKTIF / UI ONLY
 // Fungsi:
-// - menampilkan logo usaha resmi secara clean tanpa orb/frame besar yang membuat layout terlihat ramai.
+// - menampilkan logo resmi Flanel Karawang Industries sebagai focal point utama panel kiri.
 // Hubungan flow aplikasi:
 // - visual non-interaktif; tidak terhubung ke auth, Firestore, role, route, stok, kas, atau modul bisnis.
-// Status:
+// Alasan logic dipakai:
+// - menjaga brand tampil clean tanpa membuat teks brand dobel di luar asset logo.
+// Status logic:
 // - AKTIF untuk branding utama Login.
-// - SAFE: hanya menyederhanakan struktur visual logo, bukan flow login.
 // =========================
 const BrandLogoShowcase = () => (
   <div
@@ -89,13 +145,13 @@ const BrandLogoShowcase = () => (
 // =========================
 // SECTION: Brand Motif — AKTIF / UI ONLY
 // Fungsi:
-// - memberi hiasan pill/dot biru-kuning di area pinggir logo agar login tidak terlalu polos.
+// - menambah pemanis pill/dot biru-kuning yang ditempatkan di pinggir panel brand.
 // Hubungan flow aplikasi:
-// - hanya elemen presentational; tidak terhubung ke auth, Firestore, role, route, stok, kas, atau modul bisnis.
+// - dekorasi murni; tidak menyentuh input, submit, Firebase Auth, role, route, atau data bisnis.
 // Alasan logic dipakai:
-// - motif ditempatkan jauh dari logo supaya tidak menabrak atau membuat logo terlihat warp/menyatu dengan dekorasi.
-// Status:
-// - AKTIF untuk branding Login modern minimalis.
+// - membuat halaman tidak terlalu polos tanpa memakai garis keras/shape besar yang terlihat seperti bug.
+// Status logic:
+// - AKTIF untuk visual Login.
 // =========================
 const BrandMotif = () => (
   <div className="ims-login-brand-motif" aria-hidden="true">
@@ -107,27 +163,27 @@ const BrandMotif = () => (
     <span className="ims-login-motif-dot ims-login-motif-dot--two" />
     <span className="ims-login-motif-dot ims-login-motif-dot--three" />
     <span className="ims-login-motif-dot ims-login-motif-dot--four" />
+    <span className="ims-login-motif-pill ims-login-motif-pill--blue-three" />
+    <span className="ims-login-motif-pill ims-login-motif-pill--yellow-three" />
+    <span className="ims-login-motif-dot ims-login-motif-dot--five" />
+    <span className="ims-login-motif-dot ims-login-motif-dot--six" />
   </div>
 );
 
 // =========================
 // SECTION: Brand Panel — AKTIF / UI ONLY
 // Fungsi:
-// - menampilkan identitas IMS Bunga Flanel dan konteks aplikasi internal.
+// - menampilkan badge IMS, logo resmi, motif ringan, dan note internal dalam area kiri.
 // Hubungan flow aplikasi:
-// - mendampingi form login tanpa mengubah input, submit, Firebase Auth, atau profile validation.
-// Status:
-// - AKTIF untuk halaman login.
-// - SAFE: copywriting bersifat branding dan tidak mengubah business rule.
+// - mendampingi form login tanpa mengubah input, submit, Firebase Auth, profile validation, role, atau route.
+// Alasan logic dipakai:
+// - desain final menekankan logo sebagai focal point dan menghapus headline/deskripsi lama agar lebih clean.
+// Status logic:
+// - AKTIF untuk halaman Login.
 // =========================
 const BrandPanel = () => (
   <section className="ims-login-brand-panel">
-    {/* AKTIF / UI ONLY:
-        Brand panel sengaja dibuat fokus pada badge dan logo resmi agar tidak ada teks brand dobel.
-        Perubahan ini hanya presentational dan tidak menyentuh auth/role/route. */}
-    <div className="ims-login-brand-header">
-      <div className="ims-login-badge">Inventory Management System</div>
-    </div>
+    <div className="ims-login-badge">Inventory Management System</div>
 
     <div className="ims-login-brand-stage">
       <BrandMotif />
@@ -135,7 +191,7 @@ const BrandPanel = () => (
     </div>
 
     <div className="ims-login-brand-note">
-      <span className="ims-login-note-dot" />
+      <span className="ims-login-note-dot" aria-hidden="true" />
       <Text>Login khusus user internal yang sudah dibuat di sistem.</Text>
     </div>
   </section>
@@ -147,9 +203,10 @@ const BrandPanel = () => (
 // - wrapper visual halaman login untuk state loading, blocked access, dan form normal.
 // Hubungan flow aplikasi:
 // - tidak menjalankan logic auth; hanya menyediakan layout agar semua state login konsisten.
-// Status:
+// Alasan logic dipakai:
+// - menjaga redesign tetap scoped di halaman Login tanpa menyentuh AppLayout, Sidebar, Dashboard, atau modul bisnis.
+// Status logic:
 // - AKTIF untuk login internal IMS.
-// - SAFE: wrapper lokal, tidak menyentuh AppLayout/dashboard/sidebar.
 // =========================
 const LoginShell = ({ children, variant = "default" }) => (
   <main className={`ims-login-page ims-login-page--${variant}`}>
@@ -167,13 +224,15 @@ const LoginShell = ({ children, variant = "default" }) => (
 // Hubungan flow aplikasi:
 // - username dikonversi menjadi email internal Firebase Auth di AuthProvider;
 // - password tetap divalidasi Firebase Auth, bukan Firestore/frontend manual.
-// Status:
+// Alasan logic dipakai:
+// - frontend hanya mengirim credential ke flow auth existing, bukan membuat auth baru.
+// Status logic:
 // - AKTIF untuk login internal IMS.
-// - GUARDED: create Auth user/password dikelola manual di Firebase Console; frontend login hanya memakai Firebase Auth.
-// Legacy / cleanup:
-// - inline style lama sudah dipindah ke Login.css agar styling login lebih mudah dirawat.
+// - GUARDED: jangan ubah handleLogin/loginWithUsername/profileStatus/logout tanpa task auth khusus.
 // =========================
 const Login = () => {
+  useLoginBrowserBranding();
+
   const {
     authLoading,
     firebaseUser,
@@ -196,8 +255,10 @@ const Login = () => {
   // - meneruskan username dan password ke AuthProvider tanpa mengubah format input.
   // Hubungan flow aplikasi:
   // - AuthProvider tetap bertanggung jawab mengubah username menjadi email internal Firebase Auth.
-  // Status:
-  // - AKTIF dan tidak diubah business logic-nya pada redesign UI ini.
+  // Alasan logic dipakai:
+  // - menjaga flow login existing tetap menjadi satu-satunya entry submit credential.
+  // Status logic:
+  // - AKTIF dan GUARDED.
   // =========================
   const handleLogin = async (values) => {
     setIsSubmitting(true);
@@ -221,8 +282,10 @@ const Login = () => {
   // - mengeluarkan akun Firebase Auth yang valid tetapi profile internalnya belum boleh masuk.
   // Hubungan flow aplikasi:
   // - menjaga user blocked tidak tersangkut di state login dan tidak masuk AppLayout.
-  // Status:
-  // - AKTIF dan tidak mengubah permission/role/status.
+  // Alasan logic dipakai:
+  // - blocked state harus bisa dikembalikan ke form login normal tanpa bypass role/profile guard.
+  // Status logic:
+  // - AKTIF dan GUARDED.
   // =========================
   const handleLogoutBlockedUser = async () => {
     setLoginError("");
@@ -272,9 +335,9 @@ const Login = () => {
     <LoginShell>
       <Card className="ims-login-card">
         {/* AKTIF / UI ONLY:
-            Heading form dibuat ringkas agar fokus tetap pada aksi login internal.
+            Header form hanya mengubah copy dan hierarchy visual login.
             Tidak terkait submit login, AuthContext, role, route, atau profile gate. */}
-        <Space direction="vertical" size={8} className="ims-login-heading">
+        <Space direction="vertical" size={6} className="ims-login-heading">
           <Text className="ims-login-eyebrow">Akses Internal</Text>
           <Title level={3} className="ims-login-title">
             Masuk ke Sistem
