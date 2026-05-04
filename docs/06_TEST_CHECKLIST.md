@@ -1003,3 +1003,29 @@ Status: **AKTIF + GUARDED**. Checklist ini menggantikan checklist Auth/Role lama
 - Profit Loss tetap membaca `revenues + incomes + expenses`.
 - Cash In tetap membaca `revenues + incomes`.
 - Dashboard/Reports tidak berubah.
+
+## Checklist UI Theme Brand Blue/Yellow/White/Navy
+
+### Foundation theme
+- [ ] CSS variable global di `src/index.css` sesuai palette Flanel Karawang Industries.
+- [ ] Token Ant Design di `src/theme/antdTheme.js` selaras dengan CSS variable global.
+- [ ] Light theme terlihat clean corporate, terang, dan mudah dibaca.
+- [ ] Dark theme memakai navy/dark blue, bukan hitam polos atau tone lama.
+- [ ] Biru dipakai untuk primary action, link, focus ring, selected state, dan active navigation.
+- [ ] Kuning hanya menjadi accent/highlight/warning soft, bukan body text panjang.
+- [ ] Semantic success/danger tetap jelas dan tidak tertukar dengan accent brand.
+
+### Flow theme runtime
+- [ ] Toggle light/dark berjalan tanpa reload manual.
+- [ ] Pilihan theme tersimpan di localStorage `ims-bunga-flanel-theme`.
+- [ ] `html/body` mendapat `app-theme-light` atau `app-theme-dark`.
+- [ ] `html/body` mendapat `data-app-theme="light"` atau `data-app-theme="dark"`.
+- [ ] Refresh browser mempertahankan mode terakhir.
+- [ ] Modal, drawer, dropdown, select, datepicker, popover, dan table tetap solid di light/dark.
+
+### Area UI terdampak
+- [ ] Loading screen, shell, header, dan theme toggle readable.
+- [ ] Sidebar expanded/collapsed rapi, active route jelas, submenu normal, dan role-aware menu tidak berubah.
+- [ ] Login normal/error/loading/blocked user tampil profesional dan auth flow tetap berjalan.
+- [ ] Dashboard tetap read-only, compact, tanpa perubahan query/calculation/write flow.
+- [ ] PageHeader, PageSection, SummaryStatCard, FilterBar, dan PageFormModal konsisten dengan token brand.

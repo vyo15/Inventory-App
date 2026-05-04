@@ -18,16 +18,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(circle at top left, rgba(255, 211, 226, 0.78), transparent 32%),
-    radial-gradient(circle at bottom right, rgba(187, 211, 177, 0.72), transparent 34%),
-    linear-gradient(135deg, #fff8ef 0%, #fdecef 48%, #f3eadc 100%);
+  background: var(--ims-brand-gradient);
 }
 
 /* =========================
    SECTION: Decorative Background — AKTIF / UI ONLY
    Fungsi:
-   - memberi nuansa pastel/floral tanpa gambar eksternal dan tanpa library tambahan.
+   - memberi aksen blue/yellow corporate tanpa gambar eksternal dan tanpa library tambahan.
    Hubungan flow aplikasi:
    - dekorasi visual murni; tidak memengaruhi form submit, auth, Firestore, role, atau permission.
    Status:
@@ -46,7 +43,7 @@
   height: 260px;
   top: -72px;
   right: 9%;
-  background: rgba(247, 174, 191, 0.38);
+  background: rgba(44, 109, 176, 0.18);
 }
 
 .ims-login-background-glow-two {
@@ -54,13 +51,13 @@
   height: 320px;
   left: -96px;
   bottom: -120px;
-  background: rgba(165, 194, 151, 0.34);
+  background: rgba(254, 195, 45, 0.18);
 }
 
 /* =========================
    SECTION: Main Layout — AKTIF / UI ONLY
    Fungsi:
-   - membagi login menjadi panel brand floral dan panel form.
+   - membagi login menjadi panel brand corporate dan panel form.
    Hubungan flow aplikasi:
    - hanya membungkus state login existing; tidak mengubah route guard atau AppLayout.
    Status:
@@ -80,7 +77,7 @@
 /* =========================
    SECTION: Brand Panel — AKTIF / UI ONLY
    Fungsi:
-   - menampilkan identitas IMS Bunga Flanel dengan visual hangat dan elegan.
+   - menampilkan identitas IMS Bunga Flanel dengan visual clean, corporate, dan profesional.
    Hubungan flow aplikasi:
    - membantu konteks user sebelum login tanpa menyentuh data atau business rules.
    Status:
@@ -97,9 +94,9 @@
   justify-content: space-between;
   gap: 22px;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(255, 244, 232, 0.48)),
-    linear-gradient(180deg, rgba(255, 220, 229, 0.48), rgba(226, 237, 218, 0.42));
-  box-shadow: 0 30px 90px rgba(110, 69, 75, 0.16);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(234, 243, 252, 0.58)),
+    linear-gradient(180deg, rgba(44, 109, 176, 0.10), rgba(254, 195, 45, 0.12));
+  box-shadow: 0 30px 90px rgba(16, 32, 51, 0.14);
   backdrop-filter: blur(16px);
 }
 
@@ -116,7 +113,7 @@
   height: 220px;
   right: -80px;
   top: -70px;
-  background: rgba(255, 193, 209, 0.46);
+  background: rgba(44, 109, 176, 0.18);
 }
 
 .ims-login-brand-panel::after {
@@ -124,16 +121,16 @@
   height: 180px;
   left: -72px;
   bottom: 86px;
-  background: rgba(177, 202, 164, 0.42);
+  background: rgba(254, 195, 45, 0.18);
 }
 
 .ims-login-badge {
   width: fit-content;
   padding: 8px 14px;
-  border: 1px solid rgba(127, 97, 66, 0.16);
+  border: 1px solid rgba(44, 109, 176, 0.16);
   border-radius: 999px;
-  color: #7f6142;
-  background: rgba(255, 252, 247, 0.78);
+  color: var(--ims-color-primary-active);
+  background: rgba(255, 255, 255, 0.78);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -146,7 +143,7 @@
 
 .ims-login-brand-title.ant-typography {
   margin: 0;
-  color: #5c3f34;
+  color: var(--ims-text-primary);
   font-size: clamp(34px, 5vw, 58px);
   line-height: 1.02;
   letter-spacing: -0.04em;
@@ -154,7 +151,7 @@
 
 .ims-login-brand-description.ant-typography {
   max-width: 440px;
-  color: #725b4d;
+  color: var(--ims-text-secondary);
   font-size: 16px;
   line-height: 1.8;
 }
@@ -167,18 +164,18 @@
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border: 1px solid rgba(114, 91, 77, 0.14);
+  border: 1px solid var(--ims-border-color-soft);
   border-radius: 18px;
-  background: rgba(255, 252, 247, 0.7);
-  color: #725b4d;
+  background: color-mix(in srgb, var(--ims-bg-elevated) 78%, transparent);
+  color: var(--ims-text-secondary);
 }
 
 .ims-login-note-dot {
   width: 10px;
   height: 10px;
   border-radius: 999px;
-  background: #8fa87f;
-  box-shadow: 0 0 0 6px rgba(143, 168, 127, 0.18);
+  background: var(--ims-color-accent-yellow);
+  box-shadow: 0 0 0 6px var(--ims-color-accent-yellow-soft);
 }
 
 /* =========================
@@ -309,7 +306,7 @@
 }
 
 .ims-login-eyebrow.ant-typography {
-  color: #c06f86;
+  color: var(--ims-color-primary);
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -318,12 +315,12 @@
 
 .ims-login-title.ant-typography {
   margin: 0;
-  color: #4f3b33;
+  color: var(--ims-text-primary);
   letter-spacing: -0.02em;
 }
 
 .ims-login-muted-text.ant-typography {
-  color: #7b6a60;
+  color: var(--ims-text-secondary);
   line-height: 1.65;
 }
 
@@ -352,7 +349,7 @@
 }
 
 .ims-login-form .ant-form-item-label > label {
-  color: #5f4d43;
+  color: var(--ims-text-primary);
   font-weight: 700;
 }
 
@@ -362,28 +359,28 @@
 }
 
 .ims-login-form .ant-input-affix-wrapper {
-  border-color: rgba(127, 97, 66, 0.16);
-  background: #fffdf9;
+  border-color: var(--ims-border-color);
+  background: var(--ims-bg-elevated);
 }
 
 .ims-login-form .ant-input-affix-wrapper:hover,
 .ims-login-form .ant-input-affix-wrapper-focused {
-  border-color: #c06f86;
-  box-shadow: 0 0 0 3px rgba(192, 111, 134, 0.12);
+  border-color: var(--ims-color-primary);
+  box-shadow: var(--ims-focus-ring);
 }
 
 .ims-login-submit.ant-btn-primary {
   height: 46px;
   border: 0;
   border-radius: 16px;
-  background: linear-gradient(135deg, #c06f86 0%, #d98b78 100%);
-  box-shadow: 0 14px 28px rgba(192, 111, 134, 0.24);
+  background: linear-gradient(135deg, var(--ims-color-primary) 0%, var(--ims-color-primary-hover) 100%);
+  box-shadow: 0 14px 28px var(--ims-color-primary-soft);
   font-weight: 800;
 }
 
 .ims-login-submit.ant-btn-primary:hover,
 .ims-login-submit.ant-btn-primary:focus {
-  background: linear-gradient(135deg, #b95f78 0%, #cf7f6a 100%);
+  background: linear-gradient(135deg, var(--ims-color-primary-hover) 0%, var(--ims-color-primary-active) 100%);
 }
 
 .ims-login-loading-content {
@@ -480,16 +477,16 @@
   }
 }
 /* =========================
-   SECTION: Login Theme Token Sync - AKTIF DIPAKAI / UI ONLY
+   SECTION: Login Brand Token Sync - AKTIF DIPAKAI / UI ONLY
    Fungsi:
-   - menyambungkan login floral ke token global agar tidak berbeda sendiri dari app utama.
+   - menyambungkan login ke token global blue/yellow/white/navy agar konsisten dengan app utama.
    Hubungan flow aplikasi:
    - styling login saja; handleLogin, Firebase Auth, profile status, role check, dan logout blocked user tidak berubah.
    Aman diubah:
    - ubah token di src/index.css untuk tuning global; blok ini hanya mapping visual login.
 ========================= */
 .ims-login-page {
-  background: var(--ims-floral-gradient);
+  background: var(--ims-brand-gradient);
   color: var(--ims-text-primary);
 }
 
@@ -498,14 +495,14 @@
 }
 
 .ims-login-background-glow-two {
-  background: var(--ims-color-sage-soft);
+  background: var(--ims-color-accent-yellow-soft);
 }
 
 .ims-login-brand-panel {
   border-color: var(--ims-border-color-soft);
   background:
     linear-gradient(145deg, color-mix(in srgb, var(--ims-bg-card) 82%, transparent), color-mix(in srgb, var(--ims-bg-card-soft) 62%, transparent)),
-    linear-gradient(180deg, var(--ims-color-primary-softer), var(--ims-color-sage-soft));
+    linear-gradient(180deg, var(--ims-color-primary-softer), var(--ims-color-accent-yellow-soft));
   box-shadow: var(--ims-shadow-elevated);
 }
 
@@ -541,8 +538,8 @@
 }
 
 .ims-login-note-dot {
-  background: var(--ims-color-sage);
-  box-shadow: 0 0 0 6px var(--ims-color-sage-soft);
+  background: var(--ims-color-accent-yellow);
+  box-shadow: 0 0 0 6px var(--ims-color-accent-yellow-soft);
 }
 
 .ims-login-card.ant-card {
@@ -568,7 +565,7 @@
 .ims-login-submit.ant-btn-primary,
 .ims-login-submit.ant-btn-primary:hover,
 .ims-login-submit.ant-btn-primary:focus {
-  background: linear-gradient(135deg, var(--ims-color-primary) 0%, var(--ims-color-peach) 100%);
+  background: linear-gradient(135deg, var(--ims-color-primary) 0%, var(--ims-color-primary-hover) 100%);
   box-shadow: 0 14px 28px var(--ims-color-primary-soft);
 }
 
@@ -576,5 +573,5 @@ html.app-theme-dark .ims-login-page,
 body.app-theme-dark .ims-login-page,
 html[data-app-theme="dark"] .ims-login-page,
 body[data-app-theme="dark"] .ims-login-page {
-  background: var(--ims-floral-gradient);
+  background: var(--ims-brand-gradient);
 }

@@ -435,3 +435,16 @@ Status: **AKTIF + GUARDED**. Gunakan section ini untuk semua task yang menyentuh
 - Flow penjualan tidak jadi harus tetap memakai `Batalkan`, bukan hard delete user biasa.
 - Perubahan Sales summary/tab/dropdown tidak boleh mengubah stock mutation, income timing, cancel stock revert, return compatibility, atau payload Firestore.
 - Dropdown item/varian Sales tidak perlu menampilkan teks stok panjang jika panel read-only stok sudah tampil; cukup tampilkan nama item/varian dan jenis item.
+
+## Prompt Rule Tambahan — UI Theme Brand
+
+Untuk task yang menyentuh theme, branding, App shell, Login, Dashboard, Sidebar, shared component, atau Ant Design override:
+
+1. Gunakan `src/index.css`, `src/theme/antdTheme.js`, dan `src/App.css` sebagai pusat theme sebelum mengubah file halaman.
+2. Pertahankan palette aktif blue/yellow/white/navy Flanel Karawang Industries.
+3. Jangan menjadikan yellow sebagai warna body text panjang; gunakan hanya untuk accent, badge, highlight, atau warning soft.
+4. Jangan hapus guard table/modal/drawer/dropdown/form di `src/App.css` tanpa bukti visual dan regression test.
+5. Jangan ubah `AppLayout` theme sync (`app-theme-light`, `app-theme-dark`, `data-app-theme`) kecuali task khusus runtime theme.
+6. Jangan ubah `SidebarMenu` role-aware logic, `selectedKeys`, `openMenuKeys`, atau config menu saat task hanya visual.
+7. Jangan ubah Login auth flow, AuthContext, route guard, Dashboard query, Dashboard calculation, atau service bisnis saat task hanya rebrand UI.
+8. Jika menemukan sisa warna/comment lama di luar scope, tandai **CLEANUP CANDIDATE** dan jangan refactor massal.

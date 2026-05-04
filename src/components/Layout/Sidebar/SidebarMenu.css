@@ -105,41 +105,41 @@
 .sidebar-menu.light.ant-menu .ant-menu-item,
 .sidebar-menu.light.ant-menu .ant-menu-submenu-title,
 .sidebar-menu.light.ant-menu .ant-menu-item a {
-  color: #0f172a;
+  color: var(--ims-text-primary);
 }
 
 .sidebar-menu.light.ant-menu .ant-menu-item:hover,
 .sidebar-menu.light.ant-menu .ant-menu-submenu-title:hover {
-  color: #0f172a;
-  background: #eef3f8 !important;
+  color: var(--ims-text-primary);
+  background: var(--ims-sidebar-hover) !important;
 }
 
 .sidebar-menu.light.ant-menu .ant-menu-item-selected {
-  color: #0f172a !important;
-  background: #e8eef9 !important;
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+  color: var(--ims-text-primary) !important;
+  background: var(--ims-sidebar-active) !important;
+  box-shadow: inset 0 0 0 1px var(--ims-border-color-soft);
 }
 
 .sidebar-menu.light.ant-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
 .sidebar-menu.light.ant-menu .ant-menu-submenu-open > .ant-menu-submenu-title {
-  color: #0f172a !important;
-  background: #f4f7fb !important;
+  color: var(--ims-text-primary) !important;
+  background: var(--ims-color-primary-softer) !important;
 }
 
 .sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item:hover {
-  background: rgba(241, 245, 249, 0.9) !important;
+  background: var(--ims-sidebar-hover) !important;
   transform: translateX(1px);
 }
 
 .sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
-  background: #e9effa !important;
-  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+  background: var(--ims-sidebar-active) !important;
+  box-shadow: inset 0 0 0 1px var(--ims-border-color-soft);
 }
 
 .sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected::before {
   opacity: 1;
   transform: scaleY(1);
-  background: #2563eb;
+  background: var(--ims-color-primary);
 }
 
 /* =========================
@@ -151,41 +151,41 @@
 .sidebar-menu.dark.ant-menu .ant-menu-item,
 .sidebar-menu.dark.ant-menu .ant-menu-submenu-title,
 .sidebar-menu.dark.ant-menu .ant-menu-item a {
-  color: rgba(229, 231, 235, 0.88);
+  color: var(--ims-text-secondary);
 }
 
 .sidebar-menu.dark.ant-menu .ant-menu-item:hover,
 .sidebar-menu.dark.ant-menu .ant-menu-submenu-title:hover {
-  color: #f8fafc;
-  background: rgba(255, 255, 255, 0.05) !important;
+  color: var(--ims-text-primary);
+  background: var(--ims-sidebar-hover) !important;
 }
 
 .sidebar-menu.dark.ant-menu .ant-menu-item-selected {
-  color: #f8fafc !important;
-  background: rgba(59, 130, 246, 0.14) !important;
-  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.12);
+  color: var(--ims-text-primary) !important;
+  background: var(--ims-sidebar-active) !important;
+  box-shadow: inset 0 0 0 1px var(--ims-border-color-soft);
 }
 
 .sidebar-menu.dark.ant-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
 .sidebar-menu.dark.ant-menu .ant-menu-submenu-open > .ant-menu-submenu-title {
-  color: #f8fafc !important;
-  background: rgba(255, 255, 255, 0.04) !important;
+  color: var(--ims-text-primary) !important;
+  background: var(--ims-color-primary-softer) !important;
 }
 
 .sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item:hover {
-  background: rgba(255, 255, 255, 0.04) !important;
+  background: var(--ims-color-primary-softer) !important;
   transform: translateX(1px);
 }
 
 .sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
-  background: rgba(59, 130, 246, 0.12) !important;
-  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.10);
+  background: var(--ims-sidebar-active) !important;
+  box-shadow: inset 0 0 0 1px var(--ims-border-color-soft);
 }
 
 .sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected::before {
   opacity: 1;
   transform: scaleY(1);
-  background: #60a5fa;
+  background: var(--ims-color-primary);
 }
 
 /* =========================
@@ -227,18 +227,18 @@
   }
 
   .sidebar-menu.dark.ant-menu .ant-menu-item-selected {
-    background: rgba(59, 130, 246, 0.16) !important;
+    background: var(--ims-sidebar-active) !important;
   }
 
   .sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
-    background: rgba(59, 130, 246, 0.14) !important;
+    background: var(--ims-sidebar-active) !important;
   }
 }
 
 /* =========================
-   SECTION: Floral Sidebar Menu Theme Override - AKTIF DIPAKAI
+   SECTION: Brand Sidebar Menu Theme Override - AKTIF DIPAKAI
    Fungsi:
-   - mengganti aksen biru lama menjadi dusty rose/sage yang konsisten dengan login.
+   - menyelaraskan active/hover sidebar ke token brand blue/yellow/white/navy.
    Hubungan flow aplikasi:
    - hanya styling menu; tidak mengubah role access, route guard, atau sidebarMenu config.
    Aman diubah:

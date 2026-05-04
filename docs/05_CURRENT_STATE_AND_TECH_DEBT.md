@@ -590,3 +590,23 @@ Risiko tersisa:
 - **LEGACY:** rollback create sale masih memakai `deleteDoc` untuk menghapus sale baru jika mutasi stok gagal; ini bukan tombol Hapus user biasa dan tetap dipertahankan sebagai guard.
 - **CLEANUP CANDIDATE:** hard delete Sales dapat dirancang sebagai maintenance/admin guarded flow terpisah jika benar-benar dibutuhkan.
 - **CLEANUP CANDIDATE:** bila data Sales membesar, strategi fetch all + client filter dapat diganti pagination/query server-side yang tetap menjaga fallback aman.
+
+## Update UI Theme Brand — 2026-05-04
+
+### Status theme aktif
+- **AKTIF:** theme aplikasi memakai identitas Flanel Karawang Industries dengan kombinasi blue/yellow/white/navy.
+- **AKTIF:** pusat token theme berada di `src/index.css` untuk CSS variable global dan `src/theme/antdTheme.js` untuk token Ant Design.
+- **AKTIF:** `src/App.css` tetap menjadi guard visual global untuk app shell, table, modal, drawer, dropdown, form, dan portal Ant Design.
+- **AKTIF:** Login, Sidebar, Header, Dashboard, PageHeader, PageSection, SummaryStatCard, FilterBar, dan PageFormModal diarahkan membaca token global agar tidak drift antar halaman.
+
+### Area guarded theme
+- **GUARDED:** `AppLayout.jsx` menjaga sinkronisasi `app-theme-light`, `app-theme-dark`, dan `data-app-theme` di `html/body` agar portal Ant Design membaca mode yang benar.
+- **GUARDED:** override table/modal/drawer/dropdown di `src/App.css` tidak boleh dihapus massal karena menjaga surface solid dan kontras light/dark.
+- **GUARDED:** `PageFormModal` harus mempertahankan `rootClassName="page-form-modal-root"` dan `getContainer` agar modal/drawer/dropdown tidak bocor ke surface lama.
+- **GUARDED:** `SidebarMenu` role-aware logic, nested accordion, `selectedKeys`, dan `openMenuKeys` tidak boleh diubah saat task hanya visual theme.
+- **GUARDED:** Login auth flow (`handleLogin`, profile status, blocked user, logout) dan Dashboard read-only query tidak ikut theme cleanup.
+
+### Legacy dan cleanup candidate
+- **LEGACY:** komentar/arah visual lama yang mengarah ke theme decorative lama harus dianggap historis, bukan theme aktif.
+- **CLEANUP CANDIDATE:** hardcoded neutral lama yang sudah tertimpa token bisa dirapikan bertahap, tetapi jangan menghapus guard Ant Design bila dependency belum jelas.
+- **CLEANUP CANDIDATE:** file luar scope yang masih memakai warna lokal sebaiknya diaudit per modul agar tidak bercampur dengan perubahan business flow.

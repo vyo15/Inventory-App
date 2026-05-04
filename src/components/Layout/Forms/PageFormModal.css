@@ -1,5 +1,5 @@
 .page-form-modal-root .ant-modal-mask {
-  background: rgba(15, 23, 42, 0.46) !important;
+  background: color-mix(in srgb, var(--ims-bg-page) 62%, rgba(15, 23, 42, 0.5)) !important;
 }
 
 .page-form-modal-root .ant-modal-wrap {
@@ -14,34 +14,34 @@
   padding: 0 !important;
   overflow: hidden;
   border-radius: 22px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: #ffffff !important;
-  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.18);
+  border: 1px solid var(--ims-border-color-soft);
+  background: var(--ims-bg-elevated) !important;
+  box-shadow: var(--ims-shadow-elevated);
 }
 
 .page-form-modal-root .ant-modal-header {
   margin: 0 !important;
   padding: 20px 24px 16px !important;
-  background: #ffffff !important;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+  background: var(--ims-bg-elevated) !important;
+  border-bottom: 1px solid var(--ims-border-color-soft) !important;
 }
 
 .page-form-modal-root .ant-modal-title {
   font-size: 18px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--ims-text-primary);
 }
 
 .page-form-modal-root .ant-modal-body {
   padding: 20px 24px 8px !important;
-  background: #ffffff !important;
+  background: var(--ims-bg-elevated) !important;
 }
 
 .page-form-modal-root .ant-modal-footer {
   margin-top: 0 !important;
   padding: 16px 24px 20px !important;
-  background: #ffffff !important;
-  border-top: 1px solid rgba(15, 23, 42, 0.08) !important;
+  background: var(--ims-bg-elevated) !important;
+  border-top: 1px solid var(--ims-border-color-soft) !important;
 }
 
 .page-form-modal-form .ant-form-item:last-child {
@@ -49,14 +49,14 @@
 }
 
 .app-shell.dark .page-form-modal-root .ant-modal-mask {
-  background: rgba(2, 6, 23, 0.66) !important;
+  background: color-mix(in srgb, var(--ims-bg-page) 70%, rgba(0, 0, 0, 0.55)) !important;
 }
 
 .app-shell.dark .page-form-modal-root .ant-modal-content,
 .app-shell.dark .page-form-modal-root .ant-modal-header,
 .app-shell.dark .page-form-modal-root .ant-modal-body,
 .app-shell.dark .page-form-modal-root .ant-modal-footer {
-  background: #111827 !important;
+  background: var(--ims-bg-elevated) !important;
 }
 
 .app-shell.dark .page-form-modal-root .ant-modal-content {
@@ -70,7 +70,7 @@
 }
 
 .app-shell.dark .page-form-modal-root .ant-modal-title {
-  color: #f8fafc;
+  color: var(--ims-text-primary);
 }
 
 @media (max-width: 768px) {
@@ -96,7 +96,7 @@
 }
 
 /* =========================
-   SECTION: Floral Page Form Modal Override - AKTIF DIPAKAI
+   SECTION: Brand Page Form Modal Override - AKTIF DIPAKAI
    Fungsi:
    - modal form shared mengikuti surface global agar light/dark mode konsisten.
    Hubungan flow aplikasi:

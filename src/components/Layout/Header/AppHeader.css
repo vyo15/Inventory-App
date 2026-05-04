@@ -47,7 +47,7 @@
    Fungsi:
    - menggantikan inline style user area dan AntD Tag color preset agar tidak drift dari token brand.
    Hubungan flow aplikasi:
-   - hanya memoles identitas user/role dan tombol logout; session logout tetap diproses AppHeader.jsx melalui useAuth.
+   - hanya menata identitas user/role dan tombol logout; session logout tetap dijalankan AppHeader.jsx melalui useAuth.
    Status:
    - AKTIF.
    - CLEANUP CANDIDATE RESOLVED: inline user area style dan AntD blue preset diganti class CSS token-based.

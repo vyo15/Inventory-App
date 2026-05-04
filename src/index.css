@@ -57,11 +57,7 @@ body,
   --ims-color-accent-yellow: #FEC32D;
   --ims-color-accent-yellow-soft: #FFF4CC;
   --ims-color-accent-yellow-muted: rgba(254, 195, 45, 0.28);
-
-  --ims-color-sage: var(--ims-color-accent-yellow);
-  --ims-color-sage-soft: var(--ims-color-accent-yellow-soft);
-  --ims-color-peach: var(--ims-color-primary);
-  --ims-color-beige: var(--ims-border-color);
+  --ims-brand-gradient: radial-gradient(circle at top left, rgba(44, 109, 176, 0.16), transparent 34%), radial-gradient(circle at bottom right, rgba(254, 195, 45, 0.18), transparent 32%), linear-gradient(135deg, #F6F9FC 0%, #EAF3FC 48%, #FFF4CC 100%);
 
   --ims-bg-page: #F6F9FC;
   --ims-bg-shell: #EEF5FB;
@@ -96,8 +92,6 @@ body,
   --ims-sidebar-bg: #FFFFFF;
   --ims-sidebar-hover: rgba(44, 109, 176, 0.08);
   --ims-sidebar-active: #EAF3FC;
-
-  --ims-floral-gradient: var(--ims-bg-shell);
 }
 
 /* =========================
@@ -109,7 +103,7 @@ body,
    - dibaca saat AppLayout memasang class app-theme-dark dan data-app-theme="dark".
    - tidak mengubah state theme, localStorage key, routing, auth, transaksi, produksi, payroll, HPP, atau laporan.
    Alasan logic dipakai:
-   - dark mode dibuat navy/dark blue agar tidak kembali ke hitam polos atau tone rose/coklat lama.
+   - dark mode dibuat navy/dark blue agar tidak kembali ke hitam polos atau tone gelap lama yang tidak sesuai brand.
    - alias lama tetap diisi untuk compatibility dengan CSS legacy yang belum menjadi target cleanup.
    Status logic:
    - AKTIF untuk foundation theme Phase 01.
@@ -134,11 +128,7 @@ body[data-app-theme="dark"] {
   --ims-color-accent-yellow: #FFD56A;
   --ims-color-accent-yellow-soft: rgba(254, 195, 45, 0.16);
   --ims-color-accent-yellow-muted: rgba(255, 213, 106, 0.24);
-
-  --ims-color-sage: var(--ims-color-accent-yellow);
-  --ims-color-sage-soft: var(--ims-color-accent-yellow-soft);
-  --ims-color-peach: var(--ims-color-primary);
-  --ims-color-beige: var(--ims-border-color);
+  --ims-brand-gradient: radial-gradient(circle at top left, rgba(94, 163, 230, 0.18), transparent 34%), radial-gradient(circle at bottom right, rgba(255, 213, 106, 0.12), transparent 32%), linear-gradient(135deg, #07111F 0%, #0A1627 48%, #101E33 100%);
 
   --ims-bg-page: #07111F;
   --ims-bg-shell: #0A1627;
@@ -173,8 +163,6 @@ body[data-app-theme="dark"] {
   --ims-sidebar-bg: #0A1627;
   --ims-sidebar-hover: rgba(94, 163, 230, 0.10);
   --ims-sidebar-active: rgba(94, 163, 230, 0.18);
-
-  --ims-floral-gradient: var(--ims-bg-shell);
 }
 
 /* =========================
@@ -239,12 +227,6 @@ select {
   font: inherit;
 }
 
-.theme-btn {
-  cursor: pointer;
-  border-radius: 999px;
-  padding: 12px;
-  font-size: 18px;
-}
 
 /* =========================
    SECTION: Text Selection - AKTIF
