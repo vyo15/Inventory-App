@@ -12,7 +12,6 @@ import {
 } from "antd";
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import flanelKarawangLogo from "../../assets/branding/flanel-karawang-logo.png";
-import flanelKarawangMark from "../../assets/branding/flanel-karawang-mark.png";
 import useAuth from "../../hooks/useAuth";
 import { AUTH_PROFILE_STATUS } from "../../context/AuthContext";
 import "./Login.css";
@@ -88,6 +87,30 @@ const BrandLogoShowcase = () => (
 );
 
 // =========================
+// SECTION: Brand Motif — AKTIF / UI ONLY
+// Fungsi:
+// - memberi hiasan pill/dot biru-kuning di area pinggir logo agar login tidak terlalu polos.
+// Hubungan flow aplikasi:
+// - hanya elemen presentational; tidak terhubung ke auth, Firestore, role, route, stok, kas, atau modul bisnis.
+// Alasan logic dipakai:
+// - motif ditempatkan jauh dari logo supaya tidak menabrak atau membuat logo terlihat warp/menyatu dengan dekorasi.
+// Status:
+// - AKTIF untuk branding Login modern minimalis.
+// =========================
+const BrandMotif = () => (
+  <div className="ims-login-brand-motif" aria-hidden="true">
+    <span className="ims-login-motif-pill ims-login-motif-pill--blue-one" />
+    <span className="ims-login-motif-pill ims-login-motif-pill--yellow-one" />
+    <span className="ims-login-motif-pill ims-login-motif-pill--blue-two" />
+    <span className="ims-login-motif-pill ims-login-motif-pill--yellow-two" />
+    <span className="ims-login-motif-dot ims-login-motif-dot--one" />
+    <span className="ims-login-motif-dot ims-login-motif-dot--two" />
+    <span className="ims-login-motif-dot ims-login-motif-dot--three" />
+    <span className="ims-login-motif-dot ims-login-motif-dot--four" />
+  </div>
+);
+
+// =========================
 // SECTION: Brand Panel — AKTIF / UI ONLY
 // Fungsi:
 // - menampilkan identitas IMS Bunga Flanel dan konteks aplikasi internal.
@@ -100,23 +123,16 @@ const BrandLogoShowcase = () => (
 const BrandPanel = () => (
   <section className="ims-login-brand-panel">
     {/* AKTIF / UI ONLY:
-        Mode A menempatkan copy utama sebelum logo agar brand panel terasa seperti corporate hero.
+        Brand panel sengaja dibuat fokus pada badge dan logo resmi agar tidak ada teks brand dobel.
         Perubahan ini hanya presentational dan tidak menyentuh auth/role/route. */}
     <div className="ims-login-brand-header">
-      <div className="ims-login-badge">Internal Management System</div>
-
-      <Space direction="vertical" size={12} className="ims-login-brand-copy">
-        <Title level={1} className="ims-login-brand-title">
-          IMS Bunga Flanel
-        </Title>
-        <Text className="ims-login-brand-description">
-          Kelola produksi, stok, pembelian, dan penjualan bunga flanel dalam
-          satu workspace internal yang rapi, terukur, dan terkendali.
-        </Text>
-      </Space>
+      <div className="ims-login-badge">Inventory Management System</div>
     </div>
 
-    <BrandLogoShowcase />
+    <div className="ims-login-brand-stage">
+      <BrandMotif />
+      <BrandLogoShowcase />
+    </div>
 
     <div className="ims-login-brand-note">
       <span className="ims-login-note-dot" />
@@ -137,9 +153,6 @@ const BrandPanel = () => (
 // =========================
 const LoginShell = ({ children, variant = "default" }) => (
   <main className={`ims-login-page ims-login-page--${variant}`}>
-    <div className="ims-login-background-glow ims-login-background-glow-one" />
-    <div className="ims-login-background-glow ims-login-background-glow-two" />
-
     <div className="ims-login-layout">
       <BrandPanel />
       <section className="ims-login-form-panel">{children}</section>
@@ -259,23 +272,15 @@ const Login = () => {
     <LoginShell>
       <Card className="ims-login-card">
         {/* AKTIF / UI ONLY:
-            Logo kecil di card menjaga konsistensi branding dengan panel kiri dan sidebar.
+            Heading form dibuat ringkas agar fokus tetap pada aksi login internal.
             Tidak terkait submit login, AuthContext, role, route, atau profile gate. */}
-        <div className="ims-login-card-brand" aria-hidden="true">
-          <img
-            src={flanelKarawangMark}
-            alt=""
-            className="ims-login-card-logo"
-          />
-        </div>
-
-        <Space direction="vertical" size={6} className="ims-login-heading">
-          <Text className="ims-login-eyebrow">Selamat datang kembali</Text>
+        <Space direction="vertical" size={8} className="ims-login-heading">
+          <Text className="ims-login-eyebrow">Akses Internal</Text>
           <Title level={3} className="ims-login-title">
-            Masuk ke IMS Bunga Flanel
+            Masuk ke Sistem
           </Title>
           <Text className="ims-login-muted-text">
-            Gunakan username internal yang sudah dibuat dari sistem.
+            Gunakan akun internal yang sudah dibuat di sistem.
           </Text>
         </Space>
 

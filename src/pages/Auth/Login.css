@@ -1,238 +1,230 @@
 /* =========================
    SECTION: Login Page Scope — AKTIF / UI ONLY
    Fungsi:
-   - membatasi rework Mode A hanya pada halaman login agar tidak bocor ke layout aplikasi utama.
+   - membatasi redesign Login modern minimalis hanya pada halaman login agar tidak bocor ke layout aplikasi utama.
    Hubungan flow aplikasi:
-   - dipakai oleh src/pages/Auth/Login.jsx dan tidak menyentuh AppLayout, Sidebar, AuthContext, Dashboard, atau modul bisnis.
-   Status:
-   - AKTIF untuk UI login IMS Bunga Flanel.
-   - SAFE: prefix .ims-login-* menjaga style tetap lokal.
+   - dipakai oleh src/pages/Auth/Login.jsx dan tidak menyentuh AppLayout, Sidebar, AuthContext, Dashboard, route guard, atau modul bisnis.
+   Alasan logic dipakai:
+   - halaman login perlu terasa clean corporate tanpa gradasi dan tanpa dekorasi besar yang mengganggu logo/form.
+   Status logic:
+   - AKTIF untuk UI Login IMS Bunga Flanel.
+   - GUARDED secara scope karena semua selector tetap memakai prefix .ims-login-*.
    ========================= */
 .ims-login-page {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
-  padding: clamp(18px, 3vw, 34px);
+  padding: clamp(18px, 3vw, 36px);
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(circle at 56% 0%, color-mix(in srgb, var(--ims-color-accent-yellow-soft) 66%, transparent) 0%, transparent 20%),
-    radial-gradient(circle at 0% 100%, color-mix(in srgb, var(--ims-color-primary-softer) 76%, transparent) 0%, transparent 28%),
-    linear-gradient(135deg, color-mix(in srgb, var(--ims-bg-card) 96%, var(--ims-color-primary-softer)) 0%, var(--ims-bg-page) 52%, color-mix(in srgb, var(--ims-color-accent-yellow-soft) 18%, var(--ims-bg-card)) 100%);
+  background: var(--ims-bg-page);
   color: var(--ims-text-primary);
 }
 
-.ims-login-page::before,
-.ims-login-page::after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-}
-
-.ims-login-page::before {
-  inset: 0;
-  background-image:
-    linear-gradient(115deg, color-mix(in srgb, var(--ims-color-primary-softer) 34%, transparent) 0 1px, transparent 1px),
-    linear-gradient(25deg, color-mix(in srgb, var(--ims-color-accent-yellow-soft) 30%, transparent) 0 1px, transparent 1px);
-  background-size: 420px 420px, 520px 520px;
-  opacity: 0.32;
-}
-
-.ims-login-page::after {
-  width: min(28vw, 420px);
-  height: min(28vw, 420px);
-  right: -12vw;
-  top: -15vw;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ims-color-accent-yellow-soft) 65%, transparent);
-  filter: blur(4px);
-  opacity: 0.62;
-}
-
 /* =========================
-   SECTION: Decorative Background — AKTIF / UI ONLY
+   SECTION: Main Login Canvas — AKTIF / UI ONLY
    Fungsi:
-   - memberi aksen biru/kuning yang halus di luar canvas utama agar halaman tetap hidup tanpa ramai.
+   - membangun layout dua panel: brand logo di kiri dan form login di kanan.
    Hubungan flow aplikasi:
-   - dekorasi murni; tidak memengaruhi submit, Firebase Auth, role, route, atau permission.
-   Status:
-   - AKTIF untuk branding Login Mode A.
-   ========================= */
-.ims-login-background-glow {
-  position: absolute;
-  pointer-events: none;
-}
-
-.ims-login-background-glow-one {
-  width: min(20vw, 300px);
-  height: 7px;
-  top: 10%;
-  right: 14%;
-  border-radius: 999px;
-  transform: rotate(-22deg);
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ims-color-accent-yellow) 78%, transparent), transparent);
-  opacity: 0.44;
-}
-
-.ims-login-background-glow-two {
-  width: 190px;
-  height: 190px;
-  left: 8%;
-  bottom: 7%;
-  border-left: 2px solid color-mix(in srgb, var(--ims-color-primary) 24%, transparent);
-  border-bottom: 2px solid color-mix(in srgb, var(--ims-color-primary) 16%, transparent);
-  border-radius: 0 0 0 42px;
-  opacity: 0.54;
-}
-
-/* =========================
-   SECTION: Mode A Main Canvas — AKTIF / UI ONLY
-   Fungsi:
-   - membangun canvas login besar seperti referensi Mode A: lebar, rapi, terang, dan terkontrol.
-   Hubungan flow aplikasi:
-   - hanya membungkus brand panel dan form panel; tidak mengubah route guard, AuthContext, atau AppLayout.
-   Status:
+   - hanya membungkus BrandPanel dan form panel; tidak mengubah AuthContext, Firebase Auth, route, role, atau business data.
+   Alasan logic dipakai:
+   - visual dibuat flat/solid tanpa gradasi supaya lebih minimalist modern dan tidak terlihat seperti template ramai.
+   Status logic:
    - AKTIF untuk desktop dan mobile.
-   - SAFE: perubahan hanya presentational.
    ========================= */
 .ims-login-layout {
   position: relative;
   z-index: 1;
-  width: min(1260px, 100%);
-  min-height: min(660px, calc(100vh - 58px));
+  width: min(1280px, 100%);
+  min-height: min(680px, calc(100vh - 72px));
   display: grid;
-  grid-template-columns: minmax(0, 1.34fr) minmax(360px, 0.86fr);
-  gap: clamp(30px, 4.6vw, 66px);
+  grid-template-columns: minmax(0, 1.18fr) minmax(380px, 0.82fr);
+  gap: clamp(28px, 4vw, 58px);
   align-items: center;
-  padding: clamp(38px, 4.8vw, 66px) clamp(34px, 5vw, 74px);
-  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 13%, var(--ims-border-color));
-  border-radius: 30px;
-  background:
-    linear-gradient(110deg, color-mix(in srgb, var(--ims-bg-card) 97%, var(--ims-color-primary-softer)) 0%, color-mix(in srgb, var(--ims-bg-card) 99%, white) 57%, color-mix(in srgb, var(--ims-bg-elevated) 96%, var(--ims-color-primary-softer)) 100%);
-  box-shadow: 0 26px 74px color-mix(in srgb, var(--ims-color-primary-soft) 34%, transparent);
+  padding: clamp(42px, 5vw, 72px);
+  border: 1px solid var(--ims-border-color);
+  border-radius: 34px;
+  background: var(--ims-bg-card);
+  box-shadow: 0 28px 70px color-mix(in srgb, var(--ims-color-primary-soft) 34%, transparent);
   overflow: hidden;
 }
 
 .ims-login-layout::before {
   content: "";
   position: absolute;
-  width: min(34vw, 520px);
-  height: min(34vw, 520px);
-  left: -12%;
-  bottom: -28%;
+  inset: 0 50% 0 0;
   z-index: 0;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 78% 30%, transparent 0 33%, color-mix(in srgb, var(--ims-bg-card) 64%, transparent) 34% 39%, transparent 40%),
-    linear-gradient(135deg, color-mix(in srgb, var(--ims-color-primary-hover) 98%, var(--ims-color-primary)), var(--ims-color-primary));
-  opacity: 0.94;
+  background: color-mix(in srgb, var(--ims-color-accent-yellow-soft) 20%, var(--ims-bg-card));
+  border-right: 1px solid color-mix(in srgb, var(--ims-color-primary) 8%, transparent);
+  pointer-events: none;
 }
 
 .ims-login-layout::after {
   content: "";
   position: absolute;
-  width: 170px;
-  height: 170px;
-  left: 49%;
-  top: 10%;
+  width: 150px;
+  height: 150px;
+  left: 51%;
+  top: 74px;
   z-index: 0;
-  background-image: radial-gradient(color-mix(in srgb, var(--ims-color-accent-yellow) 58%, transparent) 1.1px, transparent 1.1px);
-  background-size: 15px 15px;
-  opacity: 0.34;
+  background-image: radial-gradient(color-mix(in srgb, var(--ims-color-accent-yellow) 28%, transparent) 1.1px, transparent 1.1px);
+  background-size: 16px 16px;
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 /* =========================
    SECTION: Brand Panel — AKTIF / UI ONLY
    Fungsi:
-   - menampilkan badge, headline, deskripsi, logo besar, dan note internal dalam komposisi Mode A.
+   - menampilkan badge, logo utama, motif hiasan pinggir, dan note internal dalam komposisi brand panel.
    Hubungan flow aplikasi:
-   - konteks visual sebelum login tanpa menyentuh input, submit, Firebase Auth, role, route, atau data.
-   Status:
-   - AKTIF; pada mobile panel diringkas agar form tetap prioritas.
+   - konteks visual sebelum login tanpa menyentuh input, submit, Firebase Auth, role, route, stok, kas, atau modul bisnis.
+   Alasan logic dipakai:
+   - headline dan deskripsi panjang dihapus agar logo resmi Flanel Karawang Industries menjadi focal point tunggal.
+   Status logic:
+   - AKTIF untuk branding login modern minimalis.
    ========================= */
 .ims-login-brand-panel {
   position: relative;
   z-index: 1;
   min-height: 520px;
   display: grid;
-  grid-template-rows: auto minmax(210px, 1fr) auto;
+  grid-template-rows: auto 1fr auto;
   align-items: center;
-  gap: clamp(14px, 2vw, 24px);
-}
-
-.ims-login-brand-panel::before {
-  content: "";
-  position: absolute;
-  width: min(37vw, 610px);
-  height: min(36vw, 570px);
-  left: 6%;
-  top: 20%;
-  z-index: -1;
-  border-radius: 52% 48% 42% 58%;
-  transform: rotate(-8deg);
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--ims-bg-elevated) 74%, transparent) 0%, color-mix(in srgb, var(--ims-color-primary-softer) 46%, transparent) 100%);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ims-border-color-soft) 44%, transparent);
-  opacity: 0.62;
-}
-
-.ims-login-brand-panel::after {
-  content: "";
-  position: absolute;
-  left: -4px;
-  top: clamp(106px, 16vh, 150px);
-  width: 142px;
-  height: 4px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--ims-color-primary), var(--ims-color-accent-yellow));
-  opacity: 0.78;
+  gap: 28px;
 }
 
 .ims-login-brand-header {
   display: flex;
-  flex-direction: column;
-  gap: 18px;
   align-items: flex-start;
+  justify-content: flex-start;
 }
 
 .ims-login-badge {
   width: fit-content;
-  padding: 7px 14px;
-  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 17%, var(--ims-border-color-soft));
+  padding: 8px 16px;
+  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 20%, var(--ims-border-color));
   border-radius: 999px;
+  background: var(--ims-bg-card);
   color: var(--ims-color-primary-hover);
-  background: color-mix(in srgb, var(--ims-bg-elevated) 92%, transparent);
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--ims-color-primary-soft) 22%, transparent);
-  font-size: 11px;
+  box-shadow: 0 12px 24px color-mix(in srgb, var(--ims-color-primary-soft) 22%, transparent);
+  font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.16em;
+  line-height: 1;
   text-transform: uppercase;
 }
 
-.ims-login-brand-copy {
-  max-width: 520px;
+.ims-login-brand-stage {
+  position: relative;
+  min-height: 380px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  isolation: isolate;
 }
 
-.ims-login-brand-title.ant-typography {
-  margin: 0;
-  color: var(--ims-text-primary);
-  font-size: clamp(42px, 4.8vw, 64px);
-  line-height: 0.98;
-  letter-spacing: -0.056em;
+.ims-login-brand-stage::before,
+.ims-login-brand-stage::after {
+  content: none;
 }
 
-.ims-login-brand-description.ant-typography {
-  max-width: 430px;
-  color: color-mix(in srgb, var(--ims-text-secondary) 90%, var(--ims-color-primary));
-  font-size: clamp(12px, 1vw, 14px);
-  font-weight: 600;
-  line-height: 1.72;
+/* =========================
+   SECTION: Brand Motif — AKTIF / UI ONLY
+   Fungsi:
+   - memberi hiasan pill/dot biru-kuning di pinggir logo agar halaman tidak polos.
+   Hubungan flow aplikasi:
+   - dekorasi murni; tidak memengaruhi auth flow, route guard, role access, atau data bisnis.
+   Alasan logic dipakai:
+   - motif diposisikan jauh dari logo agar tidak menabrak logo dan tidak membuat efek warp/shape menyatu.
+   Status logic:
+   - AKTIF untuk polish visual Login.
+   ========================= */
+.ims-login-brand-motif {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.ims-login-motif-pill,
+.ims-login-motif-dot {
+  position: absolute;
+  display: block;
+  opacity: 0.95;
+}
+
+.ims-login-motif-pill {
+  width: 68px;
+  height: 18px;
+  border-radius: 999px;
+  transform: rotate(-18deg);
+}
+
+.ims-login-motif-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+}
+
+.ims-login-motif-pill--blue-one {
+  left: 4%;
+  top: 10%;
+  background: color-mix(in srgb, var(--ims-color-primary) 16%, transparent);
+}
+
+.ims-login-motif-pill--yellow-one {
+  right: 4%;
+  top: 12%;
+  background: color-mix(in srgb, var(--ims-color-accent-yellow) 24%, transparent);
+  transform: rotate(18deg);
+}
+
+.ims-login-motif-pill--blue-two {
+  right: 5%;
+  bottom: 9%;
+  width: 82px;
+  background: color-mix(in srgb, var(--ims-color-primary) 13%, transparent);
+  transform: rotate(10deg);
+}
+
+.ims-login-motif-pill--yellow-two {
+  left: 5%;
+  bottom: 11%;
+  width: 76px;
+  background: color-mix(in srgb, var(--ims-color-accent-yellow) 20%, transparent);
+  transform: rotate(-12deg);
+}
+
+.ims-login-motif-dot--one {
+  left: 9%;
+  top: 35%;
+  background: color-mix(in srgb, var(--ims-color-primary) 78%, transparent);
+}
+
+.ims-login-motif-dot--two {
+  right: 9%;
+  top: 36%;
+  background: color-mix(in srgb, var(--ims-color-accent-yellow) 88%, transparent);
+}
+
+.ims-login-motif-dot--three {
+  left: 11%;
+  bottom: 31%;
+  background: color-mix(in srgb, var(--ims-color-accent-yellow) 78%, transparent);
+}
+
+.ims-login-motif-dot--four {
+  right: 11%;
+  bottom: 30%;
+  background: color-mix(in srgb, var(--ims-color-primary) 72%, transparent);
 }
 
 .ims-login-logo-showcase {
-  width: min(480px, 100%);
-  min-height: 260px;
+  position: relative;
+  z-index: 1;
+  width: min(560px, 88%);
   margin: 0;
   display: flex;
   align-items: center;
@@ -242,17 +234,19 @@
 }
 
 .ims-login-brand-logo {
-  width: min(450px, 100%);
-  max-height: 250px;
+  position: relative;
+  z-index: 2;
+  width: min(520px, 100%);
+  max-height: 330px;
   object-fit: contain;
-  filter: drop-shadow(0 22px 32px color-mix(in srgb, var(--ims-color-primary-soft) 36%, transparent));
+  filter: drop-shadow(0 20px 24px color-mix(in srgb, var(--ims-color-primary-soft) 22%, transparent));
 }
 
 .ims-login-brand-note {
   position: relative;
   z-index: 2;
   width: fit-content;
-  max-width: min(430px, 100%);
+  max-width: min(440px, 100%);
   align-self: end;
   justify-self: start;
   display: inline-flex;
@@ -261,32 +255,34 @@
   padding: 11px 15px;
   border: 1px solid color-mix(in srgb, var(--ims-color-primary) 16%, var(--ims-border-color));
   border-radius: 16px;
-  background: color-mix(in srgb, var(--ims-bg-elevated) 93%, transparent);
+  background: var(--ims-bg-card);
   color: var(--ims-text-secondary);
-  box-shadow: 0 14px 32px color-mix(in srgb, var(--ims-color-primary-soft) 20%, transparent);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--ims-color-primary-soft) 18%, transparent);
 }
 
 .ims-login-brand-note .ant-typography {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .ims-login-note-dot {
   flex: 0 0 auto;
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, var(--ims-color-primary), var(--ims-color-primary-hover));
-  box-shadow: inset 0 0 0 5px var(--ims-bg-elevated), 0 0 0 1px color-mix(in srgb, var(--ims-color-primary) 30%, transparent);
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--ims-color-primary);
+  box-shadow: 15px 0 0 -3px var(--ims-color-accent-yellow);
 }
 
 /* =========================
    SECTION: Form Panel and Card — AKTIF / GUARDED UI
    Fungsi:
-   - menjaga form login tetap fokus di dalam canvas Mode A dengan surface putih premium.
+   - menjaga form login tetap fokus di card kanan yang modern, solid, dan tidak ramai.
    Hubungan flow aplikasi:
    - form di dalamnya tetap memanggil handleLogin existing di Login.jsx.
-   Status:
+   Alasan logic dipakai:
+   - card memakai surface putih, border, shadow halus, dan dot aksen kecil tanpa mengubah logic submit.
+   Status logic:
    - AKTIF untuk semua state login.
    - GUARDED: jangan ubah validation/auth logic dari CSS refinement.
    ========================= */
@@ -298,28 +294,35 @@
   justify-content: center;
 }
 
-.ims-login-form-panel::before {
-  content: "";
-  position: absolute;
-  inset: -34px -30px;
-  z-index: -1;
-  border-radius: 30px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--ims-bg-card) 62%, transparent), transparent),
-    linear-gradient(135deg, color-mix(in srgb, var(--ims-color-primary-softer) 54%, transparent), color-mix(in srgb, var(--ims-color-accent-yellow-soft) 18%, transparent));
-  opacity: 0.55;
+.ims-login-card.ant-card {
+  position: relative;
+  width: min(100%, 410px);
+  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 18%, var(--ims-border-color));
+  border-radius: 28px;
+  background: var(--ims-bg-card);
+  box-shadow: 0 26px 62px color-mix(in srgb, var(--ims-color-primary-soft) 30%, transparent);
+  overflow: hidden;
 }
 
-.ims-login-card.ant-card {
-  width: min(100%, 410px);
-  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 13%, var(--ims-border-color));
-  border-radius: 28px;
-  background: color-mix(in srgb, var(--ims-bg-elevated) 99%, white);
-  box-shadow: 0 24px 62px color-mix(in srgb, var(--ims-color-primary-soft) 28%, transparent);
+.ims-login-card.ant-card::before {
+  content: "";
+  position: absolute;
+  top: 24px;
+  right: 28px;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--ims-color-accent-yellow);
+  box-shadow:
+    -18px 0 0 var(--ims-color-primary),
+    -36px 0 0 color-mix(in srgb, var(--ims-color-primary) 22%, transparent);
 }
 
 .ims-login-card .ant-card-body {
-  padding: clamp(30px, 3.7vw, 40px);
+  position: relative;
+  z-index: 2;
+  padding: clamp(34px, 4vw, 46px) clamp(28px, 3.8vw, 38px) clamp(30px, 3.6vw, 38px);
 }
 
 .ims-login-card--compact.ant-card {
@@ -331,58 +334,30 @@
   max-width: 520px;
 }
 
-/* =========================
-   SECTION: Card Logo Anchor — AKTIF / UI ONLY
-   Fungsi:
-   - menampilkan mark logo kecil agar form tetap punya identitas brand saat panel kiri diringkas.
-   Hubungan flow aplikasi:
-   - visual saja; tidak mengubah username/password, validation, submit, atau profile gate.
-   Status:
-   - AKTIF untuk Login normal.
-   ========================= */
-.ims-login-card-brand {
-  width: 56px;
-  height: 56px;
-  margin-bottom: 22px;
-  padding: 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--ims-color-primary) 16%, var(--ims-border-color-soft));
-  border-radius: 17px;
-  background: var(--ims-bg-elevated);
-  box-shadow: var(--ims-shadow-soft);
-}
-
-.ims-login-card-logo {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-
 .ims-login-heading {
   width: 100%;
 }
 
 .ims-login-eyebrow.ant-typography {
-  color: var(--ims-color-primary);
+  color: var(--ims-color-primary-hover);
   font-size: 11px;
   font-weight: 900;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
 }
 
 .ims-login-title.ant-typography {
   margin: 0;
   color: var(--ims-text-primary);
-  font-size: 24px;
-  letter-spacing: -0.026em;
+  font-size: 28px;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
 }
 
 .ims-login-muted-text.ant-typography {
   color: var(--ims-text-secondary);
   font-size: 13px;
-  line-height: 1.65;
+  line-height: 1.7;
 }
 
 /* =========================
@@ -391,7 +366,9 @@
    - menjaga jarak heading, error, input, dan tombol tetap nyaman.
    Hubungan flow aplikasi:
    - presentational only; tidak mengubah handleLogin, validation, AuthContext, Firebase Auth, atau profile gate.
-   Status:
+   Alasan logic dipakai:
+   - input dan button tetap memakai Ant Design existing dengan polish lokal agar terlihat modern dan readable.
+   Status logic:
    - AKTIF untuk Login UI normal.
    ========================= */
 .ims-login-error-box.ant-alert {
@@ -401,7 +378,7 @@
 }
 
 .ims-login-form {
-  margin-top: 28px;
+  margin-top: 30px;
 }
 
 .ims-login-error-box.ant-alert + .ims-login-form {
@@ -414,16 +391,17 @@
 
 .ims-login-form .ant-form-item-label > label {
   color: var(--ims-text-primary);
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 850;
 }
 
 .ims-login-form .ant-input-affix-wrapper,
 .ims-login-form .ant-input {
-  border-radius: 14px;
+  border-radius: 15px;
 }
 
 .ims-login-form .ant-input-affix-wrapper {
-  min-height: 46px;
+  min-height: 50px;
   border-color: var(--ims-border-color);
   background: var(--ims-bg-elevated);
 }
@@ -435,17 +413,17 @@
 }
 
 .ims-login-submit.ant-btn-primary {
-  height: 48px;
+  height: 52px;
   border: 0;
   border-radius: 16px;
-  background: linear-gradient(135deg, var(--ims-color-primary) 0%, var(--ims-color-primary-hover) 100%);
-  box-shadow: 0 14px 30px color-mix(in srgb, var(--ims-color-primary-soft) 34%, transparent);
+  background: var(--ims-color-primary);
+  box-shadow: 0 14px 28px color-mix(in srgb, var(--ims-color-primary) 22%, transparent);
   font-weight: 900;
 }
 
 .ims-login-submit.ant-btn-primary:hover,
 .ims-login-submit.ant-btn-primary:focus {
-  background: linear-gradient(135deg, var(--ims-color-primary-hover) 0%, var(--ims-color-primary-active) 100%);
+  background: var(--ims-color-primary-hover);
 }
 
 .ims-login-loading-content {
@@ -457,8 +435,10 @@
    Fungsi:
    - memastikan halaman login nyaman di tablet dan mobile dengan form-first priority.
    Hubungan flow aplikasi:
-   - hanya mengubah susunan visual, bukan logic auth.
-   Status:
+   - hanya mengubah susunan visual, bukan logic auth, route, role, atau data bisnis.
+   Alasan logic dipakai:
+   - di layar kecil form ditampilkan lebih dulu agar user langsung bisa login, brand panel tetap rapi di bawahnya.
+   Status logic:
    - AKTIF untuk menjaga usability mobile.
    ========================= */
 @media (max-width: 960px) {
@@ -470,30 +450,25 @@
   .ims-login-layout {
     min-height: auto;
     grid-template-columns: 1fr;
-    gap: 22px;
+    gap: 24px;
     padding: 22px 18px;
     border-radius: 26px;
   }
 
   .ims-login-layout::before {
-    width: 320px;
-    height: 320px;
-    left: -150px;
-    bottom: -160px;
+    inset: 48% 0 0 0;
+    border-right: 0;
+    border-top: 1px solid color-mix(in srgb, var(--ims-color-primary) 8%, transparent);
   }
 
   .ims-login-layout::after {
     left: auto;
-    right: 12%;
-    top: 54%;
+    right: 10%;
+    top: 56%;
   }
 
   .ims-login-form-panel {
     order: 1;
-  }
-
-  .ims-login-form-panel::before {
-    inset: -16px;
   }
 
   .ims-login-brand-panel {
@@ -501,41 +476,25 @@
     min-height: auto;
     padding: 16px 4px 4px;
     text-align: center;
-    gap: 16px;
+    gap: 18px;
   }
 
-  .ims-login-brand-panel::before {
-    width: min(80vw, 420px);
-    height: 220px;
-    left: 50%;
-    top: 42%;
-    transform: translateX(-50%) rotate(-6deg);
+  .ims-login-brand-header,
+  .ims-login-badge,
+  .ims-login-brand-note {
+    justify-self: center;
+    margin-inline: auto;
   }
 
-  .ims-login-brand-panel::after {
-    left: 50%;
-    top: 12px;
-    transform: translateX(-50%);
-  }
-
-  .ims-login-brand-header {
-    align-items: center;
-  }
-
-  .ims-login-brand-description.ant-typography {
-    max-width: 560px;
-  }
-
-  .ims-login-logo-showcase {
-    min-height: 180px;
+  .ims-login-brand-stage {
+    min-height: 280px;
   }
 
   .ims-login-brand-logo {
-    max-height: 180px;
+    max-height: 230px;
   }
 
   .ims-login-brand-note {
-    justify-self: center;
     align-self: start;
   }
 }
@@ -545,20 +504,10 @@
     padding: 10px;
   }
 
-  .ims-login-page::before,
-  .ims-login-page::after,
-  .ims-login-background-glow,
-  .ims-login-layout::before,
-  .ims-login-layout::after,
-  .ims-login-brand-panel::before,
-  .ims-login-brand-panel::after {
-    opacity: 0.34;
-  }
-
   .ims-login-layout {
     gap: 14px;
     padding: 14px;
-    border-radius: 22px;
+    border-radius: 24px;
   }
 
   .ims-login-card.ant-card {
@@ -567,33 +516,43 @@
   }
 
   .ims-login-card .ant-card-body {
-    padding: 22px 18px;
+    padding: 36px 22px 24px;
+  }
+
+  .ims-login-card.ant-card::before {
+    top: 18px;
+    right: 24px;
+  }
+
+  .ims-login-title.ant-typography {
+    font-size: 24px;
   }
 
   .ims-login-brand-panel {
     padding: 8px 0 0;
   }
 
-  .ims-login-brand-title.ant-typography {
-    font-size: 34px;
-  }
-
-  .ims-login-brand-description.ant-typography,
-  .ims-login-muted-text.ant-typography {
-    font-size: 12px;
-  }
-
-  .ims-login-logo-showcase {
-    min-height: 150px;
+  .ims-login-brand-stage {
+    min-height: 220px;
   }
 
   .ims-login-brand-logo {
-    max-height: 150px;
+    max-height: 175px;
   }
 
   .ims-login-brand-note {
     width: 100%;
     justify-content: center;
     text-align: center;
+  }
+
+  .ims-login-motif-pill {
+    width: 48px;
+    height: 14px;
+  }
+
+  .ims-login-motif-dot {
+    width: 9px;
+    height: 9px;
   }
 }
