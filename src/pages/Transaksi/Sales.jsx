@@ -825,28 +825,46 @@ const Sales = () => {
 
   // =========================
   // SECTION: Kolom tabel utama
+  // IMS NOTE [AKTIF] - Urutan kolom Sales dibuat mengikuti alur baca transaksi.
+  // Fungsi blok: menampilkan tanggal lebih dulu, lalu pelanggan, item, channel, referensi, total, status, dan aksi.
+  // Hubungan flow: hanya mengubah presentasi tabel; filter tab, pending income, status transition, stok, income, dan cancel flow tidak berubah.
+  // Alasan logic: owner lebih mudah membaca kronologi penjualan tanpa mengubah data transaksi atau payload Firestore.
   // =========================
   const salesTableColumns = [
+    {
+      title: "Tanggal",
+      dataIndex: "date",
+      key: "date",
+      width: 140,
+      render: (value) => value || "-",
+    },
     {
       title: "Pelanggan",
       dataIndex: "customerName",
       key: "customerName",
+      width: 160,
       render: (value) => value || "-",
     },
     {
       title: "Item",
       dataIndex: "items",
       key: "items",
+      width: 300,
       render: (items) =>
         Array.isArray(items) && items.length > 0 ? (
-          <ul style={{ paddingLeft: 18, margin: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {items.map((item, index) => (
-              <li key={index}>
-                {item.itemName}
-                {item.variantLabel ? ` - ${item.variantLabel}` : ""} ({formatNumberId(item.quantity)}) - {formatCurrencyId(item.subtotal || 0)}
-              </li>
+              <div key={index}>
+                <div style={{ fontWeight: 600 }}>
+                  {item.itemName}
+                  {item.variantLabel ? ` - ${item.variantLabel}` : ""}
+                </div>
+                <div style={{ color: "#8c8c8c", fontSize: 12 }}>
+                  {formatNumberId(item.quantity)} x {formatCurrencyId(item.pricePerUnit || 0)} = {formatCurrencyId(item.subtotal || 0)}
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
         ) : (
           "-"
         ),
@@ -855,23 +873,22 @@ const Sales = () => {
       title: "Channel",
       dataIndex: "salesChannel",
       key: "salesChannel",
+      width: 130,
+      render: (value) => value || "-",
     },
     {
       title: "Resi / Order / Referensi",
       dataIndex: "referenceNumber",
       key: "referenceNumber",
+      width: 190,
       render: (value) => value || "-",
     },
     {
       title: "Total",
       dataIndex: "total",
       key: "total",
+      width: 140,
       render: (value) => (value != null ? formatCurrencyId(value) : "-"),
-    },
-    {
-      title: "Tanggal",
-      dataIndex: "date",
-      key: "date",
     },
     {
       title: "Status",

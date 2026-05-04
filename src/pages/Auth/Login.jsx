@@ -11,6 +11,8 @@ import {
   Typography,
 } from "antd";
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
+import flanelKarawangLogo from "../../assets/branding/flanel-karawang-logo.png";
+import flanelKarawangMark from "../../assets/branding/flanel-karawang-mark.png";
 import useAuth from "../../hooks/useAuth";
 import { AUTH_PROFILE_STATUS } from "../../context/AuthContext";
 import "./Login.css";
@@ -34,7 +36,7 @@ const getBlockedAccessMessage = (profileStatus) => {
         status: "warning",
         title: "Akses belum aktif",
         description:
-          "Akun Auth sudah valid, tetapi profile internal belum dibuat di system_users. Hubungi Administrator untuk aktivasi profile internal.",
+          "Akun sudah valid, tetapi akses aplikasi belum aktif. Hubungi Administrator untuk aktivasi profil.",
       };
     case AUTH_PROFILE_STATUS.INACTIVE:
       return {
@@ -48,14 +50,14 @@ const getBlockedAccessMessage = (profileStatus) => {
         status: "warning",
         title: "Role belum valid",
         description:
-          "Profile user belum memiliki role valid: administrator atau user. Hubungi Administrator untuk perbaikan profile internal.",
+          "Profil user belum memiliki peran akses yang valid. Hubungi Administrator untuk perbaikan profil.",
       };
     case AUTH_PROFILE_STATUS.ERROR:
       return {
         status: "error",
         title: "Gagal membaca profile",
         description:
-          "Aplikasi tidak bisa memverifikasi profile/role user. Cek koneksi dan Firestore permission.",
+          "Aplikasi tidak bisa memverifikasi akses user. Cek koneksi atau hubungi Administrator.",
       };
     default:
       return null;
@@ -63,40 +65,33 @@ const getBlockedAccessMessage = (profileStatus) => {
 };
 
 // =========================
-// SECTION: Floral Illustration — AKTIF / UI ONLY
+// SECTION: Uploaded Brand Logo Showcase — AKTIF / UI ONLY
 // Fungsi:
-// - membuat dekorasi bunga ringan dengan CSS murni tanpa asset dan tanpa library baru.
+// - menampilkan logo usaha dari upload Logoflanel.zip sebagai branding utama halaman login.
 // Hubungan flow aplikasi:
-// - hanya visual halaman login; tidak terhubung ke auth, Firestore, role, stok, kas, atau modul bisnis.
+// - visual non-interaktif; tidak terhubung ke auth, Firestore, role, route, stok, kas, atau modul bisnis.
 // Status:
-// - AKTIF untuk identitas visual login IMS Bunga Flanel.
-// - SAFE: seluruh class memakai prefix ims-login agar tidak bocor ke halaman lain.
-// Legacy / cleanup:
-// - bukan legacy; jika kelak ada asset brand resmi, blok ini bisa menjadi kandidat cleanup visual saja.
+// - AKTIF untuk menggantikan ilustrasi/logo lama di Login.
+// - CLEANUP CANDIDATE: asset bisa diganti ulang jika owner menyediakan versi logo final lain.
 // =========================
-const FloralIllustration = () => (
-  <div className="ims-login-flower-stage" aria-hidden="true">
-    <div className="ims-login-orbit ims-login-orbit-a" />
-    <div className="ims-login-orbit ims-login-orbit-b" />
-
-    <div className="ims-login-flower ims-login-flower-main">
-      <span className="ims-login-petal ims-login-petal-top" />
-      <span className="ims-login-petal ims-login-petal-right" />
-      <span className="ims-login-petal ims-login-petal-bottom" />
-      <span className="ims-login-petal ims-login-petal-left" />
-      <span className="ims-login-flower-core" />
-    </div>
-
-    <div className="ims-login-flower ims-login-flower-small">
-      <span className="ims-login-petal ims-login-petal-top" />
-      <span className="ims-login-petal ims-login-petal-right" />
-      <span className="ims-login-petal ims-login-petal-bottom" />
-      <span className="ims-login-petal ims-login-petal-left" />
-      <span className="ims-login-flower-core" />
-    </div>
-
-    <span className="ims-login-leaf ims-login-leaf-left" />
-    <span className="ims-login-leaf ims-login-leaf-right" />
+const BrandLogoShowcase = () => (
+  <div
+    className="ims-login-logo-showcase"
+    aria-label="Logo Flanel Karawang Industries"
+  >
+    <div
+      className="ims-login-logo-orb ims-login-logo-orb-one"
+      aria-hidden="true"
+    />
+    <div
+      className="ims-login-logo-orb ims-login-logo-orb-two"
+      aria-hidden="true"
+    />
+    <img
+      src={flanelKarawangLogo}
+      alt="Flanel Karawang Industries"
+      className="ims-login-brand-logo"
+    />
   </div>
 );
 
@@ -124,7 +119,7 @@ const BrandPanel = () => (
       </Text>
     </Space>
 
-    <FloralIllustration />
+    <BrandLogoShowcase />
 
     <div className="ims-login-brand-note">
       <span className="ims-login-note-dot" />
@@ -266,6 +261,17 @@ const Login = () => {
   return (
     <LoginShell>
       <Card className="ims-login-card">
+        {/* AKTIF / UI ONLY:
+            Logo kecil di card menjaga konsistensi branding dengan panel kiri dan sidebar.
+            Tidak terkait submit login, AuthContext, role, route, atau profile gate. */}
+        <div className="ims-login-card-brand" aria-hidden="true">
+          <img
+            src={flanelKarawangMark}
+            alt=""
+            className="ims-login-card-logo"
+          />
+        </div>
+
         <Space direction="vertical" size={6} className="ims-login-heading">
           <Text className="ims-login-eyebrow">Selamat datang kembali</Text>
           <Title level={3} className="ims-login-title">
