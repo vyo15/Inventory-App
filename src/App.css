@@ -1,31 +1,29 @@
 /* =========================
-   SECTION: App Shell - AKTIF / THEME CENTER
+   SECTION: App Shell - AKTIF / THEME CENTER / GUARDED
    Fungsi:
-   - shell aplikasi membaca token global dari index.css agar light/dark tidak bentrok antar file.
+   - menyediakan shell global full-screen dengan background dan teks dari token runtime light/dark.
    Hubungan flow aplikasi:
-   - styling container saja; tidak menyentuh route, auth, stok, kas, produksi, payroll, HPP, atau laporan.
+   - dipakai AppLayout sebagai pembungkus semua route operasional; styling container saja dan tidak menyentuh route, auth, stok, kas, produksi, payroll, HPP, atau laporan.
+   Alasan logic dipakai:
+   - warna shell membaca token global body/html agar tidak perlu override manual per mode dan tidak kembali ke token warna legacy.
    Status:
-   - AKTIF sebagai baseline visual global. Warna hardcoded lama dipindah ke token untuk mencegah drift tema.
+   - AKTIF sebagai baseline visual global.
+   - GUARDED karena semua halaman operasional dirender di dalam shell ini.
 ========================= */
 .app-shell {
   height: 100vh;
   overflow: hidden;
-  background: var(--ims-floral-gradient);
+  background: var(--ims-bg-shell);
   color: var(--ims-text-primary);
   transition:
     background-color 0.22s ease,
     color 0.22s ease;
 }
 
-.app-shell.dark {
-  background: var(--ims-floral-gradient);
-  color: var(--ims-text-primary);
-}
-
 /* =========================
    SECTION: App Loading Screen - AKTIF / GUARDED
    Fungsi:
-   - menampilkan state loading auth/profile dengan visual yang mengikuti token brand blue/yellow/white/navy.
+   - menampilkan state loading auth/profile dengan visual yang mengikuti token brand aktif.
    Hubungan flow aplikasi:
    - dipakai App.jsx sebelum AppLayout dan route bisnis tampil, sehingga user tidak melihat halaman operasional sebelum session siap.
    Alasan logic dipakai:
@@ -40,7 +38,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: var(--ims-floral-gradient);
+  background: var(--ims-bg-shell);
   color: var(--ims-text-primary);
 }
 
@@ -72,7 +70,16 @@
 }
 
 /* =========================
-   SECTION: Main Layout
+   SECTION: Main Layout - AKTIF / GUARDED
+   Fungsi:
+   - menjaga Ant Design Layout tetap full-height dan transparan supaya shell background token tidak tertutup layer default.
+   Hubungan flow aplikasi:
+   - dipakai langsung oleh AppLayout untuk membungkus Sidebar, Header, dan Content; tidak mengubah routing atau business logic.
+   Alasan logic dipakai:
+   - override background/height mencegah layout AntD membuat permukaan putih/gelap sendiri di atas shell.
+   Status:
+   - AKTIF untuk struktur visual aplikasi.
+   - GUARDED karena salah height/overflow bisa memotong halaman operasional besar.
 ========================= */
 .app-layout,
 .app-main-layout {
@@ -82,7 +89,16 @@
 }
 
 /* =========================
-   SECTION: Sidebar
+   SECTION: Sidebar - AKTIF / GUARDED
+   Fungsi:
+   - menyiapkan area sidebar transparan, fixed height, dan scroll wrapper internal untuk menu besar.
+   Hubungan flow aplikasi:
+   - dipakai AppLayout bersama SidebarLogo dan SidebarMenu; hanya mengatur frame visual, bukan role/menu guard.
+   Alasan logic dipakai:
+   - background sidebar harus mengikuti token shell sementara scroll menu tetap dikendalikan komponen sidebar.
+   Status:
+   - AKTIF untuk navigasi utama.
+   - GUARDED: jangan ubah role visibility atau route access dari CSS.
 ========================= */
 .app-sider {
   height: 100vh;
@@ -115,14 +131,23 @@
   padding: 0 8px 14px;
 }
 
-/* Hilangkan garis default AntD */
+/* AKTIF / GUARDED: menetralkan garis default AntD Sider agar border sidebar tetap dikontrol token shell. */
 .ant-layout-sider {
   border-right: 0 !important;
   box-shadow: none !important;
 }
 
 /* =========================
-   SECTION: Header
+   SECTION: Header - AKTIF / GUARDED
+   Fungsi:
+   - mengunci tinggi, padding, dan surface header agar menyatu dengan AppHeader token global.
+   Hubungan flow aplikasi:
+   - dipakai AppLayout untuk AppHeader; tidak mengubah user session, theme state, atau navigasi.
+   Alasan logic dipakai:
+   - header AntD punya background/border default yang bisa menumpuk di atas shell jika tidak dinetralkan.
+   Status:
+   - AKTIF untuk struktur atas aplikasi.
+   - GUARDED karena header menjadi area kontrol user dan konteks halaman.
 ========================= */
 .app-header {
   height: 92px;
@@ -145,7 +170,16 @@
 }
 
 /* =========================
-   SECTION: Content Area
+   SECTION: Content Area - AKTIF / GUARDED
+   Fungsi:
+   - menyediakan scroll container dan content card utama untuk semua route bisnis.
+   Hubungan flow aplikasi:
+   - AppRoutes dirender di dalam .app-content-card; styling ini tidak mengubah route, form submit, query, atau mutasi data.
+   Alasan logic dipakai:
+   - satu scroll container mencegah page besar membuat body scroll ganda, sementara card menjaga surface tetap konsisten.
+   Status:
+   - AKTIF sebagai canvas halaman operasional.
+   - GUARDED karena tabel, modal trigger, drawer trigger, dan form besar bergantung pada ruang content ini.
 ========================= */
 .app-main-content {
   height: calc(100vh - 92px);
@@ -177,19 +211,15 @@
     box-shadow 0.22s ease;
 }
 
-.app-shell.dark .app-content-card {
-  background: color-mix(in srgb, var(--ims-bg-card) 92%, transparent);
-  color: var(--ims-text-primary);
-  border: 1px solid var(--ims-border-color-soft);
-  box-shadow: var(--ims-shadow-soft);
-}
 
 /* =========================
-   SECTION: Theme Toggle Button - AKTIF
+   SECTION: Theme Toggle Button - AKTIF / GUARDED
    Fungsi:
    - memoles FloatButton theme toggle agar mengikuti token shell brand dan tidak menyimpan posisi lewat inline style.
    Hubungan flow aplikasi:
    - class ini dipakai ThemeToggleButton.jsx; state dan persistence tetap dikontrol AppLayout.
+   Alasan logic dipakai:
+   - selector .light/.dark dari JSX tetap boleh ada sebagai marker, tetapi warna cukup dibaca dari token body agar tidak ada duplicate override per mode.
    Status:
    - AKTIF untuk UI control light/dark.
    - GUARDED: jangan gabungkan dengan guard table/modal/drawer pada fase ini.
@@ -200,44 +230,36 @@
 }
 
 .theme-toggle-button .ant-float-btn-body {
+  background: var(--ims-bg-elevated) !important;
+  border: 1px solid var(--ims-border-color);
   border-radius: 14px !important;
+  color: var(--ims-text-primary) !important;
+  box-shadow: var(--ims-shadow-soft);
   transition:
     background-color 0.2s ease,
     color 0.2s ease,
     border-color 0.2s ease,
     box-shadow 0.2s ease,
     transform 0.18s ease !important;
-  box-shadow: var(--ims-shadow-soft);
-}
-
-.theme-toggle-button.light .ant-float-btn-body {
-  background: var(--ims-bg-elevated) !important;
-  border: 1px solid var(--ims-border-color);
-  color: var(--ims-text-primary) !important;
-}
-
-.theme-toggle-button.dark .ant-float-btn-body {
-  background: var(--ims-bg-elevated) !important;
-  border: 1px solid var(--ims-border-color);
-  color: var(--ims-text-primary) !important;
 }
 
 .theme-toggle-button:hover .ant-float-btn-body {
+  background: var(--ims-bg-card-soft) !important;
+  box-shadow: var(--ims-shadow-elevated);
   transform: translateY(-1px);
 }
 
-.theme-toggle-button.light:hover .ant-float-btn-body {
-  background: var(--ims-bg-card-soft) !important;
-  box-shadow: var(--ims-shadow-elevated);
-}
-
-.theme-toggle-button.dark:hover .ant-float-btn-body {
-  background: var(--ims-bg-card-soft) !important;
-  box-shadow: var(--ims-shadow-elevated);
-}
-
 /* =========================
-   SECTION: Generic Surface Helper
+   SECTION: Generic Surface Helper - AKTIF / CLEANUP CANDIDATE
+   Fungsi:
+   - memberi radius dasar pada komponen AntD umum di dalam shell sebelum override spesifik table/modal/drawer bekerja.
+   Hubungan flow aplikasi:
+   - styling surface lintas halaman saja; tidak mengubah data table, action, form, atau portal render.
+   Alasan logic dipakai:
+   - helper ini menjaga tampilan komponen lama tetap rapi sambil menunggu semua halaman memakai class foundation final.
+   Status:
+   - AKTIF sebagai compatibility visual.
+   - CLEANUP CANDIDATE setelah seluruh halaman berpindah ke helper/component surface yang lebih spesifik.
 ========================= */
 .app-shell .ant-card,
 .app-shell .ant-table-wrapper,
@@ -247,7 +269,16 @@
 }
 
 /* =========================
-   SECTION: Scrollbar
+   SECTION: Scrollbar - AKTIF / GUARDED
+   Fungsi:
+   - menyatukan scrollbar content dan sidebar agar mengikuti token aktif.
+   Hubungan flow aplikasi:
+   - dipakai area scroll AppLayout dan SidebarMenu; tidak mengubah jumlah data, pagination, atau filter.
+   Alasan logic dipakai:
+   - satu token thumb cukup untuk light/dark karena nilai token diganti oleh class body/html.
+   Status:
+   - AKTIF untuk affordance scroll halaman operasional.
+   - GUARDED karena content besar memakai scroll container ini sebagai akses utama.
 ========================= */
 .app-content-scroll::-webkit-scrollbar,
 .sidebar-menu-scroll::-webkit-scrollbar,
@@ -262,14 +293,18 @@
   border-radius: 999px;
 }
 
-.app-shell.dark .app-content-scroll::-webkit-scrollbar-thumb,
-.app-shell.dark .sidebar-menu-scroll::-webkit-scrollbar-thumb,
-.app-shell.dark .sidebar-menu::-webkit-scrollbar-thumb {
-  background: var(--ims-scrollbar-thumb);
-}
 
 /* =========================
-   SECTION: Responsive
+   SECTION: Responsive Layout Guard - AKTIF / GUARDED
+   Fungsi:
+   - menjaga padding shell, content card, loading card, dan posisi theme toggle tetap usable di tablet/mobile.
+   Hubungan flow aplikasi:
+   - styling breakpoint saja; tidak mengubah render route, data, atau handler bisnis.
+   Alasan logic dipakai:
+   - halaman operasional besar tetap butuh ruang baca tanpa memaksa scroll horizontal di viewport kecil.
+   Status:
+   - AKTIF untuk baseline responsive.
+   - GUARDED karena perubahan berlebih bisa membuat tabel/modal/drawer tidak nyaman digunakan.
 ========================= */
 @media (max-width: 992px) {
   .app-header {
@@ -313,13 +348,16 @@
   }
 }
 /* =========================
-   SECTION: Shared UI Foundation
+   SECTION: Shared UI Foundation - AKTIF / GUARDED
    Fungsi:
-   - merapikan konsistensi drawer, modal, table, filter bar, dan action button
-   - dipakai lintas halaman agar tampilan tidak perlu diatur satu-satu terus
-   Catatan:
-   - blok ini masih dipakai aktif oleh banyak halaman yang memakai komponen Ant Design
-   - sengaja diletakkan global agar mudah dibersihkan / dikembangkan dari satu titik
+   - merapikan konsistensi drawer, modal, table, filter bar, form control, dan action button.
+   Hubungan flow aplikasi:
+   - dipakai lintas halaman yang memakai Ant Design; hanya presentational dan tidak mengubah submit, query, kalkulasi, atau mutasi data.
+   Alasan logic dipakai:
+   - foundation global mencegah setiap page membuat override sendiri yang sulit diaudit.
+   Status:
+   - AKTIF untuk baseline komponen bersama.
+   - GUARDED karena selector table/modal/drawer/form masih menjadi pelindung UI operasional besar.
 ========================= */
 
 /* ---------- Filter / Search / Select ---------- */
@@ -491,15 +529,16 @@
 /* =========================
    SECTION: Batch 1 Shared Page Foundation - AKTIF / CLEANUP CANDIDATE
    Fungsi:
-   - alias token lama ke token floral global supaya halaman batch lama tetap stabil tanpa warna biru/navy lama.
+   - menyediakan alias surface untuk halaman batch lama agar tetap membaca token global tanpa hardcoded color lama.
    Hubungan flow aplikasi:
    - class ini hanya mengatur spacing/surface table/action; tidak mengubah handler, query, kalkulasi, atau mutasi data.
+   Alasan logic dipakai:
+   - alias menjaga compatibility sambil menunggu halaman lama berpindah ke token final langsung.
    Status:
    - AKTIF karena masih dipakai halaman migrasi awal.
    - CLEANUP CANDIDATE: setelah semua halaman sudah memakai token global langsung, alias ini bisa dirapikan bertahap.
 ========================= */
-.app-shell,
-.app-shell.dark {
+.app-shell {
   --ims-surface-card: var(--ims-bg-card);
   --ims-surface-soft: var(--ims-bg-card-soft);
   --ims-surface-muted: var(--ims-bg-elevated);
@@ -575,11 +614,14 @@
 /* =========================
    SECTION: Shared Utility Spacing - AKTIF / GUARDED
    Fungsi:
-   - utilitas spacing ringan untuk mengurangi inline style berulang pada halaman operasional.
+   - utilitas spacing dan cell text ringan untuk mengurangi inline style berulang pada halaman operasional.
    Hubungan flow aplikasi:
    - hanya presentational; tidak mengubah event handler, payload, atau alur data.
+   Alasan logic dipakai:
+   - class kecil dipusatkan di App.css agar halaman table/report tidak membuat variasi spacing sendiri.
    Status:
    - AKTIF untuk batch cleanup UI consistency.
+   - GUARDED karena banyak halaman data memakai class ini untuk readability table.
 ========================= */
 .ims-mb-16 {
   margin-bottom: 16px !important;
@@ -614,6 +656,8 @@
    - menyatukan style tampilan read-only info field pada form operasional (purchases/produksi/finance).
    Hubungan flow aplikasi:
    - presentational only; tidak mengubah value form, validasi, ataupun payload transaksi.
+   Alasan logic dipakai:
+   - readonly field membedakan snapshot informasi dari input editable tanpa mengubah contract form.
    Status:
    - AKTIF untuk cleanup inline style berulang batch-1.
    - GUARDED: jangan dipakai untuk mengganti status bisnis/warna semantik.
@@ -641,6 +685,8 @@
    - menyatukan panel snapshot/read-only pasif agar tidak memakai Alert besar yang terasa seperti warning.
    Hubungan flow aplikasi:
    - presentational only untuk info stok/summary; tidak mengubah value form, validasi, payload, atau transaksi Firestore.
+   Alasan logic dipakai:
+   - panel ini memisahkan informasi pasif dari warning/error/destructive Alert agar semantik guard tetap jelas.
    Status:
    - AKTIF untuk snapshot stok dan info read-only.
    - GUARDED: jangan dipakai untuk warning/error/destructive/security alert.
@@ -749,6 +795,8 @@
    - menyamakan layout tombol aksi table/list tanpa mengubah handler action.
    Hubungan flow aplikasi:
    - dipakai halaman master/transaksi/produksi yang memiliki kolom Aksi; perubahan ini hanya visual dan behavior-preserving.
+   Alasan logic dipakai:
+   - kolom aksi operasional harus tetap terbaca dan rapi tanpa refactor JSX pada fase CSS-only.
    Status:
    - AKTIF untuk baseline action button table.
    - GUARDED: jangan ubah handler/data/business rules dari class CSS ini.
@@ -841,13 +889,17 @@
 }
 
 /* =========================
-   SECTION: Shared Table Surface Foundation
+   SECTION: Shared Table Surface Foundation - AKTIF / GUARDED
    Fungsi:
-   - mengunci background table agar selalu solid di class resmi app-data-table dan ims-table
-   - menyamakan hover, selected row, sticky/fixed cell, empty row, dan summary row lintas halaman
-   Catatan:
-   - jangan override background table ke transparent di CSS per halaman
-   - fixed column wajib memakai warna solid, bukan rgba, agar isi kolom di belakang tidak tembus
+   - mengunci background table agar selalu solid di class resmi app-data-table, ims-table, dan ims-page.
+   - menyamakan hover, selected row, sticky/fixed cell, empty row, dan summary row lintas halaman.
+   Hubungan flow aplikasi:
+   - styling table operasional saja; tidak mengubah dataSource, columns, pagination, sort, filter, rowSelection, atau handler aksi.
+   Alasan logic dipakai:
+   - fixed column wajib memakai warna solid agar isi kolom di belakang tidak tembus, terutama di halaman data besar.
+   Status:
+   - AKTIF untuk baseline table surface.
+   - GUARDED: jangan override background table ke transparent di CSS per halaman.
 ========================= */
 .app-data-table.ant-table-wrapper,
 .ims-table.ant-table-wrapper,
@@ -990,13 +1042,16 @@
 
 
 /* =========================
-   SECTION: Shared Stock Variant Pills
+   SECTION: Shared Stock Variant Pills - AKTIF / GUARDED
    Fungsi:
-   - menjaga tampilan stok varian di Products, Raw Materials, dan Semi Finished tetap seragam
-   - class ini sengaja dipusatkan di App.css karena dipakai lintas halaman stok
-   Catatan:
-   - blok ini aktif dipakai oleh render stok varian
-   - jangan dihapus atau diganti ke inline style lagi agar tiga halaman stok tidak saling merusak
+   - menjaga tampilan stok varian di Products, Raw Materials, dan Semi Finished tetap seragam.
+   Hubungan flow aplikasi:
+   - styling display stok varian saja; tidak mengubah stock/currentStock/reservedStock/availableStock, variantKey, atau variantLabel.
+   Alasan logic dipakai:
+   - class ini dipusatkan di App.css karena dipakai lintas halaman stok dan membaca token runtime agar light/dark tidak butuh override duplicate.
+   Status:
+   - AKTIF dipakai oleh render stok varian.
+   - GUARDED: jangan dihapus atau diganti ke inline style lagi agar tiga halaman stok tidak saling merusak.
 ========================= */
 .stock-variant-pill-wrap {
   display: flex;
@@ -1010,9 +1065,9 @@
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
+  border: 1px solid var(--ims-border-color);
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  background: rgba(248, 250, 252, 0.96);
+  background: var(--ims-bg-card-soft);
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -1020,31 +1075,17 @@
 .stock-variant-pill-label,
 .stock-variant-pill-value {
   margin: 0 !important;
+  font-size: 12px !important;
   line-height: 1.2 !important;
 }
 
 .stock-variant-pill-label {
-  font-size: 12px !important;
-  color: rgba(15, 23, 42, 0.72) !important;
+  color: var(--ims-text-secondary) !important;
 }
 
 .stock-variant-pill-value {
-  font-size: 12px !important;
+  color: var(--ims-text-primary) !important;
   font-weight: 700 !important;
-  color: #0f172a !important;
-}
-
-.app-shell.dark .stock-variant-pill {
-  border-color: rgba(148, 163, 184, 0.18);
-  background: rgba(15, 23, 42, 0.88);
-}
-
-.app-shell.dark .stock-variant-pill-label {
-  color: rgba(191, 219, 254, 0.78) !important;
-}
-
-.app-shell.dark .stock-variant-pill-value {
-  color: #e6edf3 !important;
 }
 
 @media (max-width: 768px) {
@@ -1059,76 +1100,16 @@
 }
 
 /* =========================
-   SECTION: IMS Floral Global Theme Overrides - AKTIF DIPAKAI / THEME SYSTEM
+   SECTION: IMS Shared Component Surface Overrides - AKTIF / GUARDED UI
    Fungsi:
-   - menyelaraskan shell aplikasi, content card, control, table, modal/drawer, dan stock pill dengan token floral global.
-   - override diletakkan di akhir file agar aman menimpa warna hardcoded lama tanpa refactor besar.
+   - menjaga Ant Design Card, Modal, Drawer, Popover, Dropdown, Form, dan Typography di dalam shell tetap memakai token surface aktif.
    Hubungan flow aplikasi:
-   - styling global saja; tidak menyentuh route guard, auth, stok, sales, purchases, produksi, payroll, HPP, laporan, atau reset data.
-   Aman diubah:
-   - untuk mengganti desain, ubah token di src/index.css terlebih dahulu.
-   KANDIDAT CLEANUP:
-   - beberapa warna lama di atas masih dipertahankan sebagai compatibility. Jangan hapus sebelum audit semua halaman.
-========================= */
-/* =========================
-   SECTION: Phase 1 Global Surface Guard - AKTIF / GUARDED
-   Fungsi:
-   - mengunci token surface light/dark untuk shell, card, control, portal, dan overlay supaya fondasi UI konsisten lintas halaman.
-   Hubungan flow aplikasi:
-   - styling global saja; tidak mengubah route, auth, stok, kas, produksi, transaksi, payroll, HPP, laporan, atau reset.
+   - berdampak ke halaman operasional yang memakai Ant Design di dalam AppLayout; tidak mengubah submit, query, handler, atau business rules.
+   Alasan logic dipakai:
+   - sebagian komponen AntD dirender di dalam shell, sedangkan portal punya guard body terpisah; dua lapisan ini mencegah surface tembus di light/dark.
    Status:
-   - AKTIF sebagai fondasi visual Phase 1.
-   - GUARDED karena override ini ikut terbaca area sensitif yang memakai Modal, Drawer, Table, dan Form.
-========================= */
-.app-shell,
-.app-shell.light,
-.app-shell.dark {
-  background: var(--ims-floral-gradient);
-  color: var(--ims-text-primary);
-}
-
-.app-content-card,
-.app-shell.dark .app-content-card {
-  background: color-mix(in srgb, var(--ims-bg-card) 92%, transparent);
-  color: var(--ims-text-primary);
-  border-color: var(--ims-border-color-soft);
-  box-shadow: var(--ims-shadow-soft);
-  backdrop-filter: blur(14px);
-}
-
-.theme-toggle-button.light .ant-float-btn-body,
-.theme-toggle-button.dark .ant-float-btn-body {
-  background: var(--ims-bg-elevated) !important;
-  border: 1px solid var(--ims-border-color);
-  color: var(--ims-text-primary) !important;
-  box-shadow: var(--ims-shadow-soft);
-}
-
-.theme-toggle-button.light:hover .ant-float-btn-body,
-.theme-toggle-button.dark:hover .ant-float-btn-body {
-  background: var(--ims-bg-card-soft) !important;
-  box-shadow: var(--ims-shadow-elevated);
-}
-
-.app-content-scroll::-webkit-scrollbar-thumb,
-.sidebar-menu-scroll::-webkit-scrollbar-thumb,
-.sidebar-menu::-webkit-scrollbar-thumb {
-  background: var(--ims-scrollbar-thumb);
-}
-
-.app-shell.dark .app-content-scroll::-webkit-scrollbar-thumb,
-.app-shell.dark .sidebar-menu-scroll::-webkit-scrollbar-thumb,
-.app-shell.dark .sidebar-menu::-webkit-scrollbar-thumb {
-  background: var(--ims-scrollbar-thumb);
-}
-
-/* =========================
-   SECTION: IMS Shared Component Surface Overrides - AKTIF DIPAKAI
-   Fungsi:
-   - menjaga Ant Design Card/Table/Modal/Drawer/Form terlihat satu tema warm floral.
-   - tetap mengutamakan readability halaman data, bukan dekorasi bunga besar.
-   Efek:
-   - berdampak ke halaman operasional yang memakai Ant Design di dalam AppLayout.
+   - AKTIF untuk shared component surface.
+   - GUARDED karena berhubungan dengan modal/drawer/dropdown/form yang dipakai transaksi, produksi, laporan, dan sistem.
 ========================= */
 .app-shell .ant-card,
 .app-shell .ant-modal-content,
@@ -1197,9 +1178,11 @@
 /* =========================
    SECTION: AntD Portal Surface Baseline - AKTIF / GUARDED UI
    Fungsi:
-   - memastikan Modal, Drawer, Popover, Dropdown, dan Select portal tetap solid ketika dirender di luar .app-shell.
+   - memastikan Modal, Drawer, Popover, Dropdown, Select, dan Date Picker portal tetap solid ketika dirender di luar .app-shell.
    Hubungan flow aplikasi:
    - styling portal Ant Design saja; tidak mengubah submit flow, action handler, query Firestore, atau business rules.
+   Alasan logic dipakai:
+   - portal AntD sering keluar dari hierarchy .app-shell, jadi selector body.app-theme-* wajib dipertahankan agar light/dark tetap aman.
    Status:
    - AKTIF untuk konsistensi light/dark.
    - GUARDED karena dipakai halaman transaksi, produksi, laporan, auth, dan reset.
@@ -1355,12 +1338,17 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
 }
 
 /* =========================
-   SECTION: IMS Table Surface Overrides - AKTIF DIPAKAI / GUARDED UI
+   SECTION: IMS Table Surface Overrides - AKTIF / GUARDED UI / CLEANUP CANDIDATE
    Fungsi:
    - mengunci table, fixed column, selected row, dan hover agar solid di light/dark mode.
    - mencegah bug lama: cell transparan/tembus layer belakang.
-   Efek:
-   - berdampak ke table halaman Master Data, Stock, Transaksi, Produksi, Laporan, dan Sistem.
+   Hubungan flow aplikasi:
+   - berdampak ke table halaman Master Data, Stock, Transaksi, Produksi, Laporan, dan Sistem; tidak mengubah data, pagination, filter, atau action handler.
+   Alasan logic dipakai:
+   - lapisan ini sengaja dipertahankan setelah Shared Table Surface Foundation karena table/fixed column adalah guard visual sensitif.
+   Status:
+   - AKTIF dan GUARDED untuk table operasional besar.
+   - CLEANUP CANDIDATE: ada overlap dengan Shared Table Surface Foundation, tetapi baru boleh dikurangi setelah regression check table fixed/selected/hover di light dan dark selesai.
 ========================= */
 .app-data-table .ant-table,
 .ims-table .ant-table,
@@ -1438,27 +1426,4 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
 .ims-table .ant-table-ping-right .ant-table-cell-fix-right-first::after,
 .ims-page .ant-table-ping-right .ant-table-cell-fix-right-first::after {
   box-shadow: var(--ims-table-fixed-shadow);
-}
-
-/* =========================
-   SECTION: Stock Variant Pills - AKTIF DIPAKAI
-   Fungsi:
-   - menyatukan chip stok varian dengan token floral global.
-   Hubungan flow:
-   - styling display saja; tidak mengubah stock/currentStock/reservedStock/availableStock.
-========================= */
-.stock-variant-pill,
-.app-shell.dark .stock-variant-pill {
-  border-color: var(--ims-border-color);
-  background: var(--ims-bg-card-soft);
-}
-
-.stock-variant-pill-label,
-.app-shell.dark .stock-variant-pill-label {
-  color: var(--ims-text-secondary) !important;
-}
-
-.stock-variant-pill-value,
-.app-shell.dark .stock-variant-pill-value {
-  color: var(--ims-text-primary) !important;
 }

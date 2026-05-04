@@ -1,67 +1,118 @@
 /* =========================
-   SECTION: Dashboard Page
-   Fungsi:
-   - menjaga Dashboard menjadi control center compact sesuai docs project;
-   - mencegah horizontal scroll dan tampilan terlalu ramai.
-   Hubungan flow:
-   - CSS ini hanya styling read-only, tidak menyentuh stok, kas, produksi, payroll, HPP, atau laporan.
-   Status:
-   - aktif dipakai; bukan legacy.
+   SECTION: Dashboard Runtime Surface
+   Fungsi blok:
+   - menjaga Dashboard sebagai operational control center yang compact, clean, dan tidak memicu horizontal scroll.
+   - menyediakan token lokal berbasis theme blue/yellow/white/navy dari src/index.css.
+   Hubungan blok dengan flow aplikasi:
+   - CSS ini hanya mengatur presentasi Dashboard read-only; tidak menyentuh query, kalkulasi, formatter, route, stok, kas, produksi, payroll, HPP, atau laporan.
+   Alasan logic dipakai:
+   - token lokal membuat warna card/list konsisten dengan brand tanpa membawa hardcoded style lama ke tiap selector.
+   Status logic:
+   - AKTIF untuk Dashboard summary, priority cards, metric cards, list cards, empty state, dan dark/light mode.
+   - GUARDED karena perubahan visual Dashboard tidak boleh berubah menjadi write flow atau laporan besar.
 ========================= */
 .dashboard-page {
+  --dashboard-card-radius: 16px;
+  --dashboard-card-radius-sm: 14px;
+  --dashboard-card-border: var(--ims-border-color-soft);
+  --dashboard-card-border-strong: var(--ims-border-strong);
+  --dashboard-card-background: var(--ims-bg-card);
+  --dashboard-card-background-soft: var(--ims-bg-card-soft);
+  --dashboard-card-shadow: var(--ims-shadow-soft);
+  --dashboard-card-shadow-hover: var(--ims-shadow-elevated);
+  --dashboard-control-gap: 12px;
+
   display: flex;
   flex-direction: column;
   gap: 18px;
   max-width: 100%;
+  min-width: 0;
   overflow-x: hidden;
+  color: var(--ims-text-primary);
 }
 
 .dashboard-full-width {
   width: 100%;
+  min-width: 0;
+}
+
+.dashboard-page .ant-space,
+.dashboard-page .ant-row,
+.dashboard-page .ant-col,
+.dashboard-page .ant-card,
+.dashboard-page .ant-card-body,
+.dashboard-priority-content,
+.dashboard-list-card-content {
+  min-width: 0;
+}
+
+.dashboard-priority-content .ant-typography,
+.dashboard-list-card-content .ant-typography {
+  overflow-wrap: anywhere;
+}
+
+/* =========================
+   SECTION: Dashboard Text Helpers
+   Fungsi blok:
+   - menyatukan teks pendukung, tanggal, icon section, dan arrow action dengan token theme.
+   Hubungan blok dengan flow aplikasi:
+   - helper ini dipakai lintas section Dashboard, tetapi tidak mengubah data atau navigasi.
+   Alasan logic dipakai:
+   - warna text memakai token agar light mode tetap putih/navy dan dark mode tetap navy/blue tanpa selector duplikatif.
+   Status logic:
+   - AKTIF sebagai helper visual read-only.
+========================= */
+.dashboard-section-extra,
+.dashboard-section-icon,
+.dashboard-muted-text,
+.dashboard-date-text,
+.dashboard-action-arrow {
+  color: var(--ims-text-muted);
 }
 
 .dashboard-section-extra {
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.58);
 }
 
 .dashboard-section-icon {
-  color: rgba(15, 23, 42, 0.5);
   font-size: 14px;
 }
 
 .dashboard-muted-text {
   font-size: 12px;
   line-height: 1.55;
-  color: rgba(15, 23, 42, 0.58);
 }
 
 .dashboard-date-text {
+  flex-shrink: 0;
   font-size: 12px;
-  color: rgba(15, 23, 42, 0.52);
+  text-align: right;
   white-space: nowrap;
 }
 
 .dashboard-action-arrow {
-  color: rgba(15, 23, 42, 0.45);
-  font-size: 14px;
   flex-shrink: 0;
+  font-size: 14px;
+  transition: color 0.18s ease, transform 0.18s ease;
 }
 
 /* =========================
-   SECTION: Compact cards & lists
-   Fungsi:
-   - mengganti table/chart besar Dashboard lama menjadi card/list compact;
-   - seluruh card hanya navigasi atau read-only summary.
-   Hubungan flow:
-   - action card memakai Link ke halaman terkait, bukan write otomatis.
-   Status:
-   - aktif dipakai; bukan kandidat cleanup.
+   SECTION: Priority Cards and List Cards
+   Fungsi blok:
+   - membentuk card actionable dan list compact tanpa table besar.
+   - seluruh card action tetap berupa Link/navigasi yang sudah dikontrol Dashboard.jsx.
+   Hubungan blok dengan flow aplikasi:
+   - dipakai Prioritas Hari Ini, Planning priority, Stok Kritis, Restock Assistant, dan Aktivitas Terbaru.
+   Alasan logic dipakai:
+   - border, background, dan hover memakai token brand agar dashboard tidak membawa warna hardcoded lama.
+   Status logic:
+   - AKTIF untuk layout control center.
+   - GUARDED karena card tidak boleh menjadi tombol write langsung.
 ========================= */
 .dashboard-priority-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--dashboard-control-gap);
 }
 
 .dashboard-priority-card,
@@ -69,9 +120,11 @@
 .dashboard-compact-card,
 .dashboard-metric-card {
   box-sizing: border-box;
-  border-radius: 16px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.74);
+  max-width: 100%;
+  border: 1px solid var(--dashboard-card-border);
+  border-radius: var(--dashboard-card-radius);
+  background: var(--dashboard-card-background);
+  color: var(--ims-text-primary);
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
@@ -79,38 +132,53 @@
 .dashboard-list-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
+  gap: var(--dashboard-control-gap);
   padding: 14px 16px;
-  color: inherit;
   text-decoration: none;
 }
 
 .dashboard-priority-card:hover,
-.dashboard-list-card:hover {
+.dashboard-list-card:hover,
+.dashboard-priority-card:focus-visible,
+.dashboard-list-card:focus-visible {
   transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.18);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+  border-color: var(--dashboard-card-border-strong);
+  box-shadow: var(--dashboard-card-shadow);
+  color: var(--ims-text-primary);
+  outline: none;
+}
+
+.dashboard-priority-card:focus-visible,
+.dashboard-list-card:focus-visible {
+  box-shadow: var(--ims-focus-ring), var(--dashboard-card-shadow);
+}
+
+.dashboard-priority-card:hover .dashboard-action-arrow,
+.dashboard-list-card:hover .dashboard-action-arrow,
+.dashboard-priority-card:focus-visible .dashboard-action-arrow,
+.dashboard-list-card:focus-visible .dashboard-action-arrow {
+  color: var(--ims-color-primary);
+  transform: translateX(2px);
 }
 
 .dashboard-priority-icon {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   width: 36px;
   height: 36px;
+  border: 1px solid var(--dashboard-card-border);
   border-radius: 12px;
-  background: rgba(37, 99, 235, 0.08);
-  color: #2563eb;
+  background: linear-gradient(135deg, var(--ims-color-primary-soft), var(--ims-color-accent-yellow-soft));
+  color: var(--ims-color-primary);
   font-size: 17px;
-  flex-shrink: 0;
 }
 
 .dashboard-priority-content,
 .dashboard-list-card-content {
   display: flex;
   flex: 1;
-  min-width: 0;
   flex-direction: column;
   gap: 6px;
 }
@@ -125,24 +193,38 @@
   margin-top: 14px;
 }
 
-.dashboard-readonly-card:hover {
+.dashboard-readonly-card {
+  cursor: default;
+}
+
+.dashboard-readonly-card:hover,
+.dashboard-readonly-card:focus-visible {
   transform: none;
-  border-color: rgba(15, 23, 42, 0.08);
+  border-color: var(--dashboard-card-border);
   box-shadow: none;
 }
 
+.dashboard-readonly-card:hover .dashboard-action-arrow,
+.dashboard-readonly-card:focus-visible .dashboard-action-arrow {
+  color: var(--ims-text-muted);
+  transform: none;
+}
+
 /* =========================
-   SECTION: Metrics
-   Fungsi:
-   - menampilkan ringkasan keuangan dan produksi tanpa angka dobel;
-   - card ringkas ini bukan pengganti report final.
-   Status:
-   - aktif sebagai UI summary read-only.
+   SECTION: Summary Metrics and Production Cards
+   Fungsi blok:
+   - menampilkan ringkasan produksi dan keuangan dengan card kecil, bukan laporan final.
+   Hubungan blok dengan flow aplikasi:
+   - dipakai Fokus Produksi dan Keuangan Ringkas; source final tetap Production, HPP, Cashflow, dan Profit Loss.
+   Alasan logic dipakai:
+   - surface solid memakai token white/navy supaya informasi operasional mudah dibaca di light dan dark mode.
+   Status logic:
+   - AKTIF sebagai styling read-only.
+   - GUARDED karena angka Dashboard tidak boleh diperlakukan sebagai mutasi data atau Profit Loss final.
 ========================= */
 .dashboard-compact-card {
   height: 100%;
-  background: #ffffff;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--dashboard-card-shadow);
 }
 
 .dashboard-compact-card .ant-card-body {
@@ -151,17 +233,20 @@
 }
 
 .dashboard-risk-card {
-  background: linear-gradient(135deg, rgba(255, 251, 235, 0.96), rgba(255, 255, 255, 0.98));
+  border-color: var(--ims-color-accent-yellow-muted);
+  background: linear-gradient(135deg, var(--ims-color-accent-yellow-soft), var(--dashboard-card-background));
 }
 
 .dashboard-card-label {
+  color: var(--ims-text-secondary);
   font-size: 12px;
   font-weight: 700;
-  color: rgba(15, 23, 42, 0.68);
+  letter-spacing: 0.01em;
 }
 
 .dashboard-card-value.ant-typography {
   margin: 0 !important;
+  color: var(--ims-text-primary);
   line-height: 1.2;
 }
 
@@ -171,7 +256,8 @@
   gap: 8px;
 }
 
-.dashboard-status-chip.ant-tag {
+.dashboard-status-chip.ant-tag,
+.dashboard-page .ant-tag {
   margin-inline-end: 0;
   border-radius: 999px;
 }
@@ -179,12 +265,12 @@
 .dashboard-metric-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--dashboard-control-gap);
 }
 
 .dashboard-metric-card {
   padding: 14px 16px;
-  background: #ffffff;
+  background: var(--dashboard-card-background);
 }
 
 .dashboard-note-stack {
@@ -195,101 +281,84 @@
 }
 
 /* =========================
-   SECTION: Empty State
-   Fungsi:
-   - menjaga section kosong tetap rapi dan tidak mengambil tinggi berlebihan.
-   Status:
-   - aktif untuk semua section Dashboard compact.
+   SECTION: Restock Assistant Actions
+   Fungsi blok:
+   - menjaga tombol shortcut restock tetap compact dan tidak melebar keluar card.
+   Hubungan blok dengan flow aplikasi:
+   - tombol tetap menjalankan action Dashboard.jsx yang hanya buka link eksternal atau navigasi prefill ke modul terkait.
+   Alasan logic dipakai:
+   - action group memakai wrap agar layout aman tanpa horizontal scroll pada data nama/link panjang.
+   Status logic:
+   - AKTIF untuk Restock Assistant read-only.
+   - GUARDED karena Dashboard tidak boleh membuat purchase, expense, atau mutasi stok otomatis.
+========================= */
+.dashboard-restock-card {
+  align-items: flex-start;
+}
+
+.dashboard-restock-actions {
+  max-width: 100%;
+  margin-top: 2px;
+}
+
+.dashboard-restock-actions .ant-btn {
+  max-width: 100%;
+}
+
+.dashboard-restock-actions .ant-btn-default[disabled] {
+  border-color: var(--ims-border-color-soft);
+  background: var(--ims-bg-field-disabled);
+  color: var(--ims-text-muted);
+}
+
+/* =========================
+   SECTION: Empty State and Ant Design Fit
+   Fungsi blok:
+   - menjaga empty state dan komponen Ant Design di Dashboard tetap ringan dan konsisten dengan token theme.
+   Hubungan blok dengan flow aplikasi:
+   - hanya memengaruhi state kosong/loading visual; fallback data tetap dikontrol Dashboard.jsx.
+   Alasan logic dipakai:
+   - state kosong harus terbaca tanpa mengambil tinggi berlebihan pada control center.
+   Status logic:
+   - AKTIF untuk Dashboard empty state dan component fit.
 ========================= */
 .dashboard-empty-wrap {
-  min-height: 180px;
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 180px;
 }
 
 .dashboard-empty-compact {
   min-height: 120px;
 }
 
-.dashboard-page .ant-tag {
-  border-radius: 999px;
+.dashboard-page .ant-empty-description,
+.dashboard-page .ant-progress-text {
+  color: var(--ims-text-muted);
 }
 
 /* =========================
-   SECTION: Dark Mode
-   Fungsi:
-   - menjaga card Dashboard tetap solid di dark mode;
-   - menghindari regression card putih/transparan.
-   Hubungan flow:
-   - styling saja, tidak menyentuh data/business rules.
-   Status:
-   - aktif dipakai.
-========================= */
-.dark .dashboard-priority-card,
-.app-theme-dark .dashboard-priority-card,
-[data-app-theme="dark"] .dashboard-priority-card,
-.dark .dashboard-list-card,
-.app-theme-dark .dashboard-list-card,
-[data-app-theme="dark"] .dashboard-list-card,
-.dark .dashboard-compact-card,
-.app-theme-dark .dashboard-compact-card,
-[data-app-theme="dark"] .dashboard-compact-card,
-.dark .dashboard-metric-card,
-.app-theme-dark .dashboard-metric-card,
-[data-app-theme="dark"] .dashboard-metric-card {
-  border-color: rgba(148, 163, 184, 0.14) !important;
-  background: rgba(15, 23, 42, 0.5);
-  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.22);
-}
-
-.dark .dashboard-risk-card,
-.app-theme-dark .dashboard-risk-card,
-[data-app-theme="dark"] .dashboard-risk-card {
-  background: linear-gradient(135deg, rgba(113, 63, 18, 0.22), rgba(15, 23, 42, 0.5));
-}
-
-.dark .dashboard-priority-icon,
-.app-theme-dark .dashboard-priority-icon,
-[data-app-theme="dark"] .dashboard-priority-icon {
-  background: rgba(96, 165, 250, 0.12);
-  color: #60a5fa;
-}
-
-.dark .dashboard-section-extra,
-.app-theme-dark .dashboard-section-extra,
-[data-app-theme="dark"] .dashboard-section-extra,
-.dark .dashboard-section-icon,
-.app-theme-dark .dashboard-section-icon,
-[data-app-theme="dark"] .dashboard-section-icon,
-.dark .dashboard-action-arrow,
-.app-theme-dark .dashboard-action-arrow,
-[data-app-theme="dark"] .dashboard-action-arrow,
-.dark .dashboard-muted-text,
-.app-theme-dark .dashboard-muted-text,
-[data-app-theme="dark"] .dashboard-muted-text,
-.dark .dashboard-date-text,
-.app-theme-dark .dashboard-date-text,
-[data-app-theme="dark"] .dashboard-date-text {
-  color: rgba(230, 237, 243, 0.58);
-}
-
-.dark .dashboard-card-label,
-.app-theme-dark .dashboard-card-label,
-[data-app-theme="dark"] .dashboard-card-label {
-  color: rgba(230, 237, 243, 0.72);
-}
-
-/* =========================
-   SECTION: Responsive
-   Fungsi:
-   - memastikan Dashboard tetap compact tanpa horizontal scroll di layar kecil.
-   Status:
-   - aktif untuk UI responsive.
+   SECTION: Responsive Dashboard Layout
+   Fungsi blok:
+   - menjaga priority grid, metric grid, dan list card tetap compact di desktop, laptop, tablet, dan mobile.
+   Hubungan blok dengan flow aplikasi:
+   - responsive hanya mengubah jumlah kolom visual, tidak mengubah jumlah data, route, atau query.
+   Alasan logic dipakai:
+   - Dashboard tidak boleh memakai horizontal scroll sebagai layout utama.
+   Status logic:
+   - AKTIF untuk anti horizontal scroll.
+   - GUARDED karena perubahan breakpoint tidak boleh membuat Dashboard berubah menjadi table/report penuh.
 ========================= */
 @media (max-width: 1400px) {
   .dashboard-priority-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 992px) {
+  .dashboard-priority-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -311,131 +380,16 @@
   .dashboard-priority-card,
   .dashboard-list-card {
     align-items: flex-start;
-    border-radius: 14px;
+    border-radius: var(--dashboard-card-radius-sm);
   }
 
   .dashboard-compact-card,
   .dashboard-metric-card {
-    border-radius: 14px;
+    border-radius: var(--dashboard-card-radius-sm);
   }
 
   .dashboard-date-text {
+    text-align: left;
     white-space: normal;
   }
-}
-
-/* =========================
-   SECTION: Restock Assistant actions
-   Fungsi:
-   - menata tombol restock cepat pada Stok Kritis agar tetap compact;
-   - tombol hanya navigasi/prefill atau membuka link produk eksternal.
-   Hubungan flow:
-   - styling ini tidak mengubah stok, purchases, kas, supplier, produksi, payroll, HPP, atau laporan.
-   Status:
-   - aktif dipakai oleh Dashboard Restock Assistant; bukan legacy.
-========================= */
-.dashboard-restock-card {
-  align-items: flex-start;
-}
-
-.dashboard-restock-actions {
-  margin-top: 2px;
-}
-
-.dark .dashboard-restock-actions .ant-btn-default[disabled],
-.app-theme-dark .dashboard-restock-actions .ant-btn-default[disabled],
-[data-app-theme="dark"] .dashboard-restock-actions .ant-btn-default[disabled] {
-  color: rgba(230, 237, 243, 0.32);
-  border-color: rgba(148, 163, 184, 0.16);
-  background: rgba(15, 23, 42, 0.36);
-}
-
-/* =========================
-   SECTION: Floral Dashboard Theme Override - AKTIF DIPAKAI / READ ONLY
-   Fungsi:
-   - menyelaraskan Dashboard dengan theme floral global tanpa membuat halaman operasional terlalu ramai.
-   - aksen bunga hanya berupa warna/gradient lembut pada card dan icon, bukan dekorasi besar.
-   Hubungan flow:
-   - CSS ini tetap read-only; tidak menyentuh stok, kas, produksi, payroll, HPP, laporan, atau query Dashboard.
-   Aman diubah:
-   - tuning warna cukup dari token di src/index.css.
-========================= */
-.dashboard-section-extra,
-.dashboard-section-icon,
-.dashboard-muted-text,
-.dashboard-date-text,
-.dashboard-action-arrow,
-.dark .dashboard-section-extra,
-.app-theme-dark .dashboard-section-extra,
-[data-app-theme="dark"] .dashboard-section-extra,
-.dark .dashboard-section-icon,
-.app-theme-dark .dashboard-section-icon,
-[data-app-theme="dark"] .dashboard-section-icon,
-.dark .dashboard-action-arrow,
-.app-theme-dark .dashboard-action-arrow,
-[data-app-theme="dark"] .dashboard-action-arrow,
-.dark .dashboard-muted-text,
-.app-theme-dark .dashboard-muted-text,
-[data-app-theme="dark"] .dashboard-muted-text,
-.dark .dashboard-date-text,
-.app-theme-dark .dashboard-date-text,
-[data-app-theme="dark"] .dashboard-date-text {
-  color: var(--ims-text-muted);
-}
-
-.dashboard-priority-card,
-.dashboard-list-card,
-.dashboard-compact-card,
-.dashboard-metric-card,
-.dark .dashboard-priority-card,
-.app-theme-dark .dashboard-priority-card,
-[data-app-theme="dark"] .dashboard-priority-card,
-.dark .dashboard-list-card,
-.app-theme-dark .dashboard-list-card,
-[data-app-theme="dark"] .dashboard-list-card,
-.dark .dashboard-compact-card,
-.app-theme-dark .dashboard-compact-card,
-[data-app-theme="dark"] .dashboard-compact-card,
-.dark .dashboard-metric-card,
-.app-theme-dark .dashboard-metric-card,
-[data-app-theme="dark"] .dashboard-metric-card {
-  border-color: var(--ims-border-color-soft) !important;
-  background: color-mix(in srgb, var(--ims-bg-card) 88%, transparent);
-  box-shadow: var(--ims-shadow-soft);
-}
-
-.dashboard-priority-card:hover,
-.dashboard-list-card:hover {
-  border-color: var(--ims-color-primary-soft);
-  box-shadow: var(--ims-shadow-elevated);
-}
-
-.dashboard-priority-icon,
-.dark .dashboard-priority-icon,
-.app-theme-dark .dashboard-priority-icon,
-[data-app-theme="dark"] .dashboard-priority-icon {
-  background: linear-gradient(135deg, var(--ims-color-primary-soft), var(--ims-color-sage-soft));
-  color: var(--ims-color-primary);
-}
-
-.dashboard-risk-card,
-.dark .dashboard-risk-card,
-.app-theme-dark .dashboard-risk-card,
-[data-app-theme="dark"] .dashboard-risk-card {
-  background: linear-gradient(135deg, var(--ims-color-primary-softer), var(--ims-bg-card));
-}
-
-.dashboard-card-label,
-.dark .dashboard-card-label,
-.app-theme-dark .dashboard-card-label,
-[data-app-theme="dark"] .dashboard-card-label {
-  color: var(--ims-text-secondary);
-}
-
-.dark .dashboard-restock-actions .ant-btn-default[disabled],
-.app-theme-dark .dashboard-restock-actions .ant-btn-default[disabled],
-[data-app-theme="dark"] .dashboard-restock-actions .ant-btn-default[disabled] {
-  color: var(--ims-text-muted);
-  border-color: var(--ims-border-color-soft);
-  background: var(--ims-bg-card-soft);
 }
