@@ -1,9 +1,13 @@
 /* =========================
-   SECTION: Global Reset - AKTIF DIPAKAI
-   Fungsi:
+   SECTION: Global Reset - AKTIF
+   Fungsi blok:
    - reset dasar agar sizing seluruh aplikasi konsisten.
-   Hubungan flow aplikasi:
-   - styling global saja; tidak menyentuh auth, route guard, stok, kas, produksi, payroll, HPP, atau laporan.
+   Hubungan blok dengan flow aplikasi:
+   - styling global saja; tidak menyentuh auth, router, roleAccess, service, stok, kas, produksi, payroll, HPP, laporan, atau schema Firestore.
+   Alasan logic dipakai:
+   - box sizing dan root sizing global menjadi pondasi layout sebelum AppLayout dan Ant Design dirender.
+   Status logic:
+   - AKTIF sebagai foundation global.
 ========================= */
 *,
 *::before,
@@ -21,16 +25,20 @@ body,
 }
 
 /* =========================
-   SECTION: IMS Floral Theme Tokens - AKTIF DIPAKAI / THEME CENTER
-   Fungsi:
-   - pusat CSS variable untuk light mode IMS Bunga Flanel.
-   - warna dibuat warm floral: cream, blush, peach, sage, dan warm brown.
-   Dipakai untuk area:
-   - App.css, sidebar/header CSS, dashboard CSS, shared component CSS, dan login CSS.
-   Aman diubah:
-   - boleh tuning warna di blok ini jika ingin mengganti mood desain.
-   Efek ke halaman lain:
-   - berdampak global ke background, card, table, modal, drawer, button, menu, dan text.
+   SECTION: IMS Brand Foundation Tokens - AKTIF / THEME CENTER
+   Fungsi blok:
+   - pusat CSS variable light mode untuk brand blue/yellow/white/navy Flanel Karawang Industries.
+   - menjaga token lama tetap tersedia sebagai compatibility alias untuk App.css, Login.css, dan Dashboard.css.
+   Hubungan blok dengan flow aplikasi:
+   - dibaca oleh shell, loading screen, login, dashboard, table, card, modal, drawer, form control, menu, dan utility visual.
+   - tidak mengubah AppLayout flow, auth, router, roleAccess, service, module bisnis, laporan, atau schema Firestore.
+   Alasan logic dipakai:
+   - value token diganti di satu pusat agar tampilan lebih minimalist modern dan konsisten tanpa refactor besar ke file lain.
+   - nama alias lama tidak direname karena masih dipakai file legacy UI dan cleanup variable akan lebih aman di fase berikutnya.
+   Status logic:
+   - AKTIF untuk foundation theme Phase 01.
+   - GUARDED karena perubahan token berdampak visual lintas modul.
+   - CLEANUP CANDIDATE: alias nama lama dapat dirapikan setelah App.css/Login/Dashboard diaudit penuh.
 ========================= */
 :root {
   font-family: Inter, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -39,70 +47,74 @@ body,
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* THEME TOKEN - AKTIF DIPAKAI: ubah ini untuk mengganti accent utama button, active menu, link, dan highlight. */
-  --ims-color-primary: #b8687c;
-  --ims-color-primary-hover: #a85a70;
-  --ims-color-primary-soft: rgba(184, 104, 124, 0.14);
-  --ims-color-primary-softer: rgba(184, 104, 124, 0.08);
+  --ims-color-primary: #2C6DB0;
+  --ims-color-primary-hover: #245F9D;
+  --ims-color-primary-active: #1B4F86;
+  --ims-color-primary-soft: #EAF3FC;
+  --ims-color-primary-softer: rgba(44, 109, 176, 0.08);
+  --ims-color-primary-muted: rgba(44, 109, 176, 0.16);
 
-  /* FLORAL ACCENT - AKTIF DIPAKAI: aksen bunga/sage/peach. Aman diubah selama kontras tetap nyaman. */
-  --ims-color-sage: #7f9f72;
-  --ims-color-sage-soft: rgba(127, 159, 114, 0.16);
-  --ims-color-peach: #d89275;
-  --ims-color-beige: #ead8c8;
+  --ims-color-accent-yellow: #FEC32D;
+  --ims-color-accent-yellow-soft: #FFF4CC;
+  --ims-color-accent-yellow-muted: rgba(254, 195, 45, 0.28);
 
-  /* BACKGROUND TOKEN - AKTIF DIPAKAI: background aplikasi light mode. Ubah hati-hati karena terasa di semua halaman. */
-  --ims-bg-page: #f9f1e7;
-  --ims-bg-shell: #f7eadf;
-  --ims-bg-card: #fffaf5;
-  --ims-bg-card-soft: #f8efe6;
-  --ims-bg-elevated: #fffdf9;
-  --ims-bg-field: #fffdf9;
-  --ims-bg-field-hover: #fff8f1;
-  --ims-bg-field-disabled: #f2e5d9;
-  --ims-bg-table-header: #f5e7dd;
-  --ims-bg-table-hover: #fff3ed;
-  --ims-bg-overlay-mask: rgba(74, 45, 48, 0.24);
+  --ims-color-sage: var(--ims-color-accent-yellow);
+  --ims-color-sage-soft: var(--ims-color-accent-yellow-soft);
+  --ims-color-peach: var(--ims-color-primary);
+  --ims-color-beige: var(--ims-border-color);
 
-  /* BORDER / SHADOW TOKEN - AKTIF DIPAKAI: menjaga surface tetap clean dan tidak transparan. */
-  --ims-border-color: rgba(132, 91, 78, 0.16);
-  --ims-border-color-soft: rgba(132, 91, 78, 0.10);
-  --ims-border-strong: rgba(132, 91, 78, 0.18);
-  --ims-shadow-soft: 0 14px 34px rgba(96, 61, 52, 0.08);
-  --ims-shadow-elevated: 0 24px 58px rgba(96, 61, 52, 0.13);
-  --ims-focus-ring: 0 0 0 3px rgba(184, 104, 124, 0.14);
-  --ims-scrollbar-thumb: rgba(184, 104, 124, 0.26);
+  --ims-bg-page: #F6F9FC;
+  --ims-bg-shell: #EEF5FB;
+  --ims-bg-card: #FFFFFF;
+  --ims-bg-card-soft: #F8FBFE;
+  --ims-bg-elevated: #FFFFFF;
+  --ims-bg-field: #FFFFFF;
+  --ims-bg-field-hover: #F8FBFE;
+  --ims-bg-field-disabled: #EEF5FB;
+  --ims-bg-table-header: #F8FBFE;
+  --ims-bg-table-hover: #F8FBFE;
+  --ims-bg-overlay-mask: rgba(7, 17, 31, 0.32);
 
-  /* TEXT TOKEN - AKTIF DIPAKAI: warna text utama dan sekunder untuk readability. */
-  --ims-text-primary: #3f312c;
-  --ims-text-secondary: rgba(63, 49, 44, 0.68);
-  --ims-text-muted: rgba(63, 49, 44, 0.54);
+  --ims-border-color: #D9E5F2;
+  --ims-border-color-soft: rgba(44, 109, 176, 0.12);
+  --ims-border-strong: rgba(44, 109, 176, 0.22);
+  --ims-shadow-soft: 0 14px 34px rgba(16, 32, 51, 0.08);
+  --ims-shadow-elevated: 0 24px 58px rgba(16, 32, 51, 0.13);
+  --ims-focus-ring: 0 0 0 3px rgba(44, 109, 176, 0.16);
+  --ims-scrollbar-thumb: rgba(44, 109, 176, 0.28);
 
-  /* TABLE TOKEN - AKTIF DIPAKAI: table tetap solid agar tidak mengulang bug transparansi. */
-  --ims-table-row: #fffaf5;
-  --ims-table-hover: #fff3ed;
-  --ims-table-selected: #f7e0e5;
-  --ims-table-selected-hover: #f2d3dc;
-  --ims-table-fixed-shadow: inset -12px 0 12px -12px rgba(96, 61, 52, 0.22);
+  --ims-text-primary: #102033;
+  --ims-text-secondary: #5B6F84;
+  --ims-text-muted: rgba(91, 111, 132, 0.78);
 
-  /* SIDEBAR TOKEN - AKTIF DIPAKAI: nuansa brand di shell aplikasi tanpa dekorasi ramai. */
-  --ims-sidebar-bg: #fff7ef;
-  --ims-sidebar-hover: rgba(184, 104, 124, 0.08);
-  --ims-sidebar-active: rgba(184, 104, 124, 0.14);
+  --ims-table-row: #FFFFFF;
+  --ims-table-hover: #F8FBFE;
+  --ims-table-selected: #EAF3FC;
+  --ims-table-selected-hover: #DCECFB;
+  --ims-table-fixed-shadow: inset -12px 0 12px -12px rgba(16, 32, 51, 0.22);
 
-  /* FLORAL BACKDROP - AKTIF DIPAKAI: gradient lembut untuk shell/login. Aman diubah untuk mood visual. */
-  --ims-floral-gradient: radial-gradient(circle at top left, rgba(255, 211, 226, 0.56), transparent 34%), radial-gradient(circle at bottom right, rgba(187, 211, 177, 0.44), transparent 36%), linear-gradient(135deg, #f9f1e7 0%, #f7eadf 50%, #f1e3d3 100%);
+  --ims-sidebar-bg: #FFFFFF;
+  --ims-sidebar-hover: rgba(44, 109, 176, 0.08);
+  --ims-sidebar-active: #EAF3FC;
+
+  --ims-floral-gradient: var(--ims-bg-shell);
 }
 
 /* =========================
-   SECTION: Dark Mode Tokens - AKTIF DIPAKAI
-   Fungsi:
-   - dark mode warm floral, bukan hitam polos.
-   - selector dibuat lengkap karena AppLayout memakai app-theme-dark dan data-app-theme.
-   Dipakai untuk area:
-   - app shell, portal Ant Design, table, modal, drawer, sidebar, dashboard, dan login jika class theme tersedia.
-   Aman diubah:
-   - boleh tuning warna, tetapi wajib cek kontras text/table/form setelah perubahan.
+   SECTION: Dark Mode Brand Tokens - AKTIF / THEME CENTER
+   Fungsi blok:
+   - pusat CSS variable dark mode berbasis navy/dark blue dengan primary blue dan accent yellow soft.
+   - mempertahankan selector dark mode existing agar portal Ant Design, AppLayout, body, dan html tetap sinkron.
+   Hubungan blok dengan flow aplikasi:
+   - dibaca saat AppLayout memasang class app-theme-dark dan data-app-theme="dark".
+   - tidak mengubah state theme, localStorage key, routing, auth, transaksi, produksi, payroll, HPP, atau laporan.
+   Alasan logic dipakai:
+   - dark mode dibuat navy/dark blue agar tidak kembali ke hitam polos atau tone rose/coklat lama.
+   - alias lama tetap diisi untuk compatibility dengan CSS legacy yang belum menjadi target cleanup.
+   Status logic:
+   - AKTIF untuk foundation theme Phase 01.
+   - GUARDED karena selector ini dipakai oleh shell, login, dashboard, modal, drawer, dropdown, dan table.
+   - CLEANUP CANDIDATE: alias nama lama dapat diganti setelah semua pemakaian CSS lama selesai dipetakan.
 ========================= */
 html.dark,
 body.dark,
@@ -112,54 +124,71 @@ html[data-app-theme="dark"],
 body[data-app-theme="dark"] {
   color-scheme: dark;
 
-  --ims-color-primary: #d88a9c;
-  --ims-color-primary-hover: #e59aad;
-  --ims-color-primary-soft: rgba(216, 138, 156, 0.18);
-  --ims-color-primary-softer: rgba(216, 138, 156, 0.10);
+  --ims-color-primary: #5EA3E6;
+  --ims-color-primary-hover: #7BB7F0;
+  --ims-color-primary-active: #3D86D1;
+  --ims-color-primary-soft: rgba(94, 163, 230, 0.18);
+  --ims-color-primary-softer: rgba(94, 163, 230, 0.10);
+  --ims-color-primary-muted: rgba(94, 163, 230, 0.26);
 
-  --ims-color-sage: #a7c296;
-  --ims-color-sage-soft: rgba(167, 194, 150, 0.16);
-  --ims-color-peach: #d99a82;
-  --ims-color-beige: #3e3034;
+  --ims-color-accent-yellow: #FFD56A;
+  --ims-color-accent-yellow-soft: rgba(254, 195, 45, 0.16);
+  --ims-color-accent-yellow-muted: rgba(255, 213, 106, 0.24);
 
-  /* DARK MODE SURFACE - AKTIF DIPAKAI: warna app/card/modal/table. Ubah hati-hati agar kontras tetap aman. */
-  --ims-bg-page: #171112;
-  --ims-bg-shell: #1d1518;
-  --ims-bg-card: #241a1d;
-  --ims-bg-card-soft: #31252a;
-  --ims-bg-elevated: #2a2024;
-  --ims-bg-field: #2d2126;
-  --ims-bg-field-hover: #37282e;
-  --ims-bg-field-disabled: #261b1f;
-  --ims-bg-table-header: #32262b;
-  --ims-bg-table-hover: #3a2b31;
-  --ims-bg-overlay-mask: rgba(9, 5, 7, 0.56);
+  --ims-color-sage: var(--ims-color-accent-yellow);
+  --ims-color-sage-soft: var(--ims-color-accent-yellow-soft);
+  --ims-color-peach: var(--ims-color-primary);
+  --ims-color-beige: var(--ims-border-color);
 
-  --ims-border-color: rgba(236, 184, 184, 0.16);
-  --ims-border-color-soft: rgba(236, 184, 184, 0.10);
-  --ims-border-strong: rgba(236, 184, 184, 0.18);
-  --ims-shadow-soft: 0 16px 36px rgba(0, 0, 0, 0.32);
-  --ims-shadow-elevated: 0 28px 70px rgba(0, 0, 0, 0.44);
-  --ims-focus-ring: 0 0 0 3px rgba(216, 138, 156, 0.18);
-  --ims-scrollbar-thumb: rgba(216, 138, 156, 0.3);
+  --ims-bg-page: #07111F;
+  --ims-bg-shell: #0A1627;
+  --ims-bg-card: #101E33;
+  --ims-bg-card-soft: #172A45;
+  --ims-bg-elevated: #1B304D;
+  --ims-bg-field: #101E33;
+  --ims-bg-field-hover: #172A45;
+  --ims-bg-field-disabled: #0A1627;
+  --ims-bg-table-header: #172A45;
+  --ims-bg-table-hover: #1B304D;
+  --ims-bg-overlay-mask: rgba(0, 0, 0, 0.58);
 
-  --ims-text-primary: #fff5ef;
-  --ims-text-secondary: rgba(255, 239, 230, 0.72);
-  --ims-text-muted: rgba(255, 239, 230, 0.56);
+  --ims-border-color: rgba(147, 184, 223, 0.18);
+  --ims-border-color-soft: rgba(147, 184, 223, 0.12);
+  --ims-border-strong: rgba(147, 184, 223, 0.24);
+  --ims-shadow-soft: 0 16px 36px rgba(0, 0, 0, 0.36);
+  --ims-shadow-elevated: 0 28px 70px rgba(0, 0, 0, 0.48);
+  --ims-focus-ring: 0 0 0 3px rgba(94, 163, 230, 0.24);
+  --ims-scrollbar-thumb: rgba(94, 163, 230, 0.34);
 
-  --ims-table-row: #241a1d;
-  --ims-table-hover: #3a2b31;
-  --ims-table-selected: #4a313a;
-  --ims-table-selected-hover: #573843;
-  --ims-table-fixed-shadow: inset -12px 0 12px -12px rgba(0, 0, 0, 0.48);
+  --ims-text-primary: #EAF2FB;
+  --ims-text-secondary: rgba(234, 242, 251, 0.72);
+  --ims-text-muted: rgba(234, 242, 251, 0.56);
 
-  --ims-sidebar-bg: #21171a;
-  --ims-sidebar-hover: rgba(255, 245, 239, 0.06);
-  --ims-sidebar-active: rgba(216, 138, 156, 0.18);
+  --ims-table-row: #101E33;
+  --ims-table-hover: #1B304D;
+  --ims-table-selected: rgba(94, 163, 230, 0.18);
+  --ims-table-selected-hover: rgba(94, 163, 230, 0.24);
+  --ims-table-fixed-shadow: inset -12px 0 12px -12px rgba(0, 0, 0, 0.50);
 
-  --ims-floral-gradient: radial-gradient(circle at top left, rgba(216, 138, 156, 0.18), transparent 34%), radial-gradient(circle at bottom right, rgba(167, 194, 150, 0.13), transparent 36%), linear-gradient(135deg, #171112 0%, #1d1518 52%, #261c20 100%);
+  --ims-sidebar-bg: #0A1627;
+  --ims-sidebar-hover: rgba(94, 163, 230, 0.10);
+  --ims-sidebar-active: rgba(94, 163, 230, 0.18);
+
+  --ims-floral-gradient: var(--ims-bg-shell);
 }
 
+/* =========================
+   SECTION: Body Runtime Surface - AKTIF
+   Fungsi blok:
+   - menerapkan background dan text default dari token aktif.
+   Hubungan blok dengan flow aplikasi:
+   - menjadi canvas sebelum AppLayout/Login merender halaman.
+   - tidak mengubah logic auth, state, service, transaksi, produksi, payroll, HPP, atau laporan.
+   Alasan logic dipakai:
+   - menjaga transisi light/dark halus tanpa menambah state baru.
+   Status logic:
+   - AKTIF sebagai runtime surface global.
+========================= */
 body {
   font-family: Inter, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   background-color: var(--ims-bg-page);
@@ -171,14 +200,30 @@ body {
 }
 
 /* =========================
-   SECTION: Root App Helper - AKTIF DIPAKAI
+   SECTION: Root App Helper - AKTIF
+   Fungsi blok:
+   - membuat root aplikasi menjadi stacking context yang aman.
+   Hubungan blok dengan flow aplikasi:
+   - membantu layer shell/portal visual tanpa mengubah route atau business logic.
+   Alasan logic dipakai:
+   - isolation mencegah efek blend/stacking global bocor ke luar root.
+   Status logic:
+   - AKTIF sebagai helper layout global.
 ========================= */
 #root {
   isolation: isolate;
 }
 
 /* =========================
-   SECTION: Generic Utility - AKTIF DIPAKAI
+   SECTION: Generic Utility - AKTIF
+   Fungsi blok:
+   - normalisasi media dan form control dasar agar typography mengikuti token global.
+   Hubungan blok dengan flow aplikasi:
+   - hanya styling browser default; tidak mengubah handler input, validasi form, service, atau schema data.
+   Alasan logic dipakai:
+   - menjaga asset logo, SVG, canvas, button, input, textarea, dan select tetap proporsional lintas halaman.
+   Status logic:
+   - AKTIF sebagai utility global.
 ========================= */
 img,
 svg,
@@ -202,9 +247,15 @@ select {
 }
 
 /* =========================
-   SECTION: Selection - AKTIF DIPAKAI
-   Fungsi:
-   - memakai accent floral agar text selection tidak kembali ke biru lama.
+   SECTION: Text Selection - AKTIF
+   Fungsi blok:
+   - menyelaraskan highlight text dengan primary blue dan menjaga kontras di light/dark mode.
+   Hubungan blok dengan flow aplikasi:
+   - efek visual browser saja; tidak mengubah field value, form submit, route, atau service.
+   Alasan logic dipakai:
+   - selection default browser bisa keluar dari brand, sehingga diarahkan ke token global.
+   Status logic:
+   - AKTIF sebagai polish visual.
 ========================= */
 ::selection {
   background: var(--ims-color-primary-soft);
@@ -216,6 +267,6 @@ html.app-theme-dark ::selection,
 body.app-theme-dark ::selection,
 html[data-app-theme="dark"] ::selection,
 body[data-app-theme="dark"] ::selection {
-  background: rgba(216, 138, 156, 0.28);
+  background: var(--ims-color-primary-muted);
   color: var(--ims-text-primary);
 }

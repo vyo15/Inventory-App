@@ -127,7 +127,8 @@ const AppLayout = () => {
 
           <Layout className="app-main-layout">
             <Header className="app-header">
-              <AppHeader darkTheme={isDarkTheme} />
+              {/* AKTIF / CLEANUP CANDIDATE RESOLVED: AppHeader membaca token CSS global, jadi prop darkTheme yang tidak dipakai dihapus tanpa mengubah flow AppLayout. */}
+              <AppHeader />
             </Header>
 
             <Content className="app-main-content">

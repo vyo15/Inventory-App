@@ -1,11 +1,21 @@
 /* =========================
-   SECTION: Header Wrapper
+   SECTION: Header Content - AKTIF
+   Fungsi:
+   - mengatur komposisi title workspace, subtitle, user identity, role tag, dan logout action.
+   Hubungan flow aplikasi:
+   - dipakai oleh AppHeader.jsx di dalam AppLayout setelah Auth Gate lolos.
+   Alasan logic dipakai:
+   - semua warna membaca token brand agar header konsisten dengan foundation blue/yellow/white/navy.
+   Status:
+   - AKTIF untuk topbar workspace.
+   - GUARDED: styling logout tidak mengubah behavior logout/useAuth.
 ========================= */
 .app-header-content {
   width: 100%;
   min-width: 0;
   display: flex;
   align-items: center;
+  gap: 20px;
 }
 
 .app-header-left {
@@ -19,25 +29,99 @@
   margin: 0 !important;
   font-size: 28px;
   line-height: 1.15;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #0f172a;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  color: var(--ims-text-primary);
 }
 
 .app-header-subtitle.ant-typography {
   margin: 0 !important;
+  max-width: 760px;
+  color: var(--ims-text-secondary);
   font-size: 14px;
   line-height: 1.55;
-  color: rgba(15, 23, 42, 0.7);
-  max-width: 760px;
 }
 
-.dark .app-header-title.ant-typography {
-  color: #e6edf3;
+/* =========================
+   SECTION: Header User Actions - AKTIF / CLEANUP CANDIDATE RESOLVED
+   Fungsi:
+   - menggantikan inline style user area dan AntD Tag color preset agar tidak drift dari token brand.
+   Hubungan flow aplikasi:
+   - hanya memoles identitas user/role dan tombol logout; session logout tetap diproses AppHeader.jsx melalui useAuth.
+   Status:
+   - AKTIF.
+   - CLEANUP CANDIDATE RESOLVED: inline user area style dan AntD blue preset diganti class CSS token-based.
+========================= */
+.app-header-user-area {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
-.dark .app-header-subtitle.ant-typography {
-  color: rgba(230, 237, 243, 0.72);
+.app-header-user-actions {
+  justify-content: flex-end;
+}
+
+.app-header-user-tag.ant-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 240px;
+  margin-inline-end: 0;
+  color: var(--ims-color-primary);
+  background: var(--ims-color-primary-soft);
+  border-color: color-mix(in srgb, var(--ims-color-primary) 24%, transparent);
+  border-radius: 999px;
+  font-weight: 650;
+}
+
+.app-header-user-tag.ant-tag .anticon {
+  color: var(--ims-color-primary);
+}
+
+.app-header-role-tag.ant-tag {
+  margin-inline-end: 0;
+  color: var(--ims-text-secondary);
+  background: var(--ims-bg-card-soft);
+  border-color: var(--ims-border-color-soft);
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.app-header-logout-button.ant-btn {
+  border-color: var(--ims-border-color);
+  color: var(--ims-text-primary);
+  background: var(--ims-bg-card);
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+.app-header-logout-button.ant-btn:hover,
+.app-header-logout-button.ant-btn:focus-visible {
+  border-color: var(--ims-color-primary);
+  color: var(--ims-color-primary);
+  background: var(--ims-color-primary-soft);
+}
+
+.app-header-logout-button.ant-btn:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ims-color-primary) 18%, transparent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 992px) {
+  .app-header-content {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .app-header-user-area {
+    width: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
+  }
 }
 
 @media (max-width: 768px) {
@@ -48,20 +132,8 @@
   .app-header-subtitle.ant-typography {
     font-size: 13px;
   }
-}
-/* =========================
-   SECTION: Floral Header Theme Override - AKTIF DIPAKAI
-   Fungsi:
-   - header/topbar mengikuti text token warm floral.
-   Hubungan flow aplikasi:
-   - styling text saja; tidak mengubah route, auth, atau data module.
-========================= */
-.app-header-title.ant-typography,
-.dark .app-header-title.ant-typography {
-  color: var(--ims-text-primary);
-}
 
-.app-header-subtitle.ant-typography,
-.dark .app-header-subtitle.ant-typography {
-  color: var(--ims-text-secondary);
+  .app-header-user-tag.ant-tag {
+    max-width: 100%;
+  }
 }

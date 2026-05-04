@@ -23,6 +23,55 @@
 }
 
 /* =========================
+   SECTION: App Loading Screen - AKTIF / GUARDED
+   Fungsi:
+   - menampilkan state loading auth/profile dengan visual yang mengikuti token brand blue/yellow/white/navy.
+   Hubungan flow aplikasi:
+   - dipakai App.jsx sebelum AppLayout dan route bisnis tampil, sehingga user tidak melihat halaman operasional sebelum session siap.
+   Alasan logic dipakai:
+   - class CSS menggantikan inline style agar loading screen konsisten dengan theme foundation tanpa mengubah AuthProvider/useAuth.
+   Status:
+   - AKTIF sebagai auth loading gate.
+   - GUARDED: jangan ubah kondisi render loading di App.jsx ketika cleanup visual.
+========================= */
+.app-loading-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--ims-floral-gradient);
+  color: var(--ims-text-primary);
+}
+
+.app-loading-card {
+  width: min(100%, 360px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 28px 24px;
+  background: color-mix(in srgb, var(--ims-bg-card) 94%, transparent);
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 24px;
+  box-shadow: var(--ims-shadow-soft);
+  text-align: center;
+  backdrop-filter: blur(14px);
+}
+
+.app-loading-spinner .ant-spin-dot-item {
+  background-color: var(--ims-color-primary);
+}
+
+.app-loading-text.ant-typography {
+  margin: 0 !important;
+  color: var(--ims-text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* =========================
    SECTION: Main Layout
 ========================= */
 .app-layout,
@@ -136,8 +185,20 @@
 }
 
 /* =========================
-   SECTION: Theme Toggle Button
+   SECTION: Theme Toggle Button - AKTIF
+   Fungsi:
+   - memoles FloatButton theme toggle agar mengikuti token shell brand dan tidak menyimpan posisi lewat inline style.
+   Hubungan flow aplikasi:
+   - class ini dipakai ThemeToggleButton.jsx; state dan persistence tetap dikontrol AppLayout.
+   Status:
+   - AKTIF untuk UI control light/dark.
+   - GUARDED: jangan gabungkan dengan guard table/modal/drawer pada fase ini.
 ========================= */
+.theme-toggle-button {
+  inset-inline-end: 24px !important;
+  bottom: 24px !important;
+}
+
 .theme-toggle-button .ant-float-btn-body {
   border-radius: 14px !important;
   transition:
@@ -232,6 +293,16 @@
 }
 
 @media (max-width: 576px) {
+  .theme-toggle-button {
+    inset-inline-end: 16px !important;
+    bottom: 16px !important;
+  }
+
+  .app-loading-card {
+    padding: 24px 20px;
+    border-radius: 20px;
+  }
+
   .app-content-scroll {
     padding: 0 12px 12px;
   }

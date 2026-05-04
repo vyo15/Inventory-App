@@ -14,22 +14,20 @@ const { Text } = Typography;
 // - menampilkan state aman saat Firebase Auth dan profile user sedang diverifikasi.
 // Hubungan flow aplikasi:
 // - mencegah Dashboard/route bisnis tampil sebelum status login selesai dicek.
+// Alasan logic dipakai:
+// - loading gate tetap berada di App.jsx, sementara visualnya dipindah ke App.css agar konsisten dengan foundation theme.
 // Status:
 // - AKTIF untuk Fase B Auth Foundation.
+// - GUARDED: jangan ubah kondisi authLoading ketika polishing visual.
 // =========================
 const AppLoadingScreen = () => (
-  <div
-    style={{
-      minHeight: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      flexDirection: "column",
-      gap: 12,
-    }}
-  >
-    <Spin size="large" />
-    <Text type="secondary">Memuat session IMS Bunga Flanel...</Text>
+  <div className="app-loading-screen" role="status" aria-live="polite">
+    <div className="app-loading-card">
+      <Spin size="large" className="app-loading-spinner" />
+      <Text className="app-loading-text">
+        Memuat session IMS Bunga Flanel...
+      </Text>
+    </div>
   </div>
 );
 

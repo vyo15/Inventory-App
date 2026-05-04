@@ -16,6 +16,8 @@ const { Title, Text } = Typography;
 // Status:
 // - AKTIF untuk layout utama.
 // - GUARDED: logout hanya menghapus session, tidak menyentuh stok/kas/transaksi/produksi/laporan.
+// Alasan logic dipakai:
+// - identitas user dan role tetap dihitung dari profile/useAuth, sedangkan style dipindah ke class CSS agar tidak ada inline style/header preset yang drift dari token brand.
 // IMS NOTE [AKTIF / BEHAVIOR-PRESERVING]: role label mengikuti ROLE_LABELS final administrator/user; role tidak dikenal tetap tampil mentah hanya untuk troubleshooting profile.
 // =========================
 const AppHeader = () => {
@@ -48,13 +50,14 @@ const AppHeader = () => {
         </Text>
       </div>
 
-      <div style={styles.userArea}>
-        <Space size={10} wrap>
-          <Tag icon={<UserOutlined />} color="blue">
+      <div className="app-header-user-area">
+        <Space size={10} wrap className="app-header-user-actions">
+          <Tag icon={<UserOutlined />} className="app-header-user-tag">
             {displayName}
           </Tag>
-          <Tag>{displayRole}</Tag>
+          <Tag className="app-header-role-tag">{displayRole}</Tag>
           <Button
+            className="app-header-logout-button"
             icon={<LogoutOutlined />}
             loading={isLoggingOut}
             onClick={handleLogout}
@@ -65,15 +68,6 @@ const AppHeader = () => {
       </div>
     </div>
   );
-};
-
-const styles = {
-  userArea: {
-    marginLeft: "auto",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
 };
 
 export default AppHeader;
