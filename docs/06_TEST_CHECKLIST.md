@@ -1029,3 +1029,56 @@ Status: **AKTIF + GUARDED**. Checklist ini menggantikan checklist Auth/Role lama
 - [ ] Login normal/error/loading/blocked user tampil profesional dan auth flow tetap berjalan.
 - [ ] Dashboard tetap read-only, compact, tanpa perubahan query/calculation/write flow.
 - [ ] PageHeader, PageSection, SummaryStatCard, FilterBar, dan PageFormModal konsisten dengan token brand.
+
+## Checklist Cleanup Theme Aman
+
+- [ ] Login normal, error, loading profile, blocked user, dan logout blocked user tetap berjalan setelah cleanup CSS.
+- [ ] Sidebar expanded/collapsed, active route, nested accordion, dan role-aware menu tetap sama.
+- [ ] Light/dark toggle tetap menyimpan `app-theme-light`, `app-theme-dark`, dan `data-app-theme`.
+- [ ] Modal, drawer, select dropdown, datepicker, dropdown menu, popover, dan table tetap solid/readable di light dan dark mode.
+- [ ] Table fixed column, hover row, selected row, dan pagination tetap readable.
+- [ ] Tidak ada class CSS yang dihapus tanpa grep pemakai aktif.
+- [ ] Tidak ada perubahan ke AuthContext, AppLayout runtime, SidebarMenu logic, services, transaksi, stok, cashflow, produksi, payroll, HPP, reports, atau reset flow.
+- [ ] Jalankan `npm run lint` dan `npm run build` di project lengkap yang punya `package.json`.
+
+## Checklist Login visual polish — 2026-05-04
+
+- [ ] Login normal tampil lebih proporsional dengan panel brand dan form yang seimbang.
+- [ ] Logo resmi tidak terlihat berada dalam frame/wrap besar.
+- [ ] Logo tidak tertimpa orb, glow, atau dekorasi lain.
+- [ ] Background Login tidak terlalu ramai dan tetap memakai token blue/yellow/white/navy.
+- [ ] Form Login tetap menjadi fokus utama dan mudah dibaca.
+- [ ] Username/password tetap bisa diisi.
+- [ ] Login error tetap tampil sebagai Alert error.
+- [ ] Loading profile tetap tampil.
+- [ ] Blocked user tetap tampil dan tombol keluar tetap bekerja.
+- [ ] Mobile Login tidak overflow dan panel brand tidak membuat scroll terlalu panjang.
+- [ ] Tidak ada perubahan ke `AuthContext`, route guard, role access, Dashboard, Sidebar, atau modul bisnis.
+
+## Checklist Login Mode A — Modern Bright Corporate
+
+- [ ] Login page tampil terang, clean, modern, dan corporate.
+- [ ] Layout desktop menampilkan brand hero kiri dan form card kanan secara proporsional.
+- [ ] Logo resmi tampil bebas, tidak berada dalam frame besar, dan tidak tertimpa dekorasi.
+- [ ] Shape/curve/gradient blue-yellow terlihat hidup tetapi tidak ramai.
+- [ ] Form login tetap menjadi fokus utama dan mudah dibaca.
+- [ ] Button Masuk memakai primary blue yang kontras dan terlihat clickable.
+- [ ] Input username/password tetap bisa diisi dan focus state jelas.
+- [ ] Login normal tetap berhasil.
+- [ ] Login error tetap muncul sebagai Alert error.
+- [ ] Loading profile tetap tampil.
+- [ ] Blocked user tetap tampil dan tombol keluar tetap berjalan.
+- [ ] Mobile layout form-first, tidak overflow, dan brand panel turun ke bawah.
+- [ ] Tidak ada perubahan ke AuthContext, route guard, role access, Sidebar, Dashboard, atau modul bisnis.
+
+## Checklist Login full-page corporate final
+- [ ] Login tampil full-page dan tidak terasa dibungkus outer card besar.
+- [ ] Brand area kiri menyatu dengan viewport dan memakai aksen geometric minimalis.
+- [ ] Logo utama tampil besar, center, presisi, dan tidak tertimpa dekorasi.
+- [ ] Teks deskripsi lebih kecil dan tidak mengalahkan logo/form.
+- [ ] Note internal tampil sebagai footer note/supportive information.
+- [ ] Form card kanan tetap clean, fokus, dan button Masuk tetap primary blue.
+- [ ] Input username/password readable dan focus state jelas.
+- [ ] Login normal, login error, loading profile, blocked user, dan logout blocked user tetap berjalan.
+- [ ] Mobile login tetap form-first, rapi, dan tidak overflow.
+- [ ] Tidak ada perubahan ke AuthContext, route guard, role access, Sidebar, Dashboard, atau modul bisnis.

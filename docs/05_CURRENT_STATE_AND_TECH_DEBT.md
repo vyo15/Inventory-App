@@ -610,3 +610,51 @@ Risiko tersisa:
 - **LEGACY:** komentar/arah visual lama yang mengarah ke theme decorative lama harus dianggap historis, bukan theme aktif.
 - **CLEANUP CANDIDATE:** hardcoded neutral lama yang sudah tertimpa token bisa dirapikan bertahap, tetapi jangan menghapus guard Ant Design bila dependency belum jelas.
 - **CLEANUP CANDIDATE:** file luar scope yang masih memakai warna lokal sebaiknya diaudit per modul agar tidak bercampur dengan perubahan business flow.
+
+## Cleanup Theme Aman — 2026-05-04
+
+### Cleanup yang sudah dilakukan
+- **AKTIF:** `Login.css` sekarang memakai token brand langsung pada blok utama, sehingga blok override `Login Brand Token Sync` yang duplikatif tidak lagi diperlukan.
+- **AKTIF:** `SidebarMenu.css` mobile selected state sudah memakai token `--ims-sidebar-active` dan `--ims-border-color-soft`, bukan warna hardcoded lokal.
+- **AKTIF:** `App.css` dibersihkan dari utility `.ims-action-group--inline` yang tidak memiliki pemakai aktif pada snapshot terbaru.
+- **AKTIF:** komentar theme di `index.css`, `antdTheme.js`, dan `App.css` dirapikan agar tidak memicu audit legacy theme palsu.
+
+### Guard yang tetap dipertahankan
+- **GUARDED:** override table/modal/drawer/dropdown/datepicker/popover di `App.css` tetap dipertahankan karena menjaga surface Ant Design tetap solid di light/dark mode.
+- **GUARDED:** `Login.jsx`, `AppLayout.jsx`, `SidebarMenu.jsx`, route guard, AuthContext, Dashboard query, service, transaksi, stok, cashflow, produksi, payroll, HPP, dan reports tidak disentuh oleh cleanup theme ini.
+
+### Cleanup candidate lanjutan
+- **CLEANUP CANDIDATE:** konsolidasi `!important` di `App.css` masih perlu visual regression khusus table/modal/drawer/dropdown sebelum dihapus lebih jauh.
+- **CLEANUP CANDIDATE:** warna lokal di halaman bisnis tetap perlu audit per modul agar tidak bercampur dengan logic transaksi atau service.
+
+## Update Login visual polish — 2026-05-04
+
+### Status aktif
+- **AKTIF:** halaman Login memakai komposisi brand panel dan form card yang lebih seimbang.
+- **AKTIF:** logo resmi Flanel Karawang Industries ditampilkan sebagai brand lockup clean tanpa frame/orb besar yang menumpuk visual.
+- **AKTIF:** dekorasi background Login dikurangi agar fokus user tetap pada form login.
+- **GUARDED:** `Login.jsx` hanya berubah pada struktur visual branding; auth flow `handleLogin`, `loginWithUsername`, `profileStatus`, blocked user, dan logout tidak diubah.
+
+### Cleanup candidate
+- **CLEANUP CANDIDATE:** penyesuaian ukuran logo dapat ditinjau ulang jika owner menyediakan versi logo final lain atau standar brandbook resmi.
+- **CLEANUP CANDIDATE:** wording brand Login bisa dipoles lagi tanpa menyentuh auth flow.
+
+## Update Login Mode A — Modern Bright Corporate — 2026-05-04
+
+### Status aktif
+- **AKTIF:** halaman Login memakai arah visual Mode A: bright corporate dengan brand hero kiri dan form card kanan.
+- **AKTIF:** logo Flanel Karawang Industries tampil bebas tanpa frame/showcase berat dan tanpa dekorasi yang menimpa logo.
+- **AKTIF:** background Login memakai shape/curve/gradient blue-yellow yang lebih hidup tetapi tetap clean.
+- **AKTIF:** mobile Login memakai form-first layout agar user langsung fokus ke login.
+- **GUARDED:** perubahan hanya menyentuh struktur/class visual Login; `handleLogin`, `loginWithUsername`, `profileStatus`, blocked user, logout, route guard, role access, dan modul bisnis tidak diubah.
+
+### Cleanup candidate
+- **CLEANUP CANDIDATE:** bila brandbook resmi nanti tersedia, ukuran logo, microcopy, dan proporsi hero dapat disesuaikan lagi tanpa menyentuh auth flow.
+
+## Update Login full-page corporate final — 2026-05-04
+- **AKTIF:** halaman Login memakai layout full-page corporate sehingga tidak lagi terasa seperti outer wrapper/card besar di tengah viewport.
+- **AKTIF:** brand panel kiri memakai aksen geometric minimalis; dekorasi bulat besar tidak lagi menjadi elemen dominan.
+- **AKTIF:** logo utama Flanel Karawang Industries diperbesar dan diposisikan lebih presisi dengan whitespace yang lebih baik.
+- **AKTIF:** copy deskripsi Login dibuat lebih kecil dan note internal diposisikan sebagai supportive footer note.
+- **GUARDED:** perubahan tetap CSS-only; `Login.jsx`, `AuthContext`, route guard, role access, Sidebar, Dashboard, transaksi, stok, cashflow, produksi, HPP, reports, dan service tidak diubah.
+- **CLEANUP CANDIDATE:** fine tuning visual Login berikutnya cukup dilakukan di `Login.css`; jangan campur dengan cleanup App.css/AntD portal guard atau business modules.

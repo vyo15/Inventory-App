@@ -65,28 +65,20 @@ const getBlockedAccessMessage = (profileStatus) => {
 };
 
 // =========================
-// SECTION: Uploaded Brand Logo Showcase — AKTIF / UI ONLY
+// SECTION: Brand Logo Lockup — AKTIF / UI ONLY
 // Fungsi:
-// - menampilkan logo usaha dari upload Logoflanel.zip sebagai branding utama halaman login.
+// - menampilkan logo usaha resmi secara clean tanpa orb/frame besar yang membuat layout terlihat ramai.
 // Hubungan flow aplikasi:
 // - visual non-interaktif; tidak terhubung ke auth, Firestore, role, route, stok, kas, atau modul bisnis.
 // Status:
-// - AKTIF untuk menggantikan ilustrasi/logo lama di Login.
-// - CLEANUP CANDIDATE: asset bisa diganti ulang jika owner menyediakan versi logo final lain.
+// - AKTIF untuk branding utama Login.
+// - SAFE: hanya menyederhanakan struktur visual logo, bukan flow login.
 // =========================
 const BrandLogoShowcase = () => (
   <div
     className="ims-login-logo-showcase"
     aria-label="Logo Flanel Karawang Industries"
   >
-    <div
-      className="ims-login-logo-orb ims-login-logo-orb-one"
-      aria-hidden="true"
-    />
-    <div
-      className="ims-login-logo-orb ims-login-logo-orb-two"
-      aria-hidden="true"
-    />
     <img
       src={flanelKarawangLogo}
       alt="Flanel Karawang Industries"
@@ -107,17 +99,22 @@ const BrandLogoShowcase = () => (
 // =========================
 const BrandPanel = () => (
   <section className="ims-login-brand-panel">
-    <div className="ims-login-badge">Internal Management System</div>
+    {/* AKTIF / UI ONLY:
+        Mode A menempatkan copy utama sebelum logo agar brand panel terasa seperti corporate hero.
+        Perubahan ini hanya presentational dan tidak menyentuh auth/role/route. */}
+    <div className="ims-login-brand-header">
+      <div className="ims-login-badge">Internal Management System</div>
 
-    <Space direction="vertical" size={12} className="ims-login-brand-copy">
-      <Title level={1} className="ims-login-brand-title">
-        IMS Bunga Flanel
-      </Title>
-      <Text className="ims-login-brand-description">
-        Kelola produksi, stok, pembelian, dan penjualan bunga flanel dalam satu
-        ruang kerja yang rapi, hangat, dan terkontrol.
-      </Text>
-    </Space>
+      <Space direction="vertical" size={12} className="ims-login-brand-copy">
+        <Title level={1} className="ims-login-brand-title">
+          IMS Bunga Flanel
+        </Title>
+        <Text className="ims-login-brand-description">
+          Kelola produksi, stok, pembelian, dan penjualan bunga flanel dalam
+          satu workspace internal yang rapi, terukur, dan terkendali.
+        </Text>
+      </Space>
+    </div>
 
     <BrandLogoShowcase />
 
@@ -284,7 +281,7 @@ const Login = () => {
 
         {/* AKTIF / GUARDED:
             Login normal hanya menampilkan copy user-facing, form, dan error login.
-            Info teknis internal legacy dihapus dari DOM tanpa mengubah handleLogin, AuthContext, atau profile gate. */}
+            Info teknis internal tidak ditampilkan di DOM tanpa mengubah handleLogin, AuthContext, atau profile gate. */}
         {loginError ? (
           <Alert
             className="ims-login-error-box"

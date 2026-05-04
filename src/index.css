@@ -28,17 +28,17 @@ body,
    SECTION: IMS Brand Foundation Tokens - AKTIF / THEME CENTER
    Fungsi blok:
    - pusat CSS variable light mode untuk brand blue/yellow/white/navy Flanel Karawang Industries.
-   - menjaga token lama tetap tersedia sebagai compatibility alias untuk App.css, Login.css, dan Dashboard.css.
+   - menjaga compatibility alias yang masih dibaca App.css, Login.css, dan Dashboard.css.
    Hubungan blok dengan flow aplikasi:
    - dibaca oleh shell, loading screen, login, dashboard, table, card, modal, drawer, form control, menu, dan utility visual.
    - tidak mengubah AppLayout flow, auth, router, roleAccess, service, module bisnis, laporan, atau schema Firestore.
    Alasan logic dipakai:
    - value token diganti di satu pusat agar tampilan lebih minimalist modern dan konsisten tanpa refactor besar ke file lain.
-   - nama alias lama tidak direname karena masih dipakai file legacy UI dan cleanup variable akan lebih aman di fase berikutnya.
+   - nama alias compatibility tidak direname sampai seluruh pemakaian lintas CSS selesai dipetakan.
    Status logic:
    - AKTIF untuk foundation theme Phase 01.
    - GUARDED karena perubahan token berdampak visual lintas modul.
-   - CLEANUP CANDIDATE: alias nama lama dapat dirapikan setelah App.css/Login/Dashboard diaudit penuh.
+   - CLEANUP CANDIDATE: alias compatibility dapat dirapikan setelah App.css/Login/Dashboard diaudit penuh.
 ========================= */
 :root {
   font-family: Inter, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -104,11 +104,11 @@ body,
    - tidak mengubah state theme, localStorage key, routing, auth, transaksi, produksi, payroll, HPP, atau laporan.
    Alasan logic dipakai:
    - dark mode dibuat navy/dark blue agar tidak kembali ke hitam polos atau tone gelap lama yang tidak sesuai brand.
-   - alias lama tetap diisi untuk compatibility dengan CSS legacy yang belum menjadi target cleanup.
+   - alias compatibility tetap diisi untuk CSS yang belum menjadi target cleanup.
    Status logic:
    - AKTIF untuk foundation theme Phase 01.
    - GUARDED karena selector ini dipakai oleh shell, login, dashboard, modal, drawer, dropdown, dan table.
-   - CLEANUP CANDIDATE: alias nama lama dapat diganti setelah semua pemakaian CSS lama selesai dipetakan.
+   - CLEANUP CANDIDATE: alias compatibility dapat diganti setelah semua pemakaian CSS selesai dipetakan.
 ========================= */
 html.dark,
 body.dark,

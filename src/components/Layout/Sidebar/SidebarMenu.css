@@ -218,12 +218,12 @@
   }
 
   .sidebar-menu.light.ant-menu .ant-menu-item-selected {
-    background: #e5edf9 !important;
-    box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.10);
+    background: var(--ims-sidebar-active) !important;
+    box-shadow: inset 0 0 0 1px var(--ims-border-color-soft);
   }
 
   .sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
-    background: #e5edf9 !important;
+    background: var(--ims-sidebar-active) !important;
   }
 
   .sidebar-menu.dark.ant-menu .ant-menu-item-selected {

@@ -79,3 +79,32 @@ Theme aktif memakai kombinasi **blue, yellow, white, dan navy** dengan arah visu
 - Audit warna hardcoded di halaman bisnis satu per satu, jangan dicampur dengan perubahan logic.
 - Kurangi override duplikatif di `src/App.css` secara bertahap setelah ada visual regression pass.
 - Pertahankan guard Ant Design sampai dependency modal/table/dropdown benar-benar jelas.
+- Jangan hapus `!important` pada table/modal/drawer/dropdown/datepicker/popover sebelum cek light/dark dan fixed column.
+- False-positive grep seperti `Message/message` bukan token warna lama dan tidak perlu diubah.
+
+## Standar Login branding
+
+- Halaman Login memakai logo resmi sebagai lockup brand yang clean, bukan ilustrasi besar dengan frame berat.
+- Logo Login tidak boleh tertimpa orb/shape dekoratif.
+- Panel brand dan form harus seimbang; form login tetap menjadi fokus utama user.
+- Dekorasi background harus lembut dan berbasis token blue/yellow/white/navy.
+- Perubahan Login harus mengutamakan CSS scoped `.ims-login-*`; `Login.jsx` hanya disentuh untuk struktur visual, bukan auth flow.
+- `Login.jsx` auth flow, `handleLogin`, `profileStatus`, blocked user, dan logout blocked user adalah area **GUARDED**.
+
+## Standar Login Mode A — Modern Bright Corporate
+
+- Login Mode A memakai layout dua panel terang: brand hero kiri dan form card kanan.
+- Logo Flanel Karawang Industries tampil bebas tanpa frame/showcase berat dan tidak boleh tertimpa orb/dekorasi.
+- Brand panel boleh memakai shape/curve/gradient blue-yellow yang halus, tetapi tidak boleh mengalahkan form login.
+- Form login tetap menjadi fokus utama dengan card putih solid, shadow lembut, input jelas, dan button primary blue kuat.
+- Mobile memakai prinsip form-first: form tampil terlebih dahulu, brand panel turun ke bawah agar tidak membuat scroll terlalu panjang.
+- Perubahan Login harus scoped di `.ims-login-*`; auth flow, `AuthContext`, route guard, role access, dan modul bisnis tetap **GUARDED**.
+
+## Standar Login full-page corporate final
+- Halaman Login memakai komposisi full-page, bukan wrapper/card besar yang membungkus seluruh layout.
+- Brand area kiri harus terasa menyatu dengan viewport, memakai aksen geometric minimalis, bukan dekorasi bulat besar yang dominan.
+- Logo Flanel Karawang Industries menjadi elemen utama brand panel: besar, presisi, center, bebas dari frame berat, dan tidak tertimpa dekorasi.
+- Copy brand dibuat kecil dan ringan agar tidak mengalahkan logo dan form login.
+- Note internal ditempatkan sebagai supportive footer note, bukan elemen utama.
+- Form login tetap menjadi fokus aksi dengan card putih solid, button primary blue, input readable, dan focus state jelas.
+- Perubahan Login tetap scoped pada `.ims-login-*`; auth flow, route guard, role access, Sidebar, Dashboard, dan modul bisnis tetap **GUARDED**.

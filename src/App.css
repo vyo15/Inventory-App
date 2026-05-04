@@ -5,7 +5,7 @@
    Hubungan flow aplikasi:
    - dipakai AppLayout sebagai pembungkus semua route operasional; styling container saja dan tidak menyentuh route, auth, stok, kas, produksi, payroll, HPP, atau laporan.
    Alasan logic dipakai:
-   - warna shell membaca token global body/html agar tidak perlu override manual per mode dan tidak kembali ke token warna legacy.
+   - warna shell membaca token global body/html agar tidak perlu override manual per mode dan tetap memakai token brand aktif.
    Status:
    - AKTIF sebagai baseline visual global.
    - GUARDED karena semua halaman operasional dirender di dalam shell ini.
@@ -836,16 +836,6 @@
   justify-content: center;
 }
 
-.ims-action-group--inline {
-  width: 100%;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.ims-action-group--inline > .ims-action-button.ant-btn {
-  flex: 1 1 0;
-}
 
 .ims-action-button.ant-btn,
 .ims-action-button.ant-btn.ant-btn-sm {

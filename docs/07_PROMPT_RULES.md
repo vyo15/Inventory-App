@@ -448,3 +448,15 @@ Untuk task yang menyentuh theme, branding, App shell, Login, Dashboard, Sidebar,
 6. Jangan ubah `SidebarMenu` role-aware logic, `selectedKeys`, `openMenuKeys`, atau config menu saat task hanya visual.
 7. Jangan ubah Login auth flow, AuthContext, route guard, Dashboard query, Dashboard calculation, atau service bisnis saat task hanya rebrand UI.
 8. Jika menemukan sisa warna/comment lama di luar scope, tandai **CLEANUP CANDIDATE** dan jangan refactor massal.
+
+## Prompt Rule Tambahan — Cleanup Theme Aman
+
+Untuk task cleanup theme besar-besaran:
+
+1. Jangan campur cleanup theme dengan perubahan business rules, service, stok, cashflow, produksi, payroll, HPP, reports, auth, reset, atau Firebase config.
+2. Hapus hanya class/import/comment yang pemakai aktifnya sudah dicek dengan grep dan review dependency.
+3. Jangan hapus guard `App.css` untuk table/modal/drawer/dropdown/datepicker/popover tanpa visual regression pass.
+4. Cleanup Login harus CSS-only kecuali task eksplisit menyentuh auth; jangan ubah `handleLogin`, profile status, blocked user, atau logout flow.
+5. Cleanup Sidebar harus CSS-only kecuali task eksplisit menyentuh navigasi; jangan ubah role-aware menu, `selectedKeys`, `openMenuKeys`, route config, atau role access.
+6. Jika grep theme menemukan false-positive seperti `Message/message`, tandai sebagai false-positive dan jangan ubah kode aktif.
+7. Jika warna lokal ada di halaman bisnis, jadikan fase per modul dan jangan ubah handler/query/dataSource/form submit sekaligus.

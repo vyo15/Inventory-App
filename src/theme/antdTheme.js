@@ -14,7 +14,7 @@ import { theme } from "antd";
 // Status logic:
 // - AKTIF sebagai foundation theme Phase 01.
 // - GUARDED karena berdampak ke Button, Menu, Card, Table, Modal, Drawer, Input, Select, DatePicker, dan Tag.
-// - CLEANUP CANDIDATE: struktur palette dapat disederhanakan setelah token lama di CSS legacy selesai diaudit.
+// - CLEANUP CANDIDATE: struktur palette dapat disederhanakan setelah alias compatibility CSS selesai diaudit.
 // =========================
 const IMS_BRAND_THEME = {
   light: {
