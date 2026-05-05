@@ -6,7 +6,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Col, Empty, Input, Select, Space, Table, Typography, message, Tag } from "antd";
-import { FileExcelOutlined, ReloadOutlined } from "@ant-design/icons";
+import { FileExcelOutlined } from "@ant-design/icons";
 import { getCompletedProductionWorkLogs } from "../../services/Produksi/productionWorkLogsService";
 import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
@@ -78,6 +78,108 @@ const buildHppCostWarnings = ({
   return warnings;
 };
 
+const isPayrollEligibleForHpp = (payroll, workLogId) =>
+  payroll.workLogId === workLogId &&
+  ["confirmed", "paid"].includes(payroll.status) &&
+  payroll.status !== "cancelled" &&
+  payroll.includePayrollInHpp !== false;
+
+const calculateDirectLaborCost = ({ workLog, payrolls }) => {
+  const payrollTotal = payrolls
+    .filter((payroll) => isPayrollEligibleForHpp(payroll, workLog.id))
+    .reduce((sum, payroll) => sum + Number(payroll.finalAmount || 0), 0);
+
+  return payrollTotal > 0 ? payrollTotal : Number(workLog.laborCostActual || 0);
+};
+
+// IMS NOTE [AKTIF/GUARDED] - Row kalkulasi HPP tetap lokal di halaman.
+// Fungsi blok: menyatukan rumus material + labor + overhead -> total -> HPP/unit
+// agar table, summary, dan export membaca angka yang sama tanpa memindahkan rule ke abstraction jauh.
+// Behavior: tidak mengubah source completed Work Log, payroll final, warning cost 0, atau schema.
+const buildHppAnalysisRow = ({ workLog, payrolls }) => {
+  const materialCost = Number(workLog.materialCostActual || 0);
+  const directLaborCost = calculateDirectLaborCost({ workLog, payrolls });
+  const overheadCost = Number(workLog.overheadCostActual || 0);
+  const totalCost = materialCost + directLaborCost + overheadCost;
+  const goodQty = Number(workLog.goodQty || 0);
+  const hppPerUnit = goodQty > 0 ? totalCost / goodQty : 0;
+  const costWarnings = buildHppCostWarnings({
+    materialCost,
+    directLaborCost,
+    totalCost,
+    hppPerUnit,
+    goodQty,
+  });
+
+  return {
+    id: workLog.id,
+    workNumber: workLog.workNumber || "-",
+    targetType: workLog.targetType || "-",
+    targetName: workLog.targetName || "-",
+    stepName: workLog.stepName || "-",
+    workDate: workLog.workDate || null,
+    completedAt: workLog.completedAt || null,
+    goodQty,
+    materialCost,
+    directLaborCost,
+    overheadCost,
+    totalCost,
+    hppPerUnit,
+    costWarnings,
+  };
+};
+
+const matchesHppAnalysisFilters = ({ row, search, targetTypeFilter }) => {
+  const searchText = search.trim().toLowerCase();
+  const searchableText = [row.workNumber, row.targetName, row.stepName]
+    .map((value) => String(value || "").toLowerCase())
+    .join(" ");
+  const matchSearch = !searchText || searchableText.includes(searchText);
+  const matchTargetType = targetTypeFilter === "all" || row.targetType === targetTypeFilter;
+
+  return matchSearch && matchTargetType;
+};
+
+const buildHppAnalysisSummary = (rows) => {
+  const totalLogs = rows.length;
+  const totalProductionCost = rows.reduce((sum, row) => sum + Number(row.totalCost || 0), 0);
+  const totalGoodQty = rows.reduce((sum, row) => sum + Number(row.goodQty || 0), 0);
+  const averageHpp = totalGoodQty > 0 ? totalProductionCost / totalGoodQty : 0;
+  const warningRows = rows.filter(
+    (row) => Array.isArray(row.costWarnings) && row.costWarnings.length > 0,
+  ).length;
+
+  return {
+    totalLogs,
+    totalProductionCost,
+    totalGoodQty,
+    averageHpp,
+    warningRows,
+  };
+};
+
+const resolveCostValidationText = (costWarnings = []) =>
+  Array.isArray(costWarnings) && costWarnings.length > 0
+    ? costWarnings.join("; ")
+    : "Cost valid";
+
+const buildHppExportRows = (rows) =>
+  rows.map((row) => ({
+    workNumber: row.workNumber || "-",
+    workDateDisplay: formatDateId(row.workDate, true),
+    completedAtDisplay: formatDateId(row.completedAt, true),
+    targetTypeLabel: resolveTargetTypeLabel(row.targetType),
+    targetName: row.targetName || "-",
+    stepName: row.stepName || "-",
+    goodQtyDisplay: formatNumber(row.goodQty),
+    materialCostDisplay: formatCurrency(row.materialCost),
+    directLaborCostDisplay: formatCurrency(row.directLaborCost),
+    overheadCostDisplay: formatCurrency(row.overheadCost),
+    totalCostDisplay: formatCurrency(row.totalCost),
+    hppPerUnitDisplay: formatCurrency(row.hppPerUnit),
+    costValidation: resolveCostValidationText(row.costWarnings),
+  }));
+
 const ProductionHppAnalysis = () => {
   const [loading, setLoading] = useState(false);
   const [workLogs, setWorkLogs] = useState([]);
@@ -108,126 +210,20 @@ const ProductionHppAnalysis = () => {
     loadData();
   }, []);
 
-  const rows = useMemo(() => {
-    return workLogs.map((workLog) => {
-      // =====================================================
-      // ACTIVE / FINAL
-      // HPP inti tidak boleh menarik semua payroll non-cancelled secara longgar.
-      // Setelah flow payroll difinalkan, direct labor HPP hanya membaca payroll
-      // yang sudah lolos review minimal confirmed/paid dan memang diizinkan masuk
-      // HPP melalui rule step snapshot pada payroll line.
-      // =====================================================
-      const relatedPayrolls = payrolls.filter(
-        (item) =>
-          item.workLogId === workLog.id &&
-          ["confirmed", "paid"].includes(item.status) &&
-          item.status !== "cancelled" &&
-          item.includePayrollInHpp !== false,
-      );
+  const rows = useMemo(
+    () => workLogs.map((workLog) => buildHppAnalysisRow({ workLog, payrolls })),
+    [workLogs, payrolls],
+  );
 
-      const payrollTotal = relatedPayrolls.reduce(
-        (sum, item) => sum + Number(item.finalAmount || 0),
-        0,
-      );
+  const filteredRows = useMemo(
+    () => rows.filter((row) => matchesHppAnalysisFilters({ row, search, targetTypeFilter })),
+    [rows, search, targetTypeFilter],
+  );
 
-      const materialCost = Number(workLog.materialCostActual || 0);
-      const directLaborCost =
-        payrollTotal > 0 ? payrollTotal : Number(workLog.laborCostActual || 0);
-      const overheadCost = Number(workLog.overheadCostActual || 0);
-      const totalCost = materialCost + directLaborCost + overheadCost;
-      const goodQty = Number(workLog.goodQty || 0);
-      const hppPerUnit = goodQty > 0 ? totalCost / goodQty : 0;
-      // =====================================================
-      // ACTIVE / GUARDED - warning per baris HPP.
-      // Fungsi blok:
-      // - menempelkan daftar warning cost 0 ke row tabel tanpa mengubah angka cost;
-      // - menjaga user membaca HPP sebagai data analisis yang perlu dicek jika sumber cost kosong.
-      // Hubungan dengan flow HPP/Work Log:
-      // - angka tetap berasal dari Work Log completed + payroll final;
-      // - warning hanya visibility UI dan tidak mem-posting ulang Work Log.
-      // Status: aktif dipakai; bukan legacy/kandidat cleanup.
-      // =====================================================
-      const costWarnings = buildHppCostWarnings({
-        materialCost,
-        directLaborCost,
-        totalCost,
-        hppPerUnit,
-        goodQty,
-      });
-
-      return {
-        id: workLog.id,
-        workNumber: workLog.workNumber || "-",
-        targetType: workLog.targetType || "-",
-        targetName: workLog.targetName || "-",
-        stepName: workLog.stepName || "-",
-        workDate: workLog.workDate || null,
-        completedAt: workLog.completedAt || null,
-        goodQty,
-        materialCost,
-        directLaborCost,
-        overheadCost,
-        totalCost,
-        hppPerUnit,
-        costWarnings,
-      };
-    });
-  }, [workLogs, payrolls]);
-
-  const filteredRows = useMemo(() => {
-    return rows.filter((item) => {
-      const searchText = search.trim().toLowerCase();
-
-      const matchSearch =
-        !searchText ||
-        String(item.workNumber || "")
-          .toLowerCase()
-          .includes(searchText) ||
-        String(item.targetName || "")
-          .toLowerCase()
-          .includes(searchText) ||
-        String(item.stepName || "")
-          .toLowerCase()
-          .includes(searchText);
-
-      const matchTargetType =
-        targetTypeFilter === "all" || item.targetType === targetTypeFilter;
-
-      return matchSearch && matchTargetType;
-    });
-  }, [rows, search, targetTypeFilter]);
-
-  const summary = useMemo(() => {
-    const totalLogs = filteredRows.length;
-    const totalProductionCost = filteredRows.reduce(
-      (sum, item) => sum + Number(item.totalCost || 0),
-      0,
-    );
-    const totalGoodQty = filteredRows.reduce(
-      (sum, item) => sum + Number(item.goodQty || 0),
-      0,
-    );
-    const averageHpp =
-      totalGoodQty > 0 ? totalProductionCost / totalGoodQty : 0;
-    // =====================================================
-    // ACTIVE / GUARDED - ringkasan warning HPP.
-    // Fungsi blok:
-    // - menghitung jumlah row yang punya warning cost 0;
-    // - hanya untuk visibility, tidak mengubah formula HPP atau sumber cost.
-    // Status: aktif dipakai; bukan legacy/kandidat cleanup.
-    // =====================================================
-    const warningRows = filteredRows.filter(
-      (item) => Array.isArray(item.costWarnings) && item.costWarnings.length > 0,
-    ).length;
-
-    return {
-      totalLogs,
-      totalProductionCost,
-      totalGoodQty,
-      averageHpp,
-      warningRows,
-    };
-  }, [filteredRows]);
+  const summary = useMemo(
+    () => buildHppAnalysisSummary(filteredRows),
+    [filteredRows],
+  );
 
   const summaryItems = useMemo(
     () => [
@@ -285,24 +281,7 @@ const ProductionHppAnalysis = () => {
         { key: "hppPerUnitDisplay", label: "HPP / Unit" },
         { key: "costValidation", label: "Validasi Cost" },
       ],
-      data: filteredRows.map((row) => ({
-        workNumber: row.workNumber || "-",
-        workDateDisplay: formatDateId(row.workDate, true),
-        completedAtDisplay: formatDateId(row.completedAt, true),
-        targetTypeLabel: resolveTargetTypeLabel(row.targetType),
-        targetName: row.targetName || "-",
-        stepName: row.stepName || "-",
-        goodQtyDisplay: formatNumber(row.goodQty),
-        materialCostDisplay: formatCurrency(row.materialCost),
-        directLaborCostDisplay: formatCurrency(row.directLaborCost),
-        overheadCostDisplay: formatCurrency(row.overheadCost),
-        totalCostDisplay: formatCurrency(row.totalCost),
-        hppPerUnitDisplay: formatCurrency(row.hppPerUnit),
-        costValidation:
-          Array.isArray(row.costWarnings) && row.costWarnings.length > 0
-            ? row.costWarnings.join("; ")
-            : "Cost valid",
-      })),
+      data: buildHppExportRows(filteredRows),
     });
 
     message.success("Laporan HPP berhasil diekspor ke Excel.");
@@ -376,14 +355,6 @@ const ProductionHppAnalysis = () => {
       dataIndex: "costWarnings",
       key: "costWarnings",
       width: 280,
-      // =====================================================
-      // ACTIVE / GUARDED - kolom warning HPP.
-      // Fungsi blok:
-      // - menampilkan alasan cost 0 per Work Log agar HPP tidak dibaca sebagai final valid;
-      // - tidak mengubah angka HPP, payroll, material snapshot, atau Work Log completed.
-      // Hubungan dengan flow HPP/Work Log: row tetap bersumber dari completed Work Log.
-      // Status: aktif dipakai; bukan legacy/kandidat cleanup.
-      // =====================================================
       render: (warnings) => {
         if (!Array.isArray(warnings) || warnings.length === 0) {
           return <Tag color="green">Cost valid</Tag>;
@@ -471,14 +442,6 @@ const ProductionHppAnalysis = () => {
         subtitle="Tabel tetap membaca Work Log completed dan payroll aktif tanpa mengubah contract biaya produksi yang sudah guarded."
         extra={<Tag color="purple">{formatNumber(filteredRows.length)} baris</Tag>}
       >
-        {/* =====================================================
-            ACTIVE / GUARDED - alert warning global HPP.
-            Fungsi blok:
-            - memberi konteks bahwa row dengan cost 0 perlu dicek sumber datanya;
-            - tidak mengubah rumus HPP dan tidak melakukan backfill data lama.
-            Hubungan dengan flow HPP/Work Log: hanya membaca hasil validasi row Work Log completed.
-            Status: aktif dipakai; bukan legacy/kandidat cleanup.
-        ===================================================== */}
         {summary.warningRows > 0 ? (
           <Alert
             type="warning"

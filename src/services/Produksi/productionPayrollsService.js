@@ -72,6 +72,18 @@ const getActorName = (currentUser = null) =>
   currentUser?.uid ||
   "system";
 
+// IMS NOTE [AKTIF] - metadata audit saja; tidak mengubah finalAmount/status/expense.
+const buildPayrollAuditFields = (currentUser = null, includeCreatedFields = false) => {
+  const actorName = getActorName(currentUser);
+  return {
+    updatedAt: serverTimestamp(),
+    updatedBy: actorName,
+    ...(includeCreatedFields
+      ? { createdAt: serverTimestamp(), createdBy: actorName }
+      : {}),
+  };
+};
+
 const sanitizePayrollKeySegment = (value, fallback = "line") => {
   const normalized = safeTrim(value)
     .toLowerCase()
@@ -298,22 +310,8 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
       : [],
     payrollEligibilityNotes: String(values.payrollEligibilityNotes || "").trim(),
 
-    updatedAt: serverTimestamp(),
-    updatedBy:
-      currentUser?.email ||
-      currentUser?.displayName ||
-      currentUser?.uid ||
-      "system",
+    ...buildPayrollAuditFields(currentUser, !isEdit),
   };
-
-  if (!isEdit) {
-    payload.createdAt = serverTimestamp();
-    payload.createdBy =
-      currentUser?.email ||
-      currentUser?.displayName ||
-      currentUser?.uid ||
-      "system";
-  }
 
   return payload;
 };
@@ -795,17 +793,7 @@ export const updateProductionPayroll = async (
   return id;
 };
 
-// =====================================================
-// ACTIVE / GUARDED - expense otomatis dari payroll paid
-// Fungsi blok:
-// - menyiapkan Cash Out/Expense ketika payroll produksi ditandai paid;
-// - memakai sourceModule + sourceId + doc id deterministik agar tidak double expense.
-// Alasan blok ini dipakai:
-// - integrasi IMS final mengharuskan payroll paid otomatis masuk expenses,
-//   sehingga Profit Loss cukup membaca collection expenses tanpa menghitung payroll dua kali.
-// Status:
-// - aktif dipakai oleh updatePayrollStatus; guarded karena menyentuh kas & laporan.
-// =====================================================
+// ACTIVE / GUARDED: payroll paid membuat expense idempotent via sourceModule + sourceId.
 const buildPayrollExpenseDocId = (payrollId) =>
   PAYROLL_EXPENSE_SOURCE_MODULE + "__" + sanitizePayrollKeySegment(payrollId, "payroll");
 
@@ -834,9 +822,7 @@ const findExistingPayrollExpense = async (payrollId) => {
       return { id: first.id, ...first.data() };
     }
   } catch (error) {
-    // Legacy/fallback guard:
-    // - aktif hanya jika query sourceModule+sourceId butuh index/terganggu;
-    // - plain collection dipakai agar idempotent tetap berjalan sebelum auto expense dibuat.
+    // LEGACY fallback: plain collection menjaga idempotency bila query source gagal.
     console.error("Query expense payroll by source gagal, pakai fallback plain collection", error);
     const snapshot = await getDocs(collection(db, EXPENSE_COLLECTION_NAME));
     const found = snapshot.docs
@@ -886,6 +872,33 @@ const buildPayrollExpensePayload = ({ payroll = {}, payrollId = "", paidAtDate =
   };
 };
 
+// IMS NOTE [GUARDED] - payload status paid; guard expense tetap eksplisit di transaction.
+const buildPayrollStatusUpdatePayload = ({ status, paymentStatus, extra = {} }) => ({
+  status,
+  paymentStatus,
+  ...extra,
+  updatedAt: serverTimestamp(),
+  updatedBy: "system",
+});
+
+// IMS NOTE [GUARDED] - field audit expense payroll; sourceModule/sourceId/sourceRef tidak berubah.
+const buildPayrollExpenseSyncFields = ({
+  expenseId = "",
+  sourceId = "",
+  sourceRef = "",
+  syncStatus = "",
+  syncNotes = "",
+  includeCreatedAt = false,
+} = {}) => ({
+  expenseId,
+  expenseSourceModule: PAYROLL_EXPENSE_SOURCE_MODULE,
+  expenseSourceId: sourceId,
+  expenseSourceRef: sourceRef,
+  expenseSyncStatus: syncStatus,
+  expenseSyncNotes: syncNotes,
+  ...(includeCreatedAt ? { expenseCreatedAt: serverTimestamp() } : {}),
+});
+
 export const updatePayrollStatus = async (
   id,
   status,
@@ -914,13 +927,7 @@ export const updatePayrollStatus = async (
       id: payrollSnap.id,
       ...payrollSnap.data(),
     };
-    const updatePayload = {
-      status,
-      paymentStatus,
-      ...extra,
-      updatedAt: serverTimestamp(),
-      updatedBy: "system",
-    };
+    const updatePayload = buildPayrollStatusUpdatePayload({ status, paymentStatus, extra });
 
     if (shouldCreatePayrollExpense) {
       const finalAmount = Math.round(Number(latestPayroll.finalAmount || 0));
@@ -934,12 +941,16 @@ export const updatePayrollStatus = async (
         expenseSyncResult = { status: "skipped_zero_amount", expenseId: "" };
       } else if (expenseSnap.exists() || legacyExistingExpense) {
         const expenseId = expenseSnap.exists() ? expenseRef.id : legacyExistingExpense.id;
-        updatePayload.expenseId = expenseId;
-        updatePayload.expenseSourceModule = PAYROLL_EXPENSE_SOURCE_MODULE;
-        updatePayload.expenseSourceId = id;
-        updatePayload.expenseSourceRef = latestPayroll.payrollNumber || id;
-        updatePayload.expenseSyncStatus = "already_exists";
-        updatePayload.expenseSyncNotes = "Cash Out payroll sudah ada, tidak dibuat ulang.";
+        Object.assign(
+          updatePayload,
+          buildPayrollExpenseSyncFields({
+            expenseId,
+            sourceId: id,
+            sourceRef: latestPayroll.payrollNumber || id,
+            syncStatus: "already_exists",
+            syncNotes: "Cash Out payroll sudah ada, tidak dibuat ulang.",
+          }),
+        );
         expenseSyncResult = { status: "already_exists", expenseId };
       } else {
         const expensePayload = buildPayrollExpensePayload({
@@ -949,13 +960,17 @@ export const updatePayrollStatus = async (
         });
 
         transaction.set(expenseRef, expensePayload);
-        updatePayload.expenseId = expenseRef.id;
-        updatePayload.expenseSourceModule = PAYROLL_EXPENSE_SOURCE_MODULE;
-        updatePayload.expenseSourceId = id;
-        updatePayload.expenseSourceRef = expensePayload.sourceRef;
-        updatePayload.expenseSyncStatus = "created";
-        updatePayload.expenseSyncNotes = "Cash Out otomatis dibuat dari payroll paid.";
-        updatePayload.expenseCreatedAt = serverTimestamp();
+        Object.assign(
+          updatePayload,
+          buildPayrollExpenseSyncFields({
+            expenseId: expenseRef.id,
+            sourceId: id,
+            sourceRef: expensePayload.sourceRef,
+            syncStatus: "created",
+            syncNotes: "Cash Out otomatis dibuat dari payroll paid.",
+            includeCreatedAt: true,
+          }),
+        );
         expenseSyncResult = { status: "created", expenseId: expenseRef.id };
       }
     }

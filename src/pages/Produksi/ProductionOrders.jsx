@@ -216,6 +216,60 @@ const getCompactLineStatus = (line = {}) => {
   };
 };
 
+const buildProductionOrderFormDefaults = () => ({
+  code: "",
+  targetType: "product",
+  bomId: undefined,
+  targetVariantKey: undefined,
+  targetVariantLabel: "",
+  orderQty: 1,
+  priority: "normal",
+  notes: "",
+});
+
+// IMS NOTE [AKTIF/GUARDED] - View model preview requirement PO.
+// Hanya meringkas hasil service final untuk UI read-only; submit PO tetap menghitung ulang requirement via createProductionOrder.
+// Kalkulasi requirement material tetap berada di service agar flow BOM -> PO -> Work Log mudah diaudit.
+const buildRequirementPreviewState = (result = {}) => {
+  const requirementLines = Array.isArray(result?.requirementLines)
+    ? result.requirementLines
+    : [];
+  const totalRequired = requirementLines.reduce(
+    (sum, line) => sum + Number(line.qtyRequired || 0),
+    0,
+  );
+  const totalAvailable = requirementLines.reduce(
+    (sum, line) => sum + Number(line.availableStockSnapshot || 0),
+    0,
+  );
+  const totalShortage = requirementLines.reduce(
+    (sum, line) => sum + Number(line.shortageQty || 0),
+    0,
+  );
+  const topShortageLine = [...requirementLines]
+    .filter((line) => Number(line.shortageQty || 0) > 0)
+    .sort((left, right) => Number(right.shortageQty || 0) - Number(left.shortageQty || 0))[0];
+
+  return {
+    requirementLines,
+    targetStockPreview: result?.targetStockPreview || null,
+    targetHasVariants:
+      result?.targetHasVariants === true ||
+      result?.targetStockPreview?.targetHasVariants === true ||
+      result?.bom?.targetHasVariants === true,
+    totalLines: Number(result?.reservationSummary?.totalLines || 0),
+    sufficientLines: Number(result?.reservationSummary?.sufficientLines || 0),
+    shortageLines: Number(result?.reservationSummary?.shortageLines || 0),
+    canReserveFully: result?.reservationSummary?.canReserveFully === true,
+    totalRequired,
+    totalAvailable,
+    totalShortage,
+    topShortageLabel: topShortageLine
+      ? `${topShortageLine.itemName || "Material"} kurang ${formatNumber(topShortageLine.shortageQty || 0)} ${topShortageLine.unit || ""}`
+      : "",
+  };
+};
+
 const ProductionOrders = () => {
   const { profile, firebaseUser } = useAuth();
 
@@ -367,54 +421,7 @@ const ProductionOrders = () => {
 
         if (cancelled) return;
 
-        const requirementLines = Array.isArray(result?.requirementLines)
-          ? result.requirementLines
-          : [];
-        const totalRequired = requirementLines.reduce(
-          (sum, line) => sum + Number(line.qtyRequired || 0),
-          0,
-        );
-        const totalAvailable = requirementLines.reduce(
-          (sum, line) => sum + Number(line.availableStockSnapshot || 0),
-          0,
-        );
-        const totalShortage = requirementLines.reduce(
-          (sum, line) => sum + Number(line.shortageQty || 0),
-          0,
-        );
-        const topShortageLine = [...requirementLines]
-          .filter((line) => Number(line.shortageQty || 0) > 0)
-          .sort((left, right) => Number(right.shortageQty || 0) - Number(left.shortageQty || 0))[0];
-
-        setRequirementPreview({
-          // =====================================================
-          // ACTIVE / FINAL - preview read-only Buat PO.
-          // Fungsi:
-          // - menyimpan line material dan snapshot stok target dari helper final;
-          // - dipakai hanya untuk tampilan compact sebelum submit.
-          // Alasan perubahan:
-          // - kotak summary agregat terlalu penuh dan tidak memberi info stok target.
-          // Status:
-          // - aktif dipakai untuk drawer Buat Production Order;
-          // - createProductionOrder tetap menghitung ulang requirement final saat simpan.
-          // =====================================================
-          requirementLines,
-          targetStockPreview: result?.targetStockPreview || null,
-          targetHasVariants:
-            result?.targetHasVariants === true ||
-            result?.targetStockPreview?.targetHasVariants === true ||
-            result?.bom?.targetHasVariants === true,
-          totalLines: Number(result?.reservationSummary?.totalLines || 0),
-          sufficientLines: Number(result?.reservationSummary?.sufficientLines || 0),
-          shortageLines: Number(result?.reservationSummary?.shortageLines || 0),
-          canReserveFully: result?.reservationSummary?.canReserveFully === true,
-          totalRequired,
-          totalAvailable,
-          totalShortage,
-          topShortageLabel: topShortageLine
-            ? `${topShortageLine.itemName || "Material"} kurang ${formatNumber(topShortageLine.shortageQty || 0)} ${topShortageLine.unit || ""}`
-            : "",
-        });
+        setRequirementPreview(buildRequirementPreviewState(result));
       } catch (error) {
         console.error(error);
         if (!cancelled) {
@@ -498,16 +505,7 @@ const ProductionOrders = () => {
   const handleAdd = async () => {
     form.resetFields();
 
-    form.setFieldsValue({
-      code: "",
-      targetType: "product",
-      bomId: undefined,
-      targetVariantKey: undefined,
-      targetVariantLabel: "",
-      orderQty: 1,
-      priority: "normal",
-      notes: "",
-    });
+    form.setFieldsValue(buildProductionOrderFormDefaults());
 
     setTargetVariantOptions([]);
     setFormVisible(true);

@@ -101,6 +101,29 @@ const readLogField = (record, fieldName, fallback = "") => {
 const resolveVariantLabel = (record) =>
   readLogField(record, "variantLabel") || readLogField(record, "variantKey") || "";
 
+const readLogText = (record, fieldName) => String(readLogField(record, fieldName) || "").trim();
+
+// IMS NOTE [AKTIF/GUARDED] - Field audit log dikumpulkan di satu helper reader.
+// Fungsi blok: mengurangi pengulangan readLogField di resolver tampilan tanpa mengubah fallback details/top-level.
+// Hubungan flow: Stock Management tetap read-only; helper ini hanya membentuk teks audit untuk tabel dan pencarian.
+// Status: AKTIF untuk reader UI, LEGACY fallback tetap dipertahankan untuk inventory_logs lama.
+const buildLogReferenceContext = (record) => ({
+  saleId: readLogField(record, "saleId"),
+  returnId: readLogField(record, "returnId"),
+  purchaseId: readLogField(record, "purchaseId"),
+  adjustmentId: readLogField(record, "adjustmentId"),
+  productionOrderId: readLogField(record, "productionOrderId"),
+  productionOrderCode: readLogField(record, "productionOrderCode"),
+  workLogId: readLogField(record, "workLogId") || readLogField(record, "workLogRefId"),
+  workNumber: readLogField(record, "workNumber"),
+  stepName: readLogField(record, "stepName"),
+  customerName: readLogField(record, "customerName"),
+  supplierName: readLogField(record, "supplierName"),
+  reason: readLogField(record, "reason"),
+  referenceId: readLogField(record, "referenceId"),
+  referenceType: readLogField(record, "referenceType"),
+});
+
 // =========================
 // SECTION: Helper audit worker produksi
 // Fungsi:
@@ -140,9 +163,7 @@ const resolveProductionWorkerSummary = (record) => {
 };
 
 const resolveProductionAuditContextText = (record) => {
-  const workNumber = String(readLogField(record, "workNumber") || "").trim();
-  const productionOrderCode = String(readLogField(record, "productionOrderCode") || "").trim();
-  const stepName = String(readLogField(record, "stepName") || "").trim();
+  const { workNumber, productionOrderCode, stepName } = buildLogReferenceContext(record);
 
   return [
     workNumber ? `Work Log: ${workNumber}` : "",
@@ -202,20 +223,22 @@ const resolveReferenceItems = (record) => {
   // - aktif dipakai di UI Stock Management
   // - fallback top-level dipertahankan sebagai kompatibilitas log legacy
   // =========================
-  const saleId = readLogField(record, "saleId");
-  const returnId = readLogField(record, "returnId");
-  const purchaseId = readLogField(record, "purchaseId");
-  const adjustmentId = readLogField(record, "adjustmentId");
-  const productionOrderId = readLogField(record, "productionOrderId");
-  const productionOrderCode = readLogField(record, "productionOrderCode");
-  const workLogId = readLogField(record, "workLogId") || readLogField(record, "workLogRefId");
-  const workNumber = readLogField(record, "workNumber");
-  const stepName = readLogField(record, "stepName");
-  const customerName = readLogField(record, "customerName");
-  const supplierName = readLogField(record, "supplierName");
-  const reason = readLogField(record, "reason");
-  const referenceId = readLogField(record, "referenceId");
-  const referenceType = readLogField(record, "referenceType");
+  const {
+    saleId,
+    returnId,
+    purchaseId,
+    adjustmentId,
+    productionOrderId,
+    productionOrderCode,
+    workLogId,
+    workNumber,
+    stepName,
+    customerName,
+    supplierName,
+    reason,
+    referenceId,
+    referenceType,
+  } = buildLogReferenceContext(record);
 
   if (saleId) {
     items.push(
@@ -365,8 +388,8 @@ const matchesKeyword = (record, keyword) => {
     resolveItemTypeLabel(record.collectionName),
     resolveVariantLabel(record),
     resolveNoteText(record),
-    readLogField(record, "referenceId"),
-    readLogField(record, "referenceType"),
+    readLogText(record, "referenceId"),
+    readLogText(record, "referenceType"),
     ...(resolveReferenceItems(record).map((item) => item.searchText) || []),
   ]
     .filter(Boolean)

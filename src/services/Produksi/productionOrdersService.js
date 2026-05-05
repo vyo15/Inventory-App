@@ -35,6 +35,14 @@ const COLLECTION_NAME = "production_orders";
 
 const safeTrim = (value) => String(value || "").trim();
 
+// IMS NOTE [AKTIF/GUARDED] - Actor/status PO helper.
+// Hanya merapikan metadata audit dan status ready/shortage; requirement, stok, Work Log, payroll, dan HPP tidak berubah.
+const resolveProductionOrderActor = (currentUser = null) =>
+  currentUser?.email || currentUser?.displayName || currentUser?.uid || "system";
+
+const resolveOrderStatusFromReservationSummary = (reservationSummary = {}) =>
+  reservationSummary.canReserveFully ? "ready" : "shortage";
+
 const getCollectionNameByItemType = (itemType = "") => {
   if (itemType === "raw_material") return "raw_materials";
   if (itemType === "semi_finished_material") return "semi_finished_materials";
@@ -689,7 +697,7 @@ export const createProductionOrder = async (values = {}, currentUser = null) => 
     planningCode: safeTrim(values.planningCode),
     planningTitle: safeTrim(values.planningTitle),
     priority: values.priority || "normal",
-    status: reservationSummary.canReserveFully ? "ready" : "shortage",
+    status: resolveOrderStatusFromReservationSummary(reservationSummary),
     materialRequirementLines: requirementLines,
     reservationSummary,
     generatedWorkLogCount: 0,
@@ -697,16 +705,8 @@ export const createProductionOrder = async (values = {}, currentUser = null) => 
     notes: safeTrim(values.notes),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    createdBy:
-      currentUser?.email ||
-      currentUser?.displayName ||
-      currentUser?.uid ||
-      "system",
-    updatedBy:
-      currentUser?.email ||
-      currentUser?.displayName ||
-      currentUser?.uid ||
-      "system",
+    createdBy: resolveProductionOrderActor(currentUser),
+    updatedBy: resolveProductionOrderActor(currentUser),
   };
 
   const result = await addDoc(collection(db, COLLECTION_NAME), payload);
@@ -738,16 +738,12 @@ export const refreshProductionOrderRequirements = async (orderId, currentUser = 
   await updateDoc(ref, {
     materialRequirementLines: requirementLines,
     reservationSummary,
-    status: reservationSummary.canReserveFully ? "ready" : "shortage",
+    status: resolveOrderStatusFromReservationSummary(reservationSummary),
     targetHasVariants: targetHasVariants === true,
     targetVariantKey: safeTrim(targetVariantKey || order.targetVariantKey),
     targetVariantLabel: safeTrim(targetVariantLabel || order.targetVariantLabel),
     updatedAt: serverTimestamp(),
-    updatedBy:
-      currentUser?.email ||
-      currentUser?.displayName ||
-      currentUser?.uid ||
-      "system",
+    updatedBy: resolveProductionOrderActor(currentUser),
   });
 
   return orderId;
@@ -841,11 +837,7 @@ export const reserveProductionOrder = async (orderId, currentUser = null) => {
       status: "reserved",
       reservedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      updatedBy:
-        currentUser?.email ||
-        currentUser?.displayName ||
-        currentUser?.uid ||
-        "system",
+      updatedBy: resolveProductionOrderActor(currentUser),
     });
   });
 
@@ -877,11 +869,7 @@ export const releaseProductionOrderReservation = async (orderId, currentUser = n
       status: "released",
       releasedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      updatedBy:
-        currentUser?.email ||
-        currentUser?.displayName ||
-        currentUser?.uid ||
-        "system",
+      updatedBy: resolveProductionOrderActor(currentUser),
     });
   });
 
@@ -915,11 +903,7 @@ export const markProductionOrderInProduction = async (
     workLogIds: nextWorkLogIds,
     generatedWorkLogCount: nextWorkLogIds.length,
     updatedAt: serverTimestamp(),
-    updatedBy:
-      currentUser?.email ||
-      currentUser?.displayName ||
-      currentUser?.uid ||
-      "system",
+    updatedBy: resolveProductionOrderActor(currentUser),
   });
 
   return orderId;

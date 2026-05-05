@@ -172,6 +172,67 @@ const renderCompactNote = (value) => {
   );
 };
 
+// IMS NOTE [AKTIF/GUARDED] - Helper submit hanya memadatkan konteks adjustment.
+// Fungsi blok: memisahkan validasi awal agar handler utama fokus ke Firestore transaction.
+// Hubungan flow: validasi final varian + availableStock tetap berada di transaction dan tidak dihapus.
+// Status: AKTIF untuk StockAdjustmentPanel; CLEANUP CANDIDATE bila nanti dipindah ke service adjustment khusus.
+const buildAdjustmentSubmitContext = ({ values, stockSourceItemsByType }) => {
+  const selectedItemTypeConfig = resolveStockAdjustmentItemTypeConfig({
+    itemType: values.itemType,
+  });
+  const sourceCollectionName = selectedItemTypeConfig.collectionName;
+  const selectedSourceItem = (stockSourceItemsByType[values.itemType] || []).find(
+    (item) => item.id === values.itemId,
+  );
+  const adjustmentQuantity = Number(values.quantity || 0);
+  const finalQuantityChange =
+    values.adjustmentType === "out" ? -adjustmentQuantity : adjustmentQuantity;
+
+  if (!sourceCollectionName) throw new Error("Jenis item penyesuaian stok tidak valid.");
+  if (!selectedSourceItem) throw new Error("Item tidak ditemukan");
+  if (!values.date?.toDate) throw new Error("Tanggal penyesuaian wajib diisi dengan benar.");
+  if (!Number.isFinite(adjustmentQuantity) || adjustmentQuantity <= 0) {
+    throw new Error("Jumlah penyesuaian wajib lebih dari 0.");
+  }
+  if (inferHasVariants(selectedSourceItem) && !values.variantKey) {
+    throw new Error("Pilih varian item agar penyesuaian stok masuk ke stok varian yang benar.");
+  }
+
+  return {
+    selectedItemTypeConfig,
+    sourceCollectionName,
+    adjustmentQuantity,
+    finalQuantityChange,
+  };
+};
+
+const buildAdjustmentVariantPayload = (selectedSourceVariant) => ({
+  variantId: selectedSourceVariant?.variantKey || "",
+  variantKey: selectedSourceVariant?.variantKey || "",
+  variantLabel: selectedSourceVariant?.variantLabel || "",
+  stockSourceType: selectedSourceVariant ? "variant" : "master",
+});
+
+const buildAdjustmentStockAuditFields = ({
+  sourceStockSnapshot,
+  currentStockAfter,
+  availableStockAfter,
+  includeLegacyStockAlias = false,
+}) => ({
+  currentStockBefore: sourceStockSnapshot.currentStock,
+  currentStockAfter,
+  ...(includeLegacyStockAlias
+    ? {
+        previousStock: sourceStockSnapshot.currentStock,
+        newStock: currentStockAfter,
+      }
+    : {}),
+  reservedStockBefore: sourceStockSnapshot.reservedStock,
+  reservedStockAfter: sourceStockSnapshot.reservedStock,
+  availableStockBefore: sourceStockSnapshot.availableStock,
+  availableStockAfter,
+});
+
 // =========================
 // SECTION: Stock Adjustment Panel
 // Fungsi:
@@ -387,35 +448,12 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
     setIsSubmitting(true);
 
     try {
-      const selectedItemTypeConfig = resolveStockAdjustmentItemTypeConfig({
-        itemType: values.itemType,
-      });
-      const sourceCollectionName = selectedItemTypeConfig.collectionName;
-      const sourceItems = stockSourceItemsByType[values.itemType] || [];
-      const selectedSourceItem = sourceItems.find((item) => item.id === values.itemId);
-      const adjustmentQuantity = Number(values.quantity || 0);
-      const finalQuantityChange =
-        values.adjustmentType === "out" ? -adjustmentQuantity : adjustmentQuantity;
-
-      if (!sourceCollectionName) {
-        throw new Error("Jenis item penyesuaian stok tidak valid.");
-      }
-
-      if (!selectedSourceItem) {
-        throw new Error("Item tidak ditemukan");
-      }
-
-      if (!values.date?.toDate) {
-        throw new Error("Tanggal penyesuaian wajib diisi dengan benar.");
-      }
-
-      if (!Number.isFinite(adjustmentQuantity) || adjustmentQuantity <= 0) {
-        throw new Error("Jumlah penyesuaian wajib lebih dari 0.");
-      }
-
-      if (inferHasVariants(selectedSourceItem) && !values.variantKey) {
-        throw new Error("Pilih varian item agar penyesuaian stok masuk ke stok varian yang benar.");
-      }
+      const {
+        selectedItemTypeConfig,
+        sourceCollectionName,
+        adjustmentQuantity,
+        finalQuantityChange,
+      } = buildAdjustmentSubmitContext({ values, stockSourceItemsByType });
 
       const itemReference = doc(db, sourceCollectionName, values.itemId);
       const adjustmentReference = doc(collection(db, "stock_adjustments"));
@@ -468,12 +506,18 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           currentStockAfter - sourceStockSnapshot.reservedStock,
           0,
         );
-        const variantPayload = {
-          variantId: selectedSourceVariant?.variantKey || "",
-          variantKey: selectedSourceVariant?.variantKey || "",
-          variantLabel: selectedSourceVariant?.variantLabel || "",
-          stockSourceType: selectedSourceVariant ? "variant" : "master",
-        };
+        const variantPayload = buildAdjustmentVariantPayload(selectedSourceVariant);
+        const stockAuditFields = buildAdjustmentStockAuditFields({
+          sourceStockSnapshot,
+          currentStockAfter,
+          availableStockAfter,
+        });
+        const stockAuditLogFields = buildAdjustmentStockAuditFields({
+          sourceStockSnapshot,
+          currentStockAfter,
+          availableStockAfter,
+          includeLegacyStockAlias: true,
+        });
         const adjustmentPayload = {
           date: Timestamp.fromDate(values.date.toDate()),
           itemType: values.itemType,
@@ -488,12 +532,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           reason: values.reason || "",
           note: values.note || "",
           unit: latestSourceItem.stockUnit || latestSourceItem.unit || "",
-          currentStockBefore: sourceStockSnapshot.currentStock,
-          currentStockAfter,
-          reservedStockBefore: sourceStockSnapshot.reservedStock,
-          reservedStockAfter: sourceStockSnapshot.reservedStock,
-          availableStockBefore: sourceStockSnapshot.availableStock,
-          availableStockAfter,
+          ...stockAuditFields,
           ...variantPayload,
           createdAt: adjustmentTimestamp,
         };
@@ -513,14 +552,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
             collectionName: sourceCollectionName,
             reason: values.reason || "",
             note: values.note || "",
-            currentStockBefore: sourceStockSnapshot.currentStock,
-            currentStockAfter,
-            previousStock: sourceStockSnapshot.currentStock,
-            newStock: currentStockAfter,
-            reservedStockBefore: sourceStockSnapshot.reservedStock,
-            reservedStockAfter: sourceStockSnapshot.reservedStock,
-            availableStockBefore: sourceStockSnapshot.availableStock,
-            availableStockAfter,
+            ...stockAuditLogFields,
             ...variantPayload,
           },
         });

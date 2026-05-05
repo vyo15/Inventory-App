@@ -54,29 +54,6 @@ import {
   updateProductionPayroll,
 } from "../../services/Produksi/productionPayrollsService";
 
-// =====================================================
-// IMS NOTE [AKTIF/GUARDED] - Formatter angka payroll
-// Fungsi blok: memakai formatter global tanpa desimal untuk tampilan payroll.
-// Hubungan flow: hanya display/input UI; rumus payroll dan payment to expense tetap di service.
-// Alasan logic: menghapus formatter lokal agar halaman Payroll mengikuti standar angka IMS.
-// Behavior: behavior-preserving untuk kalkulasi, mengubah tampilan menjadi no-decimal.
-// =====================================================
-// =====================================================
-// ACTIVE / UI HELP TEXT
-// Fungsi blok:
-// - menjelaskan arti field detail payroll dengan bahasa user-friendly;
-// - menjaga detail payroll tetap read-only dan tidak mengubah nominal/status.
-// Alasan perubahan:
-// - Task 3 hanya memperjelas UI, bukan mengubah kalkulasi atau flow payroll.
-// Status:
-// - aktif dipakai di drawer Detail Payroll; bukan kandidat cleanup.
-// =====================================================
-// IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
-// Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
-// Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
-// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
-
 const PAYROLL_STATUS_HELP = {
   draft: "Payroll belum final dan masih perlu dicek sebelum dibayar.",
   confirmed: "Payroll sudah disetujui tetapi belum ditandai dibayar.",
@@ -100,6 +77,49 @@ const PayrollDetailValue = ({ children, help }) => (
     ) : null}
   </Space>
 );
+
+// IMS NOTE [AKTIF] - default form UI; tidak mengubah finalAmount/status/expense.
+const buildPayrollFormDefaults = () => ({
+  ...DEFAULT_PRODUCTION_PAYROLL_FORM,
+  payrollDate: dayjs(),
+});
+
+// IMS NOTE [GUARDED] - pesan UI dari hasil guard expense idempotent service.
+const showPayrollPaidResultMessage = (result = {}) => {
+  if (result?.expenseSyncStatus === "created") {
+    message.success("Payroll paid dan Cash Out otomatis dibuat.");
+    return;
+  }
+
+  if (result?.expenseSyncStatus === "already_exists") {
+    message.info("Payroll paid. Cash Out payroll sudah ada, tidak dibuat ulang.");
+    return;
+  }
+
+  if (result?.expenseSyncStatus === "skipped_zero_amount") {
+    message.warning("Payroll paid, tetapi Cash Out tidak dibuat karena nominal payroll 0.");
+    return;
+  }
+
+  message.success("Payroll ditandai paid.");
+};
+
+// IMS NOTE [AKTIF] - preview UI saja; finalAmount final tetap dihitung ulang di service.
+const calculatePayrollPreviewFinalAmount = (values = {}) => {
+  const rate = Number(values.payrollRate || 0);
+  const qtyBase = Number(values.payrollQtyBase || 1);
+  const outputQtyUsed = Number(values.outputQtyUsed || 0);
+  const bonus = Number(values.bonusAmount || 0);
+  const deduction = Number(values.deductionAmount || 0);
+  const amountCalculated =
+    values.payrollMode === "fixed" || values.payrollMode === "per_batch"
+      ? rate
+      : qtyBase > 0
+        ? (outputQtyUsed / qtyBase) * rate
+        : 0;
+
+  return amountCalculated + bonus - deduction;
+};
 
 const ProductionPayrolls = () => {
   const [loading, setLoading] = useState(false);
@@ -216,18 +236,12 @@ const ProductionPayrolls = () => {
   const resetFormState = () => {
     setEditingRecord(null);
     form.resetFields();
-    form.setFieldsValue({
-      ...DEFAULT_PRODUCTION_PAYROLL_FORM,
-      payrollDate: dayjs(),
-    });
+    form.setFieldsValue(buildPayrollFormDefaults());
   };
 
   const handleAdd = () => {
     setEditingRecord(null);
-    form.setFieldsValue({
-      ...DEFAULT_PRODUCTION_PAYROLL_FORM,
-      payrollDate: dayjs(),
-    });
+    form.setFieldsValue(buildPayrollFormDefaults());
     setFormVisible(true);
   };
 
@@ -312,29 +326,11 @@ const ProductionPayrolls = () => {
 
   const handleMarkPaid = async (record) => {
     try {
-      // =====================================================
-      // ACTIVE / GUARDED - Paid payroll otomatis membuat Cash Out
-      // Fungsi blok:
-      // - menandai payroll paid dan meminta service membuat expense payroll idempotent;
-      // - menampilkan status sync agar user tahu Cash Out dibuat / sudah ada / dilewati.
-      // Alasan blok ini dipakai:
-      // - integrasi IMS final mengalirkan Payroll Produksi paid ke Kas & Biaya tanpa input ulang.
-      // Status:
-      // - aktif dipakai; guarded karena tidak boleh membuat double expense.
-      // =====================================================
       const result = await updatePayrollStatus(record.id, "paid", "paid", {
         paidAt: new Date(),
       });
 
-      if (result?.expenseSyncStatus === "created") {
-        message.success("Payroll paid dan Cash Out otomatis dibuat.");
-      } else if (result?.expenseSyncStatus === "already_exists") {
-        message.info("Payroll paid. Cash Out payroll sudah ada, tidak dibuat ulang.");
-      } else if (result?.expenseSyncStatus === "skipped_zero_amount") {
-        message.warning("Payroll paid, tetapi Cash Out tidak dibuat karena nominal payroll 0.");
-      } else {
-        message.success("Payroll ditandai paid.");
-      }
+      showPayrollPaidResultMessage(result);
 
       await loadData();
     } catch (error) {
@@ -569,10 +565,7 @@ const ProductionPayrolls = () => {
         <Form
           form={form}
           layout="vertical"
-          initialValues={{
-            ...DEFAULT_PRODUCTION_PAYROLL_FORM,
-            payrollDate: dayjs(),
-          }}
+          initialValues={buildPayrollFormDefaults()}
         >
           <Row gutter={16}>
             <Col xs={24} md={8}>
@@ -704,26 +697,7 @@ const ProductionPayrolls = () => {
             <Col xs={24} md={8}>
               <Form.Item shouldUpdate noStyle>
                 {({ getFieldsValue }) => {
-                  const values = getFieldsValue();
-                  const rate = Number(values.payrollRate || 0);
-                  const qtyBase = Number(values.payrollQtyBase || 1);
-                  const outputQtyUsed = Number(values.outputQtyUsed || 0);
-                  const bonus = Number(values.bonusAmount || 0);
-                  const deduction = Number(values.deductionAmount || 0);
-
-                  let amountCalculated = 0;
-
-                  if (
-                    values.payrollMode === "fixed" ||
-                    values.payrollMode === "per_batch"
-                  ) {
-                    amountCalculated = rate;
-                  } else {
-                    amountCalculated =
-                      qtyBase > 0 ? (outputQtyUsed / qtyBase) * rate : 0;
-                  }
-
-                  const finalAmount = amountCalculated + bonus - deduction;
+                  const finalAmount = calculatePayrollPreviewFinalAmount(getFieldsValue());
 
                   return (
                     <Form.Item label="Preview Final Amount">

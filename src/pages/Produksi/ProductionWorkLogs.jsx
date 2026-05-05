@@ -80,6 +80,58 @@ import useAuth from "../../hooks/useAuth";
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
+
+// IMS NOTE [AKTIF/GUARDED] - Helper modal complete Work Log.
+// Fungsi: bentuk payload qty/operator tanpa memposting stok, menghitung HPP, atau membuat payroll.
+// Status: AKTIF untuk readability handler; operator tetap dipakai payroll otomatis dan audit output.
+const resolveSelectedProductionWorkers = (employees = [], workerIds = []) => {
+  const selectedWorkerIds = Array.isArray(workerIds) ? workerIds : [];
+  const selectedWorkers = employees.filter((item) => selectedWorkerIds.includes(item.id));
+
+  return {
+    workerIds: selectedWorkerIds,
+    workerNames: selectedWorkers.map((item) => item.name || ''),
+    workerCodes: selectedWorkers.map((item) => item.code || ''),
+    workerCount: selectedWorkerIds.length,
+  };
+};
+
+const buildCompleteWorkLogUpdateValues = ({ record = {}, values = {}, employees = [] } = {}) => ({
+  ...record,
+  goodQty: values.goodQty,
+  rejectQty: values.rejectQty,
+  reworkQty: values.reworkQty,
+  ...resolveSelectedProductionWorkers(employees, values.workerIds || []),
+  notes: values.notes || '',
+});
+
+// IMS NOTE [AKTIF/GUARDED] - Pesan payroll setelah complete; urutan tetap Work Log complete dulu, payroll idempotent setelahnya.
+const buildCompletePayrollMessage = (payrollResult = {}) => {
+  const createdPayrollCount = Number(payrollResult?.createdCount || 0);
+  const skippedPayrollCount = Number(payrollResult?.skippedCount || 0);
+
+  if (createdPayrollCount > 0) {
+    return {
+      type: 'success',
+      text: `Work log selesai dan ${createdPayrollCount} line payroll dibuat.`,
+    };
+  }
+
+  if (skippedPayrollCount > 0) {
+    return {
+      type: 'info',
+      text: 'Work log selesai. Payroll sudah pernah dibuat, tidak dibuat dobel.',
+    };
+  }
+
+  return null;
+};
+
+const runAutoPayrollAfterWorkLogCompleted = async ({ workLogId, currentUser } = {}) => {
+  const payrollResult = await generatePayrollLinesFromCompletedWorkLog(workLogId, currentUser);
+  return buildCompletePayrollMessage(payrollResult);
+};
+
 const ProductionWorkLogs = () => {
   const { profile, firebaseUser } = useAuth();
 
@@ -675,65 +727,37 @@ const ProductionWorkLogs = () => {
 
       await updateProductionWorkLog(
         completingRecord.id,
-        {
-          ...completingRecord,
-          goodQty: values.goodQty,
-          rejectQty: values.rejectQty,
-          reworkQty: values.reworkQty,
-          workerIds: values.workerIds || [],
-          workerNames: (referenceData.employees || [])
-            .filter((item) => (values.workerIds || []).includes(item.id))
-            .map((item) => item.name || ''),
-          workerCodes: (referenceData.employees || [])
-            .filter((item) => (values.workerIds || []).includes(item.id))
-            .map((item) => item.code || ''),
-          workerCount: Array.isArray(values.workerIds) ? values.workerIds.length : 0,
-          notes: values.notes || '',
-        },
+        buildCompleteWorkLogUpdateValues({
+          record: completingRecord,
+          values,
+          employees: referenceData.employees || [],
+        }),
         currentUser,
       );
 
       await completeProductionWorkLog(completingRecord.id, currentUser);
-      // =====================================================
-      // ACTIVE / GUARDED - auto payroll setelah Work Log selesai
-      // Fungsi blok:
-      // - membuat payroll line otomatis dari Work Log completed;
-      // - menjaga flow lama output stok tetap selesai dulu, lalu payroll dibuat dengan guard idempotent.
-      // Alasan blok ini dipakai:
-      // - regression sebelumnya Work Log selesai tetapi Payroll Produksi tetap kosong.
-      // Status:
-      // - aktif dipakai; bukan legacy dan tidak mengubah business rule stok/HPP.
-      // =====================================================
-      let payrollMessageHandled = false;
+      let completionMessage = null;
       try {
-        const payrollResult = await generatePayrollLinesFromCompletedWorkLog(completingRecord.id, currentUser);
-        const createdPayrollCount = Number(payrollResult?.createdCount || 0);
-        const skippedPayrollCount = Number(payrollResult?.skippedCount || 0);
-
-        if (createdPayrollCount > 0) {
-          payrollMessageHandled = true;
-          message.success(`Work log selesai dan ${createdPayrollCount} line payroll dibuat.`);
-        } else if (skippedPayrollCount > 0) {
-          payrollMessageHandled = true;
-          message.info('Work log selesai. Payroll sudah pernah dibuat, tidak dibuat dobel.');
-        }
+        completionMessage = await runAutoPayrollAfterWorkLogCompleted({
+          workLogId: completingRecord.id,
+          currentUser,
+        });
       } catch (payrollError) {
-        // =====================================================
-        // ACTIVE / GUARDED - fallback error payroll setelah complete
-        // Fungsi blok:
-        // - menjaga user tahu bahwa Work Log sudah selesai meski auto payroll gagal;
-        // - tidak menjalankan ulang complete agar output stok tidak dobel.
-        // Alasan blok ini dipakai:
-        // - complete Work Log adalah guarded stock flow, sedangkan payroll bisa diperbaiki via task terpisah/manual.
-        // Status:
-        // - aktif sebagai guard; bukan legacy.
-        // =====================================================
+        // ACTIVE / GUARDED: jika payroll otomatis gagal, jangan ulang complete Work Log agar output stok tidak dobel.
         console.error(payrollError);
-        payrollMessageHandled = true;
-        message.warning(payrollError?.message || 'Work log selesai, tetapi payroll otomatis gagal dibuat.');
+        completionMessage = {
+          type: 'warning',
+          text: payrollError?.message || 'Work log selesai, tetapi payroll otomatis gagal dibuat.',
+        };
       }
 
-      if (!payrollMessageHandled) {
+      if (completionMessage?.type === 'success') {
+        message.success(completionMessage.text);
+      } else if (completionMessage?.type === 'info') {
+        message.info(completionMessage.text);
+      } else if (completionMessage?.type === 'warning') {
+        message.warning(completionMessage.text);
+      } else {
         message.success('Work log selesai. Output ditambahkan dan PO ditutup.');
       }
       setCompleteModalVisible(false);

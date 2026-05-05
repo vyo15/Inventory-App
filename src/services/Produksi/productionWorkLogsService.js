@@ -1381,16 +1381,79 @@ const getOutputStockResolution = ({
   };
 };
 
+// IMS NOTE [AKTIF/GUARDED] - Helper kecil complete Work Log.
+// Fungsi: rapikan actor, output summary, costing summary, dan payload update tanpa read/write Firestore.
+// Status: transaction complete tetap satu-satunya tempat posting output, completed status, dan update PO.
+const resolveProductionWorkLogActor = (currentUser = null) =>
+  currentUser?.email ||
+  currentUser?.displayName ||
+  currentUser?.uid ||
+  "system";
+
+const synchronizeFirstOutputWithWorkLogSummary = (outputs = [], workLog = {}) =>
+  outputs.map((line, index) =>
+    index === 0
+      ? {
+          ...line,
+          goodQty: toNumber(workLog.goodQty || 0),
+          rejectQty: toNumber(workLog.rejectQty || 0),
+          reworkQty: toNumber(workLog.reworkQty || 0),
+        }
+      : line,
+  );
+
+const calculateCompletedWorkLogCostSummary = ({ nextMaterialUsages = [], workLog = {}, totalGoodQty = 0 } = {}) => {
+  const materialCostActual = nextMaterialUsages.reduce(
+    (sum, line) => sum + toNumber(line.totalCostSnapshot || 0),
+    0,
+  );
+  const laborCostActual = toNumber(workLog.laborCostActual || 0);
+  const overheadCostActual = toNumber(workLog.overheadCostActual || 0);
+  const totalCostActual = materialCostActual + laborCostActual + overheadCostActual;
+  const costPerGoodUnit = totalGoodQty > 0 ? totalCostActual / totalGoodQty : 0;
+
+  return {
+    materialCostActual,
+    laborCostActual,
+    overheadCostActual,
+    totalCostActual,
+    costPerGoodUnit,
+  };
+};
+
+const buildCompletedWorkLogUpdatePayload = ({
+  workLog = {},
+  nextMaterialUsages = [],
+  nextOutputs = [],
+  costSummary = {},
+  productionOrder = null,
+  completedAtValue,
+  actor = "system",
+} = {}) => ({
+  status: "completed",
+  completedAt: workLog.completedAt || completedAtValue,
+  materialUsages: nextMaterialUsages,
+  outputs: nextOutputs,
+  materialCostActual: costSummary.materialCostActual,
+  laborCostActual: costSummary.laborCostActual,
+  overheadCostActual: costSummary.overheadCostActual,
+  totalCostActual: costSummary.totalCostActual,
+  costPerGoodUnit: costSummary.costPerGoodUnit,
+  stockConsumptionStatus: "applied",
+  stockOutputStatus: "applied",
+  payrollCalculated: false,
+  payrollCalculationStatus: "pending",
+  productionOrderStatusSnapshot: productionOrder ? "completed" : workLog.productionOrderStatusSnapshot || "",
+  updatedAt: serverTimestamp(),
+  updatedBy: actor,
+});
+
 // =====================================================
 // Complete work log + apply stock mutation
 // =====================================================
 export const completeProductionWorkLog = async (id, currentUser = null) => {
   const workLogRef = doc(db, COLLECTION_NAME, id);
-  const actor =
-    currentUser?.email ||
-    currentUser?.displayName ||
-    currentUser?.uid ||
-    "system";
+  const actor = resolveProductionWorkLogActor(currentUser);
 
   await runTransaction(db, async (transaction) => {
     const workLogSnap = await transaction.get(workLogRef);
@@ -1411,17 +1474,8 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
       : [];
     const outputs = Array.isArray(workLog.outputs) ? workLog.outputs : [];
 
-    // Sinkronkan output pertama dari summary qty agar sumber data hasil produksi tunggal
-    const synchronizedOutputs = outputs.map((line, index) =>
-      index === 0
-        ? {
-            ...line,
-            goodQty: toNumber(workLog.goodQty || 0),
-            rejectQty: toNumber(workLog.rejectQty || 0),
-            reworkQty: toNumber(workLog.reworkQty || 0),
-          }
-        : line,
-    );
+    // AKTIF / GUARDED: output pertama tetap disinkronkan dari summary qty agar sumber hasil produksi tunggal.
+    const synchronizedOutputs = synchronizeFirstOutputWithWorkLogSummary(outputs, workLog);
 
     const productionOrderRef = workLog.productionOrderId
       ? doc(db, "production_orders", workLog.productionOrderId)
@@ -1592,28 +1646,14 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
       throw new Error("Good Qty hasil produksi harus lebih dari 0 sebelum work log diselesaikan");
     }
 
-    // =====================================================
-    // SECTION: Hitung ulang summary costing final saat work log selesai.
-    // Fungsi:
-    // - memastikan biaya material tidak tetap 0 ketika snapshot PO awal masih kosong
-    // - menjadikan output cost memakai biaya final material terbaru + labor/overhead yang sudah ada
-    // Status:
-    // - aktif dipakai di flow Work Log complete
-    // - tidak mengubah source of truth stok; hanya menghitung ulang field summary turunan
-    // =====================================================
-    const recalculatedMaterialCost = nextMaterialUsages.reduce(
-      (sum, line) => sum + toNumber(line.totalCostSnapshot || 0),
-      0,
-    );
-    const recalculatedLaborCost = toNumber(workLog.laborCostActual || 0);
-    const recalculatedOverheadCost = toNumber(workLog.overheadCostActual || 0);
-    const recalculatedTotalCost =
-      recalculatedMaterialCost + recalculatedLaborCost + recalculatedOverheadCost;
-    const recalculatedCostPerGoodUnit =
-      totalGoodQty > 0 ? recalculatedTotalCost / totalGoodQty : 0;
-
+    // AKTIF / GUARDED: costing final tetap material + labor + overhead, tanpa source biaya baru.
+    const costSummary = calculateCompletedWorkLogCostSummary({
+      nextMaterialUsages,
+      workLog,
+      totalGoodQty,
+    });
     const fallbackUnitCost =
-      recalculatedCostPerGoodUnit || toNumber(workLog.costPerGoodUnit || 0);
+      costSummary.costPerGoodUnit || toNumber(workLog.costPerGoodUnit || 0);
     const nextOutputs = [];
 
     for (const line of synchronizedOutputs) {
@@ -1768,24 +1808,18 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
       );
     }
 
-    transaction.update(workLogRef, {
-      status: "completed",
-      completedAt: workLog.completedAt || completedAtValue,
-      materialUsages: nextMaterialUsages,
-      outputs: nextOutputs,
-      materialCostActual: recalculatedMaterialCost,
-      laborCostActual: recalculatedLaborCost,
-      overheadCostActual: recalculatedOverheadCost,
-      totalCostActual: recalculatedTotalCost,
-      costPerGoodUnit: recalculatedCostPerGoodUnit,
-      stockConsumptionStatus: "applied",
-      stockOutputStatus: "applied",
-      payrollCalculated: false,
-      payrollCalculationStatus: "pending",
-      productionOrderStatusSnapshot: productionOrder ? "completed" : workLog.productionOrderStatusSnapshot || "",
-      updatedAt: serverTimestamp(),
-      updatedBy: actor,
-    });
+    transaction.update(
+      workLogRef,
+      buildCompletedWorkLogUpdatePayload({
+        workLog,
+        nextMaterialUsages,
+        nextOutputs,
+        costSummary,
+        productionOrder,
+        completedAtValue,
+        actor,
+      }),
+    );
 
     if (productionOrderRef && productionOrder) {
       const currentWorkLogIds = Array.isArray(productionOrder.workLogIds)

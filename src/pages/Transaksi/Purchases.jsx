@@ -59,12 +59,6 @@ import {
 const { Option } = Select;
 
 // =========================
-// SECTION: Formatter final lintas aplikasi
-// =========================
-// ACTIVE / FINAL: pembelian memakai helper shared agar qty dan Rupiah tidak
-// memakai formatter lokal yang bisa berbeda dari halaman lain.
-
-// =========================
 // SECTION: Bantu tentukan status selisih hemat pembelian
 // =========================
 const getPurchaseSavingMeta = (value) => {
@@ -184,6 +178,89 @@ const buildPurchaseExpensePayload = ({
   };
 };
 
+
+const buildSupplierSubtotalBaseline = ({ itemId = "", supplierId = "", supplierItemPrice = 0, subtotalItems = 0 } = {}) => ({
+  itemId: String(itemId || ""),
+  supplierId: String(supplierId || ""),
+  supplierItemPrice: Math.round(Number(supplierItemPrice || 0)),
+  subtotalItems: Math.round(Number(subtotalItems || 0)),
+});
+
+// IMS NOTE [AKTIF/GUARDED] - Helper kecil agar rumus Purchases tidak tersebar dobel di effect dan submit.
+// Rumus tidak berubah: Total Aktual = Subtotal + Ongkir + Biaya Layanan - Diskon Ongkir - Voucher.
+const normalizePurchaseType = (value = "online") => (value === "offline" ? "offline" : "online");
+
+const calculatePurchaseTotalStockIn = ({ itemType = "", quantity = 0, conversionValue = 0 } = {}) =>
+  Math.round(Number(itemType === "material" ? Number(quantity || 0) * Number(conversionValue || 0) : quantity || 0));
+
+const normalizePurchaseCostFields = ({
+  purchaseType = "online",
+  subtotalItems = 0,
+  shippingCost = 0,
+  shippingDiscount = 0,
+  voucherDiscount = 0,
+  serviceFee = 0,
+  roundComponents = false,
+} = {}) => {
+  const normalizeCostValue = (value) => {
+    const numericValue = Number(value || 0);
+    return roundComponents ? Math.round(numericValue) : numericValue;
+  };
+  const normalizedPurchaseType = normalizePurchaseType(purchaseType);
+
+  return {
+    normalizedPurchaseType,
+    normalizedSubtotalItems: normalizeCostValue(subtotalItems),
+    normalizedShippingCost: normalizedPurchaseType === "offline" ? 0 : normalizeCostValue(shippingCost),
+    normalizedShippingDiscount: normalizedPurchaseType === "offline" ? 0 : normalizeCostValue(shippingDiscount),
+    normalizedVoucherDiscount: normalizedPurchaseType === "offline" ? 0 : normalizeCostValue(voucherDiscount),
+    normalizedServiceFee: normalizedPurchaseType === "offline" ? 0 : normalizeCostValue(serviceFee),
+  };
+};
+
+const calculateActualPurchaseTotal = (costFields = {}) => {
+  const {
+    normalizedSubtotalItems,
+    normalizedShippingCost,
+    normalizedShippingDiscount,
+    normalizedVoucherDiscount,
+    normalizedServiceFee,
+  } = normalizePurchaseCostFields(costFields);
+
+  return Math.round(
+    normalizedSubtotalItems +
+      normalizedShippingCost +
+      normalizedServiceFee -
+      normalizedShippingDiscount -
+      normalizedVoucherDiscount,
+  );
+};
+
+const calculateActualUnitCost = ({ totalActualPurchase = 0, totalStockIn = 0 } = {}) => {
+  const stockIn = Number(totalStockIn || 0);
+  return stockIn > 0 ? Math.round(Number(totalActualPurchase || 0) / stockIn) : 0;
+};
+
+const buildPurchaseFormDefaults = (overrides = {}) => ({
+  type: "material",
+  materialVariantId: undefined,
+  productVariantKey: undefined,
+  quantity: 1,
+  subtotalItems: 0,
+  shippingCost: 0,
+  shippingDiscount: 0,
+  voucherDiscount: 0,
+  serviceFee: 0,
+  purchaseType: "online",
+  totalActualPurchase: 0,
+  actualUnitCost: 0,
+  restockReferencePrice: 0,
+  totalReferencePurchase: 0,
+  purchaseSaving: 0,
+  productLink: "",
+  ...overrides,
+});
+
 // =========================
 // SECTION: Purchases Page
 // =========================
@@ -231,22 +308,8 @@ const Purchases = () => {
   const totalStockIn = Form.useWatch("totalStockIn", form);
   const restockReferencePrice = Form.useWatch("restockReferencePrice", form);
 
-  // =========================
-  // SECTION: Status pembelian online/offline dari form
-  // Fungsi blok:
-  // - membaca konteks biaya online agar field ongkir/admin/voucher bisa disembunyikan saat offline.
-  // Hubungan flow Purchases:
-  // - hanya memengaruhi UI dan biaya transaksi yang user simpan; tidak membuat transaksi otomatis.
-  // Status: aktif dipakai; bukan legacy dan bukan auto-sync Supplier.
-  // =========================
   const isOfflinePurchase = purchaseType === "offline";
 
-  // =========================
-  // SECTION: Item dan varian terpilih
-  // ACTIVE / FINAL:
-  // - bahan baku tetap memakai helper cost khusus raw material
-  // - produk bervarian memakai variant picker yang sama dengan helper stok final
-  // =========================
   const selectedProduct = useMemo(() => {
     return products.find((item) => item.id === itemId) || null;
   }, [products, itemId]);
@@ -406,15 +469,6 @@ const Purchases = () => {
     selectedProductVariant,
   ]);
 
-  // =========================
-  // SECTION: Supplier dan detail katalog supplier terpilih
-  // Fungsi blok:
-  // - membaca supplier terpilih dan materialDetails yang cocok dengan bahan baku.
-  // Hubungan flow Purchases:
-  // - data ini hanya dipakai untuk prefill Link Produk dan Harga Supplier Tercatat;
-  // - tidak menulis ke raw_materials dan tidak mengembalikan auto-sync Supplier.
-  // Status: aktif dipakai oleh form Pembelian.
-  // =========================
   const selectedSupplier = useMemo(() => {
     return suppliers.find((supplier) => String(supplier.id) === String(supplierId)) || null;
   }, [suppliers, supplierId]);
@@ -424,14 +478,6 @@ const Purchases = () => {
     return getSupplierMaterialDetail(selectedSupplier, itemId);
   }, [itemId, itemType, selectedSupplier]);
 
-  // =========================
-  // SECTION: Snapshot biaya katalog Supplier untuk default Purchases
-  // Fungsi blok:
-  // - membaca harga barang, ongkir, admin, voucher, dan harga estimasi supplier dari materialDetails yang cocok.
-  // Hubungan flow aplikasi:
-  // - Supplier hanya sumber default transaksi; nilai ini tidak menulis balik ke Supplier/Raw Material dan tidak membuat purchase otomatis.
-  // Status: aktif dipakai untuk prefill form Pembelian; bukan legacy dan bukan auto-sync supplier.
-  // =========================
   const selectedSupplierCatalogCost = useMemo(() => {
     const detail = selectedSupplierMaterialDetail || {};
     const purchaseTypeFromSupplier = detail.purchaseType === "offline" ? "offline" : "online";
@@ -493,15 +539,6 @@ const Purchases = () => {
   };
 
   // =========================
-  // SECTION: Snapshot katalog Supplier untuk prefill Pembelian
-  // Fungsi blok:
-  // - mengambil default Satuan Beli, Konversi Supplier, tipe online/offline, dan harga pembanding
-  //   dari materialDetails supplier yang cocok dengan bahan baku terpilih.
-  // Hubungan flow aplikasi:
-  // - Supplier hanya menjadi sumber default; Purchases tetap transaksi aktual dan user tetap harus Simpan sendiri.
-  // Status: AKTIF + GUARDED; bukan auto-sync dan tidak menulis balik ke Supplier/Raw Material.
-  // =========================
-  // =========================
   // SECTION: Supplier difilter ketat berdasarkan bahan baku yang dipilih
   // Fungsi blok:
   // - hanya menampilkan supplier yang memang menyediakan bahan ini di katalog Supplier.
@@ -526,9 +563,6 @@ const Purchases = () => {
     return matchedSuppliers;
   }, [suppliers, itemId, itemType, supplierId, selectedSupplier]);
 
-  // =========================
-  // SECTION: Sinkron data utama dari firestore
-  // =========================
   useEffect(() => {
     const unsubscribePurchases = onSnapshot(
       collection(db, "purchases"),
@@ -582,19 +616,7 @@ const Purchases = () => {
     };
   }, []);
 
-  // =========================
-  // SECTION: Isi field otomatis saat item berubah
-  // =========================
   useEffect(() => {
-    // =========================
-    // SECTION: Guard prefill Restock Assistant
-    // Fungsi blok:
-    // - item change normal tetap mengosongkan supplier agar user memilih ulang;
-    // - khusus pembukaan dari Dashboard Restock Assistant, supplier query dipertahankan sekali.
-    // Hubungan flow:
-    // - prefill hanya membantu form Purchases; tidak auto-submit, tidak mengubah stok/kas sebelum Simpan.
-    // Status: aktif dipakai; bukan legacy dan bukan auto-purchase.
-    // =========================
     const shouldKeepPrefilledSupplier =
       restockPrefillMaterialIdRef.current &&
       String(itemId || "") === restockPrefillMaterialIdRef.current;
@@ -609,11 +631,8 @@ const Purchases = () => {
     itemChangeContextRef.current = nextItemChangeContext;
 
     if (isItemContextChanged) {
-      // ACTIVE: perubahan Jenis/Nama Item mengawali konteks purchase baru, sehingga guard manual subtotal di-reset.
-      // ALASAN: default harga Supplier berikutnya boleh mengisi ulang Subtotal Barang untuk item baru, tetapi Qty Beli tidak boleh memicu reset ini.
-      // STATUS: aktif dipakai; bukan legacy.
       subtotalManualOverrideRef.current = false;
-      supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
+      supplierSubtotalBaselineRef.current = buildSupplierSubtotalBaseline();
     }
 
     if (isItemContextChanged && !shouldKeepPrefilledSupplier) {
@@ -748,12 +767,12 @@ const Purchases = () => {
       subtotalItems: supplierItemPrice > 0 ? nextSubtotal : 0,
     };
 
-    supplierSubtotalBaselineRef.current = {
-      itemId: String(itemId || ""),
-      supplierId: String(supplierId || ""),
+    supplierSubtotalBaselineRef.current = buildSupplierSubtotalBaseline({
+      itemId,
+      supplierId,
       supplierItemPrice,
       subtotalItems: supplierItemPrice > 0 ? nextSubtotal : 0,
-    };
+    });
 
     if (supplierPurchaseUnit) {
       nextValues.purchaseUnit = supplierPurchaseUnit;
@@ -782,17 +801,9 @@ const Purchases = () => {
     form.setFieldsValue(nextValues);
   }, [form, itemId, itemType, selectedSupplier, selectedSupplierCatalogCost, supplierId]);
 
-  // =========================
-  // SECTION: Hitung stok masuk otomatis
-  // =========================
   useEffect(() => {
-    const qty = Number(quantity || 0);
-    const conversion = Number(conversionValue || 0);
-
-    const nextTotalStockIn = itemType === "material" ? qty * conversion : qty;
-
     form.setFieldsValue({
-      totalStockIn: Math.round(nextTotalStockIn || 0),
+      totalStockIn: calculatePurchaseTotalStockIn({ itemType, quantity, conversionValue }),
     });
   }, [quantity, conversionValue, itemType, form]);
 
@@ -822,12 +833,12 @@ const Purchases = () => {
 
     if (!canAutoApplySubtotal) return;
 
-    supplierSubtotalBaselineRef.current = {
-      itemId: String(itemId || ""),
-      supplierId: String(supplierId || ""),
+    supplierSubtotalBaselineRef.current = buildSupplierSubtotalBaseline({
+      itemId,
+      supplierId,
       supplierItemPrice,
       subtotalItems: nextSubtotal,
-    };
+    });
 
     form.setFieldsValue({ subtotalItems: nextSubtotal });
   }, [form, itemId, itemType, quantity, selectedSupplierCatalogCost.supplierItemPrice, supplierId]);
@@ -863,21 +874,15 @@ const Purchases = () => {
   // Status: aktif dipakai oleh ringkasan, payload purchase, actualUnitCost, dan expense otomatis.
   // =========================
   useEffect(() => {
-    const subtotal = Number(subtotalItems || 0);
-    const shipping = purchaseType === "offline" ? 0 : Number(shippingCost || 0);
-    const shippingDiscountAmount = purchaseType === "offline" ? 0 : Number(shippingDiscount || 0);
-    const voucherAmount = purchaseType === "offline" ? 0 : Number(voucherDiscount || 0);
-    const serviceFeeAmount = purchaseType === "offline" ? 0 : Number(serviceFee || 0);
-
-    const totalActualPurchase =
-      subtotal +
-      shipping -
-      shippingDiscountAmount -
-      voucherAmount +
-      serviceFeeAmount;
-
     form.setFieldsValue({
-      totalActualPurchase: Math.round(totalActualPurchase || 0),
+      totalActualPurchase: calculateActualPurchaseTotal({
+        purchaseType,
+        subtotalItems,
+        shippingCost,
+        shippingDiscount,
+        voucherDiscount,
+        serviceFee,
+      }),
     });
   }, [
     subtotalItems,
@@ -898,16 +903,11 @@ const Purchases = () => {
   // Status: aktif dipakai; guard stockIn > 0 mencegah pembagian nol pada data supplier yang belum punya konversi.
   // =========================
   useEffect(() => {
-    const totalActualPurchase = Number(
-      form.getFieldValue("totalActualPurchase") || 0,
-    );
-    const stockIn = Number(form.getFieldValue("totalStockIn") || 0);
-
-    const actualUnitCost =
-      stockIn > 0 ? Math.round(totalActualPurchase / stockIn) : 0;
-
     form.setFieldsValue({
-      actualUnitCost,
+      actualUnitCost: calculateActualUnitCost({
+        totalActualPurchase: form.getFieldValue("totalActualPurchase") || 0,
+        totalStockIn: form.getFieldValue("totalStockIn") || 0,
+      }),
     });
   }, [
     subtotalItems,
@@ -998,35 +998,17 @@ const Purchases = () => {
     restockPrefillAppliedRef.current = true;
     restockPrefillMaterialIdRef.current = String(materialId);
     subtotalManualOverrideRef.current = false;
-    supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
+    supplierSubtotalBaselineRef.current = buildSupplierSubtotalBaseline();
 
     form.resetFields();
-    form.setFieldsValue({
-      type: "material",
+    form.setFieldsValue(buildPurchaseFormDefaults({
       itemId: materialId,
       supplierId,
       productLink,
-      materialVariantId: undefined,
-      productVariantKey: undefined,
-      quantity: 1,
-      subtotalItems: 0,
-      shippingCost: 0,
-      shippingDiscount: 0,
-      voucherDiscount: 0,
-      serviceFee: 0,
-      purchaseType: "online",
-      totalActualPurchase: 0,
-      actualUnitCost: 0,
-      restockReferencePrice: 0,
-      totalReferencePurchase: 0,
-      purchaseSaving: 0,
-    });
+    }));
     setIsModalOpen(true);
   }, [form, searchParams]);
 
-  // =========================
-  // SECTION: Modal Helpers
-  // =========================
   const openCreatePurchaseModal = () => {
     // =========================
     // SECTION: Reset prefill saat user membuat pembelian manual
@@ -1037,26 +1019,9 @@ const Purchases = () => {
     restockPrefillMaterialIdRef.current = "";
     itemChangeContextRef.current = "";
     subtotalManualOverrideRef.current = false;
-    supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
+    supplierSubtotalBaselineRef.current = buildSupplierSubtotalBaseline();
     form.resetFields();
-    form.setFieldsValue({
-      type: "material",
-      materialVariantId: undefined,
-      productVariantKey: undefined,
-      quantity: 1,
-      subtotalItems: 0,
-      shippingCost: 0,
-      shippingDiscount: 0,
-      voucherDiscount: 0,
-      serviceFee: 0,
-      purchaseType: "online",
-      totalActualPurchase: 0,
-      actualUnitCost: 0,
-      restockReferencePrice: 0,
-      totalReferencePurchase: 0,
-      purchaseSaving: 0,
-      productLink: '',
-    });
+    form.setFieldsValue(buildPurchaseFormDefaults());
     setIsModalOpen(true);
   };
 
@@ -1172,23 +1137,34 @@ const Purchases = () => {
         return;
       }
 
-      const normalizedPurchaseType = purchaseType === "offline" ? "offline" : "online";
-      const normalizedSubtotalItems = Math.round(Number(subtotalItems || 0));
-      const normalizedShippingCost = normalizedPurchaseType === "offline" ? 0 : Math.round(Number(shippingCost || 0));
-      const normalizedShippingDiscount = normalizedPurchaseType === "offline" ? 0 : Math.round(Number(shippingDiscount || 0));
-      const normalizedVoucherDiscount = normalizedPurchaseType === "offline" ? 0 : Math.round(Number(voucherDiscount || 0));
-      const normalizedServiceFee = normalizedPurchaseType === "offline" ? 0 : Math.round(Number(serviceFee || 0));
-      const normalizedTotalActualPurchase = Math.round(
-        normalizedSubtotalItems +
-          normalizedShippingCost +
-          normalizedServiceFee -
-          normalizedShippingDiscount -
-          normalizedVoucherDiscount,
-      );
-      const normalizedActualUnitCost =
-        normalizedFinalQuantity > 0
-          ? Math.round(normalizedTotalActualPurchase / normalizedFinalQuantity)
-          : 0;
+      const {
+        normalizedPurchaseType,
+        normalizedSubtotalItems,
+        normalizedShippingCost,
+        normalizedShippingDiscount,
+        normalizedVoucherDiscount,
+        normalizedServiceFee,
+      } = normalizePurchaseCostFields({
+        purchaseType,
+        subtotalItems,
+        shippingCost,
+        shippingDiscount,
+        voucherDiscount,
+        serviceFee,
+        roundComponents: true,
+      });
+      const normalizedTotalActualPurchase = calculateActualPurchaseTotal({
+        purchaseType: normalizedPurchaseType,
+        subtotalItems: normalizedSubtotalItems,
+        shippingCost: normalizedShippingCost,
+        shippingDiscount: normalizedShippingDiscount,
+        voucherDiscount: normalizedVoucherDiscount,
+        serviceFee: normalizedServiceFee,
+      });
+      const normalizedActualUnitCost = calculateActualUnitCost({
+        totalActualPurchase: normalizedTotalActualPurchase,
+        totalStockIn: normalizedFinalQuantity,
+      });
       const normalizedRestockReferencePrice = Math.round(Number(restockReferencePrice || 0));
       const normalizedTotalReferencePurchase = Math.round(Number(totalReferencePurchase || 0));
       const normalizedPurchaseSaving = Math.round(Number(purchaseSaving || 0));

@@ -81,6 +81,47 @@ const sellableItemTypeOptions = [
 
 const defaultSaleLineItemType = "products";
 
+const buildDefaultSaleLine = (overrides = {}) => ({
+  itemType: defaultSaleLineItemType,
+  itemId: undefined,
+  variantKey: undefined,
+  quantity: 1,
+  pricePerUnit: 0,
+  ...overrides,
+});
+
+const buildDefaultSaleFormValues = () => ({
+  salesChannel: "Shopee",
+  status: "Diproses",
+  date: dayjs(),
+  items: [buildDefaultSaleLine()],
+});
+
+// IMS NOTE [AKTIF/GUARDED] - Helper display income Sales.
+// Fungsi blok: menyatukan teks item untuk income create dan status Selesai tanpa mengubah kapan income dibuat.
+// Hubungan flow: rule income tetap terlihat di handler; helper ini hanya format description.
+const formatSaleIncomeItemNames = (items = []) =>
+  items
+    .map((item) => `${item.itemName}${item.variantLabel ? ` - ${item.variantLabel}` : ""} (${item.quantity})`)
+    .join(", ");
+
+const buildSaleIncomePayload = ({ saleId, items = [], amount = 0, salesChannel = "", date }) => ({
+  date: date?.toDate ? Timestamp.fromDate(date.toDate()) : Timestamp.now(),
+  type: "Penjualan",
+  relatedId: saleId,
+  description: `Penjualan: ${formatSaleIncomeItemNames(items)}`,
+  amount,
+  salesChannel,
+});
+
+const buildSaleStockBucketKey = (item) =>
+  `${item.collectionName}::${item.itemId}::${item.variantKey || "master"}`;
+
+const getSaleLineAvailableStock = ({ item = {}, variant = null }) =>
+  variant
+    ? Number(variant.availableStock || 0)
+    : Number(getItemStockSnapshot(item).availableStock || 0);
+
 // =========================
 // SECTION: Status penjualan online
 // =========================
@@ -264,14 +305,7 @@ const Sales = () => {
     // Fungsi blok: menghapus itemId, variantKey, qty, dan harga yang mungkin berasal dari collection lama.
     // Hubungan flow Sales/stok: mencegah payload final memakai collectionName/item/variant yang tidak sesuai filter UI.
     // Alasan logic: itemType adalah field UI-only; source final tetap dibangun dari selectedItem.collectionName.
-    currentItems[itemIndex] = {
-      ...(currentItems[itemIndex] || {}),
-      itemType,
-      itemId: undefined,
-      variantKey: undefined,
-      quantity: 1,
-      pricePerUnit: 0,
-    };
+    currentItems[itemIndex] = buildDefaultSaleLine({ itemType });
 
     form.setFieldsValue({ items: [...currentItems] });
   };
@@ -287,16 +321,9 @@ const Sales = () => {
     }
 
     const currentItems = form.getFieldValue("items") || [];
-    let autoPrice = 0;
-
-    // RULE:
-    // - Produk jadi ambil harga dari field price
-    // - Bahan baku ambil harga dari field sellingPrice
-    if (selectedItem.collectionName === "products") {
-      autoPrice = Number(selectedItem.price || 0);
-    } else {
-      autoPrice = Number(selectedItem.sellingPrice || 0);
-    }
+    const autoPrice = selectedItem.collectionName === "products"
+      ? Number(selectedItem.price || 0)
+      : Number(selectedItem.sellingPrice || 0);
 
     currentItems[itemIndex] = {
       ...(currentItems[itemIndex] || {}),
@@ -341,12 +368,7 @@ const Sales = () => {
     setIsModalOpen(true);
     form.resetFields();
 
-    form.setFieldsValue({
-      salesChannel: "Shopee",
-      status: "Diproses",
-      date: dayjs(),
-      items: [{ itemType: defaultSaleLineItemType, itemId: undefined, variantKey: undefined, quantity: 1, pricePerUnit: 0 }],
-    });
+    form.setFieldsValue(buildDefaultSaleFormValues());
   };
 
   // =========================
@@ -374,9 +396,10 @@ const Sales = () => {
       throw new Error(`Pilih varian untuk ${selectedItem.name} agar penjualan tidak memotong stok master.`);
     }
 
-    const availableStock = selectedVariant
-      ? Number(selectedVariant.availableStock || 0)
-      : Number(getItemStockSnapshot(selectedItem).availableStock || 0);
+    const availableStock = getSaleLineAvailableStock({
+      item: selectedItem,
+      variant: selectedVariant,
+    });
     const requestedQuantity = Number(item.quantity || 0);
 
     if (availableStock < requestedQuantity) {
@@ -397,19 +420,6 @@ const Sales = () => {
       stockSourceType: selectedVariant ? "variant" : "master",
     };
   };
-
-  // =========================
-  // SECTION: Key agregasi kebutuhan stok per sumber final
-  // Fungsi:
-  // - menggabungkan kebutuhan item yang sama pada beberapa baris sale
-  // Hubungan flow Sales/stok:
-  // - mencegah kasus dua baris item yang sama masing-masing terlihat cukup, tetapi totalnya melebihi availableStock
-  // Status:
-  // - aktif/final untuk Fase A Sales stock safety
-  // - bukan legacy dan bukan kandidat cleanup
-  // =========================
-  const buildSaleStockBucketKey = (item) =>
-    `${item.collectionName}::${item.itemId}::${item.variantKey || "master"}`;
 
   // =========================
   // SECTION: Validasi final available stock dari Firestore sebelum create sale
@@ -456,12 +466,10 @@ const Sales = () => {
         throw new Error(`Varian ${item.variantLabel || item.variantKey || "item"} untuk ${item.itemName} tidak ditemukan. Penjualan dibatalkan agar stok tidak masuk ke master/default.`);
       }
 
-      const stockSnapshot = latestVariant
-        ? {
-            availableStock: Number(latestVariant.availableStock || 0),
-          }
-        : getItemStockSnapshot(latestItem);
-      const availableStock = Number(stockSnapshot.availableStock || 0);
+      const availableStock = getSaleLineAvailableStock({
+        item: latestItem,
+        variant: latestVariant,
+      });
 
       if (availableStock < Number(item.quantity || 0)) {
         throw new Error(
@@ -635,21 +643,18 @@ const Sales = () => {
         );
       }
 
-      // RULE:
-      // Pemasukan kas hanya dicatat saat status Selesai.
+      // RULE: Pemasukan kas hanya dicatat saat status Selesai.
       if (status === "Selesai") {
-        const itemNames = newSalePayload.items
-          .map((item) => `${item.itemName}${item.variantLabel ? ` - ${item.variantLabel}` : ""} (${item.quantity})`)
-          .join(", ");
-
-        await addDoc(collection(db, "incomes"), {
-          date: Timestamp.fromDate(date.toDate()),
-          type: "Penjualan",
-          relatedId: salesDocument.id,
-          description: `Penjualan: ${itemNames}`,
-          amount: totalSaleValue,
-          salesChannel: newSalePayload.salesChannel,
-        });
+        await addDoc(
+          collection(db, "incomes"),
+          buildSaleIncomePayload({
+            saleId: salesDocument.id,
+            items: newSalePayload.items,
+            amount: totalSaleValue,
+            salesChannel: newSalePayload.salesChannel,
+            date,
+          }),
+        );
       }
 
       message.success("Penjualan berhasil ditambahkan!");
@@ -724,18 +729,15 @@ const Sales = () => {
         const incomeExists = await hasExistingIncome(saleId);
 
         if (!incomeExists) {
-          const itemNames = selectedSale.items
-            .map((item) => `${item.itemName}${item.variantLabel ? ` - ${item.variantLabel}` : ""} (${item.quantity})`)
-            .join(", ");
-
-          await addDoc(collection(db, "incomes"), {
-            date: Timestamp.now(),
-            type: "Penjualan",
-            relatedId: saleId,
-            description: `Penjualan: ${itemNames}`,
-            amount: selectedSale.total,
-            salesChannel: selectedSale.salesChannel || "",
-          });
+          await addDoc(
+            collection(db, "incomes"),
+            buildSaleIncomePayload({
+              saleId,
+              items: selectedSale.items,
+              amount: selectedSale.total,
+              salesChannel: selectedSale.salesChannel || "",
+            }),
+          );
         }
       }
 
@@ -919,9 +921,10 @@ const Sales = () => {
       fixed: "right",
       className: "app-table-action-column",
       render: (_, record) => {
-        const canMoveToShipped = record.status === "Diproses" && !isOfflineChannel(record.salesChannel);
-        const canComplete = record.status === "Dikirim" && !isOfflineChannel(record.salesChannel);
-        const canCancel = ["Diproses", "Dikirim"].includes(record.status) && !isOfflineChannel(record.salesChannel);
+        const isOffline = isOfflineChannel(record.salesChannel);
+        const canMoveToShipped = record.status === "Diproses" && !isOffline;
+        const canComplete = record.status === "Dikirim" && !isOffline;
+        const canCancel = ["Diproses", "Dikirim"].includes(record.status) && !isOffline;
 
         if (!canMoveToShipped && !canComplete && !canCancel) {
           return "-";
@@ -1237,7 +1240,7 @@ const Sales = () => {
                 ))}
 
                 <Form.Item>
-                  <Button type="dashed" onClick={() => add({ itemType: defaultSaleLineItemType, itemId: undefined, variantKey: undefined, quantity: 1, pricePerUnit: 0 })} block icon={<PlusOutlined />}>
+                  <Button type="dashed" onClick={() => add(buildDefaultSaleLine())} block icon={<PlusOutlined />}>
                     Tambah Item
                   </Button>
                 </Form.Item>
