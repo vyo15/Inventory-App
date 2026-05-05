@@ -1,3 +1,6 @@
+// IMS NOTE - CLEANUP CANDIDATE:
+// Export helper search ini saat ini banyak dipakai sebagai util internal page helper.
+// Jangan hapus hanya karena named export tidak di-import langsung sebelum audit semua halaman produksi.
 export const normalizeSearchText = (value) =>
   String(value || "").trim().toLowerCase();
 
@@ -9,7 +12,7 @@ export const includesSearchText = (value, searchText) => {
 export const matchActiveStatus = (item, statusFilter, fieldName = "isActive") => {
   if (statusFilter === "all") return true;
   if (statusFilter === "active") return Boolean(item?.[fieldName]);
-  if (statusFilter === "inactive") return !Boolean(item?.[fieldName]);
+  if (statusFilter === "inactive") return !item?.[fieldName];
   return String(item?.[fieldName] || "") === String(statusFilter);
 };
 

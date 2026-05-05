@@ -123,7 +123,11 @@ export const getInventoryStockMaintenanceAudit = async () => {
 
   return {
     generatedAt: new Date().toISOString(),
-    rows: rows.map(({ payload, ...row }) => row),
+    rows: rows.map((row) => {
+      const auditRow = { ...row };
+      delete auditRow.payload;
+      return auditRow;
+    }),
     summary: buildSummary(rows),
   };
 };

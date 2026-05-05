@@ -6,6 +6,8 @@
 // - dukung strategi varian material: inherit / fixed / none
 // - flow aktif: BOM -> PO -> Start Production -> Work Log -> Complete
 // - reserve/release lama dipertahankan hanya untuk kompatibilitas lama, bukan flow utama
+// IMS NOTE - CLEANUP CANDIDATE: export reserve/release belum terbukti dipakai route aktif,
+// tetapi tidak dihapus karena menyentuh kompatibilitas Production Order legacy yang guarded.
 // =====================================================
 
 import {
@@ -22,7 +24,6 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
-import { calculateAvailableStock } from "../../utils/stock/stockHelpers";
 import {
   applyStockMutationToItem,
   buildVariantOptionsFromItem,
@@ -187,7 +188,7 @@ const normalizeReferenceItem = (snapshot) => {
 // - Hindari query Firestore yang terlalu kaku / butuh index tambahan
 // =====================================================
 const normalizeBomTargetType = (value = "") => {
-  const raw = safeTrim(value).toLowerCase().replace(/[_\-]+/g, " ");
+  const raw = safeTrim(value).toLowerCase().replace(/[_-]+/g, " ");
   if (["semi finished", "semi finished material", "semifinished", "semi finishedmaterials"].includes(raw)) {
     return "semi_finished_material";
   }

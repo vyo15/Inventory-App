@@ -316,7 +316,10 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
     [finishedProducts, rawMaterials, semiFinishedMaterials],
   );
 
-  const availableItems = stockSourceItemsByType[selectedItemType] || [];
+  const availableItems = useMemo(
+    () => stockSourceItemsByType[selectedItemType] || [],
+    [selectedItemType, stockSourceItemsByType],
+  );
 
   const selectedItem = useMemo(
     () => availableItems.find((item) => item.id === selectedItemId) || null,
