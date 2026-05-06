@@ -640,32 +640,45 @@ const SupplierPurchases = () => {
   // ---------------------------------------------------------------------------
   const materialDetailColumns = [
     {
-      title: 'Bahan',
+      title: 'Katalog Material',
       dataIndex: 'materialName',
+      width: '28%',
       render: (value, record) => (
         <Space direction="vertical" size={2}>
           <span style={{ fontWeight: 600 }}>{value || '-'}</span>
-          <Tag color={record.purchaseType === 'online' ? 'blue' : 'default'}>
-            {record.purchaseType === 'online' ? 'Online' : 'Offline'}
-          </Tag>
+          <Space size={[4, 4]} wrap>
+            <Tag color={record.purchaseType === 'online' ? 'blue' : 'default'}>
+              {record.purchaseType === 'online' ? 'Online' : 'Offline'}
+            </Tag>
+            {record.productLink ? (
+              <a href={record.productLink} target="_blank" rel="noopener noreferrer">
+                Buka Link
+              </a>
+            ) : null}
+          </Space>
+          {record.note ? (
+            <span
+              title={record.note}
+              style={{
+                color: '#999',
+                display: 'inline-block',
+                maxWidth: 220,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                verticalAlign: 'bottom',
+              }}
+            >
+              {record.note}
+            </span>
+          ) : null}
         </Space>
       ),
     },
     {
-      title: 'Link Produk',
-      dataIndex: 'productLink',
-      render: (value) =>
-        value ? (
-          <a href={value} target="_blank" rel="noopener noreferrer">
-            Buka Link
-          </a>
-        ) : (
-          '-'
-        ),
-    },
-    {
-      title: 'Qty Beli / Konversi Supplier',
+      title: 'Qty / Konversi',
       key: 'unitConversion',
+      width: '20%',
       render: (_, record) => (
         <Space direction="vertical" size={2}>
           <span>
@@ -678,24 +691,24 @@ const SupplierPurchases = () => {
       ),
     },
     {
-      title: 'Harga Supplier Tercatat',
+      title: 'Harga Supplier',
       key: 'supplierEstimate',
+      width: '28%',
       render: (_, record) => {
         const metrics = calculateSupplierMaterialRestockMetrics(record);
         const isOfflinePurchase = record.purchaseType === 'offline';
+
         return (
           <Space direction="vertical" size={2}>
             <span>Total: {metrics.totalEstimatedSupplier ? formatCurrencyIDR(metrics.totalEstimatedSupplier) : '-'}</span>
             <span style={{ fontWeight: 600 }}>
               / {record.stockUnit || 'satuan'}: {metrics.estimatedUnitPrice ? formatCurrencyIDR(metrics.estimatedUnitPrice) : '-'}
             </span>
-            {isOfflinePurchase ? (
-              <span style={{ color: '#999' }}>Offline: ongkir/admin/voucher tidak dipakai</span>
-            ) : (
-              <span style={{ color: '#999' }}>
-                Barang {formatCurrencyIDR(metrics.supplierItemPrice || 0)} + Ongkir {formatCurrencyIDR(metrics.estimatedShippingCost || 0)} + Admin {formatCurrencyIDR(metrics.serviceFee || 0)} - Diskon {formatCurrencyIDR(metrics.discount || 0)}
-              </span>
-            )}
+            <span style={{ color: '#999' }}>
+              {isOfflinePurchase
+                ? 'Offline: ongkir/admin/voucher tidak dipakai'
+                : `Barang ${formatCurrencyIDR(metrics.supplierItemPrice || 0)} + Ongkir ${formatCurrencyIDR(metrics.estimatedShippingCost || 0)} + Admin ${formatCurrencyIDR(metrics.serviceFee || 0)} - Diskon ${formatCurrencyIDR(metrics.discount || 0)}`}
+            </span>
           </Space>
         );
       },
@@ -703,6 +716,7 @@ const SupplierPurchases = () => {
     {
       title: 'Pembanding Terakhir',
       key: 'latestPurchase',
+      width: '24%',
       render: (_, record) => {
         const latestPurchase = getLatestPurchaseForMaterial(record.materialId);
         const metrics = calculateSupplierMaterialRestockMetrics(record);
@@ -728,28 +742,8 @@ const SupplierPurchases = () => {
         );
       },
     },
-    {
-      title: 'Catatan',
-      dataIndex: 'note',
-      render: (value) => (
-        value ? (
-          <span
-            title={value}
-            style={{
-              display: 'inline-block',
-              maxWidth: 180,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              verticalAlign: 'bottom',
-            }}
-          >
-            {value}
-          </span>
-        ) : '-'
-      ),
-    },
   ];
+
 
   return (
     <div className="page-container">
@@ -1199,11 +1193,13 @@ const SupplierPurchases = () => {
 
             <div style={{ fontWeight: 700, marginBottom: 12 }}>Katalog Restock Supplier</div>
             <Table
+              className="app-data-table"
               rowKey={(record, index) => `${record.materialId || record.materialName || 'material'}-${index}`}
               pagination={false}
               dataSource={selectedSupplier.materialDetails || []}
               columns={materialDetailColumns}
-              scroll={{ x: 960 }}
+              size="small"
+              tableLayout="fixed"
               locale={{ emptyText: <Empty description="Belum ada katalog restock supplier" /> }}
             />
           </>

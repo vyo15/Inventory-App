@@ -724,8 +724,8 @@ Risiko:
 - **CLEANUP CANDIDATE:** fine tuning visual Login berikutnya cukup dilakukan di `Login.css`; jangan campur dengan cleanup App.css/AntD portal guard atau business modules.
 
 ## Update UI Table Compact — 2026-05-06
-- Cash In, Stock Adjustment Panel, Pricing Rules, Products, Supplier, dan Stock Report memakai table utama yang lebih compact tanpa horizontal scroll default pada desktop normal.
-- Products dan Stock Report memakai helper presentational `StockDisplayBlock` untuk saldo stok locked: `Total`, `Tersedia`, dan semua variant pill langsung di table jika row membawa `variants[]`.
-- Raw Materials tetap memakai pola variant pill existing; Semi Finished Materials hanya dirapikan layout primary table-nya tanpa mengubah pola variant pill atau flow produksi.
-- Preview modal Pricing Rules dan detail drawer Supplier masih boleh memakai table lebar/scroll karena merupakan area detail, bukan primary table list.
-- Cleanup candidate lanjutan: migrasikan Raw Materials dan Semi Finished Materials ke helper `StockDisplayBlock` pada patch terpisah bila ingin mengurangi duplikasi tampilan stok.
+- Cash In, Stock Adjustment Panel, Pricing Rules, Products, Supplier, Stock Report, dan Semi Finished Materials memakai table utama yang lebih compact tanpa horizontal scroll default pada desktop normal.
+- Products, Stock Report, dan Semi Finished Materials memakai helper presentational `StockDisplayBlock` untuk saldo stok locked: `Total`, `Tersedia`, dan semua variant pill langsung di table jika row membawa `variants[]`.
+- Raw Materials tetap memakai pola variant pill existing dan tidak diubah karena sudah sesuai format locked.
+- Preview modal Pricing Rules dan detail drawer Supplier sudah dipadatkan secara UI-only; detail tabular lain tetap boleh memakai scroll bila datanya memang audit/detail, bukan primary table list.
+- Cleanup candidate lanjutan: migrasikan Raw Materials ke helper `StockDisplayBlock` pada patch terpisah bila ingin mengurangi duplikasi tampilan stok.

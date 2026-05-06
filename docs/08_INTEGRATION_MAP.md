@@ -659,14 +659,14 @@ Stock Management / Stock Adjustment Panel
   -> table compact hanya mengubah render audit list
   -> submit adjustment, Firestore transaction, stock mutation, dan inventory_logs tetap di flow lama
 
-Products / Stock Report
+Products / Stock Report / Semi Finished Materials
   -> row saldo stok dikirim ke StockDisplayBlock
   -> StockDisplayBlock membaca currentStock/stock/availableStock/reservedStock/variants[] secara presentational
-  -> tidak mengubah product service, report query, summary, atau export mapping
+  -> tidak mengubah product service, semi finished service, report query, summary, atau export mapping
 
 Pricing Rules
   -> table utama compact menjadi entry point Detail/Edit/Hapus
-  -> modal Detail/preview tetap memakai pricingService existing
+  -> modal Detail/preview memakai kolom compact tanpa mengubah pricingService existing
   -> apply rule tetap melewati item manual sesuai guard pricing
 
 Supplier

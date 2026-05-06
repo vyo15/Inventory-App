@@ -62,6 +62,7 @@ import ProductionFilterCard from "../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
+import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -116,48 +117,15 @@ const buildFormValues = (record = {}) => {
 };
 
 // -----------------------------------------------------------------------------
-// Helper tampilan stok.
-// Dipakai bersama oleh tabel list dan drawer detail supaya format angka, varian,
-// dan ringkasan varian selalu konsisten di seluruh halaman.
+// Helper tampilan stok untuk form summary dan drawer detail.
+// Tabel utama memakai StockDisplayBlock agar format saldo stok locked seragam.
 // -----------------------------------------------------------------------------
 const formatStockWithUnit = (value, unit = "pcs") => `${formatNumber(value)} ${unit}`;
 
 const getVariantDisplayLabel = (variant = {}, index = 0) =>
   variant.variantLabel || variant.label || variant.name || SEMI_FINISHED_COLOR_MAP[variant.color] || variant.color || `Varian ${index + 1}`;
 
-// -----------------------------------------------------------------------------
-// Helper tampilan varian pada kolom stok.
-// Semua varian ditampilkan langsung dalam bentuk pill supaya user tidak
-// perlu membuka detail hanya untuk membaca rincian stok per varian.
-// -----------------------------------------------------------------------------
-const renderVariantStockPills = (variants = [], unit = "pcs") => {
-  const normalizedVariants = Array.isArray(variants)
-    ? variants.filter((variant) => String(variant?.variantLabel || variant?.name || variant?.color || "").trim())
-    : [];
-
-  if (normalizedVariants.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="stock-variant-pill-wrap">
-      {normalizedVariants.map((variant, index) => {
-        const variantLabel = getVariantDisplayLabel(variant, index);
-
-        return (
-          <span key={`${variant.variantKey || variant.color || "variant"}-${index}`} className="stock-variant-pill">
-            <Typography.Text className="stock-variant-pill-label">
-              {`${variantLabel}:`}
-            </Typography.Text>
-            <Typography.Text className="stock-variant-pill-value">
-              {formatStockWithUnit(variant.currentStock || 0, unit)}
-            </Typography.Text>
-          </span>
-        );
-      })}
-    </div>
-  );
-};
+// StockDisplayBlock dipakai untuk table utama agar format Total/Tersedia/variant pill sama dengan Products dan Stock Report.
 
 const getStockStatusMeta = (record = {}) => {
   const totalStock = Number(record.currentStock || 0);
@@ -468,32 +436,16 @@ const SemiFinishedMaterials = () => {
       title: "Stok",
       key: "stock",
       width: "34%",
-      render: (_, record) => {
-        const variants = Array.isArray(record.variants) ? record.variants : [];
-        const hasVariants = record.hasVariants === true && variants.length > 0;
-        const unitLabel = record.unit || "pcs";
-        const totalStock = Number(record.currentStock || 0);
-        const availableStock = Number(record.availableStock || 0);
-
-        return (
-          <div style={compactCellStyles.stack}>
-            <Typography.Text strong>
-              Total {formatStockWithUnit(totalStock, unitLabel)}
-            </Typography.Text>
-            <Typography.Text type="secondary" style={compactCellStyles.meta}>
-              Tersedia {formatStockWithUnit(availableStock, unitLabel)}
-            </Typography.Text>
-
-            {hasVariants ? (
-              renderVariantStockPills(variants, unitLabel)
-            ) : (
-              <Typography.Text type="secondary" style={compactCellStyles.meta}>
-                Non-varian
-              </Typography.Text>
-            )}
-          </div>
-        );
-      },
+      // AKTIF / GUARDED: saldo stok master memakai helper presentational locked; flow stok/produksi tidak diubah.
+      render: (_, record) => (
+        <StockDisplayBlock
+          record={record}
+          unit={record.unit || "pcs"}
+          getVariantLabel={getVariantDisplayLabel}
+          className="ims-cell-stack ims-cell-stack-tight"
+          metaClassName="ims-cell-meta"
+        />
+      ),
     },
     {
       title: "Status",

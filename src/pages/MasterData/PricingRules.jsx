@@ -556,74 +556,55 @@ const PricingRules = () => {
   // SECTION: kolom tabel preview item
   const previewColumns = [
     {
-      title: "Nama Item",
+      title: "Item",
       dataIndex: "itemName",
-      render: (value) => value || "-",
-      fixed: "left",
-      width: 220,
+      width: "26%",
+      render: (value, record) => (
+        <div className="ims-cell-stack ims-cell-stack-tight">
+          <Text strong>{value || "-"}</Text>
+          <Text type="secondary" className="ims-cell-meta">
+            {record?.pricingMode === "manual" ? "Mode manual" : "Mode rule"}
+          </Text>
+        </div>
+      ),
     },
     {
-      title: "Mode",
-      dataIndex: "pricingMode",
-      width: 120,
-      render: (value) =>
-        value === "manual" ? (
-          <Tag color="orange">Manual</Tag>
-        ) : (
-          <Tag color="green">Rule</Tag>
-        ),
-    },
-    {
-      title: "Harga Lama",
+      title: "Harga Saat Ini",
       dataIndex: "currentPrice",
-      width: 140,
-      render: (value) => formatCurrencyIDR(value || 0),
+      width: "16%",
+      render: (value) => <Text strong>{formatCurrencyIDR(value || 0)}</Text>,
     },
     {
-      title: "Base Cost",
-      dataIndex: "baseCost",
-      width: 140,
-      render: (value) =>
-        Number(value || 0) > 0 ? formatCurrencyIDR(value) : "-",
-    },
-    {
-      title: "Margin",
-      dataIndex: "marginAmount",
-      width: 140,
-      render: (value) =>
-        Number(value || 0) > 0 ? formatCurrencyIDR(value) : "-",
-    },
-    {
-      title: "Buffer",
-      dataIndex: "marketplaceBufferAmount",
-      width: 140,
-      render: (value) =>
-        Number(value || 0) > 0 ? formatCurrencyIDR(value) : "-",
-    },
-    {
-      title: "Harga Hitung",
-      dataIndex: "finalBeforeRounding",
-      width: 150,
-      render: (value) =>
-        Number(value || 0) > 0 ? formatCurrencyIDR(value) : "-",
+      title: "Perhitungan",
+      key: "calculation",
+      width: "30%",
+      render: (_, record) => (
+        <div className="ims-cell-stack ims-cell-stack-tight">
+          <Text>{`Base ${Number(record?.baseCost || 0) > 0 ? formatCurrencyIDR(record.baseCost) : "-"}`}</Text>
+          <Text type="secondary" className="ims-cell-meta">
+            {`Margin ${Number(record?.marginAmount || 0) > 0 ? formatCurrencyIDR(record.marginAmount) : "-"} · Buffer ${Number(record?.marketplaceBufferAmount || 0) > 0 ? formatCurrencyIDR(record.marketplaceBufferAmount) : "-"}`}
+          </Text>
+          <Text type="secondary" className="ims-cell-meta">
+            {`Sebelum pembulatan ${Number(record?.finalBeforeRounding || 0) > 0 ? formatCurrencyIDR(record.finalBeforeRounding) : "-"}`}
+          </Text>
+        </div>
+      ),
     },
     {
       title: "Harga Baru",
       dataIndex: "roundedPrice",
-      width: 140,
-      render: (value) => formatCurrencyIDR(value || 0),
-    },
-    {
-      title: "Update?",
-      key: "willUpdate",
-      width: 120,
-      render: (_, record) =>
-        record?.willUpdate ? <Tag color="blue">Ya</Tag> : <Tag>Tidak</Tag>,
+      width: "14%",
+      render: (value, record) => (
+        <div className="ims-cell-stack ims-cell-stack-tight">
+          <Text strong>{formatCurrencyIDR(value || 0)}</Text>
+          {record?.willUpdate ? <Tag color="blue">Update</Tag> : <Tag>Tetap</Tag>}
+        </div>
+      ),
     },
     {
       title: "Status",
       dataIndex: "status",
-      width: 220,
+      width: "14%",
       render: (value) => {
         const meta = getPreviewStatusMeta(value);
 
@@ -997,12 +978,13 @@ const PricingRules = () => {
 
         {/* SECTION: tabel preview */}
         <Table
+          className="app-data-table"
           rowKey="itemId"
           loading={previewLoading}
           dataSource={previewData}
           columns={previewColumns}
           pagination={{ pageSize: 10 }}
-          scroll={{ x: 1500 }}
+          tableLayout="fixed"
         />
       </Modal>
     </div>
