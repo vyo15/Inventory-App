@@ -43,7 +43,6 @@ import {
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
-  ReloadOutlined,
 } from "@ant-design/icons";
 import {
   BOM_MATERIAL_ITEM_TYPE_MAP,
@@ -757,7 +756,6 @@ const ProductionBoms = () => {
       <ProductionPageHeader
         title="BOM Produksi"
         description="Komposisi produksi untuk target semi finished maupun produk jadi, agar PO bisa otomatis menarik kebutuhan bahan dan step"
-        onRefresh={() => loadData()}
         onAdd={handleAdd}
         addLabel="Tambah BOM"
       />

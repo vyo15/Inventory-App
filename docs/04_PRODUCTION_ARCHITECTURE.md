@@ -147,14 +147,15 @@ Catatan penting:
 - refactor UI, shared component, atau patch modul lain tidak boleh memindahkan logic ini ke layer presentational
 - bila ada task produksi baru, cek selalu boundary ini sebelum mengubah page/component apa pun
 
-Masih ada service legacy:
-- `productionService.js`
-- collection `productions`
+Status legacy aktual hasil verifikasi source 2026-05-06:
+- file `src/services/Produksi/productionService.js` **tidak ditemukan** pada ZIP aktual; jangan menjadikannya target patch aktif;
+- collection `productions` masih diperlakukan sebagai legacy data layer pada maintenance/reset/audit, terutama melalui reset scoped dan legacy data audit;
+- flow operasional utama tetap memakai service granular `productionBomsService.js`, `productionOrdersService.js`, `productionWorkLogsService.js`, `productionPayrollsService.js`, `productionPlanningService.js`, dan service master produksi terkait.
 
 Catatan penting:
-- route utama saat ini **tidak** lagi memakai flow legacy tersebut sebagai pusat operasional
-- utilitas reset data juga masih membersihkan `productions`
-- artinya jejak flow lama masih ada dan perlu dicatat sebagai legacy layer
+- route utama saat ini **tidak** lagi memakai collection `productions` sebagai pusat operasional;
+- utilitas reset/maintenance masih dapat membersihkan atau mengaudit `productions` sebagai data lama;
+- artinya jejak flow lama masih ada di data layer, bukan sebagai service aktif.
 
 ## Rekomendasi Dokumentasi Ke Depan
 Setiap perubahan di modul produksi sebaiknya selalu diuji terhadap:
@@ -175,7 +176,7 @@ Setiap perubahan di modul produksi sebaiknya selalu diuji terhadap:
 - Cleanup stok umum tidak memindahkan logic posting stok produksi ke helper page.
 - Flow produksi final tetap guarded: BOM → Production Order → Work Log → Payroll → HPP Analysis.
 - `productionWorkLogsService` tetap boleh melakukan transaction sendiri untuk start/complete Work Log karena proses tersebut harus memotong material, menambah output, menutup status, dan mencatat log secara atomic.
-- Collection `productions` tetap dianggap legacy data layer yang hanya disentuh maintenance/reset scoped. File service legacy `productionService.js` tidak ditemukan di source `src.zip` terbaru, sehingga docs lama yang menyebut file tersebut harus dianggap outdated.
+- Collection `productions` tetap dianggap legacy data layer yang hanya disentuh maintenance/reset/audit scoped. File service legacy `src/services/Produksi/productionService.js` tidak ditemukan di source `Inventory-App.zip` terbaru, sehingga docs lama yang menyebut file tersebut sebagai file aktif harus dianggap outdated.
 
 ## Update Guarded Integration Stok & Log — 2026-04-25
 - Produksi tetap dianggap guarded area.

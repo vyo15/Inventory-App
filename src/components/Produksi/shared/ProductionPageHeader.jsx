@@ -1,11 +1,10 @@
 import React from 'react';
 import { Button, Card, Col, Row, Space, Typography } from 'antd';
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 
 const ProductionPageHeader = ({
   title,
   description,
-  onRefresh,
   onAdd,
   addLabel = 'Tambah',
   extra,
@@ -24,11 +23,6 @@ const ProductionPageHeader = ({
 
         <Col>
           <Space wrap className="ims-page-toolbar-actions">
-            {onRefresh ? (
-              <Button icon={<ReloadOutlined />} onClick={onRefresh}>
-                Refresh
-              </Button>
-            ) : null}
             {onAdd ? (
               <Button type="primary" icon={<PlusOutlined />} onClick={onAdd}>
                 {addLabel}

@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Root build artifacts accidentally committed; keep src/assets tracked.
+/assets/

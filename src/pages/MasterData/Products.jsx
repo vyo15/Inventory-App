@@ -26,7 +26,6 @@ import {
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -37,6 +36,7 @@ import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
+import StockDisplayBlock from '../../components/Layout/Table/StockDisplayBlock';
 import {
   COLOR_VARIANT_MAP,
   ensureAtLeastOneVariant,
@@ -86,9 +86,7 @@ const buildFormValues = (record = {}) => {
   };
 };
 
-// -----------------------------------------------------------------------------
-// Helper tampilan stok agar gaya visual konsisten dengan halaman semi finished.
-// -----------------------------------------------------------------------------
+// Helper detail drawer: format stok tetap lokal untuk rincian per baris, sementara table utama memakai StockDisplayBlock locked.
 const formatStockWithUnit = (value, unit = 'pcs') => `${formatNumberID(value)} ${unit}`;
 
 
@@ -123,37 +121,8 @@ const compactCellClassNames = {
   meta: 'ims-cell-meta',
 };
 
-// -----------------------------------------------------------------------------
-// Helper tampilan varian pada kolom stok.
-// Semua varian langsung ditampilkan sebagai pill agar user bisa membaca stok
-// per varian tanpa jarak terlalu lebar dan tanpa buka detail drawer.
-// -----------------------------------------------------------------------------
-const renderVariantStockPills = (variants = [], unit = 'pcs') => {
-  const normalizedVariants = Array.isArray(variants)
-    ? variants.filter((variant) => String(variant?.variantLabel || variant?.name || variant?.color || '').trim())
-    : [];
 
-  if (normalizedVariants.length === 0) {
-    return null;
-  }
 
-  return (
-    <div className="stock-variant-pill-wrap">
-      {normalizedVariants.map((variant, index) => {
-        const variantLabel = getVariantDisplayLabel(variant, index);
-
-        return (
-          <span key={`${variant.variantKey || variant.color || 'variant'}-${index}`} className="stock-variant-pill">
-            <Text className="stock-variant-pill-label">{`${variantLabel}:`}</Text>
-            <Text className="stock-variant-pill-value">
-              {formatStockWithUnit(variant.currentStock || 0, unit)}
-            </Text>
-          </span>
-        );
-      })}
-    </div>
-  );
-};
 
 // -----------------------------------------------------------------------------
 // Status stok produk.
@@ -422,16 +391,30 @@ const Products = () => {
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Kolom tabel utama.
-  // Varian dipindah menjadi rincian di kolom stok agar lebih padat dan mudah dibaca.
-  // ---------------------------------------------------------------------------
+  /* =====================================================
+  SECTION: Kolom tabel Produk Jadi compact — AKTIF / GUARDED
+  Fungsi:
+  - Menjaga table utama Produk Jadi tetap ringkas tanpa horizontal scroll besar.
+  - Kolom Stok tetap memakai format locked: Total, Tersedia, dan semua variant pill langsung di table.
+
+  Dipakai oleh:
+  - Halaman Master Data / Produk Jadi.
+
+  Alasan perubahan:
+  - Batch table compact memindahkan metadata panjang ke drawer detail, tetapi stock variant owner-locked tidak boleh disembunyikan.
+
+  Catatan cleanup:
+  - Field harga/pricing bisa dipadatkan lagi ke detail bila owner ingin table lebih minimal.
+
+  Risiko:
+  - Jangan ubah create/edit/toggle product, variant guard, stock guard, atau payload produk dari section ini.
+  ===================================================== */
   const columns = [
     {
       title: 'Produk Jadi',
       dataIndex: 'name',
       key: 'name',
-      width: 280,
+      width: '24%',
       render: (value, record) => (
         <div className={compactCellClassNames.stack}>
           <Text strong>{value || '-'}</Text>
@@ -450,31 +433,21 @@ const Products = () => {
     {
       title: 'Stok',
       key: 'stock',
-      width: 360,
-      render: (_, record) => {
-        const variants = Array.isArray(record.variants) ? record.variants : [];
-        const hasVariants = record.hasVariants === true && variants.length > 0;
-
-        return (
-          <div className={compactCellClassNames.stack}>
-            <Text strong>{`Total ${formatStockWithUnit(record.currentStock ?? record.stock ?? 0)}`}</Text>
-            <Text type="secondary" className={compactCellClassNames.meta}>
-              {`Tersedia ${formatStockWithUnit(record.availableStock ?? record.currentStock ?? record.stock ?? 0)}`}
-            </Text>
-
-            {hasVariants ? (
-              renderVariantStockPills(variants)
-            ) : (
-              <Text type="secondary" className={compactCellClassNames.meta}>Non-varian</Text>
-            )}
-          </div>
-        );
-      },
+      width: '34%',
+      render: (_, record) => (
+        <StockDisplayBlock
+          record={record}
+          unit="pcs"
+          getVariantLabel={getVariantDisplayLabel}
+          className={compactCellClassNames.stack}
+          metaClassName={compactCellClassNames.meta}
+        />
+      ),
     },
     {
       title: 'Harga',
       key: 'priceInfo',
-      width: 250,
+      width: '18%',
       render: (_, record) => (
         <div className={compactCellClassNames.stack}>
           <Text strong>{`Jual ${formatCurrencyId(record.price || 0)} / pcs`}</Text>
@@ -490,7 +463,7 @@ const Products = () => {
     {
       title: 'Status',
       key: 'status',
-      width: 120,
+      width: '10%',
       align: 'center',
       render: (_, record) => {
         const statusMeta = getProductStatusMeta(record);
@@ -500,12 +473,11 @@ const Products = () => {
     {
       title: 'Aksi',
       key: 'actions',
-      width: 170,
-      fixed: 'right',
+      width: '14%',
       className: 'app-table-action-column',
       render: (_, record) => (
         <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          {/* AKTIF / GUARDED: kolom Aksi produk dibuat 3 baris fixed agar Detail/Edit/Status rapi; handler produk dan flow stok tetap tidak diubah. */}
+          {/* AKTIF / GUARDED: kolom Aksi produk dibuat 3 baris agar Detail/Edit/Status rapi tanpa scroll horizontal; handler produk dan flow stok tetap tidak diubah. */}
           <Button className="ims-action-button ims-action-button--block" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
             Detail
           </Button>
@@ -534,7 +506,6 @@ const Products = () => {
         title="Produk Jadi"
         subtitle="Master produk jadi dengan harga di master dan stok per varian fleksibel supaya data tetap rapi dan mudah dipantau."
         actions={[
-          { key: 'refresh-products', icon: <ReloadOutlined />, label: 'Refresh', onClick: () => window.location.reload() },
           { key: 'create-product', type: 'primary', icon: <PlusOutlined />, label: 'Tambah Produk', onClick: openCreateDrawer },
         ]}
       />
@@ -604,7 +575,7 @@ const Products = () => {
           columns={columns}
           size="small"
           pagination={{ pageSize: 10 }}
-          scroll={{ x: 1180 }}
+          tableLayout="fixed"
           locale={{ emptyText: <Empty description="Belum ada data produk" /> }}
         />
       </PageSection>

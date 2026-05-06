@@ -33,7 +33,6 @@ import {
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
-  ReloadOutlined,
 } from "@ant-design/icons";
 import {
   DEFAULT_PRODUCTION_EMPLOYEE_FORM,
@@ -747,7 +746,6 @@ const ProductionEmployees = () => {
       <ProductionPageHeader
         title="Karyawan Produksi"
         description="Kelola master operator produksi yang dipakai oleh work log dan ringkasan payroll read-only."
-        onRefresh={loadData}
         onAdd={handleAdd}
         addLabel="Tambah Karyawan"
       />

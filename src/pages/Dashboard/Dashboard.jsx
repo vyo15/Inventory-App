@@ -19,7 +19,6 @@ import {
   ClockCircleOutlined,
   DollarCircleOutlined,
   HistoryOutlined,
-  ReloadOutlined,
   ShoppingCartOutlined,
   ToolOutlined,
   WarningOutlined,
@@ -818,14 +817,6 @@ const Dashboard = () => {
         title="Dashboard"
         subtitle="Pusat kontrol harian yang ringkas, read-only, dan tidak mengubah stok, kas, produksi, payroll, HPP, atau laporan."
         extra={<Text className="dashboard-section-extra">Terakhir diperbarui: {lastUpdatedText}</Text>}
-        actions={[
-          {
-            key: "refresh-dashboard",
-            label: "Refresh",
-            icon: <ReloadOutlined />,
-            onClick: loadDashboardData,
-          },
-        ]}
       />
 
       {loadWarning ? <Alert type="warning" showIcon message={loadWarning} /> : null}

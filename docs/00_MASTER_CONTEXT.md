@@ -1,6 +1,31 @@
 # MASTER CONTEXT — IMS Bunga Flanel
 
-Dokumen ini dibuat berdasarkan audit langsung terhadap source code aplikasi pada folder `IMS_Bunga_Flanel` yang diunggah, bukan template umum.
+Dokumen ini dibuat berdasarkan audit langsung terhadap source code aplikasi pada ZIP `Inventory-App.zip` yang diunggah, bukan template umum.
+
+Update verifikasi source aktual — 2026-05-06:
+- folder custom `functions/` tidak ditemukan pada ZIP aktual; jangan menganggap ada Firebase Functions custom aktif tanpa bukti source baru;
+- file legacy `src/services/Produksi/productionService.js` tidak ditemukan pada ZIP aktual; produksi aktif memakai service granular di `src/services/Produksi/`;
+- collection `productions` masih muncul sebagai legacy data layer pada maintenance/reset/audit, bukan flow operasional utama;
+- Firestore Rules wajib aktif dan aman di backend Firebase, tetapi repo ZIP saat ini tidak menyertakan file rules source-controlled karena rules dikelola manual/external di Firebase Console;
+- root `assets/` yang berisi build artifact lama bukan source aktif dan boleh dibersihkan jika tidak ada referensi runtime aktif.
+
+=====================================================
+SECTION: Current repository boundary — AKTIF / GUARDED / CLEANUP CANDIDATE
+Fungsi:
+- Mengunci batas source aktual: frontend React/Vite, Firestore client layer, rules backend external, dan cleanup root artifact.
+
+Dipakai oleh:
+- Semua task patch docs/source, terutama Auth/User Management, Firestore Rules, dan cleanup repository.
+
+Alasan perubahan:
+- Owner mengonfirmasi Firestore Rules dikelola langsung di Firebase Console dan root assets/ adalah sisa build yang lupa terhapus.
+
+Catatan cleanup:
+- Source-controlled rules boleh menjadi task terpisah jika owner ingin rules dimasukkan ke repo.
+
+Risiko:
+- Menganggap rules tidak wajib karena tidak ada file repo akan membuka risiko security; menghapus `src/assets` keliru akan merusak logo/branding aktif.
+=====================================================
 
 ## Ringkasan Aplikasi
 IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
@@ -22,13 +47,14 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
 - Routing: `HashRouter`
 - Database: Firebase Firestore
 - Hosting/deploy frontend: GitHub Pages (`gh-pages`)
-- Backend tambahan: Firebase Functions (ada, tetapi tampak legacy dan tidak menjadi flow utama saat ini)
+- Backend custom: tidak ada folder `functions/` pada ZIP aktual. Aplikasi berjalan sebagai frontend React/Vite + Firestore client/service layer. Dependency Firebase tetap dapat membawa package internal `@firebase/functions`, tetapi itu bukan bukti adanya Cloud Functions custom project.
 
 ## Struktur Teknis Utama yang Terverifikasi
 - `src/main.jsx` memakai `HashRouter`
 - `src/layouts/AppLayout.jsx` menangani shell aplikasi, dark mode, sidebar, header, dan route container
 - `src/router/AppRoutes.jsx` adalah peta route utama
 - `src/services/**` berisi service utama untuk master data, pricing, inventory, produksi, dan reset utilitas
+- `src/services/Produksi/**` aktual berisi service granular: `productionBomsService.js`, `productionEmployeesService.js`, `productionOrdersService.js`, `productionPayrollsService.js`, `productionPlanningService.js`, `productionProfilesService.js`, `productionStepsService.js`, `productionWorkLogsService.js`, dan `semiFinishedMaterialsService.js`
 - `src/pages/**` berisi implementasi halaman per modul
 
 ## Route Utama yang Aktif
@@ -43,6 +69,7 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
 - `/produksi/karyawan-produksi`
 - `/produksi/profil-produksi`
 - `/produksi/semi-finished-materials`
+- `/produksi/production-planning`
 - `/produksi/bom-produksi`
 - `/produksi/production-orders`
 - `/produksi/work-log-produksi`
@@ -59,6 +86,8 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
 - `/sales-report`
 - `/report-stock`
 - `/profit-loss`
+- `/payroll-report`
+- `/system/user-management`
 - `/utilities/reset-maintenance-data`
 - `/utilities/reset-test-data` sekarang legacy redirect ke `/utilities/reset-maintenance-data`
 
@@ -151,7 +180,7 @@ Status cleanup bertahap yang dikunci di docs:
 - **Docs lock:** task berikutnya tidak boleh membuka kembali direct edit stok master kecuali ada business rule baru, audit trail baru, dan approval eksplisit.
 
 ## Update Batch Fix Bug Merge — 2026-05-03
-- **Aktif:** patch gabungan ini menggabungkan perbaikan no-decimal number format, sidebar nested accordion, login UI copy cleanup, Production Order strict variant requirement, Work Log worker stock audit, dan Semi Finished variant color rename ke baseline `src.zip` + `docs.zip` terbaru yang diunggah.
+- **Aktif:** patch gabungan ini menggabungkan perbaikan no-decimal number format, sidebar nested accordion, login UI copy cleanup, Production Order strict variant requirement, Work Log worker stock audit, dan Semi Finished variant color rename ke baseline source/docs terbaru yang diunggah. Pada audit 2026-05-06, baseline yang diverifikasi adalah `Inventory-App.zip` + `docs.zip`.
 - **Aktif:** format angka operasional diarahkan tanpa desimal melalui formatter dan input UI aktif; data lama yang sudah memiliki decimal tidak dimigrasi otomatis.
 - **Guarded:** Production Order bervarian tidak boleh fallback diam-diam ke stok master/default. Preview PO dan Start Production harus memakai kontrak varian material yang sama.
 - **Guarded:** completed Work Log tetap hanya boleh posting output stock satu kali, tetapi inventory log output produksi baru menyimpan snapshot operator/worker agar audit di Stock Management lebih jelas.

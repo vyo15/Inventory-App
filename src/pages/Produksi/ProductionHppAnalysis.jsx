@@ -6,7 +6,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Col, Empty, Input, Select, Space, Table, Typography, message, Tag } from "antd";
-import { FileExcelOutlined, ReloadOutlined } from "@ant-design/icons";
+import { FileExcelOutlined } from "@ant-design/icons";
 import { getCompletedProductionWorkLogs } from "../../services/Produksi/productionWorkLogsService";
 import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
@@ -412,7 +412,6 @@ const ProductionHppAnalysis = () => {
       <ProductionPageHeader
         title="Analisis HPP Produksi"
         description="Analisa biaya realisasi bahan, tenaga kerja, dan overhead per work log completed dengan baseline layout shared yang seragam."
-        onRefresh={loadData}
       />
 
       <PageSection

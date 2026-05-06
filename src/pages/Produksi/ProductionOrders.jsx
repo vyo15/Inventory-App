@@ -34,7 +34,7 @@ import {
   Tag,
   Typography,
 } from "antd";
-import { EyeOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
 import { toReferenceOptions } from "../../utils/produksi/productionReferenceHelpers";
 import {
   buildCountSummary,
@@ -830,7 +830,6 @@ const ProductionOrders = () => {
       <ProductionPageHeader
         title="Production Orders"
         description="Planning produksi untuk semi finished dan product, tetap mengikuti flow aktif BOM → Production Order → Work Log."
-        onRefresh={loadData}
         onAdd={handleAdd}
         addLabel="Buat Order"
       />

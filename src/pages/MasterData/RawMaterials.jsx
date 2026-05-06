@@ -26,7 +26,6 @@ import {
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons';
 import { collection, onSnapshot, limit as firestoreLimit, orderBy, query } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
@@ -932,7 +931,6 @@ const RawMaterials = () => {
         title="Bahan Baku"
         subtitle="Master bahan baku dengan stok master atau stok per varian agar tampilan lebih rapi dan mudah dipantau."
         actions={[
-          { key: 'refresh-raw-materials', icon: <ReloadOutlined />, label: 'Refresh', onClick: () => window.location.reload() },
           { key: 'create-raw-material', type: 'primary', icon: <PlusOutlined />, label: 'Tambah Bahan Baku', onClick: openCreateDrawer },
         ]}
       />

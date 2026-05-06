@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Col, Input, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
@@ -635,14 +634,6 @@ const StockManagement = () => {
       <PageHeader
         title="Manajemen Stok"
         subtitle="Satu halaman utama inventaris untuk audit riwayat pergerakan stok dan melakukan penyesuaian stok manual."
-        actions={[
-          {
-            key: "refresh-stock-history",
-            icon: <ReloadOutlined />,
-            label: "Refresh",
-            onClick: fetchHistory,
-          },
-        ]}
       />
 
       <PageSection

@@ -46,11 +46,11 @@ Temuan terkini:
 - create sale memvalidasi `availableStock` master/varian sebelum transaksi disimpan
 - kebutuhan item yang sama digabung dulu agar multi-line tidak melewati stok tersedia
 - mutasi stok Sales memakai helper stok aktif dan mencegah stok negatif
-- jika mutasi stok gagal setelah dokumen sale dibuat, flow melakukan rollback/delete sale baru agar tidak ada sale orphan
+- jika mutasi stok gagal setelah dokumen sale dibuat, flow melakukan rollback teknis dan menghapus sale baru agar tidak ada sale orphan
 
 Risiko tersisa:
 - flow ini masih client-side/best-effort, belum Cloud Function transaction end-to-end
-- cancel/delete tetap area guarded karena berhubungan dengan stock revert dan income cleanup
+- cancel Sales tetap area guarded karena berhubungan dengan stock revert dan income; penghapusan Sales hanya rollback teknis create failure, bukan fitur user
 
 ### 5. Laporan/export sudah lebih siap data real
 Temuan terkini:
@@ -62,23 +62,27 @@ Risiko tersisa:
 - laporan stok masih belum menjadi kartu analitik varian/reserved stock yang sangat detail
 - export harus tetap dijaga agar tidak kembali menjadi data mentah/object teknis
 
-### 6. Firebase Functions tampak legacy
-Temuan:
-- `functions/index.js` masih punya trigger lama yang update stok pada `products`
-- purchase function bahkan masih mengarah ke `products` saat purchase item dibuat
-- tidak terlihat sinkron dengan logic aplikasi aktif yang banyak berjalan di client/service layer dan memakai `raw_materials`
+### 6. Firebase Functions custom tidak ditemukan pada ZIP aktual
+Temuan aktual 2026-05-06:
+- folder custom `functions/` tidak ditemukan pada `Inventory-App.zip`;
+- tidak ada source `functions/index.js` yang bisa diverifikasi sebagai bagian project aktif;
+- aplikasi aktif berjalan lewat frontend React/Vite dan Firestore client/service layer;
+- package-lock dapat memuat package internal Firebase Functions dari SDK Firebase, tetapi itu bukan bukti adanya Cloud Functions custom project.
 
 Risiko:
-- bila function ini aktif di environment production, ada potensi logic dobel atau salah target
+- docs lama yang menyebut trigger `functions/index.js` dapat menyesatkan developer baru;
+- jika suatu saat backend Cloud Functions memang ditambahkan di repository lain, task harus meminta source backend tersebut secara eksplisit.
 
-### 7. Flow legacy produksi masih tersisa
-Temuan:
-- `productionService.js` masih ada
-- collection `productions` masih dibersihkan oleh utilitas reset
-- route utama saat ini berpusat pada BOM/PO/Work Log, bukan `productions`
+### 7. Flow legacy produksi masih tersisa di data/maintenance, bukan service aktif
+Temuan aktual 2026-05-06:
+- file `src/services/Produksi/productionService.js` tidak ditemukan pada ZIP aktual;
+- collection `productions` masih muncul sebagai legacy data layer pada reset/maintenance/audit;
+- route utama saat ini berpusat pada BOM/PO/Work Log/Payroll/HPP, bukan `productions`;
+- service aktif produksi bersifat granular: BOM, Orders, Work Logs, Payrolls, Planning, Profiles, Steps, Employees, dan Semi Finished Materials.
 
 Risiko:
-- developer baru bisa bingung membedakan flow aktif dan flow lama
+- developer baru bisa bingung bila docs lama masih menyebut `productionService.js` sebagai service aktif;
+- cleanup `productions` tetap harus dianggap destructive/maintenance scoped, bukan refactor flow produksi utama.
 
 ## Current State yang Sebaiknya Dianggap Resmi
 Untuk dokumentasi saat ini, flow aktif yang paling aman dianggap resmi adalah:
@@ -91,11 +95,26 @@ Untuk dokumentasi saat ini, flow aktif yang paling aman dianggap resmi adalah:
 - reset utilitas dengan baseline
 
 ## Prioritas Tech Debt yang Paling Layak Dibereskan Dulu
-1. audit ulang Firebase Functions apakah masih dipakai atau sebaiknya dipensiunkan
-2. dokumentasikan resmi bahwa `productions` adalah legacy flow bila masih ditemukan di source lama
-3. pertimbangkan Cloud Function/transaction untuk Sales stock safety jika data real sudah besar dan multi-user aktif
-4. buat keputusan business rule rollback untuk payroll paid yang sudah membuat expense
-5. tingkatkan laporan stok varian/reserved stock jika owner membutuhkan analisis lebih detail
+1. jaga docs agar tidak lagi menyebut `functions/index.js` atau `productionService.js` sebagai source aktif tanpa bukti source aktual;
+2. dokumentasikan resmi bahwa `productions` adalah legacy data layer/maintenance scope, bukan flow produksi utama;
+3. pertimbangkan Cloud Function/transaction baru untuk Sales stock safety jika data real sudah besar dan multi-user aktif;
+4. buat keputusan business rule rollback untuk payroll paid yang sudah membuat expense;
+5. tingkatkan laporan stok varian/reserved stock jika owner membutuhkan analisis lebih detail.
+
+## Update Sinkronisasi Docs dengan Source Aktual — 2026-05-06
+
+Status hasil audit `Inventory-App.zip` + `docs.zip`:
+- `functions/` tidak ditemukan, sehingga docs tidak boleh lagi menyatakan Firebase Functions custom sebagai bagian aktif project;
+- `src/services/Produksi/productionService.js` tidak ditemukan, sehingga docs tidak boleh lagi menjadikannya service legacy aktif;
+- flow produksi aktif berada pada service granular `src/services/Produksi/*Service.js`;
+- collection `productions` masih legacy data layer untuk maintenance/reset/audit dan bukan source of truth operasional;
+- route aktual mencakup `production-planning`, `payroll-report`, dan `system/user-management`;
+- jika docs dan source konflik, source aktual harus diverifikasi lebih dulu melalui grep/import/route check.
+
+Dampak ke task berikutnya:
+- patch produksi harus menargetkan service granular yang benar, bukan `productionService.js`;
+- jangan membuat asumsi ada Cloud Functions backend kecuali user mengupload folder/repo backend;
+- cleanup docs harus mengirim ZIP berisi file docs yang berubah saja.
 
 ## Definition of Done untuk Perubahan Besar Berikutnya
 ## Update Current State: Guard Logic Work Log Produksi
@@ -138,10 +157,10 @@ Sebuah task dianggap aman selesai bila:
 - `StockReport.jsx` masih kandidat upgrade tahap lanjut agar membaca varian/reserved stock lebih detail.
 - Jalur helper stok lama/compatibility masih perlu diaudit sebelum dihapus; jangan hapus helper legacy tanpa grep/import check.
 - Flow produksi final tetap guarded dan tidak ikut direfactor pada cleanup stok umum.
-- Audit Firebase Functions tidak bisa diverifikasi dari upload `src.zip` dan `docs.zip` ini karena folder functions tidak disertakan.
+- Audit Firebase Functions custom pada 2026-05-06: folder `functions/` tidak ada di `Inventory-App.zip`; jangan menganggap backend Functions aktif tanpa source terpisah.
 
 ### Koreksi dokumen lama
-Poin lama yang menyebut revert sale masih hanya update `stock` sudah tidak sesuai dengan source terbaru. Sales sekarang memakai `updateInventoryStock()` untuk create sale dan revert cancel/delete.
+Poin lama yang menyebut revert sale masih hanya update `stock` sudah tidak sesuai dengan source terbaru. Sales sekarang memakai `updateInventoryStock()` untuk create sale dan revert cancel. Penghapusan dokumen Sales hanya rollback teknis saat create failure, bukan flow user.
 
 ## Update Karyawan Produksi — 2026-04-25
 
@@ -278,7 +297,7 @@ Tech debt tersisa:
 - Sales stock safety masih client-side/best-effort; untuk multi-user padat, pertimbangkan transaction/cloud function khusus.
 - Payroll paid reversal belum diputuskan: expense payroll tidak dihapus otomatis saat status paid dibatalkan.
 - HPP cost 0 sekarang diberi warning, tetapi data lama tidak di-backfill otomatis.
-- Firebase Functions legacy tidak bisa dipastikan dari upload ini bila folder functions tidak disertakan.
+- Firebase Functions custom tidak ada pada ZIP aktual; bila backend Functions berada di repo/ZIP lain, source tersebut harus diupload sebelum diaudit.
 - Analisis stok varian/reserved stock di report masih bisa ditingkatkan jika dibutuhkan, tetapi source data laporan sudah lebih lengkap.
 
 ### Area yang sekarang guarded
@@ -424,7 +443,7 @@ Guard tersisa:
 - CLEANUP CANDIDATE: orkestrasi transaction retur masih berada di page `Returns.jsx`; jika modul Retur makin kompleks, logic ini bisa dipindahkan ke service khusus tanpa mengubah business rule.
 
 ### Risiko tersisa
-- Retur belum memiliki flow cancel/delete/revert di UI aktif; jika nanti ditambahkan, harus memakai guard idempotent agar tidak double posting stok.
+- Retur belum memiliki flow cancel/revert atau hard delete guarded di UI aktif; jika nanti ditambahkan, harus memakai guard idempotent agar tidak double posting stok.
 - `addInventoryLog()` di `inventoryService.js` masih dipertahankan untuk caller lain dan masih best-effort; task ini hanya mengunci flow Retur agar audit log tidak silent hilang.
 - Multi-user conflict sudah lebih aman karena transaction membaca item terbaru sebelum update, tetapi regression varian tetap wajib diuji setelah patch.
 
@@ -496,7 +515,27 @@ Data berikut adalah **LEGACY** dan seharusnya tidak ada lagi setelah cleanup: pr
 
 ### Firestore Rules current state
 
-- File `firestore.rules` harus masuk source final.
+=====================================================
+SECTION: Firestore Rules external backend setup — AKTIF / GUARDED
+Fungsi:
+- Menjelaskan bahwa rules backend wajib ada dan aman, tetapi file rules belum menjadi bagian repo ZIP saat ini.
+
+Dipakai oleh:
+- AuthContext, ProtectedRoute, User Management, semua service Firestore client, dan checklist deployment.
+
+Alasan perubahan:
+- Owner mengonfirmasi rules dikelola langsung di Firebase Console, bukan disimpan sebagai `firestore.rules` pada repo ini.
+
+Catatan cleanup:
+- Jika owner ingin rules source-controlled, buat task patch terpisah untuk menambahkan file rules dan menyesuaikan deploy config.
+
+Risiko:
+- UI guard tanpa backend rules aman tidak cukup; rules manual yang terlalu longgar atau terlalu sempit bisa membuka data atau memutus flow bisnis.
+=====================================================
+
+- Firestore Rules wajib aktif dan aman di backend Firebase.
+- Pada repo ZIP saat ini, file `firestore.rules` tidak disertakan karena rules dikelola manual/external di Firebase Console.
+- Kondisi ini bukan bug source wajib untuk patch ini, tetapi tetap menjadi dependency deployment/security yang harus diverifikasi di Firebase.
 - Rules final/staged-final wajib membaca actor profile dari `system_users/{request.auth.uid}`.
 - Rules aktif hanya mengenal role `administrator` dan `user`.
 - `system_users` guarded khusus: user baca profile sendiri, administrator mengelola profile user lain.
@@ -509,11 +548,11 @@ Data berikut adalah **LEGACY** dan seharusnya tidak ada lagi setelah cleanup: pr
 - Role `super_admin` adalah **LEGACY / REMOVED FROM ACTIVE FLOW**.
 - Flow migrasi UID/domain lama adalah **CLEANUP CANDIDATE** jika masih ada sisa comment/utility lokal.
 - Alias atau comment lama yang menyebut admin/super dalam source non-scope boleh dirapikan pada task kecil terpisah jika tidak mengubah behavior.
-- Whitelist `firestore.rules` masih harus diuji runtime untuk Dashboard, Supplier, Purchases, Sales, Produksi, Cashflow, dan Reports.
+- Whitelist rules backend manual/external masih harus diuji runtime untuk Dashboard, Supplier, Purchases, Sales, Produksi, Cashflow, dan Reports.
 
 ### Risiko tersisa
 
-- Publish `firestore.rules` yang terlalu sempit dapat menimbulkan `Missing or insufficient permissions` pada modul bisnis yang collection-nya belum terdaftar.
+- Publish rules backend yang terlalu sempit dapat menimbulkan `Missing or insufficient permissions` pada modul bisnis yang collection-nya belum terdaftar.
 - Rules tidak ideal untuk menghitung administrator aktif terakhir; guard agregat itu tetap wajib ada di service/UI.
 - Jika data Firestore lama ternyata belum bersih, role/profile legacy akan ditolak oleh flow final dan perlu cleanup manual terbatas.
 
@@ -572,8 +611,33 @@ Risiko tersisa:
 - **LEGACY:** data lama di `revenues` dan `incomes` tetap valid dan tidak dimigrasi.
 - **LEGACY:** sales lama dengan status/reference lama tetap tampil sesuai status yang tersimpan.
 - **CLEANUP CANDIDATE:** jika suatu hari diperlukan delete ledger, harus dibuat flow khusus dengan approval, audit trail, dan alasan bisnis, bukan tombol Hapus biasa di Cash In.
-- **CLEANUP CANDIDATE:** hardening atomic cancel/delete Sales tetap task terpisah; patch ini hanya menjaga tampilan tab status dan tidak mengubah revert stok/income delete.
+- **CLEANUP CANDIDATE:** hardening atomic cancel Sales dan rollback teknis create failure tetap task terpisah; patch ini hanya menjaga tampilan tab status dan tidak mengubah revert stok/income timing.
 
+
+## Update Current State — Repository root assets cleanup — 2026-05-06
+
+=====================================================
+SECTION: Root assets cleanup — CLEANUP CANDIDATE
+Fungsi:
+- Menandai root `assets/` sebagai sisa build artifact yang tidak dipakai source aktif.
+
+Dipakai oleh:
+- Repository hygiene, `.gitignore`, dan patch cleanup changed-files-only.
+
+Alasan perubahan:
+- Owner mengonfirmasi root `assets/` lupa terhapus dan hasil grep tidak menemukan referensi runtime aktif ke file build artifact tersebut.
+
+Catatan cleanup:
+- Root `/assets/` di-ignore agar artifact serupa tidak ikut masuk repo lagi; `src/assets` tetap tracked.
+
+Risiko:
+- Pattern ignore tanpa slash depan dapat ikut mengabaikan `src/assets` dan merusak branding/logo aktif.
+=====================================================
+
+### Current state
+- **CLEANUP CANDIDATE:** root `assets/` berisi build artifact lama, bukan source aktif.
+- **AKTIF:** asset aplikasi yang dipakai source tetap berada di `src/assets`, misalnya logo/branding.
+- `.gitignore` harus memakai pattern root-only `/assets/` agar tidak mengabaikan `src/assets`.
 
 ## Update Current State — Sales pending income dan no-delete action — 2026-05-03
 
@@ -658,3 +722,10 @@ Risiko tersisa:
 - **AKTIF:** copy deskripsi Login dibuat lebih kecil dan note internal diposisikan sebagai supportive footer note.
 - **GUARDED:** perubahan tetap CSS-only; `Login.jsx`, `AuthContext`, route guard, role access, Sidebar, Dashboard, transaksi, stok, cashflow, produksi, HPP, reports, dan service tidak diubah.
 - **CLEANUP CANDIDATE:** fine tuning visual Login berikutnya cukup dilakukan di `Login.css`; jangan campur dengan cleanup App.css/AntD portal guard atau business modules.
+
+## Update UI Table Compact — 2026-05-06
+- Cash In, Stock Adjustment Panel, Pricing Rules, Products, Supplier, dan Stock Report memakai table utama yang lebih compact tanpa horizontal scroll default pada desktop normal.
+- Products dan Stock Report memakai helper presentational `StockDisplayBlock` untuk saldo stok locked: `Total`, `Tersedia`, dan semua variant pill langsung di table jika row membawa `variants[]`.
+- Raw Materials tetap memakai pola variant pill existing; Semi Finished Materials hanya dirapikan layout primary table-nya tanpa mengubah pola variant pill atau flow produksi.
+- Preview modal Pricing Rules dan detail drawer Supplier masih boleh memakai table lebar/scroll karena merupakan area detail, bukan primary table list.
+- Cleanup candidate lanjutan: migrasikan Raw Materials dan Semi Finished Materials ke helper `StockDisplayBlock` pada patch terpisah bila ingin mengurangi duplikasi tampilan stok.

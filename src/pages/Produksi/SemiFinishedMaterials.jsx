@@ -439,7 +439,7 @@ const SemiFinishedMaterials = () => {
       title: "Semi Finished Material",
       dataIndex: "name",
       key: "name",
-      width: 260,
+      width: "24%",
       render: (_, record) => (
         <div style={compactCellStyles.stack}>
           <Typography.Text strong>{record.name || "-"}</Typography.Text>
@@ -452,7 +452,7 @@ const SemiFinishedMaterials = () => {
     {
       title: "Kategori",
       key: "category",
-      width: 150,
+      width: "16%",
       render: (_, record) => (
         <div style={compactCellStyles.stack}>
           <Typography.Text>
@@ -467,7 +467,7 @@ const SemiFinishedMaterials = () => {
     {
       title: "Stok",
       key: "stock",
-      width: 360,
+      width: "34%",
       render: (_, record) => {
         const variants = Array.isArray(record.variants) ? record.variants : [];
         const hasVariants = record.hasVariants === true && variants.length > 0;
@@ -498,10 +498,9 @@ const SemiFinishedMaterials = () => {
     {
       title: "Status",
       key: "status",
-      width: 120,
+      width: "10%",
       align: "center",
-      // Kolom status dibuat menempel di kanan agar perilaku tabel seragam.
-      fixed: "right",
+      // AKTIF / GUARDED: status tetap terlihat di primary table tanpa fixed/sticky agar tidak memaksa horizontal scroll.
       render: (_, record) => {
         const statusMeta = getStockStatusMeta(record);
         return <Tag color={statusMeta.color}>{statusMeta.label}</Tag>;
@@ -510,9 +509,8 @@ const SemiFinishedMaterials = () => {
     {
       title: "Aksi",
       key: "actions",
-      width: 170,
-      // Tombol aksi utama disimpan di sisi kanan seperti halaman bahan baku.
-      fixed: "right",
+      width: "16%",
+      // AKTIF / GUARDED: tombol aksi tetap di kolom kanan natural tanpa fixed/sticky agar primary table tidak memaksa horizontal scroll.
       className: "app-table-action-column",
       render: (_, record) => (
         <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
@@ -579,7 +577,6 @@ const SemiFinishedMaterials = () => {
       <ProductionPageHeader
         title="Semi Finished Materials"
         description="Master stok internal produksi dengan varian fleksibel, tidak dijual ke customer."
-        onRefresh={loadData}
         onAdd={handleAdd}
         addLabel="Tambah Item"
       />
@@ -661,8 +658,7 @@ const SemiFinishedMaterials = () => {
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          // Lebar horizontal sedikit diperluas supaya kolom kanan tetap rapi.
-          scroll={{ x: 1100 }}
+          // AKTIF / GUARDED: primary table memakai layout fixed tanpa horizontal scroll default; stok varian tetap tampil sebagai pill langsung di kolom Stok.
           locale={{
             emptyText: (
               <Empty description="Belum ada data semi finished materials" />
@@ -1285,8 +1281,8 @@ const SemiFinishedMaterials = () => {
                     render: (value) => (value ? "Aktif" : "Nonaktif"),
                   },
                 ]}
-                // Lebar horizontal sedikit diperluas supaya kolom kanan tetap rapi.
-          scroll={{ x: 1100 }}
+                // Lebar horizontal sedikit diperluas supaya kolom detail varian drawer tetap rapi.
+                scroll={{ x: 1100 }}
               />
             </Card>
           </Space>

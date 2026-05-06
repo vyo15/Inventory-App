@@ -19,7 +19,7 @@ import {
   Table,
   Typography,
 } from 'antd';
-import { PlusOutlined, ReloadOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined } from '@ant-design/icons';
 import {
   DEFAULT_PRODUCTION_PROFILE_FORM,
   PRODUCTION_PROFILE_TYPES,
@@ -291,7 +291,6 @@ const ProductionProfiles = () => {
       <ProductionPageHeader
         title="Profil Produksi"
         description="Simpan rumus hasil, batch assembly, dan batas miss per produk. BOM tetap jadi resep bahan, sedangkan profil produksi menjadi aturan hitung operasional."
-        onRefresh={loadData}
         onAdd={handleAdd}
         addLabel="Tambah Profil"
       />

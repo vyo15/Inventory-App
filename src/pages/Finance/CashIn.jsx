@@ -8,6 +8,7 @@ import {
   Select,
   Table,
   Tag,
+  Typography,
   message,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
@@ -39,6 +40,7 @@ import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numb
 // Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const { Option } = Select;
+const { Text } = Typography;
 
 // =========================
 // SECTION: Konstanta tampilan periode
@@ -245,37 +247,52 @@ const CashIn = () => {
 
 
 
-  // =========================
-  // SECTION: Kolom tabel
-  // =========================
+  /* =====================================================
+  SECTION: Kolom tabel Cash In compact — AKTIF / GUARDED
+  Fungsi:
+  - Merapikan ledger pemasukan agar tidak membutuhkan horizontal scroll pada desktop normal.
+  - Menggabungkan tipe + sumber data dalam satu kolom dan menjaga nominal tetap mudah discan.
+
+  Dipakai oleh:
+  - Halaman Finance / Pemasukan Kas yang membaca revenues + incomes.
+
+  Alasan perubahan:
+  - Cash In adalah ledger read page tanpa row action destructive; table tidak perlu scroll horizontal hanya untuk metadata pendek.
+
+  Catatan cleanup:
+  - Bila nanti audit detail transaksi dibuat, action Detail bisa ditambahkan sebagai drawer read-only, bukan delete/edit langsung.
+
+  Risiko:
+  - Jangan mengubah merge revenues/incomes, collection write pemasukan manual, atau status tanpa aksi delete dari section UI ini.
+  ===================================================== */
   const columns = useMemo(
     () => [
       {
         title: "Tanggal",
         dataIndex: "date",
         key: "date",
+        width: 132,
         render: (value) => formatDateId(value),
       },
       {
-        title: "Jumlah",
-        dataIndex: "amount",
-        key: "amount",
-        render: (value) => formatCurrencyId(value),
-      },
-      {
-        title: "Tipe",
-        dataIndex: "type",
-        key: "type",
-        render: (value) => value || "-",
-      },
-      {
-        title: "Sumber Data",
-        dataIndex: "sourceCollection",
-        key: "sourceCollection",
-        render: (value) => {
-          if (value === "incomes") return <Tag color="green">Auto Penjualan</Tag>;
-          if (value === "revenues") return <Tag color="blue">Manual / Lama</Tag>;
-          return <Tag>-</Tag>;
+        title: "Sumber / Tipe",
+        key: "sourceType",
+        width: 220,
+        render: (_, record) => {
+          const sourceTag = record.sourceCollection === "incomes"
+            ? <Tag color="green">Auto Penjualan</Tag>
+            : record.sourceCollection === "revenues"
+              ? <Tag color="blue">Manual / Lama</Tag>
+              : <Tag>-</Tag>;
+
+          return (
+            <div className="ims-cell-stack ims-cell-stack-tight">
+              <div>{sourceTag}</div>
+              <Text type="secondary" className="ims-cell-meta">
+                {record.type || "-"}
+              </Text>
+            </div>
+          );
         },
       },
       {
@@ -286,7 +303,20 @@ const CashIn = () => {
         title: "Deskripsi",
         dataIndex: "description",
         key: "description",
-        render: (value) => value || "-",
+        ellipsis: true,
+        render: (value) => (
+          <Text title={value || "-"} className="ims-cell-title">
+            {value || "-"}
+          </Text>
+        ),
+      },
+      {
+        title: "Jumlah",
+        dataIndex: "amount",
+        key: "amount",
+        width: 180,
+        align: "right",
+        render: (value) => <Text strong>{formatCurrencyId(value)}</Text>,
       },
     ],
     [],
@@ -364,8 +394,8 @@ const CashIn = () => {
           dataSource={filteredCashIns}
           columns={columns}
           loading={loading}
-          // IMS NOTE [AKTIF] - tabel ledger tetap scroll ringan tanpa kolom aksi destructive.
-          scroll={{ x: 960 }}
+          // IMS NOTE [AKTIF] - table fixed tanpa scroll horizontal; ledger tetap tanpa kolom aksi destructive.
+          tableLayout="fixed"
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada pemasukan pada periode ini." />,
           }}

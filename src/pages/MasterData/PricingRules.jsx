@@ -21,6 +21,7 @@ import {
   Col,
   Statistic,
   Alert,
+  Typography,
 } from "antd";
 
 // SECTION: import icon
@@ -69,6 +70,7 @@ import {
 
 const { Option } = Select;
 const { TextArea } = Input;
+const { Text } = Typography;
 
 // SECTION: formatter final lintas aplikasi
 // ACTIVE / FINAL: semua angka dan Rupiah di Pricing Rules memakai helper shared
@@ -433,97 +435,95 @@ const PricingRules = () => {
     }
   };
 
-  // SECTION: kolom tabel pricing rules
+  /* =====================================================
+  SECTION: Kolom Pricing Rules compact — AKTIF / GUARDED
+  Fungsi:
+  - Merapikan table utama rule pricing tanpa fixed right dan tanpa horizontal scroll wajib.
+  - Menggabungkan target/base cost serta formula margin/buffer/pembulatan agar jumlah kolom lebih sedikit.
+
+  Dipakai oleh:
+  - Halaman Master Data / Pricing Rules table utama.
+
+  Alasan perubahan:
+  - Detail simulasi dampak rule sudah berada di modal Detail; table utama cukup menjadi list ringkas dan action entry point.
+
+  Catatan cleanup:
+  - Preview modal masih memakai table lebar karena berisi breakdown perhitungan; itu bukan target compact main table batch ini.
+
+  Risiko:
+  - Jangan mengubah normalizePricingRule, buildPricingPreview, applyPricingRuleToItems, atau guard item manual dari section UI ini.
+  ===================================================== */
   const rulesColumns = [
     {
-      title: "Nama Rule",
+      title: "Rule",
       dataIndex: "name",
-      render: (value) => value || "-",
+      width: "24%",
+      render: (value, record) => (
+        <div className="ims-cell-stack ims-cell-stack-tight">
+          <Text strong>{value || "-"}</Text>
+          <Text type="secondary" className="ims-cell-meta">
+            {record?.description || "Tidak ada deskripsi"}
+          </Text>
+        </div>
+      ),
     },
     {
-      title: "Target",
-      dataIndex: "targetType",
-      render: (value) => getTargetTypeLabel(value),
+      title: "Target / Base",
+      key: "targetBase",
+      width: "22%",
+      render: (_, record) => (
+        <div className="ims-cell-stack ims-cell-stack-tight">
+          <Tag color={record?.targetType === "products" ? "blue" : "gold"}>
+            {getTargetTypeLabel(record?.targetType)}
+          </Tag>
+          <Text type="secondary" className="ims-cell-meta">
+            {getBaseCostSourceLabel(record?.baseCostSource)}
+          </Text>
+        </div>
+      ),
     },
     {
-      title: "Base Cost",
-      dataIndex: "baseCostSource",
-      render: (value) => getBaseCostSourceLabel(value),
-    },
-    {
-      title: "Margin",
-      key: "margin",
+      title: "Formula",
+      key: "formula",
+      width: "30%",
       render: (_, record) => {
-        if (record?.marginType === "nominal") {
-          return formatCurrencyIDR(record?.marginValue || 0);
-        }
-
-        return `${formatNumberID(record?.marginValue || 0)}%`;
-      },
-    },
-    {
-      title: "Buffer Marketplace",
-      key: "buffer",
-      render: (_, record) => {
-        if (!record?.includeMarketplaceBuffer) {
-          return <Tag>Tidak Dipakai</Tag>;
-        }
-
-        if (record?.marketplaceBufferType === "nominal") {
-          return (
-            <Tag color="blue">
-              {formatCurrencyIDR(record?.marketplaceBufferValue || 0)}
-            </Tag>
-          );
-        }
+        const marginText = record?.marginType === "nominal"
+          ? formatCurrencyIDR(record?.marginValue || 0)
+          : `${formatNumberID(record?.marginValue || 0)}%`;
+        const bufferText = !record?.includeMarketplaceBuffer
+          ? "Buffer tidak dipakai"
+          : record?.marketplaceBufferType === "nominal"
+            ? `Buffer ${formatCurrencyIDR(record?.marketplaceBufferValue || 0)}`
+            : `Buffer ${formatNumberID(record?.marketplaceBufferValue || 0)}%`;
 
         return (
-          <Tag color="blue">
-            {formatNumberID(record?.marketplaceBufferValue || 0)}%
-          </Tag>
+          <div className="ims-cell-stack ims-cell-stack-tight">
+            <Text>{`Margin ${marginText}`}</Text>
+            <Text type="secondary" className="ims-cell-meta">{bufferText}</Text>
+            <Text type="secondary" className="ims-cell-meta">
+              {`Pembulatan ${String(record?.roundingType || "up").toUpperCase()} / ${formatNumberID(record?.roundingUnit || 0)}`}
+            </Text>
+          </div>
         );
       },
     },
     {
-      title: "Pembulatan",
-      key: "rounding",
-      render: (_, record) => {
-        return `${String(record?.roundingType || "up").toUpperCase()} / ${formatNumberID(
-          record?.roundingUnit || 0,
-        )}`;
-      },
-    },
-    {
-      // =========================
-      // SECTION: status sticky
-      // Fungsi:
-      // - menjaga status rule tetap terlihat saat tabel pricing digeser ke kanan
-      // =========================
       title: "Status",
       dataIndex: "isActive",
       key: "isActive",
-      width: 128,
-      fixed: "right",
-      className: "app-table-status-column app-table-fixed-secondary",
+      width: "10%",
+      align: "center",
       render: (value) =>
         value ? <Tag color="green">Aktif</Tag> : <Tag>Nonaktif</Tag>,
     },
     {
-      // =========================
-      // SECTION: aksi sticky
-      // Fungsi:
-      // - Pricing Rules dianggap detail-capable karena modal preview sekarang diposisikan sebagai detail rule + simulasi dampaknya
-      // - label Preview diganti menjadi Detail agar tidak membuat variasi aksi liar di luar baseline final
-      // Status: aktif / final
-      // =========================
       title: "Aksi",
       key: "actions",
-      width: 170,
-      fixed: "right",
+      width: "14%",
       className: "app-table-action-column",
       render: (_, record) => (
         <div className="ims-action-group ims-action-group--vertical">
-          {/* AKTIF / GUARDED: action Pricing Rules dibuat 3 baris konsisten; preview/edit/hapus tetap memakai handler lama dan tidak menyentuh kalkulasi pricing. */}
+          {/* AKTIF / GUARDED: action Pricing Rules tetap Detail/Edit/Hapus; hanya layout table yang dipadatkan. */}
           <Button
             className="ims-action-button ims-action-button--block"
             size="small"
@@ -695,7 +695,7 @@ const PricingRules = () => {
           dataSource={rules}
           columns={rulesColumns}
           pagination={{ pageSize: 10 }}
-          scroll={{ x: 1200 }}
+          tableLayout="fixed"
         />
       </PageSection>
 

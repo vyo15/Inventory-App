@@ -110,8 +110,8 @@ Sales Form
 Guard:
 - sale tidak boleh tersimpan jika stok tersedia tidak cukup;
 - item bervarian wajib validasi varian yang benar;
-- jika mutasi stok gagal setelah sale dibuat, sale baru harus rollback/delete agar tidak orphan;
-- cancel/delete tetap revert stok satu kali dan tidak membuat income dobel.
+- jika mutasi stok gagal setelah sale dibuat, sale baru harus di-rollback secara teknis agar tidak orphan;
+- cancel tetap revert stok satu kali dan tidak membuat income dobel; delete dokumen Sales hanya rollback teknis create failure, bukan aksi user.
 
 ### Purchase Expense Metadata
 ```text
@@ -529,6 +529,24 @@ Batasan: Hapus Profile tidak menghapus Firebase Authentication user. Jika Auth u
 
 ### Flow Firestore Rules final/staged-final
 
+=====================================================
+SECTION: Firestore Rules integration boundary — AKTIF / GUARDED
+Fungsi:
+- Memetakan rules backend aktif yang dikelola manual/external, tanpa mengharuskan file rules ada di repo ZIP saat ini.
+
+Dipakai oleh:
+- AuthContext, ProtectedRoute, User Management, role access, dan semua service Firestore client.
+
+Alasan perubahan:
+- Owner menetapkan Firestore Rules dikelola langsung di Firebase Console dan source-controlled rules bukan bagian patch ini.
+
+Catatan cleanup:
+- Jika rules ingin dimasukkan ke repo, buat task terpisah untuk file rules dan konfigurasi deploy.
+
+Risiko:
+- Menganggap sidebar/route guard sebagai security final tanpa rules backend aman akan membuka risiko akses data.
+=====================================================
+
 ```text
 request.auth.uid
 -> get system_users/{request.auth.uid}
@@ -562,7 +580,7 @@ Patch Auth/User Management dan Rules tidak mengubah integrasi stok, purchases/sa
 
 ### Runtime verification map
 
-Setelah publish `firestore.rules` atau mengubah role access, wajib test login admin, login user, Manajemen User create/edit/aktif-nonaktif/delete profile, sidebar visibility, direct route access untuk menu sensitif, Dashboard, Stock Control, Production Operation, Transaksi, Supplier/master data sebagai admin, Purchases, Sales, Produksi, Cashflow/Reports sebagai admin, dan console permission error.
+Setelah publish rules backend di Firebase Console/external source atau mengubah role access, wajib test login admin, login user, Manajemen User create/edit/aktif-nonaktif/delete profile, sidebar visibility, direct route access untuk menu sensitif, Dashboard, Stock Control, Production Operation, Transaksi, Supplier/master data sebagai admin, Purchases, Sales, Produksi, Cashflow/Reports sebagai admin, dan console permission error.
 
 ## Integration Map Update — Batch Fix Bug Merge 2026-05-03
 - `numberId.js` → halaman transaksi/master/inventory/produksi/finance/laporan: menyediakan format no-decimal dan parser integer untuk input UI aktif.
@@ -596,7 +614,7 @@ Manual Cash In
 Guard integrasi:
 - Cash In adalah read/create ledger untuk pemasukan, bukan tempat delete destructive.
 - Cash In tetap membaca `revenues + incomes`; patch UI tidak mengubah collection atau schema.
-- Sales status tab adalah filter tampilan atas `sales.status`; patch tab tidak mengubah status transition, stock mutation, income timing, cancel/delete, returns, dashboard, atau reports.
+- Sales status tab adalah filter tampilan atas `sales.status`; patch tab tidak mengubah status transition, stock mutation, income timing, cancel flow, rollback teknis create failure, returns, dashboard, atau reports.
 
 
 ## Integration Update — Sales pending income display-only — 2026-05-03
@@ -629,3 +647,29 @@ Guard integrasi:
 - Cash In tetap membaca `revenues + incomes` sebagai pemasukan resmi.
 - Tombol Delete/Hapus tidak tampil di tabel Sales; aksi tidak jadi tetap melalui `Batalkan` agar stock/audit trail tetap terlacak.
 - Dropdown item/varian Sales disederhanakan secara UI; payload item, `collectionName`, `variantKey`, stock mutation, income timing, returns, dashboard, dan reports tidak berubah.
+
+## Integrasi UI Table Compact — 2026-05-06
+Cash In
+  -> membaca revenues + incomes existing
+  -> table compact menggabungkan sumber/tipi display
+  -> tidak menambah row action dan tidak mengubah write pemasukan manual
+
+Stock Management / Stock Adjustment Panel
+  -> membaca stock_adjustments existing
+  -> table compact hanya mengubah render audit list
+  -> submit adjustment, Firestore transaction, stock mutation, dan inventory_logs tetap di flow lama
+
+Products / Stock Report
+  -> row saldo stok dikirim ke StockDisplayBlock
+  -> StockDisplayBlock membaca currentStock/stock/availableStock/reservedStock/variants[] secara presentational
+  -> tidak mengubah product service, report query, summary, atau export mapping
+
+Pricing Rules
+  -> table utama compact menjadi entry point Detail/Edit/Hapus
+  -> modal Detail/preview tetap memakai pricingService existing
+  -> apply rule tetap melewati item manual sesuai guard pricing
+
+Supplier
+  -> table utama compact membaca supplierPurchases/materialDetails existing
+  -> drawer detail tetap menjadi tempat katalog restock panjang
+  -> tidak membuat purchase, stok, kas, atau expense otomatis

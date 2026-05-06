@@ -3,11 +3,12 @@
 Gunakan file ini sebagai aturan kerja saat membantu project IMS Bunga Flanel.
 
 ## Aturan Umum
-1. Anggap dokumen di folder ini sebagai sumber konteks utama.
-2. Jangan mengubah arsitektur atau rule bisnis tanpa menyebut dampaknya.
-3. Jika menemukan konflik antara flow aktif dan flow legacy, sebutkan eksplisit.
-4. Untuk task kode, jangan langsung refactor besar kalau tidak diminta.
-5. Output kode harus siap tempel dan jelas file targetnya.
+1. Anggap dokumen di folder ini sebagai sumber konteks utama, tetapi tetap validasi terhadap source code aktual sebelum coding.
+2. Jika docs dan source code konflik, jangan langsung percaya docs lama; lakukan grep/import/route check dan tulis status sebenarnya.
+3. Jangan mengubah arsitektur atau rule bisnis tanpa menyebut dampaknya.
+4. Jika menemukan konflik antara flow aktif dan flow legacy, sebutkan eksplisit.
+5. Untuk task kode, jangan langsung refactor besar kalau tidak diminta.
+6. Output kode harus siap tempel dan jelas file targetnya.
 
 ## Sebelum Memberi Solusi
 Selalu jelaskan singkat:
@@ -16,10 +17,17 @@ Selalu jelaskan singkat:
 - efek ke stok, kas, laporan, atau produksi bila ada
 - risiko mismatch schema / collection bila ada
 
+## Guard Verifikasi Source Aktual — 2026-05-06
+- Source aktual yang sudah diverifikasi tidak memiliki folder custom `functions/`; jangan menganggap Cloud Functions custom aktif tanpa upload source backend.
+- Source aktual tidak memiliki `src/services/Produksi/productionService.js`; jangan menargetkan file ini dalam patch.
+- Produksi aktif memakai service granular di `src/services/Produksi/`.
+- Collection `productions` hanya legacy data layer untuk maintenance/reset/audit.
+- Sebelum coding, selalu cek file nyata, import, route, dan caller aktif.
+
 ## Rule Penting Project Ini
 - field stok sedang transisi: jangan ubah hanya `stock` bila area tersebut sudah memakai `currentStock`
 - sales selesai baru mengakui income
-- cancel/delete sale punya logic revert stok yang sensitif
+- cancel Sales punya logic revert stok yang sensitif; delete dokumen Sales hanya rollback teknis create failure, bukan fitur user
 - purchases membuat expense otomatis
 - purchases report membaca `expenses`, bukan `purchases`
 - profit loss membaca `revenues + incomes + expenses`
@@ -160,7 +168,7 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 ## Prompt Guard Final Hardening Fase A-G - 2026-04-26
 
 ### Guard Fase A - Sales Stock Safety
-- Jika task menyentuh Sales create/update/cancel/delete, audit dulu dampak ke stok, income, dan inventory log.
+- Jika task menyentuh Sales create/update/cancel atau rollback teknis create failure, audit dulu dampak ke stok, income, dan inventory log.
 - Jangan membuat sale tersimpan jika `availableStock` master/varian tidak cukup.
 - Jangan kembali memakai `currentStock` saja untuk validasi sale.
 - Jika item sama muncul beberapa baris, total kebutuhan harus dihitung sebelum create sale.
@@ -171,7 +179,7 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - WhatsApp boleh diperlakukan sebagai non-reference channel, tetapi jangan otomatis disamakan dengan Offline untuk status `Selesai` atau timing income.
 - Offline/WhatsApp tidak perlu menyimpan `referenceNumber`; channel marketplace/online boleh menyimpan reference opsional.
 - Income tetap hanya dibuat saat status `Selesai` dan tidak boleh dobel.
-- Cancel/delete sale tetap guarded agar stok tidak double revert.
+- Cancel sale tetap guarded agar stok tidak double revert; jangan menambahkan hard delete Sales sebagai aksi user.
 
 ### Guard Fase B - Purchase Expense Metadata
 - Jika task menyentuh Purchases, jangan hapus expense otomatis.
@@ -355,9 +363,27 @@ Status: **AKTIF + GUARDED**. Gunakan section ini untuk semua task yang menyentuh
 - Hapus Profile hanya menghapus dokumen Firestore `system_users/{uid}`.
 - Hapus Profile tidak menghapus Firebase Authentication user.
 - Self-delete guard dan last-administrator guard tidak boleh dihapus.
-- Jika delete profile gagal karena permission, cek `firestore.rules`, bukan menghapus guard aplikasi.
+- Jika delete profile gagal karena permission, cek rules backend aktif di Firebase Console/external source owner, bukan menghapus guard aplikasi.
 
 ### Aturan Firestore Rules
+
+=====================================================
+SECTION: Firestore Rules patch boundary — AKTIF / GUARDED
+Fungsi:
+- Mengunci bahwa rules backend wajib aman, tetapi repo ZIP saat ini tidak menyimpan file rules source-controlled.
+
+Dipakai oleh:
+- Prompt guard Auth/User Management, review permission denied, dan task rules berikutnya.
+
+Alasan perubahan:
+- Owner mengonfirmasi rules dikelola langsung di Firebase Console/external dan patch ini tidak boleh membuat `firestore.rules`.
+
+Catatan cleanup:
+- Source-controlled rules dapat dibuat pada task terpisah dengan approval eksplisit, termasuk perubahan deploy config jika diperlukan.
+
+Risiko:
+- Membuat file rules diam-diam atau mengubah `firebase.json` di task docs/cleanup dapat mengubah proses deployment tanpa persetujuan.
+=====================================================
 
 - Rules wajib memakai `rules_version = '2';`.
 - Rules wajib berbasis `request.auth != null`.
@@ -368,7 +394,7 @@ Status: **AKTIF + GUARDED**. Gunakan section ini untuk semua task yang menyentuh
 - Jangan memakai rules cleanup sementara `allow read, write: if true`.
 - Jangan memakai expiry sementara `request.time < ...` sebagai rules final.
 - Jangan longgarkan seluruh database.
-- Jika collection bisnis utama permission denied setelah publish rules, catat nama collection dan buat patch rules kecil terpisah.
+- Jika collection bisnis utama permission denied setelah publish rules backend manual/external, catat nama collection dan buat patch rules kecil terpisah setelah approval.
 
 ### File yang boleh disentuh untuk task Auth/User Management
 
@@ -376,7 +402,7 @@ Status: **AKTIF + GUARDED**. Gunakan section ini untuk semua task yang menyentuh
 - `src/pages/System/UserManagement.jsx` hanya jika flow create/edit/delete profile bermasalah.
 - `src/services/System/userService.js` hanya jika guard create/update/delete profile bermasalah.
 - `src/utils/auth/roleAccess.js` hanya jika role/access matrix memang perlu update.
-- `firestore.rules` untuk sinkronisasi rules.
+- File rules source-controlled hanya boleh ditambahkan pada task terpisah jika owner meminta rules masuk repo.
 - Docs Auth/User Management/checklist/integration map.
 
 ### File/area guarded
@@ -395,7 +421,7 @@ Status: **AKTIF + GUARDED**. Gunakan section ini untuk semua task yang menyentuh
 - Manajemen User tidak memiliki opsi `super_admin`.
 - Duplicate username, self-delete, dan last-administrator guard tetap berjalan.
 - Hapus Profile tidak mengubah Firebase Authentication.
-- `firestore.rules` final/staged-final sudah dipublish dan modul utama tidak permission denied.
+- Firestore Rules final/staged-final sudah aktif di Firebase Console/external source owner dan modul utama tidak permission denied.
 - Docs tidak lagi memberi instruksi ganda antara domain lama dan domain baru.
 
 ## Update Prompt Rules — Batch Fix Bug Merge 2026-05-03
@@ -423,7 +449,7 @@ Status: **AKTIF + GUARDED**. Gunakan section ini untuk semua task yang menyentuh
 - Jika task menyentuh Cash In, jangan ubah auto income dari Sales, Cash Out, Profit Loss, Dashboard, atau Reports tanpa analisis lintas modul.
 - Jika task menyentuh Sales tab/status, tabel harus tetap difilter sesuai `activeTabKey`; tab `Dikirim` tidak boleh menampilkan `Selesai`, dan tab `Selesai` tidak boleh menampilkan `Diproses`/`Dikirim`.
 - Search reference Sales harus berjalan setelah filter status aktif, bukan mengganti filter status.
-- Jangan mengubah status transition, stock mutation, income timing, cancel/delete, atau return compatibility hanya untuk memperbaiki tampilan tab.
+- Jangan mengubah status transition, stock mutation, income timing, cancel flow, rollback teknis create failure, atau return compatibility hanya untuk memperbaiki tampilan tab.
 
 
 ## Prompt Guard — Sales pending income dan no-delete action
@@ -460,3 +486,10 @@ Untuk task cleanup theme besar-besaran:
 5. Cleanup Sidebar harus CSS-only kecuali task eksplisit menyentuh navigasi; jangan ubah role-aware menu, `selectedKeys`, `openMenuKeys`, route config, atau role access.
 6. Jika grep theme menemukan false-positive seperti `Message/message`, tandai sebagai false-positive dan jangan ubah kode aktif.
 7. Jika warna lokal ada di halaman bisnis, jadikan fase per modul dan jangan ubah handler/query/dataSource/form submit sekaligus.
+
+## Prompt Guard — UI Table Compact dan Stock Display Locked
+- Jika task hanya merapikan table utama, jangan mengubah service, query, transaction, export mapping, atau schema Firestore.
+- Stock display saldo item yang sudah locked harus tetap menampilkan `Total`, `Tersedia`, dan semua variant pill langsung di table untuk row yang membawa `variants[]`.
+- Jangan menyembunyikan seluruh variant stock ke drawer/tooltip pada halaman saldo stok item seperti Products, Raw Materials, Semi Finished Materials, dan Stock Report.
+- Helper `StockDisplayBlock` adalah presentational only; jangan dipakai untuk Qty transaksi, Stok Masuk Purchases, adjustment quantity, inventory log delta, atau field audit yang bukan saldo master item.
+- Table detail/preview yang memang berisi breakdown kalkulasi boleh tetap lebih lebar, tetapi primary list table sebaiknya tidak memakai fixed/sticky action column kecuali ada alasan UX kuat.

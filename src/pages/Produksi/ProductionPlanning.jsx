@@ -42,7 +42,6 @@ import {
   LinkOutlined,
   MoreOutlined,
   PlusOutlined,
-  ReloadOutlined,
   StopOutlined,
 } from "@ant-design/icons";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
@@ -732,7 +731,6 @@ const ProductionPlanning = () => {
       <ProductionPageHeader
         title="Production Planning"
         description="Layer target sebelum Production Order untuk memantau target mingguan/bulanan tanpa mengubah stok."
-        onRefresh={loadData}
         onAdd={handleAdd}
         addLabel="Tambah Planning"
       />

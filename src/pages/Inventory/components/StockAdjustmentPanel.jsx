@@ -538,70 +538,83 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
     }
   };
 
-  // =========================
-  // SECTION: Kolom riwayat adjustment
-  // Fungsi:
-  // - menampilkan riwayat stock_adjustments di area Manajemen Stok
-  // Hubungan flow:
-  // - membantu audit adjustment tanpa membuka halaman/menu terpisah
-  // Status:
-  // - aktif dipakai untuk UI panel
-  // =========================
+  /* =====================================================
+  SECTION: Kolom riwayat Stock Adjustment compact — AKTIF / GUARDED
+  Fungsi:
+  - Menampilkan audit adjustment dalam table padat tanpa horizontal scroll wajib.
+  - Menggabungkan jenis item, nama item, tipe adjustment, qty, alasan, dan catatan tanpa mengubah record audit.
+
+  Dipakai oleh:
+  - Panel Stock Adjustment di halaman Manajemen Stok.
+
+  Alasan perubahan:
+  - Riwayat adjustment adalah audit read-only; compact table cukup menampilkan ringkasan, sementara catatan panjang tetap tersedia via tooltip/preview.
+
+  Catatan cleanup:
+  - Jika nanti ada drawer audit detail, kolom alasan/catatan bisa dibuat lebih pendek lagi.
+
+  Risiko:
+  - Jangan mengubah handleSubmitStockAdjustment, runTransaction, payload stock_adjustments, atau inventory_logs dari section UI ini.
+  ===================================================== */
   const stockAdjustmentColumns = useMemo(() => {
     return [
       {
         title: "Tanggal",
         dataIndex: "date",
         key: "date",
+        width: "12%",
         render: (value) => (value?.toDate ? dayjs(value.toDate()).format("DD-MM-YYYY") : "-"),
       },
       {
-        title: "Jenis Item",
-        dataIndex: "itemType",
-        key: "itemType",
-        render: (value, record) => {
+        title: "Item",
+        key: "itemSummary",
+        width: "28%",
+        render: (_, record) => {
           const itemTypeConfig = resolveStockAdjustmentItemTypeConfig({
-            itemType: value,
+            itemType: record.itemType,
             collectionName: record.collectionName,
           });
 
-          return <Tag color={itemTypeConfig.tagColor}>{itemTypeConfig.label}</Tag>;
+          return (
+            <div className="ims-cell-stack ims-cell-stack-tight">
+              <div>
+                <Tag color={itemTypeConfig.tagColor}>{itemTypeConfig.label}</Tag>
+              </div>
+              <strong>{record.itemName || "-"}</strong>
+              {record.variantLabel ? (
+                <span className="ims-cell-meta">Varian: {record.variantLabel}</span>
+              ) : null}
+            </div>
+          );
         },
       },
       {
-        title: "Nama Item",
-        key: "itemName",
+        title: "Adjustment",
+        key: "adjustmentSummary",
+        width: "16%",
         render: (_, record) => (
-          <div>
-            <strong>{record.itemName || "-"}</strong>
-            {record.variantLabel ? (
-              <div style={{ fontSize: 12, color: "#666" }}>Varian: {record.variantLabel}</div>
-            ) : null}
+          <div className="ims-cell-stack ims-cell-stack-tight">
+            {record.adjustmentType === "in" ? (
+              <Tag color="green">Tambah</Tag>
+            ) : (
+              <Tag color="red">Kurang</Tag>
+            )}
+            <strong>{formatQuantityId(record.quantity, record.unit)}</strong>
           </div>
         ),
-      },
-      {
-        title: "Tipe Penyesuaian",
-        dataIndex: "adjustmentType",
-        key: "adjustmentType",
-        render: (value) =>
-          value === "in" ? <Tag color="green">Tambah</Tag> : <Tag color="red">Kurang</Tag>,
-      },
-      {
-        title: "Qty",
-        key: "quantity",
-        render: (_, record) => formatQuantityId(record.quantity, record.unit),
       },
       {
         title: "Alasan",
         dataIndex: "reason",
         key: "reason",
-        render: (value) => value || "-",
+        width: "22%",
+        render: renderCompactNote,
       },
       {
         title: "Catatan",
         dataIndex: "note",
         key: "note",
+        width: "22%",
         render: renderCompactNote,
       },
     ];
@@ -648,7 +661,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         rowKey="id"
         columns={stockAdjustmentColumns}
         dataSource={sortedAdjustmentRecords}
-        scroll={{ x: 900 }}
+        tableLayout="fixed"
         pagination={{ pageSize: 5 }}
       />
 

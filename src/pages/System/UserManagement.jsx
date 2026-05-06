@@ -16,7 +16,6 @@ import {
 import {
   EditOutlined,
   PlusOutlined,
-  ReloadOutlined,
   StopOutlined,
   CheckCircleOutlined,
   DeleteOutlined,
@@ -574,12 +573,6 @@ const UserManagement = () => {
         title="Manajemen User"
         subtitle="Kelola profile internal, role aktif, dan status akses user IMS tanpa menyentuh password Firebase Authentication."
         actions={[
-          {
-            key: "refresh-users",
-            icon: <ReloadOutlined />,
-            label: "Refresh",
-            onClick: loadUsers,
-          },
           {
             key: "create-user-profile",
             type: "primary",

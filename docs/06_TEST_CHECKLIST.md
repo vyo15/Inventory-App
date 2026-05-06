@@ -634,7 +634,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - Purchase Raw Material varian; audit harus tetap OK dan master `stock/currentStock` sama dengan total varian.
 - Stock Adjustment masuk/keluar untuk varian; audit harus tetap OK dan inventory log tetap normal.
 - Edit Product bervarian; audit harus tetap OK.
-- Sales produk varian dan cancel/delete jika relevan; stok revert harus aman dan audit tetap OK.
+- Sales produk varian lalu Batalkan jika relevan; stok revert harus aman dan audit tetap OK. Jangan menguji hard delete Sales sebagai aksi user.
 - Return item varian; audit harus OK dan stok tidak double.
 - Edit Semi Finished bervarian; master `stock/currentStock` harus sama dengan total varian.
 - Start/Complete Work Log yang memakai varian; audit harus OK dan tidak double posting.
@@ -823,7 +823,26 @@ Status: **AKTIF + GUARDED**. Checklist ini menggantikan checklist Auth/Role lama
 
 ### Checklist Firestore Rules final/staged-final
 
-- [ ] Publish `firestore.rules` hasil patch.
+=====================================================
+SECTION: Firestore Rules validation without repo rules file — AKTIF / GUARDED
+Fungsi:
+- Memastikan backend rules tetap divalidasi walaupun repo ZIP saat ini tidak membawa file `firestore.rules`.
+
+Dipakai oleh:
+- Checklist release Auth/User Management, runtime smoke test, dan deployment manual Firebase.
+
+Alasan perubahan:
+- Owner mengonfirmasi rules aktif dikelola langsung di Firebase Console/external, bukan melalui patch source repo ini.
+
+Catatan cleanup:
+- Tambahkan source-controlled rules pada task terpisah jika owner ingin rules masuk repo.
+
+Risiko:
+- Melewatkan validasi rules backend dapat membuat UI guard tampak aman padahal data masih terbuka/terblokir di Firestore.
+=====================================================
+
+- [ ] Pastikan Firestore Rules aktif sudah dipublish di Firebase Console atau source external yang dipakai owner.
+- [ ] Jangan mencari file `firestore.rules` di repo ZIP ini sebagai syarat patch saat rules masih dikelola manual/external.
 - [ ] Rules memakai `rules_version = '2';`.
 - [ ] Semua akses penting berbasis `request.auth != null`.
 - [ ] Actor profile dibaca dari `system_users/{request.auth.uid}`.
@@ -1082,3 +1101,13 @@ Status: **AKTIF + GUARDED**. Checklist ini menggantikan checklist Auth/Role lama
 - [ ] Login normal, login error, loading profile, blocked user, dan logout blocked user tetap berjalan.
 - [ ] Mobile login tetap form-first, rapi, dan tidak overflow.
 - [ ] Tidak ada perubahan ke AuthContext, route guard, role access, Sidebar, Dashboard, atau modul bisnis.
+
+## Checklist UI Table Compact — 2026-05-06
+- [ ] Buka Cash In: table utama tampil tanpa horizontal scroll default, sumber + tipe terbaca, nominal tetap rata kanan, dan tidak ada aksi delete/edit row.
+- [ ] Buka Stock Management > Stock Adjustment Panel: riwayat adjustment tampil compact tanpa horizontal scroll default dan catatan panjang tetap terbaca via tooltip/preview.
+- [ ] Buka Pricing Rules: table utama tampil compact tanpa fixed/sticky kanan; tombol Detail/Edit/Hapus tetap bekerja; modal Detail/preview tetap menghitung data yang sama.
+- [ ] Buka Products: kolom Stok tetap menampilkan `Total`, `Tersedia`, dan semua variant pill langsung di table untuk item bervarian.
+- [ ] Buka Semi Finished Materials: primary table tampil tanpa horizontal scroll default; kolom Stok tetap menampilkan `Total`, `Tersedia`, dan semua variant pill langsung di table.
+- [ ] Buka Supplier: table utama tetap tanpa horizontal scroll default; Detail/Edit/Hapus tetap bekerja; drawer detail katalog tetap read-only terhadap transaksi.
+- [ ] Buka Stock Report: baris stok menampilkan `Total`, `Tersedia`, dan variant pill jika data source membawa `variants[]`; filter, summary, dan export tetap memakai data laporan existing.
+- [ ] Regression guarded: create/edit/toggle Products, submit Stock Adjustment, apply Pricing Rule, save Supplier, dan tambah Cash In manual tetap sama seperti sebelum patch.

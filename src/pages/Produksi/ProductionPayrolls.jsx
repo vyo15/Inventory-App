@@ -31,7 +31,6 @@ import {
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
-  ReloadOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
@@ -472,7 +471,6 @@ const ProductionPayrolls = () => {
       <ProductionPageHeader
         title="Payroll Produksi"
         description="Rekap line payroll produksi berbasis work log completed, tetap guarded terhadap pembuatan Cash Out otomatis."
-        onRefresh={loadData}
         onAdd={handleAdd}
         addLabel="Tambah Payroll"
       />

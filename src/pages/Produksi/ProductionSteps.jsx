@@ -33,7 +33,6 @@ import {
   EditOutlined,
   EyeOutlined,
   PlusOutlined,
-  ReloadOutlined,
 } from "@ant-design/icons";
 import {
   BASIS_TYPE_MAP,
@@ -511,7 +510,6 @@ const ProductionSteps = () => {
       <ProductionPageHeader
         title="Tahapan Produksi"
         description="Master step sederhana untuk standarisasi proses, relasi karyawan, BOM, dan source of truth payroll produksi."
-        onRefresh={loadData}
         onAdd={handleAdd}
         addLabel="Tambah Step"
       />

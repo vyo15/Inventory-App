@@ -1200,7 +1200,6 @@ const ProductionWorkLogs = () => {
       <ProductionPageHeader
         title="Work Log Produksi"
         description="Realisasi kerja produksi dari Production Order (1 PO = 1 Work Log)"
-        onRefresh={loadData}
         onAdd={() => openCreateWorkLogDrawer("manual")}
         addLabel="Tambah Work Log"
       />

@@ -518,7 +518,7 @@ const SupplierPurchases = () => {
       title: 'Nama Supplier',
       dataIndex: 'storeName',
       key: 'storeName',
-      width: '24%',
+      width: '22%',
       render: (_, record) => (
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Space size={6} wrap>
@@ -577,7 +577,7 @@ const SupplierPurchases = () => {
     {
       title: 'Harga Estimasi Ringkas',
       key: 'estimatedPrice',
-      width: '20%',
+      width: '18%',
       render: (_, record) => {
         const detail = getSupplierTableSummaryDetail(record);
         if (!detail) return '-';
@@ -601,7 +601,7 @@ const SupplierPurchases = () => {
     {
       title: 'Aksi',
       key: 'actions',
-      width: 150,
+      width: '14%',
       // ---------------------------------------------------------------------
       // AKTIF + GUARDED: action column tanpa fixed/sticky.
       // FUNGSI: tombol Detail/Edit/Hapus tetap mudah diklik tanpa horizontal
@@ -827,12 +827,14 @@ const SupplierPurchases = () => {
         </Col>
       </FilterBar>
 
-      {/* -------------------------------------------------------------------
-          TABLE UTAMA TANPA HORIZONTAL SCROLL PAKSA.
-          FUNGSI: table Supplier tetap ringkas di laptop normal dan action tidak
-          perlu digeser ke kanan. Detail katalog panjang tetap dibuka di drawer.
-          STATUS: aktif sebagai UI cleanup; tidak mengubah save Supplier.
-      ------------------------------------------------------------------- */}
+      {/* =====================================================
+          SECTION: Table Supplier compact — AKTIF / GUARDED
+          Fungsi: table utama Supplier tetap ringkas tanpa horizontal scroll default; detail katalog panjang tetap di drawer.
+          Dipakai oleh: Master Data / Supplier sebagai katalog restock, bukan transaksi pembelian.
+          Alasan perubahan: batch compact table menjaga action selalu terlihat tanpa fixed/sticky dan tanpa memadatkan flow Purchases.
+          Catatan cleanup: detail drawer bisa dipisah ke component sendiri bila file Supplier makin besar.
+          Risiko: jangan ubah save Supplier, cascade snapshot Raw Material, prefill Purchases, stok, kas, atau expense dari section UI ini.
+      ===================================================== */}
       <PageSection
         title="Daftar Supplier"
         subtitle="Supplier tetap menjadi katalog restock. Detail bahan, link toko, dan pembanding harga dibuka dari drawer."

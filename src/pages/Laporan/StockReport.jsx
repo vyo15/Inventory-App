@@ -7,6 +7,7 @@ import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
 import { db } from "../../firebase";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatNumberId } from "../../utils/formatters/numberId";
@@ -248,6 +249,23 @@ const StockReport = () => {
     });
   };
 
+  /* =====================================================
+  SECTION: Kolom laporan stok compact — AKTIF / GUARDED
+  Fungsi:
+  - Menampilkan laporan stok read-only dengan format saldo stok locked: Total, Tersedia, dan variant pill jika row membawa variants[].
+
+  Dipakai oleh:
+  - Halaman Laporan / StockReport dan summary/export yang tetap memakai data filteredData existing.
+
+  Alasan perubahan:
+  - StockReport sebelumnya masih menampilkan angka stok sederhana walaupun normalisasi row mempertahankan field variants/currentStock/availableStock dari source collection.
+
+  Catatan cleanup:
+  - Export XLSX masih tetap memakai stockDisplay angka lama agar mapping report tidak berubah pada patch UI-only ini.
+
+  Risiko:
+  - Jangan mengubah query, filter, summary, export mapping, atau perhitungan stockDisplay dari section ini tanpa approval report/data layer.
+  ===================================================== */
   const columns = useMemo(
     () => [
       {
@@ -277,14 +295,17 @@ const StockReport = () => {
         title: "Stok",
         dataIndex: "stockDisplay",
         key: "stockDisplay",
-        // AKTIF / GUARDED: format display stok report no-decimal tanpa mengubah source/formula laporan.
-        render: (value) => formatNumberId(value),
+        width: "34%",
+        // AKTIF / GUARDED: display locked hanya membaca field row; stockDisplay/export dan formula laporan tidak diubah.
+        render: (_, record) => (
+          <StockDisplayBlock
+            record={record}
+            unit={record.unitDisplay}
+            className="ims-cell-stack ims-cell-stack-tight"
+            metaClassName="ims-cell-meta"
+          />
+        ),
         sorter: (left, right) => left.stockDisplay - right.stockDisplay,
-      },
-      {
-        title: "Satuan",
-        dataIndex: "unitDisplay",
-        key: "unitDisplay",
       },
       {
         title: "Status",
@@ -392,6 +413,7 @@ const StockReport = () => {
           loading={loading}
           rowKey="id"
           bordered
+          tableLayout="fixed"
           locale={{
             emptyText: <EmptyStateBlock description="Belum ada data stok yang cocok dengan filter saat ini." />,
           }}

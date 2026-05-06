@@ -85,11 +85,33 @@ Jika status diubah ke `Dibatalkan`:
 - stok item dikembalikan
 - catat `inventory_logs` dengan type `sale_cancel_revert`
 
-### 2.6 Hapus penjualan
-Jika penjualan dihapus:
-- jika status belum `Dibatalkan`, stok dikembalikan lagi lewat `sale_revert`
-- jika status sudah `Dibatalkan`, stok tidak dikembalikan lagi agar tidak double revert
-- income terkait sale juga dihapus
+### 2.6 Sales batal dan hard delete bukan flow operasional
+
+=====================================================
+SECTION: Sales cancellation and no hard-delete user action — AKTIF / GUARDED
+Fungsi:
+- Menetapkan bahwa pembatalan penjualan resmi dilakukan melalui status `Dibatalkan`, bukan penghapusan record dari tabel Sales.
+
+Dipakai oleh:
+- `src/pages/Transaksi/Sales.jsx`, laporan Sales, Cash In auto income, dan audit `inventory_logs`.
+
+Alasan perubahan:
+- Owner menegaskan hard delete Sales rawan penyalahgunaan dan tidak boleh menjadi aksi operasional biasa.
+
+Catatan cleanup:
+- Hard delete, jika suatu hari diperlukan, harus menjadi maintenance flow guarded dengan approval dan audit trail.
+
+Risiko:
+- Menghapus sale sebagai aksi user dapat menyembunyikan transaksi, memutus audit stok, dan mengacaukan income/report.
+=====================================================
+
+Jika penjualan tidak jadi:
+- user memakai aksi **Batalkan** sehingga status menjadi `Dibatalkan`;
+- stok item dikembalikan satu kali melalui flow cancel;
+- audit `inventory_logs` tetap mencatat pembatalan;
+- record sale tetap ada untuk jejak audit dan laporan historis.
+
+Hard delete Sales tidak tersedia untuk user biasa dan tidak boleh ditambahkan sebagai tombol/handler baru. Pemanggilan `deleteDoc` di Sales hanya boleh dipahami sebagai rollback teknis ketika create sale gagal setelah dokumen sale sempat dibuat, bukan fitur delete user.
 
 ## 3. Rule Retur
 Saat retur disimpan:
@@ -416,7 +438,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Sale tidak boleh tersimpan jika stok tersedia tidak cukup.
 - Jika mutasi stok gagal setelah sale dibuat, sale baru wajib dibatalkan/rollback agar tidak ada transaksi orphan tanpa stok keluar.
 - Income rule tidak berubah: income hanya dibuat saat sale berstatus `Selesai` dan tidak boleh dobel.
-- Cancel/delete sale tetap guarded: cancel revert stok satu kali, delete sale yang sudah `Dibatalkan` tidak revert ulang.
+- Cancel Sales tetap guarded: pembatalan merevert stok satu kali. Hard delete bukan flow user; penghapusan dokumen Sales hanya rollback teknis saat create failure.
 
 ### Fase B - Metadata Expense Pembelian
 - Pembelian tetap membuat expense otomatis dengan amount mengikuti logic existing pembelian.
@@ -728,7 +750,9 @@ Field yang tidak boleh disimpan di Firestore:
 
 ### 24.6 Firestore Rules final/staged-final
 
-- Firestore Rules wajib berbasis `request.auth != null`.
+- Firestore Rules wajib aktif di backend Firebase dan berbasis `request.auth != null`.
+- Pada repo ZIP saat ini, rules dikelola manual/external di Firebase Console dan tidak disertakan sebagai file source.
+- Jangan membuat file `firestore.rules` atau mengubah `firebase.json` kecuali ada task terpisah untuk source-controlled rules.
 - Actor profile wajib dibaca dari `system_users/{request.auth.uid}`.
 - Role aktif Rules hanya `administrator` dan `user`.
 - `system_users` wajib guarded:
@@ -794,7 +818,7 @@ Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases,
 - Tab `Semua Penjualan` boleh menampilkan semua status.
 - Tab `Diproses`, `Dikirim`, `Selesai`, dan `Dibatalkan` hanya boleh menampilkan row dengan status yang sama.
 - Search resi/order/reference harus tetap bekerja di dalam batas status tab aktif.
-- Guard tab status adalah guard tampilan; tidak boleh mengubah status transition, mutasi stok, income timing, cancel/delete, retur, dashboard, atau reports.
+- Guard tab status adalah guard tampilan; tidak boleh mengubah status transition, mutasi stok, income timing, cancel flow, rollback teknis create failure, retur, dashboard, atau reports.
 
 
 ## Update Business Rules — Sales pending income, no-delete Sales, dan selector stok ringkas — 2026-05-03
@@ -819,3 +843,9 @@ Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases,
 - Selector item Sales boleh memisahkan Produk Jadi dan Bahan Baku melalui field UI **Jenis Item**, tetapi payload akhir tetap memakai `collectionName`, `itemId`, `variantKey`, dan `stockSourceType`.
 - Dropdown item/varian cukup menampilkan nama item/varian dan jenis item; detail stok tersedia cukup tampil di panel read-only stok.
 - Panel stok read-only hanya informasi snapshot; validasi dan mutasi stok tetap memakai guard `availableStock` dan helper stok aktif.
+
+## 24. Rule Tampilan Saldo Stok Locked — 2026-05-06
+- Table yang menampilkan **saldo stok item/master** harus menampilkan `Total`, `Tersedia`, dan semua variant pill langsung di table bila row memiliki `variants[]`.
+- Rule ini berlaku untuk tampilan saldo stok item seperti Products, Raw Materials, Semi Finished Materials, dan Stock Report.
+- Rule ini tidak berlaku untuk Qty transaksi, Stok Masuk Purchases, Stock Adjustment quantity, inventory log delta, atau field audit lain yang bukan saldo stok master.
+- Perubahan tampilan compact table tidak boleh mengubah rumus stok, mutation, reserved stock, available stock, HPP, pricing, export mapping, atau schema Firestore.
