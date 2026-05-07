@@ -65,6 +65,7 @@ import ProductionFilterCard from "../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -847,14 +848,14 @@ const ProductionEmployees = () => {
             Risiko:
             - Mengubah query summary payroll/worklog dari area tabel dapat menggeser source of truth payroll produksi.
         ===================================================== */}
+        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
         <Table
           className="app-data-table"
           rowKey="id"
-          loading={loading}
           columns={columns}
           dataSource={filteredData}
           locale={{
-            emptyText: <Empty description="Belum ada data karyawan produksi" />,
+            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data karyawan produksi" />),
           }}
           pagination={{
             pageSize: 10,

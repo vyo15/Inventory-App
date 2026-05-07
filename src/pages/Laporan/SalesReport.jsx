@@ -10,6 +10,7 @@ import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 const SalesReport = () => {
   // =========================
@@ -250,15 +251,15 @@ const SalesReport = () => {
           </Button>
         }
       >
+        <DataRefreshIndicator loading={loading} dataSource={salesData} />
         <Table
           // AKTIF / GUARDED UI: class standar hanya visual; sales status, income recognition, dan report calculation tidak diubah.
           className="app-data-table"
           dataSource={salesData}
           columns={columns}
           rowKey="id"
-          loading={loading}
           locale={{
-            emptyText: <EmptyStateBlock description="Belum ada data penjualan untuk ditampilkan." />,
+            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data penjualan untuk ditampilkan." />),
           }}
         />
       </PageSection>

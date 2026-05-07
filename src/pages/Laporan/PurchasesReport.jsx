@@ -10,6 +10,7 @@ import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // =========================
 // SECTION: Helper saving pembelian
@@ -270,15 +271,15 @@ const PurchasesReport = () => {
           </Button>
         }
       >
+        <DataRefreshIndicator loading={loading} dataSource={purchasesData} />
         <Table
           // AKTIF / GUARDED UI: class standar hanya visual; pembacaan report pembelian/expense flow tidak diubah.
           className="app-data-table"
           dataSource={purchasesData}
           columns={columns}
           rowKey="id"
-          loading={loading}
           locale={{
-            emptyText: <EmptyStateBlock description="Belum ada data pembelian untuk ditampilkan." />,
+            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data pembelian untuk ditampilkan." />),
           }}
         />
       </PageSection>

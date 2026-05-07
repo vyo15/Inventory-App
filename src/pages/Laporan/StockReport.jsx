@@ -11,6 +11,7 @@ import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
 import { db } from "../../firebase";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatNumberId } from "../../utils/formatters/numberId";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 const { Search } = Input;
 const { Option } = Select;
@@ -405,17 +406,17 @@ const StockReport = () => {
         subtitle="Field stok tampilan mengikuti fallback currentStock → stock → availableStock dan sudah mencakup semi-finished stock produksi."
         extra={<Tag color="blue">{formatNumberId(filteredData.length)} baris</Tag>}
       >
+        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
         <Table
           // AKTIF / GUARDED UI: class standar hanya visual; sumber stok/currentStock/reservedStock/availableStock tidak diubah.
           className="app-data-table"
           columns={columns}
           dataSource={filteredData}
-          loading={loading}
           rowKey="id"
           bordered
           tableLayout="fixed"
           locale={{
-            emptyText: <EmptyStateBlock description="Belum ada data stok yang cocok dengan filter saat ini." />,
+            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data stok yang cocok dengan filter saat ini." />),
           }}
         />
       </PageSection>

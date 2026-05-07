@@ -62,6 +62,7 @@ import {
   formatQuantityId,
   parseIntegerIdInput,
 } from "../../utils/formatters/numberId";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -779,16 +780,16 @@ const ProductionPlanning = () => {
           </Space>
         }
       >
+        <DataRefreshIndicator loading={loading} dataSource={filteredPlans} />
         <Table
           rowKey="id"
-          loading={loading}
           columns={columns}
           dataSource={filteredPlans}
           className="app-data-table"
           locale={{
-            emptyText: (
+            emptyText: getDataTableEmptyText(loading, (
               <Empty description="Belum ada planning produksi untuk filter ini." />
-            ),
+            )),
           }}
         />
       </PageSection>

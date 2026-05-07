@@ -2,7 +2,6 @@ import React, { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "../components/Auth/ProtectedRoute";
 import { ROUTE_ACCESS_KEYS } from "../utils/auth/roleAccess";
-import LogoLoadingScreen from "../components/Layout/Feedback/LogoLoadingScreen";
 
 // =========================
 // SECTION: Lazy Loaded Pages — AKTIF
@@ -78,15 +77,15 @@ const ResetMaintenanceData = lazy(
 );
 
 // =====================================================
-// SECTION: Route Loader — AKTIF / GUARDED
+// SECTION: Lazy Route Fallback — AKTIF / GUARDED
 // Fungsi:
-// - Menampilkan fallback visual saat lazy page sedang dimuat.
+// - Menjaga Suspense tetap non-prominent saat chunk halaman sedang dimuat.
 //
 // Dipakai oleh:
 // - Suspense fallback di AppRoutes.
 //
 // Alasan perubahan:
-// - Visual loader lazy route disatukan ke LogoLoadingScreen sebagai UI-only; route definitions, lazy imports, ProtectedRoute, dan role guard tidak berubah.
+// - Fallback lazy route sengaja tanpa logo besar agar tidak muncul double loading setelah global/session loader. Route definitions, lazy imports, ProtectedRoute, dan role guard tidak berubah.
 //
 // Catatan cleanup:
 // - belum ada.
@@ -94,9 +93,7 @@ const ResetMaintenanceData = lazy(
 // Risiko:
 // - Jika route structure atau guard wrapper ikut diubah, halaman bisnis dan akses role bisa terganggu.
 // =====================================================
-const RouteLoader = () => (
-  <LogoLoadingScreen message="Memuat halaman IMS Bunga Flanel..." />
-);
+const RouteFallback = null;
 
 // =========================
 // SECTION: App Routes — AKTIF / GUARDED
@@ -119,7 +116,7 @@ const AppRoutes = ({ darkTheme }) => {
   );
 
   return (
-    <Suspense fallback={<RouteLoader />}>
+    <Suspense fallback={RouteFallback}>
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/unauthorized" element={<Unauthorized />} />

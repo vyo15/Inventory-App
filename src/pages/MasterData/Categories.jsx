@@ -21,6 +21,7 @@ import { db } from "../../firebase";
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 const Categories = () => {
   const [categories, setCategories] = useState([]);
@@ -165,13 +166,14 @@ const Categories = () => {
         title="Daftar Kategori"
         subtitle="Halaman ini hanya mengelola master kategori dan tidak mengubah stok, kas, atau transaksi aktif."
       >
+        <DataRefreshIndicator loading={loading} dataSource={categories} />
         <Table
           className="app-data-table"
           columns={columns}
           dataSource={categories}
           rowKey="id"
-          loading={loading}
           pagination={{ pageSize: 10 }}
+          locale={{ emptyText: getDataTableEmptyText(loading) }}
         />
       </PageSection>
 

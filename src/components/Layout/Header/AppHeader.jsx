@@ -51,7 +51,7 @@ const AppHeader = () => {
       </div>
 
       <div className="app-header-user-area">
-        <Space size={10} wrap className="app-header-user-actions">
+        <Space size={10} className="app-header-user-actions">
           <Tag icon={<UserOutlined />} className="app-header-user-tag">
             {displayName}
           </Tag>

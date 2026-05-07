@@ -35,6 +35,7 @@ import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 const { RangePicker } = DatePicker;
 
@@ -655,15 +656,15 @@ const PayrollReport = () => {
         title="Detail Payroll Lines"
         subtitle="Tabel laporan tetap line-centric. Work Log number hanya menjadi grouping visual dan referensi audit, bukan batch entity baru."
       >
+        <DataRefreshIndicator loading={loading} dataSource={filteredPayrolls} />
         <Table
           className="app-data-table"
           rowKey="id"
-          loading={loading}
           columns={payrollColumns}
           dataSource={filteredPayrolls}
           pagination={{ pageSize: 10 }}
           locale={{
-            emptyText: <Empty description="Belum ada data payroll pada filter aktif" />,
+            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data payroll pada filter aktif" />),
           }}
         />
       </PageSection>

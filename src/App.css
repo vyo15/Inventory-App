@@ -13,7 +13,13 @@
 .app-shell {
   height: 100vh;
   overflow: hidden;
-  background: var(--ims-bg-shell);
+  background:
+    radial-gradient(
+      circle at top left,
+      color-mix(in srgb, var(--ims-color-primary) 12%, transparent) 0%,
+      transparent 34%
+    ),
+    var(--ims-bg-page);
   color: var(--ims-text-primary);
   transition:
     background-color 0.22s ease,
@@ -93,7 +99,11 @@
 .app-main-layout {
   height: 100%;
   min-width: 0;
-  background: transparent !important;
+  background: var(--ims-bg-shell) !important;
+}
+
+.app-layout {
+  overflow: hidden;
 }
 
 /* =========================
@@ -110,14 +120,14 @@
 ========================= */
 .app-sider {
   height: 100vh;
-  background: transparent !important;
+  background: var(--ims-bg-shell) !important;
   border-right: 0 !important;
   overflow: hidden;
 }
 
 .app-sider .ant-layout-sider-children {
   height: 100%;
-  background: transparent !important;
+  background: var(--ims-bg-shell) !important;
 }
 
 .app-sider-inner {
@@ -125,18 +135,19 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--ims-bg-shell);
 }
 
 .app-logo-wrap {
   flex: 0 0 auto;
-  padding: 14px 12px 8px;
+  padding: 18px 18px 8px;
 }
 
 .app-menu-wrap {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  padding: 0 8px 14px;
+  padding: 0 14px 18px;
 }
 
 /* AKTIF / GUARDED: menetralkan garis default AntD Sider agar border sidebar tetap dikontrol token shell. */
@@ -158,12 +169,12 @@
    - GUARDED karena header menjadi area kontrol user dan konteks halaman.
 ========================= */
 .app-header {
-  height: 92px;
+  height: 88px;
   line-height: normal;
   padding: 0 28px;
   display: flex;
   align-items: center;
-  background: transparent !important;
+  background: var(--ims-bg-shell) !important;
   border-bottom: 0 !important;
   box-shadow: none !important;
   z-index: 5;
@@ -190,9 +201,9 @@
    - GUARDED karena tabel, modal trigger, drawer trigger, dan form besar bergantung pada ruang content ini.
 ========================= */
 .app-main-content {
-  height: calc(100vh - 92px);
+  height: calc(100vh - 88px);
   padding: 0;
-  background: transparent !important;
+  background: var(--ims-bg-shell) !important;
   overflow: hidden;
 }
 
@@ -201,16 +212,16 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0 20px 20px;
-  background: transparent;
+  background: var(--ims-bg-shell);
 }
 
 .app-content-card {
   min-height: 100%;
-  background: color-mix(in srgb, var(--ims-bg-card) 92%, transparent);
+  background: color-mix(in srgb, var(--ims-bg-card) 92%, var(--ims-bg-card-soft));
   border: 1px solid var(--ims-border-color-soft);
-  border-radius: 24px 24px 0 0;
+  border-radius: 28px 28px 0 0;
   padding: 28px 24px 24px;
-  box-shadow: var(--ims-shadow-soft);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ims-bg-elevated) 82%, transparent), var(--ims-shadow-soft);
   backdrop-filter: blur(14px);
   transition:
     background-color 0.22s ease,
@@ -219,6 +230,71 @@
     box-shadow 0.22s ease;
 }
 
+
+
+/* =========================
+   SECTION: Unified Header + Sidebar Shell - AKTIF / UI ONLY
+   Fungsi:
+   - menyamakan surface sidebar, logo, dan header agar terlihat satu kesatuan di light/dark mode.
+   Hubungan flow aplikasi:
+   - hanya memoles shell visual; tidak menyentuh route, role guard, auth, service, stok, kas, produksi, payroll, HPP, atau laporan.
+   Status:
+   - AKTIF untuk implementasi unified app shell blue/yellow.
+========================= */
+.app-shell.light .app-sider,
+.app-shell.light .app-sider-inner,
+.app-shell.light .app-main-layout,
+.app-shell.light .app-header,
+.app-shell.light .app-main-content,
+.app-shell.light .app-content-scroll {
+  background: var(--ims-bg-shell) !important;
+}
+
+.app-shell.dark .app-sider,
+.app-shell.dark .app-sider-inner,
+.app-shell.dark .app-main-layout,
+.app-shell.dark .app-header,
+.app-shell.dark .app-main-content,
+.app-shell.dark .app-content-scroll {
+  background: var(--ims-bg-shell) !important;
+}
+
+.app-sider .ant-layout-sider-trigger {
+  background: color-mix(in srgb, var(--ims-bg-shell) 92%, var(--ims-bg-elevated)) !important;
+  color: var(--ims-text-primary) !important;
+  border-top: 1px solid var(--ims-border-color-soft);
+}
+
+@media (max-width: 992px) {
+  .app-header {
+    height: auto;
+    min-height: 92px;
+    padding: 14px 20px;
+  }
+
+  .app-main-content {
+    height: calc(100vh - 92px);
+  }
+}
+
+@media (max-width: 768px) {
+  .app-logo-wrap {
+    padding: 14px 12px 6px;
+  }
+
+  .app-menu-wrap {
+    padding: 0 10px 14px;
+  }
+
+  .app-content-scroll {
+    padding: 0 12px 16px;
+  }
+
+  .app-content-card {
+    border-radius: 22px 22px 0 0;
+    padding: 20px 16px 18px;
+  }
+}
 
 /* =========================
    SECTION: Theme Toggle Button - AKTIF / GUARDED

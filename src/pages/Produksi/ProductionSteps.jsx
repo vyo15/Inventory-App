@@ -61,6 +61,7 @@ import ProductionFilterCard from "../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -606,14 +607,14 @@ const ProductionSteps = () => {
             Risiko:
             - Menambahkan kembali fixed right tanpa scroll x dapat membuat layout action rusak di viewport kecil.
         ===================================================== */}
+        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
         <Table
           className="app-data-table"
           rowKey="id"
-          loading={loading}
           columns={columns}
           dataSource={filteredData}
           locale={{
-            emptyText: <Empty description="Belum ada data tahapan produksi" />,
+            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data tahapan produksi" />),
           }}
           pagination={{
             pageSize: 10,

@@ -36,6 +36,7 @@ import { db } from "../../firebase";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -487,14 +488,14 @@ const CashOut = () => {
         subtitle="Saving pembelian tetap ditampilkan sebagai informasi efisiensi sesuai business rule aktif."
         extra={<Tag color="red">{formatNumberId(filteredCashOuts.length)} baris</Tag>}
       >
+        <DataRefreshIndicator loading={loading} dataSource={filteredCashOuts} />
         <Table
           className="app-data-table"
           rowKey="id"
           dataSource={filteredCashOuts}
           columns={columns}
-          loading={loading}
           locale={{
-            emptyText: <EmptyStateBlock description="Belum ada pengeluaran pada periode ini." />,
+            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada pengeluaran pada periode ini." />),
           }}
         />
       </PageSection>

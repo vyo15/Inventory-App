@@ -9,6 +9,7 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import StockAdjustmentPanel from "./components/StockAdjustmentPanel";
 import { getInventoryLogs } from "../../services/Inventory/inventoryService";
 import { formatNumberId } from "../../utils/formatters/numberId";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 const { Text } = Typography;
 
@@ -692,16 +693,16 @@ const StockManagement = () => {
         subtitle={`Tabel fokus pada audit operasional. Kolom Referensi Audit menampilkan label bisnis, sementara ID teknis hanya menjadi detail kecil. ${STOCK_SNAPSHOT_COLUMN_NOTE}`}
         extra={<Tag color="purple">{formatNumberId(filteredHistory.length)} baris</Tag>}
       >
+        <DataRefreshIndicator loading={loading} dataSource={filteredHistory} />
         <Table
           // AKTIF / GUARDED UI: class standar hanya menyamakan surface riwayat stok; dataSource, columns, dan flow inventory log tidak diubah.
           className="app-data-table"
           rowKey="id"
-          loading={loading}
           columns={columns}
           dataSource={filteredHistory}
           pagination={{ pageSize: 10 }}
           locale={{
-            emptyText: <EmptyStateBlock description="Belum ada riwayat mutasi stok." />,
+            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada riwayat mutasi stok." />),
           }}
         />
       </PageSection>

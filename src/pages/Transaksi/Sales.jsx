@@ -47,6 +47,7 @@ import {
 } from "../../utils/variants/variantStockHelpers";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -1078,14 +1079,15 @@ const Sales = () => {
         title="Data Penjualan"
         subtitle="Semua transaksi penjualan akan mengurangi stok item/varian yang terjual dan dapat menghasilkan pemasukan saat selesai."
       >
+        <DataRefreshIndicator loading={isLoading} dataSource={filteredSalesRecords} />
         <Table
           className="app-data-table"
           columns={salesTableColumns}
           dataSource={filteredSalesRecords}
           rowKey="id"
           pagination={{ pageSize: 5 }}
-          loading={isLoading}
           tableLayout="fixed"
+          locale={{ emptyText: getDataTableEmptyText(isLoading) }}
         />
       </PageSection>
 

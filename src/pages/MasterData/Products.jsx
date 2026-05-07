@@ -48,6 +48,7 @@ import {
   toggleProductActive,
   updateProduct,
 } from '../../services/MasterData/productsService';
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -567,16 +568,18 @@ const Products = () => {
         title="Daftar Produk Jadi"
         subtitle="Tabel ini merangkum stok, kategori, mode pricing, dan varian produk jadi."
       >
+        <DataRefreshIndicator loading={loading} dataSource={filteredProducts} />
         <Table
           className="ims-table"
           rowKey="id"
-          loading={loading}
           dataSource={filteredProducts}
           columns={columns}
           size="small"
           pagination={{ pageSize: 10 }}
           tableLayout="fixed"
-          locale={{ emptyText: <Empty description="Belum ada data produk" /> }}
+          locale={{
+            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data produk" />),
+          }}
         />
       </PageSection>
 

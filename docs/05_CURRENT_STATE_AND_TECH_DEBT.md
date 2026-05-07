@@ -731,9 +731,15 @@ Risiko:
 - Cleanup candidate lanjutan: migrasikan Raw Materials ke helper `StockDisplayBlock` pada patch terpisah bila ingin mengurangi duplikasi tampilan stok.
 
 ## Update global/auth/route LogoLoadingScreen — 2026-05-07
-- **AKTIF:** loading utama aplikasi untuk auth/session gate, ProtectedRoute guard, Login auth/profile verification, dan lazy route fallback memakai `LogoLoadingScreen`.
+- **AKTIF:** loading utama aplikasi untuk auth/session gate, ProtectedRoute guard sebelum page tampil, dan Login auth/profile verification memakai `LogoLoadingScreen`. Lazy route fallback di dalam layout sengaja non-prominent agar tidak menampilkan logo kedua setelah sidebar/layout tampil.
 - **AKTIF:** `LogoLoadingScreen` memakai logo mark existing `src/assets/branding/flanel-karawang-mark.png` dengan animasi Elegant micro split dan fallback logo normal jika canvas gagal.
 - **AKTIF:** loading dibuat full viewport tanpa card/wrap kecil; `.app-loading-card` dipertahankan sebagai wrapper kompatibilitas tetapi tidak lagi tampil sebagai card.
 - **GUARDED:** perubahan ini UI-only; `AuthContext`, `roleAccess`, route definitions, login submit, service, query, transaction, stock, production, payroll, HPP, report, dan reset maintenance tidak berubah.
 - **LEGACY-COMPAT:** loading lokal seperti table loading, submit button loading, report loading, maintenance preview/loading, dan business process loading tetap boleh memakai komponen lokal/Ant Design sesuai kebutuhan modul.
 
+## Update local data/table/card loading hierarchy — 2026-05-07
+- **AKTIF:** loading hierarchy sekarang memisahkan global loader dan local data loader. Global/auth/route tetap memakai `LogoLoadingScreen`, sedangkan table/data/card memakai `DataLoadingState` skeleton/shimmer lokal.
+- **AKTIF:** `DataLoadingState` adalah helper presentational-only di `src/components/Layout/Feedback/DataLoadingState.jsx`; helper ini tidak fetch data, tidak import service, tidak mutate state, tidak tahu collection Firestore, dan tidak memakai logo full-screen.
+- **AKTIF:** table/data/card loading yang dipatch memakai shimmer/skeleton subtle melalui render conditional/empty state lokal, bukan AntD spinner overlay custom, agar tidak muncul double loading di table.
+- **GUARDED:** submit button, modal confirm/save loading, export/process loading, repair/reset loading, Refresh Need, dan Refresh Preview tetap memakai loading lokal existing sesuai flow masing-masing.
+- **Catatan:** `ResetMaintenanceData` belum dipaksa ke helper baru untuk loading audit/repair/reset yang sensitif; perubahan visual di area destructive harus tetap diaudit per flow sebelum diganti.

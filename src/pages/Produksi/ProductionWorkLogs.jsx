@@ -65,6 +65,7 @@ import {
   updateProductionWorkLog,
 } from "../../services/Produksi/productionWorkLogsService";
 import { generatePayrollLinesFromCompletedWorkLog } from "../../services/Produksi/productionPayrollsService";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
@@ -1238,14 +1239,14 @@ const ProductionWorkLogs = () => {
 
       <Card className="ims-section-card">
         {/* Aktif dipakai: scroll x besar dihapus agar aksi Work Log terlihat pada desktop/laptop normal. */}
+        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
         <Table
           className="ims-table"
           rowKey="id"
-          loading={loading}
           columns={columns}
           dataSource={filteredData}
           locale={{
-            emptyText: <Empty description="Belum ada data work log produksi" />,
+            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data work log produksi" />),
           }}
           pagination={{
             pageSize: 10,

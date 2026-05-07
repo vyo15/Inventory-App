@@ -2,6 +2,7 @@
 
 // SECTION: import hooks React
 import { useEffect, useMemo, useState } from "react";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // SECTION: import komponen Ant Design
 import {
@@ -669,14 +670,15 @@ const PricingRules = () => {
         subtitle="Rule tetap menjadi layer pricing. Apply rule hanya memengaruhi item yang memang memakai mode rule."
       >
         {/* SECTION: tabel utama pricing rule memakai foundation global supaya seragam */}
+        <DataRefreshIndicator loading={pageLoading} dataSource={rules} />
         <Table
           className="app-data-table"
           rowKey="id"
-          loading={pageLoading}
           dataSource={rules}
           columns={rulesColumns}
           pagination={{ pageSize: 10 }}
           tableLayout="fixed"
+          locale={{ emptyText: getDataTableEmptyText(pageLoading) }}
         />
       </PageSection>
 
@@ -977,14 +979,15 @@ const PricingRules = () => {
         </Row>
 
         {/* SECTION: tabel preview */}
+        <DataRefreshIndicator loading={previewLoading} dataSource={previewData} />
         <Table
           className="app-data-table"
           rowKey="itemId"
-          loading={previewLoading}
           dataSource={previewData}
           columns={previewColumns}
           pagination={{ pageSize: 10 }}
           tableLayout="fixed"
+          locale={{ emptyText: getDataTableEmptyText(previewLoading) }}
         />
       </Modal>
     </div>

@@ -52,6 +52,7 @@ import {
   updatePayrollStatus,
   updateProductionPayroll,
 } from "../../services/Produksi/productionPayrollsService";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // =====================================================
 // IMS NOTE [AKTIF/GUARDED] - Formatter angka payroll
@@ -586,14 +587,14 @@ const ProductionPayrolls = () => {
             Tabel payroll produksi compact guarded: layout utama tidak lagi
             memakai horizontal scroll besar; aksi paid tetap lewat handler lama.
         =============================================================== */}
+        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
         <Table
           className="app-data-table"
           rowKey="id"
-          loading={loading}
           columns={columns}
           dataSource={filteredData}
           locale={{
-            emptyText: <Empty description="Belum ada payroll produksi" />,
+            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada payroll produksi" />),
           }}
           pagination={{
             pageSize: 10,

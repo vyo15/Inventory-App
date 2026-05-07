@@ -61,6 +61,7 @@ import {
   toggleProductionBomActive,
   updateProductionBom,
 } from "../../services/Produksi/productionBomsService";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // =====================================================
 // SECTION: helper format angka Indonesia
@@ -832,14 +833,14 @@ const ProductionBoms = () => {
             Tabel utama BOM dibuat compact tanpa horizontal scroll besar.
             Detail komposisi tetap tersedia di drawer detail existing.
         =============================================================== */}
+        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
         <Table
           className="app-data-table"
           rowKey="id"
-          loading={loading}
           columns={columns}
           dataSource={filteredData}
           locale={{
-            emptyText: <Empty description="Belum ada data BOM produksi" />,
+            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data BOM produksi" />),
           }}
           pagination={{
             pageSize: 10,

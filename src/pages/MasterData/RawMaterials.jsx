@@ -54,6 +54,7 @@ import {
   DEFAULT_RAW_MATERIAL_VARIANT,
   ensureAtLeastOneRawMaterialVariant,
 } from '../../utils/variants/rawMaterialVariantHelpers';
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -999,16 +1000,18 @@ const RawMaterials = () => {
         title="Daftar Bahan Baku"
         subtitle="Tabel ini merangkum stok, supplier, mode varian, dan status bahan baku aktif."
       >
+        <DataRefreshIndicator loading={loading} dataSource={filteredMaterials} />
         <Table
           className="app-data-table"
           rowKey="id"
-          loading={loading}
           dataSource={filteredMaterials}
           columns={columns}
           size="small"
           tableLayout="fixed"
           pagination={{ pageSize: 10 }}
-          locale={{ emptyText: <Empty description="Belum ada data bahan baku" /> }}
+          locale={{
+            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data bahan baku" />),
+          }}
         />
       </PageSection>
 

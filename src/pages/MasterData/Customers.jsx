@@ -18,6 +18,7 @@ import {
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 const Customers = () => {
   // =========================
@@ -201,13 +202,14 @@ const Customers = () => {
         title="Daftar Customer"
         subtitle="Data di sini menjadi referensi dropdown customer pada flow penjualan aktif."
       >
+        <DataRefreshIndicator loading={loading} dataSource={customers} />
         <Table
           className="app-data-table"
           columns={columns}
           dataSource={customers}
           rowKey="id"
-          loading={loading}
           pagination={{ pageSize: 10 }}
+          locale={{ emptyText: getDataTableEmptyText(loading) }}
         />
       </PageSection>
 

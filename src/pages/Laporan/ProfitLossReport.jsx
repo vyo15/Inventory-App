@@ -9,6 +9,7 @@ import { db } from "../../firebase";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // =========================
 // ACTIVE / FINAL - label source IMS untuk Profit Loss
@@ -249,15 +250,15 @@ const ProfitLossReport = () => {
           </Button>
         }
       >
+        <DataRefreshIndicator loading={loading} dataSource={reportData} />
         <Table
           // AKTIF / GUARDED UI: class standar hanya visual; kalkulasi laba rugi dan sumber revenues/incomes/expenses tetap sama.
           className="app-data-table"
           dataSource={reportData}
           columns={columns}
           rowKey="id"
-          loading={loading}
           locale={{
-            emptyText: <EmptyStateBlock description="Belum ada data laba rugi untuk ditampilkan." />,
+            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data laba rugi untuk ditampilkan." />),
           }}
         />
       </PageSection>

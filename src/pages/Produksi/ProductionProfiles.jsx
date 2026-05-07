@@ -41,6 +41,7 @@ import ProductionFilterCard from '../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 const ProductionProfiles = () => {
   const [loading, setLoading] = useState(false);
@@ -350,14 +351,16 @@ const ProductionProfiles = () => {
             Risiko:
             - Menyembunyikan angka penting tanpa tooltip/detail dapat membuat user salah membaca kebutuhan produksi.
         ===================================================== */}
+        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
         <Table
           className="ims-table"
           rowKey="id"
-          loading={loading}
           columns={columns}
           dataSource={filteredData}
           pagination={{ pageSize: 10, showSizeChanger: true }}
-          locale={{ emptyText: <Empty description="Belum ada profil produksi" /> }}
+          locale={{
+            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada profil produksi" />),
+          }}
         />
       </PageSection>
 

@@ -31,6 +31,7 @@ import { db } from "../../firebase";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -388,16 +389,16 @@ const CashIn = () => {
         subtitle="Tabel tetap membaca kombinasi data revenues dan incomes tanpa mengubah alur kas yang sudah aktif."
         extra={<Tag color="blue">{formatNumberId(filteredCashIns.length)} baris</Tag>}
       >
+        <DataRefreshIndicator loading={loading} dataSource={filteredCashIns} />
         <Table
           className="app-data-table"
           rowKey="id"
           dataSource={filteredCashIns}
           columns={columns}
-          loading={loading}
           // IMS NOTE [AKTIF] - table fixed tanpa scroll horizontal; ledger tetap tanpa kolom aksi destructive.
           tableLayout="fixed"
           locale={{
-            emptyText: <EmptyStateBlock description="Belum ada pemasukan pada periode ini." />,
+            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada pemasukan pada periode ini." />),
           }}
         />
       </PageSection>

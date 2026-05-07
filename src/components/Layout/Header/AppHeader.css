@@ -1,11 +1,11 @@
 /* =========================
-   SECTION: Header Content - AKTIF
+   SECTION: Header Content - AKTIF / UNIFIED SHELL
    Fungsi:
    - mengatur komposisi title workspace, subtitle, user identity, role tag, dan logout action.
    Hubungan flow aplikasi:
    - dipakai oleh AppHeader.jsx di dalam AppLayout setelah Auth Gate lolos.
    Alasan logic dipakai:
-   - semua warna membaca token brand agar header konsisten dengan foundation blue/yellow/white/navy.
+   - header memakai surface yang sama dengan sidebar/logo agar terlihat satu kesatuan di light/dark mode.
    Status:
    - AKTIF untuk topbar workspace.
    - GUARDED: styling logout tidak mengubah behavior logout/useAuth.
@@ -15,94 +15,153 @@
   min-width: 0;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 20px;
+  color: var(--ims-text-primary);
 }
 
 .app-header-left {
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 
 .app-header-title.ant-typography {
+  max-width: 100%;
   margin: 0 !important;
-  font-size: 28px;
-  line-height: 1.15;
-  font-weight: 750;
-  letter-spacing: -0.025em;
+  overflow: hidden;
+  color: var(--ims-color-primary-active);
+  font-size: clamp(22px, 2vw, 28px);
+  line-height: 1.12;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell.dark .app-header-title.ant-typography {
   color: var(--ims-text-primary);
 }
 
 .app-header-subtitle.ant-typography {
+  max-width: min(760px, 100%);
   margin: 0 !important;
-  max-width: 760px;
+  overflow: hidden;
   color: var(--ims-text-secondary);
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* =========================
-   SECTION: Header User Actions - AKTIF / CLEANUP CANDIDATE RESOLVED
+   SECTION: Header User Actions - AKTIF / UI ONLY
    Fungsi:
-   - menggantikan inline style user area dan AntD Tag color preset agar tidak drift dari token brand.
+   - menjaga role, user chip, dan logout tetap satu baris pada desktop serta fallback rapi pada layar kecil.
    Hubungan flow aplikasi:
    - hanya menata identitas user/role dan tombol logout; session logout tetap dijalankan AppHeader.jsx melalui useAuth.
    Status:
    - AKTIF.
-   - CLEANUP CANDIDATE RESOLVED: inline user area style dan AntD blue preset diganti class CSS token-based.
 ========================= */
 .app-header-user-area {
   margin-left: auto;
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
   min-width: 0;
 }
 
-.app-header-user-actions {
+.app-header-user-actions.ant-space {
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.app-header-user-actions .ant-space-item {
+  min-width: 0;
+}
+
+.app-header-user-tag.ant-tag,
+.app-header-role-tag.ant-tag {
+  min-width: 0;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-end: 0;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  line-height: 30px;
+  white-space: nowrap;
 }
 
 .app-header-user-tag.ant-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 240px;
-  margin-inline-end: 0;
-  color: var(--ims-color-primary);
-  background: var(--ims-color-primary-soft);
+  max-width: 220px;
+  color: var(--ims-color-primary-active);
+  background: color-mix(in srgb, var(--ims-bg-elevated) 72%, var(--ims-color-primary-soft));
   border-color: color-mix(in srgb, var(--ims-color-primary) 24%, transparent);
-  border-radius: 999px;
-  font-weight: 650;
 }
 
 .app-header-user-tag.ant-tag .anticon {
+  flex: 0 0 auto;
   color: var(--ims-color-primary);
 }
 
+.app-header-user-tag.ant-tag > span:not(.anticon) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .app-header-role-tag.ant-tag {
-  margin-inline-end: 0;
   color: var(--ims-text-secondary);
-  background: var(--ims-bg-card-soft);
+  background: color-mix(in srgb, var(--ims-bg-elevated) 78%, var(--ims-bg-shell));
   border-color: var(--ims-border-color-soft);
-  border-radius: 999px;
-  font-weight: 600;
 }
 
 .app-header-logout-button.ant-btn {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-color: var(--ims-border-color);
   color: var(--ims-text-primary);
-  background: var(--ims-bg-card);
+  background: color-mix(in srgb, var(--ims-bg-elevated) 80%, var(--ims-bg-shell));
   border-radius: 999px;
   box-shadow: none;
+  font-weight: 700;
 }
 
 .app-header-logout-button.ant-btn:hover,
 .app-header-logout-button.ant-btn:focus-visible {
   border-color: var(--ims-color-primary);
-  color: var(--ims-color-primary);
+  color: var(--ims-color-primary-active);
   background: var(--ims-color-primary-soft);
+}
+
+.app-shell.dark .app-header-user-tag.ant-tag {
+  color: var(--ims-text-primary);
+  background: var(--ims-color-primary-soft);
+  border-color: var(--ims-border-color);
+}
+
+.app-shell.dark .app-header-role-tag.ant-tag,
+.app-shell.dark .app-header-logout-button.ant-btn {
+  color: var(--ims-text-primary);
+  background: color-mix(in srgb, var(--ims-bg-elevated) 72%, var(--ims-bg-shell));
+  border-color: var(--ims-border-color);
+}
+
+.app-shell.dark .app-header-logout-button.ant-btn:hover,
+.app-shell.dark .app-header-logout-button.ant-btn:focus-visible {
+  color: var(--ims-text-primary);
+  background: var(--ims-color-primary-soft);
+  border-color: var(--ims-color-primary);
 }
 
 .app-header-logout-button.ant-btn:focus-visible {
@@ -114,13 +173,18 @@
   .app-header-content {
     align-items: flex-start;
     flex-direction: column;
-    gap: 14px;
+    gap: 12px;
   }
 
   .app-header-user-area {
     width: 100%;
     justify-content: flex-start;
     margin-left: 0;
+  }
+
+  .app-header-user-actions.ant-space {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }
 
@@ -130,10 +194,11 @@
   }
 
   .app-header-subtitle.ant-typography {
+    max-width: 100%;
     font-size: 13px;
   }
 
   .app-header-user-tag.ant-tag {
-    max-width: 100%;
+    max-width: min(100%, 220px);
   }
 }

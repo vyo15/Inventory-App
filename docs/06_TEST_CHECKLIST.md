@@ -1116,9 +1116,22 @@ Risiko:
 - [ ] Refresh browser saat sudah login menampilkan satu loading logo full screen tanpa card/wrap, lalu masuk dashboard/app seperti sebelumnya.
 - [ ] Refresh browser saat belum login menampilkan satu loading logo full screen, lalu masuk halaman Login seperti sebelumnya.
 - [ ] Buka URL protected langsung: route guard memakai loading logo yang sama, redirect login tetap benar, dan unauthorized tetap benar.
-- [ ] Lazy route/page load memakai loading logo yang sama tanpa mengubah route definitions atau role guard.
+- [ ] Lazy route/page load di dalam layout tidak menampilkan logo loading kedua; fallback Suspense tetap non-prominent dan tidak mengubah route definitions atau role guard.
 - [ ] Login auth/profile loading memakai loading logo yang sama; blocked/inactive/missing profile tetap berjalan.
 - [ ] Logo loading tidak muter, micro split tetap subtle, light/dark mode bagus, mobile center, dan reduced motion aman.
 - [ ] Console tidak menampilkan error canvas/image/import.
-- [ ] Table loading, button submit loading, report loading, maintenance preview/loading, Refresh Need, dan Refresh Preview tidak berubah.
+- [ ] Setelah layout/sidebar tampil tidak muncul lagi logo `Memuat halaman...`; button submit loading, maintenance preview/loading, Refresh Need, dan Refresh Preview tetap sesuai flow existing.
 
+## Checklist local data/table/card DataLoadingState — 2026-05-07
+- [ ] Global/auth/session/Login tetap memakai `LogoLoadingScreen`, sedangkan lazy route fallback di dalam layout tidak menampilkan logo besar agar tidak double loading.
+- [ ] Table/data/card yang dipatch tidak memakai logo full-screen, tidak memakai AntD spinner overlay + skeleton bersamaan, dan tidak menampilkan spinner besar/generic.
+- [ ] Initial table load menampilkan skeleton/shimmer subtle melalui empty state lokal dan tidak membuat layout loncat besar.
+- [ ] Refresh lokal saat data lama masih ada menampilkan indicator refresh tipis atau tetap mempertahankan data lama; data tidak dikosongkan hanya demi loading visual.
+- [ ] Empty state tetap tampil setelah loading selesai jika data kosong.
+- [ ] Error state tetap terlihat dan tidak tertutup loading.
+- [ ] Dashboard SalesChart loading tidak lagi memakai spinner besar dan chart tetap tampil setelah lazy chart siap.
+- [ ] Master/Finance/Inventory/Transaksi table tetap mempertahankan create/edit/delete/cancel/status flow seperti sebelumnya.
+- [ ] Reports table loading terlihat rapi; calculation dan export mapping tidak berubah.
+- [ ] Produksi/Payroll/HPP table loading yang dipatch hanya visual; BOM, PO, WorkLog, Payroll, HPP, dan Refresh Need tidak berubah.
+- [ ] Reset Maintenance guard, Refresh Preview, repair/reset confirmation, dan destructive action tidak berubah.
+- [ ] Light mode, dark mode, mobile, dan reduced motion aman untuk skeleton/shimmer lokal.

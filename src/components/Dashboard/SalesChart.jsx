@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useMemo } from "react";
-import { Empty, Spin } from "antd";
+import { Empty } from "antd";
+import DataLoadingState from "../Layout/Feedback/DataLoadingState";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 
@@ -53,9 +54,7 @@ const SalesChart = ({ data }) => {
   return (
     <Suspense
       fallback={
-        <div className="dashboard-empty-wrap">
-          <Spin size="large" />
-        </div>
+        <DataLoadingState variant="chart" message="Memuat grafik penjualan..." minHeight={240} />
       }
     >
       <ColumnChart {...chartConfig} />

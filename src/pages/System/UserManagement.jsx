@@ -44,6 +44,7 @@ import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 const { Text } = Typography;
 
@@ -615,14 +616,15 @@ const UserManagement = () => {
           title="Daftar Profile User"
           subtitle="Aksi di bawah hanya mengelola profile internal dan tetap dijaga oleh guard role serta status."
         >
+          <DataRefreshIndicator loading={isLoading} dataSource={users} />
           <Table
             className="app-data-table"
             rowKey="authUid"
             columns={columns}
             dataSource={users}
-            loading={isLoading}
             pagination={{ pageSize: 10 }}
             tableLayout="fixed"
+            locale={{ emptyText: getDataTableEmptyText(isLoading) }}
           />
         </PageSection>
       </Space>

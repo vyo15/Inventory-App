@@ -63,6 +63,7 @@ import ProductionPageHeader from "../../components/Produksi/shared/ProductionPag
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -689,20 +690,20 @@ const SemiFinishedMaterials = () => {
         title="Daftar Semi Finished Materials"
         subtitle="Tabel ini merangkum stok master dan varian fleksibel untuk kebutuhan produksi internal."
       >
+        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
         <Table
           // AKTIF / GUARDED UI: class standar hanya menyamakan surface table; flow semi finished material dan produksi tidak diubah.
           className="app-data-table"
           rowKey="id"
           size="small"
           tableLayout="fixed"
-          loading={loading}
           columns={columns}
           dataSource={filteredData}
           // AKTIF / GUARDED: primary table memakai layout fixed tanpa horizontal scroll default; stok varian tetap tampil sebagai pill langsung di kolom Stok.
           locale={{
-            emptyText: (
+            emptyText: getDataTableEmptyText(loading, (
               <Empty description="Belum ada data semi finished materials" />
-            ),
+            )),
           }}
           pagination={{
             pageSize: 10,

@@ -57,6 +57,7 @@ import {
 } from "../../services/Produksi/productionOrdersService";
 import { createProductionWorkLogFromOrder } from "../../services/Produksi/productionWorkLogsService";
 import useAuth from "../../hooks/useAuth";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -893,14 +894,14 @@ const ProductionOrders = () => {
         subtitle="Tabel ini membantu cek shortage, readiness, dan akses cepat ke detail atau pembuatan work log."
       >
         {/* Aktif dipakai: scroll x besar dihapus agar tombol aksi terlihat pada desktop/laptop normal. */}
+        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
         <Table
           className="ims-table"
           rowKey="id"
-          loading={loading}
           columns={columns}
           dataSource={filteredData}
           locale={{
-            emptyText: <Empty description="Belum ada production order" />,
+            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada production order" />),
           }}
         />
       </PageSection>

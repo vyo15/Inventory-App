@@ -17,6 +17,7 @@ import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatDateId } from "../../utils/formatters/dateId";
 import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -540,14 +541,14 @@ const ProductionHppAnalysis = () => {
             Risiko:
             - Mengubah table props ini sembarangan dapat membuat angka HPP atau warning cost sulit dibaca pada layar kecil.
         ===================================================== */}
+        <DataRefreshIndicator loading={loading} dataSource={filteredRows} />
         <Table
           className="app-data-table"
           rowKey="id"
-          loading={loading}
           columns={columns}
           dataSource={filteredRows}
           locale={{
-            emptyText: <Empty description="Belum ada data analisis HPP" />,
+            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data analisis HPP" />),
           }}
           pagination={{
             pageSize: 10,
