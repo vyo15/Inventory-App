@@ -197,10 +197,10 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 
 ### Guard Fase D - Dashboard
 - Dashboard wajib read-only; tidak boleh ada write ke Firestore dari Dashboard.
-- Dashboard maksimal 5 section utama dan tidak boleh kembali menjadi laporan besar penuh table.
+- Dashboard harus compact, read-only, dan tidak boleh kembali menjadi laporan besar penuh table; KPI/quick actions/Data Perlu Dicek boleh ada selama navigasi-only dan tidak menulis data.
 - Jangan tampilkan angka keuangan Dashboard sebagai Profit Loss final.
 - Stok kritis Dashboard harus memakai `availableStock` bila tersedia agar tidak misleading.
-- Dashboard harus punya last updated dan refresh yang hanya reload data.
+- Dashboard harus punya last updated dan refresh/Muat Ulang yang hanya reload data.
 
 ### Guard Fase E - Report / Export
 - Export final wajib XLSX rapi dengan header manusiawi, bukan object mentah.
@@ -476,13 +476,15 @@ Risiko:
 Untuk task yang menyentuh theme, branding, App shell, Login, Dashboard, Sidebar, shared component, atau Ant Design override:
 
 1. Gunakan `src/index.css`, `src/theme/antdTheme.js`, dan `src/App.css` sebagai pusat theme sebelum mengubah file halaman.
-2. Pertahankan palette aktif blue/yellow/white/navy Flanel Karawang Industries.
-3. Jangan menjadikan yellow sebagai warna body text panjang; gunakan hanya untuk accent, badge, highlight, atau warning soft.
-4. Jangan hapus guard table/modal/drawer/dropdown/form di `src/App.css` tanpa bukti visual dan regression test.
-5. Jangan ubah `AppLayout` theme sync (`app-theme-light`, `app-theme-dark`, `data-app-theme`) kecuali task khusus runtime theme.
-6. Jangan ubah `SidebarMenu` role-aware logic, `selectedKeys`, `openMenuKeys`, atau config menu saat task hanya visual.
-7. Jangan ubah Login auth flow, AuthContext, route guard, Dashboard query, Dashboard calculation, atau service bisnis saat task hanya rebrand UI.
-8. Jika menemukan sisa warna/comment lama di luar scope, tandai **CLEANUP CANDIDATE** dan jangan refactor massal.
+2. Pertahankan palette aktif blue/navy primary, muted gold/yellow accent kecil, white/off-white surface, dan dark navy.
+3. Jangan menjadikan gold/yellow sebagai background besar, semua CTA, atau body text panjang; gunakan hanya untuk marker/ornament/focus/selected/badge subtle.
+4. Jangan menambahkan gradient baru; global/shared surface harus flat dengan border subtle dan shadow minimal.
+5. Jangan hapus guard table/modal/drawer/dropdown/form di `src/App.css` tanpa bukti visual dan regression test.
+6. Jangan ubah `AppLayout` theme sync (`app-theme-light`, `app-theme-dark`, `data-app-theme`) kecuali task khusus runtime theme.
+7. Jangan ubah `SidebarMenu` role-aware logic, `selectedKeys`, `openMenuKeys`, atau config menu saat task hanya visual.
+8. Jangan ubah Login auth flow, AuthContext, route guard, Dashboard query, Dashboard calculation, atau service bisnis saat task hanya rebrand UI.
+9. Jangan mengubah status semantic warning/success/error/info tanpa approval; brand gold harus tetap berbeda dari warning semantic.
+10. Jika menemukan sisa warna/comment lama di luar scope, tandai **CLEANUP CANDIDATE** dan jangan refactor massal.
 
 ## Prompt Rule Tambahan — Cleanup Theme Aman
 
@@ -502,3 +504,13 @@ Untuk task cleanup theme besar-besaran:
 - Jangan menyembunyikan seluruh variant stock ke drawer/tooltip pada halaman saldo stok item seperti Products, Raw Materials, Semi Finished Materials, dan Stock Report.
 - Helper `StockDisplayBlock` adalah presentational only; jangan dipakai untuk Qty transaksi, Stok Masuk Purchases, adjustment quantity, inventory log delta, atau field audit yang bukan saldo master item.
 - Table detail/preview yang memang berisi breakdown kalkulasi boleh tetap lebih lebar, tetapi primary list table sebaiknya tidak memakai fixed/sticky action column kecuali ada alasan UX kuat.
+
+
+## Prompt Guard — Brand Theme Alignment No-Gradient
+- Task theme harus UI-only kecuali user memberi approval eksplisit untuk logic.
+- Jangan memakai gold/yellow sebagai background besar, text panjang, semua CTA, atau pengganti warning semantic.
+- Jangan menambahkan `linear-gradient` atau `radial-gradient` baru.
+- Gunakan token global di `src/index.css` dan Ant Design token di `src/theme/antdTheme.js`; jangan hardcode warna baru jika token tersedia.
+- Sidebar active boleh memakai gold marker kecil; route/menu/role guard tetap tidak boleh disentuh.
+- Header/sidebar/logo/shared card/filter boleh diberi micro accent, tetapi jangan menambah asset, dependency, atau mengubah JSX bisnis.
+- Page-specific gradient seperti Dashboard/Login/feedback component harus dicatat sebagai cleanup candidate jika di luar allowlist.

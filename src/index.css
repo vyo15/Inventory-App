@@ -24,22 +24,25 @@ body,
   padding: 0;
 }
 
-/* =========================
-   SECTION: IMS Brand Foundation Tokens - AKTIF / THEME CENTER
-   Fungsi blok:
-   - pusat CSS variable light mode untuk brand blue/yellow/white/navy Flanel Karawang Industries.
-   - menjaga compatibility alias yang masih dibaca App.css, Login.css, dan Dashboard.css.
-   Hubungan blok dengan flow aplikasi:
-   - dibaca oleh shell, loading screen, login, dashboard, table, card, modal, drawer, form control, menu, dan utility visual.
-   - tidak mengubah AppLayout flow, auth, router, roleAccess, service, module bisnis, laporan, atau schema Firestore.
-   Alasan logic dipakai:
-   - value token diganti di satu pusat agar tampilan lebih minimalist modern dan konsisten tanpa refactor besar ke file lain.
-   - nama alias compatibility tidak direname sampai seluruh pemakaian lintas CSS selesai dipetakan.
-   Status logic:
-   - AKTIF untuk foundation theme Phase 01.
-   - GUARDED karena perubahan token berdampak visual lintas modul.
-   - CLEANUP CANDIDATE: alias compatibility dapat dirapikan setelah App.css/Login/Dashboard diaudit penuh.
-========================= */
+/* =====================================================
+SECTION: IMS Brand Theme Tokens Light — AKTIF / GUARDED
+Fungsi:
+- menjadi pusat token visual light mode untuk identitas IMS Bunga Flanel berbasis blue/navy primary dan gold accent kecil.
+- memisahkan brand gold dari semantic warning agar status bisnis tetap jelas.
+
+Dipakai oleh:
+- App shell, Ant Design theme bridge, sidebar, header, card, table, modal, drawer, form, dan shared layout CSS.
+
+Alasan perubahan:
+- theme perlu lebih selaras dengan logo biru-kuning tanpa membuat kuning menjadi background besar atau warna dominan.
+- standar baru memakai flat surface dan tidak memakai gradient aktif pada token global.
+
+Catatan cleanup:
+- `--ims-brand-gradient` dipertahankan sebagai legacy alias flat agar CSS lama tidak crash; jangan dipakai untuk dekorasi baru.
+
+Risiko:
+- perubahan token ini berdampak lintas aplikasi; salah kontras dapat membuat table, form, modal, drawer, atau status bisnis sulit dibaca.
+===================================================== */
 :root {
   font-family: Inter, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   color-scheme: light;
@@ -47,17 +50,27 @@ body,
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  --ims-color-primary: #2C6DB0;
-  --ims-color-primary-hover: #245F9D;
-  --ims-color-primary-active: #1B4F86;
-  --ims-color-primary-soft: #EAF3FC;
-  --ims-color-primary-softer: rgba(44, 109, 176, 0.08);
-  --ims-color-primary-muted: rgba(44, 109, 176, 0.16);
+  --ims-color-primary: #245F9D;
+  --ims-color-primary-hover: #1F548C;
+  --ims-color-primary-active: #173F6B;
+  --ims-color-primary-soft: #E9F2FB;
+  --ims-color-primary-softer: rgba(36, 95, 157, 0.08);
+  --ims-color-primary-muted: rgba(36, 95, 157, 0.16);
 
-  --ims-color-accent-yellow: #FEC32D;
-  --ims-color-accent-yellow-soft: #FFF4CC;
-  --ims-color-accent-yellow-muted: rgba(254, 195, 45, 0.28);
-  --ims-brand-gradient: radial-gradient(circle at top left, rgba(44, 109, 176, 0.16), transparent 34%), radial-gradient(circle at bottom right, rgba(254, 195, 45, 0.18), transparent 32%), linear-gradient(135deg, #F6F9FC 0%, #EAF3FC 48%, #FFF4CC 100%);
+  --ims-color-brand-gold: #C9951A;
+  --ims-color-brand-gold-hover: #B78312;
+  --ims-color-brand-gold-soft: #FFF7E3;
+  --ims-color-brand-gold-muted: rgba(201, 149, 26, 0.22);
+  --ims-color-accent-yellow: var(--ims-color-brand-gold);
+  --ims-color-accent-yellow-soft: var(--ims-color-brand-gold-soft);
+  --ims-color-accent-yellow-muted: var(--ims-color-brand-gold-muted);
+
+  --ims-color-warning: #D97706;
+  --ims-color-warning-soft: #FFF7ED;
+  --ims-color-warning-muted: rgba(217, 119, 6, 0.18);
+  --ims-color-warning-text: #92400E;
+
+  --ims-brand-gradient: var(--ims-bg-shell);
 
   --ims-bg-page: #F6F9FC;
   --ims-bg-shell: #EEF5FB;
@@ -72,12 +85,13 @@ body,
   --ims-bg-overlay-mask: rgba(7, 17, 31, 0.32);
 
   --ims-border-color: #D9E5F2;
-  --ims-border-color-soft: rgba(44, 109, 176, 0.12);
-  --ims-border-strong: rgba(44, 109, 176, 0.22);
-  --ims-shadow-soft: 0 14px 34px rgba(16, 32, 51, 0.08);
-  --ims-shadow-elevated: 0 24px 58px rgba(16, 32, 51, 0.13);
-  --ims-focus-ring: 0 0 0 3px rgba(44, 109, 176, 0.16);
-  --ims-scrollbar-thumb: rgba(44, 109, 176, 0.28);
+  --ims-border-color-soft: rgba(36, 95, 157, 0.12);
+  --ims-border-strong: rgba(36, 95, 157, 0.22);
+  --ims-shadow-soft: 0 12px 28px rgba(16, 32, 51, 0.07);
+  --ims-shadow-elevated: 0 20px 46px rgba(16, 32, 51, 0.12);
+  --ims-focus-ring: 0 0 0 3px rgba(36, 95, 157, 0.16);
+  --ims-focus-ring-accent: 0 0 0 3px rgba(201, 149, 26, 0.18);
+  --ims-scrollbar-thumb: rgba(36, 95, 157, 0.28);
 
   --ims-text-primary: #102033;
   --ims-text-secondary: #5B6F84;
@@ -85,31 +99,35 @@ body,
 
   --ims-table-row: #FFFFFF;
   --ims-table-hover: #F8FBFE;
-  --ims-table-selected: #EAF3FC;
+  --ims-table-selected: #E9F2FB;
   --ims-table-selected-hover: #DCECFB;
   --ims-table-fixed-shadow: inset -12px 0 12px -12px rgba(16, 32, 51, 0.22);
 
   --ims-sidebar-bg: #FFFFFF;
-  --ims-sidebar-hover: rgba(44, 109, 176, 0.08);
-  --ims-sidebar-active: #EAF3FC;
+  --ims-sidebar-hover: rgba(36, 95, 157, 0.08);
+  --ims-sidebar-active: #E9F2FB;
+  --ims-sidebar-active-marker: var(--ims-color-brand-gold);
 }
 
-/* =========================
-   SECTION: Dark Mode Brand Tokens - AKTIF / THEME CENTER
-   Fungsi blok:
-   - pusat CSS variable dark mode berbasis navy/dark blue dengan primary blue dan accent yellow soft.
-   - mempertahankan selector dark mode existing agar portal Ant Design, AppLayout, body, dan html tetap sinkron.
-   Hubungan blok dengan flow aplikasi:
-   - dibaca saat AppLayout memasang class app-theme-dark dan data-app-theme="dark".
-   - tidak mengubah state theme, localStorage key, routing, auth, transaksi, produksi, payroll, HPP, atau laporan.
-   Alasan logic dipakai:
-   - dark mode dibuat navy/dark blue agar tidak kembali ke hitam polos atau tone gelap lama yang tidak sesuai brand.
-   - alias compatibility tetap diisi untuk CSS yang belum menjadi target cleanup.
-   Status logic:
-   - AKTIF untuk foundation theme Phase 01.
-   - GUARDED karena selector ini dipakai oleh shell, login, dashboard, modal, drawer, dropdown, dan table.
-   - CLEANUP CANDIDATE: alias compatibility dapat diganti setelah semua pemakaian CSS selesai dipetakan.
-========================= */
+/* =====================================================
+SECTION: IMS Brand Theme Tokens Dark — AKTIF / GUARDED
+Fungsi:
+- menjadi pusat token visual dark mode berbasis deep navy dengan blue primary dan gold accent yang sedikit lebih terlihat.
+- menjaga brand gold tetap berupa marker/ornament kecil, bukan background besar.
+
+Dipakai oleh:
+- App shell, Ant Design theme bridge, sidebar, header, card, table, modal, drawer, form, dan shared layout CSS.
+
+Alasan perubahan:
+- dark mode perlu terasa lebih branded tanpa menjadi neon atau ramai.
+- semantic warning tetap dipisahkan dari gold brand agar status operasional tidak ambigu.
+
+Catatan cleanup:
+- `--ims-brand-gradient` tetap legacy alias flat sampai semua pemakaian lama selesai diaudit.
+
+Risiko:
+- perubahan token dark mode yang terlalu terang dapat menurunkan kenyamanan baca jangka panjang dan membuat status warning/success/error sulit dibedakan.
+===================================================== */
 html.dark,
 body.dark,
 html.app-theme-dark,
@@ -125,10 +143,20 @@ body[data-app-theme="dark"] {
   --ims-color-primary-softer: rgba(94, 163, 230, 0.10);
   --ims-color-primary-muted: rgba(94, 163, 230, 0.26);
 
-  --ims-color-accent-yellow: #FFD56A;
-  --ims-color-accent-yellow-soft: rgba(254, 195, 45, 0.16);
-  --ims-color-accent-yellow-muted: rgba(255, 213, 106, 0.24);
-  --ims-brand-gradient: radial-gradient(circle at top left, rgba(94, 163, 230, 0.18), transparent 34%), radial-gradient(circle at bottom right, rgba(255, 213, 106, 0.12), transparent 32%), linear-gradient(135deg, #07111F 0%, #0A1627 48%, #101E33 100%);
+  --ims-color-brand-gold: #F1C75B;
+  --ims-color-brand-gold-hover: #FFD56A;
+  --ims-color-brand-gold-soft: rgba(241, 199, 91, 0.14);
+  --ims-color-brand-gold-muted: rgba(241, 199, 91, 0.28);
+  --ims-color-accent-yellow: var(--ims-color-brand-gold);
+  --ims-color-accent-yellow-soft: var(--ims-color-brand-gold-soft);
+  --ims-color-accent-yellow-muted: var(--ims-color-brand-gold-muted);
+
+  --ims-color-warning: #F59E0B;
+  --ims-color-warning-soft: rgba(245, 158, 11, 0.15);
+  --ims-color-warning-muted: rgba(245, 158, 11, 0.28);
+  --ims-color-warning-text: #FCD34D;
+
+  --ims-brand-gradient: var(--ims-bg-shell);
 
   --ims-bg-page: #07111F;
   --ims-bg-shell: #0A1627;
@@ -145,9 +173,10 @@ body[data-app-theme="dark"] {
   --ims-border-color: rgba(147, 184, 223, 0.18);
   --ims-border-color-soft: rgba(147, 184, 223, 0.12);
   --ims-border-strong: rgba(147, 184, 223, 0.24);
-  --ims-shadow-soft: 0 16px 36px rgba(0, 0, 0, 0.36);
-  --ims-shadow-elevated: 0 28px 70px rgba(0, 0, 0, 0.48);
+  --ims-shadow-soft: 0 14px 30px rgba(0, 0, 0, 0.32);
+  --ims-shadow-elevated: 0 24px 58px rgba(0, 0, 0, 0.42);
   --ims-focus-ring: 0 0 0 3px rgba(94, 163, 230, 0.24);
+  --ims-focus-ring-accent: 0 0 0 3px rgba(241, 199, 91, 0.22);
   --ims-scrollbar-thumb: rgba(94, 163, 230, 0.34);
 
   --ims-text-primary: #EAF2FB;
@@ -163,6 +192,7 @@ body[data-app-theme="dark"] {
   --ims-sidebar-bg: #0A1627;
   --ims-sidebar-hover: rgba(94, 163, 230, 0.10);
   --ims-sidebar-active: rgba(94, 163, 230, 0.18);
+  --ims-sidebar-active-marker: var(--ims-color-brand-gold);
 }
 
 /* =========================

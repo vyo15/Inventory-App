@@ -4,19 +4,19 @@ Dokumen ini menjadi panduan praktis theme aktif IMS Bunga Flanel setelah rebrand
 
 ## Theme aktif
 
-Theme aktif memakai kombinasi **blue, yellow, white, dan navy** dengan arah visual minimalist modern, clean, proporsional, profesional, dan corporate.
+Theme aktif memakai kombinasi **blue/navy primary, muted gold/yellow accent, white/off-white surface, dan dark navy** dengan arah visual minimalist modern, clean, proporsional, profesional, dan corporate.
 
 ## Palette utama
 
 ### Light theme
 | Token | Value | Pemakaian |
 |---|---:|---|
-| Primary | `#2C6DB0` | primary action, active navigation, link, focus ring |
-| Primary hover | `#245F9D` | hover action |
-| Primary active | `#1B4F86` | active/pressed action |
-| Primary soft | `#EAF3FC` | selected state, info soft background |
-| Accent yellow | `#FEC32D` | accent kecil, badge, warning soft |
-| Accent yellow soft | `#FFF4CC` | highlight lembut |
+| Primary | `#245F9D` | primary action, active navigation, link, focus ring |
+| Primary hover | `#1F548C` | hover action |
+| Primary active | `#173F6B` | active/pressed action |
+| Primary soft | `#E9F2FB` | selected state, info soft background |
+| Brand gold | `#C9951A` | accent kecil, active marker, ornament, subtle badge |
+| Brand gold soft | `#FFF7E3` | highlight brand lembut, bukan warning utama |
 | Page background | `#F6F9FC` | canvas halaman |
 | Shell background | `#EEF5FB` | app shell |
 | Card background | `#FFFFFF` | card/modal/table/form surface |
@@ -30,8 +30,8 @@ Theme aktif memakai kombinasi **blue, yellow, white, dan navy** dengan arah visu
 |---|---:|---|
 | Primary | `#5EA3E6` | primary action, active navigation, link, focus ring |
 | Primary hover | `#7BB7F0` | hover action |
-| Accent yellow | `#FFD56A` | accent kecil/highlight |
-| Accent yellow soft | `rgba(254, 195, 45, 0.16)` | warning/highlight soft |
+| Brand gold | `#F1C75B` | accent kecil/highlight di dark mode |
+| Brand gold soft | `rgba(241, 199, 91, 0.14)` | highlight brand lembut, bukan warning utama |
 | Page background | `#07111F` | canvas dark navy |
 | Shell background | `#0A1627` | app shell dark |
 | Card background | `#101E33` | card/table/form dark |
@@ -43,12 +43,31 @@ Theme aktif memakai kombinasi **blue, yellow, white, dan navy** dengan arah visu
 
 ## Aturan penggunaan warna
 
-- Biru dipakai untuk primary action, active navigation, link, selected state, dan focus ring.
-- Kuning dipakai sebagai accent kecil, badge, highlight, atau warning soft.
+- Biru/navy dipakai untuk primary action, active navigation, link, selected state, dan focus ring.
+- Muted gold/yellow dipakai hemat sebagai accent kecil: active menu marker, garis aksen kecil, ornament icon, selected/focus accent, atau badge subtle.
+- Gold/yellow tidak boleh menjadi background besar, semua CTA, text panjang, atau pengganti status warning semantic.
+- Warning semantic memakai amber/orange terpisah dari brand gold agar status bisnis tidak ambigu.
 - Putih/neutral dipakai sebagai surface utama card, modal, drawer, table, dan form.
 - Dark navy dipakai sebagai shell, card, elevated surface, drawer/modal/table dark mode.
-- Gradient boleh dipakai selama halus, profesional, dan berbasis blue/yellow/white/navy.
+- Standar baru: **no-gradient** untuk global/shared shell dan shared components; gunakan flat surface, border subtle, dan shadow minimal.
 - Hindari warna decorative lama sebagai theme aktif.
+
+
+## Standar gold accent
+
+Boleh digunakan:
+- active menu marker 3px atau dot kecil;
+- ornament kecil pada header/sidebar;
+- selected/focus accent yang tetap readable;
+- badge subtle dengan border/tint kecil;
+- accent line kecil pada shared KPI/filter surface.
+
+Tidak boleh digunakan:
+- background card besar atau panel penuh;
+- semua primary CTA;
+- body text panjang;
+- mengganti warning/success/error/info semantic;
+- gradient atau glow dekoratif baru.
 
 ## File pusat theme
 
@@ -87,7 +106,7 @@ Theme aktif memakai kombinasi **blue, yellow, white, dan navy** dengan arah visu
 - Halaman Login memakai logo resmi sebagai lockup brand yang clean, bukan ilustrasi besar dengan frame berat.
 - Logo Login tidak boleh tertimpa orb/shape dekoratif.
 - Panel brand dan form harus seimbang; form login tetap menjadi fokus utama user.
-- Dekorasi background harus lembut dan berbasis token blue/yellow/white/navy.
+- Dekorasi background harus flat, lembut, berbasis token blue/navy + gold accent kecil, dan tidak memakai gradient baru.
 - Perubahan Login harus mengutamakan CSS scoped `.ims-login-*`; `Login.jsx` hanya disentuh untuk struktur visual, bukan auth flow.
 - `Login.jsx` auth flow, `handleLogin`, `profileStatus`, blocked user, dan logout blocked user adalah area **GUARDED**.
 
@@ -95,7 +114,7 @@ Theme aktif memakai kombinasi **blue, yellow, white, dan navy** dengan arah visu
 
 - Login Mode A memakai layout dua panel terang: brand hero kiri dan form card kanan.
 - Logo Flanel Karawang Industries tampil bebas tanpa frame/showcase berat dan tidak boleh tertimpa orb/dekorasi.
-- Brand panel boleh memakai shape/curve/gradient blue-yellow yang halus, tetapi tidak boleh mengalahkan form login.
+- Brand panel boleh memakai shape/curve flat blue-gold yang halus, tetapi tidak boleh memakai gradient baru dan tidak boleh mengalahkan form login.
 - Form login tetap menjadi fokus utama dengan card putih solid, shadow lembut, input jelas, dan button primary blue kuat.
 - Mobile memakai prinsip form-first: form tampil terlebih dahulu, brand panel turun ke bawah agar tidak membuat scroll terlalu panjang.
 - Perubahan Login harus scoped di `.ims-login-*`; auth flow, `AuthContext`, route guard, role access, dan modul bisnis tetap **GUARDED**.

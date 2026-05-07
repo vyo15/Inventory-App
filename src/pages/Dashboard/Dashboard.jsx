@@ -13,14 +13,19 @@ import {
   Typography,
 } from "antd";
 import {
+  AppstoreOutlined,
   ArrowRightOutlined,
+  BarChartOutlined,
   BuildOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   DollarCircleOutlined,
   HistoryOutlined,
+  PlusCircleOutlined,
+  ReloadOutlined,
   ShoppingCartOutlined,
   ToolOutlined,
+  WalletOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
 import { collection, getDocs, limit, orderBy, query, where } from "firebase/firestore";
@@ -44,6 +49,7 @@ const { Text, Title } = Typography;
 // - aktif dipakai; bukan legacy dan bukan kandidat cleanup.
 // =========================
 const MAX_DASHBOARD_LIST_ITEMS = 5;
+const MAX_DASHBOARD_ALERT_ITEMS = 6;
 const MAX_PLANNING_PRIORITY_ITEMS = 3;
 
 const EMPTY_PLANNING_PERIOD_SUMMARY = {
@@ -111,6 +117,15 @@ const getTransactionDate = (record = {}) => {
   return null;
 };
 
+const isSameDay = (date, referenceDate = new Date()) => {
+  if (!date) return false;
+  return (
+    date.getFullYear() === referenceDate.getFullYear() &&
+    date.getMonth() === referenceDate.getMonth() &&
+    date.getDate() === referenceDate.getDate()
+  );
+};
+
 const isSameMonth = (date, referenceDate = new Date()) => {
   if (!date) return false;
   return (
@@ -155,6 +170,9 @@ const formatCurrency = (value) => `Rp ${formatNumberId(Math.round(value || 0))}`
 
 const normalizeStatus = (value) => String(value || "").trim().toLowerCase();
 
+const isCancelledStatus = (value) =>
+  ["cancelled", "canceled", "cancel", "dibatalkan", "batal"].includes(normalizeStatus(value));
+
 const isCompletedStatus = (value) =>
   ["completed", "complete", "selesai", "done"].includes(normalizeStatus(value));
 
@@ -195,6 +213,12 @@ const getItemStock = (item = {}) =>
 
 const getItemMinStock = (item = {}) =>
   getNumericValue(item?.minStockAlert ?? item?.minStock ?? 0);
+
+const getItemCurrentStock = (item = {}) =>
+  getNumericValue(item?.currentStock ?? item?.stock ?? 0);
+
+const getItemReservedStock = (item = {}) =>
+  getNumericValue(item?.reservedStock ?? 0);
 
 const getLowStockSeverity = (item = {}) => {
   const stock = getItemStock(item);
@@ -253,6 +277,55 @@ const buildLowStockRows = (products = [], materials = [], semiFinishedMaterials 
     const rightGap = right.stock - Math.max(right.minStock, 0);
     return leftGap - rightGap;
   });
+};
+
+/* =====================================================
+SECTION: Dashboard Business Alert Stock Audit — AKTIF
+Fungsi:
+- Menyusun audit stok read-only untuk stok minus dan reserved stock tidak wajar tanpa mengubah stok.
+
+Dipakai oleh:
+- KPI Data Perlu Dicek dan section Data Perlu Dicek pada Dashboard.
+
+Alasan perubahan:
+- Owner perlu melihat exception ERP lintas menu tanpa membuka Stock Management satu per satu.
+
+Catatan cleanup:
+- Validasi reserved stock bisa dipindah ke helper/service read model jika schema stok sudah stabil penuh.
+
+Risiko:
+- Jika audit ini dijadikan mutasi otomatis, stok fisik/reserved bisa rusak dan report tidak sinkron.
+===================================================== */
+const buildStockAuditRows = (products = [], materials = [], semiFinishedMaterials = []) => {
+  const mapRows = (items = [], type = "Item", sourceType = "item", to = "/stock-management") =>
+    items.map((item) => {
+      const stock = getItemStock(item);
+      const currentStock = getItemCurrentStock(item);
+      const reservedStock = getItemReservedStock(item);
+      const minStock = getItemMinStock(item);
+
+      return {
+        key: `${sourceType}-${item.id}`,
+        id: item.id,
+        name: getItemDisplayName(item),
+        type,
+        sourceType,
+        unit: item?.stockUnit || item?.unit || "pcs",
+        stock,
+        currentStock,
+        reservedStock,
+        minStock,
+        to,
+        isNegativeStock: stock < 0 || currentStock < 0,
+        isReservedOverrun: reservedStock > 0 && (reservedStock > Math.max(currentStock, 0) || stock < 0),
+      };
+    });
+
+  return [
+    ...mapRows(products, "Produk Jadi", "product", "/stock-management"),
+    ...mapRows(materials, "Bahan Baku", "material", "/stock-management"),
+    ...mapRows(semiFinishedMaterials, "Semi Finished", "semi_finished", "/produksi/semi-finished-materials"),
+  ].filter((item) => item.isNegativeStock || item.isReservedOverrun);
 };
 
 // =========================
@@ -353,6 +426,89 @@ const buildRestockRoute = (basePath, params = {}) => {
   const queryString = searchParams.toString();
   return queryString ? `${basePath}?${queryString}` : basePath;
 };
+
+/* =====================================================
+SECTION: Dashboard Quick Actions — AKTIF / GUARDED
+Fungsi:
+- Menyediakan shortcut navigasi ke route existing agar user cepat berpindah menu tanpa membuat/mengubah data.
+
+Dipakai oleh:
+- Section Aksi Cepat pada Dashboard.
+
+Alasan perubahan:
+- Dashboard diarahkan menjadi business control center yang membantu navigasi lintas modul ERP IMS.
+
+Catatan cleanup:
+- Jika role/action matrix makin detail, daftar ini bisa dibaca dari config route yang sudah ter-guard, bukan ditulis manual.
+
+Risiko:
+- Jika quick action berubah menjadi submit/create otomatis, Dashboard melanggar prinsip read-only dan bisa membuat transaksi/stok/kas dobel.
+===================================================== */
+const buildDashboardQuickActions = () => [
+  {
+    key: "sales",
+    label: "Tambah Penjualan",
+    description: "Buka halaman Sales untuk input transaksi manual.",
+    to: "/sales",
+    icon: <PlusCircleOutlined />,
+  },
+  {
+    key: "purchases",
+    label: "Pembelian",
+    description: "Buka Purchases untuk restock bahan/barang.",
+    to: "/purchases",
+    icon: <ShoppingCartOutlined />,
+  },
+  {
+    key: "stock",
+    label: "Cek Stok",
+    description: "Buka Stock Management dan audit stok.",
+    to: "/stock-management",
+    icon: <AppstoreOutlined />,
+  },
+  {
+    key: "stock-report",
+    label: "Laporan Stok",
+    description: "Buka laporan stok final read-only.",
+    to: "/report-stock",
+    icon: <BarChartOutlined />,
+  },
+  {
+    key: "planning",
+    label: "Production Planning",
+    description: "Pantau target mingguan/bulanan produksi.",
+    to: "/produksi/production-planning",
+    icon: <ClockCircleOutlined />,
+  },
+  {
+    key: "worklog",
+    label: "Work Log Produksi",
+    description: "Cek pekerjaan produksi berjalan.",
+    to: "/produksi/work-log-produksi",
+    icon: <BuildOutlined />,
+  },
+  {
+    key: "payroll",
+    label: "Payroll Produksi",
+    description: "Review payroll draft/unpaid.",
+    to: "/produksi/payroll-produksi",
+    icon: <DollarCircleOutlined />,
+  },
+  {
+    key: "cash-in",
+    label: "Kas Masuk",
+    description: "Buka pencatatan kas masuk operasional.",
+    to: "/cash-in",
+    icon: <WalletOutlined />,
+  },
+  {
+    key: "cash-out",
+    label: "Kas Keluar",
+    description: "Buka pencatatan kas keluar/biaya.",
+    to: "/cash-out",
+    icon: <WalletOutlined />,
+  },
+];
 
 // =========================
 // SECTION: AKTIF + GUARDED - targeted purchase lookup Dashboard
@@ -484,6 +640,20 @@ const formatDashboardDate = (value) => {
   });
 };
 
+const mapSnapshotDocs = (snapshot) => snapshot.docs.map((docItem) => ({
+  id: docItem.id,
+  ...docItem.data(),
+}));
+
+const readDashboardSnapshot = async (key, requestPromise) => {
+  try {
+    return { key, data: mapSnapshotDocs(await requestPromise), error: null };
+  } catch (error) {
+    console.warn(`Gagal memuat data Dashboard: ${key}`, error);
+    return { key, data: [], error };
+  }
+};
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -499,13 +669,15 @@ const Dashboard = () => {
     expenses: [],
     incomes: [],
     revenues: [],
+    sales: [],
+    stockAuditRows: [],
     planningSummary: EMPTY_PLANNING_SUMMARY,
   });
 
   // =========================
   // SECTION: Load Dashboard data
   // Fungsi:
-  // - mengambil snapshot read-only untuk 5 section Dashboard;
+  // - mengambil snapshot read-only untuk Dashboard control center compact;
   // - tombol refresh memanggil fungsi yang sama tanpa melakukan write ke collection mana pun.
   // Hubungan flow:
   // - membaca stok, PO, Work Log, Payroll, Income/Expense, Inventory Log, dan Planning sebagai ringkasan operasional.
@@ -523,90 +695,74 @@ const Dashboard = () => {
         limit(MAX_DASHBOARD_LIST_ITEMS),
       );
 
-      const [
-        productsSnap,
-        materialsSnap,
-        semiFinishedSnap,
-        recentActivitiesSnap,
-        productionOrdersSnap,
-        workLogsSnap,
-        payrollsSnap,
-        expensesSnap,
-        incomesSnap,
-        revenuesSnap,
-        planningSummary,
-      ] = await Promise.all([
-        getDocs(collection(db, "products")),
-        getDocs(collection(db, "raw_materials")),
-        getDocs(collection(db, "semi_finished_materials")),
-        getDocs(recentActivitiesQuery),
-        getDocs(collection(db, "production_orders")),
-        getDocs(collection(db, "production_work_logs")),
-        getDocs(collection(db, "production_payrolls")),
-        getDocs(collection(db, "expenses")),
-        getDocs(collection(db, "incomes")),
-        getDocs(collection(db, "revenues")),
-        getProductionPlanningDashboardSummary().catch((error) => {
-          console.warn("Gagal memuat summary production planning:", error);
-          return EMPTY_PLANNING_SUMMARY;
-        }),
+      const dashboardReads = await Promise.all([
+        readDashboardSnapshot("products", getDocs(collection(db, "products"))),
+        readDashboardSnapshot("raw_materials", getDocs(collection(db, "raw_materials"))),
+        readDashboardSnapshot("semi_finished_materials", getDocs(collection(db, "semi_finished_materials"))),
+        readDashboardSnapshot("inventory_logs", getDocs(recentActivitiesQuery)),
+        readDashboardSnapshot("production_orders", getDocs(collection(db, "production_orders"))),
+        readDashboardSnapshot("production_work_logs", getDocs(collection(db, "production_work_logs"))),
+        readDashboardSnapshot("production_payrolls", getDocs(collection(db, "production_payrolls"))),
+        readDashboardSnapshot("expenses", getDocs(collection(db, "expenses"))),
+        readDashboardSnapshot("incomes", getDocs(collection(db, "incomes"))),
+        readDashboardSnapshot("revenues", getDocs(collection(db, "revenues"))),
+        readDashboardSnapshot("sales", getDocs(collection(db, "sales"))),
       ]);
 
-      const products = productsSnap.docs.map((docItem) => ({
-        id: docItem.id,
-        ...docItem.data(),
-      }));
+      const dataByKey = dashboardReads.reduce((accumulator, item) => {
+        accumulator[item.key] = item.data;
+        return accumulator;
+      }, {});
 
-      const materials = materialsSnap.docs.map((docItem) => ({
-        id: docItem.id,
-        ...docItem.data(),
-      }));
+      const failedReads = dashboardReads.filter((item) => item.error).map((item) => item.key);
 
-      const semiFinishedMaterials = semiFinishedSnap.docs.map((docItem) => ({
-        id: docItem.id,
-        ...docItem.data(),
-      }));
+      const planningSummary = await getProductionPlanningDashboardSummary().catch((error) => {
+        console.warn("Gagal memuat summary production planning:", error);
+        failedReads.push("production_planning_summary");
+        return EMPTY_PLANNING_SUMMARY;
+      });
 
+      const products = dataByKey.products || [];
+      const materials = dataByKey.raw_materials || [];
+      const semiFinishedMaterials = dataByKey.semi_finished_materials || [];
       const lowStockRows = buildLowStockRows(products, materials, semiFinishedMaterials);
-      const purchaseRecords = await fetchPurchaseRecordsForRestockRows(
-        lowStockRows.slice(0, MAX_DASHBOARD_LIST_ITEMS),
-      );
+      const stockAuditRows = buildStockAuditRows(products, materials, semiFinishedMaterials);
+
+      let purchaseRecords = [];
+      try {
+        purchaseRecords = await fetchPurchaseRecordsForRestockRows(
+          lowStockRows.slice(0, MAX_DASHBOARD_LIST_ITEMS),
+        );
+      } catch (error) {
+        console.warn("Gagal memuat lookup purchase Restock Assistant:", error);
+        failedReads.push("purchases_restock_lookup");
+      }
 
       setDashboardData({
         lowStockRows,
         purchaseRecords,
-        recentActivities: recentActivitiesSnap.docs.map((docItem) => ({
-          id: docItem.id,
-          ...docItem.data(),
-        })),
-        productionOrders: productionOrdersSnap.docs.map((docItem) => ({
-          id: docItem.id,
-          ...docItem.data(),
-        })),
-        workLogs: workLogsSnap.docs.map((docItem) => ({
-          id: docItem.id,
-          ...docItem.data(),
-        })),
-        payrolls: payrollsSnap.docs.map((docItem) => ({
-          id: docItem.id,
-          ...docItem.data(),
-        })),
-        expenses: expensesSnap.docs.map((docItem) => ({
-          id: docItem.id,
-          ...docItem.data(),
-        })),
-        incomes: incomesSnap.docs.map((docItem) => ({
-          id: docItem.id,
+        stockAuditRows,
+        recentActivities: dataByKey.inventory_logs || [],
+        productionOrders: dataByKey.production_orders || [],
+        workLogs: dataByKey.production_work_logs || [],
+        payrolls: dataByKey.production_payrolls || [],
+        expenses: dataByKey.expenses || [],
+        incomes: (dataByKey.incomes || []).map((item) => ({
+          ...item,
           sourceCollection: "incomes",
-          ...docItem.data(),
         })),
-        revenues: revenuesSnap.docs.map((docItem) => ({
-          id: docItem.id,
+        revenues: (dataByKey.revenues || []).map((item) => ({
+          ...item,
           sourceCollection: "revenues",
-          ...docItem.data(),
         })),
+        sales: dataByKey.sales || [],
         planningSummary: normalizePlanningDashboardSummary(planningSummary),
       });
+
+      if (failedReads.length > 0) {
+        setLoadWarning(`Sebagian data Dashboard gagal dimuat: ${failedReads.join(", ")}. Data lain tetap ditampilkan sebagai monitoring read-only.`);
+      }
+
       setLastUpdated(new Date());
     } catch (error) {
       console.error("Gagal memuat dashboard:", error);
@@ -630,10 +786,13 @@ const Dashboard = () => {
     expenses,
     incomes,
     revenues,
+    sales,
+    stockAuditRows,
     planningSummary,
   } = dashboardData;
 
   const lowStockTotal = lowStockRows.length;
+  const quickActions = useMemo(() => buildDashboardQuickActions(), []);
 
   // =========================
   // SECTION: Restock Assistant - stok kritis
@@ -653,7 +812,7 @@ const Dashboard = () => {
     [lowStockRows, purchaseRecords],
   );
   const planningPriorityItems = planningSummary.priorityPlans
-    .filter((plan) => !["completed", "cancelled"].includes(normalizeStatus(plan.status)))
+    .filter((plan) => !isCompletedStatus(plan.status) && !isCancelledStatus(plan.status))
     .slice(0, MAX_PLANNING_PRIORITY_ITEMS);
 
   const productionSummary = useMemo(() => {
@@ -692,6 +851,19 @@ const Dashboard = () => {
     };
   }, [expenses, payrolls]);
 
+  const salesSummary = useMemo(() => {
+    const validSales = sales.filter((item) => !isCancelledStatus(item.status));
+    const salesToday = validSales.filter((item) => isSameDay(getTransactionDate(item)));
+    const salesThisMonth = validSales.filter((item) => isSameMonth(getTransactionDate(item)));
+
+    return {
+      todayCount: salesToday.length,
+      todayAmount: salesToday.reduce((total, item) => total + getFinancialAmount(item), 0),
+      monthCount: salesThisMonth.length,
+      monthAmount: salesThisMonth.reduce((total, item) => total + getFinancialAmount(item), 0),
+    };
+  }, [sales]);
+
   const financeSummary = useMemo(() => {
     const recognizedIncome = [...incomes, ...revenues]
       .filter((item) => isSameMonth(getTransactionDate(item)))
@@ -707,6 +879,216 @@ const Dashboard = () => {
       netOperational: recognizedIncome - expenseThisMonth,
     };
   }, [expenses, incomes, revenues]);
+
+  /* =====================================================
+  SECTION: Dashboard Business Alerts — AKTIF / GUARDED
+  Fungsi:
+  - Merangkum exception lintas stok, produksi, payroll, dan HPP agar Dashboard menjadi control center read-only.
+
+  Dipakai oleh:
+  - KPI Data Perlu Dicek dan section Data Perlu Dicek.
+
+  Alasan perubahan:
+  - User perlu tahu data/flow yang bermasalah tanpa membuka semua menu IMS satu per satu.
+
+  Catatan cleanup:
+  - Alert yang membutuhkan source belum stabil harus tetap menjadi cleanup candidate, bukan dibuat sebagai angka final.
+
+  Risiko:
+  - Jika alert dipakai sebagai dasar write otomatis, stok, payroll, HPP, atau report bisa tidak sinkron.
+  ===================================================== */
+  const businessAlertItems = useMemo(() => {
+    const negativeStockRows = stockAuditRows.filter((item) => item.isNegativeStock);
+    const reservedOverrunRows = stockAuditRows.filter((item) => item.isReservedOverrun);
+    const items = [];
+
+    if (negativeStockRows.length > 0) {
+      items.push({
+        key: "negative-stock",
+        label: "Stok minus",
+        count: negativeStockRows.length,
+        description: `${negativeStockRows[0].name} perlu dicek di Stock Management.`,
+        color: "red",
+        type: "Stock",
+        to: negativeStockRows[0].to,
+      });
+    }
+
+    if (reservedOverrunRows.length > 0) {
+      items.push({
+        key: "reserved-overrun",
+        label: "Reserved tidak wajar",
+        count: reservedOverrunRows.length,
+        description: `${reservedOverrunRows[0].name}: reserved ${formatNumberId(reservedOverrunRows[0].reservedStock)} ${reservedOverrunRows[0].unit}.`,
+        color: "orange",
+        type: "Stock",
+        to: reservedOverrunRows[0].to,
+      });
+    }
+
+    if (lowStockTotal > 0) {
+      items.push({
+        key: "low-stock",
+        label: "Stok kritis",
+        count: lowStockTotal,
+        description: "Ada item kosong/menipis berdasarkan threshold master.",
+        color: "gold",
+        type: "Stock",
+        to: "/stock-management",
+      });
+    }
+
+    if (productionSummary.shortageOrders > 0) {
+      items.push({
+        key: "po-shortage-alert",
+        label: "PO shortage",
+        count: productionSummary.shortageOrders,
+        description: "Material/BOM perlu dicek sebelum produksi berjalan.",
+        color: "red",
+        type: "Production",
+        to: "/produksi/production-orders",
+      });
+    }
+
+    if (planningSummary.overdueCount > 0 || planningSummary.behindTargetCount > 0) {
+      items.push({
+        key: "planning-alert",
+        label: "Planning perlu dicek",
+        count: planningSummary.overdueCount + planningSummary.behindTargetCount,
+        description: "Ada planning overdue atau tertinggal target.",
+        color: planningSummary.overdueCount > 0 ? "red" : "gold",
+        type: "Production",
+        to: "/produksi/production-planning",
+      });
+    }
+
+    if (productionSummary.costIssueCount > 0) {
+      items.push({
+        key: "hpp-cost-alert",
+        label: "Cost/HPP kosong",
+        count: productionSummary.costIssueCount,
+        description: "Work Log completed punya cost actual 0.",
+        color: "purple",
+        type: "HPP",
+        to: "/produksi/analisis-hpp",
+      });
+    }
+
+    if (payrollSummary.pendingCount > 0) {
+      items.push({
+        key: "payroll-pending-alert",
+        label: "Payroll pending",
+        count: payrollSummary.pendingCount,
+        description: `${formatCurrency(payrollSummary.pendingAmount)} masih perlu review/pembayaran.`,
+        color: "cyan",
+        type: "Payroll",
+        to: "/produksi/payroll-produksi",
+      });
+    }
+
+    return items.slice(0, MAX_DASHBOARD_ALERT_ITEMS);
+  }, [
+    lowStockTotal,
+    payrollSummary.pendingAmount,
+    payrollSummary.pendingCount,
+    planningSummary.behindTargetCount,
+    planningSummary.overdueCount,
+    productionSummary.costIssueCount,
+    productionSummary.shortageOrders,
+    stockAuditRows,
+  ]);
+
+  const businessAlertTotal = businessAlertItems.reduce((total, item) => total + getNumericValue(item.count), 0);
+
+  /* =====================================================
+  SECTION: Dashboard KPI Strip — AKTIF
+  Fungsi:
+  - Mengumpulkan KPI ringkas sales, kas, stok, produksi, payroll, dan alert tanpa menulis data.
+
+  Dipakai oleh:
+  - Section Ringkasan Hari Ini pada Dashboard.
+
+  Alasan perubahan:
+  - Dashboard perlu memberi gambaran bisnis sekali lihat, tetapi tetap bukan laporan final.
+
+  Catatan cleanup:
+  - Sales dan cash masih dibaca dari collection operasional existing; standardisasi read model bisa menjadi task terpisah jika data membesar.
+
+  Risiko:
+  - Menjumlahkan sales dengan incomes/revenues sebagai angka kas yang sama akan double count dan membuat Profit Loss tidak sinkron.
+  ===================================================== */
+  const kpiItems = useMemo(() => [
+    {
+      key: "sales-month",
+      label: "Sales Bulan Ini",
+      value: formatCurrency(salesSummary.monthAmount),
+      detail: `${formatNumberId(salesSummary.monthCount)} bulan ini · ${formatCurrency(salesSummary.todayAmount)} hari ini`,
+      tone: "primary",
+    },
+    {
+      key: "cash-in",
+      label: "Kas Masuk",
+      value: formatCurrency(financeSummary.recognizedIncome),
+      detail: "revenues + incomes bulan ini",
+      tone: "success",
+    },
+    {
+      key: "cash-out",
+      label: "Kas Keluar",
+      value: formatCurrency(financeSummary.expenseThisMonth),
+      detail: "expenses bulan ini",
+      tone: "danger",
+    },
+    {
+      key: "net-cash",
+      label: "Net Kas Operasional",
+      value: formatCurrency(financeSummary.netOperational),
+      detail: "monitoring, bukan laba final",
+      tone: financeSummary.netOperational < 0 ? "danger" : "success",
+    },
+    {
+      key: "stock-critical",
+      label: "Stok Kritis",
+      value: formatNumberId(lowStockTotal),
+      detail: "produk, bahan, semi finished",
+      tone: lowStockTotal > 0 ? "warning" : "success",
+    },
+    {
+      key: "production-watch",
+      label: "Produksi Dicek",
+      value: formatNumberId(productionSummary.shortageOrders + planningSummary.overdueCount + planningSummary.behindTargetCount),
+      detail: "shortage/overdue/behind target",
+      tone: productionSummary.shortageOrders + planningSummary.overdueCount > 0 ? "danger" : "primary",
+    },
+    {
+      key: "payroll-pending",
+      label: "Payroll Pending",
+      value: formatNumberId(payrollSummary.pendingCount),
+      detail: formatCurrency(payrollSummary.pendingAmount),
+      tone: payrollSummary.pendingCount > 0 ? "warning" : "success",
+    },
+    {
+      key: "data-watch",
+      label: "Data Perlu Dicek",
+      value: formatNumberId(businessAlertTotal),
+      detail: "exception lintas modul",
+      tone: businessAlertTotal > 0 ? "warning" : "success",
+    },
+  ], [
+    businessAlertTotal,
+    financeSummary.expenseThisMonth,
+    financeSummary.netOperational,
+    financeSummary.recognizedIncome,
+    lowStockTotal,
+    payrollSummary.pendingAmount,
+    payrollSummary.pendingCount,
+    planningSummary.behindTargetCount,
+    planningSummary.overdueCount,
+    productionSummary.shortageOrders,
+    salesSummary.monthAmount,
+    salesSummary.monthCount,
+    salesSummary.todayAmount,
+  ]);
 
   // =========================
   // SECTION: Prioritas Hari Ini
@@ -843,10 +1225,135 @@ const Dashboard = () => {
       <PageHeader
         title="Dashboard"
         subtitle="Pusat kontrol harian yang ringkas, read-only, dan tidak mengubah stok, kas, produksi, payroll, HPP, atau laporan."
-        extra={<Text className="dashboard-section-extra">Terakhir diperbarui: {lastUpdatedText}</Text>}
+        extra={
+          <Space size={10} wrap>
+            <Text className="dashboard-section-extra">Terakhir diperbarui: {lastUpdatedText}</Text>
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              loading={loading}
+              onClick={loadDashboardData}
+            >
+              Muat Ulang
+            </Button>
+          </Space>
+        }
       />
 
       {loadWarning ? <Alert type="warning" showIcon message={loadWarning} /> : null}
+
+      {/* =====================================================
+          SECTION: Ringkasan Hari Ini — AKTIF
+          Fungsi:
+          - Menampilkan KPI compact sales, kas, stok, produksi, payroll, dan data perlu dicek.
+
+          Dipakai oleh:
+          - Dashboard control center.
+
+          Alasan perubahan:
+          - Owner perlu membaca kondisi bisnis utama dalam sekali lihat tanpa membuka report penuh.
+
+          Catatan cleanup:
+          - Sales dan cash dapat dipindahkan ke read model jika volume data makin besar.
+
+          Risiko:
+          - Jika KPI dianggap laporan final, angka bisa disalahartikan karena Dashboard hanya monitoring read-only.
+      ===================================================== */}
+      <PageSection
+        title="Ringkasan Hari Ini"
+        subtitle="KPI compact lintas sales, kas, stok, dan produksi. Profit Loss tetap laporan final."
+      >
+        <div className="dashboard-kpi-grid">
+          {kpiItems.map((item) => (
+            <div key={item.key} className={`dashboard-kpi-card dashboard-kpi-card-${item.tone}`}>
+              <Text className="dashboard-card-label">{item.label}</Text>
+              <Title level={4} className="dashboard-card-value">
+                {item.value}
+              </Title>
+              <Text className="dashboard-muted-text">{item.detail}</Text>
+            </div>
+          ))}
+        </div>
+      </PageSection>
+
+      {/* =====================================================
+          SECTION: Aksi Cepat — AKTIF / GUARDED
+          Fungsi:
+          - Menyediakan shortcut navigasi ke route existing tanpa create/update/delete data.
+
+          Dipakai oleh:
+          - User Dashboard untuk berpindah ke Sales, Purchases, Stock, Produksi, Payroll, dan Cash.
+
+          Alasan perubahan:
+          - Dashboard sebagai control center perlu mempercepat perpindahan menu ERP IMS.
+
+          Catatan cleanup:
+          - Daftar route bisa disatukan dengan config navigasi jika nanti role-aware quick action dibutuhkan.
+
+          Risiko:
+          - Jika action diubah menjadi auto-submit, Dashboard akan melanggar read-only dan bisa membuat data dobel.
+      ===================================================== */}
+      <PageSection
+        title="Aksi Cepat"
+        subtitle="Shortcut navigasi saja. Tidak ada transaksi, mutasi stok, kas, produksi, atau payroll yang dibuat dari Dashboard."
+      >
+        <div className="dashboard-quick-action-grid">
+          {quickActions.map((action) => (
+            <Link key={action.key} to={action.to} className="dashboard-quick-action-card">
+              <div className="dashboard-quick-action-icon">{action.icon}</div>
+              <div className="dashboard-list-card-content">
+                <Text strong>{action.label}</Text>
+                <Text className="dashboard-muted-text">{action.description}</Text>
+              </div>
+              <ArrowRightOutlined className="dashboard-action-arrow" />
+            </Link>
+          ))}
+        </div>
+      </PageSection>
+
+      {/* =====================================================
+          SECTION: Data Perlu Dicek — AKTIF / GUARDED
+          Fungsi:
+          - Menampilkan exception lintas modul secara compact dan read-only.
+
+          Dipakai oleh:
+          - Owner/admin untuk audit cepat stok, produksi, payroll, dan HPP.
+
+          Alasan perubahan:
+          - Dashboard perlu menunjukkan masalah operasional yang butuh perhatian sebelum menjadi bug laporan.
+
+          Catatan cleanup:
+          - Alert tambahan seperti return/cash anomaly hanya ditambahkan jika source datanya sudah jelas.
+
+          Risiko:
+          - Alert yang terlalu banyak atau tidak akurat bisa membuat Dashboard terlihat seperti report besar dan membingungkan user.
+      ===================================================== */}
+      <PageSection
+        title="Data Perlu Dicek"
+        subtitle="Exception paling penting dari stok, produksi, HPP, dan payroll. Maksimal ringkas agar tidak menjadi laporan penuh."
+      >
+        {businessAlertItems.length > 0 ? (
+          <div className="dashboard-alert-grid">
+            {businessAlertItems.map((item) => (
+              <Link key={item.key} to={item.to} className="dashboard-alert-card">
+                <div className="dashboard-list-card-content">
+                  <Space size={8} wrap>
+                    <Tag color={item.color}>{item.type}</Tag>
+                    <Tag color={item.color}>{formatNumberId(item.count)}</Tag>
+                    <Text strong>{item.label}</Text>
+                  </Space>
+                  <Text className="dashboard-muted-text">{item.description}</Text>
+                </div>
+                <ArrowRightOutlined className="dashboard-action-arrow" />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="dashboard-empty-wrap dashboard-empty-compact">
+            <Empty description="Belum ada data kritis yang perlu dicek." />
+          </div>
+        )}
+      </PageSection>
 
       {/* =========================
           SECTION 1: Prioritas Hari Ini

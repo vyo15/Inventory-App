@@ -464,11 +464,11 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 ### Fase D - Dashboard Read-only Control Center
 - Dashboard adalah read-only operational control center.
 - Dashboard tidak boleh menulis/mengubah stok, sales, PO, Work Log, payroll, expense, income, HPP, planning, atau laporan.
-- Struktur Dashboard final maksimal 5 section: Prioritas Hari Ini, Fokus Produksi, Stok Kritis, Keuangan Ringkas, dan Aktivitas Terbaru.
+- Struktur Dashboard harus compact sebagai control center: KPI ringkas, quick actions navigasi-only, Data Perlu Dicek, Prioritas Hari Ini, Fokus Produksi, Stok Kritis, Keuangan Ringkas, dan Aktivitas Terbaru. Jumlah section boleh bertambah hanya jika tetap read-only dan tidak berubah menjadi report/table besar.
 - Dashboard tidak boleh memakai table besar atau horizontal scroll sebagai layout utama.
-- List Dashboard maksimal 5 item, kecuali planning prioritas maksimal 3 item.
+- List Dashboard maksimal 5 item, Data Perlu Dicek maksimal 6 alert, dan planning prioritas maksimal 3 item.
 - Keuangan Dashboard hanya ringkasan monitoring; Profit Loss tetap source final laporan laba/rugi.
-- Dashboard wajib punya last updated dan refresh yang hanya reload data summary.
+- Dashboard wajib punya last updated dan refresh/Muat Ulang yang hanya reload data summary.
 - Jika payroll paid sudah masuk expense atau ada cost 0, Dashboard hanya menampilkan catatan/warning, bukan angka final yang misleading.
 
 ### Fase E - Report dan Export Standard

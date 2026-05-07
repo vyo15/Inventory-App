@@ -299,7 +299,7 @@ Tech debt tersisa:
 - Fase A Sales stock safety: sudah tercermin di source melalui validasi `availableStock`, agregasi kebutuhan item, dan rollback sale jika mutasi stok gagal.
 - Fase B Purchase expense metadata: sudah tercermin di source melalui metadata expense otomatis pembelian `sourceId`, `sourceRef`, `sourceType`, `createdByAutomation`, dan kompatibilitas `relatedPurchaseId`.
 - Fase C HPP/Work Log cost 0 warning: sudah tercermin di source melalui warning validasi cost di HPP Analysis dan detail Work Log.
-- Fase D Dashboard cleanup: sudah tercermin di source dengan Dashboard read-only 5 section, last updated, refresh, list compact, dan tanpa table besar sebagai layout utama.
+- Fase D Dashboard cleanup: sudah tercermin di source dengan Dashboard read-only compact sebagai control center; update terbaru menambahkan KPI strip, quick actions navigasi-only, dan Data Perlu Dicek tanpa table besar sebagai layout utama.
 - Fase E Report/export gap: sudah tercermin di source melalui Stock Report yang membaca semi-finished stock, export HPP XLSX, dan fix filter export Payroll Report.
 - Fase F legacy duplicate cleanup: status bersih pada upload terbaru karena folder `src/src/**` tidak ditemukan lagi dan grep reference `src/src` tidak menemukan import aktif.
 - Fase G docs/checklist: fase dokumentasi; tidak mengubah source aplikasi.
@@ -319,6 +319,26 @@ Tech debt tersisa:
 - `src/pages/Dashboard/Dashboard.jsx` dan `.css`: Dashboard harus tetap read-only dan compact.
 - `src/pages/Laporan/StockReport.jsx`: jangan hilangkan semi-finished stock dari laporan.
 - `src/services/Produksi/productionPayrollsService.js`: guard anti double payroll expense wajib dipertahankan.
+
+
+### 18. Dashboard Business Control Center compact — 2026-05
+
+Status aktif:
+- Dashboard tetap read-only dan tidak menjadi sumber transaksi.
+- Ringkasan Hari Ini membaca sales, kas, stok, produksi, payroll, dan alert operasional sebagai KPI monitoring.
+- Aksi Cepat hanya navigasi ke route existing; tidak membuat Sales, Purchases, PO, Work Log, Payroll, Cash In/Out, expense, income, atau mutasi stok.
+- Data Perlu Dicek menampilkan exception stok minus/reserved tidak wajar, stok kritis, PO shortage, planning overdue/behind target, cost/HPP kosong pada Work Log completed, dan payroll pending.
+- `Terakhir diperbarui` dan tombol `Muat Ulang` hanya reload snapshot read-only.
+
+Guarded:
+- Angka cash resmi tetap berasal dari `revenues` + `incomes` dan `expenses`; Profit Loss tetap laporan final.
+- Sales KPI membaca `sales.total` sebagai omzet/monitoring, tidak boleh dijumlahkan ulang sebagai kas resmi.
+- Dashboard tidak boleh melakukan auto-create transaction, auto-purchase, auto-PO, auto-payroll, auto-expense, auto-income, atau auto-stock-fix.
+- Alert Data Perlu Dicek hanya petunjuk audit; perbaikan tetap dilakukan di modul source of truth.
+
+Tech debt:
+- Dashboard masih membaca beberapa collection operasional untuk summary. Jika volume data besar, perlu read model/range query khusus tanpa mengubah meaning angka.
+- Quick actions belum role-aware per button; route guard tetap pengaman utama.
 
 ### 13. Supplier Restock Catalog manual dengan cascade snapshot terbatas
 Temuan terkini:
@@ -719,7 +739,7 @@ Risiko:
 ### Status aktif
 - **AKTIF:** halaman Login memakai arah visual Mode A: bright corporate dengan brand hero kiri dan form card kanan.
 - **AKTIF:** logo Flanel Karawang Industries tampil bebas tanpa frame/showcase berat dan tanpa dekorasi yang menimpa logo.
-- **AKTIF:** background Login memakai shape/curve/gradient blue-yellow yang lebih hidup tetapi tetap clean.
+- **CLEANUP CANDIDATE:** background Login masih memiliki pattern visual lama yang perlu diselaraskan ke standar no-gradient pada batch khusus Login CSS.
 - **AKTIF:** mobile Login memakai form-first layout agar user langsung fokus ke login.
 - **GUARDED:** perubahan hanya menyentuh struktur/class visual Login; `handleLogin`, `loginWithUsername`, `profileStatus`, blocked user, logout, route guard, role access, dan modul bisnis tidak diubah.
 
@@ -803,3 +823,16 @@ Status: **AKTIF + GUARDED**.
 - Stock Report sekarang memakai threshold master per entity untuk status `Habis/Kritis/Normal`, bukan threshold statis global `10` sebagai sumber utama.
 - `variants[].minStockAlert` Product/Semi Finished tetap legacy-compat untuk data lama/helper generic dan tidak boleh dipakai sebagai source threshold aktif.
 - Batch ini tidak mengubah stok fisik, reserved/available calculation, inventory log, transaksi, produksi, payroll, HPP, schema, atau migration data lama.
+
+
+## Update Brand Theme Alignment — 2026-05-07
+
+Status: **AKTIF + GUARDED UI-ONLY**.
+
+- Theme global/shared diarahkan ke flat corporate minimalist: blue/navy sebagai primary dan muted gold/yellow sebagai accent kecil.
+- Brand gold dipisahkan dari semantic warning; warning tetap amber/orange agar status bisnis tidak ambigu.
+- Global/shared shell, Ant Design token, sidebar menu, header, sidebar logo, SummaryStatCard, dan FilterBar tidak lagi memakai gradient aktif.
+- Gold accent dipakai terbatas sebagai marker active menu, ornament kecil header/sidebar, dan accent line kecil shared card/filter.
+- Perubahan batch ini tidak menyentuh service, query, schema, route guard, role guard, auth flow, transaksi, stok, produksi, payroll, HPP, report mapper, atau reset destructive flow.
+- **CLEANUP CANDIDATE:** `src/pages/Dashboard/Dashboard.css`, `src/pages/Auth/Login.css`, `src/components/Layout/Feedback/DataLoadingState.css`, dan `src/components/Layout/Feedback/LogoLoadingScreen.css` masih memiliki gradient/page-specific atau feedback-specific style lama dan perlu batch cleanup terpisah sesuai allowlist.
+- **CLEANUP CANDIDATE:** hardcoded color residual di page/component bisnis tetap perlu audit bertahap tanpa refactor logic.

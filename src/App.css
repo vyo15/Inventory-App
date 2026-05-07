@@ -42,13 +42,7 @@
   align-items: center;
   justify-content: center;
   padding: clamp(24px, 5vw, 48px);
-  background:
-    radial-gradient(
-      circle at 50% 42%,
-      color-mix(in srgb, var(--ims-color-primary) 7%, transparent) 0%,
-      transparent 42%
-    ),
-    var(--ims-bg-shell);
+  background: var(--ims-bg-shell);
   color: var(--ims-text-primary);
 }
 
@@ -65,8 +59,36 @@
   border: 0;
   border-radius: 0;
   box-shadow: none;
+  position: relative;
   text-align: center;
   backdrop-filter: none;
+}
+
+/* =====================================================
+SECTION: Global Loading Brand Accent — AKTIF
+Fungsi:
+- memberi aksen gold kecil pada auth/session loading tanpa gradient dan tanpa ornament besar.
+
+Dipakai oleh:
+- App.jsx loading gate sebelum AppLayout dan route operasional tampil.
+
+Alasan perubahan:
+- standar theme baru memakai flat surface; brand gold cukup muncul sebagai marker kecil agar tetap corporate.
+
+Catatan cleanup:
+- belum ada.
+
+Risiko:
+- ornament yang terlalu besar dapat membuat loading terasa ramai atau mengganggu fokus logo.
+===================================================== */
+.app-loading-card::after {
+  content: "";
+  width: 34px;
+  height: 3px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: var(--ims-color-brand-gold);
+  opacity: 0.78;
 }
 
 .app-loading-text {

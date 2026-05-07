@@ -1,31 +1,37 @@
 import { theme } from "antd";
 
-// =========================
-// SECTION: Brand Palette Source - AKTIF / THEME CENTER
-// Fungsi blok:
-// - menjadi pusat warna React/Ant Design untuk light dan dark mode berbasis blue/yellow/white/navy Flanel Karawang Industries.
-// - menjaga semantic palette agar komponen Ant Design tidak membawa warna lama yang berbeda dari CSS variable global.
-// Hubungan blok dengan flow aplikasi:
-// - dipakai oleh getAntdTheme() lalu diteruskan ke ConfigProvider di AppLayout.
-// - tidak menyentuh auth, router, roleAccess, service, transaksi, stok, produksi, payroll, HPP, laporan, atau schema Firestore.
-// Alasan logic dipakai:
-// - semua token Ant Design diturunkan dari satu object agar perubahan visual tidak menyebar ke modul bisnis.
-// - accent yellow dibatasi untuk highlight/warning soft dan tidak dipakai sebagai warna text panjang.
-// Status logic:
-// - AKTIF sebagai foundation theme Phase 01.
-// - GUARDED karena berdampak ke Button, Menu, Card, Table, Modal, Drawer, Input, Select, DatePicker, dan Tag.
-// - CLEANUP CANDIDATE: struktur palette dapat disederhanakan setelah alias compatibility CSS selesai diaudit.
-// =========================
+// =====================================================
+// SECTION: AntD Brand/Semantic Palette Split — AKTIF / GUARDED
+// Fungsi:
+// - menjadi pusat warna React/Ant Design untuk light dan dark mode.
+// - memisahkan blue/navy primary, gold brand accent, dan semantic warning.
+//
+// Dipakai oleh:
+// - getAntdTheme() yang diteruskan ke ConfigProvider di AppLayout.
+//
+// Alasan perubahan:
+// - theme baru harus selaras dengan logo biru-kuning tanpa membuat gold menjadi warna dominan atau menggantikan warning semantic.
+// - Ant Design token perlu sinkron dengan CSS variable global agar button, menu, table, modal, drawer, input, dan select tetap readable.
+//
+// Catatan cleanup:
+// - belum ada; page-specific hardcoded color tetap perlu audit bertahap tanpa menyentuh logic bisnis.
+//
+// Risiko:
+// - perubahan token ini berdampak global ke seluruh komponen Ant Design; salah kontras dapat membuat status bisnis, form, table, atau modal sulit dibaca.
+// =====================================================
 const IMS_BRAND_THEME = {
   light: {
-    primary: "#2C6DB0",
-    primaryHover: "#245F9D",
-    primaryActive: "#1B4F86",
-    primarySoft: "#EAF3FC",
-    primarySofter: "rgba(44, 109, 176, 0.08)",
-    accentYellow: "#FEC32D",
-    accentYellowSoft: "#FFF4CC",
-    accentYellowText: "#6F4D00",
+    primary: "#245F9D",
+    primaryHover: "#1F548C",
+    primaryActive: "#173F6B",
+    primarySoft: "#E9F2FB",
+    primarySofter: "rgba(36, 95, 157, 0.08)",
+    brandGold: "#C9951A",
+    brandGoldSoft: "#FFF7E3",
+    brandGoldText: "#6F4D00",
+    warning: "#D97706",
+    warningSoft: "#FFF7ED",
+    warningText: "#92400E",
     bgBase: "#F6F9FC",
     bgLayout: "#EEF5FB",
     bgContainer: "#FFFFFF",
@@ -36,16 +42,16 @@ const IMS_BRAND_THEME = {
     bgFieldDisabled: "#EEF5FB",
     tableHeader: "#F8FBFE",
     tableHover: "#F8FBFE",
-    tableSelected: "#EAF3FC",
+    tableSelected: "#E9F2FB",
     textPrimary: "#102033",
     textSecondary: "#5B6F84",
     textMuted: "rgba(91, 111, 132, 0.78)",
     border: "#D9E5F2",
-    borderSoft: "rgba(44, 109, 176, 0.12)",
-    shadow: "0 14px 34px rgba(16, 32, 51, 0.08)",
+    borderSoft: "rgba(36, 95, 157, 0.12)",
+    shadow: "0 12px 28px rgba(16, 32, 51, 0.07)",
     sider: "#FFFFFF",
-    menuHover: "rgba(44, 109, 176, 0.08)",
-    focusRing: "0 0 0 3px rgba(44, 109, 176, 0.16)",
+    menuHover: "rgba(36, 95, 157, 0.08)",
+    focusRing: "0 0 0 3px rgba(36, 95, 157, 0.16)",
     overlayMask: "rgba(7, 17, 31, 0.32)",
   },
   dark: {
@@ -54,9 +60,12 @@ const IMS_BRAND_THEME = {
     primaryActive: "#3D86D1",
     primarySoft: "rgba(94, 163, 230, 0.18)",
     primarySofter: "rgba(94, 163, 230, 0.10)",
-    accentYellow: "#FFD56A",
-    accentYellowSoft: "rgba(254, 195, 45, 0.16)",
-    accentYellowText: "#FFE8A3",
+    brandGold: "#F1C75B",
+    brandGoldSoft: "rgba(241, 199, 91, 0.14)",
+    brandGoldText: "#FFE8A3",
+    warning: "#F59E0B",
+    warningSoft: "rgba(245, 158, 11, 0.15)",
+    warningText: "#FCD34D",
     bgBase: "#07111F",
     bgLayout: "#0A1627",
     bgContainer: "#101E33",
@@ -73,7 +82,7 @@ const IMS_BRAND_THEME = {
     textMuted: "rgba(234, 242, 251, 0.56)",
     border: "rgba(147, 184, 223, 0.18)",
     borderSoft: "rgba(147, 184, 223, 0.12)",
-    shadow: "0 16px 36px rgba(0, 0, 0, 0.36)",
+    shadow: "0 14px 30px rgba(0, 0, 0, 0.32)",
     sider: "#0A1627",
     menuHover: "rgba(94, 163, 230, 0.10)",
     focusRing: "0 0 0 3px rgba(94, 163, 230, 0.24)",
@@ -81,28 +90,31 @@ const IMS_BRAND_THEME = {
   },
 };
 
-// =========================
-// SECTION: Ant Design Theme Generator - AKTIF / GUARDED UI
-// Fungsi blok:
+// =====================================================
+// SECTION: Ant Design Theme Generator — AKTIF / GUARDED UI
+// Fungsi:
 // - menghasilkan token global dan component token Ant Design dari palette brand aktif.
-// - menyelaraskan light/dark mode Ant Design dengan CSS variable global di src/index.css.
-// Hubungan blok dengan flow aplikasi:
-// - dipanggil AppLayout melalui ConfigProvider dan hanya mengatur presentasi komponen UI.
-// - tidak mengubah flow AppLayout, state theme, localStorage, auth, router, roleAccess, service, atau business rules.
-// Alasan logic dipakai:
-// - token per komponen menjaga Button, Menu, Card, Table, Modal, Drawer, Input, Select, DatePicker, dan Tag tetap konsisten tanpa patch halaman bisnis.
-// - warna primary biru dipakai untuk action/navigation; accent yellow hanya untuk warning/highlight soft.
-// Status logic:
-// - AKTIF sebagai theme bridge React/Ant Design.
-// - GUARDED karena perubahan token dapat memengaruhi seluruh modul yang memakai komponen Ant Design.
-// =========================
+// - menjaga primary action tetap blue/navy dan warning tetap semantic amber/orange.
+//
+// Dipakai oleh:
+// - AppLayout melalui ConfigProvider.
+//
+// Alasan perubahan:
+// - token per komponen menjaga Button, Menu, Card, Table, Modal, Drawer, Input, Select, DatePicker, dan Tag tetap konsisten tanpa patch page bisnis.
+// - gold brand tidak dipakai sebagai primary CTA atau warning mentah.
+//
+// Catatan cleanup:
+// - belum ada.
+//
+// Risiko:
+// - perubahan berlebih dapat mengubah affordance action penting di seluruh modul operasional.
+// =====================================================
 export const getAntdTheme = (darkTheme = false) => {
   const palette = darkTheme ? IMS_BRAND_THEME.dark : IMS_BRAND_THEME.light;
 
   return {
     algorithm: darkTheme ? theme.darkAlgorithm : theme.defaultAlgorithm,
     token: {
-      // THEME TOKEN - AKTIF: primary action/navigation, link, active state, dan focus Ant Design mengikuti blue foundation.
       colorPrimary: palette.primary,
       colorPrimaryHover: palette.primaryHover,
       colorPrimaryActive: palette.primaryActive,
@@ -112,15 +124,14 @@ export const getAntdTheme = (darkTheme = false) => {
       colorLink: palette.primary,
       colorLinkHover: palette.primaryHover,
       colorLinkActive: palette.primaryActive,
-      colorWarning: palette.accentYellow,
-      colorWarningBg: palette.accentYellowSoft,
-      colorWarningBgHover: palette.accentYellowSoft,
-      colorWarningBorder: palette.accentYellow,
-      colorWarningText: palette.accentYellowText,
+      colorWarning: palette.warning,
+      colorWarningBg: palette.warningSoft,
+      colorWarningBgHover: palette.warningSoft,
+      colorWarningBorder: palette.warning,
+      colorWarningText: palette.warningText,
       fontFamily: 'Inter, "Segoe UI", sans-serif',
       borderRadius: 14,
 
-      // SURFACE TOKEN - AKTIF: mengontrol background layout, card, modal, drawer, dropdown, dan container Ant Design.
       colorBgBase: palette.bgBase,
       colorBgLayout: palette.bgLayout,
       colorBgContainer: palette.bgContainer,
@@ -133,7 +144,6 @@ export const getAntdTheme = (darkTheme = false) => {
       colorFillQuaternary: palette.bgSoft,
       colorFillAlter: palette.bgSoft,
 
-      // TEXT / BORDER TOKEN - AKTIF: menjaga kontras table/form/modal di light dan dark mode.
       colorTextBase: palette.textPrimary,
       colorText: palette.textPrimary,
       colorTextSecondary: palette.textSecondary,
@@ -159,17 +169,6 @@ export const getAntdTheme = (darkTheme = false) => {
         triggerColor: palette.textPrimary,
       },
 
-      // =========================
-      // SECTION: Menu Tokens - AKTIF
-      // Fungsi blok:
-      // - mengontrol active/hover menu sidebar agar primary navigation memakai blue foundation.
-      // Hubungan blok dengan flow aplikasi:
-      // - hanya presentasi menu Ant Design; SidebarMenu route item dan role guard tidak berubah.
-      // Alasan logic dipakai:
-      // - selected state dibuat soft agar modern/minimalis dan tidak terlalu berat di sidebar.
-      // Status logic:
-      // - AKTIF; GUARDED karena menu dipakai sebagai navigasi utama aplikasi.
-      // =========================
       Menu: {
         itemBorderRadius: 14,
         subMenuItemBorderRadius: 12,
@@ -190,17 +189,6 @@ export const getAntdTheme = (darkTheme = false) => {
         darkItemHoverColor: palette.textPrimary,
       },
 
-      // =========================
-      // SECTION: Surface Components - AKTIF
-      // Fungsi blok:
-      // - menyamakan Card, Drawer, Modal, Dropdown, dan Popover dengan surface global.
-      // Hubungan blok dengan flow aplikasi:
-      // - hanya warna/radius/shadow komponen; content transaksi, produksi, payroll, dan laporan tidak berubah.
-      // Alasan logic dipakai:
-      // - portal dan card harus tetap solid/readable di light dan dark mode.
-      // Status logic:
-      // - AKTIF; GUARDED karena banyak modul bisnis memakai komponen ini.
-      // =========================
       Card: {
         borderRadiusLG: 18,
         colorBgContainer: palette.bgContainer,
@@ -227,17 +215,6 @@ export const getAntdTheme = (darkTheme = false) => {
         colorBgElevated: palette.bgElevated,
       },
 
-      // =========================
-      // SECTION: Action Components - AKTIF
-      // Fungsi blok:
-      // - menjaga Button primary sebagai action biru dan default button tetap netral/readable.
-      // Hubungan blok dengan flow aplikasi:
-      // - handler submit/save/delete/import/export tidak berubah; hanya style tombol.
-      // Alasan logic dipakai:
-      // - primaryShadow dihilangkan agar visual lebih clean dan profesional.
-      // Status logic:
-      // - AKTIF; GUARDED karena Button dipakai di semua modul operasional.
-      // =========================
       Button: {
         borderRadius: 12,
         defaultBg: palette.bgElevated,
@@ -249,17 +226,6 @@ export const getAntdTheme = (darkTheme = false) => {
         primaryShadow: "none",
       },
 
-      // =========================
-      // SECTION: Form Control Components - AKTIF
-      // Fungsi blok:
-      // - menyamakan Input, Select, DatePicker, dan InputNumber dengan token field/focus brand.
-      // Hubungan blok dengan flow aplikasi:
-      // - tidak mengubah validasi, normalize value, submit, query, atau schema data form.
-      // Alasan logic dipakai:
-      // - focus ring biru memberi affordance jelas tanpa visual berlebihan.
-      // Status logic:
-      // - AKTIF; GUARDED karena form dipakai modul master data, transaksi, produksi, payroll, dan laporan.
-      // =========================
       Input: {
         borderRadius: 12,
         activeBg: palette.bgField,
@@ -298,17 +264,6 @@ export const getAntdTheme = (darkTheme = false) => {
         activeShadow: palette.focusRing,
       },
 
-      // =========================
-      // SECTION: Data Display Components - AKTIF
-      // Fungsi blok:
-      // - menjaga Table dan Tag tetap solid, clean, dan proporsional di light/dark mode.
-      // Hubungan blok dengan flow aplikasi:
-      // - hanya presentasi data; sorting/filtering/pagination/action handler table tidak berubah.
-      // Alasan logic dipakai:
-      // - header/hover/selected row memakai soft blue agar readable, sedangkan warning soft memakai yellow accent.
-      // Status logic:
-      // - AKTIF; GUARDED karena Table/Tag muncul di inventory, purchases, sales, returns, produksi, payroll, HPP, dan reports.
-      // =========================
       Table: {
         headerBorderRadius: 16,
         headerBg: palette.tableHeader,

@@ -462,22 +462,35 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 ## Checklist Dashboard Operational Control Center — 2026-04-26
 - [ ] Buka `/dashboard` dan pastikan halaman tampil tanpa white screen atau error console.
 - [ ] Pastikan Dashboard tetap read-only: tidak ada tombol yang membuat PO, Work Log, Payroll, Cash Out, Income, Expense, atau mutasi stok langsung dari Dashboard.
-- [ ] Pastikan `Terakhir diperbarui` tampil dan tombol `Refresh` hanya reload data summary.
+- [ ] Pastikan `Terakhir diperbarui` tampil dan tombol `Muat Ulang` hanya reload data summary read-only.
 - [ ] Pastikan tidak ada table besar atau horizontal scroll di Dashboard pada laptop/desktop normal.
-- [ ] Prioritas Hari Ini tampil sebagai action card/chip: Stok Menipis, PO Shortage, PO Siap, Work Log Berjalan, Planning Overdue, dan Payroll Pending.
-- [ ] Setiap action card/chip hanya navigasi ke menu terkait dan tidak mengubah data.
-- [ ] Fokus Target Produksi menampilkan Target Minggu Ini, Target Bulan Ini, sisa target, progress, dan maksimal 3 Planning Perlu Dikejar.
+- [ ] Ringkasan Hari Ini tampil sebagai KPI compact: Sales bulan ini, Kas Masuk, Kas Keluar, Net Kas, Stok Kritis, Produksi Dicek, Payroll Pending, dan Data Perlu Dicek.
+- [ ] Aksi Cepat tampil sebagai shortcut navigasi saja dan tidak mengubah data.
+- [ ] Prioritas Hari Ini tetap tampil sebagai action card/chip: Stok Menipis, PO Shortage, PO Siap, Work Log Berjalan, Planning Overdue, dan Payroll Pending.
 - [ ] Planning completed/cancelled tidak tampil sebagai urgent.
 - [ ] Planning overdue dan deadline terdekat tampil sebagai prioritas.
 - [ ] Status Produksi menampilkan PO Shortage, PO Ready, Work Log Berjalan, Work Log Completed Minggu Ini, dan Payroll Pending.
-- [ ] Stok & Operasional tampil sebagai compact list maksimal 5 item stok paling kritis, bukan table besar.
-- [ ] Keuangan Ringkas menampilkan penjualan bulan ini, pengeluaran bulan ini, payroll pending, dan indikator selisih dengan catatan bahwa Profit Loss tetap source final.
+- [ ] Fokus Produksi menampilkan Target Minggu Ini, Target Bulan Ini, sisa target, progress, dan maksimal 3 Planning Perlu Dikejar.
+- [ ] Data Perlu Dicek menampilkan exception penting saja: stok minus/reserved tidak wajar, stok kritis, PO shortage, planning risk, cost/HPP kosong, atau payroll pending.
+- [ ] Stok Kritis tampil sebagai compact list maksimal 5 item stok paling kritis, bukan table besar.
+- [ ] Keuangan Ringkas tetap membaca incomes/revenues/expenses dan memberi catatan bahwa Profit Loss tetap source final.
 - [ ] Aktivitas Terbaru tampil sebagai activity feed compact dari inventory log, bukan table besar.
 - [ ] Status Integrasi IMS menampilkan Work Log completed, Payroll generated, Payroll pending, Payroll paid, Expense Payroll, dan HPP Cost Issue.
 - [ ] Jika ada Work Log completed dengan biaya aktual 0, warning HPP/cost material tampil.
 - [ ] Catatan payroll paid/expense tampil agar user tidak menghitung payroll dobel.
 - [ ] Jika salah satu collection gagal dibaca, Dashboard tetap tampil dengan fallback aman.
 - [ ] Build berhasil dan tidak ada error console.
+
+## Checklist Dashboard Business Control Center Compact — 2026-05
+- [ ] Buka `/dashboard`; pastikan tidak ada white screen, horizontal scroll, atau error runtime baru.
+- [ ] Klik `Muat Ulang`; pastikan hanya reload data, tidak ada dokumen baru di sales, purchases, production_orders, work_logs, payrolls, incomes, expenses, inventory_logs, atau production_plans.
+- [ ] Klik semua Aksi Cepat; pastikan hanya pindah route dan tidak ada submit otomatis.
+- [ ] Cocokkan KPI Sales Bulan Ini dengan collection/report Sales sebagai monitoring omzet, bukan kas resmi.
+- [ ] Cocokkan Kas Masuk/Keluar dengan Cash In/Cash Out/Profit Loss; jangan double count sales sebagai income jika status belum selesai.
+- [ ] Buat data stok minus atau reserved melebihi stok di data uji, lalu pastikan muncul sebagai Data Perlu Dicek tanpa auto-fix stok.
+- [ ] Buat PO shortage/planning overdue/payroll pending/cost 0 di data uji, lalu pastikan alert muncul dan link menuju menu terkait.
+- [ ] Login sebagai user operasional; Dashboard boleh tampil, tetapi route sensitif tetap ditolak oleh route guard jika user klik quick action yang tidak berhak.
+- [ ] Jika salah satu collection gagal dibaca karena permission/index, Dashboard tetap tampil dengan warning parsial.
 
 
 ## Checklist Final Hardening Fase A-G - 2026-04-26
@@ -525,15 +538,15 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 
 ### Fase D - Dashboard Cleanup
 - [ ] Buka Dashboard.
-- [ ] Pastikan Dashboard hanya memiliki 5 section utama.
+- [ ] Pastikan Dashboard tetap compact sebagai control center dan tidak berubah menjadi laporan/table besar.
 - [ ] Pastikan tidak ada horizontal scroll.
-- [ ] Pastikan Prioritas Hari Ini jelas dan actionable.
+- [ ] Pastikan Ringkasan Hari Ini, Aksi Cepat, Data Perlu Dicek, dan Prioritas Hari Ini jelas serta actionable hanya sebagai navigasi/read-only.
 - [ ] Pastikan Fokus Produksi ringkas dan planning prioritas maksimal 3 item.
 - [ ] Pastikan Stok Kritis compact dan maksimal 5 item.
 - [ ] Pastikan Keuangan Ringkas tidak terlihat sebagai Profit Loss final.
 - [ ] Pastikan Aktivitas Terbaru compact dan maksimal 5 item.
 - [ ] Pastikan last updated tampil.
-- [ ] Klik Refresh dan pastikan hanya reload data summary.
+- [ ] Klik Muat Ulang/Refresh dan pastikan hanya reload data summary.
 - [ ] Pastikan Dashboard tidak membuat/mengubah data apa pun.
 
 ### Fase E - Report dan Export Standard
@@ -1026,13 +1039,13 @@ Risiko:
 ## Checklist UI Theme Brand Blue/Yellow/White/Navy
 
 ### Foundation theme
-- [ ] CSS variable global di `src/index.css` sesuai palette Flanel Karawang Industries.
+- [ ] CSS variable global di `src/index.css` sesuai palette blue/navy primary + muted gold accent.
 - [ ] Token Ant Design di `src/theme/antdTheme.js` selaras dengan CSS variable global.
 - [ ] Light theme terlihat clean corporate, terang, dan mudah dibaca.
 - [ ] Dark theme memakai navy/dark blue, bukan hitam polos atau tone lama.
 - [ ] Biru dipakai untuk primary action, link, focus ring, selected state, dan active navigation.
-- [ ] Kuning hanya menjadi accent/highlight/warning soft, bukan body text panjang.
-- [ ] Semantic success/danger tetap jelas dan tidak tertukar dengan accent brand.
+- [ ] Gold/yellow hanya menjadi accent kecil, bukan background besar, bukan semua CTA, dan bukan body text panjang.
+- [ ] Semantic warning/success/danger/info tetap jelas dan warning tidak tertukar dengan brand gold.
 
 ### Flow theme runtime
 - [ ] Toggle light/dark berjalan tanpa reload manual.
@@ -1043,11 +1056,11 @@ Risiko:
 - [ ] Modal, drawer, dropdown, select, datepicker, popover, dan table tetap solid di light/dark.
 
 ### Area UI terdampak
-- [ ] Loading screen, shell, header, dan theme toggle readable.
+- [ ] Loading screen, shell, header, dan theme toggle readable dengan flat surface tanpa gradient global/shared.
 - [ ] Sidebar expanded/collapsed rapi, active route jelas, submenu normal, dan role-aware menu tidak berubah.
 - [ ] Login normal/error/loading/blocked user tampil profesional dan auth flow tetap berjalan.
 - [ ] Dashboard tetap read-only, compact, tanpa perubahan query/calculation/write flow.
-- [ ] PageHeader, PageSection, SummaryStatCard, FilterBar, dan PageFormModal konsisten dengan token brand.
+- [ ] PageHeader, PageSection, SummaryStatCard, FilterBar, dan PageFormModal konsisten dengan token brand; SummaryStatCard/FilterBar flat tanpa gradient.
 
 ## Checklist Cleanup Theme Aman
 
@@ -1065,7 +1078,7 @@ Risiko:
 - [ ] Login normal tampil lebih proporsional dengan panel brand dan form yang seimbang.
 - [ ] Logo resmi tidak terlihat berada dalam frame/wrap besar.
 - [ ] Logo tidak tertimpa orb, glow, atau dekorasi lain.
-- [ ] Background Login tidak terlalu ramai dan tetap memakai token blue/yellow/white/navy.
+- [ ] Background Login tidak terlalu ramai dan tercatat sebagai cleanup candidate bila masih memakai gradient page-specific.
 - [ ] Form Login tetap menjadi fokus utama dan mudah dibaca.
 - [ ] Username/password tetap bisa diisi.
 - [ ] Login error tetap tampil sebagai Alert error.
@@ -1079,7 +1092,7 @@ Risiko:
 - [ ] Login page tampil terang, clean, modern, dan corporate.
 - [ ] Layout desktop menampilkan brand hero kiri dan form card kanan secara proporsional.
 - [ ] Logo resmi tampil bebas, tidak berada dalam frame besar, dan tidak tertimpa dekorasi.
-- [ ] Shape/curve/gradient blue-yellow terlihat hidup tetapi tidak ramai.
+- [ ] Shape/curve Login tetap tidak ramai; gradient page-specific lama dicatat sebagai cleanup candidate sampai batch Login khusus.
 - [ ] Form login tetap menjadi fokus utama dan mudah dibaca.
 - [ ] Button Masuk memakai primary blue yang kontras dan terlihat clickable.
 - [ ] Input username/password tetap bisa diisi dan focus state jelas.
@@ -1176,3 +1189,29 @@ Risiko:
 - [ ] Product `minStockAlert` tetap ada dan status Product tetap memakai threshold master itu.
 - [ ] Product tidak menampilkan minimum stock per variant.
 - [ ] Data lama dengan `variants[].minStockAlert` tidak crash dan field legacy itu tidak memengaruhi Dashboard/Stock Report status.
+
+
+## Checklist Brand Theme Alignment — Blue/Navy + Gold Accent No-Gradient
+
+### Light mode
+- [ ] Dashboard, Produk, Raw Material, Stock Management, Sales, Purchases, Returns, Cash In, Cash Out, Produksi, Laporan, Manajemen User, dan Reset & Maintenance tetap readable.
+- [ ] Form input/select/date picker, table, modal, drawer, dropdown, empty state, disabled button, active menu, hover menu, dan focus input tetap jelas.
+- [ ] Gold accent terlihat subtle sebagai marker kecil, bukan background besar.
+
+### Dark mode
+- [ ] Semua area light mode di atas tetap readable.
+- [ ] Sidebar active marker gold terlihat elegan, tidak neon.
+- [ ] Header greeting, table row, modal, drawer, dan dropdown tidak belang.
+- [ ] Surface tetap flat dan corporate.
+
+### Branding dan accessibility
+- [ ] Logo cocok dengan shell; blue/navy tetap terasa sebagai primary.
+- [ ] Gold/yellow terlihat sebagai aksen kecil dan tidak terlalu banyak.
+- [ ] Tidak ada gradient aktif pada file global/shared yang diubah.
+- [ ] Brand gold tidak membingungkan dengan warning semantic.
+- [ ] Text contrast, table row, tag status, warning/success/error/info, focus state, disabled state, dan primary button tetap terbaca.
+
+### Responsive dan regression
+- [ ] Desktop lebar, laptop 1366px, laptop 1280px, tablet, mobile, sidebar expanded, dan sidebar collapsed tidak horizontal overflow.
+- [ ] Tidak ada console error; logout tetap bisa diklik; role badge jelas; menu active benar; action buttons terbaca; modal/dropdown/select/date picker tetap solid.
+- [ ] Tidak ada perubahan data, service, transaksi, stok, report mapper, produksi, payroll, HPP, auth, role, route, atau reset maintenance.

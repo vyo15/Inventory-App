@@ -1,9 +1,28 @@
+/* =====================================================
+SECTION: Flat Summary Stat Card Theme — AKTIF / GUARDED
+Fungsi:
+- menyatukan KPI/stat card dengan flat surface, subtle border, minimal shadow, dan aksen gold kecil.
+
+Dipakai oleh:
+- SummaryStatCard shared component di halaman operasional.
+
+Alasan perubahan:
+- standar theme baru tidak memakai gradient; card harus tetap corporate, readable, dan tidak ramai.
+
+Catatan cleanup:
+- belum ada.
+
+Risiko:
+- perubahan card shared berdampak ke banyak halaman; aksen yang terlalu dominan dapat mengganggu status KPI semantic.
+===================================================== */
 .summary-stat-card.ant-card {
+  position: relative;
   height: 100%;
+  overflow: hidden;
   border-radius: 18px !important;
-  border: 1px solid rgba(15, 23, 42, 0.08) !important;
-  background: linear-gradient(180deg, var(--ims-bg-card) 0%, var(--ims-bg-card-soft) 100%) !important;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  border: 1px solid var(--ims-border-color-soft) !important;
+  background: var(--ims-bg-card) !important;
+  box-shadow: var(--ims-shadow-soft);
   transition:
     transform 0.18s ease,
     box-shadow 0.18s ease,
@@ -11,9 +30,22 @@
     background-color 0.18s ease;
 }
 
+.summary-stat-card.ant-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 18px;
+  width: 36px;
+  height: 3px;
+  border-radius: 0 0 999px 999px;
+  background: var(--ims-color-brand-gold);
+  opacity: 0.62;
+}
+
 .summary-stat-card.ant-card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+  border-color: var(--ims-border-strong) !important;
+  box-shadow: var(--ims-shadow-elevated);
 }
 
 .summary-stat-card .ant-card-body {
@@ -40,7 +72,7 @@
   font-size: 13px;
   line-height: 1.55;
   font-weight: 600;
-  color: rgba(15, 23, 42, 0.72);
+  color: var(--ims-text-secondary);
 }
 
 .summary-stat-card-value.ant-typography {
@@ -55,7 +87,7 @@
   margin: 0 !important;
   font-size: 12px;
   line-height: 1.6;
-  color: rgba(15, 23, 42, 0.6);
+  color: var(--ims-text-secondary);
 }
 
 .summary-stat-card-extra {
@@ -63,25 +95,27 @@
 }
 
 .app-shell.dark .summary-stat-card.ant-card {
-  border-color: rgba(148, 163, 184, 0.14) !important;
-  background: linear-gradient(180deg, var(--ims-bg-card) 0%, var(--ims-bg-card-soft) 100%) !important;
-  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.24);
+  background: var(--ims-bg-card) !important;
+  border-color: var(--ims-border-color-soft) !important;
+  box-shadow: var(--ims-shadow-soft);
+}
+
+.app-shell.dark .summary-stat-card.ant-card::before {
+  opacity: 0.82;
 }
 
 .app-shell.dark .summary-stat-card.ant-card:hover {
-  box-shadow: 0 18px 34px rgba(2, 6, 23, 0.3);
+  border-color: var(--ims-border-strong) !important;
+  box-shadow: var(--ims-shadow-elevated);
 }
 
-.app-shell.dark .summary-stat-card-title.ant-typography {
-  color: rgba(226, 232, 240, 0.76);
+.app-shell.dark .summary-stat-card-title.ant-typography,
+.app-shell.dark .summary-stat-card-subtitle.ant-typography {
+  color: var(--ims-text-secondary);
 }
 
 .app-shell.dark .summary-stat-card-value.ant-typography {
   color: var(--ims-text-primary);
-}
-
-.app-shell.dark .summary-stat-card-subtitle.ant-typography {
-  color: rgba(226, 232, 240, 0.62);
 }
 
 @media (max-width: 768px) {
@@ -92,37 +126,4 @@
   .summary-stat-card-value.ant-typography {
     font-size: 24px;
   }
-}
-
-/* =========================
-   SECTION: Brand Summary Card Theme Override - AKTIF DIPAKAI
-   Fungsi:
-   - menyatukan KPI/stat card dengan token brand global.
-   Hubungan flow aplikasi:
-   - styling card saja; nilai statistik tetap berasal dari logic halaman masing-masing.
-   Aman diubah:
-   - tuning warna cukup dari token di src/index.css.
-========================= */
-.summary-stat-card.ant-card,
-.app-shell.dark .summary-stat-card.ant-card {
-  border-color: var(--ims-border-color-soft) !important;
-  background: linear-gradient(180deg, var(--ims-bg-card) 0%, var(--ims-bg-card-soft) 100%) !important;
-  box-shadow: var(--ims-shadow-soft);
-}
-
-.summary-stat-card.ant-card:hover,
-.app-shell.dark .summary-stat-card.ant-card:hover {
-  box-shadow: var(--ims-shadow-elevated);
-}
-
-.summary-stat-card-title.ant-typography,
-.app-shell.dark .summary-stat-card-title.ant-typography,
-.summary-stat-card-subtitle.ant-typography,
-.app-shell.dark .summary-stat-card-subtitle.ant-typography {
-  color: var(--ims-text-secondary);
-}
-
-.summary-stat-card-value.ant-typography,
-.app-shell.dark .summary-stat-card-value.ant-typography {
-  color: var(--ims-text-primary);
 }

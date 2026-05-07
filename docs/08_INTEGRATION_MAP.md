@@ -146,13 +146,35 @@ Guard:
 ### Dashboard Read-only Map
 ```text
 Dashboard
--> reads only: stock, planning, PO, work log, payroll, expenses/incomes, inventory logs
--> 5 section compact
+-> reads only: sales, stock, planning, PO, work log, payroll, expenses/incomes/revenues, inventory logs
+-> compact control center: KPI, quick actions, data alerts, priorities, production focus, stock, finance, activity
 -> no write
--> last updated + refresh summary only
+-> last updated + muat ulang summary only
+-> quick actions are Link/navigation only
 ```
 
-Dashboard tidak boleh menjadi sumber transaksi. Semua action Dashboard hanya navigasi ke modul terkait.
+Dashboard tidak boleh menjadi sumber transaksi. Semua action Dashboard hanya navigasi ke modul terkait. KPI Sales adalah monitoring omzet dari `sales`, sedangkan cash resmi tetap dari `revenues`/`incomes` dan `expenses`; jangan double count ke Profit Loss.
+
+
+### Dashboard Business Control Center Map — 2026-05
+```text
+Dashboard Ringkasan Hari Ini
+-> sales: KPI omzet monitoring
+-> revenues + incomes: kas masuk resmi
+-> expenses: kas keluar/pengeluaran resmi
+-> products + raw_materials + semi_finished_materials: stok kritis dan alert stok
+-> production_plans summary service: planning risk
+-> production_orders: shortage/ready
+-> production_work_logs: running/completed/cost issue
+-> production_payrolls: payroll pending/paid
+-> inventory_logs: aktivitas terbaru
+```
+
+Guard:
+- Dashboard tidak menulis Firestore.
+- Quick actions hanya Link ke route existing.
+- Data Perlu Dicek hanya alert audit, bukan auto repair.
+- Jika collection gagal dibaca, fallback aman harus tetap menampilkan Dashboard partial.
 
 ### Report / Export Map
 ```text

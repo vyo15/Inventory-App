@@ -210,6 +210,122 @@
   transform: none;
 }
 
+
+/* =====================================================
+   SECTION: Dashboard KPI, Quick Actions, and Alerts — AKTIF / GUARDED
+   Fungsi:
+   - menata KPI strip, shortcut navigasi, dan exception cards agar Dashboard menjadi control center compact.
+
+   Dipakai oleh:
+   - Ringkasan Hari Ini, Aksi Cepat, dan Data Perlu Dicek di Dashboard.jsx.
+
+   Alasan perubahan:
+   - Dashboard perlu menampilkan overview bisnis dan navigasi lintas modul tanpa berubah menjadi report besar atau write flow.
+
+   Catatan cleanup:
+   - tone visual bisa dipindahkan ke shared card component jika Dashboard bertambah modul.
+
+   Risiko:
+   - Jika style ini dibuat terlalu lebar/tinggi, Dashboard kembali terasa seperti report penuh dan berpotensi horizontal scroll.
+===================================================== */
+.dashboard-kpi-grid,
+.dashboard-quick-action-grid,
+.dashboard-alert-grid {
+  display: grid;
+  gap: var(--dashboard-control-gap);
+}
+
+.dashboard-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-quick-action-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-alert-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-kpi-card,
+.dashboard-quick-action-card,
+.dashboard-alert-card {
+  box-sizing: border-box;
+  max-width: 100%;
+  border: 1px solid var(--dashboard-card-border);
+  border-radius: var(--dashboard-card-radius);
+  background: var(--dashboard-card-background);
+  color: var(--ims-text-primary);
+  text-decoration: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.dashboard-kpi-card {
+  display: flex;
+  min-height: 118px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-left: 4px solid var(--ims-color-primary-muted);
+}
+
+.dashboard-kpi-card-primary,
+.dashboard-kpi-card-success {
+  border-left-color: var(--ims-color-primary);
+}
+
+.dashboard-kpi-card-warning,
+.dashboard-kpi-card-danger {
+  border-left-color: var(--ims-color-warning);
+  background: linear-gradient(135deg, var(--ims-color-warning-soft), var(--dashboard-card-background));
+}
+
+.dashboard-quick-action-card,
+.dashboard-alert-card {
+  display: flex;
+  align-items: center;
+  gap: var(--dashboard-control-gap);
+  padding: 14px 16px;
+}
+
+.dashboard-quick-action-card:hover,
+.dashboard-alert-card:hover,
+.dashboard-quick-action-card:focus-visible,
+.dashboard-alert-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--dashboard-card-border-strong);
+  box-shadow: var(--dashboard-card-shadow);
+  color: var(--ims-text-primary);
+  outline: none;
+}
+
+.dashboard-quick-action-card:focus-visible,
+.dashboard-alert-card:focus-visible {
+  box-shadow: var(--ims-focus-ring), var(--dashboard-card-shadow);
+}
+
+.dashboard-quick-action-card:hover .dashboard-action-arrow,
+.dashboard-alert-card:hover .dashboard-action-arrow,
+.dashboard-quick-action-card:focus-visible .dashboard-action-arrow,
+.dashboard-alert-card:focus-visible .dashboard-action-arrow {
+  color: var(--ims-color-primary);
+  transform: translateX(2px);
+}
+
+.dashboard-quick-action-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--dashboard-card-border);
+  border-radius: 12px;
+  background: var(--ims-color-primary-softer);
+  color: var(--ims-color-primary);
+  font-size: 17px;
+}
+
 /* =========================
    SECTION: Summary Metrics and Production Cards
    Fungsi blok:
@@ -351,13 +467,20 @@
    - GUARDED karena perubahan breakpoint tidak boleh membuat Dashboard berubah menjadi table/report penuh.
 ========================= */
 @media (max-width: 1400px) {
-  .dashboard-priority-grid {
+  .dashboard-priority-grid,
+  .dashboard-quick-action-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dashboard-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 992px) {
-  .dashboard-priority-grid {
+  .dashboard-priority-grid,
+  .dashboard-quick-action-grid,
+  .dashboard-alert-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -373,16 +496,22 @@
     gap: 14px;
   }
 
-  .dashboard-priority-grid {
+  .dashboard-priority-grid,
+  .dashboard-kpi-grid,
+  .dashboard-quick-action-grid,
+  .dashboard-alert-grid {
     grid-template-columns: 1fr;
   }
 
   .dashboard-priority-card,
-  .dashboard-list-card {
+  .dashboard-list-card,
+  .dashboard-quick-action-card,
+  .dashboard-alert-card {
     align-items: flex-start;
     border-radius: var(--dashboard-card-radius-sm);
   }
 
+  .dashboard-kpi-card,
   .dashboard-compact-card,
   .dashboard-metric-card {
     border-radius: var(--dashboard-card-radius-sm);
