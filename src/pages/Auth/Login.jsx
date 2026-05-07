@@ -7,13 +7,13 @@ import {
   Input,
   Result,
   Space,
-  Spin,
   Typography,
 } from "antd";
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import flanelKarawangLogo from "../../assets/branding/flanel-karawang-logo.png";
 import flanelKarawangMark from "../../assets/branding/flanel-karawang-mark.png";
 import useAuth from "../../hooks/useAuth";
+import LogoLoadingScreen from "../../components/Layout/Feedback/LogoLoadingScreen";
 import { AUTH_PROFILE_STATUS } from "../../context/AuthContext";
 import "./Login.css";
 
@@ -292,24 +292,25 @@ const Login = () => {
     await logout();
   };
 
+  // =====================================================
+  // SECTION: Login Auth/Profile Loading — AKTIF / GUARDED
+  // Fungsi:
+  // - Menampilkan loading saat Firebase Auth atau profile internal user sedang diverifikasi.
+  //
+  // Dipakai oleh:
+  // - Login sebelum form, blocked access, atau redirect AppContent ditentukan oleh state auth existing.
+  //
+  // Alasan perubahan:
+  // - Visual loader disatukan ke LogoLoadingScreen full viewport sebagai UI-only; login submit, validation, blocked profile, dan AuthContext tidak berubah.
+  //
+  // Catatan cleanup:
+  // - belum ada.
+  //
+  // Risiko:
+  // - Jika kondisi authLoading/profileStatus diubah sembarangan, user bisa melihat form atau AppLayout saat profile belum valid.
+  // =====================================================
   if (authLoading || profileStatus === AUTH_PROFILE_STATUS.LOADING_PROFILE) {
-    return (
-      <LoginShell variant="loading">
-        <Card className="ims-login-card ims-login-card--compact">
-          <Space
-            direction="vertical"
-            align="center"
-            size={16}
-            className="ims-login-loading-content"
-          >
-            <Spin size="large" />
-            <Text className="ims-login-muted-text">
-              Memeriksa session dan profile user...
-            </Text>
-          </Space>
-        </Card>
-      </LoginShell>
-    );
+    return <LogoLoadingScreen message="Memeriksa session dan profile user..." />;
   }
 
   if (firebaseUser && blockedAccessMessage) {

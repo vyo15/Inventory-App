@@ -5,7 +5,7 @@
 // =====================================================
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Col, Empty, Input, Select, Space, Table, Typography, message, Tag } from "antd";
+import { Alert, Button, Col, Empty, Input, Select, Space, Table, Tooltip, Typography, message, Tag } from "antd";
 import { FileExcelOutlined } from "@ant-design/icons";
 import { getCompletedProductionWorkLogs } from "../../services/Produksi/productionWorkLogsService";
 import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
@@ -308,97 +308,133 @@ const ProductionHppAnalysis = () => {
     message.success("Laporan HPP berhasil diekspor ke Excel.");
   };
 
+  const compactTextClampStyle = {
+    display: "-webkit-box",
+    overflow: "hidden",
+    WebkitBoxOrient: "vertical",
+    WebkitLineClamp: 2,
+  };
+
+  const compactTagStyle = { marginInlineEnd: 0 };
+
+  // =====================================================
+  // SECTION: Main Table Analisis HPP Compact — GUARDED
+  // Fungsi:
+  // - Memadatkan kolom utama HPP produksi agar tabel bisa dibaca tanpa horizontal scroll besar.
+  // - Menjaga work number, target, step, good qty, material, tenaga kerja, overhead, total, HPP/unit, dan validasi cost tetap terlihat atau terbaca lewat tooltip.
+  //
+  // Dipakai oleh:
+  // - Halaman ProductionHppAnalysis.jsx pada section Tabel Analisis HPP.
+  //
+  // Alasan perubahan:
+  // - Main table sebelumnya memakai scroll x besar sehingga audit HPP kurang nyaman; patch ini hanya mengubah presentasi kolom UI.
+  //
+  // Catatan cleanup:
+  // - Belum ada; export, filter, summary, source Work Log, payroll final, dan rumus HPP tetap dijaga.
+  //
+  // Risiko:
+  // - Mengubah render ini sembarangan dapat menyembunyikan angka HPP, warning cost, atau konteks Work Log yang dipakai user untuk audit biaya produksi.
+  // =====================================================
   const columns = [
     {
-      title: "No. Work Log",
-      dataIndex: "workNumber",
-      key: "workNumber",
-      width: 160,
-      render: (value) => <Typography.Text strong>{value}</Typography.Text>,
-    },
-    {
-      title: "Target / Step",
-      key: "targetStep",
-      width: 260,
+      title: "Work Log / Target",
+      key: "workLogTarget",
+      width: "28%",
       render: (_, record) => (
-        <div>
-          <div style={{ fontWeight: 600 }}>{record.targetName}</div>
-          <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-            {record.stepName}
-          </div>
-        </div>
+        <Space direction="vertical" size={6} style={{ width: "100%" }}>
+          <Space size={6} wrap>
+            <Tooltip title={record.workNumber || "-"}>
+              <Typography.Text strong style={{ ...compactTextClampStyle, maxWidth: 180 }}>
+                {record.workNumber || "-"}
+              </Typography.Text>
+            </Tooltip>
+            <Tag color="blue" style={compactTagStyle}>
+              {resolveTargetTypeLabel(record.targetType)}
+            </Tag>
+          </Space>
+          <Tooltip title={record.targetName || "-"}>
+            <Typography.Text style={compactTextClampStyle}>
+              {record.targetName || "-"}
+            </Typography.Text>
+          </Tooltip>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Selesai: {formatDateId(record.completedAt, true)}
+          </Typography.Text>
+        </Space>
       ),
     },
     {
-      title: "Good Qty",
-      dataIndex: "goodQty",
-      key: "goodQty",
-      width: 110,
-      render: (value) => formatNumber(value),
+      title: "Qty / Step",
+      key: "qtyStep",
+      width: "16%",
+      render: (_, record) => (
+        <Space direction="vertical" size={4} style={{ width: "100%" }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Good Qty
+          </Typography.Text>
+          <Typography.Text strong>{formatNumber(record.goodQty)}</Typography.Text>
+          <Tooltip title={record.stepName || "-"}>
+            <Typography.Text type="secondary" style={compactTextClampStyle}>
+              {record.stepName || "-"}
+            </Typography.Text>
+          </Tooltip>
+        </Space>
+      ),
     },
     {
-      title: "Material Cost",
-      dataIndex: "materialCost",
-      key: "materialCost",
-      width: 150,
-      render: (value) => formatCurrency(value),
-    },
-    {
-      title: "Direct Labor",
-      dataIndex: "directLaborCost",
-      key: "directLaborCost",
-      width: 150,
-      render: (value) => formatCurrency(value),
-    },
-    {
-      title: "Overhead",
-      dataIndex: "overheadCost",
-      key: "overheadCost",
-      width: 140,
-      render: (value) => formatCurrency(value),
-    },
-    {
-      title: "Total Cost",
-      dataIndex: "totalCost",
-      key: "totalCost",
-      width: 150,
-      render: (value) => formatCurrency(value),
+      title: "Biaya Produksi",
+      key: "productionCost",
+      width: "28%",
+      render: (_, record) => (
+        <Space direction="vertical" size={2} style={{ width: "100%" }}>
+          <Typography.Text>Material: {formatCurrency(record.materialCost)}</Typography.Text>
+          <Typography.Text>Tenaga kerja: {formatCurrency(record.directLaborCost)}</Typography.Text>
+          <Typography.Text>Overhead: {formatCurrency(record.overheadCost)}</Typography.Text>
+          <Typography.Text strong>Total: {formatCurrency(record.totalCost)}</Typography.Text>
+        </Space>
+      ),
     },
     {
       title: "HPP / Unit",
-      dataIndex: "hppPerUnit",
       key: "hppPerUnit",
-      width: 150,
-      render: (value) => formatCurrency(value),
+      width: "14%",
+      render: (_, record) => (
+        <Space direction="vertical" size={2}>
+          <Typography.Text strong>{formatCurrency(record.hppPerUnit)}</Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            per good unit
+          </Typography.Text>
+        </Space>
+      ),
     },
     {
-      title: "Validasi Cost",
+      title: "Validasi",
       dataIndex: "costWarnings",
       key: "costWarnings",
-      width: 280,
-      // =====================================================
-      // ACTIVE / GUARDED - kolom warning HPP.
-      // Fungsi blok:
-      // - menampilkan alasan cost 0 per Work Log agar HPP tidak dibaca sebagai final valid;
-      // - tidak mengubah angka HPP, payroll, material snapshot, atau Work Log completed.
-      // Hubungan dengan flow HPP/Work Log: row tetap bersumber dari completed Work Log.
-      // Status: aktif dipakai; bukan legacy/kandidat cleanup.
-      // =====================================================
+      width: "14%",
       render: (warnings) => {
         if (!Array.isArray(warnings) || warnings.length === 0) {
-          return <Tag color="green">Cost valid</Tag>;
+          return <Tag color="green" style={compactTagStyle}>Cost valid</Tag>;
         }
 
         return (
-          <Space direction="vertical" size={4}>
+          <Space direction="vertical" size={4} style={{ width: "100%" }}>
+            <Tag color="warning" style={compactTagStyle}>
+              {formatNumber(warnings.length)} warning cost
+            </Tag>
             {warnings.map((warning) => (
-              <Alert
-                key={warning}
-                type="warning"
-                showIcon
-                message={warning}
-                style={{ padding: "4px 8px" }}
-              />
+              <Tooltip key={warning} title={warning}>
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={(
+                    <Typography.Text style={{ ...compactTextClampStyle, fontSize: 12 }}>
+                      {warning}
+                    </Typography.Text>
+                  )}
+                  style={{ padding: "4px 8px" }}
+                />
+              </Tooltip>
             ))}
           </Space>
         );
@@ -487,20 +523,29 @@ const ProductionHppAnalysis = () => {
             description="Angka HPP tidak diubah otomatis. Cek cost bahan/snapshot material, payroll Work Log, dan output good qty sebelum memakai HPP untuk analisis final."
           />
         ) : null}
-        {/* =========================
-            SECTION: tabel HPP baseline global
+        {/* =====================================================
+            SECTION: Tabel Analisis HPP Render — GUARDED
             Fungsi:
-            - memigrasikan halaman HPP dari card layout manual ke shared page wrapper resmi
-            - menjaga tabel analisis tetap seragam tanpa menyentuh logic perhitungan biaya
-            Status: aktif / final
-        ========================= */}
+            - Menampilkan rows HPP produksi memakai columns compact tanpa horizontal scroll besar.
+
+            Dipakai oleh:
+            - Halaman ProductionHppAnalysis.jsx pada main table analisis HPP.
+
+            Alasan perubahan:
+            - Scroll x besar dihapus setelah kolom HPP digabung menjadi stack ringkas yang tetap audit-friendly.
+
+            Catatan cleanup:
+            - Belum ada; table tetap memakai filteredRows, export mapper existing, dan pagination existing.
+
+            Risiko:
+            - Mengubah table props ini sembarangan dapat membuat angka HPP atau warning cost sulit dibaca pada layar kecil.
+        ===================================================== */}
         <Table
           className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}
           dataSource={filteredRows}
-          scroll={{ x: 1550 }}
           locale={{
             emptyText: <Empty description="Belum ada data analisis HPP" />,
           }}

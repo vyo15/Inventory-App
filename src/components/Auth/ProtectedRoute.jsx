@@ -1,35 +1,28 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { Spin, Typography } from "antd";
 import useAuth from "../../hooks/useAuth";
 import { canAccessRoute } from "../../utils/auth/roleAccess";
+import LogoLoadingScreen from "../Layout/Feedback/LogoLoadingScreen";
 
-const { Text } = Typography;
-
-// =========================
+// =====================================================
 // SECTION: ProtectedRoute Loader — AKTIF / GUARDED
 // Fungsi:
-// - menampilkan state aman saat AuthProvider masih mengecek session/profile.
-// Hubungan flow aplikasi:
-// - mencegah halaman bisnis tampil sebelum role user valid.
-// Status:
-// - AKTIF untuk route guard dasar.
-// - GUARDED: jangan mengganti loader ini dengan data kosong palsu di halaman bisnis.
-// =========================
+// - Menampilkan state aman saat AuthProvider masih mengecek session/profile atau route guard belum siap.
+//
+// Dipakai oleh:
+// - ProtectedRoute sebelum route bisnis dirender.
+//
+// Alasan perubahan:
+// - Visual loader disatukan ke LogoLoadingScreen sebagai UI-only; logic auth, redirect login, unauthorized, dan role access tidak berubah.
+//
+// Catatan cleanup:
+// - belum ada.
+//
+// Risiko:
+// - Jika kondisi pemanggil loader diubah sembarangan, route bisnis bisa tampil sebelum role user valid.
+// =====================================================
 const ProtectedRouteLoader = () => (
-  <div
-    style={{
-      minHeight: "40vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      flexDirection: "column",
-      gap: 12,
-    }}
-  >
-    <Spin size="large" />
-    <Text type="secondary">Memeriksa akses halaman...</Text>
-  </div>
+  <LogoLoadingScreen message="Memeriksa akses halaman..." />
 );
 
 // =========================

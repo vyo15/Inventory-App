@@ -17,6 +17,8 @@ import {
   Statistic,
   Switch,
   Table,
+  Tag,
+  Tooltip,
   Typography,
 } from 'antd';
 import { PlusOutlined, EditOutlined } from '@ant-design/icons';
@@ -170,10 +172,24 @@ const ProductionProfiles = () => {
     { key: 'profiles-mapped', title: 'Produk Terpetakan', value: summary.mappedProducts, subtitle: 'Jumlah produk yang sudah punya profil.', accent: 'default' },
   ];
 
-  // ---------------------------------------------------------------------------
-  // Helper presentasi batch 1.
-  // Dipakai untuk menyatukan metadata tabel, status badge, dan tombol aksi.
-  // ---------------------------------------------------------------------------
+  // =====================================================
+  // SECTION: Main table compact columns — AKTIF
+  // Fungsi:
+  // - Menampilkan ringkasan produk/profil, kebutuhan per unit, yield, batch, status, dan aksi tanpa scroll x besar.
+  // - Menjaga edit drawer existing sebagai tempat konfigurasi lengkap.
+  //
+  // Dipakai oleh:
+  // - ProductionProfiles main table.
+  //
+  // Alasan perubahan:
+  // - Main table sebelumnya melebar karena kebutuhan, yield, batch, status, dan aksi dipisah sebagai kolom panjang.
+  //
+  // Catatan cleanup:
+  // - Helper presentasi angka produksi bisa dipindah ke shared UI setelah beberapa halaman master selesai dipadatkan.
+  //
+  // Risiko:
+  // - Jangan mengubah calculateProductionProfileMetrics atau lookup produk dari section presentasi ini.
+  // =====================================================
   const profileUiClassNames = {
     stack: 'ims-cell-stack ims-cell-stack-tight',
     meta: 'ims-cell-meta',
@@ -181,73 +197,71 @@ const ProductionProfiles = () => {
 
   const columns = [
     {
-      title: 'Produk',
+      title: 'Produk / Profil',
       dataIndex: 'productName',
-      key: 'productName',
-      width: 220,
-      render: (_, record) => (
-        <div className={profileUiClassNames.stack}>
-          <Typography.Text strong>{record.productName || '-'}</Typography.Text>
-          <Typography.Text type="secondary" className={profileUiClassNames.meta}>{record.profileName || '-'}</Typography.Text>
-        </div>
-      ),
-    },
-    {
-      title: 'Tipe',
-      dataIndex: 'profileType',
-      key: 'profileType',
-      width: 110,
-      render: (value) => PRODUCTION_PROFILE_TYPE_MAP[value] || '-',
+      key: 'profileSummary',
+      width: '32%',
+      render: (_, record) => {
+        const profileTypeLabel = PRODUCTION_PROFILE_TYPE_MAP[record.profileType] || '-';
+
+        return (
+          <div className={profileUiClassNames.stack}>
+            <Typography.Text strong ellipsis={{ tooltip: record.productName || '-' }}>
+              {record.productName || '-'}
+            </Typography.Text>
+            <Typography.Text type="secondary" className={profileUiClassNames.meta} ellipsis={{ tooltip: record.profileName || '-' }}>
+              {record.profileName || '-'}
+            </Typography.Text>
+            <Space size={[4, 4]} wrap>
+              <Tag>{profileTypeLabel}</Tag>
+              {record.isDefault !== false ? <Tag color="blue">Default</Tag> : null}
+            </Space>
+          </div>
+        );
+      },
     },
     {
       title: 'Kebutuhan / Unit',
       key: 'requirements',
-      width: 180,
-      render: (_, record) => (
-        <div className={profileUiClassNames.stack}>
-          <Typography.Text>Kelopak: {formatNumber(record.petalsPerUnit || 0)}</Typography.Text>
-          <Typography.Text>Daun: {formatNumber(record.leavesPerUnit || 0)}</Typography.Text>
-          <Typography.Text>Tangkai: {formatNumber(record.stemsPerUnit || 0)}</Typography.Text>
-        </div>
-      ),
+      width: '22%',
+      render: (_, record) => {
+        const detail = `Kelopak ${formatNumber(record.petalsPerUnit || 0)}, Daun ${formatNumber(record.leavesPerUnit || 0)}, Tangkai ${formatNumber(record.stemsPerUnit || 0)}`;
+
+        return (
+          <Tooltip title={detail}>
+            <Space direction="vertical" size={2}>
+              <Typography.Text>Kelopak: {formatNumber(record.petalsPerUnit || 0)}</Typography.Text>
+              <Typography.Text type="secondary">Daun/Tangkai: {formatNumber(record.leavesPerUnit || 0)} / {formatNumber(record.stemsPerUnit || 0)}</Typography.Text>
+            </Space>
+          </Tooltip>
+        );
+      },
     },
     {
-      title: 'Hasil Bahan Awal',
-      key: 'yields',
-      width: 200,
-      render: (_, record) => (
-        <div className={profileUiClassNames.stack}>
-          <Typography.Text>Kelopak / 1 meter: {formatNumber(record.petalYieldPerMeter || 0)}</Typography.Text>
-          <Typography.Text>Daun / 1 meter: {formatNumber(record.leafYieldPerMeter || 0)}</Typography.Text>
-          <Typography.Text>Tangkai / 40 cm: {formatNumber(record.stemYieldPerRod40cm || 0)}</Typography.Text>
-        </div>
-      ),
+      title: 'Yield / Batch',
+      key: 'yieldBatch',
+      width: '24%',
+      responsive: ['md'],
+      render: (_, record) => {
+        const yieldDetail = `Yield: kelopak ${formatNumber(record.petalYieldPerMeter || 0)}/m, daun ${formatNumber(record.leafYieldPerMeter || 0)}/m, tangkai ${formatNumber(record.stemYieldPerRod40cm || 0)}/40cm`;
+        const batchDetail = `Batch: kelopak ${formatNumber(record.assemblyPetalPackCount || 0)} plastik, daun ${formatNumber(record.assemblyLeafPackCount || 0)} plastik, target ${formatNumber(record.assemblyTargetOutput || 0)} bunga`;
+
+        return (
+          <Tooltip title={`${yieldDetail}. ${batchDetail}.`}>
+            <Space direction="vertical" size={2}>
+              <Typography.Text>Yield kelopak/daun: {formatNumber(record.petalYieldPerMeter || 0)} / {formatNumber(record.leafYieldPerMeter || 0)}</Typography.Text>
+              <Typography.Text type="secondary">Batch target: {formatNumber(record.assemblyTargetOutput || 0)} bunga</Typography.Text>
+            </Space>
+          </Tooltip>
+        );
+      },
     },
     {
-      title: 'Batch Standar',
-      key: 'batch',
-      width: 180,
-      render: (_, record) => (
-        <div className={profileUiClassNames.stack}>
-          <Typography.Text>Kelopak: {formatNumber(record.assemblyPetalPackCount || 0)} plastik</Typography.Text>
-          <Typography.Text>Daun: {formatNumber(record.assemblyLeafPackCount || 0)} plastik</Typography.Text>
-          <Typography.Text>Target: {formatNumber(record.assemblyTargetOutput || 0)} bunga</Typography.Text>
-        </div>
-      ),
-    },
-    {
-      // =====================================================
-      // SECTION: status sticky
-      // Fungsi:
-      // - simple config page yang tetap butuh status terlihat saat tabel melebar
-      // - mengikuti baseline final: status boleh sticky sebelum aksi untuk tabel dengan scroll.x
-      // =====================================================
       title: 'Status',
       dataIndex: 'isActive',
       key: 'isActive',
-      width: 120,
-      fixed: 'right',
-      className: 'app-table-status-column app-table-fixed-secondary',
+      width: 118,
+      className: 'app-table-status-column',
       render: (value, record) => (
         <div className="ims-badge-stack">
           <span className="ims-badge-inline">
@@ -258,16 +272,9 @@ const ProductionProfiles = () => {
       ),
     },
     {
-      // =====================================================
-      // SECTION: aksi sticky
-      // Fungsi:
-      // - Production Profiles termasuk simple config page, jadi tidak wajib punya Detail
-      // - kolom aksi tetap di-fixed right supaya pola config page seragam dengan Tahapan Produksi
-      // =====================================================
       title: 'Aksi',
       key: 'actions',
-      width: 180,
-      fixed: 'right',
+      width: 156,
       className: 'app-table-action-column',
       render: (_, record) => (
         <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
@@ -326,13 +333,29 @@ const ProductionProfiles = () => {
         title="Daftar Profil Produksi"
         subtitle="Profil membantu standarisasi hitung kapasitas dan target operasional per produk."
       >
+        {/* =====================================================
+            SECTION: Main table render — AKTIF
+            Fungsi:
+            - Merender tabel profil produksi compact tanpa scroll x besar.
+
+            Dipakai oleh:
+            - ProductionProfiles page.
+
+            Alasan perubahan:
+            - Status dan aksi tidak lagi fixed karena informasi panjang diringkas ke tooltip dan teks pendek.
+
+            Catatan cleanup:
+            - belum ada.
+
+            Risiko:
+            - Menyembunyikan angka penting tanpa tooltip/detail dapat membuat user salah membaca kebutuhan produksi.
+        ===================================================== */}
         <Table
           className="ims-table"
           rowKey="id"
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          scroll={{ x: 1200 }}
           pagination={{ pageSize: 10, showSizeChanger: true }}
           locale={{ emptyText: <Empty description="Belum ada profil produksi" /> }}
         />

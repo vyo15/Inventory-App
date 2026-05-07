@@ -9,6 +9,7 @@ import {
   Input,
   message,
   Tag,
+  Tooltip,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { collection, doc, onSnapshot, runTransaction, Timestamp } from "firebase/firestore";
@@ -331,50 +332,90 @@ const Returns = () => {
   // =========================
   // SECTION: Table Columns
   // =========================
+  /* =====================================================
+     SECTION: Compact Returns Table Columns — AKTIF/GUARDED
+     Fungsi:
+     - Menampilkan ringkasan retur tanpa horizontal scroll besar.
+     Dipakai oleh:
+     - Returns main table.
+     Alasan perubahan:
+     - Tanggal, item/source, qty retur, dan catatan harus terbaca langsung tanpa mengubah flow stok retur.
+     Catatan cleanup:
+     - Detail retur bisa dibuat drawer khusus jika audit retur bertambah kompleks.
+     Risiko:
+     - Jangan mengubah transaction retur, stock-in return, source relation, atau inventory log dari render kolom ini.
+     ===================================================== */
   const returnTableColumns = [
     {
-      title: "Tanggal",
-      dataIndex: "date",
-      key: "date",
-      render: (value) =>
-        value?.toDate ? dayjs(value.toDate()).format("DD-MM-YYYY HH:mm") : "-",
+      title: "Tanggal / Ref",
+      key: "dateReference",
+      width: 170,
+      render: (_, record) => {
+        const dateText = record.date?.toDate ? dayjs(record.date.toDate()).format("DD-MM-YYYY HH:mm") : "-";
+        const referenceText = record.referenceId || record.returnId || record.id || "-";
+        return (
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600 }}>{dateText}</div>
+            <Tooltip title={referenceText}>
+              <div style={{ color: "#8c8c8c", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {referenceText}
+              </div>
+            </Tooltip>
+          </div>
+        );
+      },
     },
     {
-      title: "Jenis",
-      dataIndex: "type",
-      key: "type",
-      render: (type) =>
-        type === "product" ? (
-          <Tag color="blue">Produk</Tag>
-        ) : (
-          <Tag color="gold">Bahan Baku</Tag>
-        ),
-    },
-    {
-      title: "Nama Item",
-      dataIndex: "itemName",
-      key: "itemName",
-    },
-    {
-      title: "Varian / Sumber",
-      key: "variant",
-      render: (_, record) =>
-        record.variantLabel || record.variantKey ? (
+      title: "Item / Source",
+      key: "itemSource",
+      width: 270,
+      render: (_, record) => {
+        const itemName = record.itemName || "-";
+        const typeTag = record.type === "product" ? <Tag color="blue">Produk</Tag> : <Tag color="gold">Bahan Baku</Tag>;
+        const variantTag = record.variantLabel || record.variantKey ? (
           <Tag color="purple">{record.variantLabel || record.variantKey}</Tag>
         ) : (
           <Tag>Master</Tag>
-        ),
+        );
+
+        return (
+          <div style={{ minWidth: 0 }}>
+            <Tooltip title={itemName}>
+              <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {itemName}
+              </div>
+            </Tooltip>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+              {typeTag}
+              {variantTag}
+            </div>
+          </div>
+        );
+      },
     },
     {
-      title: "Jumlah",
+      title: "Qty Return",
       dataIndex: "quantity",
       key: "quantity",
+      width: 130,
+      align: "right",
+      render: (value) => <strong>{formatNumberId(value)}</strong>,
     },
     {
-      title: "Catatan",
+      title: "Alasan / Catatan",
       dataIndex: "note",
       key: "note",
-      render: (value) => value || "-",
+      width: 280,
+      render: (value) => {
+        const noteText = value || "-";
+        return (
+          <Tooltip title={noteText}>
+            <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {noteText}
+            </span>
+          </Tooltip>
+        );
+      },
     },
   ];
 
@@ -401,7 +442,7 @@ const Returns = () => {
         {/* =========================
             SECTION: tabel retur baseline global
             Fungsi:
-            - retur tidak punya detail drawer, jadi tabel cukup fokus ke data inti tanpa aksi tambahan
+            - retur tidak punya detail drawer, jadi tabel ringkas fokus ke data inti tanpa aksi tambahan
             - kolom varian memakai schema final dari record retur/log
             Status: aktif / final
         ========================= */}
@@ -410,7 +451,7 @@ const Returns = () => {
           dataSource={returnRecords}
           columns={returnTableColumns}
           rowKey="id"
-          scroll={{ x: 980 }}
+          tableLayout="fixed"
         />
       </PageSection>
 

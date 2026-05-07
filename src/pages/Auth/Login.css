@@ -488,10 +488,6 @@
   background: var(--ims-color-primary-hover);
 }
 
-.ims-login-loading-content {
-  width: 100%;
-}
-
 /* =========================
    SECTION: Legacy Class Guard — CLEANUP CANDIDATE / UI ONLY
    Fungsi:

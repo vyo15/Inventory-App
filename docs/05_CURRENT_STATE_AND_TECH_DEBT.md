@@ -729,3 +729,11 @@ Risiko:
 - Raw Materials tetap memakai pola variant pill existing dan tidak diubah karena sudah sesuai format locked.
 - Preview modal Pricing Rules dan detail drawer Supplier sudah dipadatkan secara UI-only; detail tabular lain tetap boleh memakai scroll bila datanya memang audit/detail, bukan primary table list.
 - Cleanup candidate lanjutan: migrasikan Raw Materials ke helper `StockDisplayBlock` pada patch terpisah bila ingin mengurangi duplikasi tampilan stok.
+
+## Update global/auth/route LogoLoadingScreen — 2026-05-07
+- **AKTIF:** loading utama aplikasi untuk auth/session gate, ProtectedRoute guard, Login auth/profile verification, dan lazy route fallback memakai `LogoLoadingScreen`.
+- **AKTIF:** `LogoLoadingScreen` memakai logo mark existing `src/assets/branding/flanel-karawang-mark.png` dengan animasi Elegant micro split dan fallback logo normal jika canvas gagal.
+- **AKTIF:** loading dibuat full viewport tanpa card/wrap kecil; `.app-loading-card` dipertahankan sebagai wrapper kompatibilitas tetapi tidak lagi tampil sebagai card.
+- **GUARDED:** perubahan ini UI-only; `AuthContext`, `roleAccess`, route definitions, login submit, service, query, transaction, stock, production, payroll, HPP, report, dan reset maintenance tidak berubah.
+- **LEGACY-COMPAT:** loading lokal seperti table loading, submit button loading, report loading, maintenance preview/loading, dan business process loading tetap boleh memakai komponen lokal/Ant Design sesuai kebutuhan modul.
+

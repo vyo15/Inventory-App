@@ -1,35 +1,29 @@
 import React from "react";
-import { Spin, Typography } from "antd";
 import { Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import useAuth from "./hooks/useAuth";
 import AppLayout from "./layouts/AppLayout";
 import Login from "./pages/Auth/Login";
+import LogoLoadingScreen from "./components/Layout/Feedback/LogoLoadingScreen";
 
-const { Text } = Typography;
-
-// =========================
-// SECTION: App Loading State — AKTIF
+// =====================================================
+// SECTION: App Loading State — AKTIF / GUARDED
 // Fungsi:
-// - menampilkan state aman saat Firebase Auth dan profile user sedang diverifikasi.
-// Hubungan flow aplikasi:
-// - mencegah Dashboard/route bisnis tampil sebelum status login selesai dicek.
-// Alasan logic dipakai:
-// - loading gate tetap berada di App.jsx, sementara visualnya dipindah ke App.css agar konsisten dengan foundation theme.
-// Status:
-// - AKTIF untuk Fase B Auth Foundation.
-// - GUARDED: jangan ubah kondisi authLoading ketika polishing visual.
-// =========================
-const AppLoadingScreen = () => (
-  <div className="app-loading-screen" role="status" aria-live="polite">
-    <div className="app-loading-card">
-      <Spin size="large" className="app-loading-spinner" />
-      <Text className="app-loading-text">
-        Memuat session IMS Bunga Flanel...
-      </Text>
-    </div>
-  </div>
-);
+// - Menampilkan state aman saat Firebase Auth dan profile user sedang diverifikasi.
+//
+// Dipakai oleh:
+// - AppContent ketika authLoading aktif sebelum Login/AppLayout dipilih.
+//
+// Alasan perubahan:
+// - Visual loading diganti ke LogoLoadingScreen sebagai UI-only; auth guard, route guard, dan login flow tetap tidak berubah.
+//
+// Catatan cleanup:
+// - belum ada.
+//
+// Risiko:
+// - Jika kondisi authLoading diubah sembarangan, user bisa melihat route bisnis sebelum session siap.
+// =====================================================
+const AppLoadingScreen = () => <LogoLoadingScreen />;
 
 // =========================
 // SECTION: Auth Gate — AKTIF / GUARDED

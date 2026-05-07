@@ -729,34 +729,47 @@ const ProductionOrders = () => {
   ];
 
   // =====================================================
-  // Kolom detail requirement pada drawer PO
-  // Catatan maintainability:
-  // - Current / Available tetap ditampilkan karena penting untuk keputusan start produksi.
-  // - Reserved tidak dihapus, namun ditaruh sebagai info sekunder agar drawer lebih rapi.
+  // SECTION: Detail requirement drawer compact columns — AKTIF
+  // Fungsi:
+  // - Menampilkan requirement material PO secara ringkas di drawer detail.
+  //
+  // Dipakai oleh:
+  // - Drawer Detail Production Order pada halaman ProductionOrders.
+  //
+  // Alasan perubahan:
+  // - Kolom tipe, stok, shortage, dan status dipadatkan agar drawer tidak perlu scroll horizontal besar.
+  //
+  // Catatan cleanup:
+  // - Bisa diekstrak menjadi komponen shared jika detail requirement dipakai di halaman lain.
+  //
+  // Risiko:
+  // - Jika field stok/shortage disembunyikan atau kalkulasi disentuh, audit kesiapan PO bisa salah.
   // =====================================================
   const detailRequirementColumns = useMemo(
     () => [
       {
         title: "Material",
         key: "item",
+        width: 230,
         render: (_, record) => (
-          renderOrderCellBlock(record.itemName || "-", [record.itemCode || "-"])
-        ),
-      },
-      {
-        title: "Tipe",
-        dataIndex: "itemType",
-        width: 130,
-        render: (value) => (
-          <Tag className="ims-status-tag" color={value === "raw_material" ? "orange" : "blue"}>
-            {value === "raw_material" ? "Raw Material" : "Semi Finished"}
-          </Tag>
+          <div className={orderUiClassNames.stack}>
+            <Typography.Text strong>{record.itemName || "-"}</Typography.Text>
+            <Typography.Text type="secondary" className={orderUiClassNames.meta}>
+              {record.itemCode || "-"}
+            </Typography.Text>
+            <Tag
+              className="ims-status-tag"
+              color={record.itemType === "raw_material" ? "orange" : "blue"}
+            >
+              {record.itemType === "raw_material" ? "Raw Material" : "Semi Finished"}
+            </Tag>
+          </div>
         ),
       },
       {
         title: "Varian / Sumber",
         key: "variantSource",
-        width: 200,
+        width: 170,
         render: (_, record) => {
           const sourceMeta = getRequirementStockSourceMeta(record);
 
@@ -773,52 +786,52 @@ const ProductionOrders = () => {
         },
       },
       {
-        title: "Kebutuhan",
-        dataIndex: "qtyRequired",
-        width: 140,
-        render: (value, record) => (
-          <Typography.Text strong>
-            {formatNumber(value)} {record.unit || ""}
-          </Typography.Text>
-        ),
-      },
-      {
-        title: "Stok Saat Ini",
-        key: "stockSnapshot",
-        width: 180,
+        title: "Kebutuhan / Stok",
+        key: "quantityStock",
+        width: 240,
         render: (_, record) => (
           <div className={orderUiClassNames.stack}>
             <Typography.Text strong>
-              {formatNumber(record.currentStockSnapshot || 0)} {record.unit || ""}
+              Need: {formatQtyWithUnit(record.qtyRequired, record.unit)}
             </Typography.Text>
             <Typography.Text type="secondary" className={orderUiClassNames.meta}>
-              Tersedia: {formatNumber(record.availableStockSnapshot || 0)}
+              Current: {formatQtyWithUnit(record.currentStockSnapshot, record.unit)}
+            </Typography.Text>
+            <Typography.Text type="secondary" className={orderUiClassNames.meta}>
+              Tersedia: {formatQtyWithUnit(record.availableStockSnapshot, record.unit)}
             </Typography.Text>
             {Number(record.reservedStockSnapshot || 0) > 0 ? (
               <Typography.Text type="secondary" className={orderUiClassNames.meta}>
-                Reserved: {formatNumber(record.reservedStockSnapshot || 0)}
+                Reserved: {formatQtyWithUnit(record.reservedStockSnapshot, record.unit)}
               </Typography.Text>
             ) : null}
           </div>
         ),
       },
       {
-        title: "Shortage",
-        dataIndex: "shortageQty",
-        width: 120,
-        render: (value) =>
-          Number(value || 0) > 0 ? (
-            <Tag className="ims-status-tag" color="red">{formatNumber(value)}</Tag>
-          ) : (
-            <Tag className="ims-status-tag" color="green">0</Tag>
-          ),
-      },
-      {
         title: "Status",
-        dataIndex: "isSufficient",
-        width: 110,
-        render: (value) =>
-          value ? <Badge status="success" text="Cukup" /> : <Badge status="error" text="Kurang" />,
+        key: "lineStatus",
+        width: 140,
+        render: (_, record) => {
+          const shortageQty = Number(record.shortageQty || 0);
+
+          return (
+            <div className={orderUiClassNames.stack}>
+              {record.isSufficient ? (
+                <Badge status="success" text="Cukup" />
+              ) : (
+                <Badge status="error" text="Kurang" />
+              )}
+              {shortageQty > 0 ? (
+                <Tag className="ims-status-tag" color="red">
+                  Kurang {formatQtyWithUnit(shortageQty, record.unit)}
+                </Tag>
+              ) : (
+                <Tag className="ims-status-tag" color="green">Shortage 0</Tag>
+              )}
+            </div>
+          );
+        },
       },
     ],
     [],
@@ -1277,7 +1290,7 @@ const ProductionOrders = () => {
               pagination={false}
               dataSource={selectedOrder.materialRequirementLines || []}
               columns={detailRequirementColumns}
-              scroll={{ x: 980 }}
+              tableLayout="fixed"
             />
           </Space>
         )}

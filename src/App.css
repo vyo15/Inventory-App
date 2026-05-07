@@ -23,47 +23,55 @@
 /* =========================
    SECTION: App Loading Screen - AKTIF / GUARDED
    Fungsi:
-   - menampilkan state loading auth/profile dengan visual yang mengikuti token brand aktif.
+   - menampilkan state loading auth/profile dengan visual logo brand yang mengikuti token aktif.
    Hubungan flow aplikasi:
    - dipakai App.jsx sebelum AppLayout dan route bisnis tampil, sehingga user tidak melihat halaman operasional sebelum session siap.
    Alasan logic dipakai:
-   - class CSS menggantikan inline style agar loading screen konsisten dengan theme foundation tanpa mengubah AuthProvider/useAuth.
+   - styling wrapper/card tetap di App.css agar loading global konsisten dengan theme foundation tanpa mengubah AuthProvider/useAuth.
    Status:
    - AKTIF sebagai auth loading gate.
    - GUARDED: jangan ubah kondisi render loading di App.jsx ketika cleanup visual.
 ========================= */
 .app-loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  background: var(--ims-bg-shell);
+  padding: clamp(24px, 5vw, 48px);
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      color-mix(in srgb, var(--ims-color-primary) 7%, transparent) 0%,
+      transparent 42%
+    ),
+    var(--ims-bg-shell);
   color: var(--ims-text-primary);
 }
 
 .app-loading-card {
-  width: min(100%, 360px);
+  width: auto;
+  max-width: min(100%, 420px);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 14px;
-  padding: 28px 24px;
-  background: color-mix(in srgb, var(--ims-bg-card) 94%, transparent);
-  border: 1px solid var(--ims-border-color-soft);
-  border-radius: 24px;
-  box-shadow: var(--ims-shadow-soft);
+  padding: 0 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   text-align: center;
-  backdrop-filter: blur(14px);
+  backdrop-filter: none;
 }
 
-.app-loading-spinner .ant-spin-dot-item {
-  background-color: var(--ims-color-primary);
-}
-
-.app-loading-text.ant-typography {
-  margin: 0 !important;
+.app-loading-text {
+  max-width: 320px;
+  margin: 0;
   color: var(--ims-text-secondary);
   font-size: 14px;
   line-height: 1.55;
@@ -334,8 +342,8 @@
   }
 
   .app-loading-card {
-    padding: 24px 20px;
-    border-radius: 20px;
+    padding: 0 10px;
+    border-radius: 0;
   }
 
   .app-content-scroll {

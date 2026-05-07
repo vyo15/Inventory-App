@@ -100,6 +100,57 @@ const getCollectionLabels = (collections = []) => (
   Array.isArray(collections) ? collections.map((item) => item.label || item.key).filter(Boolean) : []
 );
 
+/*
+=====================================================
+SECTION: Compact audit table render helpers — AKTIF
+Fungsi:
+- Memadatkan teks panjang di tabel audit/maintenance dengan ellipsis dan tooltip agar field penting tetap bisa dibaca.
+
+Dipakai oleh:
+- ResetMaintenanceData.jsx pada tabel audit produksi, stok, schema log, legacy, payroll, variant, preview reset, data test, dan audit trail.
+
+Alasan perubahan:
+- Mengurangi kebutuhan scroll.x besar tanpa menghilangkan informasi audit seperti issue, recommendation, resetScope, action, note, dan error.
+
+Catatan cleanup:
+- Bisa dipindah ke helper table global jika pola compact audit dipakai di halaman utility lain.
+
+Risiko:
+- Jika helper ini diubah sembarangan, teks audit panjang bisa terpotong tanpa tooltip atau kolom penting menjadi sulit dibaca.
+=====================================================
+*/
+const renderCompactText = (value, maxWidth = 220, fallback = "-") => {
+  const text = Array.isArray(value) ? value.filter(Boolean).join(", ") : value;
+
+  if (text === undefined || text === null || text === "") {
+    return fallback;
+  }
+
+  return (
+    <Text
+      style={{ display: "inline-block", maxWidth: "100%", width: maxWidth }}
+      ellipsis={{ tooltip: String(text) }}
+    >
+      {String(text)}
+    </Text>
+  );
+};
+
+const renderCompactTag = (value, maxWidth = 160, fallback = "-") => {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  return (
+    <Tag
+      title={String(value)}
+      style={{ maxWidth, overflow: "hidden", textOverflow: "ellipsis", verticalAlign: "middle" }}
+    >
+      {String(value)}
+    </Tag>
+  );
+};
+
 const ResetMaintenanceData = () => {
   const [confirmForm] = Form.useForm();
 
@@ -1022,23 +1073,23 @@ const ResetMaintenanceData = () => {
                 dataSource={maintenanceRows}
                 pagination={{ pageSize: 8, showSizeChanger: false }}
                 columns={[
-                  { title: "Area", dataIndex: "scope", key: "scope", width: 150 },
-                  { title: "Kode/Type", dataIndex: "code", key: "code", width: 160 },
-                  { title: "Status", dataIndex: "status", key: "status", width: 120 },
+                  { title: "Area", dataIndex: "scope", key: "scope", width: 115, render: (value) => renderCompactText(value, 100) },
+                  { title: "Kode/Type", dataIndex: "code", key: "code", width: 125, render: (value) => renderCompactText(value, 110) },
+                  { title: "Status", dataIndex: "status", key: "status", width: 95, render: (value) => renderCompactText(value, 80) },
                   {
                     title: "Kategori",
                     dataIndex: "category",
                     key: "category",
-                    width: 170,
+                    width: 135,
                     render: (value) => {
                       const meta = MAINTENANCE_CATEGORY_META[value] || MAINTENANCE_CATEGORY_META.ok;
                       return <Tag color={meta.color}>{meta.label}</Tag>;
                     },
                   },
-                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 260, render: (value) => value || "-" },
-                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 360 },
+                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 205, render: (value) => renderCompactText(value, 190) },
+                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 250, render: (value) => renderCompactText(value, 235) },
                 ]}
-                scroll={{ x: 1240 }}
+                scroll={{ x: 925 }}
                 locale={{ emptyText: "Klik Cek Data Produksi untuk menjalankan dry run audit." }}
               />
             </Space>
@@ -1092,14 +1143,14 @@ const ResetMaintenanceData = () => {
                 dataSource={stockMaintenanceRows}
                 pagination={{ pageSize: 6, showSizeChanger: false }}
                 columns={[
-                  { title: "Collection", dataIndex: "collectionName", key: "collectionName", width: 180 },
-                  { title: "Item", dataIndex: "itemName", key: "itemName", width: 220 },
-                  { title: "Variant", dataIndex: "hasVariants", key: "hasVariants", width: 100, render: (value) => value ? <Tag color="blue">Variant</Tag> : <Tag>Master</Tag> },
-                  { title: "Kategori", dataIndex: "category", key: "category", width: 150, render: (value) => value === "safe_repair" ? <Tag color="blue">Aman Repair</Tag> : <Tag color="green">OK</Tag> },
-                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 360, render: (value) => value || "-" },
-                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 360 },
+                  { title: "Collection", dataIndex: "collectionName", key: "collectionName", width: 130, render: (value) => renderCompactText(value, 115) },
+                  { title: "Item", dataIndex: "itemName", key: "itemName", width: 175, render: (value) => renderCompactText(value, 160) },
+                  { title: "Variant", dataIndex: "hasVariants", key: "hasVariants", width: 90, render: (value) => value ? <Tag color="blue">Variant</Tag> : <Tag>Master</Tag> },
+                  { title: "Kategori", dataIndex: "category", key: "category", width: 125, render: (value) => value === "safe_repair" ? <Tag color="blue">Aman Repair</Tag> : <Tag color="green">OK</Tag> },
+                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 230, render: (value) => renderCompactText(value, 215) },
+                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 250, render: (value) => renderCompactText(value, 235) },
                 ]}
-                scroll={{ x: 1370 }}
+                scroll={{ x: 1000 }}
                 locale={{ emptyText: "Klik Cek Stok Umum untuk menjalankan dry run stok." }}
               />
             </Space>
@@ -1153,13 +1204,13 @@ const ResetMaintenanceData = () => {
                 dataSource={logSchemaRows}
                 pagination={{ pageSize: 6, showSizeChanger: false }}
                 columns={[
-                  { title: "Type", dataIndex: "type", key: "type", width: 170 },
-                  { title: "Item", dataIndex: "itemName", key: "itemName", width: 220 },
-                  { title: "Kategori", dataIndex: "category", key: "category", width: 160, render: (value) => value === "display_repair" ? <Tag color="purple">Display Repair</Tag> : <Tag color="green">OK</Tag> },
-                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 320 },
-                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 360 },
+                  { title: "Type", dataIndex: "type", key: "type", width: 115, render: (value) => renderCompactText(value, 100) },
+                  { title: "Item", dataIndex: "itemName", key: "itemName", width: 170, render: (value) => renderCompactText(value, 155) },
+                  { title: "Kategori", dataIndex: "category", key: "category", width: 135, render: (value) => value === "display_repair" ? <Tag color="purple">Display Repair</Tag> : <Tag color="green">OK</Tag> },
+                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 225, render: (value) => renderCompactText(value, 210) },
+                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 245, render: (value) => renderCompactText(value, 230) },
                 ]}
-                scroll={{ x: 1230 }}
+                scroll={{ x: 890 }}
                 locale={{ emptyText: "Klik Cek Schema Inventory Log untuk menjalankan dry run schema." }}
               />
             </Space>
@@ -1213,24 +1264,24 @@ const ResetMaintenanceData = () => {
                 dataSource={legacyDataRows}
                 pagination={{ pageSize: 8, showSizeChanger: false }}
                 columns={[
-                  { title: "Area", dataIndex: "scope", key: "scope", width: 170 },
-                  { title: "Kode/Ref", dataIndex: "code", key: "code", width: 180 },
-                  { title: "Status", dataIndex: "status", key: "status", width: 140 },
+                  { title: "Area", dataIndex: "scope", key: "scope", width: 125, render: (value) => renderCompactText(value, 110) },
+                  { title: "Kode/Ref", dataIndex: "code", key: "code", width: 135, render: (value) => renderCompactText(value, 120) },
+                  { title: "Status", dataIndex: "status", key: "status", width: 95, render: (value) => renderCompactText(value, 80) },
                   {
                     title: "Kategori",
                     dataIndex: "category",
                     key: "category",
-                    width: 170,
+                    width: 135,
                     render: (value) => {
                       const meta = MAINTENANCE_CATEGORY_META[value] || MAINTENANCE_CATEGORY_META.ok;
                       return <Tag color={meta.color}>{meta.label}</Tag>;
                     },
                   },
-                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 360 },
-                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 420 },
-                  { title: "Scope Reset", dataIndex: "resetScope", key: "resetScope", width: 180, render: (value) => value ? <Tag>{value}</Tag> : "-" },
+                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 225, render: (value) => renderCompactText(value, 210) },
+                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 255, render: (value) => renderCompactText(value, 240) },
+                  { title: "Scope Reset", dataIndex: "resetScope", key: "resetScope", width: 130, render: (value) => renderCompactTag(value, 110) },
                 ]}
-                scroll={{ x: 1450 }}
+                scroll={{ x: 1100 }}
                 locale={{ emptyText: "Klik Cek Data Legacy untuk memetakan data lama/orphan sebelum cleanup berikutnya." }}
               />
             </Space>
@@ -1285,17 +1336,17 @@ const ResetMaintenanceData = () => {
                 dataSource={payrollAuditRows}
                 pagination={{ pageSize: 6, showSizeChanger: false }}
                 columns={[
-                  { title: "Work Log", dataIndex: "code", key: "code", width: 150 },
-                  { title: "Step Snapshot", dataIndex: "stepName", key: "stepName", width: 180, render: (value, record) => value || record.masterStepName || "-" },
-                  { title: "Kategori", dataIndex: "category", key: "category", width: 160, render: (value) => {
+                  { title: "Work Log", dataIndex: "code", key: "code", width: 125, render: (value) => renderCompactText(value, 110) },
+                  { title: "Step Snapshot", dataIndex: "stepName", key: "stepName", width: 155, render: (value, record) => renderCompactText(value || record.masterStepName, 140) },
+                  { title: "Kategori", dataIndex: "category", key: "category", width: 135, render: (value) => {
                     const meta = MAINTENANCE_CATEGORY_META[value] || MAINTENANCE_CATEGORY_META.ok;
                     return <Tag color={meta.color}>{meta.label}</Tag>;
                   }},
-                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 420 },
-                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 360 },
-                  { title: "Scope Reset", dataIndex: "resetScope", key: "resetScope", width: 180, render: (value) => value ? <Tag>{value}</Tag> : "-" },
+                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 245, render: (value) => renderCompactText(value, 230) },
+                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 240, render: (value) => renderCompactText(value, 225) },
+                  { title: "Scope Reset", dataIndex: "resetScope", key: "resetScope", width: 130, render: (value) => renderCompactTag(value, 110) },
                 ]}
-                scroll={{ x: 1320 }}
+                scroll={{ x: 1030 }}
                 locale={{ emptyText: "Klik Cek Snapshot Payroll untuk menjalankan dry run stale snapshot payroll." }}
               />
             </Space>
@@ -1349,17 +1400,17 @@ const ResetMaintenanceData = () => {
                 dataSource={transactionVariantRows}
                 pagination={{ pageSize: 6, showSizeChanger: false }}
                 columns={[
-                  { title: "Area", dataIndex: "scope", key: "scope", width: 170 },
-                  { title: "Kode/Ref", dataIndex: "code", key: "code", width: 180 },
-                  { title: "Kategori", dataIndex: "category", key: "category", width: 160, render: (value) => {
+                  { title: "Area", dataIndex: "scope", key: "scope", width: 125, render: (value) => renderCompactText(value, 110) },
+                  { title: "Kode/Ref", dataIndex: "code", key: "code", width: 140, render: (value) => renderCompactText(value, 125) },
+                  { title: "Kategori", dataIndex: "category", key: "category", width: 135, render: (value) => {
                     const meta = MAINTENANCE_CATEGORY_META[value] || MAINTENANCE_CATEGORY_META.ok;
                     return <Tag color={meta.color}>{meta.label}</Tag>;
                   }},
-                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 420 },
-                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 360 },
-                  { title: "Scope Reset", dataIndex: "resetScope", key: "resetScope", width: 180, render: (value) => value ? <Tag>{value}</Tag> : "-" },
+                  { title: "Masalah", dataIndex: "issue", key: "issue", width: 245, render: (value) => renderCompactText(value, 230) },
+                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 245, render: (value) => renderCompactText(value, 230) },
+                  { title: "Scope Reset", dataIndex: "resetScope", key: "resetScope", width: 130, render: (value) => renderCompactTag(value, 110) },
                 ]}
-                scroll={{ x: 1320 }}
+                scroll={{ x: 1020 }}
                 locale={{ emptyText: "Klik Cek Variant Lintas Modul untuk menjalankan dry run transaksi lama bervarian." }}
               />
             </Space>
@@ -1556,25 +1607,25 @@ const ResetMaintenanceData = () => {
               pagination={false}
               dataSource={previewRows}
               columns={[
-                { title: "Modul", dataIndex: "moduleLabel", key: "moduleLabel", width: 170 },
-                { title: "Koleksi / Scope", dataIndex: "name", key: "name" },
-                { title: "Jumlah Data", dataIndex: "count", key: "count", width: 140 },
+                { title: "Modul", dataIndex: "moduleLabel", key: "moduleLabel", width: 145, render: (value) => renderCompactText(value, 130) },
+                { title: "Koleksi / Scope", dataIndex: "name", key: "name", width: 210, render: (value) => renderCompactText(value, 195) },
+                { title: "Jumlah Data", dataIndex: "count", key: "count", width: 115 },
                 {
                   title: "Status",
                   dataIndex: "status",
                   key: "status",
-                  width: 150,
+                  width: 130,
                   render: (value) => value === "protected" ? <Tag color="green">Dilindungi</Tag> : <Tag color="red">Akan Dihapus</Tag>,
                 },
                 {
                   title: "Aksi Reset",
                   dataIndex: "action",
                   key: "action",
-                  width: 260,
-                  render: (value) => <Tag>{value}</Tag>,
+                  width: 210,
+                  render: (value) => renderCompactTag(value, 190),
                 },
               ]}
-              scroll={{ x: 980 }}
+              scroll={{ x: 810 }}
               locale={{ emptyText: "Tidak ada modul aktif atau belum ada data yang cocok untuk reset." }}
             />
           </Card>
@@ -1616,12 +1667,12 @@ const ResetMaintenanceData = () => {
                 pagination={false}
                 dataSource={testDataRows}
                 columns={[
-                  { title: "Collection", dataIndex: "name", key: "name" },
-                  { title: "Data Test", dataIndex: "count", key: "count", width: 140 },
-                  { title: "Marker", dataIndex: "status", key: "status", width: 160, render: () => <Tag color="cyan">dev_test_seed</Tag> },
-                  { title: "Aksi", dataIndex: "action", key: "action", width: 320, render: (value) => <Tag>{value}</Tag> },
+                  { title: "Collection", dataIndex: "name", key: "name", width: 220, render: (value) => renderCompactText(value, 205) },
+                  { title: "Data Test", dataIndex: "count", key: "count", width: 115 },
+                  { title: "Marker", dataIndex: "status", key: "status", width: 135, render: () => <Tag color="cyan">dev_test_seed</Tag> },
+                  { title: "Aksi", dataIndex: "action", key: "action", width: 215, render: (value) => renderCompactTag(value, 195) },
                 ]}
-                scroll={{ x: 920 }}
+                scroll={{ x: 685 }}
                 locale={{ emptyText: "Belum ada data test bermarker dev_test_seed." }}
               />
             </Space>
@@ -1640,19 +1691,28 @@ const ResetMaintenanceData = () => {
               pagination={{ pageSize: 6, showSizeChanger: false }}
               dataSource={maintenanceLogs.map((item) => ({ ...item, key: item.id }))}
               columns={[
-                { title: "Aksi", dataIndex: "actionType", key: "actionType", width: 210 },
-                { title: "Mode", dataIndex: "mode", key: "mode", width: 130, render: (value, record) => <Tag color={record.dryRun ? "blue" : "orange"}>{value}</Tag> },
-                { title: "Pelaksana", dataIndex: "executedBy", key: "executedBy", width: 150, render: (value) => value || "client-ui" },
-                { title: "Modul", dataIndex: "modules", key: "modules", width: 220, render: (values) => Array.isArray(values) && values.length ? values.join(", ") : "-" },
-                { title: "Terdampak", dataIndex: "affectedCount", key: "affectedCount", width: 120 },
-                { title: "Plan", dataIndex: "planSummary", key: "planSummary", width: 220, render: (value) => value?.totalWriteOperations ? `Batch ${value.totalWriteOperations}` : value?.checkedRecords ? `Dicek ${value.checkedRecords}` : value?.safeRepairCount ? `Plan ${value.safeRepairCount}` : "-" },
-                { title: "Status", dataIndex: "status", key: "status", width: 120, render: (value) => {
+                { title: "Aksi", dataIndex: "actionType", key: "actionType", width: 145, render: (value) => renderCompactText(value, 130) },
+                { title: "Mode", dataIndex: "mode", key: "mode", width: 105, render: (value, record) => <Tag color={record.dryRun ? "blue" : "orange"}>{value}</Tag> },
+                { title: "Pelaksana", dataIndex: "executedBy", key: "executedBy", width: 115, render: (value) => renderCompactText(value || "client-ui", 100) },
+                { title: "Modul", dataIndex: "modules", key: "modules", width: 155, render: (values) => renderCompactText(values, 140) },
+                {
+                  title: "Terdampak",
+                  dataIndex: "affectedCount",
+                  key: "affectedCount",
+                  width: 160,
+                  render: (value, record) => renderCompactText(
+                    `${value || 0} record${record.affectedCollections?.length ? ` • ${record.affectedCollections.join(", ")}` : ""}`,
+                    145,
+                  ),
+                },
+                { title: "Plan", dataIndex: "planSummary", key: "planSummary", width: 135, render: (value) => value?.totalWriteOperations ? `Batch ${value.totalWriteOperations}` : value?.checkedRecords ? `Dicek ${value.checkedRecords}` : value?.safeRepairCount ? `Plan ${value.safeRepairCount}` : "-" },
+                { title: "Status", dataIndex: "status", key: "status", width: 95, render: (value) => {
                     const colorMap = { success: "green", started: "blue", failed: "red" };
                     return <Tag color={colorMap[value] || "default"}>{value || "-"}</Tag>;
                   } },
-                { title: "Catatan", dataIndex: "note", key: "note", width: 360, render: (value) => value || "-" },
+                { title: "Catatan/Error", dataIndex: "note", key: "note", width: 230, render: (value, record) => renderCompactText(record.errorMessage || value, 215) },
               ]}
-              scroll={{ x: 1160 }}
+              scroll={{ x: 1140 }}
               locale={{ emptyText: "Belum ada riwayat maintenance/reset." }}
             />
           </Card>

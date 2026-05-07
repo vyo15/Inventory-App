@@ -395,77 +395,108 @@ const ProductionSteps = () => {
     },
   ];
 
-  // =========================
-  // SECTION: kolom tabel utama
+  // =====================================================
+  // SECTION: Main table compact columns — AKTIF
   // Fungsi:
-  // - main table hanya menampilkan info inti agar halaman step tidak terlalu padat
-  // - detail konfigurasi lengkap dipindah ke drawer Detail read-only
-  // Status:
-  // - aktif dipakai sebagai baseline final untuk ProductionSteps
-  // =========================
+  // - Menampilkan ringkasan step, kategori, payroll, monitoring, dan relasi tanpa horizontal scroll besar.
+  // - Menjaga detail konfigurasi lengkap tetap berada di drawer detail existing.
+  //
+  // Dipakai oleh:
+  // - ProductionSteps main table.
+  //
+  // Alasan perubahan:
+  // - Main table sebelumnya memakai scroll x besar dan fixed right untuk Status/Aksi, membuat master ringan terasa terlalu lebar.
+  //
+  // Catatan cleanup:
+  // - Pola tag ringkas bisa distandarkan ke shared helper produksi pada batch cleanup UI berikutnya.
+  //
+  // Risiko:
+  // - Mengubah source employeeCount/bomCount atau payroll preview di section ini dapat mengganggu audit relasi dan payroll rule produksi.
+  // =====================================================
   const columns = [
     {
-      title: "Nama Step",
+      title: "Step / Kategori",
       dataIndex: "name",
-      key: "name",
-      width: 240,
-      render: (_, record) => <Typography.Text strong>{record.name || "-"}</Typography.Text>,
-    },
-    {
-      title: "Kategori",
-      dataIndex: "processType",
-      key: "processType",
-      width: 190,
-      render: (value) => {
-        const label = PROCESS_TYPE_MAP[value] || value || "-";
+      key: "stepSummary",
+      width: "30%",
+      render: (_, record) => {
+        const categoryLabel = PROCESS_TYPE_MAP[record.processType] || record.processType || "-";
+
         return (
-          <Tooltip title={label}>
-            <Tag style={categoryTagStyle}>{label}</Tag>
-          </Tooltip>
+          <Space direction="vertical" size={4} style={{ width: "100%" }}>
+            <Typography.Text strong ellipsis={{ tooltip: record.name || "-" }}>
+              {record.name || "-"}
+            </Typography.Text>
+            <Space size={[4, 4]} wrap>
+              <Tooltip title={categoryLabel}>
+                <Tag style={categoryTagStyle}>{categoryLabel}</Tag>
+              </Tooltip>
+              {record.description ? (
+                <Tooltip title={record.description}>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis>
+                    Ada deskripsi
+                  </Typography.Text>
+                </Tooltip>
+              ) : null}
+            </Space>
+          </Space>
         );
       },
     },
     {
-      title: "Sistem Bayar",
-      key: "payrollPreview",
-      width: 220,
+      title: "Payroll / Monitoring",
+      key: "payrollMonitoring",
+      width: "28%",
+      responsive: ["md"],
+      render: (_, record) => {
+        const payrollPreview = record.payrollMode
+          ? formatProductionStepPayrollPreview(record)
+          : "Belum ada rule payroll";
+        const basisLabel = BASIS_TYPE_MAP[record.basisType] || record.basisType || "-";
+        const monitoringLabel =
+          MONITORING_MODE_MAP[record.monitoringMode] || record.monitoringMode || "-";
+
+        return (
+          <Space direction="vertical" size={4} style={{ width: "100%" }}>
+            <Tooltip title={payrollPreview}>
+              <Typography.Text type={record.payrollMode ? undefined : "secondary"} ellipsis>
+                {payrollPreview}
+              </Typography.Text>
+            </Tooltip>
+            <Space size={[4, 4]} wrap>
+              <Tag>{basisLabel}</Tag>
+              <Tag color="blue">{monitoringLabel}</Tag>
+            </Space>
+          </Space>
+        );
+      },
+    },
+    {
+      title: "Relasi",
+      key: "relations",
+      width: "16%",
+      responsive: ["lg"],
       render: (_, record) => (
-        <Typography.Text type={record.payrollMode ? undefined : "secondary"}>
-          {record.payrollMode ? formatProductionStepPayrollPreview(record) : "-"}
-        </Typography.Text>
+        <Space direction="vertical" size={4}>
+          <Typography.Text>{record.employeeCount || 0} karyawan</Typography.Text>
+          <Typography.Text>{record.bomCount || 0} BOM</Typography.Text>
+        </Space>
       ),
     },
     {
-      // =========================
-      // SECTION: status sticky
-      // Fungsi:
-      // - menjaga kolom status tetap terlihat saat table discroll horizontal
-      // - mengikuti baseline global table/action untuk table lebar
-      // =========================
       title: "Status",
       dataIndex: "isActive",
       key: "isActive",
-      width: 124,
+      width: 118,
       align: "center",
-      fixed: "right",
-      className: "app-table-status-column app-table-fixed-secondary",
+      className: "app-table-status-column",
       render: (value) =>
         value ? <Badge status="success" text="Aktif" /> : <Badge status="default" text="Nonaktif" />,
     },
     {
-      // =========================
-      // SECTION: aksi sticky
-      // Fungsi:
-      // - ProductionSteps sekarang diperlakukan sebagai detail-capable page ringan
-      // - Detail dipakai untuk audit baca cepat, Edit tetap untuk ubah data
-      // Status:
-      // - aktif dipakai sebagai baseline baru halaman step
-      // - menggantikan pola lama simple config tanpa Detail
-      // =========================
       title: "Aksi",
       key: "actions",
-      width: 260,
-      fixed: "right",
+      width: 176,
       className: "app-table-action-column",
       render: (_, record) => (
         <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
@@ -558,23 +589,29 @@ const ProductionSteps = () => {
         title="Daftar Tahapan Produksi"
         subtitle="Step tetap menjadi master referensi untuk assignment karyawan, BOM, dan payroll rule produksi."
       >
-        {/* =========================
-            SECTION: tabel utama step
-            helper global dipakai agar ukuran dan sticky action seragam.
-        ========================= */}
+        {/* =====================================================
+            SECTION: Main table render — AKTIF
+            Fungsi:
+            - Merender tabel utama tahapan produksi dengan kolom compact tanpa scroll x besar.
+
+            Dipakai oleh:
+            - ProductionSteps page.
+
+            Alasan perubahan:
+            - Status dan aksi tidak lagi fixed karena tabel utama sudah dipadatkan.
+
+            Catatan cleanup:
+            - belum ada.
+
+            Risiko:
+            - Menambahkan kembali fixed right tanpa scroll x dapat membuat layout action rusak di viewport kecil.
+        ===================================================== */}
         <Table
           className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          // =========================
-          // SECTION: scroll table utama
-          // Fungsi:
-          // - tetap memberi ruang aman untuk sticky status + aksi
-          // - ukuran diperkecil karena kolom utama sudah diringkas
-          // =========================
-          scroll={{ x: 980 }}
           locale={{
             emptyText: <Empty description="Belum ada data tahapan produksi" />,
           }}

@@ -100,6 +100,46 @@ const PayrollDetailValue = ({ children, help }) => (
   </Space>
 );
 
+/*
+=====================================================
+SECTION: Compact table text renderer — AKTIF
+Fungsi:
+- Memadatkan teks panjang di main table payroll produksi dengan ellipsis dan tooltip.
+
+Dipakai oleh:
+- ProductionPayrolls.jsx pada section Daftar Payroll Produksi.
+
+Alasan perubahan:
+- Main table perlu lebih ringkas agar Status dan Aksi tetap terlihat tanpa horizontal scroll besar.
+
+Catatan cleanup:
+- belum ada.
+
+Risiko:
+- Jika helper ini diubah sembarangan, identitas payroll, karyawan, work log, atau step bisa sulit diaudit dari tabel utama.
+=====================================================
+*/
+const renderCompactText = (value, options = {}) => {
+  const text = value === undefined || value === null || value === ""
+    ? "-"
+    : String(value);
+
+  return (
+    <Typography.Text
+      strong={options.strong}
+      type={options.type}
+      style={{
+        display: "block",
+        maxWidth: "100%",
+        fontSize: options.fontSize,
+      }}
+      ellipsis={{ tooltip: text }}
+    >
+      {text}
+    </Typography.Text>
+  );
+};
+
 const ProductionPayrolls = () => {
   const [loading, setLoading] = useState(false);
   const [payrolls, setPayrolls] = useState([]);
@@ -353,84 +393,111 @@ const ProductionPayrolls = () => {
     raw: item,
   }));
 
+  /*
+  =====================================================
+  SECTION: Main table payroll produksi compact — GUARDED
+  Fungsi:
+  - Menampilkan rekap utama payroll produksi dalam kolom ringkas tanpa horizontal scroll besar.
+  - Menjaga nomor payroll, tanggal, karyawan, work log, step, nominal, status payroll, payment status, dan aksi tetap terlihat.
+
+  Dipakai oleh:
+  - ProductionPayrolls.jsx pada section Daftar Payroll Produksi.
+
+  Alasan perubahan:
+  - Menghapus scroll x besar dan fixed right pada Status/Aksi agar tabel utama lebih nyaman dibaca di layout normal.
+
+  Catatan cleanup:
+  - Evaluasi lagi bila nanti ada field audit tambahan yang wajib tampil di tabel utama.
+
+  Risiko:
+  - Jika logic render/action diubah sembarangan, tombol Paid yang memicu Cash Out idempotent bisa hilang atau status paid bisa salah terbaca.
+  =====================================================
+  */
   const columns = [
     {
-      title: "No. Line Payroll",
-      dataIndex: "payrollNumber",
-      key: "payrollNumber",
-      width: 160,
-      render: (value) => (
-        <Typography.Text strong>{value || "-"}</Typography.Text>
-      ),
-    },
-    {
-      title: "Tanggal",
-      dataIndex: "payrollDate",
-      key: "payrollDate",
-      width: 130,
-      render: (value) => {
-        const date = value?.toDate ? value.toDate() : value;
-        return date ? dayjs(date).format("DD/MM/YYYY") : "-";
+      title: "Payroll / Tanggal",
+      key: "payrollDateSummary",
+      width: 180,
+      render: (_, record) => {
+        const date = record.payrollDate?.toDate
+          ? record.payrollDate.toDate()
+          : record.payrollDate;
+
+        return (
+          <Space direction="vertical" size={0} style={{ width: "100%" }}>
+            {renderCompactText(record.payrollNumber, { strong: true })}
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {date ? dayjs(date).format("DD/MM/YYYY") : "-"}
+            </Typography.Text>
+          </Space>
+        );
       },
     },
     {
       title: "Karyawan / Work Log",
       key: "workerWorkLog",
-      width: 260,
+      width: 220,
       render: (_, record) => (
-        <div>
-          <div style={{ fontWeight: 600 }}>{record.workerName || "-"}</div>
-          <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-            {record.workNumber || "-"}
-          </div>
-        </div>
+        <Space direction="vertical" size={0} style={{ width: "100%" }}>
+          {renderCompactText(record.workerName, { strong: true })}
+          {renderCompactText(record.workNumber, {
+            type: "secondary",
+            fontSize: 12,
+          })}
+        </Space>
       ),
     },
     {
-      title: "Step",
-      dataIndex: "stepName",
-      key: "stepName",
-      width: 160,
-    },
-    {
-      title: "Final Amount",
-      dataIndex: "finalAmount",
-      key: "finalAmount",
-      width: 150,
-      render: (value) => formatCurrency(value),
-    },
-    {
-      // =====================================================
-      // SECTION: status sticky
-      // Fungsi:
-      // - status payroll dan payment state tetap terlihat saat tabel digeser
-      // =====================================================
-      title: "Status",
-      key: "status",
-      width: 146,
-      fixed: "right",
-      className: "app-table-status-column app-table-fixed-secondary",
+      title: "Step / Basis",
+      key: "stepBasis",
+      width: 190,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
-          <Tag color="blue">{PAYROLL_STATUS_MAP[record.status] || "-"}</Tag>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {PAYROLL_PAYMENT_STATUS_MAP[record.paymentStatus] || "-"}
+        <Space direction="vertical" size={0} style={{ width: "100%" }}>
+          {renderCompactText(record.stepName, { strong: true })}
+          <Typography.Text
+            type="secondary"
+            style={{ display: "block", fontSize: 12 }}
+            ellipsis={{ tooltip: record.payrollMode || "-" }}
+          >
+            {record.payrollMode || "-"}
+            {record.outputQtyUsed !== undefined && record.outputQtyUsed !== null
+              ? ` • Qty ${formatNumber(record.outputQtyUsed)}`
+              : ""}
           </Typography.Text>
         </Space>
       ),
     },
     {
-      // =====================================================
-      // SECTION: aksi sticky
-      // =====================================================
+      title: "Nominal",
+      dataIndex: "finalAmount",
+      key: "finalAmount",
+      width: 140,
+      align: "right",
+      render: (value) => (
+        <Typography.Text strong>{formatCurrency(value)}</Typography.Text>
+      ),
+    },
+    {
+      title: "Status",
+      key: "status",
+      width: 150,
+      render: (_, record) => (
+        <Space direction="vertical" size={2}>
+          <Tag color="blue">{PAYROLL_STATUS_MAP[record.status] || "-"}</Tag>
+          <Tag color={record.paymentStatus === "paid" ? "green" : "orange"}>
+            {PAYROLL_PAYMENT_STATUS_MAP[record.paymentStatus] || "-"}
+          </Tag>
+        </Space>
+      ),
+    },
+    {
       title: "Aksi",
       key: "actions",
-      width: 240,
-      fixed: "right",
-      className: "app-table-action-column",
+      width: 150,
       render: (_, record) => (
-        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-          <Button className="ims-action-button"
+        <Space wrap size={6} className="ims-action-group">
+          <Button
+            className="ims-action-button"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
@@ -516,7 +583,8 @@ const ProductionPayrolls = () => {
         subtitle="Tabel ini tetap menjadi rekap line payroll. Perubahan status dibaca oleh flow expense otomatis yang sudah dijaga service."
       >
         {/* ===============================================================
-            Tabel payroll mengikuti helper global untuk menjaga konsistensi bentuk.
+            Tabel payroll produksi compact guarded: layout utama tidak lagi
+            memakai horizontal scroll besar; aksi paid tetap lewat handler lama.
         =============================================================== */}
         <Table
           className="app-data-table"
@@ -524,7 +592,6 @@ const ProductionPayrolls = () => {
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          scroll={{ x: 1300 }}
           locale={{
             emptyText: <Empty description="Belum ada payroll produksi" />,
           }}

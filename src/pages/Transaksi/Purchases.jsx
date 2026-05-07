@@ -11,6 +11,7 @@ import {
   Space,
   Switch,
   Tag,
+  Tooltip,
 } from "antd";
 import { collection, doc, onSnapshot, runTransaction, Timestamp } from "firebase/firestore";
 import { PlusOutlined } from "@ant-design/icons";
@@ -1446,100 +1447,128 @@ const Purchases = () => {
   // =========================
   // SECTION: Kolom tabel pembelian
   // =========================
+  /* =====================================================
+     SECTION: Compact Purchases Table Columns — AKTIF/GUARDED
+     Fungsi:
+     - Menampilkan ringkasan pembelian/restock tanpa horizontal scroll besar.
+     Dipakai oleh:
+     - Purchases main table.
+     Alasan perubahan:
+     - Info supplier, item, stok masuk transaksi, dan total/modal utama harus terbaca tanpa scroll horizontal.
+     Catatan cleanup:
+     - Detail biaya panjang dapat dibuat drawer khusus jika nanti dibutuhkan untuk audit pembelian.
+     Risiko:
+     - Jangan mengubah transaction, stock-in, expense, conversion, actual unit cost, atau inventory log dari render kolom ini.
+     ===================================================== */
   const purchaseTableColumns = [
     {
-      title: "Tanggal",
-      dataIndex: "date",
-      key: "date",
-      render: (value) =>
-        value?.toDate ? dayjs(value.toDate()).format("DD-MM-YYYY") : "-",
+      title: "Tanggal / Supplier",
+      key: "dateSupplier",
+      width: 220,
+      render: (_, record) => {
+        const dateText = record.date?.toDate ? dayjs(record.date.toDate()).format("DD-MM-YYYY") : "-";
+        const supplierName = record.supplierName || "Supplier tidak tercatat";
+        return (
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600 }}>{dateText}</div>
+            <Tooltip title={supplierName}>
+              <div style={{ color: "#8c8c8c", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {supplierName}
+              </div>
+            </Tooltip>
+            <Tag color={record.purchaseType === "offline" ? "default" : "blue"} style={{ marginTop: 4 }}>
+              {record.purchaseType === "offline" ? "Offline" : "Online"}
+            </Tag>
+          </div>
+        );
+      },
     },
     {
-      title: "Jenis",
-      dataIndex: "type",
-      key: "type",
-      render: (type) =>
-        type === "product" ? (
-          <Tag color="blue">Produk</Tag>
-        ) : (
-          <Tag color="gold">Bahan Baku</Tag>
-        ),
-    },
-    {
-      title: "Nama Item",
-      dataIndex: "itemName",
-      key: "itemName",
-    },
-    {
-      title: "Varian / Sumber",
-      key: "variant",
-      render: (_, record) =>
-        record.variantLabel || record.variantKey ? (
+      title: "Item / Material",
+      key: "itemMaterial",
+      width: 260,
+      render: (_, record) => {
+        const itemName = record.itemName || "-";
+        const typeTag = record.type === "product" ? <Tag color="blue">Produk</Tag> : <Tag color="gold">Bahan Baku</Tag>;
+        const variantTag = record.variantLabel || record.variantKey ? (
           <Tag color="purple">{record.variantLabel || record.variantKey}</Tag>
         ) : (
           <Tag>Master</Tag>
-        ),
+        );
+
+        return (
+          <div style={{ minWidth: 0 }}>
+            <Tooltip title={itemName}>
+              <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {itemName}
+              </div>
+            </Tooltip>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+              {typeTag}
+              {variantTag}
+            </div>
+          </div>
+        );
+      },
     },
     {
-      title: "Supplier",
-      dataIndex: "supplierName",
-      key: "supplierName",
-    },
-    {
-      title: "Qty Beli",
-      key: "quantityDisplay",
-      render: (_, record) =>
-        record.type === "material"
+      title: "Qty / Stok Masuk",
+      key: "quantityStockIn",
+      width: 170,
+      render: (_, record) => {
+        const quantityText = record.type === "material"
           ? `${formatNumberId(record.quantity)} ${record.purchaseUnit || ""}`
-          : formatNumberId(record.quantity),
+          : formatNumberId(record.quantity);
+        const stockInText = record.type === "material"
+          ? `${formatNumberId(record.totalStockIn || record.quantity)} ${record.stockUnit || ""}`
+          : formatNumberId(record.quantity);
+
+        return (
+          <div>
+            <div>
+              <span style={{ color: "#8c8c8c" }}>Qty: </span>
+              <strong>{quantityText}</strong>
+            </div>
+            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+              Stok Masuk: {stockInText}
+            </div>
+          </div>
+        );
+      },
     },
     {
-      title: "Stok Masuk",
-      key: "stockInDisplay",
-      render: (_, record) =>
-        record.type === "material"
-          ? `${formatNumberId(record.totalStockIn || record.quantity)} ${
-              record.stockUnit || ""
-            }`
-          : formatNumberId(record.quantity),
-    },
-    {
-      title: "Total Aktual Pembelian",
-      dataIndex: "totalActualPurchase",
-      key: "totalActualPurchase",
-      render: (value) => formatCurrencyIdr(value),
-    },
-    {
-      title: "Modal Aktual / Satuan",
-      dataIndex: "actualUnitCost",
-      key: "actualUnitCost",
-      render: (value, record) => (
-        <span>
-          {formatCurrencyIdr(value)}
-          {record.stockUnit ? (
-            <>
-              <br />
-              <span style={{ color: "#999", fontSize: 12 }}>
-                / {record.stockUnit}
-              </span>
-            </>
-          ) : null}
-        </span>
-      ),
-    },
-    {
-      title: "Selisih Hemat",
-      dataIndex: "purchaseSaving",
-      key: "purchaseSaving",
-      render: (value) => {
-        const savingMeta = getPurchaseSavingMeta(value);
-        return <Tag color={savingMeta.color}>{savingMeta.label}</Tag>;
+      title: "Total / Modal",
+      key: "totalActual",
+      width: 190,
+      align: "right",
+      render: (_, record) => {
+        const savingMeta = getPurchaseSavingMeta(record.purchaseSaving);
+        return (
+          <div>
+            <div style={{ fontWeight: 700 }}>{formatCurrencyIdr(record.totalActualPurchase)}</div>
+            <div style={{ color: "#8c8c8c", fontSize: 12 }}>
+              Modal: {formatCurrencyIdr(record.actualUnitCost)}{record.stockUnit ? ` / ${record.stockUnit}` : ""}
+            </div>
+            <Tag color={savingMeta.color} style={{ marginTop: 4 }}>{savingMeta.label}</Tag>
+          </div>
+        );
       },
     },
     {
       title: "Catatan",
       dataIndex: "note",
       key: "note",
+      width: 220,
+      render: (value) => {
+        const noteText = value || "-";
+        return (
+          <Tooltip title={noteText}>
+            <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {noteText}
+            </span>
+          </Tooltip>
+        );
+      },
     },
   ];
 
@@ -1567,7 +1596,7 @@ const Purchases = () => {
             SECTION: tabel pembelian baseline global
             Fungsi:
             - menjaga surface tabel pembelian tetap seragam dengan halaman transaksi lain
-            - tabel ini tidak punya aksi per baris, jadi cukup memakai class global + scroll aman
+            - tabel ini tidak punya aksi per baris, jadi cukup memakai class global dengan kolom ringkas
             Status: aktif / final
         ========================= */}
         <Table
@@ -1575,7 +1604,7 @@ const Purchases = () => {
           dataSource={purchaseRecords}
           columns={purchaseTableColumns}
           rowKey="id"
-          scroll={{ x: 1380 }}
+          tableLayout="fixed"
         />
       </PageSection>
 

@@ -27,6 +27,7 @@ import {
   Switch,
   Table,
   Tag,
+  Tooltip,
   Typography,
 } from "antd";
 import {
@@ -574,50 +575,60 @@ const ProductionEmployees = () => {
     </Space>
   );
 
+  // =====================================================
+  // SECTION: Main table compact columns — AKTIF
+  // Fungsi:
+  // - Menampilkan ringkasan karyawan, role, jenis kerja, assignment step, status, dan aksi tanpa scroll x besar.
+  // - Menjaga payroll summary, work log recent, additional info, dan legacy payroll tetap di drawer detail existing.
+  //
+  // Dipakai oleh:
+  // - ProductionEmployees main table.
+  //
+  // Alasan perubahan:
+  // - Main table sebelumnya memakai scroll x besar untuk kolom identitas, role, assignment, status, dan aksi yang bisa digabung.
+  //
+  // Catatan cleanup:
+  // - Pola compact assignment tag dapat distandarkan ke shared component bila dipakai ulang di halaman produksi lain.
+  //
+  // Risiko:
+  // - Jangan mengubah employeeSummaryMap, query payroll/worklog, atau legacy payroll dari section presentasi ini.
+  // =====================================================
   const columns = [
     {
-      title: "Kode",
-      dataIndex: "code",
-      key: "code",
-      width: 140,
-      render: (value) => (
-        <Typography.Text strong>{value || "-"}</Typography.Text>
-      ),
-    },
-    {
-      title: "Nama",
+      title: "Karyawan",
       dataIndex: "name",
-      key: "name",
-      width: 220,
+      key: "employeeSummary",
+      width: "34%",
       render: (_, record) => (
-        <div>
-          <div style={{ fontWeight: 600 }}>{record.name || "-"}</div>
-          <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+        <Space direction="vertical" size={2} style={{ width: "100%" }}>
+          <Typography.Text strong ellipsis={{ tooltip: record.name || "-" }}>
+            {record.name || "-"}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {record.code || "-"}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis={{ tooltip: record.phone || "-" }}>
             {record.phone || "-"}
-          </div>
-        </div>
+          </Typography.Text>
+        </Space>
       ),
     },
     {
-      title: "Jenis Kerja",
-      dataIndex: "employmentType",
-      key: "employmentType",
-      width: 120,
-      render: (value) => <Tag>{EMPLOYEE_TYPE_MAP[value] || "-"}</Tag>,
-    },
-    {
-      title: "Role",
-      dataIndex: "role",
-      key: "role",
-      width: 120,
-      render: (value) => (
-        <Tag color="blue">{EMPLOYEE_ROLE_MAP[value] || "-"}</Tag>
+      title: "Role / Jenis Kerja",
+      key: "roleType",
+      width: "22%",
+      render: (_, record) => (
+        <Space size={[4, 4]} wrap>
+          <Tag color="blue">{EMPLOYEE_ROLE_MAP[record.role] || "-"}</Tag>
+          <Tag>{EMPLOYEE_TYPE_MAP[record.employmentType] || "-"}</Tag>
+        </Space>
       ),
     },
     {
       title: "Step Assignment",
       key: "assignedSteps",
-      width: 280,
+      width: "22%",
+      responsive: ["md"],
       render: (_, record) => {
         const stepNames = Array.isArray(record.assignedStepNames)
           ? record.assignedStepNames
@@ -628,28 +639,24 @@ const ProductionEmployees = () => {
         }
 
         return (
-          <Space size={[4, 4]} wrap>
-            {stepNames.slice(0, 3).map((item) => (
-              <Tag key={item}>{item}</Tag>
-            ))}
-            {stepNames.length > 3 && <Tag>+{stepNames.length - 3} lainnya</Tag>}
-          </Space>
+          <Tooltip title={stepNames.join(", ")}>
+            <Space size={[4, 4]} wrap>
+              {stepNames.slice(0, 3).map((item) => (
+                <Tag key={item}>{item}</Tag>
+              ))}
+              {stepNames.length > 3 && <Tag>+{stepNames.length - 3} lainnya</Tag>}
+            </Space>
+          </Tooltip>
         );
       },
     },
     {
-      // =====================================================
-      // SECTION: status sticky
-      // Fungsi:
-      // - menjaga status karyawan tetap terbaca pada tabel produksi yang lebar
-      // =====================================================
       title: "Status",
       dataIndex: "isActive",
       key: "isActive",
-      width: 124,
+      width: 118,
       align: "center",
-      fixed: "right",
-      className: "app-table-status-column app-table-fixed-secondary",
+      className: "app-table-status-column",
       render: (value) =>
         value ? (
           <Badge status="success" text="Aktif" />
@@ -658,13 +665,9 @@ const ProductionEmployees = () => {
         ),
     },
     {
-      // =====================================================
-      // SECTION: aksi sticky
-      // =====================================================
       title: "Aksi",
       key: "actions",
-      width: 220,
-      fixed: "right",
+      width: 176,
       className: "app-table-action-column",
       render: (_, record) => (
         <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
@@ -827,16 +830,29 @@ const ProductionEmployees = () => {
         title="Daftar Karyawan Produksi"
         subtitle="Tabel ini tetap menjadi master operator. Ringkasan payroll dan work log hanya dibaca sebagai konteks operasional."
       >
-        {/* ===============================================================
-            Table helper global menjaga ukuran, sticky column, dan dark mode seragam.
-        =============================================================== */}
+        {/* =====================================================
+            SECTION: Main table render — AKTIF
+            Fungsi:
+            - Merender tabel utama karyawan produksi dengan layout compact tanpa scroll x besar.
+
+            Dipakai oleh:
+            - ProductionEmployees page.
+
+            Alasan perubahan:
+            - Status dan aksi tidak lagi fixed karena kolom identitas/assignment sudah diringkas.
+
+            Catatan cleanup:
+            - belum ada.
+
+            Risiko:
+            - Mengubah query summary payroll/worklog dari area tabel dapat menggeser source of truth payroll produksi.
+        ===================================================== */}
         <Table
           className="app-data-table"
           rowKey="id"
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          scroll={{ x: 1300 }}
           locale={{
             emptyText: <Empty description="Belum ada data karyawan produksi" />,
           }}

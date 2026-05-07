@@ -1,8 +1,8 @@
 import React, { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import { Spin } from "antd";
 import ProtectedRoute from "../components/Auth/ProtectedRoute";
 import { ROUTE_ACCESS_KEYS } from "../utils/auth/roleAccess";
+import LogoLoadingScreen from "../components/Layout/Feedback/LogoLoadingScreen";
 
 // =========================
 // SECTION: Lazy Loaded Pages — AKTIF
@@ -77,24 +77,25 @@ const ResetMaintenanceData = lazy(
   () => import("../pages/Utilities/ResetMaintenanceData"),
 );
 
-// =========================
-// SECTION: Route Loader — AKTIF
+// =====================================================
+// SECTION: Route Loader — AKTIF / GUARDED
 // Fungsi:
-// - fallback saat lazy page sedang dimuat.
-// Hubungan flow aplikasi:
-// - tidak mengubah data bisnis; hanya UX loading route.
-// =========================
+// - Menampilkan fallback visual saat lazy page sedang dimuat.
+//
+// Dipakai oleh:
+// - Suspense fallback di AppRoutes.
+//
+// Alasan perubahan:
+// - Visual loader lazy route disatukan ke LogoLoadingScreen sebagai UI-only; route definitions, lazy imports, ProtectedRoute, dan role guard tidak berubah.
+//
+// Catatan cleanup:
+// - belum ada.
+//
+// Risiko:
+// - Jika route structure atau guard wrapper ikut diubah, halaman bisnis dan akses role bisa terganggu.
+// =====================================================
 const RouteLoader = () => (
-  <div
-    style={{
-      minHeight: "40vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-    }}
-  >
-    <Spin size="large" />
-  </div>
+  <LogoLoadingScreen message="Memuat halaman IMS Bunga Flanel..." />
 );
 
 // =========================

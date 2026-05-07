@@ -602,58 +602,74 @@ const ProductionBoms = () => {
   };
 
   // =====================================================
-  // SECTION: kolom tabel utama
+  // SECTION: Main table compact BOM Produksi — AKTIF
+  // Fungsi:
+  // - Menampilkan ringkasan BOM, target, komposisi, output batch, estimasi, status, dan aksi pada main table.
+  //
+  // Dipakai oleh:
+  // - Halaman ProductionBoms sebagai daftar konfigurasi BOM produksi.
+  //
+  // Alasan perubahan:
+  // - Main table sebelumnya memakai horizontal scroll besar dan fixed-right column; informasi dipadatkan agar action tetap terlihat tanpa scroll besar.
+  //
+  // Catatan cleanup:
+  // - Detail materialLines dan stepLines tetap di drawer detail existing; belum ada cleanup logic data.
+  //
+  // Risiko:
+  // - Mengubah render ini sembarangan dapat membuat target, komposisi, estimasi, atau action BOM sulit diverifikasi oleh user.
   // =====================================================
   const columns = [
     {
-      title: "Nama BOM",
-      key: "name",
-      width: 260,
+      title: "BOM / Target",
+      key: "bomTarget",
+      width: "34%",
       render: (_, record) => (
-        <div>
-          <Typography.Text strong>{record.name || "-"}</Typography.Text>
-          <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 4 }}>
-            {record.code || "Tanpa kode"}
+        <Space direction="vertical" size={6} style={{ width: "100%" }}>
+          <div>
+            <Tooltip title={record.name || "-"}>
+              <Typography.Text strong style={{ ...clampTwoLineStyle }}>
+                {record.name || "-"}
+              </Typography.Text>
+            </Tooltip>
+            <Typography.Text type="secondary" style={{ display: "block", fontSize: 12, marginTop: 2 }}>
+              {record.code || "Tanpa kode"}
+            </Typography.Text>
           </div>
+
           <Tooltip title={record.description || "Belum ada deskripsi"}>
-            <Typography.Text
-              type="secondary"
-              style={{ ...clampTwoLineStyle, marginTop: 6 }}
-            >
+            <Typography.Text type="secondary" style={clampTwoLineStyle}>
               {record.description || "Belum ada deskripsi"}
             </Typography.Text>
           </Tooltip>
-        </div>
-      ),
-    },
-    {
-      title: "Target",
-      key: "target",
-      width: 240,
-      render: (_, record) => (
-        <Space direction="vertical" size={6}>
-          <Tag color="blue" style={compactTagStyle}>
-            {BOM_TARGET_TYPE_MAP[record.targetType] || "-"}
-          </Tag>
-          <Typography.Text>{record.targetName || "-"}</Typography.Text>
+
+          <Space size={6} wrap>
+            <Tag color="blue" style={compactTagStyle}>
+              {BOM_TARGET_TYPE_MAP[record.targetType] || "-"}
+            </Tag>
+            <Tooltip title={record.targetName || "-"}>
+              <Typography.Text style={{ ...clampTwoLineStyle, maxWidth: 220 }}>
+                {record.targetName || "-"}
+              </Typography.Text>
+            </Tooltip>
+          </Space>
         </Space>
       ),
     },
     {
-      title: "Komposisi",
-      key: "counts",
-      width: 220,
+      title: "Komposisi / Output",
+      key: "compositionOutput",
+      width: "22%",
       render: (_, record) => (
-        <Space direction="vertical" size={2}>
-          <Typography.Text>
-            Material: {formatNumber(record.materialLines?.length || 0)}
-          </Typography.Text>
-          <Typography.Text>
-            Step: {formatNumber(record.stepLines?.length || 0)}
-          </Typography.Text>
+        <Space direction="vertical" size={4}>
+          <Space size={6} wrap>
+            <Tag style={compactTagStyle}>Material: {formatNumber(record.materialLines?.length || 0)}</Tag>
+            <Tag style={compactTagStyle}>Step: {formatNumber(record.stepLines?.length || 0)}</Tag>
+          </Space>
           <Typography.Text type="secondary">
-            Output batch: {formatNumber(record.batchOutputQty || 0)}{" "}
-            {record.targetUnit || "pcs"}
+            Output batch
+          </Typography.Text>
+          <Typography.Text strong>
+            {formatNumber(record.batchOutputQty || 0)} {record.targetUnit || "pcs"}
           </Typography.Text>
         </Space>
       ),
@@ -661,7 +677,7 @@ const ProductionBoms = () => {
     {
       title: "Estimasi",
       key: "estimate",
-      width: 220,
+      width: "22%",
       render: (_, record) => (
         <Space direction="vertical" size={2}>
           <Typography.Text>
@@ -677,17 +693,11 @@ const ProductionBoms = () => {
       ),
     },
     {
-      // =====================================================
-      // SECTION: status sticky
-      // Fungsi:
-      // - menjaga status BOM dan label default tetap terlihat saat user scroll horizontal
-      // =====================================================
       title: "Status",
       key: "status",
-      width: 138,
+      width: 116,
       align: "center",
-      fixed: "right",
-      className: "app-table-status-column app-table-fixed-secondary",
+      className: "app-table-status-column",
       render: (_, record) => (
         <Space direction="vertical" size={0}>
           {record.isActive ? (
@@ -704,15 +714,9 @@ const ProductionBoms = () => {
       ),
     },
     {
-      // =====================================================
-      // SECTION: aksi sticky
-      // Fungsi:
-      // - menyamakan posisi tombol detail, edit, dan toggle aktif dengan tabel utama lain
-      // =====================================================
       title: "Aksi",
       key: "actions",
-      width: 220,
-      fixed: "right",
+      width: 150,
       className: "app-table-action-column",
       render: (_, record) => (
         <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
@@ -825,8 +829,8 @@ const ProductionBoms = () => {
       {/* SECTION: tabel BOM */}
       <Card>
         {/* ===============================================================
-            Tabel utama BOM memakai foundation global agar sticky column dan
-            bentuk surface seragam dengan master data serta produksi lainnya.
+            Tabel utama BOM dibuat compact tanpa horizontal scroll besar.
+            Detail komposisi tetap tersedia di drawer detail existing.
         =============================================================== */}
         <Table
           className="app-data-table"
@@ -834,7 +838,6 @@ const ProductionBoms = () => {
           loading={loading}
           columns={columns}
           dataSource={filteredData}
-          scroll={{ x: 1180 }}
           locale={{
             emptyText: <Empty description="Belum ada data BOM produksi" />,
           }}

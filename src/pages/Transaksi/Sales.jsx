@@ -13,6 +13,7 @@ import {
   Space,
   InputNumber,
   Popconfirm,
+  Tooltip,
 } from "antd";
 import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -830,73 +831,111 @@ const Sales = () => {
   // Hubungan flow: hanya mengubah presentasi tabel; filter tab, pending income, status transition, stok, income, dan cancel flow tidak berubah.
   // Alasan logic: owner lebih mudah membaca kronologi penjualan tanpa mengubah data transaksi atau payload Firestore.
   // =========================
+  /* =====================================================
+     SECTION: Compact Sales Table Columns — AKTIF/GUARDED
+     Fungsi:
+     - Menampilkan ringkasan transaksi penjualan tanpa horizontal scroll besar.
+     Dipakai oleh:
+     - Sales main table.
+     Alasan perubahan:
+     - Action dan informasi keputusan cepat harus terlihat pada desktop/laptop normal.
+     Catatan cleanup:
+     - Item breakdown panjang bisa dibuat drawer khusus jika nanti owner butuh audit lebih nyaman.
+     Risiko:
+     - Jangan mengubah handler status/cancel/income/stock karena kolom ini hanya presentational.
+     ===================================================== */
   const salesTableColumns = [
     {
-      title: "Tanggal",
-      dataIndex: "date",
-      key: "date",
-      width: 140,
-      render: (value) => value || "-",
+      title: "Tanggal / Ref",
+      key: "dateReference",
+      width: 150,
+      render: (_, record) => {
+        const referenceText = record.referenceNumber || "Tanpa ref";
+        return (
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600 }}>{record.date || "-"}</div>
+            <Tooltip title={referenceText}>
+              <div style={{ color: "#8c8c8c", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {referenceText}
+              </div>
+            </Tooltip>
+          </div>
+        );
+      },
     },
     {
-      title: "Pelanggan",
-      dataIndex: "customerName",
-      key: "customerName",
-      width: 160,
-      render: (value) => value || "-",
+      title: "Pelanggan / Channel",
+      key: "customerChannel",
+      width: 210,
+      render: (_, record) => {
+        const customerName = record.customerName || "-";
+        const channel = record.salesChannel || "-";
+        return (
+          <div style={{ minWidth: 0 }}>
+            <Tooltip title={customerName}>
+              <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {customerName}
+              </div>
+            </Tooltip>
+            <Tag style={{ marginTop: 4 }}>{channel}</Tag>
+          </div>
+        );
+      },
     },
     {
-      title: "Item",
+      title: "Item Ringkas",
       dataIndex: "items",
       key: "items",
-      width: 300,
-      render: (items) =>
-        Array.isArray(items) && items.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {items.map((item, index) => (
-              <div key={index}>
+      width: 260,
+      render: (items) => {
+        const saleItems = Array.isArray(items) ? items : [];
+        const primaryItem = saleItems[0];
+
+        if (!primaryItem) return "-";
+
+        const primaryLabel = `${primaryItem.itemName || "Item"}${primaryItem.variantLabel ? ` - ${primaryItem.variantLabel}` : ""}`;
+        const tooltipContent = (
+          <div style={{ maxWidth: 360 }}>
+            {saleItems.map((item, index) => (
+              <div key={`${item.itemId || item.itemName || "item"}-${index}`} style={{ marginBottom: index === saleItems.length - 1 ? 0 : 8 }}>
                 <div style={{ fontWeight: 600 }}>
-                  {item.itemName}
-                  {item.variantLabel ? ` - ${item.variantLabel}` : ""}
+                  {item.itemName || "Item"}{item.variantLabel ? ` - ${item.variantLabel}` : ""}
                 </div>
-                <div style={{ color: "#8c8c8c", fontSize: 12 }}>
+                <div>
                   {formatNumberId(item.quantity)} x {formatCurrencyId(item.pricePerUnit || 0)} = {formatCurrencyId(item.subtotal || 0)}
                 </div>
               </div>
             ))}
           </div>
-        ) : (
-          "-"
-        ),
-    },
-    {
-      title: "Channel",
-      dataIndex: "salesChannel",
-      key: "salesChannel",
-      width: 130,
-      render: (value) => value || "-",
-    },
-    {
-      title: "Resi / Order / Referensi",
-      dataIndex: "referenceNumber",
-      key: "referenceNumber",
-      width: 190,
-      render: (value) => value || "-",
+        );
+
+        return (
+          <Tooltip title={tooltipContent}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {primaryLabel}
+              </div>
+              <div style={{ color: "#8c8c8c", fontSize: 12 }}>
+                {saleItems.length} item transaksi
+              </div>
+            </div>
+          </Tooltip>
+        );
+      },
     },
     {
       title: "Total",
       dataIndex: "total",
       key: "total",
       width: 140,
-      render: (value) => (value != null ? formatCurrencyId(value) : "-"),
+      align: "right",
+      render: (value) => (value != null ? <strong>{formatCurrencyId(value)}</strong> : "-"),
     },
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 130,
-      fixed: "right",
-      className: "app-table-status-column app-table-fixed-secondary",
+      width: 120,
       render: (status) => {
         const statusColors = {
           Selesai: "green",
@@ -915,8 +954,7 @@ const Sales = () => {
       // Alasan logic: Sales adalah transaksi auditable, sehingga tombol Hapus tidak boleh menjadi aksi operasional biasa.
       title: "Aksi",
       key: "action",
-      width: 220,
-      fixed: "right",
+      width: 150,
       className: "app-table-action-column",
       render: (_, record) => {
         const canMoveToShipped = record.status === "Diproses" && !isOfflineChannel(record.salesChannel);
@@ -1047,7 +1085,7 @@ const Sales = () => {
           rowKey="id"
           pagination={{ pageSize: 5 }}
           loading={isLoading}
-          scroll={{ x: 1240 }}
+          tableLayout="fixed"
         />
       </PageSection>
 

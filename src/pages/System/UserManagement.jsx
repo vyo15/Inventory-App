@@ -423,51 +423,69 @@ const UserManagement = () => {
     }
   };
 
+  // =====================================================
+  // SECTION: Compact User Management Table Columns — AKTIF / GUARDED
+  // Fungsi:
+  // - memadatkan tabel utama menjadi User / UID, Role / Status, dan Aksi tanpa horizontal scroll besar.
+  //
+  // Dipakai oleh:
+  // - Halaman Manajemen User pada section Daftar Profile User.
+  //
+  // Alasan perubahan:
+  // - tabel lama memakai scroll x besar dan fixed right sehingga kurang nyaman di layout utama.
+  //
+  // Catatan cleanup:
+  // - belum ada.
+  //
+  // Risiko:
+  // - jangan mengubah guard RBAC, modal konfirmasi, atau handler aksi saat merapikan render kolom.
+  // =====================================================
   const columns = [
     {
-      title: "User",
-      key: "user",
-      width: 240,
+      title: "User / UID",
+      key: "userIdentity",
       render: (_, record) => (
-        <Space direction="vertical" size={2}>
-          <Text strong>{record.displayName}</Text>
-          <Text type="secondary">@{record.username}</Text>
+        <Space direction="vertical" size={4} style={{ width: "100%" }}>
+          <Space direction="vertical" size={0} style={{ width: "100%" }}>
+            <Text strong ellipsis={{ tooltip: record.displayName }} style={{ maxWidth: "100%" }}>
+              {record.displayName}
+            </Text>
+            <Text type="secondary" ellipsis={{ tooltip: `@${record.username || "-"}` }} style={{ maxWidth: "100%" }}>
+              @{record.username || "-"}
+            </Text>
+          </Space>
+
+          <Tooltip title={record.authUid || "Auth UID belum tersedia"}>
+            <Text
+              code
+              copyable={record.authUid ? { text: record.authUid } : false}
+              ellipsis
+              style={{ maxWidth: "100%" }}
+              type="secondary"
+            >
+              {record.authUid || "-"}
+            </Text>
+          </Tooltip>
         </Space>
       ),
     },
     {
-      title: "Role",
-      dataIndex: "role",
-      key: "role",
+      title: "Role / Status",
+      key: "roleStatus",
       width: 180,
-      render: (role) => <Tag color={getRoleColor(role)}>{ROLE_LABELS[role] || role}</Tag>,
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      width: 140,
-      render: (status) => (
-        <Tag color={getStatusColor(status)}>{USER_STATUS_LABELS[status] || status}</Tag>
+      render: (_, record) => (
+        <Space direction="vertical" size={6}>
+          <Tag color={getRoleColor(record.role)}>{ROLE_LABELS[record.role] || record.role}</Tag>
+          <Tag color={getStatusColor(record.status)}>
+            {USER_STATUS_LABELS[record.status] || record.status}
+          </Tag>
+        </Space>
       ),
     },
     {
-      title: "Auth UID",
-      dataIndex: "authUid",
-      key: "authUid",
-      width: 260,
-      ellipsis: true,
-      render: (authUid) => <Text copyable>{authUid}</Text>,
-    },
-    {
-      // IMS NOTE [AKTIF/GUARDED] - Action button Manajemen User.
-      // Fungsi blok: menyusun Edit/Aktif-Nonaktif/Hapus Profile menjadi 3 baris konsisten.
-      // Hubungan flow: hanya layout kolom; guard RBAC, disabled, loading, dan modal existing tidak diubah.
       title: "Aksi",
       key: "actions",
-      width: 230,
-      fixed: "right",
-      className: "app-table-action-column",
+      width: 210,
       render: (_, record) => {
         const canManage = canManageUserProfile({
           actorRole,
@@ -604,7 +622,7 @@ const UserManagement = () => {
             dataSource={users}
             loading={isLoading}
             pagination={{ pageSize: 10 }}
-            scroll={{ x: 1210 }}
+            tableLayout="fixed"
           />
         </PageSection>
       </Space>

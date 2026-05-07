@@ -520,6 +520,94 @@ const SemiFinishedMaterials = () => {
     : [];
   const selectedMaterialUnit = selectedMaterial?.unit || "pcs";
 
+  // =====================================================
+  // SECTION: Detail drawer variant compact columns — AKTIF
+  // Fungsi:
+  // - Menampilkan rincian varian semi finished secara ringkas di drawer detail.
+  //
+  // Dipakai oleh:
+  // - Drawer Detail Semi Finished Material pada halaman SemiFinishedMaterials.
+  //
+  // Alasan perubahan:
+  // - Kolom stok, kode, status, min alert, dan cost dipadatkan agar drawer tidak perlu scroll horizontal besar.
+  //
+  // Catatan cleanup:
+  // - Bisa diekstrak menjadi komponen shared variant detail jika tabel detail varian dipakai ulang.
+  //
+  // Risiko:
+  // - Jika angka current/reserved/available atau status varian disembunyikan, audit stok varian bisa tidak lengkap.
+  // =====================================================
+  const detailVariantColumns = [
+    {
+      title: selectedMaterial?.variantLabel || "Varian",
+      key: "variant",
+      width: 200,
+      render: (_, variant, index) => (
+        <div style={compactCellStyles.stack}>
+          <Typography.Text strong>
+            {getVariantDisplayLabel(variant, index)}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={compactCellStyles.meta}>
+            Key: {variant.variantKey || variant.color || "-"}
+          </Typography.Text>
+        </div>
+      ),
+    },
+    {
+      title: "Kode / Status",
+      key: "skuStatus",
+      width: 140,
+      render: (_, variant) => (
+        <div style={compactCellStyles.stack}>
+          <Typography.Text>{variant.sku || "-"}</Typography.Text>
+          <Tag color={variant.isActive ? "green" : "default"}>
+            {variant.isActive ? "Aktif" : "Nonaktif"}
+          </Tag>
+        </div>
+      ),
+    },
+    {
+      title: "Stok",
+      key: "stock",
+      width: 220,
+      render: (_, variant) => {
+        const availableStock = Math.max(
+          Number(variant.currentStock || 0) - Number(variant.reservedStock || 0),
+          0,
+        );
+
+        return (
+          <div style={compactCellStyles.stack}>
+            <Typography.Text strong>
+              Current: {formatStockWithUnit(variant.currentStock, selectedMaterialUnit)}
+            </Typography.Text>
+            <Typography.Text type="secondary" style={compactCellStyles.meta}>
+              Available: {formatStockWithUnit(availableStock, selectedMaterialUnit)}
+            </Typography.Text>
+            <Typography.Text type="secondary" style={compactCellStyles.meta}>
+              Reserved: {formatStockWithUnit(variant.reservedStock, selectedMaterialUnit)}
+            </Typography.Text>
+          </div>
+        );
+      },
+    },
+    {
+      title: "Alert / Cost",
+      key: "alertCost",
+      width: 160,
+      render: (_, variant) => (
+        <div style={compactCellStyles.stack}>
+          <Typography.Text>
+            Min: {formatStockWithUnit(variant.minStockAlert, selectedMaterialUnit)}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={compactCellStyles.meta}>
+            Avg: {formatCurrency(variant.averageCostPerUnit)}
+          </Typography.Text>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="page-container">
       {/* ------------------------------------------------------------------ */}
@@ -1177,64 +1265,8 @@ const SemiFinishedMaterials = () => {
                 pagination={false}
                 dataSource={selectedMaterialVariants}
                 locale={{ emptyText: "Belum ada varian" }}
-                columns={[
-                  {
-                    title: selectedMaterial.variantLabel || "Varian",
-                    dataIndex: "color",
-                    key: "color",
-                    render: (_, variant, index) => getVariantDisplayLabel(variant, index),
-                  },
-                  {
-                    title: "Kode Variant",
-                    dataIndex: "sku",
-                    key: "sku",
-                    render: (value) => value || "-",
-                  },
-                  {
-                    title: "Current",
-                    dataIndex: "currentStock",
-                    key: "currentStock",
-                    render: (value) => formatStockWithUnit(value, selectedMaterialUnit),
-                  },
-                  {
-                    title: "Reserved",
-                    dataIndex: "reservedStock",
-                    key: "reservedStock",
-                    render: (value) => formatStockWithUnit(value, selectedMaterialUnit),
-                  },
-                  {
-                    title: "Available",
-                    key: "available",
-                    render: (_, record) =>
-                      formatStockWithUnit(
-                        Math.max(
-                          Number(record.currentStock || 0) - Number(record.reservedStock || 0),
-                          0,
-                        ),
-                        selectedMaterialUnit,
-                      ),
-                  },
-                  {
-                    title: "Min Alert",
-                    dataIndex: "minStockAlert",
-                    key: "minStockAlert",
-                    render: (value) => formatStockWithUnit(value, selectedMaterialUnit),
-                  },
-                  {
-                    title: "Avg Cost",
-                    dataIndex: "averageCostPerUnit",
-                    key: "averageCostPerUnit",
-                    render: (value) => formatCurrency(value),
-                  },
-                  {
-                    title: "Status",
-                    dataIndex: "isActive",
-                    key: "isActive",
-                    render: (value) => (value ? "Aktif" : "Nonaktif"),
-                  },
-                ]}
-                // Lebar horizontal sedikit diperluas supaya kolom detail varian drawer tetap rapi.
-                scroll={{ x: 1100 }}
+                columns={detailVariantColumns}
+                tableLayout="fixed"
               />
             </Card>
           </Space>

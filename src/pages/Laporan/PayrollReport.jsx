@@ -18,6 +18,7 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
 } from "antd";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
@@ -36,6 +37,55 @@ import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 
 const { RangePicker } = DatePicker;
+
+// =====================================================
+// SECTION: Compact Table Text Renderer — AKTIF
+// Fungsi:
+// - Menyediakan render teks ellipsis + tooltip untuk baris compact di tabel laporan payroll.
+//
+// Dipakai oleh:
+// - Halaman Laporan Payroll, khususnya kolom compact Detail Payroll Lines.
+//
+// Alasan perubahan:
+// - Field audit tetap bisa dibaca penuh lewat tooltip tanpa membutuhkan horizontal scroll besar.
+//
+// Catatan cleanup:
+// - belum ada.
+//
+// Risiko:
+// - Jika style ellipsis/tooltip diubah sembarangan, nilai payroll penting bisa terpotong tanpa akses baca penuh.
+// =====================================================
+const compactCellLineStyle = {
+  display: "block",
+  maxWidth: "100%",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const compactMetaLineStyle = {
+  ...compactCellLineStyle,
+  color: "#8c8c8c",
+  fontSize: 12,
+};
+
+const renderCompactLine = (value, options = {}) => {
+  const { fallback = "-", strong = false, muted = false } = options;
+  const displayValue = value || fallback;
+
+  return (
+    <Tooltip title={displayValue}>
+      <span
+        style={{
+          ...(muted ? compactMetaLineStyle : compactCellLineStyle),
+          fontWeight: strong ? 600 : undefined,
+        }}
+      >
+        {displayValue}
+      </span>
+    </Tooltip>
+  );
+};
 
 // =====================================================
 // ACTIVE / FINAL
@@ -222,123 +272,145 @@ const PayrollReport = () => {
   }, [filteredPayrolls]);
 
   // =====================================================
-  // ACTIVE / FINAL
-  // Tabel laporan tetap line-centric. Work Log number hanya tampil sebagai
-  // konteks audit/grouping visual, bukan batch entity baru.
+  // SECTION: Detail Payroll Lines Compact Columns — GUARDED
+  // Fungsi:
+  // - Merapikan presentasi main table payroll line menjadi kolom gabungan
+  //   yang tetap menampilkan field audit penting lewat baris ringkas dan tooltip.
+  //
+  // Dipakai oleh:
+  // - Halaman Laporan Payroll, khususnya tabel Detail Payroll Lines.
+  //
+  // Alasan perubahan:
+  // - Mengurangi kebutuhan horizontal scroll besar tanpa mengubah source payroll,
+  //   filter, summary, export, mapper, service, schema, route, role, atau business logic.
+  //
+  // Catatan cleanup:
+  // - belum ada.
+  //
+  // Risiko:
+  // - Jika render kolom diubah sembarangan, field audit payroll/expense bisa tidak
+  //   terbaca di UI meskipun data export tetap lengkap.
   // =====================================================
   const payrollColumns = useMemo(
     () => [
       {
-        title: "No. Payroll",
-        dataIndex: "payrollNumber",
-        key: "payrollNumber",
-        width: 180,
-        render: (value, record) => (
-          <div>
-            <div style={{ fontWeight: 600 }}>{value || "-"}</div>
-            <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.workNumber || "-"}</div>
+        title: "Payroll / Work Log",
+        key: "payrollWorkLog",
+        width: 210,
+        render: (_, record) => (
+          <div style={{ minWidth: 0 }}>
+            {renderCompactLine(record.payrollNumber, { strong: true })}
+            {renderCompactLine(`Tanggal: ${formatDateId(record.payrollDate, true)}`, { muted: true })}
+            {renderCompactLine(`Work Log: ${record.workNumber || "-"}`, { muted: true })}
           </div>
         ),
       },
       {
-        title: "Tanggal",
-        dataIndex: "payrollDate",
-        key: "payrollDate",
-        width: 140,
-        render: (value) => formatDateId(value, true),
-      },
-      {
-        title: "Operator",
-        dataIndex: "workerName",
-        key: "workerName",
-        width: 180,
-        render: (value) => value || "-",
-      },
-      {
-        title: "Step",
-        dataIndex: "stepName",
-        key: "stepName",
-        width: 160,
-        render: (value) => value || "-",
+        title: "Operator / Step",
+        key: "operatorStep",
+        width: 210,
+        render: (_, record) => (
+          <div style={{ minWidth: 0 }}>
+            {renderCompactLine(record.workerName, { strong: true })}
+            {renderCompactLine(`Step: ${record.stepName || "-"}`, { muted: true })}
+          </div>
+        ),
       },
       {
         title: "Mode / Qty",
         key: "modeQty",
-        width: 180,
+        width: 170,
         render: (_, record) => (
-          <div>
-            <div>{PAYROLL_MODE_MAP[record.payrollMode] || record.payrollMode || "-"}</div>
-            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-              Basis: {formatNumberId(record.workedQty)} / {formatNumberId(record.outputQtyUsed)}
-            </div>
+          <div style={{ minWidth: 0 }}>
+            {renderCompactLine(PAYROLL_MODE_MAP[record.payrollMode] || record.payrollMode || "-", { strong: true })}
+            {renderCompactLine(`Worked: ${formatNumberId(record.workedQty || 0)}`, { muted: true })}
+            {renderCompactLine(`Output: ${formatNumberId(record.outputQtyUsed || 0)}`, { muted: true })}
           </div>
         ),
       },
       {
-        title: "Nominal",
-        dataIndex: "finalAmount",
-        key: "finalAmount",
-        width: 150,
-        render: (value) => formatCurrencyId(value),
-      },
-      {
-        title: "Status",
-        dataIndex: "status",
-        key: "status",
-        width: 130,
-        render: (value) => <Tag>{PAYROLL_STATUS_MAP[value] || value || "-"}</Tag>,
-      },
-      {
-        title: "Klasifikasi",
-        dataIndex: "payrollClassification",
-        key: "payrollClassification",
-        width: 180,
-        render: (value) => PAYROLL_CLASSIFICATION_MAP[value] || value || "-",
-      },
-      {
-        title: "Masuk HPP",
-        dataIndex: "includePayrollInHpp",
-        key: "includePayrollInHpp",
-        width: 120,
-        render: (value) => (value === false ? "Tidak" : "Ya"),
-      },
-      {
-        title: "Confirmed / Paid",
-        key: "confirmedPaid",
-        width: 180,
+        title: "Nominal / HPP",
+        key: "nominalHpp",
+        width: 200,
         render: (_, record) => (
-          <div>
-            <div>{formatDateId(record.confirmedAt, true)}</div>
-            <div style={{ fontSize: 12, color: "#8c8c8c" }}>{formatDateId(record.paidAt, true)}</div>
+          <div style={{ minWidth: 0 }}>
+            {renderCompactLine(formatCurrencyId(record.finalAmount || 0), { strong: true })}
+            {renderCompactLine(
+              PAYROLL_CLASSIFICATION_MAP[record.payrollClassification] || record.payrollClassification || "-",
+              { muted: true },
+            )}
+            {renderCompactLine(`HPP: ${record.includePayrollInHpp === false ? "Tidak" : "Ya"}`, { muted: true })}
+          </div>
+        ),
+      },
+      {
+        title: "Status / Payment",
+        key: "statusPayment",
+        width: 190,
+        render: (_, record) => (
+          <div style={{ minWidth: 0 }}>
+            <Space size={4} wrap>
+              <Tag>{PAYROLL_STATUS_MAP[record.status] || record.status || "-"}</Tag>
+              <Tag>{record.paymentStatus || "-"}</Tag>
+            </Space>
+            {renderCompactLine(`Confirmed: ${formatDateId(record.confirmedAt, true)}`, { muted: true })}
+            {renderCompactLine(`Paid: ${formatDateId(record.paidAt, true)}`, { muted: true })}
           </div>
         ),
       },
       {
         title: "Cash Out Ref",
         key: "expenseRef",
-        width: 180,
+        width: 190,
         render: (_, record) => {
-          // ACTIVE / FINAL - audit link payroll paid ke expense.
-          // Fungsi blok:
-          // - menampilkan referensi Cash Out otomatis dari payroll paid;
-          // - laporan payroll tetap membaca production_payrolls, bukan expenses sebagai source utama.
-          // Status: aktif dipakai; guarded agar payroll tidak dihitung ulang sebagai expense di report ini.
+          // =====================================================
+          // SECTION: Cash Out Ref Compact Audit Render — GUARDED
+          // Fungsi:
+          // - Menampilkan status sinkronisasi Cash Out payroll paid, referensi expense,
+          //   dan expenseSyncStatus dalam layout compact.
+          //
+          // Dipakai oleh:
+          // - Halaman Laporan Payroll, kolom Cash Out Ref di Detail Payroll Lines.
+          //
+          // Alasan perubahan:
+          // - Mempertahankan audit trail Cash Out dalam tabel compact tanpa mengubah
+          //   payroll source data atau export detail/rekap.
+          //
+          // Catatan cleanup:
+          // - belum ada.
+          //
+          // Risiko:
+          // - Jika logic status ini diganti sembarangan, operator/admin bisa salah
+          //   membaca apakah Cash Out sudah dibuat, nominal nol, atau belum dibuat.
+          // =====================================================
+          const expenseReference = record.expenseSourceRef || record.expenseId || "-";
+          const expenseSyncStatus = record.expenseSyncStatus || "-";
+
           if (record.expenseSyncStatus === "created" || record.expenseSyncStatus === "already_exists") {
             return (
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <Tag color="purple">Cash Out</Tag>
-                <div style={{ fontSize: 12, color: "#8c8c8c" }}>
-                  {record.expenseSourceRef || record.expenseId || "-"}
-                </div>
+                {renderCompactLine(expenseReference, { muted: true })}
+                {renderCompactLine(`Sync: ${expenseSyncStatus}`, { muted: true })}
               </div>
             );
           }
 
           if (record.expenseSyncStatus === "skipped_zero_amount") {
-            return <Tag color="orange">Nominal 0</Tag>;
+            return (
+              <div style={{ minWidth: 0 }}>
+                <Tag color="orange">Nominal 0</Tag>
+                {renderCompactLine(`Sync: ${expenseSyncStatus}`, { muted: true })}
+              </div>
+            );
           }
 
-          return <Tag>Belum dibuat</Tag>;
+          return (
+            <div style={{ minWidth: 0 }}>
+              <Tag>Belum dibuat</Tag>
+              {renderCompactLine(`Sync: ${expenseSyncStatus}`, { muted: true })}
+            </div>
+          );
         },
       },
     ],
@@ -589,7 +661,6 @@ const PayrollReport = () => {
           loading={loading}
           columns={payrollColumns}
           dataSource={filteredPayrolls}
-          scroll={{ x: 1600 }}
           pagination={{ pageSize: 10 }}
           locale={{
             emptyText: <Empty description="Belum ada data payroll pada filter aktif" />,

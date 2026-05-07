@@ -1111,3 +1111,14 @@ Risiko:
 - [ ] Buka Supplier: table utama tetap tanpa horizontal scroll default; Detail/Edit/Hapus tetap bekerja; drawer detail katalog tetap read-only terhadap transaksi.
 - [ ] Buka Stock Report: baris stok menampilkan `Total`, `Tersedia`, dan variant pill jika data source membawa `variants[]`; filter, summary, dan export tetap memakai data laporan existing.
 - [ ] Regression guarded: create/edit/toggle Products, submit Stock Adjustment, apply Pricing Rule, save Supplier, dan tambah Cash In manual tetap sama seperti sebelum patch.
+
+## Checklist global/auth/route LogoLoadingScreen — 2026-05-07
+- [ ] Refresh browser saat sudah login menampilkan satu loading logo full screen tanpa card/wrap, lalu masuk dashboard/app seperti sebelumnya.
+- [ ] Refresh browser saat belum login menampilkan satu loading logo full screen, lalu masuk halaman Login seperti sebelumnya.
+- [ ] Buka URL protected langsung: route guard memakai loading logo yang sama, redirect login tetap benar, dan unauthorized tetap benar.
+- [ ] Lazy route/page load memakai loading logo yang sama tanpa mengubah route definitions atau role guard.
+- [ ] Login auth/profile loading memakai loading logo yang sama; blocked/inactive/missing profile tetap berjalan.
+- [ ] Logo loading tidak muter, micro split tetap subtle, light/dark mode bagus, mobile center, dan reduced motion aman.
+- [ ] Console tidak menampilkan error canvas/image/import.
+- [ ] Table loading, button submit loading, report loading, maintenance preview/loading, Refresh Need, dan Refresh Preview tidak berubah.
+
