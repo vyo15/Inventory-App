@@ -731,15 +731,53 @@ Risiko:
 - Cleanup candidate lanjutan: migrasikan Raw Materials ke helper `StockDisplayBlock` pada patch terpisah bila ingin mengurangi duplikasi tampilan stok.
 
 ## Update global/auth/route LogoLoadingScreen — 2026-05-07
-- **AKTIF:** loading utama aplikasi untuk auth/session gate, ProtectedRoute guard sebelum page tampil, dan Login auth/profile verification memakai `LogoLoadingScreen`. Lazy route fallback di dalam layout sengaja non-prominent agar tidak menampilkan logo kedua setelah sidebar/layout tampil.
+- **AKTIF:** loading utama aplikasi untuk auth/session gate, ProtectedRoute guard, Login auth/profile verification, dan lazy route fallback memakai `LogoLoadingScreen`.
 - **AKTIF:** `LogoLoadingScreen` memakai logo mark existing `src/assets/branding/flanel-karawang-mark.png` dengan animasi Elegant micro split dan fallback logo normal jika canvas gagal.
 - **AKTIF:** loading dibuat full viewport tanpa card/wrap kecil; `.app-loading-card` dipertahankan sebagai wrapper kompatibilitas tetapi tidak lagi tampil sebagai card.
 - **GUARDED:** perubahan ini UI-only; `AuthContext`, `roleAccess`, route definitions, login submit, service, query, transaction, stock, production, payroll, HPP, report, dan reset maintenance tidak berubah.
 - **LEGACY-COMPAT:** loading lokal seperti table loading, submit button loading, report loading, maintenance preview/loading, dan business process loading tetap boleh memakai komponen lokal/Ant Design sesuai kebutuhan modul.
 
-## Update local data/table/card loading hierarchy — 2026-05-07
-- **AKTIF:** loading hierarchy sekarang memisahkan global loader dan local data loader. Global/auth/route tetap memakai `LogoLoadingScreen`, sedangkan table/data/card memakai `DataLoadingState` skeleton/shimmer lokal.
-- **AKTIF:** `DataLoadingState` adalah helper presentational-only di `src/components/Layout/Feedback/DataLoadingState.jsx`; helper ini tidak fetch data, tidak import service, tidak mutate state, tidak tahu collection Firestore, dan tidak memakai logo full-screen.
-- **AKTIF:** table/data/card loading yang dipatch memakai shimmer/skeleton subtle melalui render conditional/empty state lokal, bukan AntD spinner overlay custom, agar tidak muncul double loading di table.
-- **GUARDED:** submit button, modal confirm/save loading, export/process loading, repair/reset loading, Refresh Need, dan Refresh Preview tetap memakai loading lokal existing sesuai flow masing-masing.
-- **Catatan:** `ResetMaintenanceData` belum dipaksa ke helper baru untuk loading audit/repair/reset yang sensitif; perubahan visual di area destructive harus tetap diaudit per flow sebelum diganti.
+
+## Update Header Branding Cleanup — 2026-05-07
+
+Yang sudah dirapikan:
+- duplicate app branding di `AppHeader` dibersihkan agar nama aplikasi tidak tampil dobel di sidebar dan top header;
+- sidebar/logo menjadi source utama identitas aplikasi `IMS Bunga Flanel`;
+- top `AppHeader` sekarang menjadi page-context header yang menampilkan judul halaman aktif dan subtitle ringkas berbasis pathname;
+- perubahan dibatasi UI-only pada layout/header/sidebar, tanpa mengubah route/menu/role guard, service, schema, transaksi, stok, produksi, payroll, HPP, report, atau reset destructive flow.
+
+Risiko tersisa:
+- mapping title/subtitle masih lokal di `AppHeader.jsx`; jika nanti route bertambah, mapping perlu ditambah agar title tidak memakai fallback generik;
+- halaman yang sudah punya page header internal tetap perlu dicek manual agar tidak terasa terlalu repetitif.
+
+## Update Content PageHeader Dedup Cleanup — 2026-05-07
+
+Yang sudah dirapikan:
+- **AKTIF:** `AppHeader` global menjadi source utama page title/subtitle agar konteks halaman tidak tampil dobel.
+- **AKTIF:** `PageHeader` content berubah fungsi menjadi compact toolbar/action strip; title/subtitle lama tetap diterima untuk kompatibilitas, tetapi tidak ditampilkan default.
+- **AKTIF:** `ProductionPageHeader` content berubah fungsi menjadi compact toolbar/action strip; action penting seperti Tambah/Generate/extra tetap dipertahankan.
+- **GUARDED:** perubahan dibatasi UI-only pada shared header/toolbar dan spacing global, tanpa menyentuh halaman bisnis satu per satu, route/menu/role guard, service, schema, transaksi, stok, produksi flow, payroll, HPP, report, atau reset destructive flow.
+
+Risiko tersisa:
+- mapping title/subtitle masih lokal di `AppHeader.jsx`; jika route baru ditambahkan, mapping top header perlu diperbarui agar fallback tidak terlalu generik;
+- beberapa halaman mungkin masih memiliki section title internal yang valid sebagai judul blok, sehingga review visual tetap perlu membedakan page title duplicate vs section title yang memang diperlukan.
+
+## Update UI Shell Header/Page Header — 2026-05-07
+
+Status terbaru:
+- sidebar logo/brand tetap menjadi lokasi utama identitas aplikasi `IMS Bunga Flanel`;
+- top `AppHeader` dikembalikan menjadi toolbar global ringan, bukan tempat page title besar;
+- nama menu/page title dan subtitle dikembalikan ke `PageHeader` di dalam content card agar tidak terasa mengambang di area shell;
+- `ProductionPageHeader` kembali menampilkan title/description produksi di content area sambil tetap mempertahankan action `Tambah`/`Generate`/`extra`;
+- unified sidebar + header surface light/dark tetap dipertahankan sebagai UI shell;
+- perubahan ini UI-only dan tidak menyentuh service/data layer, schema, route guard, role guard, stok, transaksi, produksi logic, payroll, HPP, report calculation, atau reset maintenance flow.
+
+Keputusan UI:
+- brand aplikasi hanya di sidebar/logo;
+- top header hanya toolbar/workspace + user/action;
+- page context berada di content card melalui shared page header.
+
+Risiko tersisa:
+- halaman yang tidak memakai `PageHeader`/`ProductionPageHeader` mungkin perlu audit visual terpisah jika page title tidak tampil;
+- title/subtitle panjang tetap harus dicek pada laptop 1280px dan mobile agar tidak menyebabkan overflow.
+

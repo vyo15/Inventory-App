@@ -16,7 +16,7 @@
   background:
     radial-gradient(
       circle at top left,
-      color-mix(in srgb, var(--ims-color-primary) 12%, transparent) 0%,
+      color-mix(in srgb, var(--ims-color-primary) 10%, transparent) 0%,
       transparent 34%
     ),
     var(--ims-bg-page);
@@ -217,7 +217,7 @@
 
 .app-content-card {
   min-height: 100%;
-  background: color-mix(in srgb, var(--ims-bg-card) 92%, var(--ims-bg-card-soft));
+  background: color-mix(in srgb, var(--ims-bg-card) 92%, transparent);
   border: 1px solid var(--ims-border-color-soft);
   border-radius: 28px 28px 0 0;
   padding: 28px 24px 24px;
@@ -231,68 +231,86 @@
 }
 
 
-
-/* =========================
-   SECTION: Unified Header + Sidebar Shell - AKTIF / UI ONLY
+/* =====================================================
+   SECTION: Production Content Page Header — AKTIF / LEGACY-COMPAT
    Fungsi:
-   - menyamakan surface sidebar, logo, dan header agar terlihat satu kesatuan di light/dark mode.
-   Hubungan flow aplikasi:
-   - hanya memoles shell visual; tidak menyentuh route, role guard, auth, service, stok, kas, produksi, payroll, HPP, atau laporan.
-   Status:
-   - AKTIF untuk implementasi unified app shell blue/yellow.
-========================= */
-.app-shell.light .app-sider,
-.app-shell.light .app-sider-inner,
-.app-shell.light .app-main-layout,
-.app-shell.light .app-header,
-.app-shell.light .app-main-content,
-.app-shell.light .app-content-scroll {
-  background: var(--ims-bg-shell) !important;
+   - menjaga ProductionPageHeader sebagai title/description halaman produksi + action area.
+
+   Dipakai oleh:
+   - halaman produksi yang masih memakai ProductionPageHeader untuk title, description, tombol Tambah/Generate/extra action.
+
+   Alasan perubahan:
+   - top AppHeader global dipakai sebagai toolbar saja; nama menu produksi kembali berada di content card.
+
+   Risiko:
+   - perubahan spacing berlebih bisa membuat tombol produksi hilang dari area awal content atau overflow di mobile.
+===================================================== */
+.production-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  min-width: 0;
 }
 
-.app-shell.dark .app-sider,
-.app-shell.dark .app-sider-inner,
-.app-shell.dark .app-main-layout,
-.app-shell.dark .app-header,
-.app-shell.dark .app-main-content,
-.app-shell.dark .app-content-scroll {
-  background: var(--ims-bg-shell) !important;
+.production-page-header-content {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.app-sider .ant-layout-sider-trigger {
-  background: color-mix(in srgb, var(--ims-bg-shell) 92%, var(--ims-bg-elevated)) !important;
-  color: var(--ims-text-primary) !important;
-  border-top: 1px solid var(--ims-border-color-soft);
+.production-page-header-title.ant-typography {
+  max-width: 100%;
+  margin: 0 !important;
+  overflow: hidden;
+  color: var(--ims-text-primary);
+  font-size: clamp(22px, 1.75vw, 28px);
+  line-height: 1.1;
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  text-overflow: ellipsis;
 }
 
-@media (max-width: 992px) {
-  .app-header {
-    height: auto;
-    min-height: 92px;
-    padding: 14px 20px;
-  }
+.production-page-header-description.ant-typography {
+  margin: 0 !important;
+  max-width: 880px;
+  color: var(--ims-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
 
-  .app-main-content {
-    height: calc(100vh - 92px);
-  }
+.production-page-header-actions {
+  display: flex;
+  justify-content: flex-end;
+  max-width: 100%;
+  gap: 8px 8px;
+}
+
+.production-page-header .ant-btn {
+  min-height: 38px;
+  border-radius: 12px;
+  font-weight: 600;
+  box-shadow: none;
 }
 
 @media (max-width: 768px) {
-  .app-logo-wrap {
-    padding: 14px 12px 6px;
+  .production-page-header {
+    align-items: stretch;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
   }
 
-  .app-menu-wrap {
-    padding: 0 10px 14px;
+  .production-page-header-actions {
+    justify-content: flex-start;
   }
 
-  .app-content-scroll {
-    padding: 0 12px 16px;
-  }
-
-  .app-content-card {
-    border-radius: 22px 22px 0 0;
-    padding: 20px 16px 18px;
+  .production-page-header .ant-btn {
+    min-height: 36px;
   }
 }
 

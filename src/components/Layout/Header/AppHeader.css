@@ -1,13 +1,14 @@
 /* =========================
-   SECTION: Header Content - AKTIF / UNIFIED SHELL
+   SECTION: Header Toolbar - AKTIF / UI ONLY
    Fungsi:
-   - mengatur komposisi title workspace, subtitle, user identity, role tag, dan logout action.
+   - mengatur top header sebagai toolbar global yang menyatu dengan sidebar/logo.
+   - title/subtitle halaman tidak ditampilkan di sini agar nama menu berada di content PageHeader.
    Hubungan flow aplikasi:
    - dipakai oleh AppHeader.jsx di dalam AppLayout setelah Auth Gate lolos.
    Alasan logic dipakai:
-   - header memakai surface yang sama dengan sidebar/logo agar terlihat satu kesatuan di light/dark mode.
+   - semua warna membaca token brand agar header konsisten dengan foundation blue/yellow/white/navy tanpa duplicate page title.
    Status:
-   - AKTIF untuk topbar workspace.
+   - AKTIF untuk topbar toolbar global.
    - GUARDED: styling logout tidak mengubah behavior logout/useAuth.
 ========================= */
 .app-header-content {
@@ -16,7 +17,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: clamp(12px, 2vw, 22px);
+  flex-wrap: nowrap;
   color: var(--ims-text-primary);
 }
 
@@ -24,104 +26,84 @@
   min-width: 0;
   flex: 1 1 auto;
   display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.app-header-title.ant-typography {
-  max-width: 100%;
-  margin: 0 !important;
+  align-items: center;
   overflow: hidden;
-  color: var(--ims-color-primary-active);
-  font-size: clamp(22px, 2vw, 28px);
-  line-height: 1.12;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.app-shell.dark .app-header-title.ant-typography {
-  color: var(--ims-text-primary);
-}
-
-.app-header-subtitle.ant-typography {
-  max-width: min(760px, 100%);
-  margin: 0 !important;
+.app-header-toolbar-label {
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
   overflow: hidden;
   color: var(--ims-text-secondary);
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* =========================
-   SECTION: Header User Actions - AKTIF / UI ONLY
-   Fungsi:
-   - menjaga role, user chip, dan logout tetap satu baris pada desktop serta fallback rapi pada layar kecil.
-   Hubungan flow aplikasi:
-   - hanya menata identitas user/role dan tombol logout; session logout tetap dijalankan AppHeader.jsx melalui useAuth.
-   Status:
-   - AKTIF.
-========================= */
+.app-header-toolbar-label::before {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: var(--ims-color-accent-yellow);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ims-color-accent-yellow) 18%, transparent);
+  content: "";
+}
+
 .app-header-user-area {
-  margin-left: auto;
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: flex-end;
   min-width: 0;
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .app-header-user-actions.ant-space {
+  max-width: 100%;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   flex-wrap: nowrap;
-  min-width: 0;
-}
-
-.app-header-user-actions .ant-space-item {
-  min-width: 0;
 }
 
 .app-header-user-tag.ant-tag,
 .app-header-role-tag.ant-tag {
-  min-width: 0;
-  height: 32px;
+  height: 34px;
+  max-width: 190px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   margin-inline-end: 0;
-  padding: 0 12px;
+  padding: 0 13px;
+  overflow: hidden;
   border-radius: 999px;
-  font-weight: 700;
-  line-height: 30px;
-  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
 }
 
 .app-header-user-tag.ant-tag {
-  max-width: 220px;
   color: var(--ims-color-primary-active);
-  background: color-mix(in srgb, var(--ims-bg-elevated) 72%, var(--ims-color-primary-soft));
-  border-color: color-mix(in srgb, var(--ims-color-primary) 24%, transparent);
-}
-
-.app-header-user-tag.ant-tag .anticon {
-  flex: 0 0 auto;
-  color: var(--ims-color-primary);
-}
-
-.app-header-user-tag.ant-tag > span:not(.anticon) {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  background: var(--ims-color-primary-soft);
+  border-color: color-mix(in srgb, var(--ims-color-primary) 24%, var(--ims-border-color-soft));
 }
 
 .app-header-role-tag.ant-tag {
   color: var(--ims-text-secondary);
   background: color-mix(in srgb, var(--ims-bg-elevated) 78%, var(--ims-bg-shell));
   border-color: var(--ims-border-color-soft);
+}
+
+.app-header-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-header-logout-button.ant-btn {
@@ -142,6 +124,10 @@
   border-color: var(--ims-color-primary);
   color: var(--ims-color-primary-active);
   background: var(--ims-color-primary-soft);
+}
+
+.app-shell.dark .app-header-toolbar-label {
+  color: var(--ims-text-secondary);
 }
 
 .app-shell.dark .app-header-user-tag.ant-tag {
@@ -173,7 +159,8 @@
   .app-header-content {
     align-items: flex-start;
     flex-direction: column;
-    gap: 12px;
+    flex-wrap: nowrap;
+    gap: 10px;
   }
 
   .app-header-user-area {
@@ -189,16 +176,26 @@
 }
 
 @media (max-width: 768px) {
-  .app-header-title.ant-typography {
-    font-size: 22px;
-  }
-
-  .app-header-subtitle.ant-typography {
+  .app-header-toolbar-label {
     max-width: 100%;
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .app-header-user-tag.ant-tag {
     max-width: min(100%, 220px);
+  }
+}
+
+@media (max-width: 480px) {
+  .app-header-user-actions.ant-space {
+    gap: 6px !important;
+  }
+
+  .app-header-user-tag.ant-tag,
+  .app-header-role-tag.ant-tag,
+  .app-header-logout-button.ant-btn {
+    height: 30px;
+    padding-inline: 10px;
+    font-size: 12px;
   }
 }

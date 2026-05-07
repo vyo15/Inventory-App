@@ -1,7 +1,7 @@
 /* =========================
-   SECTION: Sidebar Logo Shell - AKTIF / UI ONLY / UNIFIED SHELL
+   SECTION: Sidebar Logo Shell - AKTIF / UI ONLY
    Fungsi:
-   - membuat area brand sidebar menyatu dengan header dan sidebar shell, tanpa card internal yang terlihat terpisah.
+   - membuat area brand sidebar tetap rapi di light/dark mode dan saat collapsed.
    Hubungan flow aplikasi:
    - styling visual saja; tidak menyentuh route, role access, menu config, auth, stok, kas, atau modul bisnis.
    Status:
@@ -9,15 +9,17 @@
 ========================= */
 .sidebar-logo {
   width: 100%;
-  min-height: 70px;
+  min-height: 68px;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 4px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  padding: 10px 14px;
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--ims-bg-card) 92%, transparent);
+  box-shadow: var(--ims-shadow-soft);
   transition:
     background-color 0.22s ease,
     border-color 0.22s ease,
@@ -26,9 +28,9 @@
 }
 
 .sidebar-logo.collapsed {
-  min-height: 70px;
+  min-height: 64px;
   justify-content: center;
-  padding: 0;
+  padding: 10px;
 }
 
 /* =========================
@@ -39,20 +41,21 @@
    - mengganti icon visual lama; tidak mengubah handler collapse, menu key, atau navigasi.
    Status:
    - AKTIF sebagai versi kecil logo usaha.
+   - LEGACY: icon sparkles lama sudah tidak dipakai di JSX.
 ========================= */
 .sidebar-logo-icon {
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   border: 1px solid var(--ims-border-color-soft);
-  border-radius: 17px;
+  border-radius: 16px;
   background:
-    linear-gradient(135deg, var(--ims-color-primary-softer), var(--ims-color-accent-yellow-muted)),
-    color-mix(in srgb, var(--ims-bg-elevated) 84%, var(--ims-bg-shell));
+    linear-gradient(135deg, rgba(47, 111, 177, 0.1), rgba(255, 198, 38, 0.1)),
+    color-mix(in srgb, var(--ims-bg-elevated) 88%, transparent);
   box-shadow: 0 12px 24px rgba(47, 62, 82, 0.08);
 }
 
@@ -69,17 +72,6 @@
   filter: drop-shadow(0 6px 10px rgba(47, 62, 82, 0.16));
 }
 
-.app-shell.dark .sidebar-logo-icon {
-  background:
-    linear-gradient(135deg, var(--ims-color-primary-softer), var(--ims-color-accent-yellow-muted)),
-    color-mix(in srgb, var(--ims-bg-elevated) 72%, var(--ims-bg-shell));
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.22);
-}
-
-.app-shell.dark .sidebar-logo-mark {
-  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.28));
-}
-
 /* =========================
    SECTION: Sidebar Logo Text - AKTIF / UI ONLY
    Fungsi:
@@ -91,17 +83,19 @@
 ========================= */
 .sidebar-logo-text-group {
   min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  white-space: nowrap;
 }
 
 .sidebar-logo-title {
   overflow: hidden;
-  color: var(--ims-color-primary-active);
+  color: var(--ims-text-primary);
+  max-width: 100%;
   font-size: 15px;
-  font-weight: 850;
+  font-weight: 800;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -109,20 +103,13 @@
 
 .sidebar-logo-subtitle {
   overflow: hidden;
-  color: var(--ims-color-primary);
+  color: var(--ims-text-secondary);
+  max-width: 100%;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.app-shell.dark .sidebar-logo-title {
-  color: var(--ims-text-primary);
-}
-
-.app-shell.dark .sidebar-logo-subtitle {
-  color: var(--ims-color-primary-hover);
 }
 
 /* =========================
@@ -137,7 +124,8 @@
 @media (max-width: 768px) {
   .sidebar-logo {
     min-height: 62px;
-    padding: 0 2px;
+    padding: 10px 12px;
+    border-radius: 18px;
   }
 
   .sidebar-logo-icon {
