@@ -162,6 +162,17 @@ Sebuah task dianggap aman selesai bila:
 ### Koreksi dokumen lama
 Poin lama yang menyebut revert sale masih hanya update `stock` sudah tidak sesuai dengan source terbaru. Sales sekarang memakai `updateInventoryStock()` untuk create sale dan revert cancel. Penghapusan dokumen Sales hanya rollback teknis saat create failure, bukan flow user.
 
+
+## Update Product & Semi Finished Min Stock Master — 2026-05-07
+
+Status: **AKTIF + GUARDED**.
+
+- Product dan Semi Finished sekarang memakai `minStockAlert` master sebagai satu-satunya threshold minimum stok untuk item bervarian dan non-varian.
+- UI Product/Semi Finished tidak lagi menampilkan input minimum stok per varian; varian hanya untuk bucket stok fisik, reserved, available, status, dan metadata relevan.
+- Service Product/Semi Finished tetap boleh membawa `variants[].minStockAlert` sebagai legacy-compat field dari helper generic/data lama, tetapi enrich/create/update tidak menjumlahkannya sebagai source master.
+- Low-stock summary/status harus membaca `item.minStockAlert` master setelah enrichment, bukan total per-varian.
+- Cleanup data lama `variants[].minStockAlert` bersifat kandidat maintenance terpisah dan tidak dilakukan otomatis dari UI CRUD master.
+
 ## Update Karyawan Produksi — 2026-04-25
 
 ### Kode karyawan produksi sudah otomatis
@@ -781,3 +792,14 @@ Risiko tersisa:
 - halaman yang tidak memakai `PageHeader`/`ProductionPageHeader` mungkin perlu audit visual terpisah jika page title tidak tampil;
 - title/subtitle panjang tetap harus dicek pada laptop 1280px dan mobile agar tidak menyebabkan overflow.
 
+
+## Update Minimum Stock Read-Only Alignment — 2026-05-07
+
+Status: **AKTIF + GUARDED**.
+
+- Service Product dan Semi Finished terbaru sudah memakai threshold master (`products.minStockAlert` dan `semi_finished_materials.minStockAlert`), sehingga tidak perlu service patch untuk batch alignment ini.
+- Raw Material tetap memakai `raw_materials.minStock` sebagai threshold master.
+- Dashboard `Stok Kritis` sekarang diselaraskan sebagai consumer read-only untuk Product, Raw Material, dan Semi Finished dengan comparator `availableStock ?? currentStock ?? stock ?? 0`.
+- Stock Report sekarang memakai threshold master per entity untuk status `Habis/Kritis/Normal`, bukan threshold statis global `10` sebagai sumber utama.
+- `variants[].minStockAlert` Product/Semi Finished tetap legacy-compat untuk data lama/helper generic dan tidak boleh dipakai sebagai source threshold aktif.
+- Batch ini tidak mengubah stok fisik, reserved/available calculation, inventory log, transaksi, produksi, payroll, HPP, schema, atau migration data lama.

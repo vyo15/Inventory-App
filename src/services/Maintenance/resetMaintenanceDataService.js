@@ -292,6 +292,31 @@ const MODULE_DEFINITIONS = {
       },
     ],
   },
+  /*
+  =====================================================
+  SECTION: Production Planning Only reset target — GUARDED
+  Fungsi:
+  - Menyediakan module reset scoped untuk membersihkan target Planning Produksi saja.
+
+  Dipakai oleh:
+  - ResetMaintenanceData.jsx melalui getResetPreview dan runResetDataTest.
+
+  Alasan perubahan:
+  - Data trial/error planning perlu bisa dibersihkan tanpa menyentuh PO, Work Log, Payroll, HPP, stok, atau report.
+
+  Catatan cleanup:
+  - belum ada.
+
+  Risiko:
+  - Jika collection tambahan dimasukkan sembarangan, reset planning bisa ikut menghapus flow produksi guarded.
+  =====================================================
+  */
+  production_planning_only: {
+    label: "Production Planning",
+    collections: [
+      { key: "production_plans", label: "Production Planning", action: "Hapus planning produksi saja" },
+    ],
+  },
   production: {
     label: "Produksi (Lengkap)",
     collections: [

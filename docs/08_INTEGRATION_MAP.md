@@ -263,6 +263,8 @@ Guard:
 - Raw Material, Product, Semi Finished, Stock Adjustment, Sales, Returns, Purchases, dan Production tidak boleh punya rumus stok varian sendiri-sendiri.
 - Helper lama boleh tetap ada untuk import lama, tetapi harus delegasi ke helper pusat.
 - `stock` dipertahankan sebagai alias kompatibilitas; `currentStock` tetap stok utama.
+- Product/Semi Finished bervarian: helper/service tetap menghitung `currentStock`, `stock`, `reservedStock`, dan `availableStock` dari varian, tetapi `minStockAlert` final berasal dari field master item.
+- `variants[].minStockAlert` Product/Semi Finished adalah legacy/compat field dan bukan integration contract untuk low-stock summary.
 
 ## Flow Reset & Maintenance Aman
 
@@ -591,6 +593,7 @@ Setelah publish rules backend di Firebase Console/external source atau mengubah 
 - `Products.jsx` / `RawMaterials.jsx` / `SemiFinishedMaterials.jsx` → service master masing-masing: data lama non-varian hanya boleh aktif varian saat stok/reserved/available 0; varian baru existing mulai stok 0; `variantKey` existing dipreserve.
 - `Products.jsx` / `RawMaterials.jsx` → service master masing-masing: Pricing Rules opsional, default create Manual, `pricingRuleId` hanya wajib saat mode Rule.
 - `SemiFinishedMaterials.jsx` → `semiFinishedMaterialsService.js`: form edit mengirim identity varian existing supaya rename nama/label varian tidak membuat bucket stok baru.
+- `Products.jsx` / `SemiFinishedMaterials.jsx` → service master masing-masing: `minStockAlert` tetap source master untuk item varian/non-varian; input/detail per-varian untuk minimum stok tidak aktif dan legacy `variants[].minStockAlert` tidak dijumlahkan.
 - `SidebarMenu.jsx`: hanya mengatur openKeys nested accordion di UI, tidak menyentuh route, role access, atau service.
 - `Login.jsx` / `Login.css`: hanya cleanup copy teknis login, tidak menyentuh AuthContext, Firebase Auth, `system_users`, atau RBAC.
 
@@ -673,3 +676,26 @@ Supplier
   -> table utama compact membaca supplierPurchases/materialDetails existing
   -> drawer detail tetap menjadi tempat katalog restock panjang
   -> tidak membuat purchase, stok, kas, atau expense otomatis
+
+## Integration Update — Minimum Stock Read-Only Alignment — 2026-05-07
+
+```text
+Product master
+-> products.minStockAlert
+-> Dashboard Stok Kritis + Stock Report status
+
+Raw Material master
+-> raw_materials.minStock
+-> RawMaterials status + Dashboard Stok Kritis + Stock Report status
+
+Semi Finished master
+-> semi_finished_materials.minStockAlert
+-> SemiFinishedMaterials status + Dashboard Stok Kritis + Stock Report status
+```
+
+Guard:
+- Dashboard dan Stock Report adalah consumer read-only untuk minimum stock, tidak menulis stok, tidak membuat transaksi, dan tidak mengubah inventory log.
+- Stok pembanding status rendah memakai `availableStock ?? currentStock ?? stock ?? 0`.
+- Threshold Product/Semi memakai `minStockAlert`; threshold Raw Material memakai `minStock`.
+- `variants[].minStockAlert` Product/Semi Finished adalah legacy-compat only dan bukan source threshold aktif untuk Dashboard/Report.
+- Restock Assistant Dashboard tetap khusus Raw Material; Semi Finished yang muncul di `Stok Kritis` hanya read-only/navigasi.

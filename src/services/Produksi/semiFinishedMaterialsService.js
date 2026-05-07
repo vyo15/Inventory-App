@@ -33,6 +33,25 @@ const toStockNumber = (value = 0) => {
   return Number.isFinite(number) ? Math.round(number) : 0;
 };
 
+/* =====================================================
+SECTION: Semi Finished Master Minimum Stock Resolver — AKTIF
+Fungsi:
+- menetapkan `semi_finished_materials.minStockAlert` sebagai threshold minimum stok master untuk item varian dan non-varian.
+
+Dipakai oleh:
+- create/update/read Semi Finished Materials melalui service produksi dan halaman SemiFinishedMaterials.
+
+Alasan perubahan:
+- variant Semi Finished hanya bucket stok fisik/average cost; `variants[].minStockAlert` lama dipertahankan sebagai legacy-compat tetapi tidak lagi menjadi source master.
+
+Catatan cleanup:
+- audit field legacy `variants[].minStockAlert` dapat dibuat terpisah tanpa migrasi massal pada batch ini.
+
+Risiko:
+- jika resolver ini diubah kembali ke total varian, status Perlu Dicek Semi Finished bisa berbeda dari input master user.
+===================================================== */
+const resolveSemiFinishedMasterMinStockAlert = (values = {}) => toStockNumber(values.minStockAlert || 0);
+
 const toNumberValue = (value = 0) => {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
@@ -83,7 +102,7 @@ const enrichMaterialWithVariantTotals = (item = {}) => {
       stock: currentStock,
       reservedStock,
       availableStock,
-      minStockAlert: Number(item.minStockAlert || 0),
+      minStockAlert: resolveSemiFinishedMasterMinStockAlert(item),
       averageCostPerUnit: Number(item.averageCostPerUnit || 0),
       variantCount: variants.length,
       activeVariantCount: variants.filter((variant) => variant.isActive !== false).length,
@@ -96,6 +115,7 @@ const enrichMaterialWithVariantTotals = (item = {}) => {
     ...item,
     hasVariants,
     ...totals,
+    minStockAlert: resolveSemiFinishedMasterMinStockAlert(item),
   };
 };
 
@@ -115,7 +135,7 @@ const resolveSemiFinishedMetadata = (
   unit: values.unit || "pcs",
   relatedProductIds: selectedProducts.map((item) => item.id),
   relatedProductNames: selectedProducts.map((item) => item.name || ""),
-  minStockAlert: toStockNumber(values.minStockAlert || 0),
+  minStockAlert: resolveSemiFinishedMasterMinStockAlert(values),
   averageCostPerUnit: toNumberValue(values.averageCostPerUnit || 0),
   isActive: values.isActive !== false,
   isSellable: false,
@@ -134,7 +154,7 @@ const normalizeSemiFinishedCreatePayload = (
   const variantTotals = calculateSemiFinishedTotalsFromVariants(normalizedVariants);
   const currentStock = hasVariants ? variantTotals.currentStock : toNumberValue(values.currentStock || 0);
   const reservedStock = hasVariants ? variantTotals.reservedStock : toNumberValue(values.reservedStock || 0);
-  const minStockAlert = hasVariants ? variantTotals.minStockAlert : toStockNumber(values.minStockAlert || 0);
+  const minStockAlert = resolveSemiFinishedMasterMinStockAlert(values);
   const averageCostPerUnit = hasVariants
     ? toNumberValue(variantTotals.averageCostPerUnit || 0)
     : toNumberValue(values.averageCostPerUnit || 0);
@@ -342,7 +362,7 @@ const normalizeSemiFinishedMetadataPayload = (
       stock: 0,
       reservedStock: 0,
       availableStock: 0,
-      minStockAlert: variantTotals.minStockAlert,
+      minStockAlert: resolveSemiFinishedMasterMinStockAlert(values),
       averageCostPerUnit: toNumberValue(variantTotals.averageCostPerUnit || 0),
     };
   }
@@ -375,7 +395,7 @@ const normalizeSemiFinishedMetadataPayload = (
     stock: variantTotals.currentStock,
     reservedStock: variantTotals.reservedStock,
     availableStock: variantTotals.availableStock,
-    minStockAlert: variantTotals.minStockAlert,
+    minStockAlert: resolveSemiFinishedMasterMinStockAlert(values),
     averageCostPerUnit: toNumberValue(variantTotals.averageCostPerUnit || 0),
   };
 };
@@ -401,6 +421,10 @@ export const validateSemiFinishedMaterial = (values = {}) => {
 
   if (!values.flowerGroup) {
     errors.flowerGroup = "Grup bunga wajib dipilih";
+  }
+
+  if (Number(values.minStockAlert || 0) < 0) {
+    errors.minStockAlert = "Minimum stock alert tidak boleh negatif";
   }
 
   if (hasVariants) {
@@ -430,11 +454,6 @@ export const validateSemiFinishedMaterial = (values = {}) => {
           "Reserved stock tidak boleh negatif";
       }
 
-      if (Number(item.minStockAlert || 0) < 0) {
-        errors[`variants.${index}.minStockAlert`] =
-          "Minimum stock alert tidak boleh negatif";
-      }
-
       if (Number(item.averageCostPerUnit || 0) < 0) {
         errors[`variants.${index}.averageCostPerUnit`] =
           "Average cost tidak boleh negatif";
@@ -447,10 +466,6 @@ export const validateSemiFinishedMaterial = (values = {}) => {
 
     if (Number(values.reservedStock || 0) < 0) {
       errors.reservedStock = "Reserved stock tidak boleh negatif";
-    }
-
-    if (Number(values.minStockAlert || 0) < 0) {
-      errors.minStockAlert = "Minimum stock alert tidak boleh negatif";
     }
 
     if (Number(values.averageCostPerUnit || 0) < 0) {

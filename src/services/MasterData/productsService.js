@@ -45,12 +45,31 @@ const toStockNumber = (value = 0) => {
   return Number.isFinite(number) ? Math.round(number) : 0;
 };
 
+/* =====================================================
+SECTION: Product Master Minimum Stock Resolver — AKTIF
+Fungsi:
+- menetapkan `products.minStockAlert` sebagai threshold minimum stok master untuk produk varian dan non-varian.
+
+Dipakai oleh:
+- create/update/read Product melalui productsService dan halaman Products.
+
+Alasan perubahan:
+- variant sekarang hanya bucket stok fisik; `variants[].minStockAlert` dipertahankan sebagai legacy field tetapi tidak boleh menjadi source utama low stock master.
+
+Catatan cleanup:
+- audit data lama yang masih menyimpan `variants[].minStockAlert` bisa dilakukan pada batch maintenance terpisah.
+
+Risiko:
+- jika resolver ini diganti kembali ke total varian, warning stok rendah Product akan kembali tidak konsisten dengan input master.
+===================================================== */
+const resolveProductMasterMinStockAlert = (values = {}) => toStockNumber(values.minStockAlert || 0);
+
 const enrichProduct = (item = {}) => {
   const hasVariants = inferHasVariants(item);
   const totals = calculateVariantTotals(item.variants || []);
   const currentStock = hasVariants ? totals.currentStock : Number(item.currentStock ?? item.stock ?? 0);
   const reservedStock = hasVariants ? totals.reservedStock : Number(item.reservedStock || 0);
-  const minStockAlert = hasVariants ? totals.minStockAlert : Number(item.minStockAlert || 0);
+  const minStockAlert = resolveProductMasterMinStockAlert(item);
 
   return {
     ...item,
@@ -94,7 +113,7 @@ const normalizeProductCreatePayload = (values = {}, categories = []) => {
   const variantTotals = calculateVariantTotals(normalizedVariants);
   const currentStock = hasVariants ? variantTotals.currentStock : toStockNumber(values.currentStock || 0);
   const reservedStock = hasVariants ? variantTotals.reservedStock : toStockNumber(values.reservedStock || 0);
-  const minStockAlert = hasVariants ? variantTotals.minStockAlert : toStockNumber(values.minStockAlert || 0);
+  const minStockAlert = resolveProductMasterMinStockAlert(values);
 
   // IMS NOTE [AKTIF | behavior-preserving]: jalur create tetap menulis stok awal.
   // Hubungan flow: stok awal hanya boleh dibentuk saat master product pertama dibuat.
@@ -267,7 +286,7 @@ const normalizeProductMetadataPayload = (values = {}, categories = [], existingP
       reservedStock: 0,
       availableStock: 0,
       stock: 0,
-      minStockAlert: variantTotals.minStockAlert,
+      minStockAlert: resolveProductMasterMinStockAlert(values),
     };
   }
 
@@ -280,7 +299,7 @@ const normalizeProductMetadataPayload = (values = {}, categories = [], existingP
       variants: [],
       variantCount: 0,
       activeVariantCount: 0,
-      minStockAlert: toStockNumber(values.minStockAlert || 0),
+      minStockAlert: resolveProductMasterMinStockAlert(values),
     };
   }
 
@@ -291,7 +310,7 @@ const normalizeProductMetadataPayload = (values = {}, categories = [], existingP
   const variantTotals = calculateVariantTotals(mergedVariants);
 
   // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: array variants harus
-  // ditulis ulang untuk metadata, jadi total master dihitung dari stok existing/latest.
+  // ditulis ulang untuk metadata, jadi total stok master dihitung dari stok existing/latest.
   return {
     ...payload,
     variants: variantTotals.variants,
@@ -301,7 +320,7 @@ const normalizeProductMetadataPayload = (values = {}, categories = [], existingP
     reservedStock: variantTotals.reservedStock,
     availableStock: variantTotals.availableStock,
     stock: variantTotals.currentStock,
-    minStockAlert: variantTotals.minStockAlert,
+    minStockAlert: resolveProductMasterMinStockAlert(values),
   };
 };
 
@@ -327,6 +346,10 @@ export const validateProductPayload = async (values = {}, editingId = null) => {
     errors.pricingRuleId = 'Pricing rule wajib dipilih untuk mode Rule';
   }
 
+  if (Number(values.minStockAlert || 0) < 0) {
+    errors.minStockAlert = 'Minimum stok tidak boleh negatif';
+  }
+
   if (hasVariants) {
     const variants = normalizeColorVariants(values.variants || []);
     if (variants.length === 0) {
@@ -339,9 +362,6 @@ export const validateProductPayload = async (values = {}, editingId = null) => {
     }
     if (Number(values.reservedStock || 0) < 0) {
       errors.reservedStock = 'Reserved stock tidak boleh negatif';
-    }
-    if (Number(values.minStockAlert || 0) < 0) {
-      errors.minStockAlert = 'Minimum stok tidak boleh negatif';
     }
   }
 

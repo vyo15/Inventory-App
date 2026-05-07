@@ -13,13 +13,7 @@
 .app-shell {
   height: 100vh;
   overflow: hidden;
-  background:
-    radial-gradient(
-      circle at top left,
-      color-mix(in srgb, var(--ims-color-primary) 10%, transparent) 0%,
-      transparent 34%
-    ),
-    var(--ims-bg-page);
+  background: var(--ims-bg-shell);
   color: var(--ims-text-primary);
   transition:
     background-color 0.22s ease,
@@ -99,35 +93,36 @@
 .app-main-layout {
   height: 100%;
   min-width: 0;
-  background: var(--ims-bg-shell) !important;
+  background: transparent !important;
 }
 
-.app-layout {
-  overflow: hidden;
-}
+/* =====================================================
+SECTION: Sidebar Layout Shell — GUARDED
+Fungsi:
+- Menyiapkan area sidebar transparan, fixed height, dan scroll wrapper internal untuk logo serta menu besar.
 
-/* =========================
-   SECTION: Sidebar - AKTIF / GUARDED
-   Fungsi:
-   - menyiapkan area sidebar transparan, fixed height, dan scroll wrapper internal untuk menu besar.
-   Hubungan flow aplikasi:
-   - dipakai AppLayout bersama SidebarLogo dan SidebarMenu; hanya mengatur frame visual, bukan role/menu guard.
-   Alasan logic dipakai:
-   - background sidebar harus mengikuti token shell sementara scroll menu tetap dikendalikan komponen sidebar.
-   Status:
-   - AKTIF untuk navigasi utama.
-   - GUARDED: jangan ubah role visibility atau route access dari CSS.
-========================= */
+Dipakai oleh:
+- AppLayout bersama SidebarLogo dan SidebarMenu.
+
+Alasan perubahan:
+- Padding area logo diringkas agar brand block menyatu dengan sidebar dan tidak terasa seperti card besar terpisah.
+
+Catatan cleanup:
+- Belum ada.
+
+Risiko:
+- Jika spacing sidebar diubah sembarangan, menu bisa bergeser, collapsed sidebar bisa tidak center, atau muncul horizontal overflow.
+===================================================== */
 .app-sider {
   height: 100vh;
-  background: var(--ims-bg-shell) !important;
+  background: transparent !important;
   border-right: 0 !important;
   overflow: hidden;
 }
 
 .app-sider .ant-layout-sider-children {
   height: 100%;
-  background: var(--ims-bg-shell) !important;
+  background: transparent !important;
 }
 
 .app-sider-inner {
@@ -135,19 +130,18 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--ims-bg-shell);
 }
 
 .app-logo-wrap {
   flex: 0 0 auto;
-  padding: 18px 18px 8px;
+  padding: 12px 14px 8px;
 }
 
 .app-menu-wrap {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  padding: 0 14px 18px;
+  padding: 0 12px 16px;
 }
 
 /* AKTIF / GUARDED: menetralkan garis default AntD Sider agar border sidebar tetap dikontrol token shell. */
@@ -169,12 +163,12 @@
    - GUARDED karena header menjadi area kontrol user dan konteks halaman.
 ========================= */
 .app-header {
-  height: 88px;
+  height: 92px;
   line-height: normal;
   padding: 0 28px;
   display: flex;
   align-items: center;
-  background: var(--ims-bg-shell) !important;
+  background: transparent !important;
   border-bottom: 0 !important;
   box-shadow: none !important;
   z-index: 5;
@@ -201,9 +195,9 @@
    - GUARDED karena tabel, modal trigger, drawer trigger, dan form besar bergantung pada ruang content ini.
 ========================= */
 .app-main-content {
-  height: calc(100vh - 88px);
+  height: calc(100vh - 92px);
   padding: 0;
-  background: var(--ims-bg-shell) !important;
+  background: transparent !important;
   overflow: hidden;
 }
 
@@ -212,16 +206,16 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0 20px 20px;
-  background: var(--ims-bg-shell);
+  background: transparent;
 }
 
 .app-content-card {
   min-height: 100%;
   background: color-mix(in srgb, var(--ims-bg-card) 92%, transparent);
   border: 1px solid var(--ims-border-color-soft);
-  border-radius: 28px 28px 0 0;
+  border-radius: 24px 24px 0 0;
   padding: 28px 24px 24px;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ims-bg-elevated) 82%, transparent), var(--ims-shadow-soft);
+  box-shadow: var(--ims-shadow-soft);
   backdrop-filter: blur(14px);
   transition:
     background-color 0.22s ease,
@@ -230,89 +224,6 @@
     box-shadow 0.22s ease;
 }
 
-
-/* =====================================================
-   SECTION: Production Content Page Header — AKTIF / LEGACY-COMPAT
-   Fungsi:
-   - menjaga ProductionPageHeader sebagai title/description halaman produksi + action area.
-
-   Dipakai oleh:
-   - halaman produksi yang masih memakai ProductionPageHeader untuk title, description, tombol Tambah/Generate/extra action.
-
-   Alasan perubahan:
-   - top AppHeader global dipakai sebagai toolbar saja; nama menu produksi kembali berada di content card.
-
-   Risiko:
-   - perubahan spacing berlebih bisa membuat tombol produksi hilang dari area awal content atau overflow di mobile.
-===================================================== */
-.production-page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-  min-width: 0;
-}
-
-.production-page-header-content {
-  min-width: 0;
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.production-page-header-title.ant-typography {
-  max-width: 100%;
-  margin: 0 !important;
-  overflow: hidden;
-  color: var(--ims-text-primary);
-  font-size: clamp(22px, 1.75vw, 28px);
-  line-height: 1.1;
-  font-weight: 850;
-  letter-spacing: -0.03em;
-  text-overflow: ellipsis;
-}
-
-.production-page-header-description.ant-typography {
-  margin: 0 !important;
-  max-width: 880px;
-  color: var(--ims-text-secondary);
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.production-page-header-actions {
-  display: flex;
-  justify-content: flex-end;
-  max-width: 100%;
-  gap: 8px 8px;
-}
-
-.production-page-header .ant-btn {
-  min-height: 38px;
-  border-radius: 12px;
-  font-weight: 600;
-  box-shadow: none;
-}
-
-@media (max-width: 768px) {
-  .production-page-header {
-    align-items: stretch;
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-
-  .production-page-header-actions {
-    justify-content: flex-start;
-  }
-
-  .production-page-header .ant-btn {
-    min-height: 36px;
-  }
-}
 
 /* =========================
    SECTION: Theme Toggle Button - AKTIF / GUARDED

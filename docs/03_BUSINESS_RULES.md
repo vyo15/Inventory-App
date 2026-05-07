@@ -539,6 +539,9 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - `availableStock` wajib dihitung dari `currentStock - reservedStock` dengan batas minimum 0.
 - Semua writer varian wajib memakai helper pusat `variantStockNormalizer` atau helper lama yang sudah delegasi ke helper pusat.
 - Master item bervarian wajib menyimpan `currentStock`, `stock`, `reservedStock`, dan `availableStock` berdasarkan total varian.
+- Untuk Product dan Semi Finished, minimum stok final adalah field master: `products.minStockAlert` dan `semi_finished_materials.minStockAlert`, berlaku untuk item non-varian maupun bervarian.
+- `variants[].minStockAlert` pada Product/Semi Finished hanya legacy/compatibility field jika masih ada di data lama/helper generic; UI dan service master tidak boleh menjadikannya source utama threshold low-stock.
+- Saat Product/Semi Finished bervarian dibuat atau di-edit, total stok master tetap dihitung dari varian, tetapi `minStockAlert` master wajib berasal dari input master `values.minStockAlert`, bukan penjumlahan varian.
 - Reset/Maintenance hanya alat audit/repair/development, bukan flow harian user untuk menjaga stok tetap sinkron.
 
 ### 15.1 Variant conversion aman

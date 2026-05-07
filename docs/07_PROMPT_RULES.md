@@ -442,6 +442,15 @@ Risiko:
 - Perubahan read-only panel harus presentational-only: jangan ubah payload form, validasi, transaksi Firestore, formula stok/kas/produksi/HPP, formatter angka, atau schema.
 - Jika task menyentuh Stock Adjustment UI, snapshot stok harus tetap menampilkan current/reserved/available stock dan helper varian, tetapi transaction `stock_adjustments` + `inventory_logs` tidak boleh berubah.
 
+
+
+## Prompt Guard — Product/Semi Finished Min Stock Master
+- Untuk Product dan Semi Finished, `minStockAlert` adalah field master item, bukan field varian aktif.
+- Jangan menambahkan kembali input `variants[].minStockAlert` di form Product/Semi Finished kecuali ada business rule baru eksplisit.
+- Saat menyentuh service Product/Semi Finished bervarian, total stok/reserved/available boleh berasal dari varian, tetapi `minStockAlert` master harus berasal dari `values.minStockAlert`/field master.
+- `variants[].minStockAlert` boleh tetap muncul di helper generic atau data lama sebagai legacy-compat, tetapi jangan dijadikan source utama low-stock UI/report.
+- Jika task hanya menyentuh min stock master, jangan ubah Raw Materials, Stock Adjustment, Sales, Purchases, Production, Payroll, HPP, Dashboard, Reports, atau `variantStockNormalizer`.
+
 ## Prompt Guard — Cash In delete lock dan Sales status tab
 - Jangan menambahkan tombol Hapus di halaman Pemasukan / Cash In tanpa task eksplisit, approval owner, dan desain audit trail.
 - Halaman Pemasukan wajib tetap membaca `revenues + incomes`; jangan mengubah source read Cash In saat task hanya UI keamanan.

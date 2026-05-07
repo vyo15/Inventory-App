@@ -432,23 +432,39 @@ const buildSupplierDetailRoute = (materialId, supplierId) => {
   return `/suppliers?${params.toString()}`;
 };
 
-// -----------------------------------------------------------------------------
-// Status stok bahan baku.
-// Disamakan arahnya dengan Semi Finished Materials: nonaktif, kosong, rendah, aman.
-// -----------------------------------------------------------------------------
+/* =====================================================
+SECTION: Raw Material Minimum Stock Status — AKTIF
+Fungsi:
+- Menentukan status minimum stok bahan baku secara read-only memakai stok tersedia lebih dulu, lalu fallback stok lama.
+
+Dipakai oleh:
+- RawMaterials.jsx summary, filter status, table row, dan drawer detail.
+
+Alasan perubahan:
+- Status Raw Material harus konsisten dengan Dashboard/Stock Report: `availableStock ?? currentStock ?? stock ?? 0` dibandingkan dengan master `minStock`.
+
+Catatan cleanup:
+- Fallback `currentStock`/`stock` bisa diaudit lagi setelah semua data lama punya `availableStock`.
+
+Risiko:
+- Jika helper ini kembali memakai currentStock langsung, item dengan reserved stock bisa terlihat aman padahal available stock sudah di bawah minimum.
+===================================================== */
+const getRawMaterialMinimumStockValue = (record = {}) =>
+  Number(record.availableStock ?? record.currentStock ?? record.stock ?? 0);
+
 const getRawMaterialStatusMeta = (record = {}) => {
-  const currentStock = Number(record.currentStock ?? record.stock ?? 0);
+  const comparableStock = getRawMaterialMinimumStockValue(record);
   const minStock = Number(record.minStock || 0);
 
   if (record.isActive === false) {
     return { color: 'default', label: 'Nonaktif' };
   }
 
-  if (currentStock <= 0) {
+  if (comparableStock <= 0) {
     return { color: 'red', label: 'Kosong' };
   }
 
-  if (currentStock <= minStock) {
+  if (minStock > 0 && comparableStock <= minStock) {
     return { color: 'orange', label: 'Stok Rendah' };
   }
 

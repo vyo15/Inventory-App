@@ -170,16 +170,23 @@ const isPayrollPaid = (record = {}) => {
   return paymentStatus === "paid" || status === "paid";
 };
 
-// =========================
-// SECTION: Helpers - stok kritis
-// Fungsi:
-// - Dashboard memakai availableStock lebih dulu agar tidak misleading saat ada reserved stock;
-// - fallback currentStock/stock tetap ada untuk kompatibilitas data lama.
-// Hubungan flow:
-// - hanya membaca master stok; tidak memanggil helper mutasi dan tidak mengubah stock.
-// Status:
-// - aktif dipakai; legacy fallback boleh dibersihkan setelah schema stok lama tidak dipakai.
-// =========================
+/* =====================================================
+SECTION: Dashboard Low Stock Master Threshold — AKTIF
+Fungsi:
+- Menyusun list Stok Kritis read-only dari Product, Raw Material, dan Semi Finished memakai threshold master masing-masing.
+
+Dipakai oleh:
+- Widget Stok Kritis Dashboard dan Restock Assistant khusus bahan baku.
+
+Alasan perubahan:
+- Dashboard harus konsisten dengan master page/Stock Report: `availableStock ?? currentStock ?? stock ?? 0` dibandingkan dengan `minStockAlert ?? minStock`, tanpa membaca `variants[].minStockAlert`.
+
+Catatan cleanup:
+- Fallback `currentStock`/`stock` bisa diaudit setelah semua collection punya `availableStock` final.
+
+Risiko:
+- Jika Semi Finished diberi action restock/purchase otomatis atau threshold varian dipakai lagi, Dashboard berubah dari monitoring read-only menjadi flow transaksi yang tidak disetujui.
+===================================================== */
 const getItemDisplayName = (item = {}) =>
   item?.name || item?.productName || item?.materialName || "-";
 
@@ -198,7 +205,7 @@ const getLowStockSeverity = (item = {}) => {
   return { label: "Aman", color: "green" };
 };
 
-const buildLowStockRows = (products = [], materials = []) => {
+const buildLowStockRows = (products = [], materials = [], semiFinishedMaterials = []) => {
   const rows = [
     ...products.map((item) => ({
       key: `product-${item.id}`,
@@ -224,6 +231,19 @@ const buildLowStockRows = (products = [], materials = []) => {
       sourceType: "material",
       severity: getLowStockSeverity(item),
       to: "/stock-management",
+      snapshot: item,
+    })),
+    ...semiFinishedMaterials.map((item) => ({
+      key: `semi-finished-${item.id}`,
+      id: item.id,
+      name: getItemDisplayName(item),
+      stock: getItemStock(item),
+      minStock: getItemMinStock(item),
+      unit: item?.unit || "pcs",
+      type: "Semi Finished",
+      sourceType: "semi_finished",
+      severity: getLowStockSeverity(item),
+      to: "/produksi/semi-finished-materials",
       snapshot: item,
     })),
   ].filter((item) => item.stock <= 0 || (item.minStock > 0 && item.stock <= item.minStock));
@@ -506,6 +526,7 @@ const Dashboard = () => {
       const [
         productsSnap,
         materialsSnap,
+        semiFinishedSnap,
         recentActivitiesSnap,
         productionOrdersSnap,
         workLogsSnap,
@@ -517,6 +538,7 @@ const Dashboard = () => {
       ] = await Promise.all([
         getDocs(collection(db, "products")),
         getDocs(collection(db, "raw_materials")),
+        getDocs(collection(db, "semi_finished_materials")),
         getDocs(recentActivitiesQuery),
         getDocs(collection(db, "production_orders")),
         getDocs(collection(db, "production_work_logs")),
@@ -540,7 +562,12 @@ const Dashboard = () => {
         ...docItem.data(),
       }));
 
-      const lowStockRows = buildLowStockRows(products, materials);
+      const semiFinishedMaterials = semiFinishedSnap.docs.map((docItem) => ({
+        id: docItem.id,
+        ...docItem.data(),
+      }));
+
+      const lowStockRows = buildLowStockRows(products, materials, semiFinishedMaterials);
       const purchaseRecords = await fetchPurchaseRecordsForRestockRows(
         lowStockRows.slice(0, MAX_DASHBOARD_LIST_ITEMS),
       );

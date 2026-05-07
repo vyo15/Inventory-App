@@ -1122,71 +1122,57 @@ Risiko:
 - [ ] Console tidak menampilkan error canvas/image/import.
 - [ ] Table loading, button submit loading, report loading, maintenance preview/loading, Refresh Need, dan Refresh Preview tidak berubah.
 
+## Checklist Sidebar Logo & Brand Theme — 2026-05-07
+- [ ] Sidebar expanded menampilkan logo, `IMS Bunga Flanel`, dan `Flanel Karawang Industries` dalam satu baris visual yang rapi tanpa wrap.
+- [ ] Jika ruang sidebar sempit, title/subtitle memakai ellipsis dan tidak turun baris.
+- [ ] Warna brand title/subtitle menyatu dengan token biru/navy theme aplikasi dan tidak memakai burgundy/rose baru.
+- [ ] Sidebar collapsed hanya menampilkan logo/mark secara proporsional tanpa teks pecah.
+- [ ] Cek light mode dan dark mode: logo tetap jelas, teks readable, tidak ada horizontal overflow baru, dan menu di bawah logo tetap sejajar.
 
-## H. Header Branding Cleanup
 
-### Header / Branding Global
-- cek logo + brand block sidebar tidak wrap pada desktop, laptop 1366px, laptop 1280px, tablet, dan mobile
-- cek `IMS Bunga Flanel` tetap tampil di sidebar/logo saat sidebar expanded
-- cek `IMS Bunga Flanel` tidak lagi tampil sebagai title besar di top header
-- cek top header menampilkan page title aktif untuk Dashboard, Produk Jadi, Raw Materials, Stock Management, Sales, Purchases, Returns, Cash In, Cash Out, Produksi, Laporan, Manajemen User, dan Reset & Maintenance
-- cek subtitle top header tidak lagi memakai slogan global duplicate
-- cek fallback title/subtitle aman untuk route yang belum terdaftar
-- cek user chip, role tag, dan logout button tetap terlihat dan tidak overlap dengan title
-- cek sidebar expanded/collapsed tidak merusak alignment logo/header
-- cek light mode dan dark mode tetap memakai surface header/sidebar yang menyatu
-- cek tidak ada horizontal overflow baru dan tidak ada console error
+## Checklist Product & Semi Finished Min Stock Master — 2026-05-07
+- [ ] Product non-varian: Create/Edit menampilkan `Minimum Stok`, tersimpan ke `products.minStockAlert`, dan status low stock memakai nilai master itu.
+- [ ] Product bervarian: Create/Edit menampilkan `Minimum Stok Master`, tidak ada input `Min Stok` per varian, dan detail drawer menampilkan `Minimum Stok Master` sekali di level master.
+- [ ] Product bervarian: total stok/reserved/available tetap berasal dari varian, tetapi `products.minStockAlert` tidak berubah menjadi total `variants[].minStockAlert`.
+- [ ] Semi Finished non-varian: Create/Edit menampilkan `Min Stock Alert`, tersimpan ke `semi_finished_materials.minStockAlert`, dan summary `Perlu Dicek` memakai nilai master itu.
+- [ ] Semi Finished bervarian: Create/Edit menampilkan `Min Stock Alert Master`, tidak ada input `Min Stock Alert` per varian, dan ringkasan read-only menyebut Min Stock Alert sebagai master item.
+- [ ] Semi Finished bervarian: total current/reserved/available tetap berasal dari varian, average cost varian tetap tampil, tetapi min stock tidak dihitung dari total varian.
+- [ ] Negative validation: `minStockAlert < 0` ditolak baik untuk mode varian maupun non-varian.
+- [ ] Legacy compatibility: data lama yang masih punya `variants[].minStockAlert` tetap tidak crash, tetapi angka itu tidak tampil sebagai input/detail utama per varian.
+- [ ] Tidak ada perubahan ke Raw Materials, Stock Adjustment, Sales, Purchases, Production Order, Work Log, Dashboard selain read low-stock dari field master yang sudah enriched.
 
-## I. Content PageHeader Dedup Cleanup
+## Checklist Minimum Stock Read-Only Alignment — 2026-05-07
 
-### Header / Dedup Content
-- [ ] Top header tetap menampilkan title halaman aktif.
-- [ ] Top header tetap menampilkan subtitle halaman aktif.
-- [ ] Content card tidak lagi mengulang title/subtitle halaman yang sama.
-- [ ] `Produk Jadi` tidak tampil dobel antara top header dan content.
-- [ ] `Dashboard` tidak tampil dobel antara top header dan content.
-- [ ] PageHeader tanpa action/extra tidak menyisakan ruang kosong besar.
-- [ ] PageHeader dengan action/extra tetap menampilkan tombol penting seperti Tambah, Export, Generate, dan action existing lain.
-- [ ] ProductionPageHeader tanpa onAdd/extra tidak menyisakan card kosong.
-- [ ] ProductionPageHeader dengan onAdd/extra tetap menampilkan tombol Tambah/Generate/extra yang existing.
-- [ ] Tombol `Tambah Produk` tetap tampil dan callback tetap berjalan.
-- [ ] Export/action report tetap tampil.
-- [ ] Tombol produksi seperti Tambah/Generate tetap tampil.
-- [ ] User chip, role tag, dan logout tetap tampil dan bisa diklik.
-- [ ] Tidak ada horizontal overflow baru di desktop, laptop 1366px, laptop 1280px, tablet, dan mobile.
-- [ ] Light mode dan dark mode tetap readable setelah content header disederhanakan.
+### Raw Material
+- [ ] Minimum Stok Master tetap tampil dan editable di form/detail Raw Material.
+- [ ] Status Raw Material memakai comparator `availableStock ?? currentStock ?? stock ?? 0` terhadap `raw_materials.minStock`.
+- [ ] Uji item dengan `currentStock` di atas `minStock`, tetapi `availableStock` di bawah/sama `minStock`; status harus menunjukkan perlu dicek/rendah.
+- [ ] Raw Material bervarian tetap tidak punya minimum stok per variant.
+- [ ] Tidak ada inventory log baru hanya karena status display berubah.
 
-### Halaman yang perlu dicek
-- [ ] Dashboard.
-- [ ] Produk Jadi.
-- [ ] Raw Materials.
-- [ ] Categories.
-- [ ] Customers.
-- [ ] Supplier Purchases.
-- [ ] Pricing Rules.
-- [ ] Stock Management.
-- [ ] Sales.
-- [ ] Purchases.
-- [ ] Returns.
-- [ ] Cash In.
-- [ ] Cash Out.
-- [ ] Produksi: Steps, Profiles, Employees, BOM, Orders, Work Logs, Payrolls, HPP.
-- [ ] Laporan: Sales, Purchases, Stock, Profit Loss, Payroll.
-- [ ] Manajemen User.
-- [ ] Reset & Maintenance.
+### Semi Finished
+- [ ] `Min Stock Alert` / `Min Stock Alert Master` tetap tampil dan editable.
+- [ ] Status Semi Finished memakai comparator `availableStock ?? currentStock ?? stock ?? 0` terhadap `semi_finished_materials.minStockAlert`.
+- [ ] Summary `Perlu Dicek`, status row, dan drawer detail konsisten.
+- [ ] Tidak ada minimum stock per variant dan tidak ada label/komentar aktif yang menyatakan min alert varian sebagai source threshold.
+- [ ] Tidak ada perubahan create/edit Semi Finished, production order, work log, payroll, atau HPP.
 
-## I. UI Shell Header + Content Page Header
-- light mode: sidebar, logo area, dan top header tetap satu surface soft blue
-- dark mode: sidebar, logo area, dan top header tetap satu surface deep navy
-- top header tidak menampilkan title besar `Dashboard` / nama menu lain
-- top header hanya menampilkan toolbar/workspace label, user chip, role chip, dan logout
-- sidebar tetap menampilkan brand `IMS Bunga Flanel` dan tidak wrap
-- content card menampilkan nama menu/page title melalui `PageHeader`
-- halaman produksi menampilkan title/description melalui `ProductionPageHeader`
-- action PageHeader seperti Tambah, Export, Generate, dan extra tetap tampil serta bisa diklik
-- Dashboard, Produk Jadi, Sales, Purchases, Returns, Stock Management, Reports, Produksi, User Management, dan Reset Maintenance tidak kehilangan title halaman
-- desktop lebar, laptop 1366px, laptop 1280px, tablet, dan mobile tidak menghasilkan horizontal overflow
-- user name panjang tetap ellipsis atau wrap terkontrol tanpa menabrak logout
-- sidebar collapsed/open tidak merusak alignment toolbar dan content title
-- tidak ada console error setelah navigasi antar menu
+### Dashboard
+- [ ] Widget `Stok Kritis` menampilkan Product, Raw Material, dan Semi Finished jika datanya kosong/menipis.
+- [ ] Product memakai threshold `products.minStockAlert`, Raw Material memakai `raw_materials.minStock`, dan Semi Finished memakai `semi_finished_materials.minStockAlert`.
+- [ ] Dashboard memakai comparator available-first dan tidak membaca `variants[].minStockAlert`.
+- [ ] Semi Finished tampil read-only tanpa action pembelian/restock otomatis.
+- [ ] Restock Assistant bahan baku tetap hanya untuk Raw Material dan tidak berubah menjadi auto-purchase.
+- [ ] Dashboard tidak crash saat data kosong, threshold 0/kosong, atau data lama masih punya `variants[].minStockAlert`.
 
+### Stock Report
+- [ ] Product, Raw Material, dan Semi Finished tetap tampil di Stock Report.
+- [ ] Status `Habis/Kritis/Normal` memakai threshold master per entity, bukan angka statis `10`.
+- [ ] Threshold 0 atau kosong tidak otomatis membuat item menjadi `Kritis`; stok 0 tetap `Habis`.
+- [ ] Export XLSX membawa status yang sama dengan tabel dan menyertakan minimum stok master.
+- [ ] Tidak ada perubahan report lain, query collection lain, stok fisik, inventory log, transaksi, produksi, payroll, HPP, auth, role, route, atau reset maintenance.
+
+### Produk Jadi dan Data Lama
+- [ ] Product `minStockAlert` tetap ada dan status Product tetap memakai threshold master itu.
+- [ ] Product tidak menampilkan minimum stock per variant.
+- [ ] Data lama dengan `variants[].minStockAlert` tidak crash dan field legacy itu tidak memengaruhi Dashboard/Stock Report status.

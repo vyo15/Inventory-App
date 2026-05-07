@@ -1,23 +1,27 @@
-/* =========================
-   SECTION: Header Toolbar - AKTIF / UI ONLY
-   Fungsi:
-   - mengatur top header sebagai toolbar global yang menyatu dengan sidebar/logo.
-   - title/subtitle halaman tidak ditampilkan di sini agar nama menu berada di content PageHeader.
-   Hubungan flow aplikasi:
-   - dipakai oleh AppHeader.jsx di dalam AppLayout setelah Auth Gate lolos.
-   Alasan logic dipakai:
-   - semua warna membaca token brand agar header konsisten dengan foundation blue/yellow/white/navy tanpa duplicate page title.
-   Status:
-   - AKTIF untuk topbar toolbar global.
-   - GUARDED: styling logout tidak mengubah behavior logout/useAuth.
-========================= */
+/* =====================================================
+SECTION: Header Greeting Toolbar — AKTIF / GUARDED
+Fungsi:
+- mengatur top header sebagai area sapaan personal + action kanan yang ringkas.
+
+Dipakai oleh:
+- src/components/Layout/Header/AppHeader.jsx di dalam AppLayout.
+
+Alasan perubahan:
+- label toolbar generik diganti greeting berbasis akun, sementara chip identitas kanan disederhanakan menjadi satu role badge.
+
+Catatan cleanup:
+- belum ada.
+
+Risiko:
+- perubahan spacing/flex yang terlalu agresif bisa membuat action logout turun baris atau menciptakan horizontal overflow di viewport kecil.
+===================================================== */
 .app-header-content {
   width: 100%;
   min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: clamp(12px, 2vw, 22px);
+  gap: clamp(14px, 2vw, 24px);
   flex-wrap: nowrap;
   color: var(--ims-text-primary);
 }
@@ -30,29 +34,67 @@
   overflow: hidden;
 }
 
-.app-header-toolbar-label {
+.app-header-greeting {
+  min-width: 0;
   max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  overflow: hidden;
+}
+
+.app-header-greeting-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 999px;
+  color: var(--ims-color-primary-active);
+  background: color-mix(
+    in srgb,
+    var(--ims-color-primary-soft) 84%,
+    var(--ims-bg-elevated)
+  );
+  box-shadow: 0 8px 18px rgba(16, 32, 51, 0.07);
+}
+
+.app-header-greeting-icon .anticon {
+  font-size: 15px;
+}
+
+.app-header-greeting-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
   overflow: hidden;
-  color: var(--ims-text-secondary);
-  font-size: 12px;
-  font-weight: 750;
-  letter-spacing: 0.01em;
-  line-height: 1.2;
+}
+
+.app-header-greeting-title,
+.app-header-greeting-subtitle {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.app-header-toolbar-label::before {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
-  margin-right: 8px;
-  border-radius: 999px;
-  background: var(--ims-color-accent-yellow);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ims-color-accent-yellow) 18%, transparent);
-  content: "";
+.app-header-greeting-title {
+  color: var(--ims-text-primary);
+  font-size: clamp(16px, 1.35vw, 18px);
+  font-weight: 850;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.app-header-greeting-subtitle {
+  color: var(--ims-text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.25;
 }
 
 .app-header-user-area {
@@ -71,7 +113,6 @@
   flex-wrap: nowrap;
 }
 
-.app-header-user-tag.ant-tag,
 .app-header-role-tag.ant-tag {
   height: 34px;
   max-width: 190px;
@@ -79,24 +120,19 @@
   align-items: center;
   gap: 6px;
   margin-inline-end: 0;
-  padding: 0 13px;
+  padding: 0 14px;
   overflow: hidden;
   border-radius: 999px;
+  color: var(--ims-color-primary-active);
+  background: var(--ims-color-primary-soft);
+  border-color: color-mix(
+    in srgb,
+    var(--ims-color-primary) 24%,
+    var(--ims-border-color-soft)
+  );
   font-size: 12px;
   font-weight: 750;
   line-height: 1;
-}
-
-.app-header-user-tag.ant-tag {
-  color: var(--ims-color-primary-active);
-  background: var(--ims-color-primary-soft);
-  border-color: color-mix(in srgb, var(--ims-color-primary) 24%, var(--ims-border-color-soft));
-}
-
-.app-header-role-tag.ant-tag {
-  color: var(--ims-text-secondary);
-  background: color-mix(in srgb, var(--ims-bg-elevated) 78%, var(--ims-bg-shell));
-  border-color: var(--ims-border-color-soft);
 }
 
 .app-header-chip-text {
@@ -113,7 +149,11 @@
   justify-content: center;
   border-color: var(--ims-border-color);
   color: var(--ims-text-primary);
-  background: color-mix(in srgb, var(--ims-bg-elevated) 80%, var(--ims-bg-shell));
+  background: color-mix(
+    in srgb,
+    var(--ims-bg-elevated) 80%,
+    var(--ims-bg-shell)
+  );
   border-radius: 999px;
   box-shadow: none;
   font-weight: 700;
@@ -126,20 +166,21 @@
   background: var(--ims-color-primary-soft);
 }
 
-.app-shell.dark .app-header-toolbar-label {
-  color: var(--ims-text-secondary);
-}
-
-.app-shell.dark .app-header-user-tag.ant-tag {
+.app-shell.dark .app-header-greeting-icon {
   color: var(--ims-text-primary);
   background: var(--ims-color-primary-soft);
   border-color: var(--ims-border-color);
+  box-shadow: none;
 }
 
 .app-shell.dark .app-header-role-tag.ant-tag,
 .app-shell.dark .app-header-logout-button.ant-btn {
   color: var(--ims-text-primary);
-  background: color-mix(in srgb, var(--ims-bg-elevated) 72%, var(--ims-bg-shell));
+  background: color-mix(
+    in srgb,
+    var(--ims-bg-elevated) 72%,
+    var(--ims-bg-shell)
+  );
   border-color: var(--ims-border-color);
 }
 
@@ -151,15 +192,28 @@
 }
 
 .app-header-logout-button.ant-btn:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--ims-color-primary) 18%, transparent);
+  outline: 3px solid color-mix(
+    in srgb,
+    var(--ims-color-primary) 18%,
+    transparent
+  );
   outline-offset: 2px;
 }
 
 @media (max-width: 992px) {
   .app-header-content {
+    gap: 12px;
+  }
+
+  .app-header-greeting-title {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-header-content {
     align-items: flex-start;
     flex-direction: column;
-    flex-wrap: nowrap;
     gap: 10px;
   }
 
@@ -173,16 +227,19 @@
     justify-content: flex-start;
     flex-wrap: wrap;
   }
-}
 
-@media (max-width: 768px) {
-  .app-header-toolbar-label {
-    max-width: 100%;
-    font-size: 12px;
+  .app-header-greeting-icon {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
   }
 
-  .app-header-user-tag.ant-tag {
-    max-width: min(100%, 220px);
+  .app-header-greeting-title {
+    font-size: 15.5px;
+  }
+
+  .app-header-greeting-subtitle {
+    font-size: 12px;
   }
 }
 
@@ -191,7 +248,6 @@
     gap: 6px !important;
   }
 
-  .app-header-user-tag.ant-tag,
   .app-header-role-tag.ant-tag,
   .app-header-logout-button.ant-btn {
     height: 30px;

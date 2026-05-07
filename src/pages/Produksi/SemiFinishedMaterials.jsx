@@ -109,7 +109,7 @@ const buildFormValues = (record = {}) => {
             Number(record.currentStock || 0) - Number(record.reservedStock || 0),
             0,
           ),
-    minStockAlert: hasVariants ? totals.minStockAlert : Number(record.minStockAlert || 0),
+    minStockAlert: Number(record.minStockAlert || 0),
     averageCostPerUnit:
       hasVariants
         ? Number(totals.averageCostPerUnit || 0)
@@ -128,19 +128,39 @@ const getVariantDisplayLabel = (variant = {}, index = 0) =>
 
 // StockDisplayBlock dipakai untuk table utama agar format Total/Tersedia/variant pill sama dengan Products dan Stock Report.
 
+/* =====================================================
+SECTION: Semi Finished Minimum Stock Status — AKTIF
+Fungsi:
+- Menentukan status minimum stok Semi Finished secara read-only memakai stok tersedia lebih dulu, lalu fallback stok lama.
+
+Dipakai oleh:
+- SemiFinishedMaterials.jsx summary, filter status, table row, dan drawer detail.
+
+Alasan perubahan:
+- `minStockAlert` Semi Finished adalah threshold master item; status harus konsisten dengan Dashboard/Stock Report dan tidak boleh membaca min stock varian.
+
+Catatan cleanup:
+- `variants[].minStockAlert` tetap legacy-compat di data/helper dan tidak dipakai oleh helper status ini.
+
+Risiko:
+- Jika status kembali memakai currentStock langsung atau min alert varian, item dengan reserved stock bisa salah terlihat aman dan rule master-level menjadi tidak konsisten.
+===================================================== */
+const getSemiFinishedMinimumStockValue = (record = {}) =>
+  Number(record.availableStock ?? record.currentStock ?? record.stock ?? 0);
+
 const getStockStatusMeta = (record = {}) => {
-  const totalStock = Number(record.currentStock || 0);
+  const comparableStock = getSemiFinishedMinimumStockValue(record);
   const minStockAlert = Number(record.minStockAlert || 0);
 
   if (!record.isActive) {
     return { color: "default", label: "Nonaktif", alertType: "info" };
   }
 
-  if (totalStock <= 0) {
+  if (comparableStock <= 0) {
     return { color: "red", label: "Kosong", alertType: "error" };
   }
 
-  if (totalStock <= minStockAlert) {
+  if (minStockAlert > 0 && comparableStock <= minStockAlert) {
     return { color: "orange", label: "Stok Rendah", alertType: "warning" };
   }
 
@@ -219,19 +239,28 @@ const SemiFinishedMaterials = () => {
   const watchedMinStockAlert = Form.useWatch("minStockAlert", form) || 0;
   const watchedAverageCost = Form.useWatch("averageCostPerUnit", form) || 0;
 
-  const calculatedTotals = useMemo(
-    () => hasVariantsValue ? calculateSemiFinishedTotalsFromVariants(watchedVariants) : {
+  const calculatedTotals = useMemo(() => {
+    const masterMinStockAlert = Number(watchedMinStockAlert || 0);
+
+    if (hasVariantsValue) {
+      const variantTotals = calculateSemiFinishedTotalsFromVariants(watchedVariants);
+      return {
+        ...variantTotals,
+        minStockAlert: masterMinStockAlert,
+      };
+    }
+
+    return {
       currentStock: Number(watchedCurrentStock || 0),
       reservedStock: Number(watchedReservedStock || 0),
       availableStock: Math.max(Number(watchedCurrentStock || 0) - Number(watchedReservedStock || 0), 0),
-      minStockAlert: Number(watchedMinStockAlert || 0),
+      minStockAlert: masterMinStockAlert,
       averageCostPerUnit: Number(watchedAverageCost || 0),
       variantCount: 0,
       activeVariantCount: 0,
       variants: [],
-    },
-    [hasVariantsValue, watchedVariants, watchedCurrentStock, watchedReservedStock, watchedMinStockAlert, watchedAverageCost],
-  );
+    };
+  }, [hasVariantsValue, watchedVariants, watchedCurrentStock, watchedReservedStock, watchedMinStockAlert, watchedAverageCost]);
 
   // ---------------------------------------------------------------------------
   // Ringkasan card atas halaman.
@@ -243,9 +272,8 @@ const SemiFinishedMaterials = () => {
     const inactive = total - active;
 
     const lowStock = materials.filter((item) => {
-      const available = Number(item.availableStock || 0);
-      const min = Number(item.minStockAlert || 0);
-      return available <= min;
+      const statusMeta = getStockStatusMeta(item);
+      return statusMeta.label === "Kosong" || statusMeta.label === "Stok Rendah";
     }).length;
 
     return { total, active, inactive, lowStock };
@@ -530,7 +558,7 @@ const SemiFinishedMaterials = () => {
   // - Drawer Detail Semi Finished Material pada halaman SemiFinishedMaterials.
   //
   // Alasan perubahan:
-  // - Kolom stok, kode, status, min alert, dan cost dipadatkan agar drawer tidak perlu scroll horizontal besar.
+  // - Kolom stok, kode, status, dan cost dipadatkan agar drawer tidak perlu scroll horizontal besar tanpa mengaktifkan min stock per varian.
   //
   // Catatan cleanup:
   // - Bisa diekstrak menjadi komponen shared variant detail jika tabel detail varian dipakai ulang.
@@ -593,14 +621,11 @@ const SemiFinishedMaterials = () => {
       },
     },
     {
-      title: "Alert / Cost",
-      key: "alertCost",
-      width: 160,
+      title: "Avg Cost",
+      key: "averageCost",
+      width: 140,
       render: (_, variant) => (
         <div style={compactCellStyles.stack}>
-          <Typography.Text>
-            Min: {formatStockWithUnit(variant.minStockAlert, selectedMaterialUnit)}
-          </Typography.Text>
           <Typography.Text type="secondary" style={compactCellStyles.meta}>
             Avg: {formatCurrency(variant.averageCostPerUnit)}
           </Typography.Text>
@@ -863,7 +888,33 @@ const SemiFinishedMaterials = () => {
           />
 
           {hasVariantsValue ? (
-          <Form.List name="variants">
+          <>
+            {/* =====================================================
+            SECTION: Semi Finished Variant Form Without Variant Min Stock — AKTIF
+            Fungsi:
+            - menampilkan varian sebagai bucket stok fisik sambil menjaga Min Stock Alert sebagai field master item.
+
+            Dipakai oleh:
+            - SemiFinishedMaterials.jsx create/edit drawer dan semiFinishedMaterialsService payload.
+
+            Alasan perubahan:
+            - `variants[].minStockAlert` adalah legacy-compat; minimum stock Semi Finished tidak lagi diisi per varian.
+
+            Catatan cleanup:
+            - field legacy varian dapat diaudit pada batch maintenance terpisah.
+
+            Risiko:
+            - input min stock per varian yang diaktifkan lagi akan membuat status Perlu Dicek tidak konsisten dengan source master.
+            ===================================================== */}
+            <Row gutter={16}>
+              <Col xs={24} md={8}>
+                <Form.Item label="Min Stock Alert Master" name="minStockAlert">
+                  <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.List name="variants">
             {(fields, { add, remove }) => (
               <Space direction="vertical" style={{ width: "100%" }} size={12}>
                 {fields.map((field, index) => (
@@ -925,7 +976,7 @@ const SemiFinishedMaterials = () => {
                         </Form.Item>
                       </Col>
 
-                      <Col xs={24} md={6}>
+                      <Col xs={24} md={8}>
                         <Form.Item
                           {...field}
                           label="Current Stock"
@@ -936,7 +987,7 @@ const SemiFinishedMaterials = () => {
                         </Form.Item>
                       </Col>
 
-                      <Col xs={24} md={6}>
+                      <Col xs={24} md={8}>
                         <Form.Item
                           {...field}
                           label="Reserved Stock"
@@ -947,17 +998,7 @@ const SemiFinishedMaterials = () => {
                         </Form.Item>
                       </Col>
 
-                      <Col xs={24} md={6}>
-                        <Form.Item
-                          {...field}
-                          label="Min Stock Alert"
-                          name={[field.name, "minStockAlert"]}
-                        >
-                          <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-                        </Form.Item>
-                      </Col>
-
-                      <Col xs={24} md={6}>
+                      <Col xs={24} md={8}>
                         <Form.Item
                           {...field}
                           label="Average Cost / Unit"
@@ -981,6 +1022,7 @@ const SemiFinishedMaterials = () => {
               </Space>
             )}
           </Form.List>
+          </>
           ) : (
             <Row gutter={16}>
               <Col xs={24} md={6}>
@@ -1008,11 +1050,23 @@ const SemiFinishedMaterials = () => {
 
           <Divider orientation="left">Ringkasan Stok Master</Divider>
 
-          {/* IMS NOTE [AKTIF/GUARDED] - Ringkasan stok master pasif.
-              Fungsi blok: mengganti Alert info menjadi panel read-only untuk menjelaskan total master/akumulasi varian.
-              Hubungan flow: hanya presentational; perhitungan calculatedTotals, stock guard, variantKey, dan service semi finished tetap tidak berubah.
-              Alasan logic: ringkasan stok master adalah snapshot pasif, bukan warning/error produksi.
-              Status: AKTIF untuk UI Semi Finished Material, GUARDED terhadap flow produksi dan stok. */}
+          {/* =====================================================
+          SECTION: Semi Finished Master Stock Summary — AKTIF
+          Fungsi:
+          - menampilkan current/reserved/available total dari varian dan Min Stock Alert dari field master item.
+
+          Dipakai oleh:
+          - SemiFinishedMaterials.jsx form summary sebelum create/edit disimpan.
+
+          Alasan perubahan:
+          - ringkasan lama menyebut Min Stock Alert sebagai akumulasi varian, padahal rule final memakai master `minStockAlert`.
+
+          Catatan cleanup:
+          - belum ada.
+
+          Risiko:
+          - wording/perhitungan yang kembali ke total varian akan membingungkan validasi low stock Semi Finished.
+          ===================================================== */}
           <div className="ims-readonly-panel">
             <div className="ims-readonly-panel-header">
               <div>
@@ -1021,12 +1075,12 @@ const SemiFinishedMaterials = () => {
                 </div>
                 <div className="ims-readonly-panel-description">
                   {hasVariantsValue
-                    ? "Current Stock, Reserved Stock, Available Stock, dan Min Stock Alert total di bawah ini adalah hasil akumulasi seluruh varian."
+                    ? "Current Stock, Reserved Stock, dan Available Stock adalah total varian. Min Stock Alert tetap satu angka master item."
                     : "Ringkasan di bawah ini adalah nilai stok master langsung karena item ini tidak memakai varian."}
                 </div>
               </div>
               <Tag color={hasVariantsValue ? "purple" : "default"}>
-                {hasVariantsValue ? "Akumulasi Varian" : "Master"}
+                {hasVariantsValue ? "Stok Varian + Min Master" : "Master"}
               </Tag>
             </div>
           </div>
@@ -1051,7 +1105,7 @@ const SemiFinishedMaterials = () => {
             </Col>
 
             <Col xs={24} md={6}>
-              <Form.Item label="Total Min Stock Alert">
+              <Form.Item label="Min Stock Alert Master">
                 <Input value={formatNumber(calculatedTotals.minStockAlert)} disabled />
               </Form.Item>
             </Col>
@@ -1232,7 +1286,7 @@ const SemiFinishedMaterials = () => {
               <Descriptions.Item label="Available Stock Total">
                 {formatStockWithUnit(selectedMaterial.availableStock, selectedMaterialUnit)}
               </Descriptions.Item>
-              <Descriptions.Item label="Min Stock Alert Total">
+              <Descriptions.Item label="Min Stock Alert Master">
                 {formatStockWithUnit(selectedMaterial.minStockAlert, selectedMaterialUnit)}
               </Descriptions.Item>
               <Descriptions.Item label="Max Stock Target">

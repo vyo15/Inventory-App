@@ -216,11 +216,31 @@ const ResetMaintenanceData = () => {
   const [maintenanceLogs, setMaintenanceLogs] = useState([]);
   const [loadingMaintenanceLogs, setLoadingMaintenanceLogs] = useState(false);
 
+  /*
+  =====================================================
+  SECTION: Reset module options — GUARDED
+  Fungsi:
+  - Menampilkan pilihan module reset yang diteruskan ke resetMaintenanceDataService.
+
+  Dipakai oleh:
+  - Preview reset, modal confirmation, audit log, dan eksekusi reset maintenance.
+
+  Alasan perubahan:
+  - Menambahkan opsi Production Planning Only yang hanya menargetkan production_plans.
+
+  Catatan cleanup:
+  - belum ada.
+
+  Risiko:
+  - Value UI harus sama dengan module service; mismatch membuat preview/reset ditolak guard service.
+  =====================================================
+  */
   const moduleOptions = useMemo(
     () => [
       { label: "Penjualan + Income Sales", value: "sales" },
       { label: "Pembelian + Expense Purchases", value: "purchases" },
       { label: "Retur", value: "returns" },
+      { label: "Production Planning / Planning Produksi", value: "production_planning_only" },
       { label: "Produksi (Lengkap)", value: "production" },
       { label: "Produksi + Inventory Log Produksi", value: "production_core_and_logs" },
       { label: "Payroll Produksi Saja", value: "production_payroll_only" },
@@ -237,6 +257,7 @@ const ResetMaintenanceData = () => {
     return selectedModules.map((value) => labelMap.get(value) || value);
   }, [moduleOptions, selectedModules]);
 
+  const isProductionPlanningOnlySelected = selectedModules.includes("production_planning_only");
 
   const resetBlockedReason = useMemo(() => {
     // -------------------------------------------------------------------------
@@ -1472,6 +1493,15 @@ const ResetMaintenanceData = () => {
                     ))}
                   </Space>
                 </Checkbox.Group>
+                {isProductionPlanningOnlySelected && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ marginTop: 12 }}
+                    message="Reset Production Planning hanya menghapus production_plans"
+                    description="Production Order, Work Log, Payroll, HPP, stok, dan report tidak ikut dihapus. PO lama dapat tetap menyimpan reference planningId/planningCode/planningTitle setelah planning direset."
+                  />
+                )}
               </Card>
             </Col>
           </Row>

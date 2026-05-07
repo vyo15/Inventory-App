@@ -96,7 +96,6 @@ const DEFAULT_PRODUCT_VARIANT = {
   sku: '',
   currentStock: 0,
   reservedStock: 0,
-  minStockAlert: 0,
   averageCostPerUnit: 0,
   isActive: true,
 };
@@ -731,12 +730,37 @@ const Products = () => {
                 ? 'Produk lama ini stoknya 0, jadi boleh mulai memakai varian. Stok tiap varian baru tetap 0 sampai diubah lewat Stock Adjustment/transaksi resmi.'
                 : stockEditHelpText
               : hasVariantsValue
-                ? 'Harga produk tetap di master. Di bawah ini mengatur stok awal, minimum stok, dan status per varian.'
-                : 'Produk tanpa varian memakai stok awal langsung di master produk.'}
+                ? 'Harga produk tetap di master. Varian hanya mengatur bucket stok fisik; Minimum Stok tetap satu angka di master produk.'
+                : 'Produk tanpa varian memakai stok awal dan minimum stok langsung di master produk.'}
           />
 
           {hasVariantsValue ? (
             <>
+              {/* =====================================================
+              SECTION: Product Variant Form Without Variant Min Stock — AKTIF
+              Fungsi:
+              - menampilkan bucket stok fisik per varian sambil menjaga Minimum Stok sebagai field master produk.
+
+              Dipakai oleh:
+              - Products.jsx create/edit drawer dan productsService master payload.
+
+              Alasan perubahan:
+              - `variants[].minStockAlert` adalah legacy-compat; user tidak lagi mengisi min stock per varian.
+
+              Catatan cleanup:
+              - field legacy varian dapat diaudit pada batch maintenance terpisah tanpa migrasi otomatis di UI ini.
+
+              Risiko:
+              - mengembalikan input min stock per varian akan membuat threshold low stock Product tidak konsisten dengan source master.
+              ===================================================== */}
+              <Row gutter={16}>
+                <Col xs={24} md={8}>
+                  <Form.Item name="minStockAlert" label="Minimum Stok Master">
+                    <InputNumber style={{ width: '100%' }} min={0} step={1} precision={0} parser={parseIntegerIdInput} />
+                  </Form.Item>
+                </Col>
+              </Row>
+
               <Form.List name="variants">
                 {(fields, { add, remove }) => (
                   <Space direction="vertical" style={{ width: '100%' }} size={12}>
@@ -779,12 +803,7 @@ const Products = () => {
                               <InputNumber style={{ width: '100%' }} min={0} step={1} precision={0} parser={parseIntegerIdInput} disabled={isEditingProduct} />
                             </Form.Item>
                           </Col>
-                          <Col xs={24} md={4}>
-                            <Form.Item {...field} name={[field.name, 'minStockAlert']} label="Min Stok" initialValue={0}>
-                              <InputNumber style={{ width: '100%' }} min={0} step={1} precision={0} parser={parseIntegerIdInput} />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} md={1}>
+                          <Col xs={24} md={3}>
                             <Form.Item {...field} name={[field.name, 'isActive']} label="Aktif" valuePropName="checked" initialValue>
                               <Switch />
                             </Form.Item>
@@ -847,9 +866,11 @@ const Products = () => {
               </Col>
               <Col xs={24} md={8}>
                 <Statistic
-                  title={hasVariantsValue ? 'Reserved Total' : `Min Stok | Reserved ${formatNumberID(watchedReservedStock)}`}
-                  value={hasVariantsValue ? watchedVariants.reduce((sum, item) => sum + Number(item?.reservedStock || 0), 0) : watchedMinStockAlert}
-                  formatter={(value) => formatNumberID(value)}
+                  title={hasVariantsValue ? 'Reserved Total | Min Master' : `Min Stok | Reserved ${formatNumberID(watchedReservedStock)}`}
+                  value={hasVariantsValue
+                    ? `${formatNumberID(watchedVariants.reduce((sum, item) => sum + Number(item?.reservedStock || 0), 0))} | ${formatNumberID(watchedMinStockAlert)}`
+                    : watchedMinStockAlert}
+                  formatter={(value) => hasVariantsValue ? value : formatNumberID(value)}
                 />
               </Col>
             </Row>
@@ -879,36 +900,57 @@ const Products = () => {
 
             <Card size="small" title={selectedProduct.hasVariants ? 'Rincian Varian Produk' : 'Rincian Stok Master'}>
               {selectedProduct.hasVariants ? (
-                <Table
-                  className="ims-table"
-                  rowKey={(record, index) => `${selectedProduct.id}-${record.variantKey || record.color || index}`}
-                  pagination={false}
-                  size="small"
-                  dataSource={selectedProduct.variants || []}
-                  columns={[
-                    {
-                      title: selectedProduct.variantLabel || 'Varian',
-                      dataIndex: 'color',
-                      render: (_, variant, index) => getVariantDisplayLabel(variant, index),
-                    },
-                    { title: 'SKU', dataIndex: 'sku', render: (value) => value || '-' },
-                    { title: 'Stok', dataIndex: 'currentStock', render: (value) => formatStockWithUnit(value || 0) },
-                    { title: 'Reserved', dataIndex: 'reservedStock', render: (value) => formatStockWithUnit(value || 0) },
-                    {
-                      title: 'Tersedia',
-                      key: 'availableStock',
-                      render: (_, variant) => formatStockWithUnit(
-                        Math.max(Number(variant.currentStock || 0) - Number(variant.reservedStock || 0), 0),
-                      ),
-                    },
-                    { title: 'Min Stok', dataIndex: 'minStockAlert', render: (value) => formatStockWithUnit(value || 0) },
-                    {
-                      title: 'Status',
-                      dataIndex: 'isActive',
-                      render: (value) => <Tag className="ims-status-tag" color={value === false ? 'default' : 'green'}>{value === false ? 'Nonaktif' : 'Aktif'}</Tag>,
-                    },
-                  ]}
-                />
+                <>
+                  {/* =====================================================
+                  SECTION: Product Variant Detail Without Variant Min Stock — AKTIF
+                  Fungsi:
+                  - menampilkan stok fisik varian tanpa membuat minimum stok terlihat sebagai angka per varian.
+
+                  Dipakai oleh:
+                  - drawer detail Products dan audit visual stok produk bervarian.
+
+                  Alasan perubahan:
+                  - Minimum Stok sekarang threshold master `products.minStockAlert`, bukan total atau field per varian.
+
+                  Catatan cleanup:
+                  - `variants[].minStockAlert` lama tetap boleh ada di data lama tetapi tidak ditampilkan di drawer ini.
+
+                  Risiko:
+                  - menampilkan kembali kolom Min Stok per varian bisa membuat user mengira low stock dihitung per bucket varian.
+                  ===================================================== */}
+                  <Descriptions bordered column={1} size="small" style={{ marginBottom: 12 }}>
+                    <Descriptions.Item label="Minimum Stok Master">{formatStockWithUnit(selectedProduct.minStockAlert)}</Descriptions.Item>
+                  </Descriptions>
+                  <Table
+                    className="ims-table"
+                    rowKey={(record, index) => `${selectedProduct.id}-${record.variantKey || record.color || index}`}
+                    pagination={false}
+                    size="small"
+                    dataSource={selectedProduct.variants || []}
+                    columns={[
+                      {
+                        title: selectedProduct.variantLabel || 'Varian',
+                        dataIndex: 'color',
+                        render: (_, variant, index) => getVariantDisplayLabel(variant, index),
+                      },
+                      { title: 'SKU', dataIndex: 'sku', render: (value) => value || '-' },
+                      { title: 'Stok', dataIndex: 'currentStock', render: (value) => formatStockWithUnit(value || 0) },
+                      { title: 'Reserved', dataIndex: 'reservedStock', render: (value) => formatStockWithUnit(value || 0) },
+                      {
+                        title: 'Tersedia',
+                        key: 'availableStock',
+                        render: (_, variant) => formatStockWithUnit(
+                          Math.max(Number(variant.currentStock || 0) - Number(variant.reservedStock || 0), 0),
+                        ),
+                      },
+                      {
+                        title: 'Status',
+                        dataIndex: 'isActive',
+                        render: (value) => <Tag className="ims-status-tag" color={value === false ? 'default' : 'green'}>{value === false ? 'Nonaktif' : 'Aktif'}</Tag>,
+                      },
+                    ]}
+                  />
+                </>
               ) : (
                 <Descriptions bordered column={1} size="small">
                   <Descriptions.Item label="Stok Master">{formatStockWithUnit(selectedProduct.currentStock)}</Descriptions.Item>

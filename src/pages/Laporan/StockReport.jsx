@@ -16,22 +16,37 @@ import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/La
 const { Search } = Input;
 const { Option } = Select;
 
-// =========================
-// SECTION: Threshold stok rendah
-// Catatan:
-// - nilai ini memang masih sederhana sesuai current state docs
-// - refactor UI ini sengaja tidak mengubah business behavior laporan stok
-// =========================
-const LOW_STOCK_THRESHOLD = 10;
+/* =====================================================
+SECTION: Stock Report Minimum Stock Status — AKTIF
+Fungsi:
+- Menentukan status stok report secara read-only memakai threshold master per entity, bukan angka statis global.
 
+Dipakai oleh:
+- Normalisasi row StockReport, tabel, filter status, summary, dan export XLSX.
+
+Alasan perubahan:
+- Stock Report harus konsisten dengan Dashboard/master page: Product memakai `minStockAlert`, Raw Material memakai `minStock`, Semi Finished memakai `minStockAlert`, dan stok pembanding memakai available-first.
+
+Catatan cleanup:
+- Belum ada fallback threshold statis; item dengan threshold kosong/0 hanya menjadi rendah jika stok benar-benar habis.
+
+Risiko:
+- Jika threshold statis atau `variants[].minStockAlert` dipakai lagi, report bisa berbeda dari Dashboard/master page dan menandai item rendah secara salah.
+===================================================== */
 const resolveDisplayStock = (item = {}) =>
-  Number(item.currentStock ?? item.stock ?? item.availableStock ?? 0);
+  Number(item.availableStock ?? item.currentStock ?? item.stock ?? 0);
 
 const resolveDisplayUnit = (item = {}) => item.unit || item.stockUnit || "pcs";
 
-const resolveStatus = (stockValue) => {
-  if (stockValue === 0) return "Habis";
-  if (stockValue < LOW_STOCK_THRESHOLD) return "Kritis";
+const resolveMasterThreshold = (item = {}, typeLabel = "") => {
+  const thresholdSource = typeLabel === "Bahan Baku" ? item.minStock : item.minStockAlert;
+  const threshold = Number(thresholdSource ?? 0);
+  return Number.isFinite(threshold) && threshold > 0 ? threshold : 0;
+};
+
+const resolveStatus = (stockValue, thresholdValue) => {
+  if (stockValue <= 0) return "Habis";
+  if (thresholdValue > 0 && stockValue <= thresholdValue) return "Kritis";
   return "Normal";
 };
 
@@ -48,14 +63,16 @@ const mapInventorySnapshotToReportRows = (snapshot, typeLabel) =>
   snapshot.docs.map((documentItem) => {
     const payload = documentItem.data();
     const stockValue = resolveDisplayStock(payload);
+    const minimumStockThreshold = resolveMasterThreshold(payload, typeLabel);
 
     return {
       id: documentItem.id,
       ...payload,
       stockDisplay: stockValue,
+      minStockDisplay: minimumStockThreshold,
       unitDisplay: resolveDisplayUnit(payload),
       type: typeLabel,
-      status: resolveStatus(stockValue),
+      status: resolveStatus(stockValue, minimumStockThreshold),
     };
   });
 
@@ -179,8 +196,8 @@ const StockReport = () => {
   }, [categories, inventory]);
 
   const totalItems = filteredData.length;
-  const lowStockItems = filteredData.filter((item) => item.stockDisplay < LOW_STOCK_THRESHOLD);
-  const criticalStockItems = filteredData.filter((item) => item.stockDisplay === 0);
+  const lowStockItems = filteredData.filter((item) => item.status === "Kritis" || item.status === "Habis");
+  const criticalStockItems = filteredData.filter((item) => item.status === "Habis");
 
   const summaryItems = useMemo(
     () => [
@@ -195,14 +212,14 @@ const StockReport = () => {
         key: "stock-low-items",
         title: "Item Stok Rendah",
         value: formatNumberId(lowStockItems.length),
-        subtitle: `Threshold aktif < ${LOW_STOCK_THRESHOLD}.`,
+        subtitle: "Mengikuti threshold master tiap item.",
         accent: "warning",
       },
       {
         key: "stock-empty-items",
         title: "Item Stok Habis",
         value: formatNumberId(criticalStockItems.length),
-        subtitle: "Item dengan stok 0 pada data yang sedang tampil.",
+        subtitle: "Item dengan stok 0 atau kurang pada data yang sedang tampil.",
         accent: "danger",
       },
     ],
@@ -239,7 +256,8 @@ const StockReport = () => {
         { key: "name", label: "Nama Item" },
         { key: "category", label: "Kategori" },
         { key: "type", label: "Jenis" },
-        { key: "stockDisplay", label: "Stok" },
+        { key: "stockDisplay", label: "Stok Tersedia" },
+        { key: "minStockDisplay", label: "Minimum Stok Master" },
         { key: "unitDisplay", label: "Satuan" },
         { key: "status", label: "Status" },
       ],
@@ -262,7 +280,7 @@ const StockReport = () => {
   - StockReport sebelumnya masih menampilkan angka stok sederhana walaupun normalisasi row mempertahankan field variants/currentStock/availableStock dari source collection.
 
   Catatan cleanup:
-  - Export XLSX masih tetap memakai stockDisplay angka lama agar mapping report tidak berubah pada patch UI-only ini.
+  - Export XLSX memakai status dan minimum stok master yang sama dengan tabel agar report tidak berbeda dari Dashboard/master page.
 
   Risiko:
   - Jangan mengubah query, filter, summary, export mapping, atau perhitungan stockDisplay dari section ini tanpa approval report/data layer.
@@ -403,7 +421,7 @@ const StockReport = () => {
 
       <PageSection
         title="Tabel Laporan Stok"
-        subtitle="Field stok tampilan mengikuti fallback currentStock → stock → availableStock dan sudah mencakup semi-finished stock produksi."
+        subtitle="Field stok tampilan mengikuti fallback availableStock → currentStock → stock dan status rendah memakai minimum stok master per item."
         extra={<Tag color="blue">{formatNumberId(filteredData.length)} baris</Tag>}
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredData} />

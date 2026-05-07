@@ -53,6 +53,8 @@ import {
   createProductionPlan,
   getAllProductionPlans,
   getProductionPlanningReferenceData,
+  isProductionPlanPoAllowed,
+  normalizeProductionPlanStatus,
   updateProductionPlan,
 } from "../../services/Produksi/productionPlanningService";
 import { buildVariantOptionsFromItem } from "../../utils/variants/variantStockHelpers";
@@ -184,15 +186,55 @@ const isRangeOverlap = ({ startA, endA, startB, endB }) => {
   return aStart.isBefore(bEnd.add(1, "day")) && bStart.isBefore(aEnd.add(1, "day"));
 };
 
-const getStatusMeta = (status) => STATUS_META[status] || STATUS_META.active;
+const getPlanStatus = (planOrStatus = "") =>
+  normalizeProductionPlanStatus(
+    typeof planOrStatus === "string" ? planOrStatus : planOrStatus?.status,
+  );
+const getStatusMeta = (status) => STATUS_META[getPlanStatus(status)] || STATUS_META.active;
 const getPriorityMeta = (priority) => PRIORITY_META[priority] || PRIORITY_META.normal;
+const canCreatePoFromPlan = (plan = {}) => isProductionPlanPoAllowed({ ...plan, status: getPlanStatus(plan) });
+
+// =====================================================
+// SECTION: Production Planning UI guards — LEGACY-COMPAT
+// Fungsi:
+// - memakai status canonical yang sama dengan service untuk filter, label, dan guard Buat PO;
+// - memberi pesan error service yang lebih jelas saat cancel atau create PO gagal.
+//
+// Dipakai oleh:
+// - tabel Production Planning, detail drawer, action Cancel, dan drawer Buat PO.
+//
+// Alasan perubahan:
+// - status legacy cancel/canceled/Cancelled tidak boleh tetap terbaca overdue atau masih bisa dibuatkan PO.
+//
+// Catatan cleanup:
+// - helper lokal bisa disederhanakan jika seluruh data lama sudah memakai status canonical.
+//
+// Risiko:
+// - guard UI harus tetap sejalan dengan service agar tidak membuka flow PO untuk status final.
+// =====================================================
+const getActionErrorMessage = (error, fallback) => {
+  if (error?.type === "validation" && error?.errors) {
+    return Object.values(error.errors).filter(Boolean).join("; ") || fallback;
+  }
+
+  return error?.message || fallback;
+};
+
+const normalizePlanningTargetType = (value = "") => {
+  const normalized = String(value || "").trim().toLowerCase().replace(/[_-]+/g, " ");
+  if (["semi finished", "semi finished material", "semifinished"].includes(normalized)) {
+    return "semi_finished_material";
+  }
+  if (["product", "finished product"].includes(normalized)) return "product";
+  return normalized || "product";
+};
 
 const getTargetTypeLabel = (targetType) =>
-  targetType === "product" ? "Produk Jadi" : "Semi Finished";
+  normalizePlanningTargetType(targetType) === "product" ? "Produk Jadi" : "Semi Finished";
 
 const getTargetOptions = ({ targetType, referenceData }) => {
   const items =
-    targetType === "product"
+    normalizePlanningTargetType(targetType) === "product"
       ? referenceData.products || []
       : referenceData.semiFinishedMaterials || [];
 
@@ -205,22 +247,25 @@ const getTargetOptions = ({ targetType, referenceData }) => {
 
 const getTargetItemById = ({ targetType, targetItemId, referenceData }) => {
   const items =
-    targetType === "product"
+    normalizePlanningTargetType(targetType) === "product"
       ? referenceData.products || []
       : referenceData.semiFinishedMaterials || [];
 
   return items.find((item) => item.id === targetItemId) || null;
 };
 
-const getMatchingBomOptions = ({ plan, referenceData }) =>
-  (referenceData.boms || [])
-    .filter((bom) => bom.targetType === plan?.targetType)
+const getMatchingBomOptions = ({ plan, referenceData }) => {
+  const planTargetType = normalizePlanningTargetType(plan?.targetType);
+
+  return (referenceData.boms || [])
+    .filter((bom) => normalizePlanningTargetType(bom.targetType) === planTargetType)
     .filter((bom) => !plan?.targetItemId || bom.targetId === plan.targetItemId)
     .map((bom) => ({
       value: bom.id,
       label: `${bom.name || bom.code || "BOM"}${bom.batchOutputQty ? ` · Output ${formatQuantityId(bom.batchOutputQty)} ${bom.targetUnit || "pcs"}` : ""}`,
       raw: bom,
     }));
+};
 
 // =====================================================
 // ACTIVE - Production Planning page.
@@ -296,14 +341,14 @@ const ProductionPlanning = () => {
   }, []);
 
   const summary = useMemo(() => {
-    const activePlans = plans.filter((plan) => plan.status !== "cancelled");
+    const activePlans = plans.filter((plan) => getPlanStatus(plan) !== "cancelled");
     const targetQty = activePlans.reduce((sum, plan) => sum + Number(plan.targetQty || 0), 0);
     const completedQty = activePlans.reduce((sum, plan) => sum + Number(plan.actualCompletedQty || 0), 0);
 
     return {
-      activeCount: activePlans.filter((plan) => plan.status === "active" || plan.status === "draft").length,
-      completedCount: activePlans.filter((plan) => plan.status === "completed").length,
-      overdueCount: activePlans.filter((plan) => plan.status === "overdue").length,
+      activeCount: activePlans.filter((plan) => ["active", "draft"].includes(getPlanStatus(plan))).length,
+      completedCount: activePlans.filter((plan) => getPlanStatus(plan) === "completed").length,
+      overdueCount: activePlans.filter((plan) => getPlanStatus(plan) === "overdue").length,
       targetQty,
       completedQty,
       progressPercent: targetQty > 0 ? (completedQty / targetQty) * 100 : 0,
@@ -371,7 +416,7 @@ const ProductionPlanning = () => {
             .includes(normalizedSearch)
         : true;
 
-      const matchStatus = statusFilter === "all" || plan.status === statusFilter;
+      const matchStatus = statusFilter === "all" || getPlanStatus(plan) === statusFilter;
 
       const matchPeriod =
         periodFilter === "all" ||
@@ -493,9 +538,15 @@ const ProductionPlanning = () => {
       okButtonProps: { danger: true },
       cancelText: "Kembali",
       onOk: async () => {
-        await cancelProductionPlan(record.id, null);
-        message.success("Planning dibatalkan");
-        await loadData();
+        try {
+          await cancelProductionPlan(record.id, null);
+          message.success("Planning dibatalkan");
+          await loadData();
+        } catch (error) {
+          console.error(error);
+          message.error(getActionErrorMessage(error, "Gagal membatalkan planning. Cek koneksi atau permission."));
+          throw error;
+        }
       },
     });
   };
@@ -506,8 +557,17 @@ const ProductionPlanning = () => {
   };
 
   const handleOpenPoDrawer = (record) => {
+    if (!canCreatePoFromPlan(record)) {
+      message.warning("Planning cancelled/completed tidak bisa dibuatkan PO.");
+      return;
+    }
+
     const bomOptions = getMatchingBomOptions({ plan: record, referenceData });
     const firstBom = bomOptions[0]?.raw || null;
+
+    if (bomOptions.length === 0) {
+      message.warning("Belum ada BOM aktif yang cocok dengan target planning ini.");
+    }
     const suggestedBatch = firstBom?.batchOutputQty
       ? Math.max(Math.ceil(Number(record.remainingQty || record.targetQty || 0) / Number(firstBom.batchOutputQty || 1)), 1)
       : 1;
@@ -527,6 +587,11 @@ const ProductionPlanning = () => {
 
   const handleCreatePo = async () => {
     if (!selectedPlanForPo?.id) return;
+
+    if (!canCreatePoFromPlan(selectedPlanForPo)) {
+      message.warning("Planning cancelled/completed tidak bisa dibuatkan PO.");
+      return;
+    }
 
     try {
       const values = await poForm.validateFields();
@@ -549,7 +614,7 @@ const ProductionPlanning = () => {
     } catch (error) {
       if (error?.errorFields) return;
       console.error(error);
-      message.error(error?.message || "Gagal membuat PO dari planning");
+      message.error(getActionErrorMessage(error, "Gagal membuat PO dari planning"));
     } finally {
       setPoSubmitting(false);
     }
@@ -568,14 +633,14 @@ const ProductionPlanning = () => {
       key: "edit",
       label: "Edit",
       icon: <EditOutlined />,
-      disabled: ["cancelled"].includes(record.status),
+      disabled: getPlanStatus(record) === "cancelled",
     },
     {
       key: "cancel",
       label: "Cancel",
       icon: <StopOutlined />,
       danger: true,
-      disabled: ["cancelled", "completed"].includes(record.status),
+      disabled: !canCreatePoFromPlan(record),
     },
   ];
 
@@ -651,7 +716,7 @@ const ProductionPlanning = () => {
           <Space direction="vertical" size={2}>
             <Text strong>{record.targetItemName || "-"}</Text>
             <Space size={4} wrap>
-              <Tag color={record.targetType === "product" ? "purple" : "cyan"}>
+              <Tag color={normalizePlanningTargetType(record.targetType) === "product" ? "purple" : "cyan"}>
                 {getTargetTypeLabel(record.targetType)}
               </Tag>
               {record.targetVariantLabel ? (
@@ -705,7 +770,7 @@ const ProductionPlanning = () => {
             type="primary"
             className="ims-action-button"
             icon={<LinkOutlined />}
-            disabled={["cancelled", "completed"].includes(record.status)}
+            disabled={!canCreatePoFromPlan(record)}
             onClick={() => handleOpenPoDrawer(record)}
           >
             Buat PO
@@ -927,7 +992,7 @@ const ProductionPlanning = () => {
         onClose={() => setDetailVisible(false)}
         width={820}
         extra={
-          selectedPlan && !["cancelled", "completed"].includes(selectedPlan.status) ? (
+          selectedPlan && canCreatePoFromPlan(selectedPlan) ? (
             <Button type="primary" icon={<LinkOutlined />} onClick={() => handleOpenPoDrawer(selectedPlan)}>
               Buat PO
             </Button>

@@ -39,6 +39,45 @@ const toNumber = (value) => {
 };
 
 // =====================================================
+// SECTION: Canonical Production Planning status — LEGACY-COMPAT
+// Fungsi:
+// - menyamakan status legacy/campuran kapital seperti cancel, canceled, dan Cancelled ke status canonical;
+// - memastikan status final tidak dihitung ulang menjadi overdue hanya karena alias lama.
+//
+// Dipakai oleh:
+// - status calculation, summary, edit/cancel guard, dan createProductionOrderFromPlan.
+//
+// Alasan perubahan:
+// - filter Cancelled, label status, summary Overdue, dan tombol Buat PO harus membaca arti status yang sama.
+//
+// Catatan cleanup:
+// - alias legacy bisa dievaluasi ulang setelah data production_plans sudah konsisten memakai status canonical.
+//
+// Risiko:
+// - alias yang salah ditulis tetapi mirip status final akan diperlakukan sebagai final sehingga jangan diperluas tanpa audit data.
+// =====================================================
+export const normalizeProductionPlanStatus = (status = "") => {
+  const normalized = safeTrim(status || "active").toLowerCase().replace(/[_-]+/g, " ");
+
+  if (["cancel", "canceled", "cancelled", "dibatalkan", "batal"].includes(normalized)) {
+    return "cancelled";
+  }
+
+  if (["complete", "completed", "selesai", "done"].includes(normalized)) {
+    return "completed";
+  }
+
+  if (["draft", "active", "overdue", "inactive", "deleted", "archived"].includes(normalized)) {
+    return normalized;
+  }
+
+  return normalized || "active";
+};
+
+export const isProductionPlanPoAllowed = (plan = {}) =>
+  !["cancelled", "completed"].includes(normalizeProductionPlanStatus(plan.status));
+
+// =====================================================
 // ACTIVE - helper tanggal lokal berbasis YYYY-MM-DD.
 // Fungsi:
 // - menghindari status overdue meleset karena parsing timezone ISO;
@@ -236,8 +275,8 @@ export const getProductionPlanningReferenceData = async () => {
 // - aktif; tidak dipakai untuk stok/payroll/HPP.
 // =====================================================
 export const calculateProductionPlanStatus = (plan = {}, progress = {}) => {
-  const manualStatus = safeTrim(plan.status || "active").toLowerCase();
-  if (manualStatus === "cancelled") return "cancelled";
+  const manualStatus = normalizeProductionPlanStatus(plan.status || "active");
+  if (["cancelled", "completed"].includes(manualStatus)) return manualStatus;
 
   const targetQty = toNumber(plan.targetQty || progress.targetQty || 0);
   const actualCompletedQty = toNumber(progress.actualCompletedQty || 0);
@@ -325,6 +364,38 @@ const calculatePlanProgress = ({ plan = {}, orders = [], workLogs = [] }) => {
   };
 };
 
+// =====================================================
+// SECTION: Filter visible planning source — AKTIF
+// Fungsi:
+// - menyaring dokumen Planning yang explicit soft-deleted, archived, atau inactive agar tidak tampil di Dashboard/menu Planning.
+//
+// Dipakai oleh:
+// - getAllProductionPlans dan getProductionPlanById di productionPlanningService.js.
+//
+// Alasan perubahan:
+// - Dashboard harus sinkron dengan source of truth menu Planning dan tidak boleh menghitung Planning yang sudah tidak valid.
+//
+// Catatan cleanup:
+// - belum ada; rule ini tetap read-only dan tidak menambah schema/collection.
+//
+// Risiko:
+// - jika flag soft-delete/inactive disalahisi di data lama, Planning valid bisa tersembunyi dari menu dan Dashboard.
+// =====================================================
+const isVisibleProductionPlan = (plan = {}) => {
+  const status = normalizeProductionPlanStatus(plan.status);
+
+  return !(
+    plan.deleted === true ||
+    plan.isDeleted === true ||
+    plan.archived === true ||
+    plan.isArchived === true ||
+    plan.isActive === false ||
+    Boolean(plan.deletedAt) ||
+    Boolean(plan.archivedAt) ||
+    ["deleted", "archived", "inactive"].includes(status)
+  );
+};
+
 const normalizePlan = ({ plan = {}, orders = [], workLogs = [] }) => {
   const progress = calculatePlanProgress({ plan, orders, workLogs });
   const status = calculateProductionPlanStatus(plan, progress);
@@ -377,8 +448,10 @@ export const getAllProductionPlans = async () => {
   ]);
 
   return planDocs
-    .map((docItem) => normalizePlan({
-      plan: { id: docItem.id, ...docItem.data() },
+    .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
+    .filter(isVisibleProductionPlan)
+    .map((plan) => normalizePlan({
+      plan,
       orders,
       workLogs,
     }))
@@ -399,8 +472,11 @@ export const getProductionPlanById = async (id) => {
     getCompletedWorkLogsSafe(),
   ]);
 
+  const plan = { id: snap.id, ...snap.data() };
+  if (!isVisibleProductionPlan(plan)) return null;
+
   return normalizePlan({
-    plan: { id: snap.id, ...snap.data() },
+    plan,
     orders,
     workLogs,
   });
@@ -445,7 +521,7 @@ const buildPlanPayload = async (values = {}, currentUser = null, isEdit = false)
     targetVariantKey: safeTrim(values.targetVariantKey),
     targetVariantLabel: safeTrim(values.targetVariantLabel),
     targetQty: toNumber(values.targetQty),
-    status: values.status || "active",
+    status: normalizeProductionPlanStatus(values.status || "active"),
     priority: values.priority || "normal",
     linkedProductionOrderIds: Array.isArray(values.linkedProductionOrderIds)
       ? values.linkedProductionOrderIds
@@ -480,7 +556,7 @@ export const createProductionPlan = async (values = {}, currentUser = null) => {
 export const updateProductionPlan = async (id, values = {}, currentUser = null) => {
   const currentPlan = await getProductionPlanById(id);
   if (!currentPlan) throw new Error("Planning tidak ditemukan");
-  if (currentPlan.status === "cancelled") {
+  if (normalizeProductionPlanStatus(currentPlan.status) === "cancelled") {
     throw new Error("Planning yang sudah dibatalkan tidak bisa diedit");
   }
 
@@ -490,7 +566,9 @@ export const updateProductionPlan = async (id, values = {}, currentUser = null) 
     planCode: currentPlan.planCode,
     linkedProductionOrderIds: currentPlan.linkedProductionOrderIds || [],
     linkedProductionOrderCodes: currentPlan.linkedProductionOrderCodes || [],
-    status: currentPlan.status === "completed" ? "active" : values.status || currentPlan.status || "active",
+    status: normalizeProductionPlanStatus(
+      currentPlan.status === "completed" ? "active" : values.status || currentPlan.status || "active",
+    ),
   };
 
   const errors = validatePlanPayload(mergedValues);
@@ -536,7 +614,9 @@ export const createProductionOrderFromPlan = async ({
 } = {}, currentUser = null) => {
   const plan = await getProductionPlanById(planId);
   if (!plan) throw new Error("Planning tidak ditemukan");
-  if (plan.status === "cancelled") throw new Error("Planning cancelled tidak bisa dibuatkan PO");
+  if (!isProductionPlanPoAllowed(plan)) {
+    throw new Error("Planning cancelled/completed tidak bisa dibuatkan PO");
+  }
   if (!bomId) throw new Error("BOM wajib dipilih untuk membuat PO dari planning");
   if (toNumber(orderQty) <= 0) throw new Error("Qty batch PO harus lebih dari 0");
 
@@ -565,7 +645,9 @@ export const createProductionOrderFromPlan = async ({
   await updateDoc(doc(db, COLLECTION_NAME, plan.id), {
     linkedProductionOrderIds: nextIds,
     linkedProductionOrderCodes: nextCodes,
-    status: plan.status === "draft" ? "active" : plan.status || "active",
+    status: normalizeProductionPlanStatus(plan.status) === "draft"
+      ? "active"
+      : normalizeProductionPlanStatus(plan.status || "active"),
     updatedAt: serverTimestamp(),
     updatedBy:
       currentUser?.email || currentUser?.displayName || currentUser?.uid || "system",
@@ -587,7 +669,7 @@ export const createProductionOrderFromPlan = async ({
 // =====================================================
 const buildDashboardPriorityPlans = (items = [], maxItems = 3) =>
   items
-    .filter((plan) => !["completed", "cancelled"].includes(plan.status))
+    .filter((plan) => isProductionPlanPoAllowed(plan))
     .filter((plan) => toNumber(plan.remainingQty) > 0)
     .sort((left, right) => {
       const leftOverdueRank = left.status === "overdue" ? 0 : 1;
@@ -620,22 +702,29 @@ const buildDashboardPriorityPlans = (items = [], maxItems = 3) =>
     }));
 
 // =====================================================
-// ACTIVE - summary compact dashboard.
+// SECTION: Dashboard planning summary — AKTIF
 // Fungsi:
 // - menghitung target/progress minggu dan bulan berjalan;
-// - menghitung overdue, planning kurang target, dan planning prioritas.
-// Hubungan flow:
-// - actual progress tetap berasal dari Work Log completed lewat normalizePlan;
-// - Dashboard hanya membaca hasil summary dan tidak mengubah planning/PO/Work Log.
-// Status:
-// - read-only untuk Dashboard; tidak mengubah planning atau produksi.
+// - menghitung overdue, planning kurang target, dan planning prioritas dari Planning valid.
+//
+// Dipakai oleh:
+// - src/pages/Dashboard/Dashboard.jsx melalui getProductionPlanningDashboardSummary.
+//
+// Alasan perubahan:
+// - menjaga Dashboard ERP-consistent: summary berasal dari getAllProductionPlans yang sudah memfilter Planning tidak valid.
+//
+// Catatan cleanup:
+// - belum ada; progress Work Log completed dan fallback legacy goodQty tetap dipertahankan.
+//
+// Risiko:
+// - perubahan filter source of truth bisa memengaruhi semua pembaca getAllProductionPlans, jadi jangan diubah sembarangan.
 // =====================================================
 export const getProductionPlanningDashboardSummary = async () => {
   const plans = await getAllProductionPlans();
   const weekRange = getCurrentWeekRange();
   const monthRange = getCurrentMonthRange();
 
-  const activePlans = plans.filter((plan) => plan.status !== "cancelled");
+  const activePlans = plans.filter((plan) => normalizeProductionPlanStatus(plan.status) !== "cancelled");
   const weeklyPlans = activePlans.filter((plan) =>
     isRangeOverlap({
       startA: plan.periodStartDate,
@@ -673,7 +762,7 @@ export const getProductionPlanningDashboardSummary = async () => {
     monthly: summarize(monthlyPlans),
     overdueCount: activePlans.filter((plan) => plan.status === "overdue").length,
     behindTargetCount: activePlans.filter(
-      (plan) => !["completed", "cancelled"].includes(plan.status) && toNumber(plan.remainingQty) > 0,
+      (plan) => isProductionPlanPoAllowed(plan) && toNumber(plan.remainingQty) > 0,
     ).length,
     overduePlans: activePlans.filter((plan) => plan.status === "overdue").slice(0, 5),
     priorityPlans: buildDashboardPriorityPlans(activePlans, 3),

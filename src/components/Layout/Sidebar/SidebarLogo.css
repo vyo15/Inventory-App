@@ -1,145 +1,137 @@
-/* =========================
-   SECTION: Sidebar Logo Shell - AKTIF / UI ONLY
-   Fungsi:
-   - membuat area brand sidebar tetap rapi di light/dark mode dan saat collapsed.
-   Hubungan flow aplikasi:
-   - styling visual saja; tidak menyentuh route, role access, menu config, auth, stok, kas, atau modul bisnis.
-   Status:
-   - AKTIF untuk branding sidebar IMS Bunga Flanel.
-========================= */
+/* =====================================================
+SECTION: Sidebar Brand Logo Layout — AKTIF
+Fungsi:
+- menjaga logo, nama brand, dan subtitle sidebar tampil sebagai satu unit horizontal yang solid tanpa wrap.
+
+Dipakai oleh:
+- src/components/Layout/Sidebar/SidebarLogo.jsx.
+
+Alasan perubahan:
+- logo mark perlu tampil bersih tanpa frame/outline kuning mengganggu, sementara title/subtitle tetap no-wrap dan proporsional.
+
+Catatan cleanup:
+- belum ada.
+
+Risiko:
+- jika width sidebar atau ukuran logo diubah sembarangan, title/subtitle bisa cepat terpotong atau alignment collapsed ikut bergeser.
+===================================================== */
 .sidebar-logo {
   width: 100%;
-  min-height: 68px;
+  min-width: 0;
+  min-height: 52px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: nowrap;
+  gap: 10px;
+  padding: 8px 8px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
   overflow: hidden;
-  padding: 10px 14px;
-  border: 1px solid var(--ims-border-color-soft);
-  border-radius: 20px;
-  background: color-mix(in srgb, var(--ims-bg-card) 92%, transparent);
-  box-shadow: var(--ims-shadow-soft);
   transition:
     background-color 0.22s ease,
-    border-color 0.22s ease,
-    box-shadow 0.22s ease,
-    padding 0.22s ease;
+    padding 0.22s ease,
+    gap 0.22s ease;
+}
+
+.sidebar-logo:hover {
+  background: var(--ims-color-primary-softer);
 }
 
 .sidebar-logo.collapsed {
-  min-height: 64px;
+  min-height: 50px;
   justify-content: center;
-  padding: 10px;
+  padding: 7px;
 }
 
-/* =========================
-   SECTION: Uploaded Logo Mark - AKTIF / UI ONLY
-   Fungsi:
-   - menampilkan mark Flanel Karawang agar terbaca jelas dalam area sidebar kecil.
-   Hubungan flow aplikasi:
-   - mengganti icon visual lama; tidak mengubah handler collapse, menu key, atau navigasi.
-   Status:
-   - AKTIF sebagai versi kecil logo usaha.
-   - LEGACY: icon sparkles lama sudah tidak dipakai di JSX.
-========================= */
 .sidebar-logo-icon {
-  width: 46px;
-  height: 46px;
-  flex: 0 0 46px;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px solid var(--ims-border-color-soft);
-  border-radius: 16px;
-  background:
-    linear-gradient(135deg, rgba(47, 111, 177, 0.1), rgba(255, 198, 38, 0.1)),
-    color-mix(in srgb, var(--ims-bg-elevated) 88%, transparent);
-  box-shadow: 0 12px 24px rgba(47, 62, 82, 0.08);
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
 }
 
 .sidebar-logo.collapsed .sidebar-logo-icon {
-  width: 48px;
-  height: 48px;
-  flex-basis: 48px;
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
 }
 
 .sidebar-logo-mark {
-  width: 86%;
-  height: 86%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 6px 10px rgba(47, 62, 82, 0.16));
+  filter: drop-shadow(0 4px 8px rgba(47, 62, 82, 0.12));
 }
 
-/* =========================
-   SECTION: Sidebar Logo Text - AKTIF / UI ONLY
-   Fungsi:
-   - menjaga nama aplikasi dan brand owner tetap konsisten dengan login.
-   Hubungan flow aplikasi:
-   - teks branding saja; tidak memengaruhi struktur menu atau permission.
-   Status:
-   - AKTIF untuk sidebar expanded.
-========================= */
 .sidebar-logo-text-group {
   min-width: 0;
   flex: 1 1 auto;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  justify-content: center;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.sidebar-logo-title,
+.sidebar-logo-subtitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar-logo-title {
-  overflow: hidden;
   color: var(--ims-text-primary);
-  max-width: 100%;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.18;
+  letter-spacing: 0.005em;
 }
 
 .sidebar-logo-subtitle {
-  overflow: hidden;
   color: var(--ims-text-secondary);
-  max-width: 100%;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
 }
 
-/* =========================
-   SECTION: Mobile Polish - AKTIF / UI ONLY
-   Fungsi:
-   - menjaga logo tetap proporsional pada layar kecil tanpa mengubah layout sidebar global.
-   Hubungan flow aplikasi:
-   - responsive visual saja.
-   Status:
-   - AKTIF.
-========================= */
+.sidebar-logo.dark:hover {
+  background: var(--ims-sidebar-hover);
+}
+
 @media (max-width: 768px) {
   .sidebar-logo {
-    min-height: 62px;
-    padding: 10px 12px;
-    border-radius: 18px;
+    min-height: 50px;
+    padding: 7px 8px;
+    gap: 9px;
   }
 
   .sidebar-logo-icon {
-    width: 42px;
-    height: 42px;
-    flex-basis: 42px;
-    border-radius: 14px;
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+  }
+
+  .sidebar-logo.collapsed .sidebar-logo-icon {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
   }
 
   .sidebar-logo-title {
-    font-size: 14px;
+    font-size: 13.5px;
   }
 
   .sidebar-logo-subtitle {
-    font-size: 10.5px;
+    font-size: 10px;
   }
 }
