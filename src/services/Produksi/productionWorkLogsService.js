@@ -653,22 +653,11 @@ export const buildWorkLogDraftFromBom = (bom, selectedStepId = "") => {
 // =====================================================
 // Draft work log dari Production Order
 // =====================================================
-export const buildWorkLogDraftFromProductionOrder = async (
+const buildWorkLogDraftFromProductionOrderData = (
   productionOrder,
+  bom,
   selectedStepId = "",
 ) => {
-  if (!productionOrder?.bomId) {
-    throw new Error("BOM pada production order tidak ditemukan");
-  }
-
-  const bomRef = doc(db, "production_boms", productionOrder.bomId);
-  const bomSnap = await getDoc(bomRef);
-
-  if (!bomSnap.exists()) {
-    throw new Error("BOM dari production order tidak ditemukan");
-  }
-
-  const bom = { id: bomSnap.id, ...bomSnap.data() };
   const stepLines = Array.isArray(bom.stepLines) ? bom.stepLines : [];
   const requirementLines = Array.isArray(productionOrder.materialRequirementLines)
     ? productionOrder.materialRequirementLines
@@ -781,6 +770,28 @@ export const buildWorkLogDraftFromProductionOrder = async (
       },
     ],
   };
+};
+
+export const buildWorkLogDraftFromProductionOrder = async (
+  productionOrder,
+  selectedStepId = "",
+) => {
+  if (!productionOrder?.bomId) {
+    throw new Error("BOM pada production order tidak ditemukan");
+  }
+
+  const bomRef = doc(db, "production_boms", productionOrder.bomId);
+  const bomSnap = await getDoc(bomRef);
+
+  if (!bomSnap.exists()) {
+    throw new Error("BOM dari production order tidak ditemukan");
+  }
+
+  return buildWorkLogDraftFromProductionOrderData(
+    productionOrder,
+    { id: bomSnap.id, ...bomSnap.data() },
+    selectedStepId,
+  );
 };
 
 // =====================================================
@@ -1049,6 +1060,24 @@ export const createProductionWorkLogFromOrder = async (
   const workNumber = safeTrim(extraValues.workNumber) || (await generateProductionWorkLogNumber());
 
   return await runTransaction(db, async (transaction) => {
+    // =====================================================
+    // SECTION: Start Production transaction read-before-write — GUARDED
+    // Fungsi:
+    // - memulai produksi dari PO dengan membuat Work Log in_progress, memotong stok bahan, dan mengubah PO ke in_production;
+    // - memastikan semua transaction.get selesai sebelum transaction.update/set pertama.
+    //
+    // Dipakai oleh:
+    // - src/pages/Produksi/ProductionOrders.jsx melalui action Mulai Produksi.
+    //
+    // Alasan perubahan:
+    // - Firestore menolak transaction yang membaca dokumen setelah write pertama.
+    //
+    // Catatan cleanup:
+    // - complete Work Log punya transaksi berbeda dan perlu batch audit terpisah bila muncul error serupa.
+    //
+    // Risiko:
+    // - jika urutan read/write diubah sembarangan, stok bisa berkurang tanpa Work Log/PO konsisten atau transaksi kembali gagal.
+    // =====================================================
     const orderSnap = await transaction.get(orderRef);
     if (!orderSnap.exists()) {
       throw new Error("Production order tidak ditemukan");
@@ -1057,7 +1086,21 @@ export const createProductionWorkLogFromOrder = async (
     const order = { id: orderSnap.id, ...orderSnap.data() };
     assertProductionOrderStartable(order);
 
-    const draft = await buildWorkLogDraftFromProductionOrder(order);
+    if (!order.bomId) {
+      throw new Error("BOM pada production order tidak ditemukan");
+    }
+
+    const bomRef = doc(db, "production_boms", order.bomId);
+    const bomSnap = await transaction.get(bomRef);
+    if (!bomSnap.exists()) {
+      throw new Error("BOM dari production order tidak ditemukan");
+    }
+
+    const draft = buildWorkLogDraftFromProductionOrderData(
+      order,
+      { id: bomSnap.id, ...bomSnap.data() },
+      extraValues.selectedStepId || "",
+    );
     const payload = normalizePayload(
       {
         ...draft,
@@ -1074,10 +1117,41 @@ export const createProductionWorkLogFromOrder = async (
       false,
     );
 
-    // SECTION: workLogRef dibuat lebih awal karena id-nya dipakai oleh inventory log
-    // saat mutasi bahan keluar dalam transaksi start production.
+    // SECTION: workLogRef dibuat sebelum write karena id-nya dipakai metadata inventory log.
     const workLogRef = doc(collection(db, COLLECTION_NAME));
+    const stockReadMap = new Map();
+
+    for (const line of payload.materialUsages || []) {
+      const collectionName = getCollectionNameByItemType(line.itemType);
+      if (!collectionName || !line.itemId) continue;
+
+      const stockKey = `${collectionName}/${line.itemId}`;
+      if (!stockReadMap.has(stockKey)) {
+        stockReadMap.set(stockKey, {
+          collectionName,
+          ref: doc(db, collectionName, line.itemId),
+          itemName: line.itemName || "material",
+          stockItem: null,
+          nextStockItem: null,
+          updatePayload: null,
+        });
+      }
+    }
+
+    for (const stockState of stockReadMap.values()) {
+      const stockSnap = await transaction.get(stockState.ref);
+      if (!stockSnap.exists()) {
+        throw new Error(`Item material ${stockState.itemName || "-"} tidak ditemukan`);
+      }
+
+      const stockItem = normalizeReferenceItem({ id: stockSnap.id, ...stockSnap.data() });
+      stockState.stockItem = stockItem;
+      stockState.nextStockItem = stockItem;
+    }
+
     const nextMaterialUsages = [];
+    const inventoryLogPayloads = [];
+
     for (const line of payload.materialUsages || []) {
       const collectionName = getCollectionNameByItemType(line.itemType);
       if (!collectionName || !line.itemId) {
@@ -1085,13 +1159,13 @@ export const createProductionWorkLogFromOrder = async (
         continue;
       }
 
-      const stockRef = doc(db, collectionName, line.itemId);
-      const stockSnap = await transaction.get(stockRef);
-      if (!stockSnap.exists()) {
+      const stockKey = `${collectionName}/${line.itemId}`;
+      const stockState = stockReadMap.get(stockKey);
+      if (!stockState?.nextStockItem) {
         throw new Error(`Item material ${line.itemName || "-"} tidak ditemukan`);
       }
 
-      const stockItem = normalizeReferenceItem({ id: stockSnap.id, ...stockSnap.data() });
+      const stockItem = stockState.nextStockItem;
       const stockResolution = getResolvedMaterialStock({
         line,
         stockItem,
@@ -1102,19 +1176,27 @@ export const createProductionWorkLogFromOrder = async (
         throw new Error(`Stok ${line.itemName || "material"} tidak cukup untuk mulai produksi`);
       }
 
-      const updatePayload = applyStockMutationToItem({
-        item: stockItem,
-        variantKey: stockResolution.resolvedVariantKey || "",
-        deltaCurrent: -consumeQty,
+      const costSnapshot = getItemUnitCostSnapshot({
+        itemType: line.itemType,
+        stockItem,
+        stockResolution,
       });
-      transaction.update(stockRef, { ...updatePayload, updatedAt: serverTimestamp() });
+      const unitCostSnapshot =
+        toNumber(line.costPerUnitSnapshot || 0) || costSnapshot.unitCost;
 
-      // SECTION: tulis log mutasi bahan keluar saat mulai produksi
-      // Catatan maintainability:
-      // - Metadata referensi sengaja dibuat lengkap agar menu Manajemen Stok
-      //   bisa menampilkan jejak Produksi -> PO -> Work Log secara jelas.
       if (consumeQty > 0) {
-        addInventoryLogInTransaction(transaction, {
+        const updatePayload = applyStockMutationToItem({
+          item: stockItem,
+          variantKey: stockResolution.resolvedVariantKey || "",
+          deltaCurrent: -consumeQty,
+        });
+        stockState.updatePayload = updatePayload;
+        stockState.nextStockItem = {
+          ...stockItem,
+          ...updatePayload,
+        };
+
+        inventoryLogPayloads.push({
           itemId: line.itemId,
           itemName: line.itemName || stockItem.name || '-',
           quantityChange: -consumeQty,
@@ -1133,24 +1215,6 @@ export const createProductionWorkLogFromOrder = async (
         });
       }
 
-      // =====================================================
-      // ACTIVE / GUARDED - snapshot cost material saat Start Production.
-      // Fungsi:
-      // - mengunci biaya material dari dokumen stok yang benar saat bahan benar-benar keluar;
-      // - menghindari Work Log dari PO membawa costPerUnitSnapshot 0 sampai selesai.
-      // Alasan blok ini dipakai:
-      // - complete flow tidak boleh memotong stok ulang hanya untuk memperbaiki cost.
-      // Status:
-      // - aktif dipakai; guarded karena nilai ini menjadi dasar material cost dan HPP.
-      // =====================================================
-      const costSnapshot = getItemUnitCostSnapshot({
-        itemType: line.itemType,
-        stockItem,
-        stockResolution,
-      });
-      const unitCostSnapshot =
-        toNumber(line.costPerUnitSnapshot || 0) || costSnapshot.unitCost;
-
       nextMaterialUsages.push(
         calculateMaterialUsageLine({
           ...line,
@@ -1161,12 +1225,25 @@ export const createProductionWorkLogFromOrder = async (
               ? (toNumber(line.costPerUnitSnapshot || 0) > 0 ? 'existing_line_snapshot' : costSnapshot.costSource)
               : costSnapshot.costSource,
           stockDeducted: consumeQty > 0,
-          stockDeductedAt: new Date(),
+          stockDeductedAt: consumeQty > 0 ? new Date() : null,
           resolvedVariantKey: stockResolution.resolvedVariantKey || "",
           resolvedVariantLabel: stockResolution.resolvedVariantLabel || "",
           stockSourceType: stockResolution.stockSourceType || "master",
         }),
       );
+    }
+
+    for (const stockState of stockReadMap.values()) {
+      if (stockState.updatePayload) {
+        transaction.update(stockState.ref, {
+          ...stockState.updatePayload,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+
+    for (const logPayload of inventoryLogPayloads) {
+      addInventoryLogInTransaction(transaction, logPayload);
     }
 
     transaction.set(workLogRef, {

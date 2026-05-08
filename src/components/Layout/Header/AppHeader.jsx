@@ -1,28 +1,28 @@
 import React, { useMemo, useState } from "react";
 import { Button, Space, Tag } from "antd";
-import { LogoutOutlined, SmileOutlined, UserOutlined } from "@ant-design/icons";
+import { LogoutOutlined, UserOutlined } from "@ant-design/icons";
 import useAuth from "../../../hooks/useAuth";
 import { ROLE_LABELS } from "../../../utils/auth/roleAccess";
 import "./AppHeader.css";
 
-// =========================
-// SECTION: Header Greeting + Role Presentation — AKTIF / GUARDED
-// Fungsi:
-// - menyusun sapaan personal dari profile aktif tanpa mengubah source user/session;
-// - menyederhanakan identitas kanan header menjadi satu role badge agar tidak dobel dengan nama user.
-//
-// Dipakai oleh:
-// - src/components/Layout/Header/AppHeader.jsx di dalam AppLayout.
-//
-// Alasan perubahan:
-// - label toolbar generik diganti sapaan personal, dan chip user redundant di kanan dihapus.
-//
-// Catatan cleanup:
-// - belum ada.
-//
-// Risiko:
-// - jika fallback nama/role diubah sembarangan, header bisa menampilkan identitas kosong atau role mentah yang membingungkan user.
-// =========================
+/* =====================================================
+SECTION: Header Greeting + Role Presentation — AKTIF / GUARDED
+Fungsi:
+- Menyusun sapaan personal dari profile aktif tanpa mengubah source user/session.
+- Menyederhanakan identitas kanan header menjadi satu role badge agar tidak dobel dengan nama user.
+
+Dipakai oleh:
+- src/components/Layout/Header/AppHeader.jsx di dalam AppLayout.
+
+Alasan perubahan:
+- Icon smile pada sapaan diganti icon user yang lebih netral dan profesional; chip user redundant di kanan tetap disederhanakan menjadi role badge.
+
+Catatan cleanup:
+- belum ada.
+
+Risiko:
+- Jika fallback nama/role diubah sembarangan, header bisa menampilkan identitas kosong atau role mentah yang membingungkan user.
+===================================================== */
 const normalizeAccountName = (value = "") => {
   return String(value)
     .trim()
@@ -89,7 +89,7 @@ const AppHeader = () => {
       <div className="app-header-left" aria-label="Sapaan pengguna aktif">
         <div className="app-header-greeting">
           <span className="app-header-greeting-icon" aria-hidden="true">
-            <SmileOutlined />
+            <UserOutlined />
           </span>
 
           <div className="app-header-greeting-copy">

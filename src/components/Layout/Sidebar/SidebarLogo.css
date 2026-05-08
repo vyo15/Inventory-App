@@ -15,6 +15,24 @@ Catatan cleanup:
 Risiko:
 - jika width sidebar atau ukuran logo diubah sembarangan, title/subtitle bisa cepat terpotong atau alignment collapsed ikut bergeser.
 ===================================================== */
+/* =====================================================
+SECTION: Sidebar Logo Neutral Brand Lockup — AKTIF
+Fungsi:
+- Menampilkan logo, nama brand, dan subtitle tanpa garis/aksen kuning di sisi logo.
+
+Dipakai oleh:
+- SidebarLogo.jsx pada sidebar expanded/collapsed.
+
+Alasan perubahan:
+- Garis kuning vertikal di dekat logo terlihat kurang profesional untuk aplikasi IMS/ERP, sehingga brand lockup dibuat netral.
+
+Catatan cleanup:
+- belum ada.
+
+Risiko:
+- Jika aksen dekoratif ditambahkan lagi di area logo, sidebar bisa kembali terlihat ramai atau tidak konsisten.
+===================================================== */
+
 .sidebar-logo {
   position: relative;
   width: 100%;
@@ -37,39 +55,6 @@ Risiko:
 
 .sidebar-logo:hover {
   background: var(--ims-color-primary-softer);
-}
-
-/* =====================================================
-SECTION: Sidebar Logo Micro Accent — AKTIF
-Fungsi:
-- memberi aksen gold kecil pada brand lockup tanpa frame/border kuning besar.
-
-Dipakai oleh:
-- SidebarLogo.jsx pada sidebar expanded/collapsed.
-
-Alasan perubahan:
-- brand logo perlu menyatu dengan theme blue/navy + gold accent tanpa membuat area logo terasa seperti card.
-
-Catatan cleanup:
-- belum ada.
-
-Risiko:
-- accent yang terlalu besar dapat mengganggu no-wrap brand title atau membuat collapsed state tidak center.
-===================================================== */
-.sidebar-logo::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 16px;
-  bottom: 16px;
-  width: 3px;
-  border-radius: 999px;
-  background: var(--ims-color-brand-gold);
-  opacity: 0.72;
-}
-
-.sidebar-logo.collapsed::before {
-  display: none;
 }
 
 .sidebar-logo.collapsed {

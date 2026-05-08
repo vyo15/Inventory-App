@@ -77,6 +77,52 @@ export const normalizeProductionPlanStatus = (status = "") => {
 export const isProductionPlanPoAllowed = (plan = {}) =>
   !["cancelled", "completed"].includes(normalizeProductionPlanStatus(plan.status));
 
+const hasLinkedProductionOrder = (plan = {}) => {
+  const linkedIds = Array.isArray(plan.linkedProductionOrderIds)
+    ? plan.linkedProductionOrderIds.filter(Boolean)
+    : [];
+  const linkedCodes = Array.isArray(plan.linkedProductionOrderCodes)
+    ? plan.linkedProductionOrderCodes.filter(Boolean)
+    : [];
+  const linkedOrders = Array.isArray(plan.linkedProductionOrders)
+    ? plan.linkedProductionOrders.filter((order) => Boolean(order?.id || order?.code))
+    : [];
+
+  return linkedIds.length > 0 || linkedCodes.length > 0 || linkedOrders.length > 0;
+};
+
+// =====================================================
+// SECTION: Production Planning cancel guard — GUARDED
+// Fungsi:
+// - menentukan apakah Planning masih aman dibatalkan tanpa mengacaukan relasi Planning -> PO.
+//
+// Dipakai oleh:
+// - src/pages/Produksi/ProductionPlanning.jsx dan cancelProductionPlan di service ini.
+//
+// Alasan perubahan:
+// - Planning yang sudah punya Production Order tidak boleh langsung di-cancel karena PO/Work Log lama tetap harus utuh.
+//
+// Catatan cleanup:
+// - belum ada; fallback PO lewat planningId tetap dipertahankan oleh normalizePlan.
+//
+// Risiko:
+// - jika guard ini dilonggarkan sembarangan, Planning cancelled bisa tetap punya PO aktif dan membingungkan audit produksi.
+// =====================================================
+export const getProductionPlanCancelBlockReason = (plan = {}) => {
+  const status = normalizeProductionPlanStatus(plan.status);
+
+  if (status === "cancelled") return "Planning sudah dibatalkan.";
+  if (status === "completed") return "Planning yang sudah selesai tidak bisa dibatalkan.";
+  if (hasLinkedProductionOrder(plan)) {
+    return "Planning sudah punya Production Order. Selesaikan/kelola PO terkait terlebih dahulu.";
+  }
+
+  return "";
+};
+
+export const isProductionPlanCancelable = (plan = {}) =>
+  !getProductionPlanCancelBlockReason(plan);
+
 // =====================================================
 // ACTIVE - helper tanggal lokal berbasis YYYY-MM-DD.
 // Fungsi:
@@ -585,8 +631,25 @@ export const updateProductionPlan = async (id, values = {}, currentUser = null) 
 };
 
 export const cancelProductionPlan = async (id, currentUser = null) => {
+  if (!id) throw new Error("Planning tidak ditemukan");
+
+  const planRef = doc(db, COLLECTION_NAME, id);
+  const planSnap = await getDoc(planRef);
+  if (!planSnap.exists()) throw new Error("Planning tidak ditemukan");
+
+  const rawPlan = { id: planSnap.id, ...planSnap.data() };
+  if (!isVisibleProductionPlan(rawPlan)) {
+    throw new Error("Planning sudah tidak aktif/terarsip sehingga tidak bisa dibatalkan.");
+  }
+
+  const plan = await getProductionPlanById(id);
+  if (!plan) throw new Error("Planning tidak ditemukan atau tidak aktif");
+
+  const blockReason = getProductionPlanCancelBlockReason(plan);
+  if (blockReason) throw new Error(blockReason);
+
   const actor = currentUser?.email || currentUser?.displayName || currentUser?.uid || "system";
-  await updateDoc(doc(db, COLLECTION_NAME, id), {
+  await updateDoc(planRef, {
     status: "cancelled",
     cancelledAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

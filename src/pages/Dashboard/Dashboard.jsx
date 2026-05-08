@@ -1004,12 +1004,13 @@ const Dashboard = () => {
   SECTION: Dashboard KPI Strip — AKTIF
   Fungsi:
   - Mengumpulkan KPI ringkas sales, kas, stok, produksi, payroll, dan alert tanpa menulis data.
+  - Menyediakan status kecil per KPI yang membutuhkan perhatian tanpa memakai aksen warna besar pada card.
 
   Dipakai oleh:
   - Section Ringkasan Hari Ini pada Dashboard.
 
   Alasan perubahan:
-  - Dashboard perlu memberi gambaran bisnis sekali lihat, tetapi tetap bukan laporan final.
+  - Card KPI dibuat netral agar dashboard terlihat lebih profesional; penanda kondisi cukup memakai badge kecil.
 
   Catatan cleanup:
   - Sales dan cash masih dibaca dari collection operasional existing; standardisasi read model bisa menjadi task terpisah jika data membesar.
@@ -1045,6 +1046,8 @@ const Dashboard = () => {
       value: formatCurrency(financeSummary.netOperational),
       detail: "monitoring, bukan laba final",
       tone: financeSummary.netOperational < 0 ? "danger" : "success",
+      statusLabel: financeSummary.netOperational < 0 ? "Perlu Dicek" : null,
+      statusTone: "warning",
     },
     {
       key: "stock-critical",
@@ -1052,6 +1055,8 @@ const Dashboard = () => {
       value: formatNumberId(lowStockTotal),
       detail: "produk, bahan, semi finished",
       tone: lowStockTotal > 0 ? "warning" : "success",
+      statusLabel: lowStockTotal > 0 ? "Kritis" : null,
+      statusTone: "warning",
     },
     {
       key: "production-watch",
@@ -1059,6 +1064,8 @@ const Dashboard = () => {
       value: formatNumberId(productionSummary.shortageOrders + planningSummary.overdueCount + planningSummary.behindTargetCount),
       detail: "shortage/overdue/behind target",
       tone: productionSummary.shortageOrders + planningSummary.overdueCount > 0 ? "danger" : "primary",
+      statusLabel: productionSummary.shortageOrders + planningSummary.overdueCount > 0 ? "Perlu Dicek" : null,
+      statusTone: "warning",
     },
     {
       key: "payroll-pending",
@@ -1066,6 +1073,8 @@ const Dashboard = () => {
       value: formatNumberId(payrollSummary.pendingCount),
       detail: formatCurrency(payrollSummary.pendingAmount),
       tone: payrollSummary.pendingCount > 0 ? "warning" : "success",
+      statusLabel: payrollSummary.pendingCount > 0 ? "Pending" : null,
+      statusTone: "warning",
     },
     {
       key: "data-watch",
@@ -1073,6 +1082,8 @@ const Dashboard = () => {
       value: formatNumberId(businessAlertTotal),
       detail: "exception lintas modul",
       tone: businessAlertTotal > 0 ? "warning" : "success",
+      statusLabel: businessAlertTotal > 0 ? "Perlu Dicek" : null,
+      statusTone: "warning",
     },
   ], [
     businessAlertTotal,
@@ -1266,7 +1277,14 @@ const Dashboard = () => {
         <div className="dashboard-kpi-grid">
           {kpiItems.map((item) => (
             <div key={item.key} className={`dashboard-kpi-card dashboard-kpi-card-${item.tone}`}>
-              <Text className="dashboard-card-label">{item.label}</Text>
+              <div className="dashboard-kpi-card-heading">
+                <Text className="dashboard-card-label">{item.label}</Text>
+                {item.statusLabel ? (
+                  <Tag className={`dashboard-kpi-status dashboard-kpi-status-${item.statusTone || "neutral"}`}>
+                    {item.statusLabel}
+                  </Tag>
+                ) : null}
+              </div>
               <Title level={4} className="dashboard-card-value">
                 {item.value}
               </Title>

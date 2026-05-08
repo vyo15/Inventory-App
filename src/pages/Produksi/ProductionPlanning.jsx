@@ -52,7 +52,9 @@ import {
   createProductionOrderFromPlan,
   createProductionPlan,
   getAllProductionPlans,
+  getProductionPlanCancelBlockReason,
   getProductionPlanningReferenceData,
+  isProductionPlanCancelable,
   isProductionPlanPoAllowed,
   normalizeProductionPlanStatus,
   updateProductionPlan,
@@ -192,7 +194,10 @@ const getPlanStatus = (planOrStatus = "") =>
   );
 const getStatusMeta = (status) => STATUS_META[getPlanStatus(status)] || STATUS_META.active;
 const getPriorityMeta = (priority) => PRIORITY_META[priority] || PRIORITY_META.normal;
-const canCreatePoFromPlan = (plan = {}) => isProductionPlanPoAllowed({ ...plan, status: getPlanStatus(plan) });
+const withCanonicalPlanStatus = (plan = {}) => ({ ...plan, status: getPlanStatus(plan) });
+const canCreatePoFromPlan = (plan = {}) => isProductionPlanPoAllowed(withCanonicalPlanStatus(plan));
+const canCancelPlan = (plan = {}) => isProductionPlanCancelable(withCanonicalPlanStatus(plan));
+const getCancelBlockReason = (plan = {}) => getProductionPlanCancelBlockReason(withCanonicalPlanStatus(plan));
 
 // =====================================================
 // SECTION: Production Planning UI guards — LEGACY-COMPAT
@@ -530,6 +535,12 @@ const ProductionPlanning = () => {
   };
 
   const handleCancelPlan = (record) => {
+    const blockReason = getCancelBlockReason(record);
+    if (blockReason || !canCancelPlan(record)) {
+      message.warning(blockReason || "Planning ini tidak bisa dibatalkan.");
+      return;
+    }
+
     Modal.confirm({
       title: "Batalkan planning?",
       content:
@@ -541,6 +552,16 @@ const ProductionPlanning = () => {
         try {
           await cancelProductionPlan(record.id, null);
           message.success("Planning dibatalkan");
+          setSelectedPlan((current) => (
+            current?.id === record.id
+              ? { ...current, status: "cancelled", computedStatus: "cancelled", cancelledAt: new Date().toISOString() }
+              : current
+          ));
+          if (selectedPlanForPo?.id === record.id) {
+            setPoDrawerVisible(false);
+            setSelectedPlanForPo(null);
+            poForm.resetFields();
+          }
           await loadData();
         } catch (error) {
           console.error(error);
@@ -621,28 +642,45 @@ const ProductionPlanning = () => {
   };
 
   // =====================================================
-  // ACTIVE - menu aksi compact untuk tabel planning.
+  // SECTION: Production Planning row actions — GUARDED
   // Fungsi:
-  // - menjaga aksi Detail dan Buat PO tetap terlihat tanpa horizontal scroll;
-  // - memindahkan Edit/Cancel ke dropdown agar kolom aksi tidak melebar.
-  // Status:
-  // - aktif untuk UI; handler lama tetap dipakai dan tidak mengubah business rules.
+  // - menjaga aksi Detail/Buat PO/Edit/Cancel tetap konsisten dengan rule status dan relasi PO;
+  // - menyembunyikan Cancel untuk Planning final atau Planning yang sudah punya PO agar user tidak mengharapkan modal dari item disabled.
+  //
+  // Dipakai oleh:
+  // - tabel Production Planning dan handler Lainnya di halaman ini.
+  //
+  // Alasan perubahan:
+  // - Planning yang sudah punya Production Order tidak boleh di-cancel langsung, dan disabled action terbukti membingungkan user.
+  //
+  // Catatan cleanup:
+  // - belum ada; helper service tetap menjadi guard final.
+  //
+  // Risiko:
+  // - jika UI guard tidak sinkron dengan service, user bisa melihat action yang akhirnya gagal saat submit.
   // =====================================================
-  const getMoreActionItems = (record) => [
-    {
-      key: "edit",
-      label: "Edit",
-      icon: <EditOutlined />,
-      disabled: getPlanStatus(record) === "cancelled",
-    },
-    {
-      key: "cancel",
-      label: "Cancel",
-      icon: <StopOutlined />,
-      danger: true,
-      disabled: !canCreatePoFromPlan(record),
-    },
-  ];
+  const getMoreActionItems = (record) => {
+    const status = getPlanStatus(record);
+    const items = [
+      {
+        key: "edit",
+        label: "Edit",
+        icon: <EditOutlined />,
+        disabled: status === "cancelled",
+      },
+    ];
+
+    if (canCancelPlan(record)) {
+      items.push({
+        key: "cancel",
+        label: "Cancel",
+        icon: <StopOutlined />,
+        danger: true,
+      });
+    }
+
+    return items;
+  };
 
   const handleMoreActionClick = ({ key }, record) => {
     if (key === "edit") {

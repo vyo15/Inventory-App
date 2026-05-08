@@ -43,6 +43,24 @@ Risiko:
   overflow: hidden;
 }
 
+/* =====================================================
+SECTION: Header Professional Greeting Icon — AKTIF
+Fungsi:
+- Menjaga icon sapaan tetap netral dan profesional tanpa ornament smile/gold accent.
+
+Dipakai oleh:
+- AppHeader greeting toolbar di AppLayout.
+
+Alasan perubahan:
+- Header IMS/ERP perlu tampil corporate; icon smile dan aksen kuning kecil dihapus agar tidak terlihat informal.
+
+Catatan cleanup:
+- belum ada.
+
+Risiko:
+- Jika icon atau ornament dibuat terlalu dekoratif, header dapat kembali terlihat ramai dan kurang profesional.
+===================================================== */
+
 .app-header-greeting-icon {
   width: 34px;
   height: 34px;
@@ -64,35 +82,6 @@ Risiko:
 
 .app-header-greeting-icon .anticon {
   font-size: 15px;
-}
-
-/* =====================================================
-SECTION: Header Brand Gold Micro Accent — AKTIF
-Fungsi:
-- menambahkan ornament gold kecil pada greeting icon tanpa mengubah JSX, role badge, atau logout action.
-
-Dipakai oleh:
-- AppHeader greeting toolbar di AppLayout.
-
-Alasan perubahan:
-- header perlu terasa selaras dengan logo biru-kuning, tetapi tetap compact dan corporate.
-
-Catatan cleanup:
-- belum ada.
-
-Risiko:
-- gold accent yang terlalu besar dapat membuat header ramai atau terlihat seperti warning.
-===================================================== */
-.app-header-greeting-icon::after {
-  content: "";
-  position: absolute;
-  right: 3px;
-  bottom: 3px;
-  width: 7px;
-  height: 7px;
-  border: 2px solid var(--ims-bg-elevated);
-  border-radius: 999px;
-  background: var(--ims-color-brand-gold);
 }
 
 .app-header-greeting-copy {
@@ -160,7 +149,7 @@ Risiko:
     var(--ims-color-primary) 24%,
     var(--ims-border-color-soft)
   );
-  box-shadow: inset 3px 0 0 var(--ims-color-brand-gold-muted);
+  box-shadow: none;
   font-size: 12px;
   font-weight: 750;
   line-height: 1;

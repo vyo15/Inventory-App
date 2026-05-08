@@ -212,21 +212,22 @@
 
 
 /* =====================================================
-   SECTION: Dashboard KPI, Quick Actions, and Alerts — AKTIF / GUARDED
-   Fungsi:
-   - menata KPI strip, shortcut navigasi, dan exception cards agar Dashboard menjadi control center compact.
+SECTION: Dashboard KPI, Quick Actions, and Alerts — AKTIF / GUARDED
+Fungsi:
+- Menata KPI strip, shortcut navigasi, dan exception cards agar Dashboard menjadi control center compact.
+- Menjaga card KPI tetap netral; status hanya ditampilkan sebagai badge kecil bila diperlukan.
 
-   Dipakai oleh:
-   - Ringkasan Hari Ini, Aksi Cepat, dan Data Perlu Dicek di Dashboard.jsx.
+Dipakai oleh:
+- Ringkasan Hari Ini, Aksi Cepat, dan Data Perlu Dicek di Dashboard.jsx.
 
-   Alasan perubahan:
-   - Dashboard perlu menampilkan overview bisnis dan navigasi lintas modul tanpa berubah menjadi report besar atau write flow.
+Alasan perubahan:
+- Aksen border kiri biru/oranye dan background warning penuh pada KPI membuat dashboard terlihat ramai, sehingga diganti surface netral.
 
-   Catatan cleanup:
-   - tone visual bisa dipindahkan ke shared card component jika Dashboard bertambah modul.
+Catatan cleanup:
+- Tone visual bisa dipindahkan ke shared card component jika Dashboard bertambah modul.
 
-   Risiko:
-   - Jika style ini dibuat terlalu lebar/tinggi, Dashboard kembali terasa seperti report penuh dan berpotensi horizontal scroll.
+Risiko:
+- Jika style ini dibuat terlalu lebar/tinggi, Dashboard kembali terasa seperti report penuh dan berpotensi horizontal scroll.
 ===================================================== */
 .dashboard-kpi-grid,
 .dashboard-quick-action-grid,
@@ -266,18 +267,45 @@
   flex-direction: column;
   gap: 8px;
   padding: 16px;
-  border-left: 4px solid var(--ims-color-primary-muted);
+  box-shadow: var(--dashboard-card-shadow);
 }
 
 .dashboard-kpi-card-primary,
-.dashboard-kpi-card-success {
-  border-left-color: var(--ims-color-primary);
-}
-
+.dashboard-kpi-card-success,
 .dashboard-kpi-card-warning,
 .dashboard-kpi-card-danger {
-  border-left-color: var(--ims-color-warning);
-  background: linear-gradient(135deg, var(--ims-color-warning-soft), var(--dashboard-card-background));
+  background: var(--dashboard-card-background);
+}
+
+.dashboard-kpi-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dashboard-kpi-status.ant-tag {
+  flex: 0 0 auto;
+  max-width: 46%;
+  margin-inline-end: 0;
+  padding-inline: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ims-bg-card-soft);
+  border-color: var(--ims-border-color-soft);
+  color: var(--ims-text-secondary);
+  font-size: 10.5px;
+  font-weight: 750;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-kpi-status-warning.ant-tag {
+  background: var(--ims-color-warning-soft);
+  border-color: color-mix(in srgb, var(--ims-color-warning) 30%, var(--ims-border-color-soft));
+  color: var(--ims-color-warning-text);
 }
 
 .dashboard-quick-action-card,
