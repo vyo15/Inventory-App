@@ -95,7 +95,7 @@ const AppHeader = () => {
           <div className="app-header-greeting-copy">
             <span className="app-header-greeting-title">{greetingTitle}</span>
             <span className="app-header-greeting-subtitle">
-              Mari cek aktivitas operasional hari ini.
+              Pantau operasional hari ini.
             </span>
           </div>
         </div>

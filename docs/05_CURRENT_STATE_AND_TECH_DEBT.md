@@ -279,6 +279,9 @@ Tech debt tersisa:
 - Planning tidak boleh memotong stok.
 - Planning tidak boleh membuat payroll atau expense.
 - Progress tidak boleh dihitung dari PO yang baru dibuat saja; progress harus berasal dari Work Log completed.
+- Cancel Planning hanya boleh untuk Planning tanpa PO / linked Production Order dan hanya mengubah status menjadi `cancelled`; bukan hard delete dan tidak menyentuh PO, Work Log, stok, payroll, HPP, atau report.
+- Planning yang sudah punya PO tidak boleh dicancel langsung; user harus mengelola PO terkait terlebih dahulu.
+- Planning `cancelled` dan `completed` tidak boleh dibuatkan PO, sedangkan Planning `overdue` tanpa PO masih boleh dibuatkan PO atau dicancel.
 - Create PO dari planning tetap wajib lewat BOM dan helper `createProductionOrder()` existing.
 - Work Log complete/payroll/HPP tetap guarded dan tidak disentuh oleh fitur planning.
 

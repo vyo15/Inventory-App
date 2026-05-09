@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
+  Card,
   Col,
+  Descriptions,
   Drawer,
   Empty,
   Form,
@@ -16,6 +18,7 @@ import {
   Switch,
   Table,
   Tag,
+  Typography,
   message,
 } from 'antd';
 import {
@@ -52,6 +55,7 @@ import {
 
 const { Option } = Select;
 const { Search } = Input;
+const { Text } = Typography;
 
 // -----------------------------------------------------------------------------
 // Opsi satuan beli katalog supplier.
@@ -751,8 +755,8 @@ const SupplierPurchases = () => {
         title="Supplier"
         subtitle={
           materialIdFromQuery && selectedMaterialFromQuery
-            ? `Menampilkan supplier untuk bahan ${selectedMaterialFromQuery.name}.`
-            : 'Katalog restock supplier dan pembanding harga yang tetap terpisah dari transaksi pembelian.'
+            ? `Supplier untuk bahan ${selectedMaterialFromQuery.name}.`
+            : 'Katalog restock dan pembanding harga supplier.'
         }
         extra={
           materialIdFromQuery && selectedMaterialFromQuery ? (
@@ -782,8 +786,7 @@ const SupplierPurchases = () => {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="Supplier adalah katalog restock, bukan transaksi pembelian"
-        description="Supplier hanya menyimpan katalog restock dan pembanding. Stok, kas, expense, dan harga aktual tetap berubah lewat Purchases saat user klik Simpan."
+        message="Supplier hanya referensi restock. Transaksi tetap lewat Purchases."
       />
 
       <FilterBar>
@@ -831,7 +834,7 @@ const SupplierPurchases = () => {
       ===================================================== */}
       <PageSection
         title="Daftar Supplier"
-        subtitle="Supplier tetap menjadi katalog restock. Detail bahan, link toko, dan pembanding harga dibuka dari drawer."
+        subtitle="Kontak dan katalog restock."
       >
         <Table
           className="app-data-table"
@@ -886,7 +889,7 @@ const SupplierPurchases = () => {
               <>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>Katalog Restock Supplier</div>
                 <div style={{ color: '#666', marginBottom: 12 }}>
-                  Isi link produk, satuan beli, konversi, dan estimasi biaya. Data ini hanya referensi/pembanding, bukan transaksi.
+                  Isi link, satuan beli, konversi, dan estimasi biaya.
                 </div>
 
                 {fields.map(({ key, name, ...restField }) => (
@@ -998,7 +1001,7 @@ const SupplierPurchases = () => {
                           name={[name, 'purchaseQty']}
                           label="Qty Beli"
                           initialValue={1}
-                          extra="Contoh: beli 1 pack, 1 roll, 1 ikat, atau 1 dus."
+                          extra="Contoh: 1 pack, 1 roll, atau 1 dus."
                         >
                           <InputNumber min={1} step={1} precision={0} style={{ width: '100%' }} formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
                         </Form.Item>
@@ -1009,7 +1012,7 @@ const SupplierPurchases = () => {
                           {...restField}
                           name={[name, 'conversionValue']}
                           label="Konversi Supplier"
-                          extra="Contoh: beli 1 pack isi 6 pcs, maka Konversi Supplier = 6."
+                          extra="Contoh: 1 pack isi 6 pcs = 6."
                         >
                           <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
                         </Form.Item>
@@ -1028,7 +1031,7 @@ const SupplierPurchases = () => {
                                 type={detail.stockUnit ? 'info' : 'warning'}
                                 showIcon
                                 message={detail.stockUnit ? `Satuan stok: ${detail.stockUnit}` : 'Satuan stok belum diisi di Raw Material.'}
-                                description="Satuan ini otomatis diambil dari Raw Material dan dipakai untuk menghitung harga estimasi per satuan stok."
+                                description={null}
                               />
                             );
                           }}
@@ -1095,12 +1098,12 @@ const SupplierPurchases = () => {
                           <Alert
                             type="success"
                             showIcon
-                            message="Harga Supplier Tercatat"
+                            message="Estimasi Restock"
                             description={
                               <Space direction="vertical" size={2}>
-                                <span>Total Estimasi Supplier: <strong>{formatCurrencyIDR(metrics.totalEstimatedSupplier || 0)}</strong></span>
-                                <span>Total Stok dari Konversi: <strong>{formatNumberID(metrics.totalStockQty || 0)} {detail.stockUnit || 'satuan stok'}</strong></span>
-                                <span>Harga Supplier Tercatat / Satuan Stok: <strong>{formatCurrencyIDR(metrics.estimatedUnitPrice || 0)}</strong></span>
+                                <span>Total estimasi: <strong>{formatCurrencyIDR(metrics.totalEstimatedSupplier || 0)}</strong></span>
+                                <span>Total stok: <strong>{formatNumberID(metrics.totalStockQty || 0)} {detail.stockUnit || 'satuan stok'}</strong></span>
+                                <span>Harga / satuan stok: <strong>{formatCurrencyIDR(metrics.estimatedUnitPrice || 0)}</strong></span>
                               </Space>
                             }
                           />
@@ -1141,6 +1144,23 @@ const SupplierPurchases = () => {
         </Form>
       </Modal>
 
+      {/* =====================================================
+          SECTION: Supplier Detail Drawer — AKTIF
+          Fungsi:
+          - Menata ringkasan supplier, kontak toko, material supply, dan estimasi restock dalam section yang konsisten.
+
+          Dipakai oleh:
+          - Halaman Master Data / Supplier saat user membuka tombol Detail.
+
+          Alasan perubahan:
+          - Drawer lama memakai table HTML manual dan terlalu banyak border inline, sehingga detail supplier tidak konsisten dengan drawer Master Data lain.
+
+          Catatan cleanup:
+          - Belum ada.
+
+          Risiko:
+          - Jangan ubah mapping katalog supplier, cascade snapshot Raw Material, prefill Purchases, atau handler detail dari section presentasi ini.
+      ===================================================== */}
       <Drawer
         title={`Detail Supplier: ${getSupplierDisplayName(selectedSupplier || {}) || '-'}`}
         open={drawerVisible}
@@ -1151,58 +1171,61 @@ const SupplierPurchases = () => {
         width={960}
       >
         {selectedSupplier && (
-          <>
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 24 }}>
-              <tbody>
-                <tr>
-                  <td style={{ width: 220, padding: 10, border: '1px solid #f0f0f0' }}>Nama Supplier</td>
-                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>{getSupplierDisplayName(selectedSupplier)}</td>
-                </tr>
-                <tr>
-                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>Sumber Data</td>
-                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>Master supplier / katalog restock</td>
-                </tr>
-                <tr>
-                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>Link Toko</td>
-                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>
-                    {getSupplierStoreLink(selectedSupplier) ? (
-                      <a href={getSupplierStoreLink(selectedSupplier)} target="_blank" rel="noopener noreferrer">
-                        {getSupplierStoreLink(selectedSupplier)}
-                      </a>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                </tr>
-                <tr>
-                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>Material Terdaftar</td>
-                  <td style={{ padding: 10, border: '1px solid #f0f0f0' }}>
-                    {(selectedSupplier.supportedMaterialNames || []).length ? (
-                      <Space size={[6, 6]} wrap>
-                        {(selectedSupplier.supportedMaterialNames || []).map((name, index) => (
-                          <Tag key={`${name}-${index}`}>{name}</Tag>
-                        ))}
-                      </Space>
-                    ) : (
-                      'Belum ada material terdaftar'
-                    )}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <Space direction="vertical" style={{ width: '100%' }} size={16}>
+            <Card size="small">
+              <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                <Space size={[8, 8]} wrap>
+                  <Text strong style={{ fontSize: 18 }}>{getSupplierDisplayName(selectedSupplier)}</Text>
+                  <Tag color="green">Katalog Restock</Tag>
+                  <Tag>{(selectedSupplier.materialDetails || []).length || 0} item restock</Tag>
+                </Space>
+                {getSupplierStoreLink(selectedSupplier) ? (
+                  <a href={getSupplierStoreLink(selectedSupplier)} target="_blank" rel="noopener noreferrer">
+                    {getSupplierStoreLink(selectedSupplier)}
+                  </a>
+                ) : (
+                  <Text type="secondary">Belum ada link toko.</Text>
+                )}
+              </Space>
+            </Card>
 
-            <div style={{ fontWeight: 700, marginBottom: 12 }}>Katalog Restock Supplier</div>
-            <Table
-              className="app-data-table"
-              rowKey={(record, index) => `${record.materialId || record.materialName || 'material'}-${index}`}
-              pagination={false}
-              dataSource={selectedSupplier.materialDetails || []}
-              columns={materialDetailColumns}
-              size="small"
-              tableLayout="fixed"
-              locale={{ emptyText: <Empty description="Belum ada katalog restock supplier" /> }}
-            />
-          </>
+            <Card size="small" title="Ringkasan">
+              <Descriptions bordered column={1} size="small">
+                <Descriptions.Item label="Nama Supplier">{getSupplierDisplayName(selectedSupplier)}</Descriptions.Item>
+                <Descriptions.Item label="Link Toko">
+                  {getSupplierStoreLink(selectedSupplier) ? (
+                    <a href={getSupplierStoreLink(selectedSupplier)} target="_blank" rel="noopener noreferrer">
+                      Buka Link Toko
+                    </a>
+                  ) : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Material Terdaftar">
+                  {(selectedSupplier.supportedMaterialNames || []).length ? (
+                    <Space size={[6, 6]} wrap>
+                      {(selectedSupplier.supportedMaterialNames || []).map((name, index) => (
+                        <Tag key={`${name}-${index}`}>{name}</Tag>
+                      ))}
+                    </Space>
+                  ) : (
+                    'Belum ada material terdaftar'
+                  )}
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+
+            <Card size="small" title="Katalog Restock Supplier">
+              <Table
+                className="app-data-table"
+                rowKey={(record, index) => `${record.materialId || record.materialName || 'material'}-${index}`}
+                pagination={false}
+                dataSource={selectedSupplier.materialDetails || []}
+                columns={materialDetailColumns}
+                size="small"
+                tableLayout="fixed"
+                locale={{ emptyText: <Empty description="Belum ada katalog restock supplier" /> }}
+              />
+            </Card>
+          </Space>
         )}
       </Drawer>
     </div>

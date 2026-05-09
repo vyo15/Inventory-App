@@ -448,7 +448,7 @@ const ProductionHppAnalysis = () => {
       {/* AKTIF / GUARDED: header dimigrasikan ke shared produksi agar konsisten, tanpa mengubah mapping/calc HPP. */}
       <ProductionPageHeader
         title="Analisis HPP Produksi"
-        description="Analisa biaya realisasi bahan, tenaga kerja, dan overhead per work log completed dengan baseline layout shared yang seragam."
+        description="Analisa biaya per Work Log completed."
       />
 
       <PageSection
@@ -521,7 +521,7 @@ const ProductionHppAnalysis = () => {
             showIcon
             style={{ marginBottom: 16 }}
             message={`${formatNumber(summary.warningRows)} Work Log perlu cek cost`}
-            description="Angka HPP tidak diubah otomatis. Cek cost bahan/snapshot material, payroll Work Log, dan output good qty sebelum memakai HPP untuk analisis final."
+            description="HPP tidak diubah otomatis; cek cost dan output sebelum dipakai."
           />
         ) : null}
         {/* =====================================================

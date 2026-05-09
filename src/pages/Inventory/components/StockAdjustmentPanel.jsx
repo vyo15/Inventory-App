@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Button,
   DatePicker,
   Form,
@@ -665,8 +666,25 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         pagination={{ pageSize: 5 }}
       />
 
+      {/* =====================================================
+          SECTION: Stock Adjustment Form Renderer — GUARDED
+          Fungsi:
+          - Menampilkan form penyesuaian stok, snapshot stok terpilih, dan warning sebelum submit.
+
+          Dipakai oleh:
+          - Halaman Manajemen Stok untuk adjustment manual lintas item.
+
+          Alasan perubahan:
+          - Panel dibuat lebih ringkas dan warning dampak stok dibuat tetap terlihat tanpa mengubah submit payload atau validasi.
+
+          Catatan cleanup:
+          - Jika nanti ada drawer detail stok khusus, snapshot ini bisa memakai komponen ringkasan yang sama.
+
+          Risiko:
+          - Jangan mengubah validasi available stock, variantKey, transaction, stock_adjustments, atau inventory_logs dari form ini.
+      ===================================================== */}
       <Modal
-        title="Tambah Penyesuaian Stok"
+        title="Penyesuaian Stok"
         open={isModalOpen}
         onCancel={resetAdjustmentFormState}
         onOk={() => form.submit()}
@@ -676,6 +694,14 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         width={700}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmitStockAdjustment}>
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="Penyesuaian akan mengubah stok"
+            description="Pastikan item, varian, qty, dan alasan sudah benar sebelum simpan."
+          />
+
           <Form.Item
             name="date"
             label="Tanggal"
@@ -727,7 +753,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               name="variantKey"
               label="Varian Item"
               rules={[{ required: true, message: "Varian wajib dipilih untuk item bervarian" }]}
-              extra="Penyesuaian item bervarian wajib masuk ke varian agar total master tetap sinkron."
+              extra="Pilih varian agar stok master tetap sinkron."
             >
               <Select showSearch placeholder="Pilih varian" optionFilterProp="children">
                 {variantOptions.map((variantOption) => (
@@ -754,10 +780,10 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               <div className="ims-readonly-panel-header">
                 <div>
                   <div className="ims-readonly-panel-title">
-                    Stok Terpilih Sebelum Penyesuaian
+                    Stok Sebelum Penyesuaian
                   </div>
                   <div className="ims-readonly-panel-description">
-                    Snapshot ini hanya membantu membaca stok saat ini. Perubahan stok tetap terjadi saat submit penyesuaian resmi.
+                    Cek stok terpilih sebelum submit. Perubahan baru terjadi setelah disimpan.
                   </div>
                 </div>
                 <Tag color={selectedItemHasVariants ? "purple" : "default"}>
@@ -779,19 +805,19 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               {selectedStockSnapshot ? (
                 <div className="ims-readonly-stat-grid">
                   <div className="ims-readonly-stat-field">
-                    <div className="ims-readonly-stat-label">Current Stock</div>
+                    <div className="ims-readonly-stat-label">Stok Saat Ini</div>
                     <div className="ims-readonly-stat-value">
                       {formatQuantityId(selectedStockSnapshot.currentStock, quantityUnitLabel)}
                     </div>
                   </div>
                   <div className="ims-readonly-stat-field">
-                    <div className="ims-readonly-stat-label">Reserved Stock</div>
+                    <div className="ims-readonly-stat-label">Stok Dipesan</div>
                     <div className="ims-readonly-stat-value">
                       {formatQuantityId(selectedStockSnapshot.reservedStock, quantityUnitLabel)}
                     </div>
                   </div>
                   <div className="ims-readonly-stat-field">
-                    <div className="ims-readonly-stat-label">Available Stock</div>
+                    <div className="ims-readonly-stat-label">Stok Tersedia</div>
                     <div className="ims-readonly-stat-value">
                       {formatQuantityId(selectedStockSnapshot.availableStock, quantityUnitLabel)}
                     </div>
@@ -801,7 +827,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
 
               {selectedItemHasVariants ? (
                 <div className="ims-readonly-panel-note">
-                  Item bervarian wajib masuk ke varian yang dipilih agar stok bucket varian dan total master tetap sinkron.
+                  Item bervarian wajib masuk ke varian yang dipilih agar stok varian dan total master tetap sinkron.
                 </div>
               ) : null}
             </div>
@@ -849,12 +875,8 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
             ]}
             extra={
               quantityUnitLabel
-                ? `Satuan item: ${quantityUnitLabel}. ${
-                    quantityUsesWholeNumber
-                      ? "Qty dibulatkan tanpa desimal."
-                      : "Qty lama non-discrete tetap ditampilkan bulat; data lama tidak dimigrasi."
-                  }${selectedVariant ? ` Varian aktif: ${selectedVariant.variantLabel}.` : ""}`
-                : "Pilih item dulu agar format qty mengikuti satuan stok item."
+                ? `Satuan: ${quantityUnitLabel}. ${quantityUsesWholeNumber ? "Qty tanpa desimal." : "Qty ditampilkan tanpa desimal."}${selectedVariant ? ` Varian: ${selectedVariant.variantLabel}.` : ""}`
+                : "Pilih item dulu agar satuan qty jelas."
             }
           >
             <InputNumber
@@ -882,7 +904,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           </Form.Item>
 
           <Form.Item name="note" label="Catatan">
-            <Input.TextArea rows={3} placeholder="Catatan tambahan" />
+            <Input.TextArea rows={3} placeholder="Opsional" />
           </Form.Item>
         </Form>
       </Modal>

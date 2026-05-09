@@ -843,7 +843,7 @@ const ProductionOrders = () => {
       {/* AKTIF / GUARDED: header shared produksi dipakai untuk konsistensi, flow order dan status transition tetap existing. */}
       <ProductionPageHeader
         title="Production Orders"
-        description="Planning produksi untuk semi finished dan product, tetap mengikuti flow aktif BOM → Production Order → Work Log."
+        description="Flow produksi dari BOM ke Work Log."
         onAdd={handleAdd}
         addLabel="Buat Order"
       />
@@ -891,7 +891,7 @@ const ProductionOrders = () => {
 
       <PageSection
         title="Daftar Production Orders"
-        subtitle="Tabel ini membantu cek shortage, readiness, dan akses cepat ke detail atau pembuatan work log."
+        subtitle="Cek readiness, shortage, dan work log."
       >
         {/* Aktif dipakai: scroll x besar dihapus agar tombol aksi terlihat pada desktop/laptop normal. */}
         <DataRefreshIndicator loading={loading} dataSource={filteredData} />
@@ -936,7 +936,7 @@ const ProductionOrders = () => {
           style={{ marginBottom: 16 }}
           type="info"
           showIcon
-          message="Production Order membaca BOM lalu menghitung kebutuhan material. Jika bahan cukup, status akan menjadi Ready. Jika kurang, status menjadi Shortage."
+          message="PO membaca BOM dan menandai Ready atau Shortage."
         />
 
         <Form form={form} layout="vertical">
@@ -1272,14 +1272,14 @@ const ProductionOrders = () => {
                 message={`Ada ${formatNumber(
                   selectedOrder.reservationSummary?.shortageLines,
                 )} item yang stoknya masih kurang.`}
-                description="Cek baris requirement di bawah untuk tahu material mana yang harus disiapkan lebih dulu."
+                description="Cek requirement material di bawah."
               />
             ) : (
               <Alert
                 type="success"
                 showIcon
                 message="Semua kebutuhan material cukup dan siap untuk mulai produksi."
-                description="PO ini bisa langsung masuk ke antrian produksi tanpa perlu penyesuaian stok tambahan."
+                description="PO siap masuk antrian produksi."
               />
             )}
 

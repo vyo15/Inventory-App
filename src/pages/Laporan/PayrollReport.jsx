@@ -260,15 +260,15 @@ const PayrollReport = () => {
     );
 
     return [
-      { key: "draft", title: "Total Draft", value: formatNumberId(totals.totalDraft), subtitle: "Line payroll draft pada filter aktif.", accent: "warning" },
-      { key: "confirmed", title: "Total Confirmed", value: formatNumberId(totals.totalConfirmed), subtitle: "Line payroll siap pembayaran.", accent: "primary" },
-      { key: "paid", title: "Total Paid", value: formatNumberId(totals.totalPaid), subtitle: "Line payroll yang sudah dibayar.", accent: "success" },
-      { key: "cancelled", title: "Total Cancelled", value: formatNumberId(totals.totalCancelled), subtitle: "Line payroll dibatalkan.", accent: "danger" },
-      { key: "nominal", title: "Total Nominal Periode", value: formatCurrencyId(totals.totalNominal), subtitle: "Nominal line non-cancelled pada filter aktif.", accent: "primary" },
-      { key: "direct", title: "Total Direct Labor", value: formatCurrencyId(totals.totalDirect), subtitle: "Klasifikasi direct labor pada filter aktif.", accent: "success" },
-      { key: "support", title: "Total Support", value: formatCurrencyId(totals.totalSupport), subtitle: "Klasifikasi support / fulfillment pada filter aktif.", accent: "warning" },
-      { key: "hpp", title: "Total Masuk HPP", value: formatCurrencyId(totals.totalInHpp), subtitle: "Nominal payroll dengan include HPP aktif.", accent: "primary" },
-      { key: "unpaid", title: "Total Belum Paid", value: formatCurrencyId(totals.totalUnpaid), subtitle: "Draft/confirmed yang belum dibayar.", accent: "danger" },
+      { key: "draft", title: "Total Draft", value: formatNumberId(totals.totalDraft), subtitle: "Draft pada filter aktif.", accent: "warning" },
+      { key: "confirmed", title: "Total Confirmed", value: formatNumberId(totals.totalConfirmed), subtitle: "Siap dibayar.", accent: "primary" },
+      { key: "paid", title: "Total Paid", value: formatNumberId(totals.totalPaid), subtitle: "Sudah dibayar.", accent: "success" },
+      { key: "cancelled", title: "Total Cancelled", value: formatNumberId(totals.totalCancelled), subtitle: "Dibatalkan.", accent: "danger" },
+      { key: "nominal", title: "Total Nominal Periode", value: formatCurrencyId(totals.totalNominal), subtitle: "Nominal non-cancelled.", accent: "primary" },
+      { key: "direct", title: "Total Direct Labor", value: formatCurrencyId(totals.totalDirect), subtitle: "Direct labor.", accent: "success" },
+      { key: "support", title: "Total Support", value: formatCurrencyId(totals.totalSupport), subtitle: "Support/fulfillment.", accent: "warning" },
+      { key: "hpp", title: "Total Masuk HPP", value: formatCurrencyId(totals.totalInHpp), subtitle: "Masuk HPP.", accent: "primary" },
+      { key: "unpaid", title: "Total Belum Paid", value: formatCurrencyId(totals.totalUnpaid), subtitle: "Belum paid.", accent: "danger" },
     ];
   }, [filteredPayrolls]);
 
@@ -427,7 +427,7 @@ const PayrollReport = () => {
   const exportDetailXlsx = async () => {
     await exportJsonToExcel({
       title: "Laporan Payroll IMS Bunga Flanel",
-      subtitle: "Detail payroll line sesuai filter periode dan status yang sedang tampil.",
+      subtitle: "Detail payroll sesuai filter.",
       sheetName: "Payroll Report",
       fileName: "Laporan-Payroll-Detail",
       filters: [
@@ -530,7 +530,7 @@ const PayrollReport = () => {
 
     await exportJsonToExcel({
       title: "Rekap Payroll per Operator",
-      subtitle: "Ringkasan payroll operator sesuai filter periode dan status yang sedang tampil.",
+      subtitle: "Rekap operator sesuai filter.",
       sheetName: "Payroll Recap",
       fileName: "Laporan-Payroll-Rekap-Operator",
       filters: [
@@ -550,16 +550,33 @@ const PayrollReport = () => {
     message.success("Rekap payroll per operator berhasil diekspor ke Excel.");
   };
 
+  /* =====================================================
+     SECTION: Payroll Report Render Panel — GUARDED
+     Fungsi:
+     - Menata filter, summary, tabel line payroll, dan export agar status, nominal, HPP, dan Cash Out ref tetap jelas.
+
+     Dipakai oleh:
+     - Halaman Payroll Report.
+
+     Alasan perubahan:
+     - Batch 3 merapikan microcopy laporan payroll tanpa mengubah filter, totals, export detail, atau rekap operator.
+
+     Catatan cleanup:
+     - Label direct/support/HPP bisa distandarkan di batch dokumentasi UI jika diperlukan.
+
+     Risiko:
+     - Jangan mengubah payroll source, payment status, summary calculation, Cash Out ref, atau export payload dari section ini.
+     ===================================================== */
   return (
     <>
       <PageHeader
         title="Laporan Payroll"
-        subtitle="Area laporan periode untuk membaca payroll lines final. Cash Out payroll paid ditampilkan sebagai referensi audit, bukan source utama laporan payroll."
+        subtitle="Payroll produksi sesuai filter."
       />
 
       <PageSection
         title="Filter Periode Payroll"
-        subtitle="Periode resmi tahap awal dipakai untuk filter/report terlebih dahulu, belum menjadi closing operasional yang mengunci data."
+        subtitle="Periode dan status payroll."
       >
         <FilterBar
           actions={[
@@ -568,7 +585,7 @@ const PayrollReport = () => {
                 Export Detail XLSX
               </Button>
               <Button onClick={exportDetailCsv} disabled={filteredPayrolls.length === 0}>
-                Export Detail CSV (Legacy)
+                Export Detail CSV
               </Button>
               <Button type="primary" onClick={exportOperatorRecapXlsx} disabled={filteredPayrolls.length === 0}>
                 Export Rekap Operator
@@ -647,14 +664,14 @@ const PayrollReport = () => {
 
       <PageSection
         title="Ringkasan Payroll Periode"
-        subtitle="Summary cards membaca payroll final line-centric sesuai filter aktif. Draft tetap tampil agar owner/admin bisa memantau queue operasional sebelum closing pembayaran."
+        subtitle="KPI payroll."
       >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 8, lg: 6, xl: 6 }} />
       </PageSection>
 
       <PageSection
         title="Detail Payroll Lines"
-        subtitle="Tabel laporan tetap line-centric. Work Log number hanya menjadi grouping visual dan referensi audit, bukan batch entity baru."
+        subtitle="Line payroll per work log."
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredPayrolls} />
         <Table

@@ -181,7 +181,7 @@ const Customers = () => {
     <div className="page-container">
       <PageHeader
         title="Customer"
-        subtitle="Kelola master customer yang dipakai oleh modul Sales tanpa memecah source data customer aktif."
+        subtitle="Master customer untuk Sales."
         actions={[
           {
             key: "create-customer",
@@ -200,7 +200,7 @@ const Customers = () => {
 
       <PageSection
         title="Daftar Customer"
-        subtitle="Data di sini menjadi referensi dropdown customer pada flow penjualan aktif."
+        subtitle="Kontak dan alamat customer."
       >
         <DataRefreshIndicator loading={loading} dataSource={customers} />
         <Table
@@ -213,6 +213,23 @@ const Customers = () => {
         />
       </PageSection>
 
+      {/* =====================================================
+          SECTION: Customer Form Modal — AKTIF
+          Fungsi:
+          - Menampilkan form customer yang ringkas untuk kontak, alamat, dan catatan.
+
+          Dipakai oleh:
+          - Halaman Master Data / Customer saat tambah atau edit data.
+
+          Alasan perubahan:
+          - Copy form diringkas tanpa mengubah relasi customer ke Sales.
+
+          Catatan cleanup:
+          - Belum ada.
+
+          Risiko:
+          - Jangan ubah payload customer, customersService, validation, sales linkage, atau handler simpan dari section presentasi ini.
+      ===================================================== */}
       <PageFormModal
         title={isEditing ? "Edit Customer" : "Tambah Customer"}
         open={isModalVisible}
@@ -242,10 +259,10 @@ const Customers = () => {
           <Input placeholder="Nomor HP / Email" />
         </Form.Item>
         <Form.Item name="address" label="Alamat">
-          <Input.TextArea placeholder="Alamat lengkap" />
+          <Input.TextArea placeholder="Alamat customer" />
         </Form.Item>
         <Form.Item name="note" label="Catatan">
-          <Input.TextArea placeholder="Catatan tambahan (opsional)" />
+          <Input.TextArea placeholder="Catatan customer" />
         </Form.Item>
       </PageFormModal>
     </div>

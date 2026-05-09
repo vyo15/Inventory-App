@@ -69,6 +69,7 @@ Production Planning
 |---|---|---|---|
 | Planning dibuat | production_plans | target monitoring | tidak ada mutasi stok |
 | PO dari Planning | production_plans + production_boms | production_orders dengan planning reference | user action wajib, tetap lewat BOM |
+| Cancel Planning tanpa PO | production_plans | status Planning menjadi `cancelled` | hanya sebelum ada linked PO, bukan hard delete |
 | Progress Planning | completed production_work_logs | actual/remaining/progress read model realtime | hitung Work Log completed sekali per id |
 | Dashboard Planning | production_plans + PO + Work Log completed | summary target minggu/bulan | read-only, tidak update data |
 
@@ -83,6 +84,15 @@ Planning dapat menyimpan:
 - `linkedProductionOrderCodes`
 
 Jika array link planning belum lengkap, service tetap bisa membaca PO berdasarkan `planningId`.
+
+## Guard Cancel Planning
+- Planning tanpa PO boleh dicancel jika status belum final.
+- Planning yang sudah punya PO / linked Production Order tidak boleh dicancel langsung; user harus mengelola PO terkait terlebih dahulu.
+- Cancel Planning hanya mengubah status Planning menjadi `cancelled`; bukan hard delete.
+- Cancel Planning tidak menghapus/mengubah PO, Work Log, inventory/stok, Payroll, HPP, report, sales, purchases, returns, atau cash in/out.
+- Planning `cancelled` dan `completed` tidak boleh dibuatkan PO.
+- Planning `overdue` tanpa PO masih boleh dibuatkan PO atau dicancel.
+- Dashboard dan filter Planning wajib membaca status canonical `cancelled`.
 
 ## Guard Tambahan
 1. Planning tidak mengubah stok.

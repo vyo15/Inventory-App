@@ -82,28 +82,28 @@ const SalesReport = () => {
         key: "all-revenue",
         title: "Total Omzet Semua Transaksi",
         value: formatCurrencyId(summary.totalRevenue),
-        subtitle: "Total nominal seluruh transaksi sales.",
+        subtitle: "Total sales pada filter aktif.",
         accent: "primary",
       },
       {
         key: "sales-count",
         title: "Jumlah Transaksi",
         value: formatNumberId(summary.totalSalesCount),
-        subtitle: "Jumlah dokumen penjualan yang tercatat.",
+        subtitle: "Jumlah transaksi.",
         accent: "success",
       },
       {
         key: "completed-revenue",
         title: "Omzet Status Selesai",
         value: formatCurrencyId(summary.totalCompletedRevenue),
-        subtitle: "Bagian omzet dari transaksi berstatus selesai.",
+        subtitle: "Sales berstatus selesai.",
         accent: "warning",
       },
       {
         key: "completed-count",
         title: "Transaksi Selesai",
         value: formatNumberId(summary.totalCompletedCount),
-        subtitle: "Jumlah transaksi dengan status selesai.",
+        subtitle: "Transaksi selesai.",
         accent: "danger",
       },
     ],
@@ -125,7 +125,7 @@ const SalesReport = () => {
   const exportToExcel = async () => {
     await exportJsonToExcel({
       title: "Laporan Penjualan IMS Bunga Flanel",
-      subtitle: "Ekspor mengikuti data penjualan yang sedang tampil di halaman ini.",
+      subtitle: "Ekspor data yang sedang tampil.",
       sheetName: "Sales Report",
       fileName: "Laporan-Penjualan",
       columns: [
@@ -228,23 +228,40 @@ const SalesReport = () => {
     [],
   );
 
+  /* =====================================================
+     SECTION: Sales Report Render Panel — AKTIF
+     Fungsi:
+     - Menata filter, summary, tabel, dan export laporan penjualan agar ringkas tanpa mengubah angka.
+
+     Dipakai oleh:
+     - Halaman Sales Report.
+
+     Alasan perubahan:
+     - Batch 3 mengurangi deskripsi pasif dan menjaga export mengikuti data yang sedang tampil.
+
+     Catatan cleanup:
+     - Pola report panel bisa distandarkan di UI theme guide pada batch docs terpisah.
+
+     Risiko:
+     - Jangan mengubah query, summary calculation, table mapping, atau export payload dari section ini.
+     ===================================================== */
   return (
     <>
       <PageHeader
         title="Laporan Penjualan"
-        subtitle="Laporan ini tetap membaca collection sales aktif, lalu ditata ulang ke pattern page header, summary card, dan table section yang seragam."
+        subtitle="Ringkasan penjualan sesuai filter."
       />
 
       <PageSection
         title="Ringkasan Penjualan"
-        subtitle="Ringkasan membantu membaca performa transaksi keseluruhan dan status selesai secara cepat."
+        subtitle="KPI penjualan."
       >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
       </PageSection>
 
       <PageSection
         title="Detail Penjualan"
-        subtitle="Data item, pelanggan, channel, dan status tetap mengikuti dokumen sales yang tersimpan di Firestore."
+        subtitle="Transaksi sesuai filter."
         extra={
           <Button type="primary" onClick={exportToExcel} disabled={salesData.length === 0}>
             Ekspor ke Excel

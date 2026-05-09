@@ -1200,7 +1200,7 @@ const ProductionWorkLogs = () => {
     <div className="ims-page">
       <ProductionPageHeader
         title="Work Log Produksi"
-        description="Realisasi kerja produksi dari Production Order (1 PO = 1 Work Log)"
+        description="Realisasi produksi dari Production Order."
         onAdd={() => openCreateWorkLogDrawer("manual")}
         addLabel="Tambah Work Log"
       />
@@ -1862,7 +1862,7 @@ const ProductionWorkLogs = () => {
                       style={{ marginBottom: 12 }}
                       type="info"
                       showIcon
-                      message="Biaya labor mengikuti ringkasan payroll final jika line payroll sudah terbentuk. Jika payroll belum ada, sistem masih memakai labor cost manual pada Work Log."
+                      message="Labor cost memakai payroll final; jika belum ada, pakai manual Work Log."
                     />
                     {/* =====================================================
                         ACTIVE / GUARDED - alert warning detail cost 0.

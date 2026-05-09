@@ -85,8 +85,8 @@ const MAINTENANCE_CATEGORY_META = {
   safe_repair: { label: "Aman Diperbaiki", color: "blue" },
   display_repair: { label: "Display/Snapshot", color: "purple" },
   manual: { label: "Butuh Reset/Manual", color: "red" },
-  legacy: { label: "Legacy/Transisi", color: "orange" },
-  scoped_reset: { label: "Aman Reset Scoped", color: "volcano" },
+  legacy: { label: "Data Lama/Transisi", color: "orange" },
+  scoped_reset: { label: "Aman Reset Terarah", color: "volcano" },
 };
 
 // -----------------------------------------------------------------------------
@@ -244,7 +244,7 @@ const ResetMaintenanceData = () => {
       { label: "Produksi (Lengkap)", value: "production" },
       { label: "Produksi + Inventory Log Produksi", value: "production_core_and_logs" },
       { label: "Payroll Produksi Saja", value: "production_payroll_only" },
-      { label: "Productions Legacy Saja", value: "productions_legacy_only" },
+      { label: "Produksi Data Lama Saja", value: "productions_legacy_only" },
       { label: "Kas & Biaya", value: "cash_and_expenses" },
       { label: "Penyesuaian + Log Adjustment", value: "stock_adjustment_and_logs" },
       { label: "Pricing Log", value: "pricing_logs" },
@@ -646,13 +646,13 @@ const ResetMaintenanceData = () => {
         ],
         affectedCount: result?.summary?.checkedRecords || 0,
         dryRun: true,
-        note: "Batch 3 legacy data audit hanya membaca data dan memberi rekomendasi reset/repair scoped.",
+        note: "Audit data lama hanya membaca data dan memberi rekomendasi reset/repair terarah.",
       });
       await loadMaintenanceLogs();
-      message.success("Dry run data legacy selesai. Belum ada data yang diubah.");
+      message.success("Dry run data lama selesai. Belum ada data yang diubah.");
     } catch (error) {
       console.error(error);
-      message.error(error?.message || "Gagal menjalankan audit data legacy.");
+      message.error(error?.message || "Gagal menjalankan audit data lama.");
     } finally {
       setLoadingLegacyDataAudit(false);
     }
@@ -733,7 +733,7 @@ const ResetMaintenanceData = () => {
   // Audit variant lintas modul.
   // ACTIVE / TRANSITION:
   // - memetakan transaksi lama yang masih memakai field variant legacy;
-  // - dipakai untuk memisahkan record aman repair vs reset scoped/manual review.
+  // - dipakai untuk memisahkan record aman repair vs reset terarah/manual review.
   // -------------------------------------------------------------------------
   const handleLoadTransactionVariantAudit = async () => {
     try {
@@ -764,7 +764,7 @@ const ResetMaintenanceData = () => {
   // -------------------------------------------------------------------------
   // Repair variant lintas modul.
   // ACTIVE / GUARDED:
-  // - hanya melengkapi snapshot variant dari source legacy yang sudah jelas;
+  // - hanya melengkapi snapshot variant dari asal data lama yang sudah jelas;
   // - tidak mengubah qty, stok, atau kas final.
   // -------------------------------------------------------------------------
   const handleRepairTransactionVariantAudit = async () => {
@@ -780,7 +780,7 @@ const ResetMaintenanceData = () => {
         affectedCollections: ["sales", "returns", "purchases", "stock_adjustments"],
         affectedCount: result?.updatedCount || 0,
         dryRun: false,
-        note: "Repair variant lintas modul hanya mengisi snapshot/field turunan yang sudah punya source legacy jelas; qty dan kas tidak berubah.",
+        note: "Repair variant lintas modul hanya mengisi snapshot/field turunan yang asal data lamanya jelas; qty dan kas tidak berubah.",
       });
       message.success(result?.message || "Repair variant lintas modul selesai.");
       const nextAudit = await getTransactionVariantMaintenanceAudit();
@@ -803,7 +803,7 @@ const ResetMaintenanceData = () => {
     // -------------------------------------------------------------------------
     setMode("transaction_only");
     setSelectedModules(["sales", "purchases", "returns", "stock_adjustment_and_logs"]);
-    message.info("Reset scoped transaksi varian disiapkan. Review preview lalu ketik RESET jika sudah yakin.");
+    message.info("Reset terarah transaksi varian disiapkan. Review preview lalu ketik RESET jika sudah yakin.");
   };
 
   const prepareProductionReset = async () => {
@@ -987,31 +987,48 @@ const ResetMaintenanceData = () => {
 
   const maintenanceSummary = maintenanceAudit?.summary || {};
 
+  /* =====================================================
+  SECTION: Reset Maintenance Renderer — GUARDED
+  Fungsi:
+  - Menampilkan panel maintenance, preview reset, data test, audit trail, dan modal konfirmasi RESET.
+
+  Dipakai oleh:
+  - Admin utility untuk dry run, repair aman, preview reset, dan reset destructive terbatas.
+
+  Alasan perubahan:
+  - Panel dibuat lebih ringkas tanpa mengurangi warning destructive, preview wajib, scope reset, protected data, atau confirmation keyword.
+
+  Catatan cleanup:
+  - Panel maintenance dapat dipecah menjadi subkomponen jika halaman utility makin panjang.
+
+  Risiko:
+  - Jangan mengubah reset scope, preview logic, confirmation keyword RESET, protected collection, atau audit log flow.
+  ===================================================== */
   return (
     <div className="page-container">
       <Card className="content-card">
         <Space direction="vertical" size={20} style={{ width: "100%" }}>
           <PageHeader
             title="Reset & Maintenance Data"
-            subtitle="Pusat utilitas untuk audit, repair aman, reset terarah, baseline stok, dan sinkronisasi data testing."
+            subtitle="Maintenance aman, reset wajib preview."
           />
 
           <Alert
             type="warning"
             showIcon
-            message="Pisahkan Maintenance dan Reset"
-            description="Maintenance tidak menghapus data dan tidak posting stok ulang. Reset bersifat destructive dan tetap wajib melalui preview serta konfirmasi RESET."
+            message="Maintenance aman, reset destructive"
+            description="Maintenance tidak menghapus data. Reset wajib preview dan konfirmasi RESET."
           />
 
           <Alert
             type="success"
             showIcon
-            message="Supplier dilindungi dari reset default"
-            description="Collection supplierPurchases adalah master Supplier/vendor restock. Reset transaksi/testing tidak menghapus Supplier secara default agar Raw Material dan Purchases tetap punya referensi vendor."
+            message="Supplier tetap aman"
+            description="Tidak ikut reset default."
           />
 
           <Card
-            title="Maintenance / Sinkronisasi Data Produksi"
+            title="Maintenance Produksi"
             size="small"
             extra={<Tag color="purple">Tahap awal: Produksi</Tag>}
           >
@@ -1019,8 +1036,8 @@ const ResetMaintenanceData = () => {
               <Alert
                 type="info"
                 showIcon
-                message="Dry run dulu sebelum repair"
-                description="Audit membaca BOM, Production Order, Work Log, output, dan inventory log produksi. Repair aman hanya melengkapi field turunan/snapshot/display yang jelas, tanpa mengurangi/menambah stok, kas, payroll, atau HPP."
+                message="Cek dulu sebelum repair"
+                description="Audit produksi tanpa mengubah stok, kas, payroll, atau HPP."
               />
 
               <Row gutter={[12, 12]}>
@@ -1037,7 +1054,7 @@ const ResetMaintenanceData = () => {
                 <Col xs={24} md={8}>
                   <Popconfirm
                     title="Jalankan repair aman?"
-                    description="Repair hanya mengubah field turunan/snapshot/display. Stok, kas, payroll, dan HPP tidak diposting ulang."
+                    description="Repair hanya field turunan; stok, kas, payroll, dan HPP tidak berubah."
                     okText="Ya, Repair Aman"
                     cancelText="Batal"
                     onConfirm={handleRepairProductionMaintenance}
@@ -1117,7 +1134,7 @@ const ResetMaintenanceData = () => {
           </Card>
 
           <Card
-            title="Maintenance / Sinkronisasi Stok Umum"
+            title="Maintenance Stok"
             size="small"
             extra={<Tag color="cyan">Dry Run Stok</Tag>}
           >
@@ -1125,8 +1142,8 @@ const ResetMaintenanceData = () => {
               <Alert
                 type="info"
                 showIcon
-                message="Cek konsistensi stok sebelum sync"
-                description="Dry run membandingkan currentStock, stock, reservedStock, availableStock, dan total variants. Repair aman hanya merapikan field turunan stok, tidak membuat inventory log dan tidak posting stok ulang."
+                message="Cek stok sebelum repair"
+                description="Repair hanya field turunan stok; tidak membuat log mutasi baru."
               />
 
               <Row gutter={[12, 12]}>
@@ -1138,7 +1155,7 @@ const ResetMaintenanceData = () => {
                 <Col xs={24} md={12}>
                   <Popconfirm
                     title="Repair sinkronisasi stok?"
-                    description="Repair hanya menyamakan field turunan stok dan variant. Tidak ada mutasi stok baru."
+                    description="Repair field turunan stok tanpa mutasi baru."
                     okText="Ya, Repair Stok"
                     cancelText="Batal"
                     onConfirm={handleRepairStockAudit}
@@ -1178,7 +1195,7 @@ const ResetMaintenanceData = () => {
           </Card>
 
           <Card
-            title="Maintenance / Repair Schema Inventory Log"
+            title="Repair Inventory Log"
             size="small"
             extra={<Tag color="gold">Display Repair</Tag>}
           >
@@ -1186,8 +1203,8 @@ const ResetMaintenanceData = () => {
               <Alert
                 type="info"
                 showIcon
-                message="Repair schema log lama tanpa mengubah qty"
-                description="Dry run mencari log lama yang masih memakai materialVariantId/materialVariantName atau belum punya variantKey/variantLabel/stockSourceType final. Repair hanya melengkapi field display/schema."
+                message="Repair tampilan log lama"
+                description="Repair hanya melengkapi field tampilan, qty dan stok tidak berubah."
               />
 
               <Row gutter={[12, 12]}>
@@ -1199,7 +1216,7 @@ const ResetMaintenanceData = () => {
                 <Col xs={24} md={12}>
                   <Popconfirm
                     title="Repair schema inventory log?"
-                    description="Repair hanya melengkapi field variantKey/variantLabel/stockSourceType. Qty dan stok tidak berubah."
+                    description="Repair schema log tanpa mengubah qty atau stok."
                     okText="Ya, Repair Schema"
                     cancelText="Batal"
                     onConfirm={handleRepairLogSchema}
@@ -1239,22 +1256,22 @@ const ResetMaintenanceData = () => {
 
 
           <Card
-            title="Maintenance / Audit Data Legacy Batch 3"
+            title="Audit Data Lama"
             size="small"
-            extra={<Tag color="volcano">Cleanup Data Legacy</Tag>}
+            extra={<Tag color="volcano">Cleanup Data Lama</Tag>}
           >
             <Space direction="vertical" size={16} style={{ width: "100%" }}>
               <Alert
                 type="warning"
                 showIcon
-                message="Dry run legacy sebelum cleanup code berikutnya"
-                description="Audit ini memetakan productions legacy, orphan inventory log, transaksi lama tanpa variant snapshot, dan income/expense tanpa source reference. Audit tidak mengubah data; reset scoped tetap harus lewat preview dan konfirmasi RESET."
+                message="Cek data lama sebelum cleanup"
+                description="Audit data lama tanpa mengubah data; reset terarah tetap wajib preview."
               />
 
               <Row gutter={[12, 12]}>
                 <Col xs={24} md={8}>
                   <Button block icon={<EyeOutlined />} onClick={handleLoadLegacyDataAudit} loading={loadingLegacyDataAudit}>
-                    Cek Data Legacy
+                    Cek Data Lama
                   </Button>
                 </Col>
                 <Col xs={24} md={8}>
@@ -1274,7 +1291,7 @@ const ResetMaintenanceData = () => {
                 <Col xs={12} md={4}><Card size="small"><Statistic title="OK" value={legacyDataSummary.okCount || 0} /></Card></Col>
                 <Col xs={12} md={4}><Card size="small"><Statistic title="Repair" value={legacyDataSummary.safeRepairCount || 0} /></Card></Col>
                 <Col xs={12} md={4}><Card size="small"><Statistic title="Display" value={legacyDataSummary.displayRepairCount || 0} /></Card></Col>
-                <Col xs={12} md={4}><Card size="small"><Statistic title="Reset Scoped" value={legacyDataSummary.scopedResetCount || 0} /></Card></Col>
+                <Col xs={12} md={4}><Card size="small"><Statistic title="Reset Terarah" value={legacyDataSummary.scopedResetCount || 0} /></Card></Col>
                 <Col xs={12} md={4}><Card size="small"><Statistic title="Manual" value={legacyDataSummary.manualReviewCount || 0} /></Card></Col>
               </Row>
 
@@ -1300,17 +1317,17 @@ const ResetMaintenanceData = () => {
                   },
                   { title: "Masalah", dataIndex: "issue", key: "issue", width: 225, render: (value) => renderCompactText(value, 210) },
                   { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 255, render: (value) => renderCompactText(value, 240) },
-                  { title: "Scope Reset", dataIndex: "resetScope", key: "resetScope", width: 130, render: (value) => renderCompactTag(value, 110) },
+                  { title: "Reset", dataIndex: "resetScope", key: "resetScope", width: 130, render: (value) => renderCompactTag(value, 110) },
                 ]}
                 scroll={{ x: 1100 }}
-                locale={{ emptyText: "Klik Cek Data Legacy untuk memetakan data lama/orphan sebelum cleanup berikutnya." }}
+                locale={{ emptyText: "Klik Cek Data Lama untuk memetakan data transisi sebelum cleanup berikutnya." }}
               />
             </Space>
           </Card>
 
 
           <Card
-            title="Maintenance / Payroll & Work Log Snapshot"
+            title="Payroll & Work Log Snapshot"
             size="small"
             extra={<Tag color="geekblue">Payroll Snapshot</Tag>}
           >
@@ -1319,7 +1336,7 @@ const ResetMaintenanceData = () => {
                 type="info"
                 showIcon
                 message="Audit stale snapshot payroll sebelum cleanup besar payroll"
-                description="Section ini khusus memeriksa mismatch master Production Step vs snapshot payroll di Work Log. Repair aman hanya boleh berjalan jika source Step jelas dan belum ada history payroll yang mengunci Work Log tersebut."
+                description="Audit mismatch step vs payroll snapshot."
               />
 
               <Row gutter={[12, 12]}>
@@ -1331,7 +1348,7 @@ const ResetMaintenanceData = () => {
                 <Col xs={24} md={12}>
                   <Popconfirm
                     title="Repair snapshot payroll?"
-                    description="Repair hanya menyinkronkan field snapshot Work Log dari master Step aktif. Payroll final, stok, dan kas tidak diubah."
+                    description="Repair snapshot Work Log; payroll final, stok, dan kas tidak berubah."
                     okText="Ya, Repair Snapshot"
                     cancelText="Batal"
                     onConfirm={handleRepairPayrollAudit}
@@ -1365,7 +1382,7 @@ const ResetMaintenanceData = () => {
                   }},
                   { title: "Masalah", dataIndex: "issue", key: "issue", width: 245, render: (value) => renderCompactText(value, 230) },
                   { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 240, render: (value) => renderCompactText(value, 225) },
-                  { title: "Scope Reset", dataIndex: "resetScope", key: "resetScope", width: 130, render: (value) => renderCompactTag(value, 110) },
+                  { title: "Reset", dataIndex: "resetScope", key: "resetScope", width: 130, render: (value) => renderCompactTag(value, 110) },
                 ]}
                 scroll={{ x: 1030 }}
                 locale={{ emptyText: "Klik Cek Snapshot Payroll untuk menjalankan dry run stale snapshot payroll." }}
@@ -1374,7 +1391,7 @@ const ResetMaintenanceData = () => {
           </Card>
 
           <Card
-            title="Maintenance / Variant Lintas Modul"
+            title="Variant Lintas Modul"
             size="small"
             extra={<Tag color="magenta">Variant Transactions</Tag>}
           >
@@ -1383,7 +1400,7 @@ const ResetMaintenanceData = () => {
                 type="info"
                 showIcon
                 message="Audit transaksi lama tanpa variant snapshot final"
-                description="Section ini membantu membedakan record yang aman direpair dari field legacy yang sudah jelas vs record yang harus di-reset scoped/manual review. Repair aman tidak mengubah qty, stok, atau kas; hanya melengkapi snapshot variant final."
+                description="Audit transaksi lama tanpa mutasi qty, stok, atau kas."
               />
 
               <Row gutter={[12, 12]}>
@@ -1395,7 +1412,7 @@ const ResetMaintenanceData = () => {
                 <Col xs={24} md={12}>
                   <Popconfirm
                     title="Repair snapshot variant lintas modul?"
-                    description="Repair aman hanya mengisi variantKey/variantLabel dari source legacy yang sudah jelas. Record yang masih ambigu tetap manual/reset scoped."
+                    description="Repair variant hanya jika asal data lama jelas."
                     okText="Ya, Repair Variant"
                     cancelText="Batal"
                     onConfirm={handleRepairTransactionVariantAudit}
@@ -1429,7 +1446,7 @@ const ResetMaintenanceData = () => {
                   }},
                   { title: "Masalah", dataIndex: "issue", key: "issue", width: 245, render: (value) => renderCompactText(value, 230) },
                   { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 245, render: (value) => renderCompactText(value, 230) },
-                  { title: "Scope Reset", dataIndex: "resetScope", key: "resetScope", width: 130, render: (value) => renderCompactTag(value, 110) },
+                  { title: "Reset", dataIndex: "resetScope", key: "resetScope", width: 130, render: (value) => renderCompactTag(value, 110) },
                 ]}
                 scroll={{ x: 1020 }}
                 locale={{ emptyText: "Klik Cek Variant Lintas Modul untuk menjalankan dry run transaksi lama bervarian." }}
@@ -1437,12 +1454,12 @@ const ResetMaintenanceData = () => {
             </Space>
           </Card>
 
-          <Card title="Saran Scope Reset yang Lebih Presisi" size="small" extra={<Tag color="purple">Scoped Reset</Tag>}>
+          <Card title="Saran Reset Terarah" size="small" extra={<Tag color="purple">Reset Terarah</Tag>}>
             <Space direction="vertical" size={8} style={{ width: "100%" }}>
               <Text>• Gunakan <Text strong>Produksi + Inventory Log Produksi</Text> jika ingin membersihkan domain produksi tanpa menghapus payroll produksi.</Text>
               <Text>• Gunakan <Text strong>Payroll Produksi Saja</Text> bila perlu men-trim payroll testing tanpa menyentuh Work Log/PO.</Text>
-              <Text>• Gunakan <Text strong>Productions Legacy Saja</Text> jika target cleanup hanya jejak flow lama.</Text>
-              <Text>• Modul <Text strong>Penjualan + Income Sales</Text> dan <Text strong>Pembelian + Expense Purchases</Text> tetap menjadi pasangan reset scoped resmi agar kas tidak terhapus membabi buta.</Text>
+              <Text>• Gunakan <Text strong>Produksi Data Lama Saja</Text> jika target cleanup hanya jejak flow lama.</Text>
+              <Text>• Modul <Text strong>Penjualan + Income Sales</Text> dan <Text strong>Pembelian + Expense Purchases</Text> tetap menjadi pasangan reset terarah resmi agar kas tidak terhapus membabi buta.</Text>
             </Space>
           </Card>
 
@@ -1499,7 +1516,7 @@ const ResetMaintenanceData = () => {
                     showIcon
                     style={{ marginTop: 12 }}
                     message="Reset Production Planning hanya menghapus production_plans"
-                    description="Production Order, Work Log, Payroll, HPP, stok, dan report tidak ikut dihapus. PO lama dapat tetap menyimpan reference planningId/planningCode/planningTitle setelah planning direset."
+                    description="Reset Planning tidak menghapus PO, Work Log, Payroll, HPP, stok, atau report."
                   />
                 )}
               </Card>
@@ -1609,16 +1626,16 @@ const ResetMaintenanceData = () => {
           <Card
             title="Saran Pemakaian untuk Trial-Error"
             size="small"
-            extra={<Tag color="blue">Testing Flow</Tag>}
+            extra={<Tag color="blue">Alur Testing</Tag>}
           >
             <Space direction="vertical" size={8} style={{ width: "100%" }}>
               <Text>• Gunakan <Text strong>Maintenance / Sinkronisasi Data</Text> dulu jika masalahnya hanya field varian lama/stale.</Text>
-              <Text>• Gunakan <Text strong>Reset Terarah Produksi</Text> jika data produksi lama terlalu rusak untuk direpair aman. Reset produksi sekarang ikut membersihkan inventory log produksi secara scoped.</Text>
+              <Text>• Gunakan <Text strong>Reset Terarah Produksi</Text> jika data produksi lama terlalu rusak untuk direpair aman. Reset produksi sekarang ikut membersihkan inventory log produksi secara terarah.</Text>
               <Text>• Gunakan <Text strong>Reset + Baseline Testing</Text> untuk uji berulang yang konsisten.</Text>
               <Text>• Jalankan <Text strong>Cek Stok Umum</Text> sebelum Sinkronkan Stok agar mismatch stok bisa direview dulu.</Text>
               <Text>• Reset Sales/Purchases memakai scope income/expense terkait agar tidak membersihkan kas lintas modul secara diam-diam.</Text>
               <Text>• Supplier/vendor restock dilindungi dari reset default. Jika perlu reset Supplier, buat task developer destructive terpisah dengan konfirmasi khusus.</Text>
-              <Text>• Gunakan <Text strong>Cek Data Legacy</Text> sebelum cleanup file/logic berikutnya agar orphan log dan transaksi lama punya status jelas.</Text>
+              <Text>• Gunakan <Text strong>Cek Data Lama</Text> sebelum cleanup file/logic berikutnya agar orphan log dan transaksi lama punya status jelas.</Text>
             </Space>
           </Card>
 
@@ -1666,7 +1683,7 @@ const ResetMaintenanceData = () => {
                 type="info"
                 showIcon
                 message="Hapus hanya data test bermarker"
-                description="Fitur ini hanya menghapus dokumen dengan isTestData=true, sourceModule=dev_test_seed, dan createdBy=dev_seed. Data normal dan Supplier protected tidak menjadi target default."
+                description="Hanya data test bermarker dev_seed yang dihapus."
               />
 
               <Row gutter={[12, 12]}>
@@ -1678,7 +1695,7 @@ const ResetMaintenanceData = () => {
                 <Col xs={24} md={12}>
                   <Popconfirm
                     title="Hapus data test bermarker?"
-                    description="Hanya dokumen bermarker dev_test_seed yang dihapus. Supplier protected dan data normal tidak tersentuh."
+                    description="Hanya data test bermarker yang dihapus."
                     okText="Ya, Hapus Data Test"
                     cancelText="Batal"
                     onConfirm={handleDeleteDevTestData}
@@ -1768,8 +1785,8 @@ const ResetMaintenanceData = () => {
             type="error"
             showIcon
             icon={<WarningOutlined />}
-            message="Reset akan dijalankan pada data testing"
-            description="Pastikan preview sudah sesuai. Reset ini menghapus data pada modul/scope yang dipilih, tetapi Supplier/master protected tidak ikut reset default. Gunakan Maintenance jika hanya ingin repair field turunan."
+            message="Reset akan menghapus scope terpilih"
+            description="Pastikan preview sesuai. Reset menghapus data scope terpilih dan tidak bisa dibatalkan dari halaman ini."
           />
 
           <div>
@@ -1799,7 +1816,7 @@ const ResetMaintenanceData = () => {
             type="warning"
             showIcon
             message="Audit log dibuat sebelum reset berjalan"
-            description="Jika audit log awal gagal dibuat karena permission maintenance_logs, reset dibatalkan dan tidak ada delete yang dijalankan."
+            description="Jika audit log gagal, reset dibatalkan."
           />
 
           <Form form={confirmForm} layout="vertical">
@@ -1807,7 +1824,7 @@ const ResetMaintenanceData = () => {
               name="confirmationText"
               label='Ketik "RESET" untuk konfirmasi terakhir'
               rules={[{ required: true, message: 'Ketik "RESET" untuk melanjutkan.' }]}
-              extra="Popup dipakai agar halaman utama tetap bersih, tapi tetap aman sebelum eksekusi reset."
+              extra="Reset hanya berjalan jika kata RESET benar."
             >
               <Input placeholder="Ketik RESET di sini" allowClear autoFocus />
             </Form.Item>

@@ -469,7 +469,7 @@ const buildDashboardQuickActions = () => [
   {
     key: "stock-report",
     label: "Laporan Stok",
-    description: "Buka laporan stok final read-only.",
+    description: "Buka laporan stok final.",
     to: "/report-stock",
     icon: <BarChartOutlined />,
   },
@@ -760,7 +760,7 @@ const Dashboard = () => {
       });
 
       if (failedReads.length > 0) {
-        setLoadWarning(`Sebagian data Dashboard gagal dimuat: ${failedReads.join(", ")}. Data lain tetap ditampilkan sebagai monitoring read-only.`);
+        setLoadWarning(`Sebagian data Dashboard gagal dimuat: ${failedReads.join(", ")}. Data lain tetap ditampilkan untuk monitoring.`);
       }
 
       setLastUpdated(new Date());
@@ -1235,7 +1235,7 @@ const Dashboard = () => {
     <div className="dashboard-page">
       <PageHeader
         title="Dashboard"
-        subtitle="Pusat kontrol harian yang ringkas, read-only, dan tidak mengubah stok, kas, produksi, payroll, HPP, atau laporan."
+        subtitle="Ringkasan operasional harian."
         extra={
           <Space size={10} wrap>
             <Text className="dashboard-section-extra">Terakhir diperbarui: {lastUpdatedText}</Text>
@@ -1272,7 +1272,7 @@ const Dashboard = () => {
       ===================================================== */}
       <PageSection
         title="Ringkasan Hari Ini"
-        subtitle="KPI compact lintas sales, kas, stok, dan produksi. Profit Loss tetap laporan final."
+        subtitle="KPI utama harian."
       >
         <div className="dashboard-kpi-grid">
           {kpiItems.map((item) => (
@@ -1313,7 +1313,7 @@ const Dashboard = () => {
       ===================================================== */}
       <PageSection
         title="Aksi Cepat"
-        subtitle="Shortcut navigasi saja. Tidak ada transaksi, mutasi stok, kas, produksi, atau payroll yang dibuat dari Dashboard."
+        subtitle="Akses menu utama."
       >
         <div className="dashboard-quick-action-grid">
           {quickActions.map((action) => (
@@ -1348,7 +1348,7 @@ const Dashboard = () => {
       ===================================================== */}
       <PageSection
         title="Data Perlu Dicek"
-        subtitle="Exception paling penting dari stok, produksi, HPP, dan payroll. Maksimal ringkas agar tidak menjadi laporan penuh."
+        subtitle="Prioritas operasional."
       >
         {businessAlertItems.length > 0 ? (
           <div className="dashboard-alert-grid">
@@ -1382,7 +1382,7 @@ const Dashboard = () => {
       ========================= */}
       <PageSection
         title="Prioritas Hari Ini"
-        subtitle="Maksimal 5 hal yang perlu dicek lebih dulu agar operasional tidak putus."
+        subtitle="Fokus harian."
       >
         {priorityItems.length > 0 ? (
           <div className="dashboard-priority-grid">
@@ -1416,7 +1416,7 @@ const Dashboard = () => {
       ========================= */}
       <PageSection
         title="Fokus Produksi"
-        subtitle="Target produksi, status PO/Work Log, dan planning yang paling perlu dikejar."
+        subtitle="Target dan risiko produksi."
         extra={
           <Link to="/produksi/production-planning" className="dashboard-section-extra">
             Buka Planning <ArrowRightOutlined />
@@ -1510,7 +1510,7 @@ const Dashboard = () => {
         <Col xs={24} xl={12}>
           <PageSection
             title="Stok Kritis"
-            subtitle="Item kosong/menipis paling urgent. Maksimal 5 item agar tidak menjadi laporan stok penuh."
+            subtitle="Stok paling urgent."
             extra={<Text className="dashboard-section-extra">{formatNumberId(lowStockTotal)} total</Text>}
           >
             {criticalStockPreview.length > 0 ? (
@@ -1604,7 +1604,7 @@ const Dashboard = () => {
         <Col xs={24} xl={12}>
           <PageSection
             title="Keuangan Ringkas"
-            subtitle="Ringkasan bulan berjalan. Profit Loss tetap source final laporan laba/rugi."
+            subtitle="Kas bulan berjalan."
           >
             <div className="dashboard-metric-grid">
               <div className="dashboard-metric-card">
@@ -1612,21 +1612,21 @@ const Dashboard = () => {
                 <Title level={4} className="dashboard-card-value">
                   {formatCurrency(financeSummary.recognizedIncome)}
                 </Title>
-                <Text className="dashboard-muted-text">Dari revenues + incomes bulan ini.</Text>
+                <Text className="dashboard-muted-text">Kas masuk bulan ini.</Text>
               </div>
               <div className="dashboard-metric-card">
                 <Text className="dashboard-card-label">Pengeluaran</Text>
                 <Title level={4} className="dashboard-card-value">
                   {formatCurrency(financeSummary.expenseThisMonth)}
                 </Title>
-                <Text className="dashboard-muted-text">Dari expenses bulan ini.</Text>
+                <Text className="dashboard-muted-text">Kas keluar bulan ini.</Text>
               </div>
               <div className="dashboard-metric-card">
                 <Text className="dashboard-card-label">Selisih Ringkas</Text>
                 <Title level={4} className="dashboard-card-value">
                   {formatCurrency(financeSummary.netOperational)}
                 </Title>
-                <Text className="dashboard-muted-text">Monitoring cepat, bukan laporan final.</Text>
+                <Text className="dashboard-muted-text">Ringkasan cepat.</Text>
               </div>
             </div>
 
@@ -1645,7 +1645,7 @@ const Dashboard = () => {
                   showIcon
                   message={
                     payrollSummary.payrollExpenseCount > 0
-                      ? `Payroll paid sudah punya ${formatNumberId(payrollSummary.payrollExpenseCount)} expense payroll. Bulan ini: ${formatCurrency(payrollSummary.payrollExpenseThisMonth)}. Jangan hitung payroll manual lagi di Profit Loss agar tidak dobel.`
+                      ? `Payroll paid tercatat ${formatNumberId(payrollSummary.payrollExpenseCount)} kali di Cash Out. Bulan ini: ${formatCurrency(payrollSummary.payrollExpenseThisMonth)}. Hindari input ulang manual.`
                       : "Ada payroll paid, tetapi expense payroll belum terlihat. Cek Cash Out sebelum membaca Profit Loss."
                   }
                 />
@@ -1672,7 +1672,7 @@ const Dashboard = () => {
       ========================= */}
       <PageSection
         title="Aktivitas Terbaru"
-        subtitle="Feed mutasi inventory terbaru untuk audit cepat, bukan laporan detail."
+        subtitle="Mutasi stok terakhir."
         extra={
           <Space size={8}>
             <HistoryOutlined className="dashboard-section-icon" />

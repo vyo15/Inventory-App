@@ -106,14 +106,14 @@ const ProfitLossReport = () => {
         key: "revenue-total",
         title: "Total Pendapatan",
         value: formatCurrencyId(summary.totalRevenue),
-        subtitle: "Gabungan revenues dan incomes.",
+        subtitle: "Total pendapatan.",
         accent: "success",
       },
       {
         key: "cost-total",
         title: "Total Biaya",
         value: formatCurrencyId(summary.totalCost),
-        subtitle: "Seluruh expenses yang diakui pada laporan.",
+        subtitle: "Total biaya.",
         accent: "danger",
       },
       {
@@ -139,7 +139,7 @@ const ProfitLossReport = () => {
   const exportToExcel = async () => {
     await exportJsonToExcel({
       title: "Laporan Laba Rugi IMS Bunga Flanel",
-      subtitle: "Ekspor mengikuti gabungan revenues, incomes, dan expenses pada halaman ini.",
+      subtitle: "Ekspor data yang sedang tampil.",
       sheetName: "Profit Loss",
       fileName: "Laporan-Laba-Rugi",
       columns: [
@@ -227,23 +227,40 @@ const ProfitLossReport = () => {
     [],
   );
 
+  /* =====================================================
+     SECTION: Profit Loss Report Render Panel — AKTIF
+     Fungsi:
+     - Menata summary, detail transaksi, dan export laba rugi agar pendapatan, biaya, dan laba bersih mudah dibaca.
+
+     Dipakai oleh:
+     - Halaman Profit Loss Report.
+
+     Alasan perubahan:
+     - Batch 3 mengurangi deskripsi pasif tanpa mengubah gabungan revenues, incomes, expenses, calculation, atau export.
+
+     Catatan cleanup:
+     - Kategori biaya/pendapatan bisa dibuat filter tambahan pada batch fitur terpisah.
+
+     Risiko:
+     - Jangan mengubah profit/loss calculation, dataSource, summary total, atau export payload dari section ini.
+     ===================================================== */
   return (
     <>
       <PageHeader
         title="Laporan Laba Rugi"
-        subtitle="Laporan ini membaca revenues, incomes, dan expenses sebagai source final. Payroll paid masuk melalui expenses agar tidak dihitung dobel dari production_payrolls."
+        subtitle="Ringkasan laba rugi sesuai filter."
       />
 
       <PageSection
         title="Ringkasan Keuangan"
-        subtitle="Ringkasan membantu membaca total pendapatan, total biaya, dan laba kotor secara cepat."
+        subtitle="KPI laba rugi."
       >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} />
       </PageSection>
 
       <PageSection
         title="Detail Transaksi Keuangan"
-        subtitle="Semua baris tetap mengikuti source collection asli tanpa perubahan perhitungan data."
+        subtitle="Transaksi sesuai filter."
         extra={
           <Button type="primary" onClick={exportToExcel} disabled={reportData.length === 0}>
             Ekspor ke Excel

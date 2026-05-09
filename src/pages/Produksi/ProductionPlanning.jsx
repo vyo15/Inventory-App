@@ -297,6 +297,9 @@ const ProductionPlanning = () => {
   const [editingPlan, setEditingPlan] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [selectedPlanForPo, setSelectedPlanForPo] = useState(null);
+  const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
+  const [cancelCandidatePlan, setCancelCandidatePlan] = useState(null);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
 
   const [search, setSearch] = useState("");
   const [periodFilter, setPeriodFilter] = useState("week");
@@ -534,6 +537,25 @@ const ProductionPlanning = () => {
     }
   };
 
+  // =====================================================
+  // SECTION: Cancel Planning confirmation — GUARDED
+  // Fungsi:
+  // - membuka modal cancel yang dikontrol state untuk Planning active/overdue tanpa PO;
+  // - menjaga service guard tetap menjadi validasi final sebelum status diubah ke cancelled.
+  //
+  // Dipakai oleh:
+  // - tombol Cancel langsung di kolom Aksi Production Planning.
+  //
+  // Alasan perubahan:
+  // - klik Cancel dari AntD Dropdown/Menu tidak konsisten terpanggil pada runtime;
+  // - modal controlled menghindari ketergantungan ke Modal.confirm static dan memastikan UI cancel bisa dibuka.
+  //
+  // Catatan cleanup:
+  // - jika seluruh action table sudah distandarkan, modal controlled ini bisa dipindah ke reusable confirmation helper.
+  //
+  // Risiko:
+  // - jika guard ini dilonggarkan, Planning yang sudah punya PO bisa ikut dibatalkan dan merusak relasi Planning -> PO.
+  // =====================================================
   const handleCancelPlan = (record) => {
     const blockReason = getCancelBlockReason(record);
     if (blockReason || !canCancelPlan(record)) {
@@ -541,35 +563,51 @@ const ProductionPlanning = () => {
       return;
     }
 
-    Modal.confirm({
-      title: "Batalkan planning?",
-      content:
-        "Planning yang dibatalkan tidak menghapus PO atau Work Log terkait. Flow produksi existing tetap aman.",
-      okText: "Batalkan Planning",
-      okButtonProps: { danger: true },
-      cancelText: "Kembali",
-      onOk: async () => {
-        try {
-          await cancelProductionPlan(record.id, null);
-          message.success("Planning dibatalkan");
-          setSelectedPlan((current) => (
-            current?.id === record.id
-              ? { ...current, status: "cancelled", computedStatus: "cancelled", cancelledAt: new Date().toISOString() }
-              : current
-          ));
-          if (selectedPlanForPo?.id === record.id) {
-            setPoDrawerVisible(false);
-            setSelectedPlanForPo(null);
-            poForm.resetFields();
-          }
-          await loadData();
-        } catch (error) {
-          console.error(error);
-          message.error(getActionErrorMessage(error, "Gagal membatalkan planning. Cek koneksi atau permission."));
-          throw error;
-        }
-      },
-    });
+    setCancelCandidatePlan(record);
+    setCancelConfirmVisible(true);
+  };
+
+  const handleCancelConfirmClose = () => {
+    if (cancelSubmitting) return;
+    setCancelConfirmVisible(false);
+    setCancelCandidatePlan(null);
+  };
+
+  const handleConfirmCancelPlan = async () => {
+    if (!cancelCandidatePlan?.id) return;
+
+    const record = cancelCandidatePlan;
+    const blockReason = getCancelBlockReason(record);
+    if (blockReason || !canCancelPlan(record)) {
+      message.warning(blockReason || "Planning ini tidak bisa dibatalkan.");
+      setCancelConfirmVisible(false);
+      setCancelCandidatePlan(null);
+      return;
+    }
+
+    try {
+      setCancelSubmitting(true);
+      await cancelProductionPlan(record.id, null);
+      message.success("Planning dibatalkan");
+      setSelectedPlan((current) => (
+        current?.id === record.id
+          ? { ...current, status: "cancelled", computedStatus: "cancelled", cancelledAt: new Date().toISOString() }
+          : current
+      ));
+      if (selectedPlanForPo?.id === record.id) {
+        setPoDrawerVisible(false);
+        setSelectedPlanForPo(null);
+        poForm.resetFields();
+      }
+      setCancelConfirmVisible(false);
+      setCancelCandidatePlan(null);
+      await loadData();
+    } catch (error) {
+      console.error(error);
+      message.error(getActionErrorMessage(error, "Gagal membatalkan planning. Cek koneksi atau permission."));
+    } finally {
+      setCancelSubmitting(false);
+    }
   };
 
   const handleOpenDetail = (record) => {
@@ -644,24 +682,26 @@ const ProductionPlanning = () => {
   // =====================================================
   // SECTION: Production Planning row actions — GUARDED
   // Fungsi:
-  // - menjaga aksi Detail/Buat PO/Edit/Cancel tetap konsisten dengan rule status dan relasi PO;
-  // - menyembunyikan Cancel untuk Planning final atau Planning yang sudah punya PO agar user tidak mengharapkan modal dari item disabled.
+  // - menjaga aksi Detail/Buat PO/Edit tetap konsisten;
+  // - Cancel dibuat sebagai tombol langsung agar tidak bergantung pada event AntD Dropdown/Menu.
   //
   // Dipakai oleh:
   // - tabel Production Planning dan handler Lainnya di halaman ini.
   //
   // Alasan perubahan:
-  // - Planning yang sudah punya Production Order tidak boleh di-cancel langsung, dan disabled action terbukti membingungkan user.
+  // - item Cancel dalam Dropdown terlihat aktif tetapi klik tidak memicu modal pada runtime;
+  // - Planning yang sudah punya Production Order tetap tidak menampilkan Cancel agar tidak ada ekspektasi modal.
   //
   // Catatan cleanup:
-  // - belum ada; helper service tetap menjadi guard final.
+  // - jika seluruh row action nanti memakai komponen action bar shared, tombol Cancel langsung ini bisa dipindah ke komponen tersebut.
   //
   // Risiko:
   // - jika UI guard tidak sinkron dengan service, user bisa melihat action yang akhirnya gagal saat submit.
   // =====================================================
   const getMoreActionItems = (record) => {
     const status = getPlanStatus(record);
-    const items = [
+
+    return [
       {
         key: "edit",
         label: "Edit",
@@ -669,17 +709,6 @@ const ProductionPlanning = () => {
         disabled: status === "cancelled",
       },
     ];
-
-    if (canCancelPlan(record)) {
-      items.push({
-        key: "cancel",
-        label: "Cancel",
-        icon: <StopOutlined />,
-        danger: true,
-      });
-    }
-
-    return items;
   };
 
   const handleMoreActionClick = ({ key }, record) => {
@@ -813,6 +842,17 @@ const ProductionPlanning = () => {
           >
             Buat PO
           </Button>
+          {canCancelPlan(record) && (
+            <Button
+              size="small"
+              danger
+              className="ims-action-button"
+              icon={<StopOutlined />}
+              onClick={() => handleCancelPlan(record)}
+            >
+              Cancel
+            </Button>
+          )}
           <Dropdown
             trigger={["click"]}
             menu={{
@@ -834,7 +874,7 @@ const ProductionPlanning = () => {
       {/* AKTIF / GUARDED: header migrated ke shared produksi; flow planning -> order tetap sama tanpa ubah data contract. */}
       <ProductionPageHeader
         title="Production Planning"
-        description="Layer target sebelum Production Order untuk memantau target mingguan/bulanan tanpa mengubah stok."
+        description="Target produksi sebelum PO. Tidak mengubah stok."
         onAdd={handleAdd}
         addLabel="Tambah Planning"
       />
@@ -843,7 +883,7 @@ const ProductionPlanning = () => {
         type="info"
         showIcon
         className="ims-page-alert"
-        message="Planning hanya target dan monitoring. Stok tetap berubah dari flow Production Order / Work Log existing."
+        message="Planning hanya target; stok berubah lewat PO/Work Log."
       />
 
       {/* =====================================================
@@ -858,7 +898,7 @@ const ProductionPlanning = () => {
 
       <PageSection
         title="Daftar Production Planning"
-        subtitle="Filter target minggu ini, bulan ini, atau semua planning produksi."
+        subtitle="Filter periode planning."
         extra={
           <Space wrap>
             <Input.Search
@@ -918,7 +958,7 @@ const ProductionPlanning = () => {
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message="Form ini tidak membuat stok berubah. Progress nantinya dihitung dari Work Log completed milik PO terkait."
+          message="Form tidak mengubah stok. Progress dari Work Log completed."
         />
 
         {/* =====================================================
@@ -1106,7 +1146,7 @@ const ProductionPlanning = () => {
             <Alert
               type="info"
               showIcon
-              message="PO akan tetap memakai BOM dan requirement helper existing. Planning hanya menjadi referensi target."
+              message="PO tetap memakai BOM; Planning hanya referensi target."
             />
 
             <Card size="small">
@@ -1164,6 +1204,27 @@ const ProductionPlanning = () => {
           </Space>
         )}
       </Drawer>
+
+      <Modal
+        title="Batalkan planning?"
+        open={cancelConfirmVisible}
+        okText="Batalkan Planning"
+        okButtonProps={{ danger: true }}
+        cancelText="Kembali"
+        confirmLoading={cancelSubmitting}
+        onOk={handleConfirmCancelPlan}
+        onCancel={handleCancelConfirmClose}
+        maskClosable={!cancelSubmitting}
+      >
+        <Space direction="vertical" size={8}>
+          <Text>
+            Planning yang dibatalkan tidak menghapus PO atau Work Log terkait. Flow produksi existing tetap aman.
+          </Text>
+          {cancelCandidatePlan?.planCode && (
+            <Text type="secondary">Planning: {cancelCandidatePlan.planCode}</Text>
+          )}
+        </Space>
+      </Modal>
     </div>
   );
 };

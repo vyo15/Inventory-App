@@ -128,6 +128,29 @@ const compactCellClassNames = {
 // Status stok produk.
 // Disamakan dengan bahasa visual halaman master lain: nonaktif, kosong, rendah, aman.
 // -----------------------------------------------------------------------------
+const getProductStockSummary = (record = {}) => {
+  if (record?.hasVariants) {
+    const variants = Array.isArray(record.variants) ? record.variants : [];
+    const currentStock = variants.reduce((sum, item) => sum + Number(item?.currentStock || 0), 0);
+    const reservedStock = variants.reduce((sum, item) => sum + Number(item?.reservedStock || 0), 0);
+
+    return {
+      currentStock,
+      reservedStock,
+      availableStock: Math.max(currentStock - reservedStock, 0),
+    };
+  }
+
+  const currentStock = Number(record.currentStock ?? record.stock ?? 0);
+  const reservedStock = Number(record.reservedStock || 0);
+
+  return {
+    currentStock,
+    reservedStock,
+    availableStock: Number(record.availableStock ?? Math.max(currentStock - reservedStock, 0)),
+  };
+};
+
 const getProductStatusMeta = (record = {}) => {
   const availableStock = Number(record.availableStock ?? record.currentStock ?? record.stock ?? 0);
   const minStockAlert = Number(record.minStockAlert || 0);
@@ -504,7 +527,7 @@ const Products = () => {
       --------------------------------------------------------------------- */}
       <PageHeader
         title="Produk Jadi"
-        subtitle="Master produk jadi dengan harga di master dan stok per varian fleksibel supaya data tetap rapi dan mudah dipantau."
+        subtitle="Master produk jadi dan stok varian."
         actions={[
           { key: 'create-product', type: 'primary', icon: <PlusOutlined />, label: 'Tambah Produk', onClick: openCreateDrawer },
         ]}
@@ -514,7 +537,7 @@ const Products = () => {
         showIcon
         type="info"
         className="ims-page-alert"
-        message="Nama produk tidak perlu dipecah per varian. Cukup 1 master produk lalu stok varian dikelola di bucket varian. Status list akan mengikuti kondisi stok dan status aktif produk."
+        message="Stok varian dikelola per varian produk."
       />
 
       {/* ---------------------------------------------------------------------
@@ -565,7 +588,7 @@ const Products = () => {
       --------------------------------------------------------------------- */}
       <PageSection
         title="Daftar Produk Jadi"
-        subtitle="Tabel ini merangkum stok, kategori, mode pricing, dan varian produk jadi."
+        subtitle="Harga, stok, dan varian produk."
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredProducts} />
         <Table
@@ -688,7 +711,7 @@ const Products = () => {
             extra={isEditingProduct
               ? canActivateVariantsForEditing
                 ? 'Produk lama dengan stok 0 boleh mulai memakai varian. Varian baru tetap mulai dari stok 0.'
-                : 'Mode varian dikunci setelah produk dibuat agar bucket stok tidak berubah tanpa audit.'
+                : 'Mode varian dikunci setelah produk dibuat agar struktur stok tetap konsisten.'
               : undefined}
           >
             <Switch
@@ -715,7 +738,7 @@ const Products = () => {
             <Form.Item
               name="variantLabel"
               label="Label Varian"
-              extra="AKTIF: label ini hanya metadata tampilan. Contoh: Warna, Ukuran, Tipe, Motif, Spesifikasi."
+              extra="Contoh: Warna, Ukuran, Motif."
             >
               <Input placeholder="Contoh: Warna" />
             </Form.Item>
@@ -730,7 +753,7 @@ const Products = () => {
                 ? 'Produk lama ini stoknya 0, jadi boleh mulai memakai varian. Stok tiap varian baru tetap 0 sampai diubah lewat Stock Adjustment/transaksi resmi.'
                 : stockEditHelpText
               : hasVariantsValue
-                ? 'Harga produk tetap di master. Varian hanya mengatur bucket stok fisik; Minimum Stok tetap satu angka di master produk.'
+                ? 'Harga produk tetap di master. Varian hanya mengatur stok fisik; Minimum Stok tetap satu angka di master produk.'
                 : 'Produk tanpa varian memakai stok awal dan minimum stok langsung di master produk.'}
           />
 
@@ -739,7 +762,7 @@ const Products = () => {
               {/* =====================================================
               SECTION: Product Variant Form Without Variant Min Stock — AKTIF
               Fungsi:
-              - menampilkan bucket stok fisik per varian sambil menjaga Minimum Stok sebagai field master produk.
+              - menampilkan stok fisik per varian sambil menjaga Minimum Stok sebagai field master produk.
 
               Dipakai oleh:
               - Products.jsx create/edit drawer dan productsService master payload.
@@ -767,7 +790,7 @@ const Products = () => {
                     {fields.map((field) => (
                       <Card key={field.key} size="small" title={`${variantLabelValue || 'Varian'} ${field.name + 1}`}>
                         <Row gutter={12}>
-                          {/* IMS NOTE [GUARDED | identity-safe]: hidden identity field menjaga variantKey lama tetap terkirim saat label varian diganti. Hubungan flow: variantKey adalah bucket stok/reference transaksi. STATUS: AKTIF. */}
+                          {/* IMS NOTE [GUARDED | identity-safe]: hidden identity field menjaga variantKey lama tetap terkirim saat label varian diganti. Hubungan flow: variantKey adalah identitas stok varian/reference transaksi. STATUS: AKTIF. */}
                           <Form.Item name={[field.name, 'variantKey']} hidden>
                             <Input />
                           </Form.Item>
@@ -878,49 +901,65 @@ const Products = () => {
         </Form>
       </Drawer>
 
-      {/* ---------------------------------------------------------------------
-          Drawer detail produk.
-      --------------------------------------------------------------------- */}
-      <Drawer title="Detail Produk" open={detailVisible} onClose={() => setDetailVisible(false)} width={820} destroyOnClose>
-        {selectedProduct ? (
-          <Space direction="vertical" style={{ width: '100%' }} size={16}>
-            <Descriptions bordered column={1} size="small">
-              <Descriptions.Item label="Nama Produk">{selectedProduct.name || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Kategori">{selectedProduct.category || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Harga Jual">{formatCurrencyId(selectedProduct.price)}</Descriptions.Item>
-              <Descriptions.Item label="HPP / Unit">{formatCurrencyId(selectedProduct.hppPerUnit)}</Descriptions.Item>
-              <Descriptions.Item label="Mode Pricing">{PRICING_MODE_TAGS[selectedProduct.pricingMode || 'manual']}</Descriptions.Item>
-              <Descriptions.Item label="Pricing Rule">{pricingRuleMap[selectedProduct.pricingRuleId] || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Status">
-                <Tag className="ims-status-tag" color={getProductStatusMeta(selectedProduct).color}>{getProductStatusMeta(selectedProduct).label}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Update Terakhir">{formatDateId(selectedProduct.updatedAt, true)}</Descriptions.Item>
-              <Descriptions.Item label="Deskripsi">{selectedProduct.description || '-'}</Descriptions.Item>
-            </Descriptions>
+      {/* =====================================================
+          SECTION: Product Detail Drawer — AKTIF
+          Fungsi:
+          - Menata ringkasan produk, harga, stok, varian, dan catatan dalam section yang mudah dibaca.
 
-            <Card size="small" title={selectedProduct.hasVariants ? 'Rincian Varian Produk' : 'Rincian Stok Master'}>
-              {selectedProduct.hasVariants ? (
-                <>
-                  {/* =====================================================
-                  SECTION: Product Variant Detail Without Variant Min Stock — AKTIF
-                  Fungsi:
-                  - menampilkan stok fisik varian tanpa membuat minimum stok terlihat sebagai angka per varian.
+          Dipakai oleh:
+          - Halaman Master Data / Produk Jadi saat user membuka tombol Detail.
 
-                  Dipakai oleh:
-                  - drawer detail Products dan audit visual stok produk bervarian.
+          Alasan perubahan:
+          - Drawer lama menampilkan semua data dalam satu blok sehingga harga, stok, dan varian kurang cepat dibaca.
 
-                  Alasan perubahan:
-                  - Minimum Stok sekarang threshold master `products.minStockAlert`, bukan total atau field per varian.
+          Catatan cleanup:
+          - Belum ada.
 
-                  Catatan cleanup:
-                  - `variants[].minStockAlert` lama tetap boleh ada di data lama tetapi tidak ditampilkan di drawer ini.
+          Risiko:
+          - Jangan ubah mapping stok, varian, pricing, HPP, atau handler detail dari section presentasi ini.
+      ===================================================== */}
+      <Drawer title="Detail Produk" open={detailVisible} onClose={() => setDetailVisible(false)} width={900} destroyOnClose>
+        {selectedProduct ? (() => {
+          const stockSummary = getProductStockSummary(selectedProduct);
+          const statusMeta = getProductStatusMeta(selectedProduct);
 
-                  Risiko:
-                  - menampilkan kembali kolom Min Stok per varian bisa membuat user mengira low stock dihitung per bucket varian.
-                  ===================================================== */}
-                  <Descriptions bordered column={1} size="small" style={{ marginBottom: 12 }}>
-                    <Descriptions.Item label="Minimum Stok Master">{formatStockWithUnit(selectedProduct.minStockAlert)}</Descriptions.Item>
-                  </Descriptions>
+          return (
+            <Space direction="vertical" style={{ width: '100%' }} size={16}>
+              <Card size="small">
+                <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                  <Space size={[8, 8]} wrap>
+                    <Text strong style={{ fontSize: 18 }}>{selectedProduct.name || '-'}</Text>
+                    <Tag className="ims-status-tag" color={statusMeta.color}>{statusMeta.label}</Tag>
+                    {selectedProduct.hasVariants ? <Tag color="blue">Pakai Varian</Tag> : <Tag>Tanpa Varian</Tag>}
+                  </Space>
+                  <Text type="secondary">{selectedProduct.category || 'Tanpa kategori'}</Text>
+                </Space>
+              </Card>
+
+              <Row gutter={[12, 12]}>
+                <Col xs={24} md={8}>
+                  <Card size="small"><Statistic title="Harga Jual" value={formatCurrencyId(selectedProduct.price)} formatter={(value) => value} /></Card>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Card size="small"><Statistic title="HPP / Unit" value={formatCurrencyId(selectedProduct.hppPerUnit)} formatter={(value) => value} /></Card>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Card size="small"><Statistic title="Stok Tersedia" value={`${formatNumberID(stockSummary.availableStock)} pcs`} formatter={(value) => value} /></Card>
+                </Col>
+              </Row>
+
+              <Card size="small" title="Ringkasan">
+                <Descriptions bordered column={1} size="small">
+                  <Descriptions.Item label="Kategori">{selectedProduct.category || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="Mode Pricing">{PRICING_MODE_TAGS[selectedProduct.pricingMode || 'manual']}</Descriptions.Item>
+                  <Descriptions.Item label="Pricing Rule">{pricingRuleMap[selectedProduct.pricingRuleId] || '-'}</Descriptions.Item>
+                  <Descriptions.Item label="Minimum Stok">{formatStockWithUnit(selectedProduct.minStockAlert)}</Descriptions.Item>
+                  <Descriptions.Item label="Update Terakhir">{formatDateId(selectedProduct.updatedAt, true)}</Descriptions.Item>
+                </Descriptions>
+              </Card>
+
+              <Card size="small" title={selectedProduct.hasVariants ? 'Varian Produk' : 'Stok Master'}>
+                {selectedProduct.hasVariants ? (
                   <Table
                     className="ims-table"
                     rowKey={(record, index) => `${selectedProduct.id}-${record.variantKey || record.color || index}`}
@@ -950,18 +989,24 @@ const Products = () => {
                       },
                     ]}
                   />
-                </>
-              ) : (
-                <Descriptions bordered column={1} size="small">
-                  <Descriptions.Item label="Stok Master">{formatStockWithUnit(selectedProduct.currentStock)}</Descriptions.Item>
-                  <Descriptions.Item label="Reserved Stock">{formatStockWithUnit(selectedProduct.reservedStock)}</Descriptions.Item>
-                  <Descriptions.Item label="Available Stock">{formatStockWithUnit(selectedProduct.availableStock)}</Descriptions.Item>
-                  <Descriptions.Item label="Minimum Stok">{formatStockWithUnit(selectedProduct.minStockAlert)}</Descriptions.Item>
-                </Descriptions>
-              )}
-            </Card>
-          </Space>
-        ) : null}
+                ) : (
+                  <Descriptions bordered column={1} size="small">
+                    <Descriptions.Item label="Stok Total">{formatStockWithUnit(stockSummary.currentStock)}</Descriptions.Item>
+                    <Descriptions.Item label="Reserved Stock">{formatStockWithUnit(stockSummary.reservedStock)}</Descriptions.Item>
+                    <Descriptions.Item label="Stok Tersedia">{formatStockWithUnit(stockSummary.availableStock)}</Descriptions.Item>
+                    <Descriptions.Item label="Minimum Stok">{formatStockWithUnit(selectedProduct.minStockAlert)}</Descriptions.Item>
+                  </Descriptions>
+                )}
+              </Card>
+
+              {selectedProduct.description ? (
+                <Card size="small" title="Catatan">
+                  <Text>{selectedProduct.description}</Text>
+                </Card>
+              ) : null}
+            </Space>
+          );
+        })() : null}
       </Drawer>
     </div>
   );

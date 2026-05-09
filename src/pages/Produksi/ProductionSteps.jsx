@@ -48,7 +48,7 @@ import {
   PRODUCTION_STEP_PROCESS_TYPES,
   formatProductionStepPayrollPreview,
 } from "../../constants/productionStepOptions";
-import { parseIntegerIdInput } from "../../utils/formatters/numberId";
+import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import {
   createProductionStep,
   getAllProductionSteps,
@@ -627,68 +627,103 @@ const ProductionSteps = () => {
         title={`Detail Step Produksi: ${selectedStep?.name || "-"}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
-        width={720}
+        width={760}
       >
-        {/* =========================
-            SECTION: drawer detail read-only
-            Fungsi:
-            - memindahkan informasi konfigurasi step yang berat dari tabel utama ke drawer audit
-            - menjaga source data tetap dari row step yang sama tanpa mengubah business logic
-            Status:
-            - aktif dipakai untuk baseline UI terbaru ProductionSteps
-        ========================= */}
-        <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          <Descriptions bordered column={1} size="middle">
-            <Descriptions.Item label="Nama Step">{selectedStep?.name || "-"}</Descriptions.Item>
-            <Descriptions.Item label="Kategori">
-              {PROCESS_TYPE_MAP[selectedStep?.processType] || selectedStep?.processType || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Cara Kerja Step">
-              {BASIS_TYPE_MAP[selectedStep?.basisType] || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Cara Pantau Hasil">
-              {MONITORING_MODE_MAP[selectedStep?.monitoringMode] || "-"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Sistem Bayar">{selectedStepPayrollPreview}</Descriptions.Item>
-            <Descriptions.Item label="Klasifikasi Payroll">
-              <Space direction="vertical" size={4}>
-                <Tag color={selectedStep?.includePayrollInHpp === false ? "orange" : "green"}>
-                  {PAYROLL_CLASSIFICATION_MAP[selectedStep?.payrollClassification] || "-"}
-                </Tag>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {selectedStep?.includePayrollInHpp === false
-                    ? "Tidak masuk HPP inti"
-                    : "Masuk HPP inti"}
-                </Typography.Text>
-              </Space>
-            </Descriptions.Item>
-            <Descriptions.Item label="Fungsi / Deskripsi">
-              {selectedStep?.description || "Belum ada deskripsi fungsi"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Catatan Payroll">
-              {selectedStep?.payrollNotes || "Belum ada catatan payroll"}
-            </Descriptions.Item>
-            <Descriptions.Item label="Karyawan Terkait">
-              <Space direction="vertical" size={4}>
-                <Typography.Text>{selectedStep?.employeeCount || 0} karyawan</Typography.Text>
-                <Button type="link" style={{ padding: 0 }} onClick={() => handleOpenEmployeeDrawer(selectedStep)}>
-                  Lihat karyawan terkait
+        {/*
+=====================================================
+SECTION: Detail drawer tahapan produksi — AKTIF
+Fungsi:
+- Menampilkan konfigurasi step, rule payroll, dan relasi karyawan/BOM secara ringkas.
+
+Dipakai oleh:
+- Halaman ProductionSteps saat user membuka detail step produksi.
+
+Alasan perubahan:
+- Detail step dipisah menjadi metric, ringkasan, rule payroll, relasi, dan catatan agar tidak berupa satu Descriptions panjang.
+
+Catatan cleanup:
+- Belum ada; tombol relasi tetap memakai drawer existing.
+
+Risiko:
+- Jika payroll basis/rate atau relasi disembunyikan, Payroll Produksi dan BOM bisa salah dikonfigurasi.
+=====================================================
+*/}
+        {!selectedStep ? (
+          <Empty description="Tidak ada data" />
+        ) : (
+          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+            <Row gutter={[12, 12]}>
+              <Col xs={24} sm={12}>
+                <Card size="small">
+                  <Statistic title="Karyawan Terkait" value={formatNumber(selectedStep.employeeCount || 0)} />
+                </Card>
+              </Col>
+              <Col xs={24} sm={12}>
+                <Card size="small">
+                  <Statistic title="Dipakai di BOM" value={formatNumber(selectedStep.bomCount || 0)} />
+                </Card>
+              </Col>
+            </Row>
+
+            <Card size="small" title="Ringkasan Step">
+              <Descriptions bordered column={1} size="small">
+                <Descriptions.Item label="Nama Step">{selectedStep.name || "-"}</Descriptions.Item>
+                <Descriptions.Item label="Kategori">
+                  {PROCESS_TYPE_MAP[selectedStep.processType] || selectedStep.processType || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Cara Kerja">
+                  {BASIS_TYPE_MAP[selectedStep.basisType] || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Pantau Hasil">
+                  {MONITORING_MODE_MAP[selectedStep.monitoringMode] || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Status">
+                  {selectedStep.isActive ? <Badge status="success" text="Aktif" /> : <Badge status="default" text="Nonaktif" />}
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+
+            <Card size="small" title="Rule Payroll">
+              <Descriptions bordered column={1} size="small">
+                <Descriptions.Item label="Sistem Bayar">{selectedStepPayrollPreview}</Descriptions.Item>
+                <Descriptions.Item label="Klasifikasi">
+                  <Space direction="vertical" size={4}>
+                    <Tag color={selectedStep.includePayrollInHpp === false ? "orange" : "green"}>
+                      {PAYROLL_CLASSIFICATION_MAP[selectedStep.payrollClassification] || "-"}
+                    </Tag>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {selectedStep.includePayrollInHpp === false ? "Tidak masuk HPP inti" : "Masuk HPP inti"}
+                    </Typography.Text>
+                  </Space>
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+
+            <Card size="small" title="Relasi">
+              <Space size={12} wrap>
+                <Button onClick={() => handleOpenEmployeeDrawer(selectedStep)}>
+                  Lihat karyawan ({formatNumber(selectedStep.employeeCount || 0)})
+                </Button>
+                <Button onClick={() => handleOpenBomDrawer(selectedStep)}>
+                  Lihat BOM ({formatNumber(selectedStep.bomCount || 0)})
                 </Button>
               </Space>
-            </Descriptions.Item>
-            <Descriptions.Item label="Dipakai di BOM">
-              <Space direction="vertical" size={4}>
-                <Typography.Text>{selectedStep?.bomCount || 0} BOM</Typography.Text>
-                <Button type="link" style={{ padding: 0 }} onClick={() => handleOpenBomDrawer(selectedStep)}>
-                  Lihat BOM terkait
-                </Button>
-              </Space>
-            </Descriptions.Item>
-            <Descriptions.Item label="Status">
-              {selectedStep?.isActive ? <Badge status="success" text="Aktif" /> : <Badge status="default" text="Nonaktif" />}
-            </Descriptions.Item>
-          </Descriptions>
-        </Space>
+            </Card>
+
+            {(selectedStep.description || selectedStep.payrollNotes) && (
+              <Card size="small" title="Catatan">
+                <Descriptions bordered column={1} size="small">
+                  <Descriptions.Item label="Fungsi">
+                    {selectedStep.description || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Payroll">
+                    {selectedStep.payrollNotes || "-"}
+                  </Descriptions.Item>
+                </Descriptions>
+              </Card>
+            )}
+          </Space>
+        )}
       </Drawer>
 
       <Drawer

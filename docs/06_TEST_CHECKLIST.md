@@ -149,6 +149,22 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - pastikan BOM product hanya menerima material semi finished
 - cek material lines dan step lines tersimpan benar
 
+### Production Planning
+- buat Planning baru tanpa PO
+- pastikan badge/link menunjukkan `Belum ada PO`
+- pastikan tombol Cancel tampil untuk Planning tanpa PO yang statusnya belum final
+- klik Cancel, batalkan modal, lalu pastikan status tidak berubah
+- klik Cancel lagi dan confirm, lalu pastikan status berubah menjadi `cancelled`
+- filter `Cancelled`, pastikan Planning yang dicancel muncul
+- pastikan Planning `cancelled` tidak menampilkan tombol Buat PO dan tidak menampilkan Cancel lagi
+- buat Planning baru lalu buat PO dari Planning tersebut
+- pastikan Planning yang sudah punya PO / linked Production Order tidak menampilkan Cancel
+- pastikan tidak ada label disabled `Cancel — sudah ada PO`
+- pastikan Cancel Planning tidak menghapus/mengubah PO existing
+- pastikan Cancel Planning tidak mengubah Work Log, inventory/stok, Payroll, HPP, report, sales, purchases, returns, atau cash in/out
+- pastikan progress Planning tetap berasal dari Work Log `completed`, bukan dari PO created/start
+- pastikan Dashboard/filter membaca status canonical `cancelled`
+
 ### Production Order
 - generate PO dari BOM
 - cek requirement line
@@ -200,6 +216,58 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - reset + restore baseline
 - cek field stok sinkron kembali setelah reset
 
+
+## H. UI Detail / Drawer / Form Regression Checklist
+
+### Standar umum
+- buka semua halaman utama setelah patch UI;
+- buka detail drawer/modal pada halaman yang punya detail;
+- buka form tambah/edit pada halaman yang punya form;
+- pastikan action utama tetap terlihat dan tetap memanggil handler lama;
+- pastikan warning penting tidak hilang;
+- pastikan validation/error message tetap ada;
+- pastikan disabled reason penting tetap ada;
+- pastikan confirmation copy untuk action destructive tetap jelas;
+- pastikan angka bisnis tidak berubah;
+- pastikan responsive aman di desktop dan mobile;
+- pastikan dark/light mode rapi;
+- pastikan tidak ada console error;
+- pastikan tidak ada data berubah hanya karena membuka halaman, detail, drawer, modal, atau panel.
+
+### Detail drawer
+- pastikan title/nama/kode utama terlihat;
+- pastikan status badge/tag terlihat;
+- pastikan metric utama seperti total, stok, final amount, output qty, atau HPP tetap terbaca;
+- pastikan data anak seperti item transaksi, material requirement, step, payroll line, varian, atau supplier item tetap terbaca;
+- pastikan catatan manual tetap tersedia jika ada;
+- pastikan info audit/opsional tidak mengganggu ringkasan utama.
+
+### Form drawer/modal
+- pastikan label field tetap jelas;
+- pastikan helper text tidak menghapus konteks sensitif seperti stok, varian, cost, payroll, HPP, reset, dan Auth UID;
+- pastikan submit, cancel, close, preview, reset, adjust, delete, dan confirm tetap memakai flow lama;
+- pastikan payload create/edit/update/reset tidak berubah.
+
+### Area sensitif
+- Production Planning: Planning tanpa PO tetap bisa cancel, Planning dengan PO tetap tidak bisa cancel langsung, dan Planning tidak mengubah stok;
+- Production Order: readiness, material requirement, dan shortage warning tetap jelas;
+- Work Log: warning biaya material 0, biaya tenaga kerja 0, total biaya 0, dan HPP belum valid tetap terlihat saat relevan;
+- Payroll: final amount, status payroll, payment status, include HPP, dan relasi Cash Out tetap jelas;
+- HPP Analysis: HPP invalid/cost kosong tetap terlihat;
+- Stock: stok total, stok tersedia, stok dipesan, minimum stock, varian, dan warning critical tetap terlihat;
+- Sales/Purchases/Returns: item, qty, harga, subtotal, total, status, dan dampak stok/kas tetap jelas;
+- Cash In/Cash Out: sumber manual/otomatis dan referensi transaksi tetap jelas;
+- Reset Maintenance: preview wajib, scope reset, jumlah dokumen terdampak, protected data, confirmation keyword, dan destructive warning tetap jelas;
+- User Management: email, role, status, Auth UID/profile binding, dan security warning tetap jelas.
+
+### Validasi visual
+- cek light mode;
+- cek dark mode;
+- cek drawer lebar desktop;
+- cek mobile/responsive width;
+- pastikan table/list di drawer tidak overflow buruk;
+- pastikan UI tidak penuh paragraf panjang yang tidak perlu;
+- pastikan tidak ada istilah internal seperti legacy, guard, bucket, source, read-only, metadata tampilan, atau AKTIF sebagai copy utama.
 
 ## Tambahan Checklist Batch Prioritas
 

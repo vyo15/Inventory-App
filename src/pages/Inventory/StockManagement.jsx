@@ -534,8 +534,8 @@ const StockManagement = () => {
         ),
       },
       {
-        title: "Sumber",
-        key: "source",
+        title: "Asal",
+        key: "origin",
         width: 130,
         render: (_, record) => (
           <Tag color={record.sourceMeta?.color || "default"}>
@@ -588,7 +588,7 @@ const StockManagement = () => {
       // - CLEANUP CANDIDATE jika semua writer log sudah konsisten dan kolom bisa dibuat ulang sebagai "Stok Setelah".
       // =========================
       {
-        title: "Referensi Audit",
+        title: "Referensi",
         key: "reference",
         width: 230,
         render: (_, record) =>
@@ -630,29 +630,46 @@ const StockManagement = () => {
     [],
   );
 
+  /* =====================================================
+  SECTION: Stock Management Panel Renderer — GUARDED
+  Fungsi:
+  - Menampilkan ringkasan mutasi, filter audit, riwayat stok, dan panel penyesuaian stok.
+
+  Dipakai oleh:
+  - Halaman Manajemen Stok dan komponen StockAdjustmentPanel.
+
+  Alasan perubahan:
+  - Copy dan struktur panel dibuat lebih ringkas tanpa mengubah columns, dataSource, filter value, atau callback adjustment.
+
+  Catatan cleanup:
+  - Pagination server-side bisa dipertimbangkan jika inventory log melewati batas baca halaman.
+
+  Risiko:
+  - Jangan mengubah mapping audit atau payload adjustment karena area ini memengaruhi validasi stok.
+  ===================================================== */
   return (
     <>
       <PageHeader
         title="Manajemen Stok"
-        subtitle="Satu halaman utama inventaris untuk audit riwayat pergerakan stok dan melakukan penyesuaian stok manual."
+        subtitle="Audit stok dan penyesuaian manual."
       />
 
       <PageSection
         title="Ringkasan Log"
-        subtitle="Ringkasan menggunakan jumlah log, bukan total qty lintas item, agar aman untuk item dengan satuan berbeda."
+        subtitle="Mutasi stok terbaru."
       >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
       </PageSection>
 
       <PageSection
         title="Filter Riwayat"
-        subtitle="Filter membantu audit cepat berdasarkan kata kunci, arah mutasi, dan sumber transaksi. Kolom Sumber / Referensi membaca schema log baru dan fallback log lama."
+        subtitle="Cari riwayat mutasi."
       >
         <FilterBar>
           <Col xs={24} md={10}>
             <Input
               allowClear
-              placeholder="Cari item, varian, sumber audit, supplier, customer..."
+              placeholder="Cari item, varian, asal, supplier, customer..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -689,8 +706,8 @@ const StockManagement = () => {
       </PageSection>
 
       <PageSection
-        title="Tabel Riwayat Pergerakan Stok"
-        subtitle={`Tabel fokus pada audit operasional. Kolom Referensi Audit menampilkan label bisnis, sementara ID teknis hanya menjadi detail kecil. ${STOCK_SNAPSHOT_COLUMN_NOTE}`}
+        title="Riwayat Stok"
+        subtitle={`Mutasi stok resmi. ${STOCK_SNAPSHOT_COLUMN_NOTE}`}
         extra={<Tag color="purple">{formatNumberId(filteredHistory.length)} baris</Tag>}
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredHistory} />
@@ -708,8 +725,8 @@ const StockManagement = () => {
       </PageSection>
 
       <PageSection
-        title="Area Penyesuaian Stok"
-        subtitle="Form adjustment sekarang berada di Manajemen Stok agar audit log dan koreksi stok manual berada dalam satu konteks. Logic submit adjustment hanya aktif dari panel ini."
+        title="Penyesuaian Stok"
+        subtitle="Koreksi manual tercatat di audit log."
       >
         {/* =========================
             SECTION: Panel Penyesuaian Stok final

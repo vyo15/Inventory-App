@@ -749,7 +749,7 @@ const ProductionEmployees = () => {
       {/* AKTIF / GUARDED: header dimigrasikan ke shared produksi untuk konsistensi UX lintas halaman tanpa mengubah flow submit master karyawan. */}
       <ProductionPageHeader
         title="Karyawan Produksi"
-        description="Kelola master operator produksi yang dipakai oleh work log dan ringkasan payroll read-only."
+        description="Kelola master operator produksi."
         onAdd={handleAdd}
         addLabel="Tambah Karyawan"
       />
@@ -759,7 +759,7 @@ const ProductionEmployees = () => {
         type="info"
         style={{ marginBottom: 16 }}
         message="Karyawan Produksi = master operator + summary payroll read-only"
-        description="Ringkasan payroll di halaman ini dibaca dari payroll final dan work log final. Pengaturan custom payroll karyawan tetap legacy dan tidak lagi menjadi source of truth payroll."
+        description="Ringkasan payroll dibaca dari data final; custom payroll masih legacy."
       />
 
       {/* AKTIF / GUARDED: summary hanya ganti wrapper presentational, nilai tetap dari kalkulasi existing. */}
@@ -829,7 +829,7 @@ const ProductionEmployees = () => {
 
       <PageSection
         title="Daftar Karyawan Produksi"
-        subtitle="Tabel ini tetap menjadi master operator. Ringkasan payroll dan work log hanya dibaca sebagai konteks operasional."
+        subtitle="Master operator dan konteks produksi."
       >
         {/* =====================================================
             SECTION: Main table render — AKTIF

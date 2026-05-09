@@ -471,6 +471,30 @@ const getRawMaterialStatusMeta = (record = {}) => {
   return { color: 'green', label: 'Aman' };
 };
 
+const getRawMaterialStockSummary = (record = {}) => {
+  if (record?.hasVariants) {
+    const variants = Array.isArray(record.variants) ? record.variants : [];
+    const currentStock = variants.reduce((sum, item) => sum + Number(item?.currentStock || 0), 0);
+    const reservedStock = variants.reduce((sum, item) => sum + Number(item?.reservedStock || 0), 0);
+
+    return {
+      currentStock,
+      reservedStock,
+      availableStock: Math.max(currentStock - reservedStock, 0),
+    };
+  }
+
+  const currentStock = Number(record.currentStock ?? record.stock ?? 0);
+  const reservedStock = Number(record.reservedStock || 0);
+
+  return {
+    currentStock,
+    reservedStock,
+    availableStock: Number(record.availableStock ?? Math.max(currentStock - reservedStock, 0)),
+  };
+};
+
+
 const RawMaterials = () => {
   // ---------------------------------------------------------------------------
   // State utama data dan tampilan halaman.
@@ -946,7 +970,7 @@ const RawMaterials = () => {
       --------------------------------------------------------------------- */}
       <PageHeader
         title="Bahan Baku"
-        subtitle="Master bahan baku dengan stok master atau stok per varian agar tampilan lebih rapi dan mudah dipantau."
+        subtitle="Master bahan baku dan stok varian."
         actions={[
           { key: 'create-raw-material', type: 'primary', icon: <PlusOutlined />, label: 'Tambah Bahan Baku', onClick: openCreateDrawer },
         ]}
@@ -956,7 +980,7 @@ const RawMaterials = () => {
         style={{ marginBottom: 16 }}
         type="info"
         showIcon
-        message="Gunakan varian hanya jika bahan memang punya turunan seperti warna, ukuran, atau spesifikasi. Lem atau lakban tetap lebih rapi tanpa varian."
+        message="Gunakan varian hanya untuk bahan dengan turunan stok nyata."
       />
 
       {/* ---------------------------------------------------------------------
@@ -1014,7 +1038,7 @@ const RawMaterials = () => {
       --------------------------------------------------------------------- */}
       <PageSection
         title="Daftar Bahan Baku"
-        subtitle="Tabel ini merangkum stok, supplier, mode varian, dan status bahan baku aktif."
+        subtitle="Stok, supplier, dan varian bahan."
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredMaterials} />
         <Table
@@ -1179,7 +1203,7 @@ const RawMaterials = () => {
             <Alert
               type="info"
               showIcon
-              message="Sesuai konsep final: stok berada di variant jika pakai varian, tetapi minimum stok, harga referensi restock, modal aktual rata-rata, dan harga jual tetap disimpan di master bahan baku."
+              message="Jika memakai varian, stok ada di varian; minimum stok dan harga tetap di master."
             />
           </Card>
 
@@ -1362,7 +1386,7 @@ const RawMaterials = () => {
                         }
                       >
                         <Row gutter={12}>
-                          {/* IMS NOTE [GUARDED | identity-safe]: hidden identity field menjaga variantKey existing tetap terkirim saat nama varian diganti. Hubungan flow: variantKey adalah bucket stok/reference transaksi. STATUS: AKTIF. */}
+                          {/* IMS NOTE [GUARDED | identity-safe]: hidden identity field menjaga variantKey existing tetap terkirim saat nama varian diganti. Hubungan flow: variantKey adalah identitas stok varian/reference transaksi. STATUS: AKTIF. */}
                           <Form.Item name={[field.name, 'variantKey']} hidden>
                             <Input />
                           </Form.Item>
@@ -1466,53 +1490,107 @@ const RawMaterials = () => {
             style={{ marginTop: 16 }}
             type="warning"
             showIcon
-            message="Mode varian dipakai hanya kalau memang perlu. Kalau item sederhana seperti lem, lakban, atau bahan tanpa turunan, tetap lebih rapi tanpa varian."
+            message="Pakai varian hanya jika bahan punya turunan stok nyata."
           />
         </Form>
       </Drawer>
 
-      {/* ---------------------------------------------------------------------
-          Drawer detail bahan baku.
-          Dipakai untuk melihat rincian stok tanpa harus masuk mode edit.
-      --------------------------------------------------------------------- */}
+      {/* =====================================================
+          SECTION: Raw Material Detail Drawer — AKTIF
+          Fungsi:
+          - Menata ringkasan bahan, stok, harga, supplier, varian, dan link restock dalam section yang mudah dibaca.
+
+          Dipakai oleh:
+          - Halaman Master Data / Bahan Baku saat user membuka tombol Detail.
+
+          Alasan perubahan:
+          - Drawer lama terlalu padat dalam satu Descriptions dan membuat stok, cost, supplier, serta varian kurang cepat dipahami.
+
+          Catatan cleanup:
+          - Belum ada.
+
+          Risiko:
+          - Jangan ubah mapping stok, average cost, supplier snapshot, varian, purchase linkage, atau handler detail dari section presentasi ini.
+      ===================================================== */}
       <Drawer
         title="Detail Bahan Baku"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={820}
+        width={900}
         destroyOnClose
       >
-        {selectedMaterial ? (
-          <Space direction="vertical" style={{ width: '100%' }} size={16}>
-            <Descriptions bordered column={1} size="small">
-              <Descriptions.Item label="Nama Bahan Baku">{selectedMaterial.name || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Supplier">
-                <Space size={8} wrap>
-                  <Text strong>{detailRestockSupplier.name}</Text>
-                  {detailRestockSupplier.source === 'purchase' ? <Tag color="green">Terakhir dibeli</Tag> : null}
-                  {detailRestockSupplier.source === 'manual' ? <Tag color="blue">Supplier manual</Tag> : null}
-                  {detailPrimarySupplier.id && !detailPrimarySupplier.isActiveMaster ? <Tag color="orange">Snapshot lama</Tag> : null}
-                  {/* ---------------------------------------------------------
-                      Tombol internal ke menu Supplier.
-                      Fungsi: membuka supplier lain yang menyediakan bahan ini.
-                      Alasan: aplikasi memakai HashRouter, jadi gunakan
-                      useNavigate; jangan pakai href path biasa agar tidak
-                      keluar dari hash route dan menyebabkan white screen.
-                      Status: aktif dipakai sebagai navigasi read-only, tidak
-                      menulis raw_materials dan tidak mengembalikan auto-sync.
-                  --------------------------------------------------------- */}
-                  <Button
-                    size="small"
-                    onClick={() => navigate(buildSupplierDetailRoute(selectedMaterial.id, detailRestockSupplier.id))}
-                  >
-                    Lihat Supplier Lain
-                  </Button>
+        {selectedMaterial ? (() => {
+          const stockSummary = getRawMaterialStockSummary(selectedMaterial);
+          const statusMeta = getRawMaterialStatusMeta(selectedMaterial);
+
+          return (
+            <Space direction="vertical" style={{ width: '100%' }} size={16}>
+              <Card size="small">
+                <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                  <Space size={[8, 8]} wrap>
+                    <Text strong style={{ fontSize: 18 }}>{selectedMaterial.name || '-'}</Text>
+                    <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
+                    <Tag color={selectedMaterial.hasVariants ? 'blue' : 'default'}>
+                      {selectedMaterial.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
+                    </Tag>
+                  </Space>
+                  <Text type="secondary">Satuan stok: {selectedMaterial.stockUnit || '-'}</Text>
                 </Space>
-              </Descriptions.Item>
-              <Descriptions.Item label="Link Produk">
-                <Space direction="vertical" size={4}>
+              </Card>
+
+              <Row gutter={[12, 12]}>
+                <Col xs={24} md={8}>
+                  <Card size="small">
+                    <Text type="secondary">Stok Tersedia</Text>
+                    <div style={{ fontWeight: 700, fontSize: 20 }}>{formatStockWithUnit(stockSummary.availableStock, selectedMaterial.stockUnit || 'pcs')}</div>
+                  </Card>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Card size="small">
+                    <Text type="secondary">Modal Aktual Rata-rata</Text>
+                    <div style={{ fontWeight: 700, fontSize: 20 }}>{selectedMaterial.averageActualUnitCost ? formatCurrencyId(selectedMaterial.averageActualUnitCost) : '-'}</div>
+                  </Card>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Card size="small">
+                    <Text type="secondary">Harga Referensi</Text>
+                    <div style={{ fontWeight: 700, fontSize: 20 }}>{formatCurrencyId(selectedMaterial.restockReferencePrice || 0)}</div>
+                  </Card>
+                </Col>
+              </Row>
+
+              <Card size="small" title="Ringkasan">
+                <Descriptions bordered column={1} size="small">
+                  <Descriptions.Item label="Supplier">
+                    <Space size={8} wrap>
+                      <Text strong>{detailRestockSupplier.name}</Text>
+                      {detailRestockSupplier.source === 'purchase' ? <Tag color="green">Terakhir dibeli</Tag> : null}
+                      {detailRestockSupplier.source === 'manual' ? <Tag color="blue">Supplier manual</Tag> : null}
+                      {detailPrimarySupplier.id && !detailPrimarySupplier.isActiveMaster ? <Tag color="orange">Snapshot lama</Tag> : null}
+                      <Button
+                        size="small"
+                        onClick={() => navigate(buildSupplierDetailRoute(selectedMaterial.id, detailRestockSupplier.id))}
+                      >
+                        Lihat Supplier Lain
+                      </Button>
+                    </Space>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Minimum Stok">
+                    {formatStockWithUnit(selectedMaterial.minStock || 0, selectedMaterial.stockUnit || 'pcs')}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Harga Jual">
+                    {`${formatCurrencyId(selectedMaterial.sellingPrice || 0)} / ${selectedMaterial.stockUnit || '-'}`}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Update Terakhir">
+                    {formatDateId(selectedMaterial.updatedAt, true)}
+                  </Descriptions.Item>
+                </Descriptions>
+              </Card>
+
+              <Card size="small" title="Link Restock Terakhir">
+                <Space direction="vertical" size={6}>
                   {detailLatestPurchase ? (
-                    <Text type="secondary" style={compactCellStyles.meta}>
+                    <Text type="secondary">
                       {`Pembelian terakhir: ${formatDateId(detailLatestPurchase.date || detailLatestPurchase.purchaseDate || detailLatestPurchase.createdAt, true)}`}
                     </Text>
                   ) : null}
@@ -1524,119 +1602,83 @@ const RawMaterials = () => {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      Buka Link Produk Terakhir
+                      Buka Link Produk
                     </Button>
                   ) : (
                     <Text type="secondary">Belum ada link produk dari pembelian terakhir.</Text>
                   )}
                 </Space>
-              </Descriptions.Item>
-              <Descriptions.Item label="Mode Varian">
-                <Tag color={selectedMaterial.hasVariants ? 'blue' : 'default'}>
-                  {selectedMaterial.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Minimum Stok">
-                {formatStockWithUnit(selectedMaterial.minStock || 0, selectedMaterial.stockUnit || 'pcs')}
-              </Descriptions.Item>
-              <Descriptions.Item label="Harga Referensi Restock">
-                {`${formatCurrencyId(selectedMaterial.restockReferencePrice || 0)} / ${selectedMaterial.stockUnit || '-'}`}
-              </Descriptions.Item>
-              <Descriptions.Item label="Modal Aktual Rata-rata">
-                {`${selectedMaterial.averageActualUnitCost ? formatCurrencyId(selectedMaterial.averageActualUnitCost) : '-'} / ${selectedMaterial.stockUnit || '-'}`}
-              </Descriptions.Item>
-              <Descriptions.Item label="Harga Jual">
-                {`${formatCurrencyId(selectedMaterial.sellingPrice || 0)} / ${selectedMaterial.stockUnit || '-'}`}
-              </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                <Tag color={getRawMaterialStatusMeta(selectedMaterial).color}>
-                  {getRawMaterialStatusMeta(selectedMaterial).label}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Update Terakhir">
-                {formatDateId(selectedMaterial.updatedAt, true)}
-              </Descriptions.Item>
-            </Descriptions>
+              </Card>
 
-            {/* -----------------------------------------------------------------
-                Section Restock terpisah sudah dihapus.
-                Fungsi: menjaga drawer Detail Bahan Baku tetap ringkas dengan
-                menaruh supplier terakhir dibeli dan link produk terakhir pada
-                tabel utama Descriptions di atas.
-                Alasan: daftar semua supplier dan perbandingan harga cukup
-                dibuka melalui menu Supplier, bukan dirender penuh di drawer.
-                Status: cleanup UI aktif; tidak mengubah save flow, stok,
-                purchase calculation, Supplier sync, atau database schema.
-            ----------------------------------------------------------------- */}
-
-            <Card size="small" title={selectedMaterial.hasVariants ? 'Rincian Varian Bahan Baku' : 'Rincian Stok Master'}>
-              {selectedMaterial.hasVariants ? (
-                <Table
-                  rowKey={(variant, index) => `${selectedMaterial.id}-${variant.variantKey || variant.name}-${index}`}
-                  pagination={false}
-                  size="small"
-                  dataSource={selectedMaterial.variants || []}
-                  columns={[
-                    {
-                      title: selectedMaterial.variantLabel || 'Varian',
-                      dataIndex: 'name',
-                      key: 'name',
-                      render: (value) => value || '-',
-                    },
-                    {
-                      title: 'Kode / SKU',
-                      dataIndex: 'sku',
-                      key: 'sku',
-                      render: (value) => value || '-',
-                    },
-                    {
-                      title: 'Stok',
-                      dataIndex: 'currentStock',
-                      key: 'currentStock',
-                      render: (value) => formatStockWithUnit(value || 0, selectedMaterial.stockUnit || 'pcs'),
-                    },
-                    {
-                      title: 'Reserved',
-                      dataIndex: 'reservedStock',
-                      key: 'reservedStock',
-                      render: (value) => formatStockWithUnit(value || 0, selectedMaterial.stockUnit || 'pcs'),
-                    },
-                    {
-                      title: 'Tersedia',
-                      key: 'availableStock',
-                      render: (_, variant) => formatStockWithUnit(
-                        Math.max(Number(variant.currentStock || 0) - Number(variant.reservedStock || 0), 0),
-                        selectedMaterial.stockUnit || 'pcs',
-                      ),
-                    },
-                    {
-                      title: 'Status',
-                      dataIndex: 'isActive',
-                      key: 'isActive',
-                      render: (value) => (
-                        <Tag color={value === false ? 'default' : 'green'}>
-                          {value === false ? 'Nonaktif' : 'Aktif'}
-                        </Tag>
-                      ),
-                    },
-                  ]}
-                />
-              ) : (
-                <Descriptions bordered column={1} size="small">
-                  <Descriptions.Item label="Stok Total">
-                    {formatStockWithUnit(selectedMaterial.currentStock ?? selectedMaterial.stock ?? 0, selectedMaterial.stockUnit || 'pcs')}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Reserved Stock">
-                    {formatStockWithUnit(selectedMaterial.reservedStock || 0, selectedMaterial.stockUnit || 'pcs')}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Stok Tersedia">
-                    {formatStockWithUnit(selectedMaterial.availableStock ?? selectedMaterial.currentStock ?? selectedMaterial.stock ?? 0, selectedMaterial.stockUnit || 'pcs')}
-                  </Descriptions.Item>
-                </Descriptions>
-              )}
-            </Card>
-          </Space>
-        ) : null}
+              <Card size="small" title={selectedMaterial.hasVariants ? 'Varian Bahan Baku' : 'Stok Master'}>
+                {selectedMaterial.hasVariants ? (
+                  <Table
+                    rowKey={(variant, index) => `${selectedMaterial.id}-${variant.variantKey || variant.name}-${index}`}
+                    pagination={false}
+                    size="small"
+                    dataSource={selectedMaterial.variants || []}
+                    columns={[
+                      {
+                        title: selectedMaterial.variantLabel || 'Varian',
+                        dataIndex: 'name',
+                        key: 'name',
+                        render: (value) => value || '-',
+                      },
+                      {
+                        title: 'Kode / SKU',
+                        dataIndex: 'sku',
+                        key: 'sku',
+                        render: (value) => value || '-',
+                      },
+                      {
+                        title: 'Stok',
+                        dataIndex: 'currentStock',
+                        key: 'currentStock',
+                        render: (value) => formatStockWithUnit(value || 0, selectedMaterial.stockUnit || 'pcs'),
+                      },
+                      {
+                        title: 'Reserved',
+                        dataIndex: 'reservedStock',
+                        key: 'reservedStock',
+                        render: (value) => formatStockWithUnit(value || 0, selectedMaterial.stockUnit || 'pcs'),
+                      },
+                      {
+                        title: 'Tersedia',
+                        key: 'availableStock',
+                        render: (_, variant) => formatStockWithUnit(
+                          Math.max(Number(variant.currentStock || 0) - Number(variant.reservedStock || 0), 0),
+                          selectedMaterial.stockUnit || 'pcs',
+                        ),
+                      },
+                      {
+                        title: 'Status',
+                        dataIndex: 'isActive',
+                        key: 'isActive',
+                        render: (value) => (
+                          <Tag color={value === false ? 'default' : 'green'}>
+                            {value === false ? 'Nonaktif' : 'Aktif'}
+                          </Tag>
+                        ),
+                      },
+                    ]}
+                  />
+                ) : (
+                  <Descriptions bordered column={1} size="small">
+                    <Descriptions.Item label="Stok Total">
+                      {formatStockWithUnit(stockSummary.currentStock, selectedMaterial.stockUnit || 'pcs')}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Reserved Stock">
+                      {formatStockWithUnit(stockSummary.reservedStock, selectedMaterial.stockUnit || 'pcs')}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Stok Tersedia">
+                      {formatStockWithUnit(stockSummary.availableStock, selectedMaterial.stockUnit || 'pcs')}
+                    </Descriptions.Item>
+                  </Descriptions>
+                )}
+              </Card>
+            </Space>
+          );
+        })() : null}
       </Drawer>
     </div>
   );

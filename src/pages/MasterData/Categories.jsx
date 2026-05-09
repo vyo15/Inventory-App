@@ -145,7 +145,7 @@ const Categories = () => {
     <div className="page-container">
       <PageHeader
         title="Kategori"
-        subtitle="Kelola master kategori agar pengelompokan item tetap konsisten di seluruh IMS."
+        subtitle="Master kategori item."
         actions={[
           {
             key: "create-category",
@@ -164,7 +164,7 @@ const Categories = () => {
 
       <PageSection
         title="Daftar Kategori"
-        subtitle="Halaman ini hanya mengelola master kategori dan tidak mengubah stok, kas, atau transaksi aktif."
+        subtitle="Referensi kategori item."
       >
         <DataRefreshIndicator loading={loading} dataSource={categories} />
         <Table
@@ -177,6 +177,23 @@ const Categories = () => {
         />
       </PageSection>
 
+      {/* =====================================================
+          SECTION: Category Form Modal — AKTIF
+          Fungsi:
+          - Menampilkan form kategori yang ringkas untuk nama dan catatan.
+
+          Dipakai oleh:
+          - Halaman Master Data / Kategori saat tambah atau edit data.
+
+          Alasan perubahan:
+          - Copy form diringkas agar halaman kategori tetap simpel.
+
+          Catatan cleanup:
+          - Belum ada.
+
+          Risiko:
+          - Jangan ubah payload kategori, service Firestore, validation, atau handler simpan dari section presentasi ini.
+      ===================================================== */}
       <PageFormModal
         title={isEditing ? "Edit Kategori" : "Tambah Kategori"}
         open={isModalVisible}
@@ -199,7 +216,7 @@ const Categories = () => {
           <Input placeholder="Contoh: Bouquet, Aksesoris, Dekorasi" />
         </Form.Item>
         <Form.Item name="description" label="Deskripsi">
-          <Input.TextArea placeholder="Deskripsi kategori jika perlu" />
+          <Input.TextArea placeholder="Catatan kategori" />
         </Form.Item>
       </PageFormModal>
     </div>

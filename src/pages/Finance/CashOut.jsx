@@ -214,21 +214,21 @@ const CashOut = () => {
         key: "actual-expense",
         title: "Total Pengeluaran Aktual",
         value: formatCurrencyId(summary.totalActualExpense),
-        subtitle: "Semua expense pada periode aktif.",
+        subtitle: "Total pengeluaran periode aktif.",
         accent: "danger",
       },
       {
         key: "purchase-expense",
         title: "Total Belanja Pembelian",
         value: formatCurrencyId(summary.totalPurchaseExpense),
-        subtitle: "Bagian pengeluaran yang berasal dari modul purchases.",
+        subtitle: "Dari transaksi pembelian.",
         accent: "warning",
       },
       {
         key: "payroll-expense",
         title: "Total Payroll Produksi",
         value: formatCurrencyId(summary.totalPayrollExpense),
-        subtitle: "Cash Out otomatis dari payroll produksi yang ditandai paid.",
+        subtitle: "Dari payroll paid.",
         accent: "primary",
       },
       {
@@ -238,7 +238,7 @@ const CashOut = () => {
           summary.totalSaving < 0
             ? `- ${formatCurrencyId(Math.abs(summary.totalSaving))}`
             : formatCurrencyId(summary.totalSaving),
-        subtitle: "Saving hanya informasi efisiensi, bukan pengurang kas keluar.",
+        subtitle: "Selisih efisiensi pembelian.",
         accent: summary.totalSaving >= 0 ? "success" : "danger",
       },
     ],
@@ -391,7 +391,7 @@ const CashOut = () => {
           const sourceMeta = resolveExpenseSourceMeta(record);
 
           if (!sourceMeta.deletable) {
-            return <Tag color={sourceMeta.color}>Read Only</Tag>;
+            return <Tag color={sourceMeta.color}>Otomatis</Tag>;
           }
 
           return (
@@ -414,11 +414,28 @@ const CashOut = () => {
     [],
   );
 
+  /* =====================================================
+     SECTION: Cash Out Render Panel — GUARDED
+     Fungsi:
+     - Menata ringkasan, filter, tabel, dan form pengeluaran agar nominal, sumber otomatis/manual, supplier, payroll, dan selisih pembelian jelas.
+
+     Dipakai oleh:
+     - Halaman Cash Out.
+
+     Alasan perubahan:
+     - Batch 3 merapikan panel kas keluar tanpa mengubah purchase/payroll linkage, expense mapping, delete guard, atau service call.
+
+     Catatan cleanup:
+     - Detail drawer source expense bisa dibuat terpisah jika audit otomatis/manual makin kompleks.
+
+     Risiko:
+     - Jangan mengubah cash posting, paid payroll guard, purchase expense, report mapping, atau callback action dari section ini.
+     ===================================================== */
   return (
     <>
       <PageHeader
         title="Pengeluaran Kas"
-        subtitle="Pantau expense manual, pembelian otomatis, dan payroll produksi paid yang otomatis masuk expenses dengan source reference."
+        subtitle="Pengeluaran manual dan otomatis."
         actions={[
           {
             key: "add-cash-out",
@@ -434,20 +451,20 @@ const CashOut = () => {
         className="ims-mb-16"
         type="info"
         showIcon
-        message="Payroll Produksi paid otomatis masuk Cash Out dengan guard sourceModule/sourceId."
-        description="Baris sumber Payroll Produksi dibuat otomatis dari payroll paid, memakai sourceRef nomor payroll, dan read-only agar tidak double expense."
+        message="Payroll paid otomatis masuk Cash Out."
+        description="Payroll paid otomatis tercatat satu kali agar tidak double expense."
       />
 
       <PageSection
         title="Ringkasan Periode"
-        subtitle="Kartu ringkasan mengikuti tahun dan bulan yang dipilih pada filter."
+        subtitle="KPI periode aktif."
       >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
       </PageSection>
 
       <PageSection
         title="Filter Pengeluaran"
-        subtitle="Gunakan periode untuk mempersempit tampilan expense tanpa mengubah data transaksi."
+        subtitle="Periode pengeluaran."
       >
         <FilterBar>
           <Col xs={24} md={6}>
@@ -485,7 +502,7 @@ const CashOut = () => {
 
       <PageSection
         title="Daftar Pengeluaran"
-        subtitle="Saving pembelian tetap ditampilkan sebagai informasi efisiensi sesuai business rule aktif."
+        subtitle="Transaksi periode aktif."
         extra={<Tag color="red">{formatNumberId(filteredCashOuts.length)} baris</Tag>}
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredCashOuts} />

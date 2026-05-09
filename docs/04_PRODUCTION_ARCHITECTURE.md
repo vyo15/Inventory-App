@@ -277,6 +277,13 @@ Field aktif:
 ### Guard Progress
 Progress planning dihitung read-only dari Work Log completed. Perhitungan tidak menyimpan stok, tidak update Work Log, dan tidak update PO lifecycle.
 
+### Guard Cancel Planning
+Cancel Planning adalah status-level action pada layer target/monitoring sebelum PO. Planning tanpa PO boleh dicancel jika status belum final. Planning yang sudah punya PO / linked Production Order tidak boleh dicancel langsung; user harus mengelola PO terkait terlebih dahulu.
+
+Cancel Planning hanya mengubah status Planning menjadi `cancelled`. Action ini tidak menghapus dokumen Planning, tidak menghapus/mengubah PO existing, dan tidak menyentuh Work Log, inventory/stok, Payroll, HPP, report, sales, purchases, returns, atau cash in/out.
+
+Status final tetap guarded: Planning `cancelled` dan `completed` tidak boleh dibuatkan PO. Planning `overdue` tanpa PO masih boleh dibuatkan PO atau dicancel sesuai kebutuhan operasional.
+
 ### Area Legacy / Compatibility
 - PO lama tanpa planning tetap dianggap PO manual aktif.
 - Work Log lama tanpa planning tetap valid.

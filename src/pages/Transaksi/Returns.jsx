@@ -339,7 +339,7 @@ const Returns = () => {
      Dipakai oleh:
      - Returns main table.
      Alasan perubahan:
-     - Tanggal, item/source, qty retur, dan catatan harus terbaca langsung tanpa mengubah flow stok retur.
+     - Tanggal, item/asal, qty retur, dan catatan harus terbaca langsung tanpa mengubah flow stok retur.
      Catatan cleanup:
      - Detail retur bisa dibuat drawer khusus jika audit retur bertambah kompleks.
      Risiko:
@@ -366,7 +366,7 @@ const Returns = () => {
       },
     },
     {
-      title: "Item / Source",
+      title: "Item / Asal",
       key: "itemSource",
       width: 270,
       render: (_, record) => {
@@ -419,11 +419,28 @@ const Returns = () => {
     },
   ];
 
+  /* =====================================================
+     SECTION: Returns Render Panel — GUARDED
+     Fungsi:
+     - Menata tabel dan form retur agar tipe item, varian, qty, alasan, dan dampak stok tetap jelas.
+
+     Dipakai oleh:
+     - Halaman Returns.
+
+     Alasan perubahan:
+     - Batch 3 merapikan microcopy retur tanpa mengubah stock mutation, reference relation, refund/cash logic, atau payload submit.
+
+     Catatan cleanup:
+     - Detail retur bisa dibuat drawer audit jika relasi sales/purchase makin kompleks.
+
+     Risiko:
+     - Jangan mengubah logic stok kembali, relation transaksi, inventory log, atau validation dari section ini.
+     ===================================================== */
   return (
     <>
       <PageHeader
         title="Retur"
-        subtitle="Catat pengembalian item agar stok master/varian bertambah kembali dan riwayat inventaris tetap akurat."
+        subtitle="Retur barang dan stok kembali."
         actions={[
           {
             key: "add-return",
@@ -437,7 +454,7 @@ const Returns = () => {
 
       <PageSection
         title="Data Retur"
-        subtitle="Setiap retur memakai helper stok variant-aware dan mencatat variantKey/variantLabel pada inventory log."
+        subtitle="Stok kembali mengikuti item dan varian."
       >
         {/* =========================
             SECTION: tabel retur baseline global
@@ -463,6 +480,7 @@ const Returns = () => {
         confirmLoading={isSubmittingReturn}
         okText="Simpan"
         cancelText="Batal"
+        width={720}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmitReturn}>
           <Form.Item
@@ -512,7 +530,7 @@ const Returns = () => {
               name="variantKey"
               label={selectedItem?.variantLabel || "Varian"}
               rules={[{ required: true, message: "Varian wajib dipilih" }]}
-              extra="Item ini bervarian. Retur harus masuk ke varian yang dipilih, bukan master/default."
+              extra="Retur item bervarian wajib memilih varian."
             >
               <Select placeholder="Pilih varian" showSearch optionFilterProp="children">
                 {variantOptions.map((item) => (
@@ -537,7 +555,7 @@ const Returns = () => {
                     Stok Item Sebelum Retur
                   </div>
                   <div className="ims-readonly-panel-description">
-                    Snapshot ini hanya membantu membaca stok sebelum retur disimpan. Pengembalian stok tetap mengikuti transaction retur resmi.
+                    Info stok sebelum retur disimpan.
                   </div>
                 </div>
                 <Tag color={selectedItemHasVariants ? "purple" : "default"}>
@@ -558,19 +576,19 @@ const Returns = () => {
 
               <div className="ims-readonly-stat-grid">
                 <div className="ims-readonly-stat-field">
-                  <div className="ims-readonly-stat-label">Current Stock</div>
+                  <div className="ims-readonly-stat-label">Stok Saat Ini</div>
                   <div className="ims-readonly-stat-value">
                     {formatNumberId((selectedItemHasVariants ? selectedVariant?.currentStock : getItemStockSnapshot(selectedItem).currentStock) || 0)}
                   </div>
                 </div>
                 <div className="ims-readonly-stat-field">
-                  <div className="ims-readonly-stat-label">Reserved Stock</div>
+                  <div className="ims-readonly-stat-label">Stok Tertahan</div>
                   <div className="ims-readonly-stat-value">
                     {formatNumberId((selectedItemHasVariants ? selectedVariant?.reservedStock : getItemStockSnapshot(selectedItem).reservedStock) || 0)}
                   </div>
                 </div>
                 <div className="ims-readonly-stat-field">
-                  <div className="ims-readonly-stat-label">Available Stock</div>
+                  <div className="ims-readonly-stat-label">Stok Tersedia</div>
                   <div className="ims-readonly-stat-value">
                     {formatNumberId((selectedItemHasVariants ? selectedVariant?.availableStock : getItemStockSnapshot(selectedItem).availableStock) || 0)}
                   </div>
@@ -579,7 +597,7 @@ const Returns = () => {
 
               {selectedItemHasVariants ? (
                 <div className="ims-readonly-panel-note">
-                  Item bervarian wajib memilih varian agar retur masuk ke bucket variantKey yang benar.
+                  Item bervarian wajib memilih varian agar retur masuk ke varian yang benar.
                 </div>
               ) : null}
             </div>

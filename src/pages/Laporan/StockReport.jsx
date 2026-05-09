@@ -205,21 +205,21 @@ const StockReport = () => {
         key: "stock-total-items",
         title: "Total Item",
         value: formatNumberId(totalItems),
-        subtitle: "Jumlah item yang lolos filter laporan stok.",
+        subtitle: "Item sesuai filter.",
         accent: "primary",
       },
       {
         key: "stock-low-items",
         title: "Item Stok Rendah",
         value: formatNumberId(lowStockItems.length),
-        subtitle: "Mengikuti threshold master tiap item.",
+        subtitle: "Di bawah minimum stok.",
         accent: "warning",
       },
       {
         key: "stock-empty-items",
         title: "Item Stok Habis",
         value: formatNumberId(criticalStockItems.length),
-        subtitle: "Item dengan stok 0 atau kurang pada data yang sedang tampil.",
+        subtitle: "Stok habis.",
         accent: "danger",
       },
     ],
@@ -244,7 +244,7 @@ const StockReport = () => {
 
     await exportJsonToExcel({
       title: "Laporan Stok IMS Bunga Flanel",
-      subtitle: "Snapshot stok bahan baku, semi finished, dan produk jadi sesuai filter aktif.",
+      subtitle: "Ekspor stok sesuai filter aktif.",
       fileName: "laporan-stok",
       sheetName: "Stock Report",
       filters: [
@@ -359,23 +359,40 @@ const StockReport = () => {
     [],
   );
 
+  /* =====================================================
+     SECTION: Stock Report Render Panel — GUARDED
+     Fungsi:
+     - Menata filter, summary, tabel, dan export stok agar bahan, semi finished, produk, varian, dan minimum stok tetap terbaca.
+
+     Dipakai oleh:
+     - Halaman Stock Report.
+
+     Alasan perubahan:
+     - Batch 3 merapikan copy laporan tanpa mengubah threshold, available stock, status rendah/habis, atau export.
+
+     Catatan cleanup:
+     - Breakdown varian detail bisa dibuat drawer jika kebutuhan audit stok bertambah.
+
+     Risiko:
+     - Jangan mengubah source stok, threshold master, status stok, filter value, atau export payload dari section ini.
+     ===================================================== */
   return (
     <>
       <PageHeader
         title="Laporan Stok"
-        subtitle="Laporan stok membaca bahan baku, semi finished, dan produk jadi tanpa mengubah source of truth stok."
+        subtitle="Snapshot stok sesuai filter."
       />
 
       <PageSection
         title="Ringkasan Stok"
-        subtitle="Ringkasan tetap mengikuti filter pencarian, kategori, dan status pada halaman ini."
+        subtitle="KPI stok."
       >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} />
       </PageSection>
 
       <PageSection
         title="Filter Laporan"
-        subtitle="Gunakan filter untuk mempersempit tampilan laporan sebelum ekspor XLSX."
+        subtitle="Filter stok."
       >
         <FilterBar
           actions={
@@ -421,7 +438,7 @@ const StockReport = () => {
 
       <PageSection
         title="Tabel Laporan Stok"
-        subtitle="Field stok tampilan mengikuti fallback availableStock → currentStock → stock dan status rendah memakai minimum stok master per item."
+        subtitle="Item sesuai filter."
         extra={<Tag color="blue">{formatNumberId(filteredData.length)} baris</Tag>}
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredData} />

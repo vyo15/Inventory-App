@@ -1036,11 +1036,28 @@ const Sales = () => {
     form.setFieldsValue(nextValues);
   };
 
+  /* =====================================================
+     SECTION: Sales Render Panel — GUARDED
+     Fungsi:
+     - Menata ringkasan, filter, tabel, dan form penjualan agar invoice, customer, item, stok, status, dan total mudah dibaca.
+
+     Dipakai oleh:
+     - Halaman Sales.
+
+     Alasan perubahan:
+     - Batch 3 merapikan microcopy dan panel transaksi tanpa mengubah payload, stok keluar, income timing, atau handler action.
+
+     Catatan cleanup:
+     - Detail transaksi bisa dibuat drawer audit khusus jika nanti dibutuhkan.
+
+     Risiko:
+     - Jangan mengubah mapping item, status, total, stok, cash in, atau callback dari section render ini.
+     ===================================================== */
   return (
     <>
       <PageHeader
         title="Daftar Penjualan"
-        subtitle="Kelola transaksi penjualan offline dan online, termasuk pemotongan stok varian serta pencatatan kas masuk."
+        subtitle="Penjualan, stok keluar, dan status pembayaran."
         actions={[
           {
             key: "add-sale",
@@ -1054,14 +1071,14 @@ const Sales = () => {
 
       <PageSection
         title="Ringkasan Penjualan"
-        subtitle="Pemasukan Pending hanya estimasi monitoring, belum masuk Cash In atau Profit Loss sampai status Selesai."
+        subtitle="Pending belum masuk kas resmi."
       >
         <SummaryStatGrid items={salesSummaryItems} columns={{ xs: 24, md: 8 }} />
       </PageSection>
 
       <PageSection
         title="Filter Penjualan"
-        subtitle="Gunakan tab status dan pencarian nomor referensi untuk memantau transaksi lebih cepat."
+        subtitle="Status dan referensi transaksi."
       >
         <div style={{ marginBottom: 12, maxWidth: 360 }}>
           <Input.Search
@@ -1077,7 +1094,7 @@ const Sales = () => {
 
       <PageSection
         title="Data Penjualan"
-        subtitle="Semua transaksi penjualan akan mengurangi stok item/varian yang terjual dan dapat menghasilkan pemasukan saat selesai."
+        subtitle="Stok keluar dan pemasukan mengikuti status selesai."
       >
         <DataRefreshIndicator loading={isLoading} dataSource={filteredSalesRecords} />
         <Table
@@ -1101,7 +1118,7 @@ const Sales = () => {
         width={860}
       >
         <Form form={form} layout="vertical" onFinish={handleAddSale}>
-          <Form.Item label="Pelanggan" name="customerId" extra="Opsional. Boleh dikosongkan untuk pembeli offline umum atau marketplace.">
+          <Form.Item label="Pelanggan" name="customerId" extra="Opsional untuk pembeli umum atau marketplace.">
             <Select placeholder="Pilih pelanggan" allowClear showSearch optionFilterProp="children">
               {customers.map((customer) => (
                 <Option key={customer.id} value={customer.id}>
@@ -1146,8 +1163,8 @@ const Sales = () => {
                               rules={[{ required: true, message: "Pilih item!" }]}
                               extra={
                                 selectedItemType
-                                  ? "Daftar item sudah difilter berdasarkan Jenis Item."
-                                  : "Pilih Jenis Item terlebih dahulu."
+                                  ? "Item difilter sesuai jenis."
+                                  : "Pilih jenis item dulu."
                               }
                               style={{ flex: 1, minWidth: 320, marginBottom: 12 }}
                             >
@@ -1211,7 +1228,7 @@ const Sales = () => {
                                     Stok Tersedia Sebelum Penjualan
                                   </div>
                                   <div className="ims-readonly-panel-description">
-                                    Snapshot ini hanya membantu membaca stok. Pengurangan stok tetap terjadi saat penjualan disimpan.
+                                    Info stok sebelum transaksi disimpan.
                                   </div>
                                 </div>
                                 <Tag color={hasVariants ? "purple" : "default"}>
@@ -1232,19 +1249,19 @@ const Sales = () => {
 
                               <div className="ims-readonly-stat-grid">
                                 <div className="ims-readonly-stat-field">
-                                  <div className="ims-readonly-stat-label">Current Stock</div>
+                                  <div className="ims-readonly-stat-label">Stok Saat Ini</div>
                                   <div className="ims-readonly-stat-value">
                                     {formatNumberId((hasVariants ? selectedVariant?.currentStock : getItemStockSnapshot(selectedItem).currentStock) || 0)}
                                   </div>
                                 </div>
                                 <div className="ims-readonly-stat-field">
-                                  <div className="ims-readonly-stat-label">Reserved Stock</div>
+                                  <div className="ims-readonly-stat-label">Stok Tertahan</div>
                                   <div className="ims-readonly-stat-value">
                                     {formatNumberId((hasVariants ? selectedVariant?.reservedStock : getItemStockSnapshot(selectedItem).reservedStock) || 0)}
                                   </div>
                                 </div>
                                 <div className="ims-readonly-stat-field">
-                                  <div className="ims-readonly-stat-label">Available Stock</div>
+                                  <div className="ims-readonly-stat-label">Stok Tersedia</div>
                                   <div className="ims-readonly-stat-value">
                                     {formatNumberId((hasVariants ? selectedVariant?.availableStock : getItemStockSnapshot(selectedItem).availableStock) || 0)}
                                   </div>
@@ -1253,7 +1270,7 @@ const Sales = () => {
 
                               {hasVariants ? (
                                 <div className="ims-readonly-panel-note">
-                                  Item bervarian wajib memilih varian agar stok yang terpotong berasal dari bucket variantKey yang benar.
+                                  Item bervarian wajib memilih varian agar stok keluar dari varian yang benar.
                                 </div>
                               ) : null}
                             </div>
@@ -1329,8 +1346,8 @@ const Sales = () => {
                   name="referenceNumber"
                   extra={
                     referenceEnabled
-                      ? "Opsional untuk marketplace/online. Isi jika ada nomor resi, order, atau reference transaksi."
-                      : "Tidak diperlukan untuk Offline/WhatsApp. Nilai akan dikosongkan otomatis."
+                      ? "Opsional untuk nomor resi/order marketplace."
+                      : "Tidak diperlukan untuk channel ini."
                   }
                 >
                   <Input

@@ -111,14 +111,14 @@ const PurchasesReport = () => {
         key: "total-actual-purchase",
         title: "Total Aktual Pembelian",
         value: formatCurrencyId(summary.totalActual),
-        subtitle: "Total expense pembelian yang benar-benar diakui.",
+        subtitle: "Total biaya pembelian.",
         accent: "danger",
       },
       {
         key: "total-reference-purchase",
         title: "Total Referensi",
         value: formatCurrencyId(summary.totalReference),
-        subtitle: "Nilai referensi untuk pembanding efisiensi pembelian.",
+        subtitle: "Total acuan supplier.",
         accent: "primary",
       },
       {
@@ -128,14 +128,14 @@ const PurchasesReport = () => {
           summary.totalSaving < 0
             ? `- ${formatCurrencyId(Math.abs(summary.totalSaving))}`
             : formatCurrencyId(summary.totalSaving),
-        subtitle: "Saving tetap ditampilkan sebagai info, bukan pengurang kas keluar.",
+        subtitle: "Selisih efisiensi pembelian.",
         accent: summary.totalSaving >= 0 ? "success" : "danger",
       },
       {
         key: "purchase-transaction-count",
         title: "Jumlah Transaksi",
         value: formatNumberId(summary.totalTransactions),
-        subtitle: "Jumlah transaksi pembelian yang terbaca dari expenses.",
+        subtitle: "Jumlah transaksi.",
         accent: "warning",
       },
     ],
@@ -154,7 +154,7 @@ const PurchasesReport = () => {
   const exportToExcel = async () => {
     await exportJsonToExcel({
       title: "Laporan Pembelian IMS Bunga Flanel",
-      subtitle: "Ekspor mengikuti data expenses pembelian yang tampil di halaman ini.",
+      subtitle: "Ekspor data yang sedang tampil.",
       sheetName: "Purchases Report",
       fileName: "Laporan-Pembelian",
       columns: [
@@ -248,23 +248,40 @@ const PurchasesReport = () => {
     [],
   );
 
+  /* =====================================================
+     SECTION: Purchases Report Render Panel — AKTIF
+     Fungsi:
+     - Menata filter, summary, tabel, dan export laporan pembelian agar biaya, acuan supplier, dan selisih tetap jelas.
+
+     Dipakai oleh:
+     - Halaman Purchases Report.
+
+     Alasan perubahan:
+     - Batch 3 mengurangi copy pasif tanpa mengubah calculation, expenses source, atau export.
+
+     Catatan cleanup:
+     - Jika laporan audit supplier makin detail, pisahkan drawer/section audit di batch lain.
+
+     Risiko:
+     - Jangan mengubah report dataSource, saving calculation, total, atau export payload dari section ini.
+     ===================================================== */
   return (
     <>
       <PageHeader
         title="Laporan Pembelian"
-        subtitle="Laporan ini tetap membaca expenses sesuai business rule aktif, lalu distandardisasi ke pola section dan summary card yang reusable."
+        subtitle="Ringkasan pembelian sesuai filter."
       />
 
       <PageSection
         title="Ringkasan Pembelian"
-        subtitle="Ringkasan membantu membaca total aktual, total referensi, dan saving pembelian dengan cepat."
+        subtitle="KPI pembelian."
       >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
       </PageSection>
 
       <PageSection
         title="Detail Pembelian"
-        subtitle="Data tabel tetap bersumber dari expenses yang ditandai sebagai pembelian aktif."
+        subtitle="Transaksi sesuai filter."
         extra={
           <Button type="primary" onClick={exportToExcel} disabled={purchasesData.length === 0}>
             Ekspor ke Excel

@@ -188,21 +188,21 @@ const CashIn = () => {
         key: "total-cash-in",
         title: "Total Pemasukan Periode",
         value: formatCurrencyId(summary.totalAmount),
-        subtitle: "Gabungan revenues dan incomes pada periode aktif.",
+        subtitle: "Total pemasukan periode aktif.",
         accent: "primary",
       },
       {
         key: "cash-in-count",
         title: "Jumlah Transaksi",
         value: formatNumberId(summary.totalTransactions),
-        subtitle: "Jumlah transaksi pemasukan pada periode aktif.",
+        subtitle: "Transaksi pada periode aktif.",
         accent: "success",
       },
       {
         key: "sales-income",
         title: "Pemasukan dari Penjualan",
         value: formatCurrencyId(summary.totalSalesIncome),
-        subtitle: "Pemasukan otomatis dari transaksi sales berstatus selesai.",
+        subtitle: "Dari sales berstatus selesai.",
         accent: "warning",
       },
     ],
@@ -281,9 +281,9 @@ const CashIn = () => {
         width: 220,
         render: (_, record) => {
           const sourceTag = record.sourceCollection === "incomes"
-            ? <Tag color="green">Auto Penjualan</Tag>
+            ? <Tag color="green">Penjualan Selesai</Tag>
             : record.sourceCollection === "revenues"
-              ? <Tag color="blue">Manual / Lama</Tag>
+              ? <Tag color="blue">Manual / Data Lama</Tag>
               : <Tag>-</Tag>;
 
           return (
@@ -323,11 +323,28 @@ const CashIn = () => {
     [],
   );
 
+  /* =====================================================
+     SECTION: Cash In Render Panel — GUARDED
+     Fungsi:
+     - Menata ringkasan, filter, tabel, dan form pemasukan agar nominal, tipe, tanggal, dan referensi sales tetap jelas.
+
+     Dipakai oleh:
+     - Halaman Cash In.
+
+     Alasan perubahan:
+     - Batch 3 merapikan panel kas masuk tanpa mengubah payload, sales linkage, report mapping, atau service call.
+
+     Catatan cleanup:
+     - Detail drawer kas masuk bisa ditambahkan jika audit source diperlukan.
+
+     Risiko:
+     - Jangan mengubah cash posting, report source, payment mapping, atau callback dari section ini.
+     ===================================================== */
   return (
     <>
       <PageHeader
         title="Pemasukan Kas"
-        subtitle="Pantau pemasukan manual dari revenues dan pemasukan penjualan selesai dari incomes dalam satu halaman yang seragam."
+        subtitle="Pemasukan manual dan otomatis dari sales."
         actions={[
           {
             key: "add-cash-in",
@@ -341,14 +358,14 @@ const CashIn = () => {
 
       <PageSection
         title="Ringkasan Periode"
-        subtitle="Ringkasan mengikuti filter tahun dan bulan yang sedang aktif."
+        subtitle="KPI periode aktif."
       >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} />
       </PageSection>
 
       <PageSection
         title="Filter Pemasukan"
-        subtitle="Gunakan periode untuk membatasi data operasional yang tampil."
+        subtitle="Periode kas masuk."
       >
         <FilterBar>
           <Col xs={24} md={6}>
@@ -386,7 +403,7 @@ const CashIn = () => {
 
       <PageSection
         title="Daftar Pemasukan"
-        subtitle="Tabel tetap membaca kombinasi data revenues dan incomes tanpa mengubah alur kas yang sudah aktif."
+        subtitle="Transaksi periode aktif."
         extra={<Tag color="blue">{formatNumberId(filteredCashIns.length)} baris</Tag>}
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredCashIns} />

@@ -461,7 +461,7 @@ const Purchases = () => {
   // - Harga Supplier Tercatat / Satuan Stok bisa sudah memuat ongkir/admin/diskon untuk 1 paket;
   //   jika langsung dikali Stok Masuk, ongkir/admin bisa terlihat ikut dikali per satuan stok.
   // Hubungan flow aplikasi:
-  // - hasil ini hanya dipakai sebagai pembanding dan Selisih Hemat; tidak mengubah stok, kas,
+  // - hasil ini hanya dipakai sebagai pembanding dan Selisih; tidak mengubah stok, kas,
   //   expense, actualUnitCost, Supplier, atau Raw Material.
   // Status: aktif dipakai; fallback lama berbasis harga per satuan stok tetap ada untuk data legacy
   // yang belum punya Harga Barang Supplier di katalog Supplier.
@@ -924,7 +924,7 @@ const Purchases = () => {
   ]);
 
   // =========================
-  // SECTION: Hitung Total Pembanding Supplier dan Selisih Hemat
+  // SECTION: Hitung Total Pembanding Supplier dan Selisih
   // Fungsi blok:
   // - menghitung pembanding Supplier dari komponen katalog Supplier, bukan langsung dari
   //   Stok Masuk x Harga Supplier Tercatat / Satuan Stok.
@@ -932,7 +932,7 @@ const Purchases = () => {
   // - ongkir/admin/voucher marketplace biasanya berlaku per checkout, sehingga tidak aman
   //   jika selalu dianggap proporsional per satuan stok saat Qty Beli > 1.
   // Hubungan flow aplikasi:
-  // - Total Pembanding dan Selisih Hemat hanya informasi efisiensi; tidak mengubah kas,
+  // - Total Pembanding dan Selisih hanya informasi efisiensi; tidak mengubah kas,
   //   expense, actualUnitCost, stok, Supplier, atau Raw Material.
   // Status: aktif dipakai; fallback lama berbasis harga per satuan stok hanya untuk data legacy
   // yang belum memiliki supplierItemPrice di katalog Supplier.
@@ -1572,11 +1572,28 @@ const Purchases = () => {
     },
   ];
 
+  /* =====================================================
+     SECTION: Purchases Render Panel — GUARDED
+     Fungsi:
+     - Menata tabel dan form pembelian agar supplier, item, varian, stok masuk, modal aktual, dan total biaya mudah dibaca.
+
+     Dipakai oleh:
+     - Halaman Purchases.
+
+     Alasan perubahan:
+     - Batch 3 merapikan tampilan pembelian tanpa mengubah stock-in, expense, conversion, actual unit cost, atau payload submit.
+
+     Catatan cleanup:
+     - Drawer audit pembelian bisa dibuat terpisah jika rincian biaya semakin panjang.
+
+     Risiko:
+     - Jangan mengubah formula, service call, item mapping, supplier mapping, cash out linkage, atau inventory log dari section ini.
+     ===================================================== */
   return (
     <>
       <PageHeader
         title="Pembelian"
-        subtitle="Catat pembelian bahan baku maupun produk, sinkronkan stok masuk, dan hitung efisiensi pembelian."
+        subtitle="Pembelian, stok masuk, dan modal aktual."
         actions={[
           {
             key: "add-purchase",
@@ -1590,7 +1607,7 @@ const Purchases = () => {
 
       <PageSection
         title="Data Pembelian"
-        subtitle="Pembelian akan menambah stok item, mencatat inventory log, dan menghasilkan pengeluaran kas."
+        subtitle="Stok masuk dan biaya mengikuti transaksi pembelian."
       >
         {/* =========================
             SECTION: tabel pembelian baseline global
@@ -1615,7 +1632,7 @@ const Purchases = () => {
         onCancel={() => setIsModalOpen(false)}
         okText="Simpan"
         cancelText="Batal"
-        width={760}
+        width={820}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmitPurchase}>
           <Form.Item
@@ -2175,19 +2192,19 @@ const Purchases = () => {
                     Ringkasan Perbandingan Supplier
                   </div>
                   <div style={{ color: "#777", fontSize: 12, marginBottom: 12 }}>
-                    Breakdown ini read-only dari field pembelian yang sudah ada. Total aktual tetap menjadi dasar expense/cash out.
+                    Rincian otomatis dari field pembelian. Total aktual menjadi dasar biaya.
                   </div>
                   {summaryIsOfflinePurchase ? (
                     <div style={{ color: "#777", fontSize: 12, marginBottom: 10 }}>
-                      Pembelian offline: ongkir, admin/service fee, potongan ongkir, dan voucher dihitung 0.
+                      Offline: ongkir, admin, dan potongan dihitung 0.
                     </div>
                   ) : null}
 
                   {/* AKTIF/GUARDED: rincian biaya hanya display dari field existing; formula effect dan submit tidak dipindahkan atau diubah. */}
                   <Space direction="vertical" size={8} className="ims-filter-control">
-                    <div style={{ fontWeight: 600 }}>Breakdown biaya aktual</div>
+                    <div style={{ fontWeight: 600 }}>Biaya Aktual</div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                      <span>Subtotal Barang / Harga Awal</span>
+                      <span>Subtotal Barang</span>
                       <strong>{formatCurrencyIdr(subtotalItemsValue)}</strong>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
@@ -2195,7 +2212,7 @@ const Purchases = () => {
                       <strong>{formatCurrencyIdr(shippingCostValue)}</strong>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                      <span>Admin / Service Fee</span>
+                      <span>Biaya Layanan</span>
                       <strong>{formatCurrencyIdr(serviceFeeValue)}</strong>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
@@ -2221,7 +2238,7 @@ const Purchases = () => {
                     </div>
                     {/* AKTIF/GUARDED: modal aktual ditaruh langsung setelah total aktual agar user paham nilai ini berasal dari transaksi pembelian berjalan, bukan dari harga acuan Supplier. */}
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                      <span>Modal Aktual Pembelian Ini / Satuan Stok</span>
+                      <span>Modal Aktual / Satuan Stok</span>
                       <strong>{formatCurrencyIdr(actualUnitCostValue)} / {stockUnit}</strong>
                     </div>
 
@@ -2231,11 +2248,11 @@ const Purchases = () => {
                       <strong>{formatNumberId(stockInValue)} {stockUnit}</strong>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                      <span>Harga Acuan Supplier Tersimpan / Satuan Stok</span>
+                      <span>Harga Acuan Supplier</span>
                       <strong>
                         {supplierPriceValue > 0
                           ? `${formatCurrencyIdr(supplierPriceValue)} / ${stockUnit}`
-                          : "Belum ada harga acuan supplier tersimpan"}
+                          : "Belum ada harga acuan supplier"}
                       </strong>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
@@ -2243,7 +2260,7 @@ const Purchases = () => {
                       <strong>{hasSupplierReference ? formatCurrencyIdr(totalReferenceValue) : "-"}</strong>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-                      <span>Selisih Hemat</span>
+                      <span>Selisih</span>
                       <Tag color={savingMeta.color}>{hasSupplierReference ? savingMeta.label : "-"}</Tag>
                     </div>
                   </Space>

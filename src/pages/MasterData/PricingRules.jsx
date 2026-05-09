@@ -642,7 +642,7 @@ const PricingRules = () => {
     <div className="page-container">
       <PageHeader
         title="Pricing Rules"
-        subtitle="Aturan harga jual otomatis untuk bahan baku dan produk jadi, tanpa mengubah item yang masih memakai mode manual."
+        subtitle="Aturan harga otomatis per item."
         actions={[
           {
             key: "create-pricing-rule",
@@ -659,7 +659,7 @@ const PricingRules = () => {
         style={{ marginBottom: 16 }}
         type="info"
         showIcon
-        message="Harga dihitung dari base cost + margin + buffer marketplace + pembulatan. Item dengan pricingMode manual akan dilewati saat apply."
+        message="Harga dihitung dari biaya dasar, margin, buffer, dan pembulatan. Item manual dilewati."
       />
 
       <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} />
@@ -667,7 +667,7 @@ const PricingRules = () => {
       {/* SECTION: tabel pricing rules */}
       <PageSection
         title="Daftar Pricing Rules"
-        subtitle="Rule tetap menjadi layer pricing. Apply rule hanya memengaruhi item yang memang memakai mode rule."
+        subtitle="Berlaku untuk item mode rule."
       >
         {/* SECTION: tabel utama pricing rule memakai foundation global supaya seragam */}
         <DataRefreshIndicator loading={pageLoading} dataSource={rules} />
@@ -709,7 +709,7 @@ const PricingRules = () => {
 
             <Col xs={24} md={12}>
               <Form.Item
-                label="Target Type"
+                label="Target Rule"
                 name="targetType"
                 rules={[
                   { required: true, message: "Target type wajib dipilih." },
@@ -725,8 +725,8 @@ const PricingRules = () => {
                     });
                   }}
                 >
-                  <Option value="raw_materials">Raw Materials</Option>
-                  <Option value="products">Products</Option>
+                  <Option value="raw_materials">Bahan Baku</Option>
+                  <Option value="products">Produk Jadi</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -743,10 +743,10 @@ const PricingRules = () => {
 
           {/* SECTION: sumber biaya dasar */}
           <Form.Item
-            label="Base Cost Source"
+            label="Sumber Biaya Dasar"
             name="baseCostSource"
             rules={[
-              { required: true, message: "Base cost source wajib dipilih." },
+              { required: true, message: "Sumber biaya dasar wajib dipilih." },
             ]}
           >
             <Select>
@@ -762,10 +762,10 @@ const PricingRules = () => {
           <Row gutter={16}>
             <Col xs={24} md={12}>
               <Form.Item
-                label="Margin Type"
+                label="Tipe Margin"
                 name="marginType"
                 rules={[
-                  { required: true, message: "Margin type wajib dipilih." },
+                  { required: true, message: "Tipe margin wajib dipilih." },
                 ]}
               >
                 <Select>
@@ -777,10 +777,10 @@ const PricingRules = () => {
 
             <Col xs={24} md={12}>
               <Form.Item
-                label="Margin Value"
+                label="Nilai Margin"
                 name="marginValue"
                 rules={[
-                  { required: true, message: "Margin value wajib diisi." },
+                  { required: true, message: "Nilai margin wajib diisi." },
                 ]}
               >
                 <InputNumber
@@ -808,12 +808,12 @@ const PricingRules = () => {
             <Row gutter={16}>
               <Col xs={24} md={12}>
                 <Form.Item
-                  label="Marketplace Buffer Type"
+                  label="Tipe Buffer Marketplace"
                   name="marketplaceBufferType"
                   rules={[
                     {
                       required: true,
-                      message: "Marketplace buffer type wajib dipilih.",
+                      message: "Tipe buffer marketplace wajib dipilih.",
                     },
                   ]}
                 >
@@ -826,12 +826,12 @@ const PricingRules = () => {
 
               <Col xs={24} md={12}>
                 <Form.Item
-                  label="Marketplace Buffer Value"
+                  label="Nilai Buffer Marketplace"
                   name="marketplaceBufferValue"
                   rules={[
                     {
                       required: true,
-                      message: "Marketplace buffer value wajib diisi.",
+                      message: "Nilai buffer marketplace wajib diisi.",
                     },
                   ]}
                 >
@@ -852,10 +852,10 @@ const PricingRules = () => {
           <Row gutter={16}>
             <Col xs={24} md={12}>
               <Form.Item
-                label="Rounding Type"
+                label="Tipe Pembulatan"
                 name="roundingType"
                 rules={[
-                  { required: true, message: "Rounding type wajib dipilih." },
+                  { required: true, message: "Tipe pembulatan wajib dipilih." },
                 ]}
               >
                 <Select>
@@ -868,10 +868,10 @@ const PricingRules = () => {
 
             <Col xs={24} md={12}>
               <Form.Item
-                label="Rounding Unit"
+                label="Kelipatan Pembulatan"
                 name="roundingUnit"
                 rules={[
-                  { required: true, message: "Rounding unit wajib diisi." },
+                  { required: true, message: "Kelipatan pembulatan wajib diisi." },
                 ]}
               >
                 <InputNumber
@@ -890,12 +890,28 @@ const PricingRules = () => {
           <Alert
             type="warning"
             showIcon
-            message="Untuk raw materials gunakan averageActualUnitCost sebagai source utama. Untuk products gunakan hppPerUnit sebagai source utama."
+            message="Bahan baku memakai modal aktual rata-rata. Produk jadi memakai HPP per unit."
           />
         </Form>
       </Modal>
 
-      {/* SECTION: modal preview pricing */}
+      {/* =====================================================
+          SECTION: Pricing Rule Preview Modal — GUARDED
+          Fungsi:
+          - Menampilkan ringkasan target rule, dampak harga, status item, dan tombol Terapkan Rule.
+
+          Dipakai oleh:
+          - Halaman Master Data / Pricing Rules saat user klik Detail.
+
+          Alasan perubahan:
+          - Copy form dan detail dibuat lebih natural tanpa mengubah kalkulasi pricing.
+
+          Catatan cleanup:
+          - Belum ada.
+
+          Risiko:
+          - Jangan ubah normalizePricingRule, buildPricingPreview, applyPricingRuleToItems, prioritas, target matching, atau validasi harga dari section ini.
+      ===================================================== */}
       <Modal
         title={`Detail Pricing Rule${
           previewRule?.name ? ` - ${previewRule.name}` : ""
@@ -924,7 +940,7 @@ const PricingRules = () => {
           style={{ marginBottom: 16 }}
           type="info"
           showIcon
-          message="Detail rule ini juga menampilkan preview dampak harga pada item terkait. Item dengan mode manual akan dilewati. Item dengan base cost kosong atau buffer marketplace tidak valid tidak akan diupdate."
+          message="Preview hanya mengubah item mode rule dengan biaya dasar valid."
         />
 
         {/* SECTION: ringkasan preview */}
@@ -962,7 +978,7 @@ const PricingRules = () => {
           <Col xs={24} md={4}>
             <Card>
               <Statistic
-                title="Base Cost Invalid"
+                title="Biaya Dasar Invalid"
                 value={previewSummary.invalidBaseCostCount}
               />
             </Card>

@@ -102,7 +102,7 @@ const getUserManagementActionErrorMessage = (error = {}) => {
   const errorCode = error.code || error.errorCode;
 
   if (errorCode === DELETE_PROFILE_PERMISSION_ERROR_CODE) {
-    return "Permission Firestore menolak aksi profile. Cek rules system_users.";
+    return "Permission menolak aksi profile. Cek akses Firestore.";
   }
 
   if (errorCode === DELETE_PROFILE_NOT_FOUND_ERROR_CODE) {
@@ -110,7 +110,7 @@ const getUserManagementActionErrorMessage = (error = {}) => {
   }
 
   if (errorCode === DELETE_PROFILE_GUARD_ERROR_CODE) {
-    return error.message || "Guard aplikasi menolak aksi ini agar admin tidak terkunci.";
+    return error.message || "Aksi ditolak agar admin tidak terkunci.";
   }
 
   return error.message || "Aksi User Management gagal.";
@@ -260,7 +260,7 @@ const UserManagement = () => {
     try {
       if (formMode === FORM_MODE.CREATE) {
         await createManualUserProfile(values, profile);
-        message.success("Profile system_users berhasil dibuat dari Auth UID manual.");
+        message.success("Profile IMS berhasil dibuat dari Auth UID.");
       } else if (selectedUser) {
         await updateSystemUserProfile(selectedUser.authUid, values, profile);
         message.success("Profile user berhasil diperbarui.");
@@ -560,37 +560,54 @@ const UserManagement = () => {
       key: "total-users",
       title: "Total Profile",
       value: users.length,
-      subtitle: "Jumlah profile internal di collection system_users.",
+      subtitle: "Profile IMS yang terdaftar.",
       accent: "primary",
     },
     {
       key: "active-users",
       title: "User Aktif",
       value: users.filter((item) => item.status === USER_STATUS.ACTIVE).length,
-      subtitle: "Profile yang masih boleh masuk ke aplikasi utama.",
+      subtitle: "Bisa login ke aplikasi.",
       accent: "success",
     },
     {
       key: "active-admins",
       title: "Administrator Aktif",
       value: activeAdministratorCount,
-      subtitle: "Dijaga agar administrator aktif terakhir tidak ikut hilang.",
+      subtitle: "Minimal satu admin aktif.",
       accent: "warning",
     },
     {
       key: "role-users",
       title: "Role User",
       value: users.filter((item) => item.role === ROLES.USER).length,
-      subtitle: "Profile operasional non-administrator.",
+      subtitle: "Non-administrator.",
       accent: "default",
     },
   ];
 
+  /* =====================================================
+  SECTION: User Management Renderer — GUARDED
+  Fungsi:
+  - Menampilkan summary, tabel profile, form tambah/edit, dan modal konfirmasi status/hapus profile.
+
+  Dipakai oleh:
+  - Administrator untuk mengelola profile IMS yang terhubung ke Firebase Auth UID.
+
+  Alasan perubahan:
+  - Copy dibuat lebih ringkas agar Auth UID, role, dan status tetap jelas tanpa penjelasan teknis berulang.
+
+  Catatan cleanup:
+  - Detail user khusus bisa dibuat nanti bila audit login/createdAt sudah stabil di data.
+
+  Risiko:
+  - Jangan mengubah role mapping, status mapping, Auth UID binding, atau guard administrator aktif terakhir.
+  ===================================================== */
   return (
     <div className="page-container">
       <PageHeader
         title="Manajemen User"
-        subtitle="Kelola profile internal, role aktif, dan status akses user IMS tanpa menyentuh password Firebase Authentication."
+        subtitle="Kelola profile dan akses IMS."
         actions={[
           {
             key: "create-user-profile",
@@ -606,15 +623,15 @@ const UserManagement = () => {
         <Alert
           type="info"
           showIcon
-          message="Flow aktif: Auth UID manual dari Firebase Console"
-          description="Buat user dulu di Firebase Authentication dengan email username@ziyocraft.com, salin UID Auth, lalu tempel di form Tambah Profile User. Tabel ini membaca Firestore system_users, bukan daftar Firebase Authentication. Tombol Hapus Profile hanya menghapus profile Firestore, bukan Firebase Auth user."
+          message="Auth UID dibuat manual dari Firebase Console"
+          description="Buat akun di Firebase Auth, lalu sambungkan UID ke profile IMS."
         />
 
         <SummaryStatGrid items={summaryItems} />
 
         <PageSection
           title="Daftar Profile User"
-          subtitle="Aksi di bawah hanya mengelola profile internal dan tetap dijaga oleh guard role serta status."
+          subtitle="Profile IMS dan aksesnya."
         >
           <DataRefreshIndicator loading={isLoading} dataSource={users} />
           <Table
@@ -632,7 +649,7 @@ const UserManagement = () => {
       <PageFormModal
         title={
           formMode === FORM_MODE.CREATE
-            ? "Tambah Profile User Manual UID"
+            ? "Tambah Profile User"
             : "Edit Profile User"
         }
         open={isModalOpen}
@@ -651,13 +668,13 @@ const UserManagement = () => {
           style={{ marginBottom: 16 }}
           message={
             formMode === FORM_MODE.CREATE
-              ? "Tempel Auth UID dari Firebase Console"
-              : "Edit profile tidak mengubah password Auth"
+              ? "Tempel Auth UID"
+              : "Edit profile tidak mengubah password"
           }
           description={
             formMode === FORM_MODE.CREATE
-              ? "Pastikan user Auth sudah dibuat manual di Firebase Console dengan email username@ziyocraft.com. Form ini hanya membuat dokumen system_users/{uid}."
-              : "Perubahan hanya berlaku pada profile, role, dan status di Firestore. Password tetap dikelola oleh Firebase Authentication."
+              ? "Pastikan akun Auth sudah dibuat di Firebase Console. Form ini hanya membuat profile IMS."
+              : "Perubahan hanya berlaku pada profile, role, dan status IMS. Password tetap di Firebase Authentication."
           }
         />
         <Form.Item
@@ -666,8 +683,8 @@ const UserManagement = () => {
           rules={[{ required: true, message: "Auth UID wajib diisi dari Firebase Authentication." }]}
           extra={
             formMode === FORM_MODE.CREATE
-              ? "Copy UID dari Firebase Console > Authentication > Users setelah membuat Auth user manual."
-              : "Auth UID dikunci agar profile tetap sesuai dokumen system_users/{uid}."
+              ? "Copy UID dari Firebase Console > Authentication > Users."
+              : "Auth UID dikunci agar profile tetap sesuai akun Auth."
           }
         >
           <Input
@@ -680,7 +697,7 @@ const UserManagement = () => {
           label="Username"
           name="username"
           rules={[{ required: true, message: "Username wajib diisi." }]}
-          extra="Username akan dipakai sebagai login internal, contoh admin untuk admin@ziyocraft.com."
+          extra="Contoh: admin untuk admin@ziyocraft.com."
         >
           <Input disabled={formMode === FORM_MODE.EDIT} placeholder="contoh: admin" />
         </Form.Item>
@@ -744,8 +761,8 @@ const UserManagement = () => {
           </Text>
           <Text>
             {statusChangeRequest?.nextStatus === USER_STATUS.INACTIVE
-              ? "User inactive tidak boleh masuk aplikasi utama. Firebase Authentication user tidak dihapus."
-              : "User akan bisa masuk lagi jika Auth user dan password masih valid."}
+              ? "User nonaktif tidak boleh masuk IMS. Akun Firebase Auth tidak dihapus."
+              : "User bisa masuk lagi jika akun Auth dan password masih valid."}
           </Text>
         </Space>
       </Modal>
@@ -767,12 +784,12 @@ const UserManagement = () => {
             (<Text code>@{deleteTarget?.username || "-"}</Text>)
           </Text>
           <Text>
-            Aksi ini hanya menghapus dokumen profile Firestore{" "}
-            <Text code>{`system_users/${deleteTarget?.authUid || "uid-target"}`}</Text>.
+            Aksi ini hanya menghapus profile IMS untuk UID{" "}
+            <Text code>{deleteTarget?.authUid || "uid-target"}</Text>.
           </Text>
-          <Text>Firebase Authentication user tidak ikut terhapus dari Firebase Console.</Text>
+          <Text>Akun Firebase Auth tidak ikut terhapus.</Text>
           <Text type="warning">
-            Jika Auth user masih ada, user tersebut tidak bisa login ke IMS sampai profile Firestore dibuat lagi.
+            Jika akun Auth masih ada, user tidak bisa login sampai profile IMS dibuat lagi.
           </Text>
         </Space>
       </Modal>

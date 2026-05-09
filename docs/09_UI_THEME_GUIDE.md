@@ -93,6 +93,167 @@ Tidak boleh digunakan:
 - Cek Login normal, error, loading profile, blocked user, dan logout blocked user.
 - Cek Dashboard tidak membuat write flow baru dan semua action hanya navigasi.
 
+## Standar Page Header dan action utama
+
+- Title halaman berada di kiri dan harus menyebut konteks utama halaman.
+- Subtitle bersifat opsional. Pakai subtitle singkat hanya jika menambah konteks operasional; hapus bila hanya mengulang title.
+- Tombol action utama seperti `Tambah Produk`, `Tambah Planning`, `Tambah PO`, `Tambah Work Log`, atau action create lain berada di kanan header pada desktop/tablet lebar.
+- Di mobile, action utama boleh wrap atau turun ke bawah selama tetap dalam container dan tidak overlap.
+- Jangan meletakkan action utama di sisi kiri jika halaman sudah memakai pola title kiri + action kanan.
+- Header tidak boleh dipakai untuk menjelaskan seluruh flow bisnis. Penjelasan panjang tetap di docs, bukan di UI harian.
+
+## Standar Detail Drawer
+
+Detail drawer dipakai untuk membaca data, bukan untuk menggantikan dokumentasi flow. Struktur standar:
+
+1. **Header ringkas**
+   - Tampilkan nama/kode utama.
+   - Tampilkan status badge/tag yang relevan.
+   - Tampilkan metric utama bila ada, misalnya total, stok, final amount, output qty, atau HPP.
+
+2. **Section `Ringkasan`**
+   - Pakai `Card`, `Descriptions`, atau layout ringkas yang sudah ada.
+   - Label harus pendek dan user-facing.
+   - Hindari paragraf panjang atau helper text yang tidak dibutuhkan saat user hanya membaca detail.
+
+3. **Section `Data Anak`**
+   - Item transaksi, material requirement, step produksi, payroll line, varian, supplier item, atau output Work Log ditampilkan memakai `Card + Table` kecil bila berbentuk list.
+   - Hindari table HTML manual bila AntD `Table` bisa dipakai konsisten.
+   - Data anak yang panjang harus tetap readable dan boleh memakai horizontal scroll natural drawer.
+
+4. **Section `Catatan`**
+   - Catatan manual tampil sebagai section sendiri.
+   - Catatan tidak boleh mendominasi area atas kecuali memang menjadi warning bisnis.
+
+5. **Section `Info Tambahan`**
+   - Data optional, audit, kompatibilitas data lama, atau informasi teknis panjang masuk `Collapse` bila tidak perlu dibaca setiap kali.
+   - Jangan memakai istilah internal sebagai label utama bila user tidak membutuhkannya.
+
+6. **Warning penting**
+   - Warning bisnis tetap memakai `Alert` dan ditempatkan dekat data yang relevan.
+   - Jangan menyembunyikan warning stok, cost, HPP, payroll, reset, auth, atau shortage ke area yang sulit ditemukan.
+
+## Standar Form Drawer dan Modal
+
+- Form harus fokus ke input dan keputusan user.
+- Helper text maksimal satu kalimat pendek per field/section.
+- Jangan menaruh penjelasan fungsi menu atau flow panjang di dalam form.
+- Label field harus cukup jelas tanpa paragraf tambahan.
+- Validation dan error message tidak boleh dihapus.
+- Disabled reason penting harus tetap terlihat atau tetap bisa dipahami dari konteks.
+- Field sensitif boleh punya helper pendek, terutama untuk stok, varian, cost, payroll, HPP, reset, dan Auth UID.
+- Confirmation copy untuk action destructive harus tetap jelas dan tidak dibuat terlalu santai.
+- Form create/edit tidak boleh mengubah payload, callback, service call, atau mapping data hanya karena layout dirapikan.
+
+## Standar microcopy dan info text
+
+- Hapus teks yang hanya mengulang nama menu, nama card, atau nama tabel.
+- Hapus subtitle section seperti `Daftar produk jadi` bila tabel dan title sudah cukup jelas.
+- Hindari istilah internal yang tampil ke user, seperti `legacy`, `guard`, `bucket`, `source`, `read-only`, `metadata tampilan`, atau prefix `AKTIF` sebagai penjelasan.
+- Jika istilah teknis masih dibutuhkan, ubah ke bahasa operasional. Contoh: `source` menjadi `asal data`, `read-only` menjadi `hanya ditampilkan`, dan `bucket varian` menjadi `stok per varian`.
+- Gunakan kalimat pendek dan langsung pada kebutuhan user.
+- Jangan membuat UI penuh hanya karena ingin menjelaskan semua flow. Detail flow bisnis tetap berada di docs dan checklist.
+- Microcopy tidak boleh mengubah makna field bisnis, status, atau aksi.
+
+## Standar Alert
+
+Pertahankan `Alert` untuk:
+
+- warning destructive;
+- error;
+- validation;
+- stok kurang/kritis;
+- cost atau HPP invalid;
+- payroll belum valid;
+- reset maintenance;
+- auth/security;
+- confirmation risk;
+- disabled reason penting.
+
+Ringkas atau hapus `Alert` untuk:
+
+- penjelasan fungsi menu;
+- info pasif yang tidak memengaruhi keputusan user;
+- teks yang sudah jelas dari title, card, table, atau field label;
+- copy yang berulang di banyak section.
+
+Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus reset, stok, payroll, HPP, dan auth, alert harus tetap tegas.
+
+## Standar area sensitif
+
+### Production Planning
+- Planning adalah target dan monitoring sebelum Production Order.
+- Planning tidak mengubah stok.
+- Planning tanpa PO boleh dicancel jika status belum final.
+- Planning yang sudah punya PO / linked Production Order tidak bisa dicancel langsung.
+- Jangan menampilkan info yang sama berulang di banyak tempat; cukup pastikan rule utama tetap terbaca.
+
+### Production Order
+- Requirement material dan readiness harus jelas.
+- Shortage warning tidak boleh dihapus.
+- Status PO harus terlihat di area atas/detail.
+
+### Work Log
+- Warning cost tidak boleh dihapus.
+- Warning tetap penting bila biaya material 0, biaya tenaga kerja 0, total biaya 0, atau HPP belum valid.
+- Material cost, labor cost, overhead, total cost, dan output qty harus tetap bisa ditelusuri.
+
+### Payroll
+- Final amount, status payroll, payment status, dan include HPP harus jelas.
+- Relasi `paid` ke Cash Out otomatis harus tetap bisa dipahami agar user tidak membuat pengeluaran ganda.
+
+### HPP Analysis
+- HPP invalid atau cost kosong wajib terlihat.
+- Jangan menghapus warning yang membantu analisis biaya.
+- Output qty dan komponen biaya utama harus tetap jelas.
+
+### Stock
+- Stok total, stok tersedia, stok dipesan/reserved, minimum stock, dan warning critical harus jelas.
+- Adjustment stok harus tetap punya warning dan alasan.
+- Item bervarian harus tetap menampilkan varian yang relevan.
+
+### Sales, Purchases, dan Returns
+- Item, qty, harga, subtotal, total, payment/status, dan dampak stok/kas harus jelas.
+- Jangan mengubah makna field lewat copy yang terlalu bebas.
+
+### Cash In dan Cash Out
+- Sumber manual/otomatis harus jelas.
+- Referensi transaksi, payroll, atau purchase harus jelas bila ada.
+- Copy tidak boleh mendorong user membuat data manual ganda untuk sumber otomatis.
+
+### Reset Maintenance
+- Warning destructive wajib tegas.
+- Preview wajib sebelum reset.
+- Confirmation keyword tidak boleh disamarkan.
+- Jangan membuat reset terdengar aman tanpa risiko.
+- Scope reset, protected data, jumlah dokumen terdampak, status proses, dan hasil/audit harus tetap jelas.
+
+### User Management
+- Role, status, email, dan Auth UID/profile binding harus jelas.
+- Security warning tidak boleh dihapus.
+- Copy harus membedakan profile Firestore dari akun Auth bila konteks itu relevan untuk admin.
+
+## Standar drawer width
+
+- Detail sederhana: `600–720px`.
+- Detail dengan table/list anak: `820–920px`.
+- Detail kompleks seperti PO, Work Log, HPP, atau Payroll: `920–1100px` bila source sudah memakai pola tersebut.
+- Mobile harus scroll atau wrap dengan aman; jangan membuat overflow horizontal buruk.
+- Drawer width tidak boleh menjadi alasan menyembunyikan warning penting.
+
+## Checklist UI detail, drawer, form, dan panel
+
+- Title jelas.
+- Status terlihat.
+- Angka utama terlihat.
+- Detail anak terbaca.
+- Warning penting tetap ada.
+- Tidak ada paragraf panjang yang tidak perlu.
+- Tidak ada istilah internal yang tampil sebagai copy utama.
+- Dark mode aman.
+- Mobile tidak overflow buruk.
+- Action, callback, payload, data source, query, filter, dan calculation tidak berubah.
+
 ## Cleanup candidate lanjutan
 
 - Audit warna hardcoded di halaman bisnis satu per satu, jangan dicampur dengan perubahan logic.

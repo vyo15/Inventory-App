@@ -14,6 +14,7 @@ import {
   Button,
   Card,
   Col,
+  Collapse,
   Descriptions,
   Divider,
   Drawer,
@@ -1190,16 +1191,31 @@ const SemiFinishedMaterials = () => {
         title="Detail Semi Finished Material"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={820}
+        width={900}
       >
         {!selectedMaterial ? (
           <Empty description="Tidak ada data" />
         ) : (
           <Space direction="vertical" style={{ width: "100%" }} size={16}>
-            {/* -------------------------------------------------------------- */}
-            {/* Alert kondisi stok dipakai aktif untuk memberi konteks cepat    */}
-            {/* sebelum user membaca angka detail yang lebih panjang di bawah.  */}
-            {/* -------------------------------------------------------------- */}
+            {/*
+=====================================================
+SECTION: Detail drawer semi finished material — GUARDED
+Fungsi:
+- Menampilkan status stok, biaya per unit, varian, dan metadata item semi finished secara read-only.
+
+Dipakai oleh:
+- Halaman SemiFinishedMaterials untuk audit master stok internal produksi.
+
+Alasan perubahan:
+- Detail dipisah menjadi metric, ringkasan, stok/biaya, varian, dan info tambahan tanpa mengubah kalkulasi stok/HPP.
+
+Catatan cleanup:
+- Data optional tetap dipindah ke Collapse; mapping varian dan field biaya tidak diubah.
+
+Risiko:
+- Jika current/available/reserved stock atau average cost salah dirender, HPP produk jadi bisa salah dibaca user.
+=====================================================
+*/}
             <Alert
               type={selectedMaterialStatusMeta?.alertType || "info"}
               showIcon
@@ -1213,14 +1229,10 @@ const SemiFinishedMaterials = () => {
                       selectedMaterial.availableStock,
                       selectedMaterialUnit,
                     )}.`
-                  : "Item sedang nonaktif namun histori stok dan variant tetap disimpan."
+                  : "Item nonaktif. Histori stok dan varian tetap tersimpan."
               }
             />
 
-            {/* -------------------------------------------------------------- */}
-            {/* Summary cards drawer. Fokus ke metrik yang paling sering dicek  */}
-            {/* user saat audit stok semi finished.                             */}
-            {/* -------------------------------------------------------------- */}
             <Row gutter={[12, 12]}>
               <Col xs={24} sm={12} md={8}>
                 <Card size="small">
@@ -1247,71 +1259,47 @@ const SemiFinishedMaterials = () => {
               <Col xs={24} sm={12} md={8}>
                 <Card size="small">
                   <Statistic
-                    title="Varian Aktif"
-                    value={`${formatNumber(selectedMaterial.activeVariantCount)} / ${formatNumber(
-                      selectedMaterial.variantCount,
-                    )}`}
+                    title="Average Cost"
+                    value={formatCurrency(selectedMaterial.averageCostPerUnit)}
                   />
                 </Card>
               </Col>
             </Row>
 
-            <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label="Kode">
-                {selectedMaterial.code || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Nama">
-                {selectedMaterial.name || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Deskripsi">
-                {selectedMaterial.description || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Kategori">
-                {SEMI_FINISHED_CATEGORY_MAP[selectedMaterial.category] || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Jenis Bunga">
-                {SEMI_FINISHED_GROUP_MAP[selectedMaterial.flowerGroup] || "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label={selectedMaterial.variantLabel || "Varian Aktif"}>
-                {formatNumber(selectedMaterial.activeVariantCount)} / {formatNumber(
-                  selectedMaterial.variantCount,
-                )}
-              </Descriptions.Item>
-              <Descriptions.Item label="Current Stock Total">
-                {formatStockWithUnit(selectedMaterial.currentStock, selectedMaterialUnit)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Reserved Stock Total">
-                {formatStockWithUnit(selectedMaterial.reservedStock, selectedMaterialUnit)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Available Stock Total">
-                {formatStockWithUnit(selectedMaterial.availableStock, selectedMaterialUnit)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Min Stock Alert Master">
-                {formatStockWithUnit(selectedMaterial.minStockAlert, selectedMaterialUnit)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Max Stock Target">
-                {selectedMaterial.maxStockTarget === null
-                  ? "-"
-                  : formatStockWithUnit(
-                      selectedMaterial.maxStockTarget,
-                      selectedMaterialUnit,
-                    )}
-              </Descriptions.Item>
-              <Descriptions.Item label="Reference Cost / Unit">
-                {formatCurrency(selectedMaterial.referenceCostPerUnit)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Last Production Cost / Unit">
-                {formatCurrency(selectedMaterial.lastProductionCostPerUnit)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Average Cost / Unit">
-                {formatCurrency(selectedMaterial.averageCostPerUnit)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                <Tag color={selectedMaterialStatusMeta?.color || "default"}>
-                  {selectedMaterialStatusMeta?.label || "-"}
-                </Tag>
-              </Descriptions.Item>
-            </Descriptions>
+            <Card size="small" title="Ringkasan Item">
+              <Descriptions column={1} bordered size="small">
+                <Descriptions.Item label="Kode">{selectedMaterial.code || "-"}</Descriptions.Item>
+                <Descriptions.Item label="Nama">{selectedMaterial.name || "-"}</Descriptions.Item>
+                <Descriptions.Item label="Kategori">
+                  {SEMI_FINISHED_CATEGORY_MAP[selectedMaterial.category] || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Jenis Bunga">
+                  {SEMI_FINISHED_GROUP_MAP[selectedMaterial.flowerGroup] || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Status">
+                  <Tag color={selectedMaterialStatusMeta?.color || "default"}>
+                    {selectedMaterialStatusMeta?.label || "-"}
+                  </Tag>
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+
+            <Card size="small" title="Stok & Biaya">
+              <Descriptions column={1} bordered size="small">
+                <Descriptions.Item label="Reserved Stock">
+                  {formatStockWithUnit(selectedMaterial.reservedStock, selectedMaterialUnit)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Min Stock Alert">
+                  {formatStockWithUnit(selectedMaterial.minStockAlert, selectedMaterialUnit)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Reference Cost / Unit">
+                  {formatCurrency(selectedMaterial.referenceCostPerUnit)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Last Production Cost / Unit">
+                  {formatCurrency(selectedMaterial.lastProductionCostPerUnit)}
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
 
             <Card title="Rincian Varian Semi Finished" size="small">
               <Table
@@ -1322,8 +1310,39 @@ const SemiFinishedMaterials = () => {
                 locale={{ emptyText: "Belum ada varian" }}
                 columns={detailVariantColumns}
                 tableLayout="fixed"
+                scroll={{ x: 720 }}
               />
             </Card>
+
+            <Collapse
+              ghost
+              items={[
+                {
+                  key: "additional",
+                  label: "Info Tambahan",
+                  children: (
+                    <Descriptions column={1} bordered size="small">
+                      <Descriptions.Item label="Deskripsi">
+                        {selectedMaterial.description || "-"}
+                      </Descriptions.Item>
+                      <Descriptions.Item label={selectedMaterial.variantLabel || "Varian Aktif"}>
+                        {formatNumber(selectedMaterial.activeVariantCount)} / {formatNumber(
+                          selectedMaterial.variantCount,
+                        )}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="Max Stock Target">
+                        {selectedMaterial.maxStockTarget === null
+                          ? "-"
+                          : formatStockWithUnit(
+                              selectedMaterial.maxStockTarget,
+                              selectedMaterialUnit,
+                            )}
+                      </Descriptions.Item>
+                    </Descriptions>
+                  ),
+                },
+              ]}
+            />
           </Space>
         )}
       </Drawer>

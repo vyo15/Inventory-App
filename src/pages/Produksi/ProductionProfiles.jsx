@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Col,
+  Descriptions,
   Drawer,
   Empty,
   Form,
@@ -21,7 +22,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
-import { PlusOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import {
   DEFAULT_PRODUCTION_PROFILE_FORM,
   PRODUCTION_PROFILE_TYPES,
@@ -51,6 +52,8 @@ const ProductionProfiles = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [formVisible, setFormVisible] = useState(false);
   const [editingProfile, setEditingProfile] = useState(null);
+  const [selectedProfile, setSelectedProfile] = useState(null);
+  const [detailVisible, setDetailVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
   const watchedProfileValues = Form.useWatch([], form);
@@ -135,6 +138,16 @@ const ProductionProfiles = () => {
     setFormVisible(true);
   };
 
+  const handleDetail = (record) => {
+    setSelectedProfile(record);
+    setDetailVisible(true);
+  };
+
+  const closeDetail = () => {
+    setDetailVisible(false);
+    setSelectedProfile(null);
+  };
+
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
@@ -165,6 +178,27 @@ const ProductionProfiles = () => {
   };
 
   const renderStatisticValue = (value) => formatNumber(value || 0);
+
+  const renderProfileStatus = (record = {}) => (
+    <Space size={[4, 4]} wrap>
+      <Tag color={record.isActive !== false ? 'green' : 'default'}>
+        {record.isActive !== false ? 'Aktif' : 'Nonaktif'}
+      </Tag>
+      {record.isDefault !== false ? <Tag color="blue">Default</Tag> : null}
+    </Space>
+  );
+
+  const detailRequirementRows = (record = {}) => [
+    { key: 'petals', component: 'Kelopak', qty: record.petalsPerUnit || 0, unit: 'pcs / produk' },
+    { key: 'leaves', component: 'Daun', qty: record.leavesPerUnit || 0, unit: 'pcs / produk' },
+    { key: 'stems', component: 'Tangkai', qty: record.stemsPerUnit || 0, unit: 'pcs / produk' },
+  ];
+
+  const detailYieldRows = (record = {}) => [
+    { key: 'petal-yield', material: 'Kelopak', output: record.petalYieldPerMeter || 0, base: 'pcs / meter' },
+    { key: 'leaf-yield', material: 'Daun', output: record.leafYieldPerMeter || 0, base: 'pcs / meter' },
+    { key: 'stem-yield', material: 'Tangkai', output: record.stemYieldPerRod40cm || 0, base: 'pcs / batang 40 cm' },
+  ];
 
   const summaryItems = [
     { key: 'profiles-total', title: 'Total Profil', value: summary.total, subtitle: 'Semua profil produksi yang tersimpan.', accent: 'primary' },
@@ -279,6 +313,9 @@ const ProductionProfiles = () => {
       className: 'app-table-action-column',
       render: (_, record) => (
         <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+          <Button className="ims-action-button" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+            Detail
+          </Button>
           <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             Edit
           </Button>
@@ -365,13 +402,124 @@ const ProductionProfiles = () => {
       </PageSection>
 
       <Drawer
+        title="Detail Profil Produksi"
+        open={detailVisible}
+        onClose={closeDetail}
+        width={860}
+        destroyOnClose
+      >
+        {selectedProfile ? (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            {/*
+=====================================================
+SECTION: Detail profil produksi — AKTIF
+Fungsi:
+- Menampilkan ringkasan template produksi tanpa mengubah data, payload, atau rumus profil.
+
+Dipakai oleh:
+- Tombol Detail pada halaman ProductionProfiles.
+
+Alasan perubahan:
+- Template produksi sebelumnya hanya punya Edit/Toggle sehingga user tidak bisa review detail tanpa membuka form edit.
+
+Risiko:
+- Detail ini hanya presentasi; jangan memindahkan logic kalkulasi dari constants/service ke drawer.
+=====================================================
+*/}
+            <Card size="small">
+              <Row gutter={[16, 16]} align="middle">
+                <Col xs={24} md={16}>
+                  <Typography.Title level={4} style={{ marginBottom: 4 }}>
+                    {selectedProfile.profileName || '-'}
+                  </Typography.Title>
+                  <Typography.Text type="secondary">
+                    {selectedProfile.productName || '-'}
+                  </Typography.Text>
+                </Col>
+                <Col xs={24} md={8}>
+                  <div style={{ textAlign: 'right' }}>{renderProfileStatus(selectedProfile)}</div>
+                </Col>
+              </Row>
+            </Card>
+
+            <Row gutter={[16, 16]}>
+              <Col xs={24} md={8}>
+                <Card size="small">
+                  <Statistic title="Target Batch" value={selectedProfile.assemblyTargetOutput || 0} suffix="bunga" formatter={renderStatisticValue} />
+                </Card>
+              </Col>
+              <Col xs={24} md={8}>
+                <Card size="small">
+                  <Statistic title="Total Kawat / Batch" value={selectedProfile.assemblyStemQty || 0} formatter={renderStatisticValue} />
+                </Card>
+              </Col>
+              <Col xs={24} md={8}>
+                <Card size="small">
+                  <Statistic title="Sisa Daun Teoritis" value={selectedProfile.assemblyLeafTheoreticalLeftover || 0} formatter={renderStatisticValue} />
+                </Card>
+              </Col>
+            </Row>
+
+            <Card size="small" title="Ringkasan">
+              <Descriptions column={1} size="small" bordered>
+                <Descriptions.Item label="Produk">{selectedProfile.productName || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Kode Produk">{selectedProfile.productCode || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Tipe Profil">{PRODUCTION_PROFILE_TYPE_MAP[selectedProfile.profileType] || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Alert Miss">
+                  Kuning {formatNumber(selectedProfile.missYellowPercent || 0)}% · Merah {formatNumber(selectedProfile.missRedPercent || 0)}%
+                </Descriptions.Item>
+                <Descriptions.Item label="Catatan">{selectedProfile.notes || '-'}</Descriptions.Item>
+              </Descriptions>
+            </Card>
+
+            <Card size="small" title="Kebutuhan per Produk">
+              <Table
+                size="small"
+                pagination={false}
+                rowKey="key"
+                dataSource={detailRequirementRows(selectedProfile)}
+                columns={[
+                  { title: 'Komponen', dataIndex: 'component', key: 'component' },
+                  { title: 'Qty', dataIndex: 'qty', key: 'qty', align: 'right', render: (value) => formatNumber(value || 0) },
+                  { title: 'Satuan', dataIndex: 'unit', key: 'unit' },
+                ]}
+              />
+            </Card>
+
+            <Card size="small" title="Hasil Standar Bahan Awal">
+              <Table
+                size="small"
+                pagination={false}
+                rowKey="key"
+                dataSource={detailYieldRows(selectedProfile)}
+                columns={[
+                  { title: 'Material', dataIndex: 'material', key: 'material' },
+                  { title: 'Output', dataIndex: 'output', key: 'output', align: 'right', render: (value) => formatNumber(value || 0) },
+                  { title: 'Basis', dataIndex: 'base', key: 'base' },
+                ]}
+              />
+            </Card>
+
+            <Card size="small" title="Batch Assembly">
+              <Descriptions column={1} size="small" bordered>
+                <Descriptions.Item label="Plastik Kelopak">{formatNumber(selectedProfile.assemblyPetalPackCount || 0)}</Descriptions.Item>
+                <Descriptions.Item label="Plastik Daun">{formatNumber(selectedProfile.assemblyLeafPackCount || 0)}</Descriptions.Item>
+                <Descriptions.Item label="Ikat Kawat">{formatNumber(selectedProfile.assemblyStemBundleCount || 0)}</Descriptions.Item>
+                <Descriptions.Item label="Kawat Extra">{formatNumber(selectedProfile.assemblyStemExtraQty || 0)} pcs</Descriptions.Item>
+              </Descriptions>
+            </Card>
+          </Space>
+        ) : null}
+      </Drawer>
+
+      <Drawer
         title={editingProfile?.id ? 'Edit Profil Produksi' : 'Tambah Profil Produksi'}
         open={formVisible}
         onClose={() => {
           setFormVisible(false);
           resetFormState();
         }}
-        width={720}
+        width={820}
         destroyOnClose
         extra={
           <Space>
@@ -381,120 +529,144 @@ const ProductionProfiles = () => {
         }
       >
         <Form form={form} layout="vertical" initialValues={DEFAULT_PRODUCTION_PROFILE_FORM}>
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <Form.Item label="Produk" name="productId" rules={[{ required: true, message: 'Produk wajib dipilih' }]}> 
-                <Select
-                  showSearch
-                  optionFilterProp="label"
-                  options={(products || []).map((item) => ({ value: item.id, label: item.name || '-' }))}
-                  placeholder="Pilih produk..."
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item label="Nama Profil" name="profileName" rules={[{ required: true, message: 'Nama profil wajib diisi' }]}> 
-                <Input placeholder="Contoh: Profil Mawar Reguler" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item label="Tipe Profil" name="profileType">
-                <Select options={PRODUCTION_PROFILE_TYPES} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item label="Default" name="isDefault" valuePropName="checked">
-                <Switch checkedChildren="Ya" unCheckedChildren="Tidak" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item label="Status Aktif" name="isActive" valuePropName="checked">
-                <Switch checkedChildren="Aktif" unCheckedChildren="Nonaktif" />
-              </Form.Item>
-            </Col>
-          </Row>
+          {/*
+=====================================================
+SECTION: Drawer form profil produksi — AKTIF
+Fungsi:
+- Mengelompokkan konfigurasi profil produksi, kebutuhan bahan, batch, dan preview kapasitas.
 
-          <Typography.Title level={5}>Kebutuhan per 1 Produk</Typography.Title>
-          <Row gutter={16}>
-            <Col xs={24} md={8}><Form.Item label="Kelopak / Unit" name="petalsPerUnit"><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
-            <Col xs={24} md={8}><Form.Item label="Daun / Unit" name="leavesPerUnit"><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
-            <Col xs={24} md={8}><Form.Item label="Tangkai / Unit" name="stemsPerUnit"><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
-          </Row>
+Dipakai oleh:
+- Halaman ProductionProfiles untuk tambah/edit template produksi per produk.
 
-          <Typography.Title level={5} style={{ marginBottom: 8 }}>Hasil Standar dari Bahan Awal</Typography.Title>
-          <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-            Isi dengan hasil potongan normal dari bahan mentah, bukan hasil bunga jadi. Contoh: 1 meter flanel kelopak menghasilkan 480 kelopak, 1 meter flanel daun menghasilkan 256 daun, dan 1 batang kawat 40 cm menghasilkan 2 tangkai.
-          </Typography.Paragraph>
-          <Row gutter={16}>
-            <Col xs={24} md={8}><Form.Item label="Hasil Kelopak dari 1 Meter Flanel" name="petalYieldPerMeter"><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
-            <Col xs={24} md={8}><Form.Item label="Hasil Daun dari 1 Meter Flanel" name="leafYieldPerMeter"><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
-            <Col xs={24} md={8}><Form.Item label="Hasil Tangkai dari 1 Batang Kawat 40 cm" name="stemYieldPerRod40cm"><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
-          </Row>
+Alasan perubahan:
+- Drawer profil dirapikan menjadi section Card agar angka produksi tidak bercampur dalam satu area panjang.
 
-          <Typography.Title level={5}>Batch Assembly Standar</Typography.Title>
-          <Row gutter={16}>
-            <Col xs={24} md={6}><Form.Item label="Plastik Kelopak" name="assemblyPetalPackCount"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
-            <Col xs={24} md={6}><Form.Item label="Plastik Daun" name="assemblyLeafPackCount"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
-            <Col xs={24} md={6}><Form.Item label="Ikat Kawat" name="assemblyStemBundleCount"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
-            <Col xs={24} md={6}><Form.Item label="Kawat Extra pcs" name="assemblyStemExtraQty"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
-            <Col xs={24} md={8}><Form.Item label="Target Output Batch" name="assemblyTargetOutput"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
-            <Col xs={24} md={8}><Form.Item label="Alert Kuning %" name="missYellowPercent"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
-            <Col xs={24} md={8}><Form.Item label="Alert Merah %" name="missRedPercent"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
-          </Row>
+Catatan cleanup:
+- Belum ada; field dan payload form tetap mengikuti struktur existing.
 
-          <Form.Item label="Catatan" name="notes">
-            <Input.TextArea rows={3} placeholder="Catatan operasional atau asumsi batch" />
-          </Form.Item>
+Risiko:
+- Jika name Form.Item berubah, payload profile dan perhitungan kapasitas bisa rusak.
+=====================================================
+*/}
+          <Space direction="vertical" size={16} style={{ width: "100%" }}>
+            <Card size="small" title="Ringkasan Profil">
+              <Row gutter={16}>
+                <Col xs={24} md={12}>
+                  <Form.Item label="Produk" name="productId" rules={[{ required: true, message: 'Produk wajib dipilih' }]}> 
+                    <Select
+                      showSearch
+                      optionFilterProp="label"
+                      options={(products || []).map((item) => ({ value: item.id, label: item.name || '-' }))}
+                      placeholder="Pilih produk..."
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item label="Nama Profil" name="profileName" rules={[{ required: true, message: 'Nama profil wajib diisi' }]}> 
+                    <Input placeholder="Contoh: Profil Mawar Reguler" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Form.Item label="Tipe Profil" name="profileType">
+                    <Select options={PRODUCTION_PROFILE_TYPES} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Form.Item label="Default" name="isDefault" valuePropName="checked">
+                    <Switch checkedChildren="Ya" unCheckedChildren="Tidak" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Form.Item label="Status Aktif" name="isActive" valuePropName="checked">
+                    <Switch checkedChildren="Aktif" unCheckedChildren="Nonaktif" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Card>
 
-          <Card size="small" type="inner" title="Ringkasan Kapasitas Otomatis">
-            <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
-              Bagian ini mengubah hasil bahan awal menjadi kapasitas bunga agar lebih mudah dibaca operator.
-            </Typography.Paragraph>
-            <Row gutter={[16, 16]}>
-              <Col xs={24} md={8}>
-                <Statistic
-                  title="Kapasitas Bunga dari 1 Meter Kelopak"
-                  value={currentMetrics.flowerEquivalentPerPetalMeter || 0}
-                  formatter={renderStatisticValue}
-                />
-              </Col>
-              <Col xs={24} md={8}>
-                <Statistic
-                  title="Kapasitas Bunga dari 1 Meter Daun"
-                  value={currentMetrics.flowerEquivalentPerLeafMeter || 0}
-                  formatter={renderStatisticValue}
-                />
-              </Col>
-              <Col xs={24} md={8}>
-                <Statistic
-                  title="Kapasitas Bunga dari 1 Batang 40 cm"
-                  value={currentMetrics.flowerEquivalentPerRod40cm || 0}
-                  formatter={renderStatisticValue}
-                />
-              </Col>
-              <Col xs={24} md={8}>
-                <Statistic
-                  title="Total Kawat per Batch"
-                  value={currentMetrics.assemblyStemQty || 0}
-                  formatter={renderStatisticValue}
-                />
-              </Col>
-              <Col xs={24} md={8}>
-                <Statistic
-                  title="Kapasitas Kelopak per Batch"
-                  value={currentMetrics.assemblyFlowerEquivalentFromPetal || 0}
-                  formatter={renderStatisticValue}
-                />
-              </Col>
-              <Col xs={24} md={8}>
-                <Statistic
-                  title="Sisa Teoritis Daun per Batch"
-                  value={currentMetrics.assemblyLeafTheoreticalLeftover || 0}
-                  formatter={renderStatisticValue}
-                />
-              </Col>
-            </Row>
-          </Card>
+            <Card size="small" title="Kebutuhan per 1 Produk">
+              <Row gutter={16}>
+                <Col xs={24} md={8}><Form.Item label="Kelopak / Unit" name="petalsPerUnit"><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item label="Daun / Unit" name="leavesPerUnit"><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item label="Tangkai / Unit" name="stemsPerUnit"><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+              </Row>
+            </Card>
+
+            <Card
+              size="small"
+              title="Hasil Standar Bahan Awal"
+              extra={<Typography.Text type="secondary">Input hasil potongan normal.</Typography.Text>}
+            >
+              <Row gutter={16}>
+                <Col xs={24} md={8}><Form.Item label="Kelopak / Meter" name="petalYieldPerMeter"><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item label="Daun / Meter" name="leafYieldPerMeter"><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item label="Tangkai / Batang 40 cm" name="stemYieldPerRod40cm"><InputNumber min={1} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+              </Row>
+            </Card>
+
+            <Card size="small" title="Batch Assembly Standar">
+              <Row gutter={16}>
+                <Col xs={24} md={6}><Form.Item label="Plastik Kelopak" name="assemblyPetalPackCount"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col xs={24} md={6}><Form.Item label="Plastik Daun" name="assemblyLeafPackCount"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col xs={24} md={6}><Form.Item label="Ikat Kawat" name="assemblyStemBundleCount"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col xs={24} md={6}><Form.Item label="Kawat Extra pcs" name="assemblyStemExtraQty"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item label="Target Output Batch" name="assemblyTargetOutput"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item label="Alert Kuning %" name="missYellowPercent"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col xs={24} md={8}><Form.Item label="Alert Merah %" name="missRedPercent"><InputNumber min={0} precision={0} style={{ width: '100%' }} /></Form.Item></Col>
+              </Row>
+
+              <Form.Item label="Catatan" name="notes">
+                <Input.TextArea rows={3} placeholder="Catatan operasional atau asumsi batch" />
+              </Form.Item>
+            </Card>
+
+            <Card size="small" title="Ringkasan Kapasitas Otomatis">
+              <Row gutter={[16, 16]}>
+                <Col xs={24} md={8}>
+                  <Statistic
+                    title="Bunga / Meter Kelopak"
+                    value={currentMetrics.flowerEquivalentPerPetalMeter || 0}
+                    formatter={renderStatisticValue}
+                  />
+                </Col>
+                <Col xs={24} md={8}>
+                  <Statistic
+                    title="Bunga / Meter Daun"
+                    value={currentMetrics.flowerEquivalentPerLeafMeter || 0}
+                    formatter={renderStatisticValue}
+                  />
+                </Col>
+                <Col xs={24} md={8}>
+                  <Statistic
+                    title="Bunga / Batang 40 cm"
+                    value={currentMetrics.flowerEquivalentPerRod40cm || 0}
+                    formatter={renderStatisticValue}
+                  />
+                </Col>
+                <Col xs={24} md={8}>
+                  <Statistic
+                    title="Total Kawat / Batch"
+                    value={currentMetrics.assemblyStemQty || 0}
+                    formatter={renderStatisticValue}
+                  />
+                </Col>
+                <Col xs={24} md={8}>
+                  <Statistic
+                    title="Kapasitas Kelopak / Batch"
+                    value={currentMetrics.assemblyFlowerEquivalentFromPetal || 0}
+                    formatter={renderStatisticValue}
+                  />
+                </Col>
+                <Col xs={24} md={8}>
+                  <Statistic
+                    title="Sisa Daun Teoritis"
+                    value={currentMetrics.assemblyLeafTheoreticalLeftover || 0}
+                    formatter={renderStatisticValue}
+                  />
+                </Col>
+              </Row>
+            </Card>
+          </Space>
         </Form>
       </Drawer>
     </div>

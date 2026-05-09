@@ -412,6 +412,31 @@ Status planning final:
 
 Planning `completed` atau `cancelled` tidak boleh menghapus PO/Work Log yang sudah ada.
 
+### 9.5A Rule Cancel Production Planning
+Cancel Production Planning adalah pembatalan status planning, bukan hard delete dokumen. Cancel hanya mengubah status Planning menjadi `cancelled`.
+
+Rule cancel:
+- Planning tanpa PO / linked Production Order boleh dicancel jika status belum final.
+- Planning yang sudah punya PO / linked Production Order tidak boleh dicancel langsung. User harus mengelola PO terkait terlebih dahulu.
+- Planning `cancelled` tidak boleh dibuatkan PO.
+- Planning `completed` tidak boleh dibuatkan PO.
+- Planning `overdue` tanpa PO masih boleh dibuatkan PO atau dicancel sesuai kebutuhan operasional.
+- Planning `overdue` dengan PO tidak boleh dicancel langsung.
+
+Cancel Planning tidak boleh menghapus atau mengubah:
+- Production Order existing;
+- Work Log;
+- inventory/stok;
+- Payroll;
+- HPP;
+- reports;
+- sales;
+- purchases;
+- returns;
+- cash in/out.
+
+Progress Planning tetap dihitung dari Work Log `completed`, bukan dari PO yang baru dibuat atau baru dimulai. Dashboard dan filter Planning wajib membaca status canonical `cancelled`.
+
 ### 9.6 Dashboard Planning
 Dashboard hanya membaca summary planning:
 - target minggu ini;
