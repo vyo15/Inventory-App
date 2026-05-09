@@ -298,6 +298,12 @@ export const sidebarMenuItems = [
         path: "/cash-out",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },
+      {
+        key: "money-movement-ledger",
+        label: "Buku Besar Kas",
+        path: "/finance/money-movement-ledger",
+        allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
+      },
     ],
   },
 

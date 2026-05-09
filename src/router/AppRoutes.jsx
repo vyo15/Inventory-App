@@ -63,6 +63,9 @@ const Sales = lazy(() => import("../pages/Transaksi/Sales"));
 
 const CashIn = lazy(() => import("../pages/Finance/CashIn"));
 const CashOut = lazy(() => import("../pages/Finance/CashOut"));
+const MoneyMovementLedger = lazy(
+  () => import("../pages/Finance/MoneyMovementLedger"),
+);
 
 const ProfitLossReport = lazy(
   () => import("../pages/Laporan/ProfitLossReport"),
@@ -278,6 +281,13 @@ const AppRoutes = ({ darkTheme }) => {
         <Route
           path="/cash-out"
           element={guardRoute(ROUTE_ACCESS_KEYS.CASH_OUT, <CashOut />)}
+        />
+        <Route
+          path="/finance/money-movement-ledger"
+          element={guardRoute(
+            ROUTE_ACCESS_KEYS.MONEY_MOVEMENT_LEDGER,
+            <MoneyMovementLedger />,
+          )}
         />
 
         <Route

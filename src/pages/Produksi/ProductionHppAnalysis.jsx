@@ -51,6 +51,38 @@ const resolveTargetTypeLabel = (targetType) =>
 // Status:
 // - aktif dipakai; bukan legacy dan bukan kandidat cleanup.
 // =====================================================
+/*
+=====================================================
+SECTION: HPP material cost display fallback — GUARDED
+Fungsi:
+- Membaca material cost dari summary Work Log atau fallback ke materialUsages line snapshot jika summary lama masih 0.
+
+Dipakai oleh:
+- Tabel dan export Analisis HPP Produksi.
+
+Alasan perubahan:
+- Work Log lama bisa memiliki totalCostSnapshot per line namun materialCostActual masih kosong/0.
+
+Catatan cleanup:
+- Fallback ini read-only; perbaikan source terjadi di productionWorkLogsService untuk flow baru.
+
+Risiko:
+- Jangan memakai helper ini sebagai write-back massal karena hanya memastikan angka analisis terlihat benar.
+=====================================================
+*/
+const calculateMaterialCostFromUsageLines = (materialUsages = []) =>
+  (Array.isArray(materialUsages) ? materialUsages : []).reduce((sum, line) => {
+    const totalSnapshot = Number(line.totalCostSnapshot || 0);
+    if (totalSnapshot > 0) return sum + totalSnapshot;
+    return sum + (Number(line.actualQty || 0) * Number(line.costPerUnitSnapshot || 0));
+  }, 0);
+
+const resolveWorkLogMaterialCost = (workLog = {}) => {
+  const summaryValue = Number(workLog.materialCostActual || 0);
+  if (summaryValue > 0) return summaryValue;
+  return calculateMaterialCostFromUsageLines(workLog.materialUsages || []);
+};
+
 const buildHppCostWarnings = ({
   materialCost,
   directLaborCost,
@@ -118,22 +150,22 @@ const ProductionHppAnalysis = () => {
       // yang sudah lolos review minimal confirmed/paid dan memang diizinkan masuk
       // HPP melalui rule step snapshot pada payroll line.
       // =====================================================
-      const relatedPayrolls = payrolls.filter(
+      const reviewedPayrolls = payrolls.filter(
         (item) =>
           item.workLogId === workLog.id &&
           ["confirmed", "paid"].includes(item.status) &&
-          item.status !== "cancelled" &&
-          item.includePayrollInHpp !== false,
+          item.status !== "cancelled",
       );
+      const relatedPayrolls = reviewedPayrolls.filter((item) => item.includePayrollInHpp !== false);
 
       const payrollTotal = relatedPayrolls.reduce(
         (sum, item) => sum + Number(item.finalAmount || 0),
         0,
       );
 
-      const materialCost = Number(workLog.materialCostActual || 0);
+      const materialCost = resolveWorkLogMaterialCost(workLog);
       const directLaborCost =
-        payrollTotal > 0 ? payrollTotal : Number(workLog.laborCostActual || 0);
+        reviewedPayrolls.length > 0 ? payrollTotal : Number(workLog.laborCostActual || 0);
       const overheadCost = Number(workLog.overheadCostActual || 0);
       const totalCost = materialCost + directLaborCost + overheadCost;
       const goodQty = Number(workLog.goodQty || 0);

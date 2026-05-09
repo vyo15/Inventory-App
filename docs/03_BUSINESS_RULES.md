@@ -877,3 +877,26 @@ Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases,
 - Rule ini berlaku untuk tampilan saldo stok item seperti Products, Raw Materials, Semi Finished Materials, dan Stock Report.
 - Rule ini tidak berlaku untuk Qty transaksi, Stok Masuk Purchases, Stock Adjustment quantity, inventory log delta, atau field audit lain yang bukan saldo stok master.
 - Perubahan tampilan compact table tidak boleh mengubah rumus stok, mutation, reserved stock, available stock, HPP, pricing, export mapping, atau schema Firestore.
+
+## Update Business Rules — Buku Besar Kas / Log Pergerakan Uang — 2026-05-09
+
+Buku Besar Kas adalah halaman audit read-only untuk melihat uang masuk dan uang keluar aktual dari data kas existing.
+
+Source of truth nominal utama:
+- `incomes` untuk uang masuk resmi dari Sales berstatus `Selesai`.
+- `revenues` untuk uang masuk manual / legacy dari Cash In.
+- `expenses` untuk uang keluar dari Cash Out manual, purchase expense, payroll paid, dan expense lain.
+
+Collection yang tidak boleh dipakai sebagai nominal utama ledger kas:
+- `sales` karena Sales selesai sudah membuat dokumen pemasukan di `incomes`.
+- `purchases` karena Purchase yang berdampak kas sudah membuat dokumen pengeluaran di `expenses`.
+- `production_payrolls` karena Payroll paid yang berdampak kas sudah membuat dokumen pengeluaran di `expenses`.
+- `production_work_logs` karena Work Log adalah aktivitas produksi/HPP, bukan pembayaran kas langsung.
+- `inventory_logs` dan `stock_adjustments` karena mutasi stok bukan mutasi uang.
+
+Guard wajib:
+- Halaman Buku Besar Kas tidak boleh melakukan `addDoc`, `setDoc`, `updateDoc`, atau `deleteDoc`.
+- Halaman Buku Besar Kas tidak boleh membuat collection baru `money_movement_logs`.
+- Membuka halaman Buku Besar Kas tidak boleh membuat transaksi, audit log, backfill, saldo, stok, HPP, atau posting kas baru.
+- Summary Buku Besar Kas adalah total row sesuai filter, bukan saldo akhir kas karena saldo awal dan rekonsiliasi bank belum menjadi bagian fitur ini.
+- Akses menu dan route Buku Besar Kas mengikuti finance sensitive area: Administrator only.

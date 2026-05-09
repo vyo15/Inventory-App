@@ -51,7 +51,99 @@ export const RESET_MODE_OPTIONS = [
 
 const BASELINE_COLLECTION = "testing_baselines";
 const BASELINE_DOC_ID = "inventory_reset_baseline";
+
+/*
+=====================================================
+SECTION: HPP cost reset constants — GUARDED
+Fungsi:
+- Menyediakan mode reset modal/HPP yang hanya menyentuh field cost master untuk kebutuhan trial & error HPP.
+
+Dipakai oleh:
+- resetMaintenanceDataService.js dan section HPP Cost Testing / Reset Modal di ResetMaintenanceData.jsx.
+
+Alasan perubahan:
+- Menambahkan jalur maintenance terpisah untuk preview, baseline, reset, dan restore sumber cost HPP tanpa menyentuh transaksi produksi aktif.
+
+Catatan cleanup:
+- Jika nanti ada field cost resmi baru di master item, tambahkan ke config ini setelah audit schema/source.
+
+Risiko:
+- Salah menambah field di config ini dapat mereset data non-cost seperti stok, harga jual, transaksi, atau relasi produksi.
+=====================================================
+*/
+export const HPP_COST_BASELINE_DOC_ID = "hpp_cost_testing_baseline";
+
+export const HPP_COST_RESET_OPTIONS = [
+  {
+    value: "raw_actual_cost_only",
+    label: "Reset Modal Aktual Bahan Baku",
+    description: "Nolkan modal aktual rata-rata bahan baku tanpa mengubah stok atau transaksi.",
+  },
+  {
+    value: "raw_reference_cost_only",
+    label: "Reset Modal Referensi Rata-rata",
+    description: "Nolkan referensi restock bahan baku tanpa mengubah modal aktual, stok, atau supplier.",
+  },
+  {
+    value: "product_hpp_only",
+    label: "Reset HPP Produk Jadi",
+    description: "Nolkan HPP produk jadi tanpa mengubah harga jual, stok, SKU, atau pricing rules.",
+  },
+  {
+    value: "semi_finished_average_cost_only",
+    label: "Reset Average Cost Semi Finished",
+    description: "Nolkan average cost semi finished tanpa mengubah stok, reserved, atau relasi BOM.",
+  },
+  {
+    value: "all_hpp_cost_sources",
+    label: "Reset Semua Sumber Cost HPP Testing",
+    description: "Nolkan seluruh field cost/HPP master yang dipakai trial HPP tanpa menyentuh transaksi.",
+  },
+];
+
 const STOCK_COLLECTIONS = ["raw_materials", "semi_finished_materials", "products"];
+
+const HPP_COST_COLLECTION_CONFIGS = {
+  raw_materials: {
+    label: "Raw Materials",
+    fields: ["averageActualUnitCost", "restockReferencePrice"],
+    variantFields: ["averageActualUnitCost", "restockReferencePrice"],
+  },
+  products: {
+    label: "Products",
+    fields: ["hppPerUnit"],
+    variantFields: ["hppPerUnit"],
+  },
+  semi_finished_materials: {
+    label: "Semi Finished Materials",
+    fields: ["averageCostPerUnit"],
+    variantFields: ["averageCostPerUnit"],
+  },
+};
+
+const HPP_COST_RESET_MODE_CONFIG = {
+  raw_actual_cost_only: {
+    collections: [{ key: "raw_materials", fields: ["averageActualUnitCost"], variantFields: ["averageActualUnitCost"] }],
+  },
+  raw_reference_cost_only: {
+    collections: [{ key: "raw_materials", fields: ["restockReferencePrice"], variantFields: ["restockReferencePrice"] }],
+  },
+  product_hpp_only: {
+    collections: [{ key: "products", fields: ["hppPerUnit"], variantFields: ["hppPerUnit"] }],
+  },
+  semi_finished_average_cost_only: {
+    collections: [{ key: "semi_finished_materials", fields: ["averageCostPerUnit"], variantFields: ["averageCostPerUnit"] }],
+  },
+  all_hpp_cost_sources: {
+    collections: [
+      { key: "raw_materials", fields: ["averageActualUnitCost", "restockReferencePrice"], variantFields: ["averageActualUnitCost", "restockReferencePrice"] },
+      { key: "products", fields: ["hppPerUnit"], variantFields: ["hppPerUnit"] },
+      { key: "semi_finished_materials", fields: ["averageCostPerUnit"], variantFields: ["averageCostPerUnit"] },
+    ],
+  },
+};
+
+const VALID_HPP_COST_RESET_MODES = new Set(HPP_COST_RESET_OPTIONS.map((item) => item.value));
 
 // -----------------------------------------------------------------------------
 // Protected master data.
@@ -181,6 +273,319 @@ const assertClientBatchOperationLimit = (operationCount = 0) => {
       `Reset dibatalkan karena ada ${operationCount} operasi tulis, melebihi batas aman ${SAFE_CLIENT_BATCH_OPERATION_LIMIT} operasi dari browser. Perkecil scope modul atau gunakan jalur maintenance/server terpisah agar tidak partial delete.`,
     );
   }
+};
+
+const hasOwnField = (item = {}, fieldName = "") => Object.prototype.hasOwnProperty.call(item, fieldName);
+const pickExistingFields = (item = {}, fieldNames = []) => fieldNames.filter((fieldName) => hasOwnField(item, fieldName));
+const getVariantIdentity = (variant = {}, index = 0) => safeTrim(
+  variant.variantKey ||
+  variant.id ||
+  variant.sku ||
+  variant.variantCode ||
+  variant.variantName ||
+  variant.name ||
+  variant.label ||
+  variant.color ||
+  `variant-${index}`
+);
+
+const getHppCostResetOption = (resetMode) => HPP_COST_RESET_OPTIONS.find((item) => item.value === resetMode) || null;
+
+const assertValidHppCostResetMode = (resetMode) => {
+  if (!VALID_HPP_COST_RESET_MODES.has(resetMode)) {
+    throw new Error("Mode reset modal/HPP tidak valid. Pilih mode dari opsi HPP Cost Testing.");
+  }
+};
+
+const getHppCostResetCollectionConfigs = (resetMode) => {
+  assertValidHppCostResetMode(resetMode);
+  return HPP_COST_RESET_MODE_CONFIG[resetMode]?.collections || [];
+};
+
+const buildVariantCostSnapshotRows = (variants = [], variantFields = []) => (
+  Array.isArray(variants)
+    ? variants.map((variant = {}, index) => {
+      const fields = pickExistingFields(variant, variantFields);
+      if (!fields.length) return null;
+
+      return {
+        index,
+        variantKey: getVariantIdentity(variant, index),
+        fields: fields.reduce((acc, fieldName) => {
+          acc[fieldName] = variant[fieldName];
+          return acc;
+        }, {}),
+      };
+    }).filter(Boolean)
+    : []
+);
+
+const buildHppCostSnapshotItem = ({ collectionName, itemDoc, fields = [], variantFields = [] }) => {
+  const data = itemDoc.data();
+  const topLevelFields = pickExistingFields(data, fields);
+  const variantRows = buildVariantCostSnapshotRows(data.variants, variantFields);
+
+  if (!topLevelFields.length && !variantRows.length) return null;
+
+  return {
+    collectionName,
+    itemId: itemDoc.id,
+    costData: topLevelFields.reduce((acc, fieldName) => {
+      acc[fieldName] = data[fieldName];
+      return acc;
+    }, {}),
+    variantCostData: variantRows,
+  };
+};
+
+const buildHppCostPreviewRow = ({ collectionName, itemDoc, fields = [], variantFields = [] }) => {
+  const data = itemDoc.data();
+  const topLevelFields = pickExistingFields(data, fields);
+  const variantRows = buildVariantCostSnapshotRows(data.variants, variantFields);
+
+  if (!topLevelFields.length && !variantRows.length) return null;
+
+  return {
+    id: itemDoc.id,
+    name: data.name || data.materialName || data.productName || data.title || itemDoc.id,
+    fields: topLevelFields,
+    variantRows: variantRows.length,
+    variantFields: Array.from(new Set(variantRows.flatMap((variant) => Object.keys(variant.fields || {})))),
+  };
+};
+
+/*
+=====================================================
+SECTION: HPP cost reset preview builder — GUARDED
+Fungsi:
+- Membaca master cost/HPP dan membuat preview reset tanpa melakukan write apa pun.
+
+Dipakai oleh:
+- getHppCostResetPreview, runHppCostReset, dan UI HPP Cost Testing di ResetMaintenanceData.jsx.
+
+Alasan perubahan:
+- Reset modal/HPP wajib punya preflight yang menjelaskan collection, field, jumlah dokumen, jumlah varian, sample, dan batas operasi sebelum aksi destructive berjalan.
+
+Catatan cleanup:
+- Bisa dipindah menjadi service maintenance khusus jika fitur trial HPP makin besar.
+
+Risiko:
+- Jika preview salah menghitung target, user bisa mereset field cost yang tidak sesuai atau mengira reset aman padahal operasi melebihi batas batch.
+=====================================================
+*/
+const buildHppCostResetPreview = async (resetMode) => {
+  const option = getHppCostResetOption(resetMode);
+  const collectionConfigs = getHppCostResetCollectionConfigs(resetMode);
+
+  const affectedCollections = [];
+
+  for (const targetConfig of collectionConfigs) {
+    const collectionConfig = HPP_COST_COLLECTION_CONFIGS[targetConfig.key] || {};
+    const snapshot = await getDocs(collection(db, targetConfig.key));
+    const rows = snapshot.docs
+      .map((itemDoc) => buildHppCostPreviewRow({
+        collectionName: targetConfig.key,
+        itemDoc,
+        fields: targetConfig.fields,
+        variantFields: targetConfig.variantFields,
+      }))
+      .filter(Boolean);
+
+    const fieldSet = new Set(rows.flatMap((row) => row.fields || []));
+    const variantFieldSet = new Set(rows.flatMap((row) => row.variantFields || []));
+
+    affectedCollections.push({
+      key: targetConfig.key,
+      label: collectionConfig.label || targetConfig.key,
+      fieldsToReset: Array.from(fieldSet),
+      variantFieldsToReset: Array.from(variantFieldSet),
+      requestedFields: targetConfig.fields || [],
+      requestedVariantFields: targetConfig.variantFields || [],
+      affectedDocs: rows.length,
+      affectedVariantRows: rows.reduce((sum, row) => sum + Number(row.variantRows || 0), 0),
+      samples: rows.slice(0, 10),
+    });
+  }
+
+  const totalAffectedDocs = affectedCollections.reduce((sum, item) => sum + Number(item.affectedDocs || 0), 0);
+  const totalAffectedVariantRows = affectedCollections.reduce((sum, item) => sum + Number(item.affectedVariantRows || 0), 0);
+  const estimatedWriteOperations = totalAffectedDocs;
+
+  return {
+    resetMode,
+    label: option?.label || resetMode,
+    description: option?.description || "Reset modal/HPP testing.",
+    affectedCollections,
+    totalAffectedDocs,
+    totalAffectedVariantRows,
+    estimatedWriteOperations,
+    safeClientLimit: SAFE_CLIENT_BATCH_OPERATION_LIMIT,
+    isClientBatchSafe: estimatedWriteOperations <= SAFE_CLIENT_BATCH_OPERATION_LIMIT,
+    fieldsToReset: Array.from(new Set(affectedCollections.flatMap((item) => item.fieldsToReset || []))),
+    variantFieldsToReset: Array.from(new Set(affectedCollections.flatMap((item) => item.variantFieldsToReset || []))),
+    warning: "Reset ini destructive untuk field modal/HPP master, tetapi tidak menghapus transaksi, stok, PO, Work Log, Payroll, Sales, Purchases, Returns, atau Cash.",
+    recommendation: "Gunakan hanya di data test/trial HPP. Simpan baseline modal/HPP sebelum reset agar bisa restore nilai cost master.",
+  };
+};
+
+const buildHppCostResetWritePlan = async (resetMode) => {
+  const preview = await buildHppCostResetPreview(resetMode);
+  assertClientBatchOperationLimit(preview.estimatedWriteOperations);
+
+  const updates = [];
+  const collectionConfigs = getHppCostResetCollectionConfigs(resetMode);
+
+  for (const targetConfig of collectionConfigs) {
+    const snapshot = await getDocs(collection(db, targetConfig.key));
+    for (const itemDoc of snapshot.docs) {
+      const data = itemDoc.data();
+      const topLevelFields = pickExistingFields(data, targetConfig.fields);
+      const nextVariants = Array.isArray(data.variants)
+        ? data.variants.map((variant = {}) => {
+          const variantFields = pickExistingFields(variant, targetConfig.variantFields);
+          if (!variantFields.length) return variant;
+
+          return {
+            ...variant,
+            ...variantFields.reduce((acc, fieldName) => {
+              acc[fieldName] = 0;
+              return acc;
+            }, {}),
+          };
+        })
+        : null;
+      const hasVariantUpdate = Array.isArray(nextVariants) && nextVariants.some((variant, index) => variant !== data.variants[index]);
+
+      if (!topLevelFields.length && !hasVariantUpdate) continue;
+
+      const payload = {
+        ...topLevelFields.reduce((acc, fieldName) => {
+          acc[fieldName] = 0;
+          return acc;
+        }, {}),
+        hppCostResetMode: resetMode,
+        hppCostResetAt: serverTimestamp(),
+      };
+
+      if (hasVariantUpdate) {
+        payload.variants = nextVariants;
+      }
+
+      updates.push({ ref: itemDoc.ref, payload });
+    }
+  }
+
+  return { preview, updates };
+};
+
+const getHppCostBaselineSnapshotDoc = async () => {
+  const baselineRef = doc(db, BASELINE_COLLECTION, HPP_COST_BASELINE_DOC_ID);
+  const baselineSnap = await getDoc(baselineRef);
+  return baselineSnap.exists() ? baselineSnap.data() : null;
+};
+
+const buildHppCostBaselinePayload = async () => {
+  const items = [];
+
+  for (const [collectionName, collectionConfig] of Object.entries(HPP_COST_COLLECTION_CONFIGS)) {
+    const snapshot = await getDocs(collection(db, collectionName));
+    snapshot.docs.forEach((itemDoc) => {
+      const item = buildHppCostSnapshotItem({
+        collectionName,
+        itemDoc,
+        fields: collectionConfig.fields,
+        variantFields: collectionConfig.variantFields,
+      });
+
+      if (item) items.push(item);
+    });
+  }
+
+  return items;
+};
+
+const validateHppCostBaselineItemShape = (item = {}, index = 0) => {
+  const collectionName = safeTrim(item.collectionName);
+  const itemId = safeTrim(item.itemId);
+
+  if (!HPP_COST_COLLECTION_CONFIGS[collectionName]) {
+    throw new Error(`Baseline modal/HPP item #${index + 1} memakai collection tidak valid: ${collectionName || "(kosong)"}.`);
+  }
+
+  if (!itemId) {
+    throw new Error(`Baseline modal/HPP item #${index + 1} tidak punya itemId. Restore baseline dibatalkan.`);
+  }
+
+  return {
+    collectionName,
+    itemId,
+    costData: item.costData && typeof item.costData === "object" ? item.costData : {},
+    variantCostData: Array.isArray(item.variantCostData) ? item.variantCostData : [],
+  };
+};
+
+const buildHppCostBaselineRestorePlan = async () => {
+  const baselineDoc = await getHppCostBaselineSnapshotDoc();
+
+  if (!baselineDoc?.items?.length) {
+    throw new Error("Baseline modal/HPP belum ada. Simpan baseline dulu sebelum restore.");
+  }
+
+  const updates = [];
+
+  for (const [index, rawItem] of baselineDoc.items.entries()) {
+    const item = validateHppCostBaselineItemShape(rawItem, index);
+    const itemRef = doc(db, item.collectionName, item.itemId);
+    const itemSnap = await getDoc(itemRef);
+
+    if (!itemSnap.exists()) {
+      throw new Error(`Item baseline modal/HPP ${item.collectionName}/${item.itemId} tidak ditemukan. Restore dibatalkan sebelum write.`);
+    }
+
+    const currentData = itemSnap.data();
+    const payload = { ...item.costData };
+
+    if (item.variantCostData.length && Array.isArray(currentData.variants)) {
+      const usedIndexes = new Set();
+      let hasVariantRestore = false;
+      const nextVariants = currentData.variants.map((variant) => ({ ...variant }));
+
+      item.variantCostData.forEach((baselineVariant = {}) => {
+        const baselineKey = safeTrim(baselineVariant.variantKey);
+        let targetIndex = -1;
+
+        if (baselineKey) {
+          targetIndex = nextVariants.findIndex((variant, variantIndex) => (
+            !usedIndexes.has(variantIndex) && getVariantIdentity(variant, variantIndex) === baselineKey
+          ));
+        }
+
+        if (targetIndex < 0 && Number.isInteger(baselineVariant.index) && nextVariants[baselineVariant.index]) {
+          targetIndex = baselineVariant.index;
+        }
+
+        if (targetIndex < 0) return;
+
+        usedIndexes.add(targetIndex);
+        nextVariants[targetIndex] = {
+          ...nextVariants[targetIndex],
+          ...(baselineVariant.fields || {}),
+        };
+        hasVariantRestore = true;
+      });
+
+      if (hasVariantRestore) {
+        payload.variants = nextVariants;
+      }
+    }
+
+    if (Object.keys(payload).length) {
+      updates.push({ ref: itemRef, payload });
+    }
+  }
+
+  assertClientBatchOperationLimit(updates.length);
+  return { baselineDoc, updates };
 };
 
 
@@ -738,6 +1143,130 @@ const buildProtectedCollectionPreview = async () => {
       status: "protected",
     })),
   );
+};
+
+export const getHppCostResetPreview = async ({ resetMode }) => buildHppCostResetPreview(resetMode);
+
+/*
+=====================================================
+SECTION: HPP cost baseline save/restore helpers — GUARDED
+Fungsi:
+- Menyimpan baseline field cost/HPP master saat ini dan mengembalikannya tanpa menyentuh stok, transaksi, PO, Work Log, Payroll, atau Cash.
+
+Dipakai oleh:
+- Tombol Simpan Baseline Modal/HPP Saat Ini dan Restore Baseline Modal/HPP di ResetMaintenanceData.jsx.
+
+Alasan perubahan:
+- Trial & error HPP membutuhkan titik balik aman untuk sumber modal/HPP master tanpa backfill atau pemrosesan ulang produksi lama.
+
+Catatan cleanup:
+- Baseline dapat ditambah metadata user/session jika audit rules sudah final.
+
+Risiko:
+- Restore yang salah scope dapat menimpa data master aktif; karena itu restore hanya memakai field cost/HPP yang tersimpan di baseline dan diblokir jika batch terlalu besar.
+=====================================================
+*/
+export const saveCurrentHppCostBaseline = async () => {
+  const items = await buildHppCostBaselinePayload();
+
+  await setDoc(doc(db, BASELINE_COLLECTION, HPP_COST_BASELINE_DOC_ID), {
+    key: HPP_COST_BASELINE_DOC_ID,
+    items,
+    itemCount: items.length,
+    savedAt: serverTimestamp(),
+  });
+
+  return {
+    message: `Baseline modal/HPP berhasil disimpan dari ${items.length} item master.`,
+    itemCount: items.length,
+  };
+};
+
+export const getHppCostBaselineSummary = async () => {
+  const baselineDoc = await getHppCostBaselineSnapshotDoc();
+  const items = Array.isArray(baselineDoc?.items) ? baselineDoc.items : [];
+  const collectionCounts = items.reduce((acc, item) => {
+    const collectionName = safeTrim(item.collectionName);
+    if (!collectionName) return acc;
+    acc[collectionName] = Number(acc[collectionName] || 0) + 1;
+    return acc;
+  }, {});
+
+  return {
+    exists: Boolean(items.length),
+    itemCount: items.length,
+    savedAt: baselineDoc?.savedAt || null,
+    collectionCounts,
+    label: items.length ? `Tersimpan (${items.length} item)` : "Belum ada baseline modal/HPP",
+  };
+};
+
+export const restoreHppCostBaseline = async () => {
+  const { baselineDoc, updates } = await buildHppCostBaselineRestorePlan();
+
+  if (!updates.length) {
+    return {
+      message: "Restore baseline modal/HPP selesai. Tidak ada field cost yang perlu dipulihkan.",
+      restoredCount: 0,
+      itemCount: Number(baselineDoc?.items?.length || 0),
+    };
+  }
+
+  const batch = writeBatch(db);
+  updates.forEach((item) => batch.update(item.ref, item.payload));
+  await batch.commit();
+
+  return {
+    message: `Restore baseline modal/HPP selesai untuk ${updates.length} item master.`,
+    restoredCount: updates.length,
+    itemCount: Number(baselineDoc?.items?.length || 0),
+  };
+};
+
+/*
+=====================================================
+SECTION: HPP cost reset runner — GUARDED
+Fungsi:
+- Menjalankan reset field modal/HPP master berdasarkan mode yang sudah dipreview, tanpa menghapus dokumen dan tanpa memproses ulang flow produksi.
+
+Dipakai oleh:
+- Tombol Jalankan Reset Modal/HPP di ResetMaintenanceData.jsx.
+
+Alasan perubahan:
+- Menyediakan maintenance tool untuk trial HPP yang aman karena hanya update field cost/HPP allowlist dan metadata reset.
+
+Catatan cleanup:
+- Dapat dipisah ke Cloud Function jika jumlah data master melebihi batas aman operasi browser.
+
+Risiko:
+- Aksi ini destructive untuk modal/HPP master; jika dijalankan di data real tanpa baseline/backup, nilai cost lama hilang dari master.
+=====================================================
+*/
+export const runHppCostReset = async ({ resetMode }) => {
+  const { preview, updates } = await buildHppCostResetWritePlan(resetMode);
+
+  if (!updates.length) {
+    return {
+      message: "Reset modal/HPP selesai. Tidak ada field cost/HPP yang ditemukan untuk mode ini.",
+      resetMode,
+      totalAffectedDocs: 0,
+      totalWriteOperations: 0,
+      affectedCollections: preview.affectedCollections,
+    };
+  }
+
+  const batch = writeBatch(db);
+  updates.forEach((item) => batch.update(item.ref, item.payload));
+  await batch.commit();
+
+  return {
+    message: `Reset modal/HPP selesai. ${updates.length} item master diperbarui.`,
+    resetMode,
+    totalAffectedDocs: preview.totalAffectedDocs,
+    totalAffectedVariantRows: preview.totalAffectedVariantRows,
+    totalWriteOperations: updates.length,
+    affectedCollections: preview.affectedCollections,
+  };
 };
 
 export const getResetPreview = async ({ resetMode, modules }) => {

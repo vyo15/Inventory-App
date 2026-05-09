@@ -181,6 +181,56 @@ const findExistingPayrollLineForWorker = async (workLogId, stepId, worker = {}) 
     }) || null;
 };
 
+/*
+=====================================================
+SECTION: Payroll generation eligibility guard — GUARDED
+Fungsi:
+- Memastikan payroll otomatis hanya dibuat jika rule step, basis output, rate, dan qty sumber valid.
+
+Dipakai oleh:
+- generatePayrollLinesFromCompletedWorkLog sebelum menulis line payroll otomatis.
+
+Alasan perubahan:
+- Work Log completed tidak boleh menghasilkan payroll 0 diam-diam ketika step rate/basis belum diset.
+
+Catatan cleanup:
+- Jika nanti ada mode payroll baru, tambahkan validasi mode dan basis di helper ini.
+
+Risiko:
+- Melonggarkan guard ini bisa membuat labor cost/HPP terlihat 0 tanpa alasan jelas.
+=====================================================
+*/
+const assertPayrollGenerationEligibility = ({ workLog = {}, stepRule = {}, outputQtyUsed = 0, workedQty = 0 } = {}) => {
+  const payrollMode = safeTrim(stepRule.payrollMode || "per_qty");
+  const payrollOutputBasis = safeTrim(stepRule.payrollOutputBasis || "good_qty");
+  const validModes = new Set(["per_qty", "per_batch", "fixed"]);
+  const validOutputBasis = new Set(["good_qty", "actual_output_qty"]);
+
+  if (workLog.status !== "completed") {
+    throw new Error("Payroll hanya bisa dibuat dari Work Log yang sudah completed");
+  }
+
+  if (!validModes.has(payrollMode)) {
+    throw new Error(`Mode payroll tahapan tidak valid: ${payrollMode || "(kosong)"}. Cek master Tahapan Produksi.`);
+  }
+
+  if (!validOutputBasis.has(payrollOutputBasis)) {
+    throw new Error(`Basis output payroll tidak valid: ${payrollOutputBasis || "(kosong)"}. Cek master Tahapan Produksi.`);
+  }
+
+  if (Number(stepRule.payrollRate || 0) <= 0) {
+    throw new Error(`Rate payroll tahapan ${workLog.stepName || workLog.stepCode || "produksi"} masih 0. Isi rate di master Tahapan Produksi sebelum generate payroll.`);
+  }
+
+  if (payrollMode === "per_qty" && Number(outputQtyUsed || 0) <= 0) {
+    throw new Error("Output payroll 0. Isi Good Qty/Actual Output Work Log sesuai basis payroll sebelum generate payroll.");
+  }
+
+  if (payrollMode === "per_batch" && Number(workedQty || outputQtyUsed || 0) <= 0) {
+    throw new Error("Qty batch/output payroll 0. Isi Qty Batch atau output Work Log sebelum generate payroll.");
+  }
+};
+
 const getStepPayrollRuleSnapshot = async (workLog = {}) => {
   if (!workLog.stepId) {
     return {
@@ -474,8 +524,28 @@ const syncWorkLogPayrollSummary = async (workLogId) => {
 
   const activeLines = payrollLines.filter((line) => line.status !== "cancelled");
   const paidLines = activeLines.filter((line) => line.paymentStatus === "paid");
+  const hppLaborLines = activeLines.filter((line) => line.includePayrollInHpp !== false);
   const payrollIds = activeLines.map((line) => line.id);
-  const payrollFinalAmount = activeLines.reduce(
+  /*
+  =====================================================
+  SECTION: Payroll final amount for HPP — GUARDED
+  Fungsi:
+  - Menjumlahkan labor cost Work Log hanya dari line payroll aktif yang boleh masuk HPP.
+
+  Dipakai oleh:
+  - syncWorkLogPayrollSummary setelah create/update/status payroll.
+
+  Alasan perubahan:
+  - Payroll support/fulfillment atau line yang includePayrollInHpp=false tidak boleh menaikkan HPP produksi.
+
+  Catatan cleanup:
+  - Line count tetap memakai activeLines untuk audit payroll; nominal HPP memakai hppLaborLines.
+
+  Risiko:
+  - Jika includePayrollInHpp diabaikan, laporan HPP dan Profit/Loss bisa double count labor non-produksi inti.
+  =====================================================
+  */
+  const payrollFinalAmount = hppLaborLines.reduce(
     (sum, line) => sum + Number(line.finalAmount || 0),
     0,
   );
@@ -546,6 +616,12 @@ export const generatePayrollLinesFromCompletedWorkLog = async (workLogId, curren
   const payrollOutputBasis = stepRule.payrollOutputBasis || "good_qty";
   const outputQtyUsed = resolvePayrollOutputQty(workLog, payrollOutputBasis);
   const workedQty = Number(workLog.plannedQty || 0);
+  assertPayrollGenerationEligibility({
+    workLog,
+    stepRule,
+    outputQtyUsed,
+    workedQty,
+  });
   const totalWorkLogOutputQty = Number(workLog.goodQty || workLog.actualOutputQty || 0);
   const actor = getActorName(currentUser);
   const createdIds = [];

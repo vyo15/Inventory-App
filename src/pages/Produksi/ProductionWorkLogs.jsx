@@ -81,6 +81,45 @@ import useAuth from "../../hooks/useAuth";
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
+
+/*
+=====================================================
+SECTION: Detail cost display resolver — GUARDED
+Fungsi:
+- Menampilkan cost detail dari summary Work Log, dengan fallback baca totalCostSnapshot materialUsages jika summary lama masih 0.
+
+Dipakai oleh:
+- Drawer detail Work Log Produksi.
+
+Alasan perubahan:
+- Data legacy/hasil start production lama bisa punya biaya di line material tetapi materialCostActual masih 0.
+
+Catatan cleanup:
+- Fallback ini hanya display; source of truth tetap diperbaiki oleh service saat Start/Complete Work Log baru.
+
+Risiko:
+- Jangan memakai helper display ini untuk posting stok/HPP karena tidak menulis data Firestore.
+=====================================================
+*/
+const calculateMaterialCostDisplayFromLines = (materialUsages = []) =>
+  (Array.isArray(materialUsages) ? materialUsages : []).reduce((sum, line) => {
+    const totalSnapshot = Number(line.totalCostSnapshot || 0);
+    if (totalSnapshot > 0) return sum + totalSnapshot;
+    return sum + (Number(line.actualQty || 0) * Number(line.costPerUnitSnapshot || 0));
+  }, 0);
+
+const resolveMaterialCostDisplay = (workLog = {}) => {
+  const summaryValue = Number(workLog.materialCostActual || 0);
+  if (summaryValue > 0) return summaryValue;
+  return calculateMaterialCostDisplayFromLines(workLog.materialUsages || []);
+};
+
+const resolveTotalCostDisplay = (workLog = {}, laborCostDisplay = 0) => {
+  const summaryValue = Number(workLog.totalCostActual || 0);
+  if (summaryValue > 0) return summaryValue;
+  return resolveMaterialCostDisplay(workLog) + Number(laborCostDisplay || 0) + Number(workLog.overheadCostActual || 0);
+};
+
 const ProductionWorkLogs = () => {
   const { profile, firebaseUser } = useAuth();
 
@@ -857,6 +896,12 @@ const ProductionWorkLogs = () => {
     if (!selectedRecord) return [];
 
     const unitLabel = selectedRecord.targetUnit || "pcs";
+    const totalCostDisplay = resolveTotalCostDisplay(
+      selectedRecord,
+      selectedRecord.payrollFinalAmount || selectedRecord.laborCostActual,
+    );
+    const goodQtyForCost = Number(selectedRecord.goodQty || 0);
+    const costPerGoodUnitDisplay = goodQtyForCost > 0 ? totalCostDisplay / goodQtyForCost : Number(selectedRecord.costPerGoodUnit || 0);
 
     return [
       {
@@ -880,8 +925,8 @@ const ProductionWorkLogs = () => {
       {
         key: "cost",
         label: "Total Biaya",
-        value: formatCurrency(selectedRecord.totalCostActual || 0),
-        helper: `Cost / good unit ${formatCurrency(selectedRecord.costPerGoodUnit || 0)}`,
+        value: formatCurrency(totalCostDisplay),
+        helper: `Cost / good unit ${formatCurrency(costPerGoodUnitDisplay)}`,
       },
     ];
   }, [selectedRecord]);
@@ -925,11 +970,11 @@ const ProductionWorkLogs = () => {
     if (!selectedRecord) return [];
 
     const warnings = [];
-    const materialCost = Number(selectedRecord.materialCostActual || 0);
+    const materialCost = resolveMaterialCostDisplay(selectedRecord);
     const laborCost = Number(detailLaborDisplay || 0);
-    const totalCost = Number(selectedRecord.totalCostActual || 0);
-    const costPerGoodUnit = Number(selectedRecord.costPerGoodUnit || 0);
+    const totalCost = resolveTotalCostDisplay(selectedRecord, laborCost);
     const goodQty = Number(selectedRecord.goodQty || 0);
+    const costPerGoodUnit = goodQty > 0 ? totalCost / goodQty : Number(selectedRecord.costPerGoodUnit || 0);
 
     if (materialCost === 0) {
       warnings.push("Biaya material 0. Cek cost bahan atau snapshot material.");
@@ -1895,7 +1940,7 @@ const ProductionWorkLogs = () => {
                           Material
                         </Typography.Text>
                         <div style={{ fontWeight: 600, marginTop: 4 }}>
-                          {formatCurrency(selectedRecord.materialCostActual || 0)}
+                          {formatCurrency(resolveMaterialCostDisplay(selectedRecord))}
                         </div>
                       </Col>
                       <Col span={12}>

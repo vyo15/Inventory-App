@@ -204,15 +204,61 @@ const findCostVariantSnapshot = (stockItem = {}, resolvedVariantKey = "") => {
   }) || null;
 };
 
+const getCostCandidateWithSource = (data = {}, keys = [], sourcePrefix = "") => {
+  const candidate = getCostCandidate(data, keys);
+  if (candidate.unitCost > 0 && sourcePrefix) {
+    return {
+      ...candidate,
+      costSource: `${sourcePrefix}.${candidate.costSource}`,
+    };
+  }
+  return candidate;
+};
+
+/*
+=====================================================
+SECTION: Material cost resolver — GUARDED
+Fungsi:
+- Mengambil unit cost aktual material/output dari varian lebih dulu lalu fallback ke master cost yang valid.
+
+Dipakai oleh:
+- createProductionWorkLogFromOrder dan completeProductionWorkLog.
+
+Alasan perubahan:
+- Raw material/semi finished bervarian dapat punya stok varian, tetapi cost aktual masih disimpan di level master.
+- Tanpa fallback ini Work Log bisa menyimpan biaya material 0 padahal master average cost valid.
+
+Catatan cleanup:
+- Jika semua varian kelak punya field cost resmi, fallback master tetap aman sebagai kompatibilitas data lama.
+
+Risiko:
+- Mengubah prioritas field cost sembarangan dapat membuat HPP memakai reference price/harga jual, bukan modal aktual.
+=====================================================
+*/
 const getItemUnitCostSnapshot = ({ itemType = "", stockItem = {}, stockResolution = {} } = {}) => {
   const variantSnapshot =
     stockResolution.stockSourceType === "variant"
       ? findCostVariantSnapshot(stockItem, stockResolution.resolvedVariantKey)
       : null;
-  const sourceData = variantSnapshot || stockItem || {};
+
+  const resolveWithVariantFallback = (keys = []) => {
+    const variantCandidate = variantSnapshot
+      ? getCostCandidateWithSource(variantSnapshot, keys, "variant")
+      : { unitCost: 0, costSource: "variant_not_selected" };
+
+    if (variantCandidate.unitCost > 0) return variantCandidate;
+
+    const masterCandidate = getCostCandidateWithSource(stockItem || {}, keys, "master");
+    if (masterCandidate.unitCost > 0) return masterCandidate;
+
+    return {
+      unitCost: 0,
+      costSource: variantSnapshot ? "missing_variant_and_master_cost_snapshot" : "missing_master_cost_snapshot",
+    };
+  };
 
   if (itemType === "raw_material") {
-    return getCostCandidate(sourceData, [
+    return resolveWithVariantFallback([
       "averageActualUnitCost",
       "purchaseAverageUnitCost",
       "averageCostPerUnit",
@@ -222,7 +268,7 @@ const getItemUnitCostSnapshot = ({ itemType = "", stockItem = {}, stockResolutio
   }
 
   if (itemType === "semi_finished_material") {
-    return getCostCandidate(sourceData, [
+    return resolveWithVariantFallback([
       "averageCostPerUnit",
       "lastProductionCostPerUnit",
       "costPerUnit",
@@ -230,7 +276,7 @@ const getItemUnitCostSnapshot = ({ itemType = "", stockItem = {}, stockResolutio
   }
 
   if (itemType === "product") {
-    return getCostCandidate(sourceData, [
+    return resolveWithVariantFallback([
       "hppPerUnit",
       "averageCostPerUnit",
       "costPerUnit",
@@ -238,6 +284,48 @@ const getItemUnitCostSnapshot = ({ itemType = "", stockItem = {}, stockResolutio
   }
 
   return { unitCost: 0, costSource: "unsupported_item_type" };
+};
+
+/*
+=====================================================
+SECTION: Work Log cost summary calculation — GUARDED
+Fungsi:
+- Menghitung ulang material, labor, overhead, total cost, dan HPP/unit dari line snapshot Work Log.
+
+Dipakai oleh:
+- Start Production dari PO dan Complete Work Log sebelum menyimpan summary cost.
+
+Alasan perubahan:
+- Summary Work Log bisa 0 walaupun materialUsages sudah punya costPerUnitSnapshot/totalCostSnapshot.
+
+Catatan cleanup:
+- Bisa dipindah ke constants/shared helper jika nanti dibutuhkan oleh report lain.
+
+Risiko:
+- Jangan panggil helper ini untuk write back data lama secara massal; helper hanya dipakai di flow aktif yang memang sedang membuat/menyelesaikan Work Log.
+=====================================================
+*/
+const calculateMaterialCostFromUsages = (materialUsages = []) =>
+  (Array.isArray(materialUsages) ? materialUsages : []).reduce((sum, line) => {
+    const totalSnapshot = toNumber(line.totalCostSnapshot || 0);
+    if (totalSnapshot > 0) return sum + totalSnapshot;
+    return sum + (toNumber(line.actualQty || 0) * toNumber(line.costPerUnitSnapshot || 0));
+  }, 0);
+
+const buildWorkLogCostSummary = ({ materialUsages = [], laborCostActual = 0, overheadCostActual = 0, goodQty = 0 } = {}) => {
+  const materialCostActual = calculateMaterialCostFromUsages(materialUsages);
+  const laborCost = toNumber(laborCostActual || 0);
+  const overheadCost = toNumber(overheadCostActual || 0);
+  const totalCostActual = materialCostActual + laborCost + overheadCost;
+  const normalizedGoodQty = toNumber(goodQty || 0);
+
+  return {
+    materialCostActual,
+    laborCostActual: laborCost,
+    overheadCostActual: overheadCost,
+    totalCostActual,
+    costPerGoodUnit: normalizedGoodQty > 0 && totalCostActual > 0 ? totalCostActual / normalizedGoodQty : 0,
+  };
 };
 
 // =====================================================
@@ -1233,6 +1321,13 @@ export const createProductionWorkLogFromOrder = async (
       );
     }
 
+    const startedCostSummary = buildWorkLogCostSummary({
+      materialUsages: nextMaterialUsages,
+      laborCostActual: payload.laborCostActual,
+      overheadCostActual: payload.overheadCostActual,
+      goodQty: payload.goodQty,
+    });
+
     for (const stockState of stockReadMap.values()) {
       if (stockState.updatePayload) {
         transaction.update(stockState.ref, {
@@ -1248,6 +1343,7 @@ export const createProductionWorkLogFromOrder = async (
 
     transaction.set(workLogRef, {
       ...payload,
+      ...startedCostSummary,
       materialUsages: nextMaterialUsages,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -1520,6 +1616,7 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
     const completedAtValue = new Date();
 
     const nextMaterialUsages = [];
+    const materialStockUpdatePayloads = [];
     for (const line of materialUsages) {
       const actualQty = toNumber(line.actualQty || 0);
       const collectionName = getCollectionNameByItemType(line.itemType);
@@ -1622,9 +1719,12 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
         deltaReserved: -reservedReleaseQty,
       });
 
-      transaction.update(stockRef, {
-        ...updatePayload,
-        updatedAt: serverTimestamp(),
+      materialStockUpdatePayloads.push({
+        ref: stockRef,
+        payload: {
+          ...updatePayload,
+          updatedAt: serverTimestamp(),
+        },
       });
 
       // =====================================================
@@ -1669,29 +1769,90 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
       throw new Error("Good Qty hasil produksi harus lebih dari 0 sebelum work log diselesaikan");
     }
 
-    // =====================================================
-    // SECTION: Hitung ulang summary costing final saat work log selesai.
-    // Fungsi:
-    // - memastikan biaya material tidak tetap 0 ketika snapshot PO awal masih kosong
-    // - menjadikan output cost memakai biaya final material terbaru + labor/overhead yang sudah ada
-    // Status:
-    // - aktif dipakai di flow Work Log complete
-    // - tidak mengubah source of truth stok; hanya menghitung ulang field summary turunan
-    // =====================================================
-    const recalculatedMaterialCost = nextMaterialUsages.reduce(
-      (sum, line) => sum + toNumber(line.totalCostSnapshot || 0),
-      0,
-    );
-    const recalculatedLaborCost = toNumber(workLog.laborCostActual || 0);
-    const recalculatedOverheadCost = toNumber(workLog.overheadCostActual || 0);
-    const recalculatedTotalCost =
-      recalculatedMaterialCost + recalculatedLaborCost + recalculatedOverheadCost;
-    const recalculatedCostPerGoodUnit =
-      totalGoodQty > 0 ? recalculatedTotalCost / totalGoodQty : 0;
+    /*
+    =====================================================
+    SECTION: Complete Work Log cost calculation — GUARDED
+    Fungsi:
+    - Menghitung ulang summary costing final dari material usage snapshot, labor, overhead, dan good qty.
 
-    const fallbackUnitCost =
-      recalculatedCostPerGoodUnit || toNumber(workLog.costPerGoodUnit || 0);
+    Dipakai oleh:
+    - completeProductionWorkLog sebelum output HPP/average cost diposting.
+
+    Alasan perubahan:
+    - Summary Work Log tidak boleh tetap 0 jika materialUsages sudah punya snapshot cost valid.
+
+    Catatan cleanup:
+    - Labor final masih disinkronkan oleh payroll service setelah payroll dibuat/diupdate.
+
+    Risiko:
+    - Jangan update HPP output jika total cost atau good qty tidak valid; itu akan menyebarkan HPP 0 ke master produk/semi finished.
+    =====================================================
+    */
+    const recalculatedCostSummary = buildWorkLogCostSummary({
+      materialUsages: nextMaterialUsages,
+      laborCostActual: workLog.laborCostActual,
+      overheadCostActual: workLog.overheadCostActual,
+      goodQty: totalGoodQty,
+    });
+    const recalculatedMaterialCost = recalculatedCostSummary.materialCostActual;
+    const recalculatedLaborCost = recalculatedCostSummary.laborCostActual;
+    const recalculatedOverheadCost = recalculatedCostSummary.overheadCostActual;
+    const recalculatedTotalCost = recalculatedCostSummary.totalCostActual;
+    const recalculatedCostPerGoodUnit = recalculatedCostSummary.costPerGoodUnit;
+
+    const canUpdateOutputHpp = totalGoodQty > 0 && recalculatedTotalCost > 0;
+    const fallbackUnitCost = canUpdateOutputHpp
+      ? (recalculatedCostPerGoodUnit || toNumber(workLog.costPerGoodUnit || 0))
+      : 0;
     const nextOutputs = [];
+    const outputStockReadMap = new Map();
+
+    /*
+    =====================================================
+    SECTION: Complete Work Log transaction read-before-write safety — GUARDED
+    Fungsi:
+    - Membaca seluruh output stock document sebelum transaction.update/set pertama dijalankan.
+
+    Dipakai oleh:
+    - completeProductionWorkLog ketika mem-posting output produksi dan inventory log.
+
+    Alasan perubahan:
+    - Firestore transaction mewajibkan semua read dilakukan sebelum write; sebelumnya output read bisa terjadi setelah material update.
+
+    Catatan cleanup:
+    - Jika nanti material/output mutation digabung per item, tetap pertahankan fase READ+VALIDATE sebelum WRITE.
+
+    Risiko:
+    - Jika fase read/write dicampur lagi, complete Work Log dapat gagal atau menghasilkan mutasi stok tidak atomic.
+    =====================================================
+    */
+    for (const line of synchronizedOutputs) {
+      const collectionName = getCollectionNameByItemType(line.outputType);
+      if (!collectionName || !line.outputIdRef) continue;
+
+      const outputStockKey = `${collectionName}/${line.outputIdRef}`;
+      if (outputStockReadMap.has(outputStockKey)) continue;
+
+      const stockRef = doc(db, collectionName, line.outputIdRef);
+      const stockSnap = await transaction.get(stockRef);
+
+      if (!stockSnap.exists()) {
+        throw new Error(`Item output ${line.outputName || "-"} tidak ditemukan`);
+      }
+
+      outputStockReadMap.set(outputStockKey, {
+        ref: stockRef,
+        stockDataRaw: stockSnap.data(),
+        stockItem: normalizeReferenceItem({
+          id: stockSnap.id,
+          ...stockSnap.data(),
+        }),
+      });
+    }
+
+    materialStockUpdatePayloads.forEach((item) => {
+      transaction.update(item.ref, item.payload);
+    });
 
     for (const line of synchronizedOutputs) {
       const goodQty = toNumber(line.goodQty || 0);
@@ -1709,32 +1870,30 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
         continue;
       }
 
-      const stockRef = doc(db, collectionName, line.outputIdRef);
-      const stockSnap = await transaction.get(stockRef);
+      const outputStockKey = `${collectionName}/${line.outputIdRef}`;
+      const outputStockState = outputStockReadMap.get(outputStockKey);
 
-      if (!stockSnap.exists()) {
+      if (!outputStockState?.stockItem) {
         throw new Error(`Item output ${line.outputName || "-"} tidak ditemukan`);
       }
 
-      const stockItem = normalizeReferenceItem({
-        id: stockSnap.id,
-        ...stockSnap.data(),
-      });
-      const stockData = normalizeStockSnapshot(stockSnap.data());
+      const stockRef = outputStockState.ref;
+      const stockItem = outputStockState.stockItem;
+      const stockData = normalizeStockSnapshot(outputStockState.stockDataRaw || {});
       const outputResolution = getOutputStockResolution({
         line,
         stockItem,
         fallbackVariantKey: workLog.targetVariantKey || '',
         fallbackVariantLabel: workLog.targetVariantLabel || '',
       });
-      const unitCost = toNumber(line.costPerUnit || 0) || fallbackUnitCost;
+      const unitCost = canUpdateOutputHpp ? (toNumber(line.costPerUnit || 0) || fallbackUnitCost) : 0;
       const updatePayload = applyStockMutationToItem({
         item: stockItem,
         variantKey: outputResolution.resolvedVariantKey || '',
         deltaCurrent: goodQty,
       });
 
-      if (collectionName === "semi_finished_materials") {
+      if (canUpdateOutputHpp && collectionName === "semi_finished_materials") {
         const baseCurrentStock =
           outputResolution.stockSourceType === 'variant'
             ? toNumber(outputResolution.currentStock || 0)
@@ -1771,11 +1930,11 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
             };
           });
         }
-      } else if (collectionName === "products") {
+      } else if (canUpdateOutputHpp && collectionName === "products") {
         const baseCurrentStock =
           outputResolution.stockSourceType === 'variant'
             ? toNumber(outputResolution.currentStock || 0)
-            : toNumber(stockSnap.data()?.stock ?? stockData.currentStock);
+            : toNumber(outputStockState.stockDataRaw?.stock ?? stockData.currentStock);
         const currentHpp =
           outputResolution.stockSourceType === 'variant'
             ? toNumber(
@@ -1783,7 +1942,7 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
                   (variant) => (variant.variantKey || variant.id || variant.name || variant.color || '').toString().trim().toLowerCase() === (outputResolution.resolvedVariantKey || '').toString().trim().toLowerCase(),
                 )?.hppPerUnit || 0,
               )
-            : toNumber(stockSnap.data()?.hppPerUnit || 0);
+            : toNumber(outputStockState.stockDataRaw?.hppPerUnit || 0);
         const nextHpp = calculateWeightedAverage(
           baseCurrentStock,
           currentHpp,

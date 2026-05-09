@@ -12,6 +12,7 @@ import {
   Popconfirm,
   Radio,
   Row,
+  Select,
   Space,
   Statistic,
   Table,
@@ -53,11 +54,17 @@ import {
 } from "../../services/Maintenance/transactionVariantMaintenanceService";
 import {
   DEFAULT_RESET_MODULES,
+  HPP_COST_RESET_OPTIONS,
   RESET_MODE_OPTIONS,
   deleteDevTestData,
   getDevTestDataPreview,
+  getHppCostBaselineSummary,
+  getHppCostResetPreview,
   getResetPreview,
+  restoreHppCostBaseline,
+  runHppCostReset,
   runResetDataTest,
+  saveCurrentHppCostBaseline,
   saveCurrentStockAsTestingBaseline,
   syncAllStocks,
 } from "../../services/Maintenance/resetMaintenanceDataService";
@@ -78,6 +85,18 @@ const RESET_MODE_LABELS = {
   transaction_only: "Reset Transaksi",
   reset_and_zero_stock: "Reset + Nolkan Semua Stok",
   reset_and_restore_baseline: "Reset + Baseline Testing",
+};
+
+const HPP_CONFIRM_KEYWORDS = {
+  reset: "RESET MODAL HPP",
+  restore: "RESTORE MODAL HPP",
+};
+
+const formatMaintenanceDate = (value) => {
+  if (!value) return "-";
+  const date = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("id-ID");
 };
 
 const MAINTENANCE_CATEGORY_META = {
@@ -153,6 +172,7 @@ const renderCompactTag = (value, maxWidth = 160, fallback = "-") => {
 
 const ResetMaintenanceData = () => {
   const [confirmForm] = Form.useForm();
+  const [hppConfirmForm] = Form.useForm();
 
   // ---------------------------------------------------------------------------
   // State reset data.
@@ -215,6 +235,35 @@ const ResetMaintenanceData = () => {
   // ---------------------------------------------------------------------------
   const [maintenanceLogs, setMaintenanceLogs] = useState([]);
   const [loadingMaintenanceLogs, setLoadingMaintenanceLogs] = useState(false);
+
+  /*
+  =====================================================
+  SECTION: HPP Cost Testing UI state — GUARDED
+  Fungsi:
+  - Menyimpan mode, preview, baseline summary, loading, dan modal konfirmasi untuk reset/restore modal HPP.
+
+  Dipakai oleh:
+  - Section HPP Cost Testing / Reset Modal di halaman Reset Maintenance.
+
+  Alasan perubahan:
+  - Memisahkan reset modal/HPP dari reset transaksi existing agar user tidak salah menjalankan reset destructive.
+
+  Catatan cleanup:
+  - Bisa dipindah ke subcomponent jika halaman Reset Maintenance semakin panjang.
+
+  Risiko:
+  - Jika state reset HPP digabung dengan reset transaksi, confirmation keyword dan preview bisa tertukar.
+  =====================================================
+  */
+  const [hppCostResetMode, setHppCostResetMode] = useState(HPP_COST_RESET_OPTIONS[0]?.value || "raw_actual_cost_only");
+  const [hppCostPreview, setHppCostPreview] = useState(null);
+  const [hppCostBaselineSummary, setHppCostBaselineSummary] = useState(null);
+  const [loadingHppCostPreview, setLoadingHppCostPreview] = useState(false);
+  const [loadingSaveHppCostBaseline, setLoadingSaveHppCostBaseline] = useState(false);
+  const [loadingRestoreHppCostBaseline, setLoadingRestoreHppCostBaseline] = useState(false);
+  const [loadingRunHppCostReset, setLoadingRunHppCostReset] = useState(false);
+  const [hppCostConfirmOpen, setHppCostConfirmOpen] = useState(false);
+  const [hppCostConfirmAction, setHppCostConfirmAction] = useState("reset");
 
   /*
   =====================================================
@@ -296,6 +345,208 @@ const ResetMaintenanceData = () => {
   useEffect(() => {
     loadMaintenanceLogs();
   }, [loadMaintenanceLogs]);
+
+  const loadHppCostBaselineSummary = useCallback(async () => {
+    try {
+      const result = await getHppCostBaselineSummary();
+      setHppCostBaselineSummary(result);
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal memuat baseline modal/HPP.");
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHppCostBaselineSummary();
+  }, [loadHppCostBaselineSummary]);
+
+  const loadHppCostPreview = useCallback(async (showSuccessMessage = false) => {
+    try {
+      setLoadingHppCostPreview(true);
+      const result = await getHppCostResetPreview({ resetMode: hppCostResetMode });
+      setHppCostPreview(result);
+      if (showSuccessMessage) {
+        message.success("Preview reset modal/HPP berhasil dimuat.");
+      }
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal memuat preview reset modal/HPP.");
+    } finally {
+      setLoadingHppCostPreview(false);
+    }
+  }, [hppCostResetMode]);
+
+  useEffect(() => {
+    setHppCostPreview(null);
+  }, [hppCostResetMode]);
+
+  const handleSaveHppCostBaseline = async () => {
+    try {
+      setLoadingSaveHppCostBaseline(true);
+      const result = await saveCurrentHppCostBaseline();
+      await createMaintenanceLog({
+        actionType: "save_hpp_cost_baseline",
+        mode: "hpp_cost_baseline",
+        modules: ["hpp_cost_testing"],
+        summary: { itemCount: result?.itemCount || 0 },
+        affectedCollections: ["testing_baselines"],
+        affectedCount: result?.itemCount || 0,
+        dryRun: false,
+        status: "success",
+        note: "Baseline modal/HPP menyimpan field cost master saja, tanpa stok dan tanpa transaksi.",
+      });
+      message.success(result?.message || "Baseline modal/HPP berhasil disimpan.");
+      await loadHppCostBaselineSummary();
+      await loadMaintenanceLogs();
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menyimpan baseline modal/HPP.");
+    } finally {
+      setLoadingSaveHppCostBaseline(false);
+    }
+  };
+
+  const openHppCostConfirmation = (actionType) => {
+    if (actionType === "reset") {
+      if (!hppCostPreview || hppCostPreview.resetMode !== hppCostResetMode) {
+        message.error("Preview reset modal/HPP wajib dimuat untuk mode aktif sebelum reset dijalankan.");
+        return;
+      }
+
+      if (hppCostPreview.isClientBatchSafe === false) {
+        message.error(`Reset diblokir karena estimasi ${hppCostPreview.estimatedWriteOperations} operasi melebihi batas aman ${hppCostPreview.safeClientLimit}.`);
+        return;
+      }
+    }
+
+    if (actionType === "restore" && !hppCostBaselineSummary?.exists) {
+      message.error("Baseline modal/HPP belum ada. Simpan baseline dulu sebelum restore.");
+      return;
+    }
+
+    setHppCostConfirmAction(actionType);
+    hppConfirmForm.setFieldsValue({ confirmationText: "" });
+    setHppCostConfirmOpen(true);
+  };
+
+  const handleHppCostConfirmAction = async () => {
+    const actionType = hppCostConfirmAction;
+    const expectedKeyword = HPP_CONFIRM_KEYWORDS[actionType];
+    let logId = "";
+    let actionCompleted = false;
+
+    try {
+      const values = await hppConfirmForm.validateFields();
+      if ((values.confirmationText || "").trim().toUpperCase() !== expectedKeyword) {
+        message.error(`Ketik "${expectedKeyword}" untuk konfirmasi.`);
+        return;
+      }
+
+      if (actionType === "reset") {
+        if (!hppCostPreview || hppCostPreview.resetMode !== hppCostResetMode) {
+          message.error("Preview reset modal/HPP wajib dimuat ulang sebelum reset dijalankan.");
+          return;
+        }
+
+        setLoadingRunHppCostReset(true);
+        logId = await createMaintenanceLog({
+          actionType: "hpp_cost_reset",
+          mode: hppCostResetMode,
+          modules: ["hpp_cost_testing"],
+          summary: {
+            totalAffectedDocs: hppCostPreview?.totalAffectedDocs || 0,
+            totalAffectedVariantRows: hppCostPreview?.totalAffectedVariantRows || 0,
+          },
+          planSummary: {
+            estimatedWriteOperations: hppCostPreview?.estimatedWriteOperations || 0,
+            safeClientLimit: hppCostPreview?.safeClientLimit || 0,
+            isClientBatchSafe: hppCostPreview?.isClientBatchSafe !== false,
+          },
+          affectedCollections: getCollectionLabels(hppCostPreview?.affectedCollections),
+          affectedCount: hppCostPreview?.estimatedWriteOperations || 0,
+          dryRun: false,
+          status: "started",
+          note: "Reset modal/HPP dimulai setelah preview dan keyword RESET MODAL HPP. Aksi hanya menyentuh field cost/HPP master.",
+        });
+
+        const result = await runHppCostReset({ resetMode: hppCostResetMode });
+        actionCompleted = true;
+
+        await updateMaintenanceLogStatus(logId, {
+          status: "success",
+          summary: {
+            totalAffectedDocs: result?.totalAffectedDocs || 0,
+            totalAffectedVariantRows: result?.totalAffectedVariantRows || 0,
+            totalWriteOperations: result?.totalWriteOperations || 0,
+          },
+          affectedCollections: getCollectionLabels(result?.affectedCollections),
+          affectedCount: result?.totalWriteOperations || 0,
+          note: "Reset modal/HPP berhasil. Tidak ada delete transaksi, stock mutation, inventory log, payroll, cash out, atau proses ulang Work Log.",
+        });
+
+        message.success(result?.message || "Reset modal/HPP berhasil dijalankan.");
+        setHppCostConfirmOpen(false);
+        hppConfirmForm.resetFields();
+        await loadHppCostPreview(false);
+        await loadHppCostBaselineSummary();
+        await loadMaintenanceLogs();
+        return;
+      }
+
+      setLoadingRestoreHppCostBaseline(true);
+      logId = await createMaintenanceLog({
+        actionType: "restore_hpp_cost_baseline",
+        mode: "hpp_cost_baseline_restore",
+        modules: ["hpp_cost_testing"],
+        summary: { itemCount: hppCostBaselineSummary?.itemCount || 0 },
+        affectedCollections: Object.keys(hppCostBaselineSummary?.collectionCounts || {}),
+        affectedCount: hppCostBaselineSummary?.itemCount || 0,
+        dryRun: false,
+        status: "started",
+        note: "Restore baseline modal/HPP dimulai setelah keyword RESTORE MODAL HPP. Aksi hanya restore field cost/HPP dari baseline.",
+      });
+
+      const result = await restoreHppCostBaseline();
+      actionCompleted = true;
+
+      await updateMaintenanceLogStatus(logId, {
+        status: "success",
+        summary: { restoredCount: result?.restoredCount || 0, itemCount: result?.itemCount || 0 },
+        affectedCollections: Object.keys(hppCostBaselineSummary?.collectionCounts || {}),
+        affectedCount: result?.restoredCount || 0,
+        note: "Restore baseline modal/HPP berhasil. Stok dan transaksi tidak disentuh.",
+      });
+
+      message.success(result?.message || "Restore baseline modal/HPP berhasil.");
+      setHppCostConfirmOpen(false);
+      hppConfirmForm.resetFields();
+      await loadHppCostPreview(false);
+      await loadHppCostBaselineSummary();
+      await loadMaintenanceLogs();
+    } catch (error) {
+      console.error(error);
+      if (error?.errorFields) return;
+
+      if (logId && !actionCompleted) {
+        try {
+          await updateMaintenanceLogStatus(logId, {
+            status: "failed",
+            errorMessage: error?.message || "Aksi modal/HPP gagal sebelum batch selesai.",
+            note: "Aksi modal/HPP gagal. Service melakukan preflight sebelum write agar tidak partial.",
+          });
+          await loadMaintenanceLogs();
+        } catch (auditError) {
+          console.error(auditError);
+          message.warning("Aksi modal/HPP gagal, dan update audit log gagal. Cek akses maintenance_logs.");
+        }
+      }
+
+      message.error(error?.message || "Gagal menjalankan aksi modal/HPP.");
+    } finally {
+      setLoadingRunHppCostReset(false);
+      setLoadingRestoreHppCostBaseline(false);
+    }
+  };
 
   // ---------------------------------------------------------------------------
   // Helper preview dipisah agar bisa dipakai oleh tombol manual dan auto-refresh.
@@ -963,6 +1214,22 @@ const ResetMaintenanceData = () => {
     status: item.status,
   })), [testDataPreview]);
 
+  const hppCostPreviewRows = useMemo(() => (hppCostPreview?.affectedCollections || []).map((item) => ({
+    key: item.key,
+    collection: item.label || item.key,
+    affectedDocs: item.affectedDocs || 0,
+    affectedVariantRows: item.affectedVariantRows || 0,
+    fields: [...(item.fieldsToReset || []), ...(item.variantFieldsToReset || []).map((fieldName) => `variants.${fieldName}`)],
+    samples: (item.samples || []).map((sample) => sample.name || sample.id).join(", "),
+  })), [hppCostPreview]);
+
+  const hppCostSelectedOption = useMemo(
+    () => HPP_COST_RESET_OPTIONS.find((item) => item.value === hppCostResetMode),
+    [hppCostResetMode],
+  );
+
+  const hppCostConfirmKeyword = HPP_CONFIRM_KEYWORDS[hppCostConfirmAction] || HPP_CONFIRM_KEYWORDS.reset;
+
   const maintenanceRows = useMemo(() => maintenanceAudit?.rows || [], [maintenanceAudit]);
   const stockMaintenanceRows = useMemo(() => stockAudit?.rows || [], [stockAudit]);
   const logSchemaRows = useMemo(() => logSchemaAudit?.rows || [], [logSchemaAudit]);
@@ -1463,6 +1730,153 @@ const ResetMaintenanceData = () => {
             </Space>
           </Card>
 
+          {/*
+          =====================================================
+          SECTION: HPP Cost Testing / Reset Modal UI — GUARDED
+          Fungsi:
+          - Menyediakan preview, baseline, restore, dan reset field modal/HPP master untuk trial & error HPP.
+
+          Dipakai oleh:
+          - Admin di menu Reset Maintenance saat menganalisis sumber cost HPP produksi.
+
+          Alasan perubahan:
+          - Trial HPP perlu reset modal/HPP yang terpisah dari reset transaksi agar tidak menghapus PO, Work Log, Payroll, stok, atau cash.
+
+          Catatan cleanup:
+          - Bisa dijadikan subcomponent jika utility Reset Maintenance sudah dipecah per domain.
+
+          Risiko:
+          - Aksi reset/restore destructive untuk field cost master; preview dan keyword khusus wajib dipertahankan.
+          =====================================================
+          */}
+          <Divider orientation="left">HPP Cost Testing / Reset Modal</Divider>
+
+          <Card title="HPP Cost Testing / Reset Modal" size="small" extra={<Tag color="volcano">Testing HPP</Tag>}>
+            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <Alert
+                type="warning"
+                showIcon
+                message="Khusus trial & error analisis HPP"
+                description="Reset ini hanya menyentuh sumber modal/HPP master, bukan transaksi, stok, PO, Work Log, Payroll, atau Cash. Gunakan backup/baseline sebelum mencoba di data real."
+              />
+
+              <Row gutter={[12, 12]}>
+                <Col xs={24} md={10}>
+                  <Text strong>Mode reset modal/HPP</Text>
+                  <Select
+                    value={hppCostResetMode}
+                    onChange={setHppCostResetMode}
+                    options={HPP_COST_RESET_OPTIONS.map((item) => ({
+                      value: item.value,
+                      label: item.label,
+                    }))}
+                    style={{ width: "100%", marginTop: 8 }}
+                  />
+                  <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
+                    {hppCostSelectedOption?.description || "Pilih mode reset modal/HPP untuk preview."}
+                  </Paragraph>
+                </Col>
+
+                <Col xs={24} md={14}>
+                  <Row gutter={[12, 12]}>
+                    <Col xs={12} md={6}>
+                      <Card size="small"><Statistic title="Baseline" value={hppCostBaselineSummary?.exists ? "Ada" : "Belum"} /></Card>
+                    </Col>
+                    <Col xs={12} md={6}>
+                      <Card size="small"><Statistic title="Item Baseline" value={hppCostBaselineSummary?.itemCount || 0} /></Card>
+                    </Col>
+                    <Col xs={12} md={6}>
+                      <Card size="small"><Statistic title="Dokumen" value={hppCostPreview?.totalAffectedDocs || 0} /></Card>
+                    </Col>
+                    <Col xs={12} md={6}>
+                      <Card size="small"><Statistic title="Write" value={hppCostPreview?.estimatedWriteOperations || 0} /></Card>
+                    </Col>
+                  </Row>
+                  <Text type="secondary" style={{ display: "block", marginTop: 8 }}>
+                    Baseline tersimpan: {formatMaintenanceDate(hppCostBaselineSummary?.savedAt)}
+                  </Text>
+                </Col>
+              </Row>
+
+              <Row gutter={[12, 12]}>
+                <Col xs={24} md={6}>
+                  <Button
+                    block
+                    icon={<EyeOutlined />}
+                    onClick={() => loadHppCostPreview(true)}
+                    loading={loadingHppCostPreview}
+                  >
+                    Preview Reset Modal/HPP
+                  </Button>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Button
+                    block
+                    icon={<SaveOutlined />}
+                    onClick={handleSaveHppCostBaseline}
+                    loading={loadingSaveHppCostBaseline}
+                  >
+                    Simpan Baseline Modal/HPP Saat Ini
+                  </Button>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Button
+                    block
+                    icon={<ReloadOutlined />}
+                    onClick={() => openHppCostConfirmation("restore")}
+                    loading={loadingRestoreHppCostBaseline}
+                  >
+                    Restore Baseline Modal/HPP
+                  </Button>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Button
+                    block
+                    danger
+                    icon={<WarningOutlined />}
+                    onClick={() => openHppCostConfirmation("reset")}
+                    loading={loadingRunHppCostReset}
+                  >
+                    Jalankan Reset Modal/HPP
+                  </Button>
+                </Col>
+              </Row>
+
+              {hppCostPreview && (
+                <Alert
+                  type={hppCostPreview.isClientBatchSafe ? "info" : "error"}
+                  showIcon
+                  message={hppCostPreview.isClientBatchSafe ? "Preview aman dari batas batch client" : "Preview melebihi batas batch client"}
+                  description={`${hppCostPreview.label}: ${hppCostPreview.totalAffectedDocs || 0} dokumen, ${hppCostPreview.totalAffectedVariantRows || 0} baris varian, ${hppCostPreview.estimatedWriteOperations || 0}/${hppCostPreview.safeClientLimit || 0} operasi tulis. ${hppCostPreview.warning || ""}`}
+                />
+              )}
+
+              <Table
+                className="app-data-table"
+                size="small"
+                loading={loadingHppCostPreview}
+                pagination={false}
+                dataSource={hppCostPreviewRows}
+                columns={[
+                  { title: "Collection", dataIndex: "collection", key: "collection", width: 190, render: (value) => renderCompactText(value, 175) },
+                  { title: "Dokumen", dataIndex: "affectedDocs", key: "affectedDocs", width: 95 },
+                  { title: "Varian", dataIndex: "affectedVariantRows", key: "affectedVariantRows", width: 90 },
+                  { title: "Field Direset", dataIndex: "fields", key: "fields", width: 260, render: (values) => renderCompactText(values, 245) },
+                  { title: "Sample Item", dataIndex: "samples", key: "samples", width: 320, render: (value) => renderCompactText(value, 305) },
+                ]}
+                scroll={{ x: 955 }}
+                locale={{ emptyText: "Klik Preview Reset Modal/HPP untuk melihat field cost yang akan direset." }}
+              />
+
+              <Alert
+                type="info"
+                showIcon
+                message="Batas aman fitur ini"
+                description="Tidak membuat stock mutation, inventory log, payroll, cash out, atau proses ulang Work Log completed. HPP baru baru terlihat pada simulasi produksi berikutnya setelah sumber cost diisi ulang."
+              />
+            </Space>
+          </Card>
+
           <Divider orientation="left">Reset Data</Divider>
 
           <Row gutter={[16, 16]}>
@@ -1827,6 +2241,91 @@ const ResetMaintenanceData = () => {
               extra="Reset hanya berjalan jika kata RESET benar."
             >
               <Input placeholder="Ketik RESET di sini" allowClear autoFocus />
+            </Form.Item>
+          </Form>
+        </Space>
+      </Modal>
+
+      <Modal
+        open={hppCostConfirmOpen}
+        title={hppCostConfirmAction === "restore" ? "Konfirmasi Restore Baseline Modal/HPP" : "Konfirmasi Reset Modal/HPP"}
+        onCancel={() => {
+          if (loadingRunHppCostReset || loadingRestoreHppCostBaseline) return;
+          setHppCostConfirmOpen(false);
+          hppConfirmForm.resetFields();
+        }}
+        onOk={handleHppCostConfirmAction}
+        okText={hppCostConfirmAction === "restore" ? "Ya, Restore Baseline" : "Ya, Reset Modal/HPP"}
+        cancelText="Batal"
+        okButtonProps={{
+          danger: true,
+          loading: loadingRunHppCostReset || loadingRestoreHppCostBaseline,
+          icon: hppCostConfirmAction === "restore" ? <ReloadOutlined /> : <WarningOutlined />,
+        }}
+      >
+        <Space direction="vertical" size={14} style={{ width: "100%" }}>
+          <Alert
+            type="error"
+            showIcon
+            icon={<WarningOutlined />}
+            message={hppCostConfirmAction === "restore" ? "Restore akan menimpa field modal/HPP master" : "Reset akan menolkan field modal/HPP master"}
+            description="Aksi ini tidak menghapus transaksi, tidak mengubah stok, tidak membuat payroll/cash, dan tidak memproses ulang Work Log completed."
+          />
+
+          <div>
+            <Text strong>Mode:</Text>
+            <div style={{ marginTop: 6 }}>
+              <Tag color={hppCostConfirmAction === "restore" ? "blue" : "volcano"}>
+                {hppCostConfirmAction === "restore" ? "Restore Baseline Modal/HPP" : hppCostPreview?.label || hppCostSelectedOption?.label}
+              </Tag>
+            </div>
+          </div>
+
+          <Row gutter={[12, 12]}>
+            <Col xs={12}>
+              <Card size="small">
+                <Statistic
+                  title={hppCostConfirmAction === "restore" ? "Item Baseline" : "Dokumen Terdampak"}
+                  value={hppCostConfirmAction === "restore" ? hppCostBaselineSummary?.itemCount || 0 : hppCostPreview?.totalAffectedDocs || 0}
+                />
+              </Card>
+            </Col>
+            <Col xs={12}>
+              <Card size="small">
+                <Statistic
+                  title={hppCostConfirmAction === "restore" ? "Collection" : "Field/Varian"}
+                  value={hppCostConfirmAction === "restore" ? Object.keys(hppCostBaselineSummary?.collectionCounts || {}).length : hppCostPreview?.totalAffectedVariantRows || 0}
+                />
+              </Card>
+            </Col>
+          </Row>
+
+          {hppCostConfirmAction === "reset" && (
+            <div>
+              <Text strong>Field terdampak:</Text>
+              <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {[...(hppCostPreview?.fieldsToReset || []), ...(hppCostPreview?.variantFieldsToReset || []).map((fieldName) => `variants.${fieldName}`)].map((fieldName) => (
+                  <Tag key={fieldName} color="orange">{fieldName}</Tag>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <Alert
+            type="warning"
+            showIcon
+            message="Gunakan hanya untuk testing HPP"
+            description="Reset ini tidak memperbaiki Work Log lama yang sudah menyimpan cost 0. Untuk HPP baru, jalankan ulang flow produksi testing setelah sumber cost diisi ulang."
+          />
+
+          <Form form={hppConfirmForm} layout="vertical">
+            <Form.Item
+              name="confirmationText"
+              label={`Ketik "${hppCostConfirmKeyword}" untuk konfirmasi terakhir`}
+              rules={[{ required: true, message: `Ketik "${hppCostConfirmKeyword}" untuk melanjutkan.` }]}
+              extra={`Aksi hanya berjalan jika keyword ${hppCostConfirmKeyword} benar.`}
+            >
+              <Input placeholder={`Ketik ${hppCostConfirmKeyword} di sini`} allowClear autoFocus />
             </Form.Item>
           </Form>
         </Space>

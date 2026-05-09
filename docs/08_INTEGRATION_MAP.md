@@ -731,3 +731,40 @@ Guard:
 - Threshold Product/Semi memakai `minStockAlert`; threshold Raw Material memakai `minStock`.
 - `variants[].minStockAlert` Product/Semi Finished adalah legacy-compat only dan bukan source threshold aktif untuk Dashboard/Report.
 - Restock Assistant Dashboard tetap khusus Raw Material; Semi Finished yang muncul di `Stok Kritis` hanya read-only/navigasi.
+
+## Integration Update — Buku Besar Kas / Money Movement Ledger — 2026-05-09
+
+```text
+Sales status Selesai
+-> creates/keeps income in incomes
+-> Buku Besar Kas reads incomes as uang masuk Penjualan Selesai
+-> does not read sales as nominal utama to avoid double count
+```
+
+```text
+Manual Cash In
+-> user creates manual income from Pemasukan page
+-> saves to revenues
+-> Buku Besar Kas reads revenues as uang masuk Cash In Manual / legacy
+```
+
+```text
+Purchase / Payroll Paid / Manual Cash Out
+-> writes recognized cash expense to expenses
+-> Buku Besar Kas reads expenses as uang keluar
+-> does not read purchases or production_payrolls as nominal utama to avoid double count
+```
+
+```text
+Production Work Log / HPP / Inventory Log / Stock Adjustment / Reset HPP Testing
+-> not cash movement source
+-> must not appear in Buku Besar Kas unless there is an explicit existing document in incomes, revenues, or expenses
+```
+
+Guard integrasi:
+- Route aktif: `/finance/money-movement-ledger`.
+- Menu aktif: `Kas & Biaya` -> `Buku Besar Kas`.
+- Role: Administrator only.
+- Service reader: `src/services/Finance/moneyMovementLedgerService.js`.
+- Page reader: `src/pages/Finance/MoneyMovementLedger.jsx`.
+- Tidak ada append-only ledger, backfill, trigger posting, schema baru, atau perubahan Profit Loss.

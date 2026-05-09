@@ -441,6 +441,19 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - pastikan HPP Analysis membaca material cost dan labor cost dari Work Log completed tanpa mengubah data lama massal
 - pastikan Work Log lama yang sudah completed tetapi cost 0 tidak di-backfill otomatis tanpa task terpisah
 
+## Checklist Task 2 All-in-One - HPP Cost 0 Final Verification
+- [ ] Buat raw material bervarian dengan stok varian valid dan `averageActualUnitCost` master > 0, lalu Start Production dari PO dan pastikan `materialUsages[].costPerUnitSnapshot` memakai fallback cost master bila cost varian kosong.
+- [ ] Complete Work Log dari PO dan pastikan `materialCostActual`, `totalCostActual`, dan `costPerGoodUnit` tersimpan > 0 saat material cost dan `goodQty` valid.
+- [ ] Pastikan Complete Work Log tidak error Firestore `reads after writes`: semua material/output stock document terbaca sebelum write transaksi.
+- [ ] Pastikan output stok tetap bertambah satu kali, dan HPP/average cost output hanya update jika `goodQty > 0` dan `totalCostActual > 0`.
+- [ ] Pastikan jika total cost 0, output stock boleh mengikuti flow existing tetapi HPP/average cost master tidak ditulis 0 sebagai HPP valid.
+- [ ] Generate payroll otomatis dari Work Log completed dan pastikan operator kosong, rate step 0, basis invalid, atau output basis 0 menghasilkan error yang jelas.
+- [ ] Pastikan `includePayrollInHpp=false` tidak masuk ke `payrollFinalAmount`, `laborCostActual`, `totalCostActual`, dan HPP Analysis.
+- [ ] Buka Detail Work Log dan HPP Analysis: jika summary material lama 0 tetapi line material punya snapshot cost, angka display tetap membaca fallback line tanpa backfill massal.
+- [ ] Buka Reset Maintenance > HPP Cost Testing / Reset Modal: Preview wajib tampil sebelum reset, keyword konfirmasi wajib benar, dan reset hanya menyentuh field cost/HPP allowlist.
+- [ ] Simpan baseline modal/HPP, jalankan reset, lalu restore baseline dan pastikan stok, transaksi, PO, Work Log, Payroll, Sales, Purchases, Returns, dan Cash tidak berubah.
+- [ ] Jalankan smoke regression: PO ready → Start Production → Complete Work Log → Payroll generated → HPP Analysis → Reset preview/baseline/restore.
+
 ## Checklist Task 3 — Clarify Payroll dan Detail Karyawan Produksi
 
 ### Payroll Produksi — Detail Line Payroll
@@ -1283,3 +1296,101 @@ Risiko:
 - [ ] Desktop lebar, laptop 1366px, laptop 1280px, tablet, mobile, sidebar expanded, dan sidebar collapsed tidak horizontal overflow.
 - [ ] Tidak ada console error; logout tetap bisa diklik; role badge jelas; menu active benar; action buttons terbaca; modal/dropdown/select/date picker tetap solid.
 - [ ] Tidak ada perubahan data, service, transaksi, stok, report mapper, produksi, payroll, HPP, auth, role, route, atau reset maintenance.
+
+## Checklist HPP Cost Testing / Reset Modal — Reset Maintenance
+
+### Baseline modal/HPP
+- [ ] Buka Reset Maintenance lalu buka section `HPP Cost Testing / Reset Modal`.
+- [ ] Klik `Simpan Baseline Modal/HPP Saat Ini` dan pastikan sukses.
+- [ ] Refresh halaman dan pastikan baseline summary tampil sebagai tersedia.
+- [ ] Pastikan baseline hanya menyimpan field cost/HPP master, bukan stok atau transaksi.
+
+### Preview reset modal aktual bahan baku
+- [ ] Pilih `Reset Modal Aktual Bahan Baku`.
+- [ ] Klik preview dan pastikan target hanya `raw_materials`.
+- [ ] Pastikan field terdampak hanya `averageActualUnitCost` dan field varian terkait jika memang ada.
+- [ ] Pastikan tidak ada field stok/reserved/available/min stock di preview.
+
+### Preview reset modal referensi rata-rata
+- [ ] Pilih `Reset Modal Referensi Rata-rata`.
+- [ ] Klik preview dan pastikan target hanya `raw_materials`.
+- [ ] Pastikan field terdampak hanya `restockReferencePrice` dan field varian terkait jika memang ada.
+- [ ] Pastikan `averageActualUnitCost`, transaksi pembelian, dan supplier catalog tidak ikut terdampak.
+
+### Preview reset HPP produk jadi
+- [ ] Pilih `Reset HPP Produk Jadi`.
+- [ ] Klik preview dan pastikan target hanya `products`.
+- [ ] Pastikan field terdampak hanya `hppPerUnit` dan `variants.hppPerUnit` jika memang ada.
+- [ ] Pastikan harga jual, stok, SKU, category, dan pricing rules tidak ikut terdampak.
+
+### Preview reset average cost semi finished
+- [ ] Pilih `Reset Average Cost Semi Finished`.
+- [ ] Klik preview dan pastikan target hanya `semi_finished_materials`.
+- [ ] Pastikan field terdampak hanya `averageCostPerUnit` dan `variants.averageCostPerUnit` jika memang ada.
+- [ ] Pastikan stok, reserved, available, variant identity, dan relasi BOM tidak ikut terdampak.
+
+### Reset semua sumber cost HPP testing
+- [ ] Pilih `Reset Semua Sumber Cost HPP Testing`.
+- [ ] Klik preview dan pastikan target hanya raw material cost fields, product HPP fields, dan semi finished average cost fields.
+- [ ] Pastikan tidak menyentuh Work Log, Payroll, PO, stock mutation, transactions, sales, purchases, returns, atau cash.
+
+### Confirmation reset/restore
+- [ ] Klik `Jalankan Reset Modal/HPP` tanpa preview; pastikan ditolak.
+- [ ] Setelah preview, klik `Jalankan Reset Modal/HPP`; pastikan modal confirmation muncul.
+- [ ] Isi keyword salah dan pastikan aksi tidak jalan.
+- [ ] Isi `RESET MODAL HPP` pada data test dan pastikan hanya field cost/HPP yang berubah menjadi 0.
+- [ ] Klik `Restore Baseline Modal/HPP`; pastikan modal confirmation muncul.
+- [ ] Isi keyword salah dan pastikan restore tidak jalan.
+- [ ] Isi `RESTORE MODAL HPP` dan pastikan nilai cost/HPP kembali sesuai baseline.
+
+### Regression data setelah reset/restore modal HPP
+- [ ] Stok raw material tidak berubah.
+- [ ] Stok product tidak berubah.
+- [ ] Stok semi finished tidak berubah.
+- [ ] Purchases, sales, returns, production_orders, production_work_logs, production_payrolls, dan cash in/out tidak terhapus.
+- [ ] Work Log completed lama tidak diproses ulang otomatis.
+- [ ] HPP Analysis masih bisa dibuka.
+- [ ] HPP Analysis berubah hanya karena sumber cost master dipakai pada simulasi produksi berikutnya, bukan karena Work Log lama dibackfill otomatis.
+- [ ] Preview/reset transaksi existing, reset production planning only, baseline stok existing, sync stok existing, hapus data test existing, dan audit maintenance existing tetap jalan.
+
+## Checklist Buku Besar Kas / Log Pergerakan Uang
+
+### Akses menu dan route
+- [ ] Login sebagai Administrator.
+- [ ] Buka menu `Kas & Biaya` dan pastikan child `Buku Besar Kas` tampil.
+- [ ] Buka route `/finance/money-movement-ledger` dan pastikan halaman tampil tanpa whitescreen.
+- [ ] Login sebagai role `user` dan pastikan menu `Buku Besar Kas` tidak tampil.
+- [ ] Dengan role `user`, akses langsung route `/finance/money-movement-ledger` harus ditolak oleh route guard.
+
+### Source data dan anti double count
+- [ ] Data dari `incomes` tampil sebagai uang masuk `Penjualan Selesai`.
+- [ ] Data dari `revenues` tampil sebagai uang masuk `Cash In Manual` atau pemasukan legacy.
+- [ ] Data dari `expenses` tampil sebagai uang keluar.
+- [ ] Sales selesai tidak dihitung lagi langsung dari collection `sales`.
+- [ ] Purchase tidak dihitung lagi langsung dari collection `purchases`.
+- [ ] Payroll paid tidak dihitung lagi langsung dari collection `production_payrolls`.
+- [ ] Work Log completed tidak muncul sebagai uang keluar jika tidak ada dokumen `expenses`.
+- [ ] Inventory log, stock adjustment, HPP update, dan reset modal/HPP testing tidak muncul sebagai pergerakan uang.
+
+### Filter dan summary
+- [ ] Filter tahun bekerja.
+- [ ] Filter bulan bekerja.
+- [ ] Filter arah `Masuk` hanya menampilkan `incomes` dan `revenues`.
+- [ ] Filter arah `Keluar` hanya menampilkan `expenses`.
+- [ ] Filter sumber `Penjualan Selesai`, `Cash In Manual`, `Pembelian`, `Payroll Produksi`, `Cash Out Manual`, dan `Lainnya` bekerja sesuai row.
+- [ ] Search bisa mencari referensi, deskripsi, sumber, status, tipe, dan nominal.
+- [ ] Summary `Total Uang Masuk` sama dengan jumlah row masuk yang tampil.
+- [ ] Summary `Total Uang Keluar` sama dengan jumlah row keluar yang tampil.
+- [ ] Summary `Selisih Bersih Periode` = total masuk - total keluar dan tidak dibaca sebagai saldo akhir kas.
+- [ ] Limit transaksi membatasi jumlah row yang tampil tanpa crash.
+
+### Read-only dan regression
+- [ ] Membuka halaman tidak membuat dokumen Firestore baru.
+- [ ] Membuka halaman tidak mengubah `incomes`, `revenues`, `expenses`, `sales`, `purchases`, `production_payrolls`, `production_work_logs`, `inventory_logs`, atau `stock_adjustments`.
+- [ ] Cash In manual tetap bisa dibuat dari halaman Pemasukan.
+- [ ] Cash Out manual tetap bisa dibuat dari halaman Pengeluaran.
+- [ ] Profit Loss tidak berubah akibat membuka Buku Besar Kas.
+- [ ] Sales, Purchases, Payroll, HPP, Inventory, dan Reset Maintenance tetap berjalan sesuai checklist existing.
+- [ ] Cek console error.
+- [ ] Jalankan `npm run lint` jika environment tersedia.
+- [ ] Jalankan `npm run build` jika environment tersedia.
