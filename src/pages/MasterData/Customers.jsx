@@ -181,7 +181,7 @@ const Customers = () => {
     <div className="page-container">
       <PageHeader
         title="Customer"
-        subtitle="Master customer untuk Sales."
+        subtitle="Master customer Sales."
         actions={[
           {
             key: "create-customer",
@@ -200,7 +200,7 @@ const Customers = () => {
 
       <PageSection
         title="Daftar Customer"
-        subtitle="Kontak dan alamat customer."
+        subtitle="Kontak dan alamat."
       >
         <DataRefreshIndicator loading={loading} dataSource={customers} />
         <Table

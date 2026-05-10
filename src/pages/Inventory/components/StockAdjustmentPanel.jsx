@@ -29,6 +29,7 @@ import {
   inferHasVariants,
   applyStockMutationToItem,
 } from "../../../utils/variants/variantStockHelpers";
+import { showFormValidationFeedback } from '../../../utils/forms/formValidationFeedback';
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -693,13 +694,18 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         cancelText="Batal"
         width={700}
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmitStockAdjustment}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleSubmitStockAdjustment}
+          onFinishFailed={(errorInfo) => showFormValidationFeedback(errorInfo, { form })}
+        >
           <Alert
             type="warning"
             showIcon
             style={{ marginBottom: 16 }}
             message="Penyesuaian akan mengubah stok"
-            description="Pastikan item, varian, qty, dan alasan sudah benar sebelum simpan."
+            description="Cek item, varian, qty, dan alasan sebelum simpan."
           />
 
           <Form.Item
@@ -753,7 +759,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               name="variantKey"
               label="Varian Item"
               rules={[{ required: true, message: "Varian wajib dipilih untuk item bervarian" }]}
-              extra="Pilih varian agar stok master tetap sinkron."
+              extra="Pilih varian jika item bervarian."
             >
               <Select showSearch placeholder="Pilih varian" optionFilterProp="children">
                 {variantOptions.map((variantOption) => (

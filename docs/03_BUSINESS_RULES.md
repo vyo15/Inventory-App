@@ -576,7 +576,14 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Varian baru pada item existing wajib dibuat dengan `stock/currentStock/reservedStock/availableStock = 0`.
 - Item lama yang masih punya stok master atau reserved stock tidak boleh dikonversi otomatis ke varian; user harus memakai Stock Management / Stock Adjustment / transaksi resmi bila stok perlu dialihkan.
 - `variantKey` existing tidak boleh berubah saat nama/label varian diganti karena itu adalah identitas bucket stok/reference transaksi.
-- Hapus varian wajib ditolak jika varian masih punya `stock`, `currentStock`, `reservedStock`, atau `availableStock` yang belum aman.
+- Hapus/arsip varian wajib ditolak jika varian masih punya `stock`, `currentStock`, `reservedStock`, atau `availableStock` yang belum aman.
+- Jika semua bucket stok varian aman 0, varian boleh disembunyikan dari transaksi baru dengan memindahkannya ke `archivedVariants[]`, bukan hard delete.
+- Mode varian existing boleh dimatikan hanya jika semua varian aktif punya `currentStock`, `reservedStock`, dan `availableStock` 0; hasilnya `variants[]` aktif kosong, `hasVariants=false`, dan tombstone tetap ada di `archivedVariants[]`.
+- `archivedVariants[]` wajib menyimpan `variantKey`, label/nama/kode varian, snapshot stok terakhir, `isArchived=true`, `isActive=false`, `archivedAt`, `archivedBy`, dan `archiveReason`.
+- Varian arsip tidak boleh muncul sebagai pilihan transaksi baru, tetapi boleh ditampilkan di detail master sebagai audit/history.
+- Jika user membuat lagi varian dengan nama/struktur yang sama seperti arsip, service wajib restore `variantKey` lama dari `archivedVariants[]`, menghapusnya dari arsip aktif, dan menulis `restoredAt/restoredBy/restoreReason`.
+- Duplicate active variant tetap wajib ditolak; hanya satu varian aktif yang boleh memakai nama/struktur/`variantKey` yang sama.
+- `variantModeHistory[]` adalah audit ringkas untuk event `variant_mode_enabled`, `variant_mode_disabled`, `variant_archived`, dan `variant_restored`; history ini tidak menggantikan inventory log stok.
 
 ### 15.2 Pricing Rules optional
 

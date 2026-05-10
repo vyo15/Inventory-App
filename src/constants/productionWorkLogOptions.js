@@ -9,11 +9,31 @@ export const PRODUCTION_WORK_LOG_SOURCE_TYPES = [
   { value: "production_order", label: "Production Order" },
 ];
 
+/* =====================================================
+SECTION: Active Work Log Status Options — AKTIF/GUARDED
+Fungsi:
+- Menjaga opsi status Work Log aktif hanya pada status eksekusi produksi, tanpa opsi Draft di filter/form UI aktif.
+
+Dipakai oleh:
+- ProductionWorkLogs.jsx filter status dan form Work Log.
+
+Alasan perubahan:
+- Work Log produksi sekarang merepresentasikan eksekusi kerja; Draft BOM/PO hanya legacy helper pembentuk template data, bukan status operasional baru.
+
+Catatan cleanup:
+- PRODUCTION_WORK_LOG_LEGACY_STATUSES hanya untuk membaca data lama yang masih tersimpan sebagai draft.
+
+Risiko:
+- Jika Draft dikembalikan ke opsi aktif, user bisa membuat Work Log non-eksekusi yang tidak mengikuti flow PO/start production.
+===================================================== */
 export const PRODUCTION_WORK_LOG_STATUSES = [
-  { value: "draft", label: "Draft" },
   { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
+];
+
+export const PRODUCTION_WORK_LOG_LEGACY_STATUSES = [
+  { value: "draft", label: "Draft (Legacy)" },
 ];
 
 export const PRODUCTION_WORK_LOG_TARGET_TYPES = [
@@ -43,7 +63,10 @@ export const toOptionMap = (options = []) =>
 export const WORK_LOG_SOURCE_TYPE_MAP = toOptionMap(
   PRODUCTION_WORK_LOG_SOURCE_TYPES,
 );
-export const WORK_LOG_STATUS_MAP = toOptionMap(PRODUCTION_WORK_LOG_STATUSES);
+export const WORK_LOG_STATUS_MAP = toOptionMap([
+  ...PRODUCTION_WORK_LOG_LEGACY_STATUSES,
+  ...PRODUCTION_WORK_LOG_STATUSES,
+]);
 export const WORK_LOG_TARGET_TYPE_MAP = toOptionMap(
   PRODUCTION_WORK_LOG_TARGET_TYPES,
 );
@@ -117,7 +140,7 @@ export const DEFAULT_PRODUCTION_WORK_LOG_FORM = {
   bomVersion: null,
 
   // ACTIVE / FINAL: field link PO didaftarkan di default form agar drawer
-  // Work Log tidak kehilangan snapshot PO saat Apply Draft Production Order.
+  // Work Log tidak kehilangan snapshot PO saat Ambil Data Production Order.
   productionOrderId: "",
   productionOrderCode: "",
   productionOrderStatusSnapshot: "",
@@ -157,7 +180,7 @@ export const DEFAULT_PRODUCTION_WORK_LOG_FORM = {
   sequenceNo: 1,
 
   sourceType: "manual",
-  status: "draft",
+  status: "in_progress",
 
   plannedQty: 1,
   actualOutputQty: 0,

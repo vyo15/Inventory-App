@@ -62,6 +62,7 @@ import ProductionPageHeader from "../../components/Produksi/shared/ProductionPag
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -267,7 +268,7 @@ const ProductionSteps = () => {
       resetFormState();
       await loadData();
     } catch (error) {
-      if (error?.errorFields) return;
+      if (showFormValidationFeedback(error, { form })) return;
 
       if (error?.type === "validation" && error?.errors) {
         const fields = Object.entries(error.errors).map(([name, errors]) => ({
@@ -541,7 +542,7 @@ const ProductionSteps = () => {
       {/* AKTIF / GUARDED: header shared dipakai agar pola halaman produksi konsisten, flow data step tetap existing. */}
       <ProductionPageHeader
         title="Tahapan Produksi"
-        description="Master step sederhana untuk standarisasi proses, relasi karyawan, BOM, dan source of truth payroll produksi."
+        description="Master step untuk proses, BOM, dan payroll."
         onAdd={handleAdd}
         addLabel="Tambah Step"
       />
@@ -588,7 +589,7 @@ const ProductionSteps = () => {
 
       <PageSection
         title="Daftar Tahapan Produksi"
-        subtitle="Step tetap menjadi master referensi untuk assignment karyawan, BOM, dan payroll rule produksi."
+        subtitle="Referensi step untuk karyawan, BOM, dan payroll."
       >
         {/* =====================================================
             SECTION: Main table render — AKTIF

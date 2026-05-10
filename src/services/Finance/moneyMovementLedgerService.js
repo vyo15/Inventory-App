@@ -8,6 +8,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 const DEFAULT_LEDGER_LIMIT = 500;
 const MONEY_IN_COLLECTIONS = ["incomes", "revenues"];
@@ -139,6 +140,29 @@ export const normalizeMoneyMovementLedgerRow = ({ sourceCollection, documentId, 
   const amount = Math.round(toFiniteNumber(record.amount || record.totalAmount || 0));
   const date = record.date || record.createdAt || null;
   const description = toSafeString(record.description || record.note || record.notes || record.type);
+  /*
+  =====================================================
+  SECTION: Referensi display Buku Besar Kas — AKTIF / GUARDED
+  Fungsi:
+  - Menampilkan kode bisnis dari incomes/revenues/expenses tanpa menambah source data baru.
+
+  Dipakai oleh:
+  - MoneyMovementLedger.jsx.
+
+  Alasan perubahan:
+  - Ledger kas tidak boleh menampilkan Firestore ID random jika dokumen punya sourceRef/referenceNumber.
+
+  Catatan cleanup:
+  - Data lama tanpa kode bisnis tetap akan fallback ke ID ringkas sampai data test di-reset.
+
+  Risiko:
+  - Jangan menambah pembacaan sales/purchases/payroll mentah di sini karena bisa double count.
+  =====================================================
+  */
+  const referenceCode = resolveDisplayReference(
+    { id: documentId, ...record, referenceCode: sourceMeta.referenceCode },
+    { fallback: "-" },
+  );
 
   return {
     id: `${sourceCollection}-${documentId}`,
@@ -147,7 +171,7 @@ export const normalizeMoneyMovementLedgerRow = ({ sourceCollection, documentId, 
     direction,
     sourceModule: sourceMeta.sourceModule,
     sourceLabel: sourceMeta.sourceLabel,
-    referenceCode: sourceMeta.referenceCode,
+    referenceCode,
     description,
     amount,
     status: sourceMeta.status,

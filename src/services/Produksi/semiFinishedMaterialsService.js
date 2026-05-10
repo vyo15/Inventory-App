@@ -22,11 +22,19 @@ import {
   calculateSemiFinishedTotalsFromVariants,
   normalizeSemiFinishedVariants,
 } from "../../constants/semiFinishedMaterialOptions";
+import {
+  appendVariantModeHistory,
+  archiveActiveVariantsForModeDisable,
+  areAllVariantsStockEmpty,
+  buildVariantModeHistoryEntry,
+  isVariantStockEmpty,
+  reconcileVariantArchiveState,
+} from "../../utils/variants/variantArchiveHelpers";
 
 const COLLECTION_NAME = "semi_finished_materials";
 
 const inferHasVariants = (item = {}) =>
-  item?.hasVariants === true || (Array.isArray(item?.variants) && item.variants.length > 0);
+  item?.hasVariants === true || (Array.isArray(item?.variants) && item.variants.some((variant) => variant?.isArchived !== true));
 
 const toStockNumber = (value = 0) => {
   const number = Number(value ?? 0);
@@ -81,11 +89,14 @@ const normalizeZeroStockSemiVariants = (variants = []) =>
     stock: 0,
     reservedStock: 0,
     availableStock: 0,
+    isActive: true,
+    isArchived: false,
   }));
 
 const enrichMaterialWithVariantTotals = (item = {}) => {
   const hasVariants = inferHasVariants(item);
-  const variants = hasVariants ? normalizeSemiFinishedVariants(item.variants || []) : [];
+  const activeSourceVariants = (Array.isArray(item.variants) ? item.variants : []).filter((variant) => variant?.isArchived !== true);
+  const variants = hasVariants ? normalizeSemiFinishedVariants(activeSourceVariants) : [];
 
   if (!hasVariants || variants.length === 0) {
     const currentStock = Number(item.currentStock ?? item.stock ?? 0);
@@ -215,14 +226,10 @@ const resolveSemiVariantDisplayValue = (variant = {}, existingVariant = {}) =>
     .trim();
 
 const hasProtectedVariantStock = (variant = {}) => {
-  const currentStock = toStockNumber(variant.currentStock ?? variant.stock ?? 0);
-  const reservedStock = toStockNumber(variant.reservedStock || 0);
-  const availableStock = toStockNumber(variant.availableStock ?? Math.max(currentStock - reservedStock, 0));
-
-  // IMS NOTE [GUARDED | stok-varian]: hapus varian ditolak bila salah satu
+  // IMS NOTE [GUARDED | stok-varian]: hapus/archive varian ditolak bila salah satu
   // bucket stok masih bernilai. Hubungan flow: mencegah bucket stok/reference
   // hilang dari master tanpa Stock Adjustment/transaksi resmi. STATUS: AKTIF.
-  return currentStock > 0 || reservedStock > 0 || availableStock > 0;
+  return !isVariantStockEmpty(variant);
 };
 
 const assertNoSemiVariantWithStockRemoved = (editedVariants = [], existingVariants = []) => {
@@ -257,7 +264,12 @@ const validateDuplicateSemiVariantNames = (variants = []) => {
   return errors;
 };
 
-const mergeSemiVariantMetadataWithExistingStock = (editedVariants = [], existingVariants = []) => {
+const mergeSemiVariantMetadataWithExistingStock = (
+  editedVariants = [],
+  existingVariants = [],
+  archivedVariants = [],
+  options = {},
+) => {
   const normalizedEdited = normalizeSemiFinishedVariants(editedVariants);
   const normalizedExisting = normalizeSemiFinishedVariants(existingVariants);
 
@@ -267,11 +279,7 @@ const mergeSemiVariantMetadataWithExistingStock = (editedVariants = [], existing
 
   assertNoSemiVariantWithStockRemoved(normalizedEdited, normalizedExisting);
 
-  const existingLookup = buildSemiVariantLookup(normalizedExisting);
-
-  const mergedVariants = normalizedEdited.map((variant, index) => {
-    const existingVariant = findExistingSemiVariant(variant, existingLookup, index);
-
+  const mergeActiveVariant = (variant = {}, existingVariant = {}) => {
     const displayValue = resolveSemiVariantDisplayValue(variant, existingVariant);
     const currentStock = existingVariant
       ? toNumberValue(existingVariant.currentStock ?? existingVariant.stock ?? 0)
@@ -280,9 +288,6 @@ const mergeSemiVariantMetadataWithExistingStock = (editedVariants = [], existing
       ? toNumberValue(existingVariant.reservedStock || 0)
       : 0;
 
-    // IMS NOTE [GUARDED | identity-safe]: edit warna semi finished adalah rename
-    // display/metadata. variantKey existing tetap dipakai agar bucket stok, PO,
-    // Work Log, HPP, dan inventory log lama tidak perlu dimigrasi. STATUS: AKTIF.
     return {
       ...variant,
       variantKey: existingVariant?.variantKey || variant.variantKey,
@@ -298,15 +303,51 @@ const mergeSemiVariantMetadataWithExistingStock = (editedVariants = [], existing
       averageCostPerUnit: toNumberValue(
         variant.averageCostPerUnit ?? existingVariant?.averageCostPerUnit ?? 0,
       ),
+      isActive: variant.isActive !== false,
+      isArchived: false,
     };
+  };
+
+  const buildNewVariant = (variant = {}) => {
+    const displayValue = resolveSemiVariantDisplayValue(variant, {});
+    return {
+      ...variant,
+      color: displayValue,
+      name: displayValue,
+      variantLabel: displayValue,
+      label: displayValue,
+      currentStock: 0,
+      stock: 0,
+      reservedStock: 0,
+      availableStock: 0,
+      minStockAlert: toStockNumber(variant.minStockAlert || 0),
+      averageCostPerUnit: toNumberValue(variant.averageCostPerUnit || 0),
+      isActive: true,
+      isArchived: false,
+    };
+  };
+
+  const archiveResult = reconcileVariantArchiveState({
+    editedVariants: normalizedEdited,
+    existingVariants: normalizedExisting,
+    archivedVariants,
+    normalizeVariants: normalizeSemiFinishedVariants,
+    mergeActiveVariant,
+    buildNewVariant,
+    protectedRemovalMessage: "Varian yang masih punya stock/reserved tidak boleh diarsipkan. Gunakan flow produksi/adjustment resmi terlebih dulu.",
+    duplicateActiveMessage: "Nama varian aktif tidak boleh duplikat",
+    now: options.now,
+    actor: options.actor,
+    archiveReason: options.archiveReason || "Varian Semi Product diarsipkan dari edit master setelah stok 0.",
+    restoreReason: options.restoreReason || "Varian Semi Product lama direstore karena dibuat lagi dengan struktur yang sama.",
   });
 
-  const duplicateErrors = validateDuplicateSemiVariantNames(mergedVariants);
+  const duplicateErrors = validateDuplicateSemiVariantNames(archiveResult.activeVariants);
   if (Object.keys(duplicateErrors).length > 0) {
     throw { type: "validation", errors: duplicateErrors };
   }
 
-  return mergedVariants;
+  return archiveResult;
 };
 
 const normalizeSemiFinishedMetadataPayload = (
@@ -315,18 +356,78 @@ const normalizeSemiFinishedMetadataPayload = (
   selectedProducts = [],
   existingMaterial = {},
 ) => {
+  const existingActiveVariants = (Array.isArray(existingMaterial.variants) ? existingMaterial.variants : [])
+    .filter((variant) => variant?.isArchived !== true);
+  const existingArchivedVariants = Array.isArray(existingMaterial.archivedVariants)
+    ? existingMaterial.archivedVariants
+    : [];
   const existingHasVariants = inferHasVariants(existingMaterial);
   const wantsVariants = values.hasVariants === true;
   const canActivateVariants = !existingHasVariants && wantsVariants;
-  const hasVariants = existingHasVariants || canActivateVariants;
+  const hasVariants = wantsVariants;
+  const now = new Date().toISOString();
+  const actor = resolveAuditUser(currentUser);
   const payload = {
     ...resolveSemiFinishedMetadata(
-      { ...values, hasVariants, variantLabel: values.variantLabel || existingMaterial.variantLabel || 'Varian' },
+      { ...values, hasVariants, variantLabel: hasVariants ? values.variantLabel || existingMaterial.variantLabel || 'Varian' : '' },
       currentUser,
       selectedProducts,
     ),
     hasVariants,
   };
+
+  /* =====================================================
+  SECTION: Semi Finished Variant Archive/Restore Guard — GUARDED
+  Fungsi:
+  - Menjadi guard service utama untuk OFF mode varian, archive varian stok 0, restore archived variant, dan duplicate active guard Semi Finished.
+
+  Dipakai oleh:
+  - updateSemiFinishedMaterial transaction setelah membaca dokumen terbaru dan drawer Semi Finished Materials.
+
+  Alasan perubahan:
+  - Semi Finished dipakai PO/Work Log/HPP; variantKey lama harus tetap sebagai tombstone saat varian disembunyikan dari transaksi baru.
+
+  Catatan cleanup:
+  - Jika audit user belum tersedia, actor fallback ke system dari resolveAuditUser.
+
+  Risiko:
+  - Jika guard ini dilepas, client lama dapat hard delete varian produksi atau membuat duplicate variantKey yang mengganggu costing.
+  ===================================================== */
+  if (existingHasVariants && !wantsVariants) {
+    if (!areAllVariantsStockEmpty(existingActiveVariants)) {
+      throw {
+        type: "validation",
+        errors: {
+          hasVariants: "Mode varian hanya bisa dimatikan jika semua varian current/reserved/available stock 0.",
+        },
+      };
+    }
+
+    const archiveResult = archiveActiveVariantsForModeDisable({
+      activeVariants: existingActiveVariants,
+      archivedVariants: existingArchivedVariants,
+      now,
+      actor,
+      archiveReason: "Mode varian Semi Product dimatikan setelah semua stok varian 0.",
+    });
+
+    return {
+      ...payload,
+      hasVariants: false,
+      variantLabel: '',
+      variants: [],
+      archivedVariants: archiveResult.archivedVariants,
+      variantModeHistory: appendVariantModeHistory(existingMaterial.variantModeHistory, archiveResult.historyEntries),
+      variantCount: 0,
+      activeVariantCount: 0,
+      currentStock: 0,
+      stock: 0,
+      reservedStock: 0,
+      availableStock: 0,
+      minStockAlert: resolveSemiFinishedMasterMinStockAlert(values),
+      averageCostPerUnit: toNumberValue(values.averageCostPerUnit || existingMaterial.averageCostPerUnit || 0),
+    };
+  }
 
   if (canActivateVariants) {
     if (hasProtectedMasterStock(existingMaterial)) {
@@ -348,14 +449,31 @@ const normalizeSemiFinishedMetadataPayload = (
       throw { type: "validation", errors: duplicateErrors };
     }
 
-    const variantTotals = calculateSemiFinishedTotalsFromVariants(convertedVariants);
+    const mergeResult = mergeSemiVariantMetadataWithExistingStock(
+      convertedVariants,
+      [],
+      existingArchivedVariants,
+      {
+        now,
+        actor,
+        restoreReason: "Varian Semi Product lama direstore saat mode varian diaktifkan kembali.",
+      },
+    );
+    const variantTotals = calculateSemiFinishedTotalsFromVariants(mergeResult.activeVariants);
+    const historyEntries = [
+      buildVariantModeHistoryEntry('variant_mode_enabled', {
+        now,
+        actor,
+        reason: 'Mode varian Semi Product diaktifkan dari item stok master 0.',
+      }),
+      ...mergeResult.historyEntries,
+    ];
 
-    // IMS NOTE [GUARDED | konversi-varian-zero-stock]: Semi Product lama non-varian
-    // boleh mulai memakai varian hanya saat stok master aman 0. Tidak ada stok
-    // yang dipindah otomatis; semua varian baru mulai dari 0.
     return {
       ...payload,
       variants: variantTotals.variants,
+      archivedVariants: mergeResult.archivedVariants,
+      variantModeHistory: appendVariantModeHistory(existingMaterial.variantModeHistory, historyEntries),
       variantCount: variantTotals.variantCount,
       activeVariantCount: variantTotals.activeVariantCount,
       currentStock: 0,
@@ -368,27 +486,30 @@ const normalizeSemiFinishedMetadataPayload = (
   }
 
   if (!hasVariants) {
-    // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: update metadata
-    // non-varian tidak mengirim stock/currentStock/reservedStock/availableStock.
     return {
       ...payload,
+      hasVariants: false,
+      variantLabel: '',
       variants: [],
+      archivedVariants: existingArchivedVariants,
       variantCount: 0,
       activeVariantCount: 0,
     };
   }
 
-  const mergedVariants = mergeSemiVariantMetadataWithExistingStock(
+  const mergeResult = mergeSemiVariantMetadataWithExistingStock(
     values.variants || [],
-    existingMaterial.variants || [],
+    existingActiveVariants,
+    existingArchivedVariants,
+    { now, actor },
   );
-  const variantTotals = calculateSemiFinishedTotalsFromVariants(mergedVariants);
+  const variantTotals = calculateSemiFinishedTotalsFromVariants(mergeResult.activeVariants);
 
-  // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: array variants ditulis
-  // ulang hanya setelah stok existing/latest digabung kembali.
   return {
     ...payload,
     variants: variantTotals.variants,
+    archivedVariants: mergeResult.archivedVariants,
+    variantModeHistory: appendVariantModeHistory(existingMaterial.variantModeHistory, mergeResult.historyEntries),
     variantCount: variantTotals.variantCount,
     activeVariantCount: variantTotals.activeVariantCount,
     currentStock: variantTotals.currentStock,

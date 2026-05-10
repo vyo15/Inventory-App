@@ -48,6 +48,7 @@ import {
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -1057,7 +1058,7 @@ const Sales = () => {
     <>
       <PageHeader
         title="Daftar Penjualan"
-        subtitle="Penjualan, stok keluar, dan status pembayaran."
+        subtitle="Penjualan dan status pembayaran."
         actions={[
           {
             key: "add-sale",
@@ -1071,14 +1072,14 @@ const Sales = () => {
 
       <PageSection
         title="Ringkasan Penjualan"
-        subtitle="Pending belum masuk kas resmi."
+        subtitle="Pending belum masuk kas."
       >
         <SummaryStatGrid items={salesSummaryItems} columns={{ xs: 24, md: 8 }} />
       </PageSection>
 
       <PageSection
         title="Filter Penjualan"
-        subtitle="Status dan referensi transaksi."
+        subtitle="Status transaksi."
       >
         <div style={{ marginBottom: 12, maxWidth: 360 }}>
           <Input.Search
@@ -1094,7 +1095,7 @@ const Sales = () => {
 
       <PageSection
         title="Data Penjualan"
-        subtitle="Stok keluar dan pemasukan mengikuti status selesai."
+        subtitle="Stok dan kas mengikuti status selesai."
       >
         <DataRefreshIndicator loading={isLoading} dataSource={filteredSalesRecords} />
         <Table
@@ -1117,8 +1118,13 @@ const Sales = () => {
         cancelText="Batal"
         width={860}
       >
-        <Form form={form} layout="vertical" onFinish={handleAddSale}>
-          <Form.Item label="Pelanggan" name="customerId" extra="Opsional untuk pembeli umum atau marketplace.">
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleAddSale}
+          onFinishFailed={(errorInfo) => showFormValidationFeedback(errorInfo, { form })}
+        >
+          <Form.Item label="Pelanggan" name="customerId" extra="Opsional untuk pembeli umum.">
             <Select placeholder="Pilih pelanggan" allowClear showSearch optionFilterProp="children">
               {customers.map((customer) => (
                 <Option key={customer.id} value={customer.id}>
@@ -1204,7 +1210,7 @@ const Sales = () => {
                                 name={[name, "variantKey"]}
                                 label={selectedItem.variantLabel || "Varian"}
                                 rules={[{ required: true, message: "Pilih varian!" }]}
-                                extra="Item ini bervarian. Penjualan wajib memotong stok varian yang dipilih."
+                                extra="Item bervarian wajib pilih varian."
                               >
                                 <Select placeholder="Pilih varian" showSearch optionFilterProp="children">
                                   {buildVariantOptionsFromItem(selectedItem).map((item) => (

@@ -335,7 +335,7 @@ const ProductionProfiles = () => {
       {/* AKTIF / GUARDED: migrasi header ke shared produksi, menjaga konsistensi tampilan tanpa mengubah rule profil produksi. */}
       <ProductionPageHeader
         title="Profil Produksi"
-        description="Simpan rumus hasil, batch assembly, dan batas miss per produk. BOM tetap jadi resep bahan, sedangkan profil produksi menjadi aturan hitung operasional."
+        description="Aturan hitung hasil dan batas miss per produk."
         onAdd={handleAdd}
         addLabel="Tambah Profil"
       />
@@ -369,7 +369,7 @@ const ProductionProfiles = () => {
 
       <PageSection
         title="Daftar Profil Produksi"
-        subtitle="Profil membantu standarisasi hitung kapasitas dan target operasional per produk."
+        subtitle="Standar kapasitas dan target produk."
       >
         {/* =====================================================
             SECTION: Main table render — AKTIF

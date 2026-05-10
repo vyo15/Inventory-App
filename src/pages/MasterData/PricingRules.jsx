@@ -564,7 +564,7 @@ const PricingRules = () => {
         <div className="ims-cell-stack ims-cell-stack-tight">
           <Text strong>{value || "-"}</Text>
           <Text type="secondary" className="ims-cell-meta">
-            {record?.pricingMode === "manual" ? "Mode manual" : "Mode rule"}
+            {record?.pricingMode === "manual" ? "Manual - dilewati" : "Pricing Rule - diproses jika valid"}
           </Text>
         </div>
       ),
@@ -642,7 +642,7 @@ const PricingRules = () => {
     <div className="page-container">
       <PageHeader
         title="Pricing Rules"
-        subtitle="Aturan harga otomatis per item."
+        subtitle="Aturan harga otomatis."
         actions={[
           {
             key: "create-pricing-rule",
@@ -659,7 +659,7 @@ const PricingRules = () => {
         style={{ marginBottom: 16 }}
         type="info"
         showIcon
-        message="Harga dihitung dari biaya dasar, margin, buffer, dan pembulatan. Item manual dilewati."
+        message="Pricing Rules berlaku untuk item mode rule; item manual dilewati."
       />
 
       <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} />
@@ -667,7 +667,7 @@ const PricingRules = () => {
       {/* SECTION: tabel pricing rules */}
       <PageSection
         title="Daftar Pricing Rules"
-        subtitle="Berlaku untuk item mode rule."
+        subtitle="Hanya item mode rule yang diproses."
       >
         {/* SECTION: tabel utama pricing rule memakai foundation global supaya seragam */}
         <DataRefreshIndicator loading={pageLoading} dataSource={rules} />
@@ -890,7 +890,7 @@ const PricingRules = () => {
           <Alert
             type="warning"
             showIcon
-            message="Bahan baku memakai modal aktual rata-rata. Produk jadi memakai HPP per unit."
+            message="Bahan baku memakai modal/restock; produk memakai HPP."
           />
         </Form>
       </Modal>
@@ -940,7 +940,7 @@ const PricingRules = () => {
           style={{ marginBottom: 16 }}
           type="info"
           showIcon
-          message="Preview hanya mengubah item mode rule dengan biaya dasar valid."
+          message="Preview/apply memproses item mode rule dengan biaya valid."
         />
 
         {/* SECTION: ringkasan preview */}

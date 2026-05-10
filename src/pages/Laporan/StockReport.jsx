@@ -12,6 +12,7 @@ import { db } from "../../firebase";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 const { Search } = Input;
 const { Option } = Select;
@@ -253,6 +254,7 @@ const StockReport = () => {
         `Pencarian: ${searchTerm || "-"}`,
       ],
       columns: [
+        { key: "displayReference", label: "Kode Item" },
         { key: "name", label: "Nama Item" },
         { key: "category", label: "Kategori" },
         { key: "type", label: "Jenis" },
@@ -263,6 +265,7 @@ const StockReport = () => {
       ],
       data: filteredData.map((item) => ({
         ...item,
+        displayReference: resolveDisplayReference(item),
         category: item.category || "-",
       })),
     });
@@ -287,6 +290,11 @@ const StockReport = () => {
   ===================================================== */
   const columns = useMemo(
     () => [
+      {
+        title: "Kode",
+        key: "displayReference",
+        render: (_, record) => resolveDisplayReference(record),
+      },
       {
         title: "Nama Item",
         dataIndex: "name",
@@ -451,7 +459,7 @@ const StockReport = () => {
           bordered
           tableLayout="fixed"
           locale={{
-            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data stok yang cocok dengan filter saat ini." />),
+            emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data stok sesuai filter." />),
           }}
         />
       </PageSection>

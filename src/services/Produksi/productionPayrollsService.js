@@ -66,6 +66,11 @@ const sortProductionPayrollsNewestFirst = (items = []) =>
 // =====================================================
 const safeTrim = (value) => String(value || "").trim();
 
+const toSafeNumber = (value, fallback = 0) => {
+  const normalized = Number(value);
+  return Number.isFinite(normalized) ? normalized : fallback;
+};
+
 const getActorName = (currentUser = null) =>
   currentUser?.email ||
   currentUser?.displayName ||
@@ -200,6 +205,19 @@ Risiko:
 - Melonggarkan guard ini bisa membuat labor cost/HPP terlihat 0 tanpa alasan jelas.
 =====================================================
 */
+const isPayrollLineFinalForHpp = (line = {}) => {
+  if (line.status === "cancelled" || line.includePayrollInHpp === false) return false;
+
+  const status = safeTrim(line.status).toLowerCase();
+  const paymentStatus = safeTrim(line.paymentStatus).toLowerCase();
+
+  if (["confirmed", "paid"].includes(status)) return true;
+  if (paymentStatus === "paid") return true;
+
+  // LEGACY-COMPAT: payroll lama bisa belum punya status, tetapi sudah menyimpan finalAmount valid.
+  return !status && toSafeNumber(line.finalAmount) > 0;
+};
+
 const assertPayrollGenerationEligibility = ({ workLog = {}, stepRule = {}, outputQtyUsed = 0, workedQty = 0 } = {}) => {
   const payrollMode = safeTrim(stepRule.payrollMode || "per_qty");
   const payrollOutputBasis = safeTrim(stepRule.payrollOutputBasis || "good_qty");
@@ -524,35 +542,35 @@ const syncWorkLogPayrollSummary = async (workLogId) => {
 
   const activeLines = payrollLines.filter((line) => line.status !== "cancelled");
   const paidLines = activeLines.filter((line) => line.paymentStatus === "paid");
-  const hppLaborLines = activeLines.filter((line) => line.includePayrollInHpp !== false);
+  const hppLaborLines = activeLines.filter(isPayrollLineFinalForHpp);
   const payrollIds = activeLines.map((line) => line.id);
   /*
   =====================================================
   SECTION: Payroll final amount for HPP — GUARDED
   Fungsi:
-  - Menjumlahkan labor cost Work Log hanya dari line payroll aktif yang boleh masuk HPP.
+  - Menjumlahkan labor cost Work Log hanya dari line payroll final yang boleh masuk HPP.
 
   Dipakai oleh:
   - syncWorkLogPayrollSummary setelah create/update/status payroll.
 
   Alasan perubahan:
-  - Payroll support/fulfillment atau line yang includePayrollInHpp=false tidak boleh menaikkan HPP produksi.
+  - Draft/cancelled payroll serta line includePayrollInHpp=false tidak boleh menaikkan HPP final produksi.
 
   Catatan cleanup:
-  - Line count tetap memakai activeLines untuk audit payroll; nominal HPP memakai hppLaborLines.
+  - Line count tetap memakai activeLines untuk audit payroll; nominal HPP memakai hppLaborLines final.
 
   Risiko:
   - Jika includePayrollInHpp diabaikan, laporan HPP dan Profit/Loss bisa double count labor non-produksi inti.
   =====================================================
   */
   const payrollFinalAmount = hppLaborLines.reduce(
-    (sum, line) => sum + Number(line.finalAmount || 0),
+    (sum, line) => sum + toSafeNumber(line.finalAmount),
     0,
   );
 
-  const materialCostActual = Number(workLogData.materialCostActual || 0);
-  const overheadCostActual = Number(workLogData.overheadCostActual || 0);
-  const goodQty = Number(workLogData.goodQty || 0);
+  const materialCostActual = toSafeNumber(workLogData.materialCostActual);
+  const overheadCostActual = toSafeNumber(workLogData.overheadCostActual);
+  const goodQty = toSafeNumber(workLogData.goodQty);
   const totalCostActual = materialCostActual + payrollFinalAmount + overheadCostActual;
   const costPerGoodUnit = goodQty > 0 ? totalCostActual / goodQty : 0;
 
@@ -834,6 +852,35 @@ export const createProductionPayroll = async (values, currentUser = null) => {
     };
   }
 
+  /*
+  =====================================================
+  SECTION: Payroll sync anti double — GUARDED
+  Fungsi:
+  - Mencegah payroll aktif dobel untuk kombinasi Work Log + Step + Operator ketika line dibuat manual.
+
+  Dipakai oleh:
+  - createProductionPayroll sebelum addDoc payroll manual.
+
+  Alasan perubahan:
+  - Auto payroll sudah idempotent, tetapi line manual juga perlu guard agar HPP tidak double count.
+
+  Catatan cleanup:
+  - Bisa digabung dengan guard auto payroll jika service payroll dibuat helper transaksi tunggal.
+
+  Risiko:
+  - Jika guard ini dilepas, satu operator bisa punya beberapa payroll aktif pada Work Log yang sama.
+  =====================================================
+  */
+  const duplicateLine = await findExistingPayrollLineForWorker(values.workLogId, values.stepId || "", values);
+  if (duplicateLine) {
+    throw {
+      type: "validation",
+      errors: {
+        workerId: "Payroll aktif untuk operator ini pada Work Log dan step yang sama sudah ada",
+      },
+    };
+  }
+
   const payload = normalizePayload(values, currentUser, false);
   const result = await addDoc(collection(db, COLLECTION_NAME), payload);
   await syncWorkLogPayrollSummary(payload.workLogId || values.workLogId || "");
@@ -858,6 +905,16 @@ export const updateProductionPayroll = async (
       type: "validation",
       errors: {
         payrollNumber: "Nomor payroll sudah digunakan",
+      },
+    };
+  }
+
+  const duplicateLine = await findExistingPayrollLineForWorker(values.workLogId, values.stepId || "", values);
+  if (duplicateLine && duplicateLine.id !== id) {
+    throw {
+      type: "validation",
+      errors: {
+        workerId: "Payroll aktif untuk operator ini pada Work Log dan step yang sama sudah ada",
       },
     };
   }
@@ -930,7 +987,7 @@ const findExistingPayrollExpense = async (payrollId) => {
 };
 
 const buildPayrollExpensePayload = ({ payroll = {}, payrollId = "", paidAtDate = new Date() }) => {
-  const amount = Math.round(Number(payroll.finalAmount || 0));
+  const amount = Math.round(toSafeNumber(payroll.finalAmount));
   const sourceRef = payroll.payrollNumber || payrollId;
   const workerName = payroll.workerName || "Operator Produksi";
 
@@ -999,7 +1056,7 @@ export const updatePayrollStatus = async (
     };
 
     if (shouldCreatePayrollExpense) {
-      const finalAmount = Math.round(Number(latestPayroll.finalAmount || 0));
+      const finalAmount = Math.round(toSafeNumber(latestPayroll.finalAmount));
       const expenseDocId = buildPayrollExpenseDocId(id);
       const expenseRef = doc(db, EXPENSE_COLLECTION_NAME, expenseDocId);
       const expenseSnap = await transaction.get(expenseRef);

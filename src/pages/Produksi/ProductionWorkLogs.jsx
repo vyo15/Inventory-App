@@ -1,8 +1,8 @@
 // =====================================================
 // Page: Work Log Produksi
 // Revisi:
-// - bisa ambil draft dari BOM
-// - bisa ambil draft dari Production Order
+// - bisa ambil data/template dari BOM
+// - bisa ambil data/template dari Production Order
 // - Produksi lebih fokus ke eksekusi, bukan planning dari nol
 // =====================================================
 
@@ -73,6 +73,7 @@ import { getFormArrayValue, removeArrayItemByIndex, upsertArrayItemByIndex } fro
 import { buildWorkLogMaterialUsageFormLine, buildWorkLogOutputFormLine } from "../../utils/produksi/productionLineBuilders";
 import { buildVariantOptionsFromItem, inferHasVariants } from "../../utils/variants/variantStockHelpers";
 import { isProductionWorkLogCompleted } from "../../utils/produksi/productionFlowGuards";
+import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import useAuth from "../../hooks/useAuth";
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -80,45 +81,6 @@ import useAuth from "../../hooks/useAuth";
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
-
-
-/*
-=====================================================
-SECTION: Detail cost display resolver — GUARDED
-Fungsi:
-- Menampilkan cost detail dari summary Work Log, dengan fallback baca totalCostSnapshot materialUsages jika summary lama masih 0.
-
-Dipakai oleh:
-- Drawer detail Work Log Produksi.
-
-Alasan perubahan:
-- Data legacy/hasil start production lama bisa punya biaya di line material tetapi materialCostActual masih 0.
-
-Catatan cleanup:
-- Fallback ini hanya display; source of truth tetap diperbaiki oleh service saat Start/Complete Work Log baru.
-
-Risiko:
-- Jangan memakai helper display ini untuk posting stok/HPP karena tidak menulis data Firestore.
-=====================================================
-*/
-const calculateMaterialCostDisplayFromLines = (materialUsages = []) =>
-  (Array.isArray(materialUsages) ? materialUsages : []).reduce((sum, line) => {
-    const totalSnapshot = Number(line.totalCostSnapshot || 0);
-    if (totalSnapshot > 0) return sum + totalSnapshot;
-    return sum + (Number(line.actualQty || 0) * Number(line.costPerUnitSnapshot || 0));
-  }, 0);
-
-const resolveMaterialCostDisplay = (workLog = {}) => {
-  const summaryValue = Number(workLog.materialCostActual || 0);
-  if (summaryValue > 0) return summaryValue;
-  return calculateMaterialCostDisplayFromLines(workLog.materialUsages || []);
-};
-
-const resolveTotalCostDisplay = (workLog = {}, laborCostDisplay = 0) => {
-  const summaryValue = Number(workLog.totalCostActual || 0);
-  if (summaryValue > 0) return summaryValue;
-  return resolveMaterialCostDisplay(workLog) + Number(laborCostDisplay || 0) + Number(workLog.overheadCostActual || 0);
-};
 
 const ProductionWorkLogs = () => {
   const { profile, firebaseUser } = useAuth();
@@ -217,8 +179,8 @@ const ProductionWorkLogs = () => {
   // Handler tambah work log manual
   // Catatan maintainability:
   // - Flow aktif tetap mendorong start dari Production Order.
-  // - Namun draft manual/planned tetap dipertahankan agar test checklist
-  //   dan kebutuhan operasional lama tidak putus karena patch UI.
+  // - Helper BOM/PO lama masih dipakai sebagai pengisi template form,
+  //   tetapi status operasional baru langsung In Progress.
   // =====================================================
   const openCreateWorkLogDrawer = async (sourceType = "manual") => {
     resetFormState();
@@ -231,6 +193,7 @@ const ProductionWorkLogs = () => {
         workNumber: generatedWorkNumber,
         workDate: dayjs(),
         sourceType,
+        status: "in_progress",
         materialUsages: [],
         outputs: [],
         workerIds: [],
@@ -243,6 +206,7 @@ const ProductionWorkLogs = () => {
         ...DEFAULT_PRODUCTION_WORK_LOG_FORM,
         workDate: dayjs(),
         sourceType,
+        status: "in_progress",
         materialUsages: [],
         outputs: [],
         workerIds: [],
@@ -256,16 +220,19 @@ const ProductionWorkLogs = () => {
   const summary = useMemo(() => {
     return buildCountSummary(workLogs, {
       completed: (item) => item.status === "completed",
-      draft: (item) => item.status === "draft",
       inProgress: (item) => item.status === "in_progress",
+      cancelled: (item) => item.status === "cancelled",
     });
   }, [workLogs]);
 
   const filteredData = useMemo(() => {
     return workLogs.filter((item) => {
       const matchSearch = createKeywordMatcher(
-        item,
-        ["workNumber", "targetName", "stepName", "productionOrderCode"],
+        {
+          ...item,
+          displayReference: buildDisplayReferenceSearchText(item, { fields: ["workNumber", "productionOrderCode"] }),
+        },
+        ["workNumber", "productionOrderCode", "displayReference", "targetName", "stepName"],
         search,
       );
 
@@ -282,6 +249,7 @@ const ProductionWorkLogs = () => {
       ...DEFAULT_PRODUCTION_WORK_LOG_FORM,
       workDate: dayjs(),
       sourceType: "manual",
+      status: "in_progress",
       materialUsages: [],
       outputs: [],
       workerIds: [],
@@ -403,10 +371,24 @@ const ProductionWorkLogs = () => {
     ],
   );
 
-  // =====================================================
-  // Apply draft dari BOM
-  // =====================================================
-  const handleApplyBomDraft = (bomId) => {
+  /* =====================================================
+  SECTION: Apply BOM Template To Work Log — LEGACY-COMPAT/GUARDED
+  Fungsi:
+  - Mengisi form Work Log dari BOM sebagai template eksekusi, bukan membuat status Draft baru.
+
+  Dipakai oleh:
+  - Tombol Ambil Data BOM di drawer Work Log.
+
+  Alasan perubahan:
+  - Nama helper service lama tetap kompatibel (`buildWorkLogDraftFromBom`), tetapi UI aktif tidak lagi memakai konsep Draft Work Log.
+
+  Catatan cleanup:
+  - Nama helper service bisa dirapikan pada refactor non-fungsional terpisah.
+
+  Risiko:
+  - Jika status form ikut dikembalikan ke Draft, flow produksi bisa melewati start/in_progress yang dipakai PO dan stok.
+  ===================================================== */
+  const handleApplyBomTemplate = (bomId) => {
     const bom = (referenceData.boms || []).find((item) => item.id === bomId);
 
     if (!bom) {
@@ -414,20 +396,35 @@ const ProductionWorkLogs = () => {
       return;
     }
 
-    const draft = buildWorkLogDraftFromBom(bom);
+    const templateValues = buildWorkLogDraftFromBom(bom);
 
     form.setFieldsValue({
       ...form.getFieldsValue(),
-      ...draft,
+      ...templateValues,
+      status: "in_progress",
     });
 
-    message.success("Draft work log berhasil diambil dari BOM");
+    message.success("Data BOM berhasil dimasukkan ke Work Log");
   };
 
-  // =====================================================
-  // Apply draft dari Production Order
-  // =====================================================
-  const handleApplyProductionOrderDraft = async (orderId) => {
+  /* =====================================================
+  SECTION: Apply Production Order Template To Work Log — LEGACY-COMPAT/GUARDED
+  Fungsi:
+  - Mengisi form Work Log dari Production Order sebagai template eksekusi, bukan membuat status Draft baru.
+
+  Dipakai oleh:
+  - Tombol Ambil Data PO dan perubahan pilihan Production Order di drawer Work Log.
+
+  Alasan perubahan:
+  - Helper service `buildWorkLogDraftFromProductionOrder` tetap dipertahankan demi kompatibilitas, tetapi label dan status UI aktif tidak lagi Draft.
+
+  Catatan cleanup:
+  - Nama helper service bisa dirapikan pada batch refactor setelah flow produksi stabil.
+
+  Risiko:
+  - Jika data PO diterapkan dengan status Draft, Work Log baru bisa tidak sesuai lifecycle eksekusi dan status PO.
+  ===================================================== */
+  const handleApplyProductionOrderTemplate = async (orderId) => {
     try {
       const productionOrder = (referenceData.productionOrders || []).find(
         (item) => item.id === orderId,
@@ -438,18 +435,19 @@ const ProductionWorkLogs = () => {
         return;
       }
 
-      const draft = await buildWorkLogDraftFromProductionOrder(productionOrder);
+      const templateValues = await buildWorkLogDraftFromProductionOrder(productionOrder);
 
       form.setFieldsValue({
         ...form.getFieldsValue(),
-        ...draft,
+        ...templateValues,
         sourceType: "production_order",
+        status: "in_progress",
       });
 
-      message.success("Draft work log berhasil diambil dari Production Order");
+      message.success("Data Production Order berhasil dimasukkan ke Work Log");
     } catch (error) {
       console.error(error);
-      message.error(error?.message || "Gagal mengambil draft dari PO");
+      message.error(error?.message || "Gagal mengambil data PO");
     }
   };
 
@@ -896,12 +894,6 @@ const ProductionWorkLogs = () => {
     if (!selectedRecord) return [];
 
     const unitLabel = selectedRecord.targetUnit || "pcs";
-    const totalCostDisplay = resolveTotalCostDisplay(
-      selectedRecord,
-      selectedRecord.payrollFinalAmount || selectedRecord.laborCostActual,
-    );
-    const goodQtyForCost = Number(selectedRecord.goodQty || 0);
-    const costPerGoodUnitDisplay = goodQtyForCost > 0 ? totalCostDisplay / goodQtyForCost : Number(selectedRecord.costPerGoodUnit || 0);
 
     return [
       {
@@ -925,8 +917,8 @@ const ProductionWorkLogs = () => {
       {
         key: "cost",
         label: "Total Biaya",
-        value: formatCurrency(totalCostDisplay),
-        helper: `Cost / good unit ${formatCurrency(costPerGoodUnitDisplay)}`,
+        value: formatCurrency(selectedRecord.totalCostActual || 0),
+        helper: `Cost / good unit ${formatCurrency(selectedRecord.costPerGoodUnit || 0)}`,
       },
     ];
   }, [selectedRecord]);
@@ -970,11 +962,11 @@ const ProductionWorkLogs = () => {
     if (!selectedRecord) return [];
 
     const warnings = [];
-    const materialCost = resolveMaterialCostDisplay(selectedRecord);
+    const materialCost = Number(selectedRecord.materialCostActual || 0);
     const laborCost = Number(detailLaborDisplay || 0);
-    const totalCost = resolveTotalCostDisplay(selectedRecord, laborCost);
+    const totalCost = Number(selectedRecord.totalCostActual || 0);
+    const costPerGoodUnit = Number(selectedRecord.costPerGoodUnit || 0);
     const goodQty = Number(selectedRecord.goodQty || 0);
-    const costPerGoodUnit = goodQty > 0 ? totalCost / goodQty : Number(selectedRecord.costPerGoodUnit || 0);
 
     if (materialCost === 0) {
       warnings.push("Biaya material 0. Cek cost bahan atau snapshot material.");
@@ -1137,7 +1129,7 @@ const ProductionWorkLogs = () => {
       key: "workNumber",
       width: 105,
       render: (value) => (
-        <Typography.Text strong>{value || "-"}</Typography.Text>
+        <Typography.Text strong>{resolveDisplayReference({ workNumber: value }, { fields: ["workNumber"], fallback: "-" })}</Typography.Text>
       ),
     },
     {
@@ -1245,7 +1237,7 @@ const ProductionWorkLogs = () => {
     <div className="ims-page">
       <ProductionPageHeader
         title="Work Log Produksi"
-        description="Realisasi produksi dari Production Order."
+        description="Realisasi kerja produksi dari PO."
         onAdd={() => openCreateWorkLogDrawer("manual")}
         addLabel="Tambah Work Log"
       />
@@ -1253,9 +1245,9 @@ const ProductionWorkLogs = () => {
       <ProductionSummaryCards
         items={[
           { key: "total", title: "Total Work Log", value: summary.total },
-          { key: "completed", title: "Completed", value: summary.completed },
-          { key: "draft", title: "Draft", value: summary.draft },
           { key: "progress", title: "In Progress", value: summary.inProgress },
+          { key: "completed", title: "Completed", value: summary.completed },
+          { key: "cancelled", title: "Cancelled", value: summary.cancelled },
         ]}
       />
 
@@ -1336,6 +1328,7 @@ const ProductionWorkLogs = () => {
             ...DEFAULT_PRODUCTION_WORK_LOG_FORM,
             workDate: dayjs(),
             sourceType: "manual",
+            status: "in_progress",
           }}
         >
           <Divider orientation="left">Informasi Dasar</Divider>
@@ -1391,7 +1384,7 @@ const ProductionWorkLogs = () => {
                               placeholder="Pilih Production Order..."
                               onChange={(value) => {
                                 if (value) {
-                                  handleApplyProductionOrderDraft(value);
+                                  handleApplyProductionOrderTemplate(value);
                                 }
                               }}
                             />
@@ -1406,11 +1399,11 @@ const ProductionWorkLogs = () => {
                                 const orderId =
                                   form.getFieldValue("productionOrderId");
                                 if (orderId) {
-                                  handleApplyProductionOrderDraft(orderId);
+                                  handleApplyProductionOrderTemplate(orderId);
                                 }
                               }}
                             >
-                              Apply Draft PO
+                              Ambil Data PO
                             </Button>
                           </Form.Item>
                         </Col>
@@ -1444,11 +1437,11 @@ const ProductionWorkLogs = () => {
                               onClick={() => {
                                 const bomId = form.getFieldValue("bomId");
                                 if (bomId) {
-                                  handleApplyBomDraft(bomId);
+                                  handleApplyBomTemplate(bomId);
                                 }
                               }}
                             >
-                              Apply Draft BOM
+                              Ambil Data BOM
                             </Button>
                           </Form.Item>
                         </Col>
@@ -1829,7 +1822,7 @@ const ProductionWorkLogs = () => {
                 <Card size="small" title="Ringkasan Work Log">
                   <Descriptions bordered size="small" column={1}>
                     <Descriptions.Item label="No. Work Log">
-                      {selectedRecord.workNumber || "-"}
+                      {resolveDisplayReference(selectedRecord, { fields: ["workNumber"], fallback: "-" })}
                     </Descriptions.Item>
                     <Descriptions.Item label="Tanggal">
                       {formatDisplayDate(selectedRecord.workDate)}
@@ -1907,7 +1900,7 @@ const ProductionWorkLogs = () => {
                       style={{ marginBottom: 12 }}
                       type="info"
                       showIcon
-                      message="Labor cost memakai payroll final; jika belum ada, pakai manual Work Log."
+                      message="Biaya labor memakai payroll final; jika belum ada, pakai input Work Log."
                     />
                     {/* =====================================================
                         ACTIVE / GUARDED - alert warning detail cost 0.
@@ -1940,7 +1933,7 @@ const ProductionWorkLogs = () => {
                           Material
                         </Typography.Text>
                         <div style={{ fontWeight: 600, marginTop: 4 }}>
-                          {formatCurrency(resolveMaterialCostDisplay(selectedRecord))}
+                          {formatCurrency(selectedRecord.materialCostActual || 0)}
                         </div>
                       </Col>
                       <Col span={12}>

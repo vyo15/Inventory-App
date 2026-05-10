@@ -344,7 +344,7 @@ const CashIn = () => {
     <>
       <PageHeader
         title="Pemasukan Kas"
-        subtitle="Pemasukan manual dan otomatis dari sales."
+        subtitle="Pemasukan manual dan sales."
         actions={[
           {
             key: "add-cash-in",
@@ -365,7 +365,7 @@ const CashIn = () => {
 
       <PageSection
         title="Filter Pemasukan"
-        subtitle="Periode kas masuk."
+        subtitle="Filter periode."
       >
         <FilterBar>
           <Col xs={24} md={6}>
@@ -403,7 +403,7 @@ const CashIn = () => {
 
       <PageSection
         title="Daftar Pemasukan"
-        subtitle="Transaksi periode aktif."
+        subtitle="Transaksi periode."
         extra={<Tag color="blue">{formatNumberId(filteredCashIns.length)} baris</Tag>}
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredCashIns} />

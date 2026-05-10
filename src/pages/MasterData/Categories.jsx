@@ -145,7 +145,7 @@ const Categories = () => {
     <div className="page-container">
       <PageHeader
         title="Kategori"
-        subtitle="Master kategori item."
+        subtitle="Master kategori."
         actions={[
           {
             key: "create-category",
@@ -164,7 +164,7 @@ const Categories = () => {
 
       <PageSection
         title="Daftar Kategori"
-        subtitle="Referensi kategori item."
+        subtitle="Referensi kategori."
       >
         <DataRefreshIndicator loading={loading} dataSource={categories} />
         <Table

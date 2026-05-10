@@ -839,3 +839,20 @@ Status: **AKTIF + GUARDED UI-ONLY**.
 - Perubahan batch ini tidak menyentuh service, query, schema, route guard, role guard, auth flow, transaksi, stok, produksi, payroll, HPP, report mapper, atau reset destructive flow.
 - **CLEANUP CANDIDATE:** `src/pages/Dashboard/Dashboard.css`, `src/pages/Auth/Login.css`, `src/components/Layout/Feedback/DataLoadingState.css`, dan `src/components/Layout/Feedback/LogoLoadingScreen.css` masih memiliki gradient/page-specific atau feedback-specific style lama dan perlu batch cleanup terpisah sesuai allowlist.
 - **CLEANUP CANDIDATE:** hardcoded color residual di page/component bisnis tetap perlu audit bertahap tanpa refactor logic.
+
+## Update 2026-05-10 — Tahap 1 & 2: Validasi Form + Referensi Display
+
+### Tahap 1 — Popup field wajib
+- Status: AKTIF.
+- Form yang memakai `PageFormModal` sekarang otomatis menampilkan popup `Data belum lengkap` saat submit gagal validasi AntD.
+- Form/drawer custom penting juga diberi feedback yang sama lewat helper `showFormValidationFeedback`.
+- Perubahan ini hanya UI feedback: tidak mengubah service create/update, schema, kalkulasi stok, payroll, HPP, finance, atau laporan.
+- Catatan cleanup: label field bisa distandarkan lagi per halaman jika semua form sudah punya naming final.
+
+### Tahap 2 — Referensi display manusiawi
+- Status: AKTIF / LEGACY-COMPAT.
+- `referenceId`, `sourceId`, `relatedId`, dan Firestore document ID tetap dipakai sebagai relasi internal.
+- UI tabel/detail/report/ledger mengutamakan kode bisnis seperti `code`, `planCode`, `workNumber`, `payrollNumber`, `sourceRef`, `referenceNumber`, atau `productionOrderCode`.
+- Data lama yang hanya punya ID random tetap fallback ke ID ringkas agar audit tidak putus.
+- Karena project masih tahap membangun dan punya menu reset data, tidak perlu migrasi otomatis. Data dummy lama boleh dibuat ulang saat format referensi baru sudah final.
+- Risiko yang dijaga: resolver display tidak boleh dipakai untuk write relasi Firestore.

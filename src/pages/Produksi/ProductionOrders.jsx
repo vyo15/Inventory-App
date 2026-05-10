@@ -58,6 +58,7 @@ import {
 import { createProductionWorkLogFromOrder } from "../../services/Produksi/productionWorkLogsService";
 import useAuth from "../../hooks/useAuth";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -480,8 +481,11 @@ const ProductionOrders = () => {
   const filteredData = useMemo(() => {
     return orders.filter((item) => {
       const matchSearch = createKeywordMatcher(
-        item,
-        ["code", "targetName", "bomName"],
+        {
+          ...item,
+          displayReference: buildDisplayReferenceSearchText(item, { fields: ["code", "productionOrderCode"] }),
+        },
+        ["code", "productionOrderCode", "displayReference", "targetName", "bomName"],
         search,
       );
 
@@ -603,7 +607,7 @@ const ProductionOrders = () => {
       key: "order",
       width: 170,
       render: (_, record) => (
-        renderOrderCellBlock(record.code || "-", [
+        renderOrderCellBlock(resolveDisplayReference(record, { fields: ["code", "productionOrderCode"], fallback: "-" }), [
           `Dibuat: ${formatDateTimeLabel(record.createdAt)}`,
         ])
       ),
@@ -843,7 +847,7 @@ const ProductionOrders = () => {
       {/* AKTIF / GUARDED: header shared produksi dipakai untuk konsistensi, flow order dan status transition tetap existing. */}
       <ProductionPageHeader
         title="Production Orders"
-        description="Flow produksi dari BOM ke Work Log."
+        description="Produksi mengikuti alur BOM → PO → Work Log."
         onAdd={handleAdd}
         addLabel="Buat Order"
       />
@@ -891,7 +895,7 @@ const ProductionOrders = () => {
 
       <PageSection
         title="Daftar Production Orders"
-        subtitle="Cek readiness, shortage, dan work log."
+        subtitle="Cek shortage, readiness, dan akses Work Log."
       >
         {/* Aktif dipakai: scroll x besar dihapus agar tombol aksi terlihat pada desktop/laptop normal. */}
         <DataRefreshIndicator loading={loading} dataSource={filteredData} />
@@ -999,7 +1003,7 @@ const ProductionOrders = () => {
               rules={[
                 { required: true, message: "Varian target wajib dipilih" },
               ]}
-              extra="Pilih varian target agar material inherit membaca stok varian yang benar."
+              extra="Pilih varian target jika ada."
             >
               <Select
                 showSearch
@@ -1054,7 +1058,7 @@ const ProductionOrders = () => {
                   type="info"
                   showIcon
                   style={{ marginBottom: 12 }}
-                  message="Pilih varian target untuk melihat stok target dan kebutuhan material."
+                  message="Pilih varian target untuk preview kebutuhan."
                 />
               ) : requirementPreview ? (
                 <Space direction="vertical" size={12} style={{ width: "100%" }}>
@@ -1224,7 +1228,7 @@ const ProductionOrders = () => {
               title="Ringkasan Order"
             >
               <Descriptions.Item label="Kode">
-                {selectedOrder.code || "-"}
+                {resolveDisplayReference(selectedOrder, { fields: ["code", "productionOrderCode"], fallback: "-" })}
               </Descriptions.Item>
               <Descriptions.Item label="Target Type">
                 {selectedOrder.targetType === "product" ? "Product" : "Semi Finished"}
@@ -1272,7 +1276,7 @@ const ProductionOrders = () => {
                 message={`Ada ${formatNumber(
                   selectedOrder.reservationSummary?.shortageLines,
                 )} item yang stoknya masih kurang.`}
-                description="Cek requirement material di bawah."
+                description="Cek requirement yang perlu disiapkan."
               />
             ) : (
               <Alert

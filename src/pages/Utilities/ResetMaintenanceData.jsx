@@ -44,6 +44,7 @@ import {
   updateMaintenanceLogStatus,
 } from "../../services/Maintenance/maintenanceLogService";
 import { getLegacyDataMaintenanceAudit } from "../../services/Maintenance/legacyDataMaintenanceService";
+import { getDataQualityAudit } from "../../services/Maintenance/dataQualityAuditService";
 import {
   getPayrollSnapshotMaintenanceAudit,
   repairPayrollSnapshotMaintenance,
@@ -208,11 +209,14 @@ const ResetMaintenanceData = () => {
   const [stockAudit, setStockAudit] = useState(null);
   const [logSchemaAudit, setLogSchemaAudit] = useState(null);
   const [legacyDataAudit, setLegacyDataAudit] = useState(null);
+  const [dataQualityAudit, setDataQualityAudit] = useState(null);
+  const [dataQualityPreviewVisible, setDataQualityPreviewVisible] = useState(false);
   const [loadingStockAudit, setLoadingStockAudit] = useState(false);
   const [loadingStockRepair, setLoadingStockRepair] = useState(false);
   const [loadingLogSchemaAudit, setLoadingLogSchemaAudit] = useState(false);
   const [loadingLogSchemaRepair, setLoadingLogSchemaRepair] = useState(false);
   const [loadingLegacyDataAudit, setLoadingLegacyDataAudit] = useState(false);
+  const [loadingDataQualityAudit, setLoadingDataQualityAudit] = useState(false);
 
   // ---------------------------------------------------------------------------
   // State maintenance payroll snapshot dan varian lintas modul.
@@ -873,6 +877,40 @@ const ResetMaintenanceData = () => {
     }
   };
 
+  const handleLoadDataQualityAudit = async ({ showProblemPreview = false } = {}) => {
+    try {
+      setLoadingDataQualityAudit(true);
+      /*
+      =====================================================
+      SECTION: Data Quality Audit handler — LEGACY-COMPAT
+      Fungsi:
+      - Memanggil audit data lama secara read-only dan menampilkan summary/samples tanpa menulis audit log baru.
+
+      Dipakai oleh:
+      - Tombol Cek Data Lama dan Preview Data Bermasalah di section Data Quality Audit.
+
+      Alasan perubahan:
+      - Project masih development sehingga data lama cukup dipetakan untuk reset/recreate manual, bukan dimigrasi otomatis.
+
+      Catatan cleanup:
+      - Jika nanti audit ini dipakai di halaman lain, handler bisa dipindah ke hook maintenance khusus.
+
+      Risiko:
+      - Jangan tambahkan write/delete di handler ini; audit harus tetap read-only agar tidak mengubah stok, kas, payroll, HPP, atau transaksi.
+      =====================================================
+      */
+      const result = await getDataQualityAudit();
+      setDataQualityAudit(result);
+      setDataQualityPreviewVisible(Boolean(showProblemPreview));
+      message.success(showProblemPreview ? "Preview data bermasalah berhasil dimuat. Tidak ada data yang diubah." : "Audit data lama selesai. Tidak ada data yang diubah.");
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menjalankan Data Quality Audit.");
+    } finally {
+      setLoadingDataQualityAudit(false);
+    }
+  };
+
   const handleLoadLegacyDataAudit = async () => {
     try {
       setLoadingLegacyDataAudit(true);
@@ -1234,9 +1272,11 @@ const ResetMaintenanceData = () => {
   const stockMaintenanceRows = useMemo(() => stockAudit?.rows || [], [stockAudit]);
   const logSchemaRows = useMemo(() => logSchemaAudit?.rows || [], [logSchemaAudit]);
   const legacyDataRows = useMemo(() => legacyDataAudit?.rows || [], [legacyDataAudit]);
+  const dataQualityRows = useMemo(() => dataQualityAudit?.categories || [], [dataQualityAudit]);
   const stockSummary = stockAudit?.summary || {};
   const logSchemaSummary = logSchemaAudit?.summary || {};
   const legacyDataSummary = legacyDataAudit?.summary || {};
+  const dataQualitySummary = dataQualityAudit?.summary || {};
   const payrollAuditRows = useMemo(() => payrollAudit?.rows || [], [payrollAudit]);
   const transactionVariantRows = useMemo(() => transactionVariantAudit?.rows || [], [transactionVariantAudit]);
   const payrollAuditSummary = payrollAudit?.summary || {};
@@ -1277,14 +1317,14 @@ const ResetMaintenanceData = () => {
         <Space direction="vertical" size={20} style={{ width: "100%" }}>
           <PageHeader
             title="Reset & Maintenance Data"
-            subtitle="Maintenance aman, reset wajib preview."
+            subtitle="Maintenance dan reset terarah."
           />
 
           <Alert
             type="warning"
             showIcon
             message="Maintenance aman, reset destructive"
-            description="Maintenance tidak menghapus data. Reset wajib preview dan konfirmasi RESET."
+            description="Maintenance aman; reset wajib preview dan konfirmasi RESET."
           />
 
           <Alert
@@ -1304,7 +1344,7 @@ const ResetMaintenanceData = () => {
                 type="info"
                 showIcon
                 message="Cek dulu sebelum repair"
-                description="Audit produksi tanpa mengubah stok, kas, payroll, atau HPP."
+                description="Audit produksi tanpa write data."
               />
 
               <Row gutter={[12, 12]}>
@@ -1321,7 +1361,7 @@ const ResetMaintenanceData = () => {
                 <Col xs={24} md={8}>
                   <Popconfirm
                     title="Jalankan repair aman?"
-                    description="Repair hanya field turunan; stok, kas, payroll, dan HPP tidak berubah."
+                    description="Repair field turunan; stok, kas, payroll, HPP tetap."
                     okText="Ya, Repair Aman"
                     cancelText="Batal"
                     onConfirm={handleRepairProductionMaintenance}
@@ -1410,7 +1450,7 @@ const ResetMaintenanceData = () => {
                 type="info"
                 showIcon
                 message="Cek stok sebelum repair"
-                description="Repair hanya field turunan stok; tidak membuat log mutasi baru."
+                description="Repair field turunan stok tanpa mutasi baru."
               />
 
               <Row gutter={[12, 12]}>
@@ -1470,8 +1510,8 @@ const ResetMaintenanceData = () => {
               <Alert
                 type="info"
                 showIcon
-                message="Repair tampilan log lama"
-                description="Repair hanya melengkapi field tampilan, qty dan stok tidak berubah."
+                message="Repair tampilan log"
+                description="Melengkapi field tampilan; qty dan stok tetap."
               />
 
               <Row gutter={[12, 12]}>
@@ -1522,6 +1562,116 @@ const ResetMaintenanceData = () => {
           </Card>
 
 
+          {/*
+          =====================================================
+          SECTION: Data Quality Audit UI — LEGACY-COMPAT
+          Fungsi:
+          - Menampilkan audit read-only untuk data testing/legacy yang belum mengikuti standar kode/reference baru.
+
+          Dipakai oleh:
+          - Admin Reset Maintenance sebelum memutuskan reset/recreate data testing.
+
+          Alasan perubahan:
+          - Memberi daftar data bermasalah tanpa migration, backfill, delete, atau perubahan transaksi/stok/kas/HPP.
+
+          Catatan cleanup:
+          - Bisa dipisah menjadi subcomponent jika jumlah kategori audit bertambah.
+
+          Risiko:
+          - Jangan ubah tombol audit menjadi repair/delete otomatis; reset existing harus tetap lewat preview dan konfirmasi destructive.
+          =====================================================
+          */}
+          <Card
+            title="Data Quality Audit"
+            size="small"
+            extra={<Tag color="magenta">Read-only</Tag>}
+          >
+            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <Alert
+                type="info"
+                showIcon
+                message="Cek data lama tanpa mengubah data"
+                description="Audit read-only data legacy/testing; tidak ada write Firestore."
+              />
+
+              <Row gutter={[12, 12]}>
+                <Col xs={24} md={12}>
+                  <Button
+                    block
+                    icon={<EyeOutlined />}
+                    onClick={() => handleLoadDataQualityAudit({ showProblemPreview: false })}
+                    loading={loadingDataQualityAudit}
+                  >
+                    Cek Data Lama
+                  </Button>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Button
+                    block
+                    icon={<EyeOutlined />}
+                    onClick={() => handleLoadDataQualityAudit({ showProblemPreview: true })}
+                    loading={loadingDataQualityAudit}
+                  >
+                    Preview Data Bermasalah
+                  </Button>
+                </Col>
+              </Row>
+
+              <Row gutter={[12, 12]}>
+                <Col xs={12} md={6}><Card size="small"><Statistic title="Data Dicek" value={dataQualitySummary.checkedRecords || 0} /></Card></Col>
+                <Col xs={12} md={6}><Card size="small"><Statistic title="Total Temuan" value={dataQualitySummary.totalIssueRecords || 0} /></Card></Col>
+                <Col xs={12} md={6}><Card size="small"><Statistic title="Kategori Bermasalah" value={dataQualitySummary.totalCategoriesWithIssues || 0} /></Card></Col>
+                <Col xs={12} md={6}><Card size="small"><Statistic title="Collection Skipped" value={dataQualitySummary.skippedCollections || 0} /></Card></Col>
+              </Row>
+
+              {dataQualityAudit?.skippedCollections?.length ? (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message="Sebagian collection tidak bisa dibaca"
+                  description={dataQualityAudit.skippedCollections.map((item) => `${item.key}: ${item.error}`).join(" • ")}
+                />
+              ) : null}
+
+              <Table
+                className="app-data-table"
+                size="small"
+                loading={loadingDataQualityAudit}
+                dataSource={dataQualityRows}
+                pagination={false}
+                rowKey="key"
+                columns={[
+                  { title: "Kategori", dataIndex: "label", key: "label", width: 245, render: (value) => renderCompactText(value, 230) },
+                  { title: "Jumlah", dataIndex: "count", key: "count", width: 90 },
+                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 220, render: (value) => {
+                    const color = value === "Jangan reset jika data asli" ? "red" : value === "Perlu cek manual" ? "orange" : "blue";
+                    return <Tag color={color}>{value}</Tag>;
+                  } },
+                  {
+                    title: "Sample Maks. 10",
+                    dataIndex: "samples",
+                    key: "samples",
+                    width: 410,
+                    render: (samples = [], record) => {
+                      if (!record.count) return <Text type="secondary">Tidak ada temuan.</Text>;
+                      if (!dataQualityPreviewVisible) return <Text type="secondary">Klik Preview Data Bermasalah untuk melihat sample.</Text>;
+                      return renderCompactText(samples.map((sample) => `${sample.collectionName}: ${sample.reference || sample.id} — ${sample.issue}`).join(" | "), 390);
+                    },
+                  },
+                ]}
+                scroll={{ x: 965 }}
+                locale={{ emptyText: "Klik Cek Data Lama atau Preview Data Bermasalah untuk menjalankan audit read-only." }}
+              />
+
+              <Alert
+                type="warning"
+                showIcon
+                message="Audit bukan migration"
+                description="Gunakan audit sebelum reset data test. Jangan reset data asli tanpa cek manual."
+              />
+            </Space>
+          </Card>
+
           <Card
             title="Audit Data Lama"
             size="small"
@@ -1532,7 +1682,7 @@ const ResetMaintenanceData = () => {
                 type="warning"
                 showIcon
                 message="Cek data lama sebelum cleanup"
-                description="Audit data lama tanpa mengubah data; reset terarah tetap wajib preview."
+                description="Audit data lama tanpa write; reset tetap wajib preview."
               />
 
               <Row gutter={[12, 12]}>
@@ -1602,7 +1752,7 @@ const ResetMaintenanceData = () => {
               <Alert
                 type="info"
                 showIcon
-                message="Audit stale snapshot payroll sebelum cleanup besar payroll"
+                message="Audit snapshot payroll sebelum cleanup."
                 description="Audit mismatch step vs payroll snapshot."
               />
 
@@ -1666,7 +1816,7 @@ const ResetMaintenanceData = () => {
               <Alert
                 type="info"
                 showIcon
-                message="Audit transaksi lama tanpa variant snapshot final"
+                message="Audit transaksi lama tanpa snapshot varian."
                 description="Audit transaksi lama tanpa mutasi qty, stok, atau kas."
               />
 
@@ -1757,7 +1907,7 @@ const ResetMaintenanceData = () => {
                 type="warning"
                 showIcon
                 message="Khusus trial & error analisis HPP"
-                description="Reset ini hanya menyentuh sumber modal/HPP master, bukan transaksi, stok, PO, Work Log, Payroll, atau Cash. Gunakan backup/baseline sebelum mencoba di data real."
+                description="Reset hanya menyentuh modal/HPP master. Tidak menyentuh transaksi, stok, PO, Work Log, Payroll, atau Cash."
               />
 
               <Row gutter={[12, 12]}>
@@ -1872,7 +2022,7 @@ const ResetMaintenanceData = () => {
                 type="info"
                 showIcon
                 message="Batas aman fitur ini"
-                description="Tidak membuat stock mutation, inventory log, payroll, cash out, atau proses ulang Work Log completed. HPP baru baru terlihat pada simulasi produksi berikutnya setelah sumber cost diisi ulang."
+                description="Tidak membuat mutasi stok, inventory log, payroll, cash out, atau proses ulang Work Log."
               />
             </Space>
           </Card>
@@ -1930,7 +2080,7 @@ const ResetMaintenanceData = () => {
                     showIcon
                     style={{ marginTop: 12 }}
                     message="Reset Production Planning hanya menghapus production_plans"
-                    description="Reset Planning tidak menghapus PO, Work Log, Payroll, HPP, stok, atau report."
+                    description="Tidak menghapus PO, Work Log, Payroll, HPP, stok, atau report."
                   />
                 )}
               </Card>
@@ -2097,7 +2247,7 @@ const ResetMaintenanceData = () => {
                 type="info"
                 showIcon
                 message="Hapus hanya data test bermarker"
-                description="Hanya data test bermarker dev_seed yang dihapus."
+                description="Hanya data test bermarker yang dihapus."
               />
 
               <Row gutter={[12, 12]}>
@@ -2200,7 +2350,7 @@ const ResetMaintenanceData = () => {
             showIcon
             icon={<WarningOutlined />}
             message="Reset akan menghapus scope terpilih"
-            description="Pastikan preview sesuai. Reset menghapus data scope terpilih dan tidak bisa dibatalkan dari halaman ini."
+            description="Pastikan preview sesuai. Reset tidak bisa dibatalkan dari halaman ini."
           />
 
           <div>
@@ -2230,7 +2380,7 @@ const ResetMaintenanceData = () => {
             type="warning"
             showIcon
             message="Audit log dibuat sebelum reset berjalan"
-            description="Jika audit log gagal, reset dibatalkan."
+            description="Jika audit log gagal, reset batal."
           />
 
           <Form form={confirmForm} layout="vertical">
@@ -2269,7 +2419,7 @@ const ResetMaintenanceData = () => {
             showIcon
             icon={<WarningOutlined />}
             message={hppCostConfirmAction === "restore" ? "Restore akan menimpa field modal/HPP master" : "Reset akan menolkan field modal/HPP master"}
-            description="Aksi ini tidak menghapus transaksi, tidak mengubah stok, tidak membuat payroll/cash, dan tidak memproses ulang Work Log completed."
+            description="Tidak menghapus transaksi, mengubah stok, membuat payroll/cash, atau memproses ulang Work Log."
           />
 
           <div>
@@ -2315,7 +2465,7 @@ const ResetMaintenanceData = () => {
             type="warning"
             showIcon
             message="Gunakan hanya untuk testing HPP"
-            description="Reset ini tidak memperbaiki Work Log lama yang sudah menyimpan cost 0. Untuk HPP baru, jalankan ulang flow produksi testing setelah sumber cost diisi ulang."
+            description="Tidak memperbaiki Work Log lama bernilai cost 0; ulangi flow testing untuk HPP baru."
           />
 
           <Form form={hppConfirmForm} layout="vertical">

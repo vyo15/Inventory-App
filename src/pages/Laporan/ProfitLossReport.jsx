@@ -10,6 +10,7 @@ import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 // =========================
 // ACTIVE / FINAL - label source IMS untuk Profit Loss
@@ -106,14 +107,14 @@ const ProfitLossReport = () => {
         key: "revenue-total",
         title: "Total Pendapatan",
         value: formatCurrencyId(summary.totalRevenue),
-        subtitle: "Total pendapatan.",
+        subtitle: "Gabungan revenues dan incomes.",
         accent: "success",
       },
       {
         key: "cost-total",
         title: "Total Biaya",
         value: formatCurrencyId(summary.totalCost),
-        subtitle: "Total biaya.",
+        subtitle: "Seluruh expenses yang diakui pada laporan.",
         accent: "danger",
       },
       {
@@ -139,7 +140,7 @@ const ProfitLossReport = () => {
   const exportToExcel = async () => {
     await exportJsonToExcel({
       title: "Laporan Laba Rugi IMS Bunga Flanel",
-      subtitle: "Ekspor data yang sedang tampil.",
+      subtitle: "Ekspor mengikuti gabungan revenues, incomes, dan expenses pada halaman ini.",
       sheetName: "Profit Loss",
       fileName: "Laporan-Laba-Rugi",
       columns: [
@@ -155,7 +156,7 @@ const ProfitLossReport = () => {
         transactionDate: formatDateId(item.date, true),
         cashFlowType: item.flow || "-",
         sourceCollection: resolveFinancialSourceLabel(item),
-        sourceReference: item.sourceRef || item.sourceId || "-",
+        sourceReference: resolveDisplayReference(item, { fallback: item.sourceRef || item.sourceId || "-", allowTechnicalId: true }),
         transactionType: item.type || "-",
         transactionDescription: item.description || "-",
         transactionAmount: formatCurrencyId(item.amount),
@@ -187,12 +188,13 @@ const ProfitLossReport = () => {
         render: (_, record) => {
           const label = resolveFinancialSourceLabel(record);
           const color = record.flow === "Pengeluaran" ? "red" : "green";
+          const referenceText = resolveDisplayReference(record, { fallback: record.sourceRef || "" });
           return (
             <div>
               <Tag color={color}>{label}</Tag>
-              {record.sourceRef ? (
+              {referenceText ? (
                 <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 4 }}>
-                  Ref: {record.sourceRef}
+                  Ref: {referenceText}
                 </div>
               ) : null}
             </div>
@@ -227,40 +229,23 @@ const ProfitLossReport = () => {
     [],
   );
 
-  /* =====================================================
-     SECTION: Profit Loss Report Render Panel — AKTIF
-     Fungsi:
-     - Menata summary, detail transaksi, dan export laba rugi agar pendapatan, biaya, dan laba bersih mudah dibaca.
-
-     Dipakai oleh:
-     - Halaman Profit Loss Report.
-
-     Alasan perubahan:
-     - Batch 3 mengurangi deskripsi pasif tanpa mengubah gabungan revenues, incomes, expenses, calculation, atau export.
-
-     Catatan cleanup:
-     - Kategori biaya/pendapatan bisa dibuat filter tambahan pada batch fitur terpisah.
-
-     Risiko:
-     - Jangan mengubah profit/loss calculation, dataSource, summary total, atau export payload dari section ini.
-     ===================================================== */
   return (
     <>
       <PageHeader
         title="Laporan Laba Rugi"
-        subtitle="Ringkasan laba rugi sesuai filter."
+        subtitle="Laporan membaca pemasukan dan pengeluaran final."
       />
 
       <PageSection
         title="Ringkasan Keuangan"
-        subtitle="KPI laba rugi."
+        subtitle="Ringkasan pendapatan, biaya, dan laba."
       >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} />
       </PageSection>
 
       <PageSection
         title="Detail Transaksi Keuangan"
-        subtitle="Transaksi sesuai filter."
+        subtitle="Data mengikuti source collection asli."
         extra={
           <Button type="primary" onClick={exportToExcel} disabled={reportData.length === 0}>
             Ekspor ke Excel

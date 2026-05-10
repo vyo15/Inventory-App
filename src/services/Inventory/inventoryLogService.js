@@ -1,4 +1,5 @@
 import { Timestamp } from "firebase/firestore";
+import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 // =========================
 // SECTION: Collection inventory log final
@@ -50,6 +51,31 @@ export const resolveInventoryLogReference = (type = "", extraData = {}) => {
 
   return { referenceId, referenceType };
 };
+
+/*
+=====================================================
+SECTION: Display reference inventory log — AKTIF / LEGACY-COMPAT
+Fungsi:
+- Menentukan kode referensi manusiawi untuk tampilan inventory log tanpa mengganti referenceId internal.
+
+Dipakai oleh:
+- StockManagement.jsx pada kolom Referensi.
+
+Alasan perubahan:
+- Log stok lama/baru bisa tetap menyimpan ID internal, tetapi UI mengutamakan sourceRef/referenceCode/workNumber/code jika tersedia.
+
+Catatan cleanup:
+- Data test lama yang hanya punya referenceId random bisa dibuat ulang setelah format kode baru aktif.
+
+Risiko:
+- Jangan memakai nilai display ini untuk relasi transaksi karena hanya label UI.
+=====================================================
+*/
+export const resolveInventoryLogDisplayReference = (record = {}) =>
+  resolveDisplayReference(record, {
+    fallback: "",
+    extraFields: ["sourceRef", "referenceCode", "referenceNumber", "purchaseNumber", "returnNumber", "workNumber", "productionOrderCode"],
+  });
 
 // =========================
 // SECTION: Build payload inventory log final

@@ -42,6 +42,62 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - apply rule ke item mode `rule`
 - pastikan item mode `manual` tidak ikut berubah
 
+
+## Checklist Pricing Rule Switch — Product & Raw Material
+
+### Product manual pricing
+- [ ] Buka Master Data > Products.
+- [ ] Tambah Product baru dengan switch Pricing Rule OFF.
+- [ ] Pastikan helper menampilkan `Harga jual diisi manual.`
+- [ ] Isi Harga Jual manual, lalu simpan.
+- [ ] Pastikan pricing rule tidak wajib.
+- [ ] Pastikan data tersimpan dengan `pricingMode = manual` dan `pricingRuleId = null`.
+
+### Product rule pricing
+- [ ] Edit/tambah Product dengan switch Pricing Rule ON.
+- [ ] Pastikan field Pricing Rule aktif dan wajib.
+- [ ] Pilih Pricing Rule untuk target Products.
+- [ ] Pastikan harga terhitung otomatis ke field `price` jika HPP valid.
+- [ ] Coba HPP 0/kosong dan pastikan warning `Harga belum bisa dihitung. Cek HPP dan pricing rule.` muncul tanpa crash.
+- [ ] Simpan dan pastikan data tersimpan dengan `pricingMode = rule` dan mode tampil sebagai `Pricing Rule | Nama Rule`.
+
+### Raw Material manual pricing
+- [ ] Buka Master Data > Raw Materials.
+- [ ] Tambah Raw Material baru dengan switch Pricing Rule OFF.
+- [ ] Pastikan helper menampilkan `Harga jual diisi manual.`
+- [ ] Isi Harga Jual / Satuan manual, lalu simpan.
+- [ ] Pastikan pricing rule tidak wajib.
+- [ ] Pastikan data tersimpan dengan `pricingMode = manual` dan `pricingRuleId = null`.
+
+### Raw Material rule pricing
+- [ ] Edit/tambah Raw Material dengan switch Pricing Rule ON.
+- [ ] Pastikan field Pricing Rule aktif dan wajib.
+- [ ] Pilih Pricing Rule untuk target Raw Materials.
+- [ ] Pastikan harga terhitung otomatis ke field `sellingPrice` jika modal aktual rata-rata atau harga referensi restock valid.
+- [ ] Coba base cost 0/kosong dan pastikan warning `Harga belum bisa dihitung. Isi modal aktual rata-rata atau harga referensi restock.` muncul tanpa crash.
+- [ ] Simpan dan pastikan data tersimpan dengan `pricingMode = rule` dan mode tampil sebagai `Pricing Rule | Nama Rule`.
+
+### Pricing Rules apply
+- [ ] Buka Pricing Rules.
+- [ ] Preview/apply rule untuk Products.
+- [ ] Pastikan item manual dilewati.
+- [ ] Pastikan item mode rule diproses jika base cost valid.
+- [ ] Preview/apply rule untuk Raw Materials.
+- [ ] Pastikan item manual dilewati.
+- [ ] Pastikan item mode rule diproses jika base cost valid.
+- [ ] Pastikan Products dan Raw Materials sama-sama terlihat sebagai target yang didukung.
+
+### Regression guarded
+- [ ] Stok tidak berubah hanya karena mengubah pricing mode.
+- [ ] Purchase tidak berubah.
+- [ ] Sales tidak berubah.
+- [ ] HPP tidak berubah.
+- [ ] Varian Raw Material tidak berubah.
+- [ ] Produksi, payroll, dan kas tidak berubah.
+- [ ] Tidak ada nilai harga menjadi `NaN`, `undefined`, atau kosong buruk.
+- [ ] Jalankan `npm run lint` jika environment tersedia.
+- [ ] Jalankan `npm run build` jika environment tersedia.
+
 ## B. Transaksi
 
 ### Pembelian
@@ -1394,3 +1450,151 @@ Risiko:
 - [ ] Cek console error.
 - [ ] Jalankan `npm run lint` jika environment tersedia.
 - [ ] Jalankan `npm run build` jika environment tersedia.
+
+## Checklist Biaya Produksi / Labor HPP — Estimasi, Draft, Final
+
+### A. Setup Step Produksi
+- [ ] Buka Tahapan Produksi.
+- [ ] Buat/edit step dengan Rate Biaya Produksi valid.
+- [ ] Buat/edit step dengan rate 0.
+- [ ] Pastikan label rate tetap mengarah ke Biaya Produksi/operator produksi dan payload field tidak berubah.
+
+### B. Work Log baru dari PO
+- [ ] Buat BOM dengan step produksi yang punya rate valid.
+- [ ] Buat PO lalu mulai produksi / buat Work Log.
+- [ ] Pastikan material cost tetap dari snapshot bahan.
+- [ ] Pastikan Biaya Produksi estimasi tampil jika data step tersedia.
+- [ ] Pastikan labelnya `Estimasi` atau `Estimasi dari Step`, bukan `Final`.
+- [ ] Pastikan tidak ada payroll dibuat saat PO dibuat.
+- [ ] Pastikan tidak ada payroll dibuat saat Work Log baru/start production.
+- [ ] Pastikan tidak ada Cash Out/Expense dibuat dari estimasi.
+
+### C. Work Log dengan step rate 0
+- [ ] Buat Work Log dari step rate 0.
+- [ ] Pastikan Biaya Produksi 0.
+- [ ] Pastikan status/warning `Perlu cek` muncul.
+- [ ] Pastikan tidak ada NaN/Infinity.
+
+### D. Complete Work Log dan Payroll
+- [ ] Complete Work Log dengan operator valid.
+- [ ] Pastikan payroll line dibuat sesuai flow existing setelah Work Log completed.
+- [ ] Pastikan status awal payroll draft tampil sebagai `Draft Payroll`, bukan final.
+- [ ] Confirm/pay payroll jika flow tersedia.
+- [ ] Pastikan setelah payroll final, Work Log detail menampilkan `Final`.
+- [ ] Pastikan estimasi tidak dijumlahkan lagi dengan final.
+- [ ] Complete Work Log tanpa operator jika flow mengizinkan dan pastikan warning operator/payroll jelas.
+- [ ] Pastikan payroll cancelled tidak dihitung sebagai final.
+- [ ] Pastikan `includePayrollInHpp=false` tidak masuk ke final HPP.
+
+### E. HPP Analysis
+- [ ] Buka HPP Analysis.
+- [ ] Cek Work Log completed dengan draft payroll.
+- [ ] Cek Work Log completed dengan payroll final.
+- [ ] Cek Work Log completed tanpa payroll final.
+- [ ] Pastikan status `Final`, `Draft Payroll`, `Estimasi`, dan `Perlu cek` muncul sesuai kondisi.
+- [ ] Pastikan total HPP tidak double count estimasi + final.
+- [ ] Pastikan HPP/unit invalid jika goodQty 0.
+- [ ] Pastikan HPP Analysis tidak menulis ke Firestore dan tidak update `products.hppPerUnit` atau `semi_finished_materials.averageCostPerUnit`.
+
+### F. Payroll dan Cash
+- [ ] Pastikan payroll tidak dibuat saat PO dibuat.
+- [ ] Pastikan payroll tidak dibuat saat Work Log start.
+- [ ] Pastikan payroll dibuat saat complete sesuai flow existing.
+- [ ] Klik paid payroll jika tersedia.
+- [ ] Pastikan Cash Out/Expense payroll paid dibuat sekali.
+- [ ] Klik ulang paid jika UI memungkinkan dan pastikan Cash Out/Expense tidak double.
+- [ ] Pastikan draft payroll tidak dianggap uang keluar.
+
+### G. Transaction safety dan regression
+- [ ] Start production.
+- [ ] Complete Work Log.
+- [ ] Pastikan tidak muncul error `Firestore transactions require all reads to be executed before all writes.`
+- [ ] Pastikan stok material tidak double berkurang.
+- [ ] Pastikan stok output tidak double bertambah.
+- [ ] Production Planning, Production Order, Work Log detail, HPP Analysis, dan Production Payrolls tetap bisa dibuka.
+- [ ] Sales/Purchases/Returns, Cash In/Cash Out, Inventory, Reset Maintenance, route/menu/role guard tidak berubah.
+- [ ] Cek console error.
+
+## Checklist Tahap 1 & 2 — Validasi Form + Referensi Display
+
+### A. Popup field wajib
+- [ ] Buka form tambah/edit di Master Data Produk, kosongkan field wajib, klik Simpan, muncul popup `Data belum lengkap` dan field wajib tetap ter-highlight.
+- [ ] Buka form Bahan Baku, kosongkan field wajib, klik Simpan, popup menyebut field yang harus dilengkapi.
+- [ ] Buka transaksi Sales/Purchases/Returns/Stock Adjustment, kosongkan field wajib, klik Simpan, popup muncul dan tidak membuat data baru.
+- [ ] Buka Production Planning/Order/Work Log/Payroll/BOM/Step/Employee/Semi Finished, kosongkan field wajib, klik Simpan, popup muncul dan tidak ada perubahan data.
+- [ ] Pastikan error bisnis/service non-validasi tetap muncul sebagai pesan error biasa, bukan tertelan popup validasi.
+
+### B. Referensi display
+- [ ] Inventory > Stock Management: kolom Referensi menampilkan label bisnis (`Penjualan`, `Pembelian`, `Work Log`, dll.) dengan kode/ref manusiawi jika tersedia, bukan ID random sebagai teks utama.
+- [ ] Finance > Buku Besar Kas: kolom Referensi menampilkan `sourceRef/referenceNumber/payrollNumber` jika tersedia; data lama tetap menampilkan ID ringkas.
+- [ ] Laporan Sales/Purchases/Profit Loss/Payroll/Stock: export dan tabel memakai kode bisnis/display reference jika ada.
+- [ ] Produksi Planning/Order/Work Log/Payroll/BOM/Employee/Semi Finished: tabel/detail menampilkan kode bisnis (`planCode`, `code`, `workNumber`, `payrollNumber`) dan bukan Firestore ID random.
+- [ ] Buat data dummy baru setelah patch: Sales selesai, Purchase, Work Log completed, Payroll paid; cek semua referensi muncul konsisten di Inventory Log, Ledger Kas, dan Report.
+
+### C. Guard regresi
+- [ ] Tidak ada whitescreen saat membuka detail payroll, work log, production order, BOM, employee, atau semi finished.
+- [ ] Submit valid tetap berhasil membuat/update data seperti sebelum patch.
+- [ ] Tidak ada double posting stok, cash in, cash out, payroll, atau HPP akibat perubahan display/validasi.
+
+
+## Checklist Data Quality Audit — Reset Maintenance
+
+- [ ] Buka menu **Reset & Maintenance** sebagai admin.
+- [ ] Buka section **Data Quality Audit**.
+- [ ] Klik **Cek Data Lama**.
+- [ ] Pastikan summary tampil: Data Dicek, Total Temuan, Kategori Bermasalah, dan Collection Skipped.
+- [ ] Pastikan audit tidak membuat collection baru dan tidak menulis data baru.
+- [ ] Klik **Preview Data Bermasalah**.
+- [ ] Pastikan setiap kategori menampilkan sample maksimal 10 data.
+- [ ] Pastikan kategori Sales tanpa `SAL`, Purchase tanpa `PUR`, Return tanpa `RET`, Cash In/Out tanpa `CIN/COUT`, Work Log tanpa `WL`, Work Log cost 0, Work Log material snapshot kosong, Payroll reference tidak jelas, Inventory Log reference ID random, Expense/Income source tidak jelas, dan HPP 0 tampil jika ada datanya.
+- [ ] Pastikan rekomendasi kategori jelas: `Aman dibuat ulang jika data test`, `Perlu cek manual`, atau `Jangan reset jika data asli`.
+- [ ] Pastikan collection kosong tampil sebagai 0/skipped dan halaman tidak crash.
+- [ ] Pastikan tidak ada data yang terhapus setelah audit.
+- [ ] Pastikan stok, kas, payroll, HPP, Sales, Purchases, Returns, Inventory Log, dan Production Work Log tidak berubah hanya karena audit dibuka.
+- [ ] Pastikan fitur reset existing tetap wajib preview dan konfirmasi seperti sebelumnya.
+- [ ] Cek console browser, pastikan tidak ada error merah saat menjalankan audit.
+
+## Checklist Patch Variant Mode + Work Log Draft Removal
+
+### A. Variant mode edit guard
+- [ ] Products: buat produk tanpa varian dengan current/reserved/available stock 0, edit, klik Pakai Varian ON, tambah minimal 1 varian, simpan; pastikan varian baru tersimpan dengan stok 0.
+- [ ] Products: buat produk tanpa varian yang masih punya stock, edit, klik Pakai Varian ON; pastikan UI menolak dengan pesan guard dan service tidak mengubah mode varian.
+- [ ] Products: edit produk yang sudah punya varian dan salah satu varian masih punya current/reserved/available stock > 0, klik Pakai Varian OFF; pastikan UI mengembalikan switch ke ON dan service menolak payload `hasVariants=false`.
+- [ ] Products: edit produk bervarian dengan semua varian stock/reserved/available 0, klik Pakai Varian OFF, simpan; pastikan `hasVariants=false`, `variants=[]`, `archivedVariants[]` berisi semua `variantKey` lama + `archivedAt/archivedBy/archiveReason`, dan transaksi lama/detail tetap punya label varian arsip.
+- [ ] Raw Materials: ulangi skenario ON saat stok 0, ON saat masih punya stok, OFF ditolak saat varian masih punya stok, dan OFF berhasil saat semua varian 0; pastikan purchase/adjustment stock bucket tidak berubah dari edit master dan arsip varian tersimpan di `archivedVariants[]`.
+- [ ] Semi Finished Materials: ulangi skenario ON saat stok 0, ON saat masih punya stok, OFF ditolak saat varian masih punya stok, dan OFF berhasil saat semua varian 0; pastikan Work Log/PO/HPP reference tidak berubah dan arsip varian tersimpan di `archivedVariants[]`.
+- [ ] Untuk ketiga modul, edit metadata varian existing (nama/kode/label) dan pastikan current/reserved/available stock tetap mengikuti data existing terbaru.
+- [ ] Untuk ketiga modul, hapus/arsip satu varian aktif yang masih punya stock/reserved/available dan pastikan UI + service menolak dengan error validasi.
+- [ ] Untuk ketiga modul, hapus/arsip satu varian aktif dengan semua bucket stok 0, simpan, lalu pastikan varian hilang dari pilihan transaksi baru tetapi muncul di section Arsip Varian detail master.
+- [ ] Untuk ketiga modul, setelah varian diarsipkan, tambah varian baru dengan nama/struktur yang sama; pastikan service restore `variantKey` lama, menghapus item dari `archivedVariants[]`, dan menulis metadata restore.
+- [ ] Untuk ketiga modul, coba tambah dua varian aktif dengan nama/struktur sama setelah ada arsip; pastikan duplicate active variant tetap ditolak dan tidak membuat dua `variantKey` aktif.
+
+### B. Work Log tanpa status Draft aktif
+- [ ] Buka Produksi > Work Log; pastikan summary card tidak menampilkan Draft.
+- [ ] Buka filter status Work Log; pastikan opsi aktif hanya Semua Status, In Progress, Completed, dan Cancelled.
+- [ ] Klik Tambah Work Log; pastikan default status form/payload baru adalah `in_progress`.
+- [ ] Pilih Source Type Production Order, klik Ambil Data PO; pastikan label tombol/pesan tidak menyebut Draft dan field PO/BOM/material/output tetap terisi.
+- [ ] Pilih Source Type Planned, klik Ambil Data BOM; pastikan label tombol/pesan tidak menyebut Draft dan field BOM/material/output tetap terisi.
+- [ ] Jika masih ada data lama `status=draft` di Firestore, pastikan list/detail tetap bisa dibuka tanpa crash dan status lama tidak muncul sebagai opsi filter aktif.
+- [ ] Start/complete Work Log dari Production Order dan pastikan lifecycle PO, mutasi stok material, output stock, payroll, dan HPP tetap seperti flow existing.
+
+## Checklist Patch Raw Material Min Stock Varian + Snapshot Purchases
+
+### A. Raw Material minimum stock
+- [ ] Raw Material non-varian stok 0 menampilkan status `Kosong`.
+- [ ] Raw Material non-varian stok di bawah `minStock` menampilkan status `Stok Rendah`.
+- [ ] Raw Material non-varian stok aman menampilkan status `Aman`.
+- [ ] Raw Material bervarian dengan total stok aman tetapi satu varian 0 tetap menampilkan info `Ada varian kosong`.
+- [ ] Raw Material bervarian dengan salah satu varian di bawah `minStock` tetap menampilkan info `Varian di bawah minimum`.
+- [ ] Raw Material bervarian dengan semua varian aktif aman tidak menampilkan alert varian bermasalah.
+- [ ] Varian archived dan inactive tidak ikut dihitung sebagai alert minimum stock.
+- [ ] Varian dengan reserved stock memakai available stock; jika `availableStock` kosong, fallback ke `currentStock - reservedStock`.
+
+### B. Purchases stock snapshot
+- [ ] Drawer Pembelian untuk bahan non-varian menampilkan Current/Reserved/Available stock dengan label dan angka terpisah jelas.
+- [ ] Drawer Pembelian untuk bahan bervarian tanpa varian terpilih menampilkan info `Pilih varian untuk melihat stok varian`.
+- [ ] Drawer Pembelian untuk bahan bervarian dengan varian terpilih menampilkan snapshot stok varian terpilih dan satuan stok.
+- [ ] Alert varian kosong/di bawah minimum tampil ringkas dan maksimal menampilkan beberapa varian pertama.
+- [ ] Simpan pembelian non-varian tetap menambah stok seperti flow sebelumnya.
+- [ ] Simpan pembelian varian tetap menambah stok varian seperti flow sebelumnya.
+- [ ] Inventory Log purchase, expense/cash out, Stock Management, dan report tidak berubah akibat patch display ini.

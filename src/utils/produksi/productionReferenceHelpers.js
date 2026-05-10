@@ -1,4 +1,5 @@
 import { buildReferenceOptions } from '../options/referenceOptionBuilders';
+import { resolveDisplayReference } from '../references/displayReferenceResolver';
 
 export const safeTrim = (value) => String(value || '').trim();
 export const toVariantKey = (value) => safeTrim(value).toLowerCase();
@@ -31,6 +32,7 @@ export const findMatchingVariant = (item = {}, targetVariantKey = '') => {
 const decorateMasterReference = (item = {}, sourceType = '') => {
   const supportsVariant = hasVariantSupport(item);
   const rawName = safeTrim(item?.name || item?.targetName || item?.productName || '');
+  const displayCode = resolveDisplayReference(item, { fallback: '', prefixTechnicalId: false });
   const variantSuffix = supportsVariant ? ' • pakai varian' : ' • tanpa varian';
 
   return {
@@ -40,7 +42,7 @@ const decorateMasterReference = (item = {}, sourceType = '') => {
     hasVariants: supportsVariant,
     variantStrategy: supportsVariant ? 'inherit' : 'none',
     name: rawName,
-    label: rawName ? `${rawName}${variantSuffix}` : rawName,
+    label: rawName ? `${displayCode ? `${displayCode} - ` : ''}${rawName}${variantSuffix}` : displayCode,
   };
 };
 

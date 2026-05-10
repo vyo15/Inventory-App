@@ -302,19 +302,19 @@ const MoneyMovementLedger = () => {
     <>
       <PageHeader
         title="Buku Besar Kas"
-        subtitle="Audit read-only uang masuk dan keluar dari data kas existing."
+        subtitle="Audit kas read-only."
       />
 
-      <PageSection title="Ringkasan Periode" subtitle="Gabungan incomes, revenues, dan expenses.">
+      <PageSection title="Ringkasan Periode" subtitle="Gabungan pemasukan dan pengeluaran.">
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, lg: 6 }} />
       </PageSection>
 
-      <PageSection title="Filter Buku Besar" subtitle="Filter hanya mengubah tampilan audit, bukan data transaksi.">
+      <PageSection title="Filter Buku Besar" subtitle="Filter hanya mengubah tampilan.">
         <Alert
           type="info"
           showIcon
           message="Read-only ledger"
-          description="Halaman ini tidak membuat transaksi baru, tidak mengubah saldo, tidak mengubah HPP, dan tidak membaca sales/purchases/payroll sebagai nominal utama agar tidak double count."
+          description="Read-only; tidak mengubah saldo, HPP, atau transaksi."
           style={{ marginBottom: 16 }}
         />
 
@@ -376,7 +376,7 @@ const MoneyMovementLedger = () => {
         </FilterBar>
       </PageSection>
 
-      <PageSection title="Log Pergerakan Uang" subtitle="Data kas aktual yang sudah tercatat di collection existing.">
+      <PageSection title="Log Pergerakan Uang" subtitle="Data kas tercatat.">
         <DataRefreshIndicator loading={loading} dataSource={ledgerRows} />
         <Table
           className="app-data-table"

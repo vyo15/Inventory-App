@@ -786,7 +786,7 @@ const SupplierPurchases = () => {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="Supplier hanya referensi restock. Transaksi tetap lewat Purchases."
+        message="Supplier hanya referensi restock; transaksi lewat Purchases."
       />
 
       <FilterBar>
@@ -834,7 +834,7 @@ const SupplierPurchases = () => {
       ===================================================== */}
       <PageSection
         title="Daftar Supplier"
-        subtitle="Kontak dan katalog restock."
+        subtitle="Kontak dan katalog."
       >
         <Table
           className="app-data-table"
@@ -1001,7 +1001,7 @@ const SupplierPurchases = () => {
                           name={[name, 'purchaseQty']}
                           label="Qty Beli"
                           initialValue={1}
-                          extra="Contoh: 1 pack, 1 roll, atau 1 dus."
+                          extra="Contoh: pack, roll, atau dus."
                         >
                           <InputNumber min={1} step={1} precision={0} style={{ width: '100%' }} formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
                         </Form.Item>
@@ -1012,7 +1012,7 @@ const SupplierPurchases = () => {
                           {...restField}
                           name={[name, 'conversionValue']}
                           label="Konversi Supplier"
-                          extra="Contoh: 1 pack isi 6 pcs = 6."
+                          extra="Contoh: 1 pack = 6 pcs."
                         >
                           <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
                         </Form.Item>

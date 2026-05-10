@@ -451,8 +451,8 @@ const CashOut = () => {
         className="ims-mb-16"
         type="info"
         showIcon
-        message="Payroll paid otomatis masuk Cash Out."
-        description="Payroll paid otomatis tercatat satu kali agar tidak double expense."
+        message="Payroll paid masuk Cash Out."
+        description="Payroll paid tercatat satu kali."
       />
 
       <PageSection
@@ -464,7 +464,7 @@ const CashOut = () => {
 
       <PageSection
         title="Filter Pengeluaran"
-        subtitle="Periode pengeluaran."
+        subtitle="Filter periode."
       >
         <FilterBar>
           <Col xs={24} md={6}>
@@ -502,7 +502,7 @@ const CashOut = () => {
 
       <PageSection
         title="Daftar Pengeluaran"
-        subtitle="Transaksi periode aktif."
+        subtitle="Transaksi periode."
         extra={<Tag color="red">{formatNumberId(filteredCashOuts.length)} baris</Tag>}
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredCashOuts} />

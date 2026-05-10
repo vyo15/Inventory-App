@@ -10,6 +10,7 @@ import StockAdjustmentPanel from "./components/StockAdjustmentPanel";
 import { getInventoryLogs } from "../../services/Inventory/inventoryService";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 const { Text } = Typography;
 
@@ -173,13 +174,20 @@ const compactReferenceId = (referenceId = "") => {
     : normalizedReferenceId;
 };
 
-const buildReferenceItem = ({ label, referenceId = "", detail = "" }) => {
+const buildReferenceItem = ({ label, referenceId = "", businessReference = "", detail = "" }) => {
   const compactId = compactReferenceId(referenceId);
+  const detailLines = [
+    businessReference ? `Ref: ${businessReference}` : "",
+    detail,
+    compactId ? `ID: ${compactId}` : "",
+  ].filter(Boolean);
+
   return {
     label,
     referenceId,
-    detail: detail || (compactId ? `ID: ${compactId}` : ""),
-    searchText: [label, referenceId, detail, compactId].filter(Boolean).join(" "),
+    businessReference,
+    detail: detailLines.join(" | "),
+    searchText: [label, businessReference, referenceId, detail, compactId].filter(Boolean).join(" "),
   };
 };
 
@@ -216,19 +224,38 @@ const resolveReferenceItems = (record) => {
   const reason = readLogField(record, "reason");
   const referenceId = readLogField(record, "referenceId");
   const referenceType = readLogField(record, "referenceType");
+  const businessReference = resolveDisplayReference(record, {
+    fallback: "",
+    includeDefaultFields: false,
+    fields: [
+      "saleNumber",
+      "purchaseNumber",
+      "returnNumber",
+      "cashInNumber",
+      "cashOutNumber",
+      "referenceNumber",
+      "sourceRef",
+      "referenceCode",
+      "workNumber",
+      "payrollNumber",
+      "productionOrderCode",
+      "planningCode",
+    ],
+  });
 
   if (saleId) {
     items.push(
       buildReferenceItem({
         label: "Penjualan",
         referenceId: saleId,
+        businessReference,
         detail: customerName ? `Pelanggan: ${customerName}` : "",
       }),
     );
   }
 
   if (returnId) {
-    items.push(buildReferenceItem({ label: "Retur", referenceId: returnId }));
+    items.push(buildReferenceItem({ label: "Retur", referenceId: returnId, businessReference }));
   }
 
   if (purchaseId) {
@@ -236,6 +263,7 @@ const resolveReferenceItems = (record) => {
       buildReferenceItem({
         label: "Pembelian",
         referenceId: purchaseId,
+        businessReference,
         detail: supplierName ? `Supplier: ${supplierName}` : "",
       }),
     );
@@ -281,6 +309,7 @@ const resolveReferenceItems = (record) => {
       buildReferenceItem({
         label: resolveReferenceTypeLabel(referenceType),
         referenceId,
+        businessReference,
       }),
     );
   }
@@ -534,8 +563,8 @@ const StockManagement = () => {
         ),
       },
       {
-        title: "Asal",
-        key: "origin",
+        title: "Sumber",
+        key: "source",
         width: 130,
         render: (_, record) => (
           <Tag color={record.sourceMeta?.color || "default"}>
@@ -588,7 +617,7 @@ const StockManagement = () => {
       // - CLEANUP CANDIDATE jika semua writer log sudah konsisten dan kolom bisa dibuat ulang sebagai "Stok Setelah".
       // =========================
       {
-        title: "Referensi",
+        title: "Referensi Audit",
         key: "reference",
         width: 230,
         render: (_, record) =>
@@ -630,23 +659,6 @@ const StockManagement = () => {
     [],
   );
 
-  /* =====================================================
-  SECTION: Stock Management Panel Renderer — GUARDED
-  Fungsi:
-  - Menampilkan ringkasan mutasi, filter audit, riwayat stok, dan panel penyesuaian stok.
-
-  Dipakai oleh:
-  - Halaman Manajemen Stok dan komponen StockAdjustmentPanel.
-
-  Alasan perubahan:
-  - Copy dan struktur panel dibuat lebih ringkas tanpa mengubah columns, dataSource, filter value, atau callback adjustment.
-
-  Catatan cleanup:
-  - Pagination server-side bisa dipertimbangkan jika inventory log melewati batas baca halaman.
-
-  Risiko:
-  - Jangan mengubah mapping audit atau payload adjustment karena area ini memengaruhi validasi stok.
-  ===================================================== */
   return (
     <>
       <PageHeader
@@ -656,20 +668,20 @@ const StockManagement = () => {
 
       <PageSection
         title="Ringkasan Log"
-        subtitle="Mutasi stok terbaru."
+        subtitle="Ringkasan jumlah log."
       >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
       </PageSection>
 
       <PageSection
         title="Filter Riwayat"
-        subtitle="Cari riwayat mutasi."
+        subtitle="Filter audit stok."
       >
         <FilterBar>
           <Col xs={24} md={10}>
             <Input
               allowClear
-              placeholder="Cari item, varian, asal, supplier, customer..."
+              placeholder="Cari item, varian, sumber audit, supplier, customer..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -706,8 +718,8 @@ const StockManagement = () => {
       </PageSection>
 
       <PageSection
-        title="Riwayat Stok"
-        subtitle={`Mutasi stok resmi. ${STOCK_SNAPSHOT_COLUMN_NOTE}`}
+        title="Tabel Riwayat Pergerakan Stok"
+        subtitle={`Audit operasional. ${STOCK_SNAPSHOT_COLUMN_NOTE}`}
         extra={<Tag color="purple">{formatNumberId(filteredHistory.length)} baris</Tag>}
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredHistory} />
@@ -725,8 +737,8 @@ const StockManagement = () => {
       </PageSection>
 
       <PageSection
-        title="Penyesuaian Stok"
-        subtitle="Koreksi manual tercatat di audit log."
+        title="Area Penyesuaian Stok"
+        subtitle="Adjustment stok manual dengan audit log."
       >
         {/* =========================
             SECTION: Panel Penyesuaian Stok final

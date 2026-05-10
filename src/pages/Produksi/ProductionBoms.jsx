@@ -32,7 +32,6 @@ import {
   Row,
   Select,
   Space,
-  Statistic,
   Switch,
   Table,
   Tag,
@@ -72,6 +71,8 @@ import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, getNextSequenceNumber, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildBomMaterialFormLine, buildBomStepFormLine } from "../../utils/produksi/productionLineBuilders";
 import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
+import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
+import { resolveDisplayReference } from '../../utils/references/displayReferenceResolver';
 
 // =====================================================
 // SECTION: helper label item
@@ -397,7 +398,7 @@ const ProductionBoms = () => {
       setEditingMaterialIndex(null);
       materialForm.resetFields();
     } catch (error) {
-      if (error?.errorFields) return;
+      if (showFormValidationFeedback(error, { form: materialForm })) return;
       console.error(error);
       message.error("Gagal menyimpan material line");
     }
@@ -446,7 +447,7 @@ const ProductionBoms = () => {
       setEditingStepIndex(null);
       stepForm.resetFields();
     } catch (error) {
-      if (error?.errorFields) return;
+      if (showFormValidationFeedback(error, { form: stepForm })) return;
       console.error(error);
       message.error("Gagal menyimpan step line");
     }
@@ -504,7 +505,27 @@ const ProductionBoms = () => {
       }
 
       if (fieldErrors.length > 0) {
+        /*
+        =====================================================
+        SECTION: Popup validasi drawer BOM custom — AKTIF / GUARDED
+        Fungsi:
+        - Menampilkan daftar field wajib BOM ketika validasi manual drawer gagal.
+
+        Dipakai oleh:
+        - Form BOM Produksi yang masih memakai validasi manual karena line bahan/step berada di drawer custom.
+
+        Alasan perubahan:
+        - User perlu tahu field BOM mana yang belum lengkap tanpa membaca error teknis.
+
+        Catatan cleanup:
+        - Bisa dipindahkan ke AntD rules penuh jika struktur Form.List BOM sudah final.
+
+        Risiko:
+        - Jangan menghapus setFields karena highlight field tetap dibutuhkan di drawer.
+        =====================================================
+        */
         form.setFields(fieldErrors);
+        showFormValidationFeedback({ errorFields: fieldErrors }, { form });
         if (!formErrorSummary) {
           setFormErrorSummary(fieldErrors[0]?.errors?.[0] || "Form belum lengkap.");
         }
@@ -634,7 +655,7 @@ const ProductionBoms = () => {
               </Typography.Text>
             </Tooltip>
             <Typography.Text type="secondary" style={{ display: "block", fontSize: 12, marginTop: 2 }}>
-              {record.code || "Tanpa kode"}
+              {resolveDisplayReference(record, { fallback: "Tanpa kode" })}
             </Typography.Text>
           </div>
 
@@ -686,7 +707,7 @@ const ProductionBoms = () => {
             Material: {formatCurrency(record.materialCostEstimate || 0)}
           </Typography.Text>
           <Typography.Text>
-            Tenaga kerja: {formatCurrency(record.laborCostEstimate || 0)}
+            Biaya produksi: {formatCurrency(record.laborCostEstimate || 0)}
           </Typography.Text>
           <Typography.Text strong>
             Total: {formatCurrency(record.totalCostEstimate || 0)}
@@ -761,7 +782,7 @@ const ProductionBoms = () => {
     <div>
       <ProductionPageHeader
         title="BOM Produksi"
-        description="Komposisi produksi untuk target semi finished maupun produk jadi, agar PO bisa otomatis menarik kebutuhan bahan dan step"
+        description="Komposisi bahan dan step produksi."
         onAdd={handleAdd}
         addLabel="Tambah BOM"
       />
@@ -936,7 +957,7 @@ const ProductionBoms = () => {
                       style={{ marginBottom: 16 }}
                       type="warning"
                       showIcon
-                      message="Target product belum terbaca. Pastikan master Produk Jadi sudah ada dan halaman BOM sudah refresh."
+                      message="Target product belum terbaca. Refresh atau cek master produk."
                     />
                   ) : null}
 
@@ -946,7 +967,7 @@ const ProductionBoms = () => {
                       style={{ marginBottom: 16 }}
                       type="warning"
                       showIcon
-                      message="Target semi finished belum tersedia. Tambahkan Semi Finished Materials terlebih dahulu."
+                      message="Tambahkan Semi Finished Materials lebih dulu."
                     />
                   ) : null}
 
@@ -1019,7 +1040,7 @@ const ProductionBoms = () => {
                       <Form.Item
                         label="Hasil per Produksi"
                         name="batchOutputQty"
-                        extra="Isi jumlah output yang dihasilkan untuk 1 resep BOM ini. Contoh: 1 bunga, 10 tangkai, atau 20 potong komponen."
+                        extra="Output untuk 1 resep BOM."
                       >
                         <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
                       </Form.Item>
@@ -1030,7 +1051,7 @@ const ProductionBoms = () => {
                         label="Status Aktif"
                         name="isActive"
                         valuePropName="checked"
-                        extra="Biarkan aktif kalau resep ini masih dipakai. Nonaktifkan hanya jika BOM lama sudah tidak digunakan."
+                        extra="Aktifkan jika resep masih dipakai."
                       >
                         <Switch />
                       </Form.Item>
@@ -1205,7 +1226,7 @@ const ProductionBoms = () => {
                   );
 
                   return (
-                    <Form.Item label="Estimasi Biaya Tenaga Kerja">
+                    <Form.Item label="Estimasi Biaya Produksi">
                       <Input value={formatCurrency(total)} disabled />
                     </Form.Item>
                   );
@@ -1240,161 +1261,110 @@ const ProductionBoms = () => {
         title="Detail BOM Produksi"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={920}
+        width={760}
       >
         {!selectedBom ? (
           <Empty description="Tidak ada data" />
         ) : (
           <>
-            {/*
-=====================================================
-SECTION: Detail drawer BOM produksi — AKTIF
-Fungsi:
-- Menampilkan target BOM, estimasi biaya, material, step, dan catatan dalam section terpisah.
+            <Descriptions
+              column={1}
+              bordered
+              size="small"
+              style={{ marginBottom: 16 }}
+            >
+              <Descriptions.Item label="Kode">
+                {resolveDisplayReference(selectedBom)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Nama">
+                {selectedBom.name || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Target Type">
+                {BOM_TARGET_TYPE_MAP[selectedBom.targetType] || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Target Name">
+                {selectedBom.targetName || "-"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Estimasi Total">
+                {formatCurrency(selectedBom.totalCostEstimate)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Status">
+                {selectedBom.isActive ? "Aktif" : "Nonaktif"}
+              </Descriptions.Item>
+              <Descriptions.Item label="Catatan">
+                {selectedBom.notes || "-"}
+              </Descriptions.Item>
+            </Descriptions>
 
-Dipakai oleh:
-- Halaman ProductionBoms saat user membuka detail resep produksi.
+            <Divider orientation="left">Komposisi Bahan</Divider>
 
-Alasan perubahan:
-- Detail BOM dibuat lebih mudah dibaca tanpa mengubah mapping material, step, target, varian, atau service.
+            <Table
+              rowKey={(record) => record.id}
+              pagination={false}
+              size="small"
+              dataSource={selectedBom.materialLines || []}
+              locale={{ emptyText: "Belum ada material line" }}
+              columns={[
+                {
+                  title: "Item",
+                  key: "item",
+                  render: (_, record) => (
+                    <div>
+                      <div style={{ fontWeight: 600 }}>
+                        {record.itemName || "-"}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                        {record.itemCode || "-"}
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  title: "Tipe",
+                  dataIndex: "itemType",
+                  render: (value) => (
+                    <Tag>{BOM_MATERIAL_ITEM_TYPE_MAP[value] || "-"}</Tag>
+                  ),
+                },
+                {
+                  title: "Qty Total",
+                  dataIndex: "totalRequiredQty",
+                  render: (value) => formatNumber(value),
+                },
+                {
+                  title: "Total Cost",
+                  dataIndex: "totalCostSnapshot",
+                  render: (value) => formatCurrency(value),
+                },
+              ]}
+            />
 
-Catatan cleanup:
-- Belum ada; material dan step tetap memakai data line existing.
+            <Divider orientation="left">Alur Step Produksi</Divider>
 
-Risiko:
-- Jika line material/step dirender salah, user bisa salah membaca kebutuhan produksi sebelum membuat PO.
-=====================================================
-*/}
-            <Space direction="vertical" size={16} style={{ width: "100%" }}>
-              <Row gutter={[12, 12]}>
-                <Col xs={24} sm={12} md={8}>
-                  <Card size="small">
-                    <Statistic
-                      title="Output Batch"
-                      value={`${formatNumber(selectedBom.batchOutputQty || 0)} ${selectedBom.targetUnit || "pcs"}`}
-                    />
-                  </Card>
-                </Col>
-                <Col xs={24} sm={12} md={8}>
-                  <Card size="small">
-                    <Statistic
-                      title="Estimasi Material"
-                      value={formatCurrency(selectedBom.materialCostEstimate || 0)}
-                    />
-                  </Card>
-                </Col>
-                <Col xs={24} sm={12} md={8}>
-                  <Card size="small">
-                    <Statistic
-                      title="Estimasi Total"
-                      value={formatCurrency(selectedBom.totalCostEstimate || 0)}
-                    />
-                  </Card>
-                </Col>
-              </Row>
-
-              <Card size="small" title="Ringkasan BOM">
-                <Descriptions column={1} bordered size="small">
-                  <Descriptions.Item label="Kode">{selectedBom.code || "-"}</Descriptions.Item>
-                  <Descriptions.Item label="Nama">{selectedBom.name || "-"}</Descriptions.Item>
-                  <Descriptions.Item label="Target">
-                    <Space wrap>
-                      <Tag color="blue">{BOM_TARGET_TYPE_MAP[selectedBom.targetType] || "-"}</Tag>
-                      <Typography.Text>{selectedBom.targetName || "-"}</Typography.Text>
-                    </Space>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Status">
-                    <Badge
-                      status={selectedBom.isActive ? "success" : "default"}
-                      text={selectedBom.isActive ? "Aktif" : "Nonaktif"}
-                    />
-                  </Descriptions.Item>
-                </Descriptions>
-              </Card>
-
-              <Card size="small" title="Komposisi Bahan">
-                <Table
-                  rowKey={(record, index) => record.id || `${record.itemId || record.itemName}-${index}`}
-                  pagination={false}
-                  size="small"
-                  dataSource={selectedBom.materialLines || []}
-                  locale={{ emptyText: "Belum ada material line" }}
-                  scroll={{ x: 720 }}
-                  columns={[
-                    {
-                      title: "Item",
-                      key: "item",
-                      render: (_, record) => (
-                        <Space direction="vertical" size={0}>
-                          <Typography.Text strong>{record.itemName || "-"}</Typography.Text>
-                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                            {record.itemCode || "-"}
-                          </Typography.Text>
-                        </Space>
-                      ),
-                    },
-                    {
-                      title: "Tipe",
-                      dataIndex: "itemType",
-                      width: 140,
-                      render: (value) => <Tag>{BOM_MATERIAL_ITEM_TYPE_MAP[value] || "-"}</Tag>,
-                    },
-                    {
-                      title: "Qty / Batch",
-                      dataIndex: "qtyPerBatch",
-                      width: 140,
-                      render: (value, record) => `${formatNumber(value)} ${record.unit || "pcs"}`,
-                    },
-                    {
-                      title: "Qty Total",
-                      dataIndex: "totalRequiredQty",
-                      width: 140,
-                      render: (value, record) => `${formatNumber(value)} ${record.unit || "pcs"}`,
-                    },
-                    {
-                      title: "Total Cost",
-                      dataIndex: "totalCostSnapshot",
-                      width: 150,
-                      render: (value) => formatCurrency(value),
-                    },
-                  ]}
-                />
-              </Card>
-
-              <Card size="small" title="Alur Step Produksi">
-                <Table
-                  rowKey={(record, index) => record.id || `${record.stepId || record.stepName}-${index}`}
-                  pagination={false}
-                  size="small"
-                  dataSource={selectedBom.stepLines || []}
-                  locale={{ emptyText: "Belum ada step line" }}
-                  columns={[
-                    {
-                      title: "Step",
-                      key: "step",
-                      render: (_, record) => (
-                        <Space direction="vertical" size={0}>
-                          <Typography.Text strong>
-                            {formatNumber(record.sequenceNo)}. {record.stepName || "-"}
-                          </Typography.Text>
-                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                            {record.notes || record.stepCode || "-"}
-                          </Typography.Text>
-                        </Space>
-                      ),
-                    },
-                  ]}
-                />
-              </Card>
-
-              {selectedBom.notes ? (
-                <Card size="small" title="Catatan">
-                  <Typography.Paragraph style={{ marginBottom: 0 }}>
-                    {selectedBom.notes}
-                  </Typography.Paragraph>
-                </Card>
-              ) : null}
-            </Space>
+            <Table
+              rowKey={(record) => record.id}
+              pagination={false}
+              size="small"
+              dataSource={selectedBom.stepLines || []}
+              locale={{ emptyText: "Belum ada step line" }}
+              columns={[
+                {
+                  title: "Urutan Langkah",
+                  key: "step",
+                  render: (_, record) => (
+                    <div>
+                      <div style={{ fontWeight: 600 }}>
+                        Langkah {formatNumber(record.sequenceNo)} -{" "}
+                        {record.stepName || "-"}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                        {record.notes || record.stepCode || "Step produksi"}
+                      </div>
+                    </div>
+                  ),
+                },
+              ]}
+            />
           </>
         )}
       </Drawer>
@@ -1548,7 +1518,7 @@ Risiko:
               <Form.Item
                 label="Kebutuhan per Produksi"
                 name="qtyPerBatch"
-                extra="Isi jumlah bahan yang dibutuhkan untuk 1 kali produksi sesuai output BOM ini."
+                extra="Qty bahan untuk 1 resep BOM."
               >
                 <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
@@ -1557,7 +1527,7 @@ Risiko:
               <Form.Item
                 label="Satuan Bahan"
                 name="unit"
-                extra="Diambil otomatis dari master bahan yang dipilih."
+                extra="Dari master bahan."
               >
                 <Input disabled />
               </Form.Item>
@@ -1612,7 +1582,7 @@ Risiko:
               <Form.Item
                 label="Urutan Langkah"
                 name="sequenceNo"
-                extra="Terisi otomatis sesuai urutan penambahan step."
+                extra="Otomatis sesuai urutan step."
               >
                 <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>

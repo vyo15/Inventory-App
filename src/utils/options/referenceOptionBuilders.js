@@ -1,11 +1,28 @@
+import { resolveDisplayReference } from "../references/displayReferenceResolver";
+
 const safeTrim = (value) => String(value || '').trim();
 
 export const buildReferenceLabel = (item = {}) => {
-  const code =
-    safeTrim(item.code) ||
-    safeTrim(item.itemCode) ||
-    safeTrim(item.productCode) ||
-    safeTrim(item.sku);
+  /*
+  =====================================================
+  SECTION: Reference option label display — AKTIF / LEGACY-COMPAT
+  Fungsi:
+  - Menampilkan label option memakai kode manusiawi jika tersedia.
+
+  Dipakai oleh:
+  - Select reference master data dan helper produksi yang memakai buildReferenceOptions.
+
+  Alasan perubahan:
+  - Dropdown tidak boleh mengutamakan Firestore ID ketika record sudah punya kode bisnis.
+
+  Catatan cleanup:
+  - Fallback nama tetap dipertahankan untuk master data lama yang belum punya kode.
+
+  Risiko:
+  - Resolver ini hanya untuk label display, bukan value relasi. Value option tetap item.id.
+  =====================================================
+  */
+  const code = resolveDisplayReference(item, { fallback: "" });
   const name =
     safeTrim(item.name) ||
     safeTrim(item.itemName) ||

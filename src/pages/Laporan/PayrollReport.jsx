@@ -36,6 +36,7 @@ import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 const { RangePicker } = DatePicker;
 
@@ -260,15 +261,15 @@ const PayrollReport = () => {
     );
 
     return [
-      { key: "draft", title: "Total Draft", value: formatNumberId(totals.totalDraft), subtitle: "Draft pada filter aktif.", accent: "warning" },
-      { key: "confirmed", title: "Total Confirmed", value: formatNumberId(totals.totalConfirmed), subtitle: "Siap dibayar.", accent: "primary" },
-      { key: "paid", title: "Total Paid", value: formatNumberId(totals.totalPaid), subtitle: "Sudah dibayar.", accent: "success" },
-      { key: "cancelled", title: "Total Cancelled", value: formatNumberId(totals.totalCancelled), subtitle: "Dibatalkan.", accent: "danger" },
-      { key: "nominal", title: "Total Nominal Periode", value: formatCurrencyId(totals.totalNominal), subtitle: "Nominal non-cancelled.", accent: "primary" },
-      { key: "direct", title: "Total Direct Labor", value: formatCurrencyId(totals.totalDirect), subtitle: "Direct labor.", accent: "success" },
-      { key: "support", title: "Total Support", value: formatCurrencyId(totals.totalSupport), subtitle: "Support/fulfillment.", accent: "warning" },
-      { key: "hpp", title: "Total Masuk HPP", value: formatCurrencyId(totals.totalInHpp), subtitle: "Masuk HPP.", accent: "primary" },
-      { key: "unpaid", title: "Total Belum Paid", value: formatCurrencyId(totals.totalUnpaid), subtitle: "Belum paid.", accent: "danger" },
+      { key: "draft", title: "Total Draft", value: formatNumberId(totals.totalDraft), subtitle: "Line payroll draft pada filter aktif.", accent: "warning" },
+      { key: "confirmed", title: "Total Confirmed", value: formatNumberId(totals.totalConfirmed), subtitle: "Line payroll siap pembayaran.", accent: "primary" },
+      { key: "paid", title: "Total Paid", value: formatNumberId(totals.totalPaid), subtitle: "Line payroll yang sudah dibayar.", accent: "success" },
+      { key: "cancelled", title: "Total Cancelled", value: formatNumberId(totals.totalCancelled), subtitle: "Line payroll dibatalkan.", accent: "danger" },
+      { key: "nominal", title: "Total Nominal Periode", value: formatCurrencyId(totals.totalNominal), subtitle: "Nominal line non-cancelled pada filter aktif.", accent: "primary" },
+      { key: "direct", title: "Total Direct Labor", value: formatCurrencyId(totals.totalDirect), subtitle: "Klasifikasi direct labor pada filter aktif.", accent: "success" },
+      { key: "support", title: "Total Support", value: formatCurrencyId(totals.totalSupport), subtitle: "Klasifikasi support / fulfillment pada filter aktif.", accent: "warning" },
+      { key: "hpp", title: "Total Masuk HPP", value: formatCurrencyId(totals.totalInHpp), subtitle: "Nominal payroll dengan include HPP aktif.", accent: "primary" },
+      { key: "unpaid", title: "Total Belum Paid", value: formatCurrencyId(totals.totalUnpaid), subtitle: "Draft/confirmed yang belum dibayar.", accent: "danger" },
     ];
   }, [filteredPayrolls]);
 
@@ -384,7 +385,15 @@ const PayrollReport = () => {
           // - Jika logic status ini diganti sembarangan, operator/admin bisa salah
           //   membaca apakah Cash Out sudah dibuat, nominal nol, atau belum dibuat.
           // =====================================================
-          const expenseReference = record.expenseSourceRef || record.expenseId || "-";
+          const expenseReference = resolveDisplayReference(
+            {
+              cashOutNumber: record.cashOutNumber,
+              referenceNumber: record.expenseReferenceNumber,
+              sourceRef: record.expenseSourceRef,
+              expenseId: record.expenseId,
+            },
+            { fallback: record.expenseId || "-", allowTechnicalId: true },
+          );
           const expenseSyncStatus = record.expenseSyncStatus || "-";
 
           if (record.expenseSyncStatus === "created" || record.expenseSyncStatus === "already_exists") {
@@ -427,7 +436,7 @@ const PayrollReport = () => {
   const exportDetailXlsx = async () => {
     await exportJsonToExcel({
       title: "Laporan Payroll IMS Bunga Flanel",
-      subtitle: "Detail payroll sesuai filter.",
+      subtitle: "Detail payroll line sesuai filter periode dan status yang sedang tampil.",
       sheetName: "Payroll Report",
       fileName: "Laporan-Payroll-Detail",
       filters: [
@@ -450,7 +459,15 @@ const PayrollReport = () => {
         "Masuk HPP": item.includePayrollInHpp === false ? "Tidak" : "Ya",
         "Confirmed At": formatDateId(item.confirmedAt, true),
         "Paid At": formatDateId(item.paidAt, true),
-        "Cash Out Ref": item.expenseSourceRef || item.expenseId || "-",
+        "Cash Out Ref": resolveDisplayReference(
+          {
+            cashOutNumber: item.cashOutNumber,
+            referenceNumber: item.expenseReferenceNumber,
+            sourceRef: item.expenseSourceRef,
+            expenseId: item.expenseId,
+          },
+          { fallback: item.expenseId || "-", allowTechnicalId: true },
+        ),
         "Expense Sync": item.expenseSyncStatus || "-",
       })),
     });
@@ -492,7 +509,15 @@ const PayrollReport = () => {
         item.includePayrollInHpp === false ? "Tidak" : "Ya",
         formatDateId(item.confirmedAt, true),
         formatDateId(item.paidAt, true),
-        item.expenseSourceRef || item.expenseId || "-",
+        resolveDisplayReference(
+          {
+            cashOutNumber: item.cashOutNumber,
+            referenceNumber: item.expenseReferenceNumber,
+            sourceRef: item.expenseSourceRef,
+            expenseId: item.expenseId,
+          },
+          { fallback: item.expenseId || "-", allowTechnicalId: true },
+        ),
         item.expenseSyncStatus || "-",
       ]),
     ];
@@ -530,7 +555,7 @@ const PayrollReport = () => {
 
     await exportJsonToExcel({
       title: "Rekap Payroll per Operator",
-      subtitle: "Rekap operator sesuai filter.",
+      subtitle: "Ringkasan payroll operator sesuai filter periode dan status yang sedang tampil.",
       sheetName: "Payroll Recap",
       fileName: "Laporan-Payroll-Rekap-Operator",
       filters: [
@@ -550,33 +575,16 @@ const PayrollReport = () => {
     message.success("Rekap payroll per operator berhasil diekspor ke Excel.");
   };
 
-  /* =====================================================
-     SECTION: Payroll Report Render Panel — GUARDED
-     Fungsi:
-     - Menata filter, summary, tabel line payroll, dan export agar status, nominal, HPP, dan Cash Out ref tetap jelas.
-
-     Dipakai oleh:
-     - Halaman Payroll Report.
-
-     Alasan perubahan:
-     - Batch 3 merapikan microcopy laporan payroll tanpa mengubah filter, totals, export detail, atau rekap operator.
-
-     Catatan cleanup:
-     - Label direct/support/HPP bisa distandarkan di batch dokumentasi UI jika diperlukan.
-
-     Risiko:
-     - Jangan mengubah payroll source, payment status, summary calculation, Cash Out ref, atau export payload dari section ini.
-     ===================================================== */
   return (
     <>
       <PageHeader
         title="Laporan Payroll"
-        subtitle="Payroll produksi sesuai filter."
+        subtitle="Laporan payroll line final per periode."
       />
 
       <PageSection
         title="Filter Periode Payroll"
-        subtitle="Periode dan status payroll."
+        subtitle="Periode dipakai untuk filter laporan."
       >
         <FilterBar
           actions={[
@@ -585,7 +593,7 @@ const PayrollReport = () => {
                 Export Detail XLSX
               </Button>
               <Button onClick={exportDetailCsv} disabled={filteredPayrolls.length === 0}>
-                Export Detail CSV
+                Export Detail CSV (Legacy)
               </Button>
               <Button type="primary" onClick={exportOperatorRecapXlsx} disabled={filteredPayrolls.length === 0}>
                 Export Rekap Operator
@@ -664,14 +672,14 @@ const PayrollReport = () => {
 
       <PageSection
         title="Ringkasan Payroll Periode"
-        subtitle="KPI payroll."
+        subtitle="Ringkasan payroll sesuai filter aktif."
       >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 8, lg: 6, xl: 6 }} />
       </PageSection>
 
       <PageSection
         title="Detail Payroll Lines"
-        subtitle="Line payroll per work log."
+        subtitle="Tabel payroll per line operator."
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredPayrolls} />
         <Table

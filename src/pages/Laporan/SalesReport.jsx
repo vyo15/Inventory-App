@@ -11,6 +11,7 @@ import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 const SalesReport = () => {
   // =========================
@@ -82,28 +83,28 @@ const SalesReport = () => {
         key: "all-revenue",
         title: "Total Omzet Semua Transaksi",
         value: formatCurrencyId(summary.totalRevenue),
-        subtitle: "Total sales pada filter aktif.",
+        subtitle: "Total nominal seluruh transaksi sales.",
         accent: "primary",
       },
       {
         key: "sales-count",
         title: "Jumlah Transaksi",
         value: formatNumberId(summary.totalSalesCount),
-        subtitle: "Jumlah transaksi.",
+        subtitle: "Jumlah dokumen penjualan yang tercatat.",
         accent: "success",
       },
       {
         key: "completed-revenue",
         title: "Omzet Status Selesai",
         value: formatCurrencyId(summary.totalCompletedRevenue),
-        subtitle: "Sales berstatus selesai.",
+        subtitle: "Bagian omzet dari transaksi berstatus selesai.",
         accent: "warning",
       },
       {
         key: "completed-count",
         title: "Transaksi Selesai",
         value: formatNumberId(summary.totalCompletedCount),
-        subtitle: "Transaksi selesai.",
+        subtitle: "Jumlah transaksi dengan status selesai.",
         accent: "danger",
       },
     ],
@@ -125,11 +126,11 @@ const SalesReport = () => {
   const exportToExcel = async () => {
     await exportJsonToExcel({
       title: "Laporan Penjualan IMS Bunga Flanel",
-      subtitle: "Ekspor data yang sedang tampil.",
+      subtitle: "Ekspor mengikuti data penjualan yang sedang tampil di halaman ini.",
       sheetName: "Sales Report",
       fileName: "Laporan-Penjualan",
       columns: [
-        { header: "ID Transaksi", key: "salesId", width: 24 },
+        { header: "Ref Transaksi", key: "salesReference", width: 24 },
         { header: "Tanggal", key: "salesDate", width: 18 },
         { header: "Pelanggan", key: "customerName", width: 24 },
         { header: "Channel", key: "salesChannel", width: 18 },
@@ -140,11 +141,11 @@ const SalesReport = () => {
         { header: "Catatan", key: "salesNote", width: 40 },
       ],
       data: salesData.map((sale) => ({
-        salesId: sale.id,
+        salesReference: resolveDisplayReference(sale, { fallback: sale.id, allowTechnicalId: true }),
         salesDate: formatDateId(sale.date, true),
         customerName: sale.customerName || "-",
         salesChannel: sale.salesChannel || "-",
-        referenceNumber: sale.referenceNumber || "-",
+        referenceNumber: resolveDisplayReference(sale, { fallback: sale.referenceNumber || "-" }),
         soldItems: (sale.items || [])
           .map((item) => `${item.itemName} (${formatNumberId(item.quantity)} ${item.unit || "pcs"})`)
           .join("; ") || "-",
@@ -199,9 +200,8 @@ const SalesReport = () => {
       },
       {
         title: "Resi / Referensi",
-        dataIndex: "referenceNumber",
         key: "referenceNumber",
-        render: (value) => value || "-",
+        render: (_, record) => resolveDisplayReference(record, { fallback: record.referenceNumber || "-" }),
       },
       {
         title: "Total",
@@ -228,40 +228,23 @@ const SalesReport = () => {
     [],
   );
 
-  /* =====================================================
-     SECTION: Sales Report Render Panel — AKTIF
-     Fungsi:
-     - Menata filter, summary, tabel, dan export laporan penjualan agar ringkas tanpa mengubah angka.
-
-     Dipakai oleh:
-     - Halaman Sales Report.
-
-     Alasan perubahan:
-     - Batch 3 mengurangi deskripsi pasif dan menjaga export mengikuti data yang sedang tampil.
-
-     Catatan cleanup:
-     - Pola report panel bisa distandarkan di UI theme guide pada batch docs terpisah.
-
-     Risiko:
-     - Jangan mengubah query, summary calculation, table mapping, atau export payload dari section ini.
-     ===================================================== */
   return (
     <>
       <PageHeader
         title="Laporan Penjualan"
-        subtitle="Ringkasan penjualan sesuai filter."
+        subtitle="Laporan membaca data sales aktif."
       />
 
       <PageSection
         title="Ringkasan Penjualan"
-        subtitle="KPI penjualan."
+        subtitle="Ringkasan performa transaksi."
       >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
       </PageSection>
 
       <PageSection
         title="Detail Penjualan"
-        subtitle="Transaksi sesuai filter."
+        subtitle="Data mengikuti dokumen sales."
         extra={
           <Button type="primary" onClick={exportToExcel} disabled={salesData.length === 0}>
             Ekspor ke Excel

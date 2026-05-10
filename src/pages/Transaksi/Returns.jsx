@@ -29,6 +29,7 @@ import {
   inferHasVariants,
 } from "../../utils/variants/variantStockHelpers";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
+import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -440,7 +441,7 @@ const Returns = () => {
     <>
       <PageHeader
         title="Retur"
-        subtitle="Retur barang dan stok kembali."
+        subtitle="Retur dan stok kembali."
         actions={[
           {
             key: "add-return",
@@ -454,7 +455,7 @@ const Returns = () => {
 
       <PageSection
         title="Data Retur"
-        subtitle="Stok kembali mengikuti item dan varian."
+        subtitle="Stok kembali sesuai item/varian."
       >
         {/* =========================
             SECTION: tabel retur baseline global
@@ -482,7 +483,12 @@ const Returns = () => {
         cancelText="Batal"
         width={720}
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmitReturn}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleSubmitReturn}
+          onFinishFailed={(errorInfo) => showFormValidationFeedback(errorInfo, { form })}
+        >
           <Form.Item
             name="date"
             label="Tanggal"
@@ -530,7 +536,7 @@ const Returns = () => {
               name="variantKey"
               label={selectedItem?.variantLabel || "Varian"}
               rules={[{ required: true, message: "Varian wajib dipilih" }]}
-              extra="Retur item bervarian wajib memilih varian."
+              extra="Item bervarian wajib pilih varian."
             >
               <Select placeholder="Pilih varian" showSearch optionFilterProp="children">
                 {variantOptions.map((item) => (

@@ -452,8 +452,9 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     sequenceNo: toNumber(values.sequenceNo || 1),
 
     // SECTION: source
+    // IMS NOTE [AKTIF/GUARDED]: Work Log baru default In Progress; status draft hanya legacy-compat jika data lama mengirim nilai tersebut secara eksplisit.
     sourceType: values.sourceType || "manual",
-    status: values.status || "draft",
+    status: values.status || "in_progress",
 
     // SECTION: qty
     plannedQty: toNumber(values.plannedQty || 0),
@@ -640,9 +641,23 @@ export const getWorkLogReferenceData = async () => {
   };
 };
 
-// =====================================================
-// Draft work log dari BOM
-// =====================================================
+/* =====================================================
+SECTION: Work Log BOM Template Builder — LEGACY-COMPAT/GUARDED
+Fungsi:
+- Membentuk template nilai Work Log dari BOM tanpa menentukan status Draft baru.
+
+Dipakai oleh:
+- ProductionWorkLogs.jsx saat user memilih Ambil Data BOM.
+
+Alasan perubahan:
+- Nama fungsi lama dipertahankan agar import existing tetap kompatibel, tetapi UI aktif Work Log tidak lagi memakai konsep status Draft.
+
+Catatan cleanup:
+- Nama fungsi bisa diganti pada refactor non-fungsional terpisah setelah semua caller disesuaikan.
+
+Risiko:
+- Jika fungsi ini mulai mengisi status Draft lagi, Work Log baru bisa keluar dari lifecycle In Progress/Completed/Cancelled.
+===================================================== */
 export const buildWorkLogDraftFromBom = (bom, selectedStepId = "") => {
   const stepLines = Array.isArray(bom?.stepLines) ? bom.stepLines : [];
   const materialLines = Array.isArray(bom?.materialLines)
@@ -738,9 +753,23 @@ export const buildWorkLogDraftFromBom = (bom, selectedStepId = "") => {
   };
 };
 
-// =====================================================
-// Draft work log dari Production Order
-// =====================================================
+/* =====================================================
+SECTION: Work Log Production Order Template Builder — LEGACY-COMPAT/GUARDED
+Fungsi:
+- Membentuk template nilai Work Log dari Production Order/BOM tanpa membuat status Draft baru.
+
+Dipakai oleh:
+- createProductionWorkLogFromOrder dan ProductionWorkLogs.jsx saat Ambil Data PO.
+
+Alasan perubahan:
+- Helper lama tetap dipakai untuk kompatibilitas, sedangkan status eksekusi tetap diatur caller sebagai In Progress.
+
+Catatan cleanup:
+- Nama helper dapat dirapikan saat refactor penamaan service produksi.
+
+Risiko:
+- Jika caller menganggap helper ini sebagai lifecycle Draft aktif, start production dan pemotongan stok PO bisa tidak konsisten.
+===================================================== */
 const buildWorkLogDraftFromProductionOrderData = (
   productionOrder,
   bom,
@@ -1184,14 +1213,14 @@ export const createProductionWorkLogFromOrder = async (
       throw new Error("BOM dari production order tidak ditemukan");
     }
 
-    const draft = buildWorkLogDraftFromProductionOrderData(
+    const templateValues = buildWorkLogDraftFromProductionOrderData(
       order,
       { id: bomSnap.id, ...bomSnap.data() },
       extraValues.selectedStepId || "",
     );
     const payload = normalizePayload(
       {
-        ...draft,
+        ...templateValues,
         ...extraValues,
         workNumber,
         workDate: extraValues.workDate || new Date(),

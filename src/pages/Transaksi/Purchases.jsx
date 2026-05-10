@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Table,
   Modal,
   Form,
@@ -49,6 +50,7 @@ import {
   findVariantByKey,
   inferHasVariants,
 } from "../../utils/variants/variantStockHelpers";
+import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -117,8 +119,84 @@ const buildPurchaseStockPreviewSnapshot = (stockSource = {}) => {
   return {
     currentStock,
     reservedStock,
-    availableStock: Number.isFinite(availableStock) ? availableStock : calculatedAvailableStock,
+    availableStock: Number.isFinite(availableStock) ? Math.max(availableStock, 0) : calculatedAvailableStock,
   };
+};
+
+const getPurchaseStockUnit = (item = {}) => item?.stockUnit || item?.unit || item?.baseUnit || 'pcs';
+
+const formatPurchaseStockWithUnit = (value, unit = 'pcs') => `${formatNumberId(value)} ${unit || 'pcs'}`;
+
+const getActivePurchaseVariants = (item = {}) => (Array.isArray(item?.variants) ? item.variants : [])
+  .filter((variant) => variant && variant.isArchived !== true && variant.isActive !== false);
+
+const getPurchaseVariantDisplayName = (variant = {}, fallback = 'Varian') =>
+  variant.variantName || variant.variantLabel || variant.label || variant.name || variant.color || variant.variantKey || fallback;
+
+const getPurchaseVariantMinStock = (variant = {}, masterMinStock = 0) => {
+  const parsed = Number(variant.minStock ?? variant.minStockAlert ?? variant.minimumStock ?? variant.reorderPoint ?? masterMinStock);
+  return Number.isFinite(parsed) ? parsed : Number(masterMinStock || 0);
+};
+
+const formatPurchaseVariantIssueList = (items = [], formatter, maxItems = 3) => {
+  const visibleItems = items.slice(0, maxItems).map(formatter);
+  const extraCount = Math.max(items.length - maxItems, 0);
+  return extraCount > 0 ? `${visibleItems.join(', ')}, dan ${extraCount} lainnya` : visibleItems.join(', ');
+};
+
+/* =====================================================
+SECTION: Purchase Drawer Variant Stock Alert — AKTIF
+Fungsi:
+- Menyiapkan alert read-only untuk varian bahan baku yang kosong/di bawah minimum saat user membuat pembelian.
+
+Dipakai oleh:
+- Purchases.jsx drawer Tambah/Edit Pembelian.
+
+Alasan perubahan:
+- Total stok bahan bervarian bisa terlihat aman walau satu varian aktif perlu restock.
+
+Catatan cleanup:
+- Jika minimum stok per varian resmi dibuat, helper ini sudah fallback dari field varian ke master `minStock`.
+
+Risiko:
+- Jangan memakai helper ini sebagai mutasi stok; hanya display sebelum pembelian disimpan.
+===================================================== */
+const buildMaterialVariantStockAlert = (material = {}) => {
+  const variants = getActivePurchaseVariants(material);
+  const masterMinStock = Number(material?.minStock || 0);
+
+  if (!material?.hasVariants || variants.length === 0) {
+    return { emptyVariants: [], lowVariants: [], messages: [] };
+  }
+
+  const checkedVariants = variants.map((variant, index) => {
+    const stockSnapshot = buildPurchaseStockPreviewSnapshot(variant);
+    const minStock = getPurchaseVariantMinStock(variant, masterMinStock);
+
+    return {
+      variant,
+      name: getPurchaseVariantDisplayName(variant, `Varian ${index + 1}`),
+      availableStock: stockSnapshot.availableStock,
+      minStock,
+    };
+  });
+
+  const emptyVariants = checkedVariants.filter((item) => item.availableStock <= 0);
+  const lowVariants = checkedVariants.filter((item) => item.availableStock > 0 && item.minStock > 0 && item.availableStock < item.minStock);
+  const messages = [];
+
+  if (emptyVariants.length > 0) {
+    messages.push(`Ada varian kosong: ${formatPurchaseVariantIssueList(emptyVariants, (item) => item.name)}.`);
+  }
+
+  if (lowVariants.length > 0) {
+    messages.push(`Varian di bawah minimum: ${formatPurchaseVariantIssueList(
+      lowVariants,
+      (item) => `${item.name} ${formatNumberId(item.availableStock)}/${formatNumberId(item.minStock)}`,
+    )}.`);
+  }
+
+  return { emptyVariants, lowVariants, messages };
 };
 
 // =========================
@@ -287,6 +365,11 @@ const Purchases = () => {
     );
   }, [selectedMaterial, materialVariantId]);
 
+  const selectedMaterialVariantStockAlert = useMemo(
+    () => buildMaterialVariantStockAlert(selectedMaterial || {}),
+    [selectedMaterial],
+  );
+
   const materialVariantOptions = useMemo(() => {
     if (!selectedMaterial?.hasVariantOptions && !selectedMaterial?.hasVariants) return [];
 
@@ -313,11 +396,12 @@ const Purchases = () => {
   const selectedPurchaseStockPreview = useMemo(() => {
     if (!itemType || !itemId) return null;
 
-    const buildReadyPreview = ({ itemName, sourceLabel, sourceType, stockSource }) => ({
+    const buildReadyPreview = ({ itemName, sourceLabel, sourceType, stockSource, stockUnit }) => ({
       status: "ready",
       itemName,
       sourceLabel,
       sourceType,
+      stockUnit: stockUnit || getPurchaseStockUnit(stockSource),
       ...buildPurchaseStockPreviewSnapshot(stockSource),
     });
 
@@ -325,7 +409,7 @@ const Purchases = () => {
       status: "needs_variant",
       itemName,
       variantLabel: variantLabel || "Varian",
-      message: "Pilih varian untuk melihat stok aktual varian.",
+      message: "Pilih varian untuk melihat stok varian.",
     });
 
     if (itemType === "material") {
@@ -350,6 +434,7 @@ const Purchases = () => {
             "Varian terpilih",
           sourceType: "variant",
           stockSource: selectedMaterialVariant,
+          stockUnit: getPurchaseStockUnit(selectedMaterial),
         });
       }
 
@@ -358,6 +443,7 @@ const Purchases = () => {
         sourceLabel: "Master / non-varian",
         sourceType: "master",
         stockSource: selectedMaterial,
+        stockUnit: getPurchaseStockUnit(selectedMaterial),
       });
     }
 
@@ -383,6 +469,7 @@ const Purchases = () => {
             "Varian terpilih",
           sourceType: "variant",
           stockSource: selectedProductVariant,
+          stockUnit: getPurchaseStockUnit(selectedProduct),
         });
       }
 
@@ -391,6 +478,7 @@ const Purchases = () => {
         sourceLabel: "Master / non-varian",
         sourceType: "master",
         stockSource: selectedProduct,
+        stockUnit: getPurchaseStockUnit(selectedProduct),
       });
     }
 
@@ -1593,7 +1681,7 @@ const Purchases = () => {
     <>
       <PageHeader
         title="Pembelian"
-        subtitle="Pembelian, stok masuk, dan modal aktual."
+        subtitle="Pembelian dan stok masuk."
         actions={[
           {
             key: "add-purchase",
@@ -1607,7 +1695,7 @@ const Purchases = () => {
 
       <PageSection
         title="Data Pembelian"
-        subtitle="Stok masuk dan biaya mengikuti transaksi pembelian."
+        subtitle="Stok dan biaya mengikuti pembelian."
       >
         {/* =========================
             SECTION: tabel pembelian baseline global
@@ -1634,7 +1722,12 @@ const Purchases = () => {
         cancelText="Batal"
         width={820}
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmitPurchase}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleSubmitPurchase}
+          onFinishFailed={(errorInfo) => showFormValidationFeedback(errorInfo, { form })}
+        >
           <Form.Item
             name="date"
             label="Tanggal"
@@ -1695,7 +1788,7 @@ const Purchases = () => {
               name="productVariantKey"
               label={selectedProduct?.variantLabel || "Varian Produk"}
               rules={[{ required: true, message: "Varian produk wajib dipilih" }]}
-              extra="Produk ini bervarian. Pembelian wajib masuk ke varian yang dipilih, bukan master/default."
+              extra="Item bervarian wajib masuk ke varian."
             >
               <Select placeholder="Pilih varian produk">
                 {productVariantOptions.map((item) => (
@@ -1735,6 +1828,15 @@ const Purchases = () => {
                 Info ini hanya snapshot stok saat ini sebelum pembelian disimpan.
               </div>
 
+              {itemType === "material" && selectedMaterialVariantStockAlert.messages.length > 0 ? (
+                <Alert
+                  type={selectedMaterialVariantStockAlert.emptyVariants.length > 0 ? "error" : "warning"}
+                  showIcon
+                  message={selectedMaterialVariantStockAlert.messages.join(' ')}
+                  style={{ marginBottom: 10 }}
+                />
+              ) : null}
+
               {selectedPurchaseStockPreview.status === "needs_variant" ? (
                 <div
                   style={{
@@ -1772,18 +1874,26 @@ const Purchases = () => {
                       gap: 8,
                     }}
                   >
-                    <div className="ims-readonly-field ims-readonly-field--compact">
-                      <div style={{ color: "#777", fontSize: 12 }}>Current Stock</div>
-                      <strong>{formatNumberId(selectedPurchaseStockPreview.currentStock)}</strong>
-                    </div>
-                    <div className="ims-readonly-field ims-readonly-field--compact">
-                      <div style={{ color: "#777", fontSize: 12 }}>Reserved Stock</div>
-                      <strong>{formatNumberId(selectedPurchaseStockPreview.reservedStock)}</strong>
-                    </div>
-                    <div className="ims-readonly-field ims-readonly-field--compact">
-                      <div style={{ color: "#777", fontSize: 12 }}>Available Stock</div>
-                      <strong>{formatNumberId(selectedPurchaseStockPreview.availableStock)}</strong>
-                    </div>
+                    {[
+                      ['Current Stock', selectedPurchaseStockPreview.currentStock],
+                      ['Reserved Stock', selectedPurchaseStockPreview.reservedStock],
+                      ['Available Stock', selectedPurchaseStockPreview.availableStock],
+                    ].map(([label, value]) => (
+                      <div
+                        key={label}
+                        style={{
+                          border: '1px solid #edf1f7',
+                          borderRadius: 10,
+                          padding: '10px 12px',
+                          background: '#fff',
+                        }}
+                      >
+                        <div style={{ color: "#777", fontSize: 12, marginBottom: 4 }}>{label}</div>
+                        <strong style={{ display: 'block', fontSize: 16 }}>
+                          {formatPurchaseStockWithUnit(value, selectedPurchaseStockPreview.stockUnit)}
+                        </strong>
+                      </div>
+                    ))}
                   </div>
                 </>
               )}
@@ -1873,7 +1983,7 @@ const Purchases = () => {
                   name="quantity"
                   label="Qty Beli"
                   rules={[{ required: true, message: "Qty wajib diisi" }]}
-                  extra="Jumlah aktual yang dibeli."
+                  extra="Jumlah aktual beli."
                 >
                   <InputNumber
                     min={1}
@@ -1887,7 +1997,7 @@ const Purchases = () => {
 
                 <Form.Item
                   label="Satuan Beli"
-                  extra="Satuan beli mengikuti katalog Supplier."
+                  extra="Satuan dari katalog supplier."
                 >
                   <Form.Item shouldUpdate noStyle>
                     {({ getFieldValue }) => (
@@ -1962,7 +2072,7 @@ const Purchases = () => {
                   </Form.Item>
                 </Form.Item>
 
-                <Form.Item label="Satuan Stok" extra="Satuan stok mengikuti Raw Material.">
+                <Form.Item label="Satuan Stok" extra="Satuan dari Raw Material.">
                   <Form.Item shouldUpdate noStyle>
                     {({ getFieldValue }) => (
                       <div className="ims-readonly-field ims-readonly-field--compact">

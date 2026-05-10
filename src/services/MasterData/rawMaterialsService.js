@@ -18,6 +18,14 @@ import {
   enrichRawMaterialWithVariantTotals,
   normalizeRawMaterialVariants,
 } from '../../utils/variants/rawMaterialVariantHelpers';
+import {
+  appendVariantModeHistory,
+  archiveActiveVariantsForModeDisable,
+  areAllVariantsStockEmpty,
+  buildVariantModeHistoryEntry,
+  isVariantStockEmpty,
+  reconcileVariantArchiveState,
+} from '../../utils/variants/variantArchiveHelpers';
 import { toNumber } from '../../utils/stock/stockHelpers';
 import {
   getSupplierDisplayName,
@@ -46,17 +54,23 @@ export const RAW_MATERIAL_DEFAULT_FORM = {
   isActive: true,
 };
 
-const enrichRawMaterial = (item = {}) =>
-  enrichRawMaterialWithVariantTotals({
+const enrichRawMaterial = (item = {}) => {
+  const activeVariants = (Array.isArray(item.variants) ? item.variants : []).filter((variant) => variant?.isArchived !== true);
+  const activeVariantOptions = (Array.isArray(item.variantOptions) ? item.variantOptions : []).filter((variant) => variant?.isArchived !== true);
+
+  return enrichRawMaterialWithVariantTotals({
     ...item,
+    variants: activeVariants,
+    variantOptions: activeVariantOptions,
     isActive: item.isActive !== false,
   });
+};
 
 const inferHasVariants = (item = {}) =>
   item?.hasVariants === true
   || item?.hasVariantOptions === true
-  || (Array.isArray(item?.variants) && item.variants.length > 0)
-  || (Array.isArray(item?.variantOptions) && item.variantOptions.length > 0);
+  || (Array.isArray(item?.variants) && item.variants.some((variant) => variant?.isArchived !== true))
+  || (Array.isArray(item?.variantOptions) && item.variantOptions.some((variant) => variant?.isArchived !== true));
 
 const toStockNumber = (value = 0) => Math.round(toNumber(value || 0));
 
@@ -137,6 +151,8 @@ const normalizeZeroStockRawVariants = (variants = []) =>
     stock: 0,
     reservedStock: 0,
     availableStock: 0,
+    isActive: true,
+    isArchived: false,
   }));
 
 const buildRawVariantKeyCandidates = (variant = {}) => [
@@ -160,14 +176,10 @@ const buildRawVariantLookup = (variants = []) => {
 };
 
 const hasProtectedVariantStock = (variant = {}) => {
-  const currentStock = toStockNumber(variant.currentStock ?? variant.stock ?? 0);
-  const reservedStock = toStockNumber(variant.reservedStock || 0);
-  const availableStock = toStockNumber(variant.availableStock ?? Math.max(currentStock - reservedStock, 0));
-
-  // IMS NOTE [GUARDED | stok-varian]: hapus varian ditolak bila salah satu
+  // IMS NOTE [GUARDED | stok-varian]: hapus/archive varian ditolak bila salah satu
   // bucket stok masih bernilai. Hubungan flow: mencegah bucket stok/reference
-  // hilang dari master tanpa Stock Adjustment/transaksi resmi. STATUS: AKTIF.
-  return currentStock > 0 || reservedStock > 0 || availableStock > 0;
+  // hilang dari master tanpa Purchase/Stock Adjustment/transaksi resmi. STATUS: AKTIF.
+  return !isVariantStockEmpty(variant);
 };
 
 const assertNoRawVariantWithStockRemoved = (editedVariants = [], existingVariants = []) => {
@@ -202,7 +214,12 @@ const validateDuplicateRawVariantNames = (variants = []) => {
   return errors;
 };
 
-const mergeRawVariantMetadataWithExistingStock = (editedVariants = [], existingVariants = []) => {
+const mergeRawVariantMetadataWithExistingStock = (
+  editedVariants = [],
+  existingVariants = [],
+  archivedVariants = [],
+  options = {},
+) => {
   const normalizedEdited = normalizeRawMaterialVariants(editedVariants);
   const normalizedExisting = normalizeRawMaterialVariants(existingVariants);
 
@@ -217,38 +234,119 @@ const mergeRawVariantMetadataWithExistingStock = (editedVariants = [], existingV
 
   assertNoRawVariantWithStockRemoved(normalizedEdited, normalizedExisting);
 
-  const existingLookup = buildRawVariantLookup(normalizedExisting);
-
-  return normalizedEdited.map((variant, index) => {
-    const existingVariant = buildRawVariantKeyCandidates(variant, index)
-      .map((key) => existingLookup.get(key))
-      .find(Boolean);
+  const mergeActiveVariant = (variant = {}, existingVariant = {}) => {
     const currentStock = toStockNumber(existingVariant?.currentStock ?? existingVariant?.stock ?? 0);
     const reservedStock = toStockNumber(existingVariant?.reservedStock || 0);
 
-    // IMS NOTE [GUARDED | behavior-preserving]: metadata varian bahan boleh berubah,
-    // tetapi stok varian wajib diambil dari dokumen latest di transaction.
     return {
       ...variant,
+      variantKey: existingVariant?.variantKey || variant.variantKey,
       currentStock,
       stock: currentStock,
       reservedStock,
       availableStock: Math.max(currentStock - reservedStock, 0),
+      isActive: variant.isActive !== false,
+      isArchived: false,
     };
+  };
+
+  const buildNewVariant = (variant = {}) => ({
+    ...variant,
+    currentStock: 0,
+    stock: 0,
+    reservedStock: 0,
+    availableStock: 0,
+    isActive: true,
+    isArchived: false,
+  });
+
+  return reconcileVariantArchiveState({
+    editedVariants: normalizedEdited,
+    existingVariants: normalizedExisting,
+    archivedVariants,
+    normalizeVariants: normalizeRawMaterialVariants,
+    mergeActiveVariant,
+    buildNewVariant,
+    protectedRemovalMessage: 'Varian bahan yang masih punya stock/reserved tidak boleh diarsipkan. Nolkan lewat purchase/adjustment resmi lebih dulu.',
+    duplicateActiveMessage: 'Nama varian aktif tidak boleh duplikat',
+    now: options.now,
+    actor: options.actor,
+    archiveReason: options.archiveReason || 'Varian bahan baku diarsipkan dari edit master setelah stok 0.',
+    restoreReason: options.restoreReason || 'Varian bahan baku lama direstore karena dibuat lagi dengan struktur yang sama.',
   });
 };
 
 const normalizeRawMaterialMetadataPayload = (values = {}, suppliers = [], existingMaterial = {}) => {
+  const existingActiveVariants = (Array.isArray(existingMaterial.variants) ? existingMaterial.variants : existingMaterial.variantOptions || [])
+    .filter((variant) => variant?.isArchived !== true);
+  const existingArchivedVariants = Array.isArray(existingMaterial.archivedVariants)
+    ? existingMaterial.archivedVariants
+    : [];
   const existingHasVariants = inferHasVariants(existingMaterial);
   const wantsVariants = values.hasVariants === true;
   const canActivateVariants = !existingHasVariants && wantsVariants;
-  const hasVariants = existingHasVariants || canActivateVariants;
+  const hasVariants = wantsVariants;
+  const now = new Date().toISOString();
+  const actor = 'system';
   const payload = {
     ...resolveRawMaterialMetadata(values, suppliers, existingMaterial),
     hasVariants,
     hasVariantOptions: hasVariants,
     variantLabel: hasVariants ? String(values.variantLabel || existingMaterial.variantLabel || 'Varian').trim() : '',
   };
+
+  /* =====================================================
+  SECTION: Raw Material Variant Archive/Restore Guard — GUARDED
+  Fungsi:
+  - Menjadi guard service utama untuk OFF mode varian, archive varian stok 0, restore archived variant, dan duplicate active guard Raw Material.
+
+  Dipakai oleh:
+  - updateRawMaterial transaction setelah membaca dokumen Raw Material terbaru dan drawer Raw Material.
+
+  Alasan perubahan:
+  - Varian bahan boleh fleksibel saat semua stok 0, tetapi variantKey/variantOptions lama harus tetap aman untuk histori purchase/adjustment.
+
+  Catatan cleanup:
+  - Jika UI nanti mengirim audit user, actor dapat diganti dari system ke user email tanpa mengubah bentuk archive.
+
+  Risiko:
+  - Jika guard ini dilepas, client lama bisa hard delete variantOptions atau membuat duplicate variantKey bahan.
+  ===================================================== */
+  if (existingHasVariants && !wantsVariants) {
+    if (!areAllVariantsStockEmpty(existingActiveVariants)) {
+      throw {
+        type: 'validation',
+        errors: {
+          hasVariants: 'Mode varian hanya bisa dimatikan jika semua varian current/reserved/available stock 0.',
+        },
+      };
+    }
+
+    const archiveResult = archiveActiveVariantsForModeDisable({
+      activeVariants: existingActiveVariants,
+      archivedVariants: existingArchivedVariants,
+      now,
+      actor,
+      archiveReason: 'Mode varian bahan baku dimatikan setelah semua stok varian 0.',
+    });
+
+    return {
+      ...payload,
+      hasVariants: false,
+      hasVariantOptions: false,
+      variantLabel: '',
+      variants: [],
+      variantOptions: [],
+      archivedVariants: archiveResult.archivedVariants,
+      variantModeHistory: appendVariantModeHistory(existingMaterial.variantModeHistory, archiveResult.historyEntries),
+      variantCount: 0,
+      activeVariantCount: 0,
+      stock: 0,
+      currentStock: 0,
+      reservedStock: 0,
+      availableStock: 0,
+    };
+  }
 
   if (canActivateVariants) {
     if (hasProtectedMasterStock(existingMaterial)) {
@@ -270,15 +368,32 @@ const normalizeRawMaterialMetadataPayload = (values = {}, suppliers = [], existi
       throw { type: 'validation', errors: duplicateErrors };
     }
 
-    const totals = calculateRawMaterialVariantTotals(convertedVariants);
+    const mergeResult = mergeRawVariantMetadataWithExistingStock(
+      convertedVariants,
+      [],
+      existingArchivedVariants,
+      {
+        now,
+        actor,
+        restoreReason: 'Varian bahan baku lama direstore saat mode varian diaktifkan kembali.',
+      },
+    );
+    const totals = calculateRawMaterialVariantTotals(mergeResult.activeVariants);
+    const historyEntries = [
+      buildVariantModeHistoryEntry('variant_mode_enabled', {
+        now,
+        actor,
+        reason: 'Mode varian bahan baku diaktifkan dari item stok master 0.',
+      }),
+      ...mergeResult.historyEntries,
+    ];
 
-    // IMS NOTE [GUARDED | konversi-varian-zero-stock]: raw material lama non-varian
-    // boleh mulai memakai varian hanya saat stok master aman 0. Tidak ada stok
-    // yang dipindah otomatis; semua varian baru mulai dari 0.
     return {
       ...payload,
       variants: totals.variants,
       variantOptions: totals.variants,
+      archivedVariants: mergeResult.archivedVariants,
+      variantModeHistory: appendVariantModeHistory(existingMaterial.variantModeHistory, historyEntries),
       variantCount: totals.variantCount,
       activeVariantCount: totals.activeVariantCount,
       stock: 0,
@@ -289,29 +404,33 @@ const normalizeRawMaterialMetadataPayload = (values = {}, suppliers = [], existi
   }
 
   if (!hasVariants) {
-    // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: update metadata
-    // non-varian tidak mengirim stock/currentStock/reservedStock/availableStock.
     return {
       ...payload,
+      hasVariants: false,
+      hasVariantOptions: false,
+      variantLabel: '',
       variants: [],
       variantOptions: [],
+      archivedVariants: existingArchivedVariants,
       variantCount: 0,
       activeVariantCount: 0,
     };
   }
 
-  const mergedVariants = mergeRawVariantMetadataWithExistingStock(
+  const mergeResult = mergeRawVariantMetadataWithExistingStock(
     values.variants || [],
-    existingMaterial.variants || existingMaterial.variantOptions || [],
+    existingActiveVariants,
+    existingArchivedVariants,
+    { now, actor },
   );
-  const totals = calculateRawMaterialVariantTotals(mergedVariants);
+  const totals = calculateRawMaterialVariantTotals(mergeResult.activeVariants);
 
-  // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: update varian menulis
-  // array metadata + stok existing supaya adjustment/purchase terbaru tidak tertimpa.
   return {
     ...payload,
     variants: totals.variants,
     variantOptions: totals.variants,
+    archivedVariants: mergeResult.archivedVariants,
+    variantModeHistory: appendVariantModeHistory(existingMaterial.variantModeHistory, mergeResult.historyEntries),
     variantCount: totals.variantCount,
     activeVariantCount: totals.activeVariantCount,
     stock: totals.currentStock,

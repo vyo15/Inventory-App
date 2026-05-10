@@ -1,5 +1,6 @@
 import React from "react";
 import { Form, Modal } from "antd";
+import { showFormValidationFeedback } from "../../../utils/forms/formValidationFeedback";
 import "./PageFormModal.css";
 
 const resolveModalContainer = () => {
@@ -7,15 +8,26 @@ const resolveModalContainer = () => {
   return document.querySelector(".app-shell") || document.body;
 };
 
-// =========================
-// SECTION: Shared Page Form Modal
-// Fungsi:
-// - menyatukan pola modal + form submit standar lintas halaman operasional
-// - menjaga surface modal tetap solid, rapi, dan konsisten di dark/light mode
-// Catatan:
-// - komponen ini tetap wrapper presentational
-// - validation dan logic submit tetap dimiliki halaman pemanggil
-// =========================
+/*
+=====================================================
+SECTION: Integrasi validasi PageFormModal — AKTIF
+Fungsi:
+- Menyatukan modal + form submit standar lintas halaman operasional.
+- Menampilkan popup field wajib melalui helper shared saat submit gagal validasi AntD Form.
+
+Dipakai oleh:
+- Halaman yang memakai PageFormModal untuk create/edit modal.
+
+Alasan perubahan:
+- User perlu pesan “Data belum lengkap” yang jelas saat klik Simpan tanpa mengisi field wajib.
+
+Catatan cleanup:
+- Halaman custom drawer/modal tetap perlu catch lokal sampai semua form memakai PageFormModal.
+
+Risiko:
+- Jika onFinishFailed custom dari pemanggil diabaikan, pesan validasi khusus halaman bisa hilang. Karena itu callback custom tetap dipanggil setelah popup shared.
+=====================================================
+*/
 const PageFormModal = ({
   title,
   open,
@@ -34,6 +46,21 @@ const PageFormModal = ({
   const mergedRootClassName = ["page-form-modal-root", modalClassName]
     .filter(Boolean)
     .join(" ");
+
+  const handleFinishFailed = (errorInfo) => {
+    showFormValidationFeedback(errorInfo, {
+      form,
+      fieldLabels: formProps.fieldLabels || {},
+    });
+
+    if (typeof formProps.onFinishFailed === "function") {
+      formProps.onFinishFailed(errorInfo);
+    }
+  };
+
+  const safeFormProps = { ...formProps };
+  delete safeFormProps.fieldLabels;
+  delete safeFormProps.onFinishFailed;
 
   return (
     <Modal
@@ -54,8 +81,9 @@ const PageFormModal = ({
         form={form}
         layout="vertical"
         onFinish={onFinish}
+        onFinishFailed={handleFinishFailed}
         className="page-form-modal-form"
-        {...formProps}
+        {...safeFormProps}
       >
         {children}
       </Form>

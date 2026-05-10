@@ -17,6 +17,14 @@ import {
   normalizeColorVariants,
   validateDuplicateVariantColors,
 } from '../../utils/variants/variantHelpers';
+import {
+  appendVariantModeHistory,
+  archiveActiveVariantsForModeDisable,
+  areAllVariantsStockEmpty,
+  buildVariantModeHistoryEntry,
+  reconcileVariantArchiveState,
+  isVariantStockEmpty,
+} from '../../utils/variants/variantArchiveHelpers';
 
 const COLLECTION_NAME = 'products';
 
@@ -38,7 +46,7 @@ export const PRODUCT_DEFAULT_FORM = {
 };
 
 const inferHasVariants = (item = {}) =>
-  item?.hasVariants === true || (Array.isArray(item?.variants) && item.variants.length > 0);
+  item?.hasVariants === true || (Array.isArray(item?.variants) && item.variants.some((variant) => variant?.isArchived !== true));
 
 const toStockNumber = (value = 0) => {
   const number = Number(value ?? 0);
@@ -66,7 +74,8 @@ const resolveProductMasterMinStockAlert = (values = {}) => toStockNumber(values.
 
 const enrichProduct = (item = {}) => {
   const hasVariants = inferHasVariants(item);
-  const totals = calculateVariantTotals(item.variants || []);
+  const activeVariants = (Array.isArray(item.variants) ? item.variants : []).filter((variant) => variant?.isArchived !== true);
+  const totals = calculateVariantTotals(activeVariants);
   const currentStock = hasVariants ? totals.currentStock : Number(item.currentStock ?? item.stock ?? 0);
   const reservedStock = hasVariants ? totals.reservedStock : Number(item.reservedStock || 0);
   const minStockAlert = resolveProductMasterMinStockAlert(item);
@@ -156,6 +165,8 @@ const normalizeZeroStockProductVariants = (variants = []) =>
     stock: 0,
     reservedStock: 0,
     availableStock: 0,
+    isActive: true,
+    isArchived: false,
   }));
 
 const buildProductVariantKeyCandidates = (variant = {}) => [
@@ -178,14 +189,10 @@ const buildProductVariantLookup = (variants = []) => {
 };
 
 const hasProtectedVariantStock = (variant = {}) => {
-  const currentStock = toStockNumber(variant.currentStock ?? variant.stock ?? 0);
-  const reservedStock = toStockNumber(variant.reservedStock || 0);
-  const availableStock = toStockNumber(variant.availableStock ?? Math.max(currentStock - reservedStock, 0));
-
-  // IMS NOTE [GUARDED | stok-varian]: hapus varian ditolak bila salah satu
+  // IMS NOTE [GUARDED | stok-varian]: hapus/archive varian ditolak bila salah satu
   // bucket stok masih bernilai. Hubungan flow: mencegah bucket stok/reference
   // hilang dari master tanpa Stock Adjustment/transaksi resmi. STATUS: AKTIF.
-  return currentStock > 0 || reservedStock > 0 || availableStock > 0;
+  return !isVariantStockEmpty(variant);
 };
 
 const assertNoProductVariantWithStockRemoved = (editedVariants = [], existingVariants = []) => {
@@ -205,7 +212,12 @@ const assertNoProductVariantWithStockRemoved = (editedVariants = [], existingVar
   });
 };
 
-const mergeProductVariantMetadataWithExistingStock = (editedVariants = [], existingVariants = []) => {
+const mergeProductVariantMetadataWithExistingStock = (
+  editedVariants = [],
+  existingVariants = [],
+  archivedVariants = [],
+  options = {},
+) => {
   const normalizedEdited = normalizeColorVariants(editedVariants);
   const normalizedExisting = normalizeColorVariants(existingVariants);
 
@@ -220,37 +232,117 @@ const mergeProductVariantMetadataWithExistingStock = (editedVariants = [], exist
 
   assertNoProductVariantWithStockRemoved(normalizedEdited, normalizedExisting);
 
-  const existingLookup = buildProductVariantLookup(normalizedExisting);
-
-  return normalizedEdited.map((variant, index) => {
-    const existingVariant = buildProductVariantKeyCandidates(variant, index)
-      .map((key) => existingLookup.get(key))
-      .find(Boolean);
+  const mergeActiveVariant = (variant = {}, existingVariant = {}) => {
     const currentStock = toStockNumber(existingVariant?.currentStock ?? existingVariant?.stock ?? 0);
     const reservedStock = toStockNumber(existingVariant?.reservedStock || 0);
 
-    // IMS NOTE [GUARDED | behavior-preserving]: metadata varian boleh berubah,
-    // tetapi stok varian selalu dipreserve dari dokumen latest di transaction.
     return {
       ...variant,
+      variantKey: existingVariant?.variantKey || variant.variantKey,
       currentStock,
       stock: currentStock,
       reservedStock,
       availableStock: Math.max(currentStock - reservedStock, 0),
       minStockAlert: toStockNumber(variant.minStockAlert || 0),
+      isActive: variant.isActive !== false,
+      isArchived: false,
     };
+  };
+
+  const buildNewVariant = (variant = {}) => ({
+    ...variant,
+    currentStock: 0,
+    stock: 0,
+    reservedStock: 0,
+    availableStock: 0,
+    minStockAlert: toStockNumber(variant.minStockAlert || 0),
+    isActive: true,
+    isArchived: false,
+  });
+
+  return reconcileVariantArchiveState({
+    editedVariants: normalizedEdited,
+    existingVariants: normalizedExisting,
+    archivedVariants,
+    normalizeVariants: normalizeColorVariants,
+    mergeActiveVariant,
+    buildNewVariant,
+    protectedRemovalMessage: 'Varian yang masih punya stock/reserved tidak boleh diarsipkan. Nolkan lewat flow resmi lebih dulu.',
+    duplicateActiveMessage: 'Nama varian aktif tidak boleh duplikat',
+    now: options.now,
+    actor: options.actor,
+    archiveReason: options.archiveReason || 'Varian produk diarsipkan dari edit master setelah stok 0.',
+    restoreReason: options.restoreReason || 'Varian produk lama direstore karena dibuat lagi dengan struktur yang sama.',
   });
 };
 
 const normalizeProductMetadataPayload = (values = {}, categories = [], existingProduct = {}) => {
+  const existingActiveVariants = (Array.isArray(existingProduct.variants) ? existingProduct.variants : [])
+    .filter((variant) => variant?.isArchived !== true);
+  const existingArchivedVariants = Array.isArray(existingProduct.archivedVariants)
+    ? existingProduct.archivedVariants
+    : [];
   const existingHasVariants = inferHasVariants(existingProduct);
   const wantsVariants = values.hasVariants === true;
   const canActivateVariants = !existingHasVariants && wantsVariants;
-  const hasVariants = existingHasVariants || canActivateVariants;
+  const hasVariants = wantsVariants;
+  const now = new Date().toISOString();
+  const actor = 'system';
   const payload = {
     ...resolveProductMetadata(values, categories),
     hasVariants,
   };
+
+  /* =====================================================
+  SECTION: Product Variant Archive/Restore Guard — GUARDED
+  Fungsi:
+  - Menjadi guard service utama untuk OFF mode varian, archive varian stok 0, restore archived variant, dan duplicate active guard.
+
+  Dipakai oleh:
+  - updateProduct transaction setelah membaca dokumen Product terbaru dan drawer Product.
+
+  Alasan perubahan:
+  - Mode varian existing boleh fleksibel saat semua stok 0, tetapi variantKey lama harus tetap disimpan sebagai tombstone agar histori transaksi aman.
+
+  Catatan cleanup:
+  - Jika UI nanti mengirim audit user, actor dapat diganti dari system ke user email tanpa mengubah bentuk archive.
+
+  Risiko:
+  - Jika guard ini dilepas, client lama bisa hard delete varian, membuat duplicate variantKey, atau menulis stok tanpa flow resmi.
+  ===================================================== */
+  if (existingHasVariants && !wantsVariants) {
+    if (!areAllVariantsStockEmpty(existingActiveVariants)) {
+      throw {
+        type: 'validation',
+        errors: {
+          hasVariants: 'Mode varian hanya bisa dimatikan jika semua varian current/reserved/available stock 0.',
+        },
+      };
+    }
+
+    const archiveResult = archiveActiveVariantsForModeDisable({
+      activeVariants: existingActiveVariants,
+      archivedVariants: existingArchivedVariants,
+      now,
+      actor,
+      archiveReason: 'Mode varian produk dimatikan setelah semua stok varian 0.',
+    });
+
+    return {
+      ...payload,
+      hasVariants: false,
+      variants: [],
+      archivedVariants: archiveResult.archivedVariants,
+      variantModeHistory: appendVariantModeHistory(existingProduct.variantModeHistory, archiveResult.historyEntries),
+      variantCount: 0,
+      activeVariantCount: 0,
+      currentStock: 0,
+      reservedStock: 0,
+      availableStock: 0,
+      stock: 0,
+      minStockAlert: resolveProductMasterMinStockAlert(values),
+    };
+  }
 
   if (canActivateVariants) {
     if (hasProtectedMasterStock(existingProduct)) {
@@ -272,14 +364,31 @@ const normalizeProductMetadataPayload = (values = {}, categories = [], existingP
       throw { type: 'validation', errors: duplicateErrors };
     }
 
-    const variantTotals = calculateVariantTotals(convertedVariants);
+    const mergeResult = mergeProductVariantMetadataWithExistingStock(
+      convertedVariants,
+      [],
+      existingArchivedVariants,
+      {
+        now,
+        actor,
+        restoreReason: 'Varian produk lama direstore saat mode varian diaktifkan kembali.',
+      },
+    );
+    const variantTotals = calculateVariantTotals(mergeResult.activeVariants);
+    const historyEntries = [
+      buildVariantModeHistoryEntry('variant_mode_enabled', {
+        now,
+        actor,
+        reason: 'Mode varian produk diaktifkan dari item stok master 0.',
+      }),
+      ...mergeResult.historyEntries,
+    ];
 
-    // IMS NOTE [GUARDED | konversi-varian-zero-stock]: item lama non-varian
-    // boleh mulai memakai varian hanya saat stok master aman 0. Tidak ada stok
-    // yang dipindah otomatis; semua varian existing baru mulai dari 0.
     return {
       ...payload,
       variants: variantTotals.variants,
+      archivedVariants: mergeResult.archivedVariants,
+      variantModeHistory: appendVariantModeHistory(existingProduct.variantModeHistory, historyEntries),
       variantCount: variantTotals.variantCount,
       activeVariantCount: variantTotals.activeVariantCount,
       currentStock: 0,
@@ -291,29 +400,30 @@ const normalizeProductMetadataPayload = (values = {}, categories = [], existingP
   }
 
   if (!hasVariants) {
-    // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: update non-varian
-    // sengaja tidak mengirim stock/currentStock/reservedStock/availableStock.
-    // Hubungan flow: stok setelah create hanya boleh berubah lewat adjustment/transaksi resmi.
     return {
       ...payload,
+      hasVariants: false,
       variants: [],
+      archivedVariants: existingArchivedVariants,
       variantCount: 0,
       activeVariantCount: 0,
       minStockAlert: resolveProductMasterMinStockAlert(values),
     };
   }
 
-  const mergedVariants = mergeProductVariantMetadataWithExistingStock(
+  const mergeResult = mergeProductVariantMetadataWithExistingStock(
     values.variants || [],
-    existingProduct.variants || [],
+    existingActiveVariants,
+    existingArchivedVariants,
+    { now, actor },
   );
-  const variantTotals = calculateVariantTotals(mergedVariants);
+  const variantTotals = calculateVariantTotals(mergeResult.activeVariants);
 
-  // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: array variants harus
-  // ditulis ulang untuk metadata, jadi total stok master dihitung dari stok existing/latest.
   return {
     ...payload,
     variants: variantTotals.variants,
+    archivedVariants: mergeResult.archivedVariants,
+    variantModeHistory: appendVariantModeHistory(existingProduct.variantModeHistory, mergeResult.historyEntries),
     variantCount: variantTotals.variantCount,
     activeVariantCount: variantTotals.activeVariantCount,
     currentStock: variantTotals.currentStock,

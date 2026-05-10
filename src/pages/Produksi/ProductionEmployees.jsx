@@ -66,6 +66,8 @@ import ProductionPageHeader from "../../components/Produksi/shared/ProductionPag
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
+import { resolveDisplayReference } from '../../utils/references/displayReferenceResolver';
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -358,7 +360,7 @@ const ProductionEmployees = () => {
       resetFormState();
       await loadData();
     } catch (error) {
-      if (error?.errorFields) return;
+      if (showFormValidationFeedback(error, { form })) return;
 
       if (error?.type === "validation" && error?.errors) {
         const fields = Object.entries(error.errors).map(([name, errors]) => ({
@@ -606,7 +608,7 @@ const ProductionEmployees = () => {
             {record.name || "-"}
           </Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {record.code || "-"}
+            {resolveDisplayReference(record, { fallback: record.code || "-" })}
           </Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis={{ tooltip: record.phone || "-" }}>
             {record.phone || "-"}
@@ -749,7 +751,7 @@ const ProductionEmployees = () => {
       {/* AKTIF / GUARDED: header dimigrasikan ke shared produksi untuk konsistensi UX lintas halaman tanpa mengubah flow submit master karyawan. */}
       <ProductionPageHeader
         title="Karyawan Produksi"
-        description="Kelola master operator produksi."
+        description="Master operator produksi."
         onAdd={handleAdd}
         addLabel="Tambah Karyawan"
       />
@@ -758,8 +760,8 @@ const ProductionEmployees = () => {
         showIcon
         type="info"
         style={{ marginBottom: 16 }}
-        message="Karyawan Produksi = master operator + summary payroll read-only"
-        description="Ringkasan payroll dibaca dari data final; custom payroll masih legacy."
+        message="Operator produksi dan payroll read-only"
+        description="Ringkasan payroll dari data final."
       />
 
       {/* AKTIF / GUARDED: summary hanya ganti wrapper presentational, nilai tetap dari kalkulasi existing. */}
@@ -829,7 +831,7 @@ const ProductionEmployees = () => {
 
       <PageSection
         title="Daftar Karyawan Produksi"
-        subtitle="Master operator dan konteks produksi."
+        subtitle="Master operator produksi."
       >
         {/* =====================================================
             SECTION: Main table render — AKTIF
@@ -1228,13 +1230,13 @@ const ProductionEmployees = () => {
               showIcon
               type="info"
               style={{ marginBottom: 16 }}
-              message="Karyawan Produksi dipakai sebagai operator Work Log dan referensi payroll produksi."
+              message="Operator untuk Work Log dan payroll."
             />
 
             <Card size="small" title="Ringkasan Karyawan" style={{ marginBottom: 16 }}>
               <Row gutter={[12, 12]}>
                 <Col xs={24} md={12}>
-                  {renderCompactInfo("Kode", selectedEmployee.code)}
+                  {renderCompactInfo("Kode", resolveDisplayReference(selectedEmployee))}
                 </Col>
                 <Col xs={24} md={12}>
                   {renderCompactInfo("Nama", selectedEmployee.name)}
@@ -1469,8 +1471,8 @@ const ProductionEmployees = () => {
                     showIcon
                     type="warning"
                     style={{ marginBottom: 12 }}
-                    message="Legacy, tidak dipakai untuk payroll baru."
-                    description="Data ini dipertahankan untuk kompatibilitas data lama. Payroll baru mengikuti Tahapan Produksi dan Work Log completed."
+                    message="Legacy untuk data lama."
+                    description="Payroll baru mengikuti Tahapan Produksi dan Work Log completed."
                   />
                   <Descriptions column={1} size="small">
                     <Descriptions.Item label="Gunakan Tarif Custom">

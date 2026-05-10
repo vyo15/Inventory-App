@@ -11,6 +11,7 @@ import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 // =========================
 // SECTION: Helper saving pembelian
@@ -111,14 +112,14 @@ const PurchasesReport = () => {
         key: "total-actual-purchase",
         title: "Total Aktual Pembelian",
         value: formatCurrencyId(summary.totalActual),
-        subtitle: "Total biaya pembelian.",
+        subtitle: "Total expense pembelian yang benar-benar diakui.",
         accent: "danger",
       },
       {
         key: "total-reference-purchase",
         title: "Total Referensi",
         value: formatCurrencyId(summary.totalReference),
-        subtitle: "Total acuan supplier.",
+        subtitle: "Nilai referensi untuk pembanding efisiensi pembelian.",
         accent: "primary",
       },
       {
@@ -128,14 +129,14 @@ const PurchasesReport = () => {
           summary.totalSaving < 0
             ? `- ${formatCurrencyId(Math.abs(summary.totalSaving))}`
             : formatCurrencyId(summary.totalSaving),
-        subtitle: "Selisih efisiensi pembelian.",
+        subtitle: "Saving tetap ditampilkan sebagai info, bukan pengurang kas keluar.",
         accent: summary.totalSaving >= 0 ? "success" : "danger",
       },
       {
         key: "purchase-transaction-count",
         title: "Jumlah Transaksi",
         value: formatNumberId(summary.totalTransactions),
-        subtitle: "Jumlah transaksi.",
+        subtitle: "Jumlah transaksi pembelian yang terbaca dari expenses.",
         accent: "warning",
       },
     ],
@@ -154,12 +155,13 @@ const PurchasesReport = () => {
   const exportToExcel = async () => {
     await exportJsonToExcel({
       title: "Laporan Pembelian IMS Bunga Flanel",
-      subtitle: "Ekspor data yang sedang tampil.",
+      subtitle: "Ekspor mengikuti data expenses pembelian yang tampil di halaman ini.",
       sheetName: "Purchases Report",
       fileName: "Laporan-Pembelian",
       columns: [
         { header: "ID Expense", key: "expenseId", width: 24 },
         { header: "Tanggal", key: "expenseDate", width: 18 },
+        { header: "Ref Pembelian", key: "purchaseReference", width: 24 },
         { header: "Supplier", key: "supplierName", width: 24 },
         { header: "Item", key: "itemName", width: 32 },
         { header: "Varian / Sumber", key: "variantLabel", width: 22 },
@@ -170,8 +172,9 @@ const PurchasesReport = () => {
         { header: "Deskripsi", key: "description", width: 40 },
       ],
       data: purchasesData.map((purchase) => ({
-        expenseId: purchase.id,
+        expenseId: resolveDisplayReference(purchase, { fallback: purchase.id, allowTechnicalId: true }),
         expenseDate: formatDateId(purchase.date, true),
+        purchaseReference: resolveDisplayReference(purchase, { fallback: purchase.sourceRef || purchase.id, allowTechnicalId: true }),
         supplierName: purchase.supplierName || "-",
         itemName: purchase.relatedItemName || purchase.description || "-",
         variantLabel: getPurchaseVariantLabel(purchase),
@@ -198,6 +201,11 @@ const PurchasesReport = () => {
         dataIndex: "supplierName",
         key: "supplierName",
         render: (value) => value || "-",
+      },
+      {
+        title: "Ref",
+        key: "purchaseReference",
+        render: (_, record) => resolveDisplayReference(record, { fallback: record.sourceRef || "-" }),
       },
       {
         title: "Item",
@@ -248,40 +256,23 @@ const PurchasesReport = () => {
     [],
   );
 
-  /* =====================================================
-     SECTION: Purchases Report Render Panel — AKTIF
-     Fungsi:
-     - Menata filter, summary, tabel, dan export laporan pembelian agar biaya, acuan supplier, dan selisih tetap jelas.
-
-     Dipakai oleh:
-     - Halaman Purchases Report.
-
-     Alasan perubahan:
-     - Batch 3 mengurangi copy pasif tanpa mengubah calculation, expenses source, atau export.
-
-     Catatan cleanup:
-     - Jika laporan audit supplier makin detail, pisahkan drawer/section audit di batch lain.
-
-     Risiko:
-     - Jangan mengubah report dataSource, saving calculation, total, atau export payload dari section ini.
-     ===================================================== */
   return (
     <>
       <PageHeader
         title="Laporan Pembelian"
-        subtitle="Ringkasan pembelian sesuai filter."
+        subtitle="Laporan membaca data pembelian aktif."
       />
 
       <PageSection
         title="Ringkasan Pembelian"
-        subtitle="KPI pembelian."
+        subtitle="Ringkasan total dan saving pembelian."
       >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
       </PageSection>
 
       <PageSection
         title="Detail Pembelian"
-        subtitle="Transaksi sesuai filter."
+        subtitle="Data mengikuti transaksi pembelian aktif."
         extra={
           <Button type="primary" onClick={exportToExcel} disabled={purchasesData.length === 0}>
             Ekspor ke Excel
