@@ -19,6 +19,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
 import { calculatePayrollAmounts } from "../../constants/productionPayrollOptions";
 import { getCompletedProductionWorkLogs } from "./productionWorkLogsService";
 
@@ -388,10 +389,6 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
 
 export const validateProductionPayroll = (values = {}) => {
   const errors = {};
-
-  if (!String(values.payrollNumber || "").trim()) {
-    errors.payrollNumber = "Nomor payroll wajib diisi";
-  }
 
   if (!values.payrollDate) {
     errors.payrollDate = "Tanggal payroll wajib diisi";
@@ -813,6 +810,24 @@ export const getProductionPayrollById = async (id) => {
   };
 };
 
+const resolvePayrollDateForCode = (values = {}) => {
+  const source = values.payrollDate || new Date();
+  if (source?.toDate) return source.toDate();
+  if (source instanceof Date) return source;
+  const parsed = new Date(source);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
+export const generateProductionPayrollNumber = async (values = {}) => {
+  return generateDailySequenceCode({
+    db,
+    collectionName: COLLECTION_NAME,
+    fieldNames: ["payrollNumber", "code", "sourceRef"],
+    prefix: "PAY",
+    date: resolvePayrollDateForCode(values),
+  });
+};
+
 export const isPayrollNumberExists = async (
   payrollNumber,
   excludeId = null,
@@ -842,7 +857,10 @@ export const createProductionPayroll = async (values, currentUser = null) => {
     throw { type: "validation", errors };
   }
 
-  const exists = await isPayrollNumberExists(values.payrollNumber);
+  const normalizedPayrollNumber = String(values.payrollNumber || "").trim().toUpperCase() || (await generateProductionPayrollNumber(values));
+  const nextValues = { ...values, payrollNumber: normalizedPayrollNumber };
+
+  const exists = await isPayrollNumberExists(normalizedPayrollNumber);
   if (exists) {
     throw {
       type: "validation",
@@ -871,7 +889,7 @@ export const createProductionPayroll = async (values, currentUser = null) => {
   - Jika guard ini dilepas, satu operator bisa punya beberapa payroll aktif pada Work Log yang sama.
   =====================================================
   */
-  const duplicateLine = await findExistingPayrollLineForWorker(values.workLogId, values.stepId || "", values);
+  const duplicateLine = await findExistingPayrollLineForWorker(nextValues.workLogId, nextValues.stepId || "", nextValues);
   if (duplicateLine) {
     throw {
       type: "validation",
@@ -881,9 +899,9 @@ export const createProductionPayroll = async (values, currentUser = null) => {
     };
   }
 
-  const payload = normalizePayload(values, currentUser, false);
+  const payload = normalizePayload(nextValues, currentUser, false);
   const result = await addDoc(collection(db, COLLECTION_NAME), payload);
-  await syncWorkLogPayrollSummary(payload.workLogId || values.workLogId || "");
+  await syncWorkLogPayrollSummary(payload.workLogId || nextValues.workLogId || "");
   return result.id;
 };
 
@@ -899,7 +917,10 @@ export const updateProductionPayroll = async (
     throw { type: "validation", errors };
   }
 
-  const exists = await isPayrollNumberExists(values.payrollNumber, id);
+  const normalizedPayrollNumber = String(values.payrollNumber || "").trim().toUpperCase() || (await generateProductionPayrollNumber(values));
+  const nextValues = { ...values, payrollNumber: normalizedPayrollNumber };
+
+  const exists = await isPayrollNumberExists(normalizedPayrollNumber, id);
   if (exists) {
     throw {
       type: "validation",
@@ -909,7 +930,7 @@ export const updateProductionPayroll = async (
     };
   }
 
-  const duplicateLine = await findExistingPayrollLineForWorker(values.workLogId, values.stepId || "", values);
+  const duplicateLine = await findExistingPayrollLineForWorker(nextValues.workLogId, nextValues.stepId || "", nextValues);
   if (duplicateLine && duplicateLine.id !== id) {
     throw {
       type: "validation",
@@ -919,7 +940,7 @@ export const updateProductionPayroll = async (
     };
   }
 
-  const payload = normalizePayload(values, currentUser, true);
+  const payload = normalizePayload(nextValues, currentUser, true);
   await updateDoc(doc(db, COLLECTION_NAME, id), payload);
   await syncWorkLogPayrollSummary(currentRecord.workLogId || "");
   if ((payload.workLogId || "") !== (currentRecord.workLogId || "")) {

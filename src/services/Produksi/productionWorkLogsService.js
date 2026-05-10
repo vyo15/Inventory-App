@@ -521,10 +521,6 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
 export const validateProductionWorkLog = (values = {}) => {
   const errors = {};
 
-  if (!safeTrim(values.workNumber)) {
-    errors.workNumber = "Nomor work log wajib diisi";
-  }
-
   if (!values.workDate) {
     errors.workDate = "Tanggal work log wajib diisi";
   }
@@ -1026,7 +1022,10 @@ export const createProductionWorkLog = async (values, currentUser = null) => {
     throw { type: "validation", errors };
   }
 
-  const exists = await isProductionWorkLogNumberExists(values.workNumber);
+  const workNumber = safeTrim(values.workNumber).toUpperCase() || (await generateProductionWorkLogNumber());
+  const nextValues = { ...values, workNumber };
+
+  const exists = await isProductionWorkLogNumberExists(workNumber);
 
   if (exists) {
     throw {
@@ -1037,7 +1036,7 @@ export const createProductionWorkLog = async (values, currentUser = null) => {
     };
   }
 
-  const payload = normalizePayload(values, currentUser, false);
+  const payload = normalizePayload(nextValues, currentUser, false);
   const result = await addDoc(collection(db, COLLECTION_NAME), payload);
 
   return result.id;
@@ -1453,6 +1452,9 @@ export const updateProductionWorkLog = async (
   }
 
   const guardedValues = applyLockedWorkLogCoreFields(current, mergedValues);
+  if (!safeTrim(guardedValues.workNumber)) {
+    guardedValues.workNumber = await generateProductionWorkLogNumber();
+  }
 
   const errors = validateProductionWorkLog(guardedValues);
   if (Object.keys(errors).length > 0) {

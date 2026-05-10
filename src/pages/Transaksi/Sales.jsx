@@ -39,6 +39,7 @@ import {
   updateInventoryStock,
 } from "../../services/Inventory/inventoryService";
 import { getCustomers } from "../../services/MasterData/customersService";
+import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
 import {
   buildVariantOptionsFromItem,
   findVariantByKey,
@@ -556,7 +557,17 @@ const Sales = () => {
         (customer) => customer.id === customerId,
       );
 
+      const saleNumber = await generateDailySequenceCode({
+        db,
+        collectionName: "sales",
+        fieldNames: ["saleNumber", "code", "referenceNumber"],
+        prefix: "SAL",
+        date: date.toDate(),
+      });
+
       const newSalePayload = {
+        saleNumber,
+        code: saleNumber,
         customerId: customerId || null,
         customerName: selectedCustomer?.name || "",
         items: saleItems,
@@ -628,9 +639,13 @@ const Sales = () => {
           {
             customerName: newSalePayload.customerName || "",
             saleId: salesDocument.id,
+            saleNumber: newSalePayload.saleNumber || "",
+            referenceId: salesDocument.id,
+            referenceCode: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
+            sourceRef: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
             note: `Penjualan via ${newSalePayload.salesChannel}`,
             subtotal: item.subtotal,
-            referenceNumber: newSalePayload.referenceNumber || "",
+            referenceNumber: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
             variantKey: item.variantKey || "",
             variantLabel: item.variantLabel || "",
             stockSourceType: item.stockSourceType || "master",
@@ -691,6 +706,10 @@ const Sales = () => {
         item.collectionName,
         {
           saleId,
+          saleNumber: selectedSale.saleNumber || selectedSale.code || "",
+          referenceId: saleId,
+          referenceCode: selectedSale.saleNumber || selectedSale.code || selectedSale.referenceNumber || "",
+          sourceRef: selectedSale.saleNumber || selectedSale.code || selectedSale.referenceNumber || "",
           note:
             logType === "sale_cancel_revert"
               ? `Pembatalan penjualan via ${selectedSale.salesChannel || "-"}`
@@ -734,6 +753,10 @@ const Sales = () => {
           await addDoc(collection(db, "incomes"), {
             date: Timestamp.now(),
             type: "Penjualan",
+            incomeNumber: selectedSale.saleNumber || selectedSale.code || "",
+            code: selectedSale.saleNumber || selectedSale.code || "",
+            sourceRef: selectedSale.saleNumber || selectedSale.code || selectedSale.referenceNumber || "",
+            referenceNumber: selectedSale.saleNumber || selectedSale.code || selectedSale.referenceNumber || "",
             relatedId: saleId,
             description: `Penjualan: ${itemNames}`,
             amount: selectedSale.total,
@@ -770,7 +793,9 @@ const Sales = () => {
     }
 
     return statusMatchedRecords.filter((sale) =>
-      String(sale.referenceNumber || "")
+      [sale.saleNumber, sale.code, sale.referenceNumber, sale.customerName]
+        .filter(Boolean)
+        .join(" ")
         .toLowerCase()
         .includes(searchKeyword),
     );
@@ -852,7 +877,7 @@ const Sales = () => {
       key: "dateReference",
       width: 150,
       render: (_, record) => {
-        const referenceText = record.referenceNumber || "Tanpa ref";
+        const referenceText = record.saleNumber || record.code || record.referenceNumber || "Tanpa ref";
         return (
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 600 }}>{record.date || "-"}</div>

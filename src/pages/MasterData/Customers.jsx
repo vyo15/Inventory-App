@@ -88,6 +88,16 @@ const Customers = () => {
       fetchCustomers();
     } catch (error) {
       console.error("Gagal simpan customer:", error);
+      if (error?.type === "validation" && error.errors) {
+        form.setFields(
+          Object.entries(error.errors).map(([name, errorMessage]) => ({
+            name,
+            errors: [errorMessage],
+          })),
+        );
+        message.error(Object.values(error.errors)[0] || "Data customer belum valid.");
+        return;
+      }
       message.error("Gagal menyimpan customer.");
     }
   };
@@ -126,6 +136,7 @@ const Customers = () => {
     setIsModalVisible(true);
     setCurrentId(record.id);
     form.setFieldsValue({
+      code: record.code || record.customerCode || "",
       name: record.name,
       contact: record.contact,
       address: record.address,
@@ -143,6 +154,7 @@ const Customers = () => {
   // - aktif dipakai
   // =========================
   const columns = [
+    { title: "Kode", dataIndex: "code", key: "code", render: (_, record) => record.code || record.customerCode || "-" },
     { title: "Nama Customer", dataIndex: "name", key: "name" },
     { title: "Kontak", dataIndex: "contact", key: "contact" },
     { title: "Alamat", dataIndex: "address", key: "address" },
@@ -244,6 +256,9 @@ const Customers = () => {
         form={form}
         onFinish={handleAddOrEditCustomer}
       >
+        <Form.Item name="code" label="Kode Customer">
+          <Input placeholder="Opsional, otomatis: CUS-BD-ST" />
+        </Form.Item>
         <Form.Item
           name="name"
           label="Nama Customer"

@@ -646,9 +646,8 @@ const ProductionPayrolls = () => {
               <Form.Item
                 label="No. Payroll"
                 name="payrollNumber"
-                rules={[{ required: true, message: "No. payroll wajib diisi" }]}
               >
-                <Input placeholder="Contoh: PAY-20260405-001" />
+                <Input placeholder="Opsional, otomatis: PAY-YYYYMMDD-0001" />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>

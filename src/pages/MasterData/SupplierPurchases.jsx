@@ -32,6 +32,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyIDR } from '../../utils/formatters/currencyId';
+import { generateUniqueReadableCode, isBusinessCodeExists } from '../../utils/references/businessCodeGenerator';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
@@ -235,6 +236,8 @@ const SupplierPurchases = () => {
         if (!keyword) return true;
 
         const searchableText = [
+          supplier.code,
+          supplier.supplierCode,
           getSupplierDisplayName(supplier),
           getSupplierStoreLink(supplier),
           ...(supplier.supportedMaterialNames || []),
@@ -352,7 +355,11 @@ const SupplierPurchases = () => {
         };
       });
 
+    const normalizedCode = String(values.code || '').trim().toUpperCase();
+
     return {
+      code: normalizedCode,
+      supplierCode: normalizedCode,
       storeName: values.storeName,
       storeLink: values.storeLink || '',
       // Field kategori lama tidak lagi disimpan dari UI aktif. Jika ada data lama,
@@ -374,7 +381,31 @@ const SupplierPurchases = () => {
   const handleSaveSupplier = async (values) => {
     try {
       setSaving(true);
-      const payload = buildSupplierPayload(values);
+      const generatedCode = String(values.code || '').trim().toUpperCase() || await generateUniqueReadableCode({
+        db,
+        collectionName: 'supplierPurchases',
+        fieldNames: ['code', 'supplierCode'],
+        prefix: 'SUP',
+        text: values.storeName || 'Supplier',
+        fallbackText: 'Supplier',
+        excludeId: editingId || null,
+        maxParts: 5,
+      });
+      const codeExists = await isBusinessCodeExists({
+        db,
+        collectionName: 'supplierPurchases',
+        fieldNames: ['code', 'supplierCode'],
+        value: generatedCode,
+        excludeId: editingId || null,
+      });
+
+      if (codeExists) {
+        form.setFields([{ name: 'code', errors: ['Kode supplier sudah digunakan'] }]);
+        message.error('Kode supplier sudah digunakan.');
+        return;
+      }
+
+      const payload = buildSupplierPayload({ ...values, code: generatedCode });
 
       if (isEditing && editingId) {
         await updateDoc(doc(db, 'supplierPurchases', editingId), payload);
@@ -422,6 +453,7 @@ const SupplierPurchases = () => {
     setModalVisible(true);
 
     form.setFieldsValue({
+      code: record.code || record.supplierCode || '',
       storeName: getSupplierDisplayName(record),
       storeLink: getSupplierStoreLink(record),
       materialDetails:
@@ -531,6 +563,9 @@ const SupplierPurchases = () => {
               <Tag color="green">Dipilih</Tag>
             ) : null}
           </Space>
+          <span style={{ color: '#666' }}>
+            {record.code || record.supplierCode || 'Kode otomatis'}
+          </span>
           <span style={{ color: '#666' }}>
             {(record.materialDetails || []).length || 0} katalog restock
           </span>
@@ -863,6 +898,10 @@ const SupplierPurchases = () => {
         width={980}
       >
         <Form form={form} layout="vertical" onFinish={handleSaveSupplier}>
+          <Form.Item name="code" label="Kode Supplier">
+            <Input placeholder="Opsional, otomatis: SUP-TK-FLN" />
+          </Form.Item>
+
           <Form.Item
             name="storeName"
             label="Nama Supplier / Toko"

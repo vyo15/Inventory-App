@@ -1338,11 +1338,8 @@ const ProductionWorkLogs = () => {
               <Form.Item
                 label="No. Work Log"
                 name="workNumber"
-                rules={[
-                  { required: true, message: "Nomor work log wajib diisi" },
-                ]}
               >
-                <Input placeholder="Contoh: WL-0001" />
+                <Input placeholder="Opsional, otomatis: WL-0001" />
               </Form.Item>
             </Col>
 

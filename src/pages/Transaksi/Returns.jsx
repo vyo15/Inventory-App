@@ -29,6 +29,7 @@ import {
   inferHasVariants,
 } from "../../utils/variants/variantStockHelpers";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
+import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 
 
@@ -224,6 +225,13 @@ const Returns = () => {
       const itemReference = doc(db, collectionName, itemId);
       const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
       const returnTimestamp = Timestamp.fromDate(date.toDate());
+      const returnNumber = await generateDailySequenceCode({
+        db,
+        collectionName: "returns",
+        fieldNames: ["returnNumber", "code", "referenceNumber"],
+        prefix: "RET",
+        date: date.toDate(),
+      });
 
       await runTransaction(db, async (transaction) => {
         const itemDocument = await transaction.get(itemReference);
@@ -281,6 +289,9 @@ const Returns = () => {
         // - inventory log memakai buildInventoryLogPayload agar schema audit sama dengan writer aktif lain.
         // =========================
         transaction.set(returnReference, {
+          returnNumber,
+          code: returnNumber,
+          referenceNumber: returnNumber,
           type,
           itemId,
           itemName: latestItemName,
@@ -303,7 +314,10 @@ const Returns = () => {
             timestamp: Timestamp.now(),
             extraData: {
               returnId: returnReference.id,
+              returnNumber,
               referenceId: returnReference.id,
+              referenceNumber: returnNumber,
+              referenceCode: returnNumber,
               referenceType: "return",
               note: normalizedNote,
               currentStockBefore: stockSnapshotBefore.currentStock,
@@ -353,7 +367,7 @@ const Returns = () => {
       width: 170,
       render: (_, record) => {
         const dateText = record.date?.toDate ? dayjs(record.date.toDate()).format("DD-MM-YYYY HH:mm") : "-";
-        const referenceText = record.referenceId || record.returnId || record.id || "-";
+        const referenceText = record.returnNumber || record.code || record.referenceNumber || record.referenceId || record.returnId || record.id || "-";
         return (
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 600 }}>{dateText}</div>

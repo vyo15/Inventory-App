@@ -12,6 +12,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { generateUniqueReadableCode, isBusinessCodeExists } from '../../utils/references/businessCodeGenerator';
 import {
   calculateVariantTotals,
   normalizeColorVariants,
@@ -29,6 +30,7 @@ import {
 const COLLECTION_NAME = 'products';
 
 export const PRODUCT_DEFAULT_FORM = {
+  code: '',
   name: '',
   categoryId: null,
   price: 0,
@@ -98,6 +100,8 @@ const resolveProductMetadata = (values = {}, categories = []) => {
   const selectedCategory = (categories || []).find((item) => item.id === values.categoryId);
 
   return {
+    code: String(values.code || '').trim().toUpperCase(),
+    productCode: String(values.code || '').trim().toUpperCase(),
     name: String(values.name || '').trim(),
     categoryId: values.categoryId || null,
     category: selectedCategory?.name || 'Produk Jadi',
@@ -498,13 +502,46 @@ export const listenProducts = (callback, onError) => {
   );
 };
 
+export const generateProductCode = async (values = {}, excludeId = null) => {
+  return generateUniqueReadableCode({
+    db,
+    collectionName: COLLECTION_NAME,
+    fieldNames: ['code', 'productCode', 'sku'],
+    prefix: 'PRD',
+    text: values.name || 'Produk Jadi',
+    fallbackText: 'Produk Jadi',
+    excludeId,
+    maxParts: 6,
+  });
+};
+
+const assertProductCodeAvailable = async (code = '', editingId = null) => {
+  const normalizedCode = String(code || '').trim().toUpperCase();
+  if (!normalizedCode) return;
+
+  const exists = await isBusinessCodeExists({
+    db,
+    collectionName: COLLECTION_NAME,
+    fieldNames: ['code', 'productCode', 'sku'],
+    value: normalizedCode,
+    excludeId: editingId,
+  });
+
+  if (exists) {
+    throw { type: 'validation', errors: { code: 'Kode produk sudah digunakan' } };
+  }
+};
+
 export const createProduct = async (values = {}, categories = []) => {
   const errors = await validateProductPayload(values, null);
   if (Object.keys(errors).length > 0) {
     throw { type: 'validation', errors };
   }
 
-  const payload = normalizeProductCreatePayload(values, categories);
+  const normalizedCode = String(values.code || '').trim().toUpperCase() || (await generateProductCode(values));
+  await assertProductCodeAvailable(normalizedCode, null);
+
+  const payload = normalizeProductCreatePayload({ ...values, code: normalizedCode }, categories);
   const result = await addDoc(collection(db, COLLECTION_NAME), payload);
   return result.id;
 };
@@ -514,6 +551,9 @@ export const updateProduct = async (id, values = {}, categories = []) => {
   if (Object.keys(errors).length > 0) {
     throw { type: 'validation', errors };
   }
+
+  const normalizedCode = String(values.code || '').trim().toUpperCase() || (await generateProductCode(values, id));
+  await assertProductCodeAvailable(normalizedCode, id);
 
   const ref = doc(db, COLLECTION_NAME, id);
 
@@ -526,7 +566,7 @@ export const updateProduct = async (id, values = {}, categories = []) => {
     }
 
     const existingProduct = enrichProduct({ id: snapshot.id, ...snapshot.data() });
-    const payload = normalizeProductMetadataPayload(values, categories, existingProduct);
+    const payload = normalizeProductMetadataPayload({ ...values, code: normalizedCode }, categories, existingProduct);
     transaction.update(ref, payload);
   });
 

@@ -21,6 +21,7 @@ import dayjs from "dayjs";
 import { db } from "../../firebase";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { formatCurrencyId as formatCurrencyIdr } from "../../utils/formatters/currencyId";
+import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
 import {
   doesSupplierProvideMaterial,
   getSupplierDisplayName,
@@ -1293,6 +1294,14 @@ const Purchases = () => {
       const expenseReference = doc(db, "expenses", buildPurchaseExpenseDocumentId(purchaseReference.id));
       const itemReference = doc(db, collectionName, itemId);
 
+      const purchaseNumber = await generateDailySequenceCode({
+        db,
+        collectionName: "purchases",
+        fieldNames: ["purchaseNumber", "code", "referenceNumber", "sourceRef"],
+        prefix: "PUR",
+        date: date.toDate(),
+      });
+
       // =========================
       // SECTION: Firestore transaction pembelian
       // Fungsi blok:
@@ -1354,7 +1363,11 @@ const Purchases = () => {
           ? `${latestItem?.name || "Item"} - ${variantLabel}`
           : latestItem?.name || "Item tidak ditemukan";
 
+
         const purchasePayload = {
+          purchaseNumber,
+          code: purchaseNumber,
+          referenceNumber: purchaseNumber,
           type: normalizedType,
           itemId,
           itemName,
@@ -1467,7 +1480,11 @@ const Purchases = () => {
             extraData: {
               // AKTIF: reference pembelian membuat inventory log mudah dilacak dari Stock Management.
               purchaseId: purchaseReference.id,
+              purchaseNumber: purchasePayload.purchaseNumber || "",
               referenceId: purchaseReference.id,
+              referenceNumber: purchasePayload.purchaseNumber || "",
+              referenceCode: purchasePayload.purchaseNumber || "",
+              sourceRef: purchasePayload.purchaseNumber || "",
               referenceType: "purchase",
               supplierName: purchasePayload.supplierName || "",
               ...variantPayload,
@@ -1559,6 +1576,11 @@ const Purchases = () => {
         return (
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 600 }}>{dateText}</div>
+            <Tooltip title={record.purchaseNumber || record.code || record.referenceNumber || supplierName}>
+              <div style={{ color: "#8c8c8c", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {record.purchaseNumber || record.code || record.referenceNumber || "Kode otomatis"}
+              </div>
+            </Tooltip>
             <Tooltip title={supplierName}>
               <div style={{ color: "#8c8c8c", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {supplierName}

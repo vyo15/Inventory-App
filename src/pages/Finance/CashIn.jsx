@@ -31,6 +31,7 @@ import { db } from "../../firebase";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
+import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 
@@ -229,7 +230,19 @@ const CashIn = () => {
 
   const handleAddTransaction = async (values) => {
     try {
+      const cashInNumber = await generateDailySequenceCode({
+        db,
+        collectionName: "revenues",
+        fieldNames: ["cashInNumber", "code", "sourceRef", "referenceNumber"],
+        prefix: "CIN",
+        date: values.date.toDate(),
+      });
+
       await addDoc(collection(db, "revenues"), {
+        cashInNumber,
+        code: cashInNumber,
+        referenceNumber: cashInNumber,
+        sourceRef: cashInNumber,
         amount: Math.round(Number(values.amount || 0)),
         description: values.description,
         date: Timestamp.fromDate(values.date.toDate()),
@@ -289,6 +302,9 @@ const CashIn = () => {
           return (
             <div className="ims-cell-stack ims-cell-stack-tight">
               <div>{sourceTag}</div>
+              <Text type="secondary" className="ims-cell-meta">
+                {record.cashInNumber || record.code || record.sourceRef || record.referenceNumber || record.type || "-"}
+              </Text>
               <Text type="secondary" className="ims-cell-meta">
                 {record.type || "-"}
               </Text>

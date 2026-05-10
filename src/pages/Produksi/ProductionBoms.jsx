@@ -480,10 +480,6 @@ const ProductionBoms = () => {
 
       const fieldErrors = [];
 
-      if (!String(values.code || "").trim()) {
-        fieldErrors.push({ name: "code", errors: ["Kode BOM wajib diisi"] });
-      }
-
       if (!String(values.name || "").trim()) {
         fieldErrors.push({ name: "name", errors: ["Nama BOM wajib diisi"] });
       }
@@ -544,15 +540,9 @@ const ProductionBoms = () => {
       const targetName = selectedTarget?.name || "";
       const targetCode = selectedTarget?.code || "";
       const normalizedTargetName = String(targetName || "BOM").trim();
-      const normalizedTargetCode =
-        String(targetCode || normalizedTargetName)
-          .toUpperCase()
-          .replace(/[^A-Z0-9]+/g, "-")
-          .replace(/^-+|-+$/g, "") || "BOM";
-
       const payload = {
         ...values,
-        code: values.code || `BOM-${normalizedTargetCode}`,
+        code: values.code || "",
         name: values.name || `BOM ${normalizedTargetName}`,
         description: values.description || "",
         targetCode,
@@ -782,7 +772,7 @@ const ProductionBoms = () => {
     <div>
       <ProductionPageHeader
         title="BOM Produksi"
-        description="Komposisi bahan dan step produksi."
+        description="Komposisi bahan dan step untuk Production Order"
         onAdd={handleAdd}
         addLabel="Tambah BOM"
       />
@@ -920,9 +910,8 @@ const ProductionBoms = () => {
               <Form.Item
                 label="Kode BOM"
                 name="code"
-                rules={[{ required: true, message: "Kode BOM wajib diisi" }]}
               >
-                <Input placeholder="Contoh: BOM-MAWAR-V1" />
+                <Input placeholder="Opsional, otomatis: BOM-PRD-PL-DN-MWR-PTH-FLN" />
               </Form.Item>
             </Col>
 
@@ -957,7 +946,7 @@ const ProductionBoms = () => {
                       style={{ marginBottom: 16 }}
                       type="warning"
                       showIcon
-                      message="Target product belum terbaca. Refresh atau cek master produk."
+                      message="Target product belum terbaca. Pastikan master Produk Jadi sudah ada dan halaman BOM sudah refresh."
                     />
                   ) : null}
 
@@ -967,7 +956,7 @@ const ProductionBoms = () => {
                       style={{ marginBottom: 16 }}
                       type="warning"
                       showIcon
-                      message="Tambahkan Semi Finished Materials lebih dulu."
+                      message="Target semi finished belum tersedia. Tambahkan Semi Finished Materials terlebih dahulu."
                     />
                   ) : null}
 
@@ -1040,7 +1029,7 @@ const ProductionBoms = () => {
                       <Form.Item
                         label="Hasil per Produksi"
                         name="batchOutputQty"
-                        extra="Output untuk 1 resep BOM."
+                        extra="Isi jumlah output yang dihasilkan untuk 1 resep BOM ini. Contoh: 1 bunga, 10 tangkai, atau 20 potong komponen."
                       >
                         <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
                       </Form.Item>
@@ -1051,7 +1040,7 @@ const ProductionBoms = () => {
                         label="Status Aktif"
                         name="isActive"
                         valuePropName="checked"
-                        extra="Aktifkan jika resep masih dipakai."
+                        extra="Biarkan aktif kalau resep ini masih dipakai. Nonaktifkan hanya jika BOM lama sudah tidak digunakan."
                       >
                         <Switch />
                       </Form.Item>
@@ -1518,7 +1507,7 @@ const ProductionBoms = () => {
               <Form.Item
                 label="Kebutuhan per Produksi"
                 name="qtyPerBatch"
-                extra="Qty bahan untuk 1 resep BOM."
+                extra="Isi jumlah bahan yang dibutuhkan untuk 1 kali produksi sesuai output BOM ini."
               >
                 <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
@@ -1527,7 +1516,7 @@ const ProductionBoms = () => {
               <Form.Item
                 label="Satuan Bahan"
                 name="unit"
-                extra="Dari master bahan."
+                extra="Diambil otomatis dari master bahan yang dipilih."
               >
                 <Input disabled />
               </Form.Item>
@@ -1582,7 +1571,7 @@ const ProductionBoms = () => {
               <Form.Item
                 label="Urutan Langkah"
                 name="sequenceNo"
-                extra="Otomatis sesuai urutan step."
+                extra="Terisi otomatis sesuai urutan penambahan step."
               >
                 <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>

@@ -10,6 +10,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { generateUniqueReadableCode, isBusinessCodeExists } from "../../utils/references/businessCodeGenerator";
 
 // =========================
 // SECTION: Source of truth customer final
@@ -34,6 +35,8 @@ export const CUSTOMERS_COLLECTION = "customers";
 // - aktif/final
 // =========================
 const normalizeCustomerPayload = (values = {}) => ({
+  code: String(values.code || "").trim().toUpperCase(),
+  customerCode: String(values.code || "").trim().toUpperCase(),
   name: String(values.name || "").trim(),
   contact: String(values.contact || "").trim(),
   address: String(values.address || "").trim(),
@@ -71,8 +74,41 @@ export const getCustomers = async () => {
 // Status:
 // - aktif/final
 // =========================
+export const generateCustomerCode = async (values = {}, excludeId = null) => {
+  return generateUniqueReadableCode({
+    db,
+    collectionName: CUSTOMERS_COLLECTION,
+    fieldNames: ["code", "customerCode"],
+    prefix: "CUS",
+    text: values.name || "Customer",
+    fallbackText: "Customer",
+    excludeId,
+    maxParts: 5,
+  });
+};
+
+const assertCustomerCodeAvailable = async (code = "", editingId = null) => {
+  const normalizedCode = String(code || "").trim().toUpperCase();
+  if (!normalizedCode) return;
+
+  const exists = await isBusinessCodeExists({
+    db,
+    collectionName: CUSTOMERS_COLLECTION,
+    fieldNames: ["code", "customerCode"],
+    value: normalizedCode,
+    excludeId: editingId,
+  });
+
+  if (exists) {
+    throw { type: "validation", errors: { code: "Kode customer sudah digunakan" } };
+  }
+};
+
 export const createCustomer = async (values = {}) => {
-  const payload = normalizeCustomerPayload(values);
+  const normalizedCode = String(values.code || "").trim().toUpperCase() || (await generateCustomerCode(values));
+  await assertCustomerCodeAvailable(normalizedCode, null);
+
+  const payload = normalizeCustomerPayload({ ...values, code: normalizedCode });
 
   return await addDoc(collection(db, CUSTOMERS_COLLECTION), {
     ...payload,
@@ -95,8 +131,11 @@ export const updateCustomer = async (customerId, values = {}) => {
     throw new Error("Customer yang akan diubah tidak valid.");
   }
 
+  const normalizedCode = String(values.code || "").trim().toUpperCase() || (await generateCustomerCode(values, customerId));
+  await assertCustomerCodeAvailable(normalizedCode, customerId);
+
   const customerRef = doc(db, CUSTOMERS_COLLECTION, customerId);
-  const payload = normalizeCustomerPayload(values);
+  const payload = normalizeCustomerPayload({ ...values, code: normalizedCode });
 
   await updateDoc(customerRef, {
     ...payload,

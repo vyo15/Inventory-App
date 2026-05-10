@@ -42,62 +42,6 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - apply rule ke item mode `rule`
 - pastikan item mode `manual` tidak ikut berubah
 
-
-## Checklist Pricing Rule Switch — Product & Raw Material
-
-### Product manual pricing
-- [ ] Buka Master Data > Products.
-- [ ] Tambah Product baru dengan switch Pricing Rule OFF.
-- [ ] Pastikan helper menampilkan `Harga jual diisi manual.`
-- [ ] Isi Harga Jual manual, lalu simpan.
-- [ ] Pastikan pricing rule tidak wajib.
-- [ ] Pastikan data tersimpan dengan `pricingMode = manual` dan `pricingRuleId = null`.
-
-### Product rule pricing
-- [ ] Edit/tambah Product dengan switch Pricing Rule ON.
-- [ ] Pastikan field Pricing Rule aktif dan wajib.
-- [ ] Pilih Pricing Rule untuk target Products.
-- [ ] Pastikan harga terhitung otomatis ke field `price` jika HPP valid.
-- [ ] Coba HPP 0/kosong dan pastikan warning `Harga belum bisa dihitung. Cek HPP dan pricing rule.` muncul tanpa crash.
-- [ ] Simpan dan pastikan data tersimpan dengan `pricingMode = rule` dan mode tampil sebagai `Pricing Rule | Nama Rule`.
-
-### Raw Material manual pricing
-- [ ] Buka Master Data > Raw Materials.
-- [ ] Tambah Raw Material baru dengan switch Pricing Rule OFF.
-- [ ] Pastikan helper menampilkan `Harga jual diisi manual.`
-- [ ] Isi Harga Jual / Satuan manual, lalu simpan.
-- [ ] Pastikan pricing rule tidak wajib.
-- [ ] Pastikan data tersimpan dengan `pricingMode = manual` dan `pricingRuleId = null`.
-
-### Raw Material rule pricing
-- [ ] Edit/tambah Raw Material dengan switch Pricing Rule ON.
-- [ ] Pastikan field Pricing Rule aktif dan wajib.
-- [ ] Pilih Pricing Rule untuk target Raw Materials.
-- [ ] Pastikan harga terhitung otomatis ke field `sellingPrice` jika modal aktual rata-rata atau harga referensi restock valid.
-- [ ] Coba base cost 0/kosong dan pastikan warning `Harga belum bisa dihitung. Isi modal aktual rata-rata atau harga referensi restock.` muncul tanpa crash.
-- [ ] Simpan dan pastikan data tersimpan dengan `pricingMode = rule` dan mode tampil sebagai `Pricing Rule | Nama Rule`.
-
-### Pricing Rules apply
-- [ ] Buka Pricing Rules.
-- [ ] Preview/apply rule untuk Products.
-- [ ] Pastikan item manual dilewati.
-- [ ] Pastikan item mode rule diproses jika base cost valid.
-- [ ] Preview/apply rule untuk Raw Materials.
-- [ ] Pastikan item manual dilewati.
-- [ ] Pastikan item mode rule diproses jika base cost valid.
-- [ ] Pastikan Products dan Raw Materials sama-sama terlihat sebagai target yang didukung.
-
-### Regression guarded
-- [ ] Stok tidak berubah hanya karena mengubah pricing mode.
-- [ ] Purchase tidak berubah.
-- [ ] Sales tidak berubah.
-- [ ] HPP tidak berubah.
-- [ ] Varian Raw Material tidak berubah.
-- [ ] Produksi, payroll, dan kas tidak berubah.
-- [ ] Tidak ada nilai harga menjadi `NaN`, `undefined`, atau kosong buruk.
-- [ ] Jalankan `npm run lint` jika environment tersedia.
-- [ ] Jalankan `npm run build` jika environment tersedia.
-
 ## B. Transaksi
 
 ### Pembelian
@@ -1554,47 +1498,28 @@ Risiko:
 - [ ] Pastikan fitur reset existing tetap wajib preview dan konfirmasi seperti sebelumnya.
 - [ ] Cek console browser, pastikan tidak ada error merah saat menjalankan audit.
 
-## Checklist Patch Variant Mode + Work Log Draft Removal
+## Checklist Auto Code BOM dan Semi Finished — 2026-05-10
 
-### A. Variant mode edit guard
-- [ ] Products: buat produk tanpa varian dengan current/reserved/available stock 0, edit, klik Pakai Varian ON, tambah minimal 1 varian, simpan; pastikan varian baru tersimpan dengan stok 0.
-- [ ] Products: buat produk tanpa varian yang masih punya stock, edit, klik Pakai Varian ON; pastikan UI menolak dengan pesan guard dan service tidak mengubah mode varian.
-- [ ] Products: edit produk yang sudah punya varian dan salah satu varian masih punya current/reserved/available stock > 0, klik Pakai Varian OFF; pastikan UI mengembalikan switch ke ON dan service menolak payload `hasVariants=false`.
-- [ ] Products: edit produk bervarian dengan semua varian stock/reserved/available 0, klik Pakai Varian OFF, simpan; pastikan `hasVariants=false`, `variants=[]`, `archivedVariants[]` berisi semua `variantKey` lama + `archivedAt/archivedBy/archiveReason`, dan transaksi lama/detail tetap punya label varian arsip.
-- [ ] Raw Materials: ulangi skenario ON saat stok 0, ON saat masih punya stok, OFF ditolak saat varian masih punya stok, dan OFF berhasil saat semua varian 0; pastikan purchase/adjustment stock bucket tidak berubah dari edit master dan arsip varian tersimpan di `archivedVariants[]`.
-- [ ] Semi Finished Materials: ulangi skenario ON saat stok 0, ON saat masih punya stok, OFF ditolak saat varian masih punya stok, dan OFF berhasil saat semua varian 0; pastikan Work Log/PO/HPP reference tidak berubah dan arsip varian tersimpan di `archivedVariants[]`.
-- [ ] Untuk ketiga modul, edit metadata varian existing (nama/kode/label) dan pastikan current/reserved/available stock tetap mengikuti data existing terbaru.
-- [ ] Untuk ketiga modul, hapus/arsip satu varian aktif yang masih punya stock/reserved/available dan pastikan UI + service menolak dengan error validasi.
-- [ ] Untuk ketiga modul, hapus/arsip satu varian aktif dengan semua bucket stok 0, simpan, lalu pastikan varian hilang dari pilihan transaksi baru tetapi muncul di section Arsip Varian detail master.
-- [ ] Untuk ketiga modul, setelah varian diarsipkan, tambah varian baru dengan nama/struktur yang sama; pastikan service restore `variantKey` lama, menghapus item dari `archivedVariants[]`, dan menulis metadata restore.
-- [ ] Untuk ketiga modul, coba tambah dua varian aktif dengan nama/struktur sama setelah ada arsip; pastikan duplicate active variant tetap ditolak dan tidak membuat dua `variantKey` aktif.
+### BOM Produksi
+- [ ] Create BOM Product baru, kosongkan `Kode BOM`, isi nama `BOM Pola Daun Mawar Putih Flanel`, simpan; pastikan kode menjadi `BOM-PRD-PL-DN-MWR-PTH-FLN`.
+- [ ] Create BOM Semi Finished baru dengan nama sama, kosongkan `Kode BOM`, simpan; pastikan kode menjadi `BOM-SFP-PL-DN-MWR-PTH-FLN`.
+- [ ] Create BOM dengan nama dan target type yang menghasilkan kode sama; pastikan data kedua mendapat suffix `-2` dan data ketiga `-3`.
+- [ ] Edit BOM lama yang sudah punya kode, ubah nama, simpan; pastikan kode lama tidak berubah.
+- [ ] Edit BOM lama yang kodenya kosong, simpan; pastikan kode otomatis terisi dari nama dan target type.
+- [ ] Create/Edit BOM dengan kode manual; pastikan kode manual tetap dipakai dan duplicate code tetap ditolak.
+- [ ] Pastikan list/detail/dropdown BOM tetap menampilkan nama/kode aman dan Production Order masih bisa memilih BOM.
 
-### B. Work Log tanpa status Draft aktif
-- [ ] Buka Produksi > Work Log; pastikan summary card tidak menampilkan Draft.
-- [ ] Buka filter status Work Log; pastikan opsi aktif hanya Semua Status, In Progress, Completed, dan Cancelled.
-- [ ] Klik Tambah Work Log; pastikan default status form/payload baru adalah `in_progress`.
-- [ ] Pilih Source Type Production Order, klik Ambil Data PO; pastikan label tombol/pesan tidak menyebut Draft dan field PO/BOM/material/output tetap terisi.
-- [ ] Pilih Source Type Planned, klik Ambil Data BOM; pastikan label tombol/pesan tidak menyebut Draft dan field BOM/material/output tetap terisi.
-- [ ] Jika masih ada data lama `status=draft` di Firestore, pastikan list/detail tetap bisa dibuka tanpa crash dan status lama tidak muncul sebagai opsi filter aktif.
-- [ ] Start/complete Work Log dari Production Order dan pastikan lifecycle PO, mutasi stok material, output stock, payroll, dan HPP tetap seperti flow existing.
+### Semi Finished Material
+- [ ] Create Semi Finished baru, kosongkan `Kode Item`, isi nama `Pola Daun Mawar Putih Flanel`, simpan; pastikan kode menjadi `SFP-PL-DN-MWR-PTH-FLN`.
+- [ ] Create Semi Finished dengan nama yang menghasilkan kode sama; pastikan data kedua mendapat suffix `-2` dan data ketiga `-3`.
+- [ ] Edit Semi Finished lama yang sudah punya kode, ubah nama, simpan; pastikan kode lama tidak berubah.
+- [ ] Edit Semi Finished lama yang kodenya kosong, simpan; pastikan kode otomatis terisi dari nama.
+- [ ] Create/Edit Semi Finished dengan kode manual; pastikan kode manual tetap dipakai dan duplicate code tetap ditolak.
+- [ ] Pastikan list/detail/dropdown Semi Finished tetap tampil aman.
 
-## Checklist Patch Raw Material Min Stock Varian + Snapshot Purchases
-
-### A. Raw Material minimum stock
-- [ ] Raw Material non-varian stok 0 menampilkan status `Kosong`.
-- [ ] Raw Material non-varian stok di bawah `minStock` menampilkan status `Stok Rendah`.
-- [ ] Raw Material non-varian stok aman menampilkan status `Aman`.
-- [ ] Raw Material bervarian dengan total stok aman tetapi satu varian 0 tetap menampilkan info `Ada varian kosong`.
-- [ ] Raw Material bervarian dengan salah satu varian di bawah `minStock` tetap menampilkan info `Varian di bawah minimum`.
-- [ ] Raw Material bervarian dengan semua varian aktif aman tidak menampilkan alert varian bermasalah.
-- [ ] Varian archived dan inactive tidak ikut dihitung sebagai alert minimum stock.
-- [ ] Varian dengan reserved stock memakai available stock; jika `availableStock` kosong, fallback ke `currentStock - reservedStock`.
-
-### B. Purchases stock snapshot
-- [ ] Drawer Pembelian untuk bahan non-varian menampilkan Current/Reserved/Available stock dengan label dan angka terpisah jelas.
-- [ ] Drawer Pembelian untuk bahan bervarian tanpa varian terpilih menampilkan info `Pilih varian untuk melihat stok varian`.
-- [ ] Drawer Pembelian untuk bahan bervarian dengan varian terpilih menampilkan snapshot stok varian terpilih dan satuan stok.
-- [ ] Alert varian kosong/di bawah minimum tampil ringkas dan maksimal menampilkan beberapa varian pertama.
-- [ ] Simpan pembelian non-varian tetap menambah stok seperti flow sebelumnya.
-- [ ] Simpan pembelian varian tetap menambah stok varian seperti flow sebelumnya.
-- [ ] Inventory Log purchase, expense/cash out, Stock Management, dan report tidak berubah akibat patch display ini.
+### Regression produksi
+- [ ] Pastikan relasi internal tetap memakai Firestore document ID, bukan `code`.
+- [ ] Pastikan Production Order masih bisa dibuat dari BOM hasil auto-code.
+- [ ] Pastikan Work Log dari Production Order tidak rusak.
+- [ ] Pastikan HPP, Payroll, stok, dan inventory log tidak berubah akibat auto-code ini.
+- [ ] Pastikan tidak ada bulk update/migration data lama otomatis.

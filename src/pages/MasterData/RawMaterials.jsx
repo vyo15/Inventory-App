@@ -990,6 +990,8 @@ const RawMaterials = () => {
       const matchesSearch = !keyword
         ? true
         : [
+            item.code,
+            item.materialCode,
             item.name,
             item.supplierName,
             item.variantLabel,
@@ -1128,6 +1130,9 @@ const RawMaterials = () => {
         return (
           <div style={compactCellStyles.stack}>
             <Text strong>{value || '-'}</Text>
+            <Text type="secondary" style={compactCellStyles.meta}>
+              {record.code || record.materialCode || 'Kode otomatis'}
+            </Text>
             <Text type="secondary" style={compactCellStyles.meta}>
               {record.supplierName || '-'}
             </Text>
@@ -1347,7 +1352,12 @@ const RawMaterials = () => {
           ----------------------------------------------------------------- */}
           <Divider orientation="left">Informasi Utama</Divider>
           <Row gutter={16}>
-            <Col xs={24} md={12}>
+            <Col xs={24} md={8}>
+              <Form.Item name="code" label="Kode Raw Material">
+                <Input placeholder="Opsional, otomatis: RM-KN-FLN" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
               <Form.Item
                 name="name"
                 label="Nama Bahan Baku"
@@ -1356,7 +1366,7 @@ const RawMaterials = () => {
                 <Input placeholder="Contoh: Kain Flanel" />
               </Form.Item>
             </Col>
-            <Col xs={24} md={12}>
+            <Col xs={24} md={8}>
               <Form.Item name="supplierId" label="Supplier">
                 {/* ---------------------------------------------------------
                     Supplier dropdown filter.

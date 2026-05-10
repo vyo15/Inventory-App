@@ -12,12 +12,14 @@ import {
   doc,
   getDoc,
   getDocs,
-  query,
   serverTimestamp,
   updateDoc,
-  where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import {
+  generateUniqueProductionReadableCode,
+  isProductionBusinessCodeExists,
+} from "../../utils/references/productionCodeGenerator";
 import {
   calculateBomMaterialLine,
   calculateBomTotals,
@@ -25,6 +27,42 @@ import {
 import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
 
 const COLLECTION_NAME = "production_boms";
+
+const getProductionBomCodePrefix = (targetType = "product") =>
+  targetType === "semi_finished_material" ? "BOM-SFP" : "BOM-PRD";
+
+// =====================================================
+// SECTION: Auto code BOM produksi — AKTIF
+// Fungsi:
+// - Generate kode BOM dari nama BOM dan target type saat kode kosong.
+//
+// Dipakai oleh:
+// - createProductionBom
+// - updateProductionBom
+//
+// Alasan perubahan:
+// - User tidak perlu mengisi kode manual, tetapi reference bisnis tetap mudah dibaca.
+//
+// Catatan cleanup:
+// - Belum ada.
+//
+// Risiko:
+// - Jangan jadikan kode ini relasi utama; relasi tetap memakai Firestore document ID.
+// =====================================================
+export const generateProductionBomCode = async (values = {}, excludeId = null) => {
+  const targetType = values.targetType || "product";
+
+  return generateUniqueProductionReadableCode({
+    db,
+    collectionName: COLLECTION_NAME,
+    fieldNames: ["code", "bomCode"],
+    prefix: getProductionBomCodePrefix(targetType),
+    text: values.name || values.targetName || values.targetCode || "BOM Produksi",
+    fallbackText: values.targetName || values.targetCode || "BOM Produksi",
+    excludeId,
+    maxParts: 8,
+  });
+};
 
 // =====================================================
 // SECTION: helper filter aktif toleran data lama
@@ -252,7 +290,7 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const totals = calculateBomTotals(materialLines, stepLines, values);
 
   const payload = {
-    code: safeTrim(values.code).toUpperCase() || safeTrim(values.targetCode).toUpperCase() || `BOM-${Date.now()}`,
+    code: safeTrim(values.code).toUpperCase(),
     name: safeTrim(values.name) || safeTrim(values.targetName) || "BOM Produksi",
     description: safeTrim(values.description),
 
@@ -379,17 +417,13 @@ export const isProductionBomCodeExists = async (code, excludeId = null) => {
 
   if (!normalizedCode) return false;
 
-  const q = query(
-    collection(db, COLLECTION_NAME),
-    where("code", "==", normalizedCode),
-  );
-
-  const snapshot = await getDocs(q);
-
-  if (snapshot.empty) return false;
-
-  const found = snapshot.docs.find((item) => item.id !== excludeId);
-  return Boolean(found);
+  return isProductionBusinessCodeExists({
+    db,
+    collectionName: COLLECTION_NAME,
+    fieldNames: ["code", "bomCode"],
+    value: normalizedCode,
+    excludeId,
+  });
 };
 
 // =====================================================
@@ -402,7 +436,9 @@ export const createProductionBom = async (values, currentUser = null) => {
     throw { type: "validation", errors };
   }
 
-  const isCodeExists = await isProductionBomCodeExists(values.code);
+  const normalizedCode =
+    safeTrim(values.code).toUpperCase() || (await generateProductionBomCode(values));
+  const isCodeExists = await isProductionBomCodeExists(normalizedCode);
 
   if (isCodeExists) {
     throw {
@@ -413,7 +449,7 @@ export const createProductionBom = async (values, currentUser = null) => {
     };
   }
 
-  const payload = normalizePayload(values, currentUser, false);
+  const payload = normalizePayload({ ...values, code: normalizedCode }, currentUser, false);
   const result = await addDoc(collection(db, COLLECTION_NAME), payload);
 
   return result.id;
@@ -429,7 +465,21 @@ export const updateProductionBom = async (id, values, currentUser = null) => {
     throw { type: "validation", errors };
   }
 
-  const isCodeExists = await isProductionBomCodeExists(values.code, id);
+  const ref = doc(db, COLLECTION_NAME, id);
+  const snapshot = await getDoc(ref);
+
+  if (!snapshot.exists()) {
+    throw new Error("Data BOM produksi tidak ditemukan");
+  }
+
+  const existingBom = { id: snapshot.id, ...snapshot.data() };
+  const hasSubmittedCode = Object.prototype.hasOwnProperty.call(values, "code");
+  const submittedCode = safeTrim(values.code).toUpperCase();
+  const existingCode = safeTrim(existingBom.code).toUpperCase();
+  const normalizedCode =
+    submittedCode ||
+    (!hasSubmittedCode && existingCode ? existingCode : await generateProductionBomCode(values, id));
+  const isCodeExists = await isProductionBomCodeExists(normalizedCode, id);
 
   if (isCodeExists) {
     throw {
@@ -440,8 +490,7 @@ export const updateProductionBom = async (id, values, currentUser = null) => {
     };
   }
 
-  const payload = normalizePayload(values, currentUser, true);
-  const ref = doc(db, COLLECTION_NAME, id);
+  const payload = normalizePayload({ ...values, code: normalizedCode }, currentUser, true);
 
   await updateDoc(ref, payload);
 

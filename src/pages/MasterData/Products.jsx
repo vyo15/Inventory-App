@@ -480,7 +480,7 @@ const Products = () => {
 
       const matchesSearch = !keyword
         ? true
-        : [item.name, item.category, item.description, ...variantLabels]
+        : [item.code, item.productCode, item.name, item.category, item.description, ...variantLabels]
             .filter(Boolean)
             .some((value) => String(value).toLowerCase().includes(keyword));
 
@@ -628,6 +628,7 @@ const Products = () => {
       render: (value, record) => (
         <div className={compactCellClassNames.stack}>
           <Text strong>{value || '-'}</Text>
+          <Text type="secondary" className={compactCellClassNames.meta}>{record.code || record.productCode || 'Kode otomatis'}</Text>
           <Text type="secondary" className={compactCellClassNames.meta}>{record.category || 'Produk Jadi'}</Text>
           <Space size={6} wrap className="ims-cell-tag-list">
             <Tag color={record.hasVariants ? 'blue' : 'default'}>
@@ -812,12 +813,17 @@ const Products = () => {
         <Form form={form} layout="vertical" initialValues={buildFormValues(PRODUCT_DEFAULT_FORM)}>
           <Divider orientation="left">Informasi Utama</Divider>
           <Row gutter={16}>
-            <Col xs={24} md={12}>
+            <Col xs={24} md={8}>
+              <Form.Item name="code" label="Kode Produk">
+                <Input placeholder="Opsional, otomatis: PRD-BG-MWR-FLN" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
               <Form.Item name="name" label="Nama Produk" rules={[{ required: true, message: 'Nama produk wajib diisi.' }]}> 
                 <Input placeholder="Contoh: Bunga Mawar Flanel" />
               </Form.Item>
             </Col>
-            <Col xs={24} md={12}>
+            <Col xs={24} md={8}>
               <Form.Item name="categoryId" label="Kategori">
                 <Select
                   allowClear

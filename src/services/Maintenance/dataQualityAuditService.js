@@ -223,6 +223,11 @@ const CATEGORY_CONFIGS = [
     recommendation: "Perlu cek manual",
   },
   {
+    key: "master_missing_code",
+    label: "Master data tanpa kode otomatis",
+    recommendation: "Aman dibuat ulang jika data test",
+  },
+  {
     key: "hpp_zero_master",
     label: "HPP produk/semi finished 0",
     recommendation: "Jangan reset jika data asli",
@@ -336,7 +341,11 @@ export const getDataQualityAudit = async () => {
     "production_payrolls",
     "inventory_logs",
     "products",
+    "raw_materials",
     "semi_finished_materials",
+    "production_boms",
+    "supplierPurchases",
+    "customers",
   ];
 
   const collectionResults = await Promise.all(collectionNames.map(readCollectionSafe));
@@ -504,6 +513,81 @@ export const getDataQualityAudit = async () => {
         }));
       }
     });
+  });
+
+  (collectionMap.products?.docs || []).forEach((itemDoc) => {
+    const data = itemDoc.data();
+    const isRelevant = data.isActive !== false && data.active !== false;
+    if (isRelevant && !hasPrefix(data, ["PRD"], ["code", "productCode"])) {
+      addIssue(categories, "master_missing_code", toSample({
+        collectionName: "products",
+        itemDoc,
+        issue: "Produk belum punya kode PRD.",
+        recommendation: categories.master_missing_code.recommendation,
+      }));
+    }
+  });
+
+  (collectionMap.raw_materials?.docs || []).forEach((itemDoc) => {
+    const data = itemDoc.data();
+    const isRelevant = data.isActive !== false && data.active !== false;
+    if (isRelevant && !hasPrefix(data, ["RM"], ["code", "materialCode"])) {
+      addIssue(categories, "master_missing_code", toSample({
+        collectionName: "raw_materials",
+        itemDoc,
+        issue: "Raw Material belum punya kode RM.",
+        recommendation: categories.master_missing_code.recommendation,
+      }));
+    }
+  });
+
+  (collectionMap.semi_finished_materials?.docs || []).forEach((itemDoc) => {
+    const data = itemDoc.data();
+    const isRelevant = data.isActive !== false && data.active !== false;
+    if (isRelevant && !hasPrefix(data, ["SFP"], ["code", "itemCode"])) {
+      addIssue(categories, "master_missing_code", toSample({
+        collectionName: "semi_finished_materials",
+        itemDoc,
+        issue: "Semi Finished belum punya kode SFP.",
+        recommendation: categories.master_missing_code.recommendation,
+      }));
+    }
+  });
+
+  (collectionMap.production_boms?.docs || []).forEach((itemDoc) => {
+    const data = itemDoc.data();
+    if (!hasPrefix(data, ["BOM-PRD", "BOM-SFP", "BOM"], ["code", "bomCode"])) {
+      addIssue(categories, "master_missing_code", toSample({
+        collectionName: "production_boms",
+        itemDoc,
+        issue: "BOM belum punya kode BOM otomatis.",
+        recommendation: categories.master_missing_code.recommendation,
+      }));
+    }
+  });
+
+  (collectionMap.supplierPurchases?.docs || []).forEach((itemDoc) => {
+    const data = itemDoc.data();
+    if (!hasPrefix(data, ["SUP"], ["code", "supplierCode"])) {
+      addIssue(categories, "master_missing_code", toSample({
+        collectionName: "supplierPurchases",
+        itemDoc,
+        issue: "Supplier belum punya kode SUP.",
+        recommendation: categories.master_missing_code.recommendation,
+      }));
+    }
+  });
+
+  (collectionMap.customers?.docs || []).forEach((itemDoc) => {
+    const data = itemDoc.data();
+    if (!hasPrefix(data, ["CUS"], ["code", "customerCode"])) {
+      addIssue(categories, "master_missing_code", toSample({
+        collectionName: "customers",
+        itemDoc,
+        issue: "Customer belum punya kode CUS.",
+        recommendation: categories.master_missing_code.recommendation,
+      }));
+    }
   });
 
   (collectionMap.products?.docs || []).forEach((itemDoc) => {

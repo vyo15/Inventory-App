@@ -13,6 +13,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { generateUniqueReadableCode, isBusinessCodeExists } from '../../utils/references/businessCodeGenerator';
 import {
   calculateRawMaterialVariantTotals,
   enrichRawMaterialWithVariantTotals,
@@ -38,6 +39,7 @@ const COLLECTION_NAME = 'raw_materials';
 // IMS NOTE [AKTIF | behavior-preserving]: default form tetap di service supaya
 // halaman create/edit Raw Material memakai struktur awal yang sama.
 export const RAW_MATERIAL_DEFAULT_FORM = {
+  code: '',
   name: '',
   supplierId: null,
   stockUnit: 'pcs',
@@ -85,6 +87,8 @@ const resolveSupplierSnapshot = (values = {}, suppliers = []) => {
 };
 
 const resolveRawMaterialMetadata = (values = {}, suppliers = [], existingMaterial = {}) => ({
+  code: String(values.code || '').trim().toUpperCase(),
+  materialCode: String(values.code || '').trim().toUpperCase(),
   name: String(values.name || '').trim(),
   ...resolveSupplierSnapshot(values, suppliers),
   stockUnit: values.stockUnit || existingMaterial.stockUnit || 'pcs',
@@ -506,13 +510,46 @@ export const listenRawMaterials = (callback, onError) => {
   );
 };
 
+export const generateRawMaterialCode = async (values = {}, excludeId = null) => {
+  return generateUniqueReadableCode({
+    db,
+    collectionName: COLLECTION_NAME,
+    fieldNames: ['code', 'materialCode', 'sku'],
+    prefix: 'RM',
+    text: values.name || 'Raw Material',
+    fallbackText: 'Raw Material',
+    excludeId,
+    maxParts: 6,
+  });
+};
+
+const assertRawMaterialCodeAvailable = async (code = '', editingId = null) => {
+  const normalizedCode = String(code || '').trim().toUpperCase();
+  if (!normalizedCode) return;
+
+  const exists = await isBusinessCodeExists({
+    db,
+    collectionName: COLLECTION_NAME,
+    fieldNames: ['code', 'materialCode', 'sku'],
+    value: normalizedCode,
+    excludeId: editingId,
+  });
+
+  if (exists) {
+    throw { type: 'validation', errors: { code: 'Kode raw material sudah digunakan' } };
+  }
+};
+
 export const createRawMaterial = async (values = {}, suppliers = []) => {
   const errors = await validateRawMaterialPayload(values, null);
   if (Object.keys(errors).length > 0) {
     throw { type: 'validation', errors };
   }
 
-  const payload = normalizeRawMaterialCreatePayload(values, suppliers);
+  const normalizedCode = String(values.code || '').trim().toUpperCase() || (await generateRawMaterialCode(values));
+  await assertRawMaterialCodeAvailable(normalizedCode, null);
+
+  const payload = normalizeRawMaterialCreatePayload({ ...values, code: normalizedCode }, suppliers);
   const result = await addDoc(collection(db, COLLECTION_NAME), payload);
   return result.id;
 };
@@ -522,6 +559,9 @@ export const updateRawMaterial = async (id, values = {}, suppliers = []) => {
   if (Object.keys(errors).length > 0) {
     throw { type: 'validation', errors };
   }
+
+  const normalizedCode = String(values.code || '').trim().toUpperCase() || (await generateRawMaterialCode(values, id));
+  await assertRawMaterialCodeAvailable(normalizedCode, id);
 
   const ref = doc(db, COLLECTION_NAME, id);
 
@@ -534,7 +574,7 @@ export const updateRawMaterial = async (id, values = {}, suppliers = []) => {
     }
 
     const existingMaterial = enrichRawMaterial({ id: snapshot.id, ...snapshot.data() });
-    const payload = normalizeRawMaterialMetadataPayload(values, suppliers, existingMaterial);
+    const payload = normalizeRawMaterialMetadataPayload({ ...values, code: normalizedCode }, suppliers, existingMaterial);
     transaction.update(ref, payload);
   });
 

@@ -36,6 +36,7 @@ import { db } from "../../firebase";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
+import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 
@@ -265,7 +266,19 @@ const CashOut = () => {
 
   const handleAddTransaction = async (values) => {
     try {
+      const cashOutNumber = await generateDailySequenceCode({
+        db,
+        collectionName: "expenses",
+        fieldNames: ["cashOutNumber", "code", "sourceRef", "referenceNumber"],
+        prefix: "COUT",
+        date: values.date.toDate(),
+      });
+
       await addDoc(collection(db, "expenses"), {
+        cashOutNumber,
+        code: cashOutNumber,
+        referenceNumber: cashOutNumber,
+        sourceRef: cashOutNumber,
         amount: Math.round(Number(values.amount || 0)),
         description: values.description,
         date: Timestamp.fromDate(values.date.toDate()),
@@ -321,9 +334,9 @@ const CashOut = () => {
           return (
             <div>
               <Tag color={sourceMeta.color}>{sourceMeta.label}</Tag>
-              {record.sourceRef ? (
+              {record.sourceRef || record.cashOutNumber || record.code || record.referenceNumber ? (
                 <div className="ims-cell-meta" style={{ marginTop: 4 }}>
-                  Ref: {record.sourceRef}
+                  Ref: {record.sourceRef || record.cashOutNumber || record.code || record.referenceNumber}
                 </div>
               ) : null}
             </div>
