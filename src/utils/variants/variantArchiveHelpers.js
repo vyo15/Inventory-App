@@ -114,13 +114,13 @@ export const findMatchingVariant = (variant = {}, variants = []) => {
 };
 
 const removeArchiveFields = (variant = {}) => {
-  const {
-    archivedAt,
-    archivedBy,
-    archiveReason,
-    isArchived,
-    ...rest
-  } = variant;
+  const rest = { ...variant };
+
+  delete rest.archivedAt;
+  delete rest.archivedBy;
+  delete rest.archiveReason;
+  delete rest.isArchived;
+
   return rest;
 };
 

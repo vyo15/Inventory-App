@@ -9,7 +9,7 @@ export const includesSearchText = (value, searchText) => {
 export const matchActiveStatus = (item, statusFilter, fieldName = "isActive") => {
   if (statusFilter === "all") return true;
   if (statusFilter === "active") return Boolean(item?.[fieldName]);
-  if (statusFilter === "inactive") return !Boolean(item?.[fieldName]);
+  if (statusFilter === "inactive") return !item?.[fieldName];
   return String(item?.[fieldName] || "") === String(statusFilter);
 };
 

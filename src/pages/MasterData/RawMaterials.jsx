@@ -33,9 +33,11 @@ import { db } from '../../firebase';
 import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import { formatDateId } from '../../utils/formatters/dateId';
+import { formatStockWithUnitId } from '../../utils/formatters/stockUnit';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
+import StockDisplayBlock from '../../components/Layout/Table/StockDisplayBlock';
 import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import {
   createRawMaterial,
@@ -111,9 +113,9 @@ const buildFormValues = (record = {}) => ({
 const integerParser = parseIntegerIdInput;
 
 // -----------------------------------------------------------------------------
-// Helper tampilan stok supaya format di tabel dan drawer seragam.
+// Helper tampilan stok drawer/detail; implementasi memakai formatter shared agar format master konsisten.
 // -----------------------------------------------------------------------------
-const formatStockWithUnit = (value, unit = 'pcs') => `${formatNumberID(value)} ${unit}`;
+const formatStockWithUnit = formatStockWithUnitId;
 
 
 const hasSafeZeroMasterStock = (record = {}) => {
@@ -138,44 +140,6 @@ const getPricingModeDisplayText = (record = {}, pricingRuleMap = {}) => {
 
   const ruleName = pricingRuleMap?.[record?.pricingRuleId];
   return `Pricing Rule${ruleName ? ` | ${ruleName}` : ''}`;
-};
-
-// -----------------------------------------------------------------------------
-// Helper tampilan varian pada kolom stok.
-// FUNGSI: menampilkan semua chip stok varian langsung di tabel utama.
-// ALASAN: user perlu melihat stok per varian tanpa membuka drawer Detail; chip
-// tetap memakai flex-wrap sehingga tabel desktop tidak perlu horizontal scroll.
-// STATUS: aktif dipakai oleh tabel utama Raw Materials dan bukan kandidat cleanup;
-// logic ini hanya mengubah presentasi UI, bukan perhitungan stok atau data varian.
-// -----------------------------------------------------------------------------
-const renderVariantStockPills = (
-  variants = [],
-  unit = 'pcs',
-  getLabel = (variant, index) => variant?.name || `Varian ${index + 1}`,
-) => {
-  const normalizedVariants = Array.isArray(variants)
-    ? variants.filter((variant) => String(variant?.name || variant?.variantName || '').trim())
-    : [];
-
-  if (normalizedVariants.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="stock-variant-pill-wrap">
-      {normalizedVariants.map((variant, index) => (
-        <span
-          key={`${variant.variantKey || variant.sku || variant.name || 'variant'}-${index}`}
-          className="stock-variant-pill"
-        >
-          <Text className="stock-variant-pill-label">{`${getLabel(variant, index)}:`}</Text>
-          <Text className="stock-variant-pill-value">
-            {formatStockWithUnit(variant.currentStock || 0, unit)}
-          </Text>
-        </span>
-      ))}
-    </div>
-  );
 };
 
 // -----------------------------------------------------------------------------
@@ -1156,21 +1120,35 @@ const RawMaterials = () => {
       render: (_, record) => {
         const unit = record.stockUnit || 'pcs';
         const variants = getActiveRawMaterialVariants(record);
-        const hasVariants = record.hasVariants === true && variants.length > 0;
+        const stockDisplayRecord = { ...record, variants };
         const variantIssueMeta = getRawMaterialVariantStockIssueMeta(record);
 
         return (
           <div style={compactCellStyles.stack}>
-            <Text strong>{`Total ${formatStockWithUnit(record.currentStock ?? record.stock ?? 0, unit)}`}</Text>
-            <Text type="secondary" style={compactCellStyles.meta}>
-              {`Tersedia ${formatStockWithUnit(record.availableStock ?? record.currentStock ?? record.stock ?? 0, unit)}`}
-            </Text>
+            {/* =====================================================
+                SECTION: Raw Material Stock Column — AKTIF / GUARDED
+                Fungsi:
+                - menampilkan saldo Total, Tersedia, dan chip varian di table utama Raw Materials.
 
-            {hasVariants ? (
-              renderVariantStockPills(variants, unit, (variant, index) => variant.name || `Varian ${index + 1}`)
-            ) : (
-              <Text type="secondary" style={compactCellStyles.meta}>Non-varian</Text>
-            )}
+                Dipakai oleh:
+                - halaman Master Data Raw Materials table utama.
+
+                Alasan perubahan:
+                - memakai StockDisplayBlock agar tampilan saldo stok konsisten dengan Products, Semi Finished Materials, dan Stock Report.
+
+                Catatan cleanup:
+                - drawer detail masih memakai formatter lokal karena konteksnya rincian material, bukan compact table.
+
+                Risiko:
+                - jangan ubah blok ini untuk mutasi stok; ini hanya tampilan read-only saldo stok.
+            ===================================================== */}
+            <StockDisplayBlock
+              record={stockDisplayRecord}
+              unit={unit}
+              getVariantLabel={(variant, index) => variant.name || `Varian ${index + 1}`}
+              className="ims-cell-stack ims-cell-stack-tight"
+              metaClassName="ims-cell-meta"
+            />
 
             {variantIssueMeta.messages.length > 0 ? (
               <Space direction="vertical" size={0}>

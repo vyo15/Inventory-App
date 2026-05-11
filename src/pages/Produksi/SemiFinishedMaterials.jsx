@@ -59,6 +59,7 @@ import {
 } from "../../services/Produksi/semiFinishedMaterialsService";
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
+import { formatStockWithUnitId } from "../../utils/formatters/stockUnit";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
@@ -123,8 +124,9 @@ const buildFormValues = (record = {}) => {
 // -----------------------------------------------------------------------------
 // Helper tampilan stok untuk form summary dan drawer detail.
 // Tabel utama memakai StockDisplayBlock agar format saldo stok locked seragam.
+// Implementasi memakai formatter shared agar output stok + unit konsisten lintas master data.
 // -----------------------------------------------------------------------------
-const formatStockWithUnit = (value, unit = "pcs") => `${formatNumber(value)} ${unit}`;
+const formatStockWithUnit = formatStockWithUnitId;
 
 const getVariantDisplayLabel = (variant = {}, index = 0) =>
   variant.variantLabel || variant.label || variant.name || SEMI_FINISHED_COLOR_MAP[variant.color] || variant.color || `Varian ${index + 1}`;

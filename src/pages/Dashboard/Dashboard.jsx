@@ -32,6 +32,7 @@ import { collection, getDocs, limit, orderBy, query, where } from "firebase/fire
 import { db } from "../../firebase";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { getProductionPlanningDashboardSummary } from "../../services/Produksi/productionPlanningService";
 import "./Dashboard.css";
@@ -166,7 +167,24 @@ const getFinancialAmount = (record = {}) => {
   return 0;
 };
 
-const formatCurrency = (value) => `Rp ${formatNumberId(Math.round(value || 0))}`;
+// =====================================================
+// SECTION: Dashboard Currency Formatter — AKTIF
+// Fungsi:
+// - menampilkan nominal Rupiah read-only pada kartu dan alert Dashboard.
+//
+// Dipakai oleh:
+// - ringkasan sales, finance, payroll, dan tag harga Dashboard.
+//
+// Alasan perubahan:
+// - memakai formatter Rupiah global agar tampilan Dashboard konsisten dengan halaman lain.
+//
+// Catatan cleanup:
+// - alias lokal dipertahankan agar usage Dashboard tidak perlu diganti massal.
+//
+// Risiko:
+// - jangan ubah rounding di sini tanpa audit report/finance karena user membaca nominal ringkasan dari Dashboard.
+// =====================================================
+const formatCurrency = (value) => formatCurrencyId(Math.round(value || 0));
 
 const normalizeStatus = (value) => String(value || "").trim().toLowerCase();
 
