@@ -138,7 +138,7 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 
 
 ## Prompt Guard Final Cleanup Task 6
-- Jika task menyentuh Stock Management, jangan hapus kolom Referensi Audit; rapikan labelnya agar manusiawi dan pertahankan ID teknis sebagai detail sekunder.
+- Jika task menyentuh Stock Management, jangan hapus kolom Referensi Audit; rapikan labelnya agar manusiawi dan jangan tampilkan ID teknis/random ID sebagai detail sekunder, tooltip, atau fallback display.
 - Jika task menyentuh Stock Adjustment, angka bulat tidak boleh tampil `.00`, adjustment keluar wajib berbasis `availableStock`, riwayat terbaru harus di atas, dan item bervarian dari Bahan Baku/Semi Finished/Produk Jadi wajib memilih `variantKey`.
 - Jika task menyentuh Production Order create drawer, jangan hilangkan preview compact stok target dan kebutuhan material; preview tetap read-only dan PO final tetap dihitung dari BOM/helper final.
 - Jika task menyentuh Work Log complete/cost, perlakukan area ini guarded: jangan double posting stok, jangan double payroll, jangan isi cost asal, dan jangan ubah HPP tanpa cek completed Work Log cost final.
@@ -290,11 +290,14 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 ## Guard Purchases Preview Stok dan Breakdown Ringkasan
 
 - Jika task menyentuh modal Purchases, preview stok aktual hanya boleh bersifat read-only dan tidak boleh dipakai sebagai sumber mutasi stok.
+- Untuk Purchases preview, jangan tampilkan alert global varian kosong yang tidak relevan dengan varian/material yang sedang dipilih jika preview stok aktual sudah tampil.
+- Purchases stock preview hanya read-only dan tidak boleh memengaruhi save, mutation, inventory log, expense otomatis, supplier catalog, atau kalkulasi pembelian.
 - Untuk item non-varian, preview stok boleh membaca stok master `currentStock`, `reservedStock`, dan `availableStock`.
 - Untuk item bervarian, preview stok wajib membaca varian yang dipilih; jangan menampilkan total master sebagai angka utama.
 - Jika item bervarian belum memilih varian, tampilkan pesan pilih varian dan jangan fallback diam-diam ke stok master.
 - Ringkasan pembelian boleh menampilkan breakdown subtotal, ongkir, admin/service fee, potongan ongkir, voucher, total aktual, total pembanding supplier, modal aktual per satuan stok, dan selisih hemat.
 - Jangan memindahkan atau mengubah effect kalkulasi `totalStockIn`, `totalActualPurchase`, `actualUnitCost`, `totalReferencePurchase`, atau `purchaseSaving` hanya untuk memperbaiki tampilan ringkasan.
+- Jangan mengubah stock mutation, inventory log, expense otomatis, supplier catalog, atau kalkulasi Purchases untuk task UI alert.
 - Jangan menyentuh `handleSubmitPurchase`, `runTransaction`, stock mutation, inventory log, expense otomatis, supplier catalog service, raw material service, product service, Stock Management, Reports, Dashboard, Sales, Returns, Production, Payroll, atau HPP jika task hanya UI preview dan breakdown Purchases.
 
 
@@ -433,6 +436,14 @@ Risiko:
 - Pricing Rules harus tetap opsional: default create Product/Raw Material Manual, dan `pricingRuleId` hanya wajib saat mode Rule.
 - Untuk merge beberapa ZIP patch, jangan overwrite file overlap mentah. Bandingkan patch terhadap baseline terbaru, merge manual file konflik, dan hasil akhir tetap ZIP berisi changed files only.
 
+## Prompt Guard — Pricing Mode Product/Raw Material
+- Jangan membuat formula pricing di page/component; formula preview wajib tetap lewat `buildSinglePricingPreview`.
+- Jangan memasukkan auto-preview, query Firestore, service validation, atau formula pricing ke `PricingModeSwitch`.
+- Jangan mengubah `pricingService`, service validation Product/Raw Material, schema, collection, route/menu, atau role guard untuk task UI Pricing Mode kecuali sudah ada approval eksplisit.
+- Jika task hanya menyentuh UI Pricing Mode Product/Raw Material, scope maksimal adalah shared UI component atau display helper ringan.
+- Product dan Raw Material punya base cost berbeda: Product memakai `hppPerUnit`, Raw Material memakai `averageActualUnitCost` dengan fallback `restockReferencePrice`; jangan dipaksa disatukan tanpa audit patch terpisah.
+- Pricing Rules tetap opsional: default create Manual, mode Manual boleh tanpa `pricingRuleId`, dan `pricingRuleId` hanya wajib saat mode Rule.
+
 
 ## Prompt Guard — Read-only Panel dan Alert Semantik
 - Snapshot/read-only info pasif seperti stok terpilih, summary stok, detail biaya pasif, atau preview item tidak boleh memakai bubble `Alert` besar jika bukan warning/error.
@@ -501,7 +512,9 @@ Untuk task cleanup theme besar-besaran:
 ## Prompt Guard — UI Table Compact dan Stock Display Locked
 - Jika task hanya merapikan table utama, jangan mengubah service, query, transaction, export mapping, atau schema Firestore.
 - Stock display saldo item yang sudah locked harus tetap menampilkan `Total`, `Tersedia`, dan semua variant pill langsung di table untuk row yang membawa `variants[]`.
+- Untuk stock display compact, jangan menduplikasi alert varian kosong di tempat yang sama jika detail stok sudah tampil melalui chip/pill, status tag, summary, atau detail drawer.
 - Jangan menyembunyikan seluruh variant stock ke drawer/tooltip pada halaman saldo stok item seperti Products, Raw Materials, Semi Finished Materials, dan Stock Report.
+- Jangan menghapus helper guarded Raw Materials hanya karena satu render alert di-hide; helper status tetap bisa dipakai status tag, summary/filter, dan detail drawer.
 - Helper `StockDisplayBlock` adalah presentational only; jangan dipakai untuk Qty transaksi, Stok Masuk Purchases, adjustment quantity, inventory log delta, atau field audit yang bukan saldo master item.
 - Table detail/preview yang memang berisi breakdown kalkulasi boleh tetap lebih lebar, tetapi primary list table sebaiknya tidak memakai fixed/sticky action column kecuali ada alasan UX kuat.
 
@@ -514,3 +527,31 @@ Untuk task cleanup theme besar-besaran:
 - Sidebar active boleh memakai gold marker kecil; route/menu/role guard tetap tidak boleh disentuh.
 - Header/sidebar/logo/shared card/filter boleh diberi micro accent, tetapi jangan menambah asset, dependency, atau mengubah JSX bisnis.
 - Page-specific gradient seperti Dashboard/Login/feedback component harus dicatat sebagai cleanup candidate jika di luar allowlist.
+
+## Prompt Guard — Referensi ID Bisnis dan Generator Kode Manusiawi
+
+- Jangan tampilkan Firestore Technical ID/random ID di UI sebagai referensi audit.
+- Jangan jadikan Technical ID fallback display, tooltip, detail kecil, drawer/detail, table, report UI, atau export user-facing.
+- Jangan pakai Technical ID sebagai search/display utama user.
+- Jika belum ada Referensi ID bisnis, tampilkan fallback manusiawi seperti `-` atau `Referensi belum tersedia`, bukan ID random.
+- Jangan memakai mapping manual kata -> kode, dictionary singkatan per modul, atau format kode berbeda-beda tanpa approval arsitektur.
+- Jangan membuat generator kode baru di page.
+- Jangan duplicate generator kode antar modul.
+- Gunakan shared generator yang disetujui sebagai source of truth.
+- Duplicate code harus diselesaikan dengan suffix manusiawi seperti `-2`, `-3`, bukan random ID/timestamp sebagai fallback utama.
+- Jangan mengubah kode audit immutable setelah dipakai tanpa approval migrasi.
+- Jangan menghapus Firestore document ID secara database-level; document ID tetap kebutuhan internal Firestore.
+- Jangan mengubah schema/service/stock mutation/write-flow/inventory log writer/report export tanpa approval khusus.
+- Jika task hanya docs, catat source mismatch sebagai tech debt dan jangan ubah source.
+- Source saat ini yang masih memiliki mapping manual atau Firestore auto ID harus diperlakukan sebagai cleanup candidate sampai ada task source terpisah.
+
+## Prompt Guard — Reset & Maintenance Decision Center
+- Jangan membuat reset destructive baru tanpa preview, warning, confirmation keyword, result summary, dan audit/error trail.
+- Jangan membuat reset total master aktif tanpa approval khusus.
+- Jangan menambah import otomatis tanpa desain preview/normalization yang disetujui.
+- Jangan membawa transaksi/log lama sebagai default import jika logic baru sudah berubah.
+- Jangan menampilkan Technical ID / Firestore random ID sebagai audit reference atau export user-facing.
+- Jangan mengubah protected master collection tanpa approval.
+- Jangan menghapus safety guard hanya untuk menyederhanakan UI.
+- Export data pokok boleh dibuat read-only selama tidak write/update/delete dan tidak mengubah reset target.
+- XLSX/export dependency baru perlu approval; gunakan JSON/Blob native untuk patch awal.

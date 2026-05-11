@@ -1498,28 +1498,18 @@ Risiko:
 - [ ] Pastikan fitur reset existing tetap wajib preview dan konfirmasi seperti sebelumnya.
 - [ ] Cek console browser, pastikan tidak ada error merah saat menjalankan audit.
 
-## Checklist Auto Code BOM dan Semi Finished — 2026-05-10
+## Patch Check — Pricing Mode Switch Product & Raw Material
 
-### BOM Produksi
-- [ ] Create BOM Product baru, kosongkan `Kode BOM`, isi nama `BOM Pola Daun Mawar Putih Flanel`, simpan; pastikan kode menjadi `BOM-PRD-PL-DN-MWR-PTH-FLN`.
-- [ ] Create BOM Semi Finished baru dengan nama sama, kosongkan `Kode BOM`, simpan; pastikan kode menjadi `BOM-SFP-PL-DN-MWR-PTH-FLN`.
-- [ ] Create BOM dengan nama dan target type yang menghasilkan kode sama; pastikan data kedua mendapat suffix `-2` dan data ketiga `-3`.
-- [ ] Edit BOM lama yang sudah punya kode, ubah nama, simpan; pastikan kode lama tidak berubah.
-- [ ] Edit BOM lama yang kodenya kosong, simpan; pastikan kode otomatis terisi dari nama dan target type.
-- [ ] Create/Edit BOM dengan kode manual; pastikan kode manual tetap dipakai dan duplicate code tetap ditolak.
-- [ ] Pastikan list/detail/dropdown BOM tetap menampilkan nama/kode aman dan Production Order masih bisa memilih BOM.
-
-### Semi Finished Material
-- [ ] Create Semi Finished baru, kosongkan `Kode Item`, isi nama `Pola Daun Mawar Putih Flanel`, simpan; pastikan kode menjadi `SFP-PL-DN-MWR-PTH-FLN`.
-- [ ] Create Semi Finished dengan nama yang menghasilkan kode sama; pastikan data kedua mendapat suffix `-2` dan data ketiga `-3`.
-- [ ] Edit Semi Finished lama yang sudah punya kode, ubah nama, simpan; pastikan kode lama tidak berubah.
-- [ ] Edit Semi Finished lama yang kodenya kosong, simpan; pastikan kode otomatis terisi dari nama.
-- [ ] Create/Edit Semi Finished dengan kode manual; pastikan kode manual tetap dipakai dan duplicate code tetap ditolak.
-- [ ] Pastikan list/detail/dropdown Semi Finished tetap tampil aman.
-
-### Regression produksi
-- [ ] Pastikan relasi internal tetap memakai Firestore document ID, bukan `code`.
-- [ ] Pastikan Production Order masih bisa dibuat dari BOM hasil auto-code.
-- [ ] Pastikan Work Log dari Production Order tidak rusak.
-- [ ] Pastikan HPP, Payroll, stok, dan inventory log tidak berubah akibat auto-code ini.
-- [ ] Pastikan tidak ada bulk update/migration data lama otomatis.
+- [ ] Buka Master Data > Produk Jadi, tambah/edit produk, pastikan field “Gunakan Pricing Rule” tampil sebagai switch Manual/Rule.
+- [ ] Switch Produk OFF/manual: `pricingMode` tersimpan `manual`, `pricingRuleId` dikosongkan, harga jual tetap bisa diisi manual.
+- [ ] Switch Produk ON/rule tanpa memilih rule: muncul warning preview dan validasi tetap meminta pricing rule.
+- [ ] Switch Produk ON/rule dengan HPP valid dan rule aktif: harga jual di form terisi preview hasil `pricingService` saat rule/base cost berubah.
+- [ ] Buka Master Data > Raw Materials, tambah/edit bahan baku, pastikan field “Gunakan Pricing Rule” tampil sebagai switch Manual/Rule.
+- [ ] Switch Raw Material OFF/manual: `pricingMode` tersimpan `manual`, `pricingRuleId` dikosongkan, harga jual tetap bisa diisi manual.
+- [ ] Switch Raw Material ON/rule tanpa memilih rule: muncul warning preview dan validasi tetap meminta pricing rule.
+- [ ] Switch Raw Material ON/rule dengan modal/base cost valid dan rule aktif: harga jual di form terisi preview hasil `pricingService` saat rule/base cost berubah.
+- [ ] Tabel dan detail Produk menampilkan mode Manual atau Pricing Rule + nama rule bila tersedia.
+- [ ] Tabel dan detail Raw Material menampilkan mode Manual atau Pricing Rule + nama rule bila tersedia.
+- [ ] Pricing Rules tetap membaca field existing `pricingMode` dan `pricingRuleId`; tidak ada schema Firestore baru.
+- [ ] `npm run build` berhasil.
+- [ ] `npm run lint` berhasil atau warning non-blocker dicatat.

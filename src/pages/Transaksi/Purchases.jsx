@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Table,
   Modal,
   Form,
@@ -127,78 +126,6 @@ const buildPurchaseStockPreviewSnapshot = (stockSource = {}) => {
 const getPurchaseStockUnit = (item = {}) => item?.stockUnit || item?.unit || item?.baseUnit || 'pcs';
 
 const formatPurchaseStockWithUnit = (value, unit = 'pcs') => `${formatNumberId(value)} ${unit || 'pcs'}`;
-
-const getActivePurchaseVariants = (item = {}) => (Array.isArray(item?.variants) ? item.variants : [])
-  .filter((variant) => variant && variant.isArchived !== true && variant.isActive !== false);
-
-const getPurchaseVariantDisplayName = (variant = {}, fallback = 'Varian') =>
-  variant.variantName || variant.variantLabel || variant.label || variant.name || variant.color || variant.variantKey || fallback;
-
-const getPurchaseVariantMinStock = (variant = {}, masterMinStock = 0) => {
-  const parsed = Number(variant.minStock ?? variant.minStockAlert ?? variant.minimumStock ?? variant.reorderPoint ?? masterMinStock);
-  return Number.isFinite(parsed) ? parsed : Number(masterMinStock || 0);
-};
-
-const formatPurchaseVariantIssueList = (items = [], formatter, maxItems = 3) => {
-  const visibleItems = items.slice(0, maxItems).map(formatter);
-  const extraCount = Math.max(items.length - maxItems, 0);
-  return extraCount > 0 ? `${visibleItems.join(', ')}, dan ${extraCount} lainnya` : visibleItems.join(', ');
-};
-
-/* =====================================================
-SECTION: Purchase Drawer Variant Stock Alert — AKTIF
-Fungsi:
-- Menyiapkan alert read-only untuk varian bahan baku yang kosong/di bawah minimum saat user membuat pembelian.
-
-Dipakai oleh:
-- Purchases.jsx drawer Tambah/Edit Pembelian.
-
-Alasan perubahan:
-- Total stok bahan bervarian bisa terlihat aman walau satu varian aktif perlu restock.
-
-Catatan cleanup:
-- Jika minimum stok per varian resmi dibuat, helper ini sudah fallback dari field varian ke master `minStock`.
-
-Risiko:
-- Jangan memakai helper ini sebagai mutasi stok; hanya display sebelum pembelian disimpan.
-===================================================== */
-const buildMaterialVariantStockAlert = (material = {}) => {
-  const variants = getActivePurchaseVariants(material);
-  const masterMinStock = Number(material?.minStock || 0);
-
-  if (!material?.hasVariants || variants.length === 0) {
-    return { emptyVariants: [], lowVariants: [], messages: [] };
-  }
-
-  const checkedVariants = variants.map((variant, index) => {
-    const stockSnapshot = buildPurchaseStockPreviewSnapshot(variant);
-    const minStock = getPurchaseVariantMinStock(variant, masterMinStock);
-
-    return {
-      variant,
-      name: getPurchaseVariantDisplayName(variant, `Varian ${index + 1}`),
-      availableStock: stockSnapshot.availableStock,
-      minStock,
-    };
-  });
-
-  const emptyVariants = checkedVariants.filter((item) => item.availableStock <= 0);
-  const lowVariants = checkedVariants.filter((item) => item.availableStock > 0 && item.minStock > 0 && item.availableStock < item.minStock);
-  const messages = [];
-
-  if (emptyVariants.length > 0) {
-    messages.push(`Ada varian kosong: ${formatPurchaseVariantIssueList(emptyVariants, (item) => item.name)}.`);
-  }
-
-  if (lowVariants.length > 0) {
-    messages.push(`Varian di bawah minimum: ${formatPurchaseVariantIssueList(
-      lowVariants,
-      (item) => `${item.name} ${formatNumberId(item.availableStock)}/${formatNumberId(item.minStock)}`,
-    )}.`);
-  }
-
-  return { emptyVariants, lowVariants, messages };
-};
 
 // =========================
 // SECTION: Metadata expense otomatis dari Purchases
@@ -365,12 +292,6 @@ const Purchases = () => {
       (item) => String(item.variantKey) === String(materialVariantId),
     );
   }, [selectedMaterial, materialVariantId]);
-
-  const selectedMaterialVariantStockAlert = useMemo(
-    () => buildMaterialVariantStockAlert(selectedMaterial || {}),
-    [selectedMaterial],
-  );
-
   const materialVariantOptions = useMemo(() => {
     if (!selectedMaterial?.hasVariantOptions && !selectedMaterial?.hasVariants) return [];
 
@@ -1822,17 +1743,24 @@ const Purchases = () => {
             </Form.Item>
           ) : null}
 
-          {/* ===============================================================
-              SECTION: Preview stok aktual sebelum restock.
-              Fungsi blok:
+          {/* =====================================================
+              SECTION: Preview stok aktual sebelum restock — AKTIF / GUARDED / LEGACY-COMPAT
+              Fungsi:
               - memberi user konteks current/reserved/available stock setelah item dan/atau varian dipilih.
-              Hubungan flow Purchases:
-              - tampil sebelum Supplier agar keputusan restock membaca stok aktual lebih dulu;
-              - hanya display read-only dan tidak mengubah rumus stok, cash out, expense, inventory log, atau supplier catalog.
-              Alasan logic:
-              - item bervarian menampilkan stok varian terpilih, bukan total stok master yang menjumlah semua varian.
-              Status: AKTIF untuk modal pembelian, GUARDED terhadap mutasi stok, LEGACY untuk fallback currentStock ?? stock.
-          =============================================================== */}
+
+              Dipakai oleh:
+              - modal Purchases Tambah/Edit Pembelian.
+
+              Alasan perubahan:
+              - item bervarian menampilkan stok varian terpilih, bukan total stok master yang menjumlah semua varian;
+              - alert global varian kosong tidak ditampilkan di flow restock karena preview Current/Reserved/Available Stock sudah cukup dan lebih relevan dengan item/varian terpilih.
+
+              Catatan cleanup:
+              - Belum ada; preview tetap lokal karena hanya display read-only Purchases.
+
+              Risiko:
+              - Jangan ubah section ini untuk mutasi stok, cash out, expense, inventory log, supplier catalog, atau payload submit.
+          ===================================================== */}
           {selectedPurchaseStockPreview ? (
             <div
               style={{
@@ -1849,16 +1777,6 @@ const Purchases = () => {
               <div style={{ color: "#777", fontSize: 12, marginBottom: 10 }}>
                 Info ini hanya snapshot stok saat ini sebelum pembelian disimpan.
               </div>
-
-              {itemType === "material" && selectedMaterialVariantStockAlert.messages.length > 0 ? (
-                <Alert
-                  type={selectedMaterialVariantStockAlert.emptyVariants.length > 0 ? "error" : "warning"}
-                  showIcon
-                  message={selectedMaterialVariantStockAlert.messages.join(' ')}
-                  style={{ marginBottom: 10 }}
-                />
-              ) : null}
-
               {selectedPurchaseStockPreview.status === "needs_variant" ? (
                 <div
                   style={{

@@ -289,6 +289,79 @@ Field lama di top-level tetap boleh dipertahankan untuk kompatibilitas reader la
 ### 2.7 Customer Collection
 Collection customer final adalah `customers` lowercase. Modul Master Customer dan Sales harus membaca sumber yang sama agar data pelanggan tidak terpencar.
 
+## Standar Referensi ID Bisnis dan Larangan Technical ID
+
+Definisi:
+- **Technical ID** adalah Firestore document ID random, auto ID, internal generated ID, atau ID teknis lain yang tidak manusiawi.
+- **Referensi ID bisnis** adalah kode manusiawi yang dipakai user untuk audit, pencarian, dan relasi operasional.
+
+Aturan audit UI:
+- Technical ID tidak boleh dipakai sebagai referensi audit bisnis.
+- Technical ID tidak boleh tampil di UI, tooltip, table, detail, drawer, report UI, export user-facing, atau fallback text.
+- Technical ID tidak boleh menjadi search utama user.
+- Jika referensi bisnis tidak tersedia, tampilkan fallback manusiawi seperti `-` atau `Referensi belum tersedia`.
+- Firestore tetap membutuhkan document ID internal, tetapi document ID internal bukan acuan audit UI bila nilainya random/technical.
+
+Prioritas referensi audit:
+1. Kode bisnis transaksi/master/produksi yang manusiawi.
+2. `sourceRef` / `referenceNumber` readable.
+3. Fallback manusiawi `-` atau `Referensi belum tersedia`.
+4. Jangan fallback ke Technical ID.
+
+Contoh Referensi ID bisnis:
+- Purchase: `PUR-YYYYMMDD-0001`
+- Sales: `SALE-YYYYMMDD-0001`
+- Return: `RET-YYYYMMDD-0001`
+- Stock Adjustment: `ADJ-YYYYMMDD-0001`
+- Cash In: `CIN-YYYYMMDD-0001`
+- Cash Out: `COUT-YYYYMMDD-0001`
+- Payroll: `PAY-YYYYMMDD-0001`
+- Work Log: `WL-YYYYMMDD-0001`
+- Production Order: `PO-YYYYMMDD-0001`
+
+Policy Firestore document ID setelah reset data:
+- Untuk collection transaksi dengan pola 1 dokumen = 1 referensi, document ID boleh dan sebaiknya sama dengan Referensi ID bisnis, misalnya `purchases/PUR-20260511-0001`, `sales/SALE-20260511-0001`, atau `returns/RET-20260511-0001`.
+- Untuk collection log yang bisa memiliki banyak baris per referensi, jangan pakai random ID. Pakai ID turunan readable seperti `LOG-PUR-20260511-0001-001`, `LOG-PUR-20260511-0001-002`, atau `LOG-ADJ-20260511-0001-001`.
+- `sourceRef`, `referenceNumber`, `purchaseNumber`, `saleNumber`, `returnNumber`, dan field bisnis readable tetap menjadi acuan audit utama.
+- Kode audit harus immutable setelah dipakai. Jika nama/ref berubah, jangan otomatis mengubah kode audit lama tanpa approval migrasi.
+- Perubahan document ID/write flow adalah task arsitektur terpisah dan tidak boleh dilakukan tanpa approval khusus.
+
+## Standar Kode Manusiawi Tanpa Mapping Manual
+
+Aturan:
+- Jangan pakai mapping manual kata seperti `MAWAR -> MWR`, `PUTIH -> PTH`, `BUNGA -> BG`, atau daftar mapping kata lain sebagai dictionary hard-coded.
+- Jangan membuat dictionary singkatan kata per modul.
+- Jangan membuat format kode berbeda-beda antar modul tanpa alasan arsitektur yang disetujui.
+- Jangan duplicate generator kode di page/service berbeda.
+- Gunakan satu algoritma universal dan satu shared generator sebagai source of truth.
+- Jangan fallback ke Technical ID/random ID untuk menyelesaikan duplicate.
+
+Algoritma singkatan universal:
+1. Normalize text: uppercase, trim spasi, hapus karakter khusus, dan pisahkan kata berdasarkan spasi, dash, slash, underscore, atau separator lain.
+2. Untuk setiap kata: ambil huruf konsonan dari kiri ke kanan maksimal 3 karakter; jika hasil terlalu pendek, tambahkan huruf awal dari kata agar tetap readable; angka boleh dipertahankan secukupnya.
+3. Gabungkan hasil per kata dengan `-`.
+4. Batasi panjang kode agar tetap readable.
+5. Jika kode duplicate, tambahkan suffix manusiawi `-2`, `-3`, `-4`.
+6. Jangan pakai random ID untuk duplicate handling.
+
+Contoh algoritmik:
+- `Mawar` -> `MWR`
+- `Putih` -> `PTH`
+- `Flanel` -> `FLN`
+- `Pola` -> `PL`
+- `Daun` -> `DN`
+- `Bunga` -> `BNG`
+- `Kain Flanel Merah` -> `KN-FLN-MRH`
+- `Pola Daun Mawar Putih Flanel` -> `PL-DN-MWR-PTH-FLN`
+- Product: `PRD-BNG-MWR-FLN`
+- Semi Finished: `SFP-PL-DN-MWR-PTH-FLN`
+- BOM Product: `BOM-PRD-PL-DN-MWR-PTH-FLN`
+- BOM Semi Finished: `BOM-SFP-PL-DN-MWR-PTH-FLN`
+
+Catatan current state:
+- Jika contoh lama memakai `Bunga -> BG`, itu dianggap contoh lama dan bukan standar baru. Standar baru tanpa mapping menghasilkan `Bunga -> BNG`.
+- Source terbaru masih perlu audit karena generator tertentu masih menyimpan mapping manual dan fallback duplicate berbasis timestamp. Catat sebagai cleanup candidate, jangan refactor source dalam patch docs-only.
+
 ## Update Rule Karyawan Produksi — 2026-04-25
 
 ### Kode karyawan produksi otomatis
@@ -297,7 +370,7 @@ Collection customer final adalah `customers` lowercase. Modul Master Customer da
 - Nomor urut `XXX` selalu 3 digit dan naik per tanggal pembuatan.
 - User tidak boleh mengetik kode karyawan manual saat tambah data baru.
 - Service karyawan produksi wajib generate ulang kode saat submit agar preview di form tidak menjadi source final bila ada input paralel.
-- Field `code` tetap dipakai sebagai display reference di Work Log/Payroll, tetapi Firestore document id tetap menjadi relasi utama.
+- Field `code` tetap dipakai sebagai display reference di Work Log/Payroll. Firestore document ID boleh tetap dipakai sebagai relasi internal teknis, tetapi bukan referensi audit UI dan tidak boleh menjadi fallback display.
 - Kode lama seperti `EMP-...` dianggap legacy data dan tidak dimigrasi otomatis saat edit.
 
 ## Update Rule Auto Payroll Work Log Completed — 2026-04-25
@@ -325,7 +398,7 @@ Collection customer final adalah `customers` lowercase. Modul Master Customer da
 
 ### Inventory / Stock Management
 - Kolom Referensi Audit adalah audit source untuk menjelaskan asal mutasi stok: Penyesuaian Stok, Pembelian, Penjualan, Retur, Produksi / Work Log, atau Production Order.
-- Referensi harus tampil manusiawi; ID teknis boleh ada sebagai detail kecil/tooltip, bukan teks utama.
+- Referensi harus tampil manusiawi; ID teknis/random ID tidak boleh tampil sebagai teks utama, detail kecil, tooltip, drawer/detail, report UI, atau fallback display.
 - Stock Adjustment aktif hanya melalui halaman Manajemen Stok; route lama bila ada hanya legacy redirect.
 - Angka pada Stock Adjustment wajib memakai format Indonesia tanpa trailing `.00` untuk angka bulat, dan maksimal 2 desimal untuk pecahan.
 - Riwayat adjustment harus terbaru di atas, prioritas `createdAt` lalu fallback `date` untuk data lama.
@@ -588,9 +661,17 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 ### 15.2 Pricing Rules optional
 
 - Pricing Rules adalah fitur harga opsional, bukan blocker create master Product/Raw Material.
-- Mode create default adalah `manual`.
+- Mode create default Product/Raw Material adalah `manual`.
 - `pricingRuleId` hanya wajib jika user memilih `pricingMode = rule`.
 - Jika `pricingMode = manual`, `pricingRuleId` boleh kosong/null dan harga manual tetap valid.
+- Mode Manual tidak boleh otomatis overwrite harga manual yang diinput user.
+- Mode Rule hanya boleh melakukan auto-preview harga saat base cost dan rule valid. Jika base cost/rule belum valid, tampilkan warning/preview tidak siap tanpa mengisi harga asal.
+- Product memakai basis cost `hppPerUnit` untuk preview Pricing Rule.
+- Raw Material memakai `averageActualUnitCost` sebagai basis utama dengan fallback `restockReferencePrice`.
+- Semua preview harga wajib lewat `buildSinglePricingPreview` dari `pricingService`; jangan membuat formula pricing baru di page/component.
+- `PricingModeSwitch` hanya shared UI switch Manual/Rule, bukan source formula pricing, bukan validation service, bukan query Firestore, dan bukan tempat auto-preview.
+- Auto-preview Product dan Raw Material tetap local di halaman masing-masing kecuali ada audit patch terpisah yang membuktikan shared hook lebih aman.
+- PricingRules preview/apply tetap skip item Manual dan hanya memproses item yang memang berada pada mode Rule/valid.
 
 ## 17. Rule Reset & Maintenance Data Aman
 
@@ -907,3 +988,13 @@ Guard wajib:
 - Membuka halaman Buku Besar Kas tidak boleh membuat transaksi, audit log, backfill, saldo, stok, HPP, atau posting kas baru.
 - Summary Buku Besar Kas adalah total row sesuai filter, bukan saldo akhir kas karena saldo awal dan rekonsiliasi bank belum menjadi bagian fitur ini.
 - Akses menu dan route Buku Besar Kas mengikuti finance sensitive area: Administrator only.
+
+## Reset & Maintenance Development Rules
+- **Audit:** read-only terhadap data bisnis. Audit boleh membuat maintenance log metadata admin, tetapi tidak boleh mengubah stok, transaksi, kas, payroll, HPP, report, atau schema bisnis.
+- **Repair:** hanya untuk field turunan/snapshot/display yang aman sesuai service existing. Repair tidak boleh membuat transaksi baru, posting stok ulang, atau menghapus data utama.
+- **Reset:** destructive, wajib preview, warning, confirmation keyword existing, result summary, dan audit/error trail.
+- **Export data pokok:** wajib direkomendasikan sebelum reset total/master. Export bersifat backup/checklist, bukan import atau restore otomatis.
+- **Reset transaksi + nolkan stok:** cocok untuk data development yang belum real saat master masih dipakai tetapi stok lama tidak dipercaya.
+- **Protected master:** tidak ikut reset default dan tidak boleh dilepas dari guard tanpa approval khusus.
+- **Data real:** jangan reset data real/semi real tanpa backup/export dan audit dampak.
+- **Import normalized:** belum masuk patch ini; export dipakai untuk review/manual input/normalization task berikutnya.

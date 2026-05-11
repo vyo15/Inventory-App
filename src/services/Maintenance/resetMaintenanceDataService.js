@@ -199,6 +199,236 @@ const SAFE_CLIENT_BATCH_OPERATION_LIMIT = BATCH_LIMIT;
 const VALID_RESET_MODES = new Set(RESET_MODE_OPTIONS.map((item) => item.value));
 const STOCK_COLLECTION_KEYS = new Set(STOCK_COLLECTIONS);
 
+/*
+=====================================================
+SECTION: Master data export collections — AKTIF
+Fungsi:
+- Menjadi allowlist read-only untuk export data pokok sebelum reset development.
+
+Dipakai oleh:
+- ResetMaintenanceData.jsx melalui getMasterDataExportPreview dan buildMasterDataExportPayload.
+
+Alasan perubahan:
+- Owner/developer membutuhkan backup/checklist master data sebelum menjalankan reset destructive.
+
+Catatan cleanup:
+- Export XLSX dan import normalized adalah task terpisah setelah approval desain.
+
+Risiko:
+- Jangan masukkan transaksi/log turunan ke daftar default ini agar data lama tidak dibawa ulang sebagai sumber kebenaran baru.
+=====================================================
+*/
+export const MASTER_DATA_EXPORT_COLLECTIONS = [
+  { key: "products", label: "Products" },
+  { key: "raw_materials", label: "Raw Materials" },
+  { key: "semi_finished_materials", label: "Semi Finished Materials" },
+  { key: "supplierPurchases", label: "Supplier / Vendor Restock" },
+  { key: "customers", label: "Customers" },
+  { key: "production_steps", label: "Production Steps" },
+  { key: "production_employees", label: "Production Employees" },
+  { key: "production_boms", label: "Production BOMs" },
+  { key: "pricing_rules", label: "Pricing Rules" },
+  { key: "categories", label: "Categories" },
+  { key: "production_profiles", label: "Production Profiles" },
+];
+
+const MASTER_DATA_OPENING_STOCK_COLLECTIONS = new Set([
+  "products",
+  "raw_materials",
+  "semi_finished_materials",
+]);
+
+const isPlainObjectForExport = (value) => value && typeof value === "object" && !Array.isArray(value);
+
+const normalizeExportValue = (value) => {
+  if (value === undefined) return null;
+  if (value === null) return null;
+  if (typeof value !== "object") return value;
+
+  if (typeof value.toDate === "function") {
+    try {
+      return value.toDate().toISOString();
+    } catch {
+      return value;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeExportValue(item));
+  }
+
+  return Object.entries(value).reduce((accumulator, [key, entryValue]) => {
+    if (typeof entryValue !== "function") {
+      accumulator[key] = normalizeExportValue(entryValue);
+    }
+    return accumulator;
+  }, {});
+};
+
+const normalizeExportDocument = (snapshotDoc) => ({
+  id: snapshotDoc.id,
+  ...normalizeExportValue(snapshotDoc.data() || {}),
+});
+
+const getOpeningStockUnit = (item = {}) => safeTrim(
+  item.stockUnit ||
+  item.unit ||
+  item.baseUnit ||
+  item.purchaseUnit ||
+  item.salesUnit ||
+  "pcs"
+);
+
+const getOpeningStockName = (item = {}) => safeTrim(
+  item.name ||
+  item.productName ||
+  item.materialName ||
+  item.itemName ||
+  item.displayName ||
+  item.code ||
+  "Tanpa nama"
+);
+
+const buildOpeningStockVariantRows = ({ collectionKey, label, item = {} }) => {
+  const variants = Array.isArray(item.variants) ? item.variants : [];
+  const unit = getOpeningStockUnit(item);
+
+  return variants
+    .filter((variant) => variant && variant.isActive !== false && variant.isArchived !== true)
+    .map((variant, index) => {
+      const currentStock = toNumber(variant.currentStock ?? variant.stock ?? 0);
+      const reservedStock = toNumber(variant.reservedStock ?? 0);
+      const availableStock = toNumber(variant.availableStock ?? calculateAvailableStock(currentStock, reservedStock));
+
+      return {
+        collection: collectionKey,
+        collectionLabel: label,
+        itemId: item.id,
+        itemCode: safeTrim(item.code || item.sku || ""),
+        itemName: getOpeningStockName(item),
+        variantKey: getVariantIdentity(variant, index),
+        variantLabel: safeTrim(variant.variantLabel || variant.label || variant.name || variant.variantName || getVariantIdentity(variant, index)),
+        currentStock,
+        reservedStock,
+        availableStock,
+        unit,
+        isVariant: true,
+      };
+    });
+};
+
+const buildOpeningStockMasterRow = ({ collectionKey, label, item = {} }) => {
+  const currentStock = toNumber(item.currentStock ?? item.stock ?? 0);
+  const reservedStock = toNumber(item.reservedStock ?? 0);
+  const availableStock = toNumber(item.availableStock ?? calculateAvailableStock(currentStock, reservedStock));
+
+  return {
+    collection: collectionKey,
+    collectionLabel: label,
+    itemId: item.id,
+    itemCode: safeTrim(item.code || item.sku || ""),
+    itemName: getOpeningStockName(item),
+    variantKey: null,
+    variantLabel: null,
+    currentStock,
+    reservedStock,
+    availableStock,
+    unit: getOpeningStockUnit(item),
+    isVariant: false,
+  };
+};
+
+const buildOpeningStockRowsFromExportData = (collections = []) => collections.flatMap((collectionItem) => {
+  if (!MASTER_DATA_OPENING_STOCK_COLLECTIONS.has(collectionItem.collection)) {
+    return [];
+  }
+
+  return (collectionItem.records || []).flatMap((item) => {
+    const hasActiveVariants = Array.isArray(item.variants) && item.variants.some(
+      (variant) => variant && variant.isActive !== false && variant.isArchived !== true,
+    );
+
+    if (hasActiveVariants) {
+      return buildOpeningStockVariantRows({ collectionKey: collectionItem.collection, label: collectionItem.label, item });
+    }
+
+    return [buildOpeningStockMasterRow({ collectionKey: collectionItem.collection, label: collectionItem.label, item })];
+  });
+});
+
+const readMasterDataExportCollections = async ({ includeRecords = false } = {}) => {
+  const collectionsResult = [];
+  const warnings = [];
+
+  for (const item of MASTER_DATA_EXPORT_COLLECTIONS) {
+    try {
+      const snapshot = await getDocs(collection(db, item.key));
+      const records = includeRecords ? snapshot.docs.map(normalizeExportDocument) : [];
+
+      collectionsResult.push({
+        collection: item.key,
+        label: item.label,
+        count: snapshot.size,
+        records,
+      });
+    } catch (error) {
+      collectionsResult.push({
+        collection: item.key,
+        label: item.label,
+        count: 0,
+        records: [],
+        error: error?.message || "Gagal membaca collection.",
+      });
+      warnings.push({
+        collection: item.key,
+        label: item.label,
+        message: error?.message || "Gagal membaca collection.",
+      });
+    }
+  }
+
+  return { collections: collectionsResult, warnings };
+};
+
+export const buildMasterDataExportPayload = async ({ includeOpeningStock = true } = {}) => {
+  const exportedAt = new Date().toISOString();
+  const { collections: exportedCollections, warnings } = await readMasterDataExportCollections({ includeRecords: true });
+  const openingStockReference = includeOpeningStock ? buildOpeningStockRowsFromExportData(exportedCollections) : [];
+  const totalRecords = exportedCollections.reduce((total, item) => total + toNumber(item.count), 0);
+
+  return {
+    exportMeta: {
+      project: "IMS Bunga Flanel",
+      exportType: "master-data-json",
+      exportedAt,
+      source: "ResetMaintenanceData",
+      includeOpeningStock,
+      notes: "Export read-only data pokok untuk backup/checklist development. File ini bukan restore otomatis dan tidak membawa transaksi/log turunan sebagai default.",
+    },
+    summary: {
+      totalCollections: exportedCollections.length,
+      totalRecords,
+      openingStockRows: openingStockReference.length,
+      warnings: warnings.length,
+    },
+    collections: exportedCollections,
+    openingStockReference,
+    warnings,
+  };
+};
+
+export const getMasterDataExportPreview = async () => {
+  const payload = await buildMasterDataExportPayload({ includeOpeningStock: true });
+
+  return {
+    exportMeta: payload.exportMeta,
+    summary: payload.summary,
+    collections: payload.collections.map(({ records, ...collectionSummary }) => collectionSummary),
+    warnings: payload.warnings,
+  };
+};
+
+
 // -----------------------------------------------------------------------------
 // Reset target collections.
 // IMS NOTE [AKTIF/GUARDED] — daftar ini dipakai sebagai kontrak lokal dengan

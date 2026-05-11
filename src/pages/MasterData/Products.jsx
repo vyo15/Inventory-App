@@ -32,7 +32,6 @@ import { db } from '../../firebase';
 import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import { formatDateId } from '../../utils/formatters/dateId';
-import { formatStockWithUnitId } from '../../utils/formatters/stockUnit';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
@@ -42,11 +41,6 @@ import {
   COLOR_VARIANT_MAP,
   ensureAtLeastOneVariant,
 } from '../../utils/variants/variantHelpers';
-import {
-  areAllVariantsStockEmpty,
-  getVariantDisplayName,
-  isVariantStockEmpty,
-} from '../../utils/variants/variantArchiveHelpers';
 import {
   createProduct,
   listenProducts,
@@ -68,47 +62,32 @@ const { Text } = Typography;
 const { TextArea } = Input;
 
 // -----------------------------------------------------------------------------
-// Tag mode pricing.
-// Diletakkan di atas file agar mudah dipakai ulang di tabel dan detail drawer.
-// -----------------------------------------------------------------------------
-const PRICING_MODE_TAGS = {
-  manual: <Tag color="orange">Manual</Tag>,
-  rule: <Tag color="green">Pricing Rule</Tag>,
-};
-
-const getPricingModeDisplayText = (record = {}, pricingRuleMap = {}) => {
-  const mode = record?.pricingMode === 'rule' ? 'rule' : 'manual';
-
-  if (mode !== 'rule') {
-    return 'Manual';
-  }
-
-  const ruleName = pricingRuleMap?.[record?.pricingRuleId];
-  return `Pricing Rule${ruleName ? ` | ${ruleName}` : ''}`;
-};
-
-// -----------------------------------------------------------------------------
 // Builder nilai awal form produk.
 // Menjaga form create/edit tetap satu pola dan kompatibel dengan data lama.
 // -----------------------------------------------------------------------------
 const buildFormValues = (record = {}) => {
-  const activeVariants = (Array.isArray(record?.variants) ? record.variants : []).filter((variant) => variant?.isArchived !== true);
-  const hasVariants = record?.hasVariants === true || activeVariants.length > 0;
+  const hasVariants = record?.hasVariants === true || (record?.variants || []).length > 0;
 
   return {
     ...PRODUCT_DEFAULT_FORM,
     ...record,
     hasVariants,
     variantLabel: record.variantLabel || 'Varian',
-    variants: hasVariants ? ensureAtLeastOneVariant(activeVariants) : [],
+    variants: hasVariants ? ensureAtLeastOneVariant(record.variants || []) : [],
     currentStock: Number(record.currentStock || record.stock || 0),
     reservedStock: Number(record.reservedStock || 0),
     minStockAlert: Number(record.minStockAlert || 0),
   };
 };
 
-// Helper detail drawer: format stok tetap lokal alias agar rincian per baris tetap mudah dibaca.
-const formatStockWithUnit = formatStockWithUnitId;
+// Helper detail drawer: format stok tetap lokal untuk rincian per baris, sementara table utama memakai StockDisplayBlock locked.
+const formatStockWithUnit = (value, unit = 'pcs') => `${formatNumberID(value)} ${unit}`;
+
+const getRuleModeLabel = (mode, ruleId, pricingRuleMap = {}) => {
+  if (mode !== 'rule') return 'Manual';
+  return `Pricing Rule${pricingRuleMap[ruleId] ? ` | ${pricingRuleMap[ruleId]}` : ''}`;
+};
+
 
 
 const DEFAULT_PRODUCT_VARIANT = {
@@ -122,8 +101,6 @@ const DEFAULT_PRODUCT_VARIANT = {
 
 const getVariantDisplayLabel = (variant = {}, index = 0) =>
   variant.variantLabel || variant.label || variant.name || COLOR_VARIANT_MAP[variant.color] || variant.color || `Varian ${index + 1}`;
-
-const formatArchivedVariantDate = (value) => value ? formatDateId(value, true) : '-';
 
 const hasSafeZeroMasterStock = (record = {}) => {
   const currentStock = Number(record.currentStock ?? record.stock ?? 0);
@@ -205,6 +182,7 @@ const Products = () => {
   const [submitting, setSubmitting] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [pricingPreviewWarning, setPricingPreviewWarning] = useState('');
 
   // ---------------------------------------------------------------------------
   // State filter untuk menyamakan pengalaman pakai dengan halaman raw dan semi.
@@ -221,7 +199,7 @@ const Products = () => {
   // ---------------------------------------------------------------------------
   const pricingModeValue = Form.useWatch('pricingMode', form);
   const pricingRuleIdValue = Form.useWatch('pricingRuleId', form);
-  const hppPerUnitValue = Form.useWatch('hppPerUnit', form);
+  const watchedHppPerUnit = Form.useWatch('hppPerUnit', form);
   const hasVariantsValue = Form.useWatch('hasVariants', form);
   const variantLabelValue = Form.useWatch('variantLabel', form);
   const watchedVariants = Form.useWatch('variants', form) || [];
@@ -237,90 +215,8 @@ const Products = () => {
   const isEditingProduct = Boolean(editingProduct?.id);
   const editingProductHasVariants = Boolean(editingProduct?.hasVariants || (editingProduct?.variants || []).length > 0);
   const canActivateVariantsForEditing = isEditingProduct && !editingProductHasVariants && hasSafeZeroMasterStock(editingProduct);
+  const hasVariantModeSwitchLocked = isEditingProduct && !canActivateVariantsForEditing;
   const stockEditHelpText = 'Ubah stok lewat Stock Management / Stock Adjustment / transaksi resmi.';
-  const archivedProductVariants = Array.isArray(editingProduct?.archivedVariants) ? editingProduct.archivedVariants : [];
-  const canDisableVariantModeForEditing = isEditingProduct && editingProductHasVariants && areAllVariantsStockEmpty(editingProduct?.variants || []);
-
-  /* =====================================================
-  SECTION: Product Variant Mode Switch Guard — GUARDED
-  Fungsi:
-  - Mengizinkan user klik switch Pakai Varian saat edit, lalu memvalidasi ON/OFF tanpa mengubah stok dari master edit.
-
-  Dipakai oleh:
-  - Drawer create/edit Product pada Products.jsx dan guard service productsService.
-
-  Alasan perubahan:
-  - Switch tidak boleh disabled permanen. Aktivasi varian item lama aman hanya saat stok master 0, sedangkan deaktivasi varian existing hanya boleh saat semua stok varian 0 dan akan diarsipkan.
-
-  Catatan cleanup:
-  - Belum ada.
-
-  Risiko:
-  - Jika guard ini dihapus, user bisa mengirim payload yang mencoba menghilangkan bucket stok/reference varian atau memindahkan stok tanpa flow resmi.
-  ===================================================== */
-  const handleProductVariantModeChange = (checked) => {
-    if (!isEditingProduct) {
-      if (checked) {
-        form.setFieldsValue({
-          variants: ensureAtLeastOneVariant(form.getFieldValue('variants') || [], { defaultVariant: DEFAULT_PRODUCT_VARIANT }),
-          variantLabel: form.getFieldValue('variantLabel') || 'Varian',
-        });
-      } else {
-        form.setFieldsValue({ variants: [], variantLabel: 'Varian' });
-      }
-      return;
-    }
-
-    if (editingProductHasVariants && !checked) {
-      if (!areAllVariantsStockEmpty(editingProduct?.variants || [])) {
-        message.warning('Mode varian hanya bisa dimatikan setelah semua varian current/reserved/available stock 0. Nolkan lewat flow resmi dulu.');
-        form.setFieldsValue({
-          hasVariants: true,
-          variantLabel: form.getFieldValue('variantLabel') || editingProduct.variantLabel || 'Varian',
-          variants: ensureAtLeastOneVariant(form.getFieldValue('variants') || editingProduct.variants || [], { defaultVariant: DEFAULT_PRODUCT_VARIANT }),
-        });
-        return;
-      }
-
-      message.info('Semua varian stok 0 akan diarsipkan. Varian lama bisa direstore bila dibuat lagi dengan nama/struktur yang sama.');
-      form.setFieldsValue({ hasVariants: false, variants: [], variantLabel: 'Varian', currentStock: 0, reservedStock: 0 });
-      return;
-    }
-
-    if (!editingProductHasVariants && checked && !hasSafeZeroMasterStock(editingProduct)) {
-      message.warning('Mode varian tidak bisa diaktifkan karena item masih punya stok. Nolkan stok lewat flow resmi dulu.');
-      form.setFieldsValue({ hasVariants: false, variants: [], variantLabel: 'Varian' });
-      return;
-    }
-
-    if (checked) {
-      message.info('Varian baru untuk item lama selalu mulai dari stok 0.');
-      form.setFieldsValue({
-        hasVariants: true,
-        variants: ensureAtLeastOneVariant(form.getFieldValue('variants') || [], { defaultVariant: DEFAULT_PRODUCT_VARIANT }),
-        variantLabel: form.getFieldValue('variantLabel') || 'Varian',
-        currentStock: 0,
-        reservedStock: 0,
-      });
-    } else {
-      form.setFieldsValue({ hasVariants: false, variants: [], variantLabel: 'Varian' });
-    }
-  };
-
-  const handleRemoveProductVariant = (fieldName, remove) => {
-    const currentVariants = form.getFieldValue('variants') || [];
-    const targetVariant = currentVariants[fieldName] || {};
-
-    if (isEditingProduct && !isVariantStockEmpty(targetVariant)) {
-      message.warning('Varian masih punya current/reserved/available stock. Nolkan lewat Stock Adjustment/transaksi resmi sebelum diarsipkan.');
-      return;
-    }
-
-    if (isEditingProduct) {
-      message.info(`${getVariantDisplayName(targetVariant, 'Varian')} akan dipindahkan ke Arsip Varian setelah disimpan.`);
-    }
-    remove(fieldName);
-  };
 
   // ---------------------------------------------------------------------------
   // Loader data master produk, kategori, dan pricing rules.
@@ -388,63 +284,53 @@ const Products = () => {
     [pricingRules, pricingRuleIdValue],
   );
 
-  const productRulePreview = useMemo(() => {
-    if (pricingModeValue !== 'rule' || !selectedPricingRule) return null;
-
-    return buildSinglePricingPreview(
-      {
-        ...form.getFieldsValue(),
-        pricingMode: 'rule',
-        hppPerUnit: hppPerUnitValue || 0,
-        price: form.getFieldValue('price') || 0,
-      },
-      selectedPricingRule,
-    );
-  }, [form, hppPerUnitValue, pricingModeValue, selectedPricingRule]);
-
-  const productRuleWarning = pricingModeValue === 'rule' && (!productRulePreview || productRulePreview.status !== 'ready')
-    ? 'Harga belum bisa dihitung. Cek HPP dan pricing rule.'
-    : '';
-
   /* =====================================================
-  SECTION: Auto-preview harga Product dari Pricing Rule — AKTIF
+  SECTION: Product pricing rule switch preview — AKTIF / GUARDED
   Fungsi:
-  - Mengisi field `price` dari helper pricing existing saat mode rule, rule, dan HPP sudah valid.
+  - Mengisi preview/form harga jual Product saat user mengaktifkan Pricing Rule dan data HPP + rule cukup.
 
   Dipakai oleh:
-  - Drawer form Product pada halaman Master Data / Products.
+  - Drawer tambah/edit Product pada Master Data > Products.
 
   Alasan perubahan:
-  - User perlu melihat harga jual hasil Pricing Rule langsung di form sebelum klik Simpan.
+  - Mode pricing sebelumnya Select Manual/Rule kurang jelas; switch membuat alur manual vs rule lebih manusiawi.
 
   Catatan cleanup:
-  - Belum ada.
+  - Belum ada. Helper kalkulasi tetap memakai pricingService existing.
 
   Risiko:
-  - Jangan mengganti rumus di sini; semua kalkulasi wajib tetap lewat pricingService agar tidak duplikatif.
+  - Jangan menulis langsung ke Firestore dari effect ini; harga hanya tersimpan saat user klik Simpan.
   ===================================================== */
   useEffect(() => {
-    if (pricingModeValue !== 'rule' || !selectedPricingRule) return;
+    if (pricingModeValue !== 'rule') {
+      setPricingPreviewWarning('');
+      return;
+    }
+
+    if (!selectedPricingRule) {
+      setPricingPreviewWarning('Pilih pricing rule untuk menghitung harga jual.');
+      return;
+    }
 
     const preview = buildSinglePricingPreview(
       {
-        ...form.getFieldsValue(),
+        id: editingProduct?.id || 'form-product',
+        name: form.getFieldValue('name') || editingProduct?.name || 'Produk',
         pricingMode: 'rule',
-        hppPerUnit: hppPerUnitValue || 0,
         price: form.getFieldValue('price') || 0,
+        hppPerUnit: watchedHppPerUnit || 0,
       },
       selectedPricingRule,
     );
 
-    const nextPrice = Number(preview?.roundedPrice || 0);
-
-    if (preview?.status === 'ready' && Number.isFinite(nextPrice) && nextPrice >= 0) {
-      const currentPrice = Number(form.getFieldValue('price') || 0);
-      if (currentPrice !== nextPrice) {
-        form.setFieldsValue({ price: nextPrice });
-      }
+    if (preview?.status === 'ready' && Number(preview.roundedPrice || 0) >= 0) {
+      form.setFieldsValue({ price: preview.roundedPrice });
+      setPricingPreviewWarning('');
+      return;
     }
-  }, [form, hppPerUnitValue, pricingModeValue, selectedPricingRule]);
+
+    setPricingPreviewWarning('Harga belum bisa dihitung. Cek HPP dan pricing rule.');
+  }, [pricingModeValue, selectedPricingRule, watchedHppPerUnit, editingProduct, form]);
 
   // ---------------------------------------------------------------------------
   // Summary cards halaman produk.
@@ -481,7 +367,7 @@ const Products = () => {
 
       const matchesSearch = !keyword
         ? true
-        : [item.code, item.productCode, item.name, item.category, item.description, ...variantLabels]
+        : [item.name, item.category, item.description, ...variantLabels]
             .filter(Boolean)
             .some((value) => String(value).toLowerCase().includes(keyword));
 
@@ -503,6 +389,7 @@ const Products = () => {
   // ---------------------------------------------------------------------------
   const openCreateDrawer = () => {
     setEditingProduct(null);
+    setPricingPreviewWarning('');
     form.setFieldsValue(buildFormValues(PRODUCT_DEFAULT_FORM));
     setFormVisible(true);
   };
@@ -514,6 +401,7 @@ const Products = () => {
     setFormVisible(false);
     setSubmitting(false);
     setEditingProduct(null);
+    setPricingPreviewWarning('');
     form.resetFields();
   };
 
@@ -629,7 +517,6 @@ const Products = () => {
       render: (value, record) => (
         <div className={compactCellClassNames.stack}>
           <Text strong>{value || '-'}</Text>
-          <Text type="secondary" className={compactCellClassNames.meta}>{record.code || record.productCode || 'Kode otomatis'}</Text>
           <Text type="secondary" className={compactCellClassNames.meta}>{record.category || 'Produk Jadi'}</Text>
           <Space size={6} wrap className="ims-cell-tag-list">
             <Tag color={record.hasVariants ? 'blue' : 'default'}>
@@ -667,7 +554,7 @@ const Products = () => {
             {`HPP ${formatCurrencyId(record.hppPerUnit || 0)} / pcs`}
           </Text>
           <Text type="secondary" className={compactCellClassNames.meta}>
-            {getPricingModeDisplayText(record, pricingRuleMap)}
+            {getRuleModeLabel(record.pricingMode, record.pricingRuleId, pricingRuleMap)}
           </Text>
         </div>
       ),
@@ -716,7 +603,7 @@ const Products = () => {
       --------------------------------------------------------------------- */}
       <PageHeader
         title="Produk Jadi"
-        subtitle="Master produk, harga, dan stok."
+        subtitle="Master produk jadi dan stok varian."
         actions={[
           { key: 'create-product', type: 'primary', icon: <PlusOutlined />, label: 'Tambah Produk', onClick: openCreateDrawer },
         ]}
@@ -726,7 +613,7 @@ const Products = () => {
         showIcon
         type="info"
         className="ims-page-alert"
-        message="Stok varian mengikuti varian aktif."
+        message="Stok varian dikelola per varian produk."
       />
 
       {/* ---------------------------------------------------------------------
@@ -777,7 +664,7 @@ const Products = () => {
       --------------------------------------------------------------------- */}
       <PageSection
         title="Daftar Produk Jadi"
-        subtitle="Harga, stok, dan varian."
+        subtitle="Harga, stok, dan varian produk."
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredProducts} />
         <Table
@@ -814,17 +701,12 @@ const Products = () => {
         <Form form={form} layout="vertical" initialValues={buildFormValues(PRODUCT_DEFAULT_FORM)}>
           <Divider orientation="left">Informasi Utama</Divider>
           <Row gutter={16}>
-            <Col xs={24} md={8}>
-              <Form.Item name="code" label="Kode Produk">
-                <Input placeholder="Opsional, otomatis: PRD-BG-MWR-FLN" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
+            <Col xs={24} md={12}>
               <Form.Item name="name" label="Nama Produk" rules={[{ required: true, message: 'Nama produk wajib diisi.' }]}> 
                 <Input placeholder="Contoh: Bunga Mawar Flanel" />
               </Form.Item>
             </Col>
-            <Col xs={24} md={8}>
+            <Col xs={24} md={12}>
               <Form.Item name="categoryId" label="Kategori">
                 <Select
                   allowClear
@@ -840,9 +722,6 @@ const Products = () => {
           </Form.Item>
 
           <Divider orientation="left">Pricing Master</Divider>
-          <Form.Item name="pricingMode" hidden>
-            <Input />
-          </Form.Item>
           <Row gutter={16}>
             <Col xs={24} md={8}>
               <Form.Item name="hppPerUnit" label="HPP / Unit" rules={[{ required: true, message: 'HPP wajib diisi.' }]}> 
@@ -858,48 +737,47 @@ const Products = () => {
             </Col>
             <Col xs={24} md={8}>
               {/* =====================================================
-                  SECTION: Switch pricing mode Product — AKTIF
-                  Fungsi:
-                  - Mengubah pilihan harga jual Product dari select Manual/Rule menjadi switch yang lebih mudah dipahami.
+              SECTION: Product pricing mode switch — AKTIF / GUARDED
+              Fungsi:
+              - Mengubah mode pricing Product dari Select menjadi Switch: OFF manual, ON pricing rule.
 
-                  Dipakai oleh:
-                  - Drawer form Product pada halaman Master Data / Products.
+              Dipakai oleh:
+              - Form create/edit Product.
 
-                  Alasan perubahan:
-                  - User perlu memahami bahwa OFF berarti harga manual, sedangkan ON berarti wajib pilih Pricing Rule.
+              Alasan perubahan:
+              - User lebih mudah memahami bahwa Pricing Rule adalah pilihan aktif/nonaktif, bukan kategori harga terpisah.
 
-                  Catatan cleanup:
-                  - Belum ada.
+              Catatan cleanup:
+              - Belum ada. Field payload tetap pricingMode dan pricingRuleId.
 
-                  Risiko:
-                  - Jangan mengubah nilai field `pricingMode`; service tetap mengharapkan `manual` atau `rule`.
+              Risiko:
+              - Jangan ubah nilai domain pricingMode selain manual/rule karena service dan PricingRules bergantung pada nilai ini.
               ===================================================== */}
               <Form.Item
+                name="pricingMode"
                 label="Gunakan Pricing Rule"
+                valuePropName="checked"
+                getValueProps={(value) => ({ checked: value === 'rule' })}
+                getValueFromEvent={(checked) => (checked ? 'rule' : 'manual')}
                 extra={pricingModeValue === 'rule'
-                  ? 'Harga dihitung dari rule jika HPP valid.'
-                  : 'Harga jual diisi manual.'}
+                  ? 'Pricing Rule aktif: pilih rule untuk menghitung harga jual.'
+                  : 'Manual: harga jual diisi langsung.'}
               >
                 <Switch
-                  checked={pricingModeValue === 'rule'}
                   checkedChildren="Rule"
                   unCheckedChildren="Manual"
                   onChange={(checked) => {
-                    form.setFieldsValue({
-                      pricingMode: checked ? 'rule' : 'manual',
-                      pricingRuleId: checked ? form.getFieldValue('pricingRuleId') : null,
-                    });
+                    form.setFieldsValue({ pricingMode: checked ? 'rule' : 'manual' });
+                    if (!checked) {
+                      form.setFieldsValue({ pricingRuleId: null });
+                      setPricingPreviewWarning('');
+                    }
                   }}
                 />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>
-              <Form.Item
-                name="price"
-                label="Harga Jual"
-                rules={[{ required: true, message: 'Harga jual wajib diisi.' }]}
-                extra={pricingModeValue === 'rule' ? 'Terisi dari rule jika HPP valid.' : undefined}
-              > 
+              <Form.Item name="price" label="Harga Jual" rules={[{ required: true, message: 'Harga jual wajib diisi.' }]}> 
                 <InputNumber
                   style={{ width: '100%' }}
                   min={0}
@@ -912,31 +790,30 @@ const Products = () => {
             </Col>
           </Row>
 
+          {pricingPreviewWarning ? (
+            <Alert
+              type="warning"
+              showIcon
+              message={pricingPreviewWarning}
+              style={{ marginBottom: 16 }}
+            />
+          ) : null}
+
           <Form.Item
             name="pricingRuleId"
             label="Pricing Rule"
             rules={pricingModeValue === 'rule' ? [{ required: true, message: 'Pricing rule wajib dipilih.' }] : []}
-            extra={pricingModeValue === 'rule' ? 'Wajib saat rule aktif.' : 'Tidak dipakai untuk harga manual.'}
           >
             <Select
               allowClear
               disabled={pricingModeValue !== 'rule'}
-              placeholder={pricingModeValue === 'rule' ? 'Pilih pricing rule' : 'Manual: pricing rule tidak dipakai'}
+              placeholder="Pilih pricing rule"
               options={(pricingRules || []).map((item) => ({
                 value: item.id,
                 label: `${item.name}${item?.isActive ? '' : ' (Nonaktif)'}`,
               }))}
             />
           </Form.Item>
-
-          {productRuleWarning ? (
-            <Alert
-              style={{ marginBottom: 16 }}
-              type="warning"
-              showIcon
-              message={productRuleWarning}
-            />
-          ) : null}
 
           {/* IMS NOTE [GUARDED | behavior-preserving]: section stok tetap tampil untuk konteks,
               tetapi input stok dikunci saat edit agar payload master tidak menjadi jalur mutasi stok. */}
@@ -946,19 +823,28 @@ const Products = () => {
             label="Pakai Varian"
             valuePropName="checked"
             extra={isEditingProduct
-              ? editingProductHasVariants
-                ? canDisableVariantModeForEditing
-                  ? 'Bisa dimatikan jika semua stok varian 0.'
-                  : 'Bisa dimatikan jika semua stok varian 0.'
-                : canActivateVariantsForEditing
-                  ? 'Boleh aktifkan varian. Stok varian baru mulai dari 0.'
-                  : 'Bisa diaktifkan setelah stok master 0.'
+              ? canActivateVariantsForEditing
+                ? 'Produk lama dengan stok 0 boleh mulai memakai varian. Varian baru tetap mulai dari stok 0.'
+                : 'Mode varian dikunci setelah produk dibuat agar struktur stok tetap konsisten.'
               : undefined}
           >
             <Switch
               checkedChildren="Ya"
               unCheckedChildren="Tidak"
-              onChange={handleProductVariantModeChange}
+              disabled={hasVariantModeSwitchLocked}
+              onChange={(checked) => {
+                if (hasVariantModeSwitchLocked) return;
+                if (checked) {
+                  form.setFieldsValue({
+                    variants: ensureAtLeastOneVariant(form.getFieldValue('variants') || [], { defaultVariant: DEFAULT_PRODUCT_VARIANT }),
+                    variantLabel: form.getFieldValue('variantLabel') || 'Varian',
+                    currentStock: isEditingProduct ? 0 : form.getFieldValue('currentStock'),
+                    reservedStock: isEditingProduct ? 0 : form.getFieldValue('reservedStock'),
+                  });
+                } else {
+                  form.setFieldsValue({ variants: [], variantLabel: 'Varian' });
+                }
+              }}
             />
           </Form.Item>
 
@@ -966,7 +852,7 @@ const Products = () => {
             <Form.Item
               name="variantLabel"
               label="Label Varian"
-              extra="Contoh: Warna atau Ukuran."
+              extra="Contoh: Warna, Ukuran, Motif."
             >
               <Input placeholder="Contoh: Warna" />
             </Form.Item>
@@ -977,14 +863,12 @@ const Products = () => {
             showIcon
             style={{ marginBottom: 16 }}
             message={isEditingProduct
-              ? editingProductHasVariants
-                ? 'Metadata varian bisa diedit. Mode varian bisa OFF jika semua stok varian 0.'
-                : canActivateVariantsForEditing
-                  ? 'Boleh aktifkan varian. Stok varian baru mulai dari 0.'
-                  : stockEditHelpText
+              ? canActivateVariantsForEditing
+                ? 'Produk lama ini stoknya 0, jadi boleh mulai memakai varian. Stok tiap varian baru tetap 0 sampai diubah lewat Stock Adjustment/transaksi resmi.'
+                : stockEditHelpText
               : hasVariantsValue
-                ? 'Harga dan minimum stok tetap di master.'
-                : 'Stok dan minimum stok memakai master.'}
+                ? 'Harga produk tetap di master. Varian hanya mengatur stok fisik; Minimum Stok tetap satu angka di master produk.'
+                : 'Produk tanpa varian memakai stok awal dan minimum stok langsung di master produk.'}
           />
 
           {hasVariantsValue ? (
@@ -1013,19 +897,6 @@ const Products = () => {
                   </Form.Item>
                 </Col>
               </Row>
-
-              {isEditingProduct && archivedProductVariants.length > 0 ? (
-                <Card size="small" title="Arsip Varian" style={{ marginBottom: 16 }}>
-                  <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                    <Text type="secondary">Varian arsip tidak muncul di transaksi baru. Buat lagi untuk restore.</Text>
-                    {archivedProductVariants.map((variant, index) => (
-                      <Tag key={`${variant.variantKey || variant.color || index}-archived`} color="default">
-                        {getVariantDisplayName(variant, `Varian ${index + 1}`)} • diarsipkan {formatArchivedVariantDate(variant.archivedAt)}
-                      </Tag>
-                    ))}
-                  </Space>
-                </Card>
-              ) : null}
 
               <Form.List name="variants">
                 {(fields, { add, remove }) => (
@@ -1064,7 +935,7 @@ const Products = () => {
                               name={[field.name, 'reservedStock']}
                               label="Reserved"
                               initialValue={0}
-                              extra={isEditingProduct ? 'Reserved dikunci saat edit.' : undefined}
+                              extra={isEditingProduct ? 'Reserved stock dikunci saat edit karena memengaruhi available stock.' : undefined}
                             >
                               <InputNumber style={{ width: '100%' }} min={0} step={1} precision={0} parser={parseIntegerIdInput} disabled={isEditingProduct} />
                             </Form.Item>
@@ -1079,9 +950,9 @@ const Products = () => {
                           danger
                           size="small"
                           disabled={fields.length === 1}
-                          onClick={() => handleRemoveProductVariant(field.name, remove)}
+                          onClick={() => remove(field.name)}
                         >
-                          Arsipkan Varian
+                          Hapus Varian
                         </Button>
                       </Card>
                     ))}
@@ -1101,7 +972,7 @@ const Products = () => {
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item name="reservedStock" label="Reserved Stock" extra={isEditingProduct ? 'Reserved dikunci saat edit.' : undefined}>
+                <Form.Item name="reservedStock" label="Reserved Stock" extra={isEditingProduct ? 'Reserved stock dikunci saat edit karena memengaruhi available stock.' : undefined}>
                   <InputNumber style={{ width: '100%' }} min={0} step={1} precision={0} parser={parseIntegerIdInput} disabled={isEditingProduct} />
                 </Form.Item>
               </Col>
@@ -1194,12 +1065,7 @@ const Products = () => {
               <Card size="small" title="Ringkasan">
                 <Descriptions bordered column={1} size="small">
                   <Descriptions.Item label="Kategori">{selectedProduct.category || '-'}</Descriptions.Item>
-                  <Descriptions.Item label="Mode Pricing">
-                    <Space size={6} wrap>
-                      {PRICING_MODE_TAGS[selectedProduct.pricingMode || 'manual']}
-                      <Text>{getPricingModeDisplayText(selectedProduct, pricingRuleMap)}</Text>
-                    </Space>
-                  </Descriptions.Item>
+                  <Descriptions.Item label="Mode Pricing">{getRuleModeLabel(selectedProduct.pricingMode, selectedProduct.pricingRuleId, pricingRuleMap)}</Descriptions.Item>
                   <Descriptions.Item label="Pricing Rule">{pricingRuleMap[selectedProduct.pricingRuleId] || '-'}</Descriptions.Item>
                   <Descriptions.Item label="Minimum Stok">{formatStockWithUnit(selectedProduct.minStockAlert)}</Descriptions.Item>
                   <Descriptions.Item label="Update Terakhir">{formatDateId(selectedProduct.updatedAt, true)}</Descriptions.Item>
@@ -1246,24 +1112,6 @@ const Products = () => {
                   </Descriptions>
                 )}
               </Card>
-
-              {Array.isArray(selectedProduct.archivedVariants) && selectedProduct.archivedVariants.length > 0 ? (
-                <Card size="small" title="Arsip Varian">
-                  <Table
-                    className="ims-table"
-                    rowKey={(record, index) => `${selectedProduct.id}-archived-${record.variantKey || record.color || index}`}
-                    pagination={false}
-                    size="small"
-                    dataSource={selectedProduct.archivedVariants}
-                    columns={[
-                      { title: selectedProduct.variantLabel || 'Varian', render: (_, variant, index) => getVariantDisplayName(variant, `Varian ${index + 1}`) },
-                      { title: 'SKU', dataIndex: 'sku', render: (value) => value || '-' },
-                      { title: 'Diarsipkan', dataIndex: 'archivedAt', render: (value) => formatArchivedVariantDate(value) },
-                      { title: 'Alasan', dataIndex: 'archiveReason', render: (value) => value || '-' },
-                    ]}
-                  />
-                </Card>
-              ) : null}
 
               {selectedProduct.description ? (
                 <Card size="small" title="Catatan">

@@ -149,7 +149,7 @@ Saat membuat perubahan baru, selalu cek apakah perubahan menyentuh salah satu ar
 ## Final Documentation Lock — Task 6
 Status cleanup bertahap yang dikunci di docs:
 - **Aktif:** Stock Management adalah satu entry point inventory; Stock Adjustment berada di dalamnya, mendukung Bahan Baku, Semi Finished, dan Produk Jadi, serta wajib memakai format angka Indonesia tanpa trailing `.00`.
-- **Aktif:** Kolom Referensi Audit di Stock Management adalah audit source, bukan kolom tidak berguna; tampilannya harus manusiawi dan ID teknis hanya detail sekunder.
+- **Aktif:** Kolom Referensi Audit di Stock Management adalah audit source, bukan kolom tidak berguna; tampilannya harus manusiawi dan tidak boleh menampilkan ID teknis/random ID sebagai detail sekunder, tooltip, atau fallback display.
 - **Aktif:** Production Order create drawer memakai preview compact read-only untuk stok target, varian target, qty batch, estimasi output, kebutuhan material, stok material, dan status cukup/kurang.
 - **Guarded:** Completed Work Log harus menjaga material cost, labor cost, total cost, cost per good unit, output stock posting, dan auto payroll agar tidak diproses dua kali.
 - **Aktif:** Work Log completed membuat payroll line otomatis; payroll `paid` membuat Cash Out/Expense otomatis dengan guard idempotent.
@@ -189,3 +189,29 @@ Status cleanup bertahap yang dikunci di docs:
 - **Aktif:** sidebar memakai nested accordion agar sibling submenu otomatis tertutup tanpa mengubah route, role access, atau business flow.
 - **Aktif:** login normal tidak lagi menampilkan copy teknis internal Firebase/Auth/Firestore, tanpa mengubah flow Auth dan `system_users`.
 
+## Update Pricing Mode Shared UI — 2026-05-11
+- **Aktif:** Pricing Mode Product dan Raw Material sekarang memakai shared UI `src/components/Pricing/PricingModeSwitch.jsx` untuk pilihan Manual/Rule.
+- **Scope component:** `PricingModeSwitch` hanya mengatur switch UI Manual/Rule dan meneruskan perubahan mode ke pemakai. Kontrak pemakaiannya wajib membersihkan `pricingRuleId` saat user kembali ke Manual.
+- **Guarded:** `PricingModeSwitch` tidak boleh berisi formula pricing, service validation, query Firestore, atau auto-preview harga.
+- **Guarded:** shared UI ini tidak mengubah schema/collection Firestore, tidak mengubah validasi service Product/Raw Material, dan tidak menjadi source perhitungan harga.
+- **Aktif:** formula preview pricing tetap bersumber dari `buildSinglePricingPreview` di `pricingService`; auto-preview Product/Raw Material tetap local di halaman masing-masing karena base cost dan target price berbeda.
+
+## Update Standar Referensi Audit dan Kode Manusiawi — 2026-05-11
+- **Guarded:** Technical ID adalah Firestore document ID random, auto ID, internal generated ID, atau ID teknis lain yang tidak manusiawi. Technical ID bukan referensi audit bisnis.
+- **Aktif:** Referensi ID bisnis manusiawi adalah acuan utama untuk audit, pencarian, relasi operasional, table, detail, drawer, report UI, dan export yang dibaca user.
+- **Guarded:** Technical ID tidak boleh tampil di UI, tooltip, table, detail, drawer, report UI, atau fallback text. Jika referensi bisnis belum tersedia, UI wajib menampilkan fallback manusiawi seperti `-` atau `Referensi belum tersedia`, bukan Firestore random ID.
+- **Guarded:** Prioritas referensi audit adalah kode bisnis transaksi/master/produksi yang manusiawi, lalu `sourceRef` / `referenceNumber` readable, lalu fallback manusiawi. Jangan fallback ke Technical ID.
+- **Target setelah reset data:** untuk collection bisnis baru dengan pola 1 dokumen = 1 referensi, Firestore document ID boleh dan sebaiknya sama dengan Referensi ID bisnis, misalnya `purchases/PUR-YYYYMMDD-0001` atau `sales/SALE-YYYYMMDD-0001`.
+- **Target setelah reset data:** untuk collection log yang bisa memiliki banyak dokumen per referensi, gunakan ID turunan readable seperti `LOG-PUR-YYYYMMDD-0001-001`, bukan random ID.
+- **Guarded:** kode audit yang sudah dipakai harus immutable. Edit nama/ref tidak boleh otomatis mengubah kode audit lama tanpa approval migrasi.
+- **Standar kode manusiawi:** jangan pakai mapping manual kata-per-kata atau dictionary singkatan per modul. Satu algoritma universal berbasis normalisasi + konsonan harus menjadi standar.
+- **Source of truth:** satu shared generator yang disetujui harus menjadi sumber kode manusiawi lintas modul. Page/service tidak boleh membuat generator baru atau duplicate logic.
+- **Current state note:** source terbaru masih perlu audit karena generator seperti `businessCodeGenerator.js` dan `productionCodeGenerator.js` masih memiliki mapping manual kata tertentu. Patch docs ini hanya mengunci standar baru; refactor source harus menjadi task terpisah.
+
+## Reset & Maintenance Decision Center — 2026-05-11
+- **Aktif:** Reset & Maintenance Data diarahkan menjadi Maintenance Decision Center, bukan hanya daftar tombol reset teknis.
+- **Flow standar:** Audit → Preview → Export → Reset/Repair → Audit ulang.
+- **Development rule:** data lama yang belum real boleh direset agar tidak menumpuk fallback/logic lama, selama destructive action tetap lewat preview, confirmation keyword, dan audit trail.
+- **Export data pokok:** tersedia sebelum reset destructive sebagai backup/checklist master, bukan restore otomatis.
+- **Guarded:** log/transaksi lama tidak direkomendasikan dibawa ulang sebagai default jika logic berubah; transaksi baru sebaiknya dibuat ulang lewat flow terbaru agar log baru mengikuti logic terbaru.
+- **Opening stock:** setelah reset, stok awal sebaiknya dibuat ulang lewat purchase/opening adjustment, bukan menempel stok mentah tanpa audit.

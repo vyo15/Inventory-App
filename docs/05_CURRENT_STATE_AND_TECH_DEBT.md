@@ -441,11 +441,13 @@ Status source terbaru:
 - Modal Purchases menampilkan preview stok aktual sebelum restock setelah item dan/atau varian dipilih.
 - Item non-varian menampilkan stok master `currentStock`, `reservedStock`, dan `availableStock`.
 - Item bervarian menampilkan stok varian terpilih; jika varian belum dipilih, UI menampilkan pesan agar user memilih varian dulu.
+- Alert global `Ada varian kosong...` tidak ditampilkan lagi di card `Stok Aktual Sebelum Restock` karena mengganggu flow restock dan kalah relevan dibanding preview stok item/varian yang sedang dipilih.
 - Ringkasan Perbandingan Supplier menampilkan breakdown subtotal barang/harga awal, ongkir, admin/service fee, potongan ongkir, voucher/potongan, total aktual, total pembanding supplier, modal aktual per satuan stok, dan selisih hemat.
 
 Guard tersisa:
 - Preview stok hanya read-only dan tidak boleh menjadi sumber mutasi stok.
 - `handleSubmitPurchase`, `runTransaction`, stock mutation, inventory log, expense otomatis, rumus `totalStockIn`, `totalActualPurchase`, `actualUnitCost`, dan `purchaseSaving` tetap guarded.
+- Helper status Raw Materials seperti `getRawMaterialVariantStockIssueMeta`, `getActiveRawMaterialVariants`, `getRawMaterialStatusMeta`, dan `getRawMaterialStockSummary` tetap dipertahankan untuk status tag, summary/filter, dan detail drawer; yang dihapus hanya render warning duplicate pada table compact.
 - Fallback legacy `currentStock ?? stock` masih dipertahankan untuk data lama.
 - Ringkasan breakdown tidak boleh mengubah supplier catalog, prefill supplier, atau menjadikan harga supplier sebagai harga aktual wajib.
 
@@ -759,10 +761,18 @@ Risiko:
 
 ## Update UI Table Compact — 2026-05-06
 - Cash In, Stock Adjustment Panel, Pricing Rules, Products, Supplier, Stock Report, dan Semi Finished Materials memakai table utama yang lebih compact tanpa horizontal scroll default pada desktop normal.
-- Products, Stock Report, dan Semi Finished Materials memakai helper presentational `StockDisplayBlock` untuk saldo stok locked: `Total`, `Tersedia`, dan semua variant pill langsung di table jika row membawa `variants[]`.
-- Raw Materials tetap memakai pola variant pill existing dan tidak diubah karena sudah sesuai format locked.
+- Products, Raw Materials, Stock Report, dan Semi Finished Materials memakai helper presentational `StockDisplayBlock` untuk saldo stok locked: `Total`, `Tersedia`, dan semua variant pill langsung di table jika row membawa `variants[]`.
+- Raw Materials table tidak lagi perlu menampilkan warning duplicate seperti `Ada varian kosong...` di bawah stok jika chip/pill stok varian sudah terlihat langsung.
 - Preview modal Pricing Rules dan detail drawer Supplier sudah dipadatkan secara UI-only; detail tabular lain tetap boleh memakai scroll bila datanya memang audit/detail, bukan primary table list.
-- Cleanup candidate lanjutan: migrasikan Raw Materials ke helper `StockDisplayBlock` pada patch terpisah bila ingin mengurangi duplikasi tampilan stok.
+- Cleanup candidate lanjutan: display helper boleh diperluas hanya untuk presentational read-only; jangan campur dengan mutasi stok, service validation, atau report calculation.
+
+
+## Update Stock Display Alert Cleanup — 2026-05-11
+- **AKTIF:** Raw Materials table memakai `StockDisplayBlock` untuk display stok master dan chip/pill varian secara compact.
+- **AKTIF:** text tambahan `Ada varian kosong...` tidak ditampilkan lagi di bawah kolom Stok Raw Materials karena chip varian termasuk stok 0 sudah tampil langsung.
+- **AKTIF:** Purchases modal tetap menampilkan preview `Current Stock`, `Reserved Stock`, dan `Available Stock`, tetapi tidak lagi menampilkan alert global varian kosong pada card `Stok Aktual Sebelum Restock`.
+- **GUARDED:** perubahan ini UI-only; perhitungan stok, stock mutation, inventory log, expense otomatis, supplier catalog, report calculation, route/menu/role guard, schema, dan service/data layer tidak berubah.
+- **GUARDED:** helper status Raw Materials tetap dipertahankan untuk status tag `Kosong` / `Stok Rendah`, summary `Perlu Dicek`, filter status, dan alert/rincian detail drawer.
 
 ## Update global/auth/route LogoLoadingScreen — 2026-05-07
 - **AKTIF:** loading utama aplikasi untuk auth/session gate, ProtectedRoute guard, Login auth/profile verification, dan lazy route fallback memakai `LogoLoadingScreen`.
@@ -840,6 +850,25 @@ Status: **AKTIF + GUARDED UI-ONLY**.
 - **CLEANUP CANDIDATE:** `src/pages/Dashboard/Dashboard.css`, `src/pages/Auth/Login.css`, `src/components/Layout/Feedback/DataLoadingState.css`, dan `src/components/Layout/Feedback/LogoLoadingScreen.css` masih memiliki gradient/page-specific atau feedback-specific style lama dan perlu batch cleanup terpisah sesuai allowlist.
 - **CLEANUP CANDIDATE:** hardcoded color residual di page/component bisnis tetap perlu audit bertahap tanpa refactor logic.
 
+## Update Pricing Mode Shared UI — 2026-05-11
+
+Status: **AKTIF + GUARDED DOCS-SYNC**.
+
+Current state:
+- `PricingModeSwitch` sudah menjadi shared UI untuk Product dan Raw Material.
+- Auto-preview dan warning harga tetap local di `Products.jsx` dan `RawMaterials.jsx` sebagai keputusan aman karena Product memakai base cost/target price berbeda dari Raw Material.
+- Formula preview tetap lewat `buildSinglePricingPreview`; docs tidak boleh mengarahkan pembuatan rumus baru di page/component.
+- Service validation Product dan Raw Material tetap menjadi guard final untuk kewajiban `pricingRuleId` saat `pricingMode = rule`; mode Manual tetap boleh tanpa `pricingRuleId`.
+
+Cleanup candidate berikutnya:
+- shared display helper untuk label/status pricing mode boleh dipertimbangkan jika duplikasi tampilan makin banyak;
+- auto-preview hook hanya boleh dibuat jika config kecil, eksplisit, dan tidak membuat logic base cost/target price sulit dibaca;
+- jangan mengubah formula pricing, service validation, schema/collection, route/menu, atau role guard dalam cleanup UI pricing.
+
+Legacy compatibility:
+- Data lama tanpa `pricingMode` harus divalidasi hati-hati sebelum mengubah fallback behavior karena fallback Manual/Rule yang salah bisa mengubah cara harga lama dibaca.
+- Jangan menghapus atau memigrasi `pricingRuleId` lama tanpa audit data dan approval terpisah.
+
 ## Update 2026-05-10 — Tahap 1 & 2: Validasi Form + Referensi Display
 
 ### Tahap 1 — Popup field wajib
@@ -853,6 +882,36 @@ Status: **AKTIF + GUARDED UI-ONLY**.
 - Status: AKTIF / LEGACY-COMPAT.
 - `referenceId`, `sourceId`, `relatedId`, dan Firestore document ID tetap dipakai sebagai relasi internal.
 - UI tabel/detail/report/ledger mengutamakan kode bisnis seperti `code`, `planCode`, `workNumber`, `payrollNumber`, `sourceRef`, `referenceNumber`, atau `productionOrderCode`.
-- Data lama yang hanya punya ID random tetap fallback ke ID ringkas agar audit tidak putus.
+- Data lama yang hanya punya ID random tidak boleh ditampilkan sebagai fallback audit UI baru; gunakan fallback manusiawi seperti `-` atau `Referensi belum tersedia`, lalu catat kebutuhan backfill/migrasi sebagai cleanup terpisah.
 - Karena project masih tahap membangun dan punya menu reset data, tidak perlu migrasi otomatis. Data dummy lama boleh dibuat ulang saat format referensi baru sudah final.
 - Risiko yang dijaga: resolver display tidak boleh dipakai untuk write relasi Firestore.
+
+## Current State — Standar Referensi Audit Manusiawi dan Technical ID
+
+- **Docs target baru:** Referensi ID bisnis manusiawi adalah acuan utama audit, pencarian, relasi operasional, table/detail/drawer/report UI, dan export user-facing.
+- **Guarded:** Technical ID / Firestore random ID tidak boleh ditampilkan sebagai referensi audit UI, tooltip, detail sekunder, drawer, report UI, atau fallback display.
+- **Guarded:** UI yang belum punya referensi bisnis readable harus memakai fallback manusiawi seperti `-` atau `Referensi belum tersedia`.
+- **Current source mismatch:** source terbaru masih perlu audit karena beberapa helper/generator masih menyimpan mapping manual kata tertentu, terutama `src/utils/references/businessCodeGenerator.js` dan `src/utils/references/productionCodeGenerator.js`.
+- **Current source mismatch:** source terbaru masih perlu audit untuk flow create yang masih memakai Firestore auto ID sebagai document ID bisnis, serta flow log yang masih mungkin memakai random ID.
+- **Important:** patch ini docs-only. Jangan menulis seolah-olah source generator, service write flow, schema, collection, inventory log writer, atau report/export sudah berubah.
+
+### Cleanup Candidate — Referensi ID dan Generator Kode
+
+- Satukan `businessCodeGenerator`, `productionCodeGenerator`, atau generator kode terkait ke satu shared source of truth.
+- Hapus mapping manual/dictionary kata dari generator pada task source terpisah.
+- Standarkan algoritma singkatan universal berbasis konsonan lintas modul.
+- Ubah flow create setelah reset data agar memakai Referensi ID bisnis sebagai document ID jika collection bersifat 1 dokumen = 1 referensi dan migrasinya aman.
+- Ubah inventory log baru agar memakai ID turunan readable seperti `LOG-PUR-YYYYMMDD-0001-001`, bukan random ID, jika satu referensi dapat memiliki banyak log.
+- Audit report/export/menu/detail/drawer agar tidak fallback ke Technical ID.
+- Stock Management UI harus tidak menampilkan Technical ID/random ID sebagai referensi audit, tooltip, atau fallback display.
+- Audit kode audit immutable: edit nama/ref tidak boleh otomatis mengubah kode lama tanpa approval migrasi.
+
+## Current State — Reset & Maintenance Decision Center
+
+- **Aktif:** halaman `src/pages/Utilities/ResetMaintenanceData.jsx` sekarang diarahkan menjadi Maintenance Decision Center: audit dulu, preview dampak, export data pokok, lalu pilih reset/repair.
+- **Aktif:** rekomendasi default untuk data development yang belum real adalah simpan master, hapus transaksi/log turunan, lalu nolkan stok jika stok lama tidak dipercaya.
+- **Aktif:** panel teknis lama tetap dipertahankan di Advanced / Developer Tools agar developer masih bisa membuka detail audit/repair/HPP/reset existing.
+- **Aktif:** export data pokok JSON bersifat read-only dan hanya untuk backup/checklist; export ini bukan restore otomatis dan bukan import logic.
+- **Guarded:** reset total data bisnis/master belum dibuat karena menyentuh protected master collections dan harus menjadi task destructive terpisah.
+- **Guarded:** wizard keputusan hanya menyiapkan mode/module reset; eksekusi tetap harus melewati preview dan confirmation keyword existing.
+- **Cleanup candidate:** export XLSX, import normalized, trial session/correlation id, copy/export audit log, dan service khusus reset total development masih perlu phase lanjutan.

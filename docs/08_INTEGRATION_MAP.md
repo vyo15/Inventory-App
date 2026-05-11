@@ -389,6 +389,8 @@ User memilih item di modal Purchases
   -> jika item non-varian, preview membaca stok master
   -> jika item bervarian dan varian belum dipilih, UI meminta pilih varian
   -> jika item bervarian dan varian dipilih, preview membaca stok varian terpilih
+  -> preview menampilkan Current Stock, Reserved Stock, dan Available Stock secara read-only
+  -> alert global varian kosong tidak ditampilkan karena visual noise dalam flow restock
   -> user mengisi supplier, Qty Beli, subtotal, ongkir, admin, potongan, dan voucher
   -> Ringkasan Perbandingan Supplier menampilkan breakdown biaya aktual + pembanding supplier
   -> user klik Simpan Purchase
@@ -396,8 +398,9 @@ User memilih item di modal Purchases
 ```
 
 Guard:
-- preview stok aktual hanya display read-only sebelum restock;
+- preview stok aktual hanya display read-only sebelum restock dan tidak boleh menjadi sumber mutasi stok;
 - item bervarian tidak boleh menampilkan total master sebagai stok utama;
+- alert global varian kosong di Purchases tidak lagi ditampilkan jika preview stok aktual sudah memberi konteks item/varian terpilih;
 - breakdown ringkasan memakai field existing dan tidak mengubah formula submit;
 - Total Aktual tetap dasar expense/cash-out dan Selisih Hemat tetap informasi efisiensi.
 
@@ -624,6 +627,12 @@ Setelah publish rules backend di Firebase Console/external source atau mengubah 
 - `inventory_logs` → `StockManagement.jsx`: Stock Management menampilkan audit operator produksi dari metadata log baru, dengan fallback untuk log lama.
 - `Products.jsx` / `RawMaterials.jsx` / `SemiFinishedMaterials.jsx` → service master masing-masing: data lama non-varian hanya boleh aktif varian saat stok/reserved/available 0; varian baru existing mulai stok 0; `variantKey` existing dipreserve.
 - `Products.jsx` / `RawMaterials.jsx` → service master masing-masing: Pricing Rules opsional, default create Manual, `pricingRuleId` hanya wajib saat mode Rule.
+- `Products.jsx` / `RawMaterials.jsx` → `components/Pricing/PricingModeSwitch.jsx`: memakai shared UI switch Manual/Rule; handler halaman tetap membersihkan `pricingRuleId` saat kembali ke Manual.
+- `Products.jsx` → `buildSinglePricingPreview`: preview Pricing Rule memakai basis `hppPerUnit` dan target harga Product.
+- `RawMaterials.jsx` → `buildSinglePricingPreview`: preview Pricing Rule memakai `averageActualUnitCost` dengan fallback `restockReferencePrice` dan target harga Raw Material.
+- `Products.jsx` / `RawMaterials.jsx` → `pricingService.js`: keduanya tetap memakai `buildSinglePricingPreview` sebagai satu-satunya helper formula preview pricing.
+- `productsService.js` / `rawMaterialsService.js`: tetap menjadi guard validation untuk mode Rule wajib `pricingRuleId` dan mode Manual boleh tanpa `pricingRuleId`.
+- `PricingRules.jsx`: preview/apply tetap melewati item Manual dan hanya memproses item mode Rule/valid.
 - `SemiFinishedMaterials.jsx` → `semiFinishedMaterialsService.js`: form edit mengirim identity varian existing supaya rename nama/label varian tidak membuat bucket stok baru.
 - `Products.jsx` / `SemiFinishedMaterials.jsx` → service master masing-masing: `minStockAlert` tetap source master untuk item varian/non-varian; input/detail per-varian untuk minimum stok tidak aktif dan legacy `variants[].minStockAlert` tidak dijumlahkan.
 - `SidebarMenu.jsx`: hanya mengatur openKeys nested accordion di UI, tidak menyentuh route, role access, atau service.
@@ -694,10 +703,17 @@ Stock Management / Stock Adjustment Panel
   -> table compact hanya mengubah render audit list
   -> submit adjustment, Firestore transaction, stock mutation, dan inventory_logs tetap di flow lama
 
-Products / Stock Report / Semi Finished Materials
-  -> row saldo stok dikirim ke StockDisplayBlock
+Products / Raw Materials / Stock Report / Semi Finished Materials
+  -> row saldo stok dikirim ke StockDisplayBlock untuk display saldo master dan chip/pill varian
   -> StockDisplayBlock membaca currentStock/stock/availableStock/reservedStock/variants[] secara presentational
-  -> tidak mengubah product service, semi finished service, report query, summary, atau export mapping
+  -> Raw Materials tetap memakai helper status lokal untuk status tag, summary/filter, dan detail drawer
+  -> tidak mengubah product/raw material service, semi finished service, report query, summary, atau export mapping
+
+Purchases stock preview
+  -> preview stok aktual read-only terpisah dari StockDisplayBlock
+  -> menampilkan Current Stock, Reserved Stock, dan Available Stock untuk master/varian terpilih
+  -> tidak boleh menjadi sumber mutasi stok, inventory log, expense, atau kalkulasi purchase
+  -> alert global varian kosong tidak ditampilkan karena dianggap visual noise dalam flow restock
 
 Pricing Rules
   -> table utama compact menjadi entry point Detail/Edit/Hapus
@@ -768,3 +784,43 @@ Guard integrasi:
 - Service reader: `src/services/Finance/moneyMovementLedgerService.js`.
 - Page reader: `src/pages/Finance/MoneyMovementLedger.jsx`.
 - Tidak ada append-only ledger, backfill, trigger posting, schema baru, atau perubahan Profit Loss.
+
+## Integration Update — Referensi ID Bisnis dan Technical ID Lock — 2026-05-11
+
+```text
+Business flow create
+-> generate Referensi ID bisnis manusiawi
+-> simpan field bisnis readable (`purchaseNumber`, `saleNumber`, `returnNumber`, `adjustmentNumber`, `workNumber`, `productionOrderCode`, `sourceRef`, `referenceNumber`)
+-> UI audit membaca referensi manusiawi
+-> Technical ID tetap internal Firestore, bukan display audit
+```
+
+Mapping field audit readable:
+- Purchase: `purchaseNumber` / `sourceRef` / `referenceNumber` readable.
+- Sales: `saleNumber` / `sourceRef` / `referenceNumber` readable.
+- Return: `returnNumber` / `sourceRef` / `referenceNumber` readable.
+- Stock Adjustment: `adjustmentNumber` / `sourceRef` / `referenceNumber` readable.
+- Work Log: `workNumber` / `code` readable.
+- Production Order: `productionOrderCode` / `code` readable.
+- Payroll: `payrollNumber` / `sourceRef` readable.
+- Cash In/Out: `sourceRef` / `referenceNumber` readable.
+
+Guard integration:
+- `inventory_logs.referenceId`, `sourceId`, related id, atau Firestore document ID tidak boleh menjadi display audit utama jika nilainya technical/random.
+- Untuk data baru setelah reset, Referensi ID bisnis adalah acuan audit utama.
+- `StockManagement.jsx` harus menampilkan referensi manusiawi, bukan Technical ID/random ID.
+- Jika referensi bisnis belum tersedia, UI menampilkan `-` atau `Referensi belum tersedia`.
+- Inventory log baru yang memiliki banyak baris untuk satu referensi harus memakai ID turunan readable, bukan random ID, setelah task arsitektur disetujui.
+- Generator kode manusiawi harus shared dan algoritmik berbasis konsonan, bukan mapping manual kata-per-kata.
+- Current source masih memiliki generator/mapping manual yang perlu cleanup task terpisah, terutama `businessCodeGenerator` dan `productionCodeGenerator`.
+- Patch docs-only tidak mengubah service write flow, schema/collection, inventory log writer, report/export, route, menu, role guard, atau guarded production flow.
+
+## Integration Map — Reset & Maintenance Decision Center
+
+- Page aktif: `src/pages/Utilities/ResetMaintenanceData.jsx`.
+- Service reset destructive tetap: `src/services/Maintenance/resetMaintenanceDataService.js`.
+- Flow UI: Cek Kondisi Data → Detail Issue → Export Data Pokok → Preview Dampak Reset → Confirmation keyword → Eksekusi → Riwayat Maintenance.
+- Export data pokok membaca allowlist master secara read-only dan tidak membaca transaksi/log sebagai default.
+- Opening stock reference pada export berasal dari stok master saat export dan harus dibuat ulang lewat flow terbaru setelah reset.
+- Advanced / Developer Tools membungkus panel lama tanpa mengubah route/menu/role guard.
+- Guard: reset total protected master belum diaktifkan; butuh approval dan service khusus jika nanti dibuat.
