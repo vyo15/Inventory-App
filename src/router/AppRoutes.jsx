@@ -111,7 +111,7 @@ const RouteFallback = null;
 // - AKTIF.
 // - GUARDED: jangan mengubah business page di sini; hanya route access wrapper.
 // Legacy / cleanup:
-// - `/stock-adjustment` adalah legacy bridge ke Stock Management dan kandidat cleanup bila bookmark lama sudah tidak dipakai.
+// - legacy redirect route di bawah dipertahankan sementara untuk bookmark/link lama.
 // =========================
 const AppRoutes = ({ darkTheme }) => {
   const guardRoute = (routeKey, element) => (
@@ -338,6 +338,14 @@ const AppRoutes = ({ darkTheme }) => {
             <ResetMaintenanceData darkTheme={darkTheme} />,
           )}
         />
+
+        {/* =========================
+            SECTION: Legacy Maintenance Redirect — LEGACY / CLEANUP CANDIDATE
+            Fungsi:
+            - menjaga bookmark lama /utilities/reset-test-data tetap menuju halaman maintenance final.
+            Status:
+            - LEGACY bridge; jangan hapus sebelum link/prosedur lama dipastikan tidak dipakai.
+        ========================= */}
         <Route
           path="/utilities/reset-test-data"
           element={guardRoute(
