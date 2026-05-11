@@ -1,0 +1,1 @@
+import{r as t,bc as c}from"./index-NSlGmW7G.js";function s(){}const u=t.createContext({add:s,remove:s});function l(n){const r=t.useContext(u),o=t.useRef(null);return c(e=>{if(e){const a=n?e.querySelector(n):e;r.add(a),o.current=a}else r.remove(o.current)})}export{l as u};
