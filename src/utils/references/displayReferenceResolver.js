@@ -4,23 +4,24 @@ const DEFAULT_REFERENCE_FIELDS = [
   "saleNumber",
   "purchaseNumber",
   "returnNumber",
+  "adjustmentNumber",
   "cashInNumber",
   "cashOutNumber",
-  "referenceNumber",
-  "sourceRef",
-  "referenceCode",
-  "code",
-  "planCode",
   "workNumber",
   "payrollNumber",
   "productionOrderCode",
-  "planningCode",
   "bomCode",
   "itemCode",
   "productCode",
   "materialCode",
   "customerCode",
   "supplierCode",
+  "code",
+  "referenceNumber",
+  "sourceRef",
+  "referenceCode",
+  "planCode",
+  "planningCode",
   "employeeCode",
   "workerCode",
   "sku",
@@ -64,7 +65,7 @@ const readTechnicalReference = (record = {}) => {
 SECTION: Display Reference Resolver — AKTIF / LEGACY-COMPAT
 Fungsi:
 - Memilih kode referensi manusiawi untuk UI, report, log, ledger, dan export.
-- Memprioritaskan kode bisnis baru seperti saleNumber/purchaseNumber/returnNumber/cashInNumber/cashOutNumber.
+- Memprioritaskan kode bisnis baru seperti ORD/PUR/RET/STK-ADJ/CSH-IN/CSH-OUT/JOB/PAY.
 
 Dipakai oleh:
 - Stock Management, laporan, production pages, dan helper opsi referensi.

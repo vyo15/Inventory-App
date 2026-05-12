@@ -4,7 +4,6 @@
 // =====================================================
 
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -301,10 +300,15 @@ const getStepPayrollRuleSnapshot = async (workLog = {}) => {
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const totals = calculatePayrollAmounts(values);
 
+  const normalizedPayrollNumber = String(values.payrollNumber || "")
+    .trim()
+    .toUpperCase();
+
   const payload = {
-    payrollNumber: String(values.payrollNumber || "")
-      .trim()
-      .toUpperCase(),
+    payrollNumber: normalizedPayrollNumber,
+    code: normalizedPayrollNumber,
+    referenceNumber: normalizedPayrollNumber,
+    sourceRef: normalizedPayrollNumber,
     payrollDate: values.payrollDate || null,
 
     workLogId: values.workLogId || "",
@@ -661,8 +665,7 @@ export const generatePayrollLinesFromCompletedWorkLog = async (workLogId, curren
       continue;
     }
 
-    const payrollNumberSource = safeTrim(workLog.workNumber) || workLog.id;
-    const payrollNumber = `${payrollNumberSource}-PAY-${String(index + 1).padStart(3, "0")}`.toUpperCase();
+    const payrollNumber = await generateProductionPayrollNumber({ payrollDate: new Date() });
     const calculation = calculatePayrollAmounts({
       payrollMode: stepRule.payrollMode,
       payrollRate: stepRule.payrollRate,
@@ -818,11 +821,28 @@ const resolvePayrollDateForCode = (values = {}) => {
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 };
 
+/* =====================================================
+SECTION: Payroll number generator — GUARDED
+Fungsi:
+- Membuat nomor PAY-DDMMYYYY-001 untuk payroll produksi.
+
+Dipakai oleh:
+- createProductionPayroll dan auto payroll dari Work Log.
+
+Alasan perubahan:
+- Standar final IMS mengganti PAY-YYYYMMDD-0001 menjadi PAY-DDMMYYYY-001.
+
+Catatan cleanup:
+- Data lama PAY YYYYMMDD tetap compatibility, tidak di-rename.
+
+Risiko:
+- Jangan mengubah formula payroll, lifecycle paid, atau expense amount dari section ini.
+===================================================== */
 export const generateProductionPayrollNumber = async (values = {}) => {
   return generateDailySequenceCode({
     db,
     collectionName: COLLECTION_NAME,
-    fieldNames: ["payrollNumber", "code", "sourceRef"],
+    fieldNames: ["payrollNumber", "code", "referenceNumber", "sourceRef"],
     prefix: "PAY",
     date: resolvePayrollDateForCode(values),
   });
@@ -836,6 +856,9 @@ export const isPayrollNumberExists = async (
     .trim()
     .toUpperCase();
   if (!normalized) return false;
+
+  const directSnapshot = await getDoc(doc(db, COLLECTION_NAME, normalized));
+  if (directSnapshot.exists() && directSnapshot.id !== excludeId) return true;
 
   const snapshot = await getDocs(
     query(
@@ -900,9 +923,27 @@ export const createProductionPayroll = async (values, currentUser = null) => {
   }
 
   const payload = normalizePayload(nextValues, currentUser, false);
-  const result = await addDoc(collection(db, COLLECTION_NAME), payload);
+  /* =====================================================
+  SECTION: Manual Payroll document ID = business code — GUARDED
+  Fungsi:
+  - Menyimpan payroll manual baru dengan document ID sama seperti nomor PAY.
+
+  Dipakai oleh:
+  - createProductionPayroll.
+
+  Alasan perubahan:
+  - Payroll adalah guarded reference dari JOB ke pembayaran/HPP, sehingga data baru perlu ID audit-friendly.
+
+  Catatan cleanup:
+  - Auto payroll yang sudah idempotent memakai doc ID deterministic sendiri tetap dipertahankan.
+
+  Risiko:
+  - Jangan mengubah formula payroll/status paid/expense dari section ini.
+  ===================================================== */
+  const resultRef = doc(db, COLLECTION_NAME, normalizedPayrollNumber);
+  await setDoc(resultRef, payload);
   await syncWorkLogPayrollSummary(payload.workLogId || nextValues.workLogId || "");
-  return result.id;
+  return resultRef.id;
 };
 
 export const updateProductionPayroll = async (

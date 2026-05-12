@@ -221,17 +221,34 @@ const Returns = () => {
         return;
       }
 
-      const returnReference = doc(collection(db, "returns"));
-      const itemReference = doc(db, collectionName, itemId);
-      const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
       const returnTimestamp = Timestamp.fromDate(date.toDate());
       const returnNumber = await generateDailySequenceCode({
         db,
         collectionName: "returns",
-        fieldNames: ["returnNumber", "code", "referenceNumber"],
+        fieldNames: ["returnNumber", "code", "referenceNumber", "sourceRef"],
         prefix: "RET",
         date: date.toDate(),
       });
+      /* =====================================================
+      SECTION: Return reference document ID — GUARDED
+      Fungsi:
+      - Membuat document reference return baru memakai RET-DDMMYYYY-001 sebagai ID.
+
+      Dipakai oleh:
+      - handleSubmitReturn sebelum transaction retur.
+
+      Alasan perubahan:
+      - Return baru perlu reference audit yang sama antara document ID, returnNumber, dan inventory log.
+
+      Catatan cleanup:
+      - Data retur lama dengan random ID tetap compatibility.
+
+      Risiko:
+      - Jangan mengubah return stock mutation atau inventory log payload selain reference code.
+      ===================================================== */
+      const returnReference = doc(db, "returns", returnNumber);
+      const itemReference = doc(db, collectionName, itemId);
+      const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
 
       await runTransaction(db, async (transaction) => {
         const itemDocument = await transaction.get(itemReference);
@@ -292,6 +309,7 @@ const Returns = () => {
           returnNumber,
           code: returnNumber,
           referenceNumber: returnNumber,
+          sourceRef: returnNumber,
           type,
           itemId,
           itemName: latestItemName,

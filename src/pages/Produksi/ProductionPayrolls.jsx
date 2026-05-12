@@ -647,7 +647,7 @@ const ProductionPayrolls = () => {
                 label="No. Payroll"
                 name="payrollNumber"
               >
-                <Input placeholder="Opsional, otomatis: PAY-YYYYMMDD-0001" />
+                <Input placeholder="Otomatis: PAY-DDMMYYYY-001" disabled />
               </Form.Item>
             </Col>
             <Col xs={24} md={8}>

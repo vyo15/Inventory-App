@@ -13,12 +13,13 @@ import {
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import {
-  addDoc,
   collection,
+  doc,
   onSnapshot,
   orderBy,
   query,
   Timestamp,
+  setDoc,
 } from "firebase/firestore";
 import dayjs from "dayjs";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
@@ -234,11 +235,28 @@ const CashIn = () => {
         db,
         collectionName: "revenues",
         fieldNames: ["cashInNumber", "code", "sourceRef", "referenceNumber"],
-        prefix: "CIN",
+        prefix: "CSH-IN",
         date: values.date.toDate(),
       });
 
-      await addDoc(collection(db, "revenues"), {
+      /* =====================================================
+      SECTION: Cash In document ID = business code — AKTIF
+      Fungsi:
+      - Menyimpan pemasukan manual baru dengan document ID CSH-IN-DDMMYYYY-001.
+
+      Dipakai oleh:
+      - handleAddTransaction Cash In manual.
+
+      Alasan perubahan:
+      - Cash In baru perlu reference readable dan tidak boleh memakai Firestore random ID untuk display.
+
+      Catatan cleanup:
+      - Data CIN lama tetap compatibility, tidak di-rename.
+
+      Risiko:
+      - Jangan mengubah amount/type/report calculation dari section ini.
+      ===================================================== */
+      await setDoc(doc(db, "revenues", cashInNumber), {
         cashInNumber,
         code: cashInNumber,
         referenceNumber: cashInNumber,

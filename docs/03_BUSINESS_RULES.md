@@ -310,18 +310,18 @@ Prioritas referensi audit:
 
 Contoh Referensi ID bisnis:
 - Purchase: `PUR-YYYYMMDD-0001`
-- Sales: `SALE-YYYYMMDD-0001`
+- Sales: `ORDE-YYYYMMDD-0001`
 - Return: `RET-YYYYMMDD-0001`
-- Stock Adjustment: `ADJ-YYYYMMDD-0001`
-- Cash In: `CIN-YYYYMMDD-0001`
-- Cash Out: `COUT-YYYYMMDD-0001`
+- Stock Adjustment: `STK-ADJ-DDMMYYYY-001`
+- Cash In: `CSH-IN-DDMMYYYY-001`
+- Cash Out: `CSH-OUT-DDMMYYYY-001`
 - Payroll: `PAY-YYYYMMDD-0001`
-- Work Log: `WL-YYYYMMDD-0001`
+- Work Log: `JOB-DDMMYYYY-001`
 - Production Order: `PO-YYYYMMDD-0001`
 
 Policy Firestore document ID setelah reset data:
-- Untuk collection transaksi dengan pola 1 dokumen = 1 referensi, document ID boleh dan sebaiknya sama dengan Referensi ID bisnis, misalnya `purchases/PUR-20260511-0001`, `sales/SALE-20260511-0001`, atau `returns/RET-20260511-0001`.
-- Untuk collection log yang bisa memiliki banyak baris per referensi, jangan pakai random ID. Pakai ID turunan readable seperti `LOG-PUR-20260511-0001-001`, `LOG-PUR-20260511-0001-002`, atau `LOG-ADJ-20260511-0001-001`.
+- Untuk collection transaksi dengan pola 1 dokumen = 1 referensi, document ID boleh dan sebaiknya sama dengan Referensi ID bisnis, misalnya `purchases/PUR-20260511-0001`, `sales/ORDE-20260511-0001`, atau `returns/RET-20260511-0001`.
+- Untuk collection log yang bisa memiliki banyak baris per referensi, jangan pakai random ID. Pakai ID turunan readable seperti `LOG-PUR-20260511-0001-001`, `LOG-PUR-20260511-0001-002`, atau `LOG-STK-ADJ-12052026-001-001`.
 - `sourceRef`, `referenceNumber`, `purchaseNumber`, `saleNumber`, `returnNumber`, dan field bisnis readable tetap menjadi acuan audit utama.
 - Kode audit harus immutable setelah dipakai. Jika nama/ref berubah, jangan otomatis mengubah kode audit lama tanpa approval migrasi.
 - Perubahan document ID/write flow adalah task arsitektur terpisah dan tidak boleh dilakukan tanpa approval khusus.
@@ -998,3 +998,46 @@ Guard wajib:
 - **Protected master:** tidak ikut reset default dan tidak boleh dilepas dari guard tanpa approval khusus.
 - **Data real:** jangan reset data real/semi real tanpa backup/export dan audit dampak.
 - **Import normalized:** belum masuk patch ini; export dipakai untuk review/manual input/normalization task berikutnya.
+
+
+---
+
+## FINAL LOCKED REFERENCE CODE STANDARD — IMS Bunga Flanel
+
+Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah lagi tanpa approval arsitektur khusus.
+
+| Modul | Prefix final | Format final | Contoh |
+|---|---|---|---|
+| Customer | `CUS` | `CUS-DDMMYYYY-001` | `CUS-12052026-001` |
+| Supplier | `SUP` | `SUP-DDMMYYYY-001` | `SUP-12052026-001` |
+| Produk Jadi | `PRD` | `PRD-[READABLE]-001` | `PRD-BQT-MWR-PTH-FLN-001` |
+| Raw Material | `RAW` | `RAW-[READABLE]-001` | `RAW-FLN-PTH-001` |
+| Semi Finished | `SFP` | `SFP-[READABLE]-001` | `SFP-BNG-MWR-PTH-001` |
+| BOM | `BOM` | `BOM-[TARGET]-001` | `BOM-PRD-BQT-MWR-PTH-FLN-001` |
+| Production Step | `STP` | `STP-[READABLE]-001` | `STP-POTONG-001` |
+| Purchase | `PUR` | `PUR-DDMMYYYY-001` | `PUR-12052026-001` |
+| Sales / Order | `ORD` | `ORD-DDMMYYYY-001` | `ORD-12052026-001` |
+| Return | `RET` | `RET-DDMMYYYY-001` | `RET-12052026-001` |
+| Production Order | `PO` | `PO-[TYPE]-DDMMYYYY-001` | `PO-PRD-12052026-001` |
+| Stock Adjustment | `STK-ADJ` | `STK-ADJ-DDMMYYYY-001` | `STK-ADJ-12052026-001` |
+| Cash In | `CSH-IN` | `CSH-IN-DDMMYYYY-001` | `CSH-IN-12052026-001` |
+| Cash Out | `CSH-OUT` | `CSH-OUT-DDMMYYYY-001` | `CSH-OUT-12052026-001` |
+| Work Log | `JOB` | `JOB-DDMMYYYY-001` | `JOB-12052026-001` |
+| Payroll | `PAY` | `PAY-DDMMYYYY-001` | `PAY-12052026-001` |
+
+Catatan lock:
+- Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
+- Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
+- Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
+- Readable semantic code wajib memakai suffix sequence 3 digit (`-001`, `-002`) dan tidak boleh memakai timestamp/random.
+- Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
+- Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
+
+
+### Business rule final untuk generator
+
+- Daily reference code memakai format `PREFIX-DDMMYYYY-001`.
+- Readable semantic code memakai format `PREFIX-[READABLE]-001`.
+- Prefix dengan hyphen seperti `STK-ADJ`, `CSH-IN`, dan `CSH-OUT` valid dan wajib diperlakukan sebagai satu prefix bisnis.
+- `saleNumber` untuk Sales tetap dipertahankan sebagai field compatibility, tetapi value data baru wajib `ORD-DDMMYYYY-001`.
+- `cashOutNumber` untuk Cash Out wajib `CSH-OUT-DDMMYYYY-001`, bukan `CSH-OT`.

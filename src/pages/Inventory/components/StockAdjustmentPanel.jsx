@@ -17,6 +17,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import { collection, doc, onSnapshot, runTransaction, Timestamp } from "firebase/firestore";
 import dayjs from "dayjs";
 import { db } from "../../../firebase";
+import { generateDailySequenceCode } from "../../../utils/references/businessCodeGenerator";
 import {
   buildInventoryLogPayload,
   INVENTORY_LOG_COLLECTION,
@@ -416,8 +417,32 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         throw new Error("Pilih varian item agar penyesuaian stok masuk ke stok varian yang benar.");
       }
 
+      const adjustmentNumber = await generateDailySequenceCode({
+        db,
+        collectionName: "stock_adjustments",
+        fieldNames: ["adjustmentNumber", "code", "referenceNumber", "sourceRef"],
+        prefix: "STK-ADJ",
+        date: values.date.toDate(),
+      });
+      /* =====================================================
+      SECTION: Stock Adjustment reference number — GUARDED
+      Fungsi:
+      - Membuat adjustmentNumber STK-ADJ-DDMMYYYY-001 dan memakai nomor itu sebagai document ID baru.
+
+      Dipakai oleh:
+      - handleSubmitStockAdjustment sebelum transaction mutasi stok.
+
+      Alasan perubahan:
+      - Stock adjustment baru perlu reference user-facing, bukan Firestore random ID.
+
+      Catatan cleanup:
+      - Data adjustment lama tanpa nomor tetap compatibility.
+
+      Risiko:
+      - Jangan mengubah applyStockMutationToItem, prevent negative, reserved/available stock, atau transaction flow dari section ini.
+      ===================================================== */
       const itemReference = doc(db, sourceCollectionName, values.itemId);
-      const adjustmentReference = doc(collection(db, "stock_adjustments"));
+      const adjustmentReference = doc(db, "stock_adjustments", adjustmentNumber);
       const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
       const adjustmentTimestamp = Timestamp.now();
 
@@ -474,6 +499,10 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           stockSourceType: selectedSourceVariant ? "variant" : "master",
         };
         const adjustmentPayload = {
+          adjustmentNumber,
+          code: adjustmentNumber,
+          referenceNumber: adjustmentNumber,
+          sourceRef: adjustmentNumber,
           date: Timestamp.fromDate(values.date.toDate()),
           itemType: values.itemType,
           itemTypeLabel: selectedItemTypeConfig.label,
@@ -505,7 +534,11 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           timestamp: adjustmentTimestamp,
           extraData: {
             adjustmentId: adjustmentReference.id,
+            adjustmentNumber,
             referenceId: adjustmentReference.id,
+            referenceNumber: adjustmentNumber,
+            referenceCode: adjustmentNumber,
+            sourceRef: adjustmentNumber,
             referenceType: "stock_adjustment",
             itemType: values.itemType,
             itemTypeLabel: selectedItemTypeConfig.label,

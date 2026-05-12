@@ -4,19 +4,26 @@ import { db } from "../../firebase";
 const SAMPLE_LIMIT = 10;
 
 const KNOWN_BUSINESS_PREFIXES = [
+  "ORD",
   "SAL",
   "PUR",
   "RET",
+  "CSH-IN",
+  "CSH-OUT",
   "CIN",
   "COUT",
   "PP",
   "PO-PRD",
   "PO-SFP",
+  "STK-ADJ",
+  "JOB",
   "WL",
   "PAY",
   "BOM",
+  "STP",
   "STEP",
   "PRD",
+  "RAW",
   "RM",
   "SFP",
   "SUP",
@@ -174,7 +181,7 @@ Risiko:
 const CATEGORY_CONFIGS = [
   {
     key: "sales_missing_sal",
-    label: "Sales tanpa kode SAL",
+    label: "Sales/Order tanpa kode ORD",
     recommendation: "Aman dibuat ulang jika data test",
   },
   {
@@ -189,12 +196,12 @@ const CATEGORY_CONFIGS = [
   },
   {
     key: "cash_missing_cin_cout",
-    label: "Cash In/Out tanpa kode CIN/COUT",
+    label: "Cash In/Out tanpa kode CSH-IN/CSH-OUT",
     recommendation: "Perlu cek manual",
   },
   {
     key: "work_logs_missing_wl",
-    label: "Work Log tanpa workNumber manusiawi",
+    label: "Work Log tanpa kode JOB",
     recommendation: "Aman dibuat ulang jika data test",
   },
   {
@@ -339,6 +346,7 @@ export const getDataQualityAudit = async () => {
     "incomes",
     "production_work_logs",
     "production_payrolls",
+    "stock_adjustments",
     "inventory_logs",
     "products",
     "raw_materials",
@@ -356,11 +364,11 @@ export const getDataQualityAudit = async () => {
 
   (collectionMap.sales?.docs || []).forEach((itemDoc) => {
     const data = itemDoc.data();
-    if (!hasPrefix(data, ["SAL"], ["saleNumber", "code", "referenceNumber", "sourceRef"])) {
+    if (!hasPrefix(data, ["ORD"], ["saleNumber", "code", "referenceNumber", "sourceRef"])) {
       addIssue(categories, "sales_missing_sal", toSample({
         collectionName: "sales",
         itemDoc,
-        issue: "Belum punya kode Sales format SAL.",
+        issue: "Belum punya kode Order format ORD.",
         recommendation: categories.sales_missing_sal.recommendation,
       }));
     }
@@ -392,11 +400,11 @@ export const getDataQualityAudit = async () => {
 
   (collectionMap.revenues?.docs || []).forEach((itemDoc) => {
     const data = itemDoc.data();
-    if (isManualCashInRevenue(data) && !hasPrefix(data, ["CIN"], ["cashInNumber", "code", "referenceNumber", "sourceRef"])) {
+    if (isManualCashInRevenue(data) && !hasPrefix(data, ["CSH-IN"], ["cashInNumber", "code", "referenceNumber", "sourceRef"])) {
       addIssue(categories, "cash_missing_cin_cout", toSample({
         collectionName: "revenues",
         itemDoc,
-        issue: "Cash In manual belum punya kode CIN.",
+        issue: "Cash In manual belum punya kode CSH-IN.",
         recommendation: categories.cash_missing_cin_cout.recommendation,
       }));
     }
@@ -404,11 +412,11 @@ export const getDataQualityAudit = async () => {
 
   (collectionMap.expenses?.docs || []).forEach((itemDoc) => {
     const data = itemDoc.data();
-    if (isManualCashOutExpense(data) && !hasPrefix(data, ["COUT"], ["cashOutNumber", "code", "referenceNumber", "sourceRef"])) {
+    if (isManualCashOutExpense(data) && !hasPrefix(data, ["CSH-OUT"], ["cashOutNumber", "code", "referenceNumber", "sourceRef"])) {
       addIssue(categories, "cash_missing_cin_cout", toSample({
         collectionName: "expenses",
         itemDoc,
-        issue: "Cash Out manual belum punya kode COUT.",
+        issue: "Cash Out manual belum punya kode CSH-OUT.",
         recommendation: categories.cash_missing_cin_cout.recommendation,
       }));
     }
@@ -416,11 +424,11 @@ export const getDataQualityAudit = async () => {
 
   (collectionMap.production_work_logs?.docs || []).forEach((itemDoc) => {
     const data = itemDoc.data();
-    if (!hasPrefix(data, ["WL"], ["workNumber", "code", "referenceNumber", "sourceRef"])) {
+    if (!hasPrefix(data, ["JOB"], ["workNumber", "code", "referenceNumber", "sourceRef"])) {
       addIssue(categories, "work_logs_missing_wl", toSample({
         collectionName: "production_work_logs",
         itemDoc,
-        issue: "Work Log belum punya workNumber format WL.",
+        issue: "Work Log belum punya workNumber format JOB.",
         recommendation: categories.work_logs_missing_wl.recommendation,
       }));
     }
@@ -452,9 +460,22 @@ export const getDataQualityAudit = async () => {
     }
   });
 
+
+  (collectionMap.stock_adjustments?.docs || []).forEach((itemDoc) => {
+    const data = itemDoc.data();
+    if (!hasPrefix(data, ["STK-ADJ"], ["adjustmentNumber", "code", "referenceNumber", "sourceRef"])) {
+      addIssue(categories, "master_missing_code", toSample({
+        collectionName: "stock_adjustments",
+        itemDoc,
+        issue: "Stock Adjustment belum punya kode STK-ADJ.",
+        recommendation: categories.master_missing_code.recommendation,
+      }));
+    }
+  });
+
   (collectionMap.production_payrolls?.docs || []).forEach((itemDoc) => {
     const data = itemDoc.data();
-    const hasPayrollNumber = hasPrefix(data, ["WL", "PAY"], ["payrollNumber", "code", "referenceNumber"]);
+    const hasPayrollNumber = hasPrefix(data, ["PAY"], ["payrollNumber", "code", "referenceNumber", "sourceRef"]);
     const hasSourceRef = hasClearHumanSourceReference(data, ["sourceRef", "workNumber", "workLogNumber", "referenceCode", "workLogRef"]);
     if (!hasPayrollNumber || !hasSourceRef) {
       addIssue(categories, "payroll_unclear_reference", toSample({
@@ -531,11 +552,11 @@ export const getDataQualityAudit = async () => {
   (collectionMap.raw_materials?.docs || []).forEach((itemDoc) => {
     const data = itemDoc.data();
     const isRelevant = data.isActive !== false && data.active !== false;
-    if (isRelevant && !hasPrefix(data, ["RM"], ["code", "materialCode"])) {
+    if (isRelevant && !hasPrefix(data, ["RAW"], ["code", "materialCode"])) {
       addIssue(categories, "master_missing_code", toSample({
         collectionName: "raw_materials",
         itemDoc,
-        issue: "Raw Material belum punya kode RM.",
+        issue: "Raw Material belum punya kode RAW.",
         recommendation: categories.master_missing_code.recommendation,
       }));
     }

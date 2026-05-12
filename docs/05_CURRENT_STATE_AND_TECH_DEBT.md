@@ -915,3 +915,45 @@ Legacy compatibility:
 - **Guarded:** reset total data bisnis/master belum dibuat karena menyentuh protected master collections dan harus menjadi task destructive terpisah.
 - **Guarded:** wizard keputusan hanya menyiapkan mode/module reset; eksekusi tetap harus melewati preview dan confirmation keyword existing.
 - **Cleanup candidate:** export XLSX, import normalized, trial session/correlation id, copy/export audit log, dan service khusus reset total development masih perlu phase lanjutan.
+
+
+---
+
+## FINAL LOCKED REFERENCE CODE STANDARD — IMS Bunga Flanel
+
+Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah lagi tanpa approval arsitektur khusus.
+
+| Modul | Prefix final | Format final | Contoh |
+|---|---|---|---|
+| Customer | `CUS` | `CUS-DDMMYYYY-001` | `CUS-12052026-001` |
+| Supplier | `SUP` | `SUP-DDMMYYYY-001` | `SUP-12052026-001` |
+| Produk Jadi | `PRD` | `PRD-[READABLE]-001` | `PRD-BQT-MWR-PTH-FLN-001` |
+| Raw Material | `RAW` | `RAW-[READABLE]-001` | `RAW-FLN-PTH-001` |
+| Semi Finished | `SFP` | `SFP-[READABLE]-001` | `SFP-BNG-MWR-PTH-001` |
+| BOM | `BOM` | `BOM-[TARGET]-001` | `BOM-PRD-BQT-MWR-PTH-FLN-001` |
+| Production Step | `STP` | `STP-[READABLE]-001` | `STP-POTONG-001` |
+| Purchase | `PUR` | `PUR-DDMMYYYY-001` | `PUR-12052026-001` |
+| Sales / Order | `ORD` | `ORD-DDMMYYYY-001` | `ORD-12052026-001` |
+| Return | `RET` | `RET-DDMMYYYY-001` | `RET-12052026-001` |
+| Production Order | `PO` | `PO-[TYPE]-DDMMYYYY-001` | `PO-PRD-12052026-001` |
+| Stock Adjustment | `STK-ADJ` | `STK-ADJ-DDMMYYYY-001` | `STK-ADJ-12052026-001` |
+| Cash In | `CSH-IN` | `CSH-IN-DDMMYYYY-001` | `CSH-IN-12052026-001` |
+| Cash Out | `CSH-OUT` | `CSH-OUT-DDMMYYYY-001` | `CSH-OUT-12052026-001` |
+| Work Log | `JOB` | `JOB-DDMMYYYY-001` | `JOB-12052026-001` |
+| Payroll | `PAY` | `PAY-DDMMYYYY-001` | `PAY-12052026-001` |
+
+Catatan lock:
+- Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
+- Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
+- Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
+- Readable semantic code wajib memakai suffix sequence 3 digit (`-001`, `-002`) dan tidak boleh memakai timestamp/random.
+- Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
+- Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
+
+
+### Current state setelah standardisasi code
+
+- Customer/Supplier sudah memakai `CUS`/`SUP` sebagai standard aktif.
+- Data baru harus diarahkan ke prefix final locked di tabel di atas.
+- Data lama dengan prefix `SAL`, `RM`, `CIN`, `COUT`, `WL`, `ADJ`, atau `STEP` tetap dibaca sebagai legacy compatibility.
+- Tech debt yang masih harus dijaga: jangan menampilkan Firestore random ID sebagai audit reference, dan jangan mengubah formula stok/HPP/payroll/report saat hanya patch kode.

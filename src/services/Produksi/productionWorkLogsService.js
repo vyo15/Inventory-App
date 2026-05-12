@@ -8,7 +8,6 @@
 // =====================================================
 
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -17,10 +16,12 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
 import {
   buildInventoryLogPayload,
   INVENTORY_LOG_COLLECTION,
@@ -401,8 +402,12 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const goodQty = toNumber(values.goodQty || 0);
   const costPerGoodUnit = goodQty > 0 ? totalCostActual / goodQty : 0;
 
+  const normalizedWorkNumber = safeTrim(values.workNumber).toUpperCase();
   const payload = {
-    workNumber: safeTrim(values.workNumber).toUpperCase(),
+    workNumber: normalizedWorkNumber,
+    code: normalizedWorkNumber,
+    referenceNumber: normalizedWorkNumber,
+    sourceRef: normalizedWorkNumber,
     workDate: values.workDate || null,
 
     // SECTION: link BOM
@@ -907,14 +912,31 @@ export const buildWorkLogDraftFromProductionOrder = async (
   );
 };
 
-// =====================================================
-// Generate nomor work log
-// =====================================================
-export const generateProductionWorkLogNumber = async () => {
-  const snapshot = await getDocs(collection(db, COLLECTION_NAME));
-  const nextNumber = snapshot.size + 1;
-  return `WL-${String(nextNumber).padStart(4, "0")}`;
-};
+/* =====================================================
+SECTION: Work Log number generator — GUARDED
+Fungsi:
+- Membuat nomor JOB-DDMMYYYY-001 untuk Work Log produksi.
+
+Dipakai oleh:
+- ProductionWorkLogs.jsx, createProductionWorkLog, createProductionWorkLogFromOrder, dan update lock fallback.
+
+Alasan perubahan:
+- Standar final IMS mengganti WL-0001 menjadi JOB-DDMMYYYY-001.
+
+Catatan cleanup:
+- Data lama WL tetap compatibility, tidak di-rename.
+
+Risiko:
+- Jangan mengubah complete flow, material snapshot, output stock, HPP update, atau payroll auto-create dari section ini.
+===================================================== */
+export const generateProductionWorkLogNumber = async (date = new Date()) =>
+  generateDailySequenceCode({
+    db,
+    collectionName: COLLECTION_NAME,
+    fieldNames: ["workNumber", "code", "referenceNumber", "sourceRef"],
+    prefix: "JOB",
+    date,
+  });
 
 // =====================================================
 // Ambil semua work logs
@@ -999,6 +1021,9 @@ export const isProductionWorkLogNumberExists = async (
 
   if (!normalized) return false;
 
+  const directSnapshot = await getDoc(doc(db, COLLECTION_NAME, normalized));
+  if (directSnapshot.exists() && directSnapshot.id !== excludeId) return true;
+
   const q = query(
     collection(db, COLLECTION_NAME),
     where("workNumber", "==", normalized),
@@ -1037,9 +1062,27 @@ export const createProductionWorkLog = async (values, currentUser = null) => {
   }
 
   const payload = normalizePayload(nextValues, currentUser, false);
-  const result = await addDoc(collection(db, COLLECTION_NAME), payload);
+  /* =====================================================
+  SECTION: Manual Work Log document ID = business code — GUARDED
+  Fungsi:
+  - Menyimpan Work Log manual baru dengan document ID sama seperti nomor JOB.
 
-  return result.id;
+  Dipakai oleh:
+  - createProductionWorkLog.
+
+  Alasan perubahan:
+  - Work Log adalah guarded reference payroll/HPP sehingga data baru perlu ID audit-friendly.
+
+  Catatan cleanup:
+  - Data lama random/WL tetap compatibility.
+
+  Risiko:
+  - Jangan mengubah stock consumption/output/payroll dari section ini.
+  ===================================================== */
+  const resultRef = doc(db, COLLECTION_NAME, workNumber);
+  await setDoc(resultRef, payload);
+
+  return resultRef.id;
 };
 
 // =====================================================
@@ -1173,7 +1216,11 @@ export const createProductionWorkLogFromOrder = async (
 ) => {
   const actor = currentUser?.email || currentUser?.displayName || currentUser?.uid || "system";
   const orderRef = doc(db, "production_orders", orderId);
-  const workNumber = safeTrim(extraValues.workNumber) || (await generateProductionWorkLogNumber());
+  const workNumber = safeTrim(extraValues.workNumber).toUpperCase() || (await generateProductionWorkLogNumber());
+  const workNumberExists = await isProductionWorkLogNumberExists(workNumber);
+  if (workNumberExists) {
+    throw { type: "validation", errors: { workNumber: "Nomor work log sudah digunakan" } };
+  }
 
   return await runTransaction(db, async (transaction) => {
     // =====================================================
@@ -1233,8 +1280,8 @@ export const createProductionWorkLogFromOrder = async (
       false,
     );
 
-    // SECTION: workLogRef dibuat sebelum write karena id-nya dipakai metadata inventory log.
-    const workLogRef = doc(collection(db, COLLECTION_NAME));
+    // SECTION: workLogRef memakai JOB sebagai document ID agar metadata inventory log tetap readable.
+    const workLogRef = doc(db, COLLECTION_NAME, workNumber);
     const stockReadMap = new Map();
 
     for (const line of payload.materialUsages || []) {

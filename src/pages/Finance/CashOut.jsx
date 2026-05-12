@@ -16,7 +16,6 @@ import {
 } from "antd";
 import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -24,6 +23,7 @@ import {
   orderBy,
   query,
   Timestamp,
+  setDoc,
 } from "firebase/firestore";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
@@ -270,11 +270,28 @@ const CashOut = () => {
         db,
         collectionName: "expenses",
         fieldNames: ["cashOutNumber", "code", "sourceRef", "referenceNumber"],
-        prefix: "COUT",
+        prefix: "CSH-OUT",
         date: values.date.toDate(),
       });
 
-      await addDoc(collection(db, "expenses"), {
+      /* =====================================================
+      SECTION: Cash Out document ID = business code — AKTIF
+      Fungsi:
+      - Menyimpan pengeluaran manual baru dengan document ID CSH-OUT-DDMMYYYY-001.
+
+      Dipakai oleh:
+      - handleAddTransaction Cash Out manual.
+
+      Alasan perubahan:
+      - Cash Out baru perlu reference readable dan tidak boleh memakai Firestore random ID untuk display.
+
+      Catatan cleanup:
+      - Data COUT lama tetap compatibility, tidak di-rename.
+
+      Risiko:
+      - Jangan mengubah amount/type/saving/report calculation dari section ini.
+      ===================================================== */
+      await setDoc(doc(db, "expenses", cashOutNumber), {
         cashOutNumber,
         code: cashOutNumber,
         referenceNumber: cashOutNumber,

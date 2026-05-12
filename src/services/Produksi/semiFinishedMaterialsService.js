@@ -5,7 +5,6 @@
 // =====================================================
 
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -14,6 +13,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
@@ -599,9 +599,27 @@ export const createSemiFinishedMaterial = async (
     currentUser,
     selectedProducts,
   );
-  const result = await addDoc(collection(db, COLLECTION_NAME), payload);
+  /* =====================================================
+  SECTION: Semi Finished document ID = business code — AKTIF
+  Fungsi:
+  - Menyimpan Semi Finished baru memakai document ID sama dengan kode SFP readable.
 
-  return result.id;
+  Dipakai oleh:
+  - createSemiFinishedMaterial.
+
+  Alasan perubahan:
+  - Kode SFP final wajib otomatis dan data baru idealnya memakai business code sebagai ID.
+
+  Catatan cleanup:
+  - Data lama/manual code tetap compatibility, tidak di-rename.
+
+  Risiko:
+  - Jangan mengubah stok varian/output produksi dari section ini.
+  ===================================================== */
+  const resultRef = doc(db, COLLECTION_NAME, normalizedCode);
+  await setDoc(resultRef, payload);
+
+  return resultRef.id;
 };
 
 export const updateSemiFinishedMaterial = async (

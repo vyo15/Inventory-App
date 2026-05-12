@@ -7,12 +7,12 @@
 // =====================================================
 
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
   getDocs,
   serverTimestamp,
+  setDoc,
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -20,6 +20,7 @@ import {
   generateUniqueProductionReadableCode,
   isProductionBusinessCodeExists,
 } from "../../utils/references/productionCodeGenerator";
+import { stripTrailingReadableSequence } from "../../utils/references/businessCodeGenerator";
 import {
   calculateBomMaterialLine,
   calculateBomTotals,
@@ -28,8 +29,11 @@ import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
 
 const COLLECTION_NAME = "production_boms";
 
-const getProductionBomCodePrefix = (targetType = "product") =>
-  targetType === "semi_finished_material" ? "BOM-SFP" : "BOM-PRD";
+const getProductionBomCodeTargetText = (values = {}) => {
+  const targetCode = stripTrailingReadableSequence(values.targetCode || "");
+  if (targetCode) return targetCode;
+  return values.targetName || values.name || "BOM Produksi";
+};
 
 // =====================================================
 // SECTION: Auto code BOM produksi — AKTIF
@@ -50,15 +54,15 @@ const getProductionBomCodePrefix = (targetType = "product") =>
 // - Jangan jadikan kode ini relasi utama; relasi tetap memakai Firestore document ID.
 // =====================================================
 export const generateProductionBomCode = async (values = {}, excludeId = null) => {
-  const targetType = values.targetType || "product";
+  const targetText = getProductionBomCodeTargetText(values);
 
   return generateUniqueProductionReadableCode({
     db,
     collectionName: COLLECTION_NAME,
     fieldNames: ["code", "bomCode"],
-    prefix: getProductionBomCodePrefix(targetType),
-    text: values.name || values.targetName || values.targetCode || "BOM Produksi",
-    fallbackText: values.targetName || values.targetCode || "BOM Produksi",
+    prefix: "BOM",
+    text: targetText,
+    fallbackText: targetText || "BOM Produksi",
     excludeId,
     maxParts: 8,
   });
@@ -436,8 +440,7 @@ export const createProductionBom = async (values, currentUser = null) => {
     throw { type: "validation", errors };
   }
 
-  const normalizedCode =
-    safeTrim(values.code).toUpperCase() || (await generateProductionBomCode(values));
+  const normalizedCode = await generateProductionBomCode(values);
   const isCodeExists = await isProductionBomCodeExists(normalizedCode);
 
   if (isCodeExists) {
@@ -450,9 +453,27 @@ export const createProductionBom = async (values, currentUser = null) => {
   }
 
   const payload = normalizePayload({ ...values, code: normalizedCode }, currentUser, false);
-  const result = await addDoc(collection(db, COLLECTION_NAME), payload);
+  /* =====================================================
+  SECTION: BOM document ID = business code — AKTIF
+  Fungsi:
+  - Menyimpan BOM baru memakai document ID sama dengan kode BOM-[TARGET]-001.
 
-  return result.id;
+  Dipakai oleh:
+  - createProductionBom.
+
+  Alasan perubahan:
+  - Kode BOM final tidak boleh input manual dan harus mudah dilacak dari target item.
+
+  Catatan cleanup:
+  - Data lama/manual code tetap compatibility, tidak di-rename.
+
+  Risiko:
+  - Jangan mengubah materialLines/stepLines/HPP BOM dari section ini.
+  ===================================================== */
+  const resultRef = doc(db, COLLECTION_NAME, normalizedCode);
+  await setDoc(resultRef, payload);
+
+  return resultRef.id;
 };
 
 // =====================================================
@@ -473,12 +494,8 @@ export const updateProductionBom = async (id, values, currentUser = null) => {
   }
 
   const existingBom = { id: snapshot.id, ...snapshot.data() };
-  const hasSubmittedCode = Object.prototype.hasOwnProperty.call(values, "code");
-  const submittedCode = safeTrim(values.code).toUpperCase();
   const existingCode = safeTrim(existingBom.code).toUpperCase();
-  const normalizedCode =
-    submittedCode ||
-    (!hasSubmittedCode && existingCode ? existingCode : await generateProductionBomCode(values, id));
+  const normalizedCode = existingCode || (await generateProductionBomCode(values, id));
   const isCodeExists = await isProductionBomCodeExists(normalizedCode, id);
 
   if (isCodeExists) {

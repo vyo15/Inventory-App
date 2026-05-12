@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   doc,
   getDocs,
@@ -8,6 +7,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
 } from 'firebase/firestore';
@@ -542,8 +542,26 @@ export const createProduct = async (values = {}, categories = []) => {
   await assertProductCodeAvailable(normalizedCode, null);
 
   const payload = normalizeProductCreatePayload({ ...values, code: normalizedCode }, categories);
-  const result = await addDoc(collection(db, COLLECTION_NAME), payload);
-  return result.id;
+  /* =====================================================
+  SECTION: Product document ID = business code — AKTIF
+  Fungsi:
+  - Menyimpan Product baru dengan document ID sama seperti kode PRD readable.
+
+  Dipakai oleh:
+  - createProduct pada Master Data Produk.
+
+  Alasan perubahan:
+  - Data baru yang 1 dokumen = 1 referensi utama idealnya memakai business code sebagai document ID.
+
+  Catatan cleanup:
+  - Data lama dengan random ID tetap dipertahankan dan tidak di-rename.
+
+  Risiko:
+  - Jangan mengubah update flow; relasi data lama tetap bergantung id existing.
+  ===================================================== */
+  const ref = doc(db, COLLECTION_NAME, normalizedCode);
+  await setDoc(ref, payload);
+  return ref.id;
 };
 
 export const updateProduct = async (id, values = {}, categories = []) => {

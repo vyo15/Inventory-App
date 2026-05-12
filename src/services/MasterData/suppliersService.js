@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
@@ -9,6 +10,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { generateDailySequenceCode, isBusinessCodeExists } from '../../utils/references/businessCodeGenerator';
 
 // -----------------------------------------------------------------------------
 // SUPPLIER MASTER CONFIG.
@@ -20,6 +22,8 @@ import { db } from '../../firebase';
 const SUPPLIER_MASTER_COLLECTION = 'supplierPurchases';
 const RAW_MATERIAL_COLLECTION = 'raw_materials';
 const BATCH_LIMIT = 450;
+const SUPPLIER_CODE_PREFIX = 'SUP';
+const SUPPLIER_CODE_PATTERN = /^SUP-\d{8}-\d{3,}$/;
 
 // -----------------------------------------------------------------------------
 // BASIC NORMALIZER HELPERS.
@@ -34,6 +38,110 @@ const toNumberSafe = (value, fallback = 0) => {
   return Number.isFinite(parsedValue) ? parsedValue : fallback;
 };
 const toRoundedNumber = (value, fallback = 0) => Math.round(toNumberSafe(value, fallback));
+
+/* =====================================================
+SECTION: Supplier daily sequence code helper — AKTIF
+Fungsi:
+- Membuat, menormalisasi, dan memvalidasi kode Supplier otomatis dengan format SUP-DDMMYYYY-001.
+
+Dipakai oleh:
+- SupplierPurchases.jsx saat membuka modal tambah dan saat menyimpan Supplier baru.
+
+Alasan perubahan:
+- Kode Supplier tidak boleh lagi berbasis nama/singkatan toko atau diinput manual; service menjadi source of truth.
+
+Catatan cleanup:
+- Belum ada.
+
+Risiko:
+- Duplikasi logic kode di page dapat mengembalikan random ID atau readable code lama yang tidak sesuai audit.
+===================================================== */
+export const normalizeSupplierCode = (value = '') => safeTrim(value).toUpperCase();
+export const isValidSupplierCodeFormat = (code = '') => SUPPLIER_CODE_PATTERN.test(normalizeSupplierCode(code));
+
+const toDateSafe = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value.toDate === 'function') {
+    const dateValue = value.toDate();
+    return Number.isNaN(dateValue.getTime()) ? null : dateValue;
+  }
+  if (typeof value.seconds === 'number') {
+    const dateValue = new Date(value.seconds * 1000);
+    return Number.isNaN(dateValue.getTime()) ? null : dateValue;
+  }
+
+  const dateValue = new Date(value);
+  return Number.isNaN(dateValue.getTime()) ? null : dateValue;
+};
+
+export const formatSupplierCodeDate = (date = new Date()) => {
+  const normalizedDate = toDateSafe(date) || new Date();
+  const day = String(normalizedDate.getDate()).padStart(2, '0');
+  const month = String(normalizedDate.getMonth() + 1).padStart(2, '0');
+  const year = normalizedDate.getFullYear();
+
+  return `${day}${month}${year}`;
+};
+
+const buildSupplierSequenceCode = (date = new Date(), sequence = 1) => {
+  return `${SUPPLIER_CODE_PREFIX}-${formatSupplierCodeDate(date)}-${String(Number(sequence || 1)).padStart(3, '0')}`;
+};
+
+const isFirestoreRandomIdLike = (value = '') => /^[A-Za-z0-9]{20}$/.test(safeTrim(value));
+
+export const generateSupplierCode = async (values = {}, excludeId = null) => {
+  return generateDailySequenceCode({
+    db,
+    collectionName: SUPPLIER_MASTER_COLLECTION,
+    fieldNames: ['code', 'supplierCode'],
+    prefix: SUPPLIER_CODE_PREFIX,
+    excludeId,
+    dateFormat: 'DDMMYYYY',
+    sequenceLength: 3,
+  });
+};
+
+export const assertSupplierCodeAvailable = async (code = '', editingId = null) => {
+  const normalizedCode = normalizeSupplierCode(code);
+  if (!normalizedCode) return;
+
+  if (!isValidSupplierCodeFormat(normalizedCode)) {
+    throw { type: 'validation', errors: { code: 'Format kode supplier tidak valid' } };
+  }
+
+  const existsByField = await isBusinessCodeExists({
+    db,
+    collectionName: SUPPLIER_MASTER_COLLECTION,
+    fieldNames: ['code', 'supplierCode'],
+    value: normalizedCode,
+    excludeId: editingId,
+  });
+
+  if (existsByField) {
+    throw { type: 'validation', errors: { code: 'Kode supplier sudah digunakan' } };
+  }
+
+  const existingDocument = await getDoc(doc(db, SUPPLIER_MASTER_COLLECTION, normalizedCode));
+  if (existingDocument.exists() && existingDocument.id !== editingId) {
+    throw { type: 'validation', errors: { code: 'Kode supplier sudah digunakan' } };
+  }
+};
+
+export const resolveSupplierCode = async (values = {}, excludeId = null) => {
+  const candidate = normalizeSupplierCode(values.code || values.supplierCode);
+
+  if (isValidSupplierCodeFormat(candidate)) {
+    try {
+      await assertSupplierCodeAvailable(candidate, excludeId);
+      return candidate;
+    } catch (error) {
+      if (error?.type !== 'validation') throw error;
+    }
+  }
+
+  return generateSupplierCode(values, excludeId);
+};
 
 // -----------------------------------------------------------------------------
 // Helper normalisasi key untuk dedupe nama/link supplier.
@@ -491,6 +599,207 @@ const commitBatches = async (operations = []) => {
     chunk.forEach((operation) => operation(batch));
     await batch.commit();
   }
+};
+
+const getCodeOwners = (supplierRows = []) => {
+  const owners = new Map();
+
+  supplierRows.forEach(({ id, data }) => {
+    [id, data?.code, data?.supplierCode].forEach((rawValue) => {
+      const code = normalizeSupplierCode(rawValue);
+      if (!isValidSupplierCodeFormat(code)) return;
+
+      if (!owners.has(code)) owners.set(code, new Set());
+      owners.get(code).add(id);
+    });
+  });
+
+  return owners;
+};
+
+const isCodeOwnedOnlyBySupplier = (code = '', supplierId = '', codeOwners = new Map()) => {
+  const owners = codeOwners.get(normalizeSupplierCode(code));
+  if (!owners || owners.size === 0) return true;
+  return owners.size === 1 && owners.has(supplierId);
+};
+
+const getNextAvailableSupplierCode = ({ date = new Date(), usedCodes = new Set() } = {}) => {
+  const prefixDate = `${SUPPLIER_CODE_PREFIX}-${formatSupplierCodeDate(date)}-`;
+  let nextSequence = 1;
+
+  usedCodes.forEach((code) => {
+    const normalizedCode = normalizeSupplierCode(code);
+    if (!normalizedCode.startsWith(prefixDate)) return;
+
+    const sequence = Number(normalizedCode.slice(prefixDate.length).match(/^\d+/)?.[0] || 0);
+    if (sequence >= nextSequence) nextSequence = sequence + 1;
+  });
+
+  let candidate = buildSupplierSequenceCode(date, nextSequence);
+  while (usedCodes.has(candidate)) {
+    nextSequence += 1;
+    candidate = buildSupplierSequenceCode(date, nextSequence);
+  }
+
+  return candidate;
+};
+
+const getLegacySupplierRepairReason = ({ id, currentCode, currentSupplierCode, codeOwners = new Map() } = {}) => {
+  const reasons = [];
+  const normalizedCode = normalizeSupplierCode(currentCode);
+  const normalizedSupplierCode = normalizeSupplierCode(currentSupplierCode);
+
+  if (!normalizedCode) reasons.push('Kode kosong');
+  else if (isFirestoreRandomIdLike(normalizedCode)) reasons.push('Kode masih random ID');
+  else if (!isValidSupplierCodeFormat(normalizedCode)) reasons.push('Kode tidak valid');
+  else if (!isCodeOwnedOnlyBySupplier(normalizedCode, id, codeOwners)) reasons.push('Kode duplikat');
+
+  if (!normalizedSupplierCode) reasons.push('SupplierCode kosong');
+  else if (isFirestoreRandomIdLike(normalizedSupplierCode)) reasons.push('SupplierCode masih random ID');
+  else if (!isValidSupplierCodeFormat(normalizedSupplierCode)) reasons.push('SupplierCode tidak valid');
+  else if (!isCodeOwnedOnlyBySupplier(normalizedSupplierCode, id, codeOwners)) reasons.push('SupplierCode duplikat');
+
+  if (
+    isValidSupplierCodeFormat(normalizedCode)
+    && isValidSupplierCodeFormat(normalizedSupplierCode)
+    && normalizedCode !== normalizedSupplierCode
+  ) {
+    reasons.push('code dan supplierCode tidak sama');
+  }
+
+  if (!normalizedCode && !normalizedSupplierCode && isFirestoreRandomIdLike(id)) {
+    reasons.push('ID dokumen lama random tidak boleh tampil sebagai kode bisnis');
+  }
+
+  return reasons.join(' / ') || 'Kode supplier perlu dirapikan';
+};
+
+/* =====================================================
+SECTION: Legacy supplier code repair preview — LEGACY-COMPAT / GUARDED
+Fungsi:
+- Membaca supplier lama yang belum punya kode SUP-DDMMYYYY-001 valid dan menyiapkan proposed code tanpa menulis database.
+
+Dipakai oleh:
+- SupplierPurchases.jsx pada tombol Repair Kode Supplier Lama.
+
+Alasan perubahan:
+- Data lama masih bisa memiliki field kode kosong, tidak valid, atau terlihat seperti Firestore random ID sehingga tidak layak tampil sebagai kode audit.
+
+Catatan cleanup:
+- Setelah semua data lama direpair/reset, preview ini bisa dievaluasi lagi apakah masih dibutuhkan.
+
+Risiko:
+- Menjalankan repair otomatis tanpa preview dapat mengubah audit reference supplier lama tanpa kontrol user.
+===================================================== */
+export const getLegacySupplierCodeRepairPreview = async () => {
+  const supplierSnapshot = await getDocs(collection(db, SUPPLIER_MASTER_COLLECTION));
+  const supplierRows = supplierSnapshot.docs.map((documentItem) => ({
+    id: documentItem.id,
+    data: documentItem.data() || {},
+  }));
+  const codeOwners = getCodeOwners(supplierRows);
+  const usedCodes = new Set(codeOwners.keys());
+  const rows = [];
+  let skipped = 0;
+
+  supplierRows.forEach(({ id, data }) => {
+    const currentCode = normalizeSupplierCode(data.code);
+    const currentSupplierCode = normalizeSupplierCode(data.supplierCode);
+    const currentCodeValid = isValidSupplierCodeFormat(currentCode);
+    const currentSupplierCodeValid = isValidSupplierCodeFormat(currentSupplierCode);
+    const hasDuplicateCode =
+      (currentCodeValid && !isCodeOwnedOnlyBySupplier(currentCode, id, codeOwners))
+      || (currentSupplierCodeValid && !isCodeOwnedOnlyBySupplier(currentSupplierCode, id, codeOwners));
+    const hasInvalidOrRandomCode =
+      !currentCodeValid
+      || !currentSupplierCodeValid
+      || currentCode !== currentSupplierCode
+      || isFirestoreRandomIdLike(currentCode)
+      || isFirestoreRandomIdLike(currentSupplierCode)
+      || hasDuplicateCode;
+
+    if (!hasInvalidOrRandomCode) {
+      skipped += 1;
+      return;
+    }
+
+    const existingValidCode = [currentCode, currentSupplierCode, normalizeSupplierCode(id)].find((candidate) => {
+      return isValidSupplierCodeFormat(candidate) && isCodeOwnedOnlyBySupplier(candidate, id, codeOwners);
+    });
+    const proposedDate = toDateSafe(data.createdAt) || new Date();
+    const proposedCode = existingValidCode || getNextAvailableSupplierCode({ date: proposedDate, usedCodes });
+    usedCodes.add(proposedCode);
+
+    rows.push({
+      id,
+      supplierName: getSupplierDisplayName({ id, ...data }),
+      currentCode: safeTrim(data.code),
+      currentSupplierCode: safeTrim(data.supplierCode),
+      proposedCode,
+      reason: getLegacySupplierRepairReason({
+        id,
+        currentCode: data.code,
+        currentSupplierCode: data.supplierCode,
+        codeOwners,
+      }),
+    });
+  });
+
+  return {
+    rows,
+    total: rows.length,
+    skipped,
+    warnings: [],
+  };
+};
+
+/* =====================================================
+SECTION: Legacy supplier code repair apply — LEGACY-COMPAT / GUARDED
+Fungsi:
+- Menulis field code dan supplierCode pada dokumen supplier lama berdasarkan preview yang sudah disetujui user.
+
+Dipakai oleh:
+- SupplierPurchases.jsx saat user menekan Apply Repair pada modal preview.
+
+Alasan perubahan:
+- Supplier lama perlu kode bisnis manusiawi tanpa rename/delete/recreate document ID agar relasi Raw Material/Purchases tetap aman.
+
+Catatan cleanup:
+- Bisa dipindahkan ke maintenance module jika repair legacy bertambah banyak.
+
+Risiko:
+- Jika field selain code/supplierCode ikut diubah, katalog supplier, Raw Material, Purchases, atau relasi lama dapat terdampak.
+===================================================== */
+export const applyLegacySupplierCodeRepair = async (previewRows = []) => {
+  const preparedRows = (previewRows || [])
+    .map((row = {}) => ({
+      id: safeTrim(row.id),
+      proposedCode: normalizeSupplierCode(row.proposedCode),
+    }))
+    .filter((row) => row.id && isValidSupplierCodeFormat(row.proposedCode));
+
+  const proposedCodes = new Set();
+  preparedRows.forEach((row) => {
+    if (proposedCodes.has(row.proposedCode)) {
+      throw { type: 'validation', errors: { code: 'Preview repair memiliki kode supplier duplikat' } };
+    }
+    proposedCodes.add(row.proposedCode);
+  });
+
+  for (const row of preparedRows) {
+    await assertSupplierCodeAvailable(row.proposedCode, row.id);
+  }
+
+  const operations = preparedRows.map((row) => (batch) => {
+    batch.update(doc(db, SUPPLIER_MASTER_COLLECTION, row.id), {
+      code: row.proposedCode,
+      supplierCode: row.proposedCode,
+      updatedAt: serverTimestamp(),
+    });
+  });
+
+  await commitBatches(operations);
+  return { updated: operations.length };
 };
 
 // -----------------------------------------------------------------------------

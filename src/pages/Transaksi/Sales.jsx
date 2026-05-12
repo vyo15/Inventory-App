@@ -33,6 +33,7 @@ import {
   orderBy,
   doc,
   updateDoc,
+  setDoc,
 } from "firebase/firestore";
 import {
   addInventoryLog,
@@ -560,8 +561,8 @@ const Sales = () => {
       const saleNumber = await generateDailySequenceCode({
         db,
         collectionName: "sales",
-        fieldNames: ["saleNumber", "code", "referenceNumber"],
-        prefix: "SAL",
+        fieldNames: ["saleNumber", "code", "referenceNumber", "sourceRef"],
+        prefix: "ORD",
         date: date.toDate(),
       });
 
@@ -574,7 +575,9 @@ const Sales = () => {
         salesChannel,
         status,
         date: Timestamp.fromDate(date.toDate()),
-        referenceNumber: isReferenceNumberEnabledChannel(salesChannel)
+        referenceNumber: saleNumber,
+        sourceRef: saleNumber,
+        externalReferenceNumber: isReferenceNumberEnabledChannel(salesChannel)
           ? referenceNumber || null
           : null,
         total: totalSaleValue,
@@ -582,7 +585,25 @@ const Sales = () => {
         createdAt: Timestamp.now(),
       };
 
-      const salesDocument = await addDoc(collection(db, "sales"), newSalePayload);
+      /* =====================================================
+      SECTION: Sales document ID = ORD business code — GUARDED
+      Fungsi:
+      - Menyimpan sales/order baru dengan document ID sama seperti saleNumber ORD.
+
+      Dipakai oleh:
+      - handleSubmit Sales sebelum mutation stok.
+
+      Alasan perubahan:
+      - Field legacy saleNumber tetap dipakai, tetapi value data baru wajib ORD-DDMMYYYY-001.
+
+      Catatan cleanup:
+      - Data lama SAL tetap compatibility dan tidak di-rename.
+
+      Risiko:
+      - Jangan mengubah validasi stok, rollback, income creation, cancel/delete flow, atau inventory log mutation dari section ini.
+      ===================================================== */
+      const salesDocument = doc(db, "sales", saleNumber);
+      await setDoc(salesDocument, newSalePayload);
       const appliedStockItems = [];
 
       // =========================

@@ -1,16 +1,17 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
-import { generateUniqueReadableCode, isBusinessCodeExists } from "../../utils/references/businessCodeGenerator";
+import { generateDailySequenceCode, isBusinessCodeExists } from "../../utils/references/businessCodeGenerator";
 
 // =========================
 // SECTION: Source of truth customer final
@@ -25,6 +26,12 @@ import { generateUniqueReadableCode, isBusinessCodeExists } from "../../utils/re
 // =========================
 export const CUSTOMERS_COLLECTION = "customers";
 
+const CUSTOMER_CODE_PREFIX = "CUS";
+const CUSTOMER_CODE_PATTERN = /^CUS-\d{8}-\d{3,}$/;
+
+export const normalizeCustomerCode = (value = "") => String(value || "").trim().toUpperCase();
+export const isValidCustomerCodeFormat = (code = "") => CUSTOMER_CODE_PATTERN.test(normalizeCustomerCode(code));
+
 // =========================
 // SECTION: Normalisasi payload customer
 // Fungsi:
@@ -34,14 +41,18 @@ export const CUSTOMERS_COLLECTION = "customers";
 // Status:
 // - aktif/final
 // =========================
-const normalizeCustomerPayload = (values = {}) => ({
-  code: String(values.code || "").trim().toUpperCase(),
-  customerCode: String(values.code || "").trim().toUpperCase(),
-  name: String(values.name || "").trim(),
-  contact: String(values.contact || "").trim(),
-  address: String(values.address || "").trim(),
-  note: String(values.note || "").trim(),
-});
+const normalizeCustomerPayload = (values = {}) => {
+  const normalizedCode = normalizeCustomerCode(values.code || values.customerCode);
+
+  return {
+    code: normalizedCode,
+    customerCode: normalizedCode,
+    name: String(values.name || "").trim(),
+    contact: String(values.contact || "").trim(),
+    address: String(values.address || "").trim(),
+    note: String(values.note || "").trim(),
+  };
+};
 
 // =========================
 // SECTION: Ambil semua customer
@@ -65,33 +76,40 @@ export const getCustomers = async () => {
   }));
 };
 
-// =========================
-// SECTION: Tambah customer
-// Fungsi:
-// - membuat customer baru di collection final `customers`
-// Hubungan flow aplikasi:
-// - customer baru langsung bisa muncul di Sales setelah fetch ulang
-// Status:
-// - aktif/final
-// =========================
+/* =====================================================
+SECTION: Customer daily sequence code generator — AKTIF
+Fungsi:
+- Membuat kode Customer otomatis harian dengan format CUS-DDMMYYYY-001 tanpa memakai nama customer.
+
+Dipakai oleh:
+- Customers.jsx saat membuka modal tambah dan createCustomer() sebagai fallback service.
+
+Alasan perubahan:
+- Kode Customer harus konsisten seperti referensi transaksi, muncul otomatis, dan tidak bisa diinput manual.
+
+Catatan cleanup:
+- Helper readable code lama tetap dipertahankan untuk modul lain; belum ada cleanup di service ini.
+
+Risiko:
+- Mengembalikan kode berbasis nama atau random akan memutus audit dan membuat document ID tidak seragam.
+===================================================== */
 export const generateCustomerCode = async (values = {}, excludeId = null) => {
-  return generateUniqueReadableCode({
+  return generateDailySequenceCode({
     db,
     collectionName: CUSTOMERS_COLLECTION,
     fieldNames: ["code", "customerCode"],
-    prefix: "CUS",
-    text: values.name || "Customer",
-    fallbackText: "Customer",
+    prefix: CUSTOMER_CODE_PREFIX,
     excludeId,
-    maxParts: 5,
+    dateFormat: "DDMMYYYY",
+    sequenceLength: 3,
   });
 };
 
-const assertCustomerCodeAvailable = async (code = "", editingId = null) => {
-  const normalizedCode = String(code || "").trim().toUpperCase();
+export const assertCustomerCodeAvailable = async (code = "", editingId = null) => {
+  const normalizedCode = normalizeCustomerCode(code);
   if (!normalizedCode) return;
 
-  const exists = await isBusinessCodeExists({
+  const existsByField = await isBusinessCodeExists({
     db,
     collectionName: CUSTOMERS_COLLECTION,
     fieldNames: ["code", "customerCode"],
@@ -99,43 +117,101 @@ const assertCustomerCodeAvailable = async (code = "", editingId = null) => {
     excludeId: editingId,
   });
 
-  if (exists) {
+  if (existsByField) {
+    throw { type: "validation", errors: { code: "Kode customer sudah digunakan" } };
+  }
+
+  const existingDocument = await getDoc(doc(db, CUSTOMERS_COLLECTION, normalizedCode));
+  if (existingDocument.exists() && existingDocument.id !== editingId) {
     throw { type: "validation", errors: { code: "Kode customer sudah digunakan" } };
   }
 };
 
+export const resolveCustomerCode = async (values = {}, excludeId = null) => {
+  const candidate = normalizeCustomerCode(values.code || values.customerCode);
+
+  if (isValidCustomerCodeFormat(candidate)) {
+    try {
+      await assertCustomerCodeAvailable(candidate, excludeId);
+      return candidate;
+    } catch (error) {
+      if (error?.type !== "validation") throw error;
+    }
+  }
+
+  return generateCustomerCode(values, excludeId);
+};
+
+/* =====================================================
+SECTION: Customer readable document ID create flow — AKTIF / GUARDED
+Fungsi:
+- Membuat Customer baru dengan Firestore document ID yang sama dengan kode bisnis CUS-DDMMYYYY-001.
+
+Dipakai oleh:
+- Customers.jsx saat submit tambah Customer.
+
+Alasan perubahan:
+- Create Customer tidak boleh lagi memakai addDoc/random ID atau kode berbasis nama agar referensi audit konsisten.
+
+Catatan cleanup:
+- Belum ada.
+
+Risiko:
+- Mengganti kembali ke addDoc akan menghasilkan document ID random dan memutus rule kode sebagai referensi utama.
+===================================================== */
 export const createCustomer = async (values = {}) => {
-  const normalizedCode = String(values.code || "").trim().toUpperCase() || (await generateCustomerCode(values));
-  await assertCustomerCodeAvailable(normalizedCode, null);
+  const finalCode = await resolveCustomerCode(values, null);
+  if (!isValidCustomerCodeFormat(finalCode)) {
+    throw { type: "validation", errors: { code: "Kode customer otomatis belum valid" } };
+  }
 
-  const payload = normalizeCustomerPayload({ ...values, code: normalizedCode });
+  await assertCustomerCodeAvailable(finalCode, null);
 
-  return await addDoc(collection(db, CUSTOMERS_COLLECTION), {
+  const payload = normalizeCustomerPayload({ ...values, code: finalCode, customerCode: finalCode });
+
+  await setDoc(doc(db, CUSTOMERS_COLLECTION, finalCode), {
     ...payload,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+
+  return { id: finalCode };
 };
 
-// =========================
-// SECTION: Update customer
-// Fungsi:
-// - mengubah master customer di collection final `customers`
-// Hubungan flow aplikasi:
-// - tidak mengubah snapshot customerName pada sales lama agar histori transaksi aman
-// Status:
-// - aktif/final
-// =========================
+/* =====================================================
+SECTION: Customer immutable code update guard — AKTIF / GUARDED
+Fungsi:
+- Mengubah detail Customer tanpa generate ulang kode dan tanpa rename document ID.
+
+Dipakai oleh:
+- Customers.jsx saat submit edit Customer.
+
+Alasan perubahan:
+- Kode Customer harus immutable agar perubahan nama/kontak tidak mengubah referensi Sales dan audit.
+
+Catatan cleanup:
+- Data lama tanpa kode tetap dibuka tanpa migration; cleanup/migration harus menjadi task terpisah.
+
+Risiko:
+- Regenerate kode saat edit dapat membuat relasi historis dan audit master customer tidak konsisten.
+===================================================== */
 export const updateCustomer = async (customerId, values = {}) => {
   if (!customerId) {
     throw new Error("Customer yang akan diubah tidak valid.");
   }
 
-  const normalizedCode = String(values.code || "").trim().toUpperCase() || (await generateCustomerCode(values, customerId));
-  await assertCustomerCodeAvailable(normalizedCode, customerId);
+  const currentSnapshot = await getDoc(doc(db, CUSTOMERS_COLLECTION, customerId));
+  const currentData = currentSnapshot.exists() ? currentSnapshot.data() : {};
+  const immutableCode = normalizeCustomerCode(
+    values.code || values.customerCode || currentData.code || currentData.customerCode || customerId,
+  );
+
+  if (immutableCode) {
+    await assertCustomerCodeAvailable(immutableCode, customerId);
+  }
 
   const customerRef = doc(db, CUSTOMERS_COLLECTION, customerId);
-  const payload = normalizeCustomerPayload({ ...values, code: normalizedCode });
+  const payload = normalizeCustomerPayload({ ...values, code: immutableCode, customerCode: immutableCode });
 
   await updateDoc(customerRef, {
     ...payload,

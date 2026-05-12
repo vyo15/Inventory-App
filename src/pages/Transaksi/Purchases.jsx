@@ -1210,11 +1210,6 @@ const Purchases = () => {
       }
 
       const savingMeta = getPurchaseSavingMeta(normalizedPurchaseSaving);
-      const purchaseReference = doc(collection(db, "purchases"));
-      const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
-      const expenseReference = doc(db, "expenses", buildPurchaseExpenseDocumentId(purchaseReference.id));
-      const itemReference = doc(db, collectionName, itemId);
-
       const purchaseNumber = await generateDailySequenceCode({
         db,
         collectionName: "purchases",
@@ -1222,6 +1217,27 @@ const Purchases = () => {
         prefix: "PUR",
         date: date.toDate(),
       });
+      /* =====================================================
+      SECTION: Purchase reference document ID — GUARDED
+      Fungsi:
+      - Membuat document reference purchase baru memakai PUR-DDMMYYYY-001 sebagai ID.
+
+      Dipakai oleh:
+      - handleSubmitPurchase sebelum transaction pembelian.
+
+      Alasan perubahan:
+      - Purchase baru perlu reference audit yang sama antara document ID, purchaseNumber, dan inventory log.
+
+      Catatan cleanup:
+      - Data purchase lama dengan random ID tetap compatibility.
+
+      Risiko:
+      - Jangan mengubah rumus harga, supplier catalog, stok, saving, atau expense dari section ini.
+      ===================================================== */
+      const purchaseReference = doc(db, "purchases", purchaseNumber);
+      const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
+      const expenseReference = doc(db, "expenses", buildPurchaseExpenseDocumentId(purchaseReference.id));
+      const itemReference = doc(db, collectionName, itemId);
 
       // =========================
       // SECTION: Firestore transaction pembelian
@@ -1289,6 +1305,7 @@ const Purchases = () => {
           purchaseNumber,
           code: purchaseNumber,
           referenceNumber: purchaseNumber,
+          sourceRef: purchaseNumber,
           type: normalizedType,
           itemId,
           itemName,

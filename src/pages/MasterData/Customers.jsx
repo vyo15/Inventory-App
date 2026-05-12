@@ -12,6 +12,7 @@ import { PlusOutlined, EditOutlined } from "@ant-design/icons";
 import {
   createCustomer,
   deleteCustomer,
+  generateCustomerCode,
   getCustomers,
   updateCustomer,
 } from "../../services/MasterData/customersService";
@@ -35,6 +36,7 @@ const Customers = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState(null);
+  const [customerCodeLoading, setCustomerCodeLoading] = useState(false);
   const [form] = Form.useForm();
 
   // =========================
@@ -62,6 +64,41 @@ const Customers = () => {
   useEffect(() => {
     fetchCustomers();
   }, []);
+
+  /* =====================================================
+      SECTION: Prepare create customer form — AKTIF / GUARDED
+      Fungsi:
+      - Membuka modal tambah Customer dan langsung mengisi kode otomatis CUS-DDMMYYYY-001.
+
+      Dipakai oleh:
+      - Tombol Tambah Customer di halaman Master Data / Customer.
+
+      Alasan perubahan:
+      - Kode Customer tidak boleh lagi diinput manual atau dibuat dari nama customer.
+
+      Catatan cleanup:
+      - Belum ada.
+
+      Risiko:
+      - Jika preview kode dihapus, user bisa menyimpan tanpa referensi audit yang terlihat sejak awal form.
+  ===================================================== */
+  const prepareCreateCustomerForm = async () => {
+    setIsEditing(false);
+    setCurrentId(null);
+    setIsModalVisible(true);
+    form.resetFields();
+    setCustomerCodeLoading(true);
+
+    try {
+      const generatedCode = await generateCustomerCode();
+      form.setFieldsValue({ code: generatedCode });
+    } catch (error) {
+      console.error("Gagal membuat kode customer otomatis:", error);
+      message.error("Gagal membuat kode customer otomatis.");
+    } finally {
+      setCustomerCodeLoading(false);
+    }
+  };
 
   // =========================
   // SECTION: Tambah atau update customer
@@ -136,7 +173,7 @@ const Customers = () => {
     setIsModalVisible(true);
     setCurrentId(record.id);
     form.setFieldsValue({
-      code: record.code || record.customerCode || "",
+      code: record.code || record.customerCode || record.id || "",
       name: record.name,
       contact: record.contact,
       address: record.address,
@@ -154,7 +191,7 @@ const Customers = () => {
   // - aktif dipakai
   // =========================
   const columns = [
-    { title: "Kode", dataIndex: "code", key: "code", render: (_, record) => record.code || record.customerCode || "-" },
+    { title: "Kode", dataIndex: "code", key: "code", render: (_, record) => record.code || record.customerCode || record.id || "-" },
     { title: "Nama Customer", dataIndex: "name", key: "name" },
     { title: "Kontak", dataIndex: "contact", key: "contact" },
     { title: "Alamat", dataIndex: "address", key: "address" },
@@ -200,12 +237,7 @@ const Customers = () => {
             type: "primary",
             icon: <PlusOutlined />,
             label: "Tambah Customer",
-            onClick: () => {
-              setIsModalVisible(true);
-              setIsEditing(false);
-              setCurrentId(null);
-              form.resetFields();
-            },
+            onClick: prepareCreateCustomerForm,
           },
         ]}
       />
@@ -249,15 +281,46 @@ const Customers = () => {
           setIsModalVisible(false);
           setIsEditing(false);
           setCurrentId(null);
+          setCustomerCodeLoading(false);
           form.resetFields();
         }}
         okText="Simpan"
         cancelText="Batal"
         form={form}
         onFinish={handleAddOrEditCustomer}
+        confirmLoading={customerCodeLoading}
       >
-        <Form.Item name="code" label="Kode Customer">
-          <Input placeholder="Opsional, otomatis: CUS-BD-ST" />
+        {/* =====================================================
+            SECTION: Customer code disabled/read-only field — AKTIF / GUARDED
+            Fungsi:
+            - Menampilkan kode Customer otomatis sebagai referensi audit yang tidak bisa diedit user.
+
+            Dipakai oleh:
+            - Modal tambah/edit Customer.
+
+            Alasan perubahan:
+            - Kode Customer harus dikunci agar tidak berubah saat nama/kontak berubah.
+
+            Catatan cleanup:
+            - Belum ada.
+
+            Risiko:
+            - Membuka field ini untuk edit manual dapat membuat Sales/customer reference tidak konsisten.
+        ===================================================== */}
+        <Form.Item
+          name="code"
+          label="Kode Customer"
+          extra={
+            isEditing
+              ? "Kode customer tidak bisa diubah setelah dibuat agar audit tetap konsisten."
+              : "Kode customer dibuat otomatis dengan format CUS-DDMMYYYY-001 dan dikunci untuk audit."
+          }
+        >
+          <Input
+            disabled
+            readOnly
+            placeholder={customerCodeLoading ? "Membuat kode otomatis..." : "Kode dibuat otomatis"}
+          />
         </Form.Item>
         <Form.Item
           name="name"

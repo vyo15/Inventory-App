@@ -27,24 +27,30 @@ import {
   EyeOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, limit as firestoreLimit, orderBy, query } from 'firebase/firestore';
+import { collection, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc, limit as firestoreLimit, orderBy, query } from 'firebase/firestore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyIDR } from '../../utils/formatters/currencyId';
-import { generateUniqueReadableCode, isBusinessCodeExists } from '../../utils/references/businessCodeGenerator';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import {
+  applyLegacySupplierCodeRepair,
+  assertSupplierCodeAvailable,
   calculateSupplierMaterialRestockMetrics,
   cascadeSupplierSnapshotToRawMaterials,
   clearSupplierSnapshotFromRawMaterials,
   doesSupplierProvideMaterial,
+  generateSupplierCode,
+  getLegacySupplierCodeRepairPreview,
   getSupplierDisplayName,
   getSupplierStoreLink,
   isManagedSupplierRecord,
+  isValidSupplierCodeFormat,
   listenSuppliers,
+  normalizeSupplierCode,
+  resolveSupplierCode,
 } from '../../services/MasterData/suppliersService';
 
 
@@ -133,6 +139,11 @@ const SupplierPurchases = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [supplierCodeLoading, setSupplierCodeLoading] = useState(false);
+  const [editingSupplierNeedsCodeRepair, setEditingSupplierNeedsCodeRepair] = useState(false);
+  const [legacyCodeRepairLoading, setLegacyCodeRepairLoading] = useState(false);
+  const [legacyCodeRepairPreview, setLegacyCodeRepairPreview] = useState({ rows: [], total: 0, skipped: 0, warnings: [] });
+  const [legacyCodeRepairModalVisible, setLegacyCodeRepairModalVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [materialFilter, setMaterialFilter] = useState(undefined);
 
@@ -215,6 +226,31 @@ const SupplierPurchases = () => {
   }, []);
 
   // ---------------------------------------------------------------------------
+  // Helper kode supplier user-facing.
+  // FUNGSI: menampilkan hanya code/supplierCode bisnis yang valid, bukan Firestore random ID.
+  // STATUS: aktif dipakai table/detail/edit Supplier untuk menjaga audit tetap manusiawi.
+  // ---------------------------------------------------------------------------
+  const getSupplierBusinessCode = (supplier = {}) => {
+    const code = normalizeSupplierCode(supplier.code);
+    if (isValidSupplierCodeFormat(code)) return code;
+
+    const supplierCode = normalizeSupplierCode(supplier.supplierCode);
+    if (isValidSupplierCodeFormat(supplierCode)) return supplierCode;
+
+    return '';
+  };
+
+  const renderSupplierBusinessCode = (supplier = {}) => {
+    const businessCode = getSupplierBusinessCode(supplier);
+
+    if (businessCode) {
+      return <span style={{ color: '#666' }}>{businessCode}</span>;
+    }
+
+    return <Tag color="warning">Perlu repair kode</Tag>;
+  };
+
+  // ---------------------------------------------------------------------------
   // Filter supplier dari query URL + filter manual user.
   // FUNGSI: hanya menampilkan supplier yang relevan dengan material jika filter
   // material aktif, tanpa mengubah data supplier/raw material.
@@ -236,8 +272,7 @@ const SupplierPurchases = () => {
         if (!keyword) return true;
 
         const searchableText = [
-          supplier.code,
-          supplier.supplierCode,
+          getSupplierBusinessCode(supplier),
           getSupplierDisplayName(supplier),
           getSupplierStoreLink(supplier),
           ...(supplier.supportedMaterialNames || []),
@@ -282,7 +317,46 @@ const SupplierPurchases = () => {
     setIsEditing(false);
     setEditingId(null);
     setSaving(false);
+    setSupplierCodeLoading(false);
+    setEditingSupplierNeedsCodeRepair(false);
     form.resetFields();
+  };
+
+  /* =====================================================
+      SECTION: Prepare create supplier form — AKTIF / GUARDED
+      Fungsi:
+      - Membuka modal tambah Supplier dan langsung mengisi kode otomatis SUP-DDMMYYYY-001.
+
+      Dipakai oleh:
+      - Tombol Tambah Supplier di halaman Master Data / Supplier.
+
+      Alasan perubahan:
+      - Kode Supplier tidak boleh lagi diinput manual atau dibuat dari nama/singkatan toko.
+
+      Catatan cleanup:
+      - Belum ada.
+
+      Risiko:
+      - Jika preview kode dihapus, create Supplier bisa kehilangan referensi audit yang konsisten.
+  ===================================================== */
+  const prepareCreateSupplierForm = async () => {
+    setModalVisible(true);
+    setIsEditing(false);
+    setEditingId(null);
+    setEditingSupplierNeedsCodeRepair(false);
+    form.resetFields();
+    form.setFieldsValue({ materialDetails: [] });
+    setSupplierCodeLoading(true);
+
+    try {
+      const generatedCode = await generateSupplierCode();
+      form.setFieldsValue({ code: generatedCode, materialDetails: [] });
+    } catch (error) {
+      console.error('Gagal membuat kode supplier otomatis:', error);
+      message.error('Gagal membuat kode supplier otomatis.');
+    } finally {
+      setSupplierCodeLoading(false);
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -355,11 +429,13 @@ const SupplierPurchases = () => {
         };
       });
 
-    const normalizedCode = String(values.code || '').trim().toUpperCase();
+    const normalizedCode = normalizeSupplierCode(values.code || values.supplierCode);
+    const codeFields = isValidSupplierCodeFormat(normalizedCode)
+      ? { code: normalizedCode, supplierCode: normalizedCode }
+      : {};
 
     return {
-      code: normalizedCode,
-      supplierCode: normalizedCode,
+      ...codeFields,
       storeName: values.storeName,
       storeLink: values.storeLink || '',
       // Field kategori lama tidak lagi disimpan dari UI aktif. Jika ada data lama,
@@ -381,33 +457,17 @@ const SupplierPurchases = () => {
   const handleSaveSupplier = async (values) => {
     try {
       setSaving(true);
-      const generatedCode = String(values.code || '').trim().toUpperCase() || await generateUniqueReadableCode({
-        db,
-        collectionName: 'supplierPurchases',
-        fieldNames: ['code', 'supplierCode'],
-        prefix: 'SUP',
-        text: values.storeName || 'Supplier',
-        fallbackText: 'Supplier',
-        excludeId: editingId || null,
-        maxParts: 5,
-      });
-      const codeExists = await isBusinessCodeExists({
-        db,
-        collectionName: 'supplierPurchases',
-        fieldNames: ['code', 'supplierCode'],
-        value: generatedCode,
-        excludeId: editingId || null,
-      });
-
-      if (codeExists) {
-        form.setFields([{ name: 'code', errors: ['Kode supplier sudah digunakan'] }]);
-        message.error('Kode supplier sudah digunakan.');
-        return;
-      }
-
-      const payload = buildSupplierPayload({ ...values, code: generatedCode });
 
       if (isEditing && editingId) {
+        const formCode = normalizeSupplierCode(values.code || values.supplierCode);
+        const finalCode = isValidSupplierCodeFormat(formCode) ? formCode : '';
+
+        if (finalCode) {
+          await assertSupplierCodeAvailable(finalCode, editingId);
+        }
+
+        const payload = buildSupplierPayload({ ...values, code: finalCode, supplierCode: finalCode });
+
         await updateDoc(doc(db, 'supplierPurchases', editingId), payload);
 
         try {
@@ -426,7 +486,28 @@ const SupplierPurchases = () => {
           message.warning('Supplier berhasil diupdate, tetapi snapshot bahan belum ikut diperbarui. Coba simpan ulang supplier.');
         }
       } else {
-        await addDoc(collection(db, 'supplierPurchases'), {
+        /* =====================================================
+            SECTION: Supplier readable document ID create flow — AKTIF / GUARDED
+            Fungsi:
+            - Menyimpan Supplier baru dengan Firestore document ID yang sama dengan kode SUP-DDMMYYYY-001.
+
+            Dipakai oleh:
+            - Submit tambah Supplier pada halaman SupplierPurchases.jsx.
+
+            Alasan perubahan:
+            - Create Supplier tidak boleh lagi memakai addDoc/random ID atau kode berbasis nama.
+
+            Catatan cleanup:
+            - Belum ada.
+
+            Risiko:
+            - Mengubah flow ini dapat merusak linkage Purchases/Raw Material yang membaca supplier dari supplierPurchases.
+        ===================================================== */
+        const finalCode = await resolveSupplierCode(values, null);
+        await assertSupplierCodeAvailable(finalCode, null);
+        const payload = buildSupplierPayload({ ...values, code: finalCode, supplierCode: finalCode });
+
+        await setDoc(doc(db, 'supplierPurchases', finalCode), {
           ...payload,
           createdAt: serverTimestamp(),
         });
@@ -436,6 +517,16 @@ const SupplierPurchases = () => {
       resetSupplierModalState();
     } catch (error) {
       console.error(error);
+      if (error?.type === 'validation' && error.errors) {
+        form.setFields(
+          Object.entries(error.errors).map(([name, errorMessage]) => ({
+            name,
+            errors: [errorMessage],
+          })),
+        );
+        message.error(Object.values(error.errors)[0] || 'Data supplier belum valid.');
+        return;
+      }
       message.error('Gagal menyimpan supplier.');
     } finally {
       setSaving(false);
@@ -448,12 +539,15 @@ const SupplierPurchases = () => {
   // STATUS: aktif; backward-compatible untuk supplier lama tanpa field baru.
   // ---------------------------------------------------------------------------
   const handleEditSupplier = (record) => {
+    const businessCode = getSupplierBusinessCode(record);
+
     setIsEditing(true);
     setEditingId(record.id);
+    setEditingSupplierNeedsCodeRepair(!businessCode);
     setModalVisible(true);
 
     form.setFieldsValue({
-      code: record.code || record.supplierCode || '',
+      code: businessCode,
       storeName: getSupplierDisplayName(record),
       storeLink: getSupplierStoreLink(record),
       materialDetails:
@@ -487,6 +581,69 @@ const SupplierPurchases = () => {
             })
           : [],
     });
+  };
+
+  /* =====================================================
+      SECTION: Supplier legacy repair modal/action UI — LEGACY-COMPAT / GUARDED
+      Fungsi:
+      - Membuka preview repair kode supplier lama dan apply update field code/supplierCode setelah user menyetujui.
+
+      Dipakai oleh:
+      - Tombol Repair Kode Supplier Lama di halaman Master Data / Supplier.
+
+      Alasan perubahan:
+      - Data supplier lama bisa masih kosong/tidak valid/random ID, tetapi document ID lama tidak boleh direnamed agar relasi existing aman.
+
+      Catatan cleanup:
+      - Bisa dipindah ke Reset & Maintenance jika fitur repair legacy makin banyak.
+
+      Risiko:
+      - Jangan jadikan repair otomatis saat page load/edit karena perubahan kode audit harus action sadar dari user.
+  ===================================================== */
+  const handleOpenLegacyCodeRepairPreview = async () => {
+    setLegacyCodeRepairLoading(true);
+
+    try {
+      const preview = await getLegacySupplierCodeRepairPreview();
+      setLegacyCodeRepairPreview(preview);
+      setLegacyCodeRepairModalVisible(true);
+
+      if (!preview.rows.length) {
+        message.info('Tidak ada supplier lama yang perlu repair kode.');
+      }
+    } catch (error) {
+      console.error('Gagal membuat preview repair kode supplier lama:', error);
+      message.error('Gagal membuat preview repair kode supplier lama.');
+    } finally {
+      setLegacyCodeRepairLoading(false);
+    }
+  };
+
+  const handleApplyLegacyCodeRepair = async () => {
+    const previewRows = legacyCodeRepairPreview.rows || [];
+
+    if (!previewRows.length) {
+      message.info('Tidak ada supplier lama yang perlu direpair.');
+      return;
+    }
+
+    setLegacyCodeRepairLoading(true);
+
+    try {
+      const result = await applyLegacySupplierCodeRepair(previewRows);
+      message.success(`Repair kode supplier lama berhasil. ${result.updated || 0} supplier diperbarui.`);
+      setLegacyCodeRepairModalVisible(false);
+      setLegacyCodeRepairPreview({ rows: [], total: 0, skipped: 0, warnings: [] });
+    } catch (error) {
+      console.error('Gagal apply repair kode supplier lama:', error);
+      if (error?.type === 'validation' && error.errors) {
+        message.error(Object.values(error.errors)[0] || 'Preview repair belum valid.');
+      } else {
+        message.error('Gagal apply repair kode supplier lama.');
+      }
+    } finally {
+      setLegacyCodeRepairLoading(false);
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -563,9 +720,7 @@ const SupplierPurchases = () => {
               <Tag color="green">Dipilih</Tag>
             ) : null}
           </Space>
-          <span style={{ color: '#666' }}>
-            {record.code || record.supplierCode || 'Kode otomatis'}
-          </span>
+          {renderSupplierBusinessCode(record)}
           <span style={{ color: '#666' }}>
             {(record.materialDetails || []).length || 0} katalog restock
           </span>
@@ -784,6 +939,37 @@ const SupplierPurchases = () => {
   ];
 
 
+  const legacyCodeRepairColumns = [
+    {
+      title: 'Nama Supplier',
+      dataIndex: 'supplierName',
+      key: 'supplierName',
+      render: (value) => <span style={{ fontWeight: 600 }}>{value || 'Supplier tanpa nama'}</span>,
+    },
+    {
+      title: 'Kode Sekarang',
+      key: 'currentCode',
+      render: (_, record) => (
+        <Space direction="vertical" size={2}>
+          <span>code: {record.currentCode || '-'}</span>
+          <span>supplierCode: {record.currentSupplierCode || '-'}</span>
+        </Space>
+      ),
+    },
+    {
+      title: 'Kode Baru',
+      dataIndex: 'proposedCode',
+      key: 'proposedCode',
+      render: (value) => <Tag color="green">{value}</Tag>,
+    },
+    {
+      title: 'Alasan',
+      dataIndex: 'reason',
+      key: 'reason',
+    },
+  ];
+
+
   return (
     <div className="page-container">
       <PageHeader
@@ -801,18 +987,19 @@ const SupplierPurchases = () => {
           ) : null
         }
         actions={[
+          <Button
+            key="repair-legacy-supplier-code"
+            loading={legacyCodeRepairLoading}
+            onClick={handleOpenLegacyCodeRepairPreview}
+          >
+            Repair Kode Supplier Lama
+          </Button>,
           {
             key: 'create-supplier',
             type: 'primary',
             icon: <PlusOutlined />,
             label: 'Tambah Supplier',
-            onClick: () => {
-              setModalVisible(true);
-              setIsEditing(false);
-              setEditingId(null);
-              form.resetFields();
-              form.setFieldsValue({ materialDetails: [] });
-            },
+            onClick: prepareCreateSupplierForm,
           },
         ]}
       />
@@ -887,20 +1074,108 @@ const SupplierPurchases = () => {
         />
       </PageSection>
 
+      {/* =====================================================
+          SECTION: Supplier legacy repair preview modal — LEGACY-COMPAT / GUARDED
+          Fungsi:
+          - Menampilkan daftar supplier lama yang akan diberi field code/supplierCode tanpa rename document ID lama.
+
+          Dipakai oleh:
+          - Action Repair Kode Supplier Lama.
+
+          Alasan perubahan:
+          - User perlu melihat proposed code sebelum repair agar perubahan audit dilakukan sadar dan terkontrol.
+
+          Catatan cleanup:
+          - Belum ada.
+
+          Risiko:
+          - Jangan ubah modal ini menjadi auto-apply karena dapat mengubah banyak dokumen tanpa review user.
+      ===================================================== */}
+      <Modal
+        title="Preview Repair Kode Supplier Lama"
+        open={legacyCodeRepairModalVisible}
+        onCancel={() => setLegacyCodeRepairModalVisible(false)}
+        onOk={handleApplyLegacyCodeRepair}
+        okText="Apply Repair"
+        cancelText="Batal"
+        okButtonProps={{
+          loading: legacyCodeRepairLoading,
+          disabled: legacyCodeRepairLoading || !(legacyCodeRepairPreview.rows || []).length,
+        }}
+        width={920}
+      >
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="Aksi ini hanya menambahkan field code/supplierCode pada supplier lama. Document ID lama tidak diubah agar relasi existing tetap aman."
+        />
+        <Table
+          className="app-data-table"
+          rowKey="id"
+          size="small"
+          columns={legacyCodeRepairColumns}
+          dataSource={legacyCodeRepairPreview.rows || []}
+          loading={legacyCodeRepairLoading}
+          pagination={{ pageSize: 10 }}
+          locale={{ emptyText: <Empty description="Tidak ada supplier lama yang perlu repair kode" /> }}
+        />
+      </Modal>
+
       <Modal
         title={isEditing ? 'Edit Supplier' : 'Tambah Supplier'}
         open={modalVisible}
         onCancel={resetSupplierModalState}
         onOk={() => form.submit()}
         okText="Simpan"
-        okButtonProps={{ loading: saving }}
+        okButtonProps={{ loading: saving || supplierCodeLoading, disabled: supplierCodeLoading }}
         cancelText="Batal"
         width={980}
       >
         <Form form={form} layout="vertical" onFinish={handleSaveSupplier}>
-          <Form.Item name="code" label="Kode Supplier">
-            <Input placeholder="Opsional, otomatis: SUP-TK-FLN" />
+          {/* =====================================================
+              SECTION: Supplier code disabled/read-only field — AKTIF / GUARDED
+              Fungsi:
+              - Menampilkan kode Supplier otomatis sebagai referensi audit yang tidak bisa diedit user.
+
+              Dipakai oleh:
+              - Modal tambah/edit Supplier.
+
+              Alasan perubahan:
+              - Kode Supplier harus dikunci agar perubahan nama/link/katalog tidak mengubah referensi master.
+
+              Catatan cleanup:
+              - Belum ada.
+
+              Risiko:
+              - Membuka field ini untuk edit manual dapat membuat Purchases/Raw Material supplier reference tidak konsisten.
+          ===================================================== */}
+          <Form.Item
+            name="code"
+            label="Kode Supplier"
+            extra={
+              isEditing && editingSupplierNeedsCodeRepair
+                ? 'Supplier lama belum punya kode bisnis. Gunakan tombol Repair Kode Supplier Lama.'
+                : isEditing
+                  ? 'Kode supplier tidak bisa diubah setelah dibuat agar audit tetap konsisten.'
+                  : 'Kode supplier dibuat otomatis dengan format SUP-DDMMYYYY-001 dan dikunci untuk audit.'
+            }
+          >
+            <Input
+              disabled
+              readOnly
+              placeholder={supplierCodeLoading ? 'Membuat kode otomatis...' : 'Kode dibuat otomatis'}
+            />
           </Form.Item>
+
+          {isEditing && editingSupplierNeedsCodeRepair ? (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="Supplier lama ini belum punya kode bisnis. Jalankan repair kode supplier agar audit rapi."
+            />
+          ) : null}
 
           <Form.Item
             name="storeName"
@@ -1231,6 +1506,9 @@ const SupplierPurchases = () => {
             <Card size="small" title="Ringkasan">
               <Descriptions bordered column={1} size="small">
                 <Descriptions.Item label="Nama Supplier">{getSupplierDisplayName(selectedSupplier)}</Descriptions.Item>
+                <Descriptions.Item label="Kode Supplier">
+                  {getSupplierBusinessCode(selectedSupplier) || <Tag color="warning">Perlu repair kode</Tag>}
+                </Descriptions.Item>
                 <Descriptions.Item label="Link Toko">
                   {getSupplierStoreLink(selectedSupplier) ? (
                     <a href={getSupplierStoreLink(selectedSupplier)} target="_blank" rel="noopener noreferrer">

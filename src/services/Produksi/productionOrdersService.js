@@ -9,7 +9,6 @@
 // =====================================================
 
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -18,10 +17,12 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
 import { calculateAvailableStock } from "../../utils/stock/stockHelpers";
 import {
   applyStockMutationToItem,
@@ -282,28 +283,32 @@ const getProductionOrderTargetContext = async (bom = {}) => {
   };
 };
 
-const getDateCode = () => {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}${month}${day}`;
-};
+/* =====================================================
+SECTION: Production Order code generator — GUARDED
+Fungsi:
+- Membuat kode PO-PRD-DDMMYYYY-001 atau PO-SFP-DDMMYYYY-001 untuk Production Order baru.
 
-const buildOrderSequence = (orders = [], dateCode = "", prefix = "PO-PRD") => {
-  const sameDayOrders = orders.filter((item) =>
-    safeTrim(item.code).startsWith(`${prefix}-${dateCode}-`),
-  );
-  return String(sameDayOrders.length + 1).padStart(4, "0");
-};
+Dipakai oleh:
+- ProductionOrders.jsx saat preview kode dan createProductionOrder saat submit.
 
+Alasan perubahan:
+- Standar final IMS mengganti PO-[TYPE]-YYYYMMDD-0001 menjadi PO-[TYPE]-DDMMYYYY-001.
+
+Catatan cleanup:
+- Data lama PO format YYYYMMDD tetap compatibility, tidak di-rename.
+
+Risiko:
+- Jangan mengubah lifecycle PO, reservation, start, complete, payroll, atau HPP dari section ini.
+===================================================== */
 export const generateProductionOrderCode = async (targetType = "product") => {
-  const snapshot = await getDocs(collection(db, COLLECTION_NAME));
-  const existingOrders = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-  const dateCode = getDateCode();
   const prefix = targetType === "semi_finished_material" ? "PO-SFP" : "PO-PRD";
-  const nextSequence = buildOrderSequence(existingOrders, dateCode, prefix);
-  return `${prefix}-${dateCode}-${nextSequence}`;
+  return generateDailySequenceCode({
+    db,
+    collectionName: COLLECTION_NAME,
+    fieldNames: ["code", "productionOrderCode", "referenceNumber", "sourceRef"],
+    prefix,
+    date: new Date(),
+  });
 };
 
 const validateOrderVariantInputs = ({ targetHasVariants = false, targetVariantKey = "" }) => {
@@ -643,10 +648,13 @@ export const createProductionOrder = async (values = {}, currentUser = null) => 
     allowPendingTargetVariant: false,
   });
 
-  const code = safeTrim(values.code) || (await generateProductionOrderCode(targetType));
+  const code = await generateProductionOrderCode(targetType);
 
   const payload = {
     code,
+    productionOrderCode: code,
+    referenceNumber: code,
+    sourceRef: code,
     targetType: bom.targetType,
     bomId: bom.id,
     bomCode: safeTrim(bom.code),
@@ -708,8 +716,26 @@ export const createProductionOrder = async (values = {}, currentUser = null) => 
       "system",
   };
 
-  const result = await addDoc(collection(db, COLLECTION_NAME), payload);
-  return result.id;
+  /* =====================================================
+  SECTION: Production Order document ID = business code — GUARDED
+  Fungsi:
+  - Menyimpan PO baru dengan document ID sama seperti kode PO final.
+
+  Dipakai oleh:
+  - createProductionOrder.
+
+  Alasan perubahan:
+  - Data baru PO adalah guarded reference utama dalam chain BOM -> PO -> JOB -> PAY.
+
+  Catatan cleanup:
+  - Data lama random ID tetap compatibility.
+
+  Risiko:
+  - Jangan mengubah requirement/reservation/HPP dari section ini.
+  ===================================================== */
+  const resultRef = doc(db, COLLECTION_NAME, code);
+  await setDoc(resultRef, payload);
+  return resultRef.id;
 };
 
 export const refreshProductionOrderRequirements = async (orderId, currentUser = null) => {

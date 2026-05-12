@@ -789,7 +789,7 @@ const SemiFinishedMaterials = () => {
                 label="Kode Item"
                 name="code"
               >
-                <Input placeholder="Opsional, otomatis: SFP-PL-DN-MWR-PTH-FLN" />
+                <Input placeholder="Otomatis: SFP-KLP-MWR-PTH-001" disabled />
               </Form.Item>
             </Col>
 

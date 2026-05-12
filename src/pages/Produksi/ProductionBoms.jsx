@@ -911,7 +911,7 @@ const ProductionBoms = () => {
                 label="Kode BOM"
                 name="code"
               >
-                <Input placeholder="Opsional, otomatis: BOM-PRD-PL-DN-MWR-PTH-FLN" />
+                <Input placeholder="Otomatis: BOM-PRD-KLP-MWR-PTH-001" disabled />
               </Form.Item>
             </Col>
 

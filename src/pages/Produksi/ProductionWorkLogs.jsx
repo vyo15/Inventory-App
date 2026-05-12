@@ -1339,7 +1339,7 @@ const ProductionWorkLogs = () => {
                 label="No. Work Log"
                 name="workNumber"
               >
-                <Input placeholder="Opsional, otomatis: WL-0001" />
+                <Input placeholder="Otomatis: JOB-DDMMYYYY-001" disabled />
               </Form.Item>
             </Col>
 

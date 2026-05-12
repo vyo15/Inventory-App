@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -9,6 +8,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
 } from 'firebase/firestore';
@@ -515,7 +515,7 @@ export const generateRawMaterialCode = async (values = {}, excludeId = null) => 
     db,
     collectionName: COLLECTION_NAME,
     fieldNames: ['code', 'materialCode', 'sku'],
-    prefix: 'RM',
+    prefix: 'RAW',
     text: values.name || 'Raw Material',
     fallbackText: 'Raw Material',
     excludeId,
@@ -550,8 +550,26 @@ export const createRawMaterial = async (values = {}, suppliers = []) => {
   await assertRawMaterialCodeAvailable(normalizedCode, null);
 
   const payload = normalizeRawMaterialCreatePayload({ ...values, code: normalizedCode }, suppliers);
-  const result = await addDoc(collection(db, COLLECTION_NAME), payload);
-  return result.id;
+  /* =====================================================
+  SECTION: Raw Material document ID = business code — AKTIF
+  Fungsi:
+  - Menyimpan Raw Material baru dengan document ID sama seperti kode RAW readable.
+
+  Dipakai oleh:
+  - createRawMaterial pada Master Data Raw Material.
+
+  Alasan perubahan:
+  - Prefix standar data baru berubah dari RM ke RAW dan document ID baru dibuat audit-friendly.
+
+  Catatan cleanup:
+  - Data lama RM/random ID tetap compatibility, tidak di-rename.
+
+  Risiko:
+  - Jangan mengubah mutation stok atau supplier catalog dari section ini.
+  ===================================================== */
+  const ref = doc(db, COLLECTION_NAME, normalizedCode);
+  await setDoc(ref, payload);
+  return ref.id;
 };
 
 export const updateRawMaterial = async (id, values = {}, suppliers = []) => {

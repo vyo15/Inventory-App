@@ -824,3 +824,61 @@ Guard integration:
 - Opening stock reference pada export berasal dari stok master saat export dan harus dibuat ulang lewat flow terbaru setelah reset.
 - Advanced / Developer Tools membungkus panel lama tanpa mengubah route/menu/role guard.
 - Guard: reset total protected master belum diaktifkan; butuh approval dan service khusus jika nanti dibuat.
+
+
+---
+
+## FINAL LOCKED REFERENCE CODE STANDARD — IMS Bunga Flanel
+
+Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah lagi tanpa approval arsitektur khusus.
+
+| Modul | Prefix final | Format final | Contoh |
+|---|---|---|---|
+| Customer | `CUS` | `CUS-DDMMYYYY-001` | `CUS-12052026-001` |
+| Supplier | `SUP` | `SUP-DDMMYYYY-001` | `SUP-12052026-001` |
+| Produk Jadi | `PRD` | `PRD-[READABLE]-001` | `PRD-BQT-MWR-PTH-FLN-001` |
+| Raw Material | `RAW` | `RAW-[READABLE]-001` | `RAW-FLN-PTH-001` |
+| Semi Finished | `SFP` | `SFP-[READABLE]-001` | `SFP-BNG-MWR-PTH-001` |
+| BOM | `BOM` | `BOM-[TARGET]-001` | `BOM-PRD-BQT-MWR-PTH-FLN-001` |
+| Production Step | `STP` | `STP-[READABLE]-001` | `STP-POTONG-001` |
+| Purchase | `PUR` | `PUR-DDMMYYYY-001` | `PUR-12052026-001` |
+| Sales / Order | `ORD` | `ORD-DDMMYYYY-001` | `ORD-12052026-001` |
+| Return | `RET` | `RET-DDMMYYYY-001` | `RET-12052026-001` |
+| Production Order | `PO` | `PO-[TYPE]-DDMMYYYY-001` | `PO-PRD-12052026-001` |
+| Stock Adjustment | `STK-ADJ` | `STK-ADJ-DDMMYYYY-001` | `STK-ADJ-12052026-001` |
+| Cash In | `CSH-IN` | `CSH-IN-DDMMYYYY-001` | `CSH-IN-12052026-001` |
+| Cash Out | `CSH-OUT` | `CSH-OUT-DDMMYYYY-001` | `CSH-OUT-12052026-001` |
+| Work Log | `JOB` | `JOB-DDMMYYYY-001` | `JOB-12052026-001` |
+| Payroll | `PAY` | `PAY-DDMMYYYY-001` | `PAY-12052026-001` |
+
+Catatan lock:
+- Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
+- Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
+- Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
+- Readable semantic code wajib memakai suffix sequence 3 digit (`-001`, `-002`) dan tidak boleh memakai timestamp/random.
+- Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
+- Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
+
+
+### Mapping final field reference aktif
+
+| Modul | Collection utama | Field reference aktif |
+|---|---|---|
+| Customer | `customers` | `code`, `customerCode` |
+| Supplier | `supplierPurchases` | `code`, `supplierCode` |
+| Product | `products` | `code`, `productCode` |
+| Raw Material | `rawMaterials` | `code`, `materialCode` |
+| Semi Finished | `semiFinishedMaterials` | `code`, `itemCode` |
+| BOM | `productionBoms` | `code`, `bomCode` |
+| Production Step | `productionSteps` | `code` |
+| Purchase | `purchases` | `purchaseNumber`, `code`, `referenceNumber`, `sourceRef` |
+| Sales / Order | `sales` | `saleNumber` dengan value `ORD-*`, `code`, `referenceNumber`, `sourceRef` |
+| Return | `returns` | `returnNumber`, `code`, `referenceNumber`, `sourceRef` |
+| Production Order | `productionOrders` | `productionOrderCode`, `code` |
+| Stock Adjustment | `stock_adjustments` | `adjustmentNumber`, `code`, `referenceNumber`, `sourceRef` |
+| Cash In | `revenues`/`incomes` | `cashInNumber`, `code`, `referenceNumber`, `sourceRef` |
+| Cash Out | `expenses` | `cashOutNumber`, `code`, `referenceNumber`, `sourceRef` |
+| Work Log | `productionWorkLogs` | `workNumber` |
+| Payroll | `productionPayrolls` | `payrollNumber` |
+
+Inventory log harus memakai reference bisnis dari sumber transaksi, bukan Firestore random ID.

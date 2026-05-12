@@ -4,7 +4,6 @@
 // =====================================================
 
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -12,10 +11,12 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import { generateUniqueProductionReadableCode } from "../../utils/references/productionCodeGenerator";
 
 // =====================================================
 // Nama collection
@@ -28,17 +29,34 @@ const COLLECTION_NAME = "production_steps";
 // Menjaga data konsisten sebelum disimpan
 // =====================================================
 
-const generateProductionStepCode = (name = "") => {
-  const normalizedName = String(name || "")
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 24);
+/* =====================================================
+SECTION: Production Step code generator — AKTIF
+Fungsi:
+- Membuat kode STP-[READABLE]-001 untuk master tahapan produksi tanpa timestamp.
 
-  const timeSuffix = Date.now().toString().slice(-6);
-  return `${normalizedName || "STEP"}-${timeSuffix}`;
-};
+Dipakai oleh:
+- createProductionStep dan updateProductionStep.
+
+Alasan perubahan:
+- Standar final IMS mengganti kode step berbasis nama+timestamp menjadi reference readable dengan suffix 3 digit.
+
+Catatan cleanup:
+- Data lama STEP/timestamp tetap compatibility sampai ada audit repair khusus.
+
+Risiko:
+- Jangan ubah processType/inputPolicy/outputType dari section ini.
+===================================================== */
+export const generateProductionStepCode = async (name = "", excludeId = null) =>
+  generateUniqueProductionReadableCode({
+    db,
+    collectionName: COLLECTION_NAME,
+    fieldNames: ["code"],
+    prefix: "STP",
+    text: name || "Production Step",
+    fallbackText: "Production Step",
+    excludeId,
+    maxParts: 5,
+  });
 
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const normalizedCode = String(values.code || "")
@@ -116,7 +134,7 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const derivedConfig = derivedConfigByProcessType[processType] || derivedConfigByProcessType.raw_to_semi;
 
   const payload = {
-    code: normalizedCode || generateProductionStepCode(values.name),
+    code: normalizedCode,
     name: String(values.name || "").trim(),
     description: String(values.description || "").trim(),
 
@@ -372,6 +390,9 @@ export const isProductionStepCodeExists = async (code, excludeId = null) => {
 
   if (!normalizedCode) return false;
 
+  const directSnapshot = await getDoc(doc(db, COLLECTION_NAME, normalizedCode));
+  if (directSnapshot.exists() && directSnapshot.id !== excludeId) return true;
+
   const q = query(
     collection(db, COLLECTION_NAME),
     where("code", "==", normalizedCode),
@@ -396,7 +417,7 @@ export const createProductionStep = async (values, currentUser = null) => {
     throw { type: "validation", errors };
   }
 
-  const codeToCheck = String(values.code || "").trim() || generateProductionStepCode(values.name);
+  const codeToCheck = await generateProductionStepCode(values.name);
   const isCodeExists = await isProductionStepCodeExists(codeToCheck);
   values = { ...values, code: codeToCheck };
 
@@ -410,9 +431,27 @@ export const createProductionStep = async (values, currentUser = null) => {
   }
 
   const payload = normalizePayload(values, currentUser, false);
-  const result = await addDoc(collection(db, COLLECTION_NAME), payload);
+  /* =====================================================
+  SECTION: Production Step document ID = business code — AKTIF
+  Fungsi:
+  - Menyimpan step baru dengan document ID sama seperti kode STP readable.
 
-  return result.id;
+  Dipakai oleh:
+  - createProductionStep.
+
+  Alasan perubahan:
+  - Data baru step produksi perlu reference audit yang stabil dan tidak memakai timestamp.
+
+  Catatan cleanup:
+  - Data lama tetap random/timestamp sampai ada repair terpisah.
+
+  Risiko:
+  - Jangan mengubah config step produksi dari section ini.
+  ===================================================== */
+  const resultRef = doc(db, COLLECTION_NAME, codeToCheck);
+  await setDoc(resultRef, payload);
+
+  return resultRef.id;
 };
 
 // =====================================================
@@ -427,9 +466,9 @@ export const updateProductionStep = async (id, values, currentUser = null) => {
   }
 
   const codeToCheck =
-    String(values.code || "").trim() ||
     String(values.existingCode || "").trim() ||
-    generateProductionStepCode(values.name);
+    String(values.code || "").trim() ||
+    (await generateProductionStepCode(values.name, id));
   const isCodeExists = await isProductionStepCodeExists(codeToCheck, id);
   values = { ...values, code: codeToCheck };
 

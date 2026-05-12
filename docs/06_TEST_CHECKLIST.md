@@ -1490,7 +1490,7 @@ Risiko:
 - [ ] Pastikan audit tidak membuat collection baru dan tidak menulis data baru.
 - [ ] Klik **Preview Data Bermasalah**.
 - [ ] Pastikan setiap kategori menampilkan sample maksimal 10 data.
-- [ ] Pastikan kategori Sales tanpa `SAL`, Purchase tanpa `PUR`, Return tanpa `RET`, Cash In/Out tanpa `CIN/COUT`, Work Log tanpa `WL`, Work Log cost 0, Work Log material snapshot kosong, Payroll reference tidak jelas, Inventory Log reference ID random, Expense/Income source tidak jelas, dan HPP 0 tampil jika ada datanya.
+- [ ] Pastikan kategori Sales tanpa `ORD`, Purchase tanpa `PUR`, Return tanpa `RET`, Cash In/Out tanpa `CSH-IN/CSH-OUT`, Work Log tanpa `JOB`, Work Log cost 0, Work Log material snapshot kosong, Payroll reference tidak jelas, Inventory Log reference ID random, Expense/Income source tidak jelas, dan HPP 0 tampil jika ada datanya.
 - [ ] Pastikan rekomendasi kategori jelas: `Aman dibuat ulang jika data test`, `Perlu cek manual`, atau `Jangan reset jika data asli`.
 - [ ] Pastikan collection kosong tampil sebagai 0/skipped dan halaman tidak crash.
 - [ ] Pastikan tidak ada data yang terhapus setelah audit.
@@ -1513,3 +1513,60 @@ Risiko:
 - [ ] Pricing Rules tetap membaca field existing `pricingMode` dan `pricingRuleId`; tidak ada schema Firestore baru.
 - [ ] `npm run build` berhasil.
 - [ ] `npm run lint` berhasil atau warning non-blocker dicatat.
+
+
+---
+
+## FINAL LOCKED REFERENCE CODE STANDARD — IMS Bunga Flanel
+
+Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah lagi tanpa approval arsitektur khusus.
+
+| Modul | Prefix final | Format final | Contoh |
+|---|---|---|---|
+| Customer | `CUS` | `CUS-DDMMYYYY-001` | `CUS-12052026-001` |
+| Supplier | `SUP` | `SUP-DDMMYYYY-001` | `SUP-12052026-001` |
+| Produk Jadi | `PRD` | `PRD-[READABLE]-001` | `PRD-BQT-MWR-PTH-FLN-001` |
+| Raw Material | `RAW` | `RAW-[READABLE]-001` | `RAW-FLN-PTH-001` |
+| Semi Finished | `SFP` | `SFP-[READABLE]-001` | `SFP-BNG-MWR-PTH-001` |
+| BOM | `BOM` | `BOM-[TARGET]-001` | `BOM-PRD-BQT-MWR-PTH-FLN-001` |
+| Production Step | `STP` | `STP-[READABLE]-001` | `STP-POTONG-001` |
+| Purchase | `PUR` | `PUR-DDMMYYYY-001` | `PUR-12052026-001` |
+| Sales / Order | `ORD` | `ORD-DDMMYYYY-001` | `ORD-12052026-001` |
+| Return | `RET` | `RET-DDMMYYYY-001` | `RET-12052026-001` |
+| Production Order | `PO` | `PO-[TYPE]-DDMMYYYY-001` | `PO-PRD-12052026-001` |
+| Stock Adjustment | `STK-ADJ` | `STK-ADJ-DDMMYYYY-001` | `STK-ADJ-12052026-001` |
+| Cash In | `CSH-IN` | `CSH-IN-DDMMYYYY-001` | `CSH-IN-12052026-001` |
+| Cash Out | `CSH-OUT` | `CSH-OUT-DDMMYYYY-001` | `CSH-OUT-12052026-001` |
+| Work Log | `JOB` | `JOB-DDMMYYYY-001` | `JOB-12052026-001` |
+| Payroll | `PAY` | `PAY-DDMMYYYY-001` | `PAY-12052026-001` |
+
+Catatan lock:
+- Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
+- Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
+- Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
+- Readable semantic code wajib memakai suffix sequence 3 digit (`-001`, `-002`) dan tidak boleh memakai timestamp/random.
+- Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
+- Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
+
+
+### Checklist final reference code
+
+- [ ] Customer baru memakai `CUS-DDMMYYYY-001` dan field kode disabled/read-only.
+- [ ] Supplier baru memakai `SUP-DDMMYYYY-001` dan field kode disabled/read-only.
+- [ ] Product baru memakai `PRD-[READABLE]-001`.
+- [ ] Raw Material baru memakai `RAW-[READABLE]-001`, bukan `RM`.
+- [ ] Semi Finished baru memakai `SFP-[READABLE]-001`.
+- [ ] BOM baru memakai `BOM-[TARGET]-001`.
+- [ ] Production Step baru memakai `STP-[READABLE]-001`, bukan timestamp.
+- [ ] Purchase baru memakai `PUR-DDMMYYYY-001`.
+- [ ] Sales/Order baru memakai `ORD-DDMMYYYY-001` walaupun field compatibility masih `saleNumber`.
+- [ ] Return baru memakai `RET-DDMMYYYY-001`.
+- [ ] Production Order baru memakai `PO-PRD-DDMMYYYY-001` atau `PO-SFP-DDMMYYYY-001`.
+- [ ] Stock Adjustment baru memakai `STK-ADJ-DDMMYYYY-001`.
+- [ ] Cash In baru memakai `CSH-IN-DDMMYYYY-001`.
+- [ ] Cash Out baru memakai `CSH-OUT-DDMMYYYY-001`, bukan `CSH-OT`.
+- [ ] Work Log baru memakai `JOB-DDMMYYYY-001`, bukan `WL`.
+- [ ] Payroll baru memakai `PAY-DDMMYYYY-001`.
+- [ ] Firestore random ID tidak tampil sebagai kode audit/user-facing.
+- [ ] Data lama tidak di-rename document ID.
+- [ ] Duplicate code dicegah oleh service/helper.
