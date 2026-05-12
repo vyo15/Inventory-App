@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -546,6 +547,23 @@ export const createRawMaterial = async (values = {}, suppliers = []) => {
     throw { type: 'validation', errors };
   }
 
+  /* =====================================================
+  SECTION: Raw Material service auto-generates hidden internal code — AKTIF
+  Fungsi:
+  - Menjamin Raw Material baru tetap memiliki kode RAW internal walaupun UI tidak mengirim field code.
+
+  Dipakai oleh:
+  - RawMaterials.jsx saat create Raw Material dan helper businessCodeGenerator.
+
+  Alasan perubahan:
+  - Input code disembunyikan dari UI utama master item, tetapi field code tetap wajib tersimpan otomatis.
+
+  Catatan cleanup:
+  - Belum ada.
+
+  Risiko:
+  - Jangan mengganti dengan input manual atau random ID karena supplier, stok, export, dan audit teknis masih memakai reference internal.
+  ===================================================== */
   const normalizedCode = String(values.code || '').trim().toUpperCase() || (await generateRawMaterialCode(values));
   await assertRawMaterialCodeAvailable(normalizedCode, null);
 
@@ -578,10 +596,18 @@ export const updateRawMaterial = async (id, values = {}, suppliers = []) => {
     throw { type: 'validation', errors };
   }
 
-  const normalizedCode = String(values.code || '').trim().toUpperCase() || (await generateRawMaterialCode(values, id));
-  await assertRawMaterialCodeAvailable(normalizedCode, id);
-
   const ref = doc(db, COLLECTION_NAME, id);
+  const existingSnapshot = await getDoc(ref);
+  if (!existingSnapshot.exists()) {
+    throw new Error('Bahan baku tidak ditemukan.');
+  }
+
+  const existingMaterialBeforeUpdate = enrichRawMaterial({ id: existingSnapshot.id, ...existingSnapshot.data() });
+  // IMS NOTE [AKTIF | immutable-code]: UI tidak mengirim code; update wajib mempertahankan code existing agar edit nama/supplier tidak regenerate kode RAW.
+  const submittedCode = String(values.code || '').trim().toUpperCase();
+  const existingCode = String(existingMaterialBeforeUpdate.code || existingMaterialBeforeUpdate.materialCode || '').trim().toUpperCase();
+  const normalizedCode = existingCode || submittedCode || (await generateRawMaterialCode(values, id));
+  await assertRawMaterialCodeAvailable(normalizedCode, id);
 
   // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: update raw material
   // memakai transaction agar merge variant tidak menimpa purchase/adjustment terbaru.

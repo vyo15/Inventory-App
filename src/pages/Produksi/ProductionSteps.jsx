@@ -756,6 +756,23 @@ Risiko:
           <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
             Gunakan step untuk proses kerja nyata. QC tidak perlu dibuat sebagai step terpisah karena menempel di setiap proses. Bila assembly sudah menjadi proses akhir, Anda tidak perlu membuat step finishing tersendiri. Packing cukup dibuat bila memang ada pekerjaan pengemasan terpisah.
           </Typography.Paragraph>
+          {/* =====================================================
+          SECTION: Production Step internal code hidden from main UI — AKTIF
+          Fungsi:
+          - Form Production Step tidak menampilkan input kode utama agar user fokus pada nama step, kategori, deskripsi, urutan, payroll rule, dan status.
+
+          Dipakai oleh:
+          - Drawer form ProductionSteps dan productionStepsService sebagai pembuat kode internal.
+
+          Alasan perubahan:
+          - Kode STP tetap dibuat otomatis oleh service, tetapi tidak perlu menjadi input utama konfigurasi step.
+
+          Catatan cleanup:
+          - Kode internal tetap boleh dipakai audit teknis dan export jika diperlukan.
+
+          Risiko:
+          - Jangan mengubah payroll/monitoring/relasi employee-worklog saat menyembunyikan kode internal.
+          ===================================================== */}
           <Form.Item
             label="Nama Step"
             name="name"

@@ -494,7 +494,8 @@ export const updateProductionBom = async (id, values, currentUser = null) => {
   }
 
   const existingBom = { id: snapshot.id, ...snapshot.data() };
-  const existingCode = safeTrim(existingBom.code).toUpperCase();
+  // IMS NOTE [AKTIF | immutable-code]: UI tidak mengirim code; update wajib mempertahankan code/bomCode existing agar edit target/komposisi tidak regenerate kode BOM.
+  const existingCode = safeTrim(existingBom.code || existingBom.bomCode).toUpperCase();
   const normalizedCode = existingCode || (await generateProductionBomCode(values, id));
   const isCodeExists = await isProductionBomCodeExists(normalizedCode, id);
 

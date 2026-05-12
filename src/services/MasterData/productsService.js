@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -538,6 +539,23 @@ export const createProduct = async (values = {}, categories = []) => {
     throw { type: 'validation', errors };
   }
 
+  /* =====================================================
+  SECTION: Product service auto-generates hidden internal code — AKTIF
+  Fungsi:
+  - Menjamin Product baru tetap memiliki kode PRD internal walaupun UI tidak mengirim field code.
+
+  Dipakai oleh:
+  - Products.jsx saat create Product dan helper businessCodeGenerator.
+
+  Alasan perubahan:
+  - Input code disembunyikan dari UI utama master item, tetapi field code tetap wajib tersimpan otomatis.
+
+  Catatan cleanup:
+  - Belum ada.
+
+  Risiko:
+  - Jangan mengganti dengan input manual atau random ID karena akan merusak duplicate guard dan export/audit teknis.
+  ===================================================== */
   const normalizedCode = String(values.code || '').trim().toUpperCase() || (await generateProductCode(values));
   await assertProductCodeAvailable(normalizedCode, null);
 
@@ -570,10 +588,18 @@ export const updateProduct = async (id, values = {}, categories = []) => {
     throw { type: 'validation', errors };
   }
 
-  const normalizedCode = String(values.code || '').trim().toUpperCase() || (await generateProductCode(values, id));
-  await assertProductCodeAvailable(normalizedCode, id);
-
   const ref = doc(db, COLLECTION_NAME, id);
+  const existingSnapshot = await getDoc(ref);
+  if (!existingSnapshot.exists()) {
+    throw new Error('Produk tidak ditemukan.');
+  }
+
+  const existingProductBeforeUpdate = enrichProduct({ id: existingSnapshot.id, ...existingSnapshot.data() });
+  // IMS NOTE [AKTIF | immutable-code]: UI tidak mengirim code; update wajib mempertahankan code existing agar edit nama/kategori tidak regenerate kode PRD.
+  const submittedCode = String(values.code || '').trim().toUpperCase();
+  const existingCode = String(existingProductBeforeUpdate.code || existingProductBeforeUpdate.productCode || '').trim().toUpperCase();
+  const normalizedCode = existingCode || submittedCode || (await generateProductCode(values, id));
+  await assertProductCodeAvailable(normalizedCode, id);
 
   // IMS NOTE [GUARDED | behavior-preserving terhadap stok]: update metadata
   // memakai transaction supaya merge variant tidak menimpa Stock Adjustment terbaru.

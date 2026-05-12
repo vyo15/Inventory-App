@@ -700,6 +700,23 @@ const Products = () => {
       >
         <Form form={form} layout="vertical" initialValues={buildFormValues(PRODUCT_DEFAULT_FORM)}>
           <Divider orientation="left">Informasi Utama</Divider>
+          {/* =====================================================
+          SECTION: Product internal code hidden from main UI — AKTIF
+          Fungsi:
+          - Form Produk Jadi tidak menampilkan input kode utama agar user fokus pada nama, kategori, harga, stok, dan varian.
+
+          Dipakai oleh:
+          - Drawer form Products dan productsService sebagai pembuat kode internal.
+
+          Alasan perubahan:
+          - Kode PRD tetap dibuat otomatis oleh service, tetapi tidak perlu menjadi input utama di UI master item.
+
+          Catatan cleanup:
+          - Audit table/detail berikutnya dapat memastikan kode internal hanya muncul pada export/debug bila dibutuhkan.
+
+          Risiko:
+          - Jangan menambahkan input manual code karena dapat merusak immutability dan relasi produk lama.
+          ===================================================== */}
           <Row gutter={16}>
             <Col xs={24} md={12}>
               <Form.Item name="name" label="Nama Produk" rules={[{ required: true, message: 'Nama produk wajib diisi.' }]}> 

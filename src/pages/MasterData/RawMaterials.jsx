@@ -1155,6 +1155,23 @@ const RawMaterials = () => {
               Section identitas utama bahan baku.
           ----------------------------------------------------------------- */}
           <Divider orientation="left">Informasi Utama</Divider>
+          {/* =====================================================
+          SECTION: Raw Material internal code hidden from main UI — AKTIF
+          Fungsi:
+          - Form Raw Material tidak menampilkan input kode utama agar user fokus pada nama bahan, supplier, satuan, stok, harga, dan varian.
+
+          Dipakai oleh:
+          - Drawer form Raw Materials dan rawMaterialsService sebagai pembuat kode internal.
+
+          Alasan perubahan:
+          - Kode RAW tetap dibuat otomatis oleh service, tetapi tidak perlu menjadi input utama di UI master item.
+
+          Catatan cleanup:
+          - Kode internal tetap dapat dipakai export/audit teknis tanpa mengganggu form operasional.
+
+          Risiko:
+          - Jangan menyentuh SKU/kode varian karena variant identity dipakai stok dan transaksi.
+          ===================================================== */}
           <Row gutter={16}>
             <Col xs={24} md={12}>
               <Form.Item

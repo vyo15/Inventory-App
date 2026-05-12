@@ -172,6 +172,25 @@ export const isBusinessCodeExists = async ({
   return false;
 };
 
+/* =====================================================
+SECTION: Unique readable semantic code — AKTIF
+Fungsi:
+- Membuat kode master item manusiawi dari nama/konteks item.
+- Kode unik pertama memakai base code tanpa suffix, misalnya SFP-KLP-MLT.
+- Suffix 3 digit baru ditambahkan ketika base code sudah pernah dipakai/bertabrakan.
+
+Dipakai oleh:
+- Product, Raw Material, Semi Finished, BOM, dan Production Step.
+
+Alasan perubahan:
+- User ingin preview kode semantic lebih natural: tidak memakai -001 jika tidak ada duplicate.
+
+Catatan cleanup:
+- Generator masih scan collection; counter atomic bisa dibahas terpisah jika volume data tinggi.
+
+Risiko:
+- Mengubah aturan suffix dapat membuat format data baru berbeda dari batch sebelumnya; legacy tetap harus dibaca apa adanya.
+===================================================== */
 export const generateUniqueReadableCode = async ({
   db,
   collectionName,
@@ -185,17 +204,57 @@ export const generateUniqueReadableCode = async ({
 } = {}) => {
   const baseCode = buildReadableBusinessCode({ prefix, text, fallbackText, maxParts, stopwords });
 
-  for (let index = 1; index <= 999; index += 1) {
-    const candidate = `${baseCode}-${String(index).padStart(3, "0")}`;
-    const exists = await isBusinessCodeExists({
-      db,
-      collectionName,
-      fieldNames,
-      value: candidate,
-      excludeId,
-    });
+  if (!db || !collectionName) return baseCode;
 
-    if (!exists) return candidate;
+  const snapshot = await getDocs(collection(db, collectionName));
+  const fieldsToCheck = [
+    ...new Set([
+      ...fieldNames,
+      "code",
+      "productCode",
+      "materialCode",
+      "itemCode",
+      "bomCode",
+      "referenceNumber",
+      "referenceCode",
+      "sourceRef",
+    ]),
+  ];
+  const usedSequences = new Set();
+  let baseCodeExists = false;
+
+  snapshot.docs.forEach((item) => {
+    if (excludeId && item.id === excludeId) return;
+
+    const data = item.data() || {};
+    const valuesToCheck = [item.id, ...fieldsToCheck.map((fieldName) => data[fieldName])];
+
+    valuesToCheck.forEach((rawValue) => {
+      const value = safeTrim(rawValue).toUpperCase();
+      if (!value) return;
+
+      if (value === baseCode) {
+        baseCodeExists = true;
+        return;
+      }
+
+      if (!value.startsWith(`${baseCode}-`)) return;
+
+      const suffix = value.slice(baseCode.length + 1);
+      if (/^\d{3}$/.test(suffix)) {
+        usedSequences.add(Number(suffix));
+      }
+    });
+  });
+
+  if (!baseCodeExists && usedSequences.size === 0) {
+    return baseCode;
+  }
+
+  for (let index = 1; index <= 999; index += 1) {
+    if (!usedSequences.has(index)) {
+      return `${baseCode}-${String(index).padStart(3, "0")}`;
+    }
   }
 
   throw new Error(`Tidak dapat membuat kode unik untuk ${baseCode}.`);

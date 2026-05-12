@@ -407,7 +407,8 @@ const normalizeSemiFinishedMetadataPayload = (
 // =====================================================
 // SECTION: Auto code Semi Finished — AKTIF
 // Fungsi:
-// - Generate kode item Semi Finished dari nama saat kode kosong.
+// - Generate kode item Semi Finished dari nama secara otomatis.
+// - Base code tanpa suffix dipakai jika unik; suffix 3 digit hanya saat duplicate.
 //
 // Dipakai oleh:
 // - createSemiFinishedMaterial
@@ -420,7 +421,7 @@ const normalizeSemiFinishedMetadataPayload = (
 // - Belum ada.
 //
 // Risiko:
-// - Jangan jadikan kode ini relasi utama; relasi tetap memakai Firestore document ID.
+// - Data baru memakai document ID = code, tetapi data lama tetap boleh random dan tidak di-rename.
 // =====================================================
 export const generateSemiFinishedMaterialCode = async (values = {}, excludeId = null) =>
   generateUniqueProductionReadableCode({
@@ -580,9 +581,25 @@ export const createSemiFinishedMaterial = async (
     throw { type: "validation", errors };
   }
 
-  const normalizedCode =
-    String(values.code || "").trim().toUpperCase() ||
-    (await generateSemiFinishedMaterialCode(values));
+  /* =====================================================
+  SECTION: Semi Finished final code on create — AKTIF
+  Fungsi:
+  - Service selalu membuat kode final saat create, meskipun UI mengirim preview code.
+  - Preview UI hanya bantuan tampilan; source of truth tetap service.
+
+  Dipakai oleh:
+  - createSemiFinishedMaterial dari halaman SemiFinishedMaterials.
+
+  Alasan perubahan:
+  - Preview kode sekarang realtime, tetapi final code harus tetap dicek ulang agar tidak stale/duplicate.
+
+  Catatan cleanup:
+  - Belum ada.
+
+  Risiko:
+  - Jangan gunakan kode manual dari UI untuk create karena field utama harus otomatis.
+  ===================================================== */
+  const normalizedCode = await generateSemiFinishedMaterialCode(values);
   const isCodeExists = await isSemiFinishedMaterialCodeExists(normalizedCode);
 
   if (isCodeExists) {
@@ -645,14 +662,10 @@ export const updateSemiFinishedMaterial = async (
     id: snapshot.id,
     ...snapshot.data(),
   });
-  const hasSubmittedCode = Object.prototype.hasOwnProperty.call(values, "code");
+  // IMS NOTE [AKTIF | immutable-code]: UI tidak mengirim code; update wajib mempertahankan code/itemCode existing agar edit nama/kategori tidak regenerate kode SFP.
   const submittedCode = String(values.code || "").trim().toUpperCase();
-  const existingCode = String(existingMaterialBeforeUpdate.code || "").trim().toUpperCase();
-  const normalizedCode =
-    submittedCode ||
-    (!hasSubmittedCode && existingCode
-      ? existingCode
-      : await generateSemiFinishedMaterialCode(values, id));
+  const existingCode = String(existingMaterialBeforeUpdate.code || existingMaterialBeforeUpdate.itemCode || "").trim().toUpperCase();
+  const normalizedCode = existingCode || submittedCode || (await generateSemiFinishedMaterialCode(values, id));
   const isCodeExists = await isSemiFinishedMaterialCodeExists(normalizedCode, id);
 
   if (isCodeExists) {

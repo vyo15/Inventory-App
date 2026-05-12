@@ -19,6 +19,7 @@ import {
   Button,
   Card,
   Col,
+  Collapse,
   Descriptions,
   Divider,
   Drawer,
@@ -116,6 +117,7 @@ const ProductionBoms = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [targetTypeFilter, setTargetTypeFilter] = useState("all");
+  const [listViewMode, setListViewMode] = useState("grouped");
 
   // SECTION: state form/detail
   const [formVisible, setFormVisible] = useState(false);
@@ -232,6 +234,81 @@ const ProductionBoms = () => {
       return matchSearch && matchStatus && matchTargetType;
     });
   }, [boms, search, statusFilter, targetTypeFilter]);
+
+  /* =====================================================
+  SECTION: Production BOM grouped listing — AKTIF
+  Fungsi:
+  - Mengelompokkan BOM secara read-only berdasarkan Target Type lalu Target Item.
+
+  Dipakai oleh:
+  - Halaman ProductionBoms untuk membuat daftar resep lebih mudah dicari tanpa mengubah rule validasi, payload, atau service BOM.
+
+  Alasan perubahan:
+  - Saat BOM bertambah banyak, user operasional lebih aman memilih dari konteks target produksi daripada satu tabel panjang.
+
+  Catatan cleanup:
+  - Belum ada. Grouping ini hanya tampilan dan tidak menjadi source of truth relasi produksi.
+
+  Risiko:
+  - Jangan mengubah targetType/targetId dari grouping ini karena BOM tetap menjadi source of truth PO.
+  ===================================================== */
+  const groupedFilteredData = useMemo(() => {
+    const typeMap = new Map();
+
+    filteredData.forEach((item) => {
+      const targetType = item.targetType || "unknown";
+      const targetTypeLabel = BOM_TARGET_TYPE_MAP[targetType] || "Target Tidak Dikenal";
+      const targetId = String(item.targetId || item.targetName || "__unknown_target").trim() || "__unknown_target";
+      const targetName = String(item.targetName || item.targetCode || "Target belum dikenal").trim();
+      const targetKey = `${targetType}::${targetId}`;
+
+      if (!typeMap.has(targetType)) {
+        typeMap.set(targetType, {
+          key: targetType,
+          label: targetTypeLabel,
+          items: [],
+          targetMap: new Map(),
+        });
+      }
+
+      const typeGroup = typeMap.get(targetType);
+      typeGroup.items.push(item);
+
+      if (!typeGroup.targetMap.has(targetKey)) {
+        typeGroup.targetMap.set(targetKey, {
+          key: targetKey,
+          label: targetName,
+          items: [],
+        });
+      }
+
+      typeGroup.targetMap.get(targetKey).items.push(item);
+    });
+
+    return Array.from(typeMap.values())
+      .map((typeGroup) => {
+        const counts = typeGroup.items.reduce(
+          (acc, item) => {
+            if (item.isActive) acc.active += 1;
+            if (!item.isActive) acc.inactive += 1;
+            if (item.isDefault) acc.default += 1;
+            return acc;
+          },
+          { active: 0, inactive: 0, default: 0 },
+        );
+
+        return {
+          ...typeGroup,
+          counts,
+          targets: Array.from(typeGroup.targetMap.values()).sort((a, b) =>
+            a.label.localeCompare(b.label),
+          ),
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [filteredData]);
+
+  const shouldAutoOpenBomGroups = Boolean(search.trim()) || statusFilter !== "all" || targetTypeFilter !== "all";
 
   // =====================================================
   // SECTION: option target product / semi finished
@@ -644,9 +721,6 @@ const ProductionBoms = () => {
                 {record.name || "-"}
               </Typography.Text>
             </Tooltip>
-            <Typography.Text type="secondary" style={{ display: "block", fontSize: 12, marginTop: 2 }}>
-              {resolveDisplayReference(record, { fallback: "Tanpa kode" })}
-            </Typography.Text>
           </div>
 
           <Tooltip title={record.description || "Belum ada deskripsi"}>
@@ -804,7 +878,7 @@ const ProductionBoms = () => {
 
       {/* SECTION: filter */}
       <ProductionFilterCard>
-          <Col xs={24} md={8}>
+          <Col xs={24} lg={8}>
             <Input
               placeholder="Cari kode, nama BOM, target..."
               value={search}
@@ -813,7 +887,7 @@ const ProductionBoms = () => {
             />
           </Col>
 
-          <Col xs={24} md={8}>
+          <Col xs={24} sm={8} lg={5}>
             <Select
               style={{ width: "100%" }}
               value={statusFilter}
@@ -826,7 +900,7 @@ const ProductionBoms = () => {
             />
           </Col>
 
-          <Col xs={24} md={8}>
+          <Col xs={24} sm={8} lg={5}>
             <Select
               style={{ width: "100%" }}
               value={targetTypeFilter}
@@ -834,6 +908,18 @@ const ProductionBoms = () => {
               options={[
                 { value: "all", label: "Semua Target" },
                 ...PRODUCTION_BOM_TARGET_TYPES,
+              ]}
+            />
+          </Col>
+
+          <Col xs={24} sm={8} lg={6}>
+            <Select
+              style={{ width: "100%" }}
+              value={listViewMode}
+              onChange={setListViewMode}
+              options={[
+                { value: "grouped", label: "Grouped Target" },
+                { value: "global", label: "Semua BOM" },
               ]}
             />
           </Col>
@@ -846,19 +932,68 @@ const ProductionBoms = () => {
             Detail komposisi tetap tersedia di drawer detail existing.
         =============================================================== */}
         <DataRefreshIndicator loading={loading} dataSource={filteredData} />
-        <Table
-          className="app-data-table"
-          rowKey="id"
-          columns={columns}
-          dataSource={filteredData}
-          locale={{
-            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data BOM produksi" />),
-          }}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-          }}
-        />
+        {listViewMode === "global" ? (
+          <Table
+            className="app-data-table"
+            rowKey="id"
+            columns={columns}
+            dataSource={filteredData}
+            locale={{
+              emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data BOM produksi" />),
+            }}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+            }}
+          />
+        ) : filteredData.length === 0 ? (
+          <Empty description={loading ? "Memuat data..." : "Belum ada data BOM produksi"} />
+        ) : (
+          <Collapse
+            className="ims-production-group-collapse"
+            bordered={false}
+            defaultActiveKey={groupedFilteredData[0]?.key ? [groupedFilteredData[0].key] : []}
+            activeKey={shouldAutoOpenBomGroups ? groupedFilteredData.map((group) => group.key) : undefined}
+            items={groupedFilteredData.map((typeGroup) => ({
+              key: typeGroup.key,
+              label: (
+                <Space direction="vertical" size={2}>
+                  <Typography.Text strong>{typeGroup.label}</Typography.Text>
+                  <Space size={6} wrap>
+                    <Tag>{formatNumber(typeGroup.items.length)} BOM</Tag>
+                    <Tag color="green">Aktif {formatNumber(typeGroup.counts.active)}</Tag>
+                    <Tag color="blue">Default {formatNumber(typeGroup.counts.default)}</Tag>
+                    {typeGroup.counts.inactive > 0 ? (
+                      <Tag color="default">Nonaktif {formatNumber(typeGroup.counts.inactive)}</Tag>
+                    ) : null}
+                  </Space>
+                </Space>
+              ),
+              children: (
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  {typeGroup.targets.map((targetGroup) => (
+                    <Card
+                      key={targetGroup.key}
+                      size="small"
+                      title={`${targetGroup.label} (${formatNumber(targetGroup.items.length)} BOM)`}
+                    >
+                      <Table
+                        className="app-data-table"
+                        rowKey="id"
+                        columns={columns}
+                        dataSource={targetGroup.items}
+                        pagination={false}
+                        locale={{
+                          emptyText: <Empty description="Tidak ada BOM pada target ini" />,
+                        }}
+                      />
+                    </Card>
+                  ))}
+                </Space>
+              ),
+            }))}
+          />
+        )}
       </Card>
 
       {/* SECTION: drawer form tambah/edit BOM */}
@@ -905,17 +1040,25 @@ const ProductionBoms = () => {
           ) : null}
           <Divider orientation="left">Informasi Dasar</Divider>
 
-          <Row gutter={16}>
-            <Col xs={24} md={8}>
-              <Form.Item
-                label="Kode BOM"
-                name="code"
-              >
-                <Input placeholder="Otomatis: BOM-PRD-KLP-MWR-PTH-001" disabled />
-              </Form.Item>
-            </Col>
+          {/* =====================================================
+          SECTION: BOM internal code hidden from main UI — AKTIF
+          Fungsi:
+          - Menyembunyikan input kode BOM dari form tambah/edit agar user fokus pada target, komposisi bahan, step, dan formula BOM.
 
-            <Col xs={24} md={16}>
+          Dipakai oleh:
+          - Drawer form Production BOM dan productionBomsService sebagai pembuat kode internal.
+
+          Alasan perubahan:
+          - Kode BOM tetap dibuat otomatis oleh service, tetapi tidak perlu menjadi input utama di UI.
+
+          Catatan cleanup:
+          - Kode internal masih boleh tampil kecil pada drawer detail/export untuk audit teknis.
+
+          Risiko:
+          - Jangan menambahkan input manual code karena dapat membuat relasi BOM dan duplicate guard tidak konsisten.
+          ===================================================== */}
+          <Row gutter={16}>
+            <Col xs={24}>
               <Form.Item
                 label="Nama BOM"
                 name="name"
@@ -1262,7 +1405,7 @@ const ProductionBoms = () => {
               size="small"
               style={{ marginBottom: 16 }}
             >
-              <Descriptions.Item label="Kode">
+              <Descriptions.Item label="Kode internal">
                 {resolveDisplayReference(selectedBom)}
               </Descriptions.Item>
               <Descriptions.Item label="Nama">

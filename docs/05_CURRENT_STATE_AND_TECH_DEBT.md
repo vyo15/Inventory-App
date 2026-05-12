@@ -927,11 +927,11 @@ Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah 
 |---|---|---|---|
 | Customer | `CUS` | `CUS-DDMMYYYY-001` | `CUS-12052026-001` |
 | Supplier | `SUP` | `SUP-DDMMYYYY-001` | `SUP-12052026-001` |
-| Produk Jadi | `PRD` | `PRD-[READABLE]-001` | `PRD-BQT-MWR-PTH-FLN-001` |
-| Raw Material | `RAW` | `RAW-[READABLE]-001` | `RAW-FLN-PTH-001` |
-| Semi Finished | `SFP` | `SFP-[READABLE]-001` | `SFP-BNG-MWR-PTH-001` |
-| BOM | `BOM` | `BOM-[TARGET]-001` | `BOM-PRD-BQT-MWR-PTH-FLN-001` |
-| Production Step | `STP` | `STP-[READABLE]-001` | `STP-POTONG-001` |
+| Produk Jadi | `PRD` | `PRD-[READABLE]` | `PRD-BQT-MWR-PTH-FLN` |
+| Raw Material | `RAW` | `RAW-[READABLE]` | `RAW-FLN-PTH` |
+| Semi Finished | `SFP` | `SFP-[READABLE]` | `SFP-BNG-MWR-PTH` |
+| BOM | `BOM` | `BOM-[TARGET]` | `BOM-PRD-BQT-MWR-PTH-FLN` |
+| Production Step | `STP` | `STP-[READABLE]` | `STP-POTONG` |
 | Purchase | `PUR` | `PUR-DDMMYYYY-001` | `PUR-12052026-001` |
 | Sales / Order | `ORD` | `ORD-DDMMYYYY-001` | `ORD-12052026-001` |
 | Return | `RET` | `RET-DDMMYYYY-001` | `RET-12052026-001` |
@@ -946,7 +946,7 @@ Catatan lock:
 - Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
 - Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
 - Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
-- Readable semantic code wajib memakai suffix sequence 3 digit (`-001`, `-002`) dan tidak boleh memakai timestamp/random.
+- Readable semantic code unik tidak memakai suffix; suffix sequence 3 digit (`-001`, `-002`) hanya ditambahkan saat base code duplicate/collision dan tidak boleh memakai timestamp/random.
 - Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
 - Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
 
@@ -957,3 +957,12 @@ Catatan lock:
 - Data baru harus diarahkan ke prefix final locked di tabel di atas.
 - Data lama dengan prefix `SAL`, `RM`, `CIN`, `COUT`, `WL`, `ADJ`, atau `STEP` tetap dibaca sebagai legacy compatibility.
 - Tech debt yang masih harus dijaga: jangan menampilkan Firestore random ID sebagai audit reference, dan jangan mengubah formula stok/HPP/payroll/report saat hanya patch kode.
+
+
+### Current state: master item/config code UI
+
+- UI Product, Raw Material, Semi Finished, BOM, dan Production Step diarahkan lebih user-friendly dengan menyembunyikan kode internal dari form utama.
+- Kode internal tetap dibuat otomatis oleh service dan tetap disimpan pada data.
+- Cleanup candidate: audit semua table/detail agar technical ID atau kode internal tidak tampil sebagai identitas utama master item.
+- Cleanup candidate: standardisasi seluruh generator master/transaksi jika masih ada prefix lama pada data baru.
+- Risiko yang harus dijaga: jangan menyamakan rule master item dengan transaksi/audit karena nomor transaksi tetap wajib terlihat untuk pencarian dan bukti audit.

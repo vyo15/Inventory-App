@@ -185,6 +185,7 @@ const SemiFinishedMaterials = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [flowerGroupFilter, setFlowerGroupFilter] = useState("all");
+  const [listViewMode, setListViewMode] = useState("grouped");
 
   const [formVisible, setFormVisible] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
@@ -325,6 +326,93 @@ const SemiFinishedMaterials = () => {
     });
   }, [materials, search, statusFilter, categoryFilter, flowerGroupFilter]);
 
+  /* =====================================================
+  SECTION: Semi Finished grouped listing — AKTIF
+  Fungsi:
+  - Mengelompokkan list Semi Product secara read-only berdasarkan Product Family / Jenis Bunga lalu kategori.
+
+  Dipakai oleh:
+  - Halaman SemiFinishedMaterials untuk mode tampilan grouped tanpa mengubah service, payload, stok, atau schema Firestore.
+
+  Alasan perubahan:
+  - Daftar semi product global tetap reusable, tetapi user tidak lagi membaca satu daftar campur panjang saat data bertambah.
+
+  Catatan cleanup:
+  - Belum ada. Jika relasi pemakaian produk dibutuhkan, baca read-only dari BOM pada task terpisah.
+
+  Risiko:
+  - Jangan memakai grouping ini sebagai relasi kepemilikan produk karena stok semi product tetap global/reusable.
+  ===================================================== */
+  const groupedFilteredData = useMemo(() => {
+    const familyMap = new Map();
+
+    filteredData.forEach((item) => {
+      const rawFamilyKey = String(item.flowerGroup || "").trim();
+      const familyKey = rawFamilyKey || "__general_reusable";
+      const familyLabel = rawFamilyKey
+        ? SEMI_FINISHED_GROUP_MAP[rawFamilyKey] || rawFamilyKey
+        : "Umum / Reusable";
+
+      const rawCategoryKey = String(item.category || "").trim();
+      const categoryKey = rawCategoryKey || "__uncategorized";
+      const categoryLabel = rawCategoryKey
+        ? SEMI_FINISHED_CATEGORY_MAP[rawCategoryKey] || rawCategoryKey
+        : "Tanpa Kategori";
+
+      if (!familyMap.has(familyKey)) {
+        familyMap.set(familyKey, {
+          key: familyKey,
+          label: familyLabel,
+          items: [],
+          categoryMap: new Map(),
+        });
+      }
+
+      const familyGroup = familyMap.get(familyKey);
+      familyGroup.items.push(item);
+
+      if (!familyGroup.categoryMap.has(categoryKey)) {
+        familyGroup.categoryMap.set(categoryKey, {
+          key: `${familyKey}::${categoryKey}`,
+          label: categoryLabel,
+          items: [],
+        });
+      }
+
+      familyGroup.categoryMap.get(categoryKey).items.push(item);
+    });
+
+    return Array.from(familyMap.values())
+      .map((familyGroup) => {
+        const statusCounts = familyGroup.items.reduce(
+          (acc, item) => {
+            const statusMeta = getStockStatusMeta(item);
+            if (!item.isActive) acc.inactive += 1;
+            if (statusMeta.label === "Kosong") acc.empty += 1;
+            if (statusMeta.label === "Stok Rendah") acc.low += 1;
+            if (statusMeta.label === "Aman") acc.safe += 1;
+            return acc;
+          },
+          { safe: 0, empty: 0, low: 0, inactive: 0 },
+        );
+
+        return {
+          ...familyGroup,
+          statusCounts,
+          categories: Array.from(familyGroup.categoryMap.values()).sort((a, b) =>
+            a.label.localeCompare(b.label),
+          ),
+        };
+      })
+      .sort((a, b) => {
+        if (a.key === "__general_reusable") return 1;
+        if (b.key === "__general_reusable") return -1;
+        return a.label.localeCompare(b.label);
+      });
+  }, [filteredData]);
+
+  const shouldAutoOpenSemiGroups = Boolean(search.trim()) || statusFilter !== "all" || categoryFilter !== "all" || flowerGroupFilter !== "all";
+
   // ---------------------------------------------------------------------------
   // Helper reset form agar state create/edit tidak saling tercampur.
   // ---------------------------------------------------------------------------
@@ -340,7 +428,10 @@ const SemiFinishedMaterials = () => {
   // ---------------------------------------------------------------------------
   const handleAdd = () => {
     setEditingMaterial(null);
-    form.setFieldsValue(buildFormValues(DEFAULT_SEMI_FINISHED_FORM));
+    form.setFieldsValue({
+      ...buildFormValues(DEFAULT_SEMI_FINISHED_FORM),
+      code: "",
+    });
     setFormVisible(true);
   };
 
@@ -445,9 +536,6 @@ const SemiFinishedMaterials = () => {
       render: (_, record) => (
         <div style={compactCellStyles.stack}>
           <Typography.Text strong>{record.name || "-"}</Typography.Text>
-          <Typography.Text type="secondary" style={compactCellStyles.meta}>
-            {resolveDisplayReference(record, { fallback: record.code || "-" })}
-          </Typography.Text>
         </div>
       ),
     },
@@ -665,7 +753,7 @@ const SemiFinishedMaterials = () => {
       {/* ------------------------------------------------------------------ */}
       {/* AKTIF / GUARDED: filter card shared dipakai untuk keseragaman layout; behavior filter tidak diubah. */}
       <ProductionFilterCard>
-          <Col xs={24} md={8}>
+          <Col xs={24} lg={7}>
             <Input
               placeholder="Cari kode, nama, deskripsi, varian..."
               value={search}
@@ -674,7 +762,7 @@ const SemiFinishedMaterials = () => {
             />
           </Col>
 
-          <Col xs={24} md={5}>
+          <Col xs={24} sm={12} lg={4}>
             <Select
               style={{ width: "100%" }}
               value={statusFilter}
@@ -687,7 +775,7 @@ const SemiFinishedMaterials = () => {
             />
           </Col>
 
-          <Col xs={24} md={5}>
+          <Col xs={24} sm={12} lg={5}>
             <Select
               style={{ width: "100%" }}
               value={categoryFilter}
@@ -699,7 +787,7 @@ const SemiFinishedMaterials = () => {
             />
           </Col>
 
-          <Col xs={24} md={6}>
+          <Col xs={24} sm={12} lg={4}>
             <Select
               style={{ width: "100%" }}
               value={flowerGroupFilter}
@@ -707,6 +795,18 @@ const SemiFinishedMaterials = () => {
               options={[
                 { value: "all", label: "Semua Jenis Bunga" },
                 ...SEMI_FINISHED_GROUP_OPTIONS,
+              ]}
+            />
+          </Col>
+
+          <Col xs={24} sm={12} lg={4}>
+            <Select
+              style={{ width: "100%" }}
+              value={listViewMode}
+              onChange={setListViewMode}
+              options={[
+                { value: "grouped", label: "Grouped" },
+                { value: "global", label: "Semua Item" },
               ]}
             />
           </Col>
@@ -721,26 +821,80 @@ const SemiFinishedMaterials = () => {
         subtitle="Tabel ini merangkum stok master dan varian fleksibel untuk kebutuhan produksi internal."
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredData} />
-        <Table
-          // AKTIF / GUARDED UI: class standar hanya menyamakan surface table; flow semi finished material dan produksi tidak diubah.
-          className="app-data-table"
-          rowKey="id"
-          size="small"
-          tableLayout="fixed"
-          columns={columns}
-          dataSource={filteredData}
-          // AKTIF / GUARDED: primary table memakai layout fixed tanpa horizontal scroll default; stok varian tetap tampil sebagai pill langsung di kolom Stok.
-          locale={{
-            emptyText: getDataTableEmptyText(loading, (
-              <Empty description="Belum ada data semi finished materials" />
-            )),
-          }}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showTotal: (total) => `Total ${total} item`,
-          }}
-        />
+        {listViewMode === "global" ? (
+          <Table
+            // AKTIF / GUARDED UI: class standar hanya menyamakan surface table; flow semi finished material dan produksi tidak diubah.
+            className="app-data-table"
+            rowKey="id"
+            size="small"
+            tableLayout="fixed"
+            columns={columns}
+            dataSource={filteredData}
+            // AKTIF / GUARDED: primary table memakai layout fixed tanpa horizontal scroll default; stok varian tetap tampil sebagai pill langsung di kolom Stok.
+            locale={{
+              emptyText: getDataTableEmptyText(loading, (
+                <Empty description="Belum ada data semi finished materials" />
+              )),
+            }}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (total) => `Total ${total} item`,
+            }}
+          />
+        ) : filteredData.length === 0 ? (
+          <Empty description={loading ? "Memuat data..." : "Belum ada data semi finished materials"} />
+        ) : (
+          <Collapse
+            className="ims-production-group-collapse"
+            bordered={false}
+            defaultActiveKey={groupedFilteredData[0]?.key ? [groupedFilteredData[0].key] : []}
+            activeKey={shouldAutoOpenSemiGroups ? groupedFilteredData.map((group) => group.key) : undefined}
+            items={groupedFilteredData.map((familyGroup) => ({
+              key: familyGroup.key,
+              label: (
+                <Space direction="vertical" size={2}>
+                  <Typography.Text strong>
+                    Product Family / Jenis Bunga: {familyGroup.label}
+                  </Typography.Text>
+                  <Space size={6} wrap>
+                    <Tag>{formatNumber(familyGroup.items.length)} item</Tag>
+                    <Tag color="green">Aman {formatNumber(familyGroup.statusCounts.safe)}</Tag>
+                    <Tag color="red">Kosong {formatNumber(familyGroup.statusCounts.empty)}</Tag>
+                    <Tag color="orange">Rendah {formatNumber(familyGroup.statusCounts.low)}</Tag>
+                    {familyGroup.statusCounts.inactive > 0 ? (
+                      <Tag color="default">Nonaktif {formatNumber(familyGroup.statusCounts.inactive)}</Tag>
+                    ) : null}
+                  </Space>
+                </Space>
+              ),
+              children: (
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  {familyGroup.categories.map((categoryGroup) => (
+                    <Card
+                      key={categoryGroup.key}
+                      size="small"
+                      title={`${categoryGroup.label} (${formatNumber(categoryGroup.items.length)} item)`}
+                    >
+                      <Table
+                        className="app-data-table"
+                        rowKey="id"
+                        size="small"
+                        tableLayout="fixed"
+                        columns={columns}
+                        dataSource={categoryGroup.items}
+                        pagination={false}
+                        locale={{
+                          emptyText: <Empty description="Tidak ada item pada kategori ini" />,
+                        }}
+                      />
+                    </Card>
+                  ))}
+                </Space>
+              ),
+            }))}
+          />
+        )}
       </PageSection>
 
       {/* ------------------------------------------------------------------ */}
@@ -783,17 +937,25 @@ const SemiFinishedMaterials = () => {
         >
           <Divider orientation="left">Informasi Dasar</Divider>
 
-          <Row gutter={16}>
-            <Col xs={24} md={8}>
-              <Form.Item
-                label="Kode Item"
-                name="code"
-              >
-                <Input placeholder="Otomatis: SFP-KLP-MWR-PTH-001" disabled />
-              </Form.Item>
-            </Col>
+          {/* =====================================================
+          SECTION: Semi Finished internal code hidden from main UI — AKTIF
+          Fungsi:
+          - Menyembunyikan input kode utama Semi Finished dari form tambah/edit agar user fokus pada nama, kategori, varian, dan stok.
 
-            <Col xs={24} md={16}>
+          Dipakai oleh:
+          - Drawer form Semi Finished Materials dan semiFinishedMaterialsService sebagai pembuat kode internal.
+
+          Alasan perubahan:
+          - Kode SFP tetap dibuat otomatis oleh service, tetapi tidak perlu menjadi input atau preview utama di UI.
+
+          Catatan cleanup:
+          - Kode internal masih boleh ditampilkan kecil di drawer detail/export jika dibutuhkan.
+
+          Risiko:
+          - Jangan menambahkan kembali input manual code karena dapat merusak immutability dan duplicate guard service.
+          ===================================================== */}
+          <Row gutter={16}>
+            <Col xs={24}>
               <Form.Item
                 label="Nama Item"
                 name="name"
@@ -1271,7 +1433,7 @@ Risiko:
 
             <Card size="small" title="Ringkasan Item">
               <Descriptions column={1} bordered size="small">
-                <Descriptions.Item label="Kode">{resolveDisplayReference(selectedMaterial)}</Descriptions.Item>
+                <Descriptions.Item label="Kode internal">{resolveDisplayReference(selectedMaterial)}</Descriptions.Item>
                 <Descriptions.Item label="Nama">{selectedMaterial.name || "-"}</Descriptions.Item>
                 <Descriptions.Item label="Kategori">
                   {SEMI_FINISHED_CATEGORY_MAP[selectedMaterial.category] || "-"}

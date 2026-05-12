@@ -195,10 +195,16 @@ Catatan service bahkan menyebut:
 - BOM menyimpan material lines dan step lines
 
 ## 11. Rule Production Order
-- PO dibentuk dari BOM
-- PO menghitung requirement bahan otomatis
-- status utama yang terlihat: `shortage`, `ready`, `in_production`
-- ada dukungan strategi varian material: `inherit`, `fixed`, `none`
+- PO dibentuk dari BOM.
+- Source of truth internal create PO tetap `bomId`; target/family/category di drawer create hanya alat bantu UI untuk memfilter pilihan.
+- PO menghitung requirement bahan otomatis dari BOM/helper requirement final.
+- status utama yang terlihat: `shortage`, `ready`, `in_production`.
+- ada dukungan strategi varian material: `inherit`, `fixed`, `none`.
+- Untuk target `product`, UI create PO menampilkan `Produk yang dibuat`; filter `Jenis Bunga / Product Family` dan `Kategori Bahan` tidak wajib/tidak ditampilkan bila source product tidak memakai field tersebut.
+- Untuk target `semi_finished_material`, UI create PO boleh menampilkan filter UI-only `Jenis Bunga / Product Family` dan `Kategori Bahan` sebelum `Bahan yang dibuat`, supaya user tidak memilih dari daftar bahan yang terlalu panjang.
+- Field `Resep Produksi` hanya perlu tampil jika target punya lebih dari satu resep aktif; jika hanya satu resep aktif, `bomId` boleh dipilih otomatis secara internal.
+- Label user-facing target produksi tidak perlu menampilkan kode internal master item atau jumlah BOM; kode internal tetap disimpan pada data dan boleh dipakai untuk audit/detail teknis bila dibutuhkan.
+- Filter UI-only production order tidak boleh disimpan ke Firestore, tidak boleh membuat schema baru, dan tidak boleh mengubah payload bisnis selain memastikan `bomId` valid.
 
 ## 12. Rule Work Log
 Work Log adalah realisasi kerja produksi.
@@ -341,7 +347,7 @@ Algoritma singkatan universal:
 2. Untuk setiap kata: ambil huruf konsonan dari kiri ke kanan maksimal 3 karakter; jika hasil terlalu pendek, tambahkan huruf awal dari kata agar tetap readable; angka boleh dipertahankan secukupnya.
 3. Gabungkan hasil per kata dengan `-`.
 4. Batasi panjang kode agar tetap readable.
-5. Jika kode duplicate, tambahkan suffix manusiawi `-2`, `-3`, `-4`.
+5. Jika readable semantic code duplicate, tambahkan suffix 3 digit `-001`, `-002`, `-003`. Jika tidak duplicate, jangan tambahkan suffix.
 6. Jangan pakai random ID untuk duplicate handling.
 
 Contoh algoritmik:
@@ -407,6 +413,15 @@ Catatan current state:
 - Drawer Buat Production Order wajib menampilkan preview compact read-only: stok target, varian target jika ada, qty batch, estimasi output, kebutuhan material, stok material, dan status cukup/kurang.
 - Preview tidak boleh mengubah stok, status PO, BOM, Work Log, payroll, atau HPP.
 - Production Order final tetap dihitung ulang dari BOM/helper requirement final saat submit.
+
+
+### Production Order Target Selection UX
+- Drawer Buat Production Order harus membantu user memilih target secara bertahap tanpa mengubah kontrak data.
+- Untuk `Produk Jadi`, urutan UI yang disarankan: `Jenis Produksi → Produk yang dibuat → Resep Produksi jika lebih dari satu → Qty Batch Produksi → Preview Kebutuhan`.
+- Untuk `Bahan / Semi Produk`, urutan UI yang disarankan: `Jenis Produksi → Jenis Bunga / Product Family → Kategori Bahan → Bahan yang dibuat → Resep Produksi jika lebih dari satu → Qty Batch Produksi → Preview Kebutuhan`.
+- `Jenis Bunga / Product Family` dan `Kategori Bahan` hanya filter UI untuk semi product; jangan dipakai untuk memaksa produk jadi memiliki family bila source product belum mendukungnya.
+- Dropdown target user-facing sebaiknya menampilkan nama yang mudah dibaca. Kode master internal seperti `(FLN-DN-POLA)` dan hitungan `· 1 BOM` tidak wajib tampil di pilihan user karena mengganggu operasional.
+- `bomId` tetap wajib terisi sebelum submit, baik lewat auto-select resep tunggal maupun pilihan `Resep Produksi` jika ada banyak resep aktif.
 
 ### Work Log Actual Cost / HPP
 - Completed Work Log wajib menyimpan `materialCostActual`, `laborCostActual`, `overheadCostActual`, `totalCostActual`, dan `costPerGoodUnit`.
@@ -1010,11 +1025,11 @@ Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah 
 |---|---|---|---|
 | Customer | `CUS` | `CUS-DDMMYYYY-001` | `CUS-12052026-001` |
 | Supplier | `SUP` | `SUP-DDMMYYYY-001` | `SUP-12052026-001` |
-| Produk Jadi | `PRD` | `PRD-[READABLE]-001` | `PRD-BQT-MWR-PTH-FLN-001` |
-| Raw Material | `RAW` | `RAW-[READABLE]-001` | `RAW-FLN-PTH-001` |
-| Semi Finished | `SFP` | `SFP-[READABLE]-001` | `SFP-BNG-MWR-PTH-001` |
-| BOM | `BOM` | `BOM-[TARGET]-001` | `BOM-PRD-BQT-MWR-PTH-FLN-001` |
-| Production Step | `STP` | `STP-[READABLE]-001` | `STP-POTONG-001` |
+| Produk Jadi | `PRD` | `PRD-[READABLE]` | `PRD-BQT-MWR-PTH-FLN` |
+| Raw Material | `RAW` | `RAW-[READABLE]` | `RAW-FLN-PTH` |
+| Semi Finished | `SFP` | `SFP-[READABLE]` | `SFP-BNG-MWR-PTH` |
+| BOM | `BOM` | `BOM-[TARGET]` | `BOM-PRD-BQT-MWR-PTH-FLN` |
+| Production Step | `STP` | `STP-[READABLE]` | `STP-POTONG` |
 | Purchase | `PUR` | `PUR-DDMMYYYY-001` | `PUR-12052026-001` |
 | Sales / Order | `ORD` | `ORD-DDMMYYYY-001` | `ORD-12052026-001` |
 | Return | `RET` | `RET-DDMMYYYY-001` | `RET-12052026-001` |
@@ -1029,7 +1044,7 @@ Catatan lock:
 - Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
 - Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
 - Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
-- Readable semantic code wajib memakai suffix sequence 3 digit (`-001`, `-002`) dan tidak boleh memakai timestamp/random.
+- Readable semantic code unik tidak memakai suffix; suffix sequence 3 digit (`-001`, `-002`) hanya ditambahkan saat base code duplicate/collision dan tidak boleh memakai timestamp/random.
 - Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
 - Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
 
@@ -1037,7 +1052,18 @@ Catatan lock:
 ### Business rule final untuk generator
 
 - Daily reference code memakai format `PREFIX-DDMMYYYY-001`.
-- Readable semantic code memakai format `PREFIX-[READABLE]-001`.
+- Readable semantic code memakai format `PREFIX-[READABLE]` jika unik; jika duplicate memakai `PREFIX-[READABLE]-001`, `PREFIX-[READABLE]-002`, dan seterusnya.
 - Prefix dengan hyphen seperti `STK-ADJ`, `CSH-IN`, dan `CSH-OUT` valid dan wajib diperlakukan sebagai satu prefix bisnis.
 - `saleNumber` untuk Sales tetap dipertahankan sebagai field compatibility, tetapi value data baru wajib `ORD-DDMMYYYY-001`.
 - `cashOutNumber` untuk Cash Out wajib `CSH-OUT-DDMMYYYY-001`, bukan `CSH-OT`.
+
+
+### Business rule: kode internal master item/config
+
+- Product, Raw Material, Semi Finished, BOM, dan Production Step boleh menyembunyikan input code dari form dan table utama.
+- Service tetap wajib generate code otomatis saat create walaupun UI tidak mengirim `code`.
+- Code master item/config immutable saat edit; perubahan nama/kategori/warna/target tidak boleh regenerate code existing.
+- User tidak boleh input manual code master item/config.
+- Field `code` tidak boleh dihapus dari payload/data karena masih dipakai internal reference, export, dan audit teknis.
+- Customer/Supplier/transaksi/audit reference tidak boleh disembunyikan dari UI.
+- SKU Variant/kode variant tidak termasuk rule ini dan tidak boleh disentuh tanpa review khusus.

@@ -538,7 +538,7 @@ Untuk task cleanup theme besar-besaran:
 - Jangan membuat generator kode baru di page.
 - Jangan duplicate generator kode antar modul.
 - Gunakan shared generator yang disetujui sebagai source of truth.
-- Duplicate code harus diselesaikan dengan suffix manusiawi seperti `-2`, `-3`, bukan random ID/timestamp sebagai fallback utama.
+- Duplicate readable semantic code harus diselesaikan dengan suffix 3 digit seperti `-001`, `-002`, bukan random ID/timestamp sebagai fallback utama. Base code unik tidak memakai suffix.
 - Jangan mengubah kode audit immutable setelah dipakai tanpa approval migrasi.
 - Jangan menghapus Firestore document ID secara database-level; document ID tetap kebutuhan internal Firestore.
 - Jangan mengubah schema/service/stock mutation/write-flow/inventory log writer/report export tanpa approval khusus.
@@ -567,11 +567,11 @@ Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah 
 |---|---|---|---|
 | Customer | `CUS` | `CUS-DDMMYYYY-001` | `CUS-12052026-001` |
 | Supplier | `SUP` | `SUP-DDMMYYYY-001` | `SUP-12052026-001` |
-| Produk Jadi | `PRD` | `PRD-[READABLE]-001` | `PRD-BQT-MWR-PTH-FLN-001` |
-| Raw Material | `RAW` | `RAW-[READABLE]-001` | `RAW-FLN-PTH-001` |
-| Semi Finished | `SFP` | `SFP-[READABLE]-001` | `SFP-BNG-MWR-PTH-001` |
-| BOM | `BOM` | `BOM-[TARGET]-001` | `BOM-PRD-BQT-MWR-PTH-FLN-001` |
-| Production Step | `STP` | `STP-[READABLE]-001` | `STP-POTONG-001` |
+| Produk Jadi | `PRD` | `PRD-[READABLE]` | `PRD-BQT-MWR-PTH-FLN` |
+| Raw Material | `RAW` | `RAW-[READABLE]` | `RAW-FLN-PTH` |
+| Semi Finished | `SFP` | `SFP-[READABLE]` | `SFP-BNG-MWR-PTH` |
+| BOM | `BOM` | `BOM-[TARGET]` | `BOM-PRD-BQT-MWR-PTH-FLN` |
+| Production Step | `STP` | `STP-[READABLE]` | `STP-POTONG` |
 | Purchase | `PUR` | `PUR-DDMMYYYY-001` | `PUR-12052026-001` |
 | Sales / Order | `ORD` | `ORD-DDMMYYYY-001` | `ORD-12052026-001` |
 | Return | `RET` | `RET-DDMMYYYY-001` | `RET-12052026-001` |
@@ -586,7 +586,7 @@ Catatan lock:
 - Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
 - Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
 - Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
-- Readable semantic code wajib memakai suffix sequence 3 digit (`-001`, `-002`) dan tidak boleh memakai timestamp/random.
+- Readable semantic code unik tidak memakai suffix; suffix sequence 3 digit (`-001`, `-002`) hanya ditambahkan saat base code duplicate/collision dan tidak boleh memakai timestamp/random.
 - Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
 - Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
 
@@ -601,3 +601,25 @@ Catatan lock:
 - Jangan mengganti Raw Material `RAW` kembali ke `RM` untuk data baru.
 - Jangan mengganti Work Log `JOB` kembali ke `WL` untuk data baru.
 - Jangan mengganti Production Step `STP` kembali ke `STEP`/timestamp untuk data baru.
+
+
+### Prompt guard: hide master item/config code UI
+
+- Jangan menampilkan input manual untuk code Product, Raw Material, Semi Finished, BOM, dan Production Step.
+- Jangan membuat realtime preview code master item/config kecuali ada task khusus yang membatalkan rule UI internal code.
+- Jangan menghapus field `code` dari service/payload/data.
+- Jangan menyembunyikan kode Customer/Supplier/transaksi/audit.
+- Jangan mengubah Customer/Supplier reference UI dalam task hide master item codes.
+- Jangan menyentuh SKU Variant/kode variant.
+- Jangan mengubah generator format atau document ID policy kecuali task khusus.
+
+
+## Prompt Guard — Production Grouped UI & PO Target Filter
+- Jika task menyentuh menu Semi Product, ingat bahwa Semi Finished adalah stok produksi global/reusable. Jangan menduplikasi semi product per produk jadi hanya untuk merapikan tampilan.
+- UI Semi Product boleh grouped berdasarkan `Product Family / Jenis Bunga → Kategori → Item`, tetapi stok, variant bucket, service, collection, dan source of truth tidak boleh berubah tanpa approval khusus.
+- Jika task menyentuh BOM list, grouping yang aman adalah `Target Type → Target Item → Resep Produksi`; ini hanya cara baca UI, bukan perubahan rule BOM.
+- Jika task menyentuh Drawer Buat Production Order, source of truth submit tetap `bomId`. UI filter target/family/category hanya alat bantu seleksi dan tidak boleh disimpan ke Firestore.
+- Untuk `Produk Jadi`, jangan paksa field `Jenis Bunga / Product Family` atau `Kategori Bahan` bila source product tidak memilikinya. Cukup pilih `Produk yang dibuat` lalu `Resep Produksi` jika target punya lebih dari satu resep aktif.
+- Untuk `Bahan / Semi Produk`, boleh tampilkan `Jenis Bunga / Product Family` dan `Kategori Bahan` sebelum `Bahan yang dibuat` agar user tidak memilih dari flat list panjang.
+- Label user-facing di dropdown target sebaiknya bersih: nama target cukup; kode internal dan hitungan `· x BOM` jangan ditampilkan kecuali ada kebutuhan audit/detail teknis eksplisit.
+- Jangan mengubah Work Log, Payroll, HPP Analysis, inventory mutation, report calculation, status lifecycle PO, atau auto-generate kode order untuk task yang hanya merapikan UX seleksi Production Order.

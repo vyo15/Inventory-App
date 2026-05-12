@@ -59,10 +59,18 @@ Tujuan:
 - bisa punya varian
 - tidak ditujukan untuk dijual ke customer
 - koreksi stok manual resmi dilakukan lewat Stock Management / Stock Adjustment, bukan dari edit master
+- bisa reusable/lintas beberapa produk jadi sehingga tidak boleh diduplikasi per produk jadi hanya untuk kebutuhan tampilan
+
+Organisasi UI aktif:
+- daftar Semi Finished boleh ditampilkan grouped/accordion berdasarkan `Product Family / Jenis Bunga` lalu `Kategori` agar tidak menjadi daftar campur panjang
+- saat group tertutup, UI boleh menampilkan ringkasan jumlah item, stok kosong, stok aman, dan item nonaktif
+- saat group terbuka, item tetap menampilkan informasi stok total, available, variant stock, status, dan action existing
+- fallback data lama yang tidak punya family/category harus tetap tampil, misalnya `Umum / Reusable` dan `Tanpa Kategori`
 
 Guard integrasi:
 - Stock Adjustment Semi Finished hanya mengoreksi stok dan audit inventory; tidak mengubah BOM, Production Order, Work Log, Payroll, atau HPP.
 - Semi Finished bervarian wajib memakai `variantKey` saat adjustment agar bucket stok produksi tetap konsisten.
+- Grouping UI tidak boleh mengubah collection `semi_finished_materials`, tidak boleh memecah stok per produk, dan tidak boleh menulis relasi baru tanpa approval.
 
 ## 5. BOM Produksi
 Tujuan:
@@ -74,11 +82,25 @@ Rule penting yang terverifikasi:
 - BOM menyimpan `materialLines` dan `stepLines`
 - step lines sudah disortir menurut sequence
 
+Organisasi UI aktif:
+- daftar BOM boleh ditampilkan grouped/accordion berdasarkan `Target Type → Target Item → Resep Produksi`
+- label user-facing boleh memakai istilah `Resep Produksi` agar tidak terlalu teknis, tetapi source of truth tetap dokumen BOM existing
+- grouping BOM hanya cara baca UI; tidak mengubah rule material, target type, payload create/edit, atau service BOM
+
 ## 6. Production Order
 Tujuan:
 - planning produksi
 - menghitung kebutuhan bahan dari BOM
 - mendukung strategi varian material dan output
+
+UX create drawer aktif:
+- source of truth submit tetap `bomId`, bukan field UI target/family/category baru
+- untuk `Produk Jadi`, UI menampilkan `Jenis Produksi → Produk yang dibuat → Resep Produksi jika lebih dari satu → Qty → Preview Kebutuhan`
+- untuk `Bahan / Semi Produk`, UI menampilkan `Jenis Produksi → Jenis Bunga / Product Family → Kategori Bahan → Bahan yang dibuat → Resep Produksi jika lebih dari satu → Qty → Preview Kebutuhan`
+- filter `Jenis Bunga / Product Family` dan `Kategori Bahan` hanya dipakai untuk semi product, bukan dipaksakan ke produk jadi
+- jika target hanya punya satu resep aktif, `bomId` boleh auto-selected secara internal dan field `Resep Produksi` tidak perlu tampil
+- pilihan target user-facing tidak wajib menampilkan kode master internal atau hitungan jumlah BOM
+- preview kebutuhan tetap read-only dan requirement final tetap dihitung ulang oleh helper/service existing saat submit
 
 Status yang terlihat:
 - `shortage`

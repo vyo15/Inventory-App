@@ -836,11 +836,11 @@ Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah 
 |---|---|---|---|
 | Customer | `CUS` | `CUS-DDMMYYYY-001` | `CUS-12052026-001` |
 | Supplier | `SUP` | `SUP-DDMMYYYY-001` | `SUP-12052026-001` |
-| Produk Jadi | `PRD` | `PRD-[READABLE]-001` | `PRD-BQT-MWR-PTH-FLN-001` |
-| Raw Material | `RAW` | `RAW-[READABLE]-001` | `RAW-FLN-PTH-001` |
-| Semi Finished | `SFP` | `SFP-[READABLE]-001` | `SFP-BNG-MWR-PTH-001` |
-| BOM | `BOM` | `BOM-[TARGET]-001` | `BOM-PRD-BQT-MWR-PTH-FLN-001` |
-| Production Step | `STP` | `STP-[READABLE]-001` | `STP-POTONG-001` |
+| Produk Jadi | `PRD` | `PRD-[READABLE]` | `PRD-BQT-MWR-PTH-FLN` |
+| Raw Material | `RAW` | `RAW-[READABLE]` | `RAW-FLN-PTH` |
+| Semi Finished | `SFP` | `SFP-[READABLE]` | `SFP-BNG-MWR-PTH` |
+| BOM | `BOM` | `BOM-[TARGET]` | `BOM-PRD-BQT-MWR-PTH-FLN` |
+| Production Step | `STP` | `STP-[READABLE]` | `STP-POTONG` |
 | Purchase | `PUR` | `PUR-DDMMYYYY-001` | `PUR-12052026-001` |
 | Sales / Order | `ORD` | `ORD-DDMMYYYY-001` | `ORD-12052026-001` |
 | Return | `RET` | `RET-DDMMYYYY-001` | `RET-12052026-001` |
@@ -855,7 +855,7 @@ Catatan lock:
 - Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
 - Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
 - Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
-- Readable semantic code wajib memakai suffix sequence 3 digit (`-001`, `-002`) dan tidak boleh memakai timestamp/random.
+- Readable semantic code unik tidak memakai suffix; suffix sequence 3 digit (`-001`, `-002`) hanya ditambahkan saat base code duplicate/collision dan tidak boleh memakai timestamp/random.
 - Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
 - Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
 
@@ -882,3 +882,17 @@ Catatan lock:
 | Payroll | `productionPayrolls` | `payrollNumber` |
 
 Inventory log harus memakai reference bisnis dari sumber transaksi, bukan Firestore random ID.
+
+
+### Mapping UI/reference: master item vs transaksi
+
+| Area | Code behavior | UI utama |
+|---|---|---|
+| Product | `code` dibuat service dan disimpan internal | Nama produk, kategori, harga, stok, varian |
+| Raw Material | `code` dibuat service dan disimpan internal | Nama bahan, supplier, satuan, stok, varian |
+| Semi Finished | `code` dibuat service dan disimpan internal | Nama semi product, kategori, unit, stok, varian |
+| BOM | `code` dibuat service dan disimpan internal | Nama BOM, target produk/semi finished, komposisi, step |
+| Production Step | `code` dibuat service dan disimpan internal | Nama step, kategori, status, deskripsi, payroll rule |
+| Customer/Supplier/transaksi/audit | reference tetap tampil di UI | Dipakai untuk audit, pencarian, report, bukti stok/kas/produksi |
+
+Catatan: Inventory log, export, dan audit teknis tetap boleh memakai kode internal master item, tetapi UI utama tidak boleh memaksa user mengisi atau melihat kode sebagai identitas utama.

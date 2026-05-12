@@ -32,7 +32,7 @@ const COLLECTION_NAME = "production_steps";
 /* =====================================================
 SECTION: Production Step code generator — AKTIF
 Fungsi:
-- Membuat kode STP-[READABLE]-001 untuk master tahapan produksi tanpa timestamp.
+- Membuat kode STP-[READABLE] untuk master tahapan produksi tanpa timestamp; suffix 3 digit hanya saat duplicate.
 
 Dipakai oleh:
 - createProductionStep dan updateProductionStep.
@@ -417,6 +417,23 @@ export const createProductionStep = async (values, currentUser = null) => {
     throw { type: "validation", errors };
   }
 
+  /* =====================================================
+  SECTION: Production Step service auto-generates hidden internal code — AKTIF
+  Fungsi:
+  - Menjamin Production Step baru tetap memiliki kode STP internal walaupun UI tidak mengirim field code.
+
+  Dipakai oleh:
+  - ProductionSteps.jsx saat create Production Step dan helper productionCodeGenerator.
+
+  Alasan perubahan:
+  - Input code disembunyikan dari UI utama config, tetapi field code tetap wajib tersimpan otomatis.
+
+  Catatan cleanup:
+  - Belum ada.
+
+  Risiko:
+  - Jangan mengganti dengan input manual atau timestamp karena step dipakai BOM, Work Log, payroll, dan audit produksi.
+  ===================================================== */
   const codeToCheck = await generateProductionStepCode(values.name);
   const isCodeExists = await isProductionStepCodeExists(codeToCheck);
   values = { ...values, code: codeToCheck };
@@ -465,10 +482,17 @@ export const updateProductionStep = async (id, values, currentUser = null) => {
     throw { type: "validation", errors };
   }
 
-  const codeToCheck =
-    String(values.existingCode || "").trim() ||
-    String(values.code || "").trim() ||
-    (await generateProductionStepCode(values.name, id));
+  const ref = doc(db, COLLECTION_NAME, id);
+  const existingSnapshot = await getDoc(ref);
+  if (!existingSnapshot.exists()) {
+    throw new Error("Tahapan produksi tidak ditemukan");
+  }
+
+  const existingStep = { id: existingSnapshot.id, ...existingSnapshot.data() };
+  // IMS NOTE [AKTIF | immutable-code]: UI tidak mengirim code; update wajib mempertahankan code existing agar edit nama/payroll tidak regenerate kode STP.
+  const existingCode = String(existingStep.code || "").trim();
+  const submittedCode = String(values.existingCode || values.code || "").trim();
+  const codeToCheck = existingCode || submittedCode || (await generateProductionStepCode(values.name, id));
   const isCodeExists = await isProductionStepCodeExists(codeToCheck, id);
   values = { ...values, code: codeToCheck };
 
@@ -482,7 +506,6 @@ export const updateProductionStep = async (id, values, currentUser = null) => {
   }
 
   const payload = normalizePayload(values, currentUser, true);
-  const ref = doc(db, COLLECTION_NAME, id);
 
   await updateDoc(ref, payload);
 

@@ -35,6 +35,7 @@ import {
   Typography,
 } from "antd";
 import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
+import { SEMI_FINISHED_CATEGORY_MAP, SEMI_FINISHED_GROUP_MAP } from "../../constants/semiFinishedMaterialOptions";
 import { toReferenceOptions } from "../../utils/produksi/productionReferenceHelpers";
 import {
   buildCountSummary,
@@ -56,6 +57,7 @@ import {
   refreshProductionOrderRequirements,
 } from "../../services/Produksi/productionOrdersService";
 import { createProductionWorkLogFromOrder } from "../../services/Produksi/productionWorkLogsService";
+import { getActiveBomReferenceData } from "../../services/Produksi/productionBomsService";
 import useAuth from "../../hooks/useAuth";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
@@ -69,11 +71,11 @@ import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../
 const PRODUCTION_ORDER_TARGET_TYPES = [
   {
     value: "semi_finished_material",
-    label: "Semi Finished",
+    label: "Bahan / Semi Produk",
   },
   {
     value: "product",
-    label: "Product",
+    label: "Produk Jadi",
   },
 ];
 
@@ -165,6 +167,93 @@ const lineRequiresVariantStock = (line = {}) => {
   return line.materialHasVariants === true && strategy !== "none";
 };
 
+const FALLBACK_SEMI_FAMILY_KEY = "__general";
+const FALLBACK_SEMI_CATEGORY_KEY = "__uncategorized";
+
+const normalizeOptionKey = (value = "") =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_\-]+/g, "_");
+
+const getKnownOptionKeyFromText = (text = "", optionMap = {}) => {
+  const normalizedText = normalizeOptionKey(text);
+
+  if (!normalizedText) return "";
+
+  return (
+    Object.entries(optionMap).find(([key, label]) => {
+      const normalizedKey = normalizeOptionKey(key);
+      const normalizedLabel = normalizeOptionKey(label);
+      return (
+        normalizedText === normalizedKey ||
+        normalizedText === normalizedLabel ||
+        normalizedText.includes(normalizedKey) ||
+        normalizedText.includes(normalizedLabel)
+      );
+    })?.[0] || ""
+  );
+};
+
+const resolveSemiProductionGroupMeta = ({ bom = {}, reference = null } = {}) => {
+  const searchableText = [
+    reference?.flowerGroup,
+    reference?.category,
+    reference?.name,
+    reference?.code,
+    reference?.itemCode,
+    bom.targetName,
+    bom.targetCode,
+    bom.name,
+    bom.code,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const familyKey =
+    getKnownOptionKeyFromText(reference?.flowerGroup, SEMI_FINISHED_GROUP_MAP) ||
+    getKnownOptionKeyFromText(searchableText, SEMI_FINISHED_GROUP_MAP) ||
+    FALLBACK_SEMI_FAMILY_KEY;
+
+  const categoryKey =
+    getKnownOptionKeyFromText(reference?.category, SEMI_FINISHED_CATEGORY_MAP) ||
+    getKnownOptionKeyFromText(searchableText, SEMI_FINISHED_CATEGORY_MAP) ||
+    FALLBACK_SEMI_CATEGORY_KEY;
+
+  return {
+    familyKey,
+    familyLabel:
+      familyKey === FALLBACK_SEMI_FAMILY_KEY
+        ? "Umum / Reusable"
+        : SEMI_FINISHED_GROUP_MAP[familyKey] || "Umum / Reusable",
+    categoryKey,
+    categoryLabel:
+      categoryKey === FALLBACK_SEMI_CATEGORY_KEY
+        ? "Tanpa Kategori"
+        : SEMI_FINISHED_CATEGORY_MAP[categoryKey] || "Tanpa Kategori",
+  };
+};
+
+const getProductionTargetDisplayLabel = (group = {}) =>
+  group.targetName || "Target belum dikenal";
+
+const getRecipeDisplayLabel = (option = {}) => {
+  const raw = option.raw || {};
+  const rawName = String(raw.name || raw.bomName || option.label || "").trim();
+  const cleanedName = rawName
+    .replace(/^BOM\s*[-:]?\s*/i, "")
+    .replace(/^([^\s]+)\s+-\s+BOM\s*/i, "")
+    .trim();
+
+  if (cleanedName) {
+    return cleanedName.toLowerCase().startsWith("resep")
+      ? cleanedName
+      : `Resep ${cleanedName}`;
+  }
+
+  return "Resep Produksi";
+};
+
 // =====================================================
 // SECTION: Label sumber stok requirement PO.
 // Fungsi blok:
@@ -236,6 +325,10 @@ const ProductionOrders = () => {
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [bomOptions, setBomOptions] = useState([]);
+  const [semiFinishedReferences, setSemiFinishedReferences] = useState([]);
+  const [selectedProductionTargetKey, setSelectedProductionTargetKey] = useState("");
+  const [semiFamilyFilter, setSemiFamilyFilter] = useState("");
+  const [semiCategoryFilter, setSemiCategoryFilter] = useState("all");
   const [bomLoading, setBomLoading] = useState(false);
   const [targetVariantOptions, setTargetVariantOptions] = useState([]);
   const [requirementPreview, setRequirementPreview] = useState(null);
@@ -294,6 +387,18 @@ const ProductionOrders = () => {
     }
   };
 
+  const loadSemiFinishedReferences = async () => {
+    if (semiFinishedReferences.length > 0) return;
+
+    try {
+      const referenceData = await getActiveBomReferenceData();
+      setSemiFinishedReferences(referenceData?.semiFinishedMaterials || []);
+    } catch (error) {
+      console.error(error);
+      setSemiFinishedReferences([]);
+    }
+  };
+
   const loadGeneratedCode = async (targetType = "product") => {
     try {
       setCodeLoading(true);
@@ -314,6 +419,9 @@ const ProductionOrders = () => {
   useEffect(() => {
     if (targetTypeValue) {
       loadBomOptions(targetTypeValue);
+      if (targetTypeValue === "semi_finished_material") {
+        loadSemiFinishedReferences();
+      }
     }
   }, [targetTypeValue]);
 
@@ -500,6 +608,196 @@ const ProductionOrders = () => {
     });
   }, [orders, search, statusFilter, targetTypeFilter]);
 
+  /* =====================================================
+  SECTION: Guided Production Order target filters — AKTIF / GUARDED
+  Fungsi:
+  - Membuat pilihan PO bertahap dari BOM aktif existing tanpa menyimpan filter UI ke Firestore.
+  - Produk Jadi langsung memilih produk yang dibuat.
+  - Bahan / Semi Produk memakai filter Product Family dan kategori agar tidak menjadi flat list panjang.
+
+  Dipakai oleh:
+  - Drawer Buat Production Order sebagai helper UI untuk menentukan bomId internal.
+
+  Alasan perubahan:
+  - User operasional perlu memilih target produksi secara natural, sementara source of truth submit tetap bomId.
+
+  Catatan cleanup:
+  - Belum ada. Jika nanti family/category menjadi kebutuhan produk jadi, review schema terpisah diperlukan.
+
+  Risiko:
+  - Jangan menyimpan selectedProductionTargetKey, semiFamilyFilter, atau semiCategoryFilter ke Firestore karena semuanya hanya state UI.
+  ===================================================== */
+  const semiReferenceLookup = useMemo(() => {
+    const lookup = new Map();
+
+    semiFinishedReferences.forEach((item) => {
+      [item.id, item.code, item.itemCode, item.name]
+        .filter(Boolean)
+        .forEach((value) => lookup.set(String(value).trim().toLowerCase(), item));
+    });
+
+    return lookup;
+  }, [semiFinishedReferences]);
+
+  const productionTargetGroups = useMemo(() => {
+    const groupMap = new Map();
+
+    bomOptions.forEach((option) => {
+      const bom = option.raw || {};
+      const targetType = bom.targetType || targetTypeValue || "product";
+      const targetId = String(bom.targetId || bom.targetName || bom.id || option.value || "").trim();
+      const key = `${targetType}::${targetId || "unknown"}`;
+      const targetName = String(bom.targetName || bom.targetCode || "Target belum dikenal").trim();
+      const targetCode = bom.targetCode || "";
+      const semiReference =
+        targetType === "semi_finished_material"
+          ? semiReferenceLookup.get(String(bom.targetId || "").trim().toLowerCase()) ||
+            semiReferenceLookup.get(String(targetCode || "").trim().toLowerCase()) ||
+            semiReferenceLookup.get(String(targetName || "").trim().toLowerCase()) ||
+            null
+          : null;
+      const semiMeta =
+        targetType === "semi_finished_material"
+          ? resolveSemiProductionGroupMeta({ bom, reference: semiReference })
+          : {
+              familyKey: "",
+              familyLabel: "",
+              categoryKey: "",
+              categoryLabel: "",
+            };
+
+      if (!groupMap.has(key)) {
+        groupMap.set(key, {
+          key,
+          targetType,
+          targetName,
+          targetCode,
+          ...semiMeta,
+          bomOptions: [],
+        });
+      }
+
+      groupMap.get(key).bomOptions.push(option);
+    });
+
+    return Array.from(groupMap.values())
+      .map((group) => ({
+        ...group,
+        label: getProductionTargetDisplayLabel(group),
+      }))
+      .sort((a, b) => a.targetName.localeCompare(b.targetName));
+  }, [bomOptions, targetTypeValue, semiReferenceLookup]);
+
+  const semiFamilyOptions = useMemo(() => {
+    const familyMap = new Map();
+
+    productionTargetGroups
+      .filter((group) => group.targetType === "semi_finished_material")
+      .forEach((group) => {
+        if (!familyMap.has(group.familyKey)) {
+          familyMap.set(group.familyKey, {
+            value: group.familyKey,
+            label: group.familyLabel,
+          });
+        }
+      });
+
+    return Array.from(familyMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [productionTargetGroups]);
+
+  const semiCategoryOptions = useMemo(() => {
+    const categoryMap = new Map();
+
+    productionTargetGroups
+      .filter((group) => group.targetType === "semi_finished_material")
+      .filter((group) => !semiFamilyFilter || group.familyKey === semiFamilyFilter)
+      .forEach((group) => {
+        if (!categoryMap.has(group.categoryKey)) {
+          categoryMap.set(group.categoryKey, {
+            value: group.categoryKey,
+            label: group.categoryLabel,
+          });
+        }
+      });
+
+    return [
+      { value: "all", label: "Semua Kategori" },
+      ...Array.from(categoryMap.values()).sort((a, b) => a.label.localeCompare(b.label)),
+    ];
+  }, [productionTargetGroups, semiFamilyFilter]);
+
+  const visibleProductionTargetGroups = useMemo(() => {
+    if (targetTypeValue !== "semi_finished_material") {
+      return productionTargetGroups;
+    }
+
+    if (!semiFamilyFilter) return [];
+
+    return productionTargetGroups.filter((group) => {
+      const matchFamily = group.familyKey === semiFamilyFilter;
+      const matchCategory =
+        semiCategoryFilter === "all" || group.categoryKey === semiCategoryFilter;
+      return matchFamily && matchCategory;
+    });
+  }, [productionTargetGroups, targetTypeValue, semiFamilyFilter, semiCategoryFilter]);
+
+  const selectedProductionTargetGroup = useMemo(
+    () => productionTargetGroups.find((group) => group.key === selectedProductionTargetKey) || null,
+    [productionTargetGroups, selectedProductionTargetKey],
+  );
+
+  const selectedTargetBomOptions = selectedProductionTargetGroup?.bomOptions || [];
+  const recipeOptions = selectedTargetBomOptions.map((option) => ({
+    ...option,
+    label: getRecipeDisplayLabel(option),
+  }));
+  const shouldShowRecipeSelect = selectedTargetBomOptions.length > 1;
+  const isSemiFinishedProduction = targetTypeValue === "semi_finished_material";
+  const targetSelectLabel = isSemiFinishedProduction ? "Bahan yang dibuat" : "Produk yang dibuat";
+  const targetSelectPlaceholder = isSemiFinishedProduction
+    ? semiFamilyFilter
+      ? "Pilih bahan yang dibuat..."
+      : "Pilih jenis bunga dulu"
+    : "Pilih produk yang dibuat...";
+
+  useEffect(() => {
+    if (
+      selectedProductionTargetKey &&
+      !visibleProductionTargetGroups.some((group) => group.key === selectedProductionTargetKey)
+    ) {
+      setSelectedProductionTargetKey("");
+      setTargetVariantOptions([]);
+      form.setFieldsValue({
+        bomId: undefined,
+        targetVariantKey: undefined,
+        targetVariantLabel: "",
+      });
+    }
+  }, [form, selectedProductionTargetKey, visibleProductionTargetGroups]);
+
+  useEffect(() => {
+    if (
+      isSemiFinishedProduction &&
+      semiFamilyOptions.length === 1 &&
+      !semiFamilyFilter
+    ) {
+      setSemiFamilyFilter(semiFamilyOptions[0].value);
+    }
+  }, [isSemiFinishedProduction, semiFamilyFilter, semiFamilyOptions]);
+
+  const handleSelectProductionTarget = (value) => {
+    const selectedGroup = productionTargetGroups.find((group) => group.key === value);
+
+    setSelectedProductionTargetKey(value || "");
+    setTargetVariantOptions([]);
+
+    form.setFieldsValue({
+      bomId: selectedGroup?.bomOptions?.length === 1 ? selectedGroup.bomOptions[0].value : undefined,
+      targetVariantKey: undefined,
+      targetVariantLabel: "",
+    });
+  };
+
   const handleAdd = async () => {
     form.resetFields();
 
@@ -514,6 +812,9 @@ const ProductionOrders = () => {
       notes: "",
     });
 
+    setSelectedProductionTargetKey("");
+    setSemiFamilyFilter("");
+    setSemiCategoryFilter("all");
     setTargetVariantOptions([]);
     setFormVisible(true);
 
@@ -523,6 +824,16 @@ const ProductionOrders = () => {
 
   const handleSubmit = async () => {
     try {
+      if (!selectedProductionTargetKey) {
+        message.error(isSemiFinishedProduction ? "Pilih bahan yang dibuat" : "Pilih produk yang dibuat");
+        return;
+      }
+
+      if (!form.getFieldValue("bomId")) {
+        message.error("Pilih resep produksi");
+        return;
+      }
+
       const values = await form.validateFields();
       const selectedVariant = targetVariantOptions.find(
         (item) => item.value === values.targetVariantKey,
@@ -542,6 +853,9 @@ const ProductionOrders = () => {
 
       setFormVisible(false);
       form.resetFields();
+      setSelectedProductionTargetKey("");
+      setSemiFamilyFilter("");
+      setSemiCategoryFilter("all");
       await loadData();
     } catch (error) {
       if (error?.errorFields) return;
@@ -916,6 +1230,9 @@ const ProductionOrders = () => {
         onClose={() => {
           setFormVisible(false);
           form.resetFields();
+          setSelectedProductionTargetKey("");
+          setSemiFamilyFilter("");
+          setSemiCategoryFilter("all");
           setTargetVariantOptions([]);
         }}
         width={680}
@@ -925,6 +1242,9 @@ const ProductionOrders = () => {
               onClick={() => {
                 setFormVisible(false);
                 form.resetFields();
+                setSelectedProductionTargetKey("");
+                setSemiFamilyFilter("");
+                setSemiCategoryFilter("all");
                 setTargetVariantOptions([]);
               }}
             >
@@ -936,13 +1256,6 @@ const ProductionOrders = () => {
           </Space>
         }
       >
-        <Alert
-          style={{ marginBottom: 16 }}
-          type="info"
-          showIcon
-          message="PO membaca BOM dan menandai Ready atau Shortage."
-        />
-
         <Form form={form} layout="vertical">
           <Form.Item label="Kode Order" name="code">
             <Input
@@ -951,10 +1264,17 @@ const ProductionOrders = () => {
             />
           </Form.Item>
 
+          <div style={{ margin: "16px 0 12px" }}>
+            <Typography.Text strong>Target Produksi</Typography.Text>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              Tentukan jenis produksi dan target yang ingin dibuat.
+            </Typography.Paragraph>
+          </div>
+
           <Form.Item
-            label="Target Type"
+            label="Jenis Produksi"
             name="targetType"
-            rules={[{ required: true, message: "Target type wajib dipilih" }]}
+            rules={[{ required: true, message: "Jenis produksi wajib dipilih" }]}
           >
             <Select
               options={PRODUCTION_ORDER_TARGET_TYPES}
@@ -965,24 +1285,114 @@ const ProductionOrders = () => {
                   targetVariantKey: undefined,
                   targetVariantLabel: "",
                 });
+                setSelectedProductionTargetKey("");
+                setSemiFamilyFilter("");
+                setSemiCategoryFilter("all");
                 setTargetVariantOptions([]);
+                if (value === "semi_finished_material") {
+                  await loadSemiFinishedReferences();
+                }
                 await loadBomOptions(value);
                 await loadGeneratedCode(value);
               }}
             />
           </Form.Item>
 
+          {isSemiFinishedProduction ? (
+            <>
+              <Form.Item label="Jenis Bunga / Product Family" required>
+                <Select
+                  showSearch
+                  allowClear
+                  optionFilterProp="label"
+                  value={semiFamilyFilter || undefined}
+                  options={semiFamilyOptions}
+                  loading={bomLoading}
+                  placeholder="Pilih jenis bunga..."
+                  onFocus={loadSemiFinishedReferences}
+                  onChange={(value) => {
+                    setSemiFamilyFilter(value || "");
+                    setSemiCategoryFilter("all");
+                    setSelectedProductionTargetKey("");
+                    setTargetVariantOptions([]);
+                    form.setFieldsValue({
+                      bomId: undefined,
+                      targetVariantKey: undefined,
+                      targetVariantLabel: "",
+                    });
+                  }}
+                />
+              </Form.Item>
+
+              <Form.Item label="Kategori Bahan">
+                <Select
+                  optionFilterProp="label"
+                  value={semiCategoryFilter}
+                  options={semiCategoryOptions}
+                  disabled={!semiFamilyFilter}
+                  placeholder="Pilih kategori bahan..."
+                  onChange={(value) => {
+                    setSemiCategoryFilter(value || "all");
+                    setSelectedProductionTargetKey("");
+                    setTargetVariantOptions([]);
+                    form.setFieldsValue({
+                      bomId: undefined,
+                      targetVariantKey: undefined,
+                      targetVariantLabel: "",
+                    });
+                  }}
+                />
+              </Form.Item>
+            </>
+          ) : null}
+
+          <Form.Item label={targetSelectLabel} required>
+            <Select
+              showSearch
+              allowClear
+              optionFilterProp="label"
+              value={selectedProductionTargetKey || undefined}
+              options={visibleProductionTargetGroups.map((group) => ({
+                value: group.key,
+                label: group.label,
+              }))}
+              loading={bomLoading}
+              disabled={isSemiFinishedProduction && !semiFamilyFilter}
+              placeholder={targetSelectPlaceholder}
+              onFocus={() => {
+                loadBomOptions(targetTypeValue || "product");
+                if (isSemiFinishedProduction) loadSemiFinishedReferences();
+              }}
+              onDropdownVisibleChange={(open) => {
+                if (open) {
+                  loadBomOptions(targetTypeValue || "product");
+                  if (isSemiFinishedProduction) loadSemiFinishedReferences();
+                }
+              }}
+              onChange={handleSelectProductionTarget}
+            />
+          </Form.Item>
+
+          <div style={{ margin: "20px 0 12px" }}>
+            <Typography.Text strong>Detail Produksi</Typography.Text>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              Sistem memakai resep aktif sebagai acuan kebutuhan material.
+            </Typography.Paragraph>
+          </div>
+
           <Form.Item
-            label="BOM"
+            label="Resep Produksi"
             name="bomId"
-            rules={[{ required: true, message: "BOM wajib dipilih" }]}
+            rules={[{ required: true, message: "Resep produksi wajib dipilih" }]}
+            hidden={!shouldShowRecipeSelect}
           >
             <Select
               showSearch
               optionFilterProp="label"
-              options={bomOptions}
+              options={recipeOptions}
               loading={bomLoading}
-              placeholder="Pilih BOM..."
+              disabled={!selectedProductionTargetKey}
+              placeholder={selectedProductionTargetKey ? "Pilih resep produksi..." : "Pilih target produksi dulu"}
               onFocus={() => loadBomOptions(targetTypeValue || "product")}
               onDropdownVisibleChange={(open) => {
                 if (open) loadBomOptions(targetTypeValue || "product");
@@ -995,6 +1405,13 @@ const ProductionOrders = () => {
               }}
             />
           </Form.Item>
+
+          <div style={{ margin: "20px 0 12px" }}>
+            <Typography.Text strong>Preview Kebutuhan</Typography.Text>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              Isi qty batch untuk melihat kebutuhan material dan kondisi stok.
+            </Typography.Paragraph>
+          </div>
 
           {targetVariantOptions.length > 0 ? (
             <Form.Item
@@ -1099,7 +1516,7 @@ const ProductionOrders = () => {
                       </Typography.Text>
                     ) : (requirementPreview.requirementLines || []).length === 0 ? (
                       <Typography.Text type="secondary">
-                        BOM belum memiliki material.
+                        Resep produksi belum memiliki material.
                       </Typography.Text>
                     ) : (
                       <div style={{ maxHeight: 220, overflowY: "auto" }}>

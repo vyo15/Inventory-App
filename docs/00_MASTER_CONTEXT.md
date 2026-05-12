@@ -157,6 +157,16 @@ Status cleanup bertahap yang dikunci di docs:
 - **Aktif:** Profit Loss membaca biaya payroll dari `expenses`, bukan dari `production_payrolls`, agar tidak double counting.
 - **Aktif:** Export laporan final memakai XLSX rapi, bukan data mentah.
 
+## Update UX Produksi Semi Product / BOM / Production Order — 2026-05-12
+- **Aktif:** menu Semi Product boleh ditampilkan secara grouped/accordion berdasarkan **Product Family / Jenis Bunga → Kategori → Item** agar data tidak menjadi daftar campur panjang. Semi Product tetap merupakan stok produksi global/reusable, bukan data duplikat per produk jadi.
+- **Aktif:** menu BOM / Resep Produksi boleh ditampilkan grouped berdasarkan **Target Type → Target Item → Resep Produksi**. Grouping ini hanya cara baca UI; source of truth tetap dokumen BOM existing.
+- **Aktif:** drawer Buat Production Order memakai pemilihan target yang lebih natural, tetapi submit tetap wajib memakai `bomId` sebagai source of truth internal.
+- **Aktif:** untuk `Produk Jadi`, drawer PO cukup menampilkan **Jenis Produksi → Produk yang dibuat → Resep Produksi jika lebih dari satu → Qty → Preview Kebutuhan**. Filter **Jenis Bunga / Product Family** dan **Kategori Bahan** tidak ditampilkan untuk produk jadi bila source product tidak memakai field itu.
+- **Aktif:** untuk `Bahan / Semi Produk`, drawer PO menampilkan filter UI-only **Jenis Bunga / Product Family** dan **Kategori Bahan** sebelum field **Bahan yang dibuat**, agar user tidak memilih dari flat list panjang.
+- **Guarded:** filter UI-only seperti selected family/category/target key tidak boleh disimpan ke Firestore dan tidak boleh membuat schema/collection baru.
+- **Guarded:** istilah/kode internal seperti kode BOM atau kode target master boleh disembunyikan dari label pilihan user-facing, tetapi `bomId`, kode transaksi Production Order, dan referensi audit internal tetap wajib dipertahankan.
+- **Guarded:** perubahan ini hanya UX/listing/selection; tidak boleh mengubah stok, requirement calculation, Work Log, Payroll, HPP Analysis, report, atau lifecycle Production Order.
+
 ## Update Production Planning / Planning Schedule — 2026-04-25
 - **Aktif:** Production Planning ditambahkan sebagai layer target sebelum Production Order dengan route `/produksi/production-planning` dan collection `production_plans`.
 - **Aktif:** Flow final menjadi **Planning → Production Order → Work Log completed → Payroll/HPP → Dashboard**.
@@ -227,11 +237,11 @@ Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah 
 |---|---|---|---|
 | Customer | `CUS` | `CUS-DDMMYYYY-001` | `CUS-12052026-001` |
 | Supplier | `SUP` | `SUP-DDMMYYYY-001` | `SUP-12052026-001` |
-| Produk Jadi | `PRD` | `PRD-[READABLE]-001` | `PRD-BQT-MWR-PTH-FLN-001` |
-| Raw Material | `RAW` | `RAW-[READABLE]-001` | `RAW-FLN-PTH-001` |
-| Semi Finished | `SFP` | `SFP-[READABLE]-001` | `SFP-BNG-MWR-PTH-001` |
-| BOM | `BOM` | `BOM-[TARGET]-001` | `BOM-PRD-BQT-MWR-PTH-FLN-001` |
-| Production Step | `STP` | `STP-[READABLE]-001` | `STP-POTONG-001` |
+| Produk Jadi | `PRD` | `PRD-[READABLE]` | `PRD-BQT-MWR-PTH-FLN` |
+| Raw Material | `RAW` | `RAW-[READABLE]` | `RAW-FLN-PTH` |
+| Semi Finished | `SFP` | `SFP-[READABLE]` | `SFP-BNG-MWR-PTH` |
+| BOM | `BOM` | `BOM-[TARGET]` | `BOM-PRD-BQT-MWR-PTH-FLN` |
+| Production Step | `STP` | `STP-[READABLE]` | `STP-POTONG` |
 | Purchase | `PUR` | `PUR-DDMMYYYY-001` | `PUR-12052026-001` |
 | Sales / Order | `ORD` | `ORD-DDMMYYYY-001` | `ORD-12052026-001` |
 | Return | `RET` | `RET-DDMMYYYY-001` | `RET-12052026-001` |
@@ -246,7 +256,7 @@ Catatan lock:
 - Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
 - Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
 - Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
-- Readable semantic code wajib memakai suffix sequence 3 digit (`-001`, `-002`) dan tidak boleh memakai timestamp/random.
+- Readable semantic code unik tidak memakai suffix; suffix sequence 3 digit (`-001`, `-002`) hanya ditambahkan saat base code duplicate/collision dan tidak boleh memakai timestamp/random.
 - Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
 - Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
 
@@ -260,3 +270,12 @@ Catatan lock:
 - Data lama tidak boleh di-rename document ID tanpa preview/repair plan terpisah.
 - Generator readable semantic harus universal berbasis normalisasi teks + konsonan, bukan dictionary manual kata seperti `PUTIH -> PTH`.
 - Prefix legacy `SAL`, `RM`, `CIN`, `COUT`, `WL`, `ADJ`, dan `STEP` hanya boleh muncul sebagai catatan legacy compatibility/audit, bukan generator data baru.
+
+
+### UI rule final: master item/config code internal
+
+- Kode untuk Product, Raw Material, Semi Finished, BOM, dan Production Step adalah **kode internal**.
+- Service tetap wajib membuat dan menyimpan field `code` otomatis saat create.
+- Kode internal master item/config tidak wajib tampil sebagai field utama UI, tidak perlu realtime preview, dan tidak boleh diinput manual user.
+- UI utama master item/config memakai nama dan atribut bisnis sebagai identitas: kategori, warna, bahan, varian, target produk, step, dan satuan.
+- Kode transaksi/audit tetap wajib tampil di UI: Customer, Supplier, Purchase, Sales/Order, Return, Stock Adjustment, Cash In, Cash Out, Production Order, Work Log/Job, dan Payroll.

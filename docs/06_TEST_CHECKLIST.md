@@ -1525,11 +1525,11 @@ Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah 
 |---|---|---|---|
 | Customer | `CUS` | `CUS-DDMMYYYY-001` | `CUS-12052026-001` |
 | Supplier | `SUP` | `SUP-DDMMYYYY-001` | `SUP-12052026-001` |
-| Produk Jadi | `PRD` | `PRD-[READABLE]-001` | `PRD-BQT-MWR-PTH-FLN-001` |
-| Raw Material | `RAW` | `RAW-[READABLE]-001` | `RAW-FLN-PTH-001` |
-| Semi Finished | `SFP` | `SFP-[READABLE]-001` | `SFP-BNG-MWR-PTH-001` |
-| BOM | `BOM` | `BOM-[TARGET]-001` | `BOM-PRD-BQT-MWR-PTH-FLN-001` |
-| Production Step | `STP` | `STP-[READABLE]-001` | `STP-POTONG-001` |
+| Produk Jadi | `PRD` | `PRD-[READABLE]` | `PRD-BQT-MWR-PTH-FLN` |
+| Raw Material | `RAW` | `RAW-[READABLE]` | `RAW-FLN-PTH` |
+| Semi Finished | `SFP` | `SFP-[READABLE]` | `SFP-BNG-MWR-PTH` |
+| BOM | `BOM` | `BOM-[TARGET]` | `BOM-PRD-BQT-MWR-PTH-FLN` |
+| Production Step | `STP` | `STP-[READABLE]` | `STP-POTONG` |
 | Purchase | `PUR` | `PUR-DDMMYYYY-001` | `PUR-12052026-001` |
 | Sales / Order | `ORD` | `ORD-DDMMYYYY-001` | `ORD-12052026-001` |
 | Return | `RET` | `RET-DDMMYYYY-001` | `RET-12052026-001` |
@@ -1544,7 +1544,7 @@ Catatan lock:
 - Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
 - Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
 - Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
-- Readable semantic code wajib memakai suffix sequence 3 digit (`-001`, `-002`) dan tidak boleh memakai timestamp/random.
+- Readable semantic code unik tidak memakai suffix; suffix sequence 3 digit (`-001`, `-002`) hanya ditambahkan saat base code duplicate/collision dan tidak boleh memakai timestamp/random.
 - Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
 - Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
 
@@ -1553,11 +1553,12 @@ Catatan lock:
 
 - [ ] Customer baru memakai `CUS-DDMMYYYY-001` dan field kode disabled/read-only.
 - [ ] Supplier baru memakai `SUP-DDMMYYYY-001` dan field kode disabled/read-only.
-- [ ] Product baru memakai `PRD-[READABLE]-001`.
-- [ ] Raw Material baru memakai `RAW-[READABLE]-001`, bukan `RM`.
-- [ ] Semi Finished baru memakai `SFP-[READABLE]-001`.
-- [ ] BOM baru memakai `BOM-[TARGET]-001`.
-- [ ] Production Step baru memakai `STP-[READABLE]-001`, bukan timestamp.
+- [ ] Product baru memakai `PRD-[READABLE]`.
+- [ ] Raw Material baru memakai `RAW-[READABLE]`, bukan `RM`.
+- [ ] Semi Finished baru memakai `SFP-[READABLE]`.
+- [ ] Semi Finished unik tidak menambahkan suffix `-001`; duplicate baru menambahkan `-001`, `-002`, dan seterusnya.
+- [ ] BOM baru memakai `BOM-[TARGET]`.
+- [ ] Production Step baru memakai `STP-[READABLE]`, bukan timestamp.
 - [ ] Purchase baru memakai `PUR-DDMMYYYY-001`.
 - [ ] Sales/Order baru memakai `ORD-DDMMYYYY-001` walaupun field compatibility masih `saleNumber`.
 - [ ] Return baru memakai `RET-DDMMYYYY-001`.
@@ -1570,3 +1571,51 @@ Catatan lock:
 - [ ] Firestore random ID tidak tampil sebagai kode audit/user-facing.
 - [ ] Data lama tidak di-rename document ID.
 - [ ] Duplicate code dicegah oleh service/helper.
+
+
+### Checklist UI code internal master item/config
+
+- [ ] Product form tidak menampilkan input kode utama.
+- [ ] Raw Material form tidak menampilkan input kode utama.
+- [ ] Semi Finished form tidak menampilkan input kode utama atau realtime preview kode.
+- [ ] BOM form tidak menampilkan input kode utama.
+- [ ] Production Step form tidak menampilkan input kode utama.
+- [ ] Create Product/Raw Material/Semi Finished/BOM/Production Step tetap sukses tanpa `code` dari UI.
+- [ ] Data baru Product/Raw Material/Semi Finished/BOM/Production Step tetap tersimpan punya field `code`.
+- [ ] Edit nama/kategori/target/status tidak mengubah `code` existing.
+- [ ] Customer/Supplier code tetap tampil di UI.
+- [ ] Purchase/Sales/Return/Stock Adjustment/Cash In/Cash Out/Production Order/Work Log/Payroll reference tetap tampil di UI.
+- [ ] SKU Variant/kode variant tidak berubah.
+
+
+## Checklist UI Produksi Grouped & Production Order Target Filter — 2026-05-12
+
+### Semi Finished Materials
+- [ ] Buka menu Semi Product / Semi Finished Materials.
+- [ ] Pastikan tampilan grouped/accordion berdasarkan `Product Family / Jenis Bunga` lalu kategori, atau mode global tetap tersedia bila source menyediakan toggle.
+- [ ] Pastikan item tidak hilang dari UI walaupun data lama tidak punya family/category; item harus masuk fallback seperti `Umum / Reusable` atau `Tanpa Kategori`.
+- [ ] Pastikan total stock, available stock, variant stock, status aman/kosong, status aktif/nonaktif, tombol Detail/Edit/Nonaktifkan tetap sama seperti sebelum patch.
+- [ ] Pastikan grouping tidak mengubah stok, `variantKey`, `currentStock`, `availableStock`, `reservedStock`, atau collection Firestore.
+
+### BOM / Resep Produksi
+- [ ] Buka menu BOM / Resep Produksi.
+- [ ] Pastikan daftar bisa dibaca berdasarkan `Target Type → Target Item → Resep Produksi`.
+- [ ] Pastikan BOM target `product` dan `semi_finished_material` tetap dibedakan.
+- [ ] Pastikan create/edit BOM, material lines, step lines, status aktif/nonaktif, dan rule material tidak berubah.
+- [ ] Pastikan search/filter tetap menemukan BOM walaupun item berada dalam group/accordion.
+
+### Production Order Create Drawer
+- [ ] Buka menu Production Order lalu klik Buat Production Order.
+- [ ] Pastikan section angka `1`, `2`, `3` tidak muncul lagi dan diganti section yang lebih halus seperti `Target Produksi`, `Detail Produksi`, dan `Preview Kebutuhan`.
+- [ ] Pilih `Jenis Produksi = Produk Jadi`; pastikan hanya muncul `Produk yang dibuat`, bukan `Jenis Bunga / Product Family`, `Kategori Bahan`, atau `Bahan yang dibuat`.
+- [ ] Pilih `Jenis Produksi = Bahan / Semi Produk`; pastikan muncul `Jenis Bunga / Product Family`, `Kategori Bahan`, dan `Bahan yang dibuat`.
+- [ ] Pilih family seperti `Mawar`; pastikan daftar bahan terfilter dan tidak menampilkan semua bahan dalam flat list panjang.
+- [ ] Pilih kategori seperti `Daun`, `Kelopak`, `Pola`, atau `Kawat`; pastikan daftar bahan makin sempit sesuai kategori.
+- [ ] Pastikan option target user-facing tidak menampilkan hitungan `· 1 BOM` dan tidak perlu menampilkan kode master internal di belakang nama.
+- [ ] Jika target hanya punya satu resep aktif, pastikan resep otomatis dipakai secara internal dan field `Resep Produksi` tidak perlu tampil.
+- [ ] Jika target punya lebih dari satu resep aktif, pastikan field `Resep Produksi` tampil dan user bisa memilih resep.
+- [ ] Pastikan `bomId` tetap terisi saat submit dan tidak ada field UI-only seperti selected family/category yang tersimpan ke Firestore.
+- [ ] Pastikan varian target tetap wajib dipilih jika target bervarian.
+- [ ] Pastikan preview kebutuhan/stok tetap read-only dan muncul setelah target, varian jika ada, dan qty valid.
+- [ ] Buat PO untuk Produk Jadi dan Bahan / Semi Produk; pastikan kode order tetap auto-generated dan status ready/shortage tetap sesuai stok.
+- [ ] Pastikan cancel/start/complete Production Order tetap berjalan dan tidak merusak Work Log, Payroll, HPP Analysis, inventory mutation, atau report.
