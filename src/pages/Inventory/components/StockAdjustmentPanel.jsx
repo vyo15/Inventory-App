@@ -319,7 +319,27 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
     [finishedProducts, rawMaterials, semiFinishedMaterials],
   );
 
-  const availableItems = stockSourceItemsByType[selectedItemType] || [];
+  /* =====================================================
+  SECTION: Pilihan item Stock Adjustment — GUARDED
+  Fungsi:
+  - Menjaga list item aktif tetap stabil per itemType untuk form adjustment.
+
+  Dipakai oleh:
+  - StockAdjustmentPanel di halaman Stock Management.
+
+  Alasan perubahan:
+  - Memoize availableItems agar dependency selectedItem tidak berubah pada setiap render saat itemType kosong/tidak dikenal.
+
+  Catatan cleanup:
+  - Belum ada.
+
+  Risiko:
+  - Jangan ubah mapping itemType/collection di sini karena payload stock_adjustments dan inventory_logs bergantung pada source item yang benar.
+  ===================================================== */
+  const availableItems = useMemo(
+    () => stockSourceItemsByType[selectedItemType] || [],
+    [selectedItemType, stockSourceItemsByType],
+  );
 
   const selectedItem = useMemo(
     () => availableItems.find((item) => item.id === selectedItemId) || null,

@@ -90,7 +90,8 @@ const buildSupplierSequenceCode = (date = new Date(), sequence = 1) => {
 
 const isFirestoreRandomIdLike = (value = '') => /^[A-Za-z0-9]{20}$/.test(safeTrim(value));
 
-export const generateSupplierCode = async (values = {}, excludeId = null) => {
+export const generateSupplierCode = async (_values = {}, excludeId = null) => {
+  void _values;
   return generateDailySequenceCode({
     db,
     collectionName: SUPPLIER_MASTER_COLLECTION,

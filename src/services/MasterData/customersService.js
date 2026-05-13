@@ -93,7 +93,8 @@ Catatan cleanup:
 Risiko:
 - Mengembalikan kode berbasis nama atau random akan memutus audit dan membuat document ID tidak seragam.
 ===================================================== */
-export const generateCustomerCode = async (values = {}, excludeId = null) => {
+export const generateCustomerCode = async (_values = {}, excludeId = null) => {
+  void _values;
   return generateDailySequenceCode({
     db,
     collectionName: CUSTOMERS_COLLECTION,

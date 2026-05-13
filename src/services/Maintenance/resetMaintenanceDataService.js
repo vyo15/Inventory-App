@@ -238,8 +238,6 @@ const MASTER_DATA_OPENING_STOCK_COLLECTIONS = new Set([
   "semi_finished_materials",
 ]);
 
-const isPlainObjectForExport = (value) => value && typeof value === "object" && !Array.isArray(value);
-
 const normalizeExportValue = (value) => {
   if (value === undefined) return null;
   if (value === null) return null;
@@ -423,7 +421,28 @@ export const getMasterDataExportPreview = async () => {
   return {
     exportMeta: payload.exportMeta,
     summary: payload.summary,
-    collections: payload.collections.map(({ records, ...collectionSummary }) => collectionSummary),
+    collections: payload.collections.map((collectionItem) => {
+      /* =====================================================
+      SECTION: Master data export preview sanitizer — GUARDED
+      Fungsi:
+      - Menghapus records dari preview agar UI hanya membaca summary export, bukan data penuh.
+
+      Dipakai oleh:
+      - getMasterDataExportPreview di Reset Maintenance Data.
+
+      Alasan perubahan:
+      - Menghindari unused destructuring lint tanpa mengubah payload export penuh dari buildMasterDataExportPayload.
+
+      Catatan cleanup:
+      - Belum ada.
+
+      Risiko:
+      - Jangan ubah buildMasterDataExportPayload karena function itu tetap harus membawa records untuk file backup/export.
+      ===================================================== */
+      const collectionSummary = { ...collectionItem };
+      delete collectionSummary.records;
+      return collectionSummary;
+    }),
     warnings: payload.warnings,
   };
 };
@@ -568,7 +587,7 @@ const buildHppCostSnapshotItem = ({ collectionName, itemDoc, fields = [], varian
   };
 };
 
-const buildHppCostPreviewRow = ({ collectionName, itemDoc, fields = [], variantFields = [] }) => {
+const buildHppCostPreviewRow = ({ itemDoc, fields = [], variantFields = [] }) => {
   const data = itemDoc.data();
   const topLevelFields = pickExistingFields(data, fields);
   const variantRows = buildVariantCostSnapshotRows(data.variants, variantFields);
@@ -614,7 +633,6 @@ const buildHppCostResetPreview = async (resetMode) => {
     const snapshot = await getDocs(collection(db, targetConfig.key));
     const rows = snapshot.docs
       .map((itemDoc) => buildHppCostPreviewRow({
-        collectionName: targetConfig.key,
         itemDoc,
         fields: targetConfig.fields,
         variantFields: targetConfig.variantFields,

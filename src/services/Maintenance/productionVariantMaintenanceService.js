@@ -6,7 +6,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../../firebase";
-import { calculateAvailableStock, toNumber } from "../../utils/stock/stockHelpers";
+import { toNumber } from "../../utils/stock/stockHelpers";
 import {
   inferHasVariants,
   resolveVariantSelection,
@@ -461,7 +461,6 @@ const buildProductionVariantPlans = (context) => {
   const plans = [];
 
   context.orders.forEach((order) => {
-    const issues = [];
     const bom = context.bomMap.get(order.bomId);
     const relatedWorkLogs = context.workLogsByOrderId.get(order.id) || [];
     const hasRelatedWorkLog = relatedWorkLogs.length > 0;

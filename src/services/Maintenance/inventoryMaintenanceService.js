@@ -113,6 +113,29 @@ const buildSummary = (rows = []) => ({
   executablePlanCount: rows.filter((row) => row.payload).length,
 });
 
+/* =====================================================
+SECTION: Sanitasi payload audit inventory — GUARDED
+Fungsi:
+- Menghapus payload repair dari response audit read-only agar UI tidak membawa data internal write plan.
+
+Dipakai oleh:
+- getInventoryStockMaintenanceAudit di menu Reset Maintenance Data.
+
+Alasan perubahan:
+- Menghindari unused destructuring lint tanpa mengubah isi rows internal yang masih dipakai untuk summary/repair.
+
+Catatan cleanup:
+- Belum ada.
+
+Risiko:
+- Jangan hapus payload dari rowsWithPayload repair karena payload itu source plan writeBatch repair stok.
+===================================================== */
+const omitMaintenancePayload = (row = {}) => {
+  const publicRow = { ...row };
+  delete publicRow.payload;
+  return publicRow;
+};
+
 export const getInventoryStockMaintenanceAudit = async () => {
   const rows = [];
 
@@ -123,7 +146,7 @@ export const getInventoryStockMaintenanceAudit = async () => {
 
   return {
     generatedAt: new Date().toISOString(),
-    rows: rows.map(({ payload, ...row }) => row),
+    rows: rows.map(omitMaintenancePayload),
     summary: buildSummary(rows),
   };
 };

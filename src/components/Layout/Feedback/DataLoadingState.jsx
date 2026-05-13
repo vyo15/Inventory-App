@@ -1,6 +1,25 @@
 import React from "react";
 import "./DataLoadingState.css";
 
+/* eslint-disable react-refresh/only-export-components --
+=====================================================
+SECTION: DataLoadingState shared exports — AKTIF
+Fungsi:
+- Menjaga component loading dan helper empty/refresh tetap satu file shared UI.
+
+Dipakai oleh:
+- Halaman dashboard, master data, finance, inventory, transaksi, report, produksi, dan system.
+
+Alasan perubahan:
+- File ini memang export component + helper aktif; patch lint tahap ini tidak split file agar tidak mengubah banyak importer.
+
+Catatan cleanup:
+- Bisa dipisah ke file helper khusus pada batch refactor UI terpisah setelah approval.
+
+Risiko:
+- Split atau perubahan importer massal di patch lint kecil bisa memperbesar risiko broken reference lintas halaman.
+===================================================== */
+
 const DEFAULT_MESSAGE = "Memuat data...";
 const DEFAULT_EMPTY_TEXT = "Belum ada data.";
 const TABLE_COLUMNS = 4;

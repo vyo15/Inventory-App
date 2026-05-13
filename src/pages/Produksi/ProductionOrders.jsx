@@ -10,7 +10,7 @@
 // - reserve/release lama dipensiunkan dari UI utama
 // =====================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import {
   Alert,
@@ -174,7 +174,7 @@ const normalizeOptionKey = (value = "") =>
   String(value || "")
     .trim()
     .toLowerCase()
-    .replace(/[\s_\-]+/g, "_");
+    .replace(/[\s_-]+/g, "_");
 
 const getKnownOptionKeyFromText = (text = "", optionMap = {}) => {
   const normalizedText = normalizeOptionKey(text);
@@ -373,7 +373,7 @@ const ProductionOrders = () => {
   // - Dipanggil ulang saat buka form, ganti target type, fokus dropdown, dan buka dropdown
   // - Tujuannya agar BOM aktif terbaru selalu dipakai oleh menu PO
   // =====================================================
-  const loadBomOptions = async (targetType = "product") => {
+  const loadBomOptions = useCallback(async (targetType = "product") => {
     try {
       setBomLoading(true);
       const result = await getActiveProductionBomOptions(targetType);
@@ -385,9 +385,26 @@ const ProductionOrders = () => {
     } finally {
       setBomLoading(false);
     }
-  };
+  }, []);
 
-  const loadSemiFinishedReferences = async () => {
+  /* =====================================================
+  SECTION: Semi Finished reference loader — GUARDED
+  Fungsi:
+  - Memuat referensi semi finished untuk grouping target PO tanpa mengubah flow BOM/PO.
+
+  Dipakai oleh:
+  - Drawer Buat Production Order, filter family/category, dan dropdown target semi finished.
+
+  Alasan perubahan:
+  - Stabilkan function dengan useCallback agar effect targetType tidak memakai closure lama dan tidak memicu warning dependency.
+
+  Catatan cleanup:
+  - Belum ada.
+
+  Risiko:
+  - Jangan ubah cache guard/data source di sini karena pilihan semi finished PO bergantung pada reference data BOM aktif.
+  ===================================================== */
+  const loadSemiFinishedReferences = useCallback(async () => {
     if (semiFinishedReferences.length > 0) return;
 
     try {
@@ -397,7 +414,7 @@ const ProductionOrders = () => {
       console.error(error);
       setSemiFinishedReferences([]);
     }
-  };
+  }, [semiFinishedReferences.length]);
 
   const loadGeneratedCode = async (targetType = "product") => {
     try {
@@ -423,7 +440,7 @@ const ProductionOrders = () => {
         loadSemiFinishedReferences();
       }
     }
-  }, [targetTypeValue]);
+  }, [loadBomOptions, loadSemiFinishedReferences, targetTypeValue]);
 
   useEffect(() => {
     const loadTargetVariants = async () => {

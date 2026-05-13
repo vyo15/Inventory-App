@@ -23,7 +23,6 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
-import { calculateAvailableStock } from "../../utils/stock/stockHelpers";
 import {
   applyStockMutationToItem,
   buildVariantOptionsFromItem,
@@ -188,7 +187,7 @@ const normalizeReferenceItem = (snapshot) => {
 // - Hindari query Firestore yang terlalu kaku / butuh index tambahan
 // =====================================================
 const normalizeBomTargetType = (value = "") => {
-  const raw = safeTrim(value).toLowerCase().replace(/[_\-]+/g, " ");
+  const raw = safeTrim(value).toLowerCase().replace(/[_-]+/g, " ");
   if (["semi finished", "semi finished material", "semifinished", "semi finishedmaterials"].includes(raw)) {
     return "semi_finished_material";
   }
