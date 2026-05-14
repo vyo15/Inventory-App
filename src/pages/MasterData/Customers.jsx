@@ -21,6 +21,11 @@ import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
+const resolveCustomerDisplayCode = (record = {}) =>
+  record.code || record.customerCode || "Perlu repair kode";
+
+const resolveCustomerFormCode = (record = {}) => record.code || record.customerCode || "";
+
 const Customers = () => {
   // =========================
   // SECTION: State halaman customer
@@ -173,7 +178,7 @@ const Customers = () => {
     setIsModalVisible(true);
     setCurrentId(record.id);
     form.setFieldsValue({
-      code: record.code || record.customerCode || record.id || "",
+      code: resolveCustomerFormCode(record),
       name: record.name,
       contact: record.contact,
       address: record.address,
@@ -191,7 +196,7 @@ const Customers = () => {
   // - aktif dipakai
   // =========================
   const columns = [
-    { title: "Kode", dataIndex: "code", key: "code", render: (_, record) => record.code || record.customerCode || record.id || "-" },
+    { title: "Kode", dataIndex: "code", key: "code", render: (_, record) => resolveCustomerDisplayCode(record) },
     { title: "Nama Customer", dataIndex: "name", key: "name" },
     { title: "Kontak", dataIndex: "contact", key: "contact" },
     { title: "Alamat", dataIndex: "address", key: "address" },

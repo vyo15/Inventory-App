@@ -166,28 +166,54 @@ const REFERENCE_TYPE_LABELS = {
   work_log: "Produksi / Work Log",
 };
 
-const compactReferenceId = (referenceId = "") => {
-  const normalizedReferenceId = String(referenceId || "").trim();
-  if (!normalizedReferenceId) return "";
-  return normalizedReferenceId.length > 12
-    ? `${normalizedReferenceId.slice(0, 8)}...${normalizedReferenceId.slice(-4)}`
-    : normalizedReferenceId;
+const normalizeReferenceText = (value = "") => String(value ?? "").trim();
+
+const isLikelyTechnicalReferenceId = (value = "") => {
+  const normalizedValue = normalizeReferenceText(value);
+  if (!normalizedValue) return false;
+  if (normalizedValue.includes("-") || normalizedValue.includes("/") || normalizedValue.includes(" ")) {
+    return false;
+  }
+
+  return /^[A-Za-z0-9_-]{18,28}$/.test(normalizedValue);
+};
+
+const resolveDisplayableReference = ({ referenceId = "", businessReference = "" }) => {
+  const normalizedBusinessReference = normalizeReferenceText(businessReference);
+  const normalizedReferenceId = normalizeReferenceText(referenceId);
+
+  if (normalizedBusinessReference) return normalizedBusinessReference;
+  if (normalizedReferenceId && !isLikelyTechnicalReferenceId(normalizedReferenceId)) {
+    return normalizedReferenceId;
+  }
+
+  return "";
 };
 
 const buildReferenceItem = ({ label, referenceId = "", businessReference = "", detail = "" }) => {
-  const compactId = compactReferenceId(referenceId);
+  const normalizedReferenceId = normalizeReferenceText(referenceId);
+  const normalizedBusinessReference = normalizeReferenceText(businessReference);
+  const normalizedDetail = normalizeReferenceText(detail);
+  const displayReference = resolveDisplayableReference({
+    referenceId: normalizedReferenceId,
+    businessReference: normalizedBusinessReference,
+  });
   const detailLines = [
-    businessReference ? `Ref: ${businessReference}` : "",
-    detail,
-    compactId ? `ID: ${compactId}` : "",
+    displayReference ? `Ref: ${displayReference}` : "",
+    normalizedDetail,
   ].filter(Boolean);
+  const detailText = detailLines.join(" | ");
 
   return {
     label,
-    referenceId,
-    businessReference,
-    detail: detailLines.join(" | "),
-    searchText: [label, businessReference, referenceId, detail, compactId].filter(Boolean).join(" "),
+    referenceId: normalizedReferenceId,
+    businessReference: displayReference,
+    detail: detailText,
+    tooltipText: detailText || label,
+    // ID teknis tetap masuk searchText agar audit/search legacy masih bisa menemukan log, tetapi tidak ditampilkan di teks utama/tooltip.
+    searchText: [label, displayReference, normalizedBusinessReference, normalizedReferenceId, normalizedDetail]
+      .filter(Boolean)
+      .join(" "),
   };
 };
 
@@ -203,7 +229,7 @@ const resolveReferenceItems = (record) => {
   // SECTION: Referensi audit stok yang lebih manusiawi
   // Fungsi:
   // - menampilkan sumber mutasi stok sebagai label bisnis, bukan ID mentah sebagai teks utama
-  // - ID teknis tetap disimpan sebagai detail kecil/tooltip agar audit dan pencarian tetap bisa dilakukan
+  // - ID teknis hanya dipakai untuk pencarian internal agar tampilan audit tidak dobel/kotor
   // Alasan:
   // - kolom Referensi masih berguna untuk audit, tetapi user lebih mudah membaca label seperti Penjualan/Pembelian/Penyesuaian Stok
   // Status:
@@ -231,6 +257,7 @@ const resolveReferenceItems = (record) => {
       "saleNumber",
       "purchaseNumber",
       "returnNumber",
+      "adjustmentNumber",
       "cashInNumber",
       "cashOutNumber",
       "referenceNumber",
@@ -274,6 +301,7 @@ const resolveReferenceItems = (record) => {
       buildReferenceItem({
         label: "Penyesuaian Stok",
         referenceId: adjustmentId,
+        businessReference,
         detail: reason ? `Alasan: ${reason}` : "",
       }),
     );
@@ -284,7 +312,7 @@ const resolveReferenceItems = (record) => {
       buildReferenceItem({
         label: "Production Order",
         referenceId: productionOrderId,
-        detail: productionOrderCode ? `Kode: ${productionOrderCode}` : "",
+        businessReference: productionOrderCode || businessReference,
       }),
     );
   }
@@ -299,7 +327,8 @@ const resolveReferenceItems = (record) => {
       buildReferenceItem({
         label: "Produksi / Work Log",
         referenceId: workLogId,
-        detail: workLogDetails,
+        businessReference: workNumber || businessReference,
+        detail: stepName ? `Step: ${stepName}` : workLogDetails,
       }),
     );
   }
@@ -626,7 +655,7 @@ const StockManagement = () => {
               {record.referenceItems.map((item) => (
                 <Tooltip
                   key={`${item.label}-${item.referenceId || item.detail}`}
-                  title={item.referenceId ? `ID referensi: ${item.referenceId}` : item.detail}
+                  title={item.tooltipText || item.detail || item.label}
                 >
                   <Space direction="vertical" size={0}>
                     <Text strong style={{ fontSize: 12 }}>
