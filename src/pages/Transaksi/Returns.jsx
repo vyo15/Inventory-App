@@ -297,6 +297,11 @@ const Returns = () => {
           variantLabel: selectedVariant?.variantLabel || "",
           stockSourceType: selectedVariant ? "variant" : "master",
         };
+        const stockUnit =
+          latestItem.stockUnit ||
+          latestItem.unit ||
+          latestItem.baseUnit ||
+          (collectionName === "products" ? "pcs" : "");
 
         // =========================
         // SECTION: Commit atomik retur + stok + inventory log
@@ -314,6 +319,8 @@ const Returns = () => {
           itemId,
           itemName: latestItemName,
           quantity: normalizedQuantity,
+          unit: stockUnit,
+          stockUnit,
           note: normalizedNote,
           date: returnTimestamp,
           ...variantPayload,
@@ -337,6 +344,8 @@ const Returns = () => {
               referenceNumber: returnNumber,
               referenceCode: returnNumber,
               referenceType: "return",
+              unit: stockUnit,
+              stockUnit,
               note: normalizedNote,
               currentStockBefore: stockSnapshotBefore.currentStock,
               currentStockAfter,
@@ -432,7 +441,10 @@ const Returns = () => {
       key: "quantity",
       width: 130,
       align: "right",
-      render: (value) => <strong>{formatNumberId(value)}</strong>,
+      render: (value, record) => {
+        const unit = record.stockUnit || record.unit || "";
+        return <strong>{formatNumberId(value)}{unit ? ` ${unit}` : ""}</strong>;
+      },
     },
     {
       title: "Alasan / Catatan",

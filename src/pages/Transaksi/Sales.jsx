@@ -400,6 +400,11 @@ const Sales = () => {
       variantKey: selectedVariant?.variantKey || "",
       variantLabel: selectedVariant?.variantLabel || "",
       stockSourceType: selectedVariant ? "variant" : "master",
+      unit:
+        selectedItem.stockUnit ||
+        selectedItem.unit ||
+        selectedItem.baseUnit ||
+        (selectedItem.collectionName === "products" ? "pcs" : ""),
     };
   };
 
@@ -667,6 +672,8 @@ const Sales = () => {
             note: `Penjualan via ${newSalePayload.salesChannel}`,
             subtotal: item.subtotal,
             referenceNumber: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
+            unit: item.unit || "",
+            stockUnit: item.unit || "",
             variantKey: item.variantKey || "",
             variantLabel: item.variantLabel || "",
             stockSourceType: item.stockSourceType || "master",
@@ -736,6 +743,8 @@ const Sales = () => {
               ? `Pembatalan penjualan via ${selectedSale.salesChannel || "-"}`
               : `Pembatalan/hapus penjualan ID: ${saleId}`,
           customerName: selectedSale.customerName || "",
+          unit: item.unit || "",
+          stockUnit: item.unit || "",
           variantKey: item.variantKey || "",
           variantLabel: item.variantLabel || "",
           stockSourceType: item.stockSourceType || "master",

@@ -113,6 +113,9 @@ const buildVariantStockSnapshot = (variant = {}) => {
 // =========================
 const WHOLE_NUMBER_UNIT_KEYWORDS = [
   "pcs",
+  "meter",
+  "yard",
+  "roll",
   "piece",
   "unit",
   "batang",
@@ -385,7 +388,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
     };
   }, [selectedItem, selectedItemHasVariants, selectedVariant]);
 
-  const quantityUnitLabel = selectedItem?.stockUnit || selectedItem?.unit || "";
+  const quantityUnitLabel = selectedItem?.stockUnit || selectedItem?.unit || selectedItem?.baseUnit || "";
   const quantityUsesWholeNumber = isWholeNumberUnit(quantityUnitLabel);
 
   // =========================
@@ -492,12 +495,17 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         const sourceStockSnapshot = selectedSourceVariant
           ? buildVariantStockSnapshot(selectedSourceVariant)
           : getItemStockSnapshot(latestSourceItem);
+        const stockUnit =
+          latestSourceItem.stockUnit ||
+          latestSourceItem.unit ||
+          latestSourceItem.baseUnit ||
+          (["products", "semi_finished_materials"].includes(sourceCollectionName) ? "pcs" : "");
 
         if (values.adjustmentType === "out" && adjustmentQuantity > sourceStockSnapshot.availableStock) {
           throw new Error(
             `Jumlah keluar melebihi stok tersedia. Tersedia: ${formatQuantityId(
               sourceStockSnapshot.availableStock,
-              latestSourceItem.stockUnit || latestSourceItem.unit || "",
+              stockUnit,
             )}`,
           );
         }
@@ -535,7 +543,8 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           finalQuantityChange,
           reason: values.reason || "",
           note: values.note || "",
-          unit: latestSourceItem.stockUnit || latestSourceItem.unit || "",
+          unit: stockUnit,
+          stockUnit,
           currentStockBefore: sourceStockSnapshot.currentStock,
           currentStockAfter,
           reservedStockBefore: sourceStockSnapshot.reservedStock,
@@ -563,6 +572,8 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
             itemType: values.itemType,
             itemTypeLabel: selectedItemTypeConfig.label,
             collectionName: sourceCollectionName,
+            unit: stockUnit,
+            stockUnit,
             reason: values.reason || "",
             note: values.note || "",
             currentStockBefore: sourceStockSnapshot.currentStock,

@@ -1434,6 +1434,10 @@ const Purchases = () => {
           variantLabel,
           stockSourceType: latestSelectedVariant ? "variant" : "master",
         };
+        const resolvedStockUnit =
+          normalizedType === "material"
+            ? stockUnit || getPurchaseStockUnit(latestItem)
+            : getPurchaseStockUnit(latestItem);
         const itemName = latestSelectedVariant
           ? `${latestItem?.name || "Item"} - ${variantLabel}`
           : latestItem?.name || "Item tidak ditemukan";
@@ -1563,6 +1567,9 @@ const Purchases = () => {
               sourceRef: purchasePayload.purchaseNumber || "",
               referenceType: "purchase",
               supplierName: purchasePayload.supplierName || "",
+              unit: resolvedStockUnit || "",
+              stockUnit: resolvedStockUnit || "",
+              purchaseUnit: normalizedType === "material" ? purchaseUnit || "" : "",
               ...variantPayload,
               materialVariantId: normalizedType === "material" ? materialVariantId || null : null,
               materialVariantName:

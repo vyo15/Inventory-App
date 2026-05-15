@@ -15,6 +15,12 @@ Untuk bahan baku, quantity pembelian bisa memakai unit beli yang dikonversi ke u
 Rumus yang dipakai:
 - `totalStockIn = quantity × conversionValue`
 
+Rule satuan stok aktif:
+- Satuan stok operasional memakai nilai bulat, termasuk bahan berbasis `meter`; input Qty Beli, Stok Masuk, dan Stock Adjustment tidak membuka decimal baru.
+- Jangan menambahkan satuan `cm` untuk flow stok saat ini karena operasional IMS memakai pembelian/produksi per `meter`.
+- Inventory log baru dari purchase, sales, return, stock adjustment, dan production wajib membawa snapshot `stockUnit`/`unit` jika tersedia agar Qty di Stock Management terbaca sebagai `10 pcs` atau `10 meter`, bukan angka polos.
+- Data legacy yang belum punya satuan tetap boleh tampil tanpa satuan; jangan backfill/migrasi otomatis hanya untuk display.
+
 ### 1.3 Actual purchase dan actual unit cost
 Total pembelian aktual dihitung dari:
 - subtotal item
@@ -413,7 +419,7 @@ Catatan current state:
 - Kolom Referensi Audit adalah audit source untuk menjelaskan asal mutasi stok: Penyesuaian Stok, Pembelian, Penjualan, Retur, Produksi / Work Log, atau Production Order.
 - Referensi harus tampil manusiawi; ID teknis/random ID tidak boleh tampil sebagai teks utama, detail kecil, tooltip, drawer/detail, report UI, atau fallback display.
 - Stock Adjustment aktif hanya melalui halaman Manajemen Stok; route lama bila ada hanya legacy redirect.
-- Angka pada Stock Adjustment wajib memakai format Indonesia tanpa trailing `.00` untuk angka bulat, dan maksimal 2 desimal untuk pecahan.
+- Angka pada Stock Adjustment wajib memakai format Indonesia tanpa trailing `.00` dan input aktif memakai angka bulat (`precision=0`), termasuk untuk stok berbasis meter.
 - Riwayat adjustment harus terbaru di atas, prioritas `createdAt` lalu fallback `date` untuk data lama.
 
 ### Production Order Preview
@@ -985,7 +991,7 @@ Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases,
 ## 24. Rule Tampilan Saldo Stok Locked — 2026-05-06
 - Table yang menampilkan **saldo stok item/master** harus menampilkan `Total`, `Tersedia`, dan semua variant pill langsung di table bila row memiliki `variants[]`.
 - Rule ini berlaku untuk tampilan saldo stok item seperti Products, Raw Materials, Semi Finished Materials, dan Stock Report.
-- Rule ini tidak berlaku untuk Qty transaksi, Stok Masuk Purchases, Stock Adjustment quantity, inventory log delta, atau field audit lain yang bukan saldo stok master.
+- Rule ini tidak berlaku untuk Qty transaksi, Stok Masuk Purchases, Stock Adjustment quantity, inventory log delta, atau field audit lain yang bukan saldo stok master. Untuk inventory log delta, Qty boleh menampilkan satuan dari `stockUnit`/`unit`, tetapi tidak boleh berubah menjadi komponen saldo stok master.
 - Perubahan tampilan compact table tidak boleh mengubah rumus stok, mutation, reserved stock, available stock, HPP, pricing, export mapping, atau schema Firestore.
 
 ## Update Business Rules — Buku Besar Kas / Log Pergerakan Uang — 2026-05-09

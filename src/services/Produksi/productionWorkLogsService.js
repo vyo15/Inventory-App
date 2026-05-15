@@ -1372,6 +1372,8 @@ export const createProductionWorkLogFromOrder = async (
             productionOrderCode: order.code || '',
             stepName: payload.stepName || order.stepName || '',
             movementSource: 'production',
+            unit: safeTrim(line.unit) || safeTrim(stockItem.unit) || '',
+            stockUnit: safeTrim(line.unit) || safeTrim(stockItem.unit) || '',
             variantKey: stockResolution.resolvedVariantKey || '',
             variantLabel: stockResolution.resolvedVariantLabel || '',
           },
@@ -2060,11 +2062,15 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
           quantityChange: goodQty,
           type: 'production_output_in',
           collectionName,
-          extraData: buildProductionOutputAuditMetadata({
-            workLog,
-            productionOrder,
-            outputResolution,
-          }),
+          extraData: {
+            ...buildProductionOutputAuditMetadata({
+              workLog,
+              productionOrder,
+              outputResolution,
+            }),
+            unit: safeTrim(line.unit) || safeTrim(stockItem.unit) || '',
+            stockUnit: safeTrim(line.unit) || safeTrim(stockItem.unit) || '',
+          },
         });
       }
 

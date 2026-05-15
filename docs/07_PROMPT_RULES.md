@@ -100,7 +100,7 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Jika item bervarian, caller wajib mengirim `variantKey` kecuali sedang menangani data legacy dengan alasan eksplisit.
 - Stock Adjustment wajib memakai Firestore transaction atau guard setara agar record adjustment, mutasi stok, dan inventory log tidak partial; validasi keluar harus berbasis `availableStock`, bukan hanya `currentStock`; source item wajib dicek untuk `raw_materials`, `semi_finished_materials`, dan `products`.
 - `customers` lowercase adalah collection final customer. `Customers` uppercase harus dianggap legacy/test data kecuali ada bukti baru.
-- Inventory log baru sebaiknya mengirim `referenceId`, `referenceType`, dan detail transaksi agar Stock Management bisa menampilkan audit trail jelas.
+- Inventory log baru sebaiknya mengirim `referenceId`, `referenceType`, detail transaksi, serta snapshot `stockUnit`/`unit` agar Stock Management bisa menampilkan audit trail jelas dengan Qty bersatuan.
 - Produksi final tetap guarded exception dan tidak boleh dipaksa memakai helper stok umum jika transaction produksi memang dibutuhkan.
 - File unused boleh dihapus hanya setelah grep/import check membuktikan tidak dipakai route/runtime.
 
@@ -286,6 +286,13 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Jangan menghapus guard manual subtotal; harga barang supplier hanya default, bukan pemaksa harga aktual.
 - Jangan membuat shipping tier / ongkir bertingkat tanpa task khusus; ongkir, voucher, diskon ongkir, dan biaya layanan aktual tetap editable di Purchases.
 - Reject/selisih barang harus diarahkan ke Penyesuaian Stok, bukan edit konversi di Purchases.
+
+
+## Guard Satuan Stok dan Qty Stock Management
+- Jangan menambahkan satuan `cm` untuk flow stok IMS saat ini; bahan yang biasa dibeli/diproduksi panjang memakai `meter`.
+- Input Qty aktif untuk Purchases dan Stock Adjustment tetap angka bulat (`precision=0`); jangan membuka decimal tanpa review business rule khusus.
+- Jika patch menyentuh writer `inventory_logs`, sertakan `stockUnit`/`unit` dari item atau line transaksi supaya kolom Qty Stock Management tidak hanya angka polos.
+- Jangan backfill/migrasi inventory log lama hanya untuk menambah satuan; data legacy cukup fallback aman di UI.
 
 ## Guard Purchases Preview Stok dan Breakdown Ringkasan
 

@@ -457,17 +457,23 @@ Batas integrasi:
 Flow aktif Stock Management:
 
 1. Page membaca `inventory_logs` terbaru dengan limit.
-2. UI menampilkan audit read-only: Tanggal, Arah, Sumber, Item, Qty, Referensi Audit, dan Catatan.
+2. UI menampilkan audit read-only: Tanggal, Arah, Sumber, Item, Qty bersatuan jika `stockUnit`/`unit` tersedia, Referensi Audit, dan Catatan.
 3. Kolom `Stok` generic tidak ditampilkan selama snapshot belum reliable.
 4. Panel Penyesuaian Stok menjadi entry point adjustment manual resmi.
 5. Saat adjustment disimpan, Firestore transaction melakukan commit bersama:
    - update item di `raw_materials`, `semi_finished_materials`, atau `products`;
    - set `stock_adjustments/{adjustmentId}`;
-   - set `inventory_logs/{logId}` dengan `referenceType: stock_adjustment`.
+   - set `inventory_logs/{logId}` dengan `referenceType: stock_adjustment` dan snapshot `stockUnit`/`unit`.
 6. Semi Finished bervarian wajib mengirim `variantKey` agar update stok masuk ke bucket varian, bukan master/default.
 
 Batas integrasi:
 - Purchases, Sales, Returns, Production, Payroll, Dashboard, dan Reports tidak ikut diubah saat task hanya Stock Management.
+
+### Integrasi Satuan Qty Inventory Log
+- Writer aktif `purchase_in`, `sale`, `sale_cancel_revert`, `return_in`, `stock_adjustment`, `production_material_out`, dan `production_output_in` harus membawa `stockUnit`/`unit` jika source item atau line transaksi memilikinya.
+- Stock Management hanya membaca metadata satuan tersebut untuk display Qty; tidak menghitung ulang stok historis dan tidak memakai satuan untuk mutasi.
+- Data lama tanpa satuan tetap kompatibel dan tidak wajib dimigrasi.
+- Satuan panjang mengikuti operasional stok per `meter`; jangan memperkenalkan `cm` tanpa keputusan business rule baru.
 - `variantStockNormalizer` tidak boleh disentuh kecuali ada bug varian yang jelas.
 - Reset/Maintenance tetap bukan flow harian untuk memperbaiki stok.
 

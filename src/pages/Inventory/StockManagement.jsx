@@ -103,6 +103,42 @@ const resolveVariantLabel = (record) =>
   readLogField(record, "variantLabel") || readLogField(record, "variantKey") || "";
 
 // =========================
+// SECTION: Helper satuan qty inventory log
+// Fungsi:
+// - menampilkan Qty riwayat stok bersama satuan stok yang dikirim writer baru
+// - fallback produk/semi finished tetap pcs, sedangkan bahan baku legacy tanpa satuan tidak dipaksa menjadi pcs
+// Hubungan flow:
+// - hanya reader UI Stock Management; tidak mengubah quantityChange, stok, HPP, purchase, sales, return, atau produksi
+// Status:
+// - AKTIF untuk log baru yang punya stockUnit/unit
+// - LEGACY-COMPAT untuk log lama yang belum menyimpan satuan
+// =========================
+const resolveLogStockUnit = (record = {}) => {
+  const explicitUnit = String(
+    readLogField(record, "stockUnit") ||
+      readLogField(record, "unit") ||
+      readLogField(record, "baseUnit") ||
+      readLogField(record, "targetUnit") ||
+      "",
+  ).trim();
+
+  if (explicitUnit) return explicitUnit;
+
+  if (["products", "semi_finished_materials"].includes(record?.collectionName)) {
+    return "pcs";
+  }
+
+  return "";
+};
+
+const formatLogQuantityWithUnit = (value, record = {}) => {
+  const unit = resolveLogStockUnit(record);
+  const quantityText = formatNumberId(Math.abs(Number(value || 0)));
+
+  return unit ? `${quantityText} ${unit}` : quantityText;
+};
+
+// =========================
 // SECTION: Helper audit worker produksi
 // Fungsi:
 // - membaca snapshot worker/operator dari inventory log produksi baru;
@@ -629,7 +665,7 @@ const StockManagement = () => {
             strong
             style={{ color: record.directionMeta?.value === "in" ? "#389e0d" : "#cf1322" }}
           >
-            {formatNumberId(Math.abs(value || 0))}
+            {formatLogQuantityWithUnit(value, record)}
           </Text>
         ),
       },
