@@ -93,12 +93,17 @@ const extractStoreName = (lines = []) => {
 };
 
 const extractQuantity = (lines = []) => {
-  const ignoredPattern = /(estimasi|garansi|info|pengiriman|alamat|subtotal|voucher|biaya|total|resi|standard|spx|rp\s*[0-9])/i;
+  // Shopee biasanya menampilkan qty produk sebagai `x3` di baris produk yang sama
+  // dengan harga satuan. Karena itu baris yang mengandung `Rp...` tetap harus
+  // boleh dicek, selama bukan baris ringkasan biaya/pengiriman.
+  const hardIgnoredPattern = /(estimasi|garansi|info\s+pengiriman|alamat|subtotal\s+produk|subtotal\s+pengiriman|subtotal\s+diskon|voucher|biaya\s+layanan|total\s+pesanan|resi|standard|spxid)/i;
+  const subtotalLineIndex = lines.findIndex((line) => /subtotal\s+produk/i.test(line));
+  const searchWindow = subtotalLineIndex > 0 ? lines.slice(0, subtotalLineIndex) : lines;
 
-  for (const line of lines) {
-    if (!line || ignoredPattern.test(line)) continue;
+  for (const line of searchWindow) {
+    if (!line || hardIgnoredPattern.test(line)) continue;
 
-    const qtyMatch = line.match(/(?:^|\s|[^\w])(?:x|×)\s*(\d{1,4})(?=\s|$|[^\w])/i);
+    const qtyMatch = line.match(/(?:^|\s|[^A-Za-z0-9])(?:x|×)\s*(\d{1,4})(?=$|\s|[^A-Za-z0-9]|rp)/i);
     if (!qtyMatch) continue;
 
     const parsed = Number(qtyMatch[1]);
@@ -106,6 +111,44 @@ const extractQuantity = (lines = []) => {
   }
 
   return null;
+};
+
+const extractUnitPriceBeforeSubtotal = (lines = []) => {
+  const subtotalLineIndex = lines.findIndex((line) => /subtotal\s+produk/i.test(line));
+  const searchWindow = subtotalLineIndex > 0 ? lines.slice(0, subtotalLineIndex) : lines;
+  const ignoredPattern = /(estimasi|garansi|info\s+pengiriman|alamat|subtotal|pengiriman|voucher|biaya|total|standard|spxid|lacak|bantuan|pesanan\s+selesai)/i;
+
+  for (const line of [...searchWindow].reverse()) {
+    if (!line || ignoredPattern.test(line)) continue;
+
+    const moneyMatches = line.match(/(?:Rp|RP|rp)\s*[0-9][0-9.\s,]*/g) || [];
+    if (!moneyMatches.length) continue;
+
+    const parsed = parseMoneyValue(moneyMatches[moneyMatches.length - 1]);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+
+  return null;
+};
+
+const deriveQuantityFromSubtotalAndUnitPrice = ({ subtotalItems = 0, unitPrice = 0 } = {}) => {
+  const safeSubtotal = Number(subtotalItems || 0);
+  const safeUnitPrice = Number(unitPrice || 0);
+
+  if (!Number.isFinite(safeSubtotal) || !Number.isFinite(safeUnitPrice)) return null;
+  if (safeSubtotal <= 0 || safeUnitPrice <= 0) return null;
+
+  const rawQuantity = safeSubtotal / safeUnitPrice;
+  const roundedQuantity = Math.round(rawQuantity);
+
+  if (roundedQuantity <= 0 || roundedQuantity > 999) return null;
+
+  // Toleransi kecil untuk OCR tanda ribuan yang kadang kurang bersih.
+  // Contoh screenshot: harga satuan Rp40.000, subtotal Rp120.000 => qty 3.
+  const expectedSubtotal = roundedQuantity * safeUnitPrice;
+  const tolerance = Math.max(1000, Math.round(safeSubtotal * 0.01));
+
+  return Math.abs(expectedSubtotal - safeSubtotal) <= tolerance ? roundedQuantity : null;
 };
 
 const extractVariantName = (lines = []) => {
@@ -163,9 +206,12 @@ export const parseShopeePurchaseOcrText = (rawText = '') => {
   const totalOrder = findMoneyNearLabel(lines, /total\s+pesanan/i) || 0;
   const calculatedTotal = Math.round(subtotalItems + shippingCost - shippingDiscount - voucherDiscount + serviceFee);
   const totalMatches = totalOrder > 0 ? Math.abs(calculatedTotal - totalOrder) <= 1000 : false;
+  const explicitQuantity = extractQuantity(lines);
+  const unitPrice = extractUnitPriceBeforeSubtotal(lines);
+  const derivedQuantity = deriveQuantityFromSubtotalAndUnitPrice({ subtotalItems, unitPrice });
 
   const draft = {
-    quantity: extractQuantity(lines),
+    quantity: explicitQuantity || derivedQuantity,
     subtotalItems,
     shippingCost,
     shippingDiscount,
