@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { buildCountSummary, createKeywordMatcher, matchFieldValue } from '../../utils/produksi/productionPageHelpers';
 import { getWorkLogMaterialOptions, getWorkLogTargetOptions, toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
-import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
+import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
 import EditableLineSection from '../../components/Produksi/shared/EditableLineSection';
 import {
@@ -56,10 +56,8 @@ import {
 import {
   buildWorkLogDraftFromBom,
   buildWorkLogDraftFromProductionOrder,
-  createProductionWorkLog,
   completeProductionWorkLog,
   createProductionWorkLogFromOrder,
-  generateProductionWorkLogNumber,
   getAllProductionWorkLogs,
   getWorkLogReferenceData,
   updateProductionWorkLog,
@@ -175,55 +173,44 @@ const ProductionWorkLogs = () => {
   }, []);
 
 
-  // =====================================================
-  // Handler tambah work log manual
-  // Catatan maintainability:
-  // - Flow aktif tetap mendorong start dari Production Order.
-  // - Helper BOM/PO lama masih dipakai sebagai pengisi template form,
-  //   tetapi status operasional baru langsung In Progress.
-  // =====================================================
-  const openCreateWorkLogDrawer = async (sourceType = "manual") => {
-    resetFormState();
-    setFormVisible(true);
-
-    try {
-      const generatedWorkNumber = await generateProductionWorkLogNumber();
-      form.setFieldsValue({
-        ...DEFAULT_PRODUCTION_WORK_LOG_FORM,
-        workNumber: generatedWorkNumber,
-        workDate: dayjs(),
-        sourceType,
-        status: "in_progress",
-        materialUsages: [],
-        outputs: [],
-        workerIds: [],
-        productionOrderId: undefined,
-        productionProfileId: undefined,
-      });
-    } catch (error) {
-      console.error(error);
-      form.setFieldsValue({
-        ...DEFAULT_PRODUCTION_WORK_LOG_FORM,
-        workDate: dayjs(),
-        sourceType,
-        status: "in_progress",
-        materialUsages: [],
-        outputs: [],
-        workerIds: [],
-        productionOrderId: undefined,
-        productionProfileId: undefined,
-      });
-      message.warning("Nomor work log otomatis gagal dibuat. Silakan isi manual.");
-    }
-  };
-
   const summary = useMemo(() => {
     return buildCountSummary(workLogs, {
       completed: (item) => item.status === "completed",
       inProgress: (item) => item.status === "in_progress",
-      cancelled: (item) => item.status === "cancelled",
     });
   }, [workLogs]);
+
+  // =====================================================
+  // AKTIF UI-ONLY - Summary Work Log PO-first.
+  // Fungsi blok:
+  // - menampilkan KPI utama Work Log dengan pola SummaryStatGrid yang lebih compact dan konsisten;
+  // - tidak menampilkan Cancelled sebagai KPI utama karena cancel bukan action aktif di halaman Work Log.
+  // Hubungan flow:
+  // - hanya presentasi data count; tidak mengubah status, service, stok, payroll, HPP, atau lifecycle PO.
+  // =====================================================
+  const summaryItems = useMemo(() => [
+    {
+      key: "total",
+      title: "Total Work Log",
+      value: formatNumber(summary.total || 0),
+      subtitle: "Realisasi produksi yang tercatat",
+      columns: { xs: 24, md: 8 },
+    },
+    {
+      key: "progress",
+      title: "Sedang Produksi",
+      value: formatNumber(summary.inProgress || 0),
+      subtitle: "Belum selesai / belum posting output",
+      columns: { xs: 24, md: 8 },
+    },
+    {
+      key: "completed",
+      title: "Selesai",
+      value: formatNumber(summary.completed || 0),
+      subtitle: "Output sudah diproses ke flow selesai",
+      columns: { xs: 24, md: 8 },
+    },
+  ], [summary.completed, summary.inProgress, summary.total]);
 
   const filteredData = useMemo(() => {
     return workLogs.filter((item) => {
@@ -248,7 +235,7 @@ const ProductionWorkLogs = () => {
     form.setFieldsValue({
       ...DEFAULT_PRODUCTION_WORK_LOG_FORM,
       workDate: dayjs(),
-      sourceType: "manual",
+      sourceType: "production_order",
       status: "in_progress",
       materialUsages: [],
       outputs: [],
@@ -261,9 +248,8 @@ const ProductionWorkLogs = () => {
   // =====================================================
   // Handler edit work log
   // Catatan:
-  // - drawer form masih dipakai untuk mode edit
-  // - flow tambah manual saat ini tidak dipakai di UI aktif, jadi handler add
-  //   yang sebelumnya tidak terpakai dihapus agar file lebih rapih
+  // - drawer form masih dipakai untuk mode edit data Work Log existing
+  // - Work Log baru dibuat dari action Mulai Produksi di Production Order, bukan tombol tambah manual di halaman ini
   // =====================================================
   const handleEdit = (record) => {
     setEditingRecord(record);
@@ -646,8 +632,8 @@ const ProductionWorkLogs = () => {
         );
         message.success("Work log dari Production Order berhasil dibuat");
       } else {
-        await createProductionWorkLog(payload, currentUser);
-        message.success("Work log produksi berhasil ditambahkan");
+        message.error("Work Log baru harus dimulai dari Production Order melalui tombol Mulai Produksi.");
+        return;
       }
 
       setFormVisible(false);
@@ -1237,18 +1223,13 @@ const ProductionWorkLogs = () => {
     <div className="ims-page">
       <ProductionPageHeader
         title="Work Log Produksi"
-        description="Realisasi kerja produksi dari PO."
-        onAdd={() => openCreateWorkLogDrawer("manual")}
-        addLabel="Tambah Work Log"
+        description="Realisasi kerja produksi dari Production Order. Work Log baru dibuat lewat tombol Mulai Produksi di menu Production Order."
       />
 
-      <ProductionSummaryCards
-        items={[
-          { key: "total", title: "Total Work Log", value: summary.total },
-          { key: "progress", title: "In Progress", value: summary.inProgress },
-          { key: "completed", title: "Completed", value: summary.completed },
-          { key: "cancelled", title: "Cancelled", value: summary.cancelled },
-        ]}
+      <SummaryStatGrid
+        items={summaryItems}
+        className="ims-summary-row"
+        gutter={[16, 16]}
       />
 
       <ProductionFilterCard>
@@ -1296,7 +1277,7 @@ const ProductionWorkLogs = () => {
         title={
           editingRecord?.id
             ? "Edit Work Log Produksi"
-            : "Tambah Work Log Produksi"
+            : "Work Log dari Production Order"
         }
         open={formVisible}
         onClose={() => {
@@ -1327,7 +1308,7 @@ const ProductionWorkLogs = () => {
           initialValues={{
             ...DEFAULT_PRODUCTION_WORK_LOG_FORM,
             workDate: dayjs(),
-            sourceType: "manual",
+            sourceType: "production_order",
             status: "in_progress",
           }}
         >
@@ -1354,8 +1335,12 @@ const ProductionWorkLogs = () => {
             </Col>
 
             <Col xs={24} md={8}>
-              <Form.Item label="Source Type" name="sourceType">
-                <Select options={PRODUCTION_WORK_LOG_SOURCE_TYPES} />
+              <Form.Item
+                label="Source Type"
+                name="sourceType"
+                tooltip="Work Log baru dibuat dari Production Order. Nilai Manual/Planned hanya untuk membaca data lama."
+              >
+                <Select options={PRODUCTION_WORK_LOG_SOURCE_TYPES} disabled />
               </Form.Item>
             </Col>
           </Row>
@@ -1379,6 +1364,7 @@ const ProductionWorkLogs = () => {
                               optionFilterProp="label"
                               options={productionOrderOptions}
                               placeholder="Pilih Production Order..."
+                              disabled={Boolean(editingRecord?.id)}
                               onChange={(value) => {
                                 if (value) {
                                   handleApplyProductionOrderTemplate(value);
@@ -1392,6 +1378,7 @@ const ProductionWorkLogs = () => {
                           <Form.Item label=" ">
                             <Button
                               block
+                              disabled={Boolean(editingRecord?.id)}
                               onClick={() => {
                                 const orderId =
                                   form.getFieldValue("productionOrderId");

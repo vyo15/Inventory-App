@@ -262,6 +262,7 @@ Tech debt tersisa:
 
 ### Guarded / belum boleh diubah sembarangan
 - Completed Work Log, posting output, material usage, cost actual, auto payroll, dan HPP adalah guarded.
+- UI Work Log Produksi tidak lagi menyediakan tombol tambah manual; Work Log baru harus dibuat dari Production Order melalui action Mulai Produksi. `manual/planned` tetap dipertahankan sebagai legacy compatibility data lama, bukan flow input aktif.
 - Auto expense payroll tidak boleh dibuat tanpa source reference idempotent.
 - Rollback otomatis expense payroll saat payroll paid dibatalkan belum punya rule final.
 - Jika material cost tetap 0 karena master item tidak punya source cost, perbaiki master data/purchase cost; jangan isi angka asal.

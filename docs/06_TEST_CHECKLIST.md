@@ -175,14 +175,16 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - buka menu Work Log Produksi saat semua referensi produksi normal
 - buka menu Work Log Produksi saat salah satu referensi produksi gagal dimuat lalu pastikan halaman tetap tampil dengan warning
 - cek list work log tetap tampil urut terbaru walau query utama fallback
-- buat work log manual dari tombol tambah
-- buat work log dari PO eligible
+- pastikan halaman Work Log Produksi tidak menampilkan tombol tambah manual
+- pastikan summary card Work Log hanya menampilkan Total, In Progress, dan Completed
+- pastikan status `cancelled` lama tetap bisa dibaca/filter jika ada data lama, tetapi tidak menjadi summary card utama
+- buat work log dari PO eligible lewat tombol **Mulai Produksi** di menu Production Order
 - pastikan PO `ready` / `shortage` bisa dipakai start produksi
 - pastikan PO yang sudah punya work log tidak muncul lagi di referensi Work Log
 - isi material usage
 - isi outputs
 - cek worker dan biaya aktual
-- cek status `draft`, `in_progress`, `completed`
+- cek status aktif `in_progress` dan `completed`; `draft` hanya legacy compatibility jika ada data lama
 - cek konsumsi stok material
 - cek penambahan stok output
 - selesaikan work log dari popup complete

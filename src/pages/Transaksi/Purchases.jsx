@@ -12,9 +12,13 @@ import {
   Switch,
   Tag,
   Tooltip,
+  Upload,
+  Button,
+  Alert,
+  Progress,
 } from "antd";
 import { collection, doc, onSnapshot, runTransaction, Timestamp } from "firebase/firestore";
-import { PlusOutlined } from "@ant-design/icons";
+import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import { useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
 import { db } from "../../firebase";
@@ -51,6 +55,7 @@ import {
   inferHasVariants,
 } from "../../utils/variants/variantStockHelpers";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
+import { parseShopeePurchaseOcrText } from '../../utils/purchases/shopeePurchaseOcrParser';
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -141,6 +146,16 @@ const formatPurchaseStockWithUnit = (value, unit = 'pcs') => `${formatNumberId(v
 const PURCHASE_EXPENSE_SOURCE_MODULE = "purchases";
 const PURCHASE_EXPENSE_SOURCE_TYPE = "auto_generated";
 
+const SHOPEE_OCR_IDLE_STATE = {
+  status: "idle",
+  progress: 0,
+  fileName: "",
+  parsed: null,
+  error: "",
+};
+
+const formatShopeeOcrMoney = (value) => formatCurrencyIdr(Math.round(Number(value || 0)));
+
 const buildPurchaseExpenseDocumentId = (purchaseId) =>
   `${PURCHASE_EXPENSE_SOURCE_MODULE}__${String(purchaseId || "purchase").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 
@@ -216,6 +231,7 @@ const Purchases = () => {
   const [materials, setMaterials] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [shopeeOcrState, setShopeeOcrState] = useState(SHOPEE_OCR_IDLE_STATE);
 
   // =========================
   // SECTION: Watch fields
@@ -1009,6 +1025,7 @@ const Purchases = () => {
     restockPrefillAppliedRef.current = true;
     restockPrefillMaterialIdRef.current = String(materialId);
     subtotalManualOverrideRef.current = false;
+    setShopeeOcrState(SHOPEE_OCR_IDLE_STATE);
     supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
 
     form.resetFields();
@@ -1049,6 +1066,7 @@ const Purchases = () => {
     itemChangeContextRef.current = "";
     subtotalManualOverrideRef.current = false;
     supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
+    setShopeeOcrState(SHOPEE_OCR_IDLE_STATE);
     form.resetFields();
     form.setFieldsValue({
       type: "material",
@@ -1069,6 +1087,126 @@ const Purchases = () => {
       productLink: '',
     });
     setIsModalOpen(true);
+  };
+
+  // =========================
+  // SECTION: OCR Screenshot Shopee untuk draft pembelian
+  // Fungsi blok:
+  // - membaca screenshot Shopee di browser sebagai draft;
+  // - hanya mengisi field Qty Beli dan biaya setelah user klik Terapkan Qty & Biaya ke Form;
+  // - tidak menyimpan gambar, tidak menyimpan OCR mentah, dan tidak auto-submit pembelian.
+  // Hubungan flow Purchases:
+  // - stok, expense, inventory log, dan laporan tetap hanya berubah setelah handleSubmitPurchase berhasil.
+  // Status: AKTIF + GUARDED; dependency OCR client-side dipakai agar API key/backend tidak diperlukan.
+  // =========================
+  const handleShopeeScreenshotUpload = async (file) => {
+    if (!file?.type?.startsWith("image/")) {
+      message.error("Upload file gambar screenshot Shopee, bukan dokumen lain.");
+      return Upload.LIST_IGNORE;
+    }
+
+    const maxFileSizeMb = 8;
+    if (file.size > maxFileSizeMb * 1024 * 1024) {
+      message.error(`Ukuran screenshot maksimal ${maxFileSizeMb} MB.`);
+      return Upload.LIST_IGNORE;
+    }
+
+    setShopeeOcrState({
+      status: "reading",
+      progress: 5,
+      fileName: file.name || "screenshot-shopee",
+      parsed: null,
+      error: "",
+    });
+
+    let worker;
+    try {
+      const { createWorker } = await import("tesseract.js");
+      worker = await createWorker(["ind", "eng"], 1, {
+        logger: (payload) => {
+          if (typeof payload?.progress !== "number") return;
+
+          setShopeeOcrState((current) => ({
+            ...current,
+            progress: Math.min(99, Math.max(current.progress || 0, Math.round(payload.progress * 100))),
+          }));
+        },
+      });
+
+      const result = await worker.recognize(file);
+      const parsed = parseShopeePurchaseOcrText(result?.data?.text || "");
+
+      setShopeeOcrState({
+        status: parsed.hasUsefulValues ? "ready" : "needs_review",
+        progress: 100,
+        fileName: file.name || "screenshot-shopee",
+        parsed,
+        error: parsed.hasUsefulValues ? "" : "Screenshot terbaca, tapi angka utama belum terdeteksi. Isi manual atau coba screenshot yang lebih jelas.",
+      });
+
+      if (!parsed.isLikelyShopee) {
+        message.warning("Screenshot terbaca, tapi formatnya belum terlihat seperti rincian pesanan Shopee. Cek preview sebelum diterapkan.");
+      } else if (parsed.hasUsefulValues) {
+        message.success("Screenshot Shopee berhasil dibaca. Cek preview lalu terapkan qty & biaya ke form.");
+      }
+    } catch (error) {
+      console.error(error);
+      setShopeeOcrState({
+        status: "error",
+        progress: 0,
+        fileName: file.name || "screenshot-shopee",
+        parsed: null,
+        error: "Gagal membaca screenshot. Pastikan gambar jelas atau isi field pembelian secara manual.",
+      });
+      message.error("Gagal membaca screenshot Shopee.");
+    } finally {
+      if (worker) {
+        await worker.terminate();
+      }
+    }
+
+    return Upload.LIST_IGNORE;
+  };
+
+  const stripExistingShopeeOcrNote = (note = "") => {
+    const noteParts = String(note || "")
+      .split("|")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const ocrMarkerIndex = noteParts.findIndex((part) => /^OCR Shopee\b/i.test(part));
+
+    // ALASAN: klik Terapkan berulang harus idempotent. Segmen OCR lama dihapus dulu
+    // agar catatan tidak bertambah dobel, sementara catatan manual sebelum marker tetap aman.
+    return (ocrMarkerIndex >= 0 ? noteParts.slice(0, ocrMarkerIndex) : noteParts).join(" | ");
+  };
+
+  const applyShopeeOcrDraftToForm = () => {
+    const parsed = shopeeOcrState.parsed;
+    if (!parsed?.hasUsefulValues) {
+      message.warning("Belum ada hasil OCR yang bisa diterapkan.");
+      return;
+    }
+
+    const currentNote = stripExistingShopeeOcrNote(form.getFieldValue("note"));
+    const ocrNote = parsed.note || "OCR Shopee";
+    const parsedQuantity = Math.max(Number(parsed.quantity || 0), 0);
+    const nextValues = {
+      purchaseType: "online",
+      subtotalItems: Math.max(Number(parsed.subtotalItems || 0), 0),
+      shippingCost: Math.max(Number(parsed.shippingCost || 0), 0),
+      shippingDiscount: Math.max(Number(parsed.shippingDiscount || 0), 0),
+      voucherDiscount: Math.max(Number(parsed.voucherDiscount || 0), 0),
+      serviceFee: Math.max(Number(parsed.serviceFee || 0), 0),
+      note: currentNote ? `${currentNote} | ${ocrNote}` : ocrNote,
+    };
+
+    if (parsedQuantity > 0) {
+      nextValues.quantity = parsedQuantity;
+    }
+
+    subtotalManualOverrideRef.current = true;
+    form.setFieldsValue(nextValues);
+    message.success("Qty & biaya dari screenshot Shopee diterapkan ke form. Cek ulang sebelum Simpan.");
   };
 
   // =========================
@@ -1480,6 +1618,7 @@ const Purchases = () => {
 
       message.success("Pembelian berhasil ditambahkan!");
       form.resetFields();
+      setShopeeOcrState(SHOPEE_OCR_IDLE_STATE);
       setIsModalOpen(false);
     } catch (error) {
       console.error(error);
@@ -1677,7 +1816,10 @@ const Purchases = () => {
         title="Tambah Pembelian"
         open={isModalOpen}
         onOk={form.submit}
-        onCancel={() => setIsModalOpen(false)}
+        onCancel={() => {
+          setShopeeOcrState(SHOPEE_OCR_IDLE_STATE);
+          setIsModalOpen(false);
+        }}
         okText="Simpan"
         cancelText="Batal"
         width={820}
@@ -1910,6 +2052,131 @@ const Purchases = () => {
           >
             <Input placeholder="Link produk marketplace / supplier" />
           </Form.Item>
+
+          {/* ===============================================================
+              OCR Draft Screenshot Shopee.
+              Fungsi: membantu isi biaya marketplace setelah item/supplier dipilih.
+              Guard: hasil OCR selalu preview dulu, tidak mengganti item/supplier/link, tidak auto-save, dan tidak menyimpan gambar/alamat.
+          =============================================================== */}
+          <div
+            style={{
+              border: "1px dashed #d9d9d9",
+              borderRadius: 12,
+              padding: 14,
+              marginBottom: 16,
+              background: "var(--surface-card, #fff)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600 }}>Auto Isi Qty & Biaya dari Screenshot Shopee</div>
+                <div style={{ color: "#777", fontSize: 12, marginTop: 4 }}>
+                  Upload screenshot rincian pesanan untuk membaca Qty, Subtotal, Ongkir, Diskon Ongkir, Voucher, Biaya Layanan, dan Total.
+                </div>
+              </div>
+              <Upload
+                accept="image/*"
+                beforeUpload={handleShopeeScreenshotUpload}
+                showUploadList={false}
+                disabled={shopeeOcrState.status === "reading"}
+              >
+                <Button icon={<UploadOutlined />} loading={shopeeOcrState.status === "reading"}>
+                  Upload Screenshot
+                </Button>
+              </Upload>
+            </div>
+
+            <Alert
+              style={{ marginTop: 12 }}
+              type="info"
+              showIcon
+              message="OCR hanya membuat draft qty & biaya. Supplier, item, satuan, konversi, stok masuk, dan Simpan Pembelian tetap dikonfirmasi manual."
+            />
+
+            {shopeeOcrState.status === "reading" ? (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ color: "#777", fontSize: 12, marginBottom: 6 }}>
+                  Membaca screenshot: {shopeeOcrState.fileName || "gambar"}
+                </div>
+                <Progress percent={shopeeOcrState.progress} size="small" />
+              </div>
+            ) : null}
+
+            {shopeeOcrState.status === "error" || shopeeOcrState.status === "needs_review" ? (
+              <Alert
+                style={{ marginTop: 12 }}
+                type={shopeeOcrState.status === "error" ? "error" : "warning"}
+                showIcon
+                message={shopeeOcrState.error}
+              />
+            ) : null}
+
+            {shopeeOcrState.parsed ? (
+              <div
+                style={{
+                  marginTop: 12,
+                  border: "1px solid #f0f0f0",
+                  borderRadius: 10,
+                  padding: 12,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>Preview qty & biaya dari screenshot</div>
+                    <div style={{ color: "#777", fontSize: 12 }}>
+                      Cek qty, subtotal, ongkir, voucher, biaya layanan, dan total sebelum diterapkan ke form. Data pribadi dari screenshot tidak disimpan.
+                    </div>
+                  </div>
+                  <Tag color={shopeeOcrState.parsed.totalMatches ? "green" : "orange"}>
+                    {shopeeOcrState.parsed.totalMatches ? "Total cocok" : "Cek total"}
+                  </Tag>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+                    gap: 8,
+                  }}
+                >
+                  {[
+                    ["Qty Beli", shopeeOcrState.parsed.quantity || "Tidak terbaca"],
+                    ["Subtotal Barang", formatShopeeOcrMoney(shopeeOcrState.parsed.subtotalItems)],
+                    ["Ongkir", formatShopeeOcrMoney(shopeeOcrState.parsed.shippingCost)],
+                    ["Diskon Ongkir", `- ${formatShopeeOcrMoney(shopeeOcrState.parsed.shippingDiscount)}`],
+                    ["Voucher / Potongan", `- ${formatShopeeOcrMoney(shopeeOcrState.parsed.voucherDiscount)}`],
+                    ["Biaya Layanan", formatShopeeOcrMoney(shopeeOcrState.parsed.serviceFee)],
+                    ["Total Screenshot", formatShopeeOcrMoney(shopeeOcrState.parsed.totalOrder)],
+                  ].map(([label, value]) => (
+                    <div key={label} style={{ minWidth: 0 }}>
+                      <div style={{ color: "#777", fontSize: 12 }}>{label}</div>
+                      <strong style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {value}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+
+                {!shopeeOcrState.parsed.totalMatches && shopeeOcrState.parsed.totalOrder > 0 ? (
+                  <Alert
+                    style={{ marginTop: 12 }}
+                    type="warning"
+                    showIcon
+                    message={`Rumus OCR belum cocok: hasil hitung ${formatShopeeOcrMoney(shopeeOcrState.parsed.calculatedTotal)}, total screenshot ${formatShopeeOcrMoney(shopeeOcrState.parsed.totalOrder)}.`}
+                  />
+                ) : null}
+
+                <Button
+                  type="primary"
+                  style={{ marginTop: 12 }}
+                  onClick={applyShopeeOcrDraftToForm}
+                  disabled={!shopeeOcrState.parsed.hasUsefulValues}
+                >
+                  Terapkan Qty & Biaya ke Form
+                </Button>
+              </div>
+            ) : null}
+          </div>
 
           {itemType === "material" ? (
             <>

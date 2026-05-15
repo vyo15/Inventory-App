@@ -116,6 +116,7 @@ Makna status secara praktis:
 Tujuan:
 - realisasi produksi dari production order
 - 1 PO = 1 Work Log
+- Work Log baru dibuat dari action **Mulai Produksi** di Production Order, bukan dari input manual di menu Work Log
 
 Data penting yang terlihat disimpan:
 - link BOM dan link Production Order
@@ -130,10 +131,13 @@ Data penting yang terlihat disimpan:
 - monitoring miss dan output teoretis
 - status stok konsumsi, output, dan payroll calculation
 
-Status work log yang terlihat:
-- `draft`
+Status work log aktif yang terlihat:
 - `in_progress`
 - `completed`
+
+Status compatibility:
+- `cancelled` tetap dibaca untuk data lama/guard, tetapi tidak ditampilkan sebagai summary card utama dan tidak punya tombol cancel aktif di menu Work Log.
+- `draft` hanya legacy compatibility; jangan jadikan status input aktif baru.
 
 ## 8. Payroll Produksi
 Tujuan:
@@ -168,6 +172,7 @@ Boundary produksi aktif yang sekarang harus dianggap final/guarded:
 Catatan penting:
 - refactor UI, shared component, atau patch modul lain tidak boleh memindahkan logic ini ke layer presentational
 - bila ada task produksi baru, cek selalu boundary ini sebelum mengubah page/component apa pun
+- jangan mengembalikan tombol tambah Work Log manual dari halaman Work Log tanpa review stock/payroll/HPP karena flow aktif harus lewat Production Order
 
 Status legacy aktual hasil verifikasi source 2026-05-06:
 - file `src/services/Produksi/productionService.js` **tidak ditemukan** pada ZIP aktual; jangan menjadikannya target patch aktif;

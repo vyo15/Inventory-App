@@ -22,6 +22,7 @@ Master Data
 | Pembelian selesai | purchases | stock masuk + expenses | purchase id + metadata source expense |
 | Penjualan dibuat / selesai | sales | stock keluar saat create + income saat selesai | availableStock guard + sale id / status selesai |
 | Stock Adjustment | stock_adjustments | inventory_logs | adjustment id/reference |
+| Work Log dari PO | production_orders + production_work_logs | Work Log in_progress + konsumsi bahan | 1 PO = 1 Work Log |
 | Work Log completed | production_work_logs | output stock + payroll line | Work Log completed guard |
 | Payroll dari Work Log | production_payrolls | labor cost ke Work Log | Work Log + Step + Operator |
 | Payroll paid | production_payrolls | expenses / Cash Out | sourceModule + sourceId |
@@ -40,11 +41,12 @@ Semua data otomatis harus menyimpan referensi:
 
 ## Guard penting
 
-1. Work Log completed tidak boleh diproses dua kali.
-2. Payroll line tidak boleh dobel untuk Work Log + Step + Operator yang sama.
-3. Payroll paid tidak boleh membuat expense dobel.
-4. Profit Loss tidak boleh menghitung payroll dari dua sumber sekaligus.
-5. Backfill data lama tidak boleh otomatis tanpa preview.
+1. Work Log baru harus dimulai dari Production Order; halaman Work Log tidak boleh membuat input manual aktif.
+2. Work Log completed tidak boleh diproses dua kali.
+3. Payroll line tidak boleh dobel untuk Work Log + Step + Operator yang sama.
+4. Payroll paid tidak boleh membuat expense dobel.
+5. Profit Loss tidak boleh menghitung payroll dari dua sumber sekaligus.
+6. Backfill data lama tidak boleh otomatis tanpa preview.
 
 ## Catatan legacy
 
@@ -59,7 +61,7 @@ Production Planning
 → user action: Buat PO
 → Production Order berbasis BOM
 → user action: Mulai Produksi
-→ Work Log in_progress
+→ Work Log in_progress dari PO, bukan input manual
 → user action: Complete Work Log
 → output stock + payroll/HPP existing
 → Dashboard membaca progress planning

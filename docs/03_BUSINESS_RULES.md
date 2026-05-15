@@ -207,7 +207,13 @@ Catatan service bahkan menyebut:
 - Filter UI-only production order tidak boleh disimpan ke Firestore, tidak boleh membuat schema baru, dan tidak boleh mengubah payload bisnis selain memastikan `bomId` valid.
 
 ## 12. Rule Work Log
-Work Log adalah realisasi kerja produksi.
+Work Log adalah realisasi kerja produksi dari Production Order. Flow aktif yang dipakai UI adalah **BOM → Production Order → Mulai Produksi → Work Log → Complete**.
+
+Rule final:
+- Work Log baru dibuat lewat tombol **Mulai Produksi** di menu Production Order.
+- Menu Work Log Produksi tidak menyediakan tombol tambah manual.
+- `sourceType: manual` dan `sourceType: planned` hanya diperlakukan sebagai legacy compatibility untuk membaca data lama, bukan flow input aktif.
+- Jangan menambahkan kembali Work Log manual tanpa review khusus karena bisa memutus contract 1 PO = 1 Work Log, stok, payroll, dan HPP.
 
 Data inti yang direkam:
 - material usage
@@ -227,6 +233,7 @@ Setelah flow produksi aktif tervalidasi, area berikut harus dianggap locked / gu
 - Start Production memotong stok bahan dari snapshot requirement PO
 - Complete Work Log menambah stok output dan menutup PO
 - Work Log completed tidak boleh diedit sembarangan tanpa evaluasi khusus
+- Work Log `cancelled` tetap dibaca sebagai status legacy/guard, tetapi tidak menjadi summary card atau aksi cancel aktif di halaman Work Log
 
 Implikasi:
 - patch UI tidak boleh mengubah field inti work log / PO setelah flow aktif berjalan

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Col, Input, Select, Table, Tag, Typography, message } from "antd";
+import { Button, Col, Input, Select, Table, Tag, Typography, message } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
@@ -302,22 +302,20 @@ const MoneyMovementLedger = () => {
     <>
       <PageHeader
         title="Buku Besar Kas"
-        subtitle="Audit kas read-only."
+        subtitle="Audit pergerakan uang read-only dari pemasukan dan pengeluaran resmi."
       />
 
-      <PageSection title="Ringkasan Periode" subtitle="Gabungan pemasukan dan pengeluaran.">
+      <PageSection
+        title="Ringkasan Buku Besar Kas"
+        subtitle="Ringkasan uang masuk, uang keluar, dan selisih bersih sesuai filter aktif."
+      >
         <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, lg: 6 }} />
       </PageSection>
 
-      <PageSection title="Filter Buku Besar" subtitle="Filter hanya mengubah tampilan.">
-        <Alert
-          type="info"
-          showIcon
-          message="Read-only ledger"
-          description="Read-only; tidak mengubah saldo, HPP, atau transaksi."
-          style={{ marginBottom: 16 }}
-        />
-
+      <PageSection
+        title="Filter Riwayat Kas"
+        subtitle="Filter hanya mengubah tampilan; halaman ini tidak membuat atau mengubah transaksi kas."
+      >
         <FilterBar
           actions={
             <Button icon={<ReloadOutlined />} onClick={fetchLedgerRows} disabled={loading}>
@@ -376,7 +374,11 @@ const MoneyMovementLedger = () => {
         </FilterBar>
       </PageSection>
 
-      <PageSection title="Log Pergerakan Uang" subtitle="Data kas tercatat.">
+      <PageSection
+        title="Tabel Riwayat Pergerakan Kas"
+        subtitle="Data kas tercatat dari sumber transaksi resmi."
+        extra={<Tag>{formatNumberId(ledgerRows.length)} baris tampil</Tag>}
+      >
         <DataRefreshIndicator loading={loading} dataSource={ledgerRows} />
         <Table
           className="app-data-table"
