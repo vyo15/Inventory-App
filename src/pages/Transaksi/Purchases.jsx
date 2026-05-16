@@ -1658,20 +1658,18 @@ const Purchases = () => {
           } else {
             // =========================
             // SECTION: Mutasi atomik bahan baku non-varian
-            // Fungsi blok: menambah stok master dan menjaga field cost/reference yang sudah dipakai laporan/master data.
-            // Hubungan flow: mengikuti logic existing non-varian tanpa mengubah Raw Material dari data Supplier.
-            // Status: AKTIF + GUARDED; averageActualUnitCost tetap memakai unit cost transaksi saat ini sesuai flow existing.
+            // Fungsi blok: memakai helper Raw Material yang sama dengan varian agar
+            // stock/currentStock dan averageActualUnitCost selalu weighted average.
+            // Hubungan flow: hanya berjalan di dalam transaction setelah purchase reference siap.
+            // Status: AKTIF + GUARDED; tidak overwrite average cost dengan harga transaksi terakhir.
             // =========================
-            const stockUpdatePayload = applyStockMutationToItem({
-              item: latestItem,
-              deltaCurrent: normalizedFinalQuantity,
-            });
-
-            transaction.update(itemReference, {
-              ...stockUpdatePayload,
-              averageActualUnitCost: normalizedActualUnitCost,
+            const nextMaterialPayload = applyPurchaseToRawMaterial(latestItem, {
+              qty: normalizedFinalQuantity,
+              unitCost: normalizedActualUnitCost,
               restockReferencePrice: normalizedRestockReferencePrice,
             });
+
+            transaction.update(itemReference, nextMaterialPayload);
           }
         } else {
           // =========================

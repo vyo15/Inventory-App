@@ -67,7 +67,6 @@ import ProductionSummaryCards from "../../components/Produksi/shared/ProductionS
 import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
-import { resolveDisplayReference } from '../../utils/references/displayReferenceResolver';
 import {
   formatAffectedVariantStockSummary,
   getVariantAwareStockStatusMeta,
@@ -698,23 +697,17 @@ const SemiFinishedMaterials = () => {
           <Typography.Text strong>
             {getVariantDisplayLabel(variant, index)}
           </Typography.Text>
-          <Typography.Text type="secondary" style={compactCellStyles.meta}>
-            Key: {variant.variantKey || variant.color || "-"}
-          </Typography.Text>
         </div>
       ),
     },
     {
-      title: "Kode / Status",
+      title: "Status",
       key: "skuStatus",
-      width: 140,
+      width: 120,
       render: (_, variant) => (
-        <div style={compactCellStyles.stack}>
-          <Typography.Text>{variant.sku || "-"}</Typography.Text>
-          <Tag color={variant.isActive ? "green" : "default"}>
-            {variant.isActive ? "Aktif" : "Nonaktif"}
-          </Tag>
-        </div>
+        <Tag color={variant.isActive ? "green" : "default"}>
+          {variant.isActive ? "Aktif" : "Nonaktif"}
+        </Tag>
       ),
     },
     {
@@ -978,7 +971,7 @@ const SemiFinishedMaterials = () => {
           - Kode SFP tetap dibuat otomatis oleh service, tetapi tidak perlu menjadi input atau preview utama di UI.
 
           Catatan cleanup:
-          - Kode internal masih boleh ditampilkan kecil di drawer detail/export jika dibutuhkan.
+          - Kode internal disimpan untuk relasi/audit teknis, tetapi tidak ditampilkan di UI operasional.
 
           Risiko:
           - Jangan menambahkan kembali input manual code karena dapat merusak immutability dan duplicate guard service.
@@ -1150,15 +1143,9 @@ const SemiFinishedMaterials = () => {
                         </Form.Item>
                       </Col>
 
-                      <Col xs={24} md={8}>
-                        <Form.Item
-                          {...field}
-                          label="Kode Variant"
-                          name={[field.name, "sku"]}
-                        >
-                          <Input placeholder="Opsional: KEL-S-MERAH" />
-                        </Form.Item>
-                      </Col>
+                      <Form.Item {...field} name={[field.name, "sku"]} hidden>
+                        <Input />
+                      </Form.Item>
 
                       <Col xs={24} md={8}>
                         <Form.Item
@@ -1462,7 +1449,6 @@ Risiko:
 
             <Card size="small" title="Ringkasan Item">
               <Descriptions column={1} bordered size="small">
-                <Descriptions.Item label="Kode internal">{resolveDisplayReference(selectedMaterial)}</Descriptions.Item>
                 <Descriptions.Item label="Nama">{selectedMaterial.name || "-"}</Descriptions.Item>
                 <Descriptions.Item label="Kategori">
                   {SEMI_FINISHED_CATEGORY_MAP[selectedMaterial.category] || "-"}

@@ -1,5 +1,9 @@
 import { calculateBomMaterialLine } from '../../constants/productionBomOptions';
 import {
+  resolveBomMaterialUnitCost,
+  resolveBomStepPayrollSnapshot,
+} from './productionBomCostHelpers';
+import {
   calculateMaterialUsageLine,
   calculateOutputLine,
 } from '../../constants/productionWorkLogOptions';
@@ -12,6 +16,10 @@ import {
 export const buildBomMaterialFormLine = ({ values, selectedItem, itemType }) => {
   const materialHasVariants = inferHasVariants(selectedItem || {});
   const normalizedStrategy = materialHasVariants ? 'inherit' : 'none';
+  const resolvedUnitCost = resolveBomMaterialUnitCost({
+    itemType,
+    item: selectedItem || {},
+  });
 
   return calculateBomMaterialLine({
     ...values,
@@ -21,12 +29,9 @@ export const buildBomMaterialFormLine = ({ values, selectedItem, itemType }) => 
     itemName: selectedItem?.name || '',
     unit: selectedItem?.unit || values.unit || 'pcs',
     costPerUnitSnapshot: Number(
-      selectedItem?.averageCostPerUnit ||
-        selectedItem?.referenceCostPerUnit ||
-        selectedItem?.costPerUnit ||
-        values.costPerUnitSnapshot ||
-        0,
+      resolvedUnitCost.value || values.costPerUnitSnapshot || 0,
     ),
+    costSourceSnapshot: resolvedUnitCost.source || values.costSourceSnapshot || '',
     wastageQty: Number(values.wastageQty || 0),
     isOptional: false,
     materialHasVariants,
@@ -38,6 +43,7 @@ export const buildBomMaterialFormLine = ({ values, selectedItem, itemType }) => 
 
 export const buildBomStepFormLine = ({ values, selectedStep }) => ({
   ...values,
+  ...resolveBomStepPayrollSnapshot(selectedStep || values || {}),
   id: values.id || `step-${Date.now()}`,
   stepCode: selectedStep?.code || '',
   stepName: selectedStep?.name || '',

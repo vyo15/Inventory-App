@@ -221,7 +221,7 @@ const isPayrollLineFinalForHpp = (line = {}) => {
 const assertPayrollGenerationEligibility = ({ workLog = {}, stepRule = {}, outputQtyUsed = 0, workedQty = 0 } = {}) => {
   const payrollMode = safeTrim(stepRule.payrollMode || "per_qty");
   const payrollOutputBasis = safeTrim(stepRule.payrollOutputBasis || "good_qty");
-  const validModes = new Set(["per_qty", "per_batch", "fixed"]);
+  const validModes = new Set(["per_qty", "per_batch"]);
   const validOutputBasis = new Set(["good_qty", "actual_output_qty"]);
 
   if (workLog.status !== "completed") {
@@ -260,7 +260,6 @@ const getStepPayrollRuleSnapshot = async (workLog = {}) => {
       includePayrollInHpp: true,
       payrollRuleSource: "default_no_step",
       legacyPayrollFallbackUsed: true,
-      payrollNotes: "Tahapan produksi tidak ditemukan pada Work Log.",
     };
   }
 
@@ -269,15 +268,14 @@ const getStepPayrollRuleSnapshot = async (workLog = {}) => {
     if (stepSnap.exists()) {
       const step = stepSnap.data() || {};
       return {
-        payrollMode: step.payrollMode || "per_qty",
+        payrollMode: step.payrollMode === "per_batch" ? "per_batch" : "per_qty",
         payrollRate: Number(step.payrollRate || 0),
-        payrollQtyBase: Number(step.payrollQtyBase || 1),
+        payrollQtyBase: 1,
         payrollOutputBasis: step.payrollOutputBasis || "good_qty",
         payrollClassification: step.payrollClassification || "direct_labor",
         includePayrollInHpp: step.includePayrollInHpp !== false,
         payrollRuleSource: "production_step",
         legacyPayrollFallbackUsed: false,
-        payrollNotes: safeTrim(step.payrollNotes),
       };
     }
   } catch (error) {
@@ -293,7 +291,6 @@ const getStepPayrollRuleSnapshot = async (workLog = {}) => {
     includePayrollInHpp: true,
     payrollRuleSource: "fallback_step_unavailable",
     legacyPayrollFallbackUsed: true,
-    payrollNotes: "Rule payroll tahapan gagal dibaca, line tetap dibuat dengan nominal 0 agar audit tidak hilang.",
   };
 };
 
@@ -333,7 +330,7 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     workerCode: String(values.workerCode || "").trim(),
     workerName: String(values.workerName || "").trim(),
 
-    payrollMode: values.payrollMode || "per_qty",
+    payrollMode: values.payrollMode === "per_batch" ? "per_batch" : "per_qty",
     payrollRate: Number(values.payrollRate || 0),
     payrollQtyBase: Number(values.payrollQtyBase || 1),
     payrollOutputBasis: values.payrollOutputBasis || "good_qty",
@@ -450,7 +447,7 @@ export const buildPayrollDraftFromWorkLog = (workLog, employee = null) => {
   let payrollOutputBasis = "good_qty";
 
   if (employee?.useCustomPayrollRate) {
-    payrollMode = employee.customPayrollMode || "per_qty";
+    payrollMode = employee.customPayrollMode === "per_batch" ? "per_batch" : "per_qty";
     payrollRate = Number(employee.customPayrollRate || 0);
     payrollQtyBase = Number(employee.customPayrollQtyBase || 1);
     payrollOutputBasis = employee.customPayrollOutputBasis || "good_qty";

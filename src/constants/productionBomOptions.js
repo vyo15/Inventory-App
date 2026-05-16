@@ -3,6 +3,8 @@
 // Master enum dan helper untuk BOM Produksi
 // =====================================================
 
+import { calculateBomCostSummary } from "../utils/produksi/productionBomCostHelpers";
+
 export const PRODUCTION_BOM_TARGET_TYPES = [
   { value: "semi_finished_material", label: "Semi Finished Material" },
   { value: "product", label: "Product" },
@@ -59,6 +61,13 @@ export const DEFAULT_BOM_STEP_LINE = {
   stepCode: "",
   stepName: "",
   sequenceNo: 1,
+  payrollMode: "per_batch",
+  payrollRate: 0,
+  payrollQtyBase: 1,
+  payrollOutputBasis: "good_qty",
+  payrollClassification: "direct_labor",
+  includePayrollInHpp: true,
+  useStepDefaultPayroll: true,
   notes: "",
 };
 
@@ -114,26 +123,4 @@ export const calculateBomTotals = (
   materialLines = [],
   stepLines = [],
   header = {},
-) => {
-  const materialCostEstimate = materialLines.reduce(
-    (sum, item) => sum + Number(item.totalCostSnapshot || 0),
-    0,
-  );
-
-  const laborCostEstimate = stepLines.reduce((sum, item) => {
-    const useDefault = item.useStepDefaultPayroll !== false;
-    if (useDefault) return sum + Number(item.payrollRate || 0);
-    return sum + Number(item.payrollRate || 0);
-  }, 0);
-
-  const overheadCostEstimate = Number(header.overheadCostEstimate || 0);
-  const totalCostEstimate =
-    materialCostEstimate + laborCostEstimate + overheadCostEstimate;
-
-  return {
-    materialCostEstimate,
-    laborCostEstimate,
-    overheadCostEstimate,
-    totalCostEstimate,
-  };
-};
+) => calculateBomCostSummary({ materialLines, stepLines, header });

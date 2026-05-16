@@ -954,12 +954,10 @@ const Products = () => {
                               <Input placeholder="Contoh: Merah, Ukuran S, Motif Polkadot" />
                             </Form.Item>
                           </Col>
+                          <Form.Item {...field} name={[field.name, 'sku']} hidden>
+                            <Input />
+                          </Form.Item>
                           <Col xs={24} md={5}>
-                            <Form.Item {...field} name={[field.name, 'sku']} label="SKU Varian">
-                              <Input placeholder="Opsional" />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} md={4}>
                             <Form.Item
                               {...field}
                               name={[field.name, 'currentStock']}
@@ -1127,7 +1125,6 @@ const Products = () => {
                         dataIndex: 'color',
                         render: (_, variant, index) => getVariantDisplayLabel(variant, index),
                       },
-                      { title: 'SKU', dataIndex: 'sku', render: (value) => value || '-' },
                       { title: 'Stok', dataIndex: 'currentStock', render: (value) => formatStockWithUnit(value || 0) },
                       { title: 'Reserved', dataIndex: 'reservedStock', render: (value) => formatStockWithUnit(value || 0) },
                       {

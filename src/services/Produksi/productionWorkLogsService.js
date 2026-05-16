@@ -261,10 +261,7 @@ const getItemUnitCostSnapshot = ({ itemType = "", stockItem = {}, stockResolutio
   if (itemType === "raw_material") {
     return resolveWithVariantFallback([
       "averageActualUnitCost",
-      "purchaseAverageUnitCost",
-      "averageCostPerUnit",
-      "costPerUnit",
-      "lastPurchasePrice",
+      "restockReferencePrice",
     ]);
   }
 
@@ -272,7 +269,6 @@ const getItemUnitCostSnapshot = ({ itemType = "", stockItem = {}, stockResolutio
     return resolveWithVariantFallback([
       "averageCostPerUnit",
       "lastProductionCostPerUnit",
-      "costPerUnit",
     ]);
   }
 

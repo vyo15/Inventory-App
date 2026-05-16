@@ -1,7 +1,7 @@
 // =====================================================
 // Page: BOM Produksi
 // Rule final:
-// - BOM target product = assembly, material hanya semi_finished_material
+// - BOM target product = assembly, material boleh semi_finished_material + raw_material consumable
 // - BOM target semi_finished_material = material boleh raw / semi_finished_material
 // =====================================================
 
@@ -49,6 +49,7 @@ import {
   BOM_MATERIAL_ITEM_TYPE_MAP,
   BOM_MATERIAL_VARIANT_STRATEGY_MAP,
   BOM_TARGET_TYPE_MAP,
+  calculateBomTotals,
   DEFAULT_BOM_MATERIAL_LINE,
   DEFAULT_BOM_STEP_LINE,
   DEFAULT_PRODUCTION_BOM_FORM,
@@ -71,9 +72,9 @@ import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/number
 import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, getNextSequenceNumber, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildBomMaterialFormLine, buildBomStepFormLine } from "../../utils/produksi/productionLineBuilders";
+import { calculateBomStepLineCost, resolveBomMaterialUnitCost } from "../../utils/produksi/productionBomCostHelpers";
 import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
-import { resolveDisplayReference } from '../../utils/references/displayReferenceResolver';
 
 // =====================================================
 // SECTION: helper label item
@@ -399,9 +400,8 @@ const ProductionBoms = () => {
         ...DEFAULT_BOM_MATERIAL_LINE,
         ...record,
         itemType:
-          targetType === "product"
-            ? "semi_finished_material"
-            : record.itemType || "raw_material",
+          record.itemType ||
+          (targetType === "product" ? "semi_finished_material" : "raw_material"),
         materialVariantStrategy:
           record.materialHasVariants === true
             ? record.materialVariantStrategy || "inherit"
@@ -449,10 +449,11 @@ const ProductionBoms = () => {
       const values = await materialForm.validateFields();
       const targetType = getCurrentTargetType();
 
-      const forcedItemType =
-        targetType === "product" ? "semi_finished_material" : values.itemType;
+      const itemType =
+        values.itemType ||
+        (targetType === "product" ? "semi_finished_material" : "raw_material");
 
-      const options = getMaterialItemOptions(targetType, forcedItemType);
+      const options = getMaterialItemOptions(targetType, itemType);
       const selected = options.find(
         (item) => item.value === values.itemId,
       )?.raw;
@@ -460,7 +461,7 @@ const ProductionBoms = () => {
       const line = buildBomMaterialFormLine({
         values,
         selectedItem: selected,
-        itemType: forcedItemType,
+        itemType,
       });
 
       const currentLines = getFormArrayValue(form, "materialLines");
@@ -771,8 +772,13 @@ const ProductionBoms = () => {
             Material: {formatCurrency(record.materialCostEstimate || 0)}
           </Typography.Text>
           <Typography.Text>
-            Biaya produksi: {formatCurrency(record.laborCostEstimate || 0)}
+            Upah step: {formatCurrency(record.laborCostEstimate || 0)}
           </Typography.Text>
+          {Number(record.overheadCostEstimate || 0) > 0 ? (
+            <Typography.Text>
+              Overhead: {formatCurrency(record.overheadCostEstimate || 0)}
+            </Typography.Text>
+          ) : null}
           <Typography.Text strong>
             Total: {formatCurrency(record.totalCostEstimate || 0)}
           </Typography.Text>
@@ -1052,7 +1058,7 @@ const ProductionBoms = () => {
           - Kode BOM tetap dibuat otomatis oleh service, tetapi tidak perlu menjadi input utama di UI.
 
           Catatan cleanup:
-          - Kode internal masih boleh tampil kecil pada drawer detail/export untuk audit teknis.
+          - Kode internal disimpan untuk relasi/audit teknis, tetapi tidak ditampilkan di UI operasional.
 
           Risiko:
           - Jangan menambahkan input manual code karena dapat membuat relasi BOM dan duplicate guard tidak konsisten.
@@ -1125,22 +1131,13 @@ const ProductionBoms = () => {
                             const currentMaterialLines =
                               form.getFieldValue("materialLines") || [];
 
-                            if (value === "product") {
-                              const normalizedLines = currentMaterialLines
-                                .filter(
-                                  (line) =>
-                                    line.itemType === "semi_finished_material",
-                                )
-                                .map((line) => ({
-                                  ...line,
-                                  itemType: "semi_finished_material",
-                                }));
-
-                              form.setFieldValue(
-                                "materialLines",
-                                normalizedLines,
-                              );
-                            }
+                            form.setFieldValue(
+                              "materialLines",
+                              currentMaterialLines.map((line) => ({
+                                ...line,
+                                itemType: line.itemType || "raw_material",
+                              })),
+                            );
                           }}
                         />
                       </Form.Item>
@@ -1199,6 +1196,7 @@ const ProductionBoms = () => {
               const targetType = getFieldValue("targetType") || "product";
               const materialLines = getFieldValue("materialLines") || [];
               const stepLines = getFieldValue("stepLines") || [];
+              const batchOutputQty = getFieldValue("batchOutputQty") || 1;
 
               const materialColumns = [
                 {
@@ -1207,7 +1205,6 @@ const ProductionBoms = () => {
                   render: (_, record) => (
                     <div>
                       <div className="ims-cell-title">{record.itemName || "-"}</div>
-                      <div className="ims-cell-meta">{record.itemCode || "-"}</div>
                     </div>
                   ),
                 },
@@ -1264,10 +1261,23 @@ const ProductionBoms = () => {
                       <div className="ims-cell-title">
                         Langkah {formatNumber(record.sequenceNo)} - {record.stepName || "-"}
                       </div>
-                      <div className="ims-cell-meta">
-                        {record.notes || record.stepCode || "Step produksi"}
-                      </div>
+                      {record.notes ? (
+                        <div className="ims-cell-meta">{record.notes}</div>
+                      ) : null}
                     </div>
+                  ),
+                },
+                {
+                  title: "Estimasi Upah",
+                  key: "laborEstimate",
+                  width: 190,
+                  render: (_, record) => (
+                    <Space direction="vertical" size={0}>
+                      <Typography.Text>{formatCurrency(calculateBomStepLineCost(record, { batchOutputQty }))}</Typography.Text>
+                      <Typography.Text type="secondary" className="ims-cell-meta">
+                        {record.payrollMode === "per_qty" ? "Per Qty" : "Per Batch"}
+                      </Typography.Text>
+                    </Space>
                   ),
                 },
                 {
@@ -1299,7 +1309,7 @@ const ProductionBoms = () => {
                     title="Komposisi Bahan"
                     description={
                       targetType === "product"
-                        ? "Untuk target produk jadi, komposisi bahan hanya boleh mengambil Semi Finished Materials agar proses assembly tetap rapi."
+                        ? "Untuk produk jadi, pakai Semi Finished Materials sebagai komponen utama dan Raw Materials hanya untuk bahan assembly/consumable seperti lem tembak."
                         : "Untuk target semi finished, komposisi bahan boleh mengambil Raw Materials atau Semi Finished Materials sesuai kebutuhan proses."
                     }
                     addButtonText="Tambah Bahan"
@@ -1311,11 +1321,6 @@ const ProductionBoms = () => {
 
                   <EditableLineSection
                     title="Alur Step Produksi"
-                    alert={{
-                      type: "info",
-                      message:
-                        "QC tidak perlu dibuat sebagai step terpisah. Gunakan step produksi nyata saja, lalu pengecekan kualitas dicatat di work log pada setiap proses.",
-                    }}
                     addButtonText="Tambah Step BOM"
                     onAdd={() => openStepModal()}
                     dataSource={stepLines}
@@ -1329,62 +1334,59 @@ const ProductionBoms = () => {
 
           <Divider orientation="left">Biaya Estimasi</Divider>
 
-          <Row gutter={16}>
-            <Col xs={24} md={8}>
-              <Form.Item shouldUpdate noStyle>
-                {({ getFieldValue }) => {
-                  const materialLines = getFieldValue("materialLines") || [];
-                  const total = materialLines.reduce(
-                    (sum, item) => sum + Number(item.totalCostSnapshot || 0),
-                    0,
-                  );
+          <Form.Item shouldUpdate noStyle>
+            {({ getFieldValue }) => {
+              const totals = calculateBomTotals(
+                getFieldValue("materialLines") || [],
+                getFieldValue("stepLines") || [],
+                {
+                  batchOutputQty: getFieldValue("batchOutputQty"),
+                  overheadCostEstimate: getFieldValue("overheadCostEstimate"),
+                },
+              );
 
-                  return (
-                    <Form.Item label="Estimasi Biaya Material">
-                      <Input value={formatCurrency(total)} disabled />
-                    </Form.Item>
-                  );
-                }}
-              </Form.Item>
-            </Col>
+              return (
+                <>
+                  <Row gutter={16}>
+                    <Col xs={24} md={6}>
+                      <Form.Item label="Estimasi Material">
+                        <Input value={formatCurrency(totals.materialCostEstimate)} disabled />
+                      </Form.Item>
+                    </Col>
 
-            <Col xs={24} md={8}>
-              <Form.Item shouldUpdate noStyle>
-                {({ getFieldValue }) => {
-                  const stepLines = getFieldValue("stepLines") || [];
-                  const total = stepLines.reduce(
-                    (sum, item) => sum + Number(item.payrollRate || 0),
-                    0,
-                  );
+                    <Col xs={24} md={6}>
+                      <Form.Item label="Estimasi Upah Step">
+                        <Input value={formatCurrency(totals.laborCostEstimate)} disabled />
+                      </Form.Item>
+                    </Col>
 
-                  return (
-                    <Form.Item label="Estimasi Biaya Produksi">
-                      <Input value={formatCurrency(total)} disabled />
-                    </Form.Item>
-                  );
-                }}
-              </Form.Item>
-            </Col>
+                    <Col xs={24} md={6}>
+                      <Form.Item label="Overhead Manual" name="overheadCostEstimate">
+                        <InputNumber
+                          min={0}
+                          step={1}
+                          precision={0}
+                          parser={parseIntegerIdInput}
+                          style={{ width: "100%" }}
+                        />
+                      </Form.Item>
+                    </Col>
 
-            <Col xs={24} md={8}>
-              <Form.Item
-                label="Estimasi Biaya Overhead"
-                name="overheadCostEstimate"
-              >
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
+                    <Col xs={24} md={6}>
+                      <Form.Item label="Total Estimasi">
+                        <Input value={formatCurrency(totals.totalCostEstimate)} disabled />
+                      </Form.Item>
+                    </Col>
+                  </Row>
 
-          <Divider orientation="left">Catatan</Divider>
+                  <Typography.Text type="secondary" className="ims-cell-meta">
+                    Estimasi BOM memakai modal bahan dari master, tarif upah dari step, dan overhead manual sementara. HPP final tetap mengikuti Work Log dan payroll final.
+                  </Typography.Text>
+                </>
+              );
+            }}
+          </Form.Item>
 
-          <Row gutter={16}>
-            <Col xs={24}>
-              <Form.Item label="Catatan Internal" name="notes">
-                <Input.TextArea rows={3} placeholder="Catatan BOM..." />
-              </Form.Item>
-            </Col>
-          </Row>
         </Form>
       </Drawer>
 
@@ -1405,9 +1407,6 @@ const ProductionBoms = () => {
               size="small"
               style={{ marginBottom: 16 }}
             >
-              <Descriptions.Item label="Kode internal">
-                {resolveDisplayReference(selectedBom)}
-              </Descriptions.Item>
               <Descriptions.Item label="Nama">
                 {selectedBom.name || "-"}
               </Descriptions.Item>
@@ -1417,14 +1416,20 @@ const ProductionBoms = () => {
               <Descriptions.Item label="Target Name">
                 {selectedBom.targetName || "-"}
               </Descriptions.Item>
+              <Descriptions.Item label="Estimasi Material">
+                {formatCurrency(selectedBom.materialCostEstimate)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Estimasi Upah Step">
+                {formatCurrency(selectedBom.laborCostEstimate)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Overhead Manual">
+                {formatCurrency(selectedBom.overheadCostEstimate)}
+              </Descriptions.Item>
               <Descriptions.Item label="Estimasi Total">
                 {formatCurrency(selectedBom.totalCostEstimate)}
               </Descriptions.Item>
               <Descriptions.Item label="Status">
                 {selectedBom.isActive ? "Aktif" : "Nonaktif"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Catatan">
-                {selectedBom.notes || "-"}
               </Descriptions.Item>
             </Descriptions>
 
@@ -1444,9 +1449,6 @@ const ProductionBoms = () => {
                     <div>
                       <div className="ims-cell-title">
                         {record.itemName || "-"}
-                      </div>
-                      <div className="ims-cell-meta">
-                        {record.itemCode || "-"}
                       </div>
                     </div>
                   ),
@@ -1489,11 +1491,17 @@ const ProductionBoms = () => {
                         Langkah {formatNumber(record.sequenceNo)} -{" "}
                         {record.stepName || "-"}
                       </div>
-                      <div className="ims-cell-meta">
-                        {record.notes || record.stepCode || "Step produksi"}
-                      </div>
+                      {record.notes ? (
+                        <div className="ims-cell-meta">{record.notes}</div>
+                      ) : null}
                     </div>
                   ),
+                },
+                {
+                  title: "Estimasi Upah",
+                  key: "laborEstimate",
+                  width: 160,
+                  render: (_, record) => formatCurrency(record.laborCostEstimateSnapshot || 0),
                 },
               ]}
             />
@@ -1526,7 +1534,6 @@ const ProductionBoms = () => {
           <Form.Item shouldUpdate noStyle>
             {() => {
               const targetType = getCurrentTargetType();
-              const forceSemiFinished = targetType === "product";
 
               return (
                 <Form.Item
@@ -1536,14 +1543,24 @@ const ProductionBoms = () => {
                     { required: true, message: "Jenis bahan wajib dipilih" },
                   ]}
                   extra={
-                    forceSemiFinished
-                      ? "Untuk target produk jadi, bahan hanya boleh mengambil Semi Finished Materials agar proses assembly tetap rapi."
+                    targetType === "product"
+                      ? "Produk jadi boleh memakai Semi Finished untuk komponen, dan Raw Material untuk consumable assembly seperti lem tembak."
                       : undefined
                   }
                 >
                   <Select
                     options={PRODUCTION_BOM_MATERIAL_ITEM_TYPES}
-                    disabled={forceSemiFinished}
+                    onChange={() => {
+                      materialForm.setFieldsValue({
+                        itemId: undefined,
+                        unit: "pcs",
+                        costPerUnitSnapshot: 0,
+                        materialHasVariants: false,
+                        materialVariantStrategy: "none",
+                        fixedVariantKey: "",
+                        fixedVariantLabel: "",
+                      });
+                    }}
                   />
                 </Form.Item>
               );
@@ -1554,9 +1571,8 @@ const ProductionBoms = () => {
             {({ getFieldValue }) => {
               const targetType = getCurrentTargetType();
               const itemType =
-                targetType === "product"
-                  ? "semi_finished_material"
-                  : getFieldValue("itemType");
+                getFieldValue("itemType") ||
+                (targetType === "product" ? "semi_finished_material" : "raw_material");
 
               const options = getMaterialItemOptions(targetType, itemType);
 
@@ -1584,14 +1600,15 @@ const ProductionBoms = () => {
 
                       const materialHasVariants = inferHasVariants(selected || {});
 
+                      const resolvedUnitCost = resolveBomMaterialUnitCost({
+                        itemType: getFieldValue("itemType"),
+                        item: selected || {},
+                      });
+
                       materialForm.setFieldsValue({
                         unit: selected?.unit || "pcs",
-                        costPerUnitSnapshot: Number(
-                          selected?.averageCostPerUnit ||
-                            selected?.referenceCostPerUnit ||
-                            selected?.costPerUnit ||
-                            0,
-                        ),
+                        costPerUnitSnapshot: Number(resolvedUnitCost.value || 0),
+                        costSourceSnapshot: resolvedUnitCost.source || "",
                         materialHasVariants,
                         materialVariantStrategy: materialHasVariants ? "inherit" : "none",
                         fixedVariantKey: "",
@@ -1608,11 +1625,12 @@ const ProductionBoms = () => {
             {({ getFieldValue }) => {
               const targetType = getCurrentTargetType();
               const itemType =
-                targetType === "product"
-                  ? "semi_finished_material"
-                  : getFieldValue("itemType");
+                getFieldValue("itemType") ||
+                (targetType === "product" ? "semi_finished_material" : "raw_material");
               const options = getMaterialItemOptions(targetType, itemType);
-              const selectedItem = options.find((item) => item.value === getFieldValue("itemId"))?.raw;
+              const selectedItem = options.find(
+                (item) => item.value === getFieldValue("itemId"),
+              )?.raw;
               const hasVariants = inferHasVariants(selectedItem || {});
 
               return (
@@ -1627,6 +1645,9 @@ const ProductionBoms = () => {
                     <Input />
                   </Form.Item>
                   <Form.Item name="fixedVariantLabel" hidden>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="costSourceSnapshot" hidden>
                     <Input />
                   </Form.Item>
 
@@ -1666,9 +1687,6 @@ const ProductionBoms = () => {
             </Col>
           </Row>
 
-          <Form.Item label="Catatan" name="notes">
-            <Input.TextArea rows={2} placeholder="Opsional" />
-          </Form.Item>
         </Form>
       </Modal>
 
@@ -1721,9 +1739,6 @@ const ProductionBoms = () => {
             </Col>
           </Row>
 
-          <Form.Item label="Catatan" name="notes">
-            <Input.TextArea rows={2} placeholder="Opsional" />
-          </Form.Item>
         </Form>
       </Modal>
     </div>

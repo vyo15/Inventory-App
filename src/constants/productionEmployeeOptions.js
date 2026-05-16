@@ -28,7 +28,6 @@ export const PRODUCTION_EMPLOYEE_ROLES = [
 export const PRODUCTION_EMPLOYEE_CUSTOM_PAYROLL_MODES = [
   { value: "per_qty", label: "Per Qty" },
   { value: "per_batch", label: "Per Batch" },
-  { value: "fixed", label: "Fixed" },
 ];
 
 export const PRODUCTION_EMPLOYEE_PAYROLL_OUTPUT_BASIS = [

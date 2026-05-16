@@ -2,104 +2,9 @@ import { collection, doc, getDoc, getDocs, query, where } from "firebase/firesto
 
 const safeTrim = (value) => String(value ?? "").trim();
 
-const READABLE_STOPWORDS = new Set([
-  "BOM",
-  "UNTUK",
-  "DAN",
-  "THE",
-  "OF",
-  "PRODUK",
-  "PRODUCT",
-  "PRODUKSI",
-  "ITEM",
-]);
-
-const normalizeText = (value = "") =>
-  safeTrim(value)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase();
-
-export const normalizeBusinessPrefix = (prefix = "CODE") =>
-  normalizeText(prefix)
-    .replace(/[^A-Z0-9-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "") || "CODE";
-
-const normalizeCodeToken = (value = "") =>
-  normalizeText(value).replace(/[^A-Z0-9]/g, "");
-
-/* =====================================================
-SECTION: Universal readable code abbreviation — AKTIF
-Fungsi:
-- Mengubah nama bisnis menjadi token kode manusiawi tanpa dictionary manual per kata.
-- Angka dipertahankan, kata pendek dipakai langsung, kata panjang dikompresi dari konsonan utama.
-
-Dipakai oleh:
-- generateUniqueReadableCode untuk Product, Raw Material, Semi Finished, BOM, dan Production Step.
-- productionCodeGenerator sebagai compatibility wrapper.
-
-Alasan perubahan:
-- Standar kode IMS dikunci agar tidak bergantung mapping manual seperti MAWAR -> MWR atau PUTIH -> PTH.
-
-Catatan cleanup:
-- Stopword minimal bisa ditinjau jika nama item valid ikut terbuang, tetapi jangan jadikan dictionary arti kata.
-
-Risiko:
-- Mengubah algoritma ini membuat format kode baru berbeda lintas master item dan bisa membingungkan audit operasional.
-===================================================== */
-const abbreviateWord = (word = "") => {
-  const normalizedWord = normalizeCodeToken(word);
-  if (!normalizedWord || READABLE_STOPWORDS.has(normalizedWord)) return "";
-  if (/^\d+$/.test(normalizedWord)) return normalizedWord.slice(0, 4);
-  if (normalizedWord.length <= 3) return normalizedWord;
-
-  const consonants = normalizedWord.replace(/[AIUEO]/g, "");
-  if (consonants.length >= 3) return consonants.slice(0, 3);
-  if (consonants.length > 0) return (consonants + normalizedWord).slice(0, 3);
-  return normalizedWord.slice(0, 3);
-};
-
-export const buildReadableCodeParts = (text = "", options = {}) => {
-  const { maxParts = 8, stopwords = [] } = options;
-  const extraStopwords = new Set((stopwords || []).map((item) => normalizeCodeToken(item)).filter(Boolean));
-  const normalizedText = normalizeText(text);
-  const words = normalizedText.match(/[A-Z0-9]+/g) || [];
-  const parts = [];
-
-  words.forEach((word) => {
-    const normalizedWord = normalizeCodeToken(word);
-    if (extraStopwords.has(normalizedWord)) return;
-
-    const part = abbreviateWord(word);
-    if (part && !parts.includes(part)) {
-      parts.push(part);
-    }
-  });
-
-  return parts.slice(0, maxParts);
-};
-
-export const stripTrailingReadableSequence = (value = "") =>
-  normalizeText(value)
-    .replace(/[^A-Z0-9-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-\d{3}$/, "");
-
-export const buildReadableBusinessCode = ({
-  prefix = "CODE",
-  text = "",
-  fallbackText = "ITEM",
-  maxParts = 8,
-  stopwords = [],
-} = {}) => {
-  const normalizedPrefix = normalizeBusinessPrefix(prefix);
-  const parts = buildReadableCodeParts(text, { maxParts, stopwords });
-  const fallbackParts = buildReadableCodeParts(fallbackText, { maxParts, stopwords });
-  const suffix = (parts.length > 0 ? parts : fallbackParts).join("-") || "ITEM";
-
-  return `${normalizedPrefix}-${suffix}`;
+const normalizeBusinessPrefix = (value = "CODE") => {
+  const normalized = safeTrim(value).toUpperCase().replace(/[^A-Z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return normalized || "CODE";
 };
 
 export const formatBusinessDateCode = (date = new Date(), dateFormat = "DDMMYYYY") => {
@@ -144,6 +49,110 @@ export const buildDailyBusinessCode = ({
   return `${normalizedPrefix}-${formatBusinessDateCode(date, dateFormat)}-${String(Number(sequence || 1)).padStart(sequenceLength, "0")}`;
 };
 
+
+/* =====================================================
+SECTION: Sequential internal master/config code — AKTIF
+Fungsi:
+- Membuat kode internal yang sederhana dan stabil dengan format PREFIX-001.
+- Dipakai untuk master/config yang tidak perlu menampilkan konteks nama di kode UI.
+
+Dipakai oleh:
+- Product, Raw Material, Semi Finished, BOM, dan Production Step.
+
+Alasan perubahan:
+- Kode master produksi sekarang dipakai sebagai internal ID/backstage saja, sedangkan UI operasional menampilkan nama dan konteks bisnis.
+
+Catatan cleanup:
+- Generator tetap membaca kode legacy readable agar data lama tidak dimigrasi otomatis, tetapi sequence baru hanya menghitung pola PREFIX-angka.
+
+Risiko:
+- Jangan pakai generator ini untuk transaksi/history karena transaksi tetap butuh kode audit tanggal.
+===================================================== */
+export const buildSequentialBusinessCode = ({
+  prefix = "CODE",
+  sequence = 1,
+  sequenceLength = 3,
+} = {}) => {
+  const normalizedPrefix = normalizeBusinessPrefix(prefix);
+  return `${normalizedPrefix}-${String(Number(sequence || 1)).padStart(sequenceLength, "0")}`;
+};
+
+export const generateUniqueSequentialCode = async ({
+  db,
+  collectionName,
+  fieldNames = ["code"],
+  prefix = "CODE",
+  excludeId = null,
+  sequenceLength = 3,
+} = {}) => {
+  const normalizedPrefix = normalizeBusinessPrefix(prefix);
+
+  if (!db || !collectionName) {
+    return buildSequentialBusinessCode({ prefix: normalizedPrefix, sequence: 1, sequenceLength });
+  }
+
+  const snapshot = await getDocs(collection(db, collectionName));
+  const fieldsToCheck = [
+    ...new Set([
+      ...fieldNames,
+      "code",
+      "productCode",
+      "materialCode",
+      "itemCode",
+      "bomCode",
+      "stepCode",
+    ]),
+  ];
+  const codePattern = new RegExp(`^${normalizedPrefix}-(\\d{${sequenceLength},})$`);
+  const usedSequences = new Set();
+  const usedCodes = new Set();
+  let maxSequence = 0;
+
+  snapshot.docs.forEach((item) => {
+    if (excludeId && item.id === excludeId) return;
+
+    const data = item.data() || {};
+    const valuesToCheck = [item.id, ...fieldsToCheck.map((fieldName) => data[fieldName])];
+
+    valuesToCheck.forEach((rawValue) => {
+      const value = safeTrim(rawValue).toUpperCase();
+      if (!value) return;
+
+      usedCodes.add(value);
+      const match = value.match(codePattern);
+      if (!match) return;
+
+      const sequence = Number(match[1] || 0);
+      if (sequence > 0) {
+        usedSequences.add(sequence);
+        if (sequence > maxSequence) maxSequence = sequence;
+      }
+    });
+  });
+
+  let nextSequence = maxSequence + 1;
+  while (usedSequences.has(nextSequence)) {
+    nextSequence += 1;
+  }
+
+  let candidate = buildSequentialBusinessCode({
+    prefix: normalizedPrefix,
+    sequence: nextSequence,
+    sequenceLength,
+  });
+
+  while (usedCodes.has(candidate)) {
+    nextSequence += 1;
+    candidate = buildSequentialBusinessCode({
+      prefix: normalizedPrefix,
+      sequence: nextSequence,
+      sequenceLength,
+    });
+  }
+
+  return candidate;
+};
+
 export const isBusinessCodeExists = async ({
   db,
   collectionName,
@@ -170,94 +179,6 @@ export const isBusinessCodeExists = async ({
   }
 
   return false;
-};
-
-/* =====================================================
-SECTION: Unique readable semantic code — AKTIF
-Fungsi:
-- Membuat kode master item manusiawi dari nama/konteks item.
-- Kode unik pertama memakai base code tanpa suffix, misalnya SFP-KLP-MLT.
-- Suffix 3 digit baru ditambahkan ketika base code sudah pernah dipakai/bertabrakan.
-
-Dipakai oleh:
-- Product, Raw Material, Semi Finished, BOM, dan Production Step.
-
-Alasan perubahan:
-- User ingin preview kode semantic lebih natural: tidak memakai -001 jika tidak ada duplicate.
-
-Catatan cleanup:
-- Generator masih scan collection; counter atomic bisa dibahas terpisah jika volume data tinggi.
-
-Risiko:
-- Mengubah aturan suffix dapat membuat format data baru berbeda dari batch sebelumnya; legacy tetap harus dibaca apa adanya.
-===================================================== */
-export const generateUniqueReadableCode = async ({
-  db,
-  collectionName,
-  fieldNames = ["code"],
-  prefix = "CODE",
-  text = "",
-  fallbackText = "ITEM",
-  excludeId = null,
-  maxParts = 8,
-  stopwords = [],
-} = {}) => {
-  const baseCode = buildReadableBusinessCode({ prefix, text, fallbackText, maxParts, stopwords });
-
-  if (!db || !collectionName) return baseCode;
-
-  const snapshot = await getDocs(collection(db, collectionName));
-  const fieldsToCheck = [
-    ...new Set([
-      ...fieldNames,
-      "code",
-      "productCode",
-      "materialCode",
-      "itemCode",
-      "bomCode",
-      "referenceNumber",
-      "referenceCode",
-      "sourceRef",
-    ]),
-  ];
-  const usedSequences = new Set();
-  let baseCodeExists = false;
-
-  snapshot.docs.forEach((item) => {
-    if (excludeId && item.id === excludeId) return;
-
-    const data = item.data() || {};
-    const valuesToCheck = [item.id, ...fieldsToCheck.map((fieldName) => data[fieldName])];
-
-    valuesToCheck.forEach((rawValue) => {
-      const value = safeTrim(rawValue).toUpperCase();
-      if (!value) return;
-
-      if (value === baseCode) {
-        baseCodeExists = true;
-        return;
-      }
-
-      if (!value.startsWith(`${baseCode}-`)) return;
-
-      const suffix = value.slice(baseCode.length + 1);
-      if (/^\d{3}$/.test(suffix)) {
-        usedSequences.add(Number(suffix));
-      }
-    });
-  });
-
-  if (!baseCodeExists && usedSequences.size === 0) {
-    return baseCode;
-  }
-
-  for (let index = 1; index <= 999; index += 1) {
-    if (!usedSequences.has(index)) {
-      return `${baseCode}-${String(index).padStart(3, "0")}`;
-    }
-  }
-
-  throw new Error(`Tidak dapat membuat kode unik untuk ${baseCode}.`);
 };
 
 export const generateDailySequenceCode = async ({

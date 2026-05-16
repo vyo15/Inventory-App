@@ -956,7 +956,7 @@ const ProductionOrders = () => {
             </Tag>
           </Space>
           <div className={orderUiClassNames.meta}>
-            BOM: {record.bomCode || "-"} - {record.bomName || "-"}
+            BOM: {record.bomName || "-"}
           </div>
           {record.targetVariantLabel ? (
             <div className={orderUiClassNames.meta}>Varian: {record.targetVariantLabel}</div>
@@ -1090,9 +1090,6 @@ const ProductionOrders = () => {
         render: (_, record) => (
           <div className={orderUiClassNames.stack}>
             <Typography.Text strong>{record.itemName || "-"}</Typography.Text>
-            <Typography.Text type="secondary" className={orderUiClassNames.meta}>
-              {record.itemCode || "-"}
-            </Typography.Text>
             <Tag
               className="ims-status-tag"
               color={record.itemType === "raw_material" ? "orange" : "blue"}
@@ -1685,7 +1682,7 @@ const ProductionOrders = () => {
                   : "-"}
               </Descriptions.Item>
               <Descriptions.Item label="BOM / Step">
-                {selectedOrder.bomCode || "-"} - {selectedOrder.bomName || "-"}
+                {selectedOrder.bomName || "-"}
               </Descriptions.Item>
               <Descriptions.Item label="Priority">
                 <Tag color={getPriorityMeta(selectedOrder.priority).color}>

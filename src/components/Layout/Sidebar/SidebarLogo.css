@@ -110,17 +110,17 @@ Risiko:
 
 .sidebar-logo-title {
   color: var(--ims-text-primary);
-  font-size: var(--ims-font-size-body);
-  font-weight: var(--ims-font-weight-display);
-  line-height: 1.18;
-  letter-spacing: var(--ims-letter-spacing-label);
+  font-size: var(--ims-typo-sidebar-brand-title-size);
+  font-weight: var(--ims-typo-sidebar-brand-title-weight);
+  line-height: var(--ims-typo-sidebar-brand-title-line-height);
+  letter-spacing: var(--ims-letter-spacing-tight);
 }
 
 .sidebar-logo-subtitle {
   color: var(--ims-text-secondary);
-  font-size: 10.5px;
+  font-size: var(--ims-typo-sidebar-brand-subtitle-size);
   font-weight: var(--ims-font-weight-medium);
-  line-height: 1.25;
+  line-height: var(--ims-line-height-compact);
 }
 
 .sidebar-logo.dark:hover {
@@ -147,7 +147,7 @@ Risiko:
   }
 
   .sidebar-logo-title {
-    font-size: 13.5px;
+    font-size: var(--ims-font-size-helper);
   }
 
   .sidebar-logo-subtitle {

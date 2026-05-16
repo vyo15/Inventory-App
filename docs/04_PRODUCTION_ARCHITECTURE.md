@@ -33,10 +33,12 @@ Tujuan:
 - relasi dengan karyawan
 - relasi dengan BOM
 
-Catatan real dari deskripsi halaman:
-- QC tidak dijadikan step terpisah
-- assembly dianggap proses akhir
-- packing opsional bila memang ada pekerjaan pengemasan terpisah
+Catatan real dari source terbaru:
+- QC/reject detail tidak dijadikan step terpisah dan tidak menjadi field monitoring di form Step.
+- assembly dianggap proses akhir.
+- packing opsional bila memang ada pekerjaan pengemasan terpisah.
+- Step memakai `basisType` universal dengan label UI `Per Meter Bahan`, `Per Kawat`, `Per Qty`, dan `Per Batch`.
+- Aturan upah step hanya memakai mode aktif `per_qty` dan `per_batch`; `payrollQtyBase` tidak menjadi payload Step baru, sedangkan klasifikasi payroll/HPP diturunkan otomatis dari jenis proses.
 
 ## 2. Karyawan Produksi
 Tujuan:
@@ -78,9 +80,12 @@ Tujuan:
 - dasar auto requirement untuk PO
 
 Rule penting yang terverifikasi:
-- bila target adalah `product`, material yang boleh dipakai hanya `semi_finished_material`
+- bila target adalah `product`, material utama memakai `semi_finished_material`, dan `raw_material` boleh dipakai untuk consumable assembly seperti lem tembak
 - BOM menyimpan `materialLines` dan `stepLines`
 - step lines sudah disortir menurut sequence
+- estimasi material BOM mengambil snapshot cost dari master bahan: Raw Material memakai `averageActualUnitCost` dengan fallback `restockReferencePrice`; Semi Finished memakai `averageCostPerUnit` dengan fallback `lastProductionCostPerUnit`. Field reference/manual semi finished tidak menjadi sumber estimasi aktif.
+- estimasi biaya produksi BOM mengambil tarif dari Tahapan Produksi.
+- overhead manual BOM boleh diisi sebagai estimasi sementara, tetapi belum menjadi overhead actual Work Log/HPP final.
 
 Organisasi UI aktif:
 - daftar BOM boleh ditampilkan grouped/accordion berdasarkan `Target Type → Target Item → Resep Produksi`
@@ -127,7 +132,7 @@ Data penting yang terlihat disimpan:
 - startedAt, completedAt, durationMinutesActual
 - material usages
 - outputs
-- materialCostActual, laborCostActual, overheadCostActual, totalCostActual, costPerGoodUnit
+- materialCostActual, laborCostActual, totalCostActual, costPerGoodUnit; overheadCostActual hanya legacy/compatibility
 - monitoring miss dan output teoretis
 - status stok konsumsi, output, dan payroll calculation
 
@@ -154,7 +159,7 @@ Payment status yang terlihat:
 
 ## 9. Analisis HPP Produksi
 Tujuan:
-- analisa biaya realisasi bahan, tenaga kerja, dan overhead per work log completed
+- analisa biaya realisasi bahan dan tenaga kerja per work log completed; overhead actual masih compatibility. Overhead manual BOM hanya estimasi rencana.
 
 Sumber HPP yang terlihat:
 - data work log completed

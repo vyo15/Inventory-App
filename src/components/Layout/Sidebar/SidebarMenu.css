@@ -42,7 +42,9 @@
   border-radius: 14px;
   display: flex;
   align-items: center;
-  font-weight: var(--ims-font-weight-semibold);
+  font-size: var(--ims-typo-sidebar-menu-size);
+  font-weight: var(--ims-typo-sidebar-menu-weight);
+  line-height: var(--ims-line-height-tight);
   transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease,
     box-shadow 0.18s ease;
 }
@@ -50,13 +52,16 @@
 .sidebar-menu.ant-menu .ant-menu-item .ant-menu-title-content,
 .sidebar-menu.ant-menu .ant-menu-submenu-title .ant-menu-title-content {
   min-width: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
 }
 
 .sidebar-menu.ant-menu .ant-menu-item .ant-menu-item-icon,
 .sidebar-menu.ant-menu .ant-menu-submenu-title .ant-menu-item-icon,
 .sidebar-menu.ant-menu .ant-menu-item .anticon,
 .sidebar-menu.ant-menu .ant-menu-submenu-title .anticon {
-  font-size: 17px;
+  font-size: var(--ims-font-size-lg);
 }
 
 /* =========================
@@ -79,7 +84,9 @@
   margin: 4px 0;
   padding-inline: 14px !important;
   border-radius: 12px;
-  font-weight: var(--ims-font-weight-medium);
+  font-size: var(--ims-typo-sidebar-submenu-size);
+  font-weight: var(--ims-typo-sidebar-submenu-weight);
+  line-height: var(--ims-line-height-tight);
 }
 
 .sidebar-menu.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item .ant-menu-title-content {
@@ -283,6 +290,13 @@
   background: var(--ims-color-primary);
 }
 
+.sidebar-menu.light.ant-menu .ant-menu-item-selected,
+.sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected,
+.sidebar-menu.dark.ant-menu .ant-menu-item-selected,
+.sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
+  font-weight: var(--ims-font-weight-semibold);
+}
+
 /* =========================
    SECTION: Nested Sidebar Hierarchy Polish — AKTIF / GUARDED
    Fungsi:
@@ -306,7 +320,9 @@
   > .ant-menu-submenu-title {
   height: 42px;
   border-radius: 12px;
-  font-weight: var(--ims-font-weight-semibold);
+  font-size: var(--ims-typo-sidebar-menu-size);
+  font-weight: var(--ims-typo-sidebar-menu-weight);
+  line-height: var(--ims-line-height-tight);
 }
 
 .sidebar-menu.ant-menu
@@ -332,7 +348,9 @@
   height: 40px;
   margin: 3px 0;
   border-radius: 11px;
-  font-weight: var(--ims-font-weight-medium);
+  font-size: var(--ims-typo-sidebar-submenu-size);
+  font-weight: var(--ims-typo-sidebar-submenu-weight);
+  line-height: var(--ims-line-height-tight);
 }
 
 .sidebar-menu.ant-menu

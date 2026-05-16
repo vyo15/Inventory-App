@@ -1138,7 +1138,7 @@ const RawMaterials = () => {
           - Kode RAW tetap dibuat otomatis oleh service, tetapi tidak perlu menjadi input utama di UI master item.
 
           Catatan cleanup:
-          - Kode internal tetap dapat dipakai export/audit teknis tanpa mengganggu form operasional.
+          - Kode internal tetap dipakai relasi/audit teknis tanpa ditampilkan di form operasional.
 
           Risiko:
           - Jangan menyentuh SKU/kode varian karena variant identity dipakai stok dan transaksi.
@@ -1498,12 +1498,10 @@ const RawMaterials = () => {
                               />
                             </Form.Item>
                           </Col>
+                          <Form.Item {...field} name={[field.name, 'sku']} hidden>
+                            <Input />
+                          </Form.Item>
                           <Col xs={24} md={6}>
-                            <Form.Item {...field} name={[field.name, 'sku']} label="Kode / SKU Varian">
-                              <Input placeholder="Opsional" />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} md={5}>
                             <Form.Item
                               {...field}
                               name={[field.name, 'currentStock']}
@@ -1721,12 +1719,6 @@ const RawMaterials = () => {
                         title: selectedMaterial.variantLabel || 'Varian',
                         dataIndex: 'name',
                         key: 'name',
-                        render: (value) => value || '-',
-                      },
-                      {
-                        title: 'Kode / SKU',
-                        dataIndex: 'sku',
-                        key: 'sku',
                         render: (value) => value || '-',
                       },
                       {

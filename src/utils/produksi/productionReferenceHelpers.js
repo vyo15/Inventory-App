@@ -1,5 +1,4 @@
 import { buildReferenceOptions } from '../options/referenceOptionBuilders';
-import { resolveDisplayReference } from '../references/displayReferenceResolver';
 
 export const safeTrim = (value) => String(value || '').trim();
 export const toVariantKey = (value) => safeTrim(value).toLowerCase();
@@ -32,7 +31,6 @@ export const findMatchingVariant = (item = {}, targetVariantKey = '') => {
 const decorateMasterReference = (item = {}, sourceType = '') => {
   const supportsVariant = hasVariantSupport(item);
   const rawName = safeTrim(item?.name || item?.targetName || item?.productName || '');
-  const displayCode = resolveDisplayReference(item, { fallback: '', prefixTechnicalId: false });
   const variantSuffix = supportsVariant ? ' • pakai varian' : ' • tanpa varian';
 
   return {
@@ -42,7 +40,7 @@ const decorateMasterReference = (item = {}, sourceType = '') => {
     hasVariants: supportsVariant,
     variantStrategy: supportsVariant ? 'inherit' : 'none',
     name: rawName,
-    label: rawName ? `${displayCode ? `${displayCode} - ` : ''}${rawName}${variantSuffix}` : displayCode,
+    label: rawName ? `${rawName}${variantSuffix}` : '-',
   };
 };
 
@@ -66,13 +64,11 @@ export const getBomMaterialItemOptions = (
   targetType = 'product',
   itemType = 'raw_material',
 ) => {
-  if (targetType === 'product') {
-    return toReferenceOptions(
-      decorateMasterList(referenceData.semiFinishedMaterials || [], 'semi_finished_material'),
-    );
-  }
+  // targetType tetap diterima untuk compatibility caller lama.
+  // Rule aktif: product dan semi finished sama-sama boleh memilih raw/semi material.
+  const normalizedTargetType = targetType || 'product';
 
-  if (itemType === 'semi_finished_material') {
+  if (normalizedTargetType && itemType === 'semi_finished_material') {
     return toReferenceOptions(
       decorateMasterList(referenceData.semiFinishedMaterials || [], 'semi_finished_material'),
     );

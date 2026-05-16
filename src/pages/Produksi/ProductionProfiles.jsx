@@ -463,7 +463,6 @@ Risiko:
             <Card size="small" title="Ringkasan">
               <Descriptions column={1} size="small" bordered>
                 <Descriptions.Item label="Produk">{selectedProfile.productName || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Kode Produk">{selectedProfile.productCode || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Tipe Profil">{PRODUCTION_PROFILE_TYPE_MAP[selectedProfile.profileType] || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Alert Miss">
                   Kuning {formatNumber(selectedProfile.missYellowPercent || 0)}% · Merah {formatNumber(selectedProfile.missRedPercent || 0)}%

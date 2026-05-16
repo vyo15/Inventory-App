@@ -241,7 +241,7 @@ const getTargetOptions = ({ targetType, referenceData }) => {
 
   return items.map((item) => ({
     value: item.id,
-    label: `${item.name || "Tanpa nama"}${item.code ? ` · ${item.code}` : ""}`,
+    label: item.name || "Tanpa nama",
     raw: item,
   }));
 };
@@ -263,7 +263,7 @@ const getMatchingBomOptions = ({ plan, referenceData }) => {
     .filter((bom) => !plan?.targetItemId || bom.targetId === plan.targetItemId)
     .map((bom) => ({
       value: bom.id,
-      label: `${bom.name || bom.code || "BOM"}${bom.batchOutputQty ? ` · Output ${formatQuantityId(bom.batchOutputQty)} ${bom.targetUnit || "pcs"}` : ""}`,
+      label: `${bom.name || "BOM"}${bom.batchOutputQty ? ` · Output ${formatQuantityId(bom.batchOutputQty)} ${bom.targetUnit || "pcs"}` : ""}`,
       raw: bom,
     }));
 };

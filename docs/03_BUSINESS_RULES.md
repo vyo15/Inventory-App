@@ -207,8 +207,13 @@ Catatan service bahkan menyebut:
 
 ## 10. Rule BOM
 - target BOM bisa `product` atau `semi_finished_material`
-- bila target BOM adalah `product`, semua material wajib berasal dari `semi_finished_material`
+- bila target BOM adalah `product`, material utama sebaiknya berasal dari `semi_finished_material`, tetapi `raw_material` tetap boleh untuk bahan assembly/consumable seperti lem tembak
 - BOM menyimpan material lines dan step lines
+- Estimasi biaya BOM dihitung otomatis: material dari snapshot modal master bahan, upah dari tarif Tahapan Produksi, dan overhead manual dari input BOM.
+- Source estimasi material BOM aktif:
+  - Raw Material: `averageActualUnitCost` dari purchase weighted average, fallback `restockReferencePrice` jika modal aktual belum ada.
+  - Semi Finished: `averageCostPerUnit` hasil produksi sebelumnya, fallback `lastProductionCostPerUnit`. Field reference/manual semi finished tidak menjadi source estimasi aktif agar HPP turunan tetap jujur.
+- Overhead manual BOM saat ini hanya estimasi/referensi rencana, bukan source of truth HPP final. HPP final tetap dari Work Log completed dan payroll final.
 
 ## 11. Rule Production Order
 - PO dibentuk dari BOM.
@@ -219,7 +224,7 @@ Catatan service bahkan menyebut:
 - Untuk target `product`, UI create PO menampilkan `Produk yang dibuat`; filter `Jenis Bunga / Product Family` dan `Kategori Bahan` tidak wajib/tidak ditampilkan bila source product tidak memakai field tersebut.
 - Untuk target `semi_finished_material`, UI create PO boleh menampilkan filter UI-only `Jenis Bunga / Product Family` dan `Kategori Bahan` sebelum `Bahan yang dibuat`, supaya user tidak memilih dari daftar bahan yang terlalu panjang.
 - Field `Resep Produksi` hanya perlu tampil jika target punya lebih dari satu resep aktif; jika hanya satu resep aktif, `bomId` boleh dipilih otomatis secara internal.
-- Label user-facing target produksi tidak perlu menampilkan kode internal master item atau jumlah BOM; kode internal tetap disimpan pada data dan boleh dipakai untuk audit/detail teknis bila dibutuhkan.
+- Label user-facing target produksi tidak perlu menampilkan kode internal master item atau jumlah BOM; kode internal tetap disimpan pada data untuk relasi/backstage.
 - Filter UI-only production order tidak boleh disimpan ke Firestore, tidak boleh membuat schema baru, dan tidak boleh mengubah payload bisnis selain memastikan `bomId` valid.
 
 ## 12. Rule Work Log
@@ -239,7 +244,7 @@ Data inti yang direkam:
 - target
 - planned qty dan actual qty
 - good / reject / rework / scrap
-- labor cost / overhead / total cost
+- labor cost / total cost
 - monitoring miss dan output teoretis
 
 ## 12A. Rule Guarded Logic Produksi
@@ -358,39 +363,43 @@ Policy Firestore document ID setelah reset data:
 ## Standar Kode Manusiawi Tanpa Mapping Manual
 
 Aturan:
-- Jangan pakai mapping manual kata seperti `MAWAR -> MWR`, `PUTIH -> PTH`, `BUNGA -> BG`, atau daftar mapping kata lain sebagai dictionary hard-coded.
-- Jangan membuat dictionary singkatan kata per modul.
+- Product, Raw Material, Semi Finished, BOM, dan Production Step memakai sequence internal sederhana `PREFIX-001`.
+- Jangan membuat dictionary singkatan kata per modul untuk kode baru.
 - Jangan membuat format kode berbeda-beda antar modul tanpa alasan arsitektur yang disetujui.
 - Jangan duplicate generator kode di page/service berbeda.
-- Gunakan satu algoritma universal dan satu shared generator sebagai source of truth.
+- Gunakan shared generator sebagai source of truth.
 - Jangan fallback ke Technical ID/random ID untuk menyelesaikan duplicate.
 
-Algoritma singkatan universal:
-1. Normalize text: uppercase, trim spasi, hapus karakter khusus, dan pisahkan kata berdasarkan spasi, dash, slash, underscore, atau separator lain.
-2. Untuk setiap kata: ambil huruf konsonan dari kiri ke kanan maksimal 3 karakter; jika hasil terlalu pendek, tambahkan huruf awal dari kata agar tetap readable; angka boleh dipertahankan secukupnya.
-3. Gabungkan hasil per kata dengan `-`.
-4. Batasi panjang kode agar tetap readable.
-5. Jika readable semantic code duplicate, tambahkan suffix 3 digit `-001`, `-002`, `-003`. Jika tidak duplicate, jangan tambahkan suffix.
-6. Jangan pakai random ID untuk duplicate handling.
+Algoritma sequence internal master/config:
+1. Baca dokumen existing pada collection target.
+2. Hitung nomor terbesar yang cocok dengan format `PREFIX-001`.
+3. Buat nomor berikutnya dengan padding 3 digit.
+4. Data legacy readable tetap dibaca untuk compatibility, tetapi tidak menjadi standar kode baru.
+5. Kode master/config tidak ditampilkan sebagai informasi utama UI; user memilih dari nama, varian, target, step, dan satuan.
 
-Contoh algoritmik:
-- `Mawar` -> `MWR`
-- `Putih` -> `PTH`
-- `Flanel` -> `FLN`
-- `Pola` -> `PL`
-- `Daun` -> `DN`
-- `Bunga` -> `BNG`
-- `Kain Flanel Merah` -> `KN-FLN-MRH`
-- `Pola Daun Mawar Putih Flanel` -> `PL-DN-MWR-PTH-FLN`
-- Product: `PRD-BNG-MWR-FLN`
-- Semi Finished: `SFP-PL-DN-MWR-PTH-FLN`
-- BOM Product: `BOM-PRD-PL-DN-MWR-PTH-FLN`
-- BOM Semi Finished: `BOM-SFP-PL-DN-MWR-PTH-FLN`
+Contoh final:
+- Product: `PRD-001`
+- Raw Material: `RAW-001`
+- Semi Finished: `SFP-001`
+- BOM Product: `BOM-001`
+- BOM Semi Finished: `BOM-002`
+- Production Step: `STP-001`
 
 Catatan current state:
-- Jika contoh lama memakai `Bunga -> BG`, itu dianggap contoh lama dan bukan standar baru. Standar baru tanpa mapping menghasilkan `Bunga -> BNG`.
-- Source terbaru sudah memakai `businessCodeGenerator` sebagai source of truth readable code, sementara `productionCodeGenerator` menjadi compatibility wrapper tanpa dictionary manual per kata.
+- Source terbaru memakai `generateUniqueSequentialCode` untuk Product/Raw Material dan wrapper `generateUniqueProductionSequentialCode` untuk Semi Finished/BOM.
+- Production Step sudah memakai generator `STP-001` lokal di service step.
 - Collision kode harian masih scan-based; patch aman saat ini adalah guard target doc exists di transaction/write flow, sedangkan counter atomic membutuhkan approval schema/collection baru.
+
+
+## Update Rule Tahapan Produksi — 2026-05-16
+
+- Tahapan Produksi memakai `basisType` sebagai field aktif untuk cara kerja step. Field `workBasisType` tidak dipakai lagi di source terbaru.
+- Label basis step aktif adalah: `Per Meter Bahan`, `Per Kawat`, `Per Qty`, dan `Per Batch`.
+- Cara pantau hasil / `monitoringMode` tidak lagi tampil dan tidak lagi disimpan dari form Step karena reject/QC detail belum menjadi workflow utama.
+- Mode upah step aktif hanya `per_qty` dan `per_batch`; mode `fixed` tidak lagi menjadi pilihan aktif.
+- Field `payrollQtyBase` tidak lagi menjadi input atau payload dari menu Step. Untuk per qty, tarif dibaca sebagai tarif per 1 hasil. Untuk per batch, tarif mengikuti batch Work Log.
+- Klasifikasi payroll tidak dipilih manual di UI Step. Sistem menurunkan klasifikasi dari `processType` agar tidak ada rule ganda antara UI Step, Work Log, Payroll, dan HPP.
+- Step produksi harus tetap universal untuk produksi bunga, bukan hard-code hanya untuk mawar atau bouquet.
 
 ## Update Rule Karyawan Produksi — 2026-04-25
 
@@ -406,7 +415,9 @@ Catatan current state:
 ## Update Rule Auto Payroll Work Log Completed — 2026-04-25
 
 - Work Log Produksi yang berubah ke status `completed` wajib membuat line Payroll Produksi otomatis.
-- Source of truth payroll baru tetap mengikuti rule pada Tahapan Produksi: `payrollMode`, `payrollRate`, `payrollQtyBase`, `payrollOutputBasis`, `payrollClassification`, dan `includePayrollInHpp`.
+- Source of truth payroll baru tetap mengikuti rule pada Tahapan Produksi: `payrollMode`, `payrollRate`, dan `payrollOutputBasis`.
+- `payrollQtyBase` tidak lagi menjadi input atau payload UI Step; payroll otomatis memakai nilai aman `1` agar tidak ada layer hitung ganda.
+- `payrollClassification` dan `includePayrollInHpp` diturunkan otomatis dari jenis proses: `support_process` menjadi support/fulfillment dan tidak masuk HPP inti; selain itu menjadi direct labor dan masuk HPP inti.
 - Operator Produksi wajib dipilih saat menyelesaikan Work Log agar payroll line bisa dibuat per operator.
 - Guard idempotent wajib memakai kombinasi Work Log + Step + Operator agar klik Selesaikan berulang tidak membuat payroll dobel.
 - Status awal line payroll otomatis adalah `draft` dan `paymentStatus` awal adalah `unpaid`.
@@ -448,9 +459,9 @@ Catatan current state:
 - `bomId` tetap wajib terisi sebelum submit, baik lewat auto-select resep tunggal maupun pilihan `Resep Produksi` jika ada banyak resep aktif.
 
 ### Work Log Actual Cost / HPP
-- Completed Work Log wajib menyimpan `materialCostActual`, `laborCostActual`, `overheadCostActual`, `totalCostActual`, dan `costPerGoodUnit`.
+- Completed Work Log wajib menyimpan `materialCostActual`, `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit`; `overheadCostActual` hanya compatibility jika data lama punya overhead.
 - Biaya tidak boleh diisi asal; material cost harus berasal dari cost snapshot atau source cost item yang aman, bukan harga jual.
-- `totalCostActual = materialCostActual + laborCostActual + overheadCostActual`.
+- `totalCostActual = materialCostActual + laborCostActual` untuk flow aktif; overhead actual Work Log masih compatibility. Overhead manual di BOM hanya estimasi rencana sampai rule listrik/overhead produksi final di-review khusus.
 - `costPerGoodUnit = totalCostActual / goodQty` hanya jika `goodQty > 0`; jangan membagi 0.
 - HPP Analysis membaca completed Work Log sebagai source cost final.
 
@@ -1041,6 +1052,10 @@ Guard wajib:
 - **Protected master:** tidak ikut reset default dan tidak boleh dilepas dari guard tanpa approval khusus.
 - **Data real:** jangan reset data real/semi real tanpa backup/export dan audit dampak.
 - **Import normalized:** belum masuk patch ini; export dipakai untuk review/manual input/normalization task berikutnya.
+- **Normalisasi kode master:** tersedia di Reset & Maintenance Data untuk Product, Raw Material, Semi Finished, BOM, Production Step, dan Supplier. Aksi ini hanya update field `code` dan alias kode aktif; tidak rename document ID, tidak menghapus data, dan tidak menyentuh transaksi/history.
+- **Supplier legacy repair:** tidak lagi dijalankan dari halaman Supplier. Semua repair kode lama harus lewat Reset & Maintenance Data agar audit/preview terpusat.
+- **Reset Modal/HPP:** menu Reset & Maintenance menyediakan mode `Reset Semua Modal & HPP` untuk menolkan field cost/HPP master aktif dalam satu aksi guarded setelah preview dan keyword khusus. Aksi ini tidak menghapus transaksi, stok, PO, Work Log, Payroll, Sales, Purchases, Returns, atau Cash.
+- **Allowlist Reset Modal/HPP:** Raw Material: `averageActualUnitCost`, `restockReferencePrice`; Product: `hppPerUnit`, `averageCostPerUnit`, `costPerUnit`; Semi Finished: `averageCostPerUnit`, `lastProductionCostPerUnit`, `referenceCostPerUnit`, `costPerUnit` termasuk variant fields jika ada.
 
 
 ---
@@ -1053,11 +1068,11 @@ Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah 
 |---|---|---|---|
 | Customer | `CUS` | `CUS-DDMMYYYY-001` | `CUS-12052026-001` |
 | Supplier | `SUP` | `SUP-DDMMYYYY-001` | `SUP-12052026-001` |
-| Produk Jadi | `PRD` | `PRD-[READABLE]` | `PRD-BQT-MWR-PTH-FLN` |
-| Raw Material | `RAW` | `RAW-[READABLE]` | `RAW-FLN-PTH` |
-| Semi Finished | `SFP` | `SFP-[READABLE]` | `SFP-BNG-MWR-PTH` |
-| BOM | `BOM` | `BOM-[TARGET]` | `BOM-PRD-BQT-MWR-PTH-FLN` |
-| Production Step | `STP` | `STP-[READABLE]` | `STP-POTONG` |
+| Produk Jadi | `PRD` | `PRD-001` | `PRD-001` |
+| Raw Material | `RAW` | `RAW-001` | `RAW-001` |
+| Semi Finished | `SFP` | `SFP-001` | `SFP-001` |
+| BOM | `BOM` | `BOM-001` | `BOM-001` |
+| Production Step | `STP` | `STP-001` | `STP-001` |
 | Purchase | `PUR` | `PUR-DDMMYYYY-001` | `PUR-12052026-001` |
 | Sales / Order | `ORD` | `ORD-DDMMYYYY-001` | `ORD-12052026-001` |
 | Return | `RET` | `RET-DDMMYYYY-001` | `RET-12052026-001` |
@@ -1072,7 +1087,7 @@ Catatan lock:
 - Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
 - Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
 - Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
-- Readable semantic code unik tidak memakai suffix; suffix sequence 3 digit (`-001`, `-002`) hanya ditambahkan saat base code duplicate/collision dan tidak boleh memakai timestamp/random.
+- Master item/config produksi memakai sequence internal sederhana `PREFIX-001`. Kode ini disimpan untuk relasi/backstage dan tidak menjadi fokus UI.
 - Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
 - Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
 
@@ -1080,7 +1095,7 @@ Catatan lock:
 ### Business rule final untuk generator
 
 - Daily reference code memakai format `PREFIX-DDMMYYYY-001`.
-- Readable semantic code memakai format `PREFIX-[READABLE]` jika unik; jika duplicate memakai `PREFIX-[READABLE]-001`, `PREFIX-[READABLE]-002`, dan seterusnya.
+- Master item/config produksi memakai format `PREFIX-001`, `PREFIX-002`, dan seterusnya; tidak memakai readable target/nama di kode baru.
 - Prefix dengan hyphen seperti `STK-ADJ`, `CSH-IN`, dan `CSH-OUT` valid dan wajib diperlakukan sebagai satu prefix bisnis.
 - `saleNumber` untuk Sales tetap dipertahankan sebagai field compatibility, tetapi value data baru wajib `ORD-DDMMYYYY-001`.
 - `cashOutNumber` untuk Cash Out wajib `CSH-OUT-DDMMYYYY-001`, bukan `CSH-OT`.
@@ -1094,4 +1109,4 @@ Catatan lock:
 - User tidak boleh input manual code master item/config.
 - Field `code` tidak boleh dihapus dari payload/data karena masih dipakai internal reference, export, dan audit teknis.
 - Customer/Supplier/transaksi/audit reference tidak boleh disembunyikan dari UI.
-- SKU Variant/kode variant tidak termasuk rule ini dan tidak boleh disentuh tanpa review khusus.
+- SKU Variant/kode variant tetap compatibility/backstage; UI utama cukup menampilkan nama varian, status, dan stok.

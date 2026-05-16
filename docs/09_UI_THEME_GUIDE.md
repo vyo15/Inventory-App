@@ -75,6 +75,39 @@ Tidak boleh digunakan:
 2. `src/theme/antdTheme.js` — token Ant Design dan component token.
 3. `src/App.css` — guard global app shell, table, modal, drawer, dropdown, popover, form, dan shared surface.
 
+## Standar typography token
+
+Typography IMS memakai font stack utama:
+
+```css
+Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
+```
+
+Token angka typography wajib berada di `src/index.css`. Jika CSS shared memakai token seperti `--ims-font-size-*`, `--ims-font-weight-*`, `--ims-line-height-*`, `--ims-letter-spacing-*`, atau `--ims-typo-*`, token tersebut harus didefinisikan di `:root` agar browser tidak jatuh ke default Ant Design/browser.
+
+Standar penggunaan:
+
+| Area | Ukuran | Weight | Catatan |
+|---|---:|---:|---|
+| Body/table | `14px` | `400–500` | default baca data |
+| Page title | `22–26px` | `760` | tegas tapi tidak memakai `850/900` |
+| Page subtitle | `13px` | `400–500` | copy pendek |
+| App header greeting | `15.5–16.5px` | `700` | jangan terlalu display/bold |
+| App header subtitle | `12.5px` | `500` | secondary text |
+| Sidebar parent menu | `14px` | `600` | menu utama jelas |
+| Sidebar submenu | `13.5px` | `500` | lebih ringan dari parent |
+| Sidebar brand title | `14px` | `700` | jangan pakai display weight |
+| Summary value | `25px` | `760` | angka utama compact |
+| Summary label | `12px` | `680` | card title ringkas |
+
+Aturan penting:
+
+- Jangan menambah `font-weight: 850` atau `900` untuk UI operasional harian.
+- Jangan memakai ukuran unik berulang tanpa token. Jika angka dipakai lintas shared component, jadikan token.
+- Header dan sidebar tidak boleh memakai display weight berlebihan; keduanya harus terasa calm, readable, dan corporate.
+- Jangan mengubah route/menu/role guard hanya untuk memperbaiki visual sidebar. Sidebar typography adalah CSS-only.
+- Jika font `Inter` belum dimuat sebagai asset/dependency, fallback `system-ui/Segoe UI` tetap harus terlihat rapi.
+
 ## Area guarded
 
 - `AppLayout.jsx` theme sync untuk `app-theme-light`, `app-theme-dark`, dan `data-app-theme`.
@@ -197,7 +230,7 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 ### Work Log
 - Warning cost tidak boleh dihapus.
 - Warning tetap penting bila biaya material 0, biaya tenaga kerja 0, total biaya 0, atau HPP belum valid.
-- Material cost, labor cost, overhead, total cost, dan output qty harus tetap bisa ditelusuri.
+- Material cost, labor cost, total cost, dan output qty harus tetap bisa ditelusuri. Untuk BOM, overhead manual boleh tampil sebagai estimasi ringkas; untuk Work Log actual, overhead masih compatibility lama sampai rule final disetujui.
 
 ### Payroll
 - Final amount, status payroll, payment status, dan include HPP harus jelas.

@@ -162,7 +162,10 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 ### BOM Produksi
 - buat BOM target semi finished
 - buat BOM target product
-- pastikan BOM product hanya menerima material semi finished
+- pastikan BOM product menerima `semi_finished_material` untuk komponen utama dan `raw_material` untuk consumable assembly seperti lem tembak
+- pastikan Estimasi Biaya Material BOM otomatis mengambil cost dari master item, bukan tetap Rp 0 jika master punya modal/referensi.
+- pastikan Estimasi Biaya Produksi BOM otomatis mengikuti tarif Tahapan Produksi.
+- pastikan Overhead Manual BOM tersimpan sebagai estimasi dan ikut Total Estimasi, tanpa mengubah rule HPP final Work Log/payroll.
 - cek material lines dan step lines tersimpan benar
 
 ### Production Planning
@@ -450,14 +453,20 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - buat PO `ready`, lalu start menjadi Work Log dari PO
 - pastikan material usage yang berasal dari PO menyimpan `costPerUnitSnapshot` dan `totalCostSnapshot` saat material punya cost aktual
 - complete Work Log dengan `goodQty > 0`
-- pastikan `materialCostActual` tidak tetap 0 jika material punya `averageActualUnitCost`, `averageCostPerUnit`, `costPerUnit`, `lastPurchasePrice`, `lastProductionCostPerUnit`, atau `hppPerUnit`
+- pastikan `materialCostActual` tidak tetap 0 jika raw material punya `averageActualUnitCost`/`restockReferencePrice`, atau semi finished punya `averageCostPerUnit`/`lastProductionCostPerUnit`
 - pastikan `laborCostActual` tersinkron setelah payroll line otomatis dibuat
-- pastikan `totalCostActual = materialCostActual + laborCostActual + overheadCostActual`
+- pastikan `totalCostActual = materialCostActual + laborCostActual`
 - pastikan `costPerGoodUnit = totalCostActual / goodQty` dan tidak membagi 0 saat `goodQty` tidak valid
 - pastikan output stok hanya bertambah satu kali saat Work Log completed
 - pastikan payroll line tidak dobel saat tombol Selesaikan ditekan ulang / halaman refresh
 - pastikan HPP Analysis membaca material cost dan labor cost dari Work Log completed tanpa mengubah data lama massal
 - pastikan Work Log lama yang sudah completed tetapi cost 0 tidak di-backfill otomatis tanpa task terpisah
+
+## Checklist Reset Modal/HPP Master
+- [ ] Di Reset & Maintenance, pilih `Reset Semua Modal & HPP`, klik preview, dan pastikan affected collection hanya Raw Material, Product, dan Semi Finished.
+- [ ] Pastikan tombol `Reset Semua Modal/HPP` tetap meminta keyword `RESET MODAL HPP` sebelum write.
+- [ ] Pastikan reset tidak menghapus transaksi, stok, PO, Work Log, Payroll, Sales, Purchases, Returns, atau Cash.
+- [ ] Pastikan Semi Finished ikut preview/reset untuk `averageCostPerUnit` dan `lastProductionCostPerUnit`; field legacy cost hanya dibersihkan sebagai compatibility cleanup.
 
 ## Checklist Task 2 All-in-One - HPP Cost 0 Final Verification
 - [ ] Buat raw material bervarian dengan stok varian valid dan `averageActualUnitCost` master > 0, lalu Start Production dari PO dan pastikan `materialUsages[].costPerUnitSnapshot` memakai fallback cost master bila cost varian kosong.
@@ -509,7 +518,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Pastikan `materialCostActual` terisi jika material punya cost source.
 - [ ] Pastikan payroll line otomatis dibuat per operator.
 - [ ] Pastikan `laborCostActual` tersinkron dari payroll line.
-- [ ] Pastikan `totalCostActual = materialCostActual + laborCostActual + overheadCostActual`.
+- [ ] Pastikan `totalCostActual = materialCostActual + laborCostActual`.
 - [ ] Pastikan `costPerGoodUnit` benar jika `goodQty > 0`.
 - [ ] Klik Paid di Payroll Produksi.
 - [ ] Pastikan payroll berubah `status=paid` dan `paymentStatus=paid`.
@@ -1544,11 +1553,11 @@ Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah 
 |---|---|---|---|
 | Customer | `CUS` | `CUS-DDMMYYYY-001` | `CUS-12052026-001` |
 | Supplier | `SUP` | `SUP-DDMMYYYY-001` | `SUP-12052026-001` |
-| Produk Jadi | `PRD` | `PRD-[READABLE]` | `PRD-BQT-MWR-PTH-FLN` |
-| Raw Material | `RAW` | `RAW-[READABLE]` | `RAW-FLN-PTH` |
-| Semi Finished | `SFP` | `SFP-[READABLE]` | `SFP-BNG-MWR-PTH` |
-| BOM | `BOM` | `BOM-[TARGET]` | `BOM-PRD-BQT-MWR-PTH-FLN` |
-| Production Step | `STP` | `STP-[READABLE]` | `STP-POTONG` |
+| Produk Jadi | `PRD` | `PRD-001` | `PRD-001` |
+| Raw Material | `RAW` | `RAW-001` | `RAW-001` |
+| Semi Finished | `SFP` | `SFP-001` | `SFP-001` |
+| BOM | `BOM` | `BOM-001` | `BOM-001` |
+| Production Step | `STP` | `STP-001` | `STP-001` |
 | Purchase | `PUR` | `PUR-DDMMYYYY-001` | `PUR-12052026-001` |
 | Sales / Order | `ORD` | `ORD-DDMMYYYY-001` | `ORD-12052026-001` |
 | Return | `RET` | `RET-DDMMYYYY-001` | `RET-12052026-001` |
@@ -1563,7 +1572,7 @@ Catatan lock:
 - Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
 - Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
 - Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
-- Readable semantic code unik tidak memakai suffix; suffix sequence 3 digit (`-001`, `-002`) hanya ditambahkan saat base code duplicate/collision dan tidak boleh memakai timestamp/random.
+- Master item/config produksi memakai sequence internal sederhana `PREFIX-001`. Kode ini disimpan untuk relasi/backstage dan tidak menjadi fokus UI.
 - Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
 - Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
 
@@ -1572,12 +1581,11 @@ Catatan lock:
 
 - [ ] Customer baru memakai `CUS-DDMMYYYY-001` dan field kode disabled/read-only.
 - [ ] Supplier baru memakai `SUP-DDMMYYYY-001` dan field kode disabled/read-only.
-- [ ] Product baru memakai `PRD-[READABLE]`.
-- [ ] Raw Material baru memakai `RAW-[READABLE]`, bukan `RM`.
-- [ ] Semi Finished baru memakai `SFP-[READABLE]`.
-- [ ] Semi Finished unik tidak menambahkan suffix `-001`; duplicate baru menambahkan `-001`, `-002`, dan seterusnya.
-- [ ] BOM baru memakai `BOM-[TARGET]`.
-- [ ] Production Step baru memakai `STP-[READABLE]`, bukan timestamp.
+- [ ] Product baru memakai `PRD-001`, `PRD-002`, dan seterusnya.
+- [ ] Raw Material baru memakai `RAW-001`, `RAW-002`, dan seterusnya, bukan `RM`.
+- [ ] Semi Finished baru memakai `SFP-001`, `SFP-002`, dan seterusnya.
+- [ ] BOM baru memakai `BOM-001`, `BOM-002`, dan seterusnya.
+- [ ] Production Step baru memakai `STP-001`, `STP-002`, dan seterusnya, bukan timestamp.
 - [ ] Purchase baru memakai `PUR-DDMMYYYY-001`.
 - [ ] Sales/Order baru memakai `ORD-DDMMYYYY-001` walaupun field compatibility masih `saleNumber`.
 - [ ] Return baru memakai `RET-DDMMYYYY-001`.
@@ -1604,7 +1612,7 @@ Catatan lock:
 - [ ] Edit nama/kategori/target/status tidak mengubah `code` existing.
 - [ ] Customer/Supplier code tetap tampil di UI.
 - [ ] Purchase/Sales/Return/Stock Adjustment/Cash In/Cash Out/Production Order/Work Log/Payroll reference tetap tampil di UI.
-- [ ] SKU Variant/kode variant tidak berubah.
+- [ ] SKU Variant/kode variant tetap tersimpan untuk compatibility, tetapi tidak ditampilkan sebagai field utama UI.
 
 
 ## Checklist UI Produksi Grouped & Production Order Target Filter — 2026-05-12
@@ -1638,3 +1646,12 @@ Catatan lock:
 - [ ] Pastikan preview kebutuhan/stok tetap read-only dan muncul setelah target, varian jika ada, dan qty valid.
 - [ ] Buat PO untuk Produk Jadi dan Bahan / Semi Produk; pastikan kode order tetap auto-generated dan status ready/shortage tetap sesuai stok.
 - [ ] Pastikan cancel/start/complete Production Order tetap berjalan dan tidak merusak Work Log, Payroll, HPP Analysis, inventory mutation, atau report.
+
+## Checklist Master Code Maintenance — Reset & Maintenance
+
+- [ ] Buka Reset & Maintenance sebagai admin.
+- [ ] Klik `Cek Kode Master`; pastikan preview hanya menampilkan Product, Raw Material, Semi Finished, BOM, Production Step, dan Supplier yang kode/aliasnya belum sesuai standar aktif.
+- [ ] Klik `Normalisasi Kode`; pastikan hanya field `code` dan alias kode aktif yang berubah.
+- [ ] Pastikan document ID master tidak berubah dan transaksi/history lama tetap bisa dibuka.
+- [ ] Buka halaman Supplier; pastikan tidak ada tombol/modal `Repair Kode Supplier Lama`.
+- [ ] Buat Supplier/Product/Raw/Semi/BOM/Step baru; pastikan format kode tetap sesuai standar locked.

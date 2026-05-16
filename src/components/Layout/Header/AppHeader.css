@@ -150,8 +150,8 @@ Risiko:
     var(--ims-border-color-soft)
   );
   box-shadow: none;
-  font-size: var(--ims-font-size-meta);
-  font-weight: var(--ims-font-weight-action);
+  font-size: var(--ims-font-size-helper);
+  font-weight: var(--ims-font-weight-semibold);
   line-height: var(--ims-line-height-solid);
 }
 
@@ -176,7 +176,8 @@ Risiko:
   );
   border-radius: 999px;
   box-shadow: none;
-  font-weight: var(--ims-font-weight-action);
+  font-size: var(--ims-font-size-helper);
+  font-weight: var(--ims-font-weight-semibold);
 }
 
 .app-header-logout-button.ant-btn:hover,
@@ -255,7 +256,7 @@ Risiko:
   }
 
   .app-header-greeting-title {
-    font-size: 15.5px;
+    font-size: var(--ims-font-size-lg);
   }
 
   .app-header-greeting-subtitle {

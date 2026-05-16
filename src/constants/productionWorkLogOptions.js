@@ -264,7 +264,7 @@ export const calculateProductionMonitoring = (profile = {}, values = {}) => {
   const leftoverStemQty = Math.max(0, safeNumber(values.leftoverStemQty || 0));
   const leftoverPetalFlowerEquivalent = Math.max(0, safeNumber(values.leftoverPetalFlowerEquivalent || 0));
 
-  const basisType = values.workBasisType || profile.workBasisType || '';
+  const basisType = values.basisType || profile.basisType || '';
   let theoreticalOutputQty = 0;
   let theoreticalFlowerEquivalent = 0;
 
@@ -274,7 +274,7 @@ export const calculateProductionMonitoring = (profile = {}, values = {}) => {
   } else if (basisType === 'per_rod_40cm') {
     theoreticalOutputQty = baseInputQty * safeNumber(profile.referenceYieldPerBaseQty || values.referenceYieldPerBaseQty || 0);
     theoreticalFlowerEquivalent = baseInputQty * safeNumber(profile.flowerEquivalentPerBaseQty || values.flowerEquivalentPerBaseQty || 0);
-  } else if (basisType === 'per_finished_unit') {
+  } else if (basisType === 'per_qty') {
     theoreticalOutputQty = goodQty;
     theoreticalFlowerEquivalent = goodQty;
   } else if (basisType === 'per_batch') {

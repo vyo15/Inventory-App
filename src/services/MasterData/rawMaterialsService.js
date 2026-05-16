@@ -14,7 +14,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { generateUniqueReadableCode, isBusinessCodeExists } from '../../utils/references/businessCodeGenerator';
+import { generateUniqueSequentialCode, isBusinessCodeExists } from '../../utils/references/businessCodeGenerator';
 import {
   calculateRawMaterialVariantTotals,
   enrichRawMaterialWithVariantTotals,
@@ -512,15 +512,13 @@ export const listenRawMaterials = (callback, onError) => {
 };
 
 export const generateRawMaterialCode = async (values = {}, excludeId = null) => {
-  return generateUniqueReadableCode({
+  // IMS NOTE [AKTIF | internal-sequence-code]: Raw Material baru memakai kode internal RAW-001 agar UI tetap clean dan nama/supplier menjadi identitas utama.
+  return generateUniqueSequentialCode({
     db,
     collectionName: COLLECTION_NAME,
     fieldNames: ['code', 'materialCode', 'sku'],
     prefix: 'RAW',
-    text: values.name || 'Raw Material',
-    fallbackText: 'Raw Material',
     excludeId,
-    maxParts: 6,
   });
 };
 
@@ -564,14 +562,14 @@ export const createRawMaterial = async (values = {}, suppliers = []) => {
   Risiko:
   - Jangan mengganti dengan input manual atau random ID karena supplier, stok, export, dan audit teknis masih memakai reference internal.
   ===================================================== */
-  const normalizedCode = String(values.code || '').trim().toUpperCase() || (await generateRawMaterialCode(values));
+  const normalizedCode = await generateRawMaterialCode(values);
   await assertRawMaterialCodeAvailable(normalizedCode, null);
 
   const payload = normalizeRawMaterialCreatePayload({ ...values, code: normalizedCode }, suppliers);
   /* =====================================================
   SECTION: Raw Material document ID = business code — AKTIF
   Fungsi:
-  - Menyimpan Raw Material baru dengan document ID sama seperti kode RAW readable.
+  - Menyimpan Raw Material baru dengan document ID sama seperti kode RAW internal sequence.
 
   Dipakai oleh:
   - createRawMaterial pada Master Data Raw Material.

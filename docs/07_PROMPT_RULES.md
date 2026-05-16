@@ -554,7 +554,7 @@ Untuk task cleanup theme besar-besaran:
 - Jangan membuat generator kode baru di page.
 - Jangan duplicate generator kode antar modul.
 - Gunakan shared generator yang disetujui sebagai source of truth.
-- Duplicate readable semantic code harus diselesaikan dengan suffix 3 digit seperti `-001`, `-002`, bukan random ID/timestamp sebagai fallback utama. Base code unik tidak memakai suffix.
+- Master item/config produksi harus memakai sequence internal `PREFIX-001`, `PREFIX-002`, dan seterusnya; jangan memakai random ID/timestamp sebagai kode utama.
 - Jangan mengubah kode audit immutable setelah dipakai tanpa approval migrasi.
 - Jangan menghapus Firestore document ID secara database-level; document ID tetap kebutuhan internal Firestore.
 - Jangan mengubah schema/service/stock mutation/write-flow/inventory log writer/report export tanpa approval khusus.
@@ -583,11 +583,11 @@ Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah 
 |---|---|---|---|
 | Customer | `CUS` | `CUS-DDMMYYYY-001` | `CUS-12052026-001` |
 | Supplier | `SUP` | `SUP-DDMMYYYY-001` | `SUP-12052026-001` |
-| Produk Jadi | `PRD` | `PRD-[READABLE]` | `PRD-BQT-MWR-PTH-FLN` |
-| Raw Material | `RAW` | `RAW-[READABLE]` | `RAW-FLN-PTH` |
-| Semi Finished | `SFP` | `SFP-[READABLE]` | `SFP-BNG-MWR-PTH` |
-| BOM | `BOM` | `BOM-[TARGET]` | `BOM-PRD-BQT-MWR-PTH-FLN` |
-| Production Step | `STP` | `STP-[READABLE]` | `STP-POTONG` |
+| Produk Jadi | `PRD` | `PRD-001` | `PRD-001` |
+| Raw Material | `RAW` | `RAW-001` | `RAW-001` |
+| Semi Finished | `SFP` | `SFP-001` | `SFP-001` |
+| BOM | `BOM` | `BOM-001` | `BOM-001` |
+| Production Step | `STP` | `STP-001` | `STP-001` |
 | Purchase | `PUR` | `PUR-DDMMYYYY-001` | `PUR-12052026-001` |
 | Sales / Order | `ORD` | `ORD-DDMMYYYY-001` | `ORD-12052026-001` |
 | Return | `RET` | `RET-DDMMYYYY-001` | `RET-12052026-001` |
@@ -602,7 +602,7 @@ Catatan lock:
 - Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
 - Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
 - Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
-- Readable semantic code unik tidak memakai suffix; suffix sequence 3 digit (`-001`, `-002`) hanya ditambahkan saat base code duplicate/collision dan tidak boleh memakai timestamp/random.
+- Master item/config produksi memakai sequence internal sederhana `PREFIX-001`. Kode ini disimpan untuk relasi/backstage dan tidak menjadi fokus UI.
 - Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
 - Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
 
@@ -633,7 +633,7 @@ Catatan lock:
 ## Prompt Guard — Production Grouped UI & PO Target Filter
 - Jika task menyentuh menu Semi Product, ingat bahwa Semi Finished adalah stok produksi global/reusable. Jangan menduplikasi semi product per produk jadi hanya untuk merapikan tampilan.
 - UI Semi Product boleh grouped berdasarkan `Product Family / Jenis Bunga → Kategori → Item`, tetapi stok, variant bucket, service, collection, dan source of truth tidak boleh berubah tanpa approval khusus.
-- Jika task menyentuh BOM list, grouping yang aman adalah `Target Type → Target Item → Resep Produksi`; ini hanya cara baca UI, bukan perubahan rule BOM.
+- Jika task menyentuh BOM list, grouping yang aman adalah `Target Type → Target Item → Resep Produksi`; ini hanya cara baca UI, bukan perubahan rule BOM. Untuk BOM target `product`, jangan mengembalikan guard lama yang melarang `raw_material`; raw material tetap dibutuhkan untuk consumable assembly seperti lem tembak.
 - Jika task menyentuh Drawer Buat Production Order, source of truth submit tetap `bomId`. UI filter target/family/category hanya alat bantu seleksi dan tidak boleh disimpan ke Firestore.
 - Untuk `Produk Jadi`, jangan paksa field `Jenis Bunga / Product Family` atau `Kategori Bahan` bila source product tidak memilikinya. Cukup pilih `Produk yang dibuat` lalu `Resep Produksi` jika target punya lebih dari satu resep aktif.
 - Untuk `Bahan / Semi Produk`, boleh tampilkan `Jenis Bunga / Product Family` dan `Kategori Bahan` sebelum `Bahan yang dibuat` agar user tidak memilih dari flat list panjang.

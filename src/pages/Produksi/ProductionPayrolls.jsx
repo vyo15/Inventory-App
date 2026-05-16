@@ -391,7 +391,7 @@ const ProductionPayrolls = () => {
 
   const employeeOptions = referenceData.employees.map((item) => ({
     value: item.id,
-    label: `${item.code || "-"} - ${item.name || "-"}`,
+    label: item.name || "-",
     raw: item,
   }));
 
@@ -724,7 +724,6 @@ const ProductionPayrolls = () => {
                   options={[
                     { value: "per_qty", label: "Per Qty" },
                     { value: "per_batch", label: "Per Batch" },
-                    { value: "fixed", label: "Fixed" },
                   ]}
                 />
               </Form.Item>
@@ -779,11 +778,9 @@ const ProductionPayrolls = () => {
 
                   let amountCalculated = 0;
 
-                  if (
-                    values.payrollMode === "fixed" ||
-                    values.payrollMode === "per_batch"
-                  ) {
-                    amountCalculated = rate;
+                  if (values.payrollMode === "per_batch") {
+                    const workedQty = Number(values.workedQty || outputQtyUsed || 0);
+                    amountCalculated = workedQty * rate;
                   } else {
                     amountCalculated =
                       qtyBase > 0 ? (outputQtyUsed / qtyBase) * rate : 0;
@@ -882,7 +879,7 @@ const ProductionPayrolls = () => {
                 </PayrollDetailValue>
               </Descriptions.Item>
               <Descriptions.Item label="Sistem Bayar">
-                <PayrollDetailValue help="Mode payroll dari rule tahapan, misalnya per qty, per batch, atau fixed.">
+                <PayrollDetailValue help="Mode payroll dari rule tahapan, misalnya per qty atau per batch.">
                   {selectedRecord.payrollMode || "-"}
                 </PayrollDetailValue>
               </Descriptions.Item>

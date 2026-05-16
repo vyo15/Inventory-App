@@ -315,21 +315,21 @@ const ProductionWorkLogs = () => {
       calculateProductionMonitoring(
         {
           ...(selectedProductionProfile || {}),
-          workBasisType: selectedStepForMonitoring?.workBasisType || '',
+          basisType: selectedStepForMonitoring?.basisType || '',
           referenceYieldPerBaseQty:
-            selectedStepForMonitoring?.workBasisType === 'per_meter'
+            selectedStepForMonitoring?.basisType === 'per_meter'
               ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
                 ? selectedProductionProfile?.leafYieldPerMeter
                 : selectedProductionProfile?.petalYieldPerMeter
-              : selectedStepForMonitoring?.workBasisType === 'per_rod_40cm'
+              : selectedStepForMonitoring?.basisType === 'per_rod_40cm'
                 ? selectedProductionProfile?.stemYieldPerRod40cm
                 : 0,
           flowerEquivalentPerBaseQty:
-            selectedStepForMonitoring?.workBasisType === 'per_meter'
+            selectedStepForMonitoring?.basisType === 'per_meter'
               ? (selectedStepForMonitoring?.name || '').toLowerCase().includes('daun')
                 ? selectedProductionProfile?.flowerEquivalentPerLeafMeter
                 : selectedProductionProfile?.flowerEquivalentPerPetalMeter
-              : selectedStepForMonitoring?.workBasisType === 'per_rod_40cm'
+              : selectedStepForMonitoring?.basisType === 'per_rod_40cm'
                 ? selectedProductionProfile?.flowerEquivalentPerRod40cm
                 : 0,
           batchLeafQty:
@@ -338,7 +338,7 @@ const ProductionWorkLogs = () => {
           batchStemQty: selectedProductionProfile?.assemblyStemQty || 0,
         },
         {
-          workBasisType: selectedStepForMonitoring?.workBasisType || '',
+          basisType: selectedStepForMonitoring?.basisType || '',
           baseInputQty: baseInputQtyValue,
           goodQty: goodQtyValue,
           leftoverLeafQty: leftoverLeafQtyValue,
@@ -586,21 +586,21 @@ const ProductionWorkLogs = () => {
         productionProfileName: selectedProfile?.profileName || '',
         productionProfile: {
           ...(selectedProfile || {}),
-          workBasisType: selectedStep?.workBasisType || '',
+          basisType: selectedStep?.basisType || '',
           referenceYieldPerBaseQty:
-            selectedStep?.workBasisType === 'per_meter'
+            selectedStep?.basisType === 'per_meter'
               ? (selectedStep?.name || '').toLowerCase().includes('daun')
                 ? selectedProfile?.leafYieldPerMeter
                 : selectedProfile?.petalYieldPerMeter
-              : selectedStep?.workBasisType === 'per_rod_40cm'
+              : selectedStep?.basisType === 'per_rod_40cm'
                 ? selectedProfile?.stemYieldPerRod40cm
                 : 0,
           flowerEquivalentPerBaseQty:
-            selectedStep?.workBasisType === 'per_meter'
+            selectedStep?.basisType === 'per_meter'
               ? (selectedStep?.name || '').toLowerCase().includes('daun')
                 ? selectedProfile?.flowerEquivalentPerLeafMeter
                 : selectedProfile?.flowerEquivalentPerPetalMeter
-              : selectedStep?.workBasisType === 'per_rod_40cm'
+              : selectedStep?.basisType === 'per_rod_40cm'
                 ? selectedProfile?.flowerEquivalentPerRod40cm
                 : 0,
           batchLeafQty:
@@ -980,7 +980,6 @@ const ProductionWorkLogs = () => {
         key: "item",
         render: (_, record) => (
           renderWorkLogCellBlock(record.itemName || "-", [
-            record.itemCode || "-",
             record.resolvedVariantLabel ? `Varian: ${record.resolvedVariantLabel}` : null,
           ])
         ),
@@ -1406,7 +1405,7 @@ const ProductionWorkLogs = () => {
                               options={(referenceData.boms || []).map(
                                 (item) => ({
                                   value: item.id,
-                                  label: `${item.code || "-"} - ${item.name || "-"}`,
+                                  label: item.name || "-",
                                 }),
                               )}
                               placeholder="Pilih BOM..."
@@ -1605,7 +1604,6 @@ const ProductionWorkLogs = () => {
                 render: (_, record) => (
                   <div>
                     <div className={workLogUiClassNames.title}>{record.itemName || "-"}</div>
-                    <div className="ims-cell-meta">{record.itemCode || "-"}</div>
                     {record.resolvedVariantLabel ? (
                       <div className="ims-cell-meta">
                         Varian: {record.resolvedVariantLabel}
@@ -2141,12 +2139,12 @@ const ProductionWorkLogs = () => {
                 outputType === "semi_finished_material"
                   ? (referenceData.semiFinishedMaterials || []).map((item) => ({
                       value: item.id,
-                      label: `${item.code || "-"} - ${item.name || "-"}`,
+                      label: item.name || "-",
                       raw: item,
                     }))
                   : (referenceData.products || []).map((item) => ({
                       value: item.id,
-                      label: `${item.code || "-"} - ${item.name || "-"}`,
+                      label: item.name || "-",
                       raw: item,
                     }));
 

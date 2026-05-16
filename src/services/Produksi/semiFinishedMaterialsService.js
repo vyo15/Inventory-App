@@ -19,7 +19,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
-  generateUniqueProductionReadableCode,
+  generateUniqueProductionSequentialCode,
   isProductionBusinessCodeExists,
 } from "../../utils/references/productionCodeGenerator";
 import {
@@ -430,15 +430,12 @@ const normalizeSemiFinishedMetadataPayload = (
 // - Data baru memakai document ID = code, tetapi data lama tetap boleh random dan tidak di-rename.
 // =====================================================
 export const generateSemiFinishedMaterialCode = async (values = {}, excludeId = null) =>
-  generateUniqueProductionReadableCode({
+  generateUniqueProductionSequentialCode({
     db,
     collectionName: COLLECTION_NAME,
     fieldNames: ["code", "itemCode"],
     prefix: "SFP",
-    text: values.name || "Semi Product",
-    fallbackText: values.name || "Semi Product",
     excludeId,
-    maxParts: 8,
   });
 
 export const validateSemiFinishedMaterial = (values = {}) => {
@@ -597,7 +594,7 @@ export const createSemiFinishedMaterial = async (
   - createSemiFinishedMaterial dari halaman SemiFinishedMaterials.
 
   Alasan perubahan:
-  - Preview kode sekarang realtime, tetapi final code harus tetap dicek ulang agar tidak stale/duplicate.
+  - Kode SFP tidak lagi menjadi identitas user-facing; final code tetap dicek ulang agar tidak duplicate.
 
   Catatan cleanup:
   - Belum ada.
@@ -625,7 +622,7 @@ export const createSemiFinishedMaterial = async (
   /* =====================================================
   SECTION: Semi Finished document ID = business code — AKTIF
   Fungsi:
-  - Menyimpan Semi Finished baru memakai document ID sama dengan kode SFP readable.
+  - Menyimpan Semi Finished baru memakai document ID sama dengan kode SFP internal sequence.
 
   Dipakai oleh:
   - createSemiFinishedMaterial.

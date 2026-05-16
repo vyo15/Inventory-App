@@ -37,14 +37,9 @@ import {
 import {
   BASIS_TYPE_MAP,
   DEFAULT_PRODUCTION_STEP_FORM,
-  MONITORING_MODE_MAP,
-  PAYROLL_CLASSIFICATION_MAP,
   PROCESS_TYPE_MAP,
   PRODUCTION_STEP_BASIS_TYPES,
-  PRODUCTION_STEP_MONITORING_MODES,
-  PRODUCTION_STEP_PAYROLL_CLASSIFICATIONS,
   PRODUCTION_STEP_PAYROLL_MODES,
-  PRODUCTION_STEP_PAYROLL_OUTPUT_BASIS,
   PRODUCTION_STEP_PROCESS_TYPES,
   formatProductionStepPayrollPreview,
 } from "../../constants/productionStepOptions";
@@ -159,8 +154,7 @@ const ProductionSteps = () => {
         String(item.name || "").toLowerCase().includes(searchText) ||
         String(item.description || "").toLowerCase().includes(searchText) ||
         String(PROCESS_TYPE_MAP[item.processType] || "").toLowerCase().includes(searchText) ||
-        String(BASIS_TYPE_MAP[item.basisType] || "").toLowerCase().includes(searchText) ||
-        String(MONITORING_MODE_MAP[item.monitoringMode] || "").toLowerCase().includes(searchText);
+        String(BASIS_TYPE_MAP[item.basisType] || "").toLowerCase().includes(searchText);
 
       const matchStatus =
         statusFilter === "all" ||
@@ -197,17 +191,12 @@ const ProductionSteps = () => {
       ...DEFAULT_PRODUCTION_STEP_FORM,
       ...record,
       basisType: record.basisType || DEFAULT_PRODUCTION_STEP_FORM.basisType,
-      monitoringMode: record.monitoringMode || DEFAULT_PRODUCTION_STEP_FORM.monitoringMode,
-      payrollMode: record.payrollMode || DEFAULT_PRODUCTION_STEP_FORM.payrollMode,
+      payrollMode:
+        record.payrollMode === "per_batch"
+          ? "per_batch"
+          : DEFAULT_PRODUCTION_STEP_FORM.payrollMode,
       payrollRate: Number(record.payrollRate || 0),
-      payrollQtyBase: Number(record.payrollQtyBase || 1),
       payrollOutputBasis: record.payrollOutputBasis || DEFAULT_PRODUCTION_STEP_FORM.payrollOutputBasis,
-      payrollClassification:
-        record.payrollClassification || DEFAULT_PRODUCTION_STEP_FORM.payrollClassification,
-      includePayrollInHpp:
-        typeof record.includePayrollInHpp === "boolean"
-          ? record.includePayrollInHpp
-          : DEFAULT_PRODUCTION_STEP_FORM.includePayrollInHpp,
       isActive: record.isActive !== false,
     });
     setFormVisible(true);
@@ -400,7 +389,7 @@ const ProductionSteps = () => {
   // =====================================================
   // SECTION: Main table compact columns — AKTIF
   // Fungsi:
-  // - Menampilkan ringkasan step, kategori, payroll, monitoring, dan relasi tanpa horizontal scroll besar.
+  // - Menampilkan ringkasan step, kategori, aturan upah, dan relasi tanpa horizontal scroll besar.
   // - Menjaga detail konfigurasi lengkap tetap berada di drawer detail existing.
   //
   // Dipakai oleh:
@@ -417,7 +406,7 @@ const ProductionSteps = () => {
   // =====================================================
   const columns = [
     {
-      title: "Step / Kategori",
+      title: "Step",
       dataIndex: "name",
       key: "stepSummary",
       width: "30%",
@@ -433,56 +422,50 @@ const ProductionSteps = () => {
               <Tooltip title={categoryLabel}>
                 <Tag style={categoryTagStyle}>{categoryLabel}</Tag>
               </Tooltip>
-              {record.description ? (
-                <Tooltip title={record.description}>
-                  <Typography.Text type="secondary" className="ims-cell-meta" ellipsis>
-                    Ada deskripsi
-                  </Typography.Text>
-                </Tooltip>
-              ) : null}
             </Space>
           </Space>
         );
       },
     },
     {
-      title: "Payroll / Monitoring",
-      key: "payrollMonitoring",
-      width: "28%",
+      title: "Produksi",
+      key: "stepBasis",
+      width: "22%",
+      responsive: ["md"],
+      render: (_, record) => {
+        const basisLabel = BASIS_TYPE_MAP[record.basisType] || record.basisType || "-";
+
+        return <Tag>{basisLabel}</Tag>;
+      },
+    },
+    {
+      title: "Upah",
+      key: "stepPayroll",
+      width: "20%",
       responsive: ["md"],
       render: (_, record) => {
         const payrollPreview = record.payrollMode
           ? formatProductionStepPayrollPreview(record)
-          : "Belum ada rule payroll";
-        const basisLabel = BASIS_TYPE_MAP[record.basisType] || record.basisType || "-";
-        const monitoringLabel =
-          MONITORING_MODE_MAP[record.monitoringMode] || record.monitoringMode || "-";
+          : "Belum ada aturan upah";
 
         return (
-          <Space direction="vertical" size={4} style={{ width: "100%" }}>
-            <Tooltip title={payrollPreview}>
-              <Typography.Text type={record.payrollMode ? undefined : "secondary"} ellipsis>
-                {payrollPreview}
-              </Typography.Text>
-            </Tooltip>
-            <Space size={[4, 4]} wrap>
-              <Tag>{basisLabel}</Tag>
-              <Tag color="blue">{monitoringLabel}</Tag>
-            </Space>
-          </Space>
+          <Tooltip title={payrollPreview}>
+            <Typography.Text type={record.payrollMode ? undefined : "secondary"} ellipsis>
+              {payrollPreview}
+            </Typography.Text>
+          </Tooltip>
         );
       },
     },
     {
-      title: "Relasi",
+      title: "Dipakai",
       key: "relations",
       width: "16%",
       responsive: ["lg"],
       render: (_, record) => (
-        <Space direction="vertical" size={4}>
-          <Typography.Text>{record.employeeCount || 0} karyawan</Typography.Text>
-          <Typography.Text>{record.bomCount || 0} BOM</Typography.Text>
-        </Space>
+        <Typography.Text>
+          {formatNumber(record.bomCount || 0)} BOM · {formatNumber(record.employeeCount || 0)} karyawan
+        </Typography.Text>
       ),
     },
     {
@@ -542,7 +525,7 @@ const ProductionSteps = () => {
       {/* AKTIF / GUARDED: header shared dipakai agar pola halaman produksi konsisten, flow data step tetap existing. */}
       <ProductionPageHeader
         title="Tahapan Produksi"
-        description="Master step untuk proses, BOM, dan payroll."
+        description="Master step untuk proses, BOM, dan upah produksi."
         onAdd={handleAdd}
         addLabel="Tambah Step"
       />
@@ -589,7 +572,7 @@ const ProductionSteps = () => {
 
       <PageSection
         title="Daftar Tahapan Produksi"
-        subtitle="Referensi step untuk karyawan, BOM, dan payroll."
+        subtitle="Referensi step untuk karyawan, BOM, dan upah produksi."
       >
         {/* =====================================================
             SECTION: Main table render — AKTIF
@@ -675,27 +658,19 @@ Risiko:
                 <Descriptions.Item label="Cara Kerja">
                   {BASIS_TYPE_MAP[selectedStep.basisType] || "-"}
                 </Descriptions.Item>
-                <Descriptions.Item label="Pantau Hasil">
-                  {MONITORING_MODE_MAP[selectedStep.monitoringMode] || "-"}
-                </Descriptions.Item>
                 <Descriptions.Item label="Status">
                   {selectedStep.isActive ? <Badge status="success" text="Aktif" /> : <Badge status="default" text="Nonaktif" />}
                 </Descriptions.Item>
               </Descriptions>
             </Card>
 
-            <Card size="small" title="Rule Payroll">
+            <Card size="small" title="Aturan Upah Produksi">
               <Descriptions bordered column={1} size="small">
-                <Descriptions.Item label="Sistem Bayar">{selectedStepPayrollPreview}</Descriptions.Item>
-                <Descriptions.Item label="Klasifikasi">
-                  <Space direction="vertical" size={4}>
-                    <Tag color={selectedStep.includePayrollInHpp === false ? "orange" : "green"}>
-                      {PAYROLL_CLASSIFICATION_MAP[selectedStep.payrollClassification] || "-"}
-                    </Tag>
-                    <Typography.Text type="secondary" className="ims-cell-meta">
-                      {selectedStep.includePayrollInHpp === false ? "Tidak masuk HPP inti" : "Masuk HPP inti"}
-                    </Typography.Text>
-                  </Space>
+                <Descriptions.Item label="Mode Bayar">{selectedStepPayrollPreview}</Descriptions.Item>
+                <Descriptions.Item label="Dasar Hitung">
+                  {selectedStep.payrollMode === "per_batch"
+                    ? "Mengikuti jumlah batch produksi"
+                    : "Mengikuti hasil baik pada Work Log"}
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -711,18 +686,13 @@ Risiko:
               </Space>
             </Card>
 
-            {(selectedStep.description || selectedStep.payrollNotes) && (
-              <Card size="small" title="Catatan">
-                <Descriptions bordered column={1} size="small">
-                  <Descriptions.Item label="Fungsi">
-                    {selectedStep.description || "-"}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Payroll">
-                    {selectedStep.payrollNotes || "-"}
-                  </Descriptions.Item>
-                </Descriptions>
+            {selectedStep.description ? (
+              <Card size="small" title="Fungsi / Deskripsi">
+                <Typography.Paragraph style={{ marginBottom: 0 }}>
+                  {selectedStep.description}
+                </Typography.Paragraph>
               </Card>
-            )}
+            ) : null}
           </Space>
         )}
       </Drawer>
@@ -754,7 +724,7 @@ Risiko:
       >
         <Form form={form} layout="vertical" initialValues={{ ...DEFAULT_PRODUCTION_STEP_FORM, isActive: true }}>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-            Gunakan step untuk proses kerja nyata. QC tidak perlu dibuat sebagai step terpisah karena menempel di setiap proses. Bila assembly sudah menjadi proses akhir, Anda tidak perlu membuat step finishing tersendiri. Packing cukup dibuat bila memang ada pekerjaan pengemasan terpisah.
+            Gunakan step untuk proses kerja nyata yang dipakai BOM, Work Log, dan upah produksi. Step dibuat universal agar tetap cocok untuk jenis bunga lain.
           </Typography.Paragraph>
           {/* =====================================================
           SECTION: Production Step internal code hidden from main UI — AKTIF
@@ -768,10 +738,10 @@ Risiko:
           - Kode STP tetap dibuat otomatis oleh service, tetapi tidak perlu menjadi input utama konfigurasi step.
 
           Catatan cleanup:
-          - Kode internal tetap boleh dipakai audit teknis dan export jika diperlukan.
+          - Kode internal tetap dipakai untuk relasi/audit teknis, tetapi tidak ditampilkan sebagai informasi utama UI.
 
           Risiko:
-          - Jangan mengubah payroll/monitoring/relasi employee-worklog saat menyembunyikan kode internal.
+          - Jangan mengubah relasi employee-worklog saat menyembunyikan kode internal.
           ===================================================== */}
           <Form.Item
             label="Nama Step"
@@ -793,31 +763,18 @@ Risiko:
             <Input.TextArea rows={4} placeholder="Jelaskan fungsi step ini secara singkat" />
           </Form.Item>
 
-          <Row gutter={12}>
-            <Col xs={24} md={12}>
-              <Form.Item
-                label="Cara Kerja Step"
-                name="basisType"
-                rules={[{ required: true, message: "Cara kerja step wajib dipilih" }]}
-              >
-                <Select options={PRODUCTION_STEP_BASIS_TYPES} placeholder="Pilih cara kerja step" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item
-                label="Cara Pantau Hasil"
-                name="monitoringMode"
-                rules={[{ required: true, message: "Cara pantau hasil wajib dipilih" }]}
-              >
-                <Select options={PRODUCTION_STEP_MONITORING_MODES} placeholder="Pilih cara pantau hasil" />
-              </Form.Item>
-            </Col>
-          </Row>
+          <Form.Item
+            label="Cara Kerja Step"
+            name="basisType"
+            rules={[{ required: true, message: "Cara kerja step wajib dipilih" }]}
+          >
+            <Select options={PRODUCTION_STEP_BASIS_TYPES} placeholder="Pilih cara kerja step" />
+          </Form.Item>
 
-          <Divider orientation="left">Sistem Bayar</Divider>
+          <Divider orientation="left">Aturan Upah Produksi</Divider>
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-            Rule payroll di section ini adalah source of truth untuk payroll produksi baru. Work Log akan menyimpan snapshot rule ini saat diposting, lalu Payroll membaca snapshot tersebut saat draft dibuat.
+            Atur tarif operator untuk step ini. Payroll final tetap dibuat dari Work Log yang sudah selesai.
           </Typography.Paragraph>
 
           <Row gutter={12}>
@@ -827,52 +784,12 @@ Risiko:
               </Form.Item>
             </Col>
             <Col xs={24} md={12}>
-              <Form.Item label="Tarif Default" name="payrollRate">
+              <Form.Item label="Tarif Upah" name="payrollRate">
                 <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} placeholder="Contoh: 2000" />
               </Form.Item>
             </Col>
           </Row>
 
-          <Row gutter={12}>
-            <Col xs={24} md={12}>
-              <Form.Item label="Dibayar Tiap Berapa Hasil" name="payrollQtyBase">
-                <InputNumber min={1} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} placeholder="Contoh: 1" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item label="Hitung dari Hasil" name="payrollOutputBasis">
-                <Select options={PRODUCTION_STEP_PAYROLL_OUTPUT_BASIS} placeholder="Pilih basis output" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Divider orientation="left">Klasifikasi Payroll</Divider>
-
-          <Row gutter={12}>
-            <Col xs={24} md={12}>
-              <Form.Item
-                label="Klasifikasi Payroll"
-                name="payrollClassification"
-                rules={[{ required: true, message: "Klasifikasi payroll wajib dipilih" }]}
-              >
-                <Select
-                  options={PRODUCTION_STEP_PAYROLL_CLASSIFICATIONS}
-                  placeholder="Pilih klasifikasi payroll"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={12}>
-              <Form.Item label="Masuk ke HPP Produksi Inti" name="includePayrollInHpp" valuePropName="checked">
-                <Switch checkedChildren="Ya" unCheckedChildren="Tidak" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Divider orientation="left">Catatan Admin</Divider>
-
-          <Form.Item label="Catatan Payroll" name="payrollNotes">
-            <Input.TextArea rows={3} placeholder="Catatan admin untuk payroll step ini" />
-          </Form.Item>
 
           <Form.Item label="Status Aktif" name="isActive" valuePropName="checked">
             <Switch checkedChildren="Aktif" unCheckedChildren="Nonaktif" />

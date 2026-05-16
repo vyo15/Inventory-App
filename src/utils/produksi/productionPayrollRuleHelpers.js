@@ -29,9 +29,10 @@ const safeString = (value) => String(value || "").trim();
 // Formatter final lintas aplikasi: helper ini dipakai untuk pesan validasi payroll
 // agar tidak ada formatter lokal di area guarded payroll produksi.
 const normalizePayrollMode = (value) => {
-  if (["per_qty", "per_batch", "fixed"].includes(value)) {
-    return value;
+  if (value === "per_batch") {
+    return "per_batch";
   }
+
   return "per_qty";
 };
 
@@ -143,10 +144,7 @@ const hasMeaningfulWorkerSummary = (workLog = {}) =>
 export const getNormalizedProductionPayrollRule = (rule = {}) => {
   const payrollMode = normalizePayrollMode(rule.payrollMode || rule.mode);
   const payrollRate = Math.max(0, safeNumber(rule.payrollRate ?? rule.rate, 0));
-  const payrollQtyBase =
-    payrollMode === "per_qty"
-      ? Math.max(1, safeNumber(rule.payrollQtyBase ?? rule.qtyBase, 1))
-      : 1;
+  const payrollQtyBase = 1;
   const payrollOutputBasis = normalizePayrollOutputBasis(
     rule.payrollOutputBasis || rule.outputBasis,
   );
@@ -387,18 +385,12 @@ export const resolveWorkLogPayrollDraft = ({
     blockingReasons.push("Tarif payroll step harus lebih besar dari 0.");
   }
 
-  if (payrollRule.payrollMode === "per_qty") {
-    if (payrollRule.payrollQtyBase <= 0) {
-      blockingReasons.push("Qty dasar payroll per qty harus lebih besar dari 0.");
-    }
-
-    if (metrics.outputQtyUsed <= 0) {
-      blockingReasons.push(
-        `Output qty untuk payroll per qty belum valid. Basis saat ini menghasilkan ${formatNumber(
-          metrics.outputQtyUsed,
-        )}.`,
-      );
-    }
+  if (payrollRule.payrollMode === "per_qty" && metrics.outputQtyUsed <= 0) {
+    blockingReasons.push(
+      `Output qty untuk payroll per qty belum valid. Basis saat ini menghasilkan ${formatNumber(
+        metrics.outputQtyUsed,
+      )}.`,
+    );
   }
 
   if (payrollRule.payrollMode === "per_batch" && metrics.workedQty <= 0) {
@@ -472,8 +464,6 @@ export const buildPayrollCalculationNotes = ({
           : "Good Qty"
       } = ${formatNumber(metrics.outputQtyUsed)}.`,
     );
-  } else {
-    baseText.push("Mode fixed dihitung 1x per line payroll operator.");
   }
 
   if (legacyFallbackUsed) {

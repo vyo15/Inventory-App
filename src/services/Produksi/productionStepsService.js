@@ -5,6 +5,7 @@
 
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -16,7 +17,10 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
-import { generateUniqueProductionReadableCode } from "../../utils/references/productionCodeGenerator";
+import {
+  getProductionStepPayrollClassification,
+  shouldIncludeProductionStepPayrollInHpp,
+} from "../../constants/productionStepOptions";
 
 // =====================================================
 // Nama collection
@@ -32,38 +36,69 @@ const COLLECTION_NAME = "production_steps";
 /* =====================================================
 SECTION: Production Step code generator — AKTIF
 Fungsi:
-- Membuat kode STP-[READABLE] untuk master tahapan produksi tanpa timestamp; suffix 3 digit hanya saat duplicate.
+- Membuat kode internal step produksi berurutan dengan format STP-001.
+- Kode tidak bergantung nama step agar tetap stabil saat nama proses berubah.
 
 Dipakai oleh:
-- createProductionStep dan updateProductionStep.
+- createProductionStep dan updateProductionStep untuk data baru/repair code kosong.
 
 Alasan perubahan:
-- Standar final IMS mengganti kode step berbasis nama+timestamp menjadi reference readable dengan suffix 3 digit.
+- Standar final IMS mengunci Production Step ke STP-001 agar master step ringkas dan konsisten.
 
 Catatan cleanup:
-- Data lama STEP/timestamp tetap compatibility sampai ada audit repair khusus.
+- Data lama STP-[READABLE] tetap dibaca sebagai compatibility sampai user hapus/reset data lama.
 
 Risiko:
 - Jangan ubah processType/inputPolicy/outputType dari section ini.
 ===================================================== */
-export const generateProductionStepCode = async (name = "", excludeId = null) =>
-  generateUniqueProductionReadableCode({
-    db,
-    collectionName: COLLECTION_NAME,
-    fieldNames: ["code"],
-    prefix: "STP",
-    text: name || "Production Step",
-    fallbackText: "Production Step",
-    excludeId,
-    maxParts: 5,
+const PRODUCTION_STEP_CODE_PATTERN = /^STP-(\d{3,})$/;
+
+const buildProductionStepSequenceCode = (sequence = 1) =>
+  `STP-${String(Math.max(1, Number(sequence || 1))).padStart(3, "0")}`;
+
+export const generateProductionStepCode = async (excludeId = null) => {
+  const snapshot = await getDocs(collection(db, COLLECTION_NAME));
+  const usedSequences = new Set();
+  let maxSequence = 0;
+
+  snapshot.docs.forEach((item) => {
+    if (excludeId && item.id === excludeId) return;
+
+    const data = item.data() || {};
+    [item.id, data.code].forEach((rawValue) => {
+      const value = String(rawValue || "").trim().toUpperCase();
+      const matched = value.match(PRODUCTION_STEP_CODE_PATTERN);
+      if (!matched) return;
+
+      const sequence = Number(matched[1] || 0);
+      if (sequence <= 0) return;
+
+      usedSequences.add(sequence);
+      if (sequence > maxSequence) maxSequence = sequence;
+    });
   });
+
+  let nextSequence = maxSequence + 1;
+  while (usedSequences.has(nextSequence)) {
+    nextSequence += 1;
+  }
+
+  return buildProductionStepSequenceCode(nextSequence);
+};
 
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const normalizedCode = String(values.code || "")
     .trim()
     .toUpperCase();
 
-  const processType = values.processType || "raw_to_semi";
+  const processType = [
+    "raw_to_semi",
+    "semi_to_semi",
+    "semi_to_product",
+    "support_process",
+  ].includes(values.processType)
+    ? values.processType
+    : "raw_to_semi";
 
   const derivedConfigByProcessType = {
     raw_to_semi: {
@@ -102,36 +137,11 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
       autoConsumeMaterials: false,
       autoCreateOutput: false,
     },
-    raw_to_product: {
-      inputPolicy: "raw_only",
-      outputType: "product",
-      outputUnit: String(values.outputUnit || "pcs").trim() || "pcs",
-      allowsPartialOutput: true,
-      requiresQc: false,
-      autoConsumeMaterials: true,
-      autoCreateOutput: true,
-    },
-    finishing: {
-      inputPolicy: "mixed",
-      outputType: "product",
-      outputUnit: String(values.outputUnit || "pcs").trim() || "pcs",
-      allowsPartialOutput: true,
-      requiresQc: false,
-      autoConsumeMaterials: true,
-      autoCreateOutput: true,
-    },
-    qc: {
-      inputPolicy: "none",
-      outputType: "none",
-      outputUnit: "",
-      allowsPartialOutput: false,
-      requiresQc: true,
-      autoConsumeMaterials: false,
-      autoCreateOutput: false,
-    },
   };
 
-  const derivedConfig = derivedConfigByProcessType[processType] || derivedConfigByProcessType.raw_to_semi;
+  const derivedConfig = derivedConfigByProcessType[processType];
+  const payrollMode = values.payrollMode === "per_batch" ? "per_batch" : "per_qty";
+  const payrollClassification = getProductionStepPayrollClassification(processType);
 
   const payload = {
     code: normalizedCode,
@@ -145,10 +155,6 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     outputUnit: (values.outputType || derivedConfig.outputType) === "none"
       ? ""
       : String(values.outputUnit || derivedConfig.outputUnit || "").trim(),
-
-    standardBatchQty: Number(values.standardBatchQty || 1),
-    estimatedDurationMinutes: Number(values.estimatedDurationMinutes || 0),
-    defaultWorkerCount: Number(values.defaultWorkerCount || 1),
 
     allowsPartialOutput:
       typeof values.allowsPartialOutput === "boolean"
@@ -168,39 +174,23 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
         ? values.autoCreateOutput
         : Boolean(derivedConfig.autoCreateOutput),
 
-    basisType: values.basisType || "per_meter",
-    monitoringMode: values.monitoringMode || "none",
+    basisType: ["per_meter", "per_rod_40cm", "per_qty", "per_batch"].includes(values.basisType)
+      ? values.basisType
+      : "per_batch",
 
     // =====================================================
     // ACTIVE / GUARDED
-    // Rule payroll di master step adalah source of truth utama untuk
-    // generate payroll produksi.
+    // Rule upah operator di master step dipakai untuk generate payroll produksi.
+    // Mode aktif hanya per qty dan per batch agar tidak ada layer hitung ganda di UI Step.
     // =====================================================
-    payrollMode: values.payrollMode || "per_qty",
+    payrollMode,
     payrollRate: Number(values.payrollRate || 0),
-    payrollQtyBase:
-      values.payrollMode === "per_qty" ? Number(values.payrollQtyBase || 1) : 1,
     payrollOutputBasis:
-      values.payrollMode === "per_qty"
+      payrollMode === "per_qty"
         ? values.payrollOutputBasis || "good_qty"
         : "good_qty",
-    // =====================================================
-    // ACTIVE / GUARDED
-    // Klasifikasi payroll membedakan direct labor inti vs support/fulfillment.
-    // Field ini ikut disnapshot ke Work Log dan dipakai lagi saat Payroll & HPP.
-    // =====================================================
-    payrollClassification:
-      values.payrollClassification ||
-      (processType === "support_process" ? "support_fulfillment" : "direct_labor"),
-    includePayrollInHpp:
-      typeof values.includePayrollInHpp === "boolean"
-        ? values.includePayrollInHpp
-        : processType !== "support_process",
-    payrollNotes: String(values.payrollNotes || "").trim(),
-
-    colorTag: String(values.colorTag || "").trim(),
-    iconName: String(values.iconName || "").trim(),
-    notes: String(values.notes || "").trim(),
+    payrollClassification,
+    includePayrollInHpp: shouldIncludeProductionStepPayrollInHpp(processType),
 
     isActive: values.isActive !== false,
 
@@ -244,30 +234,16 @@ export const validateProductionStep = (values = {}) => {
     errors.basisType = "Basis kerja wajib dipilih";
   }
 
-  if (!values.monitoringMode) {
-    errors.monitoringMode = "Mode monitoring wajib dipilih";
-  }
-
   if (!values.payrollMode) {
     errors.payrollMode = "Mode payroll wajib dipilih";
   }
 
+  if (!["per_qty", "per_batch"].includes(values.payrollMode)) {
+    errors.payrollMode = "Mode payroll hanya boleh Per Qty atau Per Batch";
+  }
+
   if (Number(values.payrollRate || 0) < 0) {
     errors.payrollRate = "Tarif payroll tidak boleh negatif";
-  }
-
-  if (values.payrollMode === "per_qty") {
-    if (Number(values.payrollQtyBase || 0) <= 0) {
-      errors.payrollQtyBase = "Qty dasar bayar harus lebih dari 0";
-    }
-
-    if (!values.payrollOutputBasis) {
-      errors.payrollOutputBasis = "Basis output bayar wajib dipilih";
-    }
-  }
-
-  if (!values.payrollClassification) {
-    errors.payrollClassification = "Klasifikasi payroll wajib dipilih";
   }
 
   return errors;
@@ -423,7 +399,7 @@ export const createProductionStep = async (values, currentUser = null) => {
   - Menjamin Production Step baru tetap memiliki kode STP internal walaupun UI tidak mengirim field code.
 
   Dipakai oleh:
-  - ProductionSteps.jsx saat create Production Step dan helper productionCodeGenerator.
+  - ProductionSteps.jsx saat create Production Step.
 
   Alasan perubahan:
   - Input code disembunyikan dari UI utama config, tetapi field code tetap wajib tersimpan otomatis.
@@ -434,7 +410,7 @@ export const createProductionStep = async (values, currentUser = null) => {
   Risiko:
   - Jangan mengganti dengan input manual atau timestamp karena step dipakai BOM, Work Log, payroll, dan audit produksi.
   ===================================================== */
-  const codeToCheck = await generateProductionStepCode(values.name);
+  const codeToCheck = await generateProductionStepCode();
   const isCodeExists = await isProductionStepCodeExists(codeToCheck);
   values = { ...values, code: codeToCheck };
 
@@ -451,13 +427,13 @@ export const createProductionStep = async (values, currentUser = null) => {
   /* =====================================================
   SECTION: Production Step document ID = business code — AKTIF
   Fungsi:
-  - Menyimpan step baru dengan document ID sama seperti kode STP readable.
+  - Menyimpan step baru dengan document ID sama seperti kode STP-001.
 
   Dipakai oleh:
   - createProductionStep.
 
   Alasan perubahan:
-  - Data baru step produksi perlu reference audit yang stabil dan tidak memakai timestamp.
+  - Data baru step produksi perlu reference audit STP-001 yang stabil dan tidak memakai timestamp/nama.
 
   Catatan cleanup:
   - Data lama tetap random/timestamp sampai ada repair terpisah.
@@ -492,7 +468,7 @@ export const updateProductionStep = async (id, values, currentUser = null) => {
   // IMS NOTE [AKTIF | immutable-code]: UI tidak mengirim code; update wajib mempertahankan code existing agar edit nama/payroll tidak regenerate kode STP.
   const existingCode = String(existingStep.code || "").trim();
   const submittedCode = String(values.existingCode || values.code || "").trim();
-  const codeToCheck = existingCode || submittedCode || (await generateProductionStepCode(values.name, id));
+  const codeToCheck = existingCode || submittedCode || (await generateProductionStepCode(id));
   const isCodeExists = await isProductionStepCodeExists(codeToCheck, id);
   values = { ...values, code: codeToCheck };
 
@@ -507,7 +483,17 @@ export const updateProductionStep = async (id, values, currentUser = null) => {
 
   const payload = normalizePayload(values, currentUser, true);
 
-  await updateDoc(ref, payload);
+  await updateDoc(ref, {
+    ...payload,
+    // IMS CLEANUP: field lama menu Step tidak lagi dipakai UI/rule aktif.
+    standardBatchQty: deleteField(),
+    estimatedDurationMinutes: deleteField(),
+    defaultWorkerCount: deleteField(),
+    payrollNotes: deleteField(),
+    notes: deleteField(),
+    colorTag: deleteField(),
+    iconName: deleteField(),
+  });
 
   return id;
 };

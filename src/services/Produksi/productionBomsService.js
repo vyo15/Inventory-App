@@ -2,7 +2,8 @@
 // Production BOMs Service
 // CRUD Firestore untuk collection production_boms
 // Rule final:
-// - target product -> material hanya semi_finished_material
+// - target product -> material utama semi_finished_material
+// - target product boleh raw_material untuk consumable assembly seperti lem tembak
 // - target semi_finished_material -> material raw / semi_finished_material
 // =====================================================
 
@@ -11,60 +12,36 @@ import {
   doc,
   getDoc,
   getDocs,
+  deleteField,
   serverTimestamp,
   setDoc,
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
-  generateUniqueProductionReadableCode,
+  generateUniqueProductionSequentialCode,
   isProductionBusinessCodeExists,
 } from "../../utils/references/productionCodeGenerator";
-import { stripTrailingReadableSequence } from "../../utils/references/businessCodeGenerator";
 import {
   calculateBomMaterialLine,
   calculateBomTotals,
 } from "../../constants/productionBomOptions";
 import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
+import {
+  calculateBomStepLineCost,
+  resolveBomStepPayrollSnapshot,
+} from "../../utils/produksi/productionBomCostHelpers";
 
 const COLLECTION_NAME = "production_boms";
 
-const getProductionBomCodeTargetText = (values = {}) => {
-  const targetCode = stripTrailingReadableSequence(values.targetCode || "");
-  if (targetCode) return targetCode;
-  return values.targetName || values.name || "BOM Produksi";
-};
-
-// =====================================================
-// SECTION: Auto code BOM produksi — AKTIF
-// Fungsi:
-// - Generate kode BOM dari nama BOM dan target type saat kode kosong.
-//
-// Dipakai oleh:
-// - createProductionBom
-// - updateProductionBom
-//
-// Alasan perubahan:
-// - User tidak perlu mengisi kode manual, tetapi reference bisnis tetap mudah dibaca.
-//
-// Catatan cleanup:
-// - Belum ada.
-//
-// Risiko:
-// - Jangan jadikan kode ini relasi utama; relasi tetap memakai Firestore document ID.
-// =====================================================
 export const generateProductionBomCode = async (values = {}, excludeId = null) => {
-  const targetText = getProductionBomCodeTargetText(values);
-
-  return generateUniqueProductionReadableCode({
+  // IMS NOTE [AKTIF | internal-sequence-code]: BOM baru memakai kode internal BOM-001; UI menampilkan nama target dan komposisi, bukan kode BOM.
+  return generateUniqueProductionSequentialCode({
     db,
     collectionName: COLLECTION_NAME,
     fieldNames: ["code", "bomCode"],
     prefix: "BOM",
-    text: targetText,
-    fallbackText: targetText || "BOM Produksi",
     excludeId,
-    maxParts: 8,
   });
 };
 
@@ -168,18 +145,21 @@ export const getActiveBomReferenceData = async () => {
 // =====================================================
 // SECTION: normalize material lines
 // Rule penting:
-// - target product -> itemType dipaksa semi_finished_material
+// - target product boleh memakai semi_finished_material untuk komponen utama
+// - target product juga boleh memakai raw_material untuk consumable assembly
+//   seperti lem tembak, karena stok tetap harus terpotong dari bahan baku
 // =====================================================
-const normalizeMaterialLines = (materialLines = [], targetType = "") =>
+const normalizeMaterialLines = (materialLines = []) =>
   materialLines.map((line, index) => {
-    const forcedItemType =
-      targetType === "product"
-        ? "semi_finished_material"
-        : line.itemType || "raw_material";
+    const normalizedItemType = ["raw_material", "semi_finished_material"].includes(
+      line.itemType,
+    )
+      ? line.itemType
+      : "raw_material";
 
     return calculateBomMaterialLine({
       id: line.id || `material-${Date.now()}-${index}`,
-      itemType: forcedItemType,
+      itemType: normalizedItemType,
       itemId: line.itemId || "",
       itemCode: safeTrim(line.itemCode),
       itemName: safeTrim(line.itemName),
@@ -187,6 +167,7 @@ const normalizeMaterialLines = (materialLines = [], targetType = "") =>
       qtyPerBatch: Number(line.qtyPerBatch || 0),
       wastageQty: Number(line.wastageQty || 0),
       costPerUnitSnapshot: Number(line.costPerUnitSnapshot || 0),
+      costSourceSnapshot: safeTrim(line.costSourceSnapshot),
       materialHasVariants: line.materialHasVariants === true,
       materialVariantStrategy:
         line.materialHasVariants === true
@@ -202,41 +183,45 @@ const normalizeMaterialLines = (materialLines = [], targetType = "") =>
 // =====================================================
 // SECTION: normalize step lines
 // =====================================================
-const normalizeStepLines = (stepLines = []) =>
+const normalizeStepLines = (stepLines = [], header = {}) =>
   stepLines
-    .map((line, index) => ({
-      id: line.id || `step-${Date.now()}-${index}`,
-      stepId: line.stepId || "",
-      stepCode: safeTrim(line.stepCode),
-      stepName: safeTrim(line.stepName),
-      sequenceNo: Number(line.sequenceNo || index + 1),
-      inputType: line.inputType || "mixed",
-      outputType: line.outputType || "none",
+    .map((line, index) => {
+      const payrollSnapshot = resolveBomStepPayrollSnapshot(line);
+      const normalizedLine = {
+        id: line.id || `step-${Date.now()}-${index}`,
+        stepId: line.stepId || "",
+        stepCode: safeTrim(line.stepCode),
+        stepName: safeTrim(line.stepName),
+        sequenceNo: Number(line.sequenceNo || index + 1),
+        inputType: line.inputType || "mixed",
+        outputType: line.outputType || "none",
 
-      outputItemType: "",
-      outputItemId: "",
-      outputItemCode: "",
-      outputItemName: "",
+        outputItemType: "",
+        outputItemId: "",
+        outputItemCode: "",
+        outputItemName: "",
 
-      expectedOutputQty: 0,
-      estimatedDurationMinutes: 0,
-      qcRequired: false,
-      allowRework: false,
+        expectedOutputQty: 0,
+        estimatedDurationMinutes: 0,
+        qcRequired: false,
+        allowRework: false,
 
-      payrollMode: "per_qty",
-      payrollRate: 0,
-      payrollQtyBase: 1,
-      payrollOutputBasis: "good_qty",
-      useStepDefaultPayroll: true,
+        ...payrollSnapshot,
+        notes: safeTrim(line.notes),
+      };
 
-      notes: safeTrim(line.notes),
-    }))
+      return {
+        ...normalizedLine,
+        laborCostEstimateSnapshot: calculateBomStepLineCost(normalizedLine, header),
+      };
+    })
     .sort((a, b) => Number(a.sequenceNo || 0) - Number(b.sequenceNo || 0));
 
 // =====================================================
 // SECTION: validasi dasar BOM
 // Rule final:
-// - target product -> semua material wajib semi_finished_material
+// - target product boleh memakai semi_finished_material dan raw_material
+// - raw_material dipakai untuk consumable assembly seperti lem tembak
 // =====================================================
 export const validateProductionBom = (values = {}) => {
   const errors = {};
@@ -266,17 +251,16 @@ export const validateProductionBom = (values = {}) => {
   }
 
 
-  if (values.targetType === "product") {
-    const hasInvalidMaterial = (values.materialLines || []).some(
-      (line) => line.itemType && line.itemType !== "semi_finished_material",
-    );
+  const hasInvalidMaterial = (values.materialLines || []).some(
+    (line) =>
+      line.itemType &&
+      !["raw_material", "semi_finished_material"].includes(line.itemType),
+  );
 
-    if (hasInvalidMaterial) {
-      errors.materialLines =
-        "BOM product hanya boleh menggunakan material dari semi finished materials";
-    }
+  if (hasInvalidMaterial) {
+    errors.materialLines =
+      "Material BOM hanya boleh Raw Material atau Semi Finished Material";
   }
-
 
   return errors;
 };
@@ -286,11 +270,8 @@ export const validateProductionBom = (values = {}) => {
 // =====================================================
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const targetType = values.targetType || "product";
-  const materialLines = normalizeMaterialLines(
-    values.materialLines || [],
-    targetType,
-  );
-  const stepLines = normalizeStepLines(values.stepLines || []);
+  const materialLines = normalizeMaterialLines(values.materialLines || []);
+  const stepLines = normalizeStepLines(values.stepLines || [], values);
   const totals = calculateBomTotals(materialLines, stepLines, values);
 
   const payload = {
@@ -317,17 +298,12 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
 
     materialCostEstimate: totals.materialCostEstimate,
     laborCostEstimate: totals.laborCostEstimate,
-    overheadCostEstimate: Number(values.overheadCostEstimate || 0),
-    totalCostEstimate:
-      totals.materialCostEstimate +
-      totals.laborCostEstimate +
-      Number(values.overheadCostEstimate || 0),
+    overheadCostEstimate: totals.overheadCostEstimate,
+    totalCostEstimate: totals.totalCostEstimate,
 
     routingMode: values.routingMode || "multi_step",
     materialLines,
     stepLines,
-
-    notes: safeTrim(values.notes),
 
     updatedAt: serverTimestamp(),
     updatedBy:
@@ -456,13 +432,13 @@ export const createProductionBom = async (values, currentUser = null) => {
   /* =====================================================
   SECTION: BOM document ID = business code — AKTIF
   Fungsi:
-  - Menyimpan BOM baru memakai document ID sama dengan kode BOM-[TARGET]-001.
+  - Menyimpan BOM baru memakai document ID sama dengan kode BOM-001.
 
   Dipakai oleh:
   - createProductionBom.
 
   Alasan perubahan:
-  - Kode BOM final tidak boleh input manual dan harus mudah dilacak dari target item.
+  - Kode BOM final tidak boleh input manual; nama target/komposisi menjadi konteks utama di UI.
 
   Catatan cleanup:
   - Data lama/manual code tetap compatibility, tidak di-rename.
@@ -510,7 +486,11 @@ export const updateProductionBom = async (id, values, currentUser = null) => {
 
   const payload = normalizePayload({ ...values, code: normalizedCode }, currentUser, true);
 
-  await updateDoc(ref, payload);
+  await updateDoc(ref, {
+    ...payload,
+    // IMS CLEANUP: field header lama tidak lagi dipakai UI/rule aktif.
+    notes: deleteField(),
+  });
 
   return id;
 };

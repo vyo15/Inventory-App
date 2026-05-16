@@ -87,17 +87,17 @@ export const HPP_COST_RESET_OPTIONS = [
   {
     value: "product_hpp_only",
     label: "Reset HPP Produk Jadi",
-    description: "Nolkan HPP produk jadi tanpa mengubah harga jual, stok, SKU, atau pricing rules.",
+    description: "Nolkan field HPP/cost produk jadi tanpa mengubah harga jual, stok, SKU, atau pricing rules.",
   },
   {
     value: "semi_finished_average_cost_only",
-    label: "Reset Average Cost Semi Finished",
-    description: "Nolkan average cost semi finished tanpa mengubah stok, reserved, atau relasi BOM.",
+    label: "Reset HPP Semi Finished",
+    description: "Nolkan HPP/average cost semi finished tanpa mengubah stok, reserved, atau relasi BOM.",
   },
   {
     value: "all_hpp_cost_sources",
-    label: "Reset Semua Sumber Cost HPP Testing",
-    description: "Nolkan seluruh field cost/HPP master yang dipakai trial HPP tanpa menyentuh transaksi.",
+    label: "Reset Semua Modal & HPP",
+    description: "Nolkan seluruh field modal/HPP master aktif untuk trial HPP tanpa menyentuh transaksi.",
   },
 ];
 
@@ -111,13 +111,13 @@ const HPP_COST_COLLECTION_CONFIGS = {
   },
   products: {
     label: "Products",
-    fields: ["hppPerUnit"],
-    variantFields: ["hppPerUnit"],
+    fields: ["hppPerUnit", "averageCostPerUnit", "costPerUnit"],
+    variantFields: ["hppPerUnit", "averageCostPerUnit", "costPerUnit"],
   },
   semi_finished_materials: {
     label: "Semi Finished Materials",
-    fields: ["averageCostPerUnit"],
-    variantFields: ["averageCostPerUnit"],
+    fields: ["averageCostPerUnit", "lastProductionCostPerUnit", "referenceCostPerUnit", "costPerUnit"],
+    variantFields: ["averageCostPerUnit", "lastProductionCostPerUnit", "referenceCostPerUnit", "costPerUnit"],
   },
 };
 
@@ -129,16 +129,16 @@ const HPP_COST_RESET_MODE_CONFIG = {
     collections: [{ key: "raw_materials", fields: ["restockReferencePrice"], variantFields: ["restockReferencePrice"] }],
   },
   product_hpp_only: {
-    collections: [{ key: "products", fields: ["hppPerUnit"], variantFields: ["hppPerUnit"] }],
+    collections: [{ key: "products", fields: ["hppPerUnit", "averageCostPerUnit", "costPerUnit"], variantFields: ["hppPerUnit", "averageCostPerUnit", "costPerUnit"] }],
   },
   semi_finished_average_cost_only: {
-    collections: [{ key: "semi_finished_materials", fields: ["averageCostPerUnit"], variantFields: ["averageCostPerUnit"] }],
+    collections: [{ key: "semi_finished_materials", fields: ["averageCostPerUnit", "lastProductionCostPerUnit", "referenceCostPerUnit", "costPerUnit"], variantFields: ["averageCostPerUnit", "lastProductionCostPerUnit", "referenceCostPerUnit", "costPerUnit"] }],
   },
   all_hpp_cost_sources: {
     collections: [
       { key: "raw_materials", fields: ["averageActualUnitCost", "restockReferencePrice"], variantFields: ["averageActualUnitCost", "restockReferencePrice"] },
-      { key: "products", fields: ["hppPerUnit"], variantFields: ["hppPerUnit"] },
-      { key: "semi_finished_materials", fields: ["averageCostPerUnit"], variantFields: ["averageCostPerUnit"] },
+      { key: "products", fields: ["hppPerUnit", "averageCostPerUnit", "costPerUnit"], variantFields: ["hppPerUnit", "averageCostPerUnit", "costPerUnit"] },
+      { key: "semi_finished_materials", fields: ["averageCostPerUnit", "lastProductionCostPerUnit", "referenceCostPerUnit", "costPerUnit"], variantFields: ["averageCostPerUnit", "lastProductionCostPerUnit", "referenceCostPerUnit", "costPerUnit"] },
     ],
   },
 };

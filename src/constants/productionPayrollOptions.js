@@ -18,7 +18,6 @@ export const PRODUCTION_PAYROLL_PAYMENT_STATUSES = [
 export const PRODUCTION_PAYROLL_MODES = [
   { value: "per_qty", label: "Per Qty" },
   { value: "per_batch", label: "Per Batch" },
-  { value: "fixed", label: "Fixed" },
 ];
 
 export const PRODUCTION_PAYROLL_OUTPUT_BASIS = [
@@ -112,8 +111,8 @@ export const DEFAULT_PRODUCTION_PAYROLL_FORM = {
 
 // =====================================================
 // ACTIVE / GUARDED
-// Rumus payroll final wajib lewat helper ini agar per_batch,
-// per_qty, dan fixed selalu konsisten di seluruh modul.
+// Rumus payroll final wajib lewat helper ini agar per_batch
+// dan per_qty selalu konsisten di seluruh modul.
 // =====================================================
 export const calculatePayrollAmounts = (values = {}) => {
   const payrollMode = values.payrollMode || "per_qty";
@@ -127,10 +126,7 @@ export const calculatePayrollAmounts = (values = {}) => {
   let amountCalculated = 0;
   let payableQtyFactor = 0;
 
-  if (payrollMode === "fixed") {
-    amountCalculated = payrollRate;
-    payableQtyFactor = 1;
-  } else if (payrollMode === "per_batch") {
+  if (payrollMode === "per_batch") {
     // =====================================================
     // ACTIVE / GUARDED
     // Mode per_batch wajib membaca Qty Batch real dari Work Log.

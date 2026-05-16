@@ -49,6 +49,10 @@ import {
 import { getLegacyDataMaintenanceAudit } from "../../services/Maintenance/legacyDataMaintenanceService";
 import { getDataQualityAudit } from "../../services/Maintenance/dataQualityAuditService";
 import {
+  getMasterCodeMaintenanceAudit,
+  repairMasterCodeMaintenance,
+} from "../../services/Maintenance/masterCodeMaintenanceService";
+import {
   getPayrollSnapshotMaintenanceAudit,
   repairPayrollSnapshotMaintenance,
 } from "../../services/Maintenance/payrollMaintenanceService";
@@ -186,6 +190,7 @@ const ACTION_RISK_META = {
 
 const AUDIT_SUMMARY_AREAS = [
   { key: "data_quality", label: "Data Quality", collection: "mixed", source: "dataQualityAudit" },
+  { key: "master_code", label: "Kode Master", collection: "master", source: "masterCodeAudit" },
   { key: "stock", label: "Stok Umum", collection: "master stok", source: "stockAudit" },
   { key: "inventory_log", label: "Inventory Log", collection: "inventory_logs", source: "logSchemaAudit" },
   { key: "legacy", label: "Data Lama", collection: "legacy", source: "legacyDataAudit" },
@@ -299,6 +304,9 @@ const ResetMaintenanceData = () => {
   const [loadingLogSchemaRepair, setLoadingLogSchemaRepair] = useState(false);
   const [loadingLegacyDataAudit, setLoadingLegacyDataAudit] = useState(false);
   const [loadingDataQualityAudit, setLoadingDataQualityAudit] = useState(false);
+  const [masterCodeAudit, setMasterCodeAudit] = useState(null);
+  const [loadingMasterCodeAudit, setLoadingMasterCodeAudit] = useState(false);
+  const [loadingMasterCodeRepair, setLoadingMasterCodeRepair] = useState(false);
 
   // ---------------------------------------------------------------------------
   // State maintenance payroll snapshot dan varian lintas modul.
@@ -368,7 +376,7 @@ const ResetMaintenanceData = () => {
   - Jika state reset HPP digabung dengan reset transaksi, confirmation keyword dan preview bisa tertukar.
   =====================================================
   */
-  const [hppCostResetMode, setHppCostResetMode] = useState(HPP_COST_RESET_OPTIONS[0]?.value || "raw_actual_cost_only");
+  const [hppCostResetMode, setHppCostResetMode] = useState("all_hpp_cost_sources");
   const [hppCostPreview, setHppCostPreview] = useState(null);
   const [hppCostBaselineSummary, setHppCostBaselineSummary] = useState(null);
   const [loadingHppCostPreview, setLoadingHppCostPreview] = useState(false);
@@ -603,24 +611,33 @@ const ResetMaintenanceData = () => {
     loadHppCostBaselineSummary();
   }, [loadHppCostBaselineSummary]);
 
-  const loadHppCostPreview = useCallback(async (showSuccessMessage = false) => {
+  const loadHppCostPreview = useCallback(async (showSuccessMessage = false, resetModeOverride = "") => {
+    const modeToPreview = resetModeOverride || hppCostResetMode;
+
     try {
       setLoadingHppCostPreview(true);
-      const result = await getHppCostResetPreview({ resetMode: hppCostResetMode });
+      const result = await getHppCostResetPreview({ resetMode: modeToPreview });
       setHppCostPreview(result);
+      if (resetModeOverride && resetModeOverride !== hppCostResetMode) {
+        setHppCostResetMode(resetModeOverride);
+      }
       if (showSuccessMessage) {
         message.success("Preview reset modal/HPP berhasil dimuat.");
       }
+      return result;
     } catch (error) {
       console.error(error);
       message.error(error?.message || "Gagal memuat preview reset modal/HPP.");
+      return null;
     } finally {
       setLoadingHppCostPreview(false);
     }
   }, [hppCostResetMode]);
 
   useEffect(() => {
-    setHppCostPreview(null);
+    setHppCostPreview((currentPreview) => (
+      currentPreview?.resetMode === hppCostResetMode ? currentPreview : null
+    ));
   }, [hppCostResetMode]);
 
   const handleSaveHppCostBaseline = async () => {
@@ -668,6 +685,26 @@ const ResetMaintenanceData = () => {
     }
 
     setHppCostConfirmAction(actionType);
+    hppConfirmForm.setFieldsValue({ confirmationText: "", actionNote });
+    setHppCostConfirmOpen(true);
+  };
+
+  const openHppCostResetAllConfirmation = async () => {
+    const resetAllMode = "all_hpp_cost_sources";
+    const previewToUse = hppCostPreview?.resetMode === resetAllMode
+      ? hppCostPreview
+      : await loadHppCostPreview(true, resetAllMode);
+
+    if (!previewToUse) return;
+
+    if (previewToUse.isClientBatchSafe === false) {
+      message.error(`Reset semua diblokir karena estimasi ${previewToUse.estimatedWriteOperations} operasi melebihi batas aman ${previewToUse.safeClientLimit}.`);
+      return;
+    }
+
+    setHppCostResetMode(resetAllMode);
+    setHppCostPreview(previewToUse);
+    setHppCostConfirmAction("reset");
     hppConfirmForm.setFieldsValue({ confirmationText: "", actionNote });
     setHppCostConfirmOpen(true);
   };
@@ -963,6 +1000,60 @@ const ResetMaintenanceData = () => {
       message.error(error?.message || "Gagal sinkronisasi stok.");
     } finally {
       setLoadingSync(false);
+    }
+  };
+
+  const handleLoadMasterCodeAudit = async () => {
+    try {
+      setLoadingMasterCodeAudit(true);
+      const result = await getMasterCodeMaintenanceAudit();
+      setMasterCodeAudit(result);
+      await createPageMaintenanceLog({
+        actionType: "master_code_audit",
+        mode: "dry_run",
+        modules: ["master_data", "production_setup"],
+        summary: result?.summary || {},
+        affectedCollections: result?.affectedCollections || [],
+        affectedCount: result?.summary?.checkedRecords || 0,
+        dryRun: true,
+        status: "success",
+        note: "Audit kode master hanya membaca format kode Product/Raw/Semi/BOM/Step/Supplier.",
+      });
+      await loadMaintenanceLogs();
+      message.success("Dry run kode master selesai. Belum ada data yang diubah.");
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menjalankan audit kode master.");
+    } finally {
+      setLoadingMasterCodeAudit(false);
+    }
+  };
+
+  const handleRepairMasterCodeAudit = async () => {
+    try {
+      setLoadingMasterCodeRepair(true);
+      const result = await repairMasterCodeMaintenance();
+      await createPageMaintenanceLog({
+        actionType: "master_code_repair",
+        mode: "repair",
+        modules: ["master_data", "production_setup"],
+        summary: result?.summary || {},
+        affectedCollections: result?.affectedCollections || [],
+        affectedCount: result?.updatedCount || 0,
+        dryRun: false,
+        status: "success",
+        note: "Normalisasi kode master tidak rename document ID dan tidak menyentuh transaksi/history.",
+      });
+      message.success(result?.message || "Normalisasi kode master selesai.");
+      const nextAudit = await getMasterCodeMaintenanceAudit();
+      setMasterCodeAudit(nextAudit);
+      await loadPreview(false);
+      await loadMaintenanceLogs();
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menjalankan normalisasi kode master.");
+    } finally {
+      setLoadingMasterCodeRepair(false);
     }
   };
 
@@ -1359,6 +1450,7 @@ const ResetMaintenanceData = () => {
   const handleRunAllAudits = async () => {
     try {
       await handleLoadDataQualityAudit({ showProblemPreview: false });
+      await handleLoadMasterCodeAudit();
       await handleLoadStockAudit();
       await handleLoadLogSchemaAudit();
       await handleLoadLegacyDataAudit();
@@ -1550,10 +1642,12 @@ const ResetMaintenanceData = () => {
   const logSchemaRows = useMemo(() => logSchemaAudit?.rows || [], [logSchemaAudit]);
   const legacyDataRows = useMemo(() => legacyDataAudit?.rows || [], [legacyDataAudit]);
   const dataQualityRows = useMemo(() => dataQualityAudit?.categories || [], [dataQualityAudit]);
+  const masterCodeRows = useMemo(() => masterCodeAudit?.rows || [], [masterCodeAudit]);
   const stockSummary = stockAudit?.summary || {};
   const logSchemaSummary = logSchemaAudit?.summary || {};
   const legacyDataSummary = legacyDataAudit?.summary || {};
   const dataQualitySummary = dataQualityAudit?.summary || {};
+  const masterCodeSummary = masterCodeAudit?.summary || {};
   const payrollAuditRows = useMemo(() => payrollAudit?.rows || [], [payrollAudit]);
   const transactionVariantRows = useMemo(() => transactionVariantAudit?.rows || [], [transactionVariantAudit]);
   const payrollAuditSummary = payrollAudit?.summary || {};
@@ -1597,6 +1691,7 @@ const ResetMaintenanceData = () => {
 
   const auditSourceMap = useMemo(() => ({
     dataQualityAudit,
+    masterCodeAudit,
     stockAudit,
     logSchemaAudit,
     legacyDataAudit,
@@ -1605,6 +1700,7 @@ const ResetMaintenanceData = () => {
     transactionVariantAudit,
   }), [
     dataQualityAudit,
+    masterCodeAudit,
     legacyDataAudit,
     logSchemaAudit,
     maintenanceAudit,
@@ -1635,7 +1731,7 @@ const ResetMaintenanceData = () => {
       issueCount,
       safeRepairCount,
       recommendation: issueCount
-        ? "Lihat detail advanced; repair aman atau reset terarah sesuai area."
+        ? "Lihat detail audit; repair aman atau reset terarah sesuai area."
         : audit ? "Tidak ada issue besar dari summary terakhir." : "Belum dicek.",
     };
   }), [auditSourceMap]);
@@ -1773,8 +1869,11 @@ const ResetMaintenanceData = () => {
                 <Card size="small" title="HPP Trial">
                   <Space direction="vertical" size={8} style={{ width: "100%" }}>
                     <Text type="secondary">Khusus uji modal/HPP. Tidak menghapus transaksi, stok, payroll, atau work log.</Text>
-                    <Button block icon={<EyeOutlined />} loading={loadingHppCostPreview} onClick={() => loadHppCostPreview(true)}>
-                      Preview HPP
+                    <Button block icon={<EyeOutlined />} loading={loadingHppCostPreview} onClick={() => loadHppCostPreview(true, "all_hpp_cost_sources")}>
+                      Preview Semua Modal/HPP
+                    </Button>
+                    <Button block danger icon={<WarningOutlined />} loading={loadingRunHppCostReset || loadingHppCostPreview} onClick={openHppCostResetAllConfirmation}>
+                      Reset Semua Modal/HPP
                     </Button>
                   </Space>
                 </Card>
@@ -1825,7 +1924,7 @@ const ResetMaintenanceData = () => {
                   type="warning"
                   showIcon
                   message={`${autoBugSummary.issueCount} issue dan ${autoBugSummary.safeRepairCount} kandidat repair aman terdeteksi.`}
-                  description="Buka Advanced Detail jika perlu melihat sample record. Untuk data lama setelah patch, coba Repair Turunan dulu sebelum reset destructive."
+                  description="Buka Detail Audit jika perlu melihat sample record. Untuk data lama setelah patch, coba Repair Turunan dulu sebelum reset destructive."
                 />
               )}
             </Space>
@@ -1854,6 +1953,54 @@ const ResetMaintenanceData = () => {
                   </Popconfirm>
                 </Col>
               </Row>
+
+              <Divider orientation="left" plain>Normalisasi Kode Master</Divider>
+              <Text type="secondary">
+                Dipakai untuk menyamakan kode internal Product, Raw Material, Semi Finished, BOM, Step, dan Supplier ke standar aktif tanpa rename document ID dan tanpa mengubah transaksi/history.
+              </Text>
+              <Row gutter={[8, 8]}>
+                <Col xs={24} md={8}>
+                  <Button block icon={<FileSearchOutlined />} loading={loadingMasterCodeAudit} onClick={handleLoadMasterCodeAudit}>Cek Kode Master</Button>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Popconfirm
+                    title="Normalisasi kode master?"
+                    description="Aksi ini hanya update field code/alias master. Document ID dan data transaksi/history tidak diubah."
+                    okText="Ya, normalisasi"
+                    cancelText="Batal"
+                    onConfirm={handleRepairMasterCodeAudit}
+                  >
+                    <Button block icon={<SyncOutlined />} loading={loadingMasterCodeRepair} disabled={!masterCodeSummary.executablePlanCount}>Normalisasi Kode</Button>
+                  </Popconfirm>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Statistic title="Perlu Normalisasi" value={masterCodeSummary.executablePlanCount || 0} />
+                </Col>
+              </Row>
+              {masterCodeAudit && (
+                <Alert
+                  type={masterCodeSummary.executablePlanCount ? "warning" : "success"}
+                  showIcon
+                  message={masterCodeSummary.executablePlanCount ? `${masterCodeSummary.executablePlanCount} kode master perlu dinormalisasi.` : "Kode master sudah sesuai standar aktif."}
+                  description="Field yang disentuh hanya kode internal/alias. Data history seperti purchase, stock log, work log, payroll, dan transaksi tidak ikut diubah."
+                />
+              )}
+              {Boolean(masterCodeRows.length) && (
+                <Table
+                  className="app-data-table"
+                  size="small"
+                  pagination={{ pageSize: 5 }}
+                  dataSource={masterCodeRows}
+                  columns={[
+                    { title: "Area", dataIndex: "area", key: "area", width: 150, render: (value) => renderCompactText(value, 135) },
+                    { title: "Item", dataIndex: "itemName", key: "itemName", width: 220, render: (value) => renderCompactText(value, 200) },
+                    { title: "Kode Saat Ini", dataIndex: "currentCode", key: "currentCode", width: 140, render: (value) => renderCompactTag(value, 125) },
+                    { title: "Kode Baru", dataIndex: "proposedCode", key: "proposedCode", width: 140, render: (value) => renderCompactTag(value, 125) },
+                    { title: "Catatan", dataIndex: "issue", key: "issue", render: (value) => renderCompactText(value, 320) },
+                  ]}
+                  scroll={{ x: 880 }}
+                />
+              )}
             </Space>
           </Card>
 
@@ -1921,32 +2068,7 @@ const ResetMaintenanceData = () => {
           </Card>
 
           <Row gutter={[12, 12]}>
-            <Col xs={24} lg={12}>
-              <Card title="HPP Cost Testing" size="small" extra={<Tag color="purple">Terpisah dari reset transaksi</Tag>}>
-                <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                  <Select
-                    value={hppCostResetMode}
-                    onChange={setHppCostResetMode}
-                    options={HPP_COST_RESET_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
-                    style={{ width: "100%" }}
-                  />
-                  <Space wrap>
-                    <Button icon={<EyeOutlined />} loading={loadingHppCostPreview} onClick={() => loadHppCostPreview(true)}>Preview HPP</Button>
-                    <Popconfirm title="Simpan baseline HPP saat ini?" okText="Ya" cancelText="Batal" onConfirm={handleSaveHppCostBaseline}>
-                      <Button icon={<SaveOutlined />} loading={loadingSaveHppCostBaseline}>Simpan Baseline HPP</Button>
-                    </Popconfirm>
-                    <Button danger icon={<ReloadOutlined />} onClick={() => openHppCostConfirmation("reset")} disabled={!hppCostPreview || hppCostPreview?.isClientBatchSafe === false}>Reset HPP</Button>
-                    <Button icon={<ReloadOutlined />} onClick={() => openHppCostConfirmation("restore")} disabled={!hppCostBaselineSummary?.exists}>Restore HPP</Button>
-                  </Space>
-                  <Row gutter={[8, 8]}>
-                    <Col xs={8}><Statistic title="Dokumen" value={hppCostPreview?.totalAffectedDocs || 0} /></Col>
-                    <Col xs={8}><Statistic title="Variant" value={hppCostPreview?.totalAffectedVariantRows || 0} /></Col>
-                    <Col xs={8}><Statistic title="Baseline" value={hppCostBaselineSummary?.itemCount || 0} /></Col>
-                  </Row>
-                </Space>
-              </Card>
-            </Col>
-            <Col xs={24} lg={12}>
+            <Col xs={24}>
               <Card title="Data Test Seed & Export" size="small" extra={<Tag color="gold">Utility</Tag>}>
                 <Space direction="vertical" size={12} style={{ width: "100%" }}>
                   <Space wrap>
@@ -2025,7 +2147,7 @@ const ResetMaintenanceData = () => {
 
           {/*
           =====================================================
-          SECTION: Advanced Tools wrapper — CLEANUP CANDIDATE
+          SECTION: Detail Audit Tools wrapper — CLEANUP CANDIDATE
           Fungsi:
           - Membungkus panel teknis lama agar owner melihat decision center dulu, tetapi developer tetap bisa akses audit/repair/reset detail.
 
@@ -2043,7 +2165,7 @@ const ResetMaintenanceData = () => {
           =====================================================
           */}
           <Collapse defaultActiveKey={[]}>
-            <Collapse.Panel header="Advanced Detail / Developer Tools" key="advanced-tools">
+            <Collapse.Panel header="Detail Audit / Tools" key="advanced-tools">
               <Space direction="vertical" size={20} style={{ width: "100%" }}>
 
           <Card
@@ -2732,7 +2854,7 @@ const ResetMaintenanceData = () => {
                     onClick={() => loadHppCostPreview(true)}
                     loading={loadingHppCostPreview}
                   >
-                    Preview Reset Modal/HPP
+                    Preview Mode Dipilih
                   </Button>
                 </Col>
                 <Col xs={24} md={6}>
@@ -2742,7 +2864,7 @@ const ResetMaintenanceData = () => {
                     onClick={handleSaveHppCostBaseline}
                     loading={loadingSaveHppCostBaseline}
                   >
-                    Simpan Baseline Modal/HPP Saat Ini
+                    Simpan Baseline Modal/HPP
                   </Button>
                 </Col>
                 <Col xs={24} md={6}>
@@ -2763,7 +2885,19 @@ const ResetMaintenanceData = () => {
                     onClick={() => openHppCostConfirmation("reset")}
                     loading={loadingRunHppCostReset}
                   >
-                    Jalankan Reset Modal/HPP
+                    Reset Mode Dipilih
+                  </Button>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Button
+                    block
+                    danger
+                    type="primary"
+                    icon={<WarningOutlined />}
+                    onClick={openHppCostResetAllConfirmation}
+                    loading={loadingRunHppCostReset || loadingHppCostPreview}
+                  >
+                    Reset Semua Modal/HPP
                   </Button>
                 </Col>
               </Row>

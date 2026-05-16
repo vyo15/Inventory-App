@@ -1,11 +1,9 @@
-import formatNumber from "../utils/formatters/numberId";
 import formatCurrency from "../utils/formatters/currencyId";
 
 // =====================================================
 // Production Step Options
-// Master enum dan helper label untuk menu Tahapan Produksi
-// Versi disederhanakan agar fokus ke proses nyata.
-// QC tidak dijadikan step utama, tetapi nanti menempel di work log.
+// Master enum dan helper label untuk menu Tahapan Produksi.
+// Step fokus ke proses kerja nyata + aturan upah operator.
 // =====================================================
 
 export const PRODUCTION_STEP_PROCESS_TYPES = [
@@ -15,60 +13,16 @@ export const PRODUCTION_STEP_PROCESS_TYPES = [
   { value: "support_process", label: "Packing / Support" },
 ];
 
-// Map tambahan untuk kompatibilitas data lama yang mungkin masih tersimpan.
-const LEGACY_PROCESS_TYPES = [
-  { value: "raw_to_product", label: "Raw -> Finished Good" },
-  { value: "finishing", label: "Finishing" },
-  { value: "qc", label: "QC" },
-];
-
-export const PRODUCTION_STEP_INPUT_POLICIES = [
-  { value: "raw_only", label: "Raw Material Only" },
-  { value: "semi_only", label: "Semi Finished Only" },
-  { value: "mixed", label: "Mixed" },
-  { value: "none", label: "No Input" },
-];
-
-export const PRODUCTION_STEP_OUTPUT_TYPES = [
-  { value: "semi_finished_material", label: "Semi Finished Material" },
-  { value: "product", label: "Finished Good" },
-  { value: "none", label: "No Stock Output" },
-];
-
 export const PRODUCTION_STEP_BASIS_TYPES = [
-  { value: "per_meter", label: "Per Meter" },
-  { value: "per_rod_40cm", label: "Per Batang 40 cm" },
-  { value: "per_finished_unit", label: "Per Bunga Jadi" },
+  { value: "per_meter", label: "Per Meter Bahan" },
+  { value: "per_rod_40cm", label: "Per Kawat" },
+  { value: "per_qty", label: "Per Qty" },
   { value: "per_batch", label: "Per Batch" },
-];
-
-export const PRODUCTION_STEP_MONITORING_MODES = [
-  { value: "capacity_primary", label: "Kapasitas Utama" },
-  { value: "leftover_control", label: "Kontrol Sisa" },
-  { value: "finished_output", label: "Output Jadi" },
-  { value: "none", label: "Tanpa Monitoring" },
 ];
 
 export const PRODUCTION_STEP_PAYROLL_MODES = [
   { value: "per_qty", label: "Per Qty" },
   { value: "per_batch", label: "Per Batch" },
-  { value: "fixed", label: "Fixed" },
-];
-
-export const PRODUCTION_STEP_PAYROLL_OUTPUT_BASIS = [
-  { value: "good_qty", label: "Hasil Bagus" },
-  { value: "actual_output_qty", label: "Total Hasil" },
-];
-
-// =====================================================
-// ACTIVE / GUARDED
-// Klasifikasi payroll dipakai untuk membedakan direct labor produksi inti
-// vs support / fulfillment. Nilai ini ikut disnapshot ke Work Log lalu ke
-// Payroll agar HPP tidak bercampur diam-diam dengan step support.
-// =====================================================
-export const PRODUCTION_STEP_PAYROLL_CLASSIFICATIONS = [
-  { value: "direct_labor", label: "Produksi Inti" },
-  { value: "support_fulfillment", label: "Support / Fulfillment" },
 ];
 
 export const toOptionMap = (options = []) =>
@@ -77,56 +31,34 @@ export const toOptionMap = (options = []) =>
     return acc;
   }, {});
 
-export const PROCESS_TYPE_MAP = toOptionMap([
-  ...PRODUCTION_STEP_PROCESS_TYPES,
-  ...LEGACY_PROCESS_TYPES,
-]);
-export const INPUT_POLICY_MAP = toOptionMap(PRODUCTION_STEP_INPUT_POLICIES);
-export const OUTPUT_TYPE_MAP = toOptionMap(PRODUCTION_STEP_OUTPUT_TYPES);
+export const PROCESS_TYPE_MAP = toOptionMap(PRODUCTION_STEP_PROCESS_TYPES);
 export const BASIS_TYPE_MAP = toOptionMap(PRODUCTION_STEP_BASIS_TYPES);
-export const MONITORING_MODE_MAP = toOptionMap(PRODUCTION_STEP_MONITORING_MODES);
 export const PAYROLL_MODE_MAP = toOptionMap(PRODUCTION_STEP_PAYROLL_MODES);
-export const PAYROLL_OUTPUT_BASIS_MAP = toOptionMap(
-  PRODUCTION_STEP_PAYROLL_OUTPUT_BASIS,
-);
-export const PAYROLL_CLASSIFICATION_MAP = toOptionMap(
-  PRODUCTION_STEP_PAYROLL_CLASSIFICATIONS,
-);
-
 export const DEFAULT_PRODUCTION_STEP_FORM = {
   code: "",
   name: "",
   description: "",
   processType: "raw_to_semi",
-  basisType: "per_meter",
-  monitoringMode: "capacity_primary",
+  basisType: "per_batch",
   payrollMode: "per_qty",
   payrollRate: 0,
-  payrollQtyBase: 1,
   payrollOutputBasis: "good_qty",
-  payrollClassification: "direct_labor",
-  includePayrollInHpp: true,
-  payrollNotes: "",
   isActive: true,
 };
 
+export const getProductionStepPayrollClassification = (processType = "") =>
+  processType === "support_process" ? "support_fulfillment" : "direct_labor";
+
+export const shouldIncludeProductionStepPayrollInHpp = (processType = "") =>
+  getProductionStepPayrollClassification(processType) === "direct_labor";
+
 export const formatProductionStepPayrollPreview = (step = {}) => {
-  const mode = step?.payrollMode || "per_qty";
-  const rate = Number(step?.payrollRate || 0);
-  const qtyBase = Number(step?.payrollQtyBase || 1);
-  const outputBasis = step?.payrollOutputBasis || "good_qty";
-  const outputUnit = step?.outputUnit || "pcs";
-
-  // ACTIVE / FINAL: preview payroll step memakai helper formatter shared.
-  const rateText = formatCurrency(rate);
-
-  if (mode === "fixed") {
-    return `${rateText} per step selesai`;
-  }
+  const mode = step?.payrollMode === "per_batch" ? "per_batch" : "per_qty";
+  const rateText = formatCurrency(Number(step?.payrollRate || 0));
 
   if (mode === "per_batch") {
     return `${rateText} per batch`;
   }
 
-  return `${rateText} per ${formatNumber(qtyBase)} ${outputUnit} (${outputBasis})`;
+  return `${rateText} per qty`;
 };

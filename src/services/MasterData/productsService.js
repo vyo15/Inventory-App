@@ -13,7 +13,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { generateUniqueReadableCode, isBusinessCodeExists } from '../../utils/references/businessCodeGenerator';
+import { generateUniqueSequentialCode, isBusinessCodeExists } from '../../utils/references/businessCodeGenerator';
 import {
   calculateVariantTotals,
   normalizeColorVariants,
@@ -504,15 +504,13 @@ export const listenProducts = (callback, onError) => {
 };
 
 export const generateProductCode = async (values = {}, excludeId = null) => {
-  return generateUniqueReadableCode({
+  // IMS NOTE [AKTIF | internal-sequence-code]: Product baru memakai kode internal PRD-001 agar UI fokus ke nama produk, bukan kode semantic panjang.
+  return generateUniqueSequentialCode({
     db,
     collectionName: COLLECTION_NAME,
     fieldNames: ['code', 'productCode', 'sku'],
     prefix: 'PRD',
-    text: values.name || 'Produk Jadi',
-    fallbackText: 'Produk Jadi',
     excludeId,
-    maxParts: 6,
   });
 };
 
@@ -556,20 +554,20 @@ export const createProduct = async (values = {}, categories = []) => {
   Risiko:
   - Jangan mengganti dengan input manual atau random ID karena akan merusak duplicate guard dan export/audit teknis.
   ===================================================== */
-  const normalizedCode = String(values.code || '').trim().toUpperCase() || (await generateProductCode(values));
+  const normalizedCode = await generateProductCode(values);
   await assertProductCodeAvailable(normalizedCode, null);
 
   const payload = normalizeProductCreatePayload({ ...values, code: normalizedCode }, categories);
   /* =====================================================
   SECTION: Product document ID = business code — AKTIF
   Fungsi:
-  - Menyimpan Product baru dengan document ID sama seperti kode PRD readable.
+  - Menyimpan Product baru dengan document ID sama seperti kode PRD internal sequence.
 
   Dipakai oleh:
   - createProduct pada Master Data Produk.
 
   Alasan perubahan:
-  - Data baru yang 1 dokumen = 1 referensi utama idealnya memakai business code sebagai document ID.
+  - Data baru yang 1 dokumen = 1 referensi utama idealnya memakai internal code sebagai document ID.
 
   Catatan cleanup:
   - Data lama dengan random ID tetap dipertahankan dan tidak di-rename.

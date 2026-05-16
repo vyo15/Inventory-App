@@ -67,7 +67,6 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
-import { resolveDisplayReference } from '../../utils/references/displayReferenceResolver';
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -607,9 +606,6 @@ const ProductionEmployees = () => {
           <Typography.Text strong ellipsis={{ tooltip: record.name || "-" }}>
             {record.name || "-"}
           </Typography.Text>
-          <Typography.Text type="secondary" className="ims-cell-meta">
-            {resolveDisplayReference(record, { fallback: record.code || "-" })}
-          </Typography.Text>
           <Typography.Text type="secondary" className="ims-cell-meta" ellipsis={{ tooltip: record.phone || "-" }}>
             {record.phone || "-"}
           </Typography.Text>
@@ -1017,7 +1013,7 @@ const ProductionEmployees = () => {
                   optionFilterProp="label"
                   options={stepOptions.map((step) => ({
                     value: step.id,
-                    label: `${step.code} - ${step.name}`,
+                    label: step.name || "-",
                   }))}
                 />
               </Form.Item>
@@ -1235,9 +1231,6 @@ const ProductionEmployees = () => {
 
             <Card size="small" title="Ringkasan Karyawan" style={{ marginBottom: 16 }}>
               <Row gutter={[12, 12]}>
-                <Col xs={24} md={12}>
-                  {renderCompactInfo("Kode", resolveDisplayReference(selectedEmployee))}
-                </Col>
                 <Col xs={24} md={12}>
                   {renderCompactInfo("Nama", selectedEmployee.name)}
                 </Col>

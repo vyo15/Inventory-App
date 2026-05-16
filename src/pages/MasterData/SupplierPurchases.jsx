@@ -36,14 +36,12 @@ import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import {
-  applyLegacySupplierCodeRepair,
   assertSupplierCodeAvailable,
   calculateSupplierMaterialRestockMetrics,
   cascadeSupplierSnapshotToRawMaterials,
   clearSupplierSnapshotFromRawMaterials,
   doesSupplierProvideMaterial,
   generateSupplierCode,
-  getLegacySupplierCodeRepairPreview,
   getSupplierDisplayName,
   getSupplierStoreLink,
   isManagedSupplierRecord,
@@ -141,9 +139,6 @@ const SupplierPurchases = () => {
   const [saving, setSaving] = useState(false);
   const [supplierCodeLoading, setSupplierCodeLoading] = useState(false);
   const [editingSupplierNeedsCodeRepair, setEditingSupplierNeedsCodeRepair] = useState(false);
-  const [legacyCodeRepairLoading, setLegacyCodeRepairLoading] = useState(false);
-  const [legacyCodeRepairPreview, setLegacyCodeRepairPreview] = useState({ rows: [], total: 0, skipped: 0, warnings: [] });
-  const [legacyCodeRepairModalVisible, setLegacyCodeRepairModalVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [materialFilter, setMaterialFilter] = useState(undefined);
 
@@ -583,69 +578,6 @@ const SupplierPurchases = () => {
     });
   };
 
-  /* =====================================================
-      SECTION: Supplier legacy repair modal/action UI — LEGACY-COMPAT / GUARDED
-      Fungsi:
-      - Membuka preview repair kode supplier lama dan apply update field code/supplierCode setelah user menyetujui.
-
-      Dipakai oleh:
-      - Tombol Repair Kode Supplier Lama di halaman Master Data / Supplier.
-
-      Alasan perubahan:
-      - Data supplier lama bisa masih kosong/tidak valid/random ID, tetapi document ID lama tidak boleh direnamed agar relasi existing aman.
-
-      Catatan cleanup:
-      - Bisa dipindah ke Reset & Maintenance jika fitur repair legacy makin banyak.
-
-      Risiko:
-      - Jangan jadikan repair otomatis saat page load/edit karena perubahan kode audit harus action sadar dari user.
-  ===================================================== */
-  const handleOpenLegacyCodeRepairPreview = async () => {
-    setLegacyCodeRepairLoading(true);
-
-    try {
-      const preview = await getLegacySupplierCodeRepairPreview();
-      setLegacyCodeRepairPreview(preview);
-      setLegacyCodeRepairModalVisible(true);
-
-      if (!preview.rows.length) {
-        message.info('Tidak ada supplier lama yang perlu repair kode.');
-      }
-    } catch (error) {
-      console.error('Gagal membuat preview repair kode supplier lama:', error);
-      message.error('Gagal membuat preview repair kode supplier lama.');
-    } finally {
-      setLegacyCodeRepairLoading(false);
-    }
-  };
-
-  const handleApplyLegacyCodeRepair = async () => {
-    const previewRows = legacyCodeRepairPreview.rows || [];
-
-    if (!previewRows.length) {
-      message.info('Tidak ada supplier lama yang perlu direpair.');
-      return;
-    }
-
-    setLegacyCodeRepairLoading(true);
-
-    try {
-      const result = await applyLegacySupplierCodeRepair(previewRows);
-      message.success(`Repair kode supplier lama berhasil. ${result.updated || 0} supplier diperbarui.`);
-      setLegacyCodeRepairModalVisible(false);
-      setLegacyCodeRepairPreview({ rows: [], total: 0, skipped: 0, warnings: [] });
-    } catch (error) {
-      console.error('Gagal apply repair kode supplier lama:', error);
-      if (error?.type === 'validation' && error.errors) {
-        message.error(Object.values(error.errors)[0] || 'Preview repair belum valid.');
-      } else {
-        message.error('Gagal apply repair kode supplier lama.');
-      }
-    } finally {
-      setLegacyCodeRepairLoading(false);
-    }
-  };
-
   // ---------------------------------------------------------------------------
   // Hapus supplier dari master dan bersihkan snapshot pada Raw Material terkait.
   // STATUS: aktif; tidak mengubah stok, harga, purchase, atau katalog material.
@@ -939,37 +871,6 @@ const SupplierPurchases = () => {
   ];
 
 
-  const legacyCodeRepairColumns = [
-    {
-      title: 'Nama Supplier',
-      dataIndex: 'supplierName',
-      key: 'supplierName',
-      render: (value) => <span className="ims-cell-title">{value || 'Supplier tanpa nama'}</span>,
-    },
-    {
-      title: 'Kode Sekarang',
-      key: 'currentCode',
-      render: (_, record) => (
-        <Space direction="vertical" size={2}>
-          <span>code: {record.currentCode || '-'}</span>
-          <span>supplierCode: {record.currentSupplierCode || '-'}</span>
-        </Space>
-      ),
-    },
-    {
-      title: 'Kode Baru',
-      dataIndex: 'proposedCode',
-      key: 'proposedCode',
-      render: (value) => <Tag color="green">{value}</Tag>,
-    },
-    {
-      title: 'Alasan',
-      dataIndex: 'reason',
-      key: 'reason',
-    },
-  ];
-
-
   return (
     <div className="page-container">
       <PageHeader
@@ -987,13 +888,6 @@ const SupplierPurchases = () => {
           ) : null
         }
         actions={[
-          <Button
-            key="repair-legacy-supplier-code"
-            loading={legacyCodeRepairLoading}
-            onClick={handleOpenLegacyCodeRepairPreview}
-          >
-            Repair Kode Supplier Lama
-          </Button>,
           {
             key: 'create-supplier',
             type: 'primary',
@@ -1074,54 +968,6 @@ const SupplierPurchases = () => {
         />
       </PageSection>
 
-      {/* =====================================================
-          SECTION: Supplier legacy repair preview modal — LEGACY-COMPAT / GUARDED
-          Fungsi:
-          - Menampilkan daftar supplier lama yang akan diberi field code/supplierCode tanpa rename document ID lama.
-
-          Dipakai oleh:
-          - Action Repair Kode Supplier Lama.
-
-          Alasan perubahan:
-          - User perlu melihat proposed code sebelum repair agar perubahan audit dilakukan sadar dan terkontrol.
-
-          Catatan cleanup:
-          - Belum ada.
-
-          Risiko:
-          - Jangan ubah modal ini menjadi auto-apply karena dapat mengubah banyak dokumen tanpa review user.
-      ===================================================== */}
-      <Modal
-        title="Preview Repair Kode Supplier Lama"
-        open={legacyCodeRepairModalVisible}
-        onCancel={() => setLegacyCodeRepairModalVisible(false)}
-        onOk={handleApplyLegacyCodeRepair}
-        okText="Apply Repair"
-        cancelText="Batal"
-        okButtonProps={{
-          loading: legacyCodeRepairLoading,
-          disabled: legacyCodeRepairLoading || !(legacyCodeRepairPreview.rows || []).length,
-        }}
-        width={920}
-      >
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="Aksi ini hanya menambahkan field code/supplierCode pada supplier lama. Document ID lama tidak diubah agar relasi existing tetap aman."
-        />
-        <Table
-          className="app-data-table"
-          rowKey="id"
-          size="small"
-          columns={legacyCodeRepairColumns}
-          dataSource={legacyCodeRepairPreview.rows || []}
-          loading={legacyCodeRepairLoading}
-          pagination={{ pageSize: 10 }}
-          locale={{ emptyText: <Empty description="Tidak ada supplier lama yang perlu repair kode" /> }}
-        />
-      </Modal>
-
       <Modal
         title={isEditing ? 'Edit Supplier' : 'Tambah Supplier'}
         open={modalVisible}
@@ -1155,7 +1001,7 @@ const SupplierPurchases = () => {
             label="Kode Supplier"
             extra={
               isEditing && editingSupplierNeedsCodeRepair
-                ? 'Supplier lama belum punya kode bisnis. Gunakan tombol Repair Kode Supplier Lama.'
+                ? 'Supplier lama belum punya kode bisnis. Normalisasi lewat menu Reset & Maintenance Data.'
                 : isEditing
                   ? 'Kode supplier tidak bisa diubah setelah dibuat agar audit tetap konsisten.'
                   : 'Kode supplier dibuat otomatis dengan format SUP-DDMMYYYY-001 dan dikunci untuk audit.'
@@ -1173,7 +1019,7 @@ const SupplierPurchases = () => {
               type="warning"
               showIcon
               style={{ marginBottom: 16 }}
-              message="Supplier lama ini belum punya kode bisnis. Jalankan repair kode supplier agar audit rapi."
+              message="Supplier lama ini belum punya kode bisnis. Normalisasi lewat menu Reset & Maintenance Data agar audit rapi."
             />
           ) : null}
 
