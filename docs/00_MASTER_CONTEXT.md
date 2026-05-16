@@ -6,22 +6,22 @@ Update verifikasi source aktual — 2026-05-06:
 - folder custom `functions/` tidak ditemukan pada ZIP aktual; jangan menganggap ada Firebase Functions custom aktif tanpa bukti source baru;
 - file legacy `src/services/Produksi/productionService.js` tidak ditemukan pada ZIP aktual; produksi aktif memakai service granular di `src/services/Produksi/`;
 - collection `productions` masih muncul sebagai legacy data layer pada maintenance/reset/audit, bukan flow operasional utama;
-- Firestore Rules wajib aktif dan aman di backend Firebase, tetapi repo ZIP saat ini tidak menyertakan file rules source-controlled karena rules dikelola manual/external di Firebase Console;
+- Firestore Rules wajib aktif dan aman di backend Firebase; repo sekarang menyertakan `firestore.rules` dan `firebase.json` sebagai source rules staged-final;
 - root `assets/` yang berisi build artifact lama bukan source aktif dan boleh dibersihkan jika tidak ada referensi runtime aktif.
 
 =====================================================
 SECTION: Current repository boundary — AKTIF / GUARDED / CLEANUP CANDIDATE
 Fungsi:
-- Mengunci batas source aktual: frontend React/Vite, Firestore client layer, rules backend external, dan cleanup root artifact.
+- Mengunci batas source aktual: frontend React/Vite, Firestore client layer, rules source-controlled, dan cleanup root artifact.
 
 Dipakai oleh:
 - Semua task patch docs/source, terutama Auth/User Management, Firestore Rules, dan cleanup repository.
 
 Alasan perubahan:
-- Owner mengonfirmasi Firestore Rules dikelola langsung di Firebase Console dan root assets/ adalah sisa build yang lupa terhapus.
+- Rules kini disimpan di repo agar bisa direview sebelum deploy, dan root assets/ adalah sisa build yang lupa terhapus.
 
 Catatan cleanup:
-- Source-controlled rules boleh menjadi task terpisah jika owner ingin rules dimasukkan ke repo.
+- Rules masih staged-final collection-level; field-level validation per modul bisa menjadi task security lanjutan.
 
 Risiko:
 - Menganggap rules tidak wajib karena tidak ada file repo akan membuka risiko security; menghapus `src/assets` keliru akan merusak logo/branding aktif.

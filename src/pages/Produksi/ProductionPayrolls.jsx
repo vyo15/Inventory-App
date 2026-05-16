@@ -553,7 +553,7 @@ const ProductionPayrolls = () => {
       />
 
       {/* AKTIF / GUARDED: summary cards shared hanya ubah presentasi, nominal payroll tetap dari data existing. */}
-      <ProductionSummaryCards items={summaryItems} />
+      <ProductionSummaryCards items={summaryItems} variant="finance" highlightKey="payroll-total-amount" />
 
       {/* AKTIF / GUARDED: filter card shared menjaga konsistensi layout, filter state dan query logic tidak berubah. */}
       <ProductionFilterCard>

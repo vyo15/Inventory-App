@@ -23,8 +23,6 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import {
   collection,
-  addDoc,
-  deleteDoc,
   getDoc,
   getDocs,
   Timestamp,
@@ -33,15 +31,20 @@ import {
   orderBy,
   doc,
   updateDoc,
-  setDoc,
+  runTransaction,
 } from "firebase/firestore";
 import {
   addInventoryLog,
   updateInventoryStock,
 } from "../../services/Inventory/inventoryService";
+import {
+  buildInventoryLogPayload,
+  INVENTORY_LOG_COLLECTION,
+} from "../../services/Inventory/inventoryLogService";
 import { getCustomers } from "../../services/MasterData/customersService";
 import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
 import {
+  applyStockMutationToItem,
   buildVariantOptionsFromItem,
   findVariantByKey,
   getItemStockSnapshot,
@@ -482,45 +485,35 @@ const Sales = () => {
   };
 
   // =========================
-  // SECTION: Rollback sale jika mutasi stok gagal setelah dokumen sale dibuat
+  // SECTION: Payload income penjualan
   // Fungsi:
-  // - mengembalikan stok item yang sudah sempat terpotong
-  // - menghapus dokumen sale yang baru dibuat agar tidak ada sale tersimpan tanpa stok keluar lengkap
-  // Hubungan flow Sales/stok:
-  // - menjaga atomic-like behavior di sisi UI tanpa mengubah service inventory global
+  // - menyamakan isi income dari create sale dan update status Selesai
+  // - menjaga reference ORD tetap muncul di Cash In / laporan tanpa menambah collection baru
+  // Hubungan flow Sales/kas:
+  // - hanya dipakai saat status penjualan resmi Selesai
   // Status:
-  // - aktif/final guard Fase A
-  // - bukan legacy; kandidat cleanup hanya jika nanti flow dipindah ke transaction/cloud function resmi
+  // - aktif/final; jangan dipakai untuk pending income karena pending hanya monitoring UI
   // =========================
-  const rollbackSaleAfterStockMutationFailure = async ({
-    saleId,
-    appliedStockItems = [],
-  }) => {
-    const rollbackErrors = [];
+  const buildSaleIncomePayload = ({ selectedSale, saleId, dateValue = Timestamp.now() }) => {
+    const itemNames = (selectedSale.items || [])
+      .map((item) => `${item.itemName}${item.variantLabel ? ` - ${item.variantLabel}` : ""} (${item.quantity})`)
+      .join(", ");
+    const saleReferenceNumber = selectedSale.saleNumber || selectedSale.code || selectedSale.referenceNumber || saleId;
 
-    for (const item of appliedStockItems) {
-      try {
-        await updateInventoryStock({
-          itemId: item.itemId,
-          collectionName: item.collectionName,
-          quantityChange: Number(item.quantity || 0),
-          variantKey: item.variantKey || "",
-          allowMasterForVariant: !item.variantKey,
-        });
-      } catch (rollbackError) {
-        rollbackErrors.push(rollbackError);
-      }
-    }
-
-    if (saleId) {
-      await deleteDoc(doc(db, "sales", saleId));
-    }
-
-    if (rollbackErrors.length > 0) {
-      throw new Error(
-        "Mutasi stok gagal dan rollback stok perlu dicek manual. Sale baru sudah dihapus agar tidak tersimpan tanpa stok keluar lengkap.",
-      );
-    }
+    return {
+      date: dateValue,
+      type: "Penjualan",
+      incomeNumber: saleReferenceNumber,
+      code: saleReferenceNumber,
+      sourceRef: saleReferenceNumber,
+      referenceNumber: saleReferenceNumber,
+      relatedId: saleId,
+      description: `Penjualan: ${itemNames}`,
+      amount: selectedSale.total,
+      salesChannel: selectedSale.salesChannel || "",
+      sourceModule: "sales",
+      createdAt: Timestamp.now(),
+    };
   };
 
   // =========================
@@ -591,112 +584,150 @@ const Sales = () => {
       };
 
       /* =====================================================
-      SECTION: Sales document ID = ORD business code — GUARDED
+      SECTION: Sales create transaction — GUARDED
       Fungsi:
-      - Menyimpan sales/order baru dengan document ID sama seperti saleNumber ORD.
+      - Menyimpan sales/order, mutasi stok, inventory log, dan income selesai dalam satu Firestore transaction.
 
       Dipakai oleh:
-      - handleSubmit Sales sebelum mutation stok.
+      - handleAddSale Sales.
 
       Alasan perubahan:
-      - Field legacy saleNumber tetap dipakai, tetapi value data baru wajib ORD-DDMMYYYY-001.
+      - Flow lama memakai setDoc lalu update stok/log bertahap sehingga bisa meninggalkan data parsial jika salah satu write gagal.
+      - Document ID tetap ORD-DDMMYYYY-001 agar referensi audit user-facing konsisten.
 
       Catatan cleanup:
-      - Data lama SAL tetap compatibility dan tidak di-rename.
+      - Data lama SAL/random tetap compatibility dan tidak di-rename.
 
       Risiko:
-      - Jangan mengubah validasi stok, rollback, income creation, cancel/delete flow, atau inventory log mutation dari section ini.
+      - Jangan memindahkan transaction ini ke UI workaround lain tanpa transaction/service guarded.
       ===================================================== */
       const salesDocument = doc(db, "sales", saleNumber);
-      await setDoc(salesDocument, newSalePayload);
-      const appliedStockItems = [];
+      const saleIncomeReference = status === "Selesai"
+        ? doc(db, "incomes", `income_${salesDocument.id}`)
+        : null;
+      const saleInventoryLogReferences = newSalePayload.items.map(() =>
+        doc(collection(db, INVENTORY_LOG_COLLECTION)),
+      );
 
-      // =========================
-      // SECTION: Kurangi stok item final dengan rollback jika gagal
-      // Fungsi:
-      // - memotong stok melalui updateInventoryStock yang sudah variant-aware dan preventNegative
-      // - menunda inventory log sampai semua mutasi stok berhasil agar tidak ada log sale untuk transaksi yang dibatalkan
-      // Hubungan flow Sales/stok:
-      // - jika salah satu mutasi gagal, stok yang sudah sempat terpotong dikembalikan dan dokumen sale baru dihapus
-      // Status:
-      // - aktif/final untuk Fase A Sales stock safety
-      // - bukan legacy; kandidat cleanup hanya jika nanti diganti transaction/cloud function
-      // =========================
-      try {
-        for (const item of newSalePayload.items) {
-          await updateInventoryStock({
-            itemId: item.itemId,
-            collectionName: item.collectionName,
-            quantityChange: -item.quantity,
-            variantKey: item.variantKey || "",
-            preventNegative: true,
-          });
+      await runTransaction(db, async (transaction) => {
+        const saleSnapshot = await transaction.get(salesDocument);
+        const incomeSnapshot = saleIncomeReference
+          ? await transaction.get(saleIncomeReference)
+          : null;
 
-          appliedStockItems.push(item);
+        // IMS NOTE [GUARDED] - collision guard kode ORD scan-based.
+        // Fungsi: mencegah create sale menimpa order lama ketika dua user submit bersamaan.
+        if (saleSnapshot.exists()) {
+          throw new Error(`Nomor penjualan ${saleNumber} sudah dipakai. Muat ulang data lalu simpan kembali.`);
         }
-      } catch (stockMutationError) {
-        await rollbackSaleAfterStockMutationFailure({
-          saleId: salesDocument.id,
-          appliedStockItems,
+
+        if (incomeSnapshot?.exists()) {
+          throw new Error(`Income untuk penjualan ${saleNumber} sudah ada. Muat ulang data lalu simpan kembali.`);
+        }
+
+        const stockNeedsByBucket = new Map();
+        newSalePayload.items.forEach((item) => {
+          const bucketKey = buildSaleStockBucketKey(item);
+          const existingNeed = stockNeedsByBucket.get(bucketKey);
+
+          stockNeedsByBucket.set(bucketKey, {
+            ...item,
+            quantity: Number(existingNeed?.quantity || 0) + Number(item.quantity || 0),
+          });
         });
 
-        throw new Error(
-          stockMutationError?.message ||
-            "Mutasi stok penjualan gagal. Penjualan dibatalkan dan belum disimpan.",
-        );
-      }
+        const stockMutationPayloads = [];
 
-      // =========================
-      // SECTION: Catat log stok setelah mutasi stok berhasil semua
-      // Fungsi:
-      // - menulis audit trail penjualan hanya setelah stok benar-benar terpotong lengkap
-      // Hubungan flow Sales/stok:
-      // - mencegah inventory_logs berisi sale yang dokumen transaksinya sudah dihapus karena rollback
-      // Status:
-      // - aktif/final; bukan legacy dan bukan kandidat cleanup
-      // =========================
-      for (const item of newSalePayload.items) {
-        await addInventoryLog(
-          item.itemId,
-          item.itemName,
-          -item.quantity,
-          "sale",
-          item.collectionName,
-          {
-            customerName: newSalePayload.customerName || "",
-            saleId: salesDocument.id,
-            saleNumber: newSalePayload.saleNumber || "",
-            referenceId: salesDocument.id,
-            referenceCode: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
-            sourceRef: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
-            note: `Penjualan via ${newSalePayload.salesChannel}`,
-            subtotal: item.subtotal,
-            referenceNumber: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
-            unit: item.unit || "",
-            stockUnit: item.unit || "",
-            variantKey: item.variantKey || "",
-            variantLabel: item.variantLabel || "",
-            stockSourceType: item.stockSourceType || "master",
-          },
-        );
-      }
+        for (const item of stockNeedsByBucket.values()) {
+          const itemReference = doc(db, item.collectionName, item.itemId);
+          const itemSnapshotDocument = await transaction.get(itemReference);
 
-      // RULE:
-      // Pemasukan kas hanya dicatat saat status Selesai.
-      if (status === "Selesai") {
-        const itemNames = newSalePayload.items
-          .map((item) => `${item.itemName}${item.variantLabel ? ` - ${item.variantLabel}` : ""} (${item.quantity})`)
-          .join(", ");
+          if (!itemSnapshotDocument.exists()) {
+            throw new Error(`Item ${item.itemName || item.itemId} tidak ditemukan. Penjualan dibatalkan agar stok tidak partial.`);
+          }
 
-        await addDoc(collection(db, "incomes"), {
-          date: Timestamp.fromDate(date.toDate()),
-          type: "Penjualan",
-          relatedId: salesDocument.id,
-          description: `Penjualan: ${itemNames}`,
-          amount: totalSaleValue,
-          salesChannel: newSalePayload.salesChannel,
+          const latestItem = {
+            id: itemSnapshotDocument.id,
+            ...itemSnapshotDocument.data(),
+          };
+          const hasVariants = inferHasVariants(latestItem);
+          const latestVariant = hasVariants && item.variantKey
+            ? findVariantByKey(latestItem, item.variantKey)
+            : null;
+
+          if (hasVariants && !latestVariant) {
+            throw new Error(`Varian ${item.variantLabel || item.variantKey || "item"} untuk ${item.itemName} tidak ditemukan. Penjualan dibatalkan agar stok tidak masuk ke master/default.`);
+          }
+
+          const stockSnapshot = latestVariant
+            ? getItemStockSnapshot(latestVariant)
+            : getItemStockSnapshot(latestItem);
+          const requestedQuantity = Number(item.quantity || 0);
+
+          if (stockSnapshot.availableStock < requestedQuantity) {
+            throw new Error(
+              `Stok tersedia ${item.itemName}${latestVariant ? ` - ${latestVariant.variantLabel}` : ""} tidak mencukupi. Dibutuhkan: ${formatNumberId(requestedQuantity)}, tersedia: ${formatNumberId(stockSnapshot.availableStock)}. Penjualan belum disimpan.`,
+            );
+          }
+
+          stockMutationPayloads.push({
+            itemReference,
+            stockUpdatePayload: applyStockMutationToItem({
+              item: latestItem,
+              variantKey: latestVariant?.variantKey || "",
+              deltaCurrent: -requestedQuantity,
+            }),
+          });
+        }
+
+        transaction.set(salesDocument, newSalePayload);
+
+        stockMutationPayloads.forEach(({ itemReference, stockUpdatePayload }) => {
+          transaction.update(itemReference, stockUpdatePayload);
         });
-      }
+
+        newSalePayload.items.forEach((item, index) => {
+          transaction.set(
+            saleInventoryLogReferences[index],
+            buildInventoryLogPayload({
+              itemId: item.itemId,
+              itemName: item.itemName,
+              quantityChange: -item.quantity,
+              type: "sale",
+              collectionName: item.collectionName,
+              timestamp: Timestamp.now(),
+              extraData: {
+                customerName: newSalePayload.customerName || "",
+                saleId: salesDocument.id,
+                saleNumber: newSalePayload.saleNumber || "",
+                referenceId: salesDocument.id,
+                referenceCode: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
+                sourceRef: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
+                note: `Penjualan via ${newSalePayload.salesChannel}`,
+                subtotal: item.subtotal,
+                referenceNumber: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
+                unit: item.unit || "",
+                stockUnit: item.unit || "",
+                variantKey: item.variantKey || "",
+                variantLabel: item.variantLabel || "",
+                stockSourceType: item.stockSourceType || "master",
+              },
+            }),
+          );
+        });
+
+        // RULE: Pemasukan kas hanya dicatat saat status Selesai dan ikut commit dalam transaction sale.
+        if (saleIncomeReference) {
+          transaction.set(
+            saleIncomeReference,
+            buildSaleIncomePayload({
+              selectedSale: newSalePayload,
+              saleId: salesDocument.id,
+              dateValue: Timestamp.fromDate(date.toDate()),
+            }),
+          );
+        }
+      });
 
       message.success("Penjualan berhasil ditambahkan!");
       setIsModalOpen(false);
@@ -767,32 +798,41 @@ const Sales = () => {
       }
 
       const saleReference = doc(db, "sales", saleId);
-      await updateDoc(saleReference, { status: newStatus });
 
       // RULE:
-      // Saat status berubah menjadi Selesai,
-      // baru catat pemasukan kas jika belum pernah dibuat.
+      // Saat status berubah menjadi Selesai, update status dan income resmi dibuat dalam transaction yang sama.
       if (newStatus === "Selesai" && selectedSale && selectedSale.total > 0) {
         const incomeExists = await hasExistingIncome(saleId);
+        const incomeReference = doc(db, "incomes", `income_${saleId}`);
 
-        if (!incomeExists) {
-          const itemNames = selectedSale.items
-            .map((item) => `${item.itemName}${item.variantLabel ? ` - ${item.variantLabel}` : ""} (${item.quantity})`)
-            .join(", ");
+        await runTransaction(db, async (transaction) => {
+          const saleSnapshot = await transaction.get(saleReference);
+          const incomeSnapshot = await transaction.get(incomeReference);
 
-          await addDoc(collection(db, "incomes"), {
-            date: Timestamp.now(),
-            type: "Penjualan",
-            incomeNumber: selectedSale.saleNumber || selectedSale.code || "",
-            code: selectedSale.saleNumber || selectedSale.code || "",
-            sourceRef: selectedSale.saleNumber || selectedSale.code || selectedSale.referenceNumber || "",
-            referenceNumber: selectedSale.saleNumber || selectedSale.code || selectedSale.referenceNumber || "",
-            relatedId: saleId,
-            description: `Penjualan: ${itemNames}`,
-            amount: selectedSale.total,
-            salesChannel: selectedSale.salesChannel || "",
-          });
-        }
+          if (!saleSnapshot.exists()) {
+            throw new Error("Data penjualan tidak ditemukan. Status belum diubah.");
+          }
+
+          const latestSale = {
+            id: saleSnapshot.id,
+            ...saleSnapshot.data(),
+          };
+
+          transaction.update(saleReference, { status: newStatus });
+
+          if (!incomeExists && !incomeSnapshot.exists()) {
+            transaction.set(
+              incomeReference,
+              buildSaleIncomePayload({
+                selectedSale: latestSale,
+                saleId,
+                dateValue: Timestamp.now(),
+              }),
+            );
+          }
+        });
+      } else {
+        await updateDoc(saleReference, { status: newStatus });
       }
 
       message.success(`Status penjualan berhasil diubah menjadi ${newStatus}.`);

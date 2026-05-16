@@ -489,7 +489,7 @@ const CashOut = () => {
         title="Ringkasan Periode"
         subtitle="KPI periode aktif."
       >
-        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
+        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} variant="finance" />
       </PageSection>
 
       <PageSection

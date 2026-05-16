@@ -674,7 +674,7 @@ const PayrollReport = () => {
         title="Ringkasan Payroll Periode"
         subtitle="Ringkasan payroll sesuai filter aktif."
       >
-        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 8, lg: 6, xl: 6 }} />
+        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 8, lg: 6, xl: 6 }} variant="finance" highlightKey="nominal" />
       </PageSection>
 
       <PageSection

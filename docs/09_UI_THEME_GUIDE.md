@@ -307,3 +307,45 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 - Jangan mengganti loading submit, export, maintenance repair/reset, Refresh Need, atau Refresh Preview tanpa task dan audit flow terpisah.
 
 - Table initial loading yang sudah dipatch memakai `getDataTableEmptyText(...)` dan refresh lokal memakai `DataRefreshIndicator`; jangan kembali ke custom skeleton sebagai `Table loading` indicator karena bisa memicu overlay/double loading.
+
+## Standar Compact Summary Dock
+
+Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang berlebihan ketika hanya menampilkan angka seperti total, varian, tanpa varian, status cek, uang masuk, uang keluar, atau nominal report.
+
+### Varian aktif
+
+1. **Executive Dock**
+   - Default untuk halaman operasional, master data, stok, produksi umum, dan summary count.
+   - Satu metric utama dibuat lebih dominan, metric lainnya menjadi mini card kanan/bawah.
+   - Cocok untuk `Total`, `Aktif`, `Nonaktif`, `Perlu Dicek`, `Varian`, dan status ringkas lain.
+
+2. **Finance Dock**
+   - Dipakai untuk Cash In, Cash Out, Buku Besar Kas, laporan finance, payroll nominal, dan HPP.
+   - Satu angka utama diberi ruang lebih besar agar nominal Rupiah panjang tetap terbaca.
+   - Metric pendukung dan flow mini tetap ringkas tanpa mengulang kata `Total` berlebihan.
+
+3. **Legacy Cards**
+   - `variant="cards"` boleh dipakai hanya bila ada kebutuhan khusus mempertahankan grid kartu lama.
+   - Jangan jadikan default baru kecuali ada alasan layout spesifik.
+
+### Aturan copy summary
+
+- Label summary harus pendek dan user-facing.
+- Hindari pengulangan kata seperti `Total` di semua kartu bila konteks sudah jelas dari section title.
+- Subtitle hanya dipakai bila menambah konteks filter/periode/status; jangan mengulang judul.
+- Untuk angka Rupiah panjang, gunakan Finance Dock supaya tidak memaksa table/filter turun terlalu jauh.
+
+### Aturan teknis aman
+
+- `SummaryStatGrid` adalah komponen presentational; perubahan layout tidak boleh mengubah perhitungan, query, service, payload, schema, route, role guard, stok, kas, payroll, HPP, atau audit log.
+- `columns` tetap dipertahankan sebagai kompatibilitas untuk `variant="cards"`, tetapi layout baru dikendalikan oleh `variant` dan CSS responsive.
+- `ProductionSummaryCards` memakai adapter `SummaryStatGrid` agar halaman produksi konsisten tanpa menggandakan komponen summary.
+- Jika halaman finance butuh angka utama tertentu, gunakan `highlightKey` sesuai key item summary.
+
+### Checklist visual summary
+
+- Desktop: summary tidak terasa terlalu tinggi dan table/filter tetap cepat terlihat.
+- Tablet/mobile: Executive Dock dan Finance Dock turun menjadi satu kolom tanpa overflow horizontal.
+- Light/dark: border, shadow, text, dan status accent tetap readable.
+- Data banyak: halaman dengan summary lebih dari empat item tetap wrap rapi.
+- Finance: nominal panjang tidak terpotong dan flow strip tetap tidak mendominasi halaman.

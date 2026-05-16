@@ -967,3 +967,17 @@ Catatan lock:
 - Cleanup candidate: audit semua table/detail agar technical ID atau kode internal tidak tampil sebagai identitas utama master item.
 - Cleanup candidate: standardisasi seluruh generator master/transaksi jika masih ada prefix lama pada data baru.
 - Risiko yang harus dijaga: jangan menyamakan rule master item dengan transaksi/audit karena nomor transaksi tetap wajib terlihat untuk pencarian dan bukti audit.
+
+## Update Compact Summary Dock — 2026-05-15
+
+Status: **AKTIF / UI-only / GUARDED**.
+
+- `src/components/Layout/Display/SummaryStatGrid.jsx` sekarang menjadi pusat layout summary dengan varian `executive`, `finance`, dan fallback `cards`.
+- Default summary operasional memakai **Executive Dock** agar lebih compact daripada empat kartu besar sejajar.
+- Halaman finance/report tertentu memakai **Finance Dock** agar nominal Rupiah dan angka utama lebih readable.
+- `src/components/Produksi/shared/ProductionSummaryCards.jsx` menjadi adapter ke `SummaryStatGrid` supaya produksi tidak punya style summary terpisah.
+- Patch ini tidak mengubah collection, schema, route, role guard, query, service, kalkulasi, stock mutation, cash mutation, payroll, HPP, reset, atau audit log.
+
+Catatan tech debt:
+- Jika ada halaman yang secara visual lebih cocok tetap grid lama, gunakan `variant="cards"` secara eksplisit setelah review UI.
+- Jika ada finance page yang butuh angka utama berbeda, set `highlightKey` tanpa mengubah urutan data atau perhitungan summary.

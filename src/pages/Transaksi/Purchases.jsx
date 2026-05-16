@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Table,
   Modal,
@@ -18,7 +19,19 @@ import {
   Progress,
 } from "antd";
 import { collection, doc, onSnapshot, runTransaction, Timestamp } from "firebase/firestore";
-import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
+import {
+  CarOutlined,
+  CloseOutlined,
+  FileTextOutlined,
+  InboxOutlined,
+  InfoCircleOutlined,
+  PlusOutlined,
+  PrinterOutlined,
+  SafetyCertificateOutlined,
+  ShoppingOutlined,
+  TagsOutlined,
+  UploadOutlined,
+} from "@ant-design/icons";
 import { useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
 import { db } from "../../firebase";
@@ -232,6 +245,37 @@ const Purchases = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [shopeeOcrState, setShopeeOcrState] = useState(SHOPEE_OCR_IDLE_STATE);
+  const [shopeeOcrDetailModal, setShopeeOcrDetailModal] = useState({
+    open: false,
+    rows: [],
+    totalRow: null,
+    rawText: "",
+    purchaseMeta: {},
+  });
+
+  // =========================
+  // SECTION: Lock body scroll saat popup OCR aktif
+  // Fungsi blok:
+  // - menjaga struk OCR yang dirender via portal tetap fokus sebagai overlay global.
+  // - mencegah halaman Purchases ikut scroll di belakang popup.
+  // Catatan: tidak mengubah data purchase/OCR, hanya behavior visual modal.
+  // =========================
+  useEffect(() => {
+    if (!shopeeOcrDetailModal.open || typeof document === "undefined") {
+      return undefined;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [shopeeOcrDetailModal.open]);
 
   // =========================
   // SECTION: Watch fields
@@ -1168,16 +1212,227 @@ const Purchases = () => {
     return Upload.LIST_IGNORE;
   };
 
+  const normalizePurchaseNoteText = (value = "") =>
+    String(value || "")
+      .replace(/\r/g, "\n")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
   const stripExistingShopeeOcrNote = (note = "") => {
-    const noteParts = String(note || "")
-      .split("|")
-      .map((part) => part.trim())
-      .filter(Boolean);
-    const ocrMarkerIndex = noteParts.findIndex((part) => /^OCR Shopee\b/i.test(part));
+    const normalizedNote = String(note || "").replace(/\r/g, "\n");
+    const markerMatch = normalizedNote.match(/(^|\n|\|)\s*OCR Shopee\b/i);
 
     // ALASAN: klik Terapkan berulang harus idempotent. Segmen OCR lama dihapus dulu
     // agar catatan tidak bertambah dobel, sementara catatan manual sebelum marker tetap aman.
-    return (ocrMarkerIndex >= 0 ? noteParts.slice(0, ocrMarkerIndex) : noteParts).join(" | ");
+    // Guard ini mendukung catatan OCR lama berbasis `|` dan format baru multiline.
+    if (!markerMatch) return normalizePurchaseNoteText(normalizedNote);
+
+    return normalizePurchaseNoteText(normalizedNote.slice(0, markerMatch.index).replace(/[ \t]*\|[ \t]*$/, ""));
+  };
+
+  const getShopeeOcrNoteSegment = (note = "") => {
+    const normalizedNote = normalizePurchaseNoteText(note);
+    const markerMatch = normalizedNote.match(/(^|\n|\|)\s*OCR Shopee\b/i);
+
+    if (!markerMatch) return "";
+
+    return normalizePurchaseNoteText(normalizedNote.slice(markerMatch.index).replace(/^[\s|]+/, ""));
+  };
+
+  const getShopeeOcrDetailMeta = (label = "") => {
+    const normalizedLabel = String(label || "").toLowerCase();
+
+    if (normalizedLabel.includes("subtotal")) {
+      return {
+        label: "Subtotal barang",
+        iconKey: "subtotal",
+        tone: "blue",
+        order: 10,
+      };
+    }
+
+    if (normalizedLabel.includes("ongkir") && !normalizedLabel.includes("diskon")) {
+      return {
+        label: "Ongkir pengiriman",
+        iconKey: "shipping",
+        tone: "purple",
+        order: 20,
+      };
+    }
+
+    if (normalizedLabel.includes("diskon ongkir")) {
+      return {
+        label: "Diskon ongkir",
+        iconKey: "discount",
+        tone: "green",
+        order: 30,
+        isDiscount: true,
+      };
+    }
+
+    if (normalizedLabel.includes("voucher") || normalizedLabel.includes("potongan")) {
+      return {
+        label: "Voucher / potongan",
+        iconKey: "discount",
+        tone: "green",
+        order: 40,
+        isDiscount: true,
+      };
+    }
+
+    if (normalizedLabel.includes("biaya layanan")) {
+      return {
+        label: "Biaya layanan marketplace",
+        iconKey: "serviceFee",
+        tone: "orange",
+        order: 50,
+      };
+    }
+
+    if (normalizedLabel.includes("qty")) {
+      return {
+        label: "Qty beli",
+        iconKey: "qty",
+        tone: "cyan",
+        order: 60,
+      };
+    }
+
+    if (normalizedLabel.includes("total screenshot") || normalizedLabel.includes("total pesanan")) {
+      return {
+        label: "Total pesanan",
+        iconKey: "total",
+        tone: "blue",
+        order: 90,
+        isTotal: true,
+      };
+    }
+
+    return {
+      label: label || "Info",
+      iconKey: "info",
+      tone: "default",
+      order: 80,
+    };
+  };
+
+  const normalizeShopeeOcrDetailValue = (value = "", { isDiscount = false } = {}) => {
+    const trimmedValue = String(value || "").trim();
+
+    if (!trimmedValue) return "-";
+
+    // ALASAN: data lama pernah menyimpan diskon tanpa tanda minus.
+    // Untuk tampilan struk, diskon/potongan harus terbaca sebagai pengurang biaya.
+    if (isDiscount && !trimmedValue.startsWith("-")) {
+      return `-${trimmedValue}`;
+    }
+
+    return trimmedValue;
+  };
+
+  const buildShopeeOcrDetailRows = (note = "") => {
+    const rawText = getShopeeOcrNoteSegment(note);
+
+    if (!rawText) {
+      return { rawText: "", rows: [], totalRow: null };
+    }
+
+    const normalizedRows = rawText
+      .split(/\n|\|/)
+      .map((line) => line.replace(/^\s*-\s*/, "").trim())
+      .filter(Boolean)
+      .filter((line) => !/^OCR Shopee$/i.test(line))
+      .map((line) => {
+        const separatorIndex = line.indexOf(":");
+
+        if (separatorIndex === -1) {
+          const meta = getShopeeOcrDetailMeta("Info");
+          return {
+            ...meta,
+            sourceLabel: "Info",
+            value: line,
+          };
+        }
+
+        const sourceLabel = line.slice(0, separatorIndex).trim();
+        const meta = getShopeeOcrDetailMeta(sourceLabel);
+
+        return {
+          ...meta,
+          sourceLabel,
+          value: normalizeShopeeOcrDetailValue(line.slice(separatorIndex + 1), meta),
+        };
+      })
+      .filter((row) => row.label || row.value)
+      .sort((a, b) => a.order - b.order);
+
+    const totalRow = normalizedRows.find((row) => row.isTotal) || null;
+    const rows = normalizedRows.filter((row) => !row.isTotal);
+
+    return { rawText, rows, totalRow };
+  };
+
+  const buildShopeeOcrPurchaseMeta = (purchaseRecord = {}) => {
+    const dateText = purchaseRecord?.date?.toDate
+      ? dayjs(purchaseRecord.date.toDate()).format("DD-MM-YYYY")
+      : "";
+
+    return {
+      purchaseNumber:
+        purchaseRecord?.purchaseNumber ||
+        purchaseRecord?.code ||
+        purchaseRecord?.referenceNumber ||
+        "Kode otomatis",
+      supplierName: purchaseRecord?.supplierName || "Supplier tidak tercatat",
+      dateText,
+    };
+  };
+
+  const openShopeeOcrDetailModal = (purchaseRecord = {}) => {
+    const note = typeof purchaseRecord === "string" ? purchaseRecord : purchaseRecord?.note || "";
+    const detail = buildShopeeOcrDetailRows(note);
+
+    setShopeeOcrDetailModal({
+      open: true,
+      rows: detail.rows,
+      totalRow: detail.totalRow,
+      rawText: detail.rawText,
+      purchaseMeta:
+        typeof purchaseRecord === "string"
+          ? {}
+          : buildShopeeOcrPurchaseMeta(purchaseRecord),
+    });
+  };
+
+  const closeShopeeOcrDetailModal = () => {
+    setShopeeOcrDetailModal({
+      open: false,
+      rows: [],
+      totalRow: null,
+      rawText: "",
+      purchaseMeta: {},
+    });
+  };
+
+  const handlePrintShopeeOcrDetail = () => {
+    window.print();
+  };
+
+  const buildPurchaseNoteTableMeta = (note = "") => {
+    const normalizedNote = normalizePurchaseNoteText(note);
+    const hasShopeeOcrNote = /(^|\n|\|)\s*OCR Shopee\b/i.test(normalizedNote);
+    const manualNote = hasShopeeOcrNote
+      ? stripExistingShopeeOcrNote(normalizedNote)
+      : normalizedNote;
+
+    // ALASAN: tabel pembelian harus ringkas. Detail OCR tetap tersimpan untuk audit,
+    // tetapi angka OCR panjang tidak ditampilkan mentah di tabel utama.
+    return {
+      hasShopeeOcrNote,
+      manualNote,
+      manualPreview: manualNote.replace(/\s*\n+\s*/g, " ").trim(),
+    };
   };
 
   const applyShopeeOcrDraftToForm = () => {
@@ -1197,7 +1452,7 @@ const Purchases = () => {
       shippingDiscount: Math.max(Number(parsed.shippingDiscount || 0), 0),
       voucherDiscount: Math.max(Number(parsed.voucherDiscount || 0), 0),
       serviceFee: Math.max(Number(parsed.serviceFee || 0), 0),
-      note: currentNote ? `${currentNote} | ${ocrNote}` : ocrNote,
+      note: normalizePurchaseNoteText([currentNote, ocrNote].filter(Boolean).join("\n\n")),
     };
 
     if (parsedQuantity > 0) {
@@ -1390,7 +1645,19 @@ const Purchases = () => {
       // - CLEANUP CANDIDATE: helper transaksi ini bisa diekstrak ke service khusus jika Purchases nanti dipisah lebih lanjut.
       // =========================
       await runTransaction(db, async (transaction) => {
+        const purchaseSnapshot = await transaction.get(purchaseReference);
+        const expenseSnapshot = await transaction.get(expenseReference);
         const itemSnapshot = await transaction.get(itemReference);
+
+        // IMS NOTE [GUARDED] - collision guard kode PUR scan-based.
+        // Fungsi: mencegah setDoc transaction menimpa purchase/expense jika nomor bisnis sudah dipakai user lain.
+        if (purchaseSnapshot.exists()) {
+          throw new Error(`Nomor pembelian ${purchaseNumber} sudah dipakai. Muat ulang data lalu simpan kembali.`);
+        }
+
+        if (expenseSnapshot.exists()) {
+          throw new Error(`Expense untuk pembelian ${purchaseNumber} sudah ada. Muat ulang data lalu simpan kembali.`);
+        }
 
         if (!itemSnapshot.exists()) {
           throw new Error("Item stok tidak ditemukan di database.");
@@ -1583,9 +1850,16 @@ const Purchases = () => {
               purchaseSavingStatus: savingMeta.status,
               note:
                 normalizedType === "material"
-                  ? `${note || ""} | Pembelian ${formatNumberId(normalizedQuantity)} ${
-                      purchaseUnit || ""
-                    } = ${formatNumberId(normalizedFinalQuantity)} ${stockUnit || ""}${latestSelectedVariant ? ` | Varian ${variantLabel}` : ""}`
+                  ? normalizePurchaseNoteText(
+                      [
+                        note || "",
+                        `Pembelian ${formatNumberId(normalizedQuantity)} ${purchaseUnit || ""} = ${formatNumberId(
+                          normalizedFinalQuantity,
+                        )} ${stockUnit || ""}${latestSelectedVariant ? ` | Varian ${variantLabel}` : ""}`,
+                      ]
+                        .filter(Boolean)
+                        .join("\n"),
+                    )
                   : note || "",
             },
           }),
@@ -1749,18 +2023,56 @@ const Purchases = () => {
       },
     },
     {
-      title: "Catatan",
+      title: "Info",
       dataIndex: "note",
       key: "note",
-      width: 220,
-      render: (value) => {
-        const noteText = value || "-";
+      width: 170,
+      render: (value, record) => {
+        const { hasShopeeOcrNote, manualNote, manualPreview } = buildPurchaseNoteTableMeta(value);
+
+        if (!manualPreview && !hasShopeeOcrNote) {
+          return <span style={{ color: "#bfbfbf" }}>-</span>;
+        }
+
         return (
-          <Tooltip title={noteText}>
-            <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {noteText}
-            </span>
-          </Tooltip>
+          <Space direction="vertical" size={4} style={{ width: "100%" }}>
+            {manualPreview ? (
+              <Tooltip title={<span style={{ whiteSpace: "pre-line" }}>{manualNote}</span>}>
+                <span
+                  style={{
+                    color: "#334155",
+                    display: "block",
+                    maxWidth: "100%",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {manualPreview}
+                </span>
+              </Tooltip>
+            ) : null}
+            {hasShopeeOcrNote ? (
+              <Space size={6} wrap>
+                <Tooltip title="Dibantu OCR Shopee. Detail angka disimpan di catatan transaksi.">
+                  <Tag color="blue" style={{ marginInlineEnd: 0, width: "fit-content" }}>
+                    OCR Shopee
+                  </Tag>
+                </Tooltip>
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openShopeeOcrDetailModal(record);
+                  }}
+                  style={{ height: "auto", lineHeight: 1.2, padding: 0 }}
+                >
+                  Lihat
+                </Button>
+              </Space>
+            ) : null}
+          </Space>
         );
       },
     },
@@ -1818,6 +2130,156 @@ const Purchases = () => {
           tableLayout="fixed"
         />
       </PageSection>
+
+      {shopeeOcrDetailModal.open && typeof document !== "undefined" ? createPortal(
+        <div
+          className="purchase-ocr-receipt-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="purchase-ocr-receipt-title"
+          onClick={closeShopeeOcrDetailModal}
+        >
+          <button
+            type="button"
+            className="purchase-ocr-receipt-close"
+            onClick={closeShopeeOcrDetailModal}
+            aria-label="Tutup rincian OCR Shopee"
+          >
+            <CloseOutlined />
+          </button>
+
+          <div
+            className="purchase-ocr-receipt-shell purchase-ocr-receipt-print-area"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="purchase-ocr-receipt-paper">
+              <div className="purchase-ocr-receipt-grain" />
+              <div className="purchase-ocr-receipt-top-line" />
+              <div className="purchase-ocr-receipt-bottom-line" />
+
+              <div className="purchase-ocr-receipt-content">
+                <div className="purchase-ocr-receipt-header">
+                  <div className="purchase-ocr-receipt-badge">
+                    <FileTextOutlined />
+                    OCR Shopee
+                  </div>
+                  <h2 id="purchase-ocr-receipt-title" className="purchase-ocr-receipt-title">
+                    Rincian OCR Shopee
+                  </h2>
+                  <p className="purchase-ocr-receipt-subtitle">
+                    Ringkasan biaya dari hasil OCR belanja Shopee.
+                  </p>
+                </div>
+
+                <div className="purchase-ocr-receipt-divider" />
+
+                <div className="purchase-ocr-receipt-meta">
+                  <span className="purchase-ocr-receipt-meta-label">No. beli</span>
+                  <span className="purchase-ocr-receipt-meta-value">
+                    {shopeeOcrDetailModal.purchaseMeta.purchaseNumber || "-"}
+                  </span>
+                  <span className="purchase-ocr-receipt-meta-label">Supplier</span>
+                  <span className="purchase-ocr-receipt-meta-value">
+                    {shopeeOcrDetailModal.purchaseMeta.supplierName || "-"}
+                  </span>
+                  {shopeeOcrDetailModal.purchaseMeta.dateText ? (
+                    <>
+                      <span className="purchase-ocr-receipt-meta-label">Tanggal</span>
+                      <span className="purchase-ocr-receipt-meta-value">
+                        {shopeeOcrDetailModal.purchaseMeta.dateText}
+                      </span>
+                    </>
+                  ) : null}
+                </div>
+
+                <div className="purchase-ocr-receipt-divider" />
+
+                {shopeeOcrDetailModal.rows.length > 0 ? (
+                  <>
+                    <div>
+                      {shopeeOcrDetailModal.rows.map((row, index) => {
+                        const iconByKey = {
+                          subtotal: <ShoppingOutlined />,
+                          shipping: <CarOutlined />,
+                          discount: <TagsOutlined />,
+                          serviceFee: <SafetyCertificateOutlined />,
+                          qty: <InboxOutlined />,
+                          info: <InfoCircleOutlined />,
+                        };
+
+                        return (
+                          <div
+                            key={`${row.label}-${index}`}
+                            className="purchase-ocr-receipt-row"
+                          >
+                            <span className={`purchase-ocr-receipt-icon purchase-ocr-receipt-icon--${row.tone || "default"}`}>
+                              {iconByKey[row.iconKey] || <InfoCircleOutlined />}
+                            </span>
+                            <span className="purchase-ocr-receipt-label">
+                              {row.label}
+                            </span>
+                            <span
+                              className={`purchase-ocr-receipt-value ${
+                                row.isDiscount ? "purchase-ocr-receipt-value--discount" : ""
+                              }`}
+                            >
+                              {row.value || "-"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {shopeeOcrDetailModal.totalRow ? (
+                      <>
+                        <div className="purchase-ocr-receipt-divider" />
+                        <div className="purchase-ocr-receipt-total">
+                          <div className="purchase-ocr-receipt-total-inner">
+                            <div>
+                              <div className="purchase-ocr-receipt-total-kicker">
+                                Total
+                              </div>
+                              <div className="purchase-ocr-receipt-total-label">
+                                Total pesanan
+                              </div>
+                            </div>
+                            <div className="purchase-ocr-receipt-total-value">
+                              {shopeeOcrDetailModal.totalRow.value || "-"}
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : null}
+                  </>
+                ) : (
+                  <pre className="purchase-ocr-receipt-fallback">
+                    {shopeeOcrDetailModal.rawText || "Detail OCR tidak tersedia."}
+                  </pre>
+                )}
+
+                <div className="purchase-ocr-receipt-divider" />
+
+                <div className="purchase-ocr-receipt-note">
+                  <InfoCircleOutlined style={{ color: "#1d4ed8", marginTop: 2 }} />
+                  <span>Bukti screenshot tidak disimpan.</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="purchase-ocr-receipt-actions">
+              <Button
+                type="primary"
+                icon={<PrinterOutlined />}
+                onClick={handlePrintShopeeOcrDetail}
+              >
+                Print
+              </Button>
+              <Button onClick={closeShopeeOcrDetailModal}>Tutup</Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      ) : null}
 
       <Modal
         title="Tambah Pembelian"
@@ -2610,8 +3072,16 @@ const Purchases = () => {
             }}
           </Form.Item>
 
-          <Form.Item name="note" label="Catatan">
-            <Input.TextArea rows={3} />
+          <Form.Item
+            name="note"
+            label="Catatan"
+            extra="Catatan manual dan ringkasan OCR akan tampil per baris agar mudah dicek ulang."
+          >
+            <Input.TextArea
+              autoSize={{ minRows: 4, maxRows: 8 }}
+              placeholder="Contoh: Catatan supplier, kondisi barang, atau ringkasan OCR Shopee."
+              style={{ lineHeight: 1.6 }}
+            />
           </Form.Item>
         </Form>
       </Modal>

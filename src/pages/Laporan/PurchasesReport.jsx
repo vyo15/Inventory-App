@@ -267,7 +267,12 @@ const PurchasesReport = () => {
         title="Ringkasan Pembelian"
         subtitle="Ringkasan total dan saving pembelian."
       >
-        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
+        <SummaryStatGrid
+          items={summaryItems}
+          columns={{ xs: 24, sm: 12, md: 12, lg: 6 }}
+          variant="finance"
+          highlightKey="total-saving-purchase"
+        />
       </PageSection>
 
       <PageSection

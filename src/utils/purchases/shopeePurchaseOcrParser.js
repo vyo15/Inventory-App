@@ -183,15 +183,15 @@ const formatNoteMoney = (value = 0) => `Rp${Number(value || 0).toLocaleString('i
 const buildShopeeOcrNote = (draft = {}) => {
   const noteParts = ['OCR Shopee'];
 
-  if (draft.subtotalItems > 0) noteParts.push(`Subtotal: ${formatNoteMoney(draft.subtotalItems)}`);
-  if (draft.shippingCost > 0) noteParts.push(`Ongkir: ${formatNoteMoney(draft.shippingCost)}`);
-  if (draft.shippingDiscount > 0) noteParts.push(`Diskon ongkir: ${formatNoteMoney(draft.shippingDiscount)}`);
-  if (draft.voucherDiscount > 0) noteParts.push(`Voucher: ${formatNoteMoney(draft.voucherDiscount)}`);
-  if (draft.serviceFee > 0) noteParts.push(`Biaya layanan: ${formatNoteMoney(draft.serviceFee)}`);
-  if (draft.quantity > 0) noteParts.push(`Qty: ${draft.quantity}`);
-  if (draft.totalOrder > 0) noteParts.push(`Total screenshot: ${formatNoteMoney(draft.totalOrder)}`);
+  if (draft.subtotalItems > 0) noteParts.push(`- Subtotal barang: ${formatNoteMoney(draft.subtotalItems)}`);
+  if (draft.shippingCost > 0) noteParts.push(`- Ongkir pengiriman: ${formatNoteMoney(draft.shippingCost)}`);
+  if (draft.shippingDiscount > 0) noteParts.push(`- Diskon ongkir: -${formatNoteMoney(draft.shippingDiscount)}`);
+  if (draft.voucherDiscount > 0) noteParts.push(`- Voucher / potongan: -${formatNoteMoney(draft.voucherDiscount)}`);
+  if (draft.serviceFee > 0) noteParts.push(`- Biaya layanan marketplace: ${formatNoteMoney(draft.serviceFee)}`);
+  if (draft.quantity > 0) noteParts.push(`- Qty beli: ${draft.quantity}`);
+  if (draft.totalOrder > 0) noteParts.push(`- Total pesanan: ${formatNoteMoney(draft.totalOrder)}`);
 
-  return noteParts.join(' | ');
+  return noteParts.join('\n');
 };
 
 export const parseShopeePurchaseOcrText = (rawText = '') => {

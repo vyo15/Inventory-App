@@ -470,7 +470,14 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
       const adjustmentTimestamp = Timestamp.now();
 
       await runTransaction(db, async (transaction) => {
+        const adjustmentSnapshot = await transaction.get(adjustmentReference);
         const itemSnapshot = await transaction.get(itemReference);
+
+        // IMS NOTE [GUARDED] - collision guard kode STK-ADJ scan-based.
+        // Fungsi: mencegah adjustment baru menimpa adjustment lama ketika dua user submit bersamaan.
+        if (adjustmentSnapshot.exists()) {
+          throw new Error(`Nomor penyesuaian ${adjustmentNumber} sudah dipakai. Muat ulang data lalu simpan kembali.`);
+        }
 
         if (!itemSnapshot.exists()) {
           throw new Error("Item stok tidak ditemukan saat menyimpan penyesuaian.");

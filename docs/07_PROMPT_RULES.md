@@ -380,19 +380,19 @@ Status: **AKTIF + GUARDED**. Gunakan section ini untuk semua task yang menyentuh
 =====================================================
 SECTION: Firestore Rules patch boundary — AKTIF / GUARDED
 Fungsi:
-- Mengunci bahwa rules backend wajib aman, tetapi repo ZIP saat ini tidak menyimpan file rules source-controlled.
+- Mengunci bahwa rules backend wajib aman dan source rules sekarang berada di `firestore.rules`.
 
 Dipakai oleh:
 - Prompt guard Auth/User Management, review permission denied, dan task rules berikutnya.
 
 Alasan perubahan:
-- Owner mengonfirmasi rules dikelola langsung di Firebase Console/external dan patch ini tidak boleh membuat `firestore.rules`.
+- Rules source-controlled membuat perubahan permission bisa direview bersama source aplikasi.
 
 Catatan cleanup:
-- Source-controlled rules dapat dibuat pada task terpisah dengan approval eksplisit, termasuk perubahan deploy config jika diperlukan.
+- Rules masih staged-final; perubahan field-level/write matrix per modul tetap harus lewat review dan test khusus.
 
 Risiko:
-- Membuat file rules diam-diam atau mengubah `firebase.json` di task docs/cleanup dapat mengubah proses deployment tanpa persetujuan.
+- Mengubah `firestore.rules` atau `firebase.json` tanpa test runtime bisa memutus flow client-side yang menulis data turunan finance/stock.
 =====================================================
 
 - Rules wajib memakai `rules_version = '2';`.
@@ -404,7 +404,7 @@ Risiko:
 - Jangan memakai rules cleanup sementara `allow read, write: if true`.
 - Jangan memakai expiry sementara `request.time < ...` sebagai rules final.
 - Jangan longgarkan seluruh database.
-- Jika collection bisnis utama permission denied setelah publish rules backend manual/external, catat nama collection dan buat patch rules kecil terpisah setelah approval.
+- Jika collection bisnis utama permission denied setelah deploy rules, catat nama collection dan buat patch rules kecil terpisah setelah approval.
 
 ### File yang boleh disentuh untuk task Auth/User Management
 
@@ -412,7 +412,7 @@ Risiko:
 - `src/pages/System/UserManagement.jsx` hanya jika flow create/edit/delete profile bermasalah.
 - `src/services/System/userService.js` hanya jika guard create/update/delete profile bermasalah.
 - `src/utils/auth/roleAccess.js` hanya jika role/access matrix memang perlu update.
-- File rules source-controlled hanya boleh ditambahkan pada task terpisah jika owner meminta rules masuk repo.
+- `firestore.rules` dan `firebase.json` boleh disentuh hanya pada task rules/security atau jika permission backend memang menjadi scope.
 - Docs Auth/User Management/checklist/integration map.
 
 ### File/area guarded

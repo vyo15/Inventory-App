@@ -240,7 +240,12 @@ const ProfitLossReport = () => {
         title="Ringkasan Keuangan"
         subtitle="Ringkasan pendapatan, biaya, dan laba."
       >
-        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} />
+        <SummaryStatGrid
+          items={summaryItems}
+          columns={{ xs: 24, md: 8 }}
+          variant="finance"
+          highlightKey="gross-profit"
+        />
       </PageSection>
 
       <PageSection

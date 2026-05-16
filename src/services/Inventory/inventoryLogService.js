@@ -100,6 +100,9 @@ export const buildInventoryLogPayload = ({
   const referenceMeta = resolveInventoryLogReference(type, normalizedExtraData);
 
   return {
+    // IMS NOTE [GUARDED] - extraData legacy disimpan lebih dulu, lalu canonical reference ditulis ulang.
+    // Tujuan: caller lama tetap kompatibel, tetapi referenceId/referenceType hasil resolver tidak bisa tertimpa payload tambahan.
+    ...normalizedExtraData,
     itemId,
     itemName,
     quantityChange: Number(quantityChange || 0),
@@ -113,6 +116,5 @@ export const buildInventoryLogPayload = ({
       referenceId: referenceMeta.referenceId,
       referenceType: referenceMeta.referenceType,
     },
-    ...normalizedExtraData,
   };
 };

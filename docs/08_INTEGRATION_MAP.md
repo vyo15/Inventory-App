@@ -577,19 +577,19 @@ Batasan: Hapus Profile tidak menghapus Firebase Authentication user. Jika Auth u
 =====================================================
 SECTION: Firestore Rules integration boundary — AKTIF / GUARDED
 Fungsi:
-- Memetakan rules backend aktif yang dikelola manual/external, tanpa mengharuskan file rules ada di repo ZIP saat ini.
+- Memetakan rules backend yang sekarang disimpan di `firestore.rules` dan dihubungkan dari `firebase.json`.
 
 Dipakai oleh:
 - AuthContext, ProtectedRoute, User Management, role access, dan semua service Firestore client.
 
 Alasan perubahan:
-- Owner menetapkan Firestore Rules dikelola langsung di Firebase Console dan source-controlled rules bukan bagian patch ini.
+- Rules source-controlled membuat review security bisa dilakukan dari repo, bukan hanya Firebase Console.
 
 Catatan cleanup:
-- Jika rules ingin dimasukkan ke repo, buat task terpisah untuk file rules dan konfigurasi deploy.
+- Rules masih staged-final collection-level; field-level validation dan write matrix per modul perlu task terpisah.
 
 Risiko:
-- Menganggap sidebar/route guard sebagai security final tanpa rules backend aman akan membuka risiko akses data.
+- File rules di repo belum aktif sebelum dipublish/deploy ke Firebase project yang benar.
 =====================================================
 
 ```text
@@ -597,7 +597,7 @@ request.auth.uid
 -> get system_users/{request.auth.uid}
 -> status harus active
 -> role harus administrator/user
--> system_users guarded khusus
+-> system_users guarded khusus + self lastLoginAt audit update
 -> business collections diakses oleh profile aktif sesuai staged-final rules
 -> collection tidak dikenal fallback deny
 ```
@@ -820,7 +820,7 @@ Guard integration:
 - Jika referensi bisnis belum tersedia, UI menampilkan `-` atau `Referensi belum tersedia`.
 - Inventory log baru yang memiliki banyak baris untuk satu referensi harus memakai ID turunan readable, bukan random ID, setelah task arsitektur disetujui.
 - Generator kode manusiawi harus shared dan algoritmik berbasis konsonan, bukan mapping manual kata-per-kata.
-- Current source masih memiliki generator/mapping manual yang perlu cleanup task terpisah, terutama `businessCodeGenerator` dan `productionCodeGenerator`.
+- Current source sudah memakai `businessCodeGenerator` sebagai source of truth; `productionCodeGenerator` hanya compatibility wrapper.
 - Patch docs-only tidak mengubah service write flow, schema/collection, inventory log writer, report/export, route, menu, role guard, atau guarded production flow.
 
 ## Integration Map — Reset & Maintenance Decision Center

@@ -309,7 +309,12 @@ const MoneyMovementLedger = () => {
         title="Ringkasan Buku Besar Kas"
         subtitle="Ringkasan uang masuk, uang keluar, dan selisih bersih sesuai filter aktif."
       >
-        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, lg: 6 }} />
+        <SummaryStatGrid
+          items={summaryItems}
+          columns={{ xs: 24, sm: 12, lg: 6 }}
+          variant="finance"
+          highlightKey="net-movement"
+        />
       </PageSection>
 
       <PageSection

@@ -1,21 +1,25 @@
 import React from 'react';
-import { Card, Col, Row, Statistic } from 'antd';
+import SummaryStatGrid from '../../Layout/Display/SummaryStatGrid';
 
 // -----------------------------------------------------------------------------
-// Summary cards produksi memakai fondasi batch 1 agar tinggi, radius, dan spacing
-// seragam lintas halaman produksi.
+// Summary cards produksi memakai shared SummaryStatGrid agar tinggi, radius,
+// spacing, light/dark mode, dan pola compact konsisten dengan halaman lain.
+// Komponen ini tetap presentational dan tidak mengubah perhitungan produksi.
 // -----------------------------------------------------------------------------
-const ProductionSummaryCards = ({ items = [], columns = { xs: 24, sm: 12, md: 6 } }) => {
+const ProductionSummaryCards = ({
+  items = [],
+  columns = { xs: 24, sm: 12, md: 6 },
+  variant = 'executive',
+  highlightKey = null,
+}) => {
   return (
-    <Row className="ims-summary-row" gutter={[16, 16]}>
-      {items.map((item) => (
-        <Col key={item.key || item.title} {...columns}>
-          <Card className="ims-section-card ims-summary-card">
-            <Statistic title={item.title} value={item.value} suffix={item.suffix} />
-          </Card>
-        </Col>
-      ))}
-    </Row>
+    <SummaryStatGrid
+      items={items}
+      columns={columns}
+      variant={variant}
+      highlightKey={highlightKey}
+      className="ims-summary-row"
+    />
   );
 };
 

@@ -735,7 +735,12 @@ const ProductionHppAnalysis = () => {
         title="Ringkasan HPP"
         subtitle="Ringkasan sesuai filter aktif."
       >
-        <ProductionSummaryCards items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} />
+        <ProductionSummaryCards
+          items={summaryItems}
+          columns={{ xs: 24, sm: 12, md: 12, lg: 6 }}
+          variant="finance"
+          highlightKey="avg-hpp"
+        />
       </PageSection>
 
       <PageSection

@@ -394,7 +394,7 @@ const CashIn = () => {
         title="Ringkasan Periode"
         subtitle="KPI periode aktif."
       >
-        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} />
+        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} variant="finance" />
       </PageSection>
 
       <PageSection

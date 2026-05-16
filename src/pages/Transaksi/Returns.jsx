@@ -251,7 +251,14 @@ const Returns = () => {
       const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
 
       await runTransaction(db, async (transaction) => {
+        const returnSnapshot = await transaction.get(returnReference);
         const itemDocument = await transaction.get(itemReference);
+
+        // IMS NOTE [GUARDED] - collision guard kode RET scan-based.
+        // Fungsi: mencegah transaction retur menimpa dokumen lama jika nomor bisnis sudah dipakai.
+        if (returnSnapshot.exists()) {
+          throw new Error(`Nomor retur ${returnNumber} sudah dipakai. Muat ulang data lalu simpan kembali.`);
+        }
 
         if (!itemDocument.exists()) {
           throw new Error("Item stok tidak ditemukan. Retur dibatalkan agar stok dan log tidak partial.");
