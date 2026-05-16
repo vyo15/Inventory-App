@@ -915,9 +915,10 @@ Legacy compatibility:
 - **Aktif:** rekomendasi default untuk data development yang belum real adalah simpan master, hapus transaksi/log turunan, lalu nolkan stok jika stok lama tidak dipercaya.
 - **Aktif:** panel teknis lama tetap dipertahankan di Advanced / Developer Tools agar developer masih bisa membuka detail audit/repair/HPP/reset existing.
 - **Aktif:** export data pokok JSON bersifat read-only dan hanya untuk backup/checklist; export ini bukan restore otomatis dan bukan import logic.
+- **Aktif:** tombol `Reset Semua Testing` menjadi shortcut gabungan untuk semua scope non-protected: delete transaksi/log stok/planning/pricing, zero stock master/variant, dan reset field modal/HPP allowlist dengan keyword `RESET SEMUA`.
 - **Guarded:** reset total data bisnis/master belum dibuat karena menyentuh protected master collections dan harus menjadi task destructive terpisah.
 - **Guarded:** wizard keputusan hanya menyiapkan mode/module reset; eksekusi tetap harus melewati preview dan confirmation keyword existing.
-- **Cleanup candidate:** export XLSX, import normalized, trial session/correlation id, copy/export audit log, dan service khusus reset total development masih perlu phase lanjutan.
+- **Cleanup candidate:** export XLSX, import normalized, trial session/correlation id, copy/export audit log, dan server-side reset jika total operasi melewati batas aman client.
 
 
 ---

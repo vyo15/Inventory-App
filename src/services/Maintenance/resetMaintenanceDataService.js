@@ -26,8 +26,24 @@ export const DEFAULT_RESET_MODULES = [
   "production",
   "cash_and_expenses",
   "stock_adjustment_and_logs",
+  "all_inventory_logs",
   "pricing_logs",
 ];
+
+// Preset reset development paling lengkap yang tetap menjaga protected master.
+// Digunakan oleh tombol Reset Semua Testing agar admin tidak perlu memilih modul satu per satu.
+export const RESET_ALL_TESTING_MODULES = [
+  "sales",
+  "purchases",
+  "returns",
+  "production_planning_only",
+  "production",
+  "cash_and_expenses",
+  "stock_adjustment_and_logs",
+  "pricing_logs",
+];
+
+export const FULL_TESTING_RESET_HPP_MODE = "all_hpp_cost_sources";
 
 export const RESET_MODE_OPTIONS = [
   {
@@ -120,6 +136,10 @@ const HPP_COST_COLLECTION_CONFIGS = {
     variantFields: ["averageCostPerUnit", "lastProductionCostPerUnit", "referenceCostPerUnit", "costPerUnit"],
   },
 };
+
+const HPP_COST_VARIANT_FIELD_KEYS = new Set(
+  Object.values(HPP_COST_COLLECTION_CONFIGS).flatMap((item) => item.variantFields || []),
+);
 
 const HPP_COST_RESET_MODE_CONFIG = {
   raw_actual_cost_only: {
@@ -1046,6 +1066,12 @@ const MODULE_DEFINITIONS = {
       },
     ],
   },
+  all_inventory_logs: {
+    label: "Semua Inventory Log",
+    collections: [
+      { key: "inventory_logs", label: "Semua Inventory Log", action: "Hapus semua log stok non-protected" },
+    ],
+  },
   pricing_logs: {
     label: "Pricing Log",
     collections: [
@@ -1334,20 +1360,78 @@ const buildStockOperationPlan = async (resetMode) => {
   };
 };
 
-const commitResetWritePlan = async ({ deletePlans = [], stockUpdates = [] }) => {
+const getWriteRefKey = (item = {}) => item.ref?.path || `${item.ref?.parent?.path || "unknown"}/${item.ref?.id || "unknown"}`;
+
+const mergeVariantStockAndCostRows = (stockVariants = [], hppCostVariants = []) => {
+  if (!Array.isArray(stockVariants) || !Array.isArray(hppCostVariants)) return null;
+
+  return stockVariants.map((stockVariant = {}, index) => {
+    const hppVariant = hppCostVariants[index] || {};
+    const hppCostFields = {};
+
+    HPP_COST_VARIANT_FIELD_KEYS.forEach((fieldName) => {
+      if (hasOwnField(hppVariant, fieldName)) {
+        hppCostFields[fieldName] = hppVariant[fieldName];
+      }
+    });
+
+    return {
+      ...stockVariant,
+      ...hppCostFields,
+    };
+  });
+};
+
+const mergeUpdatePayloads = (currentPayload = {}, nextPayload = {}) => {
+  const mergedPayload = {
+    ...currentPayload,
+    ...nextPayload,
+  };
+
+  if (Array.isArray(currentPayload.variants) && Array.isArray(nextPayload.variants)) {
+    // Stock reset dan HPP reset sama-sama menyentuh field variants. Jangan shallow
+    // overwrite, karena HPP payload membawa snapshot stok lama dan stock payload
+    // membawa snapshot cost lama. Gabungkan hanya field HPP ke variant stok nol.
+    mergedPayload.variants = mergeVariantStockAndCostRows(currentPayload.variants, nextPayload.variants);
+  }
+
+  return mergedPayload;
+};
+
+const mergeUpdateOperations = (...operationGroups) => {
+  const map = new Map();
+
+  operationGroups.flat().filter(Boolean).forEach((item) => {
+    if (!item.ref || !item.payload) return;
+
+    const refKey = getWriteRefKey(item);
+    const current = map.get(refKey);
+
+    map.set(refKey, {
+      ref: item.ref,
+      payload: mergeUpdatePayloads(current?.payload || {}, item.payload),
+    });
+  });
+
+  return Array.from(map.values());
+};
+
+const commitResetWritePlan = async ({ deletePlans = [], stockUpdates = [], hppCostUpdates = [] }) => {
   const deleteOperationCount = deletePlans.reduce((sum, item) => sum + item.docs.length, 0);
-  const stockOperationCount = stockUpdates.length;
-  const totalWriteOperations = deleteOperationCount + stockOperationCount;
+  const mergedUpdates = mergeUpdateOperations(stockUpdates, hppCostUpdates);
+  const totalWriteOperations = deleteOperationCount + mergedUpdates.length;
 
   assertClientBatchOperationLimit(totalWriteOperations);
 
-  if (!totalWriteOperations) return { totalWriteOperations };
+  if (!totalWriteOperations) {
+    return { totalWriteOperations, mergedUpdateOperations: 0 };
+  }
 
   // ---------------------------------------------------------------------------
   // Single batch destructive commit.
-  // AKTIF / GUARDED: seluruh delete transaksi dan update stok master dipasang
-  // dalam satu batch agar Firestore melakukan commit all-or-nothing. Jika lebih
-  // dari batas aman, proses diblokir sebelum write pertama untuk mencegah partial.
+  // AKTIF / GUARDED: seluruh delete transaksi, update stok, dan reset cost/HPP
+  // dipasang dalam satu batch all-or-nothing. Update dokumen master yang sama
+  // digabung dulu agar Firestore tidak menerima dua update untuk ref yang sama.
   // ---------------------------------------------------------------------------
   const batch = writeBatch(db);
 
@@ -1357,12 +1441,15 @@ const commitResetWritePlan = async ({ deletePlans = [], stockUpdates = [] }) => 
     });
   });
 
-  stockUpdates.forEach((item) => {
+  mergedUpdates.forEach((item) => {
     batch.update(item.ref, item.payload);
   });
 
   await batch.commit();
-  return { totalWriteOperations };
+  return {
+    totalWriteOperations,
+    mergedUpdateOperations: mergedUpdates.length,
+  };
 };
 
 const countStockOperationsForPreview = async (resetMode, baselineDoc) => {
@@ -1514,6 +1601,83 @@ export const runHppCostReset = async ({ resetMode }) => {
     totalAffectedVariantRows: preview.totalAffectedVariantRows,
     totalWriteOperations: updates.length,
     affectedCollections: preview.affectedCollections,
+  };
+};
+
+const buildFullTestingResetPlan = async () => {
+  const resetMode = "reset_and_zero_stock";
+  const selectedModules = [...RESET_ALL_TESTING_MODULES];
+
+  assertValidResetMode(resetMode);
+  assertSelectedModulesAllowed(selectedModules);
+
+  const collectionTargets = getCollectionTargetsFromModules(selectedModules);
+  assertResetTargetsSafe(collectionTargets);
+
+  const deletePlans = await buildDeletePlans(collectionTargets);
+  const stockPlan = await buildStockOperationPlan(resetMode);
+  const hppCostPlan = await buildHppCostResetWritePlan(FULL_TESTING_RESET_HPP_MODE);
+  const mergedMasterUpdates = mergeUpdateOperations(stockPlan.updates, hppCostPlan.updates);
+  const totalDeletedRecords = deletePlans.reduce((sum, item) => sum + item.deletedCount, 0);
+  const totalWriteOperations = totalDeletedRecords + mergedMasterUpdates.length;
+
+  assertClientBatchOperationLimit(totalWriteOperations);
+
+  return {
+    resetMode,
+    selectedModules,
+    collectionTargets,
+    deletePlans,
+    stockPlan,
+    hppCostPlan,
+    mergedMasterUpdates,
+    totalDeletedRecords,
+    totalWriteOperations,
+  };
+};
+
+export const getFullTestingResetPreview = async () => {
+  const plan = await buildFullTestingResetPlan();
+  const collections = plan.deletePlans.map((item) => ({
+    ...item.target,
+    count: item.deletedCount,
+    status: "delete",
+  }));
+  const protectedCollections = await buildProtectedCollectionPreview();
+  const protectedRecords = protectedCollections.reduce((sum, item) => sum + Number(item.count || 0), 0);
+  const baselineDoc = await getBaselineSnapshotDoc();
+
+  return {
+    isFullTestingReset: true,
+    resetMode: plan.resetMode,
+    modules: plan.selectedModules,
+    totalRecords: plan.totalDeletedRecords,
+    protectedRecords,
+    collections,
+    protectedCollections,
+    baselineSummary: {
+      exists: Boolean(baselineDoc?.items?.length),
+      itemCount: Number(baselineDoc?.items?.length || 0),
+      savedAt: baselineDoc?.savedAt || null,
+      label: baselineDoc?.items?.length
+        ? `Tersimpan (${baselineDoc.items.length} item)`
+        : "Belum ada baseline",
+    },
+    hppCostPreview: plan.hppCostPlan.preview,
+    executionPlan: {
+      deleteOperations: plan.totalDeletedRecords,
+      stockOperations: plan.stockPlan.updates.length,
+      hppCostOperations: plan.hppCostPlan.updates.length,
+      mergedMasterUpdateOperations: plan.mergedMasterUpdates.length,
+      totalWriteOperations: plan.totalWriteOperations,
+      safeClientLimit: SAFE_CLIENT_BATCH_OPERATION_LIMIT,
+      isClientBatchSafe: plan.totalWriteOperations <= SAFE_CLIENT_BATCH_OPERATION_LIMIT,
+    },
+    rulesCompatibility: {
+      allowedDeleteCollections: Array.from(RESET_ALLOWED_DELETE_COLLECTIONS),
+      adminOnlyCollections: [BASELINE_COLLECTION, "maintenance_logs"],
+    },
+    recommendations: "Reset semua testing membersihkan transaksi/log/planning/pricing, menolkan stok master, dan menolkan field modal/HPP allowlist tanpa menghapus protected master.",
   };
 };
 
@@ -1680,6 +1844,39 @@ export const deleteDevTestData = async () => {
       ...item.target,
       deletedCount: item.deletedCount,
     })),
+  };
+};
+
+export const runFullTestingReset = async () => {
+  const plan = await buildFullTestingResetPlan();
+
+  const commitResult = await commitResetWritePlan({
+    deletePlans: plan.deletePlans,
+    stockUpdates: plan.stockPlan.updates,
+    hppCostUpdates: plan.hppCostPlan.updates,
+  });
+
+  return {
+    message: `Reset semua testing selesai. ${plan.totalDeletedRecords} record dibersihkan, ${plan.stockPlan.affectedItems} item stok dinolkan, dan ${plan.hppCostPlan.updates.length} item modal/HPP diproses.`,
+    resetMode: plan.resetMode,
+    modules: plan.selectedModules,
+    isFullTestingReset: true,
+    totalDeletedRecords: plan.totalDeletedRecords,
+    totalWriteOperations: commitResult.totalWriteOperations,
+    deletedCollections: plan.deletePlans.map((item) => ({
+      ...item.target,
+      deletedCount: item.deletedCount,
+    })),
+    stockResult: {
+      affectedItems: plan.stockPlan.affectedItems,
+      message: plan.stockPlan.message,
+    },
+    hppCostResult: {
+      resetMode: FULL_TESTING_RESET_HPP_MODE,
+      affectedItems: plan.hppCostPlan.updates.length,
+      affectedCollections: plan.hppCostPlan.preview?.affectedCollections || [],
+      message: `Modal/HPP direset untuk ${plan.hppCostPlan.updates.length} item master.`,
+    },
   };
 };
 

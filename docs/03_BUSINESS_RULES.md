@@ -271,6 +271,8 @@ Reset utilitas mendukung mode:
 
 Utilitas ini juga menyinkronkan kembali field stok agar konsisten.
 
+Preset `Reset Semua Testing` adalah shortcut guarded untuk development/testing: memilih semua modul non-protected, menghapus transaksi/log stok/planning/pricing yang diizinkan, menolkan stok master/variant, dan menolkan field modal/HPP allowlist dalam satu flow preview + keyword `RESET SEMUA`. Protected master seperti Supplier, Customer, Produk, Raw Material, Semi Finished, BOM, Step, dan Employee tidak dihapus.
+
 
 ## Tambahan Rule Terkini (Batch Prioritas)
 
@@ -1055,6 +1057,7 @@ Guard wajib:
 - **Normalisasi kode master:** tersedia di Reset & Maintenance Data untuk Product, Raw Material, Semi Finished, BOM, Production Step, dan Supplier. Aksi ini hanya update field `code` dan alias kode aktif; tidak rename document ID, tidak menghapus data, dan tidak menyentuh transaksi/history.
 - **Supplier legacy repair:** tidak lagi dijalankan dari halaman Supplier. Semua repair kode lama harus lewat Reset & Maintenance Data agar audit/preview terpusat.
 - **Reset Modal/HPP:** menu Reset & Maintenance menyediakan mode `Reset Semua Modal & HPP` untuk menolkan field cost/HPP master aktif dalam satu aksi guarded setelah preview dan keyword khusus. Aksi ini tidak menghapus transaksi, stok, PO, Work Log, Payroll, Sales, Purchases, Returns, atau Cash.
+- **Reset Semua Testing:** tombol gabungan di Reset & Maintenance menjalankan scope non-protected + zero stock + reset modal/HPP allowlist dengan keyword `RESET SEMUA`. Update stok dan HPP pada dokumen master yang sama harus digabung dalam satu write agar batch tetap aman dan tidak double-write document ref.
 - **Allowlist Reset Modal/HPP:** Raw Material: `averageActualUnitCost`, `restockReferencePrice`; Product: `hppPerUnit`, `averageCostPerUnit`, `costPerUnit`; Semi Finished: `averageCostPerUnit`, `lastProductionCostPerUnit`, `referenceCostPerUnit`, `costPerUnit` termasuk variant fields jika ada.
 
 

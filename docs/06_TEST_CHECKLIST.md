@@ -462,6 +462,14 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - pastikan HPP Analysis membaca material cost dan labor cost dari Work Log completed tanpa mengubah data lama massal
 - pastikan Work Log lama yang sudah completed tetapi cost 0 tidak di-backfill otomatis tanpa task terpisah
 
+
+## Checklist Reset Semua Testing
+- [ ] Di Reset & Maintenance, klik `Reset Semua Testing` dan pastikan modal meminta keyword `RESET SEMUA`.
+- [ ] Pastikan preview menunjukkan delete transaksi/log stok/planning/pricing, operasi stok, operasi HPP, dan total operasi di bawah batas batch aman.
+- [ ] Setelah konfirmasi, pastikan transaksi/log stok yang tidak dilindungi bersih, stok master/variant menjadi 0, dan field modal/HPP allowlist menjadi 0.
+- [ ] Pastikan protected master tidak terhapus: Supplier, Customer, Product, Raw Material, Semi Finished, BOM, Production Step, Employee.
+- [ ] Pastikan maintenance log mencatat action `reset_all_testing_data`, status success/failed, affected collections, stock result, dan HPP result.
+
 ## Checklist Reset Modal/HPP Master
 - [ ] Di Reset & Maintenance, pilih `Reset Semua Modal & HPP`, klik preview, dan pastikan affected collection hanya Raw Material, Product, dan Semi Finished.
 - [ ] Pastikan tombol `Reset Semua Modal/HPP` tetap meminta keyword `RESET MODAL HPP` sebelum write.

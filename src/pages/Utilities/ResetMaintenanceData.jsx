@@ -62,16 +62,20 @@ import {
 } from "../../services/Maintenance/transactionVariantMaintenanceService";
 import {
   DEFAULT_RESET_MODULES,
+  FULL_TESTING_RESET_HPP_MODE,
   HPP_COST_RESET_OPTIONS,
+  RESET_ALL_TESTING_MODULES,
   buildMasterDataExportPayload,
   getMasterDataExportPreview,
   RESET_MODE_OPTIONS,
   deleteDevTestData,
   getDevTestDataPreview,
+  getFullTestingResetPreview,
   getHppCostBaselineSummary,
   getHppCostResetPreview,
   getResetPreview,
   restoreHppCostBaseline,
+  runFullTestingReset,
   runHppCostReset,
   runResetDataTest,
   saveCurrentHppCostBaseline,
@@ -101,6 +105,11 @@ const RESET_MODE_LABELS = {
 const HPP_CONFIRM_KEYWORDS = {
   reset: "RESET MODAL HPP",
   restore: "RESTORE MODAL HPP",
+};
+
+const RESET_CONFIRM_KEYWORDS = {
+  standard: "RESET",
+  full_testing_reset: "RESET SEMUA",
 };
 
 const formatMaintenanceDate = (value) => {
@@ -278,6 +287,7 @@ const ResetMaintenanceData = () => {
   const [loadingBaseline, setLoadingBaseline] = useState(false);
   const [loadingSync, setLoadingSync] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [resetIntent, setResetIntent] = useState("standard");
 
   // ---------------------------------------------------------------------------
   // State maintenance produksi.
@@ -417,6 +427,7 @@ const ResetMaintenanceData = () => {
       { label: "Produksi Data Lama Saja", value: "productions_legacy_only" },
       { label: "Kas & Biaya", value: "cash_and_expenses" },
       { label: "Penyesuaian + Log Adjustment", value: "stock_adjustment_and_logs" },
+      { label: "Semua Inventory Log", value: "all_inventory_logs" },
       { label: "Pricing Log", value: "pricing_logs" },
     ],
     [],
@@ -428,6 +439,16 @@ const ResetMaintenanceData = () => {
   }, [moduleOptions, selectedModules]);
 
   const isProductionPlanningOnlySelected = selectedModules.includes("production_planning_only");
+
+  const isFullTestingResetIntent = useMemo(() => (
+    resetIntent === "full_testing_reset"
+    && mode === "reset_and_zero_stock"
+    && preview?.isFullTestingReset === true
+  ), [mode, preview?.isFullTestingReset, resetIntent]);
+
+  const resetConfirmKeyword = isFullTestingResetIntent
+    ? RESET_CONFIRM_KEYWORDS.full_testing_reset
+    : RESET_CONFIRM_KEYWORDS.standard;
 
   const resetBlockedReason = useMemo(() => {
     // -------------------------------------------------------------------------
@@ -834,13 +855,19 @@ const ResetMaintenanceData = () => {
   const loadPreview = useCallback(async (showSuccessMessage = false) => {
     try {
       setLoadingPreview(true);
-      const result = await getResetPreview({
-        resetMode: mode,
-        modules: selectedModules,
-      });
+      const result = resetIntent === "full_testing_reset"
+        ? await getFullTestingResetPreview()
+        : await getResetPreview({
+          resetMode: mode,
+          modules: selectedModules,
+        });
       setPreview(result);
+      if (result?.hppCostPreview) {
+        setHppCostPreview(result.hppCostPreview);
+        setHppCostResetMode(FULL_TESTING_RESET_HPP_MODE);
+      }
       if (showSuccessMessage) {
-        message.success("Preview reset berhasil dimuat.");
+        message.success(result?.isFullTestingReset ? "Preview reset semua testing berhasil dimuat." : "Preview reset berhasil dimuat.");
       }
     } catch (error) {
       console.error(error);
@@ -848,7 +875,35 @@ const ResetMaintenanceData = () => {
     } finally {
       setLoadingPreview(false);
     }
-  }, [mode, selectedModules]);
+  }, [mode, resetIntent, selectedModules]);
+
+  const openFullTestingResetConfirmation = useCallback(async () => {
+    try {
+      setLoadingPreview(true);
+      const result = await getFullTestingResetPreview();
+
+      setMode("reset_and_zero_stock");
+      setSelectedModules([...RESET_ALL_TESTING_MODULES]);
+      setResetIntent("full_testing_reset");
+      setPreview(result);
+      setHppCostPreview(result.hppCostPreview || null);
+      setHppCostResetMode(FULL_TESTING_RESET_HPP_MODE);
+
+      if (result?.executionPlan?.isClientBatchSafe === false) {
+        message.error(`Reset semua diblokir karena estimasi ${result.executionPlan.totalWriteOperations} operasi melebihi batas aman ${result.executionPlan.safeClientLimit}.`);
+        return;
+      }
+
+      confirmForm.setFieldsValue({ confirmationText: "", actionNote });
+      setConfirmOpen(true);
+      message.warning('Review preview lalu ketik "RESET SEMUA" untuk menjalankan reset gabungan.');
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menyiapkan reset semua testing.");
+    } finally {
+      setLoadingPreview(false);
+    }
+  }, [actionNote, confirmForm]);
 
   // ---------------------------------------------------------------------------
   // Preview data test bermarker.
@@ -878,8 +933,10 @@ const ResetMaintenanceData = () => {
   // lama dihapus supaya destructive reset wajib memakai preview yang fresh.
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    setPreview(null);
-  }, [mode, selectedModules]);
+    if (resetIntent !== "full_testing_reset") {
+      setPreview(null);
+    }
+  }, [mode, resetIntent, selectedModules]);
 
   const handleDeleteDevTestData = async () => {
     let testCleanupLogId = "";
@@ -1472,6 +1529,7 @@ const ResetMaintenanceData = () => {
     // -------------------------------------------------------------------------
     setMode("transaction_only");
     setSelectedModules(["production"]);
+    setResetIntent("standard");
     message.info("Reset terarah Produksi disiapkan. Cek preview lalu jalankan konfirmasi RESET jika sudah yakin.");
   };
 
@@ -1491,8 +1549,8 @@ const ResetMaintenanceData = () => {
 
     try {
       const values = await confirmForm.validateFields();
-      if ((values.confirmationText || "").trim().toUpperCase() !== "RESET") {
-        message.error('Ketik "RESET" untuk konfirmasi.');
+      if ((values.confirmationText || "").trim().toUpperCase() !== resetConfirmKeyword) {
+        message.error(`Ketik "${resetConfirmKeyword}" untuk konfirmasi.`);
         return;
       }
 
@@ -1509,7 +1567,7 @@ const ResetMaintenanceData = () => {
       // reset tidak dilanjutkan. Ini menjaga destructive action tetap tercatat.
       // -----------------------------------------------------------------------
       resetLogId = await createPageMaintenanceLog({
-        actionType: "reset_data",
+        actionType: isFullTestingResetIntent ? "reset_all_testing_data" : "reset_data",
         mode,
         modules: selectedModules,
         summary: {
@@ -1521,13 +1579,17 @@ const ResetMaintenanceData = () => {
         affectedCount: preview?.executionPlan?.totalWriteOperations || preview?.totalRecords || 0,
         dryRun: false,
         status: "started",
-        note: "Reset destructive dimulai setelah preview dan konfirmasi RESET. Log ini dibuat sebelum delete agar reset tidak berjalan tanpa audit.",
+        note: isFullTestingResetIntent
+          ? "Reset semua testing dimulai setelah preview dan konfirmasi RESET SEMUA. Transaksi/log/planning/pricing, stok, dan modal/HPP allowlist diproses dalam satu batch."
+          : "Reset destructive dimulai setelah preview dan konfirmasi RESET. Log ini dibuat sebelum delete agar reset tidak berjalan tanpa audit.",
       }, { note: values.actionNote });
 
-      const result = await runResetDataTest({
-        resetMode: mode,
-        modules: selectedModules,
-      });
+      const result = isFullTestingResetIntent
+        ? await runFullTestingReset()
+        : await runResetDataTest({
+          resetMode: mode,
+          modules: selectedModules,
+        });
       resetCompleted = true;
 
       try {
@@ -1537,14 +1599,18 @@ const ResetMaintenanceData = () => {
             totalDeletedRecords: result?.totalDeletedRecords || 0,
             totalWriteOperations: result?.totalWriteOperations || 0,
             stockResult: result?.stockResult || {},
+            hppCostResult: result?.hppCostResult || null,
           },
           resultBuckets: {
             deleted: result?.totalDeletedRecords || 0,
             stockUpdated: result?.stockResult?.affectedItems || 0,
+            hppCostUpdated: result?.hppCostResult?.affectedItems || 0,
           },
           affectedCollections: getCollectionLabels(result?.deletedCollections),
           affectedCount: result?.totalWriteOperations || result?.totalDeletedRecords || 0,
-          note: mergeAuditNote("Reset destructive berhasil. Delete transaksi dan update stok dijalankan dalam satu batch aman dari client.", values.actionNote),
+          note: mergeAuditNote(isFullTestingResetIntent
+            ? "Reset semua testing berhasil. Delete transaksi/log dan update stok/modal/HPP allowlist dijalankan dalam satu batch aman dari client."
+            : "Reset destructive berhasil. Delete transaksi dan update stok dijalankan dalam satu batch aman dari client.", values.actionNote),
         });
         message.success(result?.message || "Reset data berhasil dijalankan.");
       } catch (auditError) {
@@ -1556,7 +1622,13 @@ const ResetMaintenanceData = () => {
 
       setConfirmOpen(false);
       confirmForm.resetFields();
-      await loadPreview(false);
+      if (isFullTestingResetIntent) {
+        setPreview(null);
+        setHppCostPreview(null);
+      } else {
+        await loadPreview(false);
+      }
+      setResetIntent("standard");
       await loadDevTestDataPreview(false);
       await handleLoadProductionMaintenanceAudit();
       await loadMaintenanceLogs();
@@ -1849,7 +1921,7 @@ const ResetMaintenanceData = () => {
                 <Card size="small" title="Testing dari Baseline">
                   <Space direction="vertical" size={8} style={{ width: "100%" }}>
                     <Text type="secondary">Untuk test berulang dari stok awal yang sama tanpa input ulang.</Text>
-                    <Button block onClick={() => { setMode("reset_and_restore_baseline"); setSelectedModules([...DEFAULT_RESET_MODULES]); message.info("Mode Reset + Baseline dipilih. Muat preview sebelum eksekusi."); }}>
+                    <Button block onClick={() => { setMode("reset_and_restore_baseline"); setSelectedModules([...DEFAULT_RESET_MODULES]); setResetIntent("standard"); message.info("Mode Reset + Baseline dipilih. Muat preview sebelum eksekusi."); }}>
                       Pilih Baseline Reset
                     </Button>
                   </Space>
@@ -1858,9 +1930,12 @@ const ResetMaintenanceData = () => {
               <Col xs={24} md={12} xl={6}>
                 <Card size="small" title="Mulai dari Nol">
                   <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Text type="secondary">Untuk data development yang sudah kacau: transaksi/log dibersihkan dan stok dinolkan.</Text>
-                    <Button block danger onClick={() => { setMode("reset_and_zero_stock"); setSelectedModules([...DEFAULT_RESET_MODULES]); message.info("Mode Reset + Nolkan Stok dipilih. Muat preview sebelum eksekusi."); }}>
-                      Pilih Reset Nol
+                    <Text type="secondary">Untuk data development yang sudah kacau: transaksi/log, stok, dan modal/HPP testing dibersihkan dalam satu flow.</Text>
+                    <Button block type="primary" danger icon={<DeleteOutlined />} loading={loadingPreview} onClick={openFullTestingResetConfirmation}>
+                      Reset Semua Testing
+                    </Button>
+                    <Button block onClick={() => { setMode("reset_and_zero_stock"); setSelectedModules([...DEFAULT_RESET_MODULES]); setResetIntent("standard"); message.info("Mode Reset + Nolkan Stok dipilih. Muat preview sebelum eksekusi."); }}>
+                      Pilih Reset Nol Saja
                     </Button>
                   </Space>
                 </Card>
@@ -2011,7 +2086,7 @@ const ResetMaintenanceData = () => {
                   <Text strong>Mode Reset</Text>
                   <Select
                     value={mode}
-                    onChange={setMode}
+                    onChange={(value) => { setMode(value); setResetIntent("standard"); }}
                     options={RESET_MODE_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
                     style={{ width: "100%", marginTop: 8 }}
                   />
@@ -2020,7 +2095,7 @@ const ResetMaintenanceData = () => {
                   <Text strong>Modul</Text>
                   <Checkbox.Group
                     value={selectedModules}
-                    onChange={setSelectedModules}
+                    onChange={(values) => { setSelectedModules(values); setResetIntent("standard"); }}
                     options={moduleOptions}
                     style={{ display: "grid", gap: 8, marginTop: 8 }}
                   />
@@ -2953,7 +3028,7 @@ const ResetMaintenanceData = () => {
               <Card title="Mode Reset" size="small">
                 <Radio.Group
                   value={mode}
-                  onChange={(event) => setMode(event.target.value)}
+                  onChange={(event) => { setMode(event.target.value); setResetIntent("standard"); }}
                   style={{ width: "100%" }}
                 >
                   <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -2982,7 +3057,7 @@ const ResetMaintenanceData = () => {
               <Card title="Modul yang Akan Diproses" size="small">
                 <Checkbox.Group
                   value={selectedModules}
-                  onChange={setSelectedModules}
+                  onChange={(values) => { setSelectedModules(values); setResetIntent("standard"); }}
                   style={{ width: "100%" }}
                 >
                   <Space direction="vertical" size={12} style={{ width: "100%" }}>
@@ -3052,6 +3127,18 @@ const ResetMaintenanceData = () => {
             </Col>
           </Row>
 
+          <Alert
+            type="warning"
+            showIcon
+            message="Reset Semua Testing"
+            description="Tombol cepat ini memilih semua modul non-protected, menolkan stok master/variant, dan menolkan field modal/HPP allowlist. Protected master seperti Supplier, Produk, Raw Material, Semi Finished, BOM, Step, Employee, dan Customer tidak dihapus."
+            action={
+              <Button danger type="primary" icon={<DeleteOutlined />} loading={loadingPreview} onClick={openFullTestingResetConfirmation}>
+                Reset Semua Testing
+              </Button>
+            }
+          />
+
           {resetBlockedReason ? (
             <Alert
               type="warning"
@@ -3066,7 +3153,7 @@ const ResetMaintenanceData = () => {
               type="info"
               showIcon
               message="Rencana eksekusi reset"
-              description={`Estimasi ${preview.executionPlan.totalWriteOperations} operasi tulis (${preview.executionPlan.deleteOperations} delete + ${preview.executionPlan.stockOperations} update stok). Batas aman client: ${preview.executionPlan.safeClientLimit} operasi dalam satu batch.`}
+              description={`Estimasi ${preview.executionPlan.totalWriteOperations} operasi tulis (${preview.executionPlan.deleteOperations} delete + ${preview.executionPlan.stockOperations || 0} update stok + ${preview.executionPlan.hppCostOperations || 0} update HPP, digabung menjadi ${preview.executionPlan.mergedMasterUpdateOperations ?? preview.executionPlan.stockOperations ?? 0} update master). Batas aman client: ${preview.executionPlan.safeClientLimit} operasi dalam satu batch.`}
             />
           ) : null}
 
@@ -3313,7 +3400,7 @@ const ResetMaintenanceData = () => {
 
       <Modal
         open={confirmOpen}
-        title="Konfirmasi Reset Data"
+        title={isFullTestingResetIntent ? "Konfirmasi Reset Semua Testing" : "Konfirmasi Reset Data"}
         onCancel={() => {
           if (loadingRun) return;
           setConfirmOpen(false);
@@ -3329,8 +3416,10 @@ const ResetMaintenanceData = () => {
             type="error"
             showIcon
             icon={<WarningOutlined />}
-            message="Reset akan menghapus scope terpilih"
-            description="Pastikan preview sesuai. Reset tidak bisa dibatalkan dari halaman ini."
+            message={isFullTestingResetIntent ? "Reset semua testing akan membersihkan data non-protected" : "Reset akan menghapus scope terpilih"}
+            description={isFullTestingResetIntent
+              ? "Aksi ini menghapus transaksi/log/planning/pricing, menolkan stok, dan menolkan modal/HPP allowlist. Protected master tidak dihapus."
+              : "Pastikan preview sesuai. Reset tidak bisa dibatalkan dari halaman ini."}
           />
 
           <div>
@@ -3356,6 +3445,15 @@ const ResetMaintenanceData = () => {
             </div>
           </div>
 
+          {isFullTestingResetIntent && (
+            <Alert
+              type="warning"
+              showIcon
+              message="Termasuk stok dan modal/HPP"
+              description={`Stok master/variant dinolkan. Field modal/HPP allowlist diproses untuk ${preview?.executionPlan?.hppCostOperations || 0} item master, digabung dengan update stok menjadi ${preview?.executionPlan?.mergedMasterUpdateOperations || 0} update master.`}
+            />
+          )}
+
           <Alert
             type="warning"
             showIcon
@@ -3373,11 +3471,11 @@ const ResetMaintenanceData = () => {
             </Form.Item>
             <Form.Item
               name="confirmationText"
-              label='Ketik "RESET" untuk konfirmasi terakhir'
-              rules={[{ required: true, message: 'Ketik "RESET" untuk melanjutkan.' }]}
-              extra="Reset hanya berjalan jika kata RESET benar."
+              label={`Ketik "${resetConfirmKeyword}" untuk konfirmasi terakhir`}
+              rules={[{ required: true, message: `Ketik "${resetConfirmKeyword}" untuk melanjutkan.` }]}
+              extra={`Reset hanya berjalan jika kata ${resetConfirmKeyword} benar.`}
             >
-              <Input placeholder="Ketik RESET di sini" allowClear autoFocus />
+              <Input placeholder={`Ketik ${resetConfirmKeyword} di sini`} allowClear autoFocus />
             </Form.Item>
           </Form>
         </Space>
