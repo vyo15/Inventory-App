@@ -39,7 +39,7 @@
 
 .page-section-subtitle.ant-typography {
   margin: 0 !important;
-  font-size: 13px;
+  font-size: var(--ims-font-size-helper);
   line-height: 1.6;
   opacity: 0.76;
   max-width: 860px;

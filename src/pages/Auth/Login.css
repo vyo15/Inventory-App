@@ -125,9 +125,9 @@
   background: var(--ims-bg-card);
   color: var(--ims-color-primary-active);
   box-shadow: 0 12px 24px rgba(44, 109, 176, 0.08);
-  font-size: 12.5px;
-  font-weight: 900;
-  letter-spacing: 0.17em;
+  font-size: var(--ims-font-size-meta-plus);
+  font-weight: var(--ims-font-weight-display);
+  letter-spacing: 0.13em;
   text-transform: uppercase;
 }
 
@@ -321,7 +321,7 @@
   color: var(--ims-text-secondary);
   box-shadow: 0 8px 18px rgba(44, 109, 176, 0.06);
   font-size: 9.2px;
-  font-weight: 650;
+  font-weight: var(--ims-font-weight-action);
   transform: translateY(14px);
 }
 
@@ -403,9 +403,9 @@
 
 .ims-login-eyebrow.ant-typography {
   color: var(--ims-color-primary-active);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.15em;
+  font-size: var(--ims-font-size-caption);
+  font-weight: var(--ims-font-weight-display);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
@@ -414,12 +414,12 @@
   color: var(--ims-text-primary);
   font-size: 28px;
   line-height: 1.12;
-  letter-spacing: -0.035em;
+  letter-spacing: var(--ims-letter-spacing-value);
 }
 
 .ims-login-muted-text.ant-typography {
   color: var(--ims-text-secondary);
-  font-size: 13px;
+  font-size: var(--ims-font-size-helper);
   line-height: 1.7;
 }
 
@@ -454,7 +454,7 @@
 
 .ims-login-form .ant-form-item-label > label {
   color: var(--ims-text-primary);
-  font-weight: 850;
+  font-weight: var(--ims-font-weight-semibold);
 }
 
 .ims-login-form .ant-input-affix-wrapper,
@@ -480,7 +480,7 @@
   border-radius: 16px;
   background: var(--ims-color-primary);
   box-shadow: 0 14px 28px color-mix(in srgb, var(--ims-color-primary) 22%, transparent);
-  font-weight: 900;
+  font-weight: var(--ims-font-weight-strong);
 }
 
 .ims-login-submit.ant-btn-primary:hover,
@@ -600,7 +600,7 @@
   }
 
   .ims-login-title.ant-typography {
-    font-size: 24px;
+    font-size: var(--ims-font-size-kpi);
   }
 
   .ims-login-brand-panel {

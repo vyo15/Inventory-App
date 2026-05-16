@@ -77,7 +77,7 @@ import {
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import useAuth from "../../hooks/useAuth";
 
-const { Title, Paragraph, Text } = Typography;
+const { Paragraph, Text } = Typography;
 
 // -----------------------------------------------------------------------------
 // Reset & Maintenance Data Page
@@ -184,53 +184,6 @@ const ACTION_RISK_META = {
   guarded: { label: "Guarded", color: "orange" },
 };
 
-const DECISION_DEFAULTS = {
-  dataReality: "testing",
-  keepMaster: "yes",
-  keepTransactions: "no",
-  trustStock: "no",
-};
-
-const DEVELOPMENT_RESET_PRESETS = [
-  {
-    key: "transaction_only",
-    title: "Reset Transaksi Saja",
-    risk: "destructive",
-    mode: "transaction_only",
-    description: "Hapus transaksi/log scope terpilih, master dan stok master tetap dipertahankan.",
-    stockImpact: "Stok master tetap seperti sekarang.",
-    when: "Dipakai jika stok masih dipercaya dan hanya transaksi/log testing yang ingin dibersihkan.",
-  },
-  {
-    key: "reset_and_zero_stock",
-    title: "Reset Transaksi + Nolkan Semua Stok",
-    risk: "destructive",
-    mode: "reset_and_zero_stock",
-    recommended: true,
-    description: "Hapus transaksi/log lalu nolkan stok raw material, semi finished, produk, dan varian.",
-    stockImpact: "Stok dinolkan agar tidak ada stok hantu tanpa audit dari logic lama.",
-    when: "Rekomendasi utama untuk data development yang belum real dan logic baru sering berubah.",
-  },
-  {
-    key: "reset_and_restore_baseline",
-    title: "Reset + Restore Baseline Testing",
-    risk: "guarded",
-    mode: "reset_and_restore_baseline",
-    description: "Hapus transaksi/log lalu restore stok dari baseline testing yang sudah disimpan.",
-    stockImpact: "Stok kembali ke snapshot baseline, bukan nol.",
-    when: "Dipakai untuk testing berulang dari baseline yang sama.",
-  },
-  {
-    key: "future_total_business_reset",
-    title: "Reset Total Data Bisnis",
-    risk: "guarded",
-    disabled: true,
-    description: "Belum diaktifkan. Menyentuh master data dan butuh service/approval khusus.",
-    stockImpact: "Belum dieksekusi pada patch ini.",
-    when: "Export data pokok dulu, lalu buat task reset total development terpisah.",
-  },
-];
-
 const AUDIT_SUMMARY_AREAS = [
   { key: "data_quality", label: "Data Quality", collection: "mixed", source: "dataQualityAudit" },
   { key: "stock", label: "Stok Umum", collection: "master stok", source: "stockAudit" },
@@ -292,6 +245,11 @@ const ResetActionGuide = ({
       )}
     />
   );
+};
+
+const resetStatisticValueStyle = {
+  fontSize: "var(--ims-font-size-stat)",
+  fontWeight: "var(--ims-font-weight-display)",
 };
 
 const ResetMaintenanceData = () => {
@@ -369,7 +327,7 @@ const ResetMaintenanceData = () => {
 
   /*
   =====================================================
-  SECTION: Maintenance Decision Center state — AKTIF
+  SECTION: Testing & Reset Center export state — AKTIF
   Fungsi:
   - Menyimpan jawaban wizard, preview/export data pokok, dan ringkasan export terakhir.
 
@@ -377,7 +335,7 @@ const ResetMaintenanceData = () => {
   - Section Rekomendasi Sekarang, Wizard Keputusan, Export Data Pokok, dan Preview Dampak Reset.
 
   Alasan perubahan:
-  - Halaman reset harus membantu owner/developer mengambil keputusan, bukan hanya menampilkan tombol teknis.
+  - Halaman reset harus membantu owner/developer menjalankan audit, export, baseline, dan reset guarded tanpa membuka semua detail teknis di awal.
 
   Catatan cleanup:
   - Bisa dipindah ke subcomponent setelah flow stabil.
@@ -386,7 +344,6 @@ const ResetMaintenanceData = () => {
   - Jangan hubungkan wizard ini langsung ke delete service; wizard hanya menyiapkan mode/module dan tetap wajib preview + confirmation RESET.
   =====================================================
   */
-  const [decisionAnswers, setDecisionAnswers] = useState(DECISION_DEFAULTS);
   const [loadingMasterExportPreview, setLoadingMasterExportPreview] = useState(false);
   const [loadingMasterExport, setLoadingMasterExport] = useState(false);
   const [masterExportPreview, setMasterExportPreview] = useState(null);
@@ -464,79 +421,6 @@ const ResetMaintenanceData = () => {
 
   const isProductionPlanningOnlySelected = selectedModules.includes("production_planning_only");
 
-  const decisionRecommendation = useMemo(() => {
-    const { dataReality, keepMaster, keepTransactions, trustStock } = decisionAnswers;
-
-    if (keepMaster === "no") {
-      return {
-        key: "future_total_business_reset",
-        title: "Export Data Pokok dulu, lalu rencanakan reset total development terpisah",
-        mode: null,
-        color: "orange",
-        actionLabel: "Buka Section Export Data Pokok",
-        description: "Master data tidak ingin dipakai, tetapi reset total master belum diaktifkan pada patch ini karena menyentuh protected master collection.",
-      };
-    }
-
-    if (dataReality === "real") {
-      return {
-        key: "audit_repair_first",
-        title: "Audit + Repair Aman dulu",
-        mode: null,
-        color: "blue",
-        actionLabel: "Jalankan Cek Semua",
-        description: "Data sudah real/semi real. Jangan reset destructive tanpa backup dan audit detail.",
-      };
-    }
-
-    if (keepTransactions === "yes") {
-      return {
-        key: "audit_repair_first",
-        title: "Audit + Repair Aman dulu",
-        mode: null,
-        color: "blue",
-        actionLabel: "Jalankan Cek Semua",
-        description: "Transaksi lama masih penting, jadi reset tidak direkomendasikan sebagai langkah pertama.",
-      };
-    }
-
-    if (trustStock === "yes") {
-      return {
-        key: "transaction_only",
-        title: "Reset Transaksi Saja",
-        mode: "transaction_only",
-        color: "purple",
-        actionLabel: "Terapkan Reset Transaksi Saja",
-        description: "Transaksi/log lama boleh dihapus, tetapi stok master masih dipercaya.",
-      };
-    }
-
-    return {
-      key: "reset_and_zero_stock",
-      title: "Reset Transaksi + Nolkan Semua Stok",
-      mode: "reset_and_zero_stock",
-      color: "red",
-      actionLabel: "Terapkan Rekomendasi Utama",
-      description: "Rekomendasi default development: master tetap disimpan, transaksi/log lama dihapus, stok dinolkan agar tidak ada stok hantu.",
-    };
-  }, [decisionAnswers]);
-
-  const applyDecisionRecommendation = useCallback(() => {
-    if (decisionRecommendation.mode) {
-      setMode(decisionRecommendation.mode);
-      setSelectedModules([...DEFAULT_RESET_MODULES]);
-      message.info(`${decisionRecommendation.title} diterapkan. Muat preview dampak reset sebelum eksekusi.`);
-      return;
-    }
-
-    if (decisionRecommendation.key === "future_total_business_reset") {
-      message.warning("Reset total data bisnis belum diaktifkan. Export data pokok dulu, lalu buat task reset total development terpisah.");
-      return;
-    }
-
-    message.info("Rekomendasi saat ini adalah audit + repair aman dulu. Gunakan tombol Cek Semua di section Cek Kondisi Data.");
-  }, [decisionRecommendation]);
-
   const resetBlockedReason = useMemo(() => {
     // -------------------------------------------------------------------------
     // Destructive reset UI preflight.
@@ -548,7 +432,11 @@ const ResetMaintenanceData = () => {
       return "Pilih minimal 1 modul sebelum reset dijalankan.";
     }
 
-    if (mode === "reset_and_restore_baseline" && preview && !preview?.baselineSummary?.exists) {
+    if (!preview) {
+      return "Muat preview reset terbaru sebelum reset dijalankan.";
+    }
+
+    if (mode === "reset_and_restore_baseline" && !preview?.baselineSummary?.exists) {
       return "Baseline testing belum ada. Simpan baseline dulu sebelum menjalankan Reset + Baseline Testing.";
     }
 
@@ -580,10 +468,6 @@ const ResetMaintenanceData = () => {
     },
     [buildPageAuditNote, maintenanceActor],
   );
-
-  const updateDecisionAnswer = useCallback((key, value) => {
-    setDecisionAnswers((previous) => ({ ...previous, [key]: value }));
-  }, []);
 
   const downloadJsonPayload = useCallback((payload, filename) => {
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -952,16 +836,13 @@ const ResetMaintenanceData = () => {
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Auto-preview membuat halaman reset terasa hidup dan cocok untuk trial-error.
-  // User tidak wajib klik preview terus setiap kali mengganti mode atau modul.
+  // Preview reset dibuat manual agar halaman Testing & Reset Center tidak langsung
+  // melakukan full-scan Firestore saat dibuka. Saat mode/module berubah, preview
+  // lama dihapus supaya destructive reset wajib memakai preview yang fresh.
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    loadPreview(false);
-  }, [loadPreview]);
-
-  useEffect(() => {
-    loadDevTestDataPreview(false);
-  }, [loadDevTestDataPreview]);
+    setPreview(null);
+  }, [mode, selectedModules]);
 
   const handleDeleteDevTestData = async () => {
     let testCleanupLogId = "";
@@ -1773,6 +1654,30 @@ const ResetMaintenanceData = () => {
             : "Perlu dilihat detail sebelum reset atau repair.",
     })), [auditOverviewRows]);
 
+  const autoBugSummary = useMemo(() => {
+    const checkedAreas = auditOverviewRows.filter((item) => item.checkedRecords > 0 || item.issueCount > 0 || item.safeRepairCount > 0).length;
+    const issueCount = auditOverviewRows.reduce((total, item) => total + (Number(item.issueCount) || 0), 0);
+    const safeRepairCount = auditOverviewRows.reduce((total, item) => total + (Number(item.safeRepairCount) || 0), 0);
+    const uncheckedCount = Math.max(AUDIT_SUMMARY_AREAS.length - checkedAreas, 0);
+
+    return {
+      checkedAreas,
+      issueCount,
+      safeRepairCount,
+      uncheckedCount,
+      status: !checkedAreas ? "Belum dicek" : issueCount ? "Ada temuan" : safeRepairCount ? "Ada repair aman" : "OK",
+      color: !checkedAreas ? "default" : issueCount ? "red" : safeRepairCount ? "blue" : "green",
+    };
+  }, [auditOverviewRows]);
+
+  const loadingAutoDetect = loadingDataQualityAudit
+    || loadingStockAudit
+    || loadingLogSchemaAudit
+    || loadingLegacyDataAudit
+    || loadingMaintenanceAudit
+    || loadingPayrollAudit
+    || loadingTransactionVariantAudit;
+
   /* =====================================================
   SECTION: Reset Maintenance Renderer — GUARDED
   Fungsi:
@@ -1795,200 +1700,111 @@ const ResetMaintenanceData = () => {
       <Card className="content-card">
         <Space direction="vertical" size={20} style={{ width: "100%" }}>
           <PageHeader
-            title="Maintenance Decision Center"
-            subtitle="Audit, preview, export, dan reset data development dengan langkah yang jelas."
+            title="Testing & Reset Center"
+            subtitle="Cockpit ringkas untuk auto detect bug data, repair turunan, baseline testing, dan reset guarded."
           />
 
           <Alert
             type="warning"
             showIcon
-            message="Project masih development: jalankan audit dulu sebelum reset."
-            description="Gunakan halaman ini untuk mengecek kondisi data, melihat detail issue, export data pokok, lalu memilih apakah data lama cukup direpair atau lebih aman direset dan dibuat ulang. Reset destructive wajib preview dan confirmation keyword. Data log/transaksi lama tidak direkomendasikan dibawa ulang jika logic berubah."
+            message="Reset adalah langkah terakhir; mulai dari Auto Detect Bug dan Repair Turunan dulu."
+            description="Halaman ini tidak lagi auto full-scan saat dibuka. Pilih skenario, jalankan audit/preview manual, lalu eksekusi hanya jika scope dan keyword sudah jelas."
           />
 
-          <Alert
-            type="success"
-            showIcon
-            message="Protected master tetap aman dari reset default"
-            description="Supplier, product, raw material, customer, BOM, step, employee, dan master penting lain tetap dilindungi. Export data pokok tersedia sebagai backup/checklist sebelum rencana reset total development."
-          />
-
-          <Card title="Konteks Eksekusi & Catatan Percobaan" size="small" extra={<Tag color="green">Actor: {maintenanceActor}</Tag>}>
+          <Card title="Status Ringkas" size="small" extra={<Tag color="green">Actor: {maintenanceActor}</Tag>}>
             <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <ResetActionGuide
-                risk="guarded"
-                description="Standar UX semua aksi Reset & Maintenance"
-                preview="Setiap action memakai preview, dry run, summary, atau tabel dampak sesuai jenis aksinya."
-                scope="Mode, target, module, atau collection ditampilkan sebelum eksekusi."
-                impact="Hasil eksekusi ditampilkan lewat message, statistic, table, dan Riwayat Maintenance."
-                confirmation="Aksi destructive tetap memakai keyword/modal yang sudah ada; action non-destructive tidak dipaksa memakai keyword."
-                audit="Action yang membuat audit log memakai actor aktif, waktu eksekusi, status, target, note, dan error message jika ada."
-              />
+              <Row gutter={[12, 12]}>
+                <Col xs={12} md={6}>
+                  <Statistic title="Bug/Data Issue" value={autoBugSummary.issueCount} />
+                </Col>
+                <Col xs={12} md={6}>
+                  <Statistic title="Repair Aman" value={autoBugSummary.safeRepairCount} />
+                </Col>
+                <Col xs={12} md={6}>
+                  <Statistic title="Preview Reset" value={preview ? preview.totalRecords || 0 : "Belum"} />
+                </Col>
+                <Col xs={12} md={6}>
+                  <Statistic title="Baseline HPP" value={hppCostBaselineSummary?.exists ? "Ada" : "Belum"} />
+                </Col>
+              </Row>
               <Input.TextArea
                 value={actionNote}
                 onChange={(event) => setActionNote(event.target.value)}
                 rows={2}
                 allowClear
-                placeholder="Catatan percobaan opsional untuk audit log berikutnya, misalnya: trial reset PO HPP setelah test purchase"
+                placeholder="Catatan trial opsional untuk audit log, contoh: cek ulang data lama setelah patch reset UI"
               />
-              <Text type="secondary">
-                Catatan ini opsional. Jika kosong, behavior lama tetap sama. Jika diisi, sistem menggabungkannya ke field note audit tanpa menghapus note sistem.
-              </Text>
             </Space>
           </Card>
 
-          {/*
-          =====================================================
-          SECTION: Maintenance Decision Center UI — AKTIF
-          Fungsi:
-          - Mengubah halaman reset dari kumpulan tombol teknis menjadi alur Audit → Preview → Export → Reset/Repair → Audit ulang.
-
-          Dipakai oleh:
-          - Owner/developer saat menentukan apakah data lama cukup direpair, dihapus turunannya, atau direset development.
-
-          Alasan perubahan:
-          - Project masih development dan owner perlu melihat rekomendasi, dampak, target, dan backup data pokok sebelum reset destructive.
-
-          Catatan cleanup:
-          - Bisa dipecah menjadi subcomponent setelah UI stabil.
-
-          Risiko:
-          - Jangan hubungkan decision center langsung ke delete service tanpa preview, audit log, dan confirmation keyword existing.
-          =====================================================
-          */}
-          <Card title="Rekomendasi Sekarang" size="small" extra={<Tag color="red">Development Default</Tag>}>
-            <Space direction="vertical" size={14} style={{ width: "100%" }}>
-              <Alert
-                type="info"
-                showIcon
-                message="Gunakan halaman ini untuk mengecek kondisi data, melihat detail issue, export data pokok, lalu memilih apakah data lama cukup direpair atau lebih aman direset dan dibuat ulang."
-                description="Untuk data development yang belum real dan logic baru berubah, rekomendasi default adalah simpan master, hapus transaksi/log, lalu nolkan stok agar tidak ada stok hantu tanpa audit. Setelah reset, buat purchase/opening stock baru dari flow terbaru."
-              />
-              <Row gutter={[12, 12]}>
-                <Col xs={24} md={8}>
-                  <Card size="small" title="Simpan master, hapus transaksi/log saja">
-                    <Paragraph type="secondary">Master data tetap. Transaksi, log, dan data turunan scope terpilih dibersihkan. Stok master tetap dipertahankan.</Paragraph>
-                    <Button block onClick={() => { setMode("transaction_only"); setSelectedModules([...DEFAULT_RESET_MODULES]); message.info("Preset Reset Transaksi Saja diterapkan. Muat preview sebelum eksekusi."); }}>
-                      Terapkan Preset
+          <Card title="Pilih Kebutuhan Testing" size="small" extra={<Tag color="blue">Flow utama</Tag>}>
+            <Row gutter={[12, 12]}>
+              <Col xs={24} md={12} xl={6}>
+                <Card size="small" title="Pakai Data Lama">
+                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    <Text type="secondary">Untuk patch baru: cek bug data lama, lalu repair field turunan yang aman.</Text>
+                    <Button block type="primary" icon={<FileSearchOutlined />} loading={loadingAutoDetect} onClick={handleRunAllAudits}>
+                      Auto Detect Bug
                     </Button>
-                  </Card>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Card size="small" title={<Space>Simpan master + nolkan stok <Tag color="red">Rekomendasi</Tag></Space>}>
-                    <Paragraph type="secondary">Master tetap. Transaksi/log lama dihapus. Stok raw material, semi finished, product, dan varian dinolkan.</Paragraph>
-                    <Button block danger type="primary" onClick={() => { setMode("reset_and_zero_stock"); setSelectedModules([...DEFAULT_RESET_MODULES]); message.info("Preset Reset + Nolkan Stok diterapkan. Muat preview sebelum eksekusi."); }}>
-                      Terapkan Rekomendasi
+                  </Space>
+                </Card>
+              </Col>
+              <Col xs={24} md={12} xl={6}>
+                <Card size="small" title="Testing dari Baseline">
+                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    <Text type="secondary">Untuk test berulang dari stok awal yang sama tanpa input ulang.</Text>
+                    <Button block onClick={() => { setMode("reset_and_restore_baseline"); setSelectedModules([...DEFAULT_RESET_MODULES]); message.info("Mode Reset + Baseline dipilih. Muat preview sebelum eksekusi."); }}>
+                      Pilih Baseline Reset
                     </Button>
-                  </Card>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Card size="small" title="Reset total data bisnis">
-                    <Paragraph type="secondary">Belum aktif pada patch ini karena menyentuh protected master data. Export data pokok dulu, lalu buat task reset total terpisah.</Paragraph>
-                    <Button block onClick={() => message.warning("Reset total data bisnis belum diaktifkan. Gunakan Export Data Pokok JSON sebagai backup/checklist dulu.")}>
-                      Lihat Rencana Lanjutan
+                  </Space>
+                </Card>
+              </Col>
+              <Col xs={24} md={12} xl={6}>
+                <Card size="small" title="Mulai dari Nol">
+                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    <Text type="secondary">Untuk data development yang sudah kacau: transaksi/log dibersihkan dan stok dinolkan.</Text>
+                    <Button block danger onClick={() => { setMode("reset_and_zero_stock"); setSelectedModules([...DEFAULT_RESET_MODULES]); message.info("Mode Reset + Nolkan Stok dipilih. Muat preview sebelum eksekusi."); }}>
+                      Pilih Reset Nol
                     </Button>
-                  </Card>
-                </Col>
-              </Row>
-            </Space>
+                  </Space>
+                </Card>
+              </Col>
+              <Col xs={24} md={12} xl={6}>
+                <Card size="small" title="HPP Trial">
+                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                    <Text type="secondary">Khusus uji modal/HPP. Tidak menghapus transaksi, stok, payroll, atau work log.</Text>
+                    <Button block icon={<EyeOutlined />} loading={loadingHppCostPreview} onClick={() => loadHppCostPreview(true)}>
+                      Preview HPP
+                    </Button>
+                  </Space>
+                </Card>
+              </Col>
+            </Row>
           </Card>
 
-          {/*
-          =====================================================
-          SECTION: Decision Wizard / rekomendasi reset — AKTIF
-          Fungsi:
-          - Memberi rekomendasi mode reset berdasarkan kondisi data, master, transaksi, dan kepercayaan stok.
-
-          Dipakai oleh:
-          - Owner/developer sebelum memilih mode reset destructive.
-
-          Alasan perubahan:
-          - Mengurangi keputusan asal klik reset dengan pertanyaan bisnis sederhana.
-
-          Catatan cleanup:
-          - Bisa ditambah scoring issue audit setelah data quality service stabil.
-
-          Risiko:
-          - Wizard hanya boleh menyiapkan mode/module; eksekusi tetap melalui preview + confirmation RESET.
-          =====================================================
-          */}
-          <Card title="Wizard Keputusan" size="small" extra={<Tag color={decisionRecommendation.color}>{decisionRecommendation.title}</Tag>}>
-            <Space direction="vertical" size={16} style={{ width: "100%" }}>
-              <Row gutter={[12, 12]}>
-                <Col xs={24} md={12}>
-                  <Text strong>Data ini sudah real?</Text>
-                  <Radio.Group
-                    value={decisionAnswers.dataReality}
-                    onChange={(event) => updateDecisionAnswer("dataReality", event.target.value)}
-                    style={{ display: "block", marginTop: 8 }}
-                  >
-                    <Radio.Button value="testing">Belum, masih testing</Radio.Button>
-                    <Radio.Button value="real">Sudah real / semi real</Radio.Button>
-                  </Radio.Group>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Text strong>Master data masih mau dipakai?</Text>
-                  <Radio.Group
-                    value={decisionAnswers.keepMaster}
-                    onChange={(event) => updateDecisionAnswer("keepMaster", event.target.value)}
-                    style={{ display: "block", marginTop: 8 }}
-                  >
-                    <Radio.Button value="yes">Ya, simpan master</Radio.Button>
-                    <Radio.Button value="no">Tidak, input/import ulang</Radio.Button>
-                  </Radio.Group>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Text strong>Transaksi lama masih penting?</Text>
-                  <Radio.Group
-                    value={decisionAnswers.keepTransactions}
-                    onChange={(event) => updateDecisionAnswer("keepTransactions", event.target.value)}
-                    style={{ display: "block", marginTop: 8 }}
-                  >
-                    <Radio.Button value="no">Tidak, boleh hapus</Radio.Button>
-                    <Radio.Button value="yes">Ya, pertahankan</Radio.Button>
-                  </Radio.Group>
-                </Col>
-                <Col xs={24} md={12}>
-                  <Text strong>Stok sekarang masih dipercaya?</Text>
-                  <Radio.Group
-                    value={decisionAnswers.trustStock}
-                    onChange={(event) => updateDecisionAnswer("trustStock", event.target.value)}
-                    style={{ display: "block", marginTop: 8 }}
-                  >
-                    <Radio.Button value="no">Tidak, lebih baik nolkan</Radio.Button>
-                    <Radio.Button value="yes">Ya, masih dipercaya</Radio.Button>
-                  </Radio.Group>
-                </Col>
-              </Row>
-              <Alert
-                type={decisionRecommendation.mode ? "warning" : "info"}
-                showIcon
-                message={decisionRecommendation.title}
-                description={decisionRecommendation.description}
-              />
-              <Button type="primary" onClick={applyDecisionRecommendation}>
-                {decisionRecommendation.actionLabel}
-              </Button>
-            </Space>
-          </Card>
-
-          <Card title="Cek Kondisi Data" size="small" extra={<Tag color="green">Audit Read-only</Tag>}>
-            <Space direction="vertical" size={14} style={{ width: "100%" }}>
-              <Alert
-                type="success"
-                showIcon
-                message="Aman: audit hanya membaca data bisnis. Jika ada maintenance log, itu hanya catatan admin."
-                description="Gunakan audit sebelum reset untuk melihat issue, collection/area terdampak, dan rekomendasi repair/reset."
-              />
+          <Card title="Auto Detect Bug Data" size="small" extra={<Tag color={autoBugSummary.color}>{autoBugSummary.status}</Tag>}>
+            <Space direction="vertical" size={12} style={{ width: "100%" }}>
               <Row gutter={[8, 8]}>
-                <Col xs={24} md={6}><Button block icon={<FileSearchOutlined />} loading={loadingDataQualityAudit} onClick={() => handleLoadDataQualityAudit({ showProblemPreview: true })}>Cek Data Quality</Button></Col>
-                <Col xs={24} md={6}><Button block icon={<FileSearchOutlined />} loading={loadingStockAudit} onClick={handleLoadStockAudit}>Cek Stok Umum</Button></Col>
-                <Col xs={24} md={6}><Button block icon={<FileSearchOutlined />} loading={loadingLogSchemaAudit} onClick={handleLoadLogSchemaAudit}>Cek Inventory Log</Button></Col>
-                <Col xs={24} md={6}><Button block icon={<FileSearchOutlined />} loading={loadingLegacyDataAudit} onClick={handleLoadLegacyDataAudit}>Cek Data Lama</Button></Col>
-                <Col xs={24} md={6}><Button block icon={<FileSearchOutlined />} loading={loadingMaintenanceAudit} onClick={handleLoadProductionMaintenanceAudit}>Cek Produksi</Button></Col>
-                <Col xs={24} md={6}><Button block icon={<FileSearchOutlined />} loading={loadingPayrollAudit} onClick={handleLoadPayrollAudit}>Cek Payroll Snapshot</Button></Col>
-                <Col xs={24} md={6}><Button block icon={<FileSearchOutlined />} loading={loadingTransactionVariantAudit} onClick={handleLoadTransactionVariantAudit}>Cek Variant Transaksi</Button></Col>
-                <Col xs={24} md={6}><Button block type="primary" icon={<FileSearchOutlined />} onClick={handleRunAllAudits}>Cek Semua</Button></Col>
+                <Col xs={24} md={6}>
+                  <Button block type="primary" icon={<FileSearchOutlined />} loading={loadingAutoDetect} onClick={handleRunAllAudits}>
+                    Cek Semua Area
+                  </Button>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Button block icon={<FileSearchOutlined />} loading={loadingDataQualityAudit} onClick={() => handleLoadDataQualityAudit({ showProblemPreview: true })}>
+                    Cek Data Lama
+                  </Button>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Button block icon={<FileSearchOutlined />} loading={loadingStockAudit} onClick={handleLoadStockAudit}>
+                    Cek Stok
+                  </Button>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Button block icon={<FileSearchOutlined />} loading={loadingTransactionVariantAudit} onClick={handleLoadTransactionVariantAudit}>
+                    Cek Variant Transaksi
+                  </Button>
+                </Col>
               </Row>
               <Table
                 className="app-data-table"
@@ -1997,229 +1813,210 @@ const ResetMaintenanceData = () => {
                 dataSource={auditOverviewRows}
                 columns={[
                   { title: "Area", dataIndex: "area", key: "area", width: 150, render: (value) => renderCompactText(value, 135) },
-                  { title: "Collection", dataIndex: "collection", key: "collection", width: 150, render: (value) => renderCompactText(value, 135) },
                   { title: "Dicek", dataIndex: "checkedRecords", key: "checkedRecords", width: 90 },
-                  { title: "OK", dataIndex: "okCount", key: "okCount", width: 80 },
                   { title: "Issue", dataIndex: "issueCount", key: "issueCount", width: 90, render: (value) => <Tag color={value ? "red" : "green"}>{value || 0}</Tag> },
-                  { title: "Safe Repair", dataIndex: "safeRepairCount", key: "safeRepairCount", width: 110 },
+                  { title: "Repair", dataIndex: "safeRepairCount", key: "safeRepairCount", width: 90, render: (value) => <Tag color={value ? "blue" : "default"}>{value || 0}</Tag> },
                   { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", render: (value) => renderCompactText(value, 360) },
                 ]}
-                scroll={{ x: 930 }}
+                scroll={{ x: 780 }}
               />
               {auditIssueRows.length > 0 && (
-                <Card size="small" title="Detail Issue" extra={<Tag color="orange">Ringkasan</Tag>}>
-                  <Table
-                    className="app-data-table"
-                    size="small"
-                    pagination={false}
-                    dataSource={auditIssueRows}
-                    columns={[
-                      { title: "Area", dataIndex: "area", key: "area", width: 150 },
-                      { title: "Collection", dataIndex: "collection", key: "collection", width: 160 },
-                      { title: "Contoh Record/Masalah", dataIndex: "sample", key: "sample", width: 220, render: (value) => renderCompactText(value, 205) },
-                      { title: "Efek", dataIndex: "impact", key: "impact", width: 300, render: (value) => renderCompactText(value, 280) },
-                      { title: "Rekomendasi Aksi", dataIndex: "recommendation", key: "recommendation", render: (value) => renderCompactText(value, 320) },
-                    ]}
-                    scroll={{ x: 980 }}
-                  />
-                </Card>
-              )}
-            </Space>
-          </Card>
-
-          <Card title="Preview Dampak Reset" size="small" extra={<Tag color="red">Wajib sebelum RESET</Tag>}>
-            <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Alert
-                type="warning"
-                showIcon
-                message="Preview menjelaskan data yang akan dihapus, data yang dilindungi, estimasi batch, dan efek stok."
-                description="Reset Transaksi menghapus transaksi/log scope terpilih dan stok master tetap. Reset + Nolkan Semua Stok menghapus transaksi/log lalu nolkan stok raw material, semi finished, product, termasuk varian. Reset + Baseline Testing menghapus transaksi/log lalu restore stok dari baseline testing."
-              />
-              <Row gutter={[12, 12]}>
-                <Col xs={24} md={8}><Statistic title="Mode" value={RESET_MODE_LABELS[mode] || mode} /></Col>
-                <Col xs={24} md={8}><Statistic title="Akan Dihapus" value={preview?.totalRecords || 0} /></Col>
-                <Col xs={24} md={8}><Statistic title="Operasi Write/Delete" value={preview?.executionPlan?.totalWriteOperations || 0} /></Col>
-              </Row>
-              <Space wrap>
-                <Button icon={<EyeOutlined />} onClick={() => loadPreview(true)} loading={loadingPreview}>Muat Preview Dampak</Button>
-                <Button danger icon={<ReloadOutlined />} onClick={openResetConfirmation} disabled={Boolean(resetBlockedReason) || loadingPreview}>Lanjut Konfirmasi RESET</Button>
-                {resetBlockedReason && <Tag color="red">{resetBlockedReason}</Tag>}
-              </Space>
-              <Table
-                className="app-data-table"
-                size="small"
-                loading={loadingPreview}
-                dataSource={previewRows}
-                pagination={{ pageSize: 5, showSizeChanger: false }}
-                columns={[
-                  { title: "Target", dataIndex: "name", key: "name", width: 220, render: (value) => renderCompactText(value, 205) },
-                  { title: "Module", dataIndex: "moduleLabel", key: "moduleLabel", width: 170, render: (value) => renderCompactText(value, 155) },
-                  { title: "Count", dataIndex: "count", key: "count", width: 90 },
-                  { title: "Status", dataIndex: "status", key: "status", width: 130, render: (value) => value === "protected" ? <Tag color="green">Dilindungi</Tag> : <Tag color="red">Akan Dihapus</Tag> },
-                  { title: "Dampak", dataIndex: "action", key: "action", render: (value) => renderCompactText(value, 360) },
-                ]}
-                scroll={{ x: 970 }}
-                locale={{ emptyText: "Muat preview untuk melihat dampak reset." }}
-              />
-            </Space>
-          </Card>
-
-          {/*
-          =====================================================
-          SECTION: Export Data Pokok sebelum reset — AKTIF
-          Fungsi:
-          - Download JSON master data read-only sebagai backup/checklist sebelum reset destructive atau rencana reset total development.
-
-          Dipakai oleh:
-          - Owner/developer saat ingin membersihkan data lama tapi tetap punya referensi master/BOM/supplier/product.
-
-          Alasan perubahan:
-          - Export diperlukan agar master bisa dinormalisasi/manual import ulang tanpa membawa transaksi/log lama.
-
-          Catatan cleanup:
-          - Import otomatis, restore exact backup, dan XLSX export belum dibuat pada patch ini.
-
-          Risiko:
-          - Export ini bukan restore; opening stock hanya referensi dan harus dibuat ulang lewat flow terbaru.
-          =====================================================
-          */}
-          <Card title="Export Data Pokok Sebelum Reset" size="small" extra={<Tag color="blue">JSON Read-only</Tag>}>
-            <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Alert
-                type="info"
-                showIcon
-                message="Export ini hanya data pokok, bukan restore otomatis."
-                description="Produk, raw material, semi finished, supplier, customer, step, employee, BOM, pricing rules, category, dan production profile diexport sebagai JSON. Transaksi, log, payroll, report cache, dan maintenance log tidak dibawa sebagai default."
-              />
-              <Space wrap>
-                <Button icon={<EyeOutlined />} loading={loadingMasterExportPreview} onClick={handleLoadMasterExportPreview}>Preview Export</Button>
-                <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={() => handleDownloadMasterExport(false)}>Export Data Pokok JSON</Button>
-                <Button type="primary" icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={() => handleDownloadMasterExport(true)}>Export Data Pokok + Opening Stock JSON</Button>
-                <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={handleDownloadMasterExportChecklist}>Export Ringkasan Checklist JSON</Button>
-              </Space>
-              <Row gutter={[12, 12]}>
-                <Col xs={12} md={6}><Statistic title="Collection" value={masterExportPreview?.summary?.totalCollections || lastMasterExport?.totalCollections || 0} /></Col>
-                <Col xs={12} md={6}><Statistic title="Record Master" value={masterExportPreview?.summary?.totalRecords || lastMasterExport?.totalRecords || 0} /></Col>
-                <Col xs={12} md={6}><Statistic title="Opening Stock Ref" value={masterExportPreview?.summary?.openingStockRows || lastMasterExport?.openingStockRows || 0} /></Col>
-                <Col xs={12} md={6}><Statistic title="Warning" value={masterExportPreview?.summary?.warnings || lastMasterExport?.warnings?.length || 0} /></Col>
-              </Row>
-              {lastMasterExport && (
                 <Alert
-                  type={lastMasterExport.warnings?.length ? "warning" : "success"}
+                  type="warning"
                   showIcon
-                  message={`Export terakhir: ${formatMaintenanceDate(lastMasterExport.exportedAt)}`}
-                  description={`${lastMasterExport.totalRecords} record master, ${lastMasterExport.openingStockRows} baris opening stock reference, ${lastMasterExport.warnings?.length || 0} warning.`}
+                  message={`${autoBugSummary.issueCount} issue dan ${autoBugSummary.safeRepairCount} kandidat repair aman terdeteksi.`}
+                  description="Buka Advanced Detail jika perlu melihat sample record. Untuk data lama setelah patch, coba Repair Turunan dulu sebelum reset destructive."
                 />
               )}
-              {Boolean(masterExportPreview?.warnings?.length) && (
+            </Space>
+          </Card>
+
+          <Card title="Repair Turunan Aman" size="small" extra={<Tag color="green">Tidak hapus data</Tag>}>
+            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              <Text type="secondary">
+                Repair hanya menyamakan field turunan/display/snapshot. Tidak membuat transaksi baru, tidak posting stok ulang, dan tidak menghapus data utama.
+              </Text>
+              <Row gutter={[8, 8]}>
+                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingStockRepair} onClick={handleRepairStockAudit}>Repair Stok</Button></Col>
+                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingLogSchemaRepair} onClick={handleRepairLogSchema}>Repair Inventory Log</Button></Col>
+                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingMaintenanceRepair} onClick={handleRepairProductionMaintenance}>Repair Produksi</Button></Col>
+                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingPayrollRepair} onClick={handleRepairPayrollAudit}>Repair Payroll Snapshot</Button></Col>
+                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingTransactionVariantRepair} onClick={handleRepairTransactionVariantAudit}>Repair Variant Transaksi</Button></Col>
+                <Col xs={24} md={8}>
+                  <Popconfirm
+                    title="Sinkronkan semua stok turunan?"
+                    description="Aksi ini update field stok turunan master, bukan reset transaksi. Jalankan setelah audit jika benar-benar diperlukan."
+                    okText="Ya, sinkronkan"
+                    cancelText="Batal"
+                    onConfirm={handleSyncStocks}
+                  >
+                    <Button block icon={<SyncOutlined />} loading={loadingSync}>Sync All Stocks</Button>
+                  </Popconfirm>
+                </Col>
+              </Row>
+            </Space>
+          </Card>
+
+          <Card title="Reset & Baseline" size="small" extra={<Tag color="red">Destructive guarded</Tag>}>
+            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+              <Row gutter={[12, 12]}>
+                <Col xs={24} md={8}>
+                  <Text strong>Mode Reset</Text>
+                  <Select
+                    value={mode}
+                    onChange={setMode}
+                    options={RESET_MODE_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
+                    style={{ width: "100%", marginTop: 8 }}
+                  />
+                </Col>
+                <Col xs={24} md={16}>
+                  <Text strong>Modul</Text>
+                  <Checkbox.Group
+                    value={selectedModules}
+                    onChange={setSelectedModules}
+                    options={moduleOptions}
+                    style={{ display: "grid", gap: 8, marginTop: 8 }}
+                  />
+                </Col>
+              </Row>
+              <Row gutter={[12, 12]}>
+                <Col xs={12} md={6}><Statistic title="Mode" value={RESET_MODE_LABELS[mode] || mode} /></Col>
+                <Col xs={12} md={6}><Statistic title="Target Hapus" value={preview?.totalRecords || 0} /></Col>
+                <Col xs={12} md={6}><Statistic title="Operasi" value={preview?.executionPlan?.totalWriteOperations || 0} /></Col>
+                <Col xs={12} md={6}><Statistic title="Modul" value={selectedModules.length} /></Col>
+              </Row>
+              <Space wrap>
+                <Button icon={<EyeOutlined />} loading={loadingPreview} onClick={() => loadPreview(true)}>Preview Reset</Button>
+                <Popconfirm
+                  title="Simpan baseline stok saat ini?"
+                  description="Baseline dipakai untuk reset testing berulang. Data baseline lama akan diganti oleh snapshot saat ini."
+                  okText="Ya, simpan"
+                  cancelText="Batal"
+                  onConfirm={handleSaveBaseline}
+                >
+                  <Button icon={<SaveOutlined />} loading={loadingBaseline}>Simpan Baseline Stok</Button>
+                </Popconfirm>
+                <Button danger type="primary" icon={<ReloadOutlined />} onClick={openResetConfirmation} disabled={Boolean(resetBlockedReason) || loadingPreview}>
+                  Konfirmasi RESET
+                </Button>
+                {resetBlockedReason && <Tag color="red">{resetBlockedReason}</Tag>}
+              </Space>
+              {preview && (
                 <Table
                   className="app-data-table"
                   size="small"
                   pagination={false}
-                  dataSource={masterExportPreview.warnings.map((item) => ({ ...item, key: item.collection }))}
+                  dataSource={previewRows}
                   columns={[
-                    { title: "Collection", dataIndex: "collection", key: "collection", width: 180 },
-                    { title: "Label", dataIndex: "label", key: "label", width: 180 },
-                    { title: "Warning", dataIndex: "message", key: "message", render: (value) => renderCompactText(value, 420) },
+                    { title: "Modul", dataIndex: "moduleLabel", key: "moduleLabel", width: 170, render: (value) => renderCompactText(value, 150) },
+                    { title: "Target", dataIndex: "name", key: "name", width: 220, render: (value) => renderCompactText(value, 200) },
+                    { title: "Jumlah", dataIndex: "count", key: "count", width: 90 },
+                    { title: "Status", dataIndex: "status", key: "status", width: 120, render: (value) => <Tag color={value === "delete" ? "red" : "green"}>{value === "delete" ? "Dihapus" : "Dilindungi"}</Tag> },
+                    { title: "Aksi", dataIndex: "action", key: "action", render: (value) => renderCompactText(value, 300) },
                   ]}
-                  scroll={{ x: 780 }}
+                  scroll={{ x: 900 }}
                 />
               )}
             </Space>
           </Card>
 
-          <Card title="Aksi Sinkron / Repair Aman" size="small" extra={<Tag color="green">Non-reset / Maintenance</Tag>}>
-            <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Alert
-                type="success"
-                showIcon
-                message="Repair aman bukan reset."
-                description="Repair hanya field turunan/snapshot/display, tidak membuat transaksi baru, tidak posting stok ulang, dan tidak menghapus data utama. Tetap cek detail advanced sebelum repair besar."
-              />
-              <Row gutter={[8, 8]}>
-                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingStockRepair} onClick={handleRepairStockAudit}>Repair Stok Aman</Button></Col>
-                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingLogSchemaRepair} onClick={handleRepairLogSchema}>Repair Inventory Log Schema</Button></Col>
-                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingMaintenanceRepair} onClick={handleRepairProductionMaintenance}>Repair Produksi</Button></Col>
-                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingPayrollRepair} onClick={handleRepairPayrollAudit}>Repair Payroll Snapshot</Button></Col>
-                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingTransactionVariantRepair} onClick={handleRepairTransactionVariantAudit}>Repair Variant Transaksi</Button></Col>
-                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingSync} onClick={handleSyncStocks}>Sync All Stocks</Button></Col>
-              </Row>
-            </Space>
-          </Card>
+          <Row gutter={[12, 12]}>
+            <Col xs={24} lg={12}>
+              <Card title="HPP Cost Testing" size="small" extra={<Tag color="purple">Terpisah dari reset transaksi</Tag>}>
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  <Select
+                    value={hppCostResetMode}
+                    onChange={setHppCostResetMode}
+                    options={HPP_COST_RESET_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
+                    style={{ width: "100%" }}
+                  />
+                  <Space wrap>
+                    <Button icon={<EyeOutlined />} loading={loadingHppCostPreview} onClick={() => loadHppCostPreview(true)}>Preview HPP</Button>
+                    <Popconfirm title="Simpan baseline HPP saat ini?" okText="Ya" cancelText="Batal" onConfirm={handleSaveHppCostBaseline}>
+                      <Button icon={<SaveOutlined />} loading={loadingSaveHppCostBaseline}>Simpan Baseline HPP</Button>
+                    </Popconfirm>
+                    <Button danger icon={<ReloadOutlined />} onClick={() => openHppCostConfirmation("reset")} disabled={!hppCostPreview || hppCostPreview?.isClientBatchSafe === false}>Reset HPP</Button>
+                    <Button icon={<ReloadOutlined />} onClick={() => openHppCostConfirmation("restore")} disabled={!hppCostBaselineSummary?.exists}>Restore HPP</Button>
+                  </Space>
+                  <Row gutter={[8, 8]}>
+                    <Col xs={8}><Statistic title="Dokumen" value={hppCostPreview?.totalAffectedDocs || 0} /></Col>
+                    <Col xs={8}><Statistic title="Variant" value={hppCostPreview?.totalAffectedVariantRows || 0} /></Col>
+                    <Col xs={8}><Statistic title="Baseline" value={hppCostBaselineSummary?.itemCount || 0} /></Col>
+                  </Row>
+                </Space>
+              </Card>
+            </Col>
+            <Col xs={24} lg={12}>
+              <Card title="Data Test Seed & Export" size="small" extra={<Tag color="gold">Utility</Tag>}>
+                <Space direction="vertical" size={12} style={{ width: "100%" }}>
+                  <Space wrap>
+                    <Button icon={<EyeOutlined />} loading={loadingTestDataPreview} onClick={() => loadDevTestDataPreview(true)}>Preview Data Test</Button>
+                    <Popconfirm
+                      title="Hapus data test bermarker?"
+                      description="Hanya dokumen isTestData/dev_test_seed/dev_seed. Data normal dan supplier protected tidak ikut."
+                      okText="Ya, hapus"
+                      cancelText="Batal"
+                      onConfirm={handleDeleteDevTestData}
+                    >
+                      <Button danger icon={<DeleteOutlined />} loading={loadingDeleteTestData} disabled={!testDataPreview?.totalRecords}>Hapus Data Test</Button>
+                    </Popconfirm>
+                    <Button icon={<EyeOutlined />} loading={loadingMasterExportPreview} onClick={handleLoadMasterExportPreview}>Preview Export</Button>
+                    <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={() => handleDownloadMasterExport(true)}>Export Master</Button>
+                    <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={handleDownloadMasterExportChecklist}>Export Checklist</Button>
+                  </Space>
+                  <Row gutter={[8, 8]}>
+                    <Col xs={8}><Statistic title="Data Test" value={testDataPreview?.totalRecords || 0} /></Col>
+                    <Col xs={8}><Statistic title="Master" value={masterExportPreview?.summary?.totalRecords || lastMasterExport?.totalRecords || 0} /></Col>
+                    <Col xs={8}><Statistic title="Warning" value={masterExportPreview?.summary?.warnings || lastMasterExport?.warnings?.length || 0} /></Col>
+                  </Row>
+                  {Boolean(testDataRows.length) && (
+                    <Table
+                      className="app-data-table"
+                      size="small"
+                      pagination={false}
+                      dataSource={testDataRows}
+                      columns={[
+                        { title: "Collection", dataIndex: "name", key: "name", render: (value) => renderCompactText(value, 180) },
+                        { title: "Jumlah", dataIndex: "count", key: "count", width: 90 },
+                        { title: "Aksi", dataIndex: "action", key: "action", render: (value) => renderCompactText(value, 220) },
+                      ]}
+                      scroll={{ x: 520 }}
+                    />
+                  )}
+                </Space>
+              </Card>
+            </Col>
+          </Row>
 
-          <Card title="Mulai Ulang Data Development" size="small" extra={<Tag color="red">Destructive Preset</Tag>}>
-            <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Alert
-                type="warning"
-                showIcon
-                message="Semua preset destructive tetap wajib preview dan keyword RESET."
-                description="Protected master collection tetap tidak ikut reset default. Hapus Data Test hanya untuk marker dev_test_seed. Reset total master belum diaktifkan."
-              />
-              <Row gutter={[12, 12]}>
-                {DEVELOPMENT_RESET_PRESETS.map((preset) => (
-                  <Col xs={24} md={12} xl={6} key={preset.key}>
-                    <Card size="small" title={<Space>{preset.title}{preset.recommended && <Tag color="red">Utama</Tag>}</Space>}>
-                      <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                        <Tag color={ACTION_RISK_META[preset.risk]?.color || "default"}>{ACTION_RISK_META[preset.risk]?.label || preset.risk}</Tag>
-                        <Paragraph type="secondary">{preset.description}</Paragraph>
-                        <Text type="secondary"><Text strong>Efek stok:</Text> {preset.stockImpact}</Text>
-                        <Text type="secondary"><Text strong>Kapan dipakai:</Text> {preset.when}</Text>
-                        <Button
-                          block
-                          danger={preset.mode === "reset_and_zero_stock"}
-                          disabled={preset.disabled}
-                          onClick={() => {
-                            if (!preset.mode) {
-                              message.warning("Reset total data bisnis belum diaktifkan. Export data pokok dulu dan buat task khusus.");
-                              return;
-                            }
-                            setMode(preset.mode);
-                            setSelectedModules([...DEFAULT_RESET_MODULES]);
-                            message.info(`${preset.title} dipilih. Muat preview lalu konfirmasi RESET jika sudah yakin.`);
-                          }}
-                        >
-                          {preset.disabled ? "Butuh Approval Terpisah" : "Pilih Preset"}
-                        </Button>
-                      </Space>
-                    </Card>
-                  </Col>
-                ))}
-              </Row>
-            </Space>
-          </Card>
-
-          <Card title="Setelah Reset, Harus Ngapain?" size="small" extra={<Tag color="purple">Checklist</Tag>}>
+          <Card title="Cara Pakai Setelah Patch" size="small" extra={<Tag color="purple">Checklist ringkas</Tag>}>
             <Row gutter={[12, 12]}>
               <Col xs={24} md={8}>
-                <Card size="small" title="Jika reset transaksi + nolkan stok">
+                <Card size="small" title="Pakai data lama">
                   <ol style={{ paddingLeft: 18, marginBottom: 0 }}>
-                    <li>Cek master Product / Raw Material / Semi Finished.</li>
-                    <li>Cek Supplier dan Customer.</li>
-                    <li>Cek BOM dan STEP.</li>
-                    <li>Buat purchase awal / opening stock.</li>
-                    <li>Cek Stock Management dan laporan stok.</li>
-                    <li>Buat transaksi baru dari flow terbaru.</li>
+                    <li>Auto Detect Bug.</li>
+                    <li>Repair Turunan Aman.</li>
+                    <li>Cek ulang area yang warning.</li>
+                    <li>Test Purchase, Sales, Return, Produksi, Payroll.</li>
                   </ol>
                 </Card>
               </Col>
               <Col xs={24} md={8}>
-                <Card size="small" title="Jika reset transaksi saja">
+                <Card size="small" title="Testing berulang">
                   <ol style={{ paddingLeft: 18, marginBottom: 0 }}>
-                    <li>Pastikan stok masih valid.</li>
-                    <li>Cek Stock Management.</li>
-                    <li>Buat transaksi baru.</li>
-                    <li>Jalankan audit ulang.</li>
+                    <li>Simpan baseline stok.</li>
+                    <li>Jalankan transaksi test.</li>
+                    <li>Preview Reset + Baseline.</li>
+                    <li>Ketik RESET untuk ulang dari baseline.</li>
                   </ol>
                 </Card>
               </Col>
               <Col xs={24} md={8}>
-                <Card size="small" title="Jika reset total bisnis nanti">
+                <Card size="small" title="Mulai dari nol">
                   <ol style={{ paddingLeft: 18, marginBottom: 0 }}>
-                    <li>Export data pokok.</li>
-                    <li>Reset total via task terpisah.</li>
-                    <li>Import/input ulang master.</li>
-                    <li>Buat opening stock.</li>
-                    <li>Jalankan audit ulang.</li>
+                    <li>Export master.</li>
+                    <li>Pilih Reset + Nolkan Stok.</li>
+                    <li>Preview dan cek protected data.</li>
+                    <li>Input opening stock/purchase baru.</li>
                   </ol>
                 </Card>
               </Col>
@@ -2245,8 +2042,8 @@ const ResetMaintenanceData = () => {
           - Jangan hapus panel lama karena masih menjadi akses developer ke detail audit/repair dan HPP testing.
           =====================================================
           */}
-          <Collapse defaultActiveKey={["advanced-tools"]}>
-            <Collapse.Panel header="Advanced / Developer Tools" key="advanced-tools">
+          <Collapse defaultActiveKey={[]}>
+            <Collapse.Panel header="Advanced Detail / Developer Tools" key="advanced-tools">
               <Space direction="vertical" size={20} style={{ width: "100%" }}>
 
           <Card
@@ -3142,7 +2939,7 @@ const ResetMaintenanceData = () => {
           <Row gutter={[16, 16]}>
             <Col xs={24} md={6}>
               <Card size="small">
-                <Statistic title="Mode Aktif" value={RESET_MODE_LABELS[mode]} valueStyle={{ fontSize: 20 }} />
+                <Statistic title="Mode Aktif" value={RESET_MODE_LABELS[mode]} valueStyle={resetStatisticValueStyle} />
               </Card>
             </Col>
             <Col xs={24} md={6}>
@@ -3160,7 +2957,7 @@ const ResetMaintenanceData = () => {
                 <Statistic
                   title="Master Dilindungi"
                   value={preview?.protectedRecords || 0}
-                  valueStyle={{ fontSize: 20 }}
+                  valueStyle={resetStatisticValueStyle}
                 />
               </Card>
             </Col>
@@ -3169,7 +2966,7 @@ const ResetMaintenanceData = () => {
                 <Statistic
                   title="Baseline"
                   value={preview?.baselineSummary?.label || "Belum dicek"}
-                  valueStyle={{ fontSize: 20 }}
+                  valueStyle={resetStatisticValueStyle}
                 />
               </Card>
             </Col>

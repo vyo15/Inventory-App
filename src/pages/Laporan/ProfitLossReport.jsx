@@ -193,7 +193,7 @@ const ProfitLossReport = () => {
             <div>
               <Tag color={color}>{label}</Tag>
               {referenceText ? (
-                <div style={{ fontSize: 12, color: "#8c8c8c", marginTop: 4 }}>
+                <div className="ims-cell-meta" style={{ marginTop: 4 }}>
                   Ref: {referenceText}
                 </div>
               ) : null}

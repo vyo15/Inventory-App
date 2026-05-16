@@ -75,6 +75,89 @@ Tidak boleh digunakan:
 2. `src/theme/antdTheme.js` — token Ant Design dan component token.
 3. `src/App.css` — guard global app shell, table, modal, drawer, dropdown, popover, form, dan shared surface.
 
+
+## Standar Typography IMS
+
+Typography IMS memakai konsep **Inter Calm Corporate Typography**: tegas untuk angka operasional, tetap ringan untuk pemakaian harian, dan tidak dekoratif.
+
+Font family standar:
+
+```css
+Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
+```
+
+Catatan penting:
+- `Inter` adalah font utama. Fallback `system-ui` dan `Segoe UI` wajib tetap ada agar UI tetap aman bila Inter belum tersedia di device user.
+- Jangan menambah remote font/import eksternal tanpa approval, karena aplikasi internal harus tetap cepat dan tidak bergantung pada network font pihak ketiga.
+- Jika konsistensi Inter lintas device diperlukan, gunakan dependency lokal seperti `@fontsource-variable/inter` hanya setelah approval dependency.
+
+Skala standar:
+
+| Area | Size | Weight | Catatan |
+|---|---:|---:|---|
+| Body/table | `14px` | `400–500` | Ikuti baseline Ant Design dan token global. |
+| Page title | `22–26px` | `740–760` | Headline tegas, tidak memakai `850/900`. |
+| Page subtitle/helper | `12–13px` | `400–500` | Ringkas dan readable. |
+| Header greeting | `16–17px` | `700–740` | Corporate, tidak terlalu berat. |
+| Summary card title | `12px` | `650–680` | Compact tetapi jelas. |
+| Summary card value | `24–28px` | `720–760` | Angka utama kuat tanpa terlihat kasar. |
+| Featured/finance value | `30–36px` | `740–760` | Hanya untuk KPI utama, jangan dipakai berlebihan. |
+| Button | `14px` | `600–650` | Action jelas tanpa terlalu bold. |
+| Sidebar menu | `14px` | `500–600` | Nyaman untuk navigasi panjang. |
+| Table header | `13–14px` | `650–700` | Jelas untuk data padat. |
+
+Aturan implementasi:
+- Pakai token global dari `src/index.css` untuk font family, ukuran, weight, line-height, dan letter-spacing yang berulang.
+- Token dibuat hanya untuk angka yang sering dipakai; angka dekoratif/brand yang sangat spesifik boleh tetap lokal dengan alasan jelas.
+- Hindari `font-weight: 850` dan `font-weight: 900` pada UI operasional harian. Gunakan `760` maksimal untuk display/KPI penting.
+- Hindari `letter-spacing` terlalu rapat seperti `-0.055em`; gunakan sekitar `-0.01em` sampai `-0.035em` hanya pada headline atau angka besar.
+- Hindari hardcoded warna teks seperti `#777` atau `#8c8c8c`; gunakan `var(--ims-text-secondary)` atau `var(--ims-text-muted)`.
+- Inline typography di page bisnis hanya boleh untuk kebutuhan lokal yang benar-benar spesifik. Untuk pola berulang, pindahkan ke shared CSS/component.
+- Jangan mengubah makna status, angka stok, uang, HPP, payroll, atau warning hanya karena typography dirapikan.
+
+Token angka yang distandarkan:
+
+| Token | Nilai | Pemakaian utama |
+|---|---:|---|
+| `--ims-font-size-xs` | `10px` | badge/status kecil |
+| `--ims-font-size-caption` | `11px` | caption ringkas |
+| `--ims-font-size-meta` | `12px` | meta text, helper pendek, table detail |
+| `--ims-font-size-meta-plus` | `12.5px` | subtitle header/form yang butuh sedikit lebih readable |
+| `--ims-font-size-helper` | `13px` | subtitle page/section |
+| `--ims-font-size-body` | `14px` | body/table/action default |
+| `--ims-font-size-title` | `18px` | drawer/modal/detail title |
+| `--ims-font-size-stat` | `20px` | statistic value menengah |
+| `--ims-font-size-kpi` | `24px` | KPI/receipt total standar |
+| `--ims-font-size-summary-value` | `25px` | angka summary card utama |
+
+Token weight tambahan:
+
+| Token | Nilai | Pemakaian utama |
+|---|---:|---|
+| `--ims-font-weight-action` | `650` | tombol/chip/action kecil |
+| `--ims-font-weight-card-title` | `680` | title summary card |
+| `--ims-font-weight-heading` | `740` | greeting/header title |
+| `--ims-font-weight-display` | `760` | page title/KPI utama |
+
+Token line-height dan letter-spacing:
+
+| Token | Nilai | Pemakaian utama |
+|---|---:|---|
+| `--ims-line-height-solid` | `1` | angka besar/badge padat |
+| `--ims-line-height-value` | `1.08` | summary value |
+| `--ims-line-height-heading` | `1.14` | page title |
+| `--ims-line-height-tight` | `1.2` | text compact |
+| `--ims-line-height-compact` | `1.3` | header subtitle/tag |
+| `--ims-line-height-title` | `1.35` | title/cell compact |
+| `--ims-line-height-body` | `1.45` | body/detail text |
+| `--ims-line-height-readable` | `1.55` | paragraph/helper panjang |
+| `--ims-letter-spacing-tight` | `-0.01em` | header title |
+| `--ims-letter-spacing-title` | `-0.02em` | page title |
+| `--ims-letter-spacing-value` | `-0.025em` | KPI/value |
+| `--ims-letter-spacing-featured` | `-0.035em` | featured KPI besar |
+| `--ims-letter-spacing-label` | `0.005em` | label kecil |
+| `--ims-letter-spacing-uppercase` | `0.04em` | uppercase kicker/status |
+
 ## Area guarded
 
 - `AppLayout.jsx` theme sync untuk `app-theme-light`, `app-theme-dark`, dan `data-app-theme`.

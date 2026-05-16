@@ -577,19 +577,19 @@ Batasan: Hapus Profile tidak menghapus Firebase Authentication user. Jika Auth u
 =====================================================
 SECTION: Firestore Rules integration boundary — AKTIF / GUARDED
 Fungsi:
-- Memetakan rules backend yang sekarang disimpan di `firestore.rules` dan dihubungkan dari `firebase.json`.
+- Memetakan rules backend aktif yang dikelola manual/external, tanpa mengharuskan file rules ada di repo ZIP saat ini.
 
 Dipakai oleh:
 - AuthContext, ProtectedRoute, User Management, role access, dan semua service Firestore client.
 
 Alasan perubahan:
-- Rules source-controlled membuat review security bisa dilakukan dari repo, bukan hanya Firebase Console.
+- Owner menetapkan Firestore Rules dikelola langsung di Firebase Console dan source-controlled rules bukan bagian patch ini.
 
 Catatan cleanup:
-- Rules masih staged-final collection-level; field-level validation dan write matrix per modul perlu task terpisah.
+- Jika rules ingin dimasukkan ke repo, buat task terpisah untuk file rules dan konfigurasi deploy.
 
 Risiko:
-- File rules di repo belum aktif sebelum dipublish/deploy ke Firebase project yang benar.
+- Menganggap sidebar/route guard sebagai security final tanpa rules backend aman akan membuka risiko akses data.
 =====================================================
 
 ```text
@@ -597,7 +597,7 @@ request.auth.uid
 -> get system_users/{request.auth.uid}
 -> status harus active
 -> role harus administrator/user
--> system_users guarded khusus + self lastLoginAt audit update
+-> system_users guarded khusus
 -> business collections diakses oleh profile aktif sesuai staged-final rules
 -> collection tidak dikenal fallback deny
 ```
@@ -820,17 +820,19 @@ Guard integration:
 - Jika referensi bisnis belum tersedia, UI menampilkan `-` atau `Referensi belum tersedia`.
 - Inventory log baru yang memiliki banyak baris untuk satu referensi harus memakai ID turunan readable, bukan random ID, setelah task arsitektur disetujui.
 - Generator kode manusiawi harus shared dan algoritmik berbasis konsonan, bukan mapping manual kata-per-kata.
-- Current source sudah memakai `businessCodeGenerator` sebagai source of truth; `productionCodeGenerator` hanya compatibility wrapper.
+- Current source masih memiliki generator/mapping manual yang perlu cleanup task terpisah, terutama `businessCodeGenerator` dan `productionCodeGenerator`.
 - Patch docs-only tidak mengubah service write flow, schema/collection, inventory log writer, report/export, route, menu, role guard, atau guarded production flow.
 
-## Integration Map — Reset & Maintenance Decision Center
+## Integration Map — Testing & Reset Center
 
 - Page aktif: `src/pages/Utilities/ResetMaintenanceData.jsx`.
 - Service reset destructive tetap: `src/services/Maintenance/resetMaintenanceDataService.js`.
-- Flow UI: Cek Kondisi Data → Detail Issue → Export Data Pokok → Preview Dampak Reset → Confirmation keyword → Eksekusi → Riwayat Maintenance.
+- Flow UI utama: Auto Detect Bug → Repair Turunan → Preview Reset/Baseline → Confirmation keyword → Eksekusi → Audit ulang/Riwayat Maintenance.
+- Auto Detect Bug memanggil audit service existing: data quality, stok, inventory log, legacy, production variant, payroll snapshot, dan transaction variant.
+- Preview reset/dev-test tidak auto full-scan saat halaman dibuka; user harus klik preview manual sebelum eksekusi destructive.
 - Export data pokok membaca allowlist master secara read-only dan tidak membaca transaksi/log sebagai default.
 - Opening stock reference pada export berasal dari stok master saat export dan harus dibuat ulang lewat flow terbaru setelah reset.
-- Advanced / Developer Tools membungkus panel lama tanpa mengubah route/menu/role guard.
+- Advanced Detail / Developer Tools membungkus panel lama tanpa mengubah route/menu/role guard.
 - Guard: reset total protected master belum diaktifkan; butuh approval dan service khusus jika nanti dibuat.
 
 

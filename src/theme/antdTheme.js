@@ -90,6 +90,11 @@ const IMS_BRAND_THEME = {
   },
 };
 
+const IMS_FONT_FAMILY_BASE = 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+const IMS_FONT_SIZE = { meta: 12, body: 14, large: 16 };
+const IMS_LINE_HEIGHT = { body: 1.45 };
+const IMS_FONT_WEIGHT = { strong: 700 };
+
 // =====================================================
 // SECTION: Ant Design Theme Generator — AKTIF / GUARDED UI
 // Fungsi:
@@ -129,7 +134,12 @@ export const getAntdTheme = (darkTheme = false) => {
       colorWarningBgHover: palette.warningSoft,
       colorWarningBorder: palette.warning,
       colorWarningText: palette.warningText,
-      fontFamily: 'Inter, "Segoe UI", sans-serif',
+      fontFamily: IMS_FONT_FAMILY_BASE,
+      fontSize: IMS_FONT_SIZE.body,
+      fontSizeSM: IMS_FONT_SIZE.meta,
+      fontSizeLG: IMS_FONT_SIZE.large,
+      fontWeightStrong: IMS_FONT_WEIGHT.strong,
+      lineHeight: IMS_LINE_HEIGHT.body,
       borderRadius: 14,
 
       colorBgBase: palette.bgBase,

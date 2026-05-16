@@ -58,8 +58,18 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - klik Terapkan Qty & Biaya OCR lebih dari sekali dan pastikan Catatan OCR tidak dobel
 - isi Catatan manual sebelum menerapkan OCR dan pastikan catatan manual tetap tersimpan di atas ringkasan OCR
 - pastikan tabel Purchases tidak menampilkan raw detail OCR panjang; tampilkan catatan manual singkat dan/atau tag `OCR Shopee` saja
-- klik tombol `Lihat` pada tag `OCR Shopee` dan pastikan popup struk tengah menampilkan subtotal barang, ongkir pengiriman, diskon ongkir, biaya layanan marketplace, qty beli, dan total pesanan secara rapi
-- pastikan popup struk OCR memakai overlay penuh aplikasi: header, sidebar, dan konten belakang ikut redup/blur serta struk tidak tertutup header
+
+## Checklist OCR Shopee Purchases — Regression Guard
+
+- [ ] Buka Purchases lalu klik Tambah Pembelian.
+- [ ] Upload screenshot Shopee valid dan pastikan preview qty/biaya muncul tanpa auto-save.
+- [ ] Klik **Terapkan Qty & Biaya ke Form** dan pastikan field Qty Beli, Subtotal Barang, Ongkir, Diskon Ongkir/Voucher, Biaya Layanan, Total Aktual, dan Modal Aktual berubah sesuai preview.
+- [ ] Setelah Apply, pastikan ada feedback lokal di area OCR/form: tombol berubah menjadi **Sudah Diterapkan ke Form** atau muncul alert sukses dengan ringkasan field yang diterapkan.
+- [ ] Klik Apply lebih dari sekali dan pastikan Catatan tidak menambah segmen `OCR Shopee` dobel. Catatan manual sebelum OCR harus tetap ada.
+- [ ] Tutup modal Tambah Pembelian, lalu pada tabel klik **Lihat** di samping tag `OCR Shopee`; popup detail harus terbuka tanpa error console `record is not defined`.
+- [ ] Tutup popup detail OCR dan pastikan halaman Purchases bisa diklik/scroll normal lagi; overlay tidak boleh menutup tabel setelah ditutup.
+- [ ] Print popup OCR dan pastikan isi struk terbaca tanpa scrollbar internal di hasil print.
+- [ ] Pastikan flow Simpan Pembelian tetap satu-satunya flow yang mengubah purchases, stok, inventory log, dan expense. OCR Apply tidak boleh membuat transaksi.
 
 ### Penjualan
 - buka form Tambah Penjualan dan pastikan ada field Jenis Item per line
@@ -598,9 +608,6 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Input item yang sama di dua baris dengan total melebihi `availableStock`, lalu pastikan sale tidak tersimpan.
 - [ ] Status `Selesai` membuat income sekali saja.
 - [ ] Status selain `Selesai` tidak membuat income.
-- [ ] Sales create transaction atomic: jika stock/inventory log/income gagal, dokumen sales baru tidak tersimpan partial.
-- [ ] Sales create status `Selesai` membuat `incomes/income_{saleId}` satu kali dan Cash In tetap membacanya sebagai Auto Penjualan.
-- [ ] Dua submit nomor ORD/PUR/RET/STK-ADJ/CSH-IN/CSH-OUT yang sama harus gagal dengan pesan collision, bukan overwrite dokumen lama.
 - [ ] Cancel sale revert stok satu kali.
 - [ ] Delete sale yang sudah `Dibatalkan` tidak double revert.
 
@@ -701,12 +708,6 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Pastikan expense pembelian tetap dibuat dari flow Purchases.
 - [ ] Pastikan saving tetap hanya info efisiensi.
 - [ ] Pastikan kolom Info/Catatan di tabel Purchases tetap ringkas dan tidak menampilkan detail OCR Shopee mentah.
-- [ ] Pastikan tombol `Lihat` pada tag `OCR Shopee` membuka popup struk detail OCR tanpa mengubah data purchase.
-- [ ] Pastikan popup struk OCR menutup seluruh app shell, termasuk header, sidebar, dan area konten.
-- [ ] Pastikan bagian atas struk OCR tidak tertutup header pada zoom browser 90%, 100%, dan 125%.
-- [ ] Pastikan popup struk OCR tetap bisa discroll di viewport kecil/mobile tanpa tombol `Print` dan `Tutup` hilang.
-- [ ] Pastikan popup struk OCR tidak memunculkan scrollbar ganda; halaman belakang terkunci saat popup terbuka dan hanya area struk yang boleh scroll jika viewport kecil.
-- [ ] Pastikan tombol `Print` pada popup struk OCR hanya mencetak area struk, bukan seluruh dashboard Purchases.
 
 ### Build / Regression
 - [ ] Pastikan tidak ada flow yang memasang supplier ke Raw Material berdasarkan `materialDetails`.
@@ -936,30 +937,30 @@ Status: **AKTIF + GUARDED**. Checklist ini menggantikan checklist Auth/Role lama
 ### Checklist Firestore Rules final/staged-final
 
 =====================================================
-SECTION: Firestore Rules source-controlled validation — AKTIF / GUARDED
+SECTION: Firestore Rules validation without repo rules file — AKTIF / GUARDED
 Fungsi:
-- Memastikan `firestore.rules` dan `firebase.json` di repo tervalidasi sebelum rules dipublish ke Firebase backend.
+- Memastikan backend rules tetap divalidasi walaupun repo ZIP saat ini tidak membawa file `firestore.rules`.
 
 Dipakai oleh:
-- Checklist release Auth/User Management, runtime smoke test, dan deployment Firebase.
+- Checklist release Auth/User Management, runtime smoke test, dan deployment manual Firebase.
 
 Alasan perubahan:
-- Rules source-controlled memudahkan review security dan mencegah kembali ke rules cleanup allow-all.
+- Owner mengonfirmasi rules aktif dikelola langsung di Firebase Console/external, bukan melalui patch source repo ini.
 
 Catatan cleanup:
-- Rules masih staged-final collection-level; field-level validation per modul perlu task lanjutan.
+- Tambahkan source-controlled rules pada task terpisah jika owner ingin rules masuk repo.
 
 Risiko:
-- Melewatkan deploy rules membuat backend tetap memakai rules lama walaupun file repo sudah benar.
+- Melewatkan validasi rules backend dapat membuat UI guard tampak aman padahal data masih terbuka/terblokir di Firestore.
 =====================================================
 
-- [ ] Pastikan `firebase.json` mengarah ke `firestore.rules`.
-- [ ] Publish/deploy rules ke Firebase project yang benar sebelum menganggap rules aktif di backend.
+- [ ] Pastikan Firestore Rules aktif sudah dipublish di Firebase Console atau source external yang dipakai owner.
+- [ ] Jangan mencari file `firestore.rules` di repo ZIP ini sebagai syarat patch saat rules masih dikelola manual/external.
 - [ ] Rules memakai `rules_version = '2';`.
 - [ ] Semua akses penting berbasis `request.auth != null`.
 - [ ] Actor profile dibaca dari `system_users/{request.auth.uid}`.
 - [ ] Role Rules aktif hanya `administrator` dan `user`.
-- [ ] `system_users` guarded: user baca profile sendiri, administrator manage profile user lain, user hanya boleh update `lastLoginAt` sendiri.
+- [ ] `system_users` guarded: user baca profile sendiri, administrator manage profile user lain.
 - [ ] User biasa tidak bisa create/update/delete profile user lain.
 - [ ] Fallback collection tidak dikenal deny.
 - [ ] Tidak ada rules cleanup sementara `allow read, write: if true`.
@@ -1637,14 +1638,3 @@ Catatan lock:
 - [ ] Pastikan preview kebutuhan/stok tetap read-only dan muncul setelah target, varian jika ada, dan qty valid.
 - [ ] Buat PO untuk Produk Jadi dan Bahan / Semi Produk; pastikan kode order tetap auto-generated dan status ready/shortage tetap sesuai stok.
 - [ ] Pastikan cancel/start/complete Production Order tetap berjalan dan tidak merusak Work Log, Payroll, HPP Analysis, inventory mutation, atau report.
-
-## Checklist Compact Summary Dock — 2026-05-15
-
-- [ ] Buka Master Produk, Raw Materials, Stock Management, dan halaman produksi umum; summary tampil sebagai Executive Dock yang compact.
-- [ ] Buka Finance > Pemasukan, Pengeluaran, dan Buku Besar Kas; summary tampil sebagai Finance Dock dan nominal Rupiah panjang tetap readable.
-- [ ] Buka Laporan Laba Rugi, Pembelian, Penjualan, Payroll, HPP; angka utama tampil jelas dan metric pendukung tetap compact.
-- [ ] Toggle light/dark mode; border, text, accent, dan shadow summary tetap readable.
-- [ ] Resize ke tablet/mobile; dock turun satu kolom dan tidak membuat overflow horizontal.
-- [ ] Pastikan angka summary sama dengan sebelum patch karena perubahan hanya presentational.
-- [ ] Pastikan tidak ada perubahan write ke Firestore saat membuka halaman summary.
-- [ ] Cek console untuk error React/AntD setelah membuka halaman dengan tiga, empat, dan lebih dari empat item summary.

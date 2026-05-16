@@ -950,9 +950,9 @@ const Sales = () => {
         const referenceText = record.saleNumber || record.code || record.referenceNumber || "Tanpa ref";
         return (
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 600 }}>{record.date || "-"}</div>
+            <div className="ims-cell-title">{record.date || "-"}</div>
             <Tooltip title={referenceText}>
-              <div style={{ color: "#8c8c8c", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div className="ims-cell-meta" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {referenceText}
               </div>
             </Tooltip>
@@ -970,7 +970,7 @@ const Sales = () => {
         return (
           <div style={{ minWidth: 0 }}>
             <Tooltip title={customerName}>
-              <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div className="ims-cell-title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {customerName}
               </div>
             </Tooltip>
@@ -995,7 +995,7 @@ const Sales = () => {
           <div style={{ maxWidth: 360 }}>
             {saleItems.map((item, index) => (
               <div key={`${item.itemId || item.itemName || "item"}-${index}`} style={{ marginBottom: index === saleItems.length - 1 ? 0 : 8 }}>
-                <div style={{ fontWeight: 600 }}>
+                <div className="ims-cell-title">
                   {item.itemName || "Item"}{item.variantLabel ? ` - ${item.variantLabel}` : ""}
                 </div>
                 <div>
@@ -1009,10 +1009,10 @@ const Sales = () => {
         return (
           <Tooltip title={tooltipContent}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div className="ims-cell-title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {primaryLabel}
               </div>
-              <div style={{ color: "#8c8c8c", fontSize: 12 }}>
+              <div className="ims-cell-meta">
                 {saleItems.length} item transaksi
               </div>
             </div>
@@ -1338,7 +1338,7 @@ const Sales = () => {
                               </div>
 
                               <div style={{ marginBottom: 10 }}>
-                                <span style={{ fontWeight: 600 }}>
+                                <span className="ims-cell-title">
                                   {selectedItem.name || "Item"}
                                 </span>
                                 {hasVariants ? (

@@ -99,6 +99,9 @@ const enrichMaterialWithVariantTotals = (item = {}) => {
     return {
       ...item,
       hasVariants,
+      // IMS NOTE [AKTIF | legacy-active-default]: data lama yang belum punya field isActive
+      // tetap dibaca aktif seperti Product/Raw Material; hanya false eksplisit yang nonaktif.
+      isActive: item.isActive !== false,
       variants,
       currentStock,
       // IMS NOTE [LEGACY | behavior-preserving]: stock tetap alias currentStock
@@ -118,6 +121,9 @@ const enrichMaterialWithVariantTotals = (item = {}) => {
   return {
     ...item,
     hasVariants,
+    // IMS NOTE [AKTIF | legacy-active-default]: data lama yang belum punya field isActive
+    // tetap dibaca aktif seperti Product/Raw Material; hanya false eksplisit yang nonaktif.
+    isActive: item.isActive !== false,
     ...totals,
     minStockAlert: resolveSemiFinishedMasterMinStockAlert(item),
   };

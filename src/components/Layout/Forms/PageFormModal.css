@@ -27,8 +27,8 @@
 }
 
 .page-form-modal-root .ant-modal-title {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--ims-typo-detail-title-size);
+  font-weight: var(--ims-typo-detail-title-weight);
   color: var(--ims-text-primary);
 }
 

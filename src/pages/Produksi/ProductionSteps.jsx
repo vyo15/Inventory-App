@@ -435,7 +435,7 @@ const ProductionSteps = () => {
               </Tooltip>
               {record.description ? (
                 <Tooltip title={record.description}>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis>
+                  <Typography.Text type="secondary" className="ims-cell-meta" ellipsis>
                     Ada deskripsi
                   </Typography.Text>
                 </Tooltip>
@@ -692,7 +692,7 @@ Risiko:
                     <Tag color={selectedStep.includePayrollInHpp === false ? "orange" : "green"}>
                       {PAYROLL_CLASSIFICATION_MAP[selectedStep.payrollClassification] || "-"}
                     </Tag>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary" className="ims-cell-meta">
                       {selectedStep.includePayrollInHpp === false ? "Tidak masuk HPP inti" : "Masuk HPP inti"}
                     </Typography.Text>
                   </Space>

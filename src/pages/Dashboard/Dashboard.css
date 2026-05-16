@@ -71,28 +71,28 @@
 }
 
 .dashboard-section-extra {
-  font-size: 12px;
+  font-size: var(--ims-font-size-meta);
 }
 
 .dashboard-section-icon {
-  font-size: 14px;
+  font-size: var(--ims-font-size-body);
 }
 
 .dashboard-muted-text {
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--ims-font-size-meta);
+  line-height: var(--ims-line-height-readable);
 }
 
 .dashboard-date-text {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: var(--ims-font-size-meta);
   text-align: right;
   white-space: nowrap;
 }
 
 .dashboard-action-arrow {
   flex-shrink: 0;
-  font-size: 14px;
+  font-size: var(--ims-font-size-body);
   transition: color 0.18s ease, transform 0.18s ease;
 }
 
@@ -296,7 +296,7 @@ Risiko:
   border-color: var(--ims-border-color-soft);
   color: var(--ims-text-secondary);
   font-size: 10.5px;
-  font-weight: 750;
+  font-weight: var(--ims-font-weight-semibold);
   line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -383,15 +383,15 @@ Risiko:
 
 .dashboard-card-label {
   color: var(--ims-text-secondary);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--ims-font-size-meta);
+  font-weight: var(--ims-font-weight-strong);
   letter-spacing: 0.01em;
 }
 
 .dashboard-card-value.ant-typography {
   margin: 0 !important;
   color: var(--ims-text-primary);
-  line-height: 1.2;
+  line-height: var(--ims-line-height-tight);
 }
 
 .dashboard-chip-list {

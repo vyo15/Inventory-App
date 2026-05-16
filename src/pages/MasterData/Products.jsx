@@ -51,6 +51,10 @@ import {
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import { buildSinglePricingPreview } from '../../services/Pricing/pricingService';
+import {
+  getInventoryStockStatusMeta,
+  getInventoryVariantStockMeta,
+} from '../../utils/stock/stockHelpers';
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -126,6 +130,7 @@ const compactCellClassNames = {
 // -----------------------------------------------------------------------------
 // Status stok produk.
 // Disamakan dengan bahasa visual halaman master lain: nonaktif, kosong, rendah, aman.
+// Untuk produk bervarian, threshold tetap dari minStockAlert master tetapi dicek ke setiap varian aktif.
 // -----------------------------------------------------------------------------
 const getProductStockSummary = (record = {}) => {
   if (record?.hasVariants) {
@@ -150,23 +155,19 @@ const getProductStockSummary = (record = {}) => {
   };
 };
 
-const getProductStatusMeta = (record = {}) => {
-  const availableStock = Number(record.availableStock ?? record.currentStock ?? record.stock ?? 0);
-  const minStockAlert = Number(record.minStockAlert || 0);
+const getProductStatusMeta = (record = {}) =>
+  getInventoryStockStatusMeta(record, 'product', { getVariantLabel: getVariantDisplayLabel });
 
-  if (record.isActive === false) {
-    return { color: 'default', label: 'Nonaktif' };
-  }
+const getProductLowStockVariantText = (statusMeta = {}, unit = 'pcs') => {
+  if (!statusMeta.hasVariants || !statusMeta.affectedVariantCount) return '';
 
-  if (availableStock <= 0) {
-    return { color: 'red', label: 'Kosong' };
-  }
+  const preview = statusMeta.affectedVariants
+    .slice(0, 3)
+    .map((variantMeta) => `${variantMeta.label} ${formatStockWithUnit(variantMeta.availableStock, unit)}`)
+    .join(', ');
+  const extra = statusMeta.affectedVariantCount > 3 ? ` +${statusMeta.affectedVariantCount - 3} lainnya` : '';
 
-  if (availableStock <= minStockAlert) {
-    return { color: 'orange', label: 'Stok Rendah' };
-  }
-
-  return { color: 'green', label: 'Aman' };
+  return `Varian perlu cek: ${preview}${extra}`;
 };
 
 const Products = () => {
@@ -341,7 +342,7 @@ const Products = () => {
     const inactive = products.filter((item) => item.isActive === false).length;
     const lowStock = products.filter((item) => {
       const statusMeta = getProductStatusMeta(item);
-      return statusMeta.label === 'Kosong' || statusMeta.label === 'Stok Rendah';
+      return statusMeta.statusKey === 'empty' || statusMeta.statusKey === 'low';
     }).length;
 
     return { total, active, inactive, lowStock };
@@ -566,7 +567,14 @@ const Products = () => {
       align: 'center',
       render: (_, record) => {
         const statusMeta = getProductStatusMeta(record);
-        return <Tag className="ims-status-tag" color={statusMeta.color}>{statusMeta.label}</Tag>;
+        const variantText = getProductLowStockVariantText(statusMeta, record.unit || 'pcs');
+
+        return (
+          <div className={compactCellClassNames.stack}>
+            <Tag className="ims-status-tag" color={statusMeta.color}>{statusMeta.label}</Tag>
+            {variantText ? <Text type="secondary" className={compactCellClassNames.meta}>{variantText}</Text> : null}
+          </div>
+        );
       },
     },
     {
@@ -1059,11 +1067,14 @@ const Products = () => {
               <Card size="small">
                 <Space direction="vertical" size={8} style={{ width: '100%' }}>
                   <Space size={[8, 8]} wrap>
-                    <Text strong style={{ fontSize: 18 }}>{selectedProduct.name || '-'}</Text>
+                    <Text strong style={{ fontSize: "var(--ims-typo-detail-title-size)" }}>{selectedProduct.name || '-'}</Text>
                     <Tag className="ims-status-tag" color={statusMeta.color}>{statusMeta.label}</Tag>
                     {selectedProduct.hasVariants ? <Tag color="blue">Pakai Varian</Tag> : <Tag>Tanpa Varian</Tag>}
                   </Space>
                   <Text type="secondary">{selectedProduct.category || 'Tanpa kategori'}</Text>
+                  {getProductLowStockVariantText(statusMeta, selectedProduct.unit || 'pcs') ? (
+                    <Text type="secondary">{getProductLowStockVariantText(statusMeta, selectedProduct.unit || 'pcs')}</Text>
+                  ) : null}
                 </Space>
               </Card>
 
@@ -1116,7 +1127,16 @@ const Products = () => {
                       {
                         title: 'Status',
                         dataIndex: 'isActive',
-                        render: (value) => <Tag className="ims-status-tag" color={value === false ? 'default' : 'green'}>{value === false ? 'Nonaktif' : 'Aktif'}</Tag>,
+                        render: (_, variant, index) => {
+                          const variantMeta = getInventoryVariantStockMeta(
+                            variant,
+                            index,
+                            Number(selectedProduct.minStockAlert || 0),
+                            getVariantDisplayLabel,
+                          );
+                          const colorMap = { inactive: 'default', empty: 'red', low: 'orange', safe: 'green' };
+                          return <Tag className="ims-status-tag" color={colorMap[variantMeta.statusKey] || 'green'}>{variantMeta.statusLabel}</Tag>;
+                        },
                       },
                     ]}
                   />

@@ -571,7 +571,7 @@ const ProductionEmployees = () => {
 
   const renderCompactInfo = (label, value) => (
     <Space direction="vertical" size={0} style={{ width: "100%" }}>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="ims-cell-meta">
         {label}
       </Typography.Text>
       <Typography.Text strong>{value || "-"}</Typography.Text>
@@ -607,10 +607,10 @@ const ProductionEmployees = () => {
           <Typography.Text strong ellipsis={{ tooltip: record.name || "-" }}>
             {record.name || "-"}
           </Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="ims-cell-meta">
             {resolveDisplayReference(record, { fallback: record.code || "-" })}
           </Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }} ellipsis={{ tooltip: record.phone || "-" }}>
+          <Typography.Text type="secondary" className="ims-cell-meta" ellipsis={{ tooltip: record.phone || "-" }}>
             {record.phone || "-"}
           </Typography.Text>
         </Space>
@@ -1243,7 +1243,7 @@ const ProductionEmployees = () => {
                 </Col>
                 <Col xs={12} md={6}>
                   <Space direction="vertical" size={0}>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    <Typography.Text type="secondary" className="ims-cell-meta">
                       Status
                     </Typography.Text>
                     <Tag color={selectedEmployee.isActive ? "green" : "default"}>

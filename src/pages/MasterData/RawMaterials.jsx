@@ -57,6 +57,11 @@ import {
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import { buildSinglePricingPreview } from '../../services/Pricing/pricingService';
+import {
+  getInventoryStockStatusMeta,
+  getInventoryVariantStockMeta,
+  getInventoryVariantStockRows,
+} from '../../utils/stock/stockHelpers';
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -127,7 +132,7 @@ const hasSafeZeroMasterStock = (record = {}) => {
 
 const compactCellStyles = {
   stack: { display: 'flex', flexDirection: 'column', gap: 2 },
-  meta: { fontSize: 12, lineHeight: 1.35 },
+  meta: { fontSize: "var(--ims-font-size-meta)", lineHeight: "var(--ims-line-height-title)" },
 };
 
 // -----------------------------------------------------------------------------
@@ -142,28 +147,43 @@ const renderVariantStockPills = (
   variants = [],
   unit = 'pcs',
   getLabel = (variant, index) => variant?.name || `Varian ${index + 1}`,
+  record = {},
 ) => {
-  const normalizedVariants = Array.isArray(variants)
-    ? variants.filter((variant) => String(variant?.name || variant?.variantName || '').trim())
-    : [];
+  const normalizedRecord = { ...record, variants };
+  const variantRows = getInventoryVariantStockRows(normalizedRecord, 'material', getLabel)
+    .filter((variantMeta) => String(variantMeta.label || '').trim());
 
-  if (normalizedVariants.length === 0) {
+  if (variantRows.length === 0) {
     return null;
   }
 
   return (
     <div className="stock-variant-pill-wrap">
-      {normalizedVariants.map((variant, index) => (
-        <span
-          key={`${variant.variantKey || variant.sku || variant.name || 'variant'}-${index}`}
-          className="stock-variant-pill"
-        >
-          <Text className="stock-variant-pill-label">{`${getLabel(variant, index)}:`}</Text>
-          <Text className="stock-variant-pill-value">
-            {formatStockWithUnit(variant.currentStock || 0, unit)}
-          </Text>
-        </span>
-      ))}
+      {variantRows.map((variantMeta) => {
+        const className =
+          variantMeta.statusKey === 'empty'
+            ? 'stock-variant-pill stock-variant-pill--danger'
+            : variantMeta.statusKey === 'low'
+              ? 'stock-variant-pill stock-variant-pill--warning'
+              : 'stock-variant-pill';
+
+        return (
+          <span
+            key={`${variantMeta.variant.variantKey || variantMeta.variant.sku || variantMeta.label || 'variant'}-${variantMeta.index}`}
+            className={className}
+          >
+            <Text className="stock-variant-pill-label">{`${variantMeta.label}:`}</Text>
+            <Text className="stock-variant-pill-value">
+              {formatStockWithUnit(variantMeta.currentStock, unit)}
+            </Text>
+            {variantMeta.statusKey === 'empty' || variantMeta.statusKey === 'low' ? (
+              <Text className="stock-variant-pill-status">
+                {variantMeta.statusKey === 'empty' ? 'Kosong' : 'Rendah'}
+              </Text>
+            ) : null}
+          </span>
+        );
+      })}
     </div>
   );
 };
@@ -457,26 +477,21 @@ Catatan cleanup:
 Risiko:
 - Jika helper ini kembali memakai currentStock langsung, item dengan reserved stock bisa terlihat aman padahal available stock sudah di bawah minimum.
 ===================================================== */
-const getRawMaterialMinimumStockValue = (record = {}) =>
-  Number(record.availableStock ?? record.currentStock ?? record.stock ?? 0);
+const getRawMaterialStatusMeta = (record = {}) =>
+  getInventoryStockStatusMeta(record, 'material', {
+    getVariantLabel: (variant, index) => variant?.name || `Varian ${index + 1}`,
+  });
 
-const getRawMaterialStatusMeta = (record = {}) => {
-  const comparableStock = getRawMaterialMinimumStockValue(record);
-  const minStock = Number(record.minStock || 0);
+const getRawMaterialLowStockVariantText = (statusMeta = {}, unit = 'pcs') => {
+  if (!statusMeta.hasVariants || !statusMeta.affectedVariantCount) return '';
 
-  if (record.isActive === false) {
-    return { color: 'default', label: 'Nonaktif' };
-  }
+  const preview = statusMeta.affectedVariants
+    .slice(0, 3)
+    .map((variantMeta) => `${variantMeta.label} ${formatStockWithUnit(variantMeta.availableStock, unit)}`)
+    .join(', ');
+  const extra = statusMeta.affectedVariantCount > 3 ? ` +${statusMeta.affectedVariantCount - 3} lainnya` : '';
 
-  if (comparableStock <= 0) {
-    return { color: 'red', label: 'Kosong' };
-  }
-
-  if (minStock > 0 && comparableStock <= minStock) {
-    return { color: 'orange', label: 'Stok Rendah' };
-  }
-
-  return { color: 'green', label: 'Aman' };
+  return `Varian perlu cek: ${preview}${extra}`;
 };
 
 const getRawMaterialStockSummary = (record = {}) => {
@@ -715,7 +730,7 @@ const RawMaterials = () => {
     const noVariants = materials.filter((item) => !item.hasVariants).length;
     const lowStock = materials.filter((item) => {
       const statusMeta = getRawMaterialStatusMeta(item);
-      return statusMeta.label === 'Kosong' || statusMeta.label === 'Stok Rendah';
+      return statusMeta.statusKey === 'empty' || statusMeta.statusKey === 'low';
     }).length;
 
     return { total, withVariants, noVariants, lowStock };
@@ -958,6 +973,11 @@ const RawMaterials = () => {
               ) : null}
               <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
             </Space>
+            {getRawMaterialLowStockVariantText(statusMeta, record.stockUnit || 'pcs') ? (
+              <Text type="secondary" style={compactCellStyles.meta}>
+                {getRawMaterialLowStockVariantText(statusMeta, record.stockUnit || 'pcs')}
+              </Text>
+            ) : null}
           </div>
         );
       },
@@ -979,7 +999,7 @@ const RawMaterials = () => {
             </Text>
 
             {hasVariants ? (
-              renderVariantStockPills(variants, unit, (variant, index) => variant.name || `Varian ${index + 1}`)
+              renderVariantStockPills(variants, unit, (variant, index) => variant.name || `Varian ${index + 1}`, record)
             ) : (
               <Text type="secondary" style={compactCellStyles.meta}>Non-varian</Text>
             )}
@@ -1653,13 +1673,16 @@ const RawMaterials = () => {
               <Card size="small">
                 <Space direction="vertical" size={8} style={{ width: '100%' }}>
                   <Space size={[8, 8]} wrap>
-                    <Text strong style={{ fontSize: 18 }}>{selectedMaterial.name || '-'}</Text>
+                    <Text strong style={{ fontSize: "var(--ims-typo-detail-title-size)" }}>{selectedMaterial.name || '-'}</Text>
                     <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
                     <Tag color={selectedMaterial.hasVariants ? 'blue' : 'default'}>
                       {selectedMaterial.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
                     </Tag>
                   </Space>
                   <Text type="secondary">Satuan stok: {selectedMaterial.stockUnit || '-'}</Text>
+                  {getRawMaterialLowStockVariantText(statusMeta, selectedMaterial.stockUnit || 'pcs') ? (
+                    <Text type="secondary">{getRawMaterialLowStockVariantText(statusMeta, selectedMaterial.stockUnit || 'pcs')}</Text>
+                  ) : null}
                 </Space>
               </Card>
 
@@ -1667,19 +1690,19 @@ const RawMaterials = () => {
                 <Col xs={24} md={8}>
                   <Card size="small">
                     <Text type="secondary">Stok Tersedia</Text>
-                    <div style={{ fontWeight: 700, fontSize: 20 }}>{formatStockWithUnit(stockSummary.availableStock, selectedMaterial.stockUnit || 'pcs')}</div>
+                    <div style={{ fontWeight: "var(--ims-typo-detail-value-weight)", fontSize: "var(--ims-typo-detail-value-size)" }}>{formatStockWithUnit(stockSummary.availableStock, selectedMaterial.stockUnit || 'pcs')}</div>
                   </Card>
                 </Col>
                 <Col xs={24} md={8}>
                   <Card size="small">
                     <Text type="secondary">Modal Aktual Rata-rata</Text>
-                    <div style={{ fontWeight: 700, fontSize: 20 }}>{selectedMaterial.averageActualUnitCost ? formatCurrencyId(selectedMaterial.averageActualUnitCost) : '-'}</div>
+                    <div style={{ fontWeight: "var(--ims-typo-detail-value-weight)", fontSize: "var(--ims-typo-detail-value-size)" }}>{selectedMaterial.averageActualUnitCost ? formatCurrencyId(selectedMaterial.averageActualUnitCost) : '-'}</div>
                   </Card>
                 </Col>
                 <Col xs={24} md={8}>
                   <Card size="small">
                     <Text type="secondary">Harga Referensi</Text>
-                    <div style={{ fontWeight: 700, fontSize: 20 }}>{formatCurrencyId(selectedMaterial.restockReferencePrice || 0)}</div>
+                    <div style={{ fontWeight: "var(--ims-typo-detail-value-weight)", fontSize: "var(--ims-typo-detail-value-size)" }}>{formatCurrencyId(selectedMaterial.restockReferencePrice || 0)}</div>
                   </Card>
                 </Col>
               </Row>
@@ -1782,11 +1805,20 @@ const RawMaterials = () => {
                         title: 'Status',
                         dataIndex: 'isActive',
                         key: 'isActive',
-                        render: (value) => (
-                          <Tag color={value === false ? 'default' : 'green'}>
-                            {value === false ? 'Nonaktif' : 'Aktif'}
-                          </Tag>
-                        ),
+                        render: (_, variant, index) => {
+                          const variantMeta = getInventoryVariantStockMeta(
+                            variant,
+                            index,
+                            Number(selectedMaterial.minStock || 0),
+                            (item, itemIndex) => item?.name || `Varian ${itemIndex + 1}`,
+                          );
+                          const colorMap = { inactive: 'default', empty: 'red', low: 'orange', safe: 'green' };
+                          return (
+                            <Tag color={colorMap[variantMeta.statusKey] || 'green'}>
+                              {variantMeta.statusLabel}
+                            </Tag>
+                          );
+                        },
                       },
                     ]}
                   />

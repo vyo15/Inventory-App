@@ -244,7 +244,7 @@ const SupplierPurchases = () => {
     const businessCode = getSupplierBusinessCode(supplier);
 
     if (businessCode) {
-      return <span style={{ color: '#666' }}>{businessCode}</span>;
+      return <span className="ims-cell-meta">{businessCode}</span>;
     }
 
     return <Tag color="warning">Perlu repair kode</Tag>;
@@ -715,13 +715,13 @@ const SupplierPurchases = () => {
       render: (_, record) => (
         <Space direction="vertical" size={4} style={{ width: '100%' }}>
           <Space size={6} wrap>
-            <span style={{ fontWeight: 600 }}>{getSupplierDisplayName(record)}</span>
+            <span className="ims-cell-title">{getSupplierDisplayName(record)}</span>
             {supplierIdFromQuery && String(record.id) === String(supplierIdFromQuery) ? (
               <Tag color="green">Dipilih</Tag>
             ) : null}
           </Space>
           {renderSupplierBusinessCode(record)}
-          <span style={{ color: '#666' }}>
+          <span className="ims-cell-meta">
             {(record.materialDetails || []).length || 0} katalog restock
           </span>
         </Space>
@@ -737,7 +737,7 @@ const SupplierPurchases = () => {
             Buka Link Toko
           </a>
         ) : (
-          <span style={{ color: '#999' }}>Belum ada link</span>
+          <span className="ims-cell-meta">Belum ada link</span>
         )
       ),
     },
@@ -760,7 +760,7 @@ const SupplierPurchases = () => {
               {materialNames.length > 2 && <Tag>+{materialNames.length - 2} lainnya</Tag>}
             </Space>
             {detail ? (
-              <span style={{ color: '#666' }}>
+              <span className="ims-cell-meta">
                 Qty Beli {formatNumberID(detail.purchaseQty || 1)} {detail.purchaseUnit || 'satuan'} · Konversi Supplier {formatNumberID(detail.conversionValue || 0)} {detail.stockUnit || 'stok'}
               </span>
             ) : null}
@@ -781,8 +781,8 @@ const SupplierPurchases = () => {
 
         return (
           <Space direction="vertical" size={2} style={{ width: '100%' }}>
-            <span style={{ fontWeight: 600 }}>{formatCurrencyIDR(metrics.estimatedUnitPrice)} / {detail.stockUnit || 'satuan'}</span>
-            <span style={{ color: '#666' }}>
+            <span className="ims-cell-title">{formatCurrencyIDR(metrics.estimatedUnitPrice)} / {detail.stockUnit || 'satuan'}</span>
+            <span className="ims-cell-meta">
               Harga Supplier Tercatat: {formatCurrencyIDR(metrics.totalEstimatedSupplier || 0)}
             </span>
             <Tag color={detail.purchaseType === 'offline' ? 'default' : 'blue'}>
@@ -839,7 +839,7 @@ const SupplierPurchases = () => {
       width: '28%',
       render: (value, record) => (
         <Space direction="vertical" size={2}>
-          <span style={{ fontWeight: 600 }}>{value || '-'}</span>
+          <span className="ims-cell-title">{value || '-'}</span>
           <Space size={[4, 4]} wrap>
             <Tag color={record.purchaseType === 'online' ? 'blue' : 'default'}>
               {record.purchaseType === 'online' ? 'Online' : 'Offline'}
@@ -852,9 +852,9 @@ const SupplierPurchases = () => {
           </Space>
           {record.note ? (
             <span
+              className="ims-cell-meta"
               title={record.note}
               style={{
-                color: '#999',
                 display: 'inline-block',
                 maxWidth: 220,
                 overflow: 'hidden',
@@ -878,7 +878,7 @@ const SupplierPurchases = () => {
           <span>
             {formatNumberID(record.purchaseQty || 1)} {record.purchaseUnit || 'satuan beli'}
           </span>
-          <span style={{ color: '#666' }}>
+          <span className="ims-cell-meta">
             = {formatNumberID(record.conversionValue || 0)} {record.stockUnit || 'satuan stok'}
           </span>
         </Space>
@@ -895,10 +895,10 @@ const SupplierPurchases = () => {
         return (
           <Space direction="vertical" size={2}>
             <span>Total: {metrics.totalEstimatedSupplier ? formatCurrencyIDR(metrics.totalEstimatedSupplier) : '-'}</span>
-            <span style={{ fontWeight: 600 }}>
+            <span className="ims-cell-title">
               / {record.stockUnit || 'satuan'}: {metrics.estimatedUnitPrice ? formatCurrencyIDR(metrics.estimatedUnitPrice) : '-'}
             </span>
-            <span style={{ color: '#999' }}>
+            <span className="ims-cell-meta">
               {isOfflinePurchase
                 ? 'Offline: ongkir/admin/voucher tidak dipakai'
                 : `Barang ${formatCurrencyIDR(metrics.supplierItemPrice || 0)} + Ongkir ${formatCurrencyIDR(metrics.estimatedShippingCost || 0)} + Admin ${formatCurrencyIDR(metrics.serviceFee || 0)} - Diskon ${formatCurrencyIDR(metrics.discount || 0)}`}
@@ -917,7 +917,7 @@ const SupplierPurchases = () => {
         const latestUnitCost = Math.round(Number(latestPurchase?.actualUnitCost || 0));
 
         if (!latestPurchase || !latestUnitCost) {
-          return <span style={{ color: '#999' }}>Belum ada histori pembelian</span>;
+          return <span className="ims-cell-meta">Belum ada histori pembelian</span>;
         }
 
         const difference = metrics.estimatedUnitPrice - latestUnitCost;
@@ -931,7 +931,7 @@ const SupplierPurchases = () => {
           <Space direction="vertical" size={2}>
             <span>{formatCurrencyIDR(latestUnitCost)}</span>
             <span style={{ color: difference <= 0 ? '#389e0d' : '#cf1322' }}>{statusLabel}</span>
-            <span style={{ color: '#999' }}>{formatPurchaseDate(latestPurchase.date || latestPurchase.createdAt)}</span>
+            <span className="ims-cell-meta">{formatPurchaseDate(latestPurchase.date || latestPurchase.createdAt)}</span>
           </Space>
         );
       },
@@ -944,7 +944,7 @@ const SupplierPurchases = () => {
       title: 'Nama Supplier',
       dataIndex: 'supplierName',
       key: 'supplierName',
-      render: (value) => <span style={{ fontWeight: 600 }}>{value || 'Supplier tanpa nama'}</span>,
+      render: (value) => <span className="ims-cell-title">{value || 'Supplier tanpa nama'}</span>,
     },
     {
       title: 'Kode Sekarang',
@@ -1201,8 +1201,8 @@ const SupplierPurchases = () => {
           <Form.List name="materialDetails">
             {(fields, { add, remove }) => (
               <>
-                <div style={{ fontWeight: 700, marginBottom: 4 }}>Katalog Restock Supplier</div>
-                <div style={{ color: '#666', marginBottom: 12 }}>
+                <div className="ims-cell-title" style={{ marginBottom: 4 }}>Katalog Restock Supplier</div>
+                <div className="ims-cell-meta" style={{ marginBottom: 12 }}>
                   Isi link, satuan beli, konversi, dan estimasi biaya.
                 </div>
 
@@ -1287,7 +1287,7 @@ const SupplierPurchases = () => {
                                       });
                                     }}
                                   />
-                                  <span style={{ color: '#666' }}>
+                                  <span className="ims-cell-meta">
                                     {isOfflinePurchase
                                       ? 'Pembelian offline: ongkir, admin, dan voucher tidak dipakai di estimasi.'
                                       : 'Pembelian online: ongkir, admin, dan voucher ikut dihitung jika diisi.'}
@@ -1489,7 +1489,7 @@ const SupplierPurchases = () => {
             <Card size="small">
               <Space direction="vertical" size={8} style={{ width: '100%' }}>
                 <Space size={[8, 8]} wrap>
-                  <Text strong style={{ fontSize: 18 }}>{getSupplierDisplayName(selectedSupplier)}</Text>
+                  <Text strong>{getSupplierDisplayName(selectedSupplier)}</Text>
                   <Tag color="green">Katalog Restock</Tag>
                   <Tag>{(selectedSupplier.materialDetails || []).length || 0} item restock</Tag>
                 </Space>

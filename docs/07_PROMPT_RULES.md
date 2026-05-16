@@ -316,6 +316,15 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Kolom Catatan di tabel inventory log harus ringkas; catatan panjang boleh dipotong/ellipsis, bukan membuat row terlalu tinggi.
 - Jangan mengubah `variantStockNormalizer` hanya untuk merapikan tabel riwayat. Submit Stock Adjustment boleh disentuh hanya jika tujuannya menjaga adjustment, stok, dan inventory log tetap konsisten.
 
+## Guard OCR Shopee Purchases
+
+- Jika patch menyentuh `src/pages/Transaksi/Purchases.jsx`, wajib audit ulang OCR Shopee: upload screenshot, Apply Qty & Biaya, Catatan idempotent, tag `OCR Shopee`, tombol **Lihat**, popup detail, dan console error.
+- Jangan menghapus feedback lokal Apply OCR. `message.success` saja tidak cukup; UI harus menunjukkan bahwa field sudah diterapkan ke form.
+- Jangan membuat OCR auto-save. OCR hanya draft qty/biaya; stok, expense, inventory log, dan audit transaksi hanya berubah setelah user klik **Simpan Pembelian**.
+- Jangan membuat handler **Lihat** OCR yang memakai `record` di luar scope render row. Handler harus menerima row `record` dari render tabel agar tidak muncul `record is not defined`.
+- Jangan overwrite CSS `.purchase-ocr-receipt-*` dari patch lama tanpa rebase ke source terbaru. Popup OCR harus tetap portal global, tidak ketutup header, dan tidak meninggalkan overlay setelah ditutup.
+- Jika patch menyentuh `src/App.css`, wajib cek class `.purchase-ocr-receipt-overlay`, `.purchase-ocr-receipt-shell`, `.purchase-ocr-receipt-paper`, `.purchase-ocr-receipt-actions`, dan `@media print` masih ada.
+
 ## Prompt Guard — Simpan Pembelian
 
 Untuk task yang menyentuh `src/pages/Transaksi/Purchases.jsx`:
@@ -380,19 +389,19 @@ Status: **AKTIF + GUARDED**. Gunakan section ini untuk semua task yang menyentuh
 =====================================================
 SECTION: Firestore Rules patch boundary — AKTIF / GUARDED
 Fungsi:
-- Mengunci bahwa rules backend wajib aman dan source rules sekarang berada di `firestore.rules`.
+- Mengunci bahwa rules backend wajib aman, tetapi repo ZIP saat ini tidak menyimpan file rules source-controlled.
 
 Dipakai oleh:
 - Prompt guard Auth/User Management, review permission denied, dan task rules berikutnya.
 
 Alasan perubahan:
-- Rules source-controlled membuat perubahan permission bisa direview bersama source aplikasi.
+- Owner mengonfirmasi rules dikelola langsung di Firebase Console/external dan patch ini tidak boleh membuat `firestore.rules`.
 
 Catatan cleanup:
-- Rules masih staged-final; perubahan field-level/write matrix per modul tetap harus lewat review dan test khusus.
+- Source-controlled rules dapat dibuat pada task terpisah dengan approval eksplisit, termasuk perubahan deploy config jika diperlukan.
 
 Risiko:
-- Mengubah `firestore.rules` atau `firebase.json` tanpa test runtime bisa memutus flow client-side yang menulis data turunan finance/stock.
+- Membuat file rules diam-diam atau mengubah `firebase.json` di task docs/cleanup dapat mengubah proses deployment tanpa persetujuan.
 =====================================================
 
 - Rules wajib memakai `rules_version = '2';`.
@@ -404,7 +413,7 @@ Risiko:
 - Jangan memakai rules cleanup sementara `allow read, write: if true`.
 - Jangan memakai expiry sementara `request.time < ...` sebagai rules final.
 - Jangan longgarkan seluruh database.
-- Jika collection bisnis utama permission denied setelah deploy rules, catat nama collection dan buat patch rules kecil terpisah setelah approval.
+- Jika collection bisnis utama permission denied setelah publish rules backend manual/external, catat nama collection dan buat patch rules kecil terpisah setelah approval.
 
 ### File yang boleh disentuh untuk task Auth/User Management
 
@@ -412,7 +421,7 @@ Risiko:
 - `src/pages/System/UserManagement.jsx` hanya jika flow create/edit/delete profile bermasalah.
 - `src/services/System/userService.js` hanya jika guard create/update/delete profile bermasalah.
 - `src/utils/auth/roleAccess.js` hanya jika role/access matrix memang perlu update.
-- `firestore.rules` dan `firebase.json` boleh disentuh hanya pada task rules/security atau jika permission backend memang menjadi scope.
+- File rules source-controlled hanya boleh ditambahkan pada task terpisah jika owner meminta rules masuk repo.
 - Docs Auth/User Management/checklist/integration map.
 
 ### File/area guarded

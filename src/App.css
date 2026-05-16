@@ -95,8 +95,8 @@ Risiko:
   max-width: 320px;
   margin: 0;
   color: var(--ims-text-secondary);
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: var(--ims-font-size-body);
+  line-height: var(--ims-line-height-readable);
 }
 
 /* =========================
@@ -423,14 +423,14 @@ Risiko:
 .app-content-card .ant-btn {
   min-height: 38px;
   border-radius: 12px;
-  font-weight: 600;
+  font-weight: var(--ims-font-weight-semibold);
   box-shadow: none;
 }
 
 .app-content-card .ant-btn.ant-btn-sm {
   min-height: 32px;
   border-radius: 10px;
-  font-weight: 600;
+  font-weight: var(--ims-font-weight-semibold);
 }
 
 .app-content-card .ant-btn + .ant-btn {
@@ -446,7 +446,7 @@ Risiko:
 .app-content-card .ant-table-thead > tr > th {
   padding-top: 14px !important;
   padding-bottom: 14px !important;
-  font-weight: 700;
+  font-weight: var(--ims-font-weight-strong);
   border-bottom-width: 1px !important;
 }
 
@@ -467,8 +467,8 @@ Risiko:
 }
 
 .app-shell .ant-drawer-title {
-  font-weight: 700;
-  font-size: 18px;
+  font-weight: var(--ims-font-weight-strong);
+  font-size: var(--ims-font-size-title);
 }
 
 .app-shell .ant-drawer-body {
@@ -488,8 +488,8 @@ Risiko:
 }
 
 .app-shell .ant-modal-title {
-  font-weight: 700;
-  font-size: 18px;
+  font-weight: var(--ims-font-weight-strong);
+  font-size: var(--ims-font-size-title);
 }
 
 .app-shell .ant-modal-body {
@@ -508,13 +508,13 @@ Risiko:
 }
 
 .app-shell .ant-form-item-label > label {
-  font-weight: 600;
+  font-weight: var(--ims-font-weight-semibold);
 }
 
 .app-shell .ant-form-item-explain,
 .app-shell .ant-form-item-extra {
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--ims-font-size-meta);
+  line-height: var(--ims-line-height-readable);
 }
 
 /* ---------- Descriptions / Detail Drawer ---------- */
@@ -524,7 +524,7 @@ Risiko:
 
 .app-shell .ant-descriptions .ant-descriptions-title {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: var(--ims-font-weight-strong);
 }
 
 /* ---------- Dark mode specific polish ---------- */
@@ -674,14 +674,14 @@ Risiko:
 }
 
 .ims-cell-title {
-  font-weight: 600;
-  line-height: 1.45;
+  font-weight: var(--ims-font-weight-semibold);
+  line-height: var(--ims-line-height-body);
   color: var(--ims-text-primary);
 }
 
 .ims-cell-meta {
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--ims-font-size-meta);
+  line-height: var(--ims-line-height-body);
   color: var(--ims-text-secondary) !important;
 }
 
@@ -710,7 +710,7 @@ Risiko:
 .ims-readonly-field--compact {
   min-height: 32px;
   padding: 4px 11px;
-  font-weight: 600;
+  font-weight: var(--ims-font-weight-semibold);
 }
 
 
@@ -744,16 +744,16 @@ Risiko:
 }
 
 .ims-readonly-panel-title {
-  font-weight: 600;
+  font-weight: var(--ims-font-weight-semibold);
   color: var(--ims-text-primary);
-  line-height: 1.35;
+  line-height: var(--ims-line-height-title);
 }
 
 .ims-readonly-panel-description {
   margin-top: 4px;
   color: var(--ims-text-secondary);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--ims-font-size-meta);
+  line-height: var(--ims-line-height-body);
 }
 
 .ims-readonly-stat-grid {
@@ -775,22 +775,22 @@ Risiko:
 
 .ims-readonly-stat-label {
   color: var(--ims-text-secondary);
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: var(--ims-font-size-meta);
+  line-height: var(--ims-line-height-title);
 }
 
 .ims-readonly-stat-value {
   margin-top: 2px;
-  font-weight: 700;
+  font-weight: var(--ims-font-weight-strong);
   color: var(--ims-text-primary);
-  line-height: 1.35;
+  line-height: var(--ims-line-height-title);
 }
 
 .ims-readonly-panel-note {
   margin-top: 10px;
   color: var(--ims-text-secondary);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--ims-font-size-meta);
+  line-height: var(--ims-line-height-body);
 }
 
 @media (max-width: 575px) {
@@ -813,14 +813,14 @@ Risiko:
 
 .ims-badge-inline .ant-badge-status-text {
   color: var(--ims-text-primary);
-  font-weight: 500;
+  font-weight: var(--ims-font-weight-medium);
 }
 
 .ims-status-tag.ant-tag {
   margin-inline-end: 0;
   border-radius: 999px;
   padding-inline: 10px;
-  font-weight: 600;
+  font-weight: var(--ims-font-weight-semibold);
   line-height: 22px;
 }
 
@@ -878,7 +878,7 @@ Risiko:
   height: 32px;
   padding-inline: 12px;
   border-radius: 10px;
-  font-weight: 600;
+  font-weight: var(--ims-font-weight-semibold);
   box-shadow: none;
 }
 
@@ -1093,15 +1093,15 @@ Risiko:
   border: 1px solid var(--ims-border-color);
   border-radius: 999px;
   background: var(--ims-bg-card-soft);
-  line-height: 1.2;
+  line-height: var(--ims-line-height-tight);
   white-space: nowrap;
 }
 
 .stock-variant-pill-label,
 .stock-variant-pill-value {
   margin: 0 !important;
-  font-size: 12px !important;
-  line-height: 1.2 !important;
+  font-size: var(--ims-font-size-meta) !important;
+  line-height: var(--ims-line-height-tight) !important;
 }
 
 .stock-variant-pill-label {
@@ -1110,7 +1110,7 @@ Risiko:
 
 .stock-variant-pill-value {
   color: var(--ims-text-primary) !important;
-  font-weight: 700 !important;
+  font-weight: var(--ims-font-weight-strong) !important;
 }
 
 @media (max-width: 768px) {
@@ -1453,22 +1453,23 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
   box-shadow: var(--ims-table-fixed-shadow);
 }
 
-/* =====================================================
-   Purchase OCR receipt popup
-   Scope: visual detail only. Tidak mengubah data purchase/OCR.
-   ===================================================== */
+/* =========================
+   SECTION: OCR Receipt Detail Popup — Purchases
+   Fungsi: overlay portal global untuk tombol Lihat OCR Shopee.
+   Guard: jangan overwrite saat patch UI lain; pertahankan z-index di atas AntD modal.
+========================= */
 .purchase-ocr-receipt-overlay {
   position: fixed;
   inset: 0;
   z-index: 4000;
   isolation: isolate;
-  height: 100vh;
-  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: calc(24px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
-  overflow: hidden;
+  padding: calc(36px + env(safe-area-inset-top, 0px)) 16px calc(32px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
   overscroll-behavior: contain;
   background: rgba(15, 23, 42, 0.54);
   backdrop-filter: blur(3px);
@@ -1501,20 +1502,12 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
   position: relative;
   z-index: 1;
   width: min(390px, 100%);
-  max-height: calc(100dvh - 48px);
-  display: flex;
-  flex-direction: column;
   margin: 0;
 }
 
 .purchase-ocr-receipt-paper {
   position: relative;
-  flex: 1 1 auto;
-  max-height: calc(100dvh - 112px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  overflow: hidden;
   padding: 24px;
   border-radius: 22px 22px 10px 10px;
   background: var(--ims-bg-card, #fff);
@@ -1583,24 +1576,24 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
   color: #1d4ed8;
   background: #eff6ff;
   border: 1px solid #bfdbfe;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--ims-font-size-meta);
+  font-weight: var(--ims-font-weight-strong);
 }
 
 .purchase-ocr-receipt-title {
   margin: 12px 0 0;
   color: var(--ims-text-primary, #0f172a);
-  font-size: 24px;
-  font-weight: 900;
-  letter-spacing: -0.03em;
+  font-size: var(--ims-font-size-kpi);
+  font-weight: var(--ims-font-weight-display);
+  letter-spacing: var(--ims-letter-spacing-value);
 }
 
 .purchase-ocr-receipt-subtitle {
   max-width: 260px;
   margin: 8px auto 0;
   color: var(--ims-text-secondary, #64748b);
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--ims-font-size-meta);
+  line-height: var(--ims-line-height-readable);
 }
 
 .purchase-ocr-receipt-divider {
@@ -1613,20 +1606,20 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
   grid-template-columns: 78px minmax(0, 1fr);
   gap: 4px 12px;
   padding: 0 4px;
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--ims-font-size-meta);
+  line-height: var(--ims-line-height-readable);
 }
 
 .purchase-ocr-receipt-meta-label {
   color: var(--ims-text-secondary, #64748b);
-  font-weight: 600;
+  font-weight: var(--ims-font-weight-semibold);
 }
 
 .purchase-ocr-receipt-meta-value {
   min-width: 0;
   text-align: right;
   color: var(--ims-text-primary, #0f172a);
-  font-weight: 800;
+  font-weight: var(--ims-font-weight-display);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1688,14 +1681,14 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
 .purchase-ocr-receipt-label {
   min-width: 0;
   color: var(--ims-text-primary, #334155);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--ims-font-size-meta);
+  font-weight: var(--ims-font-weight-strong);
 }
 
 .purchase-ocr-receipt-value {
   color: var(--ims-text-primary, #0f172a);
-  font-size: 12px;
-  font-weight: 900;
+  font-size: var(--ims-font-size-meta);
+  font-weight: var(--ims-font-weight-display);
   text-align: right;
 }
 
@@ -1719,24 +1712,24 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
 
 .purchase-ocr-receipt-total-kicker {
   color: #2563eb;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: var(--ims-font-size-caption);
+  font-weight: var(--ims-font-weight-display);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ims-letter-spacing-uppercase);
 }
 
 .purchase-ocr-receipt-total-label {
   color: #172554;
-  font-size: 14px;
-  font-weight: 900;
+  font-size: var(--ims-font-size-body);
+  font-weight: var(--ims-font-weight-display);
 }
 
 .purchase-ocr-receipt-total-value {
   color: #1d4ed8;
-  font-size: 24px;
-  line-height: 1;
-  font-weight: 900;
-  letter-spacing: -0.03em;
+  font-size: var(--ims-font-size-kpi);
+  line-height: var(--ims-line-height-solid);
+  font-weight: var(--ims-font-weight-display);
+  letter-spacing: var(--ims-letter-spacing-value);
   text-align: right;
 }
 
@@ -1749,7 +1742,7 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
   color: var(--ims-text-secondary, #64748b);
   background: var(--ims-bg-card-soft, rgba(148, 163, 184, 0.08));
   border: 1px solid var(--ims-border-color-soft, #e2e8f0);
-  font-size: 12px;
+  font-size: var(--ims-font-size-meta);
   line-height: 1.5;
 }
 
@@ -1764,7 +1757,7 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
 .purchase-ocr-receipt-actions .ant-btn {
   height: 44px;
   border-radius: 14px;
-  font-weight: 800;
+  font-weight: var(--ims-font-weight-display);
 }
 
 .purchase-ocr-receipt-fallback {
@@ -1776,17 +1769,15 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
   background: var(--ims-bg-card-soft, rgba(148, 163, 184, 0.08));
   color: var(--ims-text-primary, #0f172a);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--ims-font-size-meta);
 }
 
 @media (max-width: 576px) {
   .purchase-ocr-receipt-overlay {
-    align-items: center;
-    padding: calc(18px + env(safe-area-inset-top, 0px)) 12px calc(18px + env(safe-area-inset-bottom, 0px));
+    padding: calc(56px + env(safe-area-inset-top, 0px)) 12px calc(24px + env(safe-area-inset-bottom, 0px));
   }
 
   .purchase-ocr-receipt-shell {
-    max-height: calc(100dvh - 36px);
     margin: 0;
   }
 
@@ -1796,12 +1787,11 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
   }
 
   .purchase-ocr-receipt-paper {
-    max-height: calc(100dvh - 104px);
     padding: 22px 18px;
   }
 
   .purchase-ocr-receipt-total-value {
-    font-size: 22px;
+    font-size: calc(var(--ims-font-size-stat) + 2px);
   }
 }
 

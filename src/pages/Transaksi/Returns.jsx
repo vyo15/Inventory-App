@@ -404,9 +404,9 @@ const Returns = () => {
         const referenceText = record.returnNumber || record.code || record.referenceNumber || record.referenceId || record.returnId || record.id || "-";
         return (
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 600 }}>{dateText}</div>
+            <div className="ims-cell-title">{dateText}</div>
             <Tooltip title={referenceText}>
-              <div style={{ color: "#8c8c8c", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div className="ims-cell-meta" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {referenceText}
               </div>
             </Tooltip>
@@ -430,7 +430,7 @@ const Returns = () => {
         return (
           <div style={{ minWidth: 0 }}>
             <Tooltip title={itemName}>
-              <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div className="ims-cell-title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {itemName}
               </div>
             </Tooltip>
@@ -621,7 +621,7 @@ const Returns = () => {
               </div>
 
               <div style={{ marginBottom: 10 }}>
-                <span style={{ fontWeight: 600 }}>
+                <span className="ims-cell-title">
                   {selectedItem.name || "Item"}
                 </span>
                 {selectedItemHasVariants ? (

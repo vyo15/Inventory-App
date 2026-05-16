@@ -1,10 +1,10 @@
 const SHOPEE_MARKER_PATTERNS = [
   /shopee/i,
-  /subtotal\s+produk/i,
+  /subtotal\s+(?:produk|barang)/i,
   /subtotal\s+pengiriman/i,
   /voucher\s+shopee/i,
-  /biaya\s+layanan/i,
-  /total\s+pesanan/i,
+  /biaya\s+(?:layanan|penanganan)/i,
+  /total\s+(?:pesanan|pembayaran)/i,
 ];
 
 const normalizeOcrText = (text = '') =>
@@ -59,6 +59,7 @@ const findMoneyNearLabel = (lines = [], labelPattern) => {
 const findShopeeVoucherDiscount = (lines = []) =>
   findMoneyNearLabel(lines, /voucher\s+(?:shopee\s+)?digunakan/i) ||
   findMoneyNearLabel(lines, /voucher\s*\/\s*potongan/i) ||
+  findMoneyNearLabel(lines, /voucher\s+(?:toko|penjual|produk)/i) ||
   0;
 
 const findFirstLine = (lines = [], pattern) => lines.find((line) => pattern.test(line)) || '';
@@ -92,30 +93,36 @@ const extractStoreName = (lines = []) => {
     .trim();
 };
 
+const getProductSearchWindow = (lines = []) => {
+  const subtotalLineIndex = lines.findIndex((line) => /subtotal\s+(?:produk|barang)/i.test(line));
+  return subtotalLineIndex > 0 ? lines.slice(0, subtotalLineIndex) : lines;
+};
+
+const extractQuantityMarkers = (lines = []) => {
+  // Guard multi-item: hanya baca area item sebelum subtotal agar qty dari ongkir/resi tidak ikut terhitung.
+  const hardIgnoredPattern = /(estimasi|garansi|info\s+pengiriman|alamat|subtotal\s+(?:produk|barang)|subtotal\s+pengiriman|subtotal\s+diskon|diskon\s+pengiriman|voucher|biaya\s+(?:layanan|penanganan)|total\s+(?:pesanan|pembayaran)|resi|standard|spxid)/i;
+  return getProductSearchWindow(lines)
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line && !hardIgnoredPattern.test(line))
+    .map(({ line, index }) => {
+      const qtyMatch = line.match(/(?:^|\s|[^A-Za-z0-9])(?:x|×)\s*(\d{1,4})(?=$|\s|[^A-Za-z0-9]|rp)/i);
+      if (!qtyMatch) return null;
+
+      const parsed = Number(qtyMatch[1]);
+      if (!Number.isFinite(parsed) || parsed <= 0) return null;
+
+      return { quantity: parsed, line, index };
+    })
+    .filter(Boolean);
+};
+
 const extractQuantity = (lines = []) => {
-  // Shopee biasanya menampilkan qty produk sebagai `x3` di baris produk yang sama
-  // dengan harga satuan. Karena itu baris yang mengandung `Rp...` tetap harus
-  // boleh dicek, selama bukan baris ringkasan biaya/pengiriman.
-  const hardIgnoredPattern = /(estimasi|garansi|info\s+pengiriman|alamat|subtotal\s+produk|subtotal\s+pengiriman|subtotal\s+diskon|voucher|biaya\s+layanan|total\s+pesanan|resi|standard|spxid)/i;
-  const subtotalLineIndex = lines.findIndex((line) => /subtotal\s+produk/i.test(line));
-  const searchWindow = subtotalLineIndex > 0 ? lines.slice(0, subtotalLineIndex) : lines;
-
-  for (const line of searchWindow) {
-    if (!line || hardIgnoredPattern.test(line)) continue;
-
-    const qtyMatch = line.match(/(?:^|\s|[^A-Za-z0-9])(?:x|×)\s*(\d{1,4})(?=$|\s|[^A-Za-z0-9]|rp)/i);
-    if (!qtyMatch) continue;
-
-    const parsed = Number(qtyMatch[1]);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-
-  return null;
+  const firstMarker = extractQuantityMarkers(lines)[0];
+  return firstMarker?.quantity || null;
 };
 
 const extractUnitPriceBeforeSubtotal = (lines = []) => {
-  const subtotalLineIndex = lines.findIndex((line) => /subtotal\s+produk/i.test(line));
-  const searchWindow = subtotalLineIndex > 0 ? lines.slice(0, subtotalLineIndex) : lines;
+  const searchWindow = getProductSearchWindow(lines);
   const ignoredPattern = /(estimasi|garansi|info\s+pengiriman|alamat|subtotal|pengiriman|voucher|biaya|total|standard|spxid|lacak|bantuan|pesanan\s+selesai)/i;
 
   for (const line of [...searchWindow].reverse()) {
@@ -178,6 +185,35 @@ const extractProductName = (lines = []) => {
   return candidate || '';
 };
 
+const detectShopeeMultiItemRisk = (lines = []) => {
+  const reasons = [];
+  const quantityMarkers = extractQuantityMarkers(lines);
+  const normalizedText = lines.join('\n');
+
+  const explicitProductCountLine = lines.find((line) =>
+    /(?:subtotal\s+(?:produk|barang)|total\s+produk|barang)\s*\(?\s*(\d{1,3})\s*(?:produk|barang|item)?\s*\)?/i.test(line),
+  );
+  const explicitProductCount = explicitProductCountLine?.match(/(\d{1,3})/)?.[1];
+
+  if (Number(explicitProductCount || 0) > 1) {
+    reasons.push(`Ringkasan Shopee menunjukkan ${explicitProductCount} produk/barang.`);
+  }
+
+  if (quantityMarkers.length > 1) {
+    reasons.push(`Terdeteksi ${quantityMarkers.length} baris Qty produk sebelum subtotal.`);
+  }
+
+  if (/\+\s*\d+\s*(?:produk|barang|item)\s*(?:lainnya|lain)/i.test(normalizedText)) {
+    reasons.push('Ada indikasi item lain pada screenshot Shopee.');
+  }
+
+  return {
+    isMultiItemLikely: reasons.length > 0,
+    multiItemReasons: reasons,
+    detectedProductLineCount: quantityMarkers.length,
+  };
+};
+
 const formatNoteMoney = (value = 0) => `Rp${Number(value || 0).toLocaleString('id-ID')}`;
 
 const buildShopeeOcrNote = (draft = {}) => {
@@ -194,21 +230,94 @@ const buildShopeeOcrNote = (draft = {}) => {
   return noteParts.join('\n');
 };
 
+const buildReviewMeta = ({ hasUsefulValues, isLikelyShopee, totalOrder, totalMatches, totalDifference, multiItemRisk }) => {
+  if (multiItemRisk.isMultiItemLikely) {
+    return {
+      reviewSeverity: 'error',
+      reviewStatusLabel: 'Tidak disarankan otomatis',
+      reviewMessage: 'Screenshot terlihat berisi lebih dari 1 item. Input manual atau pecah pembelian per item agar modal, stok, expense, dan HPP tidak tercampur.',
+      reviewReasons: multiItemRisk.multiItemReasons,
+      autoApplyBlocked: true,
+      needsManualReview: true,
+    };
+  }
+
+  if (!hasUsefulValues) {
+    return {
+      reviewSeverity: 'warning',
+      reviewStatusLabel: 'Perlu dicek manual',
+      reviewMessage: 'Angka utama belum terbaca jelas. Isi manual atau coba screenshot yang lebih tajam.',
+      reviewReasons: ['Tidak ada angka Qty atau biaya yang cukup aman untuk diterapkan.'],
+      autoApplyBlocked: false,
+      needsManualReview: true,
+    };
+  }
+
+  if (!isLikelyShopee) {
+    return {
+      reviewSeverity: 'warning',
+      reviewStatusLabel: 'Perlu dicek manual',
+      reviewMessage: 'Format screenshot belum terlihat seperti rincian pesanan Shopee. Cek ulang sebelum diterapkan.',
+      reviewReasons: ['Marker Shopee atau label ringkasan pesanan belum kuat terdeteksi.'],
+      autoApplyBlocked: false,
+      needsManualReview: true,
+    };
+  }
+
+  if (totalOrder <= 0) {
+    return {
+      reviewSeverity: 'warning',
+      reviewStatusLabel: 'Perlu dicek manual',
+      reviewMessage: 'Total pesanan belum terbaca. Cek ulang biaya sebelum diterapkan ke form.',
+      reviewReasons: ['Total pesanan dipakai sebagai pembanding akhir OCR.'],
+      autoApplyBlocked: false,
+      needsManualReview: true,
+    };
+  }
+
+  if (!totalMatches) {
+    return {
+      reviewSeverity: 'warning',
+      reviewStatusLabel: 'Perlu dicek manual',
+      reviewMessage: `Total OCR belum cocok dengan hasil hitung sistem. Selisih terbaca ${formatNoteMoney(Math.abs(totalDifference))}.`,
+      reviewReasons: ['Periksa ulang subtotal, ongkir, diskon, voucher, biaya layanan, dan total sebelum diterapkan.'],
+      autoApplyBlocked: false,
+      needsManualReview: true,
+    };
+  }
+
+  return {
+    reviewSeverity: 'success',
+    reviewStatusLabel: 'Aman diterapkan',
+    reviewMessage: 'Screenshot terdeteksi sebagai 1 transaksi Shopee dan total biaya cocok.',
+    reviewReasons: [],
+    autoApplyBlocked: false,
+    needsManualReview: false,
+  };
+};
+
 export const parseShopeePurchaseOcrText = (rawText = '') => {
   const normalizedText = normalizeOcrText(rawText);
   const lines = getOcrLines(normalizedText);
 
-  const subtotalItems = findMoneyNearLabel(lines, /subtotal\s+produk/i) || 0;
+  const subtotalItems = findMoneyNearLabel(lines, /subtotal\s+(?:produk|barang)/i) || 0;
   const shippingCost = findMoneyNearLabel(lines, /subtotal\s+pengiriman/i) || 0;
-  const shippingDiscount = findMoneyNearLabel(lines, /subtotal\s+diskon\s+pengiriman/i) || 0;
+  const shippingDiscount =
+    findMoneyNearLabel(lines, /subtotal\s+diskon\s+pengiriman/i) ||
+    findMoneyNearLabel(lines, /diskon\s+pengiriman/i) ||
+    findMoneyNearLabel(lines, /gratis\s+ongkir/i) ||
+    0;
   const voucherDiscount = findShopeeVoucherDiscount(lines);
-  const serviceFee = findMoneyNearLabel(lines, /biaya\s+layanan/i) || 0;
-  const totalOrder = findMoneyNearLabel(lines, /total\s+pesanan/i) || 0;
+  const serviceFee = findMoneyNearLabel(lines, /biaya\s+(?:layanan|penanganan)/i) || 0;
+  const totalOrder = findMoneyNearLabel(lines, /total\s+(?:pesanan|pembayaran)/i) || 0;
   const calculatedTotal = Math.round(subtotalItems + shippingCost - shippingDiscount - voucherDiscount + serviceFee);
-  const totalMatches = totalOrder > 0 ? Math.abs(calculatedTotal - totalOrder) <= 1000 : false;
+  const totalDifference = Math.round(calculatedTotal - totalOrder);
+  const totalMatches = totalOrder > 0 ? Math.abs(totalDifference) <= 1000 : false;
   const explicitQuantity = extractQuantity(lines);
   const unitPrice = extractUnitPriceBeforeSubtotal(lines);
   const derivedQuantity = deriveQuantityFromSubtotalAndUnitPrice({ subtotalItems, unitPrice });
+  const multiItemRisk = detectShopeeMultiItemRisk(lines);
+  const isLikelyShopee = SHOPEE_MARKER_PATTERNS.some((pattern) => pattern.test(normalizedText));
 
   const draft = {
     quantity: explicitQuantity || derivedQuantity,
@@ -219,26 +328,40 @@ export const parseShopeePurchaseOcrText = (rawText = '') => {
     serviceFee,
     totalOrder,
     calculatedTotal,
+    totalDifference,
     totalMatches,
     storeName: extractStoreName(lines),
     productName: extractProductName(lines),
     variantName: extractVariantName(lines),
     trackingNumber: extractTrackingNumber(normalizedText),
     estimatedArrival: extractEstimateText(lines),
-    isLikelyShopee: SHOPEE_MARKER_PATTERNS.some((pattern) => pattern.test(normalizedText)),
+    isLikelyShopee,
+    ...multiItemRisk,
   };
+
+  const hasUsefulValues = Boolean(
+    draft.quantity ||
+      draft.subtotalItems ||
+      draft.shippingCost ||
+      draft.shippingDiscount ||
+      draft.voucherDiscount ||
+      draft.serviceFee ||
+      draft.totalOrder,
+  );
+
+  const reviewMeta = buildReviewMeta({
+    hasUsefulValues,
+    isLikelyShopee,
+    totalOrder,
+    totalMatches,
+    totalDifference,
+    multiItemRisk,
+  });
 
   return {
     ...draft,
+    ...reviewMeta,
     note: buildShopeeOcrNote(draft),
-    hasUsefulValues: Boolean(
-      draft.quantity ||
-        draft.subtotalItems ||
-        draft.shippingCost ||
-        draft.shippingDiscount ||
-        draft.voucherDiscount ||
-        draft.serviceFee ||
-        draft.totalOrder,
-    ),
+    hasUsefulValues,
   };
 };

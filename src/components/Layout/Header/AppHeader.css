@@ -103,17 +103,17 @@ Risiko:
 
 .app-header-greeting-title {
   color: var(--ims-text-primary);
-  font-size: clamp(16px, 1.35vw, 18px);
-  font-weight: 850;
-  letter-spacing: -0.015em;
-  line-height: 1.2;
+  font-size: var(--ims-typo-header-title-size);
+  font-weight: var(--ims-typo-header-title-weight);
+  letter-spacing: var(--ims-typo-header-title-letter-spacing);
+  line-height: var(--ims-typo-header-title-line-height);
 }
 
 .app-header-greeting-subtitle {
   color: var(--ims-text-secondary);
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.25;
+  font-size: var(--ims-typo-header-subtitle-size);
+  font-weight: var(--ims-font-weight-medium);
+  line-height: var(--ims-typo-header-subtitle-line-height);
 }
 
 .app-header-user-area {
@@ -150,9 +150,9 @@ Risiko:
     var(--ims-border-color-soft)
   );
   box-shadow: none;
-  font-size: 12px;
-  font-weight: 750;
-  line-height: 1;
+  font-size: var(--ims-font-size-meta);
+  font-weight: var(--ims-font-weight-action);
+  line-height: var(--ims-line-height-solid);
 }
 
 .app-header-chip-text {
@@ -176,7 +176,7 @@ Risiko:
   );
   border-radius: 999px;
   box-shadow: none;
-  font-weight: 700;
+  font-weight: var(--ims-font-weight-action);
 }
 
 .app-header-logout-button.ant-btn:hover,
@@ -226,7 +226,7 @@ Risiko:
   }
 
   .app-header-greeting-title {
-    font-size: 16px;
+    font-size: var(--ims-font-size-lg);
   }
 }
 
@@ -259,7 +259,7 @@ Risiko:
   }
 
   .app-header-greeting-subtitle {
-    font-size: 12px;
+    font-size: var(--ims-font-size-meta);
   }
 }
 
@@ -272,6 +272,6 @@ Risiko:
   .app-header-logout-button.ant-btn {
     height: 30px;
     padding-inline: 10px;
-    font-size: 12px;
+    font-size: var(--ims-font-size-meta);
   }
 }

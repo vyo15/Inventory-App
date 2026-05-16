@@ -165,7 +165,7 @@ const NOTE_PREVIEW_STYLE = {
   WebkitBoxOrient: "vertical",
   overflow: "hidden",
   whiteSpace: "normal",
-  lineHeight: 1.35,
+  lineHeight: "var(--ims-line-height-title)",
 };
 
 const renderCompactNote = (value) => {
@@ -869,7 +869,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               </div>
 
               <div style={{ marginBottom: selectedStockSnapshot ? 10 : 0 }}>
-                <span style={{ fontWeight: 600 }}>
+                <span className="ims-cell-title">
                   {selectedItem.name || "Item"}
                 </span>
                 {selectedStockSnapshot?.label ? (

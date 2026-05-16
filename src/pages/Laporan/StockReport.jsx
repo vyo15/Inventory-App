@@ -13,6 +13,7 @@ import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
+import { getInventoryStockStatusMeta } from "../../utils/stock/stockHelpers";
 
 const { Search } = Input;
 const { Option } = Select;
@@ -34,21 +35,30 @@ Catatan cleanup:
 Risiko:
 - Jika threshold statis atau `variants[].minStockAlert` dipakai lagi, report bisa berbeda dari Dashboard/master page dan menandai item rendah secara salah.
 ===================================================== */
-const resolveDisplayStock = (item = {}) =>
-  Number(item.availableStock ?? item.currentStock ?? item.stock ?? 0);
+const resolveDisplayUnit = (item = {}) => item.stockUnit || item.unit || "pcs";
 
-const resolveDisplayUnit = (item = {}) => item.unit || item.stockUnit || "pcs";
-
-const resolveMasterThreshold = (item = {}, typeLabel = "") => {
-  const thresholdSource = typeLabel === "Bahan Baku" ? item.minStock : item.minStockAlert;
-  const threshold = Number(thresholdSource ?? 0);
-  return Number.isFinite(threshold) && threshold > 0 ? threshold : 0;
+const resolveSourceType = (typeLabel = "") => {
+  if (typeLabel === "Bahan Baku") return "material";
+  if (typeLabel === "Semi Finished") return "semi_finished";
+  return "product";
 };
 
-const resolveStatus = (stockValue, thresholdValue) => {
-  if (stockValue <= 0) return "Habis";
-  if (thresholdValue > 0 && stockValue <= thresholdValue) return "Kritis";
+const resolveReportStatus = (statusMeta = {}) => {
+  if (statusMeta.statusKey === "empty") return "Habis";
+  if (statusMeta.statusKey === "low") return "Kritis";
   return "Normal";
+};
+
+const resolveAffectedVariantSummary = (statusMeta = {}, unit = "pcs") => {
+  if (!statusMeta.hasVariants || !statusMeta.affectedVariantCount) return "";
+
+  const preview = statusMeta.affectedVariants
+    .slice(0, 3)
+    .map((variantMeta) => `${variantMeta.label} ${formatNumberId(variantMeta.availableStock)} ${unit}`)
+    .join(", ");
+  const extra = statusMeta.affectedVariantCount > 3 ? ` +${statusMeta.affectedVariantCount - 3} lainnya` : "";
+
+  return `Varian perlu cek: ${preview}${extra}`;
 };
 
 // =========================
@@ -63,17 +73,24 @@ const resolveStatus = (stockValue, thresholdValue) => {
 const mapInventorySnapshotToReportRows = (snapshot, typeLabel) =>
   snapshot.docs.map((documentItem) => {
     const payload = documentItem.data();
-    const stockValue = resolveDisplayStock(payload);
-    const minimumStockThreshold = resolveMasterThreshold(payload, typeLabel);
+    const sourceType = resolveSourceType(typeLabel);
+    const unitDisplay = resolveDisplayUnit(payload);
+    const statusMeta = getInventoryStockStatusMeta(payload, sourceType);
+    const lowestAffectedVariant = statusMeta.affectedVariants?.length
+      ? [...statusMeta.affectedVariants].sort((left, right) => left.availableStock - right.availableStock)[0]
+      : null;
+    const stockValue = lowestAffectedVariant ? lowestAffectedVariant.availableStock : statusMeta.stock;
 
     return {
       id: documentItem.id,
       ...payload,
       stockDisplay: stockValue,
-      minStockDisplay: minimumStockThreshold,
-      unitDisplay: resolveDisplayUnit(payload),
+      minStockDisplay: statusMeta.threshold,
+      unitDisplay,
       type: typeLabel,
-      status: resolveStatus(stockValue, minimumStockThreshold),
+      sourceType,
+      status: resolveReportStatus(statusMeta),
+      affectedVariantSummary: resolveAffectedVariantSummary(statusMeta, unitDisplay),
     };
   });
 
@@ -262,6 +279,7 @@ const StockReport = () => {
         { key: "minStockDisplay", label: "Minimum Stok Master" },
         { key: "unitDisplay", label: "Satuan" },
         { key: "status", label: "Status" },
+        { key: "affectedVariantSummary", label: "Varian Perlu Cek" },
       ],
       data: filteredData.map((item) => ({
         ...item,
@@ -328,6 +346,7 @@ const StockReport = () => {
           <StockDisplayBlock
             record={record}
             unit={record.unitDisplay}
+            sourceType={record.sourceType}
             className="ims-cell-stack ims-cell-stack-tight"
             metaClassName="ims-cell-meta"
           />
@@ -338,7 +357,7 @@ const StockReport = () => {
         title: "Status",
         dataIndex: "status",
         key: "status",
-        render: (status) => {
+        render: (status, record) => {
           let color = "geekblue";
           let icon = null;
 
@@ -351,9 +370,14 @@ const StockReport = () => {
           }
 
           return (
-            <Tag color={color} icon={icon}>
-              {status}
-            </Tag>
+            <div className="ims-cell-stack ims-cell-stack-tight">
+              <Tag color={color} icon={icon}>
+                {status}
+              </Tag>
+              {record.affectedVariantSummary ? (
+                <span className="ims-cell-meta">{record.affectedVariantSummary}</span>
+              ) : null}
+            </div>
           );
         },
         filters: [

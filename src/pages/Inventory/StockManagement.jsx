@@ -445,7 +445,7 @@ const NOTE_PREVIEW_STYLE = {
   WebkitBoxOrient: "vertical",
   overflow: "hidden",
   whiteSpace: "normal",
-  lineHeight: 1.35,
+  lineHeight: "var(--ims-line-height-title)",
 };
 
 const matchesKeyword = (record, keyword) => {
@@ -643,12 +643,12 @@ const StockManagement = () => {
         width: 280,
         render: (_, record) => (
           <Space direction="vertical" size={2}>
-            <Text strong>{record.itemName || "-"}</Text>
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text strong className="ims-cell-title">{record.itemName || "-"}</Text>
+            <Text type="secondary" className="ims-cell-meta">
               {record.itemTypeLabel}
             </Text>
             {record.variantLabelResolved ? (
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <Text type="secondary" className="ims-cell-meta">
                 Varian: {record.variantLabelResolved}
               </Text>
             ) : null}
@@ -694,11 +694,11 @@ const StockManagement = () => {
                   title={item.tooltipText || item.detail || item.label}
                 >
                   <Space direction="vertical" size={0}>
-                    <Text strong style={{ fontSize: 12 }}>
+                    <Text strong className="ims-cell-caption">
                       {item.label}
                     </Text>
                     {item.detail ? (
-                      <Text type="secondary" style={{ fontSize: 11 }}>
+                      <Text type="secondary" className="ims-cell-meta">
                         {item.detail}
                       </Text>
                     ) : null}

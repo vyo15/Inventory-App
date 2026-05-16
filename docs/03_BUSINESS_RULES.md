@@ -379,8 +379,7 @@ Contoh algoritmik:
 
 Catatan current state:
 - Jika contoh lama memakai `Bunga -> BG`, itu dianggap contoh lama dan bukan standar baru. Standar baru tanpa mapping menghasilkan `Bunga -> BNG`.
-- Source terbaru sudah memakai `businessCodeGenerator` sebagai source of truth readable code, sementara `productionCodeGenerator` menjadi compatibility wrapper tanpa dictionary manual per kata.
-- Collision kode harian masih scan-based; patch aman saat ini adalah guard target doc exists di transaction/write flow, sedangkan counter atomic membutuhkan approval schema/collection baru.
+- Source terbaru masih perlu audit karena generator tertentu masih menyimpan mapping manual dan fallback duplicate berbasis timestamp. Catat sebagai cleanup candidate, jangan refactor source dalam patch docs-only.
 
 ## Update Rule Karyawan Produksi — 2026-04-25
 
@@ -761,6 +760,17 @@ Status: **AKTIF + GUARDED**.
 - Ringkasan perbandingan supplier boleh menampilkan breakdown `subtotalItems`, `shippingCost`, `serviceFee`, `shippingDiscount`, `voucherDiscount`, `totalActualPurchase`, `totalReferencePurchase`, `actualUnitCost`, dan `purchaseSaving`, tetapi tidak boleh memindahkan atau mengubah formula kalkulasi existing.
 - `totalActualPurchase` tetap dasar expense/cash-out; `purchaseSaving` tetap informasi efisiensi dan bukan pengurang kas.
 
+## 23. Rule OCR Shopee Purchases — Apply Feedback dan Detail
+
+- OCR Shopee di Purchases hanya boleh membuat draft Qty Beli dan biaya. OCR tidak boleh mengganti supplier, item, satuan, konversi supplier, stok masuk final, atau menyimpan pembelian otomatis.
+- Tombol **Terapkan Qty & Biaya ke Form** wajib bersifat manual, idempotent, dan memberi feedback lokal di area OCR/form setelah field berubah. Feedback global `message.success` saja tidak cukup karena user bisa tidak sadar tombol sudah diklik.
+- Setelah Apply berhasil, UI wajib menampilkan status seperti **Sudah Diterapkan ke Form** beserta ringkasan field yang diterapkan: qty, subtotal, ongkir, diskon/potongan, dan biaya layanan.
+- Klik Apply berulang tidak boleh menggandakan catatan OCR di field Catatan. Segmen lama `OCR Shopee` wajib dibersihkan dulu, sementara catatan manual user tetap dipertahankan.
+- Kolom Info tabel Purchases hanya boleh menampilkan ringkasan manual dan tag `OCR Shopee`; detail angka OCR tidak boleh tampil mentah di tabel utama.
+- Tombol **Lihat** pada tag `OCR Shopee` wajib mengambil `record` dari scope render row tabel. Jangan memakai variabel `record` dari luar render row karena akan memunculkan error `record is not defined`.
+- Popup detail OCR wajib bersifat read-only, memakai data catatan transaksi, tidak membaca ulang screenshot, dan tidak mengubah purchase/stok/kas/audit log.
+- Bukti screenshot OCR tidak disimpan. Hanya ringkasan angka yang sudah diterapkan ke Catatan boleh tersimpan sebagai audit ringan.
+
 ## 22. Rule Atomic Save Pembelian
 
 Status: **AKTIF + GUARDED**.
@@ -896,8 +906,8 @@ Field yang tidak boleh disimpan di Firestore:
 ### 24.6 Firestore Rules final/staged-final
 
 - Firestore Rules wajib aktif di backend Firebase dan berbasis `request.auth != null`.
-- Source rules sekarang disertakan di repo melalui `firestore.rules` dan `firebase.json` mengarah ke file tersebut.
-- Publish/deploy rules tetap wajib dilakukan dari Firebase tooling/Console; keberadaan file di repo belum otomatis mengubah backend.
+- Pada repo ZIP saat ini, rules dikelola manual/external di Firebase Console dan tidak disertakan sebagai file source.
+- Jangan membuat file `firestore.rules` atau mengubah `firebase.json` kecuali ada task terpisah untuk source-controlled rules.
 - Actor profile wajib dibaca dari `system_users/{request.auth.uid}`.
 - Role aktif Rules hanya `administrator` dan `user`.
 - `system_users` wajib guarded:
@@ -907,7 +917,6 @@ Field yang tidak boleh disimpan di Firestore:
   - user biasa tidak boleh mengelola profile user lain;
   - delete profile sendiri diblok oleh rules dan service.
 - Collection bisnis utama boleh diakses oleh profile aktif sesuai staged-final rules agar modul utama tidak langsung permission denied.
-- `lastLoginAt` boleh di-update oleh user pada profile sendiri sebagai audit login best-effort; role/status/profile field lain tetap guarded.
 - Fallback untuk collection tidak dikenal harus deny.
 - Rules tidak boleh memakai cleanup sementara seperti `allow read, write: if true` atau expiry date sementara sebagai rules final.
 

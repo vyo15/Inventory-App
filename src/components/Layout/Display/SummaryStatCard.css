@@ -124,26 +124,27 @@ Batasan aman:
   min-width: 0;
   margin: 0 !important;
   color: var(--ims-text-secondary);
-  font-size: 12px;
-  font-weight: 750;
-  line-height: 1.35;
+  font-size: var(--ims-typo-summary-title-size);
+  font-weight: var(--ims-typo-summary-title-weight);
+  line-height: var(--ims-typo-summary-title-line-height);
+  letter-spacing: var(--ims-typo-summary-title-letter-spacing);
 }
 
 .summary-stat-card-value.ant-typography {
   margin: 0 !important;
   color: var(--ims-text-primary);
-  font-size: 24px;
-  font-weight: 850;
-  line-height: 1.06;
-  letter-spacing: -0.035em;
+  font-size: var(--ims-typo-summary-value-size);
+  font-weight: var(--ims-typo-summary-value-weight);
+  line-height: var(--ims-typo-summary-value-line-height);
+  letter-spacing: var(--ims-typo-summary-value-letter-spacing);
   overflow-wrap: anywhere;
 }
 
 .summary-stat-card-subtitle.ant-typography {
   margin: 0 !important;
   color: var(--ims-text-muted);
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: var(--ims-typo-summary-subtitle-size);
+  line-height: var(--ims-typo-summary-subtitle-line-height);
 }
 
 .summary-stat-card-extra {
@@ -165,18 +166,18 @@ Batasan aman:
 }
 
 .summary-stat-card--featured .summary-stat-card-title.ant-typography {
-  font-size: 12px;
-  font-weight: 800;
+  font-size: var(--ims-font-size-meta);
+  font-weight: var(--ims-font-weight-strong);
 }
 
 .summary-stat-card--featured .summary-stat-card-value.ant-typography {
-  font-size: clamp(30px, 3vw, 40px);
-  line-height: 0.98;
-  letter-spacing: -0.055em;
+  font-size: clamp(30px, 2.7vw, 36px);
+  line-height: var(--ims-line-height-solid);
+  letter-spacing: var(--ims-letter-spacing-featured);
 }
 
 .summary-stat-card--finance-mini.ant-card .summary-stat-card-value.ant-typography {
-  font-size: 21px;
+  font-size: calc(var(--ims-font-size-stat) + 1px);
 }
 
 .summary-stat-grid--finance {
@@ -238,17 +239,17 @@ Batasan aman:
 .summary-finance-flow-label.ant-typography {
   display: block;
   color: var(--ims-text-secondary);
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.3;
+  font-size: var(--ims-font-size-meta);
+  font-weight: var(--ims-font-weight-strong);
+  line-height: var(--ims-line-height-compact);
 }
 
 .summary-finance-period.ant-typography,
 .summary-finance-helper.ant-typography {
   display: block;
   color: var(--ims-text-muted);
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: var(--ims-typo-summary-subtitle-size);
+  line-height: var(--ims-typo-summary-subtitle-line-height);
 }
 
 .summary-finance-status {
@@ -258,18 +259,18 @@ Batasan aman:
   border-radius: 999px;
   background: var(--summary-finance-tone-soft);
   color: var(--summary-finance-tone);
-  font-size: 10px;
-  font-weight: 850;
+  font-size: var(--ims-font-size-xs);
+  font-weight: var(--ims-font-weight-strong);
   line-height: 1.4;
 }
 
 .summary-finance-value.ant-typography {
   margin: 0 !important;
   color: var(--ims-text-primary);
-  font-size: clamp(26px, 2.6vw, 34px);
-  font-weight: 900;
-  line-height: 1.02;
-  letter-spacing: -0.055em;
+  font-size: clamp(26px, 2.4vw, 32px);
+  font-weight: var(--ims-font-weight-display);
+  line-height: 1.04;
+  letter-spacing: var(--ims-letter-spacing-featured);
   overflow-wrap: anywhere;
 }
 
@@ -332,8 +333,8 @@ Batasan aman:
 .summary-finance-flow-value.ant-typography {
   min-width: 0;
   color: var(--ims-text-primary);
-  font-size: 11px;
-  font-weight: 850;
+  font-size: var(--ims-font-size-caption);
+  font-weight: var(--ims-font-weight-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -389,7 +390,7 @@ Batasan aman:
   }
 
   .summary-stat-card-value.ant-typography {
-    font-size: 22px;
+    font-size: calc(var(--ims-font-size-stat) + 2px);
   }
 
   .summary-stat-card--featured .summary-stat-card-value.ant-typography {

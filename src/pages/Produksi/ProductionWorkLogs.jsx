@@ -1604,7 +1604,7 @@ const ProductionWorkLogs = () => {
                 // =====================================================
                 render: (_, record) => (
                   <div>
-                    <div style={{ fontWeight: 600 }}>{record.itemName || "-"}</div>
+                    <div className={workLogUiClassNames.title}>{record.itemName || "-"}</div>
                     <div className="ims-cell-meta">{record.itemCode || "-"}</div>
                     {record.resolvedVariantLabel ? (
                       <div className="ims-cell-meta">
@@ -1669,7 +1669,7 @@ const ProductionWorkLogs = () => {
                 key: "output",
                 render: (_, record) => (
                   <div>
-                    <div style={{ fontWeight: 600 }}>{record.outputName || "-"}</div>
+                    <div className={workLogUiClassNames.title}>{record.outputName || "-"}</div>
                     <div className="ims-cell-meta">{record.outputCode || "-"}</div>
                     {record.outputVariantLabel ? (
                       <div className="ims-cell-meta">
@@ -1785,7 +1785,7 @@ const ProductionWorkLogs = () => {
                     <Typography.Text type="secondary">
                       {item.label}
                     </Typography.Text>
-                    <div style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>
+                    <div className="ims-detail-value" style={{ marginTop: 6 }}>
                       {item.value}
                     </div>
                     <div className="ims-cell-meta" style={{ marginTop: 6 }}>
@@ -1916,7 +1916,7 @@ const ProductionWorkLogs = () => {
                         <Typography.Text type="secondary">
                           Material
                         </Typography.Text>
-                        <div style={{ fontWeight: 600, marginTop: 4 }}>
+                        <div className="ims-cell-title" style={{ marginTop: 4 }}>
                           {formatCurrency(selectedRecord.materialCostActual || 0)}
                         </div>
                       </Col>
@@ -1924,7 +1924,7 @@ const ProductionWorkLogs = () => {
                         <Typography.Text type="secondary">
                           Labor
                         </Typography.Text>
-                        <div style={{ fontWeight: 600, marginTop: 4 }}>
+                        <div className="ims-cell-title" style={{ marginTop: 4 }}>
                           {formatCurrency(detailLaborDisplay)}
                         </div>
                       </Col>
@@ -1932,7 +1932,7 @@ const ProductionWorkLogs = () => {
                         <Typography.Text type="secondary">
                           Overhead
                         </Typography.Text>
-                        <div style={{ fontWeight: 600, marginTop: 4 }}>
+                        <div className="ims-cell-title" style={{ marginTop: 4 }}>
                           {formatCurrency(selectedRecord.overheadCostActual || 0)}
                         </div>
                       </Col>
@@ -1940,7 +1940,7 @@ const ProductionWorkLogs = () => {
                         <Typography.Text type="secondary">
                           Scrap Qty
                         </Typography.Text>
-                        <div style={{ fontWeight: 600, marginTop: 4 }}>
+                        <div className="ims-cell-title" style={{ marginTop: 4 }}>
                           {formatNumber(selectedRecord.scrapQty || 0)}
                         </div>
                       </Col>

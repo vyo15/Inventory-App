@@ -35,6 +35,7 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { getProductionPlanningDashboardSummary } from "../../services/Produksi/productionPlanningService";
+import { getInventoryStockStatusMeta } from "../../utils/stock/stockHelpers";
 import "./Dashboard.css";
 
 const { Text, Title } = Typography;
@@ -226,11 +227,7 @@ Risiko:
 const getItemDisplayName = (item = {}) =>
   item?.name || item?.productName || item?.materialName || "-";
 
-const getItemStock = (item = {}) =>
-  getNumericValue(item?.availableStock ?? item?.currentStock ?? item?.stock ?? 0);
-
-const getItemMinStock = (item = {}) =>
-  getNumericValue(item?.minStockAlert ?? item?.minStock ?? 0);
+const isStockMonitoringActiveItem = (item = {}) => item?.isActive !== false;
 
 const getItemCurrentStock = (item = {}) =>
   getNumericValue(item?.currentStock ?? item?.stock ?? 0);
@@ -238,57 +235,61 @@ const getItemCurrentStock = (item = {}) =>
 const getItemReservedStock = (item = {}) =>
   getNumericValue(item?.reservedStock ?? 0);
 
-const getLowStockSeverity = (item = {}) => {
-  const stock = getItemStock(item);
-  const minStock = getItemMinStock(item);
+const getLowStockVariantSummary = (statusMeta = {}, unit = "pcs") => {
+  if (!statusMeta.hasVariants || !statusMeta.affectedVariantCount) return "";
 
-  if (stock <= 0) return { label: "Kosong", color: "red" };
-  if (minStock > 0 && stock <= minStock) return { label: "Menipis", color: "gold" };
-  return { label: "Aman", color: "green" };
+  const preview = statusMeta.affectedVariants
+    .slice(0, 3)
+    .map((variantMeta) => `${variantMeta.label} ${formatNumberId(variantMeta.availableStock)} ${unit}`)
+    .join(", ");
+  const extra = statusMeta.affectedVariantCount > 3 ? ` +${statusMeta.affectedVariantCount - 3} lainnya` : "";
+
+  return `Varian perlu cek: ${preview}${extra}`;
+};
+
+const buildDashboardLowStockRow = (item = {}, sourceType = "", type = "", to = "") => {
+  const unit = item?.stockUnit || item?.unit || "pcs";
+  const statusMeta = getInventoryStockStatusMeta(item, sourceType);
+  const lowestAffectedVariant = statusMeta.affectedVariants?.length
+    ? [...statusMeta.affectedVariants].sort((left, right) => left.availableStock - right.availableStock)[0]
+    : null;
+  const stock = lowestAffectedVariant ? lowestAffectedVariant.availableStock : statusMeta.stock;
+  const severity =
+    statusMeta.statusKey === "empty"
+      ? { label: "Kosong", color: "red" }
+      : statusMeta.statusKey === "low"
+        ? { label: "Menipis", color: "gold" }
+        : { label: "Aman", color: "green" };
+
+  return {
+    key: `${sourceType}-${item.id}`,
+    id: item.id,
+    name: getItemDisplayName(item),
+    stock,
+    minStock: statusMeta.threshold,
+    unit,
+    type,
+    sourceType,
+    severity,
+    variantSummary: getLowStockVariantSummary(statusMeta, unit),
+    statusMeta,
+    to,
+    snapshot: item,
+  };
 };
 
 const buildLowStockRows = (products = [], materials = [], semiFinishedMaterials = []) => {
   const rows = [
-    ...products.map((item) => ({
-      key: `product-${item.id}`,
-      id: item.id,
-      name: getItemDisplayName(item),
-      stock: getItemStock(item),
-      minStock: getItemMinStock(item),
-      unit: item?.unit || "pcs",
-      type: "Produk Jadi",
-      sourceType: "product",
-      severity: getLowStockSeverity(item),
-      to: "/stock-management",
-      snapshot: item,
-    })),
-    ...materials.map((item) => ({
-      key: `material-${item.id}`,
-      id: item.id,
-      name: getItemDisplayName(item),
-      stock: getItemStock(item),
-      minStock: getItemMinStock(item),
-      unit: item?.stockUnit || item?.unit || "pcs",
-      type: "Bahan Baku",
-      sourceType: "material",
-      severity: getLowStockSeverity(item),
-      to: "/stock-management",
-      snapshot: item,
-    })),
-    ...semiFinishedMaterials.map((item) => ({
-      key: `semi-finished-${item.id}`,
-      id: item.id,
-      name: getItemDisplayName(item),
-      stock: getItemStock(item),
-      minStock: getItemMinStock(item),
-      unit: item?.unit || "pcs",
-      type: "Semi Finished",
-      sourceType: "semi_finished",
-      severity: getLowStockSeverity(item),
-      to: "/produksi/semi-finished-materials",
-      snapshot: item,
-    })),
-  ].filter((item) => item.stock <= 0 || (item.minStock > 0 && item.stock <= item.minStock));
+    ...products
+      .filter(isStockMonitoringActiveItem)
+      .map((item) => buildDashboardLowStockRow(item, "product", "Produk Jadi", "/stock-management")),
+    ...materials
+      .filter(isStockMonitoringActiveItem)
+      .map((item) => buildDashboardLowStockRow(item, "material", "Bahan Baku", "/stock-management")),
+    ...semiFinishedMaterials
+      .filter(isStockMonitoringActiveItem)
+      .map((item) => buildDashboardLowStockRow(item, "semi_finished", "Semi Finished", "/produksi/semi-finished-materials")),
+  ].filter((item) => item.statusMeta.statusKey === "empty" || item.statusMeta.statusKey === "low");
 
   return rows.sort((left, right) => {
     const leftGap = left.stock - Math.max(left.minStock, 0);
@@ -317,10 +318,11 @@ Risiko:
 const buildStockAuditRows = (products = [], materials = [], semiFinishedMaterials = []) => {
   const mapRows = (items = [], type = "Item", sourceType = "item", to = "/stock-management") =>
     items.map((item) => {
-      const stock = getItemStock(item);
+      const statusMeta = getInventoryStockStatusMeta(item, sourceType);
+      const stock = statusMeta.stock;
       const currentStock = getItemCurrentStock(item);
       const reservedStock = getItemReservedStock(item);
-      const minStock = getItemMinStock(item);
+      const minStock = statusMeta.threshold;
 
       return {
         key: `${sourceType}-${item.id}`,
@@ -1548,6 +1550,9 @@ const Dashboard = () => {
                           <Text className="dashboard-muted-text">
                             Available {formatNumberId(item.stock)} {item.unit} - Min {formatNumberId(item.minStock)} {item.unit}
                           </Text>
+                          {item.variantSummary ? (
+                            <Text className="dashboard-muted-text">{item.variantSummary}</Text>
+                          ) : null}
                         </div>
                         <ArrowRightOutlined className="dashboard-action-arrow" />
                       </Link>
@@ -1565,6 +1570,9 @@ const Dashboard = () => {
                         <Text className="dashboard-muted-text">
                           Available {formatNumberId(item.stock)} {item.unit} - Min {formatNumberId(item.minStock)} {item.unit}
                         </Text>
+                        {item.variantSummary ? (
+                          <Text className="dashboard-muted-text">{item.variantSummary}</Text>
+                        ) : null}
                         <Space size={8} wrap>
                           <Text className="dashboard-muted-text">
                             {item.restockSupplierName ? `Supplier terakhir: ${item.restockSupplierName}` : "Belum ada supplier terakhir"}

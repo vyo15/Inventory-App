@@ -95,7 +95,7 @@ const PayrollDetailValue = ({ children, help }) => (
   <Space direction="vertical" size={0}>
     <span>{children}</span>
     {help ? (
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" className="ims-cell-meta">
         {help}
       </Typography.Text>
     ) : null}
@@ -130,10 +130,10 @@ const renderCompactText = (value, options = {}) => {
     <Typography.Text
       strong={options.strong}
       type={options.type}
+      className={options.type === "secondary" ? "ims-cell-meta" : undefined}
       style={{
         display: "block",
         maxWidth: "100%",
-        fontSize: options.fontSize,
       }}
       ellipsis={{ tooltip: text }}
     >
@@ -428,7 +428,7 @@ const ProductionPayrolls = () => {
         return (
           <Space direction="vertical" size={0} style={{ width: "100%" }}>
             {renderCompactText(resolveDisplayReference(record, { fields: ["payrollNumber"], fallback: "-" }), { strong: true })}
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="ims-cell-meta">
               {date ? dayjs(date).format("DD/MM/YYYY") : "-"}
             </Typography.Text>
           </Space>
@@ -444,7 +444,6 @@ const ProductionPayrolls = () => {
           {renderCompactText(record.workerName, { strong: true })}
           {renderCompactText(record.workNumber, {
             type: "secondary",
-            fontSize: 12,
           })}
         </Space>
       ),
@@ -458,7 +457,8 @@ const ProductionPayrolls = () => {
           {renderCompactText(record.stepName, { strong: true })}
           <Typography.Text
             type="secondary"
-            style={{ display: "block", fontSize: 12 }}
+            className="ims-cell-meta"
+            style={{ display: "block" }}
             ellipsis={{ tooltip: record.payrollMode || "-" }}
           >
             {record.payrollMode || "-"}

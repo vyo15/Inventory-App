@@ -99,7 +99,7 @@ const clampTwoLineStyle = {
   WebkitLineClamp: 2,
   WebkitBoxOrient: "vertical",
   overflow: "hidden",
-  lineHeight: 1.45,
+  lineHeight: "var(--ims-line-height-body)",
 };
 
 const ProductionBoms = () => {
@@ -793,7 +793,7 @@ const ProductionBoms = () => {
             <Badge status="default" text="Nonaktif" />
           )}
           {record.isDefault ? (
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" className="ims-cell-meta">
               Default
             </Typography.Text>
           ) : null}
@@ -1206,8 +1206,8 @@ const ProductionBoms = () => {
                   key: "item",
                   render: (_, record) => (
                     <div>
-                      <div style={{ fontWeight: 600 }}>{record.itemName || "-"}</div>
-                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>{record.itemCode || "-"}</div>
+                      <div className="ims-cell-title">{record.itemName || "-"}</div>
+                      <div className="ims-cell-meta">{record.itemCode || "-"}</div>
                     </div>
                   ),
                 },
@@ -1261,10 +1261,10 @@ const ProductionBoms = () => {
                   key: "step",
                   render: (_, record) => (
                     <div>
-                      <div style={{ fontWeight: 600 }}>
+                      <div className="ims-cell-title">
                         Langkah {formatNumber(record.sequenceNo)} - {record.stepName || "-"}
                       </div>
-                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                      <div className="ims-cell-meta">
                         {record.notes || record.stepCode || "Step produksi"}
                       </div>
                     </div>
@@ -1442,10 +1442,10 @@ const ProductionBoms = () => {
                   key: "item",
                   render: (_, record) => (
                     <div>
-                      <div style={{ fontWeight: 600 }}>
+                      <div className="ims-cell-title">
                         {record.itemName || "-"}
                       </div>
-                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                      <div className="ims-cell-meta">
                         {record.itemCode || "-"}
                       </div>
                     </div>
@@ -1485,11 +1485,11 @@ const ProductionBoms = () => {
                   key: "step",
                   render: (_, record) => (
                     <div>
-                      <div style={{ fontWeight: 600 }}>
+                      <div className="ims-cell-title">
                         Langkah {formatNumber(record.sequenceNo)} -{" "}
                         {record.stepName || "-"}
                       </div>
-                      <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+                      <div className="ims-cell-meta">
                         {record.notes || record.stepCode || "Step produksi"}
                       </div>
                     </div>

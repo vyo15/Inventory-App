@@ -67,8 +67,8 @@ const compactCellLineStyle = {
 
 const compactMetaLineStyle = {
   ...compactCellLineStyle,
-  color: "#8c8c8c",
-  fontSize: 12,
+  color: "var(--ims-text-secondary)",
+  fontSize: "var(--ims-font-size-meta)",
 };
 
 const renderCompactLine = (value, options = {}) => {
@@ -80,7 +80,7 @@ const renderCompactLine = (value, options = {}) => {
       <span
         style={{
           ...(muted ? compactMetaLineStyle : compactCellLineStyle),
-          fontWeight: strong ? 600 : undefined,
+          fontWeight: strong ? "var(--ims-font-weight-semibold)" : undefined,
         }}
       >
         {displayValue}

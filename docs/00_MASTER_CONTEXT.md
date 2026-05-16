@@ -6,22 +6,22 @@ Update verifikasi source aktual — 2026-05-06:
 - folder custom `functions/` tidak ditemukan pada ZIP aktual; jangan menganggap ada Firebase Functions custom aktif tanpa bukti source baru;
 - file legacy `src/services/Produksi/productionService.js` tidak ditemukan pada ZIP aktual; produksi aktif memakai service granular di `src/services/Produksi/`;
 - collection `productions` masih muncul sebagai legacy data layer pada maintenance/reset/audit, bukan flow operasional utama;
-- Firestore Rules wajib aktif dan aman di backend Firebase; repo sekarang menyertakan `firestore.rules` dan `firebase.json` sebagai source rules staged-final;
+- Firestore Rules wajib aktif dan aman di backend Firebase, tetapi repo ZIP saat ini tidak menyertakan file rules source-controlled karena rules dikelola manual/external di Firebase Console;
 - root `assets/` yang berisi build artifact lama bukan source aktif dan boleh dibersihkan jika tidak ada referensi runtime aktif.
 
 =====================================================
 SECTION: Current repository boundary — AKTIF / GUARDED / CLEANUP CANDIDATE
 Fungsi:
-- Mengunci batas source aktual: frontend React/Vite, Firestore client layer, rules source-controlled, dan cleanup root artifact.
+- Mengunci batas source aktual: frontend React/Vite, Firestore client layer, rules backend external, dan cleanup root artifact.
 
 Dipakai oleh:
 - Semua task patch docs/source, terutama Auth/User Management, Firestore Rules, dan cleanup repository.
 
 Alasan perubahan:
-- Rules kini disimpan di repo agar bisa direview sebelum deploy, dan root assets/ adalah sisa build yang lupa terhapus.
+- Owner mengonfirmasi Firestore Rules dikelola langsung di Firebase Console dan root assets/ adalah sisa build yang lupa terhapus.
 
 Catatan cleanup:
-- Rules masih staged-final collection-level; field-level validation per modul bisa menjadi task security lanjutan.
+- Source-controlled rules boleh menjadi task terpisah jika owner ingin rules dimasukkan ke repo.
 
 Risiko:
 - Menganggap rules tidak wajib karena tidak ada file repo akan membuka risiko security; menghapus `src/assets` keliru akan merusak logo/branding aktif.
@@ -218,10 +218,11 @@ Status cleanup bertahap yang dikunci di docs:
 - **Source of truth:** satu shared generator yang disetujui harus menjadi sumber kode manusiawi lintas modul. Page/service tidak boleh membuat generator baru atau duplicate logic.
 - **Current state note:** source terbaru masih perlu audit karena generator seperti `businessCodeGenerator.js` dan `productionCodeGenerator.js` masih memiliki mapping manual kata tertentu. Patch docs ini hanya mengunci standar baru; refactor source harus menjadi task terpisah.
 
-## Reset & Maintenance Decision Center — 2026-05-11
-- **Aktif:** Reset & Maintenance Data diarahkan menjadi Maintenance Decision Center, bukan hanya daftar tombol reset teknis.
-- **Flow standar:** Audit → Preview → Export → Reset/Repair → Audit ulang.
-- **Development rule:** data lama yang belum real boleh direset agar tidak menumpuk fallback/logic lama, selama destructive action tetap lewat preview, confirmation keyword, dan audit trail.
+## Testing & Reset Center — 2026-05-16
+- **Aktif:** Reset & Maintenance Data diarahkan menjadi Testing & Reset Center, bukan daftar tombol reset teknis.
+- **Flow standar:** Auto Detect Bug → Repair Turunan → Preview Reset/Baseline → Eksekusi guarded → Audit ulang.
+- **Development rule:** data lama yang belum real boleh direset agar tidak menumpuk fallback/logic lama, selama destructive action tetap lewat preview manual, confirmation keyword, dan audit trail.
+- **Auto detect:** audit data lama/stok/log/produksi/payroll/variant transaksi bersifat read-only terhadap data bisnis dan hanya boleh membuat maintenance log metadata.
 - **Export data pokok:** tersedia sebelum reset destructive sebagai backup/checklist master, bukan restore otomatis.
 - **Guarded:** log/transaksi lama tidak direkomendasikan dibawa ulang sebagai default jika logic berubah; transaksi baru sebaiknya dibuat ulang lewat flow terbaru agar log baru mengikuti logic terbaru.
 - **Opening stock:** setelah reset, stok awal sebaiknya dibuat ulang lewat purchase/opening adjustment, bukan menempel stok mentah tanpa audit.

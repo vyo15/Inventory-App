@@ -168,9 +168,11 @@ Poin lama yang menyebut revert sale masih hanya update `stock` sudah tidak sesua
 Status: **AKTIF + GUARDED**.
 
 - Product dan Semi Finished sekarang memakai `minStockAlert` master sebagai satu-satunya threshold minimum stok untuk item bervarian dan non-varian.
-- UI Product/Semi Finished tidak lagi menampilkan input minimum stok per varian; varian hanya untuk bucket stok fisik, reserved, available, status, dan metadata relevan.
+- Raw Material memakai `minStock` master sebagai threshold minimum stok untuk item bervarian dan non-varian.
+- UI Product/Semi Finished/Raw Material tidak menampilkan input minimum stok per varian; varian hanya untuk bucket stok fisik, reserved, available, status, dan metadata relevan.
 - Service Product/Semi Finished tetap boleh membawa `variants[].minStockAlert` sebagai legacy-compat field dari helper generic/data lama, tetapi enrich/create/update tidak menjumlahkannya sebagai source master.
-- Low-stock summary/status harus membaca `item.minStockAlert` master setelah enrichment, bukan total per-varian.
+- Low-stock summary/status item non-varian membaca stok available-first terhadap threshold master.
+- Low-stock summary/status item bervarian membaca setiap varian aktif terhadap threshold master yang sama. Jika ada varian kosong/rendah, item utama ikut kosong/rendah dan UI menampilkan ringkasan varian yang perlu dicek.
 - Cleanup data lama `variants[].minStockAlert` bersifat kandidat maintenance terpisah dan tidak dilakukan otomatis dari UI CRUD master.
 
 ## Update Karyawan Produksi — 2026-04-25
@@ -967,17 +969,3 @@ Catatan lock:
 - Cleanup candidate: audit semua table/detail agar technical ID atau kode internal tidak tampil sebagai identitas utama master item.
 - Cleanup candidate: standardisasi seluruh generator master/transaksi jika masih ada prefix lama pada data baru.
 - Risiko yang harus dijaga: jangan menyamakan rule master item dengan transaksi/audit karena nomor transaksi tetap wajib terlihat untuk pencarian dan bukti audit.
-
-## Update Compact Summary Dock — 2026-05-15
-
-Status: **AKTIF / UI-only / GUARDED**.
-
-- `src/components/Layout/Display/SummaryStatGrid.jsx` sekarang menjadi pusat layout summary dengan varian `executive`, `finance`, dan fallback `cards`.
-- Default summary operasional memakai **Executive Dock** agar lebih compact daripada empat kartu besar sejajar.
-- Halaman finance/report tertentu memakai **Finance Dock** agar nominal Rupiah dan angka utama lebih readable.
-- `src/components/Produksi/shared/ProductionSummaryCards.jsx` menjadi adapter ke `SummaryStatGrid` supaya produksi tidak punya style summary terpisah.
-- Patch ini tidak mengubah collection, schema, route, role guard, query, service, kalkulasi, stock mutation, cash mutation, payroll, HPP, reset, atau audit log.
-
-Catatan tech debt:
-- Jika ada halaman yang secara visual lebih cocok tetap grid lama, gunakan `variant="cards"` secara eksplisit setelah review UI.
-- Jika ada finance page yang butuh angka utama berbeda, set `highlightKey` tanpa mengubah urutan data atau perhitungan summary.

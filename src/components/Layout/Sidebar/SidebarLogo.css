@@ -110,16 +110,16 @@ Risiko:
 
 .sidebar-logo-title {
   color: var(--ims-text-primary);
-  font-size: 14px;
-  font-weight: 800;
+  font-size: var(--ims-font-size-body);
+  font-weight: var(--ims-font-weight-display);
   line-height: 1.18;
-  letter-spacing: 0.005em;
+  letter-spacing: var(--ims-letter-spacing-label);
 }
 
 .sidebar-logo-subtitle {
   color: var(--ims-text-secondary);
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: var(--ims-font-weight-medium);
   line-height: 1.25;
 }
 
@@ -151,6 +151,6 @@ Risiko:
   }
 
   .sidebar-logo-subtitle {
-    font-size: 10px;
+    font-size: var(--ims-font-size-xs);
   }
 }

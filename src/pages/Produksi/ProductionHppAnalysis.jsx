@@ -625,7 +625,7 @@ const ProductionHppAnalysis = () => {
               {record.targetName || "-"}
             </Typography.Text>
           </Tooltip>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="ims-cell-meta">
             Selesai: {formatDateId(record.completedAt, true)}
           </Typography.Text>
         </Space>
@@ -637,7 +637,7 @@ const ProductionHppAnalysis = () => {
       width: "16%",
       render: (_, record) => (
         <Space direction="vertical" size={4} style={{ width: "100%" }}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="ims-cell-meta">
             Good Qty
           </Typography.Text>
           <Typography.Text strong>{formatNumber(record.goodQty)}</Typography.Text>
@@ -682,7 +682,7 @@ const ProductionHppAnalysis = () => {
           <Tag color={getHppCostStatusTagColor(record.totalCostStatus)} style={compactTagStyle}>
             {record.totalCostStatus}
           </Tag>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" className="ims-cell-meta">
             per good unit
           </Typography.Text>
         </Space>
@@ -709,7 +709,7 @@ const ProductionHppAnalysis = () => {
                   type="warning"
                   showIcon
                   message={(
-                    <Typography.Text style={{ ...compactTextClampStyle, fontSize: 12 }}>
+                    <Typography.Text className="ims-cell-meta" style={compactTextClampStyle}>
                       {warning}
                     </Typography.Text>
                   )}
