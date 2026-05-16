@@ -1,7 +1,6 @@
-export const toNumber = (value) => {
-  const numericValue = Number(value || 0);
-  return Number.isFinite(numericValue) ? numericValue : 0;
-};
+import { formatNumberId } from '../formatters/numberId';
+
+export const toNumber = (value) => Number(value || 0);
 
 export const calculateAvailableStock = (currentStock, reservedStock) => {
   return Math.max(toNumber(currentStock) - toNumber(reservedStock), 0);
@@ -33,225 +32,139 @@ export const calculateWeightedAverage = (previousQty, previousCost, incomingQty,
   return (prevQty * prevCost + inQty * inCost) / totalQty;
 };
 
-// =====================================================
-// SECTION: Minimum stock read model — AKTIF / GUARDED
-// Fungsi:
-// - menyatukan pembacaan minimum stok Product, Raw Material, dan Semi Finished;
-// - item non-varian dibandingkan terhadap stok master;
-// - item bervarian membandingkan setiap varian aktif terhadap minimum stok master.
-// Hubungan flow:
-// - read-only untuk Dashboard, master pages, Stock Report, dan display table;
-// - tidak menulis stok, tidak mengubah schema, dan tidak memakai variants[].minStockAlert.
-// Risiko:
-// - jangan pindahkan threshold ke varian tanpa approval schema/business rule karena UI master sengaja hanya punya satu minimum stok.
-// =====================================================
-export const resolveInventoryMinimumStock = (item = {}, sourceType = '') => {
-  const normalizedSourceType = String(sourceType || '').toLowerCase();
-  const thresholdSource =
-    normalizedSourceType === 'material' || normalizedSourceType === 'raw_material'
-      ? item.minStock
-      : normalizedSourceType === 'product' || normalizedSourceType === 'semi_finished'
-        ? item.minStockAlert
-        : item.minStockAlert ?? item.minStock;
 
-  const threshold = toNumber(thresholdSource);
-  return threshold > 0 ? threshold : 0;
+const LOW_STOCK_SOURCE_THRESHOLD_FIELDS = {
+  material: 'minStock',
+  raw_material: 'minStock',
+  raw_materials: 'minStock',
+  product: 'minStockAlert',
+  products: 'minStockAlert',
+  semi_finished: 'minStockAlert',
+  semi_finished_materials: 'minStockAlert',
 };
 
-export const resolveInventoryAvailableStock = (item = {}) => {
-  if (item?.availableStock !== undefined && item?.availableStock !== null) {
-    return toNumber(item.availableStock);
+const resolveLowStockThresholdField = (sourceType = '') =>
+  LOW_STOCK_SOURCE_THRESHOLD_FIELDS[String(sourceType || '').toLowerCase()] || 'minStockAlert';
+
+export const resolveMasterLowStockThreshold = (record = {}, sourceType = '') => {
+  const primaryField = resolveLowStockThresholdField(sourceType);
+  const fallbackField = primaryField === 'minStock' ? 'minStockAlert' : 'minStock';
+  const threshold = Number(record?.[primaryField] ?? record?.[fallbackField] ?? 0);
+
+  return Number.isFinite(threshold) && threshold > 0 ? threshold : 0;
+};
+
+export const getVariantAvailableStockValue = (variant = {}) => {
+  const currentStock = Number(variant?.currentStock ?? variant?.stock ?? 0);
+  const reservedStock = Number(variant?.reservedStock || 0);
+  const fallbackAvailable = Math.max(currentStock - reservedStock, 0);
+  const availableStock = Number(variant?.availableStock ?? fallbackAvailable);
+
+  return Number.isFinite(availableStock) ? Math.max(availableStock, 0) : fallbackAvailable;
+};
+
+export const getVariantStockStatusMeta = (variant = {}, threshold = 0) => {
+  if (variant?.isActive === false) {
+    return { status: 'safe', label: 'Aman', color: 'green', pillClassName: '' };
   }
 
-  return calculateAvailableStock(item?.currentStock ?? item?.stock ?? 0, item?.reservedStock ?? 0);
-};
-
-export const resolveInventoryCurrentStock = (item = {}) => toNumber(item?.currentStock ?? item?.stock ?? 0);
-
-export const resolveInventoryVariantLabel = (variant = {}, index = 0) =>
-  variant.variantLabel ||
-  variant.label ||
-  variant.name ||
-  variant.variantName ||
-  variant.color ||
-  variant.sku ||
-  `Varian ${index + 1}`;
-
-export const getActiveInventoryVariants = (item = {}) => {
-  const variants = Array.isArray(item?.variants) ? item.variants : [];
-  return variants.filter((variant) => variant && variant.isActive !== false);
-};
-
-export const getInventoryVariantStockMeta = (
-  variant = {},
-  index = 0,
-  threshold = 0,
-  getVariantLabel = resolveInventoryVariantLabel,
-) => {
-  const currentStock = resolveInventoryCurrentStock(variant);
-  const reservedStock = toNumber(variant?.reservedStock ?? 0);
-  const availableStock = resolveInventoryAvailableStock(variant);
-  const isInactive = variant?.isActive === false;
-  const isEmpty = !isInactive && availableStock <= 0;
-  const isLow = !isInactive && !isEmpty && threshold > 0 && availableStock <= threshold;
-  const statusKey = isInactive ? 'inactive' : isEmpty ? 'empty' : isLow ? 'low' : 'safe';
-  const statusLabel =
-    statusKey === 'inactive'
-      ? 'Nonaktif'
-      : statusKey === 'empty'
-        ? 'Kosong'
-        : statusKey === 'low'
-          ? 'Stok Rendah'
-          : 'Aman';
-
-  return {
-    variant,
-    index,
-    label: typeof getVariantLabel === 'function' ? getVariantLabel(variant, index) : resolveInventoryVariantLabel(variant, index),
-    currentStock,
-    reservedStock,
-    availableStock,
-    threshold,
-    statusKey,
-    statusLabel,
-    isInactive,
-    isEmpty,
-    isLow,
-  };
-};
-
-export const getInventoryVariantStockRows = (item = {}, sourceType = '', getVariantLabel = resolveInventoryVariantLabel) => {
-  const threshold = resolveInventoryMinimumStock(item, sourceType);
-  return getActiveInventoryVariants(item).map((variant, index) =>
-    getInventoryVariantStockMeta(variant, index, threshold, getVariantLabel),
-  );
-};
-
-export const getInventoryLowStockVariantRows = (item = {}, sourceType = '', getVariantLabel = resolveInventoryVariantLabel) =>
-  getInventoryVariantStockRows(item, sourceType, getVariantLabel).filter(
-    (variantMeta) => variantMeta.statusKey === 'empty' || variantMeta.statusKey === 'low',
-  );
-
-export const getInventoryStockStatusMeta = (item = {}, sourceType = '', options = {}) => {
-  const threshold = resolveInventoryMinimumStock(item, sourceType);
-  const hasVariants = item?.hasVariants === true || (Array.isArray(item?.variants) && item.variants.length > 0);
-  const variantRows = hasVariants
-    ? getInventoryVariantStockRows(item, sourceType, options.getVariantLabel)
-    : [];
-  const affectedVariants = variantRows.filter(
-    (variantMeta) => variantMeta.statusKey === 'empty' || variantMeta.statusKey === 'low',
-  );
-  const emptyVariantCount = affectedVariants.filter((variantMeta) => variantMeta.statusKey === 'empty').length;
-  const lowVariantCount = affectedVariants.filter((variantMeta) => variantMeta.statusKey === 'low').length;
-  const stock = resolveInventoryAvailableStock(item);
-
-  if (item?.isActive === false) {
-    return {
-      color: 'default',
-      label: options.inactiveLabel || 'Nonaktif',
-      alertType: 'info',
-      statusKey: 'inactive',
-      stock,
-      threshold,
-      hasVariants,
-      affectedVariants: [],
-      affectedVariantCount: 0,
-      emptyVariantCount: 0,
-      lowVariantCount: 0,
-    };
-  }
-
-  if (hasVariants && variantRows.length > 0) {
-    if (emptyVariantCount > 0) {
-      return {
-        color: 'red',
-        label: options.variantEmptyLabel || options.emptyLabel || 'Kosong',
-        alertType: 'error',
-        statusKey: 'empty',
-        stock,
-        threshold,
-        hasVariants: true,
-        affectedVariants,
-        affectedVariantCount: affectedVariants.length,
-        emptyVariantCount,
-        lowVariantCount,
-      };
-    }
-
-    if (lowVariantCount > 0) {
-      return {
-        color: 'orange',
-        label: options.variantLowLabel || options.lowLabel || 'Stok Rendah',
-        alertType: 'warning',
-        statusKey: 'low',
-        stock,
-        threshold,
-        hasVariants: true,
-        affectedVariants,
-        affectedVariantCount: affectedVariants.length,
-        emptyVariantCount,
-        lowVariantCount,
-      };
-    }
-
-    return {
-      color: 'green',
-      label: options.safeLabel || 'Aman',
-      alertType: 'success',
-      statusKey: 'safe',
-      stock,
-      threshold,
-      hasVariants: true,
-      affectedVariants: [],
-      affectedVariantCount: 0,
-      emptyVariantCount: 0,
-      lowVariantCount: 0,
-    };
-  }
+  const stock = getVariantAvailableStockValue(variant);
+  const safeThreshold = Number(threshold || 0);
 
   if (stock <= 0) {
-    return {
-      color: 'red',
-      label: options.emptyLabel || 'Kosong',
-      alertType: 'error',
-      statusKey: 'empty',
-      stock,
-      threshold,
-      hasVariants: false,
-      affectedVariants: [],
-      affectedVariantCount: 0,
-      emptyVariantCount: 0,
-      lowVariantCount: 0,
-    };
+    return { status: 'empty', label: 'Kosong', color: 'red', pillClassName: 'stock-variant-pill--danger' };
   }
 
-  if (threshold > 0 && stock <= threshold) {
-    return {
-      color: 'orange',
-      label: options.lowLabel || 'Stok Rendah',
-      alertType: 'warning',
-      statusKey: 'low',
-      stock,
-      threshold,
-      hasVariants: false,
-      affectedVariants: [],
-      affectedVariantCount: 0,
-      emptyVariantCount: 0,
-      lowVariantCount: 0,
-    };
+  if (safeThreshold > 0 && stock <= safeThreshold) {
+    return { status: 'low', label: 'Stok Rendah', color: 'orange', pillClassName: 'stock-variant-pill--warning' };
   }
 
-  return {
-    color: 'green',
-    label: options.safeLabel || 'Aman',
-    alertType: 'success',
-    statusKey: 'safe',
-    stock,
+  return { status: 'safe', label: 'Aman', color: 'green', pillClassName: '' };
+};
+
+export const getLowStockVariantEntries = (
+  record = {},
+  {
+    sourceType = '',
     threshold,
-    hasVariants: false,
-    affectedVariants: [],
-    affectedVariantCount: 0,
-    emptyVariantCount: 0,
-    lowVariantCount: 0,
-  };
+    unit,
+    getVariantLabel,
+  } = {},
+) => {
+  const variants = Array.isArray(record?.variants) ? record.variants : [];
+  const hasVariants = (record?.hasVariants === true || variants.length > 0) && variants.length > 0;
+
+  if (!hasVariants) return [];
+
+  const resolvedThreshold = Number.isFinite(Number(threshold))
+    ? Number(threshold)
+    : resolveMasterLowStockThreshold(record, sourceType);
+  const resolvedUnit = unit || record?.stockUnit || record?.unit || record?.baseUnit || 'pcs';
+
+  return variants
+    .map((variant, index) => {
+      const label = typeof getVariantLabel === 'function'
+        ? getVariantLabel(variant, index)
+        : variant?.variantLabel || variant?.label || variant?.name || variant?.variantName || variant?.color || `Varian ${index + 1}`;
+      const stock = getVariantAvailableStockValue(variant);
+      const statusMeta = getVariantStockStatusMeta(variant, resolvedThreshold);
+
+      return {
+        key: variant?.variantKey || variant?.sku || variant?.color || label || `variant-${index}`,
+        label,
+        stock,
+        unit: resolvedUnit,
+        threshold: resolvedThreshold,
+        ...statusMeta,
+      };
+    })
+    .filter((item) => item.status !== 'safe');
+};
+
+export const getVariantAwareStockStatusMeta = (
+  record = {},
+  {
+    sourceType = '',
+    threshold,
+  } = {},
+) => {
+  const affectedVariants = getLowStockVariantEntries(record, { sourceType, threshold });
+
+  if (affectedVariants.length > 0) {
+    const hasEmptyVariant = affectedVariants.some((item) => item.status === 'empty');
+    return hasEmptyVariant
+      ? { color: 'red', label: 'Kosong', alertType: 'error', affectedVariants }
+      : { color: 'orange', label: 'Stok Rendah', alertType: 'warning', affectedVariants };
+  }
+
+  return null;
+};
+
+export const formatAffectedVariantStockSummary = (
+  record = {},
+  {
+    sourceType = '',
+    threshold,
+    unit,
+    getVariantLabel,
+    maxItems = 3,
+    prefix = 'Perlu restock',
+  } = {},
+) => {
+  const affectedVariants = getLowStockVariantEntries(record, {
+    sourceType,
+    threshold,
+    unit,
+    getVariantLabel,
+  });
+
+  if (affectedVariants.length === 0) return '';
+
+  const preview = affectedVariants
+    .slice(0, maxItems)
+    .map((item) => `${item.label} ${formatNumberId(item.stock)} ${item.unit}`)
+    .join(', ');
+  const remainingCount = affectedVariants.length - maxItems;
+
+  return `${prefix}: ${preview}${remainingCount > 0 ? ` +${formatNumberId(remainingCount)} lainnya` : ''}`;
 };

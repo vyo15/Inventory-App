@@ -69,8 +69,8 @@ import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/La
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import { resolveDisplayReference } from '../../utils/references/displayReferenceResolver';
 import {
-  getInventoryStockStatusMeta,
-  getInventoryVariantStockMeta,
+  formatAffectedVariantStockSummary,
+  getVariantAwareStockStatusMeta,
 } from '../../utils/stock/stockHelpers';
 
 // =====================================================
@@ -154,24 +154,41 @@ Catatan cleanup:
 Risiko:
 - Jika status kembali memakai currentStock langsung atau min alert varian, item dengan reserved stock bisa salah terlihat aman dan rule master-level menjadi tidak konsisten.
 ===================================================== */
-const getStockStatusMeta = (record = {}) =>
-  getInventoryStockStatusMeta(record, 'semi_finished', { getVariantLabel: getVariantDisplayLabel });
+const getSemiFinishedMinimumStockValue = (record = {}) => {
+  const stockValue = Number(record.availableStock ?? record.currentStock ?? record.stock ?? 0);
+  return Number.isFinite(stockValue) ? stockValue : 0;
+};
 
-const getSemiFinishedLowStockVariantText = (statusMeta = {}, unit = 'pcs') => {
-  if (!statusMeta.hasVariants || !statusMeta.affectedVariantCount) return '';
+const getStockStatusMeta = (record = {}) => {
+  const comparableStock = getSemiFinishedMinimumStockValue(record);
+  const minStockAlertValue = Number(record.minStockAlert || 0);
+  const minStockAlert = Number.isFinite(minStockAlertValue) ? minStockAlertValue : 0;
 
-  const preview = statusMeta.affectedVariants
-    .slice(0, 3)
-    .map((variantMeta) => `${variantMeta.label} ${formatStockWithUnit(variantMeta.availableStock, unit)}`)
-    .join(', ');
-  const extra = statusMeta.affectedVariantCount > 3 ? ` +${statusMeta.affectedVariantCount - 3} lainnya` : '';
+  if (record.isActive === false) {
+    return { color: "default", label: "Nonaktif", alertType: "info" };
+  }
 
-  return `Varian perlu cek: ${preview}${extra}`;
+  const variantStatusMeta = getVariantAwareStockStatusMeta(record, {
+    sourceType: "semi_finished",
+    threshold: minStockAlert,
+  });
+
+  if (variantStatusMeta) return variantStatusMeta;
+
+  if (comparableStock <= 0) {
+    return { color: "red", label: "Kosong", alertType: "error" };
+  }
+
+  if (minStockAlert > 0 && comparableStock <= minStockAlert) {
+    return { color: "orange", label: "Stok Rendah", alertType: "warning" };
+  }
+
+  return { color: "green", label: "Aman", alertType: "success" };
 };
 
 const compactCellStyles = {
   stack: { display: "flex", flexDirection: "column", gap: 2 },
-  meta: { fontSize: "var(--ims-font-size-meta)", lineHeight: "var(--ims-line-height-title)" },
+  meta: { fontSize: 12, lineHeight: 1.35 },
 };
 
 const SemiFinishedMaterials = () => {
@@ -271,12 +288,12 @@ const SemiFinishedMaterials = () => {
   // ---------------------------------------------------------------------------
   const summary = useMemo(() => {
     const total = materials.length;
-    const active = materials.filter((item) => item.isActive).length;
-    const inactive = total - active;
+    const active = materials.filter((item) => item.isActive !== false).length;
+    const inactive = materials.filter((item) => item.isActive === false).length;
 
     const lowStock = materials.filter((item) => {
       const statusMeta = getStockStatusMeta(item);
-      return statusMeta.statusKey === "empty" || statusMeta.statusKey === "low";
+      return statusMeta.label === "Kosong" || statusMeta.label === "Stok Rendah";
     }).length;
 
     return { total, active, inactive, lowStock };
@@ -310,8 +327,8 @@ const SemiFinishedMaterials = () => {
 
       const matchStatus =
         statusFilter === "all" ||
-        (statusFilter === "active" && item.isActive) ||
-        (statusFilter === "inactive" && !item.isActive);
+        (statusFilter === "active" && item.isActive !== false) ||
+        (statusFilter === "inactive" && item.isActive === false);
 
       const matchCategory =
         categoryFilter === "all" || item.category === categoryFilter;
@@ -384,7 +401,7 @@ const SemiFinishedMaterials = () => {
         const statusCounts = familyGroup.items.reduce(
           (acc, item) => {
             const statusMeta = getStockStatusMeta(item);
-            if (!item.isActive) acc.inactive += 1;
+            if (item.isActive === false) acc.inactive += 1;
             if (statusMeta.label === "Kosong") acc.empty += 1;
             if (statusMeta.label === "Stok Rendah") acc.low += 1;
             if (statusMeta.label === "Aman") acc.safe += 1;
@@ -505,11 +522,13 @@ const SemiFinishedMaterials = () => {
   // menghapus histori stok atau varian yang sudah ada.
   // ---------------------------------------------------------------------------
   const handleToggleActive = async (record) => {
+    const isCurrentlyActive = record.isActive !== false;
+
     try {
-      await toggleSemiFinishedMaterialActive(record.id, !record.isActive, null);
+      await toggleSemiFinishedMaterialActive(record.id, !isCurrentlyActive, null);
       message.success(
         `Semi finished material berhasil ${
-          record.isActive ? "dinonaktifkan" : "diaktifkan"
+          isCurrentlyActive ? "dinonaktifkan" : "diaktifkan"
         }`,
       );
       await loadData();
@@ -554,33 +573,38 @@ const SemiFinishedMaterials = () => {
     {
       title: "Stok",
       key: "stock",
-      width: "34%",
+      width: "28%",
       // AKTIF / GUARDED: saldo stok master memakai helper presentational locked; flow stok/produksi tidak diubah.
       render: (_, record) => (
         <StockDisplayBlock
           record={record}
           unit={record.unit || "pcs"}
-          sourceType="semi_finished"
           getVariantLabel={getVariantDisplayLabel}
           className="ims-cell-stack ims-cell-stack-tight"
           metaClassName="ims-cell-meta"
+          minStockThreshold={Number(record.minStockAlert || 0)}
         />
       ),
     },
     {
       title: "Status",
       key: "status",
-      width: "10%",
-      align: "center",
+      width: "16%",
+      align: "left",
       // AKTIF / GUARDED: status tetap terlihat di primary table tanpa fixed/sticky agar tidak memaksa horizontal scroll.
       render: (_, record) => {
         const statusMeta = getStockStatusMeta(record);
-        const variantText = getSemiFinishedLowStockVariantText(statusMeta, record.unit || "pcs");
+        const affectedVariantText = formatAffectedVariantStockSummary(record, {
+          sourceType: "semi_finished",
+          threshold: Number(record.minStockAlert || 0),
+          unit: record.unit || "pcs",
+          getVariantLabel: getVariantDisplayLabel,
+        });
 
         return (
-          <div style={compactCellStyles.stack}>
+          <div className="ims-cell-stack ims-cell-stack-tight">
             <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
-            {variantText ? <Typography.Text type="secondary" style={compactCellStyles.meta}>{variantText}</Typography.Text> : null}
+            {affectedVariantText ? <Typography.Text className="ims-cell-caption">{affectedVariantText}</Typography.Text> : null}
           </div>
         );
       },
@@ -614,10 +638,10 @@ const SemiFinishedMaterials = () => {
 
           <Popconfirm
             title={
-              record.isActive ? "Nonaktifkan item ini?" : "Aktifkan item ini?"
+              record.isActive !== false ? "Nonaktifkan item ini?" : "Aktifkan item ini?"
             }
             description={
-              record.isActive
+              record.isActive !== false
                 ? "Item tidak akan bisa dipilih untuk data baru."
                 : "Item akan aktif kembali untuk data baru."
             }
@@ -626,7 +650,7 @@ const SemiFinishedMaterials = () => {
             cancelText="Batal"
           >
             <Button className="ims-action-button ims-action-button--block" size="small">
-              {record.isActive ? "Nonaktifkan" : "Aktifkan"}
+              {record.isActive !== false ? "Nonaktifkan" : "Aktifkan"}
             </Button>
           </Popconfirm>
         </Space>
@@ -684,19 +708,12 @@ const SemiFinishedMaterials = () => {
       title: "Kode / Status",
       key: "skuStatus",
       width: 140,
-      render: (_, variant, index) => (
+      render: (_, variant) => (
         <div style={compactCellStyles.stack}>
           <Typography.Text>{variant.sku || "-"}</Typography.Text>
-          {(() => {
-            const variantMeta = getInventoryVariantStockMeta(
-              variant,
-              index,
-              Number(selectedMaterial?.minStockAlert || 0),
-              getVariantDisplayLabel,
-            );
-            const colorMap = { inactive: "default", empty: "red", low: "orange", safe: "green" };
-            return <Tag color={colorMap[variantMeta.statusKey] || "green"}>{variantMeta.statusLabel}</Tag>;
-          })()}
+          <Tag color={variant.isActive ? "green" : "default"}>
+            {variant.isActive ? "Aktif" : "Nonaktif"}
+          </Tag>
         </div>
       ),
     },
@@ -1398,7 +1415,7 @@ Risiko:
               showIcon
               message={`Status item: ${selectedMaterialStatusMeta?.label || "-"}`}
               description={
-                selectedMaterial.isActive
+                selectedMaterial.isActive !== false
                   ? `Total stok ${formatStockWithUnit(
                       selectedMaterial.currentStock,
                       selectedMaterialUnit,
@@ -1454,16 +1471,9 @@ Risiko:
                   {SEMI_FINISHED_GROUP_MAP[selectedMaterial.flowerGroup] || "-"}
                 </Descriptions.Item>
                 <Descriptions.Item label="Status">
-                  <Space direction="vertical" size={4}>
-                    <Tag color={selectedMaterialStatusMeta?.color || "default"}>
-                      {selectedMaterialStatusMeta?.label || "-"}
-                    </Tag>
-                    {getSemiFinishedLowStockVariantText(selectedMaterialStatusMeta, selectedMaterialUnit) ? (
-                      <Typography.Text type="secondary">
-                        {getSemiFinishedLowStockVariantText(selectedMaterialStatusMeta, selectedMaterialUnit)}
-                      </Typography.Text>
-                    ) : null}
-                  </Space>
+                  <Tag color={selectedMaterialStatusMeta?.color || "default"}>
+                    {selectedMaterialStatusMeta?.label || "-"}
+                  </Tag>
                 </Descriptions.Item>
               </Descriptions>
             </Card>

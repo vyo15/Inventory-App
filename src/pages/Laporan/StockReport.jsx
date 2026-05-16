@@ -13,7 +13,10 @@ import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
-import { getInventoryStockStatusMeta } from "../../utils/stock/stockHelpers";
+import {
+  formatAffectedVariantStockSummary,
+  getVariantAwareStockStatusMeta,
+} from "../../utils/stock/stockHelpers";
 
 const { Search } = Input;
 const { Option } = Select;
@@ -35,30 +38,28 @@ Catatan cleanup:
 Risiko:
 - Jika threshold statis atau `variants[].minStockAlert` dipakai lagi, report bisa berbeda dari Dashboard/master page dan menandai item rendah secara salah.
 ===================================================== */
-const resolveDisplayUnit = (item = {}) => item.stockUnit || item.unit || "pcs";
+const resolveDisplayStock = (item = {}) =>
+  Number(item.availableStock ?? item.currentStock ?? item.stock ?? 0);
 
-const resolveSourceType = (typeLabel = "") => {
-  if (typeLabel === "Bahan Baku") return "material";
-  if (typeLabel === "Semi Finished") return "semi_finished";
-  return "product";
+const resolveDisplayUnit = (item = {}) => item.unit || item.stockUnit || "pcs";
+
+const resolveMasterThreshold = (item = {}, typeLabel = "") => {
+  const thresholdSource = typeLabel === "Bahan Baku" ? item.minStock : item.minStockAlert;
+  const threshold = Number(thresholdSource ?? 0);
+  return Number.isFinite(threshold) && threshold > 0 ? threshold : 0;
 };
 
-const resolveReportStatus = (statusMeta = {}) => {
-  if (statusMeta.statusKey === "empty") return "Habis";
-  if (statusMeta.statusKey === "low") return "Kritis";
+const resolveStatus = (stockValue, thresholdValue, item = {}, sourceType = "") => {
+  const variantStatusMeta = getVariantAwareStockStatusMeta(item, {
+    sourceType,
+    threshold: thresholdValue,
+  });
+
+  if (variantStatusMeta?.label === "Kosong") return "Habis";
+  if (variantStatusMeta?.label === "Stok Rendah") return "Kritis";
+  if (stockValue <= 0) return "Habis";
+  if (thresholdValue > 0 && stockValue <= thresholdValue) return "Kritis";
   return "Normal";
-};
-
-const resolveAffectedVariantSummary = (statusMeta = {}, unit = "pcs") => {
-  if (!statusMeta.hasVariants || !statusMeta.affectedVariantCount) return "";
-
-  const preview = statusMeta.affectedVariants
-    .slice(0, 3)
-    .map((variantMeta) => `${variantMeta.label} ${formatNumberId(variantMeta.availableStock)} ${unit}`)
-    .join(", ");
-  const extra = statusMeta.affectedVariantCount > 3 ? ` +${statusMeta.affectedVariantCount - 3} lainnya` : "";
-
-  return `Varian perlu cek: ${preview}${extra}`;
 };
 
 // =========================
@@ -73,24 +74,24 @@ const resolveAffectedVariantSummary = (statusMeta = {}, unit = "pcs") => {
 const mapInventorySnapshotToReportRows = (snapshot, typeLabel) =>
   snapshot.docs.map((documentItem) => {
     const payload = documentItem.data();
-    const sourceType = resolveSourceType(typeLabel);
+    const stockValue = resolveDisplayStock(payload);
+    const minimumStockThreshold = resolveMasterThreshold(payload, typeLabel);
+    const sourceType = typeLabel === "Bahan Baku" ? "material" : typeLabel === "Semi Finished" ? "semi_finished" : "product";
     const unitDisplay = resolveDisplayUnit(payload);
-    const statusMeta = getInventoryStockStatusMeta(payload, sourceType);
-    const lowestAffectedVariant = statusMeta.affectedVariants?.length
-      ? [...statusMeta.affectedVariants].sort((left, right) => left.availableStock - right.availableStock)[0]
-      : null;
-    const stockValue = lowestAffectedVariant ? lowestAffectedVariant.availableStock : statusMeta.stock;
 
     return {
       id: documentItem.id,
       ...payload,
       stockDisplay: stockValue,
-      minStockDisplay: statusMeta.threshold,
+      minStockDisplay: minimumStockThreshold,
       unitDisplay,
       type: typeLabel,
-      sourceType,
-      status: resolveReportStatus(statusMeta),
-      affectedVariantSummary: resolveAffectedVariantSummary(statusMeta, unitDisplay),
+      status: resolveStatus(stockValue, minimumStockThreshold, payload, sourceType),
+      affectedVariantSummary: formatAffectedVariantStockSummary(payload, {
+        sourceType,
+        threshold: minimumStockThreshold,
+        unit: unitDisplay,
+      }),
     };
   });
 
@@ -279,7 +280,6 @@ const StockReport = () => {
         { key: "minStockDisplay", label: "Minimum Stok Master" },
         { key: "unitDisplay", label: "Satuan" },
         { key: "status", label: "Status" },
-        { key: "affectedVariantSummary", label: "Varian Perlu Cek" },
       ],
       data: filteredData.map((item) => ({
         ...item,
@@ -346,9 +346,9 @@ const StockReport = () => {
           <StockDisplayBlock
             record={record}
             unit={record.unitDisplay}
-            sourceType={record.sourceType}
             className="ims-cell-stack ims-cell-stack-tight"
             metaClassName="ims-cell-meta"
+            minStockThreshold={Number(record.minStockDisplay || 0)}
           />
         ),
         sorter: (left, right) => left.stockDisplay - right.stockDisplay,
@@ -374,9 +374,7 @@ const StockReport = () => {
               <Tag color={color} icon={icon}>
                 {status}
               </Tag>
-              {record.affectedVariantSummary ? (
-                <span className="ims-cell-meta">{record.affectedVariantSummary}</span>
-              ) : null}
+              {record.affectedVariantSummary ? <span className="ims-cell-caption">{record.affectedVariantSummary}</span> : null}
             </div>
           );
         },

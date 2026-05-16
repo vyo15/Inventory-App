@@ -11,6 +11,7 @@ import { getInventoryLogs } from "../../services/Inventory/inventoryService";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
+import { buildPurchaseLogNoteDisplayMeta } from "../../utils/purchases/purchaseNoteDisplay";
 
 const { Text } = Typography;
 
@@ -427,27 +428,6 @@ const resolveNoteText = (record) => {
 const STOCK_SNAPSHOT_COLUMN_NOTE =
   "Snapshot stok tidak ditampilkan sebagai kolom utama karena tidak semua log lama menyimpan before/after yang reliable.";
 
-// =========================
-// SECTION: Style ringkas catatan inventory log
-// Fungsi:
-// - menjaga kolom Catatan tetap terbaca 1-2 baris tanpa membuat row table terlalu tinggi
-// Hubungan flow:
-// - Stock Management tetap menjadi audit log operasional, bukan halaman detail panjang
-// Status:
-// - AKTIF dipakai di tabel riwayat.
-// - GUARDED agar catatan panjang tidak membuat row terlalu tinggi.
-// - LEGACY: tidak ada logic legacy di style ini.
-// - CLEANUP CANDIDATE jika nanti ada komponen table text clamp global.
-// =========================
-const NOTE_PREVIEW_STYLE = {
-  display: "-webkit-box",
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: "vertical",
-  overflow: "hidden",
-  whiteSpace: "normal",
-  lineHeight: "var(--ims-line-height-title)",
-};
-
 const matchesKeyword = (record, keyword) => {
   const normalizedKeyword = keyword.trim().toLowerCase();
   if (!normalizedKeyword) return true;
@@ -533,6 +513,7 @@ const StockManagement = () => {
         variantLabelResolved: resolveVariantLabel(record),
         referenceItems: resolveReferenceItems(record),
         noteText: resolveNoteText(record),
+        noteDisplayMeta: buildPurchaseLogNoteDisplayMeta(resolveNoteText(record)),
       }))
       .sort((left, right) => {
         const leftTime = left.timestamp?.toDate?.()?.getTime?.() || 0;
@@ -643,12 +624,12 @@ const StockManagement = () => {
         width: 280,
         render: (_, record) => (
           <Space direction="vertical" size={2}>
-            <Text strong className="ims-cell-title">{record.itemName || "-"}</Text>
-            <Text type="secondary" className="ims-cell-meta">
+            <Text strong>{record.itemName || "-"}</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>
               {record.itemTypeLabel}
             </Text>
             {record.variantLabelResolved ? (
-              <Text type="secondary" className="ims-cell-meta">
+              <Text type="secondary" style={{ fontSize: 12 }}>
                 Varian: {record.variantLabelResolved}
               </Text>
             ) : null}
@@ -694,11 +675,11 @@ const StockManagement = () => {
                   title={item.tooltipText || item.detail || item.label}
                 >
                   <Space direction="vertical" size={0}>
-                    <Text strong className="ims-cell-caption">
+                    <Text strong style={{ fontSize: 12 }}>
                       {item.label}
                     </Text>
                     {item.detail ? (
-                      <Text type="secondary" className="ims-cell-meta">
+                      <Text type="secondary" style={{ fontSize: 11 }}>
                         {item.detail}
                       </Text>
                     ) : null}
@@ -714,11 +695,35 @@ const StockManagement = () => {
         title: "Catatan",
         key: "note",
         width: 280,
-        render: (_, record) => (
-          <Tooltip title={record.noteText && record.noteText !== "-" ? record.noteText : ""}>
-            <Text style={NOTE_PREVIEW_STYLE}>{record.noteText}</Text>
-          </Tooltip>
-        ),
+        render: (_, record) => {
+          const noteMeta = record.noteDisplayMeta || buildPurchaseLogNoteDisplayMeta(record.noteText);
+          const tooltipTitle = noteMeta.fullNote && noteMeta.fullNote !== "-" ? <span style={{ whiteSpace: "pre-line" }}>{noteMeta.fullNote}</span> : "";
+
+          if (!noteMeta.fullNote || noteMeta.fullNote === "-") {
+            return <Text type="secondary">-</Text>;
+          }
+
+          if (!noteMeta.hasShopeeOcrNote) {
+            return (
+              <Tooltip title={tooltipTitle}>
+                <Text className="ims-note-preview">{noteMeta.fullNote}</Text>
+              </Tooltip>
+            );
+          }
+
+          return (
+            <Tooltip title={tooltipTitle}>
+              <Space direction="vertical" size={4} style={{ width: "100%" }}>
+                <div className="ims-note-tag-row">
+                  <Tag color="blue" style={{ marginInlineEnd: 0 }}>OCR Shopee</Tag>
+                  {noteMeta.conversionNote ? <Tag color="cyan" style={{ marginInlineEnd: 0 }}>Konversi Stok</Tag> : null}
+                </div>
+                {noteMeta.manualPreview ? <Text className="ims-note-inline">{noteMeta.manualPreview}</Text> : null}
+                {noteMeta.conversionNote ? <Text className="ims-cell-caption">{noteMeta.conversionNote}</Text> : null}
+              </Space>
+            </Tooltip>
+          );
+        },
       },
     ],
     [],

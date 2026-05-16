@@ -44,78 +44,7 @@ Risiko:
 - perubahan token ini berdampak lintas aplikasi; salah kontras dapat membuat table, form, modal, drawer, atau status bisnis sulit dibaca.
 ===================================================== */
 :root {
-  --ims-font-family-base: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --ims-font-weight-regular: 400;
-  --ims-font-weight-medium: 500;
-  --ims-font-weight-semibold: 600;
-  --ims-font-weight-action: 650;
-  --ims-font-weight-card-title: 680;
-  --ims-font-weight-strong: 700;
-  --ims-font-weight-heading: 740;
-  --ims-font-weight-display: 760;
-
-  --ims-font-size-xs: 10px;
-  --ims-font-size-caption: 11px;
-  --ims-font-size-meta: 12px;
-  --ims-font-size-meta-plus: 12.5px;
-  --ims-font-size-helper: 13px;
-  --ims-font-size-body: 14px;
-  --ims-font-size-title: 18px;
-  --ims-font-size-stat: 20px;
-  --ims-font-size-kpi: 24px;
-  --ims-font-size-summary-value: 25px;
-
-  --ims-line-height-solid: 1;
-  --ims-line-height-value: 1.08;
-  --ims-line-height-heading: 1.14;
-  --ims-line-height-tight: 1.2;
-  --ims-line-height-compact: 1.3;
-  --ims-line-height-title: 1.35;
-  --ims-line-height-body: 1.45;
-  --ims-line-height-readable: 1.55;
-
-  --ims-letter-spacing-tight: -0.01em;
-  --ims-letter-spacing-title: -0.02em;
-  --ims-letter-spacing-value: -0.025em;
-  --ims-letter-spacing-featured: -0.035em;
-  --ims-letter-spacing-label: 0.005em;
-  --ims-letter-spacing-uppercase: 0.04em;
-
-  --ims-typo-page-title-size: clamp(22px, 1.55vw, 26px);
-  --ims-typo-page-title-weight: var(--ims-font-weight-display);
-  --ims-typo-page-title-line-height: var(--ims-line-height-heading);
-  --ims-typo-page-title-letter-spacing: var(--ims-letter-spacing-title);
-  --ims-typo-page-subtitle-size: var(--ims-font-size-helper);
-  --ims-typo-page-subtitle-line-height: var(--ims-line-height-readable);
-
-  --ims-typo-header-title-size: clamp(16px, 1.25vw, 17px);
-  --ims-typo-header-title-weight: var(--ims-font-weight-heading);
-  --ims-typo-header-title-line-height: 1.22;
-  --ims-typo-header-title-letter-spacing: var(--ims-letter-spacing-tight);
-  --ims-typo-header-subtitle-size: var(--ims-font-size-meta-plus);
-  --ims-typo-header-subtitle-line-height: var(--ims-line-height-compact);
-
-  --ims-typo-summary-title-size: var(--ims-font-size-meta);
-  --ims-typo-summary-title-weight: var(--ims-font-weight-card-title);
-  --ims-typo-summary-title-line-height: var(--ims-line-height-title);
-  --ims-typo-summary-title-letter-spacing: var(--ims-letter-spacing-label);
-  --ims-typo-summary-value-size: var(--ims-font-size-summary-value);
-  --ims-typo-summary-value-weight: var(--ims-font-weight-display);
-  --ims-typo-summary-value-line-height: var(--ims-line-height-value);
-  --ims-typo-summary-value-letter-spacing: var(--ims-letter-spacing-value);
-  --ims-typo-summary-subtitle-size: 11.5px;
-  --ims-typo-summary-subtitle-line-height: 1.5;
-
-  --ims-typo-cell-title-weight: var(--ims-font-weight-semibold);
-  --ims-typo-cell-line-height: var(--ims-line-height-body);
-  --ims-typo-cell-meta-size: var(--ims-font-size-meta);
-  --ims-typo-cell-meta-line-height: var(--ims-line-height-body);
-  --ims-typo-detail-title-size: var(--ims-font-size-title);
-  --ims-typo-detail-title-weight: var(--ims-font-weight-strong);
-  --ims-typo-detail-value-size: var(--ims-font-size-stat);
-  --ims-typo-detail-value-weight: var(--ims-font-weight-strong);
-
-  font-family: var(--ims-font-family-base);
+  font-family: Inter, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   color-scheme: light;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -140,6 +69,10 @@ Risiko:
   --ims-color-warning-soft: #FFF7ED;
   --ims-color-warning-muted: rgba(217, 119, 6, 0.18);
   --ims-color-warning-text: #92400E;
+  --ims-color-danger: #DC2626;
+  --ims-color-danger-soft: #FEF2F2;
+  --ims-color-danger-muted: rgba(220, 38, 38, 0.18);
+  --ims-color-danger-text: #991B1B;
 
   --ims-brand-gradient: var(--ims-bg-shell);
 
@@ -226,6 +159,10 @@ body[data-app-theme="dark"] {
   --ims-color-warning-soft: rgba(245, 158, 11, 0.15);
   --ims-color-warning-muted: rgba(245, 158, 11, 0.28);
   --ims-color-warning-text: #FCD34D;
+  --ims-color-danger: #F87171;
+  --ims-color-danger-soft: rgba(248, 113, 113, 0.14);
+  --ims-color-danger-muted: rgba(248, 113, 113, 0.28);
+  --ims-color-danger-text: #FCA5A5;
 
   --ims-brand-gradient: var(--ims-bg-shell);
 
@@ -279,7 +216,7 @@ body[data-app-theme="dark"] {
    - AKTIF sebagai runtime surface global.
 ========================= */
 body {
-  font-family: var(--ims-font-family-base);
+  font-family: Inter, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   background-color: var(--ims-bg-page);
   color: var(--ims-text-primary);
   overflow: hidden;

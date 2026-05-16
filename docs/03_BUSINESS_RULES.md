@@ -55,6 +55,16 @@ Saat pembelian disimpan:
 ### 1.6 Catatan penting pengeluaran pembelian
 Saving pembelian **ditampilkan sebagai informasi efisiensi**, bukan pengurang langsung nilai kas keluar. Nilai kas keluar tetap `totalActualPurchase`.
 
+### 1.7 OCR Shopee pembelian
+OCR Shopee hanya alat bantu draft untuk membaca Qty Beli dan komponen biaya marketplace. OCR tidak boleh langsung menyimpan purchase, mengubah supplier/item/satuan/konversi, menambah stok, membuat expense, atau menyimpan gambar screenshot.
+
+Guard aktif:
+- Hasil OCR wajib muncul sebagai preview dan user tetap klik **Terapkan Qty & Biaya ke Form** sebelum Simpan Pembelian.
+- Jika OCR mendeteksi kemungkinan multi-item dalam 1 screenshot, auto-apply diblokir. User harus input manual atau memecah pembelian per item agar modal, stok, expense, dan HPP tidak tercampur.
+- Jika total pesanan tidak cocok dengan rumus sistem atau marker Shopee kurang kuat, user wajib melihat warning/konfirmasi sebelum hasil OCR boleh diterapkan.
+- Catatan transaksi menyimpan ringkasan OCR teks saja; bukti screenshot tidak disimpan di Firestore/Storage maupun folder project.
+- Popup detail OCR bersifat tampilan audit/read-only. Tombol Print hanya mencetak struk OCR tanpa mengubah data transaksi.
+
 ## 2. Rule Penjualan
 
 ### 2.1 Scope item penjualan
@@ -379,7 +389,8 @@ Contoh algoritmik:
 
 Catatan current state:
 - Jika contoh lama memakai `Bunga -> BG`, itu dianggap contoh lama dan bukan standar baru. Standar baru tanpa mapping menghasilkan `Bunga -> BNG`.
-- Source terbaru masih perlu audit karena generator tertentu masih menyimpan mapping manual dan fallback duplicate berbasis timestamp. Catat sebagai cleanup candidate, jangan refactor source dalam patch docs-only.
+- Source terbaru sudah memakai `businessCodeGenerator` sebagai source of truth readable code, sementara `productionCodeGenerator` menjadi compatibility wrapper tanpa dictionary manual per kata.
+- Collision kode harian masih scan-based; patch aman saat ini adalah guard target doc exists di transaction/write flow, sedangkan counter atomic membutuhkan approval schema/collection baru.
 
 ## Update Rule Karyawan Produksi — 2026-04-25
 
@@ -760,17 +771,6 @@ Status: **AKTIF + GUARDED**.
 - Ringkasan perbandingan supplier boleh menampilkan breakdown `subtotalItems`, `shippingCost`, `serviceFee`, `shippingDiscount`, `voucherDiscount`, `totalActualPurchase`, `totalReferencePurchase`, `actualUnitCost`, dan `purchaseSaving`, tetapi tidak boleh memindahkan atau mengubah formula kalkulasi existing.
 - `totalActualPurchase` tetap dasar expense/cash-out; `purchaseSaving` tetap informasi efisiensi dan bukan pengurang kas.
 
-## 23. Rule OCR Shopee Purchases — Apply Feedback dan Detail
-
-- OCR Shopee di Purchases hanya boleh membuat draft Qty Beli dan biaya. OCR tidak boleh mengganti supplier, item, satuan, konversi supplier, stok masuk final, atau menyimpan pembelian otomatis.
-- Tombol **Terapkan Qty & Biaya ke Form** wajib bersifat manual, idempotent, dan memberi feedback lokal di area OCR/form setelah field berubah. Feedback global `message.success` saja tidak cukup karena user bisa tidak sadar tombol sudah diklik.
-- Setelah Apply berhasil, UI wajib menampilkan status seperti **Sudah Diterapkan ke Form** beserta ringkasan field yang diterapkan: qty, subtotal, ongkir, diskon/potongan, dan biaya layanan.
-- Klik Apply berulang tidak boleh menggandakan catatan OCR di field Catatan. Segmen lama `OCR Shopee` wajib dibersihkan dulu, sementara catatan manual user tetap dipertahankan.
-- Kolom Info tabel Purchases hanya boleh menampilkan ringkasan manual dan tag `OCR Shopee`; detail angka OCR tidak boleh tampil mentah di tabel utama.
-- Tombol **Lihat** pada tag `OCR Shopee` wajib mengambil `record` dari scope render row tabel. Jangan memakai variabel `record` dari luar render row karena akan memunculkan error `record is not defined`.
-- Popup detail OCR wajib bersifat read-only, memakai data catatan transaksi, tidak membaca ulang screenshot, dan tidak mengubah purchase/stok/kas/audit log.
-- Bukti screenshot OCR tidak disimpan. Hanya ringkasan angka yang sudah diterapkan ke Catatan boleh tersimpan sebagai audit ringan.
-
 ## 22. Rule Atomic Save Pembelian
 
 Status: **AKTIF + GUARDED**.
@@ -802,6 +802,7 @@ Status: **AKTIF + GUARDED**.
 - Jangan mengisi kolom stok historis memakai stok saat ini, karena itu bukan audit history.
 - Jika semua writer inventory log nanti sudah konsisten menyimpan snapshot, kolom boleh kembali dengan label eksplisit seperti `Stok Setelah` atau `Stok Sebelum/Sesudah`.
 - Catatan log harus ringkas di tabel; catatan lengkap boleh tersedia lewat tooltip/detail.
+- Catatan OCR Shopee dari purchase tidak boleh ditampilkan mentah panjang di tabel Stock Management. Tabel cukup menampilkan tag `OCR Shopee`, ringkasan konversi stok bila ada, dan detail lengkap tetap tersedia di tooltip/detail.
 - Submit Penyesuaian Stok wajib menjaga stock adjustment, mutasi stok, dan inventory log sebagai satu rangkaian konsisten.
 - Area ini tidak boleh dipakai untuk hitung ulang stok dari semua transaksi saat halaman dibuka.
 
@@ -906,8 +907,8 @@ Field yang tidak boleh disimpan di Firestore:
 ### 24.6 Firestore Rules final/staged-final
 
 - Firestore Rules wajib aktif di backend Firebase dan berbasis `request.auth != null`.
-- Pada repo ZIP saat ini, rules dikelola manual/external di Firebase Console dan tidak disertakan sebagai file source.
-- Jangan membuat file `firestore.rules` atau mengubah `firebase.json` kecuali ada task terpisah untuk source-controlled rules.
+- Source rules sekarang disertakan di repo melalui `firestore.rules` dan `firebase.json` mengarah ke file tersebut.
+- Publish/deploy rules tetap wajib dilakukan dari Firebase tooling/Console; keberadaan file di repo belum otomatis mengubah backend.
 - Actor profile wajib dibaca dari `system_users/{request.auth.uid}`.
 - Role aktif Rules hanya `administrator` dan `user`.
 - `system_users` wajib guarded:
@@ -917,6 +918,7 @@ Field yang tidak boleh disimpan di Firestore:
   - user biasa tidak boleh mengelola profile user lain;
   - delete profile sendiri diblok oleh rules dan service.
 - Collection bisnis utama boleh diakses oleh profile aktif sesuai staged-final rules agar modul utama tidak langsung permission denied.
+- `lastLoginAt` boleh di-update oleh user pada profile sendiri sebagai audit login best-effort; role/status/profile field lain tetap guarded.
 - Fallback untuk collection tidak dikenal harus deny.
 - Rules tidak boleh memakai cleanup sementara seperti `allow read, write: if true` atau expiry date sementara sebagai rules final.
 
@@ -1001,7 +1003,9 @@ Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases,
 
 ## 24. Rule Tampilan Saldo Stok Locked — 2026-05-06
 - Table yang menampilkan **saldo stok item/master** harus menampilkan `Total`, `Tersedia`, dan semua variant pill langsung di table bila row memiliki `variants[]`.
-- Rule ini berlaku untuk tampilan saldo stok item seperti Products, Raw Materials, Semi Finished Materials, dan Stock Report.
+- Variant pill tidak boleh menambah teks status panjang seperti `Kosong`/`Stok Rendah` di dalam pill karena membuat tabel berantakan saat varian banyak. Status varian boleh diberi tone visual soft, sedangkan ringkasan varian bermasalah ditaruh sebagai caption ringkas di area status/nama item.
+- Untuk item bervarian, status low-stock utama wajib membaca setiap varian terhadap threshold master (`minStock` untuk Raw Material, `minStockAlert` untuk Product/Semi Finished). Aggregate master tetap boleh tampil sebagai total, tetapi tidak boleh membuat item terlihat aman jika ada varian kosong/di bawah minimum.
+- Rule ini berlaku untuk tampilan saldo stok item seperti Products, Raw Materials, Semi Finished Materials, Dashboard Stok Kritis, dan Stock Report.
 - Rule ini tidak berlaku untuk Qty transaksi, Stok Masuk Purchases, Stock Adjustment quantity, inventory log delta, atau field audit lain yang bukan saldo stok master. Untuk inventory log delta, Qty boleh menampilkan satuan dari `stockUnit`/`unit`, tetapi tidak boleh berubah menjadi komponen saldo stok master.
 - Perubahan tampilan compact table tidak boleh mengubah rumus stok, mutation, reserved stock, available stock, HPP, pricing, export mapping, atau schema Firestore.
 

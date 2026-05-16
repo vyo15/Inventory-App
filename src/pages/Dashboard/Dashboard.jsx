@@ -35,7 +35,10 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { getProductionPlanningDashboardSummary } from "../../services/Produksi/productionPlanningService";
-import { getInventoryStockStatusMeta } from "../../utils/stock/stockHelpers";
+import {
+  formatAffectedVariantStockSummary,
+  getLowStockVariantEntries,
+} from "../../utils/stock/stockHelpers";
 import "./Dashboard.css";
 
 const { Text, Title } = Typography;
@@ -82,12 +85,12 @@ const EMPTY_PLANNING_SUMMARY = {
 // - aktif sebagai guard kompatibilitas; kandidat cleanup hanya jika schema sudah 100% diseragamkan.
 // =========================
 const getNumericValue = (value) => {
-  if (typeof value === "number" && !Number.isNaN(value)) return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
 
   if (typeof value === "string") {
     const normalized = value.replace(/[^\d.-]/g, "");
     const parsed = Number(normalized);
-    return Number.isNaN(parsed) ? 0 : parsed;
+    return Number.isFinite(parsed) ? parsed : 0;
   }
 
   return 0;
@@ -227,6 +230,18 @@ Risiko:
 const getItemDisplayName = (item = {}) =>
   item?.name || item?.productName || item?.materialName || "-";
 
+const getItemStock = (item = {}) =>
+  getNumericValue(item?.availableStock ?? item?.currentStock ?? item?.stock ?? 0);
+
+const getItemMinStock = (item = {}, sourceType = "") => {
+  if (sourceType === "material") return getNumericValue(item?.minStock ?? 0);
+  if (sourceType === "product" || sourceType === "semi_finished") {
+    return getNumericValue(item?.minStockAlert ?? 0);
+  }
+
+  return getNumericValue(item?.minStockAlert ?? item?.minStock ?? 0);
+};
+
 const isStockMonitoringActiveItem = (item = {}) => item?.isActive !== false;
 
 const getItemCurrentStock = (item = {}) =>
@@ -235,67 +250,68 @@ const getItemCurrentStock = (item = {}) =>
 const getItemReservedStock = (item = {}) =>
   getNumericValue(item?.reservedStock ?? 0);
 
-const getLowStockVariantSummary = (statusMeta = {}, unit = "pcs") => {
-  if (!statusMeta.hasVariants || !statusMeta.affectedVariantCount) return "";
-
-  const preview = statusMeta.affectedVariants
-    .slice(0, 3)
-    .map((variantMeta) => `${variantMeta.label} ${formatNumberId(variantMeta.availableStock)} ${unit}`)
-    .join(", ");
-  const extra = statusMeta.affectedVariantCount > 3 ? ` +${statusMeta.affectedVariantCount - 3} lainnya` : "";
-
-  return `Varian perlu cek: ${preview}${extra}`;
-};
-
-const buildDashboardLowStockRow = (item = {}, sourceType = "", type = "", to = "") => {
-  const unit = item?.stockUnit || item?.unit || "pcs";
-  const statusMeta = getInventoryStockStatusMeta(item, sourceType);
-  const lowestAffectedVariant = statusMeta.affectedVariants?.length
-    ? [...statusMeta.affectedVariants].sort((left, right) => left.availableStock - right.availableStock)[0]
-    : null;
-  const stock = lowestAffectedVariant ? lowestAffectedVariant.availableStock : statusMeta.stock;
-  const severity =
-    statusMeta.statusKey === "empty"
-      ? { label: "Kosong", color: "red" }
-      : statusMeta.statusKey === "low"
-        ? { label: "Menipis", color: "gold" }
-        : { label: "Aman", color: "green" };
-
-  return {
-    key: `${sourceType}-${item.id}`,
-    id: item.id,
-    name: getItemDisplayName(item),
-    stock,
-    minStock: statusMeta.threshold,
-    unit,
-    type,
+const getLowStockSeverity = (item = {}, sourceType = "") => {
+  const stock = getItemStock(item);
+  const minStock = getItemMinStock(item, sourceType);
+  const affectedVariants = getLowStockVariantEntries(item, {
     sourceType,
-    severity,
-    variantSummary: getLowStockVariantSummary(statusMeta, unit),
-    statusMeta,
-    to,
-    snapshot: item,
-  };
+    threshold: minStock,
+    unit: item?.stockUnit || item?.unit || "pcs",
+  });
+
+  if (affectedVariants.some((variant) => variant.status === "empty")) return { label: "Kosong", color: "red" };
+  if (affectedVariants.length > 0) return { label: "Menipis", color: "gold" };
+  if (stock <= 0) return { label: "Kosong", color: "red" };
+  if (minStock > 0 && stock <= minStock) return { label: "Menipis", color: "gold" };
+  return { label: "Aman", color: "green" };
 };
 
 const buildLowStockRows = (products = [], materials = [], semiFinishedMaterials = []) => {
-  const rows = [
-    ...products
-      .filter(isStockMonitoringActiveItem)
-      .map((item) => buildDashboardLowStockRow(item, "product", "Produk Jadi", "/stock-management")),
-    ...materials
-      .filter(isStockMonitoringActiveItem)
-      .map((item) => buildDashboardLowStockRow(item, "material", "Bahan Baku", "/stock-management")),
-    ...semiFinishedMaterials
-      .filter(isStockMonitoringActiveItem)
-      .map((item) => buildDashboardLowStockRow(item, "semi_finished", "Semi Finished", "/produksi/semi-finished-materials")),
-  ].filter((item) => item.statusMeta.statusKey === "empty" || item.statusMeta.statusKey === "low");
+  const activeProducts = products.filter(isStockMonitoringActiveItem);
+  const activeMaterials = materials.filter(isStockMonitoringActiveItem);
+  const activeSemiFinishedMaterials = semiFinishedMaterials.filter(isStockMonitoringActiveItem);
 
-  return rows.sort((left, right) => {
-    const leftGap = left.stock - Math.max(left.minStock, 0);
-    const rightGap = right.stock - Math.max(right.minStock, 0);
-    return leftGap - rightGap;
-  });
+  const buildRow = (item, sourceType, type, to, unit) => {
+    const stock = getItemStock(item);
+    const minStock = getItemMinStock(item, sourceType);
+    const affectedVariants = getLowStockVariantEntries(item, {
+      sourceType,
+      threshold: minStock,
+      unit,
+    });
+    const variantGap = affectedVariants.length
+      ? Math.min(...affectedVariants.map((variant) => variant.stock - Math.max(variant.threshold, 0)))
+      : null;
+
+    return {
+      key: `${sourceType}-${item.id}`,
+      id: item.id,
+      name: getItemDisplayName(item),
+      stock,
+      minStock,
+      unit,
+      type,
+      sourceType,
+      severity: getLowStockSeverity(item, sourceType),
+      affectedVariantSummary: formatAffectedVariantStockSummary(item, {
+        sourceType,
+        threshold: minStock,
+        unit,
+        maxItems: 2,
+      }),
+      sortGap: variantGap ?? stock - Math.max(minStock, 0),
+      to,
+      snapshot: item,
+    };
+  };
+
+  const rows = [
+    ...activeProducts.map((item) => buildRow(item, "product", "Produk Jadi", "/stock-management", item?.unit || "pcs")),
+    ...activeMaterials.map((item) => buildRow(item, "material", "Bahan Baku", "/stock-management", item?.stockUnit || item?.unit || "pcs")),
+    ...activeSemiFinishedMaterials.map((item) => buildRow(item, "semi_finished", "Semi Finished", "/produksi/semi-finished-materials", item?.unit || "pcs")),
+  ].filter((item) => item.affectedVariantSummary || item.stock <= 0 || (item.minStock > 0 && item.stock <= item.minStock));
+
+  return rows.sort((left, right) => left.sortGap - right.sortGap);
 };
 
 /* =====================================================
@@ -318,11 +334,9 @@ Risiko:
 const buildStockAuditRows = (products = [], materials = [], semiFinishedMaterials = []) => {
   const mapRows = (items = [], type = "Item", sourceType = "item", to = "/stock-management") =>
     items.map((item) => {
-      const statusMeta = getInventoryStockStatusMeta(item, sourceType);
-      const stock = statusMeta.stock;
+      const stock = getItemStock(item);
       const currentStock = getItemCurrentStock(item);
       const reservedStock = getItemReservedStock(item);
-      const minStock = statusMeta.threshold;
 
       return {
         key: `${sourceType}-${item.id}`,
@@ -334,7 +348,7 @@ const buildStockAuditRows = (products = [], materials = [], semiFinishedMaterial
         stock,
         currentStock,
         reservedStock,
-        minStock,
+        minStock: getItemMinStock(item, sourceType),
         to,
         isNegativeStock: stock < 0 || currentStock < 0,
         isReservedOverrun: reservedStock > 0 && (reservedStock > Math.max(currentStock, 0) || stock < 0),
@@ -1550,8 +1564,8 @@ const Dashboard = () => {
                           <Text className="dashboard-muted-text">
                             Available {formatNumberId(item.stock)} {item.unit} - Min {formatNumberId(item.minStock)} {item.unit}
                           </Text>
-                          {item.variantSummary ? (
-                            <Text className="dashboard-muted-text">{item.variantSummary}</Text>
+                          {item.affectedVariantSummary ? (
+                            <Text className="dashboard-muted-text">{item.affectedVariantSummary}</Text>
                           ) : null}
                         </div>
                         <ArrowRightOutlined className="dashboard-action-arrow" />
@@ -1570,8 +1584,8 @@ const Dashboard = () => {
                         <Text className="dashboard-muted-text">
                           Available {formatNumberId(item.stock)} {item.unit} - Min {formatNumberId(item.minStock)} {item.unit}
                         </Text>
-                        {item.variantSummary ? (
-                          <Text className="dashboard-muted-text">{item.variantSummary}</Text>
+                        {item.affectedVariantSummary ? (
+                          <Text className="dashboard-muted-text">{item.affectedVariantSummary}</Text>
                         ) : null}
                         <Space size={8} wrap>
                           <Text className="dashboard-muted-text">
