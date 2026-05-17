@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Table,
   Tag,
@@ -30,13 +30,8 @@ import {
   where,
   orderBy,
   doc,
-  updateDoc,
   runTransaction,
 } from "firebase/firestore";
-import {
-  addInventoryLog,
-  updateInventoryStock,
-} from "../../services/Inventory/inventoryService";
 import {
   buildInventoryLogPayload,
   INVENTORY_LOG_COLLECTION,
@@ -92,7 +87,67 @@ const defaultSaleLineItemType = "products";
 // =========================
 // SECTION: Status penjualan online
 // =========================
-const onlineStatuses = ["Diproses", "Dikirim", "Selesai", "Dibatalkan"];
+const onlineStatuses = ["Diproses", "Dikirim", "Selesai"];
+
+const SALE_STATUS_TRANSITIONS = {
+  Diproses: ["Dikirim", "Dibatalkan"],
+  Dikirim: ["Selesai", "Dibatalkan"],
+};
+
+const SALE_CANCEL_STOCK_REVERT_LOG_TYPE = "sale_cancel_revert";
+const buildSaleCancelLogId = (saleId, itemIndex) => `sale_cancel_revert_${saleId}_${itemIndex}`;
+const SALE_IDENTITY_FIELDS = [
+  "saleNumber",
+  "code",
+  "referenceNumber",
+  "sourceRef",
+  "referenceCode",
+];
+const INCOME_SALE_LINK_FIELDS = [
+  "relatedId",
+  "saleId",
+  "referenceId",
+  "sourceId",
+  "sourceRef",
+  "referenceCode",
+  "referenceNumber",
+  "details.relatedId",
+  "details.saleId",
+  "details.referenceId",
+  "details.sourceId",
+  "details.sourceRef",
+  "details.referenceCode",
+  "details.referenceNumber",
+];
+const CANCEL_LOG_SALE_LINK_FIELDS = [
+  "saleId",
+  "referenceId",
+  "relatedId",
+  "sourceId",
+  "sourceRef",
+  "referenceCode",
+  "referenceNumber",
+  "details.saleId",
+  "details.referenceId",
+  "details.relatedId",
+  "details.sourceId",
+  "details.sourceRef",
+  "details.referenceCode",
+  "details.referenceNumber",
+];
+
+const getNestedValue = (data = {}, path = "") => path.split(".").reduce(
+  (current, key) => (current && typeof current === "object" ? current[key] : undefined),
+  data,
+);
+const getUniqueValues = (values = []) => Array.from(
+  new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)),
+);
+const getSaleIdentityKeys = (saleId, saleData = {}) => getUniqueValues([
+  saleId,
+  ...SALE_IDENTITY_FIELDS.map((fieldName) => getNestedValue(saleData, fieldName)),
+]);
+const isSaleAuditLocked = (sale = {}) => Boolean(sale.cancelledAt || sale.stockRevertedAt);
 
 const buildSellableKey = (collectionName, itemId) => `${collectionName}::${itemId}`;
 
@@ -108,6 +163,10 @@ const Sales = () => {
   const [rawMaterials, setRawMaterials] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSavingSale, setIsSavingSale] = useState(false);
+  const [updatingSaleId, setUpdatingSaleId] = useState(null);
+  const isSavingSaleRef = useRef(false);
+  const updatingSaleIdRef = useRef(null);
 
   // =========================
   // SECTION: Modal dan filter
@@ -331,21 +390,57 @@ const Sales = () => {
   // =========================
   // SECTION: Cek apakah income sale sudah pernah dibuat
   // =========================
-  const hasExistingIncome = async (saleId) => {
+  const hasExistingIncome = async (saleId, saleData = {}) => {
     const incomesCollection = collection(db, "incomes");
-    const incomeQuery = query(
-      incomesCollection,
-      where("relatedId", "==", saleId),
-    );
-    const incomeSnapshot = await getDocs(incomeQuery);
+    const deterministicIncomeReference = doc(db, "incomes", `income_${saleId}`);
+    const identityKeys = getSaleIdentityKeys(saleId, saleData);
+    const incomeQueries = identityKeys.flatMap((identityKey) => (
+      INCOME_SALE_LINK_FIELDS.map((fieldName) => query(
+        incomesCollection,
+        where(fieldName, "==", identityKey),
+      ))
+    ));
 
-    return !incomeSnapshot.empty;
+    const [deterministicIncomeSnapshot, ...incomeSnapshots] = await Promise.all([
+      getDoc(deterministicIncomeReference),
+      ...incomeQueries.map((incomeQuery) => getDocs(incomeQuery)),
+    ]);
+
+    return deterministicIncomeSnapshot.exists() || incomeSnapshots.some((snapshot) => !snapshot.empty);
+  };
+
+  // =========================
+  // SECTION: Cek jejak cancel revert Sales legacy
+  // =========================
+  const hasSaleCancelRevertLog = async (saleId, saleData = {}) => {
+    const inventoryLogsCollection = collection(db, INVENTORY_LOG_COLLECTION);
+    const identityKeys = getSaleIdentityKeys(saleId, saleData);
+    const cancelLogQueries = identityKeys.flatMap((identityKey) => (
+      CANCEL_LOG_SALE_LINK_FIELDS.map((fieldName) => query(
+        inventoryLogsCollection,
+        where(fieldName, "==", identityKey),
+      ))
+    ));
+
+    const snapshots = await Promise.all(cancelLogQueries.map((cancelLogQuery) => getDocs(cancelLogQuery)));
+    const seenLogIds = new Set();
+
+    return snapshots.some((snapshot) => snapshot.docs.some((logDocument) => {
+      if (seenLogIds.has(logDocument.id)) return false;
+      seenLogIds.add(logDocument.id);
+
+      const data = logDocument.data();
+      const logType = String(data.type || data.details?.type || "").toLowerCase();
+      return logType === SALE_CANCEL_STOCK_REVERT_LOG_TYPE;
+    }));
   };
 
   // =========================
   // SECTION: Buka modal tambah penjualan
   // =========================
   const openCreateSaleModal = () => {
+    if (isSavingSaleRef.current) return;
+
     setIsModalOpen(true);
     form.resetFields();
 
@@ -520,6 +615,14 @@ const Sales = () => {
   // SECTION: Tambah penjualan baru
   // =========================
   const handleAddSale = async () => {
+    if (isSavingSaleRef.current) {
+      message.warning("Penjualan masih disimpan. Tunggu sampai proses selesai agar transaksi tidak dobel.");
+      return;
+    }
+
+    isSavingSaleRef.current = true;
+    setIsSavingSale(true);
+
     try {
       const values = await form.validateFields();
 
@@ -552,6 +655,12 @@ const Sales = () => {
         0,
       );
 
+      const finalSaleStatus = isOfflineChannel(salesChannel) ? "Selesai" : status;
+
+      if (!isOfflineChannel(salesChannel) && !onlineStatuses.includes(finalSaleStatus)) {
+        throw new Error("Status online hanya boleh Diproses, Dikirim, atau Selesai saat create. Gunakan tombol Batalkan untuk membatalkan order agar stok dan audit tetap guarded.");
+      }
+
       const selectedCustomer = customers.find(
         (customer) => customer.id === customerId,
       );
@@ -571,7 +680,7 @@ const Sales = () => {
         customerName: selectedCustomer?.name || "",
         items: saleItems,
         salesChannel,
-        status,
+        status: finalSaleStatus,
         date: Timestamp.fromDate(date.toDate()),
         referenceNumber: saleNumber,
         sourceRef: saleNumber,
@@ -602,7 +711,7 @@ const Sales = () => {
       - Jangan memindahkan transaction ini ke UI workaround lain tanpa transaction/service guarded.
       ===================================================== */
       const salesDocument = doc(db, "sales", saleNumber);
-      const saleIncomeReference = status === "Selesai"
+      const saleIncomeReference = finalSaleStatus === "Selesai" && totalSaleValue > 0
         ? doc(db, "incomes", `income_${salesDocument.id}`)
         : null;
       const saleInventoryLogReferences = newSalePayload.items.map(() =>
@@ -736,110 +845,264 @@ const Sales = () => {
     } catch (error) {
       console.error("Gagal tambah penjualan:", error);
       message.error(error?.message || "Gagal menambahkan penjualan.");
+    } finally {
+      isSavingSaleRef.current = false;
+      setIsSavingSale(false);
     }
   };
 
   // =========================
-  // SECTION: Revert stok sale item
+  // SECTION: Helper bucket stok Sales
   // =========================
-  const revertSaleItemsStock = async (selectedSale, logType, saleId) => {
-    for (const item of selectedSale.items || []) {
-      // =========================
-      // SECTION: Legacy guard cancel/delete
-      // Sale baru selalu punya variantKey. allowMasterForVariant hanya untuk data lama yang belum sempat dimigrasi/reset.
-      // Aman dihapus setelah reset terarah sales lama selesai.
-      // =========================
-      await updateInventoryStock({
-        itemId: item.itemId,
-        collectionName: item.collectionName,
-        quantityChange: Number(item.quantity || 0),
-        variantKey: item.variantKey || "",
-        allowMasterForVariant: !item.variantKey,
+  const buildSaleStockMutationBuckets = (saleItems = []) => {
+    const stockNeedsByBucket = new Map();
+
+    saleItems.forEach((item) => {
+      const bucketKey = buildSaleStockBucketKey(item);
+      const existingNeed = stockNeedsByBucket.get(bucketKey);
+
+      stockNeedsByBucket.set(bucketKey, {
+        ...item,
+        quantity: Number(existingNeed?.quantity || 0) + Number(item.quantity || 0),
       });
+    });
 
-      await addInventoryLog(
-        item.itemId,
-        item.itemName,
-        item.quantity,
-        logType,
-        item.collectionName,
-        {
-          saleId,
-          saleNumber: selectedSale.saleNumber || selectedSale.code || "",
-          referenceId: saleId,
-          referenceCode: selectedSale.saleNumber || selectedSale.code || selectedSale.referenceNumber || "",
-          sourceRef: selectedSale.saleNumber || selectedSale.code || selectedSale.referenceNumber || "",
-          note:
-            logType === "sale_cancel_revert"
-              ? `Pembatalan penjualan via ${selectedSale.salesChannel || "-"}`
-              : `Pembatalan/hapus penjualan ID: ${saleId}`,
-          customerName: selectedSale.customerName || "",
-          unit: item.unit || "",
-          stockUnit: item.unit || "",
-          variantKey: item.variantKey || "",
-          variantLabel: item.variantLabel || "",
-          stockSourceType: item.stockSourceType || "master",
-        },
-      );
-    }
+    return Array.from(stockNeedsByBucket.values());
   };
 
+  const assertSaleStatusTransitionAllowed = (currentStatus, nextStatus) => {
+    if (currentStatus === nextStatus) return;
+
+    const allowedNextStatuses = SALE_STATUS_TRANSITIONS[currentStatus] || [];
+    if (allowedNextStatuses.includes(nextStatus)) return;
+
+    if (currentStatus === "Selesai" && nextStatus === "Dibatalkan") {
+      throw new Error("Sales yang sudah Selesai tidak boleh dibatalkan dari flow ini. Gunakan retur/refund terpisah agar income dan stok tidak rusak.");
+    }
+
+    if (currentStatus === "Dibatalkan") {
+      throw new Error("Sales sudah Dibatalkan. Stok tidak boleh dikembalikan ulang.");
+    }
+
+    throw new Error(`Transisi status ${currentStatus || "kosong"} ke ${nextStatus} tidak diizinkan. Muat ulang data sebelum mencoba lagi.`);
+  };
+
+  const buildSaleCancelLogPayload = ({ latestSale, saleId, item, itemIndex, timestamp }) => (
+    buildInventoryLogPayload({
+      itemId: item.itemId,
+      itemName: item.itemName,
+      quantityChange: Number(item.quantity || 0),
+      type: SALE_CANCEL_STOCK_REVERT_LOG_TYPE,
+      collectionName: item.collectionName,
+      timestamp,
+      extraData: {
+        customerName: latestSale.customerName || "",
+        saleId,
+        saleNumber: latestSale.saleNumber || latestSale.code || "",
+        referenceId: saleId,
+        referenceCode: latestSale.saleNumber || latestSale.code || latestSale.referenceNumber || "",
+        sourceRef: latestSale.saleNumber || latestSale.code || latestSale.referenceNumber || "",
+        note: `Pembatalan penjualan via ${latestSale.salesChannel || "-"}`,
+        subtotal: item.subtotal || 0,
+        lineIndex: itemIndex,
+        referenceNumber: latestSale.saleNumber || latestSale.code || latestSale.referenceNumber || "",
+        unit: item.unit || "",
+        stockUnit: item.unit || "",
+        variantKey: item.variantKey || "",
+        variantLabel: item.variantLabel || "",
+        stockSourceType: item.stockSourceType || "master",
+      },
+    })
+  );
+
   // =========================
-  // SECTION: Update status penjualan
+  // SECTION: Update status penjualan guarded
   // =========================
   const handleUpdateSaleStatus = async (saleId, newStatus) => {
+    if (updatingSaleIdRef.current) {
+      message.warning("Perubahan status lain masih diproses. Tunggu sampai selesai agar stok tidak double update.");
+      return;
+    }
+
+    updatingSaleIdRef.current = saleId;
+    setUpdatingSaleId(saleId);
+
     try {
-      const selectedSale = salesRecords.find((sale) => sale.id === saleId);
-
-      // RULE:
-      // Jika dibatalkan, stok dikembalikan sebelum status ditutup agar revert tetap memakai sale item snapshot.
-      if (newStatus === "Dibatalkan" && selectedSale) {
-        await revertSaleItemsStock(selectedSale, "sale_cancel_revert", saleId);
-      }
-
+      const transitionTimestamp = Timestamp.now();
       const saleReference = doc(db, "sales", saleId);
+      const cachedSale = salesRecords.find((sale) => sale.id === saleId) || {};
+      const legacyIncomeExists = newStatus === "Selesai"
+        ? await hasExistingIncome(saleId, cachedSale)
+        : false;
+      const existingCancelRevertLog = ["Dikirim", "Selesai", "Dibatalkan"].includes(newStatus)
+        ? await hasSaleCancelRevertLog(saleId, cachedSale)
+        : false;
+      let transitionWasNoop = false;
 
-      // RULE:
-      // Saat status berubah menjadi Selesai, update status dan income resmi dibuat dalam transaction yang sama.
-      if (newStatus === "Selesai" && selectedSale && selectedSale.total > 0) {
-        const incomeExists = await hasExistingIncome(saleId);
-        const incomeReference = doc(db, "incomes", `income_${saleId}`);
+      await runTransaction(db, async (transaction) => {
+        const saleSnapshot = await transaction.get(saleReference);
 
-        await runTransaction(db, async (transaction) => {
-          const saleSnapshot = await transaction.get(saleReference);
+        if (!saleSnapshot.exists()) {
+          throw new Error("Data penjualan tidak ditemukan. Status belum diubah.");
+        }
+
+        const latestSale = {
+          id: saleSnapshot.id,
+          ...saleSnapshot.data(),
+        };
+        const currentStatus = latestSale.status || "";
+
+        if (currentStatus === newStatus) {
+          transitionWasNoop = true;
+          return;
+        }
+
+        assertSaleStatusTransitionAllowed(currentStatus, newStatus);
+
+        if (newStatus !== "Dibatalkan" && (latestSale.cancelledAt || latestSale.stockRevertedAt || existingCancelRevertLog)) {
+          throw new Error("Sales punya jejak cancel/revert stok. Transisi lanjutan ditolak agar stok dan income tidak salah. Jalankan Auto Detect Bug Data untuk audit manual.");
+        }
+
+        if (newStatus === "Dikirim") {
+          transaction.update(saleReference, {
+            status: newStatus,
+            shippedAt: transitionTimestamp,
+            statusUpdatedAt: transitionTimestamp,
+          });
+          return;
+        }
+
+        if (newStatus === "Selesai") {
+          const incomeReference = doc(db, "incomes", `income_${saleId}`);
           const incomeSnapshot = await transaction.get(incomeReference);
 
-          if (!saleSnapshot.exists()) {
-            throw new Error("Data penjualan tidak ditemukan. Status belum diubah.");
-          }
+          transaction.update(saleReference, {
+            status: newStatus,
+            completedAt: transitionTimestamp,
+            statusUpdatedAt: transitionTimestamp,
+          });
 
-          const latestSale = {
-            id: saleSnapshot.id,
-            ...saleSnapshot.data(),
-          };
-
-          transaction.update(saleReference, { status: newStatus });
-
-          if (!incomeExists && !incomeSnapshot.exists()) {
+          if (!legacyIncomeExists && !incomeSnapshot.exists() && Number(latestSale.total || 0) > 0) {
             transaction.set(
               incomeReference,
               buildSaleIncomePayload({
                 selectedSale: latestSale,
                 saleId,
-                dateValue: Timestamp.now(),
+                dateValue: transitionTimestamp,
               }),
             );
           }
-        });
-      } else {
-        await updateDoc(saleReference, { status: newStatus });
-      }
+          return;
+        }
 
-      message.success(`Status penjualan berhasil diubah menjadi ${newStatus}.`);
+        if (newStatus === "Dibatalkan") {
+          if (latestSale.stockRevertedAt || latestSale.cancelledAt) {
+            throw new Error("Sales ini sudah punya marker cancel/revert. Proses dibatalkan agar stok tidak double revert. Cek Auto Detect Bug Data untuk audit manual.");
+          }
+
+          if (existingCancelRevertLog) {
+            throw new Error("Sales ini sudah punya log cancel revert legacy. Pembatalan ditolak agar stok tidak double revert. Jalankan Auto Detect Bug Data untuk cek manual.");
+          }
+
+          const saleItems = Array.isArray(latestSale.items) ? latestSale.items : [];
+          if (!saleItems.length) {
+            throw new Error("Sales tidak punya item snapshot. Pembatalan stok ditolak agar tidak membuat audit palsu.");
+          }
+
+          const cancelLogReferences = saleItems.map((_, itemIndex) => (
+            doc(db, INVENTORY_LOG_COLLECTION, buildSaleCancelLogId(saleId, itemIndex))
+          ));
+          const cancelLogSnapshots = [];
+          for (const logReference of cancelLogReferences) {
+            cancelLogSnapshots.push(await transaction.get(logReference));
+          }
+
+          if (cancelLogSnapshots.some((logSnapshot) => logSnapshot.exists())) {
+            throw new Error("Log revert cancel untuk Sales ini sudah ada. Pembatalan ditolak agar stok tidak double revert. Jalankan Auto Detect Bug Data untuk cek manual.");
+          }
+
+          const stockMutationPayloads = [];
+          for (const item of buildSaleStockMutationBuckets(saleItems)) {
+            if (!item.collectionName || !item.itemId) {
+              throw new Error(`Snapshot item ${item.itemName || "sale"} belum punya collectionName/itemId. Pembatalan otomatis ditolak agar stok tidak salah sumber.`);
+            }
+
+            const itemReference = doc(db, item.collectionName, item.itemId);
+            const itemSnapshotDocument = await transaction.get(itemReference);
+
+            if (!itemSnapshotDocument.exists()) {
+              throw new Error(`Item ${item.itemName || item.itemId} tidak ditemukan. Pembatalan ditolak agar stok tidak partial.`);
+            }
+
+            const latestItem = {
+              id: itemSnapshotDocument.id,
+              ...itemSnapshotDocument.data(),
+            };
+            const latestItemHasVariants = inferHasVariants(latestItem);
+
+            if (!latestItemHasVariants && item.variantKey) {
+              throw new Error(`Sale line ${item.itemName || item.itemId} punya snapshot varian ${item.variantLabel || item.variantKey}, tetapi item stok saat ini tidak punya varian. Pembatalan otomatis ditolak agar stok tidak masuk bucket yang salah.`);
+            }
+
+            if (latestItemHasVariants && !item.variantKey) {
+              throw new Error(`Item ${item.itemName || item.itemId} sekarang bervarian, tetapi sale lama tidak punya variantKey. Pembatalan otomatis ditolak agar stok tidak masuk master/default.`);
+            }
+
+            if (latestItemHasVariants && item.variantKey && !findVariantByKey(latestItem, item.variantKey)) {
+              throw new Error(`Varian ${item.variantLabel || item.variantKey} untuk ${item.itemName} tidak ditemukan. Pembatalan ditolak agar stok tidak masuk master/default.`);
+            }
+
+            stockMutationPayloads.push({
+              itemReference,
+              stockUpdatePayload: applyStockMutationToItem({
+                item: latestItem,
+                variantKey: item.variantKey || "",
+                deltaCurrent: Number(item.quantity || 0),
+              }),
+            });
+          }
+
+          stockMutationPayloads.forEach(({ itemReference, stockUpdatePayload }) => {
+            transaction.update(itemReference, stockUpdatePayload);
+          });
+
+          saleItems.forEach((item, itemIndex) => {
+            transaction.set(
+              cancelLogReferences[itemIndex],
+              buildSaleCancelLogPayload({
+                latestSale,
+                saleId,
+                item,
+                itemIndex,
+                timestamp: transitionTimestamp,
+              }),
+            );
+          });
+
+          transaction.update(saleReference, {
+            status: newStatus,
+            cancelledAt: transitionTimestamp,
+            stockRevertedAt: transitionTimestamp,
+            statusUpdatedAt: transitionTimestamp,
+          });
+          return;
+        }
+
+        throw new Error(`Status ${newStatus} belum didukung oleh flow Sales guarded.`);
+      });
+
+      if (transitionWasNoop) {
+        message.info(`Status penjualan sudah ${newStatus}. Tidak ada mutasi stok/kas tambahan.`);
+      } else {
+        message.success(`Status penjualan berhasil diubah menjadi ${newStatus}.`);
+      }
       fetchSales();
     } catch (error) {
       console.error("Gagal update status:", error);
       message.error(error?.message || "Gagal mengubah status penjualan.");
+    } finally {
+      updatingSaleIdRef.current = null;
+      setUpdatingSaleId(null);
     }
   };
 
@@ -863,7 +1126,16 @@ const Sales = () => {
     }
 
     return statusMatchedRecords.filter((sale) =>
-      [sale.saleNumber, sale.code, sale.referenceNumber, sale.customerName]
+      [
+        sale.saleNumber,
+        sale.code,
+        sale.referenceNumber,
+        sale.sourceRef,
+        sale.externalReferenceNumber,
+        sale.customerName,
+        sale.salesChannel,
+        sale.note,
+      ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -948,14 +1220,26 @@ const Sales = () => {
       width: 150,
       render: (_, record) => {
         const referenceText = record.saleNumber || record.code || record.referenceNumber || "Tanpa ref";
+        const externalReferenceText = record.externalReferenceNumber || "";
+        const tooltipTitle = externalReferenceText
+          ? `${referenceText} | Marketplace: ${externalReferenceText}`
+          : referenceText;
+
         return (
           <div style={{ minWidth: 0 }}>
             <div className="ims-cell-title">{record.date || "-"}</div>
-            <Tooltip title={referenceText}>
+            <Tooltip title={tooltipTitle}>
               <div className="ims-cell-meta" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {referenceText}
               </div>
             </Tooltip>
+            {externalReferenceText ? (
+              <Tooltip title={externalReferenceText}>
+                <div className="ims-cell-meta" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  MP: {externalReferenceText}
+                </div>
+              </Tooltip>
+            ) : null}
           </div>
         );
       },
@@ -1054,9 +1338,20 @@ const Sales = () => {
       width: 150,
       className: "app-table-action-column",
       render: (_, record) => {
-        const canMoveToShipped = record.status === "Diproses" && !isOfflineChannel(record.salesChannel);
-        const canComplete = record.status === "Dikirim" && !isOfflineChannel(record.salesChannel);
-        const canCancel = ["Diproses", "Dikirim"].includes(record.status) && !isOfflineChannel(record.salesChannel);
+        const hasActiveCancelMarker = isSaleAuditLocked(record) && ["Diproses", "Dikirim", "Selesai"].includes(record.status);
+        const canMoveToShipped = record.status === "Diproses" && !isOfflineChannel(record.salesChannel) && !hasActiveCancelMarker;
+        const canComplete = record.status === "Dikirim" && !isOfflineChannel(record.salesChannel) && !hasActiveCancelMarker;
+        const canCancel = ["Diproses", "Dikirim"].includes(record.status) && !isOfflineChannel(record.salesChannel) && !hasActiveCancelMarker;
+        const isUpdatingThisSale = updatingSaleId === record.id;
+        const isAnySaleUpdating = Boolean(updatingSaleId);
+
+        if (hasActiveCancelMarker) {
+          return (
+            <Tooltip title="Sales aktif punya marker cancel/revert stok. Jalankan Auto Detect Bug Data sebelum lanjut transaksi.">
+              <Tag color="red">Perlu Audit</Tag>
+            </Tooltip>
+          );
+        }
 
         if (!canMoveToShipped && !canComplete && !canCancel) {
           return "-";
@@ -1071,7 +1366,7 @@ const Sales = () => {
                 okText="Ya"
                 cancelText="Tidak"
               >
-                <Button className="ims-action-button" size="small">
+                <Button className="ims-action-button" size="small" loading={isUpdatingThisSale} disabled={isAnySaleUpdating}>
                   Dikirim
                 </Button>
               </Popconfirm>
@@ -1084,7 +1379,7 @@ const Sales = () => {
                 okText="Ya"
                 cancelText="Tidak"
               >
-                <Button className="ims-action-button" size="small">
+                <Button className="ims-action-button" size="small" loading={isUpdatingThisSale} disabled={isAnySaleUpdating}>
                   Selesai
                 </Button>
               </Popconfirm>
@@ -1097,7 +1392,7 @@ const Sales = () => {
                 okText="Ya"
                 cancelText="Tidak"
               >
-                <Button className="ims-action-button" size="small" danger>
+                <Button className="ims-action-button" size="small" danger loading={isUpdatingThisSale} disabled={isAnySaleUpdating}>
                   Batalkan
                 </Button>
               </Popconfirm>
@@ -1208,9 +1503,15 @@ const Sales = () => {
         title="Tambah Penjualan"
         open={isModalOpen}
         onOk={form.submit}
-        onCancel={() => setIsModalOpen(false)}
+        onCancel={() => {
+          if (!isSavingSaleRef.current) setIsModalOpen(false);
+        }}
         okText="Simpan"
         cancelText="Batal"
+        confirmLoading={isSavingSale}
+        okButtonProps={{ disabled: isSavingSale }}
+        cancelButtonProps={{ disabled: isSavingSale }}
+        maskClosable={!isSavingSale}
         width={860}
       >
         <Form

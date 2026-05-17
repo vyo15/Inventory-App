@@ -992,7 +992,7 @@ const ProductionEmployees = () => {
               <Form.Item label="Skill Tags" name="skillTags">
                 <Select
                   mode="tags"
-                  placeholder="Contoh: potong, rakit, qc, senior"
+                  placeholder="Contoh: potong, rakit, senior"
                   tokenSeparators={[","]}
                 />
               </Form.Item>

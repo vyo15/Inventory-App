@@ -46,6 +46,9 @@ export const LOCKED_PRODUCTION_WORK_LOG_FIELDS = Object.freeze([
   "sequenceNo",
   "sourceType",
   "startedAt",
+  // Output identity dari PO wajib ikut terkunci. Qty hasil tetap boleh diisi
+  // lewat field summary good/reject/rework sebelum Complete Work Log.
+  "outputs",
 ]);
 
 const normalizeStatus = (value = "") => String(value || "").trim().toLowerCase();
@@ -110,6 +113,10 @@ export const applyLockedWorkLogCoreFields = (current = {}, next = {}) => {
   LOCKED_PRODUCTION_WORK_LOG_FIELDS.forEach((fieldName) => {
     result[fieldName] = current?.[fieldName];
   });
+
+  if (Boolean(current?.productionOrderId) && Array.isArray(current?.outputs)) {
+    result.outputs = current.outputs;
+  }
 
   if (normalizeStatus(current?.stockConsumptionStatus) === "applied") {
     result.stockConsumptionStatus = "applied";

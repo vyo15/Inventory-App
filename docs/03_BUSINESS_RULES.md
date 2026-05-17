@@ -77,8 +77,8 @@ Sebelum penjualan disimpan, stok item harus cukup.
 
 ### 2.2A UX pemilihan item dan referensi channel
 - Form Penjualan tetap boleh menjual produk jadi dan bahan baku, tetapi UI wajib memisahkan pilihan Jenis Item agar dua sumber item tidak tercampur dalam satu dropdown panjang.
-- Pilihan Jenis Item hanya untuk filter UI; payload final sale tetap menyimpan `collectionName`, `itemId`, `itemName`, `typeLabel`, `variantKey`, `variantLabel`, dan `stockSourceType` sesuai flow aktif.
-- `referenceNumber` bersifat opsional dan relevan untuk channel online/marketplace seperti Shopee, Tokopedia, TikTok Shop, Lazada, Instagram, dan Lainnya.
+- Pilihan Jenis Item hanya untuk filter UI; payload final sale tetap menyimpan `collectionName`, `itemId`, `itemName`, `variantKey`, `variantLabel`, dan `stockSourceType` sesuai flow aktif. `typeLabel` adalah display helper UI dan tidak wajib disimpan di payload transaksi.
+- `referenceNumber` / `sourceRef` / `saleNumber` adalah kode internal `ORD-*`; nomor resi/order marketplace disimpan terpisah di `externalReferenceNumber` dan harus ikut searchable di UI Sales.
 - Offline dan WhatsApp tidak wajib memakai resi/order/reference; saat channel berubah ke Offline/WhatsApp, field reference harus dikosongkan dan tidak aktif.
 - WhatsApp hanya dianggap non-reference channel; jangan otomatis mengubah status/income timing WhatsApp menjadi Offline tanpa keputusan business rule terpisah.
 
@@ -127,7 +127,7 @@ Jika penjualan tidak jadi:
 - audit `inventory_logs` tetap mencatat pembatalan;
 - record sale tetap ada untuk jejak audit dan laporan historis.
 
-Hard delete Sales tidak tersedia untuk user biasa dan tidak boleh ditambahkan sebagai tombol/handler baru. Pemanggilan `deleteDoc` di Sales hanya boleh dipahami sebagai rollback teknis ketika create sale gagal setelah dokumen sale sempat dibuat, bukan fitur delete user.
+Hard delete Sales tidak tersedia untuk user biasa dan tidak boleh ditambahkan sebagai tombol/handler baru. Source Sales aktif memakai Firestore transaction untuk create/cancel; jangan mengembalikan pola rollback `deleteDoc` sebagai flow normal.
 
 ## 3. Rule Retur
 Saat retur disimpan:
@@ -209,11 +209,12 @@ Catatan service bahkan menyebut:
 - target BOM bisa `product` atau `semi_finished_material`
 - bila target BOM adalah `product`, material utama sebaiknya berasal dari `semi_finished_material`, tetapi `raw_material` tetap boleh untuk bahan assembly/consumable seperti lem tembak
 - BOM menyimpan material lines dan step lines
-- Estimasi biaya BOM dihitung otomatis: material dari snapshot modal master bahan, upah dari tarif Tahapan Produksi, dan overhead manual dari input BOM.
+- Estimasi biaya BOM aktif dihitung dari master cost terbaru, bukan dari snapshot lama yang tersimpan di `production_boms.materialLines`.
 - Source estimasi material BOM aktif:
-  - Raw Material: `averageActualUnitCost` dari purchase weighted average, fallback `restockReferencePrice` jika modal aktual belum ada.
-  - Semi Finished: `averageCostPerUnit` hasil produksi sebelumnya, fallback `lastProductionCostPerUnit`. Field reference/manual semi finished tidak menjadi source estimasi aktif agar HPP turunan tetap jujur.
-- Overhead manual BOM saat ini hanya estimasi/referensi rencana, bukan source of truth HPP final. HPP final tetap dari Work Log completed dan payroll final.
+  - Raw Material: primary `averageActualUnitCost`, fallback `restockReferencePrice`; jika keduanya 0 maka estimasi wajib 0.
+  - Semi Finished: primary `averageCostPerUnit`, fallback `lastProductionCostPerUnit`; jika keduanya 0 maka estimasi wajib 0. Field reference/manual semi finished tidak menjadi source estimasi aktif agar HPP turunan tetap jujur.
+- Field `costPerUnitSnapshot` dan `totalCostSnapshot` di BOM hanya compatibility/derived cache untuk data lama. Field ini tidak boleh menjadi source utama estimasi BOM aktif, reset state, form edit BOM, atau Work Log baru.
+- `overheadCostEstimate` di BOM dipakai sebagai overhead produksi untuk listrik/glue gun. Pada Work Log baru dari PO, nilai ini dibawa ke `overheadCostActual` dan dikalikan jumlah batch PO. Labor tidak boleh di-copy ke `laborCostActual`; labor final tetap berasal dari Payroll Produksi final. Draft payroll/estimasi Step boleh tampil read-only sebagai preview, bukan HPP final.
 
 ## 11. Rule Production Order
 - PO dibentuk dari BOM.
@@ -243,8 +244,8 @@ Data inti yang direkam:
 - step
 - target
 - planned qty dan actual qty
-- good / reject / rework / scrap
-- labor cost / total cost
+- Good Qty adalah hasil produksi aktif yang dipakai stok/HPP; field hasil lain hanya compatibility data lama dan tidak ditampilkan sebagai workflow aktif
+- material cost, overhead cost, labor cost final, dan total cost
 - monitoring miss dan output teoretis
 
 ## 12A. Rule Guarded Logic Produksi
@@ -254,7 +255,7 @@ Setelah flow produksi aktif tervalidasi, area berikut harus dianggap locked / gu
 - Start Production memotong stok bahan dari snapshot requirement PO
 - Complete Work Log menambah stok output dan menutup PO
 - Work Log completed tidak boleh diedit sembarangan tanpa evaluasi khusus
-- Work Log `cancelled` tetap dibaca sebagai status legacy/guard, tetapi tidak menjadi summary card atau aksi cancel aktif di halaman Work Log
+- Status Work Log aktif hanya `in_progress` dan `completed`. `draft`/`cancelled` tidak boleh menjadi opsi input, filter utama, summary card, atau aksi aktif; jika masih ada data lama, cukup dibaca sebagai legacy read-only.
 
 Implikasi:
 - patch UI tidak boleh mengubah field inti work log / PO setelah flow aktif berjalan
@@ -271,15 +272,18 @@ Reset utilitas mendukung mode:
 
 Utilitas ini juga menyinkronkan kembali field stok agar konsisten.
 
-Preset `Reset Semua Testing` adalah shortcut guarded untuk development/testing: memilih semua modul non-protected, menghapus transaksi/log stok/planning/pricing yang diizinkan, menolkan stok master/variant, dan menolkan field modal/HPP allowlist dalam satu flow preview + keyword `RESET SEMUA`. Protected master seperti Supplier, Customer, Produk, Raw Material, Semi Finished, BOM, Step, dan Employee tidak dihapus.
+Preset `Reset Semua Testing` adalah shortcut guarded untuk development/testing: memilih semua modul non-protected, menghapus transaksi/log stok/planning/pricing yang diizinkan, menolkan stok master/variant, menolkan field modal/HPP allowlist, dan merefresh derived BOM cost estimate dalam satu flow preview + keyword `RESET SEMUA`. Protected master seperti Supplier, Customer, Produk, Raw Material, Semi Finished, BOM, Step, dan Employee tidak dihapus.
 
 
 ## Tambahan Rule Terkini (Batch Prioritas)
 
 ### Work Log Costing saat Complete
-- saat Work Log diselesaikan, summary costing final harus dihitung ulang dari snapshot material terbaru
-- `materialCostActual`, `totalCostActual`, dan `costPerGoodUnit` tidak boleh dibiarkan hanya mengikuti draft awal jika snapshot material berubah saat complete
-- sinkronisasi payroll ke Work Log boleh memperbarui `laborCostActual` sebagai ringkasan display, tetapi tidak mengubah source of truth payroll line
+- saat Work Log baru dimulai/diselesaikan, summary costing final harus dihitung ulang dari master cost terbaru lalu disimpan sebagai snapshot history Work Log
+- `materialCostActual`, `totalCostActual`, dan `costPerGoodUnit` tidak boleh dibiarkan mengikuti stale snapshot BOM/draft awal jika master cost berubah atau sudah direset
+- `overheadCostActual` aktif dipakai untuk overhead listrik/glue gun dari BOM. Jika Work Log lama belum menyimpan overhead tetapi BOM punya overhead, UI boleh menampilkan estimasi read-only tanpa backfill massal.
+- sinkronisasi payroll final ke Work Log boleh memperbarui `laborCostActual` sebagai ringkasan display, tetapi tidak mengubah source of truth payroll line.
+- Jika payroll masih draft atau belum ada final, Detail Work Log/HPP boleh menampilkan draft payroll atau estimasi Step sebagai preview read-only agar labor tidak terlihat 0 secara menyesatkan; preview ini tidak boleh dipakai sebagai HPP final atau diposting ke master stok.
+- Jika payroll final muncul setelah output stok/HPP master sudah ter-posting, reconcile/backfill HPP master/output lama wajib menjadi task guarded terpisah dengan preview; jangan auto-update dari drawer/detail.
 
 ### Payroll Paid vs Cash Out
 - status `paid` pada payroll produksi sekarang adalah trigger integrasi ke Cash Out/Expense.
@@ -397,7 +401,7 @@ Catatan current state:
 
 - Tahapan Produksi memakai `basisType` sebagai field aktif untuk cara kerja step. Field `workBasisType` tidak dipakai lagi di source terbaru.
 - Label basis step aktif adalah: `Per Meter Bahan`, `Per Kawat`, `Per Qty`, dan `Per Batch`.
-- Cara pantau hasil / `monitoringMode` tidak lagi tampil dan tidak lagi disimpan dari form Step karena reject/QC detail belum menjadi workflow utama.
+- Cara pantau hasil / `monitoringMode` tidak lagi tampil dan tidak lagi disimpan dari form Step karena Good Qty menjadi input hasil aktif utama.
 - Mode upah step aktif hanya `per_qty` dan `per_batch`; mode `fixed` tidak lagi menjadi pilihan aktif.
 - Field `payrollQtyBase` tidak lagi menjadi input atau payload dari menu Step. Untuk per qty, tarif dibaca sebagai tarif per 1 hasil. Untuk per batch, tarif mengikuti batch Work Log.
 - Klasifikasi payroll tidak dipilih manual di UI Step. Sistem menurunkan klasifikasi dari `processType` agar tidak ada rule ganda antara UI Step, Work Log, Payroll, dan HPP.
@@ -461,11 +465,12 @@ Catatan current state:
 - `bomId` tetap wajib terisi sebelum submit, baik lewat auto-select resep tunggal maupun pilihan `Resep Produksi` jika ada banyak resep aktif.
 
 ### Work Log Actual Cost / HPP
-- Completed Work Log wajib menyimpan `materialCostActual`, `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit`; `overheadCostActual` hanya compatibility jika data lama punya overhead.
+- Completed Work Log wajib menyimpan `materialCostActual`, `overheadCostActual`, `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit`.
 - Biaya tidak boleh diisi asal; material cost harus berasal dari cost snapshot atau source cost item yang aman, bukan harga jual.
-- `totalCostActual = materialCostActual + laborCostActual` untuk flow aktif; overhead actual Work Log masih compatibility. Overhead manual di BOM hanya estimasi rencana sampai rule listrik/overhead produksi final di-review khusus.
+- `totalCostActual = materialCostActual + overheadCostActual + laborCostActual` untuk flow aktif. Overhead berasal dari BOM untuk listrik/glue gun, sedangkan labor final berasal dari Payroll Produksi final.
+- Detail Work Log boleh menampilkan labor `Draft Payroll` atau `Estimasi Step` secara read-only agar user paham nilai sementara. Jika draft payroll masih 0, UI boleh fallback ke estimasi Step read-only supaya tidak terlihat kosong menyesatkan. Nilai read-only tersebut tidak boleh ditulis ke `laborCostActual` dan tidak boleh dianggap HPP final sebelum payroll confirmed/paid. Field input Labor Cost di form Work Log aktif harus read-only/disabled; perubahan final labor mengikuti Payroll Produksi.
 - `costPerGoodUnit = totalCostActual / goodQty` hanya jika `goodQty > 0`; jangan membagi 0.
-- HPP Analysis membaca completed Work Log sebagai source cost final.
+- HPP Analysis membaca completed Work Log sebagai source final/preview: final hanya valid dari payroll confirmed/paid atau step yang tidak masuk HPP; draft payroll/estimasi Step hanya tampil sebagai preview read-only dengan status jelas.
 
 ### Payroll Produksi
 - Work Log completed wajib membuat payroll line otomatis berdasarkan rule Tahapan Produksi.
@@ -523,7 +528,7 @@ Progress planning wajib dihitung dari data aktual:
 - sumber utama: Work Log `completed` milik PO yang terhubung ke planning;
 - jika Work Log punya output line, gunakan `outputs[].goodQty` yang cocok dengan target item;
 - fallback hanya untuk data lama: `workLog.goodQty` jika target Work Log cocok;
-- Work Log `draft`, `in_progress`, `cancelled`, atau status lain tidak dihitung.
+- Work Log selain `completed` tidak dihitung. `draft`/`cancelled` hanya legacy read-only bila masih ada di data lama.
 
 Jika target punya varian, progress wajib cocok dengan `targetVariantKey`. Jika target tidak punya varian, progress cukup cocok dengan item master.
 
@@ -588,7 +593,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Sale tidak boleh tersimpan jika stok tersedia tidak cukup.
 - Jika mutasi stok gagal setelah sale dibuat, sale baru wajib dibatalkan/rollback agar tidak ada transaksi orphan tanpa stok keluar.
 - Income rule tidak berubah: income hanya dibuat saat sale berstatus `Selesai` dan tidak boleh dobel.
-- Cancel Sales tetap guarded: pembatalan merevert stok satu kali. Hard delete bukan flow user; penghapusan dokumen Sales hanya rollback teknis saat create failure.
+- Cancel Sales tetap guarded: pembatalan merevert stok satu kali. Hard delete bukan flow user; create/cancel Sales aktif harus atomic transaction, bukan rollback dokumen manual.
 
 ### Fase B - Metadata Expense Pembelian
 - Pembelian tetap membuat expense otomatis dengan amount mengikuti logic existing pembelian.
@@ -988,7 +993,7 @@ Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases,
 - Tab `Semua Penjualan` boleh menampilkan semua status.
 - Tab `Diproses`, `Dikirim`, `Selesai`, dan `Dibatalkan` hanya boleh menampilkan row dengan status yang sama.
 - Search resi/order/reference harus tetap bekerja di dalam batas status tab aktif.
-- Guard tab status adalah guard tampilan; tidak boleh mengubah status transition, mutasi stok, income timing, cancel flow, rollback teknis create failure, retur, dashboard, atau reports.
+- Guard tab status adalah guard tampilan; tidak boleh mengubah status transition, mutasi stok, income timing, cancel flow, atomic create transaction, retur, dashboard, atau reports.
 
 
 ## Update Business Rules — Sales pending income, no-delete Sales, dan selector stok ringkas — 2026-05-03
@@ -1113,3 +1118,26 @@ Catatan lock:
 - Field `code` tidak boleh dihapus dari payload/data karena masih dipakai internal reference, export, dan audit teknis.
 - Customer/Supplier/transaksi/audit reference tidak boleh disembunyikan dari UI.
 - SKU Variant/kode variant tetap compatibility/backstage; UI utama cukup menampilkan nama varian, status, dan stok.
+
+### Rule Semi Product Flower Group
+- Semi Product wajib menyimpan `flowerGroup` dari pilihan/ketikan eksplisit user; source tidak boleh fallback otomatis ke `mawar`.
+- `Mawar` adalah salah satu opsi valid, bukan default sistem. Jenis bunga lain/custom yang sudah ada di data harus tetap tampil dan bisa difilter tanpa mengubah schema.
+- Data legacy tanpa `flowerGroup` wajib masuk fallback read-only `Umum / Reusable`, bukan ditebak dari nama item/BOM.
+- Drawer Production Order untuk target `semi_finished_material` harus memakai explicit `semi_finished_materials.flowerGroup` dan `category` untuk filter UI; jangan infer `Mawar` dari teks target/nama BOM karena bisa salah grouping.
+
+
+### Business rule: helper kecil, formatter stok, dan finite number
+
+- Stok/HPP/payroll/finance tidak boleh memakai angka hasil parsing yang `NaN`; helper angka shared untuk stok wajib finite-safe dan fallback ke `0` jika input invalid.
+- Formatter stok + unit untuk tampilan master data wajib memakai `formatStockWithUnitId()` agar Product, Raw Material, Semi Finished, dan table stock display konsisten.
+- Formatter display tidak boleh dipakai sebagai validator/mutator stok; mutasi stok tetap lewat transaction/service/helper stok aktif.
+- `safeTrim` boleh tetap lokal di service guarded jika dipakai untuk compatibility data lama atau reference fallback. Refactor massal helper string dilarang sebelum audit field dan manual test flow terkait.
+
+
+### Update Rule HPP Final vs Preview — 2026-05-17
+- Work Log detail dan HPP Analysis wajib memakai resolver labor yang sama: payroll final diprioritaskan, draft payroll/estimasi Step hanya read-only.
+- HPP Analysis tidak boleh menampilkan draft/estimasi sebagai HPP final. Row yang belum punya payroll final wajib berstatus Preview/Belum final.
+- Ringkasan final hanya boleh menjumlahkan row yang final-ready. Preview boleh ditampilkan sebagai angka bantu operasional, bukan dasar laporan final.
+- Alert besar tidak boleh dipakai untuk status normal seperti payroll draft/estimasi Step. Gunakan tag/helper compact; warning tetap dipakai untuk data yang benar-benar perlu dicek.
+- Field hasil selain Good Qty tetap compatibility data lama dan tidak boleh ditampilkan sebagai workflow aktif tanpa task terpisah.
+- Data Quality Audit produksi boleh menandai Work Log legacy status, payroll final pending/mismatch, output HPP yang butuh reconcile, dan Semi Finished tanpa `flowerGroup`; audit hasil selain Good Qty tidak diaktifkan.

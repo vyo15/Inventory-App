@@ -77,6 +77,35 @@ const getActorName = (currentUser = null) =>
   currentUser?.uid ||
   "system";
 
+const buildPayrollRuleFromStep = (step = {}, source = "production_step") => ({
+  payrollMode: step.payrollMode === "per_batch" ? "per_batch" : "per_qty",
+  payrollRate: toSafeNumber(step.payrollRate || 0),
+  payrollQtyBase: Math.max(1, toSafeNumber(step.payrollQtyBase || 1)),
+  payrollOutputBasis: step.payrollOutputBasis || "good_qty",
+  payrollClassification: step.payrollClassification || "direct_labor",
+  includePayrollInHpp: step.includePayrollInHpp !== false,
+  payrollRuleSource: source,
+  legacyPayrollFallbackUsed: false,
+});
+
+const buildPayrollRuleFromWorkLogSnapshot = (workLog = {}) => {
+  if (!safeTrim(workLog.stepPayrollRuleSource) && toSafeNumber(workLog.stepPayrollRate || 0) <= 0) {
+    return null;
+  }
+
+  return buildPayrollRuleFromStep(
+    {
+      payrollMode: workLog.stepPayrollMode,
+      payrollRate: workLog.stepPayrollRate,
+      payrollQtyBase: workLog.stepPayrollQtyBase,
+      payrollOutputBasis: workLog.stepPayrollOutputBasis,
+      payrollClassification: workLog.stepPayrollClassification,
+      includePayrollInHpp: workLog.stepPayrollIncludeInHpp,
+    },
+    safeTrim(workLog.stepPayrollRuleSource) || "work_log_step_snapshot",
+  );
+};
+
 const sanitizePayrollKeySegment = (value, fallback = "line") => {
   const normalized = safeTrim(value)
     .toLowerCase()
@@ -214,8 +243,8 @@ const isPayrollLineFinalForHpp = (line = {}) => {
   if (["confirmed", "paid"].includes(status)) return true;
   if (paymentStatus === "paid") return true;
 
-  // LEGACY-COMPAT: payroll lama bisa belum punya status, tetapi sudah menyimpan finalAmount valid.
-  return !status && toSafeNumber(line.finalAmount) > 0;
+  // LEGACY-COMPAT: payroll lama bisa belum punya status/paymentStatus, tetapi sudah menyimpan finalAmount valid.
+  return !status && !paymentStatus && toSafeNumber(line.finalAmount) > 0;
 };
 
 const assertPayrollGenerationEligibility = ({ workLog = {}, stepRule = {}, outputQtyUsed = 0, workedQty = 0 } = {}) => {
@@ -250,36 +279,20 @@ const assertPayrollGenerationEligibility = ({ workLog = {}, stepRule = {}, outpu
 };
 
 const getStepPayrollRuleSnapshot = async (workLog = {}) => {
-  if (!workLog.stepId) {
-    return {
-      payrollMode: "per_qty",
-      payrollRate: 0,
-      payrollQtyBase: 1,
-      payrollOutputBasis: "good_qty",
-      payrollClassification: "direct_labor",
-      includePayrollInHpp: true,
-      payrollRuleSource: "default_no_step",
-      legacyPayrollFallbackUsed: true,
-    };
+  if (workLog.stepId) {
+    try {
+      const stepSnap = await getDoc(doc(db, PRODUCTION_STEPS_COLLECTION_NAME, workLog.stepId));
+      if (stepSnap.exists()) {
+        return buildPayrollRuleFromStep(stepSnap.data() || {}, "production_step");
+      }
+    } catch (error) {
+      console.error("Gagal membaca rule payroll tahapan produksi", error);
+    }
   }
 
-  try {
-    const stepSnap = await getDoc(doc(db, PRODUCTION_STEPS_COLLECTION_NAME, workLog.stepId));
-    if (stepSnap.exists()) {
-      const step = stepSnap.data() || {};
-      return {
-        payrollMode: step.payrollMode === "per_batch" ? "per_batch" : "per_qty",
-        payrollRate: Number(step.payrollRate || 0),
-        payrollQtyBase: 1,
-        payrollOutputBasis: step.payrollOutputBasis || "good_qty",
-        payrollClassification: step.payrollClassification || "direct_labor",
-        includePayrollInHpp: step.includePayrollInHpp !== false,
-        payrollRuleSource: "production_step",
-        legacyPayrollFallbackUsed: false,
-      };
-    }
-  } catch (error) {
-    console.error("Gagal membaca rule payroll tahapan produksi", error);
+  const workLogSnapshotRule = buildPayrollRuleFromWorkLogSnapshot(workLog);
+  if (workLogSnapshotRule) {
+    return workLogSnapshotRule;
   }
 
   return {
@@ -289,7 +302,7 @@ const getStepPayrollRuleSnapshot = async (workLog = {}) => {
     payrollOutputBasis: "good_qty",
     payrollClassification: "direct_labor",
     includePayrollInHpp: true,
-    payrollRuleSource: "fallback_step_unavailable",
+    payrollRuleSource: workLog.stepId ? "fallback_step_unavailable" : "default_no_step",
     legacyPayrollFallbackUsed: true,
   };
 };
@@ -411,7 +424,7 @@ export const validateProductionPayroll = (values = {}) => {
 };
 
 export const getPayrollReferenceData = async () => {
-  const [completedWorkLogs, employeesResult] = await Promise.all([
+  const [completedWorkLogs, employeesResult, stepsResult] = await Promise.all([
     getCompletedProductionWorkLogs(),
     (async () => {
       try {
@@ -427,38 +440,49 @@ export const getPayrollReferenceData = async () => {
         return { items: [] };
       }
     })(),
+    (async () => {
+      try {
+        const snapshot = await getDocs(collection(db, PRODUCTION_STEPS_COLLECTION_NAME));
+        return {
+          items: snapshot.docs
+            .map((documentItem) => ({ id: documentItem.id, ...documentItem.data() }))
+            .filter((item) => item.isActive !== false),
+        };
+      } catch (error) {
+        console.error("Gagal memuat referensi step payroll produksi", error);
+        return { items: [] };
+      }
+    })(),
   ]);
 
   return {
     completedWorkLogs,
     employees: employeesResult.items,
+    productionSteps: stepsResult.items,
   };
 };
 
-export const buildPayrollDraftFromWorkLog = (workLog, employee = null) => {
-  const basisOutput =
-    workLog?.goodQty && Number(workLog.goodQty || 0) > 0
-      ? Number(workLog.goodQty || 0)
-      : Number(workLog.actualOutputQty || 0);
-
-  let payrollMode = "per_qty";
-  let payrollRate = 0;
-  let payrollQtyBase = 1;
-  let payrollOutputBasis = "good_qty";
-
-  if (employee?.useCustomPayrollRate) {
-    payrollMode = employee.customPayrollMode === "per_batch" ? "per_batch" : "per_qty";
-    payrollRate = Number(employee.customPayrollRate || 0);
-    payrollQtyBase = Number(employee.customPayrollQtyBase || 1);
-    payrollOutputBasis = employee.customPayrollOutputBasis || "good_qty";
-  }
-
-  const outputQtyUsed = basisOutput;
+export const buildPayrollDraftFromWorkLog = (workLog, employee = null, productionStep = null) => {
+  const stepRule = productionStep
+    ? buildPayrollRuleFromStep(productionStep, "production_step")
+    : buildPayrollRuleFromWorkLogSnapshot(workLog) || {
+        payrollMode: "per_qty",
+        payrollRate: 0,
+        payrollQtyBase: 1,
+        payrollOutputBasis: "good_qty",
+        payrollClassification: "direct_labor",
+        includePayrollInHpp: true,
+        payrollRuleSource: "manual_default_no_step",
+        legacyPayrollFallbackUsed: true,
+      };
+  const outputQtyUsed = resolvePayrollOutputQty(workLog, stepRule.payrollOutputBasis || "good_qty");
+  const workedQty = Number(workLog?.plannedQty || outputQtyUsed || 0);
   const calculated = calculatePayrollAmounts({
-    payrollMode,
-    payrollRate,
-    payrollQtyBase,
+    payrollMode: stepRule.payrollMode,
+    payrollRate: stepRule.payrollRate,
+    payrollQtyBase: stepRule.payrollQtyBase,
     outputQtyUsed,
+    workedQty,
     bonusAmount: 0,
     deductionAmount: 0,
   });
@@ -484,13 +508,15 @@ export const buildPayrollDraftFromWorkLog = (workLog, employee = null) => {
     workerCode: employee?.code || "",
     workerName: employee?.name || "",
 
-    payrollMode,
-    payrollRate,
-    payrollQtyBase,
-    payrollOutputBasis,
+    payrollMode: stepRule.payrollMode,
+    payrollRate: stepRule.payrollRate,
+    payrollQtyBase: stepRule.payrollQtyBase,
+    payrollOutputBasis: stepRule.payrollOutputBasis,
+    payrollClassification: stepRule.payrollClassification,
+    includePayrollInHpp: stepRule.includePayrollInHpp,
 
-    totalWorkLogOutputQty: basisOutput,
-    workedQty: basisOutput,
+    totalWorkLogOutputQty: Number(workLog?.goodQty || workLog?.actualOutputQty || 0),
+    workedQty,
     outputQtyUsed,
     payableQtyFactor: calculated.payableQtyFactor,
 
@@ -507,7 +533,9 @@ export const buildPayrollDraftFromWorkLog = (workLog, employee = null) => {
     paidAt: null,
 
     notes: "",
-    calculationNotes: "Draft payroll dibuat dari work log completed",
+    calculationNotes: `Draft payroll dari Work Log completed. Rule: ${stepRule.payrollRuleSource}.`,
+    payrollRuleSource: stepRule.payrollRuleSource,
+    legacyPayrollFallbackUsed: Boolean(stepRule.legacyPayrollFallbackUsed),
   };
 };
 

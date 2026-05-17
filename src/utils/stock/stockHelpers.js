@@ -1,6 +1,12 @@
 import { formatNumberId } from '../formatters/numberId';
 
-export const toNumber = (value) => Number(value || 0);
+export const toNumber = (value, fallback = 0) => {
+  const parsedValue = Number(value ?? fallback);
+  const parsedFallback = Number(fallback ?? 0);
+
+  if (Number.isFinite(parsedValue)) return parsedValue;
+  return Number.isFinite(parsedFallback) ? parsedFallback : 0;
+};
 
 export const calculateAvailableStock = (currentStock, reservedStock) => {
   return Math.max(toNumber(currentStock) - toNumber(reservedStock), 0);
@@ -8,7 +14,7 @@ export const calculateAvailableStock = (currentStock, reservedStock) => {
 
 export const normalizeStockSnapshot = (item = {}, stockField = 'currentStock') => {
   const currentStock = toNumber(item[stockField] ?? item.stock ?? 0);
-  const reservedStock = toNumber(item.reservedStock || 0);
+  const reservedStock = toNumber(item.reservedStock);
   const availableStock = calculateAvailableStock(currentStock, reservedStock);
 
   return {
@@ -49,18 +55,18 @@ const resolveLowStockThresholdField = (sourceType = '') =>
 export const resolveMasterLowStockThreshold = (record = {}, sourceType = '') => {
   const primaryField = resolveLowStockThresholdField(sourceType);
   const fallbackField = primaryField === 'minStock' ? 'minStockAlert' : 'minStock';
-  const threshold = Number(record?.[primaryField] ?? record?.[fallbackField] ?? 0);
+  const threshold = toNumber(record?.[primaryField] ?? record?.[fallbackField]);
 
-  return Number.isFinite(threshold) && threshold > 0 ? threshold : 0;
+  return threshold > 0 ? threshold : 0;
 };
 
 export const getVariantAvailableStockValue = (variant = {}) => {
-  const currentStock = Number(variant?.currentStock ?? variant?.stock ?? 0);
-  const reservedStock = Number(variant?.reservedStock || 0);
+  const currentStock = toNumber(variant?.currentStock ?? variant?.stock);
+  const reservedStock = toNumber(variant?.reservedStock);
   const fallbackAvailable = Math.max(currentStock - reservedStock, 0);
-  const availableStock = Number(variant?.availableStock ?? fallbackAvailable);
+  const availableStock = toNumber(variant?.availableStock, fallbackAvailable);
 
-  return Number.isFinite(availableStock) ? Math.max(availableStock, 0) : fallbackAvailable;
+  return Math.max(availableStock, 0);
 };
 
 export const getVariantStockStatusMeta = (variant = {}, threshold = 0) => {
@@ -69,7 +75,7 @@ export const getVariantStockStatusMeta = (variant = {}, threshold = 0) => {
   }
 
   const stock = getVariantAvailableStockValue(variant);
-  const safeThreshold = Number(threshold || 0);
+  const safeThreshold = toNumber(threshold);
 
   if (stock <= 0) {
     return { status: 'empty', label: 'Kosong', color: 'red', pillClassName: 'stock-variant-pill--danger' };
@@ -96,8 +102,9 @@ export const getLowStockVariantEntries = (
 
   if (!hasVariants) return [];
 
-  const resolvedThreshold = Number.isFinite(Number(threshold))
-    ? Number(threshold)
+  const parsedThreshold = Number(threshold);
+  const resolvedThreshold = Number.isFinite(parsedThreshold)
+    ? parsedThreshold
     : resolveMasterLowStockThreshold(record, sourceType);
   const resolvedUnit = unit || record?.stockUnit || record?.unit || record?.baseUnit || 'pcs';
 

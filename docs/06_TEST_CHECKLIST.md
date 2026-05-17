@@ -163,7 +163,10 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - buat BOM target semi finished
 - buat BOM target product
 - pastikan BOM product menerima `semi_finished_material` untuk komponen utama dan `raw_material` untuk consumable assembly seperti lem tembak
-- pastikan Estimasi Biaya Material BOM otomatis mengambil cost dari master item, bukan tetap Rp 0 jika master punya modal/referensi.
+- pastikan Estimasi Biaya Material BOM otomatis mengambil cost dari master item terbaru, bukan stale `costPerUnitSnapshot`/`totalCostSnapshot` lama.
+- set Semi Finished `averageCostPerUnit = 0` dan `lastProductionCostPerUnit = 0`, buka BOM yang memakainya, lalu pastikan estimasi material menjadi Rp 0.
+- ubah harga/modal Raw Material, reload BOM, lalu pastikan estimasi ikut berubah sesuai source terbaru.
+- edit BOM lama tanpa memilih ulang material dan pastikan snapshot lama tidak kembali menjadi source aktif.
 - pastikan Estimasi Biaya Produksi BOM otomatis mengikuti tarif Tahapan Produksi.
 - pastikan Overhead Manual BOM tersimpan sebagai estimasi dan ikut Total Estimasi, tanpa mengubah rule HPP final Work Log/payroll.
 - cek material lines dan step lines tersimpan benar
@@ -196,20 +199,23 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - cek list work log tetap tampil urut terbaru walau query utama fallback
 - pastikan halaman Work Log Produksi tidak menampilkan tombol tambah manual
 - pastikan summary card Work Log hanya menampilkan Total, In Progress, dan Completed
-- pastikan status `cancelled` lama tetap bisa dibaca/filter jika ada data lama, tetapi tidak menjadi summary card utama
+- pastikan status `cancelled`/`draft` lama bila ada tetap terbaca sebagai legacy di tabel/detail saat filter semua, tetapi tidak muncul sebagai opsi input/filter utama atau summary card
 - buat work log dari PO eligible lewat tombol **Mulai Produksi** di menu Production Order
 - pastikan PO `ready` / `shortage` bisa dipakai start produksi
 - pastikan PO yang sudah punya work log tidak muncul lagi di referensi Work Log
 - isi material usage
 - isi outputs
-- cek worker dan biaya aktual
+- cek worker dan biaya aktual; labor/overhead tampil compact dan tidak memakai alert besar untuk status normal
+- cek Detail Work Log saat payroll masih draft/belum final: labor menampilkan Draft Payroll atau Estimasi Step read-only, bukan 0 yang menyesatkan dan bukan HPP final
+- cek Detail Work Log setelah payroll confirmed/paid: labor menampilkan Payroll Final dan ringkasan cost final
 - cek status aktif `in_progress` dan `completed`; `draft` hanya legacy compatibility jika ada data lama
 - cek konsumsi stok material
 - cek penambahan stok output
 - selesaikan work log dari popup complete
 - pastikan work log completed tidak bisa diedit ulang sembarangan
 - cek payroll tetap bisa membaca work log completed
-- cek HPP tetap bisa membaca work log completed
+- cek HPP tetap bisa membaca work log completed dan membedakan Final vs Preview saat payroll belum final
+- jalankan Auto Detect/Data Quality Audit dan pastikan kandidat reconcile HPP output hanya menjadi warning read-only, bukan auto-fix
 
 ### Payroll Produksi
 - buat payroll dari work log completed
@@ -218,9 +224,10 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 
 ### Analisis HPP
 - pastikan work log completed terbaca
-- cek total biaya produksi
-- cek total good qty
-- cek rata-rata HPP per unit
+- pastikan row dengan payroll confirmed/paid tampil sebagai Final
+- pastikan row dengan payroll draft/estimasi Step tampil sebagai Preview/Belum final, bukan HPP final
+- cek total biaya final, good qty final, rata-rata HPP final, dan HPP preview
+- ekspor XLSX dan pastikan kolom Final, Preview, Status, dan Validasi Cost terbaca jelas
 
 ## F. Laporan
 - Stock Report tampil benar
@@ -272,9 +279,9 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 ### Area sensitif
 - Production Planning: Planning tanpa PO tetap bisa cancel, Planning dengan PO tetap tidak bisa cancel langsung, dan Planning tidak mengubah stok;
 - Production Order: readiness, material requirement, dan shortage warning tetap jelas;
-- Work Log: warning biaya material 0, biaya tenaga kerja 0, total biaya 0, dan HPP belum valid tetap terlihat saat relevan;
+- Work Log: detail biaya tetap compact; material/overhead/labor terlihat jelas tanpa alert besar untuk status normal seperti payroll draft atau estimasi step;
 - Payroll: final amount, status payroll, payment status, include HPP, dan relasi Cash Out tetap jelas;
-- HPP Analysis: HPP invalid/cost kosong tetap terlihat;
+- HPP Analysis: HPP invalid/cost kosong tetap terlihat, tetapi status draft/estimasi tampil compact dan tidak memakai alert besar;
 - Stock: stok total, stok tersedia, stok dipesan, minimum stock, varian, dan warning critical tetap terlihat;
 - Sales/Purchases/Returns: item, qty, harga, subtotal, total, status, dan dampak stok/kas tetap jelas;
 - Cash In/Cash Out: sumber manual/otomatis dan referensi transaksi tetap jelas;
@@ -306,7 +313,9 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 ### Work Log Costing
 - complete Work Log menghitung ulang `materialCostActual`
 - complete Work Log menghitung ulang `totalCostActual` dan `costPerGoodUnit`
-- detail labor Work Log membaca ringkasan payroll final bila tersedia
+- detail labor Work Log memprioritaskan payroll final, lalu menampilkan draft payroll/estimasi step sebagai read-only tanpa mengubah HPP final
+- HPP Analysis memakai resolver labor yang sama dengan detail Work Log dan memisahkan Final vs Preview
+- detail overhead Work Log membaca overhead BOM untuk listrik/glue gun dan tidak menampilkan field hasil selain Good Qty sebagai workflow aktif
 
 ### Payroll / Cash Out
 - detail Payroll Produksi lebih mudah dipahami user
@@ -412,7 +421,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - pastikan tabel utama tidak memaksa scroll horizontal hanya untuk melihat tombol aksi pada desktop/laptop normal
 - pastikan tombol Detail langsung terlihat
 - pastikan tombol Edit langsung terlihat untuk work log yang masih editable
-- pastikan tombol Selesaikan langsung terlihat untuk work log yang belum completed/cancelled
+- pastikan tombol Selesaikan langsung terlihat hanya untuk work log aktif `in_progress`
 - klik Selesaikan dan pastikan modal menampilkan target produksi
 - pastikan modal menampilkan step produksi
 - pastikan modal menampilkan qty batch
@@ -455,7 +464,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - complete Work Log dengan `goodQty > 0`
 - pastikan `materialCostActual` tidak tetap 0 jika raw material punya `averageActualUnitCost`/`restockReferencePrice`, atau semi finished punya `averageCostPerUnit`/`lastProductionCostPerUnit`
 - pastikan `laborCostActual` tersinkron setelah payroll line otomatis dibuat
-- pastikan `totalCostActual = materialCostActual + laborCostActual`
+- pastikan `totalCostActual = materialCostActual + overheadCostActual + laborCostActual`
 - pastikan `costPerGoodUnit = totalCostActual / goodQty` dan tidak membagi 0 saat `goodQty` tidak valid
 - pastikan output stok hanya bertambah satu kali saat Work Log completed
 - pastikan payroll line tidak dobel saat tombol Selesaikan ditekan ulang / halaman refresh
@@ -466,7 +475,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 ## Checklist Reset Semua Testing
 - [ ] Di Reset & Maintenance, klik `Reset Semua Testing` dan pastikan modal meminta keyword `RESET SEMUA`.
 - [ ] Pastikan preview menunjukkan delete transaksi/log stok/planning/pricing, operasi stok, operasi HPP, dan total operasi di bawah batas batch aman.
-- [ ] Setelah konfirmasi, pastikan transaksi/log stok yang tidak dilindungi bersih, stok master/variant menjadi 0, dan field modal/HPP allowlist menjadi 0.
+- [ ] Setelah konfirmasi, pastikan transaksi/log stok yang tidak dilindungi bersih, stok master/variant menjadi 0, field modal/HPP allowlist menjadi 0, dan BOM estimate tidak menampilkan stale cost.
 - [ ] Pastikan protected master tidak terhapus: Supplier, Customer, Product, Raw Material, Semi Finished, BOM, Production Step, Employee.
 - [ ] Pastikan maintenance log mencatat action `reset_all_testing_data`, status success/failed, affected collections, stock result, dan HPP result.
 
@@ -474,16 +483,20 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Di Reset & Maintenance, pilih `Reset Semua Modal & HPP`, klik preview, dan pastikan affected collection hanya Raw Material, Product, dan Semi Finished.
 - [ ] Pastikan tombol `Reset Semua Modal/HPP` tetap meminta keyword `RESET MODAL HPP` sebelum write.
 - [ ] Pastikan reset tidak menghapus transaksi, stok, PO, Work Log, Payroll, Sales, Purchases, Returns, atau Cash.
+- [ ] Pastikan reset merefresh `production_boms.materialLines[].costPerUnitSnapshot`, `totalCostSnapshot`, `materialCostEstimate`, dan `totalCostEstimate` dari master cost pasca-reset.
+- [ ] Pastikan `laborCostEstimate` tetap dari step, `overheadCostEstimate` tetap dari BOM, dan reset tidak menghapus overhead yang masih dipakai Work Log baru.
 - [ ] Pastikan Semi Finished ikut preview/reset untuk `averageCostPerUnit` dan `lastProductionCostPerUnit`; field legacy cost hanya dibersihkan sebagai compatibility cleanup.
 
 ## Checklist Task 2 All-in-One - HPP Cost 0 Final Verification
 - [ ] Buat raw material bervarian dengan stok varian valid dan `averageActualUnitCost` master > 0, lalu Start Production dari PO dan pastikan `materialUsages[].costPerUnitSnapshot` memakai fallback cost master bila cost varian kosong.
+- [ ] Buat Work Log baru dari PO setelah reset cost master ke 0 dan pastikan material cost tidak mengambil stale BOM snapshot.
+- [ ] Pastikan completed Work Log/history lama tidak berubah hanya karena BOM estimate atau reset HPP direfresh.
 - [ ] Complete Work Log dari PO dan pastikan `materialCostActual`, `totalCostActual`, dan `costPerGoodUnit` tersimpan > 0 saat material cost dan `goodQty` valid.
 - [ ] Pastikan Complete Work Log tidak error Firestore `reads after writes`: semua material/output stock document terbaca sebelum write transaksi.
 - [ ] Pastikan output stok tetap bertambah satu kali, dan HPP/average cost output hanya update jika `goodQty > 0` dan `totalCostActual > 0`.
 - [ ] Pastikan jika total cost 0, output stock boleh mengikuti flow existing tetapi HPP/average cost master tidak ditulis 0 sebagai HPP valid.
 - [ ] Generate payroll otomatis dari Work Log completed dan pastikan operator kosong, rate step 0, basis invalid, atau output basis 0 menghasilkan error yang jelas.
-- [ ] Pastikan `includePayrollInHpp=false` tidak masuk ke `payrollFinalAmount`, `laborCostActual`, `totalCostActual`, dan HPP Analysis.
+- [ ] Pastikan `includePayrollInHpp=false` tidak masuk ke `payrollFinalAmount`, `laborCostActual`, `totalCostActual`, dan HPP Analysis; UI detail boleh menampilkan status tidak masuk HPP secara compact.
 - [ ] Buka Detail Work Log dan HPP Analysis: jika summary material lama 0 tetapi line material punya snapshot cost, angka display tetap membaca fallback line tanpa backfill massal.
 - [ ] Buka Reset Maintenance > HPP Cost Testing / Reset Modal: Preview wajib tampil sebelum reset, keyword konfirmasi wajib benar, dan reset hanya menyentuh field cost/HPP allowlist.
 - [ ] Simpan baseline modal/HPP, jalankan reset, lalu restore baseline dan pastikan stok, transaksi, PO, Work Log, Payroll, Sales, Purchases, Returns, dan Cash tidak berubah.
@@ -535,7 +548,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Klik Paid ulang/reload, pastikan expense tidak dobel.
 - [ ] Pastikan Profit Loss membaca expense payroll sebagai pengeluaran.
 - [ ] Pastikan Payroll Report menampilkan referensi Cash Out tanpa menghitung expense sebagai source payroll.
-- [ ] Pastikan HPP Analysis membaca Work Log completed dengan material/labor/total cost final.
+- [ ] Pastikan HPP Analysis membaca Work Log completed dan membedakan material/labor/total cost final vs preview.
 - [ ] Pastikan pembelian tetap membuat expense, penjualan selesai tetap membuat income, dan stock adjustment tetap membuat inventory log.
 - [ ] Pastikan build berhasil dan tidak ada error console.
 
@@ -565,7 +578,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] PO preview compact menampilkan stok target, varian target, qty batch, estimasi output, kebutuhan material, stok material, dan status cukup/kurang.
 - [ ] PO preview tetap read-only dan tidak mengubah stok/status/PO/BOM.
 - [ ] Work Log actual cost benar: material, labor, total, dan cost per good unit tersimpan pada completed Work Log.
-- [ ] HPP Analysis membaca completed Work Log cost final.
+- [ ] HPP Analysis membaca completed Work Log cost final/preview dengan status yang jelas.
 - [ ] Detail Payroll punya penjelasan field, status, payment status, rate, qty dasar, amount calculated, final amount, notes, dan calculation notes.
 - [ ] Detail Karyawan Produksi menjelaskan data dasar, status, jenis kerja, role, skill, assignment, work log, payroll summary, dan legacy payroll preference.
 - [ ] Payroll paid business rule jelas: paid membuat Cash Out/Expense otomatis hanya dengan guard idempotent.
@@ -615,7 +628,8 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Buka form Sales dan pastikan Jenis Item memfilter dropdown: Produk Jadi hanya `products`, Bahan Baku hanya `raw_materials`.
 - [ ] Ganti Jenis Item setelah item dipilih dan pastikan item, varian, quantity, dan harga reset agar tidak stale.
 - [ ] Pilih channel Offline/WhatsApp dan pastikan `referenceNumber` disabled serta dikosongkan.
-- [ ] Pilih channel marketplace/online dan pastikan `referenceNumber` aktif tetapi tetap opsional.
+- [ ] Pilih channel marketplace/online dan pastikan input nomor marketplace aktif tetapi tetap opsional, lalu tersimpan sebagai `externalReferenceNumber`.
+- [ ] Cari Sales memakai nomor marketplace/resi dan pastikan row yang benar muncul.
 - [ ] Pastikan WhatsApp tidak otomatis diperlakukan seperti Offline untuk status/income timing.
 - [ ] Buat sale stok cukup dan pastikan sale tersimpan.
 - [ ] Pastikan stok master/varian berkurang setelah sale dibuat.
@@ -623,10 +637,13 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Buat sale item bervarian stok cukup dan pastikan varian yang benar berkurang.
 - [ ] Buat sale item bervarian stok tidak cukup dan pastikan sale tidak tersimpan.
 - [ ] Input item yang sama di dua baris dengan total melebihi `availableStock`, lalu pastikan sale tidak tersimpan.
-- [ ] Status `Selesai` membuat income sekali saja.
+- [ ] Form create online tidak menyediakan opsi `Dibatalkan`; pembatalan hanya lewat tombol `Batalkan` di tabel.
+- [ ] Status `Selesai` membuat income sekali saja, termasuk jika tombol/action dipicu ulang.
 - [ ] Status selain `Selesai` tidak membuat income.
-- [ ] Cancel sale revert stok satu kali.
-- [ ] Delete sale yang sudah `Dibatalkan` tidak double revert.
+- [ ] Cancel sale dari `Diproses` revert stok satu kali, membuat inventory log `sale_cancel_revert`, dan mengisi `cancelledAt` + `stockRevertedAt`.
+- [ ] Cancel sale dari `Dikirim` revert stok satu kali, membuat inventory log `sale_cancel_revert`, dan mengisi `cancelledAt` + `stockRevertedAt`.
+- [ ] Klik/retry cancel pada sale yang sudah `Dibatalkan` tidak menambah stok dan tidak menambah log revert.
+- [ ] Sale `Selesai` tidak bisa dibatalkan langsung dari Sales; gunakan flow retur/refund terpisah.
 
 ### Fase B - Purchase Expense Metadata
 - [ ] Buat purchase baru.
@@ -1451,9 +1468,19 @@ Risiko:
 
 ### C. Work Log dengan step rate 0
 - [ ] Buat Work Log dari step rate 0.
-- [ ] Pastikan Biaya Produksi 0.
-- [ ] Pastikan status/warning `Perlu cek` muncul.
+- [ ] Pastikan Biaya Produksi tampil `Perlu cek`/0 secara compact, bukan alert besar untuk status normal.
+- [ ] Saat diselesaikan, pastikan auto payroll diblokir dengan pesan eligibility yang jelas sampai rate Step diperbaiki.
 - [ ] Pastikan tidak ada NaN/Infinity.
+
+
+### Work Log Status & Cost Guard
+- [ ] Pastikan filter status Work Log hanya menampilkan opsi aktif `In Progress` dan `Completed`; `Draft/Cancelled` tidak menjadi opsi aktif.
+- [ ] Pastikan data Work Log lama berstatus `draft/cancelled` tetap bisa dibaca sebagai legacy read-only bila ada, tetapi tidak bisa diedit/diselesaikan dari UI aktif.
+- [ ] Pastikan output identity Work Log dari PO tidak bisa diganti lewat edit drawer; user hanya mengisi Good/Reject/Rework saat penyelesaian.
+- [ ] Pastikan Detail Work Log dan HPP Analysis menampilkan status labor yang konsisten: `Payroll Final`, `Draft Payroll`, `Estimasi Step`, atau `Perlu cek`; draft payroll 0 harus fallback ke estimasi Step read-only bila rule step valid.
+- [ ] Pastikan estimasi labor tidak ditulis ke `laborCostActual` dan tidak dianggap final sebelum payroll confirmed/paid.
+- [ ] Pastikan overhead listrik/glue gun dari BOM terbawa ke Work Log baru dari PO dan tetap tampil compact di detail.
+- [ ] Pastikan field hasil selain Good Qty tidak tampil sebagai workflow aktif.
 
 ### D. Complete Work Log dan Payroll
 - [ ] Complete Work Log dengan operator valid.
@@ -1526,7 +1553,7 @@ Risiko:
 - [ ] Pastikan audit tidak membuat collection baru dan tidak menulis data baru.
 - [ ] Klik **Preview Data Bermasalah**.
 - [ ] Pastikan setiap kategori menampilkan sample maksimal 10 data.
-- [ ] Pastikan kategori Sales tanpa `ORD`, Purchase tanpa `PUR`, Return tanpa `RET`, Cash In/Out tanpa `CSH-IN/CSH-OUT`, Work Log tanpa `JOB`, Work Log cost 0, Work Log material snapshot kosong, Payroll reference tidak jelas, Inventory Log reference ID random, Expense/Income source tidak jelas, dan HPP 0 tampil jika ada datanya.
+- [ ] Pastikan kategori Sales tanpa `ORD`, Sales cancel/revert stok tidak sinkron, Sales dibatalkan masih punya income, Purchase tanpa `PUR`, Return tanpa `RET`, Cash In/Out tanpa `CSH-IN/CSH-OUT`, Work Log tanpa `JOB`, Work Log cost 0, Work Log material snapshot kosong, Payroll reference tidak jelas, Inventory Log reference ID random, Expense/Income source tidak jelas, dan HPP 0 tampil jika ada datanya.
 - [ ] Pastikan rekomendasi kategori jelas: `Aman dibuat ulang jika data test`, `Perlu cek manual`, atau `Jangan reset jika data asli`.
 - [ ] Pastikan collection kosong tampil sebagai 0/skipped dan halaman tidak crash.
 - [ ] Pastikan tidak ada data yang terhapus setelah audit.
@@ -1663,3 +1690,58 @@ Catatan lock:
 - [ ] Pastikan document ID master tidak berubah dan transaksi/history lama tetap bisa dibuka.
 - [ ] Buka halaman Supplier; pastikan tidak ada tombol/modal `Repair Kode Supplier Lama`.
 - [ ] Buat Supplier/Product/Raw/Semi/BOM/Step baru; pastikan format kode tetap sesuai standar locked.
+
+### Semi Finished Flower Group Guard
+- [ ] Buka Semi Finished Materials → Tambah; pastikan `Jenis Bunga` kosong/placeholder dan tidak otomatis `Mawar`.
+- [ ] Submit tanpa `Jenis Bunga`; validasi wajib muncul dan data tidak tersimpan.
+- [ ] Buat/edit item dengan jenis bunga selain Mawar atau ketik custom group; pastikan list, detail, grouped view, dan filter menampilkan group yang benar.
+- [ ] Data legacy tanpa `flowerGroup` tetap tampil di `Umum / Reusable` dan tidak otomatis berubah menjadi `Mawar` saat dibuka edit.
+- [ ] Production Order target `Bahan / Semi Produk` memakai family/category dari master Semi Finished eksplisit; nama target/BOM yang mengandung kata Mawar tidak boleh membuat data tanpa family masuk group Mawar.
+
+
+
+## Checklist — Sales cancel idempotent guard v2 — 2026-05-17
+
+- [ ] Buka Sales → Tambah Penjualan channel online; pastikan pilihan status hanya `Diproses`, `Dikirim`, dan `Selesai`, tidak ada opsi create langsung `Dibatalkan`.
+- [ ] Double-click tombol Simpan saat create Sales; pastikan hanya satu dokumen `sales`, satu set log `sale`, dan satu mutasi stok yang terjadi.
+- [ ] Buat Sales online `Diproses`, klik `Batalkan`, pastikan stok kembali satu kali, status menjadi `Dibatalkan`, dan dokumen sales punya `cancelledAt`, `stockRevertedAt`, `statusUpdatedAt`.
+- [ ] Klik/trigger `Batalkan` ulang dari state stale jika memungkinkan; pastikan sistem menolak/no-op dan stok tidak bertambah dua kali.
+- [ ] Buat Sales online `Dikirim`, lalu `Selesai`; pastikan income `income_{saleId}` dibuat sekali dan Cash In/Profit Loss membaca satu income saja.
+- [ ] Coba ubah Sales yang sudah punya marker/log cancel ke `Dikirim` atau `Selesai`; harus ditolak agar data partial tidak lanjut membuat income.
+- [ ] Cek `inventory_logs` untuk cancel; log `sale_cancel_revert` harus membawa `saleId`, `referenceId`, `saleNumber/sourceRef`, `lineIndex`, `variantKey`, `variantLabel`, dan `stockSourceType`.
+- [ ] Jalankan Reset & Maintenance → Auto Detect/Data Quality Audit; pastikan kategori Sales cancel/revert, Sales dibatalkan masih punya income, Sales belum selesai punya income, dan Sales selesai belum punya income muncul jika ada data dummy bermasalah.
+- [ ] Buat dummy income legacy yang hanya punya `referenceId`/`sourceRef`/`details.saleId`, lalu pastikan Data Quality Audit tetap mengaitkannya ke Sales yang benar.
+- [ ] Buat dummy log `sale_cancel_revert` legacy yang hanya punya `sourceRef`/`referenceCode`, lalu pastikan Data Quality Audit tetap mengaitkannya ke Sales yang benar.
+- [ ] Pastikan Sales aktif yang punya marker `cancelledAt`/`stockRevertedAt` tampil sebagai `Perlu Audit` dan tidak menyediakan tombol lanjut status.
+- [ ] Pastikan Sales `Selesai` tidak menampilkan tombol Batalkan; refund/retur harus lewat flow terpisah, bukan revert stok langsung dari Sales.
+- [ ] Pastikan Firestore rules production mengizinkan transaction write ke `sales`, item stok, `inventory_logs`, dan `incomes` sesuai role yang dipakai.
+
+## Checklist — Helper cleanup stock formatter dan safeTrim audit — 2026-05-17
+
+- [ ] Buka Product detail/drawer; pastikan Stok Total, Reserved, Stok Tersedia, Minimum Stok, dan stok varian tetap tampil dengan format angka Indonesia + satuan.
+- [ ] Buka Raw Material detail/drawer; pastikan stok meter/pcs dan varian tetap memakai satuan material yang benar.
+- [ ] Buka Semi Finished detail/drawer; pastikan tampilan stok tidak berubah.
+- [ ] Buka table yang memakai `StockDisplayBlock`; pastikan Total, Tersedia, dan pill varian tetap compact serta tidak menampilkan `NaN`.
+- [ ] Uji data dummy dengan nilai stok invalid/string kosong/null; UI tidak boleh menampilkan `NaN` dan helper stok harus fallback aman.
+- [ ] Uji Sales create/cancel, Purchase masuk stok, Stock Adjustment, dan Production Work Log secara ringan untuk memastikan perubahan `stockHelpers.toNumber()` tidak mengubah flow guarded selain mencegah `NaN`.
+- [ ] Pastikan helper `safeTrim` yang tersisa tetap aktif dipakai di file guarded; jangan hapus helper lokal produksi/maintenance hanya karena terlihat duplikat.
+
+
+## Checklist Data Quality Audit Produksi — 2026-05-17
+- [ ] Jalankan Auto Detect/Data Quality Audit.
+- [ ] Pastikan Work Log status `draft`/`cancelled` lama muncul sebagai legacy status, bukan flow aktif baru.
+- [ ] Pastikan Work Log completed dengan payroll aktif tapi belum final muncul sebagai payroll pending.
+- [ ] Pastikan mismatch `laborCostActual` vs payroll final muncul sebagai perlu cek manual.
+- [ ] Pastikan Semi Finished aktif tanpa `flowerGroup` muncul sebagai perlu dilengkapi.
+- [ ] Pastikan audit hasil selain Good Qty tidak muncul.
+
+## Checklist — toOptionMap shared helper cleanup — 2026-05-17
+
+- [ ] Buka Production BOM; label target type, material type, dan variant strategy tetap tampil benar.
+- [ ] Buka Production Employee; gender, employment type, role, payroll mode, dan output basis tetap tampil benar.
+- [ ] Buka Production Payroll; status, payment status, payroll mode, output basis, dan classification tetap tampil benar.
+- [ ] Buka Production Step; process type, basis type, dan payroll mode tetap tampil benar.
+- [ ] Buka Production Work Log; source type, status, target type, stock status, dan payroll status tetap tampil benar.
+- [ ] Buka Production Profile; profile type tetap tampil benar.
+- [ ] Buka Semi Finished Materials; category, group, dan color/variant map tetap tampil benar.
+- [ ] Pastikan import lama `toOptionMap` dari constants tidak broken karena constants masih re-export helper shared.

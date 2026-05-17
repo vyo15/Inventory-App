@@ -3,6 +3,9 @@
 // Master enum dan helper untuk Karyawan Produksi
 // =====================================================
 
+import { toOptionMap } from "../utils/options/optionMap";
+export { toOptionMap };
+
 export const PRODUCTION_EMPLOYEE_GENDERS = [
   { value: "male", label: "Laki-laki" },
   { value: "female", label: "Perempuan" },
@@ -16,13 +19,20 @@ export const PRODUCTION_EMPLOYEE_EMPLOYMENT_TYPES = [
   { value: "freelance", label: "Freelance" },
 ];
 
+// ACTIVE ROLE OPTIONS
+// Role quality/reject lama tidak ditawarkan untuk data baru karena belum menjadi workflow aktif.
+// Label legacy tetap disimpan di map agar data lama masih bisa dibaca tanpa migrasi schema.
 export const PRODUCTION_EMPLOYEE_ROLES = [
   { value: "operator", label: "Operator" },
   { value: "perakit", label: "Perakit" },
-  { value: "qc", label: "QC" },
   { value: "finishing", label: "Finishing" },
   { value: "helper", label: "Helper" },
   { value: "lainnya", label: "Lainnya" },
+];
+
+const PRODUCTION_EMPLOYEE_ROLE_LABELS = [
+  ...PRODUCTION_EMPLOYEE_ROLES,
+  { value: "qc", label: "Legacy role" },
 ];
 
 export const PRODUCTION_EMPLOYEE_CUSTOM_PAYROLL_MODES = [
@@ -35,17 +45,11 @@ export const PRODUCTION_EMPLOYEE_PAYROLL_OUTPUT_BASIS = [
   { value: "actual_output_qty", label: "Actual Output Qty" },
 ];
 
-export const toOptionMap = (options = []) =>
-  options.reduce((acc, item) => {
-    acc[item.value] = item.label;
-    return acc;
-  }, {});
-
 export const EMPLOYEE_GENDER_MAP = toOptionMap(PRODUCTION_EMPLOYEE_GENDERS);
 export const EMPLOYEE_TYPE_MAP = toOptionMap(
   PRODUCTION_EMPLOYEE_EMPLOYMENT_TYPES,
 );
-export const EMPLOYEE_ROLE_MAP = toOptionMap(PRODUCTION_EMPLOYEE_ROLES);
+export const EMPLOYEE_ROLE_MAP = toOptionMap(PRODUCTION_EMPLOYEE_ROLE_LABELS);
 export const EMPLOYEE_PAYROLL_MODE_MAP = toOptionMap(
   PRODUCTION_EMPLOYEE_CUSTOM_PAYROLL_MODES,
 );

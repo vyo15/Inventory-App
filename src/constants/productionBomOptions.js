@@ -3,7 +3,10 @@
 // Master enum dan helper untuk BOM Produksi
 // =====================================================
 
+import { toOptionMap } from "../utils/options/optionMap";
 import { calculateBomCostSummary } from "../utils/produksi/productionBomCostHelpers";
+
+export { toOptionMap };
 
 export const PRODUCTION_BOM_TARGET_TYPES = [
   { value: "semi_finished_material", label: "Semi Finished Material" },
@@ -20,12 +23,6 @@ export const BOM_MATERIAL_VARIANT_STRATEGIES = [
   { value: "fixed", label: "Varian Tetap" },
   { value: "none", label: "Tanpa Varian" },
 ];
-
-export const toOptionMap = (options = []) =>
-  options.reduce((acc, item) => {
-    acc[item.value] = item.label;
-    return acc;
-  }, {});
 
 export const BOM_TARGET_TYPE_MAP = toOptionMap(PRODUCTION_BOM_TARGET_TYPES);
 export const BOM_MATERIAL_ITEM_TYPE_MAP = toOptionMap(

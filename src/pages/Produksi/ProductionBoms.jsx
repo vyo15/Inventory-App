@@ -72,7 +72,11 @@ import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/number
 import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, getNextSequenceNumber, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildBomMaterialFormLine, buildBomStepFormLine } from "../../utils/produksi/productionLineBuilders";
-import { calculateBomStepLineCost, resolveBomMaterialUnitCost } from "../../utils/produksi/productionBomCostHelpers";
+import {
+  calculateBomStepLineCost,
+  hydrateBomMaterialLineWithLiveCost,
+  hydrateBomMaterialLinesWithLiveCost,
+} from "../../utils/produksi/productionBomCostHelpers";
 import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 
@@ -103,16 +107,18 @@ const clampTwoLineStyle = {
   lineHeight: "var(--ims-line-height-body)",
 };
 
+const EMPTY_REFERENCE_DATA = {
+  products: [],
+  rawMaterials: [],
+  semiFinishedMaterials: [],
+  productionSteps: [],
+};
+
 const ProductionBoms = () => {
   // SECTION: state loading dan data utama
   const [loading, setLoading] = useState(false);
   const [boms, setBoms] = useState([]);
-  const [referenceData, setReferenceData] = useState({
-    products: [],
-    rawMaterials: [],
-    semiFinishedMaterials: [],
-    productionSteps: [],
-  });
+  const [referenceData, setReferenceData] = useState(EMPTY_REFERENCE_DATA);
 
   // SECTION: state filter
   const [search, setSearch] = useState("");
@@ -141,6 +147,44 @@ const ProductionBoms = () => {
   const [materialForm] = Form.useForm();
   const [stepForm] = Form.useForm();
 
+  /*
+  =====================================================
+  SECTION: BOM UI live cost refresh — GUARDED
+  Fungsi:
+  - Merefresh materialLines dan summary biaya BOM dari master cost terbaru sebelum list/detail/edit ditampilkan.
+
+  Dipakai oleh:
+  - loadData, handleEdit, dan handleViewDetail halaman ProductionBoms.
+
+  Alasan perubahan:
+  - UI BOM tidak boleh menampilkan stale cost snapshot setelah HPP/material cost master direset.
+
+  Catatan cleanup:
+  - Field snapshot tetap dibaca untuk compatibility, tetapi tidak menjadi source utama estimasi aktif.
+
+  Risiko:
+  - Jika record lama langsung ditampilkan tanpa helper ini, angka seperti Rp 5.224 dapat muncul lagi walau master cost sudah 0.
+  =====================================================
+  */
+  const hydrateBomRecordWithLiveCosts = (record = {}, refs = referenceData) => {
+    const materialLines = hydrateBomMaterialLinesWithLiveCost({
+      materialLines: record.materialLines || [],
+      referenceData: refs || EMPTY_REFERENCE_DATA,
+    });
+    const stepLines = Array.isArray(record.stepLines) ? record.stepLines : [];
+    const totals = calculateBomTotals(materialLines, stepLines, record);
+
+    return {
+      ...record,
+      materialLines,
+      stepLines,
+      materialCostEstimate: totals.materialCostEstimate,
+      laborCostEstimate: totals.laborCostEstimate,
+      overheadCostEstimate: totals.overheadCostEstimate,
+      totalCostEstimate: totals.totalCostEstimate,
+    };
+  };
+
   // =====================================================
   // SECTION: load data halaman
   // Penting:
@@ -158,16 +202,9 @@ const ProductionBoms = () => {
         getActiveBomReferenceData(),
       ]);
 
-      if (bomResult.status === "fulfilled") {
-        setBoms(Array.isArray(bomResult.value) ? bomResult.value : []);
-      } else {
-        console.error("Gagal memuat daftar BOM", bomResult.reason);
-        setBoms([]);
-        message.error("Daftar BOM gagal dimuat");
-      }
-
+      let nextReference = EMPTY_REFERENCE_DATA;
       if (refResult.status === "fulfilled") {
-        const nextReference = {
+        nextReference = {
           products: Array.isArray(refResult.value?.products)
             ? refResult.value.products
             : [],
@@ -183,17 +220,22 @@ const ProductionBoms = () => {
             ? refResult.value.productionSteps
             : [],
         };
-
-        setReferenceData(nextReference);
       } else {
         console.error("Gagal memuat referensi BOM", refResult.reason);
-        setReferenceData({
-          products: [],
-          rawMaterials: [],
-          semiFinishedMaterials: [],
-          productionSteps: [],
-        });
         message.error("Master referensi BOM gagal dimuat");
+      }
+
+      setReferenceData(nextReference);
+
+      if (bomResult.status === "fulfilled") {
+        const hydratedBoms = (Array.isArray(bomResult.value) ? bomResult.value : []).map((item) =>
+          hydrateBomRecordWithLiveCosts(item, nextReference),
+        );
+        setBoms(hydratedBoms);
+      } else {
+        console.error("Gagal memuat daftar BOM", bomResult.reason);
+        setBoms([]);
+        message.error("Daftar BOM gagal dimuat");
       }
     } catch (error) {
       console.error(error);
@@ -365,15 +407,16 @@ const ProductionBoms = () => {
   // SECTION: buka edit BOM
   // =====================================================
   const handleEdit = (record) => {
-    setEditingBom(record);
+    const hydratedRecord = hydrateBomRecordWithLiveCosts(record);
+    setEditingBom(hydratedRecord);
     setFormErrorSummary("");
 
     form.setFieldsValue({
       ...DEFAULT_PRODUCTION_BOM_FORM,
-      ...record,
-      targetType: record.targetType || "product",
-      materialLines: record.materialLines || [],
-      stepLines: record.stepLines || [],
+      ...hydratedRecord,
+      targetType: hydratedRecord.targetType || "product",
+      materialLines: hydratedRecord.materialLines || [],
+      stepLines: hydratedRecord.stepLines || [],
     });
 
     setFormVisible(true);
@@ -383,7 +426,7 @@ const ProductionBoms = () => {
   // SECTION: buka detail BOM
   // =====================================================
   const handleViewDetail = (record) => {
-    setSelectedBom(record);
+    setSelectedBom(hydrateBomRecordWithLiveCosts(record));
     setDetailVisible(true);
   };
 
@@ -396,15 +439,19 @@ const ProductionBoms = () => {
     const targetType = getCurrentTargetType();
 
     if (record) {
+      const hydratedRecord = hydrateBomMaterialLineWithLiveCost({
+        line: record,
+        referenceData,
+      });
       materialForm.setFieldsValue({
         ...DEFAULT_BOM_MATERIAL_LINE,
-        ...record,
+        ...hydratedRecord,
         itemType:
-          record.itemType ||
+          hydratedRecord.itemType ||
           (targetType === "product" ? "semi_finished_material" : "raw_material"),
         materialVariantStrategy:
-          record.materialHasVariants === true
-            ? record.materialVariantStrategy || "inherit"
+          hydratedRecord.materialHasVariants === true
+            ? hydratedRecord.materialVariantStrategy || "inherit"
             : "none",
       });
     } else {
@@ -1555,6 +1602,7 @@ const ProductionBoms = () => {
                         itemId: undefined,
                         unit: "pcs",
                         costPerUnitSnapshot: 0,
+                        costSourceSnapshot: "",
                         materialHasVariants: false,
                         materialVariantStrategy: "none",
                         fixedVariantKey: "",
@@ -1600,15 +1648,20 @@ const ProductionBoms = () => {
 
                       const materialHasVariants = inferHasVariants(selected || {});
 
-                      const resolvedUnitCost = resolveBomMaterialUnitCost({
+                      const hydratedLine = hydrateBomMaterialLineWithLiveCost({
                         itemType: getFieldValue("itemType"),
                         item: selected || {},
+                        line: {
+                          ...materialForm.getFieldsValue(),
+                          itemId: value,
+                          itemType: getFieldValue("itemType"),
+                        },
                       });
 
                       materialForm.setFieldsValue({
-                        unit: selected?.unit || "pcs",
-                        costPerUnitSnapshot: Number(resolvedUnitCost.value || 0),
-                        costSourceSnapshot: resolvedUnitCost.source || "",
+                        unit: hydratedLine.unit || "pcs",
+                        costPerUnitSnapshot: Number(hydratedLine.costPerUnitSnapshot || 0),
+                        costSourceSnapshot: hydratedLine.costSourceSnapshot || "",
                         materialHasVariants,
                         materialVariantStrategy: materialHasVariants ? "inherit" : "none",
                         fixedVariantKey: "",

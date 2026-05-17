@@ -130,7 +130,7 @@ Aturan penting:
 
 - Title halaman berada di kiri dan harus menyebut konteks utama halaman.
 - Subtitle bersifat opsional. Pakai subtitle singkat hanya jika menambah konteks operasional; hapus bila hanya mengulang title.
-- Tombol action utama seperti `Tambah Produk`, `Tambah Planning`, `Tambah PO`, `Tambah Work Log`, atau action create lain berada di kanan header pada desktop/tablet lebar.
+- Tombol action utama seperti `Tambah Produk`, `Tambah Planning`, `Tambah PO`, atau action create lain berada di kanan header pada desktop/tablet lebar. Catatan: `Tambah Work Log` tidak berlaku untuk flow aktif karena Work Log harus dimulai dari Production Order.
 - Di mobile, action utama boleh wrap atau turun ke bawah selama tetap dalam container dan tidak overlap.
 - Jangan meletakkan action utama di sisi kiri jika halaman sudah memakai pola title kiri + action kanan.
 - Header tidak boleh dipakai untuk menjelaskan seluruh flow bisnis. Penjelasan panjang tetap di docs, bukan di UI harian.
@@ -228,9 +228,10 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 - Status PO harus terlihat di area atas/detail.
 
 ### Work Log
-- Warning cost tidak boleh dihapus.
-- Warning tetap penting bila biaya material 0, biaya tenaga kerja 0, total biaya 0, atau HPP belum valid.
-- Material cost, labor cost, total cost, dan output qty harus tetap bisa ditelusuri. Untuk BOM, overhead manual boleh tampil sebagai estimasi ringkas; untuk Work Log actual, overhead masih compatibility lama sampai rule final disetujui.
+- Detail cost harus compact dan tidak memakai alert besar untuk status normal seperti payroll masih draft atau estimasi step.
+- Material cost, overhead cost, labor cost, total cost, dan output qty harus tetap bisa ditelusuri.
+- Labor boleh menampilkan tag compact `Payroll Final`, `Draft Payroll`, atau `Estimasi Step`; draft/estimasi wajib read-only dan tidak ditulis sebagai HPP final.
+- Overhead Work Log berasal dari overhead BOM untuk listrik/glue gun. Field hasil selain Good Qty adalah compatibility data lama dan tidak ditampilkan sebagai workflow aktif.
 
 ### Payroll
 - Final amount, status payroll, payment status, dan include HPP harus jelas.
@@ -239,6 +240,8 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 ### HPP Analysis
 - HPP invalid atau cost kosong wajib terlihat.
 - Jangan menghapus warning yang membantu analisis biaya.
+- HPP Final dan HPP Preview harus dibedakan jelas; draft payroll/estimasi Step tidak boleh terlihat seperti final.
+- Warning penting boleh tetap terlihat, tetapi status normal draft/estimasi cukup memakai tag/helper compact, bukan alert besar.
 - Output qty dan komponen biaya utama harus tetap jelas.
 
 ### Stock

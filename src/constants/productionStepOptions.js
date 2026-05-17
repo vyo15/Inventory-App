@@ -6,6 +6,9 @@ import formatCurrency from "../utils/formatters/currencyId";
 // Step fokus ke proses kerja nyata + aturan upah operator.
 // =====================================================
 
+import { toOptionMap } from "../utils/options/optionMap";
+export { toOptionMap };
+
 export const PRODUCTION_STEP_PROCESS_TYPES = [
   { value: "raw_to_semi", label: "Raw -> Semi Finished" },
   { value: "semi_to_semi", label: "Semi Finished -> Semi Finished" },
@@ -24,12 +27,6 @@ export const PRODUCTION_STEP_PAYROLL_MODES = [
   { value: "per_qty", label: "Per Qty" },
   { value: "per_batch", label: "Per Batch" },
 ];
-
-export const toOptionMap = (options = []) =>
-  options.reduce((acc, item) => {
-    acc[item.value] = item.label;
-    return acc;
-  }, {});
 
 export const PROCESS_TYPE_MAP = toOptionMap(PRODUCTION_STEP_PROCESS_TYPES);
 export const BASIS_TYPE_MAP = toOptionMap(PRODUCTION_STEP_BASIS_TYPES);

@@ -33,6 +33,7 @@ import { db } from '../../firebase';
 import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import { formatDateId } from '../../utils/formatters/dateId';
+import { formatStockWithUnitId } from '../../utils/formatters/stockUnit';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
@@ -111,9 +112,9 @@ const buildFormValues = (record = {}) => ({
 const integerParser = parseIntegerIdInput;
 
 // -----------------------------------------------------------------------------
-// Helper tampilan stok supaya format di tabel dan drawer seragam.
+// Helper tampilan stok memakai formatter shared agar tabel/drawer konsisten dengan master data lain.
 // -----------------------------------------------------------------------------
-const formatStockWithUnit = (value, unit = 'pcs') => `${formatNumberID(value)} ${unit}`;
+const formatStockWithUnit = formatStockWithUnitId;
 
 const getRuleModeLabel = (mode, ruleId, pricingRuleMap = {}) => {
   if (mode !== 'rule') return 'Manual';

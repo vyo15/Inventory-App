@@ -45,6 +45,7 @@ import {
   isProductionWorkLogCompleted,
   sortProductionWorkLogsNewestFirst,
 } from "../../utils/produksi/productionFlowGuards";
+import { resolveBomStepPayrollSnapshot } from "../../utils/produksi/productionBomCostHelpers";
 
 const COLLECTION_NAME = "production_work_logs";
 
@@ -61,6 +62,31 @@ const filterActiveLike = (items = []) =>
 // Helper format aman
 // =====================================================
 const safeTrim = (value) => String(value || "").trim();
+
+const buildWorkLogStepPayrollSnapshotFields = (stepLine = null) => {
+  if (!stepLine) {
+    return {
+      stepPayrollMode: "per_qty",
+      stepPayrollRate: 0,
+      stepPayrollQtyBase: 1,
+      stepPayrollOutputBasis: "good_qty",
+      stepPayrollClassification: "direct_labor",
+      stepPayrollIncludeInHpp: true,
+      stepPayrollRuleSource: "no_step_snapshot",
+    };
+  }
+
+  const payrollSnapshot = resolveBomStepPayrollSnapshot(stepLine);
+  return {
+    stepPayrollMode: payrollSnapshot.payrollMode || "per_qty",
+    stepPayrollRate: toNumber(payrollSnapshot.payrollRate || 0),
+    stepPayrollQtyBase: Math.max(1, toNumber(payrollSnapshot.payrollQtyBase || 1)),
+    stepPayrollOutputBasis: payrollSnapshot.payrollOutputBasis || "good_qty",
+    stepPayrollClassification: payrollSnapshot.payrollClassification || "direct_labor",
+    stepPayrollIncludeInHpp: payrollSnapshot.includePayrollInHpp !== false,
+    stepPayrollRuleSource: "bom_step_snapshot",
+  };
+};
 
 
 const normalizeReferenceItem = (item = {}) => ({
@@ -325,6 +351,21 @@ const buildWorkLogCostSummary = ({ materialUsages = [], laborCostActual = 0, ove
   };
 };
 
+const resolveBomOverheadCostForWorkLog = ({ bom = {}, batchCount = 1 } = {}) => {
+  // =====================================================
+  // ACTIVE/GUARDED - overhead BOM -> Work Log.
+  // Fungsi:
+  // - membawa estimasi overhead BOM sebagai biaya overhead Work Log untuk listrik/glue gun;
+  // - overhead BOM dianggap nilai per batch BOM, lalu dikalikan jumlah batch PO.
+  // Catatan:
+  // - labor tetap tidak di-copy ke `laborCostActual`; labor final tetap dari Payroll.
+  // =====================================================
+  const overheadPerBatch = toNumber(bom?.overheadCostEstimate || 0);
+  if (overheadPerBatch <= 0) return 0;
+
+  return overheadPerBatch * Math.max(1, toNumber(batchCount || 1));
+};
+
 // =====================================================
 // Normalize material usages
 // =====================================================
@@ -451,6 +492,13 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     stepCode: safeTrim(values.stepCode),
     stepName: safeTrim(values.stepName),
     sequenceNo: toNumber(values.sequenceNo || 1),
+    stepPayrollMode: values.stepPayrollMode === "per_batch" ? "per_batch" : "per_qty",
+    stepPayrollRate: toNumber(values.stepPayrollRate || 0),
+    stepPayrollQtyBase: Math.max(1, toNumber(values.stepPayrollQtyBase || 1)),
+    stepPayrollOutputBasis: values.stepPayrollOutputBasis || "good_qty",
+    stepPayrollClassification: values.stepPayrollClassification || "direct_labor",
+    stepPayrollIncludeInHpp: values.stepPayrollIncludeInHpp !== false,
+    stepPayrollRuleSource: safeTrim(values.stepPayrollRuleSource) || "work_log_snapshot",
 
     // SECTION: source
     // IMS NOTE [AKTIF/GUARDED]: Work Log baru default In Progress; status draft hanya legacy-compat jika data lama mengirim nilai tersebut secara eksplisit.
@@ -707,6 +755,7 @@ export const buildWorkLogDraftFromBom = (bom, selectedStepId = "") => {
     stepCode: chosenStep?.stepCode || "",
     stepName: chosenStep?.stepName || "",
     sequenceNo: toNumber(chosenStep?.sequenceNo || 1),
+    ...buildWorkLogStepPayrollSnapshotFields(chosenStep),
 
     sourceType: "planned",
     plannedQty: toNumber(
@@ -717,7 +766,27 @@ export const buildWorkLogDraftFromBom = (bom, selectedStepId = "") => {
     rejectQty: 0,
     reworkQty: 0,
     scrapQty: 0,
+    overheadCostActual: resolveBomOverheadCostForWorkLog({ bom, batchCount: 1 }),
 
+    /*
+    =====================================================
+    SECTION: BOM draft material cost neutralization — LEGACY-COMPAT
+    Fungsi:
+    - Membentuk draft material usage dari BOM tanpa menjadikan snapshot BOM sebagai biaya aktif Work Log baru.
+
+    Dipakai oleh:
+    - buildWorkLogDraftFromBom untuk flow manual/legacy yang mengambil data dari BOM.
+
+    Alasan perubahan:
+    - Snapshot BOM lama hanya compatibility; biaya aktual Work Log baru wajib diambil lagi dari master saat start/complete.
+
+    Catatan cleanup:
+    - Bisa disederhanakan jika seluruh flow Work Log sudah selalu lewat Production Order.
+
+    Risiko:
+    - Jika snapshot BOM disalin lagi ke Work Log, HPP baru bisa ikut stale setelah reset HPP.
+    =====================================================
+    */
     materialUsages: materialLines.map((line, index) => ({
       id: line.id || `usage-${Date.now()}-${index}`,
       itemType: line.itemType,
@@ -728,8 +797,9 @@ export const buildWorkLogDraftFromBom = (bom, selectedStepId = "") => {
       plannedQty: toNumber(line.totalRequiredQty || line.qtyPerBatch || 0),
       actualQty: toNumber(line.totalRequiredQty || line.qtyPerBatch || 0),
       varianceQty: 0,
-      costPerUnitSnapshot: toNumber(line.costPerUnitSnapshot || 0),
-      totalCostSnapshot: toNumber(line.totalCostSnapshot || 0),
+      costPerUnitSnapshot: 0,
+      totalCostSnapshot: 0,
+      costSourceSnapshot: "live_master_pending",
       materialHasVariants: line.materialHasVariants === true,
       materialVariantStrategy: line.materialHasVariants === true ? line.materialVariantStrategy || "inherit" : "none",
       resolvedVariantKey: line.resolvedVariantKey || "",
@@ -816,6 +886,7 @@ const buildWorkLogDraftFromProductionOrderData = (
     stepCode: chosenStep?.stepCode || "",
     stepName: chosenStep?.stepName || "",
     sequenceNo: toNumber(chosenStep?.sequenceNo || 1),
+    ...buildWorkLogStepPayrollSnapshotFields(chosenStep),
 
     sourceType: "production_order",
     plannedQty: batchCount,
@@ -825,6 +896,7 @@ const buildWorkLogDraftFromProductionOrderData = (
     rejectQty: 0,
     reworkQty: 0,
     scrapQty: 0,
+    overheadCostActual: resolveBomOverheadCostForWorkLog({ bom, batchCount }),
 
     materialUsages: requirementLines.map((line, index) => ({
       id: line.id || `usage-po-${Date.now()}-${index}`,
@@ -1340,8 +1412,26 @@ export const createProductionWorkLogFromOrder = async (
         stockItem,
         stockResolution,
       });
-      const unitCostSnapshot =
-        toNumber(line.costPerUnitSnapshot || 0) || costSnapshot.unitCost;
+      /*
+      =====================================================
+      SECTION: Start Production live material cost snapshot — GUARDED
+      Fungsi:
+      - Mengambil snapshot biaya material Work Log baru dari master cost saat stok mulai dipotong.
+
+      Dipakai oleh:
+      - createProductionWorkLogFromOrder.
+
+      Alasan perubahan:
+      - Work Log baru tidak boleh memakai stale cost snapshot dari BOM/PO jika master cost sudah berubah atau direset.
+
+      Catatan cleanup:
+      - Snapshot tetap disimpan setelah start karena inventory log dan histori transaksi perlu nilai historis.
+
+      Risiko:
+      - Jangan fallback ke line.costPerUnitSnapshot karena line bisa berasal dari BOM snapshot lama.
+      =====================================================
+      */
+      const unitCostSnapshot = costSnapshot.unitCost;
 
       if (consumeQty > 0) {
         const updatePayload = applyStockMutationToItem({
@@ -1381,10 +1471,7 @@ export const createProductionWorkLogFromOrder = async (
           ...line,
           actualQty: consumeQty,
           costPerUnitSnapshot: unitCostSnapshot,
-          costSourceSnapshot:
-            unitCostSnapshot > 0
-              ? (toNumber(line.costPerUnitSnapshot || 0) > 0 ? 'existing_line_snapshot' : costSnapshot.costSource)
-              : costSnapshot.costSource,
+          costSourceSnapshot: costSnapshot.costSource,
           stockDeducted: consumeQty > 0,
           stockDeductedAt: consumeQty > 0 ? new Date() : null,
           resolvedVariantKey: stockResolution.resolvedVariantKey || "",
@@ -1441,7 +1528,7 @@ export const createProductionWorkLogFromOrder = async (
 // Update work log
 // Catatan maintainability:
 // - Data readonly dari PO tetap dipertahankan dari record lama
-// - Summary qty (good/reject/rework) selalu disinkronkan ke output pertama
+// - Summary Good Qty selalu disinkronkan ke output pertama; qty hasil lain hanya compatibility data lama
 // =====================================================
 export const updateProductionWorkLog = async (
   id,
@@ -1675,7 +1762,9 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
     const productionOrderRef = workLog.productionOrderId
       ? doc(db, "production_orders", workLog.productionOrderId)
       : null;
+    const bomRef = workLog.bomId ? doc(db, "production_boms", workLog.bomId) : null;
     let productionOrder = null;
+    let workLogBom = null;
 
     if (productionOrderRef) {
       const productionOrderSnap = await transaction.get(productionOrderRef);
@@ -1683,6 +1772,16 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
         productionOrder = {
           id: productionOrderSnap.id,
           ...productionOrderSnap.data(),
+        };
+      }
+    }
+
+    if (bomRef) {
+      const bomSnap = await transaction.get(bomRef);
+      if (bomSnap.exists()) {
+        workLogBom = {
+          id: bomSnap.id,
+          ...bomSnap.data(),
         };
       }
     }
@@ -1709,7 +1808,7 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
         // Status:
         // - aktif dipakai; guarded karena tidak boleh double posting stok/output.
         // =====================================================
-        if (collectionName && line.itemId && toNumber(line.costPerUnitSnapshot || 0) <= 0) {
+        if (collectionName && line.itemId) {
           const stockRef = doc(db, collectionName, line.itemId);
           const stockSnap = await transaction.get(stockRef);
 
@@ -1744,7 +1843,13 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
           }
         }
 
-        nextMaterialUsages.push(calculateMaterialUsageLine({ ...line, actualQty, stockDeducted: true }));
+        nextMaterialUsages.push(calculateMaterialUsageLine({
+          ...line,
+          actualQty,
+          costPerUnitSnapshot: 0,
+          costSourceSnapshot: 'live_master.missing_item_or_zero_cost',
+          stockDeducted: true,
+        }));
         continue;
       }
 
@@ -1818,8 +1923,26 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
         stockItem,
         stockResolution,
       });
-      const unitCostSnapshot =
-        toNumber(line.costPerUnitSnapshot || 0) || costSnapshot.unitCost;
+      /*
+      =====================================================
+      SECTION: Complete Work Log live material cost snapshot — GUARDED
+      Fungsi:
+      - Mengambil snapshot biaya material dari master cost terbaru saat Work Log baru diselesaikan.
+
+      Dipakai oleh:
+      - completeProductionWorkLog sebelum final HPP/output cost dihitung.
+
+      Alasan perubahan:
+      - Complete tidak boleh memakai stale BOM/line snapshot jika master cost sudah 0 atau berubah.
+
+      Catatan cleanup:
+      - Completed Work Log lama tidak disentuh; perubahan ini hanya berlaku saat flow complete berjalan.
+
+      Risiko:
+      - Mengembalikan fallback existing_line_snapshot akan membuat HPP final Work Log baru stale.
+      =====================================================
+      */
+      const unitCostSnapshot = costSnapshot.unitCost;
 
       nextMaterialUsages.push(
         calculateMaterialUsageLine({
@@ -1830,10 +1953,7 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
           resolvedVariantLabel: stockResolution.resolvedVariantLabel || '',
           stockSourceType: stockResolution.stockSourceType || 'master',
           costPerUnitSnapshot: unitCostSnapshot,
-          costSourceSnapshot:
-            unitCostSnapshot > 0
-              ? (toNumber(line.costPerUnitSnapshot || 0) > 0 ? 'existing_line_snapshot' : costSnapshot.costSource)
-              : costSnapshot.costSource,
+          costSourceSnapshot: costSnapshot.costSource,
           stockDeducted: actualQty > 0,
           stockDeductedAt: actualQty > 0 ? completedAtValue : null,
         }),
@@ -1864,10 +1984,17 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
     - Jangan update HPP output jika total cost atau good qty tidak valid; itu akan menyebarkan HPP 0 ke master produk/semi finished.
     =====================================================
     */
+    const overheadCostForComplete =
+      toNumber(workLog.overheadCostActual || 0) > 0
+        ? workLog.overheadCostActual
+        : resolveBomOverheadCostForWorkLog({
+            bom: workLogBom,
+            batchCount: workLog.plannedQty || productionOrder?.batchCount || productionOrder?.orderQty || 1,
+          });
     const recalculatedCostSummary = buildWorkLogCostSummary({
       materialUsages: nextMaterialUsages,
       laborCostActual: workLog.laborCostActual,
-      overheadCostActual: workLog.overheadCostActual,
+      overheadCostActual: overheadCostForComplete,
       goodQty: totalGoodQty,
     });
     const recalculatedMaterialCost = recalculatedCostSummary.materialCostActual;

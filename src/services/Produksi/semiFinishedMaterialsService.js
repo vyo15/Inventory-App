@@ -61,6 +61,8 @@ const toNumberValue = (value = 0) => {
   return Number.isFinite(number) ? number : 0;
 };
 
+const normalizeMetadataText = (value = "") => String(value || "").trim();
+
 const resolveAuditUser = (currentUser = null) =>
   currentUser?.email || currentUser?.displayName || currentUser?.uid || "system";
 
@@ -140,7 +142,10 @@ const resolveSemiFinishedMetadata = (
   name: String(values.name || "").trim(),
   description: String(values.description || "").trim(),
   category: values.category || "kelopak",
-  flowerGroup: values.flowerGroup || "mawar",
+  // IMS NOTE [GUARDED | no-silent-mawar-default]: service tidak boleh fallback
+  // ke Mawar. Jika caller tidak mengirim Jenis Bunga, validasi harus gagal
+  // agar data Semi Product jenis lain tidak salah masuk group Mawar.
+  flowerGroup: normalizeMetadataText(values.flowerGroup),
   type: "semi_finished",
   unit: values.unit || "pcs",
   relatedProductIds: selectedProducts.map((item) => item.id),
@@ -453,7 +458,7 @@ export const validateSemiFinishedMaterial = (values = {}) => {
     errors.category = "Kategori wajib dipilih";
   }
 
-  if (!values.flowerGroup) {
+  if (!normalizeMetadataText(values.flowerGroup)) {
     errors.flowerGroup = "Grup bunga wajib dipilih";
   }
 

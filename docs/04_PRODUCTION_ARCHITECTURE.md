@@ -34,7 +34,7 @@ Tujuan:
 - relasi dengan BOM
 
 Catatan real dari source terbaru:
-- QC/reject detail tidak dijadikan step terpisah dan tidak menjadi field monitoring di form Step.
+- Good Qty menjadi input hasil aktif utama; field hasil lain tidak dijadikan step terpisah dan tidak menjadi field monitoring di form Step.
 - assembly dianggap proses akhir.
 - packing opsional bila memang ada pekerjaan pengemasan terpisah.
 - Step memakai `basisType` universal dengan label UI `Per Meter Bahan`, `Per Kawat`, `Per Qty`, dan `Per Batch`.
@@ -83,14 +83,20 @@ Rule penting yang terverifikasi:
 - bila target adalah `product`, material utama memakai `semi_finished_material`, dan `raw_material` boleh dipakai untuk consumable assembly seperti lem tembak
 - BOM menyimpan `materialLines` dan `stepLines`
 - step lines sudah disortir menurut sequence
-- estimasi material BOM mengambil snapshot cost dari master bahan: Raw Material memakai `averageActualUnitCost` dengan fallback `restockReferencePrice`; Semi Finished memakai `averageCostPerUnit` dengan fallback `lastProductionCostPerUnit`. Field reference/manual semi finished tidak menjadi sumber estimasi aktif.
+- estimasi material BOM mengambil live master cost terbaru: Raw Material memakai `averageActualUnitCost` dengan fallback `restockReferencePrice`; Semi Finished memakai `averageCostPerUnit` dengan fallback `lastProductionCostPerUnit`. Jika source master 0, estimate BOM wajib 0 dan tidak boleh fallback ke snapshot BOM lama.
+- `materialLines[].costPerUnitSnapshot` / `totalCostSnapshot` di BOM dipertahankan sebagai derived cache/legacy compatibility, bukan source utama untuk estimasi aktif atau Work Log baru.
 - estimasi biaya produksi BOM mengambil tarif dari Tahapan Produksi.
-- overhead manual BOM boleh diisi sebagai estimasi sementara, tetapi belum menjadi overhead actual Work Log/HPP final.
+- overhead BOM dipakai untuk biaya listrik/glue gun. Work Log baru dari PO membawa `overheadCostEstimate` BOM ke `overheadCostActual` dan mengalikannya dengan jumlah batch PO.
 
 Organisasi UI aktif:
 - daftar BOM boleh ditampilkan grouped/accordion berdasarkan `Target Type → Target Item → Resep Produksi`
 - label user-facing boleh memakai istilah `Resep Produksi` agar tidak terlalu teknis, tetapi source of truth tetap dokumen BOM existing
 - grouping BOM hanya cara baca UI; tidak mengubah rule material, target type, payload create/edit, atau service BOM
+
+Alur source cost aktif:
+- Raw Material / Semi Finished master cost terbaru → BOM estimate aktif → Work Log baru.
+- Snapshot hanya boleh menjadi histori untuk completed Work Log, inventory log, payroll/final HPP history, dan transaksi lama.
+- Reset Modal/HPP wajib merefresh BOM estimate dari master cost pasca-reset, menjaga `laborCostEstimate` dari step dan `overheadCostEstimate` existing.
 
 ## 6. Production Order
 Tujuan:
@@ -128,11 +134,12 @@ Data penting yang terlihat disimpan:
 - target item dan target variant
 - step dan sequence
 - worker ids/names/count
-- planned qty, actual output qty, good/reject/rework/scrap
+- planned qty, actual output qty, Good Qty aktif; field hasil lama tetap compatibility internal
 - startedAt, completedAt, durationMinutesActual
 - material usages
 - outputs
-- materialCostActual, laborCostActual, totalCostActual, costPerGoodUnit; overheadCostActual hanya legacy/compatibility
+- materialCostActual, overheadCostActual, laborCostActual, totalCostActual, costPerGoodUnit; input labor aktif tidak diedit manual dari Work Log karena labor berasal dari Payroll
+- Work Log baru wajib memakai current master cost saat Start/Complete; stale BOM snapshot tidak boleh menjadi source biaya aktual baru
 - monitoring miss dan output teoretis
 - status stok konsumsi, output, dan payroll calculation
 
@@ -141,8 +148,7 @@ Status work log aktif yang terlihat:
 - `completed`
 
 Status compatibility:
-- `cancelled` tetap dibaca untuk data lama/guard, tetapi tidak ditampilkan sebagai summary card utama dan tidak punya tombol cancel aktif di menu Work Log.
-- `draft` hanya legacy compatibility; jangan jadikan status input aktif baru.
+- `draft` dan `cancelled` hanya legacy read-only bila masih ada di data lama. Jangan tampilkan sebagai opsi input/filter utama, summary card, tombol cancel, atau flow aktif baru di menu Work Log.
 
 ## 8. Payroll Produksi
 Tujuan:
@@ -159,7 +165,7 @@ Payment status yang terlihat:
 
 ## 9. Analisis HPP Produksi
 Tujuan:
-- analisa biaya realisasi bahan dan tenaga kerja per work log completed; overhead actual masih compatibility. Overhead manual BOM hanya estimasi rencana.
+- analisa biaya realisasi bahan, overhead listrik/glue gun, dan tenaga kerja per work log completed, dengan pemisahan HPP Final vs HPP Preview.
 
 Sumber HPP yang terlihat:
 - data work log completed
@@ -237,7 +243,7 @@ Catatan boundary:
 2. Work Log completed memposting output stok satu kali dan menghitung `materialCostActual`.
 3. Work Log completed memanggil auto payroll untuk membuat payroll line per operator.
 4. Payroll line menyimpan `workLogId`, `workNumber`, `stepId`, `stepName`, `workerId`, dan `workerName`.
-5. Payroll summary disinkronkan kembali ke Work Log sebagai `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit`.
+5. Payroll summary disinkronkan kembali ke Work Log sebagai `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit`. Jika payroll masih draft, UI hanya boleh menampilkan preview read-only; HPP final tetap menunggu payroll final.
 6. Payroll paid membuat expense otomatis dengan guard `sourceModule/sourceId`.
 7. Cash Out membaca expense payroll dari collection `expenses`.
 8. Profit Loss membaca expense payroll dari `expenses`, sedangkan Payroll Report tetap membaca `production_payrolls`.
@@ -246,7 +252,7 @@ Catatan boundary:
 ## Final Guard Produksi Setelah Task 6
 - **Production Order preview aktif:** drawer create PO memakai preview compact read-only. Preview boleh membantu user melihat stok target dan kebutuhan material, tetapi tidak boleh menjadi source final submit.
 - **Work Log completed guarded:** complete Work Log tidak boleh memproses stok/output dua kali, tidak boleh membuat payroll dobel, dan tidak boleh mengubah completed data tanpa evaluasi khusus.
-- **Actual cost aktif:** completed Work Log wajib menyimpan ringkasan material/labor/total/cost per good unit untuk HPP Analysis.
+- **Actual cost aktif:** completed Work Log wajib menyimpan ringkasan material/labor/total/cost per good unit untuk HPP Analysis. Draft/estimasi labor boleh tampil sebagai preview, tetapi tidak boleh dianggap final.
 - **Payroll otomatis aktif:** Work Log completed membuat payroll line per operator berdasarkan rule Tahapan Produksi.
 - **Cash Out otomatis aktif:** payroll `paid` membuat expense otomatis dengan source reference dan guard idempotent.
 - **Legacy:** custom payroll preference di master karyawan tetap dibaca sebagai compatibility/info lama, bukan rule utama payroll baru.
@@ -320,3 +326,16 @@ Status final tetap guarded: Planning `cancelled` dan `completed` tidak boleh dib
 - PO lama tanpa planning tetap dianggap PO manual aktif.
 - Work Log lama tanpa planning tetap valid.
 - Tidak ada migrasi data lama otomatis.
+
+### Guard Flower Group Semi Finished
+- `semi_finished_materials.flowerGroup` adalah metadata grouping/filter, bukan relasi kepemilikan produk jadi.
+- Create/update Semi Finished tidak boleh mengisi `flowerGroup` otomatis ke `mawar`; validasi harus gagal jika user belum memilih/mengetik jenis bunga.
+- Production Order membaca grouping Semi Product dari reference master yang eksplisit. Jika reference tidak punya `flowerGroup`, item masuk fallback `Umum / Reusable`; jangan infer dari nama target/BOM.
+
+
+
+## Update HPP Analysis Final/Preview — 2026-05-17
+- `ProductionHppAnalysis.jsx` memisahkan `finalLaborCost`, `finalTotalCost`, dan `finalHppPerUnit` dari `displayLaborCost`, `previewTotalCost`, dan `previewHppPerUnit`.
+- Resolver labor yang sama dipakai oleh detail Work Log dan HPP Analysis agar tidak ada drift antara payroll final, payroll draft, dan estimasi Step.
+- Data Quality Audit produksi bersifat read-only dan sekarang mendeteksi status Work Log legacy, payroll final pending/mismatch, output HPP yang butuh reconcile, serta Semi Finished aktif tanpa `flowerGroup`. Audit hasil selain Good Qty tidak diaktifkan.
+- Patch ini tidak melakukan backfill, tidak reposting output stok, dan tidak mengubah master HPP/average cost lama secara otomatis.

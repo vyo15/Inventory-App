@@ -1,5 +1,6 @@
 import formatNumber from "../formatters/numberId";
 import formatCurrency from "../formatters/currencyId";
+import { calculatePayrollAmounts } from "../../constants/productionPayrollOptions";
 
 // =====================================================
 // Production Payroll Rule Helpers
@@ -506,4 +507,277 @@ export const buildPayrollEligibilityNotes = ({
   }
 
   return notes.join(" ");
+};
+
+// =====================================================
+// ACTIVE / GUARDED - shared Work Log labor display resolver.
+// Fungsi:
+// - Menyatukan resolver biaya labor display untuk Detail Work Log dan HPP Analysis;
+// - payroll final tetap prioritas dan satu-satunya biaya labor final HPP;
+// - payroll draft / estimasi Step hanya read-only agar UI tidak menampilkan labor 0 yang menyesatkan;
+// - tidak menulis estimasi ke Firestore.
+// Risiko:
+// - Jangan pakai displayAmount sebagai final HPP tanpa mengecek isFinal.
+// =====================================================
+export const isProductionPayrollLineHppIncluded = (line = {}) =>
+  safeString(line.status).toLowerCase() !== "cancelled" && line.includePayrollInHpp !== false;
+
+export const isProductionPayrollLineFinal = (line = {}) => {
+  if (!isProductionPayrollLineHppIncluded(line)) return false;
+
+  const status = safeString(line.status).toLowerCase();
+  const paymentStatus = safeString(line.paymentStatus).toLowerCase();
+
+  if (["confirmed", "paid"].includes(status) || paymentStatus === "paid") {
+    return true;
+  }
+
+  // LEGACY-COMPAT:
+  // Sebagian payroll lama belum punya status/paymentStatus tetapi sudah punya nominal final.
+  // Untuk display read-only Work Log/HPP, line seperti ini diperlakukan sebagai final agar
+  // labor tidak jatuh ke 0/draft palsu. Payroll baru tetap wajib memakai status eksplisit.
+  return !status && !paymentStatus && safeNumber(line.finalAmount) > 0;
+};
+
+const getDisplayPayrollWorkerCount = (workLog = {}) => {
+  const workerIds = Array.isArray(workLog.workerIds) ? workLog.workerIds.filter(Boolean) : [];
+  const workerNames = Array.isArray(workLog.workerNames) ? workLog.workerNames.filter(Boolean) : [];
+  return Math.max(workerIds.length, workerNames.length, safeNumber(workLog.workerCount), 1);
+};
+
+const getEstimatedWorkLogPayrollQty = (workLog = {}, payrollRule = {}) => {
+  const metrics = getWorkLogPayrollMetrics(workLog, payrollRule);
+  const plannedOutputQty = Math.max(
+    0,
+    safeNumber(workLog.theoreticalOutputQty),
+    safeNumber(workLog.actualOutputQty),
+    safeNumber(workLog.goodQty),
+    safeNumber(workLog.plannedQty),
+  );
+
+  if (payrollRule.payrollMode === "per_batch") {
+    return {
+      ...metrics,
+      workedQty: metrics.workedQty > 0 ? metrics.workedQty : safeNumber(workLog.plannedQty),
+      outputQtyUsed: metrics.outputQtyUsed > 0 ? metrics.outputQtyUsed : plannedOutputQty,
+    };
+  }
+
+  return {
+    ...metrics,
+    outputQtyUsed: metrics.outputQtyUsed > 0 ? metrics.outputQtyUsed : plannedOutputQty,
+    workedQty: metrics.workedQty > 0 ? metrics.workedQty : safeNumber(workLog.plannedQty),
+  };
+};
+
+const resolveWorkLogStepEstimate = ({ workLog = {}, productionStep = null } = {}) => {
+  const resolved = resolveCompletedWorkLogPayrollRule({ workLog, productionStep });
+  const payrollRule = resolved.rule || {};
+
+  if (payrollRule.includePayrollInHpp === false) {
+    return {
+      displayAmount: 0,
+      amount: 0,
+      finalAmount: 0,
+      estimatedAmount: 0,
+      draftAmount: 0,
+      source: "step_excluded_from_hpp",
+      statusLabel: "Tidak masuk HPP",
+      totalStatusLabel: "Estimasi",
+      label: "Tidak masuk HPP",
+      tagColor: "default",
+      helper: "Step support/fulfillment tidak masuk labor HPP.",
+      isFinal: false,
+      isEstimated: false,
+      isDraft: false,
+      needsReview: false,
+      reviewReasons: [],
+    };
+  }
+
+  const reviewReasons = [];
+  if (safeNumber(payrollRule.payrollRate) <= 0) {
+    reviewReasons.push("Rate step produksi 0/kosong.");
+  }
+
+  const metrics = getEstimatedWorkLogPayrollQty(workLog, payrollRule);
+  if (payrollRule.payrollMode === "per_qty" && metrics.outputQtyUsed <= 0) {
+    reviewReasons.push("Good qty/output qty 0 untuk mode per_qty.");
+  }
+  if (payrollRule.payrollMode === "per_batch" && metrics.workedQty <= 0) {
+    reviewReasons.push("Qty batch Work Log 0 untuk mode per_batch.");
+  }
+
+  if (reviewReasons.length > 0) {
+    return {
+      displayAmount: 0,
+      amount: 0,
+      finalAmount: 0,
+      estimatedAmount: 0,
+      draftAmount: 0,
+      source: "needs_review",
+      statusLabel: "Perlu cek",
+      totalStatusLabel: "Perlu cek",
+      label: "Perlu cek",
+      tagColor: "red",
+      helper: reviewReasons[0],
+      isFinal: false,
+      isEstimated: false,
+      isDraft: false,
+      needsReview: true,
+      reviewReasons,
+    };
+  }
+
+  const calculated = calculatePayrollAmounts({
+    payrollMode: payrollRule.payrollMode,
+    payrollRate: payrollRule.payrollRate,
+    payrollQtyBase: payrollRule.payrollQtyBase,
+    outputQtyUsed: metrics.outputQtyUsed,
+    workedQty: metrics.workedQty,
+    bonusAmount: 0,
+    deductionAmount: 0,
+  });
+  const workerCount = getDisplayPayrollWorkerCount(workLog);
+  const estimatedAmount = Math.max(0, safeNumber(calculated.finalAmount) * workerCount);
+
+  if (estimatedAmount <= 0) {
+    return {
+      displayAmount: 0,
+      amount: 0,
+      finalAmount: 0,
+      estimatedAmount: 0,
+      draftAmount: 0,
+      source: "needs_review",
+      statusLabel: "Perlu cek",
+      totalStatusLabel: "Perlu cek",
+      label: "Perlu cek",
+      tagColor: "red",
+      helper: "Output/batch untuk estimasi belum terbaca.",
+      isFinal: false,
+      isEstimated: false,
+      isDraft: false,
+      needsReview: true,
+      reviewReasons: ["Output/batch untuk estimasi belum terbaca."],
+    };
+  }
+
+  return {
+    displayAmount: estimatedAmount,
+    amount: estimatedAmount,
+    finalAmount: 0,
+    estimatedAmount,
+    draftAmount: 0,
+    source: "step_estimate",
+    statusLabel: "Estimasi dari Step",
+    totalStatusLabel: "Estimasi",
+    label: "Estimasi Step",
+    tagColor: "blue",
+    helper: `${formatNumber(workerCount)} operator · read-only, belum masuk HPP final.`,
+    isFinal: false,
+    isEstimated: true,
+    isDraft: false,
+    needsReview: false,
+    reviewReasons: [],
+  };
+};
+
+export const resolveWorkLogLaborCostDisplay = ({
+  workLog = {},
+  relatedPayrolls = [],
+  productionStep = null,
+} = {}) => {
+  const includedPayrolls = (Array.isArray(relatedPayrolls) ? relatedPayrolls : []).filter(
+    isProductionPayrollLineHppIncluded,
+  );
+  const finalPayrolls = includedPayrolls.filter(isProductionPayrollLineFinal);
+  const draftPayrolls = includedPayrolls.filter((line) => !isProductionPayrollLineFinal(line));
+  const cancelledPayrollCount = (Array.isArray(relatedPayrolls) ? relatedPayrolls : []).filter(
+    (line) => safeString(line.status).toLowerCase() === "cancelled",
+  ).length;
+  const finalAmount = finalPayrolls.reduce((sum, line) => sum + safeNumber(line.finalAmount), 0);
+  const draftAmount = draftPayrolls.reduce((sum, line) => sum + safeNumber(line.finalAmount), 0);
+  const reviewReasons = [];
+
+  if (finalPayrolls.length > 0) {
+    if (finalAmount <= 0) reviewReasons.push("Final amount payroll 0.");
+
+    return {
+      displayAmount: finalAmount,
+      amount: finalAmount,
+      finalAmount,
+      estimatedAmount: 0,
+      draftAmount: 0,
+      source: "payroll_final",
+      statusLabel: "Final",
+      totalStatusLabel: "Final",
+      label: "Payroll Final",
+      tagColor: "green",
+      helper: "Confirmed/paid; masuk HPP final.",
+      isFinal: true,
+      isEstimated: false,
+      isDraft: false,
+      needsReview: reviewReasons.length > 0,
+      reviewReasons,
+    };
+  }
+
+  if (draftPayrolls.length > 0 && draftAmount > 0) {
+    return {
+      displayAmount: draftAmount,
+      amount: draftAmount,
+      finalAmount: 0,
+      estimatedAmount: 0,
+      draftAmount,
+      source: "payroll_draft",
+      statusLabel: "Draft Payroll",
+      totalStatusLabel: "Draft Payroll",
+      label: "Draft Payroll",
+      tagColor: "gold",
+      helper: "Read-only; belum masuk HPP final.",
+      isFinal: false,
+      isEstimated: false,
+      isDraft: true,
+      needsReview: false,
+      reviewReasons,
+    };
+  }
+
+  if (draftPayrolls.length > 0 && draftAmount <= 0) {
+    reviewReasons.push("Draft payroll 0; tampilkan estimasi step sementara.");
+  }
+
+  if (cancelledPayrollCount > 0) {
+    reviewReasons.push("Payroll Work Log cancelled.");
+  }
+
+  const legacyLaborCost = safeNumber(workLog.laborCostActual);
+  if (legacyLaborCost > 0) {
+    return {
+      displayAmount: legacyLaborCost,
+      amount: legacyLaborCost,
+      finalAmount: 0,
+      estimatedAmount: legacyLaborCost,
+      draftAmount: 0,
+      source: "work_log_labor_cost_actual",
+      statusLabel: "Estimasi",
+      totalStatusLabel: "Estimasi",
+      label: "Ringkasan lama",
+      tagColor: "default",
+      helper: "Legacy/summary Work Log.",
+      isFinal: false,
+      isEstimated: true,
+      isDraft: false,
+      needsReview: reviewReasons.length > 0,
+      reviewReasons,
+    };
+  }
+
+  const estimate = resolveWorkLogStepEstimate({ workLog, productionStep });
+  return {
+    ...estimate,
+    reviewReasons: [...new Set([...reviewReasons, ...(estimate.reviewReasons || [])])],
+    needsReview: reviewReasons.length > 0 || Boolean(estimate.needsReview),
+    helper: reviewReasons.length > 0 ? reviewReasons[0] : estimate.helper,
+  };
 };

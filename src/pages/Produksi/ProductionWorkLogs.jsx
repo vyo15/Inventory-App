@@ -14,7 +14,6 @@ import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
 import EditableLineSection from '../../components/Produksi/shared/EditableLineSection';
 import {
-  Alert,
   Button,
   Card,
   Col,
@@ -62,15 +61,21 @@ import {
   getWorkLogReferenceData,
   updateProductionWorkLog,
 } from "../../services/Produksi/productionWorkLogsService";
-import { generatePayrollLinesFromCompletedWorkLog } from "../../services/Produksi/productionPayrollsService";
+import {
+  generatePayrollLinesFromCompletedWorkLog,
+  getAllProductionPayrolls,
+} from "../../services/Produksi/productionPayrollsService";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
-
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildWorkLogMaterialUsageFormLine, buildWorkLogOutputFormLine } from "../../utils/produksi/productionLineBuilders";
 import { buildVariantOptionsFromItem, inferHasVariants } from "../../utils/variants/variantStockHelpers";
 import { isProductionWorkLogCompleted } from "../../utils/produksi/productionFlowGuards";
+import {
+  buildProductionStepPayrollSnapshot,
+  resolveWorkLogLaborCostDisplay,
+} from "../../utils/produksi/productionPayrollRuleHelpers";
 import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import useAuth from "../../hooks/useAuth";
 
@@ -79,6 +84,39 @@ import useAuth from "../../hooks/useAuth";
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+
+const safeNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const safeText = (value) => String(value || "").trim();
+
+const findWorkLogStepMaster = (workLog = {}, productionSteps = []) =>
+  (productionSteps || []).find((item) => {
+    if (safeText(workLog.stepId) && safeText(item.id) === safeText(workLog.stepId)) return true;
+    return safeText(workLog.stepCode) && safeText(item.code) === safeText(workLog.stepCode);
+  }) || null;
+
+const getScaledBomOverheadEstimate = ({ workLog = {}, boms = [] } = {}) => {
+  const bom = (boms || []).find((item) => safeText(item.id) === safeText(workLog.bomId));
+  const overheadPerBatch = safeNumber(bom?.overheadCostEstimate);
+  if (overheadPerBatch <= 0) return 0;
+
+  return overheadPerBatch * Math.max(1, safeNumber(workLog.plannedQty, 1));
+};
+
+const isEditableProductionWorkLog = (record = {}) =>
+  safeText(record.status).toLowerCase() === "in_progress" && !isProductionWorkLogCompleted(record);
+
+const getProductionPayrollsForWorkLogDisplaySafely = async () => {
+  try {
+    return await getAllProductionPayrolls();
+  } catch (error) {
+    console.error("Gagal memuat payroll untuk display detail Work Log", error);
+    return [];
+  }
+};
 
 const ProductionWorkLogs = () => {
   const { profile, firebaseUser } = useAuth();
@@ -98,6 +136,7 @@ const ProductionWorkLogs = () => {
   // SECTION: state utama
   const [loading, setLoading] = useState(false);
   const [workLogs, setWorkLogs] = useState([]);
+  const [productionPayrolls, setProductionPayrolls] = useState([]);
   const [referenceData, setReferenceData] = useState({
     boms: [],
     productionOrders: [],
@@ -149,12 +188,14 @@ const ProductionWorkLogs = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [workLogResult, refResult] = await Promise.all([
+      const [workLogResult, refResult, payrollResult] = await Promise.all([
         getAllProductionWorkLogs(),
         getWorkLogReferenceData(),
+        getProductionPayrollsForWorkLogDisplaySafely(),
       ]);
 
       setWorkLogs(workLogResult);
+      setProductionPayrolls(Array.isArray(payrollResult) ? payrollResult : []);
       setReferenceData(refResult);
 
       if (Array.isArray(refResult?.metaWarnings) && refResult.metaWarnings.length > 0) {
@@ -522,7 +563,11 @@ const ProductionWorkLogs = () => {
       )?.raw;
 
       const line = buildWorkLogOutputFormLine({
-        values,
+        values: {
+          ...values,
+          rejectQty: 0,
+          reworkQty: 0,
+        },
         selectedOutput: selected,
       });
 
@@ -577,6 +622,10 @@ const ProductionWorkLogs = () => {
         (item) => item.id === values.productionProfileId,
       );
 
+      const selectedStepPayrollSnapshot = selectedStep
+        ? buildProductionStepPayrollSnapshot(selectedStep)
+        : null;
+
       const payload = {
         ...values,
         workDate: values.workDate ? values.workDate.toDate() : null,
@@ -611,6 +660,17 @@ const ProductionWorkLogs = () => {
         stepCode: selectedStep?.code || "",
         stepName: selectedStep?.name || "",
         sequenceNo: values.sequenceNo || 1,
+        ...(selectedStepPayrollSnapshot
+          ? {
+              stepPayrollMode: selectedStepPayrollSnapshot.payrollMode,
+              stepPayrollRate: selectedStepPayrollSnapshot.payrollRate,
+              stepPayrollQtyBase: selectedStepPayrollSnapshot.payrollQtyBase,
+              stepPayrollOutputBasis: selectedStepPayrollSnapshot.payrollOutputBasis,
+              stepPayrollClassification: selectedStepPayrollSnapshot.payrollClassification,
+              stepPayrollIncludeInHpp: selectedStepPayrollSnapshot.includePayrollInHpp,
+              stepPayrollRuleSource: "production_step",
+            }
+          : {}),
         workerCodes: selectedEmployees.map((item) => item.code || ""),
         workerNames: selectedEmployees.map((item) => item.name || ""),
         workerCount: selectedEmployees.length,
@@ -677,15 +737,13 @@ const ProductionWorkLogs = () => {
   // =====================================================
   // Popup selesai produksi
   // Catatan maintainability:
-  // - User isi actual result, reject, rework, operator, dan catatan dari popup ini
+  // - User isi Good Qty, operator, dan catatan dari popup ini; field hasil selain good hanya compatibility data lama.
   // - Setelah update work log, baru service complete menambah stok output dan menutup PO
   // =====================================================
   const handleOpenComplete = (record) => {
     setCompletingRecord(record);
     completeForm.setFieldsValue({
       goodQty: record.goodQty || 0,
-      rejectQty: record.rejectQty || 0,
-      reworkQty: record.reworkQty || 0,
       workerIds: Array.isArray(record.workerIds) ? record.workerIds : [],
       notes: record.notes || '',
     });
@@ -702,8 +760,9 @@ const ProductionWorkLogs = () => {
         {
           ...completingRecord,
           goodQty: values.goodQty,
-          rejectQty: values.rejectQty,
-          reworkQty: values.reworkQty,
+          rejectQty: 0,
+          reworkQty: 0,
+          scrapQty: 0,
           workerIds: values.workerIds || [],
           workerNames: (referenceData.employees || [])
             .filter((item) => (values.workerIds || []).includes(item.id))
@@ -835,7 +894,7 @@ const ProductionWorkLogs = () => {
   // =====================================================
   // ACTIVE UI GUARD - konteks estimasi modal complete Work Log.
   // Fungsi blok:
-  // - memberi acuan target, step, batch, dan estimasi hasil sebelum user mengisi Good/Reject/Rework Qty.
+  // - memberi acuan target, step, batch, dan estimasi hasil sebelum user mengisi Good Qty.
   // Alasan perubahan:
   // - regression UI sebelumnya menghapus konteks output sehingga user tidak punya acuan cepat saat menyelesaikan work log.
   // Status:
@@ -850,23 +909,26 @@ const ProductionWorkLogs = () => {
       .join(" · ");
 
     return (
-      <Alert
-        type="info"
-        showIcon
+      <Card
+        size="small"
+        className="ims-readonly-panel"
         style={{ marginBottom: 16 }}
-        message="Acuan estimasi hasil"
-        description={
-          <Space direction="vertical" size={2} style={{ width: "100%" }}>
-            <Typography.Text strong>{targetLabel}</Typography.Text>
-            <Typography.Text type="secondary">
-              Step: {record.stepName || "-"} · PO: {record.productionOrderCode || "-"}
-            </Typography.Text>
-            <Typography.Text type="secondary">
-              Qty batch: {formatNumber(record.plannedQty || 0)} · Estimasi hasil: {formatNumber(record.theoreticalOutputQty || 0)} {unitLabel}
-            </Typography.Text>
+        bodyStyle={{ padding: 12 }}
+      >
+        <Space direction="vertical" size={4} style={{ width: "100%" }}>
+          <Space size={6} wrap>
+            <Typography.Text strong>Acuan estimasi hasil</Typography.Text>
+            <Tag color="default">Read-only</Tag>
           </Space>
-        }
-      />
+          <Typography.Text>{targetLabel}</Typography.Text>
+          <Typography.Text type="secondary" className="ims-cell-meta">
+            Step: {record.stepName || "-"} · PO: {record.productionOrderCode || "-"}
+          </Typography.Text>
+          <Typography.Text type="secondary" className="ims-cell-meta">
+            Qty batch: {formatNumber(record.plannedQty || 0)} · Estimasi hasil: {formatNumber(record.theoreticalOutputQty || 0)} {unitLabel}
+          </Typography.Text>
+        </Space>
+      </Card>
     );
   };
 
@@ -876,6 +938,95 @@ const ProductionWorkLogs = () => {
   // - Dengan pola ini, drawer detail lebih mudah dirapikan tanpa mencampur
   //   logika presentasi dengan markup yang terlalu panjang.
   // =====================================================
+  const detailWorkerNames = useMemo(() => {
+    if (!selectedRecord || !Array.isArray(selectedRecord.workerNames)) {
+      return [];
+    }
+
+    return selectedRecord.workerNames.filter(Boolean);
+  }, [selectedRecord]);
+
+  const detailRelatedPayrolls = useMemo(() => {
+    if (!selectedRecord) return [];
+
+    const workLogId = safeText(selectedRecord.id);
+    const workNumber = safeText(selectedRecord.workNumber);
+
+    return productionPayrolls.filter((item) => (
+      (workLogId && safeText(item.workLogId) === workLogId) ||
+      (workNumber && safeText(item.workNumber) === workNumber)
+    ));
+  }, [productionPayrolls, selectedRecord]);
+
+  // =====================================================
+  // ACTIVE UI-ONLY - display labor Work Log yang compact.
+  // Fungsi:
+  // - payroll final tetap prioritas dan satu-satunya nilai yang masuk HPP final;
+  // - payroll draft/estimasi Step boleh tampil read-only agar user paham kenapa field
+  //   `laborCostActual` masih 0 sebelum payroll final;
+  // - tidak menulis balik estimasi ke Work Log dan tidak membuat payroll otomatis.
+  // =====================================================
+  const detailLaborCostDisplay = useMemo(() => {
+    if (!selectedRecord) {
+      return { amount: 0, label: "-", tagColor: "default", helper: "-" };
+    }
+
+    return resolveWorkLogLaborCostDisplay({
+      workLog: selectedRecord,
+      relatedPayrolls: detailRelatedPayrolls,
+      productionStep: findWorkLogStepMaster(selectedRecord, referenceData.productionSteps || []),
+    });
+  }, [detailRelatedPayrolls, referenceData.productionSteps, selectedRecord]);
+
+  const detailLaborDisplay = detailLaborCostDisplay.amount || detailLaborCostDisplay.displayAmount || 0;
+
+  const detailOverheadCostDisplay = useMemo(() => {
+    if (!selectedRecord) {
+      return { amount: 0, label: "-", tagColor: "default", helper: "-" };
+    }
+
+    const overheadActual = safeNumber(selectedRecord.overheadCostActual);
+    if (overheadActual > 0) {
+      return {
+        amount: overheadActual,
+        label: "BOM Overhead",
+        tagColor: "blue",
+        helper: "Listrik/glue gun dari BOM.",
+      };
+    }
+
+    const overheadEstimate = getScaledBomOverheadEstimate({
+      workLog: selectedRecord,
+      boms: referenceData.boms || [],
+    });
+
+    if (overheadEstimate > 0) {
+      return {
+        amount: overheadEstimate,
+        label: "Estimasi BOM",
+        tagColor: "default",
+        helper: "Read-only untuk data lama yang belum menyimpan overhead.",
+      };
+    }
+
+    return {
+      amount: 0,
+      label: "Tidak dipakai",
+      tagColor: "default",
+      helper: "Overhead BOM belum diisi.",
+    };
+  }, [referenceData.boms, selectedRecord]);
+
+  const detailDisplayedTotalCost = selectedRecord
+    ? safeNumber(selectedRecord.materialCostActual) +
+      safeNumber(detailOverheadCostDisplay.amount) +
+      safeNumber(detailLaborDisplay)
+    : 0;
+  const detailDisplayedCostPerGoodUnit =
+    selectedRecord && safeNumber(selectedRecord.goodQty) > 0
+      ? detailDisplayedTotalCost / safeNumber(selectedRecord.goodQty)
+      : 0;
+
   const detailMetricCards = useMemo(() => {
     if (!selectedRecord) return [];
 
@@ -898,80 +1049,23 @@ const ProductionWorkLogs = () => {
         key: "good",
         label: "Good Output",
         value: `${formatNumber(selectedRecord.goodQty || 0)} ${unitLabel}`,
-        helper: `Reject ${formatNumber(selectedRecord.rejectQty || 0)} | Rework ${formatNumber(selectedRecord.reworkQty || 0)}`,
+        helper: "Qty yang masuk stok/output produksi",
       },
       {
         key: "cost",
-        label: "Total Biaya",
-        value: formatCurrency(selectedRecord.totalCostActual || 0),
-        helper: `Cost / good unit ${formatCurrency(selectedRecord.costPerGoodUnit || 0)}`,
+        label: detailLaborCostDisplay.isFinal ? "Total Biaya Final" : "Total Biaya Display",
+        value: formatCurrency(detailDisplayedTotalCost),
+        helper: detailLaborCostDisplay.isFinal
+          ? `Cost / good unit ${formatCurrency(detailDisplayedCostPerGoodUnit)}`
+          : `${detailLaborCostDisplay.totalStatusLabel || "Preview"} read-only; final menunggu payroll confirmed/paid.`,
       },
     ];
-  }, [selectedRecord]);
-
-  const detailWorkerNames = useMemo(() => {
-    if (!selectedRecord || !Array.isArray(selectedRecord.workerNames)) {
-      return [];
-    }
-
-    return selectedRecord.workerNames.filter(Boolean);
-  }, [selectedRecord]);
-
-  // =====================================================
-  // Source display labor final di drawer detail.
-  // Fungsi:
-  // - memprioritaskan ringkasan payroll final jika payroll line sudah ada
-  // - fallback ke laborCostActual untuk data lama/manual yang belum punya sync payroll
-  // Status:
-  // - aktif dipakai di detail Work Log
-  // - kandidat cleanup jika nanti seluruh data lama sudah tersinkron penuh ke payrollFinalAmount
-  // =====================================================
-  const detailLaborDisplay = useMemo(() => {
-    if (!selectedRecord) return 0;
-    const payrollFinalAmount = Number(selectedRecord.payrollFinalAmount || 0);
-    if (payrollFinalAmount > 0) return payrollFinalAmount;
-    return Number(selectedRecord.laborCostActual || 0);
-  }, [selectedRecord]);
-
-  // =====================================================
-  // ACTIVE / GUARDED - warning cost 0 pada detail Work Log.
-  // Fungsi blok:
-  // - menjelaskan kenapa nilai biaya 0 perlu dicek tanpa mengubah angka cost;
-  // - membantu user membedakan cost benar-benar kosong vs HPP sudah valid.
-  // Hubungan dengan flow Work Log/HPP:
-  // - hanya membaca selectedRecord completed/in-progress yang sedang dibuka;
-  // - tidak menjalankan ulang complete, tidak backfill, dan tidak mengubah payroll/stok.
-  // Status:
-  // - aktif dipakai pada drawer detail; bukan legacy dan bukan kandidat cleanup.
-  // =====================================================
-  const detailCostWarnings = useMemo(() => {
-    if (!selectedRecord) return [];
-
-    const warnings = [];
-    const materialCost = Number(selectedRecord.materialCostActual || 0);
-    const laborCost = Number(detailLaborDisplay || 0);
-    const totalCost = Number(selectedRecord.totalCostActual || 0);
-    const costPerGoodUnit = Number(selectedRecord.costPerGoodUnit || 0);
-    const goodQty = Number(selectedRecord.goodQty || 0);
-
-    if (materialCost === 0) {
-      warnings.push("Biaya material 0. Cek cost bahan atau snapshot material.");
-    }
-
-    if (laborCost === 0) {
-      warnings.push("Biaya tenaga kerja 0. Cek payroll Work Log.");
-    }
-
-    if (totalCost === 0) {
-      warnings.push("Total biaya 0. HPP belum valid untuk analisis.");
-    }
-
-    if (costPerGoodUnit === 0 && goodQty > 0) {
-      warnings.push("Cost per good unit 0 walaupun good qty ada. Cek total biaya Work Log.");
-    }
-
-    return warnings;
-  }, [selectedRecord, detailLaborDisplay]);
+  }, [
+    detailDisplayedCostPerGoodUnit,
+    detailDisplayedTotalCost,
+    detailLaborCostDisplay.isFinal,
+    selectedRecord,
+  ]);
 
   const detailMaterialColumns = useMemo(
     () => [
@@ -1070,17 +1164,9 @@ const ProductionWorkLogs = () => {
         key: "result",
         width: 180,
         render: (_, record) => (
-          <Space direction="vertical" size={0}>
-            <Typography.Text>
-              Good: {formatNumber(record.goodQty)} {record.unit || ""}
-            </Typography.Text>
-            <Typography.Text type="secondary">
-              Reject: {formatNumber(record.rejectQty)} {record.unit || ""}
-            </Typography.Text>
-            <Typography.Text type="secondary">
-              Rework: {formatNumber(record.reworkQty)} {record.unit || ""}
-            </Typography.Text>
-          </Space>
+          <Typography.Text>
+            Good: {formatNumber(record.goodQty)} {record.unit || ""}
+          </Typography.Text>
         ),
       },
       {
@@ -1198,12 +1284,12 @@ const ProductionWorkLogs = () => {
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
-            disabled={isProductionWorkLogCompleted(record) || record.status === "cancelled"}
+            disabled={!isEditableProductionWorkLog(record)}
           >
             Edit
           </Button>
 
-          {!isProductionWorkLogCompleted(record) && record.status !== "cancelled" && (
+          {isEditableProductionWorkLog(record) && (
             <Button
               className="ims-action-button"
               size="small"
@@ -1542,18 +1628,8 @@ const ProductionWorkLogs = () => {
                 <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
-
-            <Col xs={24} md={6}>
-              <Form.Item label="Reject Qty" name="rejectQty">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-
-            <Col xs={24} md={6}>
-              <Form.Item label="Rework Qty" name="reworkQty">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
+            <Form.Item name="rejectQty" hidden><InputNumber /></Form.Item>
+            <Form.Item name="reworkQty" hidden><InputNumber /></Form.Item>
 
             <Col xs={24}>
               <Form.Item label="Worker" name="workerIds">
@@ -1588,8 +1664,10 @@ const ProductionWorkLogs = () => {
 
           <EditableLineSection
             title="Material Usages"
+            description={editingRecord?.productionOrderId ? "Material dari PO terkunci agar pemakaian stok dan audit tidak berubah." : undefined}
             addButtonText="Tambah Material Usage"
             onAdd={() => openMaterialModal()}
+            showAddButton={!editingRecord?.productionOrderId}
             dataSource={form.getFieldValue("materialUsages") || []}
             emptyText="Belum ada material usage"
             columns={[
@@ -1637,19 +1715,23 @@ const ProductionWorkLogs = () => {
                 title: "Aksi",
                 width: 140,
                 render: (_, record, index) => (
-                  <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-                    <Button className="ims-action-button" size="small" onClick={() => openMaterialModal(index, record)}>
-                      Edit
-                    </Button>
-                    <Popconfirm
-                      title="Hapus material usage ini?"
-                      onConfirm={() => handleRemoveMaterialUsage(index)}
-                      okText="Ya"
-                      cancelText="Batal"
-                    >
-                      <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  </Space>
+                  editingRecord?.productionOrderId ? (
+                    <Typography.Text type="secondary" className="ims-cell-meta">Terkunci dari PO</Typography.Text>
+                  ) : (
+                    <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+                      <Button className="ims-action-button" size="small" onClick={() => openMaterialModal(index, record)}>
+                        Edit
+                      </Button>
+                      <Popconfirm
+                        title="Hapus material usage ini?"
+                        onConfirm={() => handleRemoveMaterialUsage(index)}
+                        okText="Ya"
+                        cancelText="Batal"
+                      >
+                        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
+                      </Popconfirm>
+                    </Space>
+                  )
                 ),
               },
             ]}
@@ -1657,8 +1739,10 @@ const ProductionWorkLogs = () => {
 
           <EditableLineSection
             title="Outputs"
+            description={editingRecord?.productionOrderId ? "Output dari PO terkunci. Isi Good Qty dari modal Selesaikan agar stok/HPP tetap konsisten." : undefined}
             addButtonText="Tambah Output"
             onAdd={() => openOutputModal()}
+            showAddButton={!editingRecord?.productionOrderId}
             dataSource={form.getFieldValue("outputs") || []}
             emptyText="Belum ada output"
             columns={[
@@ -1682,33 +1766,32 @@ const ProductionWorkLogs = () => {
                 key: "qty",
                 width: 180,
                 render: (_, record) => (
-                  <Space direction="vertical" size={0}>
-                    <Typography.Text>
-                      Good: {formatNumber(record.goodQty)}
-                    </Typography.Text>
-                    <Typography.Text type="secondary">
-                      Reject: {formatNumber(record.rejectQty)}
-                    </Typography.Text>
-                  </Space>
+                  <Typography.Text>
+                    Good: {formatNumber(record.goodQty)}
+                  </Typography.Text>
                 ),
               },
               {
                 title: "Aksi",
                 width: 140,
                 render: (_, record, index) => (
-                  <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-                    <Button className="ims-action-button" size="small" onClick={() => openOutputModal(index, record)}>
-                      Edit
-                    </Button>
-                    <Popconfirm
-                      title="Hapus output ini?"
-                      onConfirm={() => handleRemoveOutput(index)}
-                      okText="Ya"
-                      cancelText="Batal"
-                    >
-                      <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
-                    </Popconfirm>
-                  </Space>
+                  editingRecord?.productionOrderId ? (
+                    <Typography.Text type="secondary" className="ims-cell-meta">Terkunci dari PO</Typography.Text>
+                  ) : (
+                    <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+                      <Button className="ims-action-button" size="small" onClick={() => openOutputModal(index, record)}>
+                        Edit
+                      </Button>
+                      <Popconfirm
+                        title="Hapus output ini?"
+                        onConfirm={() => handleRemoveOutput(index)}
+                        okText="Ya"
+                        cancelText="Batal"
+                      >
+                        <Button className="ims-action-button" size="small" danger icon={<DeleteOutlined />} />
+                      </Popconfirm>
+                    </Space>
+                  )
                 ),
               },
             ]}
@@ -1718,24 +1801,30 @@ const ProductionWorkLogs = () => {
 
           <Row gutter={16}>
             <Col xs={24} md={4}>
-              <Form.Item label="Labor Cost" name="laborCostActual">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
+              <Form.Item
+                label="Labor Cost"
+                name="laborCostActual"
+                tooltip="Labor aktif dibaca dari Payroll Produksi. Estimasi step hanya tampil read-only di detail/HPP."
+              >
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} disabled />
               </Form.Item>
             </Col>
 
             <Col xs={24} md={4}>
-              <Form.Item label="Overhead Cost" name="overheadCostActual">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
+              <Form.Item
+                label="Overhead Cost"
+                name="overheadCostActual"
+                tooltip="Overhead aktif berasal dari BOM untuk listrik/glue gun."
+              >
+                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} disabled={Boolean(editingRecord?.productionOrderId)} />
               </Form.Item>
             </Col>
 
-            <Col xs={24} md={4}>
-              <Form.Item label="Scrap Qty" name="scrapQty">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
+            <Form.Item name="scrapQty" hidden>
+              <InputNumber />
+            </Form.Item>
 
-            <Col xs={24} md={12}>
+            <Col xs={24} md={16}>
               <Form.Item label="Catatan" name="notes">
                 <Input.TextArea rows={2} placeholder="Catatan work log..." />
               </Form.Item>
@@ -1877,71 +1966,47 @@ const ProductionWorkLogs = () => {
                     </Space>
                   </Card>
 
-                  <Card size="small" title="Biaya Aktual">
-                    <Alert
-                      style={{ marginBottom: 12 }}
-                      type="info"
-                      showIcon
-                      message="Biaya labor memakai payroll final; jika belum ada, pakai input Work Log."
-                    />
-                    {/* =====================================================
-                        ACTIVE / GUARDED - alert warning detail cost 0.
-                        Fungsi blok:
-                        - menampilkan penjelasan cost 0 pada detail Work Log agar user tidak salah membaca HPP;
-                        - tidak mengubah angka, tidak menjalankan ulang complete, dan tidak membuat payroll otomatis.
-                        Hubungan dengan flow Work Log/HPP: visibility dari selectedRecord aktif.
-                        Status: aktif dipakai; bukan legacy/kandidat cleanup.
-                    ===================================================== */}
-                    {detailCostWarnings.length > 0 ? (
-                      <Alert
-                        style={{ marginBottom: 12 }}
-                        type="warning"
-                        showIcon
-                        message="Cost Work Log perlu dicek"
-                        description={
-                          <Space direction="vertical" size={2}>
-                            {detailCostWarnings.map((warning) => (
-                              <Typography.Text key={warning}>
-                                {warning}
-                              </Typography.Text>
-                            ))}
-                          </Space>
-                        }
-                      />
-                    ) : null}
+                  <Card size="small" title="Biaya Produksi">
                     <Row gutter={[12, 12]}>
                       <Col span={12}>
-                        <Typography.Text type="secondary">
-                          Material
-                        </Typography.Text>
+                        <Typography.Text type="secondary">Material</Typography.Text>
                         <div className="ims-cell-title" style={{ marginTop: 4 }}>
                           {formatCurrency(selectedRecord.materialCostActual || 0)}
                         </div>
                       </Col>
                       <Col span={12}>
-                        <Typography.Text type="secondary">
-                          Labor
-                        </Typography.Text>
+                        <Typography.Text type="secondary">Labor</Typography.Text>
                         <div className="ims-cell-title" style={{ marginTop: 4 }}>
                           {formatCurrency(detailLaborDisplay)}
                         </div>
-                      </Col>
-                      <Col span={12}>
-                        <Typography.Text type="secondary">
-                          Overhead
-                        </Typography.Text>
-                        <div className="ims-cell-title" style={{ marginTop: 4 }}>
-                          {formatCurrency(selectedRecord.overheadCostActual || 0)}
+                        <Tag
+                          className="ims-status-tag"
+                          color={detailLaborCostDisplay.tagColor}
+                          style={{ marginTop: 4 }}
+                        >
+                          {detailLaborCostDisplay.label}
+                        </Tag>
+                        <div className="ims-cell-meta" style={{ marginTop: 4 }}>
+                          {detailLaborCostDisplay.helper}
                         </div>
                       </Col>
                       <Col span={12}>
-                        <Typography.Text type="secondary">
-                          Scrap Qty
-                        </Typography.Text>
+                        <Typography.Text type="secondary">Overhead</Typography.Text>
                         <div className="ims-cell-title" style={{ marginTop: 4 }}>
-                          {formatNumber(selectedRecord.scrapQty || 0)}
+                          {formatCurrency(detailOverheadCostDisplay.amount)}
+                        </div>
+                        <Tag
+                          className="ims-status-tag"
+                          color={detailOverheadCostDisplay.tagColor}
+                          style={{ marginTop: 4 }}
+                        >
+                          {detailOverheadCostDisplay.label}
+                        </Tag>
+                        <div className="ims-cell-meta" style={{ marginTop: 4 }}>
+                          {detailOverheadCostDisplay.helper}
                         </div>
                       </Col>
+
                     </Row>
                   </Card>
                 </Space>
@@ -2207,22 +2272,14 @@ const ProductionWorkLogs = () => {
           </Form.Item>
 
           <Row gutter={12}>
-            <Col span={8}>
+            <Col span={24}>
               <Form.Item label="Good Qty" name="goodQty">
                 <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>
-            <Col span={8}>
-              <Form.Item label="Reject Qty" name="rejectQty">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item label="Rework Qty" name="reworkQty">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
           </Row>
+          <Form.Item name="rejectQty" hidden><InputNumber /></Form.Item>
+          <Form.Item name="reworkQty" hidden><InputNumber /></Form.Item>
 
           <Row gutter={12}>
             <Col span={12}>
@@ -2260,22 +2317,12 @@ const ProductionWorkLogs = () => {
 
         <Form form={completeForm} layout="vertical">
           <Row gutter={12}>
-            <Col span={8}>
+            <Col span={24}>
               <Form.Item
                 label="Good Qty"
                 name="goodQty"
                 rules={[{ required: true, message: "Good qty wajib diisi" }]}
               >
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item label="Reject Qty" name="rejectQty">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item label="Rework Qty" name="reworkQty">
                 <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
               </Form.Item>
             </Col>

@@ -1,5 +1,5 @@
 import { Typography } from "antd";
-import { formatNumberId } from "../../../utils/formatters/numberId";
+import { formatStockWithUnitId } from "../../../utils/formatters/stockUnit";
 import { getVariantStockStatusMeta } from "../../../utils/stock/stockHelpers";
 
 const { Text } = Typography;
@@ -23,7 +23,7 @@ const resolveVariantLabel = (variant = {}, index = 0, getVariantLabel) => {
   );
 };
 
-const formatStockWithUnit = (value, unit = "pcs") => `${formatNumberId(value)} ${unit}`;
+const formatStockWithUnit = formatStockWithUnitId;
 
 /* =====================================================
 SECTION: Locked stock balance display — AKTIF / GUARDED
@@ -31,13 +31,13 @@ Fungsi:
 - Menampilkan saldo stok item dalam format owner-locked: Total, Tersedia, dan semua variant sebagai chip/pill langsung di table utama.
 
 Dipakai oleh:
-- Products table dan StockReport table untuk saldo stok item/master inventory.
+- Products, RawMaterials, SemiFinishedMaterials, dan StockReport table untuk saldo stok item/master inventory.
 
 Alasan perubahan:
 - Batch compact table tetap harus menjaga format stok varian yang sudah dikunci owner dan tidak boleh menyembunyikan semua varian ke drawer/tooltip.
 
 Catatan cleanup:
-- Bisa dipakai bertahap oleh RawMaterials/SemiFinishedMaterials pada patch terpisah agar helper stok benar-benar tunggal.
+- Formatter stok read-only sudah dikunci ke formatStockWithUnitId agar tidak bercabang antar halaman master/report.
 
 Risiko:
 - Jangan dipakai untuk Stok Masuk Purchases, audit log, snapshot mutasi, atau field yang bukan saldo stok item karena bisa membuat user salah membaca qty transaksi sebagai saldo master.

@@ -148,6 +148,7 @@ const ProductionPayrolls = () => {
   const [referenceData, setReferenceData] = useState({
     completedWorkLogs: [],
     employees: [],
+    productionSteps: [],
   });
 
   const [search, setSearch] = useState("");
@@ -300,7 +301,8 @@ const ProductionPayrolls = () => {
         (item) => item.id === workLog.workerIds?.[0],
       ) || null;
 
-    const draft = buildPayrollDraftFromWorkLog(workLog, employee);
+    const productionStep = (referenceData.productionSteps || []).find((item) => item.id === workLog.stepId) || null;
+    const draft = buildPayrollDraftFromWorkLog(workLog, employee, productionStep);
 
     form.setFieldsValue({
       ...form.getFieldsValue(),

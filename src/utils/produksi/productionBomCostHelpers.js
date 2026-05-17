@@ -8,6 +8,8 @@ const toNumber = (value) => {
   return Number.isFinite(numberValue) ? numberValue : 0;
 };
 
+const safeTrim = (value) => String(value || '').trim();
+
 const firstPositiveNumber = (item = {}, keys = []) => {
   for (const key of keys) {
     const value = toNumber(item?.[key]);
@@ -23,6 +25,22 @@ const firstPositiveNumber = (item = {}, keys = []) => {
     value: 0,
     source: '',
   };
+};
+
+const getBomReferenceListByMaterialType = (referenceData = {}, itemType = '') => {
+  if (itemType === 'raw_material') return referenceData.rawMaterials || [];
+  if (itemType === 'semi_finished_material') return referenceData.semiFinishedMaterials || [];
+  return [];
+};
+
+const findBomReferenceMaterialItem = ({ line = {}, referenceData = {} } = {}) => {
+  const itemType = safeTrim(line.itemType);
+  const itemId = safeTrim(line.itemId);
+  if (!itemType || !itemId) return null;
+
+  return getBomReferenceListByMaterialType(referenceData, itemType).find(
+    (item) => safeTrim(item?.id) === itemId,
+  ) || null;
 };
 
 export const resolveBomMaterialUnitCost = ({ itemType = '', item = {} } = {}) => {
@@ -51,6 +69,70 @@ export const resolveBomMaterialUnitCost = ({ itemType = '', item = {} } = {}) =>
     source: '',
   };
 };
+
+/*
+=====================================================
+SECTION: Live BOM material cost hydration — GUARDED
+Fungsi:
+- Menghitung ulang costPerUnitSnapshot dan totalCostSnapshot material BOM dari master cost terbaru.
+
+Dipakai oleh:
+- productionLineBuilders.js, ProductionBoms.jsx, productionBomsService.js, dan resetMaintenanceDataService.js.
+
+Alasan perubahan:
+- BOM aktif tidak boleh lagi memakai snapshot lama ketika average cost/HPP master sudah berubah atau direset ke 0.
+
+Catatan cleanup:
+- Nama field snapshot masih dipertahankan untuk compatibility data lama; rename schema perlu approval terpisah.
+
+Risiko:
+- Jika fallback snapshot lama dikembalikan, estimasi BOM dan Work Log baru bisa memakai modal stale.
+=====================================================
+*/
+export const hydrateBomMaterialLineWithLiveCost = ({
+  line = {},
+  referenceData = {},
+  item = null,
+  itemType = '',
+} = {}) => {
+  const normalizedType = safeTrim(itemType || line.itemType) || 'raw_material';
+  const referenceItem = item || findBomReferenceMaterialItem({
+    line: { ...line, itemType: normalizedType },
+    referenceData,
+  }) || {};
+  const resolvedUnitCost = resolveBomMaterialUnitCost({
+    itemType: normalizedType,
+    item: referenceItem,
+  });
+  const qtyPerBatch = toNumber(line.qtyPerBatch || 0);
+  const wastageQty = toNumber(line.wastageQty || 0);
+  const totalRequiredQty = qtyPerBatch + wastageQty;
+  const costPerUnitSnapshot = toNumber(resolvedUnitCost.value || 0);
+  const totalCostSnapshot = totalRequiredQty * costPerUnitSnapshot;
+  const costSourceSnapshot = resolvedUnitCost.source
+    ? `live_master.${resolvedUnitCost.source}`
+    : 'live_master.zero_cost';
+
+  return {
+    ...line,
+    itemType: normalizedType,
+    itemId: line.itemId || referenceItem.id || '',
+    itemCode: safeTrim(referenceItem.code) || safeTrim(line.itemCode),
+    itemName: safeTrim(referenceItem.name) || safeTrim(line.itemName),
+    unit: safeTrim(referenceItem.unit) || safeTrim(line.unit) || 'pcs',
+    qtyPerBatch,
+    wastageQty,
+    totalRequiredQty,
+    costPerUnitSnapshot,
+    costSourceSnapshot,
+    totalCostSnapshot,
+  };
+};
+
+export const hydrateBomMaterialLinesWithLiveCost = ({ materialLines = [], referenceData = {} } = {}) =>
+  (Array.isArray(materialLines) ? materialLines : []).map((line) =>
+    hydrateBomMaterialLineWithLiveCost({ line, referenceData }),
+  );
 
 export const resolveBomStepPayrollSnapshot = (step = {}) => ({
   payrollMode: step?.payrollMode || 'per_batch',
@@ -87,7 +169,7 @@ export const calculateBomLaborCostEstimate = (stepLines = [], header = {}) =>
 
 export const calculateBomCostSummary = ({ materialLines = [], stepLines = [], header = {} } = {}) => {
   const materialCostEstimate = (Array.isArray(materialLines) ? materialLines : []).reduce(
-    (sum, item) => sum + toNumber(item?.totalCostSnapshot),
+    (sum, item) => sum + (toNumber(item?.totalRequiredQty || item?.qtyPerBatch || 0) * toNumber(item?.costPerUnitSnapshot || 0)),
     0,
   );
   const laborCostEstimate = calculateBomLaborCostEstimate(stepLines, header);

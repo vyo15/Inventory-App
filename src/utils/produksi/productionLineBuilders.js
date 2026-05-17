@@ -1,6 +1,5 @@
-import { calculateBomMaterialLine } from '../../constants/productionBomOptions';
 import {
-  resolveBomMaterialUnitCost,
+  hydrateBomMaterialLineWithLiveCost,
   resolveBomStepPayrollSnapshot,
 } from './productionBomCostHelpers';
 import {
@@ -16,28 +15,42 @@ import {
 export const buildBomMaterialFormLine = ({ values, selectedItem, itemType }) => {
   const materialHasVariants = inferHasVariants(selectedItem || {});
   const normalizedStrategy = materialHasVariants ? 'inherit' : 'none';
-  const resolvedUnitCost = resolveBomMaterialUnitCost({
+  /*
+  =====================================================
+  SECTION: BOM material line builder live cost — GUARDED
+  Fungsi:
+  - Membentuk material line BOM dari item master dengan biaya aktif terbaru.
+
+  Dipakai oleh:
+  - ProductionBoms.jsx saat tambah/edit komposisi bahan.
+
+  Alasan perubahan:
+  - Form BOM tidak boleh mempertahankan costPerUnitSnapshot lama ketika master cost sudah 0/berubah.
+
+  Catatan cleanup:
+  - Field snapshot tetap dipakai sebagai field existing sampai ada approval rename schema.
+
+  Risiko:
+  - Jangan fallback ke values.costPerUnitSnapshot karena itu menghidupkan kembali stale BOM cost.
+  =====================================================
+  */
+  return hydrateBomMaterialLineWithLiveCost({
     itemType,
     item: selectedItem || {},
-  });
-
-  return calculateBomMaterialLine({
-    ...values,
-    id: values.id || `material-${Date.now()}`,
-    itemType,
-    itemCode: selectedItem?.code || '',
-    itemName: selectedItem?.name || '',
-    unit: selectedItem?.unit || values.unit || 'pcs',
-    costPerUnitSnapshot: Number(
-      resolvedUnitCost.value || values.costPerUnitSnapshot || 0,
-    ),
-    costSourceSnapshot: resolvedUnitCost.source || values.costSourceSnapshot || '',
-    wastageQty: Number(values.wastageQty || 0),
-    isOptional: false,
-    materialHasVariants,
-    materialVariantStrategy: normalizedStrategy,
-    fixedVariantKey: '',
-    fixedVariantLabel: '',
+    line: {
+      ...values,
+      id: values.id || `material-${Date.now()}`,
+      itemType,
+      itemCode: selectedItem?.code || '',
+      itemName: selectedItem?.name || '',
+      unit: selectedItem?.unit || values.unit || 'pcs',
+      wastageQty: Number(values.wastageQty || 0),
+      isOptional: false,
+      materialHasVariants,
+      materialVariantStrategy: normalizedStrategy,
+      fixedVariantKey: '',
+      fixedVariantLabel: '',
+    },
   });
 };
 

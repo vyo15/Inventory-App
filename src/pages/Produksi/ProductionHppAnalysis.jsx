@@ -5,7 +5,7 @@
 // =====================================================
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Col, Empty, Input, Select, Space, Table, Tooltip, Typography, message, Tag } from "antd";
+import { Button, Col, Empty, Input, Select, Space, Table, Tooltip, Typography, message, Tag } from "antd";
 import { FileExcelOutlined } from "@ant-design/icons";
 import { getCompletedProductionWorkLogs } from "../../services/Produksi/productionWorkLogsService";
 import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
@@ -19,7 +19,7 @@ import { formatDateId } from "../../utils/formatters/dateId";
 import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
-import { calculatePayrollAmounts } from "../../constants/productionPayrollOptions";
+import { resolveWorkLogLaborCostDisplay } from "../../utils/produksi/productionPayrollRuleHelpers";
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -43,246 +43,11 @@ const resolveTargetTypeLabel = (targetType) =>
   TARGET_TYPE_LABEL_MAP[targetType] || targetType || "-";
 
 
-const HPP_PRODUCTION_COST_FINAL_STATUSES = new Set(["confirmed", "paid"]);
-
 const toSafeNumber = (value, fallback = 0) => {
   const normalized = Number(value);
   return Number.isFinite(normalized) ? normalized : fallback;
 };
 
-const isHppPayrollIncluded = (line = {}) =>
-  line.status !== "cancelled" && line.includePayrollInHpp !== false;
-
-const isHppPayrollFinal = (line = {}) => {
-  if (!isHppPayrollIncluded(line)) return false;
-
-  const status = String(line.status || "").toLowerCase();
-  const paymentStatus = String(line.paymentStatus || "").toLowerCase();
-
-  if (HPP_PRODUCTION_COST_FINAL_STATUSES.has(status)) return true;
-  if (paymentStatus === "paid") return true;
-
-  return !status && toSafeNumber(line.finalAmount) > 0;
-};
-
-const resolveHppEstimateOutputQty = (workLog = {}, stepRule = {}) => {
-  const payrollOutputBasis = stepRule.payrollOutputBasis || workLog.payrollOutputBasis || "good_qty";
-
-  if (payrollOutputBasis === "actual_output_qty") {
-    const actualOutputQty = toSafeNumber(workLog.actualOutputQty);
-    if (actualOutputQty > 0) return actualOutputQty;
-  }
-
-  const goodQty = toSafeNumber(workLog.goodQty);
-  if (goodQty > 0) return goodQty;
-
-  const actualOutputQty = toSafeNumber(workLog.actualOutputQty);
-  if (actualOutputQty > 0) return actualOutputQty;
-
-  const plannedQty = toSafeNumber(workLog.plannedQty || workLog.targetQty);
-  return plannedQty > 0 ? plannedQty : 0;
-};
-
-const estimateHppProductionCostFromStep = (workLog = {}, stepRule = {}) => {
-  if (!stepRule || stepRule.includePayrollInHpp === false) {
-    return {
-      amount: 0,
-      canEstimate: false,
-      excludedFromHpp: stepRule?.includePayrollInHpp === false,
-      reviewReasons: stepRule?.includePayrollInHpp === false
-        ? ["Step payroll tidak masuk HPP."]
-        : ["Rule step produksi tidak tersedia."],
-    };
-  }
-
-  const payrollMode = stepRule.payrollMode || workLog.payrollMode || "per_qty";
-  const payrollRate = toSafeNumber(stepRule.payrollRate ?? workLog.payrollRate);
-  const payrollQtyBase = Math.max(1, toSafeNumber(stepRule.payrollQtyBase ?? workLog.payrollQtyBase, 1));
-  const outputQty = resolveHppEstimateOutputQty(workLog, stepRule);
-  const reviewReasons = [];
-
-  if (payrollRate <= 0) {
-    reviewReasons.push("Rate step produksi 0/kosong.");
-  }
-
-  if (payrollMode === "per_qty" && outputQty <= 0) {
-    reviewReasons.push("Good qty/output qty 0 untuk mode per_qty.");
-  }
-
-  if (payrollRate <= 0 || (payrollMode === "per_qty" && outputQty <= 0)) {
-    return {
-      amount: 0,
-      canEstimate: false,
-      excludedFromHpp: false,
-      reviewReasons,
-    };
-  }
-
-  const workedQty = payrollMode === "per_batch"
-    ? toSafeNumber(workLog.plannedQty || workLog.targetQty || outputQty)
-    : outputQty;
-  const calculated = calculatePayrollAmounts({
-    payrollMode,
-    payrollRate,
-    payrollQtyBase,
-    outputQtyUsed: outputQty,
-    workedQty,
-  });
-
-  return {
-    amount: toSafeNumber(calculated.finalAmount),
-    canEstimate: true,
-    excludedFromHpp: false,
-    reviewReasons: [],
-  };
-};
-
-/*
-=====================================================
-SECTION: HPP Production Cost Resolver — GUARDED
-Fungsi:
-- Menentukan Biaya Produksi HPP dari payroll final, draft payroll, fallback Work Log, atau estimasi step tanpa menulis ke Firestore.
-
-Dipakai oleh:
-- Rows Analisis HPP Produksi.
-
-Alasan perubahan:
-- HPP perlu membedakan Final, Draft Payroll, Estimasi, dan Perlu cek agar estimasi tidak terbaca sebagai biaya final.
-
-Catatan cleanup:
-- Bisa dipindah ke helper shared bersama Work Log setelah alur final/estimasi stabil.
-
-Risiko:
-- Jika draft/estimasi dianggap final atau dijumlahkan bersama payroll final, HPP bisa double count.
-=====================================================
-*/
-const resolveHppProductionCost = (workLog = {}, relatedPayrolls = [], stepRule = {}) => {
-  const includedPayrolls = relatedPayrolls.filter(isHppPayrollIncluded);
-  const finalPayrolls = includedPayrolls.filter(isHppPayrollFinal);
-  const draftPayrolls = includedPayrolls.filter((line) => !isHppPayrollFinal(line));
-  const cancelledPayrollCount = relatedPayrolls.filter((line) => line.status === "cancelled").length;
-  const finalAmount = finalPayrolls.reduce((sum, line) => sum + toSafeNumber(line.finalAmount), 0);
-  const draftAmount = draftPayrolls.reduce((sum, line) => sum + toSafeNumber(line.finalAmount), 0);
-  const reviewReasons = [];
-
-  if (finalPayrolls.length > 0) {
-    if (finalAmount <= 0) {
-      reviewReasons.push("Final amount payroll 0.");
-    }
-
-    return {
-      displayAmount: finalAmount,
-      finalAmount,
-      estimatedAmount: 0,
-      draftAmount: 0,
-      source: "payroll_final",
-      statusLabel: "Final",
-      totalStatusLabel: "Final",
-      isFinal: true,
-      isEstimated: false,
-      isDraft: false,
-      needsReview: reviewReasons.length > 0,
-      reviewReasons,
-    };
-  }
-
-  if (draftPayrolls.length > 0) {
-    if (draftAmount <= 0) {
-      reviewReasons.push("Final amount draft payroll 0.");
-    }
-
-    return {
-      displayAmount: draftAmount,
-      finalAmount: 0,
-      estimatedAmount: 0,
-      draftAmount,
-      source: "payroll_draft",
-      statusLabel: "Draft Payroll",
-      totalStatusLabel: "Draft Payroll",
-      isFinal: false,
-      isEstimated: false,
-      isDraft: true,
-      needsReview: reviewReasons.length > 0,
-      reviewReasons,
-    };
-  }
-
-  if (cancelledPayrollCount > 0) {
-    reviewReasons.push("Payroll Work Log cancelled.");
-  }
-
-  const fallbackLaborCost = toSafeNumber(workLog.laborCostActual);
-  if (fallbackLaborCost > 0) {
-    return {
-      displayAmount: fallbackLaborCost,
-      finalAmount: 0,
-      estimatedAmount: fallbackLaborCost,
-      draftAmount: 0,
-      source: "work_log_labor_cost_actual",
-      statusLabel: "Estimasi",
-      totalStatusLabel: "Estimasi",
-      isFinal: false,
-      isEstimated: true,
-      isDraft: false,
-      needsReview: reviewReasons.length > 0,
-      reviewReasons,
-    };
-  }
-
-  const estimate = estimateHppProductionCostFromStep(workLog, stepRule);
-
-  if (estimate.excludedFromHpp) {
-    return {
-      displayAmount: 0,
-      finalAmount: 0,
-      estimatedAmount: 0,
-      draftAmount: 0,
-      source: "step_excluded_from_hpp",
-      statusLabel: "Tidak masuk HPP",
-      totalStatusLabel: "Estimasi",
-      isFinal: false,
-      isEstimated: false,
-      isDraft: false,
-      needsReview: false,
-      reviewReasons: estimate.reviewReasons,
-    };
-  }
-
-  if (estimate.canEstimate) {
-    return {
-      displayAmount: estimate.amount,
-      finalAmount: 0,
-      estimatedAmount: estimate.amount,
-      draftAmount: 0,
-      source: "step_estimate",
-      statusLabel: "Estimasi dari Step",
-      totalStatusLabel: "Estimasi",
-      isFinal: false,
-      isEstimated: true,
-      isDraft: false,
-      needsReview: reviewReasons.length > 0,
-      reviewReasons,
-    };
-  }
-
-  reviewReasons.push(...estimate.reviewReasons);
-  reviewReasons.push("Payroll final belum ada.");
-
-  return {
-    displayAmount: 0,
-    finalAmount: 0,
-    estimatedAmount: 0,
-    draftAmount: 0,
-    source: "needs_review",
-    statusLabel: "Perlu cek",
-    totalStatusLabel: "Perlu cek",
-    isFinal: false,
-    isEstimated: false,
-    isDraft: false,
-    needsReview: true,
-    reviewReasons: [...new Set(reviewReasons)],
-  };
-};
 
 const getHppCostStatusTagColor = (statusLabel) => {
   if (statusLabel === "Final") return "green";
@@ -291,7 +56,6 @@ const getHppCostStatusTagColor = (statusLabel) => {
   if (statusLabel === "Tidak masuk HPP") return "orange";
   return "red";
 };
-
 
 // =====================================================
 // ACTIVE / GUARDED - helper warning cost 0 HPP.
@@ -306,11 +70,14 @@ const getHppCostStatusTagColor = (statusLabel) => {
 // =====================================================
 const buildHppCostWarnings = ({
   materialCost,
-  directLaborCost,
-  totalCost,
-  hppPerUnit,
+  displayLaborCost,
+  finalLaborCost,
+  finalTotalCost,
+  previewTotalCost,
+  finalHppPerUnit,
   goodQty,
   productionCost,
+  isHppFinalReady,
 }) => {
   const warnings = [];
 
@@ -318,16 +85,12 @@ const buildHppCostWarnings = ({
     warnings.push("Biaya material 0. Cek cost bahan atau snapshot material.");
   }
 
-  if (toSafeNumber(directLaborCost) === 0) {
-    warnings.push("Biaya produksi 0. Cek operator, rate step produksi, atau payroll Work Log.");
+  if (!isHppFinalReady && toSafeNumber(displayLaborCost) <= 0 && productionCost?.source !== "step_excluded_from_hpp") {
+    warnings.push("Biaya produksi belum terbaca. Cek operator, rate step produksi, atau payroll Work Log.");
   }
 
-  if (productionCost?.isDraft) {
-    warnings.push("Payroll masih draft. Biaya produksi belum final.");
-  }
-
-  if (productionCost?.isEstimated) {
-    warnings.push("Biaya produksi masih estimasi. Final mengikuti payroll Work Log yang valid.");
+  if (isHppFinalReady && productionCost?.source !== "step_excluded_from_hpp" && toSafeNumber(finalLaborCost) <= 0) {
+    warnings.push("Biaya produksi final 0. Cek payroll final Work Log.");
   }
 
   if (productionCost?.needsReview) {
@@ -338,12 +101,16 @@ const buildHppCostWarnings = ({
     warnings.push("Good qty 0. HPP/unit belum valid.");
   }
 
-  if (toSafeNumber(totalCost) === 0) {
-    warnings.push("Total biaya 0. HPP belum valid untuk analisis.");
+  if (isHppFinalReady && toSafeNumber(finalTotalCost) === 0) {
+    warnings.push("Total biaya final 0. HPP belum valid untuk analisis final.");
   }
 
-  if (toSafeNumber(hppPerUnit) === 0 && toSafeNumber(goodQty) > 0 && productionCost?.isFinal) {
-    warnings.push("HPP per good unit 0 walaupun good qty ada. Cek sumber biaya Work Log.");
+  if (!isHppFinalReady && toSafeNumber(previewTotalCost) === 0) {
+    warnings.push("Total biaya preview 0. Cek material, overhead, dan payroll/step.");
+  }
+
+  if (isHppFinalReady && toSafeNumber(finalHppPerUnit) === 0 && toSafeNumber(goodQty) > 0) {
+    warnings.push("HPP final per good unit 0 walaupun good qty ada. Cek sumber biaya Work Log.");
   }
 
   return [...new Set(warnings)];
@@ -384,33 +151,51 @@ const ProductionHppAnalysis = () => {
 
   const rows = useMemo(() => {
     return workLogs.map((workLog) => {
-      const relatedPayrolls = payrolls.filter((item) => item.workLogId === workLog.id);
+      const workLogId = String(workLog.id || "").trim();
+      const workNumber = String(workLog.workNumber || "").trim();
+      const relatedPayrolls = payrolls.filter((item) => (
+        (workLogId && String(item.workLogId || "").trim() === workLogId) ||
+        (workNumber && String(item.workNumber || "").trim() === workNumber)
+      ));
       const stepRule = productionSteps.find((item) => item.id === workLog.stepId) || {};
-      const productionCost = resolveHppProductionCost(workLog, relatedPayrolls, stepRule);
+      const productionCost = resolveWorkLogLaborCostDisplay({
+        workLog,
+        relatedPayrolls,
+        productionStep: stepRule,
+      });
 
       const materialCost = toSafeNumber(workLog.materialCostActual);
-      const directLaborCost = productionCost.displayAmount;
+      const displayLaborCost = toSafeNumber(productionCost.displayAmount);
+      const laborExcludedFromHpp = productionCost.source === "step_excluded_from_hpp";
+      const finalLaborCost = productionCost.isFinal ? toSafeNumber(productionCost.finalAmount || productionCost.amount) : 0;
       const overheadCost = toSafeNumber(workLog.overheadCostActual);
-      const totalCost = materialCost + directLaborCost + overheadCost;
       const goodQty = toSafeNumber(workLog.goodQty);
-      const hppPerUnit = goodQty > 0 ? totalCost / goodQty : 0;
+      const isHppFinalReady = Boolean(productionCost.isFinal || laborExcludedFromHpp);
+      const previewTotalCost = materialCost + displayLaborCost + overheadCost;
+      const finalTotalCost = materialCost + finalLaborCost + overheadCost;
+      const previewHppPerUnit = goodQty > 0 ? previewTotalCost / goodQty : 0;
+      const finalHppPerUnit = isHppFinalReady && goodQty > 0 ? finalTotalCost / goodQty : 0;
+      const totalCostStatus = isHppFinalReady ? "Final" : (productionCost.totalStatusLabel || productionCost.statusLabel || "Preview");
       // =====================================================
       // ACTIVE / GUARDED - warning per baris HPP.
       // Fungsi blok:
-      // - menempelkan daftar warning cost 0 ke row tabel tanpa mengubah angka cost;
-      // - menjaga user membaca HPP sebagai data analisis yang perlu dicek jika sumber cost kosong.
+      // - memisahkan HPP final dan preview agar draft/estimasi tidak terbaca sebagai HPP final;
+      // - menjaga user melihat angka preview tanpa mengubah Work Log, payroll, stok, atau master HPP.
       // Hubungan dengan flow HPP/Work Log:
-      // - angka tetap berasal dari Work Log completed + payroll final;
-      // - warning hanya visibility UI dan tidak mem-posting ulang Work Log.
+      // - final hanya berasal dari payroll final atau step yang memang tidak masuk HPP;
+      // - preview boleh memakai draft/estimasi Step sebagai read-only.
       // Status: aktif dipakai; bukan legacy/kandidat cleanup.
       // =====================================================
       const costWarnings = buildHppCostWarnings({
         materialCost,
-        directLaborCost,
-        totalCost,
-        hppPerUnit,
+        displayLaborCost,
+        finalLaborCost,
+        finalTotalCost,
+        previewTotalCost,
+        finalHppPerUnit,
         goodQty,
         productionCost,
+        isHppFinalReady,
       });
 
       return {
@@ -423,16 +208,20 @@ const ProductionHppAnalysis = () => {
         completedAt: workLog.completedAt || null,
         goodQty,
         materialCost,
-        directLaborCost,
+        displayLaborCost,
+        finalLaborCost,
         overheadCost,
-        totalCost,
-        hppPerUnit,
+        previewTotalCost,
+        finalTotalCost,
+        previewHppPerUnit,
+        finalHppPerUnit,
         productionCostStatus: productionCost.statusLabel,
-        totalCostStatus: productionCost.totalStatusLabel,
+        totalCostStatus,
         productionCostSource: productionCost.source,
         isFinalCost: productionCost.isFinal,
         isEstimatedCost: productionCost.isEstimated,
         isDraftCost: productionCost.isDraft,
+        isHppFinalReady,
         costWarnings,
       };
     });
@@ -463,16 +252,27 @@ const ProductionHppAnalysis = () => {
 
   const summary = useMemo(() => {
     const totalLogs = filteredRows.length;
-    const totalProductionCost = filteredRows.reduce(
-      (sum, item) => sum + Number(item.totalCost || 0),
+    const finalRows = filteredRows.filter((item) => item.isHppFinalReady);
+    const totalFinalCost = finalRows.reduce(
+      (sum, item) => sum + Number(item.finalTotalCost || 0),
+      0,
+    );
+    const totalPreviewCost = filteredRows.reduce(
+      (sum, item) => sum + Number(item.previewTotalCost || 0),
       0,
     );
     const totalGoodQty = filteredRows.reduce(
       (sum, item) => sum + Number(item.goodQty || 0),
       0,
     );
-    const averageHpp =
-      totalGoodQty > 0 ? totalProductionCost / totalGoodQty : 0;
+    const finalGoodQty = finalRows.reduce(
+      (sum, item) => sum + Number(item.goodQty || 0),
+      0,
+    );
+    const averageFinalHpp =
+      finalGoodQty > 0 ? totalFinalCost / finalGoodQty : 0;
+    const averagePreviewHpp =
+      totalGoodQty > 0 ? totalPreviewCost / totalGoodQty : 0;
     // =====================================================
     // ACTIVE / GUARDED - ringkasan warning HPP.
     // Fungsi blok:
@@ -486,9 +286,12 @@ const ProductionHppAnalysis = () => {
 
     return {
       totalLogs,
-      totalProductionCost,
+      totalFinalCost,
+      totalPreviewCost,
       totalGoodQty,
-      averageHpp,
+      finalGoodQty,
+      averageFinalHpp,
+      averagePreviewHpp,
       warningRows,
     };
   }, [filteredRows]);
@@ -497,13 +300,14 @@ const ProductionHppAnalysis = () => {
     () => [
       { key: "total-logs", title: "Total Work Log", value: formatNumber(summary.totalLogs) },
       {
-        key: "total-cost",
-        title: "Total Biaya Produksi",
-        value: formatCurrency(summary.totalProductionCost),
+        key: "total-final-cost",
+        title: "Total Biaya Final",
+        value: formatCurrency(summary.totalFinalCost),
       },
-      { key: "good-qty", title: "Total Good Qty", value: formatNumber(summary.totalGoodQty) },
-      { key: "avg-hpp", title: "Rata-rata HPP / Unit", value: formatCurrency(summary.averageHpp) },
-      { key: "warning-rows", title: "Perlu Cek Cost", value: formatNumber(summary.warningRows) },
+      { key: "final-good-qty", title: "Good Qty Final", value: formatNumber(summary.finalGoodQty) },
+      { key: "avg-hpp", title: "Rata-rata HPP Final", value: formatCurrency(summary.averageFinalHpp) },
+      { key: "avg-hpp-preview", title: "HPP Preview", value: formatCurrency(summary.averagePreviewHpp) },
+      { key: "warning-rows", title: "Perlu Cek", value: formatNumber(summary.warningRows) },
     ],
     [summary],
   );
@@ -526,13 +330,13 @@ const ProductionHppAnalysis = () => {
 
     await exportJsonToExcel({
       title: "Laporan Analisis HPP Produksi IMS Bunga Flanel",
-      subtitle: "Export HPP membaca Work Log completed dan payroll final sesuai filter aktif, tanpa mengubah rumus biaya.",
+      subtitle: "Export HPP memisahkan HPP final dan preview draft/estimasi sesuai filter aktif, tanpa mengubah data produksi.",
       fileName: "laporan-hpp-produksi",
       sheetName: "HPP Analysis",
       filters: [
         `Target Type: ${targetTypeFilter === "all" ? "Semua" : resolveTargetTypeLabel(targetTypeFilter)}`,
         `Pencarian: ${search || "-"}`,
-        "Catatan: status Final/Estimasi/Draft/Perlu cek wajib dibaca sebelum angka dipakai sebagai analisis final.",
+        "Catatan: kolom Final hanya valid jika status final; Preview boleh memakai draft/estimasi read-only.",
       ],
       columns: [
         { key: "workNumber", label: "No. Work Log" },
@@ -543,12 +347,15 @@ const ProductionHppAnalysis = () => {
         { key: "stepName", label: "Step" },
         { key: "goodQtyDisplay", label: "Good Qty" },
         { key: "materialCostDisplay", label: "Biaya Material" },
-        { key: "directLaborCostDisplay", label: "Biaya Produksi" },
+        { key: "displayLaborCostDisplay", label: "Biaya Produksi Display" },
+        { key: "finalLaborCostDisplay", label: "Biaya Produksi Final" },
         { key: "productionCostStatus", label: "Status Biaya Produksi" },
         { key: "overheadCostDisplay", label: "Overhead" },
-        { key: "totalCostDisplay", label: "Total Biaya" },
+        { key: "previewTotalCostDisplay", label: "Total Biaya Preview" },
+        { key: "finalTotalCostDisplay", label: "Total Biaya Final" },
         { key: "totalCostStatus", label: "Status Total" },
-        { key: "hppPerUnitDisplay", label: "HPP / Unit" },
+        { key: "previewHppPerUnitDisplay", label: "HPP Preview / Unit" },
+        { key: "finalHppPerUnitDisplay", label: "HPP Final / Unit" },
         { key: "costValidation", label: "Validasi Cost" },
       ],
       data: filteredRows.map((row) => ({
@@ -560,12 +367,15 @@ const ProductionHppAnalysis = () => {
         stepName: row.stepName || "-",
         goodQtyDisplay: formatNumber(row.goodQty),
         materialCostDisplay: formatCurrency(row.materialCost),
-        directLaborCostDisplay: formatCurrency(row.directLaborCost),
+        displayLaborCostDisplay: formatCurrency(row.displayLaborCost),
+        finalLaborCostDisplay: row.isHppFinalReady ? formatCurrency(row.finalLaborCost) : "Belum final",
         productionCostStatus: row.productionCostStatus || "-",
         overheadCostDisplay: formatCurrency(row.overheadCost),
-        totalCostDisplay: formatCurrency(row.totalCost),
+        previewTotalCostDisplay: formatCurrency(row.previewTotalCost),
+        finalTotalCostDisplay: row.isHppFinalReady ? formatCurrency(row.finalTotalCost) : "Belum final",
         totalCostStatus: row.totalCostStatus || "-",
-        hppPerUnitDisplay: formatCurrency(row.hppPerUnit),
+        previewHppPerUnitDisplay: formatCurrency(row.previewHppPerUnit),
+        finalHppPerUnitDisplay: row.isHppFinalReady ? formatCurrency(row.finalHppPerUnit) : "Belum final",
         costValidation:
           Array.isArray(row.costWarnings) && row.costWarnings.length > 0
             ? row.costWarnings.join("; ")
@@ -657,18 +467,23 @@ const ProductionHppAnalysis = () => {
         <Space direction="vertical" size={2} style={{ width: "100%" }}>
           <Typography.Text>Material: {formatCurrency(record.materialCost)}</Typography.Text>
           <Space size={6} wrap>
-            <Typography.Text>Biaya Produksi: {formatCurrency(record.directLaborCost)}</Typography.Text>
+            <Typography.Text>Biaya Produksi: {formatCurrency(record.displayLaborCost)}</Typography.Text>
             <Tag color={getHppCostStatusTagColor(record.productionCostStatus)} style={compactTagStyle}>
               {record.productionCostStatus}
             </Tag>
           </Space>
           <Typography.Text>Overhead: {formatCurrency(record.overheadCost)}</Typography.Text>
           <Space size={6} wrap>
-            <Typography.Text strong>Total: {formatCurrency(record.totalCost)}</Typography.Text>
+            <Typography.Text strong>Final: {record.isHppFinalReady ? formatCurrency(record.finalTotalCost) : "Belum final"}</Typography.Text>
             <Tag color={getHppCostStatusTagColor(record.totalCostStatus)} style={compactTagStyle}>
               {record.totalCostStatus}
             </Tag>
           </Space>
+          {!record.isHppFinalReady ? (
+            <Typography.Text type="secondary" className="ims-cell-meta">
+              Preview: {formatCurrency(record.previewTotalCost)}
+            </Typography.Text>
+          ) : null}
         </Space>
       ),
     },
@@ -678,13 +493,19 @@ const ProductionHppAnalysis = () => {
       width: "14%",
       render: (_, record) => (
         <Space direction="vertical" size={2}>
-          <Typography.Text strong>{formatCurrency(record.hppPerUnit)}</Typography.Text>
+          <Typography.Text strong>{record.isHppFinalReady ? formatCurrency(record.finalHppPerUnit) : "Belum final"}</Typography.Text>
           <Tag color={getHppCostStatusTagColor(record.totalCostStatus)} style={compactTagStyle}>
             {record.totalCostStatus}
           </Tag>
-          <Typography.Text type="secondary" className="ims-cell-meta">
-            per good unit
-          </Typography.Text>
+          {!record.isHppFinalReady ? (
+            <Typography.Text type="secondary" className="ims-cell-meta">
+              Preview: {formatCurrency(record.previewHppPerUnit)}
+            </Typography.Text>
+          ) : (
+            <Typography.Text type="secondary" className="ims-cell-meta">
+              per good unit
+            </Typography.Text>
+          )}
         </Space>
       ),
     },
@@ -701,22 +522,20 @@ const ProductionHppAnalysis = () => {
         return (
           <Space direction="vertical" size={4} style={{ width: "100%" }}>
             <Tag color="warning" style={compactTagStyle}>
-              {formatNumber(warnings.length)} warning cost
+              {formatNumber(warnings.length)} perlu cek
             </Tag>
-            {warnings.map((warning) => (
+            {warnings.slice(0, 2).map((warning) => (
               <Tooltip key={warning} title={warning}>
-                <Alert
-                  type="warning"
-                  showIcon
-                  message={(
-                    <Typography.Text className="ims-cell-meta" style={compactTextClampStyle}>
-                      {warning}
-                    </Typography.Text>
-                  )}
-                  style={{ padding: "4px 8px" }}
-                />
+                <Typography.Text type="secondary" className="ims-cell-meta" style={compactTextClampStyle}>
+                  {warning}
+                </Typography.Text>
               </Tooltip>
             ))}
+            {warnings.length > 2 ? (
+              <Tooltip title={warnings.join("; ")}>
+                <Tag color="default" style={compactTagStyle}>+{formatNumber(warnings.length - 2)} lainnya</Tag>
+              </Tooltip>
+            ) : null}
           </Space>
         );
       },
@@ -793,7 +612,7 @@ const ProductionHppAnalysis = () => {
         extra={<Tag color="purple">{formatNumber(filteredRows.length)} baris</Tag>}
       >
         {/* =====================================================
-            ACTIVE / GUARDED - alert warning global HPP.
+            ACTIVE / GUARDED - compact warning global HPP.
             Fungsi blok:
             - memberi konteks bahwa row dengan cost 0 perlu dicek sumber datanya;
             - tidak mengubah rumus HPP dan tidak melakukan backfill data lama.
@@ -801,13 +620,14 @@ const ProductionHppAnalysis = () => {
             Status: aktif dipakai; bukan legacy/kandidat cleanup.
         ===================================================== */}
         {summary.warningRows > 0 ? (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message={`${formatNumber(summary.warningRows)} Work Log perlu cek cost`}
-            description="Cek cost dan output sebelum dipakai."
-          />
+          <div className="ims-readonly-panel" style={{ marginBottom: 16, padding: 12 }}>
+            <Space size={8} wrap>
+              <Tag color="warning">{formatNumber(summary.warningRows)} perlu cek</Tag>
+              <Typography.Text type="secondary">
+                Baca status Final/Preview sebelum angka HPP dipakai untuk keputusan biaya.
+              </Typography.Text>
+            </Space>
+          </div>
         ) : null}
         {/* =====================================================
             SECTION: Tabel Analisis HPP Render — GUARDED

@@ -176,61 +176,60 @@ const normalizeOptionKey = (value = "") =>
     .toLowerCase()
     .replace(/[\s_-]+/g, "_");
 
-const getKnownOptionKeyFromText = (text = "", optionMap = {}) => {
-  const normalizedText = normalizeOptionKey(text);
+const getExactKnownOptionKey = (value = "", optionMap = {}) => {
+  const normalizedValue = normalizeOptionKey(value);
 
-  if (!normalizedText) return "";
+  if (!normalizedValue) return "";
 
   return (
     Object.entries(optionMap).find(([key, label]) => {
       const normalizedKey = normalizeOptionKey(key);
       const normalizedLabel = normalizeOptionKey(label);
-      return (
-        normalizedText === normalizedKey ||
-        normalizedText === normalizedLabel ||
-        normalizedText.includes(normalizedKey) ||
-        normalizedText.includes(normalizedLabel)
-      );
+      return normalizedValue === normalizedKey || normalizedValue === normalizedLabel;
     })?.[0] || ""
   );
 };
 
-const resolveSemiProductionGroupMeta = ({ bom = {}, reference = null } = {}) => {
-  const searchableText = [
-    reference?.flowerGroup,
-    reference?.category,
-    reference?.name,
-    reference?.code,
-    reference?.itemCode,
-    bom.targetName,
-    bom.targetCode,
-    bom.name,
-    bom.code,
-  ]
-    .filter(Boolean)
-    .join(" ");
+const resolveExplicitSemiOptionMeta = ({
+  value = "",
+  optionMap = {},
+  fallbackKey = "",
+  fallbackLabel = "",
+} = {}) => {
+  const rawValue = String(value || "").trim();
 
-  const familyKey =
-    getKnownOptionKeyFromText(reference?.flowerGroup, SEMI_FINISHED_GROUP_MAP) ||
-    getKnownOptionKeyFromText(searchableText, SEMI_FINISHED_GROUP_MAP) ||
-    FALLBACK_SEMI_FAMILY_KEY;
+  if (!rawValue) {
+    return { key: fallbackKey, label: fallbackLabel };
+  }
 
-  const categoryKey =
-    getKnownOptionKeyFromText(reference?.category, SEMI_FINISHED_CATEGORY_MAP) ||
-    getKnownOptionKeyFromText(searchableText, SEMI_FINISHED_CATEGORY_MAP) ||
-    FALLBACK_SEMI_CATEGORY_KEY;
+  const knownKey = getExactKnownOptionKey(rawValue, optionMap);
+
+  if (knownKey) {
+    return { key: knownKey, label: optionMap[knownKey] || rawValue };
+  }
+
+  return { key: rawValue, label: rawValue };
+};
+
+const resolveSemiProductionGroupMeta = ({ reference = null } = {}) => {
+  const familyMeta = resolveExplicitSemiOptionMeta({
+    value: reference?.flowerGroup,
+    optionMap: SEMI_FINISHED_GROUP_MAP,
+    fallbackKey: FALLBACK_SEMI_FAMILY_KEY,
+    fallbackLabel: "Umum / Reusable",
+  });
+  const categoryMeta = resolveExplicitSemiOptionMeta({
+    value: reference?.category,
+    optionMap: SEMI_FINISHED_CATEGORY_MAP,
+    fallbackKey: FALLBACK_SEMI_CATEGORY_KEY,
+    fallbackLabel: "Tanpa Kategori",
+  });
 
   return {
-    familyKey,
-    familyLabel:
-      familyKey === FALLBACK_SEMI_FAMILY_KEY
-        ? "Umum / Reusable"
-        : SEMI_FINISHED_GROUP_MAP[familyKey] || "Umum / Reusable",
-    categoryKey,
-    categoryLabel:
-      categoryKey === FALLBACK_SEMI_CATEGORY_KEY
-        ? "Tanpa Kategori"
-        : SEMI_FINISHED_CATEGORY_MAP[categoryKey] || "Tanpa Kategori",
+    familyKey: familyMeta.key,
+    familyLabel: familyMeta.label,
+    categoryKey: categoryMeta.key,
+    categoryLabel: categoryMeta.label,
   };
 };
 
@@ -675,7 +674,7 @@ const ProductionOrders = () => {
           : null;
       const semiMeta =
         targetType === "semi_finished_material"
-          ? resolveSemiProductionGroupMeta({ bom, reference: semiReference })
+          ? resolveSemiProductionGroupMeta({ reference: semiReference })
           : {
               familyKey: "",
               familyLabel: "",

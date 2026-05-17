@@ -119,7 +119,7 @@ Saat membuat perubahan baru, selalu cek apakah perubahan menyentuh salah satu ar
 
 
 ## Catatan Batch Prioritas Terbaru
-- Work Log costing final sudah diarahkan agar completed Work Log menyimpan `materialCostActual`, `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit` sebagai read model HPP.
+- Work Log costing final sudah diarahkan agar completed Work Log menyimpan `materialCostActual`, `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit` sebagai read model HPP. HPP Analysis wajib memisahkan angka Final dan Preview agar payroll draft/estimasi Step tidak terbaca sebagai HPP final.
 - Payroll paid sekarang menjadi flow integrasi aktif: payroll `paid` otomatis membuat Cash Out/Expense dengan guard `sourceModule/sourceId` agar tidak double.
 - Export laporan final diarahkan ke XLSX siap baca melalui helper reusable, dengan header manusiawi, format Rupiah, tanggal Indonesia, dan sheet name jelas.
 
@@ -280,3 +280,15 @@ Catatan lock:
 - Kode internal master item/config tidak wajib tampil sebagai field utama UI, tidak perlu realtime preview, dan tidak boleh diinput manual user.
 - UI utama master item/config memakai nama dan atribut bisnis sebagai identitas: kategori, warna, bahan, varian, target produk, step, dan satuan.
 - Kode transaksi/audit tetap wajib tampil di UI: Customer, Supplier, Purchase, Sales/Order, Return, Stock Adjustment, Cash In, Cash Out, Production Order, Work Log/Job, Payroll, dan laporan/history terkait.
+
+## Update Guard Semi Product Flower Group — 2026-05-17
+- **Aktif:** Semi Product tidak boleh silent default ke `Mawar`. Field `flowerGroup` harus dipilih/diketik eksplisit saat create/edit agar jenis bunga lain tidak salah masuk grouping Mawar.
+- **Aktif:** data lama tanpa `flowerGroup` tetap tampil sebagai `Umum / Reusable`; data dengan custom/unknown `flowerGroup` harus ditampilkan sebagai label aslinya, bukan disembunyikan menjadi `-`.
+- **Guarded:** filter `Jenis Bunga / Product Family` di Production Order tetap UI-only dan tidak boleh disimpan ke `production_orders`; source of truth submit tetap `bomId`.
+
+
+
+## Update Produksi/HPP — 2026-05-17
+- Detail Work Log dan HPP Analysis memakai resolver labor yang sama: payroll final, draft payroll, lalu estimasi Step sebagai read-only preview.
+- Overhead aktif berasal dari BOM untuk listrik/glue gun. Field hasil selain Good Qty adalah compatibility data lama dan tidak ditampilkan sebagai workflow aktif.
+- Data Quality Audit produksi read-only mendeteksi Work Log legacy status, payroll pending/mismatch, output HPP yang butuh reconcile, dan Semi Finished tanpa `flowerGroup`; audit hasil selain Good Qty sengaja tidak diaktifkan.

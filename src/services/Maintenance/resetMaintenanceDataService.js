@@ -9,6 +9,10 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { calculateAvailableStock, toNumber } from "../../utils/stock/stockHelpers";
+import {
+  calculateBomCostSummary,
+  hydrateBomMaterialLinesWithLiveCost,
+} from "../../utils/produksi/productionBomCostHelpers";
 
 // -----------------------------------------------------------------------------
 // Reset & Maintenance Data Service
@@ -623,6 +627,162 @@ const buildHppCostPreviewRow = ({ itemDoc, fields = [], variantFields = [] }) =>
   };
 };
 
+
+const HPP_RESET_REFERENCE_COLLECTIONS = {
+  raw_materials: "rawMaterials",
+  semi_finished_materials: "semiFinishedMaterials",
+  products: "products",
+};
+
+const normalizeBomCostReferenceItem = ({ id = "", data = {} } = {}) => ({
+  id,
+  ...data,
+  code: safeTrim(data.code) || safeTrim(data.itemCode) || safeTrim(data.sku) || safeTrim(data.productCode),
+  name: safeTrim(data.name) || safeTrim(data.productName) || safeTrim(data.materialName) || safeTrim(data.title),
+  unit: safeTrim(data.unit) || safeTrim(data.stockUnit) || safeTrim(data.baseUnit) || "pcs",
+});
+
+const getHppResetFieldConfigForCollection = (resetMode, collectionName) => (
+  getHppCostResetCollectionConfigs(resetMode).find((item) => item.key === collectionName) || null
+);
+
+const applyHppResetToBomReferenceItem = ({ resetMode, collectionName, item = {} } = {}) => {
+  const resetConfig = getHppResetFieldConfigForCollection(resetMode, collectionName);
+  if (!resetConfig) return item;
+
+  const nextItem = {
+    ...item,
+    ...(resetConfig.fields || []).reduce((acc, fieldName) => {
+      acc[fieldName] = 0;
+      return acc;
+    }, {}),
+  };
+
+  if (Array.isArray(item.variants)) {
+    nextItem.variants = item.variants.map((variant = {}) => ({
+      ...variant,
+      ...(resetConfig.variantFields || []).reduce((acc, fieldName) => {
+        acc[fieldName] = 0;
+        return acc;
+      }, {}),
+    }));
+  }
+
+  return nextItem;
+};
+
+const buildBomReferenceDataAfterHppReset = async (resetMode) => {
+  const referenceData = {
+    products: [],
+    rawMaterials: [],
+    semiFinishedMaterials: [],
+    productionSteps: [],
+  };
+
+  for (const [collectionName, referenceKey] of Object.entries(HPP_RESET_REFERENCE_COLLECTIONS)) {
+    const snapshot = await getDocs(collection(db, collectionName));
+    referenceData[referenceKey] = snapshot.docs.map((itemDoc) => {
+      const normalizedItem = normalizeBomCostReferenceItem({
+        id: itemDoc.id,
+        data: itemDoc.data(),
+      });
+
+      return applyHppResetToBomReferenceItem({
+        resetMode,
+        collectionName,
+        item: normalizedItem,
+      });
+    });
+  }
+
+  return referenceData;
+};
+
+const hasBomCostCleanupPayloadChanged = (current = {}, payload = {}) => {
+  if (toNumber(current.materialCostEstimate || 0) !== toNumber(payload.materialCostEstimate || 0)) return true;
+  if (toNumber(current.laborCostEstimate || 0) !== toNumber(payload.laborCostEstimate || 0)) return true;
+  if (toNumber(current.overheadCostEstimate || 0) !== toNumber(payload.overheadCostEstimate || 0)) return true;
+  if (toNumber(current.totalCostEstimate || 0) !== toNumber(payload.totalCostEstimate || 0)) return true;
+
+  const currentLines = Array.isArray(current.materialLines) ? current.materialLines : [];
+  const nextLines = Array.isArray(payload.materialLines) ? payload.materialLines : [];
+  if (currentLines.length !== nextLines.length) return true;
+
+  return nextLines.some((nextLine, index) => {
+    const currentLine = currentLines[index] || {};
+    return (
+      toNumber(currentLine.costPerUnitSnapshot || 0) !== toNumber(nextLine.costPerUnitSnapshot || 0) ||
+      toNumber(currentLine.totalCostSnapshot || 0) !== toNumber(nextLine.totalCostSnapshot || 0) ||
+      safeTrim(currentLine.costSourceSnapshot) !== safeTrim(nextLine.costSourceSnapshot) ||
+      toNumber(currentLine.totalRequiredQty || 0) !== toNumber(nextLine.totalRequiredQty || 0)
+    );
+  });
+};
+
+/*
+=====================================================
+SECTION: Reset BOM live estimate after HPP reset — GUARDED
+Fungsi:
+- Membersihkan derived cost snapshot production_boms.materialLines dan menghitung ulang summary BOM dari master cost setelah mode reset HPP diterapkan.
+
+Dipakai oleh:
+- buildHppCostResetPreview, runHppCostReset, getFullTestingResetPreview, dan runFullTestingReset.
+
+Alasan perubahan:
+- Reset Modal/HPP harus mencegah BOM aktif menampilkan estimasi stale dari costPerUnitSnapshot/totalCostSnapshot lama.
+
+Catatan cleanup:
+- Jika nanti ada Cloud Function maintenance, helper ini bisa dipindahkan agar reset data besar tidak dijalankan dari browser.
+
+Risiko:
+- Jangan menghapus overheadCostEstimate di sini; totalCostEstimate wajib material + labor step + overhead existing.
+=====================================================
+*/
+const buildBomCostSnapshotCleanupPlan = async (resetMode) => {
+  const referenceData = await buildBomReferenceDataAfterHppReset(resetMode);
+  const snapshot = await getDocs(collection(db, "production_boms"));
+  const updates = [];
+
+  snapshot.docs.forEach((itemDoc) => {
+    const data = itemDoc.data();
+    const materialLines = hydrateBomMaterialLinesWithLiveCost({
+      materialLines: data.materialLines || [],
+      referenceData,
+    });
+    const stepLines = Array.isArray(data.stepLines) ? data.stepLines : [];
+    const totals = calculateBomCostSummary({ materialLines, stepLines, header: data });
+    const payload = {
+      materialLines,
+      materialCostEstimate: totals.materialCostEstimate,
+      laborCostEstimate: totals.laborCostEstimate,
+      overheadCostEstimate: totals.overheadCostEstimate,
+      totalCostEstimate: totals.totalCostEstimate,
+      updatedAt: serverTimestamp(),
+    };
+
+    if (hasBomCostCleanupPayloadChanged(data, payload)) {
+      updates.push({ ref: itemDoc.ref, payload });
+    }
+  });
+
+  return {
+    updates,
+    preview: {
+      collection: "production_boms",
+      affectedDocs: updates.length,
+      action: "refresh_bom_live_cost_estimate",
+      fieldsToRefresh: [
+        "materialLines.costPerUnitSnapshot",
+        "materialLines.totalCostSnapshot",
+        "materialCostEstimate",
+        "laborCostEstimate",
+        "totalCostEstimate",
+      ],
+      note: "BOM estimate direfresh dari master cost setelah reset HPP; overhead existing tetap dipertahankan.",
+    },
+  };
+};
+
 /*
 =====================================================
 SECTION: HPP cost reset preview builder — GUARDED
@@ -675,15 +835,17 @@ const buildHppCostResetPreview = async (resetMode) => {
     });
   }
 
+  const bomSnapshotCleanupPlan = await buildBomCostSnapshotCleanupPlan(resetMode);
   const totalAffectedDocs = affectedCollections.reduce((sum, item) => sum + Number(item.affectedDocs || 0), 0);
   const totalAffectedVariantRows = affectedCollections.reduce((sum, item) => sum + Number(item.affectedVariantRows || 0), 0);
-  const estimatedWriteOperations = totalAffectedDocs;
+  const estimatedWriteOperations = totalAffectedDocs + bomSnapshotCleanupPlan.updates.length;
 
   return {
     resetMode,
     label: option?.label || resetMode,
     description: option?.description || "Reset modal/HPP testing.",
     affectedCollections,
+    bomSnapshotCleanup: bomSnapshotCleanupPlan.preview,
     totalAffectedDocs,
     totalAffectedVariantRows,
     estimatedWriteOperations,
@@ -698,6 +860,7 @@ const buildHppCostResetPreview = async (resetMode) => {
 
 const buildHppCostResetWritePlan = async (resetMode) => {
   const preview = await buildHppCostResetPreview(resetMode);
+  const bomSnapshotCleanupPlan = await buildBomCostSnapshotCleanupPlan(resetMode);
   assertClientBatchOperationLimit(preview.estimatedWriteOperations);
 
   const updates = [];
@@ -743,7 +906,9 @@ const buildHppCostResetWritePlan = async (resetMode) => {
     }
   }
 
-  return { preview, updates };
+  assertClientBatchOperationLimit(updates.length + bomSnapshotCleanupPlan.updates.length);
+
+  return { preview, updates, bomUpdates: bomSnapshotCleanupPlan.updates };
 };
 
 const getHppCostBaselineSnapshotDoc = async () => {
@@ -1416,9 +1581,9 @@ const mergeUpdateOperations = (...operationGroups) => {
   return Array.from(map.values());
 };
 
-const commitResetWritePlan = async ({ deletePlans = [], stockUpdates = [], hppCostUpdates = [] }) => {
+const commitResetWritePlan = async ({ deletePlans = [], stockUpdates = [], hppCostUpdates = [], bomUpdates = [] }) => {
   const deleteOperationCount = deletePlans.reduce((sum, item) => sum + item.docs.length, 0);
-  const mergedUpdates = mergeUpdateOperations(stockUpdates, hppCostUpdates);
+  const mergedUpdates = mergeUpdateOperations(stockUpdates, hppCostUpdates, bomUpdates);
   const totalWriteOperations = deleteOperationCount + mergedUpdates.length;
 
   assertClientBatchOperationLimit(totalWriteOperations);
@@ -1578,29 +1743,32 @@ Risiko:
 =====================================================
 */
 export const runHppCostReset = async ({ resetMode }) => {
-  const { preview, updates } = await buildHppCostResetWritePlan(resetMode);
+  const { preview, updates, bomUpdates } = await buildHppCostResetWritePlan(resetMode);
 
-  if (!updates.length) {
+  if (!updates.length && !bomUpdates.length) {
     return {
       message: "Reset modal/HPP selesai. Tidak ada field cost/HPP yang ditemukan untuk mode ini.",
       resetMode,
       totalAffectedDocs: 0,
       totalWriteOperations: 0,
       affectedCollections: preview.affectedCollections,
+      bomSnapshotCleanup: preview.bomSnapshotCleanup,
     };
   }
 
   const batch = writeBatch(db);
   updates.forEach((item) => batch.update(item.ref, item.payload));
+  bomUpdates.forEach((item) => batch.update(item.ref, item.payload));
   await batch.commit();
 
   return {
-    message: `Reset modal/HPP selesai. ${updates.length} item master diperbarui.`,
+    message: `Reset modal/HPP selesai. ${updates.length} item master diperbarui dan ${bomUpdates.length} BOM estimate direfresh.`,
     resetMode,
     totalAffectedDocs: preview.totalAffectedDocs,
     totalAffectedVariantRows: preview.totalAffectedVariantRows,
-    totalWriteOperations: updates.length,
+    totalWriteOperations: updates.length + bomUpdates.length,
     affectedCollections: preview.affectedCollections,
+    bomSnapshotCleanup: preview.bomSnapshotCleanup,
   };
 };
 
@@ -1617,7 +1785,7 @@ const buildFullTestingResetPlan = async () => {
   const deletePlans = await buildDeletePlans(collectionTargets);
   const stockPlan = await buildStockOperationPlan(resetMode);
   const hppCostPlan = await buildHppCostResetWritePlan(FULL_TESTING_RESET_HPP_MODE);
-  const mergedMasterUpdates = mergeUpdateOperations(stockPlan.updates, hppCostPlan.updates);
+  const mergedMasterUpdates = mergeUpdateOperations(stockPlan.updates, hppCostPlan.updates, hppCostPlan.bomUpdates);
   const totalDeletedRecords = deletePlans.reduce((sum, item) => sum + item.deletedCount, 0);
   const totalWriteOperations = totalDeletedRecords + mergedMasterUpdates.length;
 
@@ -1668,6 +1836,7 @@ export const getFullTestingResetPreview = async () => {
       deleteOperations: plan.totalDeletedRecords,
       stockOperations: plan.stockPlan.updates.length,
       hppCostOperations: plan.hppCostPlan.updates.length,
+      bomSnapshotCleanupOperations: plan.hppCostPlan.bomUpdates.length,
       mergedMasterUpdateOperations: plan.mergedMasterUpdates.length,
       totalWriteOperations: plan.totalWriteOperations,
       safeClientLimit: SAFE_CLIENT_BATCH_OPERATION_LIMIT,
@@ -1677,7 +1846,8 @@ export const getFullTestingResetPreview = async () => {
       allowedDeleteCollections: Array.from(RESET_ALLOWED_DELETE_COLLECTIONS),
       adminOnlyCollections: [BASELINE_COLLECTION, "maintenance_logs"],
     },
-    recommendations: "Reset semua testing membersihkan transaksi/log/planning/pricing, menolkan stok master, dan menolkan field modal/HPP allowlist tanpa menghapus protected master.",
+    bomSnapshotCleanup: plan.hppCostPlan.preview?.bomSnapshotCleanup || null,
+    recommendations: "Reset semua testing membersihkan transaksi/log/planning/pricing, menolkan stok master, menolkan field modal/HPP allowlist, dan merefresh BOM estimate tanpa menghapus protected master.",
   };
 };
 
@@ -1854,10 +2024,11 @@ export const runFullTestingReset = async () => {
     deletePlans: plan.deletePlans,
     stockUpdates: plan.stockPlan.updates,
     hppCostUpdates: plan.hppCostPlan.updates,
+    bomUpdates: plan.hppCostPlan.bomUpdates,
   });
 
   return {
-    message: `Reset semua testing selesai. ${plan.totalDeletedRecords} record dibersihkan, ${plan.stockPlan.affectedItems} item stok dinolkan, dan ${plan.hppCostPlan.updates.length} item modal/HPP diproses.`,
+    message: `Reset semua testing selesai. ${plan.totalDeletedRecords} record dibersihkan, ${plan.stockPlan.affectedItems} item stok dinolkan, ${plan.hppCostPlan.updates.length} item modal/HPP diproses, dan ${plan.hppCostPlan.bomUpdates.length} BOM estimate direfresh.`,
     resetMode: plan.resetMode,
     modules: plan.selectedModules,
     isFullTestingReset: true,
@@ -1877,6 +2048,7 @@ export const runFullTestingReset = async () => {
       affectedCollections: plan.hppCostPlan.preview?.affectedCollections || [],
       message: `Modal/HPP direset untuk ${plan.hppCostPlan.updates.length} item master.`,
     },
+    bomSnapshotCleanup: plan.hppCostPlan.preview?.bomSnapshotCleanup || null,
   };
 };
 

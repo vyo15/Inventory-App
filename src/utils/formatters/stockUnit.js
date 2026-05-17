@@ -6,7 +6,7 @@ Fungsi:
 - Menyatukan tampilan jumlah stok dan satuan untuk halaman master/read-only display.
 
 Dipakai oleh:
-- Products.jsx, RawMaterials.jsx, dan SemiFinishedMaterials.jsx.
+- Products.jsx, RawMaterials.jsx, SemiFinishedMaterials.jsx, dan StockDisplayBlock.jsx.
 
 Alasan perubahan:
 - Mengganti helper lokal yang sama agar format stok + unit konsisten tanpa menyentuh kalkulasi stok.

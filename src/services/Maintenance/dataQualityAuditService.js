@@ -131,6 +131,66 @@ const getBestReference = (data = {}, docId = "") => (
   ]) || docId
 );
 
+const getUniqueReferenceKeys = (values = []) => Array.from(
+  new Set(values.map((value) => safeTrim(value)).filter(Boolean)),
+);
+
+const getSalesIdentityKeys = (data = {}, docId = "") => getUniqueReferenceKeys([
+  docId,
+  data.saleNumber,
+  data.code,
+  data.referenceNumber,
+  data.sourceRef,
+  data.referenceCode,
+]);
+
+const getSalesLinkedKeys = (data = {}, docId = "") => getUniqueReferenceKeys([
+  docId,
+  data.relatedId,
+  data.saleId,
+  data.referenceId,
+  data.sourceId,
+  data.sourceRef,
+  data.referenceCode,
+  data.referenceNumber,
+  data.saleNumber,
+  data.code,
+  data.details?.relatedId,
+  data.details?.saleId,
+  data.details?.referenceId,
+  data.details?.sourceId,
+  data.details?.sourceRef,
+  data.details?.referenceCode,
+  data.details?.referenceNumber,
+  data.details?.saleNumber,
+]);
+
+const pushUniqueMapRecord = (map, key, record) => {
+  const normalizedKey = safeTrim(key);
+  if (!normalizedKey) return;
+
+  const existingRecords = map.get(normalizedKey) || [];
+  if (!existingRecords.some((item) => item.id === record.id)) {
+    existingRecords.push(record);
+  }
+  map.set(normalizedKey, existingRecords);
+};
+
+const getUniqueMapRecordsByKeys = (map, keys = []) => {
+  const seenIds = new Set();
+  const records = [];
+
+  keys.forEach((key) => {
+    (map.get(key) || []).forEach((record) => {
+      if (seenIds.has(record.id)) return;
+      seenIds.add(record.id);
+      records.push(record);
+    });
+  });
+
+  return records;
+};
+
 const toSample = ({ collectionName, itemDoc, issue, recommendation }) => {
   const data = itemDoc.data();
   const reference = getBestReference(data, itemDoc.id);
@@ -190,6 +250,26 @@ const CATEGORY_CONFIGS = [
     recommendation: "Aman dibuat ulang jika data test",
   },
   {
+    key: "sales_cancel_stock_revert_conflict",
+    label: "Sales cancel/revert stok tidak sinkron",
+    recommendation: "Perlu cek manual sebelum lanjut transaksi",
+  },
+  {
+    key: "sales_cancel_income_conflict",
+    label: "Sales dibatalkan masih punya income",
+    recommendation: "Perlu cek manual sebelum laporan final",
+  },
+  {
+    key: "sales_pending_income_conflict",
+    label: "Sales belum selesai sudah punya income",
+    recommendation: "Perlu cek manual sebelum laporan final",
+  },
+  {
+    key: "sales_completed_income_missing",
+    label: "Sales selesai belum punya income",
+    recommendation: "Perlu cek manual sebelum laporan final",
+  },
+  {
     key: "returns_missing_ret",
     label: "Return tanpa kode RET",
     recommendation: "Aman dibuat ulang jika data test",
@@ -213,6 +293,31 @@ const CATEGORY_CONFIGS = [
     key: "work_logs_empty_material_snapshot",
     label: "Work Log material snapshot kosong",
     recommendation: "Aman dibuat ulang jika data test",
+  },
+  {
+    key: "work_logs_legacy_status",
+    label: "Work Log status legacy",
+    recommendation: "Perlu cek manual; flow aktif hanya in_progress/completed",
+  },
+  {
+    key: "work_logs_payroll_pending",
+    label: "Work Log menunggu payroll final",
+    recommendation: "Finalkan payroll sebelum angka HPP dipakai sebagai final",
+  },
+  {
+    key: "work_logs_payroll_cost_mismatch",
+    label: "Work Log payroll/cost tidak sinkron",
+    recommendation: "Perlu cek payroll final dan ringkasan cost Work Log",
+  },
+  {
+    key: "work_logs_output_hpp_reconcile_needed",
+    label: "Output HPP perlu reconcile",
+    recommendation: "Task guarded terpisah: preview dulu sebelum update master stok/output history",
+  },
+  {
+    key: "semi_finished_missing_flower_group",
+    label: "Semi Finished tanpa jenis bunga",
+    recommendation: "Lengkapi flowerGroup agar BOM/PO/filter produksi tidak fallback diam-diam",
   },
   {
     key: "payroll_unclear_reference",
@@ -263,6 +368,50 @@ const hasClearHumanSourceReference = (data = {}, fields = []) => fields.some((fi
   const value = getNestedValue(data, fieldName);
   return isHumanReference(value);
 });
+
+const getWorkLogIdentityKeys = (data = {}, docId = "") => getUniqueReferenceKeys([
+  docId,
+  data.id,
+  data.workLogId,
+  data.workNumber,
+  data.code,
+  data.referenceNumber,
+  data.sourceRef,
+]);
+
+const isPayrollIncludedInHpp = (data = {}) => normalizeType(data.status) !== "cancelled" && data.includePayrollInHpp !== false;
+
+const isPayrollFinalForHpp = (data = {}) => {
+  if (!isPayrollIncludedInHpp(data)) return false;
+  const status = normalizeType(data.status);
+  const paymentStatus = normalizeType(data.paymentStatus);
+  if (status === "confirmed" || status === "paid" || paymentStatus === "paid") return true;
+  return !status && !paymentStatus && getPayrollFinalAmount(data) > 0;
+};
+
+const getPayrollFinalAmount = (data = {}) => toNumber(data.finalAmount ?? data.amountCalculated ?? data.totalAmount);
+
+const isNumberClose = (left, right, tolerance = 1) => Math.abs(toNumber(left) - toNumber(right)) <= tolerance;
+
+const hasOutputHppReconcileIssue = (data = {}, finalPayrollAmount = 0) => {
+  const outputs = Array.isArray(data.outputs) ? data.outputs : [];
+  const goodQty = toNumber(data.goodQty ?? data.outputGoodQty ?? data.completedQty ?? data.actualOutputQty);
+  if (!outputs.length || goodQty <= 0 || finalPayrollAmount <= 0) return false;
+
+  const materialCost = toNumber(data.materialCostActual ?? data.materialCost ?? data.materialTotalCost);
+  const overheadCost = toNumber(data.overheadCostActual ?? data.overheadCost ?? data.overheadTotalCost);
+  const expectedFinalTotal = materialCost + overheadCost + finalPayrollAmount;
+  const expectedCostPerGoodUnit = goodQty > 0 ? expectedFinalTotal / goodQty : 0;
+
+  if (expectedCostPerGoodUnit <= 0) return false;
+
+  return outputs.some((line = {}) => {
+    const outputGoodQty = toNumber(line.goodQty ?? line.outputQty ?? line.qty ?? line.quantity);
+    if (outputGoodQty <= 0) return false;
+    const outputUnitCost = toNumber(line.costPerUnit ?? line.costPerUnitSnapshot ?? line.hppPerUnit);
+    return outputUnitCost <= 0 || outputUnitCost + 1 < expectedCostPerGoodUnit;
+  });
+};
 
 const isManualCashOutExpense = (data = {}) => {
   const sourceModule = normalizeType(data.sourceModule || data.module || data.sourceType || data.type);
@@ -335,6 +484,22 @@ const hasUnclearSource = (data = {}) => {
   return !sourceModule || !sourceRef || looksLikeFirestoreId(sourceRef) || looksLikeFirestoreId(technicalRef);
 };
 
+const buildSalesStockBucketKey = (line = {}) => (
+  `${safeTrim(line.collectionName || line.details?.collectionName)}::${safeTrim(line.itemId || line.details?.itemId)}::${safeTrim(line.variantKey || line.details?.variantKey || "master")}`
+);
+
+const sumQuantityBySalesStockBucket = (lines = [], quantityGetter = (line) => line.quantity) => {
+  const quantityByBucket = new Map();
+
+  lines.forEach((line = {}) => {
+    const bucketKey = buildSalesStockBucketKey(line);
+    const quantity = Math.abs(toNumber(quantityGetter(line)));
+    quantityByBucket.set(bucketKey, toNumber(quantityByBucket.get(bucketKey)) + quantity);
+  });
+
+  return quantityByBucket;
+};
+
 export const getDataQualityAudit = async () => {
   const categories = createCategoryAccumulator();
   const collectionNames = [
@@ -362,8 +527,53 @@ export const getDataQualityAudit = async () => {
     return acc;
   }, {});
 
+  const payrollsByWorkLogKey = new Map();
+  (collectionMap.production_payrolls?.docs || []).forEach((itemDoc) => {
+    const data = itemDoc.data();
+    const payrollRecord = { id: itemDoc.id, ...data };
+    getWorkLogIdentityKeys({
+      id: data.workLogId,
+      workLogId: data.workLogId,
+      workNumber: data.workNumber,
+      code: data.workLogCode,
+      referenceNumber: data.referenceNumber,
+      sourceRef: data.sourceRef,
+    }, data.workLogId).forEach((key) => pushUniqueMapRecord(payrollsByWorkLogKey, key, payrollRecord));
+  });
+
+  const incomeSaleKeys = new Set();
+  (collectionMap.incomes?.docs || []).forEach((itemDoc) => {
+    const data = itemDoc.data();
+    const deterministicSaleId = itemDoc.id.startsWith("income_")
+      ? safeTrim(itemDoc.id.replace(/^income_/, ""))
+      : "";
+
+    getSalesLinkedKeys(data, deterministicSaleId).forEach((saleKey) => {
+      incomeSaleKeys.add(saleKey);
+    });
+  });
+
+  const cancelRevertLogsBySaleKey = new Map();
+  (collectionMap.inventory_logs?.docs || []).forEach((itemDoc) => {
+    const data = itemDoc.data();
+    const logType = normalizeType(data.type || data.details?.type);
+
+    if (logType !== "sale_cancel_revert") return;
+
+    const logRecord = { id: itemDoc.id, ...data };
+    getSalesLinkedKeys(data, "").forEach((saleKey) => {
+      pushUniqueMapRecord(cancelRevertLogsBySaleKey, saleKey, logRecord);
+    });
+  });
+
   (collectionMap.sales?.docs || []).forEach((itemDoc) => {
     const data = itemDoc.data();
+    const status = safeTrim(data.status);
+    const saleItems = Array.isArray(data.items) ? data.items : [];
+    const saleIdentityKeys = getSalesIdentityKeys(data, itemDoc.id);
+    const hasSaleIncome = saleIdentityKeys.some((saleKey) => incomeSaleKeys.has(saleKey));
+    const cancelRevertLogs = getUniqueMapRecordsByKeys(cancelRevertLogsBySaleKey, saleIdentityKeys);
+
     if (!hasPrefix(data, ["ORD"], ["saleNumber", "code", "referenceNumber", "sourceRef"])) {
       addIssue(categories, "sales_missing_sal", toSample({
         collectionName: "sales",
@@ -371,6 +581,89 @@ export const getDataQualityAudit = async () => {
         issue: "Belum punya kode Order format ORD.",
         recommendation: categories.sales_missing_sal.recommendation,
       }));
+    }
+
+    if (["Diproses", "Dikirim", "Selesai"].includes(status) && (data.stockRevertedAt || data.cancelledAt || cancelRevertLogs.length > 0)) {
+      addIssue(categories, "sales_cancel_stock_revert_conflict", toSample({
+        collectionName: "sales",
+        itemDoc,
+        issue: "Sales masih aktif/selesai tetapi sudah punya marker/log cancel revert stok.",
+        recommendation: categories.sales_cancel_stock_revert_conflict.recommendation,
+      }));
+    }
+
+    if (["Diproses", "Dikirim"].includes(status) && hasSaleIncome) {
+      addIssue(categories, "sales_pending_income_conflict", toSample({
+        collectionName: "sales",
+        itemDoc,
+        issue: "Sales belum Selesai tetapi sudah memiliki income resmi.",
+        recommendation: categories.sales_pending_income_conflict.recommendation,
+      }));
+    }
+
+    if (status === "Selesai" && toNumber(data.total) > 0 && !hasSaleIncome) {
+      addIssue(categories, "sales_completed_income_missing", toSample({
+        collectionName: "sales",
+        itemDoc,
+        issue: "Sales Selesai bernilai lebih dari 0 tetapi belum punya income resmi.",
+        recommendation: categories.sales_completed_income_missing.recommendation,
+      }));
+    }
+
+    if (status === "Dibatalkan" && hasSaleIncome) {
+      addIssue(categories, "sales_cancel_income_conflict", toSample({
+        collectionName: "sales",
+        itemDoc,
+        issue: "Sales berstatus Dibatalkan tetapi masih memiliki income resmi.",
+        recommendation: categories.sales_cancel_income_conflict.recommendation,
+      }));
+    }
+
+    if (status === "Dibatalkan" && saleItems.length > 0 && !data.stockRevertedAt && cancelRevertLogs.length === 0) {
+      addIssue(categories, "sales_cancel_stock_revert_conflict", toSample({
+        collectionName: "sales",
+        itemDoc,
+        issue: "Sales Dibatalkan tidak punya marker stockRevertedAt dan tidak ditemukan log cancel revert. Ada risiko stok belum dikembalikan atau data dibuat lewat flow lama.",
+        recommendation: categories.sales_cancel_stock_revert_conflict.recommendation,
+      }));
+    }
+
+    if (status === "Dibatalkan" && data.stockRevertedAt && cancelRevertLogs.length === 0) {
+      addIssue(categories, "sales_cancel_stock_revert_conflict", toSample({
+        collectionName: "sales",
+        itemDoc,
+        issue: "Sales punya marker stockRevertedAt tetapi tidak ditemukan log cancel revert stok.",
+        recommendation: categories.sales_cancel_stock_revert_conflict.recommendation,
+      }));
+    }
+
+    if (status === "Dibatalkan" && saleItems.length > 0 && cancelRevertLogs.length > saleItems.length) {
+      addIssue(categories, "sales_cancel_stock_revert_conflict", toSample({
+        collectionName: "sales",
+        itemDoc,
+        issue: "Jumlah log cancel revert lebih banyak dari jumlah item sale. Ada indikasi stok pernah direvert dobel.",
+        recommendation: categories.sales_cancel_stock_revert_conflict.recommendation,
+      }));
+    }
+
+    if (status === "Dibatalkan" && saleItems.length > 0 && cancelRevertLogs.length > 0) {
+      const saleQuantityByBucket = sumQuantityBySalesStockBucket(saleItems);
+      const cancelQuantityByBucket = sumQuantityBySalesStockBucket(
+        cancelRevertLogs,
+        (line) => line.quantityChange ?? line.quantity ?? line.details?.quantityChange ?? line.details?.quantity,
+      );
+      const hasOverRevertedBucket = Array.from(cancelQuantityByBucket.entries()).some(([bucketKey, revertedQty]) => (
+        revertedQty > toNumber(saleQuantityByBucket.get(bucketKey))
+      ));
+
+      if (hasOverRevertedBucket) {
+        addIssue(categories, "sales_cancel_stock_revert_conflict", toSample({
+          collectionName: "sales",
+          itemDoc,
+          issue: "Qty log cancel revert lebih besar dari qty sale pada salah satu item/varian. Ada indikasi stok pernah direvert dobel.",
+          recommendation: categories.sales_cancel_stock_revert_conflict.recommendation,
+        }));
+      }
     }
   });
 
@@ -456,6 +749,48 @@ export const getDataQualityAudit = async () => {
         itemDoc,
         issue: "Material usage belum punya snapshot cost yang jelas.",
         recommendation: categories.work_logs_empty_material_snapshot.recommendation,
+      }));
+    }
+
+    if (["draft", "cancelled", "canceled"].includes(status)) {
+      addIssue(categories, "work_logs_legacy_status", toSample({
+        collectionName: "production_work_logs",
+        itemDoc,
+        issue: `Work Log memakai status legacy ${status || "-"}.`,
+        recommendation: categories.work_logs_legacy_status.recommendation,
+      }));
+    }
+
+    const relatedPayrolls = getUniqueMapRecordsByKeys(payrollsByWorkLogKey, getWorkLogIdentityKeys(data, itemDoc.id));
+    const finalPayrollAmount = relatedPayrolls
+      .filter(isPayrollFinalForHpp)
+      .reduce((sum, line) => sum + getPayrollFinalAmount(line), 0);
+    const activePayrollCount = relatedPayrolls.filter(isPayrollIncludedInHpp).length;
+
+    if ((status === "completed" || goodQty > 0) && activePayrollCount > 0 && finalPayrollAmount <= 0) {
+      addIssue(categories, "work_logs_payroll_pending", toSample({
+        collectionName: "production_work_logs",
+        itemDoc,
+        issue: "Work Log completed punya payroll aktif tetapi belum ada payroll final untuk HPP.",
+        recommendation: categories.work_logs_payroll_pending.recommendation,
+      }));
+    }
+
+    if ((status === "completed" || goodQty > 0) && finalPayrollAmount > 0 && !isNumberClose(data.laborCostActual, finalPayrollAmount)) {
+      addIssue(categories, "work_logs_payroll_cost_mismatch", toSample({
+        collectionName: "production_work_logs",
+        itemDoc,
+        issue: "laborCostActual Work Log tidak sama dengan total payroll final HPP.",
+        recommendation: categories.work_logs_payroll_cost_mismatch.recommendation,
+      }));
+    }
+
+    if ((status === "completed" || goodQty > 0) && hasOutputHppReconcileIssue(data, finalPayrollAmount)) {
+      addIssue(categories, "work_logs_output_hpp_reconcile_needed", toSample({
+        collectionName: "production_work_logs",
+        itemDoc,
+        issue: "Output cost Work Log terlihat belum ikut final payroll; master HPP/average cost perlu preview reconcile terpisah.",
+        recommendation: categories.work_logs_output_hpp_reconcile_needed.recommendation,
       }));
     }
   });
@@ -571,6 +906,15 @@ export const getDataQualityAudit = async () => {
         itemDoc,
         issue: "Semi Finished belum punya kode SFP.",
         recommendation: categories.master_missing_code.recommendation,
+      }));
+    }
+
+    if (isRelevant && !safeTrim(data.flowerGroup)) {
+      addIssue(categories, "semi_finished_missing_flower_group", toSample({
+        collectionName: "semi_finished_materials",
+        itemDoc,
+        issue: "Semi Finished aktif belum punya flowerGroup eksplisit.",
+        recommendation: categories.semi_finished_missing_flower_group.recommendation,
       }));
     }
   });

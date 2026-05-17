@@ -2,6 +2,9 @@
 // Production Payroll Options
 // =====================================================
 
+import { toOptionMap } from "../utils/options/optionMap";
+export { toOptionMap };
+
 export const PRODUCTION_PAYROLL_STATUSES = [
   { value: "draft", label: "Draft" },
   { value: "confirmed", label: "Confirmed" },
@@ -29,12 +32,6 @@ export const PRODUCTION_PAYROLL_CLASSIFICATIONS = [
   { value: "direct_labor", label: "Produksi Inti" },
   { value: "support_fulfillment", label: "Support / Fulfillment" },
 ];
-
-export const toOptionMap = (options = []) =>
-  options.reduce((acc, item) => {
-    acc[item.value] = item.label;
-    return acc;
-  }, {});
 
 export const PAYROLL_STATUS_MAP = toOptionMap(PRODUCTION_PAYROLL_STATUSES);
 export const PAYROLL_PAYMENT_STATUS_MAP = toOptionMap(
@@ -114,14 +111,21 @@ export const DEFAULT_PRODUCTION_PAYROLL_FORM = {
 // Rumus payroll final wajib lewat helper ini agar per_batch
 // dan per_qty selalu konsisten di seluruh modul.
 // =====================================================
+const safeNumber = (value, fallback = 0) => {
+  const parsed = Number(value ?? fallback);
+  const parsedFallback = Number(fallback ?? 0);
+  if (Number.isFinite(parsed)) return parsed;
+  return Number.isFinite(parsedFallback) ? parsedFallback : 0;
+};
+
 export const calculatePayrollAmounts = (values = {}) => {
   const payrollMode = values.payrollMode || "per_qty";
-  const payrollRate = Number(values.payrollRate || 0);
-  const payrollQtyBase = Number(values.payrollQtyBase || 1);
-  const outputQtyUsed = Number(values.outputQtyUsed || 0);
-  const workedQty = Number(values.workedQty || 0);
-  const bonusAmount = Number(values.bonusAmount || 0);
-  const deductionAmount = Number(values.deductionAmount || 0);
+  const payrollRate = Math.max(0, safeNumber(values.payrollRate));
+  const payrollQtyBase = safeNumber(values.payrollQtyBase, 1);
+  const outputQtyUsed = Math.max(0, safeNumber(values.outputQtyUsed));
+  const workedQty = Math.max(0, safeNumber(values.workedQty));
+  const bonusAmount = safeNumber(values.bonusAmount);
+  const deductionAmount = safeNumber(values.deductionAmount);
 
   let amountCalculated = 0;
   let payableQtyFactor = 0;
@@ -143,8 +147,8 @@ export const calculatePayrollAmounts = (values = {}) => {
   const finalAmount = amountCalculated + bonusAmount - deductionAmount;
 
   return {
-    payableQtyFactor,
-    amountCalculated,
-    finalAmount,
+    payableQtyFactor: safeNumber(payableQtyFactor),
+    amountCalculated: safeNumber(amountCalculated),
+    finalAmount: safeNumber(finalAmount),
   };
 };

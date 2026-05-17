@@ -22,13 +22,11 @@ import {
   generateUniqueProductionSequentialCode,
   isProductionBusinessCodeExists,
 } from "../../utils/references/productionCodeGenerator";
-import {
-  calculateBomMaterialLine,
-  calculateBomTotals,
-} from "../../constants/productionBomOptions";
+import { calculateBomTotals } from "../../constants/productionBomOptions";
 import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
 import {
   calculateBomStepLineCost,
+  hydrateBomMaterialLinesWithLiveCost,
   resolveBomStepPayrollSnapshot,
 } from "../../utils/produksi/productionBomCostHelpers";
 
@@ -149,15 +147,34 @@ export const getActiveBomReferenceData = async () => {
 // - target product juga boleh memakai raw_material untuk consumable assembly
 //   seperti lem tembak, karena stok tetap harus terpotong dari bahan baku
 // =====================================================
-const normalizeMaterialLines = (materialLines = []) =>
-  materialLines.map((line, index) => {
+const normalizeMaterialLines = (materialLines = [], referenceData = {}) => {
+  /*
+  =====================================================
+  SECTION: BOM save live material cost hydration — GUARDED
+  Fungsi:
+  - Menormalisasi materialLines dan menghitung ulang biaya dari master cost terbaru sebelum BOM disimpan.
+
+  Dipakai oleh:
+  - createProductionBom dan updateProductionBom.
+
+  Alasan perubahan:
+  - Edit/simpan BOM lama tidak boleh mempertahankan costPerUnitSnapshot/totalCostSnapshot stale.
+
+  Catatan cleanup:
+  - Field snapshot masih dipakai untuk compatibility schema lama, tetapi nilainya selalu direfresh dari master.
+
+  Risiko:
+  - Jangan fallback ke line.costPerUnitSnapshot karena akan mengembalikan bug stale BOM estimate.
+  =====================================================
+  */
+  const normalizedLines = materialLines.map((line, index) => {
     const normalizedItemType = ["raw_material", "semi_finished_material"].includes(
       line.itemType,
     )
       ? line.itemType
       : "raw_material";
 
-    return calculateBomMaterialLine({
+    return {
       id: line.id || `material-${Date.now()}-${index}`,
       itemType: normalizedItemType,
       itemId: line.itemId || "",
@@ -166,8 +183,8 @@ const normalizeMaterialLines = (materialLines = []) =>
       unit: safeTrim(line.unit) || "pcs",
       qtyPerBatch: Number(line.qtyPerBatch || 0),
       wastageQty: Number(line.wastageQty || 0),
-      costPerUnitSnapshot: Number(line.costPerUnitSnapshot || 0),
-      costSourceSnapshot: safeTrim(line.costSourceSnapshot),
+      costPerUnitSnapshot: 0,
+      costSourceSnapshot: "",
       materialHasVariants: line.materialHasVariants === true,
       materialVariantStrategy:
         line.materialHasVariants === true
@@ -177,8 +194,14 @@ const normalizeMaterialLines = (materialLines = []) =>
       fixedVariantLabel: safeTrim(line.fixedVariantLabel),
       isOptional: false,
       notes: safeTrim(line.notes),
-    });
+    };
   });
+
+  return hydrateBomMaterialLinesWithLiveCost({
+    materialLines: normalizedLines,
+    referenceData,
+  });
+};
 
 // =====================================================
 // SECTION: normalize step lines
@@ -268,9 +291,9 @@ export const validateProductionBom = (values = {}) => {
 // =====================================================
 // SECTION: normalize payload BOM
 // =====================================================
-const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
+const normalizePayload = (values = {}, currentUser = null, isEdit = false, referenceData = {}) => {
   const targetType = values.targetType || "product";
-  const materialLines = normalizeMaterialLines(values.materialLines || []);
+  const materialLines = normalizeMaterialLines(values.materialLines || [], referenceData);
   const stepLines = normalizeStepLines(values.stepLines || [], values);
   const totals = calculateBomTotals(materialLines, stepLines, values);
 
@@ -428,7 +451,8 @@ export const createProductionBom = async (values, currentUser = null) => {
     };
   }
 
-  const payload = normalizePayload({ ...values, code: normalizedCode }, currentUser, false);
+  const referenceData = await getActiveBomReferenceData();
+  const payload = normalizePayload({ ...values, code: normalizedCode }, currentUser, false, referenceData);
   /* =====================================================
   SECTION: BOM document ID = business code — AKTIF
   Fungsi:
@@ -484,7 +508,8 @@ export const updateProductionBom = async (id, values, currentUser = null) => {
     };
   }
 
-  const payload = normalizePayload({ ...values, code: normalizedCode }, currentUser, true);
+  const referenceData = await getActiveBomReferenceData();
+  const payload = normalizePayload({ ...values, code: normalizedCode }, currentUser, true, referenceData);
 
   await updateDoc(ref, {
     ...payload,

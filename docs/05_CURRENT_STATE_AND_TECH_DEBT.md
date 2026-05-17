@@ -45,17 +45,17 @@ Risiko tersisa:
 Temuan terkini:
 - create sale memvalidasi `availableStock` master/varian sebelum transaksi disimpan
 - kebutuhan item yang sama digabung dulu agar multi-line tidak melewati stok tersedia
-- mutasi stok Sales memakai helper stok aktif dan mencegah stok negatif
-- jika mutasi stok gagal setelah dokumen sale dibuat, flow melakukan rollback teknis dan menghapus sale baru agar tidak ada sale orphan
+- create sale menyimpan dokumen Sales, mutasi stok keluar, inventory log, dan income awal `Selesai` dalam Firestore transaction
+- status cancel Sales memakai transition guarded/idempotent: baca status terbaru, validasi transisi, revert stok, tulis inventory log deterministic, lalu set `cancelledAt` + `stockRevertedAt` dalam transaction yang sama
 
 Risiko tersisa:
-- flow ini masih client-side/best-effort, belum Cloud Function transaction end-to-end
-- cancel Sales tetap area guarded karena berhubungan dengan stock revert dan income; penghapusan Sales hanya rollback teknis create failure, bukan fitur user
+- flow masih berjalan dari client; untuk multi-user besar tetap ideal dipindahkan ke backend/Cloud Function agar aturan server-side lebih kuat
+- sales lama yang sudah pernah partial/cancel sebelum marker `stockRevertedAt` perlu dicek lewat Auto Detect Bug Data/Data Quality Audit sebelum dipakai sebagai dasar laporan final
 
 ### 5. Laporan/export sudah lebih siap data real
 Temuan terkini:
 - Stock Report sudah membaca bahan baku, semi-finished, dan produk jadi
-- HPP Analysis sudah memiliki export XLSX dengan header manusiawi dan kolom validasi cost
+- HPP Analysis sudah memiliki export XLSX dengan header manusiawi, kolom Final/Preview, dan kolom validasi cost
 - Payroll Report XLSX memakai filter operator aktif; CSV lama tetap compatibility/legacy
 
 Risiko tersisa:
@@ -140,7 +140,7 @@ Sebuah task dianggap aman selesai bila:
 ## Tambahan Current State Batch Prioritas
 - `StockReport.jsx` sekarang sebaiknya dianggap kandidat upgrade ke ekspor XLSX profesional, karena CSV mentah terlalu sederhana untuk kebutuhan owner/admin
 - `CashOut.jsx` sekarang menerima expense payroll otomatis dari payroll paid dengan guard `sourceModule/sourceId`; rollback otomatis expense payroll masih belum dibuat dan harus diputuskan terpisah
-- detail Payroll Produksi dan Work Log masih butuh microcopy agar user tidak salah paham terhadap arti field biaya dan status pembayaran
+- detail Payroll Produksi dan Work Log sudah memakai microcopy compact untuk membedakan final vs preview; tetap jaga agar status normal tidak kembali menjadi alert besar
 
 ## Update Cleanup Architecture — 2026-04-25
 
@@ -160,7 +160,7 @@ Sebuah task dianggap aman selesai bila:
 - Audit Firebase Functions custom pada 2026-05-06: folder `functions/` tidak ada di `Inventory-App.zip`; jangan menganggap backend Functions aktif tanpa source terpisah.
 
 ### Koreksi dokumen lama
-Poin lama yang menyebut revert sale masih hanya update `stock` sudah tidak sesuai dengan source terbaru. Sales sekarang memakai `updateInventoryStock()` untuk create sale dan revert cancel. Penghapusan dokumen Sales hanya rollback teknis saat create failure, bukan flow user.
+Poin lama yang menyebut revert sale masih hanya update `stock` atau memakai helper non-transaction sudah tidak sesuai dengan source terbaru. Sales create dan Sales cancel sekarang memakai Firestore transaction di `src/pages/Transaksi/Sales.jsx`; cancel menulis marker `cancelledAt` dan `stockRevertedAt` supaya retry/action dobel tidak mengembalikan stok dua kali. Penghapusan dokumen Sales bukan flow user biasa.
 
 
 ## Update Product & Semi Finished Min Stock Master — 2026-05-07
@@ -226,7 +226,7 @@ Temuan/fix:
 Risiko tersisa:
 - Work Log lama yang sudah completed sebelum patch tidak otomatis di-backfill pada bug ini;
 - jika butuh backfill payroll lama, buat task terpisah dengan preview/audit terlebih dahulu;
-- jika master Tahapan Produksi memiliki payroll rate 0, line payroll tetap bisa dibuat dengan nominal 0 untuk audit.
+- jika master Tahapan Produksi memiliki payroll rate 0/kosong, auto payroll diblokir oleh guard eligibility; perbaiki tarif Step terlebih dahulu, jangan membuat line nominal 0 sebagai flow aktif.
 
 ## Update Integrasi IMS — 2026-04-25
 Yang sudah dirapikan:
@@ -237,7 +237,7 @@ Yang sudah dirapikan:
 - Payroll Report tetap membaca `production_payrolls` dan hanya menampilkan referensi Cash Out sebagai audit.
 
 Tech debt tersisa:
-- Backfill untuk Work Log completed lama yang belum punya payroll/cost belum dijalankan otomatis.
+- Backfill/reconcile untuk Work Log completed lama yang belum punya payroll/cost atau output HPP master yang belum ikut payroll final belum dijalankan otomatis.
 - Rollback otomatis expense payroll saat payroll paid dibatalkan belum dibuat karena butuh business rule terpisah.
 - Jika master material tidak punya cost source, material cost bisa tetap 0 dan harus diperbaiki di master data/purchase flow, bukan diisi manual asal.
 
@@ -302,16 +302,16 @@ Tech debt tersisa:
 ## Final Current State Hardening Fase A-G - 2026-04-26
 
 ### Status Fase A-F berdasarkan source terbaru
-- Fase A Sales stock safety: sudah tercermin di source melalui validasi `availableStock`, agregasi kebutuhan item, dan rollback sale jika mutasi stok gagal.
+- Fase A Sales stock safety: sudah tercermin di source melalui validasi `availableStock`, agregasi kebutuhan item, dan Firestore transaction untuk create sale agar sales/stok/log/income tidak partial.
 - Fase B Purchase expense metadata: sudah tercermin di source melalui metadata expense otomatis pembelian `sourceId`, `sourceRef`, `sourceType`, `createdByAutomation`, dan kompatibilitas `relatedPurchaseId`.
-- Fase C HPP/Work Log cost 0 warning: sudah tercermin di source melalui warning validasi cost di HPP Analysis dan detail Work Log.
+- Fase C HPP/Work Log costing: detail Work Log sekarang compact tanpa alert besar untuk status normal; labor memakai resolver shared dengan HPP Analysis untuk menampilkan payroll final/draft/estimasi step secara read-only, overhead membaca BOM untuk listrik/glue gun, dan HPP Analysis tetap menjaga validasi cost final.
 - Fase D Dashboard cleanup: sudah tercermin di source dengan Dashboard read-only compact sebagai control center; update terbaru menambahkan KPI strip, quick actions navigasi-only, dan Data Perlu Dicek tanpa table besar sebagai layout utama.
 - Fase E Report/export gap: sudah tercermin di source melalui Stock Report yang membaca semi-finished stock, export HPP XLSX, dan fix filter export Payroll Report.
 - Fase F legacy duplicate cleanup: status bersih pada upload terbaru karena folder `src/src/**` tidak ditemukan lagi dan grep reference `src/src` tidak menemukan import aktif.
 - Fase G docs/checklist: fase dokumentasi; tidak mengubah source aplikasi.
 
 ### Tech debt yang masih terbuka setelah hardening
-- Sales stock safety masih client-side/best-effort; untuk multi-user padat, pertimbangkan transaction/cloud function khusus.
+- Sales stock safety sudah memakai Firestore transaction di client untuk create/cancel/status selesai; untuk multi-user padat tetap pertimbangkan Cloud Function/server-side guard dan validasi Firestore Rules production.
 - Payroll paid reversal belum diputuskan: expense payroll tidak dihapus otomatis saat status paid dibatalkan.
 - HPP cost 0 sekarang diberi warning, tetapi data lama tidak di-backfill otomatis.
 - Firebase Functions custom tidak ada pada ZIP aktual; bila backend Functions berada di repo/ZIP lain, source tersebut harus diupload sebelum diaudit.
@@ -644,13 +644,13 @@ Risiko tersisa:
 - **AKTIF:** halaman Pemasukan tetap membaca gabungan `revenues` dan `incomes` serta tetap mendukung create pemasukan manual ke `revenues`.
 - **GUARDED:** `incomes` auto Sales income tetap read-only dari sudut UI Pemasukan; flow auto income Sales tidak diubah.
 - **AKTIF/GUARDED:** `src/pages/Transaksi/Sales.jsx` menerapkan client-side guard status tab agar tabel tidak menampilkan row dari status lain saat query ulang, fetch gagal, atau state lama masih tertahan.
-- **AKTIF:** search `referenceNumber` tetap bekerja setelah filter status aktif.
+- **AKTIF:** search `saleNumber`/`referenceNumber`/`sourceRef` dan `externalReferenceNumber` tetap bekerja setelah filter status aktif.
 
 ### Legacy / cleanup candidate
 - **LEGACY:** data lama di `revenues` dan `incomes` tetap valid dan tidak dimigrasi.
 - **LEGACY:** sales lama dengan status/reference lama tetap tampil sesuai status yang tersimpan.
 - **CLEANUP CANDIDATE:** jika suatu hari diperlukan delete ledger, harus dibuat flow khusus dengan approval, audit trail, dan alasan bisnis, bukan tombol Hapus biasa di Cash In.
-- **CLEANUP CANDIDATE:** hardening atomic cancel Sales dan rollback teknis create failure tetap task terpisah; patch ini hanya menjaga tampilan tab status dan tidak mengubah revert stok/income timing.
+- **AKTIF/GUARDED:** atomic cancel Sales sudah masuk flow guarded: status transition membaca dokumen terbaru, menolak cancel ulang, menulis log revert deterministic, dan memberi marker `stockRevertedAt`.
 
 
 ## Update Current State — Repository root assets cleanup — 2026-05-06
@@ -686,11 +686,11 @@ Risiko:
 - **AKTIF:** tabel Sales membaca satu dataset sales lalu memfilter client-side sesuai `activeTabKey` agar tab status tidak kosong karena query per-status/index Firestore.
 - **AKTIF:** tombol Delete/Hapus tidak lagi tampil sebagai aksi user biasa di tabel Sales; flow tidak jadi tetap melalui `Batalkan`.
 - **AKTIF:** dropdown item/varian Sales disederhanakan karena detail stok sudah tampil di panel read-only.
-- **GUARDED:** mutasi stok, income timing, cancel stock revert, inventory log, Cash In, Profit Loss, Dashboard, dan Reports tidak diubah oleh patch ini.
+- **GUARDED:** mutasi stok dan cancel stock revert sekarang berjalan transactional; income timing tetap hanya status `Selesai`, Cash In/Profit Loss tetap membaca `revenues + incomes` resmi.
 
 ### Legacy / cleanup candidate
 - **LEGACY:** sales lama dengan status/reference lama tetap ditampilkan sesuai data tersimpan; tidak ada migrasi otomatis.
-- **LEGACY:** rollback create sale masih memakai `deleteDoc` untuk menghapus sale baru jika mutasi stok gagal; ini bukan tombol Hapus user biasa dan tetap dipertahankan sebagai guard.
+- **LEGACY:** sales lama tanpa marker `stockRevertedAt` tetap tampil, tetapi jika ada log/marker cancel yang tidak sinkron harus dicek manual lewat Auto Detect Bug Data/Data Quality Audit.
 - **CLEANUP CANDIDATE:** hard delete Sales dapat dirancang sebagai maintenance/admin guarded flow terpisah jika benar-benar dibutuhkan.
 - **CLEANUP CANDIDATE:** bila data Sales membesar, strategi fetch all + client filter dapat diganti pagination/query server-side yang tetap menjaga fallback aman.
 
@@ -979,3 +979,58 @@ Status: **AKTIF / GUARDED**.
 - Normalisasi hanya menyentuh field `code` dan alias kode aktif (`productCode`, `materialCode`, `itemCode`, `bomCode`, `stepCode`, `supplierCode`).
 - Aksi ini tidak rename document ID, tidak menghapus data, dan tidak mengubah transaksi/history seperti Purchases, Inventory Log, Work Log, Payroll, atau Sales.
 - Tombol/modal repair kode supplier lama sudah tidak ada di halaman Supplier supaya jalur repair kode lama terpusat di Reset & Maintenance Data.
+
+## Update Current State — Sales cancel idempotent guard — 2026-05-17
+
+Status: **AKTIF + GUARDED**.
+
+- `src/pages/Transaksi/Sales.jsx` tidak lagi membuat opsi create langsung `Dibatalkan`; pembatalan wajib lewat tombol `Batalkan` agar masuk flow transition guarded.
+- Transisi status resmi: `Diproses -> Dikirim/Dibatalkan`, `Dikirim -> Selesai/Dibatalkan`. Sales `Selesai` tidak boleh dibatalkan dari flow ini; gunakan retur/refund terpisah agar income dan stok tidak rusak.
+- Form create Sales punya submit guard (`isSavingSale` + ref lock) agar double-click Simpan tidak membuat order dobel.
+- Cancel Sales membaca dokumen Sales terbaru dalam transaction, menolak retry jika status sudah `Dibatalkan`, marker `stockRevertedAt`/`cancelledAt` sudah ada, log deterministic revert sudah ada, atau log legacy `sale_cancel_revert` untuk sale yang sama sudah terdeteksi.
+- Cancel Sales mengembalikan stok master/varian memakai helper stok aktif, menulis inventory log `sale_cancel_revert`, lalu menulis `cancelledAt`, `stockRevertedAt`, dan `statusUpdatedAt` dalam transaction yang sama.
+- Transisi ke `Dikirim`/`Selesai` ditolak jika Sales punya jejak cancel/revert supaya data partial lama tidak bisa lanjut membuat income atau status aktif palsu.
+- Data Quality Audit menambah deteksi Sales cancel/revert tidak sinkron, Sales dibatalkan yang masih punya income, Sales belum selesai yang sudah punya income, dan Sales selesai yang belum punya income, read-only tanpa write otomatis.
+- Jangan menghapus marker `stockRevertedAt`/`cancelledAt` manual karena marker ini adalah guard idempotency untuk mencegah double revert stok.
+- Search Sales wajib mencakup `externalReferenceNumber` karena nomor marketplace/resi disimpan terpisah dari kode internal `ORD-*`.
+- Guard income Sales harus membaca legacy link `relatedId`, `saleId`, `referenceId`, `sourceRef`, `referenceCode`, `referenceNumber`, dan `details.*` agar data lama tidak membuat income dobel.
+- Data Quality Audit Sales cancel/income harus mencocokkan sale bukan hanya dari Firestore document id, tetapi juga dari `saleNumber`, `code`, `referenceNumber`, dan `sourceRef`.
+
+## Update Current State — Helper cleanup stock formatter dan safeTrim audit — 2026-05-17
+
+Status: **AKTIF / SCOPED CLEANUP**.
+
+- Formatter stok read-only sekarang memakai source of truth `src/utils/formatters/stockUnit.js` untuk Product, Raw Material, Semi Finished, dan `StockDisplayBlock`; helper lokal `formatStockWithUnit` di halaman boleh hanya menjadi alias ke `formatStockWithUnitId`, bukan implementasi formatter baru.
+- `src/utils/stock/stockHelpers.js::toNumber()` sekarang wajib finite-safe: input invalid/NaN fallback ke angka aman agar kalkulasi `currentStock`, `reservedStock`, `availableStock`, weighted average, dan helper varian tidak menampilkan/menyimpan `NaN`.
+- Audit `safeTrim` menunjukkan helper lokal masih aktif di service/helper guarded seperti produksi, maintenance, supplier, variant, dan reference resolver. Jangan refactor massal `safeTrim` ke helper global tanpa audit field per file karena beberapa dipakai untuk compatibility data lama.
+- Helper `safeTrim` lokal yang hanya satu kali dipakai dan tidak memberi konteks business guard boleh dihapus/inlined, tetapi helper yang banyak dipakai di flow guarded tetap dipertahankan.
+- Cleanup lanjutan yang masih kandidat: `toOptionMap` constants dan mapper collection production. Jangan digabung dengan patch stok/helper karena mapper production menyentuh Production Order, Work Log, payroll/HPP, dan histori produksi.
+
+
+## Update Current State: Produksi/HPP Final vs Preview — 2026-05-17
+- Detail Work Log menampilkan labor dari payroll final, draft payroll, atau estimasi Step dengan tag compact read-only.
+- HPP Analysis memisahkan angka Final dan Preview agar payroll draft/estimasi tidak terbaca sebagai HPP final.
+- Overhead produksi aktif berasal dari BOM untuk listrik/glue gun; field hasil selain Good Qty tetap compatibility data lama dan tidak ditampilkan sebagai workflow aktif.
+- Data Quality Audit produksi menandai Work Log legacy status, payroll final pending/mismatch, dan Semi Finished tanpa `flowerGroup`; audit hasil selain Good Qty tidak ditambahkan.
+- Tech debt yang masih sengaja tidak disentuh: reconcile/backfill HPP master dari Work Log lama setelah payroll final, karena itu menyentuh stok/HPP history dan perlu task guarded terpisah.
+
+## Update Current State — toOptionMap shared helper cleanup — 2026-05-17
+
+Status: **AKTIF / SCOPED CLEANUP**.
+
+- Source of truth option map sekarang ada di `src/utils/options/optionMap.js::toOptionMap()`.
+- Constants produksi/variant yang sebelumnya punya local reduce `toOptionMap` sekarang import helper shared dan tetap re-export `toOptionMap` untuk legacy compatibility import.
+- `src/constants/semiFinishedMaterialOptions.js` tidak lagi mengambil `toOptionMap` dari `variantOptions.js`; coupling Semi Finished -> Variant hanya untuk opsi warna/group yang memang dipakai.
+- `src/constants/productionProfileOptions.js` juga memakai helper shared untuk `PRODUCTION_PROFILE_TYPE_MAP` agar pola enum map konsisten.
+- Jangan hapus export map/status seperti `WORK_LOG_STOCK_STATUS_MAP` / `WORK_LOG_PAYROLL_STATUS_MAP` hanya karena belum terlihat dipakai; tandai sebagai cleanup candidate sampai usage runtime/legacy benar-benar diaudit.
+- Cleanup lanjutan yang masih kandidat dan **tidak digabung**: hardening kalkulasi angka produksi (`Number(x || 0)` di BOM/Work Log/Payroll) karena menyentuh BOM, Work Log, payroll/HPP, dan histori produksi.
+
+
+## Update Produksi/HPP Guarded Reconcile — 2026-05-17
+
+Status aktif dari source terbaru:
+- Detail Work Log dan HPP Analysis menampilkan labor lewat resolver shared: payroll final menjadi nilai final, payroll draft/estimasi Step hanya preview read-only.
+- Overhead Work Log aktif berasal dari BOM untuk listrik/glue gun; field hasil selain Good Qty tetap compatibility data lama dan tidak ditampilkan sebagai workflow aktif.
+- Data Quality Audit hanya read-only dan sekarang boleh menandai kandidat `Output HPP perlu reconcile` ketika output cost lama belum ikut payroll final.
+- Reconcile/backfill HPP master/output lama setelah payroll final tetap guarded task terpisah: wajib preview, scope jelas, dan tidak boleh disentuh oleh patch UI/detail biasa.
+- `draft`/`cancelled` Work Log hanya legacy data read-only; flow input aktif tetap `in_progress` → `completed`.

@@ -4,6 +4,8 @@
 // Menyimpan parameter hasil, batch assembly, dan alert miss.
 // =====================================================
 
+import { toOptionMap } from "../utils/options/optionMap";
+
 export const PRODUCTION_PROFILE_TYPES = [
   { value: 'flower', label: 'Bunga' },
   { value: 'bouquet', label: 'Bouquet' },
@@ -38,10 +40,7 @@ export const DEFAULT_PRODUCTION_PROFILE_FORM = {
   isActive: true,
 };
 
-export const PRODUCTION_PROFILE_TYPE_MAP = PRODUCTION_PROFILE_TYPES.reduce(
-  (acc, item) => ({ ...acc, [item.value]: item.label }),
-  {},
-);
+export const PRODUCTION_PROFILE_TYPE_MAP = toOptionMap(PRODUCTION_PROFILE_TYPES);
 
 export const toNumber = (value, fallback = 0) => {
   const num = Number(value);

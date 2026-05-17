@@ -27,7 +27,7 @@ Selalu jelaskan singkat:
 ## Rule Penting Project Ini
 - field stok sedang transisi: jangan ubah hanya `stock` bila area tersebut sudah memakai `currentStock`
 - sales selesai baru mengakui income
-- cancel Sales punya logic revert stok yang sensitif; delete dokumen Sales hanya rollback teknis create failure, bukan fitur user
+- cancel Sales punya logic revert stok yang sensitif; create/cancel Sales wajib transaction/idempotent dan delete dokumen Sales bukan fitur user
 - purchases membuat expense otomatis
 - purchases report membaca `expenses`, bukan `purchases`
 - profit loss membaca `revenues + incomes + expenses`
@@ -116,6 +116,9 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Patch UI produksi tidak boleh mengembalikan tabel utama Production Orders atau Work Log Produksi ke `scroll x` besar hanya untuk mengakses tombol aksi.
 - Kolom aksi produksi harus langsung terlihat pada desktop/laptop normal, atau diringkas tanpa menghapus handler Detail, Refresh Need, Mulai Produksi, Edit, dan Selesaikan.
 - Modal `Selesaikan Work Log Produksi` wajib mempertahankan konteks estimasi output/hasil sebagai acuan user sebelum mengisi Good Qty, Reject Qty, dan Rework Qty.
+- Status Work Log aktif hanya `in_progress` dan `completed`; jangan mengembalikan opsi `draft`/`cancelled` ke filter/form/aksi aktif.
+- Output identity Work Log dari PO harus tetap locked; user hanya mengisi hasil Good/Reject/Rework saat complete.
+- Detail Work Log dan HPP Analysis wajib memakai resolver labor yang sama agar payroll final/draft/estimasi step tidak drift lagi; HPP Analysis wajib memisahkan Final vs Preview.
 - Perubahan UI produksi tidak boleh mengubah flow produksi, posting stok, payroll, HPP, status lifecycle, atau completed guard.
 
 ## Prompt Guard Auto Payroll Produksi — 2026-04-25
@@ -168,16 +171,16 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 ## Prompt Guard Final Hardening Fase A-G - 2026-04-26
 
 ### Guard Fase A - Sales Stock Safety
-- Jika task menyentuh Sales create/update/cancel atau rollback teknis create failure, audit dulu dampak ke stok, income, dan inventory log.
+- Jika task menyentuh Sales create/update/cancel atau atomic create transaction, audit dulu dampak ke stok, income, dan inventory log.
 - Jangan membuat sale tersimpan jika `availableStock` master/varian tidak cukup.
 - Jangan kembali memakai `currentStock` saja untuk validasi sale.
 - Jika item sama muncul beberapa baris, total kebutuhan harus dihitung sebelum create sale.
 - Item bervarian wajib memakai `variantKey` yang valid.
 - Sales item selector tidak boleh kembali mencampur semua Produk Jadi dan Bahan Baku dalam satu dropdown panjang tanpa filter Jenis Item.
-- Field Jenis Item di Sales adalah filter UI-only; payload final tetap wajib memakai `collectionName`, `itemId`, `itemName`, `typeLabel`, `variantKey`, `variantLabel`, dan `stockSourceType`.
+- Field Jenis Item di Sales adalah filter UI-only; payload final tetap wajib memakai `collectionName`, `itemId`, `itemName`, `variantKey`, `variantLabel`, dan `stockSourceType`. `typeLabel` hanya display helper UI dan tidak wajib disimpan ke payload transaksi.
 - Saat Jenis Item berubah, reset `itemId`, `variantKey`, `quantity`, dan `pricePerUnit` agar tidak memakai data stale dari source item lama.
 - WhatsApp boleh diperlakukan sebagai non-reference channel, tetapi jangan otomatis disamakan dengan Offline untuk status `Selesai` atau timing income.
-- Offline/WhatsApp tidak perlu menyimpan `referenceNumber`; channel marketplace/online boleh menyimpan reference opsional.
+- `referenceNumber`/`sourceRef`/`saleNumber` adalah kode internal `ORD-*`; Offline/WhatsApp tidak perlu menyimpan `externalReferenceNumber`, sementara channel marketplace/online boleh menyimpan nomor resi/order opsional di `externalReferenceNumber`.
 - Income tetap hanya dibuat saat status `Selesai` dan tidak boleh dobel.
 - Cancel sale tetap guarded agar stok tidak double revert; jangan menambahkan hard delete Sales sebagai aksi user.
 
@@ -191,9 +194,9 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 ### Guard Fase C - HPP / Work Log Cost 0
 - Jangan mengisi cost 0 dengan angka perkiraan.
 - Jika sumber material/payroll belum lengkap, tampilkan warning, bukan menghitung asal.
-- Draft payroll tidak boleh dianggap final untuk HPP.
+- Draft payroll tidak boleh dianggap final untuk HPP; hanya boleh muncul sebagai preview/read-only dengan tag jelas.
 - Jangan proses ulang Work Log completed hanya untuk memperbaiki display cost.
-- Warning cost 0 harus tetap terlihat di HPP Analysis, detail Work Log, dan export HPP jika ada.
+- Warning cost 0 harus tetap terlihat di HPP Analysis, detail Work Log, dan export HPP jika ada, tetapi status normal draft/estimasi tidak boleh kembali menjadi alert besar yang boros ruang.
 
 ### Guard Fase D - Dashboard
 - Dashboard wajib read-only; tidak boleh ada write ke Firestore dari Dashboard.
@@ -485,7 +488,7 @@ Risiko:
 - Jika task menyentuh Cash In, jangan ubah auto income dari Sales, Cash Out, Profit Loss, Dashboard, atau Reports tanpa analisis lintas modul.
 - Jika task menyentuh Sales tab/status, tabel harus tetap difilter sesuai `activeTabKey`; tab `Dikirim` tidak boleh menampilkan `Selesai`, dan tab `Selesai` tidak boleh menampilkan `Diproses`/`Dikirim`.
 - Search reference Sales harus berjalan setelah filter status aktif, bukan mengganti filter status.
-- Jangan mengubah status transition, stock mutation, income timing, cancel flow, rollback teknis create failure, atau return compatibility hanya untuk memperbaiki tampilan tab.
+- Jangan mengubah status transition, stock mutation, income timing, cancel flow, atomic create transaction, atau return compatibility hanya untuk memperbaiki tampilan tab.
 
 
 ## Prompt Guard — Sales pending income dan no-delete action
@@ -639,3 +642,30 @@ Catatan lock:
 - Untuk `Bahan / Semi Produk`, boleh tampilkan `Jenis Bunga / Product Family` dan `Kategori Bahan` sebelum `Bahan yang dibuat` agar user tidak memilih dari flat list panjang.
 - Label user-facing di dropdown target sebaiknya bersih: nama target cukup; kode internal dan hitungan `· x BOM` jangan ditampilkan kecuali ada kebutuhan audit/detail teknis eksplisit.
 - Jangan mengubah Work Log, Payroll, HPP Analysis, inventory mutation, report calculation, status lifecycle PO, atau auto-generate kode order untuk task yang hanya merapikan UX seleksi Production Order.
+
+## Prompt Guard — Semi Product Flower Group
+- Jangan menambahkan kembali default `flowerGroup: 'mawar'` pada form, service, seed, reset, atau helper Semi Finished.
+- Jika task menyentuh Semi Product / Production Order target semi finished, pastikan `Mawar` diperlakukan sebagai opsi valid, bukan fallback sistem.
+- Data lama tanpa `flowerGroup` harus tetap kompatibel dengan fallback tampilan `Umum / Reusable`; jangan melakukan migrasi/silent update massal tanpa approval khusus.
+- Jangan infer group dari nama item/BOM untuk menentukan filter PO karena bisa salah saat jenis bunga bertambah.
+
+
+### Prompt rule — helper kecil / safeTrim / formatter stok
+
+- Jika task meminta cleanup helper kecil seperti `safeTrim`, `toNumber`, formatter, atau reference display, jangan refactor massal. Wajib klasifikasikan dulu: UI-only, stock guarded, production guarded, maintenance legacy, atau cleanup candidate.
+- Untuk tampilan stok read-only, gunakan `formatStockWithUnitId()` jika sudah tersedia. Jangan membuat formatter stok lokal baru.
+- Untuk kalkulasi stok, helper angka wajib finite-safe dan tidak boleh menghasilkan `NaN`.
+- `safeTrim` lokal di Sales/production/maintenance/reference boleh tetap dipertahankan jika dipakai untuk legacy matching atau guard data. Hapus hanya yang benar-benar unused atau bisa di-inline tanpa mengubah behavior.
+
+
+### Guard Produksi Tambahan — 2026-05-17
+- Jangan menambahkan audit hasil selain Good Qty sebelum ada konsep produksi yang disetujui. Field hasil lama tetap compatibility internal.
+- Data Quality Audit produksi boleh menandai Work Log legacy status, payroll final pending/mismatch, output HPP yang butuh reconcile, dan Semi Finished tanpa `flowerGroup`; jangan melakukan auto-fix/backfill massal dari audit.
+- Jangan mengubah output stock posting atau master HPP hanya untuk menyamakan display HPP Final/Preview tanpa task reconcile guarded terpisah.
+
+### Prompt rule — toOptionMap / constants cleanup
+
+- Untuk enum option `{ value, label }`, gunakan `src/utils/options/optionMap.js::toOptionMap()` sebagai helper shared.
+- Constants lama boleh re-export `toOptionMap` untuk menjaga compatibility import lama; jangan hapus re-export sebelum audit grep/import lint bersih.
+- Jangan mencampur cleanup `toOptionMap` dengan hardening formula produksi/payroll/HPP karena risiko bisnisnya berbeda.
+- Jangan memakai `toOptionMap()` untuk collection mapper, role guard, route/menu, atau mapping status transaksi yang memerlukan aturan bisnis khusus.

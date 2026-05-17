@@ -3,6 +3,9 @@
 // Master enum dan helper untuk Work Log Produksi
 // =====================================================
 
+import { toOptionMap } from "../utils/options/optionMap";
+export { toOptionMap };
+
 export const PRODUCTION_WORK_LOG_SOURCE_TYPES = [
   { value: "planned", label: "Planned" },
   { value: "manual", label: "Manual" },
@@ -21,19 +24,19 @@ Alasan perubahan:
 - Work Log produksi sekarang merepresentasikan eksekusi kerja; Draft BOM/PO hanya legacy helper pembentuk template data, bukan status operasional baru.
 
 Catatan cleanup:
-- PRODUCTION_WORK_LOG_LEGACY_STATUSES hanya untuk membaca data lama yang masih tersimpan sebagai draft.
+- PRODUCTION_WORK_LOG_LEGACY_STATUSES hanya untuk membaca data lama yang masih tersimpan sebagai draft/cancelled.
 
 Risiko:
-- Jika Draft dikembalikan ke opsi aktif, user bisa membuat Work Log non-eksekusi yang tidak mengikuti flow PO/start production.
+- Jika Draft/Cancelled dikembalikan ke opsi aktif, user bisa membuat Work Log non-eksekusi yang tidak mengikuti flow PO/start production.
 ===================================================== */
 export const PRODUCTION_WORK_LOG_STATUSES = [
   { value: "in_progress", label: "In Progress" },
   { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
 ];
 
 export const PRODUCTION_WORK_LOG_LEGACY_STATUSES = [
   { value: "draft", label: "Draft (Legacy)" },
+  { value: "cancelled", label: "Cancelled (Legacy)" },
 ];
 
 export const PRODUCTION_WORK_LOG_TARGET_TYPES = [
@@ -53,12 +56,6 @@ export const PRODUCTION_WORK_LOG_PAYROLL_STATUSES = [
   { value: "posted", label: "Posted" },
   { value: "reverted", label: "Reverted" },
 ];
-
-export const toOptionMap = (options = []) =>
-  options.reduce((acc, item) => {
-    acc[item.value] = item.label;
-    return acc;
-  }, {});
 
 export const WORK_LOG_SOURCE_TYPE_MAP = toOptionMap(
   PRODUCTION_WORK_LOG_SOURCE_TYPES,
@@ -217,11 +214,18 @@ export const DEFAULT_PRODUCTION_WORK_LOG_FORM = {
   cancellationReason: "",
 };
 
+const safeNumber = (value, fallback = 0) => {
+  const num = Number(value ?? fallback);
+  const fallbackNum = Number(fallback ?? 0);
+  if (Number.isFinite(num)) return num;
+  return Number.isFinite(fallbackNum) ? fallbackNum : 0;
+};
+
 export const calculateMaterialUsageLine = (line = {}) => {
-  const plannedQty = Number(line.plannedQty || 0);
-  const actualQty = Number(line.actualQty || 0);
+  const plannedQty = safeNumber(line.plannedQty);
+  const actualQty = safeNumber(line.actualQty);
   const varianceQty = actualQty - plannedQty;
-  const costPerUnitSnapshot = Number(line.costPerUnitSnapshot || 0);
+  const costPerUnitSnapshot = safeNumber(line.costPerUnitSnapshot);
   const totalCostSnapshot = actualQty * costPerUnitSnapshot;
 
   return {
@@ -235,10 +239,10 @@ export const calculateMaterialUsageLine = (line = {}) => {
 };
 
 export const calculateOutputLine = (line = {}) => {
-  const goodQty = Number(line.goodQty || 0);
-  const rejectQty = Number(line.rejectQty || 0);
-  const reworkQty = Number(line.reworkQty || 0);
-  const costPerUnit = Number(line.costPerUnit || 0);
+  const goodQty = safeNumber(line.goodQty);
+  const rejectQty = safeNumber(line.rejectQty);
+  const reworkQty = safeNumber(line.reworkQty);
+  const costPerUnit = safeNumber(line.costPerUnit);
   const totalCost = goodQty * costPerUnit;
 
   return {
@@ -252,46 +256,41 @@ export const calculateOutputLine = (line = {}) => {
 };
 
 
-const safeNumber = (value) => {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : 0;
-};
-
 export const calculateProductionMonitoring = (profile = {}, values = {}) => {
-  const baseInputQty = safeNumber(values.baseInputQty || 0);
-  const goodQty = safeNumber(values.goodQty || 0);
-  const leftoverLeafQty = Math.max(0, safeNumber(values.leftoverLeafQty || 0));
-  const leftoverStemQty = Math.max(0, safeNumber(values.leftoverStemQty || 0));
-  const leftoverPetalFlowerEquivalent = Math.max(0, safeNumber(values.leftoverPetalFlowerEquivalent || 0));
+  const baseInputQty = safeNumber(values.baseInputQty);
+  const goodQty = safeNumber(values.goodQty);
+  const leftoverLeafQty = Math.max(0, safeNumber(values.leftoverLeafQty));
+  const leftoverStemQty = Math.max(0, safeNumber(values.leftoverStemQty));
+  const leftoverPetalFlowerEquivalent = Math.max(0, safeNumber(values.leftoverPetalFlowerEquivalent));
 
   const basisType = values.basisType || profile.basisType || '';
   let theoreticalOutputQty = 0;
   let theoreticalFlowerEquivalent = 0;
 
   if (basisType === 'per_meter') {
-    theoreticalOutputQty = baseInputQty * safeNumber(profile.referenceYieldPerBaseQty || values.referenceYieldPerBaseQty || 0);
-    theoreticalFlowerEquivalent = baseInputQty * safeNumber(profile.flowerEquivalentPerBaseQty || values.flowerEquivalentPerBaseQty || 0);
+    theoreticalOutputQty = baseInputQty * safeNumber(profile.referenceYieldPerBaseQty ?? values.referenceYieldPerBaseQty ?? 0);
+    theoreticalFlowerEquivalent = baseInputQty * safeNumber(profile.flowerEquivalentPerBaseQty ?? values.flowerEquivalentPerBaseQty ?? 0);
   } else if (basisType === 'per_rod_40cm') {
-    theoreticalOutputQty = baseInputQty * safeNumber(profile.referenceYieldPerBaseQty || values.referenceYieldPerBaseQty || 0);
-    theoreticalFlowerEquivalent = baseInputQty * safeNumber(profile.flowerEquivalentPerBaseQty || values.flowerEquivalentPerBaseQty || 0);
+    theoreticalOutputQty = baseInputQty * safeNumber(profile.referenceYieldPerBaseQty ?? values.referenceYieldPerBaseQty ?? 0);
+    theoreticalFlowerEquivalent = baseInputQty * safeNumber(profile.flowerEquivalentPerBaseQty ?? values.flowerEquivalentPerBaseQty ?? 0);
   } else if (basisType === 'per_qty') {
     theoreticalOutputQty = goodQty;
     theoreticalFlowerEquivalent = goodQty;
   } else if (basisType === 'per_batch') {
-    theoreticalOutputQty = safeNumber(profile.assemblyTargetOutput || values.assemblyTargetOutput || 0);
+    theoreticalOutputQty = safeNumber(profile.assemblyTargetOutput ?? values.assemblyTargetOutput ?? 0);
     theoreticalFlowerEquivalent = theoreticalOutputQty;
   }
 
-  const theoreticalLeafLeftover = Math.max(0, safeNumber(profile.batchLeafQty || 0) - goodQty * safeNumber(profile.leavesPerUnit || 1));
-  const theoreticalStemLeftover = Math.max(0, safeNumber(profile.batchStemQty || 0) - goodQty * safeNumber(profile.stemsPerUnit || 1));
+  const theoreticalLeafLeftover = Math.max(0, safeNumber(profile.batchLeafQty) - goodQty * safeNumber(profile.leavesPerUnit, 1));
+  const theoreticalStemLeftover = Math.max(0, safeNumber(profile.batchStemQty) - goodQty * safeNumber(profile.stemsPerUnit, 1));
   const missPetalFlowerEquivalent = Math.max(0, theoreticalFlowerEquivalent - (goodQty + leftoverPetalFlowerEquivalent));
-  const missPetalQty = missPetalFlowerEquivalent * Math.max(1, safeNumber(profile.petalsPerUnit || 1));
+  const missPetalQty = missPetalFlowerEquivalent * Math.max(1, safeNumber(profile.petalsPerUnit, 1));
   const missLeafQty = Math.max(0, theoreticalLeafLeftover - leftoverLeafQty);
   const missStemQty = Math.max(0, theoreticalStemLeftover - leftoverStemQty);
   const missPercent = theoreticalFlowerEquivalent > 0 ? (missPetalFlowerEquivalent / theoreticalFlowerEquivalent) * 100 : 0;
 
-  const yellow = safeNumber(profile.missYellowPercent || 2);
-  const red = safeNumber(profile.missRedPercent || 5);
+  const yellow = safeNumber(profile.missYellowPercent, 2);
+  const red = safeNumber(profile.missRedPercent, 5);
   let missStatus = 'normal';
   if (missPercent > red) missStatus = 'critical';
   else if (missPercent > yellow) missStatus = 'warning';

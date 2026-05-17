@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  AutoComplete,
   Button,
   Card,
   Col,
@@ -134,6 +135,76 @@ const formatStockWithUnit = formatStockWithUnitId;
 const getVariantDisplayLabel = (variant = {}, index = 0) =>
   variant.variantLabel || variant.label || variant.name || SEMI_FINISHED_COLOR_MAP[variant.color] || variant.color || `Varian ${index + 1}`;
 
+const FALLBACK_SEMI_FINISHED_GROUP_KEY = "__general_reusable";
+const FALLBACK_SEMI_FINISHED_GROUP_LABEL = "Umum / Reusable";
+
+const normalizeSemiFinishedGroupKey = (value = "") => String(value || "").trim();
+
+const normalizeSemiFinishedGroupLookupKey = (value = "") =>
+  normalizeSemiFinishedGroupKey(value)
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "_");
+
+const getKnownSemiFinishedGroupKey = (value = "") => {
+  const lookupKey = normalizeSemiFinishedGroupLookupKey(value);
+
+  if (!lookupKey) return "";
+
+  return (
+    SEMI_FINISHED_GROUP_OPTIONS.find((option) =>
+      [option.value, option.label].some(
+        (candidate) => normalizeSemiFinishedGroupLookupKey(candidate) === lookupKey,
+      ),
+    )?.value || ""
+  );
+};
+
+const getSemiFinishedGroupLabel = (value = "", fallbackLabel = "-") => {
+  const key = normalizeSemiFinishedGroupKey(value);
+  if (!key) return fallbackLabel;
+
+  const knownKey = getKnownSemiFinishedGroupKey(key);
+  return SEMI_FINISHED_GROUP_MAP[knownKey] || key;
+};
+
+const buildSemiFinishedGroupOptions = (materials = [], { includeGeneral = false } = {}) => {
+  const staticOptions = SEMI_FINISHED_GROUP_OPTIONS.map((option) => ({ ...option }));
+  const knownKeys = new Set(
+    staticOptions.flatMap((option) => [option.value, option.label].map(normalizeSemiFinishedGroupLookupKey)),
+  );
+  const dynamicOptions = [];
+  const dynamicKeys = new Set();
+  let hasGeneralGroup = false;
+
+  materials.forEach((item) => {
+    const key = normalizeSemiFinishedGroupKey(item?.flowerGroup);
+    const lookupKey = normalizeSemiFinishedGroupLookupKey(key);
+
+    if (!key) {
+      hasGeneralGroup = true;
+      return;
+    }
+
+    if (knownKeys.has(lookupKey) || dynamicKeys.has(lookupKey)) return;
+
+    dynamicKeys.add(lookupKey);
+    dynamicOptions.push({
+      value: key,
+      label: getSemiFinishedGroupLabel(key, key),
+    });
+  });
+
+  dynamicOptions.sort((a, b) => a.label.localeCompare(b.label));
+
+  return [
+    ...(includeGeneral && hasGeneralGroup
+      ? [{ value: FALLBACK_SEMI_FINISHED_GROUP_KEY, label: FALLBACK_SEMI_FINISHED_GROUP_LABEL }]
+      : []),
+    ...staticOptions,
+    ...dynamicOptions,
+  ];
+};
+
 // StockDisplayBlock dipakai untuk table utama agar format Total/Tersedia/variant pill sama dengan Products dan Stock Report.
 
 /* =====================================================
@@ -223,6 +294,11 @@ const SemiFinishedMaterials = () => {
     && Number(editingMaterial?.availableStock ?? 0) <= 0;
   const hasVariantModeSwitchLocked = isEditingMaterial && !canActivateVariantsForEditing;
   const stockEditHelpText = 'Ubah stok lewat Stock Management / Stock Adjustment / transaksi resmi.';
+  const flowerGroupFormOptions = useMemo(() => buildSemiFinishedGroupOptions(materials), [materials]);
+  const flowerGroupFilterOptions = useMemo(
+    () => buildSemiFinishedGroupOptions(materials, { includeGeneral: true }),
+    [materials],
+  );
 
   // ---------------------------------------------------------------------------
   // Loader utama halaman.
@@ -332,8 +408,9 @@ const SemiFinishedMaterials = () => {
       const matchCategory =
         categoryFilter === "all" || item.category === categoryFilter;
 
+      const itemFlowerGroupKey = normalizeSemiFinishedGroupKey(item.flowerGroup) || FALLBACK_SEMI_FINISHED_GROUP_KEY;
       const matchFlowerGroup =
-        flowerGroupFilter === "all" || item.flowerGroup === flowerGroupFilter;
+        flowerGroupFilter === "all" || itemFlowerGroupKey === flowerGroupFilter;
 
       return matchSearch && matchStatus && matchCategory && matchFlowerGroup;
     });
@@ -360,11 +437,9 @@ const SemiFinishedMaterials = () => {
     const familyMap = new Map();
 
     filteredData.forEach((item) => {
-      const rawFamilyKey = String(item.flowerGroup || "").trim();
-      const familyKey = rawFamilyKey || "__general_reusable";
-      const familyLabel = rawFamilyKey
-        ? SEMI_FINISHED_GROUP_MAP[rawFamilyKey] || rawFamilyKey
-        : "Umum / Reusable";
+      const rawFamilyKey = normalizeSemiFinishedGroupKey(item.flowerGroup);
+      const familyKey = rawFamilyKey || FALLBACK_SEMI_FINISHED_GROUP_KEY;
+      const familyLabel = getSemiFinishedGroupLabel(rawFamilyKey, FALLBACK_SEMI_FINISHED_GROUP_LABEL);
 
       const rawCategoryKey = String(item.category || "").trim();
       const categoryKey = rawCategoryKey || "__uncategorized";
@@ -418,8 +493,8 @@ const SemiFinishedMaterials = () => {
         };
       })
       .sort((a, b) => {
-        if (a.key === "__general_reusable") return 1;
-        if (b.key === "__general_reusable") return -1;
+        if (a.key === FALLBACK_SEMI_FINISHED_GROUP_KEY) return 1;
+        if (b.key === FALLBACK_SEMI_FINISHED_GROUP_KEY) return -1;
         return a.label.localeCompare(b.label);
       });
   }, [filteredData]);
@@ -564,7 +639,7 @@ const SemiFinishedMaterials = () => {
             {SEMI_FINISHED_CATEGORY_MAP[record.category] || "-"}
           </Typography.Text>
           <Typography.Text type="secondary" style={compactCellStyles.meta}>
-            {SEMI_FINISHED_GROUP_MAP[record.flowerGroup] || "-"}
+            {getSemiFinishedGroupLabel(record.flowerGroup, FALLBACK_SEMI_FINISHED_GROUP_LABEL)}
           </Typography.Text>
         </div>
       ),
@@ -816,7 +891,7 @@ const SemiFinishedMaterials = () => {
               onChange={setFlowerGroupFilter}
               options={[
                 { value: "all", label: "Semua Jenis Bunga" },
-                ...SEMI_FINISHED_GROUP_OPTIONS,
+                ...flowerGroupFilterOptions,
               ]}
             />
           </Col>
@@ -1009,7 +1084,15 @@ const SemiFinishedMaterials = () => {
                 name="flowerGroup"
                 rules={[{ required: true, message: "Jenis bunga wajib dipilih" }]}
               >
-                <Select options={SEMI_FINISHED_GROUP_OPTIONS} />
+                <AutoComplete
+                  options={flowerGroupFormOptions}
+                  placeholder="Pilih atau ketik jenis bunga..."
+                  filterOption={(inputValue, option) =>
+                    String(option?.label || option?.value || "")
+                      .toLowerCase()
+                      .includes(String(inputValue || "").toLowerCase())
+                  }
+                />
               </Form.Item>
             </Col>
 
@@ -1454,7 +1537,7 @@ Risiko:
                   {SEMI_FINISHED_CATEGORY_MAP[selectedMaterial.category] || "-"}
                 </Descriptions.Item>
                 <Descriptions.Item label="Jenis Bunga">
-                  {SEMI_FINISHED_GROUP_MAP[selectedMaterial.flowerGroup] || "-"}
+                  {getSemiFinishedGroupLabel(selectedMaterial.flowerGroup, FALLBACK_SEMI_FINISHED_GROUP_LABEL)}
                 </Descriptions.Item>
                 <Descriptions.Item label="Status">
                   <Tag color={selectedMaterialStatusMeta?.color || "default"}>

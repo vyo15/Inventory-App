@@ -3,13 +3,13 @@
 // Fokus untuk komponen semi jadi produksi bunga flanel
 // =====================================================
 
+import { toOptionMap } from "../utils/options/optionMap";
 import {
   COLOR_VARIANT_MAP,
   COLOR_VARIANT_OPTIONS,
   DEFAULT_COLOR_VARIANT,
   FLOWER_GROUP_MAP,
   FLOWER_GROUP_OPTIONS,
-  toOptionMap,
 } from './variantOptions';
 import {
   calculateVariantTotals,
@@ -47,7 +47,9 @@ export const DEFAULT_SEMI_FINISHED_FORM = {
   name: '',
   description: '',
   category: 'pola',
-  flowerGroup: 'mawar',
+  // IMS NOTE [AKTIF | no-silent-mawar-default]: Jenis Bunga wajib dipilih eksplisit.
+  // Data baru tidak boleh otomatis masuk group Mawar karena Semi Product akan dipakai untuk jenis bunga lain.
+  flowerGroup: '',
   unit: 'pcs',
   hasVariants: false,
   variantLabel: 'Varian',

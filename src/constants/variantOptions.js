@@ -1,3 +1,6 @@
+import { toOptionMap } from "../utils/options/optionMap";
+export { toOptionMap };
+
 export const COLOR_VARIANT_OPTIONS = [
   { value: 'merah', label: 'Merah' },
   { value: 'maroon', label: 'Maroon' },
@@ -22,12 +25,6 @@ export const FLOWER_GROUP_OPTIONS = [
   { value: 'universal', label: 'Universal' },
   { value: 'lainnya', label: 'Lainnya' },
 ];
-
-export const toOptionMap = (options = []) =>
-  options.reduce((acc, item) => {
-    acc[item.value] = item.label;
-    return acc;
-  }, {});
 
 export const COLOR_VARIANT_MAP = toOptionMap(COLOR_VARIANT_OPTIONS);
 export const FLOWER_GROUP_MAP = toOptionMap(FLOWER_GROUP_OPTIONS);

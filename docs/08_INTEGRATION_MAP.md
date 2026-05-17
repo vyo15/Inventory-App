@@ -20,14 +20,14 @@ Master Data
 | Flow | Source aktif | Output otomatis | Guard anti-double |
 |---|---|---|---|
 | Pembelian selesai | purchases | stock masuk + expenses | purchase id + metadata source expense |
-| Penjualan dibuat / selesai | sales | stock keluar saat create + income saat selesai | availableStock guard + sale id / status selesai |
+| Penjualan dibuat / selesai / dibatalkan | sales | stock keluar saat create + income saat selesai + stock revert saat cancel | Firestore transaction + sale id + status transition + `stockRevertedAt` |
 | Stock Adjustment | stock_adjustments | inventory_logs | adjustment id/reference |
 | Work Log dari PO | production_orders + production_work_logs | Work Log in_progress + konsumsi bahan | 1 PO = 1 Work Log |
 | Work Log completed | production_work_logs | output stock + payroll line | Work Log completed guard |
 | Payroll dari Work Log | production_payrolls | labor cost ke Work Log | Work Log + Step + Operator |
 | Payroll paid | production_payrolls | expenses / Cash Out | sourceModule + sourceId |
 | Profit Loss | revenues + incomes + expenses | laporan laba rugi | jangan baca payroll langsung jika sudah jadi expense |
-| HPP Analysis | completed Work Logs | material + labor + total cost + warning cost 0 | completed Work Log only + payroll final only |
+| HPP Analysis | completed Work Logs + payrolls + steps | HPP Final + HPP Preview + validasi cost | final dari payroll confirmed/paid atau step non-HPP; draft/estimasi step hanya preview read-only |
 
 ## Source reference wajib
 
@@ -122,8 +122,9 @@ Sales Form
 Guard:
 - sale tidak boleh tersimpan jika stok tersedia tidak cukup;
 - item bervarian wajib validasi varian yang benar;
-- jika mutasi stok gagal setelah sale dibuat, sale baru harus di-rollback secara teknis agar tidak orphan;
-- cancel tetap revert stok satu kali dan tidak membuat income dobel; delete dokumen Sales hanya rollback teknis create failure, bukan aksi user.
+- create sale, mutasi stok keluar, inventory log, dan income awal `Selesai` harus berada dalam transaction;
+- cancel hanya boleh dari `Diproses`/`Dikirim`, membaca status terbaru, menulis `stockRevertedAt`, dan menolak retry agar stok tidak double revert;
+- sales `Selesai` tidak boleh dibatalkan langsung; gunakan retur/refund terpisah agar income dan stok tetap auditable.
 
 ### Purchase Expense Metadata
 ```text
@@ -146,14 +147,33 @@ Expense pembelian wajib membawa:
 Completed Work Log
 -> materialCostActual / laborCostActual / totalCostActual / costPerGoodUnit
 -> HPP Analysis
--> warning jika cost 0
--> Export HPP XLSX membawa kolom Validasi Cost
+-> HPP Final jika payroll final siap
+-> HPP Preview jika masih draft/estimasi
+-> warning jika cost belum valid
+-> Export HPP XLSX membawa kolom Final, Preview, dan Validasi Cost
 ```
 
 Guard:
 - jangan isi cost asal;
-- draft payroll tidak dihitung sebagai final;
-- Work Log completed tidak diproses ulang hanya untuk display warning.
+- draft payroll tidak dihitung sebagai final; jika draft payroll 0, tampilan boleh fallback ke estimasi step read-only;
+- Work Log completed tidak diproses ulang hanya untuk display warning;
+- Data Quality Audit produksi read-only mendeteksi payroll pending/mismatch, output HPP yang butuh reconcile, dan Semi Finished tanpa `flowerGroup`; audit hasil selain Good Qty tidak diaktifkan.
+
+
+### Guarded Reconcile HPP Output Lama — 2026-05-17
+
+```text
+Payroll final muncul setelah Work Log/output stok sudah ter-posting
+-> Data Quality Audit read-only menandai Output HPP perlu reconcile
+-> task guarded terpisah wajib preview diff Work Log vs master/output
+-> baru boleh update master HPP/average cost bila owner approve
+```
+
+Guard:
+- jangan backfill otomatis dari drawer/detail/HPP Analysis;
+- jangan menyentuh inventory history/master cost tanpa preview dan approval;
+- jangan gabungkan reconcile HPP output dengan cleanup UI/docs;
+- audit hasil selain Good Qty tetap tidak diaktifkan sampai ada konsep produksi yang disetujui.
 
 ### Dashboard Read-only Map
 ```text
@@ -195,8 +215,8 @@ Stock Report
 -> XLSX siap baca
 
 HPP Analysis
--> completed Work Logs + payroll final
--> XLSX HPP + Validasi Cost
+-> completed Work Logs + payroll final/draft + step estimate
+-> Final/Preview HPP + XLSX HPP + Validasi Cost
 
 Payroll Report
 -> production_payrolls
@@ -666,7 +686,7 @@ Manual Cash In
 Guard integrasi:
 - Cash In adalah read/create ledger untuk pemasukan, bukan tempat delete destructive.
 - Cash In tetap membaca `revenues + incomes`; patch UI tidak mengubah collection atau schema.
-- Sales status tab adalah filter tampilan atas `sales.status`; patch tab tidak mengubah status transition, stock mutation, income timing, cancel flow, rollback teknis create failure, returns, dashboard, atau reports.
+- Sales status tab adalah filter tampilan atas `sales.status`; patch tab tidak mengubah status transition, stock mutation, income timing, cancel flow, atomic create transaction, returns, dashboard, atau reports.
 
 
 ## Integration Update — Sales pending income display-only — 2026-05-03
@@ -805,7 +825,7 @@ Business flow create
 
 Mapping field audit readable:
 - Purchase: `purchaseNumber` / `sourceRef` / `referenceNumber` readable.
-- Sales: `saleNumber` / `sourceRef` / `referenceNumber` readable.
+- Sales: `saleNumber` / `sourceRef` / `referenceNumber` readable untuk kode internal `ORD-*`; nomor marketplace/resi ada di `externalReferenceNumber`.
 - Return: `returnNumber` / `sourceRef` / `referenceNumber` readable.
 - Stock Adjustment: `adjustmentNumber` / `sourceRef` / `referenceNumber` readable.
 - Work Log: `workNumber` / `code` readable.
@@ -882,7 +902,7 @@ Catatan lock:
 | BOM | `productionBoms` | `code`, `bomCode` |
 | Production Step | `productionSteps` | `code` |
 | Purchase | `purchases` | `purchaseNumber`, `code`, `referenceNumber`, `sourceRef` |
-| Sales / Order | `sales` | `saleNumber` dengan value `ORD-*`, `code`, `referenceNumber`, `sourceRef` |
+| Sales / Order | `sales` | `saleNumber` dengan value `ORD-*`, `code`, `referenceNumber`, `sourceRef`; nomor marketplace/resi: `externalReferenceNumber` |
 | Return | `returns` | `returnNumber`, `code`, `referenceNumber`, `sourceRef` |
 | Production Order | `productionOrders` | `productionOrderCode`, `code` |
 | Stock Adjustment | `stock_adjustments` | `adjustmentNumber`, `code`, `referenceNumber`, `sourceRef` |
@@ -906,3 +926,61 @@ Inventory log harus memakai reference bisnis dari sumber transaksi, bukan Firest
 | Customer/Supplier/transaksi/audit | reference tetap tampil di UI | Dipakai untuk audit, pencarian, report, bukti stok/kas/produksi |
 
 Catatan: Inventory log, export, dan audit teknis tetap boleh memakai kode internal master item, tetapi UI utama tidak boleh memaksa user mengisi atau melihat kode sebagai identitas utama.
+
+### Sales Cancel Idempotent Map — 2026-05-17
+```text
+Sales Diproses/Dikirim
+-> user action: Batalkan
+-> transaction reads latest sales
+-> guard allowed transition + no stockRevertedAt/cancelledAt + no deterministic/legacy cancel log
+-> reads latest item stock master/variant and blocks mismatched variant snapshot
+-> stock revert
+-> inventory_logs sale_cancel_revert
+-> sales.status = Dibatalkan + cancelledAt + stockRevertedAt
+```
+
+Guard:
+- Jangan menyediakan create status `Dibatalkan`; pembatalan wajib action transition.
+- Jangan revert stok sebelum status update di luar transaction.
+- Jangan hapus marker `stockRevertedAt`/`cancelledAt` karena itu idempotency guard.
+- Search/display Sales harus membedakan kode internal `ORD-*` dari `externalReferenceNumber` marketplace/resi.
+- Legacy guard income/cancel harus mencocokkan `relatedId`, `saleId`, `referenceId`, `sourceRef`, `referenceCode`, `referenceNumber`, dan `details.*` agar data lama tidak lolos sebagai transaksi baru.
+- Submit create Sales wajib punya lock agar double-click tidak membuat order/stok dobel.
+- Transisi aktif (`Dikirim`/`Selesai`) wajib menolak Sales yang sudah punya jejak cancel/revert.
+- Auto Detect/Data Quality Audit hanya read-only untuk menemukan data lama yang sudah partial, income terlalu awal, income hilang pada Sales selesai, atau cancel yang masih punya income.
+
+### Helper Integration Map — stock formatter dan trim normalization — 2026-05-17
+
+```text
+Master/Product detail display
+Raw Material detail display
+Semi Finished detail display
+StockDisplayBlock table display
+-> utils/formatters/stockUnit.js::formatStockWithUnitId()
+-> utils/formatters/numberId.js::formatNumberId()
+```
+
+Guard:
+- Formatter `stockUnit` hanya untuk display read-only; jangan dipakai untuk parsing input, mutasi stok, payroll, HPP, atau audit qty transaksi.
+- Kalkulasi stok tetap lewat `utils/stock/stockHelpers.js` dan helper varian aktif.
+- `stockHelpers.toNumber()` wajib finite-safe agar helper stok/variant tidak meneruskan `NaN`.
+- `safeTrim` lokal di file guarded tetap boleh dipertahankan selama dipakai untuk fallback legacy/reference; jangan membuat refactor global tanpa grep usage dan test flow terkait.
+
+### Helper Integration Map — option map constants — 2026-05-17
+
+```text
+src/utils/options/optionMap.js::toOptionMap()
+-> src/constants/productionBomOptions.js
+-> src/constants/productionEmployeeOptions.js
+-> src/constants/productionPayrollOptions.js
+-> src/constants/productionProfileOptions.js
+-> src/constants/productionStepOptions.js
+-> src/constants/productionWorkLogOptions.js
+-> src/constants/variantOptions.js
+-> src/constants/semiFinishedMaterialOptions.js
+```
+
+Guard:
+- Constants boleh re-export `toOptionMap` sementara untuk legacy import compatibility.
+- Helper ini hanya untuk enum/display map `{ value, label }`; jangan dipakai untuk mapping collection, route, role guard, stock status mutation, payroll posting, atau data migration.
+- Jangan membuat helper map lain di constants baru jika `toOptionMap()` sudah cukup.

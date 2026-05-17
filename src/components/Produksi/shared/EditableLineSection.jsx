@@ -8,6 +8,8 @@ const EditableLineSection = ({
   alert,
   addButtonText,
   onAdd,
+  showAddButton = true,
+  addButtonDisabled = false,
   dataSource = [],
   columns = [],
   emptyText,
@@ -23,11 +25,13 @@ const EditableLineSection = ({
 
     {alert ? <Alert style={{ marginBottom: 12 }} showIcon {...alert} /> : null}
 
-    <Space style={{ marginBottom: 12 }}>
-      <Button type="dashed" icon={<PlusOutlined />} onClick={onAdd}>
-        {addButtonText}
-      </Button>
-    </Space>
+    {showAddButton && onAdd ? (
+      <Space style={{ marginBottom: 12 }}>
+        <Button type="dashed" icon={<PlusOutlined />} onClick={onAdd} disabled={addButtonDisabled}>
+          {addButtonText}
+        </Button>
+      </Space>
+    ) : null}
 
     <Table
       className="app-data-table"
