@@ -471,7 +471,7 @@ const ProductionWorkLogs = () => {
         status: "in_progress",
       });
 
-      message.success("Data Production Order berhasil dimasukkan ke Work Log");
+      message.success("Data Order Produksi berhasil dimasukkan ke Work Log");
     } catch (error) {
       console.error(error);
       message.error(error?.message || "Gagal mengambil data PO");
@@ -690,9 +690,9 @@ const ProductionWorkLogs = () => {
           payload,
           currentUser,
         );
-        message.success("Work log dari Production Order berhasil dibuat");
+        message.success("Work log dari Order Produksi berhasil dibuat");
       } else {
-        message.error("Work Log baru harus dimulai dari Production Order melalui tombol Mulai Produksi.");
+        message.error("Work Log baru harus dimulai dari Order Produksi melalui tombol Mulai Produksi.");
         return;
       }
 
@@ -922,7 +922,7 @@ const ProductionWorkLogs = () => {
           </Space>
           <Typography.Text>{targetLabel}</Typography.Text>
           <Typography.Text type="secondary" className="ims-cell-meta">
-            Step: {record.stepName || "-"} · PO: {record.productionOrderCode || "-"}
+            Tahapan: {record.stepName || "-"} · No. Order: {record.productionOrderCode || "-"}
           </Typography.Text>
           <Typography.Text type="secondary" className="ims-cell-meta">
             Qty batch: {formatNumber(record.plannedQty || 0)} · Estimasi hasil: {formatNumber(record.theoreticalOutputQty || 0)} {unitLabel}
@@ -989,9 +989,9 @@ const ProductionWorkLogs = () => {
     if (overheadActual > 0) {
       return {
         amount: overheadActual,
-        label: "BOM Overhead",
+        label: "Dari Resep Produksi",
         tagColor: "blue",
-        helper: "Listrik/glue gun dari BOM.",
+        helper: "Overhead dari resep produksi.",
       };
     }
 
@@ -1003,9 +1003,9 @@ const ProductionWorkLogs = () => {
     if (overheadEstimate > 0) {
       return {
         amount: overheadEstimate,
-        label: "Estimasi BOM",
+        label: "Estimasi Resep",
         tagColor: "default",
-        helper: "Read-only untuk data lama yang belum menyimpan overhead.",
+        helper: "Info data lama; belum disimpan sebagai overhead aktual.",
       };
     }
 
@@ -1013,7 +1013,7 @@ const ProductionWorkLogs = () => {
       amount: 0,
       label: "Tidak dipakai",
       tagColor: "default",
-      helper: "Overhead BOM belum diisi.",
+      helper: "Overhead resep belum diisi.",
     };
   }, [referenceData.boms, selectedRecord]);
 
@@ -1043,27 +1043,28 @@ const ProductionWorkLogs = () => {
         key: "estimate",
         label: "Estimasi Output",
         value: `${formatNumber(selectedRecord.theoreticalOutputQty || 0)} ${unitLabel}`,
-        helper: `Step: ${selectedRecord.stepName || "-"}`,
+        helper: `Tahapan: ${selectedRecord.stepName || "-"}`,
       },
       {
         key: "good",
-        label: "Good Output",
+        label: "Hasil Baik",
         value: `${formatNumber(selectedRecord.goodQty || 0)} ${unitLabel}`,
         helper: "Qty yang masuk stok/output produksi",
       },
       {
         key: "cost",
-        label: detailLaborCostDisplay.isFinal ? "Total Biaya Final" : "Total Biaya Display",
+        label: detailLaborCostDisplay.isFinal ? "Total Biaya Final" : "Estimasi Biaya",
         value: formatCurrency(detailDisplayedTotalCost),
         helper: detailLaborCostDisplay.isFinal
           ? `Cost / good unit ${formatCurrency(detailDisplayedCostPerGoodUnit)}`
-          : `${detailLaborCostDisplay.totalStatusLabel || "Preview"} read-only; final menunggu payroll confirmed/paid.`,
+          : `${detailLaborCostDisplay.totalStatusLabel || "Preview"}; final menunggu payroll confirmed/paid.`,
       },
     ];
   }, [
     detailDisplayedCostPerGoodUnit,
     detailDisplayedTotalCost,
     detailLaborCostDisplay.isFinal,
+    detailLaborCostDisplay.totalStatusLabel,
     selectedRecord,
   ]);
 
@@ -1211,14 +1212,14 @@ const ProductionWorkLogs = () => {
       render: (value) => formatDisplayDate(value),
     },
     {
-      title: "Target / Step",
+      title: "Target / Tahapan",
       key: "targetStep",
       width: 240,
       render: (_, record) => (
         renderWorkLogCellBlock(record.targetName || "-", [
           record.stepName || "-",
           record.targetVariantLabel ? `Varian: ${record.targetVariantLabel}` : null,
-          `PO: ${record.productionOrderCode || "-"}`,
+          `No. Order: ${record.productionOrderCode || "-"}`,
         ])
       ),
     },
@@ -1230,7 +1231,7 @@ const ProductionWorkLogs = () => {
         <Space direction="vertical" size={0}>
           <Typography.Text>Batch: {formatNumber(record.plannedQty)}</Typography.Text>
           <Typography.Text type="secondary">Estimasi: {formatNumber(record.theoreticalOutputQty || 0)}</Typography.Text>
-          <Typography.Text type="secondary">Good: {formatNumber(record.goodQty)}</Typography.Text>
+          <Typography.Text type="secondary">Hasil baik: {formatNumber(record.goodQty)}</Typography.Text>
         </Space>
       ),
     },
@@ -1242,7 +1243,7 @@ const ProductionWorkLogs = () => {
       render: (value) => formatCurrency(value),
     },
     {
-      title: "Source",
+      title: "Sumber",
       dataIndex: "sourceType",
       key: "sourceType",
       width: 105,
@@ -1308,7 +1309,7 @@ const ProductionWorkLogs = () => {
     <div className="ims-page">
       <ProductionPageHeader
         title="Work Log Produksi"
-        description="Realisasi kerja produksi dari Production Order. Work Log baru dibuat lewat tombol Mulai Produksi di menu Production Order."
+        description="Realisasi kerja produksi dari order produksi. Work Log baru dibuat lewat tombol Mulai Produksi di menu Order Produksi."
       />
 
       <SummaryStatGrid
@@ -1320,7 +1321,7 @@ const ProductionWorkLogs = () => {
       <ProductionFilterCard>
           <Col xs={24} md={12}>
             <Input
-              placeholder="Cari nomor, target, step, PO..."
+              placeholder="Cari nomor, target, tahapan, PO..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               allowClear
@@ -1362,7 +1363,7 @@ const ProductionWorkLogs = () => {
         title={
           editingRecord?.id
             ? "Edit Work Log Produksi"
-            : "Work Log dari Production Order"
+            : "Work Log dari Order Produksi"
         }
         open={formVisible}
         onClose={() => {
@@ -1421,9 +1422,9 @@ const ProductionWorkLogs = () => {
 
             <Col xs={24} md={8}>
               <Form.Item
-                label="Source Type"
+                label="Sumber Work Log"
                 name="sourceType"
-                tooltip="Work Log baru dibuat dari Production Order. Nilai Manual/Planned hanya untuk membaca data lama."
+                tooltip="Work Log baru dibuat dari order produksi. Manual/Planned hanya pembacaan data lama."
               >
                 <Select options={PRODUCTION_WORK_LOG_SOURCE_TYPES} disabled />
               </Form.Item>
@@ -1441,14 +1442,14 @@ const ProductionWorkLogs = () => {
                       <Row gutter={16}>
                         <Col xs={24} md={18}>
                           <Form.Item
-                            label="Production Order"
+                            label="No. Order Produksi"
                             name="productionOrderId"
                           >
                             <Select
                               showSearch
                               optionFilterProp="label"
                               options={productionOrderOptions}
-                              placeholder="Pilih Production Order..."
+                              placeholder="Pilih order produksi..."
                               disabled={Boolean(editingRecord?.id)}
                               onChange={(value) => {
                                 if (value) {
@@ -1484,7 +1485,7 @@ const ProductionWorkLogs = () => {
                     <Card size="small" style={{ marginBottom: 16 }}>
                       <Row gutter={16}>
                         <Col xs={24} md={18}>
-                          <Form.Item label="Production BOM" name="bomId">
+                          <Form.Item label="Resep Produksi" name="bomId">
                             <Select
                               showSearch
                               optionFilterProp="label"
@@ -1494,7 +1495,7 @@ const ProductionWorkLogs = () => {
                                   label: item.name || "-",
                                 }),
                               )}
-                              placeholder="Pilih BOM..."
+                              placeholder="Pilih resep produksi..."
                             />
                           </Form.Item>
                         </Col>
@@ -1522,21 +1523,21 @@ const ProductionWorkLogs = () => {
             }}
           </Form.Item>
 
-          <Divider orientation="left">Target & Step</Divider>
+          <Divider orientation="left">Target & Tahapan</Divider>
 
           <Row gutter={16}>
             <Col xs={24} md={8}>
               <Form.Item
-                label="Target Type"
+                label="Jenis Target"
                 name="targetType"
                 rules={[
-                  { required: true, message: "Target type wajib dipilih" },
+                  { required: true, message: "Jenis target wajib dipilih" },
                 ]}
               >
                 <Select
                   options={[
-                    { value: "semi_finished_material", label: "Semi Finished" },
-                    { value: "product", label: "Product" },
+                    { value: "semi_finished_material", label: "Bahan Produksi" },
+                    { value: "product", label: "Produk Jadi" },
                   ]}
                 />
               </Form.Item>
@@ -1544,17 +1545,17 @@ const ProductionWorkLogs = () => {
 
             <Col xs={24} md={16}>
               <Form.Item
-                label="Target Item"
+                label="Target Produksi"
                 name="targetId"
                 rules={[
-                  { required: true, message: "Target item wajib dipilih" },
+                  { required: true, message: "Target produksi wajib dipilih" },
                 ]}
               >
                 <Select
                   showSearch
                   optionFilterProp="label"
                   options={getTargetOptions(targetTypeValue)}
-                  placeholder="Pilih target item..."
+                  placeholder="Pilih target produksi..."
                 />
               </Form.Item>
             </Col>
@@ -1572,15 +1573,15 @@ const ProductionWorkLogs = () => {
 
             <Col xs={24} md={16}>
               <Form.Item
-                label="Production Step"
+                label="Tahapan Produksi"
                 name="stepId"
-                rules={[{ required: true, message: "Step wajib dipilih" }]}
+                rules={[{ required: true, message: "Tahapan wajib dipilih" }]}
               >
                 <Select
                   showSearch
                   optionFilterProp="label"
                   options={stepOptions}
-                  placeholder="Pilih step..."
+                  placeholder="Pilih tahapan..."
                 />
               </Form.Item>
             </Col>
@@ -1802,9 +1803,9 @@ const ProductionWorkLogs = () => {
           <Row gutter={16}>
             <Col xs={24} md={4}>
               <Form.Item
-                label="Labor Cost"
+                label="Biaya Tenaga Kerja"
                 name="laborCostActual"
-                tooltip="Labor aktif dibaca dari Payroll Produksi. Estimasi step hanya tampil read-only di detail/HPP."
+                tooltip="Biaya tenaga kerja aktif dibaca dari Payroll Produksi; estimasi tahapan hanya info."
               >
                 <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} disabled />
               </Form.Item>
@@ -1812,9 +1813,9 @@ const ProductionWorkLogs = () => {
 
             <Col xs={24} md={4}>
               <Form.Item
-                label="Overhead Cost"
+                label="Biaya Overhead"
                 name="overheadCostActual"
-                tooltip="Overhead aktif berasal dari BOM untuk listrik/glue gun."
+                tooltip="Overhead aktif berasal dari resep produksi untuk listrik/glue gun."
               >
                 <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} disabled={Boolean(editingRecord?.productionOrderId)} />
               </Form.Item>
@@ -1898,10 +1899,10 @@ const ProductionWorkLogs = () => {
                     <Descriptions.Item label="Tanggal">
                       {formatDisplayDate(selectedRecord.workDate)}
                     </Descriptions.Item>
-                    <Descriptions.Item label="Production Order">
+                    <Descriptions.Item label="No. Order Produksi">
                       {selectedRecord.productionOrderCode || "-"}
                     </Descriptions.Item>
-                    <Descriptions.Item label="Target Type">
+                    <Descriptions.Item label="Jenis Target">
                       {WORK_LOG_TARGET_TYPE_MAP[selectedRecord.targetType] || "-"}
                     </Descriptions.Item>
                     <Descriptions.Item label="Target">
@@ -1916,7 +1917,7 @@ const ProductionWorkLogs = () => {
                         ) : null}
                       </Space>
                     </Descriptions.Item>
-                    <Descriptions.Item label="Step">
+                    <Descriptions.Item label="Tahapan">
                       {selectedRecord.stepName || "-"}
                     </Descriptions.Item>
                     <Descriptions.Item label="Profil Produksi">
@@ -1975,7 +1976,7 @@ const ProductionWorkLogs = () => {
                         </div>
                       </Col>
                       <Col span={12}>
-                        <Typography.Text type="secondary">Labor</Typography.Text>
+                        <Typography.Text type="secondary">Tenaga Kerja</Typography.Text>
                         <div className="ims-cell-title" style={{ marginTop: 4 }}>
                           {formatCurrency(detailLaborDisplay)}
                         </div>
@@ -2078,7 +2079,7 @@ const ProductionWorkLogs = () => {
             <Select
               options={[
                 { value: "raw_material", label: "Raw Material" },
-                { value: "semi_finished_material", label: "Semi Finished" },
+                { value: "semi_finished_material", label: "Bahan Produksi" },
               ]}
             />
           </Form.Item>
@@ -2190,8 +2191,8 @@ const ProductionWorkLogs = () => {
           >
             <Select
               options={[
-                { value: "semi_finished_material", label: "Semi Finished" },
-                { value: "product", label: "Product" },
+                { value: "semi_finished_material", label: "Bahan Produksi" },
+                { value: "product", label: "Produk Jadi" },
               ]}
             />
           </Form.Item>

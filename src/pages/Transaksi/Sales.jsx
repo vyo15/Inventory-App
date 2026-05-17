@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Table,
   Tag,
@@ -30,8 +30,13 @@ import {
   where,
   orderBy,
   doc,
+  updateDoc,
   runTransaction,
 } from "firebase/firestore";
+import {
+  addInventoryLog,
+  updateInventoryStock,
+} from "../../services/Inventory/inventoryService";
 import {
   buildInventoryLogPayload,
   INVENTORY_LOG_COLLECTION,
@@ -84,70 +89,24 @@ const sellableItemTypeOptions = [
 
 const defaultSaleLineItemType = "products";
 
-// =========================
-// SECTION: Status penjualan online
-// =========================
+// =====================================================
+// SECTION: Status penjualan online — AKTIF / GUARDED
+// Fungsi:
+// - Menentukan status aktif Sales online yang boleh dibuat oleh user.
+//
+// Dipakai oleh:
+// - Form create Sales dan guard status Sales.
+//
+// Alasan perubahan:
+// - Sales tidak boleh dibatalkan dari menu Sales; pembeli batal/barang kembali wajib lewat Return agar stok dan audit tetap jelas.
+//
+// Catatan cleanup:
+// - Tidak ada; status batal tidak menjadi flow aktif Sales.
+//
+// Risiko:
+// - Jika jalur pembatalan diaktifkan lagi dari Sales, stok bisa direvert tanpa alur Return dan audit transaksi menjadi ambigu.
+// =====================================================
 const onlineStatuses = ["Diproses", "Dikirim", "Selesai"];
-
-const SALE_STATUS_TRANSITIONS = {
-  Diproses: ["Dikirim", "Dibatalkan"],
-  Dikirim: ["Selesai", "Dibatalkan"],
-};
-
-const SALE_CANCEL_STOCK_REVERT_LOG_TYPE = "sale_cancel_revert";
-const buildSaleCancelLogId = (saleId, itemIndex) => `sale_cancel_revert_${saleId}_${itemIndex}`;
-const SALE_IDENTITY_FIELDS = [
-  "saleNumber",
-  "code",
-  "referenceNumber",
-  "sourceRef",
-  "referenceCode",
-];
-const INCOME_SALE_LINK_FIELDS = [
-  "relatedId",
-  "saleId",
-  "referenceId",
-  "sourceId",
-  "sourceRef",
-  "referenceCode",
-  "referenceNumber",
-  "details.relatedId",
-  "details.saleId",
-  "details.referenceId",
-  "details.sourceId",
-  "details.sourceRef",
-  "details.referenceCode",
-  "details.referenceNumber",
-];
-const CANCEL_LOG_SALE_LINK_FIELDS = [
-  "saleId",
-  "referenceId",
-  "relatedId",
-  "sourceId",
-  "sourceRef",
-  "referenceCode",
-  "referenceNumber",
-  "details.saleId",
-  "details.referenceId",
-  "details.relatedId",
-  "details.sourceId",
-  "details.sourceRef",
-  "details.referenceCode",
-  "details.referenceNumber",
-];
-
-const getNestedValue = (data = {}, path = "") => path.split(".").reduce(
-  (current, key) => (current && typeof current === "object" ? current[key] : undefined),
-  data,
-);
-const getUniqueValues = (values = []) => Array.from(
-  new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean)),
-);
-const getSaleIdentityKeys = (saleId, saleData = {}) => getUniqueValues([
-  saleId,
-  ...SALE_IDENTITY_FIELDS.map((fieldName) => getNestedValue(saleData, fieldName)),
-]);
-const isSaleAuditLocked = (sale = {}) => Boolean(sale.cancelledAt || sale.stockRevertedAt);
 
 const buildSellableKey = (collectionName, itemId) => `${collectionName}::${itemId}`;
 
@@ -163,10 +122,6 @@ const Sales = () => {
   const [rawMaterials, setRawMaterials] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSavingSale, setIsSavingSale] = useState(false);
-  const [updatingSaleId, setUpdatingSaleId] = useState(null);
-  const isSavingSaleRef = useRef(false);
-  const updatingSaleIdRef = useRef(null);
 
   // =========================
   // SECTION: Modal dan filter
@@ -225,7 +180,7 @@ const Sales = () => {
     // IMS NOTE [GUARDED] - Clear state sebelum fetch ulang Sales.
     // Fungsi blok: mencegah row lama terlihat saat data penjualan dimuat ulang.
     // Hubungan flow Sales: hanya menjaga tampilan tabel; status transition, stock mutation, income timing, dan cancel/delete tidak diubah.
-    // Alasan logic: Sales tab harus menjadi source UX yang aman agar Dikirim/Selesai/Dibatalkan tidak saling tampil karena state stale.
+    // Alasan logic: Sales tab harus menjadi source UX yang aman agar status penjualan tidak saling tampil karena state stale.
     setSalesRecords([]);
 
     try {
@@ -390,57 +345,21 @@ const Sales = () => {
   // =========================
   // SECTION: Cek apakah income sale sudah pernah dibuat
   // =========================
-  const hasExistingIncome = async (saleId, saleData = {}) => {
+  const hasExistingIncome = async (saleId) => {
     const incomesCollection = collection(db, "incomes");
-    const deterministicIncomeReference = doc(db, "incomes", `income_${saleId}`);
-    const identityKeys = getSaleIdentityKeys(saleId, saleData);
-    const incomeQueries = identityKeys.flatMap((identityKey) => (
-      INCOME_SALE_LINK_FIELDS.map((fieldName) => query(
-        incomesCollection,
-        where(fieldName, "==", identityKey),
-      ))
-    ));
+    const incomeQuery = query(
+      incomesCollection,
+      where("relatedId", "==", saleId),
+    );
+    const incomeSnapshot = await getDocs(incomeQuery);
 
-    const [deterministicIncomeSnapshot, ...incomeSnapshots] = await Promise.all([
-      getDoc(deterministicIncomeReference),
-      ...incomeQueries.map((incomeQuery) => getDocs(incomeQuery)),
-    ]);
-
-    return deterministicIncomeSnapshot.exists() || incomeSnapshots.some((snapshot) => !snapshot.empty);
-  };
-
-  // =========================
-  // SECTION: Cek jejak cancel revert Sales legacy
-  // =========================
-  const hasSaleCancelRevertLog = async (saleId, saleData = {}) => {
-    const inventoryLogsCollection = collection(db, INVENTORY_LOG_COLLECTION);
-    const identityKeys = getSaleIdentityKeys(saleId, saleData);
-    const cancelLogQueries = identityKeys.flatMap((identityKey) => (
-      CANCEL_LOG_SALE_LINK_FIELDS.map((fieldName) => query(
-        inventoryLogsCollection,
-        where(fieldName, "==", identityKey),
-      ))
-    ));
-
-    const snapshots = await Promise.all(cancelLogQueries.map((cancelLogQuery) => getDocs(cancelLogQuery)));
-    const seenLogIds = new Set();
-
-    return snapshots.some((snapshot) => snapshot.docs.some((logDocument) => {
-      if (seenLogIds.has(logDocument.id)) return false;
-      seenLogIds.add(logDocument.id);
-
-      const data = logDocument.data();
-      const logType = String(data.type || data.details?.type || "").toLowerCase();
-      return logType === SALE_CANCEL_STOCK_REVERT_LOG_TYPE;
-    }));
+    return !incomeSnapshot.empty;
   };
 
   // =========================
   // SECTION: Buka modal tambah penjualan
   // =========================
   const openCreateSaleModal = () => {
-    if (isSavingSaleRef.current) return;
-
     setIsModalOpen(true);
     form.resetFields();
 
@@ -615,14 +534,6 @@ const Sales = () => {
   // SECTION: Tambah penjualan baru
   // =========================
   const handleAddSale = async () => {
-    if (isSavingSaleRef.current) {
-      message.warning("Penjualan masih disimpan. Tunggu sampai proses selesai agar transaksi tidak dobel.");
-      return;
-    }
-
-    isSavingSaleRef.current = true;
-    setIsSavingSale(true);
-
     try {
       const values = await form.validateFields();
 
@@ -658,7 +569,7 @@ const Sales = () => {
       const finalSaleStatus = isOfflineChannel(salesChannel) ? "Selesai" : status;
 
       if (!isOfflineChannel(salesChannel) && !onlineStatuses.includes(finalSaleStatus)) {
-        throw new Error("Status online hanya boleh Diproses, Dikirim, atau Selesai saat create. Gunakan tombol Batalkan untuk membatalkan order agar stok dan audit tetap guarded.");
+        throw new Error("Status online hanya boleh Diproses, Dikirim, atau Selesai saat create. Jika barang kembali atau pembeli batal setelah transaksi tercatat, gunakan menu Return.");
       }
 
       const selectedCustomer = customers.find(
@@ -711,7 +622,7 @@ const Sales = () => {
       - Jangan memindahkan transaction ini ke UI workaround lain tanpa transaction/service guarded.
       ===================================================== */
       const salesDocument = doc(db, "sales", saleNumber);
-      const saleIncomeReference = finalSaleStatus === "Selesai" && totalSaleValue > 0
+      const saleIncomeReference = finalSaleStatus === "Selesai"
         ? doc(db, "incomes", `income_${salesDocument.id}`)
         : null;
       const saleInventoryLogReferences = newSalePayload.items.map(() =>
@@ -845,264 +756,78 @@ const Sales = () => {
     } catch (error) {
       console.error("Gagal tambah penjualan:", error);
       message.error(error?.message || "Gagal menambahkan penjualan.");
-    } finally {
-      isSavingSaleRef.current = false;
-      setIsSavingSale(false);
     }
   };
 
-  // =========================
-  // SECTION: Helper bucket stok Sales
-  // =========================
-  const buildSaleStockMutationBuckets = (saleItems = []) => {
-    const stockNeedsByBucket = new Map();
-
-    saleItems.forEach((item) => {
-      const bucketKey = buildSaleStockBucketKey(item);
-      const existingNeed = stockNeedsByBucket.get(bucketKey);
-
-      stockNeedsByBucket.set(bucketKey, {
-        ...item,
-        quantity: Number(existingNeed?.quantity || 0) + Number(item.quantity || 0),
-      });
-    });
-
-    return Array.from(stockNeedsByBucket.values());
-  };
-
-  const assertSaleStatusTransitionAllowed = (currentStatus, nextStatus) => {
-    if (currentStatus === nextStatus) return;
-
-    const allowedNextStatuses = SALE_STATUS_TRANSITIONS[currentStatus] || [];
-    if (allowedNextStatuses.includes(nextStatus)) return;
-
-    if (currentStatus === "Selesai" && nextStatus === "Dibatalkan") {
-      throw new Error("Sales yang sudah Selesai tidak boleh dibatalkan dari flow ini. Gunakan retur/refund terpisah agar income dan stok tidak rusak.");
-    }
-
-    if (currentStatus === "Dibatalkan") {
-      throw new Error("Sales sudah Dibatalkan. Stok tidak boleh dikembalikan ulang.");
-    }
-
-    throw new Error(`Transisi status ${currentStatus || "kosong"} ke ${nextStatus} tidak diizinkan. Muat ulang data sebelum mencoba lagi.`);
-  };
-
-  const buildSaleCancelLogPayload = ({ latestSale, saleId, item, itemIndex, timestamp }) => (
-    buildInventoryLogPayload({
-      itemId: item.itemId,
-      itemName: item.itemName,
-      quantityChange: Number(item.quantity || 0),
-      type: SALE_CANCEL_STOCK_REVERT_LOG_TYPE,
-      collectionName: item.collectionName,
-      timestamp,
-      extraData: {
-        customerName: latestSale.customerName || "",
-        saleId,
-        saleNumber: latestSale.saleNumber || latestSale.code || "",
-        referenceId: saleId,
-        referenceCode: latestSale.saleNumber || latestSale.code || latestSale.referenceNumber || "",
-        sourceRef: latestSale.saleNumber || latestSale.code || latestSale.referenceNumber || "",
-        note: `Pembatalan penjualan via ${latestSale.salesChannel || "-"}`,
-        subtotal: item.subtotal || 0,
-        lineIndex: itemIndex,
-        referenceNumber: latestSale.saleNumber || latestSale.code || latestSale.referenceNumber || "",
-        unit: item.unit || "",
-        stockUnit: item.unit || "",
-        variantKey: item.variantKey || "",
-        variantLabel: item.variantLabel || "",
-        stockSourceType: item.stockSourceType || "master",
-      },
-    })
-  );
-
-  // =========================
-  // SECTION: Update status penjualan guarded
-  // =========================
+  // =====================================================
+  // SECTION: Update status penjualan — AKTIF / GUARDED
+  // Fungsi:
+  // - Mengubah status Sales online hanya pada jalur resmi Diproses -> Dikirim -> Selesai.
+  //
+  // Dipakai oleh:
+  // - Action button pada tabel Sales.
+  //
+  // Alasan perubahan:
+  // - Flow Batalkan di Sales dimatikan sebagai guard bisnis; Return adalah jalur resmi untuk barang kembali/stok masuk.
+  //
+  // Catatan cleanup:
+  // - Tidak ada; flow cancel user-facing tidak dipakai di Sales.
+  //
+  // Risiko:
+  // - Mengaktifkan cancel Sales sebagai aksi user bisa membuka peluang revert stok tanpa Return dan membuat audit ambigu.
+  // =====================================================
   const handleUpdateSaleStatus = async (saleId, newStatus) => {
-    if (updatingSaleIdRef.current) {
-      message.warning("Perubahan status lain masih diproses. Tunggu sampai selesai agar stok tidak double update.");
+    if (newStatus === "Dibatalkan") {
+      message.error("Sales tidak bisa dibatalkan. Gunakan menu Return untuk barang kembali.");
       return;
     }
 
-    updatingSaleIdRef.current = saleId;
-    setUpdatingSaleId(saleId);
-
     try {
-      const transitionTimestamp = Timestamp.now();
+      const selectedSale = salesRecords.find((sale) => sale.id === saleId);
+
       const saleReference = doc(db, "sales", saleId);
-      const cachedSale = salesRecords.find((sale) => sale.id === saleId) || {};
-      const legacyIncomeExists = newStatus === "Selesai"
-        ? await hasExistingIncome(saleId, cachedSale)
-        : false;
-      const existingCancelRevertLog = ["Dikirim", "Selesai", "Dibatalkan"].includes(newStatus)
-        ? await hasSaleCancelRevertLog(saleId, cachedSale)
-        : false;
-      let transitionWasNoop = false;
 
-      await runTransaction(db, async (transaction) => {
-        const saleSnapshot = await transaction.get(saleReference);
+      // RULE:
+      // Saat status berubah menjadi Selesai, update status dan income resmi dibuat dalam transaction yang sama.
+      if (newStatus === "Selesai" && selectedSale && selectedSale.total > 0) {
+        const incomeExists = await hasExistingIncome(saleId);
+        const incomeReference = doc(db, "incomes", `income_${saleId}`);
 
-        if (!saleSnapshot.exists()) {
-          throw new Error("Data penjualan tidak ditemukan. Status belum diubah.");
-        }
-
-        const latestSale = {
-          id: saleSnapshot.id,
-          ...saleSnapshot.data(),
-        };
-        const currentStatus = latestSale.status || "";
-
-        if (currentStatus === newStatus) {
-          transitionWasNoop = true;
-          return;
-        }
-
-        assertSaleStatusTransitionAllowed(currentStatus, newStatus);
-
-        if (newStatus !== "Dibatalkan" && (latestSale.cancelledAt || latestSale.stockRevertedAt || existingCancelRevertLog)) {
-          throw new Error("Sales punya jejak cancel/revert stok. Transisi lanjutan ditolak agar stok dan income tidak salah. Jalankan Auto Detect Bug Data untuk audit manual.");
-        }
-
-        if (newStatus === "Dikirim") {
-          transaction.update(saleReference, {
-            status: newStatus,
-            shippedAt: transitionTimestamp,
-            statusUpdatedAt: transitionTimestamp,
-          });
-          return;
-        }
-
-        if (newStatus === "Selesai") {
-          const incomeReference = doc(db, "incomes", `income_${saleId}`);
+        await runTransaction(db, async (transaction) => {
+          const saleSnapshot = await transaction.get(saleReference);
           const incomeSnapshot = await transaction.get(incomeReference);
 
-          transaction.update(saleReference, {
-            status: newStatus,
-            completedAt: transitionTimestamp,
-            statusUpdatedAt: transitionTimestamp,
-          });
+          if (!saleSnapshot.exists()) {
+            throw new Error("Data penjualan tidak ditemukan. Status belum diubah.");
+          }
 
-          if (!legacyIncomeExists && !incomeSnapshot.exists() && Number(latestSale.total || 0) > 0) {
+          const latestSale = {
+            id: saleSnapshot.id,
+            ...saleSnapshot.data(),
+          };
+
+          transaction.update(saleReference, { status: newStatus });
+
+          if (!incomeExists && !incomeSnapshot.exists()) {
             transaction.set(
               incomeReference,
               buildSaleIncomePayload({
                 selectedSale: latestSale,
                 saleId,
-                dateValue: transitionTimestamp,
+                dateValue: Timestamp.now(),
               }),
             );
           }
-          return;
-        }
-
-        if (newStatus === "Dibatalkan") {
-          if (latestSale.stockRevertedAt || latestSale.cancelledAt) {
-            throw new Error("Sales ini sudah punya marker cancel/revert. Proses dibatalkan agar stok tidak double revert. Cek Auto Detect Bug Data untuk audit manual.");
-          }
-
-          if (existingCancelRevertLog) {
-            throw new Error("Sales ini sudah punya log cancel revert legacy. Pembatalan ditolak agar stok tidak double revert. Jalankan Auto Detect Bug Data untuk cek manual.");
-          }
-
-          const saleItems = Array.isArray(latestSale.items) ? latestSale.items : [];
-          if (!saleItems.length) {
-            throw new Error("Sales tidak punya item snapshot. Pembatalan stok ditolak agar tidak membuat audit palsu.");
-          }
-
-          const cancelLogReferences = saleItems.map((_, itemIndex) => (
-            doc(db, INVENTORY_LOG_COLLECTION, buildSaleCancelLogId(saleId, itemIndex))
-          ));
-          const cancelLogSnapshots = [];
-          for (const logReference of cancelLogReferences) {
-            cancelLogSnapshots.push(await transaction.get(logReference));
-          }
-
-          if (cancelLogSnapshots.some((logSnapshot) => logSnapshot.exists())) {
-            throw new Error("Log revert cancel untuk Sales ini sudah ada. Pembatalan ditolak agar stok tidak double revert. Jalankan Auto Detect Bug Data untuk cek manual.");
-          }
-
-          const stockMutationPayloads = [];
-          for (const item of buildSaleStockMutationBuckets(saleItems)) {
-            if (!item.collectionName || !item.itemId) {
-              throw new Error(`Snapshot item ${item.itemName || "sale"} belum punya collectionName/itemId. Pembatalan otomatis ditolak agar stok tidak salah sumber.`);
-            }
-
-            const itemReference = doc(db, item.collectionName, item.itemId);
-            const itemSnapshotDocument = await transaction.get(itemReference);
-
-            if (!itemSnapshotDocument.exists()) {
-              throw new Error(`Item ${item.itemName || item.itemId} tidak ditemukan. Pembatalan ditolak agar stok tidak partial.`);
-            }
-
-            const latestItem = {
-              id: itemSnapshotDocument.id,
-              ...itemSnapshotDocument.data(),
-            };
-            const latestItemHasVariants = inferHasVariants(latestItem);
-
-            if (!latestItemHasVariants && item.variantKey) {
-              throw new Error(`Sale line ${item.itemName || item.itemId} punya snapshot varian ${item.variantLabel || item.variantKey}, tetapi item stok saat ini tidak punya varian. Pembatalan otomatis ditolak agar stok tidak masuk bucket yang salah.`);
-            }
-
-            if (latestItemHasVariants && !item.variantKey) {
-              throw new Error(`Item ${item.itemName || item.itemId} sekarang bervarian, tetapi sale lama tidak punya variantKey. Pembatalan otomatis ditolak agar stok tidak masuk master/default.`);
-            }
-
-            if (latestItemHasVariants && item.variantKey && !findVariantByKey(latestItem, item.variantKey)) {
-              throw new Error(`Varian ${item.variantLabel || item.variantKey} untuk ${item.itemName} tidak ditemukan. Pembatalan ditolak agar stok tidak masuk master/default.`);
-            }
-
-            stockMutationPayloads.push({
-              itemReference,
-              stockUpdatePayload: applyStockMutationToItem({
-                item: latestItem,
-                variantKey: item.variantKey || "",
-                deltaCurrent: Number(item.quantity || 0),
-              }),
-            });
-          }
-
-          stockMutationPayloads.forEach(({ itemReference, stockUpdatePayload }) => {
-            transaction.update(itemReference, stockUpdatePayload);
-          });
-
-          saleItems.forEach((item, itemIndex) => {
-            transaction.set(
-              cancelLogReferences[itemIndex],
-              buildSaleCancelLogPayload({
-                latestSale,
-                saleId,
-                item,
-                itemIndex,
-                timestamp: transitionTimestamp,
-              }),
-            );
-          });
-
-          transaction.update(saleReference, {
-            status: newStatus,
-            cancelledAt: transitionTimestamp,
-            stockRevertedAt: transitionTimestamp,
-            statusUpdatedAt: transitionTimestamp,
-          });
-          return;
-        }
-
-        throw new Error(`Status ${newStatus} belum didukung oleh flow Sales guarded.`);
-      });
-
-      if (transitionWasNoop) {
-        message.info(`Status penjualan sudah ${newStatus}. Tidak ada mutasi stok/kas tambahan.`);
+        });
       } else {
-        message.success(`Status penjualan berhasil diubah menjadi ${newStatus}.`);
+        await updateDoc(saleReference, { status: newStatus });
       }
+
+      message.success(`Status penjualan berhasil diubah menjadi ${newStatus}.`);
       fetchSales();
     } catch (error) {
       console.error("Gagal update status:", error);
       message.error(error?.message || "Gagal mengubah status penjualan.");
-    } finally {
-      updatingSaleIdRef.current = null;
-      setUpdatingSaleId(null);
     }
   };
 
@@ -1126,16 +851,7 @@ const Sales = () => {
     }
 
     return statusMatchedRecords.filter((sale) =>
-      [
-        sale.saleNumber,
-        sale.code,
-        sale.referenceNumber,
-        sale.sourceRef,
-        sale.externalReferenceNumber,
-        sale.customerName,
-        sale.salesChannel,
-        sale.note,
-      ]
+      [sale.saleNumber, sale.code, sale.referenceNumber, sale.customerName]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -1220,26 +936,14 @@ const Sales = () => {
       width: 150,
       render: (_, record) => {
         const referenceText = record.saleNumber || record.code || record.referenceNumber || "Tanpa ref";
-        const externalReferenceText = record.externalReferenceNumber || "";
-        const tooltipTitle = externalReferenceText
-          ? `${referenceText} | Marketplace: ${externalReferenceText}`
-          : referenceText;
-
         return (
           <div style={{ minWidth: 0 }}>
             <div className="ims-cell-title">{record.date || "-"}</div>
-            <Tooltip title={tooltipTitle}>
+            <Tooltip title={referenceText}>
               <div className="ims-cell-meta" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {referenceText}
               </div>
             </Tooltip>
-            {externalReferenceText ? (
-              <Tooltip title={externalReferenceText}>
-                <div className="ims-cell-meta" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  MP: {externalReferenceText}
-                </div>
-              </Tooltip>
-            ) : null}
           </div>
         );
       },
@@ -1322,38 +1026,38 @@ const Sales = () => {
           Selesai: "green",
           Dikirim: "orange",
           Diproses: "blue",
-          Dibatalkan: "red",
         };
 
         return <Tag color={statusColors[status] || "default"}>{status}</Tag>;
       },
     },
     {
-      // IMS NOTE [AKTIF/GUARDED] - Action button Sales tanpa hard delete user biasa.
-      // Fungsi blok: hanya memberi aksi status resmi; penjualan tidak jadi harus lewat Batalkan agar record audit tetap ada.
-      // Hubungan flow: stok, income, cancel stock revert, dan inventory log tetap memakai handler existing; hard delete tidak tampil di tabel.
-      // Alasan logic: Sales adalah transaksi auditable, sehingga tombol Hapus tidak boleh menjadi aksi operasional biasa.
+      // =====================================================
+      // SECTION: Aksi status Sales — AKTIF / GUARDED
+      // Fungsi:
+      // - Menampilkan aksi status resmi tanpa cancel user-facing dan tanpa hard delete.
+      //
+      // Dipakai oleh:
+      // - Tabel Sales.
+      //
+      // Alasan perubahan:
+      // - Sales tidak boleh dibatalkan dari tabel; pembatalan/barang kembali diarahkan ke Return.
+      //
+      // Catatan cleanup:
+      // - Tidak ada; tabel Sales tidak menyediakan aksi batal/hapus.
+      //
+      // Risiko:
+      // - Tombol Batalkan di Sales bisa disalahgunakan untuk bypass Return dan membuat audit stok ambigu.
+      // =====================================================
       title: "Aksi",
       key: "action",
       width: 150,
       className: "app-table-action-column",
       render: (_, record) => {
-        const hasActiveCancelMarker = isSaleAuditLocked(record) && ["Diproses", "Dikirim", "Selesai"].includes(record.status);
-        const canMoveToShipped = record.status === "Diproses" && !isOfflineChannel(record.salesChannel) && !hasActiveCancelMarker;
-        const canComplete = record.status === "Dikirim" && !isOfflineChannel(record.salesChannel) && !hasActiveCancelMarker;
-        const canCancel = ["Diproses", "Dikirim"].includes(record.status) && !isOfflineChannel(record.salesChannel) && !hasActiveCancelMarker;
-        const isUpdatingThisSale = updatingSaleId === record.id;
-        const isAnySaleUpdating = Boolean(updatingSaleId);
+        const canMoveToShipped = record.status === "Diproses" && !isOfflineChannel(record.salesChannel);
+        const canComplete = record.status === "Dikirim" && !isOfflineChannel(record.salesChannel);
 
-        if (hasActiveCancelMarker) {
-          return (
-            <Tooltip title="Sales aktif punya marker cancel/revert stok. Jalankan Auto Detect Bug Data sebelum lanjut transaksi.">
-              <Tag color="red">Perlu Audit</Tag>
-            </Tooltip>
-          );
-        }
-
-        if (!canMoveToShipped && !canComplete && !canCancel) {
+        if (!canMoveToShipped && !canComplete) {
           return "-";
         }
 
@@ -1366,7 +1070,7 @@ const Sales = () => {
                 okText="Ya"
                 cancelText="Tidak"
               >
-                <Button className="ims-action-button" size="small" loading={isUpdatingThisSale} disabled={isAnySaleUpdating}>
+                <Button className="ims-action-button" size="small">
                   Dikirim
                 </Button>
               </Popconfirm>
@@ -1379,24 +1083,12 @@ const Sales = () => {
                 okText="Ya"
                 cancelText="Tidak"
               >
-                <Button className="ims-action-button" size="small" loading={isUpdatingThisSale} disabled={isAnySaleUpdating}>
+                <Button className="ims-action-button" size="small">
                   Selesai
                 </Button>
               </Popconfirm>
             ) : null}
 
-            {canCancel ? (
-              <Popconfirm
-                title="Yakin batalkan penjualan ini?"
-                onConfirm={() => handleUpdateSaleStatus(record.id, "Dibatalkan")}
-                okText="Ya"
-                cancelText="Tidak"
-              >
-                <Button className="ims-action-button" size="small" danger loading={isUpdatingThisSale} disabled={isAnySaleUpdating}>
-                  Batalkan
-                </Button>
-              </Popconfirm>
-            ) : null}
           </div>
         );
       },
@@ -1408,7 +1100,6 @@ const Sales = () => {
     { key: "Diproses", label: "Diproses" },
     { key: "Dikirim", label: "Dikirim" },
     { key: "Selesai", label: "Selesai" },
-    { key: "Dibatalkan", label: "Dibatalkan" },
   ];
 
   const handleSalesChannelChange = (channel) => {
@@ -1503,15 +1194,9 @@ const Sales = () => {
         title="Tambah Penjualan"
         open={isModalOpen}
         onOk={form.submit}
-        onCancel={() => {
-          if (!isSavingSaleRef.current) setIsModalOpen(false);
-        }}
+        onCancel={() => setIsModalOpen(false)}
         okText="Simpan"
         cancelText="Batal"
-        confirmLoading={isSavingSale}
-        okButtonProps={{ disabled: isSavingSale }}
-        cancelButtonProps={{ disabled: isSavingSale }}
-        maskClosable={!isSavingSale}
         width={860}
       >
         <Form

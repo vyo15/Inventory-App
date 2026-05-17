@@ -512,6 +512,8 @@ export const listenRawMaterials = (callback, onError) => {
 };
 
 export const generateRawMaterialCode = async (values = {}, excludeId = null) => {
+  // IMS NOTE [LEGACY-COMPAT | lint-safe-signature]: values tetap diterima agar caller lama tidak perlu diubah, meski kode RAW sekarang berbasis sequence internal.
+  void values;
   // IMS NOTE [AKTIF | internal-sequence-code]: Raw Material baru memakai kode internal RAW-001 agar UI tetap clean dan nama/supplier menjadi identitas utama.
   return generateUniqueSequentialCode({
     db,

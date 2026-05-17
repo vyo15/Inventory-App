@@ -177,16 +177,42 @@ const resolveProductionWorkerSummary = (record) => {
   return "";
 };
 
-const resolveProductionAuditContextText = (record) => {
-  const workNumber = String(readLogField(record, "workNumber") || "").trim();
-  const productionOrderCode = String(readLogField(record, "productionOrderCode") || "").trim();
-  const stepName = String(readLogField(record, "stepName") || "").trim();
+const PRODUCTION_AUDIT_NOTE_SEGMENT_PREFIXES = [
+  "work log:",
+  "po:",
+  "step:",
+  "production order:",
+  "no. order produksi:",
+  "order produksi:",
+  "produksi / work log:",
+];
 
-  return [
-    workNumber ? `Work Log: ${workNumber}` : "",
-    productionOrderCode ? `PO: ${productionOrderCode}` : "",
-    stepName ? `Step: ${stepName}` : "",
-  ].filter(Boolean).join(" | ");
+const isProductionLogRecord = (record) => resolveSourceMeta(record).label === STOCK_LOG_SOURCE_META.production.label;
+
+const sanitizeProductionNoteText = (noteText = "", record = {}) => {
+  const normalizedNote = String(noteText || "").trim();
+  if (!normalizedNote || !isProductionLogRecord(record)) return normalizedNote;
+
+  const segments = normalizedNote
+    .split("|")
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (!segments.length) return normalizedNote;
+
+  const filteredSegments = segments.filter((segment) => {
+    const normalizedSegment = segment.toLowerCase();
+    return !PRODUCTION_AUDIT_NOTE_SEGMENT_PREFIXES.some((prefix) => normalizedSegment.startsWith(prefix));
+  });
+
+  if (filteredSegments.length === segments.length) return normalizedNote;
+
+  const workerSummary = resolveProductionWorkerSummary(record);
+  const mergedSegments = [...filteredSegments];
+  if (workerSummary && !mergedSegments.some((segment) => segment.toLowerCase().startsWith("operator:"))) {
+    mergedSegments.unshift(workerSummary);
+  }
+
+  return mergedSegments.join(" | ") || workerSummary || "-";
 };
 
 const REFERENCE_TYPE_LABELS = {
@@ -393,23 +419,32 @@ const resolveNoteText = (record) => {
     readLogField(record, "description") ||
     readLogField(record, "remark");
 
-  if (explicitNote) return explicitNote;
-
-  if (resolveSourceMeta(record).label !== STOCK_LOG_SOURCE_META.production.label) {
-    return "-";
+  if (!isProductionLogRecord(record)) {
+    return explicitNote || "-";
   }
+
+  // =====================================================
+  // SECTION: Catatan produksi compact — AKTIF
+  // Fungsi:
+  // - Menampilkan operator/catatan produksi tanpa mengulang PO/Work Log/Step yang sudah ada di kolom Referensi Audit.
+  //
+  // Dipakai oleh:
+  // - Tabel Stock Management dan pencarian riwayat stok.
+  //
+  // Alasan perubahan:
+  // - Note produksi lama dan writer output sebelumnya menyimpan `Operator | Work Log | PO | Step`, sehingga kolom Catatan tetap dobel walau Referensi Audit sudah benar.
+  //
+  // Catatan cleanup:
+  // - Data inventory_logs lama tidak dimigrasi; sanitasi ini hanya reader UI. Writer produksi baru juga tidak lagi membuat note konteks dobel.
+  //
+  // Risiko:
+  // - Jangan membuang catatan manual non-teknis; hanya segmen konteks produksi yang sudah tampil di Referensi Audit yang disembunyikan dari Catatan.
+  // =====================================================
+  const sanitizedExplicitNote = sanitizeProductionNoteText(explicitNote, record);
+  if (sanitizedExplicitNote) return sanitizedExplicitNote;
 
   const workerSummary = resolveProductionWorkerSummary(record);
-  if (!workerSummary) {
-    return "-";
-  }
-
-  const productionNote = [
-    workerSummary,
-    resolveProductionAuditContextText(record),
-  ].filter(Boolean).join(" | ");
-
-  return productionNote || "-";
+  return workerSummary || "-";
 };
 
 // =========================

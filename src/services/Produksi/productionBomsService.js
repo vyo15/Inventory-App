@@ -33,6 +33,8 @@ import {
 const COLLECTION_NAME = "production_boms";
 
 export const generateProductionBomCode = async (values = {}, excludeId = null) => {
+  // IMS NOTE [LEGACY-COMPAT | lint-safe-signature]: values tetap diterima agar caller lama tidak perlu diubah, meski kode BOM sekarang berbasis sequence internal.
+  void values;
   // IMS NOTE [AKTIF | internal-sequence-code]: BOM baru memakai kode internal BOM-001; UI menampilkan nama target dan komposisi, bukan kode BOM.
   return generateUniqueProductionSequentialCode({
     db,

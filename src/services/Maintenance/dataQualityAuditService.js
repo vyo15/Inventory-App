@@ -1,7 +1,12 @@
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../firebase";
+import {
+  calculateBomCostSummary,
+  hydrateBomMaterialLinesWithLiveCost,
+} from "../../utils/produksi/productionBomCostHelpers";
 
 const SAMPLE_LIMIT = 10;
+const BOM_COST_COMPARE_TOLERANCE = 1;
 
 const KNOWN_BUSINESS_PREFIXES = [
   "ORD",
@@ -320,6 +325,11 @@ const CATEGORY_CONFIGS = [
     recommendation: "Lengkapi flowerGroup agar BOM/PO/filter produksi tidak fallback diam-diam",
   },
   {
+    key: "production_boms_stale_cost_estimate",
+    label: "BOM estimate stale terhadap master cost",
+    recommendation: "Perlu cek BOM/Reset HPP; audit ini read-only dan tidak auto-fix",
+  },
+  {
     key: "payroll_unclear_reference",
     label: "Payroll tanpa payrollNumber/sourceRef jelas",
     recommendation: "Perlu cek manual",
@@ -392,6 +402,89 @@ const isPayrollFinalForHpp = (data = {}) => {
 const getPayrollFinalAmount = (data = {}) => toNumber(data.finalAmount ?? data.amountCalculated ?? data.totalAmount);
 
 const isNumberClose = (left, right, tolerance = 1) => Math.abs(toNumber(left) - toNumber(right)) <= tolerance;
+
+/*
+=====================================================
+SECTION: Audit stale estimate BOM — AKTIF / GUARDED
+Fungsi:
+- Menghitung ulang estimasi BOM secara read-only dari master Raw Material dan Semi Finished terbaru.
+
+Dipakai oleh:
+- getDataQualityAudit untuk kategori production_boms_stale_cost_estimate.
+
+Alasan perubahan:
+- Reset HPP/modal bisa membuat master cost 0, sementara BOM lama masih menyimpan cost snapshot/estimate lama. Audit harus bisa menandai mismatch tanpa menulis data.
+
+Catatan cleanup:
+- Jika Data Quality Audit makin besar, helper ini bisa dipindah ke service khusus audit produksi.
+
+Risiko:
+- Jangan menjadikan hasil audit ini auto-fix; update BOM/HPP harus tetap lewat reset/edit guarded agar history transaksi tidak berubah diam-diam.
+=====================================================
+*/
+const buildBomCostReferenceData = (collectionMap = {}) => ({
+  hasReadError: Boolean(collectionMap.raw_materials?.error || collectionMap.semi_finished_materials?.error),
+  rawMaterials: (collectionMap.raw_materials?.docs || []).map((itemDoc) => ({
+    id: itemDoc.id,
+    ...itemDoc.data(),
+  })),
+  semiFinishedMaterials: (collectionMap.semi_finished_materials?.docs || []).map((itemDoc) => ({
+    id: itemDoc.id,
+    ...itemDoc.data(),
+  })),
+});
+
+const buildLiveBomCostEstimate = (data = {}, referenceData = {}) => {
+  const materialLines = hydrateBomMaterialLinesWithLiveCost({
+    materialLines: Array.isArray(data.materialLines) ? data.materialLines : [],
+    referenceData,
+  });
+  const stepLines = Array.isArray(data.stepLines) ? data.stepLines : [];
+  const summary = calculateBomCostSummary({
+    materialLines,
+    stepLines,
+    header: data,
+  });
+
+  return {
+    materialLines,
+    ...summary,
+  };
+};
+
+const getBomStaleCostIssueText = (data = {}, liveEstimate = {}) => {
+  const storedMaterial = toNumber(data.materialCostEstimate);
+  const storedTotal = toNumber(data.totalCostEstimate);
+  const liveMaterial = toNumber(liveEstimate.materialCostEstimate);
+  const liveTotal = toNumber(liveEstimate.totalCostEstimate);
+
+  return [
+    !isNumberClose(storedMaterial, liveMaterial, BOM_COST_COMPARE_TOLERANCE)
+      ? `Material tersimpan ${storedMaterial}, live ${liveMaterial}`
+      : "",
+    !isNumberClose(storedTotal, liveTotal, BOM_COST_COMPARE_TOLERANCE)
+      ? `Total tersimpan ${storedTotal}, live ${liveTotal}`
+      : "",
+  ].filter(Boolean).join("; ") || "Snapshot material BOM tidak sama dengan master cost terbaru.";
+};
+
+const hasStaleBomCostEstimate = (data = {}, liveEstimate = {}) => {
+  const materialLines = Array.isArray(data.materialLines) ? data.materialLines : [];
+  const liveLines = Array.isArray(liveEstimate.materialLines) ? liveEstimate.materialLines : [];
+  const hasLineMismatch = materialLines.some((line = {}, index) => {
+    const liveLine = liveLines[index] || {};
+    return (
+      !isNumberClose(line.costPerUnitSnapshot, liveLine.costPerUnitSnapshot, BOM_COST_COMPARE_TOLERANCE) ||
+      !isNumberClose(line.totalCostSnapshot, liveLine.totalCostSnapshot, BOM_COST_COMPARE_TOLERANCE)
+    );
+  });
+
+  return (
+    hasLineMismatch ||
+    !isNumberClose(data.materialCostEstimate, liveEstimate.materialCostEstimate, BOM_COST_COMPARE_TOLERANCE) ||
+    !isNumberClose(data.totalCostEstimate, liveEstimate.totalCostEstimate, BOM_COST_COMPARE_TOLERANCE)
+  );
+};
 
 const hasOutputHppReconcileIssue = (data = {}, finalPayrollAmount = 0) => {
   const outputs = Array.isArray(data.outputs) ? data.outputs : [];
@@ -526,6 +619,8 @@ export const getDataQualityAudit = async () => {
     acc[item.collectionName] = item;
     return acc;
   }, {});
+
+  const bomCostReferenceData = buildBomCostReferenceData(collectionMap);
 
   const payrollsByWorkLogKey = new Map();
   (collectionMap.production_payrolls?.docs || []).forEach((itemDoc) => {
@@ -928,6 +1023,18 @@ export const getDataQualityAudit = async () => {
         issue: "BOM belum punya kode BOM otomatis.",
         recommendation: categories.master_missing_code.recommendation,
       }));
+    }
+
+    if (!bomCostReferenceData.hasReadError) {
+      const liveEstimate = buildLiveBomCostEstimate(data, bomCostReferenceData);
+      if (hasStaleBomCostEstimate(data, liveEstimate)) {
+        addIssue(categories, "production_boms_stale_cost_estimate", toSample({
+          collectionName: "production_boms",
+          itemDoc,
+          issue: getBomStaleCostIssueText(data, liveEstimate),
+          recommendation: categories.production_boms_stale_cost_estimate.recommendation,
+        }));
+      }
     }
   });
 

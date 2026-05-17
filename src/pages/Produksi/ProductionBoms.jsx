@@ -5,7 +5,7 @@
 // - BOM target semi_finished_material = material boleh raw / semi_finished_material
 // =====================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { buildCountSummary, createKeywordMatcher, matchActiveStatus, matchFieldValue } from '../../utils/produksi/productionPageHelpers';
 import { getBomMaterialItemOptions, getBomTargetOptions, toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
@@ -114,6 +114,26 @@ const EMPTY_REFERENCE_DATA = {
   productionSteps: [],
 };
 
+// IMS NOTE [AKTIF/GUARDED]: Refresh live BOM cost snapshot untuk list/detail/edit tanpa menulis balik ke Firestore.
+const hydrateBomRecordWithLiveCosts = (record = {}, refs = EMPTY_REFERENCE_DATA) => {
+  const materialLines = hydrateBomMaterialLinesWithLiveCost({
+    materialLines: record.materialLines || [],
+    referenceData: refs || EMPTY_REFERENCE_DATA,
+  });
+  const stepLines = Array.isArray(record.stepLines) ? record.stepLines : [];
+  const totals = calculateBomTotals(materialLines, stepLines, record);
+
+  return {
+    ...record,
+    materialLines,
+    stepLines,
+    materialCostEstimate: totals.materialCostEstimate,
+    laborCostEstimate: totals.laborCostEstimate,
+    overheadCostEstimate: totals.overheadCostEstimate,
+    totalCostEstimate: totals.totalCostEstimate,
+  };
+};
+
 const ProductionBoms = () => {
   // SECTION: state loading dan data utama
   const [loading, setLoading] = useState(false);
@@ -147,51 +167,13 @@ const ProductionBoms = () => {
   const [materialForm] = Form.useForm();
   const [stepForm] = Form.useForm();
 
-  /*
-  =====================================================
-  SECTION: BOM UI live cost refresh — GUARDED
-  Fungsi:
-  - Merefresh materialLines dan summary biaya BOM dari master cost terbaru sebelum list/detail/edit ditampilkan.
-
-  Dipakai oleh:
-  - loadData, handleEdit, dan handleViewDetail halaman ProductionBoms.
-
-  Alasan perubahan:
-  - UI BOM tidak boleh menampilkan stale cost snapshot setelah HPP/material cost master direset.
-
-  Catatan cleanup:
-  - Field snapshot tetap dibaca untuk compatibility, tetapi tidak menjadi source utama estimasi aktif.
-
-  Risiko:
-  - Jika record lama langsung ditampilkan tanpa helper ini, angka seperti Rp 5.224 dapat muncul lagi walau master cost sudah 0.
-  =====================================================
-  */
-  const hydrateBomRecordWithLiveCosts = (record = {}, refs = referenceData) => {
-    const materialLines = hydrateBomMaterialLinesWithLiveCost({
-      materialLines: record.materialLines || [],
-      referenceData: refs || EMPTY_REFERENCE_DATA,
-    });
-    const stepLines = Array.isArray(record.stepLines) ? record.stepLines : [];
-    const totals = calculateBomTotals(materialLines, stepLines, record);
-
-    return {
-      ...record,
-      materialLines,
-      stepLines,
-      materialCostEstimate: totals.materialCostEstimate,
-      laborCostEstimate: totals.laborCostEstimate,
-      overheadCostEstimate: totals.overheadCostEstimate,
-      totalCostEstimate: totals.totalCostEstimate,
-    };
-  };
-
   // =====================================================
   // SECTION: load data halaman
   // Penting:
   // - BOM dan reference dimuat terpisah agar salah satu gagal tidak mematikan semua
   // - ini perbaikan inti supaya target products tetap terbaca
   // =====================================================
-  const loadData = async ({ silent = false } = {}) => {
+  const loadData = useCallback(async ({ silent = false } = {}) => {
     try {
       if (!silent) {
         setLoading(true);
@@ -243,11 +225,11 @@ const ProductionBoms = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // =====================================================
   // SECTION: summary card
@@ -407,7 +389,7 @@ const ProductionBoms = () => {
   // SECTION: buka edit BOM
   // =====================================================
   const handleEdit = (record) => {
-    const hydratedRecord = hydrateBomRecordWithLiveCosts(record);
+    const hydratedRecord = hydrateBomRecordWithLiveCosts(record, referenceData);
     setEditingBom(hydratedRecord);
     setFormErrorSummary("");
 
@@ -426,7 +408,7 @@ const ProductionBoms = () => {
   // SECTION: buka detail BOM
   // =====================================================
   const handleViewDetail = (record) => {
-    setSelectedBom(hydrateBomRecordWithLiveCosts(record));
+    setSelectedBom(hydrateBomRecordWithLiveCosts(record, referenceData));
     setDetailVisible(true);
   };
 
@@ -1170,7 +1152,7 @@ const ProductionBoms = () => {
                       >
                         <Select
                           options={PRODUCTION_BOM_TARGET_TYPES}
-                          onChange={(value) => {
+                          onChange={() => {
                             form.setFieldsValue({
                               targetId: undefined,
                             });

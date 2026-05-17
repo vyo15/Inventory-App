@@ -504,6 +504,8 @@ export const listenProducts = (callback, onError) => {
 };
 
 export const generateProductCode = async (values = {}, excludeId = null) => {
+  // IMS NOTE [LEGACY-COMPAT | lint-safe-signature]: values tetap diterima agar caller lama tidak perlu diubah, meski kode PRD sekarang berbasis sequence internal.
+  void values;
   // IMS NOTE [AKTIF | internal-sequence-code]: Product baru memakai kode internal PRD-001 agar UI fokus ke nama produk, bukan kode semantic panjang.
   return generateUniqueSequentialCode({
     db,

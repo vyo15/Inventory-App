@@ -434,14 +434,18 @@ const normalizeSemiFinishedMetadataPayload = (
 // Risiko:
 // - Data baru memakai document ID = code, tetapi data lama tetap boleh random dan tidak di-rename.
 // =====================================================
-export const generateSemiFinishedMaterialCode = async (values = {}, excludeId = null) =>
-  generateUniqueProductionSequentialCode({
+export const generateSemiFinishedMaterialCode = async (values = {}, excludeId = null) => {
+  // IMS NOTE [LEGACY-COMPAT | lint-safe-signature]: values tetap diterima agar caller lama tidak perlu diubah, meski kode SFP sekarang berbasis sequence internal.
+  void values;
+
+  return generateUniqueProductionSequentialCode({
     db,
     collectionName: COLLECTION_NAME,
     fieldNames: ["code", "itemCode"],
     prefix: "SFP",
     excludeId,
   });
+};
 
 export const validateSemiFinishedMaterial = (values = {}) => {
   const errors = {};

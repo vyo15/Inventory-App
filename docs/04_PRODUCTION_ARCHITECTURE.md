@@ -84,7 +84,8 @@ Rule penting yang terverifikasi:
 - BOM menyimpan `materialLines` dan `stepLines`
 - step lines sudah disortir menurut sequence
 - estimasi material BOM mengambil live master cost terbaru: Raw Material memakai `averageActualUnitCost` dengan fallback `restockReferencePrice`; Semi Finished memakai `averageCostPerUnit` dengan fallback `lastProductionCostPerUnit`. Jika source master 0, estimate BOM wajib 0 dan tidak boleh fallback ke snapshot BOM lama.
-- `materialLines[].costPerUnitSnapshot` / `totalCostSnapshot` di BOM dipertahankan sebagai derived cache/legacy compatibility, bukan source utama untuk estimasi aktif atau Work Log baru.
+- `materialLines[].costPerUnitSnapshot` / `totalCostSnapshot` di BOM hanya derived cache/read-only history field; bukan source utama untuk estimasi aktif, PO baru, atau Work Log baru.
+- Untuk produksi bertingkat, input Semi Finished pada step berikutnya memakai HPP master Semi Finished dari step sebelumnya (`material + labor final + overhead jika ada`) setelah source masternya tersedia. Step berikutnya tidak boleh kembali memakai harga raw material awal sebagai shortcut.
 - estimasi biaya produksi BOM mengambil tarif dari Tahapan Produksi.
 - overhead BOM dipakai untuk biaya listrik/glue gun. Work Log baru dari PO membawa `overheadCostEstimate` BOM ke `overheadCostActual` dan mengalikannya dengan jumlah batch PO.
 
@@ -94,8 +95,9 @@ Organisasi UI aktif:
 - grouping BOM hanya cara baca UI; tidak mengubah rule material, target type, payload create/edit, atau service BOM
 
 Alur source cost aktif:
-- Raw Material / Semi Finished master cost terbaru → BOM estimate aktif → Work Log baru.
-- Snapshot hanya boleh menjadi histori untuk completed Work Log, inventory log, payroll/final HPP history, dan transaksi lama.
+- Raw Material master cost / Semi Finished master HPP terbaru → BOM estimate aktif → PO requirement qty → Work Log baru.
+- Work Log baru dan Work Log yang sedang diselesaikan wajib refresh cost dari master aktif, bukan memakai snapshot lama dari BOM/PO/material line.
+- Snapshot hanya boleh menjadi histori untuk completed Work Log, inventory log, payroll/final HPP history, dan transaksi yang sudah final.
 - Reset Modal/HPP wajib merefresh BOM estimate dari master cost pasca-reset, menjaga `laborCostEstimate` dari step dan `overheadCostEstimate` existing.
 
 ## 6. Production Order
@@ -139,7 +141,7 @@ Data penting yang terlihat disimpan:
 - material usages
 - outputs
 - materialCostActual, overheadCostActual, laborCostActual, totalCostActual, costPerGoodUnit; input labor aktif tidak diedit manual dari Work Log karena labor berasal dari Payroll
-- Work Log baru wajib memakai current master cost saat Start/Complete; stale BOM snapshot tidak boleh menjadi source biaya aktual baru
+- Work Log baru wajib memakai current master cost saat Start/Complete; stale BOM/PO/material line snapshot tidak boleh menjadi source biaya aktual baru
 - monitoring miss dan output teoretis
 - status stok konsumsi, output, dan payroll calculation
 
@@ -148,7 +150,7 @@ Status work log aktif yang terlihat:
 - `completed`
 
 Status compatibility:
-- `draft` dan `cancelled` hanya legacy read-only bila masih ada di data lama. Jangan tampilkan sebagai opsi input/filter utama, summary card, tombol cancel, atau flow aktif baru di menu Work Log.
+- `draft` dan `cancelled` tidak menjadi opsi input/filter utama, summary card, tombol cancel, atau flow aktif baru di menu Work Log.
 
 ## 8. Payroll Produksi
 Tujuan:
@@ -235,7 +237,7 @@ Catatan boundary:
 - Auto payroll dijalankan setelah Work Log sukses completed, memakai `generatePayrollLinesFromCompletedWorkLog()`.
 - Payroll line dibuat per operator yang tersimpan di Work Log.
 - Id dokumen payroll dibuat deterministik dari Work Log + Step + Operator untuk mencegah duplikasi.
-- Rule payroll diambil dari master Tahapan Produksi, bukan dari custom payroll karyawan legacy.
+- Rule payroll diambil dari master Tahapan Produksi, bukan dari custom payroll karyawan.
 - Sinkronisasi labor cost ke Work Log hanya ringkasan display untuk HPP/read model, bukan pengganti source of truth line payroll.
 
 ## Integration Map Produksi → Payroll → Kas → Laporan
@@ -322,10 +324,10 @@ Cancel Planning hanya mengubah status Planning menjadi `cancelled`. Action ini t
 
 Status final tetap guarded: Planning `cancelled` dan `completed` tidak boleh dibuatkan PO. Planning `overdue` tanpa PO masih boleh dibuatkan PO atau dicancel sesuai kebutuhan operasional.
 
-### Area Legacy / Compatibility
-- PO lama tanpa planning tetap dianggap PO manual aktif.
-- Work Log lama tanpa planning tetap valid.
-- Tidak ada migrasi data lama otomatis.
+### Boundary Planning Compatibility
+- PO tanpa planning tetap dianggap PO aktif selama lifecycle produksinya valid.
+- Work Log yang dibuat dari PO tetap valid walaupun planning kosong.
+- Tidak ada migrasi otomatis dari menu harian.
 
 ### Guard Flower Group Semi Finished
 - `semi_finished_materials.flowerGroup` adalah metadata grouping/filter, bukan relasi kepemilikan produk jadi.
@@ -337,5 +339,5 @@ Status final tetap guarded: Planning `cancelled` dan `completed` tidak boleh dib
 ## Update HPP Analysis Final/Preview — 2026-05-17
 - `ProductionHppAnalysis.jsx` memisahkan `finalLaborCost`, `finalTotalCost`, dan `finalHppPerUnit` dari `displayLaborCost`, `previewTotalCost`, dan `previewHppPerUnit`.
 - Resolver labor yang sama dipakai oleh detail Work Log dan HPP Analysis agar tidak ada drift antara payroll final, payroll draft, dan estimasi Step.
-- Data Quality Audit produksi bersifat read-only dan sekarang mendeteksi status Work Log legacy, payroll final pending/mismatch, output HPP yang butuh reconcile, serta Semi Finished aktif tanpa `flowerGroup`. Audit hasil selain Good Qty tidak diaktifkan.
+- Data Quality Audit produksi bersifat read-only dan sekarang mendeteksi payroll final pending/mismatch, output HPP yang butuh reconcile, stale BOM cost estimate, serta Semi Finished aktif tanpa `flowerGroup`. Audit hasil selain Good Qty tidak diaktifkan.
 - Patch ini tidak melakukan backfill, tidak reposting output stok, dan tidak mengubah master HPP/average cost lama secara otomatis.

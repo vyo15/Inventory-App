@@ -46,11 +46,11 @@ Temuan terkini:
 - create sale memvalidasi `availableStock` master/varian sebelum transaksi disimpan
 - kebutuhan item yang sama digabung dulu agar multi-line tidak melewati stok tersedia
 - create sale menyimpan dokumen Sales, mutasi stok keluar, inventory log, dan income awal `Selesai` dalam Firestore transaction
-- status cancel Sales memakai transition guarded/idempotent: baca status terbaru, validasi transisi, revert stok, tulis inventory log deterministic, lalu set `cancelledAt` + `stockRevertedAt` dalam transaction yang sama
+- Sales tidak menyediakan cancel/delete user-facing; status aktif hanya `Diproses`, `Dikirim`, dan `Selesai`, sedangkan barang kembali wajib lewat Return
 
 Risiko tersisa:
 - flow masih berjalan dari client; untuk multi-user besar tetap ideal dipindahkan ke backend/Cloud Function agar aturan server-side lebih kuat
-- sales lama yang sudah pernah partial/cancel sebelum marker `stockRevertedAt` perlu dicek lewat Auto Detect Bug Data/Data Quality Audit sebelum dipakai sebagai dasar laporan final
+- sales lama yang telanjur punya status/jejak cancel perlu dicek lewat Auto Detect Bug Data/Data Quality Audit sebelum dipakai sebagai dasar laporan final
 
 ### 5. Laporan/export sudah lebih siap data real
 Temuan terkini:
@@ -160,7 +160,7 @@ Sebuah task dianggap aman selesai bila:
 - Audit Firebase Functions custom pada 2026-05-06: folder `functions/` tidak ada di `Inventory-App.zip`; jangan menganggap backend Functions aktif tanpa source terpisah.
 
 ### Koreksi dokumen lama
-Poin lama yang menyebut revert sale masih hanya update `stock` atau memakai helper non-transaction sudah tidak sesuai dengan source terbaru. Sales create dan Sales cancel sekarang memakai Firestore transaction di `src/pages/Transaksi/Sales.jsx`; cancel menulis marker `cancelledAt` dan `stockRevertedAt` supaya retry/action dobel tidak mengembalikan stok dua kali. Penghapusan dokumen Sales bukan flow user biasa.
+Poin lama yang menyebut cancel/revert sale sebagai aksi user sudah tidak sesuai dengan source terbaru. Sales create memakai Firestore transaction di `src/pages/Transaksi/Sales.jsx`; cancel/delete Sales tidak tampil sebagai aksi operasional. Barang kembali setelah transaksi tercatat wajib lewat Return agar stok, income, dan audit trail tidak bercabang.
 
 
 ## Update Product & Semi Finished Min Stock Master — 2026-05-07
@@ -650,7 +650,7 @@ Risiko tersisa:
 - **LEGACY:** data lama di `revenues` dan `incomes` tetap valid dan tidak dimigrasi.
 - **LEGACY:** sales lama dengan status/reference lama tetap tampil sesuai status yang tersimpan.
 - **CLEANUP CANDIDATE:** jika suatu hari diperlukan delete ledger, harus dibuat flow khusus dengan approval, audit trail, dan alasan bisnis, bukan tombol Hapus biasa di Cash In.
-- **AKTIF/GUARDED:** atomic cancel Sales sudah masuk flow guarded: status transition membaca dokumen terbaru, menolak cancel ulang, menulis log revert deterministic, dan memberi marker `stockRevertedAt`.
+- **AKTIF/GUARDED:** Sales memakai no-cancel/no-delete user action; rollback teknis tidak boleh dijadikan tombol Batalkan/Hapus di tabel Sales.
 
 
 ## Update Current State — Repository root assets cleanup — 2026-05-06
@@ -684,13 +684,13 @@ Risiko:
 - **AKTIF:** halaman Sales menampilkan summary read-only **Pemasukan Pending** dari sales status `Diproses` dan `Dikirim`.
 - **GUARDED:** Pemasukan Pending hanya derived value di UI Sales; tidak menulis `revenues`, tidak menulis `incomes`, tidak masuk Cash In, dan tidak masuk Profit Loss.
 - **AKTIF:** tabel Sales membaca satu dataset sales lalu memfilter client-side sesuai `activeTabKey` agar tab status tidak kosong karena query per-status/index Firestore.
-- **AKTIF:** tombol Delete/Hapus tidak lagi tampil sebagai aksi user biasa di tabel Sales; flow tidak jadi tetap melalui `Batalkan`.
+- **AKTIF:** tombol Delete/Hapus/Batalkan tidak tampil sebagai aksi user biasa di tabel Sales; barang kembali tetap melalui Return.
 - **AKTIF:** dropdown item/varian Sales disederhanakan karena detail stok sudah tampil di panel read-only.
-- **GUARDED:** mutasi stok dan cancel stock revert sekarang berjalan transactional; income timing tetap hanya status `Selesai`, Cash In/Profit Loss tetap membaca `revenues + incomes` resmi.
+- **GUARDED:** mutasi stok Sales create/status selesai tetap transactional; income timing tetap hanya status `Selesai`, Cash In/Profit Loss tetap membaca `revenues + incomes` resmi.
 
 ### Legacy / cleanup candidate
 - **LEGACY:** sales lama dengan status/reference lama tetap ditampilkan sesuai data tersimpan; tidak ada migrasi otomatis.
-- **LEGACY:** sales lama tanpa marker `stockRevertedAt` tetap tampil, tetapi jika ada log/marker cancel yang tidak sinkron harus dicek manual lewat Auto Detect Bug Data/Data Quality Audit.
+- **LEGACY-COMPAT:** data lama berjejak cancel tetap bisa diaudit read-only; jangan menjadikan cancel sebagai flow user baru.
 - **CLEANUP CANDIDATE:** hard delete Sales dapat dirancang sebagai maintenance/admin guarded flow terpisah jika benar-benar dibutuhkan.
 - **CLEANUP CANDIDATE:** bila data Sales membesar, strategi fetch all + client filter dapat diganti pagination/query server-side yang tetap menjaga fallback aman.
 
@@ -980,21 +980,18 @@ Status: **AKTIF / GUARDED**.
 - Aksi ini tidak rename document ID, tidak menghapus data, dan tidak mengubah transaksi/history seperti Purchases, Inventory Log, Work Log, Payroll, atau Sales.
 - Tombol/modal repair kode supplier lama sudah tidak ada di halaman Supplier supaya jalur repair kode lama terpusat di Reset & Maintenance Data.
 
-## Update Current State — Sales cancel idempotent guard — 2026-05-17
+## Update Current State — Sales no-cancel/no-delete guard — 2026-05-17
 
 Status: **AKTIF + GUARDED**.
 
-- `src/pages/Transaksi/Sales.jsx` tidak lagi membuat opsi create langsung `Dibatalkan`; pembatalan wajib lewat tombol `Batalkan` agar masuk flow transition guarded.
-- Transisi status resmi: `Diproses -> Dikirim/Dibatalkan`, `Dikirim -> Selesai/Dibatalkan`. Sales `Selesai` tidak boleh dibatalkan dari flow ini; gunakan retur/refund terpisah agar income dan stok tidak rusak.
+- `src/pages/Transaksi/Sales.jsx` tidak menyediakan opsi create `Dibatalkan`, tombol `Batalkan`, tombol `Delete`, atau tombol `Hapus` sebagai aksi user.
+- Transisi status resmi: `Diproses -> Dikirim`, lalu `Dikirim -> Selesai`. Barang kembali/pembeli batal setelah transaksi tercatat wajib lewat **Return**.
 - Form create Sales punya submit guard (`isSavingSale` + ref lock) agar double-click Simpan tidak membuat order dobel.
-- Cancel Sales membaca dokumen Sales terbaru dalam transaction, menolak retry jika status sudah `Dibatalkan`, marker `stockRevertedAt`/`cancelledAt` sudah ada, log deterministic revert sudah ada, atau log legacy `sale_cancel_revert` untuk sale yang sama sudah terdeteksi.
-- Cancel Sales mengembalikan stok master/varian memakai helper stok aktif, menulis inventory log `sale_cancel_revert`, lalu menulis `cancelledAt`, `stockRevertedAt`, dan `statusUpdatedAt` dalam transaction yang sama.
-- Transisi ke `Dikirim`/`Selesai` ditolak jika Sales punya jejak cancel/revert supaya data partial lama tidak bisa lanjut membuat income atau status aktif palsu.
-- Data Quality Audit menambah deteksi Sales cancel/revert tidak sinkron, Sales dibatalkan yang masih punya income, Sales belum selesai yang sudah punya income, dan Sales selesai yang belum punya income, read-only tanpa write otomatis.
-- Jangan menghapus marker `stockRevertedAt`/`cancelledAt` manual karena marker ini adalah guard idempotency untuk mencegah double revert stok.
+- Cancel/revert Sales tidak boleh dihidupkan kembali sebagai action user-facing; jika rollback teknis create failure diperlukan, flow harus internal, guarded, dan tidak menjadi tombol/menu reguler.
+- Data Quality Audit tetap boleh mendeteksi data lama yang telanjur berstatus/berjejak cancel, Sales belum selesai yang sudah punya income, dan Sales selesai yang belum punya income, read-only tanpa write otomatis.
 - Search Sales wajib mencakup `externalReferenceNumber` karena nomor marketplace/resi disimpan terpisah dari kode internal `ORD-*`.
 - Guard income Sales harus membaca legacy link `relatedId`, `saleId`, `referenceId`, `sourceRef`, `referenceCode`, `referenceNumber`, dan `details.*` agar data lama tidak membuat income dobel.
-- Data Quality Audit Sales cancel/income harus mencocokkan sale bukan hanya dari Firestore document id, tetapi juga dari `saleNumber`, `code`, `referenceNumber`, dan `sourceRef`.
+- Data Quality Audit Sales/income harus mencocokkan sale bukan hanya dari Firestore document id, tetapi juga dari `saleNumber`, `code`, `referenceNumber`, dan `sourceRef`.
 
 ## Update Current State — Helper cleanup stock formatter dan safeTrim audit — 2026-05-17
 
