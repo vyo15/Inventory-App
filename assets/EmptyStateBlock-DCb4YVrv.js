@@ -1,1 +1,0 @@
-import{ah as e,bJ as t,E as a}from"./index-Cl2lx7M4.js";const{Text:r}=e,o=({description:s="Data belum tersedia."})=>t.jsx("div",{className:"empty-state-block",children:t.jsx(a,{description:t.jsx(r,{className:"empty-state-text",children:s})})});export{o as E};
