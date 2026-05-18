@@ -96,8 +96,8 @@ Organisasi UI aktif:
 
 Alur source cost aktif:
 - Raw Material master cost / Semi Finished master HPP terbaru → BOM estimate aktif → PO requirement qty → Work Log baru.
-- Work Log baru dan Work Log yang sedang diselesaikan wajib refresh cost dari master aktif, bukan memakai snapshot lama dari BOM/PO/material line.
-- Snapshot hanya boleh menjadi histori untuk completed Work Log, inventory log, payroll/final HPP history, dan transaksi yang sudah final.
+- Work Log baru wajib mengambil cost dari master aktif saat Start Production. Saat Complete, material yang sudah `stockDeducted=true` wajib memakai snapshot Start Production agar HPP tidak berubah karena master cost berubah setelah bahan keluar. Fallback baca master hanya untuk data legacy yang belum punya snapshot valid.
+- Snapshot BOM/PO hanya cache requirement; snapshot Work Log yang sudah dipotong menjadi histori costing material untuk completed Work Log, inventory log, payroll/final HPP history, dan transaksi yang sudah final.
 - Reset Modal/HPP wajib merefresh BOM estimate dari master cost pasca-reset, menjaga `laborCostEstimate` dari step dan `overheadCostEstimate` existing.
 
 ## 6. Production Order
@@ -339,5 +339,30 @@ Status final tetap guarded: Planning `cancelled` dan `completed` tidak boleh dib
 ## Update HPP Analysis Final/Preview — 2026-05-17
 - `ProductionHppAnalysis.jsx` memisahkan `finalLaborCost`, `finalTotalCost`, dan `finalHppPerUnit` dari `displayLaborCost`, `previewTotalCost`, dan `previewHppPerUnit`.
 - Resolver labor yang sama dipakai oleh detail Work Log dan HPP Analysis agar tidak ada drift antara payroll final, payroll draft, dan estimasi Step.
-- Data Quality Audit produksi bersifat read-only dan sekarang mendeteksi payroll final pending/mismatch, output HPP yang butuh reconcile, stale BOM cost estimate, serta Semi Finished aktif tanpa `flowerGroup`. Audit hasil selain Good Qty tidak diaktifkan.
-- Patch ini tidak melakukan backfill, tidak reposting output stok, dan tidak mengubah master HPP/average cost lama secara otomatis.
+- Data Quality Audit produksi bersifat read-only dan sekarang mendeteksi payroll final pending/mismatch, output line HPP stale, master Product/Semi Finished HPP stale, variant output HPP stale, stale BOM cost estimate, serta Semi Finished aktif tanpa `flowerGroup`. Audit hasil selain Good Qty tidak diaktifkan.
+- Flow payroll final baru menjalankan reconcile output HPP/master cost tanpa mutasi qty stok ulang. Data lama yang tidak tersentuh payroll sync tetap tidak dibackfill massal otomatis dan harus lewat audit/repair guarded terpisah.
+
+## Guarded HPP Reconcile Payroll Final — 2026-05-18
+
+Flow aktif source terbaru:
+
+```text
+BOM live master cost
+→ Production Order requirement
+→ Start Production freeze material actual snapshot
+→ Complete Work Log post output material/overhead cost
+→ Payroll final sync labor actual
+→ Reconcile output HPP/master average cost tanpa mutasi qty stok ulang
+```
+
+Rule aktif:
+- BOM estimasi membaca Raw Material `averageActualUnitCost` fallback `restockReferencePrice`.
+- BOM estimasi membaca Semi Finished `averageCostPerUnit` fallback `lastProductionCostPerUnit`.
+- Semi Finished bervarian harus memakai weighted average berdasarkan stok varian aktif agar BOM bertingkat tidak memakai HPP rata-rata sederhana yang miss.
+- Complete Work Log memakai material snapshot yang sudah dibekukan saat Start Production. Fallback ke master hanya untuk data legacy yang belum punya snapshot cost.
+- Payroll final mengubah `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit`, lalu menjalankan reconcile output HPP/master cost.
+- Reconcile HPP tidak boleh menambah/mengurangi stock qty, tidak boleh membuat inventory log baru, dan tidak boleh mengubah status Work Log/PO.
+
+Boundary legacy:
+- Work Log lama yang tidak pernah tersentuh payroll sync tetap perlu Data Quality Audit/backfill guarded terpisah.
+- Jika data sudah pernah dijual/dipakai sebelum reconcile, patch ini menjaga master cost ke depan tetapi tidak merekonstruksi COGS histori lama.

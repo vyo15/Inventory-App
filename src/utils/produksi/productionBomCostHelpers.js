@@ -27,6 +27,19 @@ const firstPositiveNumber = (item = {}, keys = []) => {
   };
 };
 
+
+export const BOM_COST_SOURCE_LABELS = {
+  'live_master.averageActualUnitCost': 'Master: modal aktual rata-rata',
+  'live_master.restockReferencePrice': 'Master: harga referensi restock',
+  'live_master.averageCostPerUnit': 'Master: HPP rata-rata Semi Finished',
+  'live_master.lastProductionCostPerUnit': 'Master: HPP produksi terakhir',
+  'live_master.zero_cost': 'Master cost 0 / belum tersedia',
+};
+
+export const resolveBomCostSourceLabel = (source = '') => (
+  BOM_COST_SOURCE_LABELS[source] || source || 'Master cost 0 / belum tersedia'
+);
+
 const getBomReferenceListByMaterialType = (referenceData = {}, itemType = '') => {
   if (itemType === 'raw_material') return referenceData.rawMaterials || [];
   if (itemType === 'semi_finished_material') return referenceData.semiFinishedMaterials || [];

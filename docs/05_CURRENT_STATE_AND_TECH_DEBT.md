@@ -1009,7 +1009,8 @@ Status: **AKTIF / SCOPED CLEANUP**.
 - HPP Analysis memisahkan angka Final dan Preview agar payroll draft/estimasi tidak terbaca sebagai HPP final.
 - Overhead produksi aktif berasal dari BOM untuk listrik/glue gun; field hasil selain Good Qty tetap compatibility data lama dan tidak ditampilkan sebagai workflow aktif.
 - Data Quality Audit produksi menandai Work Log legacy status, payroll final pending/mismatch, dan Semi Finished tanpa `flowerGroup`; audit hasil selain Good Qty tidak ditambahkan.
-- Tech debt yang masih sengaja tidak disentuh: reconcile/backfill HPP master dari Work Log lama setelah payroll final, karena itu menyentuh stok/HPP history dan perlu task guarded terpisah.
+- Reconcile HPP master untuk payroll final baru sudah aktif di service payroll/worklog: output cost dan master HPP/average cost diselaraskan tanpa mutasi qty stok ulang.
+- Tech debt yang masih sengaja tidak disentuh: backfill massal Work Log lama yang belum pernah tersentuh sync payroll, karena itu menyentuh stok/HPP history dan perlu task guarded terpisah.
 
 ## Update Current State — toOptionMap shared helper cleanup — 2026-05-17
 
@@ -1028,6 +1029,6 @@ Status: **AKTIF / SCOPED CLEANUP**.
 Status aktif dari source terbaru:
 - Detail Work Log dan HPP Analysis menampilkan labor lewat resolver shared: payroll final menjadi nilai final, payroll draft/estimasi Step hanya preview read-only.
 - Overhead Work Log aktif berasal dari BOM untuk listrik/glue gun; field hasil selain Good Qty tetap compatibility data lama dan tidak ditampilkan sebagai workflow aktif.
-- Data Quality Audit hanya read-only dan sekarang boleh menandai kandidat `Output HPP perlu reconcile` ketika output cost lama belum ikut payroll final.
-- Reconcile/backfill HPP master/output lama setelah payroll final tetap guarded task terpisah: wajib preview, scope jelas, dan tidak boleh disentuh oleh patch UI/detail biasa.
+- Data Quality Audit tetap read-only dan boleh menandai kandidat `Output HPP perlu reconcile` ketika output cost lama belum ikut payroll final.
+- Reconcile otomatis aktif untuk payroll sync baru/yang diedit; backfill massal data historis tetap guarded task terpisah: wajib preview, scope jelas, dan tidak boleh disentuh oleh patch UI/detail biasa.
 - `draft`/`cancelled` Work Log hanya legacy data read-only; flow input aktif tetap `in_progress` → `completed`.

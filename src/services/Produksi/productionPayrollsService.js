@@ -20,7 +20,10 @@ import {
 import { db } from "../../firebase";
 import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
 import { calculatePayrollAmounts } from "../../constants/productionPayrollOptions";
-import { getCompletedProductionWorkLogs } from "./productionWorkLogsService";
+import {
+  getCompletedProductionWorkLogs,
+  reconcileCompletedWorkLogOutputHpp,
+} from "./productionWorkLogsService";
 
 const COLLECTION_NAME = "production_payrolls";
 const EXPENSE_COLLECTION_NAME = "expenses";
@@ -617,6 +620,28 @@ const syncWorkLogPayrollSummary = async (workLogId) => {
     costPerGoodUnit,
     updatedAt: serverTimestamp(),
     updatedBy: "system",
+  });
+
+  /* =====================================================
+  SECTION: Payroll final -> output HPP reconcile — GUARDED
+  Fungsi:
+  - setelah labor final disinkronkan ke Work Log, master output produk/semi ikut disesuaikan tanpa menambah stok ulang.
+
+  Dipakai oleh:
+  - create/update/status payroll, termasuk payroll paid yang masuk HPP final.
+
+  Alasan perubahan:
+  - Complete Work Log terjadi sebelum payroll final; tanpa reconcile, BOM bertingkat bisa membaca averageCostPerUnit Semi Finished yang masih material-only.
+
+  Catatan cleanup:
+  - Reconcile lama tidak melakukan backfill massal; audit data lama tetap lewat Data Quality Audit.
+
+  Risiko:
+  - Jangan pindahkan logic ini ke UI; perubahan HPP harus atomic di service agar tidak bergantung halaman mana yang dibuka user.
+  ===================================================== */
+  await reconcileCompletedWorkLogOutputHpp(workLogId, {
+    actor: "system",
+    source: "payroll_summary_sync",
   });
 };
 

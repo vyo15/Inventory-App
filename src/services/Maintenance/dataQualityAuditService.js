@@ -317,7 +317,22 @@ const CATEGORY_CONFIGS = [
   {
     key: "work_logs_output_hpp_reconcile_needed",
     label: "Output HPP perlu reconcile",
-    recommendation: "Task guarded terpisah: preview dulu sebelum update master stok/output history",
+    recommendation: "Payroll sync baru sudah auto reconcile; untuk data lama jalankan review/backfill guarded dengan preview terlebih dahulu",
+  },
+  {
+    key: "work_logs_output_cost_stale",
+    label: "Output line HPP stale",
+    recommendation: "Cek Work Log completed; output line cost harus sama dengan HPP final Work Log setelah payroll final",
+  },
+  {
+    key: "work_logs_master_hpp_stale",
+    label: "Master HPP output stale",
+    recommendation: "Cek master Product/Semi Finished; HPP/average cost master terlihat belum sinkron dengan output final",
+  },
+  {
+    key: "work_logs_variant_hpp_stale",
+    label: "Variant output HPP stale",
+    recommendation: "Cek varian output produksi; HPP/average cost varian terlihat belum sinkron dengan output final",
   },
   {
     key: "semi_finished_missing_flower_group",
@@ -486,24 +501,112 @@ const hasStaleBomCostEstimate = (data = {}, liveEstimate = {}) => {
   );
 };
 
-const hasOutputHppReconcileIssue = (data = {}, finalPayrollAmount = 0) => {
+const getOutputCollectionName = (outputType = "") => {
+  const normalized = normalizeType(outputType);
+  if (normalized === "product") return "products";
+  if (normalized === "semi_finished_material" || normalized === "semi_finished") return "semi_finished_materials";
+  return "";
+};
+
+const buildDocDataMap = (docs = []) => docs.reduce((acc, itemDoc) => {
+  acc.set(itemDoc.id, {
+    id: itemDoc.id,
+    ...itemDoc.data(),
+  });
+  return acc;
+}, new Map());
+
+const getVariantIdentity = (variant = {}) => safeTrim(
+  variant.variantKey ||
+    variant.id ||
+    variant.variantId ||
+    variant.name ||
+    variant.color ||
+    variant.code ||
+    variant.sku,
+).toLowerCase();
+
+const getLineVariantKey = (line = {}) => safeTrim(
+  line.outputVariantKey ||
+    line.variantKey ||
+    line.resolvedVariantKey ||
+    line.targetVariantKey ||
+    line.details?.variantKey,
+).toLowerCase();
+
+const findOutputVariant = (stockItem = {}, line = {}) => {
+  const lineVariantKey = getLineVariantKey(line);
+  if (!lineVariantKey || !Array.isArray(stockItem.variants)) return null;
+  return stockItem.variants.find((variant) => getVariantIdentity(variant) === lineVariantKey) || null;
+};
+
+const getOutputCostField = (collectionName = "") => (
+  collectionName === "products" ? "hppPerUnit" : "averageCostPerUnit"
+);
+
+const buildOutputHppReconcileIssues = (data = {}, finalPayrollAmount = 0, masterRefs = {}) => {
   const outputs = Array.isArray(data.outputs) ? data.outputs : [];
   const goodQty = toNumber(data.goodQty ?? data.outputGoodQty ?? data.completedQty ?? data.actualOutputQty);
-  if (!outputs.length || goodQty <= 0 || finalPayrollAmount <= 0) return false;
+  const result = {
+    hasOutputLineIssue: false,
+    hasMasterCostIssue: false,
+    hasVariantCostIssue: false,
+    issueText: "",
+  };
+
+  if (!outputs.length || goodQty <= 0 || finalPayrollAmount <= 0) return result;
 
   const materialCost = toNumber(data.materialCostActual ?? data.materialCost ?? data.materialTotalCost);
   const overheadCost = toNumber(data.overheadCostActual ?? data.overheadCost ?? data.overheadTotalCost);
   const expectedFinalTotal = materialCost + overheadCost + finalPayrollAmount;
   const expectedCostPerGoodUnit = goodQty > 0 ? expectedFinalTotal / goodQty : 0;
 
-  if (expectedCostPerGoodUnit <= 0) return false;
+  if (expectedCostPerGoodUnit <= 0) return result;
 
-  return outputs.some((line = {}) => {
+  const issueParts = [];
+
+  outputs.forEach((line = {}) => {
     const outputGoodQty = toNumber(line.goodQty ?? line.outputQty ?? line.qty ?? line.quantity);
-    if (outputGoodQty <= 0) return false;
+    if (outputGoodQty <= 0 || line.stockAdded !== true) return;
+
     const outputUnitCost = toNumber(line.costPerUnit ?? line.costPerUnitSnapshot ?? line.hppPerUnit);
-    return outputUnitCost <= 0 || outputUnitCost + 1 < expectedCostPerGoodUnit;
+    const collectionName = getOutputCollectionName(line.outputType);
+    const outputId = safeTrim(line.outputIdRef || line.outputId || line.itemId);
+
+    if (outputUnitCost <= 0 || !isNumberClose(outputUnitCost, expectedCostPerGoodUnit, BOM_COST_COMPARE_TOLERANCE)) {
+      result.hasOutputLineIssue = true;
+      issueParts.push(`output line ${safeTrim(line.outputName) || outputId || "-"} ${outputUnitCost}, final ${expectedCostPerGoodUnit}`);
+    }
+
+    const stockItem = collectionName === "products"
+      ? masterRefs.productsById?.get(outputId)
+      : masterRefs.semiFinishedById?.get(outputId);
+    if (!stockItem) return;
+
+    const costField = getOutputCostField(collectionName);
+    const outputVariant = findOutputVariant(stockItem, line);
+    const lineVariantKey = getLineVariantKey(line);
+
+    if (lineVariantKey) {
+      const variantCost = toNumber(outputVariant?.[costField] || 0);
+      const variantStock = toNumber(outputVariant?.currentStock ?? outputVariant?.stock ?? 0);
+      if (!outputVariant || variantCost <= 0 || (variantStock <= outputGoodQty && !isNumberClose(variantCost, expectedCostPerGoodUnit, BOM_COST_COMPARE_TOLERANCE))) {
+        result.hasVariantCostIssue = true;
+        issueParts.push(`variant ${safeTrim(line.outputVariantLabel) || lineVariantKey} ${variantCost || 0}, final ${expectedCostPerGoodUnit}`);
+      }
+      return;
+    }
+
+    const masterCost = toNumber(stockItem?.[costField] || 0);
+    const masterStock = toNumber(stockItem?.currentStock ?? stockItem?.stock ?? 0);
+    if (masterCost <= 0 || (masterStock <= outputGoodQty && !isNumberClose(masterCost, expectedCostPerGoodUnit, BOM_COST_COMPARE_TOLERANCE))) {
+      result.hasMasterCostIssue = true;
+      issueParts.push(`master ${safeTrim(line.outputName) || outputId || "-"} ${masterCost}, final ${expectedCostPerGoodUnit}`);
+    }
   });
+
+  result.issueText = issueParts.join("; ");
+  return result;
 };
 
 const isManualCashOutExpense = (data = {}) => {
@@ -621,6 +724,10 @@ export const getDataQualityAudit = async () => {
   }, {});
 
   const bomCostReferenceData = buildBomCostReferenceData(collectionMap);
+  const productionHppMasterRefs = {
+    productsById: buildDocDataMap(collectionMap.products?.docs || []),
+    semiFinishedById: buildDocDataMap(collectionMap.semi_finished_materials?.docs || []),
+  };
 
   const payrollsByWorkLogKey = new Map();
   (collectionMap.production_payrolls?.docs || []).forEach((itemDoc) => {
@@ -880,12 +987,44 @@ export const getDataQualityAudit = async () => {
       }));
     }
 
-    if ((status === "completed" || goodQty > 0) && hasOutputHppReconcileIssue(data, finalPayrollAmount)) {
+    const outputHppIssues = buildOutputHppReconcileIssues(data, finalPayrollAmount, productionHppMasterRefs);
+    if ((status === "completed" || goodQty > 0) && (
+      outputHppIssues.hasOutputLineIssue ||
+      outputHppIssues.hasMasterCostIssue ||
+      outputHppIssues.hasVariantCostIssue
+    )) {
       addIssue(categories, "work_logs_output_hpp_reconcile_needed", toSample({
         collectionName: "production_work_logs",
         itemDoc,
-        issue: "Output cost Work Log terlihat belum ikut final payroll; master HPP/average cost perlu preview reconcile terpisah.",
+        issue: outputHppIssues.issueText || "Output/master HPP terlihat belum ikut final payroll; data lama perlu review/backfill guarded agar master HPP/average cost sinkron.",
         recommendation: categories.work_logs_output_hpp_reconcile_needed.recommendation,
+      }));
+    }
+
+    if ((status === "completed" || goodQty > 0) && outputHppIssues.hasOutputLineIssue) {
+      addIssue(categories, "work_logs_output_cost_stale", toSample({
+        collectionName: "production_work_logs",
+        itemDoc,
+        issue: outputHppIssues.issueText || "Output line cost Work Log belum sama dengan HPP final payroll.",
+        recommendation: categories.work_logs_output_cost_stale.recommendation,
+      }));
+    }
+
+    if ((status === "completed" || goodQty > 0) && outputHppIssues.hasMasterCostIssue) {
+      addIssue(categories, "work_logs_master_hpp_stale", toSample({
+        collectionName: "production_work_logs",
+        itemDoc,
+        issue: outputHppIssues.issueText || "Master HPP/average cost output terlihat belum sinkron dengan HPP final payroll.",
+        recommendation: categories.work_logs_master_hpp_stale.recommendation,
+      }));
+    }
+
+    if ((status === "completed" || goodQty > 0) && outputHppIssues.hasVariantCostIssue) {
+      addIssue(categories, "work_logs_variant_hpp_stale", toSample({
+        collectionName: "production_work_logs",
+        itemDoc,
+        issue: outputHppIssues.issueText || "Variant HPP/average cost output terlihat belum sinkron dengan HPP final payroll.",
+        recommendation: categories.work_logs_variant_hpp_stale.recommendation,
       }));
     }
   });

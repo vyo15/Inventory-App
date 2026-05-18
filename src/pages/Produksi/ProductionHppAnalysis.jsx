@@ -57,6 +57,34 @@ const getHppCostStatusTagColor = (statusLabel) => {
   return "red";
 };
 
+const getHppReconcileStatusLabel = (status = "") => {
+  if (status === "reconciled") return "Output HPP tersinkron";
+  if (status === "already_synced") return "Output HPP sudah sesuai";
+  return "Perlu Reconcile HPP";
+};
+
+const getHppReconcileStatusColor = (status = "") => {
+  if (status === "reconciled" || status === "already_synced") return "green";
+  return "warning";
+};
+
+const getDerivedHppReconcileStatus = ({ workLog = {}, finalHppPerUnit = 0, isHppFinalReady = false } = {}) => {
+  if (!isHppFinalReady) return "pending";
+
+  const outputLines = Array.isArray(workLog.outputs) ? workLog.outputs : [];
+  const postedOutputLines = outputLines.filter((line) => (
+    line?.stockAdded === true && toSafeNumber(line.goodQty) > 0
+  ));
+
+  if (postedOutputLines.length === 0) return "pending";
+
+  const isSynced = postedOutputLines.every((line) => (
+    Math.abs(toSafeNumber(line.costPerUnit) - toSafeNumber(finalHppPerUnit)) <= 1
+  ));
+
+  return isSynced ? "already_synced" : "pending";
+};
+
 // =====================================================
 // ACTIVE / GUARDED - helper warning cost 0 HPP.
 // Fungsi blok:
@@ -222,6 +250,11 @@ const ProductionHppAnalysis = () => {
         isEstimatedCost: productionCost.isEstimated,
         isDraftCost: productionCost.isDraft,
         isHppFinalReady,
+        hppReconcileStatus: getDerivedHppReconcileStatus({
+          workLog,
+          finalHppPerUnit,
+          isHppFinalReady,
+        }),
         costWarnings,
       };
     });
@@ -356,6 +389,7 @@ const ProductionHppAnalysis = () => {
         { key: "totalCostStatus", label: "Status Total" },
         { key: "previewHppPerUnitDisplay", label: "HPP Preview / Unit" },
         { key: "finalHppPerUnitDisplay", label: "HPP Final / Unit" },
+        { key: "hppReconcileStatusLabel", label: "Status Reconcile HPP" },
         { key: "costValidation", label: "Validasi Cost" },
       ],
       data: filteredRows.map((row) => ({
@@ -376,6 +410,7 @@ const ProductionHppAnalysis = () => {
         totalCostStatus: row.totalCostStatus || "-",
         previewHppPerUnitDisplay: formatCurrency(row.previewHppPerUnit),
         finalHppPerUnitDisplay: row.isHppFinalReady ? formatCurrency(row.finalHppPerUnit) : "Belum final",
+        hppReconcileStatusLabel: getHppReconcileStatusLabel(row.hppReconcileStatus),
         costValidation:
           Array.isArray(row.costWarnings) && row.costWarnings.length > 0
             ? row.costWarnings.join("; ")
@@ -496,6 +531,9 @@ const ProductionHppAnalysis = () => {
           <Typography.Text strong>{record.isHppFinalReady ? formatCurrency(record.finalHppPerUnit) : "Belum final"}</Typography.Text>
           <Tag color={getHppCostStatusTagColor(record.totalCostStatus)} style={compactTagStyle}>
             {record.totalCostStatus}
+          </Tag>
+          <Tag color={getHppReconcileStatusColor(record.hppReconcileStatus)} style={compactTagStyle}>
+            {getHppReconcileStatusLabel(record.hppReconcileStatus)}
           </Tag>
           {!record.isHppFinalReady ? (
             <Typography.Text type="secondary" className="ims-cell-meta">

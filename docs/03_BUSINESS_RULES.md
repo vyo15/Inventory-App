@@ -213,9 +213,9 @@ Catatan service bahkan menyebut:
 - Estimasi biaya BOM dihitung otomatis dari master cost aktif, upah dari tarif Tahapan Produksi, dan overhead manual dari input BOM.
 - Source estimasi material BOM aktif:
   - Raw Material: `averageActualUnitCost` dari purchase weighted average, fallback `restockReferencePrice` jika modal aktual belum ada.
-  - Semi Finished: `averageCostPerUnit` hasil produksi sebelumnya, fallback `lastProductionCostPerUnit`. Field reference/manual semi finished tidak menjadi source estimasi aktif agar HPP turunan tetap jujur.
+  - Semi Finished: `averageCostPerUnit` hasil produksi sebelumnya, fallback `lastProductionCostPerUnit`. Untuk item bervarian, `averageCostPerUnit` master wajib weighted by stock varian jika ada stok varian. Jika semua stok varian 0, fallback read-model hanya boleh memakai varian aktif yang punya cost > 0 atau `lastProductionCostPerUnit`; jangan membagi rata dengan varian kosong/cost 0 karena HPP turunan akan turun palsu. Field reference/manual semi finished tidak menjadi source estimasi aktif agar HPP turunan tetap jujur.
 - Untuk produksi bertingkat, bahan/input Semi Finished wajib memakai HPP master Semi Finished dari step sebelumnya. Sistem tidak boleh menghitung ulang ke raw material awal di step berikutnya.
-- Snapshot `costPerUnitSnapshot` / `totalCostSnapshot` pada BOM/PO/material line tidak boleh menjadi source aktif Work Log baru. Jika master cost terbaru 0, biaya aktif harus 0.
+- Snapshot BOM/PO tidak boleh menjadi source aktif Work Log baru. Saat Start Production, sistem mengambil master cost aktif lalu membekukannya sebagai snapshot actual material yang dipakai saat Complete agar biaya tidak berubah setelah stok bahan sudah dipotong.
 - Overhead manual BOM saat ini hanya estimasi/referensi rencana, bukan source of truth HPP final. HPP final tetap dari Work Log completed dan payroll final.
 
 ## 11. Rule Production Order
@@ -280,9 +280,10 @@ Preset `Reset Semua Testing` adalah shortcut guarded untuk development/testing: 
 ## Tambahan Rule Terkini (Batch Prioritas)
 
 ### Work Log Costing saat Complete
-- saat Work Log diselesaikan, summary costing final harus dihitung ulang dari master cost material terbaru untuk line aktif
-- `materialCostActual`, `totalCostActual`, dan `costPerGoodUnit` tidak boleh mengikuti snapshot lama dari BOM/PO/material line jika master cost sudah berubah saat complete
+- saat Work Log diselesaikan, summary costing final dihitung dari snapshot material actual yang dibekukan saat Start Production; data legacy tanpa snapshot boleh fallback ke master cost aktif
+- `materialCostActual`, `totalCostActual`, dan `costPerGoodUnit` tidak boleh memakai snapshot BOM/PO lama; source actual material adalah Work Log material usage setelah Start Production
 - sinkronisasi payroll ke Work Log boleh memperbarui `laborCostActual` sebagai ringkasan display, tetapi tidak mengubah source of truth payroll line
+- setelah payroll final berubah, output HPP/average cost master wajib direconcile lewat service tanpa menambah qty stok ulang
 
 ### Payroll Paid vs Cash Out
 - status `paid` pada payroll produksi sekarang adalah trigger integrasi ke Cash Out/Expense.
@@ -464,9 +465,9 @@ Catatan current state:
 - `bomId` tetap wajib terisi sebelum submit, baik lewat auto-select resep tunggal maupun pilihan `Resep Produksi` jika ada banyak resep aktif.
 
 ### Work Log Actual Cost / HPP
-- Completed Work Log wajib menyimpan `materialCostActual`, `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit`; `overheadCostActual` hanya compatibility jika data lama punya overhead.
-- Biaya tidak boleh diisi asal; material cost harus berasal dari cost snapshot atau source cost item yang aman, bukan harga jual.
-- `totalCostActual = materialCostActual + laborCostActual` untuk flow aktif; overhead actual Work Log masih compatibility. Overhead manual di BOM hanya estimasi rencana sampai rule listrik/overhead produksi final di-review khusus.
+- Completed Work Log wajib menyimpan `materialCostActual`, `laborCostActual`, `overheadCostActual`, `totalCostActual`, dan `costPerGoodUnit`.
+- Biaya tidak boleh diisi asal; material cost harus berasal dari Work Log start snapshot atau fallback source cost item yang aman, bukan harga jual.
+- `totalCostActual = materialCostActual + laborCostActual + overheadCostActual` untuk flow aktif. Overhead dari BOM tetap material/biaya produksi pendukung seperti listrik/glue gun sesuai input, bukan pengganti labor payroll final.
 - `costPerGoodUnit = totalCostActual / goodQty` hanya jika `goodQty > 0`; jangan membagi 0.
 - HPP Analysis membaca completed Work Log sebagai source cost final.
 
@@ -613,6 +614,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Jika `costPerGoodUnit = 0` sementara `goodQty > 0`, tampilkan warning agar user tidak membaca HPP/unit sebagai valid.
 - Draft payroll tidak boleh dihitung sebagai biaya tenaga kerja final untuk HPP.
 - Work Log completed tetap tidak boleh diproses ulang hanya untuk memperbaiki display cost.
+- UI final-state harus clean: Work Log `completed` hanya menampilkan aksi Detail di list utama; tombol Edit disabled tidak perlu ditampilkan.
 
 ### Fase D - Dashboard Read-only Control Center
 - Dashboard adalah read-only operational control center.
@@ -642,6 +644,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 ### Final Guard Anti Double Payroll / Expense
 - Work Log completed wajib membuat payroll line secara idempotent per Work Log + Step + Operator.
 - Payroll paid wajib membuat expense secara idempotent dengan `sourceModule=production_payroll` dan `sourceId=payrollId`.
+- UI final-state harus clean: Payroll `paid` hanya menampilkan aksi Detail di list utama; tombol Edit disabled dan Paid tidak perlu ditampilkan.
 - Profit Loss membaca payroll lewat `expenses`, bukan langsung dari `production_payrolls`, agar tidak double count.
 - Expense payroll tidak boleh dihapus otomatis saat payroll paid dibatalkan sebelum business rule rollback disepakati.
 
@@ -695,6 +698,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Untuk Product dan Semi Finished, minimum stok final adalah field master: `products.minStockAlert` dan `semi_finished_materials.minStockAlert`, berlaku untuk item non-varian maupun bervarian.
 - `variants[].minStockAlert` pada Product/Semi Finished hanya legacy/compatibility field jika masih ada di data lama/helper generic; UI dan service master tidak boleh menjadikannya source utama threshold low-stock.
 - Saat Product/Semi Finished bervarian dibuat atau di-edit, total stok master tetap dihitung dari varian, tetapi `minStockAlert` master wajib berasal dari input master `values.minStockAlert`, bukan penjumlahan varian.
+- Untuk modal/HPP Semi Finished bervarian: jika stok varian ada, master `averageCostPerUnit` wajib weighted by stock; jika semua stok 0, read-model cost tidak boleh dirata-ratakan dengan varian yang cost-nya 0. Gunakan rata-rata varian aktif yang punya cost > 0, lalu fallback `lastProductionCostPerUnit` untuk tampilan/BOM cost source.
 - Reset/Maintenance hanya alat audit/repair/development, bukan flow harian user untuk menjaga stok tetap sinkron.
 
 ### 15.1 Variant conversion aman

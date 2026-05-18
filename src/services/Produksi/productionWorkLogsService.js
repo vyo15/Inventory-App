@@ -1637,6 +1637,323 @@ const getOutputStockResolution = ({
   };
 };
 
+const COST_RECONCILE_TOLERANCE = 0.0001;
+
+const reconcileAverageUnitCost = ({
+  currentStock = 0,
+  currentUnitCost = 0,
+  affectedQty = 0,
+  previousUnitCost = 0,
+  nextUnitCost = 0,
+} = {}) => {
+  const safeCurrentStock = toNumber(currentStock || 0);
+  const safeCurrentUnitCost = toNumber(currentUnitCost || 0);
+  const safeAffectedQty = toNumber(affectedQty || 0);
+  const safePreviousUnitCost = toNumber(previousUnitCost || 0);
+  const safeNextUnitCost = toNumber(nextUnitCost || 0);
+
+  if (safeNextUnitCost <= 0) return safeCurrentUnitCost;
+  if (safeCurrentStock <= 0 || safeCurrentStock <= safeAffectedQty) return safeNextUnitCost;
+
+  const costDelta = safeAffectedQty * (safeNextUnitCost - safePreviousUnitCost);
+  return Math.max(0, safeCurrentUnitCost + (costDelta / safeCurrentStock));
+};
+
+const calculateWeightedVariantUnitCost = (variants = [], costField = 'averageCostPerUnit') => {
+  const activeVariants = Array.isArray(variants)
+    ? variants.filter((variant) => variant?.isArchived !== true && variant?.isActive !== false)
+    : [];
+  const weightedQty = activeVariants.reduce((sum, variant) => {
+    const stockQty = toNumber(variant.currentStock ?? variant.stock ?? 0);
+    const unitCost = toNumber(variant[costField] || 0);
+    return stockQty > 0 && unitCost > 0 ? sum + stockQty : sum;
+  }, 0);
+
+  if (weightedQty > 0) {
+    return activeVariants.reduce((sum, variant) => {
+      const stockQty = toNumber(variant.currentStock ?? variant.stock ?? 0);
+      const unitCost = toNumber(variant[costField] || 0);
+      return stockQty > 0 && unitCost > 0 ? sum + (stockQty * unitCost) : sum;
+    }, 0) / weightedQty;
+  }
+
+  const costLines = activeVariants
+    .map((variant) => toNumber(variant[costField] || 0))
+    .filter((value) => value > 0);
+
+  return costLines.length
+    ? costLines.reduce((sum, value) => sum + value, 0) / costLines.length
+    : 0;
+};
+
+const buildOutputHppReconcilePayload = ({
+  collectionName = '',
+  stockItem = {},
+  stockDataRaw = {},
+  outputResolution = {},
+  goodQty = 0,
+  previousUnitCost = 0,
+  nextUnitCost = 0,
+} = {}) => {
+  const isVariantOutput = outputResolution.stockSourceType === 'variant';
+  const targetVariantKey = safeTrim(outputResolution.resolvedVariantKey).toLowerCase();
+
+  if (collectionName === 'semi_finished_materials') {
+    if (isVariantOutput) {
+      const nextVariants = (Array.isArray(stockItem.variants) ? stockItem.variants : []).map((variant) => {
+        const variantKey = safeTrim(
+          variant.variantKey || variant.id || variant.variantId || variant.name || variant.color || variant.code || variant.sku,
+        ).toLowerCase();
+
+        if (variantKey !== targetVariantKey) return variant;
+
+        const currentVariantStock = toNumber(variant.currentStock ?? variant.stock ?? outputResolution.currentStock ?? 0);
+        const currentVariantCost = toNumber(variant.averageCostPerUnit || 0);
+        const reconciledVariantCost = reconcileAverageUnitCost({
+          currentStock: currentVariantStock,
+          currentUnitCost: currentVariantCost,
+          affectedQty: goodQty,
+          previousUnitCost,
+          nextUnitCost,
+        });
+
+        return {
+          ...variant,
+          averageCostPerUnit: reconciledVariantCost,
+        };
+      });
+
+      return {
+        variants: nextVariants,
+        averageCostPerUnit: calculateWeightedVariantUnitCost(nextVariants, 'averageCostPerUnit'),
+        lastProductionCostPerUnit: nextUnitCost,
+      };
+    }
+
+    const stockData = normalizeStockSnapshot(stockDataRaw || {});
+    return {
+      averageCostPerUnit: reconcileAverageUnitCost({
+        currentStock: stockData.currentStock,
+        currentUnitCost: toNumber(stockData.averageCostPerUnit || 0),
+        affectedQty: goodQty,
+        previousUnitCost,
+        nextUnitCost,
+      }),
+      lastProductionCostPerUnit: nextUnitCost,
+    };
+  }
+
+  if (collectionName === 'products') {
+    if (isVariantOutput) {
+      const nextVariants = (Array.isArray(stockItem.variants) ? stockItem.variants : []).map((variant) => {
+        const variantKey = safeTrim(
+          variant.variantKey || variant.id || variant.variantId || variant.name || variant.color || variant.code || variant.sku,
+        ).toLowerCase();
+
+        if (variantKey !== targetVariantKey) return variant;
+
+        const currentVariantStock = toNumber(variant.currentStock ?? variant.stock ?? outputResolution.currentStock ?? 0);
+        const currentVariantHpp = toNumber(variant.hppPerUnit || 0);
+        const reconciledVariantHpp = reconcileAverageUnitCost({
+          currentStock: currentVariantStock,
+          currentUnitCost: currentVariantHpp,
+          affectedQty: goodQty,
+          previousUnitCost,
+          nextUnitCost,
+        });
+
+        return {
+          ...variant,
+          hppPerUnit: reconciledVariantHpp,
+        };
+      });
+
+      return {
+        variants: nextVariants,
+        hppPerUnit: calculateWeightedVariantUnitCost(nextVariants, 'hppPerUnit'),
+      };
+    }
+
+    return {
+      hppPerUnit: reconcileAverageUnitCost({
+        currentStock: toNumber(stockDataRaw?.stock ?? stockDataRaw?.currentStock ?? 0),
+        currentUnitCost: toNumber(stockDataRaw?.hppPerUnit || 0),
+        affectedQty: goodQty,
+        previousUnitCost,
+        nextUnitCost,
+      }),
+    };
+  }
+
+  return {};
+};
+
+// =====================================================
+// SECTION: Reconcile HPP output setelah payroll final — GUARDED
+// Fungsi:
+// - menyelaraskan costPerUnit output Work Log dan master HPP/average cost setelah payroll final berubah;
+// - memakai delta cost, bukan menambah qty stok ulang, sehingga stock movement tetap idempotent.
+//
+// Dipakai oleh:
+// - productionPayrollsService.syncWorkLogPayrollSummary setelah payroll confirmed/paid/manual update.
+//
+// Alasan perubahan:
+// - Complete Work Log mem-posting output sebelum payroll final, sehingga HPP master bisa tertinggal material-only.
+// - Tanpa reconcile ini BOM bertingkat yang membaca Semi Finished `averageCostPerUnit` akan memakai harga bahan yang miss.
+//
+// Catatan cleanup:
+// - Ini bukan backfill histori lama lintas collection. Data lama yang belum pernah tersentuh tetap perlu audit/backfill terpisah.
+//
+// Risiko:
+// - Jangan mengubah qty/stockAdded di fungsi ini; yang boleh berubah hanya cost snapshot output dan field HPP/average cost master.
+// =====================================================
+export const reconcileCompletedWorkLogOutputHpp = async (workLogId, options = {}) => {
+  if (!workLogId) return { status: 'skipped_no_work_log' };
+
+  let reconcileResult = { status: 'skipped' };
+  const actor = safeTrim(options.actor) || 'system';
+  // options.source dipertahankan untuk compatibility caller, tetapi tidak ditulis ke schema agar patch ini tidak menambah field baru.
+
+  await runTransaction(db, async (transaction) => {
+    const workLogRef = doc(db, COLLECTION_NAME, workLogId);
+    const workLogSnap = await transaction.get(workLogRef);
+
+    if (!workLogSnap.exists()) {
+      reconcileResult = { status: 'skipped_missing_work_log' };
+      return;
+    }
+
+    const workLog = {
+      id: workLogSnap.id,
+      ...workLogSnap.data(),
+    };
+
+    if (workLog.status !== 'completed') {
+      reconcileResult = { status: 'skipped_not_completed' };
+      return;
+    }
+
+    const outputs = Array.isArray(workLog.outputs) ? workLog.outputs : [];
+    const goodQty = toNumber(workLog.goodQty || 0);
+    const costSummary = buildWorkLogCostSummary({
+      materialUsages: workLog.materialUsages || [],
+      laborCostActual: workLog.laborCostActual,
+      overheadCostActual: workLog.overheadCostActual,
+      goodQty,
+    });
+    const nextUnitCost = toNumber(costSummary.costPerGoodUnit || 0);
+
+    if (goodQty <= 0 || nextUnitCost <= 0 || outputs.length === 0) {
+      reconcileResult = { status: 'skipped_invalid_cost_or_output' };
+      return;
+    }
+
+    const eligibleOutputs = outputs
+      .map((line, index) => ({ line, index }))
+      .filter(({ line }) => (
+        line?.stockAdded === true &&
+        toNumber(line.goodQty || 0) > 0 &&
+        getCollectionNameByItemType(line.outputType) &&
+        line.outputIdRef
+      ));
+
+    if (eligibleOutputs.length === 0) {
+      reconcileResult = { status: 'skipped_no_posted_output' };
+      return;
+    }
+
+    const outputStockReadMap = new Map();
+    for (const { line } of eligibleOutputs) {
+      const collectionName = getCollectionNameByItemType(line.outputType);
+      const outputStockKey = `${collectionName}/${line.outputIdRef}`;
+      if (outputStockReadMap.has(outputStockKey)) continue;
+
+      const stockRef = doc(db, collectionName, line.outputIdRef);
+      const stockSnap = await transaction.get(stockRef);
+      if (!stockSnap.exists()) {
+        throw new Error(`Item output ${line.outputName || '-'} tidak ditemukan saat reconcile HPP`);
+      }
+
+      outputStockReadMap.set(outputStockKey, {
+        ref: stockRef,
+        stockDataRaw: stockSnap.data(),
+        stockItem: normalizeReferenceItem({
+          id: stockSnap.id,
+          ...stockSnap.data(),
+        }),
+      });
+    }
+
+    const nextOutputs = [...outputs];
+    let changedOutputCount = 0;
+    let changedStockCount = 0;
+
+    for (const { line, index } of eligibleOutputs) {
+      const collectionName = getCollectionNameByItemType(line.outputType);
+      const outputStockKey = `${collectionName}/${line.outputIdRef}`;
+      const outputStockState = outputStockReadMap.get(outputStockKey);
+      const lineGoodQty = toNumber(line.goodQty || 0);
+      const previousUnitCost = toNumber(line.costPerUnit || 0);
+      const outputResolution = getOutputStockResolution({
+        line,
+        stockItem: outputStockState.stockItem,
+        fallbackVariantKey: workLog.targetVariantKey || '',
+        fallbackVariantLabel: workLog.targetVariantLabel || '',
+      });
+      const needsStockCostUpdate = Math.abs(previousUnitCost - nextUnitCost) > COST_RECONCILE_TOLERANCE;
+
+      if (needsStockCostUpdate) {
+        const costPayload = buildOutputHppReconcilePayload({
+          collectionName,
+          stockItem: outputStockState.stockItem,
+          stockDataRaw: outputStockState.stockDataRaw || {},
+          outputResolution,
+          goodQty: lineGoodQty,
+          previousUnitCost,
+          nextUnitCost,
+        });
+
+        if (Object.keys(costPayload).length > 0) {
+          transaction.update(outputStockState.ref, {
+            ...costPayload,
+            updatedAt: serverTimestamp(),
+          });
+          changedStockCount += 1;
+        }
+      }
+
+      nextOutputs[index] = calculateOutputLine({
+        ...line,
+        outputHasVariants: outputResolution.materialHasVariants === true || line.outputHasVariants === true,
+        outputVariantKey: outputResolution.resolvedVariantKey || line.outputVariantKey || '',
+        outputVariantLabel: outputResolution.resolvedVariantLabel || line.outputVariantLabel || '',
+        stockSourceType: outputResolution.stockSourceType || line.stockSourceType || 'master',
+        costPerUnit: nextUnitCost,
+      });
+      changedOutputCount += 1;
+    }
+
+    transaction.update(workLogRef, {
+      outputs: nextOutputs,
+      materialCostActual: costSummary.materialCostActual,
+      laborCostActual: costSummary.laborCostActual,
+      overheadCostActual: costSummary.overheadCostActual,
+      totalCostActual: costSummary.totalCostActual,
+      costPerGoodUnit: costSummary.costPerGoodUnit,
+      updatedAt: serverTimestamp(),
+      updatedBy: actor,
+    });
+
+    reconcileResult = {
+      status: changedStockCount > 0 ? 'reconciled' : 'already_synced',
+      changedOutputCount,
+      changedStockCount,
+    };
+  });
+
+  return reconcileResult;
+};
+
 // =====================================================
 // Complete work log + apply stock mutation
 // =====================================================
@@ -1706,46 +2023,23 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
 
       if (workLog.stockConsumptionStatus === "applied" || line.stockDeducted === true) {
         // =====================================================
-        // ACTIVE / GUARDED - refresh live cost material saat Complete Work Log.
+        // ACTIVE / GUARDED - freeze material cost yang sudah dipotong saat Start Production.
         // Fungsi:
-        // - mengambil ulang cost material/output dari master cost aktif tanpa memutasi stok ulang;
-        // - memastikan Work Log aktif tidak membawa snapshot cost lama dari PO/BOM/material line.
+        // - memakai snapshot cost dari Start Production bila sudah ada agar HPP actual tidak berubah karena master cost berubah setelah stok bahan dipotong;
+        // - hanya fallback membaca master jika data legacy belum punya snapshot cost valid.
         // Alasan blok ini dipakai:
-        // - Work Log dari Production Order menandai stockDeducted=true sejak start,
-        //   sehingga complete perlu rehydrate cost dari master tanpa double posting stok.
+        // - material yang sudah stockDeducted=true tidak boleh dipotong ulang dan tidak boleh membuat biaya complete berubah hanya karena harga master terbaru berubah sesudah bahan keluar.
         // Status:
         // - aktif dipakai; guarded karena menjadi dasar material cost dan HPP Work Log.
         // =====================================================
-        if (collectionName && line.itemId) {
-          const stockRef = doc(db, collectionName, line.itemId);
-          const stockSnap = await transaction.get(stockRef);
-
-          if (!stockSnap.exists()) {
-            throw new Error(`Item material ${line.itemName || "-"} tidak ditemukan saat refresh cost complete`);
-          }
-
-          const stockItem = normalizeReferenceItem({
-            id: stockSnap.id,
-            ...stockSnap.data(),
-          });
-          const stockResolution = getResolvedMaterialStock({ line, stockItem });
-          const costSnapshot = getItemUnitCostSnapshot({
-            itemType: line.itemType,
-            stockItem,
-            stockResolution,
-          });
-
+        const existingUnitCost = toNumber(line.costPerUnitSnapshot || 0);
+        if (existingUnitCost > 0 || !collectionName || !line.itemId) {
           nextMaterialUsages.push(
             calculateMaterialUsageLine({
               ...line,
               actualQty,
-              materialHasVariants: stockResolution.materialHasVariants === true,
-              materialVariantStrategy: stockResolution.materialVariantStrategy || line.materialVariantStrategy || 'none',
-              resolvedVariantKey: stockResolution.resolvedVariantKey || line.resolvedVariantKey || '',
-              resolvedVariantLabel: stockResolution.resolvedVariantLabel || line.resolvedVariantLabel || '',
-              stockSourceType: stockResolution.stockSourceType || line.stockSourceType || 'master',
-              costPerUnitSnapshot: costSnapshot.unitCost,
-              costSourceSnapshot: costSnapshot.costSource,
+              costPerUnitSnapshot: existingUnitCost,
+              costSourceSnapshot: line.costSourceSnapshot || (existingUnitCost > 0 ? 'work_log.start_snapshot' : 'missing_master_cost_snapshot'),
               stockDeducted: true,
               stockDeductedAt: line.stockDeductedAt || completedAtValue,
             }),
@@ -1753,7 +2047,39 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
           continue;
         }
 
-        nextMaterialUsages.push(calculateMaterialUsageLine({ ...line, actualQty, stockDeducted: true }));
+        const stockRef = doc(db, collectionName, line.itemId);
+        const stockSnap = await transaction.get(stockRef);
+
+        if (!stockSnap.exists()) {
+          throw new Error(`Item material ${line.itemName || "-"} tidak ditemukan saat fallback cost complete`);
+        }
+
+        const stockItem = normalizeReferenceItem({
+          id: stockSnap.id,
+          ...stockSnap.data(),
+        });
+        const stockResolution = getResolvedMaterialStock({ line, stockItem });
+        const costSnapshot = getItemUnitCostSnapshot({
+          itemType: line.itemType,
+          stockItem,
+          stockResolution,
+        });
+
+        nextMaterialUsages.push(
+          calculateMaterialUsageLine({
+            ...line,
+            actualQty,
+            materialHasVariants: stockResolution.materialHasVariants === true,
+            materialVariantStrategy: stockResolution.materialVariantStrategy || line.materialVariantStrategy || 'none',
+            resolvedVariantKey: stockResolution.resolvedVariantKey || line.resolvedVariantKey || '',
+            resolvedVariantLabel: stockResolution.resolvedVariantLabel || line.resolvedVariantLabel || '',
+            stockSourceType: stockResolution.stockSourceType || line.stockSourceType || 'master',
+            costPerUnitSnapshot: costSnapshot.unitCost,
+            costSourceSnapshot: costSnapshot.costSource,
+            stockDeducted: true,
+            stockDeductedAt: line.stockDeductedAt || completedAtValue,
+          }),
+        );
         continue;
       }
 
@@ -1997,7 +2323,7 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
         updatePayload.lastProductionCostPerUnit = unitCost;
         updatePayload.averageCostPerUnit =
           outputResolution.stockSourceType === 'variant'
-            ? toNumber(updatePayload.averageCostPerUnit || stockData.averageCostPerUnit || 0)
+            ? toNumber(stockData.averageCostPerUnit || 0)
             : nextAverageCost;
         if (outputResolution.stockSourceType === 'variant') {
           updatePayload.variants = (updatePayload.variants || []).map((variant) => {
@@ -2010,6 +2336,10 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
               averageCostPerUnit: nextAverageCost,
             };
           });
+          updatePayload.averageCostPerUnit = calculateWeightedVariantUnitCost(
+            updatePayload.variants,
+            'averageCostPerUnit',
+          );
         }
       } else if (canUpdateOutputHpp && collectionName === "products") {
         const baseCurrentStock =
@@ -2042,6 +2372,10 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
               hppPerUnit: nextHpp,
             };
           });
+          updatePayload.hppPerUnit = calculateWeightedVariantUnitCost(
+            updatePayload.variants,
+            'hppPerUnit',
+          );
         } else {
           updatePayload.hppPerUnit = nextHpp;
         }

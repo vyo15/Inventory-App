@@ -76,6 +76,7 @@ import {
   calculateBomStepLineCost,
   hydrateBomMaterialLineWithLiveCost,
   hydrateBomMaterialLinesWithLiveCost,
+  resolveBomCostSourceLabel,
 } from "../../utils/produksi/productionBomCostHelpers";
 import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
@@ -1255,6 +1256,9 @@ const ProductionBoms = () => {
                       <Typography.Text type="secondary">
                         Estimasi biaya: {formatCurrency(record.totalCostSnapshot)}
                       </Typography.Text>
+                      <Typography.Text type="secondary" className="ims-cell-meta">
+                        Source: {resolveBomCostSourceLabel(record.costSourceSnapshot)}
+                      </Typography.Text>
                     </Space>
                   ),
                 },
@@ -1495,9 +1499,19 @@ const ProductionBoms = () => {
                   render: (value) => formatNumber(value),
                 },
                 {
-                  title: "Total Cost",
-                  dataIndex: "totalCostSnapshot",
-                  render: (value) => formatCurrency(value),
+                  title: "Cost",
+                  key: "cost",
+                  render: (_, record) => (
+                    <Space direction="vertical" size={0}>
+                      <Typography.Text>{formatCurrency(record.totalCostSnapshot)}</Typography.Text>
+                      <Typography.Text type="secondary" className="ims-cell-meta">
+                        {formatCurrency(record.costPerUnitSnapshot)} / {record.unit || "pcs"}
+                      </Typography.Text>
+                      <Typography.Text type="secondary" className="ims-cell-meta">
+                        {resolveBomCostSourceLabel(record.costSourceSnapshot)}
+                      </Typography.Text>
+                    </Space>
+                  ),
                 },
               ]}
             />
@@ -1695,6 +1709,7 @@ const ProductionBoms = () => {
                         ? "Item bahan ini punya varian. Variant tidak dipilih di BOM dan akan otomatis mengikuti variant target saat Production Order dibuat."
                         : "Item bahan ini tidak memakai varian. Saat Production Order dibuat, stok akan dibaca dari master item."
                     }
+                    description={`Estimasi biaya membaca ${resolveBomCostSourceLabel(getFieldValue("costSourceSnapshot"))}.`}
                   />
                 </>
               );

@@ -91,6 +91,8 @@ const PAYROLL_PAYMENT_STATUS_HELP = {
   paid: "Sudah dibayar; Cash Out otomatis dibuat dengan source Payroll Produksi jika nominal > 0.",
 };
 
+const isEditableProductionPayroll = (record = {}) => record.paymentStatus !== "paid";
+
 const PayrollDetailValue = ({ children, help }) => (
   <Space direction="vertical" size={0}>
     <span>{children}</span>
@@ -274,6 +276,11 @@ const ProductionPayrolls = () => {
   };
 
   const handleEdit = (record) => {
+    if (!isEditableProductionPayroll(record)) {
+      message.warning("Payroll yang sudah paid tidak bisa diedit dari UI utama.");
+      return;
+    }
+
     setEditingRecord(record);
     form.setFieldsValue({
       ...DEFAULT_PRODUCTION_PAYROLL_FORM,
@@ -509,15 +516,16 @@ const ProductionPayrolls = () => {
             Detail
           </Button>
 
-          <Button
-            className="ims-action-button"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-            disabled={record.paymentStatus === "paid"}
-          >
-            Edit
-          </Button>
+          {isEditableProductionPayroll(record) && (
+            <Button
+              className="ims-action-button"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            >
+              Edit
+            </Button>
+          )}
 
           {record.paymentStatus !== "paid" && (
             <Popconfirm

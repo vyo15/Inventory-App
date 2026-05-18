@@ -154,9 +154,45 @@ export const calculateVariantTotals = (variants = [], options = {}) => {
     ? normalized.reduce((sum, item) => sum + normalizeNumberStock(item[minStockField]), 0)
     : 0;
   const activeVariants = normalized.filter((item) => item.isActive);
-  const averageCostPerUnit = includeAverageCost && activeVariants.length > 0
-    ? activeVariants.reduce((sum, item) => sum + normalizeNumberStock(item[averageCostField]), 0) / activeVariants.length
+  /* =====================================================
+  SECTION: Weighted variant average cost — AKTIF / GUARDED
+  Fungsi:
+  - Menghitung modal/HPP rata-rata varian berdasarkan bobot stok aktif, bukan rata-rata sederhana per varian.
+
+  Dipakai oleh:
+  - Semi Finished master summary dan item bervarian yang memakai calculateVariantTotals.
+
+  Alasan perubahan:
+  - BOM membaca `averageCostPerUnit` master Semi Finished. Jika master summary memakai rata-rata sederhana, harga bahan produksi bisa miss saat stok tiap varian berbeda jauh.
+
+  Catatan cleanup:
+  - Jika semua module nantinya punya inventory valuation per ledger, helper ini tetap menjadi read-model master, bukan pengganti histori transaksi.
+
+  Risiko:
+  - Jangan ubah ke rata-rata sederhana lagi karena BOM bertingkat akan kembali memakai HPP Semi Finished yang tidak sesuai stok aktual.
+  ===================================================== */
+  const weightedCostQty = includeAverageCost
+    ? activeVariants.reduce((sum, item) => {
+      const stockQty = normalizeNumberStock(item[stockField] ?? item.currentStock ?? item.stock);
+      const unitCost = normalizeNumberStock(item[averageCostField]);
+      return stockQty > 0 && unitCost > 0 ? sum + stockQty : sum;
+    }, 0)
     : 0;
+  const positiveCostVariants = includeAverageCost
+    ? activeVariants.filter((item) => normalizeNumberStock(item[averageCostField]) > 0)
+    : [];
+  const averageCostPerUnit = includeAverageCost && weightedCostQty > 0
+    ? activeVariants.reduce((sum, item) => {
+      const stockQty = normalizeNumberStock(item[stockField] ?? item.currentStock ?? item.stock);
+      const unitCost = normalizeNumberStock(item[averageCostField]);
+      return stockQty > 0 && unitCost > 0 ? sum + (stockQty * unitCost) : sum;
+    }, 0) / weightedCostQty
+    : includeAverageCost && positiveCostVariants.length > 0
+      // ACTIVE / GUARDED: jika semua stok varian 0, jangan rata-ratakan
+      // varian kosong/cost 0 karena master HPP Semi Product akan turun palsu
+      // dan BOM bertingkat bisa membaca modal yang lebih rendah dari hasil produksi terakhir.
+      ? positiveCostVariants.reduce((sum, item) => sum + normalizeNumberStock(item[averageCostField]), 0) / positiveCostVariants.length
+      : 0;
 
   return {
     variants: normalized,

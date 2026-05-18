@@ -293,6 +293,11 @@ const ProductionWorkLogs = () => {
   // - Work Log baru dibuat dari action Mulai Produksi di Production Order, bukan tombol tambah manual di halaman ini
   // =====================================================
   const handleEdit = (record) => {
+    if (!isEditableProductionWorkLog(record)) {
+      message.warning("Work Log yang sudah completed tidak bisa diedit dari UI utama.");
+      return;
+    }
+
     setEditingRecord(record);
     form.setFieldsValue({
       ...DEFAULT_PRODUCTION_WORK_LOG_FORM,
@@ -1280,15 +1285,16 @@ const ProductionWorkLogs = () => {
             Detail
           </Button>
 
-          <Button
-            className="ims-action-button"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-            disabled={!isEditableProductionWorkLog(record)}
-          >
-            Edit
-          </Button>
+          {isEditableProductionWorkLog(record) && (
+            <Button
+              className="ims-action-button"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            >
+              Edit
+            </Button>
+          )}
 
           {isEditableProductionWorkLog(record) && (
             <Button

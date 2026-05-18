@@ -744,6 +744,34 @@ const SemiFinishedMaterials = () => {
     ? selectedMaterial.variants
     : [];
   const selectedMaterialUnit = selectedMaterial?.unit || "pcs";
+  const selectedMaterialHasVariants = selectedMaterial?.hasVariants === true
+    || selectedMaterialVariants.length > 0;
+  const selectedMaterialVariantCostTotals = selectedMaterialHasVariants
+    ? calculateSemiFinishedTotalsFromVariants(selectedMaterialVariants)
+    : null;
+  // ACTIVE / UI READ-MODEL: detail Semi Product menampilkan modal/HPP aktif
+  // yang sama dengan rule BOM: master/varian average cost dulu, lalu fallback
+  // ke last production cost. Ini menghindari kasus varian kosong ikut membagi
+  // cost sehingga summary terlihat Rp 3 padahal varian produksi terakhir Rp 19.
+  const selectedMaterialAverageCost = selectedMaterialHasVariants
+    ? Number(
+        selectedMaterialVariantCostTotals?.averageCostPerUnit
+        || selectedMaterial.averageCostPerUnit
+        || selectedMaterial.lastProductionCostPerUnit
+        || 0,
+      )
+    : Number(selectedMaterial?.averageCostPerUnit || selectedMaterial?.lastProductionCostPerUnit || 0);
+  const selectedMaterialCostSourceLabel = selectedMaterialHasVariants
+    ? Number(selectedMaterialVariantCostTotals?.averageCostPerUnit || 0) > 0
+      ? "Sumber: rata-rata varian aktif"
+      : Number(selectedMaterial?.lastProductionCostPerUnit || 0) > 0
+        ? "Sumber: last production cost"
+        : "Sumber: master cost"
+    : Number(selectedMaterial?.averageCostPerUnit || 0) > 0
+      ? "Sumber: master cost"
+      : Number(selectedMaterial?.lastProductionCostPerUnit || 0) > 0
+        ? "Sumber: last production cost"
+        : "Sumber: belum ada cost";
 
   // =====================================================
   // SECTION: Detail drawer variant compact columns — AKTIF
@@ -1523,9 +1551,12 @@ Risiko:
               <Col xs={24} sm={12} md={8}>
                 <Card size="small">
                   <Statistic
-                    title="Average Cost"
-                    value={formatCurrency(selectedMaterial.averageCostPerUnit)}
+                    title="Modal/HPP Aktif"
+                    value={formatCurrency(selectedMaterialAverageCost)}
                   />
+                  <Typography.Text type="secondary" className="ims-cell-meta">
+                    {selectedMaterialCostSourceLabel}
+                  </Typography.Text>
                 </Card>
               </Col>
             </Row>
@@ -1557,6 +1588,9 @@ Risiko:
                 </Descriptions.Item>
                 <Descriptions.Item label="Reference Cost / Unit">
                   {formatCurrency(selectedMaterial.referenceCostPerUnit)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Modal/HPP Aktif">
+                  {formatCurrency(selectedMaterialAverageCost)}
                 </Descriptions.Item>
                 <Descriptions.Item label="Last Production Cost / Unit">
                   {formatCurrency(selectedMaterial.lastProductionCostPerUnit)}

@@ -158,6 +158,8 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - tambah item tanpa varian
 - tambah item dengan varian
 - cek total stock, available stock, active variant count
+- item bervarian dengan semua stok 0 dan hanya satu varian punya `averageCostPerUnit` > 0 harus menampilkan Modal/HPP Aktif dari varian cost tersebut, bukan rata-rata yang ikut membagi varian cost 0
+- item bervarian dengan stok di beberapa varian harus menampilkan Modal/HPP Aktif weighted by stock varian
 
 ### BOM Produksi
 - buat BOM target semi finished
@@ -208,6 +210,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - cek penambahan stok output
 - selesaikan work log dari popup complete
 - pastikan work log completed tidak bisa diedit ulang sembarangan
+- pastikan row Work Log `completed` hanya menampilkan tombol Detail, tanpa tombol Edit disabled
 - cek payroll tetap bisa membaca work log completed
 - cek HPP tetap bisa membaca work log completed
 
@@ -215,6 +218,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - buat payroll dari work log completed
 - cek nilai payroll
 - ubah status unpaid → paid
+- pastikan row Payroll `paid` hanya menampilkan tombol Detail, tanpa tombol Edit disabled atau Paid
 
 ### Analisis HPP
 - pastikan work log completed terbaca
@@ -1475,9 +1479,20 @@ Risiko:
 - [ ] Cek Work Log completed dengan payroll final.
 - [ ] Cek Work Log completed tanpa payroll final.
 - [ ] Pastikan status `Final`, `Draft Payroll`, `Estimasi`, dan `Perlu cek` muncul sesuai kondisi.
+- [ ] Pastikan kolom HPP/unit menampilkan `Perlu Reconcile HPP` saat output line cost belum sama dengan HPP final payroll.
 - [ ] Pastikan total HPP tidak double count estimasi + final.
 - [ ] Pastikan HPP/unit invalid jika goodQty 0.
-- [ ] Pastikan HPP Analysis tidak menulis ke Firestore dan tidak update `products.hppPerUnit` atau `semi_finished_materials.averageCostPerUnit`.
+- [ ] Pastikan HPP Analysis tidak menulis ke Firestore dan tidak update `products.hppPerUnit` atau `semi_finished_materials.averageCostPerUnit`; update master hanya boleh terjadi dari service payroll/reconcile guarded.
+
+### E2. Scenario produksi bertingkat dan reconcile HPP
+- [ ] Buat Raw Material kain dengan `averageActualUnitCost` dari purchase dan `restockReferencePrice` berbeda; pastikan BOM memakai modal aktual rata-rata, bukan harga referensi, ketika modal aktual tersedia.
+- [ ] Buat Semi Finished `Pola Kelopak` dari Raw Material; complete Work Log dan pastikan material cost memakai snapshot Start Production.
+- [ ] Sebelum payroll final, pastikan HPP Analysis menampilkan draft/preview dan output HPP belum dianggap final.
+- [ ] Setelah payroll final/paid, pastikan Work Log `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit` berubah sesuai payroll final.
+- [ ] Pastikan payroll final menjalankan reconcile HPP tanpa menambah qty stok dan tanpa membuat inventory log baru.
+- [ ] Cek master Semi Finished: `averageCostPerUnit` / variant `averageCostPerUnit` sinkron sesuai rule weighted average.
+- [ ] Buat BOM Produk Jadi yang memakai Semi Finished tersebut; pastikan estimate membaca HPP Semi Finished, bukan harga Raw Material awal.
+- [ ] Buka Data Quality Audit; pastikan kategori output line stale, master HPP stale, dan variant HPP stale muncul hanya untuk data yang belum sinkron.
 
 ### F. Payroll dan Cash
 - [ ] Pastikan payroll tidak dibuat saat PO dibuat.
@@ -1674,3 +1689,12 @@ Catatan lock:
 - [ ] Ubah/reset master cost Semi Finished menjadi 0, lalu buat/start PO baru dan pastikan biaya material Work Log baru menjadi 0, bukan fallback snapshot lama.
 - [ ] Complete Work Log yang sedang berjalan dan pastikan service refresh cost dari master aktif sebelum menghitung `materialCostActual`.
 - [ ] Pastikan wording UI Work Log tidak berubah pada patch live cost ini.
+
+## Checklist Produksi — BOM Cost, Work Log Snapshot, Payroll Reconcile HPP
+- [ ] Buat/update Raw Material dengan `averageActualUnitCost` valid, lalu buat BOM yang memakai raw tersebut. Pastikan estimasi material BOM memakai `averageActualUnitCost`, bukan harga jual/manual lain.
+- [ ] Buat Semi Finished dari Work Log completed, finalkan/payroll paid, lalu buka BOM produk jadi yang memakai Semi Finished tersebut. Pastikan estimasi BOM membaca `averageCostPerUnit` Semi Finished yang sudah ikut labor final.
+- [ ] Untuk Semi Finished bervarian, buat stok/cost varian berbeda. Pastikan master `averageCostPerUnit` menjadi weighted average berdasarkan stok varian, bukan rata-rata sederhana per varian.
+- [ ] Jalankan flow PO → Start Production → Complete Work Log. Pastikan material cost saat complete memakai snapshot Work Log dari start, bukan berubah karena master cost diedit setelah bahan dipotong.
+- [ ] Setelah payroll final/paid, pastikan `laborCostActual`, `totalCostActual`, `costPerGoodUnit`, output `costPerUnit`, dan master HPP/average cost output berubah sesuai final tanpa menambah qty stok dan tanpa inventory log baru.
+- [ ] Buka HPP Analysis dan export XLSX. Pastikan status sinkron master HPP tampil dan kolom export membawa status sinkron master.
+- [ ] Jalankan Data Quality Audit. Pastikan kandidat stale BOM/output HPP tetap read-only dan tidak melakukan backfill otomatis.
