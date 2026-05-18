@@ -529,18 +529,20 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Pastikan output stok bertambah satu kali saja.
 - [ ] Pastikan Work Log status completed.
 - [ ] Pastikan `materialCostActual` terisi jika material punya cost source.
+- [ ] Pastikan `laborCostActual` langsung terisi dari accrued labor rule Tahapan Produksi saat Work Log completed, sebelum payroll paid.
+- [ ] Pastikan output Semi Finished/Product langsung mendapat HPP `material + accrued labor + overhead` dan BOM bertingkat membaca HPP tersebut.
 - [ ] Pastikan payroll line otomatis dibuat per operator.
-- [ ] Pastikan `laborCostActual` tersinkron dari payroll line.
-- [ ] Pastikan `totalCostActual = materialCostActual + laborCostActual`.
+- [ ] Pastikan payroll draft tidak mengubah `laborCostActual` menjadi 0.
+- [ ] Pastikan `totalCostActual = materialCostActual + laborCostActual + overheadCostActual`.
 - [ ] Pastikan `costPerGoodUnit` benar jika `goodQty > 0`.
-- [ ] Klik Paid di Payroll Produksi.
+- [ ] Klik Paid di Payroll Produksi dan pastikan hanya reconcile selisih final, bukan baru pertama kali memasukkan labor.
 - [ ] Pastikan payroll berubah `status=paid` dan `paymentStatus=paid`.
 - [ ] Pastikan expense otomatis muncul di Kas & Biaya > Pengeluaran.
 - [ ] Pastikan expense payroll punya `sourceModule=production_payroll`, `sourceId`, dan `sourceRef`.
 - [ ] Klik Paid ulang/reload, pastikan expense tidak dobel.
 - [ ] Pastikan Profit Loss membaca expense payroll sebagai pengeluaran.
 - [ ] Pastikan Payroll Report menampilkan referensi Cash Out tanpa menghitung expense sebagai source payroll.
-- [ ] Pastikan HPP Analysis membaca Work Log completed dengan material/labor/total cost final.
+- [ ] Pastikan HPP Analysis membaca Work Log completed dengan material/accrued labor/total cost, lalu berubah hanya jika payroll final berbeda.
 - [ ] Pastikan pembelian tetap membuat expense, penjualan selesai tetap membuat income, dan stock adjustment tetap membuat inventory log.
 - [ ] Pastikan build berhasil dan tidak ada error console.
 
@@ -1377,6 +1379,14 @@ Risiko:
 - [ ] Klik preview dan pastikan target hanya raw material cost fields, product HPP fields, dan semi finished average cost fields.
 - [ ] Pastikan tidak menyentuh Work Log, Payroll, PO, stock mutation, transactions, sales, purchases, returns, atau cash.
 
+
+### Guard cost/HPP stok awal dan reset modal
+- [ ] Reset Average Cost Raw Material/Semi/Product hanya pada data test, lalu buat Stock Adjustment `Tambah` pada item yang masih punya stok fisik.
+- [ ] Jika cost/HPP master 0, form Stock Adjustment wajib meminta `Modal per Unit` dan menolak submit jika kosong.
+- [ ] Setelah cost/HPP baseline terisi, buat pembelian baru dengan harga valid; pastikan average cost tidak turun karena stok lama dihitung modal 0.
+- [ ] Untuk raw material bervarian, tambah stok via purchase pada varian aktif dan pastikan master `averageActualUnitCost` memakai zero-cost baseline protection.
+- [ ] Untuk produksi output Semi Finished/Product setelah reset HPP, pastikan HPP output baru tidak terdilusi oleh stock lama yang cost/HPP-nya 0.
+
 ### Confirmation reset/restore
 - [ ] Klik `Jalankan Reset Modal/HPP` tanpa preview; pastikan ditolak.
 - [ ] Setelah preview, klik `Jalankan Reset Modal/HPP`; pastikan modal confirmation muncul.
@@ -1466,9 +1476,10 @@ Risiko:
 - [ ] Complete Work Log dengan operator valid.
 - [ ] Pastikan payroll line dibuat sesuai flow existing setelah Work Log completed.
 - [ ] Pastikan status awal payroll draft tampil sebagai `Draft Payroll`, bukan final.
+- [ ] Pastikan HPP output sudah memakai accrued labor dari step saat Work Log completed, walaupun payroll belum paid.
 - [ ] Confirm/pay payroll jika flow tersedia.
-- [ ] Pastikan setelah payroll final, Work Log detail menampilkan `Final`.
-- [ ] Pastikan estimasi tidak dijumlahkan lagi dengan final.
+- [ ] Pastikan setelah payroll final, Work Log detail hanya mereconcile selisih jika nominal final berbeda dari accrued labor.
+- [ ] Pastikan accrued labor tidak dijumlahkan dobel dengan payroll final.
 - [ ] Complete Work Log tanpa operator jika flow mengizinkan dan pastikan warning operator/payroll jelas.
 - [ ] Pastikan payroll cancelled tidak dihitung sebagai final.
 - [ ] Pastikan `includePayrollInHpp=false` tidak masuk ke final HPP.
@@ -1487,12 +1498,20 @@ Risiko:
 ### E2. Scenario produksi bertingkat dan reconcile HPP
 - [ ] Buat Raw Material kain dengan `averageActualUnitCost` dari purchase dan `restockReferencePrice` berbeda; pastikan BOM memakai modal aktual rata-rata, bukan harga referensi, ketika modal aktual tersedia.
 - [ ] Buat Semi Finished `Pola Kelopak` dari Raw Material; complete Work Log dan pastikan material cost memakai snapshot Start Production.
-- [ ] Sebelum payroll final, pastikan HPP Analysis menampilkan draft/preview dan output HPP belum dianggap final.
-- [ ] Setelah payroll final/paid, pastikan Work Log `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit` berubah sesuai payroll final.
+- [ ] Sebelum payroll final, pastikan HPP aktif sudah terbentuk dari material snapshot + accrued labor step + overhead sehingga semi product bisa dipakai ke step berikutnya tanpa material-only.
+- [ ] Setelah payroll final/paid, pastikan Work Log `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit` hanya berubah jika nominal final berbeda dari accrued labor.
 - [ ] Pastikan payroll final menjalankan reconcile HPP tanpa menambah qty stok dan tanpa membuat inventory log baru.
 - [ ] Cek master Semi Finished: `averageCostPerUnit` / variant `averageCostPerUnit` sinkron sesuai rule weighted average.
 - [ ] Buat BOM Produk Jadi yang memakai Semi Finished tersebut; pastikan estimate membaca HPP Semi Finished, bukan harga Raw Material awal.
 - [ ] Buka Data Quality Audit; pastikan kategori output line stale, master HPP stale, dan variant HPP stale muncul hanya untuk data yang belum sinkron.
+
+### E3. Presisi HPP dan pembulatan komponen bunga
+- [ ] Buat Semi Finished kategori `Kelopak` dengan HPP internal seperti `22.18125`; pastikan detail Semi Finished menampilkan `Rp 22,18 / pcs`, bukan hanya `Rp 22`.
+- [ ] Pastikan detail Semi Finished kategori `Kelopak` menampilkan estimasi resep `± Rp 222 / 10 kelopak per produk`.
+- [ ] Buat pembanding HPP `21.9729`; pastikan UI detail tetap bisa membedakan `Rp 21,97` vs `Rp 22,18`.
+- [ ] Buat BOM Produk Jadi dengan 10 kelopak; pastikan subtotal memakai `10 × cost decimal internal`, bukan `10 × angka tampilan bulat`.
+- [ ] Pastikan total HPP produk jadi/harga jual tetap tampil rupiah bulat, sementara HPP/unit kecil di detail produksi boleh 2 decimal.
+- [ ] Pastikan export HPP/unit memakai 2 decimal, sedangkan total biaya, purchase, kas, payroll, dan laporan uang tetap tanpa sen/desimal.
 
 ### F. Payroll dan Cash
 - [ ] Pastikan payroll tidak dibuat saat PO dibuat.
@@ -1698,3 +1717,10 @@ Catatan lock:
 - [ ] Setelah payroll final/paid, pastikan `laborCostActual`, `totalCostActual`, `costPerGoodUnit`, output `costPerUnit`, dan master HPP/average cost output berubah sesuai final tanpa menambah qty stok dan tanpa inventory log baru.
 - [ ] Buka HPP Analysis dan export XLSX. Pastikan status sinkron master HPP tampil dan kolom export membawa status sinkron master.
 - [ ] Jalankan Data Quality Audit. Pastikan kandidat stale BOM/output HPP tetap read-only dan tidak melakukan backfill otomatis.
+
+### Master inventory table noise cleanup
+- [ ] Buka Semi Product: tabel utama tidak menampilkan caption panjang `Perlu restock...`; status cukup tag ringkas dan varian kosong/rendah tetap terlihat lewat pill stok.
+- [ ] Buka Semi Product: kolom `Modal/HPP` tampil ringkas memakai format HPP/unit presisi, tanpa mengubah angka HPP di database.
+- [ ] Buka Products: kolom Status tidak menampilkan caption panjang `Perlu restock...`; info harga jual/HPP tetap tampil di kolom Harga.
+- [ ] Buka Raw Materials: kolom Bahan Baku tidak menampilkan caption panjang `Perlu restock...`; tag status, varian, supplier, dan kolom harga tetap rapi.
+- [ ] Buka detail item Raw/Product/Semi untuk memastikan informasi varian lengkap masih tersedia di drawer/detail dan tidak ada mutasi stok/HPP hanya karena membuka halaman.

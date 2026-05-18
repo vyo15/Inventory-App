@@ -60,7 +60,6 @@ import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/La
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import { buildSinglePricingPreview } from '../../services/Pricing/pricingService';
 import {
-  formatAffectedVariantStockSummary,
   getVariantAwareStockStatusMeta,
 } from '../../utils/stock/stockHelpers';
 
@@ -917,12 +916,6 @@ const RawMaterials = () => {
       width: 280,
       render: (value, record) => {
         const statusMeta = getRawMaterialStatusMeta(record);
-        const affectedVariantText = formatAffectedVariantStockSummary(record, {
-          sourceType: 'material',
-          threshold: Number(record.minStock || 0),
-          unit: record.stockUnit || 'pcs',
-          getVariantLabel: (variant, index) => variant.name || `Varian ${index + 1}`,
-        });
 
         return (
           <div style={compactCellStyles.stack}>
@@ -939,7 +932,6 @@ const RawMaterials = () => {
               ) : null}
               <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
             </Space>
-            {affectedVariantText ? <Text className="ims-cell-caption">{affectedVariantText}</Text> : null}
           </div>
         );
       },

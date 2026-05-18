@@ -390,5 +390,6 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 ### Variant stock alert display
 
 - Variant pill dipakai untuk saldo varian, bukan untuk teks status panjang. Hindari menulis `Kosong`/`Stok Rendah` berulang di setiap pill.
-- Gunakan tone visual soft pada pill bermasalah, lalu tampilkan caption ringkas seperti `Perlu restock: Merah 0 pcs, Putih 0 pcs +2 lainnya` di area status/nama item.
+- Tabel utama master inventory **tidak boleh** menampilkan caption panjang seperti `Perlu restock: Merah 0 pcs, Putih 0 pcs +2 lainnya` karena membuat UI ramai dan duplikatif. Status cukup memakai tag ringkas, sedangkan varian bermasalah cukup terlihat dari pill stok varian.
+- Informasi cost/modal/HPP aktif lebih prioritas daripada caption restock berulang pada tabel utama. Caption restock detail boleh dipakai di drawer, report, audit, atau halaman analisis bila konteksnya memang troubleshooting.
 - Ringkasan harus dibatasi agar aman untuk data banyak, mobile, dan table compact. Detail varian lengkap tetap berada pada daftar pill/detail drawer.

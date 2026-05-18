@@ -59,7 +59,7 @@ import {
   updateSemiFinishedMaterial,
 } from "../../services/Produksi/semiFinishedMaterialsService";
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
-import formatCurrency from "../../utils/formatters/currencyId";
+import formatCurrency, { formatHppUnitCurrencyId } from "../../utils/formatters/currencyId";
 import { formatStockWithUnitId } from "../../utils/formatters/stockUnit";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
@@ -69,7 +69,6 @@ import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import {
-  formatAffectedVariantStockSummary,
   getVariantAwareStockStatusMeta,
 } from '../../utils/stock/stockHelpers';
 
@@ -134,6 +133,54 @@ const formatStockWithUnit = formatStockWithUnitId;
 
 const getVariantDisplayLabel = (variant = {}, index = 0) =>
   variant.variantLabel || variant.label || variant.name || SEMI_FINISHED_COLOR_MAP[variant.color] || variant.color || `Varian ${index + 1}`;
+
+// ACTIVE / GUARDED: helper display HPP komponen bunga.
+// Qty resep tetap bulat, tetapi cost/unit kecil ditampilkan 2 desimal agar
+// kelopak/daun/tangkai tidak terlihat sama akibat pembulatan Rupiah penuh.
+const FLOWER_COMPONENT_RECIPE_QTY_MAP = {
+  kelopak: 10,
+  daun: 1,
+  kawat: 1,
+};
+
+const FLOWER_COMPONENT_LABEL_MAP = {
+  kelopak: "kelopak",
+  daun: "daun",
+  kawat: "tangkai",
+};
+
+const resolveFlowerComponentRecipeMeta = (record = {}) => {
+  const category = String(record?.category || "").toLowerCase();
+  const qty = FLOWER_COMPONENT_RECIPE_QTY_MAP[category];
+
+  if (!qty) return null;
+
+  return {
+    qty,
+    label: FLOWER_COMPONENT_LABEL_MAP[category] || "komponen",
+  };
+};
+
+
+// ACTIVE / UI READ-MODEL: HPP aktif untuk list utama semi product.
+// Mengikuti rule BOM/detail: average cost varian/master diprioritaskan, fallback ke last production cost.
+// Display-only; tidak menulis stok, HPP, Work Log, payroll, atau master data.
+const resolveSemiFinishedActiveHppCost = (record = {}) => {
+  const variants = Array.isArray(record?.variants) ? record.variants : [];
+  const hasVariants = record?.hasVariants === true || variants.length > 0;
+
+  if (hasVariants) {
+    const totals = calculateSemiFinishedTotalsFromVariants(variants);
+    return Number(
+      totals?.averageCostPerUnit
+      || record.averageCostPerUnit
+      || record.lastProductionCostPerUnit
+      || 0,
+    );
+  }
+
+  return Number(record?.averageCostPerUnit || record?.lastProductionCostPerUnit || 0);
+};
 
 const FALLBACK_SEMI_FINISHED_GROUP_KEY = "__general_reusable";
 const FALLBACK_SEMI_FINISHED_GROUP_LABEL = "Umum / Reusable";
@@ -622,7 +669,7 @@ const SemiFinishedMaterials = () => {
       title: "Semi Finished Material",
       dataIndex: "name",
       key: "name",
-      width: "24%",
+      width: "22%",
       render: (_, record) => (
         <div style={compactCellStyles.stack}>
           <Typography.Text strong>{record.name || "-"}</Typography.Text>
@@ -632,7 +679,7 @@ const SemiFinishedMaterials = () => {
     {
       title: "Kategori",
       key: "category",
-      width: "16%",
+      width: "14%",
       render: (_, record) => (
         <div style={compactCellStyles.stack}>
           <Typography.Text>
@@ -647,7 +694,7 @@ const SemiFinishedMaterials = () => {
     {
       title: "Stok",
       key: "stock",
-      width: "28%",
+      width: "26%",
       // AKTIF / GUARDED: saldo stok master memakai helper presentational locked; flow stok/produksi tidak diubah.
       render: (_, record) => (
         <StockDisplayBlock
@@ -661,24 +708,29 @@ const SemiFinishedMaterials = () => {
       ),
     },
     {
+      title: "Modal/HPP",
+      key: "activeHpp",
+      width: "14%",
+      // ACTIVE / UI-ONLY: tampilkan cost paling penting di table utama agar tidak kalah oleh teks status berulang.
+      render: (_, record) => (
+        <div className="ims-cell-stack ims-cell-stack-tight">
+          <Typography.Text strong>{formatHppUnitCurrencyId(resolveSemiFinishedActiveHppCost(record))}</Typography.Text>
+          <Typography.Text type="secondary" className="ims-cell-meta">/{record.unit || "pcs"}</Typography.Text>
+        </div>
+      ),
+    },
+    {
       title: "Status",
       key: "status",
-      width: "16%",
+      width: "10%",
       align: "left",
-      // AKTIF / GUARDED: status tetap terlihat di primary table tanpa fixed/sticky agar tidak memaksa horizontal scroll.
+      // AKTIF / GUARDED: tabel utama hanya menampilkan tag status ringkas; detail varian tetap ada di kolom stok/drawer.
       render: (_, record) => {
         const statusMeta = getStockStatusMeta(record);
-        const affectedVariantText = formatAffectedVariantStockSummary(record, {
-          sourceType: "semi_finished",
-          threshold: Number(record.minStockAlert || 0),
-          unit: record.unit || "pcs",
-          getVariantLabel: getVariantDisplayLabel,
-        });
 
         return (
           <div className="ims-cell-stack ims-cell-stack-tight">
             <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
-            {affectedVariantText ? <Typography.Text className="ims-cell-caption">{affectedVariantText}</Typography.Text> : null}
           </div>
         );
       },
@@ -686,7 +738,7 @@ const SemiFinishedMaterials = () => {
     {
       title: "Aksi",
       key: "actions",
-      width: "16%",
+      width: "14%",
       // AKTIF / GUARDED: tombol aksi tetap di kolom kanan natural tanpa fixed/sticky agar primary table tidak memaksa horizontal scroll.
       className: "app-table-action-column",
       render: (_, record) => (
@@ -772,6 +824,12 @@ const SemiFinishedMaterials = () => {
       : Number(selectedMaterial?.lastProductionCostPerUnit || 0) > 0
         ? "Sumber: last production cost"
         : "Sumber: belum ada cost";
+  const selectedMaterialRecipeMeta = selectedMaterial
+    ? resolveFlowerComponentRecipeMeta(selectedMaterial)
+    : null;
+  const selectedMaterialRecipeCost = selectedMaterialRecipeMeta
+    ? selectedMaterialAverageCost * selectedMaterialRecipeMeta.qty
+    : 0;
 
   // =====================================================
   // SECTION: Detail drawer variant compact columns — AKTIF
@@ -845,7 +903,7 @@ const SemiFinishedMaterials = () => {
       render: (_, variant) => (
         <div style={compactCellStyles.stack}>
           <Typography.Text type="secondary" style={compactCellStyles.meta}>
-            Avg: {formatCurrency(variant.averageCostPerUnit)}
+            Avg: {formatHppUnitCurrencyId(variant.averageCostPerUnit)}
           </Typography.Text>
         </div>
       ),
@@ -1452,7 +1510,7 @@ const SemiFinishedMaterials = () => {
 
             <Col xs={24} md={8}>
               <Form.Item label="Average Cost / Unit (Otomatis)">
-                <Input value={formatCurrency(calculatedTotals.averageCostPerUnit)} disabled />
+                <Input value={formatHppUnitCurrencyId(calculatedTotals.averageCostPerUnit)} disabled />
               </Form.Item>
             </Col>
 
@@ -1464,7 +1522,7 @@ const SemiFinishedMaterials = () => {
                       {formatSemiFinishedStockSummary(calculatedTotals)}
                     </Typography.Text>
                     <Typography.Text type="secondary">
-                      Average Cost: {formatCurrency(calculatedTotals.averageCostPerUnit)}
+                      Average Cost: {formatHppUnitCurrencyId(calculatedTotals.averageCostPerUnit)}
                     </Typography.Text>
                   </Space>
                 </Card>
@@ -1552,11 +1610,18 @@ Risiko:
                 <Card size="small">
                   <Statistic
                     title="Modal/HPP Aktif"
-                    value={formatCurrency(selectedMaterialAverageCost)}
+                    value={formatHppUnitCurrencyId(selectedMaterialAverageCost)}
                   />
-                  <Typography.Text type="secondary" className="ims-cell-meta">
-                    {selectedMaterialCostSourceLabel}
-                  </Typography.Text>
+                  <Space direction="vertical" size={0}>
+                    <Typography.Text type="secondary" className="ims-cell-meta">
+                      {selectedMaterialCostSourceLabel}
+                    </Typography.Text>
+                    {selectedMaterialRecipeMeta ? (
+                      <Typography.Text type="secondary" className="ims-cell-meta">
+                        ≈ {formatCurrency(selectedMaterialRecipeCost)} / {formatNumber(selectedMaterialRecipeMeta.qty)} {selectedMaterialRecipeMeta.label} per produk
+                      </Typography.Text>
+                    ) : null}
+                  </Space>
                 </Card>
               </Col>
             </Row>
@@ -1587,13 +1652,18 @@ Risiko:
                   {formatStockWithUnit(selectedMaterial.minStockAlert, selectedMaterialUnit)}
                 </Descriptions.Item>
                 <Descriptions.Item label="Reference Cost / Unit">
-                  {formatCurrency(selectedMaterial.referenceCostPerUnit)}
+                  {formatHppUnitCurrencyId(selectedMaterial.referenceCostPerUnit)}
                 </Descriptions.Item>
                 <Descriptions.Item label="Modal/HPP Aktif">
-                  {formatCurrency(selectedMaterialAverageCost)}
+                  {formatHppUnitCurrencyId(selectedMaterialAverageCost)}
                 </Descriptions.Item>
+                {selectedMaterialRecipeMeta ? (
+                  <Descriptions.Item label="Estimasi Resep Bunga">
+                    ≈ {formatCurrency(selectedMaterialRecipeCost)} / {formatNumber(selectedMaterialRecipeMeta.qty)} {selectedMaterialRecipeMeta.label}
+                  </Descriptions.Item>
+                ) : null}
                 <Descriptions.Item label="Last Production Cost / Unit">
-                  {formatCurrency(selectedMaterial.lastProductionCostPerUnit)}
+                  {formatHppUnitCurrencyId(selectedMaterial.lastProductionCostPerUnit)}
                 </Descriptions.Item>
               </Descriptions>
             </Card>

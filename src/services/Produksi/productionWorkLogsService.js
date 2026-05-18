@@ -31,6 +31,7 @@ import {
   calculateOutputLine,
   calculateProductionMonitoring,
 } from "../../constants/productionWorkLogOptions";
+import { calculatePayrollAmounts } from "../../constants/productionPayrollOptions";
 import { calculateWeightedAverage, normalizeStockSnapshot, toNumber } from "../../utils/stock/stockHelpers";
 import {
   applyStockMutationToItem,
@@ -62,6 +63,113 @@ const filterActiveLike = (items = []) =>
 // =====================================================
 const safeTrim = (value) => String(value || "").trim();
 
+const PRODUCTION_STEPS_COLLECTION_NAME = "production_steps";
+
+const normalizePayrollMode = (value = "") => (value === "per_batch" ? "per_batch" : "per_qty");
+const normalizePayrollOutputBasis = (value = "") => (
+  value === "actual_output_qty" ? "actual_output_qty" : "good_qty"
+);
+
+const resolveWorkerCountForHpp = (workLog = {}) => {
+  const workerIds = Array.isArray(workLog.workerIds) ? workLog.workerIds.filter(Boolean) : [];
+  const workerNames = Array.isArray(workLog.workerNames) ? workLog.workerNames.filter(Boolean) : [];
+  return Math.max(workerIds.length, workerNames.length, toNumber(workLog.workerCount || 0));
+};
+
+const resolveWorkLogStepPayrollRuleForHpp = ({ workLog = {}, productionStep = null } = {}) => {
+  const processType = safeTrim(productionStep?.processType || workLog.stepProcessType);
+  const payrollClassification = safeTrim(
+    productionStep?.payrollClassification ||
+      workLog.stepPayrollClassification ||
+      (processType === "support_process" ? "support_fulfillment" : "direct_labor"),
+  );
+  const includePayrollInHpp =
+    typeof productionStep?.includePayrollInHpp === "boolean"
+      ? productionStep.includePayrollInHpp
+      : typeof workLog.stepPayrollIncludeInHpp === "boolean"
+        ? workLog.stepPayrollIncludeInHpp
+        : payrollClassification === "direct_labor";
+
+  return {
+    stepId: safeTrim(productionStep?.id || workLog.stepId),
+    stepCode: safeTrim(productionStep?.code || workLog.stepCode),
+    stepName: safeTrim(productionStep?.name || workLog.stepName),
+    stepProcessType: processType,
+    payrollMode: normalizePayrollMode(productionStep?.payrollMode || workLog.stepPayrollMode),
+    payrollRate: Math.max(0, toNumber(productionStep?.payrollRate ?? workLog.stepPayrollRate ?? 0)),
+    payrollQtyBase: Math.max(1, toNumber(productionStep?.payrollQtyBase ?? workLog.stepPayrollQtyBase ?? 1)),
+    payrollOutputBasis: normalizePayrollOutputBasis(productionStep?.payrollOutputBasis || workLog.stepPayrollOutputBasis),
+    payrollClassification,
+    includePayrollInHpp,
+    source: productionStep?.id ? "production_step_master" : "work_log_step_snapshot",
+  };
+};
+
+const resolveCompletedWorkLogAccruedLaborCost = ({
+  workLog = {},
+  productionStep = null,
+  totalGoodQty = 0,
+} = {}) => {
+  const payrollRule = resolveWorkLogStepPayrollRuleForHpp({ workLog, productionStep });
+
+  if (payrollRule.includePayrollInHpp === false) {
+    return {
+      amount: 0,
+      perWorkerAmount: 0,
+      workerCount: resolveWorkerCountForHpp(workLog),
+      payrollRule,
+      status: "excluded_from_hpp",
+    };
+  }
+
+  const workerCount = resolveWorkerCountForHpp(workLog);
+  if (workerCount <= 0) {
+    throw new Error("Operator produksi wajib dipilih sebelum Work Log diselesaikan agar labor HPP tidak 0.");
+  }
+
+  if (payrollRule.payrollRate <= 0) {
+    throw new Error(
+      `Tarif labor tahapan ${payrollRule.stepName || payrollRule.stepCode || "produksi"} masih 0. Isi rate di master Tahapan Produksi sebelum Work Log diselesaikan.`,
+    );
+  }
+
+  const goodQty = Math.max(0, toNumber(totalGoodQty || workLog.goodQty || 0));
+  const actualOutputQty = Math.max(0, toNumber(workLog.actualOutputQty || goodQty));
+  const outputQtyUsed = payrollRule.payrollOutputBasis === "actual_output_qty" ? actualOutputQty : goodQty;
+  const workedQty = payrollRule.payrollMode === "per_batch" ? Math.max(0, toNumber(workLog.plannedQty || 0)) : outputQtyUsed;
+
+  if (payrollRule.payrollMode === "per_qty" && outputQtyUsed <= 0) {
+    throw new Error("Good Qty/Actual Output untuk labor HPP harus lebih dari 0 sebelum Work Log diselesaikan.");
+  }
+
+  if (payrollRule.payrollMode === "per_batch" && workedQty <= 0) {
+    throw new Error("Qty batch Work Log harus lebih dari 0 untuk labor HPP mode per batch.");
+  }
+
+  const calculated = calculatePayrollAmounts({
+    payrollMode: payrollRule.payrollMode,
+    payrollRate: payrollRule.payrollRate,
+    payrollQtyBase: payrollRule.payrollQtyBase,
+    outputQtyUsed,
+    workedQty,
+    bonusAmount: 0,
+    deductionAmount: 0,
+  });
+  const perWorkerAmount = Math.max(0, toNumber(calculated.finalAmount || 0));
+  const amount = perWorkerAmount * workerCount;
+
+  if (amount <= 0) {
+    throw new Error("Labor HPP hasil perhitungan 0. Cek tarif step, qty output, dan operator sebelum Work Log diselesaikan.");
+  }
+
+  return {
+    amount,
+    perWorkerAmount,
+    workerCount,
+    payrollRule,
+    status: "accrued",
+  };
+};
 
 const normalizeReferenceItem = (item = {}) => ({
   ...item,
@@ -2011,6 +2119,18 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
       }
     }
 
+    let productionStep = null;
+    if (workLog.stepId) {
+      const productionStepRef = doc(db, PRODUCTION_STEPS_COLLECTION_NAME, workLog.stepId);
+      const productionStepSnap = await transaction.get(productionStepRef);
+      if (productionStepSnap.exists()) {
+        productionStep = {
+          id: productionStepSnap.id,
+          ...productionStepSnap.data(),
+        };
+      }
+    }
+
     const reservedQtyMap = buildWorkLogReservationMap(productionOrder);
 
     const completedAtValue = new Date();
@@ -2195,9 +2315,19 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
     - Jangan update HPP output jika total cost atau good qty tidak valid; itu akan menyebarkan HPP 0 ke master produk/semi finished.
     =====================================================
     */
+    const accruedLaborCost = resolveCompletedWorkLogAccruedLaborCost({
+      workLog: {
+        ...workLog,
+        goodQty: totalGoodQty,
+        actualOutputQty: totalGoodQty,
+      },
+      productionStep,
+      totalGoodQty,
+    });
+
     const recalculatedCostSummary = buildWorkLogCostSummary({
       materialUsages: nextMaterialUsages,
-      laborCostActual: workLog.laborCostActual,
+      laborCostActual: accruedLaborCost.amount,
       overheadCostActual: workLog.overheadCostActual,
       goodQty: totalGoodQty,
     });
@@ -2433,6 +2563,19 @@ export const completeProductionWorkLog = async (id, currentUser = null) => {
       overheadCostActual: recalculatedOverheadCost,
       totalCostActual: recalculatedTotalCost,
       costPerGoodUnit: recalculatedCostPerGoodUnit,
+      payrollAccruedAmount: accruedLaborCost.amount,
+      payrollAccruedPerWorkerAmount: accruedLaborCost.perWorkerAmount,
+      payrollAccruedWorkerCount: accruedLaborCost.workerCount,
+      payrollAccruedSource: accruedLaborCost.payrollRule.source,
+      payrollCostStatus: accruedLaborCost.status,
+      stepProcessType: accruedLaborCost.payrollRule.stepProcessType || workLog.stepProcessType || "",
+      stepPayrollMode: accruedLaborCost.payrollRule.payrollMode,
+      stepPayrollRate: accruedLaborCost.payrollRule.payrollRate,
+      stepPayrollQtyBase: accruedLaborCost.payrollRule.payrollQtyBase,
+      stepPayrollOutputBasis: accruedLaborCost.payrollRule.payrollOutputBasis,
+      stepPayrollClassification: accruedLaborCost.payrollRule.payrollClassification,
+      stepPayrollIncludeInHpp: accruedLaborCost.payrollRule.includePayrollInHpp,
+      stepPayrollRuleSource: accruedLaborCost.payrollRule.source,
       stockConsumptionStatus: "applied",
       stockOutputStatus: "applied",
       payrollCalculated: false,

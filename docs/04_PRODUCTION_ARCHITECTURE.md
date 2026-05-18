@@ -85,7 +85,7 @@ Rule penting yang terverifikasi:
 - step lines sudah disortir menurut sequence
 - estimasi material BOM mengambil live master cost terbaru: Raw Material memakai `averageActualUnitCost` dengan fallback `restockReferencePrice`; Semi Finished memakai `averageCostPerUnit` dengan fallback `lastProductionCostPerUnit`. Jika source master 0, estimate BOM wajib 0 dan tidak boleh fallback ke snapshot BOM lama.
 - `materialLines[].costPerUnitSnapshot` / `totalCostSnapshot` di BOM hanya derived cache/read-only history field; bukan source utama untuk estimasi aktif, PO baru, atau Work Log baru.
-- Untuk produksi bertingkat, input Semi Finished pada step berikutnya memakai HPP master Semi Finished dari step sebelumnya (`material + labor final + overhead jika ada`) setelah source masternya tersedia. Step berikutnya tidak boleh kembali memakai harga raw material awal sebagai shortcut.
+- Untuk produksi bertingkat, input Semi Finished pada step berikutnya memakai HPP master Semi Finished dari step sebelumnya (`material + accrued labor saat Work Log completed + overhead jika ada`, lalu direvisi oleh payroll final jika ada selisih) setelah source masternya tersedia. Step berikutnya tidak boleh kembali memakai harga raw material awal sebagai shortcut.
 - estimasi biaya produksi BOM mengambil tarif dari Tahapan Produksi.
 - overhead BOM dipakai untuk biaya listrik/glue gun. Work Log baru dari PO membawa `overheadCostEstimate` BOM ke `overheadCostActual` dan mengalikannya dengan jumlah batch PO.
 
@@ -97,8 +97,17 @@ Organisasi UI aktif:
 Alur source cost aktif:
 - Raw Material master cost / Semi Finished master HPP terbaru → BOM estimate aktif → PO requirement qty → Work Log baru.
 - Work Log baru wajib mengambil cost dari master aktif saat Start Production. Saat Complete, material yang sudah `stockDeducted=true` wajib memakai snapshot Start Production agar HPP tidak berubah karena master cost berubah setelah bahan keluar. Fallback baca master hanya untuk data legacy yang belum punya snapshot valid.
+- Saat Complete Work Log, `laborCostActual` langsung di-accrue dari rule Tahapan Produksi dan jumlah operator agar HPP output tidak menunggu user klik Paid payroll. Payroll `paid/confirmed` hanya menjadi final adjustment/reconcile jika nominal final berbeda dari accrued labor.
+- Weighted average cost/HPP memakai zero-cost baseline protection: jika stok lama masih ada tetapi cost/HPP master 0 karena reset/data lama, stok lama tidak boleh dihitung sebagai modal 0 saat ada pembelian/produksi baru; cost masuk pertama yang valid menjadi baseline.
 - Snapshot BOM/PO hanya cache requirement; snapshot Work Log yang sudah dipotong menjadi histori costing material untuk completed Work Log, inventory log, payroll/final HPP history, dan transaksi yang sudah final.
 - Reset Modal/HPP wajib merefresh BOM estimate dari master cost pasca-reset, menjaga `laborCostEstimate` dari step dan `overheadCostEstimate` existing.
+
+Presisi dan pembulatan HPP:
+- Qty resep produksi tetap bulat sesuai rule bisnis, misalnya 1 bunga memakai 10 kelopak, 1 daun, dan 1 tangkai.
+- HPP internal per unit semi product kecil tidak boleh dibulatkan terlalu cepat. Nilai seperti `22.18125` tetap disimpan/dipakai kalkulasi BOM dan Work Log sebagai angka decimal internal.
+- Pembulatan Rupiah penuh hanya untuk display utama, subtotal, total HPP produk jadi, harga jual, kas, purchase, payroll, dan laporan uang.
+- UI detail produksi boleh menampilkan HPP/unit dengan 2 decimal, misalnya `Rp 22,18 / pcs`, agar `Rp 21,97` dan `Rp 22,18` tidak terlihat sama-sama `Rp 22`.
+- Untuk komponen bunga, UI boleh menampilkan estimasi resep, misalnya `10 × HPP kelopak = ± Rp 222 / 10 kelopak`, tetapi kalkulasi tetap memakai angka decimal internal sebelum dibulatkan di total akhir.
 
 ## 6. Production Order
 Tujuan:
@@ -140,7 +149,7 @@ Data penting yang terlihat disimpan:
 - startedAt, completedAt, durationMinutesActual
 - material usages
 - outputs
-- materialCostActual, overheadCostActual, laborCostActual, totalCostActual, costPerGoodUnit; input labor aktif tidak diedit manual dari Work Log karena labor berasal dari Payroll
+- materialCostActual, overheadCostActual, laborCostActual, totalCostActual, costPerGoodUnit; input labor aktif tidak diedit manual dari Work Log karena labor diambil dari rule Tahapan Produksi saat Complete dan direvisi oleh payroll final bila ada selisih
 - Work Log baru wajib memakai current master cost saat Start/Complete; stale BOM/PO/material line snapshot tidak boleh menjadi source biaya aktual baru
 - monitoring miss dan output teoretis
 - status stok konsumsi, output, dan payroll calculation
@@ -245,16 +254,17 @@ Catatan boundary:
 2. Work Log completed memposting output stok satu kali dan menghitung `materialCostActual`.
 3. Work Log completed memanggil auto payroll untuk membuat payroll line per operator.
 4. Payroll line menyimpan `workLogId`, `workNumber`, `stepId`, `stepName`, `workerId`, dan `workerName`.
-5. Payroll summary disinkronkan kembali ke Work Log sebagai `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit`. Jika payroll masih draft, UI hanya boleh menampilkan preview read-only; HPP final tetap menunggu payroll final.
-6. Payroll paid membuat expense otomatis dengan guard `sourceModule/sourceId`.
-7. Cash Out membaca expense payroll dari collection `expenses`.
-8. Profit Loss membaca expense payroll dari `expenses`, sedangkan Payroll Report tetap membaca `production_payrolls`.
+5. Complete Work Log langsung menyimpan accrued labor dari rule Tahapan Produksi ke `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit` agar output HPP/master cost siap dipakai BOM bertingkat tanpa menunggu payroll paid.
+6. Payroll summary tetap disinkronkan kembali ke Work Log sebagai final adjustment jika line payroll sudah `confirmed/paid` dan nominal final berbeda dari accrued labor.
+7. Payroll paid membuat expense otomatis dengan guard `sourceModule/sourceId`.
+8. Cash Out membaca expense payroll dari collection `expenses`.
+9. Profit Loss membaca expense payroll dari `expenses`, sedangkan Payroll Report tetap membaca `production_payrolls`.
 
 
 ## Final Guard Produksi Setelah Task 6
 - **Production Order preview aktif:** drawer create PO memakai preview compact read-only. Preview boleh membantu user melihat stok target dan kebutuhan material, tetapi tidak boleh menjadi source final submit.
 - **Work Log completed guarded:** complete Work Log tidak boleh memproses stok/output dua kali, tidak boleh membuat payroll dobel, dan tidak boleh mengubah completed data tanpa evaluasi khusus.
-- **Actual cost aktif:** completed Work Log wajib menyimpan ringkasan material/labor/total/cost per good unit untuk HPP Analysis. Draft/estimasi labor boleh tampil sebagai preview, tetapi tidak boleh dianggap final.
+- **Actual cost aktif:** completed Work Log wajib menyimpan ringkasan material/labor accrued/total/cost per good unit untuk HPP Analysis. Payroll final boleh merevisi selisih, tetapi HPP output tidak boleh material-only hanya karena payroll belum paid.
 - **Payroll otomatis aktif:** Work Log completed membuat payroll line per operator berdasarkan rule Tahapan Produksi.
 - **Cash Out otomatis aktif:** payroll `paid` membuat expense otomatis dengan source reference dan guard idempotent.
 - **Legacy:** custom payroll preference di master karyawan tetap dibaca sebagai compatibility/info lama, bukan rule utama payroll baru.
@@ -350,8 +360,9 @@ Flow aktif source terbaru:
 BOM live master cost
 → Production Order requirement
 → Start Production freeze material actual snapshot
-→ Complete Work Log post output material/overhead cost
-→ Payroll final sync labor actual
+→ Complete Work Log post output material/overhead/accrued labor cost
+→ Auto Payroll line sebagai payable/checking karyawan
+→ Payroll final sync/reconcile hanya jika nominal final berbeda
 → Reconcile output HPP/master average cost tanpa mutasi qty stok ulang
 ```
 
@@ -360,9 +371,19 @@ Rule aktif:
 - BOM estimasi membaca Semi Finished `averageCostPerUnit` fallback `lastProductionCostPerUnit`.
 - Semi Finished bervarian harus memakai weighted average berdasarkan stok varian aktif agar BOM bertingkat tidak memakai HPP rata-rata sederhana yang miss.
 - Complete Work Log memakai material snapshot yang sudah dibekukan saat Start Production. Fallback ke master hanya untuk data legacy yang belum punya snapshot cost.
-- Payroll final mengubah `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit`, lalu menjalankan reconcile output HPP/master cost.
+- Complete Work Log wajib menghitung accrued labor dari master Tahapan Produksi (`payrollMode`, `payrollRate`, `payrollQtyBase`, `payrollOutputBasis`, `includePayrollInHpp`) dan operator. Jika step direct labor rate 0/operator kosong, complete harus ditolak agar HPP tidak material-only.
+- Payroll final mengubah `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit` hanya saat ada final line yang masuk HPP, lalu menjalankan reconcile output HPP/master cost.
+- Pembelian/produksi masuk memakai weighted average dengan guard cost 0: stok lama yang cost/HPP-nya 0 tidak boleh menurunkan average cost saat incoming cost valid tersedia.
 - Reconcile HPP tidak boleh menambah/mengurangi stock qty, tidak boleh membuat inventory log baru, dan tidak boleh mengubah status Work Log/PO.
 
 Boundary legacy:
 - Work Log lama yang tidak pernah tersentuh payroll sync tetap perlu Data Quality Audit/backfill guarded terpisah.
 - Jika data sudah pernah dijual/dipakai sebelum reconcile, patch ini menjaga master cost ke depan tetapi tidak merekonstruksi COGS histori lama.
+
+## Guard Modal/HPP Stok Awal dan Reset Cost — 2026-05-18
+
+Rule aktif:
+- Stock Adjustment `Tambah` untuk item yang cost/HPP master-nya masih 0 wajib mengisi `Modal per Unit` agar stok awal/data lama tidak masuk sebagai modal 0.
+- Jika item sudah punya cost/HPP master valid, Stock Adjustment tetap hanya koreksi stok dan tidak meng-average ulang cost lama. Pembelian resmi tetap menjadi flow utama untuk incoming cost baru.
+- Raw Material purchase dan output produksi memakai weighted average dengan zero-cost baseline protection. Contoh: stok lama 100 pcs dengan average cost 0, lalu beli/produksi 10 pcs dengan cost 1.000, average cost menjadi 1.000, bukan 90,9.
+- Reset Modal/HPP hanya boleh dipakai untuk data test. Jika stok asli masih ada, simpan baseline/isi ulang modal via Stock Adjustment guard sebelum transaksi baru.

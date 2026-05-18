@@ -69,7 +69,7 @@ import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/La
 // SECTION: helper format angka Indonesia
 // =====================================================
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
-import formatCurrency from "../../utils/formatters/currencyId";
+import formatCurrency, { formatHppUnitCurrencyId } from "../../utils/formatters/currencyId";
 import { getFormArrayValue, getNextSequenceNumber, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildBomMaterialFormLine, buildBomStepFormLine } from "../../utils/produksi/productionLineBuilders";
 import {
@@ -1505,7 +1505,7 @@ const ProductionBoms = () => {
                     <Space direction="vertical" size={0}>
                       <Typography.Text>{formatCurrency(record.totalCostSnapshot)}</Typography.Text>
                       <Typography.Text type="secondary" className="ims-cell-meta">
-                        {formatCurrency(record.costPerUnitSnapshot)} / {record.unit || "pcs"}
+                        {formatHppUnitCurrencyId(record.costPerUnitSnapshot)} / {record.unit || "pcs"}
                       </Typography.Text>
                       <Typography.Text type="secondary" className="ims-cell-meta">
                         {resolveBomCostSourceLabel(record.costSourceSnapshot)}

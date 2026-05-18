@@ -35,7 +35,19 @@ export const calculateWeightedAverage = (previousQty, previousCost, incomingQty,
 
   if (totalQty <= 0) return 0;
 
-  return (prevQty * prevCost + inQty * inCost) / totalQty;
+  // =====================================================
+  // ACTIVE / GUARDED - Zero-cost baseline protection.
+  // Fungsi:
+  // - Jika stok lama masih ada tetapi cost/HPP master ter-reset/0, stok lama tidak boleh
+  //   dihitung sebagai modal 0 saat ada pembelian/produksi baru.
+  // - Cost masuk pertama yang valid menjadi baseline untuk stok lama + stok masuk.
+  // Risiko:
+  // - Jangan ubah menjadi average biasa tanpa migration cost lama, karena bisa membuat
+  //   modal turun tidak realistis dan laporan laba tampak terlalu besar.
+  // =====================================================
+  const previousCostBasis = prevQty > 0 && prevCost <= 0 && inCost > 0 ? inCost : prevCost;
+
+  return (prevQty * previousCostBasis + inQty * inCost) / totalQty;
 };
 
 

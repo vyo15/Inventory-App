@@ -17,7 +17,7 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatDateId } from "../../utils/formatters/dateId";
 import formatNumber from "../../utils/formatters/numberId";
-import formatCurrency from "../../utils/formatters/currencyId";
+import formatCurrency, { formatHppUnitCurrencyId } from "../../utils/formatters/currencyId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveWorkLogLaborCostDisplay } from "../../utils/produksi/productionPayrollRuleHelpers";
 
@@ -338,8 +338,8 @@ const ProductionHppAnalysis = () => {
         value: formatCurrency(summary.totalFinalCost),
       },
       { key: "final-good-qty", title: "Good Qty Final", value: formatNumber(summary.finalGoodQty) },
-      { key: "avg-hpp", title: "Rata-rata HPP Final", value: formatCurrency(summary.averageFinalHpp) },
-      { key: "avg-hpp-preview", title: "HPP Preview", value: formatCurrency(summary.averagePreviewHpp) },
+      { key: "avg-hpp", title: "Rata-rata HPP Final", value: formatHppUnitCurrencyId(summary.averageFinalHpp) },
+      { key: "avg-hpp-preview", title: "HPP Preview", value: formatHppUnitCurrencyId(summary.averagePreviewHpp) },
       { key: "warning-rows", title: "Perlu Cek", value: formatNumber(summary.warningRows) },
     ],
     [summary],
@@ -408,8 +408,8 @@ const ProductionHppAnalysis = () => {
         previewTotalCostDisplay: formatCurrency(row.previewTotalCost),
         finalTotalCostDisplay: row.isHppFinalReady ? formatCurrency(row.finalTotalCost) : "Belum final",
         totalCostStatus: row.totalCostStatus || "-",
-        previewHppPerUnitDisplay: formatCurrency(row.previewHppPerUnit),
-        finalHppPerUnitDisplay: row.isHppFinalReady ? formatCurrency(row.finalHppPerUnit) : "Belum final",
+        previewHppPerUnitDisplay: formatHppUnitCurrencyId(row.previewHppPerUnit),
+        finalHppPerUnitDisplay: row.isHppFinalReady ? formatHppUnitCurrencyId(row.finalHppPerUnit) : "Belum final",
         hppReconcileStatusLabel: getHppReconcileStatusLabel(row.hppReconcileStatus),
         costValidation:
           Array.isArray(row.costWarnings) && row.costWarnings.length > 0
@@ -528,7 +528,7 @@ const ProductionHppAnalysis = () => {
       width: "14%",
       render: (_, record) => (
         <Space direction="vertical" size={2}>
-          <Typography.Text strong>{record.isHppFinalReady ? formatCurrency(record.finalHppPerUnit) : "Belum final"}</Typography.Text>
+          <Typography.Text strong>{record.isHppFinalReady ? formatHppUnitCurrencyId(record.finalHppPerUnit) : "Belum final"}</Typography.Text>
           <Tag color={getHppCostStatusTagColor(record.totalCostStatus)} style={compactTagStyle}>
             {record.totalCostStatus}
           </Tag>
@@ -537,7 +537,7 @@ const ProductionHppAnalysis = () => {
           </Tag>
           {!record.isHppFinalReady ? (
             <Typography.Text type="secondary" className="ims-cell-meta">
-              Preview: {formatCurrency(record.previewHppPerUnit)}
+              Preview: {formatHppUnitCurrencyId(record.previewHppPerUnit)}
             </Typography.Text>
           ) : (
             <Typography.Text type="secondary" className="ims-cell-meta">

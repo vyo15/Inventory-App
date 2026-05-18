@@ -1,4 +1,4 @@
-import { calculateAvailableStock, toNumber } from '../stock/stockHelpers';
+import { calculateAvailableStock, calculateWeightedAverage, toNumber } from '../stock/stockHelpers';
 import {
   calculateVariantStockTotals,
   normalizeVariantStockShape,
@@ -171,11 +171,12 @@ export const applyPurchaseToRawMaterial = (
     );
 
     const previousTotalStock = variants.reduce((sum, item) => sum + toNumber(item.currentStock || 0), 0);
-    const nextTotalStock = previousTotalStock + normalizedQty;
-    const averageActualUnitCost =
-      nextTotalStock > 0
-        ? ((previousTotalStock * currentAverage) + (normalizedQty * normalizedCost)) / nextTotalStock
-        : normalizedCost;
+    const averageActualUnitCost = calculateWeightedAverage(
+      previousTotalStock,
+      currentAverage,
+      normalizedQty,
+      normalizedCost,
+    );
 
     return enrichRawMaterialWithVariantTotals({
       ...material,
@@ -187,10 +188,12 @@ export const applyPurchaseToRawMaterial = (
 
   const previousStock = toNumber(material?.currentStock ?? material?.stock ?? 0);
   const nextStock = previousStock + normalizedQty;
-  const averageActualUnitCost =
-    nextStock > 0
-      ? ((previousStock * currentAverage) + (normalizedQty * normalizedCost)) / nextStock
-      : normalizedCost;
+  const averageActualUnitCost = calculateWeightedAverage(
+    previousStock,
+    currentAverage,
+    normalizedQty,
+    normalizedCost,
+  );
 
   return {
     ...material,

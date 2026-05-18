@@ -369,6 +369,11 @@ const CATEGORY_CONFIGS = [
     label: "HPP produk/semi finished 0",
     recommendation: "Jangan reset jika data asli",
   },
+  {
+    key: "cost_zero_with_stock",
+    label: "Cost/HPP 0 padahal stok ada",
+    recommendation: "Isi baseline modal/HPP sebelum transaksi baru agar average cost tidak terdilusi modal 0",
+  },
 ];
 
 const createCategoryAccumulator = () => CATEGORY_CONFIGS.reduce((acc, item) => {
@@ -543,6 +548,15 @@ const findOutputVariant = (stockItem = {}, line = {}) => {
 const getOutputCostField = (collectionName = "") => (
   collectionName === "products" ? "hppPerUnit" : "averageCostPerUnit"
 );
+
+const getMasterCurrentStock = (data = {}) => toNumber(data.currentStock ?? data.stock ?? 0);
+
+const getMasterCostForAudit = (collectionName = "", data = {}) => {
+  if (collectionName === "raw_materials") return toNumber(data.averageActualUnitCost ?? 0);
+  if (collectionName === "products") return toNumber(data.hppPerUnit ?? data.hpp ?? data.costPerUnit ?? 0);
+  if (collectionName === "semi_finished_materials") return toNumber(data.averageCostPerUnit ?? data.hppPerUnit ?? data.costPerUnit ?? 0);
+  return 0;
+};
 
 const buildOutputHppReconcileIssues = (data = {}, finalPayrollAmount = 0, masterRefs = {}) => {
   const outputs = Array.isArray(data.outputs) ? data.outputs : [];
@@ -1199,6 +1213,28 @@ export const getDataQualityAudit = async () => {
         recommendation: categories.master_missing_code.recommendation,
       }));
     }
+  });
+
+  [
+    ["raw_materials", collectionMap.raw_materials?.docs || []],
+    ["semi_finished_materials", collectionMap.semi_finished_materials?.docs || []],
+    ["products", collectionMap.products?.docs || []],
+  ].forEach(([collectionName, docs]) => {
+    docs.forEach((itemDoc) => {
+      const data = itemDoc.data();
+      const isRelevant = data.isActive !== false && data.active !== false;
+      const currentStock = getMasterCurrentStock(data);
+      const unitCost = getMasterCostForAudit(collectionName, data);
+
+      if (isRelevant && currentStock > 0 && unitCost <= 0) {
+        addIssue(categories, "cost_zero_with_stock", toSample({
+          collectionName,
+          itemDoc,
+          issue: `Stok masih ada (${currentStock}) tetapi cost/HPP master 0.`,
+          recommendation: categories.cost_zero_with_stock.recommendation,
+        }));
+      }
+    });
   });
 
   (collectionMap.products?.docs || []).forEach((itemDoc) => {

@@ -583,7 +583,7 @@ const syncWorkLogPayrollSummary = async (workLogId) => {
   - syncWorkLogPayrollSummary setelah create/update/status payroll.
 
   Alasan perubahan:
-  - Draft/cancelled payroll serta line includePayrollInHpp=false tidak boleh menaikkan HPP final produksi.
+  - Draft/cancelled payroll serta line includePayrollInHpp=false tidak boleh mengganti accrued labor Work Log menjadi 0.
 
   Catatan cleanup:
   - Line count tetap memakai activeLines untuk audit payroll; nominal HPP memakai hppLaborLines final.
@@ -597,10 +597,19 @@ const syncWorkLogPayrollSummary = async (workLogId) => {
     0,
   );
 
+  const accruedLaborAmount = toSafeNumber(
+    workLogData.payrollAccruedAmount ?? workLogData.laborCostActual,
+  );
+  const hppLaborAmount = hppLaborLines.length > 0 ? payrollFinalAmount : accruedLaborAmount;
+  const payrollCostStatus = hppLaborLines.length > 0
+    ? "final"
+    : hppLaborAmount > 0
+      ? "accrued"
+      : "pending";
   const materialCostActual = toSafeNumber(workLogData.materialCostActual);
   const overheadCostActual = toSafeNumber(workLogData.overheadCostActual);
   const goodQty = toSafeNumber(workLogData.goodQty);
-  const totalCostActual = materialCostActual + payrollFinalAmount + overheadCostActual;
+  const totalCostActual = materialCostActual + hppLaborAmount + overheadCostActual;
   const costPerGoodUnit = goodQty > 0 ? totalCostActual / goodQty : 0;
 
   await updateDoc(workLogRef, {
@@ -615,7 +624,8 @@ const syncWorkLogPayrollSummary = async (workLogId) => {
     payrollLineCount: activeLines.length,
     paidPayrollLineCount: paidLines.length,
     payrollFinalAmount,
-    laborCostActual: payrollFinalAmount,
+    laborCostActual: hppLaborAmount,
+    payrollCostStatus,
     totalCostActual,
     costPerGoodUnit,
     updatedAt: serverTimestamp(),

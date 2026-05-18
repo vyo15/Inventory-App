@@ -53,7 +53,6 @@ import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/La
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import { buildSinglePricingPreview } from '../../services/Pricing/pricingService';
 import {
-  formatAffectedVariantStockSummary,
   getVariantAwareStockStatusMeta,
 } from '../../utils/stock/stockHelpers';
 
@@ -579,17 +578,10 @@ const Products = () => {
       align: 'left',
       render: (_, record) => {
         const statusMeta = getProductStatusMeta(record);
-        const affectedVariantText = formatAffectedVariantStockSummary(record, {
-          sourceType: 'product',
-          threshold: Number(record.minStockAlert || 0),
-          unit: 'pcs',
-          getVariantLabel: getVariantDisplayLabel,
-        });
 
         return (
           <div className={compactCellClassNames.stack}>
             <Tag className="ims-status-tag" color={statusMeta.color}>{statusMeta.label}</Tag>
-            {affectedVariantText ? <Text className="ims-cell-caption">{affectedVariantText}</Text> : null}
           </div>
         );
       },

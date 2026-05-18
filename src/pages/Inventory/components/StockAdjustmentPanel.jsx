@@ -147,6 +147,90 @@ const formatQuantityId = (value, unit = "") => {
   return `${formatted}${unit ? ` ${unit}` : ""}`.trim();
 };
 
+const getAdjustmentCostField = (collectionName = "") => {
+  if (collectionName === "raw_materials") return "averageActualUnitCost";
+  if (collectionName === "semi_finished_materials") return "averageCostPerUnit";
+  if (collectionName === "products") return "hppPerUnit";
+  return "";
+};
+
+const resolveAdjustmentCurrentUnitCost = ({ item = {}, collectionName = "", variant = null } = {}) => {
+  const costField = getAdjustmentCostField(collectionName);
+  if (!costField) return 0;
+
+  if (variant && collectionName !== "raw_materials") {
+    return Number(variant?.[costField] || 0);
+  }
+
+  return Number(item?.[costField] || 0);
+};
+
+const calculateVariantAverageCost = (variants = [], costField = "") => {
+  let stockTotal = 0;
+  let costTotal = 0;
+
+  variants.forEach((variant) => {
+    const variantStock = Number(variant.currentStock ?? variant.stock ?? 0);
+    const variantCost = Number(variant?.[costField] || 0);
+    if (variantStock > 0 && variantCost > 0) {
+      stockTotal += variantStock;
+      costTotal += variantStock * variantCost;
+    }
+  });
+
+  return stockTotal > 0 ? costTotal / stockTotal : 0;
+};
+
+const buildStockAdjustmentCostGuardPayload = ({
+  collectionName = "",
+  latestSourceItem = {},
+  selectedSourceVariant = null,
+  stockUpdatePayload = {},
+  adjustmentType = "",
+  unitCost = 0,
+} = {}) => {
+  if (adjustmentType !== "in") return {};
+
+  const costField = getAdjustmentCostField(collectionName);
+  if (!costField) return {};
+
+  const currentUnitCost = resolveAdjustmentCurrentUnitCost({
+    item: latestSourceItem,
+    collectionName,
+    variant: selectedSourceVariant,
+  });
+
+  if (currentUnitCost > 0) return {};
+
+  const normalizedUnitCost = Number(unitCost || 0);
+  if (!Number.isFinite(normalizedUnitCost) || normalizedUnitCost <= 0) {
+    throw new Error("Modal per unit wajib diisi untuk stok masuk ketika cost/HPP master masih 0.");
+  }
+
+  if (selectedSourceVariant && collectionName !== "raw_materials") {
+    const targetVariantKey = selectedSourceVariant.variantKey || "";
+    const nextVariants = (stockUpdatePayload.variants || latestSourceItem.variants || []).map((variant) => {
+      if ((variant.variantKey || "") !== targetVariantKey) return variant;
+      return {
+        ...variant,
+        [costField]: normalizedUnitCost,
+      };
+    });
+
+    return {
+      variants: nextVariants,
+      [costField]: calculateVariantAverageCost(nextVariants, costField) || normalizedUnitCost,
+    };
+  }
+
+  return {
+    [costField]: normalizedUnitCost,
+    ...(collectionName === "raw_materials"
+      ? { restockReferencePrice: Math.round(normalizedUnitCost) }
+      : {}),
+  };
+};
+
 // =========================
 // SECTION: Tampilan ringkas catatan adjustment
 // Fungsi:
@@ -390,6 +474,16 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
 
   const quantityUnitLabel = selectedItem?.stockUnit || selectedItem?.unit || selectedItem?.baseUnit || "";
   const quantityUsesWholeNumber = isWholeNumberUnit(quantityUnitLabel);
+  const selectedItemTypeConfig = resolveStockAdjustmentItemTypeConfig({
+    itemType: selectedItemType,
+  });
+  const selectedCurrentUnitCost = resolveAdjustmentCurrentUnitCost({
+    item: selectedItem || {},
+    collectionName: selectedItemTypeConfig.collectionName,
+    variant: selectedVariant,
+  });
+  const needsUnitCostGuard =
+    selectedAdjustmentType === "in" && selectedItem && selectedCurrentUnitCost <= 0;
 
   // =========================
   // SECTION: Submit penyesuaian stok atomik
@@ -522,6 +616,14 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           variantKey: selectedSourceVariant?.variantKey || "",
           deltaCurrent: finalQuantityChange,
         });
+        const stockAdjustmentCostPayload = buildStockAdjustmentCostGuardPayload({
+          collectionName: sourceCollectionName,
+          latestSourceItem,
+          selectedSourceVariant,
+          stockUpdatePayload,
+          adjustmentType: values.adjustmentType,
+          unitCost: values.unitCost,
+        });
         const currentStockAfter = sourceStockSnapshot.currentStock + finalQuantityChange;
         const availableStockAfter = Math.max(
           currentStockAfter - sourceStockSnapshot.reservedStock,
@@ -548,6 +650,8 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           quantity: adjustmentQuantity,
           finalQuantity: finalQuantityChange,
           finalQuantityChange,
+          unitCost: Number(values.unitCost || 0),
+          costGuardApplied: Object.keys(stockAdjustmentCostPayload).length > 0,
           reason: values.reason || "",
           note: values.note || "",
           unit: stockUnit,
@@ -595,7 +699,10 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           },
         });
 
-        transaction.update(itemReference, stockUpdatePayload);
+        transaction.update(itemReference, {
+          ...stockUpdatePayload,
+          ...stockAdjustmentCostPayload,
+        });
         transaction.set(adjustmentReference, adjustmentPayload);
         transaction.set(inventoryLogReference, inventoryLogPayload);
       });
@@ -795,7 +902,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
             <Select
               placeholder="Pilih jenis item"
               onChange={() => {
-                form.setFieldsValue({ itemId: undefined, variantKey: undefined });
+                form.setFieldsValue({ itemId: undefined, variantKey: undefined, unitCost: undefined });
               }}
             >
               <Option value="raw_material">Bahan Baku</Option>
@@ -814,7 +921,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               placeholder="Pilih item"
               optionFilterProp="children"
               onChange={() => {
-                form.setFieldsValue({ variantKey: undefined });
+                form.setFieldsValue({ variantKey: undefined, unitCost: undefined });
               }}
             >
               {availableItems.map((item) => (
@@ -832,7 +939,14 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               rules={[{ required: true, message: "Varian wajib dipilih untuk item bervarian" }]}
               extra="Pilih varian jika item bervarian."
             >
-              <Select showSearch placeholder="Pilih varian" optionFilterProp="children">
+              <Select
+                showSearch
+                placeholder="Pilih varian"
+                optionFilterProp="children"
+                onChange={() => {
+                  form.setFieldsValue({ unitCost: undefined });
+                }}
+              >
                 {variantOptions.map((variantOption) => (
                   <Option key={variantOption.value} value={variantOption.value}>
                     {variantOption.label}
@@ -915,7 +1029,12 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
             label="Tipe Penyesuaian"
             rules={[{ required: true, message: "Tipe penyesuaian wajib dipilih" }]}
           >
-            <Select placeholder="Pilih tipe penyesuaian">
+            <Select
+              placeholder="Pilih tipe penyesuaian"
+              onChange={() => {
+                form.setFieldsValue({ unitCost: undefined });
+              }}
+            >
               <Option value="in">Tambah</Option>
               <Option value="out">Kurang</Option>
             </Select>
@@ -965,6 +1084,43 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               parser={parseIntegerIdInput}
             />
           </Form.Item>
+
+          {selectedAdjustmentType === "in" ? (
+            <Form.Item
+              name="unitCost"
+              label="Modal per Unit"
+              rules={[
+                {
+                  validator: (_, value) => {
+                    if (!needsUnitCostGuard) return Promise.resolve();
+
+                    const numericValue = Number(value || 0);
+                    if (Number.isFinite(numericValue) && numericValue > 0) {
+                      return Promise.resolve();
+                    }
+
+                    return Promise.reject(
+                      new Error("Modal per unit wajib diisi karena cost/HPP item masih 0."),
+                    );
+                  },
+                },
+              ]}
+              extra={
+                selectedCurrentUnitCost > 0
+                  ? "Cost/HPP master sudah ada, field ini opsional dan tidak mengubah cost lama."
+                  : "Wajib untuk stok masuk pertama atau data lama yang cost/HPP-nya masih 0."
+              }
+            >
+              <InputNumber
+                min={0}
+                step={1}
+                precision={0}
+                style={{ width: "100%" }}
+                formatter={(value) => formatNumberId(value)}
+                parser={parseIntegerIdInput}
+              />
+            </Form.Item>
+          ) : null}
 
           <Form.Item
             name="reason"
