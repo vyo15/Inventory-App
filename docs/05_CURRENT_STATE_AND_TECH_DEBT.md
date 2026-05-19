@@ -454,6 +454,22 @@ Guard tersisa:
 - Fallback legacy `currentStock ?? stock` masih dipertahankan untuk data lama.
 - Ringkasan breakdown tidak boleh mengubah supplier catalog, prefill supplier, atau menjadikan harga supplier sebagai harga aktual wajib.
 
+
+## Purchases - OCR Shopee UI dan Print Guard
+
+Status source terbaru:
+- UI draft OCR Shopee di Purchases sudah dipisah ke `src/pages/Transaksi/components/PurchaseOcrDraftPanel.jsx`.
+- Popup/detail struk OCR Shopee sudah dipisah ke `src/pages/Transaksi/components/PurchaseOcrReceiptModal.jsx`.
+- CSS receipt OCR sudah keluar dari `src/App.css` dan berada di `PurchaseOcrReceiptModal.css` agar tidak menjadi style global seluruh aplikasi.
+- Print popup OCR memakai guard `body.purchase-ocr-print-mode`, sehingga rule print yang menyembunyikan `body *` hanya aktif saat user print receipt OCR.
+- Setelah klik Terapkan Qty & Biaya ke Form, UI wajib memberi feedback lokal di panel OCR, bukan hanya toast global.
+
+Guard tersisa:
+- Parser OCR tetap di `src/utils/purchases/shopeePurchaseOcrParser.js` dan tidak boleh dipindah ke UI component.
+- `purchaseNoteDisplay.js`, purchase payload, stock mutation, expense otomatis, dan inventory log tidak boleh berubah hanya karena cleanup UI OCR.
+- OCR Apply hanya mengisi draft form; transaksi tetap hanya terjadi saat user klik Simpan Pembelian.
+- Jangan mengembalikan CSS OCR receipt ke `src/App.css` kecuali terbukti harus menjadi shared global style.
+
 ## Update UI/Performance Ringan - 2026-04-26
 
 ### Supplier table cleanup
@@ -859,7 +875,9 @@ Status: **AKTIF + GUARDED DOCS-SYNC**.
 
 Current state:
 - `PricingModeSwitch` sudah menjadi shared UI untuk Product dan Raw Material.
+- Source aktual: `Products.jsx` dan `RawMaterials.jsx` mengimpor `PricingModeSwitch`, tetapi registrasi field `pricingMode` tetap local lewat hidden `Form.Item` agar payload form dan validasi service tidak berubah.
 - Auto-preview dan warning harga tetap local di `Products.jsx` dan `RawMaterials.jsx` sebagai keputusan aman karena Product memakai base cost/target price berbeda dari Raw Material.
+- Handler halaman wajib tetap membersihkan `pricingRuleId` dan `pricingPreviewWarning` saat user kembali ke Manual.
 - Formula preview tetap lewat `buildSinglePricingPreview`; docs tidak boleh mengarahkan pembuatan rumus baru di page/component.
 - Service validation Product dan Raw Material tetap menjadi guard final untuk kewajiban `pricingRuleId` saat `pricingMode = rule`; mode Manual tetap boleh tanpa `pricingRuleId`.
 

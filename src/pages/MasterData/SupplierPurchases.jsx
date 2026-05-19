@@ -35,6 +35,7 @@ import { formatCurrencyIDR } from '../../utils/formatters/currencyId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
+import { DataRefreshIndicator, getDataTableEmptyText } from '../../components/Layout/Feedback/DataLoadingState';
 import {
   assertSupplierCodeAvailable,
   calculateSupplierMaterialRestockMetrics,
@@ -139,6 +140,8 @@ const SupplierPurchases = () => {
   const [saving, setSaving] = useState(false);
   const [supplierCodeLoading, setSupplierCodeLoading] = useState(false);
   const [editingSupplierNeedsCodeRepair, setEditingSupplierNeedsCodeRepair] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [searchText, setSearchText] = useState('');
   const [materialFilter, setMaterialFilter] = useState(undefined);
 
@@ -168,9 +171,16 @@ const SupplierPurchases = () => {
   // ---------------------------------------------------------------------------
   useEffect(() => {
     const unsubscribeSuppliers = listenSuppliers(
-      (nextSuppliers) => setSuppliers(nextSuppliers),
+      (nextSuppliers) => {
+        setSuppliers(nextSuppliers);
+        setLoadError('');
+        setIsLoading(false);
+      },
       (error) => {
         console.error(error);
+        setSuppliers([]);
+        setLoadError('Gagal memuat supplier.');
+        setIsLoading(false);
         message.error('Gagal memuat supplier.');
       },
     );
@@ -952,6 +962,7 @@ const SupplierPurchases = () => {
         title="Daftar Supplier"
         subtitle="Kontak dan katalog."
       >
+        <DataRefreshIndicator loading={isLoading} dataSource={filteredSuppliers} />
         <Table
           className="app-data-table"
           columns={columns}
@@ -959,10 +970,15 @@ const SupplierPurchases = () => {
           rowKey="id"
           tableLayout="fixed"
           locale={{
-            emptyText: materialIdFromQuery ? (
-              <Empty description="Belum ada supplier yang menyediakan bahan ini" />
-            ) : (
-              <Empty description="Belum ada data supplier" />
+            emptyText: getDataTableEmptyText(
+              isLoading,
+              loadError ? (
+                <Empty description={loadError} />
+              ) : materialIdFromQuery ? (
+                <Empty description="Belum ada supplier yang menyediakan bahan ini" />
+              ) : (
+                <Empty description="Belum ada data supplier" />
+              ),
             ),
           }}
         />

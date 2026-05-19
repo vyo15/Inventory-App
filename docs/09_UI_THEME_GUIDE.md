@@ -158,6 +158,7 @@ Detail drawer dipakai untuk membaca data, bukan untuk menggantikan dokumentasi f
    - Catatan manual tampil sebagai section sendiri.
    - Catatan tidak boleh mendominasi area atas kecuali memang menjadi warning bisnis.
    - Catatan audit panjang di tabel utama wajib diringkas 1-2 baris; detail penuh boleh memakai tooltip/detail. Untuk OCR Shopee, tampilkan badge ringkas dan jangan tampilkan seluruh breakdown biaya di kolom tabel.
+   - Style detail/receipt OCR harus page/component scoped; jangan menaruh CSS receipt dan print guard OCR kembali ke `src/App.css`.
 
 5. **Section `Info Tambahan`**
    - Data optional, audit, kompatibilitas data lama, atau informasi teknis panjang masuk `Collapse` bila tidak perlu dibaca setiap kali.

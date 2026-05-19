@@ -17,6 +17,7 @@ import dayjs from "dayjs";
 import { db } from "../../firebase";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import {
   buildInventoryLogPayload,
   INVENTORY_LOG_COLLECTION,
@@ -53,6 +54,8 @@ const Returns = () => {
   const [returnRecords, setReturnRecords] = useState([]);
   const [products, setProducts] = useState([]);
   const [materials, setMaterials] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedItemType, setSelectedItemType] = useState("product");
 
@@ -102,6 +105,15 @@ const Returns = () => {
         }));
 
         setReturnRecords(nextReturnRecords);
+        setLoadError("");
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error("Gagal memuat data retur:", error);
+        setReturnRecords([]);
+        setLoadError("Gagal memuat data retur.");
+        setIsLoading(false);
+        message.error("Gagal memuat data retur.");
       },
     );
 
@@ -115,6 +127,10 @@ const Returns = () => {
 
         setProducts(nextProducts);
       },
+      (error) => {
+        console.error("Gagal memuat produk untuk retur:", error);
+        message.error("Gagal memuat produk untuk retur.");
+      },
     );
 
     const unsubscribeMaterials = onSnapshot(
@@ -126,6 +142,10 @@ const Returns = () => {
         }));
 
         setMaterials(nextMaterials);
+      },
+      (error) => {
+        console.error("Gagal memuat bahan baku untuk retur:", error);
+        message.error("Gagal memuat bahan baku untuk retur.");
       },
     );
 
@@ -515,12 +535,14 @@ const Returns = () => {
             - kolom varian memakai schema final dari record retur/log
             Status: aktif / final
         ========================= */}
+        <DataRefreshIndicator loading={isLoading} dataSource={returnRecords} />
         <Table
           className="app-data-table"
           dataSource={returnRecords}
           columns={returnTableColumns}
           rowKey="id"
           tableLayout="fixed"
+          locale={{ emptyText: getDataTableEmptyText(isLoading, loadError || "Belum ada data retur.") }}
         />
       </PageSection>
 

@@ -34,10 +34,6 @@ import {
   runTransaction,
 } from "firebase/firestore";
 import {
-  addInventoryLog,
-  updateInventoryStock,
-} from "../../services/Inventory/inventoryService";
-import {
   buildInventoryLogPayload,
   INVENTORY_LOG_COLLECTION,
 } from "../../services/Inventory/inventoryLogService";

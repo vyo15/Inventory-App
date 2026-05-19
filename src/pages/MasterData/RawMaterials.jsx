@@ -59,6 +59,7 @@ import {
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import { buildSinglePricingPreview } from '../../services/Pricing/pricingService';
+import PricingModeSwitch from '../../components/Pricing/PricingModeSwitch';
 import {
   getVariantAwareStockStatusMeta,
 } from '../../utils/stock/stockHelpers';
@@ -1327,28 +1328,22 @@ const RawMaterials = () => {
               Risiko:
               - Jangan ubah nilai domain pricingMode selain manual/rule karena service dan PricingRules bergantung pada nilai ini.
               ===================================================== */}
-              <Form.Item
-                name="pricingMode"
-                label="Gunakan Pricing Rule"
-                valuePropName="checked"
-                getValueProps={(value) => ({ checked: value === 'rule' })}
-                getValueFromEvent={(checked) => (checked ? 'rule' : 'manual')}
+              <Form.Item name="pricingMode" hidden>
+                <Input type="hidden" />
+              </Form.Item>
+              <PricingModeSwitch
+                value={pricingModeValue || 'manual'}
                 extra={pricingModeValue === 'rule'
                   ? 'Pricing Rule aktif: harga dihitung dari modal aktual rata-rata atau harga referensi restock.'
                   : 'Manual: harga jual bahan diisi langsung.'}
-              >
-                <Switch
-                  checkedChildren="Rule"
-                  unCheckedChildren="Manual"
-                  onChange={(checked) => {
-                    form.setFieldsValue({ pricingMode: checked ? 'rule' : 'manual' });
-                    if (!checked) {
-                      form.setFieldsValue({ pricingRuleId: null });
-                      setPricingPreviewWarning('');
-                    }
-                  }}
-                />
-              </Form.Item>
+                onChange={(nextMode) => {
+                  form.setFieldsValue({ pricingMode: nextMode });
+                  if (nextMode !== 'rule') {
+                    form.setFieldsValue({ pricingRuleId: null });
+                    setPricingPreviewWarning('');
+                  }
+                }}
+              />
             </Col>
           </Row>
 

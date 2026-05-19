@@ -69,6 +69,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Tutup modal Tambah Pembelian, lalu pada tabel klik **Lihat** di samping tag `OCR Shopee`; popup detail harus terbuka tanpa error console `record is not defined`.
 - [ ] Tutup popup detail OCR dan pastikan halaman Purchases bisa diklik/scroll normal lagi; overlay tidak boleh menutup tabel setelah ditutup.
 - [ ] Print popup OCR dan pastikan isi struk terbaca tanpa scrollbar internal di hasil print.
+- [ ] Setelah menutup popup OCR, coba print halaman non-OCR bila tersedia dan pastikan halaman lain tidak blank akibat CSS print OCR.
 - [ ] Pastikan flow Simpan Pembelian tetap satu-satunya flow yang mengubah purchases, stok, inventory log, dan expense. OCR Apply tidak boleh membuat transaksi.
 
 ### Penjualan

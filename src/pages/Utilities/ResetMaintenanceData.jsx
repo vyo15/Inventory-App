@@ -84,6 +84,9 @@ import {
 } from "../../services/Maintenance/resetMaintenanceDataService";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import useAuth from "../../hooks/useAuth";
+import ResetAutoDetectPanel from "./components/ResetAutoDetectPanel";
+import ResetPreviewPanel from "./components/ResetPreviewPanel";
+import ResetSafeRepairPanel from "./components/ResetSafeRepairPanel";
 
 const { Paragraph, Text } = Typography;
 
@@ -1956,191 +1959,63 @@ const ResetMaintenanceData = () => {
             </Row>
           </Card>
 
-          <Card title="Auto Detect Bug Data" size="small" extra={<Tag color={autoBugSummary.color}>{autoBugSummary.status}</Tag>}>
-            <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Row gutter={[8, 8]}>
-                <Col xs={24} md={6}>
-                  <Button block type="primary" icon={<FileSearchOutlined />} loading={loadingAutoDetect} onClick={handleRunAllAudits}>
-                    Cek Semua Area
-                  </Button>
-                </Col>
-                <Col xs={24} md={6}>
-                  <Button block icon={<FileSearchOutlined />} loading={loadingDataQualityAudit} onClick={() => handleLoadDataQualityAudit({ showProblemPreview: true })}>
-                    Cek Data Lama
-                  </Button>
-                </Col>
-                <Col xs={24} md={6}>
-                  <Button block icon={<FileSearchOutlined />} loading={loadingStockAudit} onClick={handleLoadStockAudit}>
-                    Cek Stok
-                  </Button>
-                </Col>
-                <Col xs={24} md={6}>
-                  <Button block icon={<FileSearchOutlined />} loading={loadingTransactionVariantAudit} onClick={handleLoadTransactionVariantAudit}>
-                    Cek Variant Transaksi
-                  </Button>
-                </Col>
-              </Row>
-              <Table
-                className="app-data-table"
-                size="small"
-                pagination={false}
-                dataSource={auditOverviewRows}
-                columns={[
-                  { title: "Area", dataIndex: "area", key: "area", width: 150, render: (value) => renderCompactText(value, 135) },
-                  { title: "Dicek", dataIndex: "checkedRecords", key: "checkedRecords", width: 90 },
-                  { title: "Issue", dataIndex: "issueCount", key: "issueCount", width: 90, render: (value) => <Tag color={value ? "red" : "green"}>{value || 0}</Tag> },
-                  { title: "Repair", dataIndex: "safeRepairCount", key: "safeRepairCount", width: 90, render: (value) => <Tag color={value ? "blue" : "default"}>{value || 0}</Tag> },
-                  { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", render: (value) => renderCompactText(value, 360) },
-                ]}
-                scroll={{ x: 780 }}
-              />
-              {auditIssueRows.length > 0 && (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message={`${autoBugSummary.issueCount} issue dan ${autoBugSummary.safeRepairCount} kandidat repair aman terdeteksi.`}
-                  description="Buka Detail Audit jika perlu melihat sample record. Untuk data lama setelah patch, coba Repair Turunan dulu sebelum reset destructive."
-                />
-              )}
-            </Space>
-          </Card>
+          <ResetAutoDetectPanel
+            autoBugSummary={autoBugSummary}
+            loadingAutoDetect={loadingAutoDetect}
+            loadingDataQualityAudit={loadingDataQualityAudit}
+            loadingStockAudit={loadingStockAudit}
+            loadingTransactionVariantAudit={loadingTransactionVariantAudit}
+            onRunAllAudits={handleRunAllAudits}
+            onLoadDataQualityAudit={handleLoadDataQualityAudit}
+            onLoadStockAudit={handleLoadStockAudit}
+            onLoadTransactionVariantAudit={handleLoadTransactionVariantAudit}
+            auditOverviewRows={auditOverviewRows}
+            auditIssueRows={auditIssueRows}
+            renderCompactText={renderCompactText}
+          />
 
-          <Card title="Repair Turunan Aman" size="small" extra={<Tag color="green">Tidak hapus data</Tag>}>
-            <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Text type="secondary">
-                Repair hanya menyamakan field turunan/display/snapshot. Tidak membuat transaksi baru, tidak posting stok ulang, dan tidak menghapus data utama.
-              </Text>
-              <Row gutter={[8, 8]}>
-                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingStockRepair} onClick={handleRepairStockAudit}>Repair Stok</Button></Col>
-                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingLogSchemaRepair} onClick={handleRepairLogSchema}>Repair Inventory Log</Button></Col>
-                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingMaintenanceRepair} onClick={handleRepairProductionMaintenance}>Repair Produksi</Button></Col>
-                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingPayrollRepair} onClick={handleRepairPayrollAudit}>Repair Payroll Snapshot</Button></Col>
-                <Col xs={24} md={8}><Button block icon={<SyncOutlined />} loading={loadingTransactionVariantRepair} onClick={handleRepairTransactionVariantAudit}>Repair Variant Transaksi</Button></Col>
-                <Col xs={24} md={8}>
-                  <Popconfirm
-                    title="Sinkronkan semua stok turunan?"
-                    description="Aksi ini update field stok turunan master, bukan reset transaksi. Jalankan setelah audit jika benar-benar diperlukan."
-                    okText="Ya, sinkronkan"
-                    cancelText="Batal"
-                    onConfirm={handleSyncStocks}
-                  >
-                    <Button block icon={<SyncOutlined />} loading={loadingSync}>Sync All Stocks</Button>
-                  </Popconfirm>
-                </Col>
-              </Row>
+          <ResetSafeRepairPanel
+            loadingStockRepair={loadingStockRepair}
+            onRepairStockAudit={handleRepairStockAudit}
+            loadingLogSchemaRepair={loadingLogSchemaRepair}
+            onRepairLogSchema={handleRepairLogSchema}
+            loadingMaintenanceRepair={loadingMaintenanceRepair}
+            onRepairProductionMaintenance={handleRepairProductionMaintenance}
+            loadingPayrollRepair={loadingPayrollRepair}
+            onRepairPayrollAudit={handleRepairPayrollAudit}
+            loadingTransactionVariantRepair={loadingTransactionVariantRepair}
+            onRepairTransactionVariantAudit={handleRepairTransactionVariantAudit}
+            loadingSync={loadingSync}
+            onSyncStocks={handleSyncStocks}
+            loadingMasterCodeAudit={loadingMasterCodeAudit}
+            onLoadMasterCodeAudit={handleLoadMasterCodeAudit}
+            loadingMasterCodeRepair={loadingMasterCodeRepair}
+            onRepairMasterCodeAudit={handleRepairMasterCodeAudit}
+            masterCodeSummary={masterCodeSummary}
+            masterCodeAudit={masterCodeAudit}
+            masterCodeRows={masterCodeRows}
+            renderCompactText={renderCompactText}
+            renderCompactTag={renderCompactTag}
+          />
 
-              <Divider orientation="left" plain>Normalisasi Kode Master</Divider>
-              <Text type="secondary">
-                Dipakai untuk menyamakan kode internal Product, Raw Material, Semi Finished, BOM, Step, dan Supplier ke standar aktif tanpa rename document ID dan tanpa mengubah transaksi/history.
-              </Text>
-              <Row gutter={[8, 8]}>
-                <Col xs={24} md={8}>
-                  <Button block icon={<FileSearchOutlined />} loading={loadingMasterCodeAudit} onClick={handleLoadMasterCodeAudit}>Cek Kode Master</Button>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Popconfirm
-                    title="Normalisasi kode master?"
-                    description="Aksi ini hanya update field code/alias master. Document ID dan data transaksi/history tidak diubah."
-                    okText="Ya, normalisasi"
-                    cancelText="Batal"
-                    onConfirm={handleRepairMasterCodeAudit}
-                  >
-                    <Button block icon={<SyncOutlined />} loading={loadingMasterCodeRepair} disabled={!masterCodeSummary.executablePlanCount}>Normalisasi Kode</Button>
-                  </Popconfirm>
-                </Col>
-                <Col xs={24} md={8}>
-                  <Statistic title="Perlu Normalisasi" value={masterCodeSummary.executablePlanCount || 0} />
-                </Col>
-              </Row>
-              {masterCodeAudit && (
-                <Alert
-                  type={masterCodeSummary.executablePlanCount ? "warning" : "success"}
-                  showIcon
-                  message={masterCodeSummary.executablePlanCount ? `${masterCodeSummary.executablePlanCount} kode master perlu dinormalisasi.` : "Kode master sudah sesuai standar aktif."}
-                  description="Field yang disentuh hanya kode internal/alias. Data history seperti purchase, stock log, work log, payroll, dan transaksi tidak ikut diubah."
-                />
-              )}
-              {Boolean(masterCodeRows.length) && (
-                <Table
-                  className="app-data-table"
-                  size="small"
-                  pagination={{ pageSize: 5 }}
-                  dataSource={masterCodeRows}
-                  columns={[
-                    { title: "Area", dataIndex: "area", key: "area", width: 150, render: (value) => renderCompactText(value, 135) },
-                    { title: "Item", dataIndex: "itemName", key: "itemName", width: 220, render: (value) => renderCompactText(value, 200) },
-                    { title: "Kode Saat Ini", dataIndex: "currentCode", key: "currentCode", width: 140, render: (value) => renderCompactTag(value, 125) },
-                    { title: "Kode Baru", dataIndex: "proposedCode", key: "proposedCode", width: 140, render: (value) => renderCompactTag(value, 125) },
-                    { title: "Catatan", dataIndex: "issue", key: "issue", render: (value) => renderCompactText(value, 320) },
-                  ]}
-                  scroll={{ x: 880 }}
-                />
-              )}
-            </Space>
-          </Card>
-
-          <Card title="Reset & Baseline" size="small" extra={<Tag color="red">Destructive guarded</Tag>}>
-            <Space direction="vertical" size={12} style={{ width: "100%" }}>
-              <Row gutter={[12, 12]}>
-                <Col xs={24} md={8}>
-                  <Text strong>Mode Reset</Text>
-                  <Select
-                    value={mode}
-                    onChange={(value) => { setMode(value); setResetIntent("standard"); }}
-                    options={RESET_MODE_OPTIONS.map((item) => ({ value: item.value, label: item.label }))}
-                    style={{ width: "100%", marginTop: 8 }}
-                  />
-                </Col>
-                <Col xs={24} md={16}>
-                  <Text strong>Modul</Text>
-                  <Checkbox.Group
-                    value={selectedModules}
-                    onChange={(values) => { setSelectedModules(values); setResetIntent("standard"); }}
-                    options={moduleOptions}
-                    style={{ display: "grid", gap: 8, marginTop: 8 }}
-                  />
-                </Col>
-              </Row>
-              <Row gutter={[12, 12]}>
-                <Col xs={12} md={6}><Statistic title="Mode" value={RESET_MODE_LABELS[mode] || mode} /></Col>
-                <Col xs={12} md={6}><Statistic title="Target Hapus" value={preview?.totalRecords || 0} /></Col>
-                <Col xs={12} md={6}><Statistic title="Operasi" value={preview?.executionPlan?.totalWriteOperations || 0} /></Col>
-                <Col xs={12} md={6}><Statistic title="Modul" value={selectedModules.length} /></Col>
-              </Row>
-              <Space wrap>
-                <Button icon={<EyeOutlined />} loading={loadingPreview} onClick={() => loadPreview(true)}>Preview Reset</Button>
-                <Popconfirm
-                  title="Simpan baseline stok saat ini?"
-                  description="Baseline dipakai untuk reset testing berulang. Data baseline lama akan diganti oleh snapshot saat ini."
-                  okText="Ya, simpan"
-                  cancelText="Batal"
-                  onConfirm={handleSaveBaseline}
-                >
-                  <Button icon={<SaveOutlined />} loading={loadingBaseline}>Simpan Baseline Stok</Button>
-                </Popconfirm>
-                <Button danger type="primary" icon={<ReloadOutlined />} onClick={openResetConfirmation} disabled={Boolean(resetBlockedReason) || loadingPreview}>
-                  Konfirmasi RESET
-                </Button>
-                {resetBlockedReason && <Tag color="red">{resetBlockedReason}</Tag>}
-              </Space>
-              {preview && (
-                <Table
-                  className="app-data-table"
-                  size="small"
-                  pagination={false}
-                  dataSource={previewRows}
-                  columns={[
-                    { title: "Modul", dataIndex: "moduleLabel", key: "moduleLabel", width: 170, render: (value) => renderCompactText(value, 150) },
-                    { title: "Target", dataIndex: "name", key: "name", width: 220, render: (value) => renderCompactText(value, 200) },
-                    { title: "Jumlah", dataIndex: "count", key: "count", width: 90 },
-                    { title: "Status", dataIndex: "status", key: "status", width: 120, render: (value) => <Tag color={value === "delete" ? "red" : "green"}>{value === "delete" ? "Dihapus" : "Dilindungi"}</Tag> },
-                    { title: "Aksi", dataIndex: "action", key: "action", render: (value) => renderCompactText(value, 300) },
-                  ]}
-                  scroll={{ x: 900 }}
-                />
-              )}
-            </Space>
-          </Card>
+          <ResetPreviewPanel
+            mode={mode}
+            onModeChange={(value) => { setMode(value); setResetIntent("standard"); }}
+            resetModeLabels={RESET_MODE_LABELS}
+            resetModeOptions={RESET_MODE_OPTIONS}
+            selectedModules={selectedModules}
+            onSelectedModulesChange={(values) => { setSelectedModules(values); setResetIntent("standard"); }}
+            moduleOptions={moduleOptions}
+            preview={preview}
+            previewRows={previewRows}
+            loadingPreview={loadingPreview}
+            onLoadPreview={() => loadPreview(true)}
+            loadingBaseline={loadingBaseline}
+            onSaveBaseline={handleSaveBaseline}
+            onOpenResetConfirmation={openResetConfirmation}
+            resetBlockedReason={resetBlockedReason}
+            renderCompactText={renderCompactText}
+          />
 
           <Row gutter={[12, 12]}>
             <Col xs={24}>

@@ -13,10 +13,10 @@ Alasan perubahan:
 - Mengurangi duplikasi UI pricing mode tanpa mengubah formula harga, preview, atau service validation.
 
 Catatan cleanup:
-- Auto-preview dan warning tetap local karena Product dan Raw Material memakai base cost dan target price berbeda.
+- Auto-preview, warning, dan registrasi field AntD Form tetap local karena Product dan Raw Material memakai base cost, target price, dan handler cleanup berbeda.
 
 Risiko:
-- Jika salah menangani switch Manual, `pricingRuleId` bisa tidak dibersihkan atau mode Rule bisa kehilangan pilihan rule.
+- Jika handler pemakai salah menangani switch Manual, `pricingRuleId` bisa tidak dibersihkan atau mode Rule bisa kehilangan pilihan rule.
 ===================================================== */
 export default function PricingModeSwitch({
   value,
