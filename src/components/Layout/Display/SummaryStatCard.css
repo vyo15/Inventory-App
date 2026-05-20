@@ -336,3 +336,100 @@ Batasan aman:
 .ims-page .summary-stat-grid .summary-stat-card--featured.ant-card .ant-card-body {
   padding: 15px 16px !important;
 }
+
+/* =====================================================
+SECTION: Cash In / Cash Out finance summary polish — AKTIF
+Fungsi:
+- merapikan ringkasan Cash In dan Cash Out agar total utama dominan, metric pendukung rapi, dan nominal tidak terpotong.
+- helper/catatan metric ditempatkan di bawah nominal agar tidak terasa seperti info dobel.
+Batasan aman:
+- class ini hanya aktif saat pemanggil memberi className="cash-flow-summary".
+- tidak mengubah kalkulasi, query, payload, service, schema, stok, expense, payroll, HPP, atau audit log.
+===================================================== */
+.cash-flow-summary.summary-stat-grid--finance {
+  grid-template-columns: minmax(320px, 0.95fr) minmax(0, 1.05fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.cash-flow-summary .summary-finance-main {
+  min-height: 170px;
+  padding: 18px;
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, var(--summary-finance-tone-soft), transparent 52%),
+    var(--ims-bg-card);
+}
+
+.cash-flow-summary .summary-finance-status {
+  display: none;
+}
+
+.cash-flow-summary .summary-finance-main-header {
+  gap: 10px;
+}
+
+.cash-flow-summary .summary-finance-kicker.ant-typography,
+.cash-flow-summary .summary-finance-label.ant-typography {
+  letter-spacing: var(--ims-letter-spacing-ui);
+}
+
+.cash-flow-summary .summary-finance-value.ant-typography {
+  margin-top: 6px !important;
+  font-size: clamp(30px, 2.9vw, 38px);
+  line-height: 1.02;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.cash-flow-summary .summary-finance-helper.ant-typography {
+  margin-top: 8px;
+  max-width: 36rem;
+}
+
+.cash-flow-summary .summary-finance-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  height: 100%;
+}
+
+.cash-flow-summary .summary-stat-card--finance-mini.ant-card {
+  min-height: 132px;
+  border-radius: 18px !important;
+}
+
+.cash-flow-summary .summary-stat-card--finance-mini .summary-stat-card-content {
+  gap: 8px;
+}
+
+.cash-flow-summary .summary-stat-card--finance-mini .summary-stat-card-title.ant-typography {
+  min-height: 16px;
+}
+
+.cash-flow-summary .summary-stat-card--finance-mini .summary-stat-card-value.ant-typography {
+  font-size: clamp(20px, 1.85vw, 25px);
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.cash-flow-summary .summary-stat-card--finance-mini .summary-stat-card-subtitle.ant-typography {
+  display: block;
+  padding-top: 2px;
+}
+
+@media (max-width: 1100px) {
+  .cash-flow-summary.summary-stat-grid--finance {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .cash-flow-summary .summary-finance-main {
+    min-height: 0;
+  }
+
+  .cash-flow-summary .summary-finance-metrics {
+    grid-template-columns: 1fr;
+  }
+}

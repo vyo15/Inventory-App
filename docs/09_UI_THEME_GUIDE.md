@@ -386,8 +386,10 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 
 - Label summary harus pendek dan user-facing.
 - Hindari pengulangan kata seperti `Total` di semua kartu bila konteks sudah jelas dari section title.
-- Subtitle hanya dipakai bila menambah konteks filter/periode/status; jangan mengulang judul.
+- Subtitle/helper hanya dipakai bila menambah konteks filter/periode/status; letakkan di bawah nominal, bukan sejajar dengan nominal.
+- Nominal uang wajib tampil penuh. Jangan memakai truncate/ellipsis pada angka Rupiah; layout yang harus turun/wrap jika ruang sempit.
 - Untuk angka Rupiah panjang, gunakan Finance Dock supaya tidak memaksa table/filter turun terlalu jauh.
+- Cash In/Cash Out boleh memakai class scoped `cash-flow-summary` agar total utama dominan, metric pendukung maksimal tiga kartu, dan helper seperti `Jumlah cash-in tercatat` tampil di bawah nominal.
 
 ### Aturan teknis aman
 
@@ -403,6 +405,7 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 - Light/dark: border, shadow, text, dan status accent tetap readable.
 - Data banyak: halaman dengan summary lebih dari empat item tetap wrap rapi.
 - Finance: nominal panjang tidak terpotong dan tidak ada flow strip/bar bawah yang mengulang metric sama.
+- Cash In/Cash Out: helper/catatan metric tampil di bawah nominal; angka uang tidak boleh tersembunyi sebagian.
 
 ### Variant stock alert display
 

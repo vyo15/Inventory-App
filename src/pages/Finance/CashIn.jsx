@@ -172,6 +172,8 @@ const CashIn = () => {
 
         if ((item.type || "").toLowerCase() === "penjualan") {
           accumulator.totalSalesIncome += amount;
+        } else {
+          accumulator.totalOtherIncome += amount;
         }
 
         return accumulator;
@@ -180,6 +182,7 @@ const CashIn = () => {
         totalAmount: 0,
         totalTransactions: 0,
         totalSalesIncome: 0,
+        totalOtherIncome: 0,
       },
     );
   }, [filteredCashIns]);
@@ -188,24 +191,31 @@ const CashIn = () => {
     () => [
       {
         key: "total-cash-in",
-        title: "Total Pemasukan Periode",
+        title: "Total Pemasukan",
         value: formatCurrencyId(summary.totalAmount),
-        subtitle: "Total pemasukan periode aktif.",
+        subtitle: "Akumulasi cash-in periode aktif.",
         accent: "primary",
       },
       {
         key: "cash-in-count",
-        title: "Jumlah Transaksi",
+        title: "Transaksi",
         value: formatNumberId(summary.totalTransactions),
-        subtitle: "Transaksi pada periode aktif.",
+        subtitle: "Jumlah cash-in tercatat.",
         accent: "success",
       },
       {
         key: "sales-income",
-        title: "Pemasukan dari Penjualan",
+        title: "Dari Penjualan",
         value: formatCurrencyId(summary.totalSalesIncome),
-        subtitle: "Dari sales berstatus selesai.",
+        subtitle: "Sales selesai.",
         accent: "warning",
+      },
+      {
+        key: "other-income",
+        title: "Pemasukan Lain",
+        value: formatCurrencyId(summary.totalOtherIncome),
+        subtitle: "Selain penjualan selesai.",
+        accent: "neutral",
       },
     ],
     [summary],
@@ -394,7 +404,13 @@ const CashIn = () => {
         title="Ringkasan Periode"
         subtitle="KPI periode aktif."
       >
-        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} variant="finance" />
+        <SummaryStatGrid
+          items={summaryItems}
+          columns={{ xs: 24, md: 8 }}
+          variant="finance"
+          highlightKey="total-cash-in"
+          className="cash-flow-summary"
+        />
       </PageSection>
 
       <PageSection

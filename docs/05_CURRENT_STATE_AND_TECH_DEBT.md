@@ -1070,5 +1070,6 @@ Status aktif dari source terbaru:
 
 ### UI Cleanup — Finance Summary dan Payroll Status Compact
 - **AKTIF:** Finance Dock tidak lagi merender flow strip/bar bawah yang mengulang metric card, supaya ringkasan uang tidak terlihat dobel.
+- **AKTIF:** Cash In/Cash Out memakai polish scoped `cash-flow-summary`: total utama dominan, metric pendukung rapi, helper/catatan berada di bawah nominal, dan nominal uang tidak boleh terpotong.
 - **AKTIF:** Payroll Produksi dan Laporan Payroll memakai status compact; `status` dan `paymentStatus` tetap field data terpisah, tetapi `Paid/Paid` ditampilkan sebagai satu tag `Paid`.
 - Scope perubahan ini UI-only: tidak mengubah payroll service, Cash Out otomatis, HPP, finance calculation, schema, route, atau role guard.

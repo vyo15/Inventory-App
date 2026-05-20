@@ -105,6 +105,16 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 
 ## C. Kas & Biaya
 
+
+## Checklist — Cash In / Cash Out Summary Layout
+
+- [ ] Buka Cash In dan Cash Out di desktop, tablet, dan mobile.
+- [ ] Pastikan total utama menjadi angka paling dominan dan tidak ada flow strip/bar bawah yang mengulang metric.
+- [ ] Pastikan nominal Rupiah tampil penuh, tidak truncate/ellipsis, dan boleh wrap rapi jika layar sempit.
+- [ ] Pastikan helper/catatan metric seperti `Jumlah cash-in tercatat`, `Sales selesai`, `Payroll paid`, dan `Efisiensi vs referensi` tampil di bawah nominal.
+- [ ] Pastikan Cash In tetap membaca `revenues + incomes`, dan Cash Out tetap membaca `expenses` tanpa perubahan service/payload.
+- [ ] Pastikan tambah Cash In manual dan Cash Out manual tetap menyimpan data seperti sebelum patch.
+
 ### Cash In
 - tambah pemasukan manual
 - cek data masuk ke `revenues`

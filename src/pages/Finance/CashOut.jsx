@@ -213,23 +213,23 @@ const CashOut = () => {
     () => [
       {
         key: "actual-expense",
-        title: "Total Pengeluaran Aktual",
+        title: "Total Pengeluaran",
         value: formatCurrencyId(summary.totalActualExpense),
-        subtitle: "Total pengeluaran periode aktif.",
+        subtitle: "Akumulasi cash-out periode aktif.",
         accent: "danger",
       },
       {
         key: "purchase-expense",
-        title: "Total Belanja Pembelian",
+        title: "Pembelian",
         value: formatCurrencyId(summary.totalPurchaseExpense),
-        subtitle: "Dari transaksi pembelian.",
+        subtitle: "Belanja bahan/barang.",
         accent: "warning",
       },
       {
         key: "payroll-expense",
-        title: "Total Payroll Produksi",
+        title: "Payroll Produksi",
         value: formatCurrencyId(summary.totalPayrollExpense),
-        subtitle: "Dari payroll paid.",
+        subtitle: "Payroll paid.",
         accent: "primary",
       },
       {
@@ -239,7 +239,7 @@ const CashOut = () => {
           summary.totalSaving < 0
             ? `- ${formatCurrencyId(Math.abs(summary.totalSaving))}`
             : formatCurrencyId(summary.totalSaving),
-        subtitle: "Selisih efisiensi pembelian.",
+        subtitle: "Efisiensi vs referensi.",
         accent: summary.totalSaving >= 0 ? "success" : "danger",
       },
     ],
@@ -489,7 +489,13 @@ const CashOut = () => {
         title="Ringkasan Periode"
         subtitle="KPI periode aktif."
       >
-        <SummaryStatGrid items={summaryItems} columns={{ xs: 24, sm: 12, md: 12, lg: 6 }} variant="finance" />
+        <SummaryStatGrid
+          items={summaryItems}
+          columns={{ xs: 24, sm: 12, md: 12, lg: 6 }}
+          variant="finance"
+          highlightKey="actual-expense"
+          className="cash-flow-summary"
+        />
       </PageSection>
 
       <PageSection
