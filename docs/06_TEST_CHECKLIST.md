@@ -335,6 +335,11 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - cek `stock`, `currentStock`, `reservedStock`, `availableStock`, dan total `variants[]` tetap sinkron
 - cek record `stock_adjustments` menyimpan `collectionName`, `variantKey`, `variantLabel`, `currentStockBefore`, `currentStockAfter`, `availableStockBefore`, dan `availableStockAfter`
 - cek `inventory_logs` menyimpan `adjustmentId`, `referenceId`, `referenceType`, `details`, dan snapshot stok sebelum/sesudah
+- bahan baku dengan `averageActualUnitCost = 0`, `restockReferencePrice = 0`, dan supplier utama dengan harga referensi: buka Stock Adjustment masuk, pastikan `Estimasi Modal Awal / Unit` terisi otomatis dari supplier utama dan tetap bisa diedit sebelum Simpan
+- bahan baku dengan cost 0 dan hanya satu supplier katalog yang cocok: pastikan saran modal awal terisi dari supplier tersebut
+- bahan baku dengan cost 0 dan beberapa supplier cocok tanpa supplier utama: pastikan modal awal tidak auto-pilih sembarang supplier dan user tetap wajib input manual
+- bahan baku/semi finished/product dengan cost/HPP aktif > 0: pastikan Stock Adjustment hanya menampilkan modal aktif read-only dan tidak membuka input koreksi modal
+- simpan adjustment masuk dengan estimasi modal awal dan pastikan stok bertambah, `stock_adjustments.unitCost` tersimpan, inventory log dibuat, serta purchase/expense/supplier tidak berubah
 
 ### Customer Collection Final
 - tambah customer dari Master Customer

@@ -318,6 +318,13 @@ Stock Adjustment tidak boleh lagi update field `stock` secara langsung dari page
 - membuat `inventory_logs` dengan `adjustmentId`, `referenceId`, `referenceType`, dan snapshot stok sebelum/sesudah;
 - tidak mengubah stok jika record adjustment atau inventory log gagal dibuat.
 
+Rule baseline modal stok awal:
+- Jika adjustment masuk menambah stok item yang cost/HPP aktifnya masih `0`, form wajib meminta `Estimasi Modal Awal / Unit` agar stok lama tidak dianggap gratis di laporan.
+- Untuk bahan baku, form boleh mengisi saran modal awal sebagai prefill dari katalog Supplier atau `restockReferencePrice`, tetapi user tetap harus bisa mengecek, mengedit, dan menyimpan sendiri.
+- Supplier utama pada master bahan diprioritaskan. Jika tidak ada supplier utama dan hanya ada satu referensi supplier yang cocok, referensi tersebut boleh dipakai sebagai saran. Jika beberapa supplier punya harga berbeda, sistem tidak boleh auto-pilih diam-diam; user harus input manual.
+- Saran modal awal hanya baseline untuk stok awal/data lama dan tidak membuat purchase, kas, expense, saving, atau link supplier berubah.
+- Jika cost/HPP aktif sudah ada, Stock Adjustment hanya mengubah qty dan tidak boleh menjadi shortcut koreksi modal/HPP. Koreksi modal/HPP harus flow guarded terpisah.
+
 ### 8.6 Inventory Log Reference
 Inventory log baru wajib menyimpan reference audit di field standar:
 - `referenceId`
@@ -758,6 +765,16 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Total Pembanding Supplier di Purchases memakai komponen katalog supplier: `Qty Beli × Harga Barang Supplier + Ongkir Default Supplier + Biaya Layanan Default Supplier - Diskon Default Supplier`; jangan menggandakan ongkir/admin dengan mengalikan harga per satuan stok saat Qty Beli lebih dari 1.
 - Supplier dropdown pada pembelian bahan baku harus memprioritaskan supplier yang menyediakan material tersebut; jangan fallback diam-diam ke semua supplier.
 - Supplier tetap katalog vendor/restock dan tidak otomatis menulis ke Raw Material.
+
+## 19.1 Rule Stock Adjustment Baseline dari Supplier
+
+- Stock Adjustment boleh membaca katalog Supplier `materialDetails` hanya untuk memberi saran `Estimasi Modal Awal / Unit` saat bahan baku masuk dan `averageActualUnitCost` masih 0.
+- Nilai saran tersebut tetap harus bisa dicek/diedit user sebelum Simpan; tidak boleh menjadi write otomatis tanpa konfirmasi submit Stock Adjustment.
+- Jika bahan memiliki `supplierId` utama dan supplier tersebut punya harga referensi untuk material yang sama, gunakan supplier utama sebagai saran.
+- Jika tidak ada supplier utama tetapi hanya ada satu supplier cocok, boleh gunakan satu-satunya supplier tersebut sebagai saran.
+- Jika beberapa supplier cocok, tampilkan konteks bahwa beberapa referensi tersedia dan jangan auto-pilih agar modal awal tidak salah.
+- Saran dari Supplier tidak boleh mengubah `actualUnitCost`, `hppPerUnit`, kas, expense, purchase, saving, Supplier, atau Raw Material sebelum user benar-benar menyimpan Stock Adjustment.
+- Semi Finished dan Produk Jadi tidak mengambil baseline dari Supplier, kecuali ada task terpisah untuk flow beli produk jadi.
 
 ## 20. Rule Katalog Restock Supplier
 
