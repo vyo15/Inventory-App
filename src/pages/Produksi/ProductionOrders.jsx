@@ -1545,7 +1545,7 @@ const ProductionOrders = () => {
                                 borderBottom:
                                   index === requirementPreview.requirementLines.length - 1
                                     ? "none"
-                                    : "1px solid #f0f0f0",
+                                    : "1px solid var(--ims-border-color-soft)",
                               }}
                             >
                               <Space direction="vertical" size={2} style={{ width: "100%" }}>

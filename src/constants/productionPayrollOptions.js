@@ -45,6 +45,61 @@ export const PAYROLL_CLASSIFICATION_MAP = toOptionMap(
   PRODUCTION_PAYROLL_CLASSIFICATIONS,
 );
 
+const PAYROLL_STATUS_TAG_COLORS = {
+  draft: "default",
+  confirmed: "blue",
+  paid: "green",
+  cancelled: "red",
+};
+
+const PAYROLL_PAYMENT_STATUS_TAG_COLORS = {
+  unpaid: "orange",
+  partial: "gold",
+  paid: "green",
+};
+
+const normalizePayrollStatusValue = (value) => String(value || "").trim();
+
+// =====================================================
+// ACTIVE / UI-ONLY
+// Fungsi:
+// - Menyiapkan daftar status payroll yang compact untuk tabel/detail/report.
+// - Jika lifecycle status dan payment status sama-sama `paid`, UI cukup menampilkan satu tag.
+// Catatan:
+// - Helper ini presentational; tidak mengubah status, paymentStatus, Cash Out, HPP, atau schema.
+// =====================================================
+export const getCompactPayrollStatusTags = ({ status, paymentStatus } = {}) => {
+  const statusValue = normalizePayrollStatusValue(status);
+  const paymentValue = normalizePayrollStatusValue(paymentStatus);
+
+  const statusTag = statusValue
+    ? {
+        key: `status-${statusValue}`,
+        source: "status",
+        value: statusValue,
+        label: PAYROLL_STATUS_MAP[statusValue] || statusValue,
+        color: PAYROLL_STATUS_TAG_COLORS[statusValue] || "default",
+      }
+    : null;
+
+  const paymentTag = paymentValue
+    ? {
+        key: `payment-${paymentValue}`,
+        source: "paymentStatus",
+        value: paymentValue,
+        label: PAYROLL_PAYMENT_STATUS_MAP[paymentValue] || paymentValue,
+        color: PAYROLL_PAYMENT_STATUS_TAG_COLORS[paymentValue] || "default",
+      }
+    : null;
+
+  if (statusValue && paymentValue && statusValue === paymentValue) {
+    return [statusTag || paymentTag];
+  }
+
+  const tags = [statusTag, paymentTag].filter(Boolean);
+  return tags.length ? tags : [{ key: "status-empty", label: "-", color: "default" }];
+};
+
 export const DEFAULT_PRODUCTION_PAYROLL_FORM = {
   payrollNumber: "",
   payrollDate: null,

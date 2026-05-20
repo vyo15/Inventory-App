@@ -679,7 +679,7 @@ const StockManagement = () => {
         render: (value, record) => (
           <Text
             strong
-            style={{ color: record.directionMeta?.value === "in" ? "#389e0d" : "#cf1322" }}
+            style={{ color: record.directionMeta?.value === "in" ? "var(--ims-color-success-text)" : "var(--ims-color-danger-text)" }}
           >
             {formatLogQuantityWithUnit(value, record)}
           </Text>

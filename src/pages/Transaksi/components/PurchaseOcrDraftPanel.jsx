@@ -27,7 +27,7 @@ const PurchaseOcrDraftPanel = ({
             Auto Isi Qty & Biaya dari Screenshot Shopee
           </div>
           <div className="purchase-ocr-draft-panel__description">
-            Upload screenshot rincian pesanan untuk membaca Qty, Subtotal, Ongkir, Diskon Ongkir, Voucher, Biaya Layanan, dan Total.
+            Upload screenshot rincian pesanan untuk membaca Qty, Subtotal, Ongkir, Diskon Ongkir, Voucher/Koin, Biaya Layanan, dan Total.
           </div>
         </div>
         <Upload
@@ -73,7 +73,7 @@ const PurchaseOcrDraftPanel = ({
             <div>
               <div className="purchase-ocr-preview__title">Preview qty & biaya dari screenshot</div>
               <div className="purchase-ocr-preview__description">
-                Cek qty, subtotal, ongkir, voucher, biaya layanan, dan total sebelum diterapkan ke form. Data pribadi dari screenshot tidak disimpan.
+                Cek qty, subtotal, ongkir, voucher/koin, biaya layanan, dan total sebelum diterapkan ke form. Data pribadi dari screenshot tidak disimpan.
               </div>
             </div>
             <Tag color={reviewTagColorMap?.[parsed.reviewSeverity] || "default"}>
@@ -105,7 +105,7 @@ const PurchaseOcrDraftPanel = ({
               ["Subtotal barang", formatMoney(parsed.subtotalItems)],
               ["Ongkir pengiriman", formatMoney(parsed.shippingCost)],
               ["Diskon ongkir", `- ${formatMoney(parsed.shippingDiscount)}`],
-              ["Voucher / potongan", `- ${formatMoney(parsed.voucherDiscount)}`],
+              ["Voucher / koin / potongan", `- ${formatMoney(parsed.voucherDiscount)}`],
               ["Biaya layanan", formatMoney(parsed.serviceFee)],
               ["Total pesanan", formatMoney(parsed.totalOrder)],
             ].map(([label, value]) => (

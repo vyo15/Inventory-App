@@ -1215,7 +1215,7 @@ const Sales = () => {
             {(fields, { add, remove }) => (
               <>
                 {fields.map(({ key, name, ...restField }) => (
-                  <div key={key} style={{ border: "1px solid #d9d9d9", padding: 12, marginBottom: 16, borderRadius: 8 }}>
+                  <div key={key} style={{ border: "1px solid var(--ims-border-color)", padding: 12, marginBottom: 16, borderRadius: 8 }}>
                     <Space style={{ width: "100%" }} align="baseline" wrap>
                       <Form.Item
                         {...restField}

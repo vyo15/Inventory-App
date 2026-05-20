@@ -27,7 +27,7 @@ Total pembelian aktual dihitung dari:
 - subtotal item
 - ongkir
 - diskon ongkir
-- voucher
+- voucher/koin/potongan marketplace
 - service fee
 
 Actual unit cost per stock unit dihitung dari:
@@ -61,6 +61,8 @@ OCR Shopee hanya alat bantu draft untuk membaca Qty Beli dan komponen biaya mark
 
 Guard aktif:
 - Hasil OCR wajib muncul sebagai preview dan user tetap klik **Terapkan Qty & Biaya ke Form** sebelum Simpan Pembelian.
+- OCR Shopee wajib memperlakukan `Koin Shopee Ditukarkan/Digunakan` sebagai bagian dari `voucherDiscount` karena koin mengurangi total cash-out marketplace.
+- OCR tidak boleh auto-set tanggal pembelian dari tanggal pengiriman/diterima; tanggal transaksi tetap input manual sampai ada rule tanggal order/pembayaran yang disetujui.
 - Jika OCR mendeteksi kemungkinan multi-item dalam 1 screenshot, auto-apply diblokir. User harus input manual atau memecah pembelian per item agar modal, stok, expense, dan HPP tidak tercampur.
 - Jika total pesanan tidak cocok dengan rumus sistem atau marker Shopee kurang kuat, user wajib melihat warning/konfirmasi sebelum hasil OCR boleh diterapkan.
 - Catatan transaksi menyimpan ringkasan OCR teks saja; bukti screenshot tidak disimpan di Firestore/Storage maupun folder project.
@@ -290,6 +292,7 @@ Preset `Reset Semua Testing` adalah shortcut guarded untuk development/testing: 
 - Saat payroll berubah menjadi `paid` dan `paymentStatus` menjadi `paid`, sistem membuat expense otomatis dengan guard idempotent.
 - Guard wajib memakai `sourceModule: production_payroll` dan `sourceId: payrollId`; jika expense dengan source yang sama sudah ada, sistem tidak boleh membuat expense baru.
 - Jika payroll `finalAmount <= 0`, expense otomatis boleh dilewati dan status sync dicatat agar audit tetap jelas.
+- Untuk UI list/detail/report, `status` dan `paymentStatus` tetap field data terpisah, tetapi tampilan harus compact. Jika keduanya bernilai `paid`, UI cukup menampilkan satu tag `Paid` agar tidak ada info pembayaran dobel.
 
 ### Export Laporan
 - laporan stok aktif sebaiknya memakai ekspor XLSX yang lebih rapi, bukan CSV mentah
@@ -317,13 +320,6 @@ Stock Adjustment tidak boleh lagi update field `stock` secara langsung dari page
 - membuat record `stock_adjustments`;
 - membuat `inventory_logs` dengan `adjustmentId`, `referenceId`, `referenceType`, dan snapshot stok sebelum/sesudah;
 - tidak mengubah stok jika record adjustment atau inventory log gagal dibuat.
-
-Rule baseline modal stok awal:
-- Jika adjustment masuk menambah stok item yang cost/HPP aktifnya masih `0`, form wajib meminta `Estimasi Modal Awal / Unit` agar stok lama tidak dianggap gratis di laporan.
-- Untuk bahan baku, form boleh mengisi saran modal awal sebagai prefill dari katalog Supplier atau `restockReferencePrice`, tetapi user tetap harus bisa mengecek, mengedit, dan menyimpan sendiri.
-- Supplier utama pada master bahan diprioritaskan. Jika tidak ada supplier utama dan hanya ada satu referensi supplier yang cocok, referensi tersebut boleh dipakai sebagai saran. Jika beberapa supplier punya harga berbeda, sistem tidak boleh auto-pilih diam-diam; user harus input manual.
-- Saran modal awal hanya baseline untuk stok awal/data lama dan tidak membuat purchase, kas, expense, saving, atau link supplier berubah.
-- Jika cost/HPP aktif sudah ada, Stock Adjustment hanya mengubah qty dan tidak boleh menjadi shortcut koreksi modal/HPP. Koreksi modal/HPP harus flow guarded terpisah.
 
 ### 8.6 Inventory Log Reference
 Inventory log baru wajib menyimpan reference audit di field standar:
@@ -760,21 +756,11 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Link Produk di Purchases berasal dari `materialDetails[].productLink` supplier yang dipilih dan materialId yang cocok; link produk bahan lain tidak boleh dipakai.
 - Harga Supplier Tercatat berasal dari katalog Supplier yang dipilih dan hanya menjadi harga pembanding per satuan stok.
 - Harga Supplier Tercatat tidak boleh menjadi harga aktual pembelian, tidak boleh menjadi `actualUnitCost`, dan tidak boleh mengubah kas/expense secara langsung.
-- Harga aktual pembelian tetap berasal dari subtotal transaksi, ongkir, diskon ongkir, voucher/potongan, dan biaya layanan.
+- Harga aktual pembelian tetap berasal dari subtotal transaksi, ongkir, diskon ongkir, voucher/koin/potongan, dan biaya layanan.
 - `totalStockIn` tetap dihitung dari `Qty Beli × Konversi Supplier` untuk bahan baku.
 - Total Pembanding Supplier di Purchases memakai komponen katalog supplier: `Qty Beli × Harga Barang Supplier + Ongkir Default Supplier + Biaya Layanan Default Supplier - Diskon Default Supplier`; jangan menggandakan ongkir/admin dengan mengalikan harga per satuan stok saat Qty Beli lebih dari 1.
 - Supplier dropdown pada pembelian bahan baku harus memprioritaskan supplier yang menyediakan material tersebut; jangan fallback diam-diam ke semua supplier.
 - Supplier tetap katalog vendor/restock dan tidak otomatis menulis ke Raw Material.
-
-## 19.1 Rule Stock Adjustment Baseline dari Supplier
-
-- Stock Adjustment boleh membaca katalog Supplier `materialDetails` hanya untuk memberi saran `Estimasi Modal Awal / Unit` saat bahan baku masuk dan `averageActualUnitCost` masih 0.
-- Nilai saran tersebut tetap harus bisa dicek/diedit user sebelum Simpan; tidak boleh menjadi write otomatis tanpa konfirmasi submit Stock Adjustment.
-- Jika bahan memiliki `supplierId` utama dan supplier tersebut punya harga referensi untuk material yang sama, gunakan supplier utama sebagai saran.
-- Jika tidak ada supplier utama tetapi hanya ada satu supplier cocok, boleh gunakan satu-satunya supplier tersebut sebagai saran.
-- Jika beberapa supplier cocok, tampilkan konteks bahwa beberapa referensi tersedia dan jangan auto-pilih agar modal awal tidak salah.
-- Saran dari Supplier tidak boleh mengubah `actualUnitCost`, `hppPerUnit`, kas, expense, purchase, saving, Supplier, atau Raw Material sebelum user benar-benar menyimpan Stock Adjustment.
-- Semi Finished dan Produk Jadi tidak mengambil baseline dari Supplier, kecuali ada task terpisah untuk flow beli produk jadi.
 
 ## 20. Rule Katalog Restock Supplier
 
@@ -817,7 +803,7 @@ Saat user klik **Simpan Pembelian**, flow aktif wajib menjaga purchase, stok mas
 Ketentuan wajib:
 - validasi item, supplier, varian, tanggal, Qty Beli, Stok Masuk, dan Total Aktual dilakukan sebelum write pertama;
 - Stok Masuk tetap memakai rule final `Qty Beli × Konversi Supplier`;
-- Total Aktual tetap memakai `Subtotal Barang + Ongkir + Biaya Layanan - Diskon Ongkir - Voucher/Potongan`;
+- Total Aktual tetap memakai `Subtotal Barang + Ongkir + Biaya Layanan - Diskon Ongkir - Voucher/Koin/Potongan`;
 - `actualUnitCost = Total Aktual / Stok Masuk`;
 - saving/selisih hemat tetap hanya metadata efisiensi dan tidak mengurangi cash out;
 - expense pembelian wajib memakai source reference `sourceModule: purchases` dan `sourceId: purchaseId` agar tidak double;
@@ -839,6 +825,8 @@ Status: **AKTIF + GUARDED**.
 - Jangan mengisi kolom stok historis memakai stok saat ini, karena itu bukan audit history.
 - Jika semua writer inventory log nanti sudah konsisten menyimpan snapshot, kolom boleh kembali dengan label eksplisit seperti `Stok Setelah` atau `Stok Sebelum/Sesudah`.
 - Catatan log harus ringkas di tabel; catatan lengkap boleh tersedia lewat tooltip/detail.
+- Untuk tabel riwayat Penyesuaian Stok, field `reason` dan `note` tetap tersimpan terpisah di `stock_adjustments`, tetapi UI tabel boleh menggabungkan keduanya menjadi satu kolom `Alasan & Catatan` agar tidak menampilkan info audit dobel.
+- Jika `note` kosong atau sama dengan `reason`, tabel riwayat Penyesuaian Stok hanya boleh menampilkan satu informasi ringkas; data mentah tetap tidak dihapus.
 - Catatan OCR Shopee dari purchase tidak boleh ditampilkan mentah panjang di tabel Stock Management. Tabel cukup menampilkan tag `OCR Shopee`, ringkasan konversi stok bila ada, dan detail lengkap tetap tersedia di tooltip/detail.
 - Submit Penyesuaian Stok wajib menjaga stock adjustment, mutasi stok, dan inventory log sebagai satu rangkaian konsisten.
 - Area ini tidak boleh dipakai untuk hitung ulang stok dari semua transaksi saat halaman dibuka.

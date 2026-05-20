@@ -483,7 +483,7 @@ const Purchases = () => {
   // =========================
   // SECTION: Snapshot biaya katalog Supplier untuk default Purchases
   // Fungsi blok:
-  // - membaca harga barang, ongkir, admin, voucher, dan harga estimasi supplier dari materialDetails yang cocok.
+  // - membaca harga barang, ongkir, admin, voucher/koin, dan harga estimasi supplier dari materialDetails yang cocok.
   // Hubungan flow aplikasi:
   // - Supplier hanya sumber default transaksi; nilai ini tidak menulis balik ke Supplier/Raw Material dan tidak membuat purchase otomatis.
   // Status: aktif dipakai untuk prefill form Pembelian; bukan legacy dan bukan auto-sync supplier.
@@ -914,7 +914,7 @@ const Purchases = () => {
   // =========================
   // SECTION: Guard biaya online saat Pembelian Offline
   // Fungsi blok:
-  // - saat toggle Pembelian Offline aktif, ongkir/admin/voucher/potongan di-reset ke 0
+  // - saat toggle Pembelian Offline aktif, ongkir/admin/voucher/koin/potongan di-reset ke 0
   //   agar nilai online lama tidak diam-diam ikut menghitung Total Aktual.
   // Hubungan flow Purchases:
   // - hanya membersihkan field biaya di form; tidak membuat transaksi otomatis dan tidak
@@ -938,7 +938,7 @@ const Purchases = () => {
   // - menghitung total biaya aktual yang benar-benar menjadi dasar expense pembelian.
   // Hubungan flow aplikasi:
   // - Total Aktual tetap berasal dari input transaksi Purchases: Subtotal, Ongkir, Diskon Ongkir,
-  //   Voucher/Potongan, dan Biaya Layanan; bukan dari Harga Supplier Tercatat.
+  //   Voucher/Koin/Potongan, dan Biaya Layanan; bukan dari Harga Supplier Tercatat.
   // Status: aktif dipakai oleh ringkasan, payload purchase, actualUnitCost, dan expense otomatis.
   // =========================
   useEffect(() => {
@@ -1291,8 +1291,8 @@ const Purchases = () => {
     setShopeeOcrApplyFeedback({
       appliedAt: Date.now(),
       description: parsedQuantity > 0
-        ? "Qty, subtotal, ongkir, diskon, voucher, dan biaya layanan sudah masuk ke form. Cek ulang sebelum Simpan."
-        : "Subtotal, ongkir, diskon, voucher, dan biaya layanan sudah masuk ke form. Qty belum terbaca, isi manual sebelum Simpan.",
+        ? "Qty, subtotal, ongkir, diskon, voucher/koin, dan biaya layanan sudah masuk ke form. Cek ulang sebelum Simpan."
+        : "Subtotal, ongkir, diskon, voucher/koin, dan biaya layanan sudah masuk ke form. Qty belum terbaca, isi manual sebelum Simpan.",
     });
     message.success("Qty & biaya dari screenshot Shopee diterapkan ke form. Cek ulang sebelum Simpan.");
   };
@@ -1457,7 +1457,7 @@ const Purchases = () => {
       const normalizedPurchaseSaving = Math.round(Number(purchaseSaving || 0));
 
       if (normalizedSubtotalItems < 0 || normalizedTotalActualPurchase < 0) {
-        message.error("Total Aktual Pembelian tidak valid. Cek subtotal, ongkir, diskon, voucher, dan biaya layanan.");
+        message.error("Total Aktual Pembelian tidak valid. Cek subtotal, ongkir, diskon, voucher/koin, dan biaya layanan.");
         return;
       }
 
@@ -1793,12 +1793,12 @@ const Purchases = () => {
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 600 }}>{dateText}</div>
             <Tooltip title={record.purchaseNumber || record.code || record.referenceNumber || supplierName}>
-              <div style={{ color: "#8c8c8c", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div style={{ color: "var(--ims-text-secondary)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {record.purchaseNumber || record.code || record.referenceNumber || "Kode otomatis"}
               </div>
             </Tooltip>
             <Tooltip title={supplierName}>
-              <div style={{ color: "#8c8c8c", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <div style={{ color: "var(--ims-text-secondary)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {supplierName}
               </div>
             </Tooltip>
@@ -1852,10 +1852,10 @@ const Purchases = () => {
         return (
           <div>
             <div>
-              <span style={{ color: "#8c8c8c" }}>Qty: </span>
+              <span style={{ color: "var(--ims-text-secondary)" }}>Qty: </span>
               <strong>{quantityText}</strong>
             </div>
-            <div style={{ fontSize: 12, color: "#8c8c8c" }}>
+            <div style={{ fontSize: 12, color: "var(--ims-text-secondary)" }}>
               Stok Masuk: {stockInText}
             </div>
           </div>
@@ -1872,7 +1872,7 @@ const Purchases = () => {
         return (
           <div>
             <div style={{ fontWeight: 700 }}>{formatCurrencyIdr(record.totalActualPurchase)}</div>
-            <div style={{ color: "#8c8c8c", fontSize: 12 }}>
+            <div style={{ color: "var(--ims-text-secondary)", fontSize: 12 }}>
               Modal: {formatCurrencyIdr(record.actualUnitCost)}{record.stockUnit ? ` / ${record.stockUnit}` : ""}
             </div>
             <Tag color={savingMeta.color} style={{ marginTop: 4 }}>{savingMeta.label}</Tag>
@@ -1889,7 +1889,7 @@ const Purchases = () => {
         const { hasShopeeOcrNote, manualNote, manualPreview } = buildPurchaseNoteTableMeta(value);
 
         if (!manualPreview && !hasShopeeOcrNote) {
-          return <span style={{ color: "#bfbfbf" }}>-</span>;
+          return <span style={{ color: "var(--ims-text-muted)" }}>-</span>;
         }
 
         return (
@@ -1898,7 +1898,7 @@ const Purchases = () => {
               <Tooltip title={<span style={{ whiteSpace: "pre-line" }}>{manualNote}</span>}>
                 <span
                   style={{
-                    color: "#334155",
+                    color: "var(--ims-text-primary)",
                     display: "block",
                     maxWidth: "100%",
                     overflow: "hidden",
@@ -2112,32 +2112,32 @@ const Purchases = () => {
           {selectedPurchaseStockPreview ? (
             <div
               style={{
-                border: "1px solid #f0f0f0",
+                border: "1px solid var(--ims-border-color-soft)",
                 borderRadius: 12,
                 padding: 14,
                 marginBottom: 16,
-                background: "var(--surface-muted, #fafafa)",
+                background: "var(--ims-bg-card-soft)",
               }}
             >
               <div style={{ fontWeight: 600, marginBottom: 4 }}>
                 Stok Aktual Sebelum Restock
               </div>
-              <div style={{ color: "#777", fontSize: 12, marginBottom: 10 }}>
+              <div style={{ color: "var(--ims-text-secondary)", fontSize: 12, marginBottom: 10 }}>
                 Info ini hanya snapshot stok saat ini sebelum pembelian disimpan.
               </div>
               {selectedPurchaseStockPreview.status === "needs_variant" ? (
                 <div
                   style={{
-                    border: "1px dashed #d9d9d9",
+                    border: "1px dashed var(--ims-border-color)",
                     borderRadius: 10,
                     padding: 12,
-                    background: "#fff",
+                    background: "var(--ims-bg-card)",
                   }}
                 >
                   <div style={{ fontWeight: 600 }}>
                     {selectedPurchaseStockPreview.itemName || "Item bervarian"}
                   </div>
-                  <div style={{ color: "#777", marginTop: 4 }}>
+                  <div style={{ color: "var(--ims-text-secondary)", marginTop: 4 }}>
                     {selectedPurchaseStockPreview.message}
                   </div>
                 </div>
@@ -2150,7 +2150,7 @@ const Purchases = () => {
                     <span style={{ fontWeight: 600 }}>
                       {selectedPurchaseStockPreview.itemName}
                     </span>
-                    <span style={{ color: "#777" }}>
+                    <span style={{ color: "var(--ims-text-secondary)" }}>
                       {` — ${selectedPurchaseStockPreview.sourceLabel}`}
                     </span>
                   </div>
@@ -2170,13 +2170,13 @@ const Purchases = () => {
                       <div
                         key={label}
                         style={{
-                          border: '1px solid #edf1f7',
+                          border: '1px solid var(--ims-border-color-soft)',
                           borderRadius: 10,
                           padding: '10px 12px',
-                          background: '#fff',
+                          background: 'var(--ims-bg-card)',
                         }}
                       >
-                        <div style={{ color: "#777", fontSize: 12, marginBottom: 4 }}>{label}</div>
+                        <div style={{ color: "var(--ims-text-secondary)", fontSize: 12, marginBottom: 4 }}>{label}</div>
                         <strong style={{ display: 'block', fontSize: 16 }}>
                           {formatPurchaseStockWithUnit(value, selectedPurchaseStockPreview.stockUnit)}
                         </strong>
@@ -2418,7 +2418,7 @@ const Purchases = () => {
             extra={
               isOfflinePurchase
                 ? "Offline: biaya online tidak dipakai."
-                : "Online: ongkir, voucher, dan biaya layanan ikut menghitung total aktual."
+                : "Online: ongkir, voucher/koin, dan biaya layanan ikut menghitung total aktual."
             }
           >
             <Switch
@@ -2510,7 +2510,7 @@ const Purchases = () => {
               <Space style={{ display: "flex", width: "100%" }} size={12} wrap>
                 <Form.Item
                   name="voucherDiscount"
-                  label="Voucher / Potongan"
+                  label="Voucher / Koin / Potongan"
                   style={{ flex: 1, minWidth: 180 }}
                 >
                   <InputNumber
@@ -2594,21 +2594,21 @@ const Purchases = () => {
               return (
                 <div
                   style={{
-                    border: "1px solid #f0f0f0",
+                    border: "1px solid var(--ims-border-color-soft)",
                     borderRadius: 12,
                     padding: 14,
                     marginBottom: 16,
-                    background: "var(--surface-card, #fff)",
+                    background: "var(--ims-bg-card)",
                   }}
                 >
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>
                     Ringkasan Perbandingan Supplier
                   </div>
-                  <div style={{ color: "#777", fontSize: 12, marginBottom: 12 }}>
+                  <div style={{ color: "var(--ims-text-secondary)", fontSize: 12, marginBottom: 12 }}>
                     Rincian otomatis dari field pembelian. Total aktual menjadi dasar biaya.
                   </div>
                   {summaryIsOfflinePurchase ? (
-                    <div style={{ color: "#777", fontSize: 12, marginBottom: 10 }}>
+                    <div style={{ color: "var(--ims-text-secondary)", fontSize: 12, marginBottom: 10 }}>
                       Offline: ongkir, admin, dan potongan dihitung 0.
                     </div>
                   ) : null}
@@ -2633,12 +2633,12 @@ const Purchases = () => {
                       <strong>{formatDiscountValue(shippingDiscountValue)}</strong>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                      <span>Voucher / Potongan</span>
+                      <span>Voucher / Koin / Potongan</span>
                       <strong>{formatDiscountValue(voucherDiscountValue)}</strong>
                     </div>
                     <div
                       style={{
-                        borderTop: "1px solid #f0f0f0",
+                        borderTop: "1px solid var(--ims-border-color-soft)",
                         marginTop: 4,
                         paddingTop: 8,
                         display: "flex",

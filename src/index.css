@@ -69,6 +69,10 @@ Risiko:
   --ims-color-warning-soft: #FFF7ED;
   --ims-color-warning-muted: rgba(217, 119, 6, 0.18);
   --ims-color-warning-text: #92400E;
+  --ims-color-success: #16A34A;
+  --ims-color-success-soft: #ECFDF5;
+  --ims-color-success-muted: rgba(22, 163, 74, 0.18);
+  --ims-color-success-text: #047857;
   --ims-color-danger: #DC2626;
   --ims-color-danger-soft: #FEF2F2;
   --ims-color-danger-muted: rgba(220, 38, 38, 0.18);
@@ -237,6 +241,10 @@ body[data-app-theme="dark"] {
   --ims-color-warning-soft: rgba(245, 158, 11, 0.15);
   --ims-color-warning-muted: rgba(245, 158, 11, 0.28);
   --ims-color-warning-text: #FCD34D;
+  --ims-color-success: #4ADE80;
+  --ims-color-success-soft: rgba(74, 222, 128, 0.14);
+  --ims-color-success-muted: rgba(74, 222, 128, 0.26);
+  --ims-color-success-text: #86EFAC;
   --ims-color-danger: #F87171;
   --ims-color-danger-soft: rgba(248, 113, 113, 0.14);
   --ims-color-danger-muted: rgba(248, 113, 113, 0.28);

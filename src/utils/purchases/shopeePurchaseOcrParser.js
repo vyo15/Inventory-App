@@ -3,6 +3,7 @@ const SHOPEE_MARKER_PATTERNS = [
   /subtotal\s+(?:produk|barang)/i,
   /subtotal\s+pengiriman/i,
   /voucher\s+shopee/i,
+  /koin\s+shopee/i,
   /biaya\s+(?:layanan|penanganan)/i,
   /total\s+(?:pesanan|pembayaran)/i,
 ];
@@ -54,11 +55,14 @@ const findMoneyNearLabel = (lines = [], labelPattern) => {
   return null;
 };
 
-// Voucher Shopee harus diambil dari baris ringkasan pembayaran.
-// Jangan memakai label umum "Voucher" karena bagian Garansi Tiba juga berisi teks voucher.
+// Voucher/koin Shopee harus diambil dari baris ringkasan pembayaran.
+// Jangan memakai label umum "Voucher" saja karena bagian Garansi Tiba juga berisi teks voucher.
+// Koin Shopee diperlakukan sebagai potongan marketplace karena mengurangi total cash-out.
 const findShopeeVoucherDiscount = (lines = []) =>
   findMoneyNearLabel(lines, /voucher\s+(?:shopee\s+)?digunakan/i) ||
-  findMoneyNearLabel(lines, /voucher\s*\/\s*potongan/i) ||
+  findMoneyNearLabel(lines, /(?:koin\s+shopee|shopee\s+koin)\s+(?:ditukarkan|digunakan|dipakai)?/i) ||
+  findMoneyNearLabel(lines, /koin\s+(?:shopee\s+)?(?:ditukarkan|digunakan|dipakai)/i) ||
+  findMoneyNearLabel(lines, /voucher\s*\/\s*(?:koin\s*\/\s*)?potongan/i) ||
   findMoneyNearLabel(lines, /voucher\s+(?:toko|penjual|produk)/i) ||
   0;
 
@@ -77,7 +81,7 @@ const extractEstimateText = (lines = []) => {
 };
 
 const extractStoreName = (lines = []) => {
-  const ignoredPattern = /(rincian|pesanan|estimasi|garansi|info|pengiriman|alamat|subtotal|voucher|biaya|total|bantuan|lacak|selengkapnya|diproses|standard)/i;
+  const ignoredPattern = /(rincian|pesanan|estimasi|garansi|info|pengiriman|alamat|subtotal|voucher|koin|biaya|total|bantuan|lacak|selengkapnya|diproses|standard)/i;
   const storeCandidate = lines.find((line) => {
     if (ignoredPattern.test(line)) return false;
     if (/^rp\s*[0-9]/i.test(line)) return false;
@@ -100,7 +104,7 @@ const getProductSearchWindow = (lines = []) => {
 
 const extractQuantityMarkers = (lines = []) => {
   // Guard multi-item: hanya baca area item sebelum subtotal agar qty dari ongkir/resi tidak ikut terhitung.
-  const hardIgnoredPattern = /(estimasi|garansi|info\s+pengiriman|alamat|subtotal\s+(?:produk|barang)|subtotal\s+pengiriman|subtotal\s+diskon|diskon\s+pengiriman|voucher|biaya\s+(?:layanan|penanganan)|total\s+(?:pesanan|pembayaran)|resi|standard|spxid)/i;
+  const hardIgnoredPattern = /(estimasi|garansi|info\s+pengiriman|alamat|subtotal\s+(?:produk|barang)|subtotal\s+pengiriman|subtotal\s+diskon|diskon\s+pengiriman|voucher|koin|biaya\s+(?:layanan|penanganan)|total\s+(?:pesanan|pembayaran)|resi|standard|spxid)/i;
   return getProductSearchWindow(lines)
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => line && !hardIgnoredPattern.test(line))
@@ -123,7 +127,7 @@ const extractQuantity = (lines = []) => {
 
 const extractUnitPriceBeforeSubtotal = (lines = []) => {
   const searchWindow = getProductSearchWindow(lines);
-  const ignoredPattern = /(estimasi|garansi|info\s+pengiriman|alamat|subtotal|pengiriman|voucher|biaya|total|standard|spxid|lacak|bantuan|pesanan\s+selesai)/i;
+  const ignoredPattern = /(estimasi|garansi|info\s+pengiriman|alamat|subtotal|pengiriman|voucher|koin|biaya|total|standard|spxid|lacak|bantuan|pesanan\s+selesai)/i;
 
   for (const line of [...searchWindow].reverse()) {
     if (!line || ignoredPattern.test(line)) continue;
@@ -163,7 +167,7 @@ const extractVariantName = (lines = []) => {
   if (qtyLineIndex <= 0) return '';
 
   const candidate = lines[qtyLineIndex - 1];
-  if (!candidate || /rp\s*[0-9]/i.test(candidate) || /subtotal|voucher|biaya|total/i.test(candidate)) return '';
+  if (!candidate || /rp\s*[0-9]/i.test(candidate) || /subtotal|voucher|koin|biaya|total/i.test(candidate)) return '';
 
   return candidate.trim();
 };
@@ -171,7 +175,7 @@ const extractVariantName = (lines = []) => {
 const extractProductName = (lines = []) => {
   const qtyLineIndex = lines.findIndex((line) => /\bx\s*\d+\b/i.test(line));
   const searchWindow = qtyLineIndex > 0 ? lines.slice(Math.max(qtyLineIndex - 5, 0), qtyLineIndex + 1) : lines;
-  const ignoredPattern = /(subtotal|voucher|biaya|total|estimasi|garansi|pengiriman|alamat|standard|lacak|bantuan|star)/i;
+  const ignoredPattern = /(subtotal|voucher|koin|biaya|total|estimasi|garansi|pengiriman|alamat|standard|lacak|bantuan|star)/i;
 
   const candidate = [...searchWindow]
     .reverse()
@@ -222,7 +226,7 @@ const buildShopeeOcrNote = (draft = {}) => {
   if (draft.subtotalItems > 0) noteParts.push(`- Subtotal barang: ${formatNoteMoney(draft.subtotalItems)}`);
   if (draft.shippingCost > 0) noteParts.push(`- Ongkir pengiriman: ${formatNoteMoney(draft.shippingCost)}`);
   if (draft.shippingDiscount > 0) noteParts.push(`- Diskon ongkir: -${formatNoteMoney(draft.shippingDiscount)}`);
-  if (draft.voucherDiscount > 0) noteParts.push(`- Voucher / potongan: -${formatNoteMoney(draft.voucherDiscount)}`);
+  if (draft.voucherDiscount > 0) noteParts.push(`- Voucher / koin / potongan: -${formatNoteMoney(draft.voucherDiscount)}`);
   if (draft.serviceFee > 0) noteParts.push(`- Biaya layanan marketplace: ${formatNoteMoney(draft.serviceFee)}`);
   if (draft.quantity > 0) noteParts.push(`- Qty beli: ${draft.quantity}`);
   if (draft.totalOrder > 0) noteParts.push(`- Total pesanan: ${formatNoteMoney(draft.totalOrder)}`);
@@ -280,7 +284,7 @@ const buildReviewMeta = ({ hasUsefulValues, isLikelyShopee, totalOrder, totalMat
       reviewSeverity: 'warning',
       reviewStatusLabel: 'Perlu dicek manual',
       reviewMessage: `Total OCR belum cocok dengan hasil hitung sistem. Selisih terbaca ${formatNoteMoney(Math.abs(totalDifference))}.`,
-      reviewReasons: ['Periksa ulang subtotal, ongkir, diskon, voucher, biaya layanan, dan total sebelum diterapkan.'],
+      reviewReasons: ['Periksa ulang subtotal, ongkir, diskon, voucher/koin, biaya layanan, dan total sebelum diterapkan.'],
       autoApplyBlocked: false,
       needsManualReview: true,
     };

@@ -63,13 +63,15 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 
 - [ ] Buka Purchases lalu klik Tambah Pembelian.
 - [ ] Upload screenshot Shopee valid dan pastikan preview qty/biaya muncul tanpa auto-save.
-- [ ] Klik **Terapkan Qty & Biaya ke Form** dan pastikan field Qty Beli, Subtotal Barang, Ongkir, Diskon Ongkir/Voucher, Biaya Layanan, Total Aktual, dan Modal Aktual berubah sesuai preview.
+- [ ] Klik **Terapkan Qty & Biaya ke Form** dan pastikan field Qty Beli, Subtotal Barang, Ongkir, Diskon Ongkir/Voucher/Koin, Biaya Layanan, Total Aktual, dan Modal Aktual berubah sesuai preview.
 - [ ] Setelah Apply, pastikan ada feedback lokal di area OCR/form: tombol berubah menjadi **Sudah Diterapkan ke Form** atau muncul alert sukses dengan ringkasan field yang diterapkan.
 - [ ] Klik Apply lebih dari sekali dan pastikan Catatan tidak menambah segmen `OCR Shopee` dobel. Catatan manual sebelum OCR harus tetap ada.
 - [ ] Tutup modal Tambah Pembelian, lalu pada tabel klik **Lihat** di samping tag `OCR Shopee`; popup detail harus terbuka tanpa error console `record is not defined`.
 - [ ] Tutup popup detail OCR dan pastikan halaman Purchases bisa diklik/scroll normal lagi; overlay tidak boleh menutup tabel setelah ditutup.
 - [ ] Print popup OCR dan pastikan isi struk terbaca tanpa scrollbar internal di hasil print.
 - [ ] Setelah menutup popup OCR, coba print halaman non-OCR bila tersedia dan pastikan halaman lain tidak blank akibat CSS print OCR.
+- [ ] Upload screenshot Shopee dengan `Koin Shopee Ditukarkan/Digunakan` dan pastikan nilainya masuk ke `Voucher / Koin / Potongan`, total OCR cocok, serta tidak muncul warning selisih sebesar nilai koin.
+- [ ] Pastikan OCR tidak mengisi tanggal pembelian dari tanggal status pengiriman/diterima; tanggal transaksi tetap manual.
 - [ ] Pastikan flow Simpan Pembelian tetap satu-satunya flow yang mengubah purchases, stok, inventory log, dan expense. OCR Apply tidak boleh membuat transaksi.
 
 ### Penjualan
@@ -220,6 +222,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - cek nilai payroll
 - ubah status unpaid → paid
 - pastikan row Payroll `paid` hanya menampilkan tombol Detail, tanpa tombol Edit disabled atau Paid
+- pastikan tag status `Paid` tidak tampil dobel di tabel Payroll Produksi dan Laporan Payroll; data `status`/`paymentStatus` tetap terpisah di source.
 
 ### Analisis HPP
 - pastikan work log completed terbaca
@@ -334,12 +337,9 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - tambah adjustment Semi Finished bervarian dan pastikan `variantKey` / `variantLabel` masuk ke `stock_adjustments` dan `inventory_logs`
 - cek `stock`, `currentStock`, `reservedStock`, `availableStock`, dan total `variants[]` tetap sinkron
 - cek record `stock_adjustments` menyimpan `collectionName`, `variantKey`, `variantLabel`, `currentStockBefore`, `currentStockAfter`, `availableStockBefore`, dan `availableStockAfter`
+- cek record `stock_adjustments` tetap menyimpan `reason` dan `note` terpisah, tetapi tabel riwayat hanya menampilkan satu kolom `Alasan & Catatan`
+- jika `note` kosong atau sama dengan `reason`, pastikan tabel riwayat Penyesuaian Stok tidak menampilkan info dobel
 - cek `inventory_logs` menyimpan `adjustmentId`, `referenceId`, `referenceType`, `details`, dan snapshot stok sebelum/sesudah
-- bahan baku dengan `averageActualUnitCost = 0`, `restockReferencePrice = 0`, dan supplier utama dengan harga referensi: buka Stock Adjustment masuk, pastikan `Estimasi Modal Awal / Unit` terisi otomatis dari supplier utama dan tetap bisa diedit sebelum Simpan
-- bahan baku dengan cost 0 dan hanya satu supplier katalog yang cocok: pastikan saran modal awal terisi dari supplier tersebut
-- bahan baku dengan cost 0 dan beberapa supplier cocok tanpa supplier utama: pastikan modal awal tidak auto-pilih sembarang supplier dan user tetap wajib input manual
-- bahan baku/semi finished/product dengan cost/HPP aktif > 0: pastikan Stock Adjustment hanya menampilkan modal aktif read-only dan tidak membuka input koreksi modal
-- simpan adjustment masuk dengan estimasi modal awal dan pastikan stok bertambah, `stock_adjustments.unitCost` tersimpan, inventory log dibuat, serta purchase/expense/supplier tidak berubah
 
 ### Customer Collection Final
 - tambah customer dari Master Customer
@@ -510,7 +510,8 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - pastikan field Step/Tahapan menjelaskan bahwa rule/tarif payroll berasal dari tahapan produksi
 - pastikan field Operator/Karyawan menjelaskan penerima payroll
 - pastikan status `draft`, `confirmed`, dan `paid` memiliki help text yang mudah dipahami
-- pastikan `Payment Status` menjelaskan status pembayaran internal payroll; saat `paid`, sistem membuat Cash Out otomatis dengan guard sourceModule/sourceId
+- pastikan UI detail Payroll menampilkan status secara compact: jika `status` dan `paymentStatus` sama-sama `paid`, hanya tampil satu tag `Paid`
+- pastikan `paymentStatus` tetap tersimpan dan dijelaskan lewat help text; saat `paid`, sistem membuat Cash Out otomatis dengan guard sourceModule/sourceId
 - pastikan `Payroll Rate`, `Qty Dasar / Output Qty Used`, `Amount Calculated`, dan `Final Amount` punya penjelasan fungsi
 - pastikan `Calculation Notes` dan `Notes` jelas bedanya antara catatan sistem dan catatan manual
 - pastikan tidak ada perubahan nominal, status, atau payment status hanya karena membuka detail
@@ -856,13 +857,13 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 
 - [ ] Buka Purchases lalu klik tambah pembelian.
 - [ ] Pilih bahan baku non-varian dan pastikan preview stok aktual menampilkan `currentStock`, `reservedStock`, dan `availableStock` dari stok master.
-- [ ] Ubah supplier, Qty Beli, subtotal, ongkir, admin/service fee, potongan ongkir, dan voucher; pastikan preview stok tetap read-only dan tidak error.
+- [ ] Ubah supplier, Qty Beli, subtotal, ongkir, admin/service fee, potongan ongkir, dan voucher/koin; pastikan preview stok tetap read-only dan tidak error.
 - [ ] Pilih bahan baku bervarian tanpa memilih varian; pastikan UI menampilkan pesan untuk memilih varian terlebih dahulu.
 - [ ] Pilih varian bahan baku dan pastikan stok yang tampil adalah stok varian terpilih, bukan total master.
 - [ ] Pilih produk non-varian dan pastikan preview stok aktual menampilkan stok master.
 - [ ] Pilih produk bervarian tanpa memilih varian; pastikan UI menampilkan pesan untuk memilih varian terlebih dahulu.
 - [ ] Pilih varian produk dan pastikan stok berubah real-time mengikuti `productVariantKey`.
-- [ ] Pastikan Ringkasan Perbandingan Supplier menampilkan Subtotal Barang / Harga Awal, Ongkir, Admin / Service Fee, Potongan Ongkir, Voucher / Potongan, Total Aktual Pembelian, Total Pembanding Supplier, Modal Aktual / Satuan Stok, dan Selisih Hemat.
+- [ ] Pastikan Ringkasan Perbandingan Supplier menampilkan Subtotal Barang / Harga Awal, Ongkir, Admin / Service Fee, Potongan Ongkir, Voucher / Koin / Potongan, Total Aktual Pembelian, Total Pembanding Supplier, Modal Aktual / Satuan Stok, dan Selisih Hemat.
 - [ ] Pastikan Total Aktual Pembelian tetap sama dengan formula existing `subtotalItems + shippingCost + serviceFee - shippingDiscount - voucherDiscount`.
 - [ ] Pastikan Total Pembanding Supplier tetap mengikuti logic supplier catalog existing dan tidak mengubah harga aktual pembelian.
 - [ ] Simpan purchase kecil dan pastikan stok bertambah, inventory log tercatat, expense otomatis tercatat, dan `purchaseSaving` tetap informasi efisiensi.
@@ -906,6 +907,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Pastikan Sumber terbaca sebagai Pembelian, Penjualan, Retur, Produksi, atau Penyesuaian Stok.
 - [ ] Pastikan Referensi Audit menampilkan label bisnis dan ID teknis sebagai detail kecil/tooltip.
 - [ ] Pastikan Catatan ringkas 1-2 baris dan detail panjang tetap bisa dilihat lewat tooltip.
+- [ ] Pastikan riwayat Penyesuaian Stok memakai satu kolom `Alasan & Catatan`; `reason`/`note` tetap tersimpan terpisah dan tidak tampil dobel jika isinya sama/kosong.
 - [ ] Pastikan membuka halaman Stock Management tidak mengubah stok.
 - [ ] Buat adjustment masuk item non-varian dan pastikan stok bertambah.
 - [ ] Buat adjustment keluar item non-varian dan pastikan stok berkurang sesuai `availableStock`.
@@ -1205,6 +1207,15 @@ Risiko:
 - [ ] Tidak ada perubahan ke AuthContext, AppLayout runtime, SidebarMenu logic, services, transaksi, stok, cashflow, produksi, payroll, HPP, reports, atau reset flow.
 - [ ] Jalankan `npm run lint` dan `npm run build` di project lengkap yang punya `package.json`.
 
+
+## Checklist Hardcoded Color / Theme Token Cleanup
+
+- [ ] Buka Purchases di light mode dan dark mode; preview stok, ringkasan supplier, dan OCR draft panel harus mengikuti warna card/border/text theme, bukan fallback putih/abu lama.
+- [ ] Upload OCR Shopee, buka popup detail OCR, cek badge, ikon, total, note, tombol, dan print preview tetap readable di light/dark mode.
+- [ ] Pastikan tidak ada penggunaan token lama `--surface-card` atau `--surface-muted` pada Purchases/OCR.
+- [ ] Cek Stock Management qty masuk/keluar, Supplier Purchases status harga, Sales item row, dan Production Orders requirement preview: border/status tetap readable.
+- [ ] Pastikan cleanup warna tidak mengubah OCR parser, payload purchase, stock mutation, inventory log, expense, route, role guard, production, payroll, HPP, atau reset flow.
+
 ## Checklist Login visual polish — 2026-05-04
 
 - [ ] Login normal tampil lebih proporsional dengan panel brand dan form yang seimbang.
@@ -1249,7 +1260,7 @@ Risiko:
 
 ## Checklist UI Table Compact — 2026-05-06
 - [ ] Buka Cash In: table utama tampil tanpa horizontal scroll default, sumber + tipe terbaca, nominal tetap rata kanan, dan tidak ada aksi delete/edit row.
-- [ ] Buka Stock Management > Stock Adjustment Panel: riwayat adjustment tampil compact tanpa horizontal scroll default dan catatan panjang tetap terbaca via tooltip/preview.
+- [ ] Buka Stock Management > Stock Adjustment Panel: riwayat adjustment tampil compact tanpa horizontal scroll default, kolom `Alasan & Catatan` tidak dobel, dan catatan panjang tetap terbaca via tooltip/preview.
 - [ ] Buka Pricing Rules: table utama tampil compact tanpa fixed/sticky kanan; tombol Detail/Edit/Hapus tetap bekerja; modal Detail/preview tetap menghitung data yang sama.
 - [ ] Buka Products: kolom Stok tetap menampilkan `Total`, `Tersedia`, dan semua variant pill langsung di table untuk item bervarian.
 - [ ] Buka Semi Finished Materials: primary table tampil tanpa horizontal scroll default; kolom Stok tetap menampilkan `Total`, `Tersedia`, dan semua variant pill langsung di table.

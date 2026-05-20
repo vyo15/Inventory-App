@@ -235,8 +235,7 @@ Batasan aman:
 }
 
 .summary-finance-kicker.ant-typography,
-.summary-finance-label.ant-typography,
-.summary-finance-flow-label.ant-typography {
+.summary-finance-label.ant-typography {
   display: block;
   color: var(--ims-text-secondary);
   font-size: var(--ims-font-size-meta);
@@ -275,69 +274,7 @@ Batasan aman:
 }
 
 .summary-finance-side {
-  display: grid;
-  grid-template-rows: 1fr auto;
-  gap: 10px;
   min-width: 0;
-}
-
-.summary-finance-flow {
-  min-height: 42px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  border: 1px solid var(--ims-border-color-soft);
-  border-radius: 14px;
-  background: var(--ims-bg-card-soft);
-  overflow: hidden;
-}
-
-.summary-finance-flow-item {
-  --summary-flow-tone: var(--ims-color-brand-gold);
-  min-width: 0;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  column-gap: 7px;
-  row-gap: 1px;
-  align-items: center;
-  padding: 9px 10px;
-}
-
-.summary-finance-flow-item + .summary-finance-flow-item {
-  border-left: 1px solid var(--ims-border-color-soft);
-}
-
-.summary-finance-flow-item[data-tone="primary"] {
-  --summary-flow-tone: var(--ims-color-primary);
-}
-
-.summary-finance-flow-item[data-tone="success"] {
-  --summary-flow-tone: #2f8f5b;
-}
-
-.summary-finance-flow-item[data-tone="warning"] {
-  --summary-flow-tone: var(--ims-color-warning);
-}
-
-.summary-finance-flow-item[data-tone="danger"] {
-  --summary-flow-tone: #c84c4c;
-}
-
-.summary-finance-flow-dot {
-  grid-row: span 2;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--summary-flow-tone);
-}
-
-.summary-finance-flow-value.ant-typography {
-  min-width: 0;
-  color: var(--ims-text-primary);
-  font-size: var(--ims-font-size-caption);
-  font-weight: var(--ims-font-weight-strong);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .app-shell.dark .summary-stat-card.ant-card,
@@ -356,8 +293,7 @@ Batasan aman:
 .app-shell.dark .summary-finance-kicker.ant-typography,
 .app-shell.dark .summary-finance-label.ant-typography,
 .app-shell.dark .summary-finance-period.ant-typography,
-.app-shell.dark .summary-finance-helper.ant-typography,
-.app-shell.dark .summary-finance-flow-label.ant-typography {
+.app-shell.dark .summary-finance-helper.ant-typography {
   color: var(--ims-text-secondary);
 }
 
@@ -370,14 +306,8 @@ Batasan aman:
 
 @media (max-width: 768px) {
   .summary-stat-grid-metrics,
-  .summary-finance-metrics,
-  .summary-finance-flow {
+  .summary-finance-metrics {
     grid-template-columns: 1fr;
-  }
-
-  .summary-finance-flow-item + .summary-finance-flow-item {
-    border-top: 1px solid var(--ims-border-color-soft);
-    border-left: 0;
   }
 
   .summary-finance-main-header,

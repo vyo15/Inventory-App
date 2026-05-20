@@ -29,6 +29,7 @@ import {
   PAYROLL_CLASSIFICATION_MAP,
   PAYROLL_MODE_MAP,
   PAYROLL_STATUS_MAP,
+  getCompactPayrollStatusTags,
 } from "../../constants/productionPayrollOptions";
 import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
@@ -39,6 +40,16 @@ import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/La
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 const { RangePicker } = DatePicker;
+
+const renderPayrollStatusTags = (record = {}) => (
+  <Space size={4} wrap>
+    {getCompactPayrollStatusTags(record).map((item) => (
+      <Tag key={item.key} color={item.color}>
+        {item.label}
+      </Tag>
+    ))}
+  </Space>
+);
 
 // =====================================================
 // SECTION: Compact Table Text Renderer — AKTIF
@@ -346,15 +357,12 @@ const PayrollReport = () => {
         ),
       },
       {
-        title: "Status / Payment",
+        title: "Status",
         key: "statusPayment",
         width: 190,
         render: (_, record) => (
           <div style={{ minWidth: 0 }}>
-            <Space size={4} wrap>
-              <Tag>{PAYROLL_STATUS_MAP[record.status] || record.status || "-"}</Tag>
-              <Tag>{record.paymentStatus || "-"}</Tag>
-            </Space>
+            {renderPayrollStatusTags(record)}
             {renderCompactLine(`Confirmed: ${formatDateId(record.confirmedAt, true)}`, { muted: true })}
             {renderCompactLine(`Paid: ${formatDateId(record.paidAt, true)}`, { muted: true })}
           </div>

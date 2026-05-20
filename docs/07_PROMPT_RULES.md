@@ -284,7 +284,7 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Jangan mengembalikan Konversi Supplier sebagai input utama/editable di Purchases.
 - Jangan membuat perubahan Qty Beli memicu reset item/supplier/link/purchaseType/harga pembanding.
 - Jangan menghapus guard manual subtotal; harga barang supplier hanya default, bukan pemaksa harga aktual.
-- Jangan membuat shipping tier / ongkir bertingkat tanpa task khusus; ongkir, voucher, diskon ongkir, dan biaya layanan aktual tetap editable di Purchases.
+- Jangan membuat shipping tier / ongkir bertingkat tanpa task khusus; ongkir, voucher/koin, diskon ongkir, dan biaya layanan aktual tetap editable di Purchases.
 - Reject/selisih barang harus diarahkan ke Penyesuaian Stok, bukan edit konversi di Purchases.
 
 
@@ -302,7 +302,7 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - Untuk item non-varian, preview stok boleh membaca stok master `currentStock`, `reservedStock`, dan `availableStock`.
 - Untuk item bervarian, preview stok wajib membaca varian yang dipilih; jangan menampilkan total master sebagai angka utama.
 - Jika item bervarian belum memilih varian, tampilkan pesan pilih varian dan jangan fallback diam-diam ke stok master.
-- Ringkasan pembelian boleh menampilkan breakdown subtotal, ongkir, admin/service fee, potongan ongkir, voucher, total aktual, total pembanding supplier, modal aktual per satuan stok, dan selisih hemat.
+- Ringkasan pembelian boleh menampilkan breakdown subtotal, ongkir, admin/service fee, potongan ongkir, voucher/koin, total aktual, total pembanding supplier, modal aktual per satuan stok, dan selisih hemat.
 - Jangan memindahkan atau mengubah effect kalkulasi `totalStockIn`, `totalActualPurchase`, `actualUnitCost`, `totalReferencePurchase`, atau `purchaseSaving` hanya untuk memperbaiki tampilan ringkasan.
 - Jangan mengubah stock mutation, inventory log, expense otomatis, supplier catalog, atau kalkulasi Purchases untuk task UI alert.
 - Jangan menyentuh `handleSubmitPurchase`, `runTransaction`, stock mutation, inventory log, expense otomatis, supplier catalog service, raw material service, product service, Stock Management, Reports, Dashboard, Sales, Returns, Production, Payroll, atau HPP jika task hanya UI preview dan breakdown Purchases.

@@ -57,8 +57,8 @@ const getShopeeOcrDetailMeta = (label = "") => {
     return { label: "Diskon ongkir", iconKey: "discount", tone: "green", order: 30, isDiscount: true };
   }
 
-  if (normalizedLabel.includes("voucher") || normalizedLabel.includes("potongan")) {
-    return { label: "Voucher / potongan", iconKey: "discount", tone: "green", order: 40, isDiscount: true };
+  if (normalizedLabel.includes("voucher") || normalizedLabel.includes("koin") || normalizedLabel.includes("potongan")) {
+    return { label: "Voucher / koin / potongan", iconKey: "discount", tone: "green", order: 40, isDiscount: true };
   }
 
   if (normalizedLabel.includes("biaya layanan")) {

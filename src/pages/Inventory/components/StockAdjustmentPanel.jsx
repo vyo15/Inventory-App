@@ -22,11 +22,6 @@ import {
   buildInventoryLogPayload,
   INVENTORY_LOG_COLLECTION,
 } from "../../../services/Inventory/inventoryLogService";
-import {
-  getSupplierDisplayName,
-  getSupplierReferencePriceForMaterial,
-  listenSupplierCatalog,
-} from "../../../services/MasterData/suppliersService";
 import { formatNumberId, parseIntegerIdInput } from "../../../utils/formatters/numberId";
 import {
   buildVariantOptionsFromItem,
@@ -152,73 +147,6 @@ const formatQuantityId = (value, unit = "") => {
   return `${formatted}${unit ? ` ${unit}` : ""}`.trim();
 };
 
-const formatCurrencyId = (value) => `Rp ${formatNumberId(Math.round(Number(value || 0)))}`;
-
-const getPositiveRoundedNumber = (value = 0) => {
-  const numericValue = Math.round(Number(value || 0));
-  return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : 0;
-};
-
-const buildRawMaterialSupplierCostSuggestion = ({ item = {}, suppliers = [] } = {}) => {
-  const materialId = String(item?.id || "").trim();
-  if (!materialId) return null;
-
-  const preferredSupplierId = String(item?.supplierId || item?.masterSupplierId || "").trim();
-  const supplierReferences = (suppliers || [])
-    .map((supplier) => ({
-      supplierId: String(supplier?.id || supplier?.masterSupplierId || "").trim(),
-      supplierName: getSupplierDisplayName(supplier),
-      unitCost: getPositiveRoundedNumber(getSupplierReferencePriceForMaterial(supplier, materialId)),
-    }))
-    .filter((reference) => reference.unitCost > 0);
-
-  if (preferredSupplierId) {
-    const preferredSupplierReference = supplierReferences.find(
-      (reference) => reference.supplierId === preferredSupplierId,
-    );
-
-    if (preferredSupplierReference) {
-      return {
-        unitCost: preferredSupplierReference.unitCost,
-        sourceLabel: `Supplier utama: ${preferredSupplierReference.supplierName}`,
-        helperText: "Diisi otomatis dari katalog supplier utama. Cek ulang sebelum simpan karena nilai ini menjadi baseline modal stok awal.",
-        isAutoFillSafe: true,
-      };
-    }
-  }
-
-  const masterReferencePrice = getPositiveRoundedNumber(item?.restockReferencePrice || 0);
-  if (masterReferencePrice > 0) {
-    return {
-      unitCost: masterReferencePrice,
-      sourceLabel: "Harga referensi master bahan",
-      helperText: "Diisi otomatis dari harga referensi master bahan. Cek ulang sebelum simpan karena nilai ini menjadi baseline modal stok awal.",
-      isAutoFillSafe: true,
-    };
-  }
-
-  if (supplierReferences.length === 1) {
-    const [singleReference] = supplierReferences;
-    return {
-      unitCost: singleReference.unitCost,
-      sourceLabel: `Supplier: ${singleReference.supplierName}`,
-      helperText: "Diisi otomatis dari satu-satunya katalog supplier yang cocok. Cek ulang sebelum simpan karena nilai ini menjadi baseline modal stok awal.",
-      isAutoFillSafe: true,
-    };
-  }
-
-  if (supplierReferences.length > 1) {
-    return {
-      unitCost: 0,
-      sourceLabel: `${supplierReferences.length} referensi supplier tersedia`,
-      helperText: "Ada beberapa harga supplier untuk bahan ini. Isi manual agar modal awal tidak salah pilih supplier.",
-      isAutoFillSafe: false,
-    };
-  }
-
-  return null;
-};
-
 const getAdjustmentCostField = (collectionName = "") => {
   if (collectionName === "raw_materials") return "averageActualUnitCost";
   if (collectionName === "semi_finished_materials") return "averageCostPerUnit";
@@ -304,14 +232,14 @@ const buildStockAdjustmentCostGuardPayload = ({
 };
 
 // =========================
-// SECTION: Tampilan ringkas catatan adjustment
+// SECTION: Tampilan ringkas alasan & catatan adjustment
 // Fungsi:
-// - membatasi catatan di tabel adjustment agar row tidak terlalu tinggi.
+// - menggabungkan reason/note hanya di tampilan tabel agar row tidak menampilkan info dobel.
 // Hubungan flow aplikasi:
 // - hanya memengaruhi tampilan audit; tidak mengubah data stock_adjustments atau inventory_logs.
 // Status:
 // - AKTIF untuk UI Stock Adjustment Panel.
-// - GUARDED karena catatan lengkap tetap tersedia di tooltip.
+// - GUARDED karena field reason/note tetap tersimpan terpisah dan catatan lengkap tetap tersedia di tooltip.
 // - LEGACY: tidak ada logic legacy yang dipakai di blok ini.
 // - CLEANUP CANDIDATE: tidak perlu dibersihkan selama tabel masih menampilkan catatan bebas.
 // =========================
@@ -324,12 +252,41 @@ const NOTE_PREVIEW_STYLE = {
   lineHeight: "var(--ims-line-height-title)",
 };
 
-const renderCompactNote = (value) => {
-  const noteText = String(value || "-").trim() || "-";
+const STOCK_ADJUSTMENT_REASON_LABELS = {
+  stok_awal: "Stok Awal",
+  opname: "Selisih Opname",
+  rusak: "Barang Rusak",
+  hilang: "Barang Hilang",
+  lainnya: "Lainnya",
+};
+
+const normalizeCompactText = (value = "") => String(value || "").trim();
+
+const getStockAdjustmentReasonLabel = (reason = "") => {
+  const normalizedReason = normalizeCompactText(reason);
+  return STOCK_ADJUSTMENT_REASON_LABELS[normalizedReason] || normalizedReason || "-";
+};
+
+const renderAdjustmentReasonNote = (_, record = {}) => {
+  const rawReason = normalizeCompactText(record.reason);
+  const reasonText = getStockAdjustmentReasonLabel(rawReason);
+  const noteText = normalizeCompactText(record.note);
+  const normalizedNote = noteText.toLowerCase();
+  const normalizedReasonText = reasonText.toLowerCase();
+  const normalizedRawReason = rawReason.toLowerCase();
+  const shouldShowNote = Boolean(
+    noteText && normalizedNote !== normalizedReasonText && normalizedNote !== normalizedRawReason,
+  );
+  const compactText = [reasonText !== "-" ? reasonText : "", shouldShowNote ? noteText : ""]
+    .filter(Boolean)
+    .join(" • ") || "-";
+  const tooltipTitle = shouldShowNote
+    ? [`Alasan: ${reasonText}`, `Catatan: ${noteText}`].join("\n")
+    : compactText;
 
   return (
-    <Tooltip title={noteText !== "-" ? noteText : ""}>
-      <span style={NOTE_PREVIEW_STYLE}>{noteText}</span>
+    <Tooltip title={compactText !== "-" ? tooltipTitle : ""}>
+      <span style={NOTE_PREVIEW_STYLE}>{compactText}</span>
     </Tooltip>
   );
 };
@@ -363,7 +320,6 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   const [rawMaterials, setRawMaterials] = useState([]);
   const [semiFinishedMaterials, setSemiFinishedMaterials] = useState([]);
   const [finishedProducts, setFinishedProducts] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -373,8 +329,6 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   const selectedItemId = Form.useWatch("itemId", form);
   const selectedVariantKey = Form.useWatch("variantKey", form);
   const selectedAdjustmentType = Form.useWatch("adjustmentType", form);
-  const selectedQuantity = Form.useWatch("quantity", form);
-  const selectedUnitCostInput = Form.useWatch("unitCost", form);
 
   // =========================
   // SECTION: Live data subscription
@@ -434,20 +388,11 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
       },
     );
 
-    const unsubscribeSuppliers = listenSupplierCatalog(
-      setSuppliers,
-      () => {
-        setSuppliers([]);
-        message.warning("Referensi supplier belum bisa dimuat untuk saran modal awal.");
-      },
-    );
-
     return () => {
       unsubscribeAdjustments();
       unsubscribeRawMaterials();
       unsubscribeSemiFinishedMaterials();
       unsubscribeFinishedProducts();
-      unsubscribeSuppliers?.();
     };
   }, []);
 
@@ -568,43 +513,6 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   });
   const needsUnitCostGuard =
     selectedAdjustmentType === "in" && selectedItem && selectedCurrentUnitCost <= 0;
-  const selectedUnitCostSuggestion = useMemo(() => {
-    if (!needsUnitCostGuard || selectedItemTypeConfig.collectionName !== "raw_materials") return null;
-
-    return buildRawMaterialSupplierCostSuggestion({
-      item: selectedItem,
-      suppliers,
-    });
-  }, [needsUnitCostGuard, selectedItem, selectedItemTypeConfig.collectionName, suppliers]);
-  const estimatedOpeningStockValue = useMemo(() => {
-    const quantityValue = Number(selectedQuantity || 0);
-    const unitCostValue = Number(selectedUnitCostInput || 0);
-
-    if (!needsUnitCostGuard || quantityValue <= 0 || unitCostValue <= 0) return 0;
-
-    return Math.round(quantityValue * unitCostValue);
-  }, [needsUnitCostGuard, selectedQuantity, selectedUnitCostInput]);
-
-  // =========================
-  // SECTION: Saran modal awal dari Supplier - AKTIF / GUARDED
-  // Fungsi blok:
-  // - mengisi otomatis Estimasi Modal Awal / Unit untuk bahan baku saat cost master masih 0.
-  // Hubungan flow:
-  // - hanya prefill form Stock Adjustment; transaction, stok, inventory log, dan cost guard tetap memakai unitCost yang dikonfirmasi user saat klik Simpan.
-  // Batasan:
-  // - tidak auto-pilih jika beberapa supplier punya harga berbeda dan tidak ada supplier utama pada master bahan.
-  // =========================
-  useEffect(() => {
-    if (!needsUnitCostGuard || !selectedUnitCostSuggestion?.isAutoFillSafe) return;
-
-    const suggestedUnitCost = Number(selectedUnitCostSuggestion.unitCost || 0);
-    if (suggestedUnitCost <= 0) return;
-
-    const currentInputValue = Number(form.getFieldValue("unitCost") || 0);
-    if (currentInputValue > 0) return;
-
-    form.setFieldsValue({ unitCost: suggestedUnitCost });
-  }, [form, needsUnitCostGuard, selectedUnitCostSuggestion]);
 
   // =========================
   // SECTION: Submit penyesuaian stok atomik
@@ -905,18 +813,10 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         ),
       },
       {
-        title: "Alasan",
-        dataIndex: "reason",
-        key: "reason",
-        width: "22%",
-        render: renderCompactNote,
-      },
-      {
-        title: "Catatan",
-        dataIndex: "note",
-        key: "note",
-        width: "22%",
-        render: renderCompactNote,
+        title: "Alasan & Catatan",
+        key: "reasonNote",
+        width: "44%",
+        render: renderAdjustmentReasonNote,
       },
     ];
   }, []);
@@ -1206,77 +1106,41 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
             />
           </Form.Item>
 
-          {selectedAdjustmentType === "in" && selectedItem ? (
-            needsUnitCostGuard ? (
-              <Form.Item
-                name="unitCost"
-                label="Estimasi Modal Awal / Unit"
-                rules={[
-                  {
-                    validator: (_, value) => {
-                      const numericValue = Number(value || 0);
-                      if (Number.isFinite(numericValue) && numericValue > 0) {
-                        return Promise.resolve();
-                      }
+          {selectedAdjustmentType === "in" ? (
+            <Form.Item
+              name="unitCost"
+              label="Modal per Unit"
+              rules={[
+                {
+                  validator: (_, value) => {
+                    if (!needsUnitCostGuard) return Promise.resolve();
 
-                      return Promise.reject(
-                        new Error("Estimasi modal awal wajib diisi karena cost/HPP item masih 0."),
-                      );
-                    },
+                    const numericValue = Number(value || 0);
+                    if (Number.isFinite(numericValue) && numericValue > 0) {
+                      return Promise.resolve();
+                    }
+
+                    return Promise.reject(
+                      new Error("Modal per unit wajib diisi karena cost/HPP item masih 0."),
+                    );
                   },
-                ]}
-                extra={(
-                  <div className="ims-cell-stack ims-cell-stack-tight">
-                    <span>
-                      {selectedUnitCostSuggestion?.helperText ||
-                        "Isi estimasi modal stok awal. Jika tidak tahu harga lama, gunakan harga beli terakhir atau harga supplier saat ini."}
-                    </span>
-                    {selectedUnitCostSuggestion?.sourceLabel ? (
-                      <span className="ims-cell-meta">
-                        Sumber saran: {selectedUnitCostSuggestion.sourceLabel}
-                      </span>
-                    ) : null}
-                    {estimatedOpeningStockValue > 0 ? (
-                      <span className="ims-cell-meta">
-                        Nilai stok awal: {formatCurrencyId(estimatedOpeningStockValue)}
-                      </span>
-                    ) : null}
-                  </div>
-                )}
-              >
-                <InputNumber
-                  min={0}
-                  step={1}
-                  precision={0}
-                  style={{ width: "100%" }}
-                  formatter={(value) => formatNumberId(value)}
-                  parser={parseIntegerIdInput}
-                />
-              </Form.Item>
-            ) : (
-              <div className="ims-readonly-panel" style={{ marginBottom: 16 }}>
-                <div className="ims-readonly-panel-header">
-                  <div>
-                    <div className="ims-readonly-panel-title">Modal/HPP Aktif</div>
-                    <div className="ims-readonly-panel-description">
-                      Stock Adjustment hanya mengubah qty. Modal aktif sudah tersedia dan tidak diubah dari form ini.
-                    </div>
-                  </div>
-                  <Tag color="green">Valid</Tag>
-                </div>
-                <div className="ims-readonly-stat-grid">
-                  <div className="ims-readonly-stat-field">
-                    <div className="ims-readonly-stat-label">Modal per Unit</div>
-                    <div className="ims-readonly-stat-value">
-                      {formatCurrencyId(selectedCurrentUnitCost)}
-                    </div>
-                  </div>
-                </div>
-                <div className="ims-readonly-panel-note">
-                  Untuk pembelian normal gunakan menu Purchases. Untuk koreksi modal/HPP, gunakan flow guarded terpisah agar laporan tidak berubah diam-diam.
-                </div>
-              </div>
-            )
+                },
+              ]}
+              extra={
+                selectedCurrentUnitCost > 0
+                  ? "Cost/HPP master sudah ada, field ini opsional dan tidak mengubah cost lama."
+                  : "Wajib untuk stok masuk pertama atau data lama yang cost/HPP-nya masih 0."
+              }
+            >
+              <InputNumber
+                min={0}
+                step={1}
+                precision={0}
+                style={{ width: "100%" }}
+                formatter={(value) => formatNumberId(value)}
+                parser={parseIntegerIdInput}
+              />
+            </Form.Item>
           ) : null}
 
           <Form.Item

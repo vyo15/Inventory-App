@@ -3,6 +3,15 @@
    Scope: visual detail only. Tidak mengubah data purchase/OCR.
    ===================================================== */
 .purchase-ocr-receipt-overlay {
+  --purchase-ocr-receipt-primary-text: var(--ims-color-primary);
+  --purchase-ocr-receipt-primary-bg: var(--ims-color-primary-softer);
+  --purchase-ocr-receipt-primary-border: var(--ims-color-primary-muted);
+  --purchase-ocr-receipt-success-text: var(--ims-color-success-text);
+  --purchase-ocr-receipt-success-bg: var(--ims-color-success-soft);
+  --purchase-ocr-receipt-warning-text: var(--ims-color-warning-text);
+  --purchase-ocr-receipt-warning-bg: var(--ims-color-warning-soft);
+  --purchase-ocr-receipt-neutral-bg: var(--ims-bg-card-soft);
+  --purchase-ocr-receipt-neutral-text: var(--ims-text-secondary);
   position: fixed;
   inset: 0;
   z-index: 4000;
@@ -15,7 +24,7 @@
   padding: calc(24px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
   overflow: hidden;
   overscroll-behavior: contain;
-  background: rgba(15, 23, 42, 0.54);
+  background: var(--ims-bg-overlay-mask);
   backdrop-filter: blur(3px);
 }
 
@@ -40,9 +49,9 @@
   scrollbar-gutter: stable;
   padding: 24px;
   border-radius: 22px 22px 10px 10px;
-  background: var(--ims-bg-card, #fff);
-  box-shadow: 0 26px 90px rgba(15, 23, 42, 0.32);
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: var(--ims-bg-card);
+  box-shadow: var(--ims-shadow-elevated);
+  border: 1px solid var(--ims-border-color-soft);
 }
 
 .purchase-ocr-receipt-paper::after {
@@ -53,8 +62,8 @@
   bottom: 0;
   height: 14px;
   background:
-    linear-gradient(135deg, transparent 9px, var(--ims-bg-card, #fff) 0) left bottom / 18px 14px repeat-x,
-    linear-gradient(225deg, transparent 9px, var(--ims-bg-card, #fff) 0) left bottom / 18px 14px repeat-x;
+    linear-gradient(135deg, transparent 9px, var(--ims-bg-card) 0) left bottom / 18px 14px repeat-x,
+    linear-gradient(225deg, transparent 9px, var(--ims-bg-card) 0) left bottom / 18px 14px repeat-x;
   pointer-events: none;
 }
 
@@ -63,7 +72,7 @@
   inset: 0;
   opacity: 0.24;
   pointer-events: none;
-  background-image: radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.055) 1px, transparent 0);
+  background-image: radial-gradient(circle at 1px 1px, var(--ims-color-primary-softer) 1px, transparent 0);
   background-size: 12px 12px;
 }
 
@@ -73,7 +82,7 @@
   left: 24px;
   right: 24px;
   height: 1px;
-  background-image: linear-gradient(to right, rgba(148, 163, 184, 0.55) 45%, transparent 0%);
+  background-image: linear-gradient(to right, var(--ims-border-strong) 45%, transparent 0%);
   background-position: top;
   background-size: 12px 1px;
   background-repeat: repeat-x;
@@ -103,16 +112,16 @@
   gap: 6px;
   padding: 6px 12px;
   border-radius: 999px;
-  color: #1d4ed8;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  color: var(--purchase-ocr-receipt-primary-text);
+  background: var(--purchase-ocr-receipt-primary-bg);
+  border: 1px solid var(--purchase-ocr-receipt-primary-border);
   font-size: 12px;
   font-weight: 700;
 }
 
 .purchase-ocr-receipt-title {
   margin: 12px 0 0;
-  color: var(--ims-text-primary, #0f172a);
+  color: var(--ims-text-primary);
   font-size: 24px;
   font-weight: 900;
   letter-spacing: -0.03em;
@@ -121,14 +130,14 @@
 .purchase-ocr-receipt-subtitle {
   max-width: 260px;
   margin: 8px auto 0;
-  color: var(--ims-text-secondary, #64748b);
+  color: var(--ims-text-secondary);
   font-size: 12px;
   line-height: 1.55;
 }
 
 .purchase-ocr-receipt-divider {
   margin: 16px 0;
-  border-top: 1px dashed rgba(148, 163, 184, 0.72);
+  border-top: 1px dashed var(--ims-border-strong);
 }
 
 .purchase-ocr-receipt-meta {
@@ -141,14 +150,14 @@
 }
 
 .purchase-ocr-receipt-meta-label {
-  color: var(--ims-text-secondary, #64748b);
+  color: var(--ims-text-secondary);
   font-weight: 600;
 }
 
 .purchase-ocr-receipt-meta-value {
   min-width: 0;
   text-align: right;
-  color: var(--ims-text-primary, #0f172a);
+  color: var(--ims-text-primary);
   font-weight: 800;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -161,7 +170,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 0;
-  border-bottom: 1px solid var(--ims-border-color-soft, #f1f5f9);
+  border-bottom: 1px solid var(--ims-border-color-soft);
 }
 
 .purchase-ocr-receipt-row:last-child {
@@ -175,62 +184,62 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid var(--ims-border-color-soft);
 }
 
 .purchase-ocr-receipt-icon--blue {
-  color: #1d4ed8;
-  background: #eff6ff;
+  color: var(--purchase-ocr-receipt-primary-text);
+  background: var(--purchase-ocr-receipt-primary-bg);
 }
 
 .purchase-ocr-receipt-icon--purple {
-  color: #6d28d9;
-  background: #f5f3ff;
+  color: var(--ims-color-brand-gold);
+  background: var(--ims-color-brand-gold-soft);
 }
 
 .purchase-ocr-receipt-icon--green {
-  color: #047857;
-  background: #ecfdf5;
+  color: var(--purchase-ocr-receipt-success-text);
+  background: var(--purchase-ocr-receipt-success-bg);
 }
 
 .purchase-ocr-receipt-icon--orange {
-  color: #ea580c;
-  background: #fff7ed;
+  color: var(--ims-color-warning-text);
+  background: var(--ims-color-warning-soft);
 }
 
 .purchase-ocr-receipt-icon--cyan {
-  color: #0284c7;
-  background: #f0f9ff;
+  color: var(--ims-color-primary);
+  background: var(--ims-color-primary-softer);
 }
 
 .purchase-ocr-receipt-icon--default {
-  color: #475569;
-  background: #f8fafc;
+  color: var(--purchase-ocr-receipt-neutral-text);
+  background: var(--purchase-ocr-receipt-neutral-bg);
 }
 
 .purchase-ocr-receipt-label {
   min-width: 0;
-  color: var(--ims-text-primary, #334155);
+  color: var(--ims-text-primary);
   font-size: 12px;
   font-weight: 700;
 }
 
 .purchase-ocr-receipt-value {
-  color: var(--ims-text-primary, #0f172a);
+  color: var(--ims-text-primary);
   font-size: 12px;
   font-weight: 900;
   text-align: right;
 }
 
 .purchase-ocr-receipt-value--discount {
-  color: #047857;
+  color: var(--purchase-ocr-receipt-success-text);
 }
 
 .purchase-ocr-receipt-total {
   padding: 12px 14px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #eff6ff, rgba(219, 234, 254, 0.82));
-  border: 1px solid #bfdbfe;
+  background: linear-gradient(135deg, var(--ims-color-primary-softer), var(--ims-color-primary-soft));
+  border: 1px solid var(--purchase-ocr-receipt-primary-border);
 }
 
 .purchase-ocr-receipt-total-inner {
@@ -241,7 +250,7 @@
 }
 
 .purchase-ocr-receipt-total-kicker {
-  color: #2563eb;
+  color: var(--ims-color-primary);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
@@ -249,13 +258,13 @@
 }
 
 .purchase-ocr-receipt-total-label {
-  color: #172554;
+  color: var(--ims-text-primary);
   font-size: 14px;
   font-weight: 900;
 }
 
 .purchase-ocr-receipt-total-value {
-  color: #1d4ed8;
+  color: var(--purchase-ocr-receipt-primary-text);
   font-size: 24px;
   line-height: 1;
   font-weight: 900;
@@ -269,15 +278,15 @@
   gap: 10px;
   padding: 10px 12px;
   border-radius: 16px;
-  color: var(--ims-text-secondary, #64748b);
-  background: var(--ims-bg-card-soft, rgba(148, 163, 184, 0.08));
-  border: 1px solid var(--ims-border-color-soft, #e2e8f0);
+  color: var(--ims-text-secondary);
+  background: var(--ims-bg-card-soft);
+  border: 1px solid var(--ims-border-color-soft);
   font-size: 12px;
   line-height: 1.5;
 }
 
 .purchase-ocr-receipt-note-icon {
-  color: #1d4ed8;
+  color: var(--purchase-ocr-receipt-primary-text);
   margin-top: 2px;
 }
 
@@ -298,11 +307,11 @@
 .purchase-ocr-receipt-fallback {
   margin: 0;
   padding: 12px;
-  border: 1px solid var(--ims-border-color-soft, #f0f0f0);
+  border: 1px solid var(--ims-border-color-soft);
   border-radius: 12px;
   white-space: pre-wrap;
-  background: var(--ims-bg-card-soft, rgba(148, 163, 184, 0.08));
-  color: var(--ims-text-primary, #0f172a);
+  background: var(--ims-bg-card-soft);
+  color: var(--ims-text-primary);
   font-family: inherit;
   font-size: 12px;
 }
@@ -367,7 +376,7 @@
   body.purchase-ocr-print-mode .purchase-ocr-receipt-paper {
     padding: 18px !important;
     box-shadow: none !important;
-    border: 1px solid #e2e8f0 !important;
+    border: 1px solid var(--ims-border-color-soft) !important;
     break-inside: avoid;
   }
 

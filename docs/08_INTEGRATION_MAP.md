@@ -413,7 +413,7 @@ User memilih item di modal Purchases
   -> jika item bervarian dan varian dipilih, preview membaca stok varian terpilih
   -> preview menampilkan Current Stock, Reserved Stock, dan Available Stock secara read-only
   -> alert global varian kosong tidak ditampilkan karena visual noise dalam flow restock
-  -> user mengisi supplier, Qty Beli, subtotal, ongkir, admin, potongan, dan voucher
+  -> user mengisi supplier, Qty Beli, subtotal, ongkir, admin, potongan, dan voucher/koin
   -> Ringkasan Perbandingan Supplier menampilkan breakdown biaya aktual + pembanding supplier
   -> user klik Simpan Purchase
   -> stok/inventory log/expense tetap mengikuti flow Purchases existing

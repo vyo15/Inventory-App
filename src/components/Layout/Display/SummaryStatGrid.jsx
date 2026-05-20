@@ -149,7 +149,6 @@ const renderExecutiveDock = (normalizedItems, highlightKey, className) => {
 const renderFinanceDock = (normalizedItems, highlightKey, className) => {
   const primaryItem = pickFinancePrimaryItem(normalizedItems, highlightKey);
   const metricItems = normalizedItems.filter((item) => item.key !== primaryItem.key);
-  const flowItems = normalizedItems.slice(0, 4);
 
   return (
     <div
@@ -195,17 +194,6 @@ const renderFinanceDock = (normalizedItems, highlightKey, className) => {
           </div>
         ) : null}
 
-        {flowItems.length > 1 ? (
-          <div className="summary-finance-flow">
-            {flowItems.map((item) => (
-              <div key={item.key} className="summary-finance-flow-item" data-tone={item.tone}>
-                <span className="summary-finance-flow-dot" />
-                <Text className="summary-finance-flow-label">{item.shortTitle}</Text>
-                <Text className="summary-finance-flow-value">{item.displayValue}</Text>
-              </div>
-            ))}
-          </div>
-        ) : null}
       </div>
     </div>
   );

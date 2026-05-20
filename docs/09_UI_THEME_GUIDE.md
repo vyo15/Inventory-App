@@ -17,6 +17,8 @@ Theme aktif memakai kombinasi **blue/navy primary, muted gold/yellow accent, whi
 | Primary soft | `#E9F2FB` | selected state, info soft background |
 | Brand gold | `#C9951A` | accent kecil, active marker, ornament, subtle badge |
 | Brand gold soft | `#FFF7E3` | highlight brand lembut, bukan warning utama |
+| Success | `#16A34A` | status positif seperti stok masuk/lebih murah/feedback sukses |
+| Success soft | `#ECFDF5` | background status sukses ringan |
 | Page background | `#F6F9FC` | canvas halaman |
 | Shell background | `#EEF5FB` | app shell |
 | Card background | `#FFFFFF` | card/modal/table/form surface |
@@ -32,6 +34,8 @@ Theme aktif memakai kombinasi **blue/navy primary, muted gold/yellow accent, whi
 | Primary hover | `#7BB7F0` | hover action |
 | Brand gold | `#F1C75B` | accent kecil/highlight di dark mode |
 | Brand gold soft | `rgba(241, 199, 91, 0.14)` | highlight brand lembut, bukan warning utama |
+| Success | `#4ADE80` | status positif dark mode |
+| Success soft | `rgba(74, 222, 128, 0.14)` | background status sukses ringan di dark mode |
 | Page background | `#07111F` | canvas dark navy |
 | Shell background | `#0A1627` | app shell dark |
 | Card background | `#101E33` | card/table/form dark |
@@ -47,10 +51,12 @@ Theme aktif memakai kombinasi **blue/navy primary, muted gold/yellow accent, whi
 - Muted gold/yellow dipakai hemat sebagai accent kecil: active menu marker, garis aksen kecil, ornament icon, selected/focus accent, atau badge subtle.
 - Gold/yellow tidak boleh menjadi background besar, semua CTA, text panjang, atau pengganti status warning semantic.
 - Warning semantic memakai amber/orange terpisah dari brand gold agar status bisnis tidak ambigu.
+- Success semantic memakai token `--ims-color-success*`; jangan menaruh hijau hardcoded langsung di page bisnis.
 - Putih/neutral dipakai sebagai surface utama card, modal, drawer, table, dan form.
 - Dark navy dipakai sebagai shell, card, elevated surface, drawer/modal/table dark mode.
 - Standar baru: **no-gradient** untuk global/shared shell dan shared components; gunakan flat surface, border subtle, dan shadow minimal.
 - Hindari warna decorative lama sebagai theme aktif.
+- Gunakan token IMS resmi seperti `--ims-bg-card`, `--ims-bg-card-soft`, `--ims-border-color(-soft)`, `--ims-text-*`, dan `--ims-color-*`; jangan memakai token lama/tidak aktif seperti `--surface-card` atau `--surface-muted`.
 
 
 ## Standar gold accent
@@ -294,11 +300,21 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 
 ## Cleanup candidate lanjutan
 
-- Audit warna hardcoded di halaman bisnis satu per satu, jangan dicampur dengan perubahan logic.
+- Audit warna hardcoded di halaman bisnis satu per satu, jangan dicampur dengan perubahan logic. Batch Purchases/OCR sudah membersihkan token lama `--surface-card`/`--surface-muted` dan inline neutral color utama; sisa page lain harus tetap dipatch kecil per scope.
 - Kurangi override duplikatif di `src/App.css` secara bertahap setelah ada visual regression pass.
 - Pertahankan guard Ant Design sampai dependency modal/table/dropdown benar-benar jelas.
 - Jangan hapus `!important` pada table/modal/drawer/dropdown/datepicker/popover sebelum cek light/dark dan fixed column.
 - False-positive grep seperti `Message/message` bukan token warna lama dan tidak perlu diubah.
+
+
+## Update Hardcoded Color Cleanup — Purchases/OCR/Stock Mini Scope — 2026-05-20
+
+Status: **AKTIF + GUARDED UI-ONLY**.
+
+- `src/index.css` menambahkan token success light/dark agar status positif tidak memakai hijau hardcoded langsung di page bisnis.
+- `src/pages/Transaksi/Purchases.jsx` dan `PurchaseOcrDraftPanel.css` wajib memakai token IMS resmi untuk text, border, card, dan soft surface. Token lama `--surface-card`/`--surface-muted` tidak dipakai.
+- `PurchaseOcrReceiptModal.css` tetap scoped ke component receipt OCR, tetapi badge/ikon/total/print border harus membaca token IMS agar readable di light/dark mode.
+- Mini cleanup page lain boleh mengganti border/status inline ke token, tetapi tidak boleh mengubah handler, payload, formula transaksi, stock mutation, purchase OCR parser, expense, inventory log, route, role guard, production, payroll, HPP, atau reset flow.
 
 ## Standar Login branding
 
@@ -360,7 +376,7 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 2. **Finance Dock**
    - Dipakai untuk Cash In, Cash Out, Buku Besar Kas, laporan finance, payroll nominal, dan HPP.
    - Satu angka utama diberi ruang lebih besar agar nominal Rupiah panjang tetap terbaca.
-   - Metric pendukung dan flow mini tetap ringkas tanpa mengulang kata `Total` berlebihan.
+   - Metric pendukung tetap ringkas. Finance Dock tidak boleh menampilkan flow mini/strip tambahan yang mengulang angka sama dari metric card.
 
 3. **Legacy Cards**
    - `variant="cards"` boleh dipakai hanya bila ada kebutuhan khusus mempertahankan grid kartu lama.
@@ -386,7 +402,7 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 - Tablet/mobile: Executive Dock dan Finance Dock turun menjadi satu kolom tanpa overflow horizontal.
 - Light/dark: border, shadow, text, dan status accent tetap readable.
 - Data banyak: halaman dengan summary lebih dari empat item tetap wrap rapi.
-- Finance: nominal panjang tidak terpotong dan flow strip tetap tidak mendominasi halaman.
+- Finance: nominal panjang tidak terpotong dan tidak ada flow strip/bar bawah yang mengulang metric sama.
 
 ### Variant stock alert display
 

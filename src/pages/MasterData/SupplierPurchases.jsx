@@ -872,7 +872,7 @@ const SupplierPurchases = () => {
         return (
           <Space direction="vertical" size={2}>
             <span>{formatCurrencyIDR(latestUnitCost)}</span>
-            <span style={{ color: difference <= 0 ? '#389e0d' : '#cf1322' }}>{statusLabel}</span>
+            <span style={{ color: difference <= 0 ? 'var(--ims-color-success-text)' : 'var(--ims-color-danger-text)' }}>{statusLabel}</span>
             <span className="ims-cell-meta">{formatPurchaseDate(latestPurchase.date || latestPurchase.createdAt)}</span>
           </Space>
         );
@@ -1072,7 +1072,7 @@ const SupplierPurchases = () => {
                   <div
                     key={key}
                     style={{
-                      border: '1px solid #f0f0f0',
+                      border: '1px solid var(--ims-border-color-soft)',
                       borderRadius: 10,
                       padding: 12,
                       marginBottom: 12,

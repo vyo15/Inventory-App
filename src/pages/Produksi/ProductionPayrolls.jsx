@@ -39,8 +39,7 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import {
   DEFAULT_PRODUCTION_PAYROLL_FORM,
-  PAYROLL_PAYMENT_STATUS_MAP,
-  PAYROLL_STATUS_MAP,
+  getCompactPayrollStatusTags,
 } from "../../constants/productionPayrollOptions";
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
@@ -92,6 +91,27 @@ const PAYROLL_PAYMENT_STATUS_HELP = {
 };
 
 const isEditableProductionPayroll = (record = {}) => record.paymentStatus !== "paid";
+
+const renderPayrollStatusTags = (record = {}) => (
+  <Space size={4} wrap>
+    {getCompactPayrollStatusTags(record).map((item) => (
+      <Tag key={item.key} color={item.color}>
+        {item.label}
+      </Tag>
+    ))}
+  </Space>
+);
+
+const getCompactPayrollStatusHelp = (record = {}) => {
+  const statusHelp = PAYROLL_STATUS_HELP[record.status];
+  const paymentHelp = PAYROLL_PAYMENT_STATUS_HELP[record.paymentStatus];
+
+  if (record.status && record.paymentStatus && record.status === record.paymentStatus) {
+    return statusHelp || paymentHelp || "Status payroll.";
+  }
+
+  return [statusHelp, paymentHelp].filter(Boolean).join(" ") || "Status payroll dan pembayaran internal line payroll.";
+};
 
 const PayrollDetailValue = ({ children, help }) => (
   <Space direction="vertical" size={0}>
@@ -492,14 +512,7 @@ const ProductionPayrolls = () => {
       title: "Status",
       key: "status",
       width: 150,
-      render: (_, record) => (
-        <Space direction="vertical" size={2}>
-          <Tag color="blue">{PAYROLL_STATUS_MAP[record.status] || "-"}</Tag>
-          <Tag color={record.paymentStatus === "paid" ? "green" : "orange"}>
-            {PAYROLL_PAYMENT_STATUS_MAP[record.paymentStatus] || "-"}
-          </Tag>
-        </Space>
-      ),
+      render: (_, record) => renderPayrollStatusTags(record),
     },
     {
       title: "Aksi",
@@ -913,22 +926,9 @@ const ProductionPayrolls = () => {
                   {formatCurrency(selectedRecord.finalAmount)}
                 </PayrollDetailValue>
               </Descriptions.Item>
-              <Descriptions.Item label="Status Payroll">
-                <PayrollDetailValue
-                  help={PAYROLL_STATUS_HELP[selectedRecord.status] || "Status lifecycle payroll internal."}
-                >
-                  <Tag color={selectedRecord.status === "paid" ? "green" : "blue"}>
-                    {PAYROLL_STATUS_MAP[selectedRecord.status] || "-"}
-                  </Tag>
-                </PayrollDetailValue>
-              </Descriptions.Item>
-              <Descriptions.Item label="Payment Status">
-                <PayrollDetailValue
-                  help={PAYROLL_PAYMENT_STATUS_HELP[selectedRecord.paymentStatus] || "Status pembayaran internal line payroll."}
-                >
-                  <Tag color={selectedRecord.paymentStatus === "paid" ? "green" : "orange"}>
-                    {PAYROLL_PAYMENT_STATUS_MAP[selectedRecord.paymentStatus] || "-"}
-                  </Tag>
+              <Descriptions.Item label="Status">
+                <PayrollDetailValue help={getCompactPayrollStatusHelp(selectedRecord)}>
+                  {renderPayrollStatusTags(selectedRecord)}
                 </PayrollDetailValue>
               </Descriptions.Item>
               <Descriptions.Item label="Calculation Notes / Catatan Sistem">
