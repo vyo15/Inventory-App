@@ -170,7 +170,7 @@
   height: 36px;
   border: 1px solid var(--dashboard-card-border);
   border-radius: 12px;
-  background: linear-gradient(135deg, var(--ims-color-primary-soft), var(--ims-color-accent-yellow-soft));
+  background: var(--ims-color-primary-softer);
   color: var(--ims-color-primary);
   font-size: 17px;
 }
@@ -378,7 +378,7 @@ Risiko:
 
 .dashboard-risk-card {
   border-color: var(--ims-color-accent-yellow-muted);
-  background: linear-gradient(135deg, var(--ims-color-accent-yellow-soft), var(--dashboard-card-background));
+  background: var(--dashboard-card-background);
 }
 
 .dashboard-card-label {

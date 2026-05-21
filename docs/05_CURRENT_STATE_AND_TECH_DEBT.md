@@ -716,10 +716,11 @@ Risiko:
 - **AKTIF:** theme aplikasi memakai identitas Flanel Karawang Industries dengan kombinasi blue/yellow/white/navy.
 - **AKTIF:** pusat token theme berada di `src/index.css` untuk CSS variable global dan `src/theme/antdTheme.js` untuk token Ant Design.
 - **AKTIF:** `src/App.css` tetap menjadi guard visual global untuk app shell, table, modal, drawer, dropdown, form, dan portal Ant Design.
+- **AKTIF:** `src/main.jsx` melakukan bootstrap `app-theme-light/dark` dan `data-app-theme` sebelum React render untuk mengurangi flash theme pada user yang menyimpan dark mode.
 - **AKTIF:** Login, Sidebar, Header, Dashboard, PageHeader, PageSection, SummaryStatCard, FilterBar, dan PageFormModal diarahkan membaca token global agar tidak drift antar halaman.
 
 ### Area guarded theme
-- **GUARDED:** `AppLayout.jsx` menjaga sinkronisasi `app-theme-light`, `app-theme-dark`, dan `data-app-theme` di `html/body` agar portal Ant Design membaca mode yang benar.
+- **GUARDED:** `AppLayout.jsx` menjaga sinkronisasi `app-theme-light`, `app-theme-dark`, dan `data-app-theme` di `html/body` agar portal Ant Design membaca mode yang benar. Initial state harus membaca bootstrap theme/localStorage, bukan default light lalu diperbaiki di `useEffect`.
 - **GUARDED:** override table/modal/drawer/dropdown di `src/App.css` tidak boleh dihapus massal karena menjaga surface solid dan kontras light/dark.
 - **GUARDED:** `PageFormModal` harus mempertahankan `rootClassName="page-form-modal-root"` dan `getContainer` agar modal/drawer/dropdown tidak bocor ke surface lama.
 - **GUARDED:** `SidebarMenu` role-aware logic, nested accordion, `selectedKeys`, dan `openMenuKeys` tidak boleh diubah saat task hanya visual theme.
@@ -738,6 +739,7 @@ Risiko:
 - **AKTIF:** `App.css` dibersihkan dari utility `.ims-action-group--inline` yang tidak memiliki pemakai aktif pada snapshot terbaru.
 - **AKTIF:** komentar theme di `index.css`, `antdTheme.js`, dan `App.css` dirapikan agar tidak memicu audit legacy theme palsu.
 - **AKTIF:** selector CSS top-level untuk table surface di `App.css`, surface `PageSection.css`, state sidebar `SidebarMenu.css`, dan surface `PageFormModal.css` dikonsolidasikan agar token final tidak saling menimpa.
+- **AKTIF:** Finance Dock di `SummaryStatGrid` tidak lagi memakai flow strip/bar bawah; Cash In/Cash Out memakai class scoped `cash-flow-summary` agar total utama dominan, metric pendukung tidak dobel, helper tampil di bawah nominal, dan nominal Rupiah tidak terpotong.
 
 ### Guard yang tetap dipertahankan
 - **GUARDED:** override table/modal/drawer/dropdown/datepicker/popover di `App.css` tetap dipertahankan karena menjaga surface Ant Design tetap solid di light/dark mode.
@@ -865,10 +867,10 @@ Status: **AKTIF + GUARDED UI-ONLY**.
 
 - Theme global/shared diarahkan ke flat corporate minimalist: blue/navy sebagai primary dan muted gold/yellow sebagai accent kecil.
 - Brand gold dipisahkan dari semantic warning; warning tetap amber/orange agar status bisnis tidak ambigu.
-- Global/shared shell, Ant Design token, sidebar menu, header, sidebar logo, SummaryStatCard, dan FilterBar tidak lagi memakai gradient aktif.
+- Global/shared shell, Ant Design token, sidebar menu, header, sidebar logo, SummaryStatCard, FilterBar, cash summary, Dashboard card terpilih, dan OCR receipt tidak lagi memakai gradient aktif pada source yang sudah disentuh.
 - Gold accent dipakai terbatas sebagai marker active menu, ornament kecil header/sidebar, dan accent line kecil shared card/filter.
 - Perubahan batch ini tidak menyentuh service, query, schema, route guard, role guard, auth flow, transaksi, stok, produksi, payroll, HPP, report mapper, atau reset destructive flow.
-- **CLEANUP CANDIDATE:** `src/pages/Dashboard/Dashboard.css`, `src/pages/Auth/Login.css`, `src/components/Layout/Feedback/DataLoadingState.css`, dan `src/components/Layout/Feedback/LogoLoadingScreen.css` masih memiliki gradient/page-specific atau feedback-specific style lama dan perlu batch cleanup terpisah sesuai allowlist.
+- **CLEANUP CANDIDATE:** `src/pages/Auth/Login.css`, `src/components/Layout/Feedback/DataLoadingState.css`, dan `src/components/Layout/Feedback/LogoLoadingScreen.css` masih memiliki gradient/page-specific atau feedback-specific style lama dan perlu batch cleanup terpisah sesuai allowlist. Dashboard/OCR receipt yang sudah disentuh tidak boleh dikembalikan ke gradient dekoratif.
 - **CLEANUP CANDIDATE:** hardcoded color residual di page/component bisnis tetap perlu audit bertahap tanpa refactor logic.
 
 ## Update Pricing Mode Shared UI — 2026-05-11
@@ -914,6 +916,7 @@ Legacy compatibility:
 - **Docs target baru:** Referensi ID bisnis manusiawi adalah acuan utama audit, pencarian, relasi operasional, table/detail/drawer/report UI, dan export user-facing.
 - **Guarded:** Technical ID / Firestore random ID tidak boleh ditampilkan sebagai referensi audit UI, tooltip, detail sekunder, drawer, report UI, atau fallback display.
 - **Guarded:** UI yang belum punya referensi bisnis readable harus memakai fallback manusiawi seperti `-` atau `Referensi belum tersedia`.
+- **Aktif:** tabel Retur memakai resolver referensi display dan tidak boleh fallback ke `record.id`, `returnId`, atau `referenceId` sebagai teks referensi/tooltip user-facing.
 - **Current source mismatch:** source terbaru masih perlu audit karena beberapa helper/generator masih menyimpan mapping manual kata tertentu, terutama `src/utils/references/businessCodeGenerator.js` dan `src/utils/references/productionCodeGenerator.js`.
 - **Current source mismatch:** source terbaru masih perlu audit untuk flow create yang masih memakai Firestore auto ID sebagai document ID bisnis, serta flow log yang masih mungkin memakai random ID.
 - **Important:** patch ini docs-only. Jangan menulis seolah-olah source generator, service write flow, schema, collection, inventory log writer, atau report/export sudah berubah.
@@ -933,11 +936,12 @@ Legacy compatibility:
 
 - **Aktif:** halaman `src/pages/Utilities/ResetMaintenanceData.jsx` sekarang diarahkan menjadi Maintenance Decision Center: audit dulu, preview dampak, export data pokok, lalu pilih reset/repair.
 - **Aktif:** rekomendasi default untuk data development yang belum real adalah simpan master, hapus transaksi/log turunan, lalu nolkan stok jika stok lama tidak dipercaya.
-- **Aktif:** panel teknis lama tetap dipertahankan di Advanced / Developer Tools agar developer masih bisa membuka detail audit/repair/HPP/reset existing.
+- **Aktif:** panel `Detail Audit / Tools` lama sudah dihapus dari UI utama agar Reset Maintenance tidak menampilkan informasi dan tombol audit yang dobel; akses utama sekarang lewat Auto Detect Bug, Repair Turunan Aman, Reset & Baseline, Data Test Seed & Export, dan HPP Trial ringkas.
+- **Aktif:** guide `Cara Pakai Setelah Patch` dipisah ke `src/pages/Utilities/components/ResetUsageGuidePanel.jsx` sebagai UI-only extraction; tidak mengubah reset service, confirmation keyword, scope destructive, atau audit log write.
 - **Aktif:** export data pokok JSON bersifat read-only dan hanya untuk backup/checklist; export ini bukan restore otomatis dan bukan import logic.
 - **Aktif:** tombol `Reset Semua Testing` menjadi shortcut gabungan untuk semua scope non-protected: delete transaksi/log stok/planning/pricing, zero stock master/variant, dan reset field modal/HPP allowlist dengan keyword `RESET SEMUA`.
 - **Guarded:** reset total data bisnis/master belum dibuat karena menyentuh protected master collections dan harus menjadi task destructive terpisah.
-- **Guarded:** wizard keputusan hanya menyiapkan mode/module reset; eksekusi tetap harus melewati preview dan confirmation keyword existing.
+- **Guarded:** wizard keputusan hanya menyiapkan mode/module reset; eksekusi tetap harus melewati preview dan confirmation keyword existing. Detail audit teknis yang dihapus tidak boleh dikembalikan tanpa alasan UX/QA yang jelas karena bisa membuat info reset dobel lagi.
 - **Cleanup candidate:** export XLSX, import normalized, trial session/correlation id, copy/export audit log, dan server-side reset jika total operasi melewati batas aman client.
 
 

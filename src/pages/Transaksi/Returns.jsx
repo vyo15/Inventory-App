@@ -31,6 +31,7 @@ import {
 } from "../../utils/variants/variantStockHelpers";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
+import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 
 
@@ -421,7 +422,11 @@ const Returns = () => {
       width: 170,
       render: (_, record) => {
         const dateText = record.date?.toDate ? dayjs(record.date.toDate()).format("DD-MM-YYYY HH:mm") : "-";
-        const referenceText = record.returnNumber || record.code || record.referenceNumber || record.referenceId || record.returnId || record.id || "-";
+        const referenceText = resolveDisplayReference(record, {
+          fields: ["returnNumber", "returnCode", "code", "referenceNumber", "sourceRef", "referenceCode"],
+          fallback: "Referensi belum tersedia",
+          allowTechnicalId: false,
+        });
         return (
           <div style={{ minWidth: 0 }}>
             <div className="ims-cell-title">{dateText}</div>

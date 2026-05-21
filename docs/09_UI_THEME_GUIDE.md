@@ -50,6 +50,7 @@ Theme aktif memakai kombinasi **blue/navy primary, muted gold/yellow accent, whi
 - Putih/neutral dipakai sebagai surface utama card, modal, drawer, table, dan form.
 - Dark navy dipakai sebagai shell, card, elevated surface, drawer/modal/table dark mode.
 - Standar baru: **no-gradient** untuk global/shared shell dan shared components; gunakan flat surface, border subtle, dan shadow minimal.
+- Page-specific visual seperti Dashboard card, OCR receipt, dan cash summary juga harus mengikuti arah flat token bila sudah disentuh dalam patch UI; jangan menghidupkan ulang gradient dekoratif.
 - Hindari warna decorative lama sebagai theme aktif.
 
 
@@ -103,6 +104,7 @@ Standar penggunaan:
 Aturan penting:
 
 - Jangan menambah `font-weight: 850` atau `900` untuk UI operasional harian.
+- Untuk receipt/modal transaksi, gunakan `--ims-font-weight-display` atau `--ims-font-weight-strong`, bukan angka weight 900 hardcoded.
 - Jangan memakai ukuran unik berulang tanpa token. Jika angka dipakai lintas shared component, jadikan token.
 - Header dan sidebar tidak boleh memakai display weight berlebihan; keduanya harus terasa calm, readable, dan corporate.
 - Jangan mengubah route/menu/role guard hanya untuk memperbaiki visual sidebar. Sidebar typography adalah CSS-only.
@@ -110,7 +112,8 @@ Aturan penting:
 
 ## Area guarded
 
-- `AppLayout.jsx` theme sync untuk `app-theme-light`, `app-theme-dark`, dan `data-app-theme`.
+- `src/main.jsx` melakukan bootstrap class theme sebelum React render agar dark mode tersimpan tidak flash ke light saat first paint React.
+- `AppLayout.jsx` theme sync untuk `app-theme-light`, `app-theme-dark`, dan `data-app-theme` setelah React aktif.
 - `App.css` guard untuk table/modal/drawer/dropdown/popover/form.
 - Selector CSS global boleh menjadi guard Ant Design, tetapi tidak boleh ada duplicate top-level selector dengan nilai token final yang saling menimpa.
 - `PageFormModal.jsx` `rootClassName="page-form-modal-root"` dan `getContainer`.
@@ -121,6 +124,7 @@ Aturan penting:
 ## Smoke test theme
 
 - Toggle light/dark, refresh browser, dan cek mode tetap tersimpan.
+- Simpan dark mode, refresh browser, dan pastikan shell awal tidak flash ke light mode saat React mulai render.
 - Buka Dashboard, Login, Sidebar expanded/collapsed, PageFormModal, table, select dropdown, datepicker, drawer, dropdown menu, dan popover.
 - Cek card/table/form tetap solid dan readable di light/dark.
 - Cek role-aware menu dan active route tetap benar.
@@ -254,6 +258,8 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 ### Sales, Purchases, dan Returns
 - Item, qty, harga, subtotal, total, payment/status, dan dampak stok/kas harus jelas.
 - Jangan mengubah makna field lewat copy yang terlalu bebas.
+- UI retur tidak boleh fallback ke Firestore/Technical ID pada kolom referensi atau tooltip; gunakan referensi bisnis readable atau fallback manusiawi.
+- OCR receipt harus flat token-based, tanpa gradient dekoratif dan tanpa `font-weight: 900` hardcoded.
 
 ### Cash In dan Cash Out
 - Sumber manual/otomatis harus jelas.
@@ -362,7 +368,8 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 2. **Finance Dock**
    - Dipakai untuk Cash In, Cash Out, Buku Besar Kas, laporan finance, payroll nominal, dan HPP.
    - Satu angka utama diberi ruang lebih besar agar nominal Rupiah panjang tetap terbaca.
-   - Metric pendukung dan flow mini tetap ringkas tanpa mengulang kata `Total` berlebihan.
+   - Metric pendukung tampil sebagai mini card tanpa flow strip/bar bawah agar angka tidak tampil dobel.
+   - Nominal uang wajib tampil penuh; bila ruang sempit, layout yang turun/wrap, bukan nominal yang dipotong.
 
 3. **Legacy Cards**
    - `variant="cards"` boleh dipakai hanya bila ada kebutuhan khusus mempertahankan grid kartu lama.
@@ -372,8 +379,10 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 
 - Label summary harus pendek dan user-facing.
 - Hindari pengulangan kata seperti `Total` di semua kartu bila konteks sudah jelas dari section title.
-- Subtitle hanya dipakai bila menambah konteks filter/periode/status; jangan mengulang judul.
+- Subtitle/helper hanya dipakai bila menambah konteks filter/periode/status; jangan mengulang judul.
+- Helper/catatan metric finance ditempatkan di bawah nominal agar tidak terlihat seperti info dobel.
 - Untuk angka Rupiah panjang, gunakan Finance Dock supaya tidak memaksa table/filter turun terlalu jauh.
+- Jangan memakai `truncate`, `ellipsis`, atau `nowrap` yang membuat nominal uang tidak terlihat penuh.
 
 ### Aturan teknis aman
 
@@ -388,7 +397,7 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 - Tablet/mobile: Executive Dock dan Finance Dock turun menjadi satu kolom tanpa overflow horizontal.
 - Light/dark: border, shadow, text, dan status accent tetap readable.
 - Data banyak: halaman dengan summary lebih dari empat item tetap wrap rapi.
-- Finance: nominal panjang tidak terpotong dan flow strip tetap tidak mendominasi halaman.
+- Finance: nominal panjang tidak terpotong, tidak ada flow strip/bar bawah yang mengulang metric, helper tampil di bawah nominal, dan surface cash summary tetap flat tanpa gradient.
 
 ### Variant stock alert display
 

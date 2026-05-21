@@ -356,9 +356,7 @@ Batasan aman:
   min-height: 170px;
   padding: 18px;
   border-radius: 22px;
-  background:
-    linear-gradient(135deg, var(--summary-finance-tone-soft), transparent 52%),
-    var(--ims-bg-card);
+  background: var(--ims-bg-card);
 }
 
 .cash-flow-summary .summary-finance-status {

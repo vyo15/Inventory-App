@@ -60,20 +60,16 @@
   left: 0;
   right: 0;
   bottom: 0;
-  height: 14px;
-  background:
-    linear-gradient(135deg, transparent 9px, var(--ims-bg-card) 0) left bottom / 18px 14px repeat-x,
-    linear-gradient(225deg, transparent 9px, var(--ims-bg-card) 0) left bottom / 18px 14px repeat-x;
+  height: 1px;
+  background: var(--ims-border-color-soft);
   pointer-events: none;
 }
 
 .purchase-ocr-receipt-grain {
   position: absolute;
   inset: 0;
-  opacity: 0.24;
+  display: none;
   pointer-events: none;
-  background-image: radial-gradient(circle at 1px 1px, var(--ims-color-primary-softer) 1px, transparent 0);
-  background-size: 12px 12px;
 }
 
 .purchase-ocr-receipt-top-line,
@@ -81,11 +77,9 @@
   position: absolute;
   left: 24px;
   right: 24px;
-  height: 1px;
-  background-image: linear-gradient(to right, var(--ims-border-strong) 45%, transparent 0%);
-  background-position: top;
-  background-size: 12px 1px;
-  background-repeat: repeat-x;
+  height: 0;
+  border-top: 1px dashed var(--ims-border-strong);
+  background: none;
   pointer-events: none;
 }
 
@@ -123,7 +117,7 @@
   margin: 12px 0 0;
   color: var(--ims-text-primary);
   font-size: 24px;
-  font-weight: 900;
+  font-weight: var(--ims-font-weight-display);
   letter-spacing: -0.03em;
 }
 
@@ -227,7 +221,7 @@
 .purchase-ocr-receipt-value {
   color: var(--ims-text-primary);
   font-size: 12px;
-  font-weight: 900;
+  font-weight: var(--ims-font-weight-display);
   text-align: right;
 }
 
@@ -238,7 +232,7 @@
 .purchase-ocr-receipt-total {
   padding: 12px 14px;
   border-radius: 16px;
-  background: linear-gradient(135deg, var(--ims-color-primary-softer), var(--ims-color-primary-soft));
+  background: var(--ims-color-primary-softer);
   border: 1px solid var(--purchase-ocr-receipt-primary-border);
 }
 
@@ -260,14 +254,14 @@
 .purchase-ocr-receipt-total-label {
   color: var(--ims-text-primary);
   font-size: 14px;
-  font-weight: 900;
+  font-weight: var(--ims-font-weight-display);
 }
 
 .purchase-ocr-receipt-total-value {
   color: var(--purchase-ocr-receipt-primary-text);
   font-size: 24px;
   line-height: 1;
-  font-weight: 900;
+  font-weight: var(--ims-font-weight-display);
   letter-spacing: -0.03em;
   text-align: right;
 }

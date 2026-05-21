@@ -102,6 +102,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - tambah retur bahan baku
 - cek stok bertambah
 - cek inventory log `return_in`
+- cek kolom Tanggal / Ref dan tooltip tidak menampilkan Firestore/Technical ID; data tanpa kode bisnis memakai fallback manusiawi.
 
 ## C. Kas & Biaya
 
@@ -506,7 +507,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Generate payroll otomatis dari Work Log completed dan pastikan operator kosong, rate step 0, basis invalid, atau output basis 0 menghasilkan error yang jelas.
 - [ ] Pastikan `includePayrollInHpp=false` tidak masuk ke `payrollFinalAmount`, `laborCostActual`, `totalCostActual`, dan HPP Analysis.
 - [ ] Buka Detail Work Log dan HPP Analysis: angka material cost mengikuti data Work Log final yang disimpan, tanpa backfill massal otomatis.
-- [ ] Buka Reset Maintenance > HPP Cost Testing / Reset Modal: Preview wajib tampil sebelum reset, keyword konfirmasi wajib benar, dan reset hanya menyentuh field cost/HPP allowlist.
+- [ ] Buka Reset Maintenance > HPP Trial: Preview Semua Modal/HPP wajib tampil sebelum reset, keyword konfirmasi wajib benar, dan reset hanya menyentuh field cost/HPP allowlist.
 - [ ] Simpan baseline modal/HPP, jalankan reset, lalu restore baseline dan pastikan stok, transaksi, PO, Work Log, Payroll, Sales, Purchases, Returns, dan Cash tidak berubah.
 - [ ] Jalankan smoke regression: PO ready → Start Production → Complete Work Log → Payroll generated → HPP Analysis → Reset preview/baseline/restore.
 
@@ -1194,7 +1195,8 @@ Risiko:
 ### Flow theme runtime
 - [ ] Toggle light/dark berjalan tanpa reload manual.
 - [ ] Pilihan theme tersimpan di localStorage `ims-bunga-flanel-theme`.
-- [ ] `html/body` mendapat `app-theme-light` atau `app-theme-dark`.
+- [ ] Dengan localStorage berisi `dark`, refresh browser tidak menampilkan flash light mode pada render awal React.
+- [ ] `html/body` mendapat `app-theme-light` atau `app-theme-dark` sejak bootstrap awal di `src/main.jsx`, lalu tetap sinkron dari `AppLayout.jsx`.
 - [ ] `html/body` mendapat `data-app-theme="light"` atau `data-app-theme="dark"`.
 - [ ] Refresh browser mempertahankan mode terakhir.
 - [ ] Modal, drawer, dropdown, select, datepicker, popover, dan table tetap solid di light/dark.
@@ -1203,8 +1205,8 @@ Risiko:
 - [ ] Loading screen, shell, header, dan theme toggle readable dengan flat surface tanpa gradient global/shared.
 - [ ] Sidebar expanded/collapsed rapi, active route jelas, submenu normal, dan role-aware menu tidak berubah.
 - [ ] Login normal/error/loading/blocked user tampil profesional dan auth flow tetap berjalan.
-- [ ] Dashboard tetap read-only, compact, tanpa perubahan query/calculation/write flow.
-- [ ] PageHeader, PageSection, SummaryStatCard, FilterBar, dan PageFormModal konsisten dengan token brand; SummaryStatCard/FilterBar flat tanpa gradient.
+- [ ] Dashboard tetap read-only, compact, tanpa perubahan query/calculation/write flow, dan card yang disentuh tetap flat tanpa gradient dekoratif.
+- [ ] PageHeader, PageSection, SummaryStatCard, FilterBar, PageFormModal, dan OCR receipt konsisten dengan token brand; SummaryStatCard/FilterBar/OCR receipt flat tanpa gradient dan tanpa `font-weight: 900` hardcoded.
 
 ## Checklist Cleanup Theme Aman
 
@@ -1360,7 +1362,7 @@ Risiko:
 ### Branding dan accessibility
 - [ ] Logo cocok dengan shell; blue/navy tetap terasa sebagai primary.
 - [ ] Gold/yellow terlihat sebagai aksen kecil dan tidak terlalu banyak.
-- [ ] Tidak ada gradient aktif pada file global/shared yang diubah.
+- [ ] Tidak ada gradient aktif pada file global/shared/page-specific yang diubah.
 - [ ] Brand gold tidak membingungkan dengan warning semantic.
 - [ ] Text contrast, table row, tag status, warning/success/error/info, focus state, disabled state, dan primary button tetap terbaca.
 
@@ -1369,43 +1371,15 @@ Risiko:
 - [ ] Tidak ada console error; logout tetap bisa diklik; role badge jelas; menu active benar; action buttons terbaca; modal/dropdown/select/date picker tetap solid.
 - [ ] Tidak ada perubahan data, service, transaksi, stok, report mapper, produksi, payroll, HPP, auth, role, route, atau reset maintenance.
 
-## Checklist HPP Cost Testing / Reset Modal — Reset Maintenance
+## Checklist HPP Trial — Reset Maintenance
 
-### Baseline modal/HPP
-- [ ] Buka Reset Maintenance lalu buka section `HPP Cost Testing / Reset Modal`.
-- [ ] Klik `Simpan Baseline Modal/HPP Saat Ini` dan pastikan sukses.
-- [ ] Refresh halaman dan pastikan baseline summary tampil sebagai tersedia.
-- [ ] Pastikan baseline hanya menyimpan field cost/HPP master, bukan stok atau transaksi.
-
-### Preview reset modal aktual bahan baku
-- [ ] Pilih `Reset Modal Aktual Bahan Baku`.
-- [ ] Klik preview dan pastikan target hanya `raw_materials`.
-- [ ] Pastikan field terdampak hanya `averageActualUnitCost` dan field varian terkait jika memang ada.
-- [ ] Pastikan tidak ada field stok/reserved/available/min stock di preview.
-
-### Preview reset modal referensi rata-rata
-- [ ] Pilih `Reset Modal Referensi Rata-rata`.
-- [ ] Klik preview dan pastikan target hanya `raw_materials`.
-- [ ] Pastikan field terdampak hanya `restockReferencePrice` dan field varian terkait jika memang ada.
-- [ ] Pastikan `averageActualUnitCost`, transaksi pembelian, dan supplier catalog tidak ikut terdampak.
-
-### Preview reset HPP produk jadi
-- [ ] Pilih `Reset HPP Produk Jadi`.
-- [ ] Klik preview dan pastikan target hanya `products`.
-- [ ] Pastikan field terdampak hanya `hppPerUnit` dan `variants.hppPerUnit` jika memang ada.
-- [ ] Pastikan harga jual, stok, SKU, category, dan pricing rules tidak ikut terdampak.
-
-### Preview reset average cost semi finished
-- [ ] Pilih `Reset Average Cost Semi Finished`.
-- [ ] Klik preview dan pastikan target hanya `semi_finished_materials`.
-- [ ] Pastikan field terdampak hanya `averageCostPerUnit` dan `variants.averageCostPerUnit` jika memang ada.
-- [ ] Pastikan stok, reserved, available, variant identity, dan relasi BOM tidak ikut terdampak.
-
-### Reset semua sumber cost HPP testing
-- [ ] Pilih `Reset Semua Sumber Cost HPP Testing`.
-- [ ] Klik preview dan pastikan target hanya raw material cost fields, product HPP fields, dan semi finished average cost fields.
+### Preview dan reset semua modal/HPP testing
+- [ ] Buka Reset Maintenance lalu lihat kartu `Pilih Kebutuhan Testing` > `HPP Trial`.
+- [ ] Klik `Preview Semua Modal/HPP` dan pastikan preview berhasil dimuat sebelum reset.
+- [ ] Klik `Reset Semua Modal/HPP` dan pastikan modal konfirmasi muncul.
+- [ ] Isi keyword salah dan pastikan aksi tidak jalan.
+- [ ] Isi `RESET MODAL HPP` hanya pada data test dan pastikan aksi hanya menyentuh field cost/HPP allowlist.
 - [ ] Pastikan tidak menyentuh Work Log, Payroll, PO, stock mutation, transactions, sales, purchases, returns, atau cash.
-
 
 ### Guard cost/HPP stok awal dan reset modal
 - [ ] Reset Average Cost Raw Material/Semi/Product hanya pada data test, lalu buat Stock Adjustment `Tambah` pada item yang masih punya stok fisik.
@@ -1414,16 +1388,7 @@ Risiko:
 - [ ] Untuk raw material bervarian, tambah stok via purchase pada varian aktif dan pastikan master `averageActualUnitCost` memakai zero-cost baseline protection.
 - [ ] Untuk produksi output Semi Finished/Product setelah reset HPP, pastikan HPP output baru tidak terdilusi oleh stock lama yang cost/HPP-nya 0.
 
-### Confirmation reset/restore
-- [ ] Klik `Jalankan Reset Modal/HPP` tanpa preview; pastikan ditolak.
-- [ ] Setelah preview, klik `Jalankan Reset Modal/HPP`; pastikan modal confirmation muncul.
-- [ ] Isi keyword salah dan pastikan aksi tidak jalan.
-- [ ] Isi `RESET MODAL HPP` pada data test dan pastikan hanya field cost/HPP yang berubah menjadi 0.
-- [ ] Klik `Restore Baseline Modal/HPP`; pastikan modal confirmation muncul.
-- [ ] Isi keyword salah dan pastikan restore tidak jalan.
-- [ ] Isi `RESTORE MODAL HPP` dan pastikan nilai cost/HPP kembali sesuai baseline.
-
-### Regression data setelah reset/restore modal HPP
+### Regression data setelah reset modal/HPP
 - [ ] Stok raw material tidak berubah.
 - [ ] Stok product tidak berubah.
 - [ ] Stok semi finished tidak berubah.
@@ -1584,18 +1549,19 @@ Risiko:
 ## Checklist Data Quality Audit — Reset Maintenance
 
 - [ ] Buka menu **Reset & Maintenance** sebagai admin.
-- [ ] Buka section **Data Quality Audit**.
+- [ ] Buka panel **Auto Detect Bug Data**.
 - [ ] Klik **Cek Data Lama**.
 - [ ] Pastikan summary tampil: Data Dicek, Total Temuan, Kategori Bermasalah, dan Collection Skipped.
 - [ ] Pastikan audit tidak membuat collection baru dan tidak menulis data baru.
-- [ ] Klik **Preview Data Bermasalah**.
-- [ ] Pastikan setiap kategori menampilkan sample maksimal 10 data.
+- [ ] Pastikan ringkasan issue tampil di tabel area audit tanpa membuka panel `Detail Audit / Tools` lama.
 - [ ] Pastikan kategori Sales tanpa `ORD`, Purchase tanpa `PUR`, Return tanpa `RET`, Cash In/Out tanpa `CSH-IN/CSH-OUT`, Work Log tanpa `JOB`, Work Log cost 0, Work Log material snapshot kosong, Payroll reference tidak jelas, Inventory Log reference ID random, Expense/Income source tidak jelas, dan HPP 0 tampil jika ada datanya.
 - [ ] Pastikan rekomendasi kategori jelas: `Aman dibuat ulang jika data test`, `Perlu cek manual`, atau `Jangan reset jika data asli`.
 - [ ] Pastikan collection kosong tampil sebagai 0/skipped dan halaman tidak crash.
 - [ ] Pastikan tidak ada data yang terhapus setelah audit.
 - [ ] Pastikan stok, kas, payroll, HPP, Sales, Purchases, Returns, Inventory Log, dan Production Work Log tidak berubah hanya karena audit dibuka.
 - [ ] Pastikan fitur reset existing tetap wajib preview dan konfirmasi seperti sebelumnya.
+- [ ] Pastikan panel `Detail Audit / Tools` lama tidak tampil lagi di bagian bawah halaman.
+- [ ] Pastikan `Cara Pakai Setelah Patch` tetap tampil sebagai guide ringkas.
 - [ ] Cek console browser, pastikan tidak ada error merah saat menjalankan audit.
 
 ## Patch Check — Pricing Mode Switch Product & Raw Material
@@ -1684,6 +1650,7 @@ Catatan lock:
 - [ ] Edit nama/kategori/target/status tidak mengubah `code` existing.
 - [ ] Customer/Supplier code tetap tampil di UI.
 - [ ] Purchase/Sales/Return/Stock Adjustment/Cash In/Cash Out/Production Order/Work Log/Payroll reference tetap tampil di UI.
+- [ ] Return tanpa referensi bisnis tidak menampilkan Firestore/Technical ID di tabel/tooltip dan memakai fallback manusiawi.
 - [ ] SKU Variant/kode variant tetap tersimpan untuk compatibility, tetapi tidak ditampilkan sebagai field utama UI.
 
 

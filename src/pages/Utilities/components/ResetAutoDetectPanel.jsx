@@ -24,7 +24,7 @@ const ResetAutoDetectPanel = ({
           </Button>
         </Col>
         <Col xs={24} md={6}>
-          <Button block icon={<FileSearchOutlined />} loading={loadingDataQualityAudit} onClick={() => onLoadDataQualityAudit({ showProblemPreview: true })}>
+          <Button block icon={<FileSearchOutlined />} loading={loadingDataQualityAudit} onClick={() => onLoadDataQualityAudit({ showProblemPreview: false })}>
             Cek Data Lama
           </Button>
         </Col>
@@ -58,7 +58,7 @@ const ResetAutoDetectPanel = ({
           type="warning"
           showIcon
           message={`${autoBugSummary.issueCount} issue dan ${autoBugSummary.safeRepairCount} kandidat repair aman terdeteksi.`}
-          description="Buka Detail Audit jika perlu melihat sample record. Untuk data lama setelah patch, coba Repair Turunan dulu sebelum reset destructive."
+          description="Gunakan ringkasan area dan Repair Turunan dulu sebelum reset destructive. Detail teknis lama sudah diringkas agar halaman tidak overcode."
         />
       )}
     </Space>

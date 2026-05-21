@@ -14,7 +14,58 @@ const { Header, Sider, Content } = Layout;
 // SECTION: Constants
 // =========================
 const THEME_STORAGE_KEY = "ims-bunga-flanel-theme";
-const DEFAULT_DARK_THEME = false;
+const THEME_LIGHT_VALUE = "light";
+const THEME_DARK_VALUE = "dark";
+
+const normalizeThemeMode = (themeMode) => {
+  return themeMode === THEME_DARK_VALUE ? THEME_DARK_VALUE : THEME_LIGHT_VALUE;
+};
+
+const readStoredThemeMode = () => {
+  if (typeof window === "undefined") {
+    return THEME_LIGHT_VALUE;
+  }
+
+  try {
+    return normalizeThemeMode(window.localStorage.getItem(THEME_STORAGE_KEY));
+  } catch {
+    return THEME_LIGHT_VALUE;
+  }
+};
+
+const getInitialThemeMode = () => {
+  if (typeof window !== "undefined") {
+    const bootstrappedTheme = normalizeThemeMode(window.__IMS_INITIAL_THEME_MODE__);
+
+    if (bootstrappedTheme === THEME_DARK_VALUE) {
+      return THEME_DARK_VALUE;
+    }
+  }
+
+  return readStoredThemeMode();
+};
+
+const applyDocumentThemeMode = (themeMode) => {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const normalizedThemeMode = normalizeThemeMode(themeMode);
+  const rootElement = document.documentElement;
+  const bodyElement = document.body;
+  const nextThemeClass = normalizedThemeMode === THEME_DARK_VALUE ? "app-theme-dark" : "app-theme-light";
+  const staleThemeClass = normalizedThemeMode === THEME_DARK_VALUE ? "app-theme-light" : "app-theme-dark";
+
+  rootElement.classList.remove(staleThemeClass);
+  rootElement.classList.add(nextThemeClass);
+  rootElement.setAttribute("data-app-theme", normalizedThemeMode);
+
+  if (bodyElement) {
+    bodyElement.classList.remove(staleThemeClass);
+    bodyElement.classList.add(nextThemeClass);
+    bodyElement.setAttribute("data-app-theme", normalizedThemeMode);
+  }
+};
 
 // =========================
 // SECTION: Main App Layout
@@ -23,30 +74,18 @@ const AppLayout = () => {
   // =========================
   // SECTION: UI State
   // =========================
-  const [isDarkTheme, setIsDarkTheme] = useState(DEFAULT_DARK_THEME);
+  const [isDarkTheme, setIsDarkTheme] = useState(() => getInitialThemeMode() === THEME_DARK_VALUE);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
-  // =========================
-  // SECTION: Load Saved Theme
-  // =========================
-  useEffect(() => {
-    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-
-    if (savedTheme === "dark") {
-      setIsDarkTheme(true);
-      return;
-    }
-
-    if (savedTheme === "light") {
-      setIsDarkTheme(false);
-    }
-  }, []);
 
   // =========================
   // SECTION: Persist Theme
   // =========================
   useEffect(() => {
-    localStorage.setItem(THEME_STORAGE_KEY, isDarkTheme ? "dark" : "light");
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, isDarkTheme ? THEME_DARK_VALUE : THEME_LIGHT_VALUE);
+    } catch {
+      // Theme persistence is best-effort only. UI state still follows the active React state.
+    }
   }, [isDarkTheme]);
 
   // =========================
@@ -56,27 +95,10 @@ const AppLayout = () => {
   // - membantu dark mode terlihat menyatu pada dropdown, modal, drawer, dan area global
   // Catatan:
   // - class ini masih dipakai aktif oleh CSS global di index.css dan App.css
-  // - cleanup wajib dijaga agar tidak meninggalkan class lama saat komponen unmount
+  // - class disinkronkan tanpa cleanup unmount agar StrictMode dev tidak membuat flash light/dark palsu
   // =========================
   useEffect(() => {
-    const rootElement = document.documentElement;
-    const bodyElement = document.body;
-    const nextThemeClass = isDarkTheme ? "app-theme-dark" : "app-theme-light";
-    const staleThemeClass = isDarkTheme ? "app-theme-light" : "app-theme-dark";
-
-    rootElement.classList.remove(staleThemeClass);
-    bodyElement.classList.remove(staleThemeClass);
-    rootElement.classList.add(nextThemeClass);
-    bodyElement.classList.add(nextThemeClass);
-    rootElement.setAttribute("data-app-theme", isDarkTheme ? "dark" : "light");
-    bodyElement.setAttribute("data-app-theme", isDarkTheme ? "dark" : "light");
-
-    return () => {
-      rootElement.classList.remove("app-theme-dark", "app-theme-light");
-      bodyElement.classList.remove("app-theme-dark", "app-theme-light");
-      rootElement.removeAttribute("data-app-theme");
-      bodyElement.removeAttribute("data-app-theme");
-    };
+    applyDocumentThemeMode(isDarkTheme ? THEME_DARK_VALUE : THEME_LIGHT_VALUE);
   }, [isDarkTheme]);
 
   // =========================
