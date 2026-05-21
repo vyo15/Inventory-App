@@ -436,7 +436,7 @@ Status source terbaru:
 Guard tersisa:
 - Supplier lama yang belum punya `conversionValue` harus memunculkan warning dan tidak boleh menghasilkan purchase dengan Stok Masuk 0.
 - Jangan membuat input konversi manual di Purchases; koreksi reject/selisih tetap lewat Penyesuaian Stok.
-- Jangan membuat shipping tier / ongkir bertingkat di Purchases; ongkir, voucher/koin, diskon ongkir, dan biaya layanan aktual tetap editable saat checkout.
+- Jangan membuat shipping tier / ongkir bertingkat di Purchases; ongkir, voucher, diskon ongkir, dan biaya layanan aktual tetap editable saat checkout.
 
 ## Purchases - Preview Stok Aktual dan Breakdown Ringkasan Pembelian
 
@@ -445,7 +445,7 @@ Status source terbaru:
 - Item non-varian menampilkan stok master `currentStock`, `reservedStock`, dan `availableStock`.
 - Item bervarian menampilkan stok varian terpilih; jika varian belum dipilih, UI menampilkan pesan agar user memilih varian dulu.
 - Alert global `Ada varian kosong...` tidak ditampilkan lagi di card `Stok Aktual Sebelum Restock` karena mengganggu flow restock dan kalah relevan dibanding preview stok item/varian yang sedang dipilih.
-- Ringkasan Perbandingan Supplier menampilkan breakdown subtotal barang/harga awal, ongkir, admin/service fee, potongan ongkir, voucher/koin/potongan, total aktual, total pembanding supplier, modal aktual per satuan stok, dan selisih hemat.
+- Ringkasan Perbandingan Supplier menampilkan breakdown subtotal barang/harga awal, ongkir, admin/service fee, potongan ongkir, voucher/potongan, total aktual, total pembanding supplier, modal aktual per satuan stok, dan selisih hemat.
 
 Guard tersisa:
 - Preview stok hanya read-only dan tidak boleh menjadi sumber mutasi stok.
@@ -737,9 +737,11 @@ Risiko:
 - **AKTIF:** `SidebarMenu.css` mobile selected state sudah memakai token `--ims-sidebar-active` dan `--ims-border-color-soft`, bukan warna hardcoded lokal.
 - **AKTIF:** `App.css` dibersihkan dari utility `.ims-action-group--inline` yang tidak memiliki pemakai aktif pada snapshot terbaru.
 - **AKTIF:** komentar theme di `index.css`, `antdTheme.js`, dan `App.css` dirapikan agar tidak memicu audit legacy theme palsu.
+- **AKTIF:** selector CSS top-level untuk table surface di `App.css`, surface `PageSection.css`, state sidebar `SidebarMenu.css`, dan surface `PageFormModal.css` dikonsolidasikan agar token final tidak saling menimpa.
 
 ### Guard yang tetap dipertahankan
 - **GUARDED:** override table/modal/drawer/dropdown/datepicker/popover di `App.css` tetap dipertahankan karena menjaga surface Ant Design tetap solid di light/dark mode.
+- **GUARDED:** selector global Ant Design boleh dipakai sebagai guard, tetapi selector top-level yang sama tidak boleh punya dua nilai token final berbeda di bawah file.
 - **GUARDED:** `Login.jsx`, `AppLayout.jsx`, `SidebarMenu.jsx`, route guard, AuthContext, Dashboard query, service, transaksi, stok, cashflow, produksi, payroll, HPP, dan reports tidak disentuh oleh cleanup theme ini.
 
 ### Cleanup candidate lanjutan
@@ -868,23 +870,6 @@ Status: **AKTIF + GUARDED UI-ONLY**.
 - Perubahan batch ini tidak menyentuh service, query, schema, route guard, role guard, auth flow, transaksi, stok, produksi, payroll, HPP, report mapper, atau reset destructive flow.
 - **CLEANUP CANDIDATE:** `src/pages/Dashboard/Dashboard.css`, `src/pages/Auth/Login.css`, `src/components/Layout/Feedback/DataLoadingState.css`, dan `src/components/Layout/Feedback/LogoLoadingScreen.css` masih memiliki gradient/page-specific atau feedback-specific style lama dan perlu batch cleanup terpisah sesuai allowlist.
 - **CLEANUP CANDIDATE:** hardcoded color residual di page/component bisnis tetap perlu audit bertahap tanpa refactor logic.
-
-
-## Update Hardcoded Color Cleanup — 2026-05-20
-
-Status: **AKTIF + GUARDED UI-ONLY**.
-
-- `src/index.css` sekarang memiliki token success light/dark (`--ims-color-success*`) untuk mengganti hijau hardcoded pada status positif kecil.
-- Purchases/OCR cleanup sudah diarahkan ke token IMS resmi:
-  - `src/pages/Transaksi/Purchases.jsx` memakai `--ims-text-*`, `--ims-border-*`, dan `--ims-bg-*` untuk preview stok serta ringkasan supplier.
-  - `src/pages/Transaksi/components/PurchaseOcrDraftPanel.css` tidak lagi memakai token lama `--surface-card` / `--surface-muted`.
-  - `src/pages/Transaksi/components/PurchaseOcrReceiptModal.css` tetap scoped, tetapi badge, ikon, total, note, dan print border membaca token IMS agar light/dark mode konsisten.
-- Mini cleanup juga mengganti hardcoded status/border kecil di Stock Management, Supplier Purchases, Sales, dan Production Orders tanpa mengubah logic modul.
-
-Guard:
-- Cleanup ini tidak mengubah purchase parser, OCR result mapping, purchase payload, stock mutation, inventory log, expense, supplier catalog, schema Firestore, route/menu/role guard, production, payroll, HPP, atau reset destructive flow.
-- AntD semantic `Tag color` tetap diperbolehkan sebagai shorthand component, bukan target cleanup massal.
-- Sisa hardcoded color di module lain tetap **CLEANUP CANDIDATE** dan harus dipatch per-scope agar tidak bercampur business logic.
 
 ## Update Pricing Mode Shared UI — 2026-05-11
 
@@ -1067,9 +1052,3 @@ Status aktif dari source terbaru:
 - Data Quality Audit tetap read-only dan boleh menandai kandidat `Output HPP perlu reconcile` ketika output cost lama belum ikut payroll final.
 - Reconcile otomatis aktif untuk payroll sync baru/yang diedit; backfill massal data historis tetap guarded task terpisah: wajib preview, scope jelas, dan tidak boleh disentuh oleh patch UI/detail biasa.
 - `draft`/`cancelled` Work Log hanya legacy data read-only; flow input aktif tetap `in_progress` → `completed`.
-
-### UI Cleanup — Finance Summary dan Payroll Status Compact
-- **AKTIF:** Finance Dock tidak lagi merender flow strip/bar bawah yang mengulang metric card, supaya ringkasan uang tidak terlihat dobel.
-- **AKTIF:** Cash In/Cash Out memakai polish scoped `cash-flow-summary`: total utama dominan, metric pendukung rapi, helper/catatan berada di bawah nominal, dan nominal uang tidak boleh terpotong.
-- **AKTIF:** Payroll Produksi dan Laporan Payroll memakai status compact; `status` dan `paymentStatus` tetap field data terpisah, tetapi `Paid/Paid` ditampilkan sebagai satu tag `Paid`.
-- Scope perubahan ini UI-only: tidak mengubah payroll service, Cash Out otomatis, HPP, finance calculation, schema, route, atau role guard.

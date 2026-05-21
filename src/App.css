@@ -948,7 +948,7 @@ Risiko:
 .app-data-table .ant-table,
 .ims-table .ant-table,
 .ims-page .ant-table {
-  background: var(--ims-surface-card) !important;
+  background: var(--ims-bg-card) !important;
 }
 
 .app-data-table .ant-table-container,
@@ -957,7 +957,7 @@ Risiko:
   overflow: hidden;
   border: 1px solid var(--ims-border-strong);
   border-radius: 18px;
-  background: var(--ims-surface-card) !important;
+  background: var(--ims-bg-card) !important;
 }
 
 .app-data-table .ant-table-content,
@@ -966,13 +966,13 @@ Risiko:
 .ims-table table,
 .ims-page .ant-table-content,
 .ims-page table {
-  background: var(--ims-surface-card) !important;
+  background: var(--ims-bg-card) !important;
 }
 
 .app-data-table .ant-table-thead > tr > th,
 .ims-table .ant-table-thead > tr > th,
 .ims-page .ant-table-thead > tr > th {
-  background: var(--ims-surface-soft) !important;
+  background: var(--ims-bg-table-header) !important;
   color: var(--ims-text-primary) !important;
   border-bottom: 1px solid var(--ims-border-strong) !important;
 }
@@ -1052,7 +1052,7 @@ Risiko:
 .ims-table .ant-table-thead > tr > .ant-table-cell-fix-right,
 .ims-page .ant-table-thead > tr > .ant-table-cell-fix-left,
 .ims-page .ant-table-thead > tr > .ant-table-cell-fix-right {
-  background: var(--ims-surface-soft) !important;
+  background: var(--ims-bg-table-header) !important;
 }
 
 .app-data-table .ant-table-expanded-row > td,
@@ -1061,13 +1061,13 @@ Risiko:
 .ims-table .ant-table-summary > tr > td,
 .ims-page .ant-table-expanded-row > td,
 .ims-page .ant-table-summary > tr > td {
-  background: var(--ims-surface-soft) !important;
+  background: var(--ims-bg-card-soft) !important;
 }
 
 .app-data-table .ant-table-ping-right .ant-table-cell-fix-right-first::after,
 .ims-table .ant-table-ping-right .ant-table-cell-fix-right-first::after,
 .ims-page .ant-table-ping-right .ant-table-cell-fix-right-first::after {
-  box-shadow: var(--ims-sticky-shadow);
+  box-shadow: var(--ims-table-fixed-shadow);
 }
 
 .app-data-table .ant-table-ping-left .ant-table-cell-fix-left-last::after,
@@ -1382,97 +1382,6 @@ body.app-theme-dark .ant-drawer .ant-input-affix-wrapper-focused,
 body.app-theme-dark .ant-drawer .ant-picker-focused {
   border-color: var(--ims-color-primary) !important;
   box-shadow: var(--ims-focus-ring) !important;
-}
-
-/* =========================
-   SECTION: IMS Table Surface Overrides - AKTIF / GUARDED UI / CLEANUP CANDIDATE
-   Fungsi:
-   - mengunci table, fixed column, selected row, dan hover agar solid di light/dark mode.
-   - mencegah bug lama: cell transparan/tembus layer belakang.
-   Hubungan flow aplikasi:
-   - berdampak ke table halaman Master Data, Stock, Transaksi, Produksi, Laporan, dan Sistem; tidak mengubah data, pagination, filter, atau action handler.
-   Alasan logic dipakai:
-   - lapisan ini sengaja dipertahankan setelah Shared Table Surface Foundation karena table/fixed column adalah guard visual sensitif.
-   Status:
-   - AKTIF dan GUARDED untuk table operasional besar.
-   - CLEANUP CANDIDATE: ada overlap dengan Shared Table Surface Foundation, tetapi baru boleh dikurangi setelah regression check table fixed/selected/hover di light dan dark selesai.
-========================= */
-.app-data-table .ant-table,
-.ims-table .ant-table,
-.ims-page .ant-table,
-.app-data-table .ant-table-container,
-.ims-table .ant-table-container,
-.ims-page .ant-table-container,
-.app-data-table .ant-table-content,
-.ims-table .ant-table-content,
-.ims-page .ant-table-content,
-.app-data-table table,
-.ims-table table,
-.ims-page table {
-  background: var(--ims-bg-card) !important;
-}
-
-.app-data-table .ant-table-container,
-.ims-table .ant-table-container,
-.ims-page .ant-table-container {
-  border-color: var(--ims-border-strong) !important;
-}
-
-.app-data-table .ant-table-thead > tr > th,
-.ims-table .ant-table-thead > tr > th,
-.ims-page .ant-table-thead > tr > th {
-  background: var(--ims-bg-table-header) !important;
-  color: var(--ims-text-primary) !important;
-  border-color: var(--ims-border-strong) !important;
-}
-
-.app-data-table .ant-table-tbody > tr,
-.ims-table .ant-table-tbody > tr,
-.ims-page .ant-table-tbody > tr,
-.app-data-table .ant-table-tbody > tr > td,
-.app-data-table .ant-table-placeholder > td,
-.ims-table .ant-table-tbody > tr > td,
-.ims-table .ant-table-placeholder > td,
-.ims-page .ant-table-tbody > tr > td,
-.ims-page .ant-table-placeholder > td,
-.app-data-table .ant-table-cell-fix-left,
-.app-data-table .ant-table-cell-fix-right,
-.ims-table .ant-table-cell-fix-left,
-.ims-table .ant-table-cell-fix-right,
-.ims-page .ant-table-cell-fix-left,
-.ims-page .ant-table-cell-fix-right {
-  background: var(--ims-table-row) !important;
-  color: var(--ims-text-primary);
-}
-
-.app-data-table .ant-table-tbody > tr:hover > td,
-.ims-table .ant-table-tbody > tr:hover > td,
-.ims-page .ant-table-tbody > tr:hover > td,
-.app-data-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
-.app-data-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-right,
-.ims-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
-.ims-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-right,
-.ims-page .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
-.ims-page .ant-table-tbody > tr:hover > .ant-table-cell-fix-right {
-  background: var(--ims-table-hover) !important;
-}
-
-.app-data-table .ant-table-tbody > tr.ant-table-row-selected > td,
-.ims-table .ant-table-tbody > tr.ant-table-row-selected > td,
-.ims-page .ant-table-tbody > tr.ant-table-row-selected > td,
-.app-data-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-left,
-.app-data-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-right,
-.ims-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-left,
-.ims-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-right,
-.ims-page .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-left,
-.ims-page .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-right {
-  background: var(--ims-table-selected) !important;
-}
-
-.app-data-table .ant-table-ping-right .ant-table-cell-fix-right-first::after,
-.ims-table .ant-table-ping-right .ant-table-cell-fix-right-first::after,
-.ims-page .ant-table-ping-right .ant-table-cell-fix-right-first::after {
-  box-shadow: var(--ims-table-fixed-shadow);
 }
 
 /* =========================

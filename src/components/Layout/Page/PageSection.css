@@ -3,17 +3,14 @@
    Fungsi:
    - menjadi surface standar untuk blok konten
    - dipakai agar table/filter/chart antar halaman terasa satu sistem
+   - membaca token brand final agar light/dark mode tidak drift.
 ========================= */
 .page-section {
-  border-radius: 18px !important;
   margin-bottom: 20px;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
-}
-
-.app-shell.dark .page-section {
-  border-color: rgba(148, 163, 184, 0.12);
-  box-shadow: 0 12px 26px rgba(2, 6, 23, 0.22);
+  border: 1px solid var(--ims-border-color-soft) !important;
+  border-radius: 18px !important;
+  background: var(--ims-bg-card) !important;
+  box-shadow: var(--ims-shadow-soft);
 }
 
 .page-section-header {
@@ -34,15 +31,17 @@
 
 .page-section-title.ant-typography {
   margin: 0 !important;
+  color: var(--ims-text-primary);
   line-height: 1.25;
 }
 
 .page-section-subtitle.ant-typography {
   margin: 0 !important;
+  max-width: 860px;
+  color: var(--ims-text-secondary);
   font-size: var(--ims-font-size-helper);
   line-height: 1.6;
-  opacity: 0.76;
-  max-width: 860px;
+  opacity: 1;
 }
 
 .page-section-extra {
@@ -54,27 +53,4 @@
 
 .page-section-body {
   min-width: 0;
-}
-
-/* =========================
-   SECTION: Brand Page Section Theme Override - AKTIF DIPAKAI
-   Fungsi:
-   - surface section/card standar mengikuti token brand global.
-   Hubungan flow aplikasi:
-   - styling wrapper section saja; data/table/form di dalamnya tidak berubah.
-========================= */
-.page-section,
-.app-shell.dark .page-section {
-  border-color: var(--ims-border-color-soft) !important;
-  background: var(--ims-bg-card) !important;
-  box-shadow: var(--ims-shadow-soft);
-}
-
-.page-section-title.ant-typography {
-  color: var(--ims-text-primary);
-}
-
-.page-section-subtitle.ant-typography {
-  color: var(--ims-text-secondary);
-  opacity: 1;
 }

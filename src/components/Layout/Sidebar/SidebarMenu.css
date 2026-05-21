@@ -39,6 +39,7 @@
   height: 46px;
   margin: 4px 0;
   padding-inline: 14px !important;
+  position: relative;
   border-radius: 14px;
   display: flex;
   align-items: center;
@@ -107,92 +108,31 @@
 }
 
 /* =========================
-   SECTION: Light Theme
+   SECTION: Sidebar Theme States - AKTIF / GUARDED
+   Fungsi:
+   - menyatukan state text, hover, submenu open, dan nested hover sidebar.
+   - active/selected marker final dikunci di section Active Brand Accent agar tidak ada selector top-level dobel.
 ========================= */
 .sidebar-menu.light.ant-menu .ant-menu-item,
 .sidebar-menu.light.ant-menu .ant-menu-submenu-title,
-.sidebar-menu.light.ant-menu .ant-menu-item a {
-  color: var(--ims-text-primary);
-}
-
-.sidebar-menu.light.ant-menu .ant-menu-item:hover,
-.sidebar-menu.light.ant-menu .ant-menu-submenu-title:hover {
-  color: var(--ims-text-primary);
-  background: var(--ims-sidebar-hover) !important;
-}
-
-.sidebar-menu.light.ant-menu .ant-menu-item-selected {
-  color: var(--ims-text-primary) !important;
-  background: var(--ims-sidebar-active) !important;
-  box-shadow: inset 0 0 0 1px var(--ims-border-color-soft);
-}
-
-.sidebar-menu.light.ant-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
-.sidebar-menu.light.ant-menu .ant-menu-submenu-open > .ant-menu-submenu-title {
-  color: var(--ims-text-primary) !important;
-  background: var(--ims-color-primary-softer) !important;
-}
-
-.sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item:hover {
-  background: var(--ims-sidebar-hover) !important;
-  transform: translateX(1px);
-}
-
-.sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
-  background: var(--ims-sidebar-active) !important;
-  box-shadow: inset 0 0 0 1px var(--ims-border-color-soft);
-}
-
-.sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected::before {
-  opacity: 1;
-  transform: scaleY(1);
-  background: var(--ims-color-primary);
-}
-
-/* =========================
-   SECTION: Dark Theme
-   Fungsi:
-   - sidebar dark dibuat lebih kalem dengan base navy gelap netral
-   - aksen biru dipakai tipis sebagai state aktif, bukan warna background utama
-========================= */
+.sidebar-menu.light.ant-menu .ant-menu-item a,
 .sidebar-menu.dark.ant-menu .ant-menu-item,
 .sidebar-menu.dark.ant-menu .ant-menu-submenu-title,
 .sidebar-menu.dark.ant-menu .ant-menu-item a {
-  color: var(--ims-text-secondary);
-}
-
-.sidebar-menu.dark.ant-menu .ant-menu-item:hover,
-.sidebar-menu.dark.ant-menu .ant-menu-submenu-title:hover {
   color: var(--ims-text-primary);
-  background: var(--ims-sidebar-hover) !important;
 }
 
-.sidebar-menu.dark.ant-menu .ant-menu-item-selected {
-  color: var(--ims-text-primary) !important;
-  background: var(--ims-sidebar-active) !important;
-  box-shadow: inset 0 0 0 1px var(--ims-border-color-soft);
-}
-
+.sidebar-menu.light.ant-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
+.sidebar-menu.light.ant-menu .ant-menu-submenu-open > .ant-menu-submenu-title,
 .sidebar-menu.dark.ant-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
 .sidebar-menu.dark.ant-menu .ant-menu-submenu-open > .ant-menu-submenu-title {
   color: var(--ims-text-primary) !important;
   background: var(--ims-color-primary-softer) !important;
 }
 
+.sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item:hover,
 .sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item:hover {
-  background: var(--ims-color-primary-softer) !important;
   transform: translateX(1px);
-}
-
-.sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
-  background: var(--ims-sidebar-active) !important;
-  box-shadow: inset 0 0 0 1px var(--ims-border-color-soft);
-}
-
-.sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected::before {
-  opacity: 1;
-  transform: scaleY(1);
-  background: var(--ims-color-primary);
 }
 
 /* =========================
@@ -223,78 +163,6 @@
     height: 40px;
     border-radius: 12px;
   }
-
-  .sidebar-menu.light.ant-menu .ant-menu-item-selected {
-    background: var(--ims-sidebar-active) !important;
-    box-shadow: inset 0 0 0 1px var(--ims-border-color-soft);
-  }
-
-  .sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
-    background: var(--ims-sidebar-active) !important;
-  }
-
-  .sidebar-menu.dark.ant-menu .ant-menu-item-selected {
-    background: var(--ims-sidebar-active) !important;
-  }
-
-  .sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
-    background: var(--ims-sidebar-active) !important;
-  }
-}
-
-/* =========================
-   SECTION: Brand Sidebar Menu Theme Override - AKTIF DIPAKAI
-   Fungsi:
-   - menyelaraskan active/hover sidebar ke token brand blue/yellow/white/navy.
-   Hubungan flow aplikasi:
-   - hanya styling menu; tidak mengubah role access, route guard, atau sidebarMenu config.
-   Aman diubah:
-   - active/hover mengikuti token global di index.css.
-========================= */
-.sidebar-menu.light.ant-menu .ant-menu-item,
-.sidebar-menu.light.ant-menu .ant-menu-submenu-title,
-.sidebar-menu.light.ant-menu .ant-menu-item a,
-.sidebar-menu.dark.ant-menu .ant-menu-item,
-.sidebar-menu.dark.ant-menu .ant-menu-submenu-title,
-.sidebar-menu.dark.ant-menu .ant-menu-item a {
-  color: var(--ims-text-primary);
-}
-
-.sidebar-menu.light.ant-menu .ant-menu-item:hover,
-.sidebar-menu.light.ant-menu .ant-menu-submenu-title:hover,
-.sidebar-menu.dark.ant-menu .ant-menu-item:hover,
-.sidebar-menu.dark.ant-menu .ant-menu-submenu-title:hover {
-  color: var(--ims-text-primary);
-  background: var(--ims-sidebar-hover) !important;
-}
-
-.sidebar-menu.light.ant-menu .ant-menu-item-selected,
-.sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected,
-.sidebar-menu.dark.ant-menu .ant-menu-item-selected,
-.sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
-  color: var(--ims-text-primary) !important;
-  background: var(--ims-sidebar-active) !important;
-  box-shadow: inset 0 0 0 1px var(--ims-border-color);
-}
-
-.sidebar-menu.light.ant-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
-.sidebar-menu.light.ant-menu .ant-menu-submenu-open > .ant-menu-submenu-title,
-.sidebar-menu.dark.ant-menu .ant-menu-submenu-selected > .ant-menu-submenu-title,
-.sidebar-menu.dark.ant-menu .ant-menu-submenu-open > .ant-menu-submenu-title {
-  color: var(--ims-text-primary) !important;
-  background: var(--ims-color-primary-softer) !important;
-}
-
-.sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected::before,
-.sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected::before {
-  background: var(--ims-color-primary);
-}
-
-.sidebar-menu.light.ant-menu .ant-menu-item-selected,
-.sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected,
-.sidebar-menu.dark.ant-menu .ant-menu-item-selected,
-.sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
-  font-weight: var(--ims-font-weight-semibold);
 }
 
 /* =========================
@@ -394,17 +262,11 @@ Alasan perubahan:
 - standar theme baru memakai blue/navy sebagai primary dan muted gold sebagai accent kecil yang elegan.
 
 Catatan cleanup:
-- override lama di atas dapat dirapikan setelah visual regression sidebar expanded/collapsed selesai.
+- selector hover/selected top-level dikonsolidasikan agar token final tidak saling menimpa.
 
 Risiko:
 - marker yang terlalu tebal atau background gold besar dapat membuat sidebar ramai dan mengaburkan status active route.
-===================================================== */
-.sidebar-menu.ant-menu .ant-menu-item,
-.sidebar-menu.ant-menu .ant-menu-submenu-title {
-  position: relative;
-}
-
-.sidebar-menu.ant-menu .ant-menu-item::before,
+===================================================== */.sidebar-menu.ant-menu .ant-menu-item::before,
 .sidebar-menu.ant-menu .ant-menu-submenu-title::before {
   content: "";
   position: absolute;
@@ -431,12 +293,21 @@ Risiko:
 }
 
 .sidebar-menu.light.ant-menu .ant-menu-item-selected,
-.sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected,
+.sidebar-menu.light.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
+  background: var(--ims-sidebar-active) !important;
+  color: var(--ims-text-primary) !important;
+  font-weight: var(--ims-font-weight-semibold);
+  box-shadow: inset 0 0 0 1px var(--ims-border-color-soft);
+}
+
 .sidebar-menu.dark.ant-menu .ant-menu-item-selected,
 .sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
   background: var(--ims-sidebar-active) !important;
   color: var(--ims-text-primary) !important;
-  box-shadow: inset 0 0 0 1px var(--ims-border-color-soft);
+  font-weight: var(--ims-font-weight-semibold);
+  box-shadow:
+    inset 0 0 0 1px var(--ims-border-color-soft),
+    inset 3px 0 0 var(--ims-sidebar-active-marker);
 }
 
 .sidebar-menu.light.ant-menu .ant-menu-item-selected::before,
@@ -450,12 +321,7 @@ Risiko:
   background: var(--ims-sidebar-active-marker);
 }
 
-.sidebar-menu.dark.ant-menu .ant-menu-item-selected,
-.sidebar-menu.dark.ant-menu .ant-menu-sub.ant-menu-inline .ant-menu-item-selected {
-  box-shadow:
-    inset 0 0 0 1px var(--ims-border-color-soft),
-    inset 3px 0 0 var(--ims-sidebar-active-marker);
-}
+
 
 @media (max-width: 768px) {
   .sidebar-menu.ant-menu .ant-menu-item::before,
