@@ -1,17 +1,24 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Table, Tag, message } from "antd";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { Button, Col, DatePicker, Table, Tag, message } from "antd";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
+import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
-import { db } from "../../firebase";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
+import { fetchSalesReportData } from "../../services/Laporan/reportsService";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
+import {
+  getDefaultReportDateRange,
+  getReportDateRangeLabel,
+  normalizeReportDateRange,
+} from "../../utils/reports/reportDateRange";
+
+const { RangePicker } = DatePicker;
 
 const SalesReport = () => {
   // =========================
@@ -19,6 +26,9 @@ const SalesReport = () => {
   // =========================
   const [salesData, setSalesData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState(getDefaultReportDateRange);
+
+  const dateRangeBounds = useMemo(() => normalizeReportDateRange(dateRange), [dateRange]);
 
   // =========================
   // SECTION: Fetch data laporan penjualan
@@ -30,15 +40,7 @@ const SalesReport = () => {
     const fetchSales = async () => {
       setLoading(true);
       try {
-        const querySnapshot = await getDocs(
-          query(collection(db, "sales"), orderBy("createdAt", "desc")),
-        );
-
-        const data = querySnapshot.docs.map((documentItem) => ({
-          id: documentItem.id,
-          ...documentItem.data(),
-        }));
-
+        const data = await fetchSalesReportData({ dateRangeBounds });
         setSalesData(data);
       } catch (error) {
         console.error("Gagal mengambil data laporan penjualan:", error);
@@ -49,7 +51,7 @@ const SalesReport = () => {
     };
 
     fetchSales();
-  }, []);
+  }, [dateRangeBounds]);
 
   // =========================
   // SECTION: Summary data
@@ -129,6 +131,9 @@ const SalesReport = () => {
       subtitle: "Ekspor mengikuti data penjualan yang sedang tampil di halaman ini.",
       sheetName: "Sales Report",
       fileName: "Laporan-Penjualan",
+      filters: [
+        `Periode: ${getReportDateRangeLabel(dateRange)}`,
+      ],
       columns: [
         { header: "Ref Transaksi", key: "salesReference", width: 24 },
         { header: "Tanggal", key: "salesDate", width: 18 },
@@ -236,6 +241,23 @@ const SalesReport = () => {
       />
 
       <PageSection
+        title="Filter Periode"
+        subtitle="Report membaca data sales sesuai tanggal transaksi, bukan seluruh collection."
+      >
+        <FilterBar surface={false}>
+          <Col xs={24} md={10} lg={8}>
+            <RangePicker
+              style={{ width: "100%" }}
+              format="DD/MM/YYYY"
+              value={dateRange}
+              allowClear={false}
+              onChange={(value) => setDateRange(value || getDefaultReportDateRange())}
+            />
+          </Col>
+        </FilterBar>
+      </PageSection>
+
+      <PageSection
         title="Ringkasan Penjualan"
         subtitle="Ringkasan performa transaksi."
       >
@@ -244,7 +266,7 @@ const SalesReport = () => {
 
       <PageSection
         title="Detail Penjualan"
-        subtitle="Data mengikuti dokumen sales."
+        subtitle={`Data sales periode ${getReportDateRangeLabel(dateRange)}.`}
         extra={
           <Button type="primary" onClick={exportToExcel} disabled={salesData.length === 0}>
             Ekspor ke Excel

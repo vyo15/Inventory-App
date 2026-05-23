@@ -1,99 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button, Col, Input, Select, Table, Tag, message } from "antd";
 import { CheckCircleOutlined, FileExcelOutlined, WarningOutlined } from "@ant-design/icons";
-import { collection, getDocs, onSnapshot } from "firebase/firestore";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
-import { db } from "../../firebase";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
+import { fetchStockReportData } from "../../services/Laporan/stockReportService";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
-import {
-  formatAffectedVariantStockSummary,
-  getVariantAwareStockStatusMeta,
-} from "../../utils/stock/stockHelpers";
 
 const { Search } = Input;
 const { Option } = Select;
-
-/* =====================================================
-SECTION: Stock Report Minimum Stock Status — AKTIF
-Fungsi:
-- Menentukan status stok report secara read-only memakai threshold master per entity, bukan angka statis global.
-
-Dipakai oleh:
-- Normalisasi row StockReport, tabel, filter status, summary, dan export XLSX.
-
-Alasan perubahan:
-- Stock Report harus konsisten dengan Dashboard/master page: Product memakai `minStockAlert`, Raw Material memakai `minStock`, Semi Finished memakai `minStockAlert`, dan stok pembanding memakai available-first.
-
-Catatan cleanup:
-- Belum ada fallback threshold statis; item dengan threshold kosong/0 hanya menjadi rendah jika stok benar-benar habis.
-
-Risiko:
-- Jika threshold statis atau `variants[].minStockAlert` dipakai lagi, report bisa berbeda dari Dashboard/master page dan menandai item rendah secara salah.
-===================================================== */
-const resolveDisplayStock = (item = {}) =>
-  Number(item.availableStock ?? item.currentStock ?? item.stock ?? 0);
-
-const resolveDisplayUnit = (item = {}) => item.unit || item.stockUnit || "pcs";
-
-const resolveMasterThreshold = (item = {}, typeLabel = "") => {
-  const thresholdSource = typeLabel === "Bahan Baku" ? item.minStock : item.minStockAlert;
-  const threshold = Number(thresholdSource ?? 0);
-  return Number.isFinite(threshold) && threshold > 0 ? threshold : 0;
-};
-
-const resolveStatus = (stockValue, thresholdValue, item = {}, sourceType = "") => {
-  const variantStatusMeta = getVariantAwareStockStatusMeta(item, {
-    sourceType,
-    threshold: thresholdValue,
-  });
-
-  if (variantStatusMeta?.label === "Kosong") return "Habis";
-  if (variantStatusMeta?.label === "Stok Rendah") return "Kritis";
-  if (stockValue <= 0) return "Habis";
-  if (thresholdValue > 0 && stockValue <= thresholdValue) return "Kritis";
-  return "Normal";
-};
-
-// =========================
-// ACTIVE / FINAL - normalisasi row stok untuk laporan/export.
-// Fungsi blok:
-// - menyatukan raw material, semi finished, dan produk jadi ke format row laporan yang sama;
-// - menjaga Stock Report membaca source stok final tanpa menulis/mengubah data bisnis.
-// Hubungan dengan flow laporan/export:
-// - dipakai oleh tabel dan XLSX agar semi-finished stock ikut terbaca untuk data real produksi.
-// Status: aktif dipakai; bukan legacy dan bukan kandidat cleanup.
-// =========================
-const mapInventorySnapshotToReportRows = (snapshot, typeLabel) =>
-  snapshot.docs.map((documentItem) => {
-    const payload = documentItem.data();
-    const stockValue = resolveDisplayStock(payload);
-    const minimumStockThreshold = resolveMasterThreshold(payload, typeLabel);
-    const sourceType = typeLabel === "Bahan Baku" ? "material" : typeLabel === "Semi Finished" ? "semi_finished" : "product";
-    const unitDisplay = resolveDisplayUnit(payload);
-
-    return {
-      id: documentItem.id,
-      ...payload,
-      stockDisplay: stockValue,
-      minStockDisplay: minimumStockThreshold,
-      unitDisplay,
-      type: typeLabel,
-      status: resolveStatus(stockValue, minimumStockThreshold, payload, sourceType),
-      affectedVariantSummary: formatAffectedVariantStockSummary(payload, {
-        sourceType,
-        threshold: minimumStockThreshold,
-        unit: unitDisplay,
-      }),
-    };
-  });
 
 const StockReport = () => {
   const [inventory, setInventory] = useState([]);
@@ -104,82 +25,22 @@ const StockReport = () => {
   const [selectedStatus, setSelectedStatus] = useState("all");
 
   useEffect(() => {
-    const unsubscribeRawMaterials = onSnapshot(
-      collection(db, "raw_materials"),
-      (snapshot) => {
-        const rawMaterialsData = mapInventorySnapshotToReportRows(snapshot, "Bahan Baku");
-
-        setInventory((previousInventory) => [
-          ...previousInventory.filter((item) => item.type !== "Bahan Baku"),
-          ...rawMaterialsData,
-        ]);
-        setLoading(false);
-      },
-      (error) => {
-        message.error("Gagal memuat data bahan baku.");
-        console.error("Error fetching raw materials:", error);
-        setLoading(false);
-      },
-    );
-
-    const unsubscribeProducts = onSnapshot(
-      collection(db, "products"),
-      (snapshot) => {
-        const productsData = mapInventorySnapshotToReportRows(snapshot, "Produk Jadi");
-
-        setInventory((previousInventory) => [
-          ...previousInventory.filter((item) => item.type !== "Produk Jadi"),
-          ...productsData,
-        ]);
-      },
-      (error) => {
-        message.error("Gagal memuat data produk jadi.");
-        console.error("Error fetching products:", error);
-      },
-    );
-
-    // =========================
-    // ACTIVE / FINAL - subscription semi finished stock untuk Stock Report.
-    // Fungsi blok:
-    // - menambahkan collection semi_finished_materials ke laporan stok tanpa mengubah source of truth stok;
-    // - menjaga export Stock Report siap data real karena produksi memakai semi-finished sebagai stok internal.
-    // Hubungan dengan flow laporan/export:
-    // - hanya membaca data, tidak melakukan update stok/produksi.
-    // Status: aktif dipakai; bukan legacy dan bukan kandidat cleanup.
-    // =========================
-    const unsubscribeSemiFinished = onSnapshot(
-      collection(db, "semi_finished_materials"),
-      (snapshot) => {
-        const semiFinishedData = mapInventorySnapshotToReportRows(snapshot, "Semi Finished");
-
-        setInventory((previousInventory) => [
-          ...previousInventory.filter((item) => item.type !== "Semi Finished"),
-          ...semiFinishedData,
-        ]);
-      },
-      (error) => {
-        message.error("Gagal memuat data semi finished.");
-        console.error("Error fetching semi finished materials:", error);
-      },
-    );
-
-    const fetchCategories = async () => {
+    const loadStockReportData = async () => {
       try {
-        const categorySnapshot = await getDocs(collection(db, "categories"));
-        const categoryList = categorySnapshot.docs.map((documentItem) => documentItem.data().name);
+        setLoading(true);
+        const { inventory: inventoryRows, categories: categoryList } = await fetchStockReportData();
+
+        setInventory(inventoryRows);
         setCategories(categoryList);
       } catch (error) {
-        console.error("Error fetching categories:", error);
+        console.error("Error fetching stock report data:", error);
+        message.error("Gagal memuat data laporan stok.");
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchCategories();
-
-    return () => {
-      unsubscribeRawMaterials();
-      unsubscribeProducts();
-      unsubscribeSemiFinished();
-    };
+    loadStockReportData();
   }, []);
 
   const filteredData = useMemo(() => {

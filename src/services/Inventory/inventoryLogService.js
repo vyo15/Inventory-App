@@ -78,6 +78,89 @@ export const resolveInventoryLogDisplayReference = (record = {}) =>
   });
 
 // =========================
+// SECTION: Helper metadata inventory log transaksi
+// Fungsi:
+// - menstandarkan field reference, variant, dan unit untuk writer inventory log baru;
+// - menjaga field lama tetap ada tanpa mengubah schema inventory_logs.
+// Hubungan flow aplikasi:
+// - dipakai Sales, Returns, dan Purchases agar metadata audit tidak disusun berulang di tiap service.
+// Status:
+// - AKTIF / LEGACY-COMPAT; helper pure, tidak akses Firestore, tidak mengubah stock mutation.
+// =========================
+export const buildInventoryLogReferenceFields = ({
+  referenceId = "",
+  referenceNumber = "",
+  referenceCode = "",
+  sourceRef = "",
+  referenceType = "",
+} = {}) => {
+  const normalizedDisplayReference = referenceNumber || referenceCode || sourceRef || "";
+
+  return {
+    referenceId: referenceId || "",
+    referenceNumber: normalizedDisplayReference,
+    referenceCode: referenceCode || normalizedDisplayReference,
+    sourceRef: sourceRef || normalizedDisplayReference,
+    referenceType: referenceType || "inventory_log",
+  };
+};
+
+export const buildInventoryLogVariantFields = ({
+  selectedVariant = null,
+  variantKey = "",
+  variantLabel = "",
+  stockSourceType = "",
+} = {}) => {
+  const normalizedVariantKey = variantKey || selectedVariant?.variantKey || "";
+  const normalizedVariantLabel =
+    variantLabel ||
+    selectedVariant?.variantLabel ||
+    selectedVariant?.variantName ||
+    selectedVariant?.color ||
+    selectedVariant?.name ||
+    "";
+
+  return {
+    variantKey: normalizedVariantKey,
+    variantLabel: normalizedVariantLabel,
+    stockSourceType: stockSourceType || (selectedVariant ? "variant" : "master"),
+  };
+};
+
+export const resolveInventoryStockUnit = ({
+  item = null,
+  unit = "",
+  stockUnit = "",
+  fallbackUnit = "",
+  collectionName = "",
+} = {}) => {
+  const normalizedFallbackUnit = fallbackUnit || (collectionName === "products" ? "pcs" : "");
+
+  return stockUnit || unit || item?.stockUnit || item?.unit || item?.baseUnit || normalizedFallbackUnit || "";
+};
+
+export const buildInventoryLogUnitFields = ({
+  item = null,
+  unit = "",
+  stockUnit = "",
+  fallbackUnit = "",
+  collectionName = "",
+} = {}) => {
+  const normalizedUnit = resolveInventoryStockUnit({
+    item,
+    unit,
+    stockUnit,
+    fallbackUnit,
+    collectionName,
+  });
+
+  return {
+    unit: unit || normalizedUnit,
+    stockUnit: stockUnit || normalizedUnit,
+  };
+};
+
+// =========================
 // SECTION: Build payload inventory log final
 // Fungsi:
 // - membuat bentuk dokumen inventory_logs konsisten untuk writer non-transaction dan transaction

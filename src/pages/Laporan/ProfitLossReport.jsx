@@ -1,16 +1,21 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Table, Tag, message } from "antd";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { Button, Col, DatePicker, Table, Tag, message } from "antd";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
+import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
-import { db } from "../../firebase";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
+import { fetchProfitLossReportData } from "../../services/Laporan/reportsService";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
+import {
+  getDefaultReportDateRange,
+  getReportDateRangeLabel,
+  normalizeReportDateRange,
+} from "../../utils/reports/reportDateRange";
 
 // =========================
 // ACTIVE / FINAL - label source IMS untuk Profit Loss
@@ -26,47 +31,20 @@ const resolveFinancialSourceLabel = (item = {}) => {
   return item.sourceModule || item.sourceCollection || "-";
 };
 
+const { RangePicker } = DatePicker;
+
 const ProfitLossReport = () => {
   const [reportData, setReportData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState(getDefaultReportDateRange);
+
+  const dateRangeBounds = useMemo(() => normalizeReportDateRange(dateRange), [dateRange]);
 
   useEffect(() => {
     const fetchReportData = async () => {
       setLoading(true);
       try {
-        const [revenuesSnap, incomesSnap, expensesSnap] = await Promise.all([
-          getDocs(query(collection(db, "revenues"), orderBy("date", "desc"))),
-          getDocs(query(collection(db, "incomes"), orderBy("date", "desc"))),
-          getDocs(query(collection(db, "expenses"), orderBy("date", "desc"))),
-        ]);
-
-        const revenues = revenuesSnap.docs.map((documentItem) => ({
-          id: `revenues-${documentItem.id}`,
-          sourceCollection: "revenues",
-          ...documentItem.data(),
-          flow: "Pemasukan",
-        }));
-
-        const incomes = incomesSnap.docs.map((documentItem) => ({
-          id: `incomes-${documentItem.id}`,
-          sourceCollection: "incomes",
-          ...documentItem.data(),
-          flow: "Pemasukan",
-        }));
-
-        const expenses = expensesSnap.docs.map((documentItem) => ({
-          id: `expenses-${documentItem.id}`,
-          sourceCollection: "expenses",
-          ...documentItem.data(),
-          flow: "Pengeluaran",
-        }));
-
-        const mergedData = [...revenues, ...incomes, ...expenses].sort((left, right) => {
-          const leftTime = left.date?.toDate ? left.date.toDate().getTime() : 0;
-          const rightTime = right.date?.toDate ? right.date.toDate().getTime() : 0;
-          return rightTime - leftTime;
-        });
-
+        const mergedData = await fetchProfitLossReportData({ dateRangeBounds });
         setReportData(mergedData);
       } catch (error) {
         console.error("Gagal mengambil data laporan laba rugi:", error);
@@ -77,7 +55,7 @@ const ProfitLossReport = () => {
     };
 
     fetchReportData();
-  }, []);
+  }, [dateRangeBounds]);
 
   const summary = useMemo(() => {
     return reportData.reduce(
@@ -143,6 +121,9 @@ const ProfitLossReport = () => {
       subtitle: "Ekspor mengikuti gabungan revenues, incomes, dan expenses pada halaman ini.",
       sheetName: "Profit Loss",
       fileName: "Laporan-Laba-Rugi",
+      filters: [
+        `Periode: ${getReportDateRangeLabel(dateRange)}`,
+      ],
       columns: [
         { header: "Tanggal", key: "transactionDate", width: 18 },
         { header: "Aliran Kas", key: "cashFlowType", width: 16 },
@@ -237,6 +218,23 @@ const ProfitLossReport = () => {
       />
 
       <PageSection
+        title="Filter Periode"
+        subtitle="Report membaca revenues, incomes, dan expenses sesuai tanggal transaksi, bukan seluruh collection."
+      >
+        <FilterBar surface={false}>
+          <Col xs={24} md={10} lg={8}>
+            <RangePicker
+              style={{ width: "100%" }}
+              format="DD/MM/YYYY"
+              value={dateRange}
+              allowClear={false}
+              onChange={(value) => setDateRange(value || getDefaultReportDateRange())}
+            />
+          </Col>
+        </FilterBar>
+      </PageSection>
+
+      <PageSection
         title="Ringkasan Keuangan"
         subtitle="Ringkasan pendapatan, biaya, dan laba."
       >
@@ -250,7 +248,7 @@ const ProfitLossReport = () => {
 
       <PageSection
         title="Detail Transaksi Keuangan"
-        subtitle="Data mengikuti source collection asli."
+        subtitle={`Data source collection periode ${getReportDateRangeLabel(dateRange)}.`}
         extra={
           <Button type="primary" onClick={exportToExcel} disabled={reportData.length === 0}>
             Ekspor ke Excel

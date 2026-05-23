@@ -17,30 +17,19 @@ import {
 } from "antd";
 import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { db } from "../../firebase";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
-import {
-  collection,
-  getDoc,
-  getDocs,
-  Timestamp,
-  query,
-  where,
-  orderBy,
-  doc,
-  updateDoc,
-  runTransaction,
-} from "firebase/firestore";
-import {
-  buildInventoryLogPayload,
-  INVENTORY_LOG_COLLECTION,
-} from "../../services/Inventory/inventoryLogService";
 import { getCustomers } from "../../services/MasterData/customersService";
-import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
 import {
-  applyStockMutationToItem,
+  createSaleTransaction,
+  fetchSalesProducts,
+  fetchSalesRawMaterials,
+  fetchSalesRecords,
+  updateSaleStatusTransaction,
+  validateSaleStockAvailability,
+} from "../../services/Transaksi/salesService";
+import {
   buildVariantOptionsFromItem,
   findVariantByKey,
   getItemStockSnapshot,
@@ -123,6 +112,7 @@ const Sales = () => {
   // SECTION: Modal dan filter
   // =========================
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmittingSale, setIsSubmittingSale] = useState(false);
   const [activeTabKey, setActiveTabKey] = useState("all");
   const [receiptSearch, setReceiptSearch] = useState("");
 
@@ -173,35 +163,10 @@ const Sales = () => {
   const fetchSales = async () => {
     setIsLoading(true);
 
-    // IMS NOTE [GUARDED] - Clear state sebelum fetch ulang Sales.
-    // Fungsi blok: mencegah row lama terlihat saat data penjualan dimuat ulang.
-    // Hubungan flow Sales: hanya menjaga tampilan tabel; status transition, stock mutation, income timing, dan cancel/delete tidak diubah.
-    // Alasan logic: Sales tab harus menjadi source UX yang aman agar status penjualan tidak saling tampil karena state stale.
     setSalesRecords([]);
 
     try {
-      const salesCollection = collection(db, "sales");
-
-      // IMS NOTE [AKTIF/GUARDED] - Sales difetch satu source lalu difilter client-side.
-      // Fungsi blok: menghindari tab status kosong karena query per-status/index Firestore gagal.
-      // Hubungan flow: hanya strategi read tabel/summary; status transition, stok, income, cancel, dan payload Firestore tidak berubah.
-      // Alasan logic: semua tab membaca dataset yang sama, lalu activeTabKey menjaga row sesuai status aktif. Behavior official accounting tetap dari status Selesai.
-      const salesQuery = query(salesCollection, orderBy("createdAt", "desc"));
-      const salesSnapshot = await getDocs(salesQuery);
-
-      const fetchedSalesRecords = salesSnapshot.docs.map((documentItem) => {
-        const salesData = documentItem.data();
-        const dateValue = salesData.date;
-
-        return {
-          id: documentItem.id,
-          ...salesData,
-          date: dateValue?.toDate
-            ? dayjs(dateValue.toDate()).format("YYYY-MM-DD")
-            : "Tanggal Tidak Tersedia",
-        };
-      });
-
+      const fetchedSalesRecords = await fetchSalesRecords();
       setSalesRecords(fetchedSalesRecords);
     } catch (error) {
       console.error("Gagal mengambil data penjualan:", error);
@@ -217,14 +182,7 @@ const Sales = () => {
   // =========================
   const fetchProducts = async () => {
     try {
-      const productsCollection = collection(db, "products");
-      const productsSnapshot = await getDocs(productsCollection);
-
-      const productList = productsSnapshot.docs.map((documentItem) => ({
-        id: documentItem.id,
-        ...documentItem.data(),
-      }));
-
+      const productList = await fetchSalesProducts();
       setProducts(productList);
     } catch (error) {
       console.error("Gagal mengambil data produk:", error);
@@ -237,14 +195,7 @@ const Sales = () => {
   // =========================
   const fetchRawMaterials = async () => {
     try {
-      const rawMaterialsCollection = collection(db, "raw_materials");
-      const rawMaterialsSnapshot = await getDocs(rawMaterialsCollection);
-
-      const rawMaterialList = rawMaterialsSnapshot.docs.map((documentItem) => ({
-        id: documentItem.id,
-        ...documentItem.data(),
-      }));
-
+      const rawMaterialList = await fetchSalesRawMaterials();
       setRawMaterials(rawMaterialList);
     } catch (error) {
       console.error("Gagal mengambil data bahan baku:", error);
@@ -341,16 +292,7 @@ const Sales = () => {
   // =========================
   // SECTION: Cek apakah income sale sudah pernah dibuat
   // =========================
-  const hasExistingIncome = async (saleId) => {
-    const incomesCollection = collection(db, "incomes");
-    const incomeQuery = query(
-      incomesCollection,
-      where("relatedId", "==", saleId),
-    );
-    const incomeSnapshot = await getDocs(incomeQuery);
 
-    return !incomeSnapshot.empty;
-  };
 
   // =========================
   // SECTION: Buka modal tambah penjualan
@@ -375,7 +317,7 @@ const Sales = () => {
   // Hubungan flow Sales/stok:
   // - sale line menyimpan collectionName + variantKey supaya mutasi stok dan revert cancel/delete kembali ke sumber stok yang sama
   // Status:
-  // - aktif/final; validasi final tetap dilakukan ulang ke Firestore oleh validateSaleStockAvailability sebelum sale dibuat
+  // - aktif/final; validasi preflight Firestore dipanggil dari salesService, dan validasi final tetap diulang dalam createSaleTransaction
   // - bukan legacy dan bukan kandidat cleanup
   // =========================
   const buildSaleLine = (item) => {
@@ -422,115 +364,13 @@ const Sales = () => {
   };
 
   // =========================
-  // SECTION: Key agregasi kebutuhan stok per sumber final
-  // Fungsi:
-  // - menggabungkan kebutuhan item yang sama pada beberapa baris sale
-  // Hubungan flow Sales/stok:
-  // - mencegah kasus dua baris item yang sama masing-masing terlihat cukup, tetapi totalnya melebihi availableStock
-  // Status:
-  // - aktif/final untuk Fase A Sales stock safety
-  // - bukan legacy dan bukan kandidat cleanup
-  // =========================
-  const buildSaleStockBucketKey = (item) =>
-    `${item.collectionName}::${item.itemId}::${item.variantKey || "master"}`;
-
-  // =========================
-  // SECTION: Validasi final available stock dari Firestore sebelum create sale
-  // Fungsi:
-  // - membaca ulang dokumen item terbaru langsung dari Firestore
-  // - memvalidasi availableStock master atau varian, bukan currentStock mentah
-  // Hubungan flow Sales/stok:
-  // - memastikan sale tidak dibuat jika stok tersedia sudah berubah/kurang sebelum user menekan Simpan
-  // Status:
-  // - aktif/final untuk Fase A Sales stock safety
-  // - bukan legacy dan bukan kandidat cleanup
-  // =========================
-  const validateSaleStockAvailability = async (saleItems = []) => {
-    const stockNeedsByBucket = new Map();
-
-    saleItems.forEach((item) => {
-      const bucketKey = buildSaleStockBucketKey(item);
-      const existingNeed = stockNeedsByBucket.get(bucketKey);
-
-      stockNeedsByBucket.set(bucketKey, {
-        ...item,
-        quantity: Number(existingNeed?.quantity || 0) + Number(item.quantity || 0),
-      });
-    });
-
-    for (const item of stockNeedsByBucket.values()) {
-      const itemReference = doc(db, item.collectionName, item.itemId);
-      const itemSnapshotDocument = await getDoc(itemReference);
-
-      if (!itemSnapshotDocument.exists()) {
-        throw new Error(`Item ${item.itemName || item.itemId} tidak ditemukan. Penjualan dibatalkan agar stok tidak salah.`);
-      }
-
-      const latestItem = {
-        id: itemSnapshotDocument.id,
-        ...itemSnapshotDocument.data(),
-      };
-      const hasVariants = inferHasVariants(latestItem);
-      const latestVariant = hasVariants && item.variantKey
-        ? findVariantByKey(latestItem, item.variantKey)
-        : null;
-
-      if (hasVariants && !latestVariant) {
-        throw new Error(`Varian ${item.variantLabel || item.variantKey || "item"} untuk ${item.itemName} tidak ditemukan. Penjualan dibatalkan agar stok tidak masuk ke master/default.`);
-      }
-
-      const stockSnapshot = latestVariant
-        ? {
-            availableStock: Number(latestVariant.availableStock || 0),
-          }
-        : getItemStockSnapshot(latestItem);
-      const availableStock = Number(stockSnapshot.availableStock || 0);
-
-      if (availableStock < Number(item.quantity || 0)) {
-        throw new Error(
-          `Stok tersedia ${item.itemName}${latestVariant ? ` - ${latestVariant.variantLabel}` : ""} tidak mencukupi. Dibutuhkan: ${formatNumberId(item.quantity)}, tersedia: ${formatNumberId(availableStock)}. Penjualan belum disimpan.`,
-        );
-      }
-    }
-  };
-
-  // =========================
-  // SECTION: Payload income penjualan
-  // Fungsi:
-  // - menyamakan isi income dari create sale dan update status Selesai
-  // - menjaga reference ORD tetap muncul di Cash In / laporan tanpa menambah collection baru
-  // Hubungan flow Sales/kas:
-  // - hanya dipakai saat status penjualan resmi Selesai
-  // Status:
-  // - aktif/final; jangan dipakai untuk pending income karena pending hanya monitoring UI
-  // =========================
-  const buildSaleIncomePayload = ({ selectedSale, saleId, dateValue = Timestamp.now() }) => {
-    const itemNames = (selectedSale.items || [])
-      .map((item) => `${item.itemName}${item.variantLabel ? ` - ${item.variantLabel}` : ""} (${item.quantity})`)
-      .join(", ");
-    const saleReferenceNumber = selectedSale.saleNumber || selectedSale.code || selectedSale.referenceNumber || saleId;
-
-    return {
-      date: dateValue,
-      type: "Penjualan",
-      incomeNumber: saleReferenceNumber,
-      code: saleReferenceNumber,
-      sourceRef: saleReferenceNumber,
-      referenceNumber: saleReferenceNumber,
-      relatedId: saleId,
-      description: `Penjualan: ${itemNames}`,
-      amount: selectedSale.total,
-      salesChannel: selectedSale.salesChannel || "",
-      sourceModule: "sales",
-      createdAt: Timestamp.now(),
-    };
-  };
-
-  // =========================
   // SECTION: Tambah penjualan baru
   // =========================
   const handleAddSale = async () => {
+    if (isSubmittingSale) return;
+
     try {
+      setIsSubmittingSale(true);
       const values = await form.validateFields();
 
       const {
@@ -543,17 +383,6 @@ const Sales = () => {
         note,
       } = values;
 
-      // =========================
-      // SECTION: Validasi stok dan bangun item line final
-      // Fungsi:
-      // - membangun saleItems final dari form
-      // - menjalankan validasi awal dan validasi final Firestore sebelum dokumen sale dibuat
-      // Hubungan flow Sales/stok:
-      // - sale hanya boleh dibuat jika availableStock master/varian cukup untuk total kebutuhan semua line
-      // Status:
-      // - aktif/final untuk Fase A Sales stock safety
-      // - bukan legacy dan bukan kandidat cleanup
-      // =========================
       const saleItems = (items || []).map((item) => buildSaleLine(item));
       await validateSaleStockAvailability(saleItems);
 
@@ -565,184 +394,24 @@ const Sales = () => {
       const finalSaleStatus = isOfflineChannel(salesChannel) ? "Selesai" : status;
 
       if (!isOfflineChannel(salesChannel) && !onlineStatuses.includes(finalSaleStatus)) {
-        throw new Error("Status online hanya boleh Diproses, Dikirim, atau Selesai saat create. Jika barang kembali atau pembeli batal setelah transaksi tercatat, gunakan menu Return.");
+        throw new Error("Status online hanya boleh Diproses, Dikirim, atau Selesai. Jika pembeli batal setelah transaksi tercatat, gunakan menu Return.");
       }
 
       const selectedCustomer = customers.find(
         (customer) => customer.id === customerId,
       );
 
-      const saleNumber = await generateDailySequenceCode({
-        db,
-        collectionName: "sales",
-        fieldNames: ["saleNumber", "code", "referenceNumber", "sourceRef"],
-        prefix: "ORD",
-        date: date.toDate(),
-      });
-
-      const newSalePayload = {
-        saleNumber,
-        code: saleNumber,
-        customerId: customerId || null,
-        customerName: selectedCustomer?.name || "",
-        items: saleItems,
+      await createSaleTransaction({
+        saleItems,
         salesChannel,
-        status: finalSaleStatus,
-        date: Timestamp.fromDate(date.toDate()),
-        referenceNumber: saleNumber,
-        sourceRef: saleNumber,
-        externalReferenceNumber: isReferenceNumberEnabledChannel(salesChannel)
-          ? referenceNumber || null
+        finalSaleStatus,
+        saleDate: date,
+        referenceNumber: isReferenceNumberEnabledChannel(salesChannel)
+          ? referenceNumber
           : null,
-        total: totalSaleValue,
-        note: note || "",
-        createdAt: Timestamp.now(),
-      };
-
-      /* =====================================================
-      SECTION: Sales create transaction — GUARDED
-      Fungsi:
-      - Menyimpan sales/order, mutasi stok, inventory log, dan income selesai dalam satu Firestore transaction.
-
-      Dipakai oleh:
-      - handleAddSale Sales.
-
-      Alasan perubahan:
-      - Flow lama memakai setDoc lalu update stok/log bertahap sehingga bisa meninggalkan data parsial jika salah satu write gagal.
-      - Document ID tetap ORD-DDMMYYYY-001 agar referensi audit user-facing konsisten.
-
-      Catatan cleanup:
-      - Data lama SAL/random tetap compatibility dan tidak di-rename.
-
-      Risiko:
-      - Jangan memindahkan transaction ini ke UI workaround lain tanpa transaction/service guarded.
-      ===================================================== */
-      const salesDocument = doc(db, "sales", saleNumber);
-      const saleIncomeReference = finalSaleStatus === "Selesai"
-        ? doc(db, "incomes", `income_${salesDocument.id}`)
-        : null;
-      const saleInventoryLogReferences = newSalePayload.items.map(() =>
-        doc(collection(db, INVENTORY_LOG_COLLECTION)),
-      );
-
-      await runTransaction(db, async (transaction) => {
-        const saleSnapshot = await transaction.get(salesDocument);
-        const incomeSnapshot = saleIncomeReference
-          ? await transaction.get(saleIncomeReference)
-          : null;
-
-        // IMS NOTE [GUARDED] - collision guard kode ORD scan-based.
-        // Fungsi: mencegah create sale menimpa order lama ketika dua user submit bersamaan.
-        if (saleSnapshot.exists()) {
-          throw new Error(`Nomor penjualan ${saleNumber} sudah dipakai. Muat ulang data lalu simpan kembali.`);
-        }
-
-        if (incomeSnapshot?.exists()) {
-          throw new Error(`Income untuk penjualan ${saleNumber} sudah ada. Muat ulang data lalu simpan kembali.`);
-        }
-
-        const stockNeedsByBucket = new Map();
-        newSalePayload.items.forEach((item) => {
-          const bucketKey = buildSaleStockBucketKey(item);
-          const existingNeed = stockNeedsByBucket.get(bucketKey);
-
-          stockNeedsByBucket.set(bucketKey, {
-            ...item,
-            quantity: Number(existingNeed?.quantity || 0) + Number(item.quantity || 0),
-          });
-        });
-
-        const stockMutationPayloads = [];
-
-        for (const item of stockNeedsByBucket.values()) {
-          const itemReference = doc(db, item.collectionName, item.itemId);
-          const itemSnapshotDocument = await transaction.get(itemReference);
-
-          if (!itemSnapshotDocument.exists()) {
-            throw new Error(`Item ${item.itemName || item.itemId} tidak ditemukan. Penjualan dibatalkan agar stok tidak partial.`);
-          }
-
-          const latestItem = {
-            id: itemSnapshotDocument.id,
-            ...itemSnapshotDocument.data(),
-          };
-          const hasVariants = inferHasVariants(latestItem);
-          const latestVariant = hasVariants && item.variantKey
-            ? findVariantByKey(latestItem, item.variantKey)
-            : null;
-
-          if (hasVariants && !latestVariant) {
-            throw new Error(`Varian ${item.variantLabel || item.variantKey || "item"} untuk ${item.itemName} tidak ditemukan. Penjualan dibatalkan agar stok tidak masuk ke master/default.`);
-          }
-
-          const stockSnapshot = latestVariant
-            ? getItemStockSnapshot(latestVariant)
-            : getItemStockSnapshot(latestItem);
-          const requestedQuantity = Number(item.quantity || 0);
-
-          if (stockSnapshot.availableStock < requestedQuantity) {
-            throw new Error(
-              `Stok tersedia ${item.itemName}${latestVariant ? ` - ${latestVariant.variantLabel}` : ""} tidak mencukupi. Dibutuhkan: ${formatNumberId(requestedQuantity)}, tersedia: ${formatNumberId(stockSnapshot.availableStock)}. Penjualan belum disimpan.`,
-            );
-          }
-
-          stockMutationPayloads.push({
-            itemReference,
-            stockUpdatePayload: applyStockMutationToItem({
-              item: latestItem,
-              variantKey: latestVariant?.variantKey || "",
-              deltaCurrent: -requestedQuantity,
-            }),
-          });
-        }
-
-        transaction.set(salesDocument, newSalePayload);
-
-        stockMutationPayloads.forEach(({ itemReference, stockUpdatePayload }) => {
-          transaction.update(itemReference, stockUpdatePayload);
-        });
-
-        newSalePayload.items.forEach((item, index) => {
-          transaction.set(
-            saleInventoryLogReferences[index],
-            buildInventoryLogPayload({
-              itemId: item.itemId,
-              itemName: item.itemName,
-              quantityChange: -item.quantity,
-              type: "sale",
-              collectionName: item.collectionName,
-              timestamp: Timestamp.now(),
-              extraData: {
-                customerName: newSalePayload.customerName || "",
-                saleId: salesDocument.id,
-                saleNumber: newSalePayload.saleNumber || "",
-                referenceId: salesDocument.id,
-                referenceCode: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
-                sourceRef: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
-                note: `Penjualan via ${newSalePayload.salesChannel}`,
-                subtotal: item.subtotal,
-                referenceNumber: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
-                unit: item.unit || "",
-                stockUnit: item.unit || "",
-                variantKey: item.variantKey || "",
-                variantLabel: item.variantLabel || "",
-                stockSourceType: item.stockSourceType || "master",
-              },
-            }),
-          );
-        });
-
-        // RULE: Pemasukan kas hanya dicatat saat status Selesai dan ikut commit dalam transaction sale.
-        if (saleIncomeReference) {
-          transaction.set(
-            saleIncomeReference,
-            buildSaleIncomePayload({
-              selectedSale: newSalePayload,
-              saleId: salesDocument.id,
-              dateValue: Timestamp.fromDate(date.toDate()),
-            }),
-          );
-        }
+        note,
+        selectedCustomer,
+        totalSaleValue,
       });
 
       message.success("Penjualan berhasil ditambahkan!");
@@ -752,6 +421,8 @@ const Sales = () => {
     } catch (error) {
       console.error("Gagal tambah penjualan:", error);
       message.error(error?.message || "Gagal menambahkan penjualan.");
+    } finally {
+      setIsSubmittingSale(false);
     }
   };
 
@@ -781,43 +452,11 @@ const Sales = () => {
     try {
       const selectedSale = salesRecords.find((sale) => sale.id === saleId);
 
-      const saleReference = doc(db, "sales", saleId);
-
-      // RULE:
-      // Saat status berubah menjadi Selesai, update status dan income resmi dibuat dalam transaction yang sama.
-      if (newStatus === "Selesai" && selectedSale && selectedSale.total > 0) {
-        const incomeExists = await hasExistingIncome(saleId);
-        const incomeReference = doc(db, "incomes", `income_${saleId}`);
-
-        await runTransaction(db, async (transaction) => {
-          const saleSnapshot = await transaction.get(saleReference);
-          const incomeSnapshot = await transaction.get(incomeReference);
-
-          if (!saleSnapshot.exists()) {
-            throw new Error("Data penjualan tidak ditemukan. Status belum diubah.");
-          }
-
-          const latestSale = {
-            id: saleSnapshot.id,
-            ...saleSnapshot.data(),
-          };
-
-          transaction.update(saleReference, { status: newStatus });
-
-          if (!incomeExists && !incomeSnapshot.exists()) {
-            transaction.set(
-              incomeReference,
-              buildSaleIncomePayload({
-                selectedSale: latestSale,
-                saleId,
-                dateValue: Timestamp.now(),
-              }),
-            );
-          }
-        });
-      } else {
-        await updateDoc(saleReference, { status: newStatus });
-      }
+      await updateSaleStatusTransaction({
+        saleId,
+        newStatus,
+        selectedSale,
+      });
 
       message.success(`Status penjualan berhasil diubah menjadi ${newStatus}.`);
       fetchSales();
@@ -1190,7 +829,14 @@ const Sales = () => {
         title="Tambah Penjualan"
         open={isModalOpen}
         onOk={form.submit}
-        onCancel={() => setIsModalOpen(false)}
+        onCancel={() => {
+          if (!isSubmittingSale) {
+            setIsModalOpen(false);
+          }
+        }}
+        confirmLoading={isSubmittingSale}
+        okButtonProps={{ disabled: isSubmittingSale }}
+        cancelButtonProps={{ disabled: isSubmittingSale }}
         okText="Simpan"
         cancelText="Batal"
         width={860}

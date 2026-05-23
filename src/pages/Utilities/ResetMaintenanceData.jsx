@@ -1,26 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  Button,
   Card,
   Col,
   Form,
   Input,
   Modal,
-  Popconfirm,
   Row,
   Space,
   Statistic,
-  Table,
   Tag,
   Typography,
   message,
 } from "antd";
 import {
-  DeleteOutlined,
-  DownloadOutlined,
-  EyeOutlined,
-  FileSearchOutlined,
   ReloadOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
@@ -79,6 +72,8 @@ import ResetAutoDetectPanel from "./components/ResetAutoDetectPanel";
 import ResetPreviewPanel from "./components/ResetPreviewPanel";
 import ResetSafeRepairPanel from "./components/ResetSafeRepairPanel";
 import ResetUsageGuidePanel from "./components/ResetUsageGuidePanel";
+import ResetDangerZonePanel from "./components/ResetDangerZonePanel";
+import ResetExportPanel from "./components/ResetExportPanel";
 
 const { Paragraph, Text } = Typography;
 
@@ -1723,56 +1718,26 @@ const ResetMaintenanceData = () => {
             </Space>
           </Card>
 
-          <Card title="Pilih Kebutuhan Testing" size="small" extra={<Tag color="blue">Flow utama</Tag>}>
-            <Row gutter={[12, 12]}>
-              <Col xs={24} md={12} xl={6}>
-                <Card size="small" title="Pakai Data Lama">
-                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Text type="secondary">Untuk patch baru: cek bug data lama, lalu repair field turunan yang aman.</Text>
-                    <Button block type="primary" icon={<FileSearchOutlined />} loading={loadingAutoDetect} onClick={handleRunAllAudits}>
-                      Auto Detect Bug
-                    </Button>
-                  </Space>
-                </Card>
-              </Col>
-              <Col xs={24} md={12} xl={6}>
-                <Card size="small" title="Testing dari Baseline">
-                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Text type="secondary">Untuk test berulang dari stok awal yang sama tanpa input ulang.</Text>
-                    <Button block onClick={() => { setMode("reset_and_restore_baseline"); setSelectedModules([...DEFAULT_RESET_MODULES]); setResetIntent("standard"); message.info("Mode Reset + Baseline dipilih. Muat preview sebelum eksekusi."); }}>
-                      Pilih Baseline Reset
-                    </Button>
-                  </Space>
-                </Card>
-              </Col>
-              <Col xs={24} md={12} xl={6}>
-                <Card size="small" title="Mulai dari Nol">
-                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Text type="secondary">Untuk data development yang sudah kacau: transaksi/log, stok, dan modal/HPP testing dibersihkan dalam satu flow.</Text>
-                    <Button block type="primary" danger icon={<DeleteOutlined />} loading={loadingPreview} onClick={openFullTestingResetConfirmation}>
-                      Reset Semua Testing
-                    </Button>
-                    <Button block onClick={() => { setMode("reset_and_zero_stock"); setSelectedModules([...DEFAULT_RESET_MODULES]); setResetIntent("standard"); message.info("Mode Reset + Nolkan Stok dipilih. Muat preview sebelum eksekusi."); }}>
-                      Pilih Reset Nol Saja
-                    </Button>
-                  </Space>
-                </Card>
-              </Col>
-              <Col xs={24} md={12} xl={6}>
-                <Card size="small" title="HPP Trial">
-                  <Space direction="vertical" size={8} style={{ width: "100%" }}>
-                    <Text type="secondary">Khusus uji modal/HPP. Tidak menghapus transaksi, stok, payroll, atau work log.</Text>
-                    <Button block icon={<EyeOutlined />} loading={loadingHppCostPreview} onClick={() => loadHppCostPreview(true, "all_hpp_cost_sources")}>
-                      Preview Semua Modal/HPP
-                    </Button>
-                    <Button block danger icon={<WarningOutlined />} loading={loadingRunHppCostReset || loadingHppCostPreview} onClick={openHppCostResetAllConfirmation}>
-                      Reset Semua Modal/HPP
-                    </Button>
-                  </Space>
-                </Card>
-              </Col>
-            </Row>
-          </Card>
+          <ResetDangerZonePanel
+            loadingAutoDetect={loadingAutoDetect}
+            onRunAllAudits={handleRunAllAudits}
+            onSelectBaselineReset={(modules) => {
+              setMode("reset_and_restore_baseline");
+              setSelectedModules(modules);
+              setResetIntent("standard");
+            }}
+            loadingPreview={loadingPreview}
+            onOpenFullTestingResetConfirmation={openFullTestingResetConfirmation}
+            onSelectZeroReset={(modules) => {
+              setMode("reset_and_zero_stock");
+              setSelectedModules(modules);
+              setResetIntent("standard");
+            }}
+            loadingHppCostPreview={loadingHppCostPreview}
+            loadingRunHppCostReset={loadingRunHppCostReset}
+            onLoadHppCostPreview={loadHppCostPreview}
+            onOpenHppCostResetAllConfirmation={openHppCostResetAllConfirmation}
+          />
 
           <ResetAutoDetectPanel
             autoBugSummary={autoBugSummary}
@@ -1832,49 +1797,22 @@ const ResetMaintenanceData = () => {
             renderCompactText={renderCompactText}
           />
 
-          <Row gutter={[12, 12]}>
-            <Col xs={24}>
-              <Card title="Data Test Seed & Export" size="small" extra={<Tag color="gold">Utility</Tag>}>
-                <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                  <Space wrap>
-                    <Button icon={<EyeOutlined />} loading={loadingTestDataPreview} onClick={() => loadDevTestDataPreview(true)}>Preview Data Test</Button>
-                    <Popconfirm
-                      title="Hapus data test bermarker?"
-                      description="Hanya dokumen isTestData/dev_test_seed/dev_seed. Data normal dan supplier protected tidak ikut."
-                      okText="Ya, hapus"
-                      cancelText="Batal"
-                      onConfirm={handleDeleteDevTestData}
-                    >
-                      <Button danger icon={<DeleteOutlined />} loading={loadingDeleteTestData} disabled={!testDataPreview?.totalRecords}>Hapus Data Test</Button>
-                    </Popconfirm>
-                    <Button icon={<EyeOutlined />} loading={loadingMasterExportPreview} onClick={handleLoadMasterExportPreview}>Preview Export</Button>
-                    <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={() => handleDownloadMasterExport(true)}>Export Master</Button>
-                    <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={handleDownloadMasterExportChecklist}>Export Checklist</Button>
-                  </Space>
-                  <Row gutter={[8, 8]}>
-                    <Col xs={8}><Statistic title="Data Test" value={testDataPreview?.totalRecords || 0} /></Col>
-                    <Col xs={8}><Statistic title="Master" value={masterExportPreview?.summary?.totalRecords || lastMasterExport?.totalRecords || 0} /></Col>
-                    <Col xs={8}><Statistic title="Warning" value={masterExportPreview?.summary?.warnings || lastMasterExport?.warnings?.length || 0} /></Col>
-                  </Row>
-                  {Boolean(testDataRows.length) && (
-                    <Table
-                      className="app-data-table"
-                      size="small"
-                      pagination={false}
-                      dataSource={testDataRows}
-                      columns={[
-                        { title: "Collection", dataIndex: "name", key: "name", render: (value) => renderCompactText(value, 180) },
-                        { title: "Jumlah", dataIndex: "count", key: "count", width: 90 },
-                        { title: "Aksi", dataIndex: "action", key: "action", render: (value) => renderCompactText(value, 220) },
-                      ]}
-                      scroll={{ x: 520 }}
-                    />
-                  )}
-                </Space>
-              </Card>
-            </Col>
-          </Row>
-
+          <ResetExportPanel
+            loadingTestDataPreview={loadingTestDataPreview}
+            onLoadTestDataPreview={() => loadDevTestDataPreview(true)}
+            loadingDeleteTestData={loadingDeleteTestData}
+            testDataPreview={testDataPreview}
+            onDeleteDevTestData={handleDeleteDevTestData}
+            loadingMasterExportPreview={loadingMasterExportPreview}
+            onLoadMasterExportPreview={handleLoadMasterExportPreview}
+            loadingMasterExport={loadingMasterExport}
+            onDownloadMasterExport={() => handleDownloadMasterExport(true)}
+            onDownloadMasterExportChecklist={handleDownloadMasterExportChecklist}
+            masterExportPreview={masterExportPreview}
+            lastMasterExport={lastMasterExport}
+            testDataRows={testDataRows}
+            renderCompactText={renderCompactText}
+          />
           <ResetUsageGuidePanel />
 
         </Space>

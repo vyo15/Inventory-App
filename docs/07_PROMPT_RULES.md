@@ -23,6 +23,8 @@ Selalu jelaskan singkat:
 - Produksi aktif memakai service granular di `src/services/Produksi/`.
 - Collection `productions` hanya legacy data layer untuk maintenance/reset/audit.
 - Sebelum coding, selalu cek file nyata, import, route, dan caller aktif.
+- Repo ZIP aktual tidak membawa `firestore.rules`, `firebase.json`, atau folder custom `functions/`; status rules adalah external/Firebase Console sampai owner mengupload source rules atau menyetujui task source-controlled rules.
+- Jika mengutip line count atau daftar file missing dari docs/chat lama, hitung ulang terhadap ZIP source terbaru dan beri label aktif/legacy/missing/external.
 
 ## Rule Penting Project Ini
 - field stok sedang transisi: jangan ubah hanya `stock` bila area tersebut sudah memakai `currentStock`

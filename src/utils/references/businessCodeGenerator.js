@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, documentId, getDoc, getDocs, orderBy, query, where } from "firebase/firestore";
 
 const safeTrim = (value) => String(value ?? "").trim();
 
@@ -6,6 +6,62 @@ const normalizeBusinessPrefix = (value = "CODE") => {
   const normalized = safeTrim(value).toUpperCase().replace(/[^A-Z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
   return normalized || "CODE";
 };
+const collectSnapshotDocsById = (snapshots = []) => {
+  const docsById = new Map();
+
+  snapshots.forEach((snapshot) => {
+    snapshot.docs.forEach((item) => {
+      docsById.set(item.id, item);
+    });
+  });
+
+  return Array.from(docsById.values());
+};
+
+const fetchBusinessCodeCandidatesByPrefix = async ({
+  db,
+  collectionName,
+  fieldNames = [],
+  codePrefix = "",
+} = {}) => {
+  const normalizedPrefix = safeTrim(codePrefix).toUpperCase();
+  if (!db || !collectionName || !normalizedPrefix) return [];
+
+  const upperBound = `${normalizedPrefix}\uf8ff`;
+  const uniqueFieldNames = [...new Set(fieldNames.filter(Boolean))];
+  const queryPromises = [
+    getDocs(
+      query(
+        collection(db, collectionName),
+        where(documentId(), ">=", normalizedPrefix),
+        where(documentId(), "<=", upperBound),
+        orderBy(documentId()),
+      ),
+    ),
+    ...uniqueFieldNames.map((fieldName) =>
+      getDocs(
+        query(
+          collection(db, collectionName),
+          where(fieldName, ">=", normalizedPrefix),
+          where(fieldName, "<=", upperBound),
+          orderBy(fieldName),
+        ),
+      ),
+    ),
+  ];
+
+  const results = await Promise.allSettled(queryPromises);
+  const fulfilledSnapshots = results
+    .filter((result) => result.status === "fulfilled")
+    .map((result) => result.value);
+
+  if (fulfilledSnapshots.length === 0) {
+    throw results.find((result) => result.status === "rejected")?.reason || new Error("Query prefix kode gagal");
+  }
+
+  return collectSnapshotDocsById(fulfilledSnapshots);
+};
+
 
 export const formatBusinessDateCode = (date = new Date(), dateFormat = "DDMMYYYY") => {
   const normalizedDate = date instanceof Date ? date : new Date(date);
@@ -91,7 +147,6 @@ export const generateUniqueSequentialCode = async ({
     return buildSequentialBusinessCode({ prefix: normalizedPrefix, sequence: 1, sequenceLength });
   }
 
-  const snapshot = await getDocs(collection(db, collectionName));
   const fieldsToCheck = [
     ...new Set([
       ...fieldNames,
@@ -103,12 +158,28 @@ export const generateUniqueSequentialCode = async ({
       "stepCode",
     ]),
   ];
+  let candidateDocs = [];
+
+  try {
+    candidateDocs = await fetchBusinessCodeCandidatesByPrefix({
+      db,
+      collectionName,
+      fieldNames: fieldsToCheck,
+      codePrefix: `${normalizedPrefix}-`,
+    });
+  } catch (error) {
+    // LEGACY-COMPAT: fallback full scan hanya jika semua prefix query gagal, agar data lama tetap aman.
+    console.warn("Prefix query kode sequential gagal, fallback full scan", error);
+    const snapshot = await getDocs(collection(db, collectionName));
+    candidateDocs = snapshot.docs;
+  }
+
   const codePattern = new RegExp(`^${normalizedPrefix}-(\\d{${sequenceLength},})$`);
   const usedSequences = new Set();
   const usedCodes = new Set();
   let maxSequence = 0;
 
-  snapshot.docs.forEach((item) => {
+  candidateDocs.forEach((item) => {
     if (excludeId && item.id === excludeId) return;
 
     const data = item.data() || {};
@@ -198,24 +269,39 @@ export const generateDailySequenceCode = async ({
   const dateCode = formatBusinessDateCode(date, dateFormat);
   const normalizedPrefix = normalizeBusinessPrefix(prefix);
   const prefixDate = `${normalizedPrefix}-${dateCode}-`;
-  const snapshot = await getDocs(collection(db, collectionName));
+  const fieldsToCheck = [
+    ...new Set([
+      ...fieldNames,
+      "code",
+      "referenceNumber",
+      "referenceCode",
+      "sourceRef",
+    ]),
+  ];
+  let candidateDocs = [];
+
+  try {
+    candidateDocs = await fetchBusinessCodeCandidatesByPrefix({
+      db,
+      collectionName,
+      fieldNames: fieldsToCheck,
+      codePrefix: prefixDate,
+    });
+  } catch (error) {
+    // LEGACY-COMPAT: fallback full scan hanya jika semua prefix query gagal, agar collision guard lama tetap jalan.
+    console.warn("Prefix query kode harian gagal, fallback full scan", error);
+    const snapshot = await getDocs(collection(db, collectionName));
+    candidateDocs = snapshot.docs;
+  }
+
   const usedSequences = new Set();
   const usedCodes = new Set();
   let maxSequence = 0;
 
-  snapshot.docs.forEach((item) => {
+  candidateDocs.forEach((item) => {
     if (excludeId && item.id === excludeId) return;
 
     const data = item.data() || {};
-    const fieldsToCheck = [
-      ...new Set([
-        ...fieldNames,
-        "code",
-        "referenceNumber",
-        "referenceCode",
-        "sourceRef",
-      ]),
-    ];
     const valuesToCheck = [item.id, ...fieldsToCheck.map((fieldName) => data[fieldName])];
 
     valuesToCheck.forEach((rawValue) => {

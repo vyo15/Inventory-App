@@ -858,6 +858,69 @@ export const getAllProductionPayrolls = async () => {
     );
   }
 };
+export const getProductionPayrollsByDateRange = async ({ startDate, endDateExclusive } = {}) => {
+  if (!startDate || !endDateExclusive) {
+    return getAllProductionPayrolls();
+  }
+
+  const startDateValue = startDate instanceof Date ? startDate : new Date(startDate);
+  const endDateValue = endDateExclusive instanceof Date ? endDateExclusive : new Date(endDateExclusive);
+
+  if (Number.isNaN(startDateValue.getTime()) || Number.isNaN(endDateValue.getTime())) {
+    return getAllProductionPayrolls();
+  }
+
+  const startTimestamp = Timestamp.fromDate(startDateValue);
+  const endTimestamp = Timestamp.fromDate(endDateValue);
+  const mapSnapshot = (snapshot) => sortProductionPayrollsNewestFirst(
+    snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data(),
+    })),
+  );
+
+  // =====================================================
+  // ACTIVE / GUARDED - range query untuk laporan payroll
+  // Fungsi:
+  // - membaca payroll sesuai periode laporan agar halaman report tidak selalu scan seluruh collection;
+  // - fallback tetap ada untuk lingkungan yang belum punya index orderBy payrollNumber.
+  // Hubungan flow:
+  // - read-only report; tidak mengubah finalisasi payroll, expense payroll, Work Log, HPP, atau schema.
+  // =====================================================
+  try {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where("payrollDate", ">=", startTimestamp),
+      where("payrollDate", "<", endTimestamp),
+      orderBy("payrollDate", "desc"),
+      orderBy("payrollNumber", "desc"),
+    );
+
+    return mapSnapshot(await getDocs(q));
+  } catch (error) {
+    console.warn("Query payroll report dengan orderBy lengkap gagal, coba range-only", error);
+  }
+
+  try {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where("payrollDate", ">=", startTimestamp),
+      where("payrollDate", "<", endTimestamp),
+      orderBy("payrollDate", "desc"),
+    );
+
+    return mapSnapshot(await getDocs(q));
+  } catch (error) {
+    console.warn("Query payroll report range-only gagal, fallback filter client", error);
+  }
+
+  const fallbackRows = await getAllProductionPayrolls();
+  return fallbackRows.filter((item) => {
+    const payrollTime = getPayrollSortTime(item.payrollDate || item.createdAt);
+    return payrollTime >= startDateValue.getTime() && payrollTime < endDateValue.getTime();
+  });
+};
+
 
 export const getProductionPayrollById = async (id) => {
   const ref = doc(db, COLLECTION_NAME, id);

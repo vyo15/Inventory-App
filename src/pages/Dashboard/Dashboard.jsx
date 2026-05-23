@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Alert,
@@ -28,17 +28,11 @@ import {
   WalletOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
-import { collection, getDocs, limit, orderBy, query, where } from "firebase/firestore";
-import { db } from "../../firebase";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatNumberId } from "../../utils/formatters/numberId";
-import { getProductionPlanningDashboardSummary } from "../../services/Produksi/productionPlanningService";
-import {
-  formatAffectedVariantStockSummary,
-  getLowStockVariantEntries,
-} from "../../utils/stock/stockHelpers";
+import { readDashboardData } from "../../services/Dashboard/dashboardService";
 import "./Dashboard.css";
 
 const { Text, Title } = Typography;
@@ -210,244 +204,12 @@ const isPayrollPaid = (record = {}) => {
   return paymentStatus === "paid" || status === "paid";
 };
 
-/* =====================================================
-SECTION: Dashboard Low Stock Master Threshold — AKTIF
-Fungsi:
-- Menyusun list Stok Kritis read-only dari Product, Raw Material, dan Semi Finished memakai threshold master masing-masing.
-
-Dipakai oleh:
-- Widget Stok Kritis Dashboard dan Restock Assistant khusus bahan baku.
-
-Alasan perubahan:
-- Dashboard harus konsisten dengan master page/Stock Report: `availableStock ?? currentStock ?? stock ?? 0` dibandingkan dengan `minStockAlert ?? minStock`, tanpa membaca `variants[].minStockAlert`.
-
-Catatan cleanup:
-- Fallback `currentStock`/`stock` bisa diaudit setelah semua collection punya `availableStock` final.
-
-Risiko:
-- Jika Semi Finished diberi action restock/purchase otomatis atau threshold varian dipakai lagi, Dashboard berubah dari monitoring read-only menjadi flow transaksi yang tidak disetujui.
-===================================================== */
-const getItemDisplayName = (item = {}) =>
-  item?.name || item?.productName || item?.materialName || "-";
-
-const getItemStock = (item = {}) =>
-  getNumericValue(item?.availableStock ?? item?.currentStock ?? item?.stock ?? 0);
-
-const getItemMinStock = (item = {}, sourceType = "") => {
-  if (sourceType === "material") return getNumericValue(item?.minStock ?? 0);
-  if (sourceType === "product" || sourceType === "semi_finished") {
-    return getNumericValue(item?.minStockAlert ?? 0);
-  }
-
-  return getNumericValue(item?.minStockAlert ?? item?.minStock ?? 0);
-};
-
-const isStockMonitoringActiveItem = (item = {}) => item?.isActive !== false;
-
-const getItemCurrentStock = (item = {}) =>
-  getNumericValue(item?.currentStock ?? item?.stock ?? 0);
-
-const getItemReservedStock = (item = {}) =>
-  getNumericValue(item?.reservedStock ?? 0);
-
-const getLowStockSeverity = (item = {}, sourceType = "") => {
-  const stock = getItemStock(item);
-  const minStock = getItemMinStock(item, sourceType);
-  const affectedVariants = getLowStockVariantEntries(item, {
-    sourceType,
-    threshold: minStock,
-    unit: item?.stockUnit || item?.unit || "pcs",
-  });
-
-  if (affectedVariants.some((variant) => variant.status === "empty")) return { label: "Kosong", color: "red" };
-  if (affectedVariants.length > 0) return { label: "Menipis", color: "gold" };
-  if (stock <= 0) return { label: "Kosong", color: "red" };
-  if (minStock > 0 && stock <= minStock) return { label: "Menipis", color: "gold" };
-  return { label: "Aman", color: "green" };
-};
-
-const buildLowStockRows = (products = [], materials = [], semiFinishedMaterials = []) => {
-  const activeProducts = products.filter(isStockMonitoringActiveItem);
-  const activeMaterials = materials.filter(isStockMonitoringActiveItem);
-  const activeSemiFinishedMaterials = semiFinishedMaterials.filter(isStockMonitoringActiveItem);
-
-  const buildRow = (item, sourceType, type, to, unit) => {
-    const stock = getItemStock(item);
-    const minStock = getItemMinStock(item, sourceType);
-    const affectedVariants = getLowStockVariantEntries(item, {
-      sourceType,
-      threshold: minStock,
-      unit,
-    });
-    const variantGap = affectedVariants.length
-      ? Math.min(...affectedVariants.map((variant) => variant.stock - Math.max(variant.threshold, 0)))
-      : null;
-
-    return {
-      key: `${sourceType}-${item.id}`,
-      id: item.id,
-      name: getItemDisplayName(item),
-      stock,
-      minStock,
-      unit,
-      type,
-      sourceType,
-      severity: getLowStockSeverity(item, sourceType),
-      affectedVariantSummary: formatAffectedVariantStockSummary(item, {
-        sourceType,
-        threshold: minStock,
-        unit,
-        maxItems: 2,
-      }),
-      sortGap: variantGap ?? stock - Math.max(minStock, 0),
-      to,
-      snapshot: item,
-    };
-  };
-
-  const rows = [
-    ...activeProducts.map((item) => buildRow(item, "product", "Produk Jadi", "/stock-management", item?.unit || "pcs")),
-    ...activeMaterials.map((item) => buildRow(item, "material", "Bahan Baku", "/stock-management", item?.stockUnit || item?.unit || "pcs")),
-    ...activeSemiFinishedMaterials.map((item) => buildRow(item, "semi_finished", "Semi Finished", "/produksi/semi-finished-materials", item?.unit || "pcs")),
-  ].filter((item) => item.affectedVariantSummary || item.stock <= 0 || (item.minStock > 0 && item.stock <= item.minStock));
-
-  return rows.sort((left, right) => left.sortGap - right.sortGap);
-};
-
-/* =====================================================
-SECTION: Dashboard Business Alert Stock Audit — AKTIF
-Fungsi:
-- Menyusun audit stok read-only untuk stok minus dan reserved stock tidak wajar tanpa mengubah stok.
-
-Dipakai oleh:
-- KPI Data Perlu Dicek dan section Data Perlu Dicek pada Dashboard.
-
-Alasan perubahan:
-- Owner perlu melihat exception ERP lintas menu tanpa membuka Stock Management satu per satu.
-
-Catatan cleanup:
-- Validasi reserved stock bisa dipindah ke helper/service read model jika schema stok sudah stabil penuh.
-
-Risiko:
-- Jika audit ini dijadikan mutasi otomatis, stok fisik/reserved bisa rusak dan report tidak sinkron.
-===================================================== */
-const buildStockAuditRows = (products = [], materials = [], semiFinishedMaterials = []) => {
-  const mapRows = (items = [], type = "Item", sourceType = "item", to = "/stock-management") =>
-    items.map((item) => {
-      const stock = getItemStock(item);
-      const currentStock = getItemCurrentStock(item);
-      const reservedStock = getItemReservedStock(item);
-
-      return {
-        key: `${sourceType}-${item.id}`,
-        id: item.id,
-        name: getItemDisplayName(item),
-        type,
-        sourceType,
-        unit: item?.stockUnit || item?.unit || "pcs",
-        stock,
-        currentStock,
-        reservedStock,
-        minStock: getItemMinStock(item, sourceType),
-        to,
-        isNegativeStock: stock < 0 || currentStock < 0,
-        isReservedOverrun: reservedStock > 0 && (reservedStock > Math.max(currentStock, 0) || stock < 0),
-      };
-    });
-
-  return [
-    ...mapRows(products, "Produk Jadi", "product", "/stock-management"),
-    ...mapRows(materials, "Bahan Baku", "material", "/stock-management"),
-    ...mapRows(semiFinishedMaterials, "Semi Finished", "semi_finished", "/produksi/semi-finished-materials"),
-  ].filter((item) => item.isNegativeStock || item.isReservedOverrun);
-};
-
 // =========================
-// SECTION: Helpers - Restock Assistant
+// SECTION: Restock route helper — AKTIF / UI ONLY
 // Fungsi:
-// - membaca purchase terakhir untuk bahan baku stok kritis secara null-safe;
-// - menyediakan supplier terakhir, harga terakhir, dan link produk terakhir untuk action Dashboard.
-// Hubungan flow:
-// - Dashboard hanya membaca purchases/raw_materials dan menyiapkan navigasi/prefill;
-// - tidak membuat purchase otomatis, tidak mengubah stok, kas, supplier, atau laporan.
-// Status:
-// - aktif dipakai oleh section Stok Kritis; bukan legacy.
+// - menyusun URL prefill untuk navigasi Restock Assistant;
+// - data rekomendasi stok/restock sudah disiapkan oleh dashboardService.
 // =========================
-const getRestockLink = (...values) => {
-  const validValue = values.find((value) => String(value || "").trim());
-  return validValue ? String(validValue).trim() : "";
-};
-
-const getLatestPurchaseForMaterial = (purchases = [], materialId = "") => {
-  const targetId = String(materialId || "").trim();
-  if (!targetId || !Array.isArray(purchases)) return null;
-
-  return purchases
-    .filter((purchase) => (
-      normalizeStatus(purchase?.type) === "material" &&
-      String(purchase?.itemId || "").trim() === targetId
-    ))
-    .sort((left, right) => {
-      const rightDate = getTransactionDate(right)?.getTime() || 0;
-      const leftDate = getTransactionDate(left)?.getTime() || 0;
-      return rightDate - leftDate;
-    })[0] || null;
-};
-
-const getPurchaseProductLink = (purchase = null) => {
-  if (!purchase || typeof purchase !== "object") return "";
-
-  return getRestockLink(
-    purchase?.productLink,
-    purchase?.purchaseProductLink,
-    purchase?.restockProductLink,
-  );
-};
-
-const getPurchaseLastUnitPrice = (purchase = null) => {
-  if (!purchase || typeof purchase !== "object") return 0;
-
-  return getNumericValue(
-    purchase?.actualUnitCost ??
-      purchase?.unitCost ??
-      purchase?.lastPurchasePrice ??
-      purchase?.restockReferencePrice ??
-      0,
-  );
-};
-
-const buildRestockAssistantRows = (lowStockRows = [], purchases = []) => (
-  lowStockRows.map((item) => {
-    if (item.sourceType !== "material") return item;
-
-    const latestPurchase = getLatestPurchaseForMaterial(purchases, item.id);
-    const supplierId = String(
-      latestPurchase?.supplierId ||
-        latestPurchase?.supplierRefId ||
-        latestPurchase?.supplierReferenceId ||
-        item.snapshot?.supplierId ||
-        "",
-    ).trim();
-    const supplierName = String(
-      latestPurchase?.supplierName ||
-        latestPurchase?.supplierLabel ||
-        latestPurchase?.supplierStoreName ||
-        item.snapshot?.supplierName ||
-        "",
-    ).trim();
-    const productLink = getPurchaseProductLink(latestPurchase);
-
-    return {
-      ...item,
-      latestPurchase,
-      restockSupplierId: supplierId,
-      restockSupplierName: supplierName,
-      restockProductLink: productLink,
-      lastPurchasePrice: getPurchaseLastUnitPrice(latestPurchase),
-    };
-  })
-);
-
 const buildRestockRoute = (basePath, params = {}) => {
   const searchParams = new URLSearchParams();
 
@@ -545,43 +307,6 @@ const buildDashboardQuickActions = () => [
 ];
 
 // =========================
-// SECTION: AKTIF + GUARDED - targeted purchase lookup Dashboard
-// Fungsi:
-// - mengambil histori purchases hanya untuk bahan baku stok kritis yang tampil di Restock Assistant;
-// - mengganti full read collection purchases agar Dashboard lebih ringan saat data real mulai banyak.
-// Hubungan flow:
-// - Dashboard tetap read-only; data ini hanya untuk supplier/link/harga terakhir sebagai bantuan navigasi;
-// - tidak membuat purchase otomatis, tidak mengubah stok, kas, supplier, laporan, atau expense.
-// Status:
-// - AKTIF dipakai oleh loadDashboardData.
-// - GUARDED karena hanya membaca itemId dari baris stok kritis yang sudah terpilih.
-// - LEGACY: purchase lama yang belum menyimpan itemId standar bisa tidak ikut lookup ringan ini.
-// - CLEANUP CANDIDATE jika nanti dibuat read model/latest purchase service khusus Dashboard.
-// =========================
-const fetchPurchaseRecordsForRestockRows = async (lowStockRows = []) => {
-  const materialIds = [...new Set(
-    lowStockRows
-      .filter((item) => item.sourceType === "material")
-      .map((item) => String(item.id || "").trim())
-      .filter(Boolean),
-  )].slice(0, MAX_DASHBOARD_LIST_ITEMS);
-
-  if (!materialIds.length) return [];
-
-  const purchaseRecordsQuery = query(
-    collection(db, "purchases"),
-    where("itemId", "in", materialIds),
-  );
-
-  const purchaseRecordsSnapshot = await getDocs(purchaseRecordsQuery);
-
-  return purchaseRecordsSnapshot.docs.map((docItem) => ({
-    id: docItem.id,
-    ...docItem.data(),
-  }));
-};
-
-// =========================
 // SECTION: Helpers - HPP/cost guard
 // Fungsi:
 // - mendeteksi Work Log completed yang punya cost 0 supaya Dashboard memberi catatan kecil;
@@ -632,23 +357,6 @@ const formatActivityType = (type) => {
   return { label: type || "Aktivitas", color: "default" };
 };
 
-const normalizePlanningPeriodSummary = (summary = {}) => ({
-  count: getNumericValue(summary.count),
-  targetQty: getNumericValue(summary.targetQty),
-  actualCompletedQty: getNumericValue(summary.actualCompletedQty),
-  remainingQty: getNumericValue(summary.remainingQty),
-  progressPercent: Math.max(0, Math.min(getNumericValue(summary.progressPercent), 999)),
-  priorityPlans: Array.isArray(summary.priorityPlans) ? summary.priorityPlans : [],
-});
-
-const normalizePlanningDashboardSummary = (summary = EMPTY_PLANNING_SUMMARY) => ({
-  weekly: normalizePlanningPeriodSummary(summary.weekly),
-  monthly: normalizePlanningPeriodSummary(summary.monthly),
-  overdueCount: getNumericValue(summary.overdueCount),
-  behindTargetCount: getNumericValue(summary.behindTargetCount),
-  priorityPlans: Array.isArray(summary.priorityPlans) ? summary.priorityPlans : [],
-});
-
 const getPlanningStatusMeta = (status) => {
   const normalized = normalizeStatus(status || "active");
 
@@ -674,28 +382,15 @@ const formatDashboardDate = (value) => {
   });
 };
 
-const mapSnapshotDocs = (snapshot) => snapshot.docs.map((docItem) => ({
-  id: docItem.id,
-  ...docItem.data(),
-}));
-
-const readDashboardSnapshot = async (key, requestPromise) => {
-  try {
-    return { key, data: mapSnapshotDocs(await requestPromise), error: null };
-  } catch (error) {
-    console.warn(`Gagal memuat data Dashboard: ${key}`, error);
-    return { key, data: [], error };
-  }
-};
-
 const Dashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [loadWarning, setLoadWarning] = useState("");
+  const dashboardReadInFlightRef = useRef(false);
   const [dashboardData, setDashboardData] = useState({
     lowStockRows: [],
-    purchaseRecords: [],
+    criticalStockPreview: [],
     recentActivities: [],
     productionOrders: [],
     workLogs: [],
@@ -711,7 +406,7 @@ const Dashboard = () => {
   // =========================
   // SECTION: Load Dashboard data
   // Fungsi:
-  // - mengambil snapshot read-only untuk Dashboard control center compact;
+  // - meminta dashboardData final dari dashboardService agar page fokus ke rendering UI;
   // - tombol refresh memanggil fungsi yang sama tanpa melakukan write ke collection mana pun.
   // Hubungan flow:
   // - membaca stok, PO, Work Log, Payroll, Income/Expense, Inventory Log, dan Planning sebagai ringkasan operasional.
@@ -719,79 +414,21 @@ const Dashboard = () => {
   // - aktif dipakai; tidak ada legacy write/backfill di blok ini.
   // =========================
   const loadDashboardData = useCallback(async () => {
+    if (dashboardReadInFlightRef.current) {
+      return;
+    }
+
+    dashboardReadInFlightRef.current = true;
+
     try {
       setLoading(true);
       setLoadWarning("");
 
-      const recentActivitiesQuery = query(
-        collection(db, "inventory_logs"),
-        orderBy("timestamp", "desc"),
-        limit(MAX_DASHBOARD_LIST_ITEMS),
-      );
-
-      const dashboardReads = await Promise.all([
-        readDashboardSnapshot("products", getDocs(collection(db, "products"))),
-        readDashboardSnapshot("raw_materials", getDocs(collection(db, "raw_materials"))),
-        readDashboardSnapshot("semi_finished_materials", getDocs(collection(db, "semi_finished_materials"))),
-        readDashboardSnapshot("inventory_logs", getDocs(recentActivitiesQuery)),
-        readDashboardSnapshot("production_orders", getDocs(collection(db, "production_orders"))),
-        readDashboardSnapshot("production_work_logs", getDocs(collection(db, "production_work_logs"))),
-        readDashboardSnapshot("production_payrolls", getDocs(collection(db, "production_payrolls"))),
-        readDashboardSnapshot("expenses", getDocs(collection(db, "expenses"))),
-        readDashboardSnapshot("incomes", getDocs(collection(db, "incomes"))),
-        readDashboardSnapshot("revenues", getDocs(collection(db, "revenues"))),
-        readDashboardSnapshot("sales", getDocs(collection(db, "sales"))),
-      ]);
-
-      const dataByKey = dashboardReads.reduce((accumulator, item) => {
-        accumulator[item.key] = item.data;
-        return accumulator;
-      }, {});
-
-      const failedReads = dashboardReads.filter((item) => item.error).map((item) => item.key);
-
-      const planningSummary = await getProductionPlanningDashboardSummary().catch((error) => {
-        console.warn("Gagal memuat summary production planning:", error);
-        failedReads.push("production_planning_summary");
-        return EMPTY_PLANNING_SUMMARY;
+      const { dashboardData: nextDashboardData, failedReads } = await readDashboardData({
+        maxListItems: MAX_DASHBOARD_LIST_ITEMS,
       });
 
-      const products = dataByKey.products || [];
-      const materials = dataByKey.raw_materials || [];
-      const semiFinishedMaterials = dataByKey.semi_finished_materials || [];
-      const lowStockRows = buildLowStockRows(products, materials, semiFinishedMaterials);
-      const stockAuditRows = buildStockAuditRows(products, materials, semiFinishedMaterials);
-
-      let purchaseRecords = [];
-      try {
-        purchaseRecords = await fetchPurchaseRecordsForRestockRows(
-          lowStockRows.slice(0, MAX_DASHBOARD_LIST_ITEMS),
-        );
-      } catch (error) {
-        console.warn("Gagal memuat lookup purchase Restock Assistant:", error);
-        failedReads.push("purchases_restock_lookup");
-      }
-
-      setDashboardData({
-        lowStockRows,
-        purchaseRecords,
-        stockAuditRows,
-        recentActivities: dataByKey.inventory_logs || [],
-        productionOrders: dataByKey.production_orders || [],
-        workLogs: dataByKey.production_work_logs || [],
-        payrolls: dataByKey.production_payrolls || [],
-        expenses: dataByKey.expenses || [],
-        incomes: (dataByKey.incomes || []).map((item) => ({
-          ...item,
-          sourceCollection: "incomes",
-        })),
-        revenues: (dataByKey.revenues || []).map((item) => ({
-          ...item,
-          sourceCollection: "revenues",
-        })),
-        sales: dataByKey.sales || [],
-        planningSummary: normalizePlanningDashboardSummary(planningSummary),
-      });
+      setDashboardData(nextDashboardData);
 
       if (failedReads.length > 0) {
         setLoadWarning(`Sebagian data Dashboard gagal dimuat: ${failedReads.join(", ")}. Data lain tetap ditampilkan untuk monitoring.`);
@@ -802,6 +439,7 @@ const Dashboard = () => {
       console.error("Gagal memuat dashboard:", error);
       setLoadWarning("Sebagian data Dashboard gagal dimuat. Cek koneksi atau index Firestore, lalu refresh.");
     } finally {
+      dashboardReadInFlightRef.current = false;
       setLoading(false);
     }
   }, []);
@@ -812,7 +450,7 @@ const Dashboard = () => {
 
   const {
     lowStockRows,
-    purchaseRecords,
+    criticalStockPreview,
     recentActivities,
     productionOrders,
     workLogs,
@@ -828,23 +466,6 @@ const Dashboard = () => {
   const lowStockTotal = lowStockRows.length;
   const quickActions = useMemo(() => buildDashboardQuickActions(), []);
 
-  // =========================
-  // SECTION: Restock Assistant - stok kritis
-  // Fungsi:
-  // - memperkaya item stok menipis dengan purchase terakhir untuk tombol restock cepat;
-  // - action hanya navigasi/prefill atau membuka link eksternal.
-  // Hubungan flow:
-  // - Dashboard tetap read-only; stok/kas hanya berubah setelah user menyimpan transaksi di Purchases.
-  // Status:
-  // - aktif dipakai oleh section Stok Kritis; bukan legacy dan bukan auto-purchase.
-  // =========================
-  const criticalStockPreview = useMemo(
-    () => buildRestockAssistantRows(
-      lowStockRows.slice(0, MAX_DASHBOARD_LIST_ITEMS),
-      purchaseRecords,
-    ),
-    [lowStockRows, purchaseRecords],
-  );
   const planningPriorityItems = planningSummary.priorityPlans
     .filter((plan) => !isCompletedStatus(plan.status) && !isCancelledStatus(plan.status))
     .slice(0, MAX_PLANNING_PRIORITY_ITEMS);
@@ -1277,6 +898,7 @@ const Dashboard = () => {
               size="small"
               icon={<ReloadOutlined />}
               loading={loading}
+              disabled={loading}
               onClick={loadDashboardData}
             >
               Muat Ulang
@@ -1685,8 +1307,8 @@ const Dashboard = () => {
                   showIcon
                   message={
                     payrollSummary.payrollExpenseCount > 0
-                      ? `Payroll paid tercatat ${formatNumberId(payrollSummary.payrollExpenseCount)} kali di Cash Out. Bulan ini: ${formatCurrency(payrollSummary.payrollExpenseThisMonth)}. Hindari input ulang manual.`
-                      : "Ada payroll paid, tetapi expense payroll belum terlihat. Cek Cash Out sebelum membaca Profit Loss."
+                      ? `Payroll paid bulan ini tercatat ${formatNumberId(payrollSummary.payrollExpenseCount)} kali di Cash Out: ${formatCurrency(payrollSummary.payrollExpenseThisMonth)}. Hindari input ulang manual.`
+                      : "Ada payroll paid bulan ini, tetapi expense payroll belum terlihat. Cek Cash Out sebelum membaca Profit Loss."
                   }
                 />
               ) : null}

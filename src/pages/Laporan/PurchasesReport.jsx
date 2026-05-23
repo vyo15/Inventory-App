@@ -1,17 +1,22 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Table, Tag, message } from "antd";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { Button, Col, DatePicker, Table, Tag, message } from "antd";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
+import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
-import { db } from "../../firebase";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
+import { fetchPurchasesReportData } from "../../services/Laporan/reportsService";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
+import {
+  getDefaultReportDateRange,
+  getReportDateRangeLabel,
+  normalizeReportDateRange,
+} from "../../utils/reports/reportDateRange";
 
 // =========================
 // SECTION: Helper saving pembelian
@@ -53,29 +58,20 @@ const getPurchaseVariantLabel = (record = {}) => {
   return record.stockSourceType === "variant" ? "Varian" : "Master";
 };
 
+const { RangePicker } = DatePicker;
+
 const PurchasesReport = () => {
   const [purchasesData, setPurchasesData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState(getDefaultReportDateRange);
+
+  const dateRangeBounds = useMemo(() => normalizeReportDateRange(dateRange), [dateRange]);
 
   useEffect(() => {
     const fetchPurchases = async () => {
       setLoading(true);
       try {
-        const querySnapshot = await getDocs(
-          query(collection(db, "expenses"), orderBy("date", "desc")),
-        );
-
-        const data = querySnapshot.docs
-          .map((documentItem) => ({
-            id: documentItem.id,
-            ...documentItem.data(),
-          }))
-          .filter(
-            (item) =>
-              item.sourceModule === "purchases" ||
-              item.type === "Pembelian Bahan/Barang",
-          );
-
+        const data = await fetchPurchasesReportData({ dateRangeBounds });
         setPurchasesData(data);
       } catch (error) {
         console.error("Gagal mengambil data laporan pembelian:", error);
@@ -86,7 +82,7 @@ const PurchasesReport = () => {
     };
 
     fetchPurchases();
-  }, []);
+  }, [dateRangeBounds]);
 
   const summary = useMemo(() => {
     return purchasesData.reduce(
@@ -158,6 +154,9 @@ const PurchasesReport = () => {
       subtitle: "Ekspor mengikuti data expenses pembelian yang tampil di halaman ini.",
       sheetName: "Purchases Report",
       fileName: "Laporan-Pembelian",
+      filters: [
+        `Periode: ${getReportDateRangeLabel(dateRange)}`,
+      ],
       columns: [
         { header: "ID Expense", key: "expenseId", width: 24 },
         { header: "Tanggal", key: "expenseDate", width: 18 },
@@ -264,6 +263,23 @@ const PurchasesReport = () => {
       />
 
       <PageSection
+        title="Filter Periode"
+        subtitle="Report membaca expenses pembelian sesuai tanggal transaksi, bukan seluruh collection."
+      >
+        <FilterBar surface={false}>
+          <Col xs={24} md={10} lg={8}>
+            <RangePicker
+              style={{ width: "100%" }}
+              format="DD/MM/YYYY"
+              value={dateRange}
+              allowClear={false}
+              onChange={(value) => setDateRange(value || getDefaultReportDateRange())}
+            />
+          </Col>
+        </FilterBar>
+      </PageSection>
+
+      <PageSection
         title="Ringkasan Pembelian"
         subtitle="Ringkasan total dan saving pembelian."
       >
@@ -277,7 +293,7 @@ const PurchasesReport = () => {
 
       <PageSection
         title="Detail Pembelian"
-        subtitle="Data mengikuti transaksi pembelian aktif."
+        subtitle={`Data expenses pembelian periode ${getReportDateRangeLabel(dateRange)}.`}
         extra={
           <Button type="primary" onClick={exportToExcel} disabled={purchasesData.length === 0}>
             Ekspor ke Excel

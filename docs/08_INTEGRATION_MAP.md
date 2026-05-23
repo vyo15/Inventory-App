@@ -20,7 +20,7 @@ Master Data
 | Flow | Source aktif | Output otomatis | Guard anti-double |
 |---|---|---|---|
 | Pembelian selesai | purchases | stock masuk + expenses | purchase id + metadata source expense |
-| Penjualan dibuat / selesai / dibatalkan | sales | stock keluar saat create + income saat selesai + stock revert saat cancel | Firestore transaction + sale id + status transition + `stockRevertedAt` |
+| Penjualan dibuat / selesai | sales | stock keluar saat create + income saat selesai | Firestore transaction + sale id + no-cancel user-facing guard; barang kembali wajib lewat Return |
 | Stock Adjustment | stock_adjustments | inventory_logs | adjustment id/reference |
 | Work Log dari PO | production_orders + production_work_logs | Work Log in_progress + konsumsi bahan | 1 PO = 1 Work Log |
 | Work Log completed | production_work_logs | output stock + payroll line | Work Log completed guard |
@@ -123,8 +123,8 @@ Guard:
 - sale tidak boleh tersimpan jika stok tersedia tidak cukup;
 - item bervarian wajib validasi varian yang benar;
 - create sale, mutasi stok keluar, inventory log, dan income awal `Selesai` harus berada dalam transaction;
-- cancel hanya boleh dari `Diproses`/`Dikirim`, membaca status terbaru, menulis `stockRevertedAt`, dan menolak retry agar stok tidak double revert;
-- sales `Selesai` tidak boleh dibatalkan langsung; gunakan retur/refund terpisah agar income dan stok tetap auditable.
+- cancel Sales tidak menjadi flow user-facing; barang kembali/pembeli batal setelah transaksi tercatat wajib lewat Return;
+- data legacy `Dibatalkan` atau `stockRevertedAt` hanya compatibility/audit dan tidak boleh dihidupkan ulang tanpa approval guarded terpisah.
 
 ### Purchase Expense Metadata
 ```text
@@ -178,11 +178,14 @@ Guard:
 ### Dashboard Read-only Map
 ```text
 Dashboard
--> reads only: sales, stock, planning, PO, work log, payroll, expenses/incomes/revenues, inventory logs
+-> `Dashboard.jsx` calls only `readDashboardData()` from `src/services/Dashboard/dashboardService.js`
+-> service reads only: sales, stock, planning, PO, work log, payroll, expenses/incomes/revenues, inventory logs
+-> service builds read model internally: low stock, stock audit, Restock Assistant, merged Work Log/Payroll, mapped incomes/revenues, normalized planning summary
 -> compact control center: KPI, quick actions, data alerts, priorities, production focus, stock, finance, activity
 -> no write
--> last updated + muat ulang summary only
+-> last updated + guarded Muat Ulang summary only
 -> quick actions are Link/navigation only
+-> dashboardService helper snapshot/restock lookup are internal, not page API
 ```
 
 Dashboard tidak boleh menjadi sumber transaksi. Semua action Dashboard hanya navigasi ke modul terkait. KPI Sales adalah monitoring omzet dari `sales`, sedangkan cash resmi tetap dari `revenues`/`incomes` dan `expenses`; jangan double count ke Profit Loss.
@@ -490,7 +493,7 @@ Batas integrasi:
 - Purchases, Sales, Returns, Production, Payroll, Dashboard, dan Reports tidak ikut diubah saat task hanya Stock Management.
 
 ### Integrasi Satuan Qty Inventory Log
-- Writer aktif `purchase_in`, `sale`, `sale_cancel_revert`, `return_in`, `stock_adjustment`, `production_material_out`, dan `production_output_in` harus membawa `stockUnit`/`unit` jika source item atau line transaksi memilikinya.
+- Writer aktif `purchase_in`, `sale`, `return_in`, `stock_adjustment`, `production_material_out`, dan `production_output_in` harus membawa `stockUnit`/`unit` jika source item atau line transaksi memilikinya. Log legacy `sale_cancel_revert` hanya dibaca untuk compatibility/audit data lama, bukan writer aktif baru.
 - Stock Management hanya membaca metadata satuan tersebut untuk display Qty; tidak menghitung ulang stok historis dan tidak memakai satuan untuk mutasi.
 - Data lama tanpa satuan tetap kompatibel dan tidak wajib dimigrasi.
 - Satuan panjang mengikuti operasional stok per `meter`; jangan memperkenalkan `cm` tanpa keputusan business rule baru.
@@ -511,10 +514,10 @@ Supplier
 
 ```text
 Dashboard Restock Assistant
--> reads products + raw_materials to find low stock rows
+-> dashboardService reads products + raw_materials + semi_finished_materials to build low stock rows and stock audit rows
 -> reads recent inventory_logs with limit for activity feed
 -> reads purchases only for low-stock material IDs shown in Restock Assistant
--> builds restock navigation/prefill hints
+-> dashboardService builds dashboardData/read model including low stock rows, stock audit rows, restock hints, merged Work Log/Payroll, and normalized planning summary; Dashboard.jsx renders compact UI only
 -> remains read-only and does not create purchase or mutate stock/cash
 ```
 
@@ -529,7 +532,7 @@ Raw Material Detail
 
 Guard:
 - Lookup purchase ringan hanya untuk ringkasan/restock helper, bukan source histori lengkap.
-- Jangan limit Dashboard summary penting jika limit bisa menyembunyikan PO, payroll, expense, atau status produksi aktif.
+- Jangan limit Dashboard summary penting jika limit bisa menyembunyikan PO, payroll, expense, status produksi aktif, atau stok kritis. Optimasi read model harus task terpisah.
 - Jika butuh histori penuh atau presisi lintas data lama, gunakan laporan atau buat service/index khusus pada task terpisah.
 
 ## Integration Map Final Auth/User Management dan Firestore Rules — 2026-05-01
@@ -708,16 +711,17 @@ Sales status Selesai
 ```
 
 ```text
-Sales status Dibatalkan
--> kept as transaction record for audit
+Sales legacy status Dibatalkan
+-> kept as transaction record for audit/compatibility only
 -> excluded from pending income
 -> excluded from official income
+-> tidak menjadi flow aktif atau aksi user baru
 ```
 
 Guard integrasi:
 - Sales Pemasukan Pending adalah derived UI value dari collection `sales`, bukan posting akuntansi.
 - Cash In tetap membaca `revenues + incomes` sebagai pemasukan resmi.
-- Tombol Delete/Hapus tidak tampil di tabel Sales; aksi tidak jadi tetap melalui `Batalkan` agar stock/audit trail tetap terlacak.
+- Tombol Batalkan/Delete/Hapus tidak tampil di tabel Sales; barang kembali/pembeli batal setelah transaksi tercatat wajib melalui Return agar stock/audit trail tetap terlacak.
 - Dropdown item/varian Sales disederhanakan secara UI; payload item, `collectionName`, `variantKey`, stock mutation, income timing, returns, dashboard, dan reports tidak berubah.
 
 ## Integrasi UI Table Compact — 2026-05-06
@@ -927,22 +931,26 @@ Inventory log harus memakai reference bisnis dari sumber transaksi, bukan Firest
 
 Catatan: Inventory log, export, dan audit teknis tetap boleh memakai kode internal master item, tetapi UI utama tidak boleh memaksa user mengisi atau melihat kode sebagai identitas utama.
 
-### Sales Cancel Idempotent Map — 2026-05-17
+### Sales No-Cancel Active Flow & Legacy Cancel Audit — 2026-05-17
 ```text
 Sales Diproses/Dikirim
--> user action: Batalkan
--> transaction reads latest sales
--> guard allowed transition + no stockRevertedAt/cancelledAt + no deterministic/legacy cancel log
--> reads latest item stock master/variant and blocks mismatched variant snapshot
--> stock revert
--> inventory_logs sale_cancel_revert
--> sales.status = Dibatalkan + cancelledAt + stockRevertedAt
+-> user action aktif: Dikirim atau Selesai sesuai status
+-> tidak ada tombol Batalkan/Delete/Hapus
+-> barang kembali/pembeli batal setelah transaksi tercatat
+-> create Return
+-> inventory_logs return_in
+```
+
+```text
+Legacy Sales Dibatalkan / sale_cancel_revert
+-> hanya dibaca untuk compatibility dan Data Quality Audit
+-> tidak menjadi writer aktif baru
+-> tidak boleh masuk pending income atau official income
 ```
 
 Guard:
-- Jangan menyediakan create status `Dibatalkan`; pembatalan wajib action transition.
-- Jangan revert stok sebelum status update di luar transaction.
-- Jangan hapus marker `stockRevertedAt`/`cancelledAt` karena itu idempotency guard.
+- Jangan menyediakan create status `Dibatalkan` atau action `Batalkan` dari Sales tanpa approval guarded terpisah.
+- Jangan revert stok dari Sales; stok kembali wajib lewat Return agar dokumen retur dan audit `return_in` lengkap.
 - Search/display Sales harus membedakan kode internal `ORD-*` dari `externalReferenceNumber` marketplace/resi.
 - Legacy guard income/cancel harus mencocokkan `relatedId`, `saleId`, `referenceId`, `sourceRef`, `referenceCode`, `referenceNumber`, dan `details.*` agar data lama tidak lolos sebagai transaksi baru.
 - Submit create Sales wajib punya lock agar double-click tidak membuat order/stok dobel.
@@ -984,3 +992,47 @@ Guard:
 - Constants boleh re-export `toOptionMap` sementara untuk legacy import compatibility.
 - Helper ini hanya untuk enum/display map `{ value, label }`; jangan dipakai untuk mapping collection, route, role guard, stock status mutation, payroll posting, atau data migration.
 - Jangan membuat helper map lain di constants baru jika `toOptionMap()` sudah cukup.
+
+
+## Update 2026-05-23 — Batch 8 Inventory Log Metadata Helper
+
+Sales, Returns, dan Purchases tetap punya service transaksi masing-masing, tetapi metadata audit inventory log yang berulang sekarang distandarkan melalui helper kecil di `src/services/Inventory/inventoryLogService.js`:
+
+```text
+Transaksi service
+-> buildInventoryLogReferenceFields()
+-> resolveInventoryStockUnit() jika unit butuh fallback item/collection
+-> buildInventoryLogUnitFields()
+-> buildInventoryLogVariantFields()
+-> buildInventoryLogPayload()
+-> inventory_logs
+```
+
+Batas guard:
+- helper ini hanya menyusun metadata `referenceId`, `referenceNumber`, `referenceCode`, `sourceRef`, `referenceType`, `unit`, `stockUnit`, `variantKey`, `variantLabel`, dan `stockSourceType`; resolver unit hanya fallback display/audit dan tidak mengubah qty/konversi stok;
+- tidak mengubah collection, schema, document ID, quantityChange, stock mutation, average cost, income, expense, Return flow, OCR, Production, Payroll, HPP, route, menu, role guard, atau reset destructive;
+- writer log produksi, stock adjustment, dan legacy reader tetap kompatibel karena `buildInventoryLogPayload()` masih menyimpan `extraData` di top-level dan `details`.
+
+## Batch 8D — Purchases Listener Service dan Return Submit Lock
+
+```text
+Purchases.jsx
+  -> listenPurchaseRecords()
+  -> listenPurchaseProducts()
+  -> listenPurchaseRawMaterials()
+  -> createPurchaseTransaction()
+```
+
+- Listener live data Purchases, Products, dan Raw Materials untuk halaman Purchases berada di `src/services/Transaksi/purchasesService.js`.
+- Page Purchases tetap memakai `listenSupplierCatalog()` dari Supplier service untuk katalog supplier/restock.
+- Create Purchase tetap melalui `createPurchaseTransaction()` dan tetap membuat purchase document, stock in, inventory log, dan expense otomatis dalam transaction yang sama.
+- OCR Purchases tetap berada di UI/parser existing dan tidak menjadi bagian dari listener extraction.
+
+```text
+Returns.jsx
+  -> UI submit lock penuh saat isSubmittingReturn
+  -> createReturnTransaction()
+```
+
+- Modal Return mengunci OK/Batal saat submit berjalan agar user tidak mereset/menutup form ketika transaction return masih diproses.
+- Return transaction tetap berada di `returnsService.js` dan tetap menulis return document, stock in, dan inventory log bersama.

@@ -31,13 +31,17 @@ import {
   PAYROLL_STATUS_MAP,
   getCompactPayrollStatusTags,
 } from "../../constants/productionPayrollOptions";
-import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
+import {
+  getAllProductionPayrolls,
+  getProductionPayrollsByDateRange,
+} from "../../services/Produksi/productionPayrollsService";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
+import { normalizeReportDateRange } from "../../utils/reports/reportDateRange";
 
 const { RangePicker } = DatePicker;
 
@@ -178,7 +182,13 @@ const PayrollReport = () => {
     const loadPayrollReport = async () => {
       try {
         setLoading(true);
-        const result = await getAllProductionPayrolls();
+        const dateRangeBounds = normalizeReportDateRange(dateRange);
+        const result = dateRangeBounds
+          ? await getProductionPayrollsByDateRange({
+              startDate: dateRangeBounds.startDate,
+              endDateExclusive: dateRangeBounds.endDateExclusive,
+            })
+          : await getAllProductionPayrolls();
         setPayrolls(result);
       } catch (error) {
         console.error(error);
@@ -189,7 +199,7 @@ const PayrollReport = () => {
     };
 
     loadPayrollReport();
-  }, []);
+  }, [dateRange]);
 
   const operatorOptions = useMemo(() => {
     const names = Array.from(new Set(payrolls.map((item) => item.workerName).filter(Boolean)));

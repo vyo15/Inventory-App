@@ -12,27 +12,25 @@ import {
   Tooltip,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
-import { collection, doc, onSnapshot, runTransaction, Timestamp } from "firebase/firestore";
 import dayjs from "dayjs";
-import { db } from "../../firebase";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import {
-  buildInventoryLogPayload,
-  INVENTORY_LOG_COLLECTION,
-} from "../../services/Inventory/inventoryLogService";
-import {
-  applyStockMutationToItem,
   buildVariantOptionsFromItem,
   findVariantByKey,
   getItemStockSnapshot,
   inferHasVariants,
 } from "../../utils/variants/variantStockHelpers";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
-import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
+import {
+  createReturnTransaction,
+  listenReturnProducts,
+  listenReturnRawMaterials,
+  listenReturnRecords,
+} from "../../services/Transaksi/returnsService";
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -97,14 +95,8 @@ const Returns = () => {
   // SECTION: Live Data Subscription
   // =========================
   useEffect(() => {
-    const unsubscribeReturns = onSnapshot(
-      collection(db, "returns"),
-      (snapshot) => {
-        const nextReturnRecords = snapshot.docs.map((documentItem) => ({
-          id: documentItem.id,
-          ...documentItem.data(),
-        }));
-
+    const unsubscribeReturns = listenReturnRecords(
+      (nextReturnRecords) => {
         setReturnRecords(nextReturnRecords);
         setLoadError("");
         setIsLoading(false);
@@ -118,14 +110,8 @@ const Returns = () => {
       },
     );
 
-    const unsubscribeProducts = onSnapshot(
-      collection(db, "products"),
-      (snapshot) => {
-        const nextProducts = snapshot.docs.map((documentItem) => ({
-          id: documentItem.id,
-          ...documentItem.data(),
-        }));
-
+    const unsubscribeProducts = listenReturnProducts(
+      (nextProducts) => {
         setProducts(nextProducts);
       },
       (error) => {
@@ -134,14 +120,8 @@ const Returns = () => {
       },
     );
 
-    const unsubscribeMaterials = onSnapshot(
-      collection(db, "raw_materials"),
-      (snapshot) => {
-        const nextMaterials = snapshot.docs.map((documentItem) => ({
-          id: documentItem.id,
-          ...documentItem.data(),
-        }));
-
+    const unsubscribeMaterials = listenReturnRawMaterials(
+      (nextMaterials) => {
         setMaterials(nextMaterials);
       },
       (error) => {
@@ -189,8 +169,8 @@ const Returns = () => {
   // - tidak memakai addInventoryLog/updateInventoryStock langsung agar tidak ada stok berubah tanpa audit log.
   // LEGACY:
   // - flow lama melakukan update stok lebih dulu, lalu addDoc returns, lalu addInventoryLog; jika addDoc/log gagal, stok bisa sudah berubah.
-  // CLEANUP CANDIDATE:
-  // - jika nanti ada service khusus retur, orkestrasi transaction ini bisa dipindah dari page ke service tanpa mengubah business rule.
+  // AKTIF:
+  // - orkestrasi transaction retur sudah dipindah ke returnsService; page hanya mengirim payload form dan menampilkan hasil.
   // =========================
   const handleSubmitReturn = async (values) => {
     if (isSubmittingReturn) return;
@@ -198,195 +178,9 @@ const Returns = () => {
     setIsSubmittingReturn(true);
 
     try {
-      const { type, itemId, quantity, date, note, variantKey } = values;
-      const collectionName = type === "product" ? "products" : "raw_materials";
-      const normalizedQuantity = Number(quantity || 0);
-      const normalizedNote = String(note || "").trim();
-
-      // =========================
-      // SECTION: Validasi awal sebelum write pertama
-      // AKTIF + GUARDED:
-      // - memastikan data wajib valid sebelum Firestore transaction dibuat;
-      // - menjaga retur tidak menghasilkan dokumen/log/stok dengan item, tanggal, atau qty kosong;
-      // - validasi ini tidak mengubah business rule retur, hanya mencegah partial write dan data rusak.
-      // =========================
-      if (!type || !["product", "material"].includes(type)) {
-        message.error("Jenis item retur tidak valid.");
-        return;
-      }
-
-      if (!itemId) {
-        message.error("Item retur wajib dipilih.");
-        return;
-      }
-
-      if (!Number.isFinite(normalizedQuantity) || normalizedQuantity <= 0) {
-        message.error("Jumlah retur harus lebih dari 0.");
-        return;
-      }
-
-      if (!date?.toDate || !dayjs(date.toDate()).isValid()) {
-        message.error("Tanggal retur tidak valid.");
-        return;
-      }
-
-      const item = allItems.find((sourceItem) => sourceItem.id === itemId);
-
-      if (!item) {
-        message.error("Item tidak ditemukan");
-        return;
-      }
-
-      if (inferHasVariants(item) && !variantKey) {
-        message.error("Pilih varian item terlebih dahulu agar retur masuk ke stok varian yang benar.");
-        return;
-      }
-
-      const returnTimestamp = Timestamp.fromDate(date.toDate());
-      const returnNumber = await generateDailySequenceCode({
-        db,
-        collectionName: "returns",
-        fieldNames: ["returnNumber", "code", "referenceNumber", "sourceRef"],
-        prefix: "RET",
-        date: date.toDate(),
-      });
-      /* =====================================================
-      SECTION: Return reference document ID — GUARDED
-      Fungsi:
-      - Membuat document reference return baru memakai RET-DDMMYYYY-001 sebagai ID.
-
-      Dipakai oleh:
-      - handleSubmitReturn sebelum transaction retur.
-
-      Alasan perubahan:
-      - Return baru perlu reference audit yang sama antara document ID, returnNumber, dan inventory log.
-
-      Catatan cleanup:
-      - Data retur lama dengan random ID tetap compatibility.
-
-      Risiko:
-      - Jangan mengubah return stock mutation atau inventory log payload selain reference code.
-      ===================================================== */
-      const returnReference = doc(db, "returns", returnNumber);
-      const itemReference = doc(db, collectionName, itemId);
-      const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
-
-      await runTransaction(db, async (transaction) => {
-        const returnSnapshot = await transaction.get(returnReference);
-        const itemDocument = await transaction.get(itemReference);
-
-        // IMS NOTE [GUARDED] - collision guard kode RET scan-based.
-        // Fungsi: mencegah transaction retur menimpa dokumen lama jika nomor bisnis sudah dipakai.
-        if (returnSnapshot.exists()) {
-          throw new Error(`Nomor retur ${returnNumber} sudah dipakai. Muat ulang data lalu simpan kembali.`);
-        }
-
-        if (!itemDocument.exists()) {
-          throw new Error("Item stok tidak ditemukan. Retur dibatalkan agar stok dan log tidak partial.");
-        }
-
-        const latestItem = {
-          id: itemDocument.id,
-          ...itemDocument.data(),
-        };
-        const latestItemName = latestItem?.name || item?.name || "Item tanpa nama";
-        const latestItemHasVariants = inferHasVariants(latestItem);
-        const selectedVariant = latestItemHasVariants
-          ? findVariantByKey(latestItem, variantKey)
-          : null;
-
-        // =========================
-        // SECTION: Validasi ulang varian di dalam transaction
-        // AKTIF + GUARDED:
-        // - membaca item terbaru dari Firestore, bukan hanya state UI;
-        // - mencegah retur masuk ke master/default ketika item sebenarnya bervarian;
-        // - menjaga stock/currentStock/availableStock varian tetap sinkron lewat helper final.
-        // =========================
-        if (latestItemHasVariants && !variantKey) {
-          throw new Error("Item memiliki varian. Pilih varian agar stok retur masuk ke sumber yang benar.");
-        }
-
-        if (latestItemHasVariants && !selectedVariant) {
-          throw new Error("Varian item tidak ditemukan. Retur dibatalkan agar stok tidak masuk ke master/default.");
-        }
-
-        const stockSnapshotBefore = selectedVariant
-          ? getItemStockSnapshot(selectedVariant)
-          : getItemStockSnapshot(latestItem);
-        const stockUpdatePayload = applyStockMutationToItem({
-          item: latestItem,
-          variantKey: selectedVariant?.variantKey || "",
-          deltaCurrent: normalizedQuantity,
-        });
-        const currentStockAfter = stockSnapshotBefore.currentStock + normalizedQuantity;
-        const availableStockAfter = currentStockAfter - stockSnapshotBefore.reservedStock;
-        const variantPayload = {
-          variantKey: selectedVariant?.variantKey || "",
-          variantLabel: selectedVariant?.variantLabel || "",
-          stockSourceType: selectedVariant ? "variant" : "master",
-        };
-        const stockUnit =
-          latestItem.stockUnit ||
-          latestItem.unit ||
-          latestItem.baseUnit ||
-          (collectionName === "products" ? "pcs" : "");
-
-        // =========================
-        // SECTION: Commit atomik retur + stok + inventory log
-        // AKTIF + GUARDED:
-        // - ketiga write ini berada dalam satu Firestore transaction;
-        // - jika salah satu gagal, tidak ada stok berubah tanpa dokumen retur/log;
-        // - inventory log memakai buildInventoryLogPayload agar schema audit sama dengan writer aktif lain.
-        // =========================
-        transaction.set(returnReference, {
-          returnNumber,
-          code: returnNumber,
-          referenceNumber: returnNumber,
-          sourceRef: returnNumber,
-          type,
-          itemId,
-          itemName: latestItemName,
-          quantity: normalizedQuantity,
-          unit: stockUnit,
-          stockUnit,
-          note: normalizedNote,
-          date: returnTimestamp,
-          ...variantPayload,
-        });
-
-        transaction.update(itemReference, stockUpdatePayload);
-
-        transaction.set(
-          inventoryLogReference,
-          buildInventoryLogPayload({
-            itemId,
-            itemName: latestItemName,
-            quantityChange: normalizedQuantity,
-            type: "return_in",
-            collectionName,
-            timestamp: Timestamp.now(),
-            extraData: {
-              returnId: returnReference.id,
-              returnNumber,
-              referenceId: returnReference.id,
-              referenceNumber: returnNumber,
-              referenceCode: returnNumber,
-              referenceType: "return",
-              unit: stockUnit,
-              stockUnit,
-              note: normalizedNote,
-              currentStockBefore: stockSnapshotBefore.currentStock,
-              currentStockAfter,
-              previousStock: stockSnapshotBefore.currentStock,
-              newStock: currentStockAfter,
-              reservedStockBefore: stockSnapshotBefore.reservedStock,
-              reservedStockAfter: stockSnapshotBefore.reservedStock,
-              availableStockBefore: stockSnapshotBefore.availableStock,
-              availableStockAfter,
-              ...variantPayload,
-            },
-          }),
-        );
+      await createReturnTransaction({
+        values,
+        allItems,
       });
 
       message.success("Retur berhasil ditambahkan!");
@@ -555,8 +349,14 @@ const Returns = () => {
         title="Tambah Retur"
         open={isModalOpen}
         onOk={form.submit}
-        onCancel={resetReturnFormState}
+        onCancel={() => {
+          if (!isSubmittingReturn) {
+            resetReturnFormState();
+          }
+        }}
         confirmLoading={isSubmittingReturn}
+        okButtonProps={{ disabled: isSubmittingReturn }}
+        cancelButtonProps={{ disabled: isSubmittingReturn }}
         okText="Simpan"
         cancelText="Batal"
         width={720}
