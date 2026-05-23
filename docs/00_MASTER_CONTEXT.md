@@ -211,12 +211,12 @@ Status cleanup bertahap yang dikunci di docs:
 - **Aktif:** Referensi ID bisnis manusiawi adalah acuan utama untuk audit, pencarian, relasi operasional, table, detail, drawer, report UI, dan export yang dibaca user.
 - **Guarded:** Technical ID tidak boleh tampil di UI, tooltip, table, detail, drawer, report UI, atau fallback text. Jika referensi bisnis belum tersedia, UI wajib menampilkan fallback manusiawi seperti `-` atau `Referensi belum tersedia`, bukan Firestore random ID.
 - **Guarded:** Prioritas referensi audit adalah kode bisnis transaksi/master/produksi yang manusiawi, lalu `sourceRef` / `referenceNumber` readable, lalu fallback manusiawi. Jangan fallback ke Technical ID.
-- **Target setelah reset data:** untuk collection bisnis baru dengan pola 1 dokumen = 1 referensi, Firestore document ID boleh dan sebaiknya sama dengan Referensi ID bisnis, misalnya `purchases/PUR-YYYYMMDD-0001` atau `sales/ORDE-YYYYMMDD-0001`.
-- **Target setelah reset data:** untuk collection log yang bisa memiliki banyak dokumen per referensi, gunakan ID turunan readable seperti `LOG-PUR-YYYYMMDD-0001-001`, bukan random ID.
+- **Target setelah reset data:** untuk collection bisnis baru dengan pola 1 dokumen = 1 referensi, Firestore document ID boleh dan sebaiknya sama dengan Referensi ID bisnis, misalnya `purchases/PUR-DDMMYYYY-001` atau `sales/ORD-DDMMYYYY-001`.
+- **Target setelah reset data:** untuk collection log yang bisa memiliki banyak dokumen per referensi, gunakan ID turunan readable seperti `LOG-PUR-DDMMYYYY-001-001`, bukan random ID.
 - **Guarded:** kode audit yang sudah dipakai harus immutable. Edit nama/ref tidak boleh otomatis mengubah kode audit lama tanpa approval migrasi.
-- **Standar kode manusiawi:** jangan pakai mapping manual kata-per-kata atau dictionary singkatan per modul. Satu algoritma universal berbasis normalisasi + konsonan harus menjadi standar.
+- **Standar kode manusiawi:** jangan pakai mapping manual kata-per-kata atau dictionary singkatan per modul. Gunakan prefix modul yang disetujui + sequence shared; jangan membuat dictionary singkatan kata per modul di page/service.
 - **Source of truth:** satu shared generator yang disetujui harus menjadi sumber kode manusiawi lintas modul. Page/service tidak boleh membuat generator baru atau duplicate logic.
-- **Current state note:** source terbaru masih perlu audit karena generator seperti `businessCodeGenerator.js` dan `productionCodeGenerator.js` masih memiliki mapping manual kata tertentu. Patch docs ini hanya mengunci standar baru; refactor source harus menjadi task terpisah.
+- **Current state note:** source terbaru sudah memakai `businessCodeGenerator.js` sebagai source of truth utama dan `productionCodeGenerator.js` hanya wrapper compatibility. Cleanup lanjutan tetap guarded untuk strategi counter/ID log readable, bukan untuk membuat generator baru.
 
 ## Testing & Reset Center — 2026-05-16
 - **Aktif:** Reset & Maintenance Data diarahkan menjadi Testing & Reset Center, bukan daftar tombol reset teknis.

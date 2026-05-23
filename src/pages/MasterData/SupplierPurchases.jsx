@@ -27,7 +27,7 @@ import {
   EyeOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { collection, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc, limit as firestoreLimit, orderBy, query } from 'firebase/firestore';
+import { collection, updateDoc, deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp, limit as firestoreLimit, orderBy, query } from 'firebase/firestore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
 import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
@@ -49,8 +49,11 @@ import {
   isValidSupplierCodeFormat,
   listenSuppliers,
   normalizeSupplierCode,
-  resolveSupplierCode,
 } from '../../services/MasterData/suppliersService';
+import {
+  getDailyBusinessCodeSequence,
+  prepareDailySequenceCodeInTransaction,
+} from '../../utils/references/businessCodeGenerator';
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -508,13 +511,41 @@ const SupplierPurchases = () => {
             Risiko:
             - Mengubah flow ini dapat merusak linkage Purchases/Raw Material yang membaca supplier dari supplierPurchases.
         ===================================================== */
-        const finalCode = await resolveSupplierCode(values, null);
-        await assertSupplierCodeAvailable(finalCode, null);
-        const payload = buildSupplierPayload({ ...values, code: finalCode, supplierCode: finalCode });
+        const baselineCode = await generateSupplierCode(values, null);
+        const baselineSequence = getDailyBusinessCodeSequence({
+          code: baselineCode,
+          prefix: 'SUP',
+          date: new Date(),
+        });
+        await runTransaction(db, async (transaction) => {
+          const codeReservation = await prepareDailySequenceCodeInTransaction({
+            transaction,
+            db,
+            collectionName: 'supplierPurchases',
+            prefix: 'SUP',
+            date: new Date(),
+            minimumSequence: Math.max(baselineSequence - 1, 0),
+          });
+          const finalCode = codeReservation.code;
 
-        await setDoc(doc(db, 'supplierPurchases', finalCode), {
-          ...payload,
-          createdAt: serverTimestamp(),
+          if (!isValidSupplierCodeFormat(finalCode)) {
+            throw { type: 'validation', errors: { code: 'Kode supplier otomatis belum valid' } };
+          }
+
+          const supplierRef = doc(db, 'supplierPurchases', finalCode);
+          const existingSnapshot = await transaction.get(supplierRef);
+
+          if (existingSnapshot.exists()) {
+            throw { type: 'validation', errors: { code: 'Kode supplier sudah digunakan' } };
+          }
+
+          const payload = buildSupplierPayload({ ...values, code: finalCode, supplierCode: finalCode });
+
+          codeReservation.commit();
+          transaction.set(supplierRef, {
+            ...payload,
+            createdAt: serverTimestamp(),
+          });
         });
         message.success('Supplier berhasil ditambahkan.');
       }

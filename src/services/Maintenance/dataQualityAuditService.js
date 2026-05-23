@@ -170,6 +170,97 @@ const getSalesLinkedKeys = (data = {}, docId = "") => getUniqueReferenceKeys([
   data.details?.saleNumber,
 ]);
 
+const getPurchaseIdentityKeys = (data = {}, docId = "") => getUniqueReferenceKeys([
+  docId,
+  data.id,
+  data.purchaseId,
+  data.relatedPurchaseId,
+  data.referenceId,
+  data.sourceId,
+  data.sourceRef,
+  data.referenceCode,
+  data.referenceNumber,
+  data.purchaseNumber,
+  data.code,
+]);
+
+const getPurchaseLinkedKeys = (data = {}, docId = "") => getUniqueReferenceKeys([
+  docId,
+  data.relatedId,
+  data.purchaseId,
+  data.relatedPurchaseId,
+  data.referenceId,
+  data.sourceId,
+  data.sourceRef,
+  data.referenceCode,
+  data.referenceNumber,
+  data.purchaseNumber,
+  data.code,
+  data.details?.relatedId,
+  data.details?.purchaseId,
+  data.details?.relatedPurchaseId,
+  data.details?.referenceId,
+  data.details?.sourceId,
+  data.details?.sourceRef,
+  data.details?.referenceCode,
+  data.details?.referenceNumber,
+  data.details?.purchaseNumber,
+]);
+
+const getReturnIdentityKeys = (data = {}, docId = "") => getUniqueReferenceKeys([
+  docId,
+  data.id,
+  data.returnId,
+  data.referenceId,
+  data.sourceId,
+  data.sourceRef,
+  data.referenceCode,
+  data.referenceNumber,
+  data.returnNumber,
+  data.code,
+]);
+
+const getReturnLinkedKeys = (data = {}, docId = "") => getUniqueReferenceKeys([
+  docId,
+  data.relatedId,
+  data.returnId,
+  data.referenceId,
+  data.sourceId,
+  data.sourceRef,
+  data.referenceCode,
+  data.referenceNumber,
+  data.returnNumber,
+  data.code,
+  data.details?.relatedId,
+  data.details?.returnId,
+  data.details?.referenceId,
+  data.details?.sourceId,
+  data.details?.sourceRef,
+  data.details?.referenceCode,
+  data.details?.referenceNumber,
+  data.details?.returnNumber,
+]);
+
+const hasPositiveTransactionQuantity = (data = {}) => (
+  toNumber(data.quantity ?? data.qty ?? data.totalStockIn ?? data.finalQuantity ?? data.stockInQty) > 0 ||
+  (Array.isArray(data.items) && data.items.some((line) => toNumber(line.quantity ?? line.qty) > 0))
+);
+
+const hasPositiveTransactionAmount = (data = {}) => toNumber(
+  data.totalActualPurchase ?? data.total ?? data.amount ?? data.grandTotal ?? data.subtotalItems,
+) > 0;
+
+const isPurchaseExpenseRecord = (data = {}) => {
+  const sourceModule = normalizeType(data.sourceModule || data.module || data.sourceType || data.type);
+  return Boolean(
+    safeTrim(data.relatedPurchaseId) ||
+    safeTrim(data.purchaseId) ||
+    safeTrim(data.details?.purchaseId) ||
+    sourceModule.includes("purchase") ||
+    sourceModule.includes("pembelian")
+  );
+};
+
 const pushUniqueMapRecord = (map, key, record) => {
   const normalizedKey = safeTrim(key);
   if (!normalizedKey) return;
@@ -255,14 +346,14 @@ const CATEGORY_CONFIGS = [
     recommendation: "Aman dibuat ulang jika data test",
   },
   {
-    key: "sales_cancel_stock_revert_conflict",
-    label: "Sales cancel/revert stok tidak sinkron",
-    recommendation: "Perlu cek manual sebelum lanjut transaksi",
+    key: "purchases_expense_missing",
+    label: "Purchase belum punya expense otomatis",
+    recommendation: "Perlu cek manual sebelum laporan kas/profit final",
   },
   {
-    key: "sales_cancel_income_conflict",
-    label: "Sales dibatalkan masih punya income",
-    recommendation: "Perlu cek manual sebelum laporan final",
+    key: "purchases_inventory_log_missing",
+    label: "Purchase belum punya inventory log purchase_in",
+    recommendation: "Perlu cek manual sebelum audit stok final",
   },
   {
     key: "sales_pending_income_conflict",
@@ -275,9 +366,19 @@ const CATEGORY_CONFIGS = [
     recommendation: "Perlu cek manual sebelum laporan final",
   },
   {
+    key: "sales_inventory_log_missing",
+    label: "Sales belum punya inventory log sale",
+    recommendation: "Perlu cek manual sebelum audit stok final",
+  },
+  {
     key: "returns_missing_ret",
     label: "Return tanpa kode RET",
     recommendation: "Aman dibuat ulang jika data test",
+  },
+  {
+    key: "returns_inventory_log_missing",
+    label: "Return belum punya inventory log return_in",
+    recommendation: "Perlu cek manual sebelum audit stok final",
   },
   {
     key: "cash_missing_cin_cout",
@@ -694,21 +795,6 @@ const hasUnclearSource = (data = {}) => {
   return !sourceModule || !sourceRef || looksLikeFirestoreId(sourceRef) || looksLikeFirestoreId(technicalRef);
 };
 
-const buildSalesStockBucketKey = (line = {}) => (
-  `${safeTrim(line.collectionName || line.details?.collectionName)}::${safeTrim(line.itemId || line.details?.itemId)}::${safeTrim(line.variantKey || line.details?.variantKey || "master")}`
-);
-
-const sumQuantityBySalesStockBucket = (lines = [], quantityGetter = (line) => line.quantity) => {
-  const quantityByBucket = new Map();
-
-  lines.forEach((line = {}) => {
-    const bucketKey = buildSalesStockBucketKey(line);
-    const quantity = Math.abs(toNumber(quantityGetter(line)));
-    quantityByBucket.set(bucketKey, toNumber(quantityByBucket.get(bucketKey)) + quantity);
-  });
-
-  return quantityByBucket;
-};
 
 export const getDataQualityAudit = async () => {
   const categories = createCategoryAccumulator();
@@ -769,16 +855,40 @@ export const getDataQualityAudit = async () => {
     });
   });
 
-  const cancelRevertLogsBySaleKey = new Map();
+  const saleInventoryLogsBySaleKey = new Map();
+  const purchaseInventoryLogsByPurchaseKey = new Map();
+  const returnInventoryLogsByReturnKey = new Map();
   (collectionMap.inventory_logs?.docs || []).forEach((itemDoc) => {
     const data = itemDoc.data();
     const logType = normalizeType(data.type || data.details?.type);
-
-    if (logType !== "sale_cancel_revert") return;
-
     const logRecord = { id: itemDoc.id, ...data };
-    getSalesLinkedKeys(data, "").forEach((saleKey) => {
-      pushUniqueMapRecord(cancelRevertLogsBySaleKey, saleKey, logRecord);
+
+    if (logType === "sale") {
+      getSalesLinkedKeys(data, "").forEach((saleKey) => pushUniqueMapRecord(saleInventoryLogsBySaleKey, saleKey, logRecord));
+      return;
+    }
+
+    if (logType === "purchase_in") {
+      getPurchaseLinkedKeys(data, "").forEach((purchaseKey) => pushUniqueMapRecord(purchaseInventoryLogsByPurchaseKey, purchaseKey, logRecord));
+      return;
+    }
+
+    if (logType === "return_in") {
+      getReturnLinkedKeys(data, "").forEach((returnKey) => pushUniqueMapRecord(returnInventoryLogsByReturnKey, returnKey, logRecord));
+      return;
+    }
+  });
+
+  const purchaseExpenseKeys = new Set();
+  (collectionMap.expenses?.docs || []).forEach((itemDoc) => {
+    const data = itemDoc.data();
+    if (!isPurchaseExpenseRecord(data)) return;
+    const deterministicPurchaseId = itemDoc.id.includes("__")
+      ? safeTrim(itemDoc.id.split("__").slice(1).join("__"))
+      : "";
+
+    getPurchaseLinkedKeys(data, deterministicPurchaseId).forEach((purchaseKey) => {
+      purchaseExpenseKeys.add(purchaseKey);
     });
   });
 
@@ -788,7 +898,6 @@ export const getDataQualityAudit = async () => {
     const saleItems = Array.isArray(data.items) ? data.items : [];
     const saleIdentityKeys = getSalesIdentityKeys(data, itemDoc.id);
     const hasSaleIncome = saleIdentityKeys.some((saleKey) => incomeSaleKeys.has(saleKey));
-    const cancelRevertLogs = getUniqueMapRecordsByKeys(cancelRevertLogsBySaleKey, saleIdentityKeys);
 
     if (!hasPrefix(data, ["ORD"], ["saleNumber", "code", "referenceNumber", "sourceRef"])) {
       addIssue(categories, "sales_missing_sal", toSample({
@@ -799,14 +908,6 @@ export const getDataQualityAudit = async () => {
       }));
     }
 
-    if (["Diproses", "Dikirim", "Selesai"].includes(status) && (data.stockRevertedAt || data.cancelledAt || cancelRevertLogs.length > 0)) {
-      addIssue(categories, "sales_cancel_stock_revert_conflict", toSample({
-        collectionName: "sales",
-        itemDoc,
-        issue: "Sales masih aktif/selesai tetapi sudah punya marker/log cancel revert stok.",
-        recommendation: categories.sales_cancel_stock_revert_conflict.recommendation,
-      }));
-    }
 
     if (["Diproses", "Dikirim"].includes(status) && hasSaleIncome) {
       addIssue(categories, "sales_pending_income_conflict", toSample({
@@ -826,65 +927,24 @@ export const getDataQualityAudit = async () => {
       }));
     }
 
-    if (status === "Dibatalkan" && hasSaleIncome) {
-      addIssue(categories, "sales_cancel_income_conflict", toSample({
+    const saleInventoryLogs = getUniqueMapRecordsByKeys(saleInventoryLogsBySaleKey, saleIdentityKeys);
+    if (["Diproses", "Dikirim", "Selesai"].includes(status) && saleItems.length > 0 && saleInventoryLogs.length === 0) {
+      addIssue(categories, "sales_inventory_log_missing", toSample({
         collectionName: "sales",
         itemDoc,
-        issue: "Sales berstatus Dibatalkan tetapi masih memiliki income resmi.",
-        recommendation: categories.sales_cancel_income_conflict.recommendation,
+        issue: "Sales aktif/selesai punya item tetapi tidak ditemukan inventory log type sale.",
+        recommendation: categories.sales_inventory_log_missing.recommendation,
       }));
     }
 
-    if (status === "Dibatalkan" && saleItems.length > 0 && !data.stockRevertedAt && cancelRevertLogs.length === 0) {
-      addIssue(categories, "sales_cancel_stock_revert_conflict", toSample({
-        collectionName: "sales",
-        itemDoc,
-        issue: "Sales Dibatalkan tidak punya marker stockRevertedAt dan tidak ditemukan log cancel revert. Ada risiko stok belum dikembalikan atau data dibuat lewat flow lama.",
-        recommendation: categories.sales_cancel_stock_revert_conflict.recommendation,
-      }));
-    }
-
-    if (status === "Dibatalkan" && data.stockRevertedAt && cancelRevertLogs.length === 0) {
-      addIssue(categories, "sales_cancel_stock_revert_conflict", toSample({
-        collectionName: "sales",
-        itemDoc,
-        issue: "Sales punya marker stockRevertedAt tetapi tidak ditemukan log cancel revert stok.",
-        recommendation: categories.sales_cancel_stock_revert_conflict.recommendation,
-      }));
-    }
-
-    if (status === "Dibatalkan" && saleItems.length > 0 && cancelRevertLogs.length > saleItems.length) {
-      addIssue(categories, "sales_cancel_stock_revert_conflict", toSample({
-        collectionName: "sales",
-        itemDoc,
-        issue: "Jumlah log cancel revert lebih banyak dari jumlah item sale. Ada indikasi stok pernah direvert dobel.",
-        recommendation: categories.sales_cancel_stock_revert_conflict.recommendation,
-      }));
-    }
-
-    if (status === "Dibatalkan" && saleItems.length > 0 && cancelRevertLogs.length > 0) {
-      const saleQuantityByBucket = sumQuantityBySalesStockBucket(saleItems);
-      const cancelQuantityByBucket = sumQuantityBySalesStockBucket(
-        cancelRevertLogs,
-        (line) => line.quantityChange ?? line.quantity ?? line.details?.quantityChange ?? line.details?.quantity,
-      );
-      const hasOverRevertedBucket = Array.from(cancelQuantityByBucket.entries()).some(([bucketKey, revertedQty]) => (
-        revertedQty > toNumber(saleQuantityByBucket.get(bucketKey))
-      ));
-
-      if (hasOverRevertedBucket) {
-        addIssue(categories, "sales_cancel_stock_revert_conflict", toSample({
-          collectionName: "sales",
-          itemDoc,
-          issue: "Qty log cancel revert lebih besar dari qty sale pada salah satu item/varian. Ada indikasi stok pernah direvert dobel.",
-          recommendation: categories.sales_cancel_stock_revert_conflict.recommendation,
-        }));
-      }
-    }
   });
 
   (collectionMap.purchases?.docs || []).forEach((itemDoc) => {
     const data = itemDoc.data();
+    const purchaseIdentityKeys = getPurchaseIdentityKeys(data, itemDoc.id);
+    const hasPurchaseExpense = purchaseIdentityKeys.some((purchaseKey) => purchaseExpenseKeys.has(purchaseKey));
+    const purchaseInventoryLogs = getUniqueMapRecordsByKeys(purchaseInventoryLogsByPurchaseKey, purchaseIdentityKeys);
+
     if (!hasPrefix(data, ["PUR"], ["purchaseNumber", "code", "referenceNumber", "sourceRef"])) {
       addIssue(categories, "purchases_missing_pur", toSample({
         collectionName: "purchases",
@@ -893,16 +953,46 @@ export const getDataQualityAudit = async () => {
         recommendation: categories.purchases_missing_pur.recommendation,
       }));
     }
+
+    if (hasPositiveTransactionAmount(data) && !hasPurchaseExpense) {
+      addIssue(categories, "purchases_expense_missing", toSample({
+        collectionName: "purchases",
+        itemDoc,
+        issue: "Purchase bernilai lebih dari 0 tetapi tidak ditemukan expense otomatis terkait.",
+        recommendation: categories.purchases_expense_missing.recommendation,
+      }));
+    }
+
+    if (hasPositiveTransactionQuantity(data) && purchaseInventoryLogs.length === 0) {
+      addIssue(categories, "purchases_inventory_log_missing", toSample({
+        collectionName: "purchases",
+        itemDoc,
+        issue: "Purchase punya qty/stock in tetapi tidak ditemukan inventory log type purchase_in.",
+        recommendation: categories.purchases_inventory_log_missing.recommendation,
+      }));
+    }
   });
 
   (collectionMap.returns?.docs || []).forEach((itemDoc) => {
     const data = itemDoc.data();
+    const returnIdentityKeys = getReturnIdentityKeys(data, itemDoc.id);
+    const returnInventoryLogs = getUniqueMapRecordsByKeys(returnInventoryLogsByReturnKey, returnIdentityKeys);
+
     if (!hasPrefix(data, ["RET"], ["returnNumber", "code", "referenceNumber", "sourceRef"])) {
       addIssue(categories, "returns_missing_ret", toSample({
         collectionName: "returns",
         itemDoc,
         issue: "Belum punya kode Return format RET.",
         recommendation: categories.returns_missing_ret.recommendation,
+      }));
+    }
+
+    if (hasPositiveTransactionQuantity(data) && returnInventoryLogs.length === 0) {
+      addIssue(categories, "returns_inventory_log_missing", toSample({
+        collectionName: "returns",
+        itemDoc,
+        issue: "Return punya qty tetapi tidak ditemukan inventory log type return_in.",
+        recommendation: categories.returns_inventory_log_missing.recommendation,
       }));
     }
   });
@@ -1281,6 +1371,137 @@ export const getDataQualityAudit = async () => {
     },
     skippedCollections,
     categories: categoriesResult,
+  };
+};
+
+
+const TRANSACTION_SIDE_EFFECT_REPAIR_META = {
+  sales_completed_income_missing: {
+    module: "sales",
+    targetCollection: "incomes",
+    actionLabel: "Preview income otomatis Sales",
+    riskLabel: "Guarded finance",
+    recommendation: "Jangan repair massal sebelum nominal, status Selesai, dan income existing dicek ulang.",
+  },
+  sales_inventory_log_missing: {
+    module: "sales",
+    targetCollection: "inventory_logs",
+    actionLabel: "Preview inventory log sale",
+    riskLabel: "Guarded stock log",
+    recommendation: "Jangan membuat inventory log sale sebelum dipastikan stok Sales memang sudah keluar.",
+  },
+  purchases_expense_missing: {
+    module: "purchases",
+    targetCollection: "expenses",
+    actionLabel: "Preview expense otomatis Purchase",
+    riskLabel: "Guarded finance",
+    recommendation: "Jangan repair massal sebelum amount, supplier, dan expense existing dicek ulang.",
+  },
+  purchases_inventory_log_missing: {
+    module: "purchases",
+    targetCollection: "inventory_logs",
+    actionLabel: "Preview inventory log purchase_in",
+    riskLabel: "Guarded stock log",
+    recommendation: "Jangan membuat inventory log purchase_in sebelum dipastikan stok Purchase memang sudah masuk.",
+  },
+  returns_inventory_log_missing: {
+    module: "returns",
+    targetCollection: "inventory_logs",
+    actionLabel: "Preview inventory log return_in",
+    riskLabel: "Guarded stock log",
+    recommendation: "Jangan membuat inventory log return_in sebelum dipastikan stok Return memang sudah masuk.",
+  },
+};
+
+const buildTransactionSideEffectPreviewRows = (auditResult = {}) => {
+  const rows = [];
+
+  (auditResult.categories || []).forEach((category) => {
+    const meta = TRANSACTION_SIDE_EFFECT_REPAIR_META[category.key];
+    if (!meta || !category.count) return;
+
+    (category.samples || []).forEach((sample) => {
+      rows.push({
+        key: `${category.key}:${sample.collectionName}:${sample.id}`,
+        categoryKey: category.key,
+        sourceCollection: sample.collectionName,
+        sourceId: sample.id,
+        sourceReference: sample.reference || sample.id,
+        sourceName: sample.name || sample.reference || sample.id,
+        targetCollection: meta.targetCollection,
+        actionLabel: meta.actionLabel,
+        module: meta.module,
+        riskLabel: meta.riskLabel,
+        issue: sample.issue || category.label,
+        recommendation: meta.recommendation || sample.recommendation || category.recommendation,
+        repairStatus: "preview_only",
+      });
+    });
+  });
+
+  return rows;
+};
+
+/*
+=====================================================
+SECTION: Preview repair side-effect transaksi — GUARDED / READ-ONLY
+Fungsi:
+- Mengubah hasil Data Quality Audit menjadi daftar kandidat repair side-effect
+  transaksi yang mudah direview sebelum tombol repair sungguhan dibuat.
+
+Dipakai oleh:
+- ResetMaintenanceData.jsx pada panel Repair Turunan Aman.
+
+Alasan perubahan:
+- Income, expense, dan inventory log adalah side-effect transaksi guarded.
+  Batch 18A hanya boleh membuat preview; write/repair aktual harus batch terpisah
+  dengan approval eksplisit, idempotency transaction, dan confirm keyword khusus.
+
+Risiko:
+- Jangan ubah fungsi ini menjadi write/backfill otomatis. Preview memakai sample
+  Data Quality Audit sehingga jumlah row sample bisa lebih kecil dari count total.
+=====================================================
+*/
+export const getTransactionSideEffectRepairPreview = async () => {
+  const auditResult = await getDataQualityAudit();
+  const targetCategories = auditResult.categories
+    .filter((category) => TRANSACTION_SIDE_EFFECT_REPAIR_META[category.key] && category.count > 0)
+    .map((category) => ({
+      key: category.key,
+      label: category.label,
+      count: category.count,
+      sampleCount: category.samples?.length || 0,
+      targetCollection: TRANSACTION_SIDE_EFFECT_REPAIR_META[category.key].targetCollection,
+      actionLabel: TRANSACTION_SIDE_EFFECT_REPAIR_META[category.key].actionLabel,
+    }));
+  const rows = buildTransactionSideEffectPreviewRows(auditResult);
+  const totalCandidateCount = targetCategories.reduce((sum, category) => sum + Number(category.count || 0), 0);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    sourceAuditGeneratedAt: auditResult.generatedAt,
+    rows,
+    categories: targetCategories,
+    summary: {
+      checkedRecords: auditResult.summary?.checkedRecords || 0,
+      totalCandidateCount,
+      samplePreviewCount: rows.length,
+      categoriesWithCandidates: targetCategories.length,
+      incomeCandidateCount: targetCategories
+        .filter((category) => category.targetCollection === "incomes")
+        .reduce((sum, category) => sum + Number(category.count || 0), 0),
+      expenseCandidateCount: targetCategories
+        .filter((category) => category.targetCollection === "expenses")
+        .reduce((sum, category) => sum + Number(category.count || 0), 0),
+      inventoryLogCandidateCount: targetCategories
+        .filter((category) => category.targetCollection === "inventory_logs")
+        .reduce((sum, category) => sum + Number(category.count || 0), 0),
+      executablePlanCount: 0,
+      manualReviewCount: totalCandidateCount,
+    },
+    message: totalCandidateCount
+      ? `${totalCandidateCount} kandidat side-effect transaksi perlu review guarded sebelum repair.`
+      : "Tidak ada kandidat side-effect transaksi dari Data Quality Audit.",
   };
 };
 

@@ -1,0 +1,9 @@
+src/pages/Utilities/hooks/useDataQualityAudit.js
+src/pages/Utilities/hooks/useLegacyDataAudit.js
+src/pages/Utilities/hooks/useMasterCodeMaintenance.js
+src/pages/Utilities/hooks/useProductionMaintenance.js
+src/pages/Utilities/hooks/useResetAuditOverview.js
+
+# Apply notes
+- Use the .patch file with git apply to include deletions automatically.
+- If copying files manually, delete every path listed in PATCH_DELETE_FILES.txt.

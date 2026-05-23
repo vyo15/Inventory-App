@@ -187,3 +187,191 @@ export const formatAffectedVariantStockSummary = (
 
   return `${prefix}: ${preview}${remainingCount > 0 ? ` +${formatNumberId(remainingCount)} lainnya` : ''}`;
 };
+const STOCK_READ_MODEL_SOURCE_TYPE_ALIASES = {
+  material: 'material',
+  raw_material: 'material',
+  raw_materials: 'material',
+  'bahan baku': 'material',
+  product: 'product',
+  products: 'product',
+  'produk jadi': 'product',
+  semi_finished: 'semi_finished',
+  semi_finished_material: 'semi_finished',
+  semi_finished_materials: 'semi_finished',
+  'semi finished': 'semi_finished',
+};
+
+const STOCK_READ_MODEL_SOURCE_CONFIG = {
+  material: {
+    typeLabel: 'Bahan Baku',
+    route: '/stock-management',
+  },
+  product: {
+    typeLabel: 'Produk Jadi',
+    route: '/stock-management',
+  },
+  semi_finished: {
+    typeLabel: 'Semi Finished',
+    route: '/produksi/semi-finished-materials',
+  },
+};
+
+export const normalizeStockReadModelSourceType = (sourceType = '', typeLabel = '') => {
+  const normalizedSource = String(sourceType || '').trim().toLowerCase();
+  const normalizedTypeLabel = String(typeLabel || '').trim().toLowerCase();
+
+  return (
+    STOCK_READ_MODEL_SOURCE_TYPE_ALIASES[normalizedSource] ||
+    STOCK_READ_MODEL_SOURCE_TYPE_ALIASES[normalizedTypeLabel] ||
+    'product'
+  );
+};
+
+export const getStockReadModelQuantities = (record = {}) => {
+  const currentStock = toNumber(record?.currentStock ?? record?.stock);
+  const reservedStock = toNumber(record?.reservedStock);
+  const calculatedAvailableStock = calculateAvailableStock(currentStock, reservedStock);
+  const availableStock = toNumber(record?.availableStock, calculatedAvailableStock);
+  const stock = toNumber(record?.stock, currentStock);
+
+  return {
+    stock,
+    currentStock,
+    reservedStock,
+    availableStock,
+  };
+};
+
+export const getStockReadModelStatusMeta = (
+  record = {},
+  {
+    sourceType = '',
+    threshold,
+    stockValue,
+  } = {},
+) => {
+  const safeStockValue = toNumber(stockValue);
+  const safeThreshold = toNumber(threshold);
+  const variantStatusMeta = getVariantAwareStockStatusMeta(record, {
+    sourceType,
+    threshold: safeThreshold,
+  });
+
+  if (variantStatusMeta?.label === 'Kosong') {
+    return {
+      status: 'empty',
+      reportStatus: 'Habis',
+      label: 'Kosong',
+      color: 'red',
+      alertType: 'error',
+      affectedVariants: variantStatusMeta.affectedVariants || [],
+    };
+  }
+
+  if (variantStatusMeta?.label === 'Stok Rendah') {
+    return {
+      status: 'low',
+      reportStatus: 'Kritis',
+      label: 'Menipis',
+      color: 'gold',
+      alertType: 'warning',
+      affectedVariants: variantStatusMeta.affectedVariants || [],
+    };
+  }
+
+  if (safeStockValue <= 0) {
+    return {
+      status: 'empty',
+      reportStatus: 'Habis',
+      label: 'Kosong',
+      color: 'red',
+      alertType: 'error',
+      affectedVariants: [],
+    };
+  }
+
+  if (safeThreshold > 0 && safeStockValue <= safeThreshold) {
+    return {
+      status: 'low',
+      reportStatus: 'Kritis',
+      label: 'Menipis',
+      color: 'gold',
+      alertType: 'warning',
+      affectedVariants: [],
+    };
+  }
+
+  return {
+    status: 'safe',
+    reportStatus: 'Normal',
+    label: 'Aman',
+    color: 'green',
+    alertType: 'success',
+    affectedVariants: [],
+  };
+};
+
+// =====================================================
+// ACTIVE / READ-ONLY - Stock item read model for Dashboard and Stock Report.
+// Fungsi:
+// - menyamakan sumber angka stok display: availableStock -> currentStock/stock fallback;
+// - menyamakan threshold master per entity: raw material minStock, product/semi finished minStockAlert;
+// - menjaga Dashboard dan Stock Report tidak punya comparator/status stok yang bercabang.
+// Hubungan flow:
+// - hanya mapper read-only dari dokumen master stok ke row UI/report;
+// - tidak menulis stock/currentStock/reservedStock/availableStock, inventory log, transaksi, produksi, payroll, HPP, atau schema.
+// Risiko:
+// - Jangan pindahkan mutasi stok atau validasi transaksi ke helper ini. Writer tetap memakai service/helper stok guarded.
+// =====================================================
+export const buildStockReadModelRow = (
+  record = {},
+  {
+    id,
+    sourceType = '',
+    typeLabel = '',
+    route = '',
+    unit = '',
+    name = '',
+    affectedVariantMaxItems = 3,
+  } = {},
+) => {
+  const resolvedSourceType = normalizeStockReadModelSourceType(sourceType, typeLabel);
+  const sourceConfig = STOCK_READ_MODEL_SOURCE_CONFIG[resolvedSourceType] || STOCK_READ_MODEL_SOURCE_CONFIG.product;
+  const resolvedTypeLabel = typeLabel || sourceConfig.typeLabel;
+  const quantities = getStockReadModelQuantities(record);
+  const minStockThreshold = resolveMasterLowStockThreshold(record, resolvedSourceType);
+  const unitDisplay = unit || record?.stockUnit || record?.unit || record?.baseUnit || 'pcs';
+  const displayName = name || record?.name || record?.productName || record?.materialName || '-';
+  const statusMeta = getStockReadModelStatusMeta(record, {
+    sourceType: resolvedSourceType,
+    threshold: minStockThreshold,
+    stockValue: quantities.availableStock,
+  });
+  const affectedVariantSummary = formatAffectedVariantStockSummary(record, {
+    sourceType: resolvedSourceType,
+    threshold: minStockThreshold,
+    unit: unitDisplay,
+    maxItems: affectedVariantMaxItems,
+  });
+
+  return {
+    ...record,
+    id: id || record?.id,
+    sourceType: resolvedSourceType,
+    type: resolvedTypeLabel,
+    to: route || sourceConfig.route,
+    name: displayName,
+    stock: quantities.stock,
+    currentStock: quantities.currentStock,
+    reservedStock: quantities.reservedStock,
+    availableStock: quantities.availableStock,
+    stockDisplay: quantities.availableStock,
+    minStockDisplay: minStockThreshold,
+    unitDisplay,
+    status: statusMeta.reportStatus,
+    statusMeta,
+    affectedVariantSummary,
+    affectedVariantEntries: statusMeta.affectedVariants || [],
+  };
+};
+

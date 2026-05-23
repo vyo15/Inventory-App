@@ -13,6 +13,7 @@ const ResetAutoDetectPanel = ({
   onLoadTransactionVariantAudit,
   auditOverviewRows,
   auditIssueRows,
+  dataQualityCategoryRows = [],
   renderCompactText,
 }) => (
   <Card title="Auto Detect Bug Data" size="small" extra={<Tag color={autoBugSummary.color}>{autoBugSummary.status}</Tag>}>
@@ -53,12 +54,28 @@ const ResetAutoDetectPanel = ({
         ]}
         scroll={{ x: 780 }}
       />
+      {dataQualityCategoryRows.length > 0 && (
+        <Table
+          className="app-data-table"
+          size="small"
+          title={() => "Detail Data Quality Audit"}
+          pagination={{ pageSize: 5, size: "small" }}
+          dataSource={dataQualityCategoryRows}
+          columns={[
+            { title: "Kategori", dataIndex: "categoryLabel", key: "categoryLabel", width: 220, render: (value) => renderCompactText(value, 210) },
+            { title: "Issue", dataIndex: "count", key: "count", width: 80, render: (value) => <Tag color="red">{value || 0}</Tag> },
+            { title: "Sample", dataIndex: "samplePreview", key: "samplePreview", render: (value) => renderCompactText(value, 520) },
+            { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 260, render: (value) => renderCompactText(value, 240) },
+          ]}
+          scroll={{ x: 980 }}
+        />
+      )}
       {auditIssueRows.length > 0 && (
         <Alert
           type="warning"
           showIcon
           message={`${autoBugSummary.issueCount} issue dan ${autoBugSummary.safeRepairCount} kandidat repair aman terdeteksi.`}
-          description="Gunakan ringkasan area dan Repair Turunan dulu sebelum reset destructive. Detail teknis lama sudah diringkas agar halaman tidak overcode."
+          description="Gunakan ringkasan area, detail kategori Data Quality, dan Repair Turunan dulu sebelum reset destructive. Sample audit hanya read-only dan tidak melakukan backfill otomatis."
         />
       )}
     </Space>

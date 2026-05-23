@@ -13,15 +13,18 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
   generateUniqueProductionSequentialCode,
+  prepareUniqueProductionSequentialCodeInTransaction,
   isProductionBusinessCodeExists,
 } from "../../utils/references/productionCodeGenerator";
+import {
+  getSequentialBusinessCodeSequence,
+} from "../../utils/references/businessCodeGenerator";
 import {
   calculateSemiFinishedTotalsFromVariants,
   normalizeSemiFinishedVariants,
@@ -611,44 +614,59 @@ export const createSemiFinishedMaterial = async (
   Risiko:
   - Jangan gunakan kode manual dari UI untuk create karena field utama harus otomatis.
   ===================================================== */
-  const normalizedCode = await generateSemiFinishedMaterialCode(values);
-  const isCodeExists = await isSemiFinishedMaterialCodeExists(normalizedCode);
+  const baselineCode = await generateSemiFinishedMaterialCode(values);
+  const baselineSequence = getSequentialBusinessCodeSequence({ code: baselineCode, prefix: "SFP" });
+  let createdId = "";
 
-  if (isCodeExists) {
-    throw {
-      type: "validation",
-      errors: {
-        code: "Kode semi finished sudah digunakan",
-      },
-    };
-  }
+  await runTransaction(db, async (transaction) => {
+    const codeReservation = await prepareUniqueProductionSequentialCodeInTransaction({
+      transaction,
+      db,
+      collectionName: COLLECTION_NAME,
+      prefix: "SFP",
+      minimumSequence: Math.max(baselineSequence - 1, 0),
+    });
+    const normalizedCode = codeReservation.code;
+    const resultRef = doc(db, COLLECTION_NAME, normalizedCode);
+    const existingSnapshot = await transaction.get(resultRef);
 
-  const payload = normalizeSemiFinishedCreatePayload(
-    { ...values, code: normalizedCode },
-    currentUser,
-    selectedProducts,
-  );
-  /* =====================================================
-  SECTION: Semi Finished document ID = business code — AKTIF
-  Fungsi:
-  - Menyimpan Semi Finished baru memakai document ID sama dengan kode SFP internal sequence.
+    if (existingSnapshot.exists()) {
+      throw {
+        type: "validation",
+        errors: {
+          code: "Kode semi finished sudah digunakan",
+        },
+      };
+    }
 
-  Dipakai oleh:
-  - createSemiFinishedMaterial.
+    const payload = normalizeSemiFinishedCreatePayload(
+      { ...values, code: normalizedCode },
+      currentUser,
+      selectedProducts,
+    );
+    /* =====================================================
+    SECTION: Semi Finished document ID = business code — AKTIF
+    Fungsi:
+    - Menyimpan Semi Finished baru memakai document ID sama dengan kode SFP internal sequence.
 
-  Alasan perubahan:
-  - Kode SFP final wajib otomatis dan data baru idealnya memakai business code sebagai ID.
+    Dipakai oleh:
+    - createSemiFinishedMaterial.
 
-  Catatan cleanup:
-  - Data lama/manual code tetap compatibility, tidak di-rename.
+    Alasan perubahan:
+    - Kode SFP final wajib otomatis dan data baru idealnya memakai business code sebagai ID.
 
-  Risiko:
-  - Jangan mengubah stok varian/output produksi dari section ini.
-  ===================================================== */
-  const resultRef = doc(db, COLLECTION_NAME, normalizedCode);
-  await setDoc(resultRef, payload);
+    Catatan cleanup:
+    - Data lama/manual code tetap compatibility, tidak di-rename.
 
-  return resultRef.id;
+    Risiko:
+    - Jangan mengubah stok varian/output produksi dari section ini.
+    ===================================================== */
+    codeReservation.commit();
+    transaction.set(resultRef, payload);
+    createdId = resultRef.id;
+  });
+
+  return createdId;
 };
 
 export const updateSemiFinishedMaterial = async (

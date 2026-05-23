@@ -1,14 +1,17 @@
 import {
   collection,
   doc,
-  onSnapshot,
   runTransaction,
   Timestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { formatCurrencyId as formatCurrencyIdr } from "../../utils/formatters/currencyId";
 import { formatNumberId } from "../../utils/formatters/numberId";
-import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
+import {
+  generateDailySequenceCode,
+  getDailyBusinessCodeSequence,
+  prepareDailySequenceCodeInTransaction,
+} from "../../utils/references/businessCodeGenerator";
 import {
   applyPurchaseToRawMaterial,
   enrichRawMaterialWithVariantTotals,
@@ -20,44 +23,13 @@ import {
 } from "../../utils/variants/variantStockHelpers";
 import {
   buildInventoryLogPayload,
-  buildInventoryLogReferenceFields,
-  buildInventoryLogUnitFields,
-  buildInventoryLogVariantFields,
   INVENTORY_LOG_COLLECTION,
-  resolveInventoryStockUnit,
 } from "../Inventory/inventoryLogService";
 import {
   getSupplierDisplayName,
   getSupplierReferenceId,
 } from "../MasterData/suppliersService";
 import { normalizePurchaseNoteText } from "../../utils/purchases/purchaseNoteDisplay";
-
-
-const mapSnapshotDocs = (snapshot) => snapshot.docs.map((documentItem) => ({
-  id: documentItem.id,
-  ...documentItem.data(),
-}));
-
-export const listenPurchaseRecords = (onNext, onError) =>
-  onSnapshot(
-    collection(db, "purchases"),
-    (snapshot) => onNext(mapSnapshotDocs(snapshot)),
-    onError,
-  );
-
-export const listenPurchaseProducts = (onNext, onError) =>
-  onSnapshot(
-    collection(db, "products"),
-    (snapshot) => onNext(mapSnapshotDocs(snapshot)),
-    onError,
-  );
-
-export const listenPurchaseRawMaterials = (onNext, onError) =>
-  onSnapshot(
-    collection(db, "raw_materials"),
-    (snapshot) => onNext(mapSnapshotDocs(snapshot)),
-    onError,
-  );
 
 export const PURCHASE_EXPENSE_SOURCE_MODULE = "purchases";
 export const PURCHASE_EXPENSE_SOURCE_TYPE = "auto_generated";
@@ -88,10 +60,7 @@ export const getPurchaseSavingMeta = (value) => {
   };
 };
 
-export const getPurchaseStockUnit = (item = {}) => resolveInventoryStockUnit({
-  item,
-  fallbackUnit: "pcs",
-});
+export const getPurchaseStockUnit = (item = {}) => item?.stockUnit || item?.unit || item?.baseUnit || "pcs";
 
 export const buildPurchaseExpenseDocumentId = (purchaseId) =>
   `${PURCHASE_EXPENSE_SOURCE_MODULE}__${String(purchaseId || "purchase").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
@@ -253,20 +222,35 @@ export const createPurchaseTransaction = async ({
   }
 
   const savingMeta = getPurchaseSavingMeta(normalizedPurchaseSaving);
-  const purchaseNumber = await generateDailySequenceCode({
+  const baselinePurchaseNumber = await generateDailySequenceCode({
     db,
     collectionName: "purchases",
     fieldNames: ["purchaseNumber", "code", "referenceNumber", "sourceRef"],
     prefix: "PUR",
     date: date.toDate(),
   });
-
-  const purchaseReference = doc(db, "purchases", purchaseNumber);
+  const baselineSequence = getDailyBusinessCodeSequence({
+    code: baselinePurchaseNumber,
+    prefix: "PUR",
+    date: date.toDate(),
+  });
   const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
-  const expenseReference = doc(db, "expenses", buildPurchaseExpenseDocumentId(purchaseReference.id));
   const itemReference = doc(db, collectionName, itemId);
+  let purchaseNumber = "";
+  let purchaseId = "";
 
   await runTransaction(db, async (transaction) => {
+    const codeReservation = await prepareDailySequenceCodeInTransaction({
+      transaction,
+      db,
+      collectionName: "purchases",
+      prefix: "PUR",
+      date: date.toDate(),
+      minimumSequence: Math.max(baselineSequence - 1, 0),
+    });
+    purchaseNumber = codeReservation.code;
+    const purchaseReference = doc(db, "purchases", purchaseNumber);
+    const expenseReference = doc(db, "expenses", buildPurchaseExpenseDocumentId(purchaseReference.id));
     const purchaseSnapshot = await transaction.get(purchaseReference);
     const expenseSnapshot = await transaction.get(expenseReference);
     const itemSnapshot = await transaction.get(itemReference);
@@ -316,11 +300,11 @@ export const createPurchaseTransaction = async ({
         ? latestSelectedVariant?.variantName || latestSelectedVariant?.name || ""
         : latestSelectedVariant?.variantLabel || latestSelectedVariant?.color || latestSelectedVariant?.name || "";
     const variantKey = latestSelectedVariant?.variantKey || "";
-    const variantPayload = buildInventoryLogVariantFields({
-      selectedVariant: latestSelectedVariant,
+    const variantPayload = {
       variantKey,
       variantLabel,
-    });
+      stockSourceType: latestSelectedVariant ? "variant" : "master",
+    };
     const resolvedStockUnit =
       normalizedType === "material"
         ? stockUnit || getPurchaseStockUnit(latestItem)
@@ -380,6 +364,9 @@ export const createPurchaseTransaction = async ({
       });
     }
 
+    codeReservation.commit();
+    purchaseId = purchaseReference.id;
+
     if (normalizedType === "material") {
       if ((latestItem?.hasVariantOptions || latestItem?.hasVariants) && latestSelectedVariant) {
         const nextMaterialPayload = applyPurchaseToRawMaterial(latestItem, {
@@ -423,16 +410,14 @@ export const createPurchaseTransaction = async ({
         extraData: {
           purchaseId: purchaseReference.id,
           purchaseNumber: purchasePayload.purchaseNumber || "",
-          ...buildInventoryLogReferenceFields({
-            referenceId: purchaseReference.id,
-            referenceNumber: purchasePayload.purchaseNumber || "",
-            referenceType: "purchase",
-          }),
+          referenceId: purchaseReference.id,
+          referenceNumber: purchasePayload.purchaseNumber || "",
+          referenceCode: purchasePayload.purchaseNumber || "",
+          sourceRef: purchasePayload.purchaseNumber || "",
+          referenceType: "purchase",
           supplierName: purchasePayload.supplierName || "",
-          ...buildInventoryLogUnitFields({
-            unit: resolvedStockUnit || "",
-            stockUnit: resolvedStockUnit || "",
-          }),
+          unit: resolvedStockUnit || "",
+          stockUnit: resolvedStockUnit || "",
           purchaseUnit: normalizedType === "material" ? purchaseUnit || "" : "",
           ...variantPayload,
           materialVariantId: normalizedType === "material" ? materialVariantId || null : null,
@@ -484,7 +469,7 @@ export const createPurchaseTransaction = async ({
   });
 
   return {
-    purchaseId: purchaseReference.id,
+    purchaseId,
     purchaseNumber,
   };
 };

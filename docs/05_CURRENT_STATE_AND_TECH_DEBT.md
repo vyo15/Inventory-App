@@ -46,11 +46,11 @@ Temuan terkini:
 - create sale memvalidasi `availableStock` master/varian sebelum transaksi disimpan
 - kebutuhan item yang sama digabung dulu agar multi-line tidak melewati stok tersedia
 - create sale menyimpan dokumen Sales, mutasi stok keluar, inventory log, dan income awal `Selesai` dalam Firestore transaction
-- Sales tidak menyediakan cancel/delete user-facing; status aktif hanya `Diproses`, `Dikirim`, dan `Selesai`, sedangkan barang kembali wajib lewat Return
+- Sales tidak menyediakan aksi batal/delete user-facing; status aktif hanya `Diproses`, `Dikirim`, dan `Selesai`, sedangkan barang kembali wajib lewat Return
 
 Risiko tersisa:
 - flow masih berjalan dari client; untuk multi-user besar tetap ideal dipindahkan ke backend/Cloud Function agar aturan server-side lebih kuat
-- sales lama yang telanjur punya status/jejak cancel perlu dicek lewat Auto Detect Bug Data/Data Quality Audit sebelum dipakai sebagai dasar laporan final
+- sales lama yang tidak sesuai flow aktif perlu dicek manual lewat Auto Detect Bug Data/Data Quality Audit sebelum dipakai sebagai dasar laporan final
 
 ### 5. Laporan/export sudah lebih siap data real
 Temuan terkini:
@@ -120,8 +120,8 @@ Dampak ke task berikutnya:
 
 Audit terbaru memakai `src.zip` dan `docs.zip` yang diupload pada task ini. Hasilnya:
 
-- Daftar file besar/berisiko maintainability perlu dibaca dari source aktual, bukan dari catatan lama. Pada `src.zip` terbaru setelah Batch 1-7A, `src/pages/Utilities/ResetMaintenanceData.jsx` berisi 1999 baris, bukan 3454 baris. File ini tetap berisiko maintainability karena masih menggabungkan UI orchestration, state, validasi aksi, dan panel maintenance dalam satu page besar.
-- File besar lain yang terkonfirmasi dari source aktual: `src/services/Produksi/productionWorkLogsService.js` 2628 baris, `src/pages/Produksi/ProductionWorkLogs.jsx` 2370 baris, `src/pages/Transaksi/Purchases.jsx` 2187 baris, `src/services/Maintenance/resetMaintenanceDataService.js` 2099 baris, `src/pages/Produksi/ProductionBoms.jsx` 1798 baris, `src/pages/MasterData/RawMaterials.jsx` 1766 baris, `src/pages/Produksi/ProductionOrders.jsx` 1737 baris, `src/pages/Produksi/SemiFinishedMaterials.jsx` 1720 baris, `src/pages/Dashboard/Dashboard.jsx` 1383 baris, dan `src/pages/Transaksi/Sales.jsx` 1108 baris.
+- Daftar file besar/berisiko maintainability perlu dibaca dari source aktual, bukan dari catatan lama. Pada `src.zip` terbaru, `src/pages/Utilities/ResetMaintenanceData.jsx` berisi 2110 baris, bukan 3454 baris. File ini tetap berisiko maintainability karena masih menggabungkan UI orchestration, state, validasi aksi, dan panel maintenance dalam satu page besar.
+- File besar lain yang terkonfirmasi dari source aktual setelah rangkaian extraction/cleanup dan P2 split: `src/services/Produksi/productionWorkLogsService.js` 2404 baris + helper 365 baris, `src/pages/Produksi/ProductionWorkLogs.jsx` 1617 baris setelah P2-A/P2-B UI split, `src/pages/Transaksi/Purchases.jsx` 1285 baris setelah P2-D UI split, `src/pages/Utilities/ResetMaintenanceData.jsx` 1335 baris setelah P2-C orchestration split, `src/services/Maintenance/resetMaintenanceDataService.js` 1863 baris + config 282 baris, `src/pages/Produksi/ProductionBoms.jsx` 1798 baris, `src/pages/MasterData/RawMaterials.jsx` 1766 baris, `src/pages/Produksi/ProductionOrders.jsx` 1737 baris, `src/pages/Produksi/SemiFinishedMaterials.jsx` 1720 baris, `src/pages/Dashboard/Dashboard.jsx` 1383 baris, dan `src/pages/Transaksi/Sales.jsx` 1108 baris.
 - Ini bukan alasan untuk refactor besar sekaligus. Statusnya **MAINTAINABILITY DEBT / GUARDED REFACTOR CANDIDATE**: pecah bertahap per modul, behavior-preserving, dan wajib menjaga route, role guard, schema, stock flow, production flow, payroll, purchase, reset, audit log, dan histori transaksi.
 - Path yang tidak ditemukan dan sudah sesuai status docs sebagai legacy/missing: `functions/`, `functions/index.js`, `src/services/Produksi/productionService.js`, `src/pages/Inventory/StockAdjustment.jsx`, `src/utils/access/accessControl.js`, `src/constants/roleOptions.js`, `src/stock.json`, `src/assets/dark-mode.svg`, dan `src/assets/light-mode.svg`. Jangan menjadikannya target patch aktif tanpa source baru.
 - Konflik docs yang ditemukan pada audit ini: `docs/03_BUSINESS_RULES.md` sempat menyatakan `firestore.rules` dan `firebase.json` disertakan di repo, sedangkan `src.zip` terbaru tidak memuat file tersebut dan docs lain sudah menyatakan rules dikelola external/Firebase Console. Status resmi: rules backend wajib aktif dan aman, tetapi source-controlled rules belum menjadi bagian ZIP ini.
@@ -132,6 +132,26 @@ Dampak ke task berikutnya:
 - Setiap review docs/source wajib menyebut ZIP aktual yang dibaca dan path aktual yang dicek.
 - Jangan memakai angka line count atau daftar file missing dari chat lama tanpa hitung ulang terhadap ZIP terbaru.
 - Jika docs menyebut path file, pastikan path itu benar-benar ada di source atau diberi label eksplisit **legacy/missing/external**.
+
+
+## Update Current State — P2 Jumbo File Split Behavior-Preserving — 2026-05-23
+
+Patch gabungan P2-A sampai P2-E memecah file jumbo tanpa mengubah behavior bisnis. Statusnya **MAINTAINABILITY REFACTOR / BEHAVIOR-PRESERVING**.
+
+Yang sudah dipisah:
+- **P2-A:** detail drawer Work Log dipindah ke `src/pages/Produksi/components/ProductionWorkLogDetailDrawer.jsx`.
+- **P2-B:** modal material usage, output, dan complete Work Log dipindah ke `WorkLogMaterialUsageModal.jsx`, `WorkLogOutputModal.jsx`, dan `WorkLogCompleteModal.jsx`.
+- **P2-C:** orchestration audit/repair Reset Maintenance dipindah bertahap ke `src/pages/Utilities/hooks/useResetMaintenanceAudits.js`, `src/pages/Utilities/hooks/useResetMaintenanceRepairs.js`, dan helper UI `src/pages/Utilities/utils/resetMaintenanceUiHelpers.jsx`.
+- **P2-D:** Purchases UI dipisah ke `PurchaseFormModal.jsx`, `PurchaseStockPreview.jsx`, `PurchaseTableColumns.jsx`, `PurchaseCostSummaryCard.jsx`, dan `purchaseOcrUiConstants.js`.
+- **P2-E:** helper pure Work Log service dipindah ke `src/services/Produksi/helpers/productionWorkLogsServiceHelpers.js`, dan konfigurasi reset maintenance dipindah ke `src/services/Maintenance/config/resetMaintenanceDataConfig.js`.
+
+Batas aman yang tetap dijaga:
+- tidak mengubah schema, collection, route, menu, atau role guard;
+- tidak mengubah stock mutation, inventory log payload, HPP, payroll, purchase average cost, expense, OCR parser, atau reset destructive flow;
+- tidak mengubah service transaction Sales/Purchases/Returns;
+- komponen UI baru hanya presentational atau orchestration wrapper, bukan tempat business rule baru.
+
+Line count source akhir setelah gabungan P2: `ProductionWorkLogs.jsx` 1617 baris, `Purchases.jsx` 1285 baris, `ResetMaintenanceData.jsx` 1335 baris, `productionWorkLogsService.js` 2404 baris + helper 365 baris, dan `resetMaintenanceDataService.js` 1863 baris + config 282 baris.
 
 ## Definition of Done untuk Perubahan Besar Berikutnya
 ## Update Current State: Guard Logic Work Log Produksi
@@ -177,7 +197,7 @@ Sebuah task dianggap aman selesai bila:
 - Audit Firebase Functions custom pada 2026-05-06: folder `functions/` tidak ada di `Inventory-App.zip`; jangan menganggap backend Functions aktif tanpa source terpisah.
 
 ### Koreksi dokumen lama
-Poin lama yang menyebut cancel/revert sale sebagai aksi user sudah tidak sesuai dengan source terbaru. Sales create/status selesai sekarang diorkestrasi melalui `src/services/Transaksi/salesService.js`; cancel/delete Sales tidak tampil sebagai aksi operasional. Barang kembali setelah transaksi tercatat wajib lewat Return agar stok, income, dan audit trail tidak bercabang. Preflight validasi stok Firestore Sales sudah dipindah ke `salesService.js`, sedangkan validasi final tetap diulang di dalam transaction service.
+Poin lama yang menyebut aksi batal/revert sale sebagai aksi user sudah tidak sesuai dengan source terbaru. Sales create memakai Firestore transaction di `src/pages/Transaksi/Sales.jsx`; aksi batal/delete Sales tidak tampil sebagai aksi operasional. Barang kembali setelah transaksi tercatat wajib lewat Return agar stok, income, dan audit trail tidak bercabang.
 
 
 ## Update Product & Semi Finished Min Stock Master — 2026-05-07
@@ -199,7 +219,9 @@ Temuan/fix:
 - form tambah Karyawan Produksi tidak lagi memakai input manual placeholder `EMP-...`;
 - preview kode dibuat otomatis dengan format `DDMMYYYY-XXX`;
 - service `productionEmployeesService.js` generate ulang kode saat create untuk menjaga uniqueness;
-- counter teknis `production_employee_code_sequences` dipakai untuk mengurangi risiko kode dobel saat ada create paralel.
+- Batch 16D memindahkan counter final ke collection bersama `business_code_counters` dengan key `DAILY__EMP__DDMMYYYY`;
+- `production_employee_code_sequences` hanya dibaca sebagai legacy baseline agar nomor lama tidak tertabrak;
+- format kode tampilan tetap `DDMMYYYY-XXX` untuk menjaga compatibility UI dan Work Log/Payroll lama.
 
 Risiko tersisa:
 - data lama dengan kode `EMP-...` tetap dipertahankan sebagai legacy agar Work Log/Payroll lama tidak rusak;
@@ -328,7 +350,7 @@ Tech debt tersisa:
 - Fase G docs/checklist: fase dokumentasi; tidak mengubah source aplikasi.
 
 ### Tech debt yang masih terbuka setelah hardening
-- Sales stock safety sudah memakai Firestore transaction di client/service untuk create dan status selesai; flow cancel user-facing tidak aktif. Untuk multi-user padat tetap pertimbangkan Cloud Function/server-side guard dan validasi Firestore Rules production.
+- Sales stock safety sudah memakai Firestore transaction di client untuk create/status selesai; untuk multi-user padat tetap pertimbangkan Cloud Function/server-side guard dan validasi Firestore Rules production.
 - Payroll paid reversal belum diputuskan: expense payroll tidak dihapus otomatis saat status paid dibatalkan.
 - HPP cost 0 sekarang diberi warning, tetapi data lama tidak di-backfill otomatis.
 - Firebase Functions custom tidak ada pada ZIP aktual; bila backend Functions berada di repo/ZIP lain, source tersebut harus diupload sebelum diaudit.
@@ -360,7 +382,7 @@ Guarded:
 - Alert Data Perlu Dicek hanya petunjuk audit; perbaikan tetap dilakukan di modul source of truth.
 
 Tech debt:
-- Dashboard masih membaca master stock penuh untuk menghitung stok kritis dan audit stok; query orchestration, mapper Stok Kritis, Audit Stok, Restock Assistant, lookup purchase restock, merge Work Log/Payroll, dan normalizer planning sudah dipindah ke `src/services/Dashboard/dashboardService.js` agar page lebih tipis. Jika volume master stock besar, perlu read model/range query khusus tanpa mengubah meaning angka.
+- Dashboard masih membaca master stock penuh untuk menghitung stok kritis dan audit stok; transaksi/finance/payroll/work log sudah dibatasi ke query operasional bulan/minggu berjalan. Jika volume master stock besar, perlu read model/range query khusus tanpa mengubah meaning angka.
 - Quick actions belum role-aware per button; route guard tetap pengaman utama.
 
 ### 19. Scalability read path report/dashboard/code generator — 2026-05
@@ -368,14 +390,13 @@ Tech debt:
 Status aktif:
 - `src/pages/Laporan/SalesReport.jsx`, `PurchasesReport.jsx`, dan `ProfitLossReport.jsx` memakai default periode bulan berjalan dan query Firestore berdasarkan field `date`.
 - `src/pages/Laporan/PayrollReport.jsx` memakai service range query `getProductionPayrollsByDateRange` berdasarkan `payrollDate`.
-- `src/pages/Dashboard/Dashboard.jsx` tetap read-only; query orchestration dan read model utama Dashboard berada di `src/services/Dashboard/dashboardService.js`, termasuk Stok Kritis, Audit Stok, Restock Assistant, lookup purchase restock, merge Work Log/Payroll, dan Planning normalizer. Ringkasan UI yang memakai formatter/JSX tetap di page. Data sales/finance/payroll/work log monitoring dibatasi ke periode operasional bulan/minggu berjalan.
+- `src/pages/Dashboard/Dashboard.jsx` tetap read-only, tetapi data sales/finance/payroll/work log monitoring dibatasi ke periode operasional bulan/minggu berjalan.
 - `src/utils/references/businessCodeGenerator.js` memakai prefix query pada document ID dan field kode bisnis sebelum fallback legacy full scan.
 
 Guarded / belum diubah:
-- Tidak ada counter atomic baru, collection baru, schema baru, route/menu/role guard baru, atau Cloud Function baru.
-- Stock Report masih membaca master stock yang relevan secara one-time karena laporan stok perlu menyatukan raw materials, semi-finished, dan products. Paging/read model stok sebaiknya menjadi task arsitektur terpisah bila data master membesar.
-- `businessCodeGenerator.js` belum diubah pada Batch 7A karena menyentuh sequence, document ID, audit reference, dan kemungkinan collection counter baru; perubahan generator wajib task guarded terpisah dengan approval schema/collection eksplisit.
-- Counter atomic untuk sequence tetap rekomendasi jangka panjang, tetapi wajib approval schema/collection baru.
+- Counter atomic `business_code_counters` sudah disetujui dan aktif bertahap sejak Batch 16B/16C/16D; Firestore Rules production tetap wajib diverifikasi manual karena rules tidak ada di ZIP.
+- Stock Report masih membaca master stock yang relevan secara one-time karena laporan stok perlu menyatukan raw materials, semi-finished, dan products. Batch 17A menambah guard read per collection agar satu sumber gagal tidak mengosongkan seluruh laporan; paging/read model stok tetap task arsitektur terpisah bila data master membesar.
+- Perubahan schema/read model baru di luar counter kode bisnis tetap wajib approval terpisah.
 
 
 ### 13. Supplier Restock Catalog manual dengan cascade snapshot terbatas
@@ -527,7 +548,7 @@ Guard tersisa:
 - AKTIF: item bervarian tetap wajib memilih `variantKey` agar stok retur masuk ke varian yang benar, bukan master/default.
 - AKTIF: payload log retur memakai `buildInventoryLogPayload()` agar schema audit sama dengan writer inventory aktif lain.
 - LEGACY: flow lama yang mengubah stok lebih dulu lalu membuat dokumen retur/log harus dianggap tidak aman karena bisa membuat stok berubah tanpa audit lengkap.
-- AKTIF: orkestrasi transaction retur sudah dipindahkan ke `src/services/Transaksi/returnsService.js`; `Returns.jsx` hanya mengelola state form/tabel dan memanggil service.
+- CLEANUP CANDIDATE: orkestrasi transaction retur masih berada di page `Returns.jsx`; jika modul Retur makin kompleks, logic ini bisa dipindahkan ke service khusus tanpa mengubah business rule.
 
 ### Risiko tersisa
 - Retur belum memiliki flow cancel/revert atau hard delete guarded di UI aktif; jika nanti ditambahkan, harus memakai guard idempotent agar tidak double posting stok.
@@ -561,7 +582,7 @@ Guard tersisa:
 - CLEANUP CANDIDATE: buat service `latestPurchaseLookup` atau read model khusus jika data purchase sudah besar dan index Firestore final sudah diputuskan.
 
 ### Risiko tersisa
-- Dashboard masih membaca master stock penuh untuk summary stok, dan beberapa summary produksi tetap bergantung pada service planning aktif. Ini sengaja belum di-limit lebih jauh karena limit yang salah bisa menyembunyikan status penting; optimasi read model harus batch terpisah.
+- Dashboard masih membaca beberapa collection operasional penuh untuk summary produksi, payroll, income, expense, dan stok. Ini sengaja belum di-limit karena limit yang salah bisa menyembunyikan status penting.
 - Raw Material dan Supplier lookup terbaru masih memakai jendela baca ringan, bukan lookup per material yang benar-benar presisi untuk semua data historis.
 - Jika nanti muncul error Firestore index pada query baru, buat index sesuai pesan Firebase dan jangan ubah business rule.
 
@@ -680,7 +701,7 @@ Risiko tersisa:
 - Stock Adjustment snapshot stok terpilih memakai panel read-only clean, bukan bubble `Alert`, agar info pasif tidak terlihat seperti warning.
 - Sales dan Returns stock snapshot pasif memakai panel read-only clean agar stok master/varian terbaca konsisten tanpa mengubah validasi stok, payload transaksi, atau flow income/retur.
 - Raw Material ringkasan varian dan Semi Finished ringkasan stok master memakai panel read-only clean karena keduanya hanya summary pasif, bukan warning.
-- Perubahan ini presentational-only: validasi `availableStock`, pilihan `variantKey`, transaction `stock_adjustments`, mutasi stok, `inventory_logs`, Sales stock reduction, income timing, dan Returns stock revert tetap mengikuti flow existing.
+- Perubahan ini presentational-only: validasi `availableStock`, pilihan `variantKey`, transaction `stock_adjustments`, mutasi stok, `inventory_logs`, Sales stock reduction, income timing, dan Returns stock-in tetap mengikuti flow existing.
 
 ### Cleanup candidate
 - Beberapa page-level explanation atau detail read-only di Supplier Purchases dan modul produksi masih memakai `Alert` info. Area tersebut boleh dirapikan bertahap jika terbukti pasif, tetapi jangan mengganti warning/error/destructive/security guard.
@@ -738,7 +759,6 @@ Risiko:
 
 ### Legacy / cleanup candidate
 - **LEGACY:** sales lama dengan status/reference lama tetap ditampilkan sesuai data tersimpan; tidak ada migrasi otomatis.
-- **LEGACY-COMPAT:** data lama berjejak cancel tetap bisa diaudit read-only; jangan menjadikan cancel sebagai flow user baru.
 - **CLEANUP CANDIDATE:** hard delete Sales dapat dirancang sebagai maintenance/admin guarded flow terpisah jika benar-benar dibutuhkan.
 - **CLEANUP CANDIDATE:** bila data Sales membesar, strategi fetch all + client filter dapat diganti pagination/query server-side yang tetap menjaga fallback aman.
 
@@ -1040,11 +1060,11 @@ Status: **AKTIF / GUARDED**.
 
 Status: **AKTIF + GUARDED**.
 
-- `src/pages/Transaksi/Sales.jsx` tidak menyediakan opsi create `Dibatalkan`, tombol `Batalkan`, tombol `Delete`, atau tombol `Hapus` sebagai aksi user.
+- `src/pages/Transaksi/Sales.jsx` tidak menyediakan status batal, tombol Batalkan, tombol Delete, atau tombol Hapus sebagai aksi user.
 - Transisi status resmi: `Diproses -> Dikirim`, lalu `Dikirim -> Selesai`. Barang kembali/pembeli batal setelah transaksi tercatat wajib lewat **Return**.
 - Form create Sales punya submit guard (`isSavingSale` + ref lock) agar double-click Simpan tidak membuat order dobel.
-- Cancel/revert Sales tidak boleh dihidupkan kembali sebagai action user-facing; jika rollback teknis create failure diperlukan, flow harus internal, guarded, dan tidak menjadi tombol/menu reguler.
-- Data Quality Audit tetap boleh mendeteksi data lama yang telanjur berstatus/berjejak cancel, Sales belum selesai yang sudah punya income, dan Sales selesai yang belum punya income, read-only tanpa write otomatis.
+- Aksi batal/revert Sales tidak boleh dihidupkan kembali sebagai action user-facing; barang kembali wajib memakai Return.
+- Data Quality Audit tetap boleh mendeteksi Sales belum selesai yang sudah punya income, Sales selesai yang belum punya income, Sales tanpa inventory log `sale`, dan mismatch side-effect aktif lain secara read-only tanpa write otomatis.
 - Search Sales wajib mencakup `externalReferenceNumber` karena nomor marketplace/resi disimpan terpisah dari kode internal `ORD-*`.
 - Guard income Sales harus membaca legacy link `relatedId`, `saleId`, `referenceId`, `sourceRef`, `referenceCode`, `referenceNumber`, dan `details.*` agar data lama tidak membuat income dobel.
 - Data Quality Audit Sales/income harus mencocokkan sale bukan hanya dari Firestore document id, tetapi juga dari `saleNumber`, `code`, `referenceNumber`, dan `sourceRef`.
@@ -1091,11 +1111,6 @@ Status aktif dari source terbaru:
 
 
 ## Update Current State — Scalability Read Path & Transaction Service Extraction — 2026-05-22
-### Batch 7B Dashboard read guard
-- `Dashboard.jsx` tetap hanya mengonsumsi `readDashboardData()` dari `src/services/Dashboard/dashboardService.js`.
-- Helper `readDashboardSnapshotData()` dan `fetchPurchaseRecordsForRestockRows()` bersifat internal di `dashboardService.js`, bukan export publik.
-- Refresh Dashboard memakai guard in-flight agar klik `Muat Ulang` berulang tidak memicu read paralel dari page.
-
 
 Patch ini mengurangi coupling UI dengan Firestore orchestration tanpa mengubah schema, route/menu, role guard, atau business status flow.
 
@@ -1116,8 +1131,6 @@ Patch ini mengurangi coupling UI dengan Firestore orchestration tanpa mengubah s
 - `src/services/Dashboard/dashboardService.js`
   - query orchestration Dashboard
   - snapshot mapper read-only
-  - mapper stok kritis, audit stok, Restock Assistant, merge Work Log/Payroll, mapping incomes/revenues, dan normalisasi planning summary
-  - `readDashboardData()` sebagai read model final yang dikonsumsi `Dashboard.jsx`
   - targeted purchase lookup untuk Restock Assistant
 - `src/services/Laporan/reportsService.js`
   - fetch Sales Report, Purchases Report, dan Profit/Loss
@@ -1126,41 +1139,81 @@ Patch ini mengurangi coupling UI dengan Firestore orchestration tanpa mengubah s
 - Reset UI dipecah sebagian ke `ResetDangerZonePanel` dan `ResetExportPanel`; reset service destructive tidak disentuh.
 
 ### Yang sengaja belum diubah
-- Generator kode bisnis masih memakai scan sequence koleksi. Ini masih perlu task guarded terpisah karena menyentuh strategi nomor dokumen lintas modul.
-- Dashboard dan laporan masih client-side aggregate setelah query terarah. Dashboard page sudah lebih tipis dan mengonsumsi read model final dari service, tetapi optimasi data besar tetap perlu paging/filter server-side atau read model/report summary tanpa mengubah meaning angka.
+- Generator kode bisnis sudah memakai prefix query sebagai baseline legacy. Batch 16B memigrasi Sales/Purchases/Returns ke counter atomic `business_code_counters`; Batch 16C memperluas migrasi ke master data, finance manual, stock adjustment, dan create produksi yang memakai business code otomatis.
+- Dashboard dan laporan masih client-side aggregate setelah query terarah. Untuk data besar, tahap berikutnya adalah paging/filter server-side atau read model/report summary.
 - Reset destructive service tetap belum di-split karena harus diaudit terpisah.
 
+## Batch 16B - Atomic Counter Transaksi Utama — 2026-05
 
-## Update Current State — Batch 8 Inventory Log Metadata Helper — 2026-05-23
+Status: **GUARDED / AKTIF TERBATAS / TRANSACTION-LEVEL**.
 
-Status: **AKTIF / BEHAVIOR-PRESERVING CLEANUP**.
+- `src/utils/references/businessCodeCounterService.js` menambahkan service counter atomic untuk collection `business_code_counters`.
+- `src/utils/references/businessCodeGenerator.js` menambahkan `getDailyBusinessCodeSequence()` dan `prepareDailySequenceCodeInTransaction()` sebagai helper transaction-level.
+- `src/services/Transaksi/salesService.js`, `src/services/Transaksi/purchasesService.js`, dan `src/services/Transaksi/returnsService.js` memakai helper tersebut untuk kode `ORD-*`, `PUR-*`, dan `RET-*`.
+- Counter di-commit dalam Firestore transaction yang sama dengan create dokumen bisnis, income/expense terkait, stock mutation, dan inventory log.
+- Prefix query lama tetap dipakai sebelum transaction untuk baseline sequence legacy, lalu baseline itu dipakai sebagai minimum counter agar data lama tidak tertabrak.
+- Helper prepare menjaga semua transaction read selesai sebelum counter write dilakukan. Ini menghindari read-after-write di Firestore transaction.
+- Format kode, document ID readable, stock mutation, inventory log payload, income/expense, purchase average cost, OCR, Return transaction, route/menu/role guard, production, payroll, HPP, dan reset tidak berubah.
+- Batch 16C sudah memigrasi caller master data, finance manual, stock adjustment, dan create produksi ke atomic counter. Batch 16D melengkapi sisa Production Planning `PP-*` dan Karyawan Produksi agar create baru juga memakai `business_code_counters`. Cleanup berikutnya tinggal audit generator preview/UI dan data legacy, bukan mengganti source of truth counter.
 
-- `src/services/Inventory/inventoryLogService.js` sekarang punya helper metadata kecil untuk reference, unit, variant, dan resolver satuan stok inventory log transaksi.
-- `src/services/Transaksi/salesService.js`, `src/services/Transaksi/returnsService.js`, dan `src/services/Transaksi/purchasesService.js` memakai helper tersebut agar field audit log tidak disusun berulang di tiap service.
-- Return sudah memakai `selectedVariant` pada `buildInventoryLogVariantFields()` agar fallback label varian konsisten dengan Purchase.
-- `getPurchaseStockUnit()` tetap tersedia untuk compatibility page Purchases, tetapi sekarang mendelegasikan resolver satuan ke `resolveInventoryStockUnit()`.
-- Perubahan ini tidak mengubah stock mutation, purchase average cost, expense otomatis, income Sales, Return transaction, OCR Purchases, production, payroll, HPP, schema, route/menu/role guard, reset destructive, atau generator kode bisnis.
-- Helper baru tetap legacy-compatible karena field spesifik lama seperti `saleId`, `purchaseId`, `returnId`, `saleNumber`, `purchaseNumber`, dan `returnNumber` tetap ikut tersimpan.
+## Batch 16C - Atomic Counter Master/Finance/Stock/Produksi — 2026-05
 
-Cleanup lanjutan yang masih **belum dilakukan**:
-- menyatukan stock mutation Sales/Purchase/Return;
-- menyatukan finance payload income/expense;
-- mengubah ID inventory log ke readable derivative;
-- mengubah business code generator/counter sequence;
-- optimasi read path Dashboard/Stock Report untuk data besar.
+Status source terbaru:
+- `businessCodeGenerator.js` menambahkan helper `getSequentialBusinessCodeSequence()` dan `prepareSequentialCodeInTransaction()` untuk sequence internal seperti `PRD-001`, `RAW-001`, `BOM-001`, dan `SFP-001`.
+- `productionCodeGenerator.js` tetap hanya wrapper compatibility dan mendelegasikan sequence production ke business code generator.
+- Create Product, Raw Material, Customer, Supplier, Cash In manual, Cash Out manual, Stock Adjustment, Production Order, Work Log manual/PO, Payroll manual, BOM, dan Semi Finished sudah reserve nomor final di transaction create.
+- Prefix query lama masih dipakai sebelum transaction sebagai baseline legacy agar counter baru tidak menabrak data lama.
+- Data lama dengan random ID atau format lama tidak di-rename otomatis.
 
-Semua item tersebut tetap guarded task terpisah.
+Batasan yang sengaja tidak diubah:
+- Tidak ada perubahan route/menu/role guard.
+- Tidak ada perubahan status flow Sales/Purchase/Return/Production/Payroll.
+- Tidak ada migration massal dokumen lama.
+- Auto payroll deterministic per worker/work log tetap dipertahankan; hanya payroll manual `PAY-*` yang memakai counter daily.
 
-## Update Current State — Batch 8D Purchases Listener Extraction dan Return Submit Lock — 2026-05-23
+Risiko tersisa:
+- Jika `business_code_counters` belum diizinkan di Firestore Rules production, create kode baru yang memakai counter akan gagal. Rules tidak ada di ZIP sehingga wajib diverifikasi di Firebase console/deployment rules.
+### Batch 17A — Stock Report partial read guard
 
-Status: **AKTIF / BEHAVIOR-PRESERVING CLEANUP**.
+Status aktif:
+- `src/services/Laporan/stockReportService.js` membaca `raw_materials`, `products`, `semi_finished_materials`, dan `categories` dengan guard per collection.
+- Jika salah satu source gagal dibaca, source lain tetap tampil dan `src/pages/Laporan/StockReport.jsx` menampilkan warning area yang gagal.
+- Perubahan ini read-only dan tidak membuat read model/paging/schema baru.
 
-- `src/services/Transaksi/purchasesService.js` sekarang menjadi tempat listener read-only untuk data `purchases`, `products`, dan `raw_materials` yang dipakai halaman Purchases.
-- `src/pages/Transaksi/Purchases.jsx` tidak lagi import `collection`, `onSnapshot`, atau `db` hanya untuk live data pembelian; page tetap fokus pada UI/form/OCR dan memanggil service existing.
-- `listenSupplierCatalog()` tetap berasal dari Supplier service karena katalog supplier/restock adalah read path master data yang berbeda dari purchase transaction writer.
-- `src/pages/Transaksi/Returns.jsx` sekarang mengunci tombol OK/Batal modal saat `isSubmittingReturn` agar form tidak ditutup/reset saat transaction retur masih berjalan.
-- Cleanup ini tidak mengubah create purchase transaction, OCR, stock in, average cost, inventory log, expense otomatis, return transaction, schema, collection, route/menu, role guard, production, payroll, HPP, reset destructive, atau business code generator.
+Guarded / belum diubah:
+- Stock Report tetap full source report; export XLSX tetap mengekspor data yang berhasil dibaca dan difilter di UI.
+- Read model/paging server-side untuk laporan stok masih perlu approval arsitektur terpisah karena akan mengubah kontrak export dan kelengkapan data.
+- Preview kode UI bisa berbeda dari nomor final saat ada create paralel; ini normal karena final source of truth ada di transaction submit.
 
-Sisa menuju Batch 9:
-- audit performance read path Dashboard, Stock Report, dan planning summary;
-- jangan gabungkan optimasi read path dengan generator kode bisnis atau perubahan sequence/document ID.
+
+## Batch 16D - Atomic Counter Cleanup, Production Planning, dan Karyawan Produksi — 2026-05
+
+Status: **GUARDED / AKTIF / BEHAVIOR-PRESERVING**.
+
+- `src/utils/references/businessCodeGenerator.js` menambahkan fallback tanggal invalid agar kode bisnis tidak menjadi `NaNNaNNaN`.
+- Komentar source dan docs yang masih menyebut generator scan-based sudah disinkronkan: prefix query sekarang hanya baseline legacy, final create memakai counter atomic transaction-level.
+- `src/services/Produksi/productionPlanningService.js` tidak lagi memakai full scan + `addDoc` sebagai jalur create Planning baru. Create Planning baru memakai counter `business_code_counters` dengan prefix `PP`, format tetap `PP-YYYYMMDD-0001`, dan document ID baru sama dengan `planCode`.
+- `src/services/Produksi/productionEmployeesService.js` memakai `business_code_counters` dengan counter key `DAILY__EMP__DDMMYYYY`; format kode karyawan tetap `DDMMYYYY-XXX` agar UI dan relasi Work Log/Payroll lama tidak berubah.
+- Counter lama `production_employee_code_sequences` tidak ditulis lagi untuk create baru, tetapi masih dibaca sebagai legacy baseline agar nomor existing tidak tertabrak.
+
+Batasan:
+- Tidak ada migrasi/rename dokumen Planning atau Employee lama.
+- Tidak mengubah status flow Planning, PO, Work Log, Payroll, HPP, stok, finance, route/menu/role guard, atau reset.
+- Firestore Rules untuk `business_code_counters` tetap wajib dicek di Firebase Console.
+
+
+## Batch merge 1-8 — readpath, reset maintenance, docs/QA sync — 2026-05-23
+
+Status source terbaru setelah rebase patch gabungan:
+
+- Dashboard/Stock Report read model memakai helper/service read-only untuk mapper stok bersama; belum membuat collection summary baru dan belum mengubah mutasi stok.
+- ResetMaintenanceData sudah memakai `useMasterDataExport`, `useResetMaintenanceAudits`, dan `useResetMaintenanceRepairs`, serta modal/status card split kecil agar page tidak kembali jumbo.
+- `useDataQualityAudit.js`, `useLegacyDataAudit.js`, `useMasterCodeMaintenance.js`, `useProductionMaintenance.js`, dan `useResetAuditOverview.js` bukan kontrak aktif setelah hook consolidation; jika masih ada pada working tree lokal, hapus sesuai delete list patch gabungan.
+- Repair Side-Effect Transaksi sudah naik dari preview-only ke guarded repair aktual dengan keyword `REPAIR TRANSAKSI`; service hanya membuat side-effect yang hilang dan tidak mengubah stok master/transaksi utama.
+- Firestore Rules/index tetap external/manual karena repo ZIP belum menyertakan source-controlled rules/index config final; jangan membuat rules/index asumtif dari frontend ZIP saja.
+
+Tech debt tersisa:
+
+- Laporan besar masih butuh paging/read model arsitektural jika dataset membesar; patch ini baru merapikan service/mapper dan guard partial read.
+- `src/services/Maintenance/resetMaintenanceDataService.js` tetap besar dan destructive; split service destructive harus batch terpisah dengan approval eksplisit.
+- `src/pages/Transaksi/Purchases.jsx` masih sensitif karena OCR, stock in, expense, supplier reference, dan average cost; lanjut split harus kecil dan behavior-preserving.

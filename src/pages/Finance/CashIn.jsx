@@ -18,8 +18,8 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   Timestamp,
-  setDoc,
 } from "firebase/firestore";
 import dayjs from "dayjs";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
@@ -32,7 +32,11 @@ import { db } from "../../firebase";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
-import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
+import {
+  generateDailySequenceCode,
+  getDailyBusinessCodeSequence,
+  prepareDailySequenceCodeInTransaction,
+} from "../../utils/references/businessCodeGenerator";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 
@@ -241,42 +245,67 @@ const CashIn = () => {
 
   const handleAddTransaction = async (values) => {
     try {
-      const cashInNumber = await generateDailySequenceCode({
+      const transactionDate = values.date.toDate();
+      const baselineCashInNumber = await generateDailySequenceCode({
         db,
         collectionName: "revenues",
         fieldNames: ["cashInNumber", "code", "sourceRef", "referenceNumber"],
         prefix: "CSH-IN",
-        date: values.date.toDate(),
+        date: transactionDate,
+      });
+      const baselineSequence = getDailyBusinessCodeSequence({
+        code: baselineCashInNumber,
+        prefix: "CSH-IN",
+        date: transactionDate,
       });
 
-      /* =====================================================
-      SECTION: Cash In document ID = business code — AKTIF
-      Fungsi:
-      - Menyimpan pemasukan manual baru dengan document ID CSH-IN-DDMMYYYY-001.
+      await runTransaction(db, async (transaction) => {
+        const codeReservation = await prepareDailySequenceCodeInTransaction({
+          transaction,
+          db,
+          collectionName: "revenues",
+          prefix: "CSH-IN",
+          date: transactionDate,
+          minimumSequence: Math.max(baselineSequence - 1, 0),
+        });
+        const cashInNumber = codeReservation.code;
+        const cashInRef = doc(db, "revenues", cashInNumber);
+        const existingSnapshot = await transaction.get(cashInRef);
 
-      Dipakai oleh:
-      - handleAddTransaction Cash In manual.
+        if (existingSnapshot.exists()) {
+          throw new Error(`Nomor kas masuk ${cashInNumber} sudah dipakai. Muat ulang data lalu simpan kembali.`);
+        }
 
-      Alasan perubahan:
-      - Cash In baru perlu reference readable dan tidak boleh memakai Firestore random ID untuk display.
+        /* =====================================================
+        SECTION: Cash In document ID = business code — AKTIF
+        Fungsi:
+        - Menyimpan pemasukan manual baru dengan document ID CSH-IN-DDMMYYYY-001.
 
-      Catatan cleanup:
-      - Data CIN lama tetap compatibility, tidak di-rename.
+        Dipakai oleh:
+        - handleAddTransaction Cash In manual.
 
-      Risiko:
-      - Jangan mengubah amount/type/report calculation dari section ini.
-      ===================================================== */
-      await setDoc(doc(db, "revenues", cashInNumber), {
-        cashInNumber,
-        code: cashInNumber,
-        referenceNumber: cashInNumber,
-        sourceRef: cashInNumber,
-        amount: Math.round(Number(values.amount || 0)),
-        description: values.description,
-        date: Timestamp.fromDate(values.date.toDate()),
-        type: values.type,
-        sourceModule: "cash_in_manual",
-        createdAt: Timestamp.now(),
+        Alasan perubahan:
+        - Cash In baru perlu reference readable dan tidak boleh memakai Firestore random ID untuk display.
+
+        Catatan cleanup:
+        - Data CIN lama tetap compatibility, tidak di-rename.
+
+        Risiko:
+        - Jangan mengubah amount/type/report calculation dari section ini.
+        ===================================================== */
+        codeReservation.commit();
+        transaction.set(cashInRef, {
+          cashInNumber,
+          code: cashInNumber,
+          referenceNumber: cashInNumber,
+          sourceRef: cashInNumber,
+          amount: Math.round(Number(values.amount || 0)),
+          description: values.description,
+          date: Timestamp.fromDate(transactionDate),
+          type: values.type,
+          sourceModule: "cash_in_manual",
+          createdAt: Timestamp.now(),
+        });
       });
 
       message.success("Transaksi pemasukan berhasil ditambahkan!");

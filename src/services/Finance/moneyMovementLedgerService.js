@@ -11,6 +11,8 @@ import { db } from "../../firebase";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 const DEFAULT_LEDGER_LIMIT = 500;
+// Buku Besar Kas hanya membaca collection yang merepresentasikan pergerakan uang aktual.
+// Return aktif bersifat stock-only correction, sehingga `returns` tidak menjadi sumber ledger sampai ada rule refund/finance terpisah.
 const MONEY_IN_COLLECTIONS = ["incomes", "revenues"];
 const MONEY_OUT_COLLECTIONS = ["expenses"];
 

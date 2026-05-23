@@ -3,13 +3,13 @@ import { collection, doc, onSnapshot, runTransaction, Timestamp } from "firebase
 import { db } from "../../firebase";
 import {
   buildInventoryLogPayload,
-  buildInventoryLogReferenceFields,
-  buildInventoryLogUnitFields,
-  buildInventoryLogVariantFields,
   INVENTORY_LOG_COLLECTION,
-  resolveInventoryStockUnit,
 } from "../Inventory/inventoryLogService";
-import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
+import {
+  generateDailySequenceCode,
+  getDailyBusinessCodeSequence,
+  prepareDailySequenceCodeInTransaction,
+} from "../../utils/references/businessCodeGenerator";
 import {
   applyStockMutationToItem,
   findVariantByKey,
@@ -43,6 +43,9 @@ export const listenReturnRawMaterials = (onNext, onError) =>
     onError,
   );
 
+// Rule aktif Return: stock-only correction.
+// Transaction ini hanya menulis dokumen return, stok masuk, dan inventory log return_in.
+// Jangan menambahkan income/expense/revenue/refund otomatis sebelum ada approval rule finance Return terpisah.
 export const createReturnTransaction = async ({ values, allItems = [] }) => {
   const { type, itemId, quantity, date, note, variantKey } = values;
   const collectionName = type === "product" ? "products" : "raw_materials";
@@ -76,19 +79,35 @@ export const createReturnTransaction = async ({ values, allItems = [] }) => {
   }
 
   const returnTimestamp = Timestamp.fromDate(date.toDate());
-  const returnNumber = await generateDailySequenceCode({
+  const baselineReturnNumber = await generateDailySequenceCode({
     db,
     collectionName: "returns",
     fieldNames: ["returnNumber", "code", "referenceNumber", "sourceRef"],
     prefix: "RET",
     date: date.toDate(),
   });
+  const baselineSequence = getDailyBusinessCodeSequence({
+    code: baselineReturnNumber,
+    prefix: "RET",
+    date: date.toDate(),
+  });
 
-  const returnReference = doc(db, "returns", returnNumber);
   const itemReference = doc(db, collectionName, itemId);
   const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
+  let returnNumber = "";
+  let returnId = "";
 
   await runTransaction(db, async (transaction) => {
+    const codeReservation = await prepareDailySequenceCodeInTransaction({
+      transaction,
+      db,
+      collectionName: "returns",
+      prefix: "RET",
+      date: date.toDate(),
+      minimumSequence: Math.max(baselineSequence - 1, 0),
+    });
+    returnNumber = codeReservation.code;
+    const returnReference = doc(db, "returns", returnNumber);
     const returnSnapshot = await transaction.get(returnReference);
     const itemDocument = await transaction.get(itemReference);
 
@@ -128,14 +147,19 @@ export const createReturnTransaction = async ({ values, allItems = [] }) => {
     });
     const currentStockAfter = stockSnapshotBefore.currentStock + normalizedQuantity;
     const availableStockAfter = currentStockAfter - stockSnapshotBefore.reservedStock;
-    const variantPayload = buildInventoryLogVariantFields({
-      selectedVariant,
-    });
-    const stockUnit = resolveInventoryStockUnit({
-      item: latestItem,
-      collectionName,
-    });
+    const variantPayload = {
+      variantKey: selectedVariant?.variantKey || "",
+      variantLabel: selectedVariant?.variantLabel || "",
+      stockSourceType: selectedVariant ? "variant" : "master",
+    };
+    const stockUnit =
+      latestItem.stockUnit ||
+      latestItem.unit ||
+      latestItem.baseUnit ||
+      (collectionName === "products" ? "pcs" : "");
 
+    codeReservation.commit();
+    returnId = returnReference.id;
     transaction.set(returnReference, {
       returnNumber,
       code: returnNumber,
@@ -166,15 +190,12 @@ export const createReturnTransaction = async ({ values, allItems = [] }) => {
         extraData: {
           returnId: returnReference.id,
           returnNumber,
-          ...buildInventoryLogReferenceFields({
-            referenceId: returnReference.id,
-            referenceNumber: returnNumber,
-            referenceType: "return",
-          }),
-          ...buildInventoryLogUnitFields({
-            unit: stockUnit,
-            stockUnit,
-          }),
+          referenceId: returnReference.id,
+          referenceNumber: returnNumber,
+          referenceCode: returnNumber,
+          referenceType: "return",
+          unit: stockUnit,
+          stockUnit,
           note: normalizedNote,
           currentStockBefore: stockSnapshotBefore.currentStock,
           currentStockAfter,
@@ -191,7 +212,7 @@ export const createReturnTransaction = async ({ values, allItems = [] }) => {
   });
 
   return {
-    returnId: returnReference.id,
+    returnId,
     returnNumber,
   };
 };

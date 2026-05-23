@@ -145,7 +145,9 @@ const hasMeaningfulWorkerSummary = (workLog = {}) =>
 export const getNormalizedProductionPayrollRule = (rule = {}) => {
   const payrollMode = normalizePayrollMode(rule.payrollMode || rule.mode);
   const payrollRate = Math.max(0, safeNumber(rule.payrollRate ?? rule.rate, 0));
-  const payrollQtyBase = 1;
+  // ACTIVE / GUARDED: payrollQtyBase wajib dihormati dari snapshot Step/Work Log
+  // agar payroll per_qty dan HPP tidak kembali ke basis 1 untuk data yang memang memakai basis lain.
+  const payrollQtyBase = Math.max(1, safeNumber(rule.payrollQtyBase ?? rule.qtyBase, 1));
   const payrollOutputBasis = normalizePayrollOutputBasis(
     rule.payrollOutputBasis || rule.outputBasis,
   );

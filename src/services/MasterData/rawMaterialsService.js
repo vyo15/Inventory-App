@@ -9,12 +9,16 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { generateUniqueSequentialCode, isBusinessCodeExists } from '../../utils/references/businessCodeGenerator';
+import {
+  generateUniqueSequentialCode,
+  getSequentialBusinessCodeSequence,
+  isBusinessCodeExists,
+  prepareSequentialCodeInTransaction,
+} from '../../utils/references/businessCodeGenerator';
 import {
   calculateRawMaterialVariantTotals,
   enrichRawMaterialWithVariantTotals,
@@ -564,30 +568,50 @@ export const createRawMaterial = async (values = {}, suppliers = []) => {
   Risiko:
   - Jangan mengganti dengan input manual atau random ID karena supplier, stok, export, dan audit teknis masih memakai reference internal.
   ===================================================== */
-  const normalizedCode = await generateRawMaterialCode(values);
-  await assertRawMaterialCodeAvailable(normalizedCode, null);
+  const baselineCode = await generateRawMaterialCode(values);
+  const baselineSequence = getSequentialBusinessCodeSequence({ code: baselineCode, prefix: 'RAW' });
+  let createdId = '';
 
-  const payload = normalizeRawMaterialCreatePayload({ ...values, code: normalizedCode }, suppliers);
-  /* =====================================================
-  SECTION: Raw Material document ID = business code — AKTIF
-  Fungsi:
-  - Menyimpan Raw Material baru dengan document ID sama seperti kode RAW internal sequence.
+  await runTransaction(db, async (transaction) => {
+    const codeReservation = await prepareSequentialCodeInTransaction({
+      transaction,
+      db,
+      collectionName: COLLECTION_NAME,
+      prefix: 'RAW',
+      minimumSequence: Math.max(baselineSequence - 1, 0),
+    });
+    const normalizedCode = codeReservation.code;
+    const ref = doc(db, COLLECTION_NAME, normalizedCode);
+    const existingSnapshot = await transaction.get(ref);
 
-  Dipakai oleh:
-  - createRawMaterial pada Master Data Raw Material.
+    if (existingSnapshot.exists()) {
+      throw { type: 'validation', errors: { code: 'Kode raw material sudah digunakan' } };
+    }
 
-  Alasan perubahan:
-  - Prefix standar data baru berubah dari RM ke RAW dan document ID baru dibuat audit-friendly.
+    const payload = normalizeRawMaterialCreatePayload({ ...values, code: normalizedCode }, suppliers);
+    /* =====================================================
+    SECTION: Raw Material document ID = business code — AKTIF
+    Fungsi:
+    - Menyimpan Raw Material baru dengan document ID sama seperti kode RAW internal sequence.
 
-  Catatan cleanup:
-  - Data lama RM/random ID tetap compatibility, tidak di-rename.
+    Dipakai oleh:
+    - createRawMaterial pada Master Data Raw Material.
 
-  Risiko:
-  - Jangan mengubah mutation stok atau supplier catalog dari section ini.
-  ===================================================== */
-  const ref = doc(db, COLLECTION_NAME, normalizedCode);
-  await setDoc(ref, payload);
-  return ref.id;
+    Alasan perubahan:
+    - Prefix standar data baru berubah dari RM ke RAW dan document ID baru dibuat audit-friendly.
+
+    Catatan cleanup:
+    - Data lama RM/random ID tetap compatibility, tidak di-rename.
+
+    Risiko:
+    - Jangan mengubah mutation stok atau supplier catalog dari section ini.
+    ===================================================== */
+    codeReservation.commit();
+    transaction.set(ref, payload);
+    createdId = ref.id;
+  });
+
+  return createdId;
 };
 
 export const updateRawMaterial = async (id, values = {}, suppliers = []) => {

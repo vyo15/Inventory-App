@@ -6,12 +6,17 @@ import {
   getDocs,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
-import { generateDailySequenceCode, isBusinessCodeExists } from "../../utils/references/businessCodeGenerator";
+import {
+  generateDailySequenceCode,
+  getDailyBusinessCodeSequence,
+  isBusinessCodeExists,
+  prepareDailySequenceCodeInTransaction,
+} from "../../utils/references/businessCodeGenerator";
 
 // =========================
 // SECTION: Source of truth customer final
@@ -161,22 +166,48 @@ Risiko:
 - Mengganti kembali ke addDoc akan menghasilkan document ID random dan memutus rule kode sebagai referensi utama.
 ===================================================== */
 export const createCustomer = async (values = {}) => {
-  const finalCode = await resolveCustomerCode(values, null);
-  if (!isValidCustomerCodeFormat(finalCode)) {
-    throw { type: "validation", errors: { code: "Kode customer otomatis belum valid" } };
-  }
+  const baselineCode = await generateCustomerCode(values, null);
+  const baselineSequence = getDailyBusinessCodeSequence({
+    code: baselineCode,
+    prefix: CUSTOMER_CODE_PREFIX,
+    date: new Date(),
+  });
+  let createdId = "";
 
-  await assertCustomerCodeAvailable(finalCode, null);
+  await runTransaction(db, async (transaction) => {
+    const codeReservation = await prepareDailySequenceCodeInTransaction({
+      transaction,
+      db,
+      collectionName: CUSTOMERS_COLLECTION,
+      prefix: CUSTOMER_CODE_PREFIX,
+      date: new Date(),
+      minimumSequence: Math.max(baselineSequence - 1, 0),
+    });
+    const finalCode = codeReservation.code;
 
-  const payload = normalizeCustomerPayload({ ...values, code: finalCode, customerCode: finalCode });
+    if (!isValidCustomerCodeFormat(finalCode)) {
+      throw { type: "validation", errors: { code: "Kode customer otomatis belum valid" } };
+    }
 
-  await setDoc(doc(db, CUSTOMERS_COLLECTION, finalCode), {
-    ...payload,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    const customerRef = doc(db, CUSTOMERS_COLLECTION, finalCode);
+    const existingSnapshot = await transaction.get(customerRef);
+
+    if (existingSnapshot.exists()) {
+      throw { type: "validation", errors: { code: "Kode customer sudah digunakan" } };
+    }
+
+    const payload = normalizeCustomerPayload({ ...values, code: finalCode, customerCode: finalCode });
+
+    codeReservation.commit();
+    transaction.set(customerRef, {
+      ...payload,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    createdId = finalCode;
   });
 
-  return { id: finalCode };
+  return { id: createdId };
 };
 
 /* =====================================================

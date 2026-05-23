@@ -3,7 +3,6 @@ import {
   collection,
   doc,
   getDocs,
-  getDoc,
   orderBy,
   query,
   runTransaction,
@@ -14,12 +13,13 @@ import {
 import { db } from "../../firebase";
 import {
   buildInventoryLogPayload,
-  buildInventoryLogReferenceFields,
-  buildInventoryLogUnitFields,
-  buildInventoryLogVariantFields,
   INVENTORY_LOG_COLLECTION,
 } from "../Inventory/inventoryLogService";
-import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
+import {
+  generateDailySequenceCode,
+  getDailyBusinessCodeSequence,
+  prepareDailySequenceCodeInTransaction,
+} from "../../utils/references/businessCodeGenerator";
 import {
   applyStockMutationToItem,
   findVariantByKey,
@@ -27,6 +27,8 @@ import {
   inferHasVariants,
 } from "../../utils/variants/variantStockHelpers";
 import { formatNumberId } from "../../utils/formatters/numberId";
+
+const ACTIVE_SALES_STATUSES = new Set(["Diproses", "Dikirim", "Selesai"]);
 
 export const buildSaleStockBucketKey = (item) =>
   `${item.collectionName}::${item.itemId}::${item.variantKey || "master"}`;
@@ -114,42 +116,6 @@ const aggregateSaleStockNeeds = (saleItems = []) => {
   return stockNeedsByBucket;
 };
 
-export const validateSaleStockAvailability = async (saleItems = []) => {
-  for (const item of aggregateSaleStockNeeds(saleItems).values()) {
-    const itemReference = doc(db, item.collectionName, item.itemId);
-    const itemSnapshotDocument = await getDoc(itemReference);
-
-    if (!itemSnapshotDocument.exists()) {
-      throw new Error(`Item ${item.itemName || item.itemId} tidak ditemukan. Penjualan dibatalkan agar stok tidak salah.`);
-    }
-
-    const latestItem = {
-      id: itemSnapshotDocument.id,
-      ...itemSnapshotDocument.data(),
-    };
-    const hasVariants = inferHasVariants(latestItem);
-    const latestVariant = hasVariants && item.variantKey
-      ? findVariantByKey(latestItem, item.variantKey)
-      : null;
-
-    if (hasVariants && !latestVariant) {
-      throw new Error(`Varian ${item.variantLabel || item.variantKey || "item"} untuk ${item.itemName} tidak ditemukan. Penjualan dibatalkan agar stok tidak masuk ke master/default.`);
-    }
-
-    const stockSnapshot = latestVariant
-      ? getItemStockSnapshot(latestVariant)
-      : getItemStockSnapshot(latestItem);
-    const availableStock = Number(stockSnapshot.availableStock || 0);
-    const requestedQuantity = Number(item.quantity || 0);
-
-    if (availableStock < requestedQuantity) {
-      throw new Error(
-        `Stok tersedia ${item.itemName}${latestVariant ? ` - ${latestVariant.variantLabel || latestVariant.color || latestVariant.name || item.variantLabel || ""}` : ""} tidak mencukupi. Dibutuhkan: ${formatNumberId(requestedQuantity)}, tersedia: ${formatNumberId(availableStock)}. Penjualan belum disimpan.`,
-      );
-    }
-  }
-};
-
 export const createSaleTransaction = async ({
   saleItems = [],
   salesChannel,
@@ -160,40 +126,38 @@ export const createSaleTransaction = async ({
   selectedCustomer,
   totalSaleValue,
 }) => {
-  const saleNumber = await generateDailySequenceCode({
+  const baselineSaleNumber = await generateDailySequenceCode({
     db,
     collectionName: "sales",
     fieldNames: ["saleNumber", "code", "referenceNumber", "sourceRef"],
     prefix: "ORD",
     date: saleDate.toDate(),
   });
-
-  const salesDocument = doc(db, "sales", saleNumber);
-  const saleIncomeReference = finalSaleStatus === "Selesai"
-    ? doc(db, "incomes", `income_${salesDocument.id}`)
-    : null;
+  const baselineSequence = getDailyBusinessCodeSequence({
+    code: baselineSaleNumber,
+    prefix: "ORD",
+    date: saleDate.toDate(),
+  });
   const saleInventoryLogReferences = saleItems.map(() =>
     doc(collection(db, INVENTORY_LOG_COLLECTION)),
   );
-
-  const newSalePayload = {
-    saleNumber,
-    code: saleNumber,
-    customerId: selectedCustomer?.id || null,
-    customerName: selectedCustomer?.name || "",
-    items: saleItems,
-    salesChannel,
-    status: finalSaleStatus,
-    date: Timestamp.fromDate(saleDate.toDate()),
-    referenceNumber: saleNumber,
-    sourceRef: saleNumber,
-    externalReferenceNumber: referenceNumber || null,
-    total: totalSaleValue,
-    note: note || "",
-    createdAt: Timestamp.now(),
-  };
+  let saleNumber = "";
+  let saleId = "";
 
   await runTransaction(db, async (transaction) => {
+    const codeReservation = await prepareDailySequenceCodeInTransaction({
+      transaction,
+      db,
+      collectionName: "sales",
+      prefix: "ORD",
+      date: saleDate.toDate(),
+      minimumSequence: Math.max(baselineSequence - 1, 0),
+    });
+    saleNumber = codeReservation.code;
+    const salesDocument = doc(db, "sales", saleNumber);
+    const saleIncomeReference = finalSaleStatus === "Selesai"
+      ? doc(db, "incomes", `income_${salesDocument.id}`)
+      : null;
     const saleSnapshot = await transaction.get(salesDocument);
     const incomeSnapshot = saleIncomeReference
       ? await transaction.get(saleIncomeReference)
@@ -207,6 +171,23 @@ export const createSaleTransaction = async ({
       throw new Error(`Income untuk penjualan ${saleNumber} sudah ada. Muat ulang data lalu simpan kembali.`);
     }
 
+    const newSalePayload = {
+      saleNumber,
+      code: saleNumber,
+      customerId: selectedCustomer?.id || null,
+      customerName: selectedCustomer?.name || "",
+      items: saleItems,
+      salesChannel,
+      status: finalSaleStatus,
+      date: Timestamp.fromDate(saleDate.toDate()),
+      referenceNumber: saleNumber,
+      sourceRef: saleNumber,
+      externalReferenceNumber: referenceNumber || null,
+      total: totalSaleValue,
+      note: note || "",
+      createdAt: Timestamp.now(),
+    };
+
     const stockMutationPayloads = [];
 
     for (const item of aggregateSaleStockNeeds(newSalePayload.items).values()) {
@@ -214,7 +195,7 @@ export const createSaleTransaction = async ({
       const itemSnapshotDocument = await transaction.get(itemReference);
 
       if (!itemSnapshotDocument.exists()) {
-        throw new Error(`Item ${item.itemName || item.itemId} tidak ditemukan. Penjualan dibatalkan agar stok tidak partial.`);
+        throw new Error(`Item ${item.itemName || item.itemId} tidak ditemukan. Penjualan tidak disimpan agar stok tidak partial.`);
       }
 
       const latestItem = {
@@ -227,7 +208,7 @@ export const createSaleTransaction = async ({
         : null;
 
       if (hasVariants && !latestVariant) {
-        throw new Error(`Varian ${item.variantLabel || item.variantKey || "-"} tidak ditemukan. Penjualan dibatalkan agar stok tidak masuk ke master/default.`);
+        throw new Error(`Varian ${item.variantLabel || item.variantKey || "-"} tidak ditemukan. Penjualan tidak disimpan agar stok tidak masuk ke master/default.`);
       }
 
       const stockSnapshot = latestVariant
@@ -251,6 +232,8 @@ export const createSaleTransaction = async ({
       });
     }
 
+    codeReservation.commit();
+    saleId = salesDocument.id;
     transaction.set(salesDocument, newSalePayload);
 
     stockMutationPayloads.forEach(({ itemReference, stockUpdatePayload }) => {
@@ -271,22 +254,17 @@ export const createSaleTransaction = async ({
             customerName: newSalePayload.customerName || "",
             saleId: salesDocument.id,
             saleNumber: newSalePayload.saleNumber || "",
-            ...buildInventoryLogReferenceFields({
-              referenceId: salesDocument.id,
-              referenceNumber: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
-              referenceType: "sale",
-            }),
+            referenceId: salesDocument.id,
+            referenceCode: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
+            sourceRef: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
             note: `Penjualan via ${newSalePayload.salesChannel}`,
             subtotal: item.subtotal,
-            ...buildInventoryLogUnitFields({
-              unit: item.unit || "",
-              stockUnit: item.unit || "",
-            }),
-            ...buildInventoryLogVariantFields({
-              variantKey: item.variantKey || "",
-              variantLabel: item.variantLabel || "",
-              stockSourceType: item.stockSourceType || "master",
-            }),
+            referenceNumber: newSalePayload.saleNumber || newSalePayload.referenceNumber || "",
+            unit: item.unit || "",
+            stockUnit: item.unit || "",
+            variantKey: item.variantKey || "",
+            variantLabel: item.variantLabel || "",
+            stockSourceType: item.stockSourceType || "master",
           },
         }),
       );
@@ -305,14 +283,14 @@ export const createSaleTransaction = async ({
   });
 
   return {
-    saleId: salesDocument.id,
+    saleId,
     saleNumber,
   };
 };
 
 export const updateSaleStatusTransaction = async ({ saleId, newStatus, selectedSale }) => {
-  if (newStatus === "Dibatalkan") {
-    throw new Error("Sales tidak bisa dibatalkan. Gunakan menu Return untuk barang kembali.");
+  if (!ACTIVE_SALES_STATUSES.has(newStatus)) {
+    throw new Error("Status Sales tidak valid. Gunakan menu Return untuk barang kembali.");
   }
 
   const saleReference = doc(db, "sales", saleId);

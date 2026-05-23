@@ -1,4 +1,5 @@
 import { collection, doc, documentId, getDoc, getDocs, orderBy, query, where } from "firebase/firestore";
+import { prepareBusinessCodeCounterSequenceInTransaction } from "./businessCodeCounterService";
 
 const safeTrim = (value) => String(value ?? "").trim();
 
@@ -64,7 +65,8 @@ const fetchBusinessCodeCandidatesByPrefix = async ({
 
 
 export const formatBusinessDateCode = (date = new Date(), dateFormat = "DDMMYYYY") => {
-  const normalizedDate = date instanceof Date ? date : new Date(date);
+  const parsedDate = date instanceof Date ? date : new Date(date);
+  const normalizedDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
   const year = normalizedDate.getFullYear();
   const month = String(normalizedDate.getMonth() + 1).padStart(2, "0");
   const day = String(normalizedDate.getDate()).padStart(2, "0");
@@ -89,7 +91,7 @@ Alasan perubahan:
 - Final locked code standard IMS memakai DDMMYYYY-001 untuk data baru.
 
 Catatan cleanup:
-- Generator scan-based masih bisa diganti counter atomic setelah ada approval arsitektur.
+- Prefix query tetap dipakai sebagai baseline legacy, sedangkan create yang sudah dimigrasi memakai counter atomic transaction-level.
 
 Risiko:
 - Mengubah default dateFormat/sequenceLength akan membuat kode data baru tidak sesuai standar final.
@@ -103,6 +105,69 @@ export const buildDailyBusinessCode = ({
 } = {}) => {
   const normalizedPrefix = normalizeBusinessPrefix(prefix);
   return `${normalizedPrefix}-${formatBusinessDateCode(date, dateFormat)}-${String(Number(sequence || 1)).padStart(sequenceLength, "0")}`;
+};
+
+export const getDailyBusinessCodeSequence = ({
+  code,
+  prefix = "CODE",
+  date = new Date(),
+  dateFormat = "DDMMYYYY",
+} = {}) => {
+  const normalizedPrefix = normalizeBusinessPrefix(prefix);
+  const dateCode = formatBusinessDateCode(date, dateFormat);
+  const normalizedCode = safeTrim(code).toUpperCase();
+  const prefixDate = `${normalizedPrefix}-${dateCode}-`;
+
+  if (!normalizedCode.startsWith(prefixDate)) return 0;
+
+  const sequence = Number(normalizedCode.slice(prefixDate.length).match(/^\d+/)?.[0] || 0);
+  return Number.isFinite(sequence) && sequence > 0 ? Math.floor(sequence) : 0;
+};
+
+export const prepareDailySequenceCodeInTransaction = async ({
+  transaction,
+  db,
+  collectionName,
+  prefix = "CODE",
+  date = new Date(),
+  dateFormat = "DDMMYYYY",
+  sequenceLength = 3,
+  minimumSequence = 0,
+} = {}) => {
+  if (!transaction || !db || !collectionName) {
+    return {
+      code: buildDailyBusinessCode({ prefix, date, sequence: 1, dateFormat, sequenceLength }),
+      sequence: 1,
+      previousSequence: 0,
+      commit: () => {},
+    };
+  }
+
+  const normalizedPrefix = normalizeBusinessPrefix(prefix);
+  const dateCode = formatBusinessDateCode(date, dateFormat);
+  const reservation = await prepareBusinessCodeCounterSequenceInTransaction({
+    transaction,
+    db,
+    scope: "daily",
+    prefix: normalizedPrefix,
+    dateCode,
+    collectionName,
+    minimumSequence,
+  });
+
+  return {
+    code: buildDailyBusinessCode({
+      prefix: normalizedPrefix,
+      date,
+      sequence: reservation.sequence,
+      dateFormat,
+      sequenceLength,
+    }),
+    counterId: reservation.counterId,
+    sequence: reservation.sequence,
+    previousSequence: reservation.previousSequence,
+    commit: reservation.commit,
+  };
 };
 
 
@@ -131,6 +196,61 @@ export const buildSequentialBusinessCode = ({
 } = {}) => {
   const normalizedPrefix = normalizeBusinessPrefix(prefix);
   return `${normalizedPrefix}-${String(Number(sequence || 1)).padStart(sequenceLength, "0")}`;
+};
+
+
+export const getSequentialBusinessCodeSequence = ({
+  code,
+  prefix = "CODE",
+} = {}) => {
+  const normalizedPrefix = normalizeBusinessPrefix(prefix);
+  const normalizedCode = safeTrim(code).toUpperCase();
+  const prefixValue = `${normalizedPrefix}-`;
+
+  if (!normalizedCode.startsWith(prefixValue)) return 0;
+
+  const sequence = Number(normalizedCode.slice(prefixValue.length).match(/^\d+/)?.[0] || 0);
+  return Number.isFinite(sequence) && sequence > 0 ? Math.floor(sequence) : 0;
+};
+
+export const prepareSequentialCodeInTransaction = async ({
+  transaction,
+  db,
+  collectionName,
+  prefix = "CODE",
+  sequenceLength = 3,
+  minimumSequence = 0,
+} = {}) => {
+  if (!transaction || !db || !collectionName) {
+    return {
+      code: buildSequentialBusinessCode({ prefix, sequence: 1, sequenceLength }),
+      sequence: 1,
+      previousSequence: 0,
+      commit: () => {},
+    };
+  }
+
+  const normalizedPrefix = normalizeBusinessPrefix(prefix);
+  const reservation = await prepareBusinessCodeCounterSequenceInTransaction({
+    transaction,
+    db,
+    scope: "sequential",
+    prefix: normalizedPrefix,
+    collectionName,
+    minimumSequence,
+  });
+
+  return {
+    code: buildSequentialBusinessCode({
+      prefix: normalizedPrefix,
+      sequence: reservation.sequence,
+      sequenceLength,
+    }),
+    counterId: reservation.counterId,
+    sequence: reservation.sequence,
+    previousSequence: reservation.previousSequence,
+    commit: reservation.commit,
+  };
 };
 
 export const generateUniqueSequentialCode = async ({

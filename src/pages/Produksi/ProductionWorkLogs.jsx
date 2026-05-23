@@ -12,13 +12,13 @@ import { getWorkLogMaterialOptions, getWorkLogTargetOptions, toReferenceOptions 
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
 import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
+import ProductionWorkLogDetailDrawer from './components/ProductionWorkLogDetailDrawer';
 import EditableLineSection from '../../components/Produksi/shared/EditableLineSection';
 import {
   Button,
   Card,
   Col,
   DatePicker,
-  Descriptions,
   Divider,
   Drawer,
   Empty,
@@ -26,7 +26,6 @@ import {
   Input,
   InputNumber,
   message,
-  Modal,
   Popconfirm,
   Row,
   Select,
@@ -49,7 +48,6 @@ import {
   PRODUCTION_WORK_LOG_STATUSES,
   WORK_LOG_SOURCE_TYPE_MAP,
   WORK_LOG_STATUS_MAP,
-  WORK_LOG_TARGET_TYPE_MAP,
   calculateProductionMonitoring,
 } from "../../constants/productionWorkLogOptions";
 import {
@@ -70,14 +68,15 @@ import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/number
 import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildWorkLogMaterialUsageFormLine, buildWorkLogOutputFormLine } from "../../utils/produksi/productionLineBuilders";
-import { buildVariantOptionsFromItem, inferHasVariants } from "../../utils/variants/variantStockHelpers";
 import { isProductionWorkLogCompleted } from "../../utils/produksi/productionFlowGuards";
 import {
   buildProductionStepPayrollSnapshot,
-  resolveWorkLogLaborCostDisplay,
 } from "../../utils/produksi/productionPayrollRuleHelpers";
 import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import useAuth from "../../hooks/useAuth";
+import WorkLogMaterialUsageModal from "./components/WorkLogMaterialUsageModal";
+import WorkLogOutputModal from "./components/WorkLogOutputModal";
+import WorkLogCompleteModal from "./components/WorkLogCompleteModal";
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -85,26 +84,7 @@ import useAuth from "../../hooks/useAuth";
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
-const safeNumber = (value, fallback = 0) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
 const safeText = (value) => String(value || "").trim();
-
-const findWorkLogStepMaster = (workLog = {}, productionSteps = []) =>
-  (productionSteps || []).find((item) => {
-    if (safeText(workLog.stepId) && safeText(item.id) === safeText(workLog.stepId)) return true;
-    return safeText(workLog.stepCode) && safeText(item.code) === safeText(workLog.stepCode);
-  }) || null;
-
-const getScaledBomOverheadEstimate = ({ workLog = {}, boms = [] } = {}) => {
-  const bom = (boms || []).find((item) => safeText(item.id) === safeText(workLog.bomId));
-  const overheadPerBatch = safeNumber(bom?.overheadCostEstimate);
-  if (overheadPerBatch <= 0) return 0;
-
-  return overheadPerBatch * Math.max(1, safeNumber(workLog.plannedQty, 1));
-};
 
 const isEditableProductionWorkLog = (record = {}) =>
   safeText(record.status).toLowerCase() === "in_progress" && !isProductionWorkLogCompleted(record);
@@ -837,7 +817,7 @@ const ProductionWorkLogs = () => {
 
 
   // =====================================================
-  // Helper presentasi daftar & drawer detail
+  // Helper presentasi daftar & form Work Log
   // Catatan maintainability:
   // - Helper di bawah hanya untuk kebutuhan tampilan / readability UI.
   // - Jangan dipakai untuk mengubah logika transaksi, stok, atau status produksi.
@@ -864,11 +844,6 @@ const ProductionWorkLogs = () => {
 
   const getWorkLogSourceTagColor = (sourceType) =>
     sourceType === "production_order" ? "purple" : "blue";
-
-  const getStockSourceTagColor = useCallback(
-    (stockSourceType) => (stockSourceType === "variant" ? "purple" : "default"),
-    [],
-  );
 
   // =====================================================
   // Helper presentasi batch 1.
@@ -936,258 +911,6 @@ const ProductionWorkLogs = () => {
       </Card>
     );
   };
-
-  // =====================================================
-  // Data turunan drawer detail
-  // - Semua data di bawah dibentuk dari selectedRecord aktif.
-  // - Dengan pola ini, drawer detail lebih mudah dirapikan tanpa mencampur
-  //   logika presentasi dengan markup yang terlalu panjang.
-  // =====================================================
-  const detailWorkerNames = useMemo(() => {
-    if (!selectedRecord || !Array.isArray(selectedRecord.workerNames)) {
-      return [];
-    }
-
-    return selectedRecord.workerNames.filter(Boolean);
-  }, [selectedRecord]);
-
-  const detailRelatedPayrolls = useMemo(() => {
-    if (!selectedRecord) return [];
-
-    const workLogId = safeText(selectedRecord.id);
-    const workNumber = safeText(selectedRecord.workNumber);
-
-    return productionPayrolls.filter((item) => (
-      (workLogId && safeText(item.workLogId) === workLogId) ||
-      (workNumber && safeText(item.workNumber) === workNumber)
-    ));
-  }, [productionPayrolls, selectedRecord]);
-
-  // =====================================================
-  // ACTIVE UI-ONLY - display labor Work Log yang compact.
-  // Fungsi:
-  // - payroll final tetap prioritas dan satu-satunya nilai yang masuk HPP final;
-  // - payroll draft/estimasi Step boleh tampil read-only agar user paham kenapa field
-  //   `laborCostActual` masih 0 sebelum payroll final;
-  // - tidak menulis balik estimasi ke Work Log dan tidak membuat payroll otomatis.
-  // =====================================================
-  const detailLaborCostDisplay = useMemo(() => {
-    if (!selectedRecord) {
-      return { amount: 0, label: "-", tagColor: "default", helper: "-" };
-    }
-
-    return resolveWorkLogLaborCostDisplay({
-      workLog: selectedRecord,
-      relatedPayrolls: detailRelatedPayrolls,
-      productionStep: findWorkLogStepMaster(selectedRecord, referenceData.productionSteps || []),
-    });
-  }, [detailRelatedPayrolls, referenceData.productionSteps, selectedRecord]);
-
-  const detailLaborDisplay = detailLaborCostDisplay.amount || detailLaborCostDisplay.displayAmount || 0;
-
-  const detailOverheadCostDisplay = useMemo(() => {
-    if (!selectedRecord) {
-      return { amount: 0, label: "-", tagColor: "default", helper: "-" };
-    }
-
-    const overheadActual = safeNumber(selectedRecord.overheadCostActual);
-    if (overheadActual > 0) {
-      return {
-        amount: overheadActual,
-        label: "Dari Resep Produksi",
-        tagColor: "blue",
-        helper: "Overhead dari resep produksi.",
-      };
-    }
-
-    const overheadEstimate = getScaledBomOverheadEstimate({
-      workLog: selectedRecord,
-      boms: referenceData.boms || [],
-    });
-
-    if (overheadEstimate > 0) {
-      return {
-        amount: overheadEstimate,
-        label: "Estimasi Resep",
-        tagColor: "default",
-        helper: "Info data lama; belum disimpan sebagai overhead aktual.",
-      };
-    }
-
-    return {
-      amount: 0,
-      label: "Tidak dipakai",
-      tagColor: "default",
-      helper: "Overhead resep belum diisi.",
-    };
-  }, [referenceData.boms, selectedRecord]);
-
-  const detailDisplayedTotalCost = selectedRecord
-    ? safeNumber(selectedRecord.materialCostActual) +
-      safeNumber(detailOverheadCostDisplay.amount) +
-      safeNumber(detailLaborDisplay)
-    : 0;
-  const detailDisplayedCostPerGoodUnit =
-    selectedRecord && safeNumber(selectedRecord.goodQty) > 0
-      ? detailDisplayedTotalCost / safeNumber(selectedRecord.goodQty)
-      : 0;
-
-  const detailMetricCards = useMemo(() => {
-    if (!selectedRecord) return [];
-
-    const unitLabel = selectedRecord.targetUnit || "pcs";
-
-    return [
-      {
-        key: "batch",
-        label: "Qty Batch",
-        value: formatNumber(selectedRecord.plannedQty || 0),
-        helper: "Jumlah batch yang dikerjakan",
-      },
-      {
-        key: "estimate",
-        label: "Estimasi Output",
-        value: `${formatNumber(selectedRecord.theoreticalOutputQty || 0)} ${unitLabel}`,
-        helper: `Tahapan: ${selectedRecord.stepName || "-"}`,
-      },
-      {
-        key: "good",
-        label: "Hasil Baik",
-        value: `${formatNumber(selectedRecord.goodQty || 0)} ${unitLabel}`,
-        helper: "Qty yang masuk stok/output produksi",
-      },
-      {
-        key: "cost",
-        label: detailLaborCostDisplay.isFinal ? "Total Biaya Final" : "Estimasi Biaya",
-        value: formatCurrency(detailDisplayedTotalCost),
-        helper: detailLaborCostDisplay.isFinal
-          ? `Cost / good unit ${formatCurrency(detailDisplayedCostPerGoodUnit)}`
-          : `${detailLaborCostDisplay.totalStatusLabel || "Preview"}; final menunggu payroll confirmed/paid.`,
-      },
-    ];
-  }, [
-    detailDisplayedCostPerGoodUnit,
-    detailDisplayedTotalCost,
-    detailLaborCostDisplay.isFinal,
-    detailLaborCostDisplay.totalStatusLabel,
-    selectedRecord,
-  ]);
-
-  const detailMaterialColumns = useMemo(
-    () => [
-      {
-        title: "Material",
-        key: "item",
-        render: (_, record) => (
-          renderWorkLogCellBlock(record.itemName || "-", [
-            record.resolvedVariantLabel ? `Varian: ${record.resolvedVariantLabel}` : null,
-          ])
-        ),
-      },
-      {
-        title: "Sumber Stok",
-        key: "stockSource",
-        width: 160,
-        render: (_, record) => (
-          <div className={workLogUiClassNames.stack}>
-            <Tag className="ims-status-tag" color={getStockSourceTagColor(record.stockSourceType)}>
-              {record.stockSourceType === "variant" ? "Variant" : "Master"}
-            </Tag>
-            {record.stockSourceType === "variant" && record.resolvedVariantLabel ? (
-              <Typography.Text type="secondary" className={workLogUiClassNames.meta}>
-                {record.resolvedVariantLabel}
-              </Typography.Text>
-            ) : null}
-          </div>
-        ),
-      },
-      {
-        title: "Pemakaian",
-        key: "qty",
-        width: 180,
-        render: (_, record) => (
-          <Space direction="vertical" size={0}>
-            <Typography.Text>
-              Plan: {formatNumber(record.plannedQty)} {record.unit || ""}
-            </Typography.Text>
-            <Typography.Text type="secondary">
-              Actual: {formatNumber(record.actualQty)} {record.unit || ""}
-            </Typography.Text>
-          </Space>
-        ),
-      },
-      {
-        title: "Biaya",
-        key: "cost",
-        width: 180,
-        render: (_, record) => (
-          <Space direction="vertical" size={0}>
-            <Typography.Text>
-              {formatCurrency(record.totalCostSnapshot || 0)}
-            </Typography.Text>
-            <Typography.Text type="secondary">
-              Unit: {formatCurrency(record.costPerUnitSnapshot || 0)}
-            </Typography.Text>
-          </Space>
-        ),
-      },
-    ],
-    [getStockSourceTagColor, renderWorkLogCellBlock, workLogUiClassNames.meta, workLogUiClassNames.stack],
-  );
-
-  const detailOutputColumns = useMemo(
-    () => [
-      {
-        title: "Output",
-        key: "output",
-        render: (_, record) => (
-          renderWorkLogCellBlock(record.outputName || "-", [
-            record.outputCode || "-",
-            WORK_LOG_TARGET_TYPE_MAP[record.outputType] || record.outputType || "-",
-            record.outputVariantLabel ? `Varian: ${record.outputVariantLabel}` : null,
-          ])
-        ),
-      },
-      {
-        title: "Target Stok",
-        key: "stockTarget",
-        width: 170,
-        render: (_, record) => (
-          <div className={workLogUiClassNames.stack}>
-            <Tag className="ims-status-tag" color={getStockSourceTagColor(record.stockSourceType)}>
-              {record.stockSourceType === "variant" ? "Masuk ke Variant" : "Masuk ke Master"}
-            </Tag>
-            {record.outputVariantLabel ? (
-              <Typography.Text type="secondary" className={workLogUiClassNames.meta}>
-                {record.outputVariantLabel}
-              </Typography.Text>
-            ) : null}
-          </div>
-        ),
-      },
-      {
-        title: "Hasil",
-        key: "result",
-        width: 180,
-        render: (_, record) => (
-          <Typography.Text>
-            Good: {formatNumber(record.goodQty)} {record.unit || ""}
-          </Typography.Text>
-        ),
-      },
-      {
-        title: "Mutasi Stok",
-        key: "stockAdded",
-        width: 150,
-        render: (_, record) => (
-          <Tag className="ims-status-tag" color={record.stockAdded ? "green" : "default"}>
-            {record.stockAdded ? "Sudah masuk stok" : "Belum diposting"}
-          </Tag>
-        ),
-      },
-    ],
-    [getStockSourceTagColor, renderWorkLogCellBlock, workLogUiClassNames.meta, workLogUiClassNames.stack],
-  );
 
   // =====================================================
   // Kolom list Work Log Produksi
@@ -1840,529 +1563,53 @@ const ProductionWorkLogs = () => {
         </Form>
       </Drawer>
 
-      <Drawer
-        title="Detail Work Log Produksi"
+      <ProductionWorkLogDetailDrawer
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
-        width={980}
-      >
-        {!selectedRecord ? (
-          <Empty description="Tidak ada data" />
-        ) : (
-          <>
-            {/* ------------------------------------------------------------- */}
-            {/* SECTION: ringkasan cepat untuk audit work log                 */}
-            {/* Tujuan: user langsung tahu konteks kerja, status, dan hasil.  */}
-            {/* ------------------------------------------------------------- */}
-            <Space wrap size={[8, 8]} style={{ marginBottom: 16 }}>
-              <Tag className="ims-status-tag" color={getWorkLogStatusTagColor(selectedRecord.status)}>
-                {WORK_LOG_STATUS_MAP[selectedRecord.status] || "-"}
-              </Tag>
-              <Tag className="ims-status-tag" color={getWorkLogSourceTagColor(selectedRecord.sourceType)}>
-                {WORK_LOG_SOURCE_TYPE_MAP[selectedRecord.sourceType] ||
-                  selectedRecord.sourceType ||
-                  "-"}
-              </Tag>
-              <Tag className="ims-status-tag">{selectedRecord.productionOrderCode || "Tanpa PO"}</Tag>
-            </Space>
+        selectedRecord={selectedRecord}
+        productionPayrolls={productionPayrolls}
+        referenceData={referenceData}
+      />
 
-            {/* ------------------------------------------------------------- */}
-            {/* SECTION: kartu ringkasan angka utama                          */}
-            {/* Catatan maintainability:                                      */}
-            {/* - kartu ini hanya presentasi cepat untuk user operasional     */}
-            {/* - sumber data tetap berasal dari selectedRecord aktif         */}
-            {/* ------------------------------------------------------------- */}
-            <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
-              {detailMetricCards.map((item) => (
-                <Col xs={24} sm={12} xl={6} key={item.key}>
-                  <Card size="small">
-                    <Typography.Text type="secondary">
-                      {item.label}
-                    </Typography.Text>
-                    <div className="ims-detail-value" style={{ marginTop: 6 }}>
-                      {item.value}
-                    </div>
-                    <div className="ims-cell-meta" style={{ marginTop: 6 }}>
-                      {item.helper}
-                    </div>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
-
-            {/* ------------------------------------------------------------- */}
-            {/* SECTION: informasi work log dan konteks produksi              */}
-            {/* Dibagi 2 card agar lebih mudah dibaca daripada satu tabel     */}
-            {/* deskripsi yang terlalu panjang dan padat.                     */}
-            {/* ------------------------------------------------------------- */}
-            <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-              <Col xs={24} xl={14}>
-                <Card size="small" title="Ringkasan Work Log">
-                  <Descriptions bordered size="small" column={1}>
-                    <Descriptions.Item label="No. Work Log">
-                      {resolveDisplayReference(selectedRecord, { fields: ["workNumber"], fallback: "-" })}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Tanggal">
-                      {formatDisplayDate(selectedRecord.workDate)}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="No. Order Produksi">
-                      {selectedRecord.productionOrderCode || "-"}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Jenis Target">
-                      {WORK_LOG_TARGET_TYPE_MAP[selectedRecord.targetType] || "-"}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Target">
-                      <Space direction="vertical" size={0}>
-                        <Typography.Text strong>
-                          {selectedRecord.targetName || "-"}
-                        </Typography.Text>
-                        {selectedRecord.targetVariantLabel ? (
-                          <Typography.Text type="secondary">
-                            Varian: {selectedRecord.targetVariantLabel}
-                          </Typography.Text>
-                        ) : null}
-                      </Space>
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Tahapan">
-                      {selectedRecord.stepName || "-"}
-                    </Descriptions.Item>
-                    <Descriptions.Item label="Profil Produksi">
-                      {selectedRecord.productionProfileName || "-"}
-                    </Descriptions.Item>
-                  </Descriptions>
-                </Card>
-              </Col>
-
-              <Col xs={24} xl={10}>
-                <Space direction="vertical" size={16} style={{ width: "100%" }}>
-                  <Card size="small" title="Tim & Catatan">
-                    <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                      <div>
-                        <Typography.Text type="secondary">
-                          Operator Produksi
-                        </Typography.Text>
-                        <div style={{ marginTop: 8 }}>
-                          {detailWorkerNames.length > 0 ? (
-                            <Space wrap size={[8, 8]}>
-                              {detailWorkerNames.map((name) => (
-                                <Tag key={name} color="blue">
-                                  {name}
-                                </Tag>
-                              ))}
-                            </Space>
-                          ) : (
-                            <Typography.Text type="secondary">
-                              Belum ada operator dipilih.
-                            </Typography.Text>
-                          )}
-                        </div>
-                      </div>
-
-                      <Divider style={{ margin: 0 }} />
-
-                      <div>
-                        <Typography.Text type="secondary">
-                          Catatan Eksekusi
-                        </Typography.Text>
-                        <div style={{ marginTop: 8 }}>
-                          <Typography.Paragraph style={{ marginBottom: 0 }}>
-                            {selectedRecord.notes || "Belum ada catatan work log."}
-                          </Typography.Paragraph>
-                        </div>
-                      </div>
-                    </Space>
-                  </Card>
-
-                  <Card size="small" title="Biaya Produksi">
-                    <Row gutter={[12, 12]}>
-                      <Col span={12}>
-                        <Typography.Text type="secondary">Material</Typography.Text>
-                        <div className="ims-cell-title" style={{ marginTop: 4 }}>
-                          {formatCurrency(selectedRecord.materialCostActual || 0)}
-                        </div>
-                      </Col>
-                      <Col span={12}>
-                        <Typography.Text type="secondary">Tenaga Kerja</Typography.Text>
-                        <div className="ims-cell-title" style={{ marginTop: 4 }}>
-                          {formatCurrency(detailLaborDisplay)}
-                        </div>
-                        <Tag
-                          className="ims-status-tag"
-                          color={detailLaborCostDisplay.tagColor}
-                          style={{ marginTop: 4 }}
-                        >
-                          {detailLaborCostDisplay.label}
-                        </Tag>
-                        <div className="ims-cell-meta" style={{ marginTop: 4 }}>
-                          {detailLaborCostDisplay.helper}
-                        </div>
-                      </Col>
-                      <Col span={12}>
-                        <Typography.Text type="secondary">Overhead</Typography.Text>
-                        <div className="ims-cell-title" style={{ marginTop: 4 }}>
-                          {formatCurrency(detailOverheadCostDisplay.amount)}
-                        </div>
-                        <Tag
-                          className="ims-status-tag"
-                          color={detailOverheadCostDisplay.tagColor}
-                          style={{ marginTop: 4 }}
-                        >
-                          {detailOverheadCostDisplay.label}
-                        </Tag>
-                        <div className="ims-cell-meta" style={{ marginTop: 4 }}>
-                          {detailOverheadCostDisplay.helper}
-                        </div>
-                      </Col>
-
-                    </Row>
-                  </Card>
-                </Space>
-              </Col>
-            </Row>
-
-            {/* ------------------------------------------------------------- */}
-            {/* SECTION: tabel pemakaian material                              */}
-            {/* Fokus ke item, sumber stok, qty pakai, dan biaya snapshot.    */}
-            {/* ------------------------------------------------------------- */}
-            <Card size="small" title="Pemakaian Material" style={{ marginBottom: 16 }}>
-              <Table
-                className="ims-table"
-                rowKey={(record, index) => record.id || `material-${index}`}
-                pagination={false}
-                size="small"
-                dataSource={selectedRecord.materialUsages || []}
-                locale={{ emptyText: "Belum ada material usage" }}
-                columns={detailMaterialColumns}
-              />
-            </Card>
-
-            {/* ------------------------------------------------------------- */}
-            {/* SECTION: tabel hasil produksi                                  */}
-            {/* Tujuan: user mudah audit output, variant target, dan status   */}
-            {/* posting stok setelah work log selesai.                        */}
-            {/* ------------------------------------------------------------- */}
-            <Card size="small" title="Hasil Produksi">
-              <Table
-                className="ims-table"
-                rowKey={(record, index) => record.id || `output-${index}`}
-                pagination={false}
-                size="small"
-                dataSource={selectedRecord.outputs || []}
-                locale={{ emptyText: "Belum ada output" }}
-                columns={detailOutputColumns}
-              />
-            </Card>
-          </>
-        )}
-      </Drawer>
-
-      <Modal
-        title={
-          editingMaterialIndex !== null
-            ? "Edit Material Usage"
-            : "Tambah Material Usage"
-        }
+      <WorkLogMaterialUsageModal
         open={materialModalVisible}
+        editingIndex={editingMaterialIndex}
+        form={materialForm}
+        materialOptionsResolver={getMaterialOptions}
         onCancel={() => {
           setMaterialModalVisible(false);
           setEditingMaterialIndex(null);
           materialForm.resetFields();
         }}
         onOk={handleSaveMaterialUsage}
-        okText="Simpan"
-        destroyOnClose
-      >
-        <Form
-          form={materialForm}
-          layout="vertical"
-          initialValues={DEFAULT_WORK_LOG_MATERIAL_USAGE}
-        >
-          <Form.Item
-            label="Item Type"
-            name="itemType"
-            rules={[{ required: true, message: "Item type wajib dipilih" }]}
-          >
-            <Select
-              options={[
-                { value: "raw_material", label: "Raw Material" },
-                { value: "semi_finished_material", label: "Bahan Produksi" },
-              ]}
-            />
-          </Form.Item>
+      />
 
-          <Form.Item shouldUpdate noStyle>
-            {({ getFieldValue, setFieldValue }) => {
-              const itemType = getFieldValue("itemType");
-              return (
-                <Form.Item
-                  label="Item"
-                  name="itemId"
-                  rules={[{ required: true, message: "Item wajib dipilih" }]}
-                >
-                  <Select
-                    showSearch
-                    optionFilterProp="label"
-                    options={getMaterialOptions(itemType)}
-                    placeholder="Pilih item..."
-                    onChange={() => {
-                      setFieldValue("resolvedVariantKey", undefined);
-                      setFieldValue("resolvedVariantLabel", "");
-                    }}
-                  />
-                </Form.Item>
-              );
-            }}
-          </Form.Item>
-
-          <Form.Item shouldUpdate noStyle>
-            {({ getFieldValue, setFieldValue }) => {
-              const itemType = getFieldValue("itemType");
-              const itemId = getFieldValue("itemId");
-              const selectedItem = getMaterialOptions(itemType).find((item) => item.value === itemId)?.raw;
-              const hasVariants = inferHasVariants(selectedItem || {});
-              const variantOptions = buildVariantOptionsFromItem(selectedItem || {});
-
-              if (!hasVariants) return null;
-
-              return (
-                <Form.Item
-                  label="Varian Material"
-                  name="resolvedVariantKey"
-                  rules={[{ required: true, message: "Varian material wajib dipilih" }]}
-                >
-                  <Select
-                    showSearch
-                    optionFilterProp="label"
-                    options={variantOptions}
-                    placeholder="Pilih varian material..."
-                    onChange={(value) => {
-                      const selectedVariant = variantOptions.find((item) => item.value === value);
-                      setFieldValue("resolvedVariantLabel", selectedVariant?.label || "");
-                    }}
-                  />
-                </Form.Item>
-              );
-            }}
-          </Form.Item>
-
-          <Row gutter={12}>
-            <Col span={8}>
-              <Form.Item label="Qty Batch" name="plannedQty">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item label="Actual Qty" name="actualQty">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item label="Unit" name="unit">
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item label="Cost / Unit Snapshot" name="costPerUnitSnapshot">
-            <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-          </Form.Item>
-
-          <Form.Item label="Catatan" name="notes">
-            <Input.TextArea rows={2} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal
-        title={editingOutputIndex !== null ? "Edit Output" : "Tambah Output"}
+      <WorkLogOutputModal
         open={outputModalVisible}
+        editingIndex={editingOutputIndex}
+        form={outputForm}
+        referenceData={referenceData}
         onCancel={() => {
           setOutputModalVisible(false);
           setEditingOutputIndex(null);
           outputForm.resetFields();
         }}
         onOk={handleSaveOutput}
-        okText="Simpan"
-        destroyOnClose
-      >
-        <Form
-          form={outputForm}
-          layout="vertical"
-          initialValues={DEFAULT_WORK_LOG_OUTPUT}
-        >
-          <Form.Item
-            label="Output Type"
-            name="outputType"
-            rules={[{ required: true, message: "Output type wajib dipilih" }]}
-          >
-            <Select
-              options={[
-                { value: "semi_finished_material", label: "Bahan Produksi" },
-                { value: "product", label: "Produk Jadi" },
-              ]}
-            />
-          </Form.Item>
+      />
 
-          <Form.Item shouldUpdate noStyle>
-            {({ getFieldValue, setFieldValue }) => {
-              const outputType = getFieldValue("outputType");
-
-              const options =
-                outputType === "semi_finished_material"
-                  ? (referenceData.semiFinishedMaterials || []).map((item) => ({
-                      value: item.id,
-                      label: item.name || "-",
-                      raw: item,
-                    }))
-                  : (referenceData.products || []).map((item) => ({
-                      value: item.id,
-                      label: item.name || "-",
-                      raw: item,
-                    }));
-
-              return (
-                <Form.Item
-                  label="Output Item"
-                  name="outputIdRef"
-                  rules={[
-                    { required: true, message: "Output item wajib dipilih" },
-                  ]}
-                >
-                  <Select
-                    showSearch
-                    optionFilterProp="label"
-                    options={options}
-                    placeholder="Pilih output item..."
-                    onChange={() => {
-                      setFieldValue("outputVariantKey", undefined);
-                      setFieldValue("outputVariantLabel", "");
-                    }}
-                  />
-                </Form.Item>
-              );
-            }}
-          </Form.Item>
-
-          <Form.Item shouldUpdate noStyle>
-            {({ getFieldValue, setFieldValue }) => {
-              const outputType = getFieldValue("outputType");
-              const outputIdRef = getFieldValue("outputIdRef");
-              const selectedOutput = (
-                outputType === "semi_finished_material"
-                  ? (referenceData.semiFinishedMaterials || [])
-                  : (referenceData.products || [])
-              ).find((item) => item.id === outputIdRef);
-              const hasVariants = inferHasVariants(selectedOutput || {});
-              const variantOptions = buildVariantOptionsFromItem(selectedOutput || {});
-
-              if (!hasVariants) return null;
-
-              return (
-                <Form.Item
-                  label="Varian Output"
-                  name="outputVariantKey"
-                  rules={[{ required: true, message: "Varian output wajib dipilih" }]}
-                >
-                  <Select
-                    showSearch
-                    optionFilterProp="label"
-                    options={variantOptions}
-                    placeholder="Pilih varian output..."
-                    onChange={(value) => {
-                      const selectedVariant = variantOptions.find((item) => item.value === value);
-                      setFieldValue("outputVariantLabel", selectedVariant?.label || "");
-                    }}
-                  />
-                </Form.Item>
-              );
-            }}
-          </Form.Item>
-
-          <Row gutter={12}>
-            <Col span={24}>
-              <Form.Item label="Good Qty" name="goodQty">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item name="rejectQty" hidden><InputNumber /></Form.Item>
-          <Form.Item name="reworkQty" hidden><InputNumber /></Form.Item>
-
-          <Row gutter={12}>
-            <Col span={12}>
-              <Form.Item label="Cost / Unit" name="costPerUnit">
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item label="Unit" name="unit">
-                <Input />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item label="Catatan" name="notes">
-            <Input.TextArea rows={2} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Modal
-        title="Selesaikan Work Log Produksi"
+      <WorkLogCompleteModal
         open={completeModalVisible}
+        form={completeForm}
+        employeeOptions={employeeOptions}
+        estimateInfo={renderCompleteWorkLogEstimateInfo(completingRecord)}
         onCancel={() => {
           setCompleteModalVisible(false);
           setCompletingRecord(null);
           completeForm.resetFields();
         }}
         onOk={handleMarkCompleted}
-        okText="Selesaikan"
-        destroyOnClose
-      >
-        {/* Aktif dipakai: konteks estimasi output ditampilkan kembali sebelum input hasil produksi. */}
-        {renderCompleteWorkLogEstimateInfo(completingRecord)}
+      />
 
-        <Form form={completeForm} layout="vertical">
-          <Row gutter={12}>
-            <Col span={24}>
-              <Form.Item
-                label="Good Qty"
-                name="goodQty"
-                rules={[{ required: true, message: "Good qty wajib diisi" }]}
-              >
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Form.Item
-            label="Operator Produksi"
-            name="workerIds"
-            rules={[
-              {
-                required: true,
-                type: "array",
-                min: 1,
-                message: "Operator Produksi wajib dipilih agar payroll otomatis bisa dibuat",
-              },
-            ]}
-          >
-            <Select
-              mode="multiple"
-              optionFilterProp="label"
-              options={employeeOptions}
-              placeholder="Pilih operator yang mengerjakan work log ini..."
-            />
-          </Form.Item>
-
-          <Form.Item label="Catatan Penyelesaian" name="notes">
-            <Input.TextArea
-              rows={3}
-              placeholder="Catatan hasil produksi, miss, atau kendala proses..."
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
     </div>
   );
 };

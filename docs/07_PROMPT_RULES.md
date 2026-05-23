@@ -29,10 +29,11 @@ Selalu jelaskan singkat:
 ## Rule Penting Project Ini
 - field stok sedang transisi: jangan ubah hanya `stock` bila area tersebut sudah memakai `currentStock`
 - sales selesai baru mengakui income
-- Sales tidak boleh punya tombol/status cancel user-facing; barang kembali wajib lewat Return. Logic cancel/revert Sales tidak boleh menjadi fitur user; rollback teknis create failure harus tetap internal.
+- Sales tidak boleh punya tombol/status batal user-facing; barang kembali wajib lewat Return. Logic stok masuk dari Sales tidak boleh menjadi fitur user; rollback teknis create failure harus tetap internal.
+- Return aktif bersifat stock-only correction: `returns` + stok masuk + `inventory_logs return_in`; jangan mengasumsikan refund, income, expense, revenue, atau ledger finance otomatis dari Return sebelum ada rule baru yang di-approve.
 - purchases membuat expense otomatis
 - purchases report membaca `expenses`, bukan `purchases`
-- profit loss membaca `revenues + incomes + expenses`
+- profit loss membaca `revenues + incomes - expenses`
 - flow produksi aktif adalah BOM → Production Order → Work Log → Payroll → HPP Analysis
 - collection customer final adalah `customers` lowercase; `Customers` uppercase harus dianggap legacy/test data kecuali ada task migrasi khusus
 
@@ -57,10 +58,17 @@ cek:
 ### Jika task menyentuh penjualan
 cek:
 - pengurangan stok
-- larangan cancel/delete Sales dan jalur Return untuk barang kembali
+- larangan aksi batal/delete Sales dan jalur Return untuk barang kembali
 - income saat status selesai
 - laporan penjualan
 - cash in
+
+### Jika task menyentuh Return
+cek:
+- Return aktif adalah stock-only correction, bukan finance/refund otomatis
+- dokumen `returns`, stok masuk, dan `inventory_logs return_in` tetap satu transaction
+- jangan menambah side-effect `incomes`, `revenues`, `expenses`, atau ledger tanpa approval business rule baru
+- jangan membuat stock revert dari Sales sebagai pengganti Return
 
 ### Jika task menyentuh pembelian
 cek:
@@ -181,7 +189,7 @@ Selalu beritahu apakah task itu sebaiknya juga mengupdate:
 - WhatsApp boleh diperlakukan sebagai non-reference channel, tetapi jangan otomatis disamakan dengan Offline untuk status `Selesai` atau timing income.
 - Offline/WhatsApp tidak perlu menyimpan `referenceNumber`; channel marketplace/online boleh menyimpan reference opsional.
 - Income tetap hanya dibuat saat status `Selesai` dan tidak boleh dobel.
-- Cancel Sales user-facing tidak boleh aktif; jangan menambahkan tombol Batalkan atau hard delete Sales. Barang kembali/pembeli batal setelah transaksi tercatat wajib lewat Return.
+- Aksi batal Sales user-facing tidak boleh aktif; jangan menambahkan tombol Batalkan atau hard delete Sales. Barang kembali/pembeli batal setelah transaksi tercatat wajib lewat Return.
 
 ### Guard Fase B - Purchase Expense Metadata
 - Jika task menyentuh Purchases, jangan hapus expense otomatis.
@@ -424,6 +432,8 @@ Risiko:
 - `src/services/System/userService.js` hanya jika guard create/update/delete profile bermasalah.
 - `src/utils/auth/roleAccess.js` hanya jika role/access matrix memang perlu update.
 - File rules source-controlled hanya boleh ditambahkan pada task terpisah jika owner meminta rules masuk repo.
+- Firestore index validation dilakukan dari error/link Firebase atau root config valid; jangan membuat `firestore.indexes.json` asumtif dari frontend ZIP saja.
+- Jika patch hanya validasi rules/index dan root Firebase config tidak tersedia, output aman adalah docs/checklist manual, bukan perubahan service/query/schema.
 - Docs Auth/User Management/checklist/integration map.
 
 ### File/area guarded
@@ -487,7 +497,7 @@ Risiko:
 - Jika task menyentuh Cash In, jangan ubah auto income dari Sales, Cash Out, Profit Loss, Dashboard, atau Reports tanpa analisis lintas modul.
 - Jika task menyentuh Sales tab/status, tabel harus tetap difilter sesuai `activeTabKey`; tab `Dikirim` tidak boleh menampilkan `Selesai`, dan tab `Selesai` tidak boleh menampilkan `Diproses`/`Dikirim`.
 - Search reference Sales harus berjalan setelah filter status aktif, bukan mengganti filter status.
-- Jangan mengubah status transition, stock mutation, income timing, cancel flow, rollback teknis create failure, atau return compatibility hanya untuk memperbaiki tampilan tab.
+- Jangan mengubah status transition, stock mutation, income timing, alur Return, atau return compatibility hanya untuk memperbaiki tampilan tab.
 
 
 ## Prompt Guard — Sales pending income dan no-delete action
@@ -496,8 +506,8 @@ Risiko:
 - Jangan memasukkan pending income ke Profit Loss, Cash In, Dashboard, atau Reports resmi.
 - Sales status `Diproses`/`Dikirim` boleh dihitung sebagai pending display-only; status `Selesai` menjadi income resmi; status batal tidak menjadi status operasional Sales.
 - Jangan menambahkan tombol Delete/Hapus di tabel Sales tanpa approval eksplisit dan desain maintenance/audit trail.
-- Flow barang kembali/pembeli batal setelah transaksi tercatat harus memakai menu Return, bukan `Batalkan` di Sales dan bukan hard delete user biasa.
-- Perubahan Sales summary/tab/dropdown tidak boleh mengubah stock mutation, income timing, Return compatibility, atau payload Firestore. Jangan menghidupkan kembali cancel stock revert sebagai action user-facing.
+- Flow barang kembali/pembeli batal setelah transaksi tercatat harus memakai menu Return, bukan tombol Batalkan di Sales dan bukan hard delete user biasa.
+- Perubahan Sales summary/tab/dropdown tidak boleh mengubah stock mutation, income timing, Return compatibility, atau payload Firestore. Jangan menghidupkan kembali stok masuk dari Sales sebagai action user-facing.
 - Dropdown item/varian Sales tidak perlu menampilkan teks stok panjang jika panel read-only stok sudah tampil; cukup tampilkan nama item/varian dan jenis item.
 
 ## Prompt Rule Tambahan — UI Theme Brand
@@ -561,7 +571,7 @@ Untuk task cleanup theme besar-besaran:
 - Jangan menghapus Firestore document ID secara database-level; document ID tetap kebutuhan internal Firestore.
 - Jangan mengubah schema/service/stock mutation/write-flow/inventory log writer/report export tanpa approval khusus.
 - Jika task hanya docs, catat source mismatch sebagai tech debt dan jangan ubah source.
-- Source saat ini yang masih memiliki mapping manual atau Firestore auto ID harus diperlakukan sebagai cleanup candidate sampai ada task source terpisah.
+- Source yang masih memakai Firestore auto ID untuk audit/log atau membutuhkan counter/ID readable harus diperlakukan sebagai cleanup candidate sampai ada task guarded terpisah; jangan membuat generator baru di page/service.
 
 ## Prompt Guard — Reset & Maintenance Decision Center
 - Jangan membuat reset destructive baru tanpa preview, warning, confirmation keyword, result summary, dan audit/error trail.

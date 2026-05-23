@@ -1,0 +1,3144 @@
+diff --git a/docs/03_BUSINESS_RULES.md b/docs/03_BUSINESS_RULES.md
+index ca263be..4bf09fd 100644
+--- a/docs/03_BUSINESS_RULES.md
++++ b/docs/03_BUSINESS_RULES.md
+@@ -1188,3 +1188,14 @@ Catatan lock:
+ - Karyawan Produksi tetap memakai kode tampilan `DDMMYYYY-XXX`, tetapi sequence final disimpan pada `business_code_counters` dengan prefix internal `EMP`.
+ - Collection lama `production_employee_code_sequences` hanya dibaca sebagai baseline legacy dan tidak menjadi counter aktif create baru.
+ - Tidak ada migration/rename data lama; relasi Work Log, Payroll, dan PO existing wajib tetap aman.
++
++
++## Update Business Rules — Transaction Side-Effect Repair guarded — 2026-05-23
++
++Status: **AKTIF / GUARDED**.
++
++- Flow transaksi aktif tetap sama: Sales membuat stock out + inventory log, dan income hanya saat status `Selesai`; Purchases membuat purchase + stock in + inventory log + expense; Return tetap stock-only correction + inventory log tanpa income/expense/revenue otomatis.
++- Menu Reset & Maintenance boleh menjalankan **Repair Side-Effect Transaksi** hanya untuk membuat side-effect yang benar-benar hilang dari transaksi aktif: `incomes` untuk Sales `Selesai`, `expenses` untuk Purchases, dan `inventory_logs` untuk Sales/Purchases/Returns.
++- Repair side-effect tidak boleh mengubah stok master/variant, tidak boleh mengubah dokumen `sales`, `purchases`, atau `returns`, tidak boleh menghapus income/expense/log lama, tidak boleh mengubah payroll/HPP, dan tidak boleh membuat refund Return.
++- Konflik seperti Sales belum `Selesai` tetapi sudah punya income tetap masuk review manual. Sistem tidak melakukan rollback/delete otomatis karena berisiko merusak laporan finance.
++- Repair wajib didahului audit/dry run dan konfirmasi keyword `REPAIR TRANSAKSI`; setelah repair wajib audit ulang dan cek Cash In, Cash Out, Stock Management, Sales Report, Purchases Report, dan Profit Loss.
+diff --git a/docs/05_CURRENT_STATE_AND_TECH_DEBT.md b/docs/05_CURRENT_STATE_AND_TECH_DEBT.md
+index 732c8a9..81af725 100644
+--- a/docs/05_CURRENT_STATE_AND_TECH_DEBT.md
++++ b/docs/05_CURRENT_STATE_AND_TECH_DEBT.md
+@@ -1200,3 +1200,20 @@ Batasan:
+ - Tidak ada migrasi/rename dokumen Planning atau Employee lama.
+ - Tidak mengubah status flow Planning, PO, Work Log, Payroll, HPP, stok, finance, route/menu/role guard, atau reset.
+ - Firestore Rules untuk `business_code_counters` tetap wajib dicek di Firebase Console.
++
++
++## Batch merge 1-8 — readpath, reset maintenance, docs/QA sync — 2026-05-23
++
++Status source terbaru setelah rebase patch gabungan:
++
++- Dashboard/Stock Report read model memakai helper/service read-only untuk mapper stok bersama; belum membuat collection summary baru dan belum mengubah mutasi stok.
++- ResetMaintenanceData sudah memakai `useMasterDataExport`, `useResetMaintenanceAudits`, dan `useResetMaintenanceRepairs`, serta modal/status card split kecil agar page tidak kembali jumbo.
++- `useDataQualityAudit.js`, `useLegacyDataAudit.js`, `useMasterCodeMaintenance.js`, `useProductionMaintenance.js`, dan `useResetAuditOverview.js` bukan kontrak aktif setelah hook consolidation; jika masih ada pada working tree lokal, hapus sesuai delete list patch gabungan.
++- Repair Side-Effect Transaksi sudah naik dari preview-only ke guarded repair aktual dengan keyword `REPAIR TRANSAKSI`; service hanya membuat side-effect yang hilang dan tidak mengubah stok master/transaksi utama.
++- Firestore Rules/index tetap external/manual karena repo ZIP belum menyertakan source-controlled rules/index config final; jangan membuat rules/index asumtif dari frontend ZIP saja.
++
++Tech debt tersisa:
++
++- Laporan besar masih butuh paging/read model arsitektural jika dataset membesar; patch ini baru merapikan service/mapper dan guard partial read.
++- `src/services/Maintenance/resetMaintenanceDataService.js` tetap besar dan destructive; split service destructive harus batch terpisah dengan approval eksplisit.
++- `src/pages/Transaksi/Purchases.jsx` masih sensitif karena OCR, stock in, expense, supplier reference, dan average cost; lanjut split harus kecil dan behavior-preserving.
+diff --git a/docs/06_TEST_CHECKLIST.md b/docs/06_TEST_CHECKLIST.md
+index ef5edd9..f5d2307 100644
+--- a/docs/06_TEST_CHECKLIST.md
++++ b/docs/06_TEST_CHECKLIST.md
+@@ -1803,3 +1803,18 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
+ - [ ] Jalankan flow reset maintenance yang biasa dipakai dan pastikan allowlist/config reset tetap sama.
+ - [ ] Pastikan tidak ada helper baru yang mengambil alih business logic destructive atau transaction utama.
+ 
++
++
++## Checklist Batch Merge 1-8 — rebase patch gabungan — 2026-05-23
++
++- [ ] `npm run build` berhasil setelah patch gabungan diterapkan.
++- [ ] Dashboard tetap read-only: Stok Kritis, Audit Stok, Restock Assistant, dan summary planning tampil tanpa auto-create/auto-fix.
++- [ ] Stock Report tetap menampilkan raw materials, products, semi finished, dan export XLSX mengikuti filter aktif; jika ada failedReads, UI/export menandai partial read.
++- [ ] Reset & Maintenance tidak white screen setelah hook individual lama dihapus.
++- [ ] Preview Export, Export Master, dan Export Checklist berjalan dari `useMasterDataExport` tanpa menjalankan reset/delete/repair.
++- [ ] Cek Semua menjalankan audit Data Quality, HPP, Master Code, Stok, Inventory Log, Legacy, Produksi, Payroll, Variant Transaksi, dan Side-Effect Transaksi.
++- [ ] Repair Side-Effect Transaksi terkunci sampai Cek Side-Effect dijalankan dan hanya berjalan setelah keyword `REPAIR TRANSAKSI` benar.
++- [ ] Setelah Repair Side-Effect, cek ulang Cash In, Cash Out, Stock Management/inventory log, Sales Report, Purchases Report, dan Profit Loss.
++- [ ] Return tetap stock-only + inventory log; tidak muncul refund/cash otomatis.
++- [ ] Sales tetap no-cancel user-facing; barang kembali/koreksi tetap lewat Return.
++- [ ] Firestore Rules/index tidak berubah dari patch ini; validasi manual di Firebase Console tetap diperlukan.
+diff --git a/docs/07_PROMPT_RULES.md b/docs/07_PROMPT_RULES.md
+index 2f38aba..7dc6e05 100644
+--- a/docs/07_PROMPT_RULES.md
++++ b/docs/07_PROMPT_RULES.md
+@@ -432,6 +432,8 @@ Risiko:
+ - `src/services/System/userService.js` hanya jika guard create/update/delete profile bermasalah.
+ - `src/utils/auth/roleAccess.js` hanya jika role/access matrix memang perlu update.
+ - File rules source-controlled hanya boleh ditambahkan pada task terpisah jika owner meminta rules masuk repo.
++- Firestore index validation dilakukan dari error/link Firebase atau root config valid; jangan membuat `firestore.indexes.json` asumtif dari frontend ZIP saja.
++- Jika patch hanya validasi rules/index dan root Firebase config tidak tersedia, output aman adalah docs/checklist manual, bukan perubahan service/query/schema.
+ - Docs Auth/User Management/checklist/integration map.
+ 
+ ### File/area guarded
+diff --git a/docs/08_INTEGRATION_MAP.md b/docs/08_INTEGRATION_MAP.md
+index c30bf2e..4dde7ce 100644
+--- a/docs/08_INTEGRATION_MAP.md
++++ b/docs/08_INTEGRATION_MAP.md
+@@ -956,42 +956,31 @@ Guard:
+ - Submit create Sales wajib punya lock agar double-click tidak membuat order/stok dobel.
+ - Auto Detect/Data Quality Audit hanya read-only untuk menemukan Sales belum selesai yang sudah punya income, Sales selesai yang belum punya income, Sales tanpa inventory log `sale`, dan mismatch side-effect lain yang masih relevan dengan flow aktif.
+ 
+-### Batch 18A — Transaction side-effect repair preview
++### Batch 18B — Transaction Side-Effect Repair aktual guarded — 2026-05-23
+ 
+ ```text
+ Reset & Maintenance > Repair Turunan Aman
+--> Preview Side-effect Transaksi
+--> dataQualityAuditService.getTransactionSideEffectRepairPreview()
+--> getDataQualityAudit() read-only
+--> kategori guarded:
+-   sales_completed_income_missing -> target incomes
+-   purchases_expense_missing -> target expenses
+-   sales_inventory_log_missing -> target inventory_logs sale
+-   purchases_inventory_log_missing -> target inventory_logs purchase_in
+-   returns_inventory_log_missing -> target inventory_logs return_in
++-> Cek Side-Effect Transaksi
++-> transactionSideEffectRepairService.getTransactionSideEffectRepairAudit()
++-> read sales/purchases/returns + incomes/expenses/inventory_logs
++-> classify safe repair vs manual review
++-> keyword REPAIR TRANSAKSI
++-> transactionSideEffectRepairService.repairTransactionSideEffects()
++-> create missing incomes/expenses/inventory_logs only
++-> no stock master mutation
++-> no sales/purchases/returns mutation
++-> no delete/rollback side-effect lama
++-> audit ulang
+ ```
+ 
+ Guard:
+-- Preview ini tidak menulis `incomes`, `expenses`, `inventory_logs`, Sales, Purchases, Returns, stok, kas, payroll, HPP, atau audit transaksi.
+-- Repair aktual harus batch terpisah dengan payload preview final, idempotent document id/link key, confirm keyword khusus, dan maintenance log.
+-- Jangan membuat inventory log backfill otomatis sebelum memastikan stok transaksi memang sudah termutasi pada saat transaksi asli dibuat.
++- Sales `Selesai` tanpa income boleh dibuatkan `incomes`.
++- Purchases tanpa expense otomatis boleh dibuatkan `expenses`.
++- Sales/Purchases/Returns tanpa inventory log boleh dibuatkan `inventory_logs` audit, tetapi tidak boleh mengubah stok karena stok sudah dianggap side-effect aktual transaksi lama.
++- Sales belum `Selesai` tetapi sudah punya income tetap manual review, bukan auto delete.
++- Return aktif tetap stock-only correction + inventory log; tidak membuat refund/cash finance otomatis.
+ 
+-### Batch 19A — Reset/Maintenance side-effect preview hook split
+-
+-```text
+-ResetMaintenanceData.jsx
+--> useTransactionSideEffectPreview({ createPageMaintenanceLog })
+--> dataQualityAuditService.getTransactionSideEffectRepairPreview()
+--> maintenanceLogService.createMaintenanceLog() dry_run metadata only
+--> ResetSafeRepairPanel receives preview state/rows as props
+-```
+-
+-Guard:
+-- Hook hanya mengelola state/loading/handler preview side-effect transaksi.
+-- Hook tidak membuat income, expense, inventory log, tidak memutasi stok/kas/transaksi, dan tidak menjalankan repair aktual.
+-- Jangan pindahkan destructive reset/HPP reset/repair aktual ke hook baru tanpa audit file-by-file dan approval terpisah.
+-
+-### Batch 19B — Reset/Maintenance Master Export hook split
++### Batch 19B — Reset/Maintenance Master Export hook aktif
+ 
+ ```text
+ ResetMaintenanceData.jsx
+@@ -1006,82 +995,48 @@ Guard:
+ - Hook tidak menjalankan reset, delete, repair, sync stock, baseline restore, HPP reset, atau mutasi transaksi.
+ - Export data pokok tetap read-only backup/checklist helper; bukan restore otomatis dan bukan sumber perubahan schema.
+ 
+-### Batch 19C — Reset/Maintenance Master Code hook split
+-
+-```text
+-ResetMaintenanceData.jsx
+--> useMasterCodeMaintenance({ createPageMaintenanceLog, loadPreview })
+--> masterCodeMaintenanceService.getMasterCodeMaintenanceAudit()
+--> masterCodeMaintenanceService.repairMasterCodeMaintenance()
+--> maintenanceLogService.createMaintenanceLog() dry_run/repair metadata
+--> ResetSafeRepairPanel receives master code audit/loading/handler props
+-```
+-
+-Guard:
+-- Hook hanya mengelola state/loading/handler Audit Kode Master dan Normalisasi Kode.
+-- Repair kode master tetap memakai service maintenance existing, tidak rename Firestore document ID, dan tidak menyentuh transaksi/history.
+-- Jangan gabungkan hook split ini dengan repair side-effect transaksi aktual, HPP reset, reset destructive, atau perubahan schema/collection.
+-
+-### Batch 19D — Reset/Maintenance Data Quality Audit hook split
++### Batch 19C-19G — Reset/Maintenance audit/repair hook consolidation
+ 
+ ```text
+ ResetMaintenanceData.jsx
+--> useDataQualityAudit({ createPageMaintenanceLog })
+--> dataQualityAuditService.getDataQualityAudit()
+--> maintenanceLogService.createMaintenanceLog() dry_run metadata only
+--> ResetAutoDetectPanel receives audit/category rows as props
++-> useResetMaintenanceAudits({ createPageMaintenanceLog })
++-> useResetMaintenanceRepairs({ createPageMaintenanceLog, loadPreview })
++-> ResetAutoDetectPanel / ResetSafeRepairPanel receive audit, repair, loading, rows, and summaries as props
+ ```
+ 
+ Guard:
+-- Hook hanya mengelola state/loading/handler Cek Data Lama dan derived category rows.
+-- Data Quality Audit tetap read-only dry-run; tidak membuat repair, migration, income, expense, inventory log, dan tidak memutasi stok/kas/transaksi/payroll/HPP.
+-- `Cek Semua` boleh memanggil handler dari hook, tetapi repair aktual side-effect transaksi tetap batch guarded terpisah.
++- Source aktif memakai hook konsolidasi `useResetMaintenanceAudits.js` dan `useResetMaintenanceRepairs.js`; hook individual lama seperti `useDataQualityAudit`, `useLegacyDataAudit`, `useMasterCodeMaintenance`, `useProductionMaintenance`, dan `useResetAuditOverview` sudah tidak menjadi kontrak aktif.
++- Audit tetap dry-run/read-only sampai user menekan action repair yang guarded.
++- Repair logic tetap berada di service maintenance masing-masing; hook hanya orchestration UI/loading/log metadata.
+ 
+-### Batch 19E — Reset/Maintenance Legacy Data Audit hook split
++### Reset/Maintenance remaining page split guarded
+ 
+ ```text
+ ResetMaintenanceData.jsx
+--> useLegacyDataAudit({ createPageMaintenanceLog })
+--> legacyDataMaintenanceService.getLegacyDataMaintenanceAudit()
+--> maintenanceLogService.createMaintenanceLog() dry_run metadata only
+--> ResetAutoDetectPanel receives legacy audit summary through audit overview map
++-> ResetStatusSummaryCard
++-> ResetConfirmModal
++-> HppCostConfirmModal
++-> ResetDangerZonePanel / ResetAutoDetectPanel / ResetSafeRepairPanel / ResetPreviewPanel / ResetExportPanel
+ ```
+ 
+ Guard:
+-- Hook hanya mengelola state/loading/handler Audit Data Lama / Legacy Data Maintenance.
+-- Legacy Data Audit tetap read-only dry-run; tidak menjalankan reset, delete, repair, migration, stok, kas, payroll, HPP, atau mutasi transaksi.
+-- `Cek Semua` boleh memanggil handler dari hook, tetapi repair aktual side-effect transaksi, reset destructive, dan HPP reset tetap batch guarded terpisah.
++- Split UI tidak mengubah reset scope, protected collection, confirmation keyword, audit log pre-write, HPP reset/restore semantics, stock sync, atau service destructive.
++- Modal destructive tetap require keyword dan blocking loading state.
++- Reset service `resetMaintenanceDataService.js` tetap guarded dan tidak disentuh dalam split UI ini.
+ 
+-### Batch 19F — Reset/Maintenance Audit Overview hook split
++### Integration Map — Dashboard / Stock Report Stock Read Model
+ 
+ ```text
+-ResetMaintenanceData.jsx
+--> useResetAuditOverview({ audit results })
+--> computes auditOverviewRows, auditIssueRows, autoBugSummary
+--> ResetAutoDetectPanel receives overview/issue rows as props
+--> top summary cards receive autoBugSummary
+-```
+-
+-Guard:
+-- Hook hanya derived UI state/read-only dari hasil audit yang sudah tersedia.
+-- Hook tidak memanggil service, tidak membuat maintenance log, tidak menjalankan repair/reset/delete, dan tidak memutasi stok/kas/transaksi/payroll/HPP.
+-- Jangan gabungkan derived overview split dengan repair aktual side-effect transaksi, schema/read model baru, reset destructive, atau HPP reset.
+-
+-### Batch 19G — Reset/Maintenance Production Maintenance hook split
+-
+-```text
+-ResetMaintenanceData.jsx
+--> useProductionMaintenance({ createPageMaintenanceLog, loadPreview })
+--> productionVariantMaintenanceService.getProductionVariantMaintenanceAudit()
+--> productionVariantMaintenanceService.repairProductionVariantMaintenance()
+--> maintenanceLogService.createMaintenanceLog() metadata audit/repair
+--> ResetSafeRepairPanel receives production maintenance props
++products/raw_materials/semi_finished_materials
++-> buildStockReadModelRow()
++-> Dashboard Stok Kritis / Stock Audit
++-> Stock Report table / XLSX export rows
+ ```
+ 
+ Guard:
+-- Hook hanya memindahkan orchestration Audit/Repair Varian Produksi dari page ke hook lokal.
+-- Repair logic tetap berada di service existing; patch ini tidak mengubah stok, HPP, payroll, transaksi, schema, collection, atau reset destructive.
+-- Setelah repair sukses, hook tetap reload audit produksi dan preview reset seperti flow sebelumnya.
++- Mapper ini read-only dan hanya menyatukan display/read model stok antar halaman.
++- Tidak membuat collection summary baru, tidak melakukan backfill, dan tidak mengganti helper mutasi stok guarded.
++- Jika stok master membesar, paging/read model Firestore tetap perlu batch arsitektur terpisah dengan kontrak export yang jelas.
+ 
+ ### Helper Integration Map — stock formatter dan trim normalization — 2026-05-17
+ 
+diff --git a/src/pages/Utilities/ResetMaintenanceData.jsx b/src/pages/Utilities/ResetMaintenanceData.jsx
+index ae9376d..3288ca7 100644
+--- a/src/pages/Utilities/ResetMaintenanceData.jsx
++++ b/src/pages/Utilities/ResetMaintenanceData.jsx
+@@ -9,14 +9,9 @@ import {
+   Row,
+   Space,
+   Statistic,
+-  Tag,
+-  Typography,
+   message,
+ } from "antd";
+-import {
+-  ReloadOutlined,
+-  WarningOutlined,
+-} from "@ant-design/icons";
++import { WarningOutlined } from "@ant-design/icons";
+ import {
+   createMaintenanceLog,
+   updateMaintenanceLogStatus,
+@@ -26,8 +21,6 @@ import {
+   FULL_TESTING_RESET_HPP_MODE,
+   HPP_COST_RESET_OPTIONS,
+   RESET_ALL_TESTING_MODULES,
+-  buildMasterDataExportPayload,
+-  getMasterDataExportPreview,
+   RESET_MODE_OPTIONS,
+   deleteDevTestData,
+   getDevTestDataPreview,
+@@ -46,7 +39,7 @@ import PageHeader from "../../components/Layout/Page/PageHeader";
+ import useAuth from "../../hooks/useAuth";
+ import useResetMaintenanceAudits from "./hooks/useResetMaintenanceAudits";
+ import useResetMaintenanceRepairs from "./hooks/useResetMaintenanceRepairs";
+-import useTransactionSideEffectPreview from "./hooks/useTransactionSideEffectPreview";
++import useMasterDataExport from "./hooks/useMasterDataExport";
+ import {
+   HPP_CONFIRM_KEYWORDS,
+   RESET_CONFIRM_KEYWORDS,
+@@ -63,8 +56,11 @@ import ResetSafeRepairPanel from "./components/ResetSafeRepairPanel";
+ import ResetUsageGuidePanel from "./components/ResetUsageGuidePanel";
+ import ResetDangerZonePanel from "./components/ResetDangerZonePanel";
+ import ResetExportPanel from "./components/ResetExportPanel";
++import ResetStatusSummaryCard from "./components/ResetStatusSummaryCard";
++import ResetConfirmModal from "./components/ResetConfirmModal";
++import HppCostConfirmModal from "./components/HppCostConfirmModal";
+ 
+-const { Text } = Typography;
++const TRANSACTION_SIDE_EFFECT_CONFIRM_KEYWORD = "REPAIR TRANSAKSI";
+ 
+ // -----------------------------------------------------------------------------
+ // Reset & Maintenance Data Page
+@@ -78,6 +74,7 @@ const { Text } = Typography;
+ const ResetMaintenanceData = () => {
+   const [confirmForm] = Form.useForm();
+   const [hppConfirmForm] = Form.useForm();
++  const [transactionSideEffectConfirmForm] = Form.useForm();
+   const { firebaseUser, profile } = useAuth();
+ 
+   // ---------------------------------------------------------------------------
+@@ -96,6 +93,7 @@ const ResetMaintenanceData = () => {
+   const [loadingBaseline, setLoadingBaseline] = useState(false);
+   const [loadingSync, setLoadingSync] = useState(false);
+   const [confirmOpen, setConfirmOpen] = useState(false);
++  const [transactionSideEffectConfirmOpen, setTransactionSideEffectConfirmOpen] = useState(false);
+   const [resetIntent, setResetIntent] = useState("standard");
+ 
+   // ---------------------------------------------------------------------------
+@@ -104,29 +102,15 @@ const ResetMaintenanceData = () => {
+   // ---------------------------------------------------------------------------
+   const [actionNote, setActionNote] = useState("");
+ 
+-  /*
+-  =====================================================
+-  SECTION: Testing & Reset Center export state — AKTIF
+-  Fungsi:
+-  - Menyimpan jawaban wizard, preview/export data pokok, dan ringkasan export terakhir.
+-
+-  Dipakai oleh:
+-  - Section Rekomendasi Sekarang, Wizard Keputusan, Export Data Pokok, dan Preview Dampak Reset.
+-
+-  Alasan perubahan:
+-  - Halaman reset harus membantu owner/developer menjalankan audit, export, baseline, dan reset guarded tanpa membuka semua detail teknis di awal.
+-
+-  Catatan cleanup:
+-  - Bisa dipindah ke subcomponent setelah flow stabil.
+-
+-  Risiko:
+-  - Jangan hubungkan wizard ini langsung ke delete service; wizard hanya menyiapkan mode/module dan tetap wajib preview + confirmation RESET.
+-  =====================================================
+-  */
+-  const [loadingMasterExportPreview, setLoadingMasterExportPreview] = useState(false);
+-  const [loadingMasterExport, setLoadingMasterExport] = useState(false);
+-  const [masterExportPreview, setMasterExportPreview] = useState(null);
+-  const [lastMasterExport, setLastMasterExport] = useState(null);
++  const {
++    loadingMasterExportPreview,
++    loadingMasterExport,
++    masterExportPreview,
++    lastMasterExport,
++    handleLoadMasterExportPreview,
++    handleDownloadMasterExport,
++    handleDownloadMasterExportChecklist,
++  } = useMasterDataExport();
+ 
+   /*
+   =====================================================
+@@ -257,109 +241,6 @@ const ResetMaintenanceData = () => {
+     [buildPageAuditNote, maintenanceActor],
+   );
+ 
+-  const downloadJsonPayload = useCallback((payload, filename) => {
+-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+-    const url = URL.createObjectURL(blob);
+-    const link = document.createElement("a");
+-    link.href = url;
+-    link.download = filename;
+-    document.body.appendChild(link);
+-    link.click();
+-    document.body.removeChild(link);
+-    URL.revokeObjectURL(url);
+-  }, []);
+-
+-  const getTimestampForFilename = useCallback(() => {
+-    const date = new Date();
+-    const pad = (value) => String(value).padStart(2, "0");
+-    return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}`;
+-  }, []);
+-
+-  const handleLoadMasterExportPreview = useCallback(async () => {
+-    try {
+-      setLoadingMasterExportPreview(true);
+-      const result = await getMasterDataExportPreview();
+-      setMasterExportPreview(result);
+-      message.success("Preview export data pokok berhasil dimuat.");
+-    } catch (error) {
+-      console.error(error);
+-      message.error(error?.message || "Gagal memuat preview export data pokok.");
+-    } finally {
+-      setLoadingMasterExportPreview(false);
+-    }
+-  }, []);
+-
+-  const handleDownloadMasterExport = useCallback(async (includeOpeningStock = true) => {
+-    try {
+-      setLoadingMasterExport(true);
+-      const payload = await buildMasterDataExportPayload({ includeOpeningStock });
+-      const filename = `ims-master-data-export-${getTimestampForFilename()}.json`;
+-      downloadJsonPayload(payload, filename);
+-      setLastMasterExport({
+-        exportedAt: payload.exportMeta?.exportedAt,
+-        totalCollections: payload.summary?.totalCollections || 0,
+-        totalRecords: payload.summary?.totalRecords || 0,
+-        openingStockRows: payload.summary?.openingStockRows || 0,
+-        warnings: payload.warnings || [],
+-        includeOpeningStock,
+-      });
+-      setMasterExportPreview({
+-        exportMeta: payload.exportMeta,
+-        summary: payload.summary,
+-        warnings: payload.warnings,
+-      });
+-      if (payload.warnings?.length) {
+-        message.warning("Export berhasil, tetapi ada collection yang gagal dibaca. Cek warning di section Export.");
+-      } else {
+-        message.success("Export data pokok JSON berhasil diunduh.");
+-      }
+-    } catch (error) {
+-      console.error(error);
+-      message.error(error?.message || "Gagal export data pokok JSON.");
+-    } finally {
+-      setLoadingMasterExport(false);
+-    }
+-  }, [downloadJsonPayload, getTimestampForFilename]);
+-
+-  const handleDownloadMasterExportChecklist = useCallback(async () => {
+-    try {
+-      setLoadingMasterExport(true);
+-      const previewPayload = await getMasterDataExportPreview();
+-      const checklistPayload = {
+-        exportMeta: {
+-          project: "IMS Bunga Flanel",
+-          exportType: "master-data-checklist-summary",
+-          exportedAt: new Date().toISOString(),
+-          source: "ResetMaintenanceData",
+-          notes: "Ringkasan checklist export data pokok; tidak berisi transaksi/log dan tidak bisa direstore otomatis.",
+-        },
+-        summary: previewPayload.summary,
+-        warnings: previewPayload.warnings || [],
+-        nextSteps: [
+-          "Review master product/raw material/semi finished/supplier/customer/BOM/step.",
+-          "Jangan import transaksi/log lama sebagai default jika logic baru berubah.",
+-          "Buat opening stock ulang lewat purchase/opening adjustment setelah reset.",
+-          "Jalankan audit ulang setelah reset/input ulang.",
+-        ],
+-      };
+-      downloadJsonPayload(checklistPayload, `ims-master-data-export-${getTimestampForFilename()}.json`);
+-      setMasterExportPreview(previewPayload);
+-      setLastMasterExport({
+-        exportedAt: checklistPayload.exportMeta.exportedAt,
+-        totalCollections: previewPayload.summary?.totalCollections || 0,
+-        totalRecords: previewPayload.summary?.totalRecords || 0,
+-        openingStockRows: 0,
+-        warnings: previewPayload.warnings || [],
+-        includeOpeningStock: false,
+-      });
+-      message.success("Export Ringkasan Checklist JSON berhasil diunduh.");
+-    } catch (error) {
+-      console.error(error);
+-      message.error(error?.message || "Gagal export ringkasan checklist JSON.");
+-    } finally {
+-      setLoadingMasterExport(false);
+-    }
+-  }, [downloadJsonPayload, getTimestampForFilename]);
+ 
+   const loadHppCostBaselineSummary = useCallback(async () => {
+     try {
+@@ -762,17 +643,21 @@ const ResetMaintenanceData = () => {
+     setPayrollAudit,
+     transactionVariantAudit,
+     setTransactionVariantAudit,
++    transactionSideEffectAudit,
++    setTransactionSideEffectAudit,
+     loadingStockAudit,
+     loadingDataQualityAudit,
+     loadingHppReconcileAudit,
+     loadingMasterCodeAudit,
+     loadingTransactionVariantAudit,
++    loadingTransactionSideEffectAudit,
+     handleLoadMasterCodeAudit,
+     handleLoadProductionMaintenanceAudit,
+     handleLoadStockAudit,
+     handleLoadDataQualityAudit,
+     handleLoadHppReconcileAudit,
+     handleLoadTransactionVariantAudit,
++    handleLoadTransactionSideEffectAudit,
+     handleRunAllAudits,
+     masterCodeRows,
+     masterCodeSummary,
+@@ -791,6 +676,7 @@ const ResetMaintenanceData = () => {
+     loadingHppReconcileRepair,
+     loadingPayrollRepair,
+     loadingTransactionVariantRepair,
++    loadingTransactionSideEffectRepair,
+     handleRepairMasterCodeAudit,
+     handleRepairProductionMaintenance,
+     handleRepairStockAudit,
+@@ -798,6 +684,7 @@ const ResetMaintenanceData = () => {
+     handleRepairHppReconcileAudit,
+     handleRepairPayrollAudit,
+     handleRepairTransactionVariantAudit,
++    handleRepairTransactionSideEffects,
+   } = useResetMaintenanceRepairs({
+     createPageMaintenanceLog,
+     loadPreview,
+@@ -811,24 +698,53 @@ const ResetMaintenanceData = () => {
+     setHppReconcileAudit,
+     setPayrollAudit,
+     setTransactionVariantAudit,
++    setTransactionSideEffectAudit,
+   });
+ 
+-  const {
+-    transactionSideEffectPreview,
+-    loadingTransactionSideEffectPreview,
+-    handleLoadTransactionSideEffectPreview,
+-  } = useTransactionSideEffectPreview({ createPageMaintenanceLog });
+-
+   const transactionSideEffectSummary = useMemo(
+-    () => transactionSideEffectPreview?.summary || {},
+-    [transactionSideEffectPreview],
++    () => transactionSideEffectAudit?.summary || {},
++    [transactionSideEffectAudit],
+   );
+ 
+   const transactionSideEffectRows = useMemo(
+-    () => transactionSideEffectPreview?.rows || [],
+-    [transactionSideEffectPreview],
++    () => transactionSideEffectAudit?.rows || [],
++    [transactionSideEffectAudit],
+   );
+ 
++  const openTransactionSideEffectRepairConfirmation = useCallback(() => {
++    const planCount = transactionSideEffectAudit?.summary?.executablePlanCount || 0;
++
++    if (!transactionSideEffectAudit) {
++      message.error("Jalankan Cek Side-Effect Transaksi dulu sebelum repair.");
++      return;
++    }
++
++    if (planCount <= 0) {
++      message.info("Tidak ada kandidat repair side-effect transaksi dari audit terakhir.");
++      return;
++    }
++
++    transactionSideEffectConfirmForm.setFieldsValue({ confirmationText: "", actionNote });
++    setTransactionSideEffectConfirmOpen(true);
++  }, [actionNote, transactionSideEffectAudit, transactionSideEffectConfirmForm]);
++
++  const handleConfirmTransactionSideEffectRepair = useCallback(async () => {
++    try {
++      const values = await transactionSideEffectConfirmForm.validateFields();
++      if ((values.confirmationText || "").trim().toUpperCase() !== TRANSACTION_SIDE_EFFECT_CONFIRM_KEYWORD) {
++        message.error(`Ketik "${TRANSACTION_SIDE_EFFECT_CONFIRM_KEYWORD}" untuk konfirmasi.`);
++        return;
++      }
++
++      await handleRepairTransactionSideEffects({ actionNote: values.actionNote ?? actionNote });
++      setTransactionSideEffectConfirmOpen(false);
++      transactionSideEffectConfirmForm.resetFields();
++    } catch (error) {
++      if (error?.errorFields) return;
++      console.error(error);
++    }
++  }, [actionNote, handleRepairTransactionSideEffects, transactionSideEffectConfirmForm]);
++
+   const openResetConfirmation = async () => {
+     if (resetBlockedReason) {
+       message.error(resetBlockedReason);
+@@ -1027,31 +943,14 @@ const ResetMaintenanceData = () => {
+             description="Halaman ini tidak lagi auto full-scan saat dibuka. Pilih skenario, jalankan audit/preview manual, lalu eksekusi hanya jika scope dan keyword sudah jelas."
+           />
+ 
+-          <Card title="Status Ringkas" size="small" extra={<Tag color="green">Actor: {maintenanceActor}</Tag>}>
+-            <Space direction="vertical" size={12} style={{ width: "100%" }}>
+-              <Row gutter={[12, 12]}>
+-                <Col xs={12} md={6}>
+-                  <Statistic title="Bug/Data Issue" value={autoBugSummary.issueCount} />
+-                </Col>
+-                <Col xs={12} md={6}>
+-                  <Statistic title="Repair Aman" value={autoBugSummary.safeRepairCount} />
+-                </Col>
+-                <Col xs={12} md={6}>
+-                  <Statistic title="Preview Reset" value={preview ? preview.totalRecords || 0 : "Belum"} />
+-                </Col>
+-                <Col xs={12} md={6}>
+-                  <Statistic title="Baseline HPP" value={hppCostBaselineSummary?.exists ? "Ada" : "Belum"} />
+-                </Col>
+-              </Row>
+-              <Input.TextArea
+-                value={actionNote}
+-                onChange={(event) => setActionNote(event.target.value)}
+-                rows={2}
+-                allowClear
+-                placeholder="Catatan trial opsional untuk audit log, contoh: cek ulang data lama setelah patch reset UI"
+-              />
+-            </Space>
+-          </Card>
++          <ResetStatusSummaryCard
++            actionNote={actionNote}
++            autoBugSummary={autoBugSummary}
++            hppCostBaselineSummary={hppCostBaselineSummary}
++            maintenanceActor={maintenanceActor}
++            onActionNoteChange={setActionNote}
++            preview={preview}
++          />
+ 
+           <ResetDangerZonePanel
+             loadingAutoDetect={loadingAutoDetect}
+@@ -1118,9 +1017,11 @@ const ResetMaintenanceData = () => {
+             onRepairTransactionVariantAudit={handleRepairTransactionVariantAudit}
+             transactionVariantAudit={transactionVariantAudit}
+             transactionVariantRepairSummary={transactionVariantAudit?.summary || {}}
+-            loadingTransactionSideEffectPreview={loadingTransactionSideEffectPreview}
+-            onLoadTransactionSideEffectPreview={handleLoadTransactionSideEffectPreview}
+-            transactionSideEffectPreview={transactionSideEffectPreview}
++            loadingTransactionSideEffectAudit={loadingTransactionSideEffectAudit}
++            onLoadTransactionSideEffectAudit={handleLoadTransactionSideEffectAudit}
++            loadingTransactionSideEffectRepair={loadingTransactionSideEffectRepair}
++            onOpenTransactionSideEffectRepairConfirm={openTransactionSideEffectRepairConfirmation}
++            transactionSideEffectAudit={transactionSideEffectAudit}
+             transactionSideEffectSummary={transactionSideEffectSummary}
+             transactionSideEffectRows={transactionSideEffectRows}
+             loadingSync={loadingSync}
+@@ -1176,176 +1077,104 @@ const ResetMaintenanceData = () => {
+         </Space>
+       </Card>
+ 
+-      <Modal
+-        open={confirmOpen}
+-        title={isFullTestingResetIntent ? "Konfirmasi Reset Semua Testing" : "Konfirmasi Reset Data"}
++      <ResetConfirmModal
++        confirmForm={confirmForm}
++        confirmOpen={confirmOpen}
++        isFullTestingResetIntent={isFullTestingResetIntent}
++        loadingRun={loadingRun}
++        mode={mode}
+         onCancel={() => {
+           if (loadingRun) return;
+           setConfirmOpen(false);
+           confirmForm.resetFields();
+         }}
+-        onOk={handleRunReset}
+-        okText="Ya, Jalankan Reset"
+-        cancelText="Batal"
+-        okButtonProps={{ danger: true, loading: loadingRun, icon: <ReloadOutlined /> }}
+-      >
+-        <Space direction="vertical" size={14} style={{ width: "100%" }}>
+-          <Alert
+-            type="error"
+-            showIcon
+-            icon={<WarningOutlined />}
+-            message={isFullTestingResetIntent ? "Reset semua testing akan membersihkan data non-protected" : "Reset akan menghapus scope terpilih"}
+-            description={isFullTestingResetIntent
+-              ? "Aksi ini menghapus transaksi/log/planning/pricing, menolkan stok, dan menolkan modal/HPP allowlist. Protected master tidak dihapus."
+-              : "Pastikan preview sesuai. Reset tidak bisa dibatalkan dari halaman ini."}
+-          />
+-
+-          <div>
+-            <Text strong>Mode aktif:</Text>
+-            <div style={{ marginTop: 6 }}>
+-              <Tag color="blue">{RESET_MODE_LABELS[mode]}</Tag>
+-            </div>
+-          </div>
+-
+-          <div>
+-            <Text strong>Modul dipilih:</Text>
+-            <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8 }}>
+-              {selectedModuleLabels.map((label) => (
+-                <Tag key={label} color="geekblue">{label}</Tag>
+-              ))}
+-            </div>
+-          </div>
+-
+-          <div>
+-            <Text strong>Total data terdeteksi:</Text>
+-            <div style={{ marginTop: 4 }}>
+-              <Text>{preview?.totalRecords || 0} record</Text>
+-            </div>
+-          </div>
+-
+-          {isFullTestingResetIntent && (
+-            <Alert
+-              type="warning"
+-              showIcon
+-              message="Termasuk stok dan modal/HPP"
+-              description={`Stok master/variant dinolkan. Field modal/HPP allowlist diproses untuk ${preview?.executionPlan?.hppCostOperations || 0} item master, digabung dengan update stok menjadi ${preview?.executionPlan?.mergedMasterUpdateOperations || 0} update master.`}
+-            />
+-          )}
+-
+-          <Alert
+-            type="warning"
+-            showIcon
+-            message="Audit log dibuat sebelum reset berjalan"
+-            description="Jika audit log gagal, reset batal."
+-          />
+-
+-          <Form form={confirmForm} layout="vertical">
+-            <Form.Item
+-              name="actionNote"
+-              label="Catatan percobaan"
+-              extra="Opsional. Jika diisi, catatan ini digabung ke field note audit tanpa menghapus note sistem."
+-            >
+-              <Input.TextArea rows={2} placeholder="Contoh: reset data trial PO/HPP tanggal hari ini" allowClear />
+-            </Form.Item>
+-            <Form.Item
+-              name="confirmationText"
+-              label={`Ketik "${resetConfirmKeyword}" untuk konfirmasi terakhir`}
+-              rules={[{ required: true, message: `Ketik "${resetConfirmKeyword}" untuk melanjutkan.` }]}
+-              extra={`Reset hanya berjalan jika kata ${resetConfirmKeyword} benar.`}
+-            >
+-              <Input placeholder={`Ketik ${resetConfirmKeyword} di sini`} allowClear autoFocus />
+-            </Form.Item>
+-          </Form>
+-        </Space>
+-      </Modal>
+-
+-      <Modal
+-        open={hppCostConfirmOpen}
+-        title={hppCostConfirmAction === "restore" ? "Konfirmasi Restore Baseline Modal/HPP" : "Konfirmasi Reset Modal/HPP"}
++        onConfirm={handleRunReset}
++        preview={preview}
++        resetConfirmKeyword={resetConfirmKeyword}
++        resetModeLabels={RESET_MODE_LABELS}
++        selectedModuleLabels={selectedModuleLabels}
++      />
++
++      <HppCostConfirmModal
++        hppConfirmForm={hppConfirmForm}
++        hppCostBaselineSummary={hppCostBaselineSummary}
++        hppCostConfirmAction={hppCostConfirmAction}
++        hppCostConfirmKeyword={hppCostConfirmKeyword}
++        hppCostConfirmOpen={hppCostConfirmOpen}
++        hppCostPreview={hppCostPreview}
++        hppCostSelectedOption={hppCostSelectedOption}
++        loadingRestoreHppCostBaseline={loadingRestoreHppCostBaseline}
++        loadingRunHppCostReset={loadingRunHppCostReset}
+         onCancel={() => {
+           if (loadingRunHppCostReset || loadingRestoreHppCostBaseline) return;
+           setHppCostConfirmOpen(false);
+           hppConfirmForm.resetFields();
+         }}
+-        onOk={handleHppCostConfirmAction}
+-        okText={hppCostConfirmAction === "restore" ? "Ya, Restore Baseline" : "Ya, Reset Modal/HPP"}
++        onConfirm={handleHppCostConfirmAction}
++      />
++
++
++      <Modal
++        open={transactionSideEffectConfirmOpen}
++        title="Konfirmasi Repair Side-Effect Transaksi"
++        onCancel={() => {
++          if (loadingTransactionSideEffectRepair) return;
++          setTransactionSideEffectConfirmOpen(false);
++          transactionSideEffectConfirmForm.resetFields();
++        }}
++        onOk={handleConfirmTransactionSideEffectRepair}
++        okText="Ya, Repair Transaksi"
+         cancelText="Batal"
+         okButtonProps={{
+           danger: true,
+-          loading: loadingRunHppCostReset || loadingRestoreHppCostBaseline,
+-          icon: hppCostConfirmAction === "restore" ? <ReloadOutlined /> : <WarningOutlined />,
++          loading: loadingTransactionSideEffectRepair,
++          icon: <WarningOutlined />,
+         }}
+       >
+         <Space direction="vertical" size={14} style={{ width: "100%" }}>
+           <Alert
+-            type="error"
++            type="warning"
+             showIcon
+             icon={<WarningOutlined />}
+-            message={hppCostConfirmAction === "restore" ? "Restore akan menimpa field modal/HPP master" : "Reset akan menolkan field modal/HPP master"}
+-            description="Tidak menghapus transaksi, mengubah stok, membuat payroll/cash, atau memproses ulang Work Log."
++            message="Repair ini membuat side-effect transaksi yang hilang"
++            description="Aksi hanya membuat dokumen incomes, expenses, atau inventory_logs yang benar-benar hilang dari Sales/Purchases/Returns aktif. Stok master, dokumen transaksi utama, payroll, HPP, dan reset data tidak diubah. Income/expense/log lama tidak dihapus."
+           />
+ 
+-          <div>
+-            <Text strong>Mode:</Text>
+-            <div style={{ marginTop: 6 }}>
+-              <Tag color={hppCostConfirmAction === "restore" ? "blue" : "volcano"}>
+-                {hppCostConfirmAction === "restore" ? "Restore Baseline Modal/HPP" : hppCostPreview?.label || hppCostSelectedOption?.label}
+-              </Tag>
+-            </div>
+-          </div>
+-
+           <Row gutter={[12, 12]}>
+             <Col xs={12}>
+               <Card size="small">
+-                <Statistic
+-                  title={hppCostConfirmAction === "restore" ? "Item Baseline" : "Dokumen Terdampak"}
+-                  value={hppCostConfirmAction === "restore" ? hppCostBaselineSummary?.itemCount || 0 : hppCostPreview?.totalAffectedDocs || 0}
+-                />
++                <Statistic title="Kandidat Repair" value={transactionSideEffectSummary.executablePlanCount || 0} />
+               </Card>
+             </Col>
+             <Col xs={12}>
+               <Card size="small">
+-                <Statistic
+-                  title={hppCostConfirmAction === "restore" ? "Collection" : "Field/Varian"}
+-                  value={hppCostConfirmAction === "restore" ? Object.keys(hppCostBaselineSummary?.collectionCounts || {}).length : hppCostPreview?.totalAffectedVariantRows || 0}
+-                />
++                <Statistic title="Manual Review" value={transactionSideEffectSummary.manualReviewCount || 0} />
+               </Card>
+             </Col>
+           </Row>
+ 
+-          {hppCostConfirmAction === "reset" && (
+-            <div>
+-              <Text strong>Field terdampak:</Text>
+-              <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8 }}>
+-                {[...(hppCostPreview?.fieldsToReset || []), ...(hppCostPreview?.variantFieldsToReset || []).map((fieldName) => `variants.${fieldName}`)].map((fieldName) => (
+-                  <Tag key={fieldName} color="orange">{fieldName}</Tag>
+-                ))}
+-              </div>
+-            </div>
+-          )}
+-
+           <Alert
+-            type="warning"
++            type="info"
+             showIcon
+-            message="Gunakan hanya untuk testing HPP"
+-            description="Tidak memperbaiki Work Log lama bernilai cost 0; ulangi flow testing untuk HPP baru."
++            message="Guard idempotent"
++            description="Service melakukan audit ulang sebelum write dan memakai document ID deterministik untuk repair agar klik ulang tidak membuat side-effect dobel. Tetap jalankan audit ulang setelah repair."
+           />
+ 
+-          <Form form={hppConfirmForm} layout="vertical">
++          <Form form={transactionSideEffectConfirmForm} layout="vertical">
+             <Form.Item
+               name="actionNote"
+               label="Catatan percobaan"
+               extra="Opsional. Jika diisi, catatan ini digabung ke field note audit tanpa menghapus note sistem."
+             >
+-              <Input.TextArea rows={2} placeholder="Contoh: reset simulasi cost HPP setelah tes pembelian" allowClear />
++              <Input.TextArea rows={2} placeholder="Contoh: repair missing income/expense/log dari data trial Batch 18B" allowClear />
+             </Form.Item>
+             <Form.Item
+               name="confirmationText"
+-              label={`Ketik "${hppCostConfirmKeyword}" untuk konfirmasi terakhir`}
+-              rules={[{ required: true, message: `Ketik "${hppCostConfirmKeyword}" untuk melanjutkan.` }]}
+-              extra={`Aksi hanya berjalan jika keyword ${hppCostConfirmKeyword} benar.`}
++              label={`Ketik "${TRANSACTION_SIDE_EFFECT_CONFIRM_KEYWORD}" untuk konfirmasi terakhir`}
++              rules={[{ required: true, message: `Ketik "${TRANSACTION_SIDE_EFFECT_CONFIRM_KEYWORD}" untuk melanjutkan.` }]}
++              extra="Aksi hanya berjalan jika keyword benar."
+             >
+-              <Input placeholder={`Ketik ${hppCostConfirmKeyword} di sini`} allowClear autoFocus />
++              <Input placeholder={`Ketik ${TRANSACTION_SIDE_EFFECT_CONFIRM_KEYWORD} di sini`} allowClear autoFocus />
+             </Form.Item>
+           </Form>
+         </Space>
+diff --git a/src/pages/Utilities/components/HppCostConfirmModal.jsx b/src/pages/Utilities/components/HppCostConfirmModal.jsx
+new file mode 100644
+index 0000000..f27789a
+--- /dev/null
++++ b/src/pages/Utilities/components/HppCostConfirmModal.jsx
+@@ -0,0 +1,108 @@
++import { ReloadOutlined, WarningOutlined } from "@ant-design/icons";
++import { Alert, Card, Col, Form, Input, Modal, Row, Space, Statistic, Tag, Typography } from "antd";
++
++const { Text } = Typography;
++
++const HppCostConfirmModal = ({
++  hppConfirmForm,
++  hppCostBaselineSummary,
++  hppCostConfirmAction,
++  hppCostConfirmKeyword,
++  hppCostConfirmOpen,
++  hppCostPreview,
++  hppCostSelectedOption,
++  loadingRestoreHppCostBaseline,
++  loadingRunHppCostReset,
++  onCancel,
++  onConfirm,
++}) => (
++  <Modal
++    open={hppCostConfirmOpen}
++    title={hppCostConfirmAction === "restore" ? "Konfirmasi Restore Baseline Modal/HPP" : "Konfirmasi Reset Modal/HPP"}
++    onCancel={onCancel}
++    onOk={onConfirm}
++    okText={hppCostConfirmAction === "restore" ? "Ya, Restore Baseline" : "Ya, Reset Modal/HPP"}
++    cancelText="Batal"
++    okButtonProps={{
++      danger: true,
++      loading: loadingRunHppCostReset || loadingRestoreHppCostBaseline,
++      icon: hppCostConfirmAction === "restore" ? <ReloadOutlined /> : <WarningOutlined />,
++    }}
++  >
++    <Space direction="vertical" size={14} style={{ width: "100%" }}>
++      <Alert
++        type="error"
++        showIcon
++        icon={<WarningOutlined />}
++        message={hppCostConfirmAction === "restore" ? "Restore akan menimpa field modal/HPP master" : "Reset akan menolkan field modal/HPP master"}
++        description="Tidak menghapus transaksi, mengubah stok, membuat payroll/cash, atau memproses ulang Work Log."
++      />
++
++      <div>
++        <Text strong>Mode:</Text>
++        <div style={{ marginTop: 6 }}>
++          <Tag color={hppCostConfirmAction === "restore" ? "blue" : "volcano"}>
++            {hppCostConfirmAction === "restore" ? "Restore Baseline Modal/HPP" : hppCostPreview?.label || hppCostSelectedOption?.label}
++          </Tag>
++        </div>
++      </div>
++
++      <Row gutter={[12, 12]}>
++        <Col xs={12}>
++          <Card size="small">
++            <Statistic
++              title={hppCostConfirmAction === "restore" ? "Item Baseline" : "Dokumen Terdampak"}
++              value={hppCostConfirmAction === "restore" ? hppCostBaselineSummary?.itemCount || 0 : hppCostPreview?.totalAffectedDocs || 0}
++            />
++          </Card>
++        </Col>
++        <Col xs={12}>
++          <Card size="small">
++            <Statistic
++              title={hppCostConfirmAction === "restore" ? "Collection" : "Field/Varian"}
++              value={hppCostConfirmAction === "restore" ? Object.keys(hppCostBaselineSummary?.collectionCounts || {}).length : hppCostPreview?.totalAffectedVariantRows || 0}
++            />
++          </Card>
++        </Col>
++      </Row>
++
++      {hppCostConfirmAction === "reset" && (
++        <div>
++          <Text strong>Field terdampak:</Text>
++          <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8 }}>
++            {[...(hppCostPreview?.fieldsToReset || []), ...(hppCostPreview?.variantFieldsToReset || []).map((fieldName) => `variants.${fieldName}`)].map((fieldName) => (
++              <Tag key={fieldName} color="orange">{fieldName}</Tag>
++            ))}
++          </div>
++        </div>
++      )}
++
++      <Alert
++        type="warning"
++        showIcon
++        message="Gunakan hanya untuk testing HPP"
++        description="Tidak memperbaiki Work Log lama bernilai cost 0; ulangi flow testing untuk HPP baru."
++      />
++
++      <Form form={hppConfirmForm} layout="vertical">
++        <Form.Item
++          name="actionNote"
++          label="Catatan percobaan"
++          extra="Opsional. Jika diisi, catatan ini digabung ke field note audit tanpa menghapus note sistem."
++        >
++          <Input.TextArea rows={2} placeholder="Contoh: reset simulasi cost HPP setelah tes pembelian" allowClear />
++        </Form.Item>
++        <Form.Item
++          name="confirmationText"
++          label={`Ketik "${hppCostConfirmKeyword}" untuk konfirmasi terakhir`}
++          rules={[{ required: true, message: `Ketik "${hppCostConfirmKeyword}" untuk melanjutkan.` }]}
++          extra={`Aksi hanya berjalan jika keyword ${hppCostConfirmKeyword} benar.`}
++        >
++          <Input placeholder={`Ketik ${hppCostConfirmKeyword} di sini`} allowClear autoFocus />
++        </Form.Item>
++      </Form>
++    </Space>
++  </Modal>
++);
++
++export default HppCostConfirmModal;
+diff --git a/src/pages/Utilities/components/ResetConfirmModal.jsx b/src/pages/Utilities/components/ResetConfirmModal.jsx
+new file mode 100644
+index 0000000..0dc929a
+--- /dev/null
++++ b/src/pages/Utilities/components/ResetConfirmModal.jsx
+@@ -0,0 +1,99 @@
++import { ReloadOutlined, WarningOutlined } from "@ant-design/icons";
++import { Alert, Form, Input, Modal, Space, Tag, Typography } from "antd";
++
++const { Text } = Typography;
++
++const ResetConfirmModal = ({
++  confirmForm,
++  confirmOpen,
++  isFullTestingResetIntent,
++  loadingRun,
++  mode,
++  onCancel,
++  onConfirm,
++  preview,
++  resetConfirmKeyword,
++  resetModeLabels,
++  selectedModuleLabels,
++}) => (
++  <Modal
++    open={confirmOpen}
++    title={isFullTestingResetIntent ? "Konfirmasi Reset Semua Testing" : "Konfirmasi Reset Data"}
++    onCancel={onCancel}
++    onOk={onConfirm}
++    okText="Ya, Jalankan Reset"
++    cancelText="Batal"
++    okButtonProps={{ danger: true, loading: loadingRun, icon: <ReloadOutlined /> }}
++  >
++    <Space direction="vertical" size={14} style={{ width: "100%" }}>
++      <Alert
++        type="error"
++        showIcon
++        icon={<WarningOutlined />}
++        message={isFullTestingResetIntent ? "Reset semua testing akan membersihkan data non-protected" : "Reset akan menghapus scope terpilih"}
++        description={isFullTestingResetIntent
++          ? "Aksi ini menghapus transaksi/log/planning/pricing, menolkan stok, dan menolkan modal/HPP allowlist. Protected master tidak dihapus."
++          : "Pastikan preview sesuai. Reset tidak bisa dibatalkan dari halaman ini."}
++      />
++
++      <div>
++        <Text strong>Mode aktif:</Text>
++        <div style={{ marginTop: 6 }}>
++          <Tag color="blue">{resetModeLabels[mode]}</Tag>
++        </div>
++      </div>
++
++      <div>
++        <Text strong>Modul dipilih:</Text>
++        <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8 }}>
++          {selectedModuleLabels.map((label) => (
++            <Tag key={label} color="geekblue">{label}</Tag>
++          ))}
++        </div>
++      </div>
++
++      <div>
++        <Text strong>Total data terdeteksi:</Text>
++        <div style={{ marginTop: 4 }}>
++          <Text>{preview?.totalRecords || 0} record</Text>
++        </div>
++      </div>
++
++      {isFullTestingResetIntent && (
++        <Alert
++          type="warning"
++          showIcon
++          message="Termasuk stok dan modal/HPP"
++          description={`Stok master/variant dinolkan. Field modal/HPP allowlist diproses untuk ${preview?.executionPlan?.hppCostOperations || 0} item master, digabung dengan update stok menjadi ${preview?.executionPlan?.mergedMasterUpdateOperations || 0} update master.`}
++        />
++      )}
++
++      <Alert
++        type="warning"
++        showIcon
++        message="Audit log dibuat sebelum reset berjalan"
++        description="Jika audit log gagal, reset batal."
++      />
++
++      <Form form={confirmForm} layout="vertical">
++        <Form.Item
++          name="actionNote"
++          label="Catatan percobaan"
++          extra="Opsional. Jika diisi, catatan ini digabung ke field note audit tanpa menghapus note sistem."
++        >
++          <Input.TextArea rows={2} placeholder="Contoh: reset data trial PO/HPP tanggal hari ini" allowClear />
++        </Form.Item>
++        <Form.Item
++          name="confirmationText"
++          label={`Ketik "${resetConfirmKeyword}" untuk konfirmasi terakhir`}
++          rules={[{ required: true, message: `Ketik "${resetConfirmKeyword}" untuk melanjutkan.` }]}
++          extra={`Reset hanya berjalan jika kata ${resetConfirmKeyword} benar.`}
++        >
++          <Input placeholder={`Ketik ${resetConfirmKeyword} di sini`} allowClear autoFocus />
++        </Form.Item>
++      </Form>
++    </Space>
++  </Modal>
++);
++
++export default ResetConfirmModal;
+diff --git a/src/pages/Utilities/components/ResetSafeRepairPanel.jsx b/src/pages/Utilities/components/ResetSafeRepairPanel.jsx
+index 8d88460..2668f51 100644
+--- a/src/pages/Utilities/components/ResetSafeRepairPanel.jsx
++++ b/src/pages/Utilities/components/ResetSafeRepairPanel.jsx
+@@ -11,12 +11,23 @@ const HPP_RECONCILE_CATEGORY_LABELS = {
+   manual: "Review manual",
+ };
+ 
++const TRANSACTION_SIDE_EFFECT_CATEGORY_LABELS = {
++  safe_repair: "Siap repair",
++  manual: "Review manual",
++};
++
+ const HPP_RECONCILE_CATEGORY_COLORS = {
+   safe_repair: "blue",
+   manual: "orange",
+ };
+ 
++const TRANSACTION_SIDE_EFFECT_CATEGORY_COLORS = {
++  safe_repair: "blue",
++  manual: "orange",
++};
++
+ const formatHppReconcileCategory = (value) => HPP_RECONCILE_CATEGORY_LABELS[value] || value || "-";
++const formatTransactionSideEffectCategory = (value) => TRANSACTION_SIDE_EFFECT_CATEGORY_LABELS[value] || value || "-";
+ 
+ const toSafeNumber = (value) => {
+   const numericValue = Number(value || 0);
+@@ -63,9 +74,11 @@ const ResetSafeRepairPanel = ({
+   onRepairTransactionVariantAudit,
+   transactionVariantAudit,
+   transactionVariantRepairSummary = {},
+-  loadingTransactionSideEffectPreview,
+-  onLoadTransactionSideEffectPreview,
+-  transactionSideEffectPreview,
++  loadingTransactionSideEffectAudit,
++  onLoadTransactionSideEffectAudit,
++  loadingTransactionSideEffectRepair,
++  onOpenTransactionSideEffectRepairConfirm,
++  transactionSideEffectAudit,
+   transactionSideEffectSummary = {},
+   transactionSideEffectRows = [],
+   loadingHppReconcileAudit,
+@@ -194,6 +207,75 @@ const ResetSafeRepairPanel = ({
+           />
+         )}
+ 
++        <Divider orientation="left" plain>Repair Side-Effect Transaksi</Divider>
++        <Text type="secondary">
++          Memperbaiki side-effect aktual transaksi yang hilang: income Sales selesai, expense Purchases, dan inventory log Sales/Purchases/Returns. Repair ini tidak mengubah stok master, tidak menghapus data lama, dan tidak mengubah dokumen transaksi utama.
++        </Text>
++        <Alert
++          type="warning"
++          showIcon
++          message="Gunakan untuk repair data transaksi yang sudah terlanjur partial."
++          description="Klik Cek Side-Effect dulu, review kandidat dan manual review, lalu repair dengan keyword konfirmasi. Data dengan konflik seperti Sales belum selesai tetapi sudah punya income tetap manual dan tidak dihapus otomatis."
++        />
++        <Row gutter={[8, 8]}>
++          <Col xs={24} md={8}>
++            <Button block icon={<FileSearchOutlined />} loading={loadingTransactionSideEffectAudit} onClick={onLoadTransactionSideEffectAudit}>Cek Side-Effect Transaksi</Button>
++          </Col>
++          <Col xs={24} md={8}>
++            <Button
++              block
++              icon={<SyncOutlined />}
++              loading={loadingTransactionSideEffectRepair}
++              disabled={!transactionSideEffectAudit || !transactionSideEffectSummary.executablePlanCount}
++              onClick={onOpenTransactionSideEffectRepairConfirm}
++            >
++              Repair Side-Effect{transactionSideEffectSummary.executablePlanCount ? ` (${transactionSideEffectSummary.executablePlanCount})` : ""}
++            </Button>
++          </Col>
++          <Col xs={24} md={8}>
++            <Statistic title="Manual Review" value={transactionSideEffectSummary.manualReviewCount || 0} />
++          </Col>
++        </Row>
++        {transactionSideEffectAudit && (
++          <Alert
++            type={transactionSideEffectSummary.executablePlanCount || transactionSideEffectSummary.manualReviewCount ? "warning" : "success"}
++            showIcon
++            message={transactionSideEffectSummary.executablePlanCount
++              ? `${transactionSideEffectSummary.executablePlanCount} side-effect transaksi bisa direpair aman.`
++              : transactionSideEffectSummary.manualReviewCount
++                ? `${transactionSideEffectSummary.manualReviewCount} side-effect transaksi perlu review manual.`
++                : "Side-effect transaksi aktif sudah sinkron."}
++            description="Repair hanya membuat dokumen yang hilang. Jalankan audit ulang setelah repair dan cek Cash In/Cash Out, Stock Management, Sales Report, Purchases Report, dan Profit Loss."
++          />
++        )}
++        {Boolean(transactionSideEffectRows.length) && (
++          <Table
++            className="app-data-table"
++            size="small"
++            rowKey={(record) => record.key || `${record.sourceCollection}-${record.sourceId}-${record.sideEffect}`}
++            pagination={{ pageSize: 5 }}
++            dataSource={transactionSideEffectRows}
++            columns={[
++              { title: "Sumber", dataIndex: "sourceRef", key: "sourceRef", width: 150, render: (value) => renderCompactTag(value, 135) },
++              { title: "Area", dataIndex: "area", key: "area", width: 110, render: (value) => renderCompactText(value, 100) },
++              { title: "Target", dataIndex: "targetCollection", key: "targetCollection", width: 125, render: (value) => renderCompactTag(value, 115) },
++              {
++                title: "Status",
++                dataIndex: "category",
++                key: "category",
++                width: 135,
++                render: (value) => (
++                  <Tag color={TRANSACTION_SIDE_EFFECT_CATEGORY_COLORS[value] || "default"}>
++                    {formatTransactionSideEffectCategory(value)}
++                  </Tag>
++                ),
++              },
++              { title: "Issue", dataIndex: "issue", key: "issue", render: (value) => renderCompactText(value, 360) },
++            ]}
++            scroll={{ x: 920 }}
++          />
++        )}
++
+         <Divider orientation="left" plain>Repair Turunan Umum</Divider>
+         <Row gutter={[8, 8]}>
+           <Col xs={24} md={8}>
+@@ -265,53 +347,6 @@ const ResetSafeRepairPanel = ({
+           </Col>
+         </Row>
+ 
+-
+-        <Divider orientation="left" plain>Preview Repair Side-effect Transaksi</Divider>
+-        <Text type="secondary">
+-          Batch 18A hanya preview guarded untuk kandidat income, expense, dan inventory log transaksi dari Data Quality Audit. Repair aktual belum dibuat agar tidak ada double-create kas/log stok.
+-        </Text>
+-        <Row gutter={[8, 8]}>
+-          <Col xs={24} md={8}>
+-            <Button block icon={<FileSearchOutlined />} loading={loadingTransactionSideEffectPreview} onClick={onLoadTransactionSideEffectPreview}>
+-              Preview Side-effect Transaksi
+-            </Button>
+-          </Col>
+-          <Col xs={24} md={8}>
+-            <Statistic title="Kandidat Guarded" value={transactionSideEffectSummary.totalCandidateCount || 0} />
+-          </Col>
+-          <Col xs={24} md={8}>
+-            <Statistic title="Sample Ditampilkan" value={transactionSideEffectSummary.samplePreviewCount || 0} />
+-          </Col>
+-        </Row>
+-        {transactionSideEffectPreview && (
+-          <Alert
+-            type={transactionSideEffectSummary.totalCandidateCount ? "warning" : "success"}
+-            showIcon
+-            message={transactionSideEffectSummary.totalCandidateCount
+-              ? `${transactionSideEffectSummary.totalCandidateCount} kandidat side-effect transaksi perlu review guarded.`
+-              : "Tidak ada kandidat side-effect transaksi dari Data Quality Audit."}
+-            description="Preview ini read-only. Tombol repair income/expense/inventory log sengaja belum disediakan sampai payload, idempotency, confirm keyword, dan audit log disetujui di batch guarded terpisah."
+-          />
+-        )}
+-        {Boolean(transactionSideEffectRows.length) && (
+-          <Table
+-            className="app-data-table"
+-            size="small"
+-            rowKey={(record) => record.key || `${record.categoryKey}-${record.sourceId}`}
+-            pagination={{ pageSize: 5 }}
+-            dataSource={transactionSideEffectRows}
+-            columns={[
+-              { title: "Sumber", dataIndex: "sourceCollection", key: "sourceCollection", width: 125, render: (value) => renderCompactTag(value, 115) },
+-              { title: "Referensi", dataIndex: "sourceReference", key: "sourceReference", width: 160, render: (value) => renderCompactTag(value, 145) },
+-              { title: "Target", dataIndex: "targetCollection", key: "targetCollection", width: 130, render: (value) => renderCompactTag(value, 120) },
+-              { title: "Aksi Preview", dataIndex: "actionLabel", key: "actionLabel", width: 220, render: (value) => renderCompactText(value, 205) },
+-              { title: "Issue", dataIndex: "issue", key: "issue", render: (value) => renderCompactText(value, 330) },
+-              { title: "Guard", dataIndex: "riskLabel", key: "riskLabel", width: 145, render: (value) => <Tag color="orange">{value || "Guarded"}</Tag> },
+-            ]}
+-            scroll={{ x: 1110 }}
+-          />
+-        )}
+-
+         <Divider orientation="left" plain>Normalisasi Kode Master</Divider>
+         <Text type="secondary">
+           Dipakai untuk menyamakan kode internal Product, Raw Material, Semi Finished, BOM, Step, dan Supplier ke standar aktif tanpa rename document ID dan tanpa mengubah transaksi/history.
+diff --git a/src/pages/Utilities/components/ResetStatusSummaryCard.jsx b/src/pages/Utilities/components/ResetStatusSummaryCard.jsx
+new file mode 100644
+index 0000000..38be51a
+--- /dev/null
++++ b/src/pages/Utilities/components/ResetStatusSummaryCard.jsx
+@@ -0,0 +1,38 @@
++import { Card, Col, Input, Row, Space, Statistic, Tag } from "antd";
++
++const ResetStatusSummaryCard = ({
++  actionNote,
++  autoBugSummary,
++  hppCostBaselineSummary,
++  maintenanceActor,
++  onActionNoteChange,
++  preview,
++}) => (
++  <Card title="Status Ringkas" size="small" extra={<Tag color="green">Actor: {maintenanceActor}</Tag>}>
++    <Space direction="vertical" size={12} style={{ width: "100%" }}>
++      <Row gutter={[12, 12]}>
++        <Col xs={12} md={6}>
++          <Statistic title="Bug/Data Issue" value={autoBugSummary.issueCount} />
++        </Col>
++        <Col xs={12} md={6}>
++          <Statistic title="Repair Aman" value={autoBugSummary.safeRepairCount} />
++        </Col>
++        <Col xs={12} md={6}>
++          <Statistic title="Preview Reset" value={preview ? preview.totalRecords || 0 : "Belum"} />
++        </Col>
++        <Col xs={12} md={6}>
++          <Statistic title="Baseline HPP" value={hppCostBaselineSummary?.exists ? "Ada" : "Belum"} />
++        </Col>
++      </Row>
++      <Input.TextArea
++        value={actionNote}
++        onChange={(event) => onActionNoteChange(event.target.value)}
++        rows={2}
++        allowClear
++        placeholder="Catatan trial opsional untuk audit log, contoh: cek ulang data lama setelah patch reset UI"
++      />
++    </Space>
++  </Card>
++);
++
++export default ResetStatusSummaryCard;
+diff --git a/src/pages/Utilities/hooks/useDataQualityAudit.js b/src/pages/Utilities/hooks/useDataQualityAudit.js
+deleted file mode 100644
+index 170d24f..0000000
+--- a/src/pages/Utilities/hooks/useDataQualityAudit.js
++++ /dev/null
+@@ -1,75 +0,0 @@
+-import { useCallback, useMemo, useState } from "react";
+-import { message } from "antd";
+-import { getDataQualityAudit } from "../../../services/Maintenance/dataQualityAuditService";
+-
+-const DATA_QUALITY_AUDIT_LOG_PAYLOAD = {
+-  mode: "dry_run",
+-  modules: ["data_quality", "legacy_data"],
+-  dryRun: true,
+-  status: "success",
+-  note: "Data Quality Audit hanya membaca data legacy/testing dan menampilkan rekomendasi; tidak ada migration, backfill, delete, stok, kas, payroll, HPP, atau transaksi yang diubah.",
+-};
+-
+-// -----------------------------------------------------------------------------
+-// IMS NOTE [AKTIF/BATCH 19D] — hook orchestration Data Quality Audit.
+-// Fungsi blok: memindahkan state + handler Cek Data Lama dari halaman
+-// ResetMaintenanceData agar page tidak menumpuk orchestration audit read-only.
+-// Guard: dry-run only; hook ini tidak membuat repair, income, expense,
+-// inventory log, dan tidak mengubah stok/kas/transaksi/payroll/HPP.
+-// -----------------------------------------------------------------------------
+-const useDataQualityAudit = ({ createPageMaintenanceLog } = {}) => {
+-  const [dataQualityAudit, setDataQualityAudit] = useState(null);
+-  const [loadingDataQualityAudit, setLoadingDataQualityAudit] = useState(false);
+-
+-  const dataQualityCategoryRows = useMemo(() => (dataQualityAudit?.categories || [])
+-    .filter((item) => Number(item.count || 0) > 0)
+-    .map((item) => {
+-      const samplePreview = (item.samples || []).slice(0, 3).map((sample) => {
+-        const collectionLabel = sample.collectionName || "data";
+-        const referenceLabel = sample.reference || sample.name || sample.id || "-";
+-        return `${collectionLabel} • ${referenceLabel}: ${sample.issue || item.label}`;
+-      }).join(" | ");
+-
+-      return {
+-        key: item.key,
+-        categoryLabel: item.label,
+-        count: Number(item.count || 0),
+-        samplePreview: samplePreview || "Tidak ada sample detail.",
+-        recommendation: item.recommendation || "Cek manual sebelum repair/reset.",
+-      };
+-    }), [dataQualityAudit]);
+-
+-  const handleLoadDataQualityAudit = useCallback(async ({ showProblemPreview = false } = {}) => {
+-    try {
+-      setLoadingDataQualityAudit(true);
+-      const result = await getDataQualityAudit();
+-      setDataQualityAudit(result);
+-
+-      if (typeof createPageMaintenanceLog === "function") {
+-        await createPageMaintenanceLog({
+-          ...DATA_QUALITY_AUDIT_LOG_PAYLOAD,
+-          actionType: showProblemPreview ? "data_quality_problem_preview" : "data_quality_audit",
+-          summary: result?.summary || {},
+-          affectedCollections: (result?.categories || []).map((item) => item.collection || item.key).filter(Boolean),
+-          affectedCount: result?.summary?.checkedRecords || 0,
+-        });
+-      }
+-
+-      message.success(showProblemPreview ? "Preview data bermasalah berhasil dimuat. Tidak ada data yang diubah." : "Audit data lama selesai. Tidak ada data yang diubah.");
+-    } catch (error) {
+-      console.error(error);
+-      message.error(error?.message || "Gagal menjalankan Data Quality Audit.");
+-    } finally {
+-      setLoadingDataQualityAudit(false);
+-    }
+-  }, [createPageMaintenanceLog]);
+-
+-  return {
+-    dataQualityAudit,
+-    loadingDataQualityAudit,
+-    dataQualityCategoryRows,
+-    handleLoadDataQualityAudit,
+-  };
+-};
+-
+-export default useDataQualityAudit;
+diff --git a/src/pages/Utilities/hooks/useLegacyDataAudit.js b/src/pages/Utilities/hooks/useLegacyDataAudit.js
+deleted file mode 100644
+index 5f85389..0000000
+--- a/src/pages/Utilities/hooks/useLegacyDataAudit.js
++++ /dev/null
+@@ -1,67 +0,0 @@
+-import { useCallback, useState } from "react";
+-import { message } from "antd";
+-import { getLegacyDataMaintenanceAudit } from "../../../services/Maintenance/legacyDataMaintenanceService";
+-
+-const LEGACY_DATA_AUDIT_LOG_PAYLOAD = {
+-  actionType: "legacy_data_audit",
+-  mode: "dry_run",
+-  modules: ["legacy_data", "cleanup_batch_3"],
+-  affectedCollections: [
+-    "productions",
+-    "production_orders",
+-    "production_work_logs",
+-    "inventory_logs",
+-    "sales",
+-    "returns",
+-    "stock_adjustments",
+-    "purchases",
+-    "incomes",
+-    "expenses",
+-  ],
+-  dryRun: true,
+-  status: "success",
+-  note: "Audit data lama hanya membaca data dan memberi rekomendasi reset/repair terarah.",
+-};
+-
+-// -----------------------------------------------------------------------------
+-// IMS NOTE [AKTIF/BATCH 19E] — hook orchestration audit data lama.
+-// Fungsi blok: memindahkan state + handler Audit Data Lama dari halaman
+-// ResetMaintenanceData agar page tidak menumpuk orchestration audit read-only.
+-// Guard: dry-run only; hook ini tidak menjalankan reset, delete, repair,
+-// migration, stok, kas, payroll, HPP, atau mutasi transaksi.
+-// -----------------------------------------------------------------------------
+-const useLegacyDataAudit = ({ createPageMaintenanceLog } = {}) => {
+-  const [legacyDataAudit, setLegacyDataAudit] = useState(null);
+-  const [loadingLegacyDataAudit, setLoadingLegacyDataAudit] = useState(false);
+-
+-  const handleLoadLegacyDataAudit = useCallback(async () => {
+-    try {
+-      setLoadingLegacyDataAudit(true);
+-      const result = await getLegacyDataMaintenanceAudit();
+-      setLegacyDataAudit(result);
+-
+-      if (typeof createPageMaintenanceLog === "function") {
+-        await createPageMaintenanceLog({
+-          ...LEGACY_DATA_AUDIT_LOG_PAYLOAD,
+-          summary: result?.summary || {},
+-          affectedCount: result?.summary?.checkedRecords || 0,
+-        });
+-      }
+-
+-      message.success("Dry run data lama selesai. Belum ada data yang diubah.");
+-    } catch (error) {
+-      console.error(error);
+-      message.error(error?.message || "Gagal menjalankan audit data lama.");
+-    } finally {
+-      setLoadingLegacyDataAudit(false);
+-    }
+-  }, [createPageMaintenanceLog]);
+-
+-  return {
+-    legacyDataAudit,
+-    loadingLegacyDataAudit,
+-    handleLoadLegacyDataAudit,
+-  };
+-};
+-
+-export default useLegacyDataAudit;
+diff --git a/src/pages/Utilities/hooks/useMasterCodeMaintenance.js b/src/pages/Utilities/hooks/useMasterCodeMaintenance.js
+deleted file mode 100644
+index e3f85af..0000000
+--- a/src/pages/Utilities/hooks/useMasterCodeMaintenance.js
++++ /dev/null
+@@ -1,105 +0,0 @@
+-import { useCallback, useMemo, useState } from "react";
+-import { message } from "antd";
+-import {
+-  getMasterCodeMaintenanceAudit,
+-  repairMasterCodeMaintenance,
+-} from "../../../services/Maintenance/masterCodeMaintenanceService";
+-
+-const MASTER_CODE_AUDIT_LOG_PAYLOAD = {
+-  actionType: "master_code_audit",
+-  mode: "dry_run",
+-  modules: ["master_data", "production_setup"],
+-  dryRun: true,
+-  status: "success",
+-  note: "Audit kode master hanya membaca format kode Product/Raw/Semi/BOM/Step/Supplier.",
+-};
+-
+-const MASTER_CODE_REPAIR_LOG_PAYLOAD = {
+-  actionType: "master_code_repair",
+-  mode: "repair",
+-  modules: ["master_data", "production_setup"],
+-  dryRun: false,
+-  status: "success",
+-  note: "Normalisasi kode master tidak rename document ID dan tidak menyentuh transaksi/history.",
+-};
+-
+-// -----------------------------------------------------------------------------
+-// IMS NOTE [AKTIF/BATCH 19C] — hook orchestration audit/repair kode master.
+-// Fungsi blok: memindahkan state + handler Audit Kode Master dan Normalisasi
+-// Kode dari halaman ResetMaintenanceData agar page tidak menumpuk orchestration UI.
+-// Guard: hanya memakai service maintenance existing; repair tidak rename document ID,
+-// tidak menyentuh transaksi/history, dan tetap reload preview reset setelah sukses.
+-// -----------------------------------------------------------------------------
+-const useMasterCodeMaintenance = ({ createPageMaintenanceLog, loadPreview } = {}) => {
+-  const [masterCodeAudit, setMasterCodeAudit] = useState(null);
+-  const [loadingMasterCodeAudit, setLoadingMasterCodeAudit] = useState(false);
+-  const [loadingMasterCodeRepair, setLoadingMasterCodeRepair] = useState(false);
+-
+-  const masterCodeRows = useMemo(() => masterCodeAudit?.rows || [], [masterCodeAudit]);
+-  const masterCodeSummary = masterCodeAudit?.summary || {};
+-
+-  const handleLoadMasterCodeAudit = useCallback(async () => {
+-    try {
+-      setLoadingMasterCodeAudit(true);
+-      const result = await getMasterCodeMaintenanceAudit();
+-      setMasterCodeAudit(result);
+-
+-      if (typeof createPageMaintenanceLog === "function") {
+-        await createPageMaintenanceLog({
+-          ...MASTER_CODE_AUDIT_LOG_PAYLOAD,
+-          summary: result?.summary || {},
+-          affectedCollections: result?.affectedCollections || [],
+-          affectedCount: result?.summary?.checkedRecords || 0,
+-        });
+-      }
+-
+-      message.success("Dry run kode master selesai. Belum ada data yang diubah.");
+-    } catch (error) {
+-      console.error(error);
+-      message.error(error?.message || "Gagal menjalankan audit kode master.");
+-    } finally {
+-      setLoadingMasterCodeAudit(false);
+-    }
+-  }, [createPageMaintenanceLog]);
+-
+-  const handleRepairMasterCodeAudit = useCallback(async () => {
+-    try {
+-      setLoadingMasterCodeRepair(true);
+-      const result = await repairMasterCodeMaintenance();
+-
+-      if (typeof createPageMaintenanceLog === "function") {
+-        await createPageMaintenanceLog({
+-          ...MASTER_CODE_REPAIR_LOG_PAYLOAD,
+-          summary: result?.summary || {},
+-          affectedCollections: result?.affectedCollections || [],
+-          affectedCount: result?.updatedCount || 0,
+-        });
+-      }
+-
+-      message.success(result?.message || "Normalisasi kode master selesai.");
+-      const nextAudit = await getMasterCodeMaintenanceAudit();
+-      setMasterCodeAudit(nextAudit);
+-
+-      if (typeof loadPreview === "function") {
+-        await loadPreview(false);
+-      }
+-    } catch (error) {
+-      console.error(error);
+-      message.error(error?.message || "Gagal menjalankan normalisasi kode master.");
+-    } finally {
+-      setLoadingMasterCodeRepair(false);
+-    }
+-  }, [createPageMaintenanceLog, loadPreview]);
+-
+-  return {
+-    masterCodeAudit,
+-    loadingMasterCodeAudit,
+-    loadingMasterCodeRepair,
+-    masterCodeRows,
+-    masterCodeSummary,
+-    handleLoadMasterCodeAudit,
+-    handleRepairMasterCodeAudit,
+-  };
+-};
+-
+-export default useMasterCodeMaintenance;
+diff --git a/src/pages/Utilities/hooks/useProductionMaintenance.js b/src/pages/Utilities/hooks/useProductionMaintenance.js
+deleted file mode 100644
+index 8fe4e28..0000000
+--- a/src/pages/Utilities/hooks/useProductionMaintenance.js
++++ /dev/null
+@@ -1,98 +0,0 @@
+-import { useCallback, useState } from "react";
+-import { message } from "antd";
+-import {
+-  getProductionVariantMaintenanceAudit,
+-  repairProductionVariantMaintenance,
+-} from "../../../services/Maintenance/productionVariantMaintenanceService";
+-
+-const PRODUCTION_MAINTENANCE_AUDIT_LOG_PAYLOAD = {
+-  actionType: "production_variant_audit",
+-  mode: "dry_run",
+-  modules: ["production"],
+-  affectedCollections: ["production_orders", "production_work_logs", "inventory_logs"],
+-  dryRun: true,
+-  status: "success",
+-};
+-
+-const PRODUCTION_MAINTENANCE_REPAIR_LOG_PAYLOAD = {
+-  actionType: "production_variant_repair",
+-  mode: "repair",
+-  modules: ["production"],
+-  affectedCollections: ["production_orders", "production_work_logs", "inventory_logs"],
+-  dryRun: false,
+-  status: "success",
+-};
+-
+-// -----------------------------------------------------------------------------
+-// IMS NOTE [AKTIF/BATCH 19G] — hook orchestration audit/repair maintenance produksi.
+-// Fungsi blok: memindahkan state + handler Audit/Repair Varian Produksi dari
+-// ResetMaintenanceData agar page tidak menumpuk orchestration maintenance.
+-// Guard: behavior-preserving; tetap memakai service existing, tidak mengubah
+-// logic repair produksi, stok, payroll, HPP, transaksi, atau reset destructive.
+-// -----------------------------------------------------------------------------
+-const useProductionMaintenance = ({ createPageMaintenanceLog, loadPreview } = {}) => {
+-  const [maintenanceAudit, setMaintenanceAudit] = useState(null);
+-  const [loadingMaintenanceAudit, setLoadingMaintenanceAudit] = useState(false);
+-  const [loadingMaintenanceRepair, setLoadingMaintenanceRepair] = useState(false);
+-
+-  const handleLoadProductionMaintenanceAudit = useCallback(async () => {
+-    try {
+-      setLoadingMaintenanceAudit(true);
+-      const result = await getProductionVariantMaintenanceAudit();
+-      setMaintenanceAudit(result);
+-
+-      if (typeof createPageMaintenanceLog === "function") {
+-        await createPageMaintenanceLog({
+-          ...PRODUCTION_MAINTENANCE_AUDIT_LOG_PAYLOAD,
+-          summary: result?.summary || {},
+-          affectedCount: result?.summary?.checkedRecords || 0,
+-        });
+-      }
+-
+-      message.success("Dry run audit produksi selesai. Belum ada data yang diubah.");
+-    } catch (error) {
+-      console.error(error);
+-      message.error(error?.message || "Gagal menjalankan audit maintenance produksi.");
+-    } finally {
+-      setLoadingMaintenanceAudit(false);
+-    }
+-  }, [createPageMaintenanceLog]);
+-
+-  const handleRepairProductionMaintenance = useCallback(async () => {
+-    try {
+-      setLoadingMaintenanceRepair(true);
+-      const result = await repairProductionVariantMaintenance();
+-
+-      if (typeof createPageMaintenanceLog === "function") {
+-        await createPageMaintenanceLog({
+-          ...PRODUCTION_MAINTENANCE_REPAIR_LOG_PAYLOAD,
+-          summary: result?.summary || {},
+-          affectedCount: result?.updatedCount || 0,
+-        });
+-      }
+-
+-      message.success(result?.message || "Repair varian produksi selesai.");
+-      const nextAudit = await getProductionVariantMaintenanceAudit();
+-      setMaintenanceAudit(nextAudit);
+-
+-      if (typeof loadPreview === "function") {
+-        await loadPreview(false);
+-      }
+-    } catch (error) {
+-      console.error(error);
+-      message.error(error?.message || "Gagal menjalankan repair varian produksi.");
+-    } finally {
+-      setLoadingMaintenanceRepair(false);
+-    }
+-  }, [createPageMaintenanceLog, loadPreview]);
+-
+-  return {
+-    maintenanceAudit,
+-    loadingMaintenanceAudit,
+-    loadingMaintenanceRepair,
+-    handleLoadProductionMaintenanceAudit,
+-    handleRepairProductionMaintenance,
+-  };
+-};
+-
+-export default useProductionMaintenance;
+diff --git a/src/pages/Utilities/hooks/useResetAuditOverview.js b/src/pages/Utilities/hooks/useResetAuditOverview.js
+deleted file mode 100644
+index 2c16d95..0000000
+--- a/src/pages/Utilities/hooks/useResetAuditOverview.js
++++ /dev/null
+@@ -1,134 +0,0 @@
+-import { useMemo } from "react";
+-
+-const AUDIT_SUMMARY_AREAS = [
+-  { key: "data_quality", label: "Data Quality", collection: "mixed", source: "dataQualityAudit" },
+-  { key: "hpp_reconcile", label: "HPP Reconcile", collection: "production_work_logs", source: "hppReconcileAudit" },
+-  { key: "master_code", label: "Kode Master", collection: "master", source: "masterCodeAudit" },
+-  { key: "stock", label: "Stok Umum", collection: "master stok", source: "stockAudit" },
+-  { key: "inventory_log", label: "Inventory Log", collection: "inventory_logs", source: "logSchemaAudit" },
+-  { key: "legacy", label: "Data Lama", collection: "legacy", source: "legacyDataAudit" },
+-  { key: "production", label: "Produksi", collection: "production_*", source: "maintenanceAudit" },
+-  { key: "payroll", label: "Payroll Snapshot", collection: "production_payrolls", source: "payrollAudit" },
+-  { key: "transaction_variant", label: "Variant Transaksi", collection: "sales/purchases/returns", source: "transactionVariantAudit" },
+-];
+-
+-const getIssueCount = (summary = {}) => (
+-  summary.issueCount
+-  || summary.totalIssueRecords
+-  || summary.totalIssues
+-  || summary.problemCount
+-  || summary.resetManualCount
+-  || summary.legacyCount
+-  || summary.warningCount
+-  || 0
+-);
+-
+-const getCheckedRecords = (summary = {}) => (
+-  summary.checkedRecords
+-  || summary.totalRecords
+-  || summary.totalChecked
+-  || summary.itemCount
+-  || 0
+-);
+-
+-const getSafeRepairCount = (summary = {}) => (
+-  summary.safeRepairCount
+-  || summary.displayRepairCount
+-  || summary.executablePlanCount
+-  || summary.repairableCount
+-  || 0
+-);
+-
+-const getIssueImpact = (area) => {
+-  if (area === "Stok Umum") return "Bisa memengaruhi Stock Management dan laporan stok.";
+-  if (area === "Produksi") return "Bisa memengaruhi BOM/PO/Work Log/Payroll/HPP jika tidak dipilah.";
+-  if (area === "Inventory Log") return "Bisa memengaruhi audit stok dan trace perubahan.";
+-  return "Perlu dilihat detail sebelum reset atau repair.";
+-};
+-
+-const useResetAuditOverview = ({
+-  dataQualityAudit,
+-  hppReconcileAudit,
+-  masterCodeAudit,
+-  stockAudit,
+-  logSchemaAudit,
+-  legacyDataAudit,
+-  maintenanceAudit,
+-  payrollAudit,
+-  transactionVariantAudit,
+-} = {}) => {
+-  const auditSourceMap = useMemo(() => ({
+-    dataQualityAudit,
+-    hppReconcileAudit,
+-    masterCodeAudit,
+-    stockAudit,
+-    logSchemaAudit,
+-    legacyDataAudit,
+-    maintenanceAudit,
+-    payrollAudit,
+-    transactionVariantAudit,
+-  }), [
+-    dataQualityAudit,
+-    hppReconcileAudit,
+-    masterCodeAudit,
+-    legacyDataAudit,
+-    logSchemaAudit,
+-    maintenanceAudit,
+-    payrollAudit,
+-    stockAudit,
+-    transactionVariantAudit,
+-  ]);
+-
+-  const auditOverviewRows = useMemo(() => AUDIT_SUMMARY_AREAS.map((area) => {
+-    const audit = auditSourceMap[area.source];
+-    const summary = audit?.summary || {};
+-    const checkedRecords = getCheckedRecords(summary);
+-    const issueCount = getIssueCount(summary);
+-    const safeRepairCount = getSafeRepairCount(summary);
+-
+-    return {
+-      key: area.key,
+-      area: area.label,
+-      collection: area.collection,
+-      checkedRecords,
+-      okCount: checkedRecords && !issueCount ? checkedRecords : summary.okCount || 0,
+-      issueCount,
+-      safeRepairCount,
+-      recommendation: issueCount
+-        ? "Gunakan ringkasan audit; repair aman atau reset terarah sesuai area."
+-        : audit ? "Tidak ada issue besar dari summary terakhir." : "Belum dicek.",
+-    };
+-  }), [auditSourceMap]);
+-
+-  const auditIssueRows = useMemo(() => auditOverviewRows
+-    .filter((item) => item.issueCount || item.safeRepairCount)
+-    .map((item) => ({
+-      ...item,
+-      sample: item.issueCount ? `${item.issueCount} issue terdeteksi` : `${item.safeRepairCount} kandidat repair aman`,
+-      impact: getIssueImpact(item.area),
+-    })), [auditOverviewRows]);
+-
+-  const autoBugSummary = useMemo(() => {
+-    const checkedAreas = auditOverviewRows.filter((item) => item.checkedRecords > 0 || item.issueCount > 0 || item.safeRepairCount > 0).length;
+-    const issueCount = auditOverviewRows.reduce((total, item) => total + (Number(item.issueCount) || 0), 0);
+-    const safeRepairCount = auditOverviewRows.reduce((total, item) => total + (Number(item.safeRepairCount) || 0), 0);
+-    const uncheckedCount = Math.max(AUDIT_SUMMARY_AREAS.length - checkedAreas, 0);
+-
+-    return {
+-      checkedAreas,
+-      issueCount,
+-      safeRepairCount,
+-      uncheckedCount,
+-      status: !checkedAreas ? "Belum dicek" : issueCount ? "Ada temuan" : safeRepairCount ? "Ada repair aman" : "OK",
+-      color: !checkedAreas ? "default" : issueCount ? "red" : safeRepairCount ? "blue" : "green",
+-    };
+-  }, [auditOverviewRows]);
+-
+-  return {
+-    auditOverviewRows,
+-    auditIssueRows,
+-    autoBugSummary,
+-  };
+-};
+-
+-export default useResetAuditOverview;
+diff --git a/src/pages/Utilities/hooks/useResetMaintenanceAudits.js b/src/pages/Utilities/hooks/useResetMaintenanceAudits.js
+index 1ed33ee..d4b6f5b 100644
+--- a/src/pages/Utilities/hooks/useResetMaintenanceAudits.js
++++ b/src/pages/Utilities/hooks/useResetMaintenanceAudits.js
+@@ -11,6 +11,7 @@ import { getHppReconcileMaintenanceAudit } from "../../../services/Maintenance/h
+ import { getMasterCodeMaintenanceAudit } from "../../../services/Maintenance/masterCodeMaintenanceService";
+ import { getPayrollSnapshotMaintenanceAudit } from "../../../services/Maintenance/payrollMaintenanceService";
+ import { getTransactionVariantMaintenanceAudit } from "../../../services/Maintenance/transactionVariantMaintenanceService";
++import { getTransactionSideEffectRepairAudit } from "../../../services/Maintenance/transactionSideEffectRepairService";
+ import { AUDIT_SUMMARY_AREAS } from "../utils/resetMaintenanceUiHelpers";
+ 
+ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
+@@ -28,6 +29,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
+   const [masterCodeAudit, setMasterCodeAudit] = useState(null);
+   const [payrollAudit, setPayrollAudit] = useState(null);
+   const [transactionVariantAudit, setTransactionVariantAudit] = useState(null);
++  const [transactionSideEffectAudit, setTransactionSideEffectAudit] = useState(null);
+ 
+   const [loadingMaintenanceAudit, setLoadingMaintenanceAudit] = useState(false);
+   const [loadingStockAudit, setLoadingStockAudit] = useState(false);
+@@ -38,6 +40,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
+   const [loadingMasterCodeAudit, setLoadingMasterCodeAudit] = useState(false);
+   const [loadingPayrollAudit, setLoadingPayrollAudit] = useState(false);
+   const [loadingTransactionVariantAudit, setLoadingTransactionVariantAudit] = useState(false);
++  const [loadingTransactionSideEffectAudit, setLoadingTransactionSideEffectAudit] = useState(false);
+ 
+   const handleLoadMasterCodeAudit = useCallback(async () => {
+     try {
+@@ -293,6 +296,32 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
+     }
+   }, [createPageMaintenanceLog]);
+ 
++  const handleLoadTransactionSideEffectAudit = useCallback(async () => {
++    try {
++      setLoadingTransactionSideEffectAudit(true);
++      const result = await getTransactionSideEffectRepairAudit();
++      setTransactionSideEffectAudit(result);
++      await createPageMaintenanceLog({
++        actionType: "transaction_side_effect_audit",
++        mode: "dry_run",
++        modules: ["sales", "purchases", "returns", "finance", "inventory_logs"],
++        summary: result?.summary || {},
++        planSummary: result?.summary || {},
++        affectedCollections: result?.affectedCollections || ["sales", "purchases", "returns", "incomes", "expenses", "inventory_logs"],
++        affectedCount: result?.summary?.checkedRecords || 0,
++        dryRun: true,
++        status: "success",
++        note: "Audit side-effect transaksi hanya membaca mismatch Sales/Purchases/Returns terhadap incomes/expenses/inventory_logs. Tidak ada stok, kas, atau transaksi yang diubah.",
++      });
++      message.success("Dry run side-effect transaksi selesai. Belum ada data yang diubah.");
++    } catch (error) {
++      console.error(error);
++      message.error(error?.message || "Gagal menjalankan audit side-effect transaksi.");
++    } finally {
++      setLoadingTransactionSideEffectAudit(false);
++    }
++  }, [createPageMaintenanceLog]);
++
+   const handleRunAllAudits = useCallback(async () => {
+     try {
+       await handleLoadDataQualityAudit({ showProblemPreview: false });
+@@ -304,6 +333,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
+       await handleLoadProductionMaintenanceAudit();
+       await handleLoadPayrollAudit();
+       await handleLoadTransactionVariantAudit();
++      await handleLoadTransactionSideEffectAudit();
+       message.success("Cek Semua selesai. Audit hanya membaca data bisnis; maintenance log hanya metadata admin.");
+     } catch (error) {
+       console.error(error);
+@@ -319,6 +349,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
+     handleLoadProductionMaintenanceAudit,
+     handleLoadStockAudit,
+     handleLoadTransactionVariantAudit,
++    handleLoadTransactionSideEffectAudit,
+   ]);
+ 
+   const masterCodeRows = useMemo(() => masterCodeAudit?.rows || [], [masterCodeAudit]);
+@@ -334,6 +365,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
+     maintenanceAudit,
+     payrollAudit,
+     transactionVariantAudit,
++    transactionSideEffectAudit,
+   }), [
+     dataQualityAudit,
+     hppReconcileAudit,
+@@ -344,6 +376,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
+     payrollAudit,
+     stockAudit,
+     transactionVariantAudit,
++    transactionSideEffectAudit,
+   ]);
+ 
+   const auditOverviewRows = useMemo(() => AUDIT_SUMMARY_AREAS.map((area) => {
+@@ -429,7 +462,8 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
+     || loadingLegacyDataAudit
+     || loadingMaintenanceAudit
+     || loadingPayrollAudit
+-    || loadingTransactionVariantAudit;
++    || loadingTransactionVariantAudit
++    || loadingTransactionSideEffectAudit;
+ 
+   return {
+     maintenanceAudit,
+@@ -448,6 +482,8 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
+     setPayrollAudit,
+     transactionVariantAudit,
+     setTransactionVariantAudit,
++    transactionSideEffectAudit,
++    setTransactionSideEffectAudit,
+     loadingMaintenanceAudit,
+     loadingStockAudit,
+     loadingLogSchemaAudit,
+@@ -457,6 +493,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
+     loadingMasterCodeAudit,
+     loadingPayrollAudit,
+     loadingTransactionVariantAudit,
++    loadingTransactionSideEffectAudit,
+     handleLoadMasterCodeAudit,
+     handleLoadProductionMaintenanceAudit,
+     handleLoadStockAudit,
+@@ -466,6 +503,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
+     handleLoadLegacyDataAudit,
+     handleLoadPayrollAudit,
+     handleLoadTransactionVariantAudit,
++    handleLoadTransactionSideEffectAudit,
+     handleRunAllAudits,
+     masterCodeRows,
+     masterCodeSummary,
+diff --git a/src/pages/Utilities/hooks/useResetMaintenanceRepairs.js b/src/pages/Utilities/hooks/useResetMaintenanceRepairs.js
+index 0286e81..401a235 100644
+--- a/src/pages/Utilities/hooks/useResetMaintenanceRepairs.js
++++ b/src/pages/Utilities/hooks/useResetMaintenanceRepairs.js
+@@ -26,6 +26,11 @@ import {
+   getTransactionVariantMaintenanceAudit,
+   repairTransactionVariantMaintenance,
+ } from "../../../services/Maintenance/transactionVariantMaintenanceService";
++import {
++  getTransactionSideEffectRepairAudit,
++  repairTransactionSideEffects,
++} from "../../../services/Maintenance/transactionSideEffectRepairService";
++import { mergeAuditNote } from "../utils/resetMaintenanceUiHelpers";
+ 
+ const useResetMaintenanceRepairs = ({
+   createPageMaintenanceLog,
+@@ -40,6 +45,7 @@ const useResetMaintenanceRepairs = ({
+   setHppReconcileAudit,
+   setPayrollAudit,
+   setTransactionVariantAudit,
++  setTransactionSideEffectAudit,
+ }) => {
+   // ---------------------------------------------------------------------------
+   // IMS NOTE [AKTIF] — orchestration repair aman Reset Maintenance.
+@@ -53,6 +59,7 @@ const useResetMaintenanceRepairs = ({
+   const [loadingHppReconcileRepair, setLoadingHppReconcileRepair] = useState(false);
+   const [loadingPayrollRepair, setLoadingPayrollRepair] = useState(false);
+   const [loadingTransactionVariantRepair, setLoadingTransactionVariantRepair] = useState(false);
++  const [loadingTransactionSideEffectRepair, setLoadingTransactionSideEffectRepair] = useState(false);
+ 
+   const handleRepairMasterCodeAudit = useCallback(async () => {
+     try {
+@@ -253,6 +260,41 @@ const useResetMaintenanceRepairs = ({
+     }
+   }, [createPageMaintenanceLog, loadPreview, setTransactionVariantAudit]);
+ 
++  const handleRepairTransactionSideEffects = useCallback(async ({ actionNote = "" } = {}) => {
++    try {
++      setLoadingTransactionSideEffectRepair(true);
++      const result = await repairTransactionSideEffects();
++      await createPageMaintenanceLog({
++        actionType: "transaction_side_effect_repair",
++        mode: "repair",
++        modules: ["sales", "purchases", "returns", "finance", "inventory_logs"],
++        summary: result?.summary || {},
++        resultBuckets: {
++          repaired: result?.createdCount || result?.updatedCount || 0,
++          skipped: result?.skippedCount || 0,
++        },
++        affectedCollections: result?.affectedCollections || ["incomes", "expenses", "inventory_logs"],
++        affectedCount: result?.createdCount || result?.updatedCount || 0,
++        dryRun: false,
++        status: "success",
++        note: mergeAuditNote(
++          "Repair side-effect transaksi hanya membuat income/expense/inventory log yang hilang dari flow aktif. Tidak mengubah stok master, tidak menghapus data lama, dan tidak mengubah transaksi utama.",
++          actionNote,
++        ),
++      });
++      message.success(result?.message || "Repair side-effect transaksi selesai.");
++      const nextAudit = await getTransactionSideEffectRepairAudit();
++      setTransactionSideEffectAudit(nextAudit);
++      await loadPreview(false);
++    } catch (error) {
++      console.error(error);
++      message.error(error?.message || "Gagal menjalankan repair side-effect transaksi.");
++      throw error;
++    } finally {
++      setLoadingTransactionSideEffectRepair(false);
++    }
++  }, [createPageMaintenanceLog, loadPreview, setTransactionSideEffectAudit]);
++
+   return {
+     loadingMasterCodeRepair,
+     loadingMaintenanceRepair,
+@@ -261,6 +303,7 @@ const useResetMaintenanceRepairs = ({
+     loadingHppReconcileRepair,
+     loadingPayrollRepair,
+     loadingTransactionVariantRepair,
++    loadingTransactionSideEffectRepair,
+     handleRepairMasterCodeAudit,
+     handleRepairProductionMaintenance,
+     handleRepairStockAudit,
+@@ -268,6 +311,7 @@ const useResetMaintenanceRepairs = ({
+     handleRepairHppReconcileAudit,
+     handleRepairPayrollAudit,
+     handleRepairTransactionVariantAudit,
++    handleRepairTransactionSideEffects,
+   };
+ };
+ 
+diff --git a/src/pages/Utilities/utils/resetMaintenanceUiHelpers.jsx b/src/pages/Utilities/utils/resetMaintenanceUiHelpers.jsx
+index b1f9510..622f08a 100644
+--- a/src/pages/Utilities/utils/resetMaintenanceUiHelpers.jsx
++++ b/src/pages/Utilities/utils/resetMaintenanceUiHelpers.jsx
+@@ -114,6 +114,7 @@ export const AUDIT_SUMMARY_AREAS = [
+   { key: "production", label: "Produksi", collection: "production_*", source: "maintenanceAudit" },
+   { key: "payroll", label: "Payroll Snapshot", collection: "production_payrolls", source: "payrollAudit" },
+   { key: "transaction_variant", label: "Variant Transaksi", collection: "sales/purchases/returns", source: "transactionVariantAudit" },
++  { key: "transaction_side_effect", label: "Side-effect Transaksi", collection: "incomes/expenses/inventory_logs", source: "transactionSideEffectAudit" },
+ ];
+ 
+ export const buildActorLabel = ({ profile, firebaseUser } = {}) => (
+diff --git a/src/services/Dashboard/dashboardService.js b/src/services/Dashboard/dashboardService.js
+index dfae337..e7e55db 100644
+--- a/src/services/Dashboard/dashboardService.js
++++ b/src/services/Dashboard/dashboardService.js
+@@ -1,10 +1,7 @@
+ import { collection, getDocs, limit, orderBy, query, Timestamp, where } from "firebase/firestore";
+ import { db } from "../../firebase";
+ import { getProductionPlanningDashboardSummary } from "../Produksi/productionPlanningService";
+-import {
+-  formatAffectedVariantStockSummary,
+-  getLowStockVariantEntries,
+-} from "../../utils/stock/stockHelpers";
++import { buildStockReadModelRow } from "../../utils/stock/stockHelpers";
+ 
+ const EMPTY_PLANNING_PERIOD_SUMMARY = {
+   count: 0,
+@@ -77,122 +74,74 @@ const mergeDashboardRowsById = (...rowGroups) => {
+   return Array.from(rowsById.values());
+ };
+ 
+-const getItemDisplayName = (item = {}) =>
+-  item?.name || item?.productName || item?.materialName || "-";
+-
+-const getItemStock = (item = {}) =>
+-  getNumericValue(item?.availableStock ?? item?.currentStock ?? item?.stock ?? 0);
+-
+-const getItemMinStock = (item = {}, sourceType = "") => {
+-  if (sourceType === "material") return getNumericValue(item?.minStock ?? 0);
+-  if (sourceType === "product" || sourceType === "semi_finished") {
+-    return getNumericValue(item?.minStockAlert ?? 0);
+-  }
+-
+-  return getNumericValue(item?.minStockAlert ?? item?.minStock ?? 0);
+-};
+-
+ const isStockMonitoringActiveItem = (item = {}) => item?.isActive !== false;
+ 
+-const getItemCurrentStock = (item = {}) =>
+-  getNumericValue(item?.currentStock ?? item?.stock ?? 0);
+-
+-const getItemReservedStock = (item = {}) =>
+-  getNumericValue(item?.reservedStock ?? 0);
+-
+-const getLowStockSeverity = (item = {}, sourceType = "") => {
+-  const stock = getItemStock(item);
+-  const minStock = getItemMinStock(item, sourceType);
+-  const affectedVariants = getLowStockVariantEntries(item, {
+-    sourceType,
+-    threshold: minStock,
+-    unit: item?.stockUnit || item?.unit || "pcs",
++const DASHBOARD_STOCK_READ_MODEL_SOURCES = [
++  { sourceType: "product", type: "Produk Jadi", to: "/stock-management", getUnit: (item = {}) => item?.unit || "pcs" },
++  { sourceType: "material", type: "Bahan Baku", to: "/stock-management", getUnit: (item = {}) => item?.stockUnit || item?.unit || "pcs" },
++  { sourceType: "semi_finished", type: "Semi Finished", to: "/produksi/semi-finished-materials", getUnit: (item = {}) => item?.unit || "pcs" },
++];
++
++const buildDashboardStockReadRow = (item = {}, sourceConfig = {}) => {
++  const readModelRow = buildStockReadModelRow(item, {
++    id: item.id,
++    sourceType: sourceConfig.sourceType,
++    typeLabel: sourceConfig.type,
++    route: sourceConfig.to,
++    unit: typeof sourceConfig.getUnit === "function" ? sourceConfig.getUnit(item) : undefined,
++    affectedVariantMaxItems: 2,
+   });
++  const variantGap = readModelRow.affectedVariantEntries.length
++    ? Math.min(...readModelRow.affectedVariantEntries.map((variant) => variant.stock - Math.max(variant.threshold, 0)))
++    : null;
+ 
+-  if (affectedVariants.some((variant) => variant.status === "empty")) return { label: "Kosong", color: "red" };
+-  if (affectedVariants.length > 0) return { label: "Menipis", color: "gold" };
+-  if (stock <= 0) return { label: "Kosong", color: "red" };
+-  if (minStock > 0 && stock <= minStock) return { label: "Menipis", color: "gold" };
+-  return { label: "Aman", color: "green" };
++  return {
++    ...readModelRow,
++    key: `${readModelRow.sourceType}-${item.id}`,
++    sourceStock: readModelRow.stock,
++    stock: readModelRow.stockDisplay,
++    minStock: readModelRow.minStockDisplay,
++    unit: readModelRow.unitDisplay,
++    severity: readModelRow.statusMeta,
++    sortGap: variantGap ?? readModelRow.stockDisplay - Math.max(readModelRow.minStockDisplay, 0),
++    snapshot: item,
++  };
+ };
+ 
+ const buildLowStockRows = (products = [], materials = [], semiFinishedMaterials = []) => {
+-  const activeProducts = products.filter(isStockMonitoringActiveItem);
+-  const activeMaterials = materials.filter(isStockMonitoringActiveItem);
+-  const activeSemiFinishedMaterials = semiFinishedMaterials.filter(isStockMonitoringActiveItem);
+-
+-  const buildRow = (item, sourceType, type, to, unit) => {
+-    const stock = getItemStock(item);
+-    const minStock = getItemMinStock(item, sourceType);
+-    const affectedVariants = getLowStockVariantEntries(item, {
+-      sourceType,
+-      threshold: minStock,
+-      unit,
+-    });
+-    const variantGap = affectedVariants.length
+-      ? Math.min(...affectedVariants.map((variant) => variant.stock - Math.max(variant.threshold, 0)))
+-      : null;
+-
+-    return {
+-      key: `${sourceType}-${item.id}`,
+-      id: item.id,
+-      name: getItemDisplayName(item),
+-      stock,
+-      minStock,
+-      unit,
+-      type,
+-      sourceType,
+-      severity: getLowStockSeverity(item, sourceType),
+-      affectedVariantSummary: formatAffectedVariantStockSummary(item, {
+-        sourceType,
+-        threshold: minStock,
+-        unit,
+-        maxItems: 2,
+-      }),
+-      sortGap: variantGap ?? stock - Math.max(minStock, 0),
+-      to,
+-      snapshot: item,
+-    };
+-  };
++  const sourceRows = [
++    { items: products.filter(isStockMonitoringActiveItem), sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[0] },
++    { items: materials.filter(isStockMonitoringActiveItem), sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[1] },
++    { items: semiFinishedMaterials.filter(isStockMonitoringActiveItem), sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[2] },
++  ];
+ 
+-  const rows = [
+-    ...activeProducts.map((item) => buildRow(item, "product", "Produk Jadi", "/stock-management", item?.unit || "pcs")),
+-    ...activeMaterials.map((item) => buildRow(item, "material", "Bahan Baku", "/stock-management", item?.stockUnit || item?.unit || "pcs")),
+-    ...activeSemiFinishedMaterials.map((item) => buildRow(item, "semi_finished", "Semi Finished", "/produksi/semi-finished-materials", item?.unit || "pcs")),
+-  ].filter((item) => item.affectedVariantSummary || item.stock <= 0 || (item.minStock > 0 && item.stock <= item.minStock));
++  const rows = sourceRows.flatMap(({ items, sourceConfig }) =>
++    items.map((item) => buildDashboardStockReadRow(item, sourceConfig)),
++  ).filter((item) => item.status !== "Normal");
+ 
+   return rows.sort((left, right) => left.sortGap - right.sortGap);
+ };
+ 
+ const buildStockAuditRows = (products = [], materials = [], semiFinishedMaterials = []) => {
+-  const mapRows = (items = [], type = "Item", sourceType = "item", to = "/stock-management") =>
++  const sourceRows = [
++    { items: products, sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[0] },
++    { items: materials, sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[1] },
++    { items: semiFinishedMaterials, sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[2] },
++  ];
++
++  return sourceRows.flatMap(({ items, sourceConfig }) =>
+     items.map((item) => {
+-      const stock = getItemStock(item);
+-      const currentStock = getItemCurrentStock(item);
+-      const reservedStock = getItemReservedStock(item);
++      const readModelRow = buildDashboardStockReadRow(item, sourceConfig);
+ 
+       return {
+-        key: `${sourceType}-${item.id}`,
+-        id: item.id,
+-        name: getItemDisplayName(item),
+-        type,
+-        sourceType,
+-        unit: item?.stockUnit || item?.unit || "pcs",
+-        stock,
+-        currentStock,
+-        reservedStock,
+-        minStock: getItemMinStock(item, sourceType),
+-        to,
+-        isNegativeStock: stock < 0 || currentStock < 0,
+-        isReservedOverrun: reservedStock > 0 && (reservedStock > Math.max(currentStock, 0) || stock < 0),
++        ...readModelRow,
++        isNegativeStock: readModelRow.availableStock < 0 || readModelRow.currentStock < 0 || readModelRow.sourceStock < 0,
++        isReservedOverrun: readModelRow.reservedStock > 0 && (
++          readModelRow.reservedStock > Math.max(readModelRow.currentStock, 0) || readModelRow.availableStock < 0
++        ),
+       };
+-    });
+-
+-  return [
+-    ...mapRows(products, "Produk Jadi", "product", "/stock-management"),
+-    ...mapRows(materials, "Bahan Baku", "material", "/stock-management"),
+-    ...mapRows(semiFinishedMaterials, "Semi Finished", "semi_finished", "/produksi/semi-finished-materials"),
+-  ].filter((item) => item.isNegativeStock || item.isReservedOverrun);
++    }),
++  ).filter((item) => item.isNegativeStock || item.isReservedOverrun);
+ };
+ 
+ const getRestockLink = (...values) => {
+diff --git a/src/services/Laporan/stockReportService.js b/src/services/Laporan/stockReportService.js
+index 6bd6667..838d591 100644
+--- a/src/services/Laporan/stockReportService.js
++++ b/src/services/Laporan/stockReportService.js
+@@ -1,73 +1,22 @@
+ import { collection, getDocs } from "firebase/firestore";
+ import { db } from "../../firebase";
+-import {
+-  formatAffectedVariantStockSummary,
+-  getVariantAwareStockStatusMeta,
+-} from "../../utils/stock/stockHelpers";
++import { buildStockReadModelRow } from "../../utils/stock/stockHelpers";
+ 
+ // =====================================================
+ // SECTION: Stock Report read service — AKTIF / READ-ONLY
+ // Fungsi:
+-// - memusatkan fetch dan mapper laporan stok agar page hanya mengelola filter/render/export;
++// - memakai stock read model shared agar Dashboard dan Stock Report membaca comparator stok yang sama;
+ // - menjaga Stock Report tetap membaca raw materials, products, dan semi finished sebagai source stok final.
+ // Hubungan flow:
+ // - read-only; tidak menulis stok, inventory log, transaksi, produksi, atau schema.
+ // Risiko:
+ // - Jangan ubah comparator threshold/variant di service ini tanpa menyamakan Dashboard dan master stock pages.
+ // =====================================================
+-const resolveDisplayStock = (item = {}) =>
+-  Number(item.availableStock ?? item.currentStock ?? item.stock ?? 0);
+-
+-const resolveDisplayUnit = (item = {}) => item.unit || item.stockUnit || "pcs";
+-
+-const resolveMasterThreshold = (item = {}, typeLabel = "") => {
+-  const thresholdSource = typeLabel === "Bahan Baku" ? item.minStock : item.minStockAlert;
+-  const threshold = Number(thresholdSource ?? 0);
+-  return Number.isFinite(threshold) && threshold > 0 ? threshold : 0;
+-};
+-
+-const resolveSourceType = (typeLabel = "") => {
+-  if (typeLabel === "Bahan Baku") return "material";
+-  if (typeLabel === "Semi Finished") return "semi_finished";
+-  return "product";
+-};
+-
+-const resolveStatus = (stockValue, thresholdValue, item = {}, sourceType = "") => {
+-  const variantStatusMeta = getVariantAwareStockStatusMeta(item, {
+-    sourceType,
+-    threshold: thresholdValue,
+-  });
+-
+-  if (variantStatusMeta?.label === "Kosong") return "Habis";
+-  if (variantStatusMeta?.label === "Stok Rendah") return "Kritis";
+-  if (stockValue <= 0) return "Habis";
+-  if (thresholdValue > 0 && stockValue <= thresholdValue) return "Kritis";
+-  return "Normal";
+-};
+-
+ const mapInventorySnapshotToReportRows = (snapshot, typeLabel) =>
+-  snapshot.docs.map((documentItem) => {
+-    const payload = documentItem.data();
+-    const stockValue = resolveDisplayStock(payload);
+-    const minimumStockThreshold = resolveMasterThreshold(payload, typeLabel);
+-    const sourceType = resolveSourceType(typeLabel);
+-    const unitDisplay = resolveDisplayUnit(payload);
+-
+-    return {
+-      id: documentItem.id,
+-      ...payload,
+-      stockDisplay: stockValue,
+-      minStockDisplay: minimumStockThreshold,
+-      unitDisplay,
+-      type: typeLabel,
+-      status: resolveStatus(stockValue, minimumStockThreshold, payload, sourceType),
+-      affectedVariantSummary: formatAffectedVariantStockSummary(payload, {
+-        sourceType,
+-        threshold: minimumStockThreshold,
+-        unit: unitDisplay,
+-      }),
+-    };
+-  });
++  snapshot.docs.map((documentItem) => buildStockReadModelRow(documentItem.data(), {
++    id: documentItem.id,
++    typeLabel,
++  }));
+ 
+ const readStockReportSnapshot = async (key, requestPromise) => {
+   try {
+diff --git a/src/services/Maintenance/transactionSideEffectRepairService.js b/src/services/Maintenance/transactionSideEffectRepairService.js
+new file mode 100644
+index 0000000..e62f886
+--- /dev/null
++++ b/src/services/Maintenance/transactionSideEffectRepairService.js
+@@ -0,0 +1,639 @@
++import {
++  collection,
++  doc,
++  getDocs,
++  serverTimestamp,
++  Timestamp,
++  writeBatch,
++} from "firebase/firestore";
++import { db } from "../../firebase";
++import {
++  buildInventoryLogPayload,
++  INVENTORY_LOG_COLLECTION,
++} from "../Inventory/inventoryLogService";
++import { buildSaleIncomePayload } from "../Transaksi/salesService";
++import {
++  buildPurchaseExpenseDocumentId,
++  buildPurchaseExpensePayload,
++  getPurchaseSavingMeta,
++} from "../Transaksi/purchasesService";
++
++const BATCH_LIMIT = 350;
++const SIDE_EFFECT_REPAIR_SOURCE = "transaction_side_effect_repair";
++const ACTIVE_SALES_STATUSES = new Set(["Diproses", "Dikirim", "Selesai"]);
++
++const safeTrim = (value) => String(value ?? "").trim();
++const normalizeType = (value) => safeTrim(value).toLowerCase();
++const toNumber = (value) => {
++  const numericValue = Number(value || 0);
++  return Number.isFinite(numericValue) ? numericValue : 0;
++};
++
++const readCollectionDocs = async (collectionName) => {
++  const snapshot = await getDocs(collection(db, collectionName));
++  return snapshot.docs.map((itemDoc) => ({
++    id: itemDoc.id,
++    ref: itemDoc.ref,
++    ...itemDoc.data(),
++  }));
++};
++
++const sanitizeDocIdPart = (value, fallback = "record") => {
++  const normalized = safeTrim(value || fallback).replace(/[^a-zA-Z0-9_-]/g, "_");
++  return normalized || fallback;
++};
++
++const getUniqueReferenceKeys = (values = []) => Array.from(
++  new Set(values.map((value) => safeTrim(value)).filter(Boolean)),
++);
++
++const getSalesIdentityKeys = (data = {}, docId = "") => getUniqueReferenceKeys([
++  docId,
++  data.id,
++  data.relatedId,
++  data.saleId,
++  data.referenceId,
++  data.sourceId,
++  data.sourceRef,
++  data.referenceCode,
++  data.referenceNumber,
++  data.saleNumber,
++  data.code,
++  data.details?.relatedId,
++  data.details?.saleId,
++  data.details?.referenceId,
++  data.details?.sourceId,
++  data.details?.sourceRef,
++  data.details?.referenceCode,
++  data.details?.referenceNumber,
++  data.details?.saleNumber,
++]);
++
++const getPurchaseIdentityKeys = (data = {}, docId = "") => getUniqueReferenceKeys([
++  docId,
++  data.id,
++  data.relatedId,
++  data.purchaseId,
++  data.relatedPurchaseId,
++  data.referenceId,
++  data.sourceId,
++  data.sourceRef,
++  data.referenceCode,
++  data.referenceNumber,
++  data.purchaseNumber,
++  data.code,
++  data.details?.relatedId,
++  data.details?.purchaseId,
++  data.details?.relatedPurchaseId,
++  data.details?.referenceId,
++  data.details?.sourceId,
++  data.details?.sourceRef,
++  data.details?.referenceCode,
++  data.details?.referenceNumber,
++  data.details?.purchaseNumber,
++]);
++
++const getReturnIdentityKeys = (data = {}, docId = "") => getUniqueReferenceKeys([
++  docId,
++  data.id,
++  data.relatedId,
++  data.returnId,
++  data.referenceId,
++  data.sourceId,
++  data.sourceRef,
++  data.referenceCode,
++  data.referenceNumber,
++  data.returnNumber,
++  data.code,
++  data.details?.relatedId,
++  data.details?.returnId,
++  data.details?.referenceId,
++  data.details?.sourceId,
++  data.details?.sourceRef,
++  data.details?.referenceCode,
++  data.details?.referenceNumber,
++  data.details?.returnNumber,
++]);
++
++const pushUniqueMapRecord = (map, key, record) => {
++  const normalizedKey = safeTrim(key);
++  if (!normalizedKey) return;
++
++  const records = map.get(normalizedKey) || [];
++  if (!records.some((item) => item.id === record.id)) {
++    records.push(record);
++  }
++  map.set(normalizedKey, records);
++};
++
++const getUniqueMapRecordsByKeys = (map, keys = []) => {
++  const seenIds = new Set();
++  const records = [];
++
++  keys.forEach((key) => {
++    (map.get(key) || []).forEach((record) => {
++      if (seenIds.has(record.id)) return;
++      seenIds.add(record.id);
++      records.push(record);
++    });
++  });
++
++  return records;
++};
++
++const getTransactionDate = (data = {}) => {
++  const rawDate = data.date || data.createdAt || data.timestamp;
++  return rawDate?.toDate ? rawDate : Timestamp.now();
++};
++
++const getDisplayReference = (data = {}, fallback = "") => (
++  safeTrim(data.saleNumber)
++  || safeTrim(data.purchaseNumber)
++  || safeTrim(data.returnNumber)
++  || safeTrim(data.code)
++  || safeTrim(data.referenceNumber)
++  || safeTrim(data.sourceRef)
++  || safeTrim(fallback)
++);
++
++const getStockCollectionName = (type = "") => (type === "product" ? "products" : "raw_materials");
++
++const getLineStockCollectionName = (line = {}, fallbackType = "") => (
++  safeTrim(line.collectionName)
++  || safeTrim(line.sourceCollection)
++  || getStockCollectionName(safeTrim(line.type) || fallbackType)
++);
++
++const getLineQuantity = (line = {}) => toNumber(line.quantity ?? line.qty ?? line.totalStockIn ?? line.finalQuantity);
++
++const getPurchaseStockQuantity = (purchase = {}) => toNumber(
++  purchase.totalStockIn ?? purchase.finalQuantity ?? purchase.stockInQty ?? purchase.quantity,
++);
++
++const isPurchaseExpenseRecord = (data = {}) => {
++  const sourceModule = normalizeType(data.sourceModule || data.module || data.sourceType || data.type);
++  return Boolean(
++    safeTrim(data.relatedPurchaseId)
++    || safeTrim(data.purchaseId)
++    || safeTrim(data.details?.purchaseId)
++    || sourceModule.includes("purchase")
++    || sourceModule.includes("pembelian")
++  );
++};
++
++const buildSideEffectMaps = ({ incomes = [], expenses = [], inventoryLogs = [] } = {}) => {
++  const incomeSaleKeys = new Set();
++  const purchaseExpenseKeys = new Set();
++  const saleInventoryLogsByKey = new Map();
++  const purchaseInventoryLogsByKey = new Map();
++  const returnInventoryLogsByKey = new Map();
++
++  incomes.forEach((income) => {
++    const deterministicSaleId = income.id.startsWith("income_")
++      ? safeTrim(income.id.replace(/^income_/, ""))
++      : "";
++
++    getSalesIdentityKeys(income, deterministicSaleId).forEach((key) => incomeSaleKeys.add(key));
++  });
++
++  expenses.forEach((expense) => {
++    if (!isPurchaseExpenseRecord(expense)) return;
++    const deterministicPurchaseId = expense.id.includes("__")
++      ? safeTrim(expense.id.split("__").slice(1).join("__"))
++      : "";
++
++    getPurchaseIdentityKeys(expense, deterministicPurchaseId).forEach((key) => purchaseExpenseKeys.add(key));
++  });
++
++  inventoryLogs.forEach((log) => {
++    const logType = normalizeType(log.type || log.details?.type);
++    if (logType === "sale") {
++      getSalesIdentityKeys(log).forEach((key) => pushUniqueMapRecord(saleInventoryLogsByKey, key, log));
++      return;
++    }
++    if (logType === "purchase_in") {
++      getPurchaseIdentityKeys(log).forEach((key) => pushUniqueMapRecord(purchaseInventoryLogsByKey, key, log));
++      return;
++    }
++    if (logType === "return_in") {
++      getReturnIdentityKeys(log).forEach((key) => pushUniqueMapRecord(returnInventoryLogsByKey, key, log));
++    }
++  });
++
++  return {
++    incomeSaleKeys,
++    purchaseExpenseKeys,
++    saleInventoryLogsByKey,
++    purchaseInventoryLogsByKey,
++    returnInventoryLogsByKey,
++  };
++};
++
++const addRepairRow = (rows, row) => {
++  rows.push({
++    category: "safe_repair",
++    recommendation: "Aman repair lewat menu Reset Maintenance setelah konfirmasi keyword; tidak mengubah stok fisik/master dan tidak menghapus data.",
++    ...row,
++  });
++};
++
++const addManualRow = (rows, row) => {
++  rows.push({
++    category: "manual",
++    executable: false,
++    recommendation: "Perlu review manual; repair otomatis tidak membuat rollback/delete side-effect transaksi.",
++    ...row,
++  });
++};
++
++const buildSaleInventoryLogPayload = ({ sale = {}, line = {}, index = 0 }) => {
++  const saleReference = getDisplayReference(sale, sale.id);
++  const quantity = getLineQuantity(line);
++  const itemName = safeTrim(line.itemName || line.name || `Item ${index + 1}`);
++  const salesChannel = safeTrim(sale.salesChannel);
++
++  return buildInventoryLogPayload({
++    itemId: safeTrim(line.itemId || line.id),
++    itemName,
++    quantityChange: -Math.abs(quantity),
++    type: "sale",
++    collectionName: getLineStockCollectionName(line, line.type),
++    timestamp: getTransactionDate(sale),
++    extraData: {
++      customerName: sale.customerName || "",
++      saleId: sale.id,
++      saleNumber: saleReference,
++      referenceId: sale.id,
++      referenceCode: saleReference,
++      sourceRef: saleReference,
++      referenceNumber: saleReference,
++      referenceType: "sale",
++      note: salesChannel ? `Repair log penjualan via ${salesChannel}` : "Repair log penjualan",
++      subtotal: toNumber(line.subtotal),
++      unit: line.unit || "",
++      stockUnit: line.stockUnit || line.unit || "",
++      variantKey: line.variantKey || "",
++      variantLabel: line.variantLabel || "",
++      stockSourceType: line.stockSourceType || (line.variantKey ? "variant" : "master"),
++      repairedByMaintenance: true,
++      repairSource: SIDE_EFFECT_REPAIR_SOURCE,
++    },
++  });
++};
++
++const buildPurchaseInventoryLogPayload = ({ purchase = {} }) => {
++  const purchaseReference = getDisplayReference(purchase, purchase.id);
++  const collectionName = getStockCollectionName(purchase.type);
++  const quantity = getPurchaseStockQuantity(purchase);
++  const stockUnit = purchase.stockUnit || purchase.unit || purchase.purchaseUnit || "";
++
++  return buildInventoryLogPayload({
++    itemId: purchase.itemId || "",
++    itemName: purchase.itemName || "Item pembelian",
++    quantityChange: quantity,
++    type: "purchase_in",
++    collectionName,
++    timestamp: getTransactionDate(purchase),
++    extraData: {
++      purchaseId: purchase.id,
++      purchaseNumber: purchaseReference,
++      referenceId: purchase.id,
++      referenceNumber: purchaseReference,
++      referenceCode: purchaseReference,
++      sourceRef: purchaseReference,
++      referenceType: "purchase",
++      supplierName: purchase.supplierName || "",
++      unit: stockUnit,
++      stockUnit,
++      purchaseUnit: purchase.purchaseUnit || "",
++      variantKey: purchase.variantKey || purchase.materialVariantId || "",
++      variantLabel: purchase.variantLabel || purchase.materialVariantName || "",
++      stockSourceType: purchase.stockSourceType || ((purchase.variantKey || purchase.materialVariantId) ? "variant" : "master"),
++      materialVariantId: purchase.materialVariantId || null,
++      materialVariantName: purchase.materialVariantName || purchase.variantLabel || "",
++      totalActualPurchase: toNumber(purchase.totalActualPurchase),
++      actualUnitCost: toNumber(purchase.actualUnitCost),
++      totalReferencePurchase: toNumber(purchase.totalReferencePurchase),
++      purchaseSaving: toNumber(purchase.purchaseSaving),
++      purchaseSavingStatus: purchase.purchaseSavingStatus || "",
++      note: safeTrim(purchase.note || "Repair log pembelian"),
++      repairedByMaintenance: true,
++      repairSource: SIDE_EFFECT_REPAIR_SOURCE,
++    },
++  });
++};
++
++const buildReturnInventoryLogPayload = ({ returnRecord = {} }) => {
++  const returnReference = getDisplayReference(returnRecord, returnRecord.id);
++  const collectionName = getStockCollectionName(returnRecord.type);
++  const stockUnit = returnRecord.stockUnit || returnRecord.unit || (collectionName === "products" ? "pcs" : "");
++  const quantity = toNumber(returnRecord.quantity ?? returnRecord.qty);
++
++  return buildInventoryLogPayload({
++    itemId: returnRecord.itemId || "",
++    itemName: returnRecord.itemName || "Item retur",
++    quantityChange: quantity,
++    type: "return_in",
++    collectionName,
++    timestamp: getTransactionDate(returnRecord),
++    extraData: {
++      returnId: returnRecord.id,
++      returnNumber: returnReference,
++      referenceId: returnRecord.id,
++      referenceNumber: returnReference,
++      referenceCode: returnReference,
++      sourceRef: returnReference,
++      referenceType: "return",
++      unit: stockUnit,
++      stockUnit,
++      note: safeTrim(returnRecord.note || "Repair log retur"),
++      variantKey: returnRecord.variantKey || "",
++      variantLabel: returnRecord.variantLabel || "",
++      stockSourceType: returnRecord.stockSourceType || (returnRecord.variantKey ? "variant" : "master"),
++      repairedByMaintenance: true,
++      repairSource: SIDE_EFFECT_REPAIR_SOURCE,
++    },
++  });
++};
++
++const buildPurchaseExpenseRepairPayload = (purchase = {}) => {
++  const totalActualPurchase = Math.round(toNumber(purchase.totalActualPurchase ?? purchase.total ?? purchase.amount ?? purchase.subtotalItems));
++  const totalReferencePurchase = Math.round(toNumber(purchase.totalReferencePurchase));
++  const purchaseSaving = Math.round(toNumber(purchase.purchaseSaving));
++  const savingMeta = getPurchaseSavingMeta(purchaseSaving);
++
++  return buildPurchaseExpensePayload({
++    date: getTransactionDate(purchase),
++    itemId: purchase.itemId || "",
++    itemName: purchase.itemName || "Item pembelian",
++    itemType: purchase.type || "material",
++    purchaseId: purchase.id,
++    purchasePayload: purchase,
++    resolvedSupplierId: purchase.supplierId || null,
++    savingMeta,
++    selectedSupplierName: purchase.supplierName || "",
++    totalActualPurchase,
++    totalReferencePurchase,
++    purchaseSaving,
++    variantKey: purchase.variantKey || purchase.materialVariantId || "",
++    variantLabel: purchase.variantLabel || purchase.materialVariantName || "",
++    stockSourceType: purchase.stockSourceType || ((purchase.variantKey || purchase.materialVariantId) ? "variant" : "master"),
++  });
++};
++
++const buildPublicRow = (row = {}) => {
++  const publicRow = { ...row };
++  delete publicRow.payload;
++  return publicRow;
++};
++
++const buildSummary = (rows = [], scannedCount = 0) => {
++  const executableRows = rows.filter((row) => row.executable);
++  const totalChecked = Number(scannedCount || 0);
++
++  return {
++    checkedRecords: totalChecked,
++    okCount: Math.max(totalChecked - rows.length, 0),
++    issueCount: rows.length,
++    manualReviewCount: rows.filter((row) => row.category === "manual").length,
++    safeRepairCount: executableRows.length,
++    executablePlanCount: executableRows.length,
++    incomePlanCount: executableRows.filter((row) => row.targetCollection === "incomes").length,
++    expensePlanCount: executableRows.filter((row) => row.targetCollection === "expenses").length,
++    inventoryLogPlanCount: executableRows.filter((row) => row.targetCollection === INVENTORY_LOG_COLLECTION).length,
++  };
++};
++
++const buildTransactionSideEffectPlans = async () => {
++  const [sales, purchases, returns, incomes, expenses, inventoryLogs] = await Promise.all([
++    readCollectionDocs("sales"),
++    readCollectionDocs("purchases"),
++    readCollectionDocs("returns"),
++    readCollectionDocs("incomes"),
++    readCollectionDocs("expenses"),
++    readCollectionDocs(INVENTORY_LOG_COLLECTION),
++  ]);
++
++  const maps = buildSideEffectMaps({ incomes, expenses, inventoryLogs });
++  const rows = [];
++
++  sales.forEach((sale) => {
++    const saleReference = getDisplayReference(sale, sale.id);
++    const saleKeys = getSalesIdentityKeys(sale, sale.id);
++    const hasIncome = saleKeys.some((key) => maps.incomeSaleKeys.has(key));
++    const saleLogs = getUniqueMapRecordsByKeys(maps.saleInventoryLogsByKey, saleKeys);
++    const saleItems = Array.isArray(sale.items) ? sale.items : [];
++    const status = safeTrim(sale.status);
++    const amount = toNumber(sale.total);
++
++    if (["Diproses", "Dikirim"].includes(status) && hasIncome) {
++      addManualRow(rows, {
++        key: `sales-income-conflict:${sale.id}`,
++        area: "Sales",
++        sideEffect: "Income",
++        sourceCollection: "sales",
++        sourceId: sale.id,
++        sourceRef: saleReference,
++        targetCollection: "incomes",
++        issue: "Sales belum Selesai sudah punya income. Tidak dihapus otomatis agar laporan bisa direview manual.",
++        amount,
++      });
++    }
++
++    if (status === "Selesai" && amount > 0 && !hasIncome) {
++      const targetDocId = `income_${sanitizeDocIdPart(sale.id, saleReference)}`;
++      addRepairRow(rows, {
++        key: `sales-income-missing:${sale.id}`,
++        area: "Sales",
++        sideEffect: "Income",
++        sourceCollection: "sales",
++        sourceId: sale.id,
++        sourceRef: saleReference,
++        targetCollection: "incomes",
++        targetDocId,
++        issue: "Sales Selesai belum punya income resmi.",
++        amount,
++        executable: true,
++        payload: {
++          collectionName: "incomes",
++          docId: targetDocId,
++          data: {
++            ...buildSaleIncomePayload({ selectedSale: sale, saleId: sale.id, dateValue: getTransactionDate(sale) }),
++            repairedByMaintenance: true,
++            repairSource: SIDE_EFFECT_REPAIR_SOURCE,
++            maintenanceRepairedAt: serverTimestamp(),
++          },
++        },
++      });
++    }
++
++    if (ACTIVE_SALES_STATUSES.has(status) && saleItems.length > 0 && saleLogs.length === 0) {
++      saleItems.forEach((line, index) => {
++        const quantity = getLineQuantity(line);
++        if (quantity <= 0) return;
++        const targetDocId = `repair_sale_log__${sanitizeDocIdPart(sale.id, saleReference)}__${index + 1}`;
++        addRepairRow(rows, {
++          key: `sales-log-missing:${sale.id}:${index}`,
++          area: "Sales",
++          sideEffect: "Inventory Log",
++          sourceCollection: "sales",
++          sourceId: sale.id,
++          sourceRef: saleReference,
++          targetCollection: INVENTORY_LOG_COLLECTION,
++          targetDocId,
++          issue: "Sales aktif/selesai belum punya inventory log sale.",
++          quantityChange: -Math.abs(quantity),
++          executable: true,
++          payload: {
++            collectionName: INVENTORY_LOG_COLLECTION,
++            docId: targetDocId,
++            data: {
++              ...buildSaleInventoryLogPayload({ sale, line, index }),
++              maintenanceRepairedAt: serverTimestamp(),
++            },
++          },
++        });
++      });
++    }
++  });
++
++  purchases.forEach((purchase) => {
++    const purchaseReference = getDisplayReference(purchase, purchase.id);
++    const purchaseKeys = getPurchaseIdentityKeys(purchase, purchase.id);
++    const hasExpense = purchaseKeys.some((key) => maps.purchaseExpenseKeys.has(key));
++    const purchaseLogs = getUniqueMapRecordsByKeys(maps.purchaseInventoryLogsByKey, purchaseKeys);
++    const amount = toNumber(purchase.totalActualPurchase ?? purchase.total ?? purchase.amount ?? purchase.subtotalItems);
++    const stockIn = getPurchaseStockQuantity(purchase);
++
++    if (amount > 0 && !hasExpense) {
++      const targetDocId = buildPurchaseExpenseDocumentId(purchase.id);
++      addRepairRow(rows, {
++        key: `purchase-expense-missing:${purchase.id}`,
++        area: "Purchases",
++        sideEffect: "Expense",
++        sourceCollection: "purchases",
++        sourceId: purchase.id,
++        sourceRef: purchaseReference,
++        targetCollection: "expenses",
++        targetDocId,
++        issue: "Purchase bernilai lebih dari 0 belum punya expense otomatis.",
++        amount,
++        executable: true,
++        payload: {
++          collectionName: "expenses",
++          docId: targetDocId,
++          data: {
++            ...buildPurchaseExpenseRepairPayload(purchase),
++            repairedByMaintenance: true,
++            repairSource: SIDE_EFFECT_REPAIR_SOURCE,
++            maintenanceRepairedAt: serverTimestamp(),
++          },
++        },
++      });
++    }
++
++    if (stockIn > 0 && purchaseLogs.length === 0) {
++      const targetDocId = `repair_purchase_log__${sanitizeDocIdPart(purchase.id, purchaseReference)}`;
++      addRepairRow(rows, {
++        key: `purchase-log-missing:${purchase.id}`,
++        area: "Purchases",
++        sideEffect: "Inventory Log",
++        sourceCollection: "purchases",
++        sourceId: purchase.id,
++        sourceRef: purchaseReference,
++        targetCollection: INVENTORY_LOG_COLLECTION,
++        targetDocId,
++        issue: "Purchase punya stok masuk tetapi belum punya inventory log purchase_in.",
++        quantityChange: stockIn,
++        executable: true,
++        payload: {
++          collectionName: INVENTORY_LOG_COLLECTION,
++          docId: targetDocId,
++          data: {
++            ...buildPurchaseInventoryLogPayload({ purchase }),
++            maintenanceRepairedAt: serverTimestamp(),
++          },
++        },
++      });
++    }
++  });
++
++  returns.forEach((returnRecord) => {
++    const returnReference = getDisplayReference(returnRecord, returnRecord.id);
++    const returnKeys = getReturnIdentityKeys(returnRecord, returnRecord.id);
++    const returnLogs = getUniqueMapRecordsByKeys(maps.returnInventoryLogsByKey, returnKeys);
++    const quantity = toNumber(returnRecord.quantity ?? returnRecord.qty);
++
++    if (quantity > 0 && returnLogs.length === 0) {
++      const targetDocId = `repair_return_log__${sanitizeDocIdPart(returnRecord.id, returnReference)}`;
++      addRepairRow(rows, {
++        key: `return-log-missing:${returnRecord.id}`,
++        area: "Returns",
++        sideEffect: "Inventory Log",
++        sourceCollection: "returns",
++        sourceId: returnRecord.id,
++        sourceRef: returnReference,
++        targetCollection: INVENTORY_LOG_COLLECTION,
++        targetDocId,
++        issue: "Return punya stok masuk tetapi belum punya inventory log return_in.",
++        quantityChange: quantity,
++        executable: true,
++        payload: {
++          collectionName: INVENTORY_LOG_COLLECTION,
++          docId: targetDocId,
++          data: {
++            ...buildReturnInventoryLogPayload({ returnRecord }),
++            maintenanceRepairedAt: serverTimestamp(),
++          },
++        },
++      });
++    }
++  });
++
++  return {
++    rows,
++    scannedCount: sales.length + purchases.length + returns.length + incomes.length + expenses.length + inventoryLogs.length,
++  };
++};
++
++export const getTransactionSideEffectRepairAudit = async () => {
++  const { rows, scannedCount } = await buildTransactionSideEffectPlans();
++
++  return {
++    generatedAt: new Date().toISOString(),
++    rows: rows.map(buildPublicRow),
++    summary: buildSummary(rows, scannedCount),
++    affectedCollections: ["sales", "purchases", "returns", "incomes", "expenses", INVENTORY_LOG_COLLECTION],
++  };
++};
++
++export const repairTransactionSideEffects = async () => {
++  const { rows, scannedCount } = await buildTransactionSideEffectPlans();
++  const plans = rows.filter((row) => row.executable && row.payload);
++  let batch = writeBatch(db);
++  let operationCount = 0;
++  let createdCount = 0;
++
++  for (const plan of plans) {
++    batch.set(doc(db, plan.payload.collectionName, plan.payload.docId), plan.payload.data);
++    operationCount += 1;
++    createdCount += 1;
++
++    if (operationCount >= BATCH_LIMIT) {
++      await batch.commit();
++      batch = writeBatch(db);
++      operationCount = 0;
++    }
++  }
++
++  if (operationCount > 0) await batch.commit();
++
++  return {
++    message: `Repair side-effect transaksi selesai. ${createdCount} dokumen audit/finance dibuat tanpa mengubah stok master atau dokumen transaksi utama.`,
++    updatedCount: createdCount,
++    createdCount,
++    skippedCount: rows.length - createdCount,
++    summary: buildSummary(rows, scannedCount),
++    affectedCollections: ["incomes", "expenses", INVENTORY_LOG_COLLECTION],
++  };
++};
+diff --git a/src/utils/stock/stockHelpers.js b/src/utils/stock/stockHelpers.js
+index ea5add8..77d346e 100644
+--- a/src/utils/stock/stockHelpers.js
++++ b/src/utils/stock/stockHelpers.js
+@@ -187,3 +187,191 @@ export const formatAffectedVariantStockSummary = (
+ 
+   return `${prefix}: ${preview}${remainingCount > 0 ? ` +${formatNumberId(remainingCount)} lainnya` : ''}`;
+ };
++const STOCK_READ_MODEL_SOURCE_TYPE_ALIASES = {
++  material: 'material',
++  raw_material: 'material',
++  raw_materials: 'material',
++  'bahan baku': 'material',
++  product: 'product',
++  products: 'product',
++  'produk jadi': 'product',
++  semi_finished: 'semi_finished',
++  semi_finished_material: 'semi_finished',
++  semi_finished_materials: 'semi_finished',
++  'semi finished': 'semi_finished',
++};
++
++const STOCK_READ_MODEL_SOURCE_CONFIG = {
++  material: {
++    typeLabel: 'Bahan Baku',
++    route: '/stock-management',
++  },
++  product: {
++    typeLabel: 'Produk Jadi',
++    route: '/stock-management',
++  },
++  semi_finished: {
++    typeLabel: 'Semi Finished',
++    route: '/produksi/semi-finished-materials',
++  },
++};
++
++export const normalizeStockReadModelSourceType = (sourceType = '', typeLabel = '') => {
++  const normalizedSource = String(sourceType || '').trim().toLowerCase();
++  const normalizedTypeLabel = String(typeLabel || '').trim().toLowerCase();
++
++  return (
++    STOCK_READ_MODEL_SOURCE_TYPE_ALIASES[normalizedSource] ||
++    STOCK_READ_MODEL_SOURCE_TYPE_ALIASES[normalizedTypeLabel] ||
++    'product'
++  );
++};
++
++export const getStockReadModelQuantities = (record = {}) => {
++  const currentStock = toNumber(record?.currentStock ?? record?.stock);
++  const reservedStock = toNumber(record?.reservedStock);
++  const calculatedAvailableStock = calculateAvailableStock(currentStock, reservedStock);
++  const availableStock = toNumber(record?.availableStock, calculatedAvailableStock);
++  const stock = toNumber(record?.stock, currentStock);
++
++  return {
++    stock,
++    currentStock,
++    reservedStock,
++    availableStock,
++  };
++};
++
++export const getStockReadModelStatusMeta = (
++  record = {},
++  {
++    sourceType = '',
++    threshold,
++    stockValue,
++  } = {},
++) => {
++  const safeStockValue = toNumber(stockValue);
++  const safeThreshold = toNumber(threshold);
++  const variantStatusMeta = getVariantAwareStockStatusMeta(record, {
++    sourceType,
++    threshold: safeThreshold,
++  });
++
++  if (variantStatusMeta?.label === 'Kosong') {
++    return {
++      status: 'empty',
++      reportStatus: 'Habis',
++      label: 'Kosong',
++      color: 'red',
++      alertType: 'error',
++      affectedVariants: variantStatusMeta.affectedVariants || [],
++    };
++  }
++
++  if (variantStatusMeta?.label === 'Stok Rendah') {
++    return {
++      status: 'low',
++      reportStatus: 'Kritis',
++      label: 'Menipis',
++      color: 'gold',
++      alertType: 'warning',
++      affectedVariants: variantStatusMeta.affectedVariants || [],
++    };
++  }
++
++  if (safeStockValue <= 0) {
++    return {
++      status: 'empty',
++      reportStatus: 'Habis',
++      label: 'Kosong',
++      color: 'red',
++      alertType: 'error',
++      affectedVariants: [],
++    };
++  }
++
++  if (safeThreshold > 0 && safeStockValue <= safeThreshold) {
++    return {
++      status: 'low',
++      reportStatus: 'Kritis',
++      label: 'Menipis',
++      color: 'gold',
++      alertType: 'warning',
++      affectedVariants: [],
++    };
++  }
++
++  return {
++    status: 'safe',
++    reportStatus: 'Normal',
++    label: 'Aman',
++    color: 'green',
++    alertType: 'success',
++    affectedVariants: [],
++  };
++};
++
++// =====================================================
++// ACTIVE / READ-ONLY - Stock item read model for Dashboard and Stock Report.
++// Fungsi:
++// - menyamakan sumber angka stok display: availableStock -> currentStock/stock fallback;
++// - menyamakan threshold master per entity: raw material minStock, product/semi finished minStockAlert;
++// - menjaga Dashboard dan Stock Report tidak punya comparator/status stok yang bercabang.
++// Hubungan flow:
++// - hanya mapper read-only dari dokumen master stok ke row UI/report;
++// - tidak menulis stock/currentStock/reservedStock/availableStock, inventory log, transaksi, produksi, payroll, HPP, atau schema.
++// Risiko:
++// - Jangan pindahkan mutasi stok atau validasi transaksi ke helper ini. Writer tetap memakai service/helper stok guarded.
++// =====================================================
++export const buildStockReadModelRow = (
++  record = {},
++  {
++    id,
++    sourceType = '',
++    typeLabel = '',
++    route = '',
++    unit = '',
++    name = '',
++    affectedVariantMaxItems = 3,
++  } = {},
++) => {
++  const resolvedSourceType = normalizeStockReadModelSourceType(sourceType, typeLabel);
++  const sourceConfig = STOCK_READ_MODEL_SOURCE_CONFIG[resolvedSourceType] || STOCK_READ_MODEL_SOURCE_CONFIG.product;
++  const resolvedTypeLabel = typeLabel || sourceConfig.typeLabel;
++  const quantities = getStockReadModelQuantities(record);
++  const minStockThreshold = resolveMasterLowStockThreshold(record, resolvedSourceType);
++  const unitDisplay = unit || record?.stockUnit || record?.unit || record?.baseUnit || 'pcs';
++  const displayName = name || record?.name || record?.productName || record?.materialName || '-';
++  const statusMeta = getStockReadModelStatusMeta(record, {
++    sourceType: resolvedSourceType,
++    threshold: minStockThreshold,
++    stockValue: quantities.availableStock,
++  });
++  const affectedVariantSummary = formatAffectedVariantStockSummary(record, {
++    sourceType: resolvedSourceType,
++    threshold: minStockThreshold,
++    unit: unitDisplay,
++    maxItems: affectedVariantMaxItems,
++  });
++
++  return {
++    ...record,
++    id: id || record?.id,
++    sourceType: resolvedSourceType,
++    type: resolvedTypeLabel,
++    to: route || sourceConfig.route,
++    name: displayName,
++    stock: quantities.stock,
++    currentStock: quantities.currentStock,
++    reservedStock: quantities.reservedStock,
++    availableStock: quantities.availableStock,
++    stockDisplay: quantities.availableStock,
++    minStockDisplay: minStockThreshold,
++    unitDisplay,
++    status: statusMeta.reportStatus,
++    statusMeta,
++    affectedVariantSummary,
++    affectedVariantEntries: statusMeta.affectedVariants || [],
++  };
++};
++

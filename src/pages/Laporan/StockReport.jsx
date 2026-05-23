@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Col, Input, Select, Table, Tag, message } from "antd";
+import { Alert, Button, Col, Input, Select, Table, Tag, message } from "antd";
 import { CheckCircleOutlined, FileExcelOutlined, WarningOutlined } from "@ant-design/icons";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
@@ -20,6 +20,7 @@ const StockReport = () => {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState([]);
+  const [failedReads, setFailedReads] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
@@ -28,13 +29,15 @@ const StockReport = () => {
     const loadStockReportData = async () => {
       try {
         setLoading(true);
-        const { inventory: inventoryRows, categories: categoryList } = await fetchStockReportData();
+        const { inventory: inventoryRows, categories: categoryList, failedReads: readFailures = [] } = await fetchStockReportData();
 
         setInventory(inventoryRows);
         setCategories(categoryList);
+        setFailedReads(readFailures);
       } catch (error) {
         console.error("Error fetching stock report data:", error);
         message.error("Gagal memuat data laporan stok.");
+        setFailedReads([]);
       } finally {
         setLoading(false);
       }
@@ -78,6 +81,8 @@ const StockReport = () => {
   const totalItems = filteredData.length;
   const lowStockItems = filteredData.filter((item) => item.status === "Kritis" || item.status === "Habis");
   const criticalStockItems = filteredData.filter((item) => item.status === "Habis");
+  const isPartialStockReport = failedReads.length > 0;
+  const failedReadsLabel = failedReads.join(", ");
 
   const summaryItems = useMemo(
     () => [
@@ -122,12 +127,19 @@ const StockReport = () => {
       return;
     }
 
+    if (isPartialStockReport) {
+      message.warning("Export XLSX hanya memuat sumber laporan stok yang berhasil dibaca.");
+    }
+
     await exportJsonToExcel({
       title: "Laporan Stok IMS Bunga Flanel",
-      subtitle: "Ekspor stok sesuai filter aktif.",
+      subtitle: isPartialStockReport
+        ? "Ekspor stok sesuai filter aktif. PERINGATAN: data laporan parsial."
+        : "Ekspor stok sesuai filter aktif.",
       fileName: "laporan-stok",
       sheetName: "Stock Report",
       filters: [
+        `Status data: ${isPartialStockReport ? `Parsial - sumber gagal: ${failedReadsLabel}` : "Lengkap sesuai sumber yang berhasil dimuat"}`,
         `Kategori: ${selectedCategory === "all" ? "Semua" : selectedCategory}`,
         `Status: ${selectedStatus === "all" ? "Semua" : selectedStatus}`,
         `Pencarian: ${searchTerm || "-"}`,
@@ -332,6 +344,14 @@ const StockReport = () => {
         subtitle="Item sesuai filter."
         extra={<Tag color="blue">{formatNumberId(filteredData.length)} baris</Tag>}
       >
+        {failedReads.length > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            message="Sebagian sumber laporan stok gagal dimuat."
+            description={`Area gagal: ${failedReadsLabel}. Data yang berhasil dibaca tetap ditampilkan agar laporan tidak kosong total. Export XLSX akan ditandai sebagai data parsial.`}
+          />
+        )}
         <DataRefreshIndicator loading={loading} dataSource={filteredData} />
         <Table
           // AKTIF / GUARDED UI: class standar hanya visual; sumber stok/currentStock/reservedStock/availableStock tidak diubah.

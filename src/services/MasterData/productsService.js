@@ -8,12 +8,16 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { generateUniqueSequentialCode, isBusinessCodeExists } from '../../utils/references/businessCodeGenerator';
+import {
+  generateUniqueSequentialCode,
+  getSequentialBusinessCodeSequence,
+  isBusinessCodeExists,
+  prepareSequentialCodeInTransaction,
+} from '../../utils/references/businessCodeGenerator';
 import {
   calculateVariantTotals,
   normalizeColorVariants,
@@ -556,30 +560,50 @@ export const createProduct = async (values = {}, categories = []) => {
   Risiko:
   - Jangan mengganti dengan input manual atau random ID karena akan merusak duplicate guard dan export/audit teknis.
   ===================================================== */
-  const normalizedCode = await generateProductCode(values);
-  await assertProductCodeAvailable(normalizedCode, null);
+  const baselineCode = await generateProductCode(values);
+  const baselineSequence = getSequentialBusinessCodeSequence({ code: baselineCode, prefix: 'PRD' });
+  let createdId = '';
 
-  const payload = normalizeProductCreatePayload({ ...values, code: normalizedCode }, categories);
-  /* =====================================================
-  SECTION: Product document ID = business code — AKTIF
-  Fungsi:
-  - Menyimpan Product baru dengan document ID sama seperti kode PRD internal sequence.
+  await runTransaction(db, async (transaction) => {
+    const codeReservation = await prepareSequentialCodeInTransaction({
+      transaction,
+      db,
+      collectionName: COLLECTION_NAME,
+      prefix: 'PRD',
+      minimumSequence: Math.max(baselineSequence - 1, 0),
+    });
+    const normalizedCode = codeReservation.code;
+    const ref = doc(db, COLLECTION_NAME, normalizedCode);
+    const existingSnapshot = await transaction.get(ref);
 
-  Dipakai oleh:
-  - createProduct pada Master Data Produk.
+    if (existingSnapshot.exists()) {
+      throw { type: 'validation', errors: { code: 'Kode produk sudah digunakan' } };
+    }
 
-  Alasan perubahan:
-  - Data baru yang 1 dokumen = 1 referensi utama idealnya memakai internal code sebagai document ID.
+    const payload = normalizeProductCreatePayload({ ...values, code: normalizedCode }, categories);
+    /* =====================================================
+    SECTION: Product document ID = business code — AKTIF
+    Fungsi:
+    - Menyimpan Product baru dengan document ID sama seperti kode PRD internal sequence.
 
-  Catatan cleanup:
-  - Data lama dengan random ID tetap dipertahankan dan tidak di-rename.
+    Dipakai oleh:
+    - createProduct pada Master Data Produk.
 
-  Risiko:
-  - Jangan mengubah update flow; relasi data lama tetap bergantung id existing.
-  ===================================================== */
-  const ref = doc(db, COLLECTION_NAME, normalizedCode);
-  await setDoc(ref, payload);
-  return ref.id;
+    Alasan perubahan:
+    - Data baru yang 1 dokumen = 1 referensi utama idealnya memakai internal code sebagai document ID.
+
+    Catatan cleanup:
+    - Data lama dengan random ID tetap dipertahankan dan tidak di-rename.
+
+    Risiko:
+    - Jangan mengubah update flow; relasi data lama tetap bergantung id existing.
+    ===================================================== */
+    codeReservation.commit();
+    transaction.set(ref, payload);
+    createdId = ref.id;
+  });
+
+  return createdId;
 };
 
 export const updateProduct = async (id, values = {}, categories = []) => {

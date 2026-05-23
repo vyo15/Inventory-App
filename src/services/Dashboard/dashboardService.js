@@ -1,10 +1,7 @@
 import { collection, getDocs, limit, orderBy, query, Timestamp, where } from "firebase/firestore";
 import { db } from "../../firebase";
 import { getProductionPlanningDashboardSummary } from "../Produksi/productionPlanningService";
-import {
-  formatAffectedVariantStockSummary,
-  getLowStockVariantEntries,
-} from "../../utils/stock/stockHelpers";
+import { buildStockReadModelRow } from "../../utils/stock/stockHelpers";
 
 const EMPTY_PLANNING_PERIOD_SUMMARY = {
   count: 0,
@@ -77,122 +74,74 @@ const mergeDashboardRowsById = (...rowGroups) => {
   return Array.from(rowsById.values());
 };
 
-const getItemDisplayName = (item = {}) =>
-  item?.name || item?.productName || item?.materialName || "-";
-
-const getItemStock = (item = {}) =>
-  getNumericValue(item?.availableStock ?? item?.currentStock ?? item?.stock ?? 0);
-
-const getItemMinStock = (item = {}, sourceType = "") => {
-  if (sourceType === "material") return getNumericValue(item?.minStock ?? 0);
-  if (sourceType === "product" || sourceType === "semi_finished") {
-    return getNumericValue(item?.minStockAlert ?? 0);
-  }
-
-  return getNumericValue(item?.minStockAlert ?? item?.minStock ?? 0);
-};
-
 const isStockMonitoringActiveItem = (item = {}) => item?.isActive !== false;
 
-const getItemCurrentStock = (item = {}) =>
-  getNumericValue(item?.currentStock ?? item?.stock ?? 0);
+const DASHBOARD_STOCK_READ_MODEL_SOURCES = [
+  { sourceType: "product", type: "Produk Jadi", to: "/stock-management", getUnit: (item = {}) => item?.unit || "pcs" },
+  { sourceType: "material", type: "Bahan Baku", to: "/stock-management", getUnit: (item = {}) => item?.stockUnit || item?.unit || "pcs" },
+  { sourceType: "semi_finished", type: "Semi Finished", to: "/produksi/semi-finished-materials", getUnit: (item = {}) => item?.unit || "pcs" },
+];
 
-const getItemReservedStock = (item = {}) =>
-  getNumericValue(item?.reservedStock ?? 0);
-
-const getLowStockSeverity = (item = {}, sourceType = "") => {
-  const stock = getItemStock(item);
-  const minStock = getItemMinStock(item, sourceType);
-  const affectedVariants = getLowStockVariantEntries(item, {
-    sourceType,
-    threshold: minStock,
-    unit: item?.stockUnit || item?.unit || "pcs",
+const buildDashboardStockReadRow = (item = {}, sourceConfig = {}) => {
+  const readModelRow = buildStockReadModelRow(item, {
+    id: item.id,
+    sourceType: sourceConfig.sourceType,
+    typeLabel: sourceConfig.type,
+    route: sourceConfig.to,
+    unit: typeof sourceConfig.getUnit === "function" ? sourceConfig.getUnit(item) : undefined,
+    affectedVariantMaxItems: 2,
   });
+  const variantGap = readModelRow.affectedVariantEntries.length
+    ? Math.min(...readModelRow.affectedVariantEntries.map((variant) => variant.stock - Math.max(variant.threshold, 0)))
+    : null;
 
-  if (affectedVariants.some((variant) => variant.status === "empty")) return { label: "Kosong", color: "red" };
-  if (affectedVariants.length > 0) return { label: "Menipis", color: "gold" };
-  if (stock <= 0) return { label: "Kosong", color: "red" };
-  if (minStock > 0 && stock <= minStock) return { label: "Menipis", color: "gold" };
-  return { label: "Aman", color: "green" };
+  return {
+    ...readModelRow,
+    key: `${readModelRow.sourceType}-${item.id}`,
+    sourceStock: readModelRow.stock,
+    stock: readModelRow.stockDisplay,
+    minStock: readModelRow.minStockDisplay,
+    unit: readModelRow.unitDisplay,
+    severity: readModelRow.statusMeta,
+    sortGap: variantGap ?? readModelRow.stockDisplay - Math.max(readModelRow.minStockDisplay, 0),
+    snapshot: item,
+  };
 };
 
 const buildLowStockRows = (products = [], materials = [], semiFinishedMaterials = []) => {
-  const activeProducts = products.filter(isStockMonitoringActiveItem);
-  const activeMaterials = materials.filter(isStockMonitoringActiveItem);
-  const activeSemiFinishedMaterials = semiFinishedMaterials.filter(isStockMonitoringActiveItem);
+  const sourceRows = [
+    { items: products.filter(isStockMonitoringActiveItem), sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[0] },
+    { items: materials.filter(isStockMonitoringActiveItem), sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[1] },
+    { items: semiFinishedMaterials.filter(isStockMonitoringActiveItem), sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[2] },
+  ];
 
-  const buildRow = (item, sourceType, type, to, unit) => {
-    const stock = getItemStock(item);
-    const minStock = getItemMinStock(item, sourceType);
-    const affectedVariants = getLowStockVariantEntries(item, {
-      sourceType,
-      threshold: minStock,
-      unit,
-    });
-    const variantGap = affectedVariants.length
-      ? Math.min(...affectedVariants.map((variant) => variant.stock - Math.max(variant.threshold, 0)))
-      : null;
-
-    return {
-      key: `${sourceType}-${item.id}`,
-      id: item.id,
-      name: getItemDisplayName(item),
-      stock,
-      minStock,
-      unit,
-      type,
-      sourceType,
-      severity: getLowStockSeverity(item, sourceType),
-      affectedVariantSummary: formatAffectedVariantStockSummary(item, {
-        sourceType,
-        threshold: minStock,
-        unit,
-        maxItems: 2,
-      }),
-      sortGap: variantGap ?? stock - Math.max(minStock, 0),
-      to,
-      snapshot: item,
-    };
-  };
-
-  const rows = [
-    ...activeProducts.map((item) => buildRow(item, "product", "Produk Jadi", "/stock-management", item?.unit || "pcs")),
-    ...activeMaterials.map((item) => buildRow(item, "material", "Bahan Baku", "/stock-management", item?.stockUnit || item?.unit || "pcs")),
-    ...activeSemiFinishedMaterials.map((item) => buildRow(item, "semi_finished", "Semi Finished", "/produksi/semi-finished-materials", item?.unit || "pcs")),
-  ].filter((item) => item.affectedVariantSummary || item.stock <= 0 || (item.minStock > 0 && item.stock <= item.minStock));
+  const rows = sourceRows.flatMap(({ items, sourceConfig }) =>
+    items.map((item) => buildDashboardStockReadRow(item, sourceConfig)),
+  ).filter((item) => item.status !== "Normal");
 
   return rows.sort((left, right) => left.sortGap - right.sortGap);
 };
 
 const buildStockAuditRows = (products = [], materials = [], semiFinishedMaterials = []) => {
-  const mapRows = (items = [], type = "Item", sourceType = "item", to = "/stock-management") =>
+  const sourceRows = [
+    { items: products, sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[0] },
+    { items: materials, sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[1] },
+    { items: semiFinishedMaterials, sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[2] },
+  ];
+
+  return sourceRows.flatMap(({ items, sourceConfig }) =>
     items.map((item) => {
-      const stock = getItemStock(item);
-      const currentStock = getItemCurrentStock(item);
-      const reservedStock = getItemReservedStock(item);
+      const readModelRow = buildDashboardStockReadRow(item, sourceConfig);
 
       return {
-        key: `${sourceType}-${item.id}`,
-        id: item.id,
-        name: getItemDisplayName(item),
-        type,
-        sourceType,
-        unit: item?.stockUnit || item?.unit || "pcs",
-        stock,
-        currentStock,
-        reservedStock,
-        minStock: getItemMinStock(item, sourceType),
-        to,
-        isNegativeStock: stock < 0 || currentStock < 0,
-        isReservedOverrun: reservedStock > 0 && (reservedStock > Math.max(currentStock, 0) || stock < 0),
+        ...readModelRow,
+        isNegativeStock: readModelRow.availableStock < 0 || readModelRow.currentStock < 0 || readModelRow.sourceStock < 0,
+        isReservedOverrun: readModelRow.reservedStock > 0 && (
+          readModelRow.reservedStock > Math.max(readModelRow.currentStock, 0) || readModelRow.availableStock < 0
+        ),
       };
-    });
-
-  return [
-    ...mapRows(products, "Produk Jadi", "product", "/stock-management"),
-    ...mapRows(materials, "Bahan Baku", "material", "/stock-management"),
-    ...mapRows(semiFinishedMaterials, "Semi Finished", "semi_finished", "/produksi/semi-finished-materials"),
-  ].filter((item) => item.isNegativeStock || item.isReservedOverrun);
+    }),
+  ).filter((item) => item.isNegativeStock || item.isReservedOverrun);
 };
 
 const getRestockLink = (...values) => {

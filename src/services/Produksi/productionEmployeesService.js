@@ -4,7 +4,6 @@
 // =====================================================
 
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -17,16 +16,23 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
+import {
+  BUSINESS_CODE_COUNTER_COLLECTION,
+  buildBusinessCodeCounterId,
+  prepareBusinessCodeCounterSequenceInTransaction,
+} from "../../utils/references/businessCodeCounterService";
 
 // =====================================================
 // Nama collection
 // ACTIVE / FINAL:
 // - production_employees tetap menjadi source of truth master karyawan produksi.
-// - production_employee_code_sequences hanya counter teknis untuk menjaga kode
-//   DDMMYYYY-XXX tetap unik saat tambah data baru.
+// - business_code_counters menjadi counter teknis bersama untuk menjaga kode
+//   DDMMYYYY-XXX tetap unik saat tambah data baru;
+// - production_employee_code_sequences hanya dibaca sebagai legacy baseline.
 // =====================================================
 const COLLECTION_NAME = "production_employees";
-const CODE_SEQUENCE_COLLECTION = "production_employee_code_sequences";
+const EMPLOYEE_COUNTER_PREFIX = "EMP";
+const LEGACY_CODE_SEQUENCE_COLLECTION = "production_employee_code_sequences";
 
 // =====================================================
 // Helper format kode otomatis
@@ -43,7 +49,8 @@ const padTwoDigits = (value) => String(value).padStart(2, "0");
 const padSequence = (value) => String(Number(value || 0)).padStart(3, "0");
 
 export const formatProductionEmployeeCodePrefix = (date = new Date()) => {
-  const localDate = date instanceof Date ? date : new Date(date);
+  const parsedDate = date instanceof Date ? date : new Date(date);
+  const localDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
   const day = padTwoDigits(localDate.getDate());
   const month = padTwoDigits(localDate.getMonth() + 1);
   const year = localDate.getFullYear();
@@ -63,22 +70,37 @@ const parseProductionEmployeeCodeSequence = (code = "", prefix = "") => {
 const getMaxExistingCodeSequence = async (prefix) => {
   const startCode = `${prefix}-000`;
   const endCode = `${prefix}-\uf8ff`;
-  const q = query(
-    collection(db, COLLECTION_NAME),
-    where("code", ">=", startCode),
-    where("code", "<=", endCode),
-  );
 
-  const snapshot = await getDocs(q);
+  try {
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where("code", ">=", startCode),
+      where("code", "<=", endCode),
+    );
 
-  return snapshot.docs.reduce((maxSequence, item) => {
-    const sequence = parseProductionEmployeeCodeSequence(item.data()?.code, prefix);
-    return Math.max(maxSequence, sequence);
-  }, 0);
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs.reduce((maxSequence, item) => {
+      const sequence = parseProductionEmployeeCodeSequence(item.data()?.code, prefix);
+      return Math.max(maxSequence, sequence);
+    }, 0);
+  } catch (error) {
+    console.warn("Query prefix kode karyawan produksi gagal, fallback full scan", error);
+    const snapshot = await getDocs(collection(db, COLLECTION_NAME));
+
+    return snapshot.docs.reduce((maxSequence, item) => {
+      const data = item.data() || {};
+      const sequence = Math.max(
+        parseProductionEmployeeCodeSequence(item.id, prefix),
+        parseProductionEmployeeCodeSequence(data.code, prefix),
+      );
+      return Math.max(maxSequence, sequence);
+    }, 0);
+  }
 };
 
-const getStoredCodeSequence = async (prefix) => {
-  const ref = doc(db, CODE_SEQUENCE_COLLECTION, prefix);
+const getLegacyStoredCodeSequence = async (prefix) => {
+  const ref = doc(db, LEGACY_CODE_SEQUENCE_COLLECTION, prefix);
   const snapshot = await getDoc(ref);
 
   if (!snapshot.exists()) return 0;
@@ -86,53 +108,34 @@ const getStoredCodeSequence = async (prefix) => {
   return Number(snapshot.data()?.lastSequence || 0);
 };
 
+const getBusinessCodeCounterSequence = async (prefix) => {
+  const counterId = buildBusinessCodeCounterId({
+    scope: "daily",
+    prefix: EMPLOYEE_COUNTER_PREFIX,
+    dateCode: prefix,
+  });
+  const snapshot = await getDoc(doc(db, BUSINESS_CODE_COUNTER_COLLECTION, counterId));
+
+  if (!snapshot.exists()) return 0;
+
+  return Number(snapshot.data()?.lastSequence || 0);
+};
+
+const getProductionEmployeeCodeBaselineSequence = async (prefix) => {
+  const [existingMax, counterMax, legacyStoredMax] = await Promise.all([
+    getMaxExistingCodeSequence(prefix),
+    getBusinessCodeCounterSequence(prefix),
+    getLegacyStoredCodeSequence(prefix),
+  ]);
+
+  return Math.max(existingMax, counterMax, legacyStoredMax);
+};
+
 export const getNextProductionEmployeeCodePreview = async (date = new Date()) => {
   const prefix = formatProductionEmployeeCodePrefix(date);
-  const [existingMax, storedMax] = await Promise.all([
-    getMaxExistingCodeSequence(prefix),
-    getStoredCodeSequence(prefix),
-  ]);
-  const nextSequence = Math.max(existingMax, storedMax) + 1;
+  const nextSequence = (await getProductionEmployeeCodeBaselineSequence(prefix)) + 1;
 
   return `${prefix}-${padSequence(nextSequence)}`;
-};
-
-const generateProductionEmployeeCode = async (date = new Date()) => {
-  const prefix = formatProductionEmployeeCodePrefix(date);
-  const existingMax = await getMaxExistingCodeSequence(prefix);
-  const sequenceRef = doc(db, CODE_SEQUENCE_COLLECTION, prefix);
-
-  return runTransaction(db, async (transaction) => {
-    const sequenceSnapshot = await transaction.get(sequenceRef);
-    const storedMax = sequenceSnapshot.exists()
-      ? Number(sequenceSnapshot.data()?.lastSequence || 0)
-      : 0;
-    const nextSequence = Math.max(existingMax, storedMax) + 1;
-    const code = `${prefix}-${padSequence(nextSequence)}`;
-
-    transaction.set(
-      sequenceRef,
-      {
-        prefix,
-        lastSequence: nextSequence,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    );
-
-    return code;
-  });
-};
-
-const generateUniqueProductionEmployeeCode = async (date = new Date()) => {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const code = await generateProductionEmployeeCode(date);
-    const exists = await isProductionEmployeeCodeExists(code);
-
-    if (!exists) return code;
-  }
-
-  throw new Error("Gagal membuat kode karyawan produksi yang unik");
 };
 
 // =====================================================
@@ -386,26 +389,58 @@ export const createProductionEmployee = async (
   // final dikunci di service agar tidak bentrok jika ada input paralel.
   // =====================================================
   const createdDate = new Date();
-  const generatedCode = await generateUniqueProductionEmployeeCode(createdDate);
-  const valuesWithGeneratedCode = {
-    ...values,
-    code: generatedCode,
-  };
-  const errors = validateProductionEmployee(valuesWithGeneratedCode);
+  const codePrefix = formatProductionEmployeeCodePrefix(createdDate);
+  const baselineSequence = await getProductionEmployeeCodeBaselineSequence(codePrefix);
+  let createdId = "";
+  let generatedCode = "";
 
-  if (Object.keys(errors).length > 0) {
-    throw { type: "validation", errors };
-  }
+  await runTransaction(db, async (transaction) => {
+    const codeReservation = await prepareBusinessCodeCounterSequenceInTransaction({
+      transaction,
+      db,
+      scope: "daily",
+      prefix: EMPLOYEE_COUNTER_PREFIX,
+      dateCode: codePrefix,
+      collectionName: COLLECTION_NAME,
+      minimumSequence: baselineSequence,
+    });
+    generatedCode = `${codePrefix}-${padSequence(codeReservation.sequence)}`;
 
-  const payload = normalizePayload(
-    valuesWithGeneratedCode,
-    currentUser,
-    selectedSteps,
-    false,
-  );
-  const result = await addDoc(collection(db, COLLECTION_NAME), payload);
+    const employeeRef = doc(db, COLLECTION_NAME, generatedCode);
+    const existingSnapshot = await transaction.get(employeeRef);
 
-  return { id: result.id, code: generatedCode };
+    if (existingSnapshot.exists()) {
+      throw {
+        type: "validation",
+        errors: {
+          code: "Kode karyawan produksi sudah digunakan",
+        },
+      };
+    }
+
+    const valuesWithGeneratedCode = {
+      ...values,
+      code: generatedCode,
+    };
+    const errors = validateProductionEmployee(valuesWithGeneratedCode);
+
+    if (Object.keys(errors).length > 0) {
+      throw { type: "validation", errors };
+    }
+
+    const payload = normalizePayload(
+      valuesWithGeneratedCode,
+      currentUser,
+      selectedSteps,
+      false,
+    );
+
+    codeReservation.commit();
+    transaction.set(employeeRef, payload);
+    createdId = employeeRef.id;
+  });
+
+  return { id: createdId, code: generatedCode };
 };
 
 // =====================================================

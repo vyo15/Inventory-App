@@ -12,15 +12,17 @@
 // =====================================================
 
 import {
-  addDoc,
   collection,
   doc,
+  documentId,
   getDoc,
   getDocs,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
@@ -29,6 +31,11 @@ import {
   getProductionOrderById,
 } from "./productionOrdersService";
 import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
+import {
+  generateDailySequenceCode,
+  getDailyBusinessCodeSequence,
+  prepareDailySequenceCodeInTransaction,
+} from "../../utils/references/businessCodeGenerator";
 
 const COLLECTION_NAME = "production_plans";
 
@@ -277,17 +284,16 @@ const getTargetItemSnapshot = async ({ targetType = "product", targetItemId = ""
 // Status:
 // - aktif untuk create planning baru.
 // =====================================================
-export const generateProductionPlanCode = async () => {
-  const snapshot = await getDocs(collection(db, COLLECTION_NAME));
-  const maxNumber = snapshot.docs.reduce((max, docItem) => {
-    const code = safeTrim(docItem.data()?.planCode || docItem.data()?.code);
-    const match = code.match(/(\d+)(?!.*\d)/);
-    const numberValue = match ? Number(match[1]) : 0;
-    return Math.max(max, numberValue || 0);
-  }, 0);
-
-  return `PP-${formatDateYmd(new Date()).replaceAll("-", "")}-${String(maxNumber + 1).padStart(4, "0")}`;
-};
+export const generateProductionPlanCode = async (date = new Date()) =>
+  generateDailySequenceCode({
+    db,
+    collectionName: COLLECTION_NAME,
+    fieldNames: ["planCode", "code"],
+    prefix: "PP",
+    date,
+    dateFormat: "YYYYMMDD",
+    sequenceLength: 4,
+  });
 
 // =====================================================
 // ACTIVE - reference data halaman planning.
@@ -463,16 +469,158 @@ const normalizePlan = ({ plan = {}, orders = [], workLogs = [] }) => {
   };
 };
 
-const getAllProductionOrdersSafe = async () => {
-  const snapshot = await getDocs(collection(db, "production_orders"));
-  return snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+const mapProductionOrderDocs = (snapshot) =>
+  snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+
+const chunkArray = (items = [], size = 10) => {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
 };
 
-const getCompletedWorkLogsSafe = async () => {
-  const snapshot = await getDocs(collection(db, "production_work_logs"));
-  return snapshot.docs
-    .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
-    .filter((item) => item.status === "completed");
+const uniqueTruthy = (items = []) =>
+  Array.from(new Set(items.map((item) => safeTrim(item)).filter(Boolean)));
+
+const getLinkedProductionOrderIdsFromPlans = (plans = []) =>
+  uniqueTruthy(
+    plans.flatMap((plan) =>
+      Array.isArray(plan.linkedProductionOrderIds) ? plan.linkedProductionOrderIds : [],
+    ),
+  );
+
+// =====================================================
+// SECTION: Production Order read path for Planning — AKTIF / PERFORMANCE
+// Fungsi:
+// - membaca PO yang relevan untuk Planning melalui planningId dan linkedProductionOrderIds;
+// - menghindari full read production_orders untuk Dashboard/Planning saat query terarah tersedia;
+// - tetap fallback ke full scan agar data legacy/permission/index issue tidak membuat progress kosong.
+//
+// Guard:
+// - read-only, tidak mengubah status Planning/PO/Work Log;
+// - jangan menambahkan limit karena progress Planning bisa salah jika PO terkait tersembunyi;
+// - query by documentId dipakai hanya untuk linkedProductionOrderIds legacy/explicit.
+// =====================================================
+const getProductionOrdersForPlansSafe = async (plans = []) => {
+  if (!plans.length) return [];
+
+  const orderMap = new Map();
+  const planIds = uniqueTruthy(plans.map((plan) => plan.id));
+  const linkedOrderIds = getLinkedProductionOrderIdsFromPlans(plans);
+
+  try {
+    const scopedReads = [];
+
+    chunkArray(planIds).forEach((planIdChunk) => {
+      if (!planIdChunk.length) return;
+      scopedReads.push(
+        getDocs(
+          query(
+            collection(db, "production_orders"),
+            where("planningId", "in", planIdChunk),
+          ),
+        ),
+      );
+    });
+
+    chunkArray(linkedOrderIds).forEach((orderIdChunk) => {
+      if (!orderIdChunk.length) return;
+      scopedReads.push(
+        getDocs(
+          query(
+            collection(db, "production_orders"),
+            where(documentId(), "in", orderIdChunk),
+          ),
+        ),
+      );
+    });
+
+    const snapshots = await Promise.all(scopedReads);
+    snapshots.forEach((snapshot) => {
+      mapProductionOrderDocs(snapshot).forEach((order) => {
+        orderMap.set(order.id, order);
+      });
+    });
+
+    return Array.from(orderMap.values());
+  } catch (error) {
+    console.error("Query Production Order scoped by Planning gagal, pakai fallback full scan", error);
+    const snapshot = await getDocs(collection(db, "production_orders"));
+    return mapProductionOrderDocs(snapshot);
+  }
+};
+
+const getProductionOrderIdsForWorkLogScope = ({ plans = [], orders = [] } = {}) =>
+  uniqueTruthy([
+    ...getLinkedProductionOrderIdsFromPlans(plans),
+    ...orders.map((order) => order.id),
+  ]);
+
+const mapWorkLogDocs = (snapshot) =>
+  snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+
+// =====================================================
+// SECTION: Completed Work Log read path for Planning — AKTIF / PERFORMANCE
+// Fungsi:
+// - membaca Work Log completed hanya untuk Production Order yang relevan dengan Planning;
+// - menghindari read semua Work Log completed saat jumlah histori produksi mulai besar;
+// - tetap fallback ke query status lama dan full scan jika index/rules belum siap.
+//
+// Guard:
+// - read-only, tidak mengubah PO, Work Log, stok, payroll, HPP, atau finance;
+// - jangan menambahkan limit karena progress Planning bisa salah jika Work Log terkait tersembunyi;
+// - linkedProductionOrderIds legacy tetap dipakai sebagai scope agar histori progress tidak hilang.
+// =====================================================
+const getCompletedWorkLogsSafe = async ({ plans = [], orders = [] } = {}) => {
+  const productionOrderIds = getProductionOrderIdsForWorkLogScope({ plans, orders });
+  if (!productionOrderIds.length) return [];
+
+  const scopedOrderIds = new Set(productionOrderIds);
+  const onlyScopedCompleted = (items = []) =>
+    items.filter(
+      (item) => item.status === "completed" && scopedOrderIds.has(safeTrim(item.productionOrderId)),
+    );
+
+  try {
+    const scopedReads = chunkArray(productionOrderIds).map((orderIdChunk) =>
+      getDocs(
+        query(
+          collection(db, "production_work_logs"),
+          where("productionOrderId", "in", orderIdChunk),
+          where("status", "==", "completed"),
+        ),
+      ),
+    );
+
+    const workLogMap = new Map();
+    const snapshots = await Promise.all(scopedReads);
+    snapshots.forEach((snapshot) => {
+      onlyScopedCompleted(mapWorkLogDocs(snapshot)).forEach((workLog) => {
+        workLogMap.set(workLog.id, workLog);
+      });
+    });
+
+    return Array.from(workLogMap.values());
+  } catch (error) {
+    console.error(
+      "Query Work Log completed scoped by Production Order gagal, pakai fallback query status completed",
+      error,
+    );
+
+    try {
+      const completedWorkLogsQuery = query(
+        collection(db, "production_work_logs"),
+        where("status", "==", "completed"),
+      );
+      const snapshot = await getDocs(completedWorkLogsQuery);
+      return onlyScopedCompleted(mapWorkLogDocs(snapshot));
+    } catch (fallbackError) {
+      console.error("Query Work Log completed gagal, pakai fallback full scan", fallbackError);
+      const snapshot = await getDocs(collection(db, "production_work_logs"));
+      return onlyScopedCompleted(mapWorkLogDocs(snapshot));
+    }
+  }
 };
 
 export const getAllProductionPlans = async () => {
@@ -488,14 +636,17 @@ export const getAllProductionPlans = async () => {
     planDocs = snapshot.docs;
   }
 
-  const [orders, workLogs] = await Promise.all([
-    getAllProductionOrdersSafe(),
-    getCompletedWorkLogsSafe(),
-  ]);
-
-  return planDocs
+  const visiblePlans = planDocs
     .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
-    .filter(isVisibleProductionPlan)
+    .filter(isVisibleProductionPlan);
+
+  const orders = await getProductionOrdersForPlansSafe(visiblePlans);
+  const workLogs = await getCompletedWorkLogsSafe({
+    plans: visiblePlans,
+    orders,
+  });
+
+  return visiblePlans
     .map((plan) => normalizePlan({
       plan,
       orders,
@@ -513,13 +664,14 @@ export const getProductionPlanById = async (id) => {
   const snap = await getDoc(doc(db, COLLECTION_NAME, id));
   if (!snap.exists()) return null;
 
-  const [orders, workLogs] = await Promise.all([
-    getAllProductionOrdersSafe(),
-    getCompletedWorkLogsSafe(),
-  ]);
-
   const plan = { id: snap.id, ...snap.data() };
   if (!isVisibleProductionPlan(plan)) return null;
+
+  const orders = await getProductionOrdersForPlansSafe([plan]);
+  const workLogs = await getCompletedWorkLogsSafe({
+    plans: [plan],
+    orders,
+  });
 
   return normalizePlan({
     plan,
@@ -594,9 +746,54 @@ export const createProductionPlan = async (values = {}, currentUser = null) => {
     throw { type: "validation", errors };
   }
 
-  const payload = await buildPlanPayload(values, currentUser, false);
-  const result = await addDoc(collection(db, COLLECTION_NAME), payload);
-  return result.id;
+  const codeDate = new Date();
+  const baselineCode = await generateProductionPlanCode(codeDate);
+  const baselineSequence = getDailyBusinessCodeSequence({
+    code: baselineCode,
+    prefix: "PP",
+    date: codeDate,
+    dateFormat: "YYYYMMDD",
+  });
+  const basePayload = await buildPlanPayload(
+    {
+      ...values,
+      planCode: baselineCode,
+      code: baselineCode,
+    },
+    currentUser,
+    false,
+  );
+  let createdId = "";
+
+  await runTransaction(db, async (transaction) => {
+    const codeReservation = await prepareDailySequenceCodeInTransaction({
+      transaction,
+      db,
+      collectionName: COLLECTION_NAME,
+      prefix: "PP",
+      date: codeDate,
+      dateFormat: "YYYYMMDD",
+      sequenceLength: 4,
+      minimumSequence: Math.max(baselineSequence - 1, 0),
+    });
+    const finalPlanCode = codeReservation.code;
+    const planRef = doc(db, COLLECTION_NAME, finalPlanCode);
+    const existingSnapshot = await transaction.get(planRef);
+
+    if (existingSnapshot.exists()) {
+      throw { type: "validation", errors: { planCode: "Kode planning sudah digunakan" } };
+    }
+
+    codeReservation.commit();
+    transaction.set(planRef, {
+      ...basePayload,
+      planCode: finalPlanCode,
+      code: finalPlanCode,
+    });
+    createdId = finalPlanCode;
+  });
+
+  return createdId;
 };
 
 export const updateProductionPlan = async (id, values = {}, currentUser = null) => {

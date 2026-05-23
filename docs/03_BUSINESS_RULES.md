@@ -99,44 +99,46 @@ Rule yang terlihat:
 - jika transaksi dibuat dengan status selain `Selesai`, income belum dicatat
 - jika nanti status diubah ke `Selesai`, income dibuat jika belum ada
 
-### 2.5 Pembatalan penjualan / barang kembali
-Flow aktif Sales **tidak menyediakan** status update user ke `Dibatalkan`. Jika pembeli batal setelah transaksi tercatat atau barang kembali, jalur resmi adalah menu **Return** agar stok masuk kembali lewat dokumen retur dan audit `inventory_logs` type `return_in`.
+### 2.5 Barang kembali / transaksi tidak jadi
+Sales tidak memiliki flow cancel user-facing. Status aktif Sales hanya `Diproses`, `Dikirim`, dan `Selesai`.
 
-Data lama yang telanjur memiliki status `Dibatalkan` atau log `sale_cancel_revert` hanya boleh dibaca sebagai legacy/compatibility dan dicek melalui Data Quality Audit. Jangan menghidupkan kembali tombol Batalkan atau flow cancel/revert dari halaman Sales tanpa approval guarded terpisah.
+Jika barang kembali, pembeli batal setelah transaksi tercatat, atau perlu koreksi stok atas penjualan, user wajib memakai modul **Return** agar dokumen return, stok masuk, dan `inventory_logs` type `return_in` tetap auditable.
 
 ### 2.6 Sales no-cancel dan hard delete bukan flow operasional
 
 =====================================================
-SECTION: Sales no-cancel/no hard-delete user action — AKTIF / GUARDED
+SECTION: Sales no-cancel and no hard-delete user action — AKTIF / GUARDED
 Fungsi:
-- Menetapkan bahwa Sales aktif hanya berjalan melalui status `Diproses`, `Dikirim`, dan `Selesai`; barang kembali wajib melalui Return.
+- Mengunci bahwa Sales tidak menyediakan aksi batal/delete user-facing.
+- Mengarahkan barang kembali ke modul Return sebagai flow resmi.
 
 Dipakai oleh:
 - `src/pages/Transaksi/Sales.jsx`, `src/services/Transaksi/salesService.js`, laporan Sales, Cash In auto income, Return, dan audit `inventory_logs`.
 
 Alasan perubahan:
-- Flow cancel/revert dari Sales rawan membuat stok kembali tanpa dokumen Return dan membuat audit transaksi bercabang.
+- Cancel langsung dari Sales membuat stok, income, dan audit bercabang. Return lebih jelas karena membuat dokumen koreksi tersendiri.
 
 Catatan cleanup:
-- Hard delete atau repair data cancel lama, jika diperlukan, harus menjadi maintenance flow guarded dengan preview, approval, dan audit trail.
+- Hard delete, jika suatu hari diperlukan, harus menjadi maintenance flow guarded dengan approval dan audit trail.
 
 Risiko:
-- Menghapus sale atau mengaktifkan Batalkan sebagai aksi user dapat menyembunyikan transaksi, memutus audit stok, dan mengacaukan income/report.
+- Menghidupkan kembali aksi batal/delete Sales sebagai aksi user dapat menyembunyikan transaksi, memutus audit stok, dan mengacaukan income/report.
 =====================================================
 
-Jika transaksi sudah tercatat tetapi barang kembali atau pembeli batal:
-- user wajib membuat dokumen **Return**;
-- stok item dikembalikan lewat flow Return dalam transaction;
-- audit `inventory_logs` mencatat `return_in`;
-- record sale tetap ada untuk jejak audit dan laporan historis.
-
-Hard delete Sales tidak tersedia untuk user biasa dan tidak boleh ditambahkan sebagai tombol/handler baru. Rollback teknis create sale, jika suatu hari diperlukan, harus tetap internal, guarded, dan tidak menjadi fitur delete user.
+Rule aktif:
+- Sales dibuat melalui transaction yang mengurangi stok dan mencatat `inventory_logs` type `sale`.
+- Income hanya dibuat saat Sales berstatus `Selesai`.
+- Barang kembali wajib masuk lewat Return, bukan mengubah Sales menjadi status batal.
+- Hard delete Sales tidak tersedia untuk user biasa dan tidak boleh ditambahkan sebagai tombol/handler baru.
 
 ## 3. Rule Retur
 Saat retur disimpan:
 - transaksi masuk ke `returns`
 - stok item bertambah
 - catat `inventory_logs` dengan type `return_in`
+- tidak membuat `incomes`, `revenues`, atau `expenses`
+
+Rule aktif Return adalah **stock-only correction**. Return dipakai untuk barang kembali/koreksi stok setelah Sales tercatat, bukan untuk refund/finance otomatis. Jika suatu hari refund, potongan pembayaran, atau koreksi kas atas Return diperlukan, itu wajib menjadi rule finance Return terpisah dengan review guarded, idempotency, dan update ledger/report.
 
 ## 4. Rule Kas Masuk
 Modul Cash In membaca dua sumber:
@@ -147,6 +149,8 @@ Pemasukan manual baru disimpan ke `revenues` agar kompatibel dengan laporan lama
 
 ## 5. Rule Kas Keluar
 Modul Cash Out membaca `expenses`.
+
+Buku Besar Kas dan Profit/Loss membaca pergerakan uang dari `revenues`, `incomes`, dan `expenses`. Collection `returns` tidak dibaca sebagai sumber finance karena Return aktif belum memiliki side-effect refund/kas.
 
 Sumber pengeluaran aktif:
 - pembelian otomatis dari modul purchases
@@ -397,7 +401,28 @@ Contoh final:
 Catatan current state:
 - Source terbaru memakai `generateUniqueSequentialCode` untuk Product/Raw Material dan wrapper `generateUniqueProductionSequentialCode` untuk Semi Finished/BOM.
 - Production Step sudah memakai generator `STP-001` lokal di service step.
-- Collision kode harian sudah memakai prefix query pada document ID dan field kode bisnis terkait untuk menghindari scan collection penuh pada kondisi normal. Fallback full scan hanya untuk legacy-compat saat prefix query gagal. Counter atomic tetap membutuhkan approval schema/collection baru.
+- Collision kode harian memakai prefix query pada document ID dan field kode bisnis terkait untuk baseline legacy. Batch 16B menambahkan counter atomic `business_code_counters` untuk Sales/Purchases/Returns agar create paralel tidak memakai nomor yang sama.
+
+### Batch 16B — Atomic Counter Transaksi Utama
+
+Status: **GUARDED / AKTIF TERBATAS**.
+
+- Collection counter yang disetujui untuk kode transaksi adalah `business_code_counters`.
+- Sales (`ORD-*`), Purchases (`PUR-*`), dan Returns (`RET-*`) reserve sequence counter di dalam Firestore transaction yang sama dengan create dokumen bisnis.
+- Sebelum transaction, service tetap membaca prefix query lama sebagai baseline sequence legacy agar counter baru tidak mulai dari `001` saat data lama sudah ada.
+- Counter commit dilakukan setelah semua transaction read/validasi selesai dan sebelum write dokumen bisnis, sehingga tidak ada read-after-write di Firestore transaction.
+- Format kode, document ID readable, inventory log payload, income/expense, stock mutation, purchase average cost, OCR, Return transaction, route/menu/role guard, production, payroll, HPP, dan reset tidak berubah.
+- Batch 16C: Customer/Supplier, Product/Raw Material, BOM/Semi Finished, Cash In/Out manual, Stock Adjustment, Production Order, Work Log, dan Payroll manual juga reserve business code melalui `business_code_counters` di dalam transaction create masing-masing. Batch 16D melengkapi Production Planning `PP-*` dan Karyawan Produksi lewat counter bersama yang sama.
+
+
+### Batch 16C — Atomic Counter Master, Finance, Stock Adjustment, dan Produksi
+
+- `business_code_counters` menjadi counter teknis bersama untuk kode harian dan sequence internal non-transaksi.
+- Daily code yang ikut dimigrasi di Batch 16C: `CUS`, `SUP`, `CSH-IN`, `CSH-OUT`, `STK-ADJ`, `PO-PRD`, `PO-SFP`, `JOB`, dan `PAY`.
+- Sequential internal code yang ikut dimigrasi: `PRD`, `RAW`, `BOM`, dan `SFP`.
+- Production Planning `PP` dan counter internal Karyawan Produksi `EMP` bukan scope Batch 16C; keduanya diselesaikan di Batch 16D agar audit counter tetap jelas per tahap.
+- Preview kode di UI tetap boleh memakai prefix-query legacy, tetapi final create service/page wajib reserve kode ulang di transaction agar dua create paralel tidak overwrite document ID.
+- Fallback legacy prefix-query tetap dipakai sebagai baseline sequence agar counter baru tidak mulai dari `001` saat data lama sudah ada.
 
 
 ## Update Rule Tahapan Produksi — 2026-05-16
@@ -593,9 +618,9 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Selector item Sales boleh difilter per Jenis Item, tetapi filter UI tidak boleh mengubah payload final atau source stok (`collectionName` + `itemId`).
 - Field reference/resi wajib tetap opsional dan hanya aktif untuk channel yang relevan; Offline/WhatsApp tidak boleh memaksa reference tersimpan.
 - Sale tidak boleh tersimpan jika stok tersedia tidak cukup.
-- Jika mutasi stok gagal setelah sale dibuat, sale baru wajib dibatalkan/rollback agar tidak ada transaksi orphan tanpa stok keluar.
+- Jika mutasi stok gagal saat create sale, transaction wajib gagal sehingga tidak ada transaksi orphan tanpa stok keluar.
 - Income rule tidak berubah: income hanya dibuat saat sale berstatus `Selesai` dan tidak boleh dobel.
-- Cancel Sales tidak menjadi flow user-facing. Barang kembali/pembeli batal setelah transaksi tercatat wajib lewat Return; hard delete bukan flow user dan rollback teknis create failure tidak boleh menjadi tombol/menu reguler.
+- Sales tetap no-cancel user-facing: barang kembali wajib lewat Return. Hard delete bukan flow user.
 
 ### Fase B - Metadata Expense Pembelian
 - Pembelian tetap membuat expense otomatis dengan amount mengikuti logic existing pembelian.
@@ -634,6 +659,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Export final laporan harus XLSX, bukan data mentah.
 - Header harus manusiawi, sheet name jelas, tanggal rapi, Rupiah rapi, dan angka memakai format Indonesia.
 - Stock Report wajib mencakup sumber stok aktif yang relevan: bahan baku, semi-finished, dan produk jadi.
+- Jika Stock Report hanya berhasil membaca sebagian source stok, UI dan export XLSX wajib menandai laporan sebagai parsial; export tidak boleh terlihat seperti full database lengkap.
 - HPP Analysis boleh diekspor ke XLSX tanpa mengubah rumus HPP.
 - Export HPP wajib membawa kolom validasi cost agar warning cost 0 tetap terlihat saat file dibuka.
 - Payroll Report boleh mempertahankan CSV legacy untuk compatibility, tetapi XLSX adalah output final yang lebih rapi. Query laporan Payroll harus membaca periode aktif bila tersedia, bukan selalu `getAllProductionPayrolls`.
@@ -999,9 +1025,9 @@ Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases,
 ### Sales status tab
 - Tabel Sales wajib menampilkan row sesuai tab status aktif.
 - Tab `Semua Penjualan` boleh menampilkan semua status.
-- Tab aktif source terbaru hanya `Diproses`, `Dikirim`, dan `Selesai`; jika data legacy `Dibatalkan` masih ada, data tersebut hanya boleh terbaca sebagai compatibility/audit, bukan flow aktif baru.
+- Tab `Diproses`, `Dikirim`, dan `Selesai` hanya boleh menampilkan row dengan status yang sama.
 - Search resi/order/reference harus tetap bekerja di dalam batas status tab aktif.
-- Guard tab status adalah guard tampilan; tidak boleh mengubah status transition, mutasi stok, income timing, cancel flow, rollback teknis create failure, retur, dashboard, atau reports.
+- Guard tab status adalah guard tampilan; tidak boleh mengubah status transition, mutasi stok, income timing, Return, dashboard, atau reports.
 
 
 ## Update Business Rules — Sales pending income, no-delete Sales, dan selector stok ringkas — 2026-05-03
@@ -1011,15 +1037,14 @@ Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases,
 - Pemasukan Pending adalah estimasi/potensi uang yang belum masuk resmi; nilai ini **tidak boleh** ditulis ke `revenues`, `incomes`, atau collection baru.
 - Pemasukan Pending **tidak boleh** tampil sebagai pemasukan resmi di menu Pemasukan / Cash In dan **tidak boleh** masuk Profit Loss.
 - Sales berstatus `Selesai` tetap menjadi dasar income resmi sesuai flow aktif.
-- Sales legacy berstatus `Dibatalkan` tidak boleh masuk pending income maupun income resmi.
 - Offline tetap mengikuti flow aktif yang biasanya otomatis `Selesai`; WhatsApp boleh masuk pending jika statusnya `Diproses`/`Dikirim`, tetapi WhatsApp tidak boleh otomatis dianggap Offline tanpa keputusan business rule terpisah.
 
-### Sales no-delete user action
-- Tabel Sales tidak menyediakan tombol **Delete/Hapus** sebagai aksi operasional biasa.
-- Jika barang kembali atau pembeli batal setelah transaksi tercatat, user wajib memakai **Return** agar record transaksi tetap ada dan stok bisa diaudit.
-- Row `Diproses` hanya boleh menampilkan aksi lanjut resmi ke `Dikirim`.
-- Row `Dikirim` hanya boleh menampilkan aksi lanjut resmi ke `Selesai`.
-- Row `Selesai` dan data legacy `Dibatalkan` tidak boleh menampilkan aksi Delete/Hapus biasa.
+### Sales no-cancel/no-delete user action
+- Tabel Sales tidak menyediakan tombol **Batalkan**, **Delete**, atau **Hapus** sebagai aksi operasional biasa.
+- Row `Diproses` hanya boleh menyediakan aksi lanjut ke `Dikirim`.
+- Row `Dikirim` hanya boleh menyediakan aksi lanjut ke `Selesai`.
+- Row `Selesai` tidak menyediakan aksi status lanjutan dari tabel Sales.
+- Jika barang kembali atau transaksi perlu dikoreksi setelah tercatat, user wajib memakai modul Return agar dokumen return, stok masuk, dan inventory log tetap terpisah.
 - Hard delete Sales, jika suatu hari dibutuhkan, harus menjadi maintenance flow guarded dengan approval dan audit trail, bukan tombol tabel reguler.
 
 ### Sales selector dan info stok
@@ -1133,13 +1158,13 @@ Catatan lock:
 ### Sales
 - Source of truth flow penjualan tetap `sales`.
 - Pembuatan Sales sekarang diorkestrasi melalui `src/services/Transaksi/salesService.js`.
-- Preflight validasi stok Firestore Sales juga berada di `salesService.js`; page hanya membangun line item dari form/cache UI.
 - Income otomatis tetap hanya dibuat saat status final `Selesai`.
 - Guard stok varian tetap wajib: item yang punya varian tidak boleh mengurangi stok master/default.
 - Pembatalan Sales tetap tidak disediakan sebagai status update langsung; barang kembali harus lewat Return.
 
 ### Returns
 - Return tetap menulis dokumen return, update stok, dan inventory log dalam satu Firestore transaction.
+- Return aktif adalah stock-only correction: tidak membuat `incomes`, `revenues`, `expenses`, atau ledger finance otomatis.
 - Orkestrasi transaksi Return dipindah ke `src/services/Transaksi/returnsService.js`.
 - Collection dan field Return tidak diubah.
 
@@ -1150,29 +1175,27 @@ Catatan lock:
 - Expense otomatis pembelian tetap membaca amount dari total aktual, bukan saving.
 
 ### Dashboard dan Laporan
-- Dashboard tetap read-only; page hanya memanggil API utama `readDashboardData()` dari `src/services/Dashboard/dashboardService.js`.
-- Helper snapshot, lookup restock, low stock, stock audit, Restock Assistant, merge, dan planning summary bersifat internal di `dashboardService.js`, bukan API publik page.
-- Tombol `Muat Ulang` Dashboard wajib punya guard in-flight agar klik berulang tidak membuat read paralel dari page.
+- Dashboard tetap read-only dan query orchestration dipindah ke `src/services/Dashboard/dashboardService.js`.
 - Laporan Sales/Purchases/Profit Loss memindahkan fetch data ke `src/services/Laporan/reportsService.js`.
 - Stock Report memindahkan fetch data ke `src/services/Laporan/stockReportService.js`.
 - Rule laporan tidak berubah: Profit Loss tetap `revenues + incomes - expenses`, Purchases Report tetap dari `expenses`, Sales Report tetap dari `sales`.
 
 
-## Update 2026-05-23 — Batch 8 Inventory Log Metadata Helper
+### Batch 16D — Production Planning dan Karyawan Produksi Counter
 
-- Inventory log baru dari Sales, Returns, dan Purchases tetap wajib dibuat dalam transaction yang sama dengan mutasi stok/transaksi sumber.
-- Metadata referensi log transaksi sekarang distandarkan lewat helper kecil di `src/services/Inventory/inventoryLogService.js`: `buildInventoryLogReferenceFields()`, `buildInventoryLogUnitFields()`, dan `buildInventoryLogVariantFields()`.
-- Helper tersebut hanya boleh mengurangi duplikasi metadata. Helper tidak boleh dipakai untuk mengubah `quantityChange`, jenis log, stock mutation, average cost, income, expense, status flow, atau document ID.
-- Field lama seperti `saleId`, `purchaseId`, `returnId`, `saleNumber`, `purchaseNumber`, `returnNumber`, `sourceRef`, dan `referenceCode` tetap dipertahankan agar Stock Management, report, dan data legacy tidak putus.
-- Business code generator, ID inventory log readable, dan counter/sequence collection tetap task guarded terpisah. Jangan digabung dengan helper metadata log.
-- Untuk konsistensi varian, Return wajib mengirim `selectedVariant` ke `buildInventoryLogVariantFields()` agar fallback label varian material/product mengikuti urutan helper yang sama dengan Purchase.
-- Resolver satuan stok transaksi kecil distandarkan lewat `resolveInventoryStockUnit()`; helper ini hanya menentukan `unit`/`stockUnit` audit, bukan mengubah qty, konversi pembelian, atau stock mutation.
+- Production Planning baru memakai document ID sama dengan `planCode` berformat `PP-YYYYMMDD-0001`.
+- Production Planning tidak lagi memakai full scan + `addDoc` sebagai jalur create utama; prefix query tetap menjadi baseline legacy sebelum counter transaction-level.
+- Karyawan Produksi tetap memakai kode tampilan `DDMMYYYY-XXX`, tetapi sequence final disimpan pada `business_code_counters` dengan prefix internal `EMP`.
+- Collection lama `production_employee_code_sequences` hanya dibaca sebagai baseline legacy dan tidak menjadi counter aktif create baru.
+- Tidak ada migration/rename data lama; relasi Work Log, Payroll, dan PO existing wajib tetap aman.
 
-## Update 2026-05-23 — Batch 8D Purchases Listener dan Return Submit Lock
 
-- Listener read-only untuk data Purchases, Products, dan Raw Materials di halaman Purchases dipusatkan ke `src/services/Transaksi/purchasesService.js`.
-- `src/pages/Transaksi/Purchases.jsx` tidak boleh lagi membuat listener Firestore langsung untuk `purchases`, `products`, atau `raw_materials`; page cukup menerima data dari service dan menangani UI/form.
-- `listenSupplierCatalog()` tetap dari service Supplier existing karena katalog supplier/restock bukan bagian dari purchase transaction writer.
-- Ekstraksi listener Purchases tidak boleh mengubah create purchase transaction, OCR, supplier catalog filter, stock in, average cost, inventory log, expense otomatis, schema, collection, route, atau role guard.
-- Modal Return wajib mengunci tombol OK/Batal saat `isSubmittingReturn` agar user tidak menutup/reset form ketika transaction retur masih berjalan.
-- Guard Return ini hanya UI submit lock; dokumen return, update stok, dan inventory log tetap wajib commit bersama melalui `returnsService.js`.
+## Update Business Rules — Transaction Side-Effect Repair guarded — 2026-05-23
+
+Status: **AKTIF / GUARDED**.
+
+- Flow transaksi aktif tetap sama: Sales membuat stock out + inventory log, dan income hanya saat status `Selesai`; Purchases membuat purchase + stock in + inventory log + expense; Return tetap stock-only correction + inventory log tanpa income/expense/revenue otomatis.
+- Menu Reset & Maintenance boleh menjalankan **Repair Side-Effect Transaksi** hanya untuk membuat side-effect yang benar-benar hilang dari transaksi aktif: `incomes` untuk Sales `Selesai`, `expenses` untuk Purchases, dan `inventory_logs` untuk Sales/Purchases/Returns.
+- Repair side-effect tidak boleh mengubah stok master/variant, tidak boleh mengubah dokumen `sales`, `purchases`, atau `returns`, tidak boleh menghapus income/expense/log lama, tidak boleh mengubah payroll/HPP, dan tidak boleh membuat refund Return.
+- Konflik seperti Sales belum `Selesai` tetapi sudah punya income tetap masuk review manual. Sistem tidak melakukan rollback/delete otomatis karena berisiko merusak laporan finance.
+- Repair wajib didahului audit/dry run dan konfirmasi keyword `REPAIR TRANSAKSI`; setelah repair wajib audit ulang dan cek Cash In, Cash Out, Stock Management, Sales Report, Purchases Report, dan Profit Loss.

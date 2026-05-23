@@ -223,7 +223,6 @@ const SalesReport = () => {
             Selesai: "green",
             Dikirim: "orange",
             Diproses: "blue",
-            Dibatalkan: "red",
           };
 
           return <Tag color={statusColors[status] || "default"}>{status || "-"}</Tag>;

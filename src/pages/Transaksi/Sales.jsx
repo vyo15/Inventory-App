@@ -315,7 +315,7 @@ const Sales = () => {
   // - membentuk snapshot item yang akan disimpan ke dokumen sales
   // - melakukan guard awal memakai availableStock dari cache UI agar user langsung mendapat feedback
   // Hubungan flow Sales/stok:
-  // - sale line menyimpan collectionName + variantKey supaya mutasi stok dan revert cancel/delete kembali ke sumber stok yang sama
+  // - sale line menyimpan collectionName + variantKey supaya mutasi stok keluar selalu memakai sumber stok yang sama
   // Status:
   // - aktif/final; validasi preflight Firestore dipanggil dari salesService, dan validasi final tetap diulang dalam createSaleTransaction
   // - bukan legacy dan bukan kandidat cleanup
@@ -435,17 +435,17 @@ const Sales = () => {
   // - Action button pada tabel Sales.
   //
   // Alasan perubahan:
-  // - Flow Batalkan di Sales dimatikan sebagai guard bisnis; Return adalah jalur resmi untuk barang kembali/stok masuk.
+  // - Aksi batal dari Sales tidak menjadi flow bisnis; Return adalah jalur resmi untuk barang kembali/stok masuk.
   //
   // Catatan cleanup:
   // - Tidak ada; flow cancel user-facing tidak dipakai di Sales.
   //
   // Risiko:
-  // - Mengaktifkan cancel Sales sebagai aksi user bisa membuka peluang revert stok tanpa Return dan membuat audit ambigu.
+  // - Mengaktifkan aksi batal dari Sales bisa membuka peluang stok masuk tanpa Return dan membuat audit ambigu.
   // =====================================================
   const handleUpdateSaleStatus = async (saleId, newStatus) => {
-    if (newStatus === "Dibatalkan") {
-      message.error("Sales tidak bisa dibatalkan. Gunakan menu Return untuk barang kembali.");
+    if (!onlineStatuses.includes(newStatus)) {
+      message.error("Status Sales tidak valid. Gunakan menu Return untuk barang kembali.");
       return;
     }
 
@@ -474,7 +474,7 @@ const Sales = () => {
 
     // IMS NOTE [AKTIF/GUARDED] - Client-side guard tab status Sales.
     // Fungsi blok: menjaga tabel selalu sesuai activeTabKey walaupun query Firestore gagal, loading ulang, atau state lama masih tersisa.
-    // Hubungan flow Sales: hanya filter tampilan tabel; status transition, stock mutation, income timing, dan cancel/delete tidak diubah.
+    // Hubungan flow Sales: hanya filter tampilan tabel; status transition, stock mutation, income timing, dan alur Return tidak diubah.
     // Alasan logic: owner tidak boleh membaca status Selesai di tab Dikirim atau status lain yang tidak sesuai tab aktif.
     const statusMatchedRecords =
       activeTabKey === "all"
@@ -548,7 +548,7 @@ const Sales = () => {
   // SECTION: Kolom tabel utama
   // IMS NOTE [AKTIF] - Urutan kolom Sales dibuat mengikuti alur baca transaksi.
   // Fungsi blok: menampilkan tanggal lebih dulu, lalu pelanggan, item, channel, referensi, total, status, dan aksi.
-  // Hubungan flow: hanya mengubah presentasi tabel; filter tab, pending income, status transition, stok, income, dan cancel flow tidak berubah.
+  // Hubungan flow: hanya mengubah presentasi tabel; filter tab, pending income, status transition, stok, income, dan alur Return tidak berubah.
   // Alasan logic: owner lebih mudah membaca kronologi penjualan tanpa mengubah data transaksi atau payload Firestore.
   // =========================
   /* =====================================================
@@ -562,7 +562,7 @@ const Sales = () => {
      Catatan cleanup:
      - Item breakdown panjang bisa dibuat drawer khusus jika nanti owner butuh audit lebih nyaman.
      Risiko:
-     - Jangan mengubah handler status/cancel/income/stock karena kolom ini hanya presentational.
+     - Jangan mengubah handler status/income/stock/return karena kolom ini hanya presentational.
      ===================================================== */
   const salesTableColumns = [
     {
@@ -676,13 +676,13 @@ const Sales = () => {
       // - Tabel Sales.
       //
       // Alasan perubahan:
-      // - Sales tidak boleh dibatalkan dari tabel; pembatalan/barang kembali diarahkan ke Return.
+      // - Sales tidak menyediakan aksi batal dari tabel; barang kembali diarahkan ke Return.
       //
       // Catatan cleanup:
       // - Tidak ada; tabel Sales tidak menyediakan aksi batal/hapus.
       //
       // Risiko:
-      // - Tombol Batalkan di Sales bisa disalahgunakan untuk bypass Return dan membuat audit stok ambigu.
+      // - Aksi batal di Sales bisa disalahgunakan untuk bypass Return dan membuat audit stok ambigu.
       // =====================================================
       title: "Aksi",
       key: "action",
@@ -947,7 +947,7 @@ const Sales = () => {
 
                             {/* IMS NOTE [AKTIF/GUARDED] - Snapshot stok Sales.
                                 Fungsi blok: menampilkan stok current/reserved/available item terpilih sebagai panel read-only pasif.
-                                Hubungan flow: hanya mengganti tampilan Alert lama; validasi stok, create sale, stock reduction, income timing, cancel/delete, dan payload Firestore tetap memakai logic existing.
+                                Hubungan flow: hanya mengganti tampilan Alert lama; validasi stok, create sale, stock reduction, income timing, alur Return, dan payload Firestore tetap memakai logic existing.
                                 Alasan logic: stok tersedia sebelum penjualan adalah info snapshot, bukan warning/error, sehingga mengikuti pola clean panel seperti Purchases/Stock Adjustment.
                                 Status: AKTIF untuk UI Sales, GUARDED terhadap business rule stok dan transaksi. */}
                             <div className="ims-readonly-panel">

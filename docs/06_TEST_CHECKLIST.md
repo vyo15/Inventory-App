@@ -90,10 +90,10 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - pilih channel Shopee/Tokopedia/TikTok Shop/Lazada/Instagram/Lainnya dan pastikan field reference aktif tetapi opsional
 - pilih channel Offline dan pastikan reference disabled serta value dikosongkan
 - pilih channel WhatsApp dan pastikan reference disabled serta value dikosongkan tanpa mengubah status/income timing menjadi Offline
-- pastikan UI Sales tidak menyediakan status/tombol `Dibatalkan`, `Batalkan`, Delete, atau Hapus
-- jika barang kembali/pembeli batal setelah transaksi tercatat, buat dokumen Return
-- cek stok kembali melalui Return dan inventory log `return_in` tercatat
-- pastikan Profit Loss/Cash In tidak membuat income dari sales yang belum `Selesai`
+- pastikan tidak ada tombol Batalkan/Delete/Hapus di tabel Sales
+- jika barang kembali, buat transaksi lewat menu Return
+- cek Return menambah stok dan mencatat inventory log `return_in`
+- pastikan Return tidak membuat income/expense otomatis sebelum ada rule finance resmi
 
 ### Retur
 - tambah retur produk
@@ -256,6 +256,12 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Ubah range tanggal report ke bulan/periode lain dan pastikan summary, tabel, dan export mengikuti periode tersebut.
 - [ ] Buka Payroll Report, pilih custom range, lalu pastikan data payroll yang dimuat sesuai `payrollDate`; filter operator/step/status tetap berjalan setelah data periode dimuat.
 - [ ] Buat data master/transaksi baru yang memakai kode bisnis dan pastikan sequence berikutnya tetap benar tanpa duplicate kode.
+- [ ] Batch 16B: buat Sales baru dan pastikan kode tetap `ORD-DDMMYYYY-001`, dokumen sales memakai ID readable, stok berkurang, dan inventory log `sale` tetap terbentuk.
+- [ ] Batch 16B: buat Purchase baru dan pastikan kode tetap `PUR-DDMMYYYY-001`, stock in, expense otomatis, inventory log `purchase_in`, dan average cost tetap benar.
+- [ ] Batch 16B: buat Return baru dan pastikan kode tetap `RET-DDMMYYYY-001`, return doc + stok masuk + inventory log `return_in` tetap satu transaction.
+- [ ] Batch 16B: simulasikan create cepat dua tab untuk Sales/Purchase/Return; tidak boleh overwrite document ID dan sequence harus maju lewat `business_code_counters`.
+- [ ] Batch 16B: pastikan counter tidak naik kalau transaction gagal karena stok tidak cukup, item tidak ditemukan, atau validasi varian gagal.
+
 - [ ] Jika Firestore meminta index untuk query tertentu, buat index sesuai pesan Firebase; jangan ganti ke full scan permanen sebagai solusi utama.
 
 ## G. Utility Reset
@@ -635,7 +641,6 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 ## Checklist Dashboard Business Control Center Compact — 2026-05
 - [ ] Buka `/dashboard`; pastikan tidak ada white screen, horizontal scroll, atau error runtime baru.
 - [ ] Klik `Muat Ulang`; pastikan hanya reload data, tidak ada dokumen baru di sales, purchases, production_orders, work_logs, payrolls, incomes, expenses, inventory_logs, atau production_plans.
-- [ ] Klik `Muat Ulang` berkali-kali cepat; pastikan tombol loading/disabled dan tidak ada read paralel dari page.
 - [ ] Klik semua Aksi Cepat; pastikan hanya pindah route dan tidak ada submit otomatis.
 - [ ] Cocokkan KPI Sales Bulan Ini dengan collection/report Sales sebagai monitoring omzet, bukan kas resmi.
 - [ ] Cocokkan Kas Masuk/Keluar dengan Cash In/Cash Out/Profit Loss; jangan double count sales sebagai income jika status belum selesai.
@@ -643,8 +648,6 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Buat PO shortage/planning overdue/payroll pending/cost 0 di data uji, lalu pastikan alert muncul dan link menuju menu terkait.
 - [ ] Login sebagai user operasional; Dashboard boleh tampil, tetapi route sensitif tetap ditolak oleh route guard jika user klik quick action yang tidak berhak.
 - [ ] Jika salah satu collection gagal dibaca karena permission/index, Dashboard tetap tampil dengan warning parsial.
-- [ ] Cek source: `Dashboard.jsx` hanya mengonsumsi `readDashboardData()` dari `dashboardService.js` untuk data utama, tanpa memanggil mapper stok/restock/planning service satu per satu.
-- [ ] Cek source: helper `readDashboardSnapshotData` dan `fetchPurchaseRecordsForRestockRows` tidak diekspor publik dari `dashboardService.js`.
 
 
 ## Checklist Final Hardening Fase A-G - 2026-04-26
@@ -663,8 +666,8 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - [ ] Input item yang sama di dua baris dengan total melebihi `availableStock`, lalu pastikan sale tidak tersimpan.
 - [ ] Status `Selesai` membuat income sekali saja.
 - [ ] Status selain `Selesai` tidak membuat income.
-- [ ] Sales UI tidak menyediakan flow Batalkan/Delete/Hapus sebagai aksi operasional.
-- [ ] Barang kembali setelah sale tercatat diuji lewat Return dan stok kembali satu kali melalui `return_in`.
+- [ ] Pastikan tabel Sales tidak menyediakan tombol Batalkan/Delete/Hapus.
+- [ ] Buat Return untuk barang kembali dan pastikan stok bertambah melalui inventory log `return_in`.
 
 ### Fase B - Purchase Expense Metadata
 - [ ] Buat purchase baru.
@@ -802,7 +805,7 @@ Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat in
 - Purchase Raw Material varian; audit harus tetap OK dan master `stock/currentStock` sama dengan total varian.
 - Stock Adjustment masuk/keluar untuk varian; audit harus tetap OK dan inventory log tetap normal.
 - Edit Product bervarian; audit harus tetap OK.
-- Sales produk varian lalu proses sampai status aktif yang relevan; barang kembali diuji lewat Return varian agar stok kembali dan audit tetap OK. Jangan menguji Batalkan/hard delete Sales sebagai aksi user.
+- Sales produk varian harus mengurangi stok varian yang benar. Jika barang kembali, uji lewat Return dan pastikan stok masuk/audit tetap OK.
 - Return item varian; audit harus OK dan stok tidak double.
 - Edit Semi Finished bervarian; master `stock/currentStock` harus sama dengan total varian.
 - Start/Complete Work Log yang memakai varian; audit harus OK dan tidak double posting.
@@ -1106,7 +1109,7 @@ Risiko:
 - [ ] Submit adjustment masuk/keluar tetap membuat `stock_adjustments`, mutasi stok, dan `inventory_logs` seperti sebelum perubahan UI.
 - [ ] Sales form menampilkan snapshot stok master/varian sebagai panel read-only clean dan create sale tetap mengurangi stok sesuai flow aktif.
 - [ ] Sales income timing tetap hanya mengikuti status `Selesai`; perubahan panel tidak boleh membuat income lebih awal.
-- [ ] Returns form menampilkan snapshot stok master/varian sebagai panel read-only clean dan retur tetap memakai transaction resmi tanpa double revert.
+- [ ] Returns form menampilkan snapshot stok master/varian sebagai panel read-only clean dan retur tetap memakai transaction resmi tanpa double posting stok.
 - [ ] Raw Material ringkasan varian dan Semi Finished ringkasan stok master tampil sebagai panel read-only clean tanpa membuka edit stok langsung dari master.
 - [ ] Warning/error/destructive/security/reset/auth alert tetap memakai `Alert` agar semantik guard tidak hilang.
 - [ ] Purchases “Stok Aktual Sebelum Restock” tetap rapi dan tidak berubah logic.
@@ -1137,7 +1140,7 @@ Risiko:
 ### Regression bisnis
 - [ ] Sales tetap mengurangi stok saat dibuat.
 - [ ] Sales tetap membuat income hanya saat status `Selesai`.
-- [ ] Sales tidak menyediakan cancel/delete user-facing; Return tetap menjadi jalur stok kembali.
+- [ ] Sales tetap tidak menyediakan aksi batal/delete; barang kembali tetap lewat Return.
 - [ ] Cash In tetap membaca pemasukan dari `revenues + incomes`.
 - [ ] Profit Loss tetap membaca `revenues + incomes + expenses`.
 - [ ] Dashboard/Reports tidak berubah.
@@ -1150,7 +1153,7 @@ Risiko:
 - Buat sales status `Diproses`; nilai total masuk ke Pemasukan Pending.
 - Ubah status ke `Dikirim`; nilai tetap masuk Pemasukan Pending.
 - Ubah status ke `Selesai`; nilai keluar dari Pemasukan Pending dan income resmi tetap dibuat sesuai flow aktif.
-- Jika ada data legacy `Dibatalkan`, pastikan nilai tidak masuk Pemasukan Pending; untuk flow aktif barang kembali gunakan Return.
+- Ubah sales menjadi `Selesai`; nilai keluar dari Pemasukan Pending.
 - Pastikan Pemasukan Pending tidak muncul di menu Pemasukan / Cash In.
 - Pastikan Pemasukan Pending tidak menulis dokumen ke `revenues` atau `incomes`.
 
@@ -1172,9 +1175,9 @@ Risiko:
 ### Sales action column
 - Row `Diproses` hanya menampilkan aksi lanjut `Dikirim`.
 - Row `Dikirim` hanya menampilkan aksi lanjut `Selesai`.
-- Row `Selesai` tidak menampilkan Delete/Hapus/Batalkan.
-- Data legacy `Dibatalkan`, jika masih muncul dari data lama, tidak menampilkan aksi operasional.
+- Row `Selesai` tidak menampilkan aksi status lanjutan dari tabel Sales.
 - Tidak ada tombol Batalkan/Delete/Hapus di tabel Sales.
+- Barang kembali/koreksi stok setelah Sales tercatat wajib diuji melalui menu Return.
 
 ### Sales selector dan stock snapshot
 - Buka Tambah Penjualan dan pilih Jenis Item.
@@ -1729,18 +1732,6 @@ Catatan lock:
 - [ ] Buka Raw Materials: kolom Bahan Baku tidak menampilkan caption panjang `Perlu restock...`; tag status, varian, supplier, dan kolom harga tetap rapi.
 - [ ] Buka detail item Raw/Product/Semi untuk memastikan informasi varian lengkap masih tersedia di drawer/detail dan tidak ada mutasi stok/HPP hanya karena membuka halaman.
 
-
-## Checklist Batch 7A — Transaction Submit Lock dan Dashboard Mapper
-
-- [ ] Buka modal Sales, isi data valid, lalu klik `Simpan` berkali-kali cepat; tombol submit harus masuk loading/disabled dan hanya satu transaksi Sales yang dibuat.
-- [ ] Pastikan Sales tetap memvalidasi stok master/varian melalui service dan sale tidak tersimpan jika `availableStock` kurang.
-- [ ] Pastikan Sales `Selesai` tetap membuat income satu kali dan status `Dibatalkan` tidak tersedia sebagai flow user-facing.
-- [ ] Buka modal Purchases, isi data valid, lalu klik `Simpan` berkali-kali cepat; tombol submit harus masuk loading/disabled dan purchase + stock in + inventory log + expense hanya terbentuk sekali.
-- [ ] Buka Dashboard; pastikan Stok Kritis, Data Perlu Dicek, Restock Assistant, Planning, Keuangan, Payroll, dan Aktivitas Terbaru tetap tampil seperti sebelum mapper dipindah ke service.
-- [ ] Pastikan Dashboard page tidak lagi mengimpor mapper/query orchestration Dashboard selain `readDashboardData` dari `dashboardService`.
-- [ ] Pastikan Dashboard tetap read-only: tidak ada auto-create Purchase, Sales, PO, Work Log, Payroll, Expense, Income, atau mutasi stok.
-- [ ] Pastikan `businessCodeGenerator.js` dan read model performance besar tidak ikut berubah pada batch ini.
-
 ## Checklist Sinkronisasi Docs vs Source Aktual
 
 Gunakan checklist ini setiap ada audit docs/source atau patch docs:
@@ -1754,26 +1745,76 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 - [ ] Jangan melakukan refactor besar hanya karena file besar; buat task kecil behavior-preserving dan guard modul sensitif.
 
 
-## Checklist Batch 8 — Inventory Log Metadata Helper
+## Batch 16C — Atomic Counter Master/Finance/Stock/Produksi
 
-- [ ] Buat Sales baru dan pastikan stok berkurang, inventory log `sale` muncul, dan referensi tetap memakai kode `ORD-...`, bukan Firestore random ID sebagai teks utama.
-- [ ] Ubah Sales ke `Selesai` dan pastikan income tetap dibuat satu kali; helper inventory log tidak boleh membuat income baru.
-- [ ] Buat Return baru dan pastikan dokumen return, stok masuk, dan inventory log `return_in` tetap satu transaction.
-- [ ] Pastikan inventory log Return membawa `RET-...`, `unit`/`stockUnit`, dan metadata varian jika item bervarian.
-- [ ] Retur bahan baku bervarian wajib menampilkan `variantLabel` yang konsisten dari helper (`variantLabel`, `variantName`, `color`, atau `name`) dan tidak kosong jika varian valid.
-- [ ] Pastikan satuan stok Return dan Purchase tetap sama seperti sebelum cleanup; resolver unit tidak boleh mengubah qty, conversion, average cost, atau totalStockIn.
-- [ ] Buat Purchase material dan pastikan purchase, stok masuk, average cost/restock reference price, inventory log `purchase_in`, dan expense otomatis tetap terbentuk.
-- [ ] Buat Purchase product jika flow dipakai dan pastikan metadata varian/stockSourceType tetap benar.
-- [ ] Buka Stock Management dan pastikan kolom Referensi untuk Sales, Return, dan Purchase tidak kosong dan tidak menampilkan duplikasi teknis yang membingungkan.
-- [ ] Pastikan tidak ada perubahan pada OCR Purchases, Production, Payroll, HPP, Reset Maintenance, route/menu/role guard, schema, atau business code generator.
+- [ ] Buat Customer dan Supplier baru; pastikan ID dokumen sama dengan kode `CUS-*`/`SUP-*` dan tidak overwrite saat create cepat dari dua tab.
+- [ ] Buat Product, Raw Material, BOM, dan Semi Finished baru; pastikan kode sequence `PRD-*`, `RAW-*`, `BOM-*`, `SFP-*` tetap terbentuk dan dokumen baru memakai ID readable.
+- [ ] Buat Cash In dan Cash Out manual; pastikan dokumen `revenues`/`expenses` memakai `CSH-IN-*`/`CSH-OUT-*` dan ledger/report tetap membaca data.
+- [ ] Buat Stock Adjustment masuk/keluar; pastikan stok, stock_adjustments, dan inventory_logs tetap satu transaction serta nomor `STK-ADJ-*` tidak dobel.
+- [ ] Buat Production Order, start PO menjadi Work Log, buat Work Log manual, dan buat Payroll manual; pastikan kode `PO-*`, `JOB-*`, `PAY-*` final tidak dobel dan flow status/stok/HPP tetap sama.
+- [ ] Simulasikan validasi gagal pada create yang memakai counter; counter tidak boleh maju bila transaction gagal setelah validasi/read transaction.
+- [ ] Verifikasi Firestore Rules production mengizinkan read/write collection `business_code_counters` hanya untuk user/role internal yang boleh create transaksi/master terkait.
 
-## Checklist Batch 8D — Purchases Listener Extraction + Return Submit Lock
 
-- [ ] Buka halaman Purchases dan pastikan daftar pembelian tetap tampil dari listener service.
-- [ ] Buka modal Tambah Pembelian dan pastikan daftar produk, bahan baku, dan supplier tetap tampil.
-- [ ] Pastikan `src/pages/Transaksi/Purchases.jsx` tidak lagi import `collection`, `onSnapshot`, atau `db` hanya untuk listener data pembelian.
-- [ ] Buat Purchase material; pastikan purchase document, stock in, inventory log `purchase_in`, average cost, dan expense otomatis tetap terbentuk satu kali.
-- [ ] Test OCR Purchases; parser, draft panel, apply feedback, dan note OCR tidak berubah.
-- [ ] Buka halaman Returns, isi form valid, klik Simpan, lalu coba klik OK/Batal/tutup modal saat loading; tombol OK/Batal harus terkunci sampai submit selesai.
-- [ ] Pastikan Return tetap membuat dokumen return, update stok, dan inventory log `return_in` dalam satu transaction.
-- [ ] Pastikan tidak ada perubahan ke schema, collection, route/menu, role guard, stock mutation, purchase average cost, expense, production, payroll, HPP, reset destructive, atau business code generator.
+## Batch 16D — Production Planning dan Karyawan Produksi Counter
+
+- [ ] Buat Production Planning baru; pastikan kode dan document ID berformat `PP-YYYYMMDD-0001`.
+- [ ] Buat dua Production Planning berurutan; sequence harus naik dan tidak memakai random `addDoc` ID untuk data baru.
+- [ ] Buat Karyawan Produksi baru; pastikan format kode tetap `DDMMYYYY-XXX` dan document ID baru sama dengan kode tersebut.
+- [ ] Pastikan preview kode Karyawan Produksi hanya preview; nomor final tetap dikunci saat submit.
+- [ ] Pastikan create Planning/Employee gagal validasi tidak meninggalkan dokumen bisnis partial.
+- [ ] Pastikan `business_code_counters` berisi key `DAILY__PP__YYYYMMDD` dan `DAILY__EMP__DDMMYYYY` setelah create sukses.
+- [ ] Pastikan Work Log/Payroll lama yang memakai employee ID lama tetap tampil dan tidak ikut dimigrasi otomatis.
+- [ ] Verifikasi Firestore Rules production mengizinkan read/write `business_code_counters` untuk flow create Planning dan Karyawan Produksi.
+
+## Batch 17A — Stock Report Partial Read Guard
+
+- [ ] Buka Laporan Stok dalam kondisi normal; raw materials, products, semi finished, dan categories tetap tampil seperti sebelumnya.
+- [ ] Simulasikan salah satu source gagal dibaca; laporan harus tetap menampilkan source lain yang berhasil dibaca dan warning area gagal.
+- [ ] Pastikan warning tidak membuat export aktif terlihat seperti data lengkap jika ada source yang gagal.
+- [ ] Export XLSX setelah filter aktif; data export harus sama dengan rows yang berhasil dibaca dan sedang difilter di UI.
+- [ ] Pastikan tidak ada write ke stok, inventory log, transaksi, produksi, atau collection read model baru.
+
+## Checklist P2 — Jumbo File Split Behavior-Preserving
+
+### P2-A/P2-B — Production Work Logs UI split
+- [ ] Buka halaman Production Work Logs dan pastikan list/table tetap tampil.
+- [ ] Klik detail Work Log dan pastikan drawer detail tampil sama: status, referensi PO/BOM, ringkasan biaya, material usage, output, labor, overhead, dan catatan.
+- [ ] Tambah/edit Material Usage dan pastikan field item type, item, varian, qty, unit, cost snapshot, dan notes tetap tersimpan ke form utama.
+- [ ] Tambah/edit Output dan pastikan output type, item, varian, good qty, cost per unit, unit, dan notes tetap tersimpan ke form utama.
+- [ ] Complete Work Log dan pastikan operator, good qty, auto payroll, posting stok output, HPP, dan inventory log tetap berjalan seperti sebelum split.
+- [ ] Pastikan tidak ada perubahan behavior create/edit/complete Work Log, payroll, HPP, reserved stock, atau inventory log.
+
+### P2-C — Reset Maintenance orchestration split
+- [ ] Buka Reset Maintenance dan pastikan panel Auto Detect, Safe Repair, Export, Preview, Danger Zone, dan Usage Guide tetap tampil.
+- [ ] Jalankan audit read-only dan pastikan ringkasan serta detail kategori tetap muncul.
+- [ ] Jalankan preview reset sebelum destructive action dan pastikan keyword/confirmation guard tetap wajib.
+- [ ] Pastikan tombol repair tetap terkunci sampai audit punya kandidat, dan destructive reset service tidak berubah.
+
+### P2-D — Purchases UI split
+- [ ] Buka Purchases dan pastikan tabel, filter, aksi detail/edit, dan modal tambah pembelian tetap tampil.
+- [ ] Buat pembelian bahan baku non-varian, bahan baku varian, dan produk jadi. Pastikan stok masuk, inventory log `purchase_in`, dan expense tetap terbentuk.
+- [ ] Uji supplier catalog/prefill dan pastikan tidak berubah.
+- [ ] Upload OCR Shopee, apply qty/biaya, lihat preview/detail OCR, dan pastikan parser/notes/print behavior tetap sama.
+- [ ] Pastikan average cost, purchase saving, expense payload, dan create purchase transaction tetap dari service existing.
+
+### P2-E — Service helper/config split guarded
+- [ ] Complete Work Log existing dan pastikan helper split tidak mengubah HPP/output/payroll/stock posting.
+- [ ] Jalankan flow reset maintenance yang biasa dipakai dan pastikan allowlist/config reset tetap sama.
+- [ ] Pastikan tidak ada helper baru yang mengambil alih business logic destructive atau transaction utama.
+
+
+
+## Checklist Batch Merge 1-8 — rebase patch gabungan — 2026-05-23
+
+- [ ] `npm run build` berhasil setelah patch gabungan diterapkan.
+- [ ] Dashboard tetap read-only: Stok Kritis, Audit Stok, Restock Assistant, dan summary planning tampil tanpa auto-create/auto-fix.
+- [ ] Stock Report tetap menampilkan raw materials, products, semi finished, dan export XLSX mengikuti filter aktif; jika ada failedReads, UI/export menandai partial read.
+- [ ] Reset & Maintenance tidak white screen setelah hook individual lama dihapus.
+- [ ] Preview Export, Export Master, dan Export Checklist berjalan dari `useMasterDataExport` tanpa menjalankan reset/delete/repair.
+- [ ] Cek Semua menjalankan audit Data Quality, HPP, Master Code, Stok, Inventory Log, Legacy, Produksi, Payroll, Variant Transaksi, dan Side-Effect Transaksi.
+- [ ] Repair Side-Effect Transaksi terkunci sampai Cek Side-Effect dijalankan dan hanya berjalan setelah keyword `REPAIR TRANSAKSI` benar.
+- [ ] Setelah Repair Side-Effect, cek ulang Cash In, Cash Out, Stock Management/inventory log, Sales Report, Purchases Report, dan Profit Loss.
+- [ ] Return tetap stock-only + inventory log; tidak muncul refund/cash otomatis.
+- [ ] Sales tetap no-cancel user-facing; barang kembali/koreksi tetap lewat Return.
+- [ ] Firestore Rules/index tidak berubah dari patch ini; validasi manual di Firebase Console tetap diperlukan.

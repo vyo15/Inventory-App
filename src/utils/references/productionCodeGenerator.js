@@ -1,6 +1,7 @@
 import {
   generateUniqueSequentialCode,
   isBusinessCodeExists,
+  prepareSequentialCodeInTransaction,
 } from "./businessCodeGenerator";
 
 /* =====================================================
@@ -27,3 +28,6 @@ export const isProductionBusinessCodeExists = (options = {}) =>
 
 export const generateUniqueProductionSequentialCode = (options = {}) =>
   generateUniqueSequentialCode(options);
+
+export const prepareUniqueProductionSequentialCodeInTransaction = (options = {}) =>
+  prepareSequentialCodeInTransaction(options);

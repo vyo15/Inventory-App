@@ -22,8 +22,8 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   Timestamp,
-  setDoc,
 } from "firebase/firestore";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
@@ -36,7 +36,11 @@ import { db } from "../../firebase";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
-import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
+import {
+  generateDailySequenceCode,
+  getDailyBusinessCodeSequence,
+  prepareDailySequenceCodeInTransaction,
+} from "../../utils/references/businessCodeGenerator";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 
@@ -266,46 +270,70 @@ const CashOut = () => {
 
   const handleAddTransaction = async (values) => {
     try {
-      const cashOutNumber = await generateDailySequenceCode({
+      const transactionDate = values.date.toDate();
+      const baselineCashOutNumber = await generateDailySequenceCode({
         db,
         collectionName: "expenses",
         fieldNames: ["cashOutNumber", "code", "sourceRef", "referenceNumber"],
         prefix: "CSH-OUT",
-        date: values.date.toDate(),
+        date: transactionDate,
+      });
+      const baselineSequence = getDailyBusinessCodeSequence({
+        code: baselineCashOutNumber,
+        prefix: "CSH-OUT",
+        date: transactionDate,
       });
 
-      /* =====================================================
-      SECTION: Cash Out document ID = business code — AKTIF
-      Fungsi:
-      - Menyimpan pengeluaran manual baru dengan document ID CSH-OUT-DDMMYYYY-001.
+      await runTransaction(db, async (transaction) => {
+        const codeReservation = await prepareDailySequenceCodeInTransaction({
+          transaction,
+          db,
+          collectionName: "expenses",
+          prefix: "CSH-OUT",
+          date: transactionDate,
+          minimumSequence: Math.max(baselineSequence - 1, 0),
+        });
+        const cashOutNumber = codeReservation.code;
+        const cashOutRef = doc(db, "expenses", cashOutNumber);
+        const existingSnapshot = await transaction.get(cashOutRef);
 
-      Dipakai oleh:
-      - handleAddTransaction Cash Out manual.
+        if (existingSnapshot.exists()) {
+          throw new Error(`Nomor kas keluar ${cashOutNumber} sudah dipakai. Muat ulang data lalu simpan kembali.`);
+        }
 
-      Alasan perubahan:
-      - Cash Out baru perlu reference readable dan tidak boleh memakai Firestore random ID untuk display.
+        /* =====================================================
+        SECTION: Cash Out document ID = business code — AKTIF
+        Fungsi:
+        - Menyimpan pengeluaran manual baru dengan document ID CSH-OUT-DDMMYYYY-001.
 
-      Catatan cleanup:
-      - Data COUT lama tetap compatibility, tidak di-rename.
+        Dipakai oleh:
+        - handleAddTransaction Cash Out manual.
 
-      Risiko:
-      - Jangan mengubah amount/type/saving/report calculation dari section ini.
-      ===================================================== */
-      await setDoc(doc(db, "expenses", cashOutNumber), {
-        cashOutNumber,
-        code: cashOutNumber,
-        referenceNumber: cashOutNumber,
-        sourceRef: cashOutNumber,
-        amount: Math.round(Number(values.amount || 0)),
-        description: values.description,
-        date: Timestamp.fromDate(values.date.toDate()),
-        type: values.type,
-        totalReferenceAmount: 0,
-        savingAmount: 0,
-        savingStatus: "normal",
-        savingLabel: "Sesuai Referensi",
-        sourceModule: "cash_out_manual",
-        createdAt: Timestamp.now(),
+        Alasan perubahan:
+        - Cash Out baru perlu reference readable dan tidak boleh memakai Firestore random ID untuk display.
+
+        Catatan cleanup:
+        - Data COUT lama tetap compatibility, tidak di-rename.
+
+        Risiko:
+        - Jangan mengubah amount/type/saving/report calculation dari section ini.
+        ===================================================== */
+        codeReservation.commit();
+        transaction.set(cashOutRef, {
+          cashOutNumber,
+          code: cashOutNumber,
+          referenceNumber: cashOutNumber,
+          sourceRef: cashOutNumber,
+          amount: Math.round(Number(values.amount || 0)),
+          description: values.description,
+          date: Timestamp.fromDate(transactionDate),
+          type: values.type,
+          totalReferenceAmount: 0,
+          savingAmount: 0,
+          savingStatus: "normal",
+          sourceModule: "cash_out_manual",
+          createdAt: Timestamp.now(),
+        });
       });
 
       message.success("Transaksi pengeluaran berhasil ditambahkan!");

@@ -13,15 +13,19 @@ import {
   getDoc,
   getDocs,
   deleteField,
+  runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
   generateUniqueProductionSequentialCode,
+  prepareUniqueProductionSequentialCodeInTransaction,
   isProductionBusinessCodeExists,
 } from "../../utils/references/productionCodeGenerator";
+import {
+  getSequentialBusinessCodeSequence,
+} from "../../utils/references/businessCodeGenerator";
 import { calculateBomTotals } from "../../constants/productionBomOptions";
 import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
 import {
@@ -441,41 +445,56 @@ export const createProductionBom = async (values, currentUser = null) => {
     throw { type: "validation", errors };
   }
 
-  const normalizedCode = await generateProductionBomCode(values);
-  const isCodeExists = await isProductionBomCodeExists(normalizedCode);
-
-  if (isCodeExists) {
-    throw {
-      type: "validation",
-      errors: {
-        code: "Kode BOM sudah digunakan",
-      },
-    };
-  }
-
+  const baselineCode = await generateProductionBomCode(values);
+  const baselineSequence = getSequentialBusinessCodeSequence({ code: baselineCode, prefix: "BOM" });
   const referenceData = await getActiveBomReferenceData();
-  const payload = normalizePayload({ ...values, code: normalizedCode }, currentUser, false, referenceData);
-  /* =====================================================
-  SECTION: BOM document ID = business code — AKTIF
-  Fungsi:
-  - Menyimpan BOM baru memakai document ID sama dengan kode BOM-001.
+  let createdId = "";
 
-  Dipakai oleh:
-  - createProductionBom.
+  await runTransaction(db, async (transaction) => {
+    const codeReservation = await prepareUniqueProductionSequentialCodeInTransaction({
+      transaction,
+      db,
+      collectionName: COLLECTION_NAME,
+      prefix: "BOM",
+      minimumSequence: Math.max(baselineSequence - 1, 0),
+    });
+    const normalizedCode = codeReservation.code;
+    const resultRef = doc(db, COLLECTION_NAME, normalizedCode);
+    const existingSnapshot = await transaction.get(resultRef);
 
-  Alasan perubahan:
-  - Kode BOM final tidak boleh input manual; nama target/komposisi menjadi konteks utama di UI.
+    if (existingSnapshot.exists()) {
+      throw {
+        type: "validation",
+        errors: {
+          code: "Kode BOM sudah digunakan",
+        },
+      };
+    }
 
-  Catatan cleanup:
-  - Data lama/manual code tetap compatibility, tidak di-rename.
+    const payload = normalizePayload({ ...values, code: normalizedCode }, currentUser, false, referenceData);
+    /* =====================================================
+    SECTION: BOM document ID = business code — AKTIF
+    Fungsi:
+    - Menyimpan BOM baru memakai document ID sama dengan kode BOM-001.
 
-  Risiko:
-  - Jangan mengubah materialLines/stepLines/HPP BOM dari section ini.
-  ===================================================== */
-  const resultRef = doc(db, COLLECTION_NAME, normalizedCode);
-  await setDoc(resultRef, payload);
+    Dipakai oleh:
+    - createProductionBom.
 
-  return resultRef.id;
+    Alasan perubahan:
+    - Kode BOM final tidak boleh input manual; nama target/komposisi menjadi konteks utama di UI.
+
+    Catatan cleanup:
+    - Data lama/manual code tetap compatibility, tidak di-rename.
+
+    Risiko:
+    - Jangan mengubah materialLines/stepLines/HPP BOM dari section ini.
+    ===================================================== */
+    codeReservation.commit();
+    transaction.set(resultRef, payload);
+    createdId = resultRef.id;
+  });
+
+  return createdId;
 };
 
 // =====================================================

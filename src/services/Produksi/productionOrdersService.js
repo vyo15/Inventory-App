@@ -17,12 +17,15 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
-import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
+import {
+  generateDailySequenceCode,
+  getDailyBusinessCodeSequence,
+  prepareDailySequenceCodeInTransaction,
+} from "../../utils/references/businessCodeGenerator";
 import {
   applyStockMutationToItem,
   buildVariantOptionsFromItem,
@@ -647,13 +650,19 @@ export const createProductionOrder = async (values = {}, currentUser = null) => 
     allowPendingTargetVariant: false,
   });
 
-  const code = await generateProductionOrderCode(targetType);
+  const codePrefix = targetType === "semi_finished_material" ? "PO-SFP" : "PO-PRD";
+  const baselineCode = await generateProductionOrderCode(targetType);
+  const baselineSequence = getDailyBusinessCodeSequence({
+    code: baselineCode,
+    prefix: codePrefix,
+    date: new Date(),
+  });
 
   const payload = {
-    code,
-    productionOrderCode: code,
-    referenceNumber: code,
-    sourceRef: code,
+    code: baselineCode,
+    productionOrderCode: baselineCode,
+    referenceNumber: baselineCode,
+    sourceRef: baselineCode,
     targetType: bom.targetType,
     bomId: bom.id,
     bomCode: safeTrim(bom.code),
@@ -732,9 +741,37 @@ export const createProductionOrder = async (values = {}, currentUser = null) => 
   Risiko:
   - Jangan mengubah requirement/reservation/HPP dari section ini.
   ===================================================== */
-  const resultRef = doc(db, COLLECTION_NAME, code);
-  await setDoc(resultRef, payload);
-  return resultRef.id;
+  let createdId = "";
+
+  await runTransaction(db, async (transaction) => {
+    const codeReservation = await prepareDailySequenceCodeInTransaction({
+      transaction,
+      db,
+      collectionName: COLLECTION_NAME,
+      prefix: codePrefix,
+      date: new Date(),
+      minimumSequence: Math.max(baselineSequence - 1, 0),
+    });
+    const code = codeReservation.code;
+    const resultRef = doc(db, COLLECTION_NAME, code);
+    const existingSnapshot = await transaction.get(resultRef);
+
+    if (existingSnapshot.exists()) {
+      throw { type: "validation", errors: { code: "Kode production order sudah digunakan" } };
+    }
+
+    codeReservation.commit();
+    transaction.set(resultRef, {
+      ...payload,
+      code,
+      productionOrderCode: code,
+      referenceNumber: code,
+      sourceRef: code,
+    });
+    createdId = resultRef.id;
+  });
+
+  return createdId;
 };
 
 export const refreshProductionOrderRequirements = async (orderId, currentUser = null) => {

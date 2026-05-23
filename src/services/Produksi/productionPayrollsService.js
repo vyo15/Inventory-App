@@ -18,7 +18,11 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
-import { generateDailySequenceCode } from "../../utils/references/businessCodeGenerator";
+import {
+  generateDailySequenceCode,
+  getDailyBusinessCodeSequence,
+  prepareDailySequenceCodeInTransaction,
+} from "../../utils/references/businessCodeGenerator";
 import { calculatePayrollAmounts } from "../../constants/productionPayrollOptions";
 import {
   getCompletedProductionWorkLogs,
@@ -1003,18 +1007,14 @@ export const createProductionPayroll = async (values, currentUser = null) => {
     throw { type: "validation", errors };
   }
 
-  const normalizedPayrollNumber = String(values.payrollNumber || "").trim().toUpperCase() || (await generateProductionPayrollNumber(values));
-  const nextValues = { ...values, payrollNumber: normalizedPayrollNumber };
-
-  const exists = await isPayrollNumberExists(normalizedPayrollNumber);
-  if (exists) {
-    throw {
-      type: "validation",
-      errors: {
-        payrollNumber: "Nomor payroll sudah digunakan",
-      },
-    };
-  }
+  const submittedPayrollNumber = String(values.payrollNumber || "").trim().toUpperCase();
+  const baselinePayrollNumber = submittedPayrollNumber || (await generateProductionPayrollNumber(values));
+  const baselineSequence = getDailyBusinessCodeSequence({
+    code: baselinePayrollNumber,
+    prefix: "PAY",
+    date: resolvePayrollDateForCode(values),
+  });
+  const nextValues = { ...values, payrollNumber: baselinePayrollNumber };
 
   /*
   =====================================================
@@ -1045,28 +1045,59 @@ export const createProductionPayroll = async (values, currentUser = null) => {
     };
   }
 
-  const payload = normalizePayload(nextValues, currentUser, false);
-  /* =====================================================
-  SECTION: Manual Payroll document ID = business code — GUARDED
-  Fungsi:
-  - Menyimpan payroll manual baru dengan document ID sama seperti nomor PAY.
+  let createdId = "";
+  let payloadForSummary = null;
 
-  Dipakai oleh:
-  - createProductionPayroll.
+  await runTransaction(db, async (transaction) => {
+    const codeReservation = submittedPayrollNumber
+      ? { code: submittedPayrollNumber, commit: () => {} }
+      : await prepareDailySequenceCodeInTransaction({
+          transaction,
+          db,
+          collectionName: COLLECTION_NAME,
+          prefix: "PAY",
+          date: resolvePayrollDateForCode(values),
+          minimumSequence: Math.max(baselineSequence - 1, 0),
+        });
+    const normalizedPayrollNumber = codeReservation.code;
+    const resultRef = doc(db, COLLECTION_NAME, normalizedPayrollNumber);
+    const existingSnapshot = await transaction.get(resultRef);
 
-  Alasan perubahan:
-  - Payroll adalah guarded reference dari JOB ke pembayaran/HPP, sehingga data baru perlu ID audit-friendly.
+    if (existingSnapshot.exists()) {
+      throw {
+        type: "validation",
+        errors: {
+          payrollNumber: "Nomor payroll sudah digunakan",
+        },
+      };
+    }
 
-  Catatan cleanup:
-  - Auto payroll yang sudah idempotent memakai doc ID deterministic sendiri tetap dipertahankan.
+    const payload = normalizePayload({ ...nextValues, payrollNumber: normalizedPayrollNumber }, currentUser, false);
+    /* =====================================================
+    SECTION: Manual Payroll document ID = business code — GUARDED
+    Fungsi:
+    - Menyimpan payroll manual baru dengan document ID sama seperti nomor PAY.
 
-  Risiko:
-  - Jangan mengubah formula payroll/status paid/expense dari section ini.
-  ===================================================== */
-  const resultRef = doc(db, COLLECTION_NAME, normalizedPayrollNumber);
-  await setDoc(resultRef, payload);
-  await syncWorkLogPayrollSummary(payload.workLogId || nextValues.workLogId || "");
-  return resultRef.id;
+    Dipakai oleh:
+    - createProductionPayroll.
+
+    Alasan perubahan:
+    - Payroll adalah guarded reference dari JOB ke pembayaran/HPP, sehingga data baru perlu ID audit-friendly.
+
+    Catatan cleanup:
+    - Auto payroll yang sudah idempotent memakai doc ID deterministic sendiri tetap dipertahankan.
+
+    Risiko:
+    - Jangan mengubah formula payroll/status paid/expense dari section ini.
+    ===================================================== */
+    codeReservation.commit();
+    transaction.set(resultRef, payload);
+    createdId = resultRef.id;
+    payloadForSummary = payload;
+  });
+
+  await syncWorkLogPayrollSummary(payloadForSummary?.workLogId || nextValues.workLogId || "");
+  return createdId;
 };
 
 export const updateProductionPayroll = async (

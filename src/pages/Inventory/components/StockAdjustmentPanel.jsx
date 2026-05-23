@@ -17,7 +17,11 @@ import { PlusOutlined } from "@ant-design/icons";
 import { collection, doc, onSnapshot, runTransaction, Timestamp } from "firebase/firestore";
 import dayjs from "dayjs";
 import { db } from "../../../firebase";
-import { generateDailySequenceCode } from "../../../utils/references/businessCodeGenerator";
+import {
+  generateDailySequenceCode,
+  getDailyBusinessCodeSequence,
+  prepareDailySequenceCodeInTransaction,
+} from "../../../utils/references/businessCodeGenerator";
 import {
   buildInventoryLogPayload,
   INVENTORY_LOG_COLLECTION,
@@ -563,40 +567,55 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         throw new Error("Pilih varian item agar penyesuaian stok masuk ke stok varian yang benar.");
       }
 
-      const adjustmentNumber = await generateDailySequenceCode({
+      const adjustmentDate = values.date.toDate();
+      const baselineAdjustmentNumber = await generateDailySequenceCode({
         db,
         collectionName: "stock_adjustments",
         fieldNames: ["adjustmentNumber", "code", "referenceNumber", "sourceRef"],
         prefix: "STK-ADJ",
-        date: values.date.toDate(),
+        date: adjustmentDate,
       });
-      /* =====================================================
-      SECTION: Stock Adjustment reference number — GUARDED
-      Fungsi:
-      - Membuat adjustmentNumber STK-ADJ-DDMMYYYY-001 dan memakai nomor itu sebagai document ID baru.
-
-      Dipakai oleh:
-      - handleSubmitStockAdjustment sebelum transaction mutasi stok.
-
-      Alasan perubahan:
-      - Stock adjustment baru perlu reference user-facing, bukan Firestore random ID.
-
-      Catatan cleanup:
-      - Data adjustment lama tanpa nomor tetap compatibility.
-
-      Risiko:
-      - Jangan mengubah applyStockMutationToItem, prevent negative, reserved/available stock, atau transaction flow dari section ini.
-      ===================================================== */
+      const baselineSequence = getDailyBusinessCodeSequence({
+        code: baselineAdjustmentNumber,
+        prefix: "STK-ADJ",
+        date: adjustmentDate,
+      });
       const itemReference = doc(db, sourceCollectionName, values.itemId);
-      const adjustmentReference = doc(db, "stock_adjustments", adjustmentNumber);
       const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
       const adjustmentTimestamp = Timestamp.now();
 
       await runTransaction(db, async (transaction) => {
+        const codeReservation = await prepareDailySequenceCodeInTransaction({
+          transaction,
+          db,
+          collectionName: "stock_adjustments",
+          prefix: "STK-ADJ",
+          date: adjustmentDate,
+          minimumSequence: Math.max(baselineSequence - 1, 0),
+        });
+        const adjustmentNumber = codeReservation.code;
+        /* =====================================================
+        SECTION: Stock Adjustment reference number — GUARDED
+        Fungsi:
+        - Membuat adjustmentNumber STK-ADJ-DDMMYYYY-001 dan memakai nomor itu sebagai document ID baru.
+
+        Dipakai oleh:
+        - handleSubmitStockAdjustment sebelum transaction mutasi stok.
+
+        Alasan perubahan:
+        - Stock adjustment baru perlu reference user-facing, bukan Firestore random ID.
+
+        Catatan cleanup:
+        - Data adjustment lama tanpa nomor tetap compatibility.
+
+        Risiko:
+        - Jangan mengubah applyStockMutationToItem, prevent negative, reserved/available stock, atau transaction flow dari section ini.
+        ===================================================== */
+        const adjustmentReference = doc(db, "stock_adjustments", adjustmentNumber);
         const adjustmentSnapshot = await transaction.get(adjustmentReference);
         const itemSnapshot = await transaction.get(itemReference);
 
-        // IMS NOTE [GUARDED] - collision guard kode STK-ADJ scan-based.
+        // IMS NOTE [GUARDED] - collision guard kode STK-ADJ berbasis atomic counter dengan baseline legacy.
         // Fungsi: mencegah adjustment baru menimpa adjustment lama ketika dua user submit bersamaan.
         if (adjustmentSnapshot.exists()) {
           throw new Error(`Nomor penyesuaian ${adjustmentNumber} sudah dipakai. Muat ulang data lalu simpan kembali.`);
@@ -728,6 +747,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           },
         });
 
+        codeReservation.commit();
         transaction.update(itemReference, {
           ...stockUpdatePayload,
           ...stockAdjustmentCostPayload,
