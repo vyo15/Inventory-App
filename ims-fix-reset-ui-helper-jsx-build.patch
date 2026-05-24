@@ -1,0 +1,93 @@
+diff --git a/src/pages/Utilities/utils/resetMaintenanceUiHelpers.js b/src/pages/Utilities/utils/resetMaintenanceUiHelpers.js
+index 622f08a..72afe30 100644
+--- a/src/pages/Utilities/utils/resetMaintenanceUiHelpers.js
++++ b/src/pages/Utilities/utils/resetMaintenanceUiHelpers.js
+@@ -72,13 +72,13 @@ export const renderCompactText = (value, maxWidth = 220, fallback = "-") => {
+     return fallback;
+   }
+ 
+-  return (
+-    <Text
+-      style={{ display: "inline-block", maxWidth: "100%", width: maxWidth }}
+-      ellipsis={{ tooltip: String(text) }}
+-    >
+-      {String(text)}
+-    </Text>
++  return React.createElement(
++    Text,
++    {
++      style: { display: "inline-block", maxWidth: "100%", width: maxWidth },
++      ellipsis: { tooltip: String(text) },
++    },
++    String(text),
+   );
+ };
+ 
+@@ -87,13 +87,13 @@ export const renderCompactTag = (value, maxWidth = 160, fallback = "-") => {
+     return fallback;
+   }
+ 
+-  return (
+-    <Tag
+-      title={String(value)}
+-      style={{ maxWidth, overflow: "hidden", textOverflow: "ellipsis", verticalAlign: "middle" }}
+-    >
+-      {String(value)}
+-    </Tag>
++  return React.createElement(
++    Tag,
++    {
++      title: String(value),
++      style: { maxWidth, overflow: "hidden", textOverflow: "ellipsis", verticalAlign: "middle" },
++    },
++    String(value),
+   );
+ };
+ 
+@@ -147,27 +147,25 @@ export const ResetActionGuide = ({
+ }) => {
+   const meta = ACTION_RISK_META[risk] || ACTION_RISK_META.maintenance;
+ 
+-  return (
+-    <Alert
+-      type={risk === "destructive" ? "warning" : "info"}
+-      showIcon
+-      message={(
+-        <Space wrap>
+-          <span>{description}</span>
+-          <Tag color={meta.color}>{meta.label}</Tag>
+-        </Space>
+-      )}
+-      description={(
+-        <Space direction="vertical" size={2}>
+-          <Text><Text strong>Preview:</Text> {preview}</Text>
+-          <Text><Text strong>Target:</Text> {scope}</Text>
+-          <Text><Text strong>Dampak:</Text> {impact}</Text>
+-          <Text><Text strong>Konfirmasi:</Text> {confirmation}</Text>
+-          <Text><Text strong>Audit/Error Trail:</Text> {audit}</Text>
+-        </Space>
+-      )}
+-    />
+-  );
++  return React.createElement(Alert, {
++    type: risk === "destructive" ? "warning" : "info",
++    showIcon: true,
++    message: React.createElement(
++      Space,
++      { wrap: true },
++      React.createElement("span", null, description),
++      React.createElement(Tag, { color: meta.color }, meta.label),
++    ),
++    description: React.createElement(
++      Space,
++      { direction: "vertical", size: 2 },
++      React.createElement(Text, null, React.createElement(Text, { strong: true }, "Preview:"), ` ${preview}`),
++      React.createElement(Text, null, React.createElement(Text, { strong: true }, "Target:"), ` ${scope}`),
++      React.createElement(Text, null, React.createElement(Text, { strong: true }, "Dampak:"), ` ${impact}`),
++      React.createElement(Text, null, React.createElement(Text, { strong: true }, "Konfirmasi:"), ` ${confirmation}`),
++      React.createElement(Text, null, React.createElement(Text, { strong: true }, "Audit/Error Trail:"), ` ${audit}`),
++    ),
++  });
+ };
+ 
+ export const resetStatisticValueStyle = {

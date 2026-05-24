@@ -1,6 +1,9 @@
 import {
   collection,
   doc,
+  onSnapshot,
+  orderBy,
+  query,
   runTransaction,
   Timestamp,
 } from "firebase/firestore";
@@ -30,6 +33,34 @@ import {
   getSupplierReferenceId,
 } from "../MasterData/suppliersService";
 import { normalizePurchaseNoteText } from "../../utils/purchases/purchaseNoteDisplay";
+
+
+const mapSnapshotDocs = (snapshot) =>
+  snapshot.docs.map((documentItem) => ({
+    id: documentItem.id,
+    ...documentItem.data(),
+  }));
+
+export const listenPurchaseRecords = (onNext, onError) =>
+  onSnapshot(
+    query(collection(db, "purchases"), orderBy("createdAt", "desc")),
+    (snapshot) => onNext(mapSnapshotDocs(snapshot)),
+    onError,
+  );
+
+export const listenPurchaseProducts = (onNext, onError) =>
+  onSnapshot(
+    collection(db, "products"),
+    (snapshot) => onNext(mapSnapshotDocs(snapshot)),
+    onError,
+  );
+
+export const listenPurchaseRawMaterials = (onNext, onError) =>
+  onSnapshot(
+    collection(db, "raw_materials"),
+    (snapshot) => onNext(mapSnapshotDocs(snapshot).map((item) => enrichRawMaterialWithVariantTotals(item))),
+    onError,
+  );
 
 export const PURCHASE_EXPENSE_SOURCE_MODULE = "purchases";
 export const PURCHASE_EXPENSE_SOURCE_TYPE = "auto_generated";

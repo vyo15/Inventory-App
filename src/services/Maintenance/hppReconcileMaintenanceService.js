@@ -297,7 +297,7 @@ export const getHppReconcileMaintenanceAudit = async () => {
     if (activePayrollCount > 0 && finalPayrollAmount <= 0) {
       return [buildAuditRow({
         workLog,
-        payrollFinalAmount,
+        payrollFinalAmount: finalPayrollAmount,
         category: "manual",
         issue: "Work Log completed punya payroll aktif tetapi belum ada payroll final. HPP lama belum aman direconcile otomatis.",
         recommendation: "Finalkan payroll dulu, lalu jalankan audit ulang sebelum repair HPP.",
@@ -307,7 +307,7 @@ export const getHppReconcileMaintenanceAudit = async () => {
     if (finalPayrollAmount > 0 && !isNumberClose(laborCostActual, finalPayrollAmount)) {
       return [buildAuditRow({
         workLog,
-        payrollFinalAmount,
+        payrollFinalAmount: finalPayrollAmount,
         category: "manual",
         issue: "laborCostActual Work Log belum sama dengan total payroll final. Repair HPP output ditunda agar tidak memakai cost final yang salah.",
         recommendation: "Perbaiki/sinkronkan payroll final dulu, lalu audit ulang HPP reconcile.",
@@ -320,7 +320,7 @@ export const getHppReconcileMaintenanceAudit = async () => {
     if (issueState.hasMissingMasterIssue) {
       return [buildAuditRow({
         workLog,
-        payrollFinalAmount,
+        payrollFinalAmount: finalPayrollAmount,
         issueState,
         category: "manual",
         issue: issueState.issueText || "Master output produksi tidak ditemukan. Repair otomatis ditunda.",
@@ -330,7 +330,7 @@ export const getHppReconcileMaintenanceAudit = async () => {
 
     return [buildAuditRow({
       workLog,
-      payrollFinalAmount,
+      payrollFinalAmount: finalPayrollAmount,
       issueState,
       category: "safe_repair",
       issue: issueState.issueText || "Output/master HPP belum sinkron dengan cost final Work Log.",

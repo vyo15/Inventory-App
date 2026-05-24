@@ -40,7 +40,7 @@ import {
 import PurchaseFormModal from "./components/PurchaseFormModal";
 import PurchaseOcrReceiptModal from "./components/PurchaseOcrReceiptModal";
 import { createPurchaseTableColumns } from "./components/PurchaseTableColumns";
-import { buildPurchaseStockPreviewSnapshot } from "./components/PurchaseStockPreview";
+import { buildPurchaseStockPreviewSnapshot } from "./components/purchaseStockPreviewHelpers";
 import { SHOPEE_OCR_IDLE_STATE } from "./components/purchaseOcrUiConstants";
 
 // =========================
