@@ -1,10 +1,12 @@
-import { FileSearchOutlined, SyncOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Divider, Popconfirm, Row, Space, Statistic, Table, Tag, Typography } from "antd";
+import { useState } from "react";
+import { DeleteOutlined, FileSearchOutlined, SyncOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Col, Divider, Input, Popconfirm, Row, Space, Statistic, Table, Tag, Typography } from "antd";
 import { formatHppUnitCurrencyId } from "../../../utils/formatters/currencyId";
 import { formatQuantityId } from "../../../utils/formatters/numberId";
 
 const { Text } = Typography;
 
+const STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD = "CLEANUP READ MODEL";
 
 const HPP_RECONCILE_CATEGORY_LABELS = {
   safe_repair: "Siap repair",
@@ -13,6 +15,12 @@ const HPP_RECONCILE_CATEGORY_LABELS = {
 
 const TRANSACTION_SIDE_EFFECT_CATEGORY_LABELS = {
   safe_repair: "Siap repair",
+  manual: "Review manual",
+};
+
+const STOCK_READ_MODEL_CATEGORY_LABELS = {
+  ok: "Sinkron",
+  safe_repair: "Siap rebuild",
   manual: "Review manual",
 };
 
@@ -26,8 +34,15 @@ const TRANSACTION_SIDE_EFFECT_CATEGORY_COLORS = {
   manual: "orange",
 };
 
+const STOCK_READ_MODEL_CATEGORY_COLORS = {
+  ok: "green",
+  safe_repair: "blue",
+  manual: "orange",
+};
+
 const formatHppReconcileCategory = (value) => HPP_RECONCILE_CATEGORY_LABELS[value] || value || "-";
 const formatTransactionSideEffectCategory = (value) => TRANSACTION_SIDE_EFFECT_CATEGORY_LABELS[value] || value || "-";
+const formatStockReadModelCategory = (value) => STOCK_READ_MODEL_CATEGORY_LABELS[value] || value || "-";
 
 const toSafeNumber = (value) => {
   const numericValue = Number(value || 0);
@@ -81,6 +96,17 @@ const ResetSafeRepairPanel = ({
   transactionSideEffectAudit,
   transactionSideEffectSummary = {},
   transactionSideEffectRows = [],
+  loadingStockReadModelAudit,
+  onLoadStockReadModelAudit,
+  loadingStockReadModelRepair,
+  onRepairStockReadModelAudit,
+  loadingStockReadModelRestockBackfill,
+  onBackfillStockReadModelRestockMetadata,
+  loadingStockReadModelCleanup,
+  onCleanupStockReadModelOrphans,
+  stockReadModelAudit,
+  stockReadModelSummary = {},
+  stockReadModelRows = [],
   loadingHppReconcileAudit,
   onLoadHppReconcileAudit,
   loadingHppReconcileRepair,
@@ -100,6 +126,9 @@ const ResetSafeRepairPanel = ({
   renderCompactText,
   renderCompactTag,
 }) => {
+  const [stockReadModelCleanupKeyword, setStockReadModelCleanupKeyword] = useState("");
+  const isStockReadModelCleanupKeywordValid = stockReadModelCleanupKeyword.trim() === STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD;
+
   const renderGuardedRepairButton = ({
     label,
     title,
@@ -133,7 +162,7 @@ const ResetSafeRepairPanel = ({
   const stockSyncDisabled = !stockAuditReady || getRepairPlanCount(stockRepairSummary) <= 0;
 
   return (
-    <Card title="Repair Turunan Aman" size="small" extra={<Tag color="green">Tidak hapus data</Tag>}>
+    <Card title="Repair Turunan Aman" size="small" extra={<Tag color="green">Guarded</Tag>}>
       <Space direction="vertical" size={12} style={{ width: "100%" }}>
         <Text type="secondary">
           Repair hanya menyamakan field turunan/display/snapshot. Tidak membuat transaksi baru, tidak posting stok ulang, dan tidak menghapus data utama.
@@ -144,6 +173,128 @@ const ResetSafeRepairPanel = ({
           message="Repair wajib berdasarkan hasil audit terakhir."
           description="Jalankan Cek Semua Area atau audit terkait dulu, lihat jumlah kandidat repair, lalu konfirmasi aksi. Tombol repair dikunci jika audit belum ada atau tidak ada kandidat."
         />
+
+        <Divider orientation="left" plain>Stock Read Model Backfill</Divider>
+        <Text type="secondary">
+          Rebuild hanya menulis collection turunan <Text code>stock_item_read_models</Text>. Tidak mengubah master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance. Cleanup orphan hanya menghapus dokumen read model turunan setelah audit terbaru menunjukkan master source sudah tidak ada.
+        </Text>
+        <Row gutter={[8, 8]}>
+          <Col xs={24} md={6}>
+            <Button block icon={<FileSearchOutlined />} loading={loadingStockReadModelAudit} onClick={onLoadStockReadModelAudit}>Cek Read Model Stok</Button>
+          </Col>
+          <Col xs={24} md={6}>
+            {renderGuardedRepairButton({
+              label: "Rebuild Read Model Stok",
+              title: "Rebuild stock read model?",
+              description: "Aksi ini hanya upsert read model missing/stale dari master stock aktif.",
+              loading: loadingStockReadModelRepair,
+              onConfirm: onRepairStockReadModelAudit,
+              audit: stockReadModelAudit,
+              summary: stockReadModelSummary,
+            })}
+          </Col>
+          <Col xs={24} md={6}>
+            <Popconfirm
+              title="Backfill metadata restock read model?"
+              description={`Aksi ini hanya menulis metadata purchase terakhir ke stock_item_read_models dari audit terbaru. ${buildGuardMessage({ auditReady: Boolean(stockReadModelAudit), planCount: stockReadModelSummary.restockMetadataRepairCount || 0 })}`}
+              okText="Ya, backfill"
+              cancelText="Batal"
+              disabled={!stockReadModelAudit || !stockReadModelSummary.restockMetadataRepairCount}
+              onConfirm={onBackfillStockReadModelRestockMetadata}
+            >
+              <Button
+                block
+                icon={<SyncOutlined />}
+                loading={loadingStockReadModelRestockBackfill}
+                disabled={!stockReadModelAudit || !stockReadModelSummary.restockMetadataRepairCount}
+              >
+                Backfill Restock{stockReadModelSummary.restockMetadataRepairCount ? ` (${stockReadModelSummary.restockMetadataRepairCount})` : ""}
+              </Button>
+            </Popconfirm>
+          </Col>
+          <Col xs={24} md={6}>
+            <Popconfirm
+              title="Cleanup orphan read model stok?"
+              description={(
+                <Space direction="vertical" size={6}>
+                  <Text>
+                    Aksi ini hanya menghapus dokumen turunan stock_item_read_models yang tidak punya master source pada audit terbaru. Master stock, inventory log, transaksi, produksi, HPP, payroll, dan finance tidak disentuh.
+                  </Text>
+                  <Text type="secondary">
+                    Ketik <Text code>{STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD}</Text> untuk konfirmasi cleanup derived collection.
+                  </Text>
+                  <Input
+                    value={stockReadModelCleanupKeyword}
+                    onChange={(event) => setStockReadModelCleanupKeyword(event.target.value)}
+                    placeholder={STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD}
+                  />
+                </Space>
+              )}
+              okText="Ya, hapus orphan"
+              cancelText="Batal"
+              disabled={!stockReadModelAudit || !stockReadModelSummary.orphanCount}
+              okButtonProps={{ disabled: !isStockReadModelCleanupKeywordValid }}
+              onOpenChange={(open) => {
+                if (!open) setStockReadModelCleanupKeyword("");
+              }}
+              onConfirm={() => onCleanupStockReadModelOrphans({
+                confirmKeyword: stockReadModelCleanupKeyword,
+              })}
+            >
+              <Button
+                block
+                danger
+                icon={<DeleteOutlined />}
+                loading={loadingStockReadModelCleanup}
+                disabled={!stockReadModelAudit || !stockReadModelSummary.orphanCount}
+              >
+                Cleanup Orphan{stockReadModelSummary.orphanCount ? ` (${stockReadModelSummary.orphanCount})` : ""}
+              </Button>
+            </Popconfirm>
+          </Col>
+          <Col xs={24} md={6}>
+            <Statistic title="Missing/Stale" value={(stockReadModelSummary.missingCount || 0) + (stockReadModelSummary.staleCount || 0)} />
+          </Col>
+        </Row>
+        {stockReadModelAudit && (
+          <Alert
+            type={stockReadModelSummary.executablePlanCount || stockReadModelSummary.manualReviewCount ? "warning" : "success"}
+            showIcon
+            message={stockReadModelSummary.executablePlanCount
+              ? `${stockReadModelSummary.executablePlanCount} read model stok perlu rebuild.`
+              : stockReadModelSummary.manualReviewCount
+                ? `${stockReadModelSummary.manualReviewCount} read model orphan perlu review manual.`
+                : "Stock read model sudah sinkron dengan master stock."}
+            description={`Master dicek: ${stockReadModelSummary.sourceRecords || 0}. Missing: ${stockReadModelSummary.missingCount || 0}. Stale: ${stockReadModelSummary.staleCount || 0}. Metadata restock: ${stockReadModelSummary.restockMetadataRepairCount || 0}. Orphan cleanup: ${stockReadModelSummary.orphanCount || 0}.`}
+          />
+        )}
+        {stockReadModelRows.some((record) => record.category !== "ok") && (
+          <Table
+            className="app-data-table"
+            size="small"
+            rowKey={(record) => record.key || record.readModelId || `${record.sourceCollection}-${record.sourceId}`}
+            pagination={{ pageSize: 5 }}
+            dataSource={stockReadModelRows.filter((record) => record.category !== "ok")}
+            columns={[
+              { title: "Area", dataIndex: "sourceLabel", key: "sourceLabel", width: 135, render: (value) => renderCompactText(value, 125) },
+              { title: "Item", dataIndex: "itemName", key: "itemName", width: 220, render: (value) => renderCompactText(value, 200) },
+              { title: "Read Model", dataIndex: "readModelId", key: "readModelId", width: 210, render: (value) => renderCompactTag(value, 190) },
+              {
+                title: "Status",
+                dataIndex: "category",
+                key: "category",
+                width: 135,
+                render: (value) => (
+                  <Tag color={STOCK_READ_MODEL_CATEGORY_COLORS[value] || "default"}>
+                    {formatStockReadModelCategory(value)}
+                  </Tag>
+                ),
+              },
+              { title: "Issue", dataIndex: "issue", key: "issue", render: (value) => renderCompactText(value, 360) },
+            ]}
+            scroll={{ x: 980 }}
+          />
+        )}
         <Divider orientation="left" plain>Reconcile HPP Output</Divider>
         <Text type="secondary">
           Khusus Work Log completed lama yang output/master HPP-nya belum sinkron dengan cost final. Repair hanya menyamakan snapshot cost dan master HPP/average cost; tidak menambah stok, tidak membuat inventory log, dan tidak mengubah payroll.

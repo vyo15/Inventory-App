@@ -5,6 +5,7 @@ import {
   buildInventoryLogPayload,
   INVENTORY_LOG_COLLECTION,
 } from "../Inventory/inventoryLogService";
+import { setStockItemReadModelInTransaction } from "../Inventory/stockReadModelService";
 import {
   generateDailySequenceCode,
   getDailyBusinessCodeSequence,
@@ -176,7 +177,21 @@ export const createReturnTransaction = async ({ values, allItems = [] }) => {
       ...variantPayload,
     });
 
-    transaction.update(itemReference, stockUpdatePayload);
+    const nextItem = {
+      ...latestItem,
+      ...stockUpdatePayload,
+      updatedAt: returnTimestamp,
+    };
+
+    transaction.update(itemReference, {
+      ...stockUpdatePayload,
+      updatedAt: returnTimestamp,
+    });
+    setStockItemReadModelInTransaction(transaction, nextItem, {
+      sourceType: collectionName,
+      sourceCollection: collectionName,
+      lastSyncedFrom: "returnsService.createReturnTransaction",
+    });
 
     transaction.set(
       inventoryLogReference,

@@ -26,6 +26,7 @@ import {
   buildInventoryLogPayload,
   INVENTORY_LOG_COLLECTION,
 } from "../../../services/Inventory/inventoryLogService";
+import { setStockItemReadModelInTransaction } from "../../../services/Inventory/stockReadModelService";
 import { formatNumberId, parseIntegerIdInput } from "../../../utils/formatters/numberId";
 import {
   buildVariantOptionsFromItem,
@@ -747,10 +748,23 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           },
         });
 
+        const nextStockItem = {
+          ...latestSourceItem,
+          ...stockUpdatePayload,
+          ...stockAdjustmentCostPayload,
+          updatedAt: adjustmentTimestamp,
+        };
+
         codeReservation.commit();
         transaction.update(itemReference, {
           ...stockUpdatePayload,
           ...stockAdjustmentCostPayload,
+          updatedAt: adjustmentTimestamp,
+        });
+        setStockItemReadModelInTransaction(transaction, nextStockItem, {
+          sourceType: sourceCollectionName,
+          sourceCollection: sourceCollectionName,
+          lastSyncedFrom: "StockAdjustmentPanel.submitAdjustment",
         });
         transaction.set(adjustmentReference, adjustmentPayload);
         transaction.set(inventoryLogReference, inventoryLogPayload);

@@ -16,6 +16,7 @@ import {
   buildInventoryLogPayload,
   INVENTORY_LOG_COLLECTION,
 } from "../Inventory/inventoryLogService";
+import { setStockItemReadModelInTransaction } from "../Inventory/stockReadModelService";
 import {
   generateDailySequenceCode,
   getDailyBusinessCodeSequence,
@@ -266,13 +267,17 @@ export const createSaleTransaction = async ({
         );
       }
 
+      const stockUpdatePayload = applyStockMutationToItem({
+        item: latestItem,
+        variantKey: latestVariant?.variantKey || "",
+        deltaCurrent: -requestedQuantity,
+      });
+
       stockMutationPayloads.push({
         itemReference,
-        stockUpdatePayload: applyStockMutationToItem({
-          item: latestItem,
-          variantKey: latestVariant?.variantKey || "",
-          deltaCurrent: -requestedQuantity,
-        }),
+        collectionName: item.collectionName,
+        latestItem,
+        stockUpdatePayload,
       });
     }
 
@@ -280,8 +285,18 @@ export const createSaleTransaction = async ({
     saleId = salesDocument.id;
     transaction.set(salesDocument, newSalePayload);
 
-    stockMutationPayloads.forEach(({ itemReference, stockUpdatePayload }) => {
-      transaction.update(itemReference, stockUpdatePayload);
+    stockMutationPayloads.forEach(({ itemReference, collectionName, latestItem, stockUpdatePayload }) => {
+      const nextItem = { ...latestItem, ...stockUpdatePayload, updatedAt: Timestamp.now() };
+
+      transaction.update(itemReference, {
+        ...stockUpdatePayload,
+        updatedAt: nextItem.updatedAt,
+      });
+      setStockItemReadModelInTransaction(transaction, nextItem, {
+        sourceType: collectionName,
+        sourceCollection: collectionName,
+        lastSyncedFrom: "salesService.createSaleTransaction",
+      });
     });
 
     newSalePayload.items.forEach((item, index) => {

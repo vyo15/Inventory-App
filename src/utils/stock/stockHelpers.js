@@ -1,4 +1,5 @@
 import { formatNumberId } from '../formatters/numberId';
+import { resolveDisplayReference } from '../references/displayReferenceResolver';
 
 export const toNumber = (value, fallback = 0) => {
   const parsedValue = Number(value ?? fallback);
@@ -191,6 +192,10 @@ const STOCK_READ_MODEL_SOURCE_TYPE_ALIASES = {
   material: 'material',
   raw_material: 'material',
   raw_materials: 'material',
+  'raw material': 'material',
+  'raw-material': 'material',
+  bahan_baku: 'material',
+  bahanbaku: 'material',
   'bahan baku': 'material',
   product: 'product',
   products: 'product',
@@ -199,6 +204,18 @@ const STOCK_READ_MODEL_SOURCE_TYPE_ALIASES = {
   semi_finished_material: 'semi_finished',
   semi_finished_materials: 'semi_finished',
   'semi finished': 'semi_finished',
+};
+
+export const STOCK_READ_MODEL_SOURCE_COLLECTIONS = {
+  material: 'raw_materials',
+  product: 'products',
+  semi_finished: 'semi_finished_materials',
+};
+
+export const STOCK_READ_MODEL_STATUS_RANK = {
+  safe: 0,
+  low: 1,
+  empty: 2,
 };
 
 const STOCK_READ_MODEL_SOURCE_CONFIG = {
@@ -312,7 +329,7 @@ export const getStockReadModelStatusMeta = (
 };
 
 // =====================================================
-// ACTIVE / READ-ONLY - Stock item read model for Dashboard and Stock Report.
+// ACTIVE / READ-ONLY - Stock row mapper for Dashboard and Stock Report.
 // Fungsi:
 // - menyamakan sumber angka stok display: availableStock -> currentStock/stock fallback;
 // - menyamakan threshold master per entity: raw material minStock, product/semi finished minStockAlert;
@@ -372,6 +389,173 @@ export const buildStockReadModelRow = (
     statusMeta,
     affectedVariantSummary,
     affectedVariantEntries: statusMeta.affectedVariants || [],
+  };
+};
+
+const toSafeString = (value = '') => String(value ?? '').trim();
+
+const resolveStockReadModelSourceCollection = (sourceType = '', sourceCollection = '') => {
+  const resolvedSourceType = normalizeStockReadModelSourceType(sourceType);
+  return sourceCollection || STOCK_READ_MODEL_SOURCE_COLLECTIONS[resolvedSourceType] || 'products';
+};
+
+const normalizeAffectedVariantEntryForReadModel = (entry = {}) => ({
+  key: toSafeString(entry?.key),
+  label: toSafeString(entry?.label),
+  stock: toNumber(entry?.stock),
+  unit: toSafeString(entry?.unit),
+  threshold: toNumber(entry?.threshold),
+  status: toSafeString(entry?.status),
+  statusLabel: toSafeString(entry?.label),
+});
+
+
+const normalizeVariantStockEntryForReadModel = (variant = {}, index = 0, unitDisplay = 'pcs') => {
+  const variantLabel = toSafeString(
+    variant?.variantLabel ||
+      variant?.label ||
+      variant?.name ||
+      variant?.variantName ||
+      variant?.color ||
+      variant?.sku ||
+      `Varian ${index + 1}`,
+  );
+  const currentStock = toNumber(variant?.currentStock ?? variant?.stock);
+  const reservedStock = toNumber(variant?.reservedStock);
+  const availableStock = getVariantAvailableStockValue(variant);
+
+  return {
+    variantKey: toSafeString(variant?.variantKey || variant?.id || variant?.sku || variant?.color || variantLabel),
+    variantLabel,
+    label: variantLabel,
+    name: variantLabel,
+    color: toSafeString(variant?.color),
+    sku: toSafeString(variant?.sku),
+    unit: unitDisplay,
+    stock: currentStock,
+    currentStock,
+    reservedStock,
+    availableStock,
+    isActive: variant?.isActive !== false,
+  };
+};
+
+const buildStockReadModelSearchText = ({
+  displayReference = '',
+  name = '',
+  typeLabel = '',
+  categoryName = '',
+  unitDisplay = '',
+} = {}) => [displayReference, name, typeLabel, categoryName, unitDisplay]
+  .map((value) => toSafeString(value).toLowerCase())
+  .filter(Boolean)
+  .join(' ');
+
+// =====================================================
+// ACTIVE / PURE BUILDER - Firestore stock_item_read_models payload.
+// Fungsi:
+// - membangun payload read model stok dari buildStockReadModelRow() agar comparator Dashboard/Stock Report tetap satu sumber;
+// - menyiapkan field queryable untuk status stok, issue flag, source collection, dan export/report;
+// - tidak melakukan read/write Firestore dan tidak membuat side-effect stok.
+// Guard:
+// - Jangan jadikan read model ini source of truth mutasi stok. Source of truth tetap master item + inventory_logs.
+// - Writer sync/backfill wajib batch terpisah dan harus menjaga semua jalur stock mutation.
+// =====================================================
+export const buildStockItemReadModelPayload = (
+  record = {},
+  {
+    id,
+    sourceId = '',
+    sourceType = '',
+    sourceCollection = '',
+    displayReference = '',
+    syncedAt = null,
+    lastSyncedFrom = 'master_stock',
+    affectedVariantMaxItems = 3,
+    ...rowOptions
+  } = {},
+) => {
+  const row = buildStockReadModelRow(record, {
+    ...rowOptions,
+    id: id || sourceId || record?.id,
+    sourceType,
+    affectedVariantMaxItems,
+  });
+  const resolvedSourceType = normalizeStockReadModelSourceType(row.sourceType, row.type);
+  const resolvedSourceId = toSafeString(sourceId || id || record?.id || record?.sourceId);
+  const resolvedSourceCollection = resolveStockReadModelSourceCollection(resolvedSourceType, sourceCollection || record?.sourceCollection);
+  const status = row.statusMeta?.status || 'safe';
+  const statusRank = STOCK_READ_MODEL_STATUS_RANK[status] ?? STOCK_READ_MODEL_STATUS_RANK.safe;
+  const variantList = Array.isArray(record?.variants) ? record.variants : [];
+  const hasVariants = (record?.hasVariants === true || variantList.length > 0) && variantList.length > 0;
+  const variantEntries = variantList.map((variant, index) =>
+    normalizeVariantStockEntryForReadModel(variant, index, row.unitDisplay),
+  );
+  const categoryName = toSafeString(record?.categoryName || record?.category || record?.categoryLabel || record?.categoryId);
+  const resolvedDisplayReference = displayReference || resolveDisplayReference(
+    {
+      ...record,
+      id: resolvedSourceId,
+      itemCode: record?.itemCode || record?.code || record?.productCode || record?.materialCode,
+    },
+    { fallback: '', allowTechnicalId: false },
+  );
+  const affectedVariantEntries = (row.affectedVariantEntries || [])
+    .map(normalizeAffectedVariantEntryForReadModel);
+  const isNegativeStock = row.currentStock < 0 || row.stock < 0;
+  const isReservedOverrun = row.reservedStock > row.currentStock;
+  const sortGap = row.availableStock - row.minStockDisplay;
+
+  return {
+    sourceType: resolvedSourceType,
+    sourceCollection: resolvedSourceCollection,
+    sourceId: resolvedSourceId,
+    displayReference: resolvedDisplayReference,
+    name: row.name,
+    typeLabel: row.type,
+    route: row.to,
+    categoryId: toSafeString(record?.categoryId),
+    categoryName,
+    unit: row.unitDisplay,
+    unitDisplay: row.unitDisplay,
+    stock: row.stock,
+    currentStock: row.currentStock,
+    reservedStock: row.reservedStock,
+    availableStock: row.availableStock,
+    minStockThreshold: row.minStockDisplay,
+    stockStatus: status,
+    stockStatusLabel: row.statusMeta?.label || row.status,
+    reportStatus: row.status,
+    statusColor: row.statusMeta?.color || 'green',
+    alertType: row.statusMeta?.alertType || 'success',
+    statusRank,
+    sortGap,
+    hasStockIssue: statusRank > 0 || isNegativeStock || isReservedOverrun,
+    isNegativeStock,
+    isReservedOverrun,
+    hasVariants,
+    variantCount: variantList.length,
+    variants: variantEntries,
+    affectedVariantCount: affectedVariantEntries.length,
+    affectedVariantSummary: row.affectedVariantSummary,
+    affectedVariantEntries,
+    lastPurchaseAt: record?.lastPurchaseAt || record?.latestPurchaseAt || null,
+    lastPurchasePrice: toNumber(record?.lastPurchasePrice ?? record?.latestPurchasePrice ?? record?.lastPurchaseUnitPrice),
+    lastPurchaseUnitPrice: toNumber(record?.lastPurchaseUnitPrice ?? record?.lastPurchasePrice ?? record?.latestPurchasePrice),
+    restockSupplierId: toSafeString(record?.restockSupplierId || record?.supplierId),
+    restockSupplierName: toSafeString(record?.restockSupplierName || record?.supplierName),
+    restockProductLink: toSafeString(record?.restockProductLink || record?.productLink || record?.link),
+    isActive: record?.isActive !== false,
+    searchText: buildStockReadModelSearchText({
+      displayReference: resolvedDisplayReference,
+      name: row.name,
+      typeLabel: row.type,
+      categoryName,
+      unitDisplay: row.unitDisplay,
+    }),
+    sourceUpdatedAt: record?.updatedAt || record?.createdAt || null,
+    updatedAt: syncedAt || null,
+    lastSyncedFrom,
   };
 };
 

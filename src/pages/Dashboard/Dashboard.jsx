@@ -400,6 +400,7 @@ const Dashboard = () => {
     revenues: [],
     sales: [],
     stockAuditRows: [],
+    stockIssueMeta: {},
     planningSummary: EMPTY_PLANNING_SUMMARY,
   });
 
@@ -460,10 +461,13 @@ const Dashboard = () => {
     revenues,
     sales,
     stockAuditRows,
+    stockIssueMeta = {},
     planningSummary,
   } = dashboardData;
 
   const lowStockTotal = lowStockRows.length;
+  const stockIssueHasMore = Boolean(stockIssueMeta?.hasMore || stockIssueMeta?.isLimited);
+  const lowStockTotalLabel = stockIssueHasMore ? `${formatNumberId(lowStockTotal)}+` : formatNumberId(lowStockTotal);
   const quickActions = useMemo(() => buildDashboardQuickActions(), []);
 
   const planningPriorityItems = planningSummary.priorityPlans
@@ -707,8 +711,8 @@ const Dashboard = () => {
     {
       key: "stock-critical",
       label: "Stok Kritis",
-      value: formatNumberId(lowStockTotal),
-      detail: "produk, bahan, semi finished",
+      value: lowStockTotalLabel,
+      detail: stockIssueHasMore ? "minimal item issue termuat" : "produk, bahan, semi finished",
       tone: lowStockTotal > 0 ? "warning" : "success",
       statusLabel: lowStockTotal > 0 ? "Kritis" : null,
       statusTone: "warning",
@@ -746,12 +750,14 @@ const Dashboard = () => {
     financeSummary.netOperational,
     financeSummary.recognizedIncome,
     lowStockTotal,
+    lowStockTotalLabel,
     payrollSummary.pendingAmount,
     payrollSummary.pendingCount,
     planningSummary.behindTargetCount,
     planningSummary.overdueCount,
     productionSummary.shortageOrders,
     salesSummary.monthAmount,
+    stockIssueHasMore,
     salesSummary.monthCount,
     salesSummary.todayAmount,
   ]);
@@ -1167,7 +1173,7 @@ const Dashboard = () => {
           <PageSection
             title="Stok Kritis"
             subtitle="Stok paling urgent."
-            extra={<Text className="dashboard-section-extra">{formatNumberId(lowStockTotal)} total</Text>}
+            extra={<Text className="dashboard-section-extra">{lowStockTotalLabel} total</Text>}
           >
             {criticalStockPreview.length > 0 ? (
               <div className="dashboard-card-list">

@@ -7,7 +7,7 @@ import {
   limit as firestoreLimit,
   orderBy,
   query,
-  updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import { calculateAvailableStock } from "../../utils/stock/stockHelpers";
@@ -21,6 +21,7 @@ import {
   getItemStockSnapshot,
   inferHasVariants,
 } from "../../utils/variants/variantStockHelpers";
+import { setStockItemReadModelInBatch } from "./stockReadModelService";
 
 // =========================
 // SECTION: Ambil riwayat log inventaris
@@ -184,7 +185,20 @@ export const updateInventoryStock = async ({
     deltaCurrent: normalizedQuantityChange,
   });
 
-  await updateDoc(itemReference, stockUpdatePayload);
+  const nextItem = {
+    ...item,
+    ...stockUpdatePayload,
+  };
+  const batch = writeBatch(db);
+
+  batch.update(itemReference, stockUpdatePayload);
+  setStockItemReadModelInBatch(batch, nextItem, {
+    sourceType: collectionName,
+    sourceCollection: collectionName,
+    lastSyncedFrom: "inventoryService.updateInventoryStock",
+  });
+
+  await batch.commit();
 
   const currentStockAfter = stockSnapshotBefore.currentStock + normalizedQuantityChange;
   const availableStockAfter = calculateAvailableStock(

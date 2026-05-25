@@ -1775,6 +1775,36 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 - [ ] Export XLSX setelah filter aktif; data export harus sama dengan rows yang berhasil dibaca dan sedang difilter di UI.
 - [ ] Pastikan tidak ada write ke stok, inventory log, transaksi, produksi, atau collection read model baru.
 
+## Batch 17B — Dashboard / Stock Report Read Model Design & Foundation
+
+### Design/docs only
+- [ ] Pastikan docs membedakan **Stock Row Mapper** dari **Firestore Stock Read Model**.
+- [ ] Pastikan docs menyatakan Dashboard masih full read `products`, `raw_materials`, dan `semi_finished_materials` sampai ada batch switch resmi.
+- [ ] Pastikan docs menyatakan Stock Report masih full source report sampai export/paging contract read model disetujui.
+- [ ] Pastikan docs menyatakan `stock_item_read_models` adalah derived read model, bukan source of truth stok.
+
+### Foundation source
+- [ ] Jalankan lint/build; pastikan penambahan `buildStockItemReadModelPayload()` dan `stockReadModelService.js` tidak memunculkan syntax/import error.
+- [ ] Pastikan tidak ada import baru ke `stockReadModelService.js` dari Dashboard, Stock Report, Purchases, Sales, Returns, Stock Adjustment, Production, atau Reset/Maintenance pada Batch 17B foundation.
+- [ ] Unit/manual check pure builder: Product non-varian menghasilkan `sourceType=product`, `sourceCollection=products`, dan threshold dari `minStockAlert`.
+- [ ] Unit/manual check pure builder: Raw Material non-varian menghasilkan `sourceType=material`, `sourceCollection=raw_materials`, dan threshold dari `minStock`.
+- [ ] Unit/manual check pure builder: Semi Finished menghasilkan `sourceType=semi_finished`, `sourceCollection=semi_finished_materials`, dan threshold dari `minStockAlert`.
+- [ ] Unit/manual check item bervarian: varian kosong/rendah menghasilkan `hasStockIssue=true`, `affectedVariantCount > 0`, dan `affectedVariantEntries` terisi.
+- [ ] Unit/manual check reserved overrun: `reservedStock > currentStock` menghasilkan `isReservedOverrun=true` dan `hasStockIssue=true`.
+- [ ] Pastikan builder payload tidak menulis Firestore, tidak membuat inventory log, dan tidak mengubah master stock.
+
+### Writer sync/backfill future guard
+- [ ] Sebelum Dashboard/Stock Report switch, siapkan writer sync untuk Purchases, Sales, Returns, Stock Adjustment, Production Work Logs, Production Orders/reservation, Master Data edit/toggle, dan Reset/Maintenance rebuild.
+- [ ] Backfill/rebuild `stock_item_read_models` wajib punya preview jumlah dokumen, scope jelas, dan tidak mengubah master stock maupun `inventory_logs`.
+- [ ] Setelah backfill, bandingkan sample Dashboard old mapper vs `stock_item_read_models`; status `Habis/Kritis/Normal`, available stock, threshold, dan variant summary harus sama.
+- [ ] Firestore Rules production wajib mengizinkan read/write collection baru sesuai role yang disetujui; rules tidak ada di ZIP frontend.
+- [ ] Buat composite index yang diminta Firebase untuk query issue/read report; jangan fallback ke full scan permanen.
+
+### Export/paging future guard
+- [ ] Sebelum Stock Report switch, putuskan export semua matching filter dari read model dengan paging batch atau export halaman aktif dengan disclosure jelas.
+- [ ] Untuk laporan operasional IMS, default yang disarankan adalah export semua matching filter, bukan hanya page aktif.
+- [ ] Pagination Stock Report tidak boleh membuat item kritis hilang dari export/summary.
+
 ## Checklist P2 — Jumbo File Split Behavior-Preserving
 
 ### P2-A/P2-B — Production Work Logs UI split
@@ -1818,3 +1848,16 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 - [ ] Return tetap stock-only + inventory log; tidak muncul refund/cash otomatis.
 - [ ] Sales tetap no-cancel user-facing; barang kembali/koreksi tetap lewat Return.
 - [ ] Firestore Rules/index tidak berubah dari patch ini; validasi manual di Firebase Console tetap diperlukan.
+
+
+## Batch 18H — ProductionWorkLogsService guarded split phase 1
+
+- [ ] Jalankan `npm run lint` dan `npm run build` setelah ZIP ditimpa ke root project.
+- [ ] Buka Production Work Logs; list, detail drawer, dan form create/edit tetap tampil.
+- [ ] Buat Work Log dari Production Order; pastikan material usage, output, worker, step, dan nomor Work Log tetap tersimpan sama.
+- [ ] Edit Work Log yang belum completed; pastikan validator wajib tanggal/target/step/planned qty/material/output tetap berjalan.
+- [ ] Start Production dari PO yang punya material varian; stok bahan tetap terpotong dari bucket varian yang benar dan tidak fallback ke master.
+- [ ] Complete Work Log; pastikan output masuk, HPP/output cost, payroll accrual, inventory log `production_output_in`, dan read model sync tetap berjalan.
+- [ ] Pastikan function public `validateProductionWorkLog` masih bisa diimport dari `productionWorkLogsService.js`.
+- [ ] Pastikan helper `productionWorkLogsServiceHelpers.js` tidak dipakai untuk write langsung ke Firestore, inventory log, payroll, atau stok.
+- [ ] Jangan lanjut split HPP/stock posting/payroll dalam patch yang sama tanpa fixture data production lengkap.

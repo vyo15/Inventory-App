@@ -1,0 +1,640 @@
+diff --git a/docs/05_CURRENT_STATE_AND_TECH_DEBT.md b/docs/05_CURRENT_STATE_AND_TECH_DEBT.md
+index 2f2d4e3..6b41dd4 100644
+--- a/docs/05_CURRENT_STATE_AND_TECH_DEBT.md
++++ b/docs/05_CURRENT_STATE_AND_TECH_DEBT.md
+@@ -1210,9 +1210,9 @@ Status Batch 17D-17I switch/writer sync:
+ - `stock_item_read_models` adalah derived read model, bukan source of truth. Source of truth tetap master item stock fields dan `inventory_logs`.
+ 
+ Risiko tersisa:
+-- Reset/destructive flow yang menghapus master stock belum otomatis menghapus read model; gunakan rebuild/audit maintenance setelah reset besar atau buat batch reset-read-model terpisah dengan guard preview/confirm.
++- Reset/destructive flow yang menghapus master stock belum otomatis menghapus read model. Setelah reset besar, jalankan audit/rebuild maintenance lalu gunakan cleanup orphan guarded hanya jika audit terbaru menunjukkan read model tidak punya master source aktif.
+ - Query issue seperti `hasStockIssue == true` + `orderBy(statusRank, sortGap)` kemungkinan butuh composite index Firestore. Read path Dashboard/Stock Report saat ini memakai read model rows terbatas dan sort/filter client-side sebagai transisi aman, bukan paging final.
+-- Export Stock Report masih mengikuti rows read model yang termuat; jika data melewati limit operasional, perlu paging/export job terpisah agar export semua matching filter tetap benar.
++- Export Stock Report mengikuti rows read model yang termuat dan sekarang membawa warning jika limit read model terindikasi tercapai; jika data melewati limit operasional, tetap perlu paging/export job server-side agar export semua matching filter benar.
+ 
+ 
+ 
+@@ -1248,7 +1248,7 @@ Status Batch 17C:
+   - `stale`: read model berbeda dari master stok pada field query/display yang dibandingkan.
+   - `orphan`: read model tidak punya master source aktif pada audit saat itu.
+ - Repair hanya melakukan upsert untuk kategori `missing` dan `stale` ke `stock_item_read_models`.
+-- Orphan tidak dihapus otomatis; tetap manual review agar tidak salah hapus ketika source read gagal, ada data legacy, atau rules/index belum lengkap.
++- Orphan tidak dihapus saat rebuild. Cleanup orphan hanya boleh lewat tombol guarded terpisah setelah audit terbaru menandai read model tidak punya master source aktif.
+ - Reset Maintenance menampilkan section **Stock Read Model Backfill** di panel Repair Turunan Aman. Section ini punya tombol audit, tombol rebuild guarded, ringkasan missing/stale/orphan, dan preview row issue.
+ 
+ Guard Batch 17C:
+@@ -1294,3 +1294,28 @@ Tech debt tersisa:
+ - Laporan besar masih butuh switch query ke read model/paging jika dataset membesar; foundation dan maintenance backfill `stock_item_read_models` sudah ada, tetapi writer sync realtime, Firestore Rules/index, Dashboard switch, dan Stock Report export contract tetap batch lanjutan.
+ - `src/services/Maintenance/resetMaintenanceDataService.js` tetap besar dan destructive; split service destructive harus batch terpisah dengan approval eksplisit.
+ - `src/pages/Transaksi/Purchases.jsx` masih sensitif karena OCR, stock in, expense, supplier reference, dan average cost; lanjut split harus kecil dan behavior-preserving.
++
++### Batch 17J-17M — Stock Read Model Final Hardening
++
++Status source aktual:
++- `src/utils/stock/stockHelpers.js` menormalisasi alias `raw_material`, `raw_materials`, `raw material`, `raw-material`, `bahan_baku`, `bahanbaku`, dan `bahan baku` menjadi `material` agar writer dari collection/raw label tidak membuat dokumen salah seperti `product__RAW-...`.
++- `src/services/Inventory/stockReadModelService.js::getStockReadModelRows()` tetap kompatibel dengan caller lama yang mengharapkan array, tetapi dapat mengembalikan metadata limit jika dipanggil dengan `includeMeta: true`.
++- `src/services/Laporan/stockReportService.js` meneruskan metadata read model ke `StockReport.jsx` supaya UI/export dapat memberi disclosure ketika data dibatasi limit.
++- `src/pages/Laporan/StockReport.jsx` menampilkan warning dan menulis catatan XLSX jika export hanya memakai rows read model yang sudah termuat.
++- `src/services/Maintenance/stockReadModelMaintenanceService.js` menambahkan cleanup orphan guarded untuk menghapus hanya dokumen turunan `stock_item_read_models` yang tidak punya master source pada audit terbaru.
++- `src/pages/Utilities/components/ResetSafeRepairPanel.jsx` memisahkan tombol audit, rebuild missing/stale, dan cleanup orphan agar destructive action derived collection tidak tercampur dengan rebuild.
++
++Guard penting:
++- Cleanup orphan hanya menyentuh collection turunan `stock_item_read_models`; tidak mengubah `products`, `raw_materials`, `semi_finished_materials`, `inventory_logs`, transaksi, produksi, HPP, payroll, finance, route/menu, atau role guard.
++- Rebuild tetap hanya upsert missing/stale dari master aktif. Orphan tidak ikut dihapus oleh rebuild.
++- Stock Report limit warning bukan paging final. Untuk data besar tetap perlu desain paging/export job server-side dengan index Firestore yang disetujui.
++- Firestore Rules/index tidak ada di ZIP frontend; permission dan composite index production tetap wajib diverifikasi manual di Firebase Console/deployment backend.
++
++Checklist pasca deploy Batch 17J-17M:
++1. Jalankan Reset Maintenance → Cek Read Model Stok.
++2. Jika ada missing/stale, jalankan Rebuild Read Model Stok.
++3. Jalankan audit ulang.
++4. Jika ada orphan, review jumlah dan contoh row; gunakan Cleanup Orphan hanya jika yakin master source memang sudah tidak ada.
++5. Buka Dashboard dan Stock Report; pastikan tidak ada item bahan baku yang muncul sebagai Produk Jadi akibat alias lama.
++6. Jika Stock Report menampilkan warning limit, jangan anggap export XLSX sebagai full export production-scale.
++
+diff --git a/docs/06_TEST_CHECKLIST.md b/docs/06_TEST_CHECKLIST.md
+index 6481d9e..bd87fca 100644
+--- a/docs/06_TEST_CHECKLIST.md
++++ b/docs/06_TEST_CHECKLIST.md
+@@ -1906,3 +1906,30 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
+ - [ ] Return tetap stock-only + inventory log; tidak muncul refund/cash otomatis.
+ - [ ] Sales tetap no-cancel user-facing; barang kembali/koreksi tetap lewat Return.
+ - [ ] Firestore Rules/index tidak berubah dari patch ini; validasi manual di Firebase Console tetap diperlukan.
++
++## Checklist Batch 17J-17M — Stock Read Model Final Hardening
++
++### Alias/source type
++- [ ] Buat/ubah stok bahan baku melalui Purchases, Stock Adjustment, dan Production Work Log material out jika ada data uji.
++- [ ] Jalankan Cek Read Model Stok dan pastikan bahan baku membuat read model `material__{sourceId}`, bukan `product__{sourceId}`.
++- [ ] Pastikan alias `raw_materials`, `raw material`, `raw-material`, `bahan_baku`, dan `bahan baku` tetap dibaca sebagai `material`.
++
++### Backfill, sync, dan orphan cleanup
++- [ ] Buka Reset Maintenance → Repair Turunan Aman → Cek Read Model Stok.
++- [ ] Jika ada `missing` atau `stale`, tombol Rebuild Read Model Stok aktif dan hanya mengubah `stock_item_read_models`.
++- [ ] Setelah rebuild, jalankan audit ulang dan pastikan missing/stale turun.
++- [ ] Jika ada orphan, pastikan tombol Cleanup Orphan terkunci sampai audit tersedia dan hanya menghapus dokumen turunan `stock_item_read_models`.
++- [ ] Setelah Cleanup Orphan, audit ulang dan pastikan master stock, inventory log, transaksi, produksi, HPP, payroll, dan finance tidak berubah.
++
++### Stock Report limit/export guard
++- [ ] Buka Stock Report dan pastikan data bahan baku, semi finished, dan produk jadi tetap tampil dari read model.
++- [ ] Jika jumlah read model melewati limit loader, UI menampilkan warning limit dan export XLSX membawa catatan batas read model.
++- [ ] Export XLSX tetap mengikuti filter kategori/status/search aktif.
++- [ ] Jika `stock_item_read_models` kosong/gagal, fallback master tetap tampil dengan warning parsial dan XLSX menandai data parsial.
++
++### Firestore Rules/index manual
++- [ ] Pastikan Firestore Rules production mengizinkan role yang tepat untuk read/write `stock_item_read_models`.
++- [ ] Pastikan query issue read model siap index: `hasStockIssue`, `statusRank`, `sortGap`.
++- [ ] Jika nanti paging/filter server-side Stock Report dipakai, siapkan index untuk `sourceType`, `categoryName`, dan `name` sesuai query final.
++- [ ] Setelah rules/index berubah, ulangi rebuild, Dashboard, Stock Report, export XLSX, dan reset maintenance audit.
++
+diff --git a/docs/08_INTEGRATION_MAP.md b/docs/08_INTEGRATION_MAP.md
+index 86f5969..cbab043 100644
+--- a/docs/08_INTEGRATION_MAP.md
++++ b/docs/08_INTEGRATION_MAP.md
+@@ -1084,7 +1084,7 @@ Production Work Logs material out + output in
+ Guard:
+ - Read model adalah derived projection, bukan sumber kalkulasi stok.
+ - Writer sync tidak boleh mengganti validasi stok, reservation, HPP, payroll, purchase expense, sale income, atau inventory log.
+-- Reset/destructive flow belum otomatis membersihkan orphan read model; gunakan maintenance audit/rebuild atau batch reset-read-model terpisah.
++- Reset/destructive flow belum otomatis membersihkan orphan read model; gunakan maintenance audit/rebuild lalu cleanup orphan guarded jika audit terbaru menunjukkan master source sudah tidak ada.
+ - Jika writer baru dibuat di masa depan, wajib tambah sync read model dan checklist regression.
+ 
+ 
+@@ -1097,7 +1097,7 @@ products/raw_materials/semi_finished_materials
+ -> compare expected buildStockItemReadModelDocument()
+ -> ResetSafeRepairPanel: Cek Read Model Stok / Rebuild Read Model Stok
+ -> upsert missing/stale stock_item_read_models only
+--> orphan read model = manual review, no auto-delete
++-> orphan read model = guarded cleanup button after latest audit
+ ```
+ 
+ Guard:
+@@ -1105,7 +1105,7 @@ Guard:
+ - Tidak mengubah master stock, `inventory_logs`, transaksi, produksi, HPP, payroll, finance, route/menu, atau role guard.
+ - Setelah Batch 17D-17I, Dashboard/Stock Report memakai read model sebagai path utama; backfill ini menjadi alat repair agar data lama dan reset besar tidak membuat read model stale.
+ - Writer sync realtime sudah dipasang di flow utama, tetapi rebuild tetap diperlukan untuk data lama sebelum patch dan recovery manual.
+-- Orphan tidak dihapus otomatis agar aman terhadap data legacy, source read gagal, atau rules/index yang belum lengkap.
++- Orphan tidak dihapus oleh rebuild. Cleanup orphan hanya lewat tombol guarded yang menghapus dokumen turunan `stock_item_read_models` setelah audit terbaru memastikan master source tidak ada.
+ 
+ ### Helper Integration Map — stock formatter dan trim normalization — 2026-05-17
+ 
+@@ -1193,10 +1193,43 @@ StockReport.jsx
+ -> readStockReportSnapshot(semi_finished_materials)
+ -> readStockReportSnapshot(categories)
+ -> render rows yang berhasil + warning failedReads bila ada source gagal
+--> exportJsonToExcel() dengan status data parsial jika failedReads tidak kosong
++-> exportJsonToExcel() dengan status data parsial jika failedReads tidak kosong dan status terbatas jika read model limit tercapai
+ ```
+ 
+ Guard:
+ - Flow ini read-only; tidak boleh menulis stok, inventory log, transaksi, produksi, atau finance.
+ - Guard partial read bukan pengganti read model/paging. Jika data master stok membesar, desain read model harus batch arsitektur terpisah.
+ - Export XLSX harus mengikuti data yang berhasil dibaca dan filter aktif, serta wajib membawa disclosure parsial ketika ada failedReads.
++
++### Integration Map — Stock Read Model Final Hardening 17J-17M
++
++```text
++Master stock writer / collection label
++-> normalizeStockReadModelSourceType()
++-> aliases raw_material(s) / raw material / bahan_baku / bahan baku
++-> sourceType material/product/semi_finished
++-> stock_item_read_models/{sourceType}__{sourceId}
++```
++
++```text
++Stock Report
++-> fetchStockReportData()
++-> getStockReadModelRows({ includeMeta: true, maxResults })
++-> reportMeta.hasMore / reportMeta.isLimited
++-> StockReport warning + XLSX filter note
++```
++
++```text
++Reset Maintenance
++-> Cek Read Model Stok
++-> Rebuild Read Model Stok: upsert missing/stale only
++-> Cleanup Orphan: delete only stock_item_read_models orphan from latest audit
++-> maintenance log action stock_read_model_rebuild / stock_read_model_orphan_cleanup
++```
++
++Guard:
++- Read model tetap derived projection; kalkulasi stok utama tetap dari master stock dan transaksi.
++- Cleanup orphan tidak boleh menyentuh master collection, inventory log, transaksi, produksi, HPP, payroll, finance, route/menu, atau role guard.
++- Metadata limit Stock Report adalah disclosure sementara; bukan solusi paging/export production-scale.
++- Firestore Rules/index untuk `stock_item_read_models` tetap external/manual karena tidak ada rules/index di ZIP.
++
+diff --git a/src/pages/Laporan/StockReport.jsx b/src/pages/Laporan/StockReport.jsx
+index 5a5035f..55575c5 100644
+--- a/src/pages/Laporan/StockReport.jsx
++++ b/src/pages/Laporan/StockReport.jsx
+@@ -21,6 +21,7 @@ const StockReport = () => {
+   const [loading, setLoading] = useState(true);
+   const [categories, setCategories] = useState([]);
+   const [failedReads, setFailedReads] = useState([]);
++  const [reportMeta, setReportMeta] = useState(null);
+   const [searchTerm, setSearchTerm] = useState("");
+   const [selectedCategory, setSelectedCategory] = useState("all");
+   const [selectedStatus, setSelectedStatus] = useState("all");
+@@ -29,15 +30,22 @@ const StockReport = () => {
+     const loadStockReportData = async () => {
+       try {
+         setLoading(true);
+-        const { inventory: inventoryRows, categories: categoryList, failedReads: readFailures = [] } = await fetchStockReportData();
++        const {
++          inventory: inventoryRows,
++          categories: categoryList,
++          failedReads: readFailures = [],
++          reportMeta: nextReportMeta = null,
++        } = await fetchStockReportData();
+ 
+         setInventory(inventoryRows);
+         setCategories(categoryList);
+         setFailedReads(readFailures);
++        setReportMeta(nextReportMeta);
+       } catch (error) {
+         console.error("Error fetching stock report data:", error);
+         message.error("Gagal memuat data laporan stok.");
+         setFailedReads([]);
++        setReportMeta(null);
+       } finally {
+         setLoading(false);
+       }
+@@ -82,7 +90,9 @@ const StockReport = () => {
+   const lowStockItems = filteredData.filter((item) => item.status === "Kritis" || item.status === "Habis");
+   const criticalStockItems = filteredData.filter((item) => item.status === "Habis");
+   const isPartialStockReport = failedReads.length > 0;
++  const isLimitedStockReport = Boolean(reportMeta?.isLimited);
+   const failedReadsLabel = failedReads.join(", ");
++  const stockReportLimitLabel = reportMeta?.maxResults ? formatNumberId(reportMeta.maxResults) : "-";
+ 
+   const summaryItems = useMemo(
+     () => [
+@@ -131,15 +141,20 @@ const StockReport = () => {
+       message.warning("Export XLSX hanya memuat sumber laporan stok yang berhasil dibaca.");
+     }
+ 
++    if (isLimitedStockReport) {
++      message.warning("Export XLSX hanya memuat data Stock Report yang sudah termuat di batas read model saat ini.");
++    }
++
+     await exportJsonToExcel({
+       title: "Laporan Stok IMS Bunga Flanel",
+-      subtitle: isPartialStockReport
+-        ? "Ekspor stok sesuai filter aktif. PERINGATAN: data laporan parsial."
++      subtitle: isPartialStockReport || isLimitedStockReport
++        ? "Ekspor stok sesuai filter aktif. PERINGATAN: data laporan parsial/terbatas."
+         : "Ekspor stok sesuai filter aktif.",
+       fileName: "laporan-stok",
+       sheetName: "Stock Report",
+       filters: [
+         `Status data: ${isPartialStockReport ? `Parsial - sumber gagal: ${failedReadsLabel}` : "Lengkap sesuai sumber yang berhasil dimuat"}`,
++        `Batas read model: ${isLimitedStockReport ? `Terbatas ${stockReportLimitLabel} row; ada data lanjutan yang belum termuat` : "Tidak terindikasi terbatas"}`,
+         `Kategori: ${selectedCategory === "all" ? "Semua" : selectedCategory}`,
+         `Status: ${selectedStatus === "all" ? "Semua" : selectedStatus}`,
+         `Pencarian: ${searchTerm || "-"}`,
+@@ -352,6 +367,14 @@ const StockReport = () => {
+             description={`Area gagal: ${failedReadsLabel}. Data yang berhasil dibaca tetap ditampilkan agar laporan tidak kosong total. Export XLSX akan ditandai sebagai data parsial.`}
+           />
+         )}
++        {isLimitedStockReport && (
++          <Alert
++            type="warning"
++            showIcon
++            message="Data Stock Report dibatasi oleh read model limit."
++            description={`Saat ini termuat ${formatNumberId(reportMeta?.loadedRows || inventory.length)} dari batas ${stockReportLimitLabel} row. Export XLSX hanya mengikuti data yang sudah termuat dan filter aktif; jalankan export/paging server-side jika data stok sudah melewati batas ini.`}
++          />
++        )}
+         <DataRefreshIndicator loading={loading} dataSource={filteredData} />
+         <Table
+           // AKTIF / GUARDED UI: class standar hanya visual; sumber stok/currentStock/reservedStock/availableStock tidak diubah.
+diff --git a/src/pages/Utilities/ResetMaintenanceData.jsx b/src/pages/Utilities/ResetMaintenanceData.jsx
+index f4f6dd8..3c6a29b 100644
+--- a/src/pages/Utilities/ResetMaintenanceData.jsx
++++ b/src/pages/Utilities/ResetMaintenanceData.jsx
+@@ -680,6 +680,7 @@ const ResetMaintenanceData = () => {
+     loadingTransactionSideEffectRepair,
+     loadingStockReadModelAudit,
+     loadingStockReadModelRepair,
++    loadingStockReadModelCleanup,
+     handleRepairMasterCodeAudit,
+     handleRepairProductionMaintenance,
+     handleRepairStockAudit,
+@@ -690,6 +691,7 @@ const ResetMaintenanceData = () => {
+     handleRepairTransactionSideEffects,
+     handleLoadStockReadModelAudit,
+     handleRepairStockReadModelAudit,
++    handleCleanupStockReadModelOrphans,
+   } = useResetMaintenanceRepairs({
+     createPageMaintenanceLog,
+     loadPreview,
+@@ -1034,6 +1036,8 @@ const ResetMaintenanceData = () => {
+             onLoadStockReadModelAudit={handleLoadStockReadModelAudit}
+             loadingStockReadModelRepair={loadingStockReadModelRepair}
+             onRepairStockReadModelAudit={handleRepairStockReadModelAudit}
++            loadingStockReadModelCleanup={loadingStockReadModelCleanup}
++            onCleanupStockReadModelOrphans={handleCleanupStockReadModelOrphans}
+             stockReadModelAudit={stockReadModelAudit}
+             stockReadModelSummary={stockReadModelAudit?.summary || {}}
+             stockReadModelRows={stockReadModelAudit?.rows || []}
+diff --git a/src/pages/Utilities/components/ResetSafeRepairPanel.jsx b/src/pages/Utilities/components/ResetSafeRepairPanel.jsx
+index 7a65aa7..e857693 100644
+--- a/src/pages/Utilities/components/ResetSafeRepairPanel.jsx
++++ b/src/pages/Utilities/components/ResetSafeRepairPanel.jsx
+@@ -1,4 +1,4 @@
+-import { FileSearchOutlined, SyncOutlined } from "@ant-design/icons";
++import { DeleteOutlined, FileSearchOutlined, SyncOutlined } from "@ant-design/icons";
+ import { Alert, Button, Card, Col, Divider, Popconfirm, Row, Space, Statistic, Table, Tag, Typography } from "antd";
+ import { formatHppUnitCurrencyId } from "../../../utils/formatters/currencyId";
+ import { formatQuantityId } from "../../../utils/formatters/numberId";
+@@ -98,6 +98,8 @@ const ResetSafeRepairPanel = ({
+   onLoadStockReadModelAudit,
+   loadingStockReadModelRepair,
+   onRepairStockReadModelAudit,
++  loadingStockReadModelCleanup,
++  onCleanupStockReadModelOrphans,
+   stockReadModelAudit,
+   stockReadModelSummary = {},
+   stockReadModelRows = [],
+@@ -153,7 +155,7 @@ const ResetSafeRepairPanel = ({
+   const stockSyncDisabled = !stockAuditReady || getRepairPlanCount(stockRepairSummary) <= 0;
+ 
+   return (
+-    <Card title="Repair Turunan Aman" size="small" extra={<Tag color="green">Tidak hapus data</Tag>}>
++    <Card title="Repair Turunan Aman" size="small" extra={<Tag color="green">Guarded</Tag>}>
+       <Space direction="vertical" size={12} style={{ width: "100%" }}>
+         <Text type="secondary">
+           Repair hanya menyamakan field turunan/display/snapshot. Tidak membuat transaksi baru, tidak posting stok ulang, dan tidak menghapus data utama.
+@@ -167,13 +169,13 @@ const ResetSafeRepairPanel = ({
+ 
+         <Divider orientation="left" plain>Stock Read Model Backfill</Divider>
+         <Text type="secondary">
+-          Rebuild hanya menulis collection turunan <Text code>stock_item_read_models</Text>. Tidak mengubah master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance. Orphan read model hanya ditandai review manual dan tidak dihapus otomatis.
++          Rebuild hanya menulis collection turunan <Text code>stock_item_read_models</Text>. Tidak mengubah master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance. Cleanup orphan hanya menghapus dokumen read model turunan setelah audit terbaru menunjukkan master source sudah tidak ada.
+         </Text>
+         <Row gutter={[8, 8]}>
+-          <Col xs={24} md={8}>
++          <Col xs={24} md={6}>
+             <Button block icon={<FileSearchOutlined />} loading={loadingStockReadModelAudit} onClick={onLoadStockReadModelAudit}>Cek Read Model Stok</Button>
+           </Col>
+-          <Col xs={24} md={8}>
++          <Col xs={24} md={6}>
+             {renderGuardedRepairButton({
+               label: "Rebuild Read Model Stok",
+               title: "Rebuild stock read model?",
+@@ -184,7 +186,27 @@ const ResetSafeRepairPanel = ({
+               summary: stockReadModelSummary,
+             })}
+           </Col>
+-          <Col xs={24} md={8}>
++          <Col xs={24} md={6}>
++            <Popconfirm
++              title="Cleanup orphan read model stok?"
++              description="Aksi ini hanya menghapus dokumen turunan stock_item_read_models yang tidak punya master source pada audit terbaru. Master stock, inventory log, transaksi, produksi, HPP, payroll, dan finance tidak disentuh."
++              okText="Ya, hapus orphan"
++              cancelText="Batal"
++              disabled={!stockReadModelAudit || !stockReadModelSummary.orphanCount}
++              onConfirm={onCleanupStockReadModelOrphans}
++            >
++              <Button
++                block
++                danger
++                icon={<DeleteOutlined />}
++                loading={loadingStockReadModelCleanup}
++                disabled={!stockReadModelAudit || !stockReadModelSummary.orphanCount}
++              >
++                Cleanup Orphan{stockReadModelSummary.orphanCount ? ` (${stockReadModelSummary.orphanCount})` : ""}
++              </Button>
++            </Popconfirm>
++          </Col>
++          <Col xs={24} md={6}>
+             <Statistic title="Missing/Stale" value={(stockReadModelSummary.missingCount || 0) + (stockReadModelSummary.staleCount || 0)} />
+           </Col>
+         </Row>
+@@ -197,7 +219,7 @@ const ResetSafeRepairPanel = ({
+               : stockReadModelSummary.manualReviewCount
+                 ? `${stockReadModelSummary.manualReviewCount} read model orphan perlu review manual.`
+                 : "Stock read model sudah sinkron dengan master stock."}
+-            description={`Master dicek: ${stockReadModelSummary.sourceRecords || 0}. Missing: ${stockReadModelSummary.missingCount || 0}. Stale: ${stockReadModelSummary.staleCount || 0}. Orphan manual: ${stockReadModelSummary.orphanCount || 0}.`}
++            description={`Master dicek: ${stockReadModelSummary.sourceRecords || 0}. Missing: ${stockReadModelSummary.missingCount || 0}. Stale: ${stockReadModelSummary.staleCount || 0}. Orphan cleanup: ${stockReadModelSummary.orphanCount || 0}.`}
+           />
+         )}
+         {stockReadModelRows.some((record) => record.category !== "ok") && (
+diff --git a/src/pages/Utilities/hooks/useResetMaintenanceRepairs.js b/src/pages/Utilities/hooks/useResetMaintenanceRepairs.js
+index b57b2a9..0ae6285 100644
+--- a/src/pages/Utilities/hooks/useResetMaintenanceRepairs.js
++++ b/src/pages/Utilities/hooks/useResetMaintenanceRepairs.js
+@@ -31,6 +31,7 @@ import {
+   repairTransactionSideEffects,
+ } from "../../../services/Maintenance/transactionSideEffectRepairService";
+ import {
++  deleteOrphanStockReadModelsMaintenance,
+   getStockReadModelMaintenanceAudit,
+   rebuildStockReadModelMaintenance,
+ } from "../../../services/Maintenance/stockReadModelMaintenanceService";
+@@ -67,6 +68,7 @@ const useResetMaintenanceRepairs = ({
+   const [loadingTransactionSideEffectRepair, setLoadingTransactionSideEffectRepair] = useState(false);
+   const [loadingStockReadModelAudit, setLoadingStockReadModelAudit] = useState(false);
+   const [loadingStockReadModelRepair, setLoadingStockReadModelRepair] = useState(false);
++  const [loadingStockReadModelCleanup, setLoadingStockReadModelCleanup] = useState(false);
+ 
+   const handleLoadStockReadModelAudit = useCallback(async () => {
+     try {
+@@ -113,6 +115,34 @@ const useResetMaintenanceRepairs = ({
+     }
+   }, [createPageMaintenanceLog, loadPreview, setStockReadModelAudit]);
+ 
++  const handleCleanupStockReadModelOrphans = useCallback(async () => {
++    try {
++      setLoadingStockReadModelCleanup(true);
++      const result = await deleteOrphanStockReadModelsMaintenance();
++      await createPageMaintenanceLog({
++        actionType: "stock_read_model_orphan_cleanup",
++        mode: "repair",
++        modules: ["inventory", "read_model"],
++        summary: result?.summary || {},
++        resultBuckets: { deleted: result?.deletedCount || 0 },
++        affectedCollections: result?.affectedCollections || ["stock_item_read_models"],
++        affectedCount: result?.deletedCount || 0,
++        dryRun: false,
++        status: "success",
++        note: "Cleanup orphan stock read model hanya menghapus dokumen turunan stock_item_read_models yang tidak punya master source pada audit terbaru. Tidak mengubah master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance.",
++      });
++      message.success(result?.message || "Cleanup orphan stock read model selesai.");
++      const nextAudit = await getStockReadModelMaintenanceAudit();
++      setStockReadModelAudit(nextAudit);
++      await loadPreview(false);
++    } catch (error) {
++      console.error(error);
++      message.error(error?.message || "Gagal menjalankan cleanup orphan stock read model.");
++    } finally {
++      setLoadingStockReadModelCleanup(false);
++    }
++  }, [createPageMaintenanceLog, loadPreview, setStockReadModelAudit]);
++
+   const handleRepairMasterCodeAudit = useCallback(async () => {
+     try {
+       setLoadingMasterCodeRepair(true);
+@@ -358,6 +388,7 @@ const useResetMaintenanceRepairs = ({
+     loadingTransactionSideEffectRepair,
+     loadingStockReadModelAudit,
+     loadingStockReadModelRepair,
++    loadingStockReadModelCleanup,
+     handleRepairMasterCodeAudit,
+     handleRepairProductionMaintenance,
+     handleRepairStockAudit,
+@@ -368,6 +399,7 @@ const useResetMaintenanceRepairs = ({
+     handleRepairTransactionSideEffects,
+     handleLoadStockReadModelAudit,
+     handleRepairStockReadModelAudit,
++    handleCleanupStockReadModelOrphans,
+   };
+ };
+ 
+diff --git a/src/services/Inventory/stockReadModelService.js b/src/services/Inventory/stockReadModelService.js
+index 6b55c01..8618804 100644
+--- a/src/services/Inventory/stockReadModelService.js
++++ b/src/services/Inventory/stockReadModelService.js
+@@ -265,19 +265,34 @@ export const getStockReadModelsBySourceType = async ({ sourceType = "", maxResul
+ };
+ 
+ 
+-export const getStockReadModelRows = async ({ maxResults = 1000 } = {}) => {
++export const getStockReadModelRows = async ({ maxResults = 1000, includeMeta = false } = {}) => {
+   const normalizedLimit = Math.max(1, Number(maxResults || 1000));
++  const queryLimit = includeMeta ? normalizedLimit + 1 : normalizedLimit;
+   const stockReadModelQuery = query(
+     collection(db, STOCK_ITEM_READ_MODELS_COLLECTION),
+-    firestoreLimit(normalizedLimit),
++    firestoreLimit(queryLimit),
+   );
+   const snapshot = await getDocs(stockReadModelQuery);
+-
+-  return snapshot.docs
++  const hasMore = includeMeta && snapshot.docs.length > normalizedLimit;
++  const rows = snapshot.docs
++    .slice(0, normalizedLimit)
+     .map(toStockReadModelRow)
+     .sort((left, right) => {
+       const sourceCompare = String(left.sourceType || '').localeCompare(String(right.sourceType || ''));
+       if (sourceCompare !== 0) return sourceCompare;
+       return String(left.name || '').localeCompare(String(right.name || ''));
+     });
++
++  if (!includeMeta) return rows;
++
++  return {
++    rows,
++    meta: {
++      collection: STOCK_ITEM_READ_MODELS_COLLECTION,
++      maxResults: normalizedLimit,
++      loadedRows: rows.length,
++      hasMore,
++      isLimited: hasMore,
++    },
++  };
+ };
+diff --git a/src/services/Laporan/stockReportService.js b/src/services/Laporan/stockReportService.js
+index ca5c828..510a6eb 100644
+--- a/src/services/Laporan/stockReportService.js
++++ b/src/services/Laporan/stockReportService.js
+@@ -28,7 +28,25 @@ const readStockReportSnapshot = async (key, requestPromise) => {
+   }
+ };
+ 
+-const readStockReportRowsFromMasterFallback = async () => {
++const buildStockReportMeta = ({
++  dataSource = "stock_item_read_models",
++  maxResults = 0,
++  loadedRows = 0,
++  activeRows = 0,
++  hasMore = false,
++  isLimited = false,
++  fallbackReason = "",
++} = {}) => ({
++  dataSource,
++  maxResults,
++  loadedRows,
++  activeRows,
++  hasMore,
++  isLimited,
++  fallbackReason,
++});
++
++const readStockReportRowsFromMasterFallback = async ({ fallbackReason = "" } = {}) => {
+   const stockReportReads = await Promise.all([
+     readStockReportSnapshot("raw_materials_fallback", getDocs(collection(db, "raw_materials"))),
+     readStockReportSnapshot("products_fallback", getDocs(collection(db, "products"))),
+@@ -50,16 +68,24 @@ const readStockReportRowsFromMasterFallback = async () => {
+     ? mapInventorySnapshotToReportRows(dataByKey.semi_finished_materials_fallback, "Semi Finished")
+     : [];
+ 
++  const inventory = [...rawMaterialsData, ...productsData, ...semiFinishedData];
++
+   return {
+-    inventory: [...rawMaterialsData, ...productsData, ...semiFinishedData],
++    inventory,
+     failedReads: stockReportReads.filter((item) => item.error).map((item) => item.key),
+     dataSource: "master_stock_fallback",
++    reportMeta: buildStockReportMeta({
++      dataSource: "master_stock_fallback",
++      loadedRows: inventory.length,
++      activeRows: inventory.length,
++      fallbackReason,
++    }),
+   };
+ };
+ 
+ const readStockReportRows = async ({ maxResults = 5000 } = {}) => {
+   try {
+-    const inventory = await getStockReadModelRows({ maxResults });
++    const { rows: inventory, meta } = await getStockReadModelRows({ maxResults, includeMeta: true });
+     const activeInventory = inventory.filter((item) => item.isActive !== false);
+ 
+     if (activeInventory.length > 0) {
+@@ -67,17 +93,22 @@ const readStockReportRows = async ({ maxResults = 5000 } = {}) => {
+         inventory: activeInventory,
+         failedReads: [],
+         dataSource: "stock_item_read_models",
++        reportMeta: buildStockReportMeta({
++          ...meta,
++          dataSource: "stock_item_read_models",
++          activeRows: activeInventory.length,
++        }),
+       };
+     }
+ 
+-    const fallbackResult = await readStockReportRowsFromMasterFallback();
++    const fallbackResult = await readStockReportRowsFromMasterFallback({ fallbackReason: "stock_item_read_models_empty_fallback" });
+     return {
+       ...fallbackResult,
+       failedReads: [...fallbackResult.failedReads, "stock_item_read_models_empty_fallback"],
+     };
+   } catch (error) {
+     console.warn("Gagal memuat stock_item_read_models Stock Report, fallback ke master stock:", error);
+-    const fallbackResult = await readStockReportRowsFromMasterFallback();
++    const fallbackResult = await readStockReportRowsFromMasterFallback({ fallbackReason: "stock_item_read_models_fallback" });
+     return {
+       ...fallbackResult,
+       failedReads: [...fallbackResult.failedReads, "stock_item_read_models_fallback"],
+@@ -122,5 +153,10 @@ export const fetchStockReportData = async ({ maxResults = 5000 } = {}) => {
+     categories,
+     failedReads: [...stockRowsResult.failedReads, ...categoryResult.failedReads],
+     dataSource: stockRowsResult.dataSource,
++    reportMeta: stockRowsResult.reportMeta || buildStockReportMeta({
++      dataSource: stockRowsResult.dataSource,
++      loadedRows: stockRowsResult.inventory.length,
++      activeRows: stockRowsResult.inventory.length,
++    }),
+   };
+ };
+diff --git a/src/services/Maintenance/stockReadModelMaintenanceService.js b/src/services/Maintenance/stockReadModelMaintenanceService.js
+index f6d9b22..8642621 100644
+--- a/src/services/Maintenance/stockReadModelMaintenanceService.js
++++ b/src/services/Maintenance/stockReadModelMaintenanceService.js
+@@ -130,6 +130,8 @@ const omitRepairPayload = (row = {}) => {
+   return publicRow;
+ };
+ 
++const getOrphanRows = (rows = []) => rows.filter((row) => row.issueType === "orphan" && safeTrim(row.readModelId));
++
+ const buildStockReadModelAudit = async ({ includePayload = false, syncedAt = null } = {}) => {
+   const expectedRows = [];
+   const expectedIds = new Set();
+@@ -219,7 +221,7 @@ const buildStockReadModelAudit = async ({ includePayload = false, syncedAt = nul
+ // - Rebuild hanya upsert dokumen missing/stale ke collection stock_item_read_models.
+ // Guard:
+ // - Tidak mengubah master stock, inventory_logs, transaksi, produksi, payroll, HPP, atau finance.
+-// - Orphan read model hanya ditandai manual review dan tidak dihapus otomatis.
++// - Orphan read model tidak dihapus oleh rebuild; cleanup orphan punya handler guarded terpisah.
+ // =====================================================
+ export const getStockReadModelMaintenanceAudit = async () => {
+   const rows = await buildStockReadModelAudit({ includePayload: false });
+@@ -264,3 +266,33 @@ export const rebuildStockReadModelMaintenance = async () => {
+     summary: buildSummary(rows),
+   };
+ };
++
++export const deleteOrphanStockReadModelsMaintenance = async () => {
++  const rows = await buildStockReadModelAudit({ includePayload: false });
++  const orphanRows = getOrphanRows(rows);
++  let batch = writeBatch(db);
++  let operationCount = 0;
++  let deletedCount = 0;
++
++  for (const orphanRow of orphanRows) {
++    batch.delete(doc(db, STOCK_ITEM_READ_MODELS_COLLECTION, orphanRow.readModelId));
++    operationCount += 1;
++    deletedCount += 1;
++
++    if (operationCount >= BATCH_LIMIT) {
++      await batch.commit();
++      batch = writeBatch(db);
++      operationCount = 0;
++    }
++  }
++
++  if (operationCount > 0) await batch.commit();
++
++  return {
++    message: `Cleanup orphan stock read model selesai. ${deletedCount} dokumen turunan dihapus tanpa mengubah master stock.`,
++    deletedCount,
++    affectedCollections: [STOCK_ITEM_READ_MODELS_COLLECTION],
++    summary: buildSummary(rows),
++  };
++};
++
+diff --git a/src/utils/stock/stockHelpers.js b/src/utils/stock/stockHelpers.js
+index e3f0ca4..b7d6064 100644
+--- a/src/utils/stock/stockHelpers.js
++++ b/src/utils/stock/stockHelpers.js
+@@ -192,6 +192,10 @@ const STOCK_READ_MODEL_SOURCE_TYPE_ALIASES = {
+   material: 'material',
+   raw_material: 'material',
+   raw_materials: 'material',
++  'raw material': 'material',
++  'raw-material': 'material',
++  bahan_baku: 'material',
++  bahanbaku: 'material',
+   'bahan baku': 'material',
+   product: 'product',
+   products: 'product',

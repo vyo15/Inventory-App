@@ -1,6 +1,5 @@
 import {
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -9,7 +8,6 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  updateDoc,
   where,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -38,6 +36,10 @@ import {
   getSupplierLink,
   getSupplierReferenceId,
 } from './suppliersService';
+import {
+  deleteStockItemReadModelInTransaction,
+  setStockItemReadModelInTransaction,
+} from '../Inventory/stockReadModelService';
 
 const COLLECTION_NAME = 'raw_materials';
 
@@ -608,6 +610,11 @@ export const createRawMaterial = async (values = {}, suppliers = []) => {
     ===================================================== */
     codeReservation.commit();
     transaction.set(ref, payload);
+    setStockItemReadModelInTransaction(transaction, { id: ref.id, ...payload }, {
+      sourceType: 'material',
+      sourceCollection: COLLECTION_NAME,
+      lastSyncedFrom: 'rawMaterialsService.createRawMaterial',
+    });
     createdId = ref.id;
   });
 
@@ -644,20 +651,57 @@ export const updateRawMaterial = async (id, values = {}, suppliers = []) => {
     const existingMaterial = enrichRawMaterial({ id: snapshot.id, ...snapshot.data() });
     const payload = normalizeRawMaterialMetadataPayload({ ...values, code: normalizedCode }, suppliers, existingMaterial);
     transaction.update(ref, payload);
+    setStockItemReadModelInTransaction(transaction, { ...existingMaterial, ...payload, id }, {
+      sourceType: 'material',
+      sourceCollection: COLLECTION_NAME,
+      lastSyncedFrom: 'rawMaterialsService.updateRawMaterial',
+    });
   });
 
   return id;
 };
 
 export const removeRawMaterial = async (id) => {
-  await deleteDoc(doc(db, COLLECTION_NAME, id));
+  const ref = doc(db, COLLECTION_NAME, id);
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) {
+      throw new Error('Bahan baku tidak ditemukan.');
+    }
+
+    transaction.delete(ref);
+    deleteStockItemReadModelInTransaction(transaction, {
+      sourceType: 'material',
+      sourceId: id,
+    });
+  });
+
   return id;
 };
 
 export const toggleRawMaterialActive = async (id, isActive) => {
-  await updateDoc(doc(db, COLLECTION_NAME, id), {
-    isActive: Boolean(isActive),
-    updatedAt: serverTimestamp(),
+  const ref = doc(db, COLLECTION_NAME, id);
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) {
+      throw new Error('Bahan baku tidak ditemukan.');
+    }
+
+    const existingMaterial = enrichRawMaterial({ id: snapshot.id, ...snapshot.data() });
+    const payload = {
+      isActive: Boolean(isActive),
+      updatedAt: serverTimestamp(),
+    };
+
+    transaction.update(ref, payload);
+    setStockItemReadModelInTransaction(transaction, { ...existingMaterial, ...payload, id }, {
+      sourceType: 'material',
+      sourceCollection: COLLECTION_NAME,
+      lastSyncedFrom: 'rawMaterialsService.toggleRawMaterialActive',
+    });
   });
+
   return id;
 };

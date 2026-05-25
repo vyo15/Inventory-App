@@ -32,7 +32,6 @@ import {
 import {
   calculateMaterialUsageLine,
   calculateOutputLine,
-  calculateProductionMonitoring,
 } from "../../constants/productionWorkLogOptions";
 import { calculateWeightedAverage, normalizeStockSnapshot, toNumber } from "../../utils/stock/stockHelpers";
 import {
@@ -43,15 +42,19 @@ import {
 import {
   PRODUCTION_STEPS_COLLECTION_NAME,
   assertResolvedVariantContract,
+  buildProductionOutputAuditMetadata,
   buildWorkLogCostSummary,
+  buildWorkLogReservationMap,
   filterActiveLike,
   getCollectionNameByItemType,
   getItemUnitCostSnapshot,
   normalizeMaterialVariantStrategy,
+  normalizeProductionWorkLogPayload as normalizePayload,
   normalizeReferenceItem,
   resolveCompletedWorkLogAccruedLaborCost,
   safeTrim,
   shouldLineReadVariantStrictly,
+  validateProductionWorkLogPayload,
 } from "./helpers/productionWorkLogsServiceHelpers";
 import {
   applyLockedWorkLogCoreFields,
@@ -96,235 +99,9 @@ const readCollectionDocsSafely = async (
 };
 
 // =====================================================
-// Normalize material usages
-// =====================================================
-const normalizeMaterialUsages = (lines = []) =>
-  lines.map((line, index) =>
-    calculateMaterialUsageLine({
-      id: line.id || `usage-${Date.now()}-${index}`,
-      itemType: line.itemType || "raw_material",
-      itemId: line.itemId || "",
-      itemCode: safeTrim(line.itemCode),
-      itemName: safeTrim(line.itemName),
-      unit: safeTrim(line.unit) || "pcs",
-      plannedQty: toNumber(line.plannedQty || 0),
-      actualQty: toNumber(line.actualQty || 0),
-      costPerUnitSnapshot: toNumber(line.costPerUnitSnapshot || 0),
-      materialHasVariants: Boolean(line.materialHasVariants),
-      materialVariantStrategy: safeTrim(line.materialVariantStrategy) || (line.materialHasVariants ? "fixed" : "none"),
-      resolvedVariantKey: safeTrim(line.resolvedVariantKey),
-      resolvedVariantLabel: safeTrim(line.resolvedVariantLabel),
-      stockSourceType: safeTrim(line.stockSourceType) || (line.resolvedVariantKey ? "variant" : "master"),
-      stockDeducted: Boolean(line.stockDeducted),
-      stockDeductedAt: line.stockDeductedAt || null,
-      notes: safeTrim(line.notes),
-    }),
-  );
-
-// =====================================================
-// Normalize outputs
-// =====================================================
-const normalizeOutputs = (lines = []) =>
-  lines.map((line, index) =>
-    calculateOutputLine({
-      id: line.id || `output-${Date.now()}-${index}`,
-      outputType: line.outputType || "semi_finished_material",
-      outputIdRef: line.outputIdRef || "",
-      outputCode: safeTrim(line.outputCode),
-      outputName: safeTrim(line.outputName),
-      unit: safeTrim(line.unit) || "pcs",
-      goodQty: toNumber(line.goodQty || 0),
-      rejectQty: toNumber(line.rejectQty || 0),
-      reworkQty: toNumber(line.reworkQty || 0),
-      costPerUnit: toNumber(line.costPerUnit || 0),
-      outputHasVariants: Boolean(line.outputHasVariants),
-      outputVariantKey: safeTrim(line.outputVariantKey),
-      outputVariantLabel: safeTrim(line.outputVariantLabel),
-      stockSourceType: safeTrim(line.stockSourceType) || (line.outputVariantKey ? "variant" : "master"),
-      stockAdded: Boolean(line.stockAdded),
-      stockAddedAt: line.stockAddedAt || null,
-      notes: safeTrim(line.notes),
-    }),
-  );
-
-// =====================================================
-// Normalize payload work log
-// =====================================================
-const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
-  const materialUsages = normalizeMaterialUsages(values.materialUsages || []);
-  const outputs = normalizeOutputs(values.outputs || []);
-  const monitoring = calculateProductionMonitoring(values.productionProfile || {}, values);
-
-  const materialCostActual = materialUsages.reduce(
-    (sum, item) => sum + toNumber(item.totalCostSnapshot || 0),
-    0,
-  );
-
-  const laborCostActual = toNumber(values.laborCostActual || 0);
-  const overheadCostActual = toNumber(values.overheadCostActual || 0);
-  const totalCostActual =
-    materialCostActual + laborCostActual + overheadCostActual;
-
-  const goodQty = toNumber(values.goodQty || 0);
-  const costPerGoodUnit = goodQty > 0 ? totalCostActual / goodQty : 0;
-
-  const normalizedWorkNumber = safeTrim(values.workNumber).toUpperCase();
-  const payload = {
-    workNumber: normalizedWorkNumber,
-    code: normalizedWorkNumber,
-    referenceNumber: normalizedWorkNumber,
-    sourceRef: normalizedWorkNumber,
-    workDate: values.workDate || null,
-
-    // SECTION: link BOM
-    bomId: values.bomId || "",
-    bomCode: safeTrim(values.bomCode),
-    bomName: safeTrim(values.bomName),
-    bomVersion: values.bomVersion ?? null,
-
-    // SECTION: link Production Order
-    productionOrderId: values.productionOrderId || "",
-    productionOrderCode: safeTrim(values.productionOrderCode),
-    productionOrderStatusSnapshot: safeTrim(
-      values.productionOrderStatusSnapshot,
-    ),
-
-    productionProfileId: values.productionProfileId || "",
-    productionProfileName: safeTrim(values.productionProfileName),
-
-    baseInputQty: toNumber(monitoring.baseInputQty || values.baseInputQty || 0),
-    baseInputUnit: safeTrim(values.baseInputUnit),
-    theoreticalOutputQty: toNumber(monitoring.theoreticalOutputQty || values.theoreticalOutputQty || 0),
-    theoreticalFlowerEquivalent: toNumber(monitoring.theoreticalFlowerEquivalent || values.theoreticalFlowerEquivalent || 0),
-    leftoverLeafQty: toNumber(monitoring.leftoverLeafQty || values.leftoverLeafQty || 0),
-    leftoverStemQty: toNumber(monitoring.leftoverStemQty || values.leftoverStemQty || 0),
-    leftoverPetalFlowerEquivalent: toNumber(monitoring.leftoverPetalFlowerEquivalent || values.leftoverPetalFlowerEquivalent || 0),
-    missPetalFlowerEquivalent: toNumber(monitoring.missPetalFlowerEquivalent || values.missPetalFlowerEquivalent || 0),
-    missPetalQty: toNumber(monitoring.missPetalQty || values.missPetalQty || 0),
-    missLeafQty: toNumber(monitoring.missLeafQty || values.missLeafQty || 0),
-    missStemQty: toNumber(monitoring.missStemQty || values.missStemQty || 0),
-    missPercent: toNumber(monitoring.missPercent || values.missPercent || 0),
-    missStatus: values.missStatus || monitoring.missStatus || 'normal',
-
-    // SECTION: target
-    targetType: values.targetType || "product",
-    targetId: values.targetId || "",
-    targetCode: safeTrim(values.targetCode),
-    targetName: safeTrim(values.targetName),
-    targetUnit: safeTrim(values.targetUnit) || "pcs",
-    targetHasVariants: values.targetHasVariants === true,
-    targetVariantKey: safeTrim(values.targetVariantKey),
-    targetVariantLabel: safeTrim(values.targetVariantLabel),
-
-    // SECTION: step
-    stepId: values.stepId || "",
-    stepCode: safeTrim(values.stepCode),
-    stepName: safeTrim(values.stepName),
-    sequenceNo: toNumber(values.sequenceNo || 1),
-
-    // SECTION: source
-    // IMS NOTE [AKTIF/GUARDED]: Work Log baru default In Progress dari Production Order; UI tidak membuka flow draft/manual.
-    sourceType: values.sourceType || "manual",
-    status: values.status || "in_progress",
-
-    // SECTION: qty
-    plannedQty: toNumber(values.plannedQty || 0),
-    actualOutputQty: toNumber(values.actualOutputQty || 0),
-    goodQty: toNumber(values.goodQty || 0),
-    rejectQty: toNumber(values.rejectQty || 0),
-    reworkQty: toNumber(values.reworkQty || 0),
-    scrapQty: toNumber(values.scrapQty || 0),
-
-    // SECTION: time
-    startedAt: values.startedAt || null,
-    completedAt: values.completedAt || null,
-    durationMinutesActual: toNumber(values.durationMinutesActual || 0),
-
-    // SECTION: workers
-    workerIds: Array.isArray(values.workerIds) ? values.workerIds : [],
-    workerCodes: Array.isArray(values.workerCodes) ? values.workerCodes : [],
-    workerNames: Array.isArray(values.workerNames) ? values.workerNames : [],
-    workerCount: toNumber(values.workerCount || 0),
-
-    // SECTION: costing
-    materialCostActual,
-    laborCostActual,
-    overheadCostActual,
-    totalCostActual,
-    costPerGoodUnit,
-
-    // SECTION: stock/payroll flags
-    stockConsumptionStatus: values.stockConsumptionStatus || "pending",
-    stockOutputStatus: values.stockOutputStatus || "pending",
-    payrollCalculated: Boolean(values.payrollCalculated),
-    payrollCalculationStatus: values.payrollCalculationStatus || "pending",
-
-    // SECTION: lines
-    materialUsages,
-    outputs,
-
-    notes: safeTrim(values.notes),
-    cancellationReason: safeTrim(values.cancellationReason),
-
-    updatedAt: serverTimestamp(),
-    updatedBy:
-      currentUser?.email ||
-      currentUser?.displayName ||
-      currentUser?.uid ||
-      "system",
-  };
-
-  if (!isEdit) {
-    payload.createdAt = serverTimestamp();
-    payload.createdBy =
-      currentUser?.email ||
-      currentUser?.displayName ||
-      currentUser?.uid ||
-      "system";
-  }
-
-  return payload;
-};
-
-// =====================================================
 // Validasi dasar work log
 // =====================================================
-export const validateProductionWorkLog = (values = {}) => {
-  const errors = {};
-
-  if (!values.workDate) {
-    errors.workDate = "Tanggal work log wajib diisi";
-  }
-
-  if (!values.targetType) {
-    errors.targetType = "Target type wajib dipilih";
-  }
-
-  if (!values.targetId) {
-    errors.targetId = "Target item wajib dipilih";
-  }
-
-  if (!values.stepId) {
-    errors.stepId = "Step wajib dipilih";
-  }
-
-  if (toNumber(values.plannedQty || 0) <= 0) {
-    errors.plannedQty = "Planned qty harus lebih dari 0";
-  }
-
-  if (
-    !Array.isArray(values.materialUsages) ||
-    values.materialUsages.length === 0
-  ) {
-    errors.materialUsages = "Minimal harus ada 1 material usage";
-  }
-
-  if (!Array.isArray(values.outputs) || values.outputs.length === 0) {
-    errors.outputs = "Minimal harus ada 1 output";
-  }
-
-  return errors;
-};
+export const validateProductionWorkLog = validateProductionWorkLogPayload;
 
 // =====================================================
 // Reference data work log
@@ -921,92 +698,6 @@ const addInventoryLogInTransaction = (transaction, {
 // - GUARDED karena tidak menyentuh quantityChange, stock mutation, HPP, payroll, atau guard complete.
 // - Catatan: log yang belum membawa worker metadata tetap tidak boleh merusak audit tampilan.
 // =====================================================
-const normalizeAuditStringArray = (value = []) =>
-  Array.isArray(value) ? value.map((item) => safeTrim(item)).filter(Boolean) : [];
-
-const buildProductionWorkerSummary = ({ workerNames = [], workerCodes = [], workerIds = [], workerCount = 0 } = {}) => {
-  const readableWorkers = workerNames.length ? workerNames : workerCodes.length ? workerCodes : workerIds;
-
-  if (readableWorkers.length) {
-    return `Operator: ${readableWorkers.join(', ')}`;
-  }
-
-  if (toNumber(workerCount) > 0) {
-    return `Operator: ${toNumber(workerCount)} orang`;
-  }
-
-  return '';
-};
-
-const buildProductionOutputAuditMetadata = ({ workLog = {}, productionOrder = null, outputResolution = {} } = {}) => {
-  const workerIds = normalizeAuditStringArray(workLog.workerIds);
-  const workerNames = normalizeAuditStringArray(workLog.workerNames);
-  const workerCodes = normalizeAuditStringArray(workLog.workerCodes);
-  const workerCount = toNumber(
-    workLog.workerCount || workerNames.length || workerCodes.length || workerIds.length || 0,
-  );
-  const workerSummary = buildProductionWorkerSummary({
-    workerIds,
-    workerNames,
-    workerCodes,
-    workerCount,
-  });
-  const workNumber = safeTrim(workLog.workNumber);
-  const productionOrderCode = safeTrim(productionOrder?.code || workLog.productionOrderCode);
-  const stepName = safeTrim(workLog.stepName);
-  const workLogNote = safeTrim(workLog.notes);
-  // =====================================================
-  // SECTION: Catatan inventory log output produksi — AKTIF / GUARDED
-  // Fungsi:
-  // - Menyimpan catatan output produksi yang ringkas untuk kolom Catatan Stock Management.
-  //
-  // Dipakai oleh:
-  // - completeProductionWorkLog saat membuat inventory log `production_output_in`.
-  //
-  // Alasan perubahan:
-  // - Work Log, PO, dan Step sudah disimpan sebagai metadata terpisah dan tampil di kolom Referensi Audit; menaruhnya lagi di `note` membuat UI dobel.
-  //
-  // Catatan cleanup:
-  // - Metadata `workNumber`, `productionOrderCode`, dan `stepName` tetap disimpan untuk audit/search; hanya string `note` yang dibuat compact.
-  //
-  // Risiko:
-  // - Jangan hapus metadata referensi dari payload karena Stock Management, audit log, dan pencarian masih membutuhkannya.
-  // =====================================================
-  const noteParts = [
-    workerSummary,
-    workLogNote ? `Catatan WL: ${workLogNote}` : '',
-  ].filter(Boolean);
-
-  return {
-    workLogRefId: workLog.id || '',
-    workNumber,
-    productionOrderId: productionOrder?.id || workLog.productionOrderId || '',
-    productionOrderCode,
-    stepName,
-    movementSource: 'production',
-    variantKey: outputResolution.resolvedVariantKey || '',
-    variantLabel: outputResolution.resolvedVariantLabel || '',
-    workerIds,
-    workerNames,
-    workerCodes,
-    workerCount,
-    workerSummary,
-    operatorText: workerSummary,
-    workLogNote,
-    note: noteParts.join(' | '),
-  };
-};
-
-// =====================================================
-// Create work log langsung dari Production Order
-// =====================================================
-// =====================================================
-// Create work log dari PO + langsung mulai produksi
-// Catatan maintainability:
-// - 1 PO = 1 Work Log
-// - Start Production memotong stok bahan dari requirement PO
-// - Setelah start, PO -> in_production dan Work Log -> in_progress
-// =====================================================
 export const createProductionWorkLogFromOrder = async (
   orderId,
   extraValues = {},
@@ -1339,28 +1030,6 @@ export const updateProductionWorkLog = async (
 // Helper peta kebutuhan PO untuk referensi qty requirement
 // Digunakan saat complete untuk membaca snapshot kebutuhan dari PO
 // =====================================================
-const buildWorkLogReservationMap = (productionOrder = null) => {
-  const reservedQtyMap = new Map();
-
-  if (!productionOrder) return reservedQtyMap;
-
-  const reservationLines = Array.isArray(productionOrder.materialRequirementLines)
-    ? productionOrder.materialRequirementLines
-    : [];
-
-  reservationLines.forEach((line) => {
-    const key = [
-      line.itemType || '',
-      line.itemId || '',
-      line.resolvedVariantKey || '',
-    ].join('::');
-    const existing = reservedQtyMap.get(key) || 0;
-    reservedQtyMap.set(key, existing + toNumber(line.qtyRequired || 0));
-  });
-
-  return reservedQtyMap;
-};
-
 const getResolvedMaterialStock = ({ line = {}, stockItem = {}, strictVariant = false } = {}) => {
   const materialVariantStrategy = normalizeMaterialVariantStrategy({ line, stockItem });
   const shouldReadVariant = shouldLineReadVariantStrictly({ line, stockItem, strictVariant });

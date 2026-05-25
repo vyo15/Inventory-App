@@ -101,6 +101,7 @@ const ResetMaintenanceData = () => {
   // Log ini hanya mencatat metadata aksi admin, bukan sumber mutasi operasional.
   // ---------------------------------------------------------------------------
   const [actionNote, setActionNote] = useState("");
+  const [stockReadModelAudit, setStockReadModelAudit] = useState(null);
 
   const {
     loadingMasterExportPreview,
@@ -677,6 +678,10 @@ const ResetMaintenanceData = () => {
     loadingPayrollRepair,
     loadingTransactionVariantRepair,
     loadingTransactionSideEffectRepair,
+    loadingStockReadModelAudit,
+    loadingStockReadModelRepair,
+    loadingStockReadModelRestockBackfill,
+    loadingStockReadModelCleanup,
     handleRepairMasterCodeAudit,
     handleRepairProductionMaintenance,
     handleRepairStockAudit,
@@ -685,6 +690,10 @@ const ResetMaintenanceData = () => {
     handleRepairPayrollAudit,
     handleRepairTransactionVariantAudit,
     handleRepairTransactionSideEffects,
+    handleLoadStockReadModelAudit,
+    handleRepairStockReadModelAudit,
+    handleBackfillStockReadModelRestockMetadata,
+    handleCleanupStockReadModelOrphans,
   } = useResetMaintenanceRepairs({
     createPageMaintenanceLog,
     loadPreview,
@@ -699,6 +708,7 @@ const ResetMaintenanceData = () => {
     setPayrollAudit,
     setTransactionVariantAudit,
     setTransactionSideEffectAudit,
+    setStockReadModelAudit,
   });
 
   const transactionSideEffectSummary = useMemo(
@@ -1024,6 +1034,17 @@ const ResetMaintenanceData = () => {
             transactionSideEffectAudit={transactionSideEffectAudit}
             transactionSideEffectSummary={transactionSideEffectSummary}
             transactionSideEffectRows={transactionSideEffectRows}
+            loadingStockReadModelAudit={loadingStockReadModelAudit}
+            onLoadStockReadModelAudit={handleLoadStockReadModelAudit}
+            loadingStockReadModelRepair={loadingStockReadModelRepair}
+            onRepairStockReadModelAudit={handleRepairStockReadModelAudit}
+            loadingStockReadModelRestockBackfill={loadingStockReadModelRestockBackfill}
+            onBackfillStockReadModelRestockMetadata={handleBackfillStockReadModelRestockMetadata}
+            loadingStockReadModelCleanup={loadingStockReadModelCleanup}
+            onCleanupStockReadModelOrphans={handleCleanupStockReadModelOrphans}
+            stockReadModelAudit={stockReadModelAudit}
+            stockReadModelSummary={stockReadModelAudit?.summary || {}}
+            stockReadModelRows={stockReadModelAudit?.rows || []}
             loadingSync={loadingSync}
             onSyncStocks={handleSyncStocks}
             loadingMasterCodeAudit={loadingMasterCodeAudit}

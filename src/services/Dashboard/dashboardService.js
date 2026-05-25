@@ -2,6 +2,10 @@ import { collection, getDocs, limit, orderBy, query, Timestamp, where } from "fi
 import { db } from "../../firebase";
 import { getProductionPlanningDashboardSummary } from "../Produksi/productionPlanningService";
 import { buildStockReadModelRow } from "../../utils/stock/stockHelpers";
+import {
+  getStockIssueReadModels,
+  getStockReadModelRows,
+} from "../Inventory/stockReadModelService";
 
 const EMPTY_PLANNING_PERIOD_SUMMARY = {
   count: 0,
@@ -108,42 +112,6 @@ const buildDashboardStockReadRow = (item = {}, sourceConfig = {}) => {
   };
 };
 
-const buildLowStockRows = (products = [], materials = [], semiFinishedMaterials = []) => {
-  const sourceRows = [
-    { items: products.filter(isStockMonitoringActiveItem), sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[0] },
-    { items: materials.filter(isStockMonitoringActiveItem), sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[1] },
-    { items: semiFinishedMaterials.filter(isStockMonitoringActiveItem), sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[2] },
-  ];
-
-  const rows = sourceRows.flatMap(({ items, sourceConfig }) =>
-    items.map((item) => buildDashboardStockReadRow(item, sourceConfig)),
-  ).filter((item) => item.status !== "Normal");
-
-  return rows.sort((left, right) => left.sortGap - right.sortGap);
-};
-
-const buildStockAuditRows = (products = [], materials = [], semiFinishedMaterials = []) => {
-  const sourceRows = [
-    { items: products, sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[0] },
-    { items: materials, sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[1] },
-    { items: semiFinishedMaterials, sourceConfig: DASHBOARD_STOCK_READ_MODEL_SOURCES[2] },
-  ];
-
-  return sourceRows.flatMap(({ items, sourceConfig }) =>
-    items.map((item) => {
-      const readModelRow = buildDashboardStockReadRow(item, sourceConfig);
-
-      return {
-        ...readModelRow,
-        isNegativeStock: readModelRow.availableStock < 0 || readModelRow.currentStock < 0 || readModelRow.sourceStock < 0,
-        isReservedOverrun: readModelRow.reservedStock > 0 && (
-          readModelRow.reservedStock > Math.max(readModelRow.currentStock, 0) || readModelRow.availableStock < 0
-        ),
-      };
-    }),
-  ).filter((item) => item.isNegativeStock || item.isReservedOverrun);
-};
-
 const getRestockLink = (...values) => {
   const validValue = values.find((value) => String(value || "").trim());
   return validValue ? String(validValue).trim() : "";
@@ -187,6 +155,12 @@ const getPurchaseLastUnitPrice = (purchase = null) => {
   );
 };
 
+const hasRestockReadModelMetadata = (item = {}) => Boolean(
+  getRestockLink(item.restockSupplierId, item.restockSupplierName, item.restockProductLink)
+    || getNumericValue(item.lastPurchasePrice) > 0
+    || item.lastPurchaseAt,
+);
+
 const buildRestockAssistantRows = (lowStockRows = [], purchases = []) => (
   lowStockRows.map((item) => {
     if (item.sourceType !== "material") return item;
@@ -196,6 +170,8 @@ const buildRestockAssistantRows = (lowStockRows = [], purchases = []) => (
       latestPurchase?.supplierId ||
         latestPurchase?.supplierRefId ||
         latestPurchase?.supplierReferenceId ||
+        item.restockSupplierId ||
+        item.supplierId ||
         item.snapshot?.supplierId ||
         "",
     ).trim();
@@ -203,10 +179,12 @@ const buildRestockAssistantRows = (lowStockRows = [], purchases = []) => (
       latestPurchase?.supplierName ||
         latestPurchase?.supplierLabel ||
         latestPurchase?.supplierStoreName ||
+        item.restockSupplierName ||
+        item.supplierName ||
         item.snapshot?.supplierName ||
         "",
     ).trim();
-    const productLink = getPurchaseProductLink(latestPurchase);
+    const productLink = getPurchaseProductLink(latestPurchase) || item.restockProductLink || item.productLink || "";
 
     return {
       ...item,
@@ -214,7 +192,7 @@ const buildRestockAssistantRows = (lowStockRows = [], purchases = []) => (
       restockSupplierId: supplierId,
       restockSupplierName: supplierName,
       restockProductLink: productLink,
-      lastPurchasePrice: getPurchaseLastUnitPrice(latestPurchase),
+      lastPurchasePrice: getPurchaseLastUnitPrice(latestPurchase) || item.lastPurchasePrice || 0,
     };
   })
 );
@@ -285,7 +263,7 @@ const buildDashboardDateRangeQuery = (collectionName, fieldName, dateRange) =>
 // - memusatkan query orchestration Dashboard agar page tidak lagi memegang Firestore query besar;
 // - menjaga Dashboard tetap monitoring read-only dengan range operasional bulan/minggu berjalan.
 // Hubungan flow:
-// - hanya membaca stock master, inventory logs, produksi, payroll, finance, sales, dan planning summary;
+// - membaca stock_item_read_models untuk stok, lalu inventory logs, produksi, payroll, finance, sales, dan planning summary;
 // - tidak membuat transaksi, auto-fix, auto-purchase, auto-payroll, atau mutasi stok.
 // Risiko:
 // - Jika ada query baru yang butuh composite index Firestore, catat di docs dan jangan fallback permanen ke full collection scan.
@@ -322,9 +300,6 @@ const readDashboardSnapshotData = async ({ maxListItems = 5 } = {}) => {
   );
 
   const dashboardReads = await Promise.all([
-    readDashboardSnapshot("products", getDocs(collection(db, "products"))),
-    readDashboardSnapshot("raw_materials", getDocs(collection(db, "raw_materials"))),
-    readDashboardSnapshot("semi_finished_materials", getDocs(collection(db, "semi_finished_materials"))),
     readDashboardSnapshot("inventory_logs", getDocs(recentActivitiesQuery)),
     readDashboardSnapshot("production_orders_focus", getDocs(productionOrdersFocusQuery)),
     readDashboardSnapshot("production_work_logs_running", getDocs(runningWorkLogsQuery)),
@@ -359,10 +334,119 @@ const readDashboardSnapshotData = async ({ maxListItems = 5 } = {}) => {
   };
 };
 
+const readDashboardStockRowsFromReadModel = async ({ maxResults = 1000 } = {}) => {
+  const { rows = [], meta = {} } = await getStockReadModelRows({ maxResults, includeMeta: true });
+
+  return {
+    rows: rows.filter((item) => item.isActive !== false),
+    meta,
+  };
+};
+
+const readDashboardStockIssueRowsFromReadModel = async ({ maxResults = 50 } = {}) => {
+  const { rows = [], meta = {} } = await getStockIssueReadModels({
+    maxResults,
+    includeMeta: true,
+  });
+
+  return {
+    rows: rows.filter((item) => item.isActive !== false),
+    meta,
+  };
+};
+
+const readDashboardStockRowsFromMasterFallback = async () => {
+  const fallbackReads = await Promise.all([
+    readDashboardSnapshot("products_fallback", getDocs(collection(db, "products"))),
+    readDashboardSnapshot("raw_materials_fallback", getDocs(collection(db, "raw_materials"))),
+    readDashboardSnapshot("semi_finished_materials_fallback", getDocs(collection(db, "semi_finished_materials"))),
+  ]);
+  const dataByKey = fallbackReads.reduce((accumulator, item) => {
+    accumulator[item.key] = item.data;
+    return accumulator;
+  }, {});
+
+  return {
+    rows: [
+      ...(dataByKey.products_fallback || []).filter(isStockMonitoringActiveItem).map((item) =>
+        buildDashboardStockReadRow(item, DASHBOARD_STOCK_READ_MODEL_SOURCES[0]),
+      ),
+      ...(dataByKey.raw_materials_fallback || []).filter(isStockMonitoringActiveItem).map((item) =>
+        buildDashboardStockReadRow(item, DASHBOARD_STOCK_READ_MODEL_SOURCES[1]),
+      ),
+      ...(dataByKey.semi_finished_materials_fallback || []).filter(isStockMonitoringActiveItem).map((item) =>
+        buildDashboardStockReadRow(item, DASHBOARD_STOCK_READ_MODEL_SOURCES[2]),
+      ),
+    ],
+    failedReads: fallbackReads.filter((item) => item.error).map((item) => item.key),
+  };
+};
+
+const readDashboardStockRows = async ({ maxResults = 1000, maxIssueResults = 50 } = {}) => {
+  try {
+    const issueResult = await readDashboardStockIssueRowsFromReadModel({
+      maxResults: maxIssueResults,
+    });
+
+    if (issueResult.rows.length > 0) {
+      return {
+        rows: issueResult.rows,
+        failedReads: [],
+        source: "stock_item_read_models_issue_query",
+        meta: issueResult.meta,
+      };
+    }
+
+    // Guard: zero issue rows can be a valid healthy stock state, but an empty
+    // read model after deploy/backfill should still fallback to source master.
+    const probeResult = await getStockReadModelRows({ maxResults: 1, includeMeta: true });
+    if ((probeResult?.rows || []).length > 0) {
+      return {
+        rows: [],
+        failedReads: [],
+        source: "stock_item_read_models_issue_query",
+        meta: issueResult.meta,
+      };
+    }
+
+    const fallbackResult = await readDashboardStockRowsFromMasterFallback();
+    return {
+      ...fallbackResult,
+      failedReads: [...fallbackResult.failedReads, "stock_item_read_models_empty_fallback"],
+      source: "master_stock_fallback",
+    };
+  } catch (error) {
+    console.warn("Gagal memuat issue query stock_item_read_models Dashboard, fallback ke read model umum/master stock:", error);
+
+    try {
+      const fullReadResult = await readDashboardStockRowsFromReadModel({ maxResults });
+
+      if (fullReadResult.rows.length > 0) {
+        return {
+          rows: fullReadResult.rows,
+          failedReads: ["stock_item_read_models_issue_query_fallback"],
+          source: "stock_item_read_models_full_fallback",
+          meta: fullReadResult.meta,
+        };
+      }
+    } catch (fallbackError) {
+      console.warn("Gagal memuat stock_item_read_models Dashboard, fallback ke master stock:", fallbackError);
+    }
+
+    const fallbackResult = await readDashboardStockRowsFromMasterFallback();
+    return {
+      ...fallbackResult,
+      failedReads: [...fallbackResult.failedReads, "stock_item_read_models_fallback"],
+      source: "master_stock_fallback",
+    };
+  }
+};
+
 const fetchPurchaseRecordsForRestockRows = async (lowStockRows = [], { maxItems = 5 } = {}) => {
   const materialIds = [...new Set(
     lowStockRows
       .filter((item) => item.sourceType === "material")
+      .filter((item) => !hasRestockReadModelMetadata(item))
       .map((item) => String(item.id || "").trim())
       .filter(Boolean),
   )].slice(0, maxItems);
@@ -397,12 +481,27 @@ export const readDashboardData = async ({ maxListItems = 5 } = {}) => {
     maxListItems,
   });
 
-  const products = dataByKey.products || [];
-  const materials = dataByKey.raw_materials || [];
-  const semiFinishedMaterials = dataByKey.semi_finished_materials || [];
-  const lowStockRows = buildLowStockRows(products, materials, semiFinishedMaterials);
-  const stockAuditRows = buildStockAuditRows(products, materials, semiFinishedMaterials);
   const dashboardFailedReads = [...failedReads];
+  const stockReadResult = await readDashboardStockRows({
+    maxResults: Math.max(maxListItems * 200, 1000),
+    maxIssueResults: Math.max(maxListItems * 20, 50),
+  });
+  dashboardFailedReads.push(...stockReadResult.failedReads);
+
+  const stockRows = stockReadResult.rows || [];
+  const stockIssueMeta = stockReadResult.meta || {};
+  const lowStockRows = stockRows
+    .filter((item) => item.status !== "Normal")
+    .sort((left, right) => Number(left.sortGap || 0) - Number(right.sortGap || 0));
+  const stockAuditRows = stockRows
+    .map((item) => ({
+      ...item,
+      isNegativeStock: item.isNegativeStock === true || item.availableStock < 0 || item.currentStock < 0 || item.sourceStock < 0,
+      isReservedOverrun: item.isReservedOverrun === true || (item.reservedStock > 0 && (
+        item.reservedStock > Math.max(item.currentStock, 0) || item.availableStock < 0
+      )),
+    }))
+    .filter((item) => item.isNegativeStock || item.isReservedOverrun);
 
   let purchaseRecords = [];
   try {
@@ -425,6 +524,12 @@ export const readDashboardData = async ({ maxListItems = 5 } = {}) => {
       lowStockRows,
       criticalStockPreview,
       stockAuditRows,
+      stockReadModelSource: stockReadResult.source,
+      stockIssueMeta: {
+        ...(stockIssueMeta || {}),
+        loadedRows: stockIssueMeta.loadedRows ?? lowStockRows.length,
+        hasMore: Boolean(stockIssueMeta.hasMore || stockIssueMeta.isLimited),
+      },
       recentActivities: dataByKey.inventory_logs || [],
       productionOrders: dataByKey.production_orders_focus || [],
       workLogs: mergeDashboardRowsById(

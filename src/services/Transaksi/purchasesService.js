@@ -28,6 +28,7 @@ import {
   buildInventoryLogPayload,
   INVENTORY_LOG_COLLECTION,
 } from "../Inventory/inventoryLogService";
+import { setStockItemReadModelInTransaction } from "../Inventory/stockReadModelService";
 import {
   getSupplierDisplayName,
   getSupplierReferenceId,
@@ -399,33 +400,72 @@ export const createPurchaseTransaction = async ({
     purchaseId = purchaseReference.id;
 
     if (normalizedType === "material") {
-      if ((latestItem?.hasVariantOptions || latestItem?.hasVariants) && latestSelectedVariant) {
-        const nextMaterialPayload = applyPurchaseToRawMaterial(latestItem, {
-          qty: normalizedFinalQuantity,
-          unitCost: normalizedActualUnitCost,
-          variantKey: latestSelectedVariant.variantKey,
-          variantName: variantLabel,
-          restockReferencePrice: normalizedRestockReferencePrice,
-        });
+      const nextMaterialPayload = applyPurchaseToRawMaterial(latestItem, {
+        qty: normalizedFinalQuantity,
+        unitCost: normalizedActualUnitCost,
+        variantKey: (latestItem?.hasVariantOptions || latestItem?.hasVariants) && latestSelectedVariant
+          ? latestSelectedVariant.variantKey
+          : undefined,
+        variantName: (latestItem?.hasVariantOptions || latestItem?.hasVariants) && latestSelectedVariant
+          ? variantLabel
+          : undefined,
+        restockReferencePrice: normalizedRestockReferencePrice,
+      });
+      const nextMaterialItem = {
+        ...latestItem,
+        ...nextMaterialPayload,
+        updatedAt: Timestamp.now(),
+      };
 
-        transaction.update(itemReference, nextMaterialPayload);
-      } else {
-        const nextMaterialPayload = applyPurchaseToRawMaterial(latestItem, {
-          qty: normalizedFinalQuantity,
-          unitCost: normalizedActualUnitCost,
-          restockReferencePrice: normalizedRestockReferencePrice,
-        });
-
-        transaction.update(itemReference, nextMaterialPayload);
-      }
+      transaction.update(itemReference, {
+        ...nextMaterialPayload,
+        updatedAt: nextMaterialItem.updatedAt,
+      });
+      setStockItemReadModelInTransaction(transaction, {
+        ...nextMaterialItem,
+        // AKTIF / DERIVED READ MODEL: metadata restock terakhir hanya untuk Dashboard/Report.
+        // Tidak ditulis ke master raw_materials agar business source of truth stok tetap tidak berubah.
+        lastPurchaseAt: purchasePayload.date,
+        lastPurchasePrice: normalizedActualUnitCost,
+        lastPurchaseUnitPrice: normalizedActualUnitCost,
+        restockSupplierId: purchasePayload.supplierId || "",
+        restockSupplierName: purchasePayload.supplierName || "",
+        restockProductLink: purchasePayload.restockProductLink || purchasePayload.productLink || "",
+      }, {
+        sourceType: collectionName,
+        sourceCollection: collectionName,
+        lastSyncedFrom: "purchasesService.createPurchase.material",
+      });
     } else {
       const stockUpdatePayload = applyStockMutationToItem({
         item: latestItem,
         variantKey: productVariantKey || "",
         deltaCurrent: normalizedFinalQuantity,
       });
+      const nextProductItem = {
+        ...latestItem,
+        ...stockUpdatePayload,
+        updatedAt: Timestamp.now(),
+      };
 
-      transaction.update(itemReference, stockUpdatePayload);
+      transaction.update(itemReference, {
+        ...stockUpdatePayload,
+        updatedAt: nextProductItem.updatedAt,
+      });
+      setStockItemReadModelInTransaction(transaction, {
+        ...nextProductItem,
+        // AKTIF / DERIVED READ MODEL: metadata pembelian terakhir untuk audit/report; tidak mengubah master product.
+        lastPurchaseAt: purchasePayload.date,
+        lastPurchasePrice: normalizedActualUnitCost,
+        lastPurchaseUnitPrice: normalizedActualUnitCost,
+        restockSupplierId: purchasePayload.supplierId || "",
+        restockSupplierName: purchasePayload.supplierName || "",
+        restockProductLink: purchasePayload.restockProductLink || purchasePayload.productLink || "",
+      }, {
+        sourceType: collectionName,
+        sourceCollection: collectionName,
+        lastSyncedFrom: "purchasesService.createPurchase.product",
+      });
     }
 
     transaction.set(purchaseReference, purchasePayload);

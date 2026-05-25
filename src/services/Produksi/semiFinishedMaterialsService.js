@@ -13,7 +13,6 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "../../firebase";
@@ -29,6 +28,9 @@ import {
   calculateSemiFinishedTotalsFromVariants,
   normalizeSemiFinishedVariants,
 } from "../../constants/semiFinishedMaterialOptions";
+import {
+  setStockItemReadModelInTransaction,
+} from "../Inventory/stockReadModelService";
 
 const COLLECTION_NAME = "semi_finished_materials";
 
@@ -663,6 +665,11 @@ export const createSemiFinishedMaterial = async (
     ===================================================== */
     codeReservation.commit();
     transaction.set(resultRef, payload);
+    setStockItemReadModelInTransaction(transaction, { id: resultRef.id, ...payload }, {
+      sourceType: "semi_finished",
+      sourceCollection: COLLECTION_NAME,
+      lastSyncedFrom: "semiFinishedMaterialsService.createSemiFinishedMaterial",
+    });
     createdId = resultRef.id;
   });
 
@@ -723,6 +730,11 @@ export const updateSemiFinishedMaterial = async (
       existingMaterial,
     );
     transaction.update(ref, payload);
+    setStockItemReadModelInTransaction(transaction, { ...existingMaterial, ...payload, id }, {
+      sourceType: "semi_finished",
+      sourceCollection: COLLECTION_NAME,
+      lastSyncedFrom: "semiFinishedMaterialsService.updateSemiFinishedMaterial",
+    });
   });
 
   return id;
@@ -735,10 +747,25 @@ export const toggleSemiFinishedMaterialActive = async (
 ) => {
   const ref = doc(db, COLLECTION_NAME, id);
 
-  await updateDoc(ref, {
-    isActive: Boolean(isActive),
-    updatedAt: serverTimestamp(),
-    updatedBy: resolveAuditUser(currentUser),
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) {
+      throw new Error("Data semi finished material tidak ditemukan");
+    }
+
+    const existingMaterial = enrichMaterialWithVariantTotals({ id: snapshot.id, ...snapshot.data() });
+    const payload = {
+      isActive: Boolean(isActive),
+      updatedAt: serverTimestamp(),
+      updatedBy: resolveAuditUser(currentUser),
+    };
+
+    transaction.update(ref, payload);
+    setStockItemReadModelInTransaction(transaction, { ...existingMaterial, ...payload, id }, {
+      sourceType: "semi_finished",
+      sourceCollection: COLLECTION_NAME,
+      lastSyncedFrom: "semiFinishedMaterialsService.toggleSemiFinishedMaterialActive",
+    });
   });
 
   return id;

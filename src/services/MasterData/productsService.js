@@ -8,7 +8,6 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  updateDoc,
   where,
 } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -31,6 +30,9 @@ import {
   reconcileVariantArchiveState,
   isVariantStockEmpty,
 } from '../../utils/variants/variantArchiveHelpers';
+import {
+  setStockItemReadModelInTransaction,
+} from '../Inventory/stockReadModelService';
 
 const COLLECTION_NAME = 'products';
 
@@ -600,6 +602,11 @@ export const createProduct = async (values = {}, categories = []) => {
     ===================================================== */
     codeReservation.commit();
     transaction.set(ref, payload);
+    setStockItemReadModelInTransaction(transaction, { id: ref.id, ...payload }, {
+      sourceType: 'product',
+      sourceCollection: COLLECTION_NAME,
+      lastSyncedFrom: 'productsService.createProduct',
+    });
     createdId = ref.id;
   });
 
@@ -636,15 +643,38 @@ export const updateProduct = async (id, values = {}, categories = []) => {
     const existingProduct = enrichProduct({ id: snapshot.id, ...snapshot.data() });
     const payload = normalizeProductMetadataPayload({ ...values, code: normalizedCode }, categories, existingProduct);
     transaction.update(ref, payload);
+    setStockItemReadModelInTransaction(transaction, { ...existingProduct, ...payload, id }, {
+      sourceType: 'product',
+      sourceCollection: COLLECTION_NAME,
+      lastSyncedFrom: 'productsService.updateProduct',
+    });
   });
 
   return id;
 };
 
 export const toggleProductActive = async (id, isActive) => {
-  await updateDoc(doc(db, COLLECTION_NAME, id), {
-    isActive: Boolean(isActive),
-    updatedAt: serverTimestamp(),
+  const ref = doc(db, COLLECTION_NAME, id);
+
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) {
+      throw new Error('Produk tidak ditemukan.');
+    }
+
+    const existingProduct = enrichProduct({ id: snapshot.id, ...snapshot.data() });
+    const payload = {
+      isActive: Boolean(isActive),
+      updatedAt: serverTimestamp(),
+    };
+
+    transaction.update(ref, payload);
+    setStockItemReadModelInTransaction(transaction, { ...existingProduct, ...payload, id }, {
+      sourceType: 'product',
+      sourceCollection: COLLECTION_NAME,
+      lastSyncedFrom: 'productsService.toggleProductActive',
+    });
   });
+
   return id;
 };

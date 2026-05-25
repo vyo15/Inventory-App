@@ -21,6 +21,7 @@ const StockReport = () => {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState([]);
   const [failedReads, setFailedReads] = useState([]);
+  const [reportMeta, setReportMeta] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
@@ -29,15 +30,22 @@ const StockReport = () => {
     const loadStockReportData = async () => {
       try {
         setLoading(true);
-        const { inventory: inventoryRows, categories: categoryList, failedReads: readFailures = [] } = await fetchStockReportData();
+        const {
+          inventory: inventoryRows,
+          categories: categoryList,
+          failedReads: readFailures = [],
+          reportMeta: nextReportMeta = null,
+        } = await fetchStockReportData();
 
         setInventory(inventoryRows);
         setCategories(categoryList);
         setFailedReads(readFailures);
+        setReportMeta(nextReportMeta);
       } catch (error) {
         console.error("Error fetching stock report data:", error);
         message.error("Gagal memuat data laporan stok.");
         setFailedReads([]);
+        setReportMeta(null);
       } finally {
         setLoading(false);
       }
@@ -82,7 +90,13 @@ const StockReport = () => {
   const lowStockItems = filteredData.filter((item) => item.status === "Kritis" || item.status === "Habis");
   const criticalStockItems = filteredData.filter((item) => item.status === "Habis");
   const isPartialStockReport = failedReads.length > 0;
+  const isLimitedStockReport = Boolean(reportMeta?.isLimited);
   const failedReadsLabel = failedReads.join(", ");
+  const stockReportLimitLabel = reportMeta?.maxResults ? formatNumberId(reportMeta.maxResults) : "-";
+  const stockReportLoadedLabel = reportMeta?.loadedRows ? formatNumberId(reportMeta.loadedRows) : formatNumberId(inventory.length);
+  const stockReportSourceLabel = reportMeta?.dataSource === "master_stock_fallback"
+    ? "Master stock fallback"
+    : "Stock read model";
 
   const summaryItems = useMemo(
     () => [
@@ -121,31 +135,128 @@ const StockReport = () => {
   // - sheet name distandarkan untuk Task 5 agar XLSX mudah dikenali user
   // - kandidat cleanup hanya jika nanti seluruh laporan pindah ke report/export engine yang lebih besar
   // =========================
+  const loadMoreStockReportRows = async () => {
+    if (!stockReportCursor || loadingMore) return;
+
+    try {
+      setLoadingMore(true);
+      const {
+        inventory: nextRows,
+        categories: nextCategories,
+        failedReads: nextFailedReads = [],
+        reportMeta: nextReportMeta = null,
+      } = await fetchStockReportData({
+        maxResults: STOCK_REPORT_PAGE_SIZE,
+        cursor: stockReportCursor,
+        includeCategories: false,
+      });
+
+      const mergedRows = mergeUniqueStockReportRows(inventory, nextRows);
+
+      setInventory(mergedRows);
+      setReportMeta({
+        ...nextReportMeta,
+        loadedRows: mergedRows.length,
+        activeRows: mergedRows.length,
+        isLimited: Boolean(nextReportMeta?.hasMore),
+      });
+      setCategories((currentCategories) => Array.from(new Set([
+        ...currentCategories,
+        ...nextCategories,
+        ...nextRows.map((item) => item.category || item.categoryName || "").filter(Boolean),
+      ])).sort((left, right) => String(left).localeCompare(String(right))));
+      setFailedReads((currentFailures) => Array.from(new Set([...currentFailures, ...nextFailedReads])));
+      setStockReportCursor(nextReportMeta?.nextCursor || null);
+
+      if (!nextReportMeta?.hasMore) {
+        message.success("Semua data Stock Report yang tersedia sudah termuat.");
+      }
+    } catch (error) {
+      console.error("Error loading more stock report data:", error);
+      message.error("Gagal memuat data lanjutan Stock Report.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // =========================
+  // SECTION: Export laporan stok ke XLSX
+  // Fungsi:
+  // - memakai full export loop read model agar export tidak hanya bergantung pada rows UI yang termuat;
+  // - tetap memakai filter aktif di client agar behavior filter UI dan export konsisten.
+  // Status:
+  // - aktif dipakai di laporan stok;
+  // - tidak mengubah sumber stok, hanya read-only export.
+  // =========================
   const exportToExcel = async () => {
-    if (filteredData.length === 0) {
+    let exportRows = inventory;
+    let exportMeta = reportMeta;
+    let exportFailedReads = failedReads;
+
+    try {
+      setExporting(true);
+      const exportResult = await fetchFullStockReportExportData({
+        pageSize: STOCK_REPORT_EXPORT_PAGE_SIZE,
+        maxResults: STOCK_REPORT_EXPORT_LIMIT,
+      });
+
+      if (Array.isArray(exportResult.inventory) && exportResult.inventory.length > 0) {
+        exportRows = exportResult.inventory;
+        exportMeta = exportResult.reportMeta || reportMeta;
+        exportFailedReads = exportResult.failedReads || [];
+      }
+    } catch (error) {
+      console.warn("Gagal memuat full export Stock Report, memakai data yang sudah termuat di UI:", error);
+      message.warning("Full export gagal dimuat. Export memakai data Stock Report yang sudah termuat di tabel.");
+    }
+
+    const exportFilteredData = filterStockReportRows(exportRows, {
+      searchTerm,
+      selectedCategory,
+      selectedStatus,
+    });
+    const exportIsPartial = exportFailedReads.length > 0;
+    const exportIsLimited = Boolean(exportMeta?.isLimited || exportMeta?.hasMore);
+    const exportFailedReadsLabel = exportFailedReads.join(", ");
+    const exportSourceLabel = exportMeta?.dataSource === "master_stock_fallback"
+      ? "Master stock fallback"
+      : "Stock read model";
+
+    if (exportFilteredData.length === 0) {
       message.warning("Tidak ada data untuk diekspor.");
+      setExporting(false);
       return;
     }
 
-    if (isPartialStockReport) {
+    if (exportIsPartial) {
       message.warning("Export XLSX hanya memuat sumber laporan stok yang berhasil dibaca.");
     }
 
-    await exportJsonToExcel({
-      title: "Laporan Stok IMS Bunga Flanel",
-      subtitle: isPartialStockReport
-        ? "Ekspor stok sesuai filter aktif. PERINGATAN: data laporan parsial."
-        : "Ekspor stok sesuai filter aktif.",
-      fileName: "laporan-stok",
-      sheetName: "Stock Report",
-      filters: [
-        `Status data: ${isPartialStockReport ? `Parsial - sumber gagal: ${failedReadsLabel}` : "Lengkap sesuai sumber yang berhasil dimuat"}`,
+    if (exportIsLimited) {
+      message.warning("Export XLSX dibatasi oleh limit full export Stock Report saat ini.");
+    }
+
+    try {
+      await exportJsonToExcel({
+        title: "Laporan Stok IMS Bunga Flanel",
+      subtitle: exportIsPartial || exportIsLimited
+        ? "Ekspor stok sesuai filter aktif. PERINGATAN: data laporan parsial/terbatas."
+        : "Ekspor stok sesuai filter aktif dari full export read model.",
+        fileName: "laporan-stok",
+        sheetName: "Stock Report",
+        filters: [
+        `Status data: ${exportIsPartial ? `Parsial - sumber gagal: ${exportFailedReadsLabel}` : "Lengkap sesuai sumber yang berhasil dimuat"}`,
+        `Sumber data: ${exportSourceLabel}`,
+        `Rows export termuat: ${formatNumberId(exportFilteredData.length)}`,
+        `Rows sumber terbaca: ${formatNumberId(exportMeta?.loadedRows || exportRows.length)}`,
+        `Batas full export: ${exportMeta?.exportLimit ? formatNumberId(exportMeta.exportLimit) : formatNumberId(STOCK_REPORT_EXPORT_LIMIT)}`,
+        `Catatan export: ${exportIsLimited ? "Export mencapai batas full export/paging. Tambah limit/index jika data production sudah melewati batas ini." : "Export memakai loop paging read model sesuai filter aktif."}`,
         `Kategori: ${selectedCategory === "all" ? "Semua" : selectedCategory}`,
         `Status: ${selectedStatus === "all" ? "Semua" : selectedStatus}`,
         `Pencarian: ${searchTerm || "-"}`,
       ],
-      columns: [
-        { key: "displayReference", label: "Kode Item" },
+        columns: [
+          { key: "displayReference", label: "Kode Item" },
         { key: "name", label: "Nama Item" },
         { key: "category", label: "Kategori" },
         { key: "type", label: "Jenis" },
@@ -154,12 +265,15 @@ const StockReport = () => {
         { key: "unitDisplay", label: "Satuan" },
         { key: "status", label: "Status" },
       ],
-      data: filteredData.map((item) => ({
-        ...item,
-        displayReference: resolveDisplayReference(item),
-        category: item.category || "-",
-      })),
-    });
+        data: exportFilteredData.map((item) => ({
+          ...item,
+          displayReference: resolveDisplayReference(item),
+          category: item.category || "-",
+        })),
+      });
+    } finally {
+      setExporting(false);
+    }
   };
 
   /* =====================================================
@@ -299,7 +413,7 @@ const StockReport = () => {
       >
         <FilterBar
           actions={
-            <Button type="primary" icon={<FileExcelOutlined />} onClick={exportToExcel}>
+            <Button type="primary" icon={<FileExcelOutlined />} onClick={exportToExcel} loading={exporting}>
               Ekspor ke XLSX
             </Button>
           }
@@ -352,19 +466,34 @@ const StockReport = () => {
             description={`Area gagal: ${failedReadsLabel}. Data yang berhasil dibaca tetap ditampilkan agar laporan tidak kosong total. Export XLSX akan ditandai sebagai data parsial.`}
           />
         )}
+        {isLimitedStockReport && (
+          <Alert
+            type="warning"
+            showIcon
+            message="Data Stock Report dibatasi oleh read model limit."
+            description={`Saat ini termuat ${stockReportLoadedLabel} dari batas ${stockReportLimitLabel} row. Gunakan tombol Muat data lanjutan untuk menambah rows tabel; Export XLSX akan mencoba full export dengan paging read model.`}
+          />
+        )}
         <DataRefreshIndicator loading={loading} dataSource={filteredData} />
         <Table
           // AKTIF / GUARDED UI: class standar hanya visual; sumber stok/currentStock/reservedStock/availableStock tidak diubah.
           className="app-data-table"
           columns={columns}
           dataSource={filteredData}
-          rowKey="id"
+          rowKey={(record) => getStockReportRowKey(record)}
           bordered
           tableLayout="fixed"
           locale={{
             emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data stok sesuai filter." />),
           }}
         />
+        {hasMoreStockReportRows && (
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>
+            <Button onClick={loadMoreStockReportRows} loading={loadingMore}>
+              Muat data lanjutan
+            </Button>
+          </div>
+        )}
       </PageSection>
     </>
   );

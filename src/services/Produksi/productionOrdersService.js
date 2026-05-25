@@ -32,6 +32,7 @@ import {
   inferHasVariants,
   resolveVariantSelection,
 } from "../../utils/variants/variantStockHelpers";
+import { setStockItemReadModelInTransaction } from "../Inventory/stockReadModelService";
 
 const COLLECTION_NAME = "production_orders";
 
@@ -862,9 +863,20 @@ const applyReservationMutation = async ({ transaction, line, mode = "reserve" })
     deltaReserved,
   });
 
-  transaction.update(stockRef, {
+  const nextItem = {
+    ...stockItem,
     ...nextPayload,
     updatedAt: serverTimestamp(),
+  };
+
+  transaction.update(stockRef, {
+    ...nextPayload,
+    updatedAt: nextItem.updatedAt,
+  });
+  setStockItemReadModelInTransaction(transaction, nextItem, {
+    sourceType: collectionName,
+    sourceCollection: collectionName,
+    lastSyncedFrom: `productionOrdersService.${mode}`,
   });
 };
 

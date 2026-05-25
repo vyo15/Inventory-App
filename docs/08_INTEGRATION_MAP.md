@@ -1024,7 +1024,7 @@ Guard:
 - Modal destructive tetap require keyword dan blocking loading state.
 - Reset service `resetMaintenanceDataService.js` tetap guarded dan tidak disentuh dalam split UI ini.
 
-### Integration Map — Dashboard / Stock Report Stock Read Model
+### Integration Map — Dashboard / Stock Report Stock Row Mapper
 
 ```text
 products/raw_materials/semi_finished_materials
@@ -1034,9 +1034,36 @@ products/raw_materials/semi_finished_materials
 ```
 
 Guard:
-- Mapper ini read-only dan hanya menyatukan display/read model stok antar halaman.
-- Tidak membuat collection summary baru, tidak melakukan backfill, dan tidak mengganti helper mutasi stok guarded.
-- Jika stok master membesar, paging/read model Firestore tetap perlu batch arsitektur terpisah dengan kontrak export yang jelas.
+- Mapper ini read-only dan hanya menyatukan display row/comparator stok antar halaman.
+- Ini bukan persisted Firestore read model, bukan collection summary, dan bukan mekanisme paging.
+- Tidak melakukan backfill, tidak menulis stok, dan tidak mengganti helper mutasi stok guarded.
+- Dashboard dan Stock Report masih boleh memakai mapper ini sampai switch read model dilakukan dalam batch terpisah.
+
+### Integration Map — Firestore Stock Read Model `stock_item_read_models`
+
+```text
+products/raw_materials/semi_finished_materials
+-> buildStockReadModelRow()
+-> buildStockItemReadModelPayload()
+-> stockReadModelService.js
+-> stock_item_read_models/{sourceType}__{sourceId}
+-> future Dashboard issue query / future Stock Report paging-export query
+```
+
+Kontrak field awal:
+- Identitas: `sourceType`, `sourceCollection`, `sourceId`, `displayReference`, `name`, `typeLabel`, `route`.
+- Stok: `stock`, `currentStock`, `reservedStock`, `availableStock`, `minStockThreshold`, `unitDisplay`.
+- Status query: `stockStatus`, `stockStatusLabel`, `reportStatus`, `statusRank`, `sortGap`, `hasStockIssue`, `isNegativeStock`, `isReservedOverrun`.
+- Varian: `hasVariants`, `variantCount`, `affectedVariantCount`, `affectedVariantSummary`, `affectedVariantEntries`.
+- Restock snapshot opsional: `lastPurchaseAt`, `lastPurchasePrice`, `restockSupplierId`, `restockSupplierName`, `restockProductLink`.
+- Sync metadata: `isActive`, `searchText`, `sourceUpdatedAt`, `updatedAt`, `lastSyncedFrom`.
+
+Guard:
+- `stock_item_read_models` adalah derived read model untuk read path; source of truth tetap master stok + `inventory_logs`.
+- Foundation service boleh ada, tetapi belum boleh dipakai Dashboard/Stock Report sebelum writer sync/backfill semua jalur mutasi stok selesai.
+- Writer future wajib meng-cover Purchases, Sales, Returns, Stock Adjustment, Production Work Logs, Production Orders/reservation, Master Data edit/toggle, dan Reset/Maintenance rebuild.
+- Firestore Rules/index untuk collection baru harus disiapkan di luar ZIP frontend sebelum production switch.
+- Query issue/read report harus menghindari full scan permanen; jika Firestore meminta index, buat composite index yang sesuai.
 
 ### Helper Integration Map — stock formatter dan trim normalization — 2026-05-17
 
@@ -1131,3 +1158,23 @@ Guard:
 - Flow ini read-only; tidak boleh menulis stok, inventory log, transaksi, produksi, atau finance.
 - Guard partial read bukan pengganti read model/paging. Jika data master stok membesar, desain read model harus batch arsitektur terpisah.
 - Export XLSX harus mengikuti data yang berhasil dibaca dan filter aktif, serta wajib membawa disclosure parsial ketika ada failedReads.
+
+
+### Integration Map — Batch 18H ProductionWorkLogsService helper extraction
+
+```text
+productionWorkLogsService.js
+-> helpers/productionWorkLogsServiceHelpers.js
+   -> normalizeProductionWorkLogPayload()
+   -> validateProductionWorkLogPayload()
+   -> buildProductionOutputAuditMetadata()
+   -> buildWorkLogReservationMap()
+-> productionWorkLogsService.js tetap menjalankan runTransaction Start/Complete Work Log
+-> inventory_logs / stock_item_read_models / production_orders tetap ditulis dari service utama
+```
+
+Guard:
+- Helper 18H hanya behavior-preserving extraction dari logic lokal service.
+- Source of truth produksi tetap `productionWorkLogsService.js` untuk transaction material out, output in, HPP reconcile, payroll accrual, dan status PO/Work Log.
+- Jangan memanggil helper 18H dari UI untuk menggantikan service transaction. UI hanya boleh submit payload melalui service existing.
+- Split berikutnya harus memeriksa import/usage dan menjaga atomic transaction agar stok/HPP/payroll tidak partial.

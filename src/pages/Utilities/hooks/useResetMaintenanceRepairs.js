@@ -30,7 +30,15 @@ import {
   getTransactionSideEffectRepairAudit,
   repairTransactionSideEffects,
 } from "../../../services/Maintenance/transactionSideEffectRepairService";
+import {
+  backfillStockReadModelRestockMetadataMaintenance,
+  deleteOrphanStockReadModelsMaintenance,
+  getStockReadModelMaintenanceAudit,
+  rebuildStockReadModelMaintenance,
+} from "../../../services/Maintenance/stockReadModelMaintenanceService";
 import { mergeAuditNote } from "../utils/resetMaintenanceUiHelpers";
+
+const STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD = "CLEANUP READ MODEL";
 
 const useResetMaintenanceRepairs = ({
   createPageMaintenanceLog,
@@ -46,6 +54,7 @@ const useResetMaintenanceRepairs = ({
   setPayrollAudit,
   setTransactionVariantAudit,
   setTransactionSideEffectAudit,
+  setStockReadModelAudit,
 }) => {
   // ---------------------------------------------------------------------------
   // IMS NOTE [AKTIF] — orchestration repair aman Reset Maintenance.
@@ -60,6 +69,116 @@ const useResetMaintenanceRepairs = ({
   const [loadingPayrollRepair, setLoadingPayrollRepair] = useState(false);
   const [loadingTransactionVariantRepair, setLoadingTransactionVariantRepair] = useState(false);
   const [loadingTransactionSideEffectRepair, setLoadingTransactionSideEffectRepair] = useState(false);
+  const [loadingStockReadModelAudit, setLoadingStockReadModelAudit] = useState(false);
+  const [loadingStockReadModelRepair, setLoadingStockReadModelRepair] = useState(false);
+  const [loadingStockReadModelRestockBackfill, setLoadingStockReadModelRestockBackfill] = useState(false);
+  const [loadingStockReadModelCleanup, setLoadingStockReadModelCleanup] = useState(false);
+
+  const handleLoadStockReadModelAudit = useCallback(async () => {
+    try {
+      setLoadingStockReadModelAudit(true);
+      const result = await getStockReadModelMaintenanceAudit();
+      setStockReadModelAudit(result);
+      message.success("Audit stock read model selesai dimuat.");
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal memuat audit stock read model.");
+    } finally {
+      setLoadingStockReadModelAudit(false);
+    }
+  }, [setStockReadModelAudit]);
+
+  const handleRepairStockReadModelAudit = useCallback(async () => {
+    try {
+      setLoadingStockReadModelRepair(true);
+      const result = await rebuildStockReadModelMaintenance();
+      await createPageMaintenanceLog({
+        actionType: "stock_read_model_rebuild",
+        mode: "repair",
+        modules: ["inventory", "read_model"],
+        summary: result?.summary || {},
+        resultBuckets: {
+          repaired: result?.updatedCount || 0,
+          manualReview: result?.skippedOrphanCount || 0,
+        },
+        affectedCollections: result?.affectedCollections || ["stock_item_read_models"],
+        affectedCount: result?.updatedCount || 0,
+        dryRun: false,
+        status: "success",
+        note: "Rebuild stock read model hanya menulis collection turunan stock_item_read_models. Tidak mengubah master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance.",
+      });
+      message.success(result?.message || "Rebuild stock read model selesai.");
+      const nextAudit = await getStockReadModelMaintenanceAudit();
+      setStockReadModelAudit(nextAudit);
+      await loadPreview(false);
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menjalankan rebuild stock read model.");
+    } finally {
+      setLoadingStockReadModelRepair(false);
+    }
+  }, [createPageMaintenanceLog, loadPreview, setStockReadModelAudit]);
+
+  const handleBackfillStockReadModelRestockMetadata = useCallback(async () => {
+    try {
+      setLoadingStockReadModelRestockBackfill(true);
+      const result = await backfillStockReadModelRestockMetadataMaintenance();
+      await createPageMaintenanceLog({
+        actionType: "stock_read_model_restock_metadata_backfill",
+        mode: "repair",
+        modules: ["inventory", "read_model", "purchases"],
+        summary: result?.summary || {},
+        resultBuckets: { updated: result?.updatedCount || 0 },
+        affectedCollections: result?.affectedCollections || ["stock_item_read_models"],
+        affectedCount: result?.updatedCount || 0,
+        dryRun: false,
+        status: "success",
+        note: "Backfill metadata restock hanya menulis field projection purchase terakhir di stock_item_read_models. Tidak mengubah purchases, master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance.",
+      });
+      message.success(result?.message || "Backfill metadata restock read model selesai.");
+      const nextAudit = await getStockReadModelMaintenanceAudit();
+      setStockReadModelAudit(nextAudit);
+      await loadPreview(false);
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menjalankan backfill metadata restock read model.");
+    } finally {
+      setLoadingStockReadModelRestockBackfill(false);
+    }
+  }, [createPageMaintenanceLog, loadPreview, setStockReadModelAudit]);
+
+  const handleCleanupStockReadModelOrphans = useCallback(async ({ confirmKeyword = "" } = {}) => {
+    if (String(confirmKeyword || "").trim() !== STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD) {
+      message.error(`Ketik ${STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD} untuk cleanup orphan read model.`);
+      return;
+    }
+
+    try {
+      setLoadingStockReadModelCleanup(true);
+      const result = await deleteOrphanStockReadModelsMaintenance({ confirmKeyword });
+      await createPageMaintenanceLog({
+        actionType: "stock_read_model_orphan_cleanup",
+        mode: "repair",
+        modules: ["inventory", "read_model"],
+        summary: result?.summary || {},
+        resultBuckets: { deleted: result?.deletedCount || 0 },
+        affectedCollections: result?.affectedCollections || ["stock_item_read_models"],
+        affectedCount: result?.deletedCount || 0,
+        dryRun: false,
+        status: "success",
+        note: "Cleanup orphan stock read model hanya menghapus dokumen turunan stock_item_read_models yang tidak punya master source pada audit terbaru. Tidak mengubah master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance.",
+      });
+      message.success(result?.message || "Cleanup orphan stock read model selesai.");
+      const nextAudit = await getStockReadModelMaintenanceAudit();
+      setStockReadModelAudit(nextAudit);
+      await loadPreview(false);
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal menjalankan cleanup orphan stock read model.");
+    } finally {
+      setLoadingStockReadModelCleanup(false);
+    }
+  }, [createPageMaintenanceLog, loadPreview, setStockReadModelAudit]);
 
   const handleRepairMasterCodeAudit = useCallback(async () => {
     try {
@@ -304,6 +423,10 @@ const useResetMaintenanceRepairs = ({
     loadingPayrollRepair,
     loadingTransactionVariantRepair,
     loadingTransactionSideEffectRepair,
+    loadingStockReadModelAudit,
+    loadingStockReadModelRepair,
+    loadingStockReadModelRestockBackfill,
+    loadingStockReadModelCleanup,
     handleRepairMasterCodeAudit,
     handleRepairProductionMaintenance,
     handleRepairStockAudit,
@@ -312,6 +435,10 @@ const useResetMaintenanceRepairs = ({
     handleRepairPayrollAudit,
     handleRepairTransactionVariantAudit,
     handleRepairTransactionSideEffects,
+    handleLoadStockReadModelAudit,
+    handleRepairStockReadModelAudit,
+    handleBackfillStockReadModelRestockMetadata,
+    handleCleanupStockReadModelOrphans,
   };
 };
 
