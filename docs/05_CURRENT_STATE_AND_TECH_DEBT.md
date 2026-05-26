@@ -1201,13 +1201,12 @@ Kontrak awal `stock_item_read_models`:
 - Restock snapshot opsional: `lastPurchaseAt`, `lastPurchasePrice`, `restockSupplierId`, `restockSupplierName`, `restockProductLink`.
 - Sync metadata: `isActive`, `searchText`, `sourceUpdatedAt`, `updatedAt`, `lastSyncedFrom`.
 
-Guarded / belum diubah:
-- Dashboard masih full read `products`, `raw_materials`, dan `semi_finished_materials` lewat `dashboardService.js`.
-- Stock Report masih full source report lewat `stockReportService.js`.
-- Belum ada writer sync dari Purchases, Sales, Returns, Stock Adjustment, Production Work Logs, Production Orders/reservation, Master Data edit, atau Reset/Maintenance.
-- Belum ada backfill/rebuild UI untuk `stock_item_read_models`.
-- Firestore Rules dan index untuk collection baru tetap external/manual karena tidak ada source rules/index di ZIP.
-- `stock_item_read_models` adalah derived read model, bukan source of truth. Source of truth tetap master item stock fields dan `inventory_logs`.
+Guarded / status terbaru setelah Batch 17N–18G:
+- **SUPERSEDED:** catatan lama yang menyebut Dashboard/Stock Report masih full-source tidak berlaku untuk source runtime terbaru.
+- `dashboardService.js` sudah menjadikan `stock_item_read_models` sebagai read path utama issue stok Dashboard, dengan fallback guarded ke master stock jika read model kosong/gagal.
+- `stockReportService.js` sudah menjadikan `stock_item_read_models` sebagai read path utama laporan stok, termasuk cursor paging dan full export batch, dengan fallback guarded ke master stock jika read model kosong/gagal.
+- Writer sync dan maintenance/backfill read model sudah ada pada batch sebelumnya, tetapi `stock_item_read_models` tetap derived read model. Source of truth stok tetap master item stock fields dan `inventory_logs`.
+- Firestore Rules dan index untuk collection baru tetap wajib diverifikasi/deploy manual karena rules/index production berada di luar runtime frontend.
 
 Risiko tersisa:
 - Jangan switch Dashboard/Stock Report ke `stock_item_read_models` sebelum writer sync/backfill semua jalur mutasi stok siap, karena read model stale bisa menampilkan stok salah.
@@ -1235,7 +1234,7 @@ Batasan:
 
 Status source terbaru setelah rebase patch gabungan:
 
-- Dashboard/Stock Report saat ini memakai shared Stock Row Mapper untuk comparator stok bersama; ini bukan persisted Firestore read model. Batch 17B menambahkan foundation `stock_item_read_models`, tetapi belum ada wiring Dashboard/Stock Report dan belum ada writer sync/backfill aktif.
+- **SUPERSEDED oleh Batch 17N–18G:** Dashboard/Stock Report source runtime terbaru sudah memakai `stock_item_read_models` sebagai read path utama dengan fallback guarded. Shared Stock Row Mapper tetap dipakai untuk fallback/normalisasi, bukan pengganti persisted read model.
 - ResetMaintenanceData sudah memakai `useMasterDataExport`, `useResetMaintenanceAudits`, dan `useResetMaintenanceRepairs`, serta modal/status card split kecil agar page tidak kembali jumbo.
 - `useDataQualityAudit.js`, `useLegacyDataAudit.js`, `useMasterCodeMaintenance.js`, `useProductionMaintenance.js`, dan `useResetAuditOverview.js` bukan kontrak aktif setelah hook consolidation; jika masih ada pada working tree lokal, hapus sesuai delete list patch gabungan.
 - Repair Side-Effect Transaksi sudah naik dari preview-only ke guarded repair aktual dengan keyword `REPAIR TRANSAKSI`; service hanya membuat side-effect yang hilang dan tidak mengubah stok master/transaksi utama.
@@ -1243,9 +1242,9 @@ Status source terbaru setelah rebase patch gabungan:
 
 Tech debt tersisa:
 
-- Laporan besar masih butuh switch query ke read model/paging jika dataset membesar; foundation `stock_item_read_models` sudah ada, tetapi writer sync, backfill, Firestore Rules/index, Dashboard switch, dan Stock Report export contract tetap batch lanjutan.
+- Laporan stok besar sudah memakai read model/paging/export batch di source runtime terbaru. Risiko tersisa adalah validasi Firestore Rules/index production, kualitas backfill, dan konsistensi writer sync di semua jalur mutasi stok.
 - `src/services/Maintenance/resetMaintenanceDataService.js` tetap besar dan destructive; split service destructive harus batch terpisah dengan approval eksplisit.
-- `src/pages/Transaksi/Purchases.jsx` masih sensitif karena OCR, stock in, expense, supplier reference, dan average cost; lanjut split harus kecil dan behavior-preserving.
+- `src/pages/Transaksi/Purchases.jsx` tetap sensitif karena OCR, stock in, expense, supplier reference, dan average cost; Batch 21–24 hanya boleh memindah helper UI/pure calculation dan tidak boleh mengubah parser, payload, stock in, expense, atau inventory log.
 
 
 ## Batch 18H — ProductionWorkLogsService guarded split phase 1
@@ -1268,3 +1267,51 @@ Batas aman yang tetap dijaga:
 - function public `validateProductionWorkLog` tetap diekspor dari service agar import legacy tidak rusak.
 
 Line count setelah batch 18H: `productionWorkLogsService.js` sekitar 2073 baris dan `productionWorkLogsServiceHelpers.js` sekitar 668 baris pada ZIP source batch ini. Ini belum menyelesaikan seluruh tech debt produksi; split berikutnya tetap harus kecil dan tidak boleh memindahkan stock posting/HPP/payroll tanpa fixture/test data lengkap.
+
+## Batch 20 — Combined UI Split Phase 2 — 2026-05
+
+Status: **MAINTAINABILITY REFACTOR / BEHAVIOR-PRESERVING / GUARDED**.
+
+Batch ini melanjutkan split UI besar setelah Batch 19 tanpa mengubah business logic runtime. Source aktual yang disentuh hanya helper presentasi/normalizer UI pada halaman besar berikut:
+
+- `src/pages/MasterData/RawMaterials.jsx` → helper UI/read-only di `src/pages/MasterData/helpers/rawMaterialsPageHelpers.js`.
+- `src/pages/Produksi/ProductionWorkLogs.jsx` → helper UI/read-only di `src/pages/Produksi/helpers/productionWorkLogsPageHelpers.jsx`.
+- `src/pages/Utilities/ResetMaintenanceData.jsx` → opsi/guard UI reset dipusatkan di `src/pages/Utilities/utils/resetMaintenanceUiHelpers.js`.
+
+Batas aman yang dijaga:
+- tidak mengubah create/update raw material, stock field, varian payload, supplier relation, atau pricing mode behavior;
+- tidak mengubah start/complete Work Log, material usage posting, output stock posting, HPP, payroll, inventory log, read model sync, atau status Production Order;
+- tidak mengubah reset destructive target, keyword utama reset, protected collection, baseline restore, delete plan, maintenance log, atau repair handler;
+- tidak mengubah route/menu/role guard, Firestore schema, Firestore Rules/index, atau collection baru.
+
+Catatan docs/source sync:
+- bagian lama yang masih menyebut Dashboard/Stock Report full-source harus diperlakukan sebagai histori/superseded jika konflik dengan source runtime terbaru.
+- `stock_item_read_models` tetap derived read model, bukan source of truth stok.
+- UI helper Batch 20 tidak boleh dipakai untuk menggantikan service transaction/maintenance.
+
+Large UI file status setelah Batch 20:
+- `RawMaterials.jsx`, `ProductionWorkLogs.jsx`, dan `ResetMaintenanceData.jsx` masih bisa dipecah lagi, tetapi hanya melalui batch UI terpisah dan tetap behavior-preserving.
+- Refactor lanjutan sebaiknya fokus pada extraction component/modal kecil, bukan memindahkan business rule ke UI helper.
+
+
+## Batch 21–24 — Combined UI/Data Quality/Purchase UX Hardening — 2026-05
+
+Status: **AKTIF / BEHAVIOR-PRESERVING / UI-HELPER-ONLY**.
+
+Validasi source aktual batch ini memakai `Inventory-App.zip` terbaru dan menunjukkan Batch 17N–18G serta Batch 20 sudah masuk pada source runtime. Karena itu docs lama yang masih menyebut Dashboard/Stock Report full-source harus diperlakukan sebagai **SUPERSEDED** bila konflik dengan source aktual.
+
+Perubahan maintainability yang disetujui:
+- `src/pages/Produksi/ProductionEmployees.jsx` memindahkan helper pure/detail activity ke `src/pages/Produksi/helpers/productionEmployeesPageHelpers.jsx`. Payroll, Work Log, rate, status aktif/nonaktif, dan service employee tidak berubah.
+- `src/pages/MasterData/SupplierPurchases.jsx` memindahkan helper katalog/read-only supplier ke `src/pages/MasterData/helpers/supplierPurchasesPageHelpers.jsx`. Purchase stock-in, expense, inventory log, OCR, supplier relation, dan read model writer tidak berubah.
+- `src/pages/Dashboard/Dashboard.jsx` memindahkan helper parsing/formatter/read-only summary ke `src/pages/Dashboard/helpers/dashboardPageHelpers.js`. `dashboardService.js`, query read model, finance calculation, planning summary, dan stock issue source tidak berubah.
+- `src/pages/Utilities/components/ResetAutoDetectPanel.jsx` memakai helper wording/color dari `resetMaintenanceUiHelpers.js` untuk Data Quality Audit UI. Kategori audit, repair side-effect, reset destructive, dan maintenance service tidak berubah.
+- `src/pages/Transaksi/Purchases.jsx` memindahkan helper pure calculation supplier reference dan metadata OCR receipt ke `src/pages/Transaksi/helpers/purchasesPageHelpers.js`. Parser OCR, purchase payload, stock mutation, expense otomatis, average cost, inventory log, dan read model writer tidak berubah.
+
+Guard penting:
+- Batch 21–24 tidak boleh dipakai sebagai alasan mengubah schema/collection, route/menu/role guard, Firestore rules/index, stock posting, purchase stock-in, finance side-effect, HPP, payroll, atau reset destructive.
+- Helper baru bersifat UI/read-only/pure calculation. Semua write tetap berada di service existing.
+- Jika muncul kebutuhan helper untuk menulis Firestore atau membaca collection baru, itu harus menjadi batch arsitektur terpisah dengan approval eksplisit.
+
+Large UI file status setelah Batch 21–24:
+- `ProductionEmployees.jsx`, `SupplierPurchases.jsx`, `Dashboard.jsx`, dan `Purchases.jsx` sudah lebih terpisah secara helper tetapi tetap perlu dipantau agar tidak kembali menumpuk business logic di UI.
+- Kandidat berikutnya adalah cleanup finance/report UI dan final docs/source QA sweep, bukan perubahan flow transaksi besar.

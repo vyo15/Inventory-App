@@ -45,12 +45,8 @@ import {
   DEFAULT_SEMI_FINISHED_FORM,
   DEFAULT_SEMI_FINISHED_VARIANT,
   formatSemiFinishedStockSummary,
-  normalizeSemiFinishedVariants,
   SEMI_FINISHED_CATEGORIES,
   SEMI_FINISHED_CATEGORY_MAP,
-  SEMI_FINISHED_COLOR_MAP,
-  SEMI_FINISHED_GROUP_OPTIONS,
-  SEMI_FINISHED_GROUP_MAP,
 } from "../../constants/semiFinishedMaterialOptions";
 import {
   createSemiFinishedMaterial,
@@ -60,7 +56,6 @@ import {
 } from "../../services/Produksi/semiFinishedMaterialsService";
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import formatCurrency, { formatHppUnitCurrencyId } from "../../utils/formatters/currencyId";
-import { formatStockWithUnitId } from "../../utils/formatters/stockUnit";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
@@ -69,8 +64,20 @@ import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import {
-  getVariantAwareStockStatusMeta,
-} from '../../utils/stock/stockHelpers';
+  buildFormValues,
+  buildSemiFinishedGroupOptions,
+  compactCellStyles,
+  FALLBACK_SEMI_FINISHED_GROUP_KEY,
+  FALLBACK_SEMI_FINISHED_GROUP_LABEL,
+  formatStockWithUnit,
+  getSemiFinishedGroupLabel,
+  getStockStatusMeta,
+  getVariantDisplayLabel,
+  normalizeFormVariants,
+  normalizeSemiFinishedGroupKey,
+  resolveFlowerComponentRecipeMeta,
+  resolveSemiFinishedActiveHppCost,
+} from "./helpers/semiFinishedMaterialsPageHelpers";
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -82,231 +89,6 @@ import {
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
-
-const normalizeFormVariants = (variants = [], hasVariants = true) => {
-  if (!hasVariants) {
-    return [];
-  }
-
-  const normalized = normalizeSemiFinishedVariants(variants);
-
-  if (normalized.length > 0) {
-    return normalized;
-  }
-
-  return [{ ...DEFAULT_SEMI_FINISHED_VARIANT }];
-};
-
-const buildFormValues = (record = {}) => {
-  const hasVariants = record?.hasVariants === true || (record?.variants || []).length > 0;
-  const totals = calculateSemiFinishedTotalsFromVariants(record.variants || []);
-
-  return {
-    ...DEFAULT_SEMI_FINISHED_FORM,
-    ...record,
-    hasVariants,
-    variantLabel: record.variantLabel || 'Varian',
-    variants: normalizeFormVariants(record.variants || [], hasVariants),
-    currentStock: hasVariants ? totals.currentStock : Number(record.currentStock || 0),
-    reservedStock: hasVariants ? totals.reservedStock : Number(record.reservedStock || 0),
-    availableStock:
-      hasVariants
-        ? totals.availableStock
-        : Math.max(
-            Number(record.currentStock || 0) - Number(record.reservedStock || 0),
-            0,
-          ),
-    minStockAlert: Number(record.minStockAlert || 0),
-    averageCostPerUnit:
-      hasVariants
-        ? Number(totals.averageCostPerUnit || 0)
-        : Number(record.averageCostPerUnit || 0),
-  };
-};
-
-// -----------------------------------------------------------------------------
-// Helper tampilan stok untuk form summary dan drawer detail.
-// Tabel utama memakai StockDisplayBlock agar format saldo stok locked seragam.
-// Implementasi memakai formatter shared agar output stok + unit konsisten lintas master data.
-// -----------------------------------------------------------------------------
-const formatStockWithUnit = formatStockWithUnitId;
-
-const getVariantDisplayLabel = (variant = {}, index = 0) =>
-  variant.variantLabel || variant.label || variant.name || SEMI_FINISHED_COLOR_MAP[variant.color] || variant.color || `Varian ${index + 1}`;
-
-// ACTIVE / GUARDED: helper display HPP komponen bunga.
-// Qty resep tetap bulat, tetapi cost/unit kecil ditampilkan 2 desimal agar
-// kelopak/daun/tangkai tidak terlihat sama akibat pembulatan Rupiah penuh.
-const FLOWER_COMPONENT_RECIPE_QTY_MAP = {
-  kelopak: 10,
-  daun: 1,
-  kawat: 1,
-};
-
-const FLOWER_COMPONENT_LABEL_MAP = {
-  kelopak: "kelopak",
-  daun: "daun",
-  kawat: "tangkai",
-};
-
-const resolveFlowerComponentRecipeMeta = (record = {}) => {
-  const category = String(record?.category || "").toLowerCase();
-  const qty = FLOWER_COMPONENT_RECIPE_QTY_MAP[category];
-
-  if (!qty) return null;
-
-  return {
-    qty,
-    label: FLOWER_COMPONENT_LABEL_MAP[category] || "komponen",
-  };
-};
-
-
-// ACTIVE / UI READ-MODEL: HPP aktif untuk list utama semi product.
-// Mengikuti rule BOM/detail: average cost varian/master diprioritaskan, fallback ke last production cost.
-// Display-only; tidak menulis stok, HPP, Work Log, payroll, atau master data.
-const resolveSemiFinishedActiveHppCost = (record = {}) => {
-  const variants = Array.isArray(record?.variants) ? record.variants : [];
-  const hasVariants = record?.hasVariants === true || variants.length > 0;
-
-  if (hasVariants) {
-    const totals = calculateSemiFinishedTotalsFromVariants(variants);
-    return Number(
-      totals?.averageCostPerUnit
-      || record.averageCostPerUnit
-      || record.lastProductionCostPerUnit
-      || 0,
-    );
-  }
-
-  return Number(record?.averageCostPerUnit || record?.lastProductionCostPerUnit || 0);
-};
-
-const FALLBACK_SEMI_FINISHED_GROUP_KEY = "__general_reusable";
-const FALLBACK_SEMI_FINISHED_GROUP_LABEL = "Umum / Reusable";
-
-const normalizeSemiFinishedGroupKey = (value = "") => String(value || "").trim();
-
-const normalizeSemiFinishedGroupLookupKey = (value = "") =>
-  normalizeSemiFinishedGroupKey(value)
-    .toLowerCase()
-    .replace(/[\s_-]+/g, "_");
-
-const getKnownSemiFinishedGroupKey = (value = "") => {
-  const lookupKey = normalizeSemiFinishedGroupLookupKey(value);
-
-  if (!lookupKey) return "";
-
-  return (
-    SEMI_FINISHED_GROUP_OPTIONS.find((option) =>
-      [option.value, option.label].some(
-        (candidate) => normalizeSemiFinishedGroupLookupKey(candidate) === lookupKey,
-      ),
-    )?.value || ""
-  );
-};
-
-const getSemiFinishedGroupLabel = (value = "", fallbackLabel = "-") => {
-  const key = normalizeSemiFinishedGroupKey(value);
-  if (!key) return fallbackLabel;
-
-  const knownKey = getKnownSemiFinishedGroupKey(key);
-  return SEMI_FINISHED_GROUP_MAP[knownKey] || key;
-};
-
-const buildSemiFinishedGroupOptions = (materials = [], { includeGeneral = false } = {}) => {
-  const staticOptions = SEMI_FINISHED_GROUP_OPTIONS.map((option) => ({ ...option }));
-  const knownKeys = new Set(
-    staticOptions.flatMap((option) => [option.value, option.label].map(normalizeSemiFinishedGroupLookupKey)),
-  );
-  const dynamicOptions = [];
-  const dynamicKeys = new Set();
-  let hasGeneralGroup = false;
-
-  materials.forEach((item) => {
-    const key = normalizeSemiFinishedGroupKey(item?.flowerGroup);
-    const lookupKey = normalizeSemiFinishedGroupLookupKey(key);
-
-    if (!key) {
-      hasGeneralGroup = true;
-      return;
-    }
-
-    if (knownKeys.has(lookupKey) || dynamicKeys.has(lookupKey)) return;
-
-    dynamicKeys.add(lookupKey);
-    dynamicOptions.push({
-      value: key,
-      label: getSemiFinishedGroupLabel(key, key),
-    });
-  });
-
-  dynamicOptions.sort((a, b) => a.label.localeCompare(b.label));
-
-  return [
-    ...(includeGeneral && hasGeneralGroup
-      ? [{ value: FALLBACK_SEMI_FINISHED_GROUP_KEY, label: FALLBACK_SEMI_FINISHED_GROUP_LABEL }]
-      : []),
-    ...staticOptions,
-    ...dynamicOptions,
-  ];
-};
-
-// StockDisplayBlock dipakai untuk table utama agar format Total/Tersedia/variant pill sama dengan Products dan Stock Report.
-
-/* =====================================================
-SECTION: Semi Finished Minimum Stock Status — AKTIF
-Fungsi:
-- Menentukan status minimum stok Semi Finished secara read-only memakai stok tersedia lebih dulu, lalu fallback stok lama.
-
-Dipakai oleh:
-- SemiFinishedMaterials.jsx summary, filter status, table row, dan drawer detail.
-
-Alasan perubahan:
-- `minStockAlert` Semi Finished adalah threshold master item; status harus konsisten dengan Dashboard/Stock Report dan tidak boleh membaca min stock varian.
-
-Catatan cleanup:
-- `variants[].minStockAlert` tetap legacy-compat di data/helper dan tidak dipakai oleh helper status ini.
-
-Risiko:
-- Jika status kembali memakai currentStock langsung atau min alert varian, item dengan reserved stock bisa salah terlihat aman dan rule master-level menjadi tidak konsisten.
-===================================================== */
-const getSemiFinishedMinimumStockValue = (record = {}) => {
-  const stockValue = Number(record.availableStock ?? record.currentStock ?? record.stock ?? 0);
-  return Number.isFinite(stockValue) ? stockValue : 0;
-};
-
-const getStockStatusMeta = (record = {}) => {
-  const comparableStock = getSemiFinishedMinimumStockValue(record);
-  const minStockAlertValue = Number(record.minStockAlert || 0);
-  const minStockAlert = Number.isFinite(minStockAlertValue) ? minStockAlertValue : 0;
-
-  if (record.isActive === false) {
-    return { color: "default", label: "Nonaktif", alertType: "info" };
-  }
-
-  const variantStatusMeta = getVariantAwareStockStatusMeta(record, {
-    sourceType: "semi_finished",
-    threshold: minStockAlert,
-  });
-
-  if (variantStatusMeta) return variantStatusMeta;
-
-  if (comparableStock <= 0) {
-    return { color: "red", label: "Kosong", alertType: "error" };
-  }
-
-  if (minStockAlert > 0 && comparableStock <= minStockAlert) {
-    return { color: "orange", label: "Stok Rendah", alertType: "warning" };
-  }
-
-  return { color: "green", label: "Aman", alertType: "success" };
-};
-
-const compactCellStyles = {
-  stack: { display: "flex", flexDirection: "column", gap: 2 },
-  meta: { fontSize: 12, lineHeight: 1.35 },
-};
 
 const SemiFinishedMaterials = () => {
   const [loading, setLoading] = useState(false);

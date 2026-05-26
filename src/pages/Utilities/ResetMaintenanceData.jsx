@@ -42,8 +42,13 @@ import useResetMaintenanceRepairs from "./hooks/useResetMaintenanceRepairs";
 import useMasterDataExport from "./hooks/useMasterDataExport";
 import {
   HPP_CONFIRM_KEYWORDS,
-  RESET_CONFIRM_KEYWORDS,
+  RESET_MODULE_OPTIONS,
   RESET_MODE_LABELS,
+  TRANSACTION_SIDE_EFFECT_CONFIRM_KEYWORD,
+  getResetBlockedReason,
+  getResetConfirmKeyword,
+  getSelectedResetModuleLabels,
+  isFullTestingResetPreviewIntent,
   buildActorLabel,
   getCollectionLabels,
   mergeAuditNote,
@@ -59,8 +64,6 @@ import ResetExportPanel from "./components/ResetExportPanel";
 import ResetStatusSummaryCard from "./components/ResetStatusSummaryCard";
 import ResetConfirmModal from "./components/ResetConfirmModal";
 import HppCostConfirmModal from "./components/HppCostConfirmModal";
-
-const TRANSACTION_SIDE_EFFECT_CONFIRM_KEYWORD = "REPAIR TRANSAKSI";
 
 // -----------------------------------------------------------------------------
 // Reset & Maintenance Data Page
@@ -160,65 +163,26 @@ const ResetMaintenanceData = () => {
   - Value UI harus sama dengan module service; mismatch membuat preview/reset ditolak guard service.
   =====================================================
   */
-  const moduleOptions = useMemo(
-    () => [
-      { label: "Penjualan + Income Sales", value: "sales" },
-      { label: "Pembelian + Expense Purchases", value: "purchases" },
-      { label: "Retur", value: "returns" },
-      { label: "Production Planning / Planning Produksi", value: "production_planning_only" },
-      { label: "Produksi (Lengkap)", value: "production" },
-      { label: "Produksi + Inventory Log Produksi", value: "production_core_and_logs" },
-      { label: "Payroll Produksi Saja", value: "production_payroll_only" },
-      { label: "Produksi Data Lama Saja", value: "productions_legacy_only" },
-      { label: "Kas & Biaya", value: "cash_and_expenses" },
-      { label: "Penyesuaian + Log Adjustment", value: "stock_adjustment_and_logs" },
-      { label: "Semua Inventory Log", value: "all_inventory_logs" },
-      { label: "Pricing Log", value: "pricing_logs" },
-    ],
-    [],
+  const moduleOptions = RESET_MODULE_OPTIONS;
+
+  const selectedModuleLabels = useMemo(
+    () => getSelectedResetModuleLabels(selectedModules, moduleOptions),
+    [moduleOptions, selectedModules],
   );
 
-  const selectedModuleLabels = useMemo(() => {
-    const labelMap = new Map(moduleOptions.map((item) => [item.value, item.label]));
-    return selectedModules.map((value) => labelMap.get(value) || value);
-  }, [moduleOptions, selectedModules]);
+  const isFullTestingResetIntent = useMemo(() => isFullTestingResetPreviewIntent({
+    resetIntent,
+    mode,
+    preview,
+  }), [mode, preview, resetIntent]);
 
+  const resetConfirmKeyword = getResetConfirmKeyword(isFullTestingResetIntent);
 
-  const isFullTestingResetIntent = useMemo(() => (
-    resetIntent === "full_testing_reset"
-    && mode === "reset_and_zero_stock"
-    && preview?.isFullTestingReset === true
-  ), [mode, preview?.isFullTestingReset, resetIntent]);
-
-  const resetConfirmKeyword = isFullTestingResetIntent
-    ? RESET_CONFIRM_KEYWORDS.full_testing_reset
-    : RESET_CONFIRM_KEYWORDS.standard;
-
-  const resetBlockedReason = useMemo(() => {
-    // -------------------------------------------------------------------------
-    // Destructive reset UI preflight.
-    // AKTIF / GUARDED: blokir konfirmasi sebelum service dipanggil jika baseline
-    // belum siap atau jumlah write melebihi batas aman single-batch client.
-    // Service tetap menjadi guard utama, blok UI ini hanya early warning admin.
-    // -------------------------------------------------------------------------
-    if (!selectedModules.length) {
-      return "Pilih minimal 1 modul sebelum reset dijalankan.";
-    }
-
-    if (!preview) {
-      return "Muat preview reset terbaru sebelum reset dijalankan.";
-    }
-
-    if (mode === "reset_and_restore_baseline" && !preview?.baselineSummary?.exists) {
-      return "Baseline testing belum ada. Simpan baseline dulu sebelum menjalankan Reset + Baseline Testing.";
-    }
-
-    if (preview?.executionPlan?.isClientBatchSafe === false) {
-      return `Reset diblokir karena estimasi ${preview.executionPlan.totalWriteOperations} operasi tulis melebihi batas aman ${preview.executionPlan.safeClientLimit} operasi dari browser. Perkecil scope modul agar tidak partial delete.`;
-    }
-
-    return "";
-  }, [mode, preview, selectedModules.length]);
+  const resetBlockedReason = useMemo(() => getResetBlockedReason({
+    selectedModules,
+    preview,
+    mode,
+  }), [mode, preview, selectedModules]);
 
   const maintenanceActor = useMemo(
     () => buildActorLabel({ profile, firebaseUser }),

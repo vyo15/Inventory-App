@@ -1,5 +1,6 @@
 import { FileSearchOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Col, Row, Space, Table, Tag } from "antd";
+import { buildAutoDetectIssueSummaryMessage, getAuditIssueCountColor } from "../utils/resetMaintenanceUiHelpers";
 
 const ResetAutoDetectPanel = ({
   autoBugSummary,
@@ -48,7 +49,7 @@ const ResetAutoDetectPanel = ({
         columns={[
           { title: "Area", dataIndex: "area", key: "area", width: 150, render: (value) => renderCompactText(value, 135) },
           { title: "Dicek", dataIndex: "checkedRecords", key: "checkedRecords", width: 90 },
-          { title: "Issue", dataIndex: "issueCount", key: "issueCount", width: 90, render: (value) => <Tag color={value ? "red" : "green"}>{value || 0}</Tag> },
+          { title: "Issue", dataIndex: "issueCount", key: "issueCount", width: 90, render: (value) => <Tag color={getAuditIssueCountColor(value)}>{value || 0}</Tag> },
           { title: "Repair", dataIndex: "safeRepairCount", key: "safeRepairCount", width: 90, render: (value) => <Tag color={value ? "blue" : "default"}>{value || 0}</Tag> },
           { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", render: (value) => renderCompactText(value, 360) },
         ]}
@@ -74,7 +75,7 @@ const ResetAutoDetectPanel = ({
         <Alert
           type="warning"
           showIcon
-          message={`${autoBugSummary.issueCount} issue dan ${autoBugSummary.safeRepairCount} kandidat repair aman terdeteksi.`}
+          message={buildAutoDetectIssueSummaryMessage(autoBugSummary)}
           description="Gunakan ringkasan area, detail kategori Data Quality, dan Repair Turunan dulu sebelum reset destructive. Sample audit hanya read-only dan tidak melakukan backfill otomatis."
         />
       )}

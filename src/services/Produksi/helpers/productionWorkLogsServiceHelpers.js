@@ -13,7 +13,7 @@ import {
   calculateOutputLine,
   calculateProductionMonitoring,
 } from "../../../constants/productionWorkLogOptions";
-import { toNumber } from "../../../utils/stock/stockHelpers";
+import { normalizeStockSnapshot, toNumber } from "../../../utils/stock/stockHelpers";
 import { inferHasVariants } from "../../../utils/variants/variantStockHelpers";
 
 // =====================================================
@@ -666,3 +666,442 @@ export const buildWorkLogCostSummary = ({ materialUsages = [], laborCostActual =
   };
 };
 
+/* =====================================================
+SECTION: Work Log draft template builders — GUARDED / behavior-preserving extraction
+Fungsi:
+- Membentuk template Work Log dari BOM atau Production Order tanpa Firestore write;
+- lifecycle aktif tetap diatur service/caller.
+Risiko:
+- Jangan mengisi status Draft aktif dari helper ini karena flow final Work Log adalah In Progress/Completed/Cancelled.
+===================================================== */
+export const buildWorkLogDraftFromBom = (bom, selectedStepId = "") => {
+  const stepLines = Array.isArray(bom?.stepLines) ? bom.stepLines : [];
+  const materialLines = Array.isArray(bom?.materialLines)
+    ? bom.materialLines
+    : [];
+
+  const chosenStep =
+    stepLines.find((item) => item.stepId === selectedStepId) ||
+    stepLines[0] ||
+    null;
+
+  const outputs = chosenStep
+    ? [
+        {
+          outputType: chosenStep.outputType || bom.targetType || "product",
+          outputIdRef: chosenStep.outputItemId || bom.targetId || "",
+          outputCode: chosenStep.outputItemCode || bom.targetCode || "",
+          outputName: chosenStep.outputItemName || bom.targetName || "",
+          unit: bom.targetUnit || "pcs",
+          goodQty: toNumber(
+            chosenStep.expectedOutputQty || bom.batchOutputQty || 0,
+          ),
+          rejectQty: 0,
+          reworkQty: 0,
+          costPerUnit: 0,
+          stockAdded: false,
+          stockAddedAt: null,
+          notes: "",
+        },
+      ]
+    : [];
+
+  return {
+    bomId: bom?.id || "",
+    bomCode: bom?.code || "",
+    bomName: bom?.name || "",
+    bomVersion: bom?.version ?? null,
+
+    productionOrderId: "",
+    productionOrderCode: "",
+    productionOrderStatusSnapshot: "",
+
+    targetType: bom?.targetType || "product",
+    targetId: bom?.targetId || "",
+    targetCode: bom?.targetCode || "",
+    targetName: bom?.targetName || "",
+    targetUnit: bom?.targetUnit || "pcs",
+
+    stepId: chosenStep?.stepId || "",
+    stepCode: chosenStep?.stepCode || "",
+    stepName: chosenStep?.stepName || "",
+    sequenceNo: toNumber(chosenStep?.sequenceNo || 1),
+
+    sourceType: "planned",
+    plannedQty: toNumber(
+      chosenStep?.expectedOutputQty || bom?.batchOutputQty || 1,
+    ),
+    actualOutputQty: 0,
+    goodQty: 0,
+    rejectQty: 0,
+    reworkQty: 0,
+    scrapQty: 0,
+
+    materialUsages: materialLines.map((line, index) => ({
+      id: line.id || `usage-${Date.now()}-${index}`,
+      itemType: line.itemType,
+      itemId: line.itemId,
+      itemCode: line.itemCode,
+      itemName: line.itemName,
+      unit: line.unit,
+      plannedQty: toNumber(line.totalRequiredQty || line.qtyPerBatch || 0),
+      actualQty: toNumber(line.totalRequiredQty || line.qtyPerBatch || 0),
+      varianceQty: 0,
+      costPerUnitSnapshot: toNumber(line.costPerUnitSnapshot || 0),
+      totalCostSnapshot: toNumber(line.totalCostSnapshot || 0),
+      materialHasVariants: line.materialHasVariants === true,
+      materialVariantStrategy: line.materialHasVariants === true ? line.materialVariantStrategy || "inherit" : "none",
+      resolvedVariantKey: line.resolvedVariantKey || "",
+      resolvedVariantLabel: line.resolvedVariantLabel || "",
+      stockSourceType: line.resolvedVariantKey ? "variant" : "master",
+      stockDeducted: false,
+      stockDeductedAt: null,
+      notes: line.notes || "",
+    })),
+
+    outputs: outputs.map((line) => ({
+      ...line,
+      outputHasVariants: false,
+      outputVariantKey: "",
+      outputVariantLabel: "",
+      stockSourceType: "master",
+    })),
+  };
+};
+
+export const buildWorkLogDraftFromProductionOrderData = (
+  productionOrder,
+  bom,
+  selectedStepId = "",
+) => {
+  const stepLines = Array.isArray(bom.stepLines) ? bom.stepLines : [];
+  const requirementLines = Array.isArray(productionOrder.materialRequirementLines)
+    ? productionOrder.materialRequirementLines
+    : [];
+
+  const chosenStep =
+    stepLines.find((item) => item.stepId === selectedStepId) ||
+    stepLines[0] ||
+    null;
+
+  // =====================================================
+  // Qty work log dibedakan jelas:
+  // - plannedQty = qty batch produksi
+  // - theoreticalOutputQty = estimasi output BOM x qty batch
+  // =====================================================
+  const batchCount = toNumber(productionOrder.batchCount || productionOrder.orderQty || 0);
+  const expectedOutputQty = toNumber(
+    productionOrder.expectedOutputQty ||
+      toNumber(productionOrder.batchOutputQty || 0) * batchCount,
+  );
+
+  return {
+    bomId: bom.id,
+    bomCode: bom.code || "",
+    bomName: bom.name || "",
+    bomVersion: bom.version ?? null,
+
+    productionOrderId: productionOrder.id || "",
+    productionOrderCode: productionOrder.code || "",
+    productionOrderStatusSnapshot: productionOrder.status || "",
+
+    targetType: productionOrder.targetType || bom.targetType || "product",
+    targetId: productionOrder.targetId || bom.targetId || "",
+    targetCode: productionOrder.targetCode || bom.targetCode || "",
+    targetName: productionOrder.targetName || bom.targetName || "",
+    targetUnit: productionOrder.targetUnit || bom.targetUnit || "pcs",
+    targetHasVariants: productionOrder.targetHasVariants === true,
+    targetVariantKey: productionOrder.targetVariantKey || "",
+    targetVariantLabel: productionOrder.targetVariantLabel || "",
+
+    stepId: chosenStep?.stepId || "",
+    stepCode: chosenStep?.stepCode || "",
+    stepName: chosenStep?.stepName || "",
+    sequenceNo: toNumber(chosenStep?.sequenceNo || 1),
+
+    sourceType: "production_order",
+    plannedQty: batchCount,
+    theoreticalOutputQty: expectedOutputQty,
+    actualOutputQty: 0,
+    goodQty: 0,
+    rejectQty: 0,
+    reworkQty: 0,
+    scrapQty: 0,
+
+    materialUsages: requirementLines.map((line, index) => ({
+      id: line.id || `usage-po-${Date.now()}-${index}`,
+      itemType: line.itemType || "raw_material",
+      itemId: line.itemId || "",
+      itemCode: line.itemCode || "",
+      itemName: line.itemName || "",
+      unit: line.unit || "pcs",
+      plannedQty: toNumber(line.qtyRequired || 0),
+      actualQty: toNumber(line.qtyRequired || 0),
+      varianceQty: 0,
+      costPerUnitSnapshot: 0,
+      totalCostSnapshot: 0,
+      materialHasVariants: line.materialHasVariants === true,
+      materialVariantStrategy: line.materialVariantStrategy || (line.materialHasVariants ? "inherit" : "none"),
+      sourceTargetHasVariants: productionOrder.targetHasVariants === true,
+      sourceTargetVariantKey: productionOrder.targetVariantKey || "",
+      sourceTargetVariantLabel: productionOrder.targetVariantLabel || "",
+      // =====================================================
+      // SECTION: Contract varian PO -> Work Log
+      // Fungsi blok:
+      // - menyalin resolved variant dari materialRequirementLines PO final ke materialUsages;
+      // - tidak menghitung ulang strategy di UI Work Log.
+      // Hubungan flow aplikasi:
+      // - Start Production memakai field ini untuk memotong stok bucket variant yang sama dengan preview PO.
+      // Alasan logic:
+      // - PO final adalah sumber kebenaran requirement; Work Log hanya mengeksekusi.
+      // Status: AKTIF/GUARDED untuk 1 PO = 1 Work Log.
+      // =====================================================
+      resolvedVariantKey: line.resolvedVariantKey || "",
+      resolvedVariantLabel: line.resolvedVariantLabel || "",
+      stockSourceType: line.stockSourceType || (line.resolvedVariantKey ? "variant" : "master"),
+      stockDeducted: false,
+      stockDeductedAt: null,
+      notes: "",
+    })),
+
+    outputs: [
+      {
+        id: `output-po-${Date.now()}`,
+        outputType: productionOrder.targetType || "product",
+        outputIdRef: productionOrder.targetId || "",
+        outputCode: productionOrder.targetCode || "",
+        outputName: productionOrder.targetName || "",
+        unit: productionOrder.targetUnit || "pcs",
+        goodQty: 0,
+        rejectQty: 0,
+        reworkQty: 0,
+        costPerUnit: 0,
+        outputHasVariants: productionOrder.targetHasVariants === true,
+        outputVariantKey: productionOrder.targetVariantKey || "",
+        outputVariantLabel: productionOrder.targetVariantLabel || "",
+        stockSourceType: productionOrder.targetVariantKey ? "variant" : "master",
+        stockAdded: false,
+        stockAddedAt: null,
+        notes: "",
+      },
+    ],
+  };
+};
+
+// =====================================================
+// Output HPP reconcile pure helpers — GUARDED
+// Phase 3 extraction: hanya menghitung payload/cost state.
+// Firestore transaction, stock posting, inventory log, dan payroll sync tetap di service utama.
+// =====================================================
+
+export const COST_RECONCILE_TOLERANCE = 0.0001;
+
+export const reconcileAverageUnitCost = ({
+  currentStock = 0,
+  currentUnitCost = 0,
+  affectedQty = 0,
+  previousUnitCost = 0,
+  nextUnitCost = 0,
+} = {}) => {
+  const safeCurrentStock = toNumber(currentStock || 0);
+  const safeCurrentUnitCost = toNumber(currentUnitCost || 0);
+  const safeAffectedQty = toNumber(affectedQty || 0);
+  const safePreviousUnitCost = toNumber(previousUnitCost || 0);
+  const safeNextUnitCost = toNumber(nextUnitCost || 0);
+
+  if (safeNextUnitCost <= 0) return safeCurrentUnitCost;
+  if (safeCurrentStock <= 0 || safeCurrentStock <= safeAffectedQty) return safeNextUnitCost;
+  // ACTIVE / GUARDED: jika stok lama masih ada tetapi master cost/HPP ter-reset 0,
+  // cost masuk yang valid menjadi baseline agar HPP turunan tidak terdilusi modal 0.
+  if (safeCurrentStock > 0 && safeCurrentUnitCost <= 0) return safeNextUnitCost;
+
+  const costDelta = safeAffectedQty * (safeNextUnitCost - safePreviousUnitCost);
+  return Math.max(0, safeCurrentUnitCost + (costDelta / safeCurrentStock));
+};
+
+export const calculateWeightedVariantUnitCost = (variants = [], costField = 'averageCostPerUnit') => {
+  const activeVariants = Array.isArray(variants)
+    ? variants.filter((variant) => variant?.isArchived !== true && variant?.isActive !== false)
+    : [];
+  const weightedQty = activeVariants.reduce((sum, variant) => {
+    const stockQty = toNumber(variant.currentStock ?? variant.stock ?? 0);
+    const unitCost = toNumber(variant[costField] || 0);
+    return stockQty > 0 && unitCost > 0 ? sum + stockQty : sum;
+  }, 0);
+
+  if (weightedQty > 0) {
+    return activeVariants.reduce((sum, variant) => {
+      const stockQty = toNumber(variant.currentStock ?? variant.stock ?? 0);
+      const unitCost = toNumber(variant[costField] || 0);
+      return stockQty > 0 && unitCost > 0 ? sum + (stockQty * unitCost) : sum;
+    }, 0) / weightedQty;
+  }
+
+  const costLines = activeVariants
+    .map((variant) => toNumber(variant[costField] || 0))
+    .filter((value) => value > 0);
+
+  return costLines.length
+    ? costLines.reduce((sum, value) => sum + value, 0) / costLines.length
+    : 0;
+};
+
+export const getOutputCostFieldName = (collectionName = '') => (
+  collectionName === 'products' ? 'hppPerUnit' : 'averageCostPerUnit'
+);
+
+export const getOutputTargetCostState = ({
+  collectionName = '',
+  stockItem = {},
+  stockDataRaw = {},
+  outputResolution = {},
+} = {}) => {
+  const costField = getOutputCostFieldName(collectionName);
+  const isVariantOutput = outputResolution.stockSourceType === 'variant';
+  const targetVariantKey = safeTrim(outputResolution.resolvedVariantKey).toLowerCase();
+
+  if (isVariantOutput) {
+    const targetVariant = (Array.isArray(stockItem.variants) ? stockItem.variants : []).find((variant) => {
+      const variantKey = safeTrim(
+        variant.variantKey || variant.id || variant.variantId || variant.name || variant.color || variant.code || variant.sku,
+      ).toLowerCase();
+      return variantKey === targetVariantKey;
+    });
+
+    return {
+      hasTarget: Boolean(targetVariant),
+      currentStock: toNumber(targetVariant?.currentStock ?? targetVariant?.stock ?? outputResolution.currentStock ?? 0),
+      currentUnitCost: toNumber(targetVariant?.[costField] || 0),
+      costField,
+      stockSourceType: 'variant',
+    };
+  }
+
+  const stockData = normalizeStockSnapshot(stockDataRaw || {});
+  return {
+    hasTarget: true,
+    // ACTIVE / GUARDED: currentStock diprioritaskan atas legacy stock agar reconcile cost tidak memakai stok lama yang sudah tidak sinkron.
+    currentStock: toNumber(stockDataRaw?.currentStock ?? stockDataRaw?.stock ?? stockData.currentStock ?? 0),
+    currentUnitCost: toNumber(stockDataRaw?.[costField] || 0),
+    costField,
+    stockSourceType: 'master',
+  };
+};
+
+export const needsOutputMasterCostSync = ({
+  costState = {},
+  lineGoodQty = 0,
+  nextUnitCost = 0,
+} = {}) => {
+  if (!costState.hasTarget || nextUnitCost <= 0) return false;
+
+  const currentUnitCost = toNumber(costState.currentUnitCost || 0);
+  const currentStock = toNumber(costState.currentStock || 0);
+  const affectedQty = toNumber(lineGoodQty || 0);
+
+  if (currentUnitCost <= 0) return true;
+
+  return currentStock <= affectedQty && Math.abs(currentUnitCost - nextUnitCost) > COST_RECONCILE_TOLERANCE;
+};
+
+export const buildOutputHppReconcilePayload = ({
+  collectionName = '',
+  stockItem = {},
+  stockDataRaw = {},
+  outputResolution = {},
+  goodQty = 0,
+  previousUnitCost = 0,
+  nextUnitCost = 0,
+} = {}) => {
+  const isVariantOutput = outputResolution.stockSourceType === 'variant';
+  const targetVariantKey = safeTrim(outputResolution.resolvedVariantKey).toLowerCase();
+
+  if (collectionName === 'semi_finished_materials') {
+    if (isVariantOutput) {
+      const nextVariants = (Array.isArray(stockItem.variants) ? stockItem.variants : []).map((variant) => {
+        const variantKey = safeTrim(
+          variant.variantKey || variant.id || variant.variantId || variant.name || variant.color || variant.code || variant.sku,
+        ).toLowerCase();
+
+        if (variantKey !== targetVariantKey) return variant;
+
+        const currentVariantStock = toNumber(variant.currentStock ?? variant.stock ?? outputResolution.currentStock ?? 0);
+        const currentVariantCost = toNumber(variant.averageCostPerUnit || 0);
+        const reconciledVariantCost = reconcileAverageUnitCost({
+          currentStock: currentVariantStock,
+          currentUnitCost: currentVariantCost,
+          affectedQty: goodQty,
+          previousUnitCost,
+          nextUnitCost,
+        });
+
+        return {
+          ...variant,
+          averageCostPerUnit: reconciledVariantCost,
+        };
+      });
+
+      return {
+        variants: nextVariants,
+        averageCostPerUnit: calculateWeightedVariantUnitCost(nextVariants, 'averageCostPerUnit'),
+        lastProductionCostPerUnit: nextUnitCost,
+      };
+    }
+
+    const stockData = normalizeStockSnapshot(stockDataRaw || {});
+    return {
+      averageCostPerUnit: reconcileAverageUnitCost({
+        currentStock: stockData.currentStock,
+        currentUnitCost: toNumber(stockData.averageCostPerUnit || 0),
+        affectedQty: goodQty,
+        previousUnitCost,
+        nextUnitCost,
+      }),
+      lastProductionCostPerUnit: nextUnitCost,
+    };
+  }
+
+  if (collectionName === 'products') {
+    if (isVariantOutput) {
+      const nextVariants = (Array.isArray(stockItem.variants) ? stockItem.variants : []).map((variant) => {
+        const variantKey = safeTrim(
+          variant.variantKey || variant.id || variant.variantId || variant.name || variant.color || variant.code || variant.sku,
+        ).toLowerCase();
+
+        if (variantKey !== targetVariantKey) return variant;
+
+        const currentVariantStock = toNumber(variant.currentStock ?? variant.stock ?? outputResolution.currentStock ?? 0);
+        const currentVariantHpp = toNumber(variant.hppPerUnit || 0);
+        const reconciledVariantHpp = reconcileAverageUnitCost({
+          currentStock: currentVariantStock,
+          currentUnitCost: currentVariantHpp,
+          affectedQty: goodQty,
+          previousUnitCost,
+          nextUnitCost,
+        });
+
+        return {
+          ...variant,
+          hppPerUnit: reconciledVariantHpp,
+        };
+      });
+
+      return {
+        variants: nextVariants,
+        hppPerUnit: calculateWeightedVariantUnitCost(nextVariants, 'hppPerUnit'),
+      };
+    }
+
+    return {
+      hppPerUnit: reconcileAverageUnitCost({
+        currentStock: toNumber(stockDataRaw?.currentStock ?? stockDataRaw?.stock ?? 0),
+        currentUnitCost: toNumber(stockDataRaw?.hppPerUnit || 0),
+        affectedQty: goodQty,
+        previousUnitCost,
+        nextUnitCost,
+      }),
+    };
+  }
+
+  return {};
+};

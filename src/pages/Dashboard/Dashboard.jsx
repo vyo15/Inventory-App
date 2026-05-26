@@ -30,198 +30,30 @@ import {
 } from "@ant-design/icons";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
-import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { readDashboardData } from "../../services/Dashboard/dashboardService";
+import {
+  EMPTY_PLANNING_SUMMARY,
+  MAX_DASHBOARD_ALERT_ITEMS,
+  MAX_DASHBOARD_LIST_ITEMS,
+  MAX_PLANNING_PRIORITY_ITEMS,
+  buildRestockRoute,
+  formatCurrency,
+  getFinancialAmount,
+  getNumericValue,
+  getTransactionDate,
+  isCancelledStatus,
+  isCompletedStatus,
+  isPayrollPaid,
+  isPayrollPending,
+  isSameDay,
+  isSameMonth,
+  isSameWeek,
+  normalizeStatus,
+} from "./helpers/dashboardPageHelpers";
 import "./Dashboard.css";
 
 const { Text, Title } = Typography;
-
-// =========================
-// SECTION: Dashboard limits
-// Fungsi:
-// - mengunci Dashboard sebagai control center compact sesuai docs project;
-// - list tidak boleh panjang supaya Dashboard tidak berubah menjadi laporan besar.
-// Hubungan flow:
-// - hanya membatasi tampilan read-only, tidak mengubah stok, sales, produksi, payroll, HPP, kas, atau laporan.
-// Status:
-// - aktif dipakai; bukan legacy dan bukan kandidat cleanup.
-// =========================
-const MAX_DASHBOARD_LIST_ITEMS = 5;
-const MAX_DASHBOARD_ALERT_ITEMS = 6;
-const MAX_PLANNING_PRIORITY_ITEMS = 3;
-
-const EMPTY_PLANNING_PERIOD_SUMMARY = {
-  count: 0,
-  targetQty: 0,
-  actualCompletedQty: 0,
-  remainingQty: 0,
-  progressPercent: 0,
-  priorityPlans: [],
-};
-
-const EMPTY_PLANNING_SUMMARY = {
-  weekly: EMPTY_PLANNING_PERIOD_SUMMARY,
-  monthly: EMPTY_PLANNING_PERIOD_SUMMARY,
-  overdueCount: 0,
-  behindTargetCount: 0,
-  priorityPlans: [],
-};
-
-// =========================
-// SECTION: Helpers - parsing data lama/baru
-// Fungsi:
-// - menjaga Dashboard tetap aman saat field Firestore berbeda antara data lama dan data baru;
-// - semua helper hanya membaca data dan tidak melakukan write.
-// Hubungan flow:
-// - dipakai untuk summary read-only dari Sales, Expense, Inventory Log, PO, Work Log, Payroll, dan Planning.
-// Status:
-// - aktif sebagai guard kompatibilitas; kandidat cleanup hanya jika schema sudah 100% diseragamkan.
-// =========================
-const getNumericValue = (value) => {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-
-  if (typeof value === "string") {
-    const normalized = value.replace(/[^\d.-]/g, "");
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  return 0;
-};
-
-const getTransactionDate = (record = {}) => {
-  const candidates = [
-    record?.date,
-    record?.transactionDate,
-    record?.paidAt,
-    record?.completedAt,
-    record?.createdAt,
-    record?.timestamp,
-    record?.updatedAt,
-  ];
-
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-
-    if (typeof candidate?.toDate === "function") return candidate.toDate();
-    if (candidate instanceof Date) return candidate;
-
-    if (typeof candidate === "string" || typeof candidate === "number") {
-      const parsed = new Date(candidate);
-      if (!Number.isNaN(parsed.getTime())) return parsed;
-    }
-  }
-
-  return null;
-};
-
-const isSameDay = (date, referenceDate = new Date()) => {
-  if (!date) return false;
-  return (
-    date.getFullYear() === referenceDate.getFullYear() &&
-    date.getMonth() === referenceDate.getMonth() &&
-    date.getDate() === referenceDate.getDate()
-  );
-};
-
-const isSameMonth = (date, referenceDate = new Date()) => {
-  if (!date) return false;
-  return (
-    date.getFullYear() === referenceDate.getFullYear() &&
-    date.getMonth() === referenceDate.getMonth()
-  );
-};
-
-const isSameWeek = (date, referenceDate = new Date()) => {
-  if (!date) return false;
-
-  const startOfWeek = new Date(referenceDate);
-  const day = startOfWeek.getDay() || 7;
-  startOfWeek.setHours(0, 0, 0, 0);
-  startOfWeek.setDate(startOfWeek.getDate() - day + 1);
-
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 7);
-
-  return date >= startOfWeek && date < endOfWeek;
-};
-
-const getFinancialAmount = (record = {}) => {
-  const candidates = [
-    record?.amount,
-    record?.grandTotal,
-    record?.totalAmount,
-    record?.finalAmount,
-    record?.total,
-    record?.amountPaid,
-  ];
-
-  for (const candidate of candidates) {
-    const value = getNumericValue(candidate);
-    if (value > 0) return value;
-  }
-
-  return 0;
-};
-
-// =====================================================
-// SECTION: Dashboard Currency Formatter — AKTIF
-// Fungsi:
-// - menampilkan nominal Rupiah read-only pada kartu dan alert Dashboard.
-//
-// Dipakai oleh:
-// - ringkasan sales, finance, payroll, dan tag harga Dashboard.
-//
-// Alasan perubahan:
-// - memakai formatter Rupiah global agar tampilan Dashboard konsisten dengan halaman lain.
-//
-// Catatan cleanup:
-// - alias lokal dipertahankan agar usage Dashboard tidak perlu diganti massal.
-//
-// Risiko:
-// - jangan ubah rounding di sini tanpa audit report/finance karena user membaca nominal ringkasan dari Dashboard.
-// =====================================================
-const formatCurrency = (value) => formatCurrencyId(Math.round(value || 0));
-
-const normalizeStatus = (value) => String(value || "").trim().toLowerCase();
-
-const isCancelledStatus = (value) =>
-  ["cancelled", "canceled", "cancel", "dibatalkan", "batal"].includes(normalizeStatus(value));
-
-const isCompletedStatus = (value) =>
-  ["completed", "complete", "selesai", "done"].includes(normalizeStatus(value));
-
-const isPayrollPending = (record = {}) => {
-  const paymentStatus = normalizeStatus(record.paymentStatus);
-  const status = normalizeStatus(record.status);
-  return paymentStatus === "unpaid" || status === "draft" || status === "confirmed";
-};
-
-const isPayrollPaid = (record = {}) => {
-  const paymentStatus = normalizeStatus(record.paymentStatus);
-  const status = normalizeStatus(record.status);
-  return paymentStatus === "paid" || status === "paid";
-};
-
-// =========================
-// SECTION: Restock route helper — AKTIF / UI ONLY
-// Fungsi:
-// - menyusun URL prefill untuk navigasi Restock Assistant;
-// - data rekomendasi stok/restock sudah disiapkan oleh dashboardService.
-// =========================
-const buildRestockRoute = (basePath, params = {}) => {
-  const searchParams = new URLSearchParams();
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (String(value || "").trim()) {
-      searchParams.set(key, String(value).trim());
-    }
-  });
-
-  const queryString = searchParams.toString();
-  return queryString ? `${basePath}?${queryString}` : basePath;
-};
 
 /* =====================================================
 SECTION: Dashboard Quick Actions — AKTIF / GUARDED

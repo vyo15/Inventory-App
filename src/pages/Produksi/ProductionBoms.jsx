@@ -64,6 +64,12 @@ import {
   updateProductionBom,
 } from "../../services/Produksi/productionBomsService";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import {
+  clampTwoLineStyle,
+  compactTagStyle,
+  EMPTY_REFERENCE_DATA,
+  hydrateBomRecordWithLiveCosts,
+} from "./helpers/productionBomsPageHelpers";
 
 // =====================================================
 // SECTION: helper format angka Indonesia
@@ -75,7 +81,6 @@ import { buildBomMaterialFormLine, buildBomStepFormLine } from "../../utils/prod
 import {
   calculateBomStepLineCost,
   hydrateBomMaterialLineWithLiveCost,
-  hydrateBomMaterialLinesWithLiveCost,
   resolveBomCostSourceLabel,
 } from "../../utils/produksi/productionBomCostHelpers";
 import { inferHasVariants } from "../../utils/variants/variantStockHelpers";
@@ -90,50 +95,6 @@ import { showFormValidationFeedback } from '../../utils/forms/formValidationFeed
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
-
-const compactTagStyle = {
-  display: "inline-flex",
-  whiteSpace: "normal",
-  lineHeight: 1.25,
-  paddingTop: 4,
-  paddingBottom: 4,
-  maxWidth: 180,
-};
-
-const clampTwoLineStyle = {
-  display: "-webkit-box",
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: "vertical",
-  overflow: "hidden",
-  lineHeight: "var(--ims-line-height-body)",
-};
-
-const EMPTY_REFERENCE_DATA = {
-  products: [],
-  rawMaterials: [],
-  semiFinishedMaterials: [],
-  productionSteps: [],
-};
-
-// IMS NOTE [AKTIF/GUARDED]: Refresh live BOM cost snapshot untuk list/detail/edit tanpa menulis balik ke Firestore.
-const hydrateBomRecordWithLiveCosts = (record = {}, refs = EMPTY_REFERENCE_DATA) => {
-  const materialLines = hydrateBomMaterialLinesWithLiveCost({
-    materialLines: record.materialLines || [],
-    referenceData: refs || EMPTY_REFERENCE_DATA,
-  });
-  const stepLines = Array.isArray(record.stepLines) ? record.stepLines : [];
-  const totals = calculateBomTotals(materialLines, stepLines, record);
-
-  return {
-    ...record,
-    materialLines,
-    stepLines,
-    materialCostEstimate: totals.materialCostEstimate,
-    laborCostEstimate: totals.laborCostEstimate,
-    overheadCostEstimate: totals.overheadCostEstimate,
-    totalCostEstimate: totals.totalCostEstimate,
-  };
-};
 
 const ProductionBoms = () => {
   // SECTION: state loading dan data utama

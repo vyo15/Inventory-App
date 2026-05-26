@@ -11,7 +11,6 @@
 // =====================================================
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import dayjs from "dayjs";
 import {
   Alert,
   Badge,
@@ -35,7 +34,6 @@ import {
   Typography,
 } from "antd";
 import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
-import { SEMI_FINISHED_CATEGORY_MAP, SEMI_FINISHED_GROUP_MAP } from "../../constants/semiFinishedMaterialOptions";
 import { toReferenceOptions } from "../../utils/produksi/productionReferenceHelpers";
 import {
   buildCountSummary,
@@ -61,250 +59,27 @@ import { getActiveBomReferenceData } from "../../services/Produksi/productionBom
 import useAuth from "../../hooks/useAuth";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
+import {
+  formatDateTimeLabel,
+  formatQtyWithUnit,
+  getCompactLineStatus,
+  getPriorityMeta,
+  getProductionTargetDisplayLabel,
+  getRecipeDisplayLabel,
+  getRequirementStockSourceMeta,
+  ORDER_STATUS_MAP,
+  orderUiClassNames,
+  PRIORITY_OPTIONS,
+  PRODUCTION_ORDER_TARGET_TYPES,
+  renderOrderCellBlock,
+  resolveSemiProductionGroupMeta,
+} from "./helpers/productionOrdersPageHelpers";
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
-
-const PRODUCTION_ORDER_TARGET_TYPES = [
-  {
-    value: "semi_finished_material",
-    label: "Bahan / Semi Produk",
-  },
-  {
-    value: "product",
-    label: "Produk Jadi",
-  },
-];
-
-const PRIORITY_OPTIONS = [
-  { value: "low", label: "Low" },
-  { value: "normal", label: "Normal" },
-  { value: "high", label: "High" },
-  { value: "urgent", label: "Urgent" },
-];
-
-const ORDER_STATUS_MAP = {
-  draft: { text: "Draft", status: "default" },
-  shortage: { text: "Shortage", status: "error" },
-  ready: { text: "Ready", status: "processing" },
-  in_production: { text: "In Production", status: "processing" },
-  completed: { text: "Completed", status: "success" },
-  released: { text: "Released", status: "warning" },
-  cancelled: { text: "Cancelled", status: "default" },
-};
-
-const PRIORITY_META_MAP = {
-  low: { label: "Low", color: "default" },
-  normal: { label: "Normal", color: "blue" },
-  high: { label: "High", color: "orange" },
-  urgent: { label: "Urgent", color: "red" },
-};
-
-// =====================================================
-// Helper UI order
-// Catatan maintainability:
-// - Priority sengaja dipertahankan karena akan dipakai untuk scheduling.
-// - Format tanggal dipusatkan di helper agar list dan drawer konsisten.
-// =====================================================
-const getPriorityMeta = (value) =>
-  PRIORITY_META_MAP[value] || {
-    label: value ? String(value) : "-",
-    color: "default",
-  };
-
-const formatDateTimeLabel = (value) => {
-  if (!value) return "-";
-  const parsed = dayjs(value?.toDate?.() || value);
-  return parsed.isValid() ? parsed.format("DD/MM/YYYY HH:mm") : "-";
-};
-
-// =====================================================
-// Helper tampilan batch 1.
-// Dipakai agar metadata baris, tag status, dan action button mengikuti fondasi
-// tabel global tanpa mengulang inline style di setiap render kolom.
-// =====================================================
-const orderUiClassNames = {
-  stack: "ims-cell-stack ims-cell-stack-tight",
-  meta: "ims-cell-meta",
-  title: "ims-cell-title",
-};
-
-const renderOrderCellBlock = (primary, secondaryLines = []) => (
-  <div className={orderUiClassNames.stack}>
-    <div className={orderUiClassNames.title}>{primary || "-"}</div>
-    {secondaryLines.filter(Boolean).map((line, index) => (
-      <div key={index} className={orderUiClassNames.meta}>{line}</div>
-    ))}
-  </div>
-);
-
-// =====================================================
-// ACTIVE / FINAL - helper teks preview compact Buat PO.
-// Fungsi:
-// - menyamakan format qty + satuan pada target produksi dan material;
-// - menjaga preview tetap ringkas tanpa tabel besar.
-// Alasan perubahan:
-// - drawer Buat PO harus lebih kecil dan hanya menampilkan info penting.
-// Status:
-// - aktif dipakai untuk UI read-only preview;
-// - kandidat cleanup jika nanti dibuat komponen shared requirement preview.
-// =====================================================
-const formatQtyWithUnit = (value, unit = "") => {
-  const normalizedUnit = String(unit || "").trim();
-  return `${formatNumber(Number(value || 0))}${normalizedUnit ? ` ${normalizedUnit}` : ""}`;
-};
-
-const normalizeRequirementVariantStrategy = (line = {}) => {
-  const rawStrategy = String(line.materialVariantStrategy || "none").trim().toLowerCase();
-  return ["inherit", "fixed", "none"].includes(rawStrategy) ? rawStrategy : "none";
-};
-
-const lineRequiresVariantStock = (line = {}) => {
-  const strategy = normalizeRequirementVariantStrategy(line);
-  return line.materialHasVariants === true && strategy !== "none";
-};
-
-const FALLBACK_SEMI_FAMILY_KEY = "__general";
-const FALLBACK_SEMI_CATEGORY_KEY = "__uncategorized";
-
-const normalizeOptionKey = (value = "") =>
-  String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_-]+/g, "_");
-
-const getExactKnownOptionKey = (value = "", optionMap = {}) => {
-  const normalizedValue = normalizeOptionKey(value);
-
-  if (!normalizedValue) return "";
-
-  return (
-    Object.entries(optionMap).find(([key, label]) => {
-      const normalizedKey = normalizeOptionKey(key);
-      const normalizedLabel = normalizeOptionKey(label);
-      return normalizedValue === normalizedKey || normalizedValue === normalizedLabel;
-    })?.[0] || ""
-  );
-};
-
-const resolveExplicitSemiOptionMeta = ({
-  value = "",
-  optionMap = {},
-  fallbackKey = "",
-  fallbackLabel = "",
-} = {}) => {
-  const rawValue = String(value || "").trim();
-
-  if (!rawValue) {
-    return { key: fallbackKey, label: fallbackLabel };
-  }
-
-  const knownKey = getExactKnownOptionKey(rawValue, optionMap);
-
-  if (knownKey) {
-    return { key: knownKey, label: optionMap[knownKey] || rawValue };
-  }
-
-  return { key: rawValue, label: rawValue };
-};
-
-const resolveSemiProductionGroupMeta = ({ reference = null } = {}) => {
-  const familyMeta = resolveExplicitSemiOptionMeta({
-    value: reference?.flowerGroup,
-    optionMap: SEMI_FINISHED_GROUP_MAP,
-    fallbackKey: FALLBACK_SEMI_FAMILY_KEY,
-    fallbackLabel: "Umum / Reusable",
-  });
-  const categoryMeta = resolveExplicitSemiOptionMeta({
-    value: reference?.category,
-    optionMap: SEMI_FINISHED_CATEGORY_MAP,
-    fallbackKey: FALLBACK_SEMI_CATEGORY_KEY,
-    fallbackLabel: "Tanpa Kategori",
-  });
-
-  return {
-    familyKey: familyMeta.key,
-    familyLabel: familyMeta.label,
-    categoryKey: categoryMeta.key,
-    categoryLabel: categoryMeta.label,
-  };
-};
-
-const getProductionTargetDisplayLabel = (group = {}) =>
-  group.targetName || "Target belum dikenal";
-
-const getRecipeDisplayLabel = (option = {}) => {
-  const raw = option.raw || {};
-  const rawName = String(raw.name || raw.bomName || option.label || "").trim();
-  const cleanedName = rawName
-    .replace(/^BOM\s*[-:]?\s*/i, "")
-    .replace(/^([^\s]+)\s+-\s+BOM\s*/i, "")
-    .trim();
-
-  if (cleanedName) {
-    return cleanedName.toLowerCase().startsWith("resep")
-      ? cleanedName
-      : `Resep ${cleanedName}`;
-  }
-
-  return "Resep Produksi";
-};
-
-// =====================================================
-// SECTION: Label sumber stok requirement PO.
-// Fungsi blok:
-// - membedakan material yang benar-benar membaca Variant, Master, atau invalid;
-// - dipakai oleh preview create PO dan drawer detail PO.
-// Hubungan flow aplikasi:
-// - hanya presentasi read-only dari materialRequirementLines hasil service strict;
-// - tidak mengubah submit PO, refresh need, Start Production, stok, payroll, atau HPP.
-// Alasan logic:
-// - material bervarian wajib tidak boleh terlihat normal sebagai Master bila resolver strict gagal/legacy mismatch.
-// Status: AKTIF untuk preview/detail PO, GUARDED terhadap data legacy material requirement.
-// =====================================================
-const getRequirementStockSourceMeta = (line = {}) => {
-  const variantLabel = line.resolvedVariantLabel || line.fixedVariantLabel || "";
-
-  if (line.stockSourceType === "variant" || line.resolvedVariantKey || variantLabel) {
-    return {
-      color: "purple",
-      label: "Variant",
-      variantLabel: variantLabel || "Varian terpilih",
-    };
-  }
-
-  if (lineRequiresVariantStock(line)) {
-    return {
-      color: "orange",
-      label: "Varian tidak ditemukan",
-      variantLabel: "Refresh Need / cek BOM",
-    };
-  }
-
-  return {
-    color: "default",
-    label: "Master",
-    variantLabel: "Tanpa varian",
-  };
-};
-
-const getCompactLineStatus = (line = {}) => {
-  const shortageQty = Number(line.shortageQty || 0);
-  if (shortageQty > 0) {
-    return {
-      color: "red",
-      label: `Kurang ${formatQtyWithUnit(shortageQty, line.unit)}`,
-    };
-  }
-
-  return {
-    color: "green",
-    label: "Cukup",
-  };
-};
 
 const ProductionOrders = () => {
   const { profile, firebaseUser } = useAuth();

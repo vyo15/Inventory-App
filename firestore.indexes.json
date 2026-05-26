@@ -1,0 +1,22 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "stock_item_read_models",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "hasStockIssue", "order": "ASCENDING" },
+        { "fieldPath": "statusRank", "order": "DESCENDING" },
+        { "fieldPath": "sortGap", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "stock_item_read_models",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sourceType", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

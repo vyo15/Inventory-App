@@ -6,7 +6,7 @@
 // - Produksi lebih fokus ke eksekusi, bukan planning dari nol
 // =====================================================
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buildCountSummary, createKeywordMatcher, matchFieldValue } from '../../utils/produksi/productionPageHelpers';
 import { getWorkLogMaterialOptions, getWorkLogTargetOptions, toReferenceOptions } from '../../utils/produksi/productionReferenceHelpers';
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
@@ -68,7 +68,6 @@ import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/number
 import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
 import { buildWorkLogMaterialUsageFormLine, buildWorkLogOutputFormLine } from "../../utils/produksi/productionLineBuilders";
-import { isProductionWorkLogCompleted } from "../../utils/produksi/productionFlowGuards";
 import {
   buildProductionStepPayrollSnapshot,
 } from "../../utils/produksi/productionPayrollRuleHelpers";
@@ -77,17 +76,20 @@ import useAuth from "../../hooks/useAuth";
 import WorkLogMaterialUsageModal from "./components/WorkLogMaterialUsageModal";
 import WorkLogOutputModal from "./components/WorkLogOutputModal";
 import WorkLogCompleteModal from "./components/WorkLogCompleteModal";
+import {
+  getWorkLogSourceTagColor,
+  getWorkLogStatusTagColor,
+  isEditableProductionWorkLog,
+  renderCompleteWorkLogEstimateInfo,
+  renderWorkLogCellBlock,
+  workLogUiClassNames,
+} from './helpers/productionWorkLogsPageHelpers';
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
-
-const safeText = (value) => String(value || "").trim();
-
-const isEditableProductionWorkLog = (record = {}) =>
-  safeText(record.status).toLowerCase() === "in_progress" && !isProductionWorkLogCompleted(record);
 
 const getProductionPayrollsForWorkLogDisplaySafely = async () => {
   try {
@@ -826,90 +828,6 @@ const ProductionWorkLogs = () => {
   const formatDisplayDate = (value, format = "DD/MM/YYYY") => {
     const rawValue = value?.toDate ? value.toDate() : value;
     return rawValue ? dayjs(rawValue).format(format) : "-";
-  };
-
-  const getWorkLogStatusTagColor = (status) => {
-    switch (status) {
-      case "completed":
-        return "green";
-      case "in_progress":
-        return "blue";
-      case "cancelled":
-        return "red";
-      case "draft":
-      default:
-        return "default";
-    }
-  };
-
-  const getWorkLogSourceTagColor = (sourceType) =>
-    sourceType === "production_order" ? "purple" : "blue";
-
-  // =====================================================
-  // Helper presentasi batch 1.
-  // Dipakai untuk mengganti blok metadata tabel yang sebelumnya banyak inline
-  // style menjadi class shared agar lebih rapi dan mudah di-maintain.
-  // =====================================================
-  const workLogUiClassNames = useMemo(
-    () => ({
-      stack: "ims-cell-stack ims-cell-stack-tight",
-      meta: "ims-cell-meta",
-      title: "ims-cell-title",
-    }),
-    [],
-  );
-
-  const renderWorkLogCellBlock = useCallback(
-    (primary, secondaryLines = []) => (
-      <div className={workLogUiClassNames.stack}>
-        <div className={workLogUiClassNames.title}>{primary || "-"}</div>
-        {secondaryLines.filter(Boolean).map((line, index) => (
-          <div key={index} className={workLogUiClassNames.meta}>{line}</div>
-        ))}
-      </div>
-    ),
-    [workLogUiClassNames.meta, workLogUiClassNames.stack, workLogUiClassNames.title],
-  );
-
-  // =====================================================
-  // ACTIVE UI GUARD - konteks estimasi modal complete Work Log.
-  // Fungsi blok:
-  // - memberi acuan target, step, batch, dan estimasi hasil sebelum user mengisi Good Qty.
-  // Alasan perubahan:
-  // - regression UI sebelumnya menghapus konteks output sehingga user tidak punya acuan cepat saat menyelesaikan work log.
-  // Status:
-  // - aktif dipakai hanya sebagai preview read-only; bukan business rule dan bukan kandidat cleanup.
-  // =====================================================
-  const renderCompleteWorkLogEstimateInfo = (record) => {
-    if (!record) return null;
-
-    const unitLabel = record.targetUnit || record.unit || "";
-    const targetLabel = [record.targetName || "-", record.targetVariantLabel ? `Varian: ${record.targetVariantLabel}` : null]
-      .filter(Boolean)
-      .join(" · ");
-
-    return (
-      <Card
-        size="small"
-        className="ims-readonly-panel"
-        style={{ marginBottom: 16 }}
-        bodyStyle={{ padding: 12 }}
-      >
-        <Space direction="vertical" size={4} style={{ width: "100%" }}>
-          <Space size={6} wrap>
-            <Typography.Text strong>Acuan estimasi hasil</Typography.Text>
-            <Tag color="default">Read-only</Tag>
-          </Space>
-          <Typography.Text>{targetLabel}</Typography.Text>
-          <Typography.Text type="secondary" className="ims-cell-meta">
-            Tahapan: {record.stepName || "-"} · No. Order: {record.productionOrderCode || "-"}
-          </Typography.Text>
-          <Typography.Text type="secondary" className="ims-cell-meta">
-            Qty batch: {formatNumber(record.plannedQty || 0)} · Estimasi hasil: {formatNumber(record.theoreticalOutputQty || 0)} {unitLabel}
-          </Typography.Text>
-        </Space>
-      </Card>
-    );
   };
 
   // =====================================================

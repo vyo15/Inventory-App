@@ -1178,3 +1178,65 @@ Guard:
 - Source of truth produksi tetap `productionWorkLogsService.js` untuk transaction material out, output in, HPP reconcile, payroll accrual, dan status PO/Work Log.
 - Jangan memanggil helper 18H dari UI untuk menggantikan service transaction. UI hanya boleh submit payload melalui service existing.
 - Split berikutnya harus memeriksa import/usage dan menjaga atomic transaction agar stok/HPP/payroll tidak partial.
+
+### Integration Map — Batch 20 UI Helper Split Phase 2
+
+```text
+RawMaterials.jsx
+-> helpers/rawMaterialsPageHelpers.js
+   -> form initial values, supplier/restock display resolver, status stok UI, stock summary, formatter UI
+-> rawMaterialsService tetap memegang create/update/toggle dan guard stok
+
+ProductionWorkLogs.jsx
+-> helpers/productionWorkLogsPageHelpers.jsx
+   -> status/source tag color, editable UI guard, compact cell renderer, complete estimate read-only panel
+-> productionWorkLogsService tetap memegang start/complete, stock posting, HPP, payroll, inventory log, read model sync
+
+ResetMaintenanceData.jsx
+-> utils/resetMaintenanceUiHelpers.js
+   -> reset module options, selected label resolver, reset confirm keyword resolver, reset blocked reason UI guard
+-> resetMaintenanceDataService tetap memegang preview, reset execution, baseline, sync stock, destructive delete, dan service guard
+```
+
+Guard:
+- Helper Batch 20 hanya untuk UI/read-only/formatter/guard presentasi.
+- Helper UI tidak boleh melakukan Firestore write, delete, stock mutation, reset destructive, HPP/payroll posting, atau route/role update.
+- Semua mutasi tetap lewat service existing yang sudah guarded.
+- Jika helper UI perlu data tambahan dari service baru, batch harus berhenti dan review ulang scope agar tidak memindahkan business rule ke UI.
+
+
+### Integration Map — Batch 21–24 Combined UI/Data Quality/Purchase UX Hardening
+
+```text
+ProductionEmployees.jsx
+-> helpers/productionEmployeesPageHelpers.jsx
+   -> employee payroll/worklog matching, summary map, detail activity summary, optional detail guards, compact info renderer
+-> productionEmployeesService / productionPayrollsService / productionWorkLogsService tetap read/write source existing
+
+SupplierPurchases.jsx
+-> helpers/supplierPurchasesPageHelpers.jsx
+   -> purchase date/time formatter, supplier business code display, latest purchase comparator, table summary detail
+-> suppliersService tetap memegang supplier snapshot/cascade dan purchaseRecords hanya dibaca read-only
+
+Dashboard.jsx
+-> helpers/dashboardPageHelpers.js
+   -> numeric/date/status formatter, finance amount resolver, restock route builder, planning empty summary constants
+-> dashboardService tetap memegang readDashboardData(), stock_item_read_models issue query, fallback, finance/planning/read model source
+
+ResetAutoDetectPanel.jsx
+-> utils/resetMaintenanceUiHelpers.js
+   -> issue count color dan auto-detect summary wording
+-> dataQualityAuditService / resetMaintenanceDataService tetap memegang audit/repair/reset guarded logic
+
+Purchases.jsx
+-> helpers/purchasesPageHelpers.js
+   -> supplier subtotal/reference preview dan OCR receipt metadata
+-> purchasesService tetap memegang createPurchaseTransaction, stock-in, expense, average cost, inventory log, read model sync
+-> shopeePurchaseOcrParser tetap source parser OCR
+```
+
+Guard:
+- Helper Batch 21–24 hanya UI/read-only/pure calculation.
+- Tidak ada helper baru yang boleh melakukan Firestore write/delete, stock mutation, purchase stock-in, expense/income posting, HPP/payroll posting, reset destructive, route/menu/role guard, atau schema change.
+- Dashboard dan Stock Report source runtime terbaru sudah memakai `stock_item_read_models` sebagai read path utama dengan fallback guarded; docs lama yang menyebut full-source adalah histori/superseded.
+- `stock_item_read_models` tetap derived read model. Source of truth stok tetap master item stock fields dan `inventory_logs`.

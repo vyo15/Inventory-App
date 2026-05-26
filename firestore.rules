@@ -67,6 +67,7 @@ service cloud.firestore {
         'sales',
         'semi_finished_materials',
         'stock_adjustments',
+        'stock_item_read_models',
         'supplierPurchases',
         'production_boms',
         'production_employee_code_sequences',

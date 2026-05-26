@@ -54,6 +54,16 @@ import {
   getDailyBusinessCodeSequence,
   prepareDailySequenceCodeInTransaction,
 } from '../../utils/references/businessCodeGenerator';
+import {
+  PURCHASE_UNIT_OPTIONS,
+  SUPPLIER_PURCHASE_LOOKUP_LIMIT,
+  formatPurchaseDate,
+  getLatestPurchaseForMaterial,
+  getMaterialStockUnit,
+  getSupplierBusinessCode,
+  getSupplierTableSummaryDetail,
+  renderSupplierBusinessCode,
+} from './helpers/supplierPurchasesPageHelpers';
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -66,64 +76,7 @@ const { Option } = Select;
 const { Search } = Input;
 const { Text } = Typography;
 
-// -----------------------------------------------------------------------------
-// Opsi satuan beli katalog supplier.
-// FUNGSI: membantu user mencatat konteks harga supplier tanpa membuat transaksi.
-// HUBUNGAN FLOW: dipakai hanya di menu Supplier sebagai katalog restock.
-// STATUS: aktif dipakai; bukan business rule stok.
-// -----------------------------------------------------------------------------
-const PURCHASE_UNIT_OPTIONS = ['pcs', 'meter', 'roll', 'pack', 'ikat', 'dus', 'lainnya'];
 
-// -----------------------------------------------------------------------------
-// AKTIF + GUARDED: batas histori purchase untuk pembanding Supplier.
-// FUNGSI: mencegah halaman Supplier membaca seluruh collection purchases saat
-// data real mulai banyak.
-// HUBUNGAN FLOW: hanya memengaruhi pembanding read-only; tidak membuat purchase,
-// tidak mengubah stok, kas, expense, Supplier, atau Raw Material.
-// LEGACY: purchase lama yang sangat tua bisa tidak muncul di pembanding ringkas;
-// laporan lengkap tetap berada di menu Laporan/Purchases.
-// CLEANUP CANDIDATE: ganti ke lookup per material jika nanti service latest
-// purchase dan index Firestore sudah final.
-// -----------------------------------------------------------------------------
-const SUPPLIER_PURCHASE_LOOKUP_LIMIT = 500;
-
-// -----------------------------------------------------------------------------
-// Helper format tanggal purchase terakhir.
-// FUNGSI: menampilkan histori pembelian sebagai perbandingan harga read-only.
-// STATUS: aktif dipakai di detail Supplier; tidak menulis transaksi.
-// -----------------------------------------------------------------------------
-const formatPurchaseDate = (value) => {
-  if (!value) return '-';
-  const dateValue = value?.toDate ? value.toDate() : new Date(value);
-  if (Number.isNaN(dateValue.getTime())) return '-';
-  return dateValue.toLocaleDateString('id-ID', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-};
-
-// -----------------------------------------------------------------------------
-// Helper timestamp aman untuk sorting purchase terakhir.
-// STATUS: aktif dipakai hanya untuk perbandingan harga di Supplier detail.
-// -----------------------------------------------------------------------------
-const getPurchaseTime = (purchase = {}) => {
-  const value = purchase.date || purchase.purchaseDate || purchase.createdAt || purchase.updatedAt;
-  if (!value) return 0;
-  if (typeof value.toMillis === 'function') return value.toMillis();
-  if (typeof value.toDate === 'function') return value.toDate().getTime();
-  const parsedDate = new Date(value);
-  return Number.isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime();
-};
-
-// -----------------------------------------------------------------------------
-// Helper satuan stok bahan.
-// FUNGSI: otomatis mengisi satuan stok pada katalog supplier dari Raw Material.
-// STATUS: aktif dipakai; null-safe untuk data lama.
-// -----------------------------------------------------------------------------
-const getMaterialStockUnit = (material = {}) => {
-  return material.stockUnit || material.unit || material.baseUnit || '';
-};
 
 const SupplierPurchases = () => {
   // ---------------------------------------------------------------------------
@@ -234,31 +187,6 @@ const SupplierPurchases = () => {
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Helper kode supplier user-facing.
-  // FUNGSI: menampilkan hanya code/supplierCode bisnis yang valid, bukan Firestore random ID.
-  // STATUS: aktif dipakai table/detail/edit Supplier untuk menjaga audit tetap manusiawi.
-  // ---------------------------------------------------------------------------
-  const getSupplierBusinessCode = (supplier = {}) => {
-    const code = normalizeSupplierCode(supplier.code);
-    if (isValidSupplierCodeFormat(code)) return code;
-
-    const supplierCode = normalizeSupplierCode(supplier.supplierCode);
-    if (isValidSupplierCodeFormat(supplierCode)) return supplierCode;
-
-    return '';
-  };
-
-  const renderSupplierBusinessCode = (supplier = {}) => {
-    const businessCode = getSupplierBusinessCode(supplier);
-
-    if (businessCode) {
-      return <span className="ims-cell-meta">{businessCode}</span>;
-    }
-
-    return <Tag color="warning">Perlu repair kode</Tag>;
-  };
-
-  // ---------------------------------------------------------------------------
   // Filter supplier dari query URL + filter manual user.
   // FUNGSI: hanya menampilkan supplier yang relevan dengan material jika filter
   // material aktif, tanpa mengubah data supplier/raw material.
@@ -304,17 +232,7 @@ const SupplierPurchases = () => {
   // BATASAN: read-only; tidak mengubah purchase dan tidak membuat purchase baru.
   // STATUS: aktif dipakai di detail Supplier.
   // ---------------------------------------------------------------------------
-  const getLatestPurchaseForMaterial = (materialId) => {
-    if (!materialId) return null;
-
-    return (purchaseRecords || [])
-      .filter((purchase) => {
-        const purchaseType = String(purchase.itemType || purchase.type || '').toLowerCase();
-        return purchaseType === 'material';
-      })
-      .filter((purchase) => String(purchase.itemId || purchase.materialId || purchase.rawMaterialId || '') === String(materialId))
-      .sort((leftPurchase, rightPurchase) => getPurchaseTime(rightPurchase) - getPurchaseTime(leftPurchase))[0] || null;
-  };
+  const getLatestPurchaseForMaterialFromRecords = (materialId) => getLatestPurchaseForMaterial(purchaseRecords, materialId);
 
   // ---------------------------------------------------------------------------
   // Reset state modal agar buka/tutup form selalu bersih.
@@ -655,24 +573,6 @@ const SupplierPurchases = () => {
   };
 
   // ---------------------------------------------------------------------------
-  // Supplier table summary helper.
-  // FUNGSI: memilih satu katalog representatif untuk ringkasan table Supplier.
-  // ALASAN: table harus informatif untuk membandingkan supplier, tetapi detail
-  // lengkap tetap ada di drawer agar UI tidak terlalu penuh.
-  // STATUS: aktif dipakai; tidak mengubah data dan bukan transaksi.
-  // ---------------------------------------------------------------------------
-  const getSupplierTableSummaryDetail = (supplier = {}) => {
-    const restockDetails = (supplier.materialDetails || []).filter((detail) => detail.materialId || detail.materialName);
-    if (!restockDetails.length) return null;
-
-    return [...restockDetails].sort((leftDetail, rightDetail) => {
-      const leftPrice = calculateSupplierMaterialRestockMetrics(leftDetail).estimatedUnitPrice || Number.MAX_SAFE_INTEGER;
-      const rightPrice = calculateSupplierMaterialRestockMetrics(rightDetail).estimatedUnitPrice || Number.MAX_SAFE_INTEGER;
-      return leftPrice - rightPrice;
-    })[0];
-  };
-
-  // ---------------------------------------------------------------------------
   // Kolom tabel supplier.
   // FUNGSI: menampilkan ringkasan katalog restock tanpa memuat detail panjang.
   // HUBUNGAN FLOW: Supplier tetap katalog vendor/restock; data lengkap tetap ada
@@ -885,7 +785,7 @@ const SupplierPurchases = () => {
       key: 'latestPurchase',
       width: '24%',
       render: (_, record) => {
-        const latestPurchase = getLatestPurchaseForMaterial(record.materialId);
+        const latestPurchase = getLatestPurchaseForMaterialFromRecords(record.materialId);
         const metrics = calculateSupplierMaterialRestockMetrics(record);
         const latestUnitCost = Math.round(Number(latestPurchase?.actualUnitCost || 0));
 

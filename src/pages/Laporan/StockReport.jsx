@@ -8,7 +8,7 @@ import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
-import { fetchStockReportData } from "../../services/Laporan/stockReportService";
+import { fetchFullStockReportExportData, fetchStockReportData } from "../../services/Laporan/stockReportService";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
@@ -16,12 +16,46 @@ import { resolveDisplayReference } from "../../utils/references/displayReference
 const { Search } = Input;
 const { Option } = Select;
 
+const STOCK_REPORT_PAGE_SIZE = 500;
+const STOCK_REPORT_EXPORT_PAGE_SIZE = 1000;
+const STOCK_REPORT_EXPORT_LIMIT = 20000;
+
+const getStockReportRowKey = (record = {}) => (
+  record.readModelId ||
+  `${record.sourceType || record.type || "stock"}__${record.sourceId || record.id || record.displayReference || record.name}`
+);
+
+const mergeUniqueStockReportRows = (currentRows = [], nextRows = []) => {
+  const rowMap = new Map();
+  [...currentRows, ...nextRows].forEach((row) => {
+    rowMap.set(getStockReportRowKey(row), row);
+  });
+  return Array.from(rowMap.values());
+};
+
+const filterStockReportRows = (rows = [], { searchTerm = "", selectedCategory = "all", selectedStatus = "all" } = {}) => {
+  const normalizedSearch = String(searchTerm || "").toLowerCase();
+
+  return rows.filter((item) => {
+    const itemName = String(item.name || "").toLowerCase();
+    const itemReference = String(resolveDisplayReference(item) || "").toLowerCase();
+    const matchesSearch = !normalizedSearch || itemName.includes(normalizedSearch) || itemReference.includes(normalizedSearch);
+    const matchesCategory = selectedCategory === "all" || item.category === selectedCategory;
+    const matchesStatus = selectedStatus === "all" || String(item.status || "").toLowerCase() === selectedStatus;
+
+    return matchesSearch && matchesCategory && matchesStatus;
+  });
+};
+
 const StockReport = () => {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [categories, setCategories] = useState([]);
   const [failedReads, setFailedReads] = useState([]);
   const [reportMeta, setReportMeta] = useState(null);
+  const [stockReportCursor, setStockReportCursor] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
@@ -41,11 +75,13 @@ const StockReport = () => {
         setCategories(categoryList);
         setFailedReads(readFailures);
         setReportMeta(nextReportMeta);
+        setStockReportCursor(nextReportMeta?.nextCursor || null);
       } catch (error) {
         console.error("Error fetching stock report data:", error);
         message.error("Gagal memuat data laporan stok.");
         setFailedReads([]);
         setReportMeta(null);
+        setStockReportCursor(null);
       } finally {
         setLoading(false);
       }
@@ -54,18 +90,11 @@ const StockReport = () => {
     loadStockReportData();
   }, []);
 
-  const filteredData = useMemo(() => {
-    return inventory.filter((item) => {
-      const itemName = String(item.name || "").toLowerCase();
-      const matchesSearch = itemName.includes(searchTerm.toLowerCase());
-      const matchesCategory =
-        selectedCategory === "all" || item.category === selectedCategory;
-      const matchesStatus =
-        selectedStatus === "all" || item.status.toLowerCase() === selectedStatus;
-
-      return matchesSearch && matchesCategory && matchesStatus;
-    });
-  }, [inventory, searchTerm, selectedCategory, selectedStatus]);
+  const filteredData = useMemo(() => filterStockReportRows(inventory, {
+    searchTerm,
+    selectedCategory,
+    selectedStatus,
+  }), [inventory, searchTerm, selectedCategory, selectedStatus]);
 
   // =========================
   // ACTIVE / FINAL - opsi kategori laporan dari master + stok tampil.
@@ -97,6 +126,7 @@ const StockReport = () => {
   const stockReportSourceLabel = reportMeta?.dataSource === "master_stock_fallback"
     ? "Master stock fallback"
     : "Stock read model";
+  const hasMoreStockReportRows = Boolean(reportMeta?.hasMore && stockReportCursor);
 
   const summaryItems = useMemo(
     () => [
@@ -239,32 +269,32 @@ const StockReport = () => {
     try {
       await exportJsonToExcel({
         title: "Laporan Stok IMS Bunga Flanel",
-      subtitle: exportIsPartial || exportIsLimited
-        ? "Ekspor stok sesuai filter aktif. PERINGATAN: data laporan parsial/terbatas."
-        : "Ekspor stok sesuai filter aktif dari full export read model.",
+        subtitle: exportIsPartial || exportIsLimited
+          ? "Ekspor stok sesuai filter aktif. PERINGATAN: data laporan parsial/terbatas."
+          : "Ekspor stok sesuai filter aktif dari full export read model.",
         fileName: "laporan-stok",
         sheetName: "Stock Report",
         filters: [
-        `Status data: ${exportIsPartial ? `Parsial - sumber gagal: ${exportFailedReadsLabel}` : "Lengkap sesuai sumber yang berhasil dimuat"}`,
-        `Sumber data: ${exportSourceLabel}`,
-        `Rows export termuat: ${formatNumberId(exportFilteredData.length)}`,
-        `Rows sumber terbaca: ${formatNumberId(exportMeta?.loadedRows || exportRows.length)}`,
-        `Batas full export: ${exportMeta?.exportLimit ? formatNumberId(exportMeta.exportLimit) : formatNumberId(STOCK_REPORT_EXPORT_LIMIT)}`,
-        `Catatan export: ${exportIsLimited ? "Export mencapai batas full export/paging. Tambah limit/index jika data production sudah melewati batas ini." : "Export memakai loop paging read model sesuai filter aktif."}`,
-        `Kategori: ${selectedCategory === "all" ? "Semua" : selectedCategory}`,
-        `Status: ${selectedStatus === "all" ? "Semua" : selectedStatus}`,
-        `Pencarian: ${searchTerm || "-"}`,
-      ],
+          `Status data: ${exportIsPartial ? `Parsial - sumber gagal: ${exportFailedReadsLabel}` : "Lengkap sesuai sumber yang berhasil dimuat"}`,
+          `Sumber data: ${exportSourceLabel}`,
+          `Rows export termuat: ${formatNumberId(exportFilteredData.length)}`,
+          `Rows sumber terbaca: ${formatNumberId(exportMeta?.loadedRows || exportRows.length)}`,
+          `Batas full export: ${exportMeta?.exportLimit ? formatNumberId(exportMeta.exportLimit) : formatNumberId(STOCK_REPORT_EXPORT_LIMIT)}`,
+          `Catatan export: ${exportIsLimited ? "Export mencapai batas full export/paging. Tambah limit/index jika data production sudah melewati batas ini." : "Export memakai loop paging read model sesuai filter aktif."}`,
+          `Kategori: ${selectedCategory === "all" ? "Semua" : selectedCategory}`,
+          `Status: ${selectedStatus === "all" ? "Semua" : selectedStatus}`,
+          `Pencarian: ${searchTerm || "-"}`,
+        ],
         columns: [
           { key: "displayReference", label: "Kode Item" },
-        { key: "name", label: "Nama Item" },
-        { key: "category", label: "Kategori" },
-        { key: "type", label: "Jenis" },
-        { key: "stockDisplay", label: "Stok Tersedia" },
-        { key: "minStockDisplay", label: "Minimum Stok Master" },
-        { key: "unitDisplay", label: "Satuan" },
-        { key: "status", label: "Status" },
-      ],
+          { key: "name", label: "Nama Item" },
+          { key: "category", label: "Kategori" },
+          { key: "type", label: "Jenis" },
+          { key: "stockDisplay", label: "Stok Tersedia" },
+          { key: "minStockDisplay", label: "Minimum Stok Master" },
+          { key: "unitDisplay", label: "Satuan" },
+          { key: "status", label: "Status" },
+        ],
         data: exportFilteredData.map((item) => ({
           ...item,
           displayReference: resolveDisplayReference(item),
@@ -455,10 +485,10 @@ const StockReport = () => {
 
       <PageSection
         title="Tabel Laporan Stok"
-        subtitle="Item sesuai filter."
+        subtitle={`Item sesuai filter. Sumber: ${stockReportSourceLabel}.`}
         extra={<Tag color="blue">{formatNumberId(filteredData.length)} baris</Tag>}
       >
-        {failedReads.length > 0 && (
+        {isPartialStockReport && (
           <Alert
             type="warning"
             showIcon

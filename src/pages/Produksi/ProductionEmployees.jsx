@@ -67,6 +67,14 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
+import {
+  buildEmployeeActivitySummary,
+  buildEmployeeSummaryMap,
+  formatEmployeeShortDate,
+  hasAdditionalEmployeeInfo,
+  hasLegacyPayrollInfo,
+  renderEmployeeCompactInfo,
+} from "./helpers/productionEmployeesPageHelpers";
 
 // =====================================================
 // Formatter final lintas aplikasi
@@ -392,89 +400,15 @@ const ProductionEmployees = () => {
 
 
 
-  const matchesEmployeePayrollLine = (employee = {}, payroll = {}) => {
-    const employeeId = String(employee.id || "").trim();
-    const employeeCode = String(employee.code || "").trim().toLowerCase();
-    const employeeName = String(employee.name || "").trim().toLowerCase();
-    const workerId = String(payroll.workerId || "").trim();
-    const workerCode = String(payroll.workerCode || "").trim().toLowerCase();
-    const workerName = String(payroll.workerName || "").trim().toLowerCase();
-
-    if (employeeId && workerId && employeeId === workerId) return true;
-    if (employeeCode && workerCode && employeeCode === workerCode) return true;
-    return Boolean(employeeName && workerName && employeeName === workerName);
-  };
-
-  const matchesEmployeeWorkLog = (employee = {}, workLog = {}) => {
-    const employeeId = String(employee.id || "").trim();
-    const employeeCode = String(employee.code || "").trim().toLowerCase();
-    const employeeName = String(employee.name || "").trim().toLowerCase();
-    const workerIds = Array.isArray(workLog.workerIds)
-      ? workLog.workerIds.map((item) => String(item || "").trim())
-      : [];
-    const workerCodes = Array.isArray(workLog.workerCodes)
-      ? workLog.workerCodes.map((item) => String(item || "").trim().toLowerCase())
-      : [];
-    const workerNames = Array.isArray(workLog.workerNames)
-      ? workLog.workerNames.map((item) => String(item || "").trim().toLowerCase())
-      : [];
-
-    if (employeeId && workerIds.includes(employeeId)) return true;
-    if (employeeCode && workerCodes.includes(employeeCode)) return true;
-    return Boolean(employeeName && workerNames.includes(employeeName));
-  };
-
   // =====================================================
   // ACTIVE / FINAL
   // Ringkasan payroll per orang dibaca dari payroll final dan work log final.
   // Halaman karyawan tidak menjadi source of truth payroll baru.
   // =====================================================
-  const employeeSummaryMap = useMemo(() => {
-    return employees.reduce((acc, employee) => {
-      const employeePayrolls = payrolls.filter((item) => matchesEmployeePayrollLine(employee, item));
-      const employeeWorkLogs = workLogs.filter((item) => matchesEmployeeWorkLog(employee, item));
-      const stepCounter = {};
-
-      employeePayrolls.forEach((item) => {
-        if (item.stepName) stepCounter[item.stepName] = (stepCounter[item.stepName] || 0) + 1;
-      });
-      employeeWorkLogs.forEach((item) => {
-        if (item.stepName) stepCounter[item.stepName] = (stepCounter[item.stepName] || 0) + 1;
-      });
-
-      const favoriteStep = Object.entries(stepCounter).sort((left, right) => right[1] - left[1])[0]?.[0] || "-";
-      const recentPayrolls = [...employeePayrolls].sort((left, right) => {
-        const leftTime = new Date(left.payrollDate?.toDate?.() || left.payrollDate || 0).getTime() || 0;
-        const rightTime = new Date(right.payrollDate?.toDate?.() || right.payrollDate || 0).getTime() || 0;
-        return rightTime - leftTime;
-      }).slice(0, 3);
-      const recentWorkLogs = [...employeeWorkLogs].sort((left, right) => {
-        const leftTime = new Date(left.completedAt?.toDate?.() || left.completedAt || left.workDate?.toDate?.() || left.workDate || 0).getTime() || 0;
-        const rightTime = new Date(right.completedAt?.toDate?.() || right.completedAt || right.workDate?.toDate?.() || right.workDate || 0).getTime() || 0;
-        return rightTime - leftTime;
-      }).slice(0, 3);
-
-      acc[employee.id] = {
-        totalWorkLogs: employeeWorkLogs.length,
-        totalPayrollLines: employeePayrolls.length,
-        totalDraft: employeePayrolls.filter((item) => item.status === "draft").length,
-        totalConfirmed: employeePayrolls.filter((item) => item.status === "confirmed").length,
-        totalPaid: employeePayrolls.filter((item) => item.status === "paid").length,
-        totalCancelled: employeePayrolls.filter((item) => item.status === "cancelled").length,
-        totalPaidAmount: employeePayrolls
-          .filter((item) => item.status === "paid" && item.paymentStatus === "paid")
-          .reduce((sum, item) => sum + Number(item.finalAmount || 0), 0),
-        totalConfirmedAmount: employeePayrolls
-          .filter((item) => item.status === "confirmed")
-          .reduce((sum, item) => sum + Number(item.finalAmount || 0), 0),
-        favoriteStep,
-        recentPayrolls,
-        recentWorkLogs,
-      };
-
-      return acc;
-    }, {});
-  }, [employees, payrolls, workLogs]);
+  const employeeSummaryMap = useMemo(
+    () => buildEmployeeSummaryMap({ employees, payrolls, workLogs }),
+    [employees, payrolls, workLogs],
+  );
 
   const selectedEmployeeSummary = selectedEmployee
     ? employeeSummaryMap[selectedEmployee.id] || null
@@ -490,29 +424,10 @@ const ProductionEmployees = () => {
   // Status:
   // - aktif dipakai sebagai ringkasan operasional; bukan legacy dan bukan kandidat cleanup.
   // =====================================================
-  const selectedEmployeeActivitySummary = useMemo(() => {
-    if (!selectedEmployeeSummary) {
-      return {
-        totalWorkLogs: 0,
-        payrollPending: 0,
-        totalPaid: 0,
-        totalPaidAmount: 0,
-        recentPayrolls: [],
-        recentWorkLogs: [],
-      };
-    }
-
-    return {
-      totalWorkLogs: selectedEmployeeSummary.totalWorkLogs || 0,
-      payrollPending:
-        Number(selectedEmployeeSummary.totalDraft || 0) +
-        Number(selectedEmployeeSummary.totalConfirmed || 0),
-      totalPaid: selectedEmployeeSummary.totalPaid || 0,
-      totalPaidAmount: selectedEmployeeSummary.totalPaidAmount || 0,
-      recentPayrolls: selectedEmployeeSummary.recentPayrolls || [],
-      recentWorkLogs: selectedEmployeeSummary.recentWorkLogs || [],
-    };
-  }, [selectedEmployeeSummary]);
+  const selectedEmployeeActivitySummary = useMemo(
+    () => buildEmployeeActivitySummary(selectedEmployeeSummary),
+    [selectedEmployeeSummary],
+  );
 
   // =====================================================
   // ACTIVE / UI DETAIL OPTIONAL SECTIONS
@@ -525,58 +440,6 @@ const ProductionEmployees = () => {
   // - aktif dipakai untuk UI detail; bagian payroll legacy adalah compatibility dan kandidat cleanup
   //   hanya jika data lama sudah diputuskan tidak dibutuhkan lagi.
   // =====================================================
-  const hasValue = (value) => String(value || "").trim() !== "";
-
-  const hasAdditionalEmployeeInfo = (employee = {}) => {
-    return Boolean(
-      hasValue(employee.gender) ||
-        hasValue(employee.phone) ||
-        hasValue(employee.address) ||
-        (Array.isArray(employee.skillTags) && employee.skillTags.length > 0) ||
-        hasValue(employee.notes),
-    );
-  };
-
-  const hasLegacyPayrollInfo = (employee = {}) => {
-    const customModeActive = employee.useCustomPayrollRate && hasValue(employee.customPayrollMode);
-    const customOutputActive =
-      employee.useCustomPayrollRate && hasValue(employee.customPayrollOutputBasis);
-    const customQtyActive =
-      employee.useCustomPayrollRate && Number(employee.customPayrollQtyBase || 0) > 0;
-
-    return Boolean(
-      employee.useCustomPayrollRate ||
-        customModeActive ||
-        Number(employee.customPayrollRate || 0) > 0 ||
-        customQtyActive ||
-        customOutputActive ||
-        hasValue(employee.payrollNotes),
-    );
-  };
-
-  const formatShortDate = (value) => {
-    const rawDate = value?.toDate?.() || value;
-    if (!rawDate) return "-";
-
-    const parsedDate = new Date(rawDate);
-    if (Number.isNaN(parsedDate.getTime())) return "-";
-
-    return parsedDate.toLocaleDateString("id-ID", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
-
-  const renderCompactInfo = (label, value) => (
-    <Space direction="vertical" size={0} style={{ width: "100%" }}>
-      <Typography.Text type="secondary" className="ims-cell-meta">
-        {label}
-      </Typography.Text>
-      <Typography.Text strong>{value || "-"}</Typography.Text>
-    </Space>
-  );
-
   // =====================================================
   // SECTION: Main table compact columns — AKTIF
   // Fungsi:
@@ -1232,7 +1095,7 @@ const ProductionEmployees = () => {
             <Card size="small" title="Ringkasan Karyawan" style={{ marginBottom: 16 }}>
               <Row gutter={[12, 12]}>
                 <Col xs={24} md={12}>
-                  {renderCompactInfo("Nama", selectedEmployee.name)}
+                  {renderEmployeeCompactInfo("Nama", selectedEmployee.name)}
                 </Col>
                 <Col xs={12} md={6}>
                   <Space direction="vertical" size={0}>
@@ -1245,17 +1108,17 @@ const ProductionEmployees = () => {
                   </Space>
                 </Col>
                 <Col xs={12} md={6}>
-                  {renderCompactInfo(
+                  {renderEmployeeCompactInfo(
                     "Jenis Kerja",
                     EMPLOYEE_TYPE_MAP[selectedEmployee.employmentType],
                   )}
                 </Col>
                 <Col xs={12} md={6}>
-                  {renderCompactInfo("Role", EMPLOYEE_ROLE_MAP[selectedEmployee.role])}
+                  {renderEmployeeCompactInfo("Role", EMPLOYEE_ROLE_MAP[selectedEmployee.role])}
                 </Col>
                 {selectedEmployee.phone ? (
                   <Col xs={12} md={6}>
-                    {renderCompactInfo("No. HP", selectedEmployee.phone)}
+                    {renderEmployeeCompactInfo("No. HP", selectedEmployee.phone)}
                   </Col>
                 ) : null}
               </Row>
@@ -1353,7 +1216,7 @@ const ProductionEmployees = () => {
                           <Space direction="vertical" size={2} style={{ width: "100%" }}>
                             <Typography.Text strong>{item.workNumber || "-"}</Typography.Text>
                             <Typography.Text type="secondary">
-                              {item.stepName || "-"} · {formatShortDate(item.completedAt || item.workDate)}
+                              {item.stepName || "-"} · {formatEmployeeShortDate(item.completedAt || item.workDate)}
                             </Typography.Text>
                             <Space size={[4, 4]} wrap>
                               <Tag>{item.status || "-"}</Tag>
@@ -1380,7 +1243,7 @@ const ProductionEmployees = () => {
                           <Space direction="vertical" size={2} style={{ width: "100%" }}>
                             <Typography.Text strong>{item.payrollNumber || "-"}</Typography.Text>
                             <Typography.Text type="secondary">
-                              {item.stepName || "-"} · {formatShortDate(item.payrollDate)}
+                              {item.stepName || "-"} · {formatEmployeeShortDate(item.payrollDate)}
                             </Typography.Text>
                             <Space size={[4, 4]} wrap>
                               <Tag>{item.status || "-"}</Tag>

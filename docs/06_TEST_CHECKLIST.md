@@ -1861,3 +1861,71 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 - [ ] Pastikan function public `validateProductionWorkLog` masih bisa diimport dari `productionWorkLogsService.js`.
 - [ ] Pastikan helper `productionWorkLogsServiceHelpers.js` tidak dipakai untuk write langsung ke Firestore, inventory log, payroll, atau stok.
 - [ ] Jangan lanjut split HPP/stock posting/payroll dalam patch yang sama tanpa fixture data production lengkap.
+
+## Checklist Batch 20 — Combined UI Split Phase 2
+
+### Raw Materials UI helper split
+- [ ] Buka Master Data → Bahan Baku dan pastikan tabel tampil tanpa white screen.
+- [ ] Tambah bahan baku non-varian dan pastikan form default, satuan, stok awal, min stock, supplier, dan pricing mode tetap sama.
+- [ ] Tambah/edit bahan baku bervarian dan pastikan varian, min stock, average cost, dan status stok tampil sama.
+- [ ] Buka drawer detail bahan baku dan pastikan supplier/restock link terakhir, status stok, varian, dan format angka tetap tampil.
+- [ ] Toggle aktif/nonaktif dan pastikan tidak ada perubahan behavior service.
+
+### Production Work Logs UI helper split
+- [ ] Buka Production Work Logs dan pastikan summary, filter, tabel, tag status, dan action tampil normal.
+- [ ] Buka detail Work Log dan pastikan drawer detail tetap menampilkan material usage, output, HPP, payroll, dan audit reference.
+- [ ] Edit Work Log `in_progress` dan pastikan form masih menolak Work Log completed.
+- [ ] Complete Work Log dan pastikan info estimasi read-only tetap tampil di modal complete.
+- [ ] Pastikan complete tetap memposting output stock, HPP, payroll accrual, inventory log, dan read model sync melalui service existing.
+
+### Reset Maintenance UI helper split
+- [ ] Buka Reset & Maintenance dan pastikan panel preview, export, safe repair, danger zone, status summary, dan usage guide tetap tampil.
+- [ ] Pilih module reset dan pastikan label selected module pada modal konfirmasi tetap sama.
+- [ ] Coba buka konfirmasi reset tanpa preview dan pastikan guard UI tetap memblokir.
+- [ ] Pastikan keyword destructive reset, full testing reset, HPP reset/restore, dan repair transaksi tetap wajib sesuai UI.
+- [ ] Jalankan audit/repair non-destructive yang biasa dipakai dan pastikan maintenance log tetap tercatat.
+
+### Guard umum
+- [ ] Jalankan `npm run lint`.
+- [ ] Jalankan `npm run build`.
+- [ ] Pastikan tidak ada perubahan route/menu/role guard.
+- [ ] Pastikan tidak ada perubahan stock posting, HPP final, payroll, purchase/sales/return, atau reset destructive behavior.
+
+
+## Checklist Batch 21–24 — Combined UI/Data Quality/Purchase UX Hardening
+
+### Production Employees helper split
+- [ ] Buka Produksi → Karyawan Produksi dan pastikan tabel, filter, summary card, drawer detail, dan modal tambah/edit tetap tampil.
+- [ ] Tambah/edit karyawan dengan assigned step, role, employment type, gender, skill, dan notes; pastikan payload service tetap sama.
+- [ ] Toggle aktif/nonaktif dan pastikan karyawan nonaktif tidak dipilih untuk work log baru sesuai behavior existing.
+- [ ] Buka detail karyawan yang punya payroll/work log dan pastikan recent activity, paid amount, pending payroll, dan legacy payroll section tetap read-only.
+
+### Supplier Purchases helper split
+- [ ] Buka Supplier/Katalog Restock dan pastikan realtime supplier, bahan baku, serta purchase comparator tetap tampil.
+- [ ] Buat/edit supplier dengan materialDetails, satuan beli, konversi, link toko, ongkir, admin, voucher/diskon, dan harga estimasi; pastikan tidak membuat transaksi purchase otomatis.
+- [ ] Filter dari query `materialId`/`supplierId` dan pastikan supplier yang relevan tetap highlight.
+- [ ] Buka drawer detail supplier dan pastikan purchase terakhir per material tetap read-only dan tidak mengubah stock/expense/inventory log.
+
+### Dashboard helper split
+- [ ] Buka Dashboard dan pastikan KPI, Business Alert, Stok Kritis, Restock Assistant, Planning, Payroll, Finance, dan Activity Feed tetap tampil.
+- [ ] Pastikan `stockIssueMeta.hasMore/isLimited` tetap menampilkan label count `+` untuk data yang dibatasi.
+- [ ] Klik quick action dan restock route; pastikan hanya navigasi, tidak ada auto-create/auto-fix.
+- [ ] Simulasikan read model kosong/gagal pada dev data bila memungkinkan dan pastikan fallback/warning tetap guarded.
+
+### Data Quality Audit UI polish
+- [ ] Buka Reset & Maintenance → Auto Detect Bug Data dan jalankan Cek Semua Area.
+- [ ] Pastikan warna issue, jumlah repair, detail kategori, sample, dan rekomendasi tetap muncul.
+- [ ] Pastikan Data Quality Audit tetap read-only sampai user menjalankan repair/reset yang memang memiliki keyword guard.
+- [ ] Pastikan reset destructive, repair transaksi, HPP reset/restore, dan protected collection guard tidak berubah.
+
+### Purchases OCR/Receipt helper split
+- [ ] Buka Purchases dan tambah pembelian manual tanpa OCR; pastikan stock-in, expense, inventory log, average cost, dan read model sync tetap dari service existing.
+- [ ] Upload screenshot OCR Shopee, apply qty/biaya, dan pastikan feedback lokal + toast tetap muncul.
+- [ ] Buka detail receipt OCR dari transaksi lama dan pastikan nomor pembelian, supplier, tanggal, rows, total, dan raw text tetap tampil.
+- [ ] Pastikan parser OCR tetap di `src/utils/purchases/shopeePurchaseOcrParser.js` dan helper baru tidak melakukan write.
+
+### Guard umum
+- [ ] Jalankan `npm run lint`.
+- [ ] Jalankan `npm run build`.
+- [ ] Pastikan tidak ada perubahan route/menu/role guard.
+- [ ] Pastikan tidak ada perubahan schema/collection, Firestore rules/index, stock posting, HPP, payroll, reset destructive, purchase stock-in, atau finance side-effect.

@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import { Table, Modal, Form, message, Upload } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { useSearchParams } from "react-router-dom";
-import dayjs from "dayjs";
 import {
   doesSupplierProvideMaterial,
   getSupplierMaterialDetail,
@@ -42,6 +41,11 @@ import PurchaseOcrReceiptModal from "./components/PurchaseOcrReceiptModal";
 import { createPurchaseTableColumns } from "./components/PurchaseTableColumns";
 import { buildPurchaseStockPreviewSnapshot } from "./components/purchaseStockPreviewHelpers";
 import { SHOPEE_OCR_IDLE_STATE } from "./components/purchaseOcrUiConstants";
+import {
+  buildShopeeOcrPurchaseMeta,
+  calculateSupplierReferenceTotal,
+  calculateSupplierSubtotal,
+} from "./helpers/purchasesPageHelpers";
 
 // =========================
 // SECTION: Purchases Page
@@ -321,51 +325,6 @@ const Purchases = () => {
       estimatedUnitPrice: Math.round(Number(detail.estimatedUnitPrice || detail.referencePrice || 0)),
     };
   }, [selectedSupplierMaterialDetail]);
-
-  const calculateSupplierSubtotal = (qty, supplierItemPrice) => {
-    return Math.round(Math.max(Number(qty || 0), 0) * Math.max(Number(supplierItemPrice || 0), 0));
-  };
-
-  // =========================
-  // SECTION: Hitung Total Pembanding Supplier berbasis komponen katalog
-  // Fungsi blok:
-  // - menghitung nilai pembanding dari komponen Supplier: Qty Beli x Harga Barang Supplier
-  //   + Ongkir Default + Biaya Layanan Default - Diskon Default.
-  // Alasan perubahan:
-  // - Harga Supplier Tercatat / Satuan Stok bisa sudah memuat ongkir/admin/diskon untuk 1 paket;
-  //   jika langsung dikali Stok Masuk, ongkir/admin bisa terlihat ikut dikali per satuan stok.
-  // Hubungan flow aplikasi:
-  // - hasil ini hanya dipakai sebagai pembanding dan Selisih; tidak mengubah stok, kas,
-  //   expense, actualUnitCost, Supplier, atau Raw Material.
-  // Status: aktif dipakai; fallback lama berbasis harga per satuan stok tetap ada untuk data legacy
-  // yang belum punya Harga Barang Supplier di katalog Supplier.
-  // =========================
-  const calculateSupplierReferenceTotal = ({
-    qty,
-    supplierItemPrice,
-    defaultShippingCost,
-    defaultServiceFee,
-    defaultDiscount,
-    fallbackStockIn,
-    fallbackReferencePerStockUnit,
-  }) => {
-    const safeQty = Math.max(Number(qty || 0), 0);
-    const safeSupplierItemPrice = Math.max(Number(supplierItemPrice || 0), 0);
-
-    if (safeSupplierItemPrice > 0) {
-      return Math.round(
-        safeQty * safeSupplierItemPrice +
-          Math.max(Number(defaultShippingCost || 0), 0) +
-          Math.max(Number(defaultServiceFee || 0), 0) -
-          Math.max(Number(defaultDiscount || 0), 0),
-      );
-    }
-
-    return Math.round(
-      Math.max(Number(fallbackStockIn || 0), 0) *
-        Math.max(Number(fallbackReferencePerStockUnit || 0), 0),
-    );
-  };
 
   // =========================
   // SECTION: Snapshot katalog Supplier untuk prefill Pembelian
@@ -1027,22 +986,6 @@ const Purchases = () => {
     }
 
     return Upload.LIST_IGNORE;
-  };
-
-  const buildShopeeOcrPurchaseMeta = (purchaseRecord = {}) => {
-    const dateText = purchaseRecord?.date?.toDate
-      ? dayjs(purchaseRecord.date.toDate()).format("DD-MM-YYYY")
-      : "";
-
-    return {
-      purchaseNumber:
-        purchaseRecord?.purchaseNumber ||
-        purchaseRecord?.code ||
-        purchaseRecord?.referenceNumber ||
-        "Kode otomatis",
-      supplierName: purchaseRecord?.supplierName || "Supplier tidak tercatat",
-      dateText,
-    };
   };
 
   const openShopeeOcrDetailModal = (purchaseRecord = {}) => {

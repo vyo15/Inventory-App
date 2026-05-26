@@ -172,3 +172,71 @@ export const resetStatisticValueStyle = {
   fontSize: "var(--ims-font-size-stat)",
   fontWeight: "var(--ims-font-weight-display)",
 };
+
+// IMS NOTE [AKTIF/GUARDED] - Reset Maintenance page option helpers.
+// Fungsi: memusatkan opsi/guard UI reset agar halaman utama tidak menumpuk logic presentasi.
+// Batasan: helper ini tidak menjalankan reset, delete, baseline restore, atau Firestore write.
+export const TRANSACTION_SIDE_EFFECT_CONFIRM_KEYWORD = "REPAIR TRANSAKSI";
+
+export const RESET_MODULE_OPTIONS = [
+  { label: "Penjualan + Income Sales", value: "sales" },
+  { label: "Pembelian + Expense Purchases", value: "purchases" },
+  { label: "Retur", value: "returns" },
+  { label: "Production Planning / Planning Produksi", value: "production_planning_only" },
+  { label: "Produksi (Lengkap)", value: "production" },
+  { label: "Produksi + Inventory Log Produksi", value: "production_core_and_logs" },
+  { label: "Payroll Produksi Saja", value: "production_payroll_only" },
+  { label: "Produksi Data Lama Saja", value: "productions_legacy_only" },
+  { label: "Kas & Biaya", value: "cash_and_expenses" },
+  { label: "Penyesuaian + Log Adjustment", value: "stock_adjustment_and_logs" },
+  { label: "Semua Inventory Log", value: "all_inventory_logs" },
+  { label: "Pricing Log", value: "pricing_logs" },
+];
+
+export const getSelectedResetModuleLabels = (selectedModules = [], moduleOptions = RESET_MODULE_OPTIONS) => {
+  const labelMap = new Map(moduleOptions.map((item) => [item.value, item.label]));
+  return selectedModules.map((value) => labelMap.get(value) || value);
+};
+
+export const isFullTestingResetPreviewIntent = ({ resetIntent, mode, preview } = {}) => (
+  resetIntent === "full_testing_reset"
+  && mode === "reset_and_zero_stock"
+  && preview?.isFullTestingReset === true
+);
+
+export const getResetConfirmKeyword = (isFullTestingResetIntent = false) => (
+  isFullTestingResetIntent
+    ? RESET_CONFIRM_KEYWORDS.full_testing_reset
+    : RESET_CONFIRM_KEYWORDS.standard
+);
+
+export const getResetBlockedReason = ({ selectedModules = [], preview = null, mode = "transaction_only" } = {}) => {
+  if (!selectedModules.length) {
+    return "Pilih minimal 1 modul sebelum reset dijalankan.";
+  }
+
+  if (!preview) {
+    return "Muat preview reset terbaru sebelum reset dijalankan.";
+  }
+
+  if (mode === "reset_and_restore_baseline" && !preview?.baselineSummary?.exists) {
+    return "Baseline testing belum ada. Simpan baseline dulu sebelum menjalankan Reset + Baseline Testing.";
+  }
+
+  if (preview?.executionPlan?.isClientBatchSafe === false) {
+    return `Reset diblokir karena estimasi ${preview.executionPlan.totalWriteOperations} operasi tulis melebihi batas aman ${preview.executionPlan.safeClientLimit} operasi dari browser. Perkecil scope modul agar tidak partial delete.`;
+  }
+
+  return "";
+};
+
+// -----------------------------------------------------------------------------
+// IMS NOTE [AKTIF/UI ONLY] — helper presentasi Data Quality Audit.
+// Fungsi: menyamakan warna issue dan wording summary tanpa mengubah logic audit,
+// repair, reset destructive, atau kategori business rule.
+// -----------------------------------------------------------------------------
+export const getAuditIssueCountColor = (value) => (Number(value || 0) > 0 ? "red" : "green");
+
+export const buildAutoDetectIssueSummaryMessage = ({ issueCount = 0, safeRepairCount = 0 } = {}) => {
+  return `${Number(issueCount || 0)} issue dan ${Number(safeRepairCount || 0)} kandidat repair aman terdeteksi.`;
+};
