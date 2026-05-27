@@ -374,8 +374,6 @@ Status aktif:
 - Aksi Cepat hanya navigasi ke route existing; tidak membuat Sales, Purchases, PO, Work Log, Payroll, Cash In/Out, expense, income, atau mutasi stok.
 - Data Perlu Dicek menampilkan exception stok minus/reserved tidak wajar, stok kritis, PO shortage, planning overdue/behind target, cost/HPP kosong pada Work Log completed, dan payroll pending.
 - `Terakhir diperbarui` dan tombol `Muat Ulang` hanya reload snapshot read-only.
-- Loading awal Dashboard memakai `DataLoadingState` lokal agar user tidak melihat KPI 0/empty state palsu ketika snapshot belum selesai dimuat.
-- Warning partial read dibuat user-friendly; raw failed-read key seperti `stock_item_read_models_fallback` tetap dicatat di console untuk developer.
 
 Guarded:
 - Angka cash resmi tetap berasal dari `revenues` + `incomes` dan `expenses`; Profit Loss tetap laporan final.
@@ -384,7 +382,7 @@ Guarded:
 - Alert Data Perlu Dicek hanya petunjuk audit; perbaikan tetap dilakukan di modul source of truth.
 
 Tech debt:
-- **SUPERSEDED oleh Batch 17N–18G:** Dashboard runtime terbaru memakai `stock_item_read_models` issue query sebagai path normal stok kritis dan fallback guarded ke master stock jika read model kosong/gagal. Risiko tersisa: Firestore Rules/index, kualitas backfill, dan konsistensi writer sync. Jika UI menampilkan warning read model stok, cek Firestore index/rules dan jalankan Cek/Rebuild Read Model Stok; jangan hapus fallback untuk menutupi masalah runtime.
+- **SUPERSEDED oleh Batch 17N–18G:** Dashboard runtime terbaru memakai `stock_item_read_models` issue query sebagai path normal stok kritis dan fallback guarded ke master stock jika read model kosong/gagal. Risiko tersisa: Firestore Rules/index, kualitas backfill, dan konsistensi writer sync.
 - Quick actions belum role-aware per button; route guard tetap pengaman utama.
 
 ### 19. Scalability read path report/dashboard/code generator — 2026-05
@@ -423,7 +421,6 @@ Temuan terkini:
 - Detail Raw Material menampilkan informasi restock ringkas di tabel utama, bukan list semua supplier.
 - Dashboard Stok Kritis dapat memberi action restock cepat untuk bahan baku menipis/kritis.
 - Purchases mendukung prefill dari query Restock Assistant, tetapi transaksi tetap wajib disimpan manual oleh user.
-- Dashboard hanya membuka link produk restock yang lolos validasi URL `http`/`https`; link tidak valid/legacy tidak dibuka agar tidak menjadi celah `javascript:` atau skema tidak aman.
 
 Guard tersisa:
 - data purchase lama mungkin belum memiliki `productLink`, sehingga tombol link produk tidak selalu tampil;
@@ -853,11 +850,11 @@ Risiko:
 - **GUARDED:** helper status Raw Materials tetap dipertahankan untuk status tag `Kosong` / `Stok Rendah`, summary `Perlu Dicek`, filter status, dan alert/rincian detail drawer.
 
 ## Update global/auth/route LogoLoadingScreen — 2026-05-07
-- **AKTIF:** loading utama aplikasi untuk auth/session gate, ProtectedRoute guard, dan Login auth/profile verification memakai `LogoLoadingScreen`. Lazy route fallback di dalam layout memakai `DataLoadingState` skeleton lokal agar transisi halaman tidak blank tanpa memunculkan logo/fullscreen kedua.
+- **AKTIF:** loading utama aplikasi untuk auth/session gate, ProtectedRoute guard, Login auth/profile verification, dan lazy route fallback memakai `LogoLoadingScreen`.
 - **AKTIF:** `LogoLoadingScreen` memakai logo mark existing `src/assets/branding/flanel-karawang-mark.png` dengan animasi Elegant micro split dan fallback logo normal jika canvas gagal.
 - **AKTIF:** loading dibuat full viewport tanpa card/wrap kecil; `.app-loading-card` dipertahankan sebagai wrapper kompatibilitas tetapi tidak lagi tampil sebagai card.
 - **GUARDED:** perubahan ini UI-only; `AuthContext`, `roleAccess`, route definitions, login submit, service, query, transaction, stock, production, payroll, HPP, report, dan reset maintenance tidak berubah.
-- **LEGACY-COMPAT:** loading lokal seperti lazy route fallback, table loading, submit button loading, report loading, maintenance preview/loading, dan business process loading tetap boleh memakai komponen lokal/Ant Design sesuai kebutuhan modul.
+- **LEGACY-COMPAT:** loading lokal seperti table loading, submit button loading, report loading, maintenance preview/loading, dan business process loading tetap boleh memakai komponen lokal/Ant Design sesuai kebutuhan modul.
 
 
 ## Update Header Branding Cleanup — 2026-05-07
@@ -1302,3 +1299,131 @@ Large file audit setelah Batch 21–24:
 Guard final:
 - Jangan mengubah stock posting, purchase stock-in, sales income, return finance side-effect, production HPP, payroll final/payment, reset destructive target, Firestore schema, route/menu/role guard, atau protected collection hanya demi cleanup.
 - Cleanup berikutnya harus tetap changed-files-only, behavior-preserving, dan memprioritaskan source aktual dibanding status historis docs.
+
+
+## Batch Offline DB Foundation, Backup Foundation, and Database Contract — 2026-05
+
+Status: **FOUNDATION / NON-RUNTIME / GUARDED**.
+
+Source ZIP terbaru yang diaudit untuk Batch 3 masih belum memiliki `src/data/local/*`, sehingga patch Batch 3 membawa ulang Batch 1/2 foundation sekaligus menambahkan Database Contract.
+
+File foundation/backup yang harus ada setelah patch:
+- `src/data/local/localDbSchema.js`
+- `src/data/local/imsLocalDb.js`
+- `src/data/local/localDbMeta.js`
+- `src/data/local/localDbBackupValidator.js`
+- `src/data/local/localDbBackupService.js`
+
+Dokumen kontrak baru:
+- `docs/10_OFFLINE_DATABASE_CONTRACT.md`
+
+Catatan status:
+- Dependency `dexie` sudah tersedia di project.
+- Firebase Auth/Firestore masih runtime utama.
+- Local DB belum dipakai oleh page/service produksi.
+- Backup/restore baru untuk table foundation allowlist, belum untuk transaksi/stock/production/payroll/HPP/finance.
+- Ditemukan banyak direct Firestore usage di source aktual; repository boundary harus dibuat bertahap, tidak boleh replace massal.
+- Multi-device offline sync belum aman; strategi awal tetap single-device offline-first dengan Firebase sebagai mirror/backup.
+
+Tech debt lanjutan:
+- Perlu repository pilot untuk `categories`, `customers`, dan `suppliers`.
+- Perlu mode repository sebelum page/service aktif mulai switch ke Dexie.
+- Direct Firestore usage di page/service harus dikurangi per modul, bukan mass formatting/refactor besar.
+
+
+## Batch 4 — Repository Pilot Master Data Rendah Risiko — 2026-05
+
+Status: **PILOT / NON-RUNTIME DEFAULT / GUARDED**.
+
+Patch Batch 4 menambahkan repository/adapters untuk master data rendah risiko:
+- `src/data/repositories/repositoryMode.js`
+- `src/data/repositories/categoriesRepository.js`
+- `src/data/repositories/customersRepository.js`
+- `src/data/repositories/suppliersRepository.js`
+- `src/data/adapters/firebase/firebaseCategoriesAdapter.js`
+- `src/data/adapters/firebase/firebaseCustomersAdapter.js`
+- `src/data/adapters/firebase/firebaseSuppliersAdapter.js`
+- `src/data/adapters/dexie/dexieMasterDataAdapterFactory.js`
+- `src/data/adapters/dexie/dexieCategoriesAdapter.js`
+- `src/data/adapters/dexie/dexieCustomersAdapter.js`
+- `src/data/adapters/dexie/dexieSuppliersAdapter.js`
+
+Catatan:
+- Runtime aplikasi tetap Firebase-first.
+- Tidak ada page aktif yang dipindah ke repository pada batch ini.
+- Supplier Firebase write repository sengaja belum aktif karena create/update/delete supplier masih berada di `SupplierPurchases.jsx` dan perlu audit/extract terpisah.
+- Repository pilot menjadi dasar Batch 5/6, tetapi belum boleh dipakai untuk stock/transaksi/production/payroll.
+
+
+## Batch Offline Sync Queue pilot — 2026-05
+
+Status: **FOUNDATION / NON-RUNTIME / GUARDED**.
+
+Source sekarang sudah memiliki Batch 1-4 foundation, contract, dan repository pilot. Batch 5 dev guard masih perlu dilengkapi dengan `repositoryModeService`, sehingga Batch 6 menambahkan file tersebut bersama sync queue service.
+
+File Batch 6:
+- `src/data/sync/syncQueueService.js`
+- `src/data/repositories/repositoryModeService.js`
+- update `src/data/local/localDbSchema.js` untuk constant sync status/operation/collection allowlist
+- update `src/data/adapters/dexie/dexieMasterDataAdapterFactory.js` agar write lokal pilot mencatat queue
+
+Catatan status:
+- App tetap Firebase-first.
+- Page aktif belum dipindahkan ke repository/offline local.
+- Sync queue baru local pending queue untuk pilot master data.
+- Belum ada Firebase push/pull sync.
+- Belum ada conflict resolver UI.
+- Supplier write Firebase tetap blocked di repository karena flow aktual masih berada di `SupplierPurchases.jsx`.
+
+
+## Batch Offline Manual Sync Dev Panel — 2026-05
+
+Status: **DEV FOUNDATION / GUARDED / BELUM USER-FACING PRODUKSI**.
+
+Source terbaru sudah memiliki Batch 1-6 foundation, repository pilot, repository mode guard, dan sync queue dasar. Saat audit Batch 8, file Batch 7 manual Firebase sync belum ditemukan, sehingga Batch 8 menambahkan ulang:
+- `src/data/sync/syncConflictService.js`
+- `src/data/sync/firebaseMasterDataSyncService.js`
+
+Batch 8 juga menambahkan panel UI guarded:
+- `src/pages/Utilities/components/OfflineSyncDevPanel.jsx`
+- integrasi panel di `src/pages/Utilities/ResetMaintenanceData.jsx`
+
+Catatan status:
+- Firebase tetap runtime utama.
+- Panel hanya dev/admin utility di Testing & Reset Center.
+- Panel tidak menjalankan sync otomatis.
+- Sync manual hanya mengizinkan categories/customers.
+- Supplier sync ke Firebase tetap blocked karena write flow supplier masih di `SupplierPurchases.jsx` dan terkait purchase/raw material linkage.
+- Delete Firebase tetap blocked dari panel.
+
+Tech debt berikutnya:
+- Perlu resolver konflik manual sebelum membuka sync untuk master data lebih luas.
+- Perlu audit `Categories.jsx` direct Firestore sebelum page dipindah ke repository.
+- Perlu batch khusus untuk ekstraksi supplier write flow sebelum supplier offline-sync aktif.
+
+
+## Batch Offline Conflict Resolver + Master Data Pilot Panel — 2026-05
+
+Status: **DEV GUARDED / BUILD VERIFIED / FIREBASE-FIRST TETAP AKTIF**.
+
+Batch ini memperbaiki risiko white screen dari named export mismatch pada service sync dan menambahkan resolver konflik manual untuk master data pilot.
+
+File utama:
+- `src/data/sync/syncConflictResolutionService.js`
+- `src/pages/Utilities/components/OfflineMasterDataPilotPanel.jsx`
+- update `src/pages/Utilities/components/OfflineSyncDevPanel.jsx`
+- update `src/data/sync/syncConflictService.js`
+- update `src/data/sync/syncQueueService.js`
+- compatibility re-export di `src/data/sync/firebaseMasterDataSyncService.js`
+
+Catatan status:
+- `npm run lint` dan `npm run build` berhasil pada batch ini.
+- Panel offline tetap berada di Testing & Reset Center, tidak menambah route/menu.
+- Categories/customers bisa dibuat/diubah/dihapus di local DB pilot dan masuk sync queue.
+- Conflict resolver belum boleh dipakai untuk supplier, stock, transaksi, production, payroll, atau HPP.
+- Page aktif `Categories.jsx` masih direct Firestore; migrasi page aktif harus batch terpisah setelah QA pilot.
+
+Tech debt berikutnya:
+- Buat offline code generator yang valid sebelum customer offline dipakai sebagai data produksi final.
+- Audit `Categories.jsx` direct Firestore sebelum memindahkan page kategori ke repository.
+- Supplier tetap perlu extraction/audit dari `SupplierPurchases.jsx` sebelum sync aktif.

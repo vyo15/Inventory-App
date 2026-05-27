@@ -64,6 +64,8 @@ import ResetExportPanel from "./components/ResetExportPanel";
 import ResetStatusSummaryCard from "./components/ResetStatusSummaryCard";
 import ResetConfirmModal from "./components/ResetConfirmModal";
 import HppCostConfirmModal from "./components/HppCostConfirmModal";
+import OfflineSyncDevPanel from "./components/OfflineSyncDevPanel";
+import OfflineMasterDataPilotPanel from "./components/OfflineMasterDataPilotPanel";
 
 // -----------------------------------------------------------------------------
 // Reset & Maintenance Data Page
@@ -1057,6 +1059,9 @@ const ResetMaintenanceData = () => {
             testDataRows={testDataRows}
             renderCompactText={renderCompactText}
           />
+
+          <OfflineSyncDevPanel />
+          <OfflineMasterDataPilotPanel />
           <ResetUsageGuidePanel />
 
         </Space>

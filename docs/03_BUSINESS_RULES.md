@@ -652,8 +652,6 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - List Dashboard maksimal 5 item, Data Perlu Dicek maksimal 6 alert, dan planning prioritas maksimal 3 item.
 - Keuangan Dashboard hanya ringkasan monitoring; Profit Loss tetap source final laporan laba/rugi.
 - Dashboard wajib punya last updated dan refresh/Muat Ulang yang hanya reload data summary. Data transaksi/finance pada Dashboard dibatasi ke periode operasional aktif seperti bulan/minggu berjalan; report final tetap berada di halaman laporan.
-- Loading awal Dashboard wajib memakai skeleton lokal/data loading, bukan menampilkan KPI 0 atau empty state palsu saat data belum selesai dimuat.
-- Jika read model stok/index/rules belum siap, warning Dashboard harus memakai bahasa manusiawi dan tetap menjaga fallback read-only ke master stock; key teknis seperti `stock_item_read_models_fallback` cukup untuk console/developer, bukan pesan utama user.
 - Jika payroll paid sudah masuk expense atau ada cost 0, Dashboard hanya menampilkan catatan/warning, bukan angka final yang misleading.
 
 ### Fase E - Report dan Export Standard
@@ -714,7 +712,6 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
   - buka form Purchases dengan material/supplier/link produk terisi awal;
   - buka menu Supplier dengan filter material untuk membandingkan supplier.
 - Klik action Restock Assistant tidak boleh mengubah stok, kas, expense, saving, laporan, atau supplier.
-- Link produk eksternal dari Dashboard wajib divalidasi sebagai URL `http`/`https`; skema lain tidak boleh dibuka dari UI.
 - Stok/kas/expense hanya berubah setelah user menyimpan transaksi di halaman Purchases.
 - Supplier terakhir dibeli dan link produk terakhir wajib berasal dari transaksi Purchases terakhir untuk bahan tersebut.
 - Jika belum ada purchase/link produk, UI harus menampilkan fallback/empty state aman dan tidak boleh memakai link toko supplier sebagai link produk utama.
@@ -1202,3 +1199,86 @@ Status: **AKTIF / GUARDED**.
 - Repair side-effect tidak boleh mengubah stok master/variant, tidak boleh mengubah dokumen `sales`, `purchases`, atau `returns`, tidak boleh menghapus income/expense/log lama, tidak boleh mengubah payroll/HPP, dan tidak boleh membuat refund Return.
 - Konflik seperti Sales belum `Selesai` tetapi sudah punya income tetap masuk review manual. Sistem tidak melakukan rollback/delete otomatis karena berisiko merusak laporan finance.
 - Repair wajib didahului audit/dry run dan konfirmasi keyword `REPAIR TRANSAKSI`; setelah repair wajib audit ulang dan cek Cash In, Cash Out, Stock Management, Sales Report, Purchases Report, dan Profit Loss.
+
+
+## Offline Local DB foundation, backup, and database contract — 2026-05
+
+Status: **FOUNDATION / GUARDED / BELUM SOURCE UTAMA**.
+
+Rule:
+- Database offline web memakai Dexie/IndexedDB di `src/data/local/*`.
+- Firebase/Firestore masih menjadi runtime utama sampai mode offline-local disetujui dan diuji per modul.
+- Batch 1/2 foundation wajib tersedia sebelum repository pilot: `localDbSchema`, `imsLocalDb`, `localDbMeta`, `localDbBackupValidator`, dan `localDbBackupService`.
+- Backup/restore local DB hanya berlaku untuk table foundation allowlist:
+  - `app_meta`
+  - `local_profiles`
+  - `sync_queue`
+  - `sync_conflicts`
+  - `audit_logs`
+  - `categories`
+  - `customers`
+  - `suppliers`
+- Restore wajib melalui validasi payload, preview, dan confirmation guard sebelum dibuat UI user-facing.
+- Restore tidak boleh otomatis menyentuh purchase, sales, returns, stock, inventory log, production, payroll, HPP, finance, reset destructive, atau Firestore sync.
+- Database Contract resmi untuk roadmap offline ada di `docs/10_OFFLINE_DATABASE_CONTRACT.md`.
+- Batch offline berikutnya wajib mengikuti urutan kontrak: master data rendah risiko dulu, lalu stock/transaksi/production/payroll/HPP belakangan.
+
+
+## Offline repository pilot guard — 2026-05 Batch 4
+
+Status: **REPOSITORY PILOT / NON-RUNTIME DEFAULT / GUARDED**.
+
+Rule:
+- Repository pilot hanya menjadi boundary baru untuk `categories`, `customers`, dan `suppliers`.
+- Firebase tetap default adapter lewat `firebase_primary`.
+- Dexie adapter hanya aktif jika caller eksplisit memakai mode `offline_local`; belum ada UI user-facing yang boleh mengubah mode.
+- Page/service aktif belum boleh dimigrasi massal ke repository tanpa batch per modul.
+- `customersRepository` harus menjaga rule kode customer existing dengan memakai `customersService` saat mode Firebase.
+- `suppliersRepository` mode Firebase untuk write masih diblokir sampai flow besar `SupplierPurchases.jsx` diaudit dan diekstrak; jangan duplikasi create/update/delete supplier secara diam-diam.
+- Delete lokal di Dexie repository menggunakan tombstone `_deleted`, bukan hard delete default.
+- Repository pilot tidak boleh menyentuh stock, purchase, sales, returns, finance, production, payroll, HPP, reset, auth, route/menu, atau Firestore rules.
+
+
+## Offline Sync Queue pilot — 2026-05
+
+Status: **FOUNDATION / MASTER DATA PILOT ONLY / BELUM FIREBASE SYNC**.
+
+Rule:
+- `sync_queue` hanya boleh menerima collection pilot: `categories`, `customers`, dan `suppliers`.
+- Operation yang boleh dicatat: `create`, `update`, dan `delete`.
+- Status queue yang valid: `pending`, `syncing`, `synced`, `failed`, dan `conflict`.
+- Pada Batch 6, queue hanya mencatat perubahan lokal Dexie; belum boleh push otomatis ke Firebase.
+- Queue belum boleh dipakai untuk stock, purchases, sales, returns, finance, production, payroll, HPP, reset, audit destructive, atau business code counter.
+- Delete offline pilot wajib memakai tombstone `_deleted` secara default, bukan hard delete, agar nanti aman untuk Firebase mirror.
+- `hybrid_sync` tetap diblokir sampai manual sync dan conflict resolver disetujui.
+
+
+## Offline Manual Sync Pilot UI Guard — 2026-05
+
+Status: **DEV GUARDED / MASTER DATA PILOT ONLY / BUKAN RUNTIME UTAMA**.
+
+Rule:
+- Offline Sync Dev Panel hanya boleh dipakai untuk pilot master data rendah risiko.
+- Scope manual sync Batch 8 tetap `categories` dan `customers`.
+- `suppliers` masih boleh tersimpan di queue lokal, tetapi push Firebase tetap diblokir sampai flow `SupplierPurchases` diaudit/dipecah dengan aman.
+- Panel tidak boleh auto-sync saat halaman dibuka.
+- Manual sync wajib keyword `SYNC MASTER DATA PILOT TO FIREBASE`.
+- Aktivasi offline repository pilot wajib keyword `ENABLE OFFLINE REPOSITORY PILOT`.
+- Delete Firebase tetap diblokir dari panel Batch 8 karena destructive.
+- Panel tidak boleh menyentuh stock, purchase, sales, returns, finance, production, payroll, HPP, reset destructive, route/menu, atau role guard.
+- Konflik create/update wajib masuk `sync_conflicts`; jangan overwrite otomatis data Firebase.
+
+
+## Offline Conflict Resolver & Master Data Pilot UI Guard — 2026-05 Batch 10
+
+Status: **DEV GUARDED / MASTER DATA PILOT ONLY / BUKAN RUNTIME PRODUKSI**.
+
+Rule:
+- Import compatibility untuk `createSyncConflict` wajib dipertahankan agar patch lama tidak membuat white screen karena named export mismatch.
+- Conflict resolver hanya boleh memproses `categories` dan `customers`.
+- Resolusi konflik wajib keyword `RESOLVE MASTER DATA CONFLICT`.
+- Mode resolusi yang valid hanya `local_wins`, `remote_wins`, dan `mark_skipped`.
+- Konflik delete tidak boleh di-resolve otomatis; hanya boleh `mark_skipped` setelah review manual.
+- Offline Master Data Pilot hanya panel dev di Testing & Reset Center, bukan pengganti page Master Data aktif.
+- Data customer pilot memakai kode lokal untuk testing; jangan dijadikan standar kode produksi final.
+- Tidak boleh menyentuh stock, purchase, sales, returns, finance, production, payroll, HPP, reset destructive, route/menu, role guard, Firestore rules/index, atau business code counters.

@@ -1194,5 +1194,135 @@ Guard:
 - Batch 25–27 bukan batch fitur dan bukan batch business logic. Perubahan source runtime hanya boleh berupa fix blocker aman yang terbukti dari source aktual.
 - Jika tidak ada blocker lint/build dari source ZIP, batch ini terutama menyinkronkan docs/checklist agar tidak mengarahkan patch berikutnya ke status lama yang sudah superseded.
 - Helper split Batch 18–24 tetap behavior-preserving. Jangan memakai helper UI/read-only sebagai pengganti service transaction.
-- Dashboard/Stock Report path normal terbaru memakai `stock_item_read_models`; fallback master/source tetap compatibility guard. Dashboard UI harus menerjemahkan failed-read key menjadi warning user-friendly, sementara raw key tetap di console untuk debugging.
+- Dashboard/Stock Report path normal terbaru memakai `stock_item_read_models`; fallback master/source tetap compatibility guard.
 - Semua area guarded tetap harus melalui service existing: stock posting, purchase expense, sales income, return stock-only rule, production HPP/payroll, reset destructive, inventory log, route/menu/role guard, and Firestore rules/index deployment.
+
+
+## Offline Local DB contract integration — 2026-05
+
+Status: **FOUNDATION + CONTRACT ONLY / FIREBASE PRIMARY MASIH AKTIF**.
+
+Integrasi target jangka panjang:
+
+```text
+React UI
+-> IMS service/repository
+-> Dexie/IndexedDB local DB
+-> sync_queue
+-> Firebase mirror/backup
+```
+
+Integrasi source Batch 1/2/3:
+- `src/data/local/localDbSchema.js` menyimpan nama DB, versi schema, table foundation, dan allowlist backup.
+- `src/data/local/imsLocalDb.js` membuat singleton Dexie untuk `ims_bunga_flanel_offline`.
+- `src/data/local/localDbMeta.js` menyimpan metadata foundation, mode, dan timestamp backup/restore.
+- `src/data/local/localDbBackupValidator.js` memvalidasi payload backup sebelum restore.
+- `src/data/local/localDbBackupService.js` membuat export/preview/restore foundation backup.
+- `docs/10_OFFLINE_DATABASE_CONTRACT.md` menjadi peta resmi migrasi offline-first.
+
+Boundary:
+- Page/service aktif belum boleh langsung bergantung ke Dexie untuk transaksi utama.
+- Firebase service existing tetap aktif sampai repository boundary dibuat.
+- `sync_queue` masih local storage contract, belum integrasi Firebase Sync.
+- Backup/restore foundation tidak boleh menjadi reset destructive untuk data bisnis utama.
+- Migrasi berikutnya wajib melalui repository pilot untuk `categories`, `customers`, dan `suppliers` sebelum masuk stock/purchase/sales/production.
+
+
+## Repository Pilot integration — 2026-05 Batch 4
+
+Status: **PILOT / FIREBASE PRIMARY DEFAULT**.
+
+Boundary baru:
+```text
+Repository
+-> Firebase adapter   (default)
+-> Dexie adapter      (explicit offline_local only)
+```
+
+Files:
+- `src/data/repositories/repositoryMode.js`
+- `src/data/repositories/categoriesRepository.js`
+- `src/data/repositories/customersRepository.js`
+- `src/data/repositories/suppliersRepository.js`
+- `src/data/adapters/firebase/*`
+- `src/data/adapters/dexie/*`
+
+Integrasi:
+- `categoriesRepository` menyediakan boundary untuk kategori, tetapi page kategori belum dimigrasi.
+- `customersRepository` mode Firebase menggunakan `customersService` agar rule kode customer tetap terjaga.
+- `suppliersRepository` mode Firebase read-only untuk write; create/update/delete supplier belum dipindah dari `SupplierPurchases.jsx`.
+- Batch berikutnya boleh mulai memilih satu page pilot kecil, tetapi harus audit file aktual lagi dan tidak boleh menyentuh stock/transaksi/production/payroll.
+
+
+## Offline Sync Queue pilot integration — 2026-05
+
+Status: **LOCAL QUEUE ONLY / BELUM FIREBASE PUSH-PULL**.
+
+Integrasi Batch 6:
+- `src/data/sync/syncQueueService.js` mengelola queue lokal untuk collection pilot.
+- `src/data/local/localDbSchema.js` menyimpan constant sync status, operation, dan collection allowlist.
+- `src/data/adapters/dexie/dexieMasterDataAdapterFactory.js` mencatat queue saat create/update/delete lokal pilot.
+- `src/data/repositories/repositoryModeService.js` menyediakan dev guard untuk mode repository.
+
+Boundary:
+- Queue hanya local Dexie; belum ada Firebase sync worker.
+- Collection allowlist hanya `categories`, `customers`, `suppliers`.
+- `hybrid_sync` masih diblokir.
+- Page aktif belum switch ke offline repository.
+- Batch berikutnya baru boleh membuat manual Firebase sync untuk master data pilot, bukan auto sync dan bukan transaksi.
+
+
+## Offline Manual Sync Dev Panel integration — 2026-05
+
+Status: **DEV PANEL / MANUAL ONLY**.
+
+Integrasi Batch 8:
+
+```text
+Testing & Reset Center
+-> OfflineSyncDevPanel
+-> repositoryModeService
+-> syncQueueService
+-> firebaseMasterDataSyncService
+-> syncConflictService
+-> Dexie local DB
+-> Firebase categories/customers only
+```
+
+Boundary:
+- Panel berada di existing `ResetMaintenanceData.jsx`, tidak menambah route/menu.
+- Panel hanya preview/manual action; tidak ada background sync.
+- `firebaseMasterDataSyncService` hanya allowlist categories/customers.
+- `syncConflictService` menyimpan konflik local ke `sync_conflicts`.
+- Supplier tetap blocked sampai supplier repository write flow diaudit.
+- Delete Firebase tetap blocked dari panel Batch 8.
+
+
+## Offline Conflict Resolver + Master Data Pilot integration — 2026-05 Batch 10
+
+Status: **DEV PANEL / MANUAL ONLY / NON-AUTO SYNC**.
+
+Integrasi:
+
+```text
+Testing & Reset Center
+-> OfflineSyncDevPanel
+   -> firebaseMasterDataSyncService
+   -> syncConflictService
+   -> syncConflictResolutionService
+   -> syncQueueService
+   -> Dexie local DB
+   -> Firebase categories/customers only
+
+Testing & Reset Center
+-> OfflineMasterDataPilotPanel
+   -> categoriesRepository/customersRepository
+   -> Dexie adapters via mode offline_local
+   -> syncQueueService
+```
+
+Boundary:
+- `firebaseMasterDataSyncService` memiliki re-export compatibility `createSyncConflict` untuk mencegah named export mismatch dari patch lama.
+- `syncConflictResolutionService` hanya master data pilot categories/customers.
+- `OfflineMasterDataPilotPanel` hanya dev utility; tidak mengganti page aktif Master Data.
+- Tidak ada background sync, route baru, menu baru, atau role guard baru.
