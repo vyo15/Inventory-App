@@ -57,7 +57,7 @@ import {
 import { createProductionWorkLogFromOrder } from "../../services/Produksi/productionWorkLogsService";
 import { getActiveBomReferenceData } from "../../services/Produksi/productionBomsService";
 import useAuth from "../../hooks/useAuth";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import {
   formatDateTimeLabel,
@@ -1000,15 +1000,13 @@ const ProductionOrders = () => {
         subtitle="Cek shortage, readiness, dan akses Work Log."
       >
         {/* Aktif dipakai: scroll x besar dihapus agar tombol aksi terlihat pada desktop/laptop normal. */}
-        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
-        <Table
+        <DataTableView
+          loading={loading}
           className="ims-table"
           rowKey="id"
           columns={columns}
           dataSource={filteredData}
-          locale={{
-            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada production order" />),
-          }}
+          emptyText={<Empty description="Belum ada production order" />}
         />
       </PageSection>
 

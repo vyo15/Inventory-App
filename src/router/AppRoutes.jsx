@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "../components/Auth/ProtectedRoute";
+import DataLoadingState from "../components/Layout/Feedback/DataLoadingState";
 import { ROUTE_ACCESS_KEYS } from "../utils/auth/roleAccess";
 
 // =========================
@@ -82,13 +83,13 @@ const ResetMaintenanceData = lazy(
 // =====================================================
 // SECTION: Lazy Route Fallback — AKTIF / GUARDED
 // Fungsi:
-// - Menjaga Suspense tetap non-prominent saat chunk halaman sedang dimuat.
+// - Menampilkan feedback ringan saat chunk halaman lazy belum siap agar transisi route tidak blank.
 //
 // Dipakai oleh:
 // - Suspense fallback di AppRoutes.
 //
 // Alasan perubahan:
-// - Fallback lazy route sengaja tanpa logo besar agar tidak muncul double loading setelah global/session loader. Route definitions, lazy imports, ProtectedRoute, dan role guard tidak berubah.
+// - Fallback lazy route memakai DataLoadingState lokal, bukan logo/fullscreen, agar tidak terasa seperti restart aplikasi setelah layout tampil. Route definitions, lazy imports, ProtectedRoute, dan role guard tidak berubah.
 //
 // Catatan cleanup:
 // - belum ada.
@@ -96,7 +97,15 @@ const ResetMaintenanceData = lazy(
 // Risiko:
 // - Jika route structure atau guard wrapper ikut diubah, halaman bisnis dan akses role bisa terganggu.
 // =====================================================
-const RouteFallback = null;
+const RouteFallback = (
+  <DataLoadingState
+    variant="table"
+    rows={4}
+    columns={4}
+    message="Menyiapkan halaman..."
+    minHeight={220}
+  />
+);
 
 // =========================
 // SECTION: App Routes — AKTIF / GUARDED

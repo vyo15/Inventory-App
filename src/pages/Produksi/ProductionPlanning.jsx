@@ -52,6 +52,7 @@ import {
   createProductionOrderFromPlan,
   createProductionPlan,
   getAllProductionPlans,
+  getProductionPlanCancelBlockReason,
   getProductionPlanningReferenceData,
   isProductionPlanPoAllowed,
   normalizeProductionPlanStatus,
@@ -194,24 +195,38 @@ const getPlanStatus = (planOrStatus = "") =>
 const getStatusMeta = (status) => STATUS_META[getPlanStatus(status)] || STATUS_META.active;
 const getPriorityMeta = (priority) => PRIORITY_META[priority] || PRIORITY_META.normal;
 const canCreatePoFromPlan = (plan = {}) => isProductionPlanPoAllowed({ ...plan, status: getPlanStatus(plan) });
+const getCancelBlockReason = (plan = {}) =>
+  getProductionPlanCancelBlockReason({ ...plan, status: getPlanStatus(plan) });
+const canCancelPlan = (plan = {}) => !getCancelBlockReason(plan);
+const getCancelActionLabel = (plan = {}) => {
+  const blockReason = getCancelBlockReason(plan);
+
+  if (!blockReason) return "Cancel";
+  if (blockReason.includes("Production Order")) return "Cancel — sudah ada PO";
+  if (blockReason.includes("selesai")) return "Cancel — sudah selesai";
+  if (blockReason.includes("dibatalkan")) return "Sudah cancelled";
+
+  return "Cancel tidak tersedia";
+};
 
 // =====================================================
 // SECTION: Production Planning UI guards — LEGACY-COMPAT
 // Fungsi:
-// - memakai status canonical yang sama dengan service untuk filter, label, dan guard Buat PO;
+// - memakai status canonical yang sama dengan service untuk filter, label, guard Buat PO, dan guard Cancel;
 // - memberi pesan error service yang lebih jelas saat cancel atau create PO gagal.
 //
 // Dipakai oleh:
 // - tabel Production Planning, detail drawer, action Cancel, dan drawer Buat PO.
 //
 // Alasan perubahan:
-// - status legacy cancel/canceled/Cancelled tidak boleh tetap terbaca overdue atau masih bisa dibuatkan PO.
+// - status legacy cancel/canceled/Cancelled tidak boleh tetap terbaca overdue atau masih bisa dibuatkan PO;
+// - action Cancel harus mengikuti guard service, bukan guard Buat PO, agar Planning yang sudah punya PO tidak membuka modal cancel palsu.
 //
 // Catatan cleanup:
 // - helper lokal bisa disederhanakan jika seluruh data lama sudah memakai status canonical.
 //
 // Risiko:
-// - guard UI harus tetap sejalan dengan service agar tidak membuka flow PO untuk status final.
+// - guard UI harus tetap sejalan dengan service agar tidak membuka flow PO atau cancel untuk status/relasi final.
 // =====================================================
 const getActionErrorMessage = (error, fallback) => {
   if (error?.type === "validation" && error?.errors) {
@@ -532,10 +547,17 @@ const ProductionPlanning = () => {
   };
 
   const handleCancelPlan = (record) => {
+    const blockReason = getCancelBlockReason(record);
+
+    if (blockReason) {
+      message.warning(blockReason);
+      return;
+    }
+
     Modal.confirm({
       title: "Batalkan planning?",
       content:
-        "Planning yang dibatalkan tidak menghapus PO atau Work Log terkait. Flow produksi existing tetap aman.",
+        "Planning ini belum punya Production Order terkait, sehingga aman dibatalkan. Aksi ini hanya mengubah status planning menjadi cancelled dan tidak mengubah stok, PO, Work Log, Payroll, atau HPP.",
       okText: "Batalkan Planning",
       okButtonProps: { danger: true },
       cancelText: "Kembali",
@@ -639,10 +661,10 @@ const ProductionPlanning = () => {
     },
     {
       key: "cancel",
-      label: "Cancel",
+      label: getCancelActionLabel(record),
       icon: <StopOutlined />,
-      danger: true,
-      disabled: !canCreatePoFromPlan(record),
+      danger: canCancelPlan(record),
+      disabled: !canCancelPlan(record),
     },
   ];
 

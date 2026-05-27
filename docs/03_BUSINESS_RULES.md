@@ -652,6 +652,8 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - List Dashboard maksimal 5 item, Data Perlu Dicek maksimal 6 alert, dan planning prioritas maksimal 3 item.
 - Keuangan Dashboard hanya ringkasan monitoring; Profit Loss tetap source final laporan laba/rugi.
 - Dashboard wajib punya last updated dan refresh/Muat Ulang yang hanya reload data summary. Data transaksi/finance pada Dashboard dibatasi ke periode operasional aktif seperti bulan/minggu berjalan; report final tetap berada di halaman laporan.
+- Loading awal Dashboard wajib memakai skeleton lokal/data loading, bukan menampilkan KPI 0 atau empty state palsu saat data belum selesai dimuat.
+- Jika read model stok/index/rules belum siap, warning Dashboard harus memakai bahasa manusiawi dan tetap menjaga fallback read-only ke master stock; key teknis seperti `stock_item_read_models_fallback` cukup untuk console/developer, bukan pesan utama user.
 - Jika payroll paid sudah masuk expense atau ada cost 0, Dashboard hanya menampilkan catatan/warning, bukan angka final yang misleading.
 
 ### Fase E - Report dan Export Standard
@@ -712,6 +714,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
   - buka form Purchases dengan material/supplier/link produk terisi awal;
   - buka menu Supplier dengan filter material untuk membandingkan supplier.
 - Klik action Restock Assistant tidak boleh mengubah stok, kas, expense, saving, laporan, atau supplier.
+- Link produk eksternal dari Dashboard wajib divalidasi sebagai URL `http`/`https`; skema lain tidak boleh dibuka dari UI.
 - Stok/kas/expense hanya berubah setelah user menyimpan transaksi di halaman Purchases.
 - Supplier terakhir dibeli dan link produk terakhir wajib berasal dari transaksi Purchases terakhir untuk bahan tersebut.
 - Jika belum ada purchase/link produk, UI harus menampilkan fallback/empty state aman dan tidak boleh memakai link toko supplier sebagai link produk utama.

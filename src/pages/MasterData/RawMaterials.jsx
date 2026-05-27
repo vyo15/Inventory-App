@@ -54,7 +54,7 @@ import {
   DEFAULT_RAW_MATERIAL_VARIANT,
   ensureAtLeastOneRawMaterialVariant,
 } from '../../utils/variants/rawMaterialVariantHelpers';
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import { buildSinglePricingPreview } from '../../services/Pricing/pricingService';
 import PricingModeSwitch from '../../components/Pricing/PricingModeSwitch';
@@ -685,8 +685,8 @@ const RawMaterials = () => {
         title="Daftar Bahan Baku"
         subtitle="Stok, supplier, dan varian bahan."
       >
-        <DataRefreshIndicator loading={loading} dataSource={filteredMaterials} />
-        <Table
+        <DataTableView
+          loading={loading}
           className="app-data-table"
           rowKey="id"
           dataSource={filteredMaterials}
@@ -694,9 +694,7 @@ const RawMaterials = () => {
           size="small"
           tableLayout="fixed"
           pagination={{ pageSize: 10 }}
-          locale={{
-            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data bahan baku" />),
-          }}
+          emptyText={<Empty description="Belum ada data bahan baku" />}
         />
       </PageSection>
 

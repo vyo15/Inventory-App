@@ -17,9 +17,7 @@ import {
   Alert,
   Badge,
   Button,
-  Card,
   Col,
-  Collapse,
   Descriptions,
   Divider,
   Drawer,
@@ -63,7 +61,7 @@ import {
   toggleProductionBomActive,
   updateProductionBom,
 } from "../../services/Produksi/productionBomsService";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import ProductionBomListView from "./components/ProductionBomListView";
 import {
   clampTwoLineStyle,
   compactTagStyle,
@@ -923,75 +921,14 @@ const ProductionBoms = () => {
       </ProductionFilterCard>
 
       {/* SECTION: tabel BOM */}
-      <Card>
-        {/* ===============================================================
-            Tabel utama BOM dibuat compact tanpa horizontal scroll besar.
-            Detail komposisi tetap tersedia di drawer detail existing.
-        =============================================================== */}
-        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
-        {listViewMode === "global" ? (
-          <Table
-            className="app-data-table"
-            rowKey="id"
-            columns={columns}
-            dataSource={filteredData}
-            locale={{
-              emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data BOM produksi" />),
-            }}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-            }}
-          />
-        ) : filteredData.length === 0 ? (
-          <Empty description={loading ? "Memuat data..." : "Belum ada data BOM produksi"} />
-        ) : (
-          <Collapse
-            className="ims-production-group-collapse"
-            bordered={false}
-            defaultActiveKey={groupedFilteredData[0]?.key ? [groupedFilteredData[0].key] : []}
-            activeKey={shouldAutoOpenBomGroups ? groupedFilteredData.map((group) => group.key) : undefined}
-            items={groupedFilteredData.map((typeGroup) => ({
-              key: typeGroup.key,
-              label: (
-                <Space direction="vertical" size={2}>
-                  <Typography.Text strong>{typeGroup.label}</Typography.Text>
-                  <Space size={6} wrap>
-                    <Tag>{formatNumber(typeGroup.items.length)} BOM</Tag>
-                    <Tag color="green">Aktif {formatNumber(typeGroup.counts.active)}</Tag>
-                    <Tag color="blue">Default {formatNumber(typeGroup.counts.default)}</Tag>
-                    {typeGroup.counts.inactive > 0 ? (
-                      <Tag color="default">Nonaktif {formatNumber(typeGroup.counts.inactive)}</Tag>
-                    ) : null}
-                  </Space>
-                </Space>
-              ),
-              children: (
-                <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                  {typeGroup.targets.map((targetGroup) => (
-                    <Card
-                      key={targetGroup.key}
-                      size="small"
-                      title={`${targetGroup.label} (${formatNumber(targetGroup.items.length)} BOM)`}
-                    >
-                      <Table
-                        className="app-data-table"
-                        rowKey="id"
-                        columns={columns}
-                        dataSource={targetGroup.items}
-                        pagination={false}
-                        locale={{
-                          emptyText: <Empty description="Tidak ada BOM pada target ini" />,
-                        }}
-                      />
-                    </Card>
-                  ))}
-                </Space>
-              ),
-            }))}
-          />
-        )}
-      </Card>
+      <ProductionBomListView
+        loading={loading}
+        filteredData={filteredData}
+        listViewMode={listViewMode}
+        columns={columns}
+        groupedFilteredData={groupedFilteredData}
+        shouldAutoOpenBomGroups={shouldAutoOpenBomGroups}
+      />
 
       {/* SECTION: drawer form tambah/edit BOM */}
       <Drawer

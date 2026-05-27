@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   Alert,
   Button,
+  message,
   Card,
   Col,
   Empty,
@@ -30,6 +31,7 @@ import {
 } from "@ant-design/icons";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataLoadingState from "../../components/Layout/Feedback/DataLoadingState";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { readDashboardData } from "../../services/Dashboard/dashboardService";
 import {
@@ -214,6 +216,39 @@ const formatDashboardDate = (value) => {
   });
 };
 
+const STOCK_READ_MODEL_WARNING_KEYS = new Set([
+  "stock_item_read_models_empty_fallback",
+  "stock_item_read_models_issue_query_fallback",
+  "stock_item_read_models_fallback",
+]);
+
+const formatDashboardLoadWarning = (failedReads = []) => {
+  if (!Array.isArray(failedReads) || failedReads.length === 0) return "";
+
+  const uniqueFailedReads = [...new Set(failedReads.filter(Boolean))];
+  const hasStockReadModelFallback = uniqueFailedReads.some((key) => STOCK_READ_MODEL_WARNING_KEYS.has(key));
+
+  if (hasStockReadModelFallback) {
+    return "Read model stok belum siap atau index/rules Firestore belum lengkap. Dashboard memakai fallback master stock, sehingga data monitoring tetap tampil. Jika warning tetap muncul, cek Firestore index/rules lalu jalankan Cek/Rebuild Read Model Stok di Reset Maintenance.";
+  }
+
+  return "Sebagian data Dashboard belum siap. Data lain tetap ditampilkan untuk monitoring; cek koneksi, rules, atau index Firestore bila warning berulang.";
+};
+
+const getSafeExternalHttpUrl = (value) => {
+  const rawValue = String(value || "").trim();
+  if (!rawValue) return "";
+
+  try {
+    const parsedUrl = new URL(rawValue);
+    return ["http:", "https:"].includes(parsedUrl.protocol) ? parsedUrl.href : "";
+  } catch {
+    return "";
+  }
+};
+
+const hasSafeExternalHttpUrl = (value) => Boolean(getSafeExternalHttpUrl(value));
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -264,7 +299,8 @@ const Dashboard = () => {
       setDashboardData(nextDashboardData);
 
       if (failedReads.length > 0) {
-        setLoadWarning(`Sebagian data Dashboard gagal dimuat: ${failedReads.join(", ")}. Data lain tetap ditampilkan untuk monitoring.`);
+        console.warn("Sebagian data Dashboard gagal dimuat:", failedReads);
+        setLoadWarning(formatDashboardLoadWarning(failedReads));
       }
 
       setLastUpdated(new Date());
@@ -692,6 +728,7 @@ const Dashboard = () => {
           minute: "2-digit",
         })
       : "Belum dimuat";
+  const isInitialDashboardLoading = loading && !lastUpdated;
 
   // =========================
   // SECTION: Restock Assistant Actions
@@ -704,15 +741,21 @@ const Dashboard = () => {
   // - aktif dipakai oleh Stok Kritis; bukan kandidat cleanup selama Restock Assistant aktif.
   // =========================
   const openRestockProductLink = (productLink) => {
-    if (!productLink) return;
-    window.open(productLink, "_blank", "noopener,noreferrer");
+    const safeProductLink = getSafeExternalHttpUrl(productLink);
+
+    if (!safeProductLink) {
+      message.warning("Link produk tidak valid. Hanya URL http/https yang bisa dibuka dari Dashboard.");
+      return;
+    }
+
+    window.open(safeProductLink, "_blank", "noopener,noreferrer");
   };
 
   const goToRestockPurchase = (item) => {
     navigate(buildRestockRoute("/purchases", {
       materialId: item.id,
       supplierId: item.restockSupplierId,
-      productLink: item.restockProductLink,
+      productLink: getSafeExternalHttpUrl(item.restockProductLink),
       source: "dashboard-restock",
     }));
   };
@@ -747,6 +790,18 @@ const Dashboard = () => {
 
       {loadWarning ? <Alert type="warning" showIcon message={loadWarning} /> : null}
 
+      {isInitialDashboardLoading ? (
+        <PageSection title="Menyiapkan Dashboard" subtitle="Memuat ringkasan operasional terbaru.">
+          <DataLoadingState
+            variant="table"
+            rows={5}
+            columns={4}
+            message="Menyiapkan data Dashboard..."
+            minHeight={260}
+          />
+        </PageSection>
+      ) : (
+        <>
       {/* =====================================================
           SECTION: Ringkasan Hari Ini — AKTIF
           Fungsi:
@@ -1064,7 +1119,7 @@ const Dashboard = () => {
                         <Space size={8} wrap className="dashboard-restock-actions">
                           <Button
                             size="small"
-                            disabled={!item.restockProductLink}
+                            disabled={!hasSafeExternalHttpUrl(item.restockProductLink)}
                             onClick={() => openRestockProductLink(item.restockProductLink)}
                           >
                             Buka Link Produk
@@ -1214,6 +1269,8 @@ const Dashboard = () => {
           </div>
         )}
       </PageSection>
+        </>
+      )}
     </div>
   );
 };

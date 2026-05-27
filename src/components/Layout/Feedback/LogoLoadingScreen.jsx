@@ -52,10 +52,10 @@ const drawSplitLayer = ({ canvas, image, sourceData, keepPixel }) => {
 // - App.jsx untuk auth/session gate.
 // - ProtectedRoute.jsx untuk route guard loading.
 // - Login.jsx untuk auth/profile loading.
-// - AppRoutes.jsx untuk lazy route fallback.
+// - Tidak dipakai untuk lazy route fallback di dalam layout; AppRoutes memakai skeleton lokal agar tidak terasa seperti restart aplikasi.
 //
 // Alasan perubahan:
-// - Menyatukan loading utama aplikasi ke LogoLoadingScreen full viewport tanpa card/wrap kecil, tanpa mengubah auth guard, route guard, login flow, atau route definition.
+// - Menyatukan loading utama aplikasi ke LogoLoadingScreen full viewport tanpa card/wrap kecil, tanpa mengubah auth guard, route guard, login flow, atau route definition. Lazy route di dalam layout tetap memakai fallback lokal.
 //
 // Catatan cleanup:
 // - belum ada.

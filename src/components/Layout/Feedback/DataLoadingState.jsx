@@ -42,7 +42,7 @@ Dipakai oleh:
 - Halaman dashboard, master data, finance, inventory, transaksi, report, produksi, dan system yang membutuhkan loading data lokal.
 
 Alasan perubahan:
-- Global/auth/route memakai LogoLoadingScreen, sementara loading data lokal harus satu visual: skeleton initial load atau refresh indicator ringan tanpa AntD spinner overlay.
+- Global/auth/session memakai LogoLoadingScreen, sementara lazy route di dalam layout dan loading data lokal memakai skeleton ringan agar tidak blank tanpa membuat fullscreen logo kedua.
 
 Catatan cleanup:
 - Belum ada.

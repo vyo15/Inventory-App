@@ -21,7 +21,6 @@ import {
   DatePicker,
   Divider,
   Drawer,
-  Empty,
   Form,
   Input,
   InputNumber,
@@ -30,7 +29,6 @@ import {
   Row,
   Select,
   Space,
-  Table,
   Tag,
   Typography,
 } from "antd";
@@ -63,7 +61,7 @@ import {
   generatePayrollLinesFromCompletedWorkLog,
   getAllProductionPayrolls,
 } from "../../services/Produksi/productionPayrollsService";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import formatCurrency from "../../utils/formatters/currencyId";
 import { getFormArrayValue, removeArrayItemByIndex, upsertArrayItemByIndex } from "../../utils/forms/formArrayHelpers";
@@ -990,15 +988,13 @@ const ProductionWorkLogs = () => {
 
       <Card className="ims-section-card">
         {/* Aktif dipakai: scroll x besar dihapus agar aksi Work Log terlihat pada desktop/laptop normal. */}
-        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
-        <Table
+        <DataTableView
+          loading={loading}
           className="ims-table"
           rowKey="id"
           columns={columns}
           dataSource={filteredData}
-          locale={{
-            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data work log produksi" />),
-          }}
+          emptyText="Belum ada data work log produksi"
           pagination={{
             pageSize: 10,
             showSizeChanger: true,

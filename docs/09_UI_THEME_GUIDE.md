@@ -346,7 +346,7 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 ## Standar local data/table/card loading
 - Loading hierarchy IMS:
   - Global/auth/session/login: `LogoLoadingScreen` full viewport dengan logo Flanel Karawang.
-  - Table/data/card/chart/list: `DataLoadingState` skeleton/shimmer lokal tanpa logo, tanpa full-screen overlay, dan tanpa AntD spinner overlay custom.
+  - Lazy route di dalam layout serta table/data/card/chart/list: `DataLoadingState` skeleton/shimmer lokal tanpa logo, tanpa full-screen overlay, dan tanpa AntD spinner overlay custom.
   - Button/action/modal/process: loading lokal bawaan komponen tetap dipakai sesuai konteks aksi.
 - `DataLoadingState` harus memakai class scoped `.ims-data-loading*`, mengikuti token theme IMS, support light/dark mode, mobile, dan `prefers-reduced-motion`.
 - Jangan memakai `LogoLoadingScreen` untuk lazy page fallback di dalam layout, table/data/card karena akan terasa seperti loading kedua atau restart aplikasi.

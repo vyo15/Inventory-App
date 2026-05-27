@@ -25,7 +25,6 @@ import {
   Space,
   Statistic,
   Switch,
-  Table,
   Tag,
   Tooltip,
   Typography,
@@ -65,7 +64,7 @@ import ProductionFilterCard from "../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import {
   buildEmployeeActivitySummary,
@@ -709,15 +708,13 @@ const ProductionEmployees = () => {
             Risiko:
             - Mengubah query summary payroll/worklog dari area tabel dapat menggeser source of truth payroll produksi.
         ===================================================== */}
-        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
-        <Table
+        <DataTableView
+          loading={loading}
           className="app-data-table"
           rowKey="id"
           columns={columns}
           dataSource={filteredData}
-          locale={{
-            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data karyawan produksi" />),
-          }}
+          emptyText={<Empty description="Belum ada data karyawan produksi" />}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,

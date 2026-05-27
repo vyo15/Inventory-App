@@ -61,7 +61,7 @@ import ProductionPageHeader from "../../components/Produksi/shared/ProductionPag
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import SemiFinishedMaterialsListView from "./components/SemiFinishedMaterialsListView";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import {
   buildFormValues,
@@ -785,81 +785,14 @@ const SemiFinishedMaterials = () => {
         title="Daftar Semi Finished Materials"
         subtitle="Tabel ini merangkum stok master dan varian fleksibel untuk kebutuhan produksi internal."
       >
-        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
-        {listViewMode === "global" ? (
-          <Table
-            // AKTIF / GUARDED UI: class standar hanya menyamakan surface table; flow semi finished material dan produksi tidak diubah.
-            className="app-data-table"
-            rowKey="id"
-            size="small"
-            tableLayout="fixed"
-            columns={columns}
-            dataSource={filteredData}
-            // AKTIF / GUARDED: primary table memakai layout fixed tanpa horizontal scroll default; stok varian tetap tampil sebagai pill langsung di kolom Stok.
-            locale={{
-              emptyText: getDataTableEmptyText(loading, (
-                <Empty description="Belum ada data semi finished materials" />
-              )),
-            }}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total) => `Total ${total} item`,
-            }}
-          />
-        ) : filteredData.length === 0 ? (
-          <Empty description={loading ? "Memuat data..." : "Belum ada data semi finished materials"} />
-        ) : (
-          <Collapse
-            className="ims-production-group-collapse"
-            bordered={false}
-            defaultActiveKey={groupedFilteredData[0]?.key ? [groupedFilteredData[0].key] : []}
-            activeKey={shouldAutoOpenSemiGroups ? groupedFilteredData.map((group) => group.key) : undefined}
-            items={groupedFilteredData.map((familyGroup) => ({
-              key: familyGroup.key,
-              label: (
-                <Space direction="vertical" size={2}>
-                  <Typography.Text strong>
-                    Product Family / Jenis Bunga: {familyGroup.label}
-                  </Typography.Text>
-                  <Space size={6} wrap>
-                    <Tag>{formatNumber(familyGroup.items.length)} item</Tag>
-                    <Tag color="green">Aman {formatNumber(familyGroup.statusCounts.safe)}</Tag>
-                    <Tag color="red">Kosong {formatNumber(familyGroup.statusCounts.empty)}</Tag>
-                    <Tag color="orange">Rendah {formatNumber(familyGroup.statusCounts.low)}</Tag>
-                    {familyGroup.statusCounts.inactive > 0 ? (
-                      <Tag color="default">Nonaktif {formatNumber(familyGroup.statusCounts.inactive)}</Tag>
-                    ) : null}
-                  </Space>
-                </Space>
-              ),
-              children: (
-                <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                  {familyGroup.categories.map((categoryGroup) => (
-                    <Card
-                      key={categoryGroup.key}
-                      size="small"
-                      title={`${categoryGroup.label} (${formatNumber(categoryGroup.items.length)} item)`}
-                    >
-                      <Table
-                        className="app-data-table"
-                        rowKey="id"
-                        size="small"
-                        tableLayout="fixed"
-                        columns={columns}
-                        dataSource={categoryGroup.items}
-                        pagination={false}
-                        locale={{
-                          emptyText: <Empty description="Tidak ada item pada kategori ini" />,
-                        }}
-                      />
-                    </Card>
-                  ))}
-                </Space>
-              ),
-            }))}
-          />
-        )}
+        <SemiFinishedMaterialsListView
+          loading={loading}
+          filteredData={filteredData}
+          listViewMode={listViewMode}
+          columns={columns}
+          groupedFilteredData={groupedFilteredData}
+          shouldAutoOpenSemiGroups={shouldAutoOpenSemiGroups}
+        />
       </PageSection>
 
       {/* ------------------------------------------------------------------ */}

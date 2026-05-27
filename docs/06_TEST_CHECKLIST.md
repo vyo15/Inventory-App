@@ -1293,15 +1293,15 @@ Risiko:
 - [ ] Buka Stock Report: baris stok menampilkan `Total`, `Tersedia`, dan variant pill jika data source membawa `variants[]`; filter, summary, dan export tetap memakai data laporan existing.
 - [ ] Regression guarded: create/edit/toggle Products, submit Stock Adjustment, apply Pricing Rule, save Supplier, dan tambah Cash In manual tetap sama seperti sebelum patch.
 
-## Checklist global/auth/route LogoLoadingScreen — 2026-05-07
+## Checklist global/auth/loading hierarchy — 2026-05-07
 - [ ] Refresh browser saat sudah login menampilkan satu loading logo full screen tanpa card/wrap, lalu masuk dashboard/app seperti sebelumnya.
 - [ ] Refresh browser saat belum login menampilkan satu loading logo full screen, lalu masuk halaman Login seperti sebelumnya.
 - [ ] Buka URL protected langsung: route guard memakai loading logo yang sama, redirect login tetap benar, dan unauthorized tetap benar.
-- [ ] Lazy route/page load memakai loading logo yang sama tanpa mengubah route definitions atau role guard.
+- [ ] Lazy route/page load menampilkan skeleton lokal `Menyiapkan halaman...` di dalam content card, bukan layar blank dan bukan logo fullscreen kedua; route definitions dan role guard tetap sama.
 - [ ] Login auth/profile loading memakai loading logo yang sama; blocked/inactive/missing profile tetap berjalan.
 - [ ] Logo loading tidak muter, micro split tetap subtle, light/dark mode bagus, mobile center, dan reduced motion aman.
 - [ ] Console tidak menampilkan error canvas/image/import.
-- [ ] Table loading, button submit loading, report loading, maintenance preview/loading, Refresh Need, dan Refresh Preview tidak berubah.
+- [ ] Table loading, button submit loading, report loading, maintenance preview/loading, Refresh Need, Refresh Preview, dan data skeleton lain tidak berubah.
 
 ## Checklist Sidebar Logo & Brand Theme — 2026-05-07
 - [ ] Sidebar expanded menampilkan logo, `IMS Bunga Flanel`, dan `Flanel Karawang Industries` dalam satu baris visual yang rapi tanpa wrap.
@@ -1779,8 +1779,9 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 
 ### Design/docs only
 - [ ] Pastikan docs membedakan **Stock Row Mapper** dari **Firestore Stock Read Model**.
-- [ ] Pastikan docs menyatakan Dashboard masih full read `products`, `raw_materials`, dan `semi_finished_materials` sampai ada batch switch resmi.
-- [ ] Pastikan docs menyatakan Stock Report masih full source report sampai export/paging contract read model disetujui.
+- [ ] Pastikan docs historis Batch 17B diberi label `SUPERSEDED` untuk catatan lama yang menyebut Dashboard/Stock Report masih full-source.
+- [ ] Pastikan docs status aktif menyatakan Dashboard dan Stock Report runtime terbaru memakai `stock_item_read_models` sebagai read path utama dengan fallback guarded.
+- [ ] Jika Dashboard memakai fallback master stock, cek browser console untuk detail failed read, lalu verifikasi Firestore index/rules dan jalankan Cek/Rebuild Read Model Stok sebelum mengubah query source.
 - [ ] Pastikan docs menyatakan `stock_item_read_models` adalah derived read model, bukan source of truth stok.
 
 ### Foundation source
@@ -1794,16 +1795,40 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 - [ ] Pastikan builder payload tidak menulis Firestore, tidak membuat inventory log, dan tidak mengubah master stock.
 
 ### Writer sync/backfill future guard
-- [ ] Sebelum Dashboard/Stock Report switch, siapkan writer sync untuk Purchases, Sales, Returns, Stock Adjustment, Production Work Logs, Production Orders/reservation, Master Data edit/toggle, dan Reset/Maintenance rebuild.
+- [ ] Sebelum Dashboard/Stock Report switch, siapkan writer sync realtime untuk Purchases, Sales, Returns, Stock Adjustment, Production Work Logs, Production Orders/reservation, Master Data edit/toggle, dan Reset/Maintenance rebuild.
 - [ ] Backfill/rebuild `stock_item_read_models` wajib punya preview jumlah dokumen, scope jelas, dan tidak mengubah master stock maupun `inventory_logs`.
+- [ ] Batch 17C menyediakan audit/rebuild manual; pastikan tetap dianggap backfill, bukan realtime writer sync.
 - [ ] Setelah backfill, bandingkan sample Dashboard old mapper vs `stock_item_read_models`; status `Habis/Kritis/Normal`, available stock, threshold, dan variant summary harus sama.
 - [ ] Firestore Rules production wajib mengizinkan read/write collection baru sesuai role yang disetujui; rules tidak ada di ZIP frontend.
 - [ ] Buat composite index yang diminta Firebase untuk query issue/read report; jangan fallback ke full scan permanen.
 
-### Export/paging future guard
-- [ ] Sebelum Stock Report switch, putuskan export semua matching filter dari read model dengan paging batch atau export halaman aktif dengan disclosure jelas.
-- [ ] Untuk laporan operasional IMS, default yang disarankan adalah export semua matching filter, bukan hanya page aktif.
-- [ ] Pagination Stock Report tidak boleh membuat item kritis hilang dari export/summary.
+### Export/paging active guard
+- [ ] Buka Stock Report; pastikan page awal dari read model tampil dan tombol load more muncul jika masih ada data.
+- [ ] Export XLSX; pastikan export mencoba semua matching filter via paging batch dan memberi disclosure jika fallback/limit terjadi.
+- [ ] Pagination Stock Report tidak boleh membuat item kritis hilang dari export/summary yang sedang difilter.
+
+
+## Batch 17C — Stock Read Model Backfill/Audit Maintenance
+
+### Service audit/rebuild
+- [ ] Jalankan syntax/build check; pastikan `stockReadModelMaintenanceService.js`, `useResetMaintenanceRepairs.js`, `ResetMaintenanceData.jsx`, dan `ResetSafeRepairPanel.jsx` tidak error import/JSX.
+- [ ] Jalankan Cek Read Model Stok dari Reset Maintenance; pastikan summary menampilkan master checked, missing, stale, dan orphan/manual review.
+- [ ] Jika `stock_item_read_models` kosong, audit harus menampilkan missing sesuai jumlah master stock aktif dari `products`, `raw_materials`, dan `semi_finished_materials`.
+- [ ] Jalankan Rebuild Read Model Stok; pastikan hanya collection `stock_item_read_models` yang bertambah/ter-update.
+- [ ] Setelah rebuild, jalankan Cek Read Model Stok ulang; missing/stale harus turun menjadi 0 untuk data yang sukses ditulis.
+- [ ] Pastikan orphan read model hanya tampil sebagai manual review dan tidak dihapus otomatis.
+
+### Guard data integrity
+- [ ] Pastikan rebuild tidak mengubah `products`, `raw_materials`, `semi_finished_materials`, `inventory_logs`, sales, purchases, returns, production, payroll, HPP, finance, route/menu, atau role guard.
+- [ ] Pastikan maintenance log mencatat `actionType=stock_read_model_rebuild`, affected collection `stock_item_read_models`, jumlah repaired, dan manual review/orphan count.
+- [ ] Pastikan Dashboard tetap membaca source lama dan tampilan tidak berubah setelah patch ini.
+- [ ] Pastikan Stock Report tetap membaca source lama dan export contract tidak berubah setelah patch ini.
+- [ ] Pastikan Firestore Rules production sudah mengizinkan admin/maintenance menulis `stock_item_read_models`; rules tidak ada di ZIP frontend.
+
+### Future switch guard
+- [ ] Jangan switch Dashboard ke `stock_item_read_models` sebelum writer sync realtime semua jalur mutasi stok disiapkan.
+- [ ] Jangan switch Stock Report ke `stock_item_read_models` sebelum paging/export semua matching filter disetujui.
+- [ ] Setelah writer sync future selesai, bandingkan sample row dari old mapper vs read model: status, available stock, threshold, variant summary, dan issue flag harus sama.
 
 ## Checklist P2 — Jumbo File Split Behavior-Preserving
 
@@ -1850,82 +1875,38 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 - [ ] Firestore Rules/index tidak berubah dari patch ini; validasi manual di Firebase Console tetap diperlukan.
 
 
-## Batch 18H — ProductionWorkLogsService guarded split phase 1
+## Batch 25–27 — Final QA & Stabilization Sweep
 
-- [ ] Jalankan `npm run lint` dan `npm run build` setelah ZIP ditimpa ke root project.
-- [ ] Buka Production Work Logs; list, detail drawer, dan form create/edit tetap tampil.
-- [ ] Buat Work Log dari Production Order; pastikan material usage, output, worker, step, dan nomor Work Log tetap tersimpan sama.
-- [ ] Edit Work Log yang belum completed; pastikan validator wajib tanggal/target/step/planned qty/material/output tetap berjalan.
-- [ ] Start Production dari PO yang punya material varian; stok bahan tetap terpotong dari bucket varian yang benar dan tidak fallback ke master.
-- [ ] Complete Work Log; pastikan output masuk, HPP/output cost, payroll accrual, inventory log `production_output_in`, dan read model sync tetap berjalan.
-- [ ] Pastikan function public `validateProductionWorkLog` masih bisa diimport dari `productionWorkLogsService.js`.
-- [ ] Pastikan helper `productionWorkLogsServiceHelpers.js` tidak dipakai untuk write langsung ke Firestore, inventory log, payroll, atau stok.
-- [ ] Jangan lanjut split HPP/stock posting/payroll dalam patch yang sama tanpa fixture data production lengkap.
+### Lint/build blocker cleanup
+- [ ] Jalankan `npm run lint` setelah semua ZIP changed-files-only diextract.
+- [ ] Jalankan `npm run build` setelah `npm install` di environment lokal agar optional dependency Rollup sesuai platform terpasang.
+- [ ] Pastikan tidak ada `no-undef`, `no-unused-vars`, duplicate props, duplicate import, atau helper export yang tertinggal setelah split helper Batch 18–24.
+- [ ] Jika build gagal karena `@rollup/rollup-*-*` optional dependency, jalankan `npm install` ulang di project root lokal sebelum menyimpulkan source error.
 
-## Checklist Batch 20 — Combined UI Split Phase 2
+### Docs/source final conflict cleanup
+- [ ] Pastikan docs tidak lagi menyebut Dashboard/Stock Report full-source sebagai status aktif normal.
+- [ ] Pastikan catatan lama Batch 17A/17B diberi label `SUPERSEDED` oleh Batch 17N–18F.
+- [ ] Pastikan `stock_item_read_models` tetap dijelaskan sebagai derived read model, bukan source of truth stok.
+- [ ] Pastikan status helper split Batch 18–24 tertulis sebagai behavior-preserving dan tidak mengubah transaction/write flow.
 
-### Raw Materials UI helper split
-- [ ] Buka Master Data → Bahan Baku dan pastikan tabel tampil tanpa white screen.
-- [ ] Tambah bahan baku non-varian dan pastikan form default, satuan, stok awal, min stock, supplier, dan pricing mode tetap sama.
-- [ ] Tambah/edit bahan baku bervarian dan pastikan varian, min stock, average cost, dan status stok tampil sama.
-- [ ] Buka drawer detail bahan baku dan pastikan supplier/restock link terakhir, status stok, varian, dan format angka tetap tampil.
-- [ ] Toggle aktif/nonaktif dan pastikan tidak ada perubahan behavior service.
+### Large file audit
+- [ ] Review kandidat file besar: ProductionBoms, ProductionOrders, SemiFinishedMaterials, ProductionWorkLogs page, Purchases page, Dashboard page, resetMaintenanceDataService, productionWorkLogsService.
+- [ ] Tandai kandidat split lanjutan sebagai `CLEANUP CANDIDATE`, bukan langsung refactor business logic.
+- [ ] Jangan split transaction/write block produksi/reset/purchase/payroll tanpa approval eksplisit.
 
-### Production Work Logs UI helper split
-- [ ] Buka Production Work Logs dan pastikan summary, filter, tabel, tag status, dan action tampil normal.
-- [ ] Buka detail Work Log dan pastikan drawer detail tetap menampilkan material usage, output, HPP, payroll, dan audit reference.
-- [ ] Edit Work Log `in_progress` dan pastikan form masih menolak Work Log completed.
-- [ ] Complete Work Log dan pastikan info estimasi read-only tetap tampil di modal complete.
-- [ ] Pastikan complete tetap memposting output stock, HPP, payroll accrual, inventory log, dan read model sync melalui service existing.
+### UI consistency QA pass
+- [ ] Dashboard: cek light/dark mode, empty/loading/error state, KPI stock issue `+`, restock assistant, dan tidak ada technical Firestore ID noise.
+- [ ] Dashboard initial load harus menampilkan skeleton lokal `Menyiapkan data Dashboard...`, bukan KPI 0/empty state palsu.
+- [ ] Dashboard warning `stock_item_read_models_fallback`/partial read harus tampil sebagai pesan manusiawi; key teknis cukup di console developer.
+- [ ] Restock Assistant Dashboard hanya membuka link produk eksternal dengan URL `http`/`https`; URL kosong/invalid/skema lain harus disabled atau ditolak.
+- [ ] Stock Report: cek load more, filter, export, warning partial/limited, variant display, dan fallback message.
+- [ ] Raw Materials/Purchases/Supplier Purchases: cek supplier/restock label, OCR receipt preview, compact table, dan no double scroll berlebihan.
+- [ ] Production Orders/Work Logs/BOM/Semi Finished/Employees: cek status tag, modal/detail, HPP/payroll display, dan action guard.
+- [ ] Reset Maintenance/Data Quality Audit: cek destructive wording, keyword guard, manual review wording, and derived cleanup scope.
 
-### Reset Maintenance UI helper split
-- [ ] Buka Reset & Maintenance dan pastikan panel preview, export, safe repair, danger zone, status summary, dan usage guide tetap tampil.
-- [ ] Pilih module reset dan pastikan label selected module pada modal konfirmasi tetap sama.
-- [ ] Coba buka konfirmasi reset tanpa preview dan pastikan guard UI tetap memblokir.
-- [ ] Pastikan keyword destructive reset, full testing reset, HPP reset/restore, dan repair transaksi tetap wajib sesuai UI.
-- [ ] Jalankan audit/repair non-destructive yang biasa dipakai dan pastikan maintenance log tetap tercatat.
-
-### Guard umum
-- [ ] Jalankan `npm run lint`.
-- [ ] Jalankan `npm run build`.
-- [ ] Pastikan tidak ada perubahan route/menu/role guard.
-- [ ] Pastikan tidak ada perubahan stock posting, HPP final, payroll, purchase/sales/return, atau reset destructive behavior.
-
-
-## Checklist Batch 21–24 — Combined UI/Data Quality/Purchase UX Hardening
-
-### Production Employees helper split
-- [ ] Buka Produksi → Karyawan Produksi dan pastikan tabel, filter, summary card, drawer detail, dan modal tambah/edit tetap tampil.
-- [ ] Tambah/edit karyawan dengan assigned step, role, employment type, gender, skill, dan notes; pastikan payload service tetap sama.
-- [ ] Toggle aktif/nonaktif dan pastikan karyawan nonaktif tidak dipilih untuk work log baru sesuai behavior existing.
-- [ ] Buka detail karyawan yang punya payroll/work log dan pastikan recent activity, paid amount, pending payroll, dan legacy payroll section tetap read-only.
-
-### Supplier Purchases helper split
-- [ ] Buka Supplier/Katalog Restock dan pastikan realtime supplier, bahan baku, serta purchase comparator tetap tampil.
-- [ ] Buat/edit supplier dengan materialDetails, satuan beli, konversi, link toko, ongkir, admin, voucher/diskon, dan harga estimasi; pastikan tidak membuat transaksi purchase otomatis.
-- [ ] Filter dari query `materialId`/`supplierId` dan pastikan supplier yang relevan tetap highlight.
-- [ ] Buka drawer detail supplier dan pastikan purchase terakhir per material tetap read-only dan tidak mengubah stock/expense/inventory log.
-
-### Dashboard helper split
-- [ ] Buka Dashboard dan pastikan KPI, Business Alert, Stok Kritis, Restock Assistant, Planning, Payroll, Finance, dan Activity Feed tetap tampil.
-- [ ] Pastikan `stockIssueMeta.hasMore/isLimited` tetap menampilkan label count `+` untuk data yang dibatasi.
-- [ ] Klik quick action dan restock route; pastikan hanya navigasi, tidak ada auto-create/auto-fix.
-- [ ] Simulasikan read model kosong/gagal pada dev data bila memungkinkan dan pastikan fallback/warning tetap guarded.
-
-### Data Quality Audit UI polish
-- [ ] Buka Reset & Maintenance → Auto Detect Bug Data dan jalankan Cek Semua Area.
-- [ ] Pastikan warna issue, jumlah repair, detail kategori, sample, dan rekomendasi tetap muncul.
-- [ ] Pastikan Data Quality Audit tetap read-only sampai user menjalankan repair/reset yang memang memiliki keyword guard.
-- [ ] Pastikan reset destructive, repair transaksi, HPP reset/restore, dan protected collection guard tidak berubah.
-
-### Purchases OCR/Receipt helper split
-- [ ] Buka Purchases dan tambah pembelian manual tanpa OCR; pastikan stock-in, expense, inventory log, average cost, dan read model sync tetap dari service existing.
-- [ ] Upload screenshot OCR Shopee, apply qty/biaya, dan pastikan feedback lokal + toast tetap muncul.
-- [ ] Buka detail receipt OCR dari transaksi lama dan pastikan nomor pembelian, supplier, tanggal, rows, total, dan raw text tetap tampil.
-- [ ] Pastikan parser OCR tetap di `src/utils/purchases/shopeePurchaseOcrParser.js` dan helper baru tidak melakukan write.
-
-### Guard umum
-- [ ] Jalankan `npm run lint`.
-- [ ] Jalankan `npm run build`.
-- [ ] Pastikan tidak ada perubahan route/menu/role guard.
-- [ ] Pastikan tidak ada perubahan schema/collection, Firestore rules/index, stock posting, HPP, payroll, reset destructive, purchase stock-in, atau finance side-effect.
+### Final guarded regression checklist
+- [ ] Purchase stock-in, expense, inventory log, and read model sync tetap berjalan.
+- [ ] Sales stock-out dan income saat selesai tetap sesuai rule aktif.
+- [ ] Return tetap stock-only sesuai rule aktif.
+- [ ] Production Work Log complete tetap posting material/output stock, HPP, payroll accrual, inventory log, and read model sync.
+- [ ] Reset destructive tetap mematuhi protected collection/keyword/baseline guard.

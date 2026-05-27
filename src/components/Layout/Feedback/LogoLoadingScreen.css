@@ -3,7 +3,7 @@
    Fungsi:
    - memoles animasi brand loading global secara scoped tanpa mengubah AntD spinner/table/loading lain.
    Dipakai oleh:
-   - LogoLoadingScreen.jsx untuk App auth/session, route guard, dan login auth/profile. Lazy route fallback sengaja tidak memakai logo agar tidak double loading setelah layout tampil.
+   - LogoLoadingScreen.jsx untuk App auth/session, ProtectedRoute guard, dan login auth/profile. Lazy route fallback sengaja tidak memakai logo agar tidak double loading setelah layout tampil.
    Alasan perubahan:
    - memberikan feel Elegant dengan micro split kuning/biru, tanpa rotasi dan tanpa bounce agresif.
    Catatan cleanup:
