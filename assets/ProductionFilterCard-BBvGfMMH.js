@@ -1,1 +1,0 @@
-import{bM as r,e as a,aa as t}from"./index-CrwFa62l.js";const i=({children:s})=>r.jsx(a,{className:"ims-section-card ims-filter-card",children:r.jsx(t,{className:"ims-filter-row",gutter:[12,12],children:s})});export{i as P};

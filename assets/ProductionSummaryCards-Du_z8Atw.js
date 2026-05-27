@@ -1,1 +1,0 @@
-import{bM as a}from"./index-CrwFa62l.js";import{S as o}from"./SummaryStatGrid-DJYfJncH.js";const i=({items:m=[],columns:r={xs:24,sm:12,md:6},variant:s="executive",highlightKey:t=null})=>a.jsx(o,{items:m,columns:r,variant:s,highlightKey:t,className:"ims-summary-row"});export{i as P};

@@ -1,0 +1,1 @@
+import{bN as a,S as c}from"./index-juE0UhMO.js";import{P as n}from"./PageHeader-DyxViEkO.js";const d=({title:o,description:r,onAdd:e,addLabel:t="Tambah",extra:s})=>{const i=e?[{key:"production-page-header-add",label:t,type:"primary",icon:a.jsx(c,{}),onClick:e}]:[];return a.jsx(n,{title:o,subtitle:r,extra:s,actions:i,className:"production-page-header"})};export{d as P};

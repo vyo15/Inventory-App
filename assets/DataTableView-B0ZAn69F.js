@@ -1,0 +1,1 @@
+import{bo as l,bN as e,j as n}from"./index-juE0UhMO.js";import{F as p}from"./Table-DlzaaEsW.js";const i=({loading:t=!1,dataSource:a=[],emptyText:r,locale:s,showRefreshIndicator:o=!0,...m})=>{const x={...s,emptyText:s?.emptyText??l(t,r)};return e.jsxs(e.Fragment,{children:[o?e.jsx(n,{loading:t,dataSource:a}):null,e.jsx(p,{...m,dataSource:a,locale:x})]})};export{i as D};
