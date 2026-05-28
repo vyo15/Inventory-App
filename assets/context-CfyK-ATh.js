@@ -1,0 +1,1 @@
+import{c1 as n,cs as c}from"./index-BGkqN_sJ.js";function a(){}const u=n.createContext({add:a,remove:a});function l(r){const o=n.useContext(u),s=n.useRef(null);return c(e=>{if(e){const t=r?e.querySelector(r):e;t&&(o.add(t),s.current=t)}else o.remove(s.current)})}export{l as u};
