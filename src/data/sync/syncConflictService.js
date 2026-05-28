@@ -12,50 +12,69 @@ const createConflictId = ({ collectionName, documentId, conflictType }) => {
       ? crypto.randomUUID()
       : Math.random().toString(36).slice(2, 10);
 
-  return `conflict-${collectionName}-${conflictType}-${documentId}-${timestamp}-${randomSuffix}`;
+  return `conflict-${collectionName}-${documentId}-${conflictType}-${timestamp}-${randomSuffix}`;
 };
 
-export const createSyncConflict = async ({
+export const recordSyncConflict = async ({
   collectionName,
   documentId,
-  conflictType,
-  queueId = "",
+  conflictType = "unknown",
   localPayload = null,
   remotePayload = null,
-  message = "",
+  queueItemId = null,
+  reason = "",
   metadata = {},
 } = {}) => {
-  if (!collectionName || !documentId || !conflictType) {
-    throw new Error("collectionName, documentId, dan conflictType wajib diisi untuk sync_conflicts.");
+  if (!collectionName || !documentId) {
+    throw new Error("collectionName dan documentId wajib diisi untuk sync_conflicts.");
   }
 
+  const db = getImsLocalDb();
   const detectedAt = nowIso();
   const conflict = {
     id: createConflictId({ collectionName, documentId, conflictType }),
-    queueId,
     collectionName,
     documentId,
     conflictType,
     localPayload: clonePayload(localPayload),
     remotePayload: clonePayload(remotePayload),
-    message,
+    queueItemId,
+    reason,
     metadata: clonePayload(metadata) || {},
     detectedAt,
     resolvedAt: null,
     resolution: "",
+    resolutionNote: "",
   };
 
-  const db = getImsLocalDb();
   await db.table(LOCAL_DB_TABLES.SYNC_CONFLICTS).put(conflict);
   return conflict;
 };
 
-export const listSyncConflicts = async ({ unresolvedOnly = true } = {}) => {
+// LEGACY-COMPAT: beberapa patch/panel lama sempat import createSyncConflict.
+// Jangan hapus alias ini sebelum semua usage lama diaudit.
+export const createSyncConflict = (payload = {}) => recordSyncConflict(payload);
+
+export const getSyncConflictById = async (conflictId) => {
+  if (!conflictId) return null;
+
+  const db = getImsLocalDb();
+  return db.table(LOCAL_DB_TABLES.SYNC_CONFLICTS).get(conflictId);
+};
+
+export const listSyncConflicts = async ({
+  collectionName = null,
+  unresolvedOnly = true,
+} = {}) => {
   const db = getImsLocalDb();
   const rows = await db.table(LOCAL_DB_TABLES.SYNC_CONFLICTS).toArray();
 
   return rows
-    .filter((row) => !unresolvedOnly || !row.resolvedAt)
+    .filter((row) => {
+      if (collectionName && row.collectionName !== collectionName) return false;
+      if (unresolvedOnly && row.resolvedAt) return false;
+      return true;
+    })
     .sort((first, second) =>
       String(second.detectedAt || "").localeCompare(String(first.detectedAt || ""))
     );
@@ -68,7 +87,7 @@ export const getSyncConflictSummary = async () => {
     unresolved: 0,
     resolved: 0,
     byCollection: {},
-    byType: {},
+    byResolution: {},
   };
 
   rows.forEach((row) => {
@@ -80,48 +99,45 @@ export const getSyncConflictSummary = async () => {
 
     summary.byCollection[row.collectionName] =
       (summary.byCollection[row.collectionName] || 0) + 1;
-    summary.byType[row.conflictType] = (summary.byType[row.conflictType] || 0) + 1;
+
+    const resolution = row.resolution || "unresolved";
+    summary.byResolution[resolution] = (summary.byResolution[resolution] || 0) + 1;
   });
 
   return summary;
 };
 
-export const getSyncConflictById = async (conflictId) => {
-  if (!conflictId) return null;
-
-  const db = getImsLocalDb();
-  return db.table(LOCAL_DB_TABLES.SYNC_CONFLICTS).get(conflictId);
-};
-
 export const updateSyncConflictResolution = async (
   conflictId,
-  { resolution, resolvedBy = "", note = "", metadataPatch = {} } = {}
+  {
+    resolution,
+    resolutionNote = "",
+    metadataPatch = {},
+  } = {}
 ) => {
   if (!conflictId) {
-    throw new Error("conflictId wajib diisi untuk resolve sync_conflicts.");
+    throw new Error("conflictId wajib diisi untuk update resolution sync_conflicts.");
   }
 
   const db = getImsLocalDb();
   const existing = await db.table(LOCAL_DB_TABLES.SYNC_CONFLICTS).get(conflictId);
 
   if (!existing) {
-    throw new Error("Data konflik sync tidak ditemukan.");
+    throw new Error("Data conflict tidak ditemukan.");
   }
 
   const resolvedAt = nowIso();
   const nextRecord = {
     ...existing,
-    resolution,
+    resolution: resolution || existing.resolution || "reviewed",
+    resolutionNote,
     resolvedAt,
-    resolvedBy,
-    note,
     metadata: {
       ...(existing.metadata || {}),
-      ...(clonePayload(metadataPatch) || {}),
+      ...clonePayload(metadataPatch),
     },
   };
 
   await db.table(LOCAL_DB_TABLES.SYNC_CONFLICTS).put(nextRecord);
   return nextRecord;
 };
-

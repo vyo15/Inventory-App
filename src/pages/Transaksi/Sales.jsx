@@ -20,7 +20,10 @@ import dayjs from "dayjs";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
-import { getCustomers } from "../../services/MasterData/customersService";
+import {
+  listSalesCustomerOptions,
+  resolveSalesCustomerSnapshot,
+} from "../../services/Transaksi/salesCustomerReferenceService";
 import {
   createSaleTransaction,
   fetchSalesProducts,
@@ -204,18 +207,18 @@ const Sales = () => {
   };
 
   // =========================
-  // SECTION: Ambil customer
+  // SECTION: Ambil customer Sales — AKTIF / GUARDED
   // Fungsi:
-  // - membaca customer lewat customersService sebagai source final yang sama dengan Master Customer
+  // - membaca customer Sales lewat boundary khusus agar transaksi Firebase tidak memakai customer local-only.
   // Hubungan flow:
-  // - dropdown Sales tidak boleh query collection sendiri supaya tidak kembali bercabang
+  // - Sales masih Firebase-first dan belum menjadi offline transaction runtime.
   // Status:
-  // - aktif/final
-  // - tetap menyimpan snapshot customerName saat sale dibuat agar transaksi lama aman
+  // - aktif/final untuk Sales sampai transaksi offline disetujui terpisah.
+  // - tetap menyimpan snapshot customerName saat sale dibuat agar transaksi lama aman.
   // =========================
   const fetchCustomers = async () => {
     try {
-      const customerList = await getCustomers();
+      const customerList = await listSalesCustomerOptions();
       setCustomers(customerList);
     } catch (error) {
       console.error("Gagal mengambil data pelanggan:", error);
@@ -397,9 +400,7 @@ const Sales = () => {
         throw new Error("Status online hanya boleh Diproses, Dikirim, atau Selesai. Jika pembeli batal setelah transaksi tercatat, gunakan menu Return.");
       }
 
-      const selectedCustomer = customers.find(
-        (customer) => customer.id === customerId,
-      );
+      const selectedCustomer = resolveSalesCustomerSnapshot(customers, customerId);
 
       await createSaleTransaction({
         saleItems,
@@ -851,7 +852,7 @@ const Sales = () => {
             <Select placeholder="Pilih pelanggan" allowClear showSearch optionFilterProp="children">
               {customers.map((customer) => (
                 <Option key={customer.id} value={customer.id}>
-                  {customer.name}
+                  {customer.name}{customer.code || customer.customerCode ? ` • ${customer.code || customer.customerCode}` : ""}
                 </Option>
               ))}
             </Select>

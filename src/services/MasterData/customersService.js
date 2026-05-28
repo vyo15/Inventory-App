@@ -17,6 +17,13 @@ import {
   isBusinessCodeExists,
   prepareDailySequenceCodeInTransaction,
 } from "../../utils/references/businessCodeGenerator";
+import {
+  CUSTOMER_CODE_PREFIX,
+  isValidCustomerCodeFormat,
+  normalizeCustomerCode,
+} from "../../utils/references/customerCodeReference";
+
+export { CUSTOMER_CODE_PREFIX, isValidCustomerCodeFormat, normalizeCustomerCode };
 
 // =========================
 // SECTION: Source of truth customer final
@@ -31,11 +38,6 @@ import {
 // =========================
 export const CUSTOMERS_COLLECTION = "customers";
 
-const CUSTOMER_CODE_PREFIX = "CUS";
-const CUSTOMER_CODE_PATTERN = /^CUS-\d{8}-\d{3,}$/;
-
-export const normalizeCustomerCode = (value = "") => String(value || "").trim().toUpperCase();
-export const isValidCustomerCodeFormat = (code = "") => CUSTOMER_CODE_PATTERN.test(normalizeCustomerCode(code));
 
 // =========================
 // SECTION: Normalisasi payload customer

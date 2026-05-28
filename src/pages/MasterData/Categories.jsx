@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Table,
   Button,
@@ -7,61 +7,81 @@ import {
   Space,
   Popconfirm,
   message,
+  Tag,
 } from "antd";
 import { PlusOutlined, EditOutlined } from "@ant-design/icons";
 import {
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-} from "firebase/firestore";
-import { db } from "../../firebase";
+  createCategory,
+  deleteCategory,
+  listCategories,
+  updateCategory,
+} from "../../data/repositories/categoriesRepository";
+import { REPOSITORY_MODES } from "../../data/repositories/repositoryMode";
+import { getRepositoryModeStatus } from "../../data/repositories/repositoryModeService";
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
+const sortCategoriesByName = (items = []) =>
+  [...items].sort((first, second) =>
+    String(first.name || "").localeCompare(String(second.name || ""))
+  );
+
+const getDatabaseModeLabel = (mode) =>
+  mode === REPOSITORY_MODES.OFFLINE_LOCAL ? "offline_local" : "firebase_primary";
+
+const getDatabaseModeTagColor = (mode) =>
+  mode === REPOSITORY_MODES.OFFLINE_LOCAL ? "warning" : "processing";
+
 const Categories = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [modeLoading, setModeLoading] = useState(true);
+  const [databaseMode, setDatabaseMode] = useState(REPOSITORY_MODES.FIREBASE_PRIMARY);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState(null);
   const [form] = Form.useForm();
 
-  const fetchCategories = async () => {
+  const resolveRepositoryOptions = useCallback(
+    (mode = databaseMode) => ({ mode }),
+    [databaseMode]
+  );
+
+  const fetchCategories = useCallback(async () => {
     setLoading(true);
+
     try {
-      const querySnapshot = await getDocs(collection(db, "categories"));
-      const list = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setCategories(list);
+      const repositoryStatus = await getRepositoryModeStatus();
+      const nextMode = repositoryStatus.mode || REPOSITORY_MODES.FIREBASE_PRIMARY;
+      const data = await listCategories(resolveRepositoryOptions(nextMode));
+
+      setDatabaseMode(nextMode);
+      setCategories(sortCategoriesByName(data));
     } catch (error) {
-      console.error("Gagal ambil data:", error);
+      console.error("Gagal ambil data kategori:", error);
       message.error("Gagal mengambil data kategori.");
+    } finally {
+      setLoading(false);
+      setModeLoading(false);
     }
-    setLoading(false);
-  };
+  }, [resolveRepositoryOptions]);
 
   useEffect(() => {
     fetchCategories();
-  }, []);
+  }, [fetchCategories]);
 
   const handleAddOrEditCategory = async (values) => {
     try {
       if (isEditing && currentId) {
-        // update dokumen
-        await updateDoc(doc(db, "categories", currentId), values);
+        await updateCategory(currentId, values, resolveRepositoryOptions());
         message.success("Kategori berhasil diubah!");
       } else {
-        // tambah dokumen baru
-        await addDoc(collection(db, "categories"), values);
+        await createCategory(values, resolveRepositoryOptions());
         message.success("Kategori berhasil ditambahkan!");
       }
+
       form.resetFields();
       setIsModalVisible(false);
       setIsEditing(false);
@@ -75,8 +95,12 @@ const Categories = () => {
 
   const handleDelete = async (id) => {
     try {
-      await deleteDoc(doc(db, "categories", id));
-      message.success("Kategori dihapus");
+      await deleteCategory(id, resolveRepositoryOptions());
+      message.success(
+        databaseMode === REPOSITORY_MODES.OFFLINE_LOCAL
+          ? "Kategori ditandai hapus di local DB"
+          : "Kategori dihapus"
+      );
       fetchCategories();
     } catch (error) {
       console.error("Gagal hapus kategori:", error);
@@ -167,6 +191,14 @@ const Categories = () => {
         subtitle="Referensi kategori."
       >
         <DataRefreshIndicator loading={loading} dataSource={categories} />
+        <Space size={8} wrap style={{ marginBottom: 12 }}>
+          <Tag color={getDatabaseModeTagColor(databaseMode)}>
+            DB: {modeLoading ? "checking..." : getDatabaseModeLabel(databaseMode)}
+          </Tag>
+          <Button size="small" onClick={fetchCategories} loading={loading}>
+            Refresh
+          </Button>
+        </Space>
         <Table
           className="app-data-table"
           columns={columns}
@@ -180,19 +212,19 @@ const Categories = () => {
       {/* =====================================================
           SECTION: Category Form Modal — AKTIF
           Fungsi:
-          - Menampilkan form kategori yang ringkas untuk nama dan catatan.
+          - Menampilkan form kategori yang ringkas untuk nama dan deskripsi.
 
           Dipakai oleh:
           - Halaman Master Data / Kategori saat tambah atau edit data.
 
           Alasan perubahan:
-          - Copy form diringkas agar halaman kategori tetap simpel.
+          - Batch 13 mulai memakai repository pilot agar mode Firebase/local bisa diuji tanpa mengganti route.
 
           Catatan cleanup:
           - Belum ada.
 
           Risiko:
-          - Jangan ubah payload kategori, service Firestore, validation, atau handler simpan dari section presentasi ini.
+          - Jangan ubah payload kategori, validation, atau handler simpan dari section presentasi ini.
       ===================================================== */}
       <PageFormModal
         title={isEditing ? "Edit Kategori" : "Tambah Kategori"}

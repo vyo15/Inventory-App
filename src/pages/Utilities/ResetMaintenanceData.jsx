@@ -59,13 +59,14 @@ import ResetAutoDetectPanel from "./components/ResetAutoDetectPanel";
 import ResetPreviewPanel from "./components/ResetPreviewPanel";
 import ResetSafeRepairPanel from "./components/ResetSafeRepairPanel";
 import ResetUsageGuidePanel from "./components/ResetUsageGuidePanel";
+import OfflineDevPanelErrorBoundary from "./components/OfflineDevPanelErrorBoundary";
+import OfflineSyncDevPanel from "./components/OfflineSyncDevPanel";
+import OfflineMasterDataPilotPanel from "./components/OfflineMasterDataPilotPanel";
 import ResetDangerZonePanel from "./components/ResetDangerZonePanel";
 import ResetExportPanel from "./components/ResetExportPanel";
 import ResetStatusSummaryCard from "./components/ResetStatusSummaryCard";
 import ResetConfirmModal from "./components/ResetConfirmModal";
 import HppCostConfirmModal from "./components/HppCostConfirmModal";
-import OfflineSyncDevPanel from "./components/OfflineSyncDevPanel";
-import OfflineMasterDataPilotPanel from "./components/OfflineMasterDataPilotPanel";
 
 // -----------------------------------------------------------------------------
 // Reset & Maintenance Data Page
@@ -1059,9 +1060,14 @@ const ResetMaintenanceData = () => {
             testDataRows={testDataRows}
             renderCompactText={renderCompactText}
           />
+          <OfflineDevPanelErrorBoundary>
+            <OfflineSyncDevPanel />
+          </OfflineDevPanelErrorBoundary>
 
-          <OfflineSyncDevPanel />
-          <OfflineMasterDataPilotPanel />
+          <OfflineDevPanelErrorBoundary>
+            <OfflineMasterDataPilotPanel />
+          </OfflineDevPanelErrorBoundary>
+
           <ResetUsageGuidePanel />
 
         </Space>

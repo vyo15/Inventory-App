@@ -1,26 +1,17 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Button,
   Card,
-  Col,
-  Divider,
+  Form,
   Input,
-  Row,
   Select,
   Space,
-  Statistic,
   Table,
   Tag,
   Typography,
   message,
 } from "antd";
-import {
-  CloudSyncOutlined,
-  ExperimentOutlined,
-  ReloadOutlined,
-  SafetyOutlined,
-} from "@ant-design/icons";
 
 import {
   ensureLocalDbFoundationMeta,
@@ -32,432 +23,293 @@ import {
   resetRepositoryModeToFirebasePrimary,
   setRepositoryModeForDevelopment,
 } from "../../../data/repositories/repositoryModeService";
-import { getSyncQueueSummary } from "../../../data/sync/syncQueueService";
 import {
-  MASTER_DATA_SYNC_CONFIRMATION,
+  FIREBASE_MASTER_DATA_SYNC_CONFIRMATION,
   previewFirebaseMasterDataSync,
   syncPendingMasterDataToFirebase,
 } from "../../../data/sync/firebaseMasterDataSyncService";
+import {
+  getSyncQueueSummary,
+  listSyncQueueItems,
+} from "../../../data/sync/syncQueueService";
 import {
   getSyncConflictSummary,
   listSyncConflicts,
 } from "../../../data/sync/syncConflictService";
 import {
+  CONFLICT_RESOLUTION_MODES,
   MASTER_DATA_CONFLICT_RESOLUTION_CONFIRMATION,
-  MASTER_DATA_CONFLICT_RESOLUTIONS,
   resolveMasterDataSyncConflict,
 } from "../../../data/sync/syncConflictResolutionService";
 
-const { Text } = Typography;
+const COLLECTION_OPTIONS = [
+  { label: "Categories", value: "categories" },
+  { label: "Customers", value: "customers" },
+];
 
-const renderStatusTag = (status) => {
-  const colorByStatus = {
-    pending: "gold",
-    syncing: "blue",
-    synced: "green",
-    failed: "red",
-    conflict: "volcano",
-  };
-
-  return <Tag color={colorByStatus[status] || "default"}>{status || "unknown"}</Tag>;
+const INITIAL_STATE = {
+  foundation: null,
+  repository: null,
+  queueSummary: null,
+  conflictSummary: null,
+  syncPreview: null,
 };
 
-const compactText = (value = "", maxLength = 48) => {
-  const text = String(value || "-");
-  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+const statusColor = (status) => {
+  if (status === "synced") return "green";
+  if (status === "failed") return "red";
+  if (status === "conflict") return "orange";
+  if (status === "syncing") return "blue";
+  return "default";
 };
 
 const OfflineSyncDevPanel = () => {
-  const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [modeConfirmation, setModeConfirmation] = useState("");
-  const [syncConfirmation, setSyncConfirmation] = useState("");
-  const [foundationStatus, setFoundationStatus] = useState(null);
-  const [repositoryMode, setRepositoryMode] = useState(null);
-  const [queueSummary, setQueueSummary] = useState(null);
-  const [syncPreview, setSyncPreview] = useState(null);
-  const [syncResult, setSyncResult] = useState(null);
-  const [conflictSummary, setConflictSummary] = useState(null);
-  const [conflicts, setConflicts] = useState([]);
+  const [state, setState] = useState(INITIAL_STATE);
+  const [queueRows, setQueueRows] = useState([]);
+  const [conflictRows, setConflictRows] = useState([]);
   const [selectedConflictId, setSelectedConflictId] = useState("");
-  const [conflictResolution, setConflictResolution] = useState(
-    MASTER_DATA_CONFLICT_RESOLUTIONS.MARK_SKIPPED
-  );
-  const [conflictResolutionConfirmation, setConflictResolutionConfirmation] = useState("");
-  const [conflictResolutionNote, setConflictResolutionNote] = useState("");
-  const [resolvingConflict, setResolvingConflict] = useState(false);
+  const [selectedCollection, setSelectedCollection] = useState("categories");
+  const [resolutionMode, setResolutionMode] = useState(CONFLICT_RESOLUTION_MODES.MARK_SKIPPED);
+  const [loading, setLoading] = useState(false);
+  const [modeForm] = Form.useForm();
+  const [syncForm] = Form.useForm();
+  const [resolveForm] = Form.useForm();
 
-  const loadPanelData = useCallback(async (showSuccessMessage = false) => {
+  const refreshPanel = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const [foundation, mode, queue, preview, conflictInfo, conflictRows] = await Promise.all([
-        getOfflineDatabaseFoundationStatus(),
-        getRepositoryModeStatus(),
-        getSyncQueueSummary(),
-        previewFirebaseMasterDataSync(),
-        getSyncConflictSummary(),
-        listSyncConflicts({ unresolvedOnly: true }),
-      ]);
+      const [foundation, repository, queueSummary, conflictSummary, queue, conflicts, syncPreview] =
+        await Promise.all([
+          getOfflineDatabaseFoundationStatus(),
+          getRepositoryModeStatus(),
+          getSyncQueueSummary(),
+          getSyncConflictSummary(),
+          listSyncQueueItems({ includeSynced: false }),
+          listSyncConflicts({ unresolvedOnly: true }),
+          previewFirebaseMasterDataSync({ collectionName: selectedCollection, limit: 25 }),
+        ]);
 
-      setFoundationStatus(foundation);
-      setRepositoryMode(mode);
-      setQueueSummary(queue);
-      setSyncPreview(preview);
-      setConflictSummary(conflictInfo);
-      setConflicts(conflictRows);
-      if (selectedConflictId && !conflictRows.some((row) => row.id === selectedConflictId)) {
-        setSelectedConflictId("");
-      }
-
-      if (showSuccessMessage) {
-        message.success("Preview offline sync berhasil dimuat.");
-      }
+      setState({ foundation, repository, queueSummary, conflictSummary, syncPreview });
+      setQueueRows(queue.slice(0, 25));
+      setConflictRows(conflicts.slice(0, 25));
     } catch (error) {
-      console.error(error);
-      message.error(error?.message || "Gagal memuat panel offline sync.");
+      console.error("Gagal refresh Offline Sync Dev Panel:", error);
+      message.error(error?.message || "Gagal refresh panel offline sync.");
     } finally {
       setLoading(false);
     }
-  }, [selectedConflictId]);
+  }, [selectedCollection]);
 
-  const handleEnsureFoundation = useCallback(async () => {
+  useEffect(() => {
+    refreshPanel();
+  }, [refreshPanel]);
+
+  const handlePrepareFoundation = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const status = await ensureLocalDbFoundationMeta();
-      setFoundationStatus(status);
-      message.success("Foundation local DB siap.");
-      await loadPanelData(false);
+      await ensureLocalDbFoundationMeta();
+      message.success("Local DB foundation siap.");
+      await refreshPanel();
     } catch (error) {
-      console.error(error);
-      message.error(error?.message || "Gagal menyiapkan foundation local DB.");
+      console.error("Gagal siapkan Local DB:", error);
+      message.error(error?.message || "Gagal siapkan Local DB.");
     } finally {
       setLoading(false);
     }
-  }, [loadPanelData]);
+  };
 
-  const handleEnableOfflinePilot = useCallback(async () => {
+  const handleEnableOfflinePilot = async () => {
+    const values = await modeForm.validateFields();
+    setLoading(true);
     try {
-      setLoading(true);
       await setRepositoryModeForDevelopment("offline_local", {
-        confirmation: modeConfirmation,
-        reason: "Testing offline repository pilot dari Reset Maintenance dev panel.",
+        confirmation: values.confirmation,
+        reason: values.reason,
       });
-      message.success("Mode offline repository pilot aktif untuk testing developer.");
-      await loadPanelData(false);
+      message.success("Offline repository pilot aktif untuk dev.");
+      modeForm.resetFields();
+      await refreshPanel();
     } catch (error) {
-      console.error(error);
       message.error(error?.message || "Gagal mengaktifkan offline repository pilot.");
     } finally {
       setLoading(false);
     }
-  }, [loadPanelData, modeConfirmation]);
+  };
 
-  const handleResetMode = useCallback(async () => {
+  const handleResetMode = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       await resetRepositoryModeToFirebasePrimary();
-      setModeConfirmation("");
-      message.success("Mode repository dikembalikan ke Firebase primary.");
-      await loadPanelData(false);
+      message.success("Repository mode kembali ke firebase_primary.");
+      await refreshPanel();
     } catch (error) {
-      console.error(error);
-      message.error(error?.message || "Gagal reset mode repository.");
+      message.error(error?.message || "Gagal reset repository mode.");
     } finally {
       setLoading(false);
     }
-  }, [loadPanelData]);
+  };
 
-  const handleManualSync = useCallback(async () => {
+  const handleManualSync = async () => {
+    const values = await syncForm.validateFields();
+    setLoading(true);
     try {
-      setSyncing(true);
       const result = await syncPendingMasterDataToFirebase({
-        confirmation: syncConfirmation,
-        limit: 25,
-        allowDeletes: false,
+        confirmation: values.confirmation,
+        collectionName: selectedCollection,
+        limit: 10,
       });
-      setSyncResult(result);
-      message.success(`Manual sync selesai. Sukses: ${result.synced || 0}, konflik: ${result.conflict || 0}, gagal: ${result.failed || 0}.`);
-      await loadPanelData(false);
+      message.success(`Manual sync selesai. Synced: ${result.synced}, conflict: ${result.conflict}, failed: ${result.failed}.`);
+      syncForm.resetFields();
+      await refreshPanel();
     } catch (error) {
-      console.error(error);
-      message.error(error?.message || "Manual sync gagal dijalankan.");
+      message.error(error?.message || "Manual Firebase sync gagal.");
     } finally {
-      setSyncing(false);
+      setLoading(false);
     }
-  }, [loadPanelData, syncConfirmation]);
+  };
 
-
-  const handleResolveConflict = useCallback(async () => {
-    if (!selectedConflictId) {
-      message.warning("Pilih konflik yang akan di-resolve terlebih dahulu.");
-      return;
-    }
-
+  const handleResolveConflict = async () => {
+    const values = await resolveForm.validateFields();
+    setLoading(true);
     try {
-      setResolvingConflict(true);
-      await resolveMasterDataSyncConflict(selectedConflictId, {
-        resolution: conflictResolution,
-        confirmation: conflictResolutionConfirmation,
-        note: conflictResolutionNote,
-        actorLabel: "Reset Maintenance Offline Sync Dev Panel",
+      await resolveMasterDataSyncConflict({
+        conflictId: selectedConflictId || values.conflictId,
+        resolutionMode,
+        confirmation: values.confirmation,
+        resolutionNote: values.resolutionNote,
       });
-      message.success("Konflik sync berhasil diproses.");
+      message.success("Conflict berhasil diproses.");
+      resolveForm.resetFields();
       setSelectedConflictId("");
-      setConflictResolutionConfirmation("");
-      setConflictResolutionNote("");
-      await loadPanelData(false);
+      await refreshPanel();
     } catch (error) {
-      console.error(error);
-      message.error(error?.message || "Gagal resolve konflik sync.");
+      message.error(error?.message || "Resolve conflict gagal.");
     } finally {
-      setResolvingConflict(false);
+      setLoading(false);
     }
-  }, [
-    conflictResolution,
-    conflictResolutionConfirmation,
-    conflictResolutionNote,
-    loadPanelData,
-    selectedConflictId,
-  ]);
+  };
 
-  const previewRows = useMemo(() => syncPreview?.rows || [], [syncPreview]);
-  const conflictRows = useMemo(() => conflicts || [], [conflicts]);
+  const queueColumns = useMemo(
+    () => [
+      { title: "Collection", dataIndex: "collectionName", key: "collectionName", width: 120 },
+      { title: "Operation", dataIndex: "operation", key: "operation", width: 100 },
+      { title: "Document", dataIndex: "documentId", key: "documentId", ellipsis: true },
+      {
+        title: "Status",
+        dataIndex: "syncStatus",
+        key: "syncStatus",
+        width: 100,
+        render: (status) => <Tag color={statusColor(status)}>{status || "pending"}</Tag>,
+      },
+    ],
+    []
+  );
+
+  const conflictColumns = useMemo(
+    () => [
+      { title: "Collection", dataIndex: "collectionName", key: "collectionName", width: 120 },
+      { title: "Document", dataIndex: "documentId", key: "documentId", ellipsis: true },
+      { title: "Type", dataIndex: "conflictType", key: "conflictType", width: 160 },
+      {
+        title: "Aksi",
+        key: "action",
+        width: 90,
+        render: (_, record) => (
+          <Button size="small" onClick={() => setSelectedConflictId(record.id)}>
+            Pilih
+          </Button>
+        ),
+      },
+    ],
+    []
+  );
+
+  const queuePending = state.queueSummary?.byStatus?.pending || 0;
+  const conflictCount = state.conflictSummary?.unresolved || 0;
 
   return (
-    <Card
-      title="Offline Sync Dev Panel"
-      size="small"
-      extra={<Tag color="blue">Dev Guarded</Tag>}
-    >
+    <Card title="Offline Sync Dev Panel" size="small">
       <Space direction="vertical" size={14} style={{ width: "100%" }}>
         <Alert
           type="info"
           showIcon
-          message="Panel ini hanya untuk pilot offline master data rendah risiko."
-          description="Firebase tetap source utama. Panel ini tidak auto-sync, tidak menyentuh stock, purchase, sales, finance, production, payroll, HPP, atau reset destructive. Supplier sync ke Firebase masih diblokir."
+          message="Panel ini hanya guarded dev utility untuk pilot offline master data."
+          description="Tidak ada auto-sync. Manual sync hanya categories/customers dan tetap butuh keyword. Supplier, stock, transaksi, production, payroll, HPP, dan reset destructive tetap diblokir."
         />
 
         <Space wrap>
-          <Button icon={<SafetyOutlined />} loading={loading} onClick={handleEnsureFoundation}>
-            Siapkan Local DB
-          </Button>
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={() => loadPanelData(true)}>
-            Refresh Preview
-          </Button>
+          <Button loading={loading} onClick={handlePrepareFoundation}>Siapkan Local DB</Button>
+          <Button loading={loading} onClick={refreshPanel}>Refresh Preview</Button>
+          <Button danger loading={loading} onClick={handleResetMode}>Kembali ke Firebase Primary</Button>
+          <Tag>Mode: {state.repository?.mode || "firebase_primary"}</Tag>
+          <Tag color="blue">Queue pending: {queuePending}</Tag>
+          <Tag color={conflictCount ? "orange" : "green"}>Conflict aktif: {conflictCount}</Tag>
         </Space>
 
-        <Row gutter={[8, 8]}>
-          <Col xs={12} md={6}>
-            <Statistic title="Local DB Ready" value={foundationStatus?.ready ? "Ya" : "-"} />
-          </Col>
-          <Col xs={12} md={6}>
-            <Statistic title="Mode Repository" value={repositoryMode?.mode || "firebase_primary"} />
-          </Col>
-          <Col xs={12} md={6}>
-            <Statistic title="Queue Pending" value={queueSummary?.byStatus?.pending || 0} />
-          </Col>
-          <Col xs={12} md={6}>
-            <Statistic title="Konflik Aktif" value={conflictSummary?.unresolved || 0} />
-          </Col>
-        </Row>
+        <Form form={modeForm} layout="vertical">
+          <Form.Item label="Aktifkan offline repository pilot" name="confirmation" extra={`Ketik ${OFFLINE_REPOSITORY_PILOT_CONFIRMATION} untuk dev test.`}>
+            <Input placeholder={OFFLINE_REPOSITORY_PILOT_CONFIRMATION} />
+          </Form.Item>
+          <Form.Item label="Alasan test" name="reason">
+            <Input placeholder="Contoh: test categories offline pilot" />
+          </Form.Item>
+          <Button loading={loading} onClick={handleEnableOfflinePilot}>Aktifkan Offline Pilot</Button>
+        </Form>
 
-        <Card size="small" title="Mode repository pilot" extra={<Tag color="gold">Manual</Tag>}>
-          <Space direction="vertical" size={10} style={{ width: "100%" }}>
-            <Text type="secondary">
-              Untuk testing offline repository, ketik keyword konfirmasi. Jangan dipakai untuk transaksi aktif.
-            </Text>
-            <Input
-              value={modeConfirmation}
-              onChange={(event) => setModeConfirmation(event.target.value)}
-              placeholder={OFFLINE_REPOSITORY_PILOT_CONFIRMATION}
-              allowClear
-            />
-            <Space wrap>
-              <Button
-                icon={<ExperimentOutlined />}
-                loading={loading}
-                onClick={handleEnableOfflinePilot}
-              >
-                Aktifkan Offline Pilot
-              </Button>
-              <Button loading={loading} onClick={handleResetMode}>
-                Kembali ke Firebase Primary
-              </Button>
-            </Space>
-          </Space>
-        </Card>
+        <Space wrap>
+          <Typography.Text strong>Collection manual sync:</Typography.Text>
+          <Select value={selectedCollection} options={COLLECTION_OPTIONS} onChange={setSelectedCollection} style={{ width: 180 }} />
+          <Tag>Preview item: {state.syncPreview?.summary?.total || 0}</Tag>
+        </Space>
 
-        <Card size="small" title="Preview manual sync" extra={<Tag color="purple">Categories / Customers</Tag>}>
-          <Space direction="vertical" size={10} style={{ width: "100%" }}>
-            <Row gutter={[8, 8]}>
-              <Col xs={8}>
-                <Statistic title="Queue" value={syncPreview?.summary?.total || 0} />
-              </Col>
-              <Col xs={8}>
-                <Statistic title="Bisa Sync" value={syncPreview?.summary?.syncable || 0} />
-              </Col>
-              <Col xs={8}>
-                <Statistic title="Diblokir" value={syncPreview?.summary?.blocked || 0} />
-              </Col>
-            </Row>
+        <Form form={syncForm} layout="vertical">
+          <Form.Item label="Manual sync confirmation" name="confirmation" extra={`Ketik ${FIREBASE_MASTER_DATA_SYNC_CONFIRMATION}. Delete Firebase tetap tidak diaktifkan dari panel ini.`}>
+            <Input placeholder={FIREBASE_MASTER_DATA_SYNC_CONFIRMATION} />
+          </Form.Item>
+          <Button type="primary" loading={loading} onClick={handleManualSync}>Manual Sync Categories/Customers</Button>
+        </Form>
 
-            <Table
-              className="app-data-table"
-              size="small"
-              rowKey="queueId"
-              pagination={{ pageSize: 5, hideOnSinglePage: true }}
-              dataSource={previewRows}
-              columns={[
-                {
-                  title: "Collection",
-                  dataIndex: "collectionName",
-                  key: "collectionName",
-                  width: 120,
-                },
-                {
-                  title: "Operasi",
-                  dataIndex: "operation",
-                  key: "operation",
-                  width: 90,
-                  render: (value) => <Tag>{value}</Tag>,
-                },
-                {
-                  title: "Status",
-                  dataIndex: "syncStatus",
-                  key: "syncStatus",
-                  width: 100,
-                  render: renderStatusTag,
-                },
-                {
-                  title: "Dokumen",
-                  dataIndex: "documentId",
-                  key: "documentId",
-                  render: (value) => compactText(value, 34),
-                },
-                {
-                  title: "Guard",
-                  dataIndex: "blockedReason",
-                  key: "blockedReason",
-                  render: (value, record) => (
-                    record.canSync ? <Tag color="green">Siap</Tag> : <Text type="danger">{compactText(value, 70)}</Text>
-                  ),
-                },
+        <Table
+          size="small"
+          rowKey="id"
+          columns={queueColumns}
+          dataSource={queueRows}
+          pagination={{ pageSize: 5 }}
+          scroll={{ x: 620 }}
+        />
+
+        <Table
+          size="small"
+          rowKey="id"
+          columns={conflictColumns}
+          dataSource={conflictRows}
+          pagination={{ pageSize: 5 }}
+          scroll={{ x: 620 }}
+        />
+
+        <Form form={resolveForm} layout="vertical">
+          <Form.Item label="Conflict ID" name="conflictId" initialValue={selectedConflictId}>
+            <Input value={selectedConflictId} onChange={(event) => setSelectedConflictId(event.target.value)} placeholder="Pilih conflict dari tabel atau paste ID" />
+          </Form.Item>
+          <Form.Item label="Resolution mode">
+            <Select
+              value={resolutionMode}
+              onChange={setResolutionMode}
+              options={[
+                { label: "Mark skipped / manual review", value: CONFLICT_RESOLUTION_MODES.MARK_SKIPPED },
+                { label: "Local wins", value: CONFLICT_RESOLUTION_MODES.LOCAL_WINS },
+                { label: "Remote wins", value: CONFLICT_RESOLUTION_MODES.REMOTE_WINS },
               ]}
-              scroll={{ x: 760 }}
             />
-
-            <Alert
-              type="warning"
-              showIcon
-              message="Manual sync butuh keyword dan tidak mengizinkan delete Firebase."
-              description={`Ketik "${MASTER_DATA_SYNC_CONFIRMATION}" untuk menjalankan sync. Delete queue akan ditolak karena destructive.`}
-            />
-            <Input
-              value={syncConfirmation}
-              onChange={(event) => setSyncConfirmation(event.target.value)}
-              placeholder={MASTER_DATA_SYNC_CONFIRMATION}
-              allowClear
-            />
-            <Button
-              danger
-              icon={<CloudSyncOutlined />}
-              loading={syncing}
-              disabled={!previewRows.length}
-              onClick={handleManualSync}
-            >
-              Sync Manual ke Firebase
-            </Button>
-
-            {syncResult && (
-              <Alert
-                type={syncResult.failed || syncResult.conflict ? "warning" : "success"}
-                showIcon
-                message={`Hasil sync: ${syncResult.synced || 0} sukses, ${syncResult.conflict || 0} konflik, ${syncResult.failed || 0} gagal.`}
-                description="Lihat ulang preview setelah sync. Item konflik masuk sync_conflicts lokal dan tidak dioverwrite otomatis."
-              />
-            )}
-          </Space>
-        </Card>
-
-        {Boolean(conflictRows.length) && (
-          <>
-            <Divider style={{ margin: "4px 0" }} />
-            <Card size="small" title="Konflik sync belum selesai" extra={<Tag color="volcano">Manual review</Tag>}>
-              <Space direction="vertical" size={10} style={{ width: "100%" }}>
-                <Table
-                  className="app-data-table"
-                  size="small"
-                  rowKey="id"
-                  pagination={{ pageSize: 5, hideOnSinglePage: true }}
-                  dataSource={conflictRows}
-                  columns={[
-                    { title: "Collection", dataIndex: "collectionName", key: "collectionName", width: 120 },
-                    { title: "Dokumen", dataIndex: "documentId", key: "documentId", render: (value) => compactText(value, 34) },
-                    { title: "Jenis", dataIndex: "conflictType", key: "conflictType", render: (value) => <Tag color="volcano">{value}</Tag> },
-                    { title: "Pesan", dataIndex: "message", key: "message", render: (value) => compactText(value, 90) },
-                    {
-                      title: "Aksi",
-                      key: "action",
-                      width: 90,
-                      render: (_, record) => (
-                        <Button size="small" onClick={() => setSelectedConflictId(record.id)}>
-                          Pilih
-                        </Button>
-                      ),
-                    },
-                  ]}
-                  scroll={{ x: 860 }}
-                />
-
-                <Alert
-                  type="warning"
-                  showIcon
-                  message="Resolve conflict tetap guarded. Gunakan local_wins/remote_wins hanya setelah membandingkan data."
-                  description={`Keyword wajib: ${MASTER_DATA_CONFLICT_RESOLUTION_CONFIRMATION}. Delete conflict hanya boleh mark_skipped.`}
-                />
-
-                <Row gutter={[8, 8]}>
-                  <Col xs={24} md={8}>
-                    <Input value={selectedConflictId} placeholder="Conflict ID terpilih" readOnly />
-                  </Col>
-                  <Col xs={24} md={8}>
-                    <Select
-                      value={conflictResolution}
-                      onChange={setConflictResolution}
-                      style={{ width: "100%" }}
-                      options={Object.values(MASTER_DATA_CONFLICT_RESOLUTIONS).map((value) => ({
-                        label: value,
-                        value,
-                      }))}
-                    />
-                  </Col>
-                  <Col xs={24} md={8}>
-                    <Input
-                      value={conflictResolutionConfirmation}
-                      onChange={(event) => setConflictResolutionConfirmation(event.target.value)}
-                      placeholder={MASTER_DATA_CONFLICT_RESOLUTION_CONFIRMATION}
-                      allowClear
-                    />
-                  </Col>
-                </Row>
-                <Input.TextArea
-                  value={conflictResolutionNote}
-                  onChange={(event) => setConflictResolutionNote(event.target.value)}
-                  placeholder="Catatan review konflik sebelum resolve"
-                  autoSize={{ minRows: 2, maxRows: 4 }}
-                />
-                <Button
-                  danger
-                  loading={resolvingConflict}
-                  disabled={!selectedConflictId}
-                  onClick={handleResolveConflict}
-                >
-                  Resolve Konflik Terpilih
-                </Button>
-              </Space>
-            </Card>
-          </>
-        )}
+          </Form.Item>
+          <Form.Item label="Resolution note" name="resolutionNote">
+            <Input.TextArea rows={2} placeholder="Catatan review conflict" />
+          </Form.Item>
+          <Form.Item label="Resolve confirmation" name="confirmation" extra={`Ketik ${MASTER_DATA_CONFLICT_RESOLUTION_CONFIRMATION}.`}>
+            <Input placeholder={MASTER_DATA_CONFLICT_RESOLUTION_CONFIRMATION} />
+          </Form.Item>
+          <Button loading={loading} onClick={handleResolveConflict}>Resolve Conflict</Button>
+        </Form>
       </Space>
     </Card>
   );

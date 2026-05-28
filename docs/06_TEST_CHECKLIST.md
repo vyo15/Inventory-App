@@ -1293,15 +1293,15 @@ Risiko:
 - [ ] Buka Stock Report: baris stok menampilkan `Total`, `Tersedia`, dan variant pill jika data source membawa `variants[]`; filter, summary, dan export tetap memakai data laporan existing.
 - [ ] Regression guarded: create/edit/toggle Products, submit Stock Adjustment, apply Pricing Rule, save Supplier, dan tambah Cash In manual tetap sama seperti sebelum patch.
 
-## Checklist global/auth/route LogoLoadingScreen — 2026-05-07
+## Checklist global/auth/loading hierarchy — 2026-05-07
 - [ ] Refresh browser saat sudah login menampilkan satu loading logo full screen tanpa card/wrap, lalu masuk dashboard/app seperti sebelumnya.
 - [ ] Refresh browser saat belum login menampilkan satu loading logo full screen, lalu masuk halaman Login seperti sebelumnya.
 - [ ] Buka URL protected langsung: route guard memakai loading logo yang sama, redirect login tetap benar, dan unauthorized tetap benar.
-- [ ] Lazy route/page load memakai loading logo yang sama tanpa mengubah route definitions atau role guard.
+- [ ] Lazy route/page load menampilkan skeleton lokal `Menyiapkan halaman...` di dalam content card, bukan layar blank dan bukan logo fullscreen kedua; route definitions dan role guard tetap sama.
 - [ ] Login auth/profile loading memakai loading logo yang sama; blocked/inactive/missing profile tetap berjalan.
 - [ ] Logo loading tidak muter, micro split tetap subtle, light/dark mode bagus, mobile center, dan reduced motion aman.
 - [ ] Console tidak menampilkan error canvas/image/import.
-- [ ] Table loading, button submit loading, report loading, maintenance preview/loading, Refresh Need, dan Refresh Preview tidak berubah.
+- [ ] Table loading, button submit loading, report loading, maintenance preview/loading, Refresh Need, Refresh Preview, dan data skeleton lain tidak berubah.
 
 ## Checklist Sidebar Logo & Brand Theme — 2026-05-07
 - [ ] Sidebar expanded menampilkan logo, `IMS Bunga Flanel`, dan `Flanel Karawang Industries` dalam satu baris visual yang rapi tanpa wrap.
@@ -1907,133 +1907,20 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 - [ ] Production Work Log complete tetap posting material/output stock, HPP, payroll accrual, inventory log, and read model sync.
 - [ ] Reset destructive tetap mematuhi protected collection/keyword/baseline guard.
 
+## Checklist Batch 14–16 — Customers Runtime Pilot + Sales Customer Guard
 
-## Offline DB Foundation + Backup + Contract checklist — 2026-05
-
-### Smoke test foundation
-- [ ] Jalankan `npm install`, `npm run lint`, dan `npm run build` setelah patch diextract ke repo lengkap.
-- [ ] App tetap login dan berjalan memakai Firebase seperti sebelumnya.
-- [ ] Tidak ada route/menu baru setelah foundation offline DB.
-- [ ] Tidak ada flow stock, purchase, sales, return, production, payroll, HPP, finance, reset, atau report yang berubah.
-- [ ] DevTools Browser > Application > IndexedDB dapat menampilkan DB `ims_bunga_flanel_offline` setelah helper foundation dipanggil manual.
-- [ ] Table awal tersedia: `app_meta`, `local_profiles`, `sync_queue`, `sync_conflicts`, `audit_logs`, `categories`, `customers`, `suppliers`.
-
-### Backup export/restore foundation
-- [ ] `exportLocalDbBackup()` menghasilkan JSON dengan `app = IMS Bunga Flanel`.
-- [ ] `type = offline-local-db-backup`.
-- [ ] `schemaVersion` sama dengan versi schema lokal.
-- [ ] JSON invalid ditolak.
-- [ ] App/type/schemaVersion yang salah ditolak.
-- [ ] Table di luar allowlist ditolak.
-- [ ] `previewLocalDbBackupRestore()` hanya preview dan tidak menulis data.
-- [ ] `restoreLocalDbBackup()` hanya restore table foundation allowlist.
-- [ ] Restore membuat audit log lokal `module = local_db_backup`, `action = restore`.
-- [ ] Restore tidak menyentuh transaksi/stock/production/payroll/HPP/finance.
-
-### Database Contract
-- [ ] `docs/10_OFFLINE_DATABASE_CONTRACT.md` tersedia.
-- [ ] Batch berikutnya mengikuti urutan kontrak: repository pilot master data rendah risiko dulu.
-- [ ] Tidak ada sync otomatis ke Firebase dari `sync_queue`.
-- [ ] Reset/Maintenance destructive tidak ikut berubah dari batch ini.
-
-
-## Repository Pilot Batch 4 checklist — 2026-05
-
-- [ ] `npm run lint` bersih setelah patch di-merge.
-- [ ] `npm run build` bersih setelah patch di-merge.
-- [ ] App tetap berjalan sebagai Firebase-first.
-- [ ] Customers page tetap memakai `customersService` existing dan tidak berubah runtime.
-- [ ] Categories page tetap memakai flow existing dan tidak berubah runtime.
-- [ ] SupplierPurchases page tetap memakai flow existing dan tidak berubah runtime.
-- [ ] Import repository baru tidak menghasilkan circular dependency.
-- [ ] `categoriesRepository.listCategories({ mode: "firebase_primary" })` bisa membaca Firebase saat diuji manual/dev.
-- [ ] `customersRepository.listCustomers({ mode: "firebase_primary" })` tetap mengikuti `customersService`.
-- [ ] `suppliersRepository.listSuppliers({ mode: "firebase_primary" })` bisa membaca supplier catalog.
-- [ ] Supplier create/update/delete via Firebase repository masih intentionally blocked sampai flow SupplierPurchases diekstrak.
-- [ ] Dexie mode local untuk categories/customers/suppliers tidak menulis ke Firebase.
-- [ ] Delete Dexie default memakai tombstone `_deleted`, bukan hard delete.
-- [ ] Tidak ada perubahan stock, purchase, sales, returns, production, payroll, HPP, finance, reset, route/menu, role guard.
-
-
-## Offline Sync Queue pilot checklist — 2026-05
-
-### Source/runtime guard
-- [ ] `npm run lint` dan `npm run build` tetap sukses.
-- [ ] App tetap berjalan Firebase-first.
-- [ ] Tidak ada route/menu baru.
-- [ ] Categories, Customers, dan SupplierPurchases runtime lama tetap berjalan.
-- [ ] Stock, purchase, sales, returns, finance, production, payroll, HPP, dan reset tidak berubah.
-
-### Sync queue local pilot
-- [ ] `createCategory(..., { mode: "offline_local" })` membuat record lokal dan item `sync_queue` pending.
-- [ ] `updateCategory(..., { mode: "offline_local" })` membuat item queue operation `update`.
-- [ ] `deleteCategory(..., { mode: "offline_local" })` membuat tombstone `_deleted` dan item queue operation `delete`.
-- [ ] `listPendingSyncQueueItems()` hanya menampilkan item `pending`.
-- [ ] `getSyncQueueSummary()` menghitung byStatus dan byCollection.
-- [ ] Queue menolak collection di luar `categories`, `customers`, dan `suppliers`.
-- [ ] Queue menolak operation di luar `create`, `update`, dan `delete`.
-- [ ] Tidak ada push otomatis ke Firebase setelah item masuk queue.
-
-### Mode guard
-- [ ] `setRepositoryModeForDevelopment("offline_local")` tanpa confirmation harus error.
-- [ ] Confirmation yang valid hanya `ENABLE OFFLINE REPOSITORY PILOT`.
-- [ ] `hybrid_sync` tetap ditolak.
-- [ ] `resetRepositoryModeToFirebasePrimary()` mengembalikan mode ke `firebase_primary`.
-
-
-## Offline Sync Dev Panel checklist — 2026-05
-
-### Smoke test UI
-- [ ] Buka Testing & Reset Center.
-- [ ] Panel `Offline Sync Dev Panel` tampil tanpa route/menu baru.
-- [ ] Klik `Siapkan Local DB`; IndexedDB `ims_bunga_flanel_offline` siap.
-- [ ] Klik `Refresh Preview`; panel menampilkan mode repository, queue pending, dan konflik aktif.
-- [ ] Tanpa keyword, `Aktifkan Offline Pilot` harus gagal.
-- [ ] Dengan keyword `ENABLE OFFLINE REPOSITORY PILOT`, mode repository menjadi `offline_local`.
-- [ ] Klik `Kembali ke Firebase Primary`; mode kembali `firebase_primary`.
-
-### Manual sync guard
-- [ ] Tanpa keyword, `Sync Manual ke Firebase` harus gagal.
-- [ ] Dengan keyword `SYNC MASTER DATA PILOT TO FIREBASE`, sync hanya memproses queue categories/customers.
-- [ ] Queue suppliers harus gagal/blocked dengan pesan guarded.
-- [ ] Delete queue tidak boleh menghapus Firebase dari panel Batch 8.
-- [ ] Create yang menemukan dokumen Firebase existing harus menjadi `conflict`, bukan overwrite.
-- [ ] Update yang dokumen Firebase-nya hilang harus menjadi `conflict`, bukan create diam-diam.
-- [ ] Konflik tampil di tabel konflik panel.
-- [ ] Local audit log `module = local_db_sync` dibuat untuk hasil sync.
-
-### Regression guard
-- [ ] Login tetap normal.
-- [ ] Dashboard tetap normal.
-- [ ] Categories/Customers/SupplierPurchases runtime lama tetap normal.
-- [ ] Stock/purchase/sales/returns/finance/production/payroll/HPP tidak berubah.
-- [ ] Tidak ada auto-sync saat halaman dibuka.
-
-
-## Offline Batch 10/11/12 combined checklist — 2026-05
-
-### White screen/import guard
-- [ ] Buka `/utilities/reset-maintenance-data` tanpa white screen.
-- [ ] Console browser tidak menampilkan `does not provide an export named createSyncConflict`.
 - [ ] `npm run lint` sukses.
-- [ ] `npm run build` sukses.
+- [ ] `npm run build` sukses dan tidak ada white screen import/export.
+- [ ] Buka `/utilities/reset-maintenance-data`; Offline Sync Dev Panel dan Offline Master Data Pilot tetap tampil.
+- [ ] Buka `Master Data / Customers`; tag default `DB: firebase_primary`.
+- [ ] Tambah customer di mode Firebase membuat kode otomatis `CUS-DDMMYYYY-001` dan field kode tetap disabled/read-only.
+- [ ] Edit customer di mode Firebase tidak mengubah kode.
+- [ ] Aktifkan offline pilot dengan `ENABLE OFFLINE REPOSITORY PILOT`; buka Customers lagi dan pastikan tag `DB: offline_local`.
+- [ ] Tambah customer offline membuat kode `CUS-DDMMYYYY-001`, menulis local DB, dan menambah `sync_queue`.
+- [ ] Duplicate kode customer offline ditolak.
+- [ ] Edit customer offline tidak boleh mengubah kode.
+- [ ] Delete customer offline menjadi tombstone + `sync_queue`, bukan delete Firebase.
+- [ ] Buka Sales; dropdown customer tetap membaca Firebase customer, bukan customer local-only.
+- [ ] Simpan Sales dengan customer Firebase masih menyimpan snapshot `customerId`/`customerName`.
+- [ ] Stock, purchase, returns, finance, production, payroll, HPP, dan reset destructive tidak berubah.
 
-### Conflict resolver
-- [ ] Tabel konflik aktif tampil bila ada data di `sync_conflicts`.
-- [ ] Resolve tanpa keyword `RESOLVE MASTER DATA CONFLICT` harus gagal.
-- [ ] `mark_skipped` menandai konflik resolved tanpa menulis Firebase.
-- [ ] `remote_wins` memperbarui local DB dari payload remote.
-- [ ] `local_wins` menulis payload local ke Firebase hanya untuk categories/customers.
-- [ ] Konflik supplier/stock/transaksi/production/payroll/HPP ditolak.
-- [ ] Konflik delete hanya boleh `mark_skipped`.
-
-### Offline Master Data Pilot
-- [ ] Panel `Offline Master Data Pilot` tampil di Testing & Reset Center.
-- [ ] `Muat Data Local` menyiapkan IndexedDB dan menampilkan categories/customers local.
-- [ ] Create category local menambah record dan item `sync_queue` pending.
-- [ ] Update category local menambah item `sync_queue` update.
-- [ ] Delete category local membuat tombstone dan item `sync_queue` delete.
-- [ ] Customer pilot wajib punya ID/kode lokal.
-- [ ] Manual sync tetap harus dijalankan dari `Offline Sync Dev Panel` dengan keyword terpisah.
-- [ ] Page aktif Categories/Customers/SupplierPurchases tetap berjalan seperti sebelumnya.
-- [ ] Stock, purchase, sales, returns, finance, production, payroll, HPP, reset destructive, route/menu, dan role guard tidak berubah.

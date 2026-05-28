@@ -105,6 +105,7 @@ export const listPendingSyncQueueItems = (options = {}) =>
     status: LOCAL_SYNC_STATUSES.PENDING,
   });
 
+
 export const getSyncQueueItemById = async (queueId) => {
   if (!queueId) return null;
 

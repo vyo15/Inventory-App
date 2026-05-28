@@ -1201,84 +1201,77 @@ Status: **AKTIF / GUARDED**.
 - Repair wajib didahului audit/dry run dan konfirmasi keyword `REPAIR TRANSAKSI`; setelah repair wajib audit ulang dan cek Cash In, Cash Out, Stock Management, Sales Report, Purchases Report, dan Profit Loss.
 
 
-## Offline Local DB foundation, backup, and database contract — 2026-05
+## Offline Local DB foundation, backup, repository pilot, and manual sync guard — 2026-05
 
-Status: **FOUNDATION / GUARDED / BELUM SOURCE UTAMA**.
+Status: **FOUNDATION / GUARDED / FIREBASE PRIMARY MASIH AKTIF**.
 
 Rule:
 - Database offline web memakai Dexie/IndexedDB di `src/data/local/*`.
 - Firebase/Firestore masih menjadi runtime utama sampai mode offline-local disetujui dan diuji per modul.
 - Batch 1/2 foundation wajib tersedia sebelum repository pilot: `localDbSchema`, `imsLocalDb`, `localDbMeta`, `localDbBackupValidator`, dan `localDbBackupService`.
-- Backup/restore local DB hanya berlaku untuk table foundation allowlist:
-  - `app_meta`
-  - `local_profiles`
-  - `sync_queue`
-  - `sync_conflicts`
-  - `audit_logs`
-  - `categories`
-  - `customers`
-  - `suppliers`
-- Restore wajib melalui validasi payload, preview, dan confirmation guard sebelum dibuat UI user-facing.
-- Restore tidak boleh otomatis menyentuh purchase, sales, returns, stock, inventory log, production, payroll, HPP, finance, reset destructive, atau Firestore sync.
+- Repository pilot Batch 4/5 hanya boleh untuk master data rendah risiko: `categories`, `customers`, dan `suppliers`.
+- Sync queue Batch 6 hanya boleh menerima operasi master data pilot: `create`, `update`, `delete` untuk `categories`, `customers`, `suppliers`.
+- Firebase manual sync Batch 7 hanya boleh dijalankan dengan confirmation: `SYNC MASTER DATA PILOT TO FIREBASE`.
+- Manual sync Firebase **belum otomatis** dan tidak boleh dipanggil dari page user-facing tanpa review UI/QA.
+- Supplier sync ke Firebase masih diblokir/failed secara sengaja karena write flow supplier masih guarded di `SupplierPurchases` dan terkait raw material/purchase linkage.
+- Delete sync ke Firebase default-nya diblokir kecuali caller eksplisit memberi `allowDeletes=true` setelah backup dan review impact.
+- Restore/sync tidak boleh otomatis menyentuh purchase, sales, returns, stock, inventory log, production, payroll, HPP, finance, reset destructive, atau Firestore sync di luar master pilot.
 - Database Contract resmi untuk roadmap offline ada di `docs/10_OFFLINE_DATABASE_CONTRACT.md`.
-- Batch offline berikutnya wajib mengikuti urutan kontrak: master data rendah risiko dulu, lalu stock/transaksi/production/payroll/HPP belakangan.
 
 
-## Offline repository pilot guard — 2026-05 Batch 4
+## Offline Sync Dev Panel dan Conflict Resolver — 2026-05
 
-Status: **REPOSITORY PILOT / NON-RUNTIME DEFAULT / GUARDED**.
-
-Rule:
-- Repository pilot hanya menjadi boundary baru untuk `categories`, `customers`, dan `suppliers`.
-- Firebase tetap default adapter lewat `firebase_primary`.
-- Dexie adapter hanya aktif jika caller eksplisit memakai mode `offline_local`; belum ada UI user-facing yang boleh mengubah mode.
-- Page/service aktif belum boleh dimigrasi massal ke repository tanpa batch per modul.
-- `customersRepository` harus menjaga rule kode customer existing dengan memakai `customersService` saat mode Firebase.
-- `suppliersRepository` mode Firebase untuk write masih diblokir sampai flow besar `SupplierPurchases.jsx` diaudit dan diekstrak; jangan duplikasi create/update/delete supplier secara diam-diam.
-- Delete lokal di Dexie repository menggunakan tombstone `_deleted`, bukan hard delete default.
-- Repository pilot tidak boleh menyentuh stock, purchase, sales, returns, finance, production, payroll, HPP, reset, auth, route/menu, atau Firestore rules.
-
-
-## Offline Sync Queue pilot — 2026-05
-
-Status: **FOUNDATION / MASTER DATA PILOT ONLY / BELUM FIREBASE SYNC**.
+Status: **DEV PANEL / GUARDED / MASTER DATA PILOT ONLY**.
 
 Rule:
-- `sync_queue` hanya boleh menerima collection pilot: `categories`, `customers`, dan `suppliers`.
-- Operation yang boleh dicatat: `create`, `update`, dan `delete`.
-- Status queue yang valid: `pending`, `syncing`, `synced`, `failed`, dan `conflict`.
-- Pada Batch 6, queue hanya mencatat perubahan lokal Dexie; belum boleh push otomatis ke Firebase.
-- Queue belum boleh dipakai untuk stock, purchases, sales, returns, finance, production, payroll, HPP, reset, audit destructive, atau business code counter.
-- Delete offline pilot wajib memakai tombstone `_deleted` secara default, bukan hard delete, agar nanti aman untuk Firebase mirror.
-- `hybrid_sync` tetap diblokir sampai manual sync dan conflict resolver disetujui.
+- Offline Sync Dev Panel hanya boleh berada di Testing & Reset Center sebagai alat dev/admin guarded, bukan user-facing umum.
+- Panel boleh menyiapkan local DB, melihat mode repository, melihat queue, melihat konflik, menjalankan manual sync, dan resolve conflict hanya dengan keyword guard.
+- Manual sync tetap memakai confirmation `SYNC MASTER DATA PILOT TO FIREBASE`.
+- Conflict resolver Batch 9 wajib memakai confirmation `RESOLVE MASTER DATA CONFLICT`.
+- Resolver hanya boleh untuk `categories` dan `customers`.
+- `local_wins` berarti data lokal ditulis ke Firebase; ini hanya boleh dipakai setelah data lokal dicek benar.
+- `remote_wins` berarti data Firebase dipakai untuk local DB.
+- `mark_skipped` hanya menandai conflict reviewed/skipped dan tidak menulis Firebase.
+- Supplier, stock, purchase, sales, returns, finance, production, payroll, HPP, reset destructive, route/menu/role guard, dan Firestore rules/index tetap di luar scope resolver Batch 9.
 
+## Offline Master Data Pilot Panel — Batch 11/12 — 2026-05
 
-## Offline Manual Sync Pilot UI Guard — 2026-05
-
-Status: **DEV GUARDED / MASTER DATA PILOT ONLY / BUKAN RUNTIME UTAMA**.
-
-Rule:
-- Offline Sync Dev Panel hanya boleh dipakai untuk pilot master data rendah risiko.
-- Scope manual sync Batch 8 tetap `categories` dan `customers`.
-- `suppliers` masih boleh tersimpan di queue lokal, tetapi push Firebase tetap diblokir sampai flow `SupplierPurchases` diaudit/dipecah dengan aman.
-- Panel tidak boleh auto-sync saat halaman dibuka.
-- Manual sync wajib keyword `SYNC MASTER DATA PILOT TO FIREBASE`.
-- Aktivasi offline repository pilot wajib keyword `ENABLE OFFLINE REPOSITORY PILOT`.
-- Delete Firebase tetap diblokir dari panel Batch 8 karena destructive.
-- Panel tidak boleh menyentuh stock, purchase, sales, returns, finance, production, payroll, HPP, reset destructive, route/menu, atau role guard.
-- Konflik create/update wajib masuk `sync_conflicts`; jangan overwrite otomatis data Firebase.
-
-
-## Offline Conflict Resolver & Master Data Pilot UI Guard — 2026-05 Batch 10
-
-Status: **DEV GUARDED / MASTER DATA PILOT ONLY / BUKAN RUNTIME PRODUKSI**.
+Status: **DEV PANEL / GUARDED / LOCAL DB ONLY**.
 
 Rule:
-- Import compatibility untuk `createSyncConflict` wajib dipertahankan agar patch lama tidak membuat white screen karena named export mismatch.
-- Conflict resolver hanya boleh memproses `categories` dan `customers`.
-- Resolusi konflik wajib keyword `RESOLVE MASTER DATA CONFLICT`.
-- Mode resolusi yang valid hanya `local_wins`, `remote_wins`, dan `mark_skipped`.
-- Konflik delete tidak boleh di-resolve otomatis; hanya boleh `mark_skipped` setelah review manual.
-- Offline Master Data Pilot hanya panel dev di Testing & Reset Center, bukan pengganti page Master Data aktif.
-- Data customer pilot memakai kode lokal untuk testing; jangan dijadikan standar kode produksi final.
-- Tidak boleh menyentuh stock, purchase, sales, returns, finance, production, payroll, HPP, reset destructive, route/menu, role guard, Firestore rules/index, atau business code counters.
+- Offline Master Data Pilot Panel hanya boleh berada di Testing & Reset Center untuk dev/admin testing.
+- Panel hanya boleh melakukan read/create/update/tombstone delete pada IndexedDB untuk `categories` dan `customers`.
+- Operasi panel wajib masuk `sync_queue` dengan status pending melalui repository Dexie adapter.
+- Panel tidak boleh menggantikan halaman aktif Master Data Category/Customer sebelum batch migrasi runtime disetujui terpisah.
+- Customer local pilot wajib memakai kode valid `CUS-DDMMYYYY-001`; tidak boleh memakai random ID atau `CUS-LOCAL` untuk data yang akan disync.
+- Delete di panel adalah tombstone local, bukan delete Firebase.
+- Firebase tetap tidak berubah sampai manual sync dijalankan dengan confirmation `SYNC MASTER DATA PILOT TO FIREBASE`.
+- Guard white screen: panel offline dev harus dibungkus error boundary agar Testing & Reset Center tetap tampil jika panel pilot error runtime.
+
+## Offline runtime pilot Categories/Customers — 2026-05
+
+Status: **PILOT / GUARDED / FIREBASE DEFAULT**.
+
+Rules:
+- `Categories.jsx` and `Customers.jsx` may read/write through repository boundary.
+- Default repository mode remains `firebase_primary`.
+- `offline_local` only applies after dev/admin enables offline repository pilot with guarded confirmation in Testing & Reset Center.
+- Customer code must remain immutable and valid: `CUS-DDMMYYYY-001`.
+- In offline mode, customer code is generated from local IndexedDB data only and must not call Firestore counters.
+- Offline delete is tombstone local data + `sync_queue`; it must not delete Firebase automatically.
+- Manual sync to Firebase remains guarded and limited to `categories` and `customers`.
+- `suppliers`, stock, purchases, sales, returns, finance, production, payroll, and HPP are still outside runtime offline migration.
+
+## Offline DB Pilot — Customers Runtime Boundary and Sales Customer Guard (Batch 14–16)
+
+Status: **GUARDED / FIREBASE PRIMARY MASIH AKTIF UNTUK TRANSAKSI**.
+
+- Halaman `Master Data / Customers` sekarang melewati `customersRepository` sebagai boundary data.
+- Default tetap `firebase_primary`; mode `offline_local` hanya aktif jika dev guard repository mode diaktifkan dari Testing & Reset Center.
+- Kode customer tetap wajib `CUS-DDMMYYYY-001`, dibuat otomatis, dan tidak boleh diedit manual setelah create.
+- Helper format customer code dipusatkan di `src/utils/references/customerCodeReference.js` agar Firebase service dan Dexie adapter tidak membuat regex/format berbeda.
+- Delete customer pada mode offline adalah tombstone local + `sync_queue`, bukan delete Firebase langsung.
+- Sales **belum** menjadi transaksi offline. Dropdown customer Sales dipaksa membaca `firebase_primary` melalui `salesCustomerReferenceService.js` supaya transaksi Firebase tidak memakai customer local-only yang belum tersync.
+- Snapshot Sales tetap menyimpan `customerId` dan `customerName`; transaksi lama tidak diubah ketika master customer diedit/hapus.
+- Stock, purchase, returns, finance, production, payroll, HPP, reset destructive, route/menu/role guard, dan Firestore rules/index tidak berubah oleh batch ini.
+

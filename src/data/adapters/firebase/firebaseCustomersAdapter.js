@@ -1,6 +1,7 @@
 import {
   createCustomer as createFirebaseCustomer,
   deleteCustomer as deleteFirebaseCustomer,
+  generateCustomerCode as generateFirebaseCustomerCode,
   getCustomers,
   updateCustomer as updateFirebaseCustomer,
 } from "../../../services/MasterData/customersService";
@@ -12,6 +13,9 @@ export const getCustomerById = async (customerId) => {
   const customers = await getCustomers();
   return customers.find((customer) => customer.id === customerId) || null;
 };
+
+export const generateCustomerCode = (values = {}, excludeId = null) =>
+  generateFirebaseCustomerCode(values, excludeId);
 
 export const createCustomer = (values = {}) => createFirebaseCustomer(values);
 

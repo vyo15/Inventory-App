@@ -1,9 +1,11 @@
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { db } from "../../firebase";
+import { isValidCustomerCodeFormat } from "../../services/MasterData/customersService";
 import { getImsLocalDb } from "../local/imsLocalDb";
 import {
   LOCAL_DB_TABLES,
+  LOCAL_SYNC_OPERATIONS,
   LOCAL_SYNC_STATUSES,
 } from "../local/localDbSchema";
 import {
@@ -15,222 +17,234 @@ import {
   updateSyncQueueItemStatus,
 } from "./syncQueueService";
 
-export const MASTER_DATA_CONFLICT_RESOLUTION_CONFIRMATION = "RESOLVE MASTER DATA CONFLICT";
+export const MASTER_DATA_CONFLICT_RESOLUTION_CONFIRMATION =
+  "RESOLVE MASTER DATA CONFLICT";
 
-export const MASTER_DATA_CONFLICT_RESOLUTIONS = Object.freeze({
+export const CONFLICT_RESOLUTION_MODES = Object.freeze({
   LOCAL_WINS: "local_wins",
   REMOTE_WINS: "remote_wins",
   MARK_SKIPPED: "mark_skipped",
 });
 
-const RESOLVABLE_COLLECTIONS = Object.freeze([
-  LOCAL_DB_TABLES.CATEGORIES,
-  LOCAL_DB_TABLES.CUSTOMERS,
-]);
-
-const FIREBASE_COLLECTION_BY_LOCAL_COLLECTION = Object.freeze({
+const FIREBASE_COLLECTION_BY_LOCAL_TABLE = Object.freeze({
   [LOCAL_DB_TABLES.CATEGORIES]: "categories",
   [LOCAL_DB_TABLES.CUSTOMERS]: "customers",
 });
+
+const LOCAL_ONLY_FIELDS = new Set([
+  "id",
+  "_deleted",
+  "deletedAt",
+  "localUpdatedAt",
+  "lastSyncedAt",
+  "syncError",
+  "syncStatus",
+]);
 
 const nowIso = () => new Date().toISOString();
 
 const clonePayload = (payload = null) => JSON.parse(JSON.stringify(payload || null));
 
-const sanitizeFirestorePayload = (payload = {}) => {
-  const cloned = clonePayload(payload) || {};
-  [
-    "_deleted",
-    "syncStatus",
-    "localUpdatedAt",
-    "lastSyncedAt",
-    "remoteUpdatedAt",
-    "deletedAt",
-    "deletedBy",
-  ].forEach((fieldName) => {
-    delete cloned[fieldName];
-  });
+const stripLocalOnlyFields = (payload = {}) =>
+  Object.fromEntries(
+    Object.entries(payload || {}).filter(
+      ([fieldName, value]) => !LOCAL_ONLY_FIELDS.has(fieldName) && value !== undefined
+    )
+  );
 
-  return cloned;
-};
-
-const assertConfirmation = (confirmation = "") => {
+const assertConfirmation = (confirmation) => {
   if (confirmation !== MASTER_DATA_CONFLICT_RESOLUTION_CONFIRMATION) {
     throw new Error(
-      `Resolusi konflik wajib memakai keyword: ${MASTER_DATA_CONFLICT_RESOLUTION_CONFIRMATION}`
+      `Resolve conflict membutuhkan confirmation: ${MASTER_DATA_CONFLICT_RESOLUTION_CONFIRMATION}`
     );
   }
 };
 
-const assertResolvableConflict = (conflict) => {
-  if (!conflict) {
-    throw new Error("Konflik sync tidak ditemukan.");
-  }
-
-  if (conflict.resolvedAt) {
-    throw new Error("Konflik sync ini sudah pernah diselesaikan.");
-  }
-
-  if (!RESOLVABLE_COLLECTIONS.includes(conflict.collectionName)) {
+const assertAllowedConflictCollection = (collectionName) => {
+  if (!FIREBASE_COLLECTION_BY_LOCAL_TABLE[collectionName]) {
     throw new Error(
-      `Resolusi konflik untuk ${conflict.collectionName || "collection kosong"} belum diizinkan.`
+      `Conflict collection ${collectionName || "kosong"} belum diizinkan untuk resolver master data pilot.`
     );
   }
 };
 
-const normalizeResolution = (resolution) => {
-  if (Object.values(MASTER_DATA_CONFLICT_RESOLUTIONS).includes(resolution)) {
-    return resolution;
-  }
-
-  throw new Error("Mode resolusi konflik tidak valid.");
+const normalizeResolutionMode = (resolutionMode) => {
+  const values = Object.values(CONFLICT_RESOLUTION_MODES);
+  return values.includes(resolutionMode)
+    ? resolutionMode
+    : CONFLICT_RESOLUTION_MODES.MARK_SKIPPED;
 };
 
-const writeConflictResolutionAudit = async ({ conflict, resolution, note, actorLabel }) => {
-  const dbLocal = getImsLocalDb();
-  const timestamp = nowIso();
+const buildFirestorePayload = ({ collectionName, documentId, payload = {} }) => {
+  const normalized = stripLocalOnlyFields(payload);
 
-  await dbLocal.table(LOCAL_DB_TABLES.AUDIT_LOGS).put({
-    id: `local-conflict-resolution-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  if (collectionName === LOCAL_DB_TABLES.CUSTOMERS) {
+    const resolvedCode = normalized.code || normalized.customerCode || documentId;
+    if (!isValidCustomerCodeFormat(resolvedCode)) {
+      throw new Error(
+        "Customer conflict local_wins wajib memakai kode customer valid CUS-DDMMYYYY-001 sebagai document ID."
+      );
+    }
+
+    normalized.code = resolvedCode;
+    normalized.customerCode = resolvedCode;
+  }
+
+  return {
+    ...normalized,
+    updatedAt: serverTimestamp(),
+    lastSyncedAt: serverTimestamp(),
+    syncStatus: LOCAL_SYNC_STATUSES.SYNCED,
+  };
+};
+
+const writeConflictResolutionAuditLog = async ({
+  conflict,
+  resolution,
+  resolutionNote = "",
+} = {}) => {
+  const timestamp = nowIso();
+  const auditLog = {
+    id: `local-conflict-resolution-${conflict.id}-${Date.now()}`,
     module: "local_db_sync_conflict",
-    action: resolution,
-    referenceId: conflict.documentId,
+    action: `resolve_${resolution}`,
+    referenceId: `${conflict.collectionName}:${conflict.documentId}`,
     createdAt: timestamp,
     metadata: {
       conflictId: conflict.id,
-      queueId: conflict.queueId || "",
+      queueItemId: conflict.queueItemId || "",
       collectionName: conflict.collectionName,
+      documentId: conflict.documentId,
       conflictType: conflict.conflictType,
-      note,
-      actorLabel,
-      scope: "master_data_pilot",
+      resolution,
+      resolutionNote,
     },
-  });
+  };
+
+  await getImsLocalDb().table(LOCAL_DB_TABLES.AUDIT_LOGS).put(auditLog);
+  return auditLog;
 };
 
-const markQueueAfterResolution = async ({ queueId, resolution, message }) => {
-  if (!queueId) return null;
+const markQueueResolved = async ({ queueItem, resolution }) => {
+  if (!queueItem?.id) return null;
 
-  const queue = await getSyncQueueItemById(queueId);
-  if (!queue) return null;
+  const status =
+    resolution === CONFLICT_RESOLUTION_MODES.MARK_SKIPPED
+      ? LOCAL_SYNC_STATUSES.FAILED
+      : LOCAL_SYNC_STATUSES.SYNCED;
 
-  const status = resolution === MASTER_DATA_CONFLICT_RESOLUTIONS.MARK_SKIPPED
-    ? LOCAL_SYNC_STATUSES.FAILED
-    : LOCAL_SYNC_STATUSES.SYNCED;
-
-  return updateSyncQueueItemStatus(queueId, {
+  return updateSyncQueueItemStatus(queueItem.id, {
     status,
-    errorMessage: resolution === MASTER_DATA_CONFLICT_RESOLUTIONS.MARK_SKIPPED ? message : "",
+    errorMessage:
+      resolution === CONFLICT_RESOLUTION_MODES.MARK_SKIPPED
+        ? "Conflict ditandai skipped/manual review."
+        : "",
     metadataPatch: {
-      resolvedConflictAt: nowIso(),
       conflictResolution: resolution,
+      conflictResolvedAt: nowIso(),
     },
   });
 };
 
-const applyLocalWins = async (conflict) => {
-  const firebaseCollection = FIREBASE_COLLECTION_BY_LOCAL_COLLECTION[conflict.collectionName];
-  const payload = sanitizeFirestorePayload(conflict.localPayload || {});
-
-  if (!firebaseCollection) {
-    throw new Error(`Collection ${conflict.collectionName} belum punya mapping Firebase.`);
+const applyLocalWins = async ({ conflict, queueItem }) => {
+  if (queueItem?.operation === LOCAL_SYNC_OPERATIONS.DELETE) {
+    throw new Error("Conflict delete tidak di-resolve otomatis. Gunakan mark_skipped lalu review manual.");
   }
 
-  if (!Object.keys(payload).length) {
-    throw new Error("Payload local kosong, tidak aman ditulis ke Firebase.");
-  }
+  const firebaseCollection = FIREBASE_COLLECTION_BY_LOCAL_TABLE[conflict.collectionName];
+  const payload = queueItem?.payload || conflict.localPayload || {};
+  const firestorePayload = buildFirestorePayload({
+    collectionName: conflict.collectionName,
+    documentId: conflict.documentId,
+    payload,
+  });
 
-  await setDoc(
-    doc(db, firebaseCollection, conflict.documentId),
-    {
-      ...payload,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
+  await setDoc(doc(db, firebaseCollection, conflict.documentId), firestorePayload, {
+    merge: true,
+  });
 
-  return { firebaseCollection, documentId: conflict.documentId };
-};
-
-const applyRemoteWins = async (conflict) => {
-  const remotePayload = clonePayload(conflict.remotePayload);
-
-  if (!remotePayload) {
-    throw new Error("Payload remote kosong. Gunakan mark_skipped jika konflik hanya perlu ditandai selesai.");
-  }
-
-  const dbLocal = getImsLocalDb();
   const timestamp = nowIso();
-  const record = {
-    ...remotePayload,
+  await getImsLocalDb().table(conflict.collectionName).put({
+    ...clonePayload(payload),
     id: conflict.documentId,
     syncStatus: LOCAL_SYNC_STATUSES.SYNCED,
-    remoteUpdatedAt: timestamp,
+    lastSyncedAt: timestamp,
+    updatedAt: payload.updatedAt || timestamp,
+    _deleted: false,
+  });
+};
+
+const applyRemoteWins = async ({ conflict }) => {
+  const remotePayload = conflict.remotePayload || {};
+  const timestamp = nowIso();
+
+  await getImsLocalDb().table(conflict.collectionName).put({
+    ...clonePayload(remotePayload),
+    id: conflict.documentId,
+    syncStatus: LOCAL_SYNC_STATUSES.SYNCED,
     lastSyncedAt: timestamp,
     localUpdatedAt: timestamp,
     _deleted: false,
-  };
-
-  await dbLocal.table(conflict.collectionName).put(record);
-  return { localTable: conflict.collectionName, documentId: conflict.documentId };
+  });
 };
 
-export const resolveMasterDataSyncConflict = async (
+export const resolveMasterDataSyncConflict = async ({
   conflictId,
-  {
-    resolution,
-    confirmation = "",
-    note = "",
-    actorLabel = "",
-  } = {}
-) => {
+  resolutionMode = CONFLICT_RESOLUTION_MODES.MARK_SKIPPED,
+  confirmation = "",
+  resolutionNote = "",
+} = {}) => {
   assertConfirmation(confirmation);
 
-  const nextResolution = normalizeResolution(resolution);
   const conflict = await getSyncConflictById(conflictId);
-  assertResolvableConflict(conflict);
-
-  if (
-    conflict.conflictType?.includes("delete") &&
-    nextResolution !== MASTER_DATA_CONFLICT_RESOLUTIONS.MARK_SKIPPED
-  ) {
-    throw new Error("Konflik delete tidak boleh di-resolve otomatis. Gunakan mark_skipped setelah review manual.");
+  if (!conflict) {
+    throw new Error("Conflict tidak ditemukan.");
   }
 
-  let actionResult = null;
-  if (nextResolution === MASTER_DATA_CONFLICT_RESOLUTIONS.LOCAL_WINS) {
-    actionResult = await applyLocalWins(conflict);
-  } else if (nextResolution === MASTER_DATA_CONFLICT_RESOLUTIONS.REMOTE_WINS) {
-    actionResult = await applyRemoteWins(conflict);
-  } else {
-    actionResult = { skipped: true };
+  if (conflict.resolvedAt) {
+    return {
+      resolved: false,
+      skipped: true,
+      reason: "already_resolved",
+      conflict,
+    };
   }
 
-  const updatedConflict = await updateSyncConflictResolution(conflict.id, {
-    resolution: nextResolution,
-    resolvedBy: actorLabel,
-    note,
+  assertAllowedConflictCollection(conflict.collectionName);
+
+  const queueItem = conflict.queueItemId
+    ? await getSyncQueueItemById(conflict.queueItemId)
+    : null;
+  const resolution = normalizeResolutionMode(resolutionMode);
+
+  if (resolution === CONFLICT_RESOLUTION_MODES.LOCAL_WINS) {
+    await applyLocalWins({ conflict, queueItem });
+  }
+
+  if (resolution === CONFLICT_RESOLUTION_MODES.REMOTE_WINS) {
+    if (queueItem?.operation === LOCAL_SYNC_OPERATIONS.DELETE) {
+      throw new Error("Conflict delete tidak di-resolve otomatis. Gunakan mark_skipped lalu review manual.");
+    }
+    await applyRemoteWins({ conflict });
+  }
+
+  await markQueueResolved({ queueItem, resolution });
+  const resolvedConflict = await updateSyncConflictResolution(conflict.id, {
+    resolution,
+    resolutionNote,
     metadataPatch: {
-      actionResult,
+      queueItemFound: Boolean(queueItem),
     },
   });
-
-  const updatedQueue = await markQueueAfterResolution({
-    queueId: conflict.queueId,
-    resolution: nextResolution,
-    message: note || "Konflik ditandai skipped dari dev panel.",
-  });
-
-  await writeConflictResolutionAudit({
+  await writeConflictResolutionAuditLog({
     conflict,
-    resolution: nextResolution,
-    note,
-    actorLabel,
+    resolution,
+    resolutionNote,
   });
 
   return {
-    conflict: updatedConflict,
-    queue: updatedQueue,
-    actionResult,
+    resolved: true,
+    resolution,
+    conflict: resolvedConflict,
   };
 };

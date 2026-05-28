@@ -453,52 +453,114 @@ Gate sebelum Batch 7:
 - App tetap Firebase-first dan tidak ada perubahan runtime user-facing.
 
 
-## 12. Batch 8 — Offline Sync Dev Panel Contract
+## 12. Batch 7 Manual Firebase Sync Contract
 
-Status: **DEV GUARDED / MANUAL ONLY**.
+Status: **MANUAL / GUARDED / MASTER DATA PILOT ONLY**.
 
-Batch 8 menambahkan panel guarded di Testing & Reset Center untuk melihat status local DB, repository mode, queue pending, konflik sync, dan menjalankan manual sync master data pilot.
+File sync:
+- `src/data/sync/syncQueueService.js`
+- `src/data/sync/syncConflictService.js`
+- `src/data/sync/firebaseMasterDataSyncService.js`
 
-Kontrak Batch 8:
-- Tidak ada route/menu baru.
+Manual Firebase sync hanya boleh dijalankan dengan confirmation:
+
+```text
+SYNC MASTER DATA PILOT TO FIREBASE
+```
+
+Supported push awal:
+- `categories` create/update.
+- `customers` create/update dengan kode valid `CUS-DDMMYYYY-001`.
+
+Blocked/guarded:
+- `suppliers` belum push ke Firebase karena source aktual memakai collection `supplierPurchases` dan write flow masih terkait SupplierPurchases/raw material/purchase linkage.
+- `delete` ke Firebase default blocked; perlu `allowDeletes=true` dan backup/review impact.
+- Stock, purchase, sales, returns, finance, production, payroll, HPP, reset, dan audit bisnis utama tidak boleh masuk manual sync Batch 7.
+
+Conflict rule awal:
+- Jika queue operation `create` menemukan dokumen Firebase dengan ID yang sama, status queue menjadi `conflict`.
+- Detail konflik ditulis ke `sync_conflicts`.
+- Tidak ada overwrite diam-diam kecuali caller eksplisit memberi `allowOverwriteExistingCreate=true` dalam konteks dev/test yang sudah direview.
+
+Runtime:
 - Tidak ada auto-sync.
-- Tidak ada perubahan runtime utama Firebase.
-- Manual sync hanya untuk `categories` dan `customers`.
-- `suppliers` masih blocked karena flow supplier aktif masih berada di `SupplierPurchases` dan terkait raw material/purchase linkage.
-- Delete Firebase blocked dari panel.
-- Conflict create/update wajib disimpan ke `sync_conflicts`.
-- Panel hanya admin/dev utility untuk validasi migrasi, bukan fitur produksi umum.
-
-Gate sebelum Batch 9:
-- Konflik manual sudah bisa terlihat jelas di panel.
-- Queue categories/customers bisa dibuat dari repository offline-local dan dipreview.
-- Manual sync categories/customers lolos smoke test.
-- Tidak ada regression pada page Master Data aktif.
-- Supplier write flow belum boleh diaktifkan sebelum audit khusus.
+- Tidak ada UI user-facing.
+- Firebase tetap source utama aplikasi.
+- Setiap hasil manual sync menulis audit lokal `module = local_db_sync` supaya percobaan sync bisa ditelusuri.
 
 
-## 13. Batch 10 — Conflict Resolver + Offline Master Data Pilot Panel
+## 13. Batch 8–9 Dev Panel dan Conflict Resolver Contract
 
-Status: **DEV GUARDED / BUILD VERIFIED / FIREBASE-FIRST**.
+Status: **GUARDED / MASTER DATA PILOT ONLY / FIREBASE PRIMARY MASIH AKTIF**.
 
-Tambahan kontrak:
-- Named export compatibility untuk `createSyncConflict` harus dipertahankan selama patch offline lama masih mungkin terpasang.
-- `syncConflictResolutionService` adalah satu-satunya resolver konflik manual untuk pilot master data.
-- Resolver hanya menerima collection `categories` dan `customers`.
-- Keyword resolver wajib: `RESOLVE MASTER DATA CONFLICT`.
-- Mode resolver valid: `local_wins`, `remote_wins`, `mark_skipped`.
-- Delete conflict tidak boleh dieksekusi otomatis ke Firebase.
-- `OfflineMasterDataPilotPanel` boleh membuat data local categories/customers untuk QA queue, tetapi belum menjadi runtime user-facing.
+Panel:
+- Panel berada di `src/pages/Utilities/components/OfflineSyncDevPanel.jsx`.
+- Panel dipasang di `src/pages/Utilities/ResetMaintenanceData.jsx` tanpa mengubah reset destructive flow.
+- Panel hanya untuk dev/admin preview dan manual action guarded.
 
-Dilarang setelah Batch 10:
-- Mengaktifkan supplier sync tanpa audit `SupplierPurchases`.
-- Mengalihkan page aktif ke offline repository tanpa batch migrasi khusus.
-- Menambahkan stock/transaksi/production/payroll/HPP ke local queue/resolver.
-- Menambah auto-sync/background worker.
+Confirmation keyword:
+- Repository mode pilot: `ENABLE OFFLINE REPOSITORY PILOT`.
+- Manual Firebase sync: `SYNC MASTER DATA PILOT TO FIREBASE`.
+- Conflict resolver: `RESOLVE MASTER DATA CONFLICT`.
 
-Gate sebelum migrasi page aktif:
-- White screen import guard tidak muncul lagi.
-- Lint/build sukses.
-- Categories/customer local pilot create/update/delete lolos QA.
-- Conflict resolver lolos QA untuk `mark_skipped`, `remote_wins`, dan `local_wins`.
-- Manual sync tetap tidak berjalan tanpa keyword.
+Resolver allowed collection:
+- `categories`.
+- `customers`.
+
+Resolver mode:
+- `local_wins`: payload local DB ditulis ke Firebase lalu local record/queue/conflict ditandai synced/resolved.
+- `remote_wins`: payload Firebase dipakai untuk local DB lalu queue/conflict ditandai synced/resolved.
+- `mark_skipped`: conflict ditandai reviewed/skipped, queue menjadi failed, dan tidak ada write Firebase.
+
+Blocked:
+- `suppliers` sampai supplier write flow diekstrak dari `SupplierPurchases` dan diaudit.
+- `delete` conflict selain mark skipped.
+- stock, purchase, sales, returns, finance, production, payroll, HPP, reset destructive, route/menu/role guard, dan Firestore rules/index.
+
+Audit:
+- Manual sync menulis audit lokal `module = local_db_sync`.
+- Conflict resolver menulis audit lokal `module = local_db_sync_conflict`.
+
+## Batch 11/12 Addendum — Dev Pilot UI and White Screen Guard
+
+Batch 11/12 allowed additions:
+- Dev-only local CRUD pilot untuk `categories` dan `customers`.
+- Runtime error boundary khusus panel offline dev.
+- Compatibility export alias untuk mencegah named export mismatch pada route Utilities.
+- Collection filter pada preview/manual sync agar admin bisa membatasi sync pilot.
+
+Still forbidden without explicit approval:
+- Mengganti halaman aktif `Categories.jsx` atau `Customers.jsx` menjadi offline-first.
+- Mengaktifkan supplier Firebase sync.
+- Mengaktifkan auto-sync.
+- Mengubah schema Firestore, route/menu/role guard, stock/transaksi/production/payroll/HPP, reset destructive flow, atau business code counter.
+
+Customer offline rule:
+- Pilot customer local wajib memakai document ID/kode `CUS-DDMMYYYY-001`.
+- Data customer dengan kode local/random tidak boleh masuk manual sync Firebase.
+
+## Batch 14 contract addition — Categories/Customers runtime pilot
+
+Runtime migration may start only from low-risk master data:
+1. `categories`
+2. `customers`
+
+Rules:
+- Repository mode must be resolved before page read/write.
+- Page default must remain `firebase_primary`.
+- `offline_local` writes must enqueue local sync operations.
+- Customer local code must be deterministic enough for single-device pilot and must follow `CUS-DDMMYYYY-001`.
+- Customer code field remains disabled/read-only in UI.
+- Local delete remains tombstone until conflict/sync policy is finalized.
+- No supplier runtime write migration before supplier flow is extracted from `SupplierPurchases`.
+- No stock, purchase, sales, return, finance, production, payroll, HPP, reset destructive, or audit-log migration in this batch.
+
+## Batch 14–16 Contract Addendum
+
+- Runtime page aktif kedua yang boleh memakai repository boundary adalah `Customers.jsx`.
+- `customersRepository.generateCustomerCode()` wajib tersedia agar UI tidak perlu tahu adapter Firebase/Dexie yang aktif.
+- Dexie customer adapter wajib menolak kode di luar format `CUS-DDMMYYYY-001`, menolak duplicate local code, dan menjaga kode immutable saat edit.
+- Sales belum menjadi offline transaction runtime; Sales wajib membaca customer dari `firebase_primary` sampai stock/income/inventory-log offline contract disetujui.
+- Customer local-only tidak boleh dipakai untuk membuat transaksi Sales Firebase karena bisa membuat `customerId` mengarah ke dokumen yang belum ada di Firebase.
+- Setiap perluasan offline ke transaksi wajib punya kontrak terpisah untuk stock mutation, inventory log, income/expense, conflict, dan rollback/idempotency.
+

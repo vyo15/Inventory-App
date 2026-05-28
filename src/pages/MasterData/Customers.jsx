@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Table,
   Button,
@@ -7,86 +7,79 @@ import {
   Space,
   Popconfirm,
   message,
+  Tag,
 } from "antd";
 import { PlusOutlined, EditOutlined } from "@ant-design/icons";
 import {
   createCustomer,
   deleteCustomer,
   generateCustomerCode,
-  getCustomers,
+  listCustomers,
   updateCustomer,
-} from "../../services/MasterData/customersService";
+} from "../../data/repositories/customersRepository";
+import {
+  getRepositoryModeStatus,
+} from "../../data/repositories/repositoryModeService";
+import { REPOSITORY_MODES } from "../../data/repositories/repositoryMode";
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+
+const FIREBASE_FALLBACK_OPTIONS = { mode: REPOSITORY_MODES.FIREBASE_PRIMARY };
 
 const resolveCustomerDisplayCode = (record = {}) =>
   record.code || record.customerCode || "Perlu repair kode";
 
 const resolveCustomerFormCode = (record = {}) => record.code || record.customerCode || "";
 
+const getRepositoryModeTagColor = (mode) => {
+  if (mode === REPOSITORY_MODES.OFFLINE_LOCAL) return "orange";
+  if (mode === REPOSITORY_MODES.HYBRID_SYNC) return "blue";
+  return "green";
+};
+
 const Customers = () => {
-  // =========================
-  // SECTION: State halaman customer
-  // Fungsi:
-  // - menyimpan data tabel, loading, modal, mode edit, dan form
-  // Hubungan flow:
-  // - data dari halaman ini menjadi referensi dropdown customer di Sales
-  // Status:
-  // - aktif dipakai melalui route /customers
-  // =========================
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState(null);
   const [customerCodeLoading, setCustomerCodeLoading] = useState(false);
+  const [repositoryMode, setRepositoryMode] = useState(REPOSITORY_MODES.FIREBASE_PRIMARY);
   const [form] = Form.useForm();
 
-  // =========================
-  // SECTION: Fetch customer final
-  // Fungsi:
-  // - membaca semua customer lewat customersService sebagai satu pintu data
-  // Hubungan flow:
-  // - Master Customer dan Sales memakai helper yang sama agar tidak ada source of truth ganda
-  // Status:
-  // - aktif/final
-  // - collection `Customers` uppercase adalah legacy/data uji dan tidak lagi dibaca
-  // =========================
-  const fetchCustomers = async () => {
+  const resolveCustomerRepositoryOptions = useCallback(async () => {
+    try {
+      const modeStatus = await getRepositoryModeStatus();
+      setRepositoryMode(modeStatus.mode);
+      return { mode: modeStatus.mode };
+    } catch (error) {
+      // GUARD: kegagalan IndexedDB/dev-mode tidak boleh membuat halaman Customer blank.
+      console.error("Gagal membaca repository mode customer:", error);
+      setRepositoryMode(REPOSITORY_MODES.FIREBASE_PRIMARY);
+      return FIREBASE_FALLBACK_OPTIONS;
+    }
+  }, []);
+
+  const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getCustomers();
+      const repositoryOptions = await resolveCustomerRepositoryOptions();
+      const data = await listCustomers(repositoryOptions);
       setCustomers(data);
     } catch (error) {
       console.error("Gagal ambil data customer:", error);
       message.error("Gagal mengambil data customer.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }, [resolveCustomerRepositoryOptions]);
 
   useEffect(() => {
     fetchCustomers();
-  }, []);
+  }, [fetchCustomers]);
 
-  /* =====================================================
-      SECTION: Prepare create customer form — AKTIF / GUARDED
-      Fungsi:
-      - Membuka modal tambah Customer dan langsung mengisi kode otomatis CUS-DDMMYYYY-001.
-
-      Dipakai oleh:
-      - Tombol Tambah Customer di halaman Master Data / Customer.
-
-      Alasan perubahan:
-      - Kode Customer tidak boleh lagi diinput manual atau dibuat dari nama customer.
-
-      Catatan cleanup:
-      - Belum ada.
-
-      Risiko:
-      - Jika preview kode dihapus, user bisa menyimpan tanpa referensi audit yang terlihat sejak awal form.
-  ===================================================== */
   const prepareCreateCustomerForm = async () => {
     setIsEditing(false);
     setCurrentId(null);
@@ -95,7 +88,8 @@ const Customers = () => {
     setCustomerCodeLoading(true);
 
     try {
-      const generatedCode = await generateCustomerCode();
+      const repositoryOptions = await resolveCustomerRepositoryOptions();
+      const generatedCode = await generateCustomerCode({}, null, repositoryOptions);
       form.setFieldsValue({ code: generatedCode });
     } catch (error) {
       console.error("Gagal membuat kode customer otomatis:", error);
@@ -105,23 +99,24 @@ const Customers = () => {
     }
   };
 
-  // =========================
-  // SECTION: Tambah atau update customer
-  // Fungsi:
-  // - menyimpan customer baru atau perubahan customer ke collection final yang sama
-  // Hubungan flow:
-  // - memastikan customer yang dibuat di master langsung bisa dibaca Sales
-  // Status:
-  // - aktif/final
-  // =========================
   const handleAddOrEditCustomer = async (values) => {
     try {
+      const repositoryOptions = await resolveCustomerRepositoryOptions();
+
       if (isEditing && currentId) {
-        await updateCustomer(currentId, values);
-        message.success("Customer berhasil diubah!");
+        await updateCustomer(currentId, values, repositoryOptions);
+        message.success(
+          repositoryOptions.mode === REPOSITORY_MODES.OFFLINE_LOCAL
+            ? "Customer offline berhasil diubah dan masuk antrean sync."
+            : "Customer berhasil diubah!"
+        );
       } else {
-        await createCustomer(values);
-        message.success("Customer berhasil ditambahkan!");
+        await createCustomer(values, repositoryOptions);
+        message.success(
+          repositoryOptions.mode === REPOSITORY_MODES.OFFLINE_LOCAL
+            ? "Customer offline berhasil ditambahkan dan masuk antrean sync."
+            : "Customer berhasil ditambahkan!"
+        );
       }
       form.resetFields();
       setIsModalVisible(false);
@@ -140,39 +135,26 @@ const Customers = () => {
         message.error(Object.values(error.errors)[0] || "Data customer belum valid.");
         return;
       }
-      message.error("Gagal menyimpan customer.");
+      message.error(error?.message || "Gagal menyimpan customer.");
     }
   };
 
-  // =========================
-  // SECTION: Hapus customer
-  // Fungsi:
-  // - menghapus customer lewat customersService dari collection final `customers`
-  // Hubungan flow:
-  // - tidak menyentuh sales lama; sale tetap menyimpan snapshot customerName agar histori tidak rusak
-  // Status:
-  // - aktif dipakai
-  // =========================
   const handleDelete = async (id) => {
     try {
-      await deleteCustomer(id);
-      message.success("Customer dihapus");
+      const repositoryOptions = await resolveCustomerRepositoryOptions();
+      await deleteCustomer(id, repositoryOptions);
+      message.success(
+        repositoryOptions.mode === REPOSITORY_MODES.OFFLINE_LOCAL
+          ? "Customer offline ditandai hapus dan masuk antrean sync."
+          : "Customer dihapus"
+      );
       fetchCustomers();
     } catch (error) {
       console.error("Gagal hapus customer:", error);
-      message.error("Gagal menghapus customer");
+      message.error(error?.message || "Gagal menghapus customer");
     }
   };
 
-  // =========================
-  // SECTION: Masuk mode edit
-  // Fungsi:
-  // - mengisi form dengan data customer yang dipilih
-  // Hubungan flow:
-  // - hanya mengubah master customer, tidak mengubah snapshot customerName pada transaksi lama
-  // Status:
-  // - aktif dipakai
-  // =========================
   const handleEdit = (record) => {
     setIsEditing(true);
     setIsModalVisible(true);
@@ -186,15 +168,6 @@ const Customers = () => {
     });
   };
 
-  // =========================
-  // SECTION: Kolom tabel customer
-  // Fungsi:
-  // - menampilkan data master customer dan aksi edit/hapus
-  // Hubungan flow:
-  // - customer adalah master referensi untuk Sales, bukan transaksi kas/stok
-  // Status:
-  // - aktif dipakai
-  // =========================
   const columns = [
     { title: "Kode", dataIndex: "code", key: "code", render: (_, record) => resolveCustomerDisplayCode(record) },
     { title: "Nama Customer", dataIndex: "name", key: "name" },
@@ -217,7 +190,16 @@ const Customers = () => {
             Edit
           </Button>
           <Popconfirm
-            title="Yakin hapus customer ini?"
+            title={
+              repositoryMode === REPOSITORY_MODES.OFFLINE_LOCAL
+                ? "Tandai hapus customer offline ini?"
+                : "Yakin hapus customer ini?"
+            }
+            description={
+              repositoryMode === REPOSITORY_MODES.OFFLINE_LOCAL
+                ? "Data local akan menjadi tombstone dan masuk antrean sync."
+                : undefined
+            }
             onConfirm={() => handleDelete(record.id)}
             okText="Ya"
             cancelText="Batal"
@@ -250,6 +232,7 @@ const Customers = () => {
       <PageSection
         title="Daftar Customer"
         subtitle="Kontak dan alamat."
+        extra={<Tag color={getRepositoryModeTagColor(repositoryMode)}>DB: {repositoryMode}</Tag>}
       >
         <DataRefreshIndicator loading={loading} dataSource={customers} />
         <Table
@@ -262,23 +245,6 @@ const Customers = () => {
         />
       </PageSection>
 
-      {/* =====================================================
-          SECTION: Customer Form Modal — AKTIF
-          Fungsi:
-          - Menampilkan form customer yang ringkas untuk kontak, alamat, dan catatan.
-
-          Dipakai oleh:
-          - Halaman Master Data / Customer saat tambah atau edit data.
-
-          Alasan perubahan:
-          - Copy form diringkas tanpa mengubah relasi customer ke Sales.
-
-          Catatan cleanup:
-          - Belum ada.
-
-          Risiko:
-          - Jangan ubah payload customer, customersService, validation, sales linkage, atau handler simpan dari section presentasi ini.
-      ===================================================== */}
       <PageFormModal
         title={isEditing ? "Edit Customer" : "Tambah Customer"}
         open={isModalVisible}
@@ -295,23 +261,6 @@ const Customers = () => {
         onFinish={handleAddOrEditCustomer}
         confirmLoading={customerCodeLoading}
       >
-        {/* =====================================================
-            SECTION: Customer code disabled/read-only field — AKTIF / GUARDED
-            Fungsi:
-            - Menampilkan kode Customer otomatis sebagai referensi audit yang tidak bisa diedit user.
-
-            Dipakai oleh:
-            - Modal tambah/edit Customer.
-
-            Alasan perubahan:
-            - Kode Customer harus dikunci agar tidak berubah saat nama/kontak berubah.
-
-            Catatan cleanup:
-            - Belum ada.
-
-            Risiko:
-            - Membuka field ini untuk edit manual dapat membuat Sales/customer reference tidak konsisten.
-        ===================================================== */}
         <Form.Item
           name="code"
           label="Kode Customer"

@@ -1198,9 +1198,9 @@ Guard:
 - Semua area guarded tetap harus melalui service existing: stock posting, purchase expense, sales income, return stock-only rule, production HPP/payroll, reset destructive, inventory log, route/menu/role guard, and Firestore rules/index deployment.
 
 
-## Offline Local DB contract integration — 2026-05
+## Offline Local DB manual sync integration — 2026-05
 
-Status: **FOUNDATION + CONTRACT ONLY / FIREBASE PRIMARY MASIH AKTIF**.
+Status: **FOUNDATION + REPOSITORY + MANUAL SYNC PILOT / FIREBASE PRIMARY MASIH AKTIF**.
 
 Integrasi target jangka panjang:
 
@@ -1212,117 +1212,112 @@ React UI
 -> Firebase mirror/backup
 ```
 
-Integrasi source Batch 1/2/3:
-- `src/data/local/localDbSchema.js` menyimpan nama DB, versi schema, table foundation, dan allowlist backup.
+Integrasi source Batch 1–7:
+- `src/data/local/localDbSchema.js` menyimpan nama DB, versi schema, table foundation, mode, sync status, operation, dan allowlist backup.
 - `src/data/local/imsLocalDb.js` membuat singleton Dexie untuk `ims_bunga_flanel_offline`.
 - `src/data/local/localDbMeta.js` menyimpan metadata foundation, mode, dan timestamp backup/restore.
 - `src/data/local/localDbBackupValidator.js` memvalidasi payload backup sebelum restore.
 - `src/data/local/localDbBackupService.js` membuat export/preview/restore foundation backup.
+- `src/data/repositories/*Repository.js` menjadi boundary pilot untuk categories/customers/suppliers.
+- `src/data/repositories/repositoryModeService.js` menyimpan guarded dev mode untuk repository pilot.
+- `src/data/sync/syncQueueService.js` menyimpan queue lokal untuk master data pilot.
+- `src/data/sync/syncConflictService.js` menyimpan konflik sync lokal.
+- `src/data/sync/firebaseMasterDataSyncService.js` menyediakan manual push sync ke Firebase untuk `categories` dan `customers`, serta menulis audit lokal `module = local_db_sync`.
 - `docs/10_OFFLINE_DATABASE_CONTRACT.md` menjadi peta resmi migrasi offline-first.
 
 Boundary:
 - Page/service aktif belum boleh langsung bergantung ke Dexie untuk transaksi utama.
-- Firebase service existing tetap aktif sampai repository boundary dibuat.
-- `sync_queue` masih local storage contract, belum integrasi Firebase Sync.
+- Firebase service existing tetap aktif sampai repository boundary dibuat per page.
+- Manual Firebase sync belum otomatis dan belum UI user-facing.
+- Supplier Firebase sync masih diblokir sampai write flow supplier diaudit.
 - Backup/restore foundation tidak boleh menjadi reset destructive untuk data bisnis utama.
-- Migrasi berikutnya wajib melalui repository pilot untuk `categories`, `customers`, dan `suppliers` sebelum masuk stock/purchase/sales/production.
+- Migrasi berikutnya wajib membuat guarded preview/dev panel atau service test sebelum masuk UI pilot master data.
 
 
-## Repository Pilot integration — 2026-05 Batch 4
+## Offline Sync Dev Panel dan Conflict Resolver integration — 2026-05
 
-Status: **PILOT / FIREBASE PRIMARY DEFAULT**.
+Status: **DEV PANEL + CONFLICT RESOLVER / FIREBASE PRIMARY MASIH AKTIF**.
 
-Boundary baru:
-```text
-Repository
--> Firebase adapter   (default)
--> Dexie adapter      (explicit offline_local only)
-```
+Integrasi Batch 8–9:
+- `src/pages/Utilities/components/OfflineSyncDevPanel.jsx` menampilkan guarded preview untuk local DB, repository mode, sync queue, manual sync, dan conflict resolver.
+- `src/pages/Utilities/ResetMaintenanceData.jsx` hanya menambahkan panel dev guarded; flow reset destructive existing tidak diubah.
+- `src/data/sync/syncConflictService.js` menyimpan, membaca, menghitung summary, dan menandai resolve conflict lokal.
+- `src/data/sync/syncConflictResolutionService.js` menjalankan resolver guarded untuk `categories/customers`.
+- `src/data/sync/syncQueueService.js` menyediakan read helper queue by ID untuk resolver.
 
-Files:
-- `src/data/repositories/repositoryMode.js`
-- `src/data/repositories/categoriesRepository.js`
-- `src/data/repositories/customersRepository.js`
-- `src/data/repositories/suppliersRepository.js`
-- `src/data/adapters/firebase/*`
-- `src/data/adapters/dexie/*`
+Boundary:
+- Resolver bukan auto-sync.
+- Resolver tidak boleh dipakai untuk supplier sebelum write flow supplier diekstrak.
+- Resolver tidak boleh dipakai untuk stock/transaksi/production/payroll/HPP.
+- `local_wins` adalah aksi overwrite/merge Firebase yang wajib confirmation dan audit lokal.
+- `remote_wins` hanya menyesuaikan local DB dengan Firebase.
+
+## Offline Master Data Pilot Panel integration — Batch 11/12 — 2026-05
+
+Status: **DEV PANEL ONLY / LOCAL DB PILOT / NO RUNTIME MIGRATION**.
 
 Integrasi:
-- `categoriesRepository` menyediakan boundary untuk kategori, tetapi page kategori belum dimigrasi.
-- `customersRepository` mode Firebase menggunakan `customersService` agar rule kode customer tetap terjaga.
-- `suppliersRepository` mode Firebase read-only untuk write; create/update/delete supplier belum dipindah dari `SupplierPurchases.jsx`.
-- Batch berikutnya boleh mulai memilih satu page pilot kecil, tetapi harus audit file aktual lagi dan tidak boleh menyentuh stock/transaksi/production/payroll.
+- `src/pages/Utilities/components/OfflineDevPanelErrorBoundary.jsx` membungkus panel offline agar error runtime tidak membuat route reset blank.
+- `src/pages/Utilities/components/OfflineMasterDataPilotPanel.jsx` memakai repository pilot untuk operasi local `categories/customers`.
+- `src/pages/Utilities/ResetMaintenanceData.jsx` menampilkan Offline Sync Dev Panel dan Offline Master Data Pilot di dalam error boundary.
+- `src/data/sync/syncConflictService.js` menyediakan alias `createSyncConflict` untuk compatibility.
+- `src/data/sync/firebaseMasterDataSyncService.js` menyediakan alias confirmation dan filter collection untuk preview/sync manual.
 
-
-## Offline Sync Queue pilot integration — 2026-05
-
-Status: **LOCAL QUEUE ONLY / BELUM FIREBASE PUSH-PULL**.
-
-Integrasi Batch 6:
-- `src/data/sync/syncQueueService.js` mengelola queue lokal untuk collection pilot.
-- `src/data/local/localDbSchema.js` menyimpan constant sync status, operation, dan collection allowlist.
-- `src/data/adapters/dexie/dexieMasterDataAdapterFactory.js` mencatat queue saat create/update/delete lokal pilot.
-- `src/data/repositories/repositoryModeService.js` menyediakan dev guard untuk mode repository.
-
-Boundary:
-- Queue hanya local Dexie; belum ada Firebase sync worker.
-- Collection allowlist hanya `categories`, `customers`, `suppliers`.
-- `hybrid_sync` masih diblokir.
-- Page aktif belum switch ke offline repository.
-- Batch berikutnya baru boleh membuat manual Firebase sync untuk master data pilot, bukan auto sync dan bukan transaksi.
-
-
-## Offline Manual Sync Dev Panel integration — 2026-05
-
-Status: **DEV PANEL / MANUAL ONLY**.
-
-Integrasi Batch 8:
-
+Flow pilot:
 ```text
 Testing & Reset Center
--> OfflineSyncDevPanel
--> repositoryModeService
--> syncQueueService
--> firebaseMasterDataSyncService
--> syncConflictService
--> Dexie local DB
--> Firebase categories/customers only
+-> Offline Master Data Pilot Panel
+-> categoriesRepository/customersRepository mode offline_local
+-> Dexie adapter
+-> IndexedDB + sync_queue pending
+-> Offline Sync Dev Panel
+-> manual Firebase sync guarded
 ```
 
 Boundary:
-- Panel berada di existing `ResetMaintenanceData.jsx`, tidak menambah route/menu.
-- Panel hanya preview/manual action; tidak ada background sync.
-- `firebaseMasterDataSyncService` hanya allowlist categories/customers.
-- `syncConflictService` menyimpan konflik local ke `sync_conflicts`.
-- Supplier tetap blocked sampai supplier repository write flow diaudit.
-- Delete Firebase tetap blocked dari panel Batch 8.
+- Tidak ada auto-sync.
+- Tidak ada runtime switch halaman master data aktif.
+- Tidak ada supplier write/sync Firebase.
+- Tidak ada perubahan route/menu/role guard.
 
+## Batch 14 runtime pilot integration — 2026-05
 
-## Offline Conflict Resolver + Master Data Pilot integration — 2026-05 Batch 10
-
-Status: **DEV PANEL / MANUAL ONLY / NON-AUTO SYNC**.
-
-Integrasi:
+Active pilot boundary:
 
 ```text
-Testing & Reset Center
--> OfflineSyncDevPanel
-   -> firebaseMasterDataSyncService
-   -> syncConflictService
-   -> syncConflictResolutionService
-   -> syncQueueService
-   -> Dexie local DB
-   -> Firebase categories/customers only
-
-Testing & Reset Center
--> OfflineMasterDataPilotPanel
-   -> categoriesRepository/customersRepository
-   -> Dexie adapters via mode offline_local
-   -> syncQueueService
+Categories.jsx / Customers.jsx
+-> categoriesRepository / customersRepository
+-> firebase adapter when mode = firebase_primary
+-> dexie adapter when mode = offline_local
+-> sync_queue for local create/update/delete
+-> manual Firebase sync only after confirmation
 ```
 
-Boundary:
-- `firebaseMasterDataSyncService` memiliki re-export compatibility `createSyncConflict` untuk mencegah named export mismatch dari patch lama.
-- `syncConflictResolutionService` hanya master data pilot categories/customers.
-- `OfflineMasterDataPilotPanel` hanya dev utility; tidak mengganti page aktif Master Data.
-- Tidak ada background sync, route baru, menu baru, atau role guard baru.
+Important guard:
+- Firebase remains default runtime.
+- `offline_local` is a development/admin pilot mode, not a production-wide switch.
+- Customer code generation is mode-aware:
+  - Firebase mode delegates to `customersService` and existing business code counter.
+  - Offline mode scans local IndexedDB customer records and generates `CUS-DDMMYYYY-001`.
+- Supplier, stock, transaction, production, payroll, and HPP modules are still intentionally outside the offline runtime pilot.
+
+## Batch 14–16 Integration Map — Customers Pilot and Sales Customer Boundary
+
+```text
+Customers.jsx
+-> customersRepository
+-> firebaseCustomersAdapter when firebase_primary
+-> dexieCustomersAdapter when offline_local
+-> sync_queue for offline create/update/tombstone delete
+
+Sales.jsx
+-> salesCustomerReferenceService
+-> customersRepository({ mode: firebase_primary })
+-> createSaleTransaction() remains Firebase transaction
+```
+
+Guard:
+- `Sales.jsx` tidak membaca customer `offline_local` karena transaksi Sales masih menulis Firebase, stock mutation, inventory log, dan income.
+- `customerCodeReference.js` menjadi helper bersama untuk menjaga format `CUS-DDMMYYYY-001` konsisten antara Firebase service, Dexie adapter, dan panel offline.
+- Tidak ada auto-sync dan tidak ada perubahan route/menu/role guard.
+

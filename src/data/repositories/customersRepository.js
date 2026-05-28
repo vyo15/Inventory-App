@@ -21,6 +21,9 @@ export const listCustomers = (options = {}) =>
 export const getCustomerById = (customerId, options = {}) =>
   getCustomersAdapter(options).getCustomerById(customerId, options);
 
+export const generateCustomerCode = (values = {}, options = {}) =>
+  getCustomersAdapter(options).generateCustomerCode(values, options);
+
 export const createCustomer = (values = {}, options = {}) =>
   getCustomersAdapter(options).createCustomer(values, options);
 
