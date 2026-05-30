@@ -12,18 +12,16 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
+  CUSTOMER_CODE_PREFIX,
+  isValidCustomerCodeFormat,
+  normalizeCustomerCode,
+} from "../../utils/references/customerCodeReference";
+import {
   generateDailySequenceCode,
   getDailyBusinessCodeSequence,
   isBusinessCodeExists,
   prepareDailySequenceCodeInTransaction,
 } from "../../utils/references/businessCodeGenerator";
-import {
-  CUSTOMER_CODE_PREFIX,
-  isValidCustomerCodeFormat,
-  normalizeCustomerCode,
-} from "../../utils/references/customerCodeReference";
-
-export { CUSTOMER_CODE_PREFIX, isValidCustomerCodeFormat, normalizeCustomerCode };
 
 // =========================
 // SECTION: Source of truth customer final

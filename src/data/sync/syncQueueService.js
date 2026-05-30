@@ -105,14 +105,6 @@ export const listPendingSyncQueueItems = (options = {}) =>
     status: LOCAL_SYNC_STATUSES.PENDING,
   });
 
-
-export const getSyncQueueItemById = async (queueId) => {
-  if (!queueId) return null;
-
-  const db = getImsLocalDb();
-  return db.table(LOCAL_DB_TABLES.SYNC_QUEUE).get(queueId);
-};
-
 export const getSyncQueueSummary = async () => {
   const rows = await listSyncQueueItems();
   const summary = {
@@ -179,4 +171,11 @@ export const removeSyncQueueItem = async (queueId) => {
   const db = getImsLocalDb();
   await db.table(LOCAL_DB_TABLES.SYNC_QUEUE).delete(queueId);
   return { id: queueId, deleted: true };
+};
+
+
+export const getSyncQueueItemById = async (queueId) => {
+  if (!queueId) return null;
+  const db = getImsLocalDb();
+  return db.table(LOCAL_DB_TABLES.SYNC_QUEUE).get(queueId);
 };

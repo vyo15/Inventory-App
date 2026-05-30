@@ -1,15 +1,19 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Table,
   Button,
   Form,
   Input,
-  Space,
   Popconfirm,
-  message,
+  Space,
+  Table,
   Tag,
+  message,
 } from "antd";
-import { PlusOutlined, EditOutlined } from "@ant-design/icons";
+import { EditOutlined, PlusOutlined } from "@ant-design/icons";
+import PageFormModal from "../../components/Layout/Forms/PageFormModal";
+import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import {
   createCustomer,
   deleteCustomer,
@@ -17,56 +21,31 @@ import {
   listCustomers,
   updateCustomer,
 } from "../../data/repositories/customersRepository";
-import {
-  getRepositoryModeStatus,
-} from "../../data/repositories/repositoryModeService";
 import { REPOSITORY_MODES } from "../../data/repositories/repositoryMode";
-import PageFormModal from "../../components/Layout/Forms/PageFormModal";
-import PageHeader from "../../components/Layout/Page/PageHeader";
-import PageSection from "../../components/Layout/Page/PageSection";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
-
-const FIREBASE_FALLBACK_OPTIONS = { mode: REPOSITORY_MODES.FIREBASE_PRIMARY };
-
-const resolveCustomerDisplayCode = (record = {}) =>
-  record.code || record.customerCode || "Perlu repair kode";
-
-const resolveCustomerFormCode = (record = {}) => record.code || record.customerCode || "";
-
-const getRepositoryModeTagColor = (mode) => {
-  if (mode === REPOSITORY_MODES.OFFLINE_LOCAL) return "orange";
-  if (mode === REPOSITORY_MODES.HYBRID_SYNC) return "blue";
-  return "green";
-};
+import { getRepositoryModeStatus } from "../../data/repositories/repositoryModeService";
+import {
+  resolveCustomerDisplayCode,
+  resolveCustomerFormCode,
+} from "../../utils/references/customerCodeReference";
 
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
+  const [repositoryMode, setRepositoryMode] = useState(REPOSITORY_MODES.FIREBASE_PRIMARY);
   const [loading, setLoading] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState(null);
   const [customerCodeLoading, setCustomerCodeLoading] = useState(false);
-  const [repositoryMode, setRepositoryMode] = useState(REPOSITORY_MODES.FIREBASE_PRIMARY);
   const [form] = Form.useForm();
 
-  const resolveCustomerRepositoryOptions = useCallback(async () => {
-    try {
-      const modeStatus = await getRepositoryModeStatus();
-      setRepositoryMode(modeStatus.mode);
-      return { mode: modeStatus.mode };
-    } catch (error) {
-      // GUARD: kegagalan IndexedDB/dev-mode tidak boleh membuat halaman Customer blank.
-      console.error("Gagal membaca repository mode customer:", error);
-      setRepositoryMode(REPOSITORY_MODES.FIREBASE_PRIMARY);
-      return FIREBASE_FALLBACK_OPTIONS;
-    }
-  }, []);
+  const getModeOptions = useCallback((mode = repositoryMode) => ({ mode }), [repositoryMode]);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
-      const repositoryOptions = await resolveCustomerRepositoryOptions();
-      const data = await listCustomers(repositoryOptions);
+      const modeStatus = await getRepositoryModeStatus();
+      setRepositoryMode(modeStatus.mode);
+      const data = await listCustomers(getModeOptions(modeStatus.mode));
       setCustomers(data);
     } catch (error) {
       console.error("Gagal ambil data customer:", error);
@@ -74,7 +53,7 @@ const Customers = () => {
     } finally {
       setLoading(false);
     }
-  }, [resolveCustomerRepositoryOptions]);
+  }, [getModeOptions]);
 
   useEffect(() => {
     fetchCustomers();
@@ -88,12 +67,13 @@ const Customers = () => {
     setCustomerCodeLoading(true);
 
     try {
-      const repositoryOptions = await resolveCustomerRepositoryOptions();
-      const generatedCode = await generateCustomerCode({}, null, repositoryOptions);
-      form.setFieldsValue({ code: generatedCode });
+      const modeStatus = await getRepositoryModeStatus();
+      setRepositoryMode(modeStatus.mode);
+      const generatedCode = await generateCustomerCode({}, getModeOptions(modeStatus.mode));
+      form.setFieldsValue({ code: generatedCode, customerCode: generatedCode });
     } catch (error) {
       console.error("Gagal membuat kode customer otomatis:", error);
-      message.error("Gagal membuat kode customer otomatis.");
+      message.error(error?.message || "Gagal membuat kode customer otomatis.");
     } finally {
       setCustomerCodeLoading(false);
     }
@@ -101,22 +81,12 @@ const Customers = () => {
 
   const handleAddOrEditCustomer = async (values) => {
     try {
-      const repositoryOptions = await resolveCustomerRepositoryOptions();
-
       if (isEditing && currentId) {
-        await updateCustomer(currentId, values, repositoryOptions);
-        message.success(
-          repositoryOptions.mode === REPOSITORY_MODES.OFFLINE_LOCAL
-            ? "Customer offline berhasil diubah dan masuk antrean sync."
-            : "Customer berhasil diubah!"
-        );
+        await updateCustomer(currentId, values, getModeOptions());
+        message.success("Customer berhasil diubah!");
       } else {
-        await createCustomer(values, repositoryOptions);
-        message.success(
-          repositoryOptions.mode === REPOSITORY_MODES.OFFLINE_LOCAL
-            ? "Customer offline berhasil ditambahkan dan masuk antrean sync."
-            : "Customer berhasil ditambahkan!"
-        );
+        await createCustomer(values, getModeOptions());
+        message.success("Customer berhasil ditambahkan!");
       }
       form.resetFields();
       setIsModalVisible(false);
@@ -141,13 +111,8 @@ const Customers = () => {
 
   const handleDelete = async (id) => {
     try {
-      const repositoryOptions = await resolveCustomerRepositoryOptions();
-      await deleteCustomer(id, repositoryOptions);
-      message.success(
-        repositoryOptions.mode === REPOSITORY_MODES.OFFLINE_LOCAL
-          ? "Customer offline ditandai hapus dan masuk antrean sync."
-          : "Customer dihapus"
-      );
+      await deleteCustomer(id, getModeOptions());
+      message.success(repositoryMode === REPOSITORY_MODES.OFFLINE_LOCAL ? "Customer ditandai hapus di local DB" : "Customer dihapus");
       fetchCustomers();
     } catch (error) {
       console.error("Gagal hapus customer:", error);
@@ -161,6 +126,7 @@ const Customers = () => {
     setCurrentId(record.id);
     form.setFieldsValue({
       code: resolveCustomerFormCode(record),
+      customerCode: resolveCustomerFormCode(record),
       name: record.name,
       contact: record.contact,
       address: record.address,
@@ -190,16 +156,7 @@ const Customers = () => {
             Edit
           </Button>
           <Popconfirm
-            title={
-              repositoryMode === REPOSITORY_MODES.OFFLINE_LOCAL
-                ? "Tandai hapus customer offline ini?"
-                : "Yakin hapus customer ini?"
-            }
-            description={
-              repositoryMode === REPOSITORY_MODES.OFFLINE_LOCAL
-                ? "Data local akan menjadi tombstone dan masuk antrean sync."
-                : undefined
-            }
+            title={repositoryMode === REPOSITORY_MODES.OFFLINE_LOCAL ? "Tandai hapus customer di local DB?" : "Yakin hapus customer ini?"}
             onConfirm={() => handleDelete(record.id)}
             okText="Ya"
             cancelText="Batal"
@@ -217,7 +174,8 @@ const Customers = () => {
     <div className="page-container">
       <PageHeader
         title="Customer"
-        subtitle="Master customer Sales."
+        subtitle="Master customer Sales. Default tetap Firebase; offline hanya aktif saat pilot dev diaktifkan."
+        extra={<Tag color={repositoryMode === REPOSITORY_MODES.OFFLINE_LOCAL ? "gold" : "blue"}>DB: {repositoryMode}</Tag>}
         actions={[
           {
             key: "create-customer",
@@ -229,11 +187,7 @@ const Customers = () => {
         ]}
       />
 
-      <PageSection
-        title="Daftar Customer"
-        subtitle="Kontak dan alamat."
-        extra={<Tag color={getRepositoryModeTagColor(repositoryMode)}>DB: {repositoryMode}</Tag>}
-      >
+      <PageSection title="Daftar Customer" subtitle="Kontak dan alamat.">
         <DataRefreshIndicator loading={loading} dataSource={customers} />
         <Table
           className="app-data-table"
@@ -264,31 +218,18 @@ const Customers = () => {
         <Form.Item
           name="code"
           label="Kode Customer"
-          extra={
-            isEditing
-              ? "Kode customer tidak bisa diubah setelah dibuat agar audit tetap konsisten."
-              : "Kode customer dibuat otomatis dengan format CUS-DDMMYYYY-001 dan dikunci untuk audit."
-          }
+          extra={isEditing ? "Kode customer tidak bisa diubah setelah dibuat agar audit tetap konsisten." : "Kode customer dibuat otomatis dengan format CUS-DDMMYYYY-001 dan dikunci untuk audit."}
         >
-          <Input
-            disabled
-            readOnly
-            placeholder={customerCodeLoading ? "Membuat kode otomatis..." : "Kode dibuat otomatis"}
-          />
+          <Input disabled readOnly placeholder={customerCodeLoading ? "Membuat kode otomatis..." : "Kode dibuat otomatis"} />
         </Form.Item>
-        <Form.Item
-          name="name"
-          label="Nama Customer"
-          rules={[{ required: true, message: "Nama wajib diisi" }]}
-        >
+        <Form.Item name="customerCode" hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name="name" label="Nama Customer" rules={[{ required: true, message: "Nama wajib diisi" }]}>
           <Input placeholder="Contoh: Budi Santoso" />
         </Form.Item>
-        <Form.Item
-          name="contact"
-          label="Kontak"
-          rules={[{ required: true, message: "Kontak wajib diisi" }]}
-        >
-          <Input placeholder="Nomor HP / Email" />
+        <Form.Item name="contact" label="Kontak" rules={[{ required: true, message: "Kontak wajib diisi" }]}>
+          <Input placeholder="Nomor HP / kontak" />
         </Form.Item>
         <Form.Item name="address" label="Alamat">
           <Input.TextArea placeholder="Alamat customer" />

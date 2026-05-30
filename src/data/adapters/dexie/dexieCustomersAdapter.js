@@ -1,10 +1,12 @@
+import { getImsLocalDb } from "../../local/imsLocalDb";
 import { LOCAL_DB_TABLES } from "../../local/localDbSchema";
+import { createDexieMasterDataAdapter } from "./dexieMasterDataAdapterFactory";
 import {
   buildCustomerCode,
+  getCustomerCodeSequence,
   isValidCustomerCodeFormat,
   normalizeCustomerCode,
 } from "../../../utils/references/customerCodeReference";
-import { createDexieMasterDataAdapter } from "./dexieMasterDataAdapterFactory";
 
 const adapter = createDexieMasterDataAdapter({
   tableName: LOCAL_DB_TABLES.CUSTOMERS,
@@ -13,12 +15,15 @@ const adapter = createDexieMasterDataAdapter({
 
 const normalizeCustomerPayload = (values = {}) => {
   const normalizedCode = normalizeCustomerCode(values.code || values.customerCode);
-
   return {
     ...values,
-    id: normalizedCode || values.id,
-    code: normalizedCode,
-    customerCode: normalizedCode,
+    ...(normalizedCode
+      ? {
+          id: values.id || normalizedCode,
+          code: normalizedCode,
+          customerCode: normalizedCode,
+        }
+      : {}),
     name: String(values.name || "").trim(),
     contact: String(values.contact || "").trim(),
     address: String(values.address || "").trim(),
@@ -26,108 +31,66 @@ const normalizeCustomerPayload = (values = {}) => {
   };
 };
 
-const throwValidationError = (fieldName, message) => {
-  throw { type: "validation", errors: { [fieldName]: message } };
-};
+const assertValidCustomerPayload = async (payload = {}, editingId = null) => {
+  if (!payload.name) {
+    throw { type: "validation", errors: { name: "Nama customer wajib diisi" } };
+  }
+  if (!payload.contact) {
+    throw { type: "validation", errors: { contact: "Kontak wajib diisi" } };
+  }
+  if (!isValidCustomerCodeFormat(payload.code)) {
+    throw { type: "validation", errors: { code: "Kode customer wajib format CUS-DDMMYYYY-001" } };
+  }
 
-const listAllCustomers = () => adapter.list({ includeDeleted: true });
-
-const assertCustomerCodeAvailable = async (code = "", editingId = null) => {
-  const normalizedCode = normalizeCustomerCode(code);
-  if (!normalizedCode) return;
-
-  const rows = await listAllCustomers();
-  const duplicate = rows.find((customer) => {
-    const candidateCodes = [customer.id, customer.code, customer.customerCode]
-      .map((value) => normalizeCustomerCode(value))
-      .filter(Boolean);
-
-    return candidateCodes.includes(normalizedCode) && customer.id !== editingId;
+  const db = getImsLocalDb();
+  const rows = await db.table(LOCAL_DB_TABLES.CUSTOMERS).toArray();
+  const duplicate = rows.find((row) => {
+    if (row?._deleted) return false;
+    if (editingId && String(row.id) === String(editingId)) return false;
+    return [row.id, row.code, row.customerCode]
+      .map(normalizeCustomerCode)
+      .includes(payload.code);
   });
 
   if (duplicate) {
-    throwValidationError("code", "Kode customer sudah digunakan di offline DB.");
+    throw { type: "validation", errors: { code: "Kode customer sudah digunakan di local DB" } };
   }
-};
-
-export const generateCustomerCode = async (_values = {}, excludeId = null) => {
-  void _values;
-  const todayPrefix = buildCustomerCode({ date: new Date(), sequence: 1 }).slice(0, -3);
-  const rows = await listAllCustomers();
-  const usedSequences = rows
-    .filter((customer) => customer.id !== excludeId)
-    .flatMap((customer) => [customer.id, customer.code, customer.customerCode])
-    .map((value) => normalizeCustomerCode(value))
-    .filter((code) => code.startsWith(todayPrefix))
-    .map((code) => Number(code.split("-").at(-1)))
-    .filter((sequence) => Number.isFinite(sequence) && sequence > 0);
-
-  const nextSequence = usedSequences.length ? Math.max(...usedSequences) + 1 : 1;
-  return buildCustomerCode({ date: new Date(), sequence: nextSequence });
 };
 
 export const listCustomers = adapter.list;
 export const getCustomerById = adapter.getById;
 
+export const generateCustomerCode = async (_values = {}, excludeId = null) => {
+  void _values;
+  const db = getImsLocalDb();
+  const rows = await db.table(LOCAL_DB_TABLES.CUSTOMERS).toArray();
+  const maxSequence = rows.reduce((maxValue, row) => {
+    if (excludeId && String(row.id) === String(excludeId)) return maxValue;
+    const sequence = Math.max(
+      getCustomerCodeSequence(row?.code),
+      getCustomerCodeSequence(row?.customerCode),
+      getCustomerCodeSequence(row?.id),
+    );
+    return Math.max(maxValue, sequence);
+  }, 0);
+
+  return buildCustomerCode({ sequence: maxSequence + 1 });
+};
+
 export const createCustomer = async (values = {}, options = {}) => {
-  const code = normalizeCustomerCode(values.code || values.customerCode) ||
-    await generateCustomerCode(values);
-
-  if (!isValidCustomerCodeFormat(code)) {
-    throwValidationError("code", "Kode customer offline wajib berformat CUS-DDMMYYYY-001.");
-  }
-
-  await assertCustomerCodeAvailable(code, null);
-
-  const payload = normalizeCustomerPayload({ ...values, code, customerCode: code });
-
-  if (!payload.name) {
-    throwValidationError("name", "Nama wajib diisi.");
-  }
-
-  if (!payload.contact) {
-    throwValidationError("contact", "Kontak wajib diisi.");
-  }
-
+  const generatedCode = values.code || values.customerCode || (await generateCustomerCode(values));
+  const payload = normalizeCustomerPayload({ ...values, code: generatedCode, customerCode: generatedCode });
+  await assertValidCustomerPayload(payload, null);
   return adapter.create(payload, options);
 };
 
 export const updateCustomer = async (customerId, values = {}, options = {}) => {
   const existing = await adapter.getById(customerId);
-
-  if (!existing) {
-    throw new Error("Customer offline tidak ditemukan.");
-  }
-
   const immutableCode = normalizeCustomerCode(
-    existing.code || existing.customerCode || existing.id
+    existing?.code || existing?.customerCode || values.code || values.customerCode || customerId,
   );
-  const requestedCode = normalizeCustomerCode(values.code || values.customerCode || immutableCode);
-
-  if (requestedCode && requestedCode !== immutableCode) {
-    throwValidationError("code", "Kode customer tidak boleh diubah setelah dibuat.");
-  }
-
-  if (!isValidCustomerCodeFormat(immutableCode)) {
-    throwValidationError("code", "Kode customer offline existing belum valid.");
-  }
-
-  await assertCustomerCodeAvailable(immutableCode, customerId);
-
-  const payload = normalizeCustomerPayload({
-    ...values,
-    code: immutableCode,
-    customerCode: immutableCode,
-  });
-
-  if (!payload.name) {
-    throwValidationError("name", "Nama wajib diisi.");
-  }
-
-  if (!payload.contact) {
-    throwValidationError("contact", "Kontak wajib diisi.");
-  }
-
+  const payload = normalizeCustomerPayload({ ...values, code: immutableCode, customerCode: immutableCode });
+  await assertValidCustomerPayload(payload, customerId);
   return adapter.update(customerId, payload, options);
 };
 

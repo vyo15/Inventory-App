@@ -1,239 +1,229 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Form, Input, Select, Space, Table, Tag, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Divider,
+  Form,
+  Input,
+  Row,
+  Space,
+  Statistic,
+  Table,
+  Tag,
+  Typography,
+  message,
+} from "antd";
+import { ReloadOutlined, SaveOutlined } from "@ant-design/icons";
 
-import { ensureLocalDbFoundationMeta } from "../../../data/local/localDbMeta";
-import { REPOSITORY_MODES } from "../../../data/repositories/repositoryMode";
 import {
   createCategory,
-  deleteCategory,
   listCategories,
-  updateCategory,
 } from "../../../data/repositories/categoriesRepository";
 import {
   createCustomer,
-  deleteCustomer,
+  generateCustomerCode,
   listCustomers,
-  updateCustomer,
 } from "../../../data/repositories/customersRepository";
-import { isValidCustomerCodeFormat } from "../../../services/MasterData/customersService";
+import { REPOSITORY_MODES } from "../../../data/repositories/repositoryMode";
+import { getRepositoryModeStatus } from "../../../data/repositories/repositoryModeService";
 
-const COLLECTION_OPTIONS = [
-  { label: "Categories", value: "categories" },
-  { label: "Customers", value: "customers" },
-];
-
-const repositoryOptions = { mode: REPOSITORY_MODES.OFFLINE_LOCAL };
-
-const getDisplayName = (record = {}) => record.name || record.customerName || record.id || "-";
+const { Text } = Typography;
 
 const OfflineMasterDataPilotPanel = () => {
-  const [collectionName, setCollectionName] = useState("categories");
-  const [rows, setRows] = useState([]);
-  const [selectedId, setSelectedId] = useState("");
+  const [categoryForm] = Form.useForm();
+  const [customerForm] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [form] = Form.useForm();
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [repositoryMode, setRepositoryMode] = useState(REPOSITORY_MODES.FIREBASE_PRIMARY);
+  const [categories, setCategories] = useState([]);
+  const [customers, setCustomers] = useState([]);
 
-  const isCustomers = collectionName === "customers";
+  const isOfflineMode = repositoryMode === REPOSITORY_MODES.OFFLINE_LOCAL;
+  const modeOptions = useMemo(() => ({ mode: repositoryMode }), [repositoryMode]);
 
-  const loadRows = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (showSuccessMessage = false) => {
     try {
-      await ensureLocalDbFoundationMeta();
-      const result = isCustomers
-        ? await listCustomers(repositoryOptions)
-        : await listCategories(repositoryOptions);
-      setRows(result);
+      setLoading(true);
+      const modeStatus = await getRepositoryModeStatus();
+      const options = { mode: modeStatus.mode };
+      const [categoryRows, customerRows] = await Promise.all([
+        listCategories(options),
+        listCustomers(options),
+      ]);
+      setRepositoryMode(modeStatus.mode);
+      setCategories(categoryRows);
+      setCustomers(customerRows);
+      if (showSuccessMessage) message.success("Data pilot offline dimuat ulang.");
     } catch (error) {
-      console.error("Gagal muat data local pilot:", error);
-      message.error(error?.message || "Gagal muat data local pilot.");
+      console.error(error);
+      message.error(error?.message || "Gagal memuat data pilot offline.");
     } finally {
       setLoading(false);
     }
-  }, [isCustomers]);
+  }, []);
 
   useEffect(() => {
-    loadRows();
-  }, [loadRows]);
+    loadData(false);
+  }, [loadData]);
 
-  const selectedRecord = useMemo(
-    () => rows.find((row) => row.id === selectedId) || null,
-    [rows, selectedId]
-  );
-
-  useEffect(() => {
-    if (!selectedRecord) return;
-
-    form.setFieldsValue({
-      id: selectedRecord.id,
-      name: selectedRecord.name || selectedRecord.customerName || "",
-      phone: selectedRecord.phone || "",
-      description: selectedRecord.description || selectedRecord.notes || "",
-    });
-  }, [form, selectedRecord]);
-
-  const buildPayload = async () => {
-    const values = await form.validateFields();
-    const name = values.name?.trim();
-    const id = values.id?.trim();
-
-    if (!name) {
-      throw new Error("Nama wajib diisi.");
-    }
-
-    if (isCustomers) {
-      if (!id || !isValidCustomerCodeFormat(id)) {
-        throw new Error("Customer local wajib memakai kode valid CUS-DDMMYYYY-001 sebagai ID.");
-      }
-
-      return {
-        id,
-        code: id,
-        customerCode: id,
-        name,
-        customerName: name,
-        phone: values.phone || "",
-        notes: values.description || "",
-      };
-    }
-
-    return {
-      ...(id ? { id } : {}),
-      name,
-      description: values.description || "",
-    };
-  };
-
-  const handleCreate = async () => {
-    setLoading(true);
-    try {
-      const payload = await buildPayload();
-      if (isCustomers) {
-        await createCustomer(payload, repositoryOptions);
-      } else {
-        await createCategory(payload, repositoryOptions);
-      }
-      message.success("Record local dibuat dan masuk sync_queue pending.");
-      form.resetFields();
-      setSelectedId("");
-      await loadRows();
-    } catch (error) {
-      message.error(error?.message || "Gagal membuat record local.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdate = async () => {
-    if (!selectedId) {
-      message.warning("Pilih record local terlebih dahulu.");
+  const handleCreateCategory = async (values) => {
+    if (!isOfflineMode) {
+      message.warning("Aktifkan offline repository pilot dulu jika ingin test write local.");
       return;
     }
 
-    setLoading(true);
     try {
-      const payload = await buildPayload();
-      if (isCustomers) {
-        await updateCustomer(selectedId, payload, repositoryOptions);
-      } else {
-        await updateCategory(selectedId, payload, repositoryOptions);
-      }
-      message.success("Record local diubah dan masuk sync_queue pending.");
-      await loadRows();
+      setSavingCategory(true);
+      await createCategory(values, modeOptions);
+      categoryForm.resetFields();
+      message.success("Kategori local dibuat dan masuk sync_queue.");
+      await loadData(false);
     } catch (error) {
-      message.error(error?.message || "Gagal mengubah record local.");
+      console.error(error);
+      message.error(error?.message || "Gagal membuat kategori local.");
     } finally {
-      setLoading(false);
+      setSavingCategory(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedId) {
-      message.warning("Pilih record local terlebih dahulu.");
+  const prepareCustomerCode = async () => {
+    if (!isOfflineMode) return;
+    try {
+      const code = await generateCustomerCode({}, modeOptions);
+      customerForm.setFieldsValue({ code, customerCode: code });
+    } catch (error) {
+      console.error(error);
+      message.error(error?.message || "Gagal membuat kode customer local.");
+    }
+  };
+
+  const handleCreateCustomer = async (values) => {
+    if (!isOfflineMode) {
+      message.warning("Aktifkan offline repository pilot dulu jika ingin test write local.");
       return;
     }
 
-    setLoading(true);
     try {
-      if (isCustomers) {
-        await deleteCustomer(selectedId, repositoryOptions);
-      } else {
-        await deleteCategory(selectedId, repositoryOptions);
-      }
-      message.success("Record local ditandai tombstone dan masuk sync_queue pending.");
-      form.resetFields();
-      setSelectedId("");
-      await loadRows();
+      setSavingCustomer(true);
+      const code = values.code || (await generateCustomerCode({}, modeOptions));
+      await createCustomer({ ...values, code, customerCode: code }, modeOptions);
+      customerForm.resetFields();
+      message.success("Customer local dibuat dan masuk sync_queue.");
+      await loadData(false);
     } catch (error) {
-      message.error(error?.message || "Gagal tombstone record local.");
+      console.error(error);
+      if (error?.type === "validation" && error.errors) {
+        customerForm.setFields(Object.entries(error.errors).map(([name, errorMessage]) => ({ name, errors: [errorMessage] })));
+        message.error(Object.values(error.errors)[0] || "Data customer belum valid.");
+        return;
+      }
+      message.error(error?.message || "Gagal membuat customer local.");
     } finally {
-      setLoading(false);
+      setSavingCustomer(false);
     }
   };
-
-  const columns = [
-    { title: "ID", dataIndex: "id", key: "id", ellipsis: true },
-    { title: "Nama", key: "name", render: (_, record) => getDisplayName(record), ellipsis: true },
-    {
-      title: "Status",
-      dataIndex: "syncStatus",
-      key: "syncStatus",
-      width: 110,
-      render: (status) => <Tag>{status || "local"}</Tag>,
-    },
-    {
-      title: "Aksi",
-      key: "action",
-      width: 80,
-      render: (_, record) => <Button size="small" onClick={() => setSelectedId(record.id)}>Pilih</Button>,
-    },
-  ];
 
   return (
-    <Card title="Offline Master Data Pilot" size="small">
+    <Card size="small" title="Offline Master Data Pilot" extra={<Tag color="gold">Batch 13–16 Guard</Tag>}>
       <Space direction="vertical" size={14} style={{ width: "100%" }}>
         <Alert
-          type="warning"
+          type={isOfflineMode ? "warning" : "info"}
           showIcon
-          message="Pilot local DB ini bukan halaman master data produksi."
-          description="Gunakan hanya untuk test categories/customers offline. Delete hanya tombstone local. Firebase tidak berubah sebelum manual sync guarded dijalankan."
+          message={isOfflineMode ? "Offline repository pilot aktif" : "Mode saat ini masih Firebase primary"}
+          description="Panel ini hanya untuk test Categories dan Customers. Sales tetap membaca customer dari Firebase-primary. Supplier, product, raw material, stock, purchase, production, payroll, dan HPP tidak ikut runtime pilot ini."
         />
 
         <Space wrap>
-          <Select value={collectionName} options={COLLECTION_OPTIONS} onChange={(value) => { setCollectionName(value); setSelectedId(""); form.resetFields(); }} style={{ width: 180 }} />
-          <Button loading={loading} onClick={loadRows}>Muat Data Local</Button>
-          <Tag>Mode: offline_local explicit</Tag>
+          <Button icon={<ReloadOutlined />} loading={loading} onClick={() => loadData(true)}>
+            Refresh Data Pilot
+          </Button>
+          <Tag color={isOfflineMode ? "gold" : "blue"}>DB: {repositoryMode}</Tag>
         </Space>
 
-        <Form form={form} layout="vertical">
-          <Form.Item label={isCustomers ? "Customer ID / Code" : "ID Kategori"} name="id" extra={isCustomers ? "Wajib format CUS-DDMMYYYY-001." : "Opsional untuk categories. Jika kosong akan dibuat ID local."}>
-            <Input placeholder={isCustomers ? "CUS-27052026-001" : "Kosongkan untuk auto local ID"} />
-          </Form.Item>
-          <Form.Item label="Nama" name="name" rules={[{ required: true, message: "Nama wajib diisi." }]}>
-            <Input placeholder={isCustomers ? "Nama customer" : "Nama kategori"} />
-          </Form.Item>
-          {isCustomers ? (
-            <Form.Item label="No. HP" name="phone">
-              <Input placeholder="Nomor HP customer" />
-            </Form.Item>
-          ) : null}
-          <Form.Item label="Catatan" name="description">
-            <Input.TextArea rows={2} placeholder="Catatan local pilot" />
-          </Form.Item>
-          <Space wrap>
-            <Button type="primary" loading={loading} onClick={handleCreate}>Create Local</Button>
-            <Button loading={loading} disabled={!selectedId} onClick={handleUpdate}>Update Selected</Button>
-            <Button danger loading={loading} disabled={!selectedId} onClick={handleDelete}>Tombstone Selected</Button>
-          </Space>
-        </Form>
+        <Row gutter={[8, 8]}>
+          <Col xs={12} md={6}>
+            <Statistic title="Kategori" value={categories.length} />
+          </Col>
+          <Col xs={12} md={6}>
+            <Statistic title="Customer" value={customers.length} />
+          </Col>
+          <Col xs={24} md={12}>
+            <Text type="secondary">Write local hanya aktif saat mode offline_local. Default aman tetap Firebase-primary.</Text>
+          </Col>
+        </Row>
 
+        <Row gutter={[12, 12]}>
+          <Col xs={24} lg={12}>
+            <Card size="small" title="Quick create kategori local">
+              <Form form={categoryForm} layout="vertical" onFinish={handleCreateCategory} disabled={!isOfflineMode}>
+                <Form.Item name="name" label="Nama Kategori" rules={[{ required: true, message: "Nama kategori wajib diisi" }]}>
+                  <Input placeholder="Contoh: Pilot Kategori Offline" />
+                </Form.Item>
+                <Form.Item name="description" label="Deskripsi">
+                  <Input.TextArea rows={2} placeholder="Catatan test local" />
+                </Form.Item>
+                <Button htmlType="submit" icon={<SaveOutlined />} loading={savingCategory} disabled={!isOfflineMode}>
+                  Simpan Kategori Local
+                </Button>
+              </Form>
+            </Card>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Card size="small" title="Quick create customer local">
+              <Form form={customerForm} layout="vertical" onFinish={handleCreateCustomer} disabled={!isOfflineMode}>
+                <Form.Item name="code" label="Kode Customer">
+                  <Input disabled placeholder="Klik generate kode local" />
+                </Form.Item>
+                <Form.Item name="customerCode" hidden>
+                  <Input />
+                </Form.Item>
+                <Form.Item name="name" label="Nama Customer" rules={[{ required: true, message: "Nama customer wajib diisi" }]}>
+                  <Input placeholder="Contoh: Customer Pilot Offline" />
+                </Form.Item>
+                <Form.Item name="contact" label="Kontak" rules={[{ required: true, message: "Kontak wajib diisi" }]}>
+                  <Input placeholder="0812xxxx" />
+                </Form.Item>
+                <Space wrap>
+                  <Button onClick={prepareCustomerCode} disabled={!isOfflineMode}>
+                    Generate Kode Local
+                  </Button>
+                  <Button htmlType="submit" icon={<SaveOutlined />} loading={savingCustomer} disabled={!isOfflineMode}>
+                    Simpan Customer Local
+                  </Button>
+                </Space>
+              </Form>
+            </Card>
+          </Col>
+        </Row>
+
+        <Divider style={{ margin: "4px 0" }} />
         <Table
+          className="app-data-table"
           size="small"
-          rowKey="id"
-          columns={columns}
-          dataSource={rows}
-          loading={loading}
-          pagination={{ pageSize: 5 }}
-          scroll={{ x: 620 }}
+          rowKey={(row) => `category-${row.id}`}
+          title={() => "Preview kategori pilot"}
+          pagination={{ pageSize: 5, hideOnSinglePage: true }}
+          dataSource={categories}
+          columns={[
+            { title: "Nama", dataIndex: "name", key: "name" },
+            { title: "Sync", dataIndex: "syncStatus", key: "syncStatus", width: 100, render: (value) => <Tag>{value || "remote"}</Tag> },
+          ]}
+        />
+        <Table
+          className="app-data-table"
+          size="small"
+          rowKey={(row) => `customer-${row.id}`}
+          title={() => "Preview customer pilot"}
+          pagination={{ pageSize: 5, hideOnSinglePage: true }}
+          dataSource={customers}
+          columns={[
+            { title: "Kode", dataIndex: "code", key: "code", width: 160 },
+            { title: "Nama", dataIndex: "name", key: "name" },
+            { title: "Sync", dataIndex: "syncStatus", key: "syncStatus", width: 100, render: (value) => <Tag>{value || "remote"}</Tag> },
+          ]}
         />
       </Space>
     </Card>

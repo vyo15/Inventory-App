@@ -1317,3 +1317,51 @@ Tech debt tersisa:
 - Supplier masih belum boleh diaktifkan ke Firebase sync karena masih terkait `SupplierPurchases`, raw material, dan purchase linkage.
 - Perlu batch audit khusus sebelum dropdown Sales, Purchase, atau modul transaksi lain membaca repository offline.
 
+
+## Offline DB Batch 17–20 completion — 2026-05
+
+Status terbaru:
+- Batch 17 dilengkapi dengan `OfflineLocalDbBackupPanel.jsx` di Testing & Reset Center.
+- Restore local DB sekarang punya wrapper guard `restoreLocalDbBackupWithGuard()` dan keyword `RESTORE LOCAL DB BACKUP`.
+- `OfflineSyncDevPanel` diperhalus: tombol guarded action disabled sampai keyword tepat agar tidak terlihat seperti error console besar saat keyword belum lengkap.
+- Batch 18/19 tetap audit/guard supplier. Supplier runtime/sync Firebase belum diaktifkan.
+- Batch 20 tetap contract-only untuk Products/Raw Materials/Semi Finished. Tidak ada runtime migration.
+
+Tech debt tersisa:
+- Offline DB masih pilot untuk categories/customers saja.
+- Banyak service masih import `firebase/firestore`, ini wajar sampai kontrak offline per modul disetujui.
+- Warning AntD React 19 masih perlu batch dependency compatibility terpisah, tidak digabung dengan offline DB batch.
+
+## Batch 21 Note — Offline Database Center UX
+
+Offline DB pilot sekarang memiliki UI utama yang lebih ringkas di Reset Maintenance: `Offline Database Center`. UI ini menggantikan tampilan beberapa panel panjang yang sebelumnya membuat user sulit membedakan mode Firebase, mode Offline, backup, queue, dan conflict.
+
+Kondisi saat ini:
+
+- Categories dan Customers bisa dipakai sebagai pilot offline.
+- Ada pull sync Firebase → Local agar data offline tidak kosong saat mode offline aktif.
+- Ada push sync Local → Firebase untuk queue pending.
+- Supplier/Product/Raw/Semi/Stock/Purchase/Sales transaction/Production/Payroll/HPP tetap guarded dan belum masuk runtime offline.
+
+Tech debt yang masih tersisa:
+
+- Panel legacy `OfflineSyncDevPanel` dan `OfflineMasterDataPilotPanel` masih dipertahankan sebagai compatibility/development component, tetapi tidak menjadi UI utama.
+- Offline flow belum multi-device otomatis; data local tetap per browser/per device.
+- Auto-sync belum diaktifkan.
+
+## Batch 22 Note — Reset Maintenance tabbed workspace UX
+
+Testing & Reset Center sekarang memakai `Reset Maintenance Workspace` berbasis tab agar tampilan reset/maintenance konsisten dengan `Offline Database Center` Batch 21.
+
+Perubahan UX:
+
+- Panel panjang di Reset Maintenance tidak lagi ditampilkan semua berurutan dalam satu scroll panjang.
+- Area dipisah menjadi tab: `Ringkasan`, `Skenario & Audit`, `Repair Aman`, `Reset & Export`, dan `Offline DB`.
+- Warning destructive, keyword confirmation, preview reset, audit log, protected data, dan flow service tidak diubah.
+- `OfflineDatabaseCenter` tetap dibungkus `OfflineDevPanelErrorBoundary` agar error runtime panel offline tidak membuat halaman reset white screen.
+- Cleanup lint kecil dilakukan di `OfflineDatabaseCenter.jsx`: state `queueRows` yang tidak terpakai dihapus karena daftar queue belum menjadi UI utama.
+
+Batasan:
+
+- Perubahan ini hanya menata UX. Tidak ada schema, collection, route/menu/role guard, dependency, flow stok, transaksi, produksi, payroll, HPP, atau reset destructive yang diubah.
+- `ResetSafeRepairPanel` masih menyimpan beberapa tabel repair di dalam tab `Repair Aman`; refactor internal per repair area bisa dibuat batch terpisah jika masih terasa terlalu panjang setelah dipakai.

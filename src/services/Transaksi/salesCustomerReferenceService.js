@@ -1,39 +1,31 @@
-import { listCustomers } from "../../data/repositories/customersRepository";
-import { REPOSITORY_MODES } from "../../data/repositories/repositoryMode";
+import { getCustomers } from "../MasterData/customersService";
 
-export const SALES_CUSTOMER_REPOSITORY_OPTIONS = Object.freeze({
-  mode: REPOSITORY_MODES.FIREBASE_PRIMARY,
+const toSalesCustomerReference = (customer = {}) => ({
+  ...customer,
+  id: customer.id,
+  name: customer.name || "",
+  code: customer.code || customer.customerCode || customer.id || "",
+  customerCode: customer.customerCode || customer.code || customer.id || "",
+  source: "firebase_primary",
 });
 
-const sortSalesCustomers = (customers = []) =>
-  [...customers].sort((first, second) =>
-    String(first?.name || "").localeCompare(String(second?.name || ""), "id", {
-      sensitivity: "base",
-    })
-  );
+/* =====================================================
+SECTION: Sales customer references — AKTIF / GUARDED
+Fungsi:
+- Memaksa dropdown Customer di Sales membaca customer dari Firebase-primary.
 
-export const listSalesCustomerOptions = async () => {
-  const customers = await listCustomers(SALES_CUSTOMER_REPOSITORY_OPTIONS);
-  return sortSalesCustomers(customers).filter((customer) => !customer?._deleted);
+Alasan:
+- Sales transaction write masih Firebase. Customer offline-local yang belum sync tidak boleh dipakai sebagai foreign reference transaksi.
+
+Risiko:
+- Jangan mengganti service ini ke customersRepository runtime mode sebelum Sales transaction, stock, income, dan audit flow punya kontrak offline sendiri.
+===================================================== */
+export const getSalesCustomerReferences = async () => {
+  const customers = await getCustomers();
+  return (customers || []).map(toSalesCustomerReference);
 };
 
-export const resolveSalesCustomerSnapshot = (customers = [], customerId = null) => {
+export const resolveSalesCustomerReference = (customers = [], customerId = "") => {
   if (!customerId) return null;
-
-  const selectedCustomer = customers.find((customer) => customer.id === customerId);
-
-  if (!selectedCustomer) {
-    throw new Error(
-      "Customer yang dipilih tidak ditemukan di sumber Firebase Sales. Muat ulang daftar pelanggan sebelum menyimpan penjualan."
-    );
-  }
-
-  return {
-    id: selectedCustomer.id,
-    code: selectedCustomer.code || selectedCustomer.customerCode || selectedCustomer.id,
-    customerCode: selectedCustomer.customerCode || selectedCustomer.code || selectedCustomer.id,
-    name: selectedCustomer.name || "",
-    contact: selectedCustomer.contact || "",
-    address: selectedCustomer.address || "",
-  };
+  return (customers || []).find((customer) => String(customer.id) === String(customerId)) || null;
 };

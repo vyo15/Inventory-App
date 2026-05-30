@@ -9,6 +9,9 @@ import {
   Row,
   Space,
   Statistic,
+  Tabs,
+  Tag,
+  Typography,
   message,
 } from "antd";
 import { WarningOutlined } from "@ant-design/icons";
@@ -60,13 +63,15 @@ import ResetPreviewPanel from "./components/ResetPreviewPanel";
 import ResetSafeRepairPanel from "./components/ResetSafeRepairPanel";
 import ResetUsageGuidePanel from "./components/ResetUsageGuidePanel";
 import OfflineDevPanelErrorBoundary from "./components/OfflineDevPanelErrorBoundary";
-import OfflineSyncDevPanel from "./components/OfflineSyncDevPanel";
-import OfflineMasterDataPilotPanel from "./components/OfflineMasterDataPilotPanel";
+import OfflineDatabaseCenter from "./components/OfflineDatabaseCenter";
 import ResetDangerZonePanel from "./components/ResetDangerZonePanel";
 import ResetExportPanel from "./components/ResetExportPanel";
 import ResetStatusSummaryCard from "./components/ResetStatusSummaryCard";
 import ResetConfirmModal from "./components/ResetConfirmModal";
 import HppCostConfirmModal from "./components/HppCostConfirmModal";
+import "./ResetMaintenanceData.css";
+
+const { Text, Title } = Typography;
 
 // -----------------------------------------------------------------------------
 // Reset & Maintenance Data Page
@@ -887,6 +892,184 @@ const ResetMaintenanceData = () => {
 
   const hppCostConfirmKeyword = HPP_CONFIRM_KEYWORDS[hppCostConfirmAction] || HPP_CONFIRM_KEYWORDS.reset;
 
+  const resetWorkspaceTabs = [
+    {
+      key: "overview",
+      label: "Ringkasan",
+      children: (
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <ResetStatusSummaryCard
+            actionNote={actionNote}
+            autoBugSummary={autoBugSummary}
+            hppCostBaselineSummary={hppCostBaselineSummary}
+            maintenanceActor={maintenanceActor}
+            onActionNoteChange={setActionNote}
+            preview={preview}
+          />
+          <ResetUsageGuidePanel />
+        </Space>
+      ),
+    },
+    {
+      key: "scenario-audit",
+      label: `Skenario & Audit${autoBugSummary.issueCount ? ` (${autoBugSummary.issueCount})` : ""}`,
+      children: (
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <ResetDangerZonePanel
+            loadingAutoDetect={loadingAutoDetect}
+            onRunAllAudits={handleRunAllAudits}
+            onSelectBaselineReset={(modules) => {
+              setMode("reset_and_restore_baseline");
+              setSelectedModules(modules);
+              setResetIntent("standard");
+            }}
+            loadingPreview={loadingPreview}
+            onOpenFullTestingResetConfirmation={openFullTestingResetConfirmation}
+            onSelectZeroReset={(modules) => {
+              setMode("reset_and_zero_stock");
+              setSelectedModules(modules);
+              setResetIntent("standard");
+            }}
+            loadingHppCostPreview={loadingHppCostPreview}
+            loadingRunHppCostReset={loadingRunHppCostReset}
+            onLoadHppCostPreview={loadHppCostPreview}
+            onOpenHppCostResetAllConfirmation={openHppCostResetAllConfirmation}
+          />
+          <ResetAutoDetectPanel
+            autoBugSummary={autoBugSummary}
+            loadingAutoDetect={loadingAutoDetect}
+            loadingDataQualityAudit={loadingDataQualityAudit}
+            loadingStockAudit={loadingStockAudit}
+            loadingTransactionVariantAudit={loadingTransactionVariantAudit}
+            onRunAllAudits={handleRunAllAudits}
+            onLoadDataQualityAudit={handleLoadDataQualityAudit}
+            onLoadStockAudit={handleLoadStockAudit}
+            onLoadTransactionVariantAudit={handleLoadTransactionVariantAudit}
+            auditOverviewRows={auditOverviewRows}
+            auditIssueRows={auditIssueRows}
+            dataQualityCategoryRows={dataQualityCategoryRows}
+            renderCompactText={renderCompactText}
+          />
+        </Space>
+      ),
+    },
+    {
+      key: "safe-repair",
+      label: "Repair Aman",
+      children: (
+        <ResetSafeRepairPanel
+          loadingStockRepair={loadingStockRepair}
+          onRepairStockAudit={handleRepairStockAudit}
+          loadingHppReconcileAudit={loadingHppReconcileAudit}
+          onLoadHppReconcileAudit={handleLoadHppReconcileAudit}
+          loadingHppReconcileRepair={loadingHppReconcileRepair}
+          onRepairHppReconcileAudit={handleRepairHppReconcileAudit}
+          hppReconcileAudit={hppReconcileAudit}
+          hppReconcileSummary={hppReconcileAudit?.summary || {}}
+          hppReconcileRows={hppReconcileAudit?.rows || []}
+          stockAudit={stockAudit}
+          stockRepairSummary={stockAudit?.summary || {}}
+          loadingLogSchemaRepair={loadingLogSchemaRepair}
+          onRepairLogSchema={handleRepairLogSchema}
+          logSchemaAudit={logSchemaAudit}
+          logSchemaRepairSummary={logSchemaAudit?.summary || {}}
+          loadingMaintenanceRepair={loadingMaintenanceRepair}
+          onRepairProductionMaintenance={handleRepairProductionMaintenance}
+          maintenanceAudit={maintenanceAudit}
+          maintenanceRepairSummary={maintenanceAudit?.summary || {}}
+          loadingPayrollRepair={loadingPayrollRepair}
+          onRepairPayrollAudit={handleRepairPayrollAudit}
+          payrollAudit={payrollAudit}
+          payrollRepairSummary={payrollAudit?.summary || {}}
+          loadingTransactionVariantRepair={loadingTransactionVariantRepair}
+          onRepairTransactionVariantAudit={handleRepairTransactionVariantAudit}
+          transactionVariantAudit={transactionVariantAudit}
+          transactionVariantRepairSummary={transactionVariantAudit?.summary || {}}
+          loadingTransactionSideEffectAudit={loadingTransactionSideEffectAudit}
+          onLoadTransactionSideEffectAudit={handleLoadTransactionSideEffectAudit}
+          loadingTransactionSideEffectRepair={loadingTransactionSideEffectRepair}
+          onOpenTransactionSideEffectRepairConfirm={openTransactionSideEffectRepairConfirmation}
+          transactionSideEffectAudit={transactionSideEffectAudit}
+          transactionSideEffectSummary={transactionSideEffectSummary}
+          transactionSideEffectRows={transactionSideEffectRows}
+          loadingStockReadModelAudit={loadingStockReadModelAudit}
+          onLoadStockReadModelAudit={handleLoadStockReadModelAudit}
+          loadingStockReadModelRepair={loadingStockReadModelRepair}
+          onRepairStockReadModelAudit={handleRepairStockReadModelAudit}
+          loadingStockReadModelRestockBackfill={loadingStockReadModelRestockBackfill}
+          onBackfillStockReadModelRestockMetadata={handleBackfillStockReadModelRestockMetadata}
+          loadingStockReadModelCleanup={loadingStockReadModelCleanup}
+          onCleanupStockReadModelOrphans={handleCleanupStockReadModelOrphans}
+          stockReadModelAudit={stockReadModelAudit}
+          stockReadModelSummary={stockReadModelAudit?.summary || {}}
+          stockReadModelRows={stockReadModelAudit?.rows || []}
+          loadingSync={loadingSync}
+          onSyncStocks={handleSyncStocks}
+          loadingMasterCodeAudit={loadingMasterCodeAudit}
+          onLoadMasterCodeAudit={handleLoadMasterCodeAudit}
+          loadingMasterCodeRepair={loadingMasterCodeRepair}
+          onRepairMasterCodeAudit={handleRepairMasterCodeAudit}
+          masterCodeSummary={masterCodeSummary}
+          masterCodeAudit={masterCodeAudit}
+          masterCodeRows={masterCodeRows}
+          renderCompactText={renderCompactText}
+          renderCompactTag={renderCompactTag}
+        />
+      ),
+    },
+    {
+      key: "reset-export",
+      label: "Reset & Export",
+      children: (
+        <Space direction="vertical" size={16} style={{ width: "100%" }}>
+          <ResetPreviewPanel
+            mode={mode}
+            onModeChange={(value) => { setMode(value); setResetIntent("standard"); }}
+            resetModeLabels={RESET_MODE_LABELS}
+            resetModeOptions={RESET_MODE_OPTIONS}
+            selectedModules={selectedModules}
+            onSelectedModulesChange={(values) => { setSelectedModules(values); setResetIntent("standard"); }}
+            moduleOptions={moduleOptions}
+            preview={preview}
+            previewRows={previewRows}
+            loadingPreview={loadingPreview}
+            onLoadPreview={() => loadPreview(true)}
+            loadingBaseline={loadingBaseline}
+            onSaveBaseline={handleSaveBaseline}
+            onOpenResetConfirmation={openResetConfirmation}
+            resetBlockedReason={resetBlockedReason}
+            renderCompactText={renderCompactText}
+          />
+          <ResetExportPanel
+            loadingTestDataPreview={loadingTestDataPreview}
+            onLoadTestDataPreview={() => loadDevTestDataPreview(true)}
+            loadingDeleteTestData={loadingDeleteTestData}
+            testDataPreview={testDataPreview}
+            onDeleteDevTestData={handleDeleteDevTestData}
+            loadingMasterExportPreview={loadingMasterExportPreview}
+            onLoadMasterExportPreview={handleLoadMasterExportPreview}
+            loadingMasterExport={loadingMasterExport}
+            onDownloadMasterExport={() => handleDownloadMasterExport(true)}
+            onDownloadMasterExportChecklist={handleDownloadMasterExportChecklist}
+            masterExportPreview={masterExportPreview}
+            lastMasterExport={lastMasterExport}
+            testDataRows={testDataRows}
+            renderCompactText={renderCompactText}
+          />
+        </Space>
+      ),
+    },
+    {
+      key: "offline-db",
+      label: "Offline DB",
+      children: (
+        <OfflineDevPanelErrorBoundary>
+          <OfflineDatabaseCenter />
+        </OfflineDevPanelErrorBoundary>
+      ),
+    },
+  ];
+
   /* =====================================================
   SECTION: Reset Maintenance Renderer — GUARDED
   Fungsi:
@@ -920,155 +1103,45 @@ const ResetMaintenanceData = () => {
             description="Halaman ini tidak lagi auto full-scan saat dibuka. Pilih skenario, jalankan audit/preview manual, lalu eksekusi hanya jika scope dan keyword sudah jelas."
           />
 
-          <ResetStatusSummaryCard
-            actionNote={actionNote}
-            autoBugSummary={autoBugSummary}
-            hppCostBaselineSummary={hppCostBaselineSummary}
-            maintenanceActor={maintenanceActor}
-            onActionNoteChange={setActionNote}
-            preview={preview}
-          />
+          <Card
+            size="small"
+            className="reset-maintenance-workspace"
+            title={(
+              <Space size={10}>
+                <span>Reset Maintenance Workspace</span>
+                <Tag color="blue">Tabbed</Tag>
+              </Space>
+            )}
+            extra={(
+              <Space size={8} wrap>
+                <Tag color={autoBugSummary.issueCount ? "orange" : "green"}>Issue: {autoBugSummary.issueCount || 0}</Tag>
+                <Tag color={autoBugSummary.safeRepairCount ? "green" : "default"}>Repair: {autoBugSummary.safeRepairCount || 0}</Tag>
+                <Tag color={preview ? "gold" : "default"}>Preview: {preview ? preview.totalRecords || 0 : "belum"}</Tag>
+              </Space>
+            )}
+          >
+            <Space direction="vertical" size={16} style={{ width: "100%" }}>
+              <div className="reset-maintenance-hero">
+                <div>
+                  <Text type="secondary">Menu maintenance dibuat seperti Offline Database Center</Text>
+                  <Title level={4} style={{ margin: "2px 0 4px" }}>Pilih satu area, review preview, lalu eksekusi guarded</Title>
+                  <Text type="secondary">
+                    Tab ini mengurangi scroll panjang dan memisahkan alur: ringkasan, audit, repair, reset/export, dan offline database.
+                  </Text>
+                </div>
+                <Space direction="vertical" size={4} align="end" className="reset-maintenance-hero-status">
+                  <Tag color="purple">Scope jelas</Tag>
+                  <Text type="secondary">Keyword destructive tetap wajib</Text>
+                </Space>
+              </div>
 
-          <ResetDangerZonePanel
-            loadingAutoDetect={loadingAutoDetect}
-            onRunAllAudits={handleRunAllAudits}
-            onSelectBaselineReset={(modules) => {
-              setMode("reset_and_restore_baseline");
-              setSelectedModules(modules);
-              setResetIntent("standard");
-            }}
-            loadingPreview={loadingPreview}
-            onOpenFullTestingResetConfirmation={openFullTestingResetConfirmation}
-            onSelectZeroReset={(modules) => {
-              setMode("reset_and_zero_stock");
-              setSelectedModules(modules);
-              setResetIntent("standard");
-            }}
-            loadingHppCostPreview={loadingHppCostPreview}
-            loadingRunHppCostReset={loadingRunHppCostReset}
-            onLoadHppCostPreview={loadHppCostPreview}
-            onOpenHppCostResetAllConfirmation={openHppCostResetAllConfirmation}
-          />
-
-          <ResetAutoDetectPanel
-            autoBugSummary={autoBugSummary}
-            loadingAutoDetect={loadingAutoDetect}
-            loadingDataQualityAudit={loadingDataQualityAudit}
-            loadingStockAudit={loadingStockAudit}
-            loadingTransactionVariantAudit={loadingTransactionVariantAudit}
-            onRunAllAudits={handleRunAllAudits}
-            onLoadDataQualityAudit={handleLoadDataQualityAudit}
-            onLoadStockAudit={handleLoadStockAudit}
-            onLoadTransactionVariantAudit={handleLoadTransactionVariantAudit}
-            auditOverviewRows={auditOverviewRows}
-            auditIssueRows={auditIssueRows}
-            dataQualityCategoryRows={dataQualityCategoryRows}
-            renderCompactText={renderCompactText}
-          />
-
-          <ResetSafeRepairPanel
-            loadingStockRepair={loadingStockRepair}
-            onRepairStockAudit={handleRepairStockAudit}
-            loadingHppReconcileAudit={loadingHppReconcileAudit}
-            onLoadHppReconcileAudit={handleLoadHppReconcileAudit}
-            loadingHppReconcileRepair={loadingHppReconcileRepair}
-            onRepairHppReconcileAudit={handleRepairHppReconcileAudit}
-            hppReconcileAudit={hppReconcileAudit}
-            hppReconcileSummary={hppReconcileAudit?.summary || {}}
-            hppReconcileRows={hppReconcileAudit?.rows || []}
-            stockAudit={stockAudit}
-            stockRepairSummary={stockAudit?.summary || {}}
-            loadingLogSchemaRepair={loadingLogSchemaRepair}
-            onRepairLogSchema={handleRepairLogSchema}
-            logSchemaAudit={logSchemaAudit}
-            logSchemaRepairSummary={logSchemaAudit?.summary || {}}
-            loadingMaintenanceRepair={loadingMaintenanceRepair}
-            onRepairProductionMaintenance={handleRepairProductionMaintenance}
-            maintenanceAudit={maintenanceAudit}
-            maintenanceRepairSummary={maintenanceAudit?.summary || {}}
-            loadingPayrollRepair={loadingPayrollRepair}
-            onRepairPayrollAudit={handleRepairPayrollAudit}
-            payrollAudit={payrollAudit}
-            payrollRepairSummary={payrollAudit?.summary || {}}
-            loadingTransactionVariantRepair={loadingTransactionVariantRepair}
-            onRepairTransactionVariantAudit={handleRepairTransactionVariantAudit}
-            transactionVariantAudit={transactionVariantAudit}
-            transactionVariantRepairSummary={transactionVariantAudit?.summary || {}}
-            loadingTransactionSideEffectAudit={loadingTransactionSideEffectAudit}
-            onLoadTransactionSideEffectAudit={handleLoadTransactionSideEffectAudit}
-            loadingTransactionSideEffectRepair={loadingTransactionSideEffectRepair}
-            onOpenTransactionSideEffectRepairConfirm={openTransactionSideEffectRepairConfirmation}
-            transactionSideEffectAudit={transactionSideEffectAudit}
-            transactionSideEffectSummary={transactionSideEffectSummary}
-            transactionSideEffectRows={transactionSideEffectRows}
-            loadingStockReadModelAudit={loadingStockReadModelAudit}
-            onLoadStockReadModelAudit={handleLoadStockReadModelAudit}
-            loadingStockReadModelRepair={loadingStockReadModelRepair}
-            onRepairStockReadModelAudit={handleRepairStockReadModelAudit}
-            loadingStockReadModelRestockBackfill={loadingStockReadModelRestockBackfill}
-            onBackfillStockReadModelRestockMetadata={handleBackfillStockReadModelRestockMetadata}
-            loadingStockReadModelCleanup={loadingStockReadModelCleanup}
-            onCleanupStockReadModelOrphans={handleCleanupStockReadModelOrphans}
-            stockReadModelAudit={stockReadModelAudit}
-            stockReadModelSummary={stockReadModelAudit?.summary || {}}
-            stockReadModelRows={stockReadModelAudit?.rows || []}
-            loadingSync={loadingSync}
-            onSyncStocks={handleSyncStocks}
-            loadingMasterCodeAudit={loadingMasterCodeAudit}
-            onLoadMasterCodeAudit={handleLoadMasterCodeAudit}
-            loadingMasterCodeRepair={loadingMasterCodeRepair}
-            onRepairMasterCodeAudit={handleRepairMasterCodeAudit}
-            masterCodeSummary={masterCodeSummary}
-            masterCodeAudit={masterCodeAudit}
-            masterCodeRows={masterCodeRows}
-            renderCompactText={renderCompactText}
-            renderCompactTag={renderCompactTag}
-          />
-
-          <ResetPreviewPanel
-            mode={mode}
-            onModeChange={(value) => { setMode(value); setResetIntent("standard"); }}
-            resetModeLabels={RESET_MODE_LABELS}
-            resetModeOptions={RESET_MODE_OPTIONS}
-            selectedModules={selectedModules}
-            onSelectedModulesChange={(values) => { setSelectedModules(values); setResetIntent("standard"); }}
-            moduleOptions={moduleOptions}
-            preview={preview}
-            previewRows={previewRows}
-            loadingPreview={loadingPreview}
-            onLoadPreview={() => loadPreview(true)}
-            loadingBaseline={loadingBaseline}
-            onSaveBaseline={handleSaveBaseline}
-            onOpenResetConfirmation={openResetConfirmation}
-            resetBlockedReason={resetBlockedReason}
-            renderCompactText={renderCompactText}
-          />
-
-          <ResetExportPanel
-            loadingTestDataPreview={loadingTestDataPreview}
-            onLoadTestDataPreview={() => loadDevTestDataPreview(true)}
-            loadingDeleteTestData={loadingDeleteTestData}
-            testDataPreview={testDataPreview}
-            onDeleteDevTestData={handleDeleteDevTestData}
-            loadingMasterExportPreview={loadingMasterExportPreview}
-            onLoadMasterExportPreview={handleLoadMasterExportPreview}
-            loadingMasterExport={loadingMasterExport}
-            onDownloadMasterExport={() => handleDownloadMasterExport(true)}
-            onDownloadMasterExportChecklist={handleDownloadMasterExportChecklist}
-            masterExportPreview={masterExportPreview}
-            lastMasterExport={lastMasterExport}
-            testDataRows={testDataRows}
-            renderCompactText={renderCompactText}
-          />
-          <OfflineDevPanelErrorBoundary>
-            <OfflineSyncDevPanel />
-          </OfflineDevPanelErrorBoundary>
-
-          <OfflineDevPanelErrorBoundary>
-            <OfflineMasterDataPilotPanel />
-          </OfflineDevPanelErrorBoundary>
-
-          <ResetUsageGuidePanel />
+              <Tabs
+                className="reset-maintenance-tabs"
+                defaultActiveKey="overview"
+                items={resetWorkspaceTabs}
+              />
+            </Space>
+          </Card>
 
         </Space>
       </Card>

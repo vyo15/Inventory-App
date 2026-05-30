@@ -1,0 +1,45 @@
+.offline-db-center {
+  border-radius: 14px;
+}
+
+.offline-db-hero {
+  align-items: flex-start;
+  border: 1px solid;
+  border-radius: 14px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 16px;
+}
+
+.offline-db-tabs .ant-tabs-nav {
+  margin-bottom: 14px;
+}
+
+.offline-db-tabs .ant-tabs-tab {
+  padding: 8px 10px;
+}
+
+.offline-db-status-card,
+.offline-db-action-card {
+  border-radius: 12px;
+}
+
+.offline-db-action-card .ant-card-head {
+  min-height: 42px;
+}
+
+.offline-db-action-card .ant-card-body {
+  padding: 14px;
+}
+
+@media (max-width: 768px) {
+  .offline-db-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .offline-db-tabs .ant-tabs-nav-list {
+    min-width: max-content;
+  }
+}

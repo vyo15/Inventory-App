@@ -1924,3 +1924,53 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 - [ ] Simpan Sales dengan customer Firebase masih menyimpan snapshot `customerId`/`customerName`.
 - [ ] Stock, purchase, returns, finance, production, payroll, HPP, dan reset destructive tidak berubah.
 
+
+## Checklist Batch 17–20 Completion — Local Backup Guard + Audit Contracts
+
+- [ ] `npm run lint` sukses.
+- [ ] `npm run build` sukses.
+- [ ] Buka `/utilities/reset-maintenance-data` dan pastikan tidak white screen.
+- [ ] Panel `Local DB Backup / Restore Guard` tampil.
+- [ ] Klik `Export Local DB Backup` dan pastikan file JSON terunduh.
+- [ ] Import file backup JSON yang sama dan pastikan preview valid.
+- [ ] Restore tanpa keyword `RESTORE LOCAL DB BACKUP` harus gagal/disabled secara aman.
+- [ ] Restore dengan keyword benar berhasil dan hanya mempengaruhi IndexedDB local.
+- [ ] Firebase data tidak berubah setelah restore local DB.
+- [ ] Offline Sync Dev Panel tidak menjalankan action saat keyword belum lengkap.
+- [ ] Supplier sync Firebase tetap blocked.
+- [ ] Products/Raw/Semi tidak masuk sync queue dan tidak berubah runtime.
+- [ ] Stock, purchase, sales transaction write, production, payroll, HPP, finance, dan reset destructive tidak berubah.
+
+## Batch 21 — Offline Database Center UX Checklist
+
+- Buka `/utilities/reset-maintenance-data` dan pastikan tidak white screen.
+- Pastikan `Offline Database Center` tampil dalam satu kartu dengan tab: Status, Sinkronisasi, Backup & Restore, Konflik, Data Local.
+- Tab Status: klik `Siapkan Local DB`, lalu pastikan status Local DB menjadi siap.
+- Tab Sinkronisasi: jalankan `Preview Firebase → Offline` untuk `categories`.
+- Sync Firebase → Offline tanpa keyword harus disabled/gagal guarded.
+- Isi keyword `PULL FIREBASE MASTER DATA TO LOCAL`, lalu sync Firebase → Offline.
+- Aktifkan Offline Mode dengan keyword `ENABLE OFFLINE REPOSITORY PILOT`.
+- Buka Categories; data tidak boleh kosong jika pull dari Firebase berhasil.
+- Tambah/edit category/customer saat Offline Mode; pastikan `sync_queue` pending bertambah.
+- Preview `Offline → Firebase`; pastikan hanya categories/customers yang muncul.
+- Sync Offline → Firebase dengan keyword `SYNC MASTER DATA PILOT TO FIREBASE`.
+- Tab Data Local: pilih Categories/Customers dan pastikan hanya satu tabel yang tampil sesuai pilihan.
+- Tab Backup & Restore: export/import/restore tetap membutuhkan keyword `RESTORE LOCAL DB BACKUP`.
+- Supplier/Product/Raw/Semi/Stock/Purchase/Sales transaction/Production/Payroll/HPP tidak boleh berubah perilaku runtime.
+
+## Batch 22 — Reset Maintenance Workspace UX Checklist
+
+- [ ] `npm run lint` sukses.
+- [ ] `npm run build` sukses.
+- [ ] Buka `/utilities/reset-maintenance-data` dan pastikan tidak white screen.
+- [ ] Pastikan kartu `Reset Maintenance Workspace` tampil dengan tab: Ringkasan, Skenario & Audit, Repair Aman, Reset & Export, Offline DB.
+- [ ] Tab Ringkasan menampilkan status summary dan panduan penggunaan tanpa tombol destructive langsung.
+- [ ] Tab Skenario & Audit menampilkan pilihan kebutuhan testing, auto detect, dan audit data quality.
+- [ ] Tab Repair Aman menampilkan repair guarded dan tombol repair tetap disabled jika audit belum tersedia atau kandidat 0.
+- [ ] Tab Reset & Export menampilkan preview reset, baseline, export, dan data test seed; reset tanpa preview/keyword tetap blocked.
+- [ ] Tab Offline DB tetap menampilkan Offline Database Center dengan Status, Sinkronisasi, Backup & Restore, Konflik, dan Data Local.
+- [ ] Mobile/tablet: tab bisa digeser horizontal dan hero tidak overflow.
+- [ ] Dark mode: hero/card/tab tetap terbaca, tidak ada background putih mencolok.
+- [ ] Jalankan preview reset lalu pindah tab; preview tidak hilang dan konfirmasi reset tetap memakai keyword yang benar.
+- [ ] Jalankan audit/repair side-effect transaksi dari tab Repair Aman; modal konfirmasi dan audit log tetap berjalan.
+- [ ] Pastikan tidak ada perubahan ke route/menu/role guard, schema, stock, purchase, sales, production, payroll, HPP, finance, dan reset destructive flow.

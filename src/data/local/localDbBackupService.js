@@ -15,6 +15,8 @@ import {
   validateLocalDbBackupPayload,
 } from "./localDbBackupValidator";
 
+export const LOCAL_DB_BACKUP_RESTORE_CONFIRMATION = "RESTORE LOCAL DB BACKUP";
+
 const nowIso = () => new Date().toISOString();
 
 const cloneRows = (rows = []) => JSON.parse(JSON.stringify(rows));
@@ -149,4 +151,17 @@ export const restoreLocalDbBackup = async (
     summary: createLocalDbBackupSummary(payload),
     warnings: validation.warnings,
   };
+};
+
+export const restoreLocalDbBackupWithGuard = async (
+  payload,
+  { confirmation = "", ...options } = {}
+) => {
+  if (confirmation !== LOCAL_DB_BACKUP_RESTORE_CONFIRMATION) {
+    throw new Error(
+      `Untuk restore Local DB, isi confirmation: ${LOCAL_DB_BACKUP_RESTORE_CONFIRMATION}`
+    );
+  }
+
+  return restoreLocalDbBackup(payload, options);
 };

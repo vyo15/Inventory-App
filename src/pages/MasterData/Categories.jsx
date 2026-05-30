@@ -1,15 +1,19 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Table,
   Button,
   Form,
   Input,
-  Space,
   Popconfirm,
-  message,
+  Space,
+  Table,
   Tag,
+  message,
 } from "antd";
-import { PlusOutlined, EditOutlined } from "@ant-design/icons";
+import { EditOutlined, PlusOutlined } from "@ant-design/icons";
+import PageFormModal from "../../components/Layout/Forms/PageFormModal";
+import PageHeader from "../../components/Layout/Page/PageHeader";
+import PageSection from "../../components/Layout/Page/PageSection";
+import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import {
   createCategory,
   deleteCategory,
@@ -18,55 +22,32 @@ import {
 } from "../../data/repositories/categoriesRepository";
 import { REPOSITORY_MODES } from "../../data/repositories/repositoryMode";
 import { getRepositoryModeStatus } from "../../data/repositories/repositoryModeService";
-import PageFormModal from "../../components/Layout/Forms/PageFormModal";
-import PageHeader from "../../components/Layout/Page/PageHeader";
-import PageSection from "../../components/Layout/Page/PageSection";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
-
-const sortCategoriesByName = (items = []) =>
-  [...items].sort((first, second) =>
-    String(first.name || "").localeCompare(String(second.name || ""))
-  );
-
-const getDatabaseModeLabel = (mode) =>
-  mode === REPOSITORY_MODES.OFFLINE_LOCAL ? "offline_local" : "firebase_primary";
-
-const getDatabaseModeTagColor = (mode) =>
-  mode === REPOSITORY_MODES.OFFLINE_LOCAL ? "warning" : "processing";
 
 const Categories = () => {
   const [categories, setCategories] = useState([]);
+  const [repositoryMode, setRepositoryMode] = useState(REPOSITORY_MODES.FIREBASE_PRIMARY);
   const [loading, setLoading] = useState(true);
-  const [modeLoading, setModeLoading] = useState(true);
-  const [databaseMode, setDatabaseMode] = useState(REPOSITORY_MODES.FIREBASE_PRIMARY);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentId, setCurrentId] = useState(null);
   const [form] = Form.useForm();
 
-  const resolveRepositoryOptions = useCallback(
-    (mode = databaseMode) => ({ mode }),
-    [databaseMode]
-  );
+  const getModeOptions = useCallback((mode = repositoryMode) => ({ mode }), [repositoryMode]);
 
   const fetchCategories = useCallback(async () => {
     setLoading(true);
-
     try {
-      const repositoryStatus = await getRepositoryModeStatus();
-      const nextMode = repositoryStatus.mode || REPOSITORY_MODES.FIREBASE_PRIMARY;
-      const data = await listCategories(resolveRepositoryOptions(nextMode));
-
-      setDatabaseMode(nextMode);
-      setCategories(sortCategoriesByName(data));
+      const modeStatus = await getRepositoryModeStatus();
+      setRepositoryMode(modeStatus.mode);
+      const list = await listCategories(getModeOptions(modeStatus.mode));
+      setCategories(list);
     } catch (error) {
-      console.error("Gagal ambil data kategori:", error);
+      console.error("Gagal ambil data:", error);
       message.error("Gagal mengambil data kategori.");
     } finally {
       setLoading(false);
-      setModeLoading(false);
     }
-  }, [resolveRepositoryOptions]);
+  }, [getModeOptions]);
 
   useEffect(() => {
     fetchCategories();
@@ -75,13 +56,12 @@ const Categories = () => {
   const handleAddOrEditCategory = async (values) => {
     try {
       if (isEditing && currentId) {
-        await updateCategory(currentId, values, resolveRepositoryOptions());
+        await updateCategory(currentId, values, getModeOptions());
         message.success("Kategori berhasil diubah!");
       } else {
-        await createCategory(values, resolveRepositoryOptions());
+        await createCategory(values, getModeOptions());
         message.success("Kategori berhasil ditambahkan!");
       }
-
       form.resetFields();
       setIsModalVisible(false);
       setIsEditing(false);
@@ -89,22 +69,18 @@ const Categories = () => {
       fetchCategories();
     } catch (error) {
       console.error("Gagal simpan kategori:", error);
-      message.error("Gagal menyimpan kategori.");
+      message.error(error?.message || "Gagal menyimpan kategori.");
     }
   };
 
   const handleDelete = async (id) => {
     try {
-      await deleteCategory(id, resolveRepositoryOptions());
-      message.success(
-        databaseMode === REPOSITORY_MODES.OFFLINE_LOCAL
-          ? "Kategori ditandai hapus di local DB"
-          : "Kategori dihapus"
-      );
+      await deleteCategory(id, getModeOptions());
+      message.success(repositoryMode === REPOSITORY_MODES.OFFLINE_LOCAL ? "Kategori ditandai hapus di local DB" : "Kategori dihapus");
       fetchCategories();
     } catch (error) {
       console.error("Gagal hapus kategori:", error);
-      message.error("Gagal menghapus kategori");
+      message.error(error?.message || "Gagal menghapus kategori");
     }
   };
 
@@ -130,12 +106,6 @@ const Categories = () => {
       key: "description",
     },
     {
-      // =========================
-      // SECTION: aksi tabel
-      // Fungsi:
-      // - Categories termasuk simple config page, jadi cukup Edit + Hapus tanpa Detail
-      // - kolom aksi tetap memakai marker baseline final agar visual dan spacing konsisten lintas halaman
-      // =========================
       title: "Aksi",
       key: "actions",
       width: 170,
@@ -151,7 +121,7 @@ const Categories = () => {
             Edit
           </Button>
           <Popconfirm
-            title="Yakin hapus kategori ini?"
+            title={repositoryMode === REPOSITORY_MODES.OFFLINE_LOCAL ? "Tandai hapus kategori di local DB?" : "Yakin hapus kategori ini?"}
             onConfirm={() => handleDelete(record.id)}
             okText="Ya"
             cancelText="Batal"
@@ -169,7 +139,8 @@ const Categories = () => {
     <div className="page-container">
       <PageHeader
         title="Kategori"
-        subtitle="Master kategori."
+        subtitle="Master kategori. Default tetap Firebase; offline hanya aktif saat pilot dev diaktifkan."
+        extra={<Tag color={repositoryMode === REPOSITORY_MODES.OFFLINE_LOCAL ? "gold" : "blue"}>DB: {repositoryMode}</Tag>}
         actions={[
           {
             key: "create-category",
@@ -186,19 +157,8 @@ const Categories = () => {
         ]}
       />
 
-      <PageSection
-        title="Daftar Kategori"
-        subtitle="Referensi kategori."
-      >
+      <PageSection title="Daftar Kategori" subtitle="Referensi kategori.">
         <DataRefreshIndicator loading={loading} dataSource={categories} />
-        <Space size={8} wrap style={{ marginBottom: 12 }}>
-          <Tag color={getDatabaseModeTagColor(databaseMode)}>
-            DB: {modeLoading ? "checking..." : getDatabaseModeLabel(databaseMode)}
-          </Tag>
-          <Button size="small" onClick={fetchCategories} loading={loading}>
-            Refresh
-          </Button>
-        </Space>
         <Table
           className="app-data-table"
           columns={columns}
@@ -209,23 +169,6 @@ const Categories = () => {
         />
       </PageSection>
 
-      {/* =====================================================
-          SECTION: Category Form Modal — AKTIF
-          Fungsi:
-          - Menampilkan form kategori yang ringkas untuk nama dan deskripsi.
-
-          Dipakai oleh:
-          - Halaman Master Data / Kategori saat tambah atau edit data.
-
-          Alasan perubahan:
-          - Batch 13 mulai memakai repository pilot agar mode Firebase/local bisa diuji tanpa mengganti route.
-
-          Catatan cleanup:
-          - Belum ada.
-
-          Risiko:
-          - Jangan ubah payload kategori, validation, atau handler simpan dari section presentasi ini.
-      ===================================================== */}
       <PageFormModal
         title={isEditing ? "Edit Kategori" : "Tambah Kategori"}
         open={isModalVisible}
@@ -240,11 +183,7 @@ const Categories = () => {
         form={form}
         onFinish={handleAddOrEditCategory}
       >
-        <Form.Item
-          name="name"
-          label="Nama Kategori"
-          rules={[{ required: true, message: "Nama wajib diisi" }]}
-        >
+        <Form.Item name="name" label="Nama Kategori" rules={[{ required: true, message: "Nama wajib diisi" }]}>
           <Input placeholder="Contoh: Bouquet, Aksesoris, Dekorasi" />
         </Form.Item>
         <Form.Item name="description" label="Deskripsi">

@@ -74,6 +74,9 @@ const OfflineSyncDevPanel = () => {
   const [modeForm] = Form.useForm();
   const [syncForm] = Form.useForm();
   const [resolveForm] = Form.useForm();
+  const modeConfirmation = Form.useWatch("confirmation", modeForm) || "";
+  const syncConfirmation = Form.useWatch("confirmation", syncForm) || "";
+  const resolveConfirmation = Form.useWatch("confirmation", resolveForm) || "";
 
   const refreshPanel = useCallback(async () => {
     setLoading(true);
@@ -226,6 +229,11 @@ const OfflineSyncDevPanel = () => {
 
   const queuePending = state.queueSummary?.byStatus?.pending || 0;
   const conflictCount = state.conflictSummary?.unresolved || 0;
+  const canEnableOfflinePilot = modeConfirmation === OFFLINE_REPOSITORY_PILOT_CONFIRMATION;
+  const canRunManualSync = syncConfirmation === FIREBASE_MASTER_DATA_SYNC_CONFIRMATION;
+  const canResolveConflict =
+    resolveConfirmation === MASTER_DATA_CONFLICT_RESOLUTION_CONFIRMATION &&
+    Boolean(selectedConflictId || resolveForm.getFieldValue("conflictId"));
 
   return (
     <Card title="Offline Sync Dev Panel" size="small">
@@ -250,10 +258,18 @@ const OfflineSyncDevPanel = () => {
           <Form.Item label="Aktifkan offline repository pilot" name="confirmation" extra={`Ketik ${OFFLINE_REPOSITORY_PILOT_CONFIRMATION} untuk dev test.`}>
             <Input placeholder={OFFLINE_REPOSITORY_PILOT_CONFIRMATION} />
           </Form.Item>
+          {modeConfirmation && !canEnableOfflinePilot ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="Keyword belum tepat"
+              description={`Gunakan keyword lengkap: ${OFFLINE_REPOSITORY_PILOT_CONFIRMATION}`}
+            />
+          ) : null}
           <Form.Item label="Alasan test" name="reason">
             <Input placeholder="Contoh: test categories offline pilot" />
           </Form.Item>
-          <Button loading={loading} onClick={handleEnableOfflinePilot}>Aktifkan Offline Pilot</Button>
+          <Button loading={loading} disabled={!canEnableOfflinePilot} onClick={handleEnableOfflinePilot}>Aktifkan Offline Pilot</Button>
         </Form>
 
         <Space wrap>
@@ -266,7 +282,7 @@ const OfflineSyncDevPanel = () => {
           <Form.Item label="Manual sync confirmation" name="confirmation" extra={`Ketik ${FIREBASE_MASTER_DATA_SYNC_CONFIRMATION}. Delete Firebase tetap tidak diaktifkan dari panel ini.`}>
             <Input placeholder={FIREBASE_MASTER_DATA_SYNC_CONFIRMATION} />
           </Form.Item>
-          <Button type="primary" loading={loading} onClick={handleManualSync}>Manual Sync Categories/Customers</Button>
+          <Button type="primary" loading={loading} disabled={!canRunManualSync} onClick={handleManualSync}>Manual Sync Categories/Customers</Button>
         </Form>
 
         <Table
@@ -308,7 +324,7 @@ const OfflineSyncDevPanel = () => {
           <Form.Item label="Resolve confirmation" name="confirmation" extra={`Ketik ${MASTER_DATA_CONFLICT_RESOLUTION_CONFIRMATION}.`}>
             <Input placeholder={MASTER_DATA_CONFLICT_RESOLUTION_CONFIRMATION} />
           </Form.Item>
-          <Button loading={loading} onClick={handleResolveConflict}>Resolve Conflict</Button>
+          <Button loading={loading} disabled={!canResolveConflict} onClick={handleResolveConflict}>Resolve Conflict</Button>
         </Form>
       </Space>
     </Card>

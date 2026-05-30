@@ -1321,3 +1321,55 @@ Guard:
 - `customerCodeReference.js` menjadi helper bersama untuk menjaga format `CUS-DDMMYYYY-001` konsisten antara Firebase service, Dexie adapter, dan panel offline.
 - Tidak ada auto-sync dan tidak ada perubahan route/menu/role guard.
 
+
+## Batch 17–20 Completion Integration Map
+
+```text
+ResetMaintenanceData.jsx
+-> OfflineDevPanelErrorBoundary
+-> OfflineLocalDbBackupPanel
+-> localDbBackupService / localDbBackupValidator / localDbMeta
+-> IndexedDB local foundation only
+```
+
+Guard:
+- `restoreLocalDbBackupWithGuard()` requires `RESTORE LOCAL DB BACKUP`.
+- Restore local DB writes only IndexedDB allowlist tables.
+- No Firebase write, no auto-sync, no transaction/stock/production mutation.
+
+Audit docs:
+- Supplier flow audit: `docs/11_OFFLINE_SUPPLIER_FLOW_AUDIT.md`.
+- Products/Raw/Semi contract: `docs/12_OFFLINE_PRODUCTS_RAW_SEMI_CONTRACT.md`.
+
+## Batch 21 — Offline Database Center Integration
+
+UI utama offline database di Reset Maintenance sekarang:
+
+```txt
+src/pages/Utilities/components/OfflineDatabaseCenter.jsx
+src/pages/Utilities/components/OfflineDatabaseCenter.css
+```
+
+Service baru untuk pull Firebase → Local:
+
+```txt
+src/data/sync/firebaseToLocalMasterDataSyncService.js
+```
+
+Arah data:
+
+```txt
+Firebase categories/customers
+  → firebaseToLocalMasterDataSyncService
+  → IndexedDB categories/customers
+```
+
+Arah data existing yang tetap dipakai:
+
+```txt
+IndexedDB sync_queue
+  → firebaseMasterDataSyncService
+  → Firebase categories/customers
+```
+
+Guard allowlist tetap `categories` dan `customers` saja.

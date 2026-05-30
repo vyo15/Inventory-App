@@ -1275,3 +1275,37 @@ Status: **GUARDED / FIREBASE PRIMARY MASIH AKTIF UNTUK TRANSAKSI**.
 - Snapshot Sales tetap menyimpan `customerId` dan `customerName`; transaksi lama tidak diubah ketika master customer diedit/hapus.
 - Stock, purchase, returns, finance, production, payroll, HPP, reset destructive, route/menu/role guard, dan Firestore rules/index tidak berubah oleh batch ini.
 
+
+## Offline Local DB Backup/Restore UI Guard — Batch 17 Completion — 2026-05
+
+Status: **GUARDED / LOCAL INDEXEDDB ONLY / FIREBASE TIDAK DISENTUH**.
+
+Rule:
+- Backup/restore local DB hanya boleh berjalan dari Testing & Reset Center.
+- Restore wajib melalui preview valid dan confirmation `RESTORE LOCAL DB BACKUP`.
+- Restore hanya berlaku untuk table foundation allowlist di IndexedDB: app meta, local profiles, sync queue, sync conflicts, audit logs, categories, customers, suppliers.
+- Restore tidak boleh menulis, menghapus, atau sync ke Firebase.
+- Restore tidak boleh menyentuh stock, purchase, sales, returns, finance, production, payroll, HPP, atau reset destructive.
+- Panel backup/restore wajib dibungkus `OfflineDevPanelErrorBoundary` agar gagal runtime tidak membuat halaman Reset Maintenance white screen.
+
+## Offline Supplier and Products/Raw/Semi Guard — Batch 18–20 Completion — 2026-05
+
+Status: **AUDIT / CONTRACT ONLY / BELUM RUNTIME MIGRATION**.
+
+Rule:
+- Supplier sync Firebase tetap diblokir sampai flow supplier purchase/raw material diaudit dan disetujui.
+- Products, Raw Materials, dan Semi Finished belum boleh masuk offline runtime/sync queue karena terhubung ke stock, purchase, production, payroll, dan HPP.
+- Kontrak audit supplier ada di `docs/11_OFFLINE_SUPPLIER_FLOW_AUDIT.md`.
+- Kontrak products/raw/semi ada di `docs/12_OFFLINE_PRODUCTS_RAW_SEMI_CONTRACT.md`.
+
+## Offline DB Pilot Rule — Firebase → Local Pull
+
+Saat Offline Mode diaktifkan, halaman pilot `Categories` dan `Customers` membaca data dari IndexedDB local browser. Karena itu, sebelum memakai Offline Mode, user wajib menjalankan pull sync `Firebase → Offline` agar data local tidak kosong.
+
+Rule guard:
+
+- Pull Firebase → Offline hanya berlaku untuk `categories` dan `customers`.
+- Pull tidak membuat queue upload.
+- Pull tidak overwrite record local yang masih punya perubahan pending/conflict.
+- Push Offline → Firebase tetap manual dan guarded.
+- Area supplier, product, raw material, semi finished, stock, purchase, sales transaction, finance, production, payroll, dan HPP belum masuk runtime offline.

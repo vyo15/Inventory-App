@@ -564,3 +564,63 @@ Rules:
 - Customer local-only tidak boleh dipakai untuk membuat transaksi Sales Firebase karena bisa membuat `customerId` mengarah ke dokumen yang belum ada di Firebase.
 - Setiap perluasan offline ke transaksi wajib punya kontrak terpisah untuk stock mutation, inventory log, income/expense, conflict, dan rollback/idempotency.
 
+
+## Batch 17–20 Completion Contract
+
+Batch 17 completed scope:
+- `OfflineLocalDbBackupPanel.jsx` is the only UI entry for local DB backup/restore.
+- Export creates a JSON backup using `exportLocalDbBackup()`.
+- Import uses `parseLocalDbBackupJson()` and `previewLocalDbBackupRestore()` before restore.
+- Restore uses `restoreLocalDbBackupWithGuard()` and requires `RESTORE LOCAL DB BACKUP`.
+- Restore is local IndexedDB only and does not sync Firebase.
+
+Batch 18/19 supplier decision:
+- Supplier local table may exist as foundation, but supplier Firebase sync remains blocked.
+- Supplier runtime migration requires a separate supplier flow extraction plan and approval.
+- Detailed audit: `docs/11_OFFLINE_SUPPLIER_FLOW_AUDIT.md`.
+
+Batch 20 products/raw/semi decision:
+- Products, Raw Materials, and Semi Finished remain outside local runtime/sync queue.
+- They require stock/production/payroll/HPP contracts before any migration.
+- Detailed contract: `docs/12_OFFLINE_PRODUCTS_RAW_SEMI_CONTRACT.md`.
+
+## Batch 21 — Offline Sync UX Simplification + Firebase → Local Pull
+
+Status: AKTIF untuk pilot Categories dan Customers saja.
+
+Tujuan batch ini adalah membuat alur offline database lebih mudah dipahami oleh user. Panel lama yang panjang di Reset Maintenance digantikan oleh `Offline Database Center` berbasis tab:
+
+- **Status**: melihat mode aktif, kesiapan Local DB, jumlah queue pending, dan conflict.
+- **Sinkronisasi**: memisahkan dua arah sync secara eksplisit:
+  - Firebase → Offline: mengambil data Firebase ke IndexedDB local agar offline mode tidak kosong.
+  - Offline → Firebase: meng-upload perubahan local yang masih pending ke Firebase.
+- **Backup & Restore**: export/import/restore backup local DB tetap guarded.
+- **Konflik**: conflict resolver tetap manual dan guarded.
+- **Data Local**: preview isi IndexedDB dengan pilihan `Categories` atau `Customers`, bukan banyak tabel panjang.
+
+Keyword baru untuk menarik data Firebase ke local:
+
+```txt
+PULL FIREBASE MASTER DATA TO LOCAL
+```
+
+Guard penting:
+
+- Pull Firebase → Offline hanya untuk `categories` dan `customers`.
+- Pull tidak membuat `sync_queue` baru.
+- Pull tidak menghapus record local yang tidak ada di Firebase.
+- Pull tidak overwrite local record yang masih `pending`, `syncing`, `failed`, atau `conflict`.
+- Pull tidak menyentuh `suppliers`, `products`, `rawMaterials`, `semiFinishedMaterials`, stock, purchase, sales transaction, finance, production, payroll, HPP, atau reset destructive.
+
+Alur pakai yang disarankan:
+
+1. Buka `Testing & Reset Center`.
+2. Masuk `Offline Database Center` tab `Status`.
+3. Klik `Siapkan Local DB`.
+4. Masuk tab `Sinkronisasi`.
+5. Jalankan `Preview Firebase → Offline` untuk Categories/Customers.
+6. Isi keyword `PULL FIREBASE MASTER DATA TO LOCAL` lalu sync Firebase → Offline.
+7. Aktifkan `Offline Mode` dengan keyword `ENABLE OFFLINE REPOSITORY PILOT`.
+8. Edit/tambah Categories/Customers.
+9. Preview dan sync `Offline → Firebase` dengan keyword `SYNC MASTER DATA PILOT TO FIREBASE`.
+10. Jika selesai, kembali ke `Firebase Mode`.

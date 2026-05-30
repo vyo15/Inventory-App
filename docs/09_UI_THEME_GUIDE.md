@@ -267,11 +267,15 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 - Copy tidak boleh mendorong user membuat data manual ganda untuk sumber otomatis.
 
 ### Reset Maintenance
-- Warning destructive wajib tegas.
+- Gunakan workspace berbasis tab untuk halaman maintenance yang kompleks: Ringkasan, Skenario & Audit, Repair Aman, Reset & Export, Offline DB.
+- Jangan menampilkan semua panel maintenance panjang sekaligus jika bisa dipisah per area.
+- Tab boleh membuat tampilan lebih ringkas, tetapi warning destructive wajib tegas.
 - Preview wajib sebelum reset.
 - Confirmation keyword tidak boleh disamarkan.
 - Jangan membuat reset terdengar aman tanpa risiko.
 - Scope reset, protected data, jumlah dokumen terdampak, status proses, dan hasil/audit harus tetap jelas.
+- Mobile/tablet harus menjaga tab dapat digeser dan hero tidak overflow.
+- Dark mode harus tetap aman; hindari background hardcoded yang terlalu putih/terang.
 
 ### User Management
 - Role, status, email, dan Auth UID/profile binding harus jelas.
