@@ -3,7 +3,8 @@ const { spawn } = require("node:child_process");
 const path = require("node:path");
 
 const rootDir = path.resolve(__dirname, "..");
-const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+const isWindows = process.platform === "win32";
+const npmCmd = "npm";
 const children = new Map();
 let shuttingDown = false;
 
@@ -17,6 +18,18 @@ const commands = [
     args: ["--prefix", "frontend", "run", "dev", "--", "--host", "0.0.0.0"],
   },
 ];
+
+const createSafeEnv = () => {
+  const safeEnv = {};
+
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!key || key.startsWith("=") || key.includes("\0")) continue;
+    if (value === undefined || String(value).includes("\0")) continue;
+    safeEnv[key] = value;
+  }
+
+  return safeEnv;
+};
 
 const prefixStream = (name, stream, output) => {
   let buffer = "";
@@ -48,15 +61,12 @@ const stopAll = (exitCode = 0) => {
   setTimeout(() => process.exit(exitCode), 300).unref();
 };
 
-console.log("[dev] Menjalankan backend dan frontend IMS...");
-console.log("[dev] Backend : http://localhost:3001");
-console.log("[dev] Frontend: http://localhost:5173/Inventory-App/");
-console.log("[dev] Tekan Ctrl+C untuk menghentikan keduanya.\n");
-
-for (const command of commands) {
+const spawnDevProcess = (command) => {
   const child = spawn(npmCmd, command.args, {
     cwd: rootDir,
-    env: process.env,
+    env: createSafeEnv(),
+    shell: isWindows,
+    windowsHide: false,
     stdio: ["inherit", "pipe", "pipe"],
   });
 
@@ -81,6 +91,15 @@ for (const command of commands) {
     console.error(`[${command.name}] berhenti dengan kode ${code}. Dev server lain akan dihentikan.`);
     stopAll(code || 1);
   });
+};
+
+console.log("[dev] Menjalankan backend dan frontend IMS...");
+console.log("[dev] Backend : http://localhost:3001");
+console.log("[dev] Frontend: http://localhost:5173/Inventory-App/");
+console.log("[dev] Tekan Ctrl+C untuk menghentikan keduanya.\n");
+
+for (const command of commands) {
+  spawnDevProcess(command);
 }
 
 process.on("SIGINT", () => stopAll(0));
