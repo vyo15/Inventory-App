@@ -1,3 +1,24 @@
+## Catatan struktur frontend/backend — aktif setelah restruktur
+
+Project sekarang memakai struktur terpisah: `frontend/` untuk React + Vite dan `backend/` untuk Node.js SQLite sidecar. Jika checklist lama menyebut `npm run lint`, `npm run build`, atau `npm run dev` di root project, jalankan dari folder yang sesuai:
+
+```bash
+cd frontend
+npm install
+npm run lint
+npm run build
+npm run dev -- --host 0.0.0.0
+```
+
+```bash
+cd backend
+npm install
+npm run check
+npm run dev
+```
+
+Untuk ZIP source bersih, gunakan `git archive` atau helper `scripts/create-clean-zip.*`, bukan compress manual folder runtime.
+
 # TEST CHECKLIST — IMS Bunga Flanel
 
 Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat ini.
@@ -1230,7 +1251,7 @@ Risiko:
 - [ ] Table fixed column, hover row, selected row, dan pagination tetap readable.
 - [ ] Tidak ada class CSS yang dihapus tanpa grep pemakai aktif.
 - [ ] Tidak ada perubahan ke AuthContext, AppLayout runtime, SidebarMenu logic, services, transaksi, stok, cashflow, produksi, payroll, HPP, reports, atau reset flow.
-- [ ] Jalankan `npm run lint` dan `npm run build` di project lengkap yang punya `package.json`.
+- [ ] Jalankan `cd frontend && npm run lint` dan `cd frontend && npm run build` di project lengkap.
 
 
 ## Checklist Hardcoded Color / Theme Token Cleanup
@@ -1881,10 +1902,10 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 ## Batch 25–27 — Final QA & Stabilization Sweep
 
 ### Lint/build blocker cleanup
-- [ ] Jalankan `npm run lint` setelah semua ZIP changed-files-only diextract.
-- [ ] Jalankan `npm run build` setelah `npm install` di environment lokal agar optional dependency Rollup sesuai platform terpasang.
+- [ ] Jalankan `cd frontend && npm run lint` setelah semua ZIP changed-files-only diextract.
+- [ ] Jalankan `cd frontend && npm run build` setelah `npm install` di environment lokal agar optional dependency Rollup sesuai platform terpasang.
 - [ ] Pastikan tidak ada `no-undef`, `no-unused-vars`, duplicate props, duplicate import, atau helper export yang tertinggal setelah split helper Batch 18–24.
-- [ ] Jika build gagal karena `@rollup/rollup-*-*` optional dependency, jalankan `npm install` ulang di project root lokal sebelum menyimpulkan source error.
+- [ ] Jika build gagal karena `@rollup/rollup-*-*` optional dependency, jalankan `npm install` ulang di folder `frontend/` lokal sebelum menyimpulkan source error.
 
 ### Docs/source final conflict cleanup
 - [ ] Pastikan docs tidak lagi menyebut Dashboard/Stock Report full-source sebagai status aktif normal.
@@ -2016,6 +2037,10 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 [ ] Modul stock/sales/purchase/finance/production/payroll/HPP tampil guarded
 [ ] Tab Restore Plan tidak menjalankan overwrite database
 [ ] Customer dan Categories tetap bisa CRUD dari laptop dan HP
-[ ] npm run lint root project sukses
-[ ] npm run build root project sukses
+[ ] cd frontend
+[ ] npm install
+[ ] npm run lint
+[ ] npm run build
+[ ] cd ../backend
+[ ] npm run check
 ```

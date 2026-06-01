@@ -418,8 +418,9 @@ Batch 3 tidak boleh:
 ## 11. QA gate sebelum Batch 4
 
 Sebelum repository pilot:
-- `npm run lint` harus bersih.
-- `npm run build` harus bersih.
+- `cd frontend && npm run lint` harus bersih.
+- `cd frontend && npm run build` harus bersih.
+- `cd backend && npm run check` harus bersih.
 - App tetap berjalan sebagai Firebase-first.
 - Local DB foundation bisa dibuat di IndexedDB.
 - Backup export/preview/restore foundation bisa diuji manual/dev.

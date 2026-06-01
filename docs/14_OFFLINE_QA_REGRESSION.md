@@ -17,9 +17,11 @@ Aturan:
 
 ## 1. Smoke test build
 
-- [ ] `npm install` sukses.
-- [ ] `npm run lint` sukses.
-- [ ] `npm run build` sukses.
+- [ ] `cd frontend && npm install` sukses.
+- [ ] `cd frontend && npm run lint` sukses.
+- [ ] `cd frontend && npm run build` sukses.
+- [ ] `cd backend && npm install` sukses.
+- [ ] `cd backend && npm run check` sukses.
 - [ ] Aplikasi bisa dibuka dari fresh reload.
 - [ ] Login/session/route guard tetap normal.
 - [ ] Sidebar/menu tidak berubah.

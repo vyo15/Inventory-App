@@ -68,6 +68,7 @@ npm run dev
 Frontend:
 
 ```bash
+cd frontend
 npm install
 npm run dev -- --host 0.0.0.0
 ```
@@ -98,6 +99,28 @@ backups/sqlite/
 ```
 
 Folder runtime tidak boleh masuk git/patch.
+
+## 4A. Membuat ZIP bersih
+
+Gunakan `git archive` dari root repository agar file runtime SQLite, backup, `node_modules`, dan `dist` tidak ikut masuk ZIP:
+
+```bash
+git archive --format=zip --prefix=Inventory-App/ --output ../Inventory-App-clean.zip HEAD
+```
+
+Atau gunakan helper:
+
+```bash
+bash scripts/create-clean-zip.sh
+```
+
+PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/create-clean-zip.ps1
+```
+
+Sebelum membuat ZIP, pastikan perubahan sudah di-commit jika ingin ikut masuk ke ZIP. `git archive HEAD` hanya mengambil isi commit terakhir.
 
 ## 5. Guardrail migrasi
 
@@ -147,8 +170,12 @@ Audit satu-satu untuk stock engine, purchase, sales, returns, finance ledger, pr
 [ ] Tambah kategori dari laptop, refresh HP, data muncul
 [ ] Tambah customer dari HP, refresh laptop, data muncul
 [ ] Restart backend, data SQLite masih ada
-[ ] npm run lint root project sukses
-[ ] npm run build root project sukses
+[ ] cd frontend
+[ ] npm install
+[ ] npm run lint
+[ ] npm run build
+[ ] cd ../backend
+[ ] npm run check
 ```
 
 ## 8. Catatan legacy cleanup

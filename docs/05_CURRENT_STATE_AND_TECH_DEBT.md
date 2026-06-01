@@ -1296,7 +1296,7 @@ Tech debt tersisa:
 
 Status: **FINAL STABILIZATION / DOCS-SOURCE SYNC / QA-ONLY RUNTIME GUARD**.
 
-Validasi source aktual pada batch ini menunjukkan helper split dan read model batch sebelumnya sudah masuk di source terbaru. Tidak ditemukan syntax blocker dari pemeriksaan `node --check` untuk file `.js` dan parse JSX untuk file `.jsx` pada ZIP `src/docs` terbaru. Full `npm run lint` dan `npm run build` tetap harus dijalankan di project root lokal karena ZIP ini tidak menyertakan `package.json`/dependency.
+Validasi source aktual pada batch ini menunjukkan helper split dan read model batch sebelumnya sudah masuk di source terbaru. Tidak ditemukan syntax blocker dari pemeriksaan `node --check` untuk file `.js` dan parse JSX untuk file `.jsx` pada ZIP `src/docs` terbaru. Setelah restruktur folder, validasi frontend harus dijalankan dari `frontend/` (`npm run lint` dan `npm run build`), sedangkan validasi backend SQLite dijalankan dari `backend/` (`npm run check`).
 
 Status runtime terbaru yang harus dianggap aktif:
 - Dashboard memakai `stock_item_read_models` issue query sebagai path normal stok kritis, dengan fallback guarded ke master stock jika read model kosong/gagal.

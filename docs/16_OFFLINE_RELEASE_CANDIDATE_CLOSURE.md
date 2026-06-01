@@ -16,9 +16,11 @@ Dokumen ini menutup roadmap offline Batch 23–52 pada level source. Setelah dok
 
 ## Release candidate checklist
 
-- [ ] `npm install` atau `npm ci` sukses.
-- [ ] `npm run lint` sukses.
-- [ ] `npm run build` sukses.
+- [ ] `cd frontend && npm install` atau `cd frontend && npm ci` sukses.
+- [ ] `cd frontend && npm run lint` sukses.
+- [ ] `cd frontend && npm run build` sukses.
+- [ ] `cd backend && npm install` sukses.
+- [ ] `cd backend && npm run check` sukses.
 - [ ] Offline Database Center tab `QA RC` selesai dicentang setelah test manual.
 - [ ] `Health` tidak memiliki error blocker.
 - [ ] Queue hanya berisi Categories/Customers untuk write pilot.
