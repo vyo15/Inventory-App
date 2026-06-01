@@ -292,3 +292,7 @@ Catatan lock:
 - Detail Work Log dan HPP Analysis memakai resolver labor yang sama: payroll final, draft payroll, lalu estimasi Step sebagai read-only preview.
 - Overhead aktif berasal dari BOM untuk listrik/glue gun. Field hasil selain Good Qty adalah compatibility data lama dan tidak ditampilkan sebagai workflow aktif.
 - Data Quality Audit produksi read-only mendeteksi Work Log legacy status, payroll pending/mismatch, output HPP yang butuh reconcile, dan Semi Finished tanpa `flowerGroup`; audit hasil selain Good Qty sengaja tidak diaktifkan.
+
+## Update SQLite Local Runtime Pilot
+
+Status terbaru: Categories dan Customers diarahkan ke mode `sqlite_sidecar` melalui backend Node.js lokal dan SQLite file lokal. Firebase tetap dipertahankan sebagai fallback dan untuk modul yang belum dimigrasi. Dexie/IndexedDB tidak lagi dipakai sebagai runtime aktif Offline Database Center. File Dexie/IndexedDB legacy yang belum diaudit delete masih dianggap cleanup candidate.

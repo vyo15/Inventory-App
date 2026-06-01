@@ -1267,7 +1267,7 @@ Flow pilot:
 ```text
 Testing & Reset Center
 -> Offline Master Data Pilot Panel
--> categoriesRepository/customersRepository mode offline_local
+-> categoriesRepository/customersRepository mode sqlite_sidecar
 -> Dexie adapter
 -> IndexedDB + sync_queue pending
 -> Offline Sync Dev Panel
@@ -1288,14 +1288,14 @@ Active pilot boundary:
 Categories.jsx / Customers.jsx
 -> categoriesRepository / customersRepository
 -> firebase adapter when mode = firebase_primary
--> dexie adapter when mode = offline_local
+-> sqlite REST adapter when mode = sqlite_sidecar
 -> sync_queue for local create/update/delete
 -> manual Firebase sync only after confirmation
 ```
 
 Important guard:
 - Firebase remains default runtime.
-- `offline_local` is a development/admin pilot mode, not a production-wide switch.
+- `sqlite_sidecar` adalah runtime pilot lokal untuk Categories/Customers, bukan switch semua modul.
 - Customer code generation is mode-aware:
   - Firebase mode delegates to `customersService` and existing business code counter.
   - Offline mode scans local IndexedDB customer records and generates `CUS-DDMMYYYY-001`.
@@ -1307,7 +1307,7 @@ Important guard:
 Customers.jsx
 -> customersRepository
 -> firebaseCustomersAdapter when firebase_primary
--> dexieCustomersAdapter when offline_local
+-> sqliteCustomersAdapter when sqlite_sidecar
 -> sync_queue for offline create/update/tombstone delete
 
 Sales.jsx
@@ -1373,3 +1373,32 @@ IndexedDB sync_queue
 ```
 
 Guard allowlist tetap `categories` dan `customers` saja.
+
+## Fase 1 Offline UX Guard — Batch 23–25 Integration
+
+```txt
+Categories.jsx / Customers.jsx
+  -> getRepositoryModeStatus()
+  -> categoriesRepository / customersRepository
+  -> getPendingSyncQueueCount()
+  -> OfflineRepositoryStatus.jsx
+```
+
+UI-only helper baru:
+
+```txt
+src/components/Layout/Feedback/OfflineRepositoryStatus.jsx
+src/components/Layout/Feedback/OfflineRepositoryStatus.css
+```
+
+Arah data tidak berubah:
+
+```txt
+firebase_primary  -> Firebase adapter -> Firestore categories/customers
+sqlite_sidecar    -> SQLite REST adapter -> backend local -> SQLite customers/categories
+```
+
+Guard:
+- Banner master data hanya membaca status mode dan queue pending.
+- Tombol `Offline DB Center` hanya navigasi ke route existing `/utilities/reset-maintenance-data`.
+- Tidak ada auto-sync, auto-delete, schema change, atau perubahan akses route/menu.

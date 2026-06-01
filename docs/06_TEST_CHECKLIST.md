@@ -1263,6 +1263,7 @@ Risiko:
 - [ ] Shape/curve Login tetap tidak ramai; gradient page-specific lama dicatat sebagai cleanup candidate sampai batch Login khusus.
 - [ ] Form login tetap menjadi fokus utama dan mudah dibaca.
 - [ ] Button Masuk memakai primary blue yang kontras dan terlihat clickable.
+- [ ] Logo utama Login dimuat dari WebP pada browser modern dan PNG fallback tetap tersedia.
 - [ ] Input username/password tetap bisa diisi dan focus state jelas.
 - [ ] Login normal tetap berhasil.
 - [ ] Login error tetap muncul sebagai Alert error.
@@ -1364,6 +1365,9 @@ Risiko:
 ### Light mode
 - [ ] Dashboard, Produk, Raw Material, Stock Management, Sales, Purchases, Returns, Cash In, Cash Out, Produksi, Laporan, Manajemen User, dan Reset & Maintenance tetap readable.
 - [ ] Form input/select/date picker, table, modal, drawer, dropdown, empty state, disabled button, active menu, hover menu, dan focus input tetap jelas.
+- [ ] Top header button menampilkan focus outline saat navigasi keyboard.
+- [ ] FilterBar mobile membuat field full-width dan tidak berhimpit.
+- [ ] PageHeader action mobile wrap/full-width dan tombol tidak overlap.
 - [ ] Gold accent terlihat subtle sebagai marker kecil, bukan background besar.
 
 ### Dark mode
@@ -1915,7 +1919,7 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 - [ ] Buka `Master Data / Customers`; tag default `DB: firebase_primary`.
 - [ ] Tambah customer di mode Firebase membuat kode otomatis `CUS-DDMMYYYY-001` dan field kode tetap disabled/read-only.
 - [ ] Edit customer di mode Firebase tidak mengubah kode.
-- [ ] Aktifkan offline pilot dengan `ENABLE OFFLINE REPOSITORY PILOT`; buka Customers lagi dan pastikan tag `DB: offline_local`.
+- [ ] Pastikan backend SQLite jalan; buka Customers lagi dan pastikan tag `DB: sqlite_sidecar` atau SQLite local aktif.
 - [ ] Tambah customer offline membuat kode `CUS-DDMMYYYY-001`, menulis local DB, dan menambah `sync_queue`.
 - [ ] Duplicate kode customer offline ditolak.
 - [ ] Edit customer offline tidak boleh mengubah kode.
@@ -1974,3 +1978,44 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 - [ ] Jalankan preview reset lalu pindah tab; preview tidak hilang dan konfirmasi reset tetap memakai keyword yang benar.
 - [ ] Jalankan audit/repair side-effect transaksi dari tab Repair Aman; modal konfirmasi dan audit log tetap berjalan.
 - [ ] Pastikan tidak ada perubahan ke route/menu/role guard, schema, stock, purchase, sales, production, payroll, HPP, finance, dan reset destructive flow.
+
+## Fase 1 Offline UX Guard — Batch 23–25 Checklist
+
+- [ ] `npm run lint` sukses.
+- [ ] `npm run build` sukses dan tidak ada white screen import/export.
+- [ ] Buka `/categories` saat `firebase_primary`; pastikan banner menulis `Mode Firebase aktif`, source `Firebase Server`, dan tabel membaca data Firebase.
+- [ ] Buka `/customers` saat `firebase_primary`; pastikan banner menulis `Mode Firebase aktif`, source `Firebase Server`, dan kode customer tetap otomatis/read-only.
+- [ ] Buka `/utilities/reset-maintenance-data` → `Offline DB` → `Sinkronisasi`, jalankan preview dan pull `Firebase → Offline` untuk categories/customers dengan keyword `PULL FIREBASE MASTER DATA TO LOCAL`.
+- [ ] Aktifkan offline pilot dengan keyword `ENABLE OFFLINE REPOSITORY PILOT`.
+- [ ] Buka `/categories`; banner harus menulis `Mode Offline aktif`, source `Browser Local / IndexedDB`, dan data tidak kosong jika pull sebelumnya berhasil.
+- [ ] Buka `/customers`; banner harus menulis `Mode Offline aktif`, source `Browser Local / IndexedDB`, dan data tidak kosong jika pull sebelumnya berhasil.
+- [ ] Jika local DB memang kosong, empty state harus menjelaskan `Data offline masih kosong` dan menyediakan tombol `Ambil Firebase → Offline`.
+- [ ] Tambah/edit/hapus category/customer di mode offline; pastikan `Queue pending` pada banner bertambah setelah refresh/fetch ulang.
+- [ ] Klik shortcut `Offline DB Center` dari banner dan pastikan menuju halaman reset maintenance tanpa route/menu baru.
+- [ ] Sync `Offline → Firebase` dari `Offline Database Center` dengan keyword `SYNC MASTER DATA PILOT TO FIREBASE`, lalu pastikan queue pending berkurang.
+- [ ] Kembali ke Firebase Mode dan pastikan Categories/Customers kembali membaca Firebase.
+- [ ] Pastikan Supplier/Product/Raw/Semi/Stock/Purchase/Sales transaction/Production/Payroll/HPP tidak berubah perilaku runtime.
+
+
+## SQLite-C1 Foundation Safety Checklist
+
+```text
+[ ] cd backend
+[ ] npm install
+[ ] npm run check
+[ ] npm run dev
+[ ] buka http://localhost:3001/health
+[ ] buka http://localhost:3001/api/maintenance/status
+[ ] buka http://localhost:3001/api/migration-status
+[ ] curl -X POST http://localhost:3001/api/maintenance/backup
+[ ] curl -X POST http://localhost:3001/api/maintenance/restore-plan
+[ ] Pastikan restore-plan mengembalikan destructiveAllowed=false
+[ ] Pastikan tabel module_migration_status terisi
+[ ] Buka SQLite Local DB Center
+[ ] Tab Migrasi Modul tampil dan Customers/Categories berstatus sqlite_active
+[ ] Modul stock/sales/purchase/finance/production/payroll/HPP tampil guarded
+[ ] Tab Restore Plan tidak menjalankan overwrite database
+[ ] Customer dan Categories tetap bisa CRUD dari laptop dan HP
+[ ] npm run lint root project sukses
+[ ] npm run build root project sukses
+```

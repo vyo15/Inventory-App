@@ -1207,7 +1207,7 @@ Status: **FOUNDATION / GUARDED / FIREBASE PRIMARY MASIH AKTIF**.
 
 Rule:
 - Database offline web memakai Dexie/IndexedDB di `src/data/local/*`.
-- Firebase/Firestore masih menjadi runtime utama sampai mode offline-local disetujui dan diuji per modul.
+- SQLite local lewat backend LAN menjadi runtime pilot untuk Categories/Customers. Firebase/Firestore tetap fallback dan tetap source untuk modul yang belum dimigrasi.
 - Batch 1/2 foundation wajib tersedia sebelum repository pilot: `localDbSchema`, `imsLocalDb`, `localDbMeta`, `localDbBackupValidator`, dan `localDbBackupService`.
 - Repository pilot Batch 4/5 hanya boleh untuk master data rendah risiko: `categories`, `customers`, dan `suppliers`.
 - Sync queue Batch 6 hanya boleh menerima operasi master data pilot: `create`, `update`, `delete` untuk `categories`, `customers`, `suppliers`.
@@ -1255,7 +1255,7 @@ Status: **PILOT / GUARDED / FIREBASE DEFAULT**.
 Rules:
 - `Categories.jsx` and `Customers.jsx` may read/write through repository boundary.
 - Default repository mode remains `firebase_primary`.
-- `offline_local` only applies after dev/admin enables offline repository pilot with guarded confirmation in Testing & Reset Center.
+- `sqlite_sidecar` adalah mode lokal aktif untuk pilot Categories/Customers. Nilai legacy `offline_local` dipetakan ke `sqlite_sidecar`.
 - Customer code must remain immutable and valid: `CUS-DDMMYYYY-001`.
 - In offline mode, customer code is generated from local IndexedDB data only and must not call Firestore counters.
 - Offline delete is tombstone local data + `sync_queue`; it must not delete Firebase automatically.
@@ -1267,7 +1267,7 @@ Rules:
 Status: **GUARDED / FIREBASE PRIMARY MASIH AKTIF UNTUK TRANSAKSI**.
 
 - Halaman `Master Data / Customers` sekarang melewati `customersRepository` sebagai boundary data.
-- Default tetap `firebase_primary`; mode `offline_local` hanya aktif jika dev guard repository mode diaktifkan dari Testing & Reset Center.
+- Default repository pilot menjadi `sqlite_sidecar`; Firebase hanya fallback manual sampai migrasi modul terkait selesai.
 - Kode customer tetap wajib `CUS-DDMMYYYY-001`, dibuat otomatis, dan tidak boleh diedit manual setelah create.
 - Helper format customer code dipusatkan di `src/utils/references/customerCodeReference.js` agar Firebase service dan Dexie adapter tidak membuat regex/format berbeda.
 - Delete customer pada mode offline adalah tombstone local + `sync_queue`, bukan delete Firebase langsung.

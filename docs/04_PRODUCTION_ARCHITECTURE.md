@@ -100,6 +100,10 @@ Alur source cost aktif:
 - Saat Complete Work Log, `laborCostActual` langsung di-accrue dari rule Tahapan Produksi dan jumlah operator agar HPP output tidak menunggu user klik Paid payroll. Payroll `paid/confirmed` hanya menjadi final adjustment/reconcile jika nominal final berbeda dari accrued labor.
 - Weighted average cost/HPP memakai zero-cost baseline protection: jika stok lama masih ada tetapi cost/HPP master 0 karena reset/data lama, stok lama tidak boleh dihitung sebagai modal 0 saat ada pembelian/produksi baru; cost masuk pertama yang valid menjadi baseline.
 - Snapshot BOM/PO hanya cache requirement; snapshot Work Log yang sudah dipotong menjadi histori costing material untuk completed Work Log, inventory log, payroll/final HPP history, dan transaksi yang sudah final.
+- Start Production material out wajib menulis master stock, `inventory_logs`, dan `stock_item_read_models` dalam transaction yang sama.
+- Complete Work Log output in wajib menulis master stock, `inventory_logs`, dan `stock_item_read_models` dalam transaction yang sama.
+- Complete Work Log legacy fallback material out wajib menulis `inventory_logs` saat stok material benar-benar dipotong dan sync `stock_item_read_models`, supaya histori audit dan Dashboard/Stock Report tidak stale.
+- Jika ada beberapa line material/output yang mengarah ke item/varian yang sama, mutasi wajib diakumulasi dari state stok progresif sebelum write final agar tidak ada overwrite antar-line.
 - Reset Modal/HPP wajib merefresh BOM estimate dari master cost pasca-reset, menjaga `laborCostEstimate` dari step dan `overheadCostEstimate` existing.
 
 Presisi dan pembulatan HPP:
@@ -387,3 +391,32 @@ Rule aktif:
 - Jika item sudah punya cost/HPP master valid, Stock Adjustment tetap hanya koreksi stok dan tidak meng-average ulang cost lama. Pembelian resmi tetap menjadi flow utama untuk incoming cost baru.
 - Raw Material purchase dan output produksi memakai weighted average dengan zero-cost baseline protection. Contoh: stok lama 100 pcs dengan average cost 0, lalu beli/produksi 10 pcs dengan cost 1.000, average cost menjadi 1.000, bukan 90,9.
 - Reset Modal/HPP hanya boleh dipakai untuk data test. Jika stok asli masih ada, simpan baseline/isi ulang modal via Stock Adjustment guard sebelum transaksi baru.
+
+---
+
+## Offline Read-Only Snapshot Boundary — Batch 41-44
+
+Status: **GUARDED / FIREBASE PRIMARY / READ-ONLY**.
+
+Production architecture tetap online-first. Offline database hanya boleh membaca snapshot:
+
+- Planning snapshot.
+- Production Order snapshot.
+- Work Log snapshot.
+- BOM snapshot.
+- Payroll snapshot read-only.
+- HPP snapshot derived read-only.
+
+Boundary yang tidak boleh dilanggar:
+
+- Tidak boleh start production offline.
+- Tidak boleh finish production offline.
+- Tidak boleh consume raw/semi material offline.
+- Tidak boleh menulis output stock dari Work Log offline.
+- Tidak boleh create/confirm/paid payroll offline.
+- Tidak boleh membuat expense payroll offline.
+- Tidak boleh finalize HPP offline.
+
+HPP final tetap mengikuti resolver aktif: Work Log completed + payroll final/confirmed/paid + rule step. Estimasi labor dari step boleh tampil di UI sebagai preview, tetapi tidak boleh dipakai sebagai final HPP.
+
+Referensi batch offline: `docs/13_OFFLINE_PRODUCTION_PAYROLL_HPP_CONTRACT.md`.

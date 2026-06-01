@@ -44,6 +44,7 @@ Theme aktif memakai kombinasi **blue/navy primary, muted gold/yellow accent, whi
 ## Aturan penggunaan warna
 
 - Biru/navy dipakai untuk primary action, active navigation, link, selected state, dan focus ring.
+- Primary action wajib memakai token teks kontras `--ims-color-on-primary` agar tombol tetap readable pada light/dark mode.
 - Muted gold/yellow dipakai hemat sebagai accent kecil: active menu marker, garis aksen kecil, ornament icon, selected/focus accent, atau badge subtle.
 - Gold/yellow tidak boleh menjadi background besar, semua CTA, text panjang, atau pengganti status warning semantic.
 - Warning semantic memakai amber/orange terpisah dari brand gold agar status bisnis tidak ambigu.
@@ -139,6 +140,21 @@ Aturan penting:
 - Di mobile, action utama boleh wrap atau turun ke bawah selama tetap dalam container dan tidak overlap.
 - Jangan meletakkan action utama di sisi kiri jika halaman sudah memakai pola title kiri + action kanan.
 - Header tidak boleh dipakai untuk menjelaskan seluruh flow bisnis. Penjelasan panjang tetap di docs, bukan di UI harian.
+
+
+## Standar Mobile App Shell
+
+- Pada viewport tablet/HP, sidebar tidak boleh memakai collapsed sidebar desktop yang tetap memakan lebar content. App shell harus memakai drawer navigasi dari tombol menu di header.
+- Drawer navigasi mobile tetap memakai `SidebarLogo` dan `SidebarMenu` existing agar role-aware menu, selected route, dan nested accordion tidak berubah.
+- Drawer mobile harus tertutup setelah route berubah agar layar kembali fokus ke halaman tujuan.
+- Header mobile harus compact: tombol menu di kiri, greeting tetap ringkas, subtitle global boleh disembunyikan, dan action user tidak boleh membuat horizontal overflow.
+- Content card mobile harus memakai full width dengan padding lebih kecil; jangan memakai fixed height content yang bergantung pada asumsi tinggi header desktop.
+- Table pada mobile boleh memakai horizontal scroll lokal di dalam card/table wrapper. Jangan membuat body/shell ikut horizontal scroll.
+- Drawer dan modal pada mobile harus dibatasi `100vw`/viewport dan body-nya boleh scroll vertikal agar form/detail panjang tetap bisa diakses.
+- Filter field pada mobile boleh full-width agar input/select/date tidak saling menghimpit.
+- Filter dan PageHeader action boleh turun ke bawah/full-width selama tombol utama tetap terlihat, tidak overlap, dan callback/action tidak berubah.
+- Top header button wajib punya focus outline yang jelas untuk keyboard navigation.
+- Perubahan mobile shell harus UI-only; tidak boleh mengubah route config, sidebar menu config, role guard, auth, schema, service, stock, purchase, sales, production, payroll, HPP, finance, report, reset, atau audit log.
 
 ## Standar Detail Drawer
 
@@ -316,7 +332,7 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 
 - Halaman Login memakai logo resmi sebagai lockup brand yang clean, bukan ilustrasi besar dengan frame berat.
 - Logo Login tidak boleh tertimpa orb/shape dekoratif.
-- Panel brand dan form harus seimbang; form login tetap menjadi fokus utama user.
+- Panel brand dan form harus seimbang; pada mobile final, logo brand boleh menjadi fokus visual utama selama form tetap langsung terlihat dan mudah dipakai.
 - Dekorasi background harus flat, lembut, berbasis token blue/navy + gold accent kecil, dan tidak memakai gradient baru.
 - Perubahan Login harus mengutamakan CSS scoped `.ims-login-*`; `Login.jsx` hanya disentuh untuk struktur visual, bukan auth flow.
 - `Login.jsx` auth flow, `handleLogin`, `profileStatus`, blocked user, dan logout blocked user adalah area **GUARDED**.
@@ -327,7 +343,7 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 - Logo Flanel Karawang Industries tampil bebas tanpa frame/showcase berat dan tidak boleh tertimpa orb/dekorasi.
 - Brand panel boleh memakai shape/curve flat blue-gold yang halus, tetapi tidak boleh memakai gradient baru dan tidak boleh mengalahkan form login.
 - Form login tetap menjadi fokus utama dengan card putih solid, shadow lembut, input jelas, dan button primary blue kuat.
-- Mobile memakai prinsip form-first: form tampil terlebih dahulu, brand panel turun ke bawah agar tidak membuat scroll terlalu panjang.
+- Mobile memakai prinsip brand-first single card: badge `Inventory Management System` kecil di kiri atas, logo besar tanpa frame/wrap khusus, form langsung berada di bawah logo, dan heading `Akses Internal/Masuk ke Sistem` tidak ditampilkan agar tidak ramai.
 - Perubahan Login harus scoped di `.ims-login-*`; auth flow, `AuthContext`, route guard, role access, dan modul bisnis tetap **GUARDED**.
 
 ## Standar Login full-page corporate final
@@ -335,8 +351,9 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 - Brand area kiri harus terasa menyatu dengan viewport, memakai aksen geometric minimalis, bukan dekorasi bulat besar yang dominan.
 - Logo Flanel Karawang Industries menjadi elemen utama brand panel: besar, presisi, center, bebas dari frame berat, dan tidak tertimpa dekorasi.
 - Copy brand dibuat kecil dan ringan agar tidak mengalahkan logo dan form login.
-- Note internal ditempatkan sebagai supportive footer note, bukan elemen utama.
+- Note internal ditempatkan sebagai supportive footer note, bukan elemen utama; pada mobile note tampil setelah form agar tidak memecah fokus logo dan input.
 - Form login tetap menjadi fokus aksi dengan card putih solid, button primary blue, input readable, dan focus state jelas.
+- Logo utama Login boleh memakai asset WebP teroptimasi dengan PNG fallback agar performa lebih baik tanpa mengubah brand lockup.
 - Perubahan Login tetap scoped pada `.ims-login-*`; auth flow, route guard, role access, Sidebar, Dashboard, dan modul bisnis tetap **GUARDED**.
 
 ## Standar global/auth/route loading logo
@@ -409,3 +426,20 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 - Tabel utama master inventory **tidak boleh** menampilkan caption panjang seperti `Perlu restock: Merah 0 pcs, Putih 0 pcs +2 lainnya` karena membuat UI ramai dan duplikatif. Status cukup memakai tag ringkas, sedangkan varian bermasalah cukup terlihat dari pill stok varian.
 - Informasi cost/modal/HPP aktif lebih prioritas daripada caption restock berulang pada tabel utama. Caption restock detail boleh dipakai di drawer, report, audit, atau halaman analisis bila konteksnya memang troubleshooting.
 - Ringkasan harus dibatasi agar aman untuk data banyak, mobile, dan table compact. Detail varian lengkap tetap berada pada daftar pill/detail drawer.
+
+## Standar Offline Repository Status Banner
+
+- Page master data pilot yang bisa berpindah repository (`Categories`, `Customers`) wajib menampilkan banner mode data di bawah `PageHeader`.
+- Banner harus menjelaskan source aktif dengan bahasa user-facing: `Firebase Server` untuk `firebase_primary`, dan `Browser Local / IndexedDB` untuk `offline_local`.
+- Saat offline aktif, copy harus mengingatkan bahwa perubahan belum otomatis masuk Firebase sampai user menjalankan sync `Offline → Firebase`.
+- Empty state offline tidak boleh hanya menulis `Belum ada data`; harus menjelaskan kemungkinan local DB belum diisi dan memberi shortcut ke `Offline Database Center` untuk menjalankan `Firebase → Offline`.
+- Banner harus compact, responsive, dan tidak menggantikan table/action utama. Detail queue, conflict resolver, backup, dan sync tetap berada di `Offline Database Center`.
+- Perubahan banner adalah UI-only. Jangan menyisipkan write/sync otomatis, schema change, route/menu baru, atau business flow transaksi di komponen status.
+
+## Standar Action Result Popup — Success/Error Only
+
+- Popup hasil proses hanya dipakai untuk status sukses dan error/gagal.
+- Warning/info cukup memakai toast ringan Ant Design; jangan dijadikan popup modal agar user tidak terganggu untuk preview, dry-run, filter, dan status ringan.
+- Popup sukses/error harus tetap muncul setelah modal konfirmasi tertutup, terutama pada Reset Maintenance dan Offline Database Center.
+- Error popup boleh menyediakan tombol salin detail, tetapi isi detail harus user-facing dan tidak boleh menampilkan Firestore technical ID, stack trace panjang, secret, credential, atau payload mentah.
+- Popup tidak menggantikan confirm guard. Aksi destructive tetap wajib preview + keyword confirmation sebelum proses berjalan.

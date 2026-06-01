@@ -7,10 +7,26 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Build output
+dist/
+dist-ssr/
+frontend/dist/
+frontend/dist-ssr/
+build/
+coverage/
+.cache/
+.vite/
+
+# Local env
 *.local
+.env
+backend/.env
+frontend/.env
 
 # Editor directories and files
 .vscode/*
@@ -23,5 +39,16 @@ dist-ssr
 *.sln
 *.sw?
 
-# Root build artifacts accidentally committed; keep src/assets tracked.
+# Root build artifacts accidentally committed; keep frontend/src/assets tracked.
 /assets/
+
+# IMS SQLite local backend runtime data
+/data/*
+!/data/.gitkeep
+/backups/*
+!/backups/.gitkeep
+/backups/sqlite/*
+!/backups/sqlite/.gitkeep
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

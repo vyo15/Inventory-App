@@ -1,5 +1,17 @@
 # CURRENT STATE & TECH DEBT — IMS Bunga Flanel
 
+## Update UI/UX Sales Channel — Patch channel report polish
+
+Status: **AKTIF / UI-DISPLAY ONLY**.
+
+- Patch Firestore Rules untuk `business_code_counters` sengaja **ditunda** karena owner menyatakan arah berikutnya adalah SQLite/offline database, bukan Firebase sebagai target final. File `firestore.rules` tidak diubah pada patch ini.
+- Selama source runtime masih memakai service Firebase lama, semua perubahan SQLite/PostgreSQL/local database tetap wajib task migrasi terpisah; patch ini tidak mengubah schema, collection, stock mutation, finance, production, payroll, atau offline mutation.
+- Sales channel sekarang punya single source di `src/constants/salesChannelOptions.js` untuk opsi input, label grup, fallback `Belum Dikategorikan`, marketplace set, dan helper summary.
+- `Sales.jsx` dan `SalesReport.jsx` memakai helper summary yang sama agar tampilan penjualan per channel tidak beda antara transaksi dan laporan.
+- `SalesReport.jsx` menambahkan section `Performa Channel` compact; detail transaksi final tetap di tabel utama dan export XLSX tetap memakai kolom Channel + Order Marketplace/Resi.
+- Dashboard duplicate helper activity/planning/cost dipusatkan kembali ke `src/pages/Dashboard/helpers/dashboardPageHelpers.js`; perubahan ini read-only display dan tidak mengubah query/service.
+
+
 Dokumen ini tidak berisi tebakan. Semua poin di bawah berasal dari temuan audit source code saat ini.
 
 ## Bagian yang Sudah Terlihat Matang
@@ -124,7 +136,7 @@ Audit terbaru memakai `src.zip` dan `docs.zip` yang diupload pada task ini. Hasi
 - File besar lain yang terkonfirmasi dari source aktual setelah rangkaian extraction/cleanup dan P2 split: `src/services/Produksi/productionWorkLogsService.js` 2404 baris + helper 365 baris, `src/pages/Produksi/ProductionWorkLogs.jsx` 1617 baris setelah P2-A/P2-B UI split, `src/pages/Transaksi/Purchases.jsx` 1285 baris setelah P2-D UI split, `src/pages/Utilities/ResetMaintenanceData.jsx` 1335 baris setelah P2-C orchestration split, `src/services/Maintenance/resetMaintenanceDataService.js` 1863 baris + config 282 baris, `src/pages/Produksi/ProductionBoms.jsx` 1798 baris, `src/pages/MasterData/RawMaterials.jsx` 1766 baris, `src/pages/Produksi/ProductionOrders.jsx` 1737 baris, `src/pages/Produksi/SemiFinishedMaterials.jsx` 1720 baris, `src/pages/Dashboard/Dashboard.jsx` 1383 baris, dan `src/pages/Transaksi/Sales.jsx` 1108 baris.
 - Ini bukan alasan untuk refactor besar sekaligus. Statusnya **MAINTAINABILITY DEBT / GUARDED REFACTOR CANDIDATE**: pecah bertahap per modul, behavior-preserving, dan wajib menjaga route, role guard, schema, stock flow, production flow, payroll, purchase, reset, audit log, dan histori transaksi.
 - Path yang tidak ditemukan dan sudah sesuai status docs sebagai legacy/missing: `functions/`, `functions/index.js`, `src/services/Produksi/productionService.js`, `src/pages/Inventory/StockAdjustment.jsx`, `src/utils/access/accessControl.js`, `src/constants/roleOptions.js`, `src/stock.json`, `src/assets/dark-mode.svg`, dan `src/assets/light-mode.svg`. Jangan menjadikannya target patch aktif tanpa source baru.
-- Konflik docs yang ditemukan pada audit ini: `docs/03_BUSINESS_RULES.md` sempat menyatakan `firestore.rules` dan `firebase.json` disertakan di repo, sedangkan `src.zip` terbaru tidak memuat file tersebut dan docs lain sudah menyatakan rules dikelola external/Firebase Console. Status resmi: rules backend wajib aktif dan aman, tetapi source-controlled rules belum menjadi bagian ZIP ini.
+- Sync docs aktual: ZIP source terbaru menyertakan `firestore.rules`, `firestore.indexes.json`, dan `firebase.json`. Patch UI/UX dan report ini tetap **tidak mengubah rules** karena owner sudah mengarahkan migrasi berikutnya ke SQLite/offline database. Selama runtime lama masih memakai Firebase, rules backend tetap wajib diverifikasi manual sebelum deployment.
 - Import relatif source aktif sudah diaudit ringan: tidak ditemukan import relatif yang mengarah ke file hilang. Sidebar menu juga sinkron dengan route aktif; route yang tidak tampil di menu adalah route redirect/system seperti `/`, `/unauthorized`, `/stock-adjustment`, `/utilities/reset-test-data`, dan `*`.
 
 Dampak ke task berikutnya:
@@ -394,8 +406,8 @@ Status aktif:
 - `src/utils/references/businessCodeGenerator.js` memakai prefix query pada document ID dan field kode bisnis sebelum fallback legacy full scan.
 
 Guarded / belum diubah:
-- Counter atomic `business_code_counters` sudah disetujui dan aktif bertahap sejak Batch 16B/16C/16D; Firestore Rules production tetap wajib diverifikasi manual karena rules tidak ada di ZIP.
-- Stock Report masih membaca master stock yang relevan secara one-time karena laporan stok perlu menyatukan raw materials, semi-finished, dan products. Batch 17A menambah guard read per collection agar satu sumber gagal tidak mengosongkan seluruh laporan; Batch 17B menyiapkan kontrak `stock_item_read_models` dan builder payload; Batch 17C menambahkan audit/rebuild maintenance, tetapi belum mengubah query Stock Report atau kontrak export.
+- Counter atomic `business_code_counters` sudah disetujui dan aktif bertahap sejak Batch 16B/16C/16D. File rules ada di repo ZIP terbaru, tetapi patch rules sengaja ditunda karena arah owner adalah SQLite; selama runtime Firebase lama masih dipakai, `business_code_counters` tetap wajib diverifikasi di backend/deployment rules.
+- **SUPERSEDED oleh source aktual:** Stock Report sekarang membaca `stock_item_read_models` sebagai read path utama dengan paging/export dan fallback guarded ke master stock jika read model kosong/gagal. Batch lama 17A–17C tetap historis sebagai foundation/backfill, bukan status runtime terbaru.
 - Perubahan schema/read model baru di luar counter kode bisnis tetap wajib approval terpisah.
 
 
@@ -642,7 +654,7 @@ Risiko:
 =====================================================
 
 - Firestore Rules wajib aktif dan aman di backend Firebase.
-- Pada repo ZIP saat ini, file `firestore.rules` tidak disertakan karena rules dikelola manual/external di Firebase Console.
+- Pada repo ZIP aktual, `firestore.rules`, `firestore.indexes.json`, dan `firebase.json` disertakan sebagai source-controlled artifact, tetapi patch ini tidak mengubah rules karena arah owner adalah SQLite/offline database.
 - Kondisi ini bukan bug source wajib untuk patch ini, tetapi tetap menjadi dependency deployment/security yang harus diverifikasi di Firebase.
 - Rules final/staged-final wajib membaca actor profile dari `system_users/{request.auth.uid}`.
 - Rules aktif hanya mengenal role `administrator` dan `user`.
@@ -833,6 +845,12 @@ Risiko:
 - **AKTIF:** copy deskripsi Login dibuat lebih kecil dan note internal diposisikan sebagai supportive footer note.
 - **GUARDED:** perubahan tetap CSS-only; `Login.jsx`, `AuthContext`, route guard, role access, Sidebar, Dashboard, transaksi, stok, cashflow, produksi, HPP, reports, dan service tidak diubah.
 - **CLEANUP CANDIDATE:** fine tuning visual Login berikutnya cukup dilakukan di `Login.css`; jangan campur dengan cleanup App.css/AntD portal guard atau business modules.
+
+## Update Login mobile brand-first single card — 2026-06-01
+- **AKTIF:** mobile Login memakai satu card menyatu: badge `Inventory Management System` kecil di kiri atas, logo besar tanpa frame/wrap khusus, form tepat di bawah logo, dan note internal setelah form.
+- **AKTIF:** heading form `Akses Internal`, `Masuk ke Sistem`, dan deskripsi login disembunyikan pada mobile agar tidak ramai dan logo tetap menjadi fokus visual utama.
+- **GUARDED:** perubahan hanya di `Login.css` dan docs; `Login.jsx`, `AuthContext`, route guard, role access, transaksi, stok, produksi, payroll, HPP, finance, report, reset, dan service tidak disentuh.
+- **CLEANUP CANDIDATE:** jika nanti desain desktop ingin mengikuti mobile single-card, lakukan batch terpisah karena desktop saat ini tetap mempertahankan layout dua panel existing.
 
 ## Update UI Table Compact — 2026-05-06
 - Cash In, Stock Adjustment Panel, Pricing Rules, Products, Supplier, Stock Report, dan Semi Finished Materials memakai table utama yang lebih compact tanpa horizontal scroll default pada desktop normal.
@@ -1172,7 +1190,7 @@ Batasan yang sengaja tidak diubah:
 - Auto payroll deterministic per worker/work log tetap dipertahankan; hanya payroll manual `PAY-*` yang memakai counter daily.
 
 Risiko tersisa:
-- Jika `business_code_counters` belum diizinkan di Firestore Rules production, create kode baru yang memakai counter akan gagal. Rules tidak ada di ZIP sehingga wajib diverifikasi di Firebase console/deployment rules.
+- Jika runtime Firebase lama masih dipakai dan `business_code_counters` belum diizinkan di Firestore Rules production, create kode baru yang memakai counter dapat gagal. File rules ada di ZIP aktual, tetapi tidak dipatch pada batch ini karena rules/Firebase bukan target final owner.
 ### Batch 17A — Stock Report partial read guard
 
 Status historis:
@@ -1209,7 +1227,7 @@ Guarded / status aktif terbaru:
 - `stock_item_read_models` adalah derived read model, bukan source of truth. Source of truth tetap master item stock fields dan `inventory_logs`.
 
 Risiko tersisa:
-- Jangan switch Dashboard/Stock Report ke `stock_item_read_models` sebelum writer sync realtime semua jalur mutasi stok siap, karena read model stale bisa menampilkan stok salah.
+- **SUPERSEDED oleh source aktual:** Dashboard dan Stock Report sudah memakai `stock_item_read_models` sebagai read path dengan fallback guarded ke master stock. Writer sync utama untuk purchases, sales, returns, stock adjustment, production reserve/release, production work log material/output, dan maintenance rebuild sudah masuk; read model tetap derived/cache, bukan source of truth.
 - Query issue seperti `hasStockIssue == true` + `orderBy(statusRank, sortGap)` kemungkinan butuh composite index Firestore. Jangan mengganti ke full scan permanen jika index belum dibuat.
 - Export Stock Report harus diputuskan sebelum switch: export semua matching filter dari read model dengan paging batch, bukan hanya page aktif, kecuali UI memberi disclosure jelas.
 
@@ -1233,12 +1251,12 @@ Guard Batch 17C:
 - Tidak mengubah Dashboard, Stock Report, writer stok besar, transaksi, master stock, inventory log, produksi, HPP, payroll, finance, route/menu, atau role guard.
 - `stock_item_read_models` tetap derived read model. Source of truth tetap master item stock fields dan `inventory_logs`.
 - Batch ini hanya backfill/rebuild manual dari master stock saat tombol maintenance dijalankan; belum menjamin realtime sync setelah transaksi baru.
-- Firestore Rules dan index collection `stock_item_read_models` tetap harus diverifikasi manual karena rules/index tidak ada di ZIP frontend.
+- Firestore Rules dan index collection `stock_item_read_models` tetap harus diverifikasi manual selama runtime Firebase lama masih dipakai. File rules/index ada di ZIP aktual, tetapi tidak diubah pada batch ini karena arah migrasi owner adalah SQLite.
 
 Risiko tersisa Batch 17C:
 - Jika user belum menjalankan rebuild setelah perubahan master stock, read model bisa stale.
 - Jika production rules belum mengizinkan write ke `stock_item_read_models`, rebuild maintenance bisa gagal.
-- Dashboard/Stock Report belum boleh switch ke read model sampai writer sync realtime semua jalur mutasi stok selesai dan export/paging contract disetujui.
+- **SUPERSEDED oleh source aktual:** Dashboard/Stock Report sudah switch ke read model dengan fallback guarded dan Stock Report sudah memiliki paging/export contract. Tugas tersisa adalah regression test berkala dan verifikasi jika ada flow mutasi stok baru.
 
 
 ## Batch 16D - Atomic Counter Cleanup, Production Planning, dan Karyawan Produksi — 2026-05
@@ -1261,15 +1279,15 @@ Batasan:
 
 Status source terbaru setelah rebase patch gabungan:
 
-- Dashboard/Stock Report saat ini memakai shared Stock Row Mapper untuk comparator stok bersama; ini bukan persisted Firestore read model. Batch 17B menambahkan foundation `stock_item_read_models`; Batch 17C menambahkan maintenance audit/rebuild untuk backfill manual. Belum ada wiring Dashboard/Stock Report dan belum ada writer sync realtime semua jalur mutasi stok.
+- **SUPERSEDED oleh batch terbaru:** Dashboard/Stock Report sekarang membaca persisted derived collection `stock_item_read_models` sebagai jalur normal dengan fallback guarded ke master stock. Production Work Log juga sudah sync read model saat Start Production material out, legacy complete material out fallback, dan Complete Work Log output in.
 - ResetMaintenanceData sudah memakai `useMasterDataExport`, `useResetMaintenanceAudits`, dan `useResetMaintenanceRepairs`, serta modal/status card split kecil agar page tidak kembali jumbo.
 - `useDataQualityAudit.js`, `useLegacyDataAudit.js`, `useMasterCodeMaintenance.js`, `useProductionMaintenance.js`, dan `useResetAuditOverview.js` bukan kontrak aktif setelah hook consolidation; jika masih ada pada working tree lokal, hapus sesuai delete list patch gabungan.
 - Repair Side-Effect Transaksi sudah naik dari preview-only ke guarded repair aktual dengan keyword `REPAIR TRANSAKSI`; service hanya membuat side-effect yang hilang dan tidak mengubah stok master/transaksi utama.
-- Firestore Rules/index tetap external/manual karena repo ZIP belum menyertakan source-controlled rules/index config final; jangan membuat rules/index asumtif dari frontend ZIP saja.
+- Firestore Rules/index ada di ZIP aktual, tetapi tidak diubah pada batch ini karena owner mengarahkan migrasi berikutnya ke SQLite. Jangan membuat patch rules asumtif tanpa task security/rules terpisah.
 
 Tech debt tersisa:
 
-- Laporan besar masih butuh switch query ke read model/paging jika dataset membesar; foundation dan maintenance backfill `stock_item_read_models` sudah ada, tetapi writer sync realtime, Firestore Rules/index, Dashboard switch, dan Stock Report export contract tetap batch lanjutan.
+- Laporan besar masih perlu dipantau performanya saat dataset membesar, tetapi Stock Report sudah memakai read model + paging/export batch. Tugas tersisa: regression test writer sync, audit index/rules selama runtime Firebase lama masih dipakai, dan rencana migrasi SQLite sebagai batch database terpisah.
 - `src/services/Maintenance/resetMaintenanceDataService.js` tetap besar dan destructive; split service destructive harus batch terpisah dengan approval eksplisit.
 - `src/pages/Transaksi/Purchases.jsx` masih sensitif karena OCR, stock in, expense, supplier reference, dan average cost; lanjut split harus kecil dan behavior-preserving.
 
@@ -1314,7 +1332,7 @@ Sudah aktif:
 Tech debt tersisa:
 - Sales transaction, stock posting, income creation, dan inventory log masih Firebase-first dan belum punya offline queue. Ini sengaja belum disentuh.
 - Customer local yang belum disync tidak boleh dipakai di Sales karena bisa menghasilkan referensi transaksi ke dokumen yang belum ada di Firebase.
-- Supplier masih belum boleh diaktifkan ke Firebase sync karena masih terkait `SupplierPurchases`, raw material, dan purchase linkage.
+- Supplier masih belum boleh diaktifkan ke Firebase sync karena masih terkait `SupplierPurchases`, raw material, dan purchase linkage; supplier local hanya snapshot read-only hasil pull Firebase → Offline.
 - Perlu batch audit khusus sebelum dropdown Sales, Purchase, atau modul transaksi lain membaca repository offline.
 
 
@@ -1340,8 +1358,9 @@ Kondisi saat ini:
 
 - Categories dan Customers bisa dipakai sebagai pilot offline.
 - Ada pull sync Firebase → Local agar data offline tidak kosong saat mode offline aktif.
-- Ada push sync Local → Firebase untuk queue pending.
-- Supplier/Product/Raw/Semi/Stock/Purchase/Sales transaction/Production/Payroll/HPP tetap guarded dan belum masuk runtime offline.
+- Ada push sync Local → Firebase untuk queue pending Categories/Customers.
+- Supplier boleh dipull sebagai snapshot read-only, tetapi tidak boleh masuk write runtime/sync queue.
+- Product/Raw/Semi/Stock/Purchase/Sales transaction/Production/Payroll/HPP tetap guarded dan belum masuk runtime offline.
 
 Tech debt yang masih tersisa:
 
@@ -1365,3 +1384,134 @@ Batasan:
 
 - Perubahan ini hanya menata UX. Tidak ada schema, collection, route/menu/role guard, dependency, flow stok, transaksi, produksi, payroll, HPP, atau reset destructive yang diubah.
 - `ResetSafeRepairPanel` masih menyimpan beberapa tabel repair di dalam tab `Repair Aman`; refactor internal per repair area bisa dibuat batch terpisah jika masih terasa terlalu panjang setelah dipakai.
+
+## Fase 1 Offline UX Guard — Batch 23–25
+
+Status: **AKTIF / UI-ONLY / GUARDED**.
+
+Perubahan terbaru berfokus pada kejelasan penggunaan database offline, terutama saat user membuka master data pilot.
+
+Sudah aktif:
+- `Categories.jsx` dan `Customers.jsx` sekarang menampilkan status mode data secara eksplisit: Firebase Mode atau Offline Mode.
+- Banner mode menampilkan source data aktif, jumlah `sync_queue` pending, tombol refresh, dan shortcut ke `Offline Database Center`.
+- Empty state saat `offline_local` tidak lagi terlihat seperti bug kosong biasa. UI memberi arahan untuk menjalankan `Firebase → Offline` agar IndexedDB local terisi.
+- Helper `getPendingSyncQueueCount()` ditambahkan di `syncQueueService.js` sebagai read-only helper untuk status UI.
+- Komponen baru `OfflineRepositoryStatus.jsx` bersifat presentational-only dan dipakai bersama oleh Categories/Customers agar wording tidak duplikatif.
+
+Guard yang tetap berlaku:
+- Tidak ada perubahan schema, collection, route/menu/role guard, dependency, Firebase rules, transaksi, stock, purchase, sales transaction write, finance, production, payroll, HPP, atau reset destructive flow.
+- Offline runtime write masih pilot untuk `categories` dan `customers` saja; supplier hanya read-only snapshot.
+- Supplier/Product/Raw/Semi/Stock/Purchase/Sales transaction/Production/Payroll/HPP tetap belum boleh masuk runtime offline tanpa kontrak dan approval terpisah.
+
+Tech debt tersisa:
+- Queue pending yang ditampilkan masih total semua collection offline pilot, bukan breakdown per collection di master page.
+- Conflict resolver, queue detail, dan backup tetap dikelola dari `Offline Database Center`, bukan dari page master data agar page utama tetap compact.
+
+Status: **SOURCE-COMPLETE / AKTIF / GUARDED**.
+
+- `Offline Database Center` sekarang punya tab `Health` untuk audit read-only local data Fase 1: queue invalid, conflict unresolved, duplicate customer code, tombstone, snapshot kosong, queue pending terlalu lama, dan collection di luar allowlist.
+
+- Delete tombstone local tetap tidak otomatis menghapus Firebase dari panel sync default; ini sengaja guarded untuk menghindari destructive delete tanpa review. Health audit akan memberi catatan agar user tidak mengira queue delete hilang.
+- Conflict resolver, queue detail, backup, dan health audit tetap dikelola dari `Offline Database Center`, bukan dari page master data agar page utama tetap compact.
+
+## Offline Performance Hardening — Batch 50
+
+Status: **AKTIF / BUILD-ONLY + UI CODE-SPLIT / GUARDED**.
+
+Perubahan terbaru berfokus pada pengurangan ukuran chunk awal tanpa mengubah business flow:
+
+- `vite.config.js` memakai `manualChunks` untuk memisahkan vendor besar: React/router, Firebase, Dexie, Dayjs, XLSX, dan vendor lain; Ant Design/rc components dibiarkan auto-split oleh Rollup/Vite agar tidak menjadi satu chunk besar.
+- `ResetMaintenanceData.jsx` memuat panel maintenance berat dengan `React.lazy` + `Suspense` lokal:
+  - Skenario & Audit,
+  - Repair Aman,
+  - Reset & Export,
+  - Offline DB.
+- `OfflineDatabaseCenter.jsx` memuat `OfflineLocalDbBackupPanel` secara lazy saat tab Backup & Restore dibuka.
+
+Guard yang tetap berlaku:
+
+- Tidak ada perubahan route, sidebar, role guard, dependency, reset keyword, stock, purchase, sales, returns, finance ledger, production, payroll, HPP, atau destructive reset.
+- Perubahan ini hanya memengaruhi cara bundle dibagi dan kapan komponen UI berat dimuat.
+- `xlsx` tetap dynamic import dari helper export; tidak dipindahkan ke import statis.
+
+## Report/Finance Runtime Snapshot — Batch 40 Runtime Closure
+
+Status: **AKTIF / READ-ONLY SNAPSHOT / FIREBASE-PRIMARY / GUARDED**.
+
+Batch 40 kini memiliki runtime snapshot aman di `Offline Database Center` tab `Snapshot Report`:
+
+- Snapshot disimpan ke IndexedDB table `report_snapshots` dengan schema local v4.
+- Snapshot yang tersedia:
+  - Dashboard Summary,
+  - Stock Report Snapshot,
+  - Sales Report Snapshot,
+  - Purchases Report Snapshot,
+  - Finance Summary Snapshot.
+- Semua snapshot dibangun dari service read Firebase-primary yang sudah ada:
+  - `readDashboardData`,
+  - `fetchStockReportData`,
+  - `fetchSalesReportData`,
+  - `fetchPurchasesReportData`,
+  - `fetchProfitLossReportData`.
+- Snapshot diberi metadata `readOnlySnapshot=true`, `offlineMutationAllowed=false`, `syncStatus=synced`, dan tidak masuk `sync_queue`.
+
+Guard penting:
+
+- Tidak ada offline mutation untuk `revenues`, `incomes`, `expenses`, `sales`, `purchases`, `returns`, `inventory_logs`, `stock_item_read_models`, production, payroll, atau HPP.
+- Finance/report final tetap Firebase-primary.
+- Snapshot local tidak menghitung ulang ledger/profit/loss dari local draft atau queue pending.
+- Snapshot local hanya referensi offline/preview; bukan sumber laporan final.
+
+Tech debt tersisa:
+
+- Halaman Dashboard/Report final belum membaca snapshot offline secara otomatis. Ini sengaja ditahan agar user tidak salah mengira snapshot sebagai laporan final.
+- Jika nanti ingin mode baca offline langsung di halaman report, wajib ada badge cache, timestamp `pulledAt/generatedAt`, dan warning jelas bahwa data hanya snapshot terakhir.
+
+## Offline QA Regression & Documentation Closure — Batch 51–52
+
+Status: **AKTIF / DOCS + QA CONTRACT / GUARDED**.
+
+Dokumentasi final ditambahkan untuk membantu regression manual sebelum merge/deploy:
+
+- `docs/14_OFFLINE_QA_REGRESSION.md` berisi checklist regresi full modul online/offline, backup/restore, queue/conflict, snapshot read-only, dan report/finance snapshot.
+- `docs/15_OFFLINE_USER_GUIDE.md` berisi panduan user offline mode, batasan, troubleshooting, dan daftar boleh/tidak boleh.
+
+Catatan:
+
+- QA regression tidak mengubah runtime bisnis.
+- Dokumentasi menegaskan bahwa offline write saat ini hanya `Categories` dan `Customers`.
+- Semua area stock, purchase, sales, returns, finance, report, production, payroll, HPP, dan reset destructive tetap guarded.
+
+## Batch 53 — RC Final Hardening P1-P3
+
+Status: **AKTIF / SOURCE PATCHED / MANUAL QA REQUIRED**.
+
+Yang ditutup:
+
+- P1 update conflict guard: sync update `categories/customers` tidak boleh overwrite Firebase jika remote berubah setelah data dipull.
+- P1 health audit: snapshot read-only wajib punya `readOnlySnapshot=true`; data lama/restored tanpa flag harus muncul sebagai warning.
+- P1 docs cleanup: kontrak offline diselaraskan ke schema v4 dan UI utama Offline Database Center.
+- P2 QA/security follow-up: Firestore rules broad, Firebase config hardcoded, dan dependency `xlsx` dicatat sebagai risiko follow-up tanpa perubahan runtime/dependency.
+- P3 legacy cleanup: `OfflineSyncDevPanel` dan `OfflineMasterDataPilotPanel` diberi status cleanup candidate, tidak dihapus.
+
+Sengaja tidak diubah:
+
+- Firestore rules aktif, route/menu/role guard, Firebase config deployment, dependency, stock/purchase/sales/returns/finance/production/payroll/HPP, dan reset destructive flow.
+
+
+## Update Mobile app shell baseline — 2026-06-01
+
+- **AKTIF:** `src/layouts/AppLayout.jsx` memakai mobile sidebar drawer untuk viewport tablet/HP. Sidebar desktop tetap aktif di laptop/desktop.
+- **AKTIF:** tombol menu mobile berada di header dan drawer otomatis tertutup setelah route berubah.
+- **AKTIF:** `src/App.css` mengubah content shell menjadi flex-height agar tidak bergantung pada fixed `calc(100vh - 92px)` saat header mobile lebih compact.
+- **AKTIF:** table, drawer, modal, PageHeader action, dan FilterBar mendapat responsive baseline agar tidak membuat body horizontal overflow di HP.
+- **GUARDED:** patch ini UI-only; `sidebarMenuItems`, `SidebarMenu` role-aware filtering, route guard, auth, Firestore schema, service, stock, sales, purchase, returns, production, payroll, HPP, finance, report, reset, dan audit log tidak diubah.
+- **CLEANUP CANDIDATE:** halaman dengan tabel sangat kompleks masih bisa dipoles menjadi mobile card view per halaman, tetapi harus batch terpisah karena beberapa halaman menyentuh flow guarded.
+
+## Update Mobile Accessibility & Asset Polish — 2026-06-01
+- **AKTIF:** Top header button focus state memakai outline primary yang jelas untuk keyboard navigation.
+- **AKTIF:** `FilterBar` pada mobile membuat field menjadi full-width agar input/select/date tidak saling menghimpit.
+- **AKTIF:** `PageHeader` action pada mobile boleh wrap dan memakai lebar penuh agar tombol tidak overlap.
+- **AKTIF:** Primary action memakai token `--ims-color-on-primary` supaya teks tetap kontras pada light/dark mode.
+- **AKTIF:** Login memakai asset WebP untuk logo utama dengan PNG fallback, tanpa mengubah auth flow.
+- **GUARDED:** Perubahan ini UI-only; tidak menyentuh route/menu/role guard, service, SQLite/Firebase, stok, purchase, sales, production, payroll, HPP, finance, reset, atau audit log.

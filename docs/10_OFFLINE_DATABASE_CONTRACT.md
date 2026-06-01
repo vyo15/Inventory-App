@@ -1,6 +1,32 @@
 # OFFLINE DATABASE CONTRACT — IMS Bunga Flanel
 
-Status: **BATCH 3 / DATABASE CONTRACT / REVIEWED FROM SOURCE / BELUM MIGRASI RUNTIME**
+Status terbaru: **SQLite local sidecar menjadi runtime offline utama untuk pilot Categories & Customers. Dexie/IndexedDB sudah tidak menjadi runtime aktif.**
+
+Update 2026-06-01 — Source aktual menunjukkan arah baru:
+
+```text
+React Web UI
+-> Repository/adapter IMS
+-> Node.js backend lokal/LAN
+-> SQLite file database lokal
+```
+
+Kontrak aktif:
+- Customers dan Categories boleh read/write ke SQLite local sidecar.
+- Firebase tetap dipertahankan sebagai fallback/legacy sampai migrasi selesai.
+- Dexie/IndexedDB tidak boleh dipakai lagi sebagai runtime aktif.
+- Stock, sales, purchase, returns, finance, production, payroll, HPP, auth, dan restore destructive tetap guarded.
+- Restore SQLite pada tahap C1 hanya **preview-only restore plan**, bukan overwrite database.
+- Laporan/ledger/profit-loss tidak boleh dihitung ulang dari draft/local yang belum final.
+
+---
+
+
+## Arsip kontrak lama IndexedDB
+
+Bagian di bawah ini adalah catatan historis Batch 3 lama. Jika bertentangan dengan status terbaru di atas, gunakan kontrak SQLite terbaru sebagai acuan.
+
+Status legacy: **BATCH 3 / DATABASE CONTRACT / REVIEWED FROM SOURCE / BELUM MIGRASI RUNTIME**
 
 Tanggal audit: 2026-05-27
 
@@ -624,3 +650,46 @@ Alur pakai yang disarankan:
 8. Edit/tambah Categories/Customers.
 9. Preview dan sync `Offline → Firebase` dengan keyword `SYNC MASTER DATA PILOT TO FIREBASE`.
 10. Jika selesai, kembali ke `Firebase Mode`.
+
+## Batch 23–25 — Offline UX Guard Contract
+
+Scope batch ini adalah UX dan observability untuk master data pilot, bukan perluasan runtime offline.
+
+Komponen/halaman aktif:
+- `src/pages/MasterData/Categories.jsx`
+- `src/pages/MasterData/Customers.jsx`
+- `src/components/Layout/Feedback/OfflineRepositoryStatus.jsx`
+- `src/data/sync/syncQueueService.js` read-only helper `getPendingSyncQueueCount()`
+
+Kontrak UX:
+- Page pilot harus selalu menunjukkan mode repository aktif.
+- Page pilot harus memberi arahan saat Offline Mode kosong karena data Firebase belum dipull ke Local.
+- Queue pending boleh ditampilkan sebagai indikator, tetapi penyelesaian sync tetap melalui `Offline Database Center`.
+
+Batasan guarded:
+- Tidak ada auto-pull atau auto-push saat page dibuka.
+- Tidak ada sync destructive otomatis.
+- Tidak ada perluasan allowlist ke supplier/product/raw/semi/stock/purchase/sales transaction/finance/production/payroll/HPP.
+- Tidak ada perubahan route/menu/role guard atau Firestore schema/rules.
+
+---
+
+## Appendix — SQLite Local Runtime Pilot Update
+
+Status terbaru: **SQLite local menjadi target runtime pilot untuk Categories dan Customers.**
+
+Perubahan penting:
+
+- Offline Database Center aktif sekarang adalah **SQLite Local DB Center**.
+- `Dexie/IndexedDB` tidak lagi dipakai oleh UI utama SQLite Center dan master data pilot aktif.
+- Dependency root `dexie` dihapus dari `package.json`.
+- Repository mode lama `offline_local` dan `hybrid_sync` dipetakan ke `sqlite_sidecar` agar setting lama tidak membuat UI crash.
+- `sync_queue` dan `sync_conflicts` Dexie tidak lagi menjadi jalur runtime aktif.
+- `customers` dan `categories` memakai backend SQLite lewat HTTP API.
+
+Batasan:
+
+- File Dexie/IndexedDB legacy masih boleh ada sebagai cleanup candidate sampai audit delete file selesai.
+- Supplier belum diarahkan ke SQLite.
+- Stock, purchase, sales final, returns, finance, production, payroll, HPP, dan reset destructive belum boleh dimutasi offline.
+- Restore SQLite belum dibuat dalam runtime aktif karena perlu guard destructive terpisah.

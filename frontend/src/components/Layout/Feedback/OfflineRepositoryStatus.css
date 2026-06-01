@@ -1,0 +1,39 @@
+.ims-offline-repository-status {
+  border-radius: 14px;
+  margin-bottom: 14px;
+}
+
+.ims-offline-repository-status .ant-alert-message {
+  line-height: 1.5;
+}
+
+.ims-offline-repository-status__description {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 760px;
+}
+
+.ims-offline-repository-status__actions {
+  justify-content: flex-end;
+}
+
+.ims-offline-repository-empty-state {
+  padding: 20px 8px;
+}
+
+.ims-offline-repository-empty-state .ant-empty-description {
+  margin-bottom: 10px;
+}
+
+@media (max-width: 768px) {
+  .ims-offline-repository-status .ant-alert-action {
+    margin-inline-start: 0;
+    margin-top: 12px;
+    width: 100%;
+  }
+
+  .ims-offline-repository-status__actions {
+    justify-content: flex-start;
+  }
+}

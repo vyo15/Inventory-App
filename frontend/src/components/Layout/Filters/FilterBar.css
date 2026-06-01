@@ -1,0 +1,121 @@
+.filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* =====================================================
+SECTION: Flat Filter Bar Surface — AKTIF / GUARDED
+Fungsi:
+- menyatukan surface filter/search dengan flat card, subtle border, dan marker gold kecil.
+
+Dipakai oleh:
+- FilterBar shared component lintas halaman operasional.
+
+Alasan perubahan:
+- standar theme baru tidak memakai gradient; filter bar harus terasa clean dan tidak mengalahkan content utama.
+
+Catatan cleanup:
+- belum ada.
+
+Risiko:
+- filter bar yang terlalu mencolok dapat mengganggu fokus table/form dan membuat page terlihat ramai.
+===================================================== */
+.filter-bar-surface {
+  position: relative;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--ims-border-color-soft);
+  background: var(--ims-bg-card);
+  box-shadow: none;
+}
+
+.filter-bar-surface::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  top: 0;
+  width: 30px;
+  height: 3px;
+  border-radius: 0 0 999px 999px;
+  background: var(--ims-color-brand-gold);
+  opacity: 0.55;
+}
+
+.filter-bar-actions {
+  justify-content: flex-end;
+}
+
+.app-shell.dark .filter-bar-surface {
+  border-color: var(--ims-border-color-soft);
+  background: var(--ims-bg-card);
+}
+
+.app-shell.dark .filter-bar-surface::before {
+  opacity: 0.78;
+}
+
+@media (max-width: 768px) {
+  .filter-bar-surface {
+    padding: 12px 14px;
+    border-radius: 16px;
+  }
+
+  .filter-bar-surface::before {
+    left: 14px;
+  }
+
+  .filter-bar > .ant-row,
+  .filter-bar > .ant-row > .ant-col {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .filter-bar .ant-row {
+    row-gap: 10px;
+  }
+
+  /* AKTIF / UI ONLY:
+     Field filter dibuat full-width di mobile agar input/select/date tidak saling menghimpit. */
+  .filter-bar-surface > .ant-row > .ant-col,
+  .filter-bar-surface > .ant-row > .ant-col > .ant-row > .ant-col {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+    min-width: 0;
+  }
+
+  .filter-bar .ant-col {
+    max-width: 100%;
+  }
+
+  .filter-bar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .filter-bar-actions.ant-space {
+    width: 100%;
+    display: flex;
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .filter-bar-actions .ant-space-item {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 576px) {
+  .filter-bar-surface {
+    padding: 12px;
+    border-radius: 15px;
+  }
+
+  .filter-bar .ant-input,
+  .filter-bar .ant-input-affix-wrapper,
+  .filter-bar .ant-select,
+  .filter-bar .ant-picker,
+  .filter-bar .ant-input-number {
+    width: 100%;
+  }
+}

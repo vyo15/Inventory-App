@@ -1,0 +1,21 @@
+{
+  "name": "ims-sqlite-sidecar-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "IMS Bunga Flanel SQLite sidecar backend for full-offline LAN POC.",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/db/connection.js && node --check src/db/migrate.js && node --check src/modules/customers/customers.routes.js && node --check src/modules/categories/categories.routes.js && node --check src/modules/maintenance/maintenance.routes.js && node --check src/modules/migrationStatus/migrationStatus.routes.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^6.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
