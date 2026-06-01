@@ -1,6 +1,6 @@
 ## Catatan struktur frontend/backend — aktif setelah restruktur
 
-Project sekarang memakai struktur terpisah: `frontend/` untuk React + Vite dan `backend/` untuk Node.js SQLite sidecar. Jika checklist lama menyebut `npm run lint`, `npm run build`, atau `npm run dev` di root project, jalankan dari folder yang sesuai:
+Project sekarang memakai struktur terpisah: `frontend/` untuk React + Vite dan `backend/` untuk Node.js SQLite sidecar. Root project juga menyediakan runner `npm run dev` untuk menjalankan backend dan frontend sekaligus. Jika checklist lama menyebut `npm run lint`, `npm run build`, atau `npm run dev` di root project, gunakan runner root baru atau jalankan dari folder yang sesuai:
 
 ```bash
 cd frontend
@@ -2044,3 +2044,49 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 [ ] cd ../backend
 [ ] npm run check
 ```
+
+## Checklist Tambahan Fase 3B/4/6B
+
+Backend:
+
+```bash
+cd backend
+npm run check
+npm run dev
+curl http://localhost:3001/api/auth/status
+curl http://localhost:3001/api/maintenance/status
+curl http://localhost:3001/api/suppliers
+```
+
+Bootstrap admin lokal:
+
+```bash
+curl -X POST http://localhost:3001/api/auth/bootstrap-admin \
+  -H "Content-Type: application/json" \
+  -d '{"confirmKeyword":"CREATE LOCAL ADMIN","username":"admin","displayName":"Administrator Lokal","password":"Admin12345"}'
+```
+
+Login lokal:
+
+```bash
+curl -X POST http://localhost:3001/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"Admin12345"}'
+```
+
+Restore guarded:
+
+- Jalankan backup normal terlebih dahulu.
+- Coba restore tanpa keyword: harus tidak menjalankan overwrite.
+- Coba restore tanpa token administrator: harus 401/403.
+- Coba restore dengan token admin dan keyword `RESTORE SQLITE`: harus membuat pre-restore backup otomatis dan menulis audit log.
+
+Frontend auth lokal:
+
+- Buat `frontend/.env.local` berisi `VITE_AUTH_MODE=sqlite`.
+- Login dengan username/password admin lokal.
+- Pastikan route guard membaca role lokal.
+- Hapus `.env.local` untuk kembali ke Firebase Auth default.
+
+
+Catatan guard restore: Restore execute wajib memilih `filename` backup secara eksplisit. Backend juga menerima alias `backupFileName`, tetapi tidak akan restore otomatis dari backup terbaru tanpa nama file yang jelas.

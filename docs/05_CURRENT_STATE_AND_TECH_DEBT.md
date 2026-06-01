@@ -1515,3 +1515,29 @@ Sengaja tidak diubah:
 - **AKTIF:** Primary action memakai token `--ims-color-on-primary` supaya teks tetap kontras pada light/dark mode.
 - **AKTIF:** Login memakai asset WebP untuk logo utama dengan PNG fallback, tanpa mengubah auth flow.
 - **GUARDED:** Perubahan ini UI-only; tidak menyentuh route/menu/role guard, service, SQLite/Firebase, stok, purchase, sales, production, payroll, HPP, finance, reset, atau audit log.
+
+## Update Auth Lokal SQLite dan Restore Guarded
+
+Yang sudah tersedia:
+
+- Backend schema `roles`, `users`, `local_user_sessions`, dan `suppliers`.
+- API auth lokal: status, bootstrap admin, login, me, logout, dan basic user management backend.
+- Frontend bisa memakai auth lokal secara opt-in dengan `VITE_AUTH_MODE=sqlite`.
+- Restore execute guarded dengan token administrator lokal, keyword `RESTORE SQLITE`, dan pre-restore backup otomatis.
+- Supplier SQLite backend tersedia sebagai persiapan Fase 7.
+
+Yang masih guarded / belum final:
+
+- Firebase Auth tetap default agar tidak memutus login lama.
+- UI User Management masih Firebase-primary; local user management backend belum dibuatkan halaman khusus.
+- Supplier UI/transaksi belum dialihkan ke SQLite default karena relasi purchase/raw/history belum diaudit penuh.
+- Stock, purchases, sales, returns, finance, production, payroll, dan HPP tetap tidak boleh offline mutation.
+
+
+## SQLite runner dan guard endpoint — update aktif
+
+- Root project memiliki `package.json` runner ringan: `npm run dev` menjalankan backend SQLite dan frontend Vite sekaligus tanpa dependency root tambahan.
+- Script terpisah tetap tersedia: `npm run dev:backend`, `npm run dev:frontend`, `npm run install:all`, `npm run check:backend`, dan `npm run build:frontend`.
+- Endpoint maintenance non-status yang membuat/list backup atau restore plan/logs sekarang wajib session lokal role `administrator`.
+- Endpoint write Supplier SQLite (`POST`, `PUT`, `DELETE`) sekarang wajib session lokal role `administrator`; `GET /api/suppliers` tetap public sementara untuk compatibility read/dev.
+- Tech debt tersisa: UI maintenance perlu menampilkan pesan login/admin dengan jelas saat auth lokal belum aktif.

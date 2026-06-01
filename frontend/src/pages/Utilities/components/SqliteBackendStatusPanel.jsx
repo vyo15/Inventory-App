@@ -115,22 +115,32 @@ const SqliteBackendStatusPanel = () => {
         />
 
         <Row gutter={[12, 12]}>
-          <Col xs={12} md={6}>
+          <Col xs={12} md={4}>
             <Card size="small" className="offline-db-status-card">
               <Statistic title="Schema" value={statusData.schemaVersion || "-"} prefix={<DatabaseOutlined />} />
             </Card>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={12} md={4}>
+            <Card size="small" className="offline-db-status-card">
+              <Statistic title="Users" value={formatNumber(statusData.userCount)} />
+            </Card>
+          </Col>
+          <Col xs={12} md={4}>
             <Card size="small" className="offline-db-status-card">
               <Statistic title="Customers" value={formatNumber(statusData.customerCount)} />
             </Card>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={12} md={4}>
             <Card size="small" className="offline-db-status-card">
               <Statistic title="Categories" value={formatNumber(statusData.categoryCount)} />
             </Card>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={12} md={4}>
+            <Card size="small" className="offline-db-status-card">
+              <Statistic title="Suppliers" value={formatNumber(statusData.supplierCount)} />
+            </Card>
+          </Col>
+          <Col xs={12} md={4}>
             <Card size="small" className="offline-db-status-card">
               <Statistic title="Backup" value={formatNumber(statusData.backupCount)} prefix={<HddOutlined />} />
             </Card>

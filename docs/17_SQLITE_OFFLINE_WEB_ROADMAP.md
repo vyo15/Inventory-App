@@ -181,3 +181,66 @@ Audit satu-satu untuk stock engine, purchase, sales, returns, finance ledger, pr
 ## 8. Catatan legacy cleanup
 
 File Dexie/IndexedDB lama yang sudah tidak diimpor runtime aktif boleh diaudit sebagai cleanup candidate. Penghapusan fisik file lama sebaiknya dilakukan sebagai patch cleanup terpisah karena banyak dokumen lama masih menyebut batch Dexie dan user sedang migrasi bertahap.
+
+## Update Fase 3B, 4, 6B, dan Supplier Pilot
+
+Status source setelah patch ini:
+
+- Fase 3B schema lokal bertambah: `roles`, `users`, `local_user_sessions`, dan `suppliers`.
+- Fase 4 auth lokal tersedia secara opt-in melalui `VITE_AUTH_MODE=sqlite`. Firebase Auth tetap default untuk legacy compatibility.
+- Role backend lokal tersedia melalui middleware `requireLocalAuth` dan `requireLocalAdministrator`.
+- Bootstrap administrator lokal pertama wajib memakai keyword `CREATE LOCAL ADMIN` dan hanya bisa dilakukan saat belum ada administrator aktif.
+- Restore guarded tersedia melalui `/api/maintenance/restore-execute`, wajib session administrator lokal dan keyword `RESTORE SQLITE`.
+- Sebelum restore overwrite database aktif, backend membuat backup otomatis `ims-sqlite-sidecar-pre-restore-backup-*.sqlite`.
+- Supplier SQLite backend tersedia di `/api/suppliers`, tetapi frontend utama Supplier tetap Firebase default karena supplier masih terkait purchase, raw material, history, dan report. Peralihan UI supplier ke SQLite hanya boleh opt-in/audit lanjutan.
+
+Command auth lokal pilot:
+
+```bash
+cd backend
+npm run dev
+curl -X POST http://localhost:3001/api/auth/bootstrap-admin \
+  -H "Content-Type: application/json" \
+  -d '{"confirmKeyword":"CREATE LOCAL ADMIN","username":"admin","displayName":"Administrator Lokal","password":"Admin12345"}'
+```
+
+Aktifkan frontend auth lokal:
+
+```bash
+cd frontend
+printf "VITE_AUTH_MODE=sqlite\n" > .env.local
+npm run dev -- --host 0.0.0.0
+```
+
+Catatan guarded:
+
+- Jangan aktifkan `VITE_SUPPLIERS_REPOSITORY_MODE=sqlite` untuk operasional final sebelum audit relasi purchase/raw/history selesai.
+- Jangan restore database saat backend sedang dipakai transaksi oleh user lain.
+- Jangan commit `.env.local`, file SQLite runtime, atau backup SQLite.
+
+
+## Root runner frontend + backend
+
+Status: aktif.
+
+Setelah struktur `frontend/` dan `backend/` dipisah, root project menyediakan runner tanpa dependency tambahan:
+
+```bash
+npm run install:all
+npm run dev
+```
+
+`npm run dev` menjalankan backend SQLite dan frontend Vite sekaligus. Untuk debug yang lebih jelas, tetap boleh menjalankan terpisah:
+
+```bash
+npm run dev:backend
+npm run dev:frontend
+```
+
+Guard security terbaru:
+- `POST /api/maintenance/backup`, `GET /api/maintenance/backups`, `POST /api/maintenance/restore-plan`, `GET /api/maintenance/restore-logs`, dan `POST /api/maintenance/restore-execute` wajib session lokal role `administrator`.
+- Supplier SQLite write `POST/PUT/DELETE /api/suppliers` wajib session lokal role `administrator`.
+- Supplier read tetap public sementara untuk compatibility dev dan UI pilot.
+
+
+Catatan guard restore: Restore execute wajib memilih `filename` backup secara eksplisit. Backend juga menerima alias `backupFileName`, tetapi tidak akan restore otomatis dari backup terbaru tanpa nama file yang jelas.

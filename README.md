@@ -1,6 +1,6 @@
 # IMS Offline Web
 
-IMS Offline Web adalah project Inventory Management System Bunga Flanel dengan struktur frontend/backend terpisah.
+IMS Offline Web adalah project Inventory Management System Bunga Flanel dengan struktur frontend/backend terpisah. Root project sekarang punya runner ringan tanpa dependency tambahan agar backend dan frontend bisa dijalankan sekali command.
 
 ## Struktur folder
 
@@ -13,6 +13,32 @@ Inventory-App/
 ├── scripts/       # Helper command lokal
 └── docs/          # Dokumentasi project
 ```
+
+
+## Menjalankan backend dan frontend sekali command
+
+Cara harian yang disarankan setelah dependency `frontend/` dan `backend/` sudah terpasang:
+
+```bash
+npm run dev
+```
+
+Command ini menjalankan backend SQLite di port `3001` dan frontend Vite di port `5173` dalam satu terminal. Tekan `Ctrl+C` untuk menghentikan keduanya.
+
+Install dependency pertama kali atau setelah `package-lock.json` berubah:
+
+```bash
+npm run install:all
+```
+
+Validasi cepat dari root:
+
+```bash
+npm run check:backend
+npm run build:frontend
+```
+
+Jika ingin log frontend dan backend terpisah, tetap boleh pakai dua terminal seperti bagian di bawah.
 
 ## Menjalankan frontend
 
@@ -106,3 +132,55 @@ frontend/dist/
 ```
 
 Jika database lokal perlu dipindah, lakukan backup/restore secara terpisah. Jangan menjadikan file SQLite runtime sebagai bagian dari source patch.
+
+## Auth lokal SQLite opt-in
+
+Default frontend tetap memakai Firebase Auth agar flow lama tidak rusak.
+Untuk pilot auth lokal SQLite, buat file `frontend/.env.local`:
+
+```env
+VITE_AUTH_MODE=sqlite
+```
+
+Buat administrator lokal pertama dari backend setelah `npm run dev` aktif:
+
+```bash
+curl -X POST http://localhost:3001/api/auth/bootstrap-admin \
+  -H "Content-Type: application/json" \
+  -d '{"confirmKeyword":"CREATE LOCAL ADMIN","username":"admin","displayName":"Administrator Lokal","password":"Admin12345"}'
+```
+
+Login frontend tetap memakai field Username dan Password. Dalam mode SQLite, session disimpan di backend pada tabel `local_user_sessions` dan token disimpan di `localStorage` browser.
+
+## Restore SQLite guarded
+
+Restore destructive tidak berjalan dari preview. Restore sungguhan wajib:
+
+1. Login auth lokal sebagai `administrator`.
+2. Pilih backup yang valid dari `backups/sqlite/`.
+3. Kirim keyword konfirmasi `RESTORE SQLITE` ke endpoint restore execute.
+4. Backend membuat backup otomatis sebelum overwrite database aktif.
+
+Endpoint guarded:
+
+```text
+POST /api/maintenance/restore-execute
+Authorization: Bearer <local-session-token>
+```
+
+Flow ini tetap harus dipakai hati-hati. Jangan restore saat transaksi penting sedang berjalan.
+
+
+## Guard admin lokal untuk maintenance dan Supplier SQLite
+
+Endpoint maintenance yang membuat/list backup, membuat restore plan, membaca restore logs, dan menjalankan restore wajib memakai session lokal role `administrator`. Endpoint write Supplier SQLite (`POST`, `PUT`, `DELETE`) juga wajib session administrator. Endpoint read seperti `/health`, `/api/maintenance/status`, `/api/auth/status`, dan `GET /api/suppliers` tetap public untuk status/dev compatibility.
+
+Contoh pakai token admin lokal:
+
+```bash
+curl -X POST http://localhost:3001/api/maintenance/backup \
+  -H "Authorization: Bearer <local-session-token>"
+```
+
+
+Catatan guard restore: Restore execute wajib memilih `filename` backup secara eksplisit. Backend juga menerima alias `backupFileName`, tetapi tidak akan restore otomatis dari backup terbaru tanpa nama file yang jelas.

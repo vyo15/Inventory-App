@@ -1,9 +1,14 @@
 import * as firebaseSuppliersAdapter from "../adapters/firebase/firebaseSuppliersAdapter";
+import * as sqliteSuppliersAdapter from "../adapters/sqlite/sqliteSuppliersAdapter";
 
-// LEGACY-COMPAT:
-// Supplier belum dipindahkan ke SQLite karena supplier terkait purchase/raw material/history.
-// Semua write/read supplier tetap Firebase-primary sampai audit migrasi supplier selesai.
-const getSuppliersAdapter = () => firebaseSuppliersAdapter;
+// GUARDED:
+// Supplier masih terkait purchase/raw material/history. Default tetap Firebase agar flow produksi/transaksi tidak berubah.
+// SQLite supplier hanya opt-in eksplisit untuk pilot master data setelah audit manual.
+const getSuppliersAdapter = (options = {}) => {
+  const requestedMode = options.mode || import.meta.env.VITE_SUPPLIERS_REPOSITORY_MODE;
+  if (requestedMode === "sqlite") return sqliteSuppliersAdapter;
+  return firebaseSuppliersAdapter;
+};
 
 export const listSuppliers = (options = {}) =>
   getSuppliersAdapter(options).listSuppliers(options);

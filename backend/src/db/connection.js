@@ -29,4 +29,12 @@ async function getDb() {
   return dbPromise;
 }
 
-module.exports = { getDb, getDbPath };
+async function closeDb() {
+  if (!dbPromise) return;
+
+  const db = await dbPromise;
+  await db.close();
+  dbPromise = null;
+}
+
+module.exports = { getDb, getDbPath, closeDb };

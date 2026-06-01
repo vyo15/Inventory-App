@@ -694,3 +694,38 @@ Batasan:
 - Supplier belum diarahkan ke SQLite.
 - Stock, purchase, sales final, returns, finance, production, payroll, HPP, dan reset destructive belum boleh dimutasi offline.
 - Restore SQLite belum dibuat dalam runtime aktif karena perlu guard destructive terpisah.
+
+## Kontrak Auth Lokal dan Restore Guarded
+
+Tabel lokal baru:
+
+- `roles`: daftar role aktif `administrator` dan `user`.
+- `users`: profile user lokal, password hash PBKDF2, role, status, dan last login.
+- `local_user_sessions`: session token yang disimpan sebagai hash SHA-256, expiry, user-agent, dan revoked flag.
+- `suppliers`: master supplier SQLite backend-ready, tetapi belum menjadi source utama UI/transaksi.
+
+Aturan auth:
+
+- Password tidak disimpan plain text.
+- Bootstrap admin hanya boleh saat belum ada administrator aktif.
+- Administrator aktif terakhir tidak boleh dinonaktifkan/diturunkan role-nya.
+- Frontend auth lokal harus opt-in via `VITE_AUTH_MODE=sqlite`; default tetap Firebase.
+
+Aturan restore:
+
+- `/api/maintenance/restore-plan` tetap preview-only.
+- `/api/maintenance/restore-execute` wajib token administrator lokal dan keyword `RESTORE SQLITE`.
+- Backend wajib membuat backup otomatis sebelum restore overwrite database aktif.
+- Restore destructive tidak boleh menjadi tombol bebas tanpa confirm guard.
+
+
+## Kontrak guard endpoint SQLite sidecar — update aktif
+
+- Public read/status tetap: `GET /health`, `GET /api/maintenance/status`, `GET /api/auth/status`, `GET /api/suppliers`.
+- Maintenance guarded admin: `POST /api/maintenance/backup`, `GET /api/maintenance/backups`, `POST /api/maintenance/restore-plan`, `GET /api/maintenance/restore-logs`, `POST /api/maintenance/restore-execute`.
+- Supplier SQLite write guarded admin: `POST /api/suppliers`, `PUT /api/suppliers/:id`, `DELETE /api/suppliers/:id`.
+- Guard memakai `Authorization: Bearer <local-session-token>` dari auth lokal SQLite.
+- Tidak ada perubahan pada stock, purchase, sales, returns, finance, production, payroll, HPP, atau reset destructive lama.
+
+
+Catatan guard restore: Restore execute wajib memilih `filename` backup secara eksplisit. Backend juga menerima alias `backupFileName`, tetapi tidak akan restore otomatis dari backup terbaru tanpa nama file yang jelas.

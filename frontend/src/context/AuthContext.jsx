@@ -8,6 +8,13 @@ import React, {
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import {
+  getCurrentLocalAuthUser,
+  getStoredLocalAuthUser,
+  isSqliteAuthMode,
+  loginWithLocalUsername,
+  logoutLocalAuth,
+} from "../services/System/localAuthService";
 import { ALL_ROLES, USER_STATUS } from "../utils/auth/roleAccess";
 
 // =========================
@@ -25,6 +32,7 @@ import { ALL_ROLES, USER_STATUS } from "../utils/auth/roleAccess";
 const INTERNAL_AUTH_DOMAIN = "ziyocraft.com";
 const SYSTEM_USERS_COLLECTION = "system_users";
 const ACTIVE_STATUS = USER_STATUS.ACTIVE;
+const LOCAL_AUTH_PROVIDER = "sqlite_local";
 
 export const AUTH_PROFILE_STATUS = {
   SIGNED_OUT: "signed_out",
@@ -89,6 +97,69 @@ export const AuthProvider = ({ children }) => {
     AUTH_PROFILE_STATUS.SIGNED_OUT,
   );
   const [profileError, setProfileError] = useState(null);
+  const useSqliteAuth = isSqliteAuthMode();
+
+
+  // =========================
+  // SECTION: SQLite Local Auth Profile — AKTIF / OPT-IN
+  // Fungsi:
+  // - membaca session auth lokal dari backend SQLite saat VITE_AUTH_MODE=sqlite;
+  // - menjaga Firebase Auth tetap legacy-compatible saat mode belum diaktifkan.
+  // Status:
+  // - AKTIF opt-in untuk migrasi auth lokal.
+  // - GUARDED: mode ini tidak otomatis mengambil alih Firebase agar rollback tetap aman.
+  // =========================
+  const applyLocalAuthUser = useCallback((localUser) => {
+    if (!localUser) {
+      setFirebaseUser(null);
+      setProfile(null);
+      setProfileStatus(AUTH_PROFILE_STATUS.SIGNED_OUT);
+      return;
+    }
+
+    if (localUser.status !== ACTIVE_STATUS) {
+      setFirebaseUser({ uid: localUser.authUid || `local-${localUser.id}` });
+      setProfile(localUser);
+      setProfileStatus(AUTH_PROFILE_STATUS.INACTIVE);
+      return;
+    }
+
+    if (!ALL_ROLES.includes(localUser.role)) {
+      setFirebaseUser({ uid: localUser.authUid || `local-${localUser.id}` });
+      setProfile(localUser);
+      setProfileStatus(AUTH_PROFILE_STATUS.MISSING_ROLE);
+      return;
+    }
+
+    setFirebaseUser({
+      uid: localUser.authUid || `local-${localUser.id}`,
+      email: `${localUser.username || "local"}@sqlite.local`,
+      providerId: LOCAL_AUTH_PROVIDER,
+    });
+    setProfile(localUser);
+    setProfileStatus(AUTH_PROFILE_STATUS.READY);
+  }, []);
+
+  const loadLocalAuthProfile = useCallback(async () => {
+    setAuthLoading(true);
+    setProfileError(null);
+
+    try {
+      const cachedUser = getStoredLocalAuthUser();
+      if (cachedUser) applyLocalAuthUser(cachedUser);
+
+      const localUser = await getCurrentLocalAuthUser();
+      applyLocalAuthUser(localUser);
+    } catch (error) {
+      console.warn("[Auth] Session SQLite lokal tidak aktif.", error);
+      setFirebaseUser(null);
+      setProfile(null);
+      setProfileError(error);
+      setProfileStatus(AUTH_PROFILE_STATUS.SIGNED_OUT);
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [applyLocalAuthUser]);
 
   // =========================
   // SECTION: Load User Profile — AKTIF / GUARDED
@@ -178,6 +249,11 @@ export const AuthProvider = ({ children }) => {
   // - AKTIF dipakai sebagai auth state utama.
   // =========================
   useEffect(() => {
+    if (useSqliteAuth) {
+      loadLocalAuthProfile();
+      return undefined;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setAuthLoading(true);
       setFirebaseUser(currentUser);
@@ -195,7 +271,7 @@ export const AuthProvider = ({ children }) => {
     });
 
     return () => unsubscribe();
-  }, [loadUserProfile]);
+  }, [loadLocalAuthProfile, loadUserProfile, useSqliteAuth]);
 
   // =========================
   // SECTION: Login Action — AKTIF / GUARDED
@@ -208,9 +284,15 @@ export const AuthProvider = ({ children }) => {
   // - GUARDED: user Auth dibuat manual di Firebase Console, lalu profile dibuat di Manajemen User memakai Auth UID.
   // =========================
   const loginWithUsername = useCallback(async (username, password) => {
+    if (useSqliteAuth) {
+      const result = await loginWithLocalUsername(username, password);
+      applyLocalAuthUser(result.user);
+      return;
+    }
+
     const internalEmail = buildInternalAuthEmail(username);
     await signInWithEmailAndPassword(auth, internalEmail, password);
-  }, []);
+  }, [applyLocalAuthUser, useSqliteAuth]);
 
   // =========================
   // SECTION: Logout Action — AKTIF
@@ -222,16 +304,25 @@ export const AuthProvider = ({ children }) => {
   // - AKTIF dipakai di header dan halaman Login saat user inactive/no-profile.
   // =========================
   const logout = useCallback(async () => {
-    await signOut(auth);
-  }, []);
+    if (useSqliteAuth) {
+      await logoutLocalAuth();
+      setFirebaseUser(null);
+      setProfile(null);
+      setProfileStatus(AUTH_PROFILE_STATUS.SIGNED_OUT);
+      return;
+    }
 
-  const isAuthenticated = Boolean(firebaseUser);
+    await signOut(auth);
+  }, [useSqliteAuth]);
+
+  const isAuthenticated = Boolean(firebaseUser || (useSqliteAuth && profile));
   const isAccessReady = isAuthenticated && profileStatus === AUTH_PROFILE_STATUS.READY;
 
   const value = useMemo(
     () => ({
       firebaseUser,
       profile,
+      authMode: useSqliteAuth ? "sqlite" : "firebase",
       activeRole: profile?.role || null,
       authLoading,
       profileStatus,
@@ -240,11 +331,12 @@ export const AuthProvider = ({ children }) => {
       isAccessReady,
       loginWithUsername,
       logout,
-      reloadProfile: () => loadUserProfile(auth.currentUser),
+      reloadProfile: () => (useSqliteAuth ? loadLocalAuthProfile() : loadUserProfile(auth.currentUser)),
     }),
     [
       firebaseUser,
       profile,
+      useSqliteAuth,
       authLoading,
       profileStatus,
       profileError,
@@ -252,6 +344,7 @@ export const AuthProvider = ({ children }) => {
       isAccessReady,
       loginWithUsername,
       logout,
+      loadLocalAuthProfile,
       loadUserProfile,
     ],
   );

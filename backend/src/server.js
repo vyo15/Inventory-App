@@ -8,8 +8,10 @@ const { errorHandler, notFoundHandler } = require("./middlewares/errorHandler");
 const { success } = require("./utils/response");
 const healthRoutes = require("./modules/health/health.routes");
 const settingsRoutes = require("./modules/settings/settings.routes");
+const authRoutes = require("./modules/auth/auth.routes");
 const customersRoutes = require("./modules/customers/customers.routes");
 const categoriesRoutes = require("./modules/categories/categories.routes");
+const suppliersRoutes = require("./modules/suppliers/suppliers.routes");
 const maintenanceRoutes = require("./modules/maintenance/maintenance.routes");
 const auditLogsRoutes = require("./modules/auditLogs/auditLogs.routes");
 const migrationStatusRoutes = require("./modules/migrationStatus/migrationStatus.routes");
@@ -24,6 +26,14 @@ app.get("/api", (req, res) => success(res, "IMS SQLite sidecar API aktif", {
   endpoints: [
     "GET /health",
     "GET /api/settings",
+    "GET /api/auth/status",
+    "POST /api/auth/bootstrap-admin",
+    "POST /api/auth/login",
+    "GET /api/auth/me",
+    "POST /api/auth/logout",
+    "GET /api/auth/users",
+    "POST /api/auth/users",
+    "PUT /api/auth/users/:id",
     "GET /api/customers",
     "GET /api/customers/generate-code",
     "GET /api/customers/:id",
@@ -35,10 +45,17 @@ app.get("/api", (req, res) => success(res, "IMS SQLite sidecar API aktif", {
     "POST /api/categories",
     "PUT /api/categories/:id",
     "DELETE /api/categories/:id",
+    "GET /api/suppliers",
+    "GET /api/suppliers/generate-code",
+    "GET /api/suppliers/:id",
+    "POST /api/suppliers",
+    "PUT /api/suppliers/:id",
+    "DELETE /api/suppliers/:id",
     "GET /api/maintenance/status",
     "POST /api/maintenance/backup",
     "GET /api/maintenance/backups",
     "POST /api/maintenance/restore-plan",
+    "POST /api/maintenance/restore-execute",
     "GET /api/maintenance/restore-logs",
     "GET /api/migration-status",
     "GET /api/audit-logs",
@@ -48,8 +65,10 @@ app.get("/api", (req, res) => success(res, "IMS SQLite sidecar API aktif", {
 
 app.use("/health", healthRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/auth", authRoutes);
 app.use("/api/customers", customersRoutes);
 app.use("/api/categories", categoriesRoutes);
+app.use("/api/suppliers", suppliersRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/audit-logs", auditLogsRoutes);
 app.use("/api/migration-status", migrationStatusRoutes);

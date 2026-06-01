@@ -1,4 +1,4 @@
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 const TABLES = {
   SCHEMA_META: "schema_meta",
@@ -8,8 +8,12 @@ const TABLES = {
   RESTORE_LOGS: "restore_logs",
   MODULE_MIGRATION_STATUS: "module_migration_status",
   BUSINESS_CODE_COUNTERS: "business_code_counters",
+  ROLES: "roles",
+  USERS: "users",
+  LOCAL_USER_SESSIONS: "local_user_sessions",
   CUSTOMERS: "customers",
   CATEGORIES: "categories",
+  SUPPLIERS: "suppliers",
 };
 
 module.exports = { SCHEMA_VERSION, TABLES };

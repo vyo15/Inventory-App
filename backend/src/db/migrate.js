@@ -12,6 +12,24 @@ async function seedSetting(db, key, value) {
   );
 }
 
+async function seedRole(db, roleKey, label, description = "") {
+  await db.run(
+    `
+      INSERT INTO roles (role_key, label, description, updated_at)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(role_key) DO UPDATE SET
+        label = excluded.label,
+        description = excluded.description,
+        updated_at = CURRENT_TIMESTAMP
+    `,
+    [roleKey, label, description]
+  );
+}
+
+async function seedLocalRoles(db) {
+  await seedRole(db, "administrator", "Administrator", "Akses penuh untuk setup, maintenance, dan modul guarded.");
+  await seedRole(db, "user", "User", "Akses operasional harian sesuai route guard IMS.");
+}
 
 async function seedModuleMigrationStatus(db, moduleKey, status, { label, scope, notes } = {}) {
   await db.run(
@@ -33,7 +51,7 @@ async function seedMigrationStatus(db) {
   const rows = [
     ["customers", "Customers", "sqlite_active", "read_write", "Pilot aman sudah memakai SQLite local sidecar."],
     ["categories", "Categories", "sqlite_active", "read_write", "Pilot aman sudah memakai SQLite local sidecar."],
-    ["suppliers", "Suppliers", "firebase_only", "guarded_master", "Masih Firebase karena terkait purchase/raw/history."],
+    ["suppliers", "Suppliers", "sqlite_backend_ready", "frontend_guarded", "Schema dan API SQLite supplier tersedia; frontend utama belum dialihkan karena terkait purchase/raw/history."],
     ["products", "Products", "firebase_only", "guarded_master", "Belum dimigrasi karena terkait stock, sales, BOM, dan report."],
     ["raw_materials", "Raw Materials", "firebase_only", "guarded_master", "Belum dimigrasi karena terkait purchase, stock, production material usage."],
     ["semi_finished", "Semi Finished", "firebase_only", "guarded_master", "Belum dimigrasi karena terkait production flow dan stock."],
@@ -45,8 +63,8 @@ async function seedMigrationStatus(db) {
     ["production", "Production", "guarded", "no_offline_final_transaction", "Production menyentuh material usage, payroll, HPP."],
     ["payroll_hpp", "Payroll & HPP", "guarded", "no_offline_final_transaction", "HPP final harus dari material actual dan payroll final/paid."],
     ["reports", "Reports & Dashboard", "firebase_primary_snapshot_pending", "read_only_snapshot_pending", "Report final belum boleh membaca draft/local yang belum committed."],
-    ["auth", "Auth & Role Guard", "firebase_auth", "login_guard", "Login masih Firebase Auth; local auth perlu phase terpisah."],
-    ["reset_restore", "Reset & Restore", "guarded", "preview_only", "Restore SQLite destructive belum aktif; baru restore-plan preview."],
+    ["auth", "Auth & Role Guard", "sqlite_local_ready", "backend_frontend_opt_in", "Auth lokal SQLite tersedia opt-in via VITE_AUTH_MODE=sqlite; Firebase masih legacy-compatible."],
+    ["reset_restore", "Reset & Restore", "guarded", "confirm_keyword_required", "Restore SQLite guarded tersedia untuk administrator lokal dengan backup otomatis dan keyword konfirmasi."],
   ];
 
   for (const [moduleKey, label, status, scope, notes] of rows) {
@@ -128,6 +146,46 @@ async function runMigrations() {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS roles (
+      role_key TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      description TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      username_lower TEXT NOT NULL UNIQUE,
+      display_name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'user',
+      status TEXT NOT NULL DEFAULT 'active',
+      last_login_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (role) REFERENCES roles(role_key)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_users_role_status ON users (role, status);
+    CREATE INDEX IF NOT EXISTS idx_users_status ON users (status);
+
+    CREATE TABLE IF NOT EXISTS local_user_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      user_agent TEXT,
+      ip_address TEXT,
+      expires_at TEXT NOT NULL,
+      revoked_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_local_user_sessions_user_id ON local_user_sessions (user_id);
+    CREATE INDEX IF NOT EXISTS idx_local_user_sessions_expires_at ON local_user_sessions (expires_at);
+
     CREATE TABLE IF NOT EXISTS customers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       customer_code TEXT UNIQUE,
@@ -157,6 +215,22 @@ async function runMigrations() {
     CREATE INDEX IF NOT EXISTS idx_categories_name ON categories (name);
     CREATE INDEX IF NOT EXISTS idx_categories_type ON categories (type);
     CREATE INDEX IF NOT EXISTS idx_categories_status ON categories (status);
+
+    CREATE TABLE IF NOT EXISTS suppliers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      supplier_code TEXT UNIQUE,
+      name TEXT NOT NULL,
+      store_link TEXT,
+      phone TEXT,
+      address TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers (name);
+    CREATE INDEX IF NOT EXISTS idx_suppliers_status ON suppliers (status);
   `);
 
   await db.run(
@@ -171,6 +245,7 @@ async function runMigrations() {
   await seedSetting(db, "app_name", "IMS Bunga Flanel");
   await seedSetting(db, "server_mode", "sqlite_local_primary_pilot");
   await seedSetting(db, "guarded_modules", "stock,sales,purchase,returns,finance,production,payroll,hpp,reset");
+  await seedLocalRoles(db);
   await seedMigrationStatus(db);
 }
 
