@@ -2,6 +2,7 @@ const express = require("express");
 const { getDb } = require("../../db/connection");
 const { createAuditLog } = require("../../utils/auditLog");
 const { failure, success } = require("../../utils/response");
+const { requireLocalAuth, requireLocalAdministrator } = require("../../middlewares/localAuth");
 
 const router = express.Router();
 
@@ -72,7 +73,7 @@ router.get("/:id", async (req, res, next) => {
   }
 });
 
-router.post("/", async (req, res, next) => {
+router.post("/", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
   try {
     const db = await getDb();
     const payload = buildCategoryPayload(req.body);
@@ -98,6 +99,7 @@ router.post("/", async (req, res, next) => {
       action: "create",
       entityType: "category",
       entityId: result.lastID,
+      actor: req.localAuth.user.username,
       description: `Kategori ${payload.name} dibuat di SQLite local`,
       metadata: { code: payload.code, name: payload.name, type: payload.type },
     });
@@ -111,7 +113,7 @@ router.post("/", async (req, res, next) => {
   }
 });
 
-router.put("/:id", async (req, res, next) => {
+router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
   try {
     const db = await getDb();
     const current = await db.get(
@@ -148,6 +150,7 @@ router.put("/:id", async (req, res, next) => {
       action: "update",
       entityType: "category",
       entityId: current.id,
+      actor: req.localAuth.user.username,
       description: `Kategori ${payload.name} diubah di SQLite local`,
       metadata: { code: immutableCode, name: payload.name, type: payload.type },
     });
@@ -161,7 +164,7 @@ router.put("/:id", async (req, res, next) => {
   }
 });
 
-router.delete("/:id", async (req, res, next) => {
+router.delete("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
   try {
     const db = await getDb();
     const current = await db.get(
@@ -183,6 +186,7 @@ router.delete("/:id", async (req, res, next) => {
       action: "soft_delete",
       entityType: "category",
       entityId: current.id,
+      actor: req.localAuth.user.username,
       description: `Kategori ${current.name} dinonaktifkan di SQLite local`,
       metadata: { code: current.code, name: current.name },
     });

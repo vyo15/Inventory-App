@@ -1541,3 +1541,14 @@ Yang masih guarded / belum final:
 - Endpoint maintenance non-status yang membuat/list backup atau restore plan/logs sekarang wajib session lokal role `administrator`.
 - Endpoint write Supplier SQLite (`POST`, `PUT`, `DELETE`) sekarang wajib session lokal role `administrator`; `GET /api/suppliers` tetap public sementara untuk compatibility read/dev.
 - Tech debt tersisa: UI maintenance perlu menampilkan pesan login/admin dengan jelas saat auth lokal belum aktif.
+
+
+## SQLite master data write guard consistency — update aktif
+
+- Endpoint write Categories SQLite (`POST`, `PUT`, `DELETE`) sekarang wajib session lokal role `administrator`.
+- Endpoint write Customers SQLite (`POST`, `PUT`, `DELETE`) sekarang wajib session lokal role `administrator`.
+- Endpoint write Supplier SQLite tetap wajib session lokal role `administrator`.
+- Endpoint read Categories/Customers/Supplier tetap public sementara untuk compatibility read/dev dan status pilot.
+- Frontend SQLite API client otomatis menyertakan `Authorization: Bearer <local-session-token>` dari auth lokal jika token tersedia, sehingga adapter Categories/Customers/Supplier tidak perlu duplikasi header.
+- Audit log create/update/delete Categories dan Customers kini menyimpan actor username admin lokal, bukan default `system`.
+- Tidak ada perubahan schema SQLite, Firestore schema, route/menu aplikasi utama, stock, purchase, sales, returns, finance, production, payroll, HPP, atau reset destructive lama.

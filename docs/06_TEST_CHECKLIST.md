@@ -2090,3 +2090,49 @@ Frontend auth lokal:
 
 
 Catatan guard restore: Restore execute wajib memilih `filename` backup secara eksplisit. Backend juga menerima alias `backupFileName`, tetapi tidak akan restore otomatis dari backup terbaru tanpa nama file yang jelas.
+
+
+## SQLite master data admin guard consistency
+
+Backend harus sedang aktif dari root runner atau `npm run dev:backend`.
+
+Tanpa token admin lokal, write harus ditolak:
+
+```bash
+curl -X POST http://localhost:3001/api/categories \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Kategori Tanpa Token"}'
+
+curl -X POST http://localhost:3001/api/customers \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Customer Tanpa Token","phone":"08123"}'
+
+curl -X POST http://localhost:3001/api/suppliers \
+  -H "Content-Type: application/json" \
+  -d '{"storeName":"Supplier Tanpa Token"}'
+```
+
+Ekspektasi: semua response write tanpa token mengembalikan `ok:false` dengan `UNAUTHENTICATED` atau `SESSION_EXPIRED`.
+
+Dengan token admin lokal, write boleh berhasil:
+
+```bash
+TOKEN="<local-session-token>"
+
+curl -X POST http://localhost:3001/api/categories \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Kategori Dengan Token","type":"general"}'
+
+curl -X POST http://localhost:3001/api/customers \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Customer Dengan Token","phone":"08123"}'
+```
+
+Ekspektasi tambahan:
+
+- [ ] `GET /api/categories`, `GET /api/customers`, dan `GET /api/suppliers` tetap bisa dibaca untuk compatibility pilot.
+- [ ] Audit log create/update/delete Categories dan Customers menyimpan actor admin lokal, bukan `system`.
+- [ ] Frontend mode `VITE_AUTH_MODE=sqlite` + repository SQLite bisa create/update/delete setelah login admin lokal.
+- [ ] Jika token expired/hilang, UI menampilkan error dan tidak membuat data baru diam-diam.

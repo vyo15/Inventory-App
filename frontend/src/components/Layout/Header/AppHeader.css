@@ -267,7 +267,7 @@ Risiko:
 
   .app-header-greeting-title {
     max-width: min(44vw, 220px);
-    font-size: var(--ims-font-size-md);
+    font-size: var(--ims-font-size-body);
   }
 
   .app-header-greeting-subtitle {
@@ -297,7 +297,7 @@ Risiko:
 
   .app-header-greeting-title {
     max-width: 34vw;
-    font-size: var(--ims-font-size-sm);
+    font-size: var(--ims-font-size-helper);
   }
 
   .app-header-role-tag.ant-tag {

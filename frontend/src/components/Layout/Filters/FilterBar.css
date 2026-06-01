@@ -76,11 +76,17 @@ Risiko:
   }
 
   /* AKTIF / UI ONLY:
-     Field filter dibuat full-width di mobile agar input/select/date tidak saling menghimpit. */
-  .filter-bar-surface > .ant-row > .ant-col,
-  .filter-bar-surface > .ant-row > .ant-col > .ant-row > .ant-col {
+     Tablet/HP besar tidak dipaksa 1 kolom. Filter boleh tetap compact 2 kolom
+     agar portrait tidak terlalu panjang, sementara HP kecil tetap full-width. */
+  .filter-bar-surface > .ant-row > .ant-col {
     flex: 1 1 100% !important;
     max-width: 100% !important;
+    min-width: 0;
+  }
+
+  .filter-bar-surface > .ant-row > .ant-col > .ant-row > .ant-col {
+    flex: 0 0 50% !important;
+    max-width: 50% !important;
     min-width: 0;
   }
 
@@ -109,6 +115,11 @@ Risiko:
   .filter-bar-surface {
     padding: 12px;
     border-radius: 15px;
+  }
+
+  .filter-bar-surface > .ant-row > .ant-col > .ant-row > .ant-col {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
   }
 
   .filter-bar .ant-input,

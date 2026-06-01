@@ -1,3 +1,14 @@
-import { fetchSqliteJson } from "../../../services/System/sqliteBackendStatusService";
+import {
+  fetchSqliteJson,
+  getStoredSqliteAuthHeaders,
+} from "../../../services/System/sqliteBackendStatusService";
 
-export const requestSqliteApi = (path, options = {}) => fetchSqliteJson(path, options);
+const withLocalAuthHeaders = (options = {}) => ({
+  ...options,
+  headers: {
+    ...getStoredSqliteAuthHeaders(),
+    ...(options.headers || {}),
+  },
+});
+
+export const requestSqliteApi = (path, options = {}) => fetchSqliteJson(path, withLocalAuthHeaders(options));

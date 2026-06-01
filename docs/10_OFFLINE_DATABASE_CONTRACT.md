@@ -721,11 +721,20 @@ Aturan restore:
 
 ## Kontrak guard endpoint SQLite sidecar — update aktif
 
-- Public read/status tetap: `GET /health`, `GET /api/maintenance/status`, `GET /api/auth/status`, `GET /api/suppliers`.
+- Public read/status tetap: `GET /health`, `GET /api/maintenance/status`, `GET /api/auth/status`, `GET /api/categories`, `GET /api/customers`, dan `GET /api/suppliers`.
 - Maintenance guarded admin: `POST /api/maintenance/backup`, `GET /api/maintenance/backups`, `POST /api/maintenance/restore-plan`, `GET /api/maintenance/restore-logs`, `POST /api/maintenance/restore-execute`.
+- Categories SQLite write guarded admin: `POST /api/categories`, `PUT /api/categories/:id`, `DELETE /api/categories/:id`.
+- Customers SQLite write guarded admin: `POST /api/customers`, `PUT /api/customers/:id`, `DELETE /api/customers/:id`.
 - Supplier SQLite write guarded admin: `POST /api/suppliers`, `PUT /api/suppliers/:id`, `DELETE /api/suppliers/:id`.
 - Guard memakai `Authorization: Bearer <local-session-token>` dari auth lokal SQLite.
 - Tidak ada perubahan pada stock, purchase, sales, returns, finance, production, payroll, HPP, atau reset destructive lama.
 
 
 Catatan guard restore: Restore execute wajib memilih `filename` backup secara eksplisit. Backend juga menerima alias `backupFileName`, tetapi tidak akan restore otomatis dari backup terbaru tanpa nama file yang jelas.
+
+
+Tambahan implementasi frontend:
+
+- `sqliteApiClient` wajib menyertakan token auth lokal dari localStorage saat tersedia.
+- Adapter SQLite Categories/Customers/Supplier tidak boleh membuat mekanisme token masing-masing.
+- Jika token tidak ada atau expired, backend harus mengembalikan `UNAUTHENTICATED`/`SESSION_EXPIRED` untuk write. UI boleh menampilkan error dan meminta login ulang.

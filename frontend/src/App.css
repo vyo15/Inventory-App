@@ -706,25 +706,37 @@ Risiko:
   }
 
   /* AKTIF / UI ONLY:
-     Mobile content wrapper perlu membuka overflow horizontal agar tabel besar bisa digeser
-     tanpa memotong kolom penting. Ini hanya mengubah scroll behavior, bukan data table,
-     route, role, atau business logic. */
+     Mobile shell tetap portrait-first: viewport/page tidak ikut horizontal scroll.
+     Scroll horizontal hanya dibuka secara lokal pada wrapper table agar halaman mobile
+     terasa seperti app, bukan desktop lebar yang harus dimiringkan. */
   .app-content-scroll {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow-x: hidden;
   }
 
   .app-content-card {
     width: 100%;
     max-width: 100%;
     min-width: 0;
+    overflow-x: hidden;
     box-sizing: border-box;
   }
 
-  .app-content-card .ant-table-wrapper {
+  .app-content-card .ant-table-wrapper,
+  .app-data-table.ant-table-wrapper,
+  .ims-table.ant-table-wrapper,
+  .ims-page .ant-table-wrapper {
     max-width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .app-content-card .ant-table-content,
+  .app-data-table .ant-table-content,
+  .ims-table .ant-table-content,
+  .ims-page .ant-table-content {
+    overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -737,6 +749,11 @@ Risiko:
   .app-content-card .ant-table-tbody > tr > td {
     padding-top: 12px !important;
     padding-bottom: 12px !important;
+    white-space: nowrap;
+  }
+
+  .app-content-card .ant-table-tbody .ims-note-preview,
+  .app-content-card .ant-table-tbody .ims-note-inline {
     white-space: normal;
   }
 

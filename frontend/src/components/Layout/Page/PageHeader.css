@@ -133,25 +133,32 @@
   }
 
   .page-header-title.ant-typography {
-    font-size: var(--ims-font-size-xl);
+    font-size: var(--ims-font-size-title);
   }
 
   .page-header-actions .ant-space-item {
     max-width: 100%;
   }
 
+  /* AKTIF / UI ONLY:
+     Action mobile tidak lagi dipaksa full-width semua. Tombol tetap bisa wrap,
+     tetapi tinggi header tidak membengkak seperti form panjang. */
   .page-header-action-group .ant-space-item {
-    flex: 1 1 auto;
-    min-width: min(100%, 148px);
+    flex: 0 1 auto;
+    min-width: 0;
   }
 
   .page-header-action-button.ant-btn,
   .page-header-action-group .ant-space-item > .ant-btn {
-    width: 100%;
+    width: auto;
     max-width: 100%;
-    min-height: 38px;
+    min-height: 36px;
     justify-content: center;
     padding-inline: 12px;
-    white-space: normal;
+    white-space: nowrap;
+  }
+
+  .page-header-action-button.is-primary.ant-btn {
+    min-width: 128px;
   }
 }

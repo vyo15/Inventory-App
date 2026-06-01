@@ -151,8 +151,9 @@ Aturan penting:
 - Content card mobile harus memakai full width dengan padding lebih kecil; jangan memakai fixed height content yang bergantung pada asumsi tinggi header desktop.
 - Table pada mobile boleh memakai horizontal scroll lokal di dalam card/table wrapper. Jangan membuat body/shell ikut horizontal scroll.
 - Drawer dan modal pada mobile harus dibatasi `100vw`/viewport dan body-nya boleh scroll vertikal agar form/detail panjang tetap bisa diakses.
-- Filter field pada mobile boleh full-width agar input/select/date tidak saling menghimpit.
-- Filter dan PageHeader action boleh turun ke bawah/full-width selama tombol utama tetap terlihat, tidak overlap, dan callback/action tidak berubah.
+- Filter mobile memakai prinsip portrait-first: HP kecil boleh full-width, tetapi tablet/HP besar tidak boleh dipaksa 1 kolom jika masih aman memakai 2 kolom compact.
+- Filter dan PageHeader action boleh wrap atau turun ke bawah, tetapi jangan memaksa semua tombol menjadi full-width bila membuat header terlalu tinggi. Tombol utama tetap harus jelas, tidak overlap, dan callback/action tidak berubah.
+- Summary/KPI mobile boleh memakai 2 kolom compact untuk metric pendek agar dashboard/report tidak terlalu panjang; nilai Rupiah panjang tetap harus readable dengan wrap aman.
 - Top header button wajib punya focus outline yang jelas untuk keyboard navigation.
 - Perubahan mobile shell harus UI-only; tidak boleh mengubah route config, sidebar menu config, role guard, auth, schema, service, stock, purchase, sales, production, payroll, HPP, finance, report, reset, atau audit log.
 

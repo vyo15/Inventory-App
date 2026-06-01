@@ -17,7 +17,7 @@ export const getSqliteBackendBaseUrl = () => normalizeBaseUrl(
   import.meta.env.VITE_SQLITE_API_BASE_URL || getRuntimeHostBaseUrl(),
 );
 
-const getStoredSqliteAuthHeaders = () => {
+export const getStoredSqliteAuthHeaders = () => {
   if (typeof window === "undefined") return {};
   const token = window.localStorage.getItem(LOCAL_AUTH_TOKEN_KEY) || "";
   return token ? { Authorization: `Bearer ${token}` } : {};

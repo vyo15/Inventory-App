@@ -307,7 +307,7 @@ Batasan aman:
 @media (max-width: 768px) {
   .summary-stat-grid-metrics,
   .summary-finance-metrics {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   }
 
   .summary-finance-main-header,
@@ -320,11 +320,18 @@ Batasan aman:
   }
 
   .summary-stat-card-value.ant-typography {
-    font-size: calc(var(--ims-font-size-stat) + 2px);
+    font-size: clamp(20px, 6vw, calc(var(--ims-font-size-stat) + 2px));
   }
 
   .summary-stat-card--featured .summary-stat-card-value.ant-typography {
     font-size: 30px;
+  }
+}
+
+@media (max-width: 360px) {
+  .summary-stat-grid-metrics,
+  .summary-finance-metrics {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -427,6 +434,12 @@ Batasan aman:
     min-height: 0;
   }
 
+  .cash-flow-summary .summary-finance-metrics {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  }
+}
+
+@media (max-width: 360px) {
   .cash-flow-summary .summary-finance-metrics {
     grid-template-columns: 1fr;
   }

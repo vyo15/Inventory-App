@@ -239,8 +239,29 @@ npm run dev:frontend
 
 Guard security terbaru:
 - `POST /api/maintenance/backup`, `GET /api/maintenance/backups`, `POST /api/maintenance/restore-plan`, `GET /api/maintenance/restore-logs`, dan `POST /api/maintenance/restore-execute` wajib session lokal role `administrator`.
+- Categories SQLite write `POST/PUT/DELETE /api/categories` wajib session lokal role `administrator`.
+- Customers SQLite write `POST/PUT/DELETE /api/customers` wajib session lokal role `administrator`.
 - Supplier SQLite write `POST/PUT/DELETE /api/suppliers` wajib session lokal role `administrator`.
-- Supplier read tetap public sementara untuk compatibility dev dan UI pilot.
+- Read Categories/Customers/Supplier tetap public sementara untuk compatibility dev dan UI pilot.
+- Frontend SQLite API client otomatis mengirim token auth lokal saat tersedia.
 
 
 Catatan guard restore: Restore execute wajib memilih `filename` backup secara eksplisit. Backend juga menerima alias `backupFileName`, tetapi tidak akan restore otomatis dari backup terbaru tanpa nama file yang jelas.
+
+
+## Update guard consistency Categories/Customers
+
+Status: aktif.
+
+Categories dan Customers sebelumnya sudah menjadi runtime pilot SQLite, tetapi write endpoint masih perlu konsistensi guard dengan Supplier. Setelah update ini:
+
+- `POST/PUT/DELETE /api/categories` guarded admin lokal.
+- `POST/PUT/DELETE /api/customers` guarded admin lokal.
+- Audit log Categories/Customers mencatat actor username admin lokal.
+- Frontend SQLite adapter memakai token auth lokal otomatis melalui `sqliteApiClient`.
+
+Batasan tetap:
+
+- `GET` master data pilot masih public sementara untuk compatibility read/dev.
+- Firebase Auth tetap default sampai cutover auth lokal disetujui.
+- Stock, purchase, sales, returns, finance, production, payroll, dan HPP tidak berubah.

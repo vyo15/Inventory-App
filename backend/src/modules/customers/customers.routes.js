@@ -2,6 +2,7 @@ const express = require("express");
 const { getDb } = require("../../db/connection");
 const { createAuditLog } = require("../../utils/auditLog");
 const { failure, success } = require("../../utils/response");
+const { requireLocalAuth, requireLocalAdministrator } = require("../../middlewares/localAuth");
 
 const router = express.Router();
 
@@ -124,7 +125,7 @@ router.get("/:id", async (req, res, next) => {
   }
 });
 
-router.post("/", async (req, res, next) => {
+router.post("/", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
   try {
     const db = await getDb();
     const payload = buildCustomerPayload(req.body);
@@ -160,6 +161,7 @@ router.post("/", async (req, res, next) => {
       action: "create",
       entityType: "customer",
       entityId: result.lastID,
+      actor: req.localAuth.user.username,
       description: `Customer ${payload.name} dibuat di SQLite local`,
       metadata: { customerCode: finalCode, name: payload.name, phone: payload.phone, address: payload.address },
     });
@@ -173,7 +175,7 @@ router.post("/", async (req, res, next) => {
   }
 });
 
-router.put("/:id", async (req, res, next) => {
+router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
   try {
     const db = await getDb();
     const current = await db.get(
@@ -218,6 +220,7 @@ router.put("/:id", async (req, res, next) => {
       action: "update",
       entityType: "customer",
       entityId: current.id,
+      actor: req.localAuth.user.username,
       description: `Customer ${payload.name} diubah di SQLite local`,
       metadata: { customerCode: immutableCode, name: payload.name, phone: payload.phone },
     });
@@ -231,7 +234,7 @@ router.put("/:id", async (req, res, next) => {
   }
 });
 
-router.delete("/:id", async (req, res, next) => {
+router.delete("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
   try {
     const db = await getDb();
     const current = await db.get(
@@ -253,6 +256,7 @@ router.delete("/:id", async (req, res, next) => {
       action: "soft_delete",
       entityType: "customer",
       entityId: current.id,
+      actor: req.localAuth.user.username,
       description: `Customer ${current.name} dinonaktifkan di SQLite local`,
       metadata: { customerCode: current.customer_code, name: current.name },
     });

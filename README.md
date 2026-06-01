@@ -171,9 +171,17 @@ Authorization: Bearer <local-session-token>
 Flow ini tetap harus dipakai hati-hati. Jangan restore saat transaksi penting sedang berjalan.
 
 
-## Guard admin lokal untuk maintenance dan Supplier SQLite
+## Guard admin lokal untuk maintenance dan master data SQLite
 
-Endpoint maintenance yang membuat/list backup, membuat restore plan, membaca restore logs, dan menjalankan restore wajib memakai session lokal role `administrator`. Endpoint write Supplier SQLite (`POST`, `PUT`, `DELETE`) juga wajib session administrator. Endpoint read seperti `/health`, `/api/maintenance/status`, `/api/auth/status`, dan `GET /api/suppliers` tetap public untuk status/dev compatibility.
+Endpoint maintenance yang membuat/list backup, membuat restore plan, membaca restore logs, dan menjalankan restore wajib memakai session lokal role `administrator`. Endpoint write master data SQLite pilot juga wajib session administrator:
+
+```text
+POST/PUT/DELETE /api/categories
+POST/PUT/DELETE /api/customers
+POST/PUT/DELETE /api/suppliers
+```
+
+Endpoint read/status seperti `/health`, `/api/maintenance/status`, `/api/auth/status`, `GET /api/categories`, `GET /api/customers`, dan `GET /api/suppliers` tetap public sementara untuk status/dev compatibility. Frontend SQLite adapter otomatis mengirim `Authorization: Bearer <local-session-token>` dari auth lokal saat token tersedia.
 
 Contoh pakai token admin lokal:
 
