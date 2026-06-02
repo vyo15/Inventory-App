@@ -33,8 +33,67 @@ import {
 import {
   setStockItemReadModelInTransaction,
 } from '../Inventory/stockReadModelService';
+import { getRepositoryModeStatus } from '../../data/repositories/repositoryModeService';
+import * as sqliteProductsAdapter from '../../data/adapters/sqlite/sqliteProductsAdapter';
 
 const COLLECTION_NAME = 'products';
+
+const shouldUseSqliteProducts = async () => {
+  const status = await getRepositoryModeStatus();
+  return status.isSqliteSidecar === true;
+};
+
+const assertSqliteProductPayload = (values = {}) => {
+  const errors = {};
+  if (!String(values.name || '').trim()) errors.name = 'Nama produk wajib diisi';
+  if (Number(values.currentStock || 0) < 0) errors.currentStock = 'Stok tidak boleh negatif';
+  if (Number(values.reservedStock || 0) < 0) errors.reservedStock = 'Reserved stock tidak boleh negatif';
+  if (Object.keys(errors).length > 0) throw { type: 'validation', errors };
+};
+
+const buildSqliteProductPayload = (values = {}, categories = [], existingProduct = {}) => {
+  const hasVariants = values.hasVariants === true;
+  const normalizedVariants = hasVariants ? normalizeColorVariants(values.variants || []) : [];
+  const variantTotals = calculateVariantTotals(normalizedVariants);
+  const currentStock = hasVariants
+    ? variantTotals.currentStock
+    : toStockNumber(values.currentStock ?? existingProduct.currentStock ?? existingProduct.stock ?? 0);
+  const reservedStock = hasVariants
+    ? variantTotals.reservedStock
+    : toStockNumber(values.reservedStock ?? existingProduct.reservedStock ?? 0);
+  const selectedCategory = (categories || []).find((item) => String(item.id) === String(values.categoryId));
+  const code = String(values.code || existingProduct.code || existingProduct.productCode || '').trim().toUpperCase();
+  const now = new Date().toISOString();
+
+  return {
+    ...existingProduct,
+    ...values,
+    id: existingProduct.id || values.id || code || undefined,
+    code,
+    productCode: code,
+    name: String(values.name || existingProduct.name || '').trim(),
+    categoryId: values.categoryId || existingProduct.categoryId || null,
+    category: selectedCategory?.name || values.category || existingProduct.category || 'Produk Jadi',
+    description: String(values.description || existingProduct.description || '').trim(),
+    pricingMode: values.pricingMode === 'rule' ? 'rule' : 'manual',
+    pricingRuleId: values.pricingMode === 'rule' ? values.pricingRuleId || null : null,
+    price: toStockNumber(values.price ?? existingProduct.price ?? 0),
+    hppPerUnit: toStockNumber(values.hppPerUnit ?? existingProduct.hppPerUnit ?? 0),
+    hasVariants,
+    variantLabel: String(values.variantLabel || existingProduct.variantLabel || 'Varian').trim() || 'Varian',
+    variants: normalizedVariants,
+    variantCount: hasVariants ? variantTotals.variantCount : 0,
+    activeVariantCount: hasVariants ? variantTotals.activeVariantCount : 0,
+    currentStock,
+    reservedStock,
+    availableStock: Math.max(currentStock - reservedStock, 0),
+    stock: currentStock,
+    minStockAlert: resolveProductMasterMinStockAlert(values),
+    isActive: values.isActive !== false,
+    createdAt: existingProduct.createdAt || values.createdAt || now,
+    updatedAt: now,
+  };
+};
 
 export const PRODUCT_DEFAULT_FORM = {
   code: '',
@@ -499,17 +558,40 @@ export const validateProductPayload = async (values = {}, editingId = null) => {
 };
 
 export const listenProducts = (callback, onError) => {
-  const q = query(collection(db, COLLECTION_NAME), orderBy('name', 'asc'));
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      callback(snapshot.docs.map((item) => enrichProduct({ id: item.id, ...item.data() })));
-    },
-    onError,
-  );
+  let unsubscribe = () => {};
+  let disposed = false;
+
+  (async () => {
+    try {
+      if (await shouldUseSqliteProducts()) {
+        unsubscribe = sqliteProductsAdapter.subscribeProducts(
+          (rows) => callback(rows.map(enrichProduct)),
+          onError,
+        );
+        return;
+      }
+
+      const q = query(collection(db, COLLECTION_NAME), orderBy('name', 'asc'));
+      unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          if (!disposed) callback(snapshot.docs.map((item) => enrichProduct({ id: item.id, ...item.data() })));
+        },
+        onError,
+      );
+    } catch (error) {
+      if (!disposed && typeof onError === 'function') onError(error);
+    }
+  })();
+
+  return () => {
+    disposed = true;
+    unsubscribe();
+  };
 };
 
 export const generateProductCode = async (values = {}, excludeId = null) => {
+  if (await shouldUseSqliteProducts()) return sqliteProductsAdapter.generateProductCode();
   // IMS NOTE [LEGACY-COMPAT | lint-safe-signature]: values tetap diterima agar caller lama tidak perlu diubah, meski kode PRD sekarang berbasis sequence internal.
   void values;
   // IMS NOTE [AKTIF | internal-sequence-code]: Product baru memakai kode internal PRD-001 agar UI fokus ke nama produk, bukan kode semantic panjang.
@@ -540,6 +622,13 @@ const assertProductCodeAvailable = async (code = '', editingId = null) => {
 };
 
 export const createProduct = async (values = {}, categories = []) => {
+  if (await shouldUseSqliteProducts()) {
+    assertSqliteProductPayload(values);
+    const code = values.code || await sqliteProductsAdapter.generateProductCode();
+    const created = await sqliteProductsAdapter.createProduct(buildSqliteProductPayload({ ...values, code }, categories));
+    return created?.id || code;
+  }
+
   const errors = await validateProductPayload(values, null);
   if (Object.keys(errors).length > 0) {
     throw { type: 'validation', errors };
@@ -614,6 +703,14 @@ export const createProduct = async (values = {}, categories = []) => {
 };
 
 export const updateProduct = async (id, values = {}, categories = []) => {
+  if (await shouldUseSqliteProducts()) {
+    assertSqliteProductPayload(values);
+    const existingProduct = await sqliteProductsAdapter.getProductById(id);
+    if (!existingProduct) throw new Error('Produk tidak ditemukan.');
+    const updated = await sqliteProductsAdapter.updateProduct(id, buildSqliteProductPayload(values, categories, existingProduct));
+    return updated?.id || id;
+  }
+
   const errors = await validateProductPayload(values, id);
   if (Object.keys(errors).length > 0) {
     throw { type: 'validation', errors };
@@ -654,6 +751,13 @@ export const updateProduct = async (id, values = {}, categories = []) => {
 };
 
 export const toggleProductActive = async (id, isActive) => {
+  if (await shouldUseSqliteProducts()) {
+    const existingProduct = await sqliteProductsAdapter.getProductById(id);
+    if (!existingProduct) throw new Error('Produk tidak ditemukan.');
+    await sqliteProductsAdapter.updateProduct(id, { ...existingProduct, isActive: Boolean(isActive), status: isActive ? 'active' : 'inactive' });
+    return id;
+  }
+
   const ref = doc(db, COLLECTION_NAME, id);
 
   await runTransaction(db, async (transaction) => {

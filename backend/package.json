@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check src/db/connection.js && node --check src/db/migrate.js && node --check src/middlewares/localAuth.js && node --check src/modules/auth/auth.routes.js && node --check src/modules/customers/customers.routes.js && node --check src/modules/categories/categories.routes.js && node --check src/modules/suppliers/suppliers.routes.js && node --check src/modules/maintenance/maintenance.routes.js && node --check src/modules/migrationStatus/migrationStatus.routes.js"
+    "check": "node --check src/server.js && node --check src/db/connection.js && node --check src/db/migrate.js && node --check src/middlewares/localAuth.js && node --check src/modules/auth/auth.routes.js && node --check src/modules/customers/customers.routes.js && node --check src/modules/categories/categories.routes.js && node --check src/modules/suppliers/suppliers.routes.js && node --check src/modules/pricingRules/pricingRules.routes.js && node --check src/modules/maintenance/maintenance.routes.js && node --check src/modules/migrationStatus/migrationStatus.routes.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

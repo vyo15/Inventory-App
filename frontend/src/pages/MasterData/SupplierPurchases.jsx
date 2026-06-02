@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
@@ -29,6 +29,15 @@ import {
 import { collection, updateDoc, deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp, limit as firestoreLimit, orderBy, query } from 'firebase/firestore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../../firebase';
+import { REPOSITORY_MODES } from '../../data/repositories/repositoryMode';
+import { getRepositoryModeStatus } from '../../data/repositories/repositoryModeService';
+import {
+  createSupplier as createSupplierRepository,
+  deleteSupplier as deleteSupplierRepository,
+  generateSupplierCode as generateSupplierCodeRepository,
+  listSuppliers as listSupplierRepository,
+  updateSupplier as updateSupplierRepository,
+} from '../../data/repositories/suppliersRepository';
 import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyIDR } from '../../utils/formatters/currencyId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
@@ -42,7 +51,7 @@ import {
   cascadeSupplierSnapshotToRawMaterials,
   clearSupplierSnapshotFromRawMaterials,
   doesSupplierProvideMaterial,
-  generateSupplierCode,
+  generateSupplierCode as generateFirebaseSupplierCode,
   getSupplierDisplayName,
   getSupplierStoreLink,
   isManagedSupplierRecord,
@@ -77,6 +86,13 @@ const { Search } = Input;
 const { Text } = Typography;
 
 
+const getRepositoryModeCopy = (mode) => (
+  mode === REPOSITORY_MODES.SQLITE_SIDECAR
+    ? { label: 'SQLite Lokal', shortLabel: 'SQLite', color: 'green' }
+    : { label: 'Firebase Legacy', shortLabel: 'Firebase', color: 'blue' }
+);
+
+
 
 const SupplierPurchases = () => {
   // ---------------------------------------------------------------------------
@@ -100,6 +116,11 @@ const SupplierPurchases = () => {
   const [loadError, setLoadError] = useState('');
   const [searchText, setSearchText] = useState('');
   const [materialFilter, setMaterialFilter] = useState(undefined);
+  const [repositoryMode, setRepositoryMode] = useState(REPOSITORY_MODES.SQLITE_SIDECAR);
+
+  const isSqliteSupplierMode = repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR;
+  const repositoryModeCopy = getRepositoryModeCopy(repositoryMode);
+  const getModeOptions = useCallback((mode = repositoryMode) => ({ mode }), [repositoryMode]);
 
   const [form] = Form.useForm();
   const location = useLocation();
@@ -118,37 +139,83 @@ const SupplierPurchases = () => {
     return materials.find((item) => item.id === materialIdFromQuery);
   }, [materials, materialIdFromQuery]);
 
+  const fetchSuppliers = useCallback(async (mode = repositoryMode) => {
+    setIsLoading(true);
+    try {
+      const nextSuppliers = await listSupplierRepository(getModeOptions(mode));
+      setSuppliers(nextSuppliers);
+      setLoadError('');
+    } catch (error) {
+      console.error(error);
+      setSuppliers([]);
+      setLoadError('Gagal memuat supplier. Pastikan backend SQLite aktif jika mode SQLite dipakai.');
+      message.error(error?.message || 'Gagal memuat supplier.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getModeOptions, repositoryMode]);
+
   // ---------------------------------------------------------------------------
   // Load master supplier, bahan baku, dan purchases.
-  // FUNGSI: Supplier tetap katalog restock; purchase hanya dibaca read-only untuk
-  // menampilkan perbandingan harga terakhir beli.
-  // BATASAN: tidak menulis purchase, stok, kas, atau raw material.
+  // FUNGSI: C1 memindahkan master Supplier ke repository boundary agar mode
+  // SQLite tidak lagi melakukan write langsung ke Firestore supplierPurchases.
+  // BATASAN: raw material dan histori purchase tetap legacy read-only untuk
+  // pembanding; tidak menulis purchase, stok, kas, raw material, atau finance.
   // STATUS: aktif dipakai.
   // ---------------------------------------------------------------------------
   useEffect(() => {
-    const unsubscribeSuppliers = listenSuppliers(
-      (nextSuppliers) => {
-        setSuppliers(nextSuppliers);
-        setLoadError('');
-        setIsLoading(false);
-      },
-      (error) => {
+    let isActive = true;
+    let unsubscribeSuppliers = () => {};
+
+    const initializeSupplierSource = async () => {
+      try {
+        const modeStatus = await getRepositoryModeStatus();
+        if (!isActive) return;
+
+        setRepositoryMode(modeStatus.mode);
+
+        if (modeStatus.mode === REPOSITORY_MODES.SQLITE_SIDECAR) {
+          await fetchSuppliers(modeStatus.mode);
+          return;
+        }
+
+        setIsLoading(true);
+        unsubscribeSuppliers = listenSuppliers(
+          (nextSuppliers) => {
+            if (!isActive) return;
+            setSuppliers(nextSuppliers);
+            setLoadError('');
+            setIsLoading(false);
+          },
+          (error) => {
+            if (!isActive) return;
+            console.error(error);
+            setSuppliers([]);
+            setLoadError('Gagal memuat supplier Firebase legacy.');
+            setIsLoading(false);
+            message.error('Gagal memuat supplier.');
+          },
+        );
+      } catch (error) {
+        if (!isActive) return;
         console.error(error);
         setSuppliers([]);
-        setLoadError('Gagal memuat supplier.');
+        setLoadError('Gagal membaca mode repository supplier.');
         setIsLoading(false);
-        message.error('Gagal memuat supplier.');
-      },
-    );
+      }
+    };
+
+    initializeSupplierSource();
 
     const unsubscribeMaterials = onSnapshot(
       collection(db, 'raw_materials'),
       (snapshot) => {
+        if (!isActive) return;
         setMaterials(snapshot.docs.map((documentItem) => ({ id: documentItem.id, ...documentItem.data() })));
       },
       (error) => {
         console.error(error);
-        message.error('Gagal memuat bahan baku untuk referensi supplier.');
+        message.warning('Referensi bahan baku Firebase belum bisa dimuat. Supplier SQLite tetap master-only.');
       },
     );
 
@@ -171,20 +238,22 @@ const SupplierPurchases = () => {
         // CLEANUP CANDIDATE: pindahkan ke service latest purchase per material
         // jika nanti index Firestore final sudah dikunci.
         // -------------------------------------------------------------------
+        if (!isActive) return;
         setPurchaseRecords(snapshot.docs.map((documentItem) => ({ id: documentItem.id, ...documentItem.data() })));
       },
       (error) => {
         console.error(error);
-        message.warning('Histori purchase belum bisa dimuat untuk pembanding supplier.');
+        message.warning('Histori purchase Firebase legacy belum bisa dimuat untuk pembanding supplier.');
       },
     );
 
     return () => {
+      isActive = false;
       unsubscribeSuppliers();
       unsubscribeMaterials();
       unsubscribePurchases();
     };
-  }, []);
+  }, [fetchSuppliers]);
 
   // ---------------------------------------------------------------------------
   // Filter supplier dari query URL + filter manual user.
@@ -197,11 +266,11 @@ const SupplierPurchases = () => {
 
     return (suppliers || [])
       .filter((supplier) => {
-        if (!materialIdFromQuery) return true;
+        if (isSqliteSupplierMode || !materialIdFromQuery) return true;
         return doesSupplierProvideMaterial(supplier, materialIdFromQuery);
       })
       .filter((supplier) => {
-        if (!materialFilter) return true;
+        if (isSqliteSupplierMode || !materialFilter) return true;
         return doesSupplierProvideMaterial(supplier, materialFilter);
       })
       .filter((supplier) => {
@@ -224,7 +293,7 @@ const SupplierPurchases = () => {
       .sort((leftSupplier, rightSupplier) =>
         getSupplierDisplayName(leftSupplier).localeCompare(getSupplierDisplayName(rightSupplier), 'id-ID'),
       );
-  }, [suppliers, materialIdFromQuery, materialFilter, searchText]);
+  }, [suppliers, isSqliteSupplierMode, materialIdFromQuery, materialFilter, searchText]);
 
   // ---------------------------------------------------------------------------
   // Helper purchase terakhir per material.
@@ -275,7 +344,9 @@ const SupplierPurchases = () => {
     setSupplierCodeLoading(true);
 
     try {
-      const generatedCode = await generateSupplierCode();
+      const generatedCode = isSqliteSupplierMode
+        ? await generateSupplierCodeRepository(getModeOptions())
+        : await generateFirebaseSupplierCode();
       form.setFieldsValue({ code: generatedCode, materialDetails: [] });
     } catch (error) {
       console.error('Gagal membuat kode supplier otomatis:', error);
@@ -360,6 +431,20 @@ const SupplierPurchases = () => {
       ? { code: normalizedCode, supplierCode: normalizedCode }
       : {};
 
+    if (isSqliteSupplierMode) {
+      return {
+        ...codeFields,
+        name: values.storeName,
+        storeName: values.storeName,
+        storeLink: values.storeLink || '',
+        // C1 master-only: katalog material tidak dikirim sebagai mutation aktif
+        // karena raw material/purchase/stock belum menjadi SQLite transaction engine.
+        materialDetails: [],
+        supportedMaterialIds: [],
+        supportedMaterialNames: [],
+      };
+    }
+
     return {
       ...codeFields,
       storeName: values.storeName,
@@ -383,6 +468,22 @@ const SupplierPurchases = () => {
   const handleSaveSupplier = async (values) => {
     try {
       setSaving(true);
+
+      if (isSqliteSupplierMode) {
+        const payload = buildSupplierPayload(values);
+
+        if (isEditing && editingId) {
+          await updateSupplierRepository(editingId, payload, getModeOptions());
+          message.success('Supplier berhasil diupdate di SQLite local.');
+        } else {
+          await createSupplierRepository(payload, getModeOptions());
+          message.success('Supplier berhasil ditambahkan ke SQLite local.');
+        }
+
+        resetSupplierModalState();
+        await fetchSuppliers(repositoryMode);
+        return;
+      }
 
       if (isEditing && editingId) {
         const formCode = normalizeSupplierCode(values.code || values.supplierCode);
@@ -429,7 +530,7 @@ const SupplierPurchases = () => {
             Risiko:
             - Mengubah flow ini dapat merusak linkage Purchases/Raw Material yang membaca supplier dari supplierPurchases.
         ===================================================== */
-        const baselineCode = await generateSupplierCode(values, null);
+        const baselineCode = await generateFirebaseSupplierCode(values, null);
         const baselineSequence = getDailyBusinessCodeSequence({
           code: baselineCode,
           prefix: 'SUP',
@@ -548,6 +649,13 @@ const SupplierPurchases = () => {
     }
 
     try {
+      if (isSqliteSupplierMode) {
+        await deleteSupplierRepository(record.id, getModeOptions());
+        message.success('Supplier berhasil dinonaktifkan di SQLite local.');
+        await fetchSuppliers(repositoryMode);
+        return;
+      }
+
       await deleteDoc(doc(db, 'supplierPurchases', record.id));
 
       try {
@@ -876,15 +984,20 @@ const SupplierPurchases = () => {
         subtitle={
           materialIdFromQuery && selectedMaterialFromQuery
             ? `Supplier untuk bahan ${selectedMaterialFromQuery.name}.`
-            : 'Katalog restock dan pembanding harga supplier.'
+            : isSqliteSupplierMode
+              ? 'Master supplier SQLite local. Katalog material dan histori purchase masih legacy read-only.'
+              : 'Katalog restock dan pembanding harga supplier.'
         }
-        extra={
-          materialIdFromQuery && selectedMaterialFromQuery ? (
-            <Button type="link" size="small" onClick={() => navigate('/suppliers')}>
-              Reset Filter URL
-            </Button>
-          ) : null
-        }
+        extra={(
+          <Space size={8} wrap>
+            <Tag color={repositoryModeCopy.color}>Mode: {repositoryModeCopy.label}</Tag>
+            {materialIdFromQuery && selectedMaterialFromQuery ? (
+              <Button type="link" size="small" onClick={() => navigate('/suppliers')}>
+                Reset Filter URL
+              </Button>
+            ) : null}
+          </Space>
+        )}
         actions={[
           {
             key: 'create-supplier',
@@ -900,7 +1013,11 @@ const SupplierPurchases = () => {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="Supplier hanya referensi restock; transaksi lewat Purchases."
+        message={
+          isSqliteSupplierMode
+            ? 'C1 aktif: Supplier memakai SQLite master-only. Katalog bahan, histori purchase, stok, kas, dan transaksi belum ikut dimutasi.'
+            : 'Supplier hanya referensi restock; transaksi lewat Purchases.'
+        }
       />
 
       <FilterBar>
@@ -915,8 +1032,9 @@ const SupplierPurchases = () => {
 
         <Col xs={24} md={8}>
           <Select
-            placeholder="Filter bahan"
+            placeholder={isSqliteSupplierMode ? 'Filter bahan nonaktif di SQLite master-only' : 'Filter bahan'}
             allowClear
+            disabled={isSqliteSupplierMode}
             value={materialFilter}
             onChange={setMaterialFilter}
             style={{ width: '100%' }}
@@ -1050,6 +1168,14 @@ const SupplierPurchases = () => {
               bukan input utama.
           ----------------------------------------------------------------- */}
 
+          {isSqliteSupplierMode ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="Katalog Restock belum aktif di SQLite C1"
+              description="Batch C1 hanya memindahkan master Supplier ke SQLite. Relasi bahan, purchase history, stok, kas, dan prefill pembelian tetap guarded agar tidak merusak transaksi lama."
+            />
+          ) : (
           <Form.List name="materialDetails">
             {(fields, { add, remove }) => (
               <>
@@ -1307,6 +1433,7 @@ const SupplierPurchases = () => {
               </>
             )}
           </Form.List>
+          )}
         </Form>
       </Modal>
 

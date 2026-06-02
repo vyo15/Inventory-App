@@ -642,7 +642,7 @@ request.auth.uid
 
 - Firebase Authentication menyimpan password/session.
 - Firestore `system_users/{uid}` menyimpan profile internal, role, dan status.
-- Frontend User Management hanya menulis profile Firestore.
+- Frontend User Management menulis akun lokal SQLite saat `VITE_AUTH_MODE=sqlite`; mode Firebase legacy tetap hanya menulis profile Firestore.
 - Frontend tidak membuat, mengubah password, atau menghapus Firebase Authentication user.
 - Admin SDK, service account, dan secret tidak boleh berada di `src` frontend.
 
@@ -1198,207 +1198,127 @@ Guard:
 - Semua area guarded tetap harus melalui service existing: stock posting, purchase expense, sales income, return stock-only rule, production HPP/payroll, reset destructive, inventory log, route/menu/role guard, and Firestore rules/index deployment.
 
 
-## Offline Local DB manual sync integration — 2026-05
+## SQLite Local DB integration — Patch A-B — 2026-06-02
 
-Status: **FOUNDATION + REPOSITORY + MANUAL SYNC PILOT / FIREBASE PRIMARY MASIH AKTIF**.
+Status: **AKTIF / SQLITE-FIRST PILOT / DEXIE LEGACY REMOVED**.
 
-Integrasi target jangka panjang:
+Arsitektur aktif:
 
 ```text
 React UI
--> IMS service/repository
--> Dexie/IndexedDB local DB
--> sync_queue
--> Firebase mirror/backup
+-> repository/adapter IMS
+-> SQLite REST adapter when mode = sqlite_sidecar
+-> backend Node.js lokal/LAN
+-> file SQLite local
 ```
 
-Integrasi source Batch 1–7:
-- `src/data/local/localDbSchema.js` menyimpan nama DB, versi schema, table foundation, mode, sync status, operation, dan allowlist backup.
-- `src/data/local/imsLocalDb.js` membuat singleton Dexie untuk `ims_bunga_flanel_offline`.
-- `src/data/local/localDbMeta.js` menyimpan metadata foundation, mode, dan timestamp backup/restore.
-- `src/data/local/localDbBackupValidator.js` memvalidasi payload backup sebelum restore.
-- `src/data/local/localDbBackupService.js` membuat export/preview/restore foundation backup.
-- `src/data/repositories/*Repository.js` menjadi boundary pilot untuk categories/customers/suppliers.
-- `src/data/repositories/repositoryModeService.js` menyimpan guarded dev mode untuk repository pilot.
-- `src/data/sync/syncQueueService.js` menyimpan queue lokal untuk master data pilot.
-- `src/data/sync/syncConflictService.js` menyimpan konflik sync lokal.
-- `src/data/sync/firebaseMasterDataSyncService.js` menyediakan manual push sync ke Firebase untuk `categories` dan `customers`, serta menulis audit lokal `module = local_db_sync`.
-- `docs/10_OFFLINE_DATABASE_CONTRACT.md` menjadi peta resmi migrasi offline-first.
+Runtime Categories/Customers:
 
-Boundary:
-- Page/service aktif belum boleh langsung bergantung ke Dexie untuk transaksi utama.
-- Firebase service existing tetap aktif sampai repository boundary dibuat per page.
-- Manual Firebase sync belum otomatis dan belum UI user-facing.
-- Supplier Firebase sync masih diblokir sampai write flow supplier diaudit.
-- Backup/restore foundation tidak boleh menjadi reset destructive untuk data bisnis utama.
-- Migrasi berikutnya wajib membuat guarded preview/dev panel atau service test sebelum masuk UI pilot master data.
-
-
-## Offline Sync Dev Panel dan Conflict Resolver integration — 2026-05
-
-Status: **DEV PANEL + CONFLICT RESOLVER / FIREBASE PRIMARY MASIH AKTIF**.
-
-Integrasi Batch 8–9:
-- `src/pages/Utilities/components/OfflineSyncDevPanel.jsx` menampilkan guarded preview untuk local DB, repository mode, sync queue, manual sync, dan conflict resolver.
-- `src/pages/Utilities/ResetMaintenanceData.jsx` hanya menambahkan panel dev guarded; flow reset destructive existing tidak diubah.
-- `src/data/sync/syncConflictService.js` menyimpan, membaca, menghitung summary, dan menandai resolve conflict lokal.
-- `src/data/sync/syncConflictResolutionService.js` menjalankan resolver guarded untuk `categories/customers`.
-- `src/data/sync/syncQueueService.js` menyediakan read helper queue by ID untuk resolver.
-
-Boundary:
-- Resolver bukan auto-sync.
-- Resolver tidak boleh dipakai untuk supplier sebelum write flow supplier diekstrak.
-- Resolver tidak boleh dipakai untuk stock/transaksi/production/payroll/HPP.
-- `local_wins` adalah aksi overwrite/merge Firebase yang wajib confirmation dan audit lokal.
-- `remote_wins` hanya menyesuaikan local DB dengan Firebase.
-
-## Offline Master Data Pilot Panel integration — Batch 11/12 — 2026-05
-
-Status: **DEV PANEL ONLY / LOCAL DB PILOT / NO RUNTIME MIGRATION**.
-
-Integrasi:
-- `src/pages/Utilities/components/OfflineDevPanelErrorBoundary.jsx` membungkus panel offline agar error runtime tidak membuat route reset blank.
-- `src/pages/Utilities/components/OfflineMasterDataPilotPanel.jsx` memakai repository pilot untuk operasi local `categories/customers`.
-- `src/pages/Utilities/ResetMaintenanceData.jsx` menampilkan Offline Sync Dev Panel dan Offline Master Data Pilot di dalam error boundary.
-- `src/data/sync/syncConflictService.js` menyediakan alias `createSyncConflict` untuk compatibility.
-- `src/data/sync/firebaseMasterDataSyncService.js` menyediakan alias confirmation dan filter collection untuk preview/sync manual.
-
-Flow pilot:
 ```text
-Testing & Reset Center
--> Offline Master Data Pilot Panel
--> categoriesRepository/customersRepository mode sqlite_sidecar
--> Dexie adapter
--> IndexedDB + sync_queue pending
--> Offline Sync Dev Panel
--> manual Firebase sync guarded
+Categories.jsx / Customers.jsx
+-> categoriesRepository / customersRepository
+-> sqliteCategoriesAdapter / sqliteCustomersAdapter
+-> sqliteApiClient
+-> backend /api/categories atau /api/customers
+-> SQLite database file
 ```
 
-Boundary:
-- Tidak ada auto-sync.
-- Tidak ada runtime switch halaman master data aktif.
-- Tidak ada supplier write/sync Firebase.
-- Tidak ada perubahan route/menu/role guard.
-
-## Batch 14 runtime pilot integration — 2026-05
-
-Active pilot boundary:
+Fallback legacy:
 
 ```text
 Categories.jsx / Customers.jsx
 -> categoriesRepository / customersRepository
 -> firebase adapter when mode = firebase_primary
--> sqlite REST adapter when mode = sqlite_sidecar
--> sync_queue for local create/update/delete
--> manual Firebase sync only after confirmation
+-> Firestore
 ```
 
-Important guard:
-- Firebase remains default runtime.
-- `sqlite_sidecar` adalah runtime pilot lokal untuk Categories/Customers, bukan switch semua modul.
-- Customer code generation is mode-aware:
-  - Firebase mode delegates to `customersService` and existing business code counter.
-  - Offline mode scans local IndexedDB customer records and generates `CUS-DDMMYYYY-001`.
-- Supplier, stock, transaction, production, payroll, and HPP modules are still intentionally outside the offline runtime pilot.
-
-## Batch 14–16 Integration Map — Customers Pilot and Sales Customer Boundary
+Mode compatibility:
 
 ```text
-Customers.jsx
--> customersRepository
--> firebaseCustomersAdapter when firebase_primary
--> sqliteCustomersAdapter when sqlite_sidecar
--> sync_queue for offline create/update/tombstone delete
-
-Sales.jsx
--> salesCustomerReferenceService
--> customersRepository({ mode: firebase_primary })
--> createSaleTransaction() remains Firebase transaction
+offline_local / hybrid_sync legacy setting
+-> normalizeRepositoryMode()
+-> sqlite_sidecar
 ```
 
-Guard:
-- `Sales.jsx` tidak membaca customer `offline_local` karena transaksi Sales masih menulis Firebase, stock mutation, inventory log, dan income.
-- `customerCodeReference.js` menjadi helper bersama untuk menjaga format `CUS-DDMMYYYY-001` konsisten antara Firebase service, Dexie adapter, dan panel offline.
-- Tidak ada auto-sync dan tidak ada perubahan route/menu/role guard.
+Catatan: alias legacy hanya mencegah crash setting lama; tidak ada Dexie runtime yang aktif.
 
+## SQLite Local DB Center integration
 
-## Batch 17–20 Completion Integration Map
+UI aktif:
 
 ```text
 ResetMaintenanceData.jsx
 -> OfflineDevPanelErrorBoundary
--> OfflineLocalDbBackupPanel
--> localDbBackupService / localDbBackupValidator / localDbMeta
--> IndexedDB local foundation only
+-> OfflineDatabaseCenter.jsx
+-> SqliteBackendStatusPanel.jsx
+-> sqliteBackendStatusService.js
+-> backend maintenance/migration endpoints
 ```
 
-Guard:
-- `restoreLocalDbBackupWithGuard()` requires `RESTORE LOCAL DB BACKUP`.
-- Restore local DB writes only IndexedDB allowlist tables.
-- No Firebase write, no auto-sync, no transaction/stock/production mutation.
+Fungsi aktif:
+- membaca health/status SQLite backend;
+- membaca migration status;
+- membuat backup SQLite lewat backend;
+- membuat restore plan/preview;
+- mengganti repository mode dengan confirmation guard;
+- menampilkan batasan modul guarded.
 
-Audit docs:
-- Supplier flow audit: `docs/11_OFFLINE_SUPPLIER_FLOW_AUDIT.md`.
-- Products/Raw/Semi contract: `docs/12_OFFLINE_PRODUCTS_RAW_SEMI_CONTRACT.md`.
+Yang sudah tidak menjadi integration aktif:
 
-## Batch 21 — Offline Database Center Integration
-
-UI utama offline database di Reset Maintenance sekarang:
-
-```txt
-src/pages/Utilities/components/OfflineDatabaseCenter.jsx
-src/pages/Utilities/components/OfflineDatabaseCenter.css
+```text
+frontend/src/data/adapters/dexie/
+frontend/src/data/local/
+frontend/src/data/sync/
+frontend/src/pages/Utilities/components/OfflineLocalDbBackupPanel.jsx
+frontend/src/pages/Utilities/components/OfflineMasterDataPilotPanel.jsx
+frontend/src/pages/Utilities/components/OfflineQaExecutionPanel.jsx
+frontend/src/pages/Utilities/components/OfflineSyncDevPanel.jsx
 ```
 
-Service baru untuk pull Firebase → Local:
+Tidak ada lagi flow berikut di runtime aktif:
 
-```txt
-src/data/sync/firebaseToLocalMasterDataSyncService.js
+```text
+React UI -> Dexie/IndexedDB -> sync_queue -> Firebase mirror
+React UI -> IndexedDB backup JSON restore
+React UI -> Dexie conflict resolver
 ```
 
-Arah data:
+## Guard integration tetap
 
-```txt
-Firebase categories/customers
-  → firebaseToLocalMasterDataSyncService
-  → IndexedDB categories/customers
+- Supplier frontend tetap Firebase-primary sampai audit relasi purchase/raw/history selesai.
+- Sales customer boundary tetap tidak boleh membaca customer local-only untuk transaksi final.
+- Stock mutation, purchase receive, sales stock out, returns stock in/refund, finance ledger, production material usage, payroll final, dan HPP final tidak berubah.
+- Reset destructive tetap memakai service/guard existing; SQLite restore destructive harus lewat backend guarded.
+- Tidak ada route/menu/role guard baru pada Patch A-B.
+- Tidak ada schema Firestore, Firestore rules/index, atau dependency yang diubah.
+
+## Env integration
+
+`frontend/.env.example` sekarang SQLite-first untuk pilot lokal:
+
+```env
+VITE_AUTH_MODE=sqlite
+# VITE_SQLITE_API_BASE_URL=http://localhost:3001
+VITE_SUPPLIERS_REPOSITORY_MODE=sqlite
 ```
 
-Arah data existing yang tetap dipakai:
+Jika backend berada di laptop dan frontend dibuka dari HP satu jaringan, `VITE_SQLITE_API_BASE_URL` boleh diarahkan ke `http://IP-LAPTOP:3001`.
 
-```txt
-IndexedDB sync_queue
-  → firebaseMasterDataSyncService
-  → Firebase categories/customers
+
+## SQLite C1 Supplier Master-Only Integration Map
+
+```text
+SupplierPurchases.jsx
+-> suppliersRepository
+-> sqliteSuppliersAdapter
+-> Node backend /api/suppliers
+-> SQLite suppliers table
 ```
 
-Guard allowlist tetap `categories` dan `customers` saja.
+Batasan C1:
 
-## Fase 1 Offline UX Guard — Batch 23–25 Integration
-
-```txt
-Categories.jsx / Customers.jsx
-  -> getRepositoryModeStatus()
-  -> categoriesRepository / customersRepository
-  -> getPendingSyncQueueCount()
-  -> OfflineRepositoryStatus.jsx
-```
-
-UI-only helper baru:
-
-```txt
-src/components/Layout/Feedback/OfflineRepositoryStatus.jsx
-src/components/Layout/Feedback/OfflineRepositoryStatus.css
-```
-
-Arah data tidak berubah:
-
-```txt
-firebase_primary  -> Firebase adapter -> Firestore categories/customers
-sqlite_sidecar    -> SQLite REST adapter -> backend local -> SQLite customers/categories
-```
-
-Guard:
-- Banner master data hanya membaca status mode dan queue pending.
-- Tombol `Offline DB Center` hanya navigasi ke route existing `/utilities/reset-maintenance-data`.
-- Tidak ada auto-sync, auto-delete, schema change, atau perubahan akses route/menu.
+- Tidak menulis `raw_materials`.
+- Tidak membuat atau mengubah `purchases`.
+- Tidak mengubah stock/currentStock/reservedStock/availableStock.
+- Tidak membuat cash out/expense/ledger.
+- Katalog restock dan purchase comparison tetap legacy/read-only sampai Raw Material, Purchase, Stock, dan Finance SQLite transaction engine dibuat.

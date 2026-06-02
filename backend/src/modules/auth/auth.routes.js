@@ -325,6 +325,13 @@ router.put("/users/:id", requireLocalAuth, requireLocalAdministrator, async (req
     assertValidRole(role);
     assertValidStatus(status);
     await assertUsernameAvailable(db, username, current.id);
+
+    const isSelfUpdate = Number(req.localAuth.user.id) === Number(current.id);
+    const roleOrStatusChanged = role !== current.role || status !== current.status;
+    if (isSelfUpdate && roleOrStatusChanged) {
+      return failure(res, "User aktif tidak boleh mengubah role/status akunnya sendiri.", "SELF_UPDATE_BLOCKED", 400);
+    }
+
     await assertNotLastActiveAdministrator(db, current.id, role, status);
 
     let passwordHash = current.password_hash;
@@ -367,5 +374,41 @@ router.put("/users/:id", requireLocalAuth, requireLocalAdministrator, async (req
     return next(error);
   }
 });
+
+
+router.delete("/users/:id", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
+  try {
+    const db = await getDb();
+    const current = await db.get("SELECT * FROM users WHERE id = ?", [req.params.id]);
+    if (!current) return failure(res, "User lokal tidak ditemukan.", "NOT_FOUND", 404);
+
+    await assertNotLastActiveAdministrator(db, current.id, "user", "inactive");
+
+    if (Number(req.localAuth.user.id) === Number(current.id)) {
+      return failure(res, "User aktif tidak boleh menghapus akunnya sendiri.", "SELF_DELETE_BLOCKED", 400);
+    }
+
+    await db.run("UPDATE local_user_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL", [current.id]);
+    await db.run("DELETE FROM users WHERE id = ?", [current.id]);
+
+    await createAuditLog({
+      module: "auth",
+      action: "user_delete",
+      entityType: "user",
+      entityId: current.id,
+      actor: req.localAuth.user.username,
+      description: `User lokal ${current.username} dihapus`,
+      metadata: { username: current.username, role: current.role, status: current.status },
+    });
+
+    return success(res, "User lokal berhasil dihapus", { id: current.id, deleted: true });
+  } catch (error) {
+    if (["LAST_ADMIN_GUARD"].includes(error?.code)) {
+      return failure(res, error.message, error.code, 400);
+    }
+    return next(error);
+  }
+});
+
 
 module.exports = router;

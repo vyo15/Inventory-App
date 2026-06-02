@@ -2,7 +2,7 @@
 
 Backend ini adalah perantara lokal untuk IMS web full-offline LAN berbasis SQLite. React tidak boleh mengakses file SQLite langsung; semua akses harus lewat HTTP API backend ini.
 
-Status saat ini: runtime pilot aktif untuk `customers` dan `categories`. Modul guarded seperti stock, purchase, sales final, returns, finance, production, payroll, HPP, dan reset destructive belum boleh diarahkan ke SQLite tanpa audit khusus.
+Status saat ini: runtime pilot aktif untuk auth lokal, user management lokal, `customers`, `categories`, dan Supplier master-only. Modul guarded seperti stock mutation, purchase/sales final, returns, finance, production, payroll, HPP, dan reset destructive belum boleh diarahkan ke SQLite tanpa audit khusus.
 
 ## Jalankan
 
@@ -36,6 +36,15 @@ http://IP-LAPTOP:5173/Inventory-App/
 GET    /health
 GET    /api
 GET    /api/settings
+GET    /api/auth/status
+POST   /api/auth/bootstrap-admin
+POST   /api/auth/login
+GET    /api/auth/me
+POST   /api/auth/logout
+GET    /api/auth/users
+POST   /api/auth/users
+PUT    /api/auth/users/:id
+DELETE /api/auth/users/:id
 GET    /api/customers
 GET    /api/customers/generate-code
 GET    /api/customers/:id

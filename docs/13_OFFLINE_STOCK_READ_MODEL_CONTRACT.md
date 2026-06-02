@@ -1,3 +1,8 @@
+<!--
+PATCH A-B NOTE — 2026-06-02:
+Dokumen ini adalah arsip historis Batch offline Dexie/IndexedDB. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime Dexie/IndexedDB, sync_queue, conflict resolver, atau backup JSON IndexedDB dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+-->
+
 # OFFLINE STOCK READ MODEL CONTRACT — BATCH 31–33
 
 Status: **AKTIF SEBAGAI AUDIT + KONTRAK / READ-ONLY SNAPSHOT ONLY / MUTATION TETAP FIREBASE-ONLY**
@@ -205,3 +210,18 @@ Patch ini sengaja tidak mengubah:
 - Purchase/sales/returns/production/payroll/HPP runtime.
 - Route/menu/role guard.
 - Firestore rules/index.
+
+## Update C5 SQLite Stock Read Model Foundation
+
+Source SQLite baru:
+
+```text
+/api/stock-read-models
+stock_read_models
+```
+
+Aturan guard:
+
+- SQLite stock read model adalah snapshot/read model, bukan source of truth mutasi stok.
+- `currentStock`, `reservedStock`, dan `availableStock` final tetap harus diubah lewat flow atomic yang mencatat audit log dan inventory log.
+- UI/report boleh memakai snapshot untuk tampilan setelah batch terkait siap, tetapi tidak boleh melakukan adjustment langsung dari snapshot.

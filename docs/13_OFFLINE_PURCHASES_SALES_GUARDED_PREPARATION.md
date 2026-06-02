@@ -1,3 +1,8 @@
+<!--
+PATCH A-B NOTE — 2026-06-02:
+Dokumen ini adalah arsip historis Batch offline Dexie/IndexedDB. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime Dexie/IndexedDB, sync_queue, conflict resolver, atau backup JSON IndexedDB dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+-->
+
 # Offline Purchases & Sales Guarded Preparation — Batch 34–37
 
 Status: **AUDIT / CONTRACT / GUARDED / TIDAK MIGRASI RUNTIME**
@@ -441,3 +446,22 @@ Sebelum batch runtime draft dibuat, wajib ada approval terpisah untuk:
 - [ ] `LOCAL_SYNC_COLLECTIONS` tetap hanya pilot master data; tidak ada `purchases`, `sales`, `inventory_logs`, `expenses`, atau `incomes`.
 - [ ] Offline Database Center tidak menawarkan push/pull transaksi final.
 - [ ] Draft offline masa depan tidak muncul di report/dashboard/ledger final sebelum commit online sukses.
+
+## Update C6 SQLite Transaction Foundation
+
+Endpoint foundation baru:
+
+```text
+/api/transactions/purchases
+/api/transactions/sales
+/api/transactions/returns
+```
+
+Status: guarded storage foundation.
+
+Yang belum boleh:
+
+- Purchase final langsung menambah stok atau expense dari draft SQLite.
+- Sales final langsung mengurangi stok atau membuat income dari draft SQLite.
+- Returns final langsung restore stok/refund dari draft SQLite.
+- Menganggap data transaksi lokal sebagai laporan final sebelum commit/rekonsiliasi audited.

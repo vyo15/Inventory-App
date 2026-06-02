@@ -608,7 +608,7 @@ Status: **AKTIF + GUARDED**. Section ini menggantikan catatan transisi Auth/Role
 - Firebase Authentication menyimpan password dan session.
 - Firestore `system_users/{uid}` menyimpan profile internal, role, status, dan metadata user IMS.
 - Role aktif final hanya `administrator` dan `user`.
-- Manajemen User mengelola profile Firestore berdasarkan Auth UID manual dari Firebase Console.
+- Manajemen User mengelola akun sesuai mode auth aktif: SQLite lokal memakai username/password di backend SQLite, Firebase legacy memakai profile Firestore berdasarkan Auth UID manual dari Firebase Console.
 - Tombol **Hapus Profile** tetap aktif untuk cleanup profile aman dan hanya menghapus dokumen Firestore.
 - Frontend tidak membuat, mengubah password, atau menghapus Firebase Authentication user.
 
@@ -1318,186 +1318,39 @@ Guard final:
 - Jangan mengubah stock posting, purchase stock-in, sales income, return finance side-effect, production HPP, payroll final/payment, reset destructive target, Firestore schema, route/menu/role guard, atau protected collection hanya demi cleanup.
 - Cleanup berikutnya harus tetap changed-files-only, behavior-preserving, dan memprioritaskan source aktual dibanding status historis docs.
 
-## Batch Offline DB 14–16 status — Customers Runtime Pilot + Sales Guard
+## SQLite local pilot current state — Patch A-B — 2026-06-02
 
-Status: **PARTIAL PILOT / GUARDED**.
+Status: **AKTIF / SQLITE-FIRST PILOT / DEXIE LEGACY CLEANUP SELESAI**.
 
-Sudah aktif:
-- `Categories.jsx` memakai `categoriesRepository`.
-- `Customers.jsx` memakai `customersRepository`.
-- `customersRepository` sudah expose `generateCustomerCode()` untuk Firebase adapter dan Dexie adapter.
-- `customerCodeReference.js` menjadi helper bersama untuk prefix/format kode customer.
-- `salesCustomerReferenceService.js` menjaga Sales tetap membaca customer dari Firebase sampai transaksi offline benar-benar disiapkan.
+Yang aktif di source sekarang:
+- Backend SQLite lokal di folder `backend/` tetap menjadi sidecar database lokal/LAN.
+- `frontend/.env.example` default ke `VITE_AUTH_MODE=sqlite` untuk pilot lokal.
+- Categories dan Customers berjalan lewat repository boundary dan adapter SQLite/backend saat mode `sqlite_sidecar`.
+- Firebase tetap tersedia sebagai fallback/legacy dan untuk modul yang belum dimigrasi.
+- SQLite Local DB Center (`OfflineDatabaseCenter.jsx`) adalah satu-satunya UI aktif untuk status database lokal, backup SQLite, migration status, dan restore plan.
 
-Tech debt tersisa:
-- Sales transaction, stock posting, income creation, dan inventory log masih Firebase-first dan belum punya offline queue. Ini sengaja belum disentuh.
-- Customer local yang belum disync tidak boleh dipakai di Sales karena bisa menghasilkan referensi transaksi ke dokumen yang belum ada di Firebase.
-- Supplier masih belum boleh diaktifkan ke Firebase sync karena masih terkait `SupplierPurchases`, raw material, dan purchase linkage; supplier local hanya snapshot read-only hasil pull Firebase → Offline.
-- Perlu batch audit khusus sebelum dropdown Sales, Purchase, atau modul transaksi lain membaca repository offline.
+Cleanup yang sudah ditutup:
+- Folder `frontend/src/data/adapters/dexie/` dihapus.
+- Folder `frontend/src/data/local/` dihapus.
+- Folder `frontend/src/data/sync/` dihapus.
+- Panel legacy `OfflineLocalDbBackupPanel.jsx`, `OfflineMasterDataPilotPanel.jsx`, `OfflineQaExecutionPanel.jsx`, dan `OfflineSyncDevPanel.jsx` dihapus karena tidak diimpor route aktif.
 
+Konsekuensi runtime:
+- Tidak ada Dexie/IndexedDB runtime aktif.
+- Tidak ada `sync_queue` IndexedDB aktif.
+- Tidak ada conflict resolver Dexie aktif.
+- Tidak ada backup/restore JSON IndexedDB aktif.
+- Compatibility alias `offline_local`/`hybrid_sync` tetap ada di `repositoryMode.js` dan dinormalisasi ke `sqlite_sidecar` agar setting lama tidak crash.
 
-## Offline DB Batch 17–20 completion — 2026-05
+Tech debt yang masih ada:
+- Firebase dependency/config masih dipertahankan; removal final harus patch terpisah setelah grep source dan audit modul.
+- Supplier frontend C1 sudah memakai repository boundary dan dapat memakai SQLite master-only; katalog raw material, purchase history, stock, finance, dan prefill transaksi tetap guarded/read-only legacy.
+- Products/raw materials/stock/sales/purchase/returns/finance/reports/production/payroll/HPP belum dimigrasi.
+- Dokumen historis lama yang menyebut Dexie dianggap arsip; source dan `docs/10_OFFLINE_DATABASE_CONTRACT.md` menjadi acuan terbaru.
 
-Status terbaru:
-- Batch 17 dilengkapi dengan `OfflineLocalDbBackupPanel.jsx` di Testing & Reset Center.
-- Restore local DB sekarang punya wrapper guard `restoreLocalDbBackupWithGuard()` dan keyword `RESTORE LOCAL DB BACKUP`.
-- `OfflineSyncDevPanel` diperhalus: tombol guarded action disabled sampai keyword tepat agar tidak terlihat seperti error console besar saat keyword belum lengkap.
-- Batch 18/19 tetap audit/guard supplier. Supplier runtime/sync Firebase belum diaktifkan.
-- Batch 20 tetap contract-only untuk Products/Raw Materials/Semi Finished. Tidak ada runtime migration.
-
-Tech debt tersisa:
-- Offline DB masih pilot untuk categories/customers saja.
-- Banyak service masih import `firebase/firestore`, ini wajar sampai kontrak offline per modul disetujui.
-- Warning AntD React 19 masih perlu batch dependency compatibility terpisah, tidak digabung dengan offline DB batch.
-
-## Batch 21 Note — Offline Database Center UX
-
-Offline DB pilot sekarang memiliki UI utama yang lebih ringkas di Reset Maintenance: `Offline Database Center`. UI ini menggantikan tampilan beberapa panel panjang yang sebelumnya membuat user sulit membedakan mode Firebase, mode Offline, backup, queue, dan conflict.
-
-Kondisi saat ini:
-
-- Categories dan Customers bisa dipakai sebagai pilot offline.
-- Ada pull sync Firebase → Local agar data offline tidak kosong saat mode offline aktif.
-- Ada push sync Local → Firebase untuk queue pending Categories/Customers.
-- Supplier boleh dipull sebagai snapshot read-only, tetapi tidak boleh masuk write runtime/sync queue.
-- Product/Raw/Semi/Stock/Purchase/Sales transaction/Production/Payroll/HPP tetap guarded dan belum masuk runtime offline.
-
-Tech debt yang masih tersisa:
-
-- Panel legacy `OfflineSyncDevPanel` dan `OfflineMasterDataPilotPanel` masih dipertahankan sebagai compatibility/development component, tetapi tidak menjadi UI utama.
-- Offline flow belum multi-device otomatis; data local tetap per browser/per device.
-- Auto-sync belum diaktifkan.
-
-## Batch 22 Note — Reset Maintenance tabbed workspace UX
-
-Testing & Reset Center sekarang memakai `Reset Maintenance Workspace` berbasis tab agar tampilan reset/maintenance konsisten dengan `Offline Database Center` Batch 21.
-
-Perubahan UX:
-
-- Panel panjang di Reset Maintenance tidak lagi ditampilkan semua berurutan dalam satu scroll panjang.
-- Area dipisah menjadi tab: `Ringkasan`, `Skenario & Audit`, `Repair Aman`, `Reset & Export`, dan `Offline DB`.
-- Warning destructive, keyword confirmation, preview reset, audit log, protected data, dan flow service tidak diubah.
-- `OfflineDatabaseCenter` tetap dibungkus `OfflineDevPanelErrorBoundary` agar error runtime panel offline tidak membuat halaman reset white screen.
-- Cleanup lint kecil dilakukan di `OfflineDatabaseCenter.jsx`: state `queueRows` yang tidak terpakai dihapus karena daftar queue belum menjadi UI utama.
-
-Batasan:
-
-- Perubahan ini hanya menata UX. Tidak ada schema, collection, route/menu/role guard, dependency, flow stok, transaksi, produksi, payroll, HPP, atau reset destructive yang diubah.
-- `ResetSafeRepairPanel` masih menyimpan beberapa tabel repair di dalam tab `Repair Aman`; refactor internal per repair area bisa dibuat batch terpisah jika masih terasa terlalu panjang setelah dipakai.
-
-## Fase 1 Offline UX Guard — Batch 23–25
-
-Status: **AKTIF / UI-ONLY / GUARDED**.
-
-Perubahan terbaru berfokus pada kejelasan penggunaan database offline, terutama saat user membuka master data pilot.
-
-Sudah aktif:
-- `Categories.jsx` dan `Customers.jsx` sekarang menampilkan status mode data secara eksplisit: Firebase Mode atau Offline Mode.
-- Banner mode menampilkan source data aktif, jumlah `sync_queue` pending, tombol refresh, dan shortcut ke `Offline Database Center`.
-- Empty state saat `offline_local` tidak lagi terlihat seperti bug kosong biasa. UI memberi arahan untuk menjalankan `Firebase → Offline` agar IndexedDB local terisi.
-- Helper `getPendingSyncQueueCount()` ditambahkan di `syncQueueService.js` sebagai read-only helper untuk status UI.
-- Komponen baru `OfflineRepositoryStatus.jsx` bersifat presentational-only dan dipakai bersama oleh Categories/Customers agar wording tidak duplikatif.
-
-Guard yang tetap berlaku:
-- Tidak ada perubahan schema, collection, route/menu/role guard, dependency, Firebase rules, transaksi, stock, purchase, sales transaction write, finance, production, payroll, HPP, atau reset destructive flow.
-- Offline runtime write masih pilot untuk `categories` dan `customers` saja; supplier hanya read-only snapshot.
-- Supplier/Product/Raw/Semi/Stock/Purchase/Sales transaction/Production/Payroll/HPP tetap belum boleh masuk runtime offline tanpa kontrak dan approval terpisah.
-
-Tech debt tersisa:
-- Queue pending yang ditampilkan masih total semua collection offline pilot, bukan breakdown per collection di master page.
-- Conflict resolver, queue detail, dan backup tetap dikelola dari `Offline Database Center`, bukan dari page master data agar page utama tetap compact.
-
-Status: **SOURCE-COMPLETE / AKTIF / GUARDED**.
-
-- `Offline Database Center` sekarang punya tab `Health` untuk audit read-only local data Fase 1: queue invalid, conflict unresolved, duplicate customer code, tombstone, snapshot kosong, queue pending terlalu lama, dan collection di luar allowlist.
-
-- Delete tombstone local tetap tidak otomatis menghapus Firebase dari panel sync default; ini sengaja guarded untuk menghindari destructive delete tanpa review. Health audit akan memberi catatan agar user tidak mengira queue delete hilang.
-- Conflict resolver, queue detail, backup, dan health audit tetap dikelola dari `Offline Database Center`, bukan dari page master data agar page utama tetap compact.
-
-## Offline Performance Hardening — Batch 50
-
-Status: **AKTIF / BUILD-ONLY + UI CODE-SPLIT / GUARDED**.
-
-Perubahan terbaru berfokus pada pengurangan ukuran chunk awal tanpa mengubah business flow:
-
-- `vite.config.js` memakai `manualChunks` untuk memisahkan vendor besar: React/router, Firebase, Dexie, Dayjs, XLSX, dan vendor lain; Ant Design/rc components dibiarkan auto-split oleh Rollup/Vite agar tidak menjadi satu chunk besar.
-- `ResetMaintenanceData.jsx` memuat panel maintenance berat dengan `React.lazy` + `Suspense` lokal:
-  - Skenario & Audit,
-  - Repair Aman,
-  - Reset & Export,
-  - Offline DB.
-- `OfflineDatabaseCenter.jsx` memuat `OfflineLocalDbBackupPanel` secara lazy saat tab Backup & Restore dibuka.
-
-Guard yang tetap berlaku:
-
-- Tidak ada perubahan route, sidebar, role guard, dependency, reset keyword, stock, purchase, sales, returns, finance ledger, production, payroll, HPP, atau destructive reset.
-- Perubahan ini hanya memengaruhi cara bundle dibagi dan kapan komponen UI berat dimuat.
-- `xlsx` tetap dynamic import dari helper export; tidak dipindahkan ke import statis.
-
-## Report/Finance Runtime Snapshot — Batch 40 Runtime Closure
-
-Status: **AKTIF / READ-ONLY SNAPSHOT / FIREBASE-PRIMARY / GUARDED**.
-
-Batch 40 kini memiliki runtime snapshot aman di `Offline Database Center` tab `Snapshot Report`:
-
-- Snapshot disimpan ke IndexedDB table `report_snapshots` dengan schema local v4.
-- Snapshot yang tersedia:
-  - Dashboard Summary,
-  - Stock Report Snapshot,
-  - Sales Report Snapshot,
-  - Purchases Report Snapshot,
-  - Finance Summary Snapshot.
-- Semua snapshot dibangun dari service read Firebase-primary yang sudah ada:
-  - `readDashboardData`,
-  - `fetchStockReportData`,
-  - `fetchSalesReportData`,
-  - `fetchPurchasesReportData`,
-  - `fetchProfitLossReportData`.
-- Snapshot diberi metadata `readOnlySnapshot=true`, `offlineMutationAllowed=false`, `syncStatus=synced`, dan tidak masuk `sync_queue`.
-
-Guard penting:
-
-- Tidak ada offline mutation untuk `revenues`, `incomes`, `expenses`, `sales`, `purchases`, `returns`, `inventory_logs`, `stock_item_read_models`, production, payroll, atau HPP.
-- Finance/report final tetap Firebase-primary.
-- Snapshot local tidak menghitung ulang ledger/profit/loss dari local draft atau queue pending.
-- Snapshot local hanya referensi offline/preview; bukan sumber laporan final.
-
-Tech debt tersisa:
-
-- Halaman Dashboard/Report final belum membaca snapshot offline secara otomatis. Ini sengaja ditahan agar user tidak salah mengira snapshot sebagai laporan final.
-- Jika nanti ingin mode baca offline langsung di halaman report, wajib ada badge cache, timestamp `pulledAt/generatedAt`, dan warning jelas bahwa data hanya snapshot terakhir.
-
-## Offline QA Regression & Documentation Closure — Batch 51–52
-
-Status: **AKTIF / DOCS + QA CONTRACT / GUARDED**.
-
-Dokumentasi final ditambahkan untuk membantu regression manual sebelum merge/deploy:
-
-- `docs/14_OFFLINE_QA_REGRESSION.md` berisi checklist regresi full modul online/offline, backup/restore, queue/conflict, snapshot read-only, dan report/finance snapshot.
-- `docs/15_OFFLINE_USER_GUIDE.md` berisi panduan user offline mode, batasan, troubleshooting, dan daftar boleh/tidak boleh.
-
-Catatan:
-
-- QA regression tidak mengubah runtime bisnis.
-- Dokumentasi menegaskan bahwa offline write saat ini hanya `Categories` dan `Customers`.
-- Semua area stock, purchase, sales, returns, finance, report, production, payroll, HPP, dan reset destructive tetap guarded.
-
-## Batch 53 — RC Final Hardening P1-P3
-
-Status: **AKTIF / SOURCE PATCHED / MANUAL QA REQUIRED**.
-
-Yang ditutup:
-
-- P1 update conflict guard: sync update `categories/customers` tidak boleh overwrite Firebase jika remote berubah setelah data dipull.
-- P1 health audit: snapshot read-only wajib punya `readOnlySnapshot=true`; data lama/restored tanpa flag harus muncul sebagai warning.
-- P1 docs cleanup: kontrak offline diselaraskan ke schema v4 dan UI utama Offline Database Center.
-- P2 QA/security follow-up: Firestore rules broad, Firebase config hardcoded, dan dependency `xlsx` dicatat sebagai risiko follow-up tanpa perubahan runtime/dependency.
-- P3 legacy cleanup: `OfflineSyncDevPanel` dan `OfflineMasterDataPilotPanel` diberi status cleanup candidate, tidak dihapus.
-
-Sengaja tidak diubah:
-
-- Firestore rules aktif, route/menu/role guard, Firebase config deployment, dependency, stock/purchase/sales/returns/finance/production/payroll/HPP, dan reset destructive flow.
-
+Guard yang tetap tidak berubah:
+- Tidak ada perubahan route/menu/role guard.
+- Tidak ada perubahan schema Firestore, Firestore rules/index, dependency, stock mutation, purchase receive, sales stock out, return, finance ledger, production material usage, payroll final, HPP final, atau reset destructive.
 
 ## Update Mobile app shell baseline — 2026-06-01
 
@@ -1528,9 +1381,9 @@ Yang sudah tersedia:
 
 Yang masih guarded / belum final:
 
-- Firebase Auth tetap default agar tidak memutus login lama.
-- UI User Management masih Firebase-primary; local user management backend belum dibuatkan halaman khusus.
-- Supplier UI/transaksi belum dialihkan ke SQLite default karena relasi purchase/raw/history belum diaudit penuh.
+- SQLite auth menjadi default pilot melalui `.env.example`; Firebase Auth tetap fallback legacy agar login lama tidak langsung diputus sebelum cleanup final.
+- UI User Management sudah adaptif: mode `VITE_AUTH_MODE=sqlite` mengelola akun lokal SQLite langsung dari backend, termasuk create/update/delete guarded; mode Firebase tetap fallback legacy profile Auth UID.
+- Supplier UI master-only sudah dialihkan ke SQLite saat mode `sqlite_sidecar`; transaksi/purchase/raw/history belum dialihkan.
 - Stock, purchases, sales, returns, finance, production, payroll, dan HPP tetap tidak boleh offline mutation.
 
 
@@ -1568,3 +1421,11 @@ Yang masih guarded / belum final:
 - **AKTIF:** `src/App.css` menambahkan penguatan scroll lokal mobile untuk tabel yang sengaja belum dikonversi, terutama di drawer/modal/utility/reset/offline panel. Ini hanya mencegah body horizontal overflow; tabel kompleks tetap boleh scroll lokal.
 - **GUARDED:** perubahan ini hanya presentation layer. Tidak ada perubahan schema, collection, route/menu/role guard, service mutation, stock/purchase/sales/returns/finance ledger, production order status flow, material usage, payroll final, HPP calculation, reset destructive flow, atau audit log payload.
 - **CLEANUP CANDIDATE:** report besar dan utility/reset/offline panel yang masih memakai tabel lengkap sebaiknya tetap diaudit per halaman sebelum dimigrasikan penuh, karena beberapa tabel memang membutuhkan kolom lengkap dan konteks audit.
+
+
+## Update C1 Supplier SQLite Master-Only
+
+- `SupplierPurchases.jsx` tidak lagi melakukan write langsung ke Firestore saat repository mode SQLite aktif.
+- Create/update/delete Supplier SQLite diarahkan ke `suppliersRepository` dan backend `/api/suppliers`.
+- Form katalog restock material dinonaktifkan pada mode SQLite C1 agar tidak ada partial migration yang merusak Raw Material, Purchase, Stock, Finance, atau Report.
+- Firebase masih dipakai sebagai fallback legacy dan read-only reference untuk modul guarded yang belum dimigrasi.

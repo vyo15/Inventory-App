@@ -31,6 +31,40 @@ async function seedLocalRoles(db) {
   await seedRole(db, "user", "User", "Akses operasional harian sesuai route guard IMS.");
 }
 
+async function ensureColumn(db, tableName, columnName, columnDefinition) {
+  const columns = await db.all(`PRAGMA table_info(${tableName})`);
+  const hasColumn = columns.some((column) => column.name === columnName);
+
+  if (!hasColumn) {
+    await db.run(`ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`);
+  }
+}
+
+async function ensurePricingRulesSchema(db) {
+  // D1-SQLITE-COMPAT:
+  // Database pilot yang sudah pernah dibuat bisa memiliki table pricing_rules lama
+  // tanpa kolom target_type/is_active. CREATE TABLE IF NOT EXISTS tidak menambah
+  // kolom pada table existing, jadi kolom wajib D1 ditambahkan secara idempotent.
+  await ensureColumn(db, "pricing_rules", "code", "code TEXT");
+  await ensureColumn(db, "pricing_rules", "name", "name TEXT");
+  await ensureColumn(db, "pricing_rules", "target_type", "target_type TEXT NOT NULL DEFAULT 'raw_materials'");
+  await ensureColumn(db, "pricing_rules", "status", "status TEXT NOT NULL DEFAULT 'active'");
+  await ensureColumn(db, "pricing_rules", "is_active", "is_active INTEGER NOT NULL DEFAULT 1");
+  await ensureColumn(db, "pricing_rules", "payload_json", "payload_json TEXT NOT NULL DEFAULT '{}'");
+  await ensureColumn(db, "pricing_rules", "created_at", "created_at TEXT");
+  await ensureColumn(db, "pricing_rules", "updated_at", "updated_at TEXT");
+
+  await db.run("UPDATE pricing_rules SET target_type = 'raw_materials' WHERE target_type IS NULL OR target_type = ''");
+  await db.run("UPDATE pricing_rules SET status = 'active' WHERE status IS NULL OR status = ''");
+  await db.run("UPDATE pricing_rules SET is_active = 1 WHERE is_active IS NULL");
+  await db.run("UPDATE pricing_rules SET payload_json = '{}' WHERE payload_json IS NULL OR payload_json = ''");
+
+  await db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_pricing_rules_target_status
+      ON pricing_rules (target_type, status);
+  `);
+}
+
 async function seedModuleMigrationStatus(db, moduleKey, status, { label, scope, notes } = {}) {
   await db.run(
     `
@@ -52,6 +86,7 @@ async function seedMigrationStatus(db) {
     ["customers", "Customers", "sqlite_active", "read_write", "Pilot aman sudah memakai SQLite local sidecar."],
     ["categories", "Categories", "sqlite_active", "read_write", "Pilot aman sudah memakai SQLite local sidecar."],
     ["suppliers", "Suppliers", "sqlite_backend_ready", "frontend_guarded", "Schema dan API SQLite supplier tersedia; frontend utama belum dialihkan karena terkait purchase/raw/history."],
+    ["pricing_rules", "Pricing Rules", "sqlite_active", "read_write_master", "D1: rule pricing disimpan di SQLite. Apply harga massal tetap guarded jika target item masih legacy."],
     ["products", "Products", "firebase_only", "guarded_master", "Belum dimigrasi karena terkait stock, sales, BOM, dan report."],
     ["raw_materials", "Raw Materials", "firebase_only", "guarded_master", "Belum dimigrasi karena terkait purchase, stock, production material usage."],
     ["semi_finished", "Semi Finished", "firebase_only", "guarded_master", "Belum dimigrasi karena terkait production flow dan stock."],
@@ -231,7 +266,21 @@ async function runMigrations() {
 
     CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers (name);
     CREATE INDEX IF NOT EXISTS idx_suppliers_status ON suppliers (status);
+
+    CREATE TABLE IF NOT EXISTS pricing_rules (
+      id TEXT PRIMARY KEY,
+      code TEXT UNIQUE,
+      name TEXT NOT NULL,
+      target_type TEXT NOT NULL DEFAULT 'raw_materials',
+      status TEXT NOT NULL DEFAULT 'active',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
   `);
+
+  await ensurePricingRulesSchema(db);
 
   await db.run(
     `

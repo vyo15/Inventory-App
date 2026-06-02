@@ -1932,91 +1932,21 @@ Gunakan checklist ini setiap ada audit docs/source atau patch docs:
 - [ ] Production Work Log complete tetap posting material/output stock, HPP, payroll accrual, inventory log, and read model sync.
 - [ ] Reset destructive tetap mematuhi protected collection/keyword/baseline guard.
 
-## Checklist Batch 14–16 — Customers Runtime Pilot + Sales Customer Guard
+## SQLite Patch A-B — Env dan Dexie legacy cleanup checklist — 2026-06-02
 
-- [ ] `npm run lint` sukses.
-- [ ] `npm run build` sukses dan tidak ada white screen import/export.
-- [ ] Buka `/utilities/reset-maintenance-data`; Offline Sync Dev Panel dan Offline Master Data Pilot tetap tampil.
-- [ ] Buka `Master Data / Customers`; tag default `DB: firebase_primary`.
-- [ ] Tambah customer di mode Firebase membuat kode otomatis `CUS-DDMMYYYY-001` dan field kode tetap disabled/read-only.
-- [ ] Edit customer di mode Firebase tidak mengubah kode.
-- [ ] Pastikan backend SQLite jalan; buka Customers lagi dan pastikan tag `DB: sqlite_sidecar` atau SQLite local aktif.
-- [ ] Tambah customer offline membuat kode `CUS-DDMMYYYY-001`, menulis local DB, dan menambah `sync_queue`.
-- [ ] Duplicate kode customer offline ditolak.
-- [ ] Edit customer offline tidak boleh mengubah kode.
-- [ ] Delete customer offline menjadi tombstone + `sync_queue`, bukan delete Firebase.
-- [ ] Buka Sales; dropdown customer tetap membaca Firebase customer, bukan customer local-only.
-- [ ] Simpan Sales dengan customer Firebase masih menyimpan snapshot `customerId`/`customerName`.
-- [ ] Stock, purchase, returns, finance, production, payroll, HPP, dan reset destructive tidak berubah.
-
-
-## Checklist Batch 17–20 Completion — Local Backup Guard + Audit Contracts
-
+- [ ] `frontend/.env.example` berisi `VITE_AUTH_MODE=sqlite`.
+- [ ] `frontend/.env.example` memakai `VITE_SUPPLIERS_REPOSITORY_MODE=sqlite` untuk Supplier master-only, tanpa menganggap purchase/raw/history sudah full SQLite.
+- [ ] Tidak ada import aktif ke `frontend/src/data/adapters/dexie/`, `frontend/src/data/local/`, atau `frontend/src/data/sync/`.
+- [ ] Tidak ada route/import aktif ke `OfflineLocalDbBackupPanel`, `OfflineMasterDataPilotPanel`, `OfflineQaExecutionPanel`, atau `OfflineSyncDevPanel`.
+- [ ] `OfflineDatabaseCenter` tetap bisa dibuka dari `/utilities/reset-maintenance-data` tab Offline DB.
+- [ ] SQLite backend jalan dan `GET /health` berhasil.
+- [ ] Login lokal SQLite berhasil saat `.env.local` memakai `VITE_AUTH_MODE=sqlite`; jika database belum punya admin aktif, form bootstrap admin pertama muncul dan setelah dibuat langsung bisa login.
+- [ ] Categories CRUD lewat SQLite berhasil setelah login admin lokal.
+- [ ] Customers CRUD lewat SQLite berhasil setelah login admin lokal.
+- [ ] Supplier frontend tetap Firebase-primary/default dan tidak ikut cutover SQLite.
+- [ ] Stock, Sales, Purchases, Returns, Finance, Reports, Production, Payroll, HPP, dan reset destructive tidak berubah perilaku runtime.
 - [ ] `npm run lint` sukses.
 - [ ] `npm run build` sukses.
-- [ ] Buka `/utilities/reset-maintenance-data` dan pastikan tidak white screen.
-- [ ] Panel `Local DB Backup / Restore Guard` tampil.
-- [ ] Klik `Export Local DB Backup` dan pastikan file JSON terunduh.
-- [ ] Import file backup JSON yang sama dan pastikan preview valid.
-- [ ] Restore tanpa keyword `RESTORE LOCAL DB BACKUP` harus gagal/disabled secara aman.
-- [ ] Restore dengan keyword benar berhasil dan hanya mempengaruhi IndexedDB local.
-- [ ] Firebase data tidak berubah setelah restore local DB.
-- [ ] Offline Sync Dev Panel tidak menjalankan action saat keyword belum lengkap.
-- [ ] Supplier sync Firebase tetap blocked.
-- [ ] Products/Raw/Semi tidak masuk sync queue dan tidak berubah runtime.
-- [ ] Stock, purchase, sales transaction write, production, payroll, HPP, finance, dan reset destructive tidak berubah.
-
-## Batch 21 — Offline Database Center UX Checklist
-
-- Buka `/utilities/reset-maintenance-data` dan pastikan tidak white screen.
-- Pastikan `Offline Database Center` tampil dalam satu kartu dengan tab: Status, Sinkronisasi, Backup & Restore, Konflik, Data Local.
-- Tab Status: klik `Siapkan Local DB`, lalu pastikan status Local DB menjadi siap.
-- Tab Sinkronisasi: jalankan `Preview Firebase → Offline` untuk `categories`.
-- Sync Firebase → Offline tanpa keyword harus disabled/gagal guarded.
-- Isi keyword `PULL FIREBASE MASTER DATA TO LOCAL`, lalu sync Firebase → Offline.
-- Aktifkan Offline Mode dengan keyword `ENABLE OFFLINE REPOSITORY PILOT`.
-- Buka Categories; data tidak boleh kosong jika pull dari Firebase berhasil.
-- Tambah/edit category/customer saat Offline Mode; pastikan `sync_queue` pending bertambah.
-- Preview `Offline → Firebase`; pastikan hanya categories/customers yang muncul.
-- Sync Offline → Firebase dengan keyword `SYNC MASTER DATA PILOT TO FIREBASE`.
-- Tab Data Local: pilih Categories/Customers dan pastikan hanya satu tabel yang tampil sesuai pilihan.
-- Tab Backup & Restore: export/import/restore tetap membutuhkan keyword `RESTORE LOCAL DB BACKUP`.
-- Supplier/Product/Raw/Semi/Stock/Purchase/Sales transaction/Production/Payroll/HPP tidak boleh berubah perilaku runtime.
-
-## Batch 22 — Reset Maintenance Workspace UX Checklist
-
-- [ ] `npm run lint` sukses.
-- [ ] `npm run build` sukses.
-- [ ] Buka `/utilities/reset-maintenance-data` dan pastikan tidak white screen.
-- [ ] Pastikan kartu `Reset Maintenance Workspace` tampil dengan tab: Ringkasan, Skenario & Audit, Repair Aman, Reset & Export, Offline DB.
-- [ ] Tab Ringkasan menampilkan status summary dan panduan penggunaan tanpa tombol destructive langsung.
-- [ ] Tab Skenario & Audit menampilkan pilihan kebutuhan testing, auto detect, dan audit data quality.
-- [ ] Tab Repair Aman menampilkan repair guarded dan tombol repair tetap disabled jika audit belum tersedia atau kandidat 0.
-- [ ] Tab Reset & Export menampilkan preview reset, baseline, export, dan data test seed; reset tanpa preview/keyword tetap blocked.
-- [ ] Tab Offline DB tetap menampilkan Offline Database Center dengan Status, Sinkronisasi, Backup & Restore, Konflik, dan Data Local.
-- [ ] Mobile/tablet: tab bisa digeser horizontal dan hero tidak overflow.
-- [ ] Dark mode: hero/card/tab tetap terbaca, tidak ada background putih mencolok.
-- [ ] Jalankan preview reset lalu pindah tab; preview tidak hilang dan konfirmasi reset tetap memakai keyword yang benar.
-- [ ] Jalankan audit/repair side-effect transaksi dari tab Repair Aman; modal konfirmasi dan audit log tetap berjalan.
-- [ ] Pastikan tidak ada perubahan ke route/menu/role guard, schema, stock, purchase, sales, production, payroll, HPP, finance, dan reset destructive flow.
-
-## Fase 1 Offline UX Guard — Batch 23–25 Checklist
-
-- [ ] `npm run lint` sukses.
-- [ ] `npm run build` sukses dan tidak ada white screen import/export.
-- [ ] Buka `/categories` saat `firebase_primary`; pastikan banner menulis `Mode Firebase aktif`, source `Firebase Server`, dan tabel membaca data Firebase.
-- [ ] Buka `/customers` saat `firebase_primary`; pastikan banner menulis `Mode Firebase aktif`, source `Firebase Server`, dan kode customer tetap otomatis/read-only.
-- [ ] Buka `/utilities/reset-maintenance-data` → `Offline DB` → `Sinkronisasi`, jalankan preview dan pull `Firebase → Offline` untuk categories/customers dengan keyword `PULL FIREBASE MASTER DATA TO LOCAL`.
-- [ ] Aktifkan offline pilot dengan keyword `ENABLE OFFLINE REPOSITORY PILOT`.
-- [ ] Buka `/categories`; banner harus menulis `Mode Offline aktif`, source `Browser Local / IndexedDB`, dan data tidak kosong jika pull sebelumnya berhasil.
-- [ ] Buka `/customers`; banner harus menulis `Mode Offline aktif`, source `Browser Local / IndexedDB`, dan data tidak kosong jika pull sebelumnya berhasil.
-- [ ] Jika local DB memang kosong, empty state harus menjelaskan `Data offline masih kosong` dan menyediakan tombol `Ambil Firebase → Offline`.
-- [ ] Tambah/edit/hapus category/customer di mode offline; pastikan `Queue pending` pada banner bertambah setelah refresh/fetch ulang.
-- [ ] Klik shortcut `Offline DB Center` dari banner dan pastikan menuju halaman reset maintenance tanpa route/menu baru.
-- [ ] Sync `Offline → Firebase` dari `Offline Database Center` dengan keyword `SYNC MASTER DATA PILOT TO FIREBASE`, lalu pastikan queue pending berkurang.
-- [ ] Kembali ke Firebase Mode dan pastikan Categories/Customers kembali membaca Firebase.
-- [ ] Pastikan Supplier/Product/Raw/Semi/Stock/Purchase/Sales transaction/Production/Payroll/HPP tidak berubah perilaku runtime.
-
 
 ## SQLite-C1 Foundation Safety Checklist
 
@@ -2166,3 +2096,21 @@ Ekspektasi tambahan:
 - [ ] Supplier dan Pricing Rules mobile: katalog restock supplier dan preview pricing tampil ringkas; link/action masih memakai handler existing.
 - [ ] Utility/reset/offline panel yang masih tabel lengkap hanya scroll lokal di area tabel/drawer/modal, bukan membuat halaman ikut geser kanan-kiri.
 - [ ] Uji viewport 360x640, 400x800, dan desktop >=992px; dark mode tetap terbaca dan tidak ada informasi teknis/Firestore ID sebagai judul kartu.
+
+
+## C1 Supplier SQLite Master-Only Test
+
+```text
+[ ] Backend SQLite aktif: cd backend && npm run dev
+[ ] Frontend memakai VITE_AUTH_MODE=sqlite
+[ ] Frontend memakai VITE_SUPPLIERS_REPOSITORY_MODE=sqlite atau repository mode sqlite_sidecar
+[ ] Login sebagai administrator lokal
+[ ] Buka Master Data > Supplier
+[ ] Mode tag menampilkan SQLite Lokal
+[ ] Tambah Supplier baru tanpa katalog material
+[ ] Refresh halaman, Supplier tetap muncul dari SQLite
+[ ] Edit nama/link Supplier
+[ ] Hapus Supplier, data soft-delete/nonaktif dan hilang dari list aktif
+[ ] Buka Products/Raw Materials/Purchases/Sales/Stock, pastikan tidak ada flow yang berubah
+[ ] Pastikan tidak ada write raw material, purchase, stock, cash, expense, ledger dari Supplier SQLite C1
+```

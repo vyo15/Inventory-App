@@ -1,0 +1,39 @@
+import { createSqliteJsonRecordAdapter } from "./sqliteJsonRecordAdapterFactory";
+
+const toNumber = (value = 0) => {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? Math.round(parsed) : 0;
+};
+
+export const normalizeProductRecord = (record = {}) => {
+  const currentStock = toNumber(record.currentStock ?? record.stock ?? 0);
+  const reservedStock = toNumber(record.reservedStock || 0);
+  const minStockAlert = toNumber(record.minStockAlert || 0);
+  return {
+    ...record,
+    code: record.code || record.productCode || "",
+    productCode: record.productCode || record.code || "",
+    name: record.name || "",
+    hasVariants: record.hasVariants === true || (Array.isArray(record.variants) && record.variants.length > 0),
+    variants: Array.isArray(record.variants) ? record.variants : [],
+    currentStock,
+    stock: currentStock,
+    reservedStock,
+    availableStock: toNumber(record.availableStock ?? Math.max(currentStock - reservedStock, 0)),
+    minStockAlert,
+    isActive: record.isActive !== false,
+  };
+};
+
+const adapter = createSqliteJsonRecordAdapter({
+  endpoint: "/api/products",
+  normalizeRecord: normalizeProductRecord,
+});
+
+export const listProducts = adapter.list;
+export const getProductById = adapter.getById;
+export const generateProductCode = adapter.generateCode;
+export const createProduct = adapter.create;
+export const updateProduct = adapter.update;
+export const deleteProduct = adapter.remove;
+export const subscribeProducts = adapter.subscribe;

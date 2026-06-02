@@ -1,3 +1,4 @@
+import { normalizeSupplierRecord } from "../../../services/MasterData/suppliersService";
 import { requestSqliteApi } from "./sqliteApiClient";
 
 const normalizeSupplierPayload = (values = {}) => ({
@@ -11,17 +12,22 @@ const normalizeSupplierPayload = (values = {}) => ({
   address: values.address || "",
   note: values.note || values.notes || values.description || "",
   notes: values.notes || values.note || values.description || "",
+  // C1 master-only: katalog material disimpan sebagai data pasif bila backend sudah mendukung,
+  // tetapi tidak boleh memutasi raw material/purchase/stock dari adapter ini.
+  materialDetails: Array.isArray(values.materialDetails) ? values.materialDetails : [],
+  supportedMaterialIds: Array.isArray(values.supportedMaterialIds) ? values.supportedMaterialIds : [],
+  supportedMaterialNames: Array.isArray(values.supportedMaterialNames) ? values.supportedMaterialNames : [],
 });
 
 export const listSuppliers = async () => {
   const result = await requestSqliteApi("/api/suppliers");
-  return result?.data || [];
+  return (result?.data || []).map(normalizeSupplierRecord);
 };
 
 export const getSupplierById = async (supplierId) => {
   if (!supplierId) return null;
   const result = await requestSqliteApi(`/api/suppliers/${encodeURIComponent(supplierId)}`);
-  return result?.data || null;
+  return result?.data ? normalizeSupplierRecord(result.data) : null;
 };
 
 export const generateSupplierCode = async () => {
@@ -34,7 +40,7 @@ export const createSupplier = async (values = {}) => {
     method: "POST",
     body: JSON.stringify(normalizeSupplierPayload(values)),
   });
-  return result?.data || null;
+  return result?.data ? normalizeSupplierRecord(result.data) : null;
 };
 
 export const updateSupplier = async (supplierId, values = {}) => {
@@ -46,7 +52,7 @@ export const updateSupplier = async (supplierId, values = {}) => {
     method: "PUT",
     body: JSON.stringify(normalizeSupplierPayload(values)),
   });
-  return result?.data || null;
+  return result?.data ? normalizeSupplierRecord(result.data) : null;
 };
 
 export const deleteSupplier = async (supplierId) => {

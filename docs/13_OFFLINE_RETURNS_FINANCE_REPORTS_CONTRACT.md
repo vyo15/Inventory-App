@@ -1,3 +1,8 @@
+<!--
+PATCH A-B NOTE — 2026-06-02:
+Dokumen ini adalah arsip historis Batch offline Dexie/IndexedDB. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime Dexie/IndexedDB, sync_queue, conflict resolver, atau backup JSON IndexedDB dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+-->
+
 # 13 Offline Returns, Finance, dan Reports Contract
 
 Status: **AUDIT / CONTRACT ONLY / FIREBASE PRIMARY TETAP AKTIF**.
@@ -308,3 +313,22 @@ Keputusan resmi setelah audit source:
 3. Report offline boleh dirancang sebagai snapshot read-only, bukan report final baru.
 4. Tidak ada perubahan runtime, schema, route, menu, role guard, Firestore collection, Dexie schema, atau sync queue pada batch ini.
 5. Fase berikutnya yang aman adalah desain table snapshot lokal secara eksplisit, tetapi itu termasuk schema local baru dan perlu approval terpisah.
+
+## Update C7 SQLite Finance/Report Foundation
+
+Endpoint foundation baru:
+
+```text
+/api/finance/incomes
+/api/finance/expenses
+/api/finance/ledger
+/api/reports
+```
+
+Status: storage/snapshot foundation.
+
+Batasan:
+
+- Ledger/profit-loss final belum boleh dihitung ulang dari draft lokal.
+- Report snapshot boleh disimpan sebagai data pendamping, bukan sumber final transaksi.
+- Finance final tetap perlu audit idempotency, rollback, source reference, dan conflict rule.

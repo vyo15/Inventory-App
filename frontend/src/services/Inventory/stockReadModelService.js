@@ -19,12 +19,28 @@ import {
   normalizeStockReadModelSourceType,
   STOCK_READ_MODEL_SOURCE_COLLECTIONS,
 } from "../../utils/stock/stockHelpers";
+import { getRepositoryModeStatus } from "../../data/repositories/repositoryModeService";
+import * as sqliteStockReadModelsAdapter from "../../data/adapters/sqlite/sqliteStockReadModelsAdapter";
 
 export const STOCK_ITEM_READ_MODELS_COLLECTION = "stock_item_read_models";
 
 const STOCK_READ_MODEL_BATCH_LIMIT = 450;
 
 const toSafeString = (value = "") => String(value ?? "").trim();
+
+const shouldUseSqliteStockReadModels = async () => {
+  const status = await getRepositoryModeStatus();
+  return status.isSqliteSidecar === true;
+};
+
+const toSqliteStockReadModelRecord = (record = {}) => ({
+  ...record,
+  id: record.id || buildStockItemReadModelDocumentId(record),
+  code: record.code || record.referenceCode || record.sourceRef || buildStockItemReadModelDocumentId(record),
+  name: record.name || record.itemName || record.sourceName || '',
+  sourceType: normalizeStockReadModelSourceType(record.sourceType || record.type || ''),
+  sourceId: record.sourceId || record.id || '',
+});
 
 
 const toStockReadModelRow = (documentSnapshot) => mapStockReadModelDocumentToRow({
@@ -180,6 +196,12 @@ export const setStockItemReadModelInBatch = (batch, record = {}, options = {}) =
 };
 
 export const upsertStockItemReadModel = async (record = {}, options = {}) => {
+  if (await shouldUseSqliteStockReadModels()) {
+    const payload = toSqliteStockReadModelRecord(buildStockItemReadModelPayload(record, { ...options, syncedAt: new Date().toISOString() }));
+    const created = await sqliteStockReadModelsAdapter.createStockReadModel(payload);
+    return created || payload;
+  }
+
   const syncedAt = options.syncedAt || Timestamp.now();
   const { id, payload } = buildStockItemReadModelDocument(record, {
     ...options,
@@ -195,6 +217,14 @@ export const upsertStockItemReadModel = async (record = {}, options = {}) => {
 };
 
 export const upsertStockItemReadModels = async (records = [], options = {}) => {
+  if (await shouldUseSqliteStockReadModels()) {
+    const rows = [];
+    for (const record of records) {
+      rows.push(await upsertStockItemReadModel(record, options));
+    }
+    return rows;
+  }
+
   const syncedAt = options.syncedAt || Timestamp.now();
   const documents = records.map((record) => buildStockItemReadModelDocument(record, {
     ...options,
@@ -228,12 +258,24 @@ export const deleteStockItemReadModelInTransaction = (transaction, { sourceType 
 
 export const deleteStockItemReadModel = async ({ sourceType = "", sourceId = "" } = {}) => {
   const documentId = buildStockItemReadModelDocumentId({ sourceType, sourceId });
+  if (await shouldUseSqliteStockReadModels()) {
+    await sqliteStockReadModelsAdapter.deleteStockReadModel(documentId);
+    return documentId;
+  }
   await deleteDoc(doc(db, STOCK_ITEM_READ_MODELS_COLLECTION, documentId));
 
   return documentId;
 };
 
 export const getStockIssueReadModels = async ({ maxResults = 50, includeMeta = false } = {}) => {
+  if (await shouldUseSqliteStockReadModels()) {
+    const rows = (await sqliteStockReadModelsAdapter.listStockReadModels({ limit: maxResults }))
+      .map(mapStockReadModelDocumentToRow)
+      .filter((item) => item.hasStockIssue === true || item.stockStatus === "low" || item.stockStatus === "empty");
+    if (!includeMeta) return rows;
+    return { rows, meta: { collection: "stock_read_models", maxResults, loadedRows: rows.length, hasMore: false, isLimited: false } };
+  }
+
   const normalizedLimit = Math.max(1, Number(maxResults || 50));
   const queryLimit = includeMeta ? normalizedLimit + 1 : normalizedLimit;
   const stockReadModelQuery = query(
@@ -266,6 +308,9 @@ export const getStockIssueReadModels = async ({ maxResults = 50, includeMeta = f
 
 export const getStockReadModelsBySourceType = async ({ sourceType = "", maxResults = 100 } = {}) => {
   const resolvedSourceType = normalizeStockReadModelSourceType(sourceType);
+  if (await shouldUseSqliteStockReadModels()) {
+    return (await sqliteStockReadModelsAdapter.listStockReadModels({ sourceType: resolvedSourceType, limit: maxResults })).map(mapStockReadModelDocumentToRow);
+  }
   const stockReadModelQuery = query(
     collection(db, STOCK_ITEM_READ_MODELS_COLLECTION),
     where("sourceType", "==", resolvedSourceType),
@@ -287,6 +332,18 @@ export const getStockReadModelRows = async ({
   cursor = null,
   ordered = false,
 } = {}) => {
+  if (await shouldUseSqliteStockReadModels()) {
+    const rows = (await sqliteStockReadModelsAdapter.listStockReadModels({ limit: maxResults }))
+      .map(mapStockReadModelDocumentToRow)
+      .sort((left, right) => {
+        const sourceCompare = String(left.sourceType || "").localeCompare(String(right.sourceType || ""));
+        if (sourceCompare !== 0) return sourceCompare;
+        return String(left.name || "").localeCompare(String(right.name || ""));
+      });
+    if (!includeMeta) return rows;
+    return { rows, meta: { collection: "stock_read_models", maxResults, loadedRows: rows.length, hasMore: false, isLimited: false, nextCursor: null, orderBy: ordered || cursor ? ["sourceType", "name"] : [] } };
+  }
+
   const normalizedLimit = Math.max(1, Number(maxResults || 1000));
   const queryLimit = includeMeta ? normalizedLimit + 1 : normalizedLimit;
   const queryConstraints = [];

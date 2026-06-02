@@ -431,10 +431,10 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 ## Standar Offline Repository Status Banner
 
 - Page master data pilot yang bisa berpindah repository (`Categories`, `Customers`) wajib menampilkan banner mode data di bawah `PageHeader`.
-- Banner harus menjelaskan source aktif dengan bahasa user-facing: `Firebase Server` untuk `firebase_primary`, dan `Browser Local / IndexedDB` untuk `offline_local`.
-- Saat offline aktif, copy harus mengingatkan bahwa perubahan belum otomatis masuk Firebase sampai user menjalankan sync `Offline → Firebase`.
-- Empty state offline tidak boleh hanya menulis `Belum ada data`; harus menjelaskan kemungkinan local DB belum diisi dan memberi shortcut ke `Offline Database Center` untuk menjalankan `Firebase → Offline`.
-- Banner harus compact, responsive, dan tidak menggantikan table/action utama. Detail queue, conflict resolver, backup, dan sync tetap berada di `Offline Database Center`.
+- Banner harus menjelaskan source aktif dengan bahasa user-facing: `Firebase Server` untuk `firebase_primary`, dan `SQLite Lokal`/`Backend Lokal` untuk `sqlite_sidecar`. Nilai legacy `offline_local` hanya alias compatibility ke `sqlite_sidecar`, bukan IndexedDB.
+- Saat SQLite aktif, copy harus mengingatkan bahwa data pilot dibaca/ditulis lewat backend Node.js lokal dan file SQLite di laptop/server lokal.
+- Empty state SQLite tidak boleh hanya menulis `Belum ada data`; harus menjelaskan kemungkinan backend SQLite belum jalan atau database SQLite masih kosong, serta memberi shortcut ke `SQLite Local DB Center`.
+- Banner harus compact, responsive, dan tidak menggantikan table/action utama. Detail backup SQLite, migration status, dan restore plan tetap berada di `SQLite Local DB Center`.
 - Perubahan banner adalah UI-only. Jangan menyisipkan write/sync otomatis, schema change, route/menu baru, atau business flow transaksi di komponen status.
 
 ## Standar Action Result Popup — Success/Error Only

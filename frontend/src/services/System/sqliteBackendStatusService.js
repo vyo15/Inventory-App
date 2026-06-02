@@ -38,6 +38,8 @@ export const fetchSqliteJson = async (path, options = {}) => {
   if (!response.ok || payload?.ok === false) {
     const error = new Error(payload?.message || `SQLite backend request gagal (${response.status})`);
     error.status = response.status;
+    error.code = payload?.code || payload?.errorCode || "";
+    error.errorCode = payload?.code || payload?.errorCode || "";
     error.payload = payload;
     throw error;
   }

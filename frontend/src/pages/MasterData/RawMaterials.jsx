@@ -26,9 +26,7 @@ import {
   EyeOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { collection, onSnapshot, limit as firestoreLimit, orderBy, query } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
-import { db } from '../../firebase';
 import { formatNumberID } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import { formatDateId } from '../../utils/formatters/dateId';
@@ -47,15 +45,17 @@ import {
 import {
   getSupplierDisplayName,
   getSupplierOptionLabel,
-  listenSupplierCatalog,
 } from '../../services/MasterData/suppliersService';
+import { listSuppliers as listSupplierRepository } from '../../data/repositories/suppliersRepository';
 import {
   DEFAULT_RAW_MATERIAL_VARIANT,
   ensureAtLeastOneRawMaterialVariant,
 } from '../../utils/variants/rawMaterialVariantHelpers';
 import DataTableView from "../../components/Layout/Table/DataTableView";
+
+import { listenPurchaseRecords } from '../../services/Transaksi/purchasesService';
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
-import { buildSinglePricingPreview } from '../../services/Pricing/pricingService';
+import { buildSinglePricingPreview, listPricingRulesByTargetType } from '../../services/Pricing/pricingService';
 import PricingModeSwitch from '../../components/Pricing/PricingModeSwitch';
 import {
   RAW_MATERIAL_PURCHASE_LOOKUP_LIMIT,
@@ -157,70 +157,46 @@ const RawMaterials = () => {
       },
     );
 
-    const unsubSuppliers = listenSupplierCatalog(
+    const unsubPurchases = listenPurchaseRecords(
       (data) => {
-        // -------------------------------------------------------------------
-        // Supplier dibaca sebagai katalog vendor/restock untuk pilihan manual.
-        // ACTIVE: Raw Material tetap menjadi tempat user memilih supplier; halaman Supplier hanya boleh cascade snapshot untuk supplierId yang sudah dipilih manual.
-        // -------------------------------------------------------------------
-        setSuppliers(data);
+        // AKTIF/GUARDED: histori pembelian tetap dibaca dari service purchase aktual.
+        // C1-C8 belum menjadikan transaksi purchase sebagai SQLite writer, jadi jangan ambil dari adapter transaksi SQLite placeholder.
+        setPurchaseRecords((data || []).slice(0, RAW_MATERIAL_PURCHASE_LOOKUP_LIMIT));
       },
       (error) => {
         console.error(error);
-        message.error('Gagal memuat supplier.');
+        message.warning('Histori pembelian belum bisa dimuat. Data bahan baku tetap bisa dibuka.');
       },
     );
 
-    const purchaseLookupQuery = query(
-      collection(db, 'purchases'),
-      orderBy('date', 'desc'),
-      firestoreLimit(RAW_MATERIAL_PURCHASE_LOOKUP_LIMIT),
-    );
+    let disposed = false;
 
-    const unsubPurchases = onSnapshot(
-      purchaseLookupQuery,
-      (snapshot) => {
+    const loadSqliteCompanions = async () => {
+      try {
+        const [supplierRows, pricingRuleRows] = await Promise.all([
+          listSupplierRepository(),
+          listPricingRulesByTargetType('raw_materials'),
+        ]);
+        if (disposed) return;
         // -------------------------------------------------------------------
-        // AKTIF + GUARDED: pembelian dibaca terbatas untuk link produk terakhir
-        // pada drawer Detail Raw Material.
-        // FUNGSI: menjaga lookup restock tetap ringan saat data real membesar.
-        // HUBUNGAN FLOW: read-only; tidak mengubah stok, kas, harga, saving,
-        // Supplier, Raw Material, Purchases, expense, atau laporan.
-        // LEGACY: purchase sangat lama di luar limit tidak dipakai di ringkasan
-        // drawer; laporan pembelian tetap source histori lengkap.
-        // CLEANUP CANDIDATE: service latest purchase per material jika index
-        // Firestore final sudah dikunci.
+        // Supplier dibaca dari repository boundary. Dalam mode SQLite, ini C1
+        // master-only dan tidak memutasi purchase/raw/stock.
+        // Histori purchase tetap lewat purchasesService agar tidak mismatch dengan data transaksi aktif.
         // -------------------------------------------------------------------
-        setPurchaseRecords(
-          snapshot.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() })),
-        );
-      },
-      (error) => {
+        setSuppliers(supplierRows);
+        setPricingRules(pricingRuleRows);
+      } catch (error) {
         console.error(error);
-        message.error('Gagal memuat data pembelian untuk link restock.');
-      },
-    );
+        message.warning('Supplier/pricing rule SQLite belum lengkap. Raw Material tetap bisa dimuat.');
+      }
+    };
 
-    const unsubPricingRules = onSnapshot(
-      collection(db, 'pricing_rules'),
-      (snapshot) => {
-        setPricingRules(
-          snapshot.docs
-            .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
-            .filter((item) => item?.targetType === 'raw_materials'),
-        );
-      },
-      (error) => {
-        console.error(error);
-        message.error('Gagal memuat pricing rules.');
-      },
-    );
+    loadSqliteCompanions();
 
     return () => {
+      disposed = true;
       unsubMaterials();
-      unsubSuppliers();
       unsubPurchases();
-      unsubPricingRules();
     };
   }, []);
 

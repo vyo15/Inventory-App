@@ -12,6 +12,7 @@ const authRoutes = require("./modules/auth/auth.routes");
 const customersRoutes = require("./modules/customers/customers.routes");
 const categoriesRoutes = require("./modules/categories/categories.routes");
 const suppliersRoutes = require("./modules/suppliers/suppliers.routes");
+const pricingRulesRoutes = require("./modules/pricingRules/pricingRules.routes");
 const maintenanceRoutes = require("./modules/maintenance/maintenance.routes");
 const auditLogsRoutes = require("./modules/auditLogs/auditLogs.routes");
 const migrationStatusRoutes = require("./modules/migrationStatus/migrationStatus.routes");
@@ -51,6 +52,12 @@ app.get("/api", (req, res) => success(res, "IMS SQLite sidecar API aktif", {
     "POST /api/suppliers",
     "PUT /api/suppliers/:id",
     "DELETE /api/suppliers/:id",
+    "GET /api/pricing-rules",
+    "GET /api/pricing-rules/generate-code",
+    "GET /api/pricing-rules/:id",
+    "POST /api/pricing-rules",
+    "PUT /api/pricing-rules/:id",
+    "DELETE /api/pricing-rules/:id",
     "GET /api/maintenance/status",
     "POST /api/maintenance/backup",
     "GET /api/maintenance/backups",
@@ -69,6 +76,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/customers", customersRoutes);
 app.use("/api/categories", categoriesRoutes);
 app.use("/api/suppliers", suppliersRoutes);
+app.use("/api/pricing-rules", pricingRulesRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/audit-logs", auditLogsRoutes);
 app.use("/api/migration-status", migrationStatusRoutes);

@@ -1,3 +1,8 @@
+<!--
+PATCH A-B NOTE — 2026-06-02:
+Dokumen ini adalah arsip historis Batch offline Dexie/IndexedDB. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime Dexie/IndexedDB, sync_queue, conflict resolver, atau backup JSON IndexedDB dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+-->
+
 # Offline Product / Raw Material / Semi Finished Contract — Batch 29–30
 
 Status: **FIELD CONTRACT + READ-ONLY SNAPSHOT / BELUM RUNTIME WRITE MIGRATION**
@@ -213,3 +218,22 @@ Stock read model snapshot telah dipisahkan dari master item mutation:
 - Products/Raw/Semi tetap tidak boleh masuk offline write runtime hanya karena snapshot stok sudah tersedia.
 - Mutation yang menyentuh `currentStock`, `reservedStock`, `availableStock`, variant stock, cost/HPP, purchase, sales, returns, production, dan adjustment tetap Firebase-only.
 - Detail kontrak stok: `docs/13_OFFLINE_STOCK_READ_MODEL_CONTRACT.md`.
+
+## Update C2-C4 SQLite Foundation
+
+Products dan Raw Materials kini memiliki foundation SQLite lewat backend sidecar:
+
+```text
+/api/products
+/api/raw-materials
+/api/pricing-rules
+/api/semi-finished-materials
+```
+
+Kontrak aman:
+
+- Master create/update/toggle Product dan Raw Material boleh memakai SQLite saat repository mode `sqlite_sidecar`.
+- Stok awal master tetap field pasif pada master. Mutasi stok operasional tetap wajib lewat transaction engine/audit log pada batch berikutnya.
+- Relasi sales, purchase, BOM, production usage, HPP, dan report final belum boleh dianggap selesai hanya karena table foundation sudah ada.
+- Pricing rule SQLite boleh dibaca UI sebagai data pendamping; data kosong harus graceful dan tidak memblok master form.
+- Semi Finished masih foundation/snapshot; production flow final tetap guarded.

@@ -16,6 +16,7 @@ import flanelKarawangMark from "../../assets/branding/flanel-karawang-mark.png";
 import useAuth from "../../hooks/useAuth";
 import LogoLoadingScreen from "../../components/Layout/Feedback/LogoLoadingScreen";
 import { AUTH_PROFILE_STATUS } from "../../context/AuthContext";
+import { createLocalBootstrapAdmin, getLocalAuthStatus } from "../../services/System/localAuthService";
 import "./Login.css";
 
 const { Text, Title } = Typography;
@@ -243,19 +244,57 @@ const Login = () => {
 
   const {
     authLoading,
+    authMode,
     firebaseUser,
     loginWithUsername,
     logout,
     profileStatus,
   } = useAuth();
   const [form] = Form.useForm();
+  const [bootstrapForm] = Form.useForm();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBootstrapping, setIsBootstrapping] = useState(false);
+  const [bootstrapStatus, setBootstrapStatus] = useState(null);
+  const [bootstrapError, setBootstrapError] = useState("");
   const [loginError, setLoginError] = useState("");
 
   const blockedAccessMessage = useMemo(
     () => getBlockedAccessMessage(profileStatus),
     [profileStatus],
   );
+  const isSqliteAuth = authMode === "sqlite";
+
+  useEffect(() => {
+    let disposed = false;
+
+    const loadBootstrapStatus = async () => {
+      if (!isSqliteAuth) {
+        setBootstrapStatus(null);
+        setBootstrapError("");
+        return;
+      }
+
+      try {
+        const status = await getLocalAuthStatus();
+        if (!disposed) {
+          setBootstrapStatus(status);
+          setBootstrapError("");
+        }
+      } catch (error) {
+        console.error("[Login] Gagal membaca status auth lokal.", error);
+        if (!disposed) {
+          setBootstrapStatus(null);
+          setBootstrapError("Backend SQLite belum bisa dibaca. Pastikan backend berjalan sebelum membuat admin lokal.");
+        }
+      }
+    };
+
+    loadBootstrapStatus();
+
+    return () => {
+      disposed = true;
+    };
+  }, [isSqliteAuth]);
 
   // =========================
   // SECTION: Submit Login — AKTIF / GUARDED
@@ -281,6 +320,28 @@ const Login = () => {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleBootstrapAdmin = async (values) => {
+    setIsBootstrapping(true);
+    setBootstrapError("");
+
+    try {
+      const payload = {
+        username: values.username,
+        displayName: values.displayName,
+        password: values.password,
+        confirmKeyword: bootstrapStatus?.bootstrapConfirmKeyword || "CREATE LOCAL ADMIN",
+      };
+
+      await createLocalBootstrapAdmin(payload);
+      await loginWithUsername(values.username, values.password);
+    } catch (error) {
+      console.error("[Login] Gagal membuat admin lokal.", error);
+      setBootstrapError(error.message || "Gagal membuat administrator lokal SQLite.");
+    } finally {
+      setIsBootstrapping(false);
     }
   };
 
@@ -335,6 +396,88 @@ const Login = () => {
               </Button>
             }
           />
+        </Card>
+      </LoginShell>
+    );
+  }
+
+  if (isSqliteAuth && bootstrapStatus?.bootstrapRequired) {
+    return (
+      <LoginShell>
+        <Card className="ims-login-card">
+          <Space direction="vertical" size={6} className="ims-login-heading">
+            <Text className="ims-login-eyebrow">Setup SQLite Lokal</Text>
+            <Title level={3} className="ims-login-title">
+              Buat Administrator Pertama
+            </Title>
+            <Text className="ims-login-muted-text">
+              Database SQLite belum punya administrator aktif. Buat akun pertama untuk membuka IMS.
+            </Text>
+          </Space>
+
+          {bootstrapError ? (
+            <Alert
+              className="ims-login-error-box"
+              type="error"
+              showIcon
+              message={bootstrapError}
+            />
+          ) : null}
+
+          <Form
+            form={bootstrapForm}
+            layout="vertical"
+            onFinish={handleBootstrapAdmin}
+            requiredMark={false}
+            className="ims-login-form"
+          >
+            <Form.Item
+              label="Username Admin"
+              name="username"
+              initialValue="admin"
+              rules={[{ required: true, message: "Username admin wajib diisi." }]}
+            >
+              <Input
+                autoComplete="username"
+                prefix={<UserOutlined />}
+                placeholder="contoh: admin"
+                size="large"
+              />
+            </Form.Item>
+
+            <Form.Item
+              label="Nama Tampilan"
+              name="displayName"
+              initialValue="Administrator Lokal"
+              rules={[{ required: true, message: "Nama tampilan wajib diisi." }]}
+            >
+              <Input placeholder="contoh: Administrator Lokal" size="large" />
+            </Form.Item>
+
+            <Form.Item
+              label="Password Admin"
+              name="password"
+              rules={[{ required: true, message: "Password admin wajib diisi." }]}
+            >
+              <Input.Password
+                autoComplete="new-password"
+                prefix={<LockOutlined />}
+                placeholder="Buat password admin"
+                size="large"
+              />
+            </Form.Item>
+
+            <Button
+              block
+              htmlType="submit"
+              loading={isBootstrapping}
+              size="large"
+              type="primary"
+              className="ims-login-submit"
+            >
+              Buat Admin dan Masuk
+            </Button>
+          </Form>
         </Card>
       </LoginShell>
     );

@@ -1,6 +1,6 @@
 # IMS SQLite Offline Web Roadmap
 
-Status: **SQLite-C1 foundation safety / runtime pilot Categories & Customers / Dexie tidak lagi aktif di UI utama**
+Status: **SQLite-first local pilot / runtime Categories, Customers, dan Supplier master-only / Dexie legacy cleanup selesai**
 
 ## 1. Keputusan arsitektur
 
@@ -27,15 +27,16 @@ Yang aktif:
 - Status database: `GET /api/maintenance/status`.
 - Backup database: `POST /api/maintenance/backup`.
 - Audit log: `GET /api/audit-logs`.
-- CRUD SQLite untuk `customers` dan `categories`.
-- Adapter frontend SQLite untuk halaman Customer dan Kategori.
+- CRUD SQLite untuk `customers`, `categories`, dan Supplier master-only.
+- Adapter frontend SQLite untuk halaman Customer, Kategori, dan Supplier master-only.
 - Repository mode default diarahkan ke `sqlite_sidecar`.
 - Offline Database Center diganti menjadi **SQLite Local DB Center**.
 - Dependency `dexie` dihapus dari package root dan tidak lagi dipakai runtime aktif.
+- File legacy Dexie/IndexedDB dan panel dev lama sudah dihapus dari source aktif pada Patch A-B.
 
 Yang belum dimigrasi:
 
-- Supplier masih Firebase-primary karena terkait purchase/raw/history.
+- Supplier master-only sudah bisa memakai SQLite; katalog raw material, histori purchase, purchase prefill, stock, dan finance masih guarded/legacy read-only.
 - Stock, sales, purchase, returns, finance, production, payroll, HPP belum boleh diarahkan ke SQLite tanpa audit khusus.
 - Restore database SQLite production belum dibuat karena destructive dan perlu guard terpisah.
 - Firebase belum dihapus agar legacy/fallback dan migrasi bertahap tetap aman.
@@ -180,7 +181,29 @@ Audit satu-satu untuk stock engine, purchase, sales, returns, finance ledger, pr
 
 ## 8. Catatan legacy cleanup
 
-File Dexie/IndexedDB lama yang sudah tidak diimpor runtime aktif boleh diaudit sebagai cleanup candidate. Penghapusan fisik file lama sebaiknya dilakukan sebagai patch cleanup terpisah karena banyak dokumen lama masih menyebut batch Dexie dan user sedang migrasi bertahap.
+Patch A-B sudah menutup cleanup Dexie legacy yang tidak dipakai runtime aktif. File yang dihapus:
+
+```text
+frontend/src/data/adapters/dexie/
+frontend/src/data/local/
+frontend/src/data/sync/
+frontend/src/pages/Utilities/components/OfflineLocalDbBackupPanel.jsx
+frontend/src/pages/Utilities/components/OfflineMasterDataPilotPanel.jsx
+frontend/src/pages/Utilities/components/OfflineQaExecutionPanel.jsx
+frontend/src/pages/Utilities/components/OfflineSyncDevPanel.jsx
+```
+
+Yang tersisa hanya compatibility alias `offline_local`/`hybrid_sync` di repository mode agar setting lama tidak membuat UI crash. Alias tersebut tetap diarahkan ke `sqlite_sidecar`, bukan mengaktifkan Dexie.
+
+Contoh `.env.local` pilot SQLite yang aman:
+
+```env
+VITE_AUTH_MODE=sqlite
+# VITE_SQLITE_API_BASE_URL=http://localhost:3001
+VITE_SUPPLIERS_REPOSITORY_MODE=sqlite
+```
+
+Supplier C1 memakai `sqlite` untuk master-only. Relasi purchase/raw/history tetap tidak dimutasi sampai batch transaksi/stock siap.
 
 ## Update Fase 3B, 4, 6B, dan Supplier Pilot
 
@@ -208,7 +231,11 @@ Aktifkan frontend auth lokal:
 
 ```bash
 cd frontend
-printf "VITE_AUTH_MODE=sqlite\n" > .env.local
+cat > .env.local <<'EOF'
+VITE_AUTH_MODE=sqlite
+# VITE_SQLITE_API_BASE_URL=http://localhost:3001
+VITE_SUPPLIERS_REPOSITORY_MODE=sqlite
+EOF
 npm run dev -- --host 0.0.0.0
 ```
 
@@ -265,3 +292,38 @@ Batasan tetap:
 - `GET` master data pilot masih public sementara untuk compatibility read/dev.
 - Firebase Auth tetap default sampai cutover auth lokal disetujui.
 - Stock, purchase, sales, returns, finance, production, payroll, dan HPP tidak berubah.
+
+
+## Update C1 Supplier SQLite Master-Only
+
+Status source setelah patch C1:
+
+- Halaman `SupplierPurchases.jsx` membaca/menulis master Supplier melalui `suppliersRepository`.
+- Mode `sqlite_sidecar` memakai backend `/api/suppliers` untuk list/create/update/soft-delete.
+- Mode Firebase masih tersedia sebagai legacy fallback, tetapi write Firebase lama tidak dipakai saat SQLite aktif.
+- Katalog restock material di modal Supplier dinonaktifkan pada mode SQLite C1 karena Raw Material, Purchase, Stock, dan Finance belum berada di SQLite transaction engine.
+- Read-only reference ke `raw_materials` dan `purchases` Firebase masih dipertahankan untuk compatibility tampilan, bukan sebagai mutation.
+
+Yang belum dikerjakan di C1:
+
+- Products, Raw Materials, Stock read model, Purchases, Sales, Returns, Finance, Reports, Production, Payroll, dan HPP belum dipindahkan ke SQLite.
+- Firebase belum boleh dihapus karena modul guarded masih aktif menggunakan Firestore.
+
+
+## Update D0-D1 — Auth lokal dan Pricing Rules SQLite
+
+Status source patch ini:
+- D0 auth lokal SQLite aktif untuk login dan Manajemen User.
+- Form Tambah User pada mode `VITE_AUTH_MODE=sqlite` tidak lagi meminta Firebase Auth UID.
+- User lokal dibuat lewat backend SQLite (`/api/auth/users`) dengan username, password, role, dan status.
+- Delete user lokal memakai guard backend: tidak boleh self-delete dan tidak boleh menghapus/menurunkan administrator aktif terakhir.
+
+D1 Pricing Rules:
+- `pricing_rules` mendapat table SQLite dan endpoint `/api/pricing-rules`.
+- `VITE_PRICING_RULES_REPOSITORY_MODE=sqlite` menyimpan rule harga ke SQLite local.
+- Apply harga massal masih guarded/ditahan pada mode SQLite D1 karena target `products` dan `raw_materials` pada source ZIP ini masih legacy Firebase read model.
+- Target Product/Raw Material SQLite penuh harus dikerjakan pada batch terpisah sebelum apply harga massal lokal diaktifkan.
+
+Batas aman:
+- Tidak ada mutasi stock, sales, purchase, production, payroll, HPP, finance, atau reset dari D1 ini.
+- Firebase compatibility belum dihapus karena masih dipakai oleh raw/products preview dan modul guarded lain.

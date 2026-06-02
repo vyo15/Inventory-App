@@ -1,8 +1,8 @@
 // src/Pages/MasterData/PricingRules.jsx
 
 // SECTION: import hooks React
-import { useEffect, useMemo, useState } from "react";
-import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import DataRefreshIndicator, { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // SECTION: import komponen Ant Design
 import {
@@ -20,7 +20,6 @@ import {
   Row,
   Col,
   Statistic,
-  Alert,
   Typography,
 } from "antd";
 
@@ -59,6 +58,11 @@ import {
   buildPricingPreview,
   buildPricingPreviewSummary,
   applyPricingRuleToItems,
+  isSqlitePricingRulesRepositoryMode,
+  listPricingRulesFromRepository,
+  createPricingRuleInRepository,
+  updatePricingRuleInRepository,
+  deletePricingRuleFromRepository,
 } from "../../services/Pricing/pricingService";
 
 // SECTION: alias komponen select
@@ -142,27 +146,53 @@ const PricingRules = () => {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [applyLoading, setApplyLoading] = useState(false);
 
+  const isSqlitePricingRulesMode = useMemo(
+    () => isSqlitePricingRulesRepositoryMode(),
+    [],
+  );
+
+  const loadPricingRules = useCallback(async ({ silent = false } = {}) => {
+    if (!isSqlitePricingRulesMode) return;
+
+    try {
+      if (!silent) setPageLoading(true);
+      const data = await listPricingRulesFromRepository();
+      setRules(data);
+    } catch (error) {
+      console.error("Gagal memuat pricing rules SQLite:", error);
+      message.error("Gagal memuat pricing rules SQLite.");
+    } finally {
+      if (!silent) setPageLoading(false);
+    }
+  }, [isSqlitePricingRulesMode]);
+
   // SECTION: sinkron data pricing rules, bahan baku, dan produk
   useEffect(() => {
     setPageLoading(true);
 
-    const unsubRules = onSnapshot(
-      collection(db, "pricing_rules"),
-      (snapshot) => {
-        const data = snapshot.docs.map((item) => ({
-          id: item.id,
-          ...item.data(),
-        }));
+    let unsubRules = null;
 
-        setRules(data);
-        setPageLoading(false);
-      },
-      (error) => {
-        console.error("Gagal sinkron pricing rules:", error);
-        message.error("Gagal memuat data pricing rules.");
-        setPageLoading(false);
-      },
-    );
+    if (isSqlitePricingRulesMode) {
+      loadPricingRules();
+    } else {
+      unsubRules = onSnapshot(
+        collection(db, "pricing_rules"),
+        (snapshot) => {
+          const data = snapshot.docs.map((item) => ({
+            id: item.id,
+            ...item.data(),
+          }));
+
+          setRules(data);
+          setPageLoading(false);
+        },
+        (error) => {
+          console.error("Gagal sinkron pricing rules:", error);
+          message.error("Gagal memuat data pricing rules.");
+          setPageLoading(false);
+        },
+      );
+    }
 
     const unsubRawMaterials = onSnapshot(
       collection(db, "raw_materials"),
@@ -195,11 +225,11 @@ const PricingRules = () => {
     );
 
     return () => {
-      unsubRules();
+      if (unsubRules) unsubRules();
       unsubRawMaterials();
       unsubProducts();
     };
-  }, []);
+  }, [isSqlitePricingRulesMode, loadPricingRules]);
 
   // SECTION: watch field target type agar pilihan base cost otomatis berubah
   const targetTypeValue = Form.useWatch("targetType", form);
@@ -322,10 +352,22 @@ const PricingRules = () => {
         ),
         roundingType: values?.roundingType || "up",
         roundingUnit: Math.round(Number(values?.roundingUnit || 100)),
-        updatedAt: Timestamp.now(),
+        updatedAt: isSqlitePricingRulesMode ? new Date().toISOString() : Timestamp.now(),
       };
 
-      if (isEditing && editingRuleId) {
+      if (isSqlitePricingRulesMode) {
+        if (isEditing && editingRuleId) {
+          await updatePricingRuleInRepository(editingRuleId, payload);
+          message.success("Pricing rule berhasil diupdate.");
+        } else {
+          await createPricingRuleInRepository({
+            ...payload,
+            createdAt: new Date().toISOString(),
+          });
+          message.success("Pricing rule berhasil ditambahkan.");
+        }
+        await loadPricingRules({ silent: true });
+      } else if (isEditing && editingRuleId) {
         await updateDoc(doc(db, "pricing_rules", editingRuleId), payload);
         message.success("Pricing rule berhasil diupdate.");
       } else {
@@ -348,7 +390,12 @@ const PricingRules = () => {
   // SECTION: hapus rule
   const handleDeleteRule = async (ruleId) => {
     try {
-      await deleteDoc(doc(db, "pricing_rules", ruleId));
+      if (isSqlitePricingRulesMode) {
+        await deletePricingRuleFromRepository(ruleId);
+        await loadPricingRules({ silent: true });
+      } else {
+        await deleteDoc(doc(db, "pricing_rules", ruleId));
+      }
       message.success("Pricing rule berhasil dihapus.");
     } catch (error) {
       console.error("Gagal menghapus pricing rule:", error);
@@ -397,6 +444,11 @@ const PricingRules = () => {
   const handleApplyRule = async () => {
     if (!previewRule?.id) {
       message.warning("Rule preview belum valid atau belum dipilih.");
+      return;
+    }
+
+    if (isSqlitePricingRulesMode) {
+      message.warning("Apply harga massal belum diaktifkan di SQLite D1.");
       return;
     }
 
@@ -684,21 +736,21 @@ const PricingRules = () => {
       key: "pricing-rules-total",
       title: "Total Pricing Rules",
       value: rules.length,
-      subtitle: "Semua rule harga yang tersimpan di master pricing.",
+      subtitle: isSqlitePricingRulesMode ? "Tersimpan di SQLite." : "Tersimpan di Firebase.",
       accent: "primary",
     },
     {
       key: "pricing-rules-active",
       title: "Rule Aktif",
       value: rules.filter((item) => item?.isActive).length,
-      subtitle: "Rule yang masih aktif dipakai untuk preview dan apply.",
+      subtitle: "Siap untuk preview.",
       accent: "success",
     },
     {
       key: "pricing-rules-targets",
       title: "Target Item Tersedia",
       value: rawMaterials.length + products.length,
-      subtitle: "Gabungan bahan baku dan produk jadi yang bisa jadi target rule.",
+      subtitle: "Bahan baku + produk.",
       accent: "warning",
     },
   ];
@@ -719,20 +771,12 @@ const PricingRules = () => {
         ]}
       />
 
-      {/* SECTION: informasi penting aturan pricing */}
-      <Alert
-        style={{ marginBottom: 16 }}
-        type="info"
-        showIcon
-        message="Pricing Rules berlaku untuk item mode rule; item manual dilewati."
-      />
-
       <SummaryStatGrid items={summaryItems} columns={{ xs: 24, md: 8 }} />
 
       {/* SECTION: tabel pricing rules */}
       <PageSection
         title="Daftar Pricing Rules"
-        subtitle="Hanya item mode rule yang diproses."
+        subtitle={isSqlitePricingRulesMode ? "Rule tersimpan di SQLite local." : "Hanya item mode rule yang diproses."}
       >
         {/* SECTION: tabel utama pricing rule memakai foundation global supaya seragam */}
         <DataRefreshIndicator loading={pageLoading} dataSource={rules} />
@@ -953,12 +997,6 @@ const PricingRules = () => {
             </Col>
           </Row>
 
-          {/* SECTION: catatan bantuan */}
-          <Alert
-            type="warning"
-            showIcon
-            message="Bahan baku memakai modal/restock; produk memakai HPP."
-          />
         </Form>
       </Modal>
 
@@ -1002,14 +1040,6 @@ const PricingRules = () => {
         width={1280}
         destroyOnClose
       >
-        {/* SECTION: info preview */}
-        <Alert
-          style={{ marginBottom: 16 }}
-          type="info"
-          showIcon
-          message="Preview/apply memproses item mode rule dengan biaya valid."
-        />
-
         {/* SECTION: ringkasan preview */}
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={24} md={4}>

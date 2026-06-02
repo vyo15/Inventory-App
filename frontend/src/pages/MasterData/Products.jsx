@@ -26,8 +26,6 @@ import {
   EyeOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../../firebase';
 import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import { formatDateId } from '../../utils/formatters/dateId';
@@ -38,6 +36,8 @@ import PageSection from '../../components/Layout/Page/PageSection';
 import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import StockDisplayBlock from '../../components/Layout/Table/StockDisplayBlock';
 import DataTableView from '../../components/Layout/Table/DataTableView';
+import { listCategories } from '../../data/repositories/categoriesRepository';
+
 import {
   COLOR_VARIANT_MAP,
   ensureAtLeastOneVariant,
@@ -50,7 +50,7 @@ import {
   updateProduct,
 } from '../../services/MasterData/productsService';
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
-import { buildSinglePricingPreview } from '../../services/Pricing/pricingService';
+import { buildSinglePricingPreview, listPricingRulesByTargetType } from '../../services/Pricing/pricingService';
 import PricingModeSwitch from '../../components/Pricing/PricingModeSwitch';
 import {
   getVariantAwareStockStatusMeta,
@@ -247,36 +247,28 @@ const Products = () => {
       },
     );
 
-    const unsubCategories = onSnapshot(
-      collection(db, 'categories'),
-      (snapshot) => {
-        setCategories(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
-      },
-      (error) => {
-        console.error(error);
-        message.error('Gagal memuat kategori.');
-      },
-    );
+    let disposed = false;
 
-    const unsubPricingRules = onSnapshot(
-      collection(db, 'pricing_rules'),
-      (snapshot) => {
-        setPricingRules(
-          snapshot.docs
-            .map((item) => ({ id: item.id, ...item.data() }))
-            .filter((item) => item?.targetType === 'products'),
-        );
-      },
-      (error) => {
+    const loadSqliteCompanions = async () => {
+      try {
+        const [categoryRows, pricingRuleRows] = await Promise.all([
+          listCategories(),
+          listPricingRulesByTargetType('products'),
+        ]);
+        if (disposed) return;
+        setCategories(categoryRows);
+        setPricingRules(pricingRuleRows);
+      } catch (error) {
         console.error(error);
-        message.error('Gagal memuat pricing rules.');
-      },
-    );
+        message.warning('Kategori/pricing rule SQLite belum lengkap. Produk tetap bisa dimuat.');
+      }
+    };
+
+    loadSqliteCompanions();
 
     return () => {
+      disposed = true;
       unsubProducts();
-      unsubCategories();
-      unsubPricingRules();
     };
   }, []);
 

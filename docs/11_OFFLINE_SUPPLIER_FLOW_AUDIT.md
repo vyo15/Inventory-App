@@ -1,3 +1,8 @@
+<!--
+PATCH A-B NOTE — 2026-06-02:
+Dokumen ini adalah arsip historis Batch offline Dexie/IndexedDB. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime Dexie/IndexedDB, sync_queue, conflict resolver, atau backup JSON IndexedDB dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+-->
+
 # Offline Supplier Flow Audit — Batch 18/19 + Decision Batch 28
 
 Status: **FINAL DECISION / GUARDED / READ-ONLY SNAPSHOT / TIDAK MIGRASI RUNTIME WRITE**

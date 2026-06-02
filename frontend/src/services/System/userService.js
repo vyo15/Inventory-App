@@ -12,6 +12,14 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import {
+  createLocalUser,
+  deleteLocalUser,
+  isSqliteAuthMode,
+  listLocalUsers,
+  updateLocalUser,
+  validateLocalPasswordPolicy,
+} from "./localAuthService";
+import {
   ROLE_LABELS,
   ROLES,
   USER_STATUS,
@@ -33,6 +41,55 @@ export const DELETE_PROFILE_GUARD_ERROR_CODE = "DELETE_PROFILE_GUARD_REJECTED";
 const USERNAME_ALREADY_USED_MESSAGE =
   "Username sudah dipakai profile user lain.";
 const AUTH_UID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+
+const isLocalUserManagementMode = () => isSqliteAuthMode();
+
+const getLocalUserId = (value = "") => {
+  const rawValue = String(value || "").trim();
+  if (/^local-\d+$/.test(rawValue)) return rawValue.replace("local-", "");
+  return rawValue;
+};
+
+const normalizeLocalSystemUser = (user = {}) => {
+  const role = user.role || ROLES.USER;
+  const status = user.status || USER_STATUS.INACTIVE;
+  const username = user.username || "";
+  const authUid = user.authUid || `local-${user.id}`;
+
+  return {
+    id: user.id,
+    authUid,
+    username,
+    usernameLower: user.usernameLower || user.username_lower || String(username).toLowerCase(),
+    displayName: user.displayName || user.display_name || username || "User IMS",
+    role,
+    roleLabel: ROLE_LABELS[role] || role,
+    status,
+    statusLabel: USER_STATUS_LABELS[status] || status,
+    authProvider: user.authProvider || "sqlite_local",
+    createdAt: user.createdAt || user.created_at || null,
+    updatedAt: user.updatedAt || user.updated_at || null,
+    createdBy: user.createdBy || "sqlite_local",
+    updatedBy: user.updatedBy || "sqlite_local",
+    lastLoginAt: user.lastLoginAt || user.last_login_at || null,
+  };
+};
+
+const normalizeLocalUserPayload = (values = {}) => ({
+  username: String(values.username || "").trim(),
+  displayName: String(values.displayName || values.username || "").trim(),
+  role: values.role || ROLES.USER,
+  status: values.status || USER_STATUS.ACTIVE,
+  password: String(values.password || ""),
+});
+
+const assertLocalPasswordPolicy = (password = "", { required = false } = {}) => {
+  const value = String(password || "");
+  if (!required && !value) return;
+
+  const errorMessage = validateLocalPasswordPolicy(value);
+  if (errorMessage) throw new Error(errorMessage);
+};
 
 // =========================
 // SECTION: User Management Error Helpers — AKTIF / GUARDED
@@ -137,6 +194,8 @@ export const isUsernameAlreadyUsedError = (error) => {
     error &&
     (error.code === USERNAME_ALREADY_USED_ERROR_CODE ||
       error.errorCode === USERNAME_ALREADY_USED_ERROR_CODE ||
+      error.code === "DUPLICATE_USERNAME" ||
+      error.errorCode === "DUPLICATE_USERNAME" ||
       error.isUsernameAlreadyUsed ||
       error.message === USERNAME_ALREADY_USED_MESSAGE),
   );
@@ -237,6 +296,15 @@ const assertTargetIsNotLastActiveAdministrator = async (targetProfile) => {
 export const listSystemUsers = async (actorProfile) => {
   assertActorCanAccessUserManagement(actorProfile);
 
+  if (isLocalUserManagementMode()) {
+    const localUsers = await listLocalUsers();
+    return localUsers
+      .map(normalizeLocalSystemUser)
+      .filter((userProfile) => isKnownRole(userProfile.role))
+      .filter((userProfile) => canViewUserProfile(actorProfile.role, userProfile.role))
+      .sort((a, b) => String(a.usernameLower).localeCompare(String(b.usernameLower)));
+  }
+
   const snapshot = await getDocs(collection(db, SYSTEM_USERS_COLLECTION));
   const normalizedUsers = snapshot.docs
     .map(normalizeSystemUser)
@@ -275,6 +343,33 @@ export const listSystemUsers = async (actorProfile) => {
 // =========================
 export const createManualUserProfile = async (values, actorProfile) => {
   assertActorCanAccessUserManagement(actorProfile);
+
+  if (isLocalUserManagementMode()) {
+    const payload = normalizeLocalUserPayload(values);
+
+    if (!validateUsername(payload.username)) {
+      throw new Error(
+        "Username wajib diisi dan hanya boleh huruf, angka, titik, underscore, atau strip.",
+      );
+    }
+
+    if (!payload.displayName) {
+      throw new Error("Nama tampilan wajib diisi.");
+    }
+
+    if (!isKnownRole(payload.role) || !canCreateUserProfile(actorProfile.role, payload.role)) {
+      throw new Error("Role target tidak boleh dibuat oleh role aktif.");
+    }
+
+    if (!isKnownUserStatus(payload.status)) {
+      throw new Error("Status user tidak valid.");
+    }
+
+    assertLocalPasswordPolicy(payload.password, { required: true });
+
+    const createdUser = await createLocalUser(payload);
+    return normalizeLocalSystemUser(createdUser);
+  }
 
   const actorUid = getActorUid(actorProfile);
   const authUid = String(values.authUid || "").trim();
@@ -358,6 +453,28 @@ export const createManualUserProfile = async (values, actorProfile) => {
 export const updateSystemUserProfile = async (userId, values, actorProfile) => {
   assertActorCanAccessUserManagement(actorProfile);
 
+  if (isLocalUserManagementMode()) {
+    const payload = normalizeLocalUserPayload(values);
+    const localUserId = getLocalUserId(userId);
+
+    if (!payload.displayName) {
+      throw new Error("Nama tampilan wajib diisi.");
+    }
+
+    if (!isKnownRole(payload.role) || !canCreateUserProfile(actorProfile.role, payload.role)) {
+      throw new Error("Role target tidak boleh dibuat oleh role aktif.");
+    }
+
+    if (!isKnownUserStatus(payload.status)) {
+      throw new Error("Status user tidak valid.");
+    }
+
+    assertLocalPasswordPolicy(payload.password, { required: false });
+
+    const updatedUser = await updateLocalUser(localUserId, payload);
+    return normalizeLocalSystemUser(updatedUser);
+  }
+
   const actorUid = getActorUid(actorProfile);
   const userRef = doc(db, SYSTEM_USERS_COLLECTION, userId);
   const currentSnapshot = await getDoc(userRef);
@@ -430,6 +547,17 @@ export const updateSystemUserProfile = async (userId, values, actorProfile) => {
 // - GUARDED: ada validasi role actor, target exists, self-delete, role target, dan administrator aktif terakhir.
 // =========================
 export const deleteSystemUserProfile = async (userId, actorProfile) => {
+  if (isLocalUserManagementMode()) {
+    if (!canAccessUserManagement(actorProfile?.role)) {
+      throw createUserManagementError(
+        "Role ini tidak boleh menghapus user lokal.",
+        DELETE_PROFILE_GUARD_ERROR_CODE,
+      );
+    }
+
+    return deleteLocalUser(getLocalUserId(userId));
+  }
+
   if (!canAccessUserManagement(actorProfile?.role)) {
     throw createUserManagementError(
       "Role ini tidak boleh menghapus profile user.",

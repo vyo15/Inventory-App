@@ -295,4 +295,4 @@ Catatan lock:
 
 ## Update SQLite Local Runtime Pilot
 
-Status terbaru: Categories dan Customers diarahkan ke mode `sqlite_sidecar` melalui backend Node.js lokal dan SQLite file lokal. Firebase tetap dipertahankan sebagai fallback dan untuk modul yang belum dimigrasi. Dexie/IndexedDB tidak lagi dipakai sebagai runtime aktif Offline Database Center. File Dexie/IndexedDB legacy yang belum diaudit delete masih dianggap cleanup candidate.
+Status terbaru: Categories dan Customers diarahkan ke mode `sqlite_sidecar` melalui backend Node.js lokal dan SQLite file lokal. `frontend/.env.example` sudah SQLite-first (`VITE_AUTH_MODE=sqlite`) untuk pilot lokal. Firebase tetap dipertahankan sebagai fallback dan untuk modul yang belum dimigrasi. Dexie/IndexedDB tidak lagi dipakai sebagai runtime aktif Offline Database Center, dan file/panel legacy Dexie yang tidak diimpor route aktif sudah dihapus pada Patch A-B. Supplier master-only sudah memakai repository SQLite untuk pilot lokal; purchase/raw/history tetap guarded dan tidak ikut dimutasi. Raw Materials membaca histori pembelian dari purchasesService aktif agar tidak mismatch dengan adapter transaksi SQLite placeholder.

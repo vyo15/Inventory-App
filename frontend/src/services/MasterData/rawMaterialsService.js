@@ -40,8 +40,70 @@ import {
   deleteStockItemReadModelInTransaction,
   setStockItemReadModelInTransaction,
 } from '../Inventory/stockReadModelService';
+import { getRepositoryModeStatus } from '../../data/repositories/repositoryModeService';
+import * as sqliteRawMaterialsAdapter from '../../data/adapters/sqlite/sqliteRawMaterialsAdapter';
 
 const COLLECTION_NAME = 'raw_materials';
+
+const shouldUseSqliteRawMaterials = async () => {
+  const status = await getRepositoryModeStatus();
+  return status.isSqliteSidecar === true;
+};
+
+const assertSqliteRawMaterialPayload = (values = {}) => {
+  const errors = {};
+  if (!String(values.name || '').trim()) errors.name = 'Nama bahan baku wajib diisi';
+  if (!values.stockUnit) errors.stockUnit = 'Satuan stok wajib dipilih';
+  if (Number(values.stock || values.currentStock || 0) < 0) errors.stock = 'Stok tidak boleh negatif';
+  if (Number(values.minStock || 0) < 0) errors.minStock = 'Minimum stok tidak boleh negatif';
+  if (Object.keys(errors).length > 0) throw { type: 'validation', errors };
+};
+
+const buildSqliteRawMaterialPayload = (values = {}, suppliers = [], existingMaterial = {}) => {
+  const hasVariants = values.hasVariants === true;
+  const variants = hasVariants ? normalizeRawMaterialVariants(values.variants || values.variantOptions || []) : [];
+  const variantTotals = calculateRawMaterialVariantTotals(variants);
+  const stock = hasVariants
+    ? toStockNumber(variantTotals.currentStock || 0)
+    : toStockNumber(values.stock ?? values.currentStock ?? existingMaterial.stock ?? existingMaterial.currentStock ?? 0);
+  const reservedStock = hasVariants
+    ? toStockNumber(variantTotals.reservedStock || 0)
+    : toStockNumber(values.reservedStock ?? existingMaterial.reservedStock ?? 0);
+  const supplierSnapshot = resolveSupplierSnapshot(values, suppliers);
+  const code = String(values.code || existingMaterial.code || existingMaterial.materialCode || '').trim().toUpperCase();
+  const now = new Date().toISOString();
+
+  return {
+    ...existingMaterial,
+    ...values,
+    id: existingMaterial.id || values.id || code || undefined,
+    code,
+    materialCode: code,
+    name: String(values.name || existingMaterial.name || '').trim(),
+    ...supplierSnapshot,
+    stockUnit: values.stockUnit || existingMaterial.stockUnit || 'pcs',
+    pricingMode: values.pricingMode === 'rule' ? 'rule' : 'manual',
+    pricingRuleId: values.pricingMode === 'rule' ? values.pricingRuleId || null : null,
+    minStock: toStockNumber(values.minStock ?? existingMaterial.minStock ?? 0),
+    restockReferencePrice: toStockNumber(values.restockReferencePrice ?? existingMaterial.restockReferencePrice ?? 0),
+    averageActualUnitCost: toStockNumber(values.averageActualUnitCost ?? existingMaterial.averageActualUnitCost ?? 0),
+    sellingPrice: toStockNumber(values.sellingPrice ?? existingMaterial.sellingPrice ?? 0),
+    hasVariants,
+    hasVariantOptions: hasVariants,
+    variantLabel: hasVariants ? String(values.variantLabel || existingMaterial.variantLabel || 'Varian').trim() : '',
+    variants,
+    variantOptions: variants,
+    variantCount: hasVariants ? variantTotals.variantCount : 0,
+    activeVariantCount: hasVariants ? variantTotals.activeVariantCount : 0,
+    stock,
+    currentStock: stock,
+    reservedStock,
+    availableStock: Math.max(stock - reservedStock, 0),
+    isActive: values.isActive !== false,
+    createdAt: existingMaterial.createdAt || values.createdAt || now,
+    updatedAt: now,
+  };
+};
 
 // IMS NOTE [AKTIF | behavior-preserving]: default form tetap di service supaya
 // halaman create/edit Raw Material memakai struktur awal yang sama.
@@ -507,17 +569,40 @@ export const validateRawMaterialPayload = async (values = {}, editingId = null) 
 };
 
 export const listenRawMaterials = (callback, onError) => {
-  const q = query(collection(db, COLLECTION_NAME), orderBy('name', 'asc'));
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      callback(snapshot.docs.map((item) => enrichRawMaterial({ id: item.id, ...item.data() })));
-    },
-    onError,
-  );
+  let unsubscribe = () => {};
+  let disposed = false;
+
+  (async () => {
+    try {
+      if (await shouldUseSqliteRawMaterials()) {
+        unsubscribe = sqliteRawMaterialsAdapter.subscribeRawMaterials(
+          (rows) => callback(rows.map(enrichRawMaterial)),
+          onError,
+        );
+        return;
+      }
+
+      const q = query(collection(db, COLLECTION_NAME), orderBy('name', 'asc'));
+      unsubscribe = onSnapshot(
+        q,
+        (snapshot) => {
+          if (!disposed) callback(snapshot.docs.map((item) => enrichRawMaterial({ id: item.id, ...item.data() })));
+        },
+        onError,
+      );
+    } catch (error) {
+      if (!disposed && typeof onError === 'function') onError(error);
+    }
+  })();
+
+  return () => {
+    disposed = true;
+    unsubscribe();
+  };
 };
 
 export const generateRawMaterialCode = async (values = {}, excludeId = null) => {
+  if (await shouldUseSqliteRawMaterials()) return sqliteRawMaterialsAdapter.generateRawMaterialCode();
   // IMS NOTE [LEGACY-COMPAT | lint-safe-signature]: values tetap diterima agar caller lama tidak perlu diubah, meski kode RAW sekarang berbasis sequence internal.
   void values;
   // IMS NOTE [AKTIF | internal-sequence-code]: Raw Material baru memakai kode internal RAW-001 agar UI tetap clean dan nama/supplier menjadi identitas utama.
@@ -548,6 +633,13 @@ const assertRawMaterialCodeAvailable = async (code = '', editingId = null) => {
 };
 
 export const createRawMaterial = async (values = {}, suppliers = []) => {
+  if (await shouldUseSqliteRawMaterials()) {
+    assertSqliteRawMaterialPayload(values);
+    const code = values.code || await sqliteRawMaterialsAdapter.generateRawMaterialCode();
+    const created = await sqliteRawMaterialsAdapter.createRawMaterial(buildSqliteRawMaterialPayload({ ...values, code }, suppliers));
+    return created?.id || code;
+  }
+
   const errors = await validateRawMaterialPayload(values, null);
   if (Object.keys(errors).length > 0) {
     throw { type: 'validation', errors };
@@ -622,6 +714,14 @@ export const createRawMaterial = async (values = {}, suppliers = []) => {
 };
 
 export const updateRawMaterial = async (id, values = {}, suppliers = []) => {
+  if (await shouldUseSqliteRawMaterials()) {
+    assertSqliteRawMaterialPayload(values);
+    const existingMaterial = await sqliteRawMaterialsAdapter.getRawMaterialById(id);
+    if (!existingMaterial) throw new Error('Bahan baku tidak ditemukan.');
+    const updated = await sqliteRawMaterialsAdapter.updateRawMaterial(id, buildSqliteRawMaterialPayload(values, suppliers, existingMaterial));
+    return updated?.id || id;
+  }
+
   const errors = await validateRawMaterialPayload(values, id);
   if (Object.keys(errors).length > 0) {
     throw { type: 'validation', errors };
@@ -662,6 +762,11 @@ export const updateRawMaterial = async (id, values = {}, suppliers = []) => {
 };
 
 export const removeRawMaterial = async (id) => {
+  if (await shouldUseSqliteRawMaterials()) {
+    await sqliteRawMaterialsAdapter.deleteRawMaterial(id);
+    return id;
+  }
+
   const ref = doc(db, COLLECTION_NAME, id);
 
   await runTransaction(db, async (transaction) => {
@@ -681,6 +786,13 @@ export const removeRawMaterial = async (id) => {
 };
 
 export const toggleRawMaterialActive = async (id, isActive) => {
+  if (await shouldUseSqliteRawMaterials()) {
+    const existingMaterial = await sqliteRawMaterialsAdapter.getRawMaterialById(id);
+    if (!existingMaterial) throw new Error('Bahan baku tidak ditemukan.');
+    await sqliteRawMaterialsAdapter.updateRawMaterial(id, { ...existingMaterial, isActive: Boolean(isActive), status: isActive ? 'active' : 'inactive' });
+    return id;
+  }
+
   const ref = doc(db, COLLECTION_NAME, id);
 
   await runTransaction(db, async (transaction) => {

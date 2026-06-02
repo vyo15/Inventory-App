@@ -3,8 +3,20 @@ import { fetchSqliteJson } from "./sqliteBackendStatusService";
 const LOCAL_AUTH_TOKEN_KEY = "ims.sqlite.authToken";
 const LOCAL_AUTH_USER_KEY = "ims.sqlite.authUser";
 
-export const AUTH_MODE = import.meta.env.VITE_AUTH_MODE === "sqlite" ? "sqlite" : "firebase";
+const normalizeAuthMode = (value = "") => {
+  const mode = String(value || "").trim().toLowerCase();
+  return mode === "firebase" ? "firebase" : "sqlite";
+};
+
+export const AUTH_MODE = normalizeAuthMode(import.meta.env.VITE_AUTH_MODE);
 export const isSqliteAuthMode = () => AUTH_MODE === "sqlite";
+
+export const validateLocalPasswordPolicy = (password = "") => {
+  const value = String(password || "");
+  if (value.length < 8) return "Password minimal 8 karakter.";
+  if (!/[A-Za-z]/.test(value) || !/\d/.test(value)) return "Password wajib memakai huruf dan angka.";
+  return "";
+};
 
 export const getStoredLocalAuthToken = () => {
   if (typeof window === "undefined") return "";
@@ -95,5 +107,39 @@ export const createLocalBootstrapAdmin = async (values = {}) => {
 
 export const getLocalAuthStatus = async () => {
   const result = await fetchSqliteJson("/api/auth/status");
+  return result?.data || null;
+};
+
+
+export const listLocalUsers = async () => {
+  const result = await fetchSqliteJson("/api/auth/users", {
+    headers: authHeaders(),
+  });
+  return result?.data || [];
+};
+
+export const createLocalUser = async (values = {}) => {
+  const result = await fetchSqliteJson("/api/auth/users", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(values),
+  });
+  return result?.data || null;
+};
+
+export const updateLocalUser = async (userId, values = {}) => {
+  const result = await fetchSqliteJson(`/api/auth/users/${userId}`, {
+    method: "PUT",
+    headers: authHeaders(),
+    body: JSON.stringify(values),
+  });
+  return result?.data || null;
+};
+
+export const deleteLocalUser = async (userId) => {
+  const result = await fetchSqliteJson(`/api/auth/users/${userId}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
   return result?.data || null;
 };

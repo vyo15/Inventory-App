@@ -8,7 +8,10 @@ import {
 } from "firebase/firestore";
 
 import { db } from "../../../firebase";
-import { normalizeSupplierRecord } from "../../../services/MasterData/suppliersService";
+import {
+  generateSupplierCode as generateFirebaseSupplierCode,
+  normalizeSupplierRecord,
+} from "../../../services/MasterData/suppliersService";
 
 const SUPPLIERS_COLLECTION = "supplierPurchases";
 
@@ -39,6 +42,8 @@ export const getSupplierById = async (supplierId) => {
   const snapshot = await getDoc(doc(db, SUPPLIERS_COLLECTION, supplierId));
   return snapshot.exists() ? toSupplierRecord(snapshot) : null;
 };
+
+export const generateSupplierCode = () => generateFirebaseSupplierCode();
 
 export const createSupplier = unsupportedWrite;
 export const updateSupplier = unsupportedWrite;

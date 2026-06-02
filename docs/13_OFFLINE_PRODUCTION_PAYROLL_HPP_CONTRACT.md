@@ -1,3 +1,8 @@
+<!--
+PATCH A-B NOTE — 2026-06-02:
+Dokumen ini adalah arsip historis Batch offline Dexie/IndexedDB. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime Dexie/IndexedDB, sync_queue, conflict resolver, atau backup JSON IndexedDB dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+-->
+
 # Offline Production, Payroll, dan HPP Contract
 
 Status: **Batch 41-44 / GUARDED / Firebase-primary / read-only snapshot only**.
@@ -220,3 +225,26 @@ Belum disarankan:
 - Offline raw material consumption.
 - Offline stock mutation dari production.
 - Runtime production draft UI sebelum ada batch UI/field approval terpisah.
+
+## Update C8 SQLite Production Foundation
+
+Endpoint foundation baru:
+
+```text
+/api/production/steps
+/api/production/employees
+/api/production/profiles
+/api/production/boms
+/api/production/planning
+/api/production/orders
+/api/production/work-logs
+/api/production/payrolls
+```
+
+Status: storage/foundation guarded.
+
+Batasan:
+
+- Material consume final belum boleh terjadi dari draft SQLite.
+- Work log final, payroll final/paid, dan HPP final masih harus mengikuti rule existing: material actual + payroll final/paid.
+- BOM SQLite foundation tidak boleh membuat HPP final otomatis sampai audit produksi selesai.

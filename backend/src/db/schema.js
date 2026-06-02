@@ -1,4 +1,4 @@
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 const TABLES = {
   SCHEMA_META: "schema_meta",
@@ -14,6 +14,7 @@ const TABLES = {
   CUSTOMERS: "customers",
   CATEGORIES: "categories",
   SUPPLIERS: "suppliers",
+  PRICING_RULES: "pricing_rules",
 };
 
 module.exports = { SCHEMA_VERSION, TABLES };

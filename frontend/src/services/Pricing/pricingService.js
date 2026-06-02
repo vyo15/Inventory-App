@@ -5,6 +5,45 @@ import { collection, doc, Timestamp, writeBatch } from "firebase/firestore";
 
 // SECTION: import koneksi firebase
 import { db } from "../../firebase";
+import * as sqlitePricingRulesAdapter from "../../data/adapters/sqlite/sqlitePricingRulesAdapter";
+
+
+
+const SQLITE_REPOSITORY_MODES = ["sqlite", "sqlite_sidecar", "local_sqlite"];
+const getPricingRulesRepositoryMode = () => String(
+  import.meta.env.VITE_PRICING_RULES_REPOSITORY_MODE || "sqlite"
+).toLowerCase();
+
+export const isSqlitePricingRulesRepositoryMode = () =>
+  SQLITE_REPOSITORY_MODES.includes(getPricingRulesRepositoryMode());
+
+export const listPricingRulesFromRepository = async () => {
+  if (!isSqlitePricingRulesRepositoryMode()) {
+    throw new Error("Pricing Rules repository masih memakai Firebase legacy.");
+  }
+  return sqlitePricingRulesAdapter.listPricingRules();
+};
+
+export const createPricingRuleInRepository = async (payload = {}) => {
+  if (!isSqlitePricingRulesRepositoryMode()) {
+    throw new Error("Pricing Rules repository masih memakai Firebase legacy.");
+  }
+  return sqlitePricingRulesAdapter.createPricingRule(payload);
+};
+
+export const updatePricingRuleInRepository = async (ruleId, payload = {}) => {
+  if (!isSqlitePricingRulesRepositoryMode()) {
+    throw new Error("Pricing Rules repository masih memakai Firebase legacy.");
+  }
+  return sqlitePricingRulesAdapter.updatePricingRule(ruleId, payload);
+};
+
+export const deletePricingRuleFromRepository = async (ruleId) => {
+  if (!isSqlitePricingRulesRepositoryMode()) {
+    throw new Error("Pricing Rules repository masih memakai Firebase legacy.");
+  }
+  return sqlitePricingRulesAdapter.deletePricingRule(ruleId);
+};
 
 // SECTION: helper ubah value ke number aman
 const toNumber = (value) => {
