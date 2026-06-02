@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { Col, Input, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
+import { Button, Col, Drawer, Input, Select, Space, Tag, Tooltip, Typography, message } from "antd";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import StockAdjustmentPanel from "./components/StockAdjustmentPanel";
 import { getInventoryLogs } from "../../services/Inventory/inventoryService";
 import { formatNumberId } from "../../utils/formatters/numberId";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import { buildPurchaseLogNoteDisplayMeta } from "../../utils/purchases/purchaseNoteDisplay";
+import { EyeOutlined } from "@ant-design/icons";
 
 const { Text } = Typography;
 
@@ -500,6 +502,7 @@ const StockManagement = () => {
   const [search, setSearch] = useState("");
   const [directionFilter, setDirectionFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
+  const [selectedStockLogDetail, setSelectedStockLogDetail] = useState(null);
 
   // =========================
   // SECTION: Load inventory logs
@@ -589,6 +592,24 @@ const StockManagement = () => {
       return matchSearch && matchDirection && matchSource;
     });
   }, [directionFilter, normalizedHistory, search, sourceFilter]);
+
+  // =========================
+  // SECTION: Detail read-only inventory log untuk mobile card
+  // Fungsi:
+  // - membuka drawer detail dari kartu mobile riwayat stok tanpa membuat mutation baru.
+  // Hubungan flow:
+  // - hanya memakai record inventory log yang sudah terbaca di tabel; tidak fetch/write stock, purchase, sales, return, atau produksi.
+  // Status:
+  // - AKTIF sebagai UI audit ringkas di mobile.
+  // - GUARDED karena drawer ini tidak boleh menjadi entry point perubahan stok.
+  // =========================
+  const openStockLogDetail = (record) => {
+    setSelectedStockLogDetail(record);
+  };
+
+  const closeStockLogDetail = () => {
+    setSelectedStockLogDetail(null);
+  };
 
   const summaryItems = useMemo(
     () => [
@@ -764,6 +785,60 @@ const StockManagement = () => {
     [],
   );
 
+
+  const stockHistoryMobileCardConfig = {
+    title: (record) => record.itemName || "-",
+    subtitle: (record) => [
+      formatLogDate(record.timestamp),
+      record.itemTypeLabel || resolveItemTypeLabel(record.collectionName),
+      record.variantLabelResolved ? `Varian: ${record.variantLabelResolved}` : null,
+    ].filter(Boolean),
+    tags: (record) => [
+      <Tag key="direction" color={record.directionMeta?.color || "default"}>
+        {record.directionMeta?.label || "-"}
+      </Tag>,
+      <Tag key="source" color={record.sourceMeta?.color || "default"}>
+        {record.sourceMeta?.label || "-"}
+      </Tag>,
+    ],
+    meta: [
+      {
+        label: "Qty",
+        value: (record) => (
+          <Text
+            strong
+            style={{ color: record.directionMeta?.value === "in" ? "var(--ims-color-success-text)" : "var(--ims-color-danger-text)" }}
+          >
+            {formatLogQuantityWithUnit(record.quantityChange, record)}
+          </Text>
+        ),
+      },
+      {
+        label: "Referensi",
+        value: (record) => {
+          const primaryReference = Array.isArray(record.referenceItems) ? record.referenceItems[0] : null;
+          return primaryReference?.businessReference || primaryReference?.label || "-";
+        },
+      },
+    ],
+    content: (record) => {
+      const noteMeta = record.noteDisplayMeta || buildPurchaseLogNoteDisplayMeta(record.noteText);
+      if (!noteMeta.fullNote || noteMeta.fullNote === "-") return null;
+
+      return <span className="ims-note-preview">{noteMeta.fullNote}</span>;
+    },
+    actions: (record) => (
+      <Button
+        className="ims-action-button"
+        icon={<EyeOutlined />}
+        size="small"
+        onClick={() => openStockLogDetail(record)}
+      >
+        Detail
+      </Button>
+    ),
+  };
+
   return (
     <>
       <PageHeader
@@ -827,9 +902,8 @@ const StockManagement = () => {
         subtitle={`Audit operasional. ${STOCK_SNAPSHOT_COLUMN_NOTE}`}
         extra={<Tag color="purple">{formatNumberId(filteredHistory.length)} baris</Tag>}
       >
-        <DataRefreshIndicator loading={loading} dataSource={filteredHistory} />
-        <Table
-          // AKTIF / GUARDED UI: class standar hanya menyamakan surface riwayat stok; dataSource, columns, dan flow inventory log tidak diubah.
+        <DataTableView
+          // AKTIF / GUARDED UI: DataTableView hanya mengganti renderer mobile card; dataSource, columns, dan flow inventory log tidak diubah.
           className="app-data-table"
           rowKey="id"
           columns={columns}
@@ -838,6 +912,8 @@ const StockManagement = () => {
           locale={{
             emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada riwayat mutasi stok." />),
           }}
+          loading={loading}
+          mobileCardConfig={stockHistoryMobileCardConfig}
         />
       </PageSection>
 
@@ -856,6 +932,66 @@ const StockManagement = () => {
         ========================= */}
         <StockAdjustmentPanel onAdjustmentSaved={fetchHistory} />
       </PageSection>
+
+      <Drawer
+        title="Detail Riwayat Stok"
+        open={Boolean(selectedStockLogDetail)}
+        onClose={closeStockLogDetail}
+        width="min(100vw, 420px)"
+      >
+        {selectedStockLogDetail ? (
+          <Space direction="vertical" size={14} style={{ width: "100%" }}>
+            <div className="ims-cell-stack">
+              <Text type="secondary">Tanggal</Text>
+              <Text strong>{formatLogDate(selectedStockLogDetail.timestamp)}</Text>
+            </div>
+            <div className="ims-cell-stack">
+              <Text type="secondary">Item</Text>
+              <Text strong>{selectedStockLogDetail.itemName || "-"}</Text>
+              <Text type="secondary">
+                {selectedStockLogDetail.itemTypeLabel || resolveItemTypeLabel(selectedStockLogDetail.collectionName)}
+                {selectedStockLogDetail.variantLabelResolved ? ` • Varian: ${selectedStockLogDetail.variantLabelResolved}` : ""}
+              </Text>
+            </div>
+            <Space wrap>
+              <Tag color={selectedStockLogDetail.directionMeta?.color || "default"}>
+                {selectedStockLogDetail.directionMeta?.label || "-"}
+              </Tag>
+              <Tag color={selectedStockLogDetail.sourceMeta?.color || "default"}>
+                {selectedStockLogDetail.sourceMeta?.label || "-"}
+              </Tag>
+            </Space>
+            <div className="ims-cell-stack">
+              <Text type="secondary">Qty</Text>
+              <Text
+                strong
+                style={{ color: selectedStockLogDetail.directionMeta?.value === "in" ? "var(--ims-color-success-text)" : "var(--ims-color-danger-text)" }}
+              >
+                {formatLogQuantityWithUnit(selectedStockLogDetail.quantityChange, selectedStockLogDetail)}
+              </Text>
+            </div>
+            <div className="ims-cell-stack">
+              <Text type="secondary">Referensi Audit</Text>
+              {Array.isArray(selectedStockLogDetail.referenceItems) && selectedStockLogDetail.referenceItems.length > 0 ? (
+                <Space direction="vertical" size={6}>
+                  {selectedStockLogDetail.referenceItems.map((item) => (
+                    <div key={`${item.label}-${item.referenceId || item.detail}`} className="ims-cell-stack ims-cell-stack-tight">
+                      <Text strong>{item.label}</Text>
+                      {item.detail ? <Text type="secondary">{item.detail}</Text> : null}
+                    </div>
+                  ))}
+                </Space>
+              ) : (
+                <Text type="secondary">-</Text>
+              )}
+            </div>
+            <div className="ims-cell-stack">
+              <Text type="secondary">Catatan</Text>
+              <Text>{selectedStockLogDetail.noteText || "-"}</Text>
+            </div>
+          </Space>
+        ) : null}
+      </Drawer>
     </>
   );
 };

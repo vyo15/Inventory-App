@@ -444,3 +444,34 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 - Popup sukses/error harus tetap muncul setelah modal konfirmasi tertutup, terutama pada Reset Maintenance dan Offline Database Center.
 - Error popup boleh menyediakan tombol salin detail, tetapi isi detail harus user-facing dan tidak boleh menampilkan Firestore technical ID, stack trace panjang, secret, credential, atau payload mentah.
 - Popup tidak menggantikan confirm guard. Aksi destructive tetap wajib preview + keyword confirmation sebelum proses berjalan.
+
+## Standar DataTableView Mobile Card
+
+- Tabel operasional yang sering dibuka di HP harus memakai `DataTableView` dengan `mobileCardConfig`, bukan memaksa user scroll kanan-kiri untuk melihat kolom penting.
+- Desktop tetap memakai AntD `Table` existing; mode kartu hanya aktif di layar mobile lewat CSS `.ims-data-table-view--mobile-card` sehingga konfigurasi kolom desktop, sort/filter/action handler, dan pagination desktop tidak berubah.
+- Isi kartu mobile harus ringkas:
+  - `title`: nama/kode utama yang mudah dikenali user.
+  - `subtitle`: tanggal, customer/supplier/kategori, atau satuan utama.
+  - `tags`: status/channel/type secukupnya.
+  - `meta`: maksimal informasi kunci seperti nominal, stok, qty, role, atau status.
+  - `content`: ringkasan item/stock bila memang penting.
+  - `actions`: gunakan handler existing; jangan membuat handler baru di mobile card.
+- Jangan menampilkan Firestore technical ID sebagai judul/subtitle kartu. Gunakan referensi bisnis manusiawi seperti kode transaksi, kode customer/supplier, atau nama item.
+- Mobile card adalah presentational-only. Jangan memasukkan query, mutation, stock update, cash ledger update, purchase/sales/return commit, payroll/HPP, reset, route guard, atau role guard ke `DataTableView`.
+- Area produksi yang sudah memakai mobile card UI-only: `ProductionEmployees`, `ProductionOrders`, `ProductionWorkLogs`, `ProductionBoms`, dan `SemiFinishedMaterials`. Semua action mobile harus tetap memanggil handler existing pada page, bukan membuat flow baru untuk stok/material usage/payroll/HPP.
+- Jika halaman report/utility kompleks masih membutuhkan tabel scroll, boleh dibiarkan sampai ada audit mobile khusus.
+
+### Detail drawer untuk mobile card operasional
+
+- Kartu mobile untuk data audit/transaksi boleh memiliki tombol `Detail` / `Lihat Detail` yang membuka drawer read-only bila informasi utama tidak muat di kartu.
+- Drawer detail wajib memakai data record yang sudah ada di tabel/page state; jangan membuat mutation, re-query besar, atau workflow baru dari tombol detail mobile.
+- Untuk stok dan penyesuaian stok, drawer detail hanya boleh menampilkan audit read-only: tanggal, item, arah, qty, referensi, alasan, dan catatan.
+- Untuk Sales/Purchases, drawer detail hanya boleh menampilkan ringkasan transaksi dan item. Jangan menambahkan cancel/delete/edit/commit baru dari drawer mobile.
+- Label mode data di kartu master data harus user-facing. Hindari enum teknis seperti `SQLITE_SIDECAR` sebagai teks utama; gunakan copy seperti `Data Lokal`, `SQLite Lokal`, atau `Firebase Fallback`.
+
+### Standar tabel detail/report setelah patch mobile detail
+
+- Tabel detail/drawer yang sederhana boleh memakai `DataTableView + mobileCardConfig` agar data penting langsung terbaca di HP.
+- Tabel report yang masih dibutuhkan penuh di desktop tetap mempertahankan `columns` existing; kartu mobile hanya ringkasan baca cepat, bukan pengganti data desktop.
+- Untuk tabel utility/reset/offline yang kompleks, prioritas aman adalah scroll lokal pada wrapper tabel. Jangan ubah workflow destructive/reset, sync, atau audit hanya demi tampilan mobile.
+- Konfigurasi kartu mobile wajib memanggil handler existing untuk action. Jangan membuat handler mobile baru yang melewati guard/confirm/status flow.

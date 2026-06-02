@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Col, DatePicker, Table, Tag, message } from "antd";
+import { Button, Col, DatePicker, Tag, message } from "antd";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { fetchSalesReportData } from "../../services/Laporan/reportsService";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import {
   buildSalesChannelSummary,
   getSalesChannelLabel,
@@ -210,6 +211,19 @@ const SalesReport = () => {
     [],
   );
 
+  const salesChannelSummaryMobileCardConfig = useMemo(
+    () => ({
+      title: (record) => record.channel || "Channel penjualan",
+      subtitle: (record) => [record.groupLabel, `${formatNumberId(record.transactionCount)} transaksi`],
+      meta: [
+        { label: "Omzet", value: (record) => formatCurrencyId(record.totalAmount) },
+        { label: "Selesai", value: (record) => `${formatCurrencyId(record.completedAmount)} / ${formatNumberId(record.completedCount)} trx` },
+        { label: "Pending", value: (record) => `${formatCurrencyId(record.pendingAmount)} / ${formatNumberId(record.pendingCount)} trx` },
+      ],
+    }),
+    [],
+  );
+
   // =========================
   // SECTION: Export helper
   // =========================
@@ -258,6 +272,33 @@ const SalesReport = () => {
     });
     message.success("Laporan penjualan berhasil diekspor ke Excel.");
   };
+
+  const salesReportMobileCardConfig = useMemo(
+    () => ({
+      title: (record) => getSalesInternalReference(record),
+      subtitle: (record) => [
+        formatDateId(record.date, true),
+        record.customerName || "Tanpa pelanggan",
+        getSalesChannelLabel(record.salesChannel),
+      ],
+      tags: (record) => {
+        const statusColors = { Selesai: "green", Dikirim: "orange", Diproses: "blue" };
+        return <Tag color={statusColors[record.status] || "default"}>{record.status || "-"}</Tag>;
+      },
+      meta: [
+        { label: "Total", value: (record) => formatCurrencyId(record.total) },
+        { label: "Marketplace/Resi", value: (record) => getSalesMarketplaceReference(record) },
+      ],
+      subtext: (record) => {
+        const items = Array.isArray(record.items) ? record.items : [];
+        if (!items.length) return "Item: -";
+        const firstItem = items[0];
+        const moreCount = Math.max(items.length - 1, 0);
+        return `Item: ${firstItem.itemName || "-"} (${formatNumberId(firstItem.quantity)} ${firstItem.unit || "pcs"})${moreCount ? ` +${formatNumberId(moreCount)} item` : ""}`;
+      },
+    }),
+    [],
+  );
 
   const columns = useMemo(
     () => [
@@ -377,7 +418,7 @@ const SalesReport = () => {
         title="Performa Channel"
         subtitle="Ringkasan omzet per channel pada periode laporan."
       >
-        <Table
+        <DataTableView
           className="app-data-table"
           dataSource={salesChannelSummaryItems}
           columns={salesChannelSummaryColumns}
@@ -386,7 +427,9 @@ const SalesReport = () => {
           size="small"
           tableLayout="fixed"
           loading={loading}
+          showRefreshIndicator={false}
           scroll={{ x: 650 }}
+          mobileCardConfig={salesChannelSummaryMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(
               loading,
@@ -408,14 +451,16 @@ const SalesReport = () => {
           </Button>
         }
       >
-        <DataRefreshIndicator loading={loading} dataSource={salesData} />
-        <Table
+        <DataTableView
           // AKTIF / GUARDED UI: class standar hanya visual; sales status, income recognition, dan report calculation tidak diubah.
+          loading={loading}
+          showRefreshIndicator
           className="app-data-table"
           dataSource={salesData}
           columns={columns}
           rowKey="id"
           scroll={{ x: 1245 }}
+          mobileCardConfig={salesReportMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data penjualan untuk ditampilkan." />),
           }}

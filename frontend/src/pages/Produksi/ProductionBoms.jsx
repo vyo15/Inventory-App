@@ -13,6 +13,7 @@ import ProductionSummaryCards from '../../components/Produksi/shared/ProductionS
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
 import EditableLineSection from '../../components/Produksi/shared/EditableLineSection';
 import ReadonlyLineSection from '../../components/Produksi/shared/ReadonlyLineSection';
+import DataTableView from '../../components/Layout/Table/DataTableView';
 import {
   Alert,
   Badge,
@@ -32,7 +33,6 @@ import {
   Select,
   Space,
   Switch,
-  Table,
   Tag,
   Tooltip,
   Typography,
@@ -837,6 +837,74 @@ const ProductionBoms = () => {
     },
   ];
 
+  // IMS NOTE [AKTIF/GUARDED UI] - Mobile card BOM Produksi.
+  // Fungsi: membuat daftar BOM dan grouped BOM tetap nyaman dibaca di HP.
+  // Guardrail: hanya presentasi; materialLines, stepLines, estimasi biaya, default BOM, dan toggle status tetap memakai handler existing.
+  const bomMobileCardConfig = {
+    title: (record) => record.name || "-",
+    subtitle: (record) => [
+      record.targetName || "Target belum tercatat",
+      record.description || null,
+    ].filter(Boolean),
+    tags: (record) => [
+      <Tag key="target-type" color="blue" style={compactTagStyle}>
+        {BOM_TARGET_TYPE_MAP[record.targetType] || "-"}
+      </Tag>,
+      record.isActive ? (
+        <Tag key="status" color="green" style={compactTagStyle}>Aktif</Tag>
+      ) : (
+        <Tag key="status" color="default" style={compactTagStyle}>Nonaktif</Tag>
+      ),
+      record.isDefault ? <Tag key="default" color="purple" style={compactTagStyle}>Default</Tag> : null,
+    ].filter(Boolean),
+    meta: [
+      { label: "Material", value: (record) => formatNumber(record.materialLines?.length || 0) },
+      { label: "Step", value: (record) => formatNumber(record.stepLines?.length || 0) },
+      {
+        label: "Output Batch",
+        value: (record) => `${formatNumber(record.batchOutputQty || 0)} ${record.targetUnit || "pcs"}`,
+      },
+      { label: "Estimasi", value: (record) => formatCurrency(record.totalCostEstimate || 0) },
+    ],
+    content: (record) => [
+      `Material: ${formatCurrency(record.materialCostEstimate || 0)}`,
+      `Upah step: ${formatCurrency(record.laborCostEstimate || 0)}`,
+      Number(record.overheadCostEstimate || 0) > 0
+        ? `Overhead: ${formatCurrency(record.overheadCostEstimate || 0)}`
+        : null,
+    ].filter(Boolean),
+    actions: (record) => (
+      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+        <Button
+          className="ims-action-button ims-action-button--block"
+          size="small"
+          icon={<EyeOutlined />}
+          onClick={() => handleViewDetail(record)}
+        >
+          Detail
+        </Button>
+        <Button
+          className="ims-action-button ims-action-button--block"
+          size="small"
+          icon={<EditOutlined />}
+          onClick={() => handleEdit(record)}
+        >
+          Edit
+        </Button>
+        <Popconfirm
+          title={record.isActive ? "Nonaktifkan BOM ini?" : "Aktifkan BOM ini?"}
+          onConfirm={() => handleToggleActive(record)}
+          okText="Ya"
+          cancelText="Batal"
+        >
+          <Button className="ims-action-button ims-action-button--block" size="small">
+            {record.isActive ? "Nonaktifkan" : "Aktifkan"}
+          </Button>
+        </Popconfirm>
+      </Space>
+    ),
+  };
+
   return (
     <div>
       <ProductionPageHeader
@@ -926,6 +994,7 @@ const ProductionBoms = () => {
         filteredData={filteredData}
         listViewMode={listViewMode}
         columns={columns}
+        mobileCardConfig={bomMobileCardConfig}
         groupedFilteredData={groupedFilteredData}
         shouldAutoOpenBomGroups={shouldAutoOpenBomGroups}
       />
@@ -1366,12 +1435,23 @@ const ProductionBoms = () => {
 
             <Divider orientation="left">Komposisi Bahan</Divider>
 
-            <Table
+            <DataTableView
               rowKey={(record) => record.id}
               pagination={false}
               size="small"
+              showRefreshIndicator={false}
               dataSource={selectedBom.materialLines || []}
               locale={{ emptyText: "Belum ada material line" }}
+              mobileCardConfig={{
+                title: (record) => record.itemName || "Material",
+                tags: (record) => <Tag>{BOM_MATERIAL_ITEM_TYPE_MAP[record.itemType] || "-"}</Tag>,
+                meta: [
+                  { label: "Qty Total", value: (record) => formatNumber(record.totalRequiredQty) },
+                  { label: "Cost", value: (record) => formatCurrency(record.totalCostSnapshot) },
+                  { label: "Cost/Unit", value: (record) => `${formatHppUnitCurrencyId(record.costPerUnitSnapshot)} / ${record.unit || "pcs"}` },
+                ],
+                subtext: (record) => resolveBomCostSourceLabel(record.costSourceSnapshot),
+              }}
               columns={[
                 {
                   title: "Item",
@@ -1416,12 +1496,20 @@ const ProductionBoms = () => {
 
             <Divider orientation="left">Alur Step Produksi</Divider>
 
-            <Table
+            <DataTableView
               rowKey={(record) => record.id}
               pagination={false}
               size="small"
+              showRefreshIndicator={false}
               dataSource={selectedBom.stepLines || []}
               locale={{ emptyText: "Belum ada step line" }}
+              mobileCardConfig={{
+                title: (record) => `Langkah ${formatNumber(record.sequenceNo)} - ${record.stepName || "-"}`,
+                meta: [
+                  { label: "Estimasi Upah", value: (record) => formatCurrency(record.laborCostEstimateSnapshot || 0) },
+                ],
+                subtext: (record) => record.notes || null,
+              }}
               columns={[
                 {
                   title: "Urutan Langkah",

@@ -16,7 +16,6 @@ import {
   Select,
   Space,
   Switch,
-  Table,
   Tag,
   Typography,
   message,
@@ -607,6 +606,63 @@ const RawMaterials = () => {
     },
   ];
 
+  const rawMaterialMobileCardConfig = {
+    title: (record) => record.name || '-',
+    subtitle: (record) => [
+      record.supplierName || 'Supplier belum tercatat',
+      record.stockUnit ? `Satuan: ${record.stockUnit}` : null,
+    ].filter(Boolean),
+    tags: (record) => {
+      const statusMeta = getRawMaterialStatusMeta(record);
+      return [
+        <Tag key="variant" color={record.hasVariants ? 'blue' : 'default'}>
+          {record.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
+        </Tag>,
+        record.hasVariants ? <Tag key="variant-count" color="purple">{formatNumberID(record.variantCount || 0)} varian</Tag> : null,
+        <Tag key="status" color={statusMeta.color}>{statusMeta.label}</Tag>,
+      ].filter(Boolean);
+    },
+    meta: [
+      { label: 'Restock', value: (record) => `${formatCurrencyId(record.restockReferencePrice || 0)} / ${record.stockUnit || '-'}` },
+      { label: 'Modal', value: (record) => `${record.averageActualUnitCost ? formatCurrencyId(record.averageActualUnitCost) : '-'} / ${record.stockUnit || '-'}` },
+      { label: 'Jual', value: (record) => `${formatCurrencyId(record.sellingPrice || 0)} / ${record.stockUnit || '-'}` },
+      { label: 'Pricing', value: (record) => getRuleModeLabel(record.pricingMode, record.pricingRuleId, pricingRuleMap) },
+    ],
+    content: (record) => (
+      <StockDisplayBlock
+        record={record}
+        unit={record.stockUnit || 'pcs'}
+        getVariantLabel={(variant, index) => variant.name || `Varian ${index + 1}`}
+        className="ims-cell-stack ims-cell-stack-tight"
+        metaClassName="ims-cell-meta"
+        minStockThreshold={Number(record.minStock || 0)}
+      />
+    ),
+    actions: (record) => (
+      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+        <Button className="ims-action-button ims-action-button--block" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
+          Detail
+        </Button>
+        <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          Edit
+        </Button>
+        <Popconfirm
+          title={record.isActive === false ? 'Aktifkan kembali bahan baku?' : 'Nonaktifkan bahan baku?'}
+          description={
+            record.isActive === false
+              ? 'Bahan baku akan aktif kembali untuk dipakai pada transaksi baru.'
+              : 'Bahan baku tidak akan muncul sebagai pilihan data baru, tetapi histori tetap aman.'
+          }
+          okText="Ya"
+          cancelText="Batal"
+          onConfirm={() => handleToggleActive(record)}
+        >
+          <Button className="ims-action-button ims-action-button--block" size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
+        </Popconfirm>
+      </Space>
+    ),
+  };
+
   return (
     <div className="page-container">
       {/* ---------------------------------------------------------------------
@@ -695,6 +751,7 @@ const RawMaterials = () => {
           tableLayout="fixed"
           pagination={{ pageSize: 10 }}
           emptyText={<Empty description="Belum ada data bahan baku" />}
+          mobileCardConfig={rawMaterialMobileCardConfig}
         />
       </PageSection>
 
@@ -1299,11 +1356,31 @@ const RawMaterials = () => {
 
               <Card size="small" title={selectedMaterial.hasVariants ? 'Varian Bahan Baku' : 'Stok Master'}>
                 {selectedMaterial.hasVariants ? (
-                  <Table
+                  <DataTableView
                     rowKey={(variant, index) => `${selectedMaterial.id}-${variant.variantKey || variant.name}-${index}`}
                     pagination={false}
                     size="small"
+                    showRefreshIndicator={false}
                     dataSource={selectedMaterial.variants || []}
+                    mobileCardConfig={{
+                      title: (variant) => variant.name || variant.variantLabel || variant.variantKey || 'Varian',
+                      tags: (variant) => (
+                        <Tag color={variant.isActive === false ? 'default' : 'green'}>
+                          {variant.isActive === false ? 'Nonaktif' : 'Aktif'}
+                        </Tag>
+                      ),
+                      meta: [
+                        { label: 'Stok', value: (variant) => formatStockWithUnit(variant.currentStock || 0, selectedMaterial.stockUnit || 'pcs') },
+                        { label: 'Reserved', value: (variant) => formatStockWithUnit(variant.reservedStock || 0, selectedMaterial.stockUnit || 'pcs') },
+                        {
+                          label: 'Tersedia',
+                          value: (variant) => formatStockWithUnit(
+                            Math.max(Number(variant.currentStock || 0) - Number(variant.reservedStock || 0), 0),
+                            selectedMaterial.stockUnit || 'pcs',
+                          ),
+                        },
+                      ],
+                    }}
                     columns={[
                       {
                         title: selectedMaterial.variantLabel || 'Varian',

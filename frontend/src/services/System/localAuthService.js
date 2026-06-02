@@ -27,7 +27,7 @@ export const getStoredLocalAuthUser = () => {
   if (typeof window === "undefined") return null;
   try {
     return JSON.parse(window.localStorage.getItem(LOCAL_AUTH_USER_KEY) || "null");
-  } catch (_error) {
+  } catch {
     return null;
   }
 };

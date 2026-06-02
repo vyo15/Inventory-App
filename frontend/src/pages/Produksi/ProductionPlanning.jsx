@@ -32,7 +32,6 @@ import {
   Row,
   Select,
   Space,
-  Table,
   Tag,
   Typography,
 } from "antd";
@@ -46,6 +45,7 @@ import {
 } from "@ant-design/icons";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import {
   cancelProductionPlan,
@@ -65,7 +65,7 @@ import {
   formatQuantityId,
   parseIntegerIdInput,
 } from "../../utils/formatters/numberId";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -816,6 +816,50 @@ const ProductionPlanning = () => {
     },
   ];
 
+  const planningMobileCardConfig = {
+    title: (record) => resolveDisplayReference(record, { fields: ["planCode", "code"], fallback: "Planning" }),
+    subtitle: (record) => [
+      record.title || "Rencana Produksi",
+      `${formatDateDisplay(record.periodStartDate)} - ${formatDateDisplay(record.periodEndDate)}`,
+      record.targetItemName || "Target belum diisi",
+    ],
+    tags: (record) => {
+      const meta = getStatusMeta(record.status);
+      return [
+        <Badge key="status" status={meta.badge} text={meta.label} className="ims-badge-inline" />,
+        <Tag key="priority" color={getPriorityMeta(record.priority).color}>{getPriorityMeta(record.priority).label}</Tag>,
+      ];
+    },
+    meta: [
+      { label: "Target", value: (record) => `${formatQuantityId(record.targetQty)} ${record.targetUnit || "pcs"}` },
+      { label: "Aktual", value: (record) => `${formatQuantityId(record.actualCompletedQty)} ${record.targetUnit || "pcs"}` },
+      { label: "Sisa", value: (record) => `${formatQuantityId(record.remainingQty)} ${record.targetUnit || "pcs"}` },
+      { label: "Deadline", value: (record) => formatDateDisplay(record.dueDate) },
+    ],
+    content: (record) => (
+      <Progress
+        percent={Math.min(Number(record.progressPercent || 0), 100)}
+        size="small"
+        format={(percent) => formatPercentId(percent)}
+      />
+    ),
+    actions: (record) => (
+      <Space wrap className="ims-action-group">
+        <Button size="small" className="ims-action-button" icon={<EyeOutlined />} onClick={() => handleOpenDetail(record)}>Detail</Button>
+        <Button
+          size="small"
+          type="primary"
+          className="ims-action-button"
+          icon={<LinkOutlined />}
+          disabled={!canCreatePoFromPlan(record)}
+          onClick={() => handleOpenPoDrawer(record)}
+        >
+          Buat PO
+        </Button>
+      </Space>
+    ),
+  };
+
   return (
     <div className="ims-page">
       {/* AKTIF / GUARDED: header migrated ke shared produksi; flow planning -> order tetap sama tanpa ubah data contract. */}
@@ -870,12 +914,14 @@ const ProductionPlanning = () => {
           </Space>
         }
       >
-        <DataRefreshIndicator loading={loading} dataSource={filteredPlans} />
-        <Table
+        <DataTableView
+          loading={loading}
+          showRefreshIndicator
           rowKey="id"
           columns={columns}
           dataSource={filteredPlans}
           className="app-data-table"
+          mobileCardConfig={planningMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(loading, (
               <Empty description="Belum ada planning produksi untuk filter ini." />

@@ -7,7 +7,6 @@ import {
   Modal,
   Select,
   Space,
-  Table,
   Tag,
   Tooltip,
   Typography,
@@ -44,6 +43,7 @@ import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 const { Text } = Typography;
@@ -586,6 +586,86 @@ const UserManagement = () => {
     },
   ];
 
+  const userMobileCardConfig = {
+    title: (record) => record.displayName || '-',
+    subtitle: (record) => [`@${record.username || '-'}`, record.authUid ? `UID: ${record.authUid}` : 'Auth UID belum tersedia'],
+    tags: (record) => [
+      <Tag key="role" color={getRoleColor(record.role)}>{ROLE_LABELS[record.role] || record.role}</Tag>,
+      <Tag key="status" color={getStatusColor(record.status)}>
+        {USER_STATUS_LABELS[record.status] || record.status}
+      </Tag>,
+    ],
+    meta: [
+      { label: 'Role', value: (record) => ROLE_LABELS[record.role] || record.role || '-' },
+      { label: 'Status', value: (record) => USER_STATUS_LABELS[record.status] || record.status || '-' },
+    ],
+    actions: (record) => {
+      const canManage = canManageUserProfile({
+        actorRole,
+        targetRole: record.role,
+        targetUid: record.authUid,
+        actorUid,
+      });
+      const isSelfProfile = Boolean(actorUid && record.authUid === actorUid);
+      const isLastActiveAdministrator =
+        record.role === ROLES.ADMINISTRATOR &&
+        record.status === USER_STATUS.ACTIVE &&
+        activeAdministratorCount <= 1;
+      const deleteGuardReason = getDeleteGuardReason({
+        canManage,
+        isLastActiveAdministrator,
+        isSelfProfile,
+      });
+      const canDelete = !deleteGuardReason;
+
+      return (
+        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+          <Button
+            className="ims-action-button"
+            icon={<EditOutlined />}
+            disabled={!canManage}
+            onClick={() => openEditModal(record)}
+          >
+            Edit
+          </Button>
+          <Button
+            className="ims-action-button"
+            icon={
+              record.status === USER_STATUS.ACTIVE ? (
+                <StopOutlined />
+              ) : (
+                <CheckCircleOutlined />
+              )
+            }
+            disabled={!canManage}
+            danger={record.status === USER_STATUS.ACTIVE}
+            loading={
+              isUpdatingStatus &&
+              statusChangeRequest?.userRecord?.authUid === record.authUid
+            }
+            onClick={() => handleOpenStatusModal(record)}
+          >
+            {record.status === USER_STATUS.ACTIVE ? 'Nonaktifkan' : 'Aktifkan'}
+          </Button>
+          <Tooltip title={deleteGuardReason || 'Hapus hanya profile Firestore, bukan Firebase Auth user.'}>
+            <span style={{ display: 'block', width: '100%' }}>
+              <Button
+                className="ims-action-button"
+                danger
+                icon={<DeleteOutlined />}
+                disabled={!canDelete}
+                loading={isDeletingProfile && deleteTarget?.authUid === record.authUid}
+                onClick={() => handleOpenDeleteModal(record)}
+              >
+                Hapus Profile
+              </Button>
+            </span>
+          </Tooltip>
+        </Space>
+      );
+    },
+  };
+
   /* =====================================================
   SECTION: User Management Renderer — GUARDED
   Fungsi:
@@ -634,7 +714,8 @@ const UserManagement = () => {
           subtitle="Profile IMS dan aksesnya."
         >
           <DataRefreshIndicator loading={isLoading} dataSource={users} />
-          <Table
+          <DataTableView
+            showRefreshIndicator={false}
             className="app-data-table"
             rowKey="authUid"
             columns={columns}
@@ -642,6 +723,7 @@ const UserManagement = () => {
             pagination={{ pageSize: 10 }}
             tableLayout="fixed"
             locale={{ emptyText: getDataTableEmptyText(isLoading) }}
+            mobileCardConfig={userMobileCardConfig}
           />
         </PageSection>
       </Space>

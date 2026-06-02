@@ -17,7 +17,6 @@ import {
   Space,
   Statistic,
   Switch,
-  Table,
   Tag,
   Tooltip,
   Typography,
@@ -41,8 +40,9 @@ import formatNumber from '../../utils/formatters/numberId';
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
+import DataTableView from '../../components/Layout/Table/DataTableView';
 import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 const ProductionProfiles = () => {
   const [loading, setLoading] = useState(false);
@@ -330,6 +330,43 @@ const ProductionProfiles = () => {
     },
   ];
 
+  const profilesMobileCardConfig = {
+    title: (record) => record.productName || "Produk",
+    subtitle: (record) => [record.profileName || "Profil belum diisi", PRODUCTION_PROFILE_TYPE_MAP[record.profileType] || "Tipe belum diisi"],
+    tags: (record) => [
+      <Badge key="active" status={record.isActive !== false ? "success" : "default"} text={record.isActive !== false ? "Aktif" : "Nonaktif"} />,
+      record.isDefault !== false ? <Tag key="default" color="blue">Default</Tag> : null,
+    ].filter(Boolean),
+    meta: [
+      { label: "Kelopak", value: (record) => formatNumber(record.petalsPerUnit || 0) },
+      { label: "Daun", value: (record) => formatNumber(record.leavesPerUnit || 0) },
+      { label: "Tangkai", value: (record) => formatNumber(record.stemsPerUnit || 0) },
+      { label: "Target Batch", value: (record) => `${formatNumber(record.assemblyTargetOutput || 0)} bunga` },
+    ],
+    actions: (record) => (
+      <Space wrap className="ims-action-group">
+        <Button className="ims-action-button" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>Detail</Button>
+        <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>Edit</Button>
+      </Space>
+    ),
+  };
+
+  const requirementMobileCardConfig = {
+    title: (record) => record.component || "Komponen",
+    meta: [
+      { label: "Qty", value: (record) => formatNumber(record.qty || 0) },
+      { label: "Satuan", value: (record) => record.unit || "-" },
+    ],
+  };
+
+  const yieldMobileCardConfig = {
+    title: (record) => record.material || "Material",
+    meta: [
+      { label: "Output", value: (record) => formatNumber(record.output || 0) },
+      { label: "Basis", value: (record) => record.base || "-" },
+    ],
+  };
+
   return (
     <div className="page-container ims-page">
       {/* AKTIF / GUARDED: migrasi header ke shared produksi, menjaga konsistensi tampilan tanpa mengubah rule profil produksi. */}
@@ -388,13 +425,15 @@ const ProductionProfiles = () => {
             Risiko:
             - Menyembunyikan angka penting tanpa tooltip/detail dapat membuat user salah membaca kebutuhan produksi.
         ===================================================== */}
-        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
-        <Table
+        <DataTableView
+          loading={loading}
+          showRefreshIndicator
           className="ims-table"
           rowKey="id"
           columns={columns}
           dataSource={filteredData}
           pagination={{ pageSize: 10, showSizeChanger: true }}
+          mobileCardConfig={profilesMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada profil produksi" />),
           }}
@@ -472,11 +511,13 @@ Risiko:
             </Card>
 
             <Card size="small" title="Kebutuhan per Produk">
-              <Table
+              <DataTableView
                 size="small"
                 pagination={false}
+                showRefreshIndicator={false}
                 rowKey="key"
                 dataSource={detailRequirementRows(selectedProfile)}
+                mobileCardConfig={requirementMobileCardConfig}
                 columns={[
                   { title: 'Komponen', dataIndex: 'component', key: 'component' },
                   { title: 'Qty', dataIndex: 'qty', key: 'qty', align: 'right', render: (value) => formatNumber(value || 0) },
@@ -486,11 +527,13 @@ Risiko:
             </Card>
 
             <Card size="small" title="Hasil Standar Bahan Awal">
-              <Table
+              <DataTableView
                 size="small"
                 pagination={false}
+                showRefreshIndicator={false}
                 rowKey="key"
                 dataSource={detailYieldRows(selectedProfile)}
+                mobileCardConfig={yieldMobileCardConfig}
                 columns={[
                   { title: 'Material', dataIndex: 'material', key: 'material' },
                   { title: 'Output', dataIndex: 'output', key: 'output', align: 'right', render: (value) => formatNumber(value || 0) },

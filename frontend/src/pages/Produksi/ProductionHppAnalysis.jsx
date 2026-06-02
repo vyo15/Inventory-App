@@ -5,7 +5,7 @@
 // =====================================================
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Col, Empty, Input, Select, Space, Table, Tooltip, Typography, message, Tag } from "antd";
+import { Button, Col, Empty, Input, Select, Space, Tooltip, Typography, message, Tag } from "antd";
 import { FileExcelOutlined } from "@ant-design/icons";
 import { getCompletedProductionWorkLogs } from "../../services/Produksi/productionWorkLogsService";
 import { getAllProductionPayrolls } from "../../services/Produksi/productionPayrollsService";
@@ -14,11 +14,12 @@ import ProductionSummaryCards from "../../components/Produksi/shared/ProductionS
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatDateId } from "../../utils/formatters/dateId";
 import formatNumber from "../../utils/formatters/numberId";
 import formatCurrency, { formatHppUnitCurrencyId } from "../../utils/formatters/currencyId";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveWorkLogLaborCostDisplay } from "../../utils/produksi/productionPayrollRuleHelpers";
 
 // =====================================================
@@ -448,6 +449,29 @@ const ProductionHppAnalysis = () => {
   // Risiko:
   // - Mengubah render ini sembarangan dapat menyembunyikan angka HPP, warning cost, atau konteks Work Log yang dipakai user untuk audit biaya produksi.
   // =====================================================
+  const hppAnalysisMobileCardConfig = {
+    title: (record) => record.workNumber || "Work Log",
+    subtitle: (record) => [
+      record.targetName || "Target belum diisi",
+      resolveTargetTypeLabel(record.targetType),
+      `Selesai: ${formatDateId(record.completedAt, true)}`,
+    ],
+    tags: (record) => [
+      <Tag key="cost-status" color={getHppCostStatusTagColor(record.totalCostStatus)}>{record.totalCostStatus}</Tag>,
+      <Tag key="reconcile" color={getHppReconcileStatusColor(record.hppReconcileStatus)}>{getHppReconcileStatusLabel(record.hppReconcileStatus)}</Tag>,
+    ],
+    meta: [
+      { label: "Good Qty", value: (record) => formatNumber(record.goodQty) },
+      { label: "HPP/Unit", value: (record) => record.isHppFinalReady ? formatHppUnitCurrencyId(record.finalHppPerUnit) : "Belum final" },
+      { label: "Final Cost", value: (record) => record.isHppFinalReady ? formatCurrency(record.finalTotalCost) : "Belum final" },
+      { label: "Preview", value: (record) => formatCurrency(record.previewTotalCost) },
+    ],
+    subtext: (record) => record.stepName ? `Step: ${record.stepName}` : null,
+    content: (record) => Array.isArray(record.costWarnings) && record.costWarnings.length > 0 ? (
+      <span className="ims-cell-meta">{formatNumber(record.costWarnings.length)} warning: {record.costWarnings[0]}</span>
+    ) : <Tag color="green">Cost valid</Tag>,
+  };
+
   const columns = [
     {
       title: "Work Log / Target",
@@ -684,12 +708,14 @@ const ProductionHppAnalysis = () => {
             Risiko:
             - Mengubah table props ini sembarangan dapat membuat angka HPP atau warning cost sulit dibaca pada layar kecil.
         ===================================================== */}
-        <DataRefreshIndicator loading={loading} dataSource={filteredRows} />
-        <Table
+        <DataTableView
+          loading={loading}
+          showRefreshIndicator
           className="app-data-table"
           rowKey="id"
           columns={columns}
           dataSource={filteredRows}
+          mobileCardConfig={hppAnalysisMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data analisis HPP" />),
           }}

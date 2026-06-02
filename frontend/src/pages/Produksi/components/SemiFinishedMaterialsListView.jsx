@@ -1,4 +1,4 @@
-import { Card, Collapse, Empty, Space, Table, Tag, Typography } from "antd";
+import { Card, Collapse, Empty, Space, Tag, Typography } from "antd";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
 import { DataRefreshIndicator } from "../../../components/Layout/Feedback/DataLoadingState";
 import formatNumber from "../../../utils/formatters/numberId";
@@ -10,6 +10,7 @@ const SemiFinishedMaterialsListView = ({
   filteredData,
   listViewMode,
   columns,
+  mobileCardConfig,
   groupedFilteredData,
   shouldAutoOpenSemiGroups,
 }) => (
@@ -28,6 +29,7 @@ const SemiFinishedMaterialsListView = ({
         dataSource={filteredData}
         // AKTIF / GUARDED: primary table memakai layout fixed tanpa horizontal scroll default; stok varian tetap tampil sebagai pill langsung di kolom Stok.
         emptyText={<Empty description="Belum ada data semi finished materials" />}
+        mobileCardConfig={mobileCardConfig}
         pagination={{
           pageSize: 10,
           showSizeChanger: true,
@@ -68,7 +70,8 @@ const SemiFinishedMaterialsListView = ({
                   size="small"
                   title={`${categoryGroup.label} (${formatNumber(categoryGroup.items.length)} item)`}
                 >
-                  <Table
+                  <DataTableView
+                    showRefreshIndicator={false}
                     className="app-data-table"
                     rowKey="id"
                     size="small"
@@ -76,9 +79,8 @@ const SemiFinishedMaterialsListView = ({
                     columns={columns}
                     dataSource={categoryGroup.items}
                     pagination={false}
-                    locale={{
-                      emptyText: <Empty description="Tidak ada item pada kategori ini" />,
-                    }}
+                    emptyText={<Empty description="Tidak ada item pada kategori ini" />}
+                    mobileCardConfig={mobileCardConfig}
                   />
                 </Card>
               ))}

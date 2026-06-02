@@ -3,17 +3,20 @@ import {
   Alert,
   Button,
   DatePicker,
+  Drawer,
   Form,
   Input,
   InputNumber,
   Modal,
   Select,
-  Table,
+  Space,
   Tag,
   Tooltip,
+  Typography,
   message,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
+import DataTableView from "../../../components/Layout/Table/DataTableView";
 import { collection, doc, onSnapshot, runTransaction, Timestamp } from "firebase/firestore";
 import dayjs from "dayjs";
 import { db } from "../../../firebase";
@@ -45,6 +48,7 @@ import { showFormValidationFeedback } from '../../../utils/forms/formValidationF
 // Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const { Option } = Select;
+const { Text } = Typography;
 
 
 // =========================
@@ -326,6 +330,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   const [semiFinishedMaterials, setSemiFinishedMaterials] = useState([]);
   const [finishedProducts, setFinishedProducts] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedAdjustmentDetail, setSelectedAdjustmentDetail] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
 
@@ -420,6 +425,23 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   const openCreateAdjustmentModal = () => {
     form.resetFields();
     setIsModalOpen(true);
+  };
+
+  // =========================
+  // SECTION: Detail read-only adjustment untuk mobile card
+  // Fungsi:
+  // - membuka detail penyesuaian stok dari kartu mobile tanpa mengubah submit adjustment.
+  // Hubungan flow:
+  // - hanya membaca record stock_adjustments yang sudah ada di state panel.
+  // Status:
+  // - AKTIF sebagai UI audit ringkas; tidak melakukan mutation stok/inventory log.
+  // =========================
+  const openAdjustmentDetail = (record) => {
+    setSelectedAdjustmentDetail(record);
+  };
+
+  const closeAdjustmentDetail = () => {
+    setSelectedAdjustmentDetail(null);
   };
 
   // =========================
@@ -882,6 +904,50 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
     });
   }, [stockAdjustmentRecords]);
 
+  const stockAdjustmentMobileCardConfig = {
+    title: (record) => record.itemName || '-',
+    subtitle: (record) => {
+      const itemTypeConfig = resolveStockAdjustmentItemTypeConfig({
+        itemType: record.itemType,
+        collectionName: record.collectionName,
+      });
+      return [
+        record.date?.toDate ? dayjs(record.date.toDate()).format('DD-MM-YYYY') : '-',
+        itemTypeConfig.label,
+        record.variantLabel ? `Varian: ${record.variantLabel}` : null,
+      ].filter(Boolean);
+    },
+    tags: (record) => {
+      const itemTypeConfig = resolveStockAdjustmentItemTypeConfig({
+        itemType: record.itemType,
+        collectionName: record.collectionName,
+      });
+      return [
+        <Tag key="item-type" color={itemTypeConfig.tagColor}>{itemTypeConfig.label}</Tag>,
+        record.adjustmentType === 'in' ? (
+          <Tag key="adjustment-type" color="green">Tambah</Tag>
+        ) : (
+          <Tag key="adjustment-type" color="red">Kurang</Tag>
+        ),
+      ];
+    },
+    meta: [
+      { label: 'Qty', value: (record) => formatQuantityId(record.quantity, record.unit) },
+      { label: 'Tanggal', value: (record) => (record.date?.toDate ? dayjs(record.date.toDate()).format('DD-MM-YYYY') : '-') },
+    ],
+    content: (record) => renderAdjustmentReasonNote(null, record),
+    actions: (record) => (
+      <Button
+        className="ims-action-button"
+        icon={<EyeOutlined />}
+        size="small"
+        onClick={() => openAdjustmentDetail(record)}
+      >
+        Detail
+      </Button>
+    ),
+  };
+
   return (
     <>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
@@ -890,7 +956,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         </Button>
       </div>
 
-      <Table
+      <DataTableView
         // AKTIF / GUARDED UI: class standar menjaga table adjustment solid di light/dark tanpa mengubah submit adjustment atau mutasi stok.
         className="app-data-table"
         rowKey="id"
@@ -898,7 +964,63 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         dataSource={sortedAdjustmentRecords}
         tableLayout="fixed"
         pagination={{ pageSize: 5 }}
+        mobileCardConfig={stockAdjustmentMobileCardConfig}
       />
+
+      <Drawer
+        title="Detail Penyesuaian Stok"
+        open={Boolean(selectedAdjustmentDetail)}
+        onClose={closeAdjustmentDetail}
+        width="min(100vw, 420px)"
+      >
+        {selectedAdjustmentDetail ? (() => {
+          const itemTypeConfig = resolveStockAdjustmentItemTypeConfig({
+            itemType: selectedAdjustmentDetail.itemType,
+            collectionName: selectedAdjustmentDetail.collectionName,
+          });
+          const reasonText = getStockAdjustmentReasonLabel(selectedAdjustmentDetail.reason);
+
+          return (
+            <Space direction="vertical" size={14} style={{ width: "100%" }}>
+              <div className="ims-cell-stack">
+                <Text type="secondary">Tanggal</Text>
+                <Text strong>
+                  {selectedAdjustmentDetail.date?.toDate
+                    ? dayjs(selectedAdjustmentDetail.date.toDate()).format("DD-MM-YYYY")
+                    : "-"}
+                </Text>
+              </div>
+              <div className="ims-cell-stack">
+                <Text type="secondary">Item</Text>
+                <Text strong>{selectedAdjustmentDetail.itemName || "-"}</Text>
+                <Space wrap>
+                  <Tag color={itemTypeConfig.tagColor}>{itemTypeConfig.label}</Tag>
+                  {selectedAdjustmentDetail.variantLabel ? <Tag color="purple">{selectedAdjustmentDetail.variantLabel}</Tag> : null}
+                </Space>
+              </div>
+              <div className="ims-cell-stack">
+                <Text type="secondary">Adjustment</Text>
+                <Space wrap>
+                  {selectedAdjustmentDetail.adjustmentType === "in" ? (
+                    <Tag color="green">Tambah</Tag>
+                  ) : (
+                    <Tag color="red">Kurang</Tag>
+                  )}
+                  <Text strong>{formatQuantityId(selectedAdjustmentDetail.quantity, selectedAdjustmentDetail.unit)}</Text>
+                </Space>
+              </div>
+              <div className="ims-cell-stack">
+                <Text type="secondary">Alasan</Text>
+                <Text>{reasonText}</Text>
+              </div>
+              <div className="ims-cell-stack">
+                <Text type="secondary">Catatan</Text>
+                <Text>{normalizeCompactText(selectedAdjustmentDetail.note) || "-"}</Text>
+              </div>
+            </Space>
+          );
+        })() : null}
+      </Drawer>
 
       {/* =====================================================
           SECTION: Stock Adjustment Form Renderer — GUARDED

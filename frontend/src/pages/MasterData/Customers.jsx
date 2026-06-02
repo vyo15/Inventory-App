@@ -5,7 +5,6 @@ import {
   Input,
   Popconfirm,
   Space,
-  Table,
   Tag,
   message,
 } from "antd";
@@ -13,6 +12,7 @@ import { EditOutlined, PlusOutlined } from "@ant-design/icons";
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import OfflineRepositoryStatus, {
   OfflineRepositoryEmptyState,
@@ -31,6 +31,12 @@ import {
   resolveCustomerFormCode,
 } from "../../utils/references/customerCodeReference";
 
+const getRepositoryModeCopy = (mode) => (
+  mode === REPOSITORY_MODES.SQLITE_SIDECAR
+    ? { label: "SQLite Lokal", shortLabel: "Data Lokal", color: "green" }
+    : { label: "Firebase Fallback", shortLabel: "Fallback", color: "blue" }
+);
+
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
   const [repositoryMode, setRepositoryMode] = useState(REPOSITORY_MODES.SQLITE_SIDECAR);
@@ -42,6 +48,7 @@ const Customers = () => {
   const [form] = Form.useForm();
 
   const getModeOptions = useCallback((mode = repositoryMode) => ({ mode }), [repositoryMode]);
+  const repositoryModeCopy = getRepositoryModeCopy(repositoryMode);
 
 
   const fetchCustomers = useCallback(async () => {
@@ -174,12 +181,52 @@ const Customers = () => {
     },
   ];
 
+  const customerMobileCardConfig = {
+    title: (record) => record.name || '-',
+    subtitle: (record) => [resolveCustomerDisplayCode(record), record.contact || null].filter(Boolean),
+    tags: () => [
+      <Tag key="db" color={repositoryModeCopy.color}>
+        {repositoryModeCopy.shortLabel}
+      </Tag>,
+    ],
+    meta: [
+      { label: 'Kontak', value: (record) => record.contact || '-' },
+      { label: 'Kode', value: (record) => resolveCustomerDisplayCode(record) },
+    ],
+    content: (record) => [
+      record.address ? <span key="address">Alamat: {record.address}</span> : null,
+      record.note ? <span key="note">Catatan: {record.note}</span> : null,
+    ].filter(Boolean),
+    actions: (record) => (
+      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+        <Button
+          className="ims-action-button"
+          icon={<EditOutlined />}
+          size="small"
+          onClick={() => handleEdit(record)}
+        >
+          Edit
+        </Button>
+        <Popconfirm
+          title={repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR ? 'Nonaktifkan customer di SQLite?' : 'Yakin hapus customer ini?'}
+          onConfirm={() => handleDelete(record.id)}
+          okText="Ya"
+          cancelText="Batal"
+        >
+          <Button className="ims-action-button" danger size="small">
+            Hapus
+          </Button>
+        </Popconfirm>
+      </Space>
+    ),
+  };
+
   return (
     <div className="page-container">
       <PageHeader
         title="Customer"
         subtitle="Master customer Sales. Default memakai SQLite lokal lewat backend LAN. Firebase masih tersedia sebagai fallback manual."
-        extra={<Tag color={repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR ? "gold" : "blue"}>DB: {repositoryMode}</Tag>}
+        extra={<Tag color={repositoryModeCopy.color}>Mode: {repositoryModeCopy.label}</Tag>}
         actions={[
           {
             key: "create-customer",
@@ -207,7 +254,8 @@ const Customers = () => {
         }
       >
         <DataRefreshIndicator loading={loading} dataSource={customers} />
-        <Table
+        <DataTableView
+          showRefreshIndicator={false}
           className="app-data-table"
           columns={columns}
           dataSource={customers}
@@ -222,6 +270,7 @@ const Customers = () => {
               />,
             ),
           }}
+          mobileCardConfig={customerMobileCardConfig}
         />
       </PageSection>
 

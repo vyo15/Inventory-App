@@ -29,7 +29,6 @@ import {
   Select,
   Space,
   Statistic,
-  Table,
   Tag,
   Typography,
 } from "antd";
@@ -43,6 +42,7 @@ import {
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import {
@@ -57,7 +57,6 @@ import {
 import { createProductionWorkLogFromOrder } from "../../services/Produksi/productionWorkLogsService";
 import { getActiveBomReferenceData } from "../../services/Produksi/productionBomsService";
 import useAuth from "../../hooks/useAuth";
-import DataTableView from "../../components/Layout/Table/DataTableView";
 import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import {
   formatDateTimeLabel,
@@ -838,6 +837,82 @@ const ProductionOrders = () => {
     },
   ];
 
+  // IMS NOTE [AKTIF/GUARDED UI] - Mobile card Production Order.
+  // Fungsi: menampilkan PO, target, readiness, dan aksi utama secara ringkas di HP.
+  // Guardrail: hanya presentasi; refresh requirement, mulai produksi, stok consume, dan lifecycle PO tetap memakai handler/service existing.
+  const productionOrderMobileCardConfig = {
+    title: (record) => resolveDisplayReference(record, { fields: ["code", "productionOrderCode"], fallback: "-" }),
+    subtitle: (record) => [
+      `Dibuat: ${formatDateTimeLabel(record.createdAt)}`,
+      record.targetName || "Target belum tercatat",
+      record.planningCode ? `Planning: ${record.planningCode}` : null,
+    ].filter(Boolean),
+    tags: (record) => {
+      const statusMeta = ORDER_STATUS_MAP[record.status] || ORDER_STATUS_MAP.draft;
+      const priorityMeta = getPriorityMeta(record.priority);
+
+      return [
+        <Tag key="target-type" color={record.targetType === "product" ? "blue" : "purple"}>
+          {record.targetType === "product" ? "Product" : "Semi Finished"}
+        </Tag>,
+        <Tag key="priority" color={priorityMeta.color}>{priorityMeta.label}</Tag>,
+        <Tag key="status" color={statusMeta.status === "success" ? "green" : statusMeta.status === "error" ? "red" : "blue"}>
+          {statusMeta.text}
+        </Tag>,
+      ];
+    },
+    meta: [
+      { label: "Qty Batch", value: (record) => formatNumber(record.batchCount ?? record.orderQty) },
+      {
+        label: "Output",
+        value: (record) => `${formatNumber(record.expectedOutputQty || 0)} ${record.targetUnit || "pcs"}`,
+      },
+      {
+        label: "Shortage",
+        value: (record) => formatNumber(record.reservationSummary?.shortageLines || 0),
+      },
+    ],
+    content: (record) => [
+      record.bomName ? `BOM: ${record.bomName}` : null,
+      record.targetVariantLabel ? `Varian: ${record.targetVariantLabel}` : null,
+      `Requirement line: ${formatNumber(record.reservationSummary?.totalLines || 0)}`,
+    ].filter(Boolean),
+    actions: (record) => (
+      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+        <Button
+          className="ims-action-button ims-action-button--block"
+          size="small"
+          icon={<EyeOutlined />}
+          onClick={() => {
+            setSelectedOrder(record);
+            setDetailVisible(true);
+          }}
+        >
+          Detail
+        </Button>
+        {(record.status === "shortage" || record.status === "ready") ? (
+          <Button
+            className="ims-action-button ims-action-button--block"
+            size="small"
+            onClick={() => handleRefreshRequirement(record)}
+          >
+            Refresh Need
+          </Button>
+        ) : null}
+        {record.status === "ready" ? (
+          <Button
+            className="ims-action-button ims-action-button--block"
+            size="small"
+            type="primary"
+            onClick={() => handleStartProduction(record)}
+          >
+            Mulai Produksi
+          </Button>
+        ) : null}
+      </Space>
+    ),
+  };
+
   // =====================================================
   // SECTION: Detail requirement drawer compact columns — AKTIF
   // Fungsi:
@@ -1007,6 +1082,7 @@ const ProductionOrders = () => {
           columns={columns}
           dataSource={filteredData}
           emptyText={<Empty description="Belum ada production order" />}
+          mobileCardConfig={productionOrderMobileCardConfig}
         />
       </PageSection>
 
@@ -1492,13 +1568,36 @@ const ProductionOrders = () => {
 
             <Divider orientation="left">Requirement Material</Divider>
 
-            <Table
+            <DataTableView
               className="ims-table"
               rowKey="id"
               pagination={false}
+              showRefreshIndicator={false}
               dataSource={selectedOrder.materialRequirementLines || []}
               columns={detailRequirementColumns}
               tableLayout="fixed"
+              mobileCardConfig={{
+                title: (record) => record.itemName || "Material",
+                tags: (record) => {
+                  const sourceMeta = getRequirementStockSourceMeta(record);
+                  return [
+                    <Tag key="type" className="ims-status-tag" color={record.itemType === "raw_material" ? "orange" : "blue"}>
+                      {record.itemType === "raw_material" ? "Raw Material" : "Semi Finished"}
+                    </Tag>,
+                    <Tag key="source" className="ims-status-tag" color={sourceMeta.color}>
+                      {sourceMeta.label}
+                    </Tag>,
+                    record.isSufficient ? <Badge key="ok" status="success" text="Cukup" /> : <Badge key="short" status="error" text="Kurang" />,
+                  ];
+                },
+                subtitle: (record) => getRequirementStockSourceMeta(record).variantLabel,
+                meta: [
+                  { label: "Need", value: (record) => formatQtyWithUnit(record.qtyRequired, record.unit) },
+                  { label: "Current", value: (record) => formatQtyWithUnit(record.currentStockSnapshot, record.unit) },
+                  { label: "Tersedia", value: (record) => formatQtyWithUnit(record.availableStockSnapshot, record.unit) },
+                  { label: "Kurang", value: (record) => formatQtyWithUnit(record.shortageQty || 0, record.unit) },
+                ],
+              }}
             />
           </Space>
         )}

@@ -1,15 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Col, DatePicker, Table, Tag, message } from "antd";
+import { Button, Col, DatePicker, Tag, message } from "antd";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { fetchProfitLossReportData } from "../../services/Laporan/reportsService";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import {
   getDefaultReportDateRange,
@@ -146,6 +147,26 @@ const ProfitLossReport = () => {
     message.success("Laporan laba rugi berhasil diekspor ke Excel.");
   };
 
+  const profitLossMobileCardConfig = useMemo(
+    () => ({
+      title: (record) => record.description || record.type || resolveFinancialSourceLabel(record),
+      subtitle: (record) => [
+        formatDateId(record.date, true),
+        resolveFinancialSourceLabel(record),
+        resolveDisplayReference(record, { fallback: record.sourceRef || "" }) || null,
+      ],
+      tags: (record) => <Tag color={record.flow === "Pemasukan" ? "green" : "red"}>{record.flow || "-"}</Tag>,
+      meta: [
+        {
+          label: "Jumlah",
+          value: (record) => `${record.flow === "Pengeluaran" ? "-" : "+"} ${formatCurrencyId(record.amount)}`,
+        },
+        { label: "Tipe", value: (record) => record.type || "-" },
+      ],
+    }),
+    [],
+  );
+
   const columns = useMemo(
     () => [
       {
@@ -255,13 +276,15 @@ const ProfitLossReport = () => {
           </Button>
         }
       >
-        <DataRefreshIndicator loading={loading} dataSource={reportData} />
-        <Table
+        <DataTableView
           // AKTIF / GUARDED UI: class standar hanya visual; kalkulasi laba rugi dan sumber revenues/incomes/expenses tetap sama.
+          loading={loading}
+          showRefreshIndicator
           className="app-data-table"
           dataSource={reportData}
           columns={columns}
           rowKey="id"
+          mobileCardConfig={profitLossMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data laba rugi untuk ditampilkan." />),
           }}

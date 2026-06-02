@@ -16,7 +16,6 @@ import {
   message,
   Select,
   Space,
-  Table,
   Tag,
   Tooltip,
 } from "antd";
@@ -25,6 +24,7 @@ import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import {
   PAYROLL_CLASSIFICATION_MAP,
   PAYROLL_MODE_MAP,
@@ -39,7 +39,7 @@ import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import { normalizeReportDateRange } from "../../utils/reports/reportDateRange";
 
@@ -314,6 +314,32 @@ const PayrollReport = () => {
   // - Jika render kolom diubah sembarangan, field audit payroll/expense bisa tidak
   //   terbaca di UI meskipun data export tetap lengkap.
   // =====================================================
+  const payrollReportMobileCardConfig = useMemo(
+    () => ({
+      title: (record) => record.payrollNumber || record.workerName || "Payroll line",
+      subtitle: (record) => [
+        formatDateId(record.payrollDate, true),
+        record.workerName || "Operator belum diisi",
+        record.stepName || "Step belum diisi",
+      ],
+      tags: (record) => renderPayrollStatusTags(record),
+      meta: [
+        { label: "Nominal", value: (record) => formatCurrencyId(record.finalAmount || 0) },
+        { label: "Mode", value: (record) => PAYROLL_MODE_MAP[record.payrollMode] || record.payrollMode || "-" },
+        { label: "Worked", value: (record) => formatNumberId(record.workedQty || 0) },
+        { label: "Output", value: (record) => formatNumberId(record.outputQtyUsed || 0) },
+      ],
+      subtext: (record) => [
+        `Work Log: ${record.workNumber || "-"}`,
+        `HPP: ${record.includePayrollInHpp === false ? "Tidak" : "Ya"}`,
+      ],
+      content: (record) => record.expenseSyncStatus ? (
+        <span className="ims-cell-meta">Cash Out Sync: {record.expenseSyncStatus}</span>
+      ) : null,
+    }),
+    [],
+  );
+
   const payrollColumns = useMemo(
     () => [
       {
@@ -699,13 +725,15 @@ const PayrollReport = () => {
         title="Detail Payroll Lines"
         subtitle="Tabel payroll per line operator."
       >
-        <DataRefreshIndicator loading={loading} dataSource={filteredPayrolls} />
-        <Table
+        <DataTableView
+          loading={loading}
+          showRefreshIndicator
           className="app-data-table"
           rowKey="id"
           columns={payrollColumns}
           dataSource={filteredPayrolls}
           pagination={{ pageSize: 10 }}
+          mobileCardConfig={payrollReportMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data payroll pada filter aktif" />),
           }}

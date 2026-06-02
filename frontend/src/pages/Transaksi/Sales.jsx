@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Table,
   Tag,
   Button,
   Modal,
@@ -17,12 +16,14 @@ import {
   Drawer,
   Empty,
   Progress,
+  Typography,
 } from "antd";
 import { PlusOutlined, DeleteOutlined, EyeOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { SALES_CHANNEL_OPTIONS, buildSalesChannelSummary } from "../../constants/salesChannelOptions";
 import {
   getSalesCustomerReferences,
@@ -55,6 +56,7 @@ import { showFormValidationFeedback } from '../../utils/forms/formValidationFeed
 // Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
 
 const { Option } = Select;
+const { Text } = Typography;
 
 // =========================
 // SECTION: Daftar channel penjualan
@@ -132,6 +134,7 @@ const Sales = () => {
   const [selectedSalesChannelKey, setSelectedSalesChannelKey] = useState(null);
   const [channelDetailStatusFilter, setChannelDetailStatusFilter] = useState("all");
   const [channelDetailSearch, setChannelDetailSearch] = useState("");
+  const [selectedSaleDetail, setSelectedSaleDetail] = useState(null);
 
   const [form] = Form.useForm();
 
@@ -572,6 +575,24 @@ const Sales = () => {
     setChannelDetailSearch("");
   };
 
+  // =========================
+  // SECTION: Detail read-only transaksi Sales
+  // Fungsi:
+  // - membuka drawer detail transaksi dari mobile card tanpa mengubah status, stok, income, atau return flow.
+  // Hubungan flow:
+  // - detail memakai record sales yang sudah ada di state tabel; tidak melakukan write/fetch tambahan.
+  // Status:
+  // - AKTIF sebagai UI mobile detail.
+  // - GUARDED karena Sales tidak membuka aksi batal/delete dari drawer ini.
+  // =========================
+  const openSaleDetail = (record) => {
+    setSelectedSaleDetail(record);
+  };
+
+  const closeSaleDetail = () => {
+    setSelectedSaleDetail(null);
+  };
+
   const selectedSalesChannelTransactions = useMemo(() => {
     if (!selectedSalesChannelSummary) {
       return [];
@@ -969,6 +990,45 @@ const Sales = () => {
   ];
 
 
+  const salesChannelMobileCardConfig = {
+    title: (record) => record.channel || "Channel penjualan",
+    subtitle: (record) => [record.groupLabel, `${formatNumberId(record.transactionCount)} transaksi`],
+    meta: [
+      { label: "Omzet", value: (record) => formatCurrencyId(record.totalAmount) },
+      { label: "Selesai", value: (record) => `${formatCurrencyId(record.completedAmount)} / ${formatNumberId(record.completedCount)} trx` },
+      { label: "Pending", value: (record) => `${formatCurrencyId(record.pendingAmount)} / ${formatNumberId(record.pendingCount)} trx` },
+      {
+        label: "Kontribusi",
+        value: (record) => {
+          const percent = salesChannelTotalAmount
+            ? Math.round((Number(record.totalAmount || 0) / salesChannelTotalAmount) * 100)
+            : 0;
+          return `${formatNumberId(percent)}%`;
+        },
+      },
+    ],
+    actions: (record) => (
+      <Button
+        size="small"
+        icon={<EyeOutlined />}
+        disabled={record.transactionCount <= 0}
+        onClick={() => openSalesChannelDetail(record.key)}
+      >
+        Lihat Detail
+      </Button>
+    ),
+  };
+
+  const selectedSalesChannelTransactionMobileCardConfig = {
+    title: (record) => getSaleDisplayReference(record),
+    subtitle: (record) => [record.date || "-", record.customerName || "Tanpa pelanggan"],
+    tags: (record) => <Tag color={getSalesStatusColor(record.status)}>{record.status || "-"}</Tag>,
+    meta: [
+      { label: "Total", value: (record) => formatCurrencyId(record.total || 0) },
+      { label: "Order/Resi", value: (record) => getSaleExternalReference(record) },
+    ],
+  };
+
   const salesTabItems = [
     { key: "all", label: "Semua Penjualan" },
     { key: "Diproses", label: "Diproses" },
@@ -990,6 +1050,80 @@ const Sales = () => {
     }
 
     form.setFieldsValue(nextValues);
+  };
+
+  const salesMobileCardConfig = {
+    title: (record) => getSaleDisplayReference(record),
+    subtitle: (record) => [
+      record.date || '-',
+      record.customerName || 'Customer tidak tercatat',
+      record.salesChannel || null,
+    ].filter(Boolean),
+    tags: (record) => [
+      <Tag key="status" color={getSalesStatusColor(record.status)}>{record.status || '-'}</Tag>,
+    ],
+    meta: [
+      { label: 'Total', value: (record) => formatCurrencyId(record.total || 0) },
+      { label: 'Item', value: (record) => `${formatNumberId((record.items || []).length)} item` },
+    ],
+    content: (record) => {
+      const saleItems = Array.isArray(record.items) ? record.items : [];
+      const primaryItem = saleItems[0];
+      if (!primaryItem) return 'Item belum tercatat';
+      return (
+        <div className="ims-cell-stack ims-cell-stack-tight">
+          <span className="ims-cell-title">
+            {primaryItem.itemName || 'Item'}{primaryItem.variantLabel ? ` - ${primaryItem.variantLabel}` : ''}
+          </span>
+          <span className="ims-cell-meta">
+            {formatNumberId(primaryItem.quantity)} x {formatCurrencyId(primaryItem.pricePerUnit || 0)}
+          </span>
+        </div>
+      );
+    },
+    actions: (record) => {
+      const canMoveToShipped = record.status === 'Diproses' && !isOfflineChannel(record.salesChannel);
+      const canComplete = record.status === 'Dikirim' && !isOfflineChannel(record.salesChannel);
+
+      return (
+        <div className="ims-action-group ims-action-group--vertical">
+          <Button
+            className="ims-action-button"
+            icon={<EyeOutlined />}
+            size="small"
+            onClick={() => openSaleDetail(record)}
+          >
+            Lihat Detail
+          </Button>
+
+          {canMoveToShipped ? (
+            <Popconfirm
+              title="Yakin ubah status menjadi Dikirim?"
+              onConfirm={() => handleUpdateSaleStatus(record.id, 'Dikirim')}
+              okText="Ya"
+              cancelText="Tidak"
+            >
+              <Button className="ims-action-button" size="small">
+                Dikirim
+              </Button>
+            </Popconfirm>
+          ) : null}
+
+          {canComplete ? (
+            <Popconfirm
+              title="Yakin ubah status menjadi Selesai?"
+              onConfirm={() => handleUpdateSaleStatus(record.id, 'Selesai')}
+              okText="Ya"
+              cancelText="Tidak"
+            >
+              <Button className="ims-action-button" size="small">
+                Selesai
+              </Button>
+            </Popconfirm>
+          ) : null}
+        </div>
+      );
+    },
   };
 
   /* =====================================================
@@ -1074,7 +1208,7 @@ const Sales = () => {
           </div>
         </div>
 
-        <Table
+        <DataTableView
           className="app-data-table"
           columns={salesChannelSummaryColumns}
           dataSource={salesChannelSummaryItems}
@@ -1084,6 +1218,8 @@ const Sales = () => {
           size="small"
           scroll={{ x: 880 }}
           loading={isLoading}
+          showRefreshIndicator={false}
+          mobileCardConfig={salesChannelMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(
               isLoading,
@@ -1106,7 +1242,8 @@ const Sales = () => {
         subtitle="Menampilkan data sesuai filter aktif."
       >
         <DataRefreshIndicator loading={isLoading} dataSource={filteredSalesRecords} />
-        <Table
+        <DataTableView
+          showRefreshIndicator={false}
           className="app-data-table"
           columns={salesTableColumns}
           dataSource={filteredSalesRecords}
@@ -1114,8 +1251,60 @@ const Sales = () => {
           pagination={{ pageSize: 5 }}
           tableLayout="fixed"
           locale={{ emptyText: getDataTableEmptyText(isLoading) }}
+          mobileCardConfig={salesMobileCardConfig}
         />
       </PageSection>
+
+      <Drawer
+        title="Detail Penjualan"
+        open={Boolean(selectedSaleDetail)}
+        onClose={closeSaleDetail}
+        width="min(100vw, 440px)"
+      >
+        {selectedSaleDetail ? (
+          <Space direction="vertical" size={14} style={{ width: "100%" }}>
+            <div className="ims-cell-stack">
+              <Text type="secondary">Referensi</Text>
+              <Text strong>{getSaleDisplayReference(selectedSaleDetail)}</Text>
+              {getSaleExternalReference(selectedSaleDetail) !== "-" ? (
+                <Text type="secondary">Order marketplace: {getSaleExternalReference(selectedSaleDetail)}</Text>
+              ) : null}
+            </div>
+            <div className="ims-cell-stack">
+              <Text type="secondary">Tanggal / Customer</Text>
+              <Text strong>{selectedSaleDetail.date || "-"}</Text>
+              <Text>{selectedSaleDetail.customerName || "Customer tidak tercatat"}</Text>
+            </div>
+            <Space wrap>
+              <Tag>{selectedSaleDetail.salesChannel || "Channel tidak tercatat"}</Tag>
+              <Tag color={getSalesStatusColor(selectedSaleDetail.status)}>{selectedSaleDetail.status || "-"}</Tag>
+            </Space>
+            <div className="ims-cell-stack">
+              <Text type="secondary">Total</Text>
+              <Text strong>{formatCurrencyId(selectedSaleDetail.total || 0)}</Text>
+            </div>
+            <div className="ims-cell-stack">
+              <Text type="secondary">Item</Text>
+              {Array.isArray(selectedSaleDetail.items) && selectedSaleDetail.items.length > 0 ? (
+                <Space direction="vertical" size={8} style={{ width: "100%" }}>
+                  {selectedSaleDetail.items.map((item, index) => (
+                    <div key={`${item.itemId || item.itemName || "item"}-${index}`} className="ims-cell-stack ims-cell-stack-tight">
+                      <Text strong>
+                        {item.itemName || "Item"}{item.variantLabel ? ` - ${item.variantLabel}` : ""}
+                      </Text>
+                      <Text type="secondary">
+                        {formatNumberId(item.quantity)} x {formatCurrencyId(item.pricePerUnit || 0)} = {formatCurrencyId(item.subtotal || 0)}
+                      </Text>
+                    </div>
+                  ))}
+                </Space>
+              ) : (
+                <Text type="secondary">Item belum tercatat.</Text>
+              )}
+            </div>
+          </Space>
+        ) : null}
+      </Drawer>
 
       <Drawer
         title={selectedSalesChannelSummary ? `Detail Channel — ${selectedSalesChannelSummary.channel}` : "Detail Channel"}
@@ -1167,7 +1356,7 @@ const Sales = () => {
               </Select>
             </Space>
 
-            <Table
+            <DataTableView
               className="app-data-table"
               columns={selectedSalesChannelTransactionColumns}
               dataSource={selectedSalesChannelTransactions}
@@ -1176,6 +1365,8 @@ const Sales = () => {
               size="small"
               tableLayout="fixed"
               scroll={{ x: 560 }}
+              showRefreshIndicator={false}
+              mobileCardConfig={selectedSalesChannelTransactionMobileCardConfig}
               locale={{
                 emptyText: (
                   <Empty

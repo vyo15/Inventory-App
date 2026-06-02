@@ -16,7 +16,6 @@ import {
   Select,
   Space,
   Switch,
-  Table,
   Tag,
   Typography,
   message,
@@ -35,6 +34,7 @@ import { formatCurrencyIDR } from '../../utils/formatters/currencyId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
+import DataTableView from '../../components/Layout/Table/DataTableView';
 import { DataRefreshIndicator, getDataTableEmptyText } from '../../components/Layout/Feedback/DataLoadingState';
 import {
   assertSupplierCodeAvailable,
@@ -812,6 +812,63 @@ const SupplierPurchases = () => {
   ];
 
 
+  const supplierMobileCardConfig = {
+    title: (record) => getSupplierDisplayName(record),
+    subtitle: (record) => [
+      getSupplierBusinessCode(record) || null,
+      `${(record.materialDetails || []).length || 0} katalog restock`,
+    ].filter(Boolean),
+    tags: (record) => {
+      const detail = getSupplierTableSummaryDetail(record);
+      return [
+        supplierIdFromQuery && String(record.id) === String(supplierIdFromQuery) ? <Tag key="selected" color="green">Dipilih</Tag> : null,
+        detail ? (
+          <Tag key="purchase-type" color={detail.purchaseType === 'offline' ? 'default' : 'blue'}>
+            {detail.purchaseType === 'offline' ? 'Offline' : 'Online'}
+          </Tag>
+        ) : null,
+      ].filter(Boolean);
+    },
+    meta: [
+      { label: 'Katalog', value: (record) => `${(record.materialDetails || []).length || 0} item` },
+      { label: 'Link Toko', value: (record) => (getSupplierStoreLink(record) ? 'Ada' : 'Belum ada') },
+      { label: 'Estimasi', value: (record) => {
+        const detail = getSupplierTableSummaryDetail(record);
+        if (!detail) return '-';
+        const metrics = calculateSupplierMaterialRestockMetrics(detail);
+        return metrics.estimatedUnitPrice ? `${formatCurrencyIDR(metrics.estimatedUnitPrice)} / ${detail.stockUnit || 'satuan'}` : '-';
+      } },
+    ],
+    content: (record) => {
+      const materialNames = record.supportedMaterialNames || [];
+      if (!materialNames.length) return 'Belum ada katalog restock';
+      return (
+        <Space size={[4, 4]} wrap>
+          {materialNames.slice(0, 3).map((name, index) => (
+            <Tag key={`${name}-${index}`}>{name}</Tag>
+          ))}
+          {materialNames.length > 3 ? <Tag>+{materialNames.length - 3} lainnya</Tag> : null}
+        </Space>
+      );
+    },
+    actions: (record) => (
+      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+        <Button className="ims-action-button ims-action-button--block" size="small" icon={<EyeOutlined />} onClick={() => openSupplierDrawer(record)}>
+          Detail
+        </Button>
+        <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => handleEditSupplier(record)}>
+          Edit
+        </Button>
+        <Popconfirm title="Yakin hapus supplier ini?" onConfirm={() => handleDeleteSupplier(record)} okText="Ya" cancelText="Batal">
+          <Button className="ims-action-button ims-action-button--block" danger size="small" icon={<DeleteOutlined />}>
+            Hapus
+          </Button>
+        </Popconfirm>
+      </Space>
+    ),
+  };
+
+
   return (
     <div className="page-container">
       <PageHeader
@@ -894,7 +951,8 @@ const SupplierPurchases = () => {
         subtitle="Kontak dan katalog."
       >
         <DataRefreshIndicator loading={isLoading} dataSource={filteredSuppliers} />
-        <Table
+        <DataTableView
+          showRefreshIndicator={false}
           className="app-data-table"
           columns={columns}
           dataSource={filteredSuppliers}
@@ -912,6 +970,7 @@ const SupplierPurchases = () => {
               ),
             ),
           }}
+          mobileCardConfig={supplierMobileCardConfig}
         />
       </PageSection>
 
@@ -1324,14 +1383,38 @@ const SupplierPurchases = () => {
             </Card>
 
             <Card size="small" title="Katalog Restock Supplier">
-              <Table
+              <DataTableView
                 className="app-data-table"
                 rowKey={(record, index) => `${record.materialId || record.materialName || 'material'}-${index}`}
                 pagination={false}
+                showRefreshIndicator={false}
                 dataSource={selectedSupplier.materialDetails || []}
                 columns={materialDetailColumns}
                 size="small"
                 tableLayout="fixed"
+                mobileCardConfig={{
+                  title: (record) => record.materialName || 'Katalog material',
+                  subtitle: (record) => record.note || null,
+                  tags: (record) => (
+                    <Tag color={record.purchaseType === 'online' ? 'blue' : 'default'}>
+                      {record.purchaseType === 'online' ? 'Online' : 'Offline'}
+                    </Tag>
+                  ),
+                  meta: [
+                    { label: 'Qty Beli', value: (record) => `${formatNumberID(record.purchaseQty || 1)} ${record.purchaseUnit || 'satuan beli'}` },
+                    { label: 'Konversi', value: (record) => `${formatNumberID(record.conversionValue || 0)} ${record.stockUnit || 'satuan stok'}` },
+                    {
+                      label: 'Estimasi/Unit',
+                      value: (record) => {
+                        const metrics = calculateSupplierMaterialRestockMetrics(record);
+                        return metrics.estimatedUnitPrice ? formatCurrencyIDR(metrics.estimatedUnitPrice) : '-';
+                      },
+                    },
+                  ],
+                  content: (record) => record.productLink ? (
+                    <a href={record.productLink} target="_blank" rel="noopener noreferrer">Buka Link Produk</a>
+                  ) : null,
+                }}
                 locale={{ emptyText: <Empty description="Belum ada katalog restock supplier" /> }}
               />
             </Card>

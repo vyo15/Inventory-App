@@ -1,4 +1,4 @@
-import { Card, Collapse, Empty, Space, Table, Tag, Typography } from "antd";
+import { Card, Collapse, Empty, Space, Tag, Typography } from "antd";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
 import { DataRefreshIndicator } from "../../../components/Layout/Feedback/DataLoadingState";
 import formatNumber from "../../../utils/formatters/numberId";
@@ -10,6 +10,7 @@ const ProductionBomListView = ({
   filteredData,
   listViewMode,
   columns,
+  mobileCardConfig,
   groupedFilteredData,
   shouldAutoOpenBomGroups,
 }) => (
@@ -28,6 +29,7 @@ const ProductionBomListView = ({
         columns={columns}
         dataSource={filteredData}
         emptyText={<Empty description="Belum ada data BOM produksi" />}
+        mobileCardConfig={mobileCardConfig}
         pagination={{
           pageSize: 10,
           showSizeChanger: true,
@@ -64,15 +66,15 @@ const ProductionBomListView = ({
                   size="small"
                   title={`${targetGroup.label} (${formatNumber(targetGroup.items.length)} BOM)`}
                 >
-                  <Table
+                  <DataTableView
+                    showRefreshIndicator={false}
                     className="app-data-table"
                     rowKey="id"
                     columns={columns}
                     dataSource={targetGroup.items}
                     pagination={false}
-                    locale={{
-                      emptyText: <Empty description="Tidak ada BOM pada target ini" />,
-                    }}
+                    emptyText={<Empty description="Tidak ada BOM pada target ini" />}
+                    mobileCardConfig={mobileCardConfig}
                   />
                 </Card>
               ))}

@@ -2,11 +2,10 @@
 
 // SECTION: import hooks React
 import { useEffect, useMemo, useState } from "react";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // SECTION: import komponen Ant Design
 import {
-  Table,
   Button,
   Modal,
   Form,
@@ -51,6 +50,7 @@ import { formatNumberID, parseIntegerIdInput } from "../../utils/formatters/numb
 import { formatCurrencyIDR } from "../../utils/formatters/currencyId";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 
 // SECTION: import pricing service
@@ -614,6 +614,71 @@ const PricingRules = () => {
     },
   ];
 
+  const previewMobileCardConfig = {
+    title: (record) => record?.itemName || 'Item',
+    subtitle: (record) => record?.pricingMode === 'manual' ? 'Manual - dilewati' : 'Pricing Rule - diproses jika valid',
+    tags: (record) => {
+      const meta = getPreviewStatusMeta(record?.status);
+      return [
+        <Tag key="status" color={meta.color}>{meta.label}</Tag>,
+        record?.willUpdate ? <Tag key="update" color="blue">Update</Tag> : <Tag key="same">Tetap</Tag>,
+      ];
+    },
+    meta: [
+      { label: 'Harga Saat Ini', value: (record) => formatCurrencyIDR(record?.currentPrice || 0) },
+      { label: 'Base', value: (record) => Number(record?.baseCost || 0) > 0 ? formatCurrencyIDR(record.baseCost) : '-' },
+      { label: 'Harga Baru', value: (record) => formatCurrencyIDR(record?.roundedPrice || 0) },
+    ],
+    subtext: (record) => `Margin ${Number(record?.marginAmount || 0) > 0 ? formatCurrencyIDR(record.marginAmount) : '-'} · Buffer ${Number(record?.marketplaceBufferAmount || 0) > 0 ? formatCurrencyIDR(record.marketplaceBufferAmount) : '-'}`,
+  };
+
+  const pricingRuleMobileCardConfig = {
+    title: (record) => record?.name || '-',
+    subtitle: (record) => record?.description || 'Tidak ada deskripsi',
+    tags: (record) => [
+      <Tag key="target" color={record?.targetType === 'products' ? 'blue' : 'gold'}>
+        {getTargetTypeLabel(record?.targetType)}
+      </Tag>,
+      record?.isActive ? <Tag key="status" color="green">Aktif</Tag> : <Tag key="status">Nonaktif</Tag>,
+    ],
+    meta: [
+      { label: 'Base', value: (record) => getBaseCostSourceLabel(record?.baseCostSource) },
+      { label: 'Margin', value: (record) => (
+        record?.marginType === 'nominal'
+          ? formatCurrencyIDR(record?.marginValue || 0)
+          : `${formatNumberID(record?.marginValue || 0)}%`
+      ) },
+      { label: 'Pembulatan', value: (record) => `${String(record?.roundingType || 'up').toUpperCase()} / ${formatNumberID(record?.roundingUnit || 0)}` },
+    ],
+    actions: (record) => (
+      <div className="ims-action-group ims-action-group--vertical">
+        <Button
+          className="ims-action-button ims-action-button--block"
+          size="small"
+          icon={<EyeOutlined />}
+          onClick={() => handlePreviewRule(record)}
+        >
+          Detail
+        </Button>
+        <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)}>
+          Edit
+        </Button>
+        <Popconfirm
+          title="Hapus pricing rule?"
+          description="Rule yang dihapus tidak bisa dikembalikan."
+          okText="Ya"
+          cancelText="Batal"
+          onConfirm={() => handleDeleteRule(record?.id)}
+        >
+          <Button className="ims-action-button ims-action-button--block" size="small" danger icon={<DeleteOutlined />}>
+            Hapus
+          </Button>
+        </Popconfirm>
+      </div>
+    ),
+  };
+
+
   const summaryItems = [
     {
       key: "pricing-rules-total",
@@ -671,7 +736,8 @@ const PricingRules = () => {
       >
         {/* SECTION: tabel utama pricing rule memakai foundation global supaya seragam */}
         <DataRefreshIndicator loading={pageLoading} dataSource={rules} />
-        <Table
+        <DataTableView
+          showRefreshIndicator={false}
           className="app-data-table"
           rowKey="id"
           dataSource={rules}
@@ -679,6 +745,7 @@ const PricingRules = () => {
           pagination={{ pageSize: 10 }}
           tableLayout="fixed"
           locale={{ emptyText: getDataTableEmptyText(pageLoading) }}
+          mobileCardConfig={pricingRuleMobileCardConfig}
         />
       </PageSection>
 
@@ -995,14 +1062,16 @@ const PricingRules = () => {
         </Row>
 
         {/* SECTION: tabel preview */}
-        <DataRefreshIndicator loading={previewLoading} dataSource={previewData} />
-        <Table
+        <DataTableView
+          loading={previewLoading}
+          showRefreshIndicator
           className="app-data-table"
           rowKey="itemId"
           dataSource={previewData}
           columns={previewColumns}
           pagination={{ pageSize: 10 }}
           tableLayout="fixed"
+          mobileCardConfig={previewMobileCardConfig}
           locale={{ emptyText: getDataTableEmptyText(previewLoading) }}
         />
       </Modal>

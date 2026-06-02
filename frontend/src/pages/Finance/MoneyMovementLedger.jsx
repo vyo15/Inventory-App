@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Col, Input, Select, Table, Tag, Typography, message } from "antd";
+import { Button, Col, Input, Select, Tag, Typography, message } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import {
   MONEY_MOVEMENT_LEDGER_DEFAULT_LIMIT,
   getMoneyMovementLedger,
@@ -207,6 +208,35 @@ const MoneyMovementLedger = () => {
     [netMovement, summary],
   );
 
+  const ledgerMobileCardConfig = useMemo(
+    () => ({
+      title: (record) => record.description || record.referenceCode || "Pergerakan kas",
+      subtitle: (record) => [
+        formatDateId(record.date, true),
+        record.referenceCode || "Tanpa referensi",
+        record.sourceLabel || record.sourceCollection || "Sumber tidak diketahui",
+      ],
+      tags: (record) => {
+        const directionMeta = getDirectionMeta(record.direction);
+        return <Tag color={directionMeta.color}>{directionMeta.label}</Tag>;
+      },
+      meta: [
+        {
+          label: "Nominal",
+          value: (record) => {
+            const directionMeta = getDirectionMeta(record.direction);
+            return `${directionMeta.sign ? `${directionMeta.sign} ` : ""}${formatCurrencyId(record.amount)}`;
+          },
+        },
+        { label: "Status", value: (record) => record.status || "-" },
+      ],
+      content: (record) => (
+        <Tag color={getSourceTagColor(record.sourceModule)}>{record.sourceLabel || record.sourceModule || "Sumber"}</Tag>
+      ),
+    }),
+    [],
+  );
+
   const columns = useMemo(
     () => [
       {
@@ -384,14 +414,16 @@ const MoneyMovementLedger = () => {
         subtitle="Data kas tercatat dari sumber transaksi resmi."
         extra={<Tag>{formatNumberId(ledgerRows.length)} baris tampil</Tag>}
       >
-        <DataRefreshIndicator loading={loading} dataSource={ledgerRows} />
-        <Table
+        <DataTableView
+          loading={loading}
+          showRefreshIndicator
           className="app-data-table"
           dataSource={ledgerRows}
           columns={columns}
           rowKey="id"
           scroll={{ x: 980 }}
           pagination={{ pageSize: 20, showSizeChanger: true }}
+          mobileCardConfig={ledgerMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(
               loading,

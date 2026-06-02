@@ -1632,3 +1632,236 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
   align-items: center;
   gap: 6px;
 }
+
+/* =========================
+   SECTION: DataTableView Mobile Cards - AKTIF / GUARDED
+   Fungsi:
+   - membuat tabel operasional yang sudah diberi mobileCardConfig tampil sebagai kartu ringkas di layar HP.
+   - desktop/tablet besar tetap memakai AntD Table existing agar layout lama tidak berubah.
+   Hubungan flow aplikasi:
+   - presentational-only; tidak mengubah dataSource, columns, pagination desktop, handler aksi, mutasi stok, kas, sales, purchase, payroll, atau audit log.
+   Status:
+   - AKTIF untuk page master/transaksi/finance yang sudah dimigrasikan ke DataTableView.
+========================= */
+.ims-mobile-card-list {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .ims-data-table-view--mobile-card > .ant-table-wrapper {
+    display: none;
+  }
+
+  .ims-data-table-view--mobile-card .ims-mobile-card-list {
+    display: grid;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .ims-mobile-card {
+    width: 100%;
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--ims-border-strong);
+    border-radius: 16px;
+    background: var(--ims-bg-card);
+    box-shadow: var(--ims-shadow-soft);
+  }
+
+  .ims-mobile-card__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .ims-mobile-card__identity {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .ims-mobile-card__title {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ims-text-primary);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+  }
+
+  .ims-mobile-card__subtitle,
+  .ims-mobile-card__subtext {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    min-width: 0;
+    color: var(--ims-text-secondary);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .ims-mobile-card__tags {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
+    max-width: 45%;
+  }
+
+  .ims-mobile-card__tags .ant-tag,
+  .ims-mobile-card__content .ant-tag {
+    margin-inline-end: 0;
+  }
+
+  .ims-mobile-card__subtext,
+  .ims-mobile-card__meta-grid,
+  .ims-mobile-card__content,
+  .ims-mobile-card__actions {
+    margin-top: 10px;
+  }
+
+  .ims-mobile-card__meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .ims-mobile-card__meta-item {
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1px solid var(--ims-border-color-soft);
+    border-radius: 12px;
+    background: var(--ims-bg-card-soft);
+  }
+
+  .ims-mobile-card__meta-label,
+  .ims-mobile-card__meta-value {
+    display: block;
+    min-width: 0;
+  }
+
+  .ims-mobile-card__meta-label {
+    color: var(--ims-text-muted);
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .ims-mobile-card__meta-value {
+    margin-top: 3px;
+    overflow-wrap: anywhere;
+    color: var(--ims-text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .ims-mobile-card__content {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    color: var(--ims-text-primary);
+  }
+
+  .ims-mobile-card__content-item {
+    min-width: 0;
+  }
+
+  .ims-mobile-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--ims-border-color-soft);
+  }
+
+  .ims-mobile-card__actions > span,
+  .ims-mobile-card__actions .ims-action-group {
+    display: flex;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .ims-mobile-card__actions .ims-action-group--vertical {
+    flex-direction: row !important;
+  }
+
+  .ims-mobile-card__actions .ims-action-button,
+  .ims-mobile-card__actions .ant-btn {
+    flex: 1 1 auto;
+    min-width: 104px;
+  }
+
+  .ims-mobile-card-empty {
+    padding: 18px 14px;
+    border: 1px dashed var(--ims-border-strong);
+    border-radius: 16px;
+    background: var(--ims-bg-card-soft);
+    color: var(--ims-text-secondary);
+    text-align: center;
+  }
+
+  .ims-mobile-card-pagination {
+    justify-content: center;
+    padding: 2px 0 6px;
+  }
+}
+
+@media (max-width: 420px) {
+  .ims-mobile-card__header {
+    flex-direction: column;
+  }
+
+  .ims-mobile-card__tags {
+    justify-content: flex-start;
+    max-width: 100%;
+  }
+
+  .ims-mobile-card__meta-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* =========================
+   SECTION: Mobile Local Table Scroll Reinforcement - AKTIF / GUARDED
+   Fungsi:
+   - memastikan tabel yang sengaja belum dikonversi ke mobile cards tetap scroll lokal di drawer/modal/report utility.
+   - mencegah overflow horizontal body pada layar HP tanpa mengubah kolom, dataSource, handler, atau business flow.
+   Scope:
+   - hanya viewport mobile; desktop >= 992px tetap mengikuti tampilan tabel lengkap existing.
+========================= */
+@media (max-width: 768px) {
+  .app-data-table.ant-table-wrapper,
+  .ims-table.ant-table-wrapper,
+  .ims-page .ant-table-wrapper,
+  .ant-drawer-body .ant-table-wrapper,
+  .ant-modal-body .ant-table-wrapper,
+  .app-content-card .ant-table-wrapper {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .app-data-table .ant-table-content,
+  .ims-table .ant-table-content,
+  .ims-page .ant-table-content,
+  .ant-drawer-body .ant-table-content,
+  .ant-modal-body .ant-table-content,
+  .app-content-card .ant-table-content {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ant-drawer-body,
+  .ant-modal-body {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+}

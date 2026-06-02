@@ -10,7 +10,6 @@ import {
   Popconfirm,
   Select,
   Space,
-  Table,
   Tag,
   message,
 } from "antd";
@@ -32,6 +31,7 @@ import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { db } from "../../firebase";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
@@ -472,6 +472,52 @@ const CashOut = () => {
     [],
   );
 
+  const cashOutMobileCardConfig = {
+    title: (record) => record.description || record.type || 'Pengeluaran',
+    subtitle: (record) => [
+      formatDateId(record.date),
+      record.sourceRef || record.cashOutNumber || record.code || record.referenceNumber || null,
+    ].filter(Boolean),
+    tags: (record) => {
+      const sourceMeta = resolveExpenseSourceMeta(record);
+      const savingMeta = record.sourceModule === 'purchases' || record.savingLabel ? getSavingMeta(record.savingAmount) : null;
+      return [
+        <Tag key="source" color={sourceMeta.color}>{sourceMeta.label}</Tag>,
+        savingMeta ? <Tag key="saving" color={savingMeta.color}>{savingMeta.label}</Tag> : null,
+      ].filter(Boolean);
+    },
+    meta: [
+      { label: 'Aktual Keluar', value: (record) => formatCurrencyId(record.amount || 0) },
+      { label: 'Total Ref', value: (record) => {
+        if (record.sourceModule !== 'purchases' && !record.totalReferenceAmount) return '-';
+        return formatCurrencyId(record.totalReferenceAmount || 0);
+      } },
+      { label: 'Supplier', value: (record) => record.supplierName || '-' },
+    ],
+    actions: (record) => {
+      const sourceMeta = resolveExpenseSourceMeta(record);
+
+      if (!sourceMeta.deletable) {
+        return <Tag color={sourceMeta.color}>Otomatis</Tag>;
+      }
+
+      return (
+        <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+          <Popconfirm
+            title="Yakin hapus transaksi ini?"
+            onConfirm={() => handleDeleteTransaction(record.id)}
+            okText="Ya"
+            cancelText="Tidak"
+          >
+            <Button className="ims-action-button" danger icon={<DeleteOutlined />}>
+              Hapus
+            </Button>
+          </Popconfirm>
+        </Space>
+      );
+    },
+  };
+
   /* =====================================================
      SECTION: Cash Out Render Panel — GUARDED
      Fungsi:
@@ -570,7 +616,8 @@ const CashOut = () => {
         extra={<Tag color="red">{formatNumberId(filteredCashOuts.length)} baris</Tag>}
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredCashOuts} />
-        <Table
+        <DataTableView
+          showRefreshIndicator={false}
           className="app-data-table"
           rowKey="id"
           dataSource={filteredCashOuts}
@@ -578,6 +625,7 @@ const CashOut = () => {
           locale={{
             emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada pengeluaran pada periode ini." />),
           }}
+          mobileCardConfig={cashOutMobileCardConfig}
         />
       </PageSection>
 

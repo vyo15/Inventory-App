@@ -2136,3 +2136,33 @@ Ekspektasi tambahan:
 - [ ] Audit log create/update/delete Categories dan Customers menyimpan actor admin lokal, bukan `system`.
 - [ ] Frontend mode `VITE_AUTH_MODE=sqlite` + repository SQLite bisa create/update/delete setelah login admin lokal.
 - [ ] Jika token expired/hilang, UI menampilkan error dan tidak membuat data baru diam-diam.
+
+## Checklist UI Mobile DataTableView
+
+- Buka halaman berikut di viewport mobile 360–430px dan pastikan tidak perlu scroll horizontal untuk melihat data utama: Products, Raw Materials, Stock Adjustment history, Sales, Purchases, Returns, Cash In, Cash Out, Customers, Categories, Pricing Rules, Suppliers, User Management.
+- Buka halaman Produksi: Karyawan Produksi, Production Orders, Work Log Produksi, BOM Produksi, dan Semi Finished Materials di viewport mobile 360–430px; pastikan daftar berubah menjadi kartu ringkas tanpa scroll horizontal untuk informasi utama.
+- Pastikan desktop tetap memakai tabel lama dan kolom/action masih sama seperti sebelum patch.
+- Pastikan action mobile tetap memakai handler existing: Detail/Edit/Hapus/Status/Nonaktifkan/Aktifkan tidak membuat flow baru.
+- Pastikan action mobile area Produksi tetap memanggil handler existing: Detail/Edit/Refresh Need/Mulai Produksi/Selesaikan/toggle status, tanpa membuat flow stok, material usage, payroll, atau HPP baru.
+- Di BOM dan Semi Finished grouped mode, buka collapse lalu pastikan item di dalam group juga tampil sebagai mobile card, bukan tabel desktop penuh.
+- Pastikan empty state, loading refresh lokal, pagination mobile, light mode, dan dark mode tetap terbaca.
+- Pastikan tidak ada Firestore technical ID yang tampil sebagai judul utama kartu mobile.
+
+## Checklist Mobile DataTableView Patch A-C — 2026-06-02
+
+- [ ] Buka Stock Management pada viewport 360x640 dan 400x800; Riwayat Pergerakan Stok tampil sebagai kartu, body tidak horizontal overflow, dan tombol `Detail` membuka drawer read-only.
+- [ ] Buka panel Penyesuaian Stok pada mobile; kartu menampilkan tanggal, item, jenis item, qty, alasan/catatan ringkas, dan tombol `Detail` membuka drawer tanpa mengubah stok.
+- [ ] Buka Sales pada mobile; setiap kartu menampilkan referensi, tanggal/customer, channel/status, total, item ringkas, dan `Lihat Detail` membuka drawer. Pastikan tidak ada tombol Batalkan/Delete/Hapus.
+- [ ] Buka Purchases pada mobile; kartu menampilkan kode/tanggal, supplier, total/modal, item, dan `Lihat Detail` membuka drawer. Pastikan OCR, stock-in, dan expense flow tetap tidak berubah.
+- [ ] Buka Customers dan Categories pada mobile/desktop; tag mode tidak menampilkan enum mentah `SQLITE_SIDECAR`, melainkan label user-facing.
+- [ ] Ulangi semua halaman di dark mode; kartu, tag, tombol detail, dan drawer tetap terbaca.
+
+## Checklist Mobile Detail/Report DataTableView — 2026-06-02
+
+- [ ] Sales mobile: bagian Penjualan per Channel tampil sebagai kartu; tombol `Lihat Detail` membuka drawer dan transaksi di drawer juga tampil kartu ringkas.
+- [ ] Products/Raw Materials/Semi Finished mobile: buka detail item dengan varian; daftar varian tampil kartu berisi nama varian, stok, reserved, tersedia, dan status.
+- [ ] Produksi mobile: buka BOM detail, Production Order detail, Work Log detail, Production Steps detail, Production Profiles detail; tabel detail material/step/output tampil sebagai kartu atau scroll lokal tanpa overflow body.
+- [ ] Report mobile: StockReport, SalesReport, PurchasesReport, PayrollReport, ProfitLossReport, dan Money Movement Ledger menampilkan informasi utama sebagai kartu, sementara desktop tetap tabel lengkap.
+- [ ] Supplier dan Pricing Rules mobile: katalog restock supplier dan preview pricing tampil ringkas; link/action masih memakai handler existing.
+- [ ] Utility/reset/offline panel yang masih tabel lengkap hanya scroll lokal di area tabel/drawer/modal, bukan membuat halaman ikut geser kanan-kiri.
+- [ ] Uji viewport 360x640, 400x800, dan desktop >=992px; dark mode tetap terbaca dan tidak ada informasi teknis/Firestore ID sebagai judul kartu.

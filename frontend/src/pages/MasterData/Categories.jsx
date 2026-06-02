@@ -5,7 +5,6 @@ import {
   Input,
   Popconfirm,
   Space,
-  Table,
   Tag,
   message,
 } from "antd";
@@ -13,6 +12,7 @@ import { EditOutlined, PlusOutlined } from "@ant-design/icons";
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import OfflineRepositoryStatus, {
   OfflineRepositoryEmptyState,
@@ -26,6 +26,12 @@ import {
 import { REPOSITORY_MODES } from "../../data/repositories/repositoryMode";
 import { getRepositoryModeStatus } from "../../data/repositories/repositoryModeService";
 
+const getRepositoryModeCopy = (mode) => (
+  mode === REPOSITORY_MODES.SQLITE_SIDECAR
+    ? { label: "SQLite Lokal", shortLabel: "Data Lokal", color: "green" }
+    : { label: "Firebase Fallback", shortLabel: "Fallback", color: "blue" }
+);
+
 const Categories = () => {
   const [categories, setCategories] = useState([]);
   const [repositoryMode, setRepositoryMode] = useState(REPOSITORY_MODES.SQLITE_SIDECAR);
@@ -36,6 +42,7 @@ const Categories = () => {
   const [form] = Form.useForm();
 
   const getModeOptions = useCallback((mode = repositoryMode) => ({ mode }), [repositoryMode]);
+  const repositoryModeCopy = getRepositoryModeCopy(repositoryMode);
 
 
   const fetchCategories = useCallback(async () => {
@@ -139,12 +146,44 @@ const Categories = () => {
     },
   ];
 
+  const categoryMobileCardConfig = {
+    title: (record) => record.name || '-',
+    subtitle: (record) => record.description || 'Tanpa deskripsi',
+    tags: () => [
+      <Tag key="db" color={repositoryModeCopy.color}>
+        {repositoryModeCopy.shortLabel}
+      </Tag>,
+    ],
+    actions: (record) => (
+      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+        <Button
+          className="ims-action-button"
+          icon={<EditOutlined />}
+          size="small"
+          onClick={() => handleEdit(record)}
+        >
+          Edit
+        </Button>
+        <Popconfirm
+          title={repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR ? 'Nonaktifkan kategori di SQLite?' : 'Yakin hapus kategori ini?'}
+          onConfirm={() => handleDelete(record.id)}
+          okText="Ya"
+          cancelText="Batal"
+        >
+          <Button className="ims-action-button" danger size="small">
+            Hapus
+          </Button>
+        </Popconfirm>
+      </Space>
+    ),
+  };
+
   return (
     <div className="page-container">
       <PageHeader
         title="Kategori"
         subtitle="Master kategori. Default memakai SQLite lokal lewat backend LAN. Firebase masih tersedia sebagai fallback manual."
-        extra={<Tag color={repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR ? "gold" : "blue"}>DB: {repositoryMode}</Tag>}
+        extra={<Tag color={repositoryModeCopy.color}>Mode: {repositoryModeCopy.label}</Tag>}
         actions={[
           {
             key: "create-category",
@@ -177,7 +216,8 @@ const Categories = () => {
         }
       >
         <DataRefreshIndicator loading={loading} dataSource={categories} />
-        <Table
+        <DataTableView
+          showRefreshIndicator={false}
           className="app-data-table"
           columns={columns}
           dataSource={categories}
@@ -192,6 +232,7 @@ const Categories = () => {
               />,
             ),
           }}
+          mobileCardConfig={categoryMobileCardConfig}
         />
       </PageSection>
 

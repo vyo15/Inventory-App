@@ -950,6 +950,68 @@ const ProductionWorkLogs = () => {
     },
   ];
 
+  // IMS NOTE [AKTIF/GUARDED UI] - Mobile card Work Log Produksi.
+  // Fungsi: daftar work log terbaca di HP tanpa scroll tabel panjang.
+  // Guardrail: hanya presentasi; edit/complete, payroll generation, material usage, output, dan status flow tetap handler existing.
+  const productionWorkLogMobileCardConfig = {
+    title: (record) => resolveDisplayReference(record, { fields: ["workNumber"], fallback: "-" }),
+    subtitle: (record) => [
+      formatDisplayDate(record.workDate),
+      record.targetName || "Target belum tercatat",
+      record.stepName || null,
+    ].filter(Boolean),
+    tags: (record) => [
+      <Tag key="source" color={getWorkLogSourceTagColor(record.sourceType)}>
+        {WORK_LOG_SOURCE_TYPE_MAP[record.sourceType] || record.sourceType || "-"}
+      </Tag>,
+      <Tag key="status" color={getWorkLogStatusTagColor(record.status)}>
+        {WORK_LOG_STATUS_MAP[record.status] || "-"}
+      </Tag>,
+    ],
+    meta: [
+      { label: "Batch", value: (record) => formatNumber(record.plannedQty) },
+      { label: "Hasil Baik", value: (record) => formatNumber(record.goodQty) },
+      { label: "Biaya Aktual", value: (record) => formatCurrency(record.totalCostActual) },
+    ],
+    content: (record) => [
+      record.targetVariantLabel ? `Varian: ${record.targetVariantLabel}` : null,
+      `No. Order: ${record.productionOrderCode || "-"}`,
+      `Estimasi output: ${formatNumber(record.theoreticalOutputQty || 0)}`,
+    ].filter(Boolean),
+    actions: (record) => (
+      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+        <Button
+          className="ims-action-button ims-action-button--block"
+          size="small"
+          icon={<EyeOutlined />}
+          onClick={() => handleViewDetail(record)}
+        >
+          Detail
+        </Button>
+        {isEditableProductionWorkLog(record) ? (
+          <Button
+            className="ims-action-button ims-action-button--block"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            Edit
+          </Button>
+        ) : null}
+        {isEditableProductionWorkLog(record) ? (
+          <Button
+            className="ims-action-button ims-action-button--block"
+            size="small"
+            type="primary"
+            onClick={() => handleOpenComplete(record)}
+          >
+            Selesaikan
+          </Button>
+        ) : null}
+      </Space>
+    ),
+  };
+
   return (
     <div className="ims-page">
       <ProductionPageHeader
@@ -999,6 +1061,7 @@ const ProductionWorkLogs = () => {
             pageSize: 10,
             showSizeChanger: true,
           }}
+          mobileCardConfig={productionWorkLogMobileCardConfig}
         />
       </Card>
 

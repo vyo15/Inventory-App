@@ -17,7 +17,6 @@ import {
   Space,
   Statistic,
   Switch,
-  Table,
   Tag,
   Typography,
   message,
@@ -38,6 +37,7 @@ import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import StockDisplayBlock from '../../components/Layout/Table/StockDisplayBlock';
+import DataTableView from '../../components/Layout/Table/DataTableView';
 import {
   COLOR_VARIANT_MAP,
   ensureAtLeastOneVariant,
@@ -49,7 +49,6 @@ import {
   toggleProductActive,
   updateProduct,
 } from '../../services/MasterData/productsService';
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import { buildSinglePricingPreview } from '../../services/Pricing/pricingService';
 import PricingModeSwitch from '../../components/Pricing/PricingModeSwitch';
@@ -614,6 +613,53 @@ const Products = () => {
     },
   ];
 
+  const productMobileCardConfig = {
+    title: (record) => record.name || '-',
+    subtitle: (record) => [
+      record.category || 'Produk Jadi',
+      record.hasVariants ? `${formatNumberID(record.variantCount || 0)} varian` : 'Tanpa Varian',
+    ],
+    tags: (record) => {
+      const statusMeta = getProductStatusMeta(record);
+      return [
+        <Tag key="status" className="ims-status-tag" color={statusMeta.color}>{statusMeta.label}</Tag>,
+      ];
+    },
+    meta: [
+      { label: 'Harga Jual', value: (record) => `${formatCurrencyId(record.price || 0)} / pcs` },
+      { label: 'HPP', value: (record) => `${formatCurrencyId(record.hppPerUnit || 0)} / pcs` },
+      { label: 'Pricing', value: (record) => getRuleModeLabel(record.pricingMode, record.pricingRuleId, pricingRuleMap) },
+    ],
+    content: (record) => (
+      <StockDisplayBlock
+        record={record}
+        unit="pcs"
+        getVariantLabel={getVariantDisplayLabel}
+        className="ims-cell-stack ims-cell-stack-tight"
+        metaClassName="ims-cell-meta"
+        minStockThreshold={Number(record.minStockAlert || 0)}
+      />
+    ),
+    actions: (record) => (
+      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+        <Button className="ims-action-button ims-action-button--block" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
+          Detail
+        </Button>
+        <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          Edit
+        </Button>
+        <Popconfirm
+          title={record.isActive === false ? 'Aktifkan kembali produk?' : 'Nonaktifkan produk?'}
+          okText="Ya"
+          cancelText="Batal"
+          onConfirm={() => handleToggleActive(record)}
+        >
+          <Button className="ims-action-button ims-action-button--block" size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
+        </Popconfirm>
+      </Space>
+    ),
+  };
+
   return (
     <div className="page-container ims-page">
       {/* ---------------------------------------------------------------------
@@ -684,8 +730,8 @@ const Products = () => {
         title="Daftar Produk Jadi"
         subtitle="Harga, stok, dan varian produk."
       >
-        <DataRefreshIndicator loading={loading} dataSource={filteredProducts} />
-        <Table
+        <DataTableView
+          loading={loading}
           className="ims-table"
           rowKey="id"
           dataSource={filteredProducts}
@@ -693,9 +739,8 @@ const Products = () => {
           size="small"
           pagination={{ pageSize: 10 }}
           tableLayout="fixed"
-          locale={{
-            emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data produk" />),
-          }}
+          emptyText={<Empty description="Belum ada data produk" />}
+          mobileCardConfig={productMobileCardConfig}
         />
       </PageSection>
 
@@ -1101,12 +1146,31 @@ const Products = () => {
 
               <Card size="small" title={selectedProduct.hasVariants ? 'Varian Produk' : 'Stok Master'}>
                 {selectedProduct.hasVariants ? (
-                  <Table
+                  <DataTableView
                     className="ims-table"
                     rowKey={(record, index) => `${selectedProduct.id}-${record.variantKey || record.color || index}`}
                     pagination={false}
                     size="small"
+                    showRefreshIndicator={false}
                     dataSource={selectedProduct.variants || []}
+                    mobileCardConfig={{
+                      title: (variant, index) => getVariantDisplayLabel(variant, index),
+                      tags: (variant) => (
+                        <Tag className="ims-status-tag" color={variant.isActive === false ? 'default' : 'green'}>
+                          {variant.isActive === false ? 'Nonaktif' : 'Aktif'}
+                        </Tag>
+                      ),
+                      meta: [
+                        { label: 'Stok', value: (variant) => formatStockWithUnit(variant.currentStock || 0) },
+                        { label: 'Reserved', value: (variant) => formatStockWithUnit(variant.reservedStock || 0) },
+                        {
+                          label: 'Tersedia',
+                          value: (variant) => formatStockWithUnit(
+                            Math.max(Number(variant.currentStock || 0) - Number(variant.reservedStock || 0), 0),
+                          ),
+                        },
+                      ],
+                    }}
                     columns={[
                       {
                         title: selectedProduct.variantLabel || 'Varian',

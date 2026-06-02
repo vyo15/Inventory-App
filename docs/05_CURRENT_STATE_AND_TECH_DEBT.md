@@ -1552,3 +1552,19 @@ Yang masih guarded / belum final:
 - Frontend SQLite API client otomatis menyertakan `Authorization: Bearer <local-session-token>` dari auth lokal jika token tersedia, sehingga adapter Categories/Customers/Supplier tidak perlu duplikasi header.
 - Audit log create/update/delete Categories dan Customers kini menyimpan actor username admin lokal, bukan default `system`.
 - Tidak ada perubahan schema SQLite, Firestore schema, route/menu aplikasi utama, stock, purchase, sales, returns, finance, production, payroll, HPP, atau reset destructive lama.
+
+## Update Mobile DataTableView Patch A-C — 2026-06-02
+
+- **AKTIF:** `src/pages/Inventory/StockManagement.jsx` memakai `DataTableView` untuk Riwayat Pergerakan Stok. Desktop tetap tabel lengkap; mobile memakai kartu ringkas dengan nama item, tanggal, arah, sumber, qty, referensi, catatan, dan drawer Detail read-only.
+- **AKTIF:** `src/pages/Inventory/components/StockAdjustmentPanel.jsx` menambahkan action `Detail` pada mobile card riwayat Penyesuaian Stok. Detail ditampilkan di drawer read-only berisi tanggal, item, jenis item, varian, arah adjustment, qty, alasan, dan catatan.
+- **AKTIF:** `src/pages/Transaksi/Sales.jsx` menambahkan action `Lihat Detail` pada mobile card Sales. Drawer detail menampilkan referensi bisnis, tanggal, customer, channel, status, total, dan ringkasan item tanpa membuka cancel/delete.
+- **AKTIF:** `src/pages/Transaksi/Purchases.jsx` menambahkan action `Lihat Detail` pada mobile card Purchases. Drawer detail menampilkan kode, tanggal, supplier, tipe item, varian, qty, stok masuk, biaya, dan catatan tanpa mengubah OCR, stock-in, atau expense flow.
+- **AKTIF:** `src/pages/MasterData/Customers.jsx` dan `src/pages/MasterData/Categories.jsx` tidak lagi menampilkan enum mentah `SQLITE_SIDECAR` pada tag utama/mobile card; label diganti menjadi copy user-facing seperti `SQLite Lokal`, `Data Lokal`, dan `Firebase Fallback`.
+- **GUARDED:** Patch ini UI-only. Tidak ada perubahan schema, route/menu/role guard, service mutation, stock transaction, purchase commit, sales status guard, returns, finance ledger, production, payroll, HPP, reset destructive, atau audit log payload.
+
+## Update Mobile Detail/Report DataTableView — 2026-06-02
+
+- **AKTIF:** tabel sisa yang masih sering memicu scroll horizontal di mobile kini dimigrasikan ke `DataTableView + mobileCardConfig` pada channel summary Sales, drawer detail channel Sales, detail varian Products/Raw Materials/Semi Finished, detail material/step BOM, detail requirement Production Orders, detail Work Log, Production Planning, Production Steps, Production Profiles, Production Payrolls, Production HPP Analysis, report Stock/Sales/Purchases/Payroll/Profit Loss, Money Movement Ledger, Supplier katalog restock, dan preview Pricing Rules.
+- **AKTIF:** `src/App.css` menambahkan penguatan scroll lokal mobile untuk tabel yang sengaja belum dikonversi, terutama di drawer/modal/utility/reset/offline panel. Ini hanya mencegah body horizontal overflow; tabel kompleks tetap boleh scroll lokal.
+- **GUARDED:** perubahan ini hanya presentation layer. Tidak ada perubahan schema, collection, route/menu/role guard, service mutation, stock/purchase/sales/returns/finance ledger, production order status flow, material usage, payroll final, HPP calculation, reset destructive flow, atau audit log payload.
+- **CLEANUP CANDIDATE:** report besar dan utility/reset/offline panel yang masih memakai tabel lengkap sebaiknya tetap diaudit per halaman sebelum dimigrasikan penuh, karena beberapa tabel memang membutuhkan kolom lengkap dan konteks audit.

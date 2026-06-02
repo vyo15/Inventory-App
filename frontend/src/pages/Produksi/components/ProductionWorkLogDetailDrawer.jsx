@@ -8,7 +8,6 @@ import {
   Empty,
   Row,
   Space,
-  Table,
   Tag,
   Typography,
 } from "antd";
@@ -22,6 +21,7 @@ import formatCurrency from "../../../utils/formatters/currencyId";
 import formatNumber from "../../../utils/formatters/numberId";
 import { resolveWorkLogLaborCostDisplay } from "../../../utils/produksi/productionPayrollRuleHelpers";
 import { resolveDisplayReference } from "../../../utils/references/displayReferenceResolver";
+import DataTableView from "../../../components/Layout/Table/DataTableView";
 
 const safeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -508,26 +508,62 @@ const ProductionWorkLogDetailDrawer = ({
           </Row>
 
           <Card size="small" title="Pemakaian Material" style={{ marginBottom: 16 }}>
-            <Table
+            <DataTableView
               className="ims-table"
               rowKey={(record, index) => record.id || `material-${index}`}
               pagination={false}
               size="small"
+              showRefreshIndicator={false}
               dataSource={selectedRecord.materialUsages || []}
               locale={{ emptyText: "Belum ada material usage" }}
               columns={detailMaterialColumns}
+              mobileCardConfig={{
+                title: (record) => record.itemName || "Material",
+                subtitle: (record) => record.resolvedVariantLabel ? `Varian: ${record.resolvedVariantLabel}` : null,
+                tags: (record) => (
+                  <Tag className="ims-status-tag" color={getStockSourceTagColor(record.stockSourceType)}>
+                    {record.stockSourceType === "variant" ? "Variant" : "Master"}
+                  </Tag>
+                ),
+                meta: [
+                  { label: "Plan", value: (record) => `${formatNumber(record.plannedQty)} ${record.unit || ""}` },
+                  { label: "Actual", value: (record) => `${formatNumber(record.actualQty)} ${record.unit || ""}` },
+                  { label: "Biaya", value: (record) => formatCurrency(record.totalCostSnapshot || 0) },
+                ],
+              }}
             />
           </Card>
 
           <Card size="small" title="Hasil Produksi">
-            <Table
+            <DataTableView
               className="ims-table"
               rowKey={(record, index) => record.id || `output-${index}`}
               pagination={false}
               size="small"
+              showRefreshIndicator={false}
               dataSource={selectedRecord.outputs || []}
               locale={{ emptyText: "Belum ada output" }}
               columns={detailOutputColumns}
+              mobileCardConfig={{
+                title: (record) => record.outputName || "Output produksi",
+                subtitle: (record) => [
+                  record.outputCode || null,
+                  WORK_LOG_TARGET_TYPE_MAP[record.outputType] || record.outputType || null,
+                  record.outputVariantLabel ? `Varian: ${record.outputVariantLabel}` : null,
+                ],
+                tags: (record) => (
+                  <Tag className="ims-status-tag" color={record.stockAdded ? "green" : "default"}>
+                    {record.stockAdded ? "Sudah masuk stok" : "Belum diposting"}
+                  </Tag>
+                ),
+                meta: [
+                  { label: "Good", value: (record) => `${formatNumber(record.goodQty)} ${record.unit || ""}` },
+                  {
+                    label: "Target Stok",
+                    value: (record) => record.stockSourceType === "variant" ? "Variant" : "Master",
+                  },
+                ],
+              }}
             />
           </Card>
         </>

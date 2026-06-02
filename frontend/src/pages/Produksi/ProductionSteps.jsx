@@ -24,7 +24,6 @@ import {
   Space,
   Statistic,
   Switch,
-  Table,
   Tag,
   Tooltip,
   Typography,
@@ -55,8 +54,9 @@ import { getAllProductionBoms } from "../../services/Produksi/productionBomsServ
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -516,6 +516,41 @@ const ProductionSteps = () => {
     },
   ];
 
+  const stepsMobileCardConfig = {
+    title: (record) => record.name || "Step produksi",
+    subtitle: (record) => [
+      PROCESS_TYPE_MAP[record.processType] || record.processType || "Kategori belum diisi",
+      BASIS_TYPE_MAP[record.basisType] || record.basisType || "Cara kerja belum diisi",
+    ],
+    tags: (record) => record.isActive ? <Badge status="success" text="Aktif" /> : <Badge status="default" text="Nonaktif" />,
+    meta: [
+      { label: "Upah", value: (record) => record.payrollMode ? formatProductionStepPayrollPreview(record) : "Belum ada aturan upah" },
+      { label: "BOM", value: (record) => formatNumber(record.bomCount || 0) },
+      { label: "Karyawan", value: (record) => formatNumber(record.employeeCount || 0) },
+    ],
+    actions: (record) => (
+      <Space wrap className="ims-action-group">
+        <Button className="ims-action-button" size="small" icon={<EyeOutlined />} onClick={() => handleOpenDetailDrawer(record)}>Detail</Button>
+        <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>Edit</Button>
+      </Space>
+    ),
+  };
+
+  const stepEmployeeMobileCardConfig = {
+    title: (record) => record.name || "Karyawan",
+    subtitle: (record) => [record.role || "Role belum diisi", record.employmentType || "Tipe kerja belum diisi"],
+    tags: (record) => record.isActive ? <Badge status="success" text="Aktif" /> : <Badge status="default" text="Nonaktif" />,
+  };
+
+  const stepBomMobileCardConfig = {
+    title: (record) => record.name || "BOM",
+    subtitle: (record) => record.targetName || "Target belum diisi",
+    tags: (record) => [
+      <Tag key="target" color="purple">{record.targetType === "product" ? "Produk Jadi" : "Semi Finished"}</Tag>,
+      record.isActive ? <Badge key="active" status="success" text="Aktif" /> : <Badge key="inactive" status="default" text="Nonaktif" />,
+    ],
+  };
+
   const selectedStepPayrollPreview = selectedStep?.payrollMode
     ? formatProductionStepPayrollPreview(selectedStep)
     : "Belum ada rule payroll";
@@ -591,12 +626,14 @@ const ProductionSteps = () => {
             Risiko:
             - Menambahkan kembali fixed right tanpa scroll x dapat membuat layout action rusak di viewport kecil.
         ===================================================== */}
-        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
-        <Table
+        <DataTableView
+          loading={loading}
+          showRefreshIndicator
           className="app-data-table"
           rowKey="id"
           columns={columns}
           dataSource={filteredData}
+          mobileCardConfig={stepsMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada data tahapan produksi" />),
           }}
@@ -811,11 +848,13 @@ Risiko:
             allowClear
           />
 
-          <Table
+          <DataTableView
             rowKey="id"
             columns={employeeColumns}
             dataSource={selectedStepEmployees}
             pagination={{ pageSize: 8, showSizeChanger: true }}
+            showRefreshIndicator={false}
+            mobileCardConfig={stepEmployeeMobileCardConfig}
             locale={{ emptyText: <Empty description="Belum ada karyawan terkait step ini" /> }}
           />
         </Space>
@@ -835,11 +874,13 @@ Risiko:
             allowClear
           />
 
-          <Table
+          <DataTableView
             rowKey="id"
             columns={bomColumns}
             dataSource={selectedStepBoms}
             pagination={{ pageSize: 8, showSizeChanger: true }}
+            showRefreshIndicator={false}
+            mobileCardConfig={stepBomMobileCardConfig}
             locale={{ emptyText: <Empty description="Step ini belum dipakai di BOM mana pun" /> }}
           />
         </Space>

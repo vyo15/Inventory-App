@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Col, DatePicker, Table, Tag, message } from "antd";
+import { Button, Col, DatePicker, Tag, message } from "antd";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { fetchPurchasesReportData } from "../../services/Laporan/reportsService";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 import {
   getDefaultReportDateRange,
@@ -187,6 +188,28 @@ const PurchasesReport = () => {
     message.success("Laporan pembelian berhasil diekspor ke Excel.");
   };
 
+  const purchasesReportMobileCardConfig = useMemo(
+    () => ({
+      title: (record) => resolveDisplayReference(record, { fallback: record.sourceRef || "Pembelian" }),
+      subtitle: (record) => [
+        formatDateId(record.date, true),
+        record.supplierName || "Tanpa supplier",
+        getPurchaseVariantLabel(record),
+      ],
+      tags: (record) => {
+        const meta = getSavingMeta(record.savingAmount);
+        return <Tag color={meta.color}>{meta.label}</Tag>;
+      },
+      meta: [
+        { label: "Aktual Keluar", value: (record) => formatCurrencyId(record.amount) },
+        { label: "Referensi", value: (record) => (record.totalReferenceAmount ? formatCurrencyId(record.totalReferenceAmount) : "-") },
+      ],
+      subtext: (record) => `Item: ${record.relatedItemName || record.description || "-"}`,
+      content: (record) => record.description ? <span className="ims-cell-meta">{record.description}</span> : null,
+    }),
+    [],
+  );
+
   const columns = useMemo(
     () => [
       {
@@ -300,13 +323,15 @@ const PurchasesReport = () => {
           </Button>
         }
       >
-        <DataRefreshIndicator loading={loading} dataSource={purchasesData} />
-        <Table
+        <DataTableView
           // AKTIF / GUARDED UI: class standar hanya visual; pembacaan report pembelian/expense flow tidak diubah.
+          loading={loading}
+          showRefreshIndicator
           className="app-data-table"
           dataSource={purchasesData}
           columns={columns}
           rowKey="id"
+          mobileCardConfig={purchasesReportMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data pembelian untuk ditampilkan." />),
           }}

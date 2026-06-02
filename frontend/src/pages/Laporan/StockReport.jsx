@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Col, Input, Select, Table, Tag, message } from "antd";
+import { Alert, Button, Col, Input, Select, Tag, message } from "antd";
 import { CheckCircleOutlined, FileExcelOutlined, WarningOutlined } from "@ant-design/icons";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
@@ -7,10 +7,11 @@ import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { exportJsonToExcel } from "../../utils/export/exportExcel";
 import { fetchFullStockReportExportData, fetchStockReportData } from "../../services/Laporan/stockReportService";
 import { formatNumberId } from "../../utils/formatters/numberId";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 const { Search } = Input;
@@ -323,6 +324,33 @@ const StockReport = () => {
   Risiko:
   - Jangan mengubah query, filter, summary, export mapping, atau perhitungan stockDisplay dari section ini tanpa approval report/data layer.
   ===================================================== */
+  const stockReportMobileCardConfig = useMemo(
+    () => ({
+      title: (record) => record.name || resolveDisplayReference(record) || "Item stok",
+      subtitle: (record) => [
+        resolveDisplayReference(record),
+        record.type || "Jenis belum diisi",
+        record.category || "Tanpa kategori",
+      ],
+      tags: (record) => {
+        const status = record.status || "-";
+        const color = status === "Kritis" || status === "Habis" ? "volcano" : status === "Normal" ? "green" : "default";
+        return <Tag color={color}>{status}</Tag>;
+      },
+      content: (record) => (
+        <StockDisplayBlock
+          record={record}
+          unit={record.unitDisplay}
+          className="ims-cell-stack ims-cell-stack-tight"
+          metaClassName="ims-cell-meta"
+          minStockThreshold={Number(record.minStockDisplay || 0)}
+        />
+      ),
+      subtext: (record) => record.affectedVariantSummary || null,
+    }),
+    [],
+  );
+
   const columns = useMemo(
     () => [
       {
@@ -504,15 +532,17 @@ const StockReport = () => {
             description={`Saat ini termuat ${stockReportLoadedLabel} dari batas ${stockReportLimitLabel} row. Gunakan tombol Muat data lanjutan untuk menambah rows tabel; Export XLSX akan mencoba full export dengan paging read model.`}
           />
         )}
-        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
-        <Table
+        <DataTableView
           // AKTIF / GUARDED UI: class standar hanya visual; sumber stok/currentStock/reservedStock/availableStock tidak diubah.
+          loading={loading}
+          showRefreshIndicator
           className="app-data-table"
           columns={columns}
           dataSource={filteredData}
           rowKey={(record) => getStockReportRowKey(record)}
           bordered
           tableLayout="fixed"
+          mobileCardConfig={stockReportMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada data stok sesuai filter." />),
           }}

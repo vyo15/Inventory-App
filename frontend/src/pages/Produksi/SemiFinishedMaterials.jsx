@@ -30,7 +30,6 @@ import {
   Space,
   Statistic,
   Switch,
-  Table,
   Tag,
   Typography,
 } from "antd";
@@ -61,6 +60,7 @@ import ProductionPageHeader from "../../components/Produksi/shared/ProductionPag
 import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import SemiFinishedMaterialsListView from "./components/SemiFinishedMaterialsListView";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import {
@@ -566,6 +566,84 @@ const SemiFinishedMaterials = () => {
     },
   ];
 
+  // IMS NOTE [AKTIF/GUARDED UI] - Mobile card Semi Finished Material.
+  // Fungsi: membuat stok semi finished dan varian utama terbaca di HP tanpa tabel geser.
+  // Guardrail: hanya presentasi; stok varian, HPP aktif, PO, Work Log, payroll, dan service produksi tidak diubah.
+  const semiFinishedMobileCardConfig = {
+    title: (record) => record.name || "-",
+    subtitle: (record) => [
+      SEMI_FINISHED_CATEGORY_MAP[record.category] || "Kategori belum tercatat",
+      getSemiFinishedGroupLabel(record.flowerGroup, FALLBACK_SEMI_FINISHED_GROUP_LABEL),
+    ].filter(Boolean),
+    tags: (record) => {
+      const statusMeta = getStockStatusMeta(record);
+
+      return [
+        <Tag key="status" color={statusMeta.color}>{statusMeta.label}</Tag>,
+        record.isActive === false ? <Tag key="inactive" color="default">Nonaktif</Tag> : null,
+      ].filter(Boolean);
+    },
+    meta: [
+      {
+        label: "Stok",
+        value: (record) => formatStockWithUnit(record.currentStock || 0, record.unit || "pcs"),
+      },
+      {
+        label: "Available",
+        value: (record) => formatStockWithUnit(record.availableStock ?? record.currentStock ?? 0, record.unit || "pcs"),
+      },
+      {
+        label: "Modal/HPP",
+        value: (record) => `${formatHppUnitCurrencyId(resolveSemiFinishedActiveHppCost(record))} / ${record.unit || "pcs"}`,
+      },
+    ],
+    content: (record) => (
+      <StockDisplayBlock
+        record={record}
+        unit={record.unit || "pcs"}
+        getVariantLabel={getVariantDisplayLabel}
+        className="ims-cell-stack ims-cell-stack-tight"
+        metaClassName="ims-cell-meta"
+        minStockThreshold={Number(record.minStockAlert || 0)}
+      />
+    ),
+    actions: (record) => (
+      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+        <Button
+          className="ims-action-button ims-action-button--block"
+          size="small"
+          icon={<EyeOutlined />}
+          onClick={() => handleViewDetail(record)}
+        >
+          Detail
+        </Button>
+        <Button
+          className="ims-action-button ims-action-button--block"
+          size="small"
+          icon={<EditOutlined />}
+          onClick={() => handleEdit(record)}
+        >
+          Edit
+        </Button>
+        <Popconfirm
+          title={record.isActive !== false ? "Nonaktifkan item ini?" : "Aktifkan item ini?"}
+          description={
+            record.isActive !== false
+              ? "Item tidak akan bisa dipilih untuk data baru."
+              : "Item akan aktif kembali untuk data baru."
+          }
+          onConfirm={() => handleToggleActive(record)}
+          okText="Ya"
+          cancelText="Batal"
+        >
+          <Button className="ims-action-button ims-action-button--block" size="small">
+            {record.isActive !== false ? "Nonaktifkan" : "Aktifkan"}
+          </Button>
+        </Popconfirm>
+      </Space>
+    ),
+  };
+
   // ---------------------------------------------------------------------------
   // State turunan khusus drawer detail.
   // Dipisah dari JSX agar render drawer lebih mudah dibaca dan tidak dipenuhi
@@ -790,6 +868,7 @@ const SemiFinishedMaterials = () => {
           filteredData={filteredData}
           listViewMode={listViewMode}
           columns={columns}
+          mobileCardConfig={semiFinishedMobileCardConfig}
           groupedFilteredData={groupedFilteredData}
           shouldAutoOpenSemiGroups={shouldAutoOpenSemiGroups}
         />
@@ -1384,15 +1463,29 @@ Risiko:
             </Card>
 
             <Card title="Rincian Varian Semi Finished" size="small">
-              <Table
+              <DataTableView
                 size="small"
                 rowKey={(record, index) => `${record.variantKey || record.color}-${index}`}
                 pagination={false}
+                showRefreshIndicator={false}
                 dataSource={selectedMaterialVariants}
                 locale={{ emptyText: "Belum ada varian" }}
                 columns={detailVariantColumns}
                 tableLayout="fixed"
                 scroll={{ x: 720 }}
+                mobileCardConfig={{
+                  title: (record, index) => getVariantDisplayLabel(record, index),
+                  tags: (record) => (
+                    <Tag color={record.isActive === false ? "default" : "green"}>
+                      {record.isActive === false ? "Nonaktif" : "Aktif"}
+                    </Tag>
+                  ),
+                  meta: [
+                    { label: "Stok", value: (record) => formatStockWithUnit(record.currentStock, selectedMaterialUnit) },
+                    { label: "Reserved", value: (record) => formatStockWithUnit(record.reservedStock, selectedMaterialUnit) },
+                    { label: "Tersedia", value: (record) => formatStockWithUnit(record.availableStock, selectedMaterialUnit) },
+                  ],
+                }}
               />
             </Card>
 

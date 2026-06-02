@@ -573,6 +573,91 @@ const ProductionEmployees = () => {
     },
   ];
 
+  // IMS NOTE [AKTIF/GUARDED UI] - Mobile card karyawan produksi.
+  // Fungsi: membuat daftar karyawan terbaca di HP tanpa tabel geser.
+  // Guardrail: hanya presentasi; query payroll/worklog, rule payroll, dan status karyawan tetap memakai handler existing.
+  const productionEmployeeMobileCardConfig = {
+    title: (record) => record.name || "-",
+    subtitle: (record) => [
+      record.phone || "No HP belum tercatat",
+      record.code ? `Kode: ${record.code}` : null,
+    ].filter(Boolean),
+    tags: (record) => [
+      <Tag key="role" color="blue">{EMPLOYEE_ROLE_MAP[record.role] || "Role belum diset"}</Tag>,
+      <Tag key="type">{EMPLOYEE_TYPE_MAP[record.employmentType] || "Jenis kerja belum diset"}</Tag>,
+      record.isActive ? (
+        <Tag key="status" color="green">Aktif</Tag>
+      ) : (
+        <Tag key="status" color="default">Nonaktif</Tag>
+      ),
+    ],
+    meta: [
+      {
+        label: "Step",
+        value: (record) => {
+          const stepNames = Array.isArray(record.assignedStepNames) ? record.assignedStepNames : [];
+          return stepNames.length ? `${formatNumber(stepNames.length)} step` : "Belum ada";
+        },
+      },
+      {
+        label: "Work Log",
+        value: (record) => formatNumber(employeeSummaryMap[record.id]?.totalWorkLogs || 0),
+      },
+      {
+        label: "Payroll Paid",
+        value: (record) => formatCurrency(employeeSummaryMap[record.id]?.totalPaidAmount || 0),
+      },
+    ],
+    content: (record) => {
+      const stepNames = Array.isArray(record.assignedStepNames) ? record.assignedStepNames : [];
+      if (!stepNames.length) return "Belum ada assignment step.";
+
+      return (
+        <Space size={[4, 4]} wrap>
+          {stepNames.slice(0, 4).map((item) => (
+            <Tag key={item}>{item}</Tag>
+          ))}
+          {stepNames.length > 4 ? <Tag>+{formatNumber(stepNames.length - 4)} lainnya</Tag> : null}
+        </Space>
+      );
+    },
+    actions: (record) => (
+      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
+        <Button
+          className="ims-action-button ims-action-button--block"
+          size="small"
+          icon={<EyeOutlined />}
+          onClick={() => handleViewDetail(record)}
+        >
+          Detail
+        </Button>
+        <Button
+          className="ims-action-button ims-action-button--block"
+          size="small"
+          icon={<EditOutlined />}
+          onClick={() => handleEdit(record)}
+        >
+          Edit
+        </Button>
+        <Popconfirm
+          title={record.isActive ? "Nonaktifkan karyawan ini?" : "Aktifkan karyawan ini?"}
+          description={
+            record.isActive
+              ? "Karyawan tidak akan bisa dipilih untuk work log baru."
+              : "Karyawan akan aktif kembali untuk work log baru."
+          }
+          onConfirm={() => handleToggleActive(record)}
+          okText="Ya"
+          cancelText="Batal"
+        >
+          <Button className="ims-action-button ims-action-button--block" size="small">
+            {record.isActive ? "Nonaktifkan" : "Aktifkan"}
+          </Button>
+        </Popconfirm>
+      </Space>
+    ),
+  };
+
   const summaryItems = [
     {
       key: "employees-total",
@@ -719,6 +804,7 @@ const ProductionEmployees = () => {
             pageSize: 10,
             showSizeChanger: true,
           }}
+          mobileCardConfig={productionEmployeeMobileCardConfig}
         />
       </PageSection>
 

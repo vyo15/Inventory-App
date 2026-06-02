@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Table,
   Modal,
   Form,
   Select,
@@ -15,6 +14,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import {
   buildVariantOptionsFromItem,
@@ -290,6 +290,34 @@ const Returns = () => {
     },
   ];
 
+  const returnMobileCardConfig = {
+    title: (record) => resolveDisplayReference(record, {
+      fields: ['returnNumber', 'returnCode', 'code', 'referenceNumber', 'sourceRef', 'referenceCode'],
+      fallback: 'Referensi belum tersedia',
+      allowTechnicalId: false,
+    }),
+    subtitle: (record) => [
+      record.date?.toDate ? dayjs(record.date.toDate()).format('DD-MM-YYYY HH:mm') : '-',
+      record.itemName || 'Item tidak tercatat',
+    ],
+    tags: (record) => [
+      <Tag key="item-type" color={record.type === 'product' ? 'blue' : 'gold'}>
+        {record.type === 'product' ? 'Produk' : 'Bahan Baku'}
+      </Tag>,
+      <Tag key="variant" color={record.variantLabel || record.variantKey ? 'purple' : 'default'}>
+        {record.variantLabel || record.variantKey || 'Master'}
+      </Tag>,
+    ],
+    meta: [
+      { label: 'Qty Return', value: (record) => {
+        const unit = record.stockUnit || record.unit || '';
+        return `${formatNumberId(record.quantity)}${unit ? ` ${unit}` : ''}`;
+      } },
+      { label: 'Tanggal', value: (record) => (record.date?.toDate ? dayjs(record.date.toDate()).format('DD-MM-YYYY') : '-') },
+    ],
+    content: (record) => record.note || '-',
+  };
+
   /* =====================================================
      SECTION: Returns Render Panel — GUARDED
      Fungsi:
@@ -335,13 +363,15 @@ const Returns = () => {
             Status: aktif / final
         ========================= */}
         <DataRefreshIndicator loading={isLoading} dataSource={returnRecords} />
-        <Table
+        <DataTableView
+          showRefreshIndicator={false}
           className="app-data-table"
           dataSource={returnRecords}
           columns={returnTableColumns}
           rowKey="id"
           tableLayout="fixed"
           locale={{ emptyText: getDataTableEmptyText(isLoading, loadError || "Belum ada data retur.") }}
+          mobileCardConfig={returnMobileCardConfig}
         />
       </PageSection>
 

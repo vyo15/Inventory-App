@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { Table, Modal, Form, message, Upload } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { Button, Drawer, Form, message, Modal, Space, Tag, Upload, Typography } from "antd";
+import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
 import { useSearchParams } from "react-router-dom";
 import {
   doesSupplierProvideMaterial,
@@ -14,7 +15,10 @@ import {
 } from "../../services/MasterData/suppliersService";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { formatCurrencyId } from "../../utils/formatters/currencyId";
+import { formatNumberId } from "../../utils/formatters/numberId";
 import {
   enrichRawMaterialWithVariantTotals,
 } from "../../utils/variants/rawMaterialVariantHelpers";
@@ -46,6 +50,8 @@ import {
   calculateSupplierReferenceTotal,
   calculateSupplierSubtotal,
 } from "./helpers/purchasesPageHelpers";
+
+const { Text } = Typography;
 
 // =========================
 // SECTION: Purchases Page
@@ -84,6 +90,7 @@ const Purchases = () => {
     rawText: "",
     purchaseMeta: {},
   });
+  const [selectedPurchaseDetail, setSelectedPurchaseDetail] = useState(null);
 
   // =========================
   // SECTION: Watch fields
@@ -1014,6 +1021,24 @@ const Purchases = () => {
     });
   };
 
+  // =========================
+  // SECTION: Detail read-only transaksi Purchases
+  // Fungsi:
+  // - membuka drawer detail dari mobile card pembelian tanpa mengubah purchase, stok masuk, expense, atau OCR parser.
+  // Hubungan flow:
+  // - detail memakai record purchase yang sudah ada di state tabel; tidak melakukan write/fetch tambahan.
+  // Status:
+  // - AKTIF sebagai UI mobile detail.
+  // - GUARDED karena drawer ini tidak menjadi jalur edit/hapus pembelian.
+  // =========================
+  const openPurchaseDetail = (record) => {
+    setSelectedPurchaseDetail(record);
+  };
+
+  const closePurchaseDetail = () => {
+    setSelectedPurchaseDetail(null);
+  };
+
 
   const applyShopeeOcrParsedToForm = (parsed) => {
     const currentNote = stripExistingShopeeOcrNote(form.getFieldValue("note"));
@@ -1129,6 +1154,48 @@ const Purchases = () => {
     onOpenShopeeOcrDetail: openShopeeOcrDetailModal,
   });
 
+  const purchaseMobileCardConfig = {
+    title: (record) => record.purchaseNumber || record.code || record.referenceNumber || 'Kode otomatis',
+    subtitle: (record) => [
+      record.date?.toDate ? dayjs(record.date.toDate()).format('DD-MM-YYYY') : '-',
+      record.supplierName || 'Supplier tidak tercatat',
+    ],
+    tags: (record) => [
+      <Tag key="purchase-type" color={record.purchaseType === 'offline' ? 'default' : 'blue'}>
+        {record.purchaseType === 'offline' ? 'Offline' : 'Online'}
+      </Tag>,
+      <Tag key="item-type" color={record.type === 'product' ? 'blue' : 'gold'}>
+        {record.type === 'product' ? 'Produk' : 'Bahan Baku'}
+      </Tag>,
+    ],
+    meta: [
+      { label: 'Total', value: (record) => formatCurrencyId(record.totalActualPurchase || 0) },
+      { label: 'Modal', value: (record) => `${formatCurrencyId(record.actualUnitCost || 0)}${record.stockUnit ? ` / ${record.stockUnit}` : ''}` },
+      { label: 'Stok Masuk', value: (record) => {
+        const stockIn = record.type === 'material' ? (record.totalStockIn || record.quantity) : record.quantity;
+        return `${formatNumberId(stockIn || 0)}${record.stockUnit ? ` ${record.stockUnit}` : ''}`;
+      } },
+    ],
+    content: (record) => (
+      <div className="ims-cell-stack ims-cell-stack-tight">
+        <span className="ims-cell-title">{record.itemName || '-'}</span>
+        <span className="ims-cell-meta">
+          {record.variantLabel || record.variantKey ? `Varian: ${record.variantLabel || record.variantKey}` : 'Master'}
+        </span>
+      </div>
+    ),
+    actions: (record) => (
+      <Button
+        className="ims-action-button"
+        icon={<EyeOutlined />}
+        size="small"
+        onClick={() => openPurchaseDetail(record)}
+      >
+        Lihat Detail
+      </Button>
+    ),
+  };
+
   /* =====================================================
      SECTION: Purchases Render Panel — GUARDED
      Fungsi:
@@ -1174,15 +1241,78 @@ const Purchases = () => {
             Status: aktif / final
         ========================= */}
         <DataRefreshIndicator loading={isLoading} dataSource={purchaseRecords} />
-        <Table
+        <DataTableView
+          showRefreshIndicator={false}
           className="app-data-table"
           dataSource={purchaseRecords}
           columns={purchaseTableColumns}
           rowKey="id"
           tableLayout="fixed"
           locale={{ emptyText: getDataTableEmptyText(isLoading, loadError || "Belum ada data pembelian.") }}
+          mobileCardConfig={purchaseMobileCardConfig}
         />
       </PageSection>
+
+      <Drawer
+        title="Detail Pembelian"
+        open={Boolean(selectedPurchaseDetail)}
+        onClose={closePurchaseDetail}
+        width="min(100vw, 440px)"
+      >
+        {selectedPurchaseDetail ? (() => {
+          const dateText = selectedPurchaseDetail.date?.toDate
+            ? dayjs(selectedPurchaseDetail.date.toDate()).format("DD-MM-YYYY")
+            : "-";
+          const stockIn = selectedPurchaseDetail.type === "material"
+            ? selectedPurchaseDetail.totalStockIn || selectedPurchaseDetail.quantity
+            : selectedPurchaseDetail.quantity;
+
+          return (
+            <Space direction="vertical" size={14} style={{ width: "100%" }}>
+              <div className="ims-cell-stack">
+                <Text type="secondary">Kode / Tanggal</Text>
+                <Text strong>{selectedPurchaseDetail.purchaseNumber || selectedPurchaseDetail.code || selectedPurchaseDetail.referenceNumber || "Kode otomatis"}</Text>
+                <Text>{dateText}</Text>
+              </div>
+              <div className="ims-cell-stack">
+                <Text type="secondary">Supplier</Text>
+                <Text strong>{selectedPurchaseDetail.supplierName || "Supplier tidak tercatat"}</Text>
+              </div>
+              <Space wrap>
+                <Tag color={selectedPurchaseDetail.purchaseType === "offline" ? "default" : "blue"}>
+                  {selectedPurchaseDetail.purchaseType === "offline" ? "Offline" : "Online"}
+                </Tag>
+                <Tag color={selectedPurchaseDetail.type === "product" ? "blue" : "gold"}>
+                  {selectedPurchaseDetail.type === "product" ? "Produk" : "Bahan Baku"}
+                </Tag>
+                {selectedPurchaseDetail.variantLabel || selectedPurchaseDetail.variantKey ? (
+                  <Tag color="purple">{selectedPurchaseDetail.variantLabel || selectedPurchaseDetail.variantKey}</Tag>
+                ) : (
+                  <Tag>Master</Tag>
+                )}
+              </Space>
+              <div className="ims-cell-stack">
+                <Text type="secondary">Item</Text>
+                <Text strong>{selectedPurchaseDetail.itemName || "-"}</Text>
+              </div>
+              <div className="ims-cell-stack">
+                <Text type="secondary">Qty / Stok Masuk</Text>
+                <Text>Qty beli: {formatNumberId(selectedPurchaseDetail.quantity || 0)}{selectedPurchaseDetail.purchaseUnit ? ` ${selectedPurchaseDetail.purchaseUnit}` : ""}</Text>
+                <Text strong>Stok masuk: {formatNumberId(stockIn || 0)}{selectedPurchaseDetail.stockUnit ? ` ${selectedPurchaseDetail.stockUnit}` : ""}</Text>
+              </div>
+              <div className="ims-cell-stack">
+                <Text type="secondary">Biaya</Text>
+                <Text strong>Total: {formatCurrencyId(selectedPurchaseDetail.totalActualPurchase || 0)}</Text>
+                <Text>Modal: {formatCurrencyId(selectedPurchaseDetail.actualUnitCost || 0)}{selectedPurchaseDetail.stockUnit ? ` / ${selectedPurchaseDetail.stockUnit}` : ""}</Text>
+              </div>
+              <div className="ims-cell-stack">
+                <Text type="secondary">Catatan</Text>
+                <Text style={{ whiteSpace: "pre-line" }}>{selectedPurchaseDetail.note || "-"}</Text>
+              </div>
+            </Space>
+          );
+        })() : null}
+      </Drawer>
 
       <PurchaseOcrReceiptModal
         open={shopeeOcrDetailModal.open}

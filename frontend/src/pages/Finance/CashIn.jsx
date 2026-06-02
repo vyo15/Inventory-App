@@ -6,7 +6,6 @@ import {
   Input,
   InputNumber,
   Select,
-  Table,
   Tag,
   Typography,
   message,
@@ -28,6 +27,7 @@ import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import { db } from "../../firebase";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
@@ -396,6 +396,27 @@ const CashIn = () => {
     [],
   );
 
+  const cashInMobileCardConfig = {
+    title: (record) => record.description || record.type || 'Pemasukan',
+    subtitle: (record) => [
+      formatDateId(record.date),
+      record.cashInNumber || record.code || record.sourceRef || record.referenceNumber || null,
+    ].filter(Boolean),
+    tags: (record) => [
+      record.sourceCollection === 'incomes' ? (
+        <Tag key="source" color="green">Penjualan Selesai</Tag>
+      ) : record.sourceCollection === 'revenues' ? (
+        <Tag key="source" color="blue">Manual / Data Lama</Tag>
+      ) : (
+        <Tag key="source">-</Tag>
+      ),
+    ],
+    meta: [
+      { label: 'Jumlah', value: (record) => formatCurrencyId(record.amount || 0) },
+      { label: 'Tipe', value: (record) => record.type || '-' },
+    ],
+  };
+
   /* =====================================================
      SECTION: Cash In Render Panel — GUARDED
      Fungsi:
@@ -486,7 +507,8 @@ const CashIn = () => {
         extra={<Tag color="blue">{formatNumberId(filteredCashIns.length)} baris</Tag>}
       >
         <DataRefreshIndicator loading={loading} dataSource={filteredCashIns} />
-        <Table
+        <DataTableView
+          showRefreshIndicator={false}
           className="app-data-table"
           rowKey="id"
           dataSource={filteredCashIns}
@@ -496,6 +518,7 @@ const CashIn = () => {
           locale={{
             emptyText: getDataTableEmptyText(loading, <EmptyStateBlock description="Belum ada pemasukan pada periode ini." />),
           }}
+          mobileCardConfig={cashInMobileCardConfig}
         />
       </PageSection>
 

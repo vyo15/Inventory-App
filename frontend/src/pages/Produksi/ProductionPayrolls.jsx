@@ -23,7 +23,6 @@ import {
   Select,
   Space,
   Statistic,
-  Table,
   Tag,
   Typography,
 } from "antd";
@@ -36,6 +35,7 @@ import dayjs from "dayjs";
 import ProductionFilterCard from "../../components/Produksi/shared/ProductionFilterCard";
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
+import DataTableView from "../../components/Layout/Table/DataTableView";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import {
   DEFAULT_PRODUCTION_PAYROLL_FORM,
@@ -51,7 +51,7 @@ import {
   updatePayrollStatus,
   updateProductionPayroll,
 } from "../../services/Produksi/productionPayrollsService";
-import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
 
 // =====================================================
@@ -557,6 +557,30 @@ const ProductionPayrolls = () => {
     },
   ];
 
+  const payrollMobileCardConfig = {
+    title: (record) => resolveDisplayReference(record, { fields: ["payrollNumber"], fallback: "Payroll produksi" }),
+    subtitle: (record) => [
+      record.payrollDate ? dayjs(record.payrollDate?.toDate ? record.payrollDate.toDate() : record.payrollDate).format("DD/MM/YYYY") : "Tanggal belum diisi",
+      record.workerName || "Karyawan belum diisi",
+      record.stepName || "Step belum diisi",
+    ],
+    tags: (record) => renderPayrollStatusTags(record),
+    meta: [
+      { label: "Nominal", value: (record) => formatCurrency(record.finalAmount || 0) },
+      { label: "Work Log", value: (record) => record.workNumber || "-" },
+      { label: "Mode", value: (record) => record.payrollMode || "-" },
+      { label: "Qty", value: (record) => formatNumber(record.outputQtyUsed || 0) },
+    ],
+    actions: (record) => (
+      <Space wrap size={6} className="ims-action-group">
+        <Button className="ims-action-button" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>Detail</Button>
+        {isEditableProductionPayroll(record) ? (
+          <Button className="ims-action-button" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>Edit</Button>
+        ) : null}
+      </Space>
+    ),
+  };
+
   return (
     <div className="page-container">
       {/* AKTIF / GUARDED: migrasi header ke shared produksi; submit payroll dan integrasi cash-out tetap mengikuti flow existing. */}
@@ -611,12 +635,14 @@ const ProductionPayrolls = () => {
             Tabel payroll produksi compact guarded: layout utama tidak lagi
             memakai horizontal scroll besar; aksi paid tetap lewat handler lama.
         =============================================================== */}
-        <DataRefreshIndicator loading={loading} dataSource={filteredData} />
-        <Table
+        <DataTableView
+          loading={loading}
+          showRefreshIndicator
           className="app-data-table"
           rowKey="id"
           columns={columns}
           dataSource={filteredData}
+          mobileCardConfig={payrollMobileCardConfig}
           locale={{
             emptyText: getDataTableEmptyText(loading, <Empty description="Belum ada payroll produksi" />),
           }}
