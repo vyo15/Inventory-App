@@ -34,8 +34,7 @@ import {
   toggleProductionProfileActive,
   updateProductionProfile,
 } from '../../services/Produksi/productionProfilesService';
-import { getDocs, collection } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { listenProducts } from '../../services/MasterData/productsService';
 import formatNumber from '../../utils/formatters/numberId';
 import ProductionFilterCard from '../../components/Produksi/shared/ProductionFilterCard';
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
@@ -66,18 +65,17 @@ const ProductionProfiles = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [profileResult, productsSnap] = await Promise.all([
-        getAllProductionProfiles(),
-        getDocs(collection(db, 'products')),
-      ]);
-
-      const productItems = productsSnap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((item) => item.isActive !== false)
-        .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'id-ID'));
+      const profileResult = await getAllProductionProfiles();
+      const productItems = await new Promise((resolve, reject) => {
+        let unsubscribe = null;
+        unsubscribe = listenProducts((rows) => {
+          if (unsubscribe) unsubscribe();
+          resolve((rows || []).filter((item) => item.isActive !== false));
+        }, reject);
+      });
 
       setProfiles(profileResult);
-      setProducts(productItems);
+      setProducts(productItems.sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'id-ID')));
     } catch (error) {
       console.error(error);
       message.error('Gagal memuat profil produksi');

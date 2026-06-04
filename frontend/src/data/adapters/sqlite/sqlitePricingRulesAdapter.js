@@ -68,3 +68,26 @@ export const deletePricingRule = async (ruleId) => {
   });
   return result?.data || { id: ruleId, deleted: true };
 };
+
+export const subscribePricingRules = (callback, onError, options = {}) => {
+  let disposed = false;
+  let timer = null;
+  const intervalMs = Math.max(Number(options.intervalMs || 15000), 5000);
+
+  const load = async () => {
+    try {
+      const rows = await listPricingRules();
+      if (!disposed) callback(rows);
+    } catch (error) {
+      if (!disposed && typeof onError === "function") onError(error);
+    }
+  };
+
+  load();
+  timer = window.setInterval(load, intervalMs);
+
+  return () => {
+    disposed = true;
+    if (timer) window.clearInterval(timer);
+  };
+};

@@ -6,7 +6,6 @@
 // melakukan Firestore write, route/menu change, schema change, atau stock mutation.
 // =====================================================
 
-import { serverTimestamp } from "firebase/firestore";
 import { calculatePayrollAmounts } from "../../../constants/productionPayrollOptions";
 import {
   calculateMaterialUsageLine,
@@ -203,7 +202,7 @@ export const normalizeProductionWorkLogPayload = (values = {}, currentUser = nul
     notes: safeTrim(values.notes),
     cancellationReason: safeTrim(values.cancellationReason),
 
-    updatedAt: serverTimestamp(),
+    updatedAt: new Date().toISOString(),
     updatedBy:
       currentUser?.email ||
       currentUser?.displayName ||
@@ -212,7 +211,7 @@ export const normalizeProductionWorkLogPayload = (values = {}, currentUser = nul
   };
 
   if (!isEdit) {
-    payload.createdAt = serverTimestamp();
+    payload.createdAt = new Date().toISOString();
     payload.createdBy =
       currentUser?.email ||
       currentUser?.displayName ||

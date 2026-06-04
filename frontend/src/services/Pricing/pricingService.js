@@ -1,11 +1,9 @@
 // src/utils/pricingService.js
 
 // SECTION: import firestore helper
-import { collection, doc, Timestamp, writeBatch } from "firebase/firestore";
-
-// SECTION: import koneksi firebase
-import { db } from "../../firebase";
 import * as sqlitePricingRulesAdapter from "../../data/adapters/sqlite/sqlitePricingRulesAdapter";
+import * as sqliteProductsAdapter from "../../data/adapters/sqlite/sqliteProductsAdapter";
+import * as sqliteRawMaterialsAdapter from "../../data/adapters/sqlite/sqliteRawMaterialsAdapter";
 
 
 
@@ -17,31 +15,36 @@ const getPricingRulesRepositoryMode = () => String(
 export const isSqlitePricingRulesRepositoryMode = () =>
   SQLITE_REPOSITORY_MODES.includes(getPricingRulesRepositoryMode());
 
-export const listPricingRulesFromRepository = async () => {
-  if (!isSqlitePricingRulesRepositoryMode()) {
-    throw new Error("Pricing Rules repository masih memakai Firebase legacy.");
-  }
-  return sqlitePricingRulesAdapter.listPricingRules();
+
+export const subscribePricingRulesFromRepository = (callback, onError) =>
+  sqlitePricingRulesAdapter.subscribePricingRules(callback, onError);
+
+export const savePricingRuleInRepository = async ({ ruleId = "", payload = {}, isEditing = false } = {}) =>
+  isEditing && ruleId
+    ? updatePricingRuleInRepository(ruleId, payload)
+    : createPricingRuleInRepository({ ...payload, createdAt: payload.createdAt || new Date().toISOString() });
+
+export const removePricingRuleFromRepository = async (ruleId) => deletePricingRuleFromRepository(ruleId);
+
+export const listPricingRulesFromRepository = async () => sqlitePricingRulesAdapter.listPricingRules();
+
+export const listPricingRulesByTargetType = async (targetType = "") => {
+  const normalizedTargetType = targetType === "products" ? "products" : "raw_materials";
+  const rows = await listPricingRulesFromRepository();
+  return (rows || [])
+    .map(normalizePricingRule)
+    .filter((rule) => rule.targetType === normalizedTargetType && rule.isActive !== false);
 };
 
 export const createPricingRuleInRepository = async (payload = {}) => {
-  if (!isSqlitePricingRulesRepositoryMode()) {
-    throw new Error("Pricing Rules repository masih memakai Firebase legacy.");
-  }
   return sqlitePricingRulesAdapter.createPricingRule(payload);
 };
 
 export const updatePricingRuleInRepository = async (ruleId, payload = {}) => {
-  if (!isSqlitePricingRulesRepositoryMode()) {
-    throw new Error("Pricing Rules repository masih memakai Firebase legacy.");
-  }
   return sqlitePricingRulesAdapter.updatePricingRule(ruleId, payload);
 };
 
 export const deletePricingRuleFromRepository = async (ruleId) => {
-  if (!isSqlitePricingRulesRepositoryMode()) {
-    throw new Error("Pricing Rules repository masih memakai Firebase legacy.");
-  }
   return sqlitePricingRulesAdapter.deletePricingRule(ruleId);
 };
 
@@ -428,7 +431,7 @@ export const createPricingUpdatePayload = ({
       sellingPrice: toInteger(newPrice),
       pricingMode: originalItem?.pricingMode || "rule",
       pricingRuleId: normalizedRule.id || null,
-      lastPricingUpdatedAt: Timestamp.now(),
+      lastPricingUpdatedAt: new Date().toISOString(),
     };
   }
 
@@ -437,7 +440,7 @@ export const createPricingUpdatePayload = ({
       price: toInteger(newPrice),
       pricingMode: originalItem?.pricingMode || "rule",
       pricingRuleId: normalizedRule.id || null,
-      lastPricingUpdatedAt: Timestamp.now(),
+      lastPricingUpdatedAt: new Date().toISOString(),
     };
   }
 
@@ -483,8 +486,57 @@ export const createPricingLogPayload = ({
 
     changeSource: changeSource || "pricing_rule_apply",
     notes: notes || "",
-    createdAt: Timestamp.now(),
+    createdAt: new Date().toISOString(),
   };
+};
+
+const createSqlitePricingUpdatePayload = ({
+  targetType = "",
+  originalItem = {},
+  newPrice = 0,
+  rule = {},
+}) => {
+  const normalizedRule = normalizePricingRule(rule);
+  const now = new Date().toISOString();
+  const basePayload = {
+    ...originalItem,
+    pricingMode: originalItem?.pricingMode || "rule",
+    pricingRuleId: normalizedRule.id || null,
+    lastPricingUpdatedAt: now,
+    updatedAt: now,
+  };
+
+  if (targetType === "products") {
+    return {
+      ...basePayload,
+      price: toInteger(newPrice),
+    };
+  }
+
+  if (targetType === "raw_materials") {
+    return {
+      ...basePayload,
+      sellingPrice: toInteger(newPrice),
+    };
+  }
+
+  return basePayload;
+};
+
+const updateSqlitePricedItem = async ({ targetType = "", itemId = "", payload = {} } = {}) => {
+  if (!itemId) {
+    throw new Error("Item pricing SQLite tidak valid karena ID kosong.");
+  }
+
+  if (targetType === "products") {
+    return sqliteProductsAdapter.updateProduct(itemId, payload);
+  }
+
+  if (targetType === "raw_materials") {
+    return sqliteRawMaterialsAdapter.updateRawMaterial(itemId, payload);
+  }
+
+  throw new Error(`Target pricing SQLite tidak didukung: ${targetType || "-"}`);
 };
 
 // SECTION: apply pricing rule ke semua item target
@@ -509,96 +561,74 @@ export const applyPricingRuleToItems = async ({
   // SECTION: buat preview dulu supaya hasil apply konsisten
   const previewData = buildPricingPreview(items, normalizedRule);
 
-  // SECTION: batch firestore
-  const batch = writeBatch(db);
+  // SECTION: jalur SQLite tidak boleh menulis Firebase.
+  // Pricing Rules sudah menjadi pilot SQLite, sehingga apply harga ke Product/Raw
+  // harus memakai adapter SQLite agar tidak membuat data harga pecah.
+  if (isSqlitePricingRulesRepositoryMode()) {
+    let updatedCount = 0;
+    let skippedManualCount = 0;
+    let invalidBaseCostCount = 0;
+    let invalidMarketplaceBufferCount = 0;
+    let unchangedCount = 0;
 
-  // SECTION: summary hasil apply
-  let updatedCount = 0;
-  let skippedManualCount = 0;
-  let invalidBaseCostCount = 0;
-  let invalidMarketplaceBufferCount = 0;
-  let unchangedCount = 0;
+    for (const previewItem of previewData) {
+      const originalItem = (items || []).find(
+        (item) => item?.id === previewItem?.itemId,
+      );
 
-  // SECTION: loop semua item preview
-  previewData.forEach((previewItem) => {
-    const originalItem = (items || []).find(
-      (item) => item?.id === previewItem?.itemId,
-    );
+      if (!originalItem) {
+        continue;
+      }
 
-    if (!originalItem) {
-      return;
+      if (previewItem.status === "skipped_manual") {
+        skippedManualCount += 1;
+        continue;
+      }
+
+      if (previewItem.status === "invalid_base_cost") {
+        invalidBaseCostCount += 1;
+        continue;
+      }
+
+      if (previewItem.status === "invalid_marketplace_buffer") {
+        invalidMarketplaceBufferCount += 1;
+        continue;
+      }
+
+      const oldPrice = toInteger(previewItem.currentPrice);
+      const newPrice = toInteger(previewItem.roundedPrice);
+
+      if (oldPrice === newPrice) {
+        unchangedCount += 1;
+        continue;
+      }
+
+      await updateSqlitePricedItem({
+        targetType,
+        itemId: previewItem.itemId,
+        payload: createSqlitePricingUpdatePayload({
+          targetType,
+          originalItem,
+          newPrice,
+          rule: normalizedRule,
+        }),
+      });
+
+      updatedCount += 1;
     }
 
-    // SECTION: mode manual dilewati
-    if (previewItem.status === "skipped_manual") {
-      skippedManualCount += 1;
-      return;
-    }
+    return {
+      previewData,
+      summary: {
+        totalItems: previewData.length,
+        updatedCount,
+        skippedManualCount,
+        invalidBaseCostCount,
+        invalidMarketplaceBufferCount,
+        unchangedCount,
+      },
+    };
+  }
 
-    // SECTION: base cost invalid dilewati
-    if (previewItem.status === "invalid_base_cost") {
-      invalidBaseCostCount += 1;
-      return;
-    }
-
-    // SECTION: buffer invalid dilewati
-    if (previewItem.status === "invalid_marketplace_buffer") {
-      invalidMarketplaceBufferCount += 1;
-      return;
-    }
-
-    const oldPrice = toInteger(previewItem.currentPrice);
-    const newPrice = toInteger(previewItem.roundedPrice);
-
-    // SECTION: jika harga tidak berubah tidak perlu update
-    if (oldPrice === newPrice) {
-      unchangedCount += 1;
-      return;
-    }
-
-    // SECTION: update dokumen item
-    const itemRef = doc(db, targetType, previewItem.itemId);
-    const itemPayload = createPricingUpdatePayload({
-      targetType,
-      originalItem,
-      newPrice,
-      rule: normalizedRule,
-    });
-
-    batch.update(itemRef, itemPayload);
-
-    // SECTION: simpan log perubahan harga
-    const logRef = doc(collection(db, "pricing_logs"));
-    const logPayload = createPricingLogPayload({
-      item: originalItem,
-      targetType,
-      oldPrice,
-      newPrice,
-      pricingMode: originalItem?.pricingMode || "rule",
-      rule: normalizedRule,
-      baseCost: previewItem.baseCost,
-      changeSource,
-      notes,
-    });
-
-    batch.set(logRef, logPayload);
-
-    updatedCount += 1;
-  });
-
-  // SECTION: commit semua perubahan
-  await batch.commit();
-
-  // SECTION: kembalikan preview + summary
-  return {
-    previewData,
-    summary: {
-      totalItems: previewData.length,
-      updatedCount,
-      skippedManualCount,
-      invalidBaseCostCount,
-      invalidMarketplaceBufferCount,
-      unchangedCount,
-    },
-  };
+  throw new Error("Pricing Rules wajib memakai SQLite. Periksa VITE_PRICING_RULES_REPOSITORY_MODE=sqlite.");
 };

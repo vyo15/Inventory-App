@@ -26,9 +26,7 @@ import {
   EyeOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { collection, updateDoc, deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp, limit as firestoreLimit, orderBy, query } from 'firebase/firestore';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { db } from '../../firebase';
 import { REPOSITORY_MODES } from '../../data/repositories/repositoryMode';
 import { getRepositoryModeStatus } from '../../data/repositories/repositoryModeService';
 import {
@@ -45,13 +43,11 @@ import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
 import { DataRefreshIndicator, getDataTableEmptyText } from '../../components/Layout/Feedback/DataLoadingState';
+import { listenRawMaterials } from '../../services/MasterData/rawMaterialsService';
+import { listenPurchaseRecords } from '../../services/Transaksi/purchasesService';
 import {
-  assertSupplierCodeAvailable,
   calculateSupplierMaterialRestockMetrics,
-  cascadeSupplierSnapshotToRawMaterials,
-  clearSupplierSnapshotFromRawMaterials,
   doesSupplierProvideMaterial,
-  generateSupplierCode as generateFirebaseSupplierCode,
   getSupplierDisplayName,
   getSupplierStoreLink,
   isManagedSupplierRecord,
@@ -59,10 +55,6 @@ import {
   listenSuppliers,
   normalizeSupplierCode,
 } from '../../services/MasterData/suppliersService';
-import {
-  getDailyBusinessCodeSequence,
-  prepareDailySequenceCodeInTransaction,
-} from '../../utils/references/businessCodeGenerator';
 import {
   PURCHASE_UNIT_OPTIONS,
   SUPPLIER_PURCHASE_LOOKUP_LIMIT,
@@ -207,43 +199,25 @@ const SupplierPurchases = () => {
 
     initializeSupplierSource();
 
-    const unsubscribeMaterials = onSnapshot(
-      collection(db, 'raw_materials'),
-      (snapshot) => {
+    const unsubscribeMaterials = listenRawMaterials(
+      (nextMaterials) => {
         if (!isActive) return;
-        setMaterials(snapshot.docs.map((documentItem) => ({ id: documentItem.id, ...documentItem.data() })));
+        setMaterials(nextMaterials);
       },
       (error) => {
         console.error(error);
-        message.warning('Referensi bahan baku Firebase belum bisa dimuat. Supplier SQLite tetap master-only.');
+        message.warning('Referensi bahan baku belum bisa dimuat. Supplier tetap bisa dikelola sebagai master data.');
       },
     );
 
-    const purchaseHistoryQuery = query(
-      collection(db, 'purchases'),
-      orderBy('date', 'desc'),
-      firestoreLimit(SUPPLIER_PURCHASE_LOOKUP_LIMIT),
-    );
-
-    const unsubscribePurchases = onSnapshot(
-      purchaseHistoryQuery,
-      (snapshot) => {
-        // -------------------------------------------------------------------
-        // AKTIF + GUARDED: histori purchase dibaca terbatas dan terbaru dulu.
-        // FUNGSI: pembanding harga Supplier tetap cepat saat data real banyak.
-        // HUBUNGAN FLOW: read-only; tidak membuat purchase, tidak mengubah stok,
-        // kas, Supplier, Raw Material, expense, atau laporan.
-        // LEGACY: pembanding untuk purchase sangat lama tetap bukan source of truth
-        // laporan; laporan lengkap tetap di menu Laporan.
-        // CLEANUP CANDIDATE: pindahkan ke service latest purchase per material
-        // jika nanti index Firestore final sudah dikunci.
-        // -------------------------------------------------------------------
+    const unsubscribePurchases = listenPurchaseRecords(
+      (nextPurchases) => {
         if (!isActive) return;
-        setPurchaseRecords(snapshot.docs.map((documentItem) => ({ id: documentItem.id, ...documentItem.data() })));
+        setPurchaseRecords((nextPurchases || []).slice(0, SUPPLIER_PURCHASE_LOOKUP_LIMIT));
       },
       (error) => {
         console.error(error);
-        message.warning('Histori purchase Firebase legacy belum bisa dimuat untuk pembanding supplier.');
+        message.warning('Histori purchase belum bisa dimuat untuk pembanding supplier.');
       },
     );
 
@@ -344,9 +318,7 @@ const SupplierPurchases = () => {
     setSupplierCodeLoading(true);
 
     try {
-      const generatedCode = isSqliteSupplierMode
-        ? await generateSupplierCodeRepository(getModeOptions())
-        : await generateFirebaseSupplierCode();
+      const generatedCode = await generateSupplierCodeRepository(getModeOptions());
       form.setFieldsValue({ code: generatedCode, materialDetails: [] });
     } catch (error) {
       console.error('Gagal membuat kode supplier otomatis:', error);
@@ -437,11 +409,9 @@ const SupplierPurchases = () => {
         name: values.storeName,
         storeName: values.storeName,
         storeLink: values.storeLink || '',
-        // C1 master-only: katalog material tidak dikirim sebagai mutation aktif
-        // karena raw material/purchase/stock belum menjadi SQLite transaction engine.
-        materialDetails: [],
-        supportedMaterialIds: [],
-        supportedMaterialNames: [],
+        materialDetails,
+        supportedMaterialIds: materialDetails.map((item) => item.materialId),
+        supportedMaterialNames: materialDetails.map((item) => item.materialName),
       };
     }
 
@@ -454,7 +424,7 @@ const SupplierPurchases = () => {
       supportedMaterialIds: materialDetails.map((item) => item.materialId),
       supportedMaterialNames: materialDetails.map((item) => item.materialName),
       materialDetails,
-      updatedAt: serverTimestamp(),
+      updatedAt: new Date().toISOString(),
     };
   };
 
@@ -468,108 +438,18 @@ const SupplierPurchases = () => {
   const handleSaveSupplier = async (values) => {
     try {
       setSaving(true);
-
-      if (isSqliteSupplierMode) {
-        const payload = buildSupplierPayload(values);
-
-        if (isEditing && editingId) {
-          await updateSupplierRepository(editingId, payload, getModeOptions());
-          message.success('Supplier berhasil diupdate di SQLite local.');
-        } else {
-          await createSupplierRepository(payload, getModeOptions());
-          message.success('Supplier berhasil ditambahkan ke SQLite local.');
-        }
-
-        resetSupplierModalState();
-        await fetchSuppliers(repositoryMode);
-        return;
-      }
+      const payload = buildSupplierPayload(values);
 
       if (isEditing && editingId) {
-        const formCode = normalizeSupplierCode(values.code || values.supplierCode);
-        const finalCode = isValidSupplierCodeFormat(formCode) ? formCode : '';
-
-        if (finalCode) {
-          await assertSupplierCodeAvailable(finalCode, editingId);
-        }
-
-        const payload = buildSupplierPayload({ ...values, code: finalCode, supplierCode: finalCode });
-
-        await updateDoc(doc(db, 'supplierPurchases', editingId), payload);
-
-        try {
-          const affectedMaterials = await cascadeSupplierSnapshotToRawMaterials(editingId, {
-            id: editingId,
-            ...payload,
-          });
-
-          message.success(
-            affectedMaterials > 0
-              ? `Supplier berhasil diupdate. Snapshot ${affectedMaterials} bahan ikut diperbarui.`
-              : 'Supplier berhasil diupdate.',
-          );
-        } catch (snapshotError) {
-          console.error('Gagal memperbarui snapshot supplier di Raw Material.', snapshotError);
-          message.warning('Supplier berhasil diupdate, tetapi snapshot bahan belum ikut diperbarui. Coba simpan ulang supplier.');
-        }
+        await updateSupplierRepository(editingId, payload, getModeOptions());
+        message.success('Supplier berhasil diupdate di SQLite local.');
       } else {
-        /* =====================================================
-            SECTION: Supplier readable document ID create flow — AKTIF / GUARDED
-            Fungsi:
-            - Menyimpan Supplier baru dengan Firestore document ID yang sama dengan kode SUP-DDMMYYYY-001.
-
-            Dipakai oleh:
-            - Submit tambah Supplier pada halaman SupplierPurchases.jsx.
-
-            Alasan perubahan:
-            - Create Supplier tidak boleh lagi memakai addDoc/random ID atau kode berbasis nama.
-
-            Catatan cleanup:
-            - Belum ada.
-
-            Risiko:
-            - Mengubah flow ini dapat merusak linkage Purchases/Raw Material yang membaca supplier dari supplierPurchases.
-        ===================================================== */
-        const baselineCode = await generateFirebaseSupplierCode(values, null);
-        const baselineSequence = getDailyBusinessCodeSequence({
-          code: baselineCode,
-          prefix: 'SUP',
-          date: new Date(),
-        });
-        await runTransaction(db, async (transaction) => {
-          const codeReservation = await prepareDailySequenceCodeInTransaction({
-            transaction,
-            db,
-            collectionName: 'supplierPurchases',
-            prefix: 'SUP',
-            date: new Date(),
-            minimumSequence: Math.max(baselineSequence - 1, 0),
-          });
-          const finalCode = codeReservation.code;
-
-          if (!isValidSupplierCodeFormat(finalCode)) {
-            throw { type: 'validation', errors: { code: 'Kode supplier otomatis belum valid' } };
-          }
-
-          const supplierRef = doc(db, 'supplierPurchases', finalCode);
-          const existingSnapshot = await transaction.get(supplierRef);
-
-          if (existingSnapshot.exists()) {
-            throw { type: 'validation', errors: { code: 'Kode supplier sudah digunakan' } };
-          }
-
-          const payload = buildSupplierPayload({ ...values, code: finalCode, supplierCode: finalCode });
-
-          codeReservation.commit();
-          transaction.set(supplierRef, {
-            ...payload,
-            createdAt: serverTimestamp(),
-          });
-        });
-        message.success('Supplier berhasil ditambahkan.');
+        await createSupplierRepository(payload, getModeOptions());
+        message.success('Supplier berhasil ditambahkan ke SQLite local.');
       }
 
       resetSupplierModalState();
+      await fetchSuppliers(repositoryMode);
     } catch (error) {
       console.error(error);
       if (error?.type === 'validation' && error.errors) {
@@ -579,69 +459,14 @@ const SupplierPurchases = () => {
             errors: [errorMessage],
           })),
         );
-        message.error(Object.values(error.errors)[0] || 'Data supplier belum valid.');
         return;
       }
-      message.error('Gagal menyimpan supplier.');
+      message.error(error?.message || 'Gagal menyimpan supplier.');
     } finally {
       setSaving(false);
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Isi modal saat edit supplier.
-  // FUNGSI: memetakan data lama dan baru ke form katalog restock.
-  // STATUS: aktif; backward-compatible untuk supplier lama tanpa field baru.
-  // ---------------------------------------------------------------------------
-  const handleEditSupplier = (record) => {
-    const businessCode = getSupplierBusinessCode(record);
-
-    setIsEditing(true);
-    setEditingId(record.id);
-    setEditingSupplierNeedsCodeRepair(!businessCode);
-    setModalVisible(true);
-
-    form.setFieldsValue({
-      code: businessCode,
-      storeName: getSupplierDisplayName(record),
-      storeLink: getSupplierStoreLink(record),
-      materialDetails:
-        (record.materialDetails || []).length > 0
-          ? record.materialDetails.map((item) => {
-              // ---------------------------------------------------------------
-              // BACKWARD COMPATIBILITY FORM MAPPER.
-              // FUNGSI: membuka supplier lama/baru ke form tanpa crash.
-              // ALASAN: data lama belum punya toggle offline, sehingga type
-              // ditentukan dari purchaseType atau keberadaan link produk.
-              // STATUS: aktif dipakai saat edit Supplier; bukan migration.
-              // ---------------------------------------------------------------
-              const purchaseType = item.purchaseType || (item.productLink ? 'online' : 'offline');
-              const isOfflinePurchase = purchaseType === 'offline';
-
-              return {
-                materialId: item.materialId,
-                materialName: item.materialName,
-                productLink: item.productLink || '',
-                purchaseType,
-                purchaseUnit: item.purchaseUnit || '',
-                purchaseQty: Number(item.purchaseQty || 1),
-                conversionValue: Number(item.conversionValue || 0),
-                stockUnit: item.stockUnit || '',
-                supplierItemPrice: Math.round(Number(item.supplierItemPrice || 0)),
-                estimatedShippingCost: isOfflinePurchase ? 0 : Math.round(Number(item.estimatedShippingCost || 0)),
-                serviceFee: isOfflinePurchase ? 0 : Math.round(Number(item.serviceFee || 0)),
-                discount: isOfflinePurchase ? 0 : Math.round(Number(item.discount || 0)),
-                note: item.note || '',
-              };
-            })
-          : [],
-    });
-  };
-
-  // ---------------------------------------------------------------------------
-  // Hapus supplier dari master dan bersihkan snapshot pada Raw Material terkait.
-  // STATUS: aktif; tidak mengubah stok, harga, purchase, atau katalog material.
-  // ---------------------------------------------------------------------------
   const handleDeleteSupplier = async (record) => {
     if (!isManagedSupplierRecord(record)) {
       message.warning('Supplier ini bukan record master yang bisa dihapus dari halaman ini.');
@@ -649,26 +474,9 @@ const SupplierPurchases = () => {
     }
 
     try {
-      if (isSqliteSupplierMode) {
-        await deleteSupplierRepository(record.id, getModeOptions());
-        message.success('Supplier berhasil dinonaktifkan di SQLite local.');
-        await fetchSuppliers(repositoryMode);
-        return;
-      }
-
-      await deleteDoc(doc(db, 'supplierPurchases', record.id));
-
-      try {
-        const clearedMaterials = await clearSupplierSnapshotFromRawMaterials(record.id);
-        message.success(
-          clearedMaterials > 0
-            ? `Supplier berhasil dihapus. Snapshot supplier di ${clearedMaterials} bahan ikut dibersihkan.`
-            : 'Supplier berhasil dihapus dari master supplier.',
-        );
-      } catch (snapshotError) {
-        console.error('Gagal membersihkan snapshot supplier di Raw Material.', snapshotError);
-        message.warning('Supplier berhasil dihapus, tetapi snapshot di bahan belum ikut dibersihkan. Cek Raw Material terkait.');
-      }
+      await deleteSupplierRepository(record.id, getModeOptions());
+      message.success('Supplier berhasil dinonaktifkan di SQLite local.');
+      await fetchSuppliers(repositoryMode);
     } catch (error) {
       console.error(error);
       message.error('Gagal menghapus supplier.');

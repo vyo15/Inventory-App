@@ -1,20 +1,7 @@
-import {
-  collection,
-  getDocs,
-  limit as firestoreLimit,
-  orderBy,
-  query,
-  Timestamp,
-  where,
-} from "firebase/firestore";
-import { db } from "../../firebase";
 import { resolveDisplayReference } from "../../utils/references/displayReferenceResolver";
+import { listFinanceLedgerRows } from "./financeService";
 
 const DEFAULT_LEDGER_LIMIT = 500;
-// Buku Besar Kas hanya membaca collection yang merepresentasikan pergerakan uang aktual.
-// Return aktif bersifat stock-only correction, sehingga `returns` tidak menjadi sumber ledger sampai ada rule refund/finance terpisah.
-const MONEY_IN_COLLECTIONS = ["incomes", "revenues"];
-const MONEY_OUT_COLLECTIONS = ["expenses"];
 
 const toFiniteNumber = (value, fallback = 0) => {
   const numericValue = Number(value);
@@ -27,21 +14,15 @@ const getTimestampMillis = (value) => {
   if (!value) return 0;
   if (typeof value?.toDate === "function") return value.toDate().getTime();
   if (value instanceof Date) return value.getTime();
-
   const parsedDate = new Date(value);
   return Number.isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime();
 };
 
 const buildPeriodRange = ({ year, month }) => {
   const normalizedYear = Number(year);
-
-  if (!Number.isInteger(normalizedYear) || normalizedYear < 2000) {
-    return null;
-  }
-
+  if (!Number.isInteger(normalizedYear) || normalizedYear < 2000) return null;
   if (month !== undefined && month !== null && month !== "all") {
     const normalizedMonth = Number(month);
-
     if (Number.isInteger(normalizedMonth) && normalizedMonth >= 0 && normalizedMonth <= 11) {
       return {
         startDate: new Date(normalizedYear, normalizedMonth, 1, 0, 0, 0, 0),
@@ -49,120 +30,32 @@ const buildPeriodRange = ({ year, month }) => {
       };
     }
   }
-
   return {
     startDate: new Date(normalizedYear, 0, 1, 0, 0, 0, 0),
     endDate: new Date(normalizedYear + 1, 0, 1, 0, 0, 0, 0),
   };
 };
 
-const resolveIncomeLedgerSource = (sourceCollection, record = {}) => {
-  if (sourceCollection === "incomes") {
-    return {
-      sourceModule: "sales",
-      sourceLabel: "Penjualan Selesai",
-      referenceCode: toSafeString(record.sourceRef || record.referenceNumber || record.relatedId || record.sourceId),
-      status: toSafeString(record.status || "Selesai"),
-    };
-  }
-
-  const sourceModule = toSafeString(record.sourceModule) || "cash_in_manual";
-
-  if (sourceModule === "cash_in_manual") {
-    return {
-      sourceModule: "cash_in_manual",
-      sourceLabel: "Cash In Manual",
-      referenceCode: toSafeString(record.sourceRef || record.referenceNumber || record.relatedId || record.sourceId),
-      status: toSafeString(record.status || "Tercatat"),
-    };
-  }
-
-  return {
-    sourceModule: "other",
-    sourceLabel: sourceModule || "Pemasukan Lainnya",
-    referenceCode: toSafeString(record.sourceRef || record.referenceNumber || record.relatedId || record.sourceId),
-    status: toSafeString(record.status || "Tercatat"),
-  };
+const resolveLedgerSource = (record = {}) => {
+  const sourceModule = toSafeString(record.sourceModule || record.sourceType || record.rawRecord?.sourceModule);
+  const sourceCollection = toSafeString(record.sourceCollection || record.rawRecord?.sourceCollection);
+  if (sourceModule === "sales") return { sourceModule: "sales", sourceLabel: "Penjualan Selesai" };
+  if (sourceModule === "purchases") return { sourceModule: "purchases", sourceLabel: "Pembelian" };
+  if (sourceModule === "returns") return { sourceModule: "returns", sourceLabel: "Refund Retur" };
+  if (sourceModule === "production_payroll") return { sourceModule: "production_payroll", sourceLabel: "Payroll Produksi" };
+  if (sourceModule === "cash_in_manual" || sourceCollection === "incomes") return { sourceModule: "cash_in_manual", sourceLabel: "Cash In Manual" };
+  if (sourceModule === "cash_out_manual" || sourceCollection === "expenses") return { sourceModule: "cash_out_manual", sourceLabel: "Cash Out Manual" };
+  return { sourceModule: sourceModule || "other", sourceLabel: sourceModule || "Lainnya" };
 };
 
-const resolveExpenseLedgerSource = (record = {}) => {
-  const rawSourceModule = toSafeString(record.sourceModule);
-  const transactionType = toSafeString(record.type).toLowerCase();
-  const inferredSourceModule = !rawSourceModule && transactionType.includes("pembelian")
-    ? "purchases"
-    : !rawSourceModule && transactionType.includes("payroll")
-      ? "production_payroll"
-      : rawSourceModule;
-  const sourceModule = inferredSourceModule || "cash_out_manual";
-  const sourceRef = toSafeString(
-    record.sourceRef || record.referenceNumber || record.relatedPurchaseId || record.relatedId || record.sourceId,
-  );
-
-  if (sourceModule === "purchases") {
-    return {
-      sourceModule: "purchases",
-      sourceLabel: "Pembelian",
-      referenceCode: sourceRef,
-      status: toSafeString(record.status || record.paymentStatus || "Tercatat"),
-    };
-  }
-
-  if (sourceModule === "production_payroll") {
-    return {
-      sourceModule: "production_payroll",
-      sourceLabel: "Payroll Produksi",
-      referenceCode: sourceRef,
-      status: toSafeString(record.status || record.paymentStatus || "Paid"),
-    };
-  }
-
-  if (sourceModule === "cash_out_manual") {
-    return {
-      sourceModule: "cash_out_manual",
-      sourceLabel: "Cash Out Manual",
-      referenceCode: sourceRef,
-      status: toSafeString(record.status || "Tercatat"),
-    };
-  }
-
-  return {
-    sourceModule: "other",
-    sourceLabel: sourceModule || "Pengeluaran Lainnya",
-    referenceCode: sourceRef,
-    status: toSafeString(record.status || record.paymentStatus || "Tercatat"),
-  };
-};
-
-export const normalizeMoneyMovementLedgerRow = ({ sourceCollection, documentId, record = {} }) => {
-  const direction = MONEY_OUT_COLLECTIONS.includes(sourceCollection) ? "out" : "in";
-  const sourceMeta = direction === "out"
-    ? resolveExpenseLedgerSource(record)
-    : resolveIncomeLedgerSource(sourceCollection, record);
-
-  const amount = Math.round(toFiniteNumber(record.amount || record.totalAmount || 0));
-  const date = record.date || record.createdAt || null;
-  const description = toSafeString(record.description || record.note || record.notes || record.type);
-  /*
-  =====================================================
-  SECTION: Referensi display Buku Besar Kas — AKTIF / GUARDED
-  Fungsi:
-  - Menampilkan kode bisnis dari incomes/revenues/expenses tanpa menambah source data baru.
-
-  Dipakai oleh:
-  - MoneyMovementLedger.jsx.
-
-  Alasan perubahan:
-  - Ledger kas tidak boleh menampilkan Firestore ID random jika dokumen punya sourceRef/referenceNumber.
-
-  Catatan cleanup:
-  - Data lama tanpa kode bisnis tetap akan fallback ke ID ringkas sampai data test di-reset.
-
-  Risiko:
-  - Jangan menambah pembacaan sales/purchases/payroll mentah di sini karena bisa double count.
-  =====================================================
-  */
+export const normalizeMoneyMovementLedgerRow = ({ sourceCollection = "money_movement_ledger", documentId, record = {} }) => {
+  const direction = record.direction === "out" || Number(record.credit || 0) > 0 ? "out" : "in";
+  const sourceMeta = resolveLedgerSource({ ...record, sourceCollection });
+  const amount = Math.round(toFiniteNumber(record.amount || record.totalAmount || record.debit || record.credit || 0));
+  const date = record.date || record.transactionDate || record.createdAt || null;
+  const description = toSafeString(record.description || record.note || record.notes || record.type || record.name);
   const referenceCode = resolveDisplayReference(
-    { id: documentId, ...record, referenceCode: sourceMeta.referenceCode },
+    { id: documentId, ...record, referenceCode: record.sourceRef || record.referenceNumber || record.code },
     { fallback: "-" },
   );
 
@@ -176,62 +69,28 @@ export const normalizeMoneyMovementLedgerRow = ({ sourceCollection, documentId, 
     referenceCode,
     description,
     amount,
-    status: sourceMeta.status,
+    status: toSafeString(record.status || "Tercatat"),
     createdAt: record.createdAt || record.date || null,
-    rawRecord: {
-      id: documentId,
-      ...record,
-    },
+    rawRecord: { id: documentId, ...record },
   };
 };
 
-const buildLedgerQuery = (collectionName, { year, month, limit }) => {
-  const periodRange = buildPeriodRange({ year, month });
-  const queryConstraints = [];
-
-  if (periodRange) {
-    queryConstraints.push(where("date", ">=", Timestamp.fromDate(periodRange.startDate)));
-    queryConstraints.push(where("date", "<", Timestamp.fromDate(periodRange.endDate)));
-  }
-
-  queryConstraints.push(orderBy("date", "desc"));
-  queryConstraints.push(firestoreLimit(Math.max(1, Number(limit || DEFAULT_LEDGER_LIMIT))));
-
-  return query(collection(db, collectionName), ...queryConstraints);
+const matchesPeriod = (row, periodRange) => {
+  if (!periodRange) return true;
+  const time = getTimestampMillis(row.date);
+  return time >= periodRange.startDate.getTime() && time < periodRange.endDate.getTime();
 };
 
-const readLedgerCollection = async (collectionName, params) => {
-  const ledgerSnapshot = await getDocs(buildLedgerQuery(collectionName, params));
-
-  return ledgerSnapshot.docs.map((documentItem) =>
-    normalizeMoneyMovementLedgerRow({
-      sourceCollection: collectionName,
-      documentId: documentItem.id,
-      record: documentItem.data(),
-    }),
-  );
-};
-
-const matchesDirection = (row, direction) => {
-  if (!direction || direction === "all") return true;
-  return row.direction === direction;
-};
-
+const matchesDirection = (row, direction) => !direction || direction === "all" || row.direction === direction;
 const matchesSource = (row, source) => {
   if (!source || source === "all") return true;
-
-  if (source === "other") {
-    return row.sourceModule === "other";
-  }
-
+  if (source === "other") return row.sourceModule === "other";
   return row.sourceModule === source;
 };
-
 const matchesSearch = (row, search) => {
   const normalizedSearch = toSafeString(search).toLowerCase();
   if (!normalizedSearch) return true;
-
-  const searchableText = [
+  return [
     row.sourceCollection,
     row.direction,
     row.sourceModule,
@@ -241,24 +100,9 @@ const matchesSearch = (row, search) => {
     row.status,
     row.rawRecord?.type,
     row.amount,
-  ]
-    .filter((value) => value !== undefined && value !== null)
-    .join(" ")
-    .toLowerCase();
-
-  return searchableText.includes(normalizedSearch);
+  ].filter((value) => value !== undefined && value !== null).join(" ").toLowerCase().includes(normalizedSearch);
 };
 
-// =====================================================
-// SECTION: Buku Besar Kas read-only — AKTIF / GUARDED
-// Fungsi:
-// - membaca uang masuk dari incomes/revenues dan uang keluar dari expenses;
-// - menormalisasi row audit tanpa membuat transaksi, posting kas, backfill, atau collection baru.
-// Dipakai oleh:
-// - src/pages/Finance/MoneyMovementLedger.jsx.
-// Risiko:
-// - Jangan menambahkan source sales/purchases/payroll/work_logs/inventory_logs ke nominal utama karena akan double count.
-// =====================================================
 export const getMoneyMovementLedger = async ({
   year,
   month = "all",
@@ -268,21 +112,12 @@ export const getMoneyMovementLedger = async ({
   limit = DEFAULT_LEDGER_LIMIT,
 } = {}) => {
   const normalizedLimit = Math.max(1, Number(limit || DEFAULT_LEDGER_LIMIT));
-
-  const collectionNames = direction === "in"
-    ? MONEY_IN_COLLECTIONS
-    : direction === "out"
-      ? MONEY_OUT_COLLECTIONS
-      : [...MONEY_IN_COLLECTIONS, ...MONEY_OUT_COLLECTIONS];
-
-  const ledgerRows = await Promise.all(
-    collectionNames.map((collectionName) =>
-      readLedgerCollection(collectionName, { year, month, limit: normalizedLimit }),
-    ),
-  );
+  const periodRange = buildPeriodRange({ year, month });
+  const ledgerRows = await listFinanceLedgerRows({ limit: Math.max(normalizedLimit, DEFAULT_LEDGER_LIMIT) });
 
   return ledgerRows
-    .flat()
+    .map((record) => normalizeMoneyMovementLedgerRow({ sourceCollection: "money_movement_ledger", documentId: record.id, record }))
+    .filter((row) => matchesPeriod(row, periodRange))
     .filter((row) => matchesDirection(row, direction))
     .filter((row) => matchesSource(row, source))
     .filter((row) => matchesSearch(row, search))

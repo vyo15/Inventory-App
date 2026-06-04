@@ -327,3 +327,35 @@ D1 Pricing Rules:
 Batas aman:
 - Tidak ada mutasi stock, sales, purchase, production, payroll, HPP, finance, atau reset dari D1 ini.
 - Firebase compatibility belum dihapus karena masih dipakai oleh raw/products preview dan modul guarded lain.
+
+## Update D2-D4 — Product/Raw/Stock/Transactions SQLite bertahap
+
+Status aktif:
+
+1. Pricing Rules page sudah melewati service boundary dan tidak direct Firestore.
+2. Supplier page sudah memakai service boundary untuk raw/purchase reference; katalog restock pasif disimpan di Supplier SQLite payload.
+3. Backend foundation table dan route untuk Product/Raw/Semi/Stock/Transactions/Finance/Production/Reports sudah tersedia.
+4. Product master, Raw Material master, dan Stock Read Model snapshot sudah opt-in SQLite.
+5. Stock Engine atomic untuk Product/Raw sudah tersedia dan dipakai oleh Stock Adjustment serta commit Purchase/Sales/Returns.
+
+Masih guarded:
+
+- Finance ledger final, Production/Payroll/HPP, Semi Finished final, dan Reports final belum selesai.
+- Firebase removal final hanya boleh setelah `npm --prefix backend run audit:sqlite-cutover -- --strict` bersih dari blocker Firebase runtime.
+
+## Update D6 — Semi Finished, Finance Ledger, Reports
+
+Status aktif:
+
+- Semi Finished master SQLite aktif dan stock engine mendukung source type `semi_finished` untuk adjustment manual.
+- Finance Cash In/Cash Out manual sudah lewat SQLite commit endpoint dan menulis ledger.
+- Transaction commit Purchase/Sales/Returns SQLite sudah membuat finance side effect untuk transaksi baru sesuai guard:
+  - Purchase -> expense.
+  - Sales `Selesai` -> income.
+  - Return -> refund expense hanya jika payload refund ada.
+- Reports service sudah membaca SQLite transactions/finance/stock snapshot untuk data baru.
+
+Belum final dan sengaja ditahan:
+
+- Production/Payroll/HPP final belum dipindah karena flow tersebut menyentuh material actual, work log, payroll final/paid, dan HPP final.
+- Firebase removal final belum boleh dilakukan sampai audit strict tidak menemukan runtime import Firebase.

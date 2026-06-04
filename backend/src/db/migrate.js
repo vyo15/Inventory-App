@@ -40,6 +40,89 @@ async function ensureColumn(db, tableName, columnName, columnDefinition) {
   }
 }
 
+
+async function ensureJsonRecordTable(db, tableName) {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS ${tableName} (
+      id TEXT PRIMARY KEY,
+      code TEXT UNIQUE,
+      name TEXT,
+      category_id TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      current_stock INTEGER NOT NULL DEFAULT 0,
+      reserved_stock INTEGER NOT NULL DEFAULT 0,
+      available_stock INTEGER NOT NULL DEFAULT 0,
+      min_stock_alert INTEGER NOT NULL DEFAULT 0,
+      total_amount INTEGER NOT NULL DEFAULT 0,
+      transaction_date TEXT,
+      source_type TEXT,
+      source_id TEXT,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_${tableName}_status
+      ON ${tableName} (status);
+    CREATE INDEX IF NOT EXISTS idx_${tableName}_name
+      ON ${tableName} (name);
+    CREATE INDEX IF NOT EXISTS idx_${tableName}_source
+      ON ${tableName} (source_type, source_id);
+    CREATE INDEX IF NOT EXISTS idx_${tableName}_transaction_date
+      ON ${tableName} (transaction_date DESC);
+    CREATE INDEX IF NOT EXISTS idx_${tableName}_updated_at
+      ON ${tableName} (updated_at DESC);
+  `);
+}
+
+async function ensureFoundationJsonTables(db) {
+  const tables = [
+    'products',
+    'raw_materials',
+    'semi_finished_materials',
+    'stock_read_models',
+    'stock_adjustments',
+    'inventory_logs',
+    'purchases',
+    'sales',
+    'returns',
+    'incomes',
+    'expenses',
+    'money_movement_ledger',
+    'production_steps',
+    'production_employees',
+    'production_profiles',
+    'production_boms',
+    'production_planning',
+    'production_orders',
+    'production_work_logs',
+    'production_payrolls',
+    'report_snapshots',
+  ];
+
+  for (const tableName of tables) {
+    await ensureJsonRecordTable(db, tableName);
+  }
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS migration_identity_map (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      module_key TEXT NOT NULL,
+      legacy_source TEXT NOT NULL DEFAULT 'firestore',
+      legacy_id TEXT NOT NULL,
+      sqlite_id TEXT NOT NULL,
+      reference_code TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(module_key, legacy_source, legacy_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_migration_identity_map_sqlite_id
+      ON migration_identity_map (sqlite_id);
+  `);
+}
+
 async function ensurePricingRulesSchema(db) {
   // D1-SQLITE-COMPAT:
   // Database pilot yang sudah pernah dibuat bisa memiliki table pricing_rules lama
@@ -85,20 +168,20 @@ async function seedMigrationStatus(db) {
   const rows = [
     ["customers", "Customers", "sqlite_active", "read_write", "Pilot aman sudah memakai SQLite local sidecar."],
     ["categories", "Categories", "sqlite_active", "read_write", "Pilot aman sudah memakai SQLite local sidecar."],
-    ["suppliers", "Suppliers", "sqlite_backend_ready", "frontend_guarded", "Schema dan API SQLite supplier tersedia; frontend utama belum dialihkan karena terkait purchase/raw/history."],
+    ["suppliers", "Suppliers", "sqlite_active", "read_write_master_payload", "Supplier master SQLite aktif; katalog restock pasif disimpan di payload_json. Purchase/raw history tetap lewat service boundary."],
     ["pricing_rules", "Pricing Rules", "sqlite_active", "read_write_master", "D1: rule pricing disimpan di SQLite. Apply harga massal tetap guarded jika target item masih legacy."],
-    ["products", "Products", "firebase_only", "guarded_master", "Belum dimigrasi karena terkait stock, sales, BOM, dan report."],
-    ["raw_materials", "Raw Materials", "firebase_only", "guarded_master", "Belum dimigrasi karena terkait purchase, stock, production material usage."],
-    ["semi_finished", "Semi Finished", "firebase_only", "guarded_master", "Belum dimigrasi karena terkait production flow dan stock."],
-    ["stock", "Stock Engine", "guarded", "no_offline_mutation", "currentStock/reservedStock/availableStock harus atomic dan audited."],
-    ["purchases", "Purchases", "guarded", "no_offline_final_transaction", "Purchase final menyentuh supplier, raw material, stock in, finance."],
-    ["sales", "Sales", "guarded", "no_offline_final_transaction", "Sales final menyentuh customer snapshot, stock out, income."],
-    ["returns", "Returns", "guarded", "no_offline_final_transaction", "Returns menyentuh sales, stock restore, refund rule."],
-    ["finance", "Finance Ledger", "guarded", "no_local_recompute", "Ledger/profit-loss belum boleh dihitung ulang dari draft/local."],
-    ["production", "Production", "guarded", "no_offline_final_transaction", "Production menyentuh material usage, payroll, HPP."],
-    ["payroll_hpp", "Payroll & HPP", "guarded", "no_offline_final_transaction", "HPP final harus dari material actual dan payroll final/paid."],
-    ["reports", "Reports & Dashboard", "firebase_primary_snapshot_pending", "read_only_snapshot_pending", "Report final belum boleh membaca draft/local yang belum committed."],
-    ["auth", "Auth & Role Guard", "sqlite_local_ready", "backend_frontend_opt_in", "Auth lokal SQLite tersedia opt-in via VITE_AUTH_MODE=sqlite; Firebase masih legacy-compatible."],
+    ["products", "Products", "sqlite_active", "read_write_master", "Product master SQLite aktif; stock mutation final wajib lewat stock engine."],
+    ["raw_materials", "Raw Materials", "sqlite_active", "read_write_master", "Raw Material master SQLite aktif; purchase/production mutation final wajib lewat stock engine."],
+    ["semi_finished", "Semi Finished", "sqlite_active", "read_write_master_stock", "Semi Finished master SQLite aktif; stock adjustment SQLite didukung. Production material usage/HPP tetap lewat batch production."],
+    ["stock", "Stock Engine", "sqlite_active", "atomic_product_raw_semi", "Stock engine SQLite aktif untuk Product/Raw/Semi Finished melalui endpoint commit dan audit log."],
+    ["purchases", "Purchases", "sqlite_active", "atomic_stock_finance", "Purchase SQLite atomic aktif untuk stock-in Product/Raw dan posting expense finance."],
+    ["sales", "Sales", "sqlite_active", "atomic_stock_finance", "Sales SQLite atomic aktif untuk stock-out Product/Raw dan posting income saat selesai."],
+    ["returns", "Returns", "sqlite_atomic_stock_only", "product_raw_stock_restore", "Returns SQLite atomic aktif untuk Product/Raw stock restore. Refund/finance final masih guarded."],
+    ["finance", "Finance Ledger", "sqlite_active", "cash_in_cash_out_ledger", "Finance SQLite aktif untuk cash-in/cash-out manual dan ledger transaksi baru."],
+    ["production", "Production", "sqlite_active", "production_sqlite_runtime", "Production steps, employees, profiles, BOM, planning, orders, dan work logs memakai SQLite runtime."],
+    ["payroll_hpp", "Payroll & HPP", "sqlite_active", "payroll_paid_hpp_sqlite", "Payroll final/paid dan HPP runtime memakai data SQLite baru; payroll paid memposting expense finance."],
+    ["reports", "Reports & Dashboard", "sqlite_active", "sqlite_transactions_finance_stock", "Report service membaca SQLite transaction/finance/stock snapshot untuk data baru."],
+    ["auth", "Auth & Role Guard", "sqlite_active", "local_auth_only", "Auth lokal SQLite menjadi runtime final; Firebase Auth dependency dihapus."],
     ["reset_restore", "Reset & Restore", "guarded", "confirm_keyword_required", "Restore SQLite guarded tersedia untuk administrator lokal dengan backup otomatis dan keyword konfirmasi."],
   ];
 
@@ -281,6 +364,8 @@ async function runMigrations() {
   `);
 
   await ensurePricingRulesSchema(db);
+  await ensureColumn(db, "suppliers", "payload_json", "payload_json TEXT NOT NULL DEFAULT '{}'");
+  await ensureFoundationJsonTables(db);
 
   await db.run(
     `
@@ -293,7 +378,7 @@ async function runMigrations() {
 
   await seedSetting(db, "app_name", "IMS Bunga Flanel");
   await seedSetting(db, "server_mode", "sqlite_local_primary_pilot");
-  await seedSetting(db, "guarded_modules", "stock,sales,purchase,returns,finance,production,payroll,hpp,reset");
+  await seedSetting(db, "guarded_modules", "reset_restore");
   await seedLocalRoles(db);
   await seedMigrationStatus(db);
 }

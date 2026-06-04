@@ -1,5 +1,6 @@
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../../firebase";
+import * as sqliteProductsAdapter from "../../data/adapters/sqlite/sqliteProductsAdapter";
+import * as sqliteRawMaterialsAdapter from "../../data/adapters/sqlite/sqliteRawMaterialsAdapter";
+import * as sqliteSemiFinishedMaterialsAdapter from "../../data/adapters/sqlite/sqliteSemiFinishedMaterialsAdapter";
 import { buildStockReadModelRow } from "../../utils/stock/stockHelpers";
 import { getStockReadModelRows } from "../Inventory/stockReadModelService";
 
@@ -73,38 +74,32 @@ const mergeUniqueStockRows = (currentRows = [], nextRows = []) => {
 
 const readStockReportRowsFromMasterFallback = async ({ fallbackReason = "" } = {}) => {
   const stockReportReads = await Promise.all([
-    readStockReportSnapshot("raw_materials_fallback", getDocs(collection(db, "raw_materials"))),
-    readStockReportSnapshot("products_fallback", getDocs(collection(db, "products"))),
-    readStockReportSnapshot("semi_finished_materials_fallback", getDocs(collection(db, "semi_finished_materials"))),
+    readStockReportSnapshot("raw_materials_fallback", sqliteRawMaterialsAdapter.listRawMaterials({ limit: 5000 })),
+    readStockReportSnapshot("products_fallback", sqliteProductsAdapter.listProducts({ limit: 5000 })),
+    readStockReportSnapshot("semi_finished_materials_fallback", sqliteSemiFinishedMaterialsAdapter.listSemiFinishedMaterials({ limit: 5000 })),
   ]);
 
   const dataByKey = stockReportReads.reduce((accumulator, item) => {
-    accumulator[item.key] = item.snapshot;
+    accumulator[item.key] = Array.isArray(item.snapshot) ? item.snapshot : [];
     return accumulator;
   }, {});
 
-  const rawMaterialsData = dataByKey.raw_materials_fallback
-    ? mapInventorySnapshotToReportRows(dataByKey.raw_materials_fallback, "Bahan Baku")
-    : [];
-  const productsData = dataByKey.products_fallback
-    ? mapInventorySnapshotToReportRows(dataByKey.products_fallback, "Produk Jadi")
-    : [];
-  const semiFinishedData = dataByKey.semi_finished_materials_fallback
-    ? mapInventorySnapshotToReportRows(dataByKey.semi_finished_materials_fallback, "Semi Finished")
-    : [];
+  const rawMaterialsData = dataByKey.raw_materials_fallback.map((item) => buildStockReadModelRow(item, { id: item.id, typeLabel: "Bahan Baku" }));
+  const productsData = dataByKey.products_fallback.map((item) => buildStockReadModelRow(item, { id: item.id, typeLabel: "Produk Jadi" }));
+  const semiFinishedData = dataByKey.semi_finished_materials_fallback.map((item) => buildStockReadModelRow(item, { id: item.id, typeLabel: "Semi Finished" }));
 
   const inventory = [...rawMaterialsData, ...productsData, ...semiFinishedData];
 
   return {
     inventory,
     failedReads: stockReportReads.filter((item) => item.error).map((item) => item.key),
-    dataSource: "master_stock_fallback",
+    dataSource: "sqlite_master_stock_fallback",
     reportMeta: buildStockReportMeta({
-      dataSource: "master_stock_fallback",
+      dataSource: "sqlite_master_stock_fallback",
       loadedRows: inventory.length,
       activeRows: inventory.length,
       fallbackReason,
-      exportMode: "fallback_master_rows",
+      exportMode: "sqlite_fallback_master_rows",
     }),
   };
 };
@@ -153,16 +148,10 @@ const readStockReportRows = async ({
   }
 };
 
-const readStockReportCategories = async () => {
-  const categoriesRead = await readStockReportSnapshot("categories", getDocs(collection(db, "categories")));
-
-  return {
-    categories: categoriesRead.snapshot
-      ? categoriesRead.snapshot.docs.map((documentItem) => documentItem.data().name)
-      : [],
-    failedReads: categoriesRead.error ? [categoriesRead.key] : [],
-  };
-};
+const readStockReportCategories = async () => ({
+  categories: [],
+  failedReads: [],
+});
 
 // =====================================================
 // SECTION: Stock Report data loader — AKTIF / READ MODEL PRIMARY + PAGING

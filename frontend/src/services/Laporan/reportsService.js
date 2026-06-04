@@ -1,85 +1,63 @@
-import { collection, getDocs, orderBy, query, where } from "firebase/firestore";
-import { db } from "../../firebase";
+import * as sqliteTransactionsAdapter from "../../data/adapters/sqlite/sqliteTransactionsAdapter";
+import { listFinanceExpenses, listFinanceIncomes } from "../Finance/financeService";
 
-// =====================================================
-// SECTION: Report read service — AKTIF / READ-ONLY
-// Fungsi:
-// - memusatkan query laporan transaksi/finance agar page tidak lagi orchestration Firestore langsung;
-// - menjaga filter periode server-side tetap menjadi standar read path laporan besar.
-// Hubungan flow:
-// - hanya membaca sales, expenses, revenues, dan incomes;
-// - tidak mengubah transaksi, stok, kas, expense, income, revenue, schema, route, atau role guard.
-// Risiko:
-// - Jangan ubah sumber truth laporan di service ini tanpa audit business rule dan report regression test.
-// =====================================================
-const mapSnapshotDocs = (snapshot) =>
-  snapshot.docs.map((documentItem) => ({
-    id: documentItem.id,
-    ...documentItem.data(),
-  }));
-
-const buildDateRangeConstraints = (fieldName = "date", dateRangeBounds = null) => {
-  if (!dateRangeBounds) return [];
-
-  return [
-    where(fieldName, ">=", dateRangeBounds.startTimestamp),
-    where(fieldName, "<", dateRangeBounds.endTimestampExclusive),
-  ];
+const getDateMillis = (value) => {
+  if (!value) return 0;
+  if (typeof value?.toDate === "function") return value.toDate().getTime();
+  if (value instanceof Date) return value.getTime();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
 };
 
-const buildDateRangeQuery = (collectionName, dateRangeBounds = null, fieldName = "date") =>
-  query(
-    collection(db, collectionName),
-    ...buildDateRangeConstraints(fieldName, dateRangeBounds),
-    orderBy(fieldName, "desc"),
-  );
+const getBoundsMillis = (dateRangeBounds = null) => {
+  if (!dateRangeBounds) return null;
+  const start = getDateMillis(dateRangeBounds.startTimestamp || dateRangeBounds.startDate || dateRangeBounds.start);
+  const end = getDateMillis(dateRangeBounds.endTimestampExclusive || dateRangeBounds.endDateExclusive || dateRangeBounds.end);
+  if (!start || !end) return null;
+  return { start, end };
+};
+
+const filterByDateRange = (rows = [], dateRangeBounds = null) => {
+  const bounds = getBoundsMillis(dateRangeBounds);
+  if (!bounds) return rows;
+  return rows.filter((item) => {
+    const time = getDateMillis(item.date || item.transactionDate || item.createdAt);
+    return time >= bounds.start && time < bounds.end;
+  });
+};
+
+const sortByDateDesc = (rows = []) => rows.sort((left, right) =>
+  getDateMillis(right.date || right.transactionDate || right.createdAt) - getDateMillis(left.date || left.transactionDate || left.createdAt),
+);
 
 export const fetchSalesReportData = async ({ dateRangeBounds = null } = {}) => {
-  const querySnapshot = await getDocs(buildDateRangeQuery("sales", dateRangeBounds));
-  return mapSnapshotDocs(querySnapshot);
+  const rows = await sqliteTransactionsAdapter.listSales({ limit: 5000 });
+  return sortByDateDesc(filterByDateRange(rows, dateRangeBounds));
 };
 
 export const fetchPurchasesReportData = async ({ dateRangeBounds = null } = {}) => {
-  const querySnapshot = await getDocs(buildDateRangeQuery("expenses", dateRangeBounds));
-
-  return mapSnapshotDocs(querySnapshot).filter(
-    (item) => item.sourceModule === "purchases" || item.type === "Pembelian Bahan/Barang",
-  );
+  const rows = await sqliteTransactionsAdapter.listPurchases({ limit: 5000 });
+  return sortByDateDesc(filterByDateRange(rows, dateRangeBounds));
 };
 
 export const fetchProfitLossReportData = async ({ dateRangeBounds = null } = {}) => {
-  const buildFinancialQuery = (collectionName) => buildDateRangeQuery(collectionName, dateRangeBounds);
-
-  const [revenuesSnap, incomesSnap, expensesSnap] = await Promise.all([
-    getDocs(buildFinancialQuery("revenues")),
-    getDocs(buildFinancialQuery("incomes")),
-    getDocs(buildFinancialQuery("expenses")),
+  const [incomes, expenses] = await Promise.all([
+    listFinanceIncomes({ limit: 5000 }),
+    listFinanceExpenses({ limit: 5000 }),
   ]);
 
-  const revenues = revenuesSnap.docs.map((documentItem) => ({
-    id: `revenues-${documentItem.id}`,
-    sourceCollection: "revenues",
-    ...documentItem.data(),
-    flow: "Pemasukan",
-  }));
-
-  const incomes = incomesSnap.docs.map((documentItem) => ({
-    id: `incomes-${documentItem.id}`,
+  const incomeRows = incomes.map((item) => ({
+    ...item,
+    id: `incomes-${item.id}`,
     sourceCollection: "incomes",
-    ...documentItem.data(),
     flow: "Pemasukan",
   }));
-
-  const expenses = expensesSnap.docs.map((documentItem) => ({
-    id: `expenses-${documentItem.id}`,
+  const expenseRows = expenses.map((item) => ({
+    ...item,
+    id: `expenses-${item.id}`,
     sourceCollection: "expenses",
-    ...documentItem.data(),
     flow: "Pengeluaran",
   }));
 
-  return [...revenues, ...incomes, ...expenses].sort((left, right) => {
-    const leftTime = left.date?.toDate ? left.date.toDate().getTime() : 0;
-    const rightTime = right.date?.toDate ? right.date.toDate().getTime() : 0;
-    return rightTime - leftTime;
-  });
+  return sortByDateDesc(filterByDateRange([...incomeRows, ...expenseRows], dateRangeBounds));
 };

@@ -1429,3 +1429,37 @@ Yang masih guarded / belum final:
 - Create/update/delete Supplier SQLite diarahkan ke `suppliersRepository` dan backend `/api/suppliers`.
 - Form katalog restock material dinonaktifkan pada mode SQLite C1 agar tidak ada partial migration yang merusak Raw Material, Purchase, Stock, Finance, atau Report.
 - Firebase masih dipakai sebagai fallback legacy dan read-only reference untuk modul guarded yang belum dimigrasi.
+
+## Update D2-D4 SQLite Foundation dan Atomic Stock/Transactions
+
+Status aktif source terbaru:
+
+- Pricing Rules page tidak lagi direct import Firestore; CRUD rule lewat `pricingService` dan SQLite adapter saat env SQLite aktif.
+- Supplier page tidak lagi direct Firestore untuk raw/purchase reference; referensi bahan dan histori pembelian lewat service boundary. Supplier SQLite menyimpan katalog restock pasif di `payload_json`.
+- Env guard sudah eksplisit untuk Product, Raw Material, Stock Read Model, Stock Adjustment, Transactions, Finance, Production, dan Reports.
+- Backend migration menyediakan table foundation JSON untuk Products, Raw Materials, Semi Finished, Stock Read Models, Stock Adjustments, Inventory Logs, Purchases, Sales, Returns, Finance, Production, Reports, dan migration identity map.
+- Backend route foundation sudah mounted untuk `/api/products`, `/api/raw-materials`, `/api/semi-finished-materials`, `/api/stock-read-models`, `/api/stock`, `/api/stock-adjustments`, `/api/transactions`, `/api/finance`, `/api/production`, dan `/api/reports`.
+- Product master dan Raw Material master sudah opt-in SQLite; Stock Read Model snapshot juga opt-in SQLite.
+- Stock Engine SQLite atomic aktif untuk Product/Raw mutation via backend, termasuk stock adjustment, inventory log, stock read model, dan audit log dalam satu SQLite transaction.
+- Purchase/Sales/Returns SQLite commit tersedia untuk Product/Raw stock-in/out/restore. Finance final masih guarded.
+
+Batasan guarded yang masih tersisa:
+
+- Semi Finished tetap `firebase_primary` sampai Production/BOM/HPP selesai diaudit.
+- Finance/Production/Reports masih storage/snapshot foundation; business logic final belum boleh dianggap selesai.
+- Firebase removal final belum aman selama audit strict masih menemukan import Firebase runtime.
+
+## Update D6 — Semi Finished, Finance, dan Reports SQLite
+
+Status aktif source terbaru:
+
+- Semi Finished master sekarang opt-in SQLite melalui `VITE_SEMI_FINISHED_REPOSITORY_MODE=sqlite`.
+- Stock Engine SQLite sudah mendukung `semi_finished` untuk Stock Adjustment Product/Raw/Semi, tetapi material usage produksi final tetap harus lewat modul Production.
+- Finance manual Cash In/Cash Out memakai backend SQLite `/api/finance/cash-in/commit` dan `/api/finance/cash-out/commit` yang menulis `incomes`/`expenses` sekaligus `money_movement_ledger` dalam satu SQLite transaction.
+- Purchase/Sales/Returns SQLite commit sekarang membuat side effect finance untuk transaksi baru: Purchase membuat expense, Sales status `Selesai` membuat income, Returns hanya membuat refund expense jika payload refund bernilai > 0.
+- Reports service membaca Sales/Purchases dari SQLite transactions dan Profit/Loss dari SQLite finance. Stock Report fallback master memakai adapter SQLite Product/Raw/Semi.
+
+Batasan guarded yang tetap berlaku:
+
+- Production/Payroll/HPP final belum dibuka dari UI karena wajib audit material usage, work log, payroll final/paid, dan HPP final. `VITE_PRODUCTION_REPOSITORY_MODE` tetap `firebase_primary`.
+- Firebase removal final belum aman selama audit strict masih menemukan runtime import Firebase.

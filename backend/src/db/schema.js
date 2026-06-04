@@ -1,4 +1,4 @@
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 7;
 
 const TABLES = {
   SCHEMA_META: "schema_meta",
@@ -15,6 +15,29 @@ const TABLES = {
   CATEGORIES: "categories",
   SUPPLIERS: "suppliers",
   PRICING_RULES: "pricing_rules",
+
+  PRODUCTS: "products",
+  RAW_MATERIALS: "raw_materials",
+  SEMI_FINISHED_MATERIALS: "semi_finished_materials",
+  STOCK_READ_MODELS: "stock_read_models",
+  STOCK_ADJUSTMENTS: "stock_adjustments",
+  INVENTORY_LOGS: "inventory_logs",
+  PURCHASES: "purchases",
+  SALES: "sales",
+  RETURNS: "returns",
+  INCOMES: "incomes",
+  EXPENSES: "expenses",
+  MONEY_MOVEMENT_LEDGER: "money_movement_ledger",
+  PRODUCTION_STEPS: "production_steps",
+  PRODUCTION_EMPLOYEES: "production_employees",
+  PRODUCTION_PROFILES: "production_profiles",
+  PRODUCTION_BOMS: "production_boms",
+  PRODUCTION_PLANNING: "production_planning",
+  PRODUCTION_ORDERS: "production_orders",
+  PRODUCTION_WORK_LOGS: "production_work_logs",
+  PRODUCTION_PAYROLLS: "production_payrolls",
+  REPORT_SNAPSHOTS: "report_snapshots",
+  MIGRATION_IDENTITY_MAP: "migration_identity_map",
 };
 
 module.exports = { SCHEMA_VERSION, TABLES };

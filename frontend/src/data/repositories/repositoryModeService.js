@@ -6,6 +6,16 @@ import {
 
 const REPOSITORY_MODE_STORAGE_KEY = "ims.repositoryMode";
 
+const SQLITE_MODULE_MODES = new Set(["sqlite", "sqlite_sidecar", "local_sqlite"]);
+
+export const isSqliteRepositoryModuleEnabled = (envKey, fallbackMode = "firebase_primary") => {
+  const value = String(import.meta.env?.[envKey] || fallbackMode || "").trim().toLowerCase();
+  return SQLITE_MODULE_MODES.has(value);
+};
+
+export const getRepositoryModuleMode = (envKey, fallbackMode = "firebase_primary") =>
+  String(import.meta.env?.[envKey] || fallbackMode || "").trim().toLowerCase();
+
 export const SQLITE_REPOSITORY_CONFIRMATION = "ENABLE SQLITE LOCAL MODE";
 export const FIREBASE_REPOSITORY_CONFIRMATION = "ENABLE FIREBASE MODE";
 

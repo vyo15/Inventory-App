@@ -12,6 +12,15 @@ const SUPPLIER_CODE_PATTERN = /^SUP-\d{8}-\d{3,}$/;
 const normalizeText = (value) => String(value || "").trim();
 const normalizeCode = (value) => normalizeText(value).toUpperCase();
 
+const safeJsonParse = (value, fallback = {}) => {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch (_error) {
+    return fallback;
+  }
+};
+
 const getDateStamp = (date = new Date()) => {
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -31,23 +40,30 @@ const getSupplierSequence = (code = "", date = new Date()) => {
   return Number.isFinite(sequence) ? sequence : 0;
 };
 
-const toSupplierRecord = (row = {}) => ({
-  id: row.id,
-  code: row.supplier_code || "",
-  supplierCode: row.supplier_code || "",
-  name: row.name || "",
-  storeName: row.name || "",
-  storeLink: row.store_link || "",
-  link: row.store_link || "",
-  contact: row.phone || "",
-  phone: row.phone || "",
-  address: row.address || "",
-  note: row.notes || "",
-  notes: row.notes || "",
-  status: row.status || "active",
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-});
+const toSupplierRecord = (row = {}) => {
+  const payload = safeJsonParse(row.payload_json, {});
+  return {
+    ...payload,
+    id: row.id,
+    code: row.supplier_code || payload.code || "",
+    supplierCode: row.supplier_code || payload.supplierCode || "",
+    name: row.name || payload.name || "",
+    storeName: row.name || payload.storeName || "",
+    storeLink: row.store_link || payload.storeLink || "",
+    link: row.store_link || payload.link || "",
+    contact: row.phone || payload.contact || "",
+    phone: row.phone || payload.phone || "",
+    address: row.address || payload.address || "",
+    note: row.notes || payload.note || "",
+    notes: row.notes || payload.notes || "",
+    materialDetails: Array.isArray(payload.materialDetails) ? payload.materialDetails : [],
+    supportedMaterialIds: Array.isArray(payload.supportedMaterialIds) ? payload.supportedMaterialIds : [],
+    supportedMaterialNames: Array.isArray(payload.supportedMaterialNames) ? payload.supportedMaterialNames : [],
+    status: row.status || payload.status || "active",
+    createdAt: row.created_at || payload.createdAt,
+    updatedAt: row.updated_at || payload.updatedAt,
+  };
+};
 
 const buildSupplierPayload = (body = {}) => ({
   supplierCode: normalizeCode(body.code || body.supplierCode || body.supplier_code),
@@ -56,6 +72,12 @@ const buildSupplierPayload = (body = {}) => ({
   phone: normalizeText(body.contact || body.phone),
   address: normalizeText(body.address),
   notes: normalizeText(body.note || body.notes || body.description),
+  payload: {
+    ...body,
+    materialDetails: Array.isArray(body.materialDetails) ? body.materialDetails : [],
+    supportedMaterialIds: Array.isArray(body.supportedMaterialIds) ? body.supportedMaterialIds : [],
+    supportedMaterialNames: Array.isArray(body.supportedMaterialNames) ? body.supportedMaterialNames : [],
+  },
 });
 
 const ensureSupplierCodeAvailable = async (db, code, excludeId = null) => {
@@ -140,10 +162,10 @@ router.post("/", requireLocalAuth, requireLocalAdministrator, async (req, res, n
 
     const result = await db.run(
       `
-        INSERT INTO suppliers (supplier_code, name, store_link, phone, address, notes, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        INSERT INTO suppliers (supplier_code, name, store_link, phone, address, notes, payload_json, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `,
-      [finalCode, payload.name, payload.storeLink, payload.phone, payload.address, payload.notes]
+      [finalCode, payload.name, payload.storeLink, payload.phone, payload.address, payload.notes, JSON.stringify(payload.payload)]
     );
 
     const supplier = await db.get("SELECT * FROM suppliers WHERE id = ?", [result.lastID]);
@@ -189,10 +211,10 @@ router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res,
     await db.run(
       `
         UPDATE suppliers
-        SET supplier_code = ?, name = ?, store_link = ?, phone = ?, address = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+        SET supplier_code = ?, name = ?, store_link = ?, phone = ?, address = ?, notes = ?, payload_json = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `,
-      [immutableCode, payload.name, payload.storeLink, payload.phone, payload.address, payload.notes, current.id]
+      [immutableCode, payload.name, payload.storeLink, payload.phone, payload.address, payload.notes, JSON.stringify(payload.payload), current.id]
     );
 
     const updated = await db.get("SELECT * FROM suppliers WHERE id = ?", [current.id]);

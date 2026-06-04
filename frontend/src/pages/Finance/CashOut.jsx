@@ -14,16 +14,6 @@ import {
   message,
 } from "antd";
 import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  runTransaction,
-  Timestamp,
-} from "firebase/firestore";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
@@ -32,15 +22,10 @@ import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
-import { db } from "../../firebase";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
-import {
-  generateDailySequenceCode,
-  getDailyBusinessCodeSequence,
-  prepareDailySequenceCodeInTransaction,
-} from "../../utils/references/businessCodeGenerator";
+import { createCashOutTransaction, deleteCashOutTransaction, listenCashOutRecords } from "../../services/Finance/financeService";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 
@@ -127,30 +112,24 @@ const CashOut = () => {
   const [selectedMonth, setSelectedMonth] = useState("all");
 
   // =========================
-  // SECTION: Sinkronisasi data expense
-  // Catatan business rule:
-  // - halaman ini tetap membaca collection expenses
-  // - purchase expense otomatis dan cash out manual tetap berada di source yang sama
+  // SECTION: Sinkronisasi data expense SQLite
   // =========================
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      query(collection(db, "expenses"), orderBy("date", "desc")),
-      (snapshot) => {
-        const data = snapshot.docs.map((documentItem) => ({
-          id: documentItem.id,
-          ...documentItem.data(),
-        }));
-        setCashOuts(data);
+    setLoading(true);
+    const unsubscribe = listenCashOutRecords(
+      (rows) => {
+        setCashOuts(rows);
         setLoading(false);
       },
       (error) => {
-        console.error("Gagal sinkronisasi data kas keluar:", error);
+        console.error("Gagal sinkronisasi data kas keluar SQLite:", error);
         message.error("Gagal memuat data kas keluar.");
+        setCashOuts([]);
         setLoading(false);
       },
     );
 
-    return () => unsubscribe();
+    return () => unsubscribe?.();
   }, []);
 
   // =========================
@@ -270,87 +249,22 @@ const CashOut = () => {
 
   const handleAddTransaction = async (values) => {
     try {
-      const transactionDate = values.date.toDate();
-      const baselineCashOutNumber = await generateDailySequenceCode({
-        db,
-        collectionName: "expenses",
-        fieldNames: ["cashOutNumber", "code", "sourceRef", "referenceNumber"],
-        prefix: "CSH-OUT",
-        date: transactionDate,
-      });
-      const baselineSequence = getDailyBusinessCodeSequence({
-        code: baselineCashOutNumber,
-        prefix: "CSH-OUT",
-        date: transactionDate,
-      });
-
-      await runTransaction(db, async (transaction) => {
-        const codeReservation = await prepareDailySequenceCodeInTransaction({
-          transaction,
-          db,
-          collectionName: "expenses",
-          prefix: "CSH-OUT",
-          date: transactionDate,
-          minimumSequence: Math.max(baselineSequence - 1, 0),
-        });
-        const cashOutNumber = codeReservation.code;
-        const cashOutRef = doc(db, "expenses", cashOutNumber);
-        const existingSnapshot = await transaction.get(cashOutRef);
-
-        if (existingSnapshot.exists()) {
-          throw new Error(`Nomor kas keluar ${cashOutNumber} sudah dipakai. Muat ulang data lalu simpan kembali.`);
-        }
-
-        /* =====================================================
-        SECTION: Cash Out document ID = business code — AKTIF
-        Fungsi:
-        - Menyimpan pengeluaran manual baru dengan document ID CSH-OUT-DDMMYYYY-001.
-
-        Dipakai oleh:
-        - handleAddTransaction Cash Out manual.
-
-        Alasan perubahan:
-        - Cash Out baru perlu reference readable dan tidak boleh memakai Firestore random ID untuk display.
-
-        Catatan cleanup:
-        - Data COUT lama tetap compatibility, tidak di-rename.
-
-        Risiko:
-        - Jangan mengubah amount/type/saving/report calculation dari section ini.
-        ===================================================== */
-        codeReservation.commit();
-        transaction.set(cashOutRef, {
-          cashOutNumber,
-          code: cashOutNumber,
-          referenceNumber: cashOutNumber,
-          sourceRef: cashOutNumber,
-          amount: Math.round(Number(values.amount || 0)),
-          description: values.description,
-          date: Timestamp.fromDate(transactionDate),
-          type: values.type,
-          totalReferenceAmount: 0,
-          savingAmount: 0,
-          savingStatus: "normal",
-          sourceModule: "cash_out_manual",
-          createdAt: Timestamp.now(),
-        });
-      });
-
+      await createCashOutTransaction(values);
       message.success("Transaksi pengeluaran berhasil ditambahkan!");
       closeCreateModal();
     } catch (error) {
       console.error("Gagal menambahkan transaksi kas keluar:", error);
-      message.error("Gagal menambahkan transaksi kas keluar.");
+      message.error(error?.message || "Gagal menambahkan transaksi kas keluar.");
     }
   };
 
   const handleDeleteTransaction = async (id) => {
     try {
-      await deleteDoc(doc(db, "expenses", id));
+      await deleteCashOutTransaction(id);
       message.success("Transaksi berhasil dihapus.");
     } catch (error) {
       console.error("Gagal menghapus transaksi:", error);
-      message.error("Gagal menghapus transaksi.");
+      message.error(error?.message || "Gagal menghapus transaksi.");
     }
   };
 

@@ -1,44 +1,42 @@
-import dayjs from "dayjs";
-import { Timestamp } from "firebase/firestore";
-
-// =====================================================
-// SECTION: Report date range helper — AKTIF / GUARDED
-// Fungsi:
-// - menyamakan default periode laporan ke bulan berjalan;
-// - menyediakan batas tanggal eksklusif untuk query Firestore agar report tidak membaca seluruh collection.
-// Hubungan flow:
-// - hanya dipakai untuk read-only report/dashboard; tidak mengubah schema, transaksi, stok, kas, payroll, atau HPP.
-// Risiko:
-// - Jangan ubah default periode tanpa audit UX/report karena export mengikuti data yang tampil pada filter aktif.
-// =====================================================
-export const getDefaultReportDateRange = () => [dayjs().startOf("month"), dayjs().endOf("month")];
-
-export const normalizeReportDateRange = (dateRange = []) => {
-  if (!Array.isArray(dateRange) || !dateRange[0] || !dateRange[1]) {
-    return null;
-  }
-
-  const start = dayjs(dateRange[0]).startOf("day");
-  const end = dayjs(dateRange[1]).endOf("day");
-
-  if (!start.isValid() || !end.isValid() || end.isBefore(start)) {
-    return null;
-  }
-
-  const endExclusive = end.add(1, "millisecond");
-
-  return {
-    start,
-    end,
-    endExclusive,
-    startDate: start.toDate(),
-    endDateExclusive: endExclusive.toDate(),
-    startTimestamp: Timestamp.fromDate(start.toDate()),
-    endTimestampExclusive: Timestamp.fromDate(endExclusive.toDate()),
-    label: `${start.format("DD/MM/YYYY")} - ${end.format("DD/MM/YYYY")}`,
-    dependencyKey: `${start.valueOf()}-${endExclusive.valueOf()}`,
-  };
+const toDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value?.toDate === "function") return value.toDate();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-export const getReportDateRangeLabel = (dateRange = []) =>
-  normalizeReportDateRange(dateRange)?.label || "Semua tanggal";
+export const normalizeReportDateValue = (value) => toDate(value);
+export const toReportDate = (value) => toDate(value);
+export const toFirestoreTimestampRange = ({ startDate, endDateExclusive } = {}) => ({
+  startTimestamp: toDate(startDate),
+  endTimestamp: toDate(endDateExclusive),
+});
+export const getDateValueTime = (value) => toDate(value)?.getTime() || 0;
+export const isDateValueInRange = (value, { startDate, endDateExclusive } = {}) => {
+  const time = getDateValueTime(value);
+  if (!time) return false;
+  const start = startDate ? getDateValueTime(startDate) : null;
+  const end = endDateExclusive ? getDateValueTime(endDateExclusive) : null;
+  if (start && time < start) return false;
+  if (end && time >= end) return false;
+  return true;
+};
+
+export const getDefaultReportDateRange = () => {
+  const end = new Date();
+  const start = new Date(end.getFullYear(), end.getMonth(), 1);
+  const endExclusive = new Date(end.getFullYear(), end.getMonth() + 1, 1);
+  return { startDate: start, endDate: end, endDateExclusive: endExclusive };
+};
+export const normalizeReportDateRange = (range = {}) => {
+  const defaults = getDefaultReportDateRange();
+  const startDate = toDate(range.startDate || range.start || defaults.startDate) || defaults.startDate;
+  const endDate = toDate(range.endDate || range.end || defaults.endDate) || defaults.endDate;
+  const endDateExclusive = toDate(range.endDateExclusive) || new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() + 1);
+  return { startDate, endDate, endDateExclusive };
+};
+export const getReportDateRangeLabel = (range = {}) => {
+  const { startDate, endDate } = normalizeReportDateRange(range);
+  return `${startDate.toLocaleDateString('id-ID')} - ${endDate.toLocaleDateString('id-ID')}`;
+};

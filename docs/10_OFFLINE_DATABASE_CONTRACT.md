@@ -144,3 +144,49 @@ Kontrak aktif:
 - Supplier SQLite C1 hanya master data dasar: kode, nama/toko, link, kontak/alamat/catatan jika tersedia.
 - Katalog `materialDetails`, purchase history, raw material supplier snapshot, stock, cash/expense, dan report final belum boleh dimutasi dari Supplier SQLite.
 - Firebase masih dipertahankan sebagai legacy fallback sampai Products/Raw/Stock/Transactions/Finance/Production selesai dimigrasi dan dites.
+
+## 8. Kontrak D2-D4: SQLite module guard dan stock engine
+
+Env pilot yang sekarang digunakan:
+
+```env
+VITE_AUTH_MODE=sqlite
+VITE_SUPPLIERS_REPOSITORY_MODE=sqlite
+VITE_PRICING_RULES_REPOSITORY_MODE=sqlite
+VITE_PRODUCTS_REPOSITORY_MODE=sqlite
+VITE_RAW_MATERIALS_REPOSITORY_MODE=sqlite
+VITE_STOCK_READ_MODELS_REPOSITORY_MODE=sqlite
+VITE_STOCK_ADJUSTMENTS_REPOSITORY_MODE=sqlite
+VITE_TRANSACTIONS_REPOSITORY_MODE=sqlite
+VITE_SEMI_FINISHED_REPOSITORY_MODE=firebase_primary
+VITE_FINANCE_REPOSITORY_MODE=firebase_primary
+VITE_PRODUCTION_REPOSITORY_MODE=firebase_primary
+VITE_REPORTS_REPOSITORY_MODE=firebase_primary
+```
+
+Kontrak aman:
+
+- Product dan Raw Material master boleh SQLite.
+- Stock Read Model adalah snapshot SQLite yang disinkronkan dari master/stock engine.
+- Stock Adjustment wajib lewat `POST /api/stock/adjustments/commit`, bukan direct write table.
+- Purchase/Sales/Returns SQLite commit hanya membuka Product/Raw stock mutation. Finance/income/ledger final tetap batch terpisah.
+- Semi Finished, Production, Payroll, HPP, Finance final, dan Reports final tetap guarded sampai ada audit khusus.
+
+## 9. Kontrak D6: Semi Finished, Finance, Reports
+
+Env aktif untuk batch D6:
+
+```env
+VITE_SEMI_FINISHED_REPOSITORY_MODE=sqlite
+VITE_FINANCE_REPOSITORY_MODE=sqlite
+VITE_REPORTS_REPOSITORY_MODE=sqlite
+VITE_PRODUCTION_REPOSITORY_MODE=firebase_primary
+```
+
+Kontrak aman:
+
+- Semi Finished adalah master stock SQLite dan boleh dipakai Stock Adjustment SQLite.
+- Finance commit wajib atomic: cash movement dan `money_movement_ledger` harus ditulis dalam satu transaction backend.
+- Purchase/Sales/Returns transaksi baru boleh membuat finance side effect di SQLite, tetapi data legacy Firestore tetap memerlukan migrasi/backfill terpisah.
+- Reports membaca data SQLite baru. Jika data lama belum dimigrasi, hasil report hanya mewakili data SQLite yang sudah ada.
+- Production/Payroll/HPP tidak boleh dipaksa final sampai audit khusus selesai.

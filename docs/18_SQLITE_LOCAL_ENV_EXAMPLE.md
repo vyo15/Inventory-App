@@ -1,0 +1,43 @@
+# Contoh `.env.local` SQLite Local IMS
+
+File ini hanya contoh. Jangan commit `frontend/.env.local` karena file env lokal harus tetap ignored oleh Git.
+
+## Laptop yang sama
+
+```env
+VITE_AUTH_MODE=sqlite
+# VITE_SQLITE_API_BASE_URL=http://localhost:3001
+VITE_SUPPLIERS_REPOSITORY_MODE=sqlite
+VITE_PRICING_RULES_REPOSITORY_MODE=sqlite
+VITE_PRODUCTS_REPOSITORY_MODE=sqlite
+VITE_RAW_MATERIALS_REPOSITORY_MODE=sqlite
+VITE_STOCK_READ_MODELS_REPOSITORY_MODE=sqlite
+VITE_STOCK_ADJUSTMENTS_REPOSITORY_MODE=sqlite
+VITE_TRANSACTIONS_REPOSITORY_MODE=sqlite
+VITE_SEMI_FINISHED_REPOSITORY_MODE=sqlite
+VITE_FINANCE_REPOSITORY_MODE=sqlite
+VITE_PRODUCTION_REPOSITORY_MODE=firebase_primary
+VITE_REPORTS_REPOSITORY_MODE=sqlite
+```
+
+## HP/laptop lain satu WiFi
+
+Ganti `IP-LAPTOP` dengan IP komputer yang menjalankan backend:
+
+```env
+VITE_AUTH_MODE=sqlite
+VITE_SQLITE_API_BASE_URL=http://IP-LAPTOP:3001
+VITE_SUPPLIERS_REPOSITORY_MODE=sqlite
+VITE_PRICING_RULES_REPOSITORY_MODE=sqlite
+VITE_PRODUCTS_REPOSITORY_MODE=sqlite
+VITE_RAW_MATERIALS_REPOSITORY_MODE=sqlite
+VITE_STOCK_READ_MODELS_REPOSITORY_MODE=sqlite
+VITE_STOCK_ADJUSTMENTS_REPOSITORY_MODE=sqlite
+VITE_TRANSACTIONS_REPOSITORY_MODE=sqlite
+VITE_SEMI_FINISHED_REPOSITORY_MODE=sqlite
+VITE_FINANCE_REPOSITORY_MODE=sqlite
+VITE_PRODUCTION_REPOSITORY_MODE=firebase_primary
+VITE_REPORTS_REPOSITORY_MODE=sqlite
+```
+
+Catatan: Semi Finished, Finance, dan Reports aktif SQLite untuk data baru. Production/Payroll/HPP tetap guarded sampai audit khusus selesai.

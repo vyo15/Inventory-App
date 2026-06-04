@@ -11,15 +11,6 @@ import {
   message,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
-import {
-  collection,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  runTransaction,
-  Timestamp,
-} from "firebase/firestore";
 import dayjs from "dayjs";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
@@ -28,15 +19,10 @@ import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
-import { db } from "../../firebase";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
-import {
-  generateDailySequenceCode,
-  getDailyBusinessCodeSequence,
-  prepareDailySequenceCodeInTransaction,
-} from "../../utils/references/businessCodeGenerator";
+import { createCashInTransaction, listenCashInRecords } from "../../services/Finance/financeService";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 
@@ -77,70 +63,23 @@ const CashIn = () => {
   const [selectedMonth, setSelectedMonth] = useState("all");
 
   // =========================
-  // SECTION: Sinkronisasi data pemasukan
-  // Catatan business rule:
-  // - halaman ini tetap membaca revenues + incomes
-  // - pemasukan manual tetap tersimpan ke revenues agar kompatibel dengan laporan lama
+  // SECTION: Sinkronisasi data pemasukan SQLite
   // =========================
   useEffect(() => {
-    let revenuesLoaded = false;
-    let incomesLoaded = false;
-    let revenuesData = [];
-    let incomesData = [];
-
-    const syncMergedData = () => {
-      if (!revenuesLoaded || !incomesLoaded) return;
-
-      const mergedData = [...revenuesData, ...incomesData].sort((left, right) => {
-        const leftTime = left.date?.toDate ? left.date.toDate().getTime() : 0;
-        const rightTime = right.date?.toDate ? right.date.toDate().getTime() : 0;
-        return rightTime - leftTime;
-      });
-
-      setCashIns(mergedData);
-      setLoading(false);
-    };
-
-    const unsubscribeRevenues = onSnapshot(
-      query(collection(db, "revenues"), orderBy("date", "desc")),
-      (snapshot) => {
-        revenuesData = snapshot.docs.map((documentItem) => ({
-          id: documentItem.id,
-          sourceCollection: "revenues",
-          ...documentItem.data(),
-        }));
-        revenuesLoaded = true;
-        syncMergedData();
+    setLoading(true);
+    const unsubscribe = listenCashInRecords(
+      (rows) => {
+        setCashIns(rows);
+        setLoading(false);
       },
       (error) => {
-        console.error("Gagal sinkronisasi data revenues:", error);
-        revenuesLoaded = true;
-        syncMergedData();
+        console.error("Gagal sinkronisasi data cash-in SQLite:", error);
+        setCashIns([]);
+        setLoading(false);
       },
     );
 
-    const unsubscribeIncomes = onSnapshot(
-      query(collection(db, "incomes"), orderBy("date", "desc")),
-      (snapshot) => {
-        incomesData = snapshot.docs.map((documentItem) => ({
-          id: documentItem.id,
-          sourceCollection: "incomes",
-          ...documentItem.data(),
-        }));
-        incomesLoaded = true;
-        syncMergedData();
-      },
-      (error) => {
-        console.error("Gagal sinkronisasi data incomes:", error);
-        incomesLoaded = true;
-        syncMergedData();
-      },
-    );
-
-    return () => {
-      unsubscribeRevenues();
-      unsubscribeIncomes();
-    };
+    return () => unsubscribe?.();
   }, []);
 
   // =========================
@@ -245,76 +184,15 @@ const CashIn = () => {
 
   const handleAddTransaction = async (values) => {
     try {
-      const transactionDate = values.date.toDate();
-      const baselineCashInNumber = await generateDailySequenceCode({
-        db,
-        collectionName: "revenues",
-        fieldNames: ["cashInNumber", "code", "sourceRef", "referenceNumber"],
-        prefix: "CSH-IN",
-        date: transactionDate,
-      });
-      const baselineSequence = getDailyBusinessCodeSequence({
-        code: baselineCashInNumber,
-        prefix: "CSH-IN",
-        date: transactionDate,
-      });
-
-      await runTransaction(db, async (transaction) => {
-        const codeReservation = await prepareDailySequenceCodeInTransaction({
-          transaction,
-          db,
-          collectionName: "revenues",
-          prefix: "CSH-IN",
-          date: transactionDate,
-          minimumSequence: Math.max(baselineSequence - 1, 0),
-        });
-        const cashInNumber = codeReservation.code;
-        const cashInRef = doc(db, "revenues", cashInNumber);
-        const existingSnapshot = await transaction.get(cashInRef);
-
-        if (existingSnapshot.exists()) {
-          throw new Error(`Nomor kas masuk ${cashInNumber} sudah dipakai. Muat ulang data lalu simpan kembali.`);
-        }
-
-        /* =====================================================
-        SECTION: Cash In document ID = business code — AKTIF
-        Fungsi:
-        - Menyimpan pemasukan manual baru dengan document ID CSH-IN-DDMMYYYY-001.
-
-        Dipakai oleh:
-        - handleAddTransaction Cash In manual.
-
-        Alasan perubahan:
-        - Cash In baru perlu reference readable dan tidak boleh memakai Firestore random ID untuk display.
-
-        Catatan cleanup:
-        - Data CIN lama tetap compatibility, tidak di-rename.
-
-        Risiko:
-        - Jangan mengubah amount/type/report calculation dari section ini.
-        ===================================================== */
-        codeReservation.commit();
-        transaction.set(cashInRef, {
-          cashInNumber,
-          code: cashInNumber,
-          referenceNumber: cashInNumber,
-          sourceRef: cashInNumber,
-          amount: Math.round(Number(values.amount || 0)),
-          description: values.description,
-          date: Timestamp.fromDate(transactionDate),
-          type: values.type,
-          sourceModule: "cash_in_manual",
-          createdAt: Timestamp.now(),
-        });
-      });
-
+      await createCashInTransaction(values);
       message.success("Transaksi pemasukan berhasil ditambahkan!");
       closeCreateModal();
     } catch (error) {
       console.error("Gagal menambahkan transaksi kas masuk:", error);
-      message.error("Gagal menambahkan transaksi kas masuk.");
+      message.error(error?.message || "Gagal menambahkan transaksi kas masuk.");
     }
   };
+
 
 
 

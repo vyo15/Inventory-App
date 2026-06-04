@@ -1,7 +1,7 @@
 // src/Pages/MasterData/PricingRules.jsx
 
 // SECTION: import hooks React
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DataRefreshIndicator, { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
 // SECTION: import komponen Ant Design
@@ -32,19 +32,6 @@ import {
   CheckOutlined,
 } from "@ant-design/icons";
 
-// SECTION: import firestore helper
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  Timestamp,
-} from "firebase/firestore";
-
-// SECTION: import firebase db
-import { db } from "../../firebase";
 import { formatNumberID, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { formatCurrencyIDR } from "../../utils/formatters/currencyId";
 import PageHeader from "../../components/Layout/Page/PageHeader";
@@ -59,11 +46,12 @@ import {
   buildPricingPreviewSummary,
   applyPricingRuleToItems,
   isSqlitePricingRulesRepositoryMode,
-  listPricingRulesFromRepository,
-  createPricingRuleInRepository,
-  updatePricingRuleInRepository,
-  deletePricingRuleFromRepository,
+  subscribePricingRulesFromRepository,
+  savePricingRuleInRepository,
+  removePricingRuleFromRepository,
 } from "../../services/Pricing/pricingService";
+import { listenRawMaterials } from "../../services/MasterData/rawMaterialsService";
+import { listenProducts } from "../../services/MasterData/productsService";
 
 // SECTION: alias komponen select
 
@@ -151,85 +139,42 @@ const PricingRules = () => {
     [],
   );
 
-  const loadPricingRules = useCallback(async ({ silent = false } = {}) => {
-    if (!isSqlitePricingRulesMode) return;
-
-    try {
-      if (!silent) setPageLoading(true);
-      const data = await listPricingRulesFromRepository();
-      setRules(data);
-    } catch (error) {
-      console.error("Gagal memuat pricing rules SQLite:", error);
-      message.error("Gagal memuat pricing rules SQLite.");
-    } finally {
-      if (!silent) setPageLoading(false);
-    }
-  }, [isSqlitePricingRulesMode]);
-
   // SECTION: sinkron data pricing rules, bahan baku, dan produk
   useEffect(() => {
     setPageLoading(true);
 
-    let unsubRules = null;
-
-    if (isSqlitePricingRulesMode) {
-      loadPricingRules();
-    } else {
-      unsubRules = onSnapshot(
-        collection(db, "pricing_rules"),
-        (snapshot) => {
-          const data = snapshot.docs.map((item) => ({
-            id: item.id,
-            ...item.data(),
-          }));
-
-          setRules(data);
-          setPageLoading(false);
-        },
-        (error) => {
-          console.error("Gagal sinkron pricing rules:", error);
-          message.error("Gagal memuat data pricing rules.");
-          setPageLoading(false);
-        },
-      );
-    }
-
-    const unsubRawMaterials = onSnapshot(
-      collection(db, "raw_materials"),
-      (snapshot) => {
-        const data = snapshot.docs.map((item) => ({
-          id: item.id,
-          ...item.data(),
-        }));
-
-        setRawMaterials(data);
+    const unsubscribeRules = subscribePricingRulesFromRepository(
+      (data) => {
+        setRules(data);
+        setPageLoading(false);
       },
+      (error) => {
+        console.error("Gagal sinkron pricing rules:", error);
+        message.error("Gagal memuat data pricing rules.");
+        setPageLoading(false);
+      },
+    );
+
+    const unsubscribeRawMaterials = listenRawMaterials(
+      (data) => setRawMaterials(data),
       (error) => {
         console.error("Gagal sinkron raw materials:", error);
       },
     );
 
-    const unsubProducts = onSnapshot(
-      collection(db, "products"),
-      (snapshot) => {
-        const data = snapshot.docs.map((item) => ({
-          id: item.id,
-          ...item.data(),
-        }));
-
-        setProducts(data);
-      },
+    const unsubscribeProducts = listenProducts(
+      (data) => setProducts(data),
       (error) => {
         console.error("Gagal sinkron products:", error);
       },
     );
 
     return () => {
-      if (unsubRules) unsubRules();
-      unsubRawMaterials();
-      unsubProducts();
+      unsubscribeRules?.();
+      unsubscribeRawMaterials?.();
+      unsubscribeProducts?.();
     };
-  }, [isSqlitePricingRulesMode, loadPricingRules]);
+  }, []);
 
   // SECTION: watch field target type agar pilihan base cost otomatis berubah
   const targetTypeValue = Form.useWatch("targetType", form);
@@ -352,31 +297,15 @@ const PricingRules = () => {
         ),
         roundingType: values?.roundingType || "up",
         roundingUnit: Math.round(Number(values?.roundingUnit || 100)),
-        updatedAt: isSqlitePricingRulesMode ? new Date().toISOString() : Timestamp.now(),
+        updatedAt: new Date().toISOString(),
       };
 
-      if (isSqlitePricingRulesMode) {
-        if (isEditing && editingRuleId) {
-          await updatePricingRuleInRepository(editingRuleId, payload);
-          message.success("Pricing rule berhasil diupdate.");
-        } else {
-          await createPricingRuleInRepository({
-            ...payload,
-            createdAt: new Date().toISOString(),
-          });
-          message.success("Pricing rule berhasil ditambahkan.");
-        }
-        await loadPricingRules({ silent: true });
-      } else if (isEditing && editingRuleId) {
-        await updateDoc(doc(db, "pricing_rules", editingRuleId), payload);
-        message.success("Pricing rule berhasil diupdate.");
-      } else {
-        await addDoc(collection(db, "pricing_rules"), {
-          ...payload,
-          createdAt: Timestamp.now(),
-        });
-        message.success("Pricing rule berhasil ditambahkan.");
-      }
+      await savePricingRuleInRepository({
+        ruleId: editingRuleId,
+        payload,
+        isEditing: isEditing && Boolean(editingRuleId),
+      });
+      message.success(isEditing ? "Pricing rule berhasil diupdate." : "Pricing rule berhasil ditambahkan.");
 
       closeFormModal();
     } catch (error) {
@@ -390,12 +319,7 @@ const PricingRules = () => {
   // SECTION: hapus rule
   const handleDeleteRule = async (ruleId) => {
     try {
-      if (isSqlitePricingRulesMode) {
-        await deletePricingRuleFromRepository(ruleId);
-        await loadPricingRules({ silent: true });
-      } else {
-        await deleteDoc(doc(db, "pricing_rules", ruleId));
-      }
+      await removePricingRuleFromRepository(ruleId);
       message.success("Pricing rule berhasil dihapus.");
     } catch (error) {
       console.error("Gagal menghapus pricing rule:", error);

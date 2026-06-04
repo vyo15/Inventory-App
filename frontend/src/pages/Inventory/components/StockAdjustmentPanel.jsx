@@ -17,19 +17,7 @@ import {
 } from "antd";
 import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
-import { collection, doc, onSnapshot, runTransaction, Timestamp } from "firebase/firestore";
 import dayjs from "dayjs";
-import { db } from "../../../firebase";
-import {
-  generateDailySequenceCode,
-  getDailyBusinessCodeSequence,
-  prepareDailySequenceCodeInTransaction,
-} from "../../../utils/references/businessCodeGenerator";
-import {
-  buildInventoryLogPayload,
-  INVENTORY_LOG_COLLECTION,
-} from "../../../services/Inventory/inventoryLogService";
-import { setStockItemReadModelInTransaction } from "../../../services/Inventory/stockReadModelService";
 import { formatNumberId, parseIntegerIdInput } from "../../../utils/formatters/numberId";
 import {
   buildVariantOptionsFromItem,
@@ -39,6 +27,11 @@ import {
   applyStockMutationToItem,
 } from "../../../utils/variants/variantStockHelpers";
 import { showFormValidationFeedback } from '../../../utils/forms/formValidationFeedback';
+import { getRepositoryModeStatus, isSqliteRepositoryModuleEnabled } from '../../../data/repositories/repositoryModeService';
+import * as sqliteStockAdjustmentsAdapter from '../../../data/adapters/sqlite/sqliteStockAdjustmentsAdapter';
+import { listenProducts } from '../../../services/MasterData/productsService';
+import { listenRawMaterials } from '../../../services/MasterData/rawMaterialsService';
+import { getActiveSemiFinishedMaterials } from '../../../services/Produksi/semiFinishedMaterialsService';
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -339,6 +332,8 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   const selectedItemId = Form.useWatch("itemId", form);
   const selectedVariantKey = Form.useWatch("variantKey", form);
   const selectedAdjustmentType = Form.useWatch("adjustmentType", form);
+  const [isSqliteStockAdjustmentMode, setIsSqliteStockAdjustmentMode] = useState(false);
+
 
   // =========================
   // SECTION: Live data subscription
@@ -350,59 +345,54 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // - aktif dipakai; bukan legacy
   // =========================
   useEffect(() => {
-    const unsubscribeAdjustments = onSnapshot(
-      collection(db, "stock_adjustments"),
-      (snapshot) => {
-        const nextAdjustmentRecords = snapshot.docs.map((documentItem) => ({
-          id: documentItem.id,
-          ...documentItem.data(),
-        }));
+    let disposed = false;
+    let unsubscribeAdjustments = () => {};
+    let unsubscribeRawMaterials = () => {};
+    let unsubscribeSemiFinishedMaterials = () => {};
+    let unsubscribeFinishedProducts = () => {};
 
-        setStockAdjustmentRecords(nextAdjustmentRecords);
-      },
-    );
+    const initializeSources = async () => {
+      try {
+        const modeStatus = await getRepositoryModeStatus();
+        const useSqliteAdjustments = modeStatus.isSqliteSidecar === true
+          && isSqliteRepositoryModuleEnabled('VITE_STOCK_ADJUSTMENTS_REPOSITORY_MODE');
+        if (disposed) return;
+        setIsSqliteStockAdjustmentMode(useSqliteAdjustments);
 
-    const unsubscribeRawMaterials = onSnapshot(
-      collection(db, "raw_materials"),
-      (snapshot) => {
-        const nextRawMaterials = snapshot.docs.map((documentItem) => ({
-          id: documentItem.id,
-          ...documentItem.data(),
-        }));
+        if (!useSqliteAdjustments) {
+          throw new Error("Stock Adjustment sekarang wajib memakai SQLite. Periksa VITE_STOCK_ADJUSTMENTS_REPOSITORY_MODE=sqlite.");
+        }
 
-        setRawMaterials(nextRawMaterials);
-      },
-    );
+        unsubscribeAdjustments = sqliteStockAdjustmentsAdapter.subscribeStockAdjustments(
+          (rows) => !disposed && setStockAdjustmentRecords(rows),
+          (error) => console.error(error),
+          { limit: 500 },
+        );
+        unsubscribeRawMaterials = listenRawMaterials(
+          (rows) => !disposed && setRawMaterials(rows),
+          (error) => console.error(error),
+        );
+        unsubscribeFinishedProducts = listenProducts(
+          (rows) => !disposed && setFinishedProducts(rows),
+          (error) => console.error(error),
+        );
+        getActiveSemiFinishedMaterials()
+          .then((rows) => !disposed && setSemiFinishedMaterials(rows))
+          .catch((error) => console.error(error));
+      } catch (error) {
+        console.error(error);
+        message.error('Gagal memuat sumber data penyesuaian stok.');
+      }
+    };
 
-    const unsubscribeSemiFinishedMaterials = onSnapshot(
-      collection(db, "semi_finished_materials"),
-      (snapshot) => {
-        const nextSemiFinishedMaterials = snapshot.docs.map((documentItem) => ({
-          id: documentItem.id,
-          ...documentItem.data(),
-        }));
-
-        setSemiFinishedMaterials(nextSemiFinishedMaterials);
-      },
-    );
-
-    const unsubscribeFinishedProducts = onSnapshot(
-      collection(db, "products"),
-      (snapshot) => {
-        const nextFinishedProducts = snapshot.docs.map((documentItem) => ({
-          id: documentItem.id,
-          ...documentItem.data(),
-        }));
-
-        setFinishedProducts(nextFinishedProducts);
-      },
-    );
+    initializeSources();
 
     return () => {
-      unsubscribeAdjustments();
-      unsubscribeRawMaterials();
-      unsubscribeSemiFinishedMaterials();
-      unsubscribeFinishedProducts();
+      disposed = true;
+      unsubscribeAdjustments?.();
+      unsubscribeRawMaterials?.();
+      unsubscribeSemiFinishedMaterials?.();
+      unsubscribeFinishedProducts?.();
     };
   }, []);
 
@@ -590,211 +580,31 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         throw new Error("Pilih varian item agar penyesuaian stok masuk ke stok varian yang benar.");
       }
 
-      const adjustmentDate = values.date.toDate();
-      const baselineAdjustmentNumber = await generateDailySequenceCode({
-        db,
-        collectionName: "stock_adjustments",
-        fieldNames: ["adjustmentNumber", "code", "referenceNumber", "sourceRef"],
-        prefix: "STK-ADJ",
-        date: adjustmentDate,
-      });
-      const baselineSequence = getDailyBusinessCodeSequence({
-        code: baselineAdjustmentNumber,
-        prefix: "STK-ADJ",
-        date: adjustmentDate,
-      });
-      const itemReference = doc(db, sourceCollectionName, values.itemId);
-      const inventoryLogReference = doc(collection(db, INVENTORY_LOG_COLLECTION));
-      const adjustmentTimestamp = Timestamp.now();
-
-      await runTransaction(db, async (transaction) => {
-        const codeReservation = await prepareDailySequenceCodeInTransaction({
-          transaction,
-          db,
-          collectionName: "stock_adjustments",
-          prefix: "STK-ADJ",
-          date: adjustmentDate,
-          minimumSequence: Math.max(baselineSequence - 1, 0),
-        });
-        const adjustmentNumber = codeReservation.code;
-        /* =====================================================
-        SECTION: Stock Adjustment reference number — GUARDED
-        Fungsi:
-        - Membuat adjustmentNumber STK-ADJ-DDMMYYYY-001 dan memakai nomor itu sebagai document ID baru.
-
-        Dipakai oleh:
-        - handleSubmitStockAdjustment sebelum transaction mutasi stok.
-
-        Alasan perubahan:
-        - Stock adjustment baru perlu reference user-facing, bukan Firestore random ID.
-
-        Catatan cleanup:
-        - Data adjustment lama tanpa nomor tetap compatibility.
-
-        Risiko:
-        - Jangan mengubah applyStockMutationToItem, prevent negative, reserved/available stock, atau transaction flow dari section ini.
-        ===================================================== */
-        const adjustmentReference = doc(db, "stock_adjustments", adjustmentNumber);
-        const adjustmentSnapshot = await transaction.get(adjustmentReference);
-        const itemSnapshot = await transaction.get(itemReference);
-
-        // IMS NOTE [GUARDED] - collision guard kode STK-ADJ berbasis atomic counter dengan baseline legacy.
-        // Fungsi: mencegah adjustment baru menimpa adjustment lama ketika dua user submit bersamaan.
-        if (adjustmentSnapshot.exists()) {
-          throw new Error(`Nomor penyesuaian ${adjustmentNumber} sudah dipakai. Muat ulang data lalu simpan kembali.`);
-        }
-
-        if (!itemSnapshot.exists()) {
-          throw new Error("Item stok tidak ditemukan saat menyimpan penyesuaian.");
-        }
-
-        const latestSourceItem = {
-          id: itemSnapshot.id,
-          ...itemSnapshot.data(),
-        };
-
-        const latestHasVariants = inferHasVariants(latestSourceItem);
-        const selectedSourceVariant = values.variantKey
-          ? findVariantByKey(latestSourceItem, values.variantKey)
-          : null;
-
-        if (latestHasVariants && !selectedSourceVariant) {
-          throw new Error(
-            `Varian item ${latestSourceItem.name || values.itemId} tidak ditemukan. Proses dihentikan agar stok tidak masuk ke master/default.`,
-          );
-        }
-
-        const sourceStockSnapshot = selectedSourceVariant
-          ? buildVariantStockSnapshot(selectedSourceVariant)
-          : getItemStockSnapshot(latestSourceItem);
-        const stockUnit =
-          latestSourceItem.stockUnit ||
-          latestSourceItem.unit ||
-          latestSourceItem.baseUnit ||
-          (["products", "semi_finished_materials"].includes(sourceCollectionName) ? "pcs" : "");
-
-        if (values.adjustmentType === "out" && adjustmentQuantity > sourceStockSnapshot.availableStock) {
-          throw new Error(
-            `Jumlah keluar melebihi stok tersedia. Tersedia: ${formatQuantityId(
-              sourceStockSnapshot.availableStock,
-              stockUnit,
-            )}`,
-          );
-        }
-
-        const stockUpdatePayload = applyStockMutationToItem({
-          item: latestSourceItem,
-          variantKey: selectedSourceVariant?.variantKey || "",
-          deltaCurrent: finalQuantityChange,
-        });
-        const stockAdjustmentCostPayload = buildStockAdjustmentCostGuardPayload({
-          collectionName: sourceCollectionName,
-          latestSourceItem,
-          selectedSourceVariant,
-          stockUpdatePayload,
-          adjustmentType: values.adjustmentType,
-          unitCost: values.unitCost,
-        });
-        const currentStockAfter = sourceStockSnapshot.currentStock + finalQuantityChange;
-        const availableStockAfter = Math.max(
-          currentStockAfter - sourceStockSnapshot.reservedStock,
-          0,
-        );
-        const variantPayload = {
-          variantId: selectedSourceVariant?.variantKey || "",
-          variantKey: selectedSourceVariant?.variantKey || "",
-          variantLabel: selectedSourceVariant?.variantLabel || "",
-          stockSourceType: selectedSourceVariant ? "variant" : "master",
-        };
-        const adjustmentPayload = {
-          adjustmentNumber,
-          code: adjustmentNumber,
-          referenceNumber: adjustmentNumber,
-          sourceRef: adjustmentNumber,
-          date: Timestamp.fromDate(values.date.toDate()),
+      if (isSqliteStockAdjustmentMode) {
+        const result = await sqliteStockAdjustmentsAdapter.commitStockAdjustment({
+          sourceType: values.itemType === "raw_material" ? "raw_material" : values.itemType === "semi_finished" ? "semi_finished" : "product",
+          sourceId: values.itemId,
           itemType: values.itemType,
-          itemTypeLabel: selectedItemTypeConfig.label,
-          collectionName: sourceCollectionName,
           itemId: values.itemId,
-          itemName: latestSourceItem.name,
-          adjustmentType: values.adjustmentType,
+          itemName: selectedSourceItem.name,
+          variantKey: values.variantKey || "",
+          deltaCurrent: finalQuantityChange,
           quantity: adjustmentQuantity,
-          finalQuantity: finalQuantityChange,
-          finalQuantityChange,
-          unitCost: Number(values.unitCost || 0),
-          costGuardApplied: Object.keys(stockAdjustmentCostPayload).length > 0,
+          adjustmentType: values.adjustmentType,
           reason: values.reason || "",
+          notes: values.note || "",
           note: values.note || "",
-          unit: stockUnit,
-          stockUnit,
-          currentStockBefore: sourceStockSnapshot.currentStock,
-          currentStockAfter,
-          reservedStockBefore: sourceStockSnapshot.reservedStock,
-          reservedStockAfter: sourceStockSnapshot.reservedStock,
-          availableStockBefore: sourceStockSnapshot.availableStock,
-          availableStockAfter,
-          ...variantPayload,
-          createdAt: adjustmentTimestamp,
-        };
-        const inventoryLogPayload = buildInventoryLogPayload({
-          itemId: values.itemId,
-          itemName: latestSourceItem.name,
-          quantityChange: finalQuantityChange,
-          type: "stock_adjustment",
-          collectionName: sourceCollectionName,
-          timestamp: adjustmentTimestamp,
-          extraData: {
-            adjustmentId: adjustmentReference.id,
-            adjustmentNumber,
-            referenceId: adjustmentReference.id,
-            referenceNumber: adjustmentNumber,
-            referenceCode: adjustmentNumber,
-            sourceRef: adjustmentNumber,
-            referenceType: "stock_adjustment",
-            itemType: values.itemType,
-            itemTypeLabel: selectedItemTypeConfig.label,
-            collectionName: sourceCollectionName,
-            unit: stockUnit,
-            stockUnit,
-            reason: values.reason || "",
-            note: values.note || "",
-            currentStockBefore: sourceStockSnapshot.currentStock,
-            currentStockAfter,
-            previousStock: sourceStockSnapshot.currentStock,
-            newStock: currentStockAfter,
-            reservedStockBefore: sourceStockSnapshot.reservedStock,
-            reservedStockAfter: sourceStockSnapshot.reservedStock,
-            availableStockBefore: sourceStockSnapshot.availableStock,
-            availableStockAfter,
-            ...variantPayload,
-          },
+          unitCost: Number(values.unitCost || 0),
+          transactionDate: values.date.toDate().toISOString(),
         });
+        message.success("Penyesuaian stok SQLite berhasil disimpan");
+        resetAdjustmentFormState();
+        onAdjustmentSaved?.(result);
+        return;
+      }
 
-        const nextStockItem = {
-          ...latestSourceItem,
-          ...stockUpdatePayload,
-          ...stockAdjustmentCostPayload,
-          updatedAt: adjustmentTimestamp,
-        };
+      throw new Error("Mode Firebase Stock Adjustment sudah dihapus. Gunakan SQLite Stock Adjustment.");
 
-        codeReservation.commit();
-        transaction.update(itemReference, {
-          ...stockUpdatePayload,
-          ...stockAdjustmentCostPayload,
-          updatedAt: adjustmentTimestamp,
-        });
-        setStockItemReadModelInTransaction(transaction, nextStockItem, {
-          sourceType: sourceCollectionName,
-          sourceCollection: sourceCollectionName,
-          lastSyncedFrom: "StockAdjustmentPanel.submitAdjustment",
-        });
-        transaction.set(adjustmentReference, adjustmentPayload);
-        transaction.set(inventoryLogReference, inventoryLogPayload);
-      });
-
-      message.success("Penyesuaian stok berhasil disimpan");
-      resetAdjustmentFormState();
-      onAdjustmentSaved?.();
     } catch (error) {
       console.error(error);
       message.error(error?.message || "Gagal menyimpan penyesuaian stok");
@@ -950,6 +760,15 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
 
   return (
     <>
+      {isSqliteStockAdjustmentMode ? (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="Penyesuaian stok SQLite aktif untuk Produk Jadi, Bahan Baku, dan Semi Finished. Mutasi produksi/HPP final tetap lewat modul Production."
+        />
+      ) : null}
+
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreateAdjustmentModal}>
           Tambah Penyesuaian
