@@ -2,36 +2,36 @@ import { Card, Col, Row, Tag } from "antd";
 
 const guideItems = [
   {
-    title: "Pakai data lama",
+    title: "Backup aman",
     steps: [
-      "Auto Detect Bug.",
-      "Repair Turunan Aman.",
-      "Cek ulang area yang warning.",
-      "Test Purchase, Sales, Return, Produksi, Payroll.",
+      "Cek Checklist auto.",
+      "Buat backup manual jika belum ada backup hari ini.",
+      "Copy backup verified ke flashdisk/harddisk.",
+      "Preview Restore hanya saat diperlukan.",
     ],
   },
   {
-    title: "Testing berulang",
+    title: "Audit & repair",
     steps: [
-      "Simpan baseline stok.",
-      "Jalankan transaksi test.",
-      "Preview Reset + Baseline.",
-      "Ketik RESET untuk ulang dari baseline.",
+      "Jalankan Auto Detect Bug.",
+      "Review issue yang muncul.",
+      "Pakai Repair Aman hanya untuk field turunan.",
+      "Audit ulang setelah repair.",
     ],
   },
   {
-    title: "Mulai dari nol",
+    title: "Reset testing",
     steps: [
-      "Export master.",
-      "Pilih Reset + Nolkan Stok.",
-      "Preview dan cek protected data.",
-      "Input opening stock/purchase baru.",
+      "Pastikan backup verified tersedia.",
+      "Pilih skenario reset testing.",
+      "Muat preview dan cek protected data.",
+      "Eksekusi hanya dengan keyword yang benar.",
     ],
   },
 ];
 
 const ResetUsageGuidePanel = () => (
-  <Card title="Cara Pakai Setelah Patch" size="small" extra={<Tag color="purple">Checklist ringkas</Tag>}>
+  <Card title="Cara Pakai Maintenance Center" size="small" extra={<Tag color="purple">Panduan ringkas</Tag>}>
     <Row gutter={[12, 12]}>
       {guideItems.map((item) => (
         <Col key={item.title} xs={24} md={8}>

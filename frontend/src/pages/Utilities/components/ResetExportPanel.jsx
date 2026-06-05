@@ -20,11 +20,11 @@ const ResetExportPanel = ({
 }) => (
   <Row gutter={[12, 12]}>
     <Col xs={24}>
-      <Card title="Data Test Seed & Export" size="small" extra={<Tag color="gold">Utility</Tag>}>
+      <Card title="Data Tools: Test Seed & Export" size="small" extra={<Tag color="gold">Non-destructive</Tag>}>
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
           <Space wrap>
             <Button icon={<EyeOutlined />} loading={loadingTestDataPreview} onClick={onLoadTestDataPreview}>
-              Preview Data Test
+              Preview Data Test Bermarker
             </Button>
             <Popconfirm
               title="Hapus data test bermarker?"
@@ -39,17 +39,17 @@ const ResetExportPanel = ({
                 loading={loadingDeleteTestData}
                 disabled={!testDataPreview?.totalRecords}
               >
-                Hapus Data Test
+                Hapus Data Test Bermarker
               </Button>
             </Popconfirm>
             <Button icon={<EyeOutlined />} loading={loadingMasterExportPreview} onClick={onLoadMasterExportPreview}>
-              Preview Export
+              Preview Download Export Master
             </Button>
             <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={onDownloadMasterExport}>
-              Export Master
+              Download Export Master
             </Button>
             <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={onDownloadMasterExportChecklist}>
-              Export Checklist
+              Download Checklist
             </Button>
           </Space>
           <Row gutter={[8, 8]}>

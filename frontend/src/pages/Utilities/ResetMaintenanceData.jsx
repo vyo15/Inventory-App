@@ -79,12 +79,13 @@ const { Text, Title } = Typography;
 const ResetAutoDetectPanel = lazy(() => import("./components/ResetAutoDetectPanel"));
 const ResetDangerZonePanel = lazy(() => import("./components/ResetDangerZonePanel"));
 const ResetExportPanel = lazy(() => import("./components/ResetExportPanel"));
-const ResetPreviewPanel = lazy(() => import("./components/ResetPreviewPanel"));
 const ResetSafeRepairPanel = lazy(() => import("./components/ResetSafeRepairPanel"));
 const ResetUsageGuidePanel = lazy(() => import("./components/ResetUsageGuidePanel"));
 const OfflineDatabaseCenter = lazy(() => import("./components/OfflineDatabaseCenter"));
+const MaintenanceChecklistPanel = lazy(() => import("./components/MaintenanceChecklistPanel"));
+const MaintenanceHistoryPanel = lazy(() => import("./components/MaintenanceHistoryPanel"));
 
-const ResetPanelFallback = (
+const ResetPanelRuntime = (
   <Card
     size="small"
     loading
@@ -93,11 +94,11 @@ const ResetPanelFallback = (
 );
 
 const renderLazyResetPanel = (children) => (
-  <Suspense fallback={ResetPanelFallback}>{children}</Suspense>
+  <Suspense fallback={ResetPanelRuntime}>{children}</Suspense>
 );
 
 // -----------------------------------------------------------------------------
-// Reset & Maintenance Data Page
+// Maintenance & Backup Center Page
 // ACTIVE / FINAL:
 // - Reset Data masih memakai service utility lama yang sudah ada.
 // - Maintenance Data memakai service baru terpisah agar audit/repair tidak
@@ -109,7 +110,7 @@ const ResetMaintenanceData = () => {
   const [confirmForm] = Form.useForm();
   const [hppConfirmForm] = Form.useForm();
   const [transactionSideEffectConfirmForm] = Form.useForm();
-  const { firebaseUser, profile } = useAuth();
+  const { authSessionUser, profile } = useAuth();
 
   // ---------------------------------------------------------------------------
   // State reset data.
@@ -216,8 +217,8 @@ const ResetMaintenanceData = () => {
   }), [mode, preview, selectedModules]);
 
   const maintenanceActor = useMemo(
-    () => buildActorLabel({ profile, firebaseUser }),
-    [firebaseUser, profile],
+    () => buildActorLabel({ profile, authSessionUser }),
+    [authSessionUser, profile],
   );
 
   const buildPageAuditNote = useCallback(
@@ -497,7 +498,7 @@ const ResetMaintenanceData = () => {
 
   // ---------------------------------------------------------------------------
   // Preview reset dibuat manual agar halaman Testing & Reset Center tidak langsung
-  // melakukan full-scan Firestore saat dibuka. Saat mode/module berubah, preview
+  // melakukan full-scan SQLite saat dibuka. Saat mode/module berubah, preview
   // lama dihapus supaya destructive reset wajib memakai preview yang fresh.
   // ---------------------------------------------------------------------------
   useEffect(() => {
@@ -692,7 +693,7 @@ const ResetMaintenanceData = () => {
   } = useResetMaintenanceRepairs({
     createPageMaintenanceLog,
     loadPreview,
-    firebaseUser,
+    authSessionUser,
     profile,
     maintenanceActor,
     setMasterCodeAudit,
@@ -780,7 +781,7 @@ const ResetMaintenanceData = () => {
 
       // -----------------------------------------------------------------------
       // Audit log pre-write sebelum reset destructive.
-      // AKTIF / GUARDED: jika log awal gagal dibuat karena Firestore Rules,
+      // AKTIF / GUARDED: jika log awal gagal dibuat karena SQLite Rules,
       // reset tidak dilanjutkan. Ini menjaga destructive action tetap tercatat.
       // -----------------------------------------------------------------------
       resetLogId = await createPageMaintenanceLog({
@@ -833,7 +834,7 @@ const ResetMaintenanceData = () => {
       } catch (auditError) {
         console.error(auditError);
         message.warning(
-          "Reset data berhasil, tetapi update audit log akhir gagal. Cek koneksi/Firestore Rules untuk maintenance_logs; data reset tidak dianggap gagal.",
+          "Reset data berhasil, tetapi update audit log akhir gagal. Cek koneksi/SQLite Rules untuk maintenance_logs; data reset tidak dianggap gagal.",
         );
       }
 
@@ -861,7 +862,7 @@ const ResetMaintenanceData = () => {
           });
             } catch (auditError) {
           console.error(auditError);
-          message.warning("Reset gagal, dan update audit log gagal. Cek akses maintenance_logs di Firestore Rules.");
+          message.warning("Reset gagal, dan update audit log gagal. Cek akses maintenance_logs di SQLite Rules.");
         }
       }
 
@@ -934,30 +935,19 @@ const ResetMaintenanceData = () => {
       ),
     },
     {
-      key: "scenario-audit",
-      label: `Skenario & Audit${autoBugSummary.issueCount ? ` (${autoBugSummary.issueCount})` : ""}`,
+      key: "backup-restore",
+      label: "Backup & Restore",
+      children: (
+        <OfflineDevPanelErrorBoundary>
+          {renderLazyResetPanel(<OfflineDatabaseCenter />)}
+        </OfflineDevPanelErrorBoundary>
+      ),
+    },
+    {
+      key: "audit-data",
+      label: `Audit Data${autoBugSummary.issueCount ? ` (${autoBugSummary.issueCount})` : ""}`,
       children: (
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          {renderLazyResetPanel(<ResetDangerZonePanel
-            loadingAutoDetect={loadingAutoDetect}
-            onRunAllAudits={handleRunAllAudits}
-            onSelectBaselineReset={(modules) => {
-              setMode("reset_and_restore_baseline");
-              setSelectedModules(modules);
-              setResetIntent("standard");
-            }}
-            loadingPreview={loadingPreview}
-            onOpenFullTestingResetConfirmation={openFullTestingResetConfirmation}
-            onSelectZeroReset={(modules) => {
-              setMode("reset_and_zero_stock");
-              setSelectedModules(modules);
-              setResetIntent("standard");
-            }}
-            loadingHppCostPreview={loadingHppCostPreview}
-            loadingRunHppCostReset={loadingRunHppCostReset}
-            onLoadHppCostPreview={loadHppCostPreview}
-            onOpenHppCostResetAllConfirmation={openHppCostResetAllConfirmation}
-          />)}
           {renderLazyResetPanel(<ResetAutoDetectPanel
             autoBugSummary={autoBugSummary}
             loadingAutoDetect={loadingAutoDetect}
@@ -1039,28 +1029,10 @@ const ResetMaintenanceData = () => {
         />),
     },
     {
-      key: "reset-export",
-      label: "Reset & Export",
+      key: "data-tools",
+      label: "Data Tools",
       children: (
         <Space direction="vertical" size={16} style={{ width: "100%" }}>
-          {renderLazyResetPanel(<ResetPreviewPanel
-            mode={mode}
-            onModeChange={(value) => { setMode(value); setResetIntent("standard"); }}
-            resetModeLabels={RESET_MODE_LABELS}
-            resetModeOptions={RESET_MODE_OPTIONS}
-            selectedModules={selectedModules}
-            onSelectedModulesChange={(values) => { setSelectedModules(values); setResetIntent("standard"); }}
-            moduleOptions={moduleOptions}
-            preview={preview}
-            previewRows={previewRows}
-            loadingPreview={loadingPreview}
-            onLoadPreview={() => loadPreview(true)}
-            loadingBaseline={loadingBaseline}
-            onSaveBaseline={handleSaveBaseline}
-            onOpenResetConfirmation={openResetConfirmation}
-            resetBlockedReason={resetBlockedReason}
-            renderCompactText={renderCompactText}
-          />)}
           {renderLazyResetPanel(<ResetExportPanel
             loadingTestDataPreview={loadingTestDataPreview}
             onLoadTestDataPreview={() => loadDevTestDataPreview(true)}
@@ -1081,13 +1053,34 @@ const ResetMaintenanceData = () => {
       ),
     },
     {
-      key: "offline-db",
-      label: "Offline DB",
-      children: (
-        <OfflineDevPanelErrorBoundary>
-          {renderLazyResetPanel(<OfflineDatabaseCenter />)}
-        </OfflineDevPanelErrorBoundary>
-      ),
+      key: "checklist",
+      label: "Checklist",
+      children: renderLazyResetPanel(<MaintenanceChecklistPanel />),
+    },
+    {
+      key: "history",
+      label: "Riwayat",
+      children: renderLazyResetPanel(<MaintenanceHistoryPanel />),
+    },
+    {
+      key: "reset-testing",
+      label: "Reset Testing",
+      children: renderLazyResetPanel(<ResetDangerZonePanel
+        loadingAutoDetect={loadingAutoDetect}
+        onRunAllAudits={handleRunAllAudits}
+        legacyResetState={{
+          loadingPreview,
+          loadingBaseline,
+          loadingHppCostPreview,
+          previewRows,
+        }}
+        legacyResetActions={{
+          openFullTestingResetConfirmation,
+          openHppCostResetAllConfirmation,
+          handleSaveBaseline,
+          openResetConfirmation,
+        }}
+      />),
     },
   ];
 
@@ -1113,15 +1106,15 @@ const ResetMaintenanceData = () => {
       <Card className="content-card">
         <Space direction="vertical" size={20} style={{ width: "100%" }}>
           <PageHeader
-            title="Testing & Reset Center"
-            subtitle="Cockpit ringkas untuk auto detect bug data, repair turunan, baseline testing, dan reset guarded."
+            title="Maintenance & Backup Center"
+            subtitle="Pusat backup, restore, audit data, repair aman, checklist operasional, dan reset testing terbatas."
           />
 
           <Alert
             type="warning"
             showIcon
-            message="Reset adalah langkah terakhir; mulai dari Auto Detect Bug dan Repair Turunan dulu."
-            description="Halaman ini tidak lagi auto full-scan saat dibuka. Pilih skenario, jalankan audit/preview manual, lalu eksekusi hanya jika scope dan keyword sudah jelas."
+            message="Backup dan audit menjadi langkah utama; reset hanya untuk testing/development."
+            description="Mulai dari Backup & Restore, Audit Data, dan Repair Aman. Reset destructive tetap wajib preview, keyword, dan scope jelas."
           />
 
           <Card
@@ -1129,8 +1122,8 @@ const ResetMaintenanceData = () => {
             className="reset-maintenance-workspace"
             title={(
               <Space size={10}>
-                <span>Reset Maintenance Workspace</span>
-                <Tag color="blue">Tabbed</Tag>
+                <span>Maintenance Workspace</span>
+                <Tag color="blue">Guarded</Tag>
               </Space>
             )}
             extra={(
@@ -1144,14 +1137,14 @@ const ResetMaintenanceData = () => {
             <Space direction="vertical" size={16} style={{ width: "100%" }}>
               <div className="reset-maintenance-hero">
                 <div>
-                  <Text type="secondary">Menu maintenance dibuat seperti Offline Database Center</Text>
-                  <Title level={4} style={{ margin: "2px 0 4px" }}>Pilih satu area, review preview, lalu eksekusi guarded</Title>
+                  <Text type="secondary">Maintenance SQLite offline</Text>
+                  <Title level={4} style={{ margin: "2px 0 4px" }}>Backup dulu, audit data, lalu repair atau restore bila perlu</Title>
                   <Text type="secondary">
-                    Tab ini mengurangi scroll panjang dan memisahkan alur: ringkasan, audit, repair, reset/export, dan offline database.
+                    Tab dipisah agar user tidak bingung: Backup/restore dan audit menjadi flow utama; reset testing berada paling akhir dan nonaktif di mode SQLite penuh.
                   </Text>
                 </div>
                 <Space direction="vertical" size={4} align="end" className="reset-maintenance-hero-status">
-                  <Tag color="purple">Scope jelas</Tag>
+                  <Tag color="purple">Checklist auto</Tag>
                   <Text type="secondary">Keyword destructive tetap wajib</Text>
                 </Space>
               </div>

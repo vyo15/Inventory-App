@@ -51,9 +51,10 @@ export const getSqliteBackendHealth = async () => fetchSqliteJson("/health");
 
 export const getSqliteBackendStatus = async () => fetchSqliteJson("/api/maintenance/status");
 
-export const createSqliteBackendBackup = async () => fetchSqliteJson("/api/maintenance/backup", {
+export const createSqliteBackendBackup = async (values = {}) => fetchSqliteJson("/api/maintenance/backup", {
   method: "POST",
   headers: getStoredSqliteAuthHeaders(),
+  body: JSON.stringify(values),
 });
 
 export const getSqliteBackendBackups = async () => fetchSqliteJson("/api/maintenance/backups", {

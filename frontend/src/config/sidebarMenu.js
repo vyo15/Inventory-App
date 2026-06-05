@@ -33,7 +33,7 @@ import { ROLE_GROUPS } from "../utils/auth/roleAccess";
 // Status:
 // - AKTIF dipakai oleh SidebarMenu.jsx.
 // - GUARDED: jangan menambah menu sensitif tanpa allowedRoles dan route guard yang sesuai.
-// Legacy / cleanup:
+// Cleanup data lama:
 // - tidak ada legacy pada config aktif; route legacy /stock-adjustment tetap ditangani di AppRoutes.
 // =========================
 export const sidebarMenuItems = [
@@ -313,7 +313,7 @@ export const sidebarMenuItems = [
   // - menampung Manajemen User dan maintenance/reset yang sensitif.
   // Akses:
   // - Manajemen User hanya boleh tampil untuk Administrator sesuai guard;
-  // - Reset & Maintenance ikut akses penuh Administrator sesuai penyederhanaan 2 role aktif.
+  // - Maintenance & Backup ikut akses penuh Administrator sesuai penyederhanaan 2 role aktif.
   // Status:
   // - GUARDED: user biasa tidak boleh melihat parent Sistem; child sensitif tetap punya allowedRoles sendiri.
   // =========================
@@ -332,7 +332,7 @@ export const sidebarMenuItems = [
       },
       {
         key: "reset-maintenance-data",
-        label: "Reset & Maintenance",
+        label: "Maintenance & Backup",
         path: "/utilities/reset-maintenance-data",
         allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
       },

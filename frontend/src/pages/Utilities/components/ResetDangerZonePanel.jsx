@@ -1,97 +1,60 @@
 import React from "react";
-import { Button, Card, Col, Row, Space, Tag, Typography } from "antd";
-import { EyeOutlined, FileSearchOutlined, WarningOutlined } from "@ant-design/icons";
-import {
-  DEFAULT_RESET_MODULES,
-} from "../../../services/Maintenance/resetMaintenanceDataService";
-import { showActionInfo } from "../../../utils/feedback/actionResultFeedback";
+import { Alert, Button, Card, Col, Row, Space, Tag, Typography } from "antd";
+import { DatabaseOutlined, FileSearchOutlined, LockOutlined, SafetyOutlined } from "@ant-design/icons";
 
 const { Text } = Typography;
 
-const ResetDangerZonePanel = ({
-  loadingAutoDetect,
-  onRunAllAudits,
-  onSelectBaselineReset,
-  loadingPreview,
-  onOpenFullTestingResetConfirmation,
-  onSelectZeroReset,
-  loadingHppCostPreview,
-  loadingRunHppCostReset,
-  onLoadHppCostPreview,
-  onOpenHppCostResetAllConfirmation,
-}) => (
-  <Card title="Pilih Kebutuhan Testing" size="small" extra={<Tag color="blue">Flow utama</Tag>}>
-    <Row gutter={[12, 12]}>
-      <Col xs={24} md={12} xl={6}>
-        <Card size="small" title="Pakai Data Lama">
-          <Space direction="vertical" size={8} style={{ width: "100%" }}>
-            <Text type="secondary">Untuk patch baru: cek bug data lama, lalu repair field turunan yang aman.</Text>
-            <Button block type="primary" icon={<FileSearchOutlined />} loading={loadingAutoDetect} onClick={onRunAllAudits}>
-              Auto Detect Bug
-            </Button>
-          </Space>
-        </Card>
-      </Col>
-      <Col xs={24} md={12} xl={6}>
-        <Card size="small" title="Testing dari Baseline">
-          <Space direction="vertical" size={8} style={{ width: "100%" }}>
-            <Text type="secondary">Untuk test berulang dari stok awal yang sama tanpa input ulang.</Text>
-            <Button
-              block
-              onClick={() => {
-                onSelectBaselineReset([...DEFAULT_RESET_MODULES]);
-                showActionInfo({ title: "Mode Reset + Baseline dipilih", content: "Muat preview sebelum eksekusi.", module: "Reset Maintenance", action: "Pilih Baseline Reset" });
-              }}
-            >
-              Pilih Baseline Reset
-            </Button>
-          </Space>
-        </Card>
-      </Col>
-      <Col xs={24} md={12} xl={6}>
-        <Card size="small" title="Mulai dari Nol">
-          <Space direction="vertical" size={8} style={{ width: "100%" }}>
-            <Text type="secondary">Untuk data development: transaksi, stok, dan modal/HPP testing dibersihkan dalam satu flow.</Text>
-            <Button block type="primary" danger icon={<WarningOutlined />} loading={loadingPreview} onClick={onOpenFullTestingResetConfirmation}>
-              Reset Semua Testing
-            </Button>
-            <Button
-              block
-              onClick={() => {
-                onSelectZeroReset([...DEFAULT_RESET_MODULES]);
-                showActionInfo({ title: "Mode Reset + Nolkan Stok dipilih", content: "Muat preview sebelum eksekusi.", module: "Reset Maintenance", action: "Pilih Reset Nol Saja" });
-              }}
-            >
-              Pilih Reset Nol Saja
-            </Button>
-          </Space>
-        </Card>
-      </Col>
-      <Col xs={24} md={12} xl={6}>
-        <Card size="small" title="HPP Trial">
-          <Space direction="vertical" size={8} style={{ width: "100%" }}>
-            <Text type="secondary">Khusus uji modal/HPP. Tidak menghapus transaksi, stok, payroll, atau work log.</Text>
-            <Button
-              block
-              icon={<EyeOutlined />}
-              loading={loadingHppCostPreview}
-              onClick={() => onLoadHppCostPreview(true, "all_hpp_cost_sources")}
-            >
-              Preview Semua Modal/HPP
-            </Button>
-            <Button
-              block
-              danger
-              icon={<WarningOutlined />}
-              loading={loadingRunHppCostReset || loadingHppCostPreview}
-              onClick={onOpenHppCostResetAllConfirmation}
-            >
-              Reset Semua Modal/HPP
-            </Button>
-          </Space>
-        </Card>
-      </Col>
-    </Row>
+const ResetDangerZonePanel = ({ loadingAutoDetect, onRunAllAudits }) => (
+  <Card
+    title="Reset Testing / Development"
+    size="small"
+    extra={<Tag color="red">Legacy nonaktif</Tag>}
+  >
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      <Alert
+        type="warning"
+        showIcon
+        message="Reset testing lama dinonaktifkan pada mode full SQLite"
+        description="Pemulihan data utama sekarang wajib lewat Backup & Restore resmi. Reset destructive SQLite belum tersedia dan tidak akan diaktifkan tanpa backend guard, preview, backup otomatis, keyword, serta audit log SQLite."
+      />
+
+      <Row gutter={[12, 12]}>
+        <Col xs={24} md={12} xl={6}>
+          <Card size="small" title="Status Reset Legacy" className="reset-maintenance-status-card">
+            <Space direction="vertical" size={8} style={{ width: "100%" }}>
+              <Tag icon={<LockOutlined />} color="red">Nonaktif</Tag>
+              <Text type="secondary">Service reset lama sudah masuk mode sqlite_only dan tidak menjalankan destructive reset.</Text>
+            </Space>
+          </Card>
+        </Col>
+        <Col xs={24} md={12} xl={6}>
+          <Card size="small" title="Recovery Utama" className="reset-maintenance-status-card">
+            <Space direction="vertical" size={8} style={{ width: "100%" }}>
+              <Tag icon={<DatabaseOutlined />} color="green">Backup & Restore</Tag>
+              <Text type="secondary">Gunakan backup resmi .imsbak.zip, preview restore, dan keyword RESTORE SQLITE.</Text>
+            </Space>
+          </Card>
+        </Col>
+        <Col xs={24} md={12} xl={6}>
+          <Card size="small" title="Data Test" className="reset-maintenance-status-card">
+            <Space direction="vertical" size={8} style={{ width: "100%" }}>
+              <Tag icon={<SafetyOutlined />} color="blue">Pindah ke Data Tools</Tag>
+              <Text type="secondary">Preview/hapus data test bermarker dan export master dipisah dari area reset.</Text>
+            </Space>
+          </Card>
+        </Col>
+        <Col xs={24} md={12} xl={6}>
+          <Card size="small" title="Langkah Aman" className="reset-maintenance-status-card">
+            <Space direction="vertical" size={8} style={{ width: "100%" }}>
+              <Text type="secondary">Audit data terlebih dahulu sebelum repair atau restore.</Text>
+              <Button block icon={<FileSearchOutlined />} loading={loadingAutoDetect} onClick={onRunAllAudits}>
+                Jalankan Audit Data
+              </Button>
+            </Space>
+          </Card>
+        </Col>
+      </Row>
+    </Space>
   </Card>
 );
 

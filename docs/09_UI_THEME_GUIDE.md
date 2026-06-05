@@ -109,7 +109,7 @@ Aturan penting:
 - Jangan memakai ukuran unik berulang tanpa token. Jika angka dipakai lintas shared component, jadikan token.
 - Header dan sidebar tidak boleh memakai display weight berlebihan; keduanya harus terasa calm, readable, dan corporate.
 - Jangan mengubah route/menu/role guard hanya untuk memperbaiki visual sidebar. Sidebar typography adalah CSS-only.
-- Jika font `Inter` belum dimuat sebagai asset/dependency, fallback `system-ui/Segoe UI` tetap harus terlihat rapi.
+- Jika font `Inter` belum dimuat sebagai asset/dependency, runtime `system-ui/Segoe UI` tetap harus terlihat rapi.
 
 ## Area guarded
 
@@ -131,6 +131,27 @@ Aturan penting:
 - Cek role-aware menu dan active route tetap benar.
 - Cek Login normal, error, loading profile, blocked user, dan logout blocked user.
 - Cek Dashboard tidak membuat write flow baru dan semua action hanya navigasi.
+
+## Standar Enterprise Clean Layout
+
+IMS memakai arah **Enterprise Clean** untuk halaman operasional harian. Tujuannya adalah mengurangi wrapper/card yang terlihat saling bertumpuk, tetapi tetap menjaga boundary data penting.
+
+Aturan aktif:
+
+- `app-content-card` berperan sebagai canvas, bukan card besar. Jangan menambah shadow/border besar pada wrapper global halaman.
+- `PageSection` menjadi surface utama dengan border halus, radius sedang, dan tanpa shadow.
+- `FilterBar` tampil seperti toolbar compact, bukan panel terpisah yang terlalu menonjol.
+- Summary/KPI card boleh tetap berupa card, tetapi shadow harus minimal dan aksen cukup berupa garis kecil.
+- Card di dalam drawer/modal boleh dipakai untuk grouping detail panjang, tetapi hindari card bertingkat di halaman utama.
+- Utility/reset/backup boleh memakai boundary lebih jelas karena area itu berisiko, tetapi tetap memakai border halus dan spacing compact.
+- Patch visual layout wajib CSS-only kecuali ada approval khusus untuk refactor halaman. Jangan mengubah service, route, schema, stock, finance, production, payroll, HPP, reset, report, atau audit log hanya untuk merapikan tampilan.
+
+Prioritas cleanup halaman bila masih terasa ramai:
+
+1. Master Data: Products, Raw Materials, Semi Finished, Supplier, Pricing Rules.
+2. Production: Profiles, BOM, Planning, Orders, Work Logs, Payroll.
+3. Dashboard: ringkasan harus fokus, bukan report penuh.
+4. Utility: Reset/Backup tetap jelas tetapi tidak terlalu banyak panel dekoratif.
 
 ## Standar Page Header dan action utama
 
@@ -275,7 +296,7 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 ### Sales, Purchases, dan Returns
 - Item, qty, harga, subtotal, total, payment/status, dan dampak stok/kas harus jelas.
 - Jangan mengubah makna field lewat copy yang terlalu bebas.
-- UI retur tidak boleh fallback ke Firestore/Technical ID pada kolom referensi atau tooltip; gunakan referensi bisnis readable atau fallback manusiawi.
+- UI retur tidak boleh runtime ke SQLite/Technical ID pada kolom referensi atau tooltip; gunakan referensi bisnis readable atau runtime manusiawi.
 - OCR receipt harus flat token-based, tanpa gradient dekoratif dan tanpa `font-weight: 900` hardcoded.
 
 ### Cash In dan Cash Out
@@ -283,8 +304,13 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 - Referensi transaksi, payroll, atau purchase harus jelas bila ada.
 - Copy tidak boleh mendorong user membuat data manual ganda untuk sumber otomatis.
 
-### Reset Maintenance
-- Gunakan workspace berbasis tab untuk halaman maintenance yang kompleks: Ringkasan, Skenario & Audit, Repair Aman, Reset & Export, Offline DB.
+### Maintenance & Backup Center
+- Gunakan workspace berbasis tab untuk halaman maintenance yang kompleks: Ringkasan, Backup & Restore, Audit Data, Repair Aman, Data Tools, Checklist, Riwayat, Reset Testing.
+- Backup & Restore harus tampil sebagai area utama pada mode SQLite offline, bukan tersembunyi di tab teknis.
+- Data Tools menampung preview/hapus data test bermarker dan export master agar tidak bercampur dengan area reset destructive.
+- Checklist memakai status auto/manual: auto untuk kondisi yang bisa dibuktikan sistem, manual untuk konfirmasi user seperti copy backup eksternal dan user lain berhenti input.
+- Riwayat menampilkan backup dan restore resmi dari backend SQLite.
+- Reset destructive diposisikan paling akhir sebagai Reset Testing/Development dan nonaktif pada mode full SQLite sampai ada backend reset resmi.
 - Jangan menampilkan semua panel maintenance panjang sekaligus jika bisa dipisah per area.
 - Tab boleh membuat tampilan lebih ringkas, tetapi warning destructive wajib tegas.
 - Preview wajib sebelum reset.
@@ -297,7 +323,7 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 ### User Management
 - Role, status, email, dan Auth UID/profile binding harus jelas.
 - Security warning tidak boleh dihapus.
-- Copy harus membedakan profile Firestore dari akun Auth bila konteks itu relevan untuk admin.
+- Copy harus membedakan profile SQLite dari akun Auth bila konteks itu relevan untuk admin.
 
 ## Standar drawer width
 
@@ -354,14 +380,14 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 - Copy brand dibuat kecil dan ringan agar tidak mengalahkan logo dan form login.
 - Note internal ditempatkan sebagai supportive footer note, bukan elemen utama; pada mobile note tampil setelah form agar tidak memecah fokus logo dan input.
 - Form login tetap menjadi fokus aksi dengan card putih solid, button primary blue, input readable, dan focus state jelas.
-- Logo utama Login boleh memakai asset WebP teroptimasi dengan PNG fallback agar performa lebih baik tanpa mengubah brand lockup.
+- Logo utama Login boleh memakai asset WebP teroptimasi dengan PNG runtime agar performa lebih baik tanpa mengubah brand lockup.
 - Perubahan Login tetap scoped pada `.ims-login-*`; auth flow, route guard, role access, Sidebar, Dashboard, dan modul bisnis tetap **GUARDED**.
 
 ## Standar global/auth/route loading logo
-- Loading utama aplikasi memakai `LogoLoadingScreen` untuk auth/session gate, ProtectedRoute guard sebelum page tampil, dan Login auth/profile verification. Lazy route fallback di dalam layout harus non-prominent agar tidak muncul logo loading kedua setelah sidebar/layout tampil.
+- Loading utama aplikasi memakai `LogoLoadingScreen` untuk auth/session gate, ProtectedRoute guard sebelum page tampil, dan Login auth/profile verification. Lazy route runtime di dalam layout harus non-prominent agar tidak muncul logo loading kedua setelah sidebar/layout tampil.
 - Loading logo wajib full viewport, center, tanpa card/wrap kecil, dan mengikuti token theme existing untuk light/dark mode.
 - Animasi default adalah Elegant micro split: logo tidak berputar, komponen kuning/biru bergerak subtle, lalu menyatu smooth.
-- `LogoLoadingScreen` wajib tetap accessible dengan `role="status"`, `aria-live="polite"`, `aria-busy="true"`, serta fallback logo normal jika canvas gagal.
+- `LogoLoadingScreen` wajib tetap accessible dengan `role="status"`, `aria-live="polite"`, `aria-busy="true"`, serta runtime logo normal jika canvas gagal.
 - Loading lokal table, submit button, modal/drawer saving, report, maintenance preview, produksi/payroll/HPP data flow, Refresh Need, dan Refresh Preview tidak otomatis diganti oleh standar global ini.
 - Perubahan loading global adalah UI-only; auth flow, route guard logic, role access, service, query, transaction, schema, collection, dan business flow tetap **GUARDED**.
 
@@ -371,7 +397,7 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
   - Lazy route di dalam layout serta table/data/card/chart/list: `DataLoadingState` skeleton/shimmer lokal tanpa logo, tanpa full-screen overlay, dan tanpa AntD spinner overlay custom.
   - Button/action/modal/process: loading lokal bawaan komponen tetap dipakai sesuai konteks aksi.
 - `DataLoadingState` harus memakai class scoped `.ims-data-loading*`, mengikuti token theme IMS, support light/dark mode, mobile, dan `prefers-reduced-motion`.
-- Jangan memakai `LogoLoadingScreen` untuk lazy page fallback di dalam layout, table/data/card karena akan terasa seperti loading kedua atau restart aplikasi.
+- Jangan memakai `LogoLoadingScreen` untuk lazy page runtime di dalam layout, table/data/card karena akan terasa seperti loading kedua atau restart aplikasi.
 - Jangan mengganti loading submit, export, maintenance repair/reset, Refresh Need, atau Refresh Preview tanpa task dan audit flow terpisah.
 
 - Table initial loading yang sudah dipatch memakai `getDataTableEmptyText(...)` dan refresh lokal memakai `DataRefreshIndicator`; jangan kembali ke custom skeleton sebagai `Table loading` indicator karena bisa memicu overlay/double loading.
@@ -393,7 +419,7 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
    - Metric pendukung tampil sebagai mini card tanpa flow strip/bar bawah agar angka tidak tampil dobel.
    - Nominal uang wajib tampil penuh; bila ruang sempit, layout yang turun/wrap, bukan nominal yang dipotong.
 
-3. **Legacy Cards**
+3. **Data lama Cards**
    - `variant="cards"` boleh dipakai hanya bila ada kebutuhan khusus mempertahankan grid kartu lama.
    - Jangan jadikan default baru kecuali ada alasan layout spesifik.
 
@@ -430,9 +456,9 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 
 ## Standar Offline Repository Status Banner
 
-- Page master data pilot yang bisa berpindah repository (`Categories`, `Customers`) wajib menampilkan banner mode data di bawah `PageHeader`.
-- Banner harus menjelaskan source aktif dengan bahasa user-facing: `Firebase Server` untuk `firebase_primary`, dan `SQLite Lokal`/`Backend Lokal` untuk `sqlite_sidecar`. Nilai legacy `offline_local` hanya alias compatibility ke `sqlite_sidecar`, bukan IndexedDB.
-- Saat SQLite aktif, copy harus mengingatkan bahwa data pilot dibaca/ditulis lewat backend Node.js lokal dan file SQLite di laptop/server lokal.
+- Page master data yang memakai SQLite wajib menampilkan status data singkat di bawah `PageHeader` bila perlu.
+- Banner harus menjelaskan source aktif dengan bahasa user-facing: `SQLite Server` untuk `sqlite`, dan `SQLite Lokal`/`Backend Lokal` untuk `sqlite_sidecar`. Nilai lama `offline_local` dinormalisasi ke `sqlite_sidecar` agar setting browser lama tidak membuat UI crash.
+- Copy harus menjelaskan bahwa data dibaca/ditulis lewat backend Node.js lokal dan file SQLite di laptop/server lokal.
 - Empty state SQLite tidak boleh hanya menulis `Belum ada data`; harus menjelaskan kemungkinan backend SQLite belum jalan atau database SQLite masih kosong, serta memberi shortcut ke `SQLite Local DB Center`.
 - Banner harus compact, responsive, dan tidak menggantikan table/action utama. Detail backup SQLite, migration status, dan restore plan tetap berada di `SQLite Local DB Center`.
 - Perubahan banner adalah UI-only. Jangan menyisipkan write/sync otomatis, schema change, route/menu baru, atau business flow transaksi di komponen status.
@@ -442,7 +468,7 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 - Popup hasil proses hanya dipakai untuk status sukses dan error/gagal.
 - Warning/info cukup memakai toast ringan Ant Design; jangan dijadikan popup modal agar user tidak terganggu untuk preview, dry-run, filter, dan status ringan.
 - Popup sukses/error harus tetap muncul setelah modal konfirmasi tertutup, terutama pada Reset Maintenance dan Offline Database Center.
-- Error popup boleh menyediakan tombol salin detail, tetapi isi detail harus user-facing dan tidak boleh menampilkan Firestore technical ID, stack trace panjang, secret, credential, atau payload mentah.
+- Error popup boleh menyediakan tombol salin detail, tetapi isi detail harus user-facing dan tidak boleh menampilkan SQLite technical ID, stack trace panjang, secret, credential, atau payload mentah.
 - Popup tidak menggantikan confirm guard. Aksi destructive tetap wajib preview + keyword confirmation sebelum proses berjalan.
 
 ## Standar DataTableView Mobile Card
@@ -456,7 +482,7 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
   - `meta`: maksimal informasi kunci seperti nominal, stok, qty, role, atau status.
   - `content`: ringkasan item/stock bila memang penting.
   - `actions`: gunakan handler existing; jangan membuat handler baru di mobile card.
-- Jangan menampilkan Firestore technical ID sebagai judul/subtitle kartu. Gunakan referensi bisnis manusiawi seperti kode transaksi, kode customer/supplier, atau nama item.
+- Jangan menampilkan SQLite technical ID sebagai judul/subtitle kartu. Gunakan referensi bisnis manusiawi seperti kode transaksi, kode customer/supplier, atau nama item.
 - Mobile card adalah presentational-only. Jangan memasukkan query, mutation, stock update, cash ledger update, purchase/sales/return commit, payroll/HPP, reset, route guard, atau role guard ke `DataTableView`.
 - Area produksi yang sudah memakai mobile card UI-only: `ProductionEmployees`, `ProductionOrders`, `ProductionWorkLogs`, `ProductionBoms`, dan `SemiFinishedMaterials`. Semua action mobile harus tetap memanggil handler existing pada page, bukan membuat flow baru untuk stok/material usage/payroll/HPP.
 - Jika halaman report/utility kompleks masih membutuhkan tabel scroll, boleh dibiarkan sampai ada audit mobile khusus.
@@ -467,7 +493,7 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 - Drawer detail wajib memakai data record yang sudah ada di tabel/page state; jangan membuat mutation, re-query besar, atau workflow baru dari tombol detail mobile.
 - Untuk stok dan penyesuaian stok, drawer detail hanya boleh menampilkan audit read-only: tanggal, item, arah, qty, referensi, alasan, dan catatan.
 - Untuk Sales/Purchases, drawer detail hanya boleh menampilkan ringkasan transaksi dan item. Jangan menambahkan cancel/delete/edit/commit baru dari drawer mobile.
-- Label mode data di kartu master data harus user-facing. Hindari enum teknis seperti `SQLITE_SIDECAR` sebagai teks utama; gunakan copy seperti `Data Lokal`, `SQLite Lokal`, atau `Firebase Fallback`.
+- Label mode data di kartu master data harus user-facing. Hindari enum teknis seperti `SQLITE_SIDECAR` sebagai teks utama; gunakan copy seperti `Data Lokal`, `SQLite Lokal`, atau `SQLite Runtime`.
 
 ### Standar tabel detail/report setelah patch mobile detail
 

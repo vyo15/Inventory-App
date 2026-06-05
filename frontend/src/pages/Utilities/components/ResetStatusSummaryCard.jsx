@@ -21,7 +21,7 @@ const ResetStatusSummaryCard = ({
           <Statistic title="Preview Reset" value={preview ? preview.totalRecords || 0 : "Belum"} />
         </Col>
         <Col xs={12} md={6}>
-          <Statistic title="Baseline HPP" value={hppCostBaselineSummary?.exists ? "Ada" : "Belum"} />
+          <Statistic title="Baseline Modal/HPP" value={hppCostBaselineSummary?.exists ? "Ada" : "Belum"} />
         </Col>
       </Row>
       <Input.TextArea
@@ -29,7 +29,7 @@ const ResetStatusSummaryCard = ({
         onChange={(event) => onActionNoteChange(event.target.value)}
         rows={2}
         allowClear
-        placeholder="Catatan trial opsional untuk audit log, contoh: cek ulang data lama setelah patch reset UI"
+        placeholder="Catatan maintenance opsional untuk audit log, contoh: audit data setelah backup manual"
       />
     </Space>
   </Card>

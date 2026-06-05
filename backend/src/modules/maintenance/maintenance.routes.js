@@ -7,17 +7,22 @@ const { createAuditLog } = require("../../utils/auditLog");
 const { runMigrations } = require("../../db/migrate");
 const { requireLocalAuth, requireLocalAdministrator } = require("../../middlewares/localAuth");
 const { success } = require("../../utils/response");
+const {
+  RESTORE_CONFIRM_KEYWORD,
+  createOfficialSqliteBackup,
+  enrichBackupLog,
+  enrichBackupLogs,
+  extractBackupDatabaseToTemp,
+  getBackupPreview,
+  normalizeBackupFilename,
+} = require("../../utils/sqliteBackup");
 
 const router = express.Router();
-
-const RESTORE_CONFIRM_KEYWORD = "RESTORE SQLITE";
-
-const safeTimestamp = () => new Date().toISOString().replace(/[:.]/g, "-");
 
 router.get("/status", async (req, res, next) => {
   try {
     const db = await getDb();
-    const [schemaVersion, userCount, activeAdminCount, customerCount, categoryCount, supplierCount, auditCount, backupCount, restorePlanCount, migrationStatusCount] = await Promise.all([
+    const [schemaVersion, userCount, activeAdminCount, customerCount, categoryCount, supplierCount, auditCount, backupCount, restorePlanCount, migrationStatusCount, latestBackup] = await Promise.all([
       db.get("SELECT value FROM schema_meta WHERE key = 'schema_version'"),
       db.get("SELECT COUNT(*) AS count FROM users"),
       db.get("SELECT COUNT(*) AS count FROM users WHERE role = 'administrator' AND status = 'active'"),
@@ -28,6 +33,7 @@ router.get("/status", async (req, res, next) => {
       db.get("SELECT COUNT(*) AS count FROM backup_logs"),
       db.get("SELECT COUNT(*) AS count FROM restore_logs"),
       db.get("SELECT COUNT(*) AS count FROM module_migration_status"),
+      db.get("SELECT * FROM backup_logs ORDER BY id DESC LIMIT 1"),
     ]);
 
     return success(res, "Status SQLite sidecar berhasil dimuat", {
@@ -43,6 +49,16 @@ router.get("/status", async (req, res, next) => {
       backupCount: backupCount?.count || 0,
       restorePlanCount: restorePlanCount?.count || 0,
       migrationStatusCount: migrationStatusCount?.count || 0,
+      latestBackup: enrichBackupLog(latestBackup),
+      backupFormat: "imsbak_zip_manifest_checksum",
+      backupPolicy: {
+        manual: true,
+        autoDailyOnBackendStart: true,
+        preRestoreBackup: true,
+        verifyChecksum: true,
+        verifyIntegrityCheck: true,
+        externalCopyReminderDays: 7,
+      },
       restoreMode: "guarded_confirm_keyword",
       restoreConfirmKeyword: RESTORE_CONFIRM_KEYWORD,
     });
@@ -51,46 +67,17 @@ router.get("/status", async (req, res, next) => {
   }
 });
 
-const createBackupFile = async (db, { prefix = "ims-sqlite-sidecar-backup", actor = "system", action = "backup_create" } = {}) => {
-  fs.mkdirSync(env.backupDir, { recursive: true });
-
-  const filename = `${prefix}-${safeTimestamp()}.sqlite`;
-  const backupPath = path.join(env.backupDir, filename);
-
-  await db.exec("PRAGMA wal_checkpoint(FULL);");
-  fs.copyFileSync(getDbPath(), backupPath);
-  const stat = fs.statSync(backupPath);
-
-  const result = await db.run(
-    `
-      INSERT INTO backup_logs (filename, path, size_bytes, status)
-      VALUES (?, ?, ?, 'success')
-    `,
-    [filename, backupPath, stat.size]
-  );
-
-  await createAuditLog({
-    module: "maintenance",
-    action,
-    entityType: "backup_log",
-    entityId: result.lastID,
-    actor,
-    description: "Backup SQLite sidecar berhasil dibuat",
-    metadata: { filename, backupPath, sizeBytes: stat.size },
-  });
-
-  return { id: result.lastID, filename, path: backupPath, sizeBytes: stat.size };
-};
-
 router.post("/backup", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
   try {
     const db = await getDb();
-    const backup = await createBackupFile(db, {
+    const backup = await createOfficialSqliteBackup(db, {
+      type: req.body?.backupType || req.body?.type || "manual",
       actor: req.localAuth.user.username,
       action: "backup_create",
+      notes: req.body?.notes || "Backup manual resmi dari UI IMS.",
     });
 
-    return success(res, "Backup database SQLite sidecar berhasil dibuat", backup);
+    return success(res, "Backup database SQLite berhasil dibuat dan diverifikasi", backup);
   } catch (error) {
     return next(error);
   }
@@ -103,7 +90,24 @@ const removeSqliteRuntimeSidecars = (dbPath) => {
   }
 };
 
+const getActiveDbValidation = async (db) => {
+  const integrityRows = await db.all("PRAGMA integrity_check;");
+  const foreignKeyRows = await db.all("PRAGMA foreign_key_check;");
+  const integrityMessages = integrityRows.map((row) => row.integrity_check || Object.values(row)[0]).filter(Boolean);
+  const integrityCheck = integrityMessages.length === 1 && String(integrityMessages[0]).toLowerCase() === "ok"
+    ? "ok"
+    : integrityMessages.join("; ") || "unknown";
+
+  return {
+    integrityCheck,
+    foreignKeyCheck: foreignKeyRows.length ? `${foreignKeyRows.length} issue(s)` : "ok",
+    valid: integrityCheck === "ok" && foreignKeyRows.length === 0,
+  };
+};
+
 router.post("/restore-execute", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
+  const tempDir = path.join(env.backupDir, ".tmp", `restore-${Date.now()}`);
+
   try {
     const confirmKeyword = String(req.body?.confirmKeyword || "").trim();
     if (confirmKeyword !== RESTORE_CONFIRM_KEYWORD) {
@@ -115,7 +119,7 @@ router.post("/restore-execute", requireLocalAuth, requireLocalAdministrator, asy
     }
 
     const db = await getDb();
-    const requestedFilename = String(req.body?.filename || req.body?.backupFileName || "").trim();
+    const requestedFilename = normalizeBackupFilename(req.body?.filename || req.body?.backupFileName || "");
     if (!requestedFilename) {
       return success(res, "Restore dibatalkan karena filename backup wajib dipilih secara eksplisit.", {
         restored: false,
@@ -137,20 +141,34 @@ router.post("/restore-execute", requireLocalAuth, requireLocalAdministrator, asy
       });
     }
 
+    const preview = await getBackupPreview(backup);
+    if (!preview.validForRestore) {
+      return success(res, "Restore dibatalkan karena backup tidak lolos validasi.", {
+        restored: false,
+        backupFound: true,
+        backupFileExists: true,
+        destructiveAllowed: false,
+        preview,
+      });
+    }
+
     const actor = req.localAuth.user.username;
-    const preRestoreBackup = await createBackupFile(db, {
-      prefix: "ims-sqlite-sidecar-pre-restore-backup",
+    const preRestoreBackup = await createOfficialSqliteBackup(db, {
+      type: "pre-restore",
       actor,
       action: "pre_restore_backup_create",
+      notes: `Backup otomatis sebelum restore dari ${requestedFilename}.`,
     });
 
+    const extractedBackup = await extractBackupDatabaseToTemp(backup, tempDir);
     const activeDbPath = getDbPath();
     await closeDb();
-    fs.copyFileSync(backup.path, activeDbPath);
+    fs.copyFileSync(extractedBackup.dbPath, activeDbPath);
     removeSqliteRuntimeSidecars(activeDbPath);
 
     await runMigrations();
     const restoredDb = await getDb();
+    const activeValidation = await getActiveDbValidation(restoredDb);
 
     const summary = {
       mode: "executed_guarded",
@@ -162,9 +180,12 @@ router.post("/restore-execute", requireLocalAuth, requireLocalAdministrator, asy
         sizeBytes: backup.size_bytes,
         createdAt: backup.created_at,
       },
+      backupManifest: extractedBackup.manifest || preview.manifest || null,
+      backupValidation: extractedBackup.validation || preview.validation || null,
+      activeDatabaseValidation: activeValidation,
       preRestoreBackup,
       actor,
-      note: "Database aktif dioverwrite dari backup setelah backup otomatis dibuat dan keyword konfirmasi valid.",
+      note: "Database aktif dioverwrite dari backup setelah backup otomatis dibuat, checksum/integrity valid, dan keyword konfirmasi valid.",
     };
 
     const result = await restoredDb.run(
@@ -181,54 +202,74 @@ router.post("/restore-execute", requireLocalAuth, requireLocalAdministrator, asy
       entityType: "restore_log",
       entityId: result.lastID,
       actor,
-      description: "Restore SQLite guarded berhasil dijalankan",
+      description: "Restore SQLite guarded berhasil dijalankan setelah validasi backup",
       metadata: summary,
     });
 
-    return success(res, "Restore SQLite guarded berhasil dijalankan", {
+    return success(res, "Restore SQLite guarded berhasil dijalankan. Refresh aplikasi dan login ulang bila diperlukan.", {
       id: result.lastID,
       ...summary,
     });
   } catch (error) {
     return next(error);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
-
 
 router.post("/restore-plan", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
   try {
     const db = await getDb();
-    const requestedFilename = String(req.body?.filename || req.body?.backupFileName || "").trim();
+    const requestedFilename = normalizeBackupFilename(req.body?.filename || req.body?.backupFileName || "");
     const backup = requestedFilename
       ? await db.get("SELECT * FROM backup_logs WHERE filename = ? ORDER BY id DESC LIMIT 1", [requestedFilename])
       : await db.get("SELECT * FROM backup_logs ORDER BY id DESC LIMIT 1");
 
-    const backupExists = backup?.path ? fs.existsSync(backup.path) : false;
     const activeDbExists = fs.existsSync(getDbPath());
+    const preview = backup ? await getBackupPreview(backup).catch((error) => ({
+      backup: enrichBackupLog(backup),
+      validationError: error.message,
+      validForRestore: false,
+    })) : null;
+
     const summary = {
       mode: "preview_only",
       destructiveAllowed: false,
+      requiredConfirmKeyword: RESTORE_CONFIRM_KEYWORD,
       backupFound: Boolean(backup),
-      backupFileExists: backupExists,
+      backupFileExists: Boolean(preview?.backup?.fileExists),
       activeDbExists,
-      selectedBackup: backup ? {
-        id: backup.id,
-        filename: backup.filename,
-        path: backup.path,
-        sizeBytes: backup.size_bytes,
-        createdAt: backup.created_at,
+      validForRestore: Boolean(preview?.validForRestore),
+      selectedBackup: preview?.backup ? {
+        id: preview.backup.id,
+        filename: preview.backup.filename,
+        path: preview.backup.path,
+        sizeBytes: preview.backup.size_bytes,
+        createdAt: preview.backup.created_at,
+        status: preview.backup.status,
+        backupType: preview.backup.backupType,
+        manifestStatus: preview.backup.manifestStatus,
       } : null,
+      manifest: preview?.manifest || preview?.backup?.manifest || null,
+      validation: preview?.validation || null,
+      validationError: preview?.validationError || null,
       blockedActions: [
         "Tidak overwrite database aktif.",
         "Tidak stop backend otomatis.",
         "Tidak menghapus file SQLite aktif.",
         "Restore destructive hanya lewat /api/maintenance/restore-execute dengan session administrator lokal dan keyword konfirmasi.",
       ],
+      guidedSteps: [
+        "Pilih backup dari daftar resmi.",
+        "Validasi checksum dan integrity check.",
+        "Review preview jumlah data.",
+        `Ketik ${RESTORE_CONFIRM_KEYWORD} untuk eksekusi restore guarded.`,
+      ],
       manualSafeSteps: [
         "Buat backup terbaru terlebih dahulu.",
-        "Stop backend dengan CTRL+C sebelum restore manual.",
-        "Copy file backup ke data/ims-sqlite-sidecar.sqlite hanya setelah yakin.",
-        "Jalankan backend dan cek /health serta /api/maintenance/status.",
+        "Jangan copy file SQLite aktif saat backend berjalan.",
+        "Gunakan restore guarded dari UI/backend agar sistem membuat pre-restore backup otomatis.",
+        "Setelah restore, refresh aplikasi dan cek /health serta /api/maintenance/status.",
       ],
     };
 
@@ -246,7 +287,7 @@ router.post("/restore-plan", requireLocalAuth, requireLocalAdministrator, async 
       entityType: "restore_log",
       entityId: result.lastID,
       actor: req.localAuth.user.username,
-      description: "Restore plan SQLite dibuat sebagai preview-only",
+      description: "Restore plan SQLite dibuat sebagai preview-only dengan validasi backup",
       metadata: summary,
     });
 
@@ -273,7 +314,7 @@ router.get("/backups", requireLocalAuth, requireLocalAdministrator, async (req, 
   try {
     const db = await getDb();
     const rows = await db.all("SELECT * FROM backup_logs ORDER BY id DESC LIMIT 100");
-    return success(res, "Daftar backup SQLite sidecar berhasil dimuat", rows);
+    return success(res, "Daftar backup SQLite berhasil dimuat", enrichBackupLogs(rows));
   } catch (error) {
     return next(error);
   }

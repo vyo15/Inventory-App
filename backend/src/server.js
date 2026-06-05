@@ -3,6 +3,7 @@ const cors = require("cors");
 const env = require("./config/env");
 const { runMigrations } = require("./db/migrate");
 const { getDbPath } = require("./db/connection");
+const { ensureDailyBackupForToday } = require("./utils/sqliteBackup");
 const requestLogger = require("./middlewares/requestLogger");
 const { errorHandler, notFoundHandler } = require("./middlewares/errorHandler");
 const { success } = require("./utils/response");
@@ -128,6 +129,15 @@ app.use(errorHandler);
 
 async function startServer() {
   await runMigrations();
+
+  try {
+    const dailyBackup = await ensureDailyBackupForToday();
+    if (dailyBackup.created) {
+      console.log(`Auto backup harian dibuat: ${dailyBackup.backup.filename}`);
+    }
+  } catch (error) {
+    console.warn("Auto backup harian gagal dibuat. Jalankan backup manual dari UI.", error.message);
+  }
 
   app.listen(env.port, env.host, () => {
     console.log(`IMS SQLite sidecar backend jalan di http://localhost:${env.port}`);

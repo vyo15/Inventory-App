@@ -60,3 +60,16 @@
   display: block;
   line-height: 1.45;
 }
+
+.offline-db-danger-card {
+  border-color: color-mix(in srgb, var(--ant-color-error, #ff4d4f) 35%, transparent);
+}
+
+.offline-db-danger-card .ant-card-head {
+  color: var(--ant-color-error, #ff4d4f);
+}
+
+.offline-db-status-card .ant-tag,
+.offline-db-action-card .ant-tag {
+  margin-inline-end: 0;
+}

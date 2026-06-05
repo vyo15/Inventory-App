@@ -1,0 +1,239 @@
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, Button, Card, Col, Descriptions, Empty, Row, Space, Table, Tag, Timeline, Typography, message } from "antd";
+import { DatabaseOutlined, ReloadOutlined, SafetyOutlined, SwapOutlined } from "@ant-design/icons";
+
+import {
+  getSqliteBackendBackups,
+  getSqliteRestoreLogs,
+} from "../../../services/System/sqliteBackendStatusService";
+
+const { Text } = Typography;
+
+const formatBytes = (value) => {
+  const bytes = Number(value || 0);
+  if (!bytes) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+};
+
+const parseDate = (value) => {
+  if (!value) return null;
+  const normalized = String(value).includes("T") ? String(value) : `${String(value).replace(" ", "T")}Z`;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatDateTime = (value) => {
+  const date = parseDate(value);
+  if (!date) return value || "-";
+  return new Intl.DateTimeFormat("id-ID", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+};
+
+const getBackupTypeLabel = (backupType) => {
+  const labels = {
+    manual: "Manual",
+    daily: "Harian",
+    "pre-update": "Sebelum Update",
+    "pre-restore": "Sebelum Restore",
+    "pre-reset": "Sebelum Reset",
+    "pre-import": "Sebelum Import",
+    legacy: "Legacy",
+  };
+  return labels[backupType] || backupType || "Backup";
+};
+
+const getStatusColor = (value) => {
+  const status = String(value || "").toLowerCase();
+  if (["verified", "success", "ok", "completed"].includes(status)) return "green";
+  if (["failed", "error", "invalid"].includes(status)) return "red";
+  if (["planned", "preview", "started"].includes(status)) return "blue";
+  return "orange";
+};
+
+const parseSummary = (value) => {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+};
+
+const MaintenanceHistoryPanel = () => {
+  const [loading, setLoading] = useState(false);
+  const [backups, setBackups] = useState([]);
+  const [restoreLogs, setRestoreLogs] = useState([]);
+
+  const loadHistory = useCallback(async ({ showSuccess = false } = {}) => {
+    setLoading(true);
+    try {
+      const [backupResult, restoreLogResult] = await Promise.all([
+        getSqliteBackendBackups(),
+        getSqliteRestoreLogs(),
+      ]);
+      setBackups(backupResult?.data || []);
+      setRestoreLogs(restoreLogResult?.data || []);
+      if (showSuccess) message.success("Riwayat maintenance berhasil diperbarui.");
+    } catch (error) {
+      console.error("Gagal memuat riwayat maintenance:", error);
+      message.error(error?.message || "Riwayat maintenance belum bisa dimuat dari backend SQLite.");
+      setBackups([]);
+      setRestoreLogs([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  const latestBackup = backups[0] || null;
+  const latestRestore = restoreLogs[0] || null;
+  const successfulBackups = useMemo(
+    () => backups.filter((backup) => ["verified", "success"].includes(String(backup.status || "").toLowerCase())).length,
+    [backups],
+  );
+
+  const restoreTimelineItems = useMemo(() => restoreLogs.slice(0, 8).map((log) => {
+    const summary = parseSummary(log.summary_json);
+    return {
+      color: getStatusColor(log.plan_status),
+      children: (
+        <Space direction="vertical" size={2}>
+          <Text strong>{formatDateTime(log.created_at)}</Text>
+          <Text type="secondary">{log.filename || summary?.selectedBackup?.filename || "Restore preview"}</Text>
+          <Space size={6} wrap>
+            <Tag color={getStatusColor(log.plan_status)}>{log.plan_status || "planned"}</Tag>
+            <Tag color={log.destructive_allowed ? "red" : "blue"}>{log.destructive_allowed ? "execute" : "preview"}</Tag>
+            {log.actor ? <Tag>{log.actor}</Tag> : null}
+          </Space>
+        </Space>
+      ),
+    };
+  }), [restoreLogs]);
+
+  return (
+    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+      <Alert
+        type="info"
+        showIcon
+        message="Riwayat maintenance resmi"
+        description="Tab ini menampilkan backup dan restore dari backend SQLite. Riwayat reset legacy tidak dijadikan sumber utama karena service reset lama sudah nonaktif pada mode full SQLite."
+      />
+
+      <Row gutter={[12, 12]}>
+        <Col xs={24} md={8}>
+          <Card size="small" className="reset-maintenance-status-card">
+            <Space direction="vertical" size={6}>
+              <Tag icon={<DatabaseOutlined />} color="green">Backup</Tag>
+              <Text strong>{backups.length}</Text>
+              <Text type="secondary">Total backup resmi terbaca</Text>
+            </Space>
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card size="small" className="reset-maintenance-status-card">
+            <Space direction="vertical" size={6}>
+              <Tag icon={<SafetyOutlined />} color="blue">Verified</Tag>
+              <Text strong>{successfulBackups}</Text>
+              <Text type="secondary">Backup dengan status verified/success</Text>
+            </Space>
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card size="small" className="reset-maintenance-status-card">
+            <Space direction="vertical" size={6}>
+              <Tag icon={<SwapOutlined />} color="purple">Restore</Tag>
+              <Text strong>{restoreLogs.length}</Text>
+              <Text type="secondary">Preview/execute restore tercatat</Text>
+            </Space>
+          </Card>
+        </Col>
+      </Row>
+
+      <Card
+        title="Ringkasan Terakhir"
+        size="small"
+        extra={<Button icon={<ReloadOutlined />} loading={loading} onClick={() => loadHistory({ showSuccess: true })}>Refresh</Button>}
+      >
+        <Descriptions size="small" bordered column={{ xs: 1, md: 2 }}>
+          <Descriptions.Item label="Backup terakhir">{latestBackup?.filename || "-"}</Descriptions.Item>
+          <Descriptions.Item label="Tanggal backup">{formatDateTime(latestBackup?.created_at)}</Descriptions.Item>
+          <Descriptions.Item label="Jenis backup">{getBackupTypeLabel(latestBackup?.backupType)}</Descriptions.Item>
+          <Descriptions.Item label="Status backup"><Tag color={getStatusColor(latestBackup?.status)}>{latestBackup?.status || "-"}</Tag></Descriptions.Item>
+          <Descriptions.Item label="Restore terakhir">{latestRestore?.filename || "-"}</Descriptions.Item>
+          <Descriptions.Item label="Tanggal restore">{formatDateTime(latestRestore?.created_at)}</Descriptions.Item>
+        </Descriptions>
+      </Card>
+
+      <Row gutter={[12, 12]}>
+        <Col xs={24} xl={15}>
+          <Card title="Riwayat Backup" size="small">
+            <Table
+              className="app-data-table"
+              size="small"
+              loading={loading}
+              dataSource={backups.slice(0, 20).map((backup) => ({ ...backup, key: backup.id || backup.filename }))}
+              pagination={false}
+              locale={{ emptyText: <Empty description="Belum ada riwayat backup" /> }}
+              columns={[
+                {
+                  title: "Tanggal",
+                  dataIndex: "created_at",
+                  key: "created_at",
+                  width: 150,
+                  render: formatDateTime,
+                },
+                {
+                  title: "Jenis",
+                  dataIndex: "backupType",
+                  key: "backupType",
+                  width: 120,
+                  render: (value) => <Tag>{getBackupTypeLabel(value)}</Tag>,
+                },
+                {
+                  title: "Status",
+                  dataIndex: "status",
+                  key: "status",
+                  width: 120,
+                  render: (value) => <Tag color={getStatusColor(value)}>{value || "unknown"}</Tag>,
+                },
+                {
+                  title: "Ukuran",
+                  dataIndex: "size_bytes",
+                  key: "size_bytes",
+                  width: 110,
+                  render: formatBytes,
+                },
+                {
+                  title: "File",
+                  dataIndex: "filename",
+                  key: "filename",
+                  render: (value) => <Text copyable ellipsis style={{ maxWidth: 360 }}>{value}</Text>,
+                },
+              ]}
+              scroll={{ x: 760 }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} xl={9}>
+          <Card title="Riwayat Restore" size="small">
+            {restoreTimelineItems.length ? (
+              <Timeline items={restoreTimelineItems} />
+            ) : (
+              <Empty description="Belum ada riwayat restore" />
+            )}
+          </Card>
+        </Col>
+      </Row>
+    </Space>
+  );
+};
+
+export default MaintenanceHistoryPanel;

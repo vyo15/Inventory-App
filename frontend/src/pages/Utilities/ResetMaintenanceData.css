@@ -49,3 +49,31 @@
     min-width: max-content;
   }
 }
+
+.maintenance-checklist-item {
+  height: 100%;
+}
+
+.maintenance-checklist-item .ant-card-body {
+  height: 100%;
+}
+
+@media (max-width: 768px) {
+  .maintenance-checklist-item .ant-btn {
+    width: 100%;
+  }
+}
+
+.reset-maintenance-status-card {
+  height: 100%;
+}
+
+.reset-maintenance-status-card .ant-card-body {
+  height: 100%;
+}
+
+@media (max-width: 768px) {
+  .reset-maintenance-tabs .ant-tabs-tab {
+    padding: 7px 8px;
+  }
+}
