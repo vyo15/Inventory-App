@@ -1,5 +1,6 @@
 import { FileSearchOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Row, Space, Table, Tag } from "antd";
+import { Alert, Button, Card, Col, Row, Space, Tag } from "antd";
+import DataTableView from "../../../components/Layout/Table/DataTableView";
 import { buildAutoDetectIssueSummaryMessage, getAuditIssueCountColor } from "../utils/resetMaintenanceUiHelpers";
 
 const ResetAutoDetectPanel = ({
@@ -41,7 +42,7 @@ const ResetAutoDetectPanel = ({
           </Button>
         </Col>
       </Row>
-      <Table
+      <DataTableView
         className="app-data-table"
         size="small"
         pagination={false}
@@ -53,10 +54,19 @@ const ResetAutoDetectPanel = ({
           { title: "Repair", dataIndex: "safeRepairCount", key: "safeRepairCount", width: 90, render: (value) => <Tag color={value ? "blue" : "default"}>{value || 0}</Tag> },
           { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", render: (value) => renderCompactText(value, 360) },
         ]}
+        mobileCardConfig={{
+          title: (record) => record.area || "Area Audit",
+          subtitle: (record) => record.recommendation || "Rekomendasi audit",
+          tags: (record) => <Tag color={getAuditIssueCountColor(record.issueCount)}>Issue {record.issueCount || 0}</Tag>,
+          meta: [
+            { label: "Dicek", value: (record) => record.checkedRecords || 0 },
+            { label: "Repair", value: (record) => record.safeRepairCount || 0 },
+          ],
+        }}
         scroll={{ x: 780 }}
       />
       {dataQualityCategoryRows.length > 0 && (
-        <Table
+        <DataTableView
           className="app-data-table"
           size="small"
           title={() => "Detail Data Quality Audit"}
@@ -68,6 +78,15 @@ const ResetAutoDetectPanel = ({
             { title: "Sample", dataIndex: "samplePreview", key: "samplePreview", render: (value) => renderCompactText(value, 520) },
             { title: "Rekomendasi", dataIndex: "recommendation", key: "recommendation", width: 260, render: (value) => renderCompactText(value, 240) },
           ]}
+          mobileCardConfig={{
+            title: (record) => record.categoryLabel || "Kategori Data",
+            subtitle: (record) => record.recommendation || "Rekomendasi",
+            tags: (record) => <Tag color="red">Issue {record.count || 0}</Tag>,
+            meta: [
+              { label: "Issue", value: (record) => record.count || 0 },
+              { label: "Sample", value: (record) => record.samplePreview || "-" },
+            ],
+          }}
           scroll={{ x: 980 }}
         />
       )}

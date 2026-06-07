@@ -107,7 +107,7 @@ const generateNextSupplierCode = async (db) => {
   return buildSupplierCode(maxSequence + 1);
 };
 
-router.get("/generate-code", async (req, res, next) => {
+router.get("/generate-code", requireLocalAuth, async (req, res, next) => {
   try {
     const db = await getDb();
     const code = await generateNextSupplierCode(db);
@@ -117,7 +117,7 @@ router.get("/generate-code", async (req, res, next) => {
   }
 });
 
-router.get("/", async (req, res, next) => {
+router.get("/", requireLocalAuth, async (req, res, next) => {
   try {
     const db = await getDb();
     const rows = await db.all(
@@ -129,7 +129,7 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-router.get("/:id", async (req, res, next) => {
+router.get("/:id", requireLocalAuth, async (req, res, next) => {
   try {
     const db = await getDb();
     const row = await db.get(

@@ -8,16 +8,16 @@ const REPOSITORY_MODE_STORAGE_KEY = "ims.repositoryMode";
 
 const SQLITE_MODULE_MODES = new Set(["sqlite", "sqlite_sidecar", "local_sqlite"]);
 
-export const isSqliteRepositoryModuleEnabled = (envKey, fallbackMode = "firebase_primary") => {
+export const isSqliteRepositoryModuleEnabled = (envKey, fallbackMode = "sqlite") => {
   const value = String(import.meta.env?.[envKey] || fallbackMode || "").trim().toLowerCase();
   return SQLITE_MODULE_MODES.has(value);
 };
 
-export const getRepositoryModuleMode = (envKey, fallbackMode = "firebase_primary") =>
+export const getRepositoryModuleMode = (envKey, fallbackMode = "sqlite") =>
   String(import.meta.env?.[envKey] || fallbackMode || "").trim().toLowerCase();
 
 export const SQLITE_REPOSITORY_CONFIRMATION = "ENABLE SQLITE LOCAL MODE";
-export const FIREBASE_REPOSITORY_CONFIRMATION = "ENABLE FIREBASE MODE";
+export const FIREBASE_REPOSITORY_CONFIRMATION = "FIREBASE RUNTIME DISABLED";
 
 const safeGetLocalStorage = () => {
   if (typeof window === "undefined") return null;
@@ -46,7 +46,7 @@ export const getRepositoryModeStatus = async () => {
 
   return {
     mode,
-    isFirebasePrimary: mode === REPOSITORY_MODES.FIREBASE_PRIMARY,
+    isFirebasePrimary: false,
     isOfflineLocal: mode === REPOSITORY_MODES.SQLITE_SIDECAR,
     isSqliteSidecar: mode === REPOSITORY_MODES.SQLITE_SIDECAR,
     isHybridSync: false,
@@ -62,12 +62,9 @@ export const setRepositoryModeForDevelopment = async (
   } = {}
 ) => {
   const nextMode = normalizeRepositoryMode(mode);
-  const expectedConfirmation = nextMode === REPOSITORY_MODES.FIREBASE_PRIMARY
-    ? FIREBASE_REPOSITORY_CONFIRMATION
-    : SQLITE_REPOSITORY_CONFIRMATION;
 
-  if (confirmation !== expectedConfirmation) {
-    throw new Error(`Untuk mengganti repository mode, isi confirmation: ${expectedConfirmation}`);
+  if (confirmation !== SQLITE_REPOSITORY_CONFIRMATION) {
+    throw new Error(`Runtime utama IMS adalah SQLite. Isi confirmation: ${SQLITE_REPOSITORY_CONFIRMATION}`);
   }
 
   persistMode(nextMode);
@@ -79,11 +76,9 @@ export const setRepositoryModeForDevelopment = async (
   };
 };
 
-export const resetRepositoryModeToFirebasePrimary = async ({ confirmation = "" } = {}) =>
-  setRepositoryModeForDevelopment(REPOSITORY_MODES.FIREBASE_PRIMARY, {
-    confirmation,
-    reason: "Fallback manual ke Firebase mode dari SQLite Local DB Center.",
-  });
+export const resetRepositoryModeToFirebasePrimary = async () => {
+  throw new Error("Mode Firebase runtime sudah dinonaktifkan. Gunakan SQLite backend lokal.");
+};
 
 export const resetRepositoryModeToSqliteLocal = async () => {
   persistMode(REPOSITORY_MODES.SQLITE_SIDECAR);

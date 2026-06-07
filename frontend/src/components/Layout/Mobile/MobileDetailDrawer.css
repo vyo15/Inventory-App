@@ -1,0 +1,99 @@
+.ims-mobile-detail-drawer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ims-mobile-detail-drawer__identity {
+  min-width: 0;
+}
+
+.ims-mobile-detail-drawer__eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ims-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ims-mobile-detail-drawer__identity h2 {
+  margin: 0;
+  color: var(--ims-text-primary);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.ims-mobile-detail-drawer__identity p {
+  margin: 6px 0 0;
+  color: var(--ims-text-secondary);
+}
+
+.ims-mobile-detail-drawer__status {
+  flex: 0 0 auto;
+}
+
+.ims-mobile-detail-drawer__descriptions .ant-descriptions-item-label {
+  width: 42%;
+  color: var(--ims-text-secondary);
+  font-weight: 700;
+}
+
+.ims-mobile-detail-drawer__body {
+  margin-top: 14px;
+}
+
+.ims-mobile-detail-drawer__footer {
+  position: sticky;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  margin: 18px -24px -24px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--ims-border-color-soft);
+  background: var(--ims-bg-card);
+}
+
+@media (max-width: 768px) {
+  .ims-mobile-detail-drawer-root .ant-drawer-content-wrapper {
+    width: 100vw !important;
+  }
+
+  .ims-mobile-detail-drawer .ant-drawer-body {
+    padding: 16px;
+  }
+
+  .ims-mobile-detail-drawer__footer {
+    margin: 18px -16px -16px;
+    padding: 12px 16px;
+  }
+
+  .ims-mobile-detail-drawer__footer .ant-space {
+    width: 100%;
+  }
+
+  .ims-mobile-detail-drawer__footer .ant-btn {
+    flex: 1 1 140px;
+    min-height: 42px;
+  }
+}
+
+/* IMS Mobile Standard v1: drawer detail panjang menjadi full-screen friendly di HP. */
+@media (max-width: 768px) {
+  .ims-mobile-detail-drawer-root .ant-drawer-content-wrapper {
+    height: 100dvh !important;
+  }
+
+  .ims-mobile-detail-drawer .ant-drawer-content {
+    max-height: 100dvh;
+  }
+
+  .ims-mobile-detail-drawer .ant-drawer-body {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+}

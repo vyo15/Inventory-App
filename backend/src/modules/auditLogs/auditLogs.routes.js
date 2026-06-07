@@ -1,10 +1,11 @@
 const express = require("express");
 const { getDb } = require("../../db/connection");
 const { success } = require("../../utils/response");
+const { requireLocalAuth, requireLocalAdministrator } = require("../../middlewares/localAuth");
 
 const router = express.Router();
 
-router.get("/", async (req, res, next) => {
+router.get("/", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
   try {
     const db = await getDb();
     const limit = Math.min(Number(req.query.limit || 50), 200);

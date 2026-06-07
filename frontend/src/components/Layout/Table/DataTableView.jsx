@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { isValidElement, useEffect, useMemo, useState } from "react";
 import { Pagination, Table } from "antd";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../Feedback/DataLoadingState";
+import MobileActionMenu from "../Mobile/MobileActionMenu";
+import MobileStateBlock from "../Mobile/MobileStateBlock";
 
 const combineClassNames = (...classNames) => classNames.filter(Boolean).join(" ");
 
@@ -36,6 +38,113 @@ const normalizeMobileContentList = (content) => {
   return Array.isArray(content) ? content.filter(hasRenderableValue) : [content];
 };
 
+// IMS NOTE [AKTIF] - Mobile Clean v2 defaults.
+// Fungsi blok: membuat card mobile lebih ringkas tanpa mengubah dataSource, columns, handler, atau business logic.
+// Behavior default: compact card hanya menampilkan title/subtitle/status, quickline, maksimal 2 meta, dan action minimal.
+const getMobileCardDensity = (mobileCardConfig = {}) =>
+  mobileCardConfig.density || mobileCardConfig.variant || "compact";
+
+const isCompactMobileCard = (mobileCardConfig = {}) => getMobileCardDensity(mobileCardConfig) !== "detailed";
+
+const limitMobileItems = (items, limit) => {
+  if (!Number.isFinite(limit)) return items;
+  if (limit < 0) return items;
+  return items.slice(0, limit);
+};
+
+const resolveMobileLimit = (mobileCardConfig = {}, key, fallback) => {
+  const value = Number(mobileCardConfig[key]);
+  return Number.isFinite(value) ? value : fallback;
+};
+
+const normalizeCleanActionItems = (items, mobileCardConfig = {}) => {
+  if (!isCompactMobileCard(mobileCardConfig)) return items;
+  if (mobileCardConfig.showActionsOnCard === true) {
+    return limitMobileItems(items, resolveMobileLimit(mobileCardConfig, "actionLimit", 1));
+  }
+  if (mobileCardConfig.onCardClick) return [];
+  return limitMobileItems(items, resolveMobileLimit(mobileCardConfig, "actionLimit", 1));
+};
+
+const normalizeMobileActionList = (actions, record, index) => {
+  const resolvedActions = renderMobileField(actions, record, index);
+  return normalizeMobileContentList(resolvedActions)
+    .map((action, actionIndex) => {
+      if (typeof action === "function") {
+        return action(record, index);
+      }
+
+      if (!action || isValidElement(action)) {
+        return action;
+      }
+
+      if (typeof action !== "object") {
+        return action;
+      }
+
+      const originalOnClick = action.onClick;
+      return {
+        ...action,
+        key: action.key || action.label || `mobile-action-${actionIndex}`,
+        onClick: originalOnClick
+          ? (event) => {
+              event?.domEvent?.stopPropagation?.();
+              event?.stopPropagation?.();
+              originalOnClick(record, index, event);
+            }
+          : undefined,
+      };
+    })
+    .filter(hasRenderableValue);
+};
+
+const renderMobileActions = (mobileCardConfig, record, index) => {
+  const structuredPrimaryActions = normalizeMobileActionList(
+    mobileCardConfig.primaryActions,
+    record,
+    index,
+  ).filter((action) => !isValidElement(action));
+  const structuredMoreActions = normalizeMobileActionList(
+    mobileCardConfig.moreActions,
+    record,
+    index,
+  ).filter((action) => !isValidElement(action));
+
+  if (structuredPrimaryActions.length || structuredMoreActions.length) {
+    return normalizeCleanActionItems([
+      <MobileActionMenu
+        key="mobile-action-menu"
+        primaryActions={structuredPrimaryActions}
+        moreActions={structuredMoreActions}
+        maxPrimaryActions={resolveMobileLimit(mobileCardConfig, "primaryActionLimit", 1)}
+      />,
+    ], mobileCardConfig);
+  }
+
+  return normalizeCleanActionItems(
+    normalizeMobileContentList(renderMobileField(mobileCardConfig.actions, record, index)),
+    mobileCardConfig,
+  );
+};
+
+const renderMobileEmptyState = (resolvedLocale, loading) => {
+  if (loading) {
+    return (
+      <MobileStateBlock
+        type="loading"
+        description="Memuat data..."
+      />
+    );
+  }
+
+  return (
+    <MobileStateBlock
+      type="empty"
+      description={resolvedLocale.emptyText || "Belum ada data."}
+    />
+  );
+};
+
 const getRecordKey = (rowKey, record, index) => {
   if (typeof rowKey === "function") return rowKey(record, index);
   if (typeof rowKey === "string" && record?.[rowKey] !== undefined) return record[rowKey];
@@ -51,6 +160,7 @@ const renderMobileCards = ({
   mobileCurrentPage,
   mobilePageSize,
   onMobilePageChange,
+  loading,
 }) => {
   if (!mobileCardConfig) return null;
 
@@ -63,7 +173,7 @@ const renderMobileCards = ({
   if (!resolvedDataSource.length) {
     return (
       <div className="ims-mobile-card-list" aria-live="polite">
-        <div className="ims-mobile-card-empty">{resolvedLocale.emptyText}</div>
+        {renderMobileEmptyState(resolvedLocale, loading)}
       </div>
     );
   }
@@ -73,30 +183,53 @@ const renderMobileCards = ({
       {visibleRows.map((record, index) => {
         const absoluteIndex = useMobilePagination ? (mobileCurrentPage - 1) * mobilePageSize + index : index;
         const title = renderMobileField(mobileCardConfig.title, record, absoluteIndex);
-        const subtitleItems = normalizeMobileContentList(
-          renderMobileField(mobileCardConfig.subtitle, record, absoluteIndex),
+        const compactCard = isCompactMobileCard(mobileCardConfig);
+        const subtitleItems = limitMobileItems(
+          normalizeMobileContentList(renderMobileField(mobileCardConfig.subtitle, record, absoluteIndex)),
+          compactCard ? resolveMobileLimit(mobileCardConfig, "subtitleLimit", 2) : -1,
         );
-        const subtextItems = normalizeMobileContentList(
-          renderMobileField(mobileCardConfig.subtext, record, absoluteIndex),
+        const subtextItems = limitMobileItems(
+          normalizeMobileContentList(renderMobileField(mobileCardConfig.subtext, record, absoluteIndex)),
+          compactCard ? resolveMobileLimit(mobileCardConfig, "subtextLimit", 1) : -1,
         );
-        const tagItems = normalizeMobileContentList(
-          renderMobileField(mobileCardConfig.tags, record, absoluteIndex),
+        const tagItems = limitMobileItems(
+          normalizeMobileContentList(renderMobileField(mobileCardConfig.tags, record, absoluteIndex)),
+          compactCard ? resolveMobileLimit(mobileCardConfig, "tagLimit", 1) : -1,
         );
-        const contentItems = normalizeMobileContentList(
-          renderMobileField(mobileCardConfig.content, record, absoluteIndex),
+        const primaryValue = renderMobileField(mobileCardConfig.primary, record, absoluteIndex);
+        const secondaryValue = renderMobileField(mobileCardConfig.secondary, record, absoluteIndex);
+        const contentItems = limitMobileItems(
+          normalizeMobileContentList(renderMobileField(mobileCardConfig.content, record, absoluteIndex)),
+          compactCard ? resolveMobileLimit(mobileCardConfig, "contentLimit", 0) : -1,
         );
-        const actionItems = normalizeMobileContentList(
-          renderMobileField(mobileCardConfig.actions, record, absoluteIndex),
+        const actionItems = renderMobileActions(mobileCardConfig, record, absoluteIndex);
+        const handleCardClick = mobileCardConfig.onCardClick
+          ? (event) => {
+              if (event.target.closest?.("button, a, input, textarea, select, .ant-dropdown, .ant-popover")) return;
+              mobileCardConfig.onCardClick(record, absoluteIndex, event);
+            }
+          : undefined;
+        const metaItems = limitMobileItems(
+          (mobileCardConfig.meta || [])
+            .map((item) => ({
+              ...item,
+              value: renderMobileField(item.value ?? item.render, record, absoluteIndex),
+            }))
+            .filter((item) => hasRenderableValue(item.value)),
+          compactCard ? resolveMobileLimit(mobileCardConfig, "metaLimit", 2) : -1,
         );
-        const metaItems = (mobileCardConfig.meta || [])
-          .map((item) => ({
-            ...item,
-            value: renderMobileField(item.value ?? item.render, record, absoluteIndex),
-          }))
-          .filter((item) => hasRenderableValue(item.value));
 
         return (
-          <article className="ims-mobile-card" key={getRecordKey(rowKey, record, absoluteIndex)}>
+          <article
+            className={[
+              "ims-mobile-card",
+              compactCard ? "ims-mobile-card--clean" : "ims-mobile-card--detailed",
+              `ims-mobile-card--${getMobileCardDensity(mobileCardConfig)}`,
+              handleCardClick ? "ims-mobile-card--clickable" : "",
+            ].filter(Boolean).join(" ")}
+            key={getRecordKey(rowKey, record, absoluteIndex)}
+            onClick={handleCardClick}
+          >
             <div className="ims-mobile-card__header">
               <div className="ims-mobile-card__identity">
                 {hasRenderableValue(title) ? <div className="ims-mobile-card__title">{title}</div> : null}
@@ -122,6 +255,13 @@ const renderMobileCards = ({
                 {subtextItems.map((item, itemIndex) => (
                   <span key={itemIndex}>{item}</span>
                 ))}
+              </div>
+            ) : null}
+
+            {hasRenderableValue(primaryValue) || hasRenderableValue(secondaryValue) ? (
+              <div className="ims-mobile-card__quickline">
+                {hasRenderableValue(primaryValue) ? <strong>{primaryValue}</strong> : null}
+                {hasRenderableValue(secondaryValue) ? <span>{secondaryValue}</span> : null}
               </div>
             ) : null}
 
@@ -243,6 +383,7 @@ const DataTableView = ({
         mobileCurrentPage,
         mobilePageSize,
         onMobilePageChange: handleMobilePageChange,
+        loading,
       })}
     </div>
   );

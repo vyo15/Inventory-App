@@ -3,14 +3,15 @@
    Fungsi:
    - menjadi surface standar untuk blok konten
    - dipakai agar table/filter/chart antar halaman terasa satu sistem
-   - membaca token brand final agar light/dark mode tidak drift.
+   - membaca token brand final agar light/dark mode tidak drift
+   - menjaga Enterprise Clean: PageSection boleh menjadi boundary data, tetapi bukan card tebal bertumpuk.
 ========================= */
 .page-section {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   border: 1px solid var(--ims-border-color-soft) !important;
-  border-radius: 18px !important;
+  border-radius: 16px !important;
   background: var(--ims-bg-card) !important;
-  box-shadow: var(--ims-shadow-soft);
+  box-shadow: none !important;
 }
 
 .page-section-header {
@@ -51,6 +52,26 @@
   flex-wrap: wrap;
 }
 
+.page-section > .ant-card-body {
+  padding: 18px !important;
+}
+
 .page-section-body {
   min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .page-section {
+    margin-bottom: 14px;
+    border-radius: 14px !important;
+  }
+
+  .page-section > .ant-card-body {
+    padding: 14px !important;
+  }
+
+  .page-section-header {
+    gap: 10px;
+    margin-bottom: 12px;
+  }
 }

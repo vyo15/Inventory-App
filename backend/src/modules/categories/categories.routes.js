@@ -43,7 +43,7 @@ const ensureCategoryCodeAvailable = async (db, code, excludeId = null) => {
   }
 };
 
-router.get("/", async (req, res, next) => {
+router.get("/", requireLocalAuth, async (req, res, next) => {
   try {
     const db = await getDb();
     const rows = await db.all(
@@ -55,7 +55,7 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-router.get("/:id", async (req, res, next) => {
+router.get("/:id", requireLocalAuth, async (req, res, next) => {
   try {
     const db = await getDb();
     const row = await db.get(

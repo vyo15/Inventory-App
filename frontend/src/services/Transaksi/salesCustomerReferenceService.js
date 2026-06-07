@@ -6,19 +6,20 @@ const toSalesCustomerReference = (customer = {}) => ({
   name: customer.name || "",
   code: customer.code || customer.customerCode || customer.id || "",
   customerCode: customer.customerCode || customer.code || customer.id || "",
-  source: "firebase_primary",
+  source: "sqlite_backend",
 });
 
 /* =====================================================
 SECTION: Sales customer references — AKTIF / GUARDED
 Fungsi:
-- Memaksa dropdown Customer di Sales membaca customer dari Firebase-primary.
+- Dropdown Customer di Sales membaca customer dari service master data SQLite.
 
 Alasan:
-- Sales transaction write masih Firebase. Customer offline-local yang belum sync tidak boleh dipakai sebagai foreign reference transaksi.
+- Sales transaction write sudah diarahkan ke backend SQLite commit flow.
+- Reference customer tetap read-only di halaman Sales dan tidak boleh membuat mutasi stok/finance dari UI.
 
 Risiko:
-- Jangan mengganti service ini ke customersRepository runtime mode sebelum Sales transaction, stock, income, dan audit flow punya kontrak offline sendiri.
+- Jangan mengganti service ini menjadi akses langsung file SQLite; semua data wajib lewat backend service.
 ===================================================== */
 export const getSalesCustomerReferences = async () => {
   const customers = await getCustomers();

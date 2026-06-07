@@ -242,16 +242,16 @@ Risiko:
 
 
 /* =========================
-   SECTION: Content Area - AKTIF / GUARDED
+   SECTION: Content Area - AKTIF / GUARDED UI
    Fungsi:
-   - menyediakan scroll container dan content card utama untuk semua route bisnis.
+   - menyediakan scroll container dan canvas utama untuk semua route bisnis.
    Hubungan flow aplikasi:
    - AppRoutes dirender di dalam .app-content-card; styling ini tidak mengubah route, form submit, query, atau mutasi data.
    Alasan logic dipakai:
-   - satu scroll container mencegah page besar membuat body scroll ganda, sementara card menjaga surface tetap konsisten.
+   - satu scroll container mencegah page besar membuat body scroll ganda, sementara .app-content-card hanya menjadi canvas transparan, bukan card/wrapper visual besar.
    Status:
-   - AKTIF sebagai canvas halaman operasional.
-   - GUARDED karena tabel, modal trigger, drawer trigger, dan form besar bergantung pada ruang content ini.
+   - AKTIF sebagai canvas halaman operasional Enterprise Clean.
+   - GUARDED: jangan mengembalikan border/shadow/background besar pada wrapper global karena akan membuat halaman terasa card bertumpuk.
 ========================= */
 .app-main-content {
   flex: 1 1 auto;
@@ -272,12 +272,12 @@ Risiko:
 
 .app-content-card {
   min-height: 100%;
-  background: color-mix(in srgb, var(--ims-bg-card) 92%, transparent);
-  border: 1px solid var(--ims-border-color-soft);
-  border-radius: 24px 24px 0 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   padding: 28px 24px 24px;
-  box-shadow: var(--ims-shadow-soft);
-  backdrop-filter: blur(14px);
+  box-shadow: none;
+  backdrop-filter: none;
   transition:
     background-color 0.22s ease,
     color 0.22s ease,
@@ -456,7 +456,7 @@ Risiko:
 
   .app-content-card {
     padding: 20px 18px 18px;
-    border-radius: 20px 20px 0 0;
+    border-radius: 0;
   }
 }
 
@@ -493,7 +493,7 @@ Risiko:
 
   .app-content-card {
     padding: 14px 12px 14px;
-    border-radius: 18px 18px 0 0;
+    border-radius: 0;
   }
 }
 /* =========================
@@ -813,9 +813,10 @@ Risiko:
   border-radius: 20px;
   border-color: var(--ims-border-strong);
   background: var(--ims-surface-card);
-  box-shadow: var(--ims-shadow-soft);
+  box-shadow: none;
 }
 
+/* AKTIF / GUARDED UI: wrapper halaman tidak boleh diberi shadow agar Enterprise Clean tidak kembali jadi card bertumpuk. */
 .ims-page > .ant-card > .ant-card-body,
 .ims-page .ims-section-card.ant-card > .ant-card-body {
   padding: 20px;
@@ -1386,8 +1387,12 @@ Risiko:
 }
 
 .app-shell .ant-card {
-  box-shadow: var(--ims-shadow-soft);
+  box-shadow: none;
 }
+
+/* AKTIF / GUARDED UI:
+   PageSection, table, modal, dan drawer tetap punya border/surface masing-masing.
+   Jangan memberi shadow global ke semua AntD Card karena memunculkan efek wrapper/card bertingkat di halaman utama. */
 
 .app-shell .ant-drawer-header,
 .app-shell .ant-drawer-footer,
@@ -1665,7 +1670,7 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
     border: 1px solid var(--ims-border-strong);
     border-radius: 16px;
     background: var(--ims-bg-card);
-    box-shadow: var(--ims-shadow-soft);
+    box-shadow: none;
   }
 
   .ims-mobile-card__header {
@@ -1863,5 +1868,413 @@ body.app-theme-dark .ant-drawer .ant-picker-focused {
   .ant-modal-body {
     max-width: 100%;
     overflow-x: hidden;
+  }
+}
+
+/* =====================================================
+SECTION: IMS Mobile Standard v1 Enforcement — AKTIF / UI-ONLY
+Fungsi:
+- Mengunci standar portrait-first lintas Phase M1-M5 agar halaman mobile tidak kembali menjadi desktop table yang dipaksa kecil.
+- Desktop tetap table; mobile memakai DataTableView card/list bila mobileCardConfig tersedia.
+Guardrail:
+- CSS only. Tidak mengubah auth, SQLite, stock mutation, purchase, sales, return, finance, production, payroll, HPP, backup/restore, atau schema.
+===================================================== */
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+@media (max-width: 768px) {
+  .app-shell {
+    width: 100%;
+    max-width: 100vw;
+  }
+
+  .ims-page {
+    gap: 12px;
+  }
+
+  .ims-page > .ant-card > .ant-card-body,
+  .ims-page .ims-section-card.ant-card > .ant-card-body,
+  .app-content-card .ant-card > .ant-card-body {
+    padding: 14px !important;
+  }
+
+  .app-content-card .ant-tabs-nav {
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+
+  .app-content-card .ant-tabs-nav-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-content-card .ant-tabs-tab {
+    padding-inline: 8px;
+    white-space: nowrap;
+  }
+
+  .app-content-card .ant-collapse,
+  .app-content-card .ant-collapse-item,
+  .app-content-card .ant-collapse-content,
+  .app-content-card .ant-card,
+  .app-content-card .ant-alert,
+  .app-content-card .ant-descriptions,
+  .app-content-card .ant-list,
+  .app-content-card .ant-timeline {
+    max-width: 100%;
+  }
+
+  .app-content-card .ant-space,
+  .app-content-card .ant-space-item {
+    max-width: 100%;
+  }
+
+  .app-content-card .ant-form .ant-row > .ant-col,
+  .page-form-modal-form .ant-row > .ant-col,
+  .ant-drawer-body .ant-form .ant-row > .ant-col,
+  .ant-modal-body .ant-form .ant-row > .ant-col {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+    min-width: 0;
+  }
+
+  .app-content-card .ant-form .ant-input,
+  .app-content-card .ant-form .ant-input-number,
+  .app-content-card .ant-form .ant-select,
+  .app-content-card .ant-form .ant-picker,
+  .page-form-modal-form .ant-input,
+  .page-form-modal-form .ant-input-number,
+  .page-form-modal-form .ant-select,
+  .page-form-modal-form .ant-picker,
+  .ant-drawer-body .ant-input,
+  .ant-drawer-body .ant-input-number,
+  .ant-drawer-body .ant-select,
+  .ant-drawer-body .ant-picker {
+    width: 100%;
+  }
+
+  .app-content-card .ant-btn,
+  .page-form-modal-root .ant-btn,
+  .ant-drawer .ant-btn,
+  .ant-modal .ant-btn {
+    min-height: 40px;
+  }
+
+  .summary-stat-grid--executive,
+  .summary-stat-grid--finance {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .summary-stat-grid-metrics,
+  .summary-finance-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summary-stat-card.ant-card:hover {
+    transform: none;
+  }
+
+  .ims-readonly-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ims-data-table-view--mobile-card {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ims-mobile-card-list {
+    padding-bottom: 4px;
+  }
+
+  .ims-mobile-card--clickable {
+    cursor: pointer;
+  }
+
+  .ims-mobile-card--clickable:active {
+    transform: scale(0.995);
+  }
+
+  .ims-mobile-card__title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    white-space: normal;
+  }
+
+  .ims-mobile-card__subtitle > span,
+  .ims-mobile-card__subtext > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ims-mobile-card__actions .ant-btn {
+    min-height: 40px;
+  }
+
+  .ims-mobile-card__actions .ant-btn-dangerous {
+    flex-basis: 100%;
+  }
+
+  .ims-mobile-state-block--error.ant-alert {
+    align-items: flex-start;
+  }
+
+  .ims-mobile-state-block--empty .ant-empty {
+    margin-block: 0;
+  }
+}
+
+@media (max-width: 576px) {
+  .summary-stat-grid-metrics,
+  .summary-finance-metrics,
+  .ims-readonly-stat-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-content-card .ant-alert {
+    padding: 12px;
+  }
+
+  .app-content-card .ant-alert-action {
+    margin-inline-start: 0;
+    margin-top: 10px;
+  }
+
+  .app-content-card .ant-alert-content {
+    min-width: 0;
+  }
+
+  .ims-mobile-card__actions .ant-btn {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .ims-mobile-line-action,
+  .ims-mobile-line-action .ant-space-item,
+  .ims-mobile-line-action .ant-btn {
+    width: 100%;
+  }
+}
+
+/* =====================================================
+   SECTION: IMS Mobile Clean v2 - AKTIF / UI-ONLY
+   Fungsi:
+   - menyederhanakan card mobile agar halaman HP portrait terasa seperti operational list, bukan tabel desktop yang dipadatkan.
+   - detail tetap tersedia melalui drawer/page/detail handler existing.
+   Guardrail:
+   - presentational-only; tidak mengubah auth, schema, SQLite, stock mutation, finance, sales, purchase, return, production, payroll, HPP, reset, restore, atau audit log.
+===================================================== */
+@media (max-width: 768px) {
+  .ims-mobile-card-list {
+    gap: 8px;
+  }
+
+  .ims-mobile-card--clean {
+    padding: 11px 12px;
+    border-radius: 14px;
+    box-shadow: none;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__header {
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__identity {
+    gap: 1px;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__title {
+    font-size: 14px;
+    line-height: 1.25;
+    -webkit-line-clamp: 1;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__subtitle,
+  .ims-mobile-card--clean .ims-mobile-card__subtext {
+    gap: 3px 6px;
+    font-size: 11.5px;
+    line-height: 1.35;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__tags {
+    max-width: 38%;
+    gap: 0;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__tags .ant-tag {
+    max-width: 100%;
+    overflow: hidden;
+    padding-inline: 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ims-mobile-card__quickline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+    margin-top: 7px;
+    color: var(--ims-text-primary);
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+
+  .ims-mobile-card__quickline strong {
+    font-size: 13.5px;
+    font-weight: 800;
+  }
+
+  .ims-mobile-card__quickline span {
+    color: var(--ims-text-secondary);
+    font-weight: 600;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__subtext,
+  .ims-mobile-card--clean .ims-mobile-card__meta-grid,
+  .ims-mobile-card--clean .ims-mobile-card__content,
+  .ims-mobile-card--clean .ims-mobile-card__actions {
+    margin-top: 7px;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__meta-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    width: auto;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__meta-label {
+    font-size: 11px;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__meta-label::after {
+    content: ":";
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__meta-value {
+    margin-top: 0;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__content {
+    padding: 0;
+    border: 0;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__content .ims-cell-meta,
+  .ims-mobile-card--clean .ims-mobile-card__content .ant-typography-secondary {
+    font-size: 11px;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__actions {
+    padding-top: 7px;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__actions .ims-action-group > *:nth-child(n+2),
+  .ims-mobile-card--clean .ims-mobile-card__actions .ims-action-group .ant-space-item:nth-child(n+2),
+  .ims-mobile-card--clean .ims-mobile-card__actions .ims-action-group--vertical > *:nth-child(n+2) {
+    display: none !important;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__actions .ant-btn {
+    min-height: 36px;
+    font-size: 12px;
+  }
+
+  .ims-page-alert.ant-alert,
+  .page-container > .ant-alert {
+    margin-bottom: 10px !important;
+    padding: 8px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+
+  .ims-page-alert .ant-alert-message,
+  .page-container > .ant-alert .ant-alert-message {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .page-container > .summary-stat-grid,
+  .ims-page > .summary-stat-grid,
+  .page-container .ims-summary-row,
+  .ims-page .ims-summary-row {
+    margin-bottom: 10px;
+  }
+
+  .summary-stat-grid--executive,
+  .summary-stat-grid--finance {
+    gap: 7px;
+  }
+
+  .summary-stat-grid--executive .summary-stat-grid-metrics,
+  .summary-stat-grid--finance .summary-finance-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .summary-stat-card.ant-card {
+    border-radius: 12px !important;
+  }
+
+  .summary-stat-card.ant-card::before {
+    left: 12px;
+    width: 24px;
+    height: 2px;
+  }
+
+  .summary-stat-card .ant-card-body,
+  .ims-page .summary-stat-grid .summary-stat-card.ant-card .ant-card-body,
+  .ims-page .summary-stat-grid .summary-stat-card--featured.ant-card .ant-card-body {
+    padding: 9px 10px !important;
+  }
+
+  .summary-stat-card-content {
+    gap: 3px;
+  }
+
+  .summary-stat-card-subtitle.ant-typography {
+    display: none;
+  }
+
+  .summary-stat-card-value.ant-typography,
+  .summary-stat-card--featured .summary-stat-card-value.ant-typography {
+    font-size: clamp(18px, 5vw, 22px);
+  }
+}
+
+@media (max-width: 420px) {
+  .ims-mobile-card--clean .ims-mobile-card__header {
+    flex-direction: row;
+  }
+
+  .ims-mobile-card--clean .ims-mobile-card__tags {
+    justify-content: flex-end;
+    max-width: 42%;
   }
 }

@@ -37,6 +37,39 @@ const normalizeTransactionItems = (body = {}) => {
 
 const shouldCreateSaleIncome = (status = "") => String(status || "").trim().toLowerCase() === "selesai";
 
+const ACTIVE_SALE_STATUS_LABELS = Object.freeze({
+  diproses: "Diproses",
+  processing: "Diproses",
+  processed: "Diproses",
+  active: "Diproses",
+  dikirim: "Dikirim",
+  shipped: "Dikirim",
+  sent: "Dikirim",
+  selesai: "Selesai",
+  completed: "Selesai",
+  complete: "Selesai",
+  done: "Selesai",
+});
+
+const normalizeSaleStatusForWrite = (status = "Diproses") => {
+  const normalized = String(status || "Diproses").trim().toLowerCase();
+  const resolvedStatus = ACTIVE_SALE_STATUS_LABELS[normalized];
+  if (!resolvedStatus) {
+    const error = new Error("Status sales hanya boleh Diproses, Dikirim, atau Selesai. Cancel/delete sales tetap dilarang; gunakan Return untuk barang kembali.");
+    error.code = "INVALID_SALE_STATUS";
+    throw error;
+  }
+  return resolvedStatus;
+};
+
+const prepareTransactionBody = (transactionType, body = {}) => {
+  if (transactionType !== "sale") return body;
+  return {
+    ...body,
+    status: normalizeSaleStatusForWrite(body.status || "Diproses"),
+  };
+};
+
 const createFinanceSideEffect = async (db, { tableName, transactionType, transactionRecord, body, actor }) => {
   const amount = toInteger(body.totalAmount ?? body.total ?? body.grandTotal ?? body.amount ?? 0);
   if (amount <= 0) return null;
@@ -122,22 +155,32 @@ const createFinanceSideEffect = async (db, { tableName, transactionType, transac
 };
 
 const commitStockTransaction = async ({ req, res, next, tableName, transactionType, stockDirection, successMessage }) => {
+  let body = req.body || {};
+  try {
+    body = prepareTransactionBody(transactionType, body);
+  } catch (error) {
+    return failure(res, error.message, error.code || "VALIDATION_ERROR", 400);
+  }
+
+  const referenceNumber = body.referenceNumber || body.code || body.purchaseNumber || body.saleNumber || body.returnNumber || `${transactionType.toUpperCase()}-${Date.now()}`;
+  const items = normalizeTransactionItems(body);
+  if (!items.length) return failure(res, "Item transaksi wajib tersedia", "VALIDATION_ERROR", 400);
+
+  for (const item of items) {
+    if (!item.sourceId || !item.sourceType) {
+      return failure(res, "Item transaksi belum memiliki sourceType/sourceId yang valid.", "VALIDATION_ERROR", 400);
+    }
+    if (!item.quantity || item.quantity <= 0) {
+      return failure(res, "Qty transaksi harus lebih dari 0.", "VALIDATION_ERROR", 400);
+    }
+  }
+
   const db = await getDb();
   try {
     await db.run("BEGIN IMMEDIATE TRANSACTION");
-    const body = req.body || {};
-    const referenceNumber = body.referenceNumber || body.code || body.purchaseNumber || body.saleNumber || body.returnNumber || `${transactionType.toUpperCase()}-${Date.now()}`;
-    const items = normalizeTransactionItems(body);
-    if (!items.length) return failure(res, "Item transaksi wajib tersedia", "VALIDATION_ERROR", 400);
 
     const mutationResults = [];
     for (const item of items) {
-      if (!item.sourceId || !item.sourceType) {
-        throw new Error("Item transaksi belum memiliki sourceType/sourceId yang valid.");
-      }
-      if (!item.quantity || item.quantity <= 0) {
-        throw new Error("Qty transaksi harus lebih dari 0.");
-      }
       const deltaCurrent = stockDirection === "out" ? -Math.abs(item.quantity) : Math.abs(item.quantity);
       const result = await commitStockMutation(db, {
         sourceType: item.sourceType,
@@ -215,7 +258,13 @@ router.put("/sales/:id/status", requireLocalAuth, requireLocalAdministrator, asy
     }
     const payload = JSON.parse(row.payload_json || "{}");
     const previousStatus = payload.status || row.status;
-    const nextStatus = req.body?.status || previousStatus;
+    let nextStatus = previousStatus;
+    try {
+      nextStatus = normalizeSaleStatusForWrite(req.body?.status || previousStatus || "Diproses");
+    } catch (error) {
+      await db.run("ROLLBACK").catch(() => {});
+      return failure(res, error.message, error.code || "VALIDATION_ERROR", 400);
+    }
     const nextPayload = { ...payload, status: nextStatus, updatedAt: nowIso() };
     await db.run("UPDATE sales SET status = ?, payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [nextStatus, JSON.stringify(nextPayload), req.params.id]);
 
@@ -255,7 +304,11 @@ router.use("/purchases", createSqliteJsonRecordRouter({
   codePrefix: "PUR",
   requiredName: false,
   orderBy: "transaction_date DESC, updated_at DESC",
-  protectedWriteNote: "Purchase SQLite atomic aktif untuk Product/Raw stock-in. Finance ledger final masih guarded.",
+  protectedWriteNote: "Purchase SQLite atomic aktif untuk Product/Raw stock-in. Direct write generic diblokir agar stok/finance tidak dobel.",
+  allowDirectCreate: false,
+  allowDirectUpdate: false,
+  allowDirectDelete: false,
+  blockedWriteMessage: "Purchase wajib lewat POST /api/transactions/purchases/commit agar stok masuk, expense, audit log, dan transaction record atomic.",
 }));
 
 router.use("/sales", createSqliteJsonRecordRouter({
@@ -265,7 +318,11 @@ router.use("/sales", createSqliteJsonRecordRouter({
   codePrefix: "ORD",
   requiredName: false,
   orderBy: "transaction_date DESC, updated_at DESC",
-  protectedWriteNote: "Sales SQLite atomic aktif untuk Product/Raw stock-out. Income/ledger final masih guarded.",
+  protectedWriteNote: "Sales SQLite atomic aktif untuk Product/Raw stock-out. Direct write/delete diblokir; status aktif hanya Diproses, Dikirim, Selesai.",
+  allowDirectCreate: false,
+  allowDirectUpdate: false,
+  allowDirectDelete: false,
+  blockedWriteMessage: "Sales wajib lewat endpoint commit/status resmi. Cancel/delete sales dilarang; gunakan Return untuk barang kembali.",
 }));
 
 router.use("/returns", createSqliteJsonRecordRouter({
@@ -275,7 +332,11 @@ router.use("/returns", createSqliteJsonRecordRouter({
   codePrefix: "RET",
   requiredName: false,
   orderBy: "transaction_date DESC, updated_at DESC",
-  protectedWriteNote: "Returns SQLite atomic aktif untuk Product/Raw stock restore. Refund/finance final masih guarded.",
+  protectedWriteNote: "Returns SQLite atomic aktif untuk Product/Raw stock restore. Direct write generic diblokir agar jalur barang kembali tetap resmi.",
+  allowDirectCreate: false,
+  allowDirectUpdate: false,
+  allowDirectDelete: false,
+  blockedWriteMessage: "Return wajib lewat POST /api/transactions/returns/commit agar stok restore, refund, audit log, dan transaction record atomic.",
 }));
 
 module.exports = router;

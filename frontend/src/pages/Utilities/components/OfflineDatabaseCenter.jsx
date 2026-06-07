@@ -147,7 +147,7 @@ const OfflineDatabaseCenter = () => {
   const migrationData = migrationStatus?.data || {};
   const migrationModules = migrationData.modules || [];
   const migrationSummary = migrationData.summary || {};
-  const modeTag = useMemo(() => <Tag color="green">SQLite local aktif</Tag>, []);
+  const modeTag = useMemo(() => <Tag color="green">Aktif</Tag>, []);
   const latestBackup = backups[0] || statusData.latestBackup || null;
   const backupTone = getBackupStatusTone(latestBackup);
   const selectedBackup = backups.find((backup) => backup.filename === selectedBackupFilename) || latestBackup;
@@ -170,10 +170,10 @@ const OfflineDatabaseCenter = () => {
       setBackups(backupRows);
       setSelectedBackupFilename((previous) => previous || backupRows[0]?.filename || "");
       setMigrationStatus(nextMigrationStatus);
-      if (showSuccess) message.success("Status SQLite Center diperbarui.");
+      if (showSuccess) message.success("Status Database Center diperbarui.");
     } catch (error) {
-      console.error("Gagal memuat SQLite Center:", error);
-      message.error(error?.message || "SQLite backend belum bisa diakses.");
+      console.error("Gagal memuat Database Center:", error);
+      message.error(error?.message || "Backend database belum bisa diakses.");
       const modeStatus = await getRepositoryModeStatus().catch(() => ({ mode: REPOSITORY_MODES.SQLITE_SIDECAR }));
       void modeStatus;
     } finally {
@@ -189,10 +189,10 @@ const OfflineDatabaseCenter = () => {
     setBackupLoading(true);
     try {
       const result = await createSqliteBackendBackup({ backupType: "manual" });
-      message.success(result?.message || "Backup SQLite berhasil dibuat dan diverifikasi.");
+      message.success(result?.message || "Backup database berhasil dibuat dan diverifikasi.");
       await loadCenterData();
     } catch (error) {
-      message.error(error?.message || "Backup SQLite gagal.");
+      message.error(error?.message || "Backup database gagal.");
     } finally {
       setBackupLoading(false);
     }
@@ -297,8 +297,8 @@ const OfflineDatabaseCenter = () => {
       </Row>
 
       <Descriptions size="small" bordered column={{ xs: 1, lg: 2 }}>
-        <Descriptions.Item label="Repository Mode">{modeTag}</Descriptions.Item>
-        <Descriptions.Item label="Schema SQLite">{statusData.schemaVersion || "-"}</Descriptions.Item>
+        <Descriptions.Item label="Status Runtime">{modeTag}</Descriptions.Item>
+        <Descriptions.Item label="Schema DB">{statusData.schemaVersion || "-"}</Descriptions.Item>
         <Descriptions.Item label="Restore Mode"><Tag color="orange">{statusData.restoreMode || "preview_only"}</Tag></Descriptions.Item>
         <Descriptions.Item label="Format Backup"><Tag color="blue">{statusData.backupFormat || "imsbak"}</Tag></Descriptions.Item>
         <Descriptions.Item label="Database" span={2}>
@@ -316,13 +316,13 @@ const OfflineDatabaseCenter = () => {
       <Alert
         type="success"
         showIcon
-        message="Runtime aktif: SQLite lokal lewat backend LAN"
-        description="Semua modul berjalan melalui backend Node.js lokal dan database SQLite. Mode data lain sudah dihapus dari runtime aktif."
+        message="Runtime database aktif"
+        description="Semua modul berjalan melalui backend lokal dan database utama aplikasi."
       />
 
-      <Card size="small" title="Repository mode" className="offline-db-action-card">
+      <Card size="small" title="Status runtime" className="offline-db-action-card">
         <Space direction="vertical" size={8}>
-          <Tag color="green">SQLite local aktif</Tag>
+          <Tag color="green">Aktif</Tag>
           <Text type="secondary">Confirmation internal: {SQLITE_REPOSITORY_CONFIRMATION}</Text>
         </Space>
       </Card>
@@ -332,12 +332,12 @@ const OfflineDatabaseCenter = () => {
           {
             color: "green",
             dot: <CheckCircleOutlined />,
-            children: "Semua modul utama membaca dan menulis melalui SQLite backend.",
+            children: "Semua modul utama membaca dan menulis melalui backend database aplikasi.",
           },
           {
             color: "blue",
             dot: <DatabaseOutlined />,
-            children: "HP mengakses frontend lewat IP laptop dan API SQLite otomatis mengikuti host/IP frontend.",
+            children: "HP/PC lain dapat mengakses aplikasi dari jaringan lokal yang sama.",
           },
           {
             color: "green",
@@ -386,7 +386,7 @@ const OfflineDatabaseCenter = () => {
       <Card
         size="small"
         className="offline-db-action-card"
-        title="Backup SQLite"
+        title="Backup Database"
         extra={(
           <Space wrap>
             <Button icon={<ReloadOutlined />} loading={loading} onClick={() => loadCenterData({ showSuccess: true })}>
@@ -592,7 +592,7 @@ const OfflineDatabaseCenter = () => {
       <Alert
         type="warning"
         showIcon
-        message="Checklist wajib setelah patch SQLite runtime"
+        message="Checklist wajib setelah patch database runtime"
         description="Jalankan checklist ini sebelum dipakai produksi. Pastikan backend check, build frontend, backup manual, restore preview, dan copy eksternal sudah diuji."
       />
       <Card size="small" title="Manual QA" className="offline-db-action-card">
@@ -600,7 +600,7 @@ const OfflineDatabaseCenter = () => {
           items={[
             { color: "green", children: "Backend: cd backend && npm install && npm run dev; buka /health dan /api/maintenance/status." },
             { color: "green", children: "Frontend laptop: npm run dev -- --host 0.0.0.0; buka halaman Kategori dan Customer." },
-            { color: "green", children: "Frontend HP: buka http://IP-LAPTOP:5173/Inventory-App/ dan tambah/edit customer test." },
+            { color: "green", children: "Frontend HP: buka aplikasi dari alamat lokal laptop/PC server dan tambah/edit customer test." },
             { color: "green", children: "Restart backend; pastikan auto backup harian tidak dobel di hari yang sama." },
             { color: "blue", children: "Buat backup manual; pastikan paket .imsbak.zip, manifest, checksum, dan audit log maintenance tercatat." },
             { color: "orange", children: "Jalankan Preview Restore pada backup terbaru; pastikan status valid sebelum tombol restore aktif." },
@@ -627,7 +627,7 @@ const OfflineDatabaseCenter = () => {
       title={(
         <Space size={10}>
           <SwapOutlined />
-          <span>SQLite Local DB Center</span>
+          <span>Database Center</span>
           {modeTag}
         </Space>
       )}

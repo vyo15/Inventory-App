@@ -21,6 +21,26 @@ Untuk ZIP source bersih, gunakan `git archive` atau helper `scripts/create-clean
 
 # TEST CHECKLIST — IMS Bunga Flanel
 
+## Clean Professional SQLite Regression — 2026-06-05
+
+Checklist wajib setelah apply patch clean professional:
+
+- [ ] `npm --prefix backend run check` berhasil.
+- [ ] `npm --prefix frontend run build` berhasil pada environment yang sudah install dependency frontend.
+- [ ] Login memakai user SQLite lokal berhasil.
+- [ ] Tanpa token, endpoint data bisnis seperti `/api/customers` atau `/api/transactions/sales` ditolak oleh backend.
+- [ ] CRUD master data tetap berjalan lewat backend SQLite.
+- [ ] Stock Adjustment hanya berhasil lewat `/api/stock/adjustments/commit`; direct create/update/delete generic ditolak.
+- [ ] Purchase hanya berhasil lewat `/api/transactions/purchases/commit`; direct create/update/delete generic ditolak.
+- [ ] Sales hanya berhasil lewat `/api/transactions/sales/commit`; direct delete/cancel/status nonaktif ditolak.
+- [ ] Status Sales hanya bisa `Diproses`, `Dikirim`, atau `Selesai`.
+- [ ] Return hanya dibuat lewat `/api/transactions/returns/commit` dan menjadi jalur resmi barang kembali.
+- [ ] Cash In/Out hanya lewat finance commit/delete resmi; ledger direct write ditolak.
+- [ ] Dashboard dan report tetap tampil saat data kosong atau salah satu section gagal dimuat.
+- [ ] Maintenance & Backup Center tetap guarded: restore wajib preview, keyword, pre-restore backup, dan audit log.
+- [ ] Mobile Dashboard, Master Data, Transaksi, Report, dan Maintenance Center tidak kembali ke wrapper card bertumpuk.
+
+
 Checklist ini disusun berdasarkan modul yang benar-benar ada di aplikasi saat ini.
 
 ## A. Master Data
@@ -2114,3 +2134,91 @@ Ekspektasi tambahan:
 [ ] Buka Products/Raw Materials/Purchases/Sales/Stock, pastikan tidak ada flow yang berubah
 [ ] Pastikan tidak ada write raw material, purchase, stock, cash, expense, ledger dari Supplier SQLite C1
 ```
+
+
+## Checklist Enterprise Clean Anti-Wrapper Regression — 2026-06-05
+
+- [ ] Buka Dashboard, Products, Raw Materials, Sales, Purchases, Stock Management, Cash In, Cash Out, Production Planning, Production Orders, Work Logs, Payroll, Reports, dan Maintenance Center di desktop; pastikan halaman tidak terlihat seperti card besar di dalam card besar.
+- [ ] Pastikan `.app-content-card` hanya terasa sebagai area/canvas content, bukan surface putih/navy dengan border/shadow besar.
+- [ ] Pastikan `PageSection` tetap menjadi boundary data utama yang flat: border halus, radius sedang, tanpa shadow tebal.
+- [ ] Pastikan KPI/summary card masih readable, tetapi tidak membuat hierarchy card bertumpuk berlebihan.
+- [ ] Buka viewport 360x640, 400x800, dan tablet; pastikan padding content compact, body tidak horizontal overflow, dan action/filter boleh wrap tanpa membuat header terlalu tinggi.
+- [ ] Buka dark mode; pastikan surface tetap terbaca walau shadow global Card tidak dipakai.
+- [ ] Cek source sebelum merge: jangan ada patch visual yang mengembalikan `box-shadow: var(--ims-shadow-soft)` ke `.app-content-card`, `.page-section`, atau `.app-shell .ant-card` global.
+
+## Checklist Mobile UI v1.0 — AKTIF
+
+Gunakan checklist ini setiap patch mobile:
+
+- [ ] HP portrait tidak perlu landscape.
+- [ ] Tidak ada horizontal scroll body.
+- [ ] Desktop tetap memakai tabel lengkap.
+- [ ] Daftar utama mobile memakai card/list ringkas.
+- [ ] Detail panjang masuk drawer atau halaman detail.
+- [ ] Filter lanjutan tidak memenuhi layar mobile.
+- [ ] Form mobile 1 kolom.
+- [ ] Tombol action tidak dempet dan minimal 40px tinggi.
+- [ ] Action destructive tetap memakai confirm.
+- [ ] Empty/loading/error state rapi dan tidak menampilkan error mentah.
+- [ ] Sales tetap tidak memiliki cancel/delete.
+- [ ] Restore/reset tetap guarded.
+- [ ] Patch UI tidak mengubah stock, finance, production, transaction, auth, schema, backup, atau restore logic.
+- [ ] Docs terkait ikut diperbarui sebelum patch dianggap selesai.
+
+## Checklist Regression Mobile Standard M1-M5 — 2026-06-05
+
+Validasi global:
+
+- [ ] `npm run dev` berhasil menjalankan backend dan frontend.
+- [ ] Login SQLite lokal berhasil.
+- [ ] Desktop >=1024px tetap memakai tabel lengkap.
+- [ ] HP portrait 360px, 390px, dan 430px tidak horizontal scroll body.
+- [ ] Sidebar mobile tampil sebagai drawer dan otomatis tertutup setelah pilih menu.
+- [ ] Header mobile tidak terlalu tinggi dan user action tetap terlihat.
+- [ ] PageHeader action tidak tumpang tindih.
+- [ ] Form modal/drawer mobile menjadi satu kolom.
+- [ ] Empty/loading/error state tidak menampilkan TypeError mentah.
+
+Validasi M2 Master Data:
+
+- [ ] Products tampil card/list di mobile; desktop tetap table.
+- [ ] Raw Materials tampil card/list di mobile.
+- [ ] Semi Finished Materials tampil card/list/group yang tidak membuat body overflow.
+- [ ] Customers, Suppliers, Pricing Rules tampil card/list ringkas.
+
+Validasi M3 Inventory & Transactions:
+
+- [ ] Stock Management dan Stock Adjustment tampil card/list atau form satu kolom di mobile.
+- [ ] Purchases tampil card nomor purchase, supplier, total, item/status.
+- [ ] Sales tampil card nomor sales/order, customer, total, channel, status.
+- [ ] Sales tetap tidak punya cancel/delete.
+- [ ] Returns tampil card nomor return, referensi sales, item/status.
+
+Validasi M4 Production/Payroll/HPP:
+
+- [ ] Production Profiles, BOM, Planning, Orders, Work Logs, Payroll, HPP tampil card/list ringkas di mobile.
+- [ ] Detail material/formula panjang masuk drawer/page atau scroll lokal, bukan memenuhi card utama.
+- [ ] Payroll final dan HPP tidak berubah karena patch UI.
+
+Validasi M5 Finance/Reports/Maintenance:
+
+- [ ] Cash In/Cash Out/Ledger tampil card/list di mobile.
+- [ ] Reports menampilkan ringkasan/card mobile dan tidak crash saat data kosong.
+- [ ] Backup/Restore/Maintenance Center tidak horizontal scroll body.
+- [ ] Restore/reset tetap guarded, butuh confirm/keyword sesuai flow existing.
+- [ ] Riwayat backup, data tools, auto detect, dan safe repair tampil card/list atau scroll lokal di mobile.
+
+Tambahan validasi M4 line section:
+
+- [ ] Buka form/detail produksi yang memakai EditableLineSection dan ReadonlyLineSection; di mobile list material/step/output tampil card/list atau minimal tidak membuat body horizontal scroll.
+- [ ] Tombol tambah line tetap memakai handler lama dan tidak mengubah payload produksi.
+
+## Update 2026-06-05 - QA Cleanup Banner Runtime Database
+
+Checklist setelah patch cleanup banner runtime:
+- [ ] Halaman Kategori tidak lagi menampilkan banner "Mode SQLite lokal aktif" / "SQLite LAN".
+- [ ] Halaman Customer tidak lagi menampilkan banner runtime database.
+- [ ] Halaman Supplier tidak lagi menampilkan alert C1/SQLite master-only di area utama.
+- [ ] Page subtitle master data memakai bahasa bisnis, bukan instruksi backend/port/firewall.
+- [ ] Empty state master data tidak mengarahkan user ke SQLite Center.
+- [ ] Maintenance/Database Center tetap bisa dipakai untuk cek backend dan backup/restore.

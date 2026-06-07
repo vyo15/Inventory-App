@@ -94,14 +94,24 @@ const createSqliteJsonRecordRouter = ({
   orderBy = "name ASC, updated_at DESC",
   extractColumns = defaultExtractColumns,
   protectedWriteNote = "",
+  allowDirectCreate = true,
+  allowDirectUpdate = true,
+  allowDirectDelete = true,
+  blockedWriteMessage = "",
 } = {}) => {
   if (!tableName || !moduleKey || !entityType) {
     throw new Error("Konfigurasi SQLite JSON record route tidak lengkap.");
   }
 
   const router = express.Router();
+  const rejectDirectWrite = (actionLabel) => (_req, res) => failure(
+    res,
+    blockedWriteMessage || `${entityType} SQLite tidak boleh ${actionLabel} langsung. Gunakan endpoint commit/service resmi agar audit, stok, dan ledger tetap konsisten.`,
+    "DIRECT_WRITE_BLOCKED",
+    405,
+  );
 
-  router.get("/generate-code", async (_req, res, next) => {
+  router.get("/generate-code", requireLocalAuth, async (_req, res, next) => {
     try {
       const db = await getDb();
       const code = await generateNextCode(db, tableName, codePrefix);
@@ -111,7 +121,7 @@ const createSqliteJsonRecordRouter = ({
     }
   });
 
-  router.get("/", async (req, res, next) => {
+  router.get("/", requireLocalAuth, async (req, res, next) => {
     try {
       const db = await getDb();
       const limit = Math.min(Math.max(Number(req.query.limit || 500), 1), 2000);
@@ -143,7 +153,7 @@ const createSqliteJsonRecordRouter = ({
     }
   });
 
-  router.get("/:id", async (req, res, next) => {
+  router.get("/:id", requireLocalAuth, async (req, res, next) => {
     try {
       const db = await getDb();
       const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [req.params.id]);
@@ -154,178 +164,190 @@ const createSqliteJsonRecordRouter = ({
     }
   });
 
+  if (allowDirectCreate) {
   router.post("/", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
-    try {
-      const db = await getDb();
-      const now = new Date().toISOString();
-      const incomingPayload = { ...(req.body || {}) };
-      const columns = extractColumns(incomingPayload);
-      const finalCode = normalizeCode(columns.code || incomingPayload.code || incomingPayload.referenceNumber || "") || await generateNextCode(db, tableName, codePrefix);
-      const finalId = normalizeText(incomingPayload.id || finalCode || crypto.randomUUID());
-      const finalName = normalizeText(columns.name || incomingPayload.name || incomingPayload.title || finalCode);
-
-      if (requiredName && !finalName) {
-        return failure(res, `Nama ${entityType} wajib diisi`, "VALIDATION_ERROR", 400);
+      try {
+        const db = await getDb();
+        const now = new Date().toISOString();
+        const incomingPayload = { ...(req.body || {}) };
+        const columns = extractColumns(incomingPayload);
+        const finalCode = normalizeCode(columns.code || incomingPayload.code || incomingPayload.referenceNumber || "") || await generateNextCode(db, tableName, codePrefix);
+        const finalId = normalizeText(incomingPayload.id || finalCode || crypto.randomUUID());
+        const finalName = normalizeText(columns.name || incomingPayload.name || incomingPayload.title || finalCode);
+  
+        if (requiredName && !finalName) {
+          return failure(res, `Nama ${entityType} wajib diisi`, "VALIDATION_ERROR", 400);
+        }
+  
+        const duplicate = await db.get(`SELECT id FROM ${tableName} WHERE code = ? AND status != 'deleted'`, [finalCode]);
+        if (duplicate) {
+          return failure(res, `Kode ${entityType} sudah ada di SQLite`, "DUPLICATE_CODE", 409);
+        }
+  
+        const payload = {
+          ...incomingPayload,
+          id: finalId,
+          code: finalCode,
+          name: finalName,
+          status: columns.status || incomingPayload.status || "active",
+          isActive: columns.isActive === 0 ? false : incomingPayload.isActive !== false,
+          createdAt: incomingPayload.createdAt || now,
+          updatedAt: now,
+        };
+        const normalizedColumns = extractColumns(payload);
+  
+        await db.run(
+          `
+            INSERT INTO ${tableName} (
+              id, code, name, category_id, status, is_active,
+              current_stock, reserved_stock, available_stock, min_stock_alert,
+              total_amount, transaction_date, source_type, source_id,
+              payload_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `,
+          [
+            finalId,
+            normalizedColumns.code || finalCode,
+            normalizedColumns.name || finalName,
+            normalizedColumns.categoryId || null,
+            normalizedColumns.status || "active",
+            normalizedColumns.isActive,
+            normalizedColumns.currentStock,
+            normalizedColumns.reservedStock,
+            normalizedColumns.availableStock,
+            normalizedColumns.minStockAlert,
+            normalizedColumns.totalAmount,
+            normalizedColumns.transactionDate || null,
+            normalizedColumns.sourceType || null,
+            normalizedColumns.sourceId || null,
+            JSON.stringify(payload),
+          ]
+        );
+  
+        await createAuditLog({
+          module: moduleKey,
+          action: "create",
+          entityType,
+          entityId: finalId,
+          actor: req.localAuth.user.username,
+          description: `${entityType} ${finalName || finalCode} dibuat di SQLite local`,
+          metadata: { code: finalCode, guarded: Boolean(protectedWriteNote), protectedWriteNote },
+        });
+  
+        const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ?`, [finalId]);
+        return success(res, `${entityType} berhasil ditambahkan ke SQLite local`, toRecord(row), undefined, 201);
+      } catch (error) {
+        if (String(error?.message || "").includes("UNIQUE")) {
+          return failure(res, `Kode/ID ${entityType} sudah ada di SQLite`, "DUPLICATE_CODE", 409);
+        }
+        return next(error);
       }
+    });
+  } else {
+    router.post("/", requireLocalAuth, requireLocalAdministrator, rejectDirectWrite("dibuat"));
+  }
 
-      const duplicate = await db.get(`SELECT id FROM ${tableName} WHERE code = ? AND status != 'deleted'`, [finalCode]);
-      if (duplicate) {
-        return failure(res, `Kode ${entityType} sudah ada di SQLite`, "DUPLICATE_CODE", 409);
-      }
-
-      const payload = {
-        ...incomingPayload,
-        id: finalId,
-        code: finalCode,
-        name: finalName,
-        status: columns.status || incomingPayload.status || "active",
-        isActive: columns.isActive === 0 ? false : incomingPayload.isActive !== false,
-        createdAt: incomingPayload.createdAt || now,
-        updatedAt: now,
-      };
-      const normalizedColumns = extractColumns(payload);
-
-      await db.run(
-        `
-          INSERT INTO ${tableName} (
-            id, code, name, category_id, status, is_active,
-            current_stock, reserved_stock, available_stock, min_stock_alert,
-            total_amount, transaction_date, source_type, source_id,
-            payload_json, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `,
-        [
-          finalId,
-          normalizedColumns.code || finalCode,
-          normalizedColumns.name || finalName,
-          normalizedColumns.categoryId || null,
-          normalizedColumns.status || "active",
-          normalizedColumns.isActive,
-          normalizedColumns.currentStock,
-          normalizedColumns.reservedStock,
-          normalizedColumns.availableStock,
-          normalizedColumns.minStockAlert,
-          normalizedColumns.totalAmount,
-          normalizedColumns.transactionDate || null,
-          normalizedColumns.sourceType || null,
-          normalizedColumns.sourceId || null,
-          JSON.stringify(payload),
-        ]
-      );
-
-      await createAuditLog({
-        module: moduleKey,
-        action: "create",
-        entityType,
-        entityId: finalId,
-        actor: req.localAuth.user.username,
-        description: `${entityType} ${finalName || finalCode} dibuat di SQLite local`,
-        metadata: { code: finalCode, guarded: Boolean(protectedWriteNote), protectedWriteNote },
-      });
-
-      const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ?`, [finalId]);
-      return success(res, `${entityType} berhasil ditambahkan ke SQLite local`, toRecord(row), undefined, 201);
-    } catch (error) {
-      if (String(error?.message || "").includes("UNIQUE")) {
-        return failure(res, `Kode/ID ${entityType} sudah ada di SQLite`, "DUPLICATE_CODE", 409);
-      }
-      return next(error);
-    }
-  });
-
+  if (allowDirectUpdate) {
   router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
-    try {
-      const db = await getDb();
-      const current = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [req.params.id]);
-      if (!current) return failure(res, `${entityType} SQLite tidak ditemukan`, "NOT_FOUND", 404);
-
-      const currentPayload = safeJsonParse(current.payload_json, {});
-      const mergedPayload = {
-        ...currentPayload,
-        ...(req.body || {}),
-        id: current.id,
-        code: normalizeCode(current.code || req.body?.code || currentPayload.code || ""),
-        updatedAt: new Date().toISOString(),
-      };
-      const columns = extractColumns(mergedPayload);
-      const finalName = normalizeText(columns.name || mergedPayload.name || current.name || current.code);
-
-      if (requiredName && !finalName) {
-        return failure(res, `Nama ${entityType} wajib diisi`, "VALIDATION_ERROR", 400);
+      try {
+        const db = await getDb();
+        const current = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [req.params.id]);
+        if (!current) return failure(res, `${entityType} SQLite tidak ditemukan`, "NOT_FOUND", 404);
+  
+        const currentPayload = safeJsonParse(current.payload_json, {});
+        const mergedPayload = {
+          ...currentPayload,
+          ...(req.body || {}),
+          id: current.id,
+          code: normalizeCode(current.code || req.body?.code || currentPayload.code || ""),
+          updatedAt: new Date().toISOString(),
+        };
+        const columns = extractColumns(mergedPayload);
+        const finalName = normalizeText(columns.name || mergedPayload.name || current.name || current.code);
+  
+        if (requiredName && !finalName) {
+          return failure(res, `Nama ${entityType} wajib diisi`, "VALIDATION_ERROR", 400);
+        }
+  
+        await db.run(
+          `
+            UPDATE ${tableName}
+            SET code = ?, name = ?, category_id = ?, status = ?, is_active = ?,
+                current_stock = ?, reserved_stock = ?, available_stock = ?, min_stock_alert = ?,
+                total_amount = ?, transaction_date = ?, source_type = ?, source_id = ?,
+                payload_json = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `,
+          [
+            columns.code || current.code,
+            finalName,
+            columns.categoryId || null,
+            columns.status || current.status || "active",
+            columns.isActive,
+            columns.currentStock,
+            columns.reservedStock,
+            columns.availableStock,
+            columns.minStockAlert,
+            columns.totalAmount,
+            columns.transactionDate || null,
+            columns.sourceType || null,
+            columns.sourceId || null,
+            JSON.stringify({ ...mergedPayload, name: finalName, status: columns.status || mergedPayload.status || "active" }),
+            current.id,
+          ]
+        );
+  
+        await createAuditLog({
+          module: moduleKey,
+          action: "update",
+          entityType,
+          entityId: current.id,
+          actor: req.localAuth.user.username,
+          description: `${entityType} ${finalName} diubah di SQLite local`,
+          metadata: { code: columns.code || current.code, guarded: Boolean(protectedWriteNote), protectedWriteNote },
+        });
+  
+        const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ?`, [current.id]);
+        return success(res, `${entityType} SQLite berhasil diubah`, toRecord(row));
+      } catch (error) {
+        return next(error);
       }
+    });
+  } else {
+    router.put("/:id", requireLocalAuth, requireLocalAdministrator, rejectDirectWrite("diubah"));
+  }
 
-      await db.run(
-        `
-          UPDATE ${tableName}
-          SET code = ?, name = ?, category_id = ?, status = ?, is_active = ?,
-              current_stock = ?, reserved_stock = ?, available_stock = ?, min_stock_alert = ?,
-              total_amount = ?, transaction_date = ?, source_type = ?, source_id = ?,
-              payload_json = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `,
-        [
-          columns.code || current.code,
-          finalName,
-          columns.categoryId || null,
-          columns.status || current.status || "active",
-          columns.isActive,
-          columns.currentStock,
-          columns.reservedStock,
-          columns.availableStock,
-          columns.minStockAlert,
-          columns.totalAmount,
-          columns.transactionDate || null,
-          columns.sourceType || null,
-          columns.sourceId || null,
-          JSON.stringify({ ...mergedPayload, name: finalName, status: columns.status || mergedPayload.status || "active" }),
-          current.id,
-        ]
-      );
-
-      await createAuditLog({
-        module: moduleKey,
-        action: "update",
-        entityType,
-        entityId: current.id,
-        actor: req.localAuth.user.username,
-        description: `${entityType} ${finalName} diubah di SQLite local`,
-        metadata: { code: columns.code || current.code, guarded: Boolean(protectedWriteNote), protectedWriteNote },
-      });
-
-      const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ?`, [current.id]);
-      return success(res, `${entityType} SQLite berhasil diubah`, toRecord(row));
-    } catch (error) {
-      return next(error);
-    }
-  });
-
+  if (allowDirectDelete) {
   router.delete("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
-    try {
-      const db = await getDb();
-      const current = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [req.params.id]);
-      if (!current) return failure(res, `${entityType} SQLite tidak ditemukan`, "NOT_FOUND", 404);
-
-      const payload = safeJsonParse(current.payload_json, {});
-      await db.run(
-        `UPDATE ${tableName} SET status = 'deleted', is_active = 0, payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [JSON.stringify({ ...payload, status: "deleted", isActive: false, updatedAt: new Date().toISOString() }), current.id]
-      );
-
-      await createAuditLog({
-        module: moduleKey,
-        action: "soft_delete",
-        entityType,
-        entityId: current.id,
-        actor: req.localAuth.user.username,
-        description: `${entityType} ${current.name || current.code} dinonaktifkan di SQLite local`,
-        metadata: { code: current.code, guarded: Boolean(protectedWriteNote), protectedWriteNote },
-      });
-
-      return success(res, `${entityType} SQLite berhasil dinonaktifkan`, { id: current.id, deleted: true, softDeleted: true });
-    } catch (error) {
-      return next(error);
-    }
-  });
+      try {
+        const db = await getDb();
+        const current = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [req.params.id]);
+        if (!current) return failure(res, `${entityType} SQLite tidak ditemukan`, "NOT_FOUND", 404);
+  
+        const payload = safeJsonParse(current.payload_json, {});
+        await db.run(
+          `UPDATE ${tableName} SET status = 'deleted', is_active = 0, payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+          [JSON.stringify({ ...payload, status: "deleted", isActive: false, updatedAt: new Date().toISOString() }), current.id]
+        );
+  
+        await createAuditLog({
+          module: moduleKey,
+          action: "soft_delete",
+          entityType,
+          entityId: current.id,
+          actor: req.localAuth.user.username,
+          description: `${entityType} ${current.name || current.code} dinonaktifkan di SQLite local`,
+          metadata: { code: current.code, guarded: Boolean(protectedWriteNote), protectedWriteNote },
+        });
+  
+        return success(res, `${entityType} SQLite berhasil dinonaktifkan`, { id: current.id, deleted: true, softDeleted: true });
+      } catch (error) {
+        return next(error);
+      }
+    });
+  } else {
+    router.delete("/:id", requireLocalAuth, requireLocalAdministrator, rejectDirectWrite("dihapus/dinonaktifkan"));
+  }
 
   return router;
 };

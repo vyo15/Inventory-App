@@ -606,11 +606,14 @@ const Products = () => {
   ];
 
   const productMobileCardConfig = {
+    density: 'compact',
     title: (record) => record.name || '-',
-    subtitle: (record) => [
-      record.category || 'Produk Jadi',
-      record.hasVariants ? `${formatNumberID(record.variantCount || 0)} varian` : 'Tanpa Varian',
-    ],
+    subtitle: (record) => [record.category || 'Produk Jadi'],
+    primary: (record) => {
+      const stockSummary = getProductStockSummary(record);
+      return `${formatStockWithUnit(stockSummary.availableStock)} tersedia`;
+    },
+    secondary: (record) => `${formatCurrencyId(record.price || 0)} / pcs`,
     tags: (record) => {
       const statusMeta = getProductStatusMeta(record);
       return [
@@ -618,38 +621,17 @@ const Products = () => {
       ];
     },
     meta: [
-      { label: 'Harga Jual', value: (record) => `${formatCurrencyId(record.price || 0)} / pcs` },
-      { label: 'HPP', value: (record) => `${formatCurrencyId(record.hppPerUnit || 0)} / pcs` },
-      { label: 'Pricing', value: (record) => getRuleModeLabel(record.pricingMode, record.pricingRuleId, pricingRuleMap) },
+      { label: 'Min', value: (record) => formatStockWithUnit(record.minStockAlert || 0) },
+      { label: 'Varian', value: (record) => (record.hasVariants ? `${formatNumberID(record.variantCount || 0)} varian` : 'Tidak') },
     ],
-    content: (record) => (
-      <StockDisplayBlock
-        record={record}
-        unit="pcs"
-        getVariantLabel={getVariantDisplayLabel}
-        className="ims-cell-stack ims-cell-stack-tight"
-        metaClassName="ims-cell-meta"
-        minStockThreshold={Number(record.minStockAlert || 0)}
-      />
-    ),
-    actions: (record) => (
-      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-        <Button className="ims-action-button ims-action-button--block" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
-          Detail
-        </Button>
-        <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-          Edit
-        </Button>
-        <Popconfirm
-          title={record.isActive === false ? 'Aktifkan kembali produk?' : 'Nonaktifkan produk?'}
-          okText="Ya"
-          cancelText="Batal"
-          onConfirm={() => handleToggleActive(record)}
-        >
-          <Button className="ims-action-button ims-action-button--block" size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
-        </Popconfirm>
-      </Space>
-    ),
+    onCardClick: (record) => handleViewDetail(record),
+    primaryActions: [
+      { key: 'detail', label: 'Detail', icon: <EyeOutlined />, onClick: (record) => handleViewDetail(record) },
+    ],
+    moreActions: (record) => [
+      { key: 'edit', label: 'Edit', icon: <EditOutlined />, onClick: () => handleEdit(record) },
+      { key: 'toggle', label: record.isActive === false ? 'Aktifkan' : 'Nonaktifkan', onClick: () => handleToggleActive(record) },
+    ],
   };
 
   return (

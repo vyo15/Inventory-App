@@ -5,7 +5,6 @@ import {
   Input,
   Popconfirm,
   Space,
-  Tag,
   message,
 } from "antd";
 import { EditOutlined, PlusOutlined } from "@ant-design/icons";
@@ -14,9 +13,6 @@ import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
-import OfflineRepositoryStatus, {
-  OfflineRepositoryEmptyState,
-} from "../../components/Layout/Feedback/OfflineRepositoryStatus";
 import {
   createCategory,
   deleteCategory,
@@ -25,12 +21,6 @@ import {
 } from "../../data/repositories/categoriesRepository";
 import { REPOSITORY_MODES } from "../../data/repositories/repositoryMode";
 import { getRepositoryModeStatus } from "../../data/repositories/repositoryModeService";
-
-const getRepositoryModeCopy = (mode) => (
-  mode === REPOSITORY_MODES.SQLITE_SIDECAR
-    ? { label: "SQLite Lokal", shortLabel: "Data Lokal", color: "green" }
-    : { label: "Firebase Fallback", shortLabel: "Fallback", color: "blue" }
-);
 
 const Categories = () => {
   const [categories, setCategories] = useState([]);
@@ -42,9 +32,6 @@ const Categories = () => {
   const [form] = Form.useForm();
 
   const getModeOptions = useCallback((mode = repositoryMode) => ({ mode }), [repositoryMode]);
-  const repositoryModeCopy = getRepositoryModeCopy(repositoryMode);
-
-
   const fetchCategories = useCallback(async () => {
     setLoading(true);
     try {
@@ -87,7 +74,7 @@ const Categories = () => {
   const handleDelete = async (id) => {
     try {
       await deleteCategory(id, getModeOptions());
-      message.success(repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR ? "Kategori dinonaktifkan di SQLite" : "Kategori dihapus");
+      message.success("Kategori berhasil dinonaktifkan.");
       fetchCategories();
     } catch (error) {
       console.error("Gagal hapus kategori:", error);
@@ -132,7 +119,7 @@ const Categories = () => {
             Edit
           </Button>
           <Popconfirm
-            title={repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR ? "Nonaktifkan kategori di SQLite?" : "Yakin hapus kategori ini?"}
+            title="Nonaktifkan kategori ini?"
             onConfirm={() => handleDelete(record.id)}
             okText="Ya"
             cancelText="Batal"
@@ -149,11 +136,6 @@ const Categories = () => {
   const categoryMobileCardConfig = {
     title: (record) => record.name || '-',
     subtitle: (record) => record.description || 'Tanpa deskripsi',
-    tags: () => [
-      <Tag key="db" color={repositoryModeCopy.color}>
-        {repositoryModeCopy.shortLabel}
-      </Tag>,
-    ],
     actions: (record) => (
       <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
         <Button
@@ -165,7 +147,7 @@ const Categories = () => {
           Edit
         </Button>
         <Popconfirm
-          title={repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR ? 'Nonaktifkan kategori di SQLite?' : 'Yakin hapus kategori ini?'}
+          title="Nonaktifkan kategori ini?"
           onConfirm={() => handleDelete(record.id)}
           okText="Ya"
           cancelText="Batal"
@@ -182,8 +164,7 @@ const Categories = () => {
     <div className="page-container">
       <PageHeader
         title="Kategori"
-        subtitle="Master kategori. Default memakai SQLite lokal lewat backend LAN. Firebase masih tersedia sebagai fallback manual."
-        extra={<Tag color={repositoryModeCopy.color}>Mode: {repositoryModeCopy.label}</Tag>}
+        subtitle="Kelola kategori produk, bahan baku, dan kebutuhan produksi."
         actions={[
           {
             key: "create-category",
@@ -200,20 +181,10 @@ const Categories = () => {
         ]}
       />
 
-      <OfflineRepositoryStatus
-        repositoryMode={repositoryMode}
-        dataLabel="Kategori"
-        loading={loading}
-        onRefresh={fetchCategories}
-      />
 
       <PageSection
         title="Daftar Kategori"
-        subtitle={
-          repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR
-            ? "Data dari SQLite lokal di laptop server. Jalankan backend agar data bisa dibuka dari laptop dan HP satu jaringan."
-            : "Referensi kategori dari Firebase fallback."
-        }
+        subtitle="Daftar kategori yang dipakai untuk mengelompokkan data IMS."
       >
         <DataRefreshIndicator loading={loading} dataSource={categories} />
         <DataTableView
@@ -226,10 +197,7 @@ const Categories = () => {
           locale={{
             emptyText: getDataTableEmptyText(
               loading,
-              <OfflineRepositoryEmptyState
-                repositoryMode={repositoryMode}
-                dataLabel="kategori"
-              />,
+              "Belum ada kategori. Tambahkan kategori pertama dari halaman ini.",
             ),
           }}
           mobileCardConfig={categoryMobileCardConfig}

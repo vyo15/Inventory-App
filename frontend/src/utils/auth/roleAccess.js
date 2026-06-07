@@ -7,9 +7,9 @@
 // - dipakai AuthProvider, Route Guard, Sidebar/Menu Guard, dan Manajemen User.
 // Status:
 // - AKTIF untuk Login + Role internal IMS.
-// - GUARDED: role baru tidak boleh ditambah tanpa update access matrix docs, route guard, menu guard, User Management, dan Firestore Rules.
+// - GUARDED: role baru tidak boleh ditambah tanpa update access matrix docs, route guard, menu guard, User Management, dan backend localAuth/RBAC.
 // Legacy / cleanup:
-// - compatibility role lama sudah dihapus dari role aktif; data Firestore lama wajib sudah dibersihkan sebelum patch ini dipakai.
+// - compatibility role lama sudah dihapus dari role aktif; data legacy lama wajib sudah dibersihkan sebelum patch ini dipakai.
 // =========================
 export const ROLES = {
   ADMINISTRATOR: "administrator",
@@ -118,7 +118,7 @@ export const ROLE_GROUPS = {
 // - dipakai SidebarMenu untuk menyembunyikan menu yang tidak sesuai role.
 // Status:
 // - AKTIF untuk Route/Menu Guard dan User Management.
-// - GUARDED: UI guard ini belum menggantikan Firestore Rules final.
+// - GUARDED: UI guard ini belum menggantikan backend localAuth/RBAC final.
 // =========================
 export const ROUTE_ROLE_ACCESS = {
   [ROUTE_ACCESS_KEYS.DASHBOARD]: ROLE_GROUPS.ALL_AUTHENTICATED,
@@ -206,10 +206,10 @@ export const canAccessUserManagement = (role) => {
 // - tidak ada role yang boleh mengubah role/status dirinya sendiri lewat halaman Manajemen User.
 // Hubungan flow aplikasi:
 // - dipakai UserManagement dan userService sebelum menulis `system_users`;
-// - service create profile manual dan Firestore Rules wajib mengikuti aturan yang sama.
+// - service create profile manual dan backend localAuth/RBAC wajib mengikuti aturan yang sama.
 // Status:
 // - AKTIF untuk penyederhanaan role 2 level.
-// - GUARDED: aturan ini harus diselaraskan dengan Firestore Rules; UI guard saja tidak cukup.
+// - GUARDED: aturan ini harus diselaraskan dengan backend localAuth/RBAC; UI guard saja tidak cukup.
 // =========================
 export const getAssignableRolesForActor = (actorRole) => {
   if (actorRole === ROLES.ADMINISTRATOR) {
@@ -265,7 +265,7 @@ export const canCreateUserProfile = (actorRole, targetRole) => {
 // - dipakai SidebarMenu agar user tidak melihat menu yang route-nya ditolak.
 // Status:
 // - AKTIF.
-// - GUARDED: hide menu bukan security final; route guard dan Firestore Rules tetap wajib.
+// - GUARDED: hide menu bukan security final; route guard dan backend localAuth/RBAC tetap wajib.
 // =========================
 export const filterSidebarMenuItemsByRole = (menuItems = [], role) => {
   if (!isKnownRole(role)) {

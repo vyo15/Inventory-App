@@ -59,7 +59,7 @@ import { listenProducts } from "../../services/MasterData/productsService";
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+// Behavior: input baru no-decimal; business rules tetap sama di runtime SQLite.
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -660,7 +660,7 @@ const PricingRules = () => {
       key: "pricing-rules-total",
       title: "Total Pricing Rules",
       value: rules.length,
-      subtitle: isSqlitePricingRulesMode ? "Tersimpan di SQLite." : "Tersimpan di Firebase.",
+      subtitle: "Aturan harga aktif.",
       accent: "primary",
     },
     {
@@ -700,7 +700,7 @@ const PricingRules = () => {
       {/* SECTION: tabel pricing rules */}
       <PageSection
         title="Daftar Pricing Rules"
-        subtitle={isSqlitePricingRulesMode ? "Rule tersimpan di SQLite local." : "Hanya item mode rule yang diproses."}
+        subtitle="Rule aktif yang dipakai untuk perhitungan harga."
       >
         {/* SECTION: tabel utama pricing rule memakai foundation global supaya seragam */}
         <DataRefreshIndicator loading={pageLoading} dataSource={rules} />

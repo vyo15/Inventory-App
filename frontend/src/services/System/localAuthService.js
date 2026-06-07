@@ -3,10 +3,7 @@ import { fetchSqliteJson } from "./sqliteBackendStatusService";
 const LOCAL_AUTH_TOKEN_KEY = "ims.sqlite.authToken";
 const LOCAL_AUTH_USER_KEY = "ims.sqlite.authUser";
 
-const normalizeAuthMode = (value = "") => {
-  const mode = String(value || "").trim().toLowerCase();
-  return mode === "firebase" ? "firebase" : "sqlite";
-};
+const normalizeAuthMode = () => "sqlite";
 
 export const AUTH_MODE = normalizeAuthMode(import.meta.env.VITE_AUTH_MODE);
 export const isSqliteAuthMode = () => AUTH_MODE === "sqlite";

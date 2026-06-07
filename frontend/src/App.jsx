@@ -9,7 +9,7 @@ import LogoLoadingScreen from "./components/Layout/Feedback/LogoLoadingScreen";
 // =====================================================
 // SECTION: App Loading State — AKTIF / GUARDED
 // Fungsi:
-// - Menampilkan state aman saat Firebase Auth dan profile user sedang diverifikasi.
+// - Menampilkan state aman saat session SQLite lokal dan profile user sedang diverifikasi.
 //
 // Dipakai oleh:
 // - AppContent ketika authLoading aktif sebelum Login/AppLayout dipilih.
@@ -65,7 +65,7 @@ const AppContent = () => {
 // - tidak mengubah routing bisnis, hanya menambahkan pondasi session login sebelum layout utama.
 // Status:
 // - AKTIF untuk Fase B.
-// - GUARDED: jangan gabungkan dengan User Management/Firestore Rules final pada fase ini.
+// - GUARDED: jangan gabungkan dengan perubahan User Management/role guard final pada fase ini.
 // =========================
 const App = () => {
   return (

@@ -1,0 +1,24 @@
+.ims-mobile-action-menu {
+  width: 100%;
+}
+
+.ims-mobile-action-menu .ant-btn {
+  min-height: 40px;
+  font-weight: 700;
+}
+
+.ims-mobile-action-menu__button {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ims-mobile-action-menu__more {
+  width: 44px;
+  flex: 0 0 44px;
+}
+
+@media (max-width: 420px) {
+  .ims-mobile-action-menu .ant-btn {
+    min-height: 42px;
+  }
+}

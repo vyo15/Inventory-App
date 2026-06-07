@@ -1,11 +1,33 @@
 # CURRENT STATE & TECH DEBT — IMS Bunga Flanel
 
+## Update Clean Professional SQLite Guard — 2026-06-05
+
+Status: **AKTIF / SOURCE-VERIFIED PATCH**.
+
+Temuan source aktual pada ZIP terbaru menunjukkan runtime utama sudah SQLite, tetapi masih ada beberapa celah regresi dari patch lama:
+
+- Generic JSON router backend sebelumnya masih mengizinkan direct `POST/PUT/DELETE` pada tabel transaksi, finance, dan stock adjustment. Ini berisiko melewati stock engine, ledger, audit log, dan membuat double mutation.
+- Endpoint Sales status sebelumnya masih menerima status bebas dari request body. Status sales sekarang wajib masuk allowlist aktif: `Diproses`, `Dikirim`, atau `Selesai`; cancel/delete sales tetap dilarang dan barang kembali wajib lewat Return.
+- Mode repository legacy `firebase_primary`, `offline_local`, dan `hybrid_sync` sekarang dipetakan ke SQLite agar Firebase/Dexie/IndexedDB tidak hidup kembali dari localStorage/env lama.
+- User Management lokal diperbaiki agar service role guard memakai kontrak `canManageUserProfile({ actorRole, targetRole, targetUid, actorUid })`, bukan pemanggilan lama yang membuat update/status/delete user lokal mudah gagal.
+- Read endpoint master/generic backend sekarang diberi local auth guard agar data SQLite tidak dibaca tanpa session lokal.
+- Copy UI aktif yang masih menyebut Firebase fallback pada mode SQLite diganti menjadi SQLite backend lokal.
+
+Batasan patch ini:
+
+- Tidak mengubah schema SQLite.
+- Tidak mengubah route/menu matrix.
+- Tidak menghapus file legacy besar yang masih menjadi compatibility helper tanpa audit usage penuh.
+- Tidak melakukan mass-formatting.
+- Console error yang memang dipakai untuk error handling tidak dihapus massal.
+
+
 ## Update UI/UX Sales Channel — Patch channel report polish
 
 Status: **AKTIF / UI-DISPLAY ONLY**.
 
 - Patch Firestore Rules untuk `business_code_counters` sengaja **ditunda** karena owner menyatakan arah berikutnya adalah SQLite/offline database, bukan Firebase sebagai target final. File `firestore.rules` tidak diubah pada patch ini.
-- Selama source runtime masih memakai service Firebase lama, semua perubahan SQLite/PostgreSQL/local database tetap wajib task migrasi terpisah; patch ini tidak mengubah schema, collection, stock mutation, finance, production, payroll, atau offline mutation.
+- Catatan historis: poin ini berasal dari patch lama. Source aktual ZIP terbaru sudah SQLite-first; jika ada konflik antara dokumen lama dan source, source aktual menang.
 - Sales channel sekarang punya single source di `src/constants/salesChannelOptions.js` untuk opsi input, label grup, fallback `Belum Dikategorikan`, marketplace set, dan helper summary.
 - `Sales.jsx` dan `SalesReport.jsx` memakai helper summary yang sama agar tampilan penjualan per channel tidak beda antara transaksi dan laporan.
 - `SalesReport.jsx` menambahkan section `Performa Channel` compact; detail transaksi final tetap di tabel utama dan export XLSX tetap memakai kolom Channel + Order Marketplace/Resi.
@@ -13,6 +35,21 @@ Status: **AKTIF / UI-DISPLAY ONLY**.
 
 
 Dokumen ini tidak berisi tebakan. Semua poin di bawah berasal dari temuan audit source code saat ini.
+
+## Update Dashboard Anti White Screen — 2026-06-05
+
+Status: **AKTIF / RUNTIME SAFETY**.
+
+Temuan source aktual:
+
+- `Dashboard.jsx` memakai kontrak baru dari `readDashboardData()` berupa `{ dashboardData, failedReads }`.
+- Service Dashboard sebelumnya masih mengembalikan bentuk lama (`summary`, `lowStockItems`, `recentSales`, `recentIncomes`, `recentExpenses`) sehingga `dashboardData` menjadi `undefined` dan halaman blank.
+- Patch ini mengembalikan kontrak Dashboard penuh, memberi fallback kosong per section, mengganti warning Firestore legacy menjadi SQLite/backend local, dan menambahkan `AppErrorBoundary` pada area route agar error render halaman lain tidak menjadi white screen total.
+
+Batasan penting:
+
+- Dashboard tetap read-only. Tidak ada schema change, route/menu/role change, stock mutation, finance mutation, production/payroll/HPP write, reset, atau repair data otomatis.
+- Error boundary hanya fallback UI; root cause tetap wajib diperbaiki di service/page terkait jika ada error baru.
 
 ## Bagian yang Sudah Terlihat Matang
 - struktur route utama sudah cukup rapi
@@ -1463,3 +1500,20 @@ Batasan guarded yang tetap berlaku:
 
 - Production/Payroll/HPP final belum dibuka dari UI karena wajib audit material usage, work log, payroll final/paid, dan HPP final. `VITE_PRODUCTION_REPOSITORY_MODE` tetap `firebase_primary`.
 - Firebase removal final belum aman selama audit strict masih menemukan runtime import Firebase.
+
+## Update Enterprise Clean Anti-Wrapper Regression — 2026-06-05
+
+Status aktif source terbaru:
+
+- `src/App.css` mengembalikan `.app-content-card` sebagai canvas transparan, bukan card/wrapper visual besar. Wrapper global tidak boleh diberi border, shadow, blur, atau background card besar lagi.
+- `src/components/Layout/Page/PageSection.css` menjaga `PageSection` sebagai boundary data utama dengan border halus, radius sedang, padding compact, dan tanpa shadow.
+- Override global `.app-shell .ant-card` tidak lagi memberi shadow ke semua Ant Design Card. Shadow global semacam ini membuat halaman terasa banyak wrap/card bertumpuk dan mudah regresi ketika patch lain menambah Card lokal.
+- Mobile card `DataTableView` tetap boleh menjadi kartu data, tetapi tampil flat/compact agar tidak terasa seperti nested card di dalam card.
+
+Guard anti-regression:
+
+- Jangan mengubah `.app-content-card` kembali menjadi card visual besar kecuali ada approval eksplisit untuk redesign shell.
+- Jangan memberi `box-shadow: var(--ims-shadow-soft)` secara global ke `.app-shell .ant-card`.
+- Jangan menambah Card pembungkus baru di halaman utama hanya untuk spacing. Gunakan `PageSection`, `FilterBar`, `SummaryStatGrid`, atau CSS layout existing.
+- Utility/reset/backup boleh punya boundary lebih jelas, tetapi tetap harus flat dan compact.
+- Perubahan ini UI-only; tidak ada perubahan route/menu/role guard, auth, SQLite schema, service, stock, purchase, sales, returns, finance, production, payroll, HPP, reset destructive flow, atau audit log.

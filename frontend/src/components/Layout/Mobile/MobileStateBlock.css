@@ -1,0 +1,17 @@
+.ims-mobile-state-block {
+  border-radius: 16px;
+}
+
+.ims-mobile-state-block--empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 20px 14px;
+  border: 1px dashed var(--ims-border-strong);
+  background: var(--ims-bg-card-soft);
+}
+
+.ims-mobile-state-block--empty .ant-btn,
+.ims-mobile-state-block--error .ant-btn {
+  min-height: 40px;
+}

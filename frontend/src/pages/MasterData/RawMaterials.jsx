@@ -583,60 +583,30 @@ const RawMaterials = () => {
   ];
 
   const rawMaterialMobileCardConfig = {
+    density: 'compact',
     title: (record) => record.name || '-',
-    subtitle: (record) => [
-      record.supplierName || 'Supplier belum tercatat',
-      record.stockUnit ? `Satuan: ${record.stockUnit}` : null,
-    ].filter(Boolean),
+    subtitle: (record) => [record.supplierName || 'Supplier belum tercatat'],
+    primary: (record) => {
+      const stockSummary = getRawMaterialStockSummary(record);
+      return `${formatStockWithUnit(stockSummary.availableStock, record.stockUnit || 'pcs')} tersedia`;
+    },
+    secondary: (record) => `Min ${formatStockWithUnit(record.minStock || 0, record.stockUnit || 'pcs')}`,
     tags: (record) => {
       const statusMeta = getRawMaterialStatusMeta(record);
-      return [
-        <Tag key="variant" color={record.hasVariants ? 'blue' : 'default'}>
-          {record.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
-        </Tag>,
-        record.hasVariants ? <Tag key="variant-count" color="purple">{formatNumberID(record.variantCount || 0)} varian</Tag> : null,
-        <Tag key="status" color={statusMeta.color}>{statusMeta.label}</Tag>,
-      ].filter(Boolean);
+      return [<Tag key="status" color={statusMeta.color}>{statusMeta.label}</Tag>];
     },
     meta: [
-      { label: 'Restock', value: (record) => `${formatCurrencyId(record.restockReferencePrice || 0)} / ${record.stockUnit || '-'}` },
-      { label: 'Modal', value: (record) => `${record.averageActualUnitCost ? formatCurrencyId(record.averageActualUnitCost) : '-'} / ${record.stockUnit || '-'}` },
       { label: 'Jual', value: (record) => `${formatCurrencyId(record.sellingPrice || 0)} / ${record.stockUnit || '-'}` },
-      { label: 'Pricing', value: (record) => getRuleModeLabel(record.pricingMode, record.pricingRuleId, pricingRuleMap) },
+      { label: 'Varian', value: (record) => (record.hasVariants ? `${formatNumberID(record.variantCount || 0)} varian` : 'Tidak') },
     ],
-    content: (record) => (
-      <StockDisplayBlock
-        record={record}
-        unit={record.stockUnit || 'pcs'}
-        getVariantLabel={(variant, index) => variant.name || `Varian ${index + 1}`}
-        className="ims-cell-stack ims-cell-stack-tight"
-        metaClassName="ims-cell-meta"
-        minStockThreshold={Number(record.minStock || 0)}
-      />
-    ),
-    actions: (record) => (
-      <Space direction="vertical" size={6} className="ims-action-group ims-action-group--vertical">
-        <Button className="ims-action-button ims-action-button--block" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
-          Detail
-        </Button>
-        <Button className="ims-action-button ims-action-button--block" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-          Edit
-        </Button>
-        <Popconfirm
-          title={record.isActive === false ? 'Aktifkan kembali bahan baku?' : 'Nonaktifkan bahan baku?'}
-          description={
-            record.isActive === false
-              ? 'Bahan baku akan aktif kembali untuk dipakai pada transaksi baru.'
-              : 'Bahan baku tidak akan muncul sebagai pilihan data baru, tetapi histori tetap aman.'
-          }
-          okText="Ya"
-          cancelText="Batal"
-          onConfirm={() => handleToggleActive(record)}
-        >
-          <Button className="ims-action-button ims-action-button--block" size="small">{record.isActive === false ? 'Aktifkan' : 'Nonaktifkan'}</Button>
-        </Popconfirm>
-      </Space>
-    ),
+    onCardClick: (record) => handleViewDetail(record),
+    primaryActions: [
+      { key: 'detail', label: 'Detail', icon: <EyeOutlined />, onClick: (record) => handleViewDetail(record) },
+    ],
+    moreActions: (record) => [
+      { key: 'edit', label: 'Edit', icon: <EditOutlined />, onClick: () => handleEdit(record) },
+      { key: 'toggle', label: record.isActive === false ? 'Aktifkan' : 'Nonaktifkan', onClick: () => handleToggleActive(record) },
+    ],
   };
 
   return (

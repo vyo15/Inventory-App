@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Col, Descriptions, Empty, Row, Space, Table, Tag, Timeline, Typography, message } from "antd";
+import { Alert, Button, Card, Col, Descriptions, Empty, Row, Space, Tag, Timeline, Typography, message } from "antd";
+import DataTableView from "../../../components/Layout/Table/DataTableView";
 import { DatabaseOutlined, ReloadOutlined, SafetyOutlined, SwapOutlined } from "@ant-design/icons";
 
 import {
@@ -175,7 +176,7 @@ const MaintenanceHistoryPanel = () => {
       <Row gutter={[12, 12]}>
         <Col xs={24} xl={15}>
           <Card title="Riwayat Backup" size="small">
-            <Table
+            <DataTableView
               className="app-data-table"
               size="small"
               loading={loading}
@@ -218,6 +219,20 @@ const MaintenanceHistoryPanel = () => {
                   render: (value) => <Text copyable ellipsis style={{ maxWidth: 360 }}>{value}</Text>,
                 },
               ]}
+              mobileCardConfig={{
+                title: (record) => record.filename || "Backup Database",
+                subtitle: (record) => [formatDateTime(record.created_at), getBackupTypeLabel(record.backupType)],
+                tags: (record) => <Tag color={getStatusColor(record.status)}>{record.status || "unknown"}</Tag>,
+                meta: [
+                  { label: "Ukuran", value: (record) => formatBytes(record.size_bytes) },
+                  { label: "Jenis", value: (record) => getBackupTypeLabel(record.backupType) },
+                ],
+                content: (record) => (
+                  <Text copyable ellipsis>
+                    {record.filename}
+                  </Text>
+                ),
+              }}
               scroll={{ x: 760 }}
             />
           </Card>

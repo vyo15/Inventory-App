@@ -176,7 +176,7 @@ const MaintenanceChecklistPanel = () => {
       kind: "auto",
       status: statusData.dbPath ? "done" : "failed",
       statusLabel: statusData.dbPath ? "Sesuai" : "Belum sesuai",
-      title: "Backend SQLite aktif",
+      title: "Backend aktif",
       description: "Status dibaca dari endpoint maintenance backend.",
       extra: statusData.dbPath ? `Schema v${statusData.schemaVersion || "unknown"}` : "Backend/status SQLite belum terbaca.",
     },

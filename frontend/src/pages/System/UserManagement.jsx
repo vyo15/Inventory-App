@@ -120,11 +120,11 @@ const getUserManagementActionErrorMessage = (error = {}) => {
   const errorCode = error.code || error.errorCode;
 
   if (errorCode === DELETE_PROFILE_PERMISSION_ERROR_CODE) {
-    return "Permission menolak aksi profile. Cek akses Firestore.";
+    return "Permission menolak aksi user. Cek akses administrator lokal.";
   }
 
   if (errorCode === DELETE_PROFILE_NOT_FOUND_ERROR_CODE) {
-    return "Profile sudah tidak ada di Firestore. Refresh daftar user.";
+    return "User lokal sudah tidak ditemukan. Refresh daftar user.";
   }
 
   if (errorCode === DELETE_PROFILE_GUARD_ERROR_CODE) {
@@ -137,21 +137,19 @@ const getUserManagementActionErrorMessage = (error = {}) => {
 // =========================
 // SECTION: User Management Page - AKTIF / GUARDED
 // Fungsi:
-// - menampilkan dan mengelola akun IMS sesuai mode auth aktif;
-// - mode SQLite membuat user/password lokal, mode Firebase legacy tetap memakai profile Auth UID.
+// - menampilkan dan mengelola akun IMS lokal SQLite.
 // Hubungan flow aplikasi:
-// - AuthProvider memakai profile ini untuk memutuskan user boleh masuk aplikasi;
+// - AuthProvider memakai profile lokal ini untuk memutuskan user boleh masuk aplikasi;
 // - Route/Menu Guard membatasi halaman ini untuk Administrator;
-// - SQLite lokal menyimpan password lewat backend Node/SQLite, bukan di frontend;
-// - Firebase legacy tetap mengelola password dari Firebase Authentication.
+// - SQLite lokal menyimpan password lewat backend Node/SQLite, bukan di frontend.
 // Status:
-// - AKTIF untuk SQLite local user management dan fallback Firebase profile legacy.
+// - AKTIF untuk SQLite local user management.
 // - GUARDED: password lokal hanya dikirim ke backend auth SQLite dan tidak disimpan di UI.
 // Cleanup:
-// - flow migrasi UID/domain lama dan indikator legacy/orphan sudah dihapus; pastikan data Firestore lama sudah bersih sebelum memakai patch ini.
+// - flow migrasi UID/domain lama dan indikator legacy/orphan sudah dihapus dari runtime aktif.
 // =========================
 const UserManagement = () => {
-  const { authMode, profile, firebaseUser, reloadProfile } = useAuth();
+  const { profile, reloadProfile } = useAuth();
   const [form] = Form.useForm();
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -167,8 +165,7 @@ const UserManagement = () => {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const actorRole = profile?.role;
-  const actorUid = profile?.authUid || profile?.id || firebaseUser?.uid;
-  const isSqliteUserManagement = authMode === "sqlite";
+  const actorUid = profile?.authUid || profile?.id;
 
   const assignableRoleOptions = useMemo(() => {
     return getAssignableRolesForActor(actorRole).map((role) => ({
@@ -203,7 +200,7 @@ const UserManagement = () => {
   // Hubungan flow aplikasi:
   // - Manajemen User tidak boleh menghapus administrator aktif terakhir agar akses pemulihan tetap ada.
   // Status:
-  // - AKTIF untuk UI guard; service tetap melakukan validasi ulang sebelum delete Firestore.
+  // - AKTIF untuk UI guard; service/backend tetap melakukan validasi ulang sebelum delete user SQLite.
   // =========================
   const activeAdministratorCount = useMemo(() => {
     return users.filter(
@@ -286,11 +283,11 @@ const UserManagement = () => {
   // =========================
   // SECTION: Save User - AKTIF / GUARDED
   // Fungsi:
-  // - create: mode SQLite membuat akun lokal; mode Firebase legacy membuat profile `system_users/{authUid}`;
+  // - create: mode SQLite membuat akun lokal;
   // - edit: mengubah profile, role, status, dan opsional password baru untuk akun lokal SQLite.
   // Hubungan flow aplikasi:
-  // - AuthProvider membaca user dari backend SQLite atau Firebase profile sesuai mode aktif;
-  // - Auth UID hanya wajib pada mode Firebase legacy.
+  // - AuthProvider membaca user dari backend SQLite localAuth;
+  // - Auth UID hanya ditampilkan sebagai compatibility internal, bukan input user.
   // Status:
   // - AKTIF.
   // - GUARDED: password lokal hanya dikirim ke backend SQLite dan tidak disimpan di state.
@@ -301,10 +298,10 @@ const UserManagement = () => {
     try {
       if (formMode === FORM_MODE.CREATE) {
         await createManualUserProfile(values, profile);
-        message.success(isSqliteUserManagement ? "Akun lokal berhasil dibuat." : "Profile IMS berhasil dibuat dari Auth UID.");
+        message.success("Akun lokal berhasil dibuat.");
       } else if (selectedUser) {
-        await updateSystemUserProfile(selectedUser.id || selectedUser.authUid, values, profile);
-        message.success(isSqliteUserManagement ? "Akun lokal berhasil diperbarui." : "Profile user berhasil diperbarui.");
+        await updateSystemUserProfile(selectedUser, values, profile);
+        message.success("Akun lokal berhasil diperbarui.");
       }
 
       closeModal();
@@ -329,7 +326,7 @@ const UserManagement = () => {
   // Fungsi:
   // - menghitung alasan aksi Edit/Nonaktifkan/Hapus Profile diblokir dari data terbaru tabel.
   // Hubungan flow aplikasi:
-  // - UI memberi feedback cepat, tetapi service tetap memvalidasi ulang sebelum write/delete Firestore.
+  // - UI memberi feedback cepat, tetapi service dan backend tetap memvalidasi ulang sebelum write/delete user SQLite.
   // Status:
   // - AKTIF untuk Manajemen User final.
   // - GUARDED: self-profile dan administrator aktif terakhir tetap tidak boleh dihapus.
@@ -359,7 +356,7 @@ const UserManagement = () => {
   // Fungsi:
   // - memakai modal berbasis state agar kompatibel dengan theme AntD v5.
   // Hubungan flow aplikasi:
-  // - toggle status tetap hanya mengubah profile Firestore; Firebase Authentication user tidak ikut berubah.
+  // - toggle status mengubah akun lokal SQLite dan backend otomatis mencabut session user nonaktif.
   // Status:
   // - AKTIF untuk aksi Aktifkan/Nonaktifkan.
   // =========================
@@ -419,10 +416,10 @@ const UserManagement = () => {
   // =========================
   // SECTION: Controlled Delete Profile Modal - AKTIF / GUARDED
   // Fungsi:
-  // - membuka modal konfirmasi berbasis state sebelum delete Firestore system_users/{uid};
+  // - membuka modal konfirmasi berbasis state sebelum delete user lokal SQLite;
   // - memastikan tombol Hapus Profile memanggil handler dan reload data setelah sukses.
   // Hubungan flow aplikasi:
-  // - tombol ini hanya membersihkan profile di IMS; Firebase Authentication user tidak ikut dihapus.
+  // - tombol ini menghapus user lokal lewat backend guarded; session user target ikut dicabut.
   // Status:
   // - AKTIF untuk delete profile target aman.
   // - GUARDED: service tetap menolak self-delete dan administrator aktif terakhir.
@@ -452,8 +449,8 @@ const UserManagement = () => {
     setIsDeletingProfile(true);
 
     try {
-      await deleteSystemUserProfile(deleteTarget.id || deleteTarget.authUid, profile);
-      message.success(isSqliteUserManagement ? "Akun lokal berhasil dihapus." : "Profile Firestore berhasil dihapus. Firebase Auth user tidak ikut terhapus.");
+      await deleteSystemUserProfile(deleteTarget, profile);
+      message.success("Akun lokal berhasil dihapus.");
       setIsDeleteModalOpen(false);
       setDeleteTarget(null);
       await loadUsers();
@@ -496,20 +493,6 @@ const UserManagement = () => {
               @{record.username || "-"}
             </Text>
           </Space>
-
-          {!isSqliteUserManagement ? (
-            <Tooltip title={record.authUid || "Auth UID belum tersedia"}>
-              <Text
-                code
-                copyable={record.authUid ? { text: record.authUid } : false}
-                ellipsis
-                style={{ maxWidth: "100%" }}
-                type="secondary"
-              >
-                {record.authUid || "-"}
-              </Text>
-            </Tooltip>
-          ) : null}
         </Space>
       ),
     },
@@ -588,7 +571,7 @@ const UserManagement = () => {
                   loading={isDeletingProfile && deleteTarget?.authUid === record.authUid}
                   onClick={() => handleOpenDeleteModal(record)}
                 >
-                  {isSqliteUserManagement ? "Hapus Akun" : "Hapus Profile"}
+                  Hapus Akun
                 </Button>
               </span>
             </Tooltip>
@@ -601,9 +584,9 @@ const UserManagement = () => {
   const summaryItems = [
     {
       key: "total-users",
-      title: isSqliteUserManagement ? "Total Akun" : "Total Profile",
+      title: "Total Akun",
       value: users.length,
-      subtitle: isSqliteUserManagement ? "Akun terdaftar." : "Profile terdaftar.",
+      subtitle: "Akun terdaftar.",
       accent: "primary",
     },
     {
@@ -631,9 +614,7 @@ const UserManagement = () => {
 
   const userMobileCardConfig = {
     title: (record) => record.displayName || '-',
-    subtitle: (record) => isSqliteUserManagement
-      ? [`@${record.username || '-'}`]
-      : [`@${record.username || '-'}`, record.authUid ? `UID: ${record.authUid}` : 'Auth UID belum tersedia'],
+    subtitle: (record) => [`@${record.username || '-'}`],
     tags: (record) => [
       <Tag key="role" color={getRoleColor(record.role)}>{ROLE_LABELS[record.role] || record.role}</Tag>,
       <Tag key="status" color={getStatusColor(record.status)}>
@@ -702,7 +683,7 @@ const UserManagement = () => {
                 loading={isDeletingProfile && deleteTarget?.authUid === record.authUid}
                 onClick={() => handleOpenDeleteModal(record)}
               >
-                {isSqliteUserManagement ? 'Hapus Akun' : 'Hapus Profile'}
+                Hapus Akun
               </Button>
             </span>
           </Tooltip>
@@ -717,10 +698,10 @@ const UserManagement = () => {
   - Menampilkan summary, tabel profile, form tambah/edit, dan modal konfirmasi status/hapus profile.
 
   Dipakai oleh:
-  - Administrator untuk mengelola akun lokal SQLite atau profile Firebase legacy.
+  - Administrator untuk mengelola akun lokal SQLite.
 
   Alasan perubahan:
-  - Copy dibuat adaptif: SQLite tidak menonjolkan UID teknis, Firebase legacy tetap menjelaskan Auth UID.
+  - Copy dibuat ringkas: tidak menonjolkan UID teknis dan fokus ke akun lokal.
 
   Catatan cleanup:
   - Detail user khusus bisa dibuat nanti bila audit login/createdAt sudah stabil di data.
@@ -732,13 +713,13 @@ const UserManagement = () => {
     <div className="page-container">
       <PageHeader
         title="Manajemen User"
-        subtitle={isSqliteUserManagement ? "Kelola akun lokal IMS." : "Kelola profile dan akses IMS."}
+        subtitle="Kelola akun lokal IMS."
         actions={[
           {
             key: "create-user-profile",
             type: "primary",
             icon: <PlusOutlined />,
-            label: isSqliteUserManagement ? "Tambah Akun Lokal" : "Tambah Profile User",
+            label: "Tambah Akun Lokal",
             onClick: openCreateModal,
           },
         ]}
@@ -748,7 +729,7 @@ const UserManagement = () => {
         <SummaryStatGrid items={summaryItems} />
 
         <PageSection
-          title={isSqliteUserManagement ? "Daftar Akun Lokal" : "Daftar Profile User"}
+          title="Daftar Akun Lokal"
           subtitle="Role, status, dan akses login."
         >
           <DataRefreshIndicator loading={isLoading} dataSource={users} />
@@ -769,8 +750,8 @@ const UserManagement = () => {
       <PageFormModal
         title={
           formMode === FORM_MODE.CREATE
-            ? (isSqliteUserManagement ? "Tambah Akun Lokal" : "Tambah Profile User")
-            : (isSqliteUserManagement ? "Edit Akun Lokal" : "Edit Profile User")
+            ? "Tambah Akun Lokal"
+            : "Edit Akun Lokal"
         }
         open={isModalOpen}
         onCancel={closeModal}
@@ -782,19 +763,6 @@ const UserManagement = () => {
         modalProps={{ destroyOnHidden: true }}
         formProps={{ requiredMark: false }}
       >
-        {!isSqliteUserManagement ? (
-          <Form.Item
-            label="Auth UID"
-            name="authUid"
-            rules={[{ required: true, message: "Auth UID wajib diisi dari Firebase Authentication." }]}
-          >
-            <Input
-              disabled={formMode === FORM_MODE.EDIT}
-              placeholder="Tempel UID Firebase Auth"
-            />
-          </Form.Item>
-        ) : null}
-
         <Form.Item
           label="Username"
           name="username"
@@ -816,9 +784,7 @@ const UserManagement = () => {
           <Input placeholder="contoh: Admin Toko" />
         </Form.Item>
 
-        {isSqliteUserManagement ? (
-          <>
-            <Form.Item
+        <Form.Item
               label={formMode === FORM_MODE.CREATE ? "Password" : "Password Baru"}
               name="password"
               rules={
@@ -863,8 +829,6 @@ const UserManagement = () => {
                 placeholder="Ulangi password"
               />
             </Form.Item>
-          </>
-        ) : null}
 
         <Form.Item
           label="Role"
@@ -924,12 +888,12 @@ const UserManagement = () => {
       </Modal>
 
       <Modal
-        title={`${isSqliteUserManagement ? "Hapus akun" : "Hapus profile"} ${deleteTarget?.displayName || "user"}?`}
+        title={`Hapus akun ${deleteTarget?.displayName || "user"}?`}
         open={isDeleteModalOpen}
         onCancel={handleCloseDeleteModal}
         onOk={handleConfirmDeleteProfile}
         confirmLoading={isDeletingProfile}
-        okText={isSqliteUserManagement ? "Hapus Akun" : "Hapus Profile"}
+        okText="Hapus Akun"
         okButtonProps={{ danger: true }}
         cancelText="Batal"
         destroyOnHidden
@@ -940,9 +904,7 @@ const UserManagement = () => {
             (<Text code>@{deleteTarget?.username || "-"}</Text>)
           </Text>
           <Text type="warning">
-            {isSqliteUserManagement
-              ? "Akun dan session lokal target akan dihapus."
-              : "Hanya profile IMS yang dihapus; akun Firebase Auth tidak ikut terhapus."}
+            Akun dan session lokal target akan dihapus.
           </Text>
         </Space>
       </Modal>

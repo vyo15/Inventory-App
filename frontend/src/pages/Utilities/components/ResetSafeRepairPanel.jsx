@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DeleteOutlined, FileSearchOutlined, SyncOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Divider, Input, Popconfirm, Row, Space, Statistic, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Col, Divider, Input, Popconfirm, Row, Space, Statistic, Tag, Typography } from "antd";
+import DataTableView from "../../../components/Layout/Table/DataTableView";
 import { formatHppUnitCurrencyId } from "../../../utils/formatters/currencyId";
 import { formatQuantityId } from "../../../utils/formatters/numberId";
 
@@ -269,7 +270,7 @@ const ResetSafeRepairPanel = ({
           />
         )}
         {stockReadModelRows.some((record) => record.category !== "ok") && (
-          <Table
+          <DataTableView
             className="app-data-table"
             size="small"
             rowKey={(record) => record.key || record.readModelId || `${record.sourceCollection}-${record.sourceId}`}
@@ -292,6 +293,19 @@ const ResetSafeRepairPanel = ({
               },
               { title: "Issue", dataIndex: "issue", key: "issue", render: (value) => renderCompactText(value, 360) },
             ]}
+            mobileCardConfig={{
+              title: (record) => record.itemName || record.sourceLabel || "Read Model Stok",
+              subtitle: (record) => [record.sourceLabel, record.readModelId].filter(Boolean),
+              tags: (record) => (
+                <Tag color={STOCK_READ_MODEL_CATEGORY_COLORS[record.category] || "default"}>
+                  {formatStockReadModelCategory(record.category)}
+                </Tag>
+              ),
+              meta: [
+                { label: "Area", value: (record) => record.sourceLabel || "-" },
+                { label: "Issue", value: (record) => record.issue || "-" },
+              ],
+            }}
             scroll={{ x: 980 }}
           />
         )}
@@ -331,7 +345,7 @@ const ResetSafeRepairPanel = ({
           />
         )}
         {Boolean(hppReconcileRows.length) && (
-          <Table
+          <DataTableView
             className="app-data-table"
             size="small"
             rowKey={(record) => record.key || record.workLogId || record.workLogCode}
@@ -354,6 +368,19 @@ const ResetSafeRepairPanel = ({
               { title: "HPP Final", dataIndex: "expectedUnitCost", key: "expectedUnitCost", width: 140, render: (value) => formatHppUnitCurrencyId(value) },
               { title: "Issue", dataIndex: "issue", key: "issue", render: (value) => renderCompactText(value, 360) },
             ]}
+            mobileCardConfig={{
+              title: (record) => record.workLogCode || "Work Log",
+              subtitle: (record) => record.issue || "Reconcile HPP output",
+              tags: (record) => (
+                <Tag color={HPP_RECONCILE_CATEGORY_COLORS[record.category] || "default"}>
+                  {formatHppReconcileCategory(record.category)}
+                </Tag>
+              ),
+              meta: [
+                { label: "Good Qty", value: (record) => formatQuantityId(record.goodQty) },
+                { label: "HPP Final", value: (record) => formatHppUnitCurrencyId(record.expectedUnitCost) },
+              ],
+            }}
             scroll={{ x: 900 }}
           />
         )}
@@ -400,7 +427,7 @@ const ResetSafeRepairPanel = ({
           />
         )}
         {Boolean(transactionSideEffectRows.length) && (
-          <Table
+          <DataTableView
             className="app-data-table"
             size="small"
             rowKey={(record) => record.key || `${record.sourceCollection}-${record.sourceId}-${record.sideEffect}`}
@@ -423,6 +450,19 @@ const ResetSafeRepairPanel = ({
               },
               { title: "Issue", dataIndex: "issue", key: "issue", render: (value) => renderCompactText(value, 360) },
             ]}
+            mobileCardConfig={{
+              title: (record) => record.sourceRef || "Side-Effect",
+              subtitle: (record) => [record.area, record.targetCollection].filter(Boolean),
+              tags: (record) => (
+                <Tag color={TRANSACTION_SIDE_EFFECT_CATEGORY_COLORS[record.category] || "default"}>
+                  {formatTransactionSideEffectCategory(record.category)}
+                </Tag>
+              ),
+              meta: [
+                { label: "Target", value: (record) => record.targetCollection || "-" },
+                { label: "Issue", value: (record) => record.issue || "-" },
+              ],
+            }}
             scroll={{ x: 920 }}
           />
         )}
@@ -531,7 +571,7 @@ const ResetSafeRepairPanel = ({
           />
         )}
         {Boolean(masterCodeRows.length) && (
-          <Table
+          <DataTableView
             className="app-data-table"
             size="small"
             pagination={{ pageSize: 5 }}
@@ -543,6 +583,16 @@ const ResetSafeRepairPanel = ({
               { title: "Kode Baru", dataIndex: "proposedCode", key: "proposedCode", width: 140, render: (value) => renderCompactTag(value, 125) },
               { title: "Catatan", dataIndex: "issue", key: "issue", render: (value) => renderCompactText(value, 320) },
             ]}
+            mobileCardConfig={{
+              title: (record) => record.itemName || "Kode Master",
+              subtitle: (record) => record.area || "Normalisasi kode",
+              tags: (record) => <Tag color="blue">Kode</Tag>,
+              meta: [
+                { label: "Saat Ini", value: (record) => record.currentCode || "-" },
+                { label: "Kode Baru", value: (record) => record.proposedCode || "-" },
+              ],
+              content: (record) => record.issue || null,
+            }}
             scroll={{ x: 880 }}
           />
         )}

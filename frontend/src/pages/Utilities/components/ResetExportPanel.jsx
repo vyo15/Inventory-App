@@ -1,5 +1,6 @@
 import React from "react";
-import { Button, Card, Col, Popconfirm, Row, Space, Statistic, Table, Tag } from "antd";
+import { Button, Card, Col, Popconfirm, Row, Space, Statistic, Tag } from "antd";
+import DataTableView from "../../../components/Layout/Table/DataTableView";
 import { DeleteOutlined, DownloadOutlined, EyeOutlined } from "@ant-design/icons";
 
 const ResetExportPanel = ({
@@ -58,7 +59,7 @@ const ResetExportPanel = ({
             <Col xs={8}><Statistic title="Warning" value={masterExportPreview?.summary?.warnings || lastMasterExport?.warnings?.length || 0} /></Col>
           </Row>
           {Boolean(testDataRows.length) && (
-            <Table
+            <DataTableView
               className="app-data-table"
               size="small"
               pagination={false}
@@ -68,6 +69,15 @@ const ResetExportPanel = ({
                 { title: "Jumlah", dataIndex: "count", key: "count", width: 90 },
                 { title: "Aksi", dataIndex: "action", key: "action", render: (value) => renderCompactText(value, 220) },
               ]}
+              mobileCardConfig={{
+                title: (record) => record.name || "Collection",
+                subtitle: (record) => record.action || "Data test bermarker",
+                tags: (record) => <Tag color={Number(record.count || 0) > 0 ? "orange" : "green"}>Jumlah {record.count || 0}</Tag>,
+                meta: [
+                  { label: "Collection", value: (record) => record.name || "-" },
+                  { label: "Jumlah", value: (record) => record.count || 0 },
+                ],
+              }}
               scroll={{ x: 520 }}
             />
           )}

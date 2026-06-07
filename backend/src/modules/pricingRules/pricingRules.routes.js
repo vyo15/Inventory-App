@@ -84,7 +84,7 @@ const generateNextCode = async (db) => {
   return `PRC-${String(maxSequence + 1).padStart(3, "0")}`;
 };
 
-router.get("/generate-code", async (_req, res, next) => {
+router.get("/generate-code", requireLocalAuth, async (_req, res, next) => {
   try {
     const db = await getDb();
     const code = await generateNextCode(db);
@@ -94,7 +94,7 @@ router.get("/generate-code", async (_req, res, next) => {
   }
 });
 
-router.get("/", async (req, res, next) => {
+router.get("/", requireLocalAuth, async (req, res, next) => {
   try {
     const db = await getDb();
     const targetType = normalizeText(req.query.targetType || "");
@@ -118,7 +118,7 @@ router.get("/", async (req, res, next) => {
 });
 
 
-router.get("/:id", async (req, res, next) => {
+router.get("/:id", requireLocalAuth, async (req, res, next) => {
   try {
     const db = await getDb();
     const row = await db.get(

@@ -100,7 +100,7 @@ app.get("/api", (req, res) => success(res, "IMS SQLite sidecar API aktif", {
     "GET /api/migration-status",
     "GET /api/audit-logs",
   ],
-  guardedReminder: "SQLite local menjadi target runtime lokal untuk modul pilot. Modul guarded tetap belum dimutasi offline.",
+  guardedReminder: "SQLite local menjadi runtime utama. Modul guarded wajib lewat endpoint backend resmi dan tidak boleh direct write.",
 }));
 
 app.use("/health", healthRoutes);
@@ -142,7 +142,7 @@ async function startServer() {
   app.listen(env.port, env.host, () => {
     console.log(`IMS SQLite sidecar backend jalan di http://localhost:${env.port}`);
     console.log(`Database SQLite: ${getDbPath()}`);
-    console.log("Mode: SQLite local primary pilot untuk master data aman. Modul guarded belum dimutasi offline.");
+    console.log("Mode: SQLite local primary. Modul guarded wajib lewat endpoint backend resmi.");
   });
 }
 

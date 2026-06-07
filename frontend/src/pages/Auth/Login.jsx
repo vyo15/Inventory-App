@@ -284,7 +284,7 @@ const Login = () => {
         console.error("[Login] Gagal membaca status auth lokal.", error);
         if (!disposed) {
           setBootstrapStatus(null);
-          setBootstrapError("Backend SQLite belum bisa dibaca. Pastikan backend berjalan sebelum membuat admin lokal.");
+          setBootstrapError("Backend belum bisa dibaca. Pastikan backend berjalan sebelum membuat admin lokal.");
         }
       }
     };

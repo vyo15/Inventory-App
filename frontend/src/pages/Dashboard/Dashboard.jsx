@@ -33,7 +33,11 @@ import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataLoadingState from "../../components/Layout/Feedback/DataLoadingState";
 import { formatNumberId } from "../../utils/formatters/numberId";
-import { readDashboardData } from "../../services/Dashboard/dashboardService";
+import {
+  createEmptyDashboardData,
+  normalizeDashboardData,
+  readDashboardData,
+} from "../../services/Dashboard/dashboardService";
 import {
   EMPTY_PLANNING_SUMMARY,
   MAX_DASHBOARD_ALERT_ITEMS,
@@ -151,6 +155,8 @@ const STOCK_READ_MODEL_WARNING_KEYS = new Set([
   "stock_item_read_models_empty_fallback",
   "stock_item_read_models_issue_query_fallback",
   "stock_item_read_models_fallback",
+  "stock_issues",
+  "stock_read_models",
 ]);
 
 const formatDashboardLoadWarning = (failedReads = []) => {
@@ -160,10 +166,10 @@ const formatDashboardLoadWarning = (failedReads = []) => {
   const hasStockReadModelFallback = uniqueFailedReads.some((key) => STOCK_READ_MODEL_WARNING_KEYS.has(key));
 
   if (hasStockReadModelFallback) {
-    return "Read model stok belum siap atau index/rules Firestore belum lengkap. Dashboard memakai fallback master stock, sehingga data monitoring tetap tampil. Jika warning tetap muncul, cek Firestore index/rules lalu jalankan Cek/Rebuild Read Model Stok di Reset Maintenance.";
+    return "Read model stok SQLite belum siap atau backend lokal belum mengembalikan data stok lengkap. Dashboard tetap memakai fallback aman agar monitoring tidak blank. Jika warning berulang, cek backend SQLite dan rebuild/read model stok dari Maintenance & Backup Center.";
   }
 
-  return "Sebagian data Dashboard belum siap. Data lain tetap ditampilkan untuk monitoring; cek koneksi, rules, atau index Firestore bila warning berulang.";
+  return "Sebagian data Dashboard belum siap. Data lain tetap ditampilkan untuk monitoring; cek backend SQLite lokal, koneksi LAN, atau status migrasi modul bila warning berulang.";
 };
 
 const getSafeExternalHttpUrl = (value) => {
@@ -186,21 +192,7 @@ const Dashboard = () => {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [loadWarning, setLoadWarning] = useState("");
   const dashboardReadInFlightRef = useRef(false);
-  const [dashboardData, setDashboardData] = useState({
-    lowStockRows: [],
-    criticalStockPreview: [],
-    recentActivities: [],
-    productionOrders: [],
-    workLogs: [],
-    payrolls: [],
-    expenses: [],
-    incomes: [],
-    revenues: [],
-    sales: [],
-    stockAuditRows: [],
-    stockIssueMeta: {},
-    planningSummary: EMPTY_PLANNING_SUMMARY,
-  });
+  const [dashboardData, setDashboardData] = useState(() => createEmptyDashboardData());
 
   // =========================
   // SECTION: Load Dashboard data
@@ -223,21 +215,26 @@ const Dashboard = () => {
       setLoading(true);
       setLoadWarning("");
 
-      const { dashboardData: nextDashboardData, failedReads } = await readDashboardData({
+      const {
+        dashboardData: nextDashboardData,
+        failedReads = [],
+      } = await readDashboardData({
         maxListItems: MAX_DASHBOARD_LIST_ITEMS,
       });
+      const safeFailedReads = Array.isArray(failedReads) ? failedReads : [];
 
-      setDashboardData(nextDashboardData);
+      setDashboardData(normalizeDashboardData(nextDashboardData));
 
-      if (failedReads.length > 0) {
-        console.warn("Sebagian data Dashboard gagal dimuat:", failedReads);
-        setLoadWarning(formatDashboardLoadWarning(failedReads));
+      if (safeFailedReads.length > 0) {
+        console.warn("Sebagian data Dashboard gagal dimuat:", safeFailedReads);
+        setLoadWarning(formatDashboardLoadWarning(safeFailedReads));
       }
 
       setLastUpdated(new Date());
     } catch (error) {
       console.error("Gagal memuat dashboard:", error);
-      setLoadWarning("Sebagian data Dashboard gagal dimuat. Cek koneksi atau index Firestore, lalu refresh.");
+      setDashboardData((currentDashboardData) => normalizeDashboardData(currentDashboardData));
+      setLoadWarning("Sebagian data Dashboard gagal dimuat. Cek backend SQLite lokal atau koneksi LAN, lalu refresh.");
     } finally {
       dashboardReadInFlightRef.current = false;
       setLoading(false);
@@ -248,6 +245,7 @@ const Dashboard = () => {
     loadDashboardData();
   }, [loadDashboardData]);
 
+  const safeDashboardData = normalizeDashboardData(dashboardData);
   const {
     lowStockRows,
     criticalStockPreview,
@@ -261,8 +259,8 @@ const Dashboard = () => {
     sales,
     stockAuditRows,
     stockIssueMeta = {},
-    planningSummary,
-  } = dashboardData;
+    planningSummary = EMPTY_PLANNING_SUMMARY,
+  } = safeDashboardData;
 
   const lowStockTotal = lowStockRows.length;
   const stockIssueHasMore = Boolean(stockIssueMeta?.hasMore || stockIssueMeta?.isLimited);
@@ -667,7 +665,7 @@ const Dashboard = () => {
   // - membuka link produk terakhir, prefill halaman Purchases, dan membuka Supplier terfilter;
   // - semua action aman untuk HashRouter karena route internal memakai useNavigate.
   // Hubungan flow:
-  // - action Dashboard hanya navigasi/prefill, tidak menulis Firestore dan tidak membuat transaksi otomatis.
+  // - action Dashboard hanya navigasi/prefill, tidak menulis SQLite dan tidak membuat transaksi otomatis.
   // Status:
   // - aktif dipakai oleh Stok Kritis; bukan kandidat cleanup selama Restock Assistant aktif.
   // =========================

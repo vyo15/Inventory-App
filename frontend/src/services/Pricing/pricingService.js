@@ -1,6 +1,6 @@
 // src/utils/pricingService.js
 
-// SECTION: import firestore helper
+// SECTION: SQLite pricing adapters
 import * as sqlitePricingRulesAdapter from "../../data/adapters/sqlite/sqlitePricingRulesAdapter";
 import * as sqliteProductsAdapter from "../../data/adapters/sqlite/sqliteProductsAdapter";
 import * as sqliteRawMaterialsAdapter from "../../data/adapters/sqlite/sqliteRawMaterialsAdapter";

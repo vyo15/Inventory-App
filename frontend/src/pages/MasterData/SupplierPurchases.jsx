@@ -78,12 +78,6 @@ const { Search } = Input;
 const { Text } = Typography;
 
 
-const getRepositoryModeCopy = (mode) => (
-  mode === REPOSITORY_MODES.SQLITE_SIDECAR
-    ? { label: 'SQLite Lokal', shortLabel: 'SQLite', color: 'green' }
-    : { label: 'Firebase Legacy', shortLabel: 'Firebase', color: 'blue' }
-);
-
 
 
 const SupplierPurchases = () => {
@@ -111,7 +105,6 @@ const SupplierPurchases = () => {
   const [repositoryMode, setRepositoryMode] = useState(REPOSITORY_MODES.SQLITE_SIDECAR);
 
   const isSqliteSupplierMode = repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR;
-  const repositoryModeCopy = getRepositoryModeCopy(repositoryMode);
   const getModeOptions = useCallback((mode = repositoryMode) => ({ mode }), [repositoryMode]);
 
   const [form] = Form.useForm();
@@ -140,7 +133,7 @@ const SupplierPurchases = () => {
     } catch (error) {
       console.error(error);
       setSuppliers([]);
-      setLoadError('Gagal memuat supplier. Pastikan backend SQLite aktif jika mode SQLite dipakai.');
+      setLoadError('Gagal memuat supplier. Pastikan backend aplikasi aktif.');
       message.error(error?.message || 'Gagal memuat supplier.');
     } finally {
       setIsLoading(false);
@@ -183,7 +176,7 @@ const SupplierPurchases = () => {
             if (!isActive) return;
             console.error(error);
             setSuppliers([]);
-            setLoadError('Gagal memuat supplier Firebase legacy.');
+            setLoadError('Gagal memuat supplier.');
             setIsLoading(false);
             message.error('Gagal memuat supplier.');
           },
@@ -442,10 +435,10 @@ const SupplierPurchases = () => {
 
       if (isEditing && editingId) {
         await updateSupplierRepository(editingId, payload, getModeOptions());
-        message.success('Supplier berhasil diupdate di SQLite local.');
+        message.success('Supplier berhasil diubah.');
       } else {
         await createSupplierRepository(payload, getModeOptions());
-        message.success('Supplier berhasil ditambahkan ke SQLite local.');
+        message.success('Supplier berhasil ditambahkan.');
       }
 
       resetSupplierModalState();
@@ -475,7 +468,7 @@ const SupplierPurchases = () => {
 
     try {
       await deleteSupplierRepository(record.id, getModeOptions());
-      message.success('Supplier berhasil dinonaktifkan di SQLite local.');
+      message.success('Supplier berhasil dinonaktifkan.');
       await fetchSuppliers(repositoryMode);
     } catch (error) {
       console.error(error);
@@ -792,20 +785,13 @@ const SupplierPurchases = () => {
         subtitle={
           materialIdFromQuery && selectedMaterialFromQuery
             ? `Supplier untuk bahan ${selectedMaterialFromQuery.name}.`
-            : isSqliteSupplierMode
-              ? 'Master supplier SQLite local. Katalog material dan histori purchase masih legacy read-only.'
-              : 'Katalog restock dan pembanding harga supplier.'
+            : 'Kelola data supplier, kontak toko, dan referensi pembelian.'
         }
-        extra={(
-          <Space size={8} wrap>
-            <Tag color={repositoryModeCopy.color}>Mode: {repositoryModeCopy.label}</Tag>
-            {materialIdFromQuery && selectedMaterialFromQuery ? (
-              <Button type="link" size="small" onClick={() => navigate('/suppliers')}>
-                Reset Filter URL
-              </Button>
-            ) : null}
-          </Space>
-        )}
+        extra={materialIdFromQuery && selectedMaterialFromQuery ? (
+          <Button type="link" size="small" onClick={() => navigate('/suppliers')}>
+            Reset Filter URL
+          </Button>
+        ) : null}
         actions={[
           {
             key: 'create-supplier',
@@ -815,17 +801,6 @@ const SupplierPurchases = () => {
             onClick: prepareCreateSupplierForm,
           },
         ]}
-      />
-
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-        message={
-          isSqliteSupplierMode
-            ? 'C1 aktif: Supplier memakai SQLite master-only. Katalog bahan, histori purchase, stok, kas, dan transaksi belum ikut dimutasi.'
-            : 'Supplier hanya referensi restock; transaksi lewat Purchases.'
-        }
       />
 
       <FilterBar>
@@ -840,7 +815,7 @@ const SupplierPurchases = () => {
 
         <Col xs={24} md={8}>
           <Select
-            placeholder={isSqliteSupplierMode ? 'Filter bahan nonaktif di SQLite master-only' : 'Filter bahan'}
+            placeholder="Filter bahan"
             allowClear
             disabled={isSqliteSupplierMode}
             value={materialFilter}
@@ -976,15 +951,8 @@ const SupplierPurchases = () => {
               bukan input utama.
           ----------------------------------------------------------------- */}
 
-          {isSqliteSupplierMode ? (
-            <Alert
-              type="warning"
-              showIcon
-              message="Katalog Restock belum aktif di SQLite C1"
-              description="Batch C1 hanya memindahkan master Supplier ke SQLite. Relasi bahan, purchase history, stok, kas, dan prefill pembelian tetap guarded agar tidak merusak transaksi lama."
-            />
-          ) : (
-          <Form.List name="materialDetails">
+          {!isSqliteSupplierMode ? (
+            <Form.List name="materialDetails">
             {(fields, { add, remove }) => (
               <>
                 <div className="ims-cell-title" style={{ marginBottom: 4 }}>Katalog Restock Supplier</div>
@@ -1240,8 +1208,8 @@ const SupplierPurchases = () => {
                 </Button>
               </>
             )}
-          </Form.List>
-          )}
+            </Form.List>
+          ) : null}
         </Form>
       </Modal>
 

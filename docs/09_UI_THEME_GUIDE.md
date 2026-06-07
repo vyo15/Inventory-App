@@ -71,6 +71,17 @@ Tidak boleh digunakan:
 - mengganti warning/success/error/info semantic;
 - gradient atau glow dekoratif baru.
 
+
+## Enterprise Clean anti-wrapper guard — 2026-06-05
+
+Aturan ini mengikat untuk patch UI berikutnya:
+
+- `.app-content-card` adalah canvas/shell content, bukan card besar. Jangan beri background tebal, border besar, blur, atau shadow.
+- `.ims-page .ims-section-card.ant-card` dan `.app-shell .ant-card` tidak boleh diberi shadow global karena membuat efek card bertumpuk.
+- Jangan menambah Card pembungkus hanya untuk spacing. Gunakan `PageSection`, `SummaryStatGrid`, `FilterBar`, atau spacing CSS shared yang sudah ada.
+- Mobile card boleh memakai border/subtle surface, tetapi tidak boleh memakai shadow bertumpuk.
+- Setiap patch UI wajib cek Dashboard, Master Data, transaksi, report, dan Maintenance Center di desktop serta mobile.
+
 ## File pusat theme
 
 1. `src/index.css` — CSS variable global, light/dark token, body/root baseline.
@@ -138,8 +149,9 @@ IMS memakai arah **Enterprise Clean** untuk halaman operasional harian. Tujuanny
 
 Aturan aktif:
 
-- `app-content-card` berperan sebagai canvas, bukan card besar. Jangan menambah shadow/border besar pada wrapper global halaman.
-- `PageSection` menjadi surface utama dengan border halus, radius sedang, dan tanpa shadow.
+- `app-content-card` berperan sebagai canvas transparan, bukan card besar. Jangan menambah shadow, border, blur, atau background card besar pada wrapper global halaman.
+- `PageSection` menjadi surface utama dengan border halus, radius sedang, padding compact, dan tanpa shadow.
+- `.app-shell .ant-card` tidak boleh diberi shadow global karena efeknya menyebar ke semua Card lokal dan membuat halaman kembali terasa banyak wrap.
 - `FilterBar` tampil seperti toolbar compact, bukan panel terpisah yang terlalu menonjol.
 - Summary/KPI card boleh tetap berupa card, tetapi shadow harus minimal dan aksen cukup berupa garis kecil.
 - Card di dalam drawer/modal boleh dipakai untuk grouping detail panjang, tetapi hindari card bertingkat di halaman utama.
@@ -501,3 +513,72 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 - Tabel report yang masih dibutuhkan penuh di desktop tetap mempertahankan `columns` existing; kartu mobile hanya ringkasan baca cepat, bukan pengganti data desktop.
 - Untuk tabel utility/reset/offline yang kompleks, prioritas aman adalah scroll lokal pada wrapper tabel. Jangan ubah workflow destructive/reset, sync, atau audit hanya demi tampilan mobile.
 - Konfigurasi kartu mobile wajib memanggil handler existing untuk action. Jangan membuat handler mobile baru yang melewati guard/confirm/status flow.
+
+
+## Guard Anti-Wrapper Regression
+
+Source of truth visual saat ini:
+
+- `src/App.css` menjaga `.app-content-card` sebagai canvas transparan.
+- `src/components/Layout/Page/PageSection.css` menjaga `PageSection` sebagai boundary data flat.
+- Shadow boleh dipakai secara sangat selektif pada komponen spesifik yang memang butuh emphasis, bukan override global semua Card.
+
+Aturan merge:
+
+- Jika patch visual membuat halaman utama terlihat seperti card di dalam card di dalam card, patch harus dikembalikan atau dipersempit.
+- Jika docs dan source konflik soal wrapper global, source harus diarahkan kembali ke aturan Enterprise Clean ini, bukan docs yang dilonggarkan.
+- Screenshot desktop, mobile, dan dark mode wajib dicek untuk Dashboard + minimal satu halaman master data + satu halaman transaksi sebelum merge visual layout.
+
+## Mobile UI Standard v1.0 — AKTIF
+
+Mulai fase mobile, IMS menggunakan standar portrait-first:
+
+- Desktop tetap memakai tabel lengkap.
+- Mobile memakai card/list ringkas untuk daftar utama.
+- Detail panjang masuk drawer/full-screen detail.
+- Filter lanjutan masuk drawer/collapse.
+- Form mobile wajib 1 kolom.
+- Action utama maksimal 2 tombol, action tambahan masuk menu titik tiga.
+- Loading, empty, error state harus user-friendly.
+- Tidak boleh ada horizontal scroll body di HP portrait.
+
+Komponen foundation yang menjadi acuan:
+
+- `DataTableView` dengan `mobileCardConfig`.
+- `MobileActionMenu`.
+- `MobileDetailDrawer`.
+- `ResponsiveFormSection`.
+- `MobileStateBlock`.
+
+Route preview UI-only: `/mobile-standard-preview`.
+
+## Update Mobile Standard M1-M5 — 2026-06-05
+
+Standar mobile sekarang bersifat aktif untuk seluruh project IMS:
+
+- `DataTableView` adalah implementasi utama untuk pola **desktop table + mobile card/list**.
+- `ResponsiveDataView` hanya alias penamaan standar yang mengarah ke `DataTableView`, supaya page baru tidak membuat implementasi table/card kedua.
+- `MobileActionMenu` dipakai untuk desain action card baru: maksimal dua action utama, sisanya titik tiga.
+- `MobileFilterDrawer` dipakai untuk filter lanjutan mobile; search boleh tetap di halaman, filter detail masuk drawer bawah.
+- `MobileDetailDrawer` dipakai untuk detail panjang card mobile; detail tidak boleh dipaksa masuk list utama.
+- `ResponsiveFormSection` dipakai untuk form panjang agar mobile satu kolom dan section mudah dibaca.
+- `MobileStateBlock` dipakai untuk loading, empty, dan error state user-friendly.
+
+Aturan visual mobile:
+
+- Body tidak boleh horizontal scroll.
+- Table yang sudah punya `mobileCardConfig` wajib tersembunyi di mobile dan diganti card/list.
+- Table utility/report yang belum dikonversi harus scroll lokal pada wrapper table, bukan pada body.
+- Tombol mobile minimal 40px tinggi.
+- Action destructive tidak boleh tampil terlalu dekat dengan action normal dan tetap wajib confirm.
+- Patch UI mobile tidak boleh menambah workflow bisnis baru.
+
+## Update 2026-06-05 - Database Mode Banner Cleanup
+
+Halaman operasional tidak boleh lagi menampilkan banner teknis seperti "Mode SQLite lokal aktif", "SQLite LAN", instruksi port, atau penjelasan runtime Firebase/Dexie. Runtime IMS sudah dianggap database lokal utama, sehingga informasi teknis tersebut hanya boleh muncul di Maintenance/Database Center bila benar-benar diperlukan untuk troubleshooting.
+
+Standar UI baru:
+- Page header master data memakai bahasa bisnis, bukan bahasa runtime.
+- Empty state memakai pesan user-friendly seperti "Belum ada kategori" atau "Tambahkan data dari halaman ini".
+- Tombol cepat "SQLite Center" tidak boleh muncul di halaman operasional seperti Kategori/Customer/Supplier.
+- Label "Mode: SQLite Lokal" tidak perlu tampil di list/card/page header.

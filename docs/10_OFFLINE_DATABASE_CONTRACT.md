@@ -1,6 +1,20 @@
 # OFFLINE DATABASE CONTRACT — IMS Bunga Flanel
 
-Status terbaru: **SQLite local sidecar adalah runtime offline utama untuk pilot Categories, Customers, dan Supplier master-only. Dexie/IndexedDB sudah dihapus dari source runtime aktif.**
+Status terbaru: **SQLite local sidecar adalah runtime offline utama untuk source aktual. Dexie/IndexedDB sudah dihapus dari source runtime aktif. Dashboard wajib membaca data lewat service SQLite/read-only dan harus tetap tampil walaupun sebagian section gagal dimuat.**
+
+
+## Update Clean Professional Guard — 2026-06-05
+
+Kontrak runtime yang wajib dipertahankan setelah patch ini:
+
+1. **Backend adalah satu-satunya akses database.** Frontend hanya boleh memanggil API HTTP backend SQLite melalui adapter/service, tidak boleh membaca file `.sqlite` langsung.
+2. **Read data bisnis memerlukan session lokal.** Generic JSON router dan master data read sudah memakai `requireLocalAuth`; auth status/login/bootstrap tetap boleh diakses tanpa token sesuai kebutuhan login.
+3. **Transaksi wajib lewat endpoint commit resmi.** Direct create/update/delete generic untuk `purchases`, `sales`, `returns`, `finance`, dan `stock_adjustments` diblokir.
+4. **Sales cancel/delete tetap dilarang.** Status sales hanya `Diproses`, `Dikirim`, dan `Selesai`. Barang kembali wajib lewat Return.
+5. **Stock mutation tidak boleh dobel.** Purchase/Sales/Return/Stock Adjustment wajib lewat stock engine backend agar stock read model, inventory log, dan audit log konsisten.
+6. **Finance ledger tidak boleh ditulis langsung.** Cash-in/cash-out dan ledger wajib lewat finance commit/delete resmi agar ledger tetap atomic.
+7. **Mode lama tidak boleh hidup kembali.** Alias `firebase_primary`, `offline_local`, dan `hybrid_sync` diarahkan ke SQLite sidecar, bukan mengaktifkan Firebase/Dexie/IndexedDB runtime.
+8. **Backup/restore tetap guarded.** Restore harus melalui preview, keyword, pre-restore backup, checksum, dan audit log backend.
 
 Update Patch A-B — 2026-06-02:
 
@@ -32,22 +46,23 @@ Rule wajib:
 - React tidak boleh membaca file `.sqlite` langsung.
 - Semua write SQLite wajib lewat backend Node.js.
 - File runtime `data/*.sqlite`, WAL/SHM, dan backup SQLite tidak boleh masuk git/patch.
-- Firebase tetap dipertahankan sebagai fallback/legacy sampai migrasi semua modul selesai dan aman.
+- Firebase/Firestore yang masih muncul di komentar atau compatibility helper lama tidak boleh dianggap runtime aktif tanpa validasi source aktual. Runtime utama ZIP ini adalah SQLite sidecar lewat backend Node.js.
 
 ## 2. Runtime aktif per area
 
 | Area | Runtime aktif | Catatan |
 |---|---|---|
-| Auth lokal pilot | SQLite backend opt-in/SQLite-first env example | Firebase Auth masih fallback legacy |
-| Categories | SQLite sidecar | CRUD pilot lewat backend |
-| Customers | SQLite sidecar | CRUD pilot lewat backend |
-| Suppliers | SQLite sidecar master-only | UI Supplier memakai repository/backend SQLite untuk master; katalog raw material dan histori purchase tetap guarded/read-only legacy |
-| Products/Raw/Semi | Firebase-primary | Belum dimigrasi |
-| Stock | Firebase/read model existing | Mutation stock guarded; belum SQLite |
-| Sales/Purchases/Returns | Firebase-primary | Tidak boleh offline mutation langsung |
-| Finance/Reports | Firebase-primary | Ledger/report final tidak boleh dihitung dari data lokal belum final |
-| Production/Payroll/HPP | Firebase-primary | Guarded; perlu audit khusus sebelum migrasi |
-| Backup/Restore SQLite | Backend guarded | Restore destructive wajib admin lokal, file eksplisit, backup otomatis, dan keyword guard |
+| Auth lokal | SQLite backend | `VITE_AUTH_MODE=sqlite`; user management lokal lewat backend. |
+| Categories | SQLite sidecar | CRUD lewat backend. |
+| Customers | SQLite sidecar | CRUD lewat backend. |
+| Suppliers | SQLite sidecar | Master supplier lewat backend; relasi purchase/raw/history tetap harus diaudit jika dibuat final. |
+| Products/Raw/Semi | SQLite sidecar | Master data dan stock snapshot memakai adapter SQLite. |
+| Stock | SQLite sidecar | Stock read model dan adjustment lewat backend/stock engine; jangan direct write table dari UI. |
+| Sales/Purchases/Returns | SQLite sidecar | Commit transaksi baru lewat backend transaction adapter. |
+| Finance/Reports | SQLite sidecar | Finance movement/ledger/report membaca SQLite; data legacy lama tetap butuh migrasi/backfill terpisah. |
+| Production/Payroll/HPP | SQLite sidecar guarded | Service produksi memakai adapter SQLite; material usage, payroll final, dan HPP tetap guarded business flow. |
+| Dashboard | SQLite/read-only service | `readDashboardData()` wajib return `{ dashboardData, failedReads }` dan tidak boleh membuat white screen jika satu section gagal. |
+| Backup/Restore SQLite | Backend guarded | Restore destructive wajib admin lokal, file eksplisit, backup otomatis, keyword guard, dan audit log. |
 
 ## 3. Yang sudah tidak menjadi runtime aktif
 
@@ -79,16 +94,16 @@ Boleh:
 - Login lokal pilot dengan `VITE_AUTH_MODE=sqlite`, termasuk bootstrap administrator pertama dan Manajemen User lokal melalui backend SQLite.
 - CRUD Categories dan Customers lewat adapter SQLite/backend.
 - Membuka SQLite Local DB Center untuk status backend, migration status, backup SQLite, dan restore plan.
-- Fallback manual ke Firebase jika SQLite backend belum siap.
+- Fallback UI aman ketika backend SQLite belum siap: halaman menampilkan warning/empty state, bukan white screen.
 
 Tidak boleh tanpa audit/approval terpisah:
 
-- Menghapus Firebase dependency/config final.
 - Mengubah route/menu/role guard.
-- Mengarahkan Supplier frontend ke SQLite untuk operasional final.
-- Mengubah stock mutation, purchase receive, sales stock out, returns stock in/refund, finance ledger, production material usage, payroll final, atau HPP final ke SQLite.
+- Mengubah schema/table SQLite penting.
+- Menulis langsung ke table stock, finance ledger, production material usage, payroll final, atau HPP final dari UI tanpa service/backend existing.
 - Membuat sync otomatis Firebase ↔ SQLite untuk transaksi.
-- Membuat restore destructive tanpa guard admin lokal, preview, keyword, file backup eksplisit, dan backup otomatis.
+- Membuat restore destructive tanpa guard admin lokal, preview, keyword, file backup eksplisit, backup otomatis, dan audit log.
+- Menghapus compatibility legacy hanya berdasarkan komentar lama tanpa audit import/usage.
 
 ## 5. Env lokal pilot
 
@@ -98,6 +113,16 @@ Contoh `.env.local` yang aman untuk pilot SQLite lokal:
 VITE_AUTH_MODE=sqlite
 # VITE_SQLITE_API_BASE_URL=http://localhost:3001
 VITE_SUPPLIERS_REPOSITORY_MODE=sqlite
+VITE_PRICING_RULES_REPOSITORY_MODE=sqlite
+VITE_PRODUCTS_REPOSITORY_MODE=sqlite
+VITE_RAW_MATERIALS_REPOSITORY_MODE=sqlite
+VITE_STOCK_READ_MODELS_REPOSITORY_MODE=sqlite
+VITE_SEMI_FINISHED_REPOSITORY_MODE=sqlite
+VITE_STOCK_ADJUSTMENTS_REPOSITORY_MODE=sqlite
+VITE_TRANSACTIONS_REPOSITORY_MODE=sqlite
+VITE_FINANCE_REPOSITORY_MODE=sqlite
+VITE_PRODUCTION_REPOSITORY_MODE=sqlite
+VITE_REPORTS_REPOSITORY_MODE=sqlite
 ```
 
 Jika frontend dibuka dari HP satu WiFi dan backend berjalan di laptop:
@@ -105,7 +130,7 @@ Jika frontend dibuka dari HP satu WiFi dan backend berjalan di laptop:
 ```env
 VITE_AUTH_MODE=sqlite
 VITE_SQLITE_API_BASE_URL=http://IP-LAPTOP:3001
-VITE_SUPPLIERS_REPOSITORY_MODE=sqlite
+# Mode modul lain mengikuti frontend/.env.example terbaru.
 ```
 
 Jangan commit `.env.local`.
@@ -125,9 +150,9 @@ Jangan commit `.env.local`.
 [ ] Login lokal SQLite berhasil
 [ ] Categories CRUD berhasil
 [ ] Customers CRUD berhasil
-[ ] Supplier master-only boleh memakai SQLite, tetapi relasi purchase/raw/history tetap guarded dan tidak ikut transaksi final SQLite
-[ ] Stock/Sales/Purchases/Returns/Finance/Production/Payroll/HPP tidak berubah perilaku runtime
-[ ] Reset destructive tetap memakai preview dan keyword guard existing
+[ ] Supplier, Products, Raw, Semi, Stock, Transactions, Finance, Production, Reports membaca SQLite sesuai source aktual
+[ ] Dashboard terbuka tanpa white screen walaupun salah satu section gagal dimuat
+[ ] Reset destructive tetap memakai preview, backup, keyword guard, dan audit log existing
 ```
 
 ## 7. Catatan legacy docs
@@ -137,13 +162,13 @@ Dokumen lama Batch offline Dexie/IndexedDB sebelum SQLite dianggap **arsip histo
 
 ## Update C1 Supplier SQLite Master-Only
 
-Kontrak aktif:
+Catatan historis batch C1. Untuk source aktual, Supplier sudah berada pada runtime SQLite sidecar. Kontrak aktif:
 
 - Supplier create/update/delete pada mode SQLite wajib lewat backend `/api/suppliers`.
 - Delete Supplier SQLite adalah soft-delete/status nonaktif, bukan hard delete.
 - Supplier SQLite C1 hanya master data dasar: kode, nama/toko, link, kontak/alamat/catatan jika tersedia.
 - Katalog `materialDetails`, purchase history, raw material supplier snapshot, stock, cash/expense, dan report final belum boleh dimutasi dari Supplier SQLite.
-- Firebase masih dipertahankan sebagai legacy fallback sampai Products/Raw/Stock/Transactions/Finance/Production selesai dimigrasi dan dites.
+- Catatan lama tentang Firebase fallback hanya berlaku sebagai compatibility historis. Untuk ZIP/source aktual, jangan aktifkan kembali fallback tanpa audit import/usage dan approval eksplisit.
 
 ## 8. Kontrak D2-D4: SQLite module guard dan stock engine
 
@@ -158,10 +183,10 @@ VITE_RAW_MATERIALS_REPOSITORY_MODE=sqlite
 VITE_STOCK_READ_MODELS_REPOSITORY_MODE=sqlite
 VITE_STOCK_ADJUSTMENTS_REPOSITORY_MODE=sqlite
 VITE_TRANSACTIONS_REPOSITORY_MODE=sqlite
-VITE_SEMI_FINISHED_REPOSITORY_MODE=firebase_primary
-VITE_FINANCE_REPOSITORY_MODE=firebase_primary
-VITE_PRODUCTION_REPOSITORY_MODE=firebase_primary
-VITE_REPORTS_REPOSITORY_MODE=firebase_primary
+VITE_SEMI_FINISHED_REPOSITORY_MODE=sqlite
+VITE_FINANCE_REPOSITORY_MODE=sqlite
+VITE_PRODUCTION_REPOSITORY_MODE=sqlite
+VITE_REPORTS_REPOSITORY_MODE=sqlite
 ```
 
 Kontrak aman:
@@ -169,8 +194,8 @@ Kontrak aman:
 - Product dan Raw Material master boleh SQLite.
 - Stock Read Model adalah snapshot SQLite yang disinkronkan dari master/stock engine.
 - Stock Adjustment wajib lewat `POST /api/stock/adjustments/commit`, bukan direct write table.
-- Purchase/Sales/Returns SQLite commit hanya membuka Product/Raw stock mutation. Finance/income/ledger final tetap batch terpisah.
-- Semi Finished, Production, Payroll, HPP, Finance final, dan Reports final tetap guarded sampai ada audit khusus.
+- Purchase/Sales/Returns SQLite commit harus tetap lewat backend transaction adapter dan stock engine, bukan direct mutation dari UI.
+- Semi Finished, Finance, Production, Payroll, HPP, dan Reports sudah memiliki mode SQLite pada env/source aktual, tetapi business flow guarded tetap tidak boleh diubah tanpa audit khusus.
 
 ## 9. Kontrak D6: Semi Finished, Finance, Reports
 
@@ -180,7 +205,7 @@ Env aktif untuk batch D6:
 VITE_SEMI_FINISHED_REPOSITORY_MODE=sqlite
 VITE_FINANCE_REPOSITORY_MODE=sqlite
 VITE_REPORTS_REPOSITORY_MODE=sqlite
-VITE_PRODUCTION_REPOSITORY_MODE=firebase_primary
+VITE_PRODUCTION_REPOSITORY_MODE=sqlite
 ```
 
 Kontrak aman:
@@ -189,4 +214,16 @@ Kontrak aman:
 - Finance commit wajib atomic: cash movement dan `money_movement_ledger` harus ditulis dalam satu transaction backend.
 - Purchase/Sales/Returns transaksi baru boleh membuat finance side effect di SQLite, tetapi data legacy Firestore tetap memerlukan migrasi/backfill terpisah.
 - Reports membaca data SQLite baru. Jika data lama belum dimigrasi, hasil report hanya mewakili data SQLite yang sudah ada.
-- Production/Payroll/HPP tidak boleh dipaksa final sampai audit khusus selesai.
+- Production/Payroll/HPP memakai service SQLite, tetapi perubahan material usage, payroll paid/final, dan HPP final tetap harus lewat audit khusus dan service existing.
+
+
+## 10. Kontrak Dashboard Anti White Screen
+
+Kontrak source aktual setelah patch 2026-06-05:
+
+- `frontend/src/services/Dashboard/dashboardService.js` wajib mengembalikan object `{ dashboardData, failedReads }`.
+- `dashboardData` wajib selalu memiliki array default untuk `lowStockRows`, `criticalStockPreview`, `recentActivities`, `productionOrders`, `workLogs`, `payrolls`, `expenses`, `incomes`, `revenues`, `sales`, dan `stockAuditRows`.
+- `planningSummary` wajib selalu memiliki `weekly`, `monthly`, `overdueCount`, `behindTargetCount`, dan `priorityPlans`.
+- Jika section gagal dibaca, masukkan nama section ke `failedReads` dan kembalikan fallback kosong. Jangan throw error sampai membuat page blank.
+- `Dashboard.jsx` hanya boleh menampilkan warning dan fallback aman; Dashboard tetap read-only dan tidak boleh melakukan repair, reset, stock mutation, finance mutation, payroll finalization, atau HPP write.
+- `AppErrorBoundary` di `AppLayout.jsx` menjadi safety net global agar error render halaman lain tidak berubah menjadi white screen total.

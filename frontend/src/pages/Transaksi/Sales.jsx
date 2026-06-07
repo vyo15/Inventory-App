@@ -1053,77 +1053,21 @@ const Sales = () => {
   };
 
   const salesMobileCardConfig = {
+    density: 'compact',
     title: (record) => getSaleDisplayReference(record),
     subtitle: (record) => [
-      record.date || '-',
       record.customerName || 'Customer tidak tercatat',
       record.salesChannel || null,
     ].filter(Boolean),
+    primary: (record) => formatCurrencyId(record.total || 0),
+    secondary: (record) => `${formatNumberId((record.items || []).length)} item${record.date ? ` · ${record.date}` : ''}`,
     tags: (record) => [
       <Tag key="status" color={getSalesStatusColor(record.status)}>{record.status || '-'}</Tag>,
     ],
-    meta: [
-      { label: 'Total', value: (record) => formatCurrencyId(record.total || 0) },
-      { label: 'Item', value: (record) => `${formatNumberId((record.items || []).length)} item` },
+    onCardClick: (record) => openSaleDetail(record),
+    primaryActions: [
+      { key: 'detail', label: 'Detail', icon: <EyeOutlined />, onClick: (record) => openSaleDetail(record) },
     ],
-    content: (record) => {
-      const saleItems = Array.isArray(record.items) ? record.items : [];
-      const primaryItem = saleItems[0];
-      if (!primaryItem) return 'Item belum tercatat';
-      return (
-        <div className="ims-cell-stack ims-cell-stack-tight">
-          <span className="ims-cell-title">
-            {primaryItem.itemName || 'Item'}{primaryItem.variantLabel ? ` - ${primaryItem.variantLabel}` : ''}
-          </span>
-          <span className="ims-cell-meta">
-            {formatNumberId(primaryItem.quantity)} x {formatCurrencyId(primaryItem.pricePerUnit || 0)}
-          </span>
-        </div>
-      );
-    },
-    actions: (record) => {
-      const canMoveToShipped = record.status === 'Diproses' && !isOfflineChannel(record.salesChannel);
-      const canComplete = record.status === 'Dikirim' && !isOfflineChannel(record.salesChannel);
-
-      return (
-        <div className="ims-action-group ims-action-group--vertical">
-          <Button
-            className="ims-action-button"
-            icon={<EyeOutlined />}
-            size="small"
-            onClick={() => openSaleDetail(record)}
-          >
-            Lihat Detail
-          </Button>
-
-          {canMoveToShipped ? (
-            <Popconfirm
-              title="Yakin ubah status menjadi Dikirim?"
-              onConfirm={() => handleUpdateSaleStatus(record.id, 'Dikirim')}
-              okText="Ya"
-              cancelText="Tidak"
-            >
-              <Button className="ims-action-button" size="small">
-                Dikirim
-              </Button>
-            </Popconfirm>
-          ) : null}
-
-          {canComplete ? (
-            <Popconfirm
-              title="Yakin ubah status menjadi Selesai?"
-              onConfirm={() => handleUpdateSaleStatus(record.id, 'Selesai')}
-              okText="Ya"
-              cancelText="Tidak"
-            >
-              <Button className="ims-action-button" size="small">
-                Selesai
-              </Button>
-            </Popconfirm>
-          ) : null}
-        </div>
-      );
-    },
   };
 
   /* =====================================================

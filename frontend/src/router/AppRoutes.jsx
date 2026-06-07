@@ -17,6 +17,7 @@ import { ROUTE_ACCESS_KEYS } from "../utils/auth/roleAccess";
 const Dashboard = lazy(() => import("../pages/Dashboard/Dashboard"));
 const WeLost = lazy(() => import("../pages/ErrorPage/WeLost"));
 const Unauthorized = lazy(() => import("../pages/Auth/Unauthorized"));
+const MobileStandardPreview = lazy(() => import("../pages/Preview/MobileStandardPreview"));
 
 const Categories = lazy(() => import("../pages/MasterData/Categories"));
 const Customers = lazy(() => import("../pages/MasterData/Customers"));
@@ -360,6 +361,15 @@ const AppRoutes = ({ darkTheme }) => {
           element={guardRoute(
             ROUTE_ACCESS_KEYS.RESET_MAINTENANCE,
             <Navigate to="/utilities/reset-maintenance-data" replace />,
+          )}
+        />
+
+
+        <Route
+          path="/mobile-standard-preview"
+          element={guardRoute(
+            ROUTE_ACCESS_KEYS.DASHBOARD,
+            <MobileStandardPreview />,
           )}
         />
 

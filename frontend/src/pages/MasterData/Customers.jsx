@@ -5,7 +5,6 @@ import {
   Input,
   Popconfirm,
   Space,
-  Tag,
   message,
 } from "antd";
 import { EditOutlined, PlusOutlined } from "@ant-design/icons";
@@ -14,9 +13,6 @@ import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
-import OfflineRepositoryStatus, {
-  OfflineRepositoryEmptyState,
-} from "../../components/Layout/Feedback/OfflineRepositoryStatus";
 import {
   createCustomer,
   deleteCustomer,
@@ -31,12 +27,6 @@ import {
   resolveCustomerFormCode,
 } from "../../utils/references/customerCodeReference";
 
-const getRepositoryModeCopy = (mode) => (
-  mode === REPOSITORY_MODES.SQLITE_SIDECAR
-    ? { label: "SQLite Lokal", shortLabel: "Data Lokal", color: "green" }
-    : { label: "Firebase Fallback", shortLabel: "Fallback", color: "blue" }
-);
-
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
   const [repositoryMode, setRepositoryMode] = useState(REPOSITORY_MODES.SQLITE_SIDECAR);
@@ -48,9 +38,6 @@ const Customers = () => {
   const [form] = Form.useForm();
 
   const getModeOptions = useCallback((mode = repositoryMode) => ({ mode }), [repositoryMode]);
-  const repositoryModeCopy = getRepositoryModeCopy(repositoryMode);
-
-
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
@@ -123,7 +110,7 @@ const Customers = () => {
   const handleDelete = async (id) => {
     try {
       await deleteCustomer(id, getModeOptions());
-      message.success(repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR ? "Customer dinonaktifkan di SQLite" : "Customer dihapus");
+      message.success("Customer berhasil dinonaktifkan.");
       fetchCustomers();
     } catch (error) {
       console.error("Gagal hapus customer:", error);
@@ -167,7 +154,7 @@ const Customers = () => {
             Edit
           </Button>
           <Popconfirm
-            title={repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR ? "Nonaktifkan customer di SQLite?" : "Yakin hapus customer ini?"}
+            title="Nonaktifkan customer ini?"
             onConfirm={() => handleDelete(record.id)}
             okText="Ya"
             cancelText="Batal"
@@ -184,11 +171,6 @@ const Customers = () => {
   const customerMobileCardConfig = {
     title: (record) => record.name || '-',
     subtitle: (record) => [resolveCustomerDisplayCode(record), record.contact || null].filter(Boolean),
-    tags: () => [
-      <Tag key="db" color={repositoryModeCopy.color}>
-        {repositoryModeCopy.shortLabel}
-      </Tag>,
-    ],
     meta: [
       { label: 'Kontak', value: (record) => record.contact || '-' },
       { label: 'Kode', value: (record) => resolveCustomerDisplayCode(record) },
@@ -208,7 +190,7 @@ const Customers = () => {
           Edit
         </Button>
         <Popconfirm
-          title={repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR ? 'Nonaktifkan customer di SQLite?' : 'Yakin hapus customer ini?'}
+          title="Nonaktifkan customer ini?"
           onConfirm={() => handleDelete(record.id)}
           okText="Ya"
           cancelText="Batal"
@@ -225,8 +207,7 @@ const Customers = () => {
     <div className="page-container">
       <PageHeader
         title="Customer"
-        subtitle="Master customer Sales. Default memakai SQLite lokal lewat backend LAN. Firebase masih tersedia sebagai fallback manual."
-        extra={<Tag color={repositoryModeCopy.color}>Mode: {repositoryModeCopy.label}</Tag>}
+        subtitle="Kelola data customer untuk penjualan dan riwayat transaksi."
         actions={[
           {
             key: "create-customer",
@@ -238,20 +219,10 @@ const Customers = () => {
         ]}
       />
 
-      <OfflineRepositoryStatus
-        repositoryMode={repositoryMode}
-        dataLabel="Customer"
-        loading={loading}
-        onRefresh={fetchCustomers}
-      />
 
       <PageSection
         title="Daftar Customer"
-        subtitle={
-          repositoryMode === REPOSITORY_MODES.SQLITE_SIDECAR
-            ? "Data dari SQLite lokal di laptop server. Jalankan backend agar data bisa dibuka dari laptop dan HP satu jaringan."
-            : "Kontak dan alamat dari Firebase fallback."
-        }
+        subtitle="Daftar customer aktif dan informasi kontak utama."
       >
         <DataRefreshIndicator loading={loading} dataSource={customers} />
         <DataTableView
@@ -264,10 +235,7 @@ const Customers = () => {
           locale={{
             emptyText: getDataTableEmptyText(
               loading,
-              <OfflineRepositoryEmptyState
-                repositoryMode={repositoryMode}
-                dataLabel="customer"
-              />,
+              "Belum ada customer. Tambahkan customer pertama dari halaman ini.",
             ),
           }}
           mobileCardConfig={customerMobileCardConfig}

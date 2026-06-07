@@ -53,12 +53,12 @@ const SqliteBackendStatusPanel = () => {
       ]);
       setHealth(nextHealth);
       setStatus(nextStatus);
-      if (showSuccess) message.success("Status SQLite backend diperbarui.");
+      if (showSuccess) message.success("Status backend diperbarui.");
     } catch (error) {
       setHealth(null);
       setStatus(null);
-      setErrorMessage(error?.message || "SQLite backend belum bisa diakses.");
-      if (showSuccess) message.error(error?.message || "SQLite backend belum bisa diakses.");
+      setErrorMessage(error?.message || "Backend belum bisa diakses.");
+      if (showSuccess) message.error(error?.message || "Backend belum bisa diakses.");
     } finally {
       setLoading(false);
     }
@@ -72,10 +72,10 @@ const SqliteBackendStatusPanel = () => {
     setBackupLoading(true);
     try {
       const result = await createSqliteBackendBackup();
-      message.success(result?.message || "Backup SQLite berhasil dibuat.");
+      message.success(result?.message || "Backup database berhasil dibuat.");
       await refreshStatus();
     } catch (error) {
-      message.error(error?.message || "Backup SQLite gagal.");
+      message.error(error?.message || "Backup database gagal.");
     } finally {
       setBackupLoading(false);
     }
@@ -88,7 +88,7 @@ const SqliteBackendStatusPanel = () => {
       title={(
         <Space size={8}>
           <ApiOutlined />
-          <span>SQLite Local Backend</span>
+          <span>Backend Lokal</span>
           <Tag color={isOnline ? "green" : "orange"}>{isOnline ? "online" : "belum aktif"}</Tag>
         </Space>
       )}
@@ -98,7 +98,7 @@ const SqliteBackendStatusPanel = () => {
             Refresh
           </Button>
           <Button size="small" icon={<SaveOutlined />} loading={backupLoading} disabled={!isOnline} onClick={handleBackup}>
-            Backup SQLite
+            Backup Database
           </Button>
         </Space>
       )}
@@ -107,10 +107,10 @@ const SqliteBackendStatusPanel = () => {
         <Alert
           type={isOnline ? "success" : "warning"}
           showIcon
-          message={isOnline ? "Backend SQLite LAN aktif" : "Backend SQLite belum tersambung"}
+          message={isOnline ? "Backend lokal aktif" : "Backend belum tersambung"}
           description={isOnline
-            ? "Panel ini memantau backend SQLite lokal yang sekarang menjadi target runtime pilot Categories dan Customers."
-            : "Jalankan backend dari folder backend dengan npm install lalu npm run dev. Untuk HP, pastikan port 3001 dibuka di firewall, IP laptop statis, dan frontend dibuka lewat IP laptop."
+            ? "Panel ini memantau koneksi backend lokal dan status database aplikasi."
+            : "Jalankan backend dari folder backend dengan npm install lalu npm run dev. Untuk akses HP, gunakan jaringan yang sama dan pastikan firewall mengizinkan aplikasi."
           }
         />
 
@@ -149,7 +149,7 @@ const SqliteBackendStatusPanel = () => {
 
         <Descriptions size="small" bordered column={{ xs: 1, md: 2 }}>
           <Descriptions.Item label="API Base URL">{baseUrl}</Descriptions.Item>
-          <Descriptions.Item label="Mode">{healthData.phase || "sidecar-poc"}</Descriptions.Item>
+          <Descriptions.Item label="Service">{healthData.service || healthData.phase || "backend"}</Descriptions.Item>
           <Descriptions.Item label="DB Path" span={2}>
             <Text copyable ellipsis style={{ maxWidth: "100%" }}>{statusData.dbPath || healthData.dbPath || "-"}</Text>
           </Descriptions.Item>

@@ -651,3 +651,15 @@ Catatan lock:
 - Untuk `Bahan / Semi Produk`, boleh tampilkan `Jenis Bunga / Product Family` dan `Kategori Bahan` sebelum `Bahan yang dibuat` agar user tidak memilih dari flat list panjang.
 - Label user-facing di dropdown target sebaiknya bersih: nama target cukup; kode internal dan hitungan `· x BOM` jangan ditampilkan kecuali ada kebutuhan audit/detail teknis eksplisit.
 - Jangan mengubah Work Log, Payroll, HPP Analysis, inventory mutation, report calculation, status lifecycle PO, atau auto-generate kode order untuk task yang hanya merapikan UX seleksi Production Order.
+
+
+## Prompt Guard — Enterprise Clean Anti-Wrapper Regression
+
+Untuk task yang menyentuh App shell, shared layout, PageHeader, PageSection, FilterBar, DataTableView, Dashboard, atau halaman operasional utama:
+
+1. Treat `.app-content-card` sebagai canvas transparan, bukan card besar. Jangan menambah border, shadow, blur, atau background card besar pada wrapper global ini tanpa approval eksplisit.
+2. `PageSection` adalah boundary data utama yang flat: border halus, radius sedang, padding compact, tanpa shadow tebal.
+3. Jangan memberi shadow global ke `.app-shell .ant-card`; efek ini membuat semua Card lokal terlihat seperti nested wrapper dan membuat UI kembali ramai.
+4. Jangan membuat Card pembungkus baru hanya untuk spacing. Pakai CSS layout, `PageSection`, `FilterBar`, `SummaryStatGrid`, atau komponen existing.
+5. Card di drawer/modal/detail boleh dipakai untuk grouping data panjang, tetapi halaman utama harus tetap clean dan compact.
+6. Perubahan anti-wrapper wajib UI-only. Jangan sentuh route/menu/role guard, auth, schema/database, service mutation, stock, purchase, sales, returns, finance, production, payroll, HPP, reset destructive flow, atau audit log.

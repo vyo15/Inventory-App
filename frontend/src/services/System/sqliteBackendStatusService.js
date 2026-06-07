@@ -25,18 +25,30 @@ export const getStoredSqliteAuthHeaders = () => {
 
 export const fetchSqliteJson = async (path, options = {}) => {
   const baseUrl = getSqliteBackendBaseUrl();
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-  });
+  let response;
+
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
+  } catch (requestError) {
+    const error = new Error(
+      `Backend tidak bisa dihubungi di ${baseUrl}. Pastikan backend lokal berjalan dan HP/PC berada di jaringan yang sama.`
+    );
+    error.code = "SQLITE_BACKEND_UNAVAILABLE";
+    error.errorCode = "SQLITE_BACKEND_UNAVAILABLE";
+    error.cause = requestError;
+    throw error;
+  }
 
   const payload = await response.json().catch(() => null);
 
   if (!response.ok || payload?.ok === false) {
-    const error = new Error(payload?.message || `SQLite backend request gagal (${response.status})`);
+    const error = new Error(payload?.message || `Request backend gagal (${response.status})`);
     error.status = response.status;
     error.code = payload?.code || payload?.errorCode || "";
     error.errorCode = payload?.code || payload?.errorCode || "";

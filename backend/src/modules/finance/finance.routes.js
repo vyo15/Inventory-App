@@ -74,6 +74,10 @@ router.use("/incomes", createSqliteJsonRecordRouter({
   requiredName: false,
   orderBy: "transaction_date DESC, updated_at DESC",
   protectedWriteNote: "Finance SQLite final: income tersimpan bersama money_movement_ledger melalui endpoint commit untuk transaksi baru.",
+  allowDirectCreate: false,
+  allowDirectUpdate: false,
+  allowDirectDelete: false,
+  blockedWriteMessage: "Kas masuk wajib lewat POST /api/finance/cash-in/commit agar income dan ledger tetap atomic.",
 }));
 
 router.use("/expenses", createSqliteJsonRecordRouter({
@@ -84,6 +88,10 @@ router.use("/expenses", createSqliteJsonRecordRouter({
   requiredName: false,
   orderBy: "transaction_date DESC, updated_at DESC",
   protectedWriteNote: "Finance SQLite final: expense tersimpan bersama money_movement_ledger melalui endpoint commit untuk transaksi baru.",
+  allowDirectCreate: false,
+  allowDirectUpdate: false,
+  allowDirectDelete: false,
+  blockedWriteMessage: "Kas keluar wajib lewat POST /api/finance/cash-out/commit atau DELETE /api/finance/cash-out/:id agar expense dan ledger tetap atomic.",
 }));
 
 router.use("/ledger", createSqliteJsonRecordRouter({
@@ -93,7 +101,11 @@ router.use("/ledger", createSqliteJsonRecordRouter({
   codePrefix: "LGR",
   requiredName: false,
   orderBy: "transaction_date DESC, updated_at DESC",
-  protectedWriteNote: "Ledger SQLite final untuk transaksi baru; data legacy Firestore tetap perlu migrasi/backfill terpisah.",
+  protectedWriteNote: "Ledger SQLite final untuk transaksi baru; data legacy lama perlu migrasi/backfill terpisah.",
+  allowDirectCreate: false,
+  allowDirectUpdate: false,
+  allowDirectDelete: false,
+  blockedWriteMessage: "Ledger tidak boleh diubah langsung. Gunakan endpoint finance commit/delete resmi agar audit dan saldo tetap konsisten.",
 }));
 
 module.exports = router;

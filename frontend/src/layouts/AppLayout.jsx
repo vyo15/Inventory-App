@@ -4,6 +4,7 @@ import { Button, ConfigProvider, Drawer, Layout } from "antd";
 import { useLocation } from "react-router-dom";
 import SidebarMenu from "../components/Layout/Sidebar/SidebarMenu";
 import SidebarLogo from "../components/Layout/Sidebar/SidebarLogo";
+import AppErrorBoundary from "../components/Layout/Feedback/AppErrorBoundary";
 import AppHeader from "../components/Layout/Header/AppHeader";
 import ThemeToggleButton from "../components/Layout/Header/ThemeToggleButton";
 import AppRoutes from "../router/AppRoutes";
@@ -190,7 +191,9 @@ const AppLayout = () => {
             <Content className="app-main-content">
               <div className="app-content-scroll">
                 <div className="app-content-card">
-                  <AppRoutes darkTheme={isDarkTheme} />
+                  <AppErrorBoundary resetKey={`${location.pathname}${location.search}${location.hash}`}>
+                    <AppRoutes darkTheme={isDarkTheme} />
+                  </AppErrorBoundary>
                 </div>
               </div>
             </Content>

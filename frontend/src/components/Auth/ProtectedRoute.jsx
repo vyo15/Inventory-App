@@ -36,7 +36,7 @@ const ProtectedRouteLoader = () => (
 // - AKTIF untuk Fase C/D.
 // - GUARDED: hide menu bukan security; route tetap wajib dicek di sini.
 // Legacy / cleanup:
-// - tidak ada legacy; jika Firestore Rules final sudah aktif, guard ini tetap dipakai untuk UX.
+// - tidak ada legacy aktif; backend localAuth/RBAC tetap menjadi guard data, route guard ini untuk UX dan URL langsung.
 // =========================
 const ProtectedRoute = ({ routeKey, children }) => {
   const location = useLocation();

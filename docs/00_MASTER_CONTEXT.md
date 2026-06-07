@@ -296,3 +296,30 @@ Catatan lock:
 ## Update SQLite Local Runtime Pilot
 
 Status terbaru: Categories dan Customers diarahkan ke mode `sqlite_sidecar` melalui backend Node.js lokal dan SQLite file lokal. `frontend/.env.example` sudah SQLite-first (`VITE_AUTH_MODE=sqlite`) untuk pilot lokal. Firebase tetap dipertahankan sebagai fallback dan untuk modul yang belum dimigrasi. Dexie/IndexedDB tidak lagi dipakai sebagai runtime aktif Offline Database Center, dan file/panel legacy Dexie yang tidak diimpor route aktif sudah dihapus pada Patch A-B. Supplier master-only sudah memakai repository SQLite untuk pilot lokal; purchase/raw/history tetap guarded dan tidak ikut dimutasi. Raw Materials membaca histori pembelian dari purchasesService aktif agar tidak mismatch dengan adapter transaksi SQLite placeholder.
+
+## Mobile UI Standard v1.0 — Keputusan Aktif
+
+IMS Bunga Flanel memakai standar mobile portrait-first. Desktop tetap menggunakan tabel profesional, sedangkan mobile harus menggunakan card/list ringkas dengan detail drawer. Tujuannya agar user tidak perlu memiringkan HP, zoom, atau horizontal scroll body.
+
+Guardrail mobile:
+
+- Patch mobile adalah UI-only kecuali ada approval khusus.
+- Jangan mengubah business logic saat scope hanya mobile UI.
+- `DataTableView` + `mobileCardConfig` menjadi pola utama untuk daftar data.
+- `MobileActionMenu`, `MobileDetailDrawer`, `ResponsiveFormSection`, dan `MobileStateBlock` menjadi komponen foundation.
+- Setiap patch mobile wajib update docs agar standar tidak balik ke pola lama.
+
+## Update Mobile UI Standard M1-M5 — 2026-06-05
+
+Keputusan aktif tambahan:
+
+- Mobile IMS memakai standar portrait-first untuk semua phase M1-M5.
+- `DataTableView + mobileCardConfig` menjadi pola wajib untuk daftar operasional lintas modul.
+- `ResponsiveDataView` adalah alias standar untuk `DataTableView`; tidak boleh membuat komponen table/card baru yang menduplikasi behavior.
+- Foundation mobile aktif: `MobileActionMenu`, `MobileFilterDrawer`, `MobileDetailDrawer`, `ResponsiveFormSection`, dan `MobileStateBlock`.
+- Patch mobile harus UI-only kecuali ada persetujuan khusus. Jangan mengubah stock mutation, sales/purchase/return commit, finance ledger, production material usage, payroll final, HPP, backup/restore, reset destructive, auth, schema, atau role guard.
+- Dokumentasi wajib ikut diperbarui setiap patch mobile agar standar tidak kembali ke tampilan desktop table di HP.
+
+## Update 2026-06-05 - UI Runtime Database Tidak Ditampilkan di Halaman Operasional
+
+Karena runtime IMS sudah diarahkan ke database lokal utama, halaman operasional tidak perlu menampilkan banner teknis mode database. Label seperti "Mode SQLite lokal aktif", "SQLite LAN", instruksi IP/port/firewall, dan tombol "SQLite Center" harus dihapus dari halaman kerja harian seperti Kategori, Customer, dan Supplier. Informasi teknis koneksi backend hanya boleh berada di Maintenance/Database Center.
