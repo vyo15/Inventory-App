@@ -338,7 +338,7 @@ const Sales = () => {
   // - sale line menyimpan collectionName + variantKey supaya mutasi stok keluar selalu memakai sumber stok yang sama
   // Status:
   // - aktif/final; validasi preflight dipanggil dari salesService/backend SQLite, dan validasi final tetap diulang dalam createSaleTransaction
-  // - bukan legacy dan bukan kandidat cleanup
+  // - bukan data lama dan bukan kandidat cleanup
   // =========================
   const buildSaleLine = (item) => {
     const selectedItem = findSellableItem(item.itemId);

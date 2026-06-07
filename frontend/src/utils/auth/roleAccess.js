@@ -8,8 +8,8 @@
 // Status:
 // - AKTIF untuk Login + Role internal IMS.
 // - GUARDED: role baru tidak boleh ditambah tanpa update access matrix docs, route guard, menu guard, User Management, dan backend localAuth/RBAC.
-// Legacy / cleanup:
-// - compatibility role lama sudah dihapus dari role aktif; data legacy lama wajib sudah dibersihkan sebelum patch ini dipakai.
+// Compatibility / cleanup:
+// - compatibility role lama sudah dihapus dari role aktif; data lama wajib sudah dibersihkan sebelum patch ini dipakai.
 // =========================
 export const ROLES = {
   ADMINISTRATOR: "administrator",

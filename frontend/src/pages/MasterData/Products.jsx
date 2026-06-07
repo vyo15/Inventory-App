@@ -260,7 +260,7 @@ const Products = () => {
         setPricingRules(pricingRuleRows);
       } catch (error) {
         console.error(error);
-        message.warning('Kategori/pricing rule SQLite belum lengkap. Produk tetap bisa dimuat.');
+        message.warning('Kategori/aturan harga belum lengkap. Produk tetap bisa dimuat.');
       }
     };
 
@@ -930,10 +930,10 @@ const Products = () => {
               - Products.jsx create/edit drawer dan productsService master payload.
 
               Alasan perubahan:
-              - `variants[].minStockAlert` adalah legacy-compat; user tidak lagi mengisi min stock per varian.
+              - `variants[].minStockAlert` adalah compatibility data lama; user tidak lagi mengisi min stock per varian.
 
               Catatan cleanup:
-              - field legacy varian dapat diaudit pada batch maintenance terpisah tanpa migrasi otomatis di UI ini.
+              - field data lama varian dapat diaudit pada batch maintenance terpisah tanpa migrasi otomatis di UI ini.
 
               Risiko:
               - mengembalikan input min stock per varian akan membuat threshold low stock Product tidak konsisten dengan source master.

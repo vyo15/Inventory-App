@@ -10,7 +10,7 @@ import { calculatePayrollAmounts } from "../../constants/productionPayrollOption
 // - ACTIVE / GUARDED:
 //   semua draft payroll baru wajib membaca rule dari snapshot step di Work Log
 //   atau, bila snapshot lama belum ada, fallback sekali ke master step.
-// - LEGACY / DEPRECATED:
+// - DEPRECATED / DATA LAMA:
 //   custom payroll di master karyawan tidak lagi menjadi sumber hitung aktif.
 //
 // Catatan maintainability:
@@ -76,7 +76,7 @@ const buildWorkerLineKey = ({ workerId = "", workerName = "" } = {}, index = 0) 
     .replace(/[^a-z0-9-]/g, "");
 
   if (normalizedName) {
-    return `legacy_name:${normalizedName}`;
+    return `worker_name_fallback:${normalizedName}`;
   }
 
   return `unknown:${index + 1}`;
@@ -117,7 +117,7 @@ export const buildWorkLogPayrollWorkerCandidates = (workLog = {}) => {
       workerId,
       workerCode,
       workerName: workerName || `Operator ${index + 1}`,
-      workerSourceType: workerId ? "employee_master" : "legacy_name",
+      workerSourceType: workerId ? "employee_master" : "worker_name_fallback",
       workerIndex: index,
     });
   }
@@ -130,7 +130,7 @@ export const buildWorkLogPayrollWorkerCandidates = (workLog = {}) => {
         workerId: "",
         workerCode: "",
         workerName: singleWorkerName,
-        workerSourceType: "legacy_name",
+        workerSourceType: "worker_name_fallback",
         workerIndex: 0,
       });
     }
@@ -264,15 +264,15 @@ export const resolveCompletedWorkLogPayrollRule = ({
     return {
       rule: workLogSnapshot,
       source: "work_log_step_snapshot",
-      legacyFallbackUsed: false,
+      historicalFallbackUsed: false,
     };
   }
 
   if (productionStep) {
     return {
       rule: buildProductionStepPayrollSnapshot(productionStep),
-      source: "production_step_master_legacy_fallback",
-      legacyFallbackUsed: true,
+      source: "production_step_master_historical_fallback",
+      historicalFallbackUsed: true,
     };
   }
 
@@ -284,7 +284,7 @@ export const resolveCompletedWorkLogPayrollRule = ({
       processType: workLog.stepProcessType,
     }),
     source: "missing_payroll_rule",
-    legacyFallbackUsed: true,
+    historicalFallbackUsed: true,
   };
 };
 
@@ -315,8 +315,8 @@ export const formatPayrollRuleSourceLabel = (source = "") => {
     return "Snapshot rule step pada Work Log";
   }
 
-  if (source === "production_step_master_legacy_fallback") {
-    return "Legacy fallback ke master step";
+  if (source === "production_step_master_historical_fallback") {
+    return "Fallback data lama ke master step";
   }
 
   return "Rule payroll tidak lengkap";
@@ -404,9 +404,9 @@ export const resolveWorkLogPayrollDraft = ({
     );
   }
 
-  if (resolvedRule.legacyFallbackUsed) {
+  if (resolvedRule.historicalFallbackUsed) {
     warningReasons.push(
-      "Draft payroll memakai legacy/deprecated fallback ke master step karena snapshot rule payroll lama belum ada di Work Log.",
+      "Draft payroll memakai fallback data lama/deprecated ke master step karena snapshot rule payroll lama belum ada di Work Log.",
     );
   }
 
@@ -437,7 +437,7 @@ export const buildPayrollCalculationNotes = ({
   workLog = {},
   payrollRule = {},
   payrollSource = "",
-  legacyFallbackUsed = false,
+  historicalFallbackUsed = false,
   workerName = "",
 } = {}) => {
   const metrics = getWorkLogPayrollMetrics(workLog, payrollRule);
@@ -469,9 +469,9 @@ export const buildPayrollCalculationNotes = ({
     );
   }
 
-  if (legacyFallbackUsed) {
+  if (historicalFallbackUsed) {
     baseText.push(
-      "Legacy/deprecated fallback terpakai karena snapshot payroll rule lama belum tersimpan di Work Log. Setelah work log baru diposting, fallback ini seharusnya tidak dipakai lagi.",
+      "Fallback data lama/deprecated terpakai karena snapshot payroll rule lama belum tersimpan di Work Log. Setelah work log baru diposting, fallback ini seharusnya tidak dipakai lagi.",
     );
   }
 
@@ -534,7 +534,7 @@ export const isProductionPayrollLineFinal = (line = {}) => {
     return true;
   }
 
-  // LEGACY-COMPAT:
+  // COMPATIBILITY:
   // Sebagian payroll lama belum punya status/paymentStatus tetapi sudah punya nominal final.
   // Untuk display read-only Work Log/HPP, line seperti ini diperlakukan sebagai final agar
   // labor tidak jatuh ke 0/draft palsu. Payroll baru tetap wajib memakai status eksplisit.
@@ -753,20 +753,20 @@ export const resolveWorkLogLaborCostDisplay = ({
     reviewReasons.push("Payroll Work Log cancelled.");
   }
 
-  const legacyLaborCost = safeNumber(workLog.laborCostActual);
-  if (legacyLaborCost > 0) {
+  const historicalLaborCost = safeNumber(workLog.laborCostActual);
+  if (historicalLaborCost > 0) {
     return {
-      displayAmount: legacyLaborCost,
-      amount: legacyLaborCost,
+      displayAmount: historicalLaborCost,
+      amount: historicalLaborCost,
       finalAmount: 0,
-      estimatedAmount: legacyLaborCost,
+      estimatedAmount: historicalLaborCost,
       draftAmount: 0,
       source: "work_log_labor_cost_actual",
       statusLabel: "Estimasi",
       totalStatusLabel: "Estimasi",
       label: "Ringkasan lama",
       tagColor: "default",
-      helper: "Legacy/summary Work Log.",
+      helper: "Ringkasan lama Work Log.",
       isFinal: false,
       isEstimated: true,
       isDraft: false,

@@ -8,22 +8,22 @@ const ResetDangerZonePanel = ({ loadingAutoDetect, onRunAllAudits }) => (
   <Card
     title="Reset Testing / Development"
     size="small"
-    extra={<Tag color="red">Legacy nonaktif</Tag>}
+    extra={<Tag color="red">Reset lama nonaktif</Tag>}
   >
     <Space direction="vertical" size={12} style={{ width: "100%" }}>
       <Alert
         type="warning"
         showIcon
-        message="Reset testing lama dinonaktifkan pada mode full SQLite"
-        description="Pemulihan data utama sekarang wajib lewat Backup & Restore resmi. Reset destructive SQLite belum tersedia dan tidak akan diaktifkan tanpa backend guard, preview, backup otomatis, keyword, serta audit log SQLite."
+        message="Reset testing lama dinonaktifkan pada mode database lokal"
+        description="Pemulihan data utama sekarang wajib lewat Backup & Restore resmi. Reset destructive belum tersedia dan tidak akan diaktifkan tanpa guard layanan lokal, preview, backup otomatis, keyword, serta audit log."
       />
 
       <Row gutter={[12, 12]}>
         <Col xs={24} md={12} xl={6}>
-          <Card size="small" title="Status Reset Legacy" className="reset-maintenance-status-card">
+          <Card size="small" title="Status Reset Lama" className="reset-maintenance-status-card">
             <Space direction="vertical" size={8} style={{ width: "100%" }}>
               <Tag icon={<LockOutlined />} color="red">Nonaktif</Tag>
-              <Text type="secondary">Service reset lama sudah masuk mode sqlite_only dan tidak menjalankan destructive reset.</Text>
+              <Text type="secondary">Service reset lama sudah nonaktif dan tidak menjalankan destructive reset.</Text>
             </Space>
           </Card>
         </Col>
@@ -31,7 +31,7 @@ const ResetDangerZonePanel = ({ loadingAutoDetect, onRunAllAudits }) => (
           <Card size="small" title="Recovery Utama" className="reset-maintenance-status-card">
             <Space direction="vertical" size={8} style={{ width: "100%" }}>
               <Tag icon={<DatabaseOutlined />} color="green">Backup & Restore</Tag>
-              <Text type="secondary">Gunakan backup resmi .imsbak.zip, preview restore, dan keyword RESTORE SQLITE.</Text>
+              <Text type="secondary">Gunakan backup resmi .imsbak.zip, preview restore, dan keyword konfirmasi.</Text>
             </Space>
           </Card>
         </Col>

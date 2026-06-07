@@ -880,7 +880,7 @@ const ProductionPayrolls = () => {
                 Alasan perubahan:
                 - Task 3 meminta help text tanpa mengubah status, nominal, atau service.
                 Status:
-                - aktif dipakai; bukan legacy dan bukan kandidat cleanup.
+                - aktif dipakai; bukan kandidat cleanup.
             ===================================================== */}
             <Alert
               showIcon

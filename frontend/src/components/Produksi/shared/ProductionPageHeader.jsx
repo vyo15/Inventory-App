@@ -3,7 +3,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import PageHeader from '../../Layout/Page/PageHeader';
 
 // =====================================================
-// SECTION: Production Content Page Header — AKTIF / LEGACY-COMPAT
+// SECTION: Production Content Page Header — AKTIF / COMPATIBILITY
 // Fungsi:
 // - menampilkan title/description halaman produksi di kiri dan action utama di kanan.
 // - memakai layout PageHeader agar tombol tambah/generate produksi konsisten dengan halaman bisnis lain.

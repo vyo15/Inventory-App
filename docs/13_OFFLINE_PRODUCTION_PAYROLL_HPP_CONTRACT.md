@@ -1,6 +1,6 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, legacy_sync_queue, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, sync queue lama, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # Offline Production, Payroll, dan HPP Contract
@@ -93,7 +93,7 @@ Risiko utama bila production dibuat offline write terlalu cepat:
 Implementasi yang disetujui untuk batch ini:
 
 - Local storage browser lama schema naik ke versi 2 untuk menambahkan table snapshot produksi.
-- Snapshot production bersifat read-only dan tidak masuk `legacy_sync_queue`.
+- Snapshot production bersifat read-only dan tidak masuk `sync queue lama`.
 - Pull snapshot membutuhkan keyword:
 
 ```txt
@@ -164,7 +164,7 @@ Payroll/HPP tetap online/runtime lama-primary.
 Rule guard:
 
 - Draft payroll boleh muncul sebagai preview UI/read-only, tetapi tidak boleh menjadi HPP final.
-- Payroll final untuk HPP hanya status `confirmed`, `paid`, atau `paymentStatus = paid`, dengan legacy compatibility untuk data lama yang sudah punya final amount valid.
+- Payroll final untuk HPP hanya status `confirmed`, `paid`, atau `paymentStatus = paid`, dengan compatibility data lama untuk data lama yang sudah punya final amount valid.
 - Payroll paid tetap membuat cash out/expense dari service online dengan idempotency guard.
 - Work Log relation wajib memakai `workLogId` dan/atau `workNumber`.
 - HPP final per unit hanya valid jika goodQty > 0 dan labor source final siap.
@@ -206,7 +206,7 @@ Manual test minimal:
 5. Buka tab `Snapshot Produksi`.
 6. Preview `Planning snapshot`.
 7. Isi keyword `PULL PRODUCTION SNAPSHOT READ ONLY`.
-8. Pull snapshot dan pastikan berhasil tanpa membuat `legacy_sync_queue`.
+8. Pull snapshot dan pastikan berhasil tanpa membuat `sync queue lama`.
 9. Ulangi untuk `Production Order`, `Work Log`, `BOM`, `Payroll`, dan `HPP` snapshot.
 10. Buka tab `Data Local`, pilih table production, pastikan data tampil read-only.
 11. Pastikan tab Offline → runtime lama tetap hanya berisi Categories/Customers.

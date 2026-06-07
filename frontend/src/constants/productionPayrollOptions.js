@@ -154,7 +154,7 @@ export const DEFAULT_PRODUCTION_PAYROLL_FORM = {
   notes: "",
   calculationNotes: "",
   payrollRuleSource: "work_log_step_snapshot",
-  legacyPayrollFallbackUsed: false,
+  historicalPayrollFallbackUsed: false,
   payrollEligibilityStatus: "eligible",
   payrollEligibilityBlockingReasons: [],
   payrollEligibilityWarningReasons: [],

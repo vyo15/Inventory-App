@@ -5,7 +5,7 @@ import {
 } from "./businessCodeGenerator";
 
 /* =====================================================
-SECTION: Production code generator compatibility wrapper — LEGACY-COMPAT
+SECTION: Production code generator compatibility wrapper — COMPATIBILITY
 Fungsi:
 - Menjaga import lama productionCodeGenerator tetap berjalan.
 - Mendelegasikan algoritma kode internal sequence dan collision check ke businessCodeGenerator sebagai source of truth.

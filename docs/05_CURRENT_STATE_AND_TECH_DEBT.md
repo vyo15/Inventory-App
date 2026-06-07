@@ -116,7 +116,7 @@ Jangan membuat perhitungan stok baru di UI.
 
 - Backup resmi memakai format SQLite backup resmi dari backend.
 - Restore wajib preview, validasi, pre-restore backup, dan keyword confirm.
-- Reset testing lama tetap nonaktif/legacy redirect.
+- Reset testing lama tetap nonaktif/redirect lama.
 - Destructive action wajib punya scope jelas, confirm guard, dan audit log.
 
 ### 8. UI/UX

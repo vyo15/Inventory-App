@@ -103,7 +103,7 @@ const StockReport = () => {
   // - menjaga kategori semi-finished tetap bisa dipilih walaupun tidak ada di collection categories lama;
   // - tidak mengubah data kategori, hanya memperkaya pilihan filter UI/export.
   // Hubungan dengan flow laporan/export: filter aktif ikut tercatat di XLSX.
-  // Status: aktif dipakai; bukan legacy dan bukan kandidat cleanup.
+  // Status: aktif dipakai; bukan data lama dan bukan kandidat cleanup.
   // =========================
   const categoryOptions = useMemo(() => {
     const mergedCategories = new Set([
@@ -126,7 +126,7 @@ const StockReport = () => {
   const stockReportLoadedLabel = reportMeta?.loadedRows ? formatNumberId(reportMeta.loadedRows) : formatNumberId(inventory.length);
   const stockReportSourceLabel = reportMeta?.dataSource === "master_stock_fallback"
     ? "Master stock fallback"
-    : "Stock read model";
+    : "Data stok lokal";
   const hasMoreStockReportRows = Boolean(reportMeta?.hasMore && stockReportCursor);
 
   const summaryItems = useMemo(
@@ -251,7 +251,7 @@ const StockReport = () => {
     const exportFailedReadsLabel = exportFailedReads.join(", ");
     const exportSourceLabel = exportMeta?.dataSource === "master_stock_fallback"
       ? "Master stock fallback"
-      : "Stock read model";
+      : "Data stok lokal";
 
     if (exportFilteredData.length === 0) {
       message.warning("Tidak ada data untuk diekspor.");
@@ -272,7 +272,7 @@ const StockReport = () => {
         title: "Laporan Stok IMS Bunga Flanel",
         subtitle: exportIsPartial || exportIsLimited
           ? "Ekspor stok sesuai filter aktif. PERINGATAN: data laporan parsial/terbatas."
-          : "Ekspor stok sesuai filter aktif dari full export read model.",
+          : "Ekspor stok sesuai filter aktif dari data stok lengkap.",
         fileName: "laporan-stok",
         sheetName: "Stock Report",
         filters: [
@@ -281,7 +281,7 @@ const StockReport = () => {
           `Rows export termuat: ${formatNumberId(exportFilteredData.length)}`,
           `Rows sumber terbaca: ${formatNumberId(exportMeta?.loadedRows || exportRows.length)}`,
           `Batas full export: ${exportMeta?.exportLimit ? formatNumberId(exportMeta.exportLimit) : formatNumberId(STOCK_REPORT_EXPORT_LIMIT)}`,
-          `Catatan export: ${exportIsLimited ? "Export mencapai batas full export/paging. Tambah limit/index jika data production sudah melewati batas ini." : "Export memakai loop paging read model sesuai filter aktif."}`,
+          `Catatan export: ${exportIsLimited ? "Export mencapai batas full export/paging. Tambah limit/index jika data production sudah melewati batas ini." : "Export memakai paging data stok sesuai filter aktif."}`,
           `Kategori: ${selectedCategory === "all" ? "Semua" : selectedCategory}`,
           `Status: ${selectedStatus === "all" ? "Semua" : selectedStatus}`,
           `Pencarian: ${searchTerm || "-"}`,
@@ -528,8 +528,8 @@ const StockReport = () => {
           <Alert
             type="warning"
             showIcon
-            message="Data Stock Report dibatasi oleh read model limit."
-            description={`Saat ini termuat ${stockReportLoadedLabel} dari batas ${stockReportLimitLabel} row. Gunakan tombol Muat data lanjutan untuk menambah rows tabel; Export XLSX akan mencoba full export dengan paging read model.`}
+            message="Data laporan stok dibatasi oleh batas pemuatan."
+            description={`Saat ini termuat ${stockReportLoadedLabel} dari batas ${stockReportLimitLabel} row. Gunakan tombol Muat data lanjutan untuk menambah rows tabel; Export XLSX akan mencoba mengambil data lengkap secara bertahap.`}
           />
         )}
         <DataTableView

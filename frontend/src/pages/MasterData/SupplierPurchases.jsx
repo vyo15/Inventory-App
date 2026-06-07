@@ -133,7 +133,7 @@ const SupplierPurchases = () => {
     } catch (error) {
       console.error(error);
       setSuppliers([]);
-      setLoadError('Gagal memuat supplier. Pastikan backend aplikasi aktif.');
+      setLoadError('Gagal memuat supplier. Pastikan layanan aplikasi aktif.');
       message.error(error?.message || 'Gagal memuat supplier.');
     } finally {
       setIsLoading(false);
@@ -143,8 +143,8 @@ const SupplierPurchases = () => {
   // ---------------------------------------------------------------------------
   // Load master supplier, bahan baku, dan purchases.
   // FUNGSI: C1 memindahkan master Supplier ke repository boundary agar mode
-  // UI tidak melakukan write langsung ke database; perubahan berjalan lewat service/backend SQLite.
-  // BATASAN: raw material dan histori purchase tetap legacy read-only untuk
+  // UI tidak melakukan write langsung ke database; perubahan berjalan lewat service/backend database lokal.
+  // BATASAN: raw material dan histori purchase tetap read-only data lama untuk
   // pembanding; tidak menulis purchase, stok, kas, raw material, atau finance.
   // STATUS: aktif dipakai.
   // ---------------------------------------------------------------------------
@@ -413,7 +413,7 @@ const SupplierPurchases = () => {
       storeName: values.storeName,
       storeLink: values.storeLink || '',
       // Field kategori lama tidak lagi disimpan dari UI aktif. Jika ada data lama,
-      // service tetap membacanya sebagai legacy read-only.
+      // service tetap membacanya sebagai read-only data lama.
       supportedMaterialIds: materialDetails.map((item) => item.materialId),
       supportedMaterialNames: materialDetails.map((item) => item.materialName),
       materialDetails,
@@ -584,7 +584,7 @@ const SupplierPurchases = () => {
       // scroll kanan yang berlebihan dan tanpa efek transparan/menumpuk.
       // HUBUNGAN FLOW: hanya UI; handler lama tetap dipakai dan tidak mengubah
       // Supplier schema, Purchases prefill, stok, kas, expense, atau Raw Material.
-      // LEGACY: fixed action column lama tidak dipakai karena rawan overlap.
+      // DATA LAMA: fixed action column lama tidak dipakai karena rawan overlap.
       // CLEANUP CANDIDATE: pindahkan styling ke CSS khusus jika nanti ada file
       // style Supplier yang terpisah.
       // ---------------------------------------------------------------------
@@ -943,11 +943,11 @@ const SupplierPurchases = () => {
           </Form.Item>
 
           {/* -----------------------------------------------------------------
-              FIELD LEGACY CATEGORY.
+              FIELD CATEGORY LAMA.
               FUNGSI: field kategori/keterangan supplier lama sengaja tidak lagi
               ditampilkan di UI aktif karena flow restock sekarang fokus pada
               katalog material, satuan, konversi, dan estimasi harga.
-              STATUS: legacy read-only; data lama tetap dibaca service tetapi
+              STATUS: read-only data lama; data lama tetap dibaca service tetapi
               bukan input utama.
           ----------------------------------------------------------------- */}
 

@@ -210,7 +210,7 @@ const getCancelActionLabel = (plan = {}) => {
 };
 
 // =====================================================
-// SECTION: Production Planning UI guards — LEGACY-COMPAT
+// SECTION: Production Planning UI guards — COMPATIBILITY
 // Fungsi:
 // - memakai status canonical yang sama dengan service untuk filter, label, guard Buat PO, dan guard Cancel;
 // - memberi pesan error service yang lebih jelas saat cancel atau create PO gagal.
@@ -219,7 +219,7 @@ const getCancelActionLabel = (plan = {}) => {
 // - tabel Production Planning, detail drawer, action Cancel, dan drawer Buat PO.
 //
 // Alasan perubahan:
-// - status legacy cancel/canceled/Cancelled tidak boleh tetap terbaca overdue atau masih bisa dibuatkan PO;
+// - status lama cancel/canceled/Cancelled tidak boleh tetap terbaca overdue atau masih bisa dibuatkan PO;
 // - action Cancel harus mengikuti guard service, bukan guard Buat PO, agar Planning yang sudah punya PO tidak membuka modal cancel palsu.
 //
 // Catatan cleanup:

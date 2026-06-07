@@ -1,1 +1,1 @@
-export const getDataQualityAudit = async () => ({ summary: { status: "sqlite_only", findings: 0 }, findings: [], note: "Audit legacy runtime sudah dinonaktifkan pada mode full SQLite." });
+export const getDataQualityAudit = async () => ({ summary: { status: "database_local_active", findings: 0 }, findings: [], note: "Audit runtime lama sudah dinonaktifkan pada mode database lokal." });

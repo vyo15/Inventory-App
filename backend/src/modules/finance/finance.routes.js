@@ -21,7 +21,7 @@ router.post("/cash-in/commit", requireLocalAuth, requireLocalAdministrator, asyn
       description: req.body?.description || req.body?.type || "Pemasukan manual",
     });
     await db.run("COMMIT");
-    return success(res, "Kas masuk SQLite berhasil disimpan dan ledger dibuat", result, undefined, 201);
+    return success(res, "Kas masuk database lokal berhasil disimpan dan ledger dibuat", result, undefined, 201);
   } catch (error) {
     await db.run("ROLLBACK").catch(() => {});
     return next(error);
@@ -42,7 +42,7 @@ router.post("/cash-out/commit", requireLocalAuth, requireLocalAdministrator, asy
       description: req.body?.description || req.body?.type || "Pengeluaran manual",
     });
     await db.run("COMMIT");
-    return success(res, "Kas keluar SQLite berhasil disimpan dan ledger dibuat", result, undefined, 201);
+    return success(res, "Kas keluar database lokal berhasil disimpan dan ledger dibuat", result, undefined, 201);
   } catch (error) {
     await db.run("ROLLBACK").catch(() => {});
     return next(error);
@@ -59,7 +59,7 @@ router.delete("/cash-out/:id", requireLocalAuth, requireLocalAdministrator, asyn
       actor: req.localAuth.user.username,
     });
     await db.run("COMMIT");
-    return success(res, "Kas keluar SQLite berhasil dihapus", result);
+    return success(res, "Kas keluar database lokal berhasil dihapus", result);
   } catch (error) {
     await db.run("ROLLBACK").catch(() => {});
     return next(error);
@@ -73,7 +73,7 @@ router.use("/incomes", createSqliteJsonRecordRouter({
   codePrefix: "CSH-IN",
   requiredName: false,
   orderBy: "transaction_date DESC, updated_at DESC",
-  protectedWriteNote: "Finance SQLite final: income tersimpan bersama money_movement_ledger melalui endpoint commit untuk transaksi baru.",
+  protectedWriteNote: "Finance database lokal final: income tersimpan bersama money_movement_ledger melalui endpoint commit untuk transaksi baru.",
   allowDirectCreate: false,
   allowDirectUpdate: false,
   allowDirectDelete: false,
@@ -87,7 +87,7 @@ router.use("/expenses", createSqliteJsonRecordRouter({
   codePrefix: "CSH-OUT",
   requiredName: false,
   orderBy: "transaction_date DESC, updated_at DESC",
-  protectedWriteNote: "Finance SQLite final: expense tersimpan bersama money_movement_ledger melalui endpoint commit untuk transaksi baru.",
+  protectedWriteNote: "Finance database lokal final: expense tersimpan bersama money_movement_ledger melalui endpoint commit untuk transaksi baru.",
   allowDirectCreate: false,
   allowDirectUpdate: false,
   allowDirectDelete: false,
@@ -101,7 +101,7 @@ router.use("/ledger", createSqliteJsonRecordRouter({
   codePrefix: "LGR",
   requiredName: false,
   orderBy: "transaction_date DESC, updated_at DESC",
-  protectedWriteNote: "Ledger SQLite final untuk transaksi baru; data legacy lama perlu migrasi/backfill terpisah.",
+  protectedWriteNote: "Ledger database lokal final untuk transaksi baru; data lama perlu migrasi/backfill terpisah.",
   allowDirectCreate: false,
   allowDirectUpdate: false,
   allowDirectDelete: false,

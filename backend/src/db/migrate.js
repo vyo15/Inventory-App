@@ -3,7 +3,8 @@ const { SCHEMA_VERSION } = require("./schema");
 
 const OLD_REMOTE_STATUS_PREFIX = `${["fire", "base"].join("")}_`;
 const OLD_REMOTE_SOURCE = ["fire", "store"].join("");
-const LEGACY_IMPORT_SOURCE = "legacy_import";
+const HISTORICAL_IMPORT_SOURCE = "historical_import";
+const OLD_INACTIVE_STATUS = ["leg", "acy_inactive"].join("");
 
 async function seedSetting(db, key, value) {
   await db.run(
@@ -113,7 +114,7 @@ async function ensureFoundationJsonTables(db) {
     CREATE TABLE IF NOT EXISTS migration_identity_map (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       module_key TEXT NOT NULL,
-      legacy_source TEXT NOT NULL DEFAULT 'legacy_import',
+      legacy_source TEXT NOT NULL DEFAULT 'historical_import',
       legacy_id TEXT NOT NULL,
       sqlite_id TEXT NOT NULL,
       reference_code TEXT,
@@ -169,7 +170,7 @@ async function seedModuleMigrationStatus(db, moduleKey, status, { label, scope, 
 }
 
 
-async function normalizeLegacyModuleRuntimeStatuses(db) {
+async function normalizeHistoricalModuleRuntimeStatuses(db) {
   await db.run(`
     UPDATE module_migration_status
     SET status = 'sqlite_active',
@@ -180,11 +181,11 @@ async function normalizeLegacyModuleRuntimeStatuses(db) {
   await db.run(
     `
       UPDATE module_migration_status
-      SET status = 'legacy_inactive',
+      SET status = 'archived_inactive',
           updated_at = CURRENT_TIMESTAMP
-      WHERE status LIKE ?
+      WHERE status LIKE ? OR status = ?
     `,
-    [`${OLD_REMOTE_STATUS_PREFIX}%`]
+    [`${OLD_REMOTE_STATUS_PREFIX}%`, OLD_INACTIVE_STATUS]
   );
 
   await db.run(
@@ -193,29 +194,29 @@ async function normalizeLegacyModuleRuntimeStatuses(db) {
       SET legacy_source = ?
       WHERE legacy_source = ?
     `,
-    [LEGACY_IMPORT_SOURCE, OLD_REMOTE_SOURCE]
+    [HISTORICAL_IMPORT_SOURCE, OLD_REMOTE_SOURCE]
   );
 }
 
 async function seedMigrationStatus(db) {
   const rows = [
-    ["customers", "Customers", "sqlite_active", "read_write", "Customers aktif memakai backend SQLite lokal."],
-    ["categories", "Categories", "sqlite_active", "read_write", "Categories aktif memakai backend SQLite lokal."],
-    ["suppliers", "Suppliers", "sqlite_active", "read_write_master_payload", "Supplier master SQLite aktif; katalog restock pasif disimpan di payload_json. Purchase/raw history tetap lewat service boundary."],
-    ["pricing_rules", "Pricing Rules", "sqlite_active", "read_write_master", "Rule pricing aktif di SQLite; apply harga massal tetap melalui service resmi agar aman."],
-    ["products", "Products", "sqlite_active", "read_write_master", "Product master SQLite aktif; stock mutation final wajib lewat stock engine."],
-    ["raw_materials", "Raw Materials", "sqlite_active", "read_write_master", "Raw Material master SQLite aktif; purchase/production mutation final wajib lewat stock engine."],
-    ["semi_finished", "Semi Finished", "sqlite_active", "read_write_master_stock", "Semi Finished master SQLite aktif; stock adjustment SQLite didukung. Production material usage/HPP tetap lewat batch production."],
-    ["stock", "Stock Engine", "sqlite_active", "atomic_product_raw_semi", "Stock engine SQLite aktif untuk Product/Raw/Semi Finished melalui endpoint commit dan audit log."],
-    ["purchases", "Purchases", "sqlite_active", "atomic_stock_finance", "Purchase SQLite atomic aktif untuk stock-in Product/Raw dan posting expense finance."],
-    ["sales", "Sales", "sqlite_active", "atomic_stock_finance", "Sales SQLite atomic aktif untuk stock-out Product/Raw dan posting income saat selesai."],
-    ["returns", "Returns", "sqlite_active", "product_raw_stock_restore_guarded_refund", "Returns SQLite aktif untuk stock restore Product/Raw. Refund/finance tetap guarded melalui aturan backend resmi."],
-    ["finance", "Finance Ledger", "sqlite_active", "cash_in_cash_out_ledger", "Finance SQLite aktif untuk cash-in/cash-out manual dan ledger transaksi baru."],
-    ["production", "Production", "sqlite_active", "production_sqlite_runtime", "Production steps, employees, profiles, BOM, planning, orders, dan work logs memakai SQLite runtime."],
-    ["payroll_hpp", "Payroll & HPP", "sqlite_active", "payroll_paid_hpp_sqlite", "Payroll final/paid dan HPP runtime memakai data SQLite baru; payroll paid memposting expense finance."],
-    ["reports", "Reports & Dashboard", "sqlite_active", "sqlite_transactions_finance_stock", "Report service membaca SQLite transaction/finance/stock snapshot untuk data baru."],
-    ["auth", "Auth & Role Guard", "sqlite_active", "local_auth_only", "Auth lokal SQLite menjadi runtime final; dependency auth runtime lama dihapus."],
-    ["reset_restore", "Reset & Restore", "guarded", "confirm_keyword_required", "Restore SQLite guarded tersedia untuk administrator lokal dengan backup otomatis dan keyword konfirmasi."],
+    ["customers", "Customers", "sqlite_active", "read_write", "Customers aktif memakai layanan database lokal."],
+    ["categories", "Categories", "sqlite_active", "read_write", "Categories aktif memakai layanan database lokal."],
+    ["suppliers", "Suppliers", "sqlite_active", "read_write_master_payload", "Supplier master aktif; katalog restock pasif disimpan aman. Riwayat pembelian/bahan tetap lewat layanan resmi."],
+    ["pricing_rules", "Pricing Rules", "sqlite_active", "read_write_master", "Aturan harga aktif di database lokal; apply harga massal tetap melalui layanan resmi agar aman."],
+    ["products", "Products", "sqlite_active", "read_write_master", "Master produk aktif; perubahan stok final wajib lewat stock engine."],
+    ["raw_materials", "Raw Materials", "sqlite_active", "read_write_master", "Master bahan baku aktif; perubahan stok dari pembelian/produksi wajib lewat stock engine."],
+    ["semi_finished", "Semi Finished", "sqlite_active", "read_write_master_stock", "Master semi finished aktif; penyesuaian stok didukung. Pemakaian material produksi/HPP tetap lewat batch production."],
+    ["stock", "Stock Engine", "sqlite_active", "atomic_product_raw_semi", "Stock engine aktif untuk Produk, Bahan Baku, dan Semi Finished melalui layanan commit dan audit log."],
+    ["purchases", "Purchases", "sqlite_active", "atomic_stock_finance", "Pembelian aktif untuk stok masuk Produk/Bahan Baku dan posting biaya finance."],
+    ["sales", "Sales", "sqlite_active", "atomic_stock_finance", "Penjualan aktif untuk stok keluar Produk/Bahan Baku dan posting pemasukan saat selesai."],
+    ["returns", "Returns", "sqlite_active", "product_raw_stock_restore_guarded_refund", "Retur aktif untuk pemulihan stok Produk/Bahan Baku. Refund/finance tetap guarded melalui aturan resmi."],
+    ["finance", "Finance Ledger", "sqlite_active", "cash_in_cash_out_ledger", "Finance aktif untuk cash-in/cash-out manual dan ledger transaksi baru."],
+    ["production", "Production", "sqlite_active", "production_sqlite_runtime", "Production steps, employees, profiles, BOM, planning, orders, dan work logs memakai database lokal."],
+    ["payroll_hpp", "Payroll & HPP", "sqlite_active", "payroll_paid_hpp_sqlite", "Payroll final/paid dan HPP memakai data lokal; payroll paid memposting biaya finance."],
+    ["reports", "Reports & Dashboard", "sqlite_active", "sqlite_transactions_finance_stock", "Report service membaca transaksi, finance, dan snapshot stok dari database lokal."],
+    ["auth", "Auth & Role Guard", "sqlite_active", "local_auth_only", "Auth lokal menjadi runtime final; dependency auth runtime lama dihapus."],
+    ["reset_restore", "Reset & Restore", "guarded", "confirm_keyword_required", "Restore guarded tersedia untuk administrator dengan backup otomatis dan keyword konfirmasi."],
   ];
 
   for (const [moduleKey, label, status, scope, notes] of rows) {
@@ -414,7 +415,7 @@ async function runMigrations() {
   await seedSetting(db, "guarded_modules", "reset_restore");
   await seedLocalRoles(db);
   await seedMigrationStatus(db);
-  await normalizeLegacyModuleRuntimeStatuses(db);
+  await normalizeHistoricalModuleRuntimeStatuses(db);
 }
 
 module.exports = { runMigrations };

@@ -271,12 +271,12 @@ export const RESET_TRANSACTION_COLLECTIONS = [
   "pricing_logs",
 ];
 
-// IMS NOTE [LEGACY/GUARDED] — collection produksi lama tetap diizinkan hanya
-// karena reset service masih punya opsi cleanup legacy. Jangan jadikan flow aktif.
-export const RESET_LEGACY_COLLECTIONS = ["productions"];
+// IMS NOTE [DATA LAMA/GUARDED] — collection produksi lama tetap diizinkan hanya
+// karena reset service masih punya opsi cleanup data lama. Jangan jadikan flow aktif.
+export const RESET_ARCHIVED_COLLECTIONS = ["productions"];
 
 export const RESET_ALLOWED_DELETE_COLLECTIONS = new Set([
   ...RESET_TRANSACTION_COLLECTIONS,
-  ...RESET_LEGACY_COLLECTIONS,
+  ...RESET_ARCHIVED_COLLECTIONS,
 ]);
 

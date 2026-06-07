@@ -5,7 +5,7 @@ import {
   getInventoryLogSchemaAudit,
   getInventoryStockMaintenanceAudit,
 } from "../../../services/Maintenance/inventoryMaintenanceService";
-import { getLegacyDataMaintenanceAudit } from "../../../services/Maintenance/legacyDataMaintenanceService";
+import { getHistoricalDataMaintenanceAudit } from "../../../services/Maintenance/historicalDataMaintenanceService";
 import { getDataQualityAudit } from "../../../services/Maintenance/dataQualityAuditService";
 import { getHppReconcileMaintenanceAudit } from "../../../services/Maintenance/hppReconcileMaintenanceService";
 import { getMasterCodeMaintenanceAudit } from "../../../services/Maintenance/masterCodeMaintenanceService";
@@ -23,7 +23,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
   const [maintenanceAudit, setMaintenanceAudit] = useState(null);
   const [stockAudit, setStockAudit] = useState(null);
   const [logSchemaAudit, setLogSchemaAudit] = useState(null);
-  const [legacyDataAudit, setLegacyDataAudit] = useState(null);
+  const [historicalDataAudit, setHistoricalDataAudit] = useState(null);
   const [dataQualityAudit, setDataQualityAudit] = useState(null);
   const [hppReconcileAudit, setHppReconcileAudit] = useState(null);
   const [masterCodeAudit, setMasterCodeAudit] = useState(null);
@@ -34,7 +34,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
   const [loadingMaintenanceAudit, setLoadingMaintenanceAudit] = useState(false);
   const [loadingStockAudit, setLoadingStockAudit] = useState(false);
   const [loadingLogSchemaAudit, setLoadingLogSchemaAudit] = useState(false);
-  const [loadingLegacyDataAudit, setLoadingLegacyDataAudit] = useState(false);
+  const [loadingHistoricalDataAudit, setLoadingHistoricalDataAudit] = useState(false);
   const [loadingDataQualityAudit, setLoadingDataQualityAudit] = useState(false);
   const [loadingHppReconcileAudit, setLoadingHppReconcileAudit] = useState(false);
   const [loadingMasterCodeAudit, setLoadingMasterCodeAudit] = useState(false);
@@ -144,7 +144,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
       setLoadingDataQualityAudit(true);
       /*
       =====================================================
-      SECTION: Data Quality Audit handler — LEGACY-COMPAT
+      SECTION: Data Quality Audit handler — COMPATIBILITY
       Fungsi:
       - Memanggil audit data lama secara read-only, menampilkan ringkasan area, dan mencatat audit log metadata.
 
@@ -166,13 +166,13 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
       await createPageMaintenanceLog({
         actionType: showProblemPreview ? "data_quality_problem_preview" : "data_quality_audit",
         mode: "dry_run",
-        modules: ["data_quality", "legacy_data"],
+        modules: ["data_quality", "historical_data"],
         summary: result?.summary || {},
         affectedCollections: (result?.categories || []).map((item) => item.collection || item.key).filter(Boolean),
         affectedCount: result?.summary?.checkedRecords || 0,
         dryRun: true,
         status: "success",
-        note: "Data Quality Audit hanya membaca data legacy/testing dan menampilkan rekomendasi; tidak ada migration, backfill, delete, stok, kas, payroll, HPP, atau transaksi yang diubah.",
+        note: "Data Quality Audit hanya membaca data lama/testing dan menampilkan rekomendasi; tidak ada migration, backfill, delete, stok, kas, payroll, HPP, atau transaksi yang diubah.",
       });
       showActionSuccess(showProblemPreview ? "Preview data bermasalah berhasil dimuat. Tidak ada data yang diubah." : "Audit data lama selesai. Tidak ada data yang diubah.");
     } catch (error) {
@@ -208,15 +208,15 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
     }
   }, [createPageMaintenanceLog]);
 
-  const handleLoadLegacyDataAudit = useCallback(async () => {
+  const handleLoadHistoricalDataAudit = useCallback(async () => {
     try {
-      setLoadingLegacyDataAudit(true);
-      const result = await getLegacyDataMaintenanceAudit();
-      setLegacyDataAudit(result);
+      setLoadingHistoricalDataAudit(true);
+      const result = await getHistoricalDataMaintenanceAudit();
+      setHistoricalDataAudit(result);
       await createPageMaintenanceLog({
-        actionType: "legacy_data_audit",
+        actionType: "historical_data_audit",
         mode: "dry_run",
-        modules: ["legacy_data", "cleanup_batch_3"],
+        modules: ["historical_data", "cleanup_batch_3"],
         summary: result?.summary || {},
         affectedCollections: [
           "productions",
@@ -240,7 +240,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
       console.error(error);
       showActionError(error?.message || "Gagal menjalankan audit data lama.");
     } finally {
-      setLoadingLegacyDataAudit(false);
+      setLoadingHistoricalDataAudit(false);
     }
   }, [createPageMaintenanceLog]);
 
@@ -285,7 +285,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
         affectedCount: result?.summary?.checkedRecords || 0,
         dryRun: true,
         status: "success",
-        note: "Audit variant lintas modul memetakan transaksi lama yang masih memakai field legacy tanpa membuat fallback baru ke master.",
+        note: "Audit variant lintas modul memetakan transaksi lama yang masih memakai field data lama tanpa membuat fallback baru ke master.",
       });
       showActionSuccess("Dry run variant lintas modul selesai. Belum ada data yang diubah.");
     } catch (error) {
@@ -329,7 +329,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
       await handleLoadMasterCodeAudit();
       await handleLoadStockAudit();
       await handleLoadLogSchemaAudit();
-      await handleLoadLegacyDataAudit();
+      await handleLoadHistoricalDataAudit();
       await handleLoadProductionMaintenanceAudit();
       await handleLoadPayrollAudit();
       await handleLoadTransactionVariantAudit();
@@ -342,7 +342,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
   }, [
     handleLoadDataQualityAudit,
     handleLoadHppReconcileAudit,
-    handleLoadLegacyDataAudit,
+    handleLoadHistoricalDataAudit,
     handleLoadLogSchemaAudit,
     handleLoadMasterCodeAudit,
     handleLoadPayrollAudit,
@@ -361,7 +361,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
     masterCodeAudit,
     stockAudit,
     logSchemaAudit,
-    legacyDataAudit,
+    historicalDataAudit,
     maintenanceAudit,
     payrollAudit,
     transactionVariantAudit,
@@ -370,7 +370,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
     dataQualityAudit,
     hppReconcileAudit,
     masterCodeAudit,
-    legacyDataAudit,
+    historicalDataAudit,
     logSchemaAudit,
     maintenanceAudit,
     payrollAudit,
@@ -388,7 +388,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
       || summary.totalIssues
       || summary.problemCount
       || summary.resetManualCount
-      || summary.legacyCount
+      || summary.historicalCount
       || summary.warningCount
       || 0;
     const safeRepairCount = summary.safeRepairCount || summary.displayRepairCount || summary.executablePlanCount || summary.repairableCount || 0;
@@ -459,7 +459,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
     || loadingHppReconcileAudit
     || loadingStockAudit
     || loadingLogSchemaAudit
-    || loadingLegacyDataAudit
+    || loadingHistoricalDataAudit
     || loadingMaintenanceAudit
     || loadingPayrollAudit
     || loadingTransactionVariantAudit
@@ -472,7 +472,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
     setStockAudit,
     logSchemaAudit,
     setLogSchemaAudit,
-    legacyDataAudit,
+    historicalDataAudit,
     dataQualityAudit,
     hppReconcileAudit,
     setHppReconcileAudit,
@@ -487,7 +487,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
     loadingMaintenanceAudit,
     loadingStockAudit,
     loadingLogSchemaAudit,
-    loadingLegacyDataAudit,
+    loadingHistoricalDataAudit,
     loadingDataQualityAudit,
     loadingHppReconcileAudit,
     loadingMasterCodeAudit,
@@ -500,7 +500,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
     handleLoadLogSchemaAudit,
     handleLoadDataQualityAudit,
     handleLoadHppReconcileAudit,
-    handleLoadLegacyDataAudit,
+    handleLoadHistoricalDataAudit,
     handleLoadPayrollAudit,
     handleLoadTransactionVariantAudit,
     handleLoadTransactionSideEffectAudit,

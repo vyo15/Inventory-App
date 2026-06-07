@@ -1,6 +1,6 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, legacy_sync_queue, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, sync queue lama, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # Offline Product / Raw Material / Semi Finished Contract — Batch 29–30
@@ -39,7 +39,7 @@ Batasan validasi:
 
 - Audit ini static source audit, bukan dump database runtime.
 - rules database lama/index tetap harus dicek manual di runtime lama Console.
-- Snapshot local tidak membuktikan data lama sudah bersih; legacy data shape tetap harus diasumsikan ada.
+- Snapshot local tidak membuktikan data lama sudah bersih; data lama shape tetap harus diasumsikan ada.
 
 ## Keputusan Batch 29–30
 
@@ -49,7 +49,7 @@ Batasan validasi:
 | Raw Material | Boleh pull runtime lama ke local sebagai snapshot read-only. |
 | Semi Finished | Boleh pull runtime lama ke local sebagai snapshot read-only. |
 | Offline write | Tetap blocked. Tidak ada create/edit/delete offline. |
-| `legacy_sync_queue` | Tetap hanya `categories` dan `customers`. Product/raw/semi tidak masuk queue. |
+| `sync queue lama` | Tetap hanya `categories` dan `customers`. Product/raw/semi tidak masuk queue. |
 | Offline → runtime lama | Tetap hanya `categories` dan `customers`. Product/raw/semi diblokir. |
 | Runtime page | `Products`, `RawMaterials`, `SemiFinishedMaterials`, `Purchases`, `ProductionBoms`, dan `ProductionWorkLogs` tetap runtime lama/service aktif. |
 | Stock/HPP | Tidak dihitung ulang dari storage browser lama local. |
@@ -60,15 +60,15 @@ Source utama: `src/services/MasterData/productsService.js`.
 
 | Field | Status | Catatan |
 |---|---|---|
-| `id` | identity | Data baru memakai document ID = kode `PRD-xxx`; data lama random ID tetap legacy-compatible. |
+| `id` | identity | Data baru memakai document ID = kode `PRD-xxx`; data lama random ID tetap data-lama-compatible. |
 | `code`, `productCode` | identity internal | Service auto-generate dan menjaga immutable saat update. UI utama tidak boleh bergantung pada input manual. |
 | `name` | wajib | Duplicate name dicek di service. |
 | `categoryId`, `category` | metadata | `category` disnapshot dari selected category, fallback `Produk Jadi`. |
 | `price`, `hppPerUnit` | finance/valuation | Tidak boleh negatif; HPP product output bisa dipengaruhi flow produksi, bukan snapshot local. |
 | `pricingMode`, `pricingRuleId`, `lastPricingUpdatedAt` | pricing | Mode default manual. Rule wajib hanya saat mode `rule`. |
 | `description`, `isActive` | metadata | `isActive` default true kecuali false eksplisit. |
-| `hasVariants`, `variantLabel`, `variants`, `archivedVariants`, `variantModeHistory` | variant | Variant aktif dihitung lewat helper; archive/history dipertahankan untuk guard legacy. |
-| `currentStock`, `stock`, `reservedStock`, `availableStock` | stock guarded | `stock` masih alias legacy `currentStock`. Tidak boleh diubah dari offline snapshot. |
+| `hasVariants`, `variantLabel`, `variants`, `archivedVariants`, `variantModeHistory` | variant | Variant aktif dihitung lewat helper; archive/history dipertahankan untuk guard data lama. |
+| `currentStock`, `stock`, `reservedStock`, `availableStock` | stock guarded | `stock` masih alias lama `currentStock`. Tidak boleh diubah dari offline snapshot. |
 | `minStockAlert` | alert master | Threshold master, bukan agregat variant. |
 | `variantCount`, `activeVariantCount` | derived | Hasil perhitungan helper, bukan field input utama. |
 | `createdAt`, `updatedAt` | audit timestamp | runtime lama timestamp; saat snapshot local disimpan sebagai data remote apa adanya. |
@@ -86,16 +86,16 @@ Source utama: `src/services/MasterData/rawMaterialsService.js`.
 
 | Field | Status | Catatan |
 |---|---|---|
-| `id` | identity | Data baru memakai document ID = kode `RAW-xxx`; data lama `RM`/random ID tetap legacy-compatible. |
+| `id` | identity | Data baru memakai document ID = kode `RAW-xxx`; data lama `RM`/random ID tetap data-lama-compatible. |
 | `code`, `materialCode` | identity internal | Auto-generated, immutable saat update. |
 | `name` | wajib | Duplicate name dicek di service. |
 | `supplierId`, `supplierName`, `supplierLink` | supplier snapshot | Di-resolve dari supplier aktif lewat helper supplier. Inilah alasan supplier tidak boleh offline write dulu. |
 | `stockUnit` | unit | Wajib; default `pcs`. Dipakai purchase dan production usage. |
-| `stock`, `currentStock`, `reservedStock`, `availableStock` | stock guarded | `stock` alias legacy `currentStock`. Tidak boleh dimutasi dari snapshot local. |
+| `stock`, `currentStock`, `reservedStock`, `availableStock` | stock guarded | `stock` alias lama `currentStock`. Tidak boleh dimutasi dari snapshot local. |
 | `minStock` | alert master | Tidak boleh negatif. |
 | `restockReferencePrice`, `averageActualUnitCost`, `sellingPrice` | cost/pricing | Terkait purchase/restock/HPP. Tidak boleh dihitung ulang dari local snapshot. |
 | `pricingMode`, `pricingRuleId`, `lastPricingUpdatedAt` | pricing | Default manual. Rule wajib hanya saat mode `rule`. |
-| `hasVariants`, `hasVariantOptions`, `variantLabel`, `variants`, `variantOptions`, `archivedVariants`, `variantModeHistory` | variant | `variantOptions` dipertahankan sebagai legacy alias. |
+| `hasVariants`, `hasVariantOptions`, `variantLabel`, `variants`, `variantOptions`, `archivedVariants`, `variantModeHistory` | variant | `variantOptions` dipertahankan sebagai alias lama. |
 | `variantCount`, `activeVariantCount` | derived | Diambil dari helper variant raw material. |
 | `isActive`, `createdAt`, `updatedAt` | metadata | `isActive` default true kecuali false eksplisit. |
 
@@ -112,7 +112,7 @@ Source utama: `src/services/Produksi/semiFinishedMaterialsService.js` dan `src/c
 
 | Field | Status | Catatan |
 |---|---|---|
-| `id` | identity | Data baru memakai document ID = kode `SFP-xxx`; data lama/manual code tetap legacy-compatible. |
+| `id` | identity | Data baru memakai document ID = kode `SFP-xxx`; data lama/manual code tetap data-lama-compatible. |
 | `code`, `itemCode` | identity internal | Service membuat kode final saat create; update menjaga kode existing. |
 | `name` | wajib | Nama semi finished wajib ada. |
 | `description` | metadata | Teks bebas. |
@@ -121,7 +121,7 @@ Source utama: `src/services/Produksi/semiFinishedMaterialsService.js` dan `src/c
 | `type` | fixed | `semi_finished`. |
 | `unit` | unit | Default `pcs`. |
 | `relatedProductIds`, `relatedProductNames` | relation snapshot | Snapshot relasi ke product. |
-| `stock`, `currentStock`, `reservedStock`, `availableStock` | stock guarded | Alias legacy tetap dipertahankan. Tidak boleh dimutasi dari snapshot local. |
+| `stock`, `currentStock`, `reservedStock`, `availableStock` | stock guarded | Alias data lama tetap dipertahankan. Tidak boleh dimutasi dari snapshot local. |
 | `minStockAlert` | alert master | Threshold master, bukan agregat variant. |
 | `averageCostPerUnit` | HPP/valuation | Bisa dipengaruhi production output/payroll/HPP; tidak boleh recalculation dari local snapshot. |
 | `isActive`, `isSellable` | metadata | `isSellable` false. |
@@ -187,7 +187,7 @@ Metadata snapshot local:
 Batasan runtime:
 
 - Table ini hanya bisa dilihat di tab `Data Local` pada Offline Database Center.
-- Pull tidak membuat `legacy_sync_queue` baru.
+- Pull tidak membuat `sync queue lama` baru.
 - Push UI tetap hanya Categories/Customers.
 - Guard push service tetap menolak Product/Raw/Semi jika suatu saat ada queue nyasar.
 
@@ -207,7 +207,7 @@ Batasan runtime:
 - [ ] Preview dan pull `Raw Materials (read-only)`.
 - [ ] Preview dan pull `Semi Finished (read-only)`.
 - [ ] Pastikan `Offline → runtime lama` hanya menampilkan Categories dan Customers.
-- [ ] Pastikan tidak ada `legacy_sync_queue` untuk suppliers/products/raw_materials/semi_finished_materials.
+- [ ] Pastikan tidak ada `sync queue lama` untuk suppliers/products/raw_materials/semi_finished_materials.
 - [ ] Pastikan halaman `Products`, `RawMaterials`, `SemiFinishedMaterials`, `Purchases`, `ProductionBoms`, dan `ProductionWorkLogs` tetap membaca source aktif seperti sebelumnya.
 - [ ] Pastikan tidak ada perubahan stok, inventory logs, purchase, production work log, payroll, atau HPP setelah pull snapshot.
 

@@ -5,7 +5,7 @@ import "./PageHeader.css";
 const { Title, Text } = Typography;
 
 // =====================================================
-// SECTION: Shared Content Page Header — AKTIF / LEGACY-COMPAT
+// SECTION: Shared Content Page Header — AKTIF / COMPATIBILITY
 // Fungsi:
 // - menampilkan nama menu/page title dan subtitle di dalam content card.
 // - tetap menerima props lama title, subtitle, extra, actions, className, dan showTitle agar halaman bisnis tidak perlu diubah satu per satu.

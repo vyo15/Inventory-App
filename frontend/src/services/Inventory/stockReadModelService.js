@@ -26,8 +26,8 @@ export const buildStockItemReadModelDocument = (record = {}, options = {}) => {
     syncedAt: new Date().toISOString(),
   };
 };
-export const setStockItemReadModelInTransaction = () => ({ skipped: true, reason: "SQLite stock read model tidak memakai legacy transaction." });
-export const setStockItemReadModelInBatch = () => ({ skipped: true, reason: "SQLite stock read model tidak memakai legacy batch." });
+export const setStockItemReadModelInTransaction = () => ({ skipped: true, reason: "Data stok lokal tidak memakai transaksi lama." });
+export const setStockItemReadModelInBatch = () => ({ skipped: true, reason: "Data stok lokal tidak memakai batch lama." });
 export const upsertStockItemReadModel = async (record = {}, options = {}) => sqliteStockReadModelsAdapter.upsertStockReadModel(buildStockItemReadModelDocument(record, options));
 export const upsertStockItemReadModels = async (records = [], options = {}) => Promise.all((records || []).map((record) => upsertStockItemReadModel(record, options)));
 export const deleteStockItemReadModelInTransaction = () => ({ skipped: true });

@@ -30,10 +30,7 @@ import {
 } from "@ant-design/icons";
 
 import { REPOSITORY_MODES } from "../../../data/repositories/repositoryMode";
-import {
-  SQLITE_REPOSITORY_CONFIRMATION,
-  getRepositoryModeStatus,
-} from "../../../data/repositories/repositoryModeService";
+import { getRepositoryModeStatus } from "../../../data/repositories/repositoryModeService";
 import {
   createSqliteBackendBackup,
   createSqliteRestorePlan,
@@ -87,10 +84,37 @@ const getBackupTypeLabel = (backupType) => {
     "pre-restore": "Sebelum Restore",
     "pre-reset": "Sebelum Reset",
     "pre-import": "Sebelum Import",
-    legacy: "Legacy",
+    archived: "Data Lama",
   };
   return map[backupType] || backupType || "Backup";
 };
+
+
+const RUNTIME_STATUS_LABELS = {
+  sqlite_active: "Database aktif",
+  guarded: "Butuh konfirmasi",
+  archived_inactive: "Nonaktif",
+  unknown: "Perlu dicek",
+};
+
+const RUNTIME_SCOPE_LABELS = {
+  read_write: "Baca/tulis data",
+  read_write_master: "Master data",
+  read_write_master_payload: "Master data dan katalog",
+  read_write_master_stock: "Master data dan stok",
+  atomic_product_raw_semi: "Stok produk, bahan, dan semi finished",
+  atomic_stock_finance: "Stok dan keuangan",
+  product_raw_stock_restore_guarded_refund: "Retur barang dan pemulihan stok",
+  cash_in_cash_out_ledger: "Kas masuk, kas keluar, dan ledger",
+  production_sqlite_runtime: "Alur produksi",
+  payroll_paid_hpp_sqlite: "Payroll final dan HPP",
+  sqlite_transactions_finance_stock: "Laporan transaksi, keuangan, dan stok",
+  local_auth_only: "Login dan role user",
+  confirm_keyword_required: "Aksi wajib konfirmasi",
+};
+
+const getRuntimeStatusLabel = (status) => RUNTIME_STATUS_LABELS[status] || "Perlu dicek";
+const getRuntimeScopeLabel = (scope) => RUNTIME_SCOPE_LABELS[scope] || "Area modul";
 
 const getBackupStatusTone = (backup) => {
   if (!backup) return { color: "red", text: "Belum ada backup" };
@@ -122,7 +146,7 @@ const renderSelectedBackupSummary = (backup) => {
 // =====================================================
 // SECTION: OfflineDatabaseCenter — AKTIF / SQLITE LOCAL CENTER
 // Fungsi:
-// - Menggantikan UI penyimpanan browser lama dengan pusat kontrol SQLite local LAN.
+// - Menggantikan UI penyimpanan browser lama dengan pusat kontrol database lokal LAN.
 // - Tidak menjalankan sinkronisasi lama, conflict resolver, atau backup penyimpanan browser.
 // - Modul guarded stock/purchase/sales/finance/production tetap tidak dimutasi offline.
 // =====================================================
@@ -151,7 +175,7 @@ const OfflineDatabaseCenter = () => {
   const latestBackup = backups[0] || statusData.latestBackup || null;
   const backupTone = getBackupStatusTone(latestBackup);
   const selectedBackup = backups.find((backup) => backup.filename === selectedBackupFilename) || latestBackup;
-  const restoreKeywordRequired = statusData.restoreConfirmKeyword || restorePlan?.requiredConfirmKeyword || "RESTORE SQLITE";
+  const restoreKeywordRequired = statusData.restoreConfirmKeyword || restorePlan?.requiredConfirmKeyword || "RESTORE DATABASE";
   const restoreReady = Boolean(restorePlan?.validForRestore && selectedBackupFilename && restoreKeyword.trim() === restoreKeywordRequired);
   const externalCopyAgeDays = externalCopyConfirmedAt ? getAgeDays(externalCopyConfirmedAt) : null;
 
@@ -173,7 +197,7 @@ const OfflineDatabaseCenter = () => {
       if (showSuccess) message.success("Status Database Center diperbarui.");
     } catch (error) {
       console.error("Gagal memuat Database Center:", error);
-      message.error(error?.message || "Backend database belum bisa diakses.");
+      message.error(error?.message || "Layanan database belum bisa diakses.");
       const modeStatus = await getRepositoryModeStatus().catch(() => ({ mode: REPOSITORY_MODES.SQLITE_SIDECAR }));
       void modeStatus;
     } finally {
@@ -227,13 +251,13 @@ const OfflineDatabaseCenter = () => {
     }
 
     Modal.confirm({
-      title: "Jalankan restore database SQLite?",
+      title: "Jalankan restore database?",
       icon: <ExclamationCircleOutlined />,
       content: (
         <Space direction="vertical" size={8} style={{ width: "100%" }}>
           <Text>Database aktif akan diganti oleh backup yang dipilih.</Text>
           <Text strong>{selectedBackupFilename}</Text>
-          <Text type="secondary">Backend akan membuat backup pre-restore otomatis sebelum overwrite.</Text>
+          <Text type="secondary">Sistem akan membuat backup pre-restore otomatis sebelum overwrite.</Text>
         </Space>
       ),
       okText: "Restore Sekarang",
@@ -246,12 +270,12 @@ const OfflineDatabaseCenter = () => {
             filename: selectedBackupFilename,
             confirmKeyword: restoreKeyword,
           });
-          message.success(result?.message || "Restore SQLite berhasil dijalankan. Refresh aplikasi bila diperlukan.");
+          message.success(result?.message || "Restore database berhasil dijalankan. Refresh aplikasi bila diperlukan.");
           setRestoreKeyword("");
           setRestorePlan(null);
           await loadCenterData();
         } catch (error) {
-          message.error(error?.message || "Restore SQLite gagal dijalankan.");
+          message.error(error?.message || "Restore database gagal dijalankan.");
         } finally {
           setRestoreExecuteLoading(false);
         }
@@ -317,13 +341,13 @@ const OfflineDatabaseCenter = () => {
         type="success"
         showIcon
         message="Runtime database aktif"
-        description="Semua modul berjalan melalui backend lokal dan database utama aplikasi."
+        description="Semua modul berjalan melalui layanan lokal dan database utama aplikasi."
       />
 
       <Card size="small" title="Status runtime" className="offline-db-action-card">
         <Space direction="vertical" size={8}>
           <Tag color="green">Aktif</Tag>
-          <Text type="secondary">Confirmation internal: {SQLITE_REPOSITORY_CONFIRMATION}</Text>
+          <Text type="secondary">Mode database lokal aktif.</Text>
         </Space>
       </Card>
 
@@ -332,7 +356,7 @@ const OfflineDatabaseCenter = () => {
           {
             color: "green",
             dot: <CheckCircleOutlined />,
-            children: "Semua modul utama membaca dan menulis melalui backend database aplikasi.",
+            children: "Semua modul utama membaca dan menulis melalui layanan database aplikasi.",
           },
           {
             color: "blue",
@@ -342,7 +366,7 @@ const OfflineDatabaseCenter = () => {
           {
             color: "green",
             dot: <SafetyOutlined />,
-            children: "Backup resmi dibuat backend dalam paket .imsbak.zip dengan manifest, checksum, dan integrity check.",
+            children: "Backup resmi dibuat sistem dalam paket .imsbak.zip dengan manifest, checksum, dan integrity check.",
           },
         ]}
       />
@@ -355,14 +379,14 @@ const OfflineDatabaseCenter = () => {
         type={backupTone.color === "green" ? "success" : backupTone.color === "orange" ? "warning" : "error"}
         showIcon
         message={backupTone.text}
-        description="Backup resmi dibuat dari backend dalam format .imsbak.zip. Copy backup yang sudah verified ke flashdisk atau harddisk eksternal secara rutin."
+        description="Backup resmi dibuat dalam format .imsbak.zip. Copy backup yang sudah verified ke flashdisk atau harddisk eksternal secara rutin."
       />
 
       <Row gutter={[12, 12]}>
         <Col xs={24} md={12}>
           <Card size="small" className="offline-db-action-card" title="Status Backup Terakhir">
             {latestBackup ? renderSelectedBackupSummary(latestBackup) : (
-              <Alert type="warning" showIcon message="Belum ada backup SQLite." />
+              <Alert type="warning" showIcon message="Belum ada backup database." />
             )}
           </Card>
         </Col>
@@ -417,7 +441,7 @@ const OfflineDatabaseCenter = () => {
           ))}
         </Row>
         {!backups.length ? (
-          <Alert style={{ marginTop: 12 }} type="warning" showIcon message="Belum ada backup SQLite." />
+          <Alert style={{ marginTop: 12 }} type="warning" showIcon message="Belum ada backup database." />
         ) : null}
       </Card>
     </Space>
@@ -429,18 +453,18 @@ const OfflineDatabaseCenter = () => {
         type="success"
         showIcon
         message="Status runtime modul"
-        description="Semua modul utama berjalan melalui backend SQLite lokal. Modul restore destructive tetap memakai guard konfirmasi."
+        description="Semua modul utama berjalan melalui layanan database lokal. Restore tetap memakai guard konfirmasi."
       />
 
       <Row gutter={[12, 12]}>
         <Col xs={12} md={6}>
           <Card size="small" className="offline-db-status-card">
-            <Statistic title="SQLite Aktif" value={formatNumber(moduleRuntimeSummary.sqlite_active)} prefix={<CheckCircleOutlined />} />
+            <Statistic title="Database Aktif" value={formatNumber(moduleRuntimeSummary.sqlite_active)} prefix={<CheckCircleOutlined />} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card size="small" className="offline-db-status-card">
-            <Statistic title="Runtime Ready" value={formatNumber(moduleRuntimeSummary.runtime_ready || 0)} prefix={<DatabaseOutlined />} />
+            <Statistic title="Siap Dipakai" value={formatNumber(moduleRuntimeSummary.runtime_ready || 0)} prefix={<DatabaseOutlined />} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
@@ -461,7 +485,7 @@ const OfflineDatabaseCenter = () => {
             ? "green"
             : item.status === "guarded"
               ? "red"
-              : item.status === "legacy_inactive"
+              : item.status === "archived_inactive"
                 ? "orange"
                 : "blue";
 
@@ -471,9 +495,9 @@ const OfflineDatabaseCenter = () => {
                 <Space direction="vertical" size={6} style={{ width: "100%" }}>
                   <Space wrap size={6}>
                     <Text strong>{item.label}</Text>
-                    <Tag color={statusColor}>{item.status}</Tag>
+                    <Tag color={statusColor}>{getRuntimeStatusLabel(item.status)}</Tag>
                   </Space>
-                  <Text type="secondary">Scope: {item.scope || "-"}</Text>
+                  <Text type="secondary">Area: {getRuntimeScopeLabel(item.scope)}</Text>
                   <Text type="secondary">{item.notes || "-"}</Text>
                 </Space>
               </Card>
@@ -489,8 +513,8 @@ const OfflineDatabaseCenter = () => {
       <Alert
         type="warning"
         showIcon
-        message="Restore SQLite memakai alur guarded"
-        description="Restore wajib pilih backup resmi, preview valid, keyword RESTORE SQLITE, dan backend otomatis membuat pre-restore backup sebelum overwrite database aktif."
+        message="Restore database memakai alur aman"
+        description="Restore wajib pilih backup resmi, preview valid, keyword konfirmasi, dan sistem otomatis membuat backup pre-restore sebelum mengganti database aktif."
       />
       <Card
         size="small"
@@ -582,7 +606,7 @@ const OfflineDatabaseCenter = () => {
             disabled={!restorePlan?.validForRestore}
           />
           <Button danger type="primary" loading={restoreExecuteLoading} disabled={!restoreReady} onClick={handleExecuteRestore}>
-            Restore Database SQLite
+            Restore Database
           </Button>
         </Space>
       </Card>
@@ -594,16 +618,16 @@ const OfflineDatabaseCenter = () => {
       <Alert
         type="warning"
         showIcon
-        message="Checklist wajib setelah patch database runtime"
-        description="Jalankan checklist ini sebelum dipakai produksi. Pastikan backend check, build frontend, backup manual, restore preview, dan copy eksternal sudah diuji."
+        message="Checklist wajib setelah update database"
+        description="Jalankan checklist ini sebelum dipakai produksi. Pastikan layanan lokal, build frontend, backup manual, restore preview, dan copy eksternal sudah diuji."
       />
       <Card size="small" title="Manual QA" className="offline-db-action-card">
         <Timeline
           items={[
-            { color: "green", children: "Backend: cd backend && npm install && npm run dev; buka /health dan /api/maintenance/status." },
+            { color: "green", children: "Layanan lokal: jalankan npm install dan npm run dev dari folder backend, lalu cek status aplikasi." },
             { color: "green", children: "Frontend laptop: npm run dev -- --host 0.0.0.0; buka halaman Kategori dan Customer." },
-            { color: "green", children: "Frontend HP: buka aplikasi dari alamat lokal laptop/PC server dan tambah/edit customer test." },
-            { color: "green", children: "Restart backend; pastikan auto backup harian tidak dobel di hari yang sama." },
+            { color: "green", children: "HP: buka aplikasi dari alamat lokal laptop/PC server dan tambah/edit customer test." },
+            { color: "green", children: "Restart layanan lokal; pastikan auto backup harian tidak dobel di hari yang sama." },
             { color: "blue", children: "Buat backup manual; pastikan paket .imsbak.zip, manifest, checksum, dan audit log maintenance tercatat." },
             { color: "orange", children: "Jalankan Preview Restore pada backup terbaru; pastikan status valid sebelum tombol restore aktif." },
             { color: "orange", children: "Copy backup verified ke flashdisk/harddisk eksternal dan tandai checklist eksternal." },
@@ -639,8 +663,8 @@ const OfflineDatabaseCenter = () => {
             Refresh
           </Button>
           <Tag color={backupTone.color}>{backupTone.text}</Tag>
-          <Tag color="green">Backend LAN</Tag>
-          <Tag color="blue">SQLite only</Tag>
+          <Tag color="green">Layanan lokal aktif</Tag>
+          <Tag color="blue">Database lokal aktif</Tag>
         </Space>
       )}
       styles={{
@@ -653,15 +677,15 @@ const OfflineDatabaseCenter = () => {
       <Space direction="vertical" size={16} style={{ width: "100%" }}>
         <div className="offline-db-hero" style={{ background: token.colorBgElevated, borderColor: token.colorBorderSecondary }}>
           <div>
-            <Text type="secondary">SQLite offline LAN</Text>
-            <Title level={4} style={{ margin: "2px 0 4px" }}>Satu database lokal untuk laptop dan HP</Title>
+            <Text type="secondary">Database lokal</Text>
+            <Title level={4} style={{ margin: "2px 0 4px" }}>Satu database untuk laptop dan HP</Title>
             <Text type="secondary">
-              Frontend tetap web React. Data disimpan di SQLite lewat backend Node.js lokal. Backup resmi tersedia dalam format .imsbak.zip agar bisa dipreview, dicek checksum, dan direstore dengan guard.
+              Aplikasi tetap berbasis web. Data disimpan di database lokal melalui layanan aplikasi. Backup resmi tersedia dalam format .imsbak.zip agar bisa dipreview, dicek checksum, dan direstore dengan aman.
             </Text>
           </div>
           <Space direction="vertical" size={4} align="end">
             {modeTag}
-            <Text type="secondary">Runtime: semua modul SQLite</Text>
+            <Text type="secondary">Runtime: semua modul aktif</Text>
             <Text type="secondary">Backup: {backupTone.text}</Text>
           </Space>
         </div>

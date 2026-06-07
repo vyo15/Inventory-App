@@ -504,7 +504,7 @@
 }
 
 /* =========================
-   SECTION: Legacy Class Guard — CLEANUP CANDIDATE / UI ONLY
+   SECTION: Compatibility Class Guard — CLEANUP CANDIDATE / UI ONLY
    Fungsi:
    - menjaga class lama tidak memunculkan dekorasi/card logo lama jika masih tersisa dari cache atau branch lain.
    Hubungan flow aplikasi:

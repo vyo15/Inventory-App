@@ -175,19 +175,19 @@ const ResetSafeRepairPanel = ({
           description="Jalankan Cek Semua Area atau audit terkait dulu, lihat jumlah kandidat repair, lalu konfirmasi aksi. Tombol repair dikunci jika audit belum ada atau tidak ada kandidat."
         />
 
-        <Divider orientation="left" plain>Stock Read Model Backfill</Divider>
+        <Divider orientation="left" plain>Perbaikan Data Stok</Divider>
         <Text type="secondary">
-          Rebuild hanya menulis collection turunan <Text code>stock_item_read_models</Text>. Tidak mengubah master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance. Cleanup orphan hanya menghapus dokumen read model turunan setelah audit terbaru menunjukkan master source sudah tidak ada.
+          Perbaikan ini hanya memperbarui data turunan stok. Tidak mengubah master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance. Cleanup data yatim hanya menghapus data turunan setelah audit terbaru menunjukkan master source sudah tidak ada.
         </Text>
         <Row gutter={[8, 8]}>
           <Col xs={24} md={6}>
-            <Button block icon={<FileSearchOutlined />} loading={loadingStockReadModelAudit} onClick={onLoadStockReadModelAudit}>Cek Read Model Stok</Button>
+            <Button block icon={<FileSearchOutlined />} loading={loadingStockReadModelAudit} onClick={onLoadStockReadModelAudit}>Cek Data Stok</Button>
           </Col>
           <Col xs={24} md={6}>
             {renderGuardedRepairButton({
-              label: "Rebuild Read Model Stok",
-              title: "Rebuild stock read model?",
-              description: "Aksi ini hanya upsert read model missing/stale dari master stock aktif.",
+              label: "Perbaiki Data Stok",
+              title: "Perbaiki data stok?",
+              description: "Aksi ini hanya memperbarui data stok yang kurang/kedaluwarsa dari master stock aktif.",
               loading: loadingStockReadModelRepair,
               onConfirm: onRepairStockReadModelAudit,
               audit: stockReadModelAudit,
@@ -196,8 +196,8 @@ const ResetSafeRepairPanel = ({
           </Col>
           <Col xs={24} md={6}>
             <Popconfirm
-              title="Backfill metadata restock read model?"
-              description={`Aksi ini hanya menulis metadata purchase terakhir ke stock_item_read_models dari audit terbaru. ${buildGuardMessage({ auditReady: Boolean(stockReadModelAudit), planCount: stockReadModelSummary.restockMetadataRepairCount || 0 })}`}
+              title="Lengkapi metadata restock?"
+              description={`Aksi ini hanya menulis metadata pembelian terakhir dari audit terbaru. ${buildGuardMessage({ auditReady: Boolean(stockReadModelAudit), planCount: stockReadModelSummary.restockMetadataRepairCount || 0 })}`}
               okText="Ya, backfill"
               cancelText="Batal"
               disabled={!stockReadModelAudit || !stockReadModelSummary.restockMetadataRepairCount}
@@ -215,14 +215,14 @@ const ResetSafeRepairPanel = ({
           </Col>
           <Col xs={24} md={6}>
             <Popconfirm
-              title="Cleanup orphan read model stok?"
+              title="Cleanup data stok yatim?"
               description={(
                 <Space direction="vertical" size={6}>
                   <Text>
-                    Aksi ini hanya menghapus dokumen turunan stock_item_read_models yang tidak punya master source pada audit terbaru. Master stock, inventory log, transaksi, produksi, HPP, payroll, dan finance tidak disentuh.
+                    Aksi ini hanya menghapus data turunan stok yang tidak punya master source pada audit terbaru. Master stock, inventory log, transaksi, produksi, HPP, payroll, dan finance tidak disentuh.
                   </Text>
                   <Text type="secondary">
-                    Ketik <Text code>{STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD}</Text> untuk konfirmasi cleanup derived collection.
+                    Ketik <Text code>{STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD}</Text> untuk konfirmasi cleanup data turunan.
                   </Text>
                   <Input
                     value={stockReadModelCleanupKeyword}
@@ -249,12 +249,12 @@ const ResetSafeRepairPanel = ({
                 loading={loadingStockReadModelCleanup}
                 disabled={!stockReadModelAudit || !stockReadModelSummary.orphanCount}
               >
-                Cleanup Orphan{stockReadModelSummary.orphanCount ? ` (${stockReadModelSummary.orphanCount})` : ""}
+                Cleanup Data Yatim{stockReadModelSummary.orphanCount ? ` (${stockReadModelSummary.orphanCount})` : ""}
               </Button>
             </Popconfirm>
           </Col>
           <Col xs={24} md={6}>
-            <Statistic title="Missing/Stale" value={(stockReadModelSummary.missingCount || 0) + (stockReadModelSummary.staleCount || 0)} />
+            <Statistic title="Kurang/Kedaluwarsa" value={(stockReadModelSummary.missingCount || 0) + (stockReadModelSummary.staleCount || 0)} />
           </Col>
         </Row>
         {stockReadModelAudit && (
@@ -262,11 +262,11 @@ const ResetSafeRepairPanel = ({
             type={stockReadModelSummary.executablePlanCount || stockReadModelSummary.manualReviewCount ? "warning" : "success"}
             showIcon
             message={stockReadModelSummary.executablePlanCount
-              ? `${stockReadModelSummary.executablePlanCount} read model stok perlu rebuild.`
+              ? `${stockReadModelSummary.executablePlanCount} data stok perlu diperbaiki.`
               : stockReadModelSummary.manualReviewCount
-                ? `${stockReadModelSummary.manualReviewCount} read model orphan perlu review manual.`
-                : "Stock read model sudah sinkron dengan master stock."}
-            description={`Master dicek: ${stockReadModelSummary.sourceRecords || 0}. Missing: ${stockReadModelSummary.missingCount || 0}. Stale: ${stockReadModelSummary.staleCount || 0}. Metadata restock: ${stockReadModelSummary.restockMetadataRepairCount || 0}. Orphan cleanup: ${stockReadModelSummary.orphanCount || 0}.`}
+                ? `${stockReadModelSummary.manualReviewCount} data stok yatim perlu review manual.`
+                : "Data stok sudah sinkron dengan master stock."}
+            description={`Master dicek: ${stockReadModelSummary.sourceRecords || 0}. Missing: ${stockReadModelSummary.missingCount || 0}. Stale: ${stockReadModelSummary.staleCount || 0}. Metadata restock: ${stockReadModelSummary.restockMetadataRepairCount || 0}. Cleanup data yatim: ${stockReadModelSummary.orphanCount || 0}.`}
           />
         )}
         {stockReadModelRows.some((record) => record.category !== "ok") && (
@@ -279,7 +279,7 @@ const ResetSafeRepairPanel = ({
             columns={[
               { title: "Area", dataIndex: "sourceLabel", key: "sourceLabel", width: 135, render: (value) => renderCompactText(value, 125) },
               { title: "Item", dataIndex: "itemName", key: "itemName", width: 220, render: (value) => renderCompactText(value, 200) },
-              { title: "Read Model", dataIndex: "readModelId", key: "readModelId", width: 210, render: (value) => renderCompactTag(value, 190) },
+              { title: "Data Stok", dataIndex: "readModelId", key: "readModelId", width: 210, render: (value) => renderCompactTag(value, 190) },
               {
                 title: "Status",
                 dataIndex: "category",
@@ -294,7 +294,7 @@ const ResetSafeRepairPanel = ({
               { title: "Issue", dataIndex: "issue", key: "issue", render: (value) => renderCompactText(value, 360) },
             ]}
             mobileCardConfig={{
-              title: (record) => record.itemName || record.sourceLabel || "Read Model Stok",
+              title: (record) => record.itemName || record.sourceLabel || "Data Stok",
               subtitle: (record) => [record.sourceLabel, record.readModelId].filter(Boolean),
               tags: (record) => (
                 <Tag color={STOCK_READ_MODEL_CATEGORY_COLORS[record.category] || "default"}>

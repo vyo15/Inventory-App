@@ -42,7 +42,7 @@ const getBackupTypeLabel = (backupType) => {
     "pre-restore": "Sebelum Restore",
     "pre-reset": "Sebelum Reset",
     "pre-import": "Sebelum Import",
-    legacy: "Legacy",
+    compatibility: "Data Lama",
   };
   return labels[backupType] || backupType || "Backup";
 };
@@ -82,7 +82,7 @@ const MaintenanceHistoryPanel = () => {
       if (showSuccess) message.success("Riwayat maintenance berhasil diperbarui.");
     } catch (error) {
       console.error("Gagal memuat riwayat maintenance:", error);
-      message.error(error?.message || "Riwayat maintenance belum bisa dimuat dari backend SQLite.");
+      message.error(error?.message || "Riwayat maintenance belum bisa dimuat dari layanan lokal.");
       setBackups([]);
       setRestoreLogs([]);
     } finally {
@@ -125,7 +125,7 @@ const MaintenanceHistoryPanel = () => {
         type="info"
         showIcon
         message="Riwayat maintenance resmi"
-        description="Tab ini menampilkan backup dan restore dari backend SQLite. Riwayat reset legacy tidak dijadikan sumber utama karena service reset lama sudah nonaktif pada mode full SQLite."
+        description="Tab ini menampilkan backup dan restore resmi dari layanan lokal. Riwayat reset lama tidak dijadikan sumber utama karena fitur reset lama sudah nonaktif."
       />
 
       <Row gutter={[12, 12]}>
@@ -152,7 +152,7 @@ const MaintenanceHistoryPanel = () => {
             <Space direction="vertical" size={6}>
               <Tag icon={<SwapOutlined />} color="purple">Restore</Tag>
               <Text strong>{restoreLogs.length}</Text>
-              <Text type="secondary">Preview/execute restore tercatat</Text>
+              <Text type="secondary">Preview/restore tercatat</Text>
             </Space>
           </Card>
         </Col>

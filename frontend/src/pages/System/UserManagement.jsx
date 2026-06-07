@@ -74,7 +74,7 @@ const validateLocalPasswordField = (_, value) => {
 // - mode create membuat profile `system_users/{authUid}` dari UID Auth yang ditempel manual;
 // - mode edit hanya mengubah profile role/status/display name yang sudah ada.
 // Status:
-// - AKTIF untuk halaman Manajemen User final setelah cleanup legacy.
+// - AKTIF untuk halaman Manajemen User final setelah cleanup data lama.
 // =========================
 const FORM_MODE = {
   CREATE: "create",
@@ -120,11 +120,11 @@ const getUserManagementActionErrorMessage = (error = {}) => {
   const errorCode = error.code || error.errorCode;
 
   if (errorCode === DELETE_PROFILE_PERMISSION_ERROR_CODE) {
-    return "Permission menolak aksi user. Cek akses administrator lokal.";
+    return "Akses administrator tidak mengizinkan aksi ini.";
   }
 
   if (errorCode === DELETE_PROFILE_NOT_FOUND_ERROR_CODE) {
-    return "User lokal sudah tidak ditemukan. Refresh daftar user.";
+    return "Akun sudah tidak ditemukan. Refresh daftar user.";
   }
 
   if (errorCode === DELETE_PROFILE_GUARD_ERROR_CODE) {
@@ -137,16 +137,16 @@ const getUserManagementActionErrorMessage = (error = {}) => {
 // =========================
 // SECTION: User Management Page - AKTIF / GUARDED
 // Fungsi:
-// - menampilkan dan mengelola akun IMS lokal SQLite.
+// - menampilkan dan mengelola akun IMS lokal database lokal.
 // Hubungan flow aplikasi:
 // - AuthProvider memakai profile lokal ini untuk memutuskan user boleh masuk aplikasi;
 // - Route/Menu Guard membatasi halaman ini untuk Administrator;
-// - SQLite lokal menyimpan password lewat backend Node/SQLite, bukan di frontend.
+// - database lokal menyimpan password lewat backend Node/database lokal, bukan di frontend.
 // Status:
-// - AKTIF untuk SQLite local user management.
-// - GUARDED: password lokal hanya dikirim ke backend auth SQLite dan tidak disimpan di UI.
+// - AKTIF untuk database lokal user management.
+// - GUARDED: password lokal hanya dikirim ke backend auth database lokal dan tidak disimpan di UI.
 // Cleanup:
-// - flow migrasi UID/domain lama dan indikator legacy/orphan sudah dihapus dari runtime aktif.
+// - flow migrasi UID/domain lama dan indikator data lama/orphan sudah dihapus dari runtime aktif.
 // =========================
 const UserManagement = () => {
   const { profile, reloadProfile } = useAuth();
@@ -200,7 +200,7 @@ const UserManagement = () => {
   // Hubungan flow aplikasi:
   // - Manajemen User tidak boleh menghapus administrator aktif terakhir agar akses pemulihan tetap ada.
   // Status:
-  // - AKTIF untuk UI guard; service/backend tetap melakukan validasi ulang sebelum delete user SQLite.
+  // - AKTIF untuk UI guard; service/backend tetap melakukan validasi ulang sebelum delete user database lokal.
   // =========================
   const activeAdministratorCount = useMemo(() => {
     return users.filter(
@@ -283,14 +283,14 @@ const UserManagement = () => {
   // =========================
   // SECTION: Save User - AKTIF / GUARDED
   // Fungsi:
-  // - create: mode SQLite membuat akun lokal;
-  // - edit: mengubah profile, role, status, dan opsional password baru untuk akun lokal SQLite.
+  // - create: mode database lokal membuat akun lokal;
+  // - edit: mengubah profile, role, status, dan opsional password baru untuk akun lokal database lokal.
   // Hubungan flow aplikasi:
-  // - AuthProvider membaca user dari backend SQLite localAuth;
+  // - AuthProvider membaca user dari backend database lokalAuth;
   // - Auth UID hanya ditampilkan sebagai compatibility internal, bukan input user.
   // Status:
   // - AKTIF.
-  // - GUARDED: password lokal hanya dikirim ke backend SQLite dan tidak disimpan di state.
+  // - GUARDED: password lokal hanya dikirim ke backend database lokal dan tidak disimpan di state.
   // =========================
   const handleSaveProfile = async (values) => {
     setIsSaving(true);
@@ -326,7 +326,7 @@ const UserManagement = () => {
   // Fungsi:
   // - menghitung alasan aksi Edit/Nonaktifkan/Hapus Profile diblokir dari data terbaru tabel.
   // Hubungan flow aplikasi:
-  // - UI memberi feedback cepat, tetapi service dan backend tetap memvalidasi ulang sebelum write/delete user SQLite.
+  // - UI memberi feedback cepat, tetapi service dan backend tetap memvalidasi ulang sebelum write/delete user database lokal.
   // Status:
   // - AKTIF untuk Manajemen User final.
   // - GUARDED: self-profile dan administrator aktif terakhir tetap tidak boleh dihapus.
@@ -356,7 +356,7 @@ const UserManagement = () => {
   // Fungsi:
   // - memakai modal berbasis state agar kompatibel dengan theme AntD v5.
   // Hubungan flow aplikasi:
-  // - toggle status mengubah akun lokal SQLite dan backend otomatis mencabut session user nonaktif.
+  // - toggle status mengubah akun lokal database lokal dan backend otomatis mencabut session user nonaktif.
   // Status:
   // - AKTIF untuk aksi Aktifkan/Nonaktifkan.
   // =========================
@@ -416,7 +416,7 @@ const UserManagement = () => {
   // =========================
   // SECTION: Controlled Delete Profile Modal - AKTIF / GUARDED
   // Fungsi:
-  // - membuka modal konfirmasi berbasis state sebelum delete user lokal SQLite;
+  // - membuka modal konfirmasi berbasis state sebelum delete user lokal database lokal;
   // - memastikan tombol Hapus Profile memanggil handler dan reload data setelah sukses.
   // Hubungan flow aplikasi:
   // - tombol ini menghapus user lokal lewat backend guarded; session user target ikut dicabut.
@@ -698,7 +698,7 @@ const UserManagement = () => {
   - Menampilkan summary, tabel profile, form tambah/edit, dan modal konfirmasi status/hapus profile.
 
   Dipakai oleh:
-  - Administrator untuk mengelola akun lokal SQLite.
+  - Administrator untuk mengelola akun lokal database lokal.
 
   Alasan perubahan:
   - Copy dibuat ringkas: tidak menonjolkan UID teknis dan fokus ke akun lokal.
@@ -713,13 +713,13 @@ const UserManagement = () => {
     <div className="page-container">
       <PageHeader
         title="Manajemen User"
-        subtitle="Kelola akun lokal IMS."
+        subtitle="Kelola akun pengguna IMS."
         actions={[
           {
             key: "create-user-profile",
             type: "primary",
             icon: <PlusOutlined />,
-            label: "Tambah Akun Lokal",
+            label: "Tambah Akun",
             onClick: openCreateModal,
           },
         ]}
@@ -729,7 +729,7 @@ const UserManagement = () => {
         <SummaryStatGrid items={summaryItems} />
 
         <PageSection
-          title="Daftar Akun Lokal"
+          title="Daftar Akun"
           subtitle="Role, status, dan akses login."
         >
           <DataRefreshIndicator loading={isLoading} dataSource={users} />
@@ -750,7 +750,7 @@ const UserManagement = () => {
       <PageFormModal
         title={
           formMode === FORM_MODE.CREATE
-            ? "Tambah Akun Lokal"
+            ? "Tambah Akun"
             : "Edit Akun Lokal"
         }
         open={isModalOpen}
@@ -790,7 +790,7 @@ const UserManagement = () => {
               rules={
                 formMode === FORM_MODE.CREATE
                   ? [
-                      { required: true, message: "Password akun lokal wajib diisi." },
+                      { required: true, message: "Password akun wajib diisi." },
                       { validator: validateLocalPasswordField },
                     ]
                   : [{ validator: (_, value) => (value ? validateLocalPasswordField(_, value) : Promise.resolve()) }]

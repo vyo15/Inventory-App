@@ -38,9 +38,9 @@ export const KNOWN_BUSINESS_PREFIXES = [
 
 /*
 =====================================================
-SECTION: Helper audit data lama — LEGACY-COMPAT
+SECTION: Helper audit data lama — COMPATIBILITY
 Fungsi:
-- Membaca collection lama secara read-only, mengenali kode bisnis manusiawi, dan membedakan reference teknis legacy random ID dari reference operasional.
+- Membaca collection lama secara read-only, mengenali kode bisnis manusiawi, dan membedakan reference teknis data lama random ID dari reference operasional.
 
 Dipakai oleh:
 - getDataQualityAudit di dataQualityAuditService.js dan section Data Quality Audit di ResetMaintenanceData.jsx.
@@ -304,7 +304,7 @@ export const toSample = ({ collectionName, itemDoc, issue, recommendation }) => 
 
 /*
 =====================================================
-SECTION: Kategori masalah data — LEGACY-COMPAT
+SECTION: Kategori masalah data — COMPATIBILITY
 Fungsi:
 - Menetapkan kategori audit, label summary, rekomendasi, dan batas sample yang tampil untuk data lama yang belum sesuai standar kode/reference baru.
 
@@ -312,7 +312,7 @@ Dipakai oleh:
 - getDataQualityAudit dan tabel Data Quality Audit di ResetMaintenanceData.jsx.
 
 Alasan perubahan:
-- Admin butuh daftar data yang perlu dibuat ulang setelah reset testing, bukan migration/backfill massal yang berisiko menumpuk data legacy.
+- Admin butuh daftar data yang perlu dibuat ulang setelah reset testing, bukan migration/backfill massal yang berisiko menumpuk data lama.
 
 Catatan cleanup:
 - Kategori bisa dipisah menjadi config docs jika standar audit data lama makin banyak.
@@ -388,8 +388,8 @@ export const CATEGORY_CONFIGS = [
     recommendation: "Aman dibuat ulang jika data test",
   },
   {
-    key: "work_logs_legacy_status",
-    label: "Work Log status legacy",
+    key: "work_logs_archived_status",
+    label: "Work Log status data lama",
     recommendation: "Perlu cek manual; flow aktif hanya in_progress/completed",
   },
   {

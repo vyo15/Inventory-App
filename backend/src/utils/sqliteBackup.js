@@ -12,7 +12,7 @@ const BACKUP_FORMAT = "imsbak";
 const BACKUP_FORMAT_VERSION = 1;
 const BACKUP_FILE_SUFFIX = ".imsbak.zip";
 const BACKUP_TYPES = new Set(["manual", "daily", "pre-update", "pre-restore", "pre-reset", "pre-import", "test"]);
-const RESTORE_CONFIRM_KEYWORD = "RESTORE SQLITE";
+const RESTORE_CONFIRM_KEYWORD = "RESTORE DATABASE";
 const SQLITE_PACKAGE_DATABASE_FILE = "database.sqlite";
 const SQLITE_PACKAGE_MANIFEST_FILE = "manifest.json";
 const SQLITE_PACKAGE_CHECKSUM_FILE = "checksum.sha256";
@@ -268,7 +268,7 @@ const createOfficialSqliteBackup = async (db, options = {}) => {
 
     const validation = await validateSqliteFile(backupDbPath);
     if (!validation.valid) {
-      throw new Error(`Backup SQLite tidak valid: integrity=${validation.integrityCheck}; foreignKey=${validation.foreignKeyCheck}`);
+      throw new Error(`Backup database lokal tidak valid: integrity=${validation.integrityCheck}; foreignKey=${validation.foreignKeyCheck}`);
     }
 
     const dbStat = fs.statSync(backupDbPath);
@@ -318,7 +318,7 @@ const createOfficialSqliteBackup = async (db, options = {}) => {
       entityType: "backup_log",
       entityId: result.lastID,
       actor,
-      description: `Backup SQLite resmi (${backupType}) berhasil dibuat dan diverifikasi`,
+      description: `Backup database lokal resmi (${backupType}) berhasil dibuat dan diverifikasi`,
       metadata: {
         filename: packageFilename,
         backupPath: packagePath,
@@ -375,7 +375,7 @@ const enrichBackupLog = (backup) => {
   return {
     ...backup,
     fileExists,
-    backupType: manifest?.backupType || (String(backup.filename || "").includes("pre-restore") ? "pre-restore" : "legacy"),
+    backupType: manifest?.backupType || (String(backup.filename || "").includes("pre-restore") ? "pre-restore" : "manual-import"),
     manifestStatus,
     manifest,
   };
@@ -395,7 +395,7 @@ const extractBackupDatabaseToTemp = async (backup, tempDir) => {
   if (!isPackage) {
     fs.copyFileSync(backup.path, extractedDbPath);
     const validation = await validateSqliteFile(extractedDbPath);
-    return { dbPath: extractedDbPath, manifest: null, validation, legacy: true };
+    return { dbPath: extractedDbPath, manifest: null, validation, compatibilityPackage: true };
   }
 
   const manifest = readBackupManifest(backup.path);
@@ -417,7 +417,7 @@ const extractBackupDatabaseToTemp = async (backup, tempDir) => {
     throw new Error(`Backup tidak lolos validasi: integrity=${validation.integrityCheck}; foreignKey=${validation.foreignKeyCheck}`);
   }
 
-  return { dbPath: extractedDbPath, manifest, validation, legacy: false };
+  return { dbPath: extractedDbPath, manifest, validation, compatibilityPackage: false };
 };
 
 const getBackupPreview = async (backup) => {
@@ -434,7 +434,7 @@ const getBackupPreview = async (backup) => {
       validation: extracted.validation,
       manifest: extracted.manifest || enriched.manifest,
       validForRestore: extracted.validation?.valid === true,
-      legacy: extracted.legacy,
+      compatibilityPackage: extracted.compatibilityPackage,
     };
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });

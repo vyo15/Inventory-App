@@ -34,7 +34,7 @@ app.use(cors({ origin: env.corsOrigin === "*" ? true : env.corsOrigin }));
 app.use(express.json({ limit: "1mb" }));
 app.use(requestLogger);
 
-app.get("/api", (req, res) => success(res, "IMS SQLite sidecar API aktif", {
+app.get("/api", (req, res) => success(res, "IMS layanan lokal API aktif", {
   endpoints: [
     "GET /health",
     "GET /api/settings",
@@ -101,7 +101,7 @@ app.get("/api", (req, res) => success(res, "IMS SQLite sidecar API aktif", {
     "GET /api/migration-status",
     "GET /api/audit-logs",
   ],
-  guardedReminder: "SQLite local menjadi runtime utama. Modul guarded wajib lewat endpoint backend resmi dan tidak boleh direct write.",
+  guardedReminder: "database lokal menjadi runtime utama. Modul guarded wajib lewat endpoint backend resmi dan tidak boleh direct write.",
 }));
 
 app.use("/health", healthRoutes);
@@ -142,13 +142,13 @@ async function startServer() {
   }
 
   app.listen(env.port, env.host, () => {
-    console.log(`IMS SQLite sidecar backend jalan di http://localhost:${env.port}`);
-    console.log(`Database SQLite: ${getDbPath()}`);
-    console.log("Mode: SQLite local primary. Modul guarded wajib lewat endpoint backend resmi.");
+    console.log(`IMS layanan lokal jalan di http://localhost:${env.port}`);
+    console.log(`Database database lokal: ${getDbPath()}`);
+    console.log("Mode: database lokal primary. Modul guarded wajib lewat endpoint backend resmi.");
   });
 }
 
 startServer().catch((error) => {
-  console.error("Gagal menjalankan IMS SQLite sidecar backend:", error);
+  console.error("Gagal menjalankan IMS layanan lokal:", error);
   process.exit(1);
 });

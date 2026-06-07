@@ -150,7 +150,7 @@ const createFinanceMovement = async (db, {
     entityType: tableName,
     entityId: movementId,
     actor,
-    description: `${normalizedDirection === "out" ? "Kas keluar" : "Kas masuk"} ${referenceNumber} tersimpan di SQLite`,
+    description: `${normalizedDirection === "out" ? "Kas keluar" : "Kas masuk"} ${referenceNumber} tersimpan di database lokal`,
     metadata: { referenceNumber, amount, sourceModule: movementPayload.sourceModule, sourceId: movementPayload.sourceId },
   });
 
@@ -160,7 +160,7 @@ const createFinanceMovement = async (db, {
 const markFinanceMovementDeleted = async (db, { tableName, id, actor = "system" } = {}) => {
   if (!id) throw new Error("ID kas yang akan dihapus tidak valid.");
   const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [id]);
-  if (!row) throw new Error("Data kas SQLite tidak ditemukan.");
+  if (!row) throw new Error("Data kas database lokal tidak ditemukan.");
   const payload = { ...safeJsonParse(row.payload_json, {}), status: "deleted", isActive: false, deletedAt: nowIso(), updatedAt: nowIso() };
 
   await db.run(
@@ -178,7 +178,7 @@ const markFinanceMovementDeleted = async (db, { tableName, id, actor = "system" 
     entityType: tableName,
     entityId: id,
     actor,
-    description: `Data kas ${id} dihapus dari SQLite`,
+    description: `Data kas ${id} dihapus dari database lokal`,
     metadata: { tableName, id },
   });
 

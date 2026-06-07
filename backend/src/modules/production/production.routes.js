@@ -3,7 +3,7 @@ const { createSqliteJsonRecordRouter } = require("../../shared/sqliteJsonRecordR
 
 const router = express.Router();
 
-const productionNote = "Production SQLite final aktif untuk data runtime baru. Material usage, payroll paid, dan HPP wajib tetap lewat service/endpoint SQLite agar audit dan ledger konsisten.";
+const productionNote = "Production database lokal final aktif untuk data runtime baru. Material usage, payroll paid, dan HPP wajib tetap lewat service/endpoint database lokal agar audit dan ledger konsisten.";
 
 router.use("/steps", createSqliteJsonRecordRouter({ tableName: "production_steps", moduleKey: "production", entityType: "production_step", codePrefix: "STP", requiredName: true, protectedWriteNote: productionNote }));
 router.use("/employees", createSqliteJsonRecordRouter({ tableName: "production_employees", moduleKey: "production", entityType: "production_employee", codePrefix: "EMP", requiredName: true, protectedWriteNote: productionNote }));

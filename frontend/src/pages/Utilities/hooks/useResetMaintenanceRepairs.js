@@ -80,10 +80,10 @@ const useResetMaintenanceRepairs = ({
       setLoadingStockReadModelAudit(true);
       const result = await getStockReadModelMaintenanceAudit();
       setStockReadModelAudit(result);
-      showActionSuccess("Audit stock read model selesai dimuat.");
+      showActionSuccess("Audit data stok selesai dimuat.");
     } catch (error) {
       console.error(error);
-      showActionError(error?.message || "Gagal memuat audit stock read model.");
+      showActionError(error?.message || "Gagal memuat audit data stok.");
     } finally {
       setLoadingStockReadModelAudit(false);
     }
@@ -106,15 +106,15 @@ const useResetMaintenanceRepairs = ({
         affectedCount: result?.updatedCount || 0,
         dryRun: false,
         status: "success",
-        note: "Rebuild stock read model hanya menulis collection turunan stock_item_read_models. Tidak mengubah master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance.",
+        note: "Perbaikan data stok hanya memperbarui data turunan stok. Tidak mengubah master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance.",
       });
-      showActionSuccess(result?.message || "Rebuild stock read model selesai.");
+      showActionSuccess(result?.message || "Perbaikan data stok selesai.");
       const nextAudit = await getStockReadModelMaintenanceAudit();
       setStockReadModelAudit(nextAudit);
       await loadPreview(false);
     } catch (error) {
       console.error(error);
-      showActionError(error?.message || "Gagal menjalankan rebuild stock read model.");
+      showActionError(error?.message || "Gagal menjalankan perbaikan data stok.");
     } finally {
       setLoadingStockReadModelRepair(false);
     }
@@ -136,13 +136,13 @@ const useResetMaintenanceRepairs = ({
         status: "success",
         note: "Backfill metadata restock hanya menulis field projection purchase terakhir di stock_item_read_models. Tidak mengubah purchases, master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance.",
       });
-      showActionSuccess(result?.message || "Backfill metadata restock read model selesai.");
+      showActionSuccess(result?.message || "Perbaikan metadata restock selesai.");
       const nextAudit = await getStockReadModelMaintenanceAudit();
       setStockReadModelAudit(nextAudit);
       await loadPreview(false);
     } catch (error) {
       console.error(error);
-      showActionError(error?.message || "Gagal menjalankan backfill metadata restock read model.");
+      showActionError(error?.message || "Gagal menjalankan perbaikan metadata restock.");
     } finally {
       setLoadingStockReadModelRestockBackfill(false);
     }
@@ -150,7 +150,7 @@ const useResetMaintenanceRepairs = ({
 
   const handleCleanupStockReadModelOrphans = useCallback(async ({ confirmKeyword = "" } = {}) => {
     if (String(confirmKeyword || "").trim() !== STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD) {
-      showActionError(`Ketik ${STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD} untuk cleanup orphan read model.`);
+      showActionError(`Ketik ${STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD} untuk cleanup data stok yatim.`);
       return;
     }
 
@@ -167,15 +167,15 @@ const useResetMaintenanceRepairs = ({
         affectedCount: result?.deletedCount || 0,
         dryRun: false,
         status: "success",
-        note: "Cleanup orphan stock read model hanya menghapus dokumen turunan stock_item_read_models yang tidak punya master source pada audit terbaru. Tidak mengubah master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance.",
+        note: "Cleanup data stok yatim hanya menghapus data turunan stok yang tidak punya master source pada audit terbaru. Tidak mengubah master stock, inventory log, transaksi, produksi, HPP, payroll, atau finance.",
       });
-      showActionSuccess(result?.message || "Cleanup orphan stock read model selesai.");
+      showActionSuccess(result?.message || "Cleanup data stok yatim selesai.");
       const nextAudit = await getStockReadModelMaintenanceAudit();
       setStockReadModelAudit(nextAudit);
       await loadPreview(false);
     } catch (error) {
       console.error(error);
-      showActionError(error?.message || "Gagal menjalankan cleanup orphan stock read model.");
+      showActionError(error?.message || "Gagal menjalankan cleanup data stok yatim.");
     } finally {
       setLoadingStockReadModelCleanup(false);
     }

@@ -34,7 +34,7 @@ import { ROLE_GROUPS } from "../utils/auth/roleAccess";
 // - AKTIF dipakai oleh SidebarMenu.jsx.
 // - GUARDED: jangan menambah menu sensitif tanpa allowedRoles dan route guard yang sesuai.
 // Cleanup data lama:
-// - tidak ada legacy pada config aktif; route legacy /stock-adjustment tetap ditangani di AppRoutes.
+// - tidak ada data lama pada config aktif; route data lama /stock-adjustment tetap ditangani di AppRoutes.
 // =========================
 export const sidebarMenuItems = [
   // =========================

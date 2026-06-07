@@ -17,7 +17,7 @@ export const unitOptions = ['pcs', 'meter', 'yard', 'kg', 'gram', 'liter', 'ml',
 // membuka seluruh collection purchases saat data real membesar.
 // HUBUNGAN FLOW: read-only; tidak mengubah Raw Material, Supplier, Purchases,
 // stok, kas, expense, harga, saving, atau laporan.
-// LEGACY: purchase yang sangat tua di luar jendela lookup tidak dipakai sebagai
+// DATA LAMA: purchase yang sangat tua di luar jendela lookup tidak dipakai sebagai
 // pembanding ringkas; source of truth histori tetap laporan pembelian.
 // CLEANUP CANDIDATE: ganti ke service latest purchase per material jika index
 // Payload final sudah dibuat oleh service/backend.

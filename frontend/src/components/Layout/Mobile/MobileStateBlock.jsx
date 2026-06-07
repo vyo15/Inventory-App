@@ -36,7 +36,7 @@ const MobileStateBlock = ({
         type="error"
         className="ims-mobile-state-block ims-mobile-state-block--error"
         message={title || "Data belum bisa dimuat"}
-        description={description || "Periksa backend lokal atau coba muat ulang."}
+        description={description || "Periksa layanan lokal atau coba muat ulang."}
         action={actionLabel && onAction ? <Button onClick={onAction}>{actionLabel}</Button> : null}
       />
     );

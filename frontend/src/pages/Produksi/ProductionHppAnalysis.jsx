@@ -33,7 +33,7 @@ import { resolveWorkLogLaborCostDisplay } from "../../utils/produksi/productionP
 // - mengubah kode target type menjadi label yang mudah dibaca user;
 // - tidak mengubah source data Work Log atau rumus HPP.
 // Hubungan dengan flow laporan/export: dipakai agar XLSX HPP bukan data mentah teknis.
-// Status: aktif dipakai; bukan legacy dan bukan kandidat cleanup.
+// Status: aktif dipakai; bukan kandidat cleanup.
 // =====================================================
 const TARGET_TYPE_LABEL_MAP = {
   product: "Produk Jadi",
@@ -95,7 +95,7 @@ const getDerivedHppReconcileStatus = ({ workLog = {}, finalHppPerUnit = 0, isHpp
 // - HPP tetap bersumber dari Work Log completed dan payroll confirmed/paid;
 // - helper ini hanya visibility UI, bukan backfill dan bukan kalkulasi baru.
 // Status:
-// - aktif dipakai; bukan legacy dan bukan kandidat cleanup.
+// - aktif dipakai; bukan kandidat cleanup.
 // =====================================================
 const buildHppCostWarnings = ({
   materialCost,
@@ -213,7 +213,7 @@ const ProductionHppAnalysis = () => {
       // Hubungan dengan flow HPP/Work Log:
       // - final hanya berasal dari payroll final atau step yang memang tidak masuk HPP;
       // - preview boleh memakai draft/estimasi Step sebagai read-only.
-      // Status: aktif dipakai; bukan legacy/kandidat cleanup.
+      // Status: aktif dipakai; bukan kandidat cleanup.
       // =====================================================
       const costWarnings = buildHppCostWarnings({
         materialCost,
@@ -312,7 +312,7 @@ const ProductionHppAnalysis = () => {
     // Fungsi blok:
     // - menghitung jumlah row yang punya warning cost 0;
     // - hanya untuk visibility, tidak mengubah formula HPP atau sumber cost.
-    // Status: aktif dipakai; bukan legacy/kandidat cleanup.
+    // Status: aktif dipakai; bukan kandidat cleanup.
     // =====================================================
     const warningRows = filteredRows.filter(
       (item) => Array.isArray(item.costWarnings) && item.costWarnings.length > 0,
@@ -354,7 +354,7 @@ const ProductionHppAnalysis = () => {
   // Hubungan dengan flow HPP/laporan:
   // - hanya membaca hasil analisis Work Log completed + payroll final;
   // - tidak mengubah rumus HPP, payroll, Work Log, atau source data bisnis.
-  // Status: aktif dipakai; bukan legacy dan bukan kandidat cleanup.
+  // Status: aktif dipakai; bukan kandidat cleanup.
   // =====================================================
   const exportHppToExcel = async () => {
     if (filteredRows.length === 0) {
@@ -679,7 +679,7 @@ const ProductionHppAnalysis = () => {
             - memberi konteks bahwa row dengan cost 0 perlu dicek sumber datanya;
             - tidak mengubah rumus HPP dan tidak melakukan backfill data lama.
             Hubungan dengan flow HPP/Work Log: hanya membaca hasil validasi row Work Log completed.
-            Status: aktif dipakai; bukan legacy/kandidat cleanup.
+            Status: aktif dipakai; bukan kandidat cleanup.
         ===================================================== */}
         {summary.warningRows > 0 ? (
           <div className="ims-readonly-panel" style={{ marginBottom: 16, padding: 12 }}>

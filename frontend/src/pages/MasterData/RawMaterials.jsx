@@ -140,7 +140,7 @@ const RawMaterials = () => {
 
   // ---------------------------------------------------------------------------
   // Loader data master.
-  // Semua source of truth tetap datang dari service/backend SQLite.
+  // Semua source of truth tetap datang dari service/backend database lokal.
   // ---------------------------------------------------------------------------
   useEffect(() => {
     setLoading(true);
@@ -160,7 +160,7 @@ const RawMaterials = () => {
     const unsubPurchases = listenPurchaseRecords(
       (data) => {
         // AKTIF/GUARDED: histori pembelian tetap dibaca dari service purchase aktual.
-        // C1-C8 belum menjadikan transaksi purchase sebagai SQLite writer, jadi jangan ambil dari adapter transaksi SQLite placeholder.
+        // C1-C8 belum menjadikan transaksi purchase sebagai database lokal writer, jadi jangan ambil dari adapter transaksi database lokal placeholder.
         setPurchaseRecords((data || []).slice(0, RAW_MATERIAL_PURCHASE_LOOKUP_LIMIT));
       },
       (error) => {
@@ -179,7 +179,7 @@ const RawMaterials = () => {
         ]);
         if (disposed) return;
         // -------------------------------------------------------------------
-        // Supplier dibaca dari repository boundary. Dalam mode SQLite, ini C1
+        // Supplier dibaca dari repository boundary. Dalam mode database lokal, ini C1
         // master-only dan tidak memutasi purchase/raw/stock.
         // Histori purchase tetap lewat purchasesService agar tidak mismatch dengan data transaksi aktif.
         // -------------------------------------------------------------------
@@ -187,7 +187,7 @@ const RawMaterials = () => {
         setPricingRules(pricingRuleRows);
       } catch (error) {
         console.error(error);
-        message.warning('Supplier/pricing rule SQLite belum lengkap. Raw Material tetap bisa dimuat.');
+        message.warning('Supplier/aturan harga belum lengkap. Bahan Baku tetap bisa dimuat.');
       }
     };
 

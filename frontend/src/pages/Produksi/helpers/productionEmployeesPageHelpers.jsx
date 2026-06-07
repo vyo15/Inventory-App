@@ -124,7 +124,7 @@ export const hasAdditionalEmployeeInfo = (employee = {}) => {
   );
 };
 
-export const hasLegacyPayrollInfo = (employee = {}) => {
+export const hasArchivedPayrollInfo = (employee = {}) => {
   const customModeActive = employee.useCustomPayrollRate && hasValue(employee.customPayrollMode);
   const customOutputActive = employee.useCustomPayrollRate && hasValue(employee.customPayrollOutputBasis);
   const customQtyActive = employee.useCustomPayrollRate && Number(employee.customPayrollQtyBase || 0) > 0;

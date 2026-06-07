@@ -119,7 +119,7 @@ const Purchases = () => {
   // - membaca konteks biaya online agar field ongkir/admin/voucher bisa disembunyikan saat offline.
   // Hubungan flow Purchases:
   // - hanya memengaruhi UI dan biaya transaksi yang user simpan; tidak membuat transaksi otomatis.
-  // Status: aktif dipakai; bukan legacy dan bukan auto-sync Supplier.
+  // Status: aktif dipakai; bukan data lama dan bukan auto-sync Supplier.
   // =========================
   const isOfflinePurchase = purchaseType === "offline";
 
@@ -188,7 +188,7 @@ const Purchases = () => {
   // - tidak mengubah totalStockIn, totalActualPurchase, actualUnitCost, purchaseSaving, save flow, atau services.
   // Alasan logic:
   // - item bervarian tidak boleh menampilkan total master sebagai angka utama karena mutasi pembelian masuk ke varian.
-  // Status: AKTIF untuk UI modal pembelian, GUARDED agar tidak menjadi sumber mutasi stok, LEGACY untuk fallback field stock.
+  // Status: AKTIF untuk UI modal pembelian, GUARDED agar tidak menjadi sumber mutasi stok, COMPATIBILITY untuk fallback field stock.
   // =========================
   const selectedPurchaseStockPreview = useMemo(() => {
     if (!itemType || !itemId) return null;
@@ -316,7 +316,7 @@ const Purchases = () => {
   // - membaca harga barang, ongkir, admin, voucher/koin, dan harga estimasi supplier dari materialDetails yang cocok.
   // Hubungan flow aplikasi:
   // - Supplier hanya sumber default transaksi; nilai ini tidak menulis balik ke Supplier/Raw Material dan tidak membuat purchase otomatis.
-  // Status: aktif dipakai untuk prefill form Pembelian; bukan legacy dan bukan auto-sync supplier.
+  // Status: aktif dipakai untuk prefill form Pembelian; bukan data lama dan bukan auto-sync supplier.
   // =========================
   const selectedSupplierCatalogCost = useMemo(() => {
     const detail = selectedSupplierMaterialDetail || {};
@@ -442,7 +442,7 @@ const Purchases = () => {
     // - khusus pembukaan dari Dashboard Restock Assistant, supplier query dipertahankan sekali.
     // Hubungan flow:
     // - prefill hanya membantu form Purchases; tidak auto-submit, tidak mengubah stok/kas sebelum Simpan.
-    // Status: aktif dipakai; bukan legacy dan bukan auto-purchase.
+    // Status: aktif dipakai; bukan data lama dan bukan auto-purchase.
     // =========================
     const shouldKeepPrefilledSupplier =
       restockPrefillMaterialIdRef.current &&
@@ -460,7 +460,7 @@ const Purchases = () => {
     if (isItemContextChanged) {
       // ACTIVE: perubahan Jenis/Nama Item mengawali konteks purchase baru, sehingga guard manual subtotal di-reset.
       // ALASAN: default harga Supplier berikutnya boleh mengisi ulang Subtotal Barang untuk item baru, tetapi Qty Beli tidak boleh memicu reset ini.
-      // STATUS: aktif dipakai; bukan legacy.
+      // STATUS: aktif dipakai; bukan data lama.
       subtotalManualOverrideRef.current = false;
       supplierSubtotalBaselineRef.current = { itemId: "", supplierId: "", supplierItemPrice: 0, subtotalItems: 0 };
     }
@@ -689,7 +689,7 @@ const Purchases = () => {
   // Hubungan flow Purchases:
   // - hanya membersihkan field biaya di form; tidak membuat transaksi otomatis dan tidak
   //   mengubah stok/kas sebelum user klik Simpan.
-  // Status: aktif dipakai; bukan legacy.
+  // Status: aktif dipakai; bukan data lama.
   // =========================
   useEffect(() => {
     if (purchaseType !== "offline") return;
@@ -782,7 +782,7 @@ const Purchases = () => {
   // Hubungan flow aplikasi:
   // - Total Pembanding dan Selisih hanya informasi efisiensi; tidak mengubah kas,
   //   expense, actualUnitCost, stok, Supplier, atau Raw Material.
-  // Status: aktif dipakai; fallback lama berbasis harga per satuan stok hanya untuk data legacy
+  // Status: aktif dipakai; fallback lama berbasis harga per satuan stok hanya untuk data lama
   // yang belum memiliki supplierItemPrice di katalog Supplier.
   // =========================
   useEffect(() => {
@@ -883,7 +883,7 @@ const Purchases = () => {
     // SECTION: Reset prefill saat user membuat pembelian manual
     // Fungsi blok: memastikan tombol Tambah Pembelian biasa tidak membawa state prefill Dashboard sebelumnya.
     // Hubungan flow: pembelian manual tetap bersih; transaksi hanya tersimpan saat user klik Simpan.
-    // Status: aktif dipakai oleh tombol Tambah Pembelian; bukan legacy.
+    // Status: aktif dipakai oleh tombol Tambah Pembelian; bukan data lama.
     // =========================
     restockPrefillMaterialIdRef.current = "";
     itemChangeContextRef.current = "";
@@ -1106,7 +1106,7 @@ const Purchases = () => {
   // - rumus Purchases tetap sama: Stok Masuk = Qty Beli x Konversi Supplier dan Total Aktual menjadi dasar expense.
   // Status:
   // - AKTIF + GUARDED untuk data real karena menyentuh purchases, stok, inventory_logs, dan expenses.
-  // - LEGACY: tidak ada jalur addDoc purchase lalu update stok terpisah; flow lama diganti transaction agar tidak partial.
+  // - FLOW LAMA: tidak ada jalur addDoc purchase lalu update stok terpisah; flow lama diganti transaction agar tidak partial.
   // - AKTIF: orchestration write sudah berada di purchasesService; page hanya mengirim input form dan data lookup UI.
   // =========================
   const handleSubmitPurchase = async (values) => {

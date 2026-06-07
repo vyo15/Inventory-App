@@ -88,7 +88,7 @@ router.get("/generate-code", requireLocalAuth, async (_req, res, next) => {
   try {
     const db = await getDb();
     const code = await generateNextCode(db);
-    return success(res, "Kode pricing rule SQLite berhasil dibuat", { code });
+    return success(res, "Kode pricing rule database lokal berhasil dibuat", { code });
   } catch (error) {
     return next(error);
   }
@@ -111,7 +111,7 @@ router.get("/", requireLocalAuth, async (req, res, next) => {
       params
     );
 
-    return success(res, "Data pricing rule SQLite berhasil dimuat", rows.map(toPricingRuleRecord));
+    return success(res, "Data pricing rule database lokal berhasil dimuat", rows.map(toPricingRuleRecord));
   } catch (error) {
     return next(error);
   }
@@ -127,10 +127,10 @@ router.get("/:id", requireLocalAuth, async (req, res, next) => {
     );
 
     if (!row) {
-      return failure(res, "Pricing rule SQLite tidak ditemukan.", "NOT_FOUND", 404);
+      return failure(res, "Pricing rule database lokal tidak ditemukan.", "NOT_FOUND", 404);
     }
 
-    return success(res, "Pricing rule SQLite berhasil dimuat", toPricingRuleRecord(row));
+    return success(res, "Pricing rule database lokal berhasil dimuat", toPricingRuleRecord(row));
   } catch (error) {
     return next(error);
   }
@@ -168,15 +168,15 @@ router.post("/", requireLocalAuth, requireLocalAdministrator, async (req, res, n
       entityType: "pricing_rule",
       entityId: payload.id,
       actor: req.localAuth.user.username,
-      description: `Pricing rule ${payload.name} dibuat di SQLite local`,
+      description: `Pricing rule ${payload.name} dibuat di database lokal`,
       metadata: { code, targetType: payload.targetType },
     });
 
     const row = await db.get("SELECT * FROM pricing_rules WHERE id = ?", [payload.id]);
-    return success(res, "Pricing rule berhasil ditambahkan ke SQLite local", toPricingRuleRecord(row), undefined, 201);
+    return success(res, "Pricing rule berhasil ditambahkan ke database lokal", toPricingRuleRecord(row), undefined, 201);
   } catch (error) {
     if (String(error?.message || "").includes("UNIQUE")) {
-      return failure(res, "Kode/ID pricing rule sudah ada di SQLite.", "DUPLICATE_CODE", 409);
+      return failure(res, "Kode/ID pricing rule sudah ada di database lokal.", "DUPLICATE_CODE", 409);
     }
     return next(error);
   }
@@ -188,7 +188,7 @@ router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res,
     const current = await db.get("SELECT * FROM pricing_rules WHERE id = ? AND status != 'deleted'", [req.params.id]);
 
     if (!current) {
-      return failure(res, "Pricing rule SQLite tidak ditemukan.", "NOT_FOUND", 404);
+      return failure(res, "Pricing rule database lokal tidak ditemukan.", "NOT_FOUND", 404);
     }
 
     const currentPayload = toPricingRuleRecord(current);
@@ -220,12 +220,12 @@ router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res,
       entityType: "pricing_rule",
       entityId: current.id,
       actor: req.localAuth.user.username,
-      description: `Pricing rule ${payload.name} diubah di SQLite local`,
+      description: `Pricing rule ${payload.name} diubah di database lokal`,
       metadata: { code: current.code, targetType: payload.targetType },
     });
 
     const row = await db.get("SELECT * FROM pricing_rules WHERE id = ?", [current.id]);
-    return success(res, "Pricing rule SQLite berhasil diubah", toPricingRuleRecord(row));
+    return success(res, "Pricing rule database lokal berhasil diubah", toPricingRuleRecord(row));
   } catch (error) {
     return next(error);
   }
@@ -237,7 +237,7 @@ router.delete("/:id", requireLocalAuth, requireLocalAdministrator, async (req, r
     const current = await db.get("SELECT * FROM pricing_rules WHERE id = ? AND status != 'deleted'", [req.params.id]);
 
     if (!current) {
-      return failure(res, "Pricing rule SQLite tidak ditemukan.", "NOT_FOUND", 404);
+      return failure(res, "Pricing rule database lokal tidak ditemukan.", "NOT_FOUND", 404);
     }
 
     const payload = {
@@ -258,11 +258,11 @@ router.delete("/:id", requireLocalAuth, requireLocalAdministrator, async (req, r
       entityType: "pricing_rule",
       entityId: current.id,
       actor: req.localAuth.user.username,
-      description: `Pricing rule ${current.name} dinonaktifkan di SQLite local`,
+      description: `Pricing rule ${current.name} dinonaktifkan di database lokal`,
       metadata: { code: current.code, targetType: current.target_type },
     });
 
-    return success(res, "Pricing rule SQLite berhasil dihapus", { id: current.id, deleted: true, softDeleted: true });
+    return success(res, "Pricing rule database lokal berhasil dihapus", { id: current.id, deleted: true, softDeleted: true });
   } catch (error) {
     return next(error);
   }

@@ -37,7 +37,7 @@ const ensureCategoryCodeAvailable = async (db, code, excludeId = null) => {
   );
 
   if (existing) {
-    const error = new Error("Kode kategori sudah digunakan di SQLite.");
+    const error = new Error("Kode kategori sudah digunakan di database lokal.");
     error.code = "DUPLICATE_CODE";
     throw error;
   }
@@ -49,7 +49,7 @@ router.get("/", requireLocalAuth, async (req, res, next) => {
     const rows = await db.all(
       "SELECT * FROM categories WHERE status != 'deleted' ORDER BY name ASC, id DESC LIMIT 500"
     );
-    return success(res, "Data kategori SQLite berhasil dimuat", rows.map(toCategoryRecord));
+    return success(res, "Data kategori database lokal berhasil dimuat", rows.map(toCategoryRecord));
   } catch (error) {
     return next(error);
   }
@@ -64,10 +64,10 @@ router.get("/:id", requireLocalAuth, async (req, res, next) => {
     );
 
     if (!row) {
-      return failure(res, "Kategori SQLite tidak ditemukan", "NOT_FOUND", 404);
+      return failure(res, "Kategori database lokal tidak ditemukan", "NOT_FOUND", 404);
     }
 
-    return success(res, "Detail kategori SQLite berhasil dimuat", toCategoryRecord(row));
+    return success(res, "Detail kategori database lokal berhasil dimuat", toCategoryRecord(row));
   } catch (error) {
     return next(error);
   }
@@ -100,14 +100,14 @@ router.post("/", requireLocalAuth, requireLocalAdministrator, async (req, res, n
       entityType: "category",
       entityId: result.lastID,
       actor: req.localAuth.user.username,
-      description: `Kategori ${payload.name} dibuat di SQLite local`,
+      description: `Kategori ${payload.name} dibuat di database lokal`,
       metadata: { code: payload.code, name: payload.name, type: payload.type },
     });
 
-    return success(res, "Kategori berhasil ditambahkan ke SQLite local", toCategoryRecord(category), undefined, 201);
+    return success(res, "Kategori berhasil ditambahkan ke database lokal", toCategoryRecord(category), undefined, 201);
   } catch (error) {
     if (error?.code === "DUPLICATE_CODE" || String(error?.message || "").includes("UNIQUE")) {
-      return failure(res, "Kode kategori sudah ada di SQLite local", "DUPLICATE_CODE", 409);
+      return failure(res, "Kode kategori sudah ada di database lokal", "DUPLICATE_CODE", 409);
     }
     return next(error);
   }
@@ -122,7 +122,7 @@ router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res,
     );
 
     if (!current) {
-      return failure(res, "Kategori SQLite tidak ditemukan", "NOT_FOUND", 404);
+      return failure(res, "Kategori database lokal tidak ditemukan", "NOT_FOUND", 404);
     }
 
     const payload = buildCategoryPayload(req.body);
@@ -151,14 +151,14 @@ router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res,
       entityType: "category",
       entityId: current.id,
       actor: req.localAuth.user.username,
-      description: `Kategori ${payload.name} diubah di SQLite local`,
+      description: `Kategori ${payload.name} diubah di database lokal`,
       metadata: { code: immutableCode, name: payload.name, type: payload.type },
     });
 
-    return success(res, "Kategori SQLite berhasil diubah", toCategoryRecord(updated));
+    return success(res, "Kategori database lokal berhasil diubah", toCategoryRecord(updated));
   } catch (error) {
     if (error?.code === "DUPLICATE_CODE" || String(error?.message || "").includes("UNIQUE")) {
-      return failure(res, "Kode kategori sudah ada di SQLite local", "DUPLICATE_CODE", 409);
+      return failure(res, "Kode kategori sudah ada di database lokal", "DUPLICATE_CODE", 409);
     }
     return next(error);
   }
@@ -173,7 +173,7 @@ router.delete("/:id", requireLocalAuth, requireLocalAdministrator, async (req, r
     );
 
     if (!current) {
-      return failure(res, "Kategori SQLite tidak ditemukan", "NOT_FOUND", 404);
+      return failure(res, "Kategori database lokal tidak ditemukan", "NOT_FOUND", 404);
     }
 
     await db.run(
@@ -187,11 +187,11 @@ router.delete("/:id", requireLocalAuth, requireLocalAdministrator, async (req, r
       entityType: "category",
       entityId: current.id,
       actor: req.localAuth.user.username,
-      description: `Kategori ${current.name} dinonaktifkan di SQLite local`,
+      description: `Kategori ${current.name} dinonaktifkan di database lokal`,
       metadata: { code: current.code, name: current.name },
     });
 
-    return success(res, "Kategori SQLite berhasil dinonaktifkan", {
+    return success(res, "Kategori database lokal berhasil dinonaktifkan", {
       id: current.id,
       deleted: true,
       softDeleted: true,

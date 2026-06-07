@@ -100,13 +100,13 @@ const createSqliteJsonRecordRouter = ({
   blockedWriteMessage = "",
 } = {}) => {
   if (!tableName || !moduleKey || !entityType) {
-    throw new Error("Konfigurasi SQLite JSON record route tidak lengkap.");
+    throw new Error("Konfigurasi database lokal JSON record route tidak lengkap.");
   }
 
   const router = express.Router();
   const rejectDirectWrite = (actionLabel) => (_req, res) => failure(
     res,
-    blockedWriteMessage || `${entityType} SQLite tidak boleh ${actionLabel} langsung. Gunakan endpoint commit/service resmi agar audit, stok, dan ledger tetap konsisten.`,
+    blockedWriteMessage || `${entityType} database lokal tidak boleh ${actionLabel} langsung. Gunakan endpoint commit/service resmi agar audit, stok, dan ledger tetap konsisten.`,
     "DIRECT_WRITE_BLOCKED",
     405,
   );
@@ -115,7 +115,7 @@ const createSqliteJsonRecordRouter = ({
     try {
       const db = await getDb();
       const code = await generateNextCode(db, tableName, codePrefix);
-      return success(res, `Kode ${entityType} SQLite berhasil dibuat`, { code, referenceNumber: code });
+      return success(res, `Kode ${entityType} database lokal berhasil dibuat`, { code, referenceNumber: code });
     } catch (error) {
       return next(error);
     }
@@ -143,7 +143,7 @@ const createSqliteJsonRecordRouter = ({
         `SELECT * FROM ${tableName} WHERE ${where.join(" AND ")} ORDER BY ${orderBy} LIMIT ?`,
         [...params, limit]
       );
-      return success(res, `Data ${entityType} SQLite berhasil dimuat`, rows.map(toRecord), {
+      return success(res, `Data ${entityType} database lokal berhasil dimuat`, rows.map(toRecord), {
         table: tableName,
         guarded: Boolean(protectedWriteNote),
         protectedWriteNote,
@@ -157,8 +157,8 @@ const createSqliteJsonRecordRouter = ({
     try {
       const db = await getDb();
       const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [req.params.id]);
-      if (!row) return failure(res, `${entityType} SQLite tidak ditemukan`, "NOT_FOUND", 404);
-      return success(res, `Detail ${entityType} SQLite berhasil dimuat`, toRecord(row));
+      if (!row) return failure(res, `${entityType} database lokal tidak ditemukan`, "NOT_FOUND", 404);
+      return success(res, `Detail ${entityType} database lokal berhasil dimuat`, toRecord(row));
     } catch (error) {
       return next(error);
     }
@@ -181,7 +181,7 @@ const createSqliteJsonRecordRouter = ({
   
         const duplicate = await db.get(`SELECT id FROM ${tableName} WHERE code = ? AND status != 'deleted'`, [finalCode]);
         if (duplicate) {
-          return failure(res, `Kode ${entityType} sudah ada di SQLite`, "DUPLICATE_CODE", 409);
+          return failure(res, `Kode ${entityType} sudah ada di database lokal`, "DUPLICATE_CODE", 409);
         }
   
         const payload = {
@@ -230,15 +230,15 @@ const createSqliteJsonRecordRouter = ({
           entityType,
           entityId: finalId,
           actor: req.localAuth.user.username,
-          description: `${entityType} ${finalName || finalCode} dibuat di SQLite local`,
+          description: `${entityType} ${finalName || finalCode} dibuat di database lokal`,
           metadata: { code: finalCode, guarded: Boolean(protectedWriteNote), protectedWriteNote },
         });
   
         const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ?`, [finalId]);
-        return success(res, `${entityType} berhasil ditambahkan ke SQLite local`, toRecord(row), undefined, 201);
+        return success(res, `${entityType} berhasil ditambahkan ke database lokal`, toRecord(row), undefined, 201);
       } catch (error) {
         if (String(error?.message || "").includes("UNIQUE")) {
-          return failure(res, `Kode/ID ${entityType} sudah ada di SQLite`, "DUPLICATE_CODE", 409);
+          return failure(res, `Kode/ID ${entityType} sudah ada di database lokal`, "DUPLICATE_CODE", 409);
         }
         return next(error);
       }
@@ -252,7 +252,7 @@ const createSqliteJsonRecordRouter = ({
       try {
         const db = await getDb();
         const current = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [req.params.id]);
-        if (!current) return failure(res, `${entityType} SQLite tidak ditemukan`, "NOT_FOUND", 404);
+        if (!current) return failure(res, `${entityType} database lokal tidak ditemukan`, "NOT_FOUND", 404);
   
         const currentPayload = safeJsonParse(current.payload_json, {});
         const mergedPayload = {
@@ -303,12 +303,12 @@ const createSqliteJsonRecordRouter = ({
           entityType,
           entityId: current.id,
           actor: req.localAuth.user.username,
-          description: `${entityType} ${finalName} diubah di SQLite local`,
+          description: `${entityType} ${finalName} diubah di database lokal`,
           metadata: { code: columns.code || current.code, guarded: Boolean(protectedWriteNote), protectedWriteNote },
         });
   
         const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ?`, [current.id]);
-        return success(res, `${entityType} SQLite berhasil diubah`, toRecord(row));
+        return success(res, `${entityType} database lokal berhasil diubah`, toRecord(row));
       } catch (error) {
         return next(error);
       }
@@ -322,7 +322,7 @@ const createSqliteJsonRecordRouter = ({
       try {
         const db = await getDb();
         const current = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [req.params.id]);
-        if (!current) return failure(res, `${entityType} SQLite tidak ditemukan`, "NOT_FOUND", 404);
+        if (!current) return failure(res, `${entityType} database lokal tidak ditemukan`, "NOT_FOUND", 404);
   
         const payload = safeJsonParse(current.payload_json, {});
         await db.run(
@@ -336,11 +336,11 @@ const createSqliteJsonRecordRouter = ({
           entityType,
           entityId: current.id,
           actor: req.localAuth.user.username,
-          description: `${entityType} ${current.name || current.code} dinonaktifkan di SQLite local`,
+          description: `${entityType} ${current.name || current.code} dinonaktifkan di database lokal`,
           metadata: { code: current.code, guarded: Boolean(protectedWriteNote), protectedWriteNote },
         });
   
-        return success(res, `${entityType} SQLite berhasil dinonaktifkan`, { id: current.id, deleted: true, softDeleted: true });
+        return success(res, `${entityType} database lokal berhasil dinonaktifkan`, { id: current.id, deleted: true, softDeleted: true });
       } catch (error) {
         return next(error);
       }

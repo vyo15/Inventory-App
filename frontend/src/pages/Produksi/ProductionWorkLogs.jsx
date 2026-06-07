@@ -384,7 +384,7 @@ const ProductionWorkLogs = () => {
   );
 
   /* =====================================================
-  SECTION: Apply BOM Template To Work Log — LEGACY-COMPAT/GUARDED
+  SECTION: Apply BOM Template To Work Log — COMPATIBILITY/GUARDED
   Fungsi:
   - Mengisi form Work Log dari BOM sebagai template eksekusi, bukan membuat status Draft baru.
 
@@ -420,7 +420,7 @@ const ProductionWorkLogs = () => {
   };
 
   /* =====================================================
-  SECTION: Apply Production Order Template To Work Log — LEGACY-COMPAT/GUARDED
+  SECTION: Apply Production Order Template To Work Log — COMPATIBILITY/GUARDED
   Fungsi:
   - Mengisi form Work Log dari Production Order sebagai template eksekusi, bukan membuat status Draft baru.
 
@@ -770,7 +770,7 @@ const ProductionWorkLogs = () => {
       // Alasan blok ini dipakai:
       // - regression sebelumnya Work Log selesai tetapi Payroll Produksi tetap kosong.
       // Status:
-      // - aktif dipakai; bukan legacy dan tidak mengubah business rule stok/HPP.
+      // - aktif dipakai; bukan data lama dan tidak mengubah business rule stok/HPP.
       // =====================================================
       let payrollMessageHandled = false;
       try {
@@ -794,7 +794,7 @@ const ProductionWorkLogs = () => {
         // Alasan blok ini dipakai:
         // - complete Work Log adalah guarded stock flow, sedangkan payroll bisa diperbaiki via task terpisah/manual.
         // Status:
-        // - aktif sebagai guard; bukan legacy.
+        // - aktif sebagai guard; bukan data lama.
         // =====================================================
         console.error(payrollError);
         payrollMessageHandled = true;

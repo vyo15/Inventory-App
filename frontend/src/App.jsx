@@ -35,8 +35,8 @@ const AppLoadingScreen = () => <LogoLoadingScreen />;
 // Status:
 // - AKTIF.
 // - GUARDED: salah guard bisa membuat seluruh app terkunci, jadi fallback Login tetap jelas.
-// Legacy / cleanup:
-// - belum ada legacy; ProtectedRoute detail akan menjadi fase C/D.
+// Compatibility / cleanup:
+// - belum ada data lama; ProtectedRoute detail akan menjadi fase C/D.
 // =========================
 const AppContent = () => {
   const { authLoading, isAccessReady } = useAuth();

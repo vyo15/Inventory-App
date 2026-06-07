@@ -1,6 +1,6 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, legacy_sync_queue, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, sync queue lama, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # Offline Release Candidate Closure
@@ -14,7 +14,7 @@ Dokumen ini menutup roadmap offline Batch 23–52 pada level source. Setelah dok
 - `src/data/local/localDbSchema.js` menggunakan `LOCAL_DB_SCHEMA_VERSION = 4`.
 - Write offline pilot hanya untuk `categories` dan `customers`.
 - Supplier/Product/Raw/Semi/Stock/Production/Report/Finance hanya read-only snapshot.
-- `legacy_sync_queue` hanya boleh untuk `categories` dan `customers`.
+- `sync queue lama` hanya boleh untuk `categories` dan `customers`.
 - Backup/restore tetap local-only dan harus guarded.
 - Queue/conflict/health/security guard sudah tersedia di Offline Database Center.
 - Batch 40 Report/Finance snapshot sudah runtime read-only via `report_snapshots`, bukan ledger final.
@@ -68,11 +68,11 @@ Perbaikan Batch 53:
 - Health audit juga memberi warning untuk queue update lama yang belum memiliki `baseVersion/baseRecordFingerprint`.
 - Resolve conflict `local_wins` sekarang ikut menandai record local sebagai `synced`, bukan hanya queue, agar tidak meninggalkan dirty local state palsu.
 - `docs/10_OFFLINE_DATABASE_CONTRACT.md` dan `docs/08_INTEGRATION_MAP.md` diselaraskan dengan source v4.
-- `OfflineSyncDevPanel.jsx` dan `OfflineMasterDataPilotPanel.jsx` diberi status `LEGACY-COMPAT / CLEANUP CANDIDATE`; jangan dihapus sebelum audit usage final.
+- `OfflineSyncDevPanel.jsx` dan `OfflineMasterDataPilotPanel.jsx` diberi status `COMPATIBILITY / CLEANUP CANDIDATE`; jangan dihapus sebelum audit usage final.
 
 P2 yang sengaja tidak diubah runtime:
 
-- `legacy-db.rules` masih perlu audit production rules terpisah. Jangan ubah field-level/module-level rules di batch offline closure karena bisa memutus flow transaksi.
+- `rules database lama` masih perlu audit production rules terpisah. Jangan ubah field-level/module-level rules di batch offline closure karena bisa memutus flow transaksi.
 - `src/runtime-lama.js` masih memakai public runtime lama Web config hardcoded. Ini bukan secret server, tetapi env-based config boleh menjadi cleanup terpisah setelah deployment workflow disetujui.
 - `xlsx@0.18.5` masih memiliki audit risk high dan belum ada fix resmi dari `npm audit`. Jangan ganti dependency tanpa approval; batasi penggunaan file Excel dari sumber tidak dipercaya dan pertimbangkan migrasi export library di batch terpisah.
 
@@ -80,5 +80,5 @@ QA tambahan setelah Batch 53:
 
 - Pull `categories/customers` dari runtime lama, edit record yang sama di runtime lama/device lain, lalu sync offline update; hasil yang benar adalah `sync_conflicts`, bukan overwrite.
 - Restore/import snapshot lama yang tidak punya `readOnlySnapshot`; tab Health harus memberi warning.
-- Pastikan panel legacy tidak muncul sebagai UI utama dan Offline Database Center tetap normal.
+- Pastikan panel data lama tidak muncul sebagai UI utama dan Offline Database Center tetap normal.
 

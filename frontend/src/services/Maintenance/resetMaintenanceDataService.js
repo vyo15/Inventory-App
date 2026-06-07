@@ -10,7 +10,7 @@ export {
   RESET_MODE_OPTIONS,
 } from "./config/resetMaintenanceDataConfig";
 
-const sqliteOnly = (label = "maintenance") => ({ mode: "sqlite_only", label, warnings: [], destructiveAllowed: false, note: "Reset legacy sudah dihapus. Gunakan backup/restore resmi untuk maintenance data." });
+const sqliteOnly = (label = "maintenance") => ({ mode: "database_local_active", label, warnings: [], destructiveAllowed: false, note: "Reset lama sudah dihapus. Gunakan backup/restore resmi untuk maintenance data." });
 export const buildMasterDataExportPayload = async ({ includeOpeningStock = true } = {}) => ({ exportMeta: { project: "IMS Bunga Flanel", exportType: "sqlite-master-data-json", exportedAt: new Date().toISOString(), includeOpeningStock }, summary: { totalCollections: 0, totalRecords: 0, openingStockRows: 0, warnings: 0 }, collections: [], openingStockReference: [], warnings: [] });
 export const getMasterDataExportPreview = async () => ({ ...sqliteOnly("export_preview"), payload: await buildMasterDataExportPayload() });
 export const getHppCostResetPreview = async ({ resetMode } = {}) => ({ ...sqliteOnly("hpp_cost_reset"), resetMode });

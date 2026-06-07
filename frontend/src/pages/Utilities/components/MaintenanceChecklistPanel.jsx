@@ -136,7 +136,7 @@ const MaintenanceChecklistPanel = () => {
       if (showSuccess) message.success("Checklist maintenance berhasil diperbarui.");
     } catch (error) {
       console.error("Gagal memuat checklist maintenance:", error);
-      message.error(error?.message || "Checklist maintenance belum bisa dimuat dari backend SQLite.");
+      message.error(error?.message || "Checklist maintenance belum bisa dimuat dari backend database lokal.");
       setStatus(null);
       setBackups([]);
       setModuleRuntimeStatus(null);
@@ -179,7 +179,7 @@ const MaintenanceChecklistPanel = () => {
       statusLabel: statusData.dbPath ? "Sesuai" : "Belum sesuai",
       title: "Backend aktif",
       description: "Status dibaca dari endpoint maintenance backend.",
-      extra: statusData.dbPath ? `Schema v${statusData.schemaVersion || "unknown"}` : "Backend/status SQLite belum terbaca.",
+      extra: statusData.dbPath ? `Schema v${statusData.schemaVersion || "unknown"}` : "Backend/status database lokal belum terbaca.",
     },
     {
       key: "backup-format",
@@ -231,7 +231,7 @@ const MaintenanceChecklistPanel = () => {
       kind: "auto",
       status: moduleRuntimeKnown && moduleRuntimeNotReady === 0 && moduleRuntimeReady === moduleRuntimeTotal ? "done" : "pending",
       statusLabel: moduleRuntimeKnown && moduleRuntimeNotReady === 0 && moduleRuntimeReady === moduleRuntimeTotal ? "Sesuai" : "Perlu cek",
-      title: "Status runtime modul SQLite terbaca",
+      title: "Status runtime modul database lokal terbaca",
       description: "Checklist otomatis dari tabel module_migration_status yang dinormalisasi backend sebagai Module Runtime Status.",
       extra: moduleRuntimeKnown ? `${moduleRuntimeReady}/${moduleRuntimeTotal} modul runtime ready` : "Status runtime modul belum terbaca.",
     },
@@ -268,7 +268,7 @@ const MaintenanceChecklistPanel = () => {
       status: restoreUnderstoodAgeDays !== null && restoreUnderstoodAgeDays <= 1 ? "done" : "pending",
       statusLabel: restoreUnderstoodAgeDays !== null && restoreUnderstoodAgeDays <= 1 ? "Sudah" : "Perlu konfirmasi",
       title: "Dampak restore sudah dipahami",
-      description: "Restore akan mengganti database aktif. Keyword RESTORE SQLITE tetap wajib di tab Backup & Restore.",
+      description: "Restore akan mengganti database aktif. Keyword konfirmasi tetap wajib di tab Backup & Restore.",
       extra: restoreUnderstoodAt ? `Terakhir: ${formatDateTime(restoreUnderstoodAt)}` : "Belum dikonfirmasi untuk hari ini.",
       action: (
         <Button size="small" danger onClick={() => markManual(RESTORE_UNDERSTOOD_STORAGE_KEY, setRestoreUnderstoodAt, "Pemahaman dampak restore ditandai.")}>Saya paham dampak restore</Button>
@@ -285,8 +285,8 @@ const MaintenanceChecklistPanel = () => {
       <Alert
         type={criticalIssues ? "error" : autoDoneCount === autoItems.length ? "success" : "warning"}
         showIcon
-        message={criticalIssues ? "Ada checklist backup/maintenance yang belum aman" : "Checklist otomatis membaca kondisi SQLite saat ini"}
-        description="Item auto akan terisi sendiri jika backend, backup, manifest, checksum, restore guard, dan status modul sudah sesuai. Item manual tetap perlu konfirmasi user karena tidak bisa dibuktikan sistem."
+        message={criticalIssues ? "Ada checklist backup/maintenance yang belum aman" : "Checklist otomatis membaca kondisi database saat ini"}
+        description="Item auto akan terisi sendiri jika layanan lokal, backup, manifest, checksum, restore guard, dan status modul sudah sesuai. Item manual tetap perlu konfirmasi user karena tidak bisa dibuktikan sistem."
       />
 
       <Row gutter={[12, 12]}>
@@ -343,7 +343,7 @@ const MaintenanceChecklistPanel = () => {
             { color: externalCopyAgeDays !== null && externalCopyAgeDays <= 7 ? "green" : "orange", children: "Copy backup verified ke flashdisk/harddisk eksternal." },
             { color: otherUsersPausedAgeDays !== null && otherUsersPausedAgeDays <= 1 ? "green" : "orange", children: "Pastikan user lain tidak sedang input data." },
             { color: "blue", children: "Buka tab Backup & Restore, pilih backup, lalu Preview Restore." },
-            { color: restoreUnderstoodAgeDays !== null && restoreUnderstoodAgeDays <= 1 ? "green" : "orange", children: "Pahami dampak restore, lalu ketik keyword RESTORE SQLITE hanya jika benar-benar diperlukan." },
+            { color: restoreUnderstoodAgeDays !== null && restoreUnderstoodAgeDays <= 1 ? "green" : "orange", children: "Pahami dampak restore, lalu ketik keyword konfirmasi hanya jika benar-benar diperlukan." },
           ]}
         />
       </Card>

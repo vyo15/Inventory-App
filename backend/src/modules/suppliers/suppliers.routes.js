@@ -89,7 +89,7 @@ const ensureSupplierCodeAvailable = async (db, code, excludeId = null) => {
   );
 
   if (existing) {
-    const error = new Error("Kode supplier sudah digunakan di SQLite.");
+    const error = new Error("Kode supplier sudah digunakan di database lokal.");
     error.code = "DUPLICATE_CODE";
     throw error;
   }
@@ -111,7 +111,7 @@ router.get("/generate-code", requireLocalAuth, async (req, res, next) => {
   try {
     const db = await getDb();
     const code = await generateNextSupplierCode(db);
-    return success(res, "Kode supplier SQLite berhasil dibuat", { code, supplierCode: code });
+    return success(res, "Kode supplier database lokal berhasil dibuat", { code, supplierCode: code });
   } catch (error) {
     return next(error);
   }
@@ -123,7 +123,7 @@ router.get("/", requireLocalAuth, async (req, res, next) => {
     const rows = await db.all(
       "SELECT * FROM suppliers WHERE status != 'deleted' ORDER BY name ASC, id DESC LIMIT 500"
     );
-    return success(res, "Data supplier SQLite berhasil dimuat", rows.map(toSupplierRecord));
+    return success(res, "Data supplier database lokal berhasil dimuat", rows.map(toSupplierRecord));
   } catch (error) {
     return next(error);
   }
@@ -137,8 +137,8 @@ router.get("/:id", requireLocalAuth, async (req, res, next) => {
       [req.params.id]
     );
 
-    if (!row) return failure(res, "Supplier SQLite tidak ditemukan", "NOT_FOUND", 404);
-    return success(res, "Detail supplier SQLite berhasil dimuat", toSupplierRecord(row));
+    if (!row) return failure(res, "Supplier database lokal tidak ditemukan", "NOT_FOUND", 404);
+    return success(res, "Detail supplier database lokal berhasil dimuat", toSupplierRecord(row));
   } catch (error) {
     return next(error);
   }
@@ -155,7 +155,7 @@ router.post("/", requireLocalAuth, requireLocalAdministrator, async (req, res, n
 
     const finalCode = payload.supplierCode || await generateNextSupplierCode(db);
     if (!SUPPLIER_CODE_PATTERN.test(finalCode)) {
-      return failure(res, "Kode supplier SQLite belum valid", "VALIDATION_ERROR", 400);
+      return failure(res, "Kode supplier database lokal belum valid", "VALIDATION_ERROR", 400);
     }
 
     await ensureSupplierCodeAvailable(db, finalCode);
@@ -176,14 +176,14 @@ router.post("/", requireLocalAuth, requireLocalAdministrator, async (req, res, n
       entityType: "supplier",
       entityId: result.lastID,
       actor: req.localAuth.user.username,
-      description: `Supplier ${payload.name} dibuat di SQLite local`,
+      description: `Supplier ${payload.name} dibuat di database lokal`,
       metadata: { supplierCode: finalCode, name: payload.name, storeLink: payload.storeLink },
     });
 
-    return success(res, "Supplier berhasil ditambahkan ke SQLite local", toSupplierRecord(supplier), undefined, 201);
+    return success(res, "Supplier berhasil ditambahkan ke database lokal", toSupplierRecord(supplier), undefined, 201);
   } catch (error) {
     if (error?.code === "DUPLICATE_CODE" || String(error?.message || "").includes("UNIQUE")) {
-      return failure(res, "Kode supplier sudah ada di SQLite local", "DUPLICATE_CODE", 409);
+      return failure(res, "Kode supplier sudah ada di database lokal", "DUPLICATE_CODE", 409);
     }
     return next(error);
   }
@@ -197,7 +197,7 @@ router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res,
       [req.params.id]
     );
 
-    if (!current) return failure(res, "Supplier SQLite tidak ditemukan", "NOT_FOUND", 404);
+    if (!current) return failure(res, "Supplier database lokal tidak ditemukan", "NOT_FOUND", 404);
 
     const payload = buildSupplierPayload(req.body);
     const immutableCode = normalizeCode(payload.supplierCode || current.supplier_code);
@@ -225,14 +225,14 @@ router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res,
       entityType: "supplier",
       entityId: current.id,
       actor: req.localAuth.user.username,
-      description: `Supplier ${payload.name} diubah di SQLite local`,
+      description: `Supplier ${payload.name} diubah di database lokal`,
       metadata: { supplierCode: immutableCode, name: payload.name, storeLink: payload.storeLink },
     });
 
-    return success(res, "Supplier SQLite berhasil diubah", toSupplierRecord(updated));
+    return success(res, "Supplier database lokal berhasil diubah", toSupplierRecord(updated));
   } catch (error) {
     if (error?.code === "DUPLICATE_CODE" || String(error?.message || "").includes("UNIQUE")) {
-      return failure(res, "Kode supplier sudah ada di SQLite local", "DUPLICATE_CODE", 409);
+      return failure(res, "Kode supplier sudah ada di database lokal", "DUPLICATE_CODE", 409);
     }
     return next(error);
   }
@@ -246,7 +246,7 @@ router.delete("/:id", requireLocalAuth, requireLocalAdministrator, async (req, r
       [req.params.id]
     );
 
-    if (!current) return failure(res, "Supplier SQLite tidak ditemukan", "NOT_FOUND", 404);
+    if (!current) return failure(res, "Supplier database lokal tidak ditemukan", "NOT_FOUND", 404);
 
     await db.run(
       "UPDATE suppliers SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -259,11 +259,11 @@ router.delete("/:id", requireLocalAuth, requireLocalAdministrator, async (req, r
       entityType: "supplier",
       entityId: current.id,
       actor: req.localAuth.user.username,
-      description: `Supplier ${current.name} dinonaktifkan di SQLite local`,
+      description: `Supplier ${current.name} dinonaktifkan di database lokal`,
       metadata: { supplierCode: current.supplier_code, name: current.name },
     });
 
-    return success(res, "Supplier SQLite berhasil dinonaktifkan", {
+    return success(res, "Supplier database lokal berhasil dinonaktifkan", {
       id: current.id,
       deleted: true,
       softDeleted: true,

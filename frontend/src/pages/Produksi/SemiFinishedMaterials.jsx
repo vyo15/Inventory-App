@@ -1049,10 +1049,10 @@ const SemiFinishedMaterials = () => {
             - SemiFinishedMaterials.jsx create/edit drawer dan semiFinishedMaterialsService payload.
 
             Alasan perubahan:
-            - `variants[].minStockAlert` adalah legacy-compat; minimum stock Semi Finished tidak lagi diisi per varian.
+            - `variants[].minStockAlert` adalah compatibility data lama; minimum stock Semi Finished tidak lagi diisi per varian.
 
             Catatan cleanup:
-            - field legacy varian dapat diaudit pada batch maintenance terpisah.
+            - field data lama varian dapat diaudit pada batch maintenance terpisah.
 
             Risiko:
             - input min stock per varian yang diaktifkan lagi akan membuat status Perlu Dicek tidak konsisten dengan source master.

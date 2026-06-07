@@ -12,7 +12,7 @@ router.get("/", async (req, res, next) => {
       acc[row.key] = row.value;
       return acc;
     }, {});
-    return success(res, "Settings SQLite sidecar berhasil dimuat", settings, { rows });
+    return success(res, "Settings layanan database lokal berhasil dimuat", settings, { rows });
   } catch (error) {
     return next(error);
   }

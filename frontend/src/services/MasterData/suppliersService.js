@@ -27,7 +27,7 @@ export const buildSupplierDisplayLabel = (supplier = {}) => getSupplierDisplayNa
 export const getSupplierOptionLabel = (supplier = {}) => buildSupplierDisplayLabel(supplier);
 export const isManagedSupplierRecord = () => true;
 export const isMasterSupplierRecord = isManagedSupplierRecord;
-export const isLegacyMaterialSupplierRecord = () => false;
+export const isArchivedMaterialSupplierRecord = () => false;
 export const getSupplierReferenceId = (supplier = {}, fallbackId = null) => supplier.id || supplier.supplierId || supplier.code || fallbackId;
 export const normalizeSupplierPurchaseType = (detail = {}) => detail.purchaseType || detail.type || 'unknown';
 export const calculateSupplierMaterialRestockMetrics = (detail = {}) => ({ referencePrice: Number(detail.referencePrice || detail.price || 0), conversionValue: Number(detail.conversionValue || 1) });
@@ -48,5 +48,5 @@ export const listenSuppliers = (callback, onError) => {
   return () => { disposed = true; };
 };
 export const listenSupplierCatalog = listenSuppliers;
-export const cascadeSupplierSnapshotToRawMaterials = async () => ({ skipped: true, reason: 'SQLite supplier tidak melakukan cascade langsung ke raw material.' });
-export const clearSupplierSnapshotFromRawMaterials = async () => ({ skipped: true, reason: 'SQLite supplier tidak melakukan cascade langsung ke raw material.' });
+export const cascadeSupplierSnapshotToRawMaterials = async () => ({ skipped: true, reason: 'Supplier tidak melakukan cascade langsung ke raw material.' });
+export const clearSupplierSnapshotFromRawMaterials = async () => ({ skipped: true, reason: 'Supplier tidak melakukan cascade langsung ke raw material.' });

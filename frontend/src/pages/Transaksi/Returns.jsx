@@ -167,7 +167,7 @@ const Returns = () => {
   // - flow ini adalah jalur resmi retur yang menambah stok kembali;
   // - dokumen retur, update stok, dan inventory log wajib commit bersama dalam backend SQLite transaction;
   // - tidak memakai addInventoryLog/updateInventoryStock langsung agar tidak ada stok berubah tanpa audit log.
-  // LEGACY:
+  // DATA LAMA:
   // - flow lama melakukan update stok lebih dulu, lalu addDoc returns, lalu addInventoryLog; jika addDoc/log gagal, stok bisa sudah berubah.
   // AKTIF:
   // - orkestrasi transaction retur sudah dipindah ke returnsService; page hanya mengirim payload form dan menampilkan hasil.

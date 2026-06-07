@@ -36,7 +36,7 @@ router.get("/status", async (req, res, next) => {
       db.get("SELECT * FROM backup_logs ORDER BY id DESC LIMIT 1"),
     ]);
 
-    return success(res, "Status SQLite sidecar berhasil dimuat", {
+    return success(res, "Status layanan database lokal berhasil dimuat", {
       dbPath: getDbPath(),
       backupDir: env.backupDir,
       schemaVersion: schemaVersion?.value || "unknown",
@@ -78,7 +78,7 @@ router.post("/backup", requireLocalAuth, requireLocalAdministrator, async (req, 
       notes: req.body?.notes || "Backup manual resmi dari UI IMS.",
     });
 
-    return success(res, "Backup database SQLite berhasil dibuat dan diverifikasi", backup);
+    return success(res, "Backup database berhasil dibuat dan diverifikasi", backup);
   } catch (error) {
     return next(error);
   }
@@ -203,11 +203,11 @@ router.post("/restore-execute", requireLocalAuth, requireLocalAdministrator, asy
       entityType: "restore_log",
       entityId: result.lastID,
       actor,
-      description: "Restore SQLite guarded berhasil dijalankan setelah validasi backup",
+      description: "Restore database lokal guarded berhasil dijalankan setelah validasi backup",
       metadata: summary,
     });
 
-    return success(res, "Restore SQLite guarded berhasil dijalankan. Refresh aplikasi dan login ulang bila diperlukan.", {
+    return success(res, "Restore database lokal guarded berhasil dijalankan. Refresh aplikasi dan login ulang bila diperlukan.", {
       id: result.lastID,
       ...summary,
     });
@@ -257,7 +257,7 @@ router.post("/restore-plan", requireLocalAuth, requireLocalAdministrator, async 
       blockedActions: [
         "Tidak overwrite database aktif.",
         "Tidak stop backend otomatis.",
-        "Tidak menghapus file SQLite aktif.",
+        "Tidak menghapus file database lokal aktif.",
         "Restore destructive hanya lewat /api/maintenance/restore-execute dengan session administrator lokal dan keyword konfirmasi.",
       ],
       guidedSteps: [
@@ -268,7 +268,7 @@ router.post("/restore-plan", requireLocalAuth, requireLocalAdministrator, async 
       ],
       manualSafeSteps: [
         "Buat backup terbaru terlebih dahulu.",
-        "Jangan copy file SQLite aktif saat backend berjalan.",
+        "Jangan copy file database lokal aktif saat backend berjalan.",
         "Gunakan restore guarded dari UI/backend agar sistem membuat pre-restore backup otomatis.",
         "Setelah restore, refresh aplikasi dan cek /health serta /api/maintenance/status.",
       ],
@@ -288,7 +288,7 @@ router.post("/restore-plan", requireLocalAuth, requireLocalAdministrator, async 
       entityType: "restore_log",
       entityId: result.lastID,
       actor: req.localAuth.user.username,
-      description: "Restore plan SQLite dibuat sebagai preview-only dengan validasi backup",
+      description: "Restore plan database lokal dibuat sebagai preview-only dengan validasi backup",
       metadata: summary,
     });
 
@@ -305,7 +305,7 @@ router.get("/restore-logs", requireLocalAuth, requireLocalAdministrator, async (
   try {
     const db = await getDb();
     const rows = await db.all("SELECT * FROM restore_logs ORDER BY id DESC LIMIT 50");
-    return success(res, "Daftar restore plan SQLite berhasil dimuat", rows);
+    return success(res, "Daftar restore plan database lokal berhasil dimuat", rows);
   } catch (error) {
     return next(error);
   }
@@ -315,7 +315,7 @@ router.get("/backups", requireLocalAuth, requireLocalAdministrator, async (req, 
   try {
     const db = await getDb();
     const rows = await db.all("SELECT * FROM backup_logs ORDER BY id DESC LIMIT 100");
-    return success(res, "Daftar backup SQLite berhasil dimuat", enrichBackupLogs(rows));
+    return success(res, "Daftar backup database lokal berhasil dimuat", enrichBackupLogs(rows));
   } catch (error) {
     return next(error);
   }

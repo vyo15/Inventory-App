@@ -239,7 +239,7 @@ Detail drawer dipakai untuk membaca data, bukan untuk menggantikan dokumentasi f
 
 - Hapus teks yang hanya mengulang nama menu, nama card, atau nama tabel.
 - Hapus subtitle section seperti `Daftar produk jadi` bila tabel dan title sudah cukup jelas.
-- Hindari istilah internal yang tampil ke user, seperti `legacy`, `guard`, `bucket`, `source`, `read-only`, `metadata tampilan`, atau prefix `AKTIF` sebagai penjelasan.
+- Hindari istilah internal yang tampil ke user, seperti `data lama`, `guard`, `bucket`, `source`, `read-only`, `metadata tampilan`, atau prefix `AKTIF` sebagai penjelasan.
 - Jika istilah teknis masih dibutuhkan, ubah ke bahasa operasional. Contoh: `source` menjadi `asal data`, `read-only` menjadi `hanya ditampilkan`, dan `bucket varian` menjadi `stok per varian`.
 - Gunakan kalimat pendek dan langsung pada kebutuhan user.
 - Jangan membuat UI penuh hanya karena ingin menjelaskan semua flow. Detail flow bisnis tetap berada di docs dan checklist.

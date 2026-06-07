@@ -1,6 +1,6 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, legacy_sync_queue, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, sync queue lama, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # OFFLINE STOCK READ MODEL CONTRACT — BATCH 31–33
@@ -41,7 +41,7 @@ File source yang benar-benar dicek:
 File/area relevan yang tidak ditemukan sebagai komponen terpisah:
 - Tidak ditemukan `src/data/adapters/database-browser-lama/database-browser-lamaStockAdapter.js` atau repository stock offline yang aktif.
 - Tidak ditemukan local stock mutation service/offline stock queue khusus; ini memang harus tetap tidak ada untuk batch ini.
-- rules database lama/index runtime di runtime lama Console tidak bisa divalidasi dari ZIP selain file repo `legacy-db.rules` dan `legacy-db.indexes.json`.
+- rules database lama/index runtime di runtime lama Console tidak bisa divalidasi dari ZIP selain file repo `rules database lama` dan `data lama-db.indexes.json`.
 
 Batasan validasi:
 - Audit ini static source review dari ZIP, bukan dump data database lama production.
@@ -69,7 +69,7 @@ Keputusan awal/final batch ini: **stock mutation tetap runtime lama-only**. Offl
 | Purchase receive | `purchasesService.js` | Stok barang/bahan masuk saat purchase disimpan/diterima | Tulis purchase, expense/side effect, inventory log, stock read model | Tidak boleh offline |
 | Sales stock out | `salesService.js` | Stok produk keluar dalam transaction | Tulis sale, income/revenue side effect, inventory log, stock read model | Tidak boleh offline |
 | Return stock in | `returnsService.js` | Stok produk/bahan masuk untuk koreksi return | Tulis return, inventory log, stock read model | Tidak boleh offline |
-| Production reserve/release legacy | `productionOrdersService.js` | Update `reservedStock/availableStock` | Tulis stock read model | Tidak boleh offline |
+| Production reserve/release data lama | `productionOrdersService.js` | Update `reservedStock/availableStock` | Tulis stock read model | Tidak boleh offline |
 | Production material usage saat Start/Complete Work Log | `productionWorkLogsService.js` | Mengurangi stok bahan/komponen dan release reserved | Tulis inventory log produksi dan `stock_item_read_models` dalam transaction yang sama | Tidak boleh offline |
 | Production output stock in | `productionWorkLogsService.js` | Menambah stok output product/semi-finished dan update cost/HPP | Tulis inventory log produksi dan `stock_item_read_models` dalam transaction yang sama | Tidak boleh offline |
 | Semi-finished master create/update/toggle | `semiFinishedMaterialsService.js` | Metadata semi-finished; beberapa flow production mengubah stoknya | Tulis stock read model saat metadata master berubah | Tidak boleh offline mutation |
@@ -90,7 +90,7 @@ Field minimum yang harus dijaga pada source stok dan read model:
 | `currentStock` | Stok fisik/current | Mutation hanya online/runtime lama |
 | `reservedStock` | Stok tertahan/reserved | Mutation hanya online/runtime lama |
 | `availableStock` | Stok tersedia | Harus konsisten dengan current - reserved |
-| `stock` | Legacy alias/master stock | Jangan dihapus tanpa audit legacy |
+| `stock` | Data lama alias/master stock | Jangan dihapus tanpa audit data lama |
 | `minStock` | Minimum stok | Dipakai status stock issue |
 | `stockStatus`, `hasStockIssue` | Status read model | Dipakai dashboard/report/snapshot |
 | `variants[]` | Stok varian | Wajib dijaga, jangan fallback ke master jika item punya varian |
@@ -119,8 +119,8 @@ Risiko terbesar jika stock mutation diaktifkan offline terlalu cepat:
 
 Catatan audit penting dari source aktual:
 - Writer purchase, sales, returns, stock adjustment, production reserve/release, semi-finished metadata, dan Production Work Log sudah memanggil stock read model writer.
-- `productionWorkLogsService.js` sekarang menyinkronkan `stock_item_read_models` di transaction yang sama saat Start Production material out, Complete Work Log material out legacy fallback, dan Complete Work Log output in.
-- Flow complete legacy fallback juga menulis `inventory_logs` `production_material_out` saat benar-benar memotong stok material, sehingga stok tidak berkurang tanpa histori audit baru.
+- `productionWorkLogsService.js` sekarang menyinkronkan `stock_item_read_models` di transaction yang sama saat Start Production material out, Complete Work Log material out fallback data lama, dan Complete Work Log output in.
+- Flow complete fallback data lama juga menulis `inventory_logs` `production_material_out` saat benar-benar memotong stok material, sehingga stok tidak berkurang tanpa histori audit baru.
 - `stock_item_read_models` tetap derived/cache. Source of truth stok tetap dokumen master `products`/`raw_materials`/`semi_finished_materials` dan histori tetap `inventory_logs`.
 
 ## 6. Daftar flow yang tidak boleh offline
@@ -150,7 +150,7 @@ Tidak boleh dijalankan offline sampai ada approval kontrak mutation, idempotency
 ### Tidak boleh offline
 
 - Membuat/mengubah/menghapus stok dari local.
-- Menulis `legacy_sync_queue` untuk stock.
+- Menulis `sync queue lama` untuk stock.
 - Push `stock_snapshots` ke runtime lama.
 - Menjalankan adjustment/transaksi/produksi dari snapshot local.
 

@@ -47,7 +47,7 @@ const { Text } = Typography;
 // =========================
 // SECTION: Konfigurasi sumber item Stock Adjustment
 // Fungsi blok:
-// - menyatukan mapping itemType UI ke target modul backend SQLite dan label riwayat adjustment.
+// - menyatukan mapping itemType UI ke target modul backend database lokal dan label riwayat adjustment.
 // Hubungan flow aplikasi:
 // - Stock Adjustment resmi sekarang mendukung Bahan Baku, Semi Finished, dan Produk Jadi tanpa mengubah flow produksi/HPP/transaksi lain.
 // Alasan logic dipakai:
@@ -111,7 +111,7 @@ const buildVariantStockSnapshot = (variant = {}) => {
 // - hanya memengaruhi format UI panel adjustment di Manajemen Stok, bukan source of truth mutasi stok
 // Status:
 // - aktif dipakai oleh StockAdjustmentPanel
-// - bukan legacy dan bukan kandidat cleanup
+// - bukan kandidat cleanup
 // =========================
 const WHOLE_NUMBER_UNIT_KEYWORDS = [
   "pcs",
@@ -242,7 +242,7 @@ const buildStockAdjustmentCostGuardPayload = ({
 // Status:
 // - AKTIF untuk UI Stock Adjustment Panel.
 // - GUARDED karena field reason/note tetap tersimpan terpisah dan catatan lengkap tetap tersedia di tooltip.
-// - LEGACY: tidak ada logic legacy yang dipakai di blok ini.
+// - COMPATIBILITY: tidak ada logic data lama yang dipakai di blok ini.
 // - CLEANUP CANDIDATE: tidak perlu dibersihkan selama tabel masih menampilkan catatan bebas.
 // =========================
 const NOTE_PREVIEW_STYLE = {
@@ -299,7 +299,7 @@ const renderAdjustmentReasonNote = (_, record = {}) => {
 // - memindahkan form dan riwayat Penyesuaian Stok ke dalam halaman Manajemen Stok
 // Hubungan flow:
 // - menjadi satu-satunya UI aktif untuk adjustment manual setelah menu / halaman lama dihapus
-// - mutasi stok sekarang memakai backend SQLite transaction dan helper stock mutation agar stock/currentStock/availableStock/variants[] sinkron
+// - mutasi stok sekarang memakai backend database lokal transaction dan helper stock mutation agar stock/currentStock/availableStock/variants[] sinkron
 // Status:
 // - aktif/final untuk adjustment stok manual
 // - bukan halaman route mandiri; route lama /stock-adjustment hanya redirect ke /stock-management
@@ -310,12 +310,12 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // Fungsi:
   // - menyimpan riwayat stock_adjustments, master item, dan status modal form
   // Hubungan flow:
-  // - master item hanya dipakai sebagai pilihan form; source of truth mutasi final ada di backend SQLite transaction dan helper stok varian aktif
+  // - master item hanya dipakai sebagai pilihan form; source of truth mutasi final ada di backend database lokal transaction dan helper stok varian aktif
   // - isSubmittingRef menjadi guard teknis agar submit dobel tidak membuat double stock/log sebelum state React sempat update
   // Status:
   // - AKTIF dipakai di halaman Manajemen Stok.
   // - GUARDED karena submit state/ref mencegah double submit.
-  // - LEGACY: tidak ada state legacy yang dipakai untuk mutasi stok.
+  // - COMPATIBILITY: tidak ada state data lama yang dipakai untuk mutasi stok.
   // - CLEANUP CANDIDATE jika orkestrasi adjustment dipindah ke service khusus.
   // =========================
   const [stockAdjustmentRecords, setStockAdjustmentRecords] = useState([]);
@@ -342,7 +342,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // Hubungan flow:
   // - panel adjustment selalu memakai data master terbaru yang juga dipakai audit Manajemen Stok
   // Status:
-  // - aktif dipakai; bukan legacy
+  // - aktif dipakai; bukan data lama
   // =========================
   useEffect(() => {
     let disposed = false;
@@ -360,7 +360,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         setIsSqliteStockAdjustmentMode(useSqliteAdjustments);
 
         if (!useSqliteAdjustments) {
-          throw new Error("Stock Adjustment sekarang wajib memakai SQLite. Periksa VITE_STOCK_ADJUSTMENTS_REPOSITORY_MODE=sqlite.");
+          throw new Error("Penyesuaian stok belum aktif. Cek konfigurasi layanan lokal aplikasi.");
         }
 
         unsubscribeAdjustments = sqliteStockAdjustmentsAdapter.subscribeStockAdjustments(
@@ -441,7 +441,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // Hubungan flow:
   // - variantKey yang dipilih dipakai transaction untuk update stok varian dan total master tetap sinkron
   // Status:
-  // - aktif dipakai; bukan legacy
+  // - aktif dipakai; bukan data lama
   // =========================
   const stockSourceItemsByType = useMemo(
     () => ({
@@ -534,13 +534,13 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // =========================
   // SECTION: Submit penyesuaian stok atomik
   // Fungsi:
-  // - menyimpan stock_adjustments, mutasi stok master/varian, dan inventory_logs dalam satu backend SQLite transaction.
+  // - menyimpan stock_adjustments, mutasi stok master/varian, dan inventory_logs dalam satu backend database lokal transaction.
   // Hubungan flow aplikasi:
   // - Stock Management adalah audit log + adjustment resmi; stok tidak boleh berubah tanpa record adjustment dan log audit.
   // Status:
   // - AKTIF sebagai satu-satunya submit adjustment manual di UI.
   // - GUARDED karena transaksi dibatalkan jika item/varian tidak valid atau stok keluar melebihi availableStock.
-  // - LEGACY: flow lama updateInventoryStock -> addDoc adjustment -> addInventoryLog terpisah tidak dipakai lagi di panel ini.
+  // - FLOW LAMA: updateInventoryStock -> addDoc adjustment -> addInventoryLog terpisah tidak dipakai lagi di panel ini.
   // - CLEANUP CANDIDATE: orkestrasi transaction masih di component; boleh dipindah ke service khusus jika nanti ada task refactor inventory.
   // =========================
   const handleSubmitStockAdjustment = async (values) => {
@@ -597,13 +597,13 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           unitCost: Number(values.unitCost || 0),
           transactionDate: values.date.toDate().toISOString(),
         });
-        message.success("Penyesuaian stok SQLite berhasil disimpan");
+        message.success("Penyesuaian stok berhasil disimpan");
         resetAdjustmentFormState();
         onAdjustmentSaved?.(result);
         return;
       }
 
-      throw new Error("Mode legacy Stock Adjustment sudah dihapus. Gunakan SQLite Stock Adjustment.");
+      throw new Error("Mode lama Penyesuaian Stok sudah nonaktif. Gunakan Penyesuaian Stok resmi.");
 
     } catch (error) {
       console.error(error);
@@ -765,7 +765,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message="Penyesuaian stok SQLite aktif untuk Produk Jadi, Bahan Baku, dan Semi Finished. Mutasi produksi/HPP final tetap lewat modul Production."
+          message="Penyesuaian stok aktif untuk Produk Jadi, Bahan Baku, dan Semi Finished. Mutasi produksi/HPP final tetap lewat modul Production."
         />
       ) : null}
 
@@ -960,7 +960,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               - hanya mengganti tampilan snapshot sebelum submit; validasi availableStock, variantKey, transaction, stock_adjustments, dan inventory_logs tetap memakai logic existing.
               Alasan logic:
               - info stok bukan warning/error, sehingga lebih aman secara UX ditampilkan sebagai panel clean seperti Purchases.
-              Status: AKTIF untuk UI Stock Adjustment, GUARDED terhadap mutasi stok dan payload backend SQLite.
+              Status: AKTIF untuk UI Stock Adjustment, GUARDED terhadap mutasi stok dan payload backend database lokal.
           ===================================================== */}
           {selectedItem ? (
             <div className="ims-readonly-panel">

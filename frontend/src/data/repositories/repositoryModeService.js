@@ -16,7 +16,7 @@ export const isSqliteRepositoryModuleEnabled = (envKey, fallbackMode = "sqlite")
 export const getRepositoryModuleMode = (envKey, fallbackMode = "sqlite") =>
   String(import.meta.env?.[envKey] || fallbackMode || "").trim().toLowerCase();
 
-export const SQLITE_REPOSITORY_CONFIRMATION = "ENABLE SQLITE LOCAL MODE";
+export const SQLITE_REPOSITORY_CONFIRMATION = "ENABLE LOCAL DATABASE MODE";
 const safeGetLocalStorage = () => {
   if (typeof window === "undefined") return null;
   return window.localStorage;
@@ -26,7 +26,7 @@ const readPersistedMode = () => {
   try {
     return safeGetLocalStorage()?.getItem(REPOSITORY_MODE_STORAGE_KEY) || DEFAULT_REPOSITORY_MODE;
   } catch (error) {
-    console.warn("Gagal membaca repository mode SQLite:", error);
+    console.warn("Gagal membaca mode repository lokal:", error);
     return DEFAULT_REPOSITORY_MODE;
   }
 };
@@ -35,7 +35,7 @@ const persistMode = (mode) => {
   try {
     safeGetLocalStorage()?.setItem(REPOSITORY_MODE_STORAGE_KEY, mode);
   } catch (error) {
-    console.warn("Gagal menyimpan repository mode SQLite:", error);
+    console.warn("Gagal menyimpan mode repository lokal:", error);
   }
 };
 
@@ -61,7 +61,7 @@ export const setRepositoryModeForDevelopment = async (
   const nextMode = normalizeRepositoryMode(mode);
 
   if (confirmation !== SQLITE_REPOSITORY_CONFIRMATION) {
-    throw new Error(`Runtime utama IMS adalah SQLite. Isi confirmation: ${SQLITE_REPOSITORY_CONFIRMATION}`);
+    throw new Error(`Runtime utama IMS memakai database lokal. Isi confirmation: ${SQLITE_REPOSITORY_CONFIRMATION}`);
   }
 
   persistMode(nextMode);

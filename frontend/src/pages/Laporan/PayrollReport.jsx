@@ -474,7 +474,7 @@ const PayrollReport = () => {
   // =====================================================
   // ACTIVE / FINAL
   // Export minimum yang dibutuhkan: detail lines dan rekap operator.
-  // XLSX menjadi export final Task 5; CSV dipertahankan sebagai legacy/compatibility manual.
+  // XLSX menjadi export final Task 5; CSV dipertahankan sebagai export compatibility manual.
   // Blok ini aktif dipakai dan tidak mengubah source/perhitungan payroll.
   // =====================================================
   const exportDetailXlsx = async () => {
@@ -637,7 +637,7 @@ const PayrollReport = () => {
                 Export Detail XLSX
               </Button>
               <Button onClick={exportDetailCsv} disabled={filteredPayrolls.length === 0}>
-                Export Detail CSV (Legacy)
+                Export Detail CSV (Compatibility)
               </Button>
               <Button type="primary" onClick={exportOperatorRecapXlsx} disabled={filteredPayrolls.length === 0}>
                 Export Rekap Operator

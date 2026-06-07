@@ -172,8 +172,8 @@ const buildAntdMenuItems = (menuItems, level = 0) => {
 // Status:
 // - AKTIF untuk Fase D Sidebar/Menu Guard.
 // - GUARDED: hide menu bukan security final; ProtectedRoute, backend auth, dan role guard tetap wajib.
-// Legacy / cleanup:
-// - tidak ada legacy; menu User Management belum ditambahkan karena Fase E belum dibuat.
+// Compatibility / cleanup:
+// - tidak ada flow lama aktif; menu User Management sudah mengikuti route aktif.
 // =========================
 const SidebarMenu = ({ darkTheme }) => {
   const location = useLocation();

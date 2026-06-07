@@ -4,7 +4,7 @@ const toArray = (result) => (Array.isArray(result?.data) ? result.data : []);
 
 export const createSqliteJsonRecordAdapter = ({ endpoint, normalizeRecord = (record) => record } = {}) => {
   if (!endpoint) {
-    throw new Error("Endpoint SQLite adapter wajib tersedia.");
+    throw new Error("Endpoint adapter database lokal wajib tersedia.");
   }
 
   const list = async (options = {}) => {
@@ -37,7 +37,7 @@ export const createSqliteJsonRecordAdapter = ({ endpoint, normalizeRecord = (rec
   };
 
   const update = async (id, values = {}) => {
-    if (!id) throw new Error("ID data SQLite yang akan diubah tidak valid.");
+    if (!id) throw new Error("ID data database lokal yang akan diubah tidak valid.");
     const result = await requestSqliteApi(`${endpoint}/${encodeURIComponent(id)}`, {
       method: "PUT",
       body: JSON.stringify(values),
@@ -46,7 +46,7 @@ export const createSqliteJsonRecordAdapter = ({ endpoint, normalizeRecord = (rec
   };
 
   const remove = async (id) => {
-    if (!id) throw new Error("ID data SQLite yang akan dihapus tidak valid.");
+    if (!id) throw new Error("ID data database lokal yang akan dihapus tidak valid.");
     const result = await requestSqliteApi(`${endpoint}/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });

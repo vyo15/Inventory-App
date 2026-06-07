@@ -53,12 +53,12 @@ const SqliteBackendStatusPanel = () => {
       ]);
       setHealth(nextHealth);
       setStatus(nextStatus);
-      if (showSuccess) message.success("Status backend diperbarui.");
+      if (showSuccess) message.success("Status layanan lokal diperbarui.");
     } catch (error) {
       setHealth(null);
       setStatus(null);
-      setErrorMessage(error?.message || "Backend belum bisa diakses.");
-      if (showSuccess) message.error(error?.message || "Backend belum bisa diakses.");
+      setErrorMessage(error?.message || "Layanan lokal belum bisa diakses.");
+      if (showSuccess) message.error(error?.message || "Layanan lokal belum bisa diakses.");
     } finally {
       setLoading(false);
     }
@@ -88,8 +88,8 @@ const SqliteBackendStatusPanel = () => {
       title={(
         <Space size={8}>
           <ApiOutlined />
-          <span>Backend Lokal</span>
-          <Tag color={isOnline ? "green" : "orange"}>{isOnline ? "online" : "belum aktif"}</Tag>
+          <span>Layanan Lokal</span>
+          <Tag color={isOnline ? "green" : "orange"}>{isOnline ? "aktif" : "belum tersambung"}</Tag>
         </Space>
       )}
       extra={(
@@ -107,10 +107,10 @@ const SqliteBackendStatusPanel = () => {
         <Alert
           type={isOnline ? "success" : "warning"}
           showIcon
-          message={isOnline ? "Backend lokal aktif" : "Backend belum tersambung"}
+          message={isOnline ? "Layanan lokal aktif" : "Layanan lokal belum tersambung"}
           description={isOnline
-            ? "Panel ini memantau koneksi backend lokal dan status database aplikasi."
-            : "Jalankan backend dari folder backend dengan npm install lalu npm run dev. Untuk akses HP, gunakan jaringan yang sama dan pastikan firewall mengizinkan aplikasi."
+            ? "Panel ini memantau koneksi layanan lokal dan status database aplikasi."
+            : "Jalankan layanan lokal dari folder backend dengan npm install lalu npm run dev. Untuk akses HP, gunakan jaringan yang sama dan pastikan firewall mengizinkan aplikasi."
           }
         />
 
@@ -148,12 +148,12 @@ const SqliteBackendStatusPanel = () => {
         </Row>
 
         <Descriptions size="small" bordered column={{ xs: 1, md: 2 }}>
-          <Descriptions.Item label="API Base URL">{baseUrl}</Descriptions.Item>
-          <Descriptions.Item label="Service">{healthData.service || healthData.phase || "backend"}</Descriptions.Item>
-          <Descriptions.Item label="DB Path" span={2}>
+          <Descriptions.Item label="Alamat Layanan">{baseUrl}</Descriptions.Item>
+          <Descriptions.Item label="Layanan">{healthData.service || healthData.phase || "layanan lokal"}</Descriptions.Item>
+          <Descriptions.Item label="Lokasi Database" span={2}>
             <Text copyable ellipsis style={{ maxWidth: "100%" }}>{statusData.dbPath || healthData.dbPath || "-"}</Text>
           </Descriptions.Item>
-          <Descriptions.Item label="Backup Dir" span={2}>
+          <Descriptions.Item label="Folder Backup" span={2}>
             <Text copyable ellipsis style={{ maxWidth: "100%" }}>{statusData.backupDir || "-"}</Text>
           </Descriptions.Item>
         </Descriptions>

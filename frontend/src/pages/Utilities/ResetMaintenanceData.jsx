@@ -498,7 +498,7 @@ const ResetMaintenanceData = () => {
 
   // ---------------------------------------------------------------------------
   // Preview reset dibuat manual agar halaman Testing & Reset Center tidak langsung
-  // melakukan full-scan SQLite saat dibuka. Saat mode/module berubah, preview
+  // melakukan full-scan database lokal saat dibuka. Saat mode/module berubah, preview
   // lama dihapus supaya destructive reset wajib memakai preview yang fresh.
   // ---------------------------------------------------------------------------
   useEffect(() => {
@@ -781,7 +781,7 @@ const ResetMaintenanceData = () => {
 
       // -----------------------------------------------------------------------
       // Audit log pre-write sebelum reset destructive.
-      // AKTIF / GUARDED: jika log awal gagal dibuat karena SQLite Rules,
+      // AKTIF / GUARDED: jika log awal gagal dibuat karena database lokal Rules,
       // reset tidak dilanjutkan. Ini menjaga destructive action tetap tercatat.
       // -----------------------------------------------------------------------
       resetLogId = await createPageMaintenanceLog({
@@ -834,7 +834,7 @@ const ResetMaintenanceData = () => {
       } catch (auditError) {
         console.error(auditError);
         message.warning(
-          "Reset data berhasil, tetapi update audit log akhir gagal. Cek koneksi/SQLite Rules untuk maintenance_logs; data reset tidak dianggap gagal.",
+          "Reset data berhasil, tetapi update audit log akhir gagal. Cek koneksi atau akses audit maintenance; data reset tidak dianggap gagal.",
         );
       }
 
@@ -862,7 +862,7 @@ const ResetMaintenanceData = () => {
           });
             } catch (auditError) {
           console.error(auditError);
-          message.warning("Reset gagal, dan update audit log gagal. Cek akses maintenance_logs di SQLite Rules.");
+          message.warning("Reset gagal, dan update audit log gagal. Cek akses audit maintenance.");
         }
       }
 
@@ -1068,18 +1068,6 @@ const ResetMaintenanceData = () => {
       children: renderLazyResetPanel(<ResetDangerZonePanel
         loadingAutoDetect={loadingAutoDetect}
         onRunAllAudits={handleRunAllAudits}
-        legacyResetState={{
-          loadingPreview,
-          loadingBaseline,
-          loadingHppCostPreview,
-          previewRows,
-        }}
-        legacyResetActions={{
-          openFullTestingResetConfirmation,
-          openHppCostResetAllConfirmation,
-          handleSaveBaseline,
-          openResetConfirmation,
-        }}
       />),
     },
   ];
@@ -1137,10 +1125,10 @@ const ResetMaintenanceData = () => {
             <Space direction="vertical" size={16} style={{ width: "100%" }}>
               <div className="reset-maintenance-hero">
                 <div>
-                  <Text type="secondary">Maintenance SQLite offline</Text>
+                  <Text type="secondary">Maintenance database lokal</Text>
                   <Title level={4} style={{ margin: "2px 0 4px" }}>Backup dulu, audit data, lalu repair atau restore bila perlu</Title>
                   <Text type="secondary">
-                    Tab dipisah agar user tidak bingung: Backup/restore dan audit menjadi flow utama; reset testing berada paling akhir dan nonaktif di mode SQLite penuh.
+                    Tab dipisah agar user tidak bingung: Backup/restore dan audit menjadi flow utama; reset testing berada paling akhir dan nonaktif pada mode database lokal.
                   </Text>
                 </div>
                 <Space direction="vertical" size={4} align="end" className="reset-maintenance-hero-status">

@@ -1,6 +1,6 @@
 // src/utils/pricingService.js
 
-// SECTION: SQLite pricing adapters
+// SECTION: database lokal pricing adapters
 import * as sqlitePricingRulesAdapter from "../../data/adapters/sqlite/sqlitePricingRulesAdapter";
 import * as sqliteProductsAdapter from "../../data/adapters/sqlite/sqliteProductsAdapter";
 import * as sqliteRawMaterialsAdapter from "../../data/adapters/sqlite/sqliteRawMaterialsAdapter";
@@ -525,7 +525,7 @@ const createSqlitePricingUpdatePayload = ({
 
 const updateSqlitePricedItem = async ({ targetType = "", itemId = "", payload = {} } = {}) => {
   if (!itemId) {
-    throw new Error("Item pricing SQLite tidak valid karena ID kosong.");
+    throw new Error("Item pricing tidak valid karena ID kosong.");
   }
 
   if (targetType === "products") {
@@ -536,7 +536,7 @@ const updateSqlitePricedItem = async ({ targetType = "", itemId = "", payload = 
     return sqliteRawMaterialsAdapter.updateRawMaterial(itemId, payload);
   }
 
-  throw new Error(`Target pricing SQLite tidak didukung: ${targetType || "-"}`);
+  throw new Error(`Target pricing tidak didukung: ${targetType || "-"}`);
 };
 
 // SECTION: apply pricing rule ke semua item target
@@ -561,9 +561,9 @@ export const applyPricingRuleToItems = async ({
   // SECTION: buat preview dulu supaya hasil apply konsisten
   const previewData = buildPricingPreview(items, normalizedRule);
 
-  // SECTION: jalur SQLite tidak boleh menulis runtime lama.
-  // Pricing Rules sudah menjadi pilot SQLite, sehingga apply harga ke Product/Raw
-  // harus memakai adapter SQLite agar tidak membuat data harga pecah.
+  // SECTION: jalur database lokal tidak boleh menulis runtime lama.
+  // Pricing Rules sudah menjadi pilot database lokal, sehingga apply harga ke Product/Raw
+  // harus memakai adapter database lokal agar tidak membuat data harga pecah.
   if (isSqlitePricingRulesRepositoryMode()) {
     let updatedCount = 0;
     let skippedManualCount = 0;
@@ -630,5 +630,5 @@ export const applyPricingRuleToItems = async ({
     };
   }
 
-  throw new Error("Pricing Rules wajib memakai SQLite. Periksa VITE_PRICING_RULES_REPOSITORY_MODE=sqlite.");
+  throw new Error("Modul aturan harga belum aktif. Cek konfigurasi layanan lokal.");
 };

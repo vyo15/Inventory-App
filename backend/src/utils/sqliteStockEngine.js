@@ -39,7 +39,7 @@ const safeJsonParse = (value, fallback = {}) => {
 const getTableForSourceType = (sourceType = "") => {
   const tableName = SOURCE_TABLES[String(sourceType || "").trim().toLowerCase()];
   if (!tableName) {
-    throw new Error("Stock engine SQLite hanya mendukung Product, Raw Material, dan Semi Finished.");
+    throw new Error("Stock engine database lokal hanya mendukung Product, Raw Material, dan Semi Finished.");
   }
   return tableName;
 };
@@ -235,7 +235,7 @@ const insertEventRecord = async (db, tableName, payload = {}) => {
 const loadSourceItem = async (db, sourceType, sourceId) => {
   const tableName = getTableForSourceType(sourceType);
   const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [sourceId]);
-  if (!row) throw new Error("Item stok SQLite tidak ditemukan.");
+  if (!row) throw new Error("Item stok database lokal tidak ditemukan.");
   return { tableName, row, payload: toRowPayload(row) };
 };
 

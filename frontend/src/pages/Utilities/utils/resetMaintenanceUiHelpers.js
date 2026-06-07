@@ -31,7 +31,7 @@ export const MAINTENANCE_CATEGORY_META = {
   safe_repair: { label: "Aman Diperbaiki", color: "blue" },
   display_repair: { label: "Display/Snapshot", color: "purple" },
   manual: { label: "Butuh Reset/Manual", color: "red" },
-  legacy: { label: "Data Lama/Transisi", color: "orange" },
+  historical: { label: "Data Lama/Transisi", color: "orange" },
   scoped_reset: { label: "Aman Reset Terarah", color: "volcano" },
 };
 
@@ -53,7 +53,7 @@ Fungsi:
 - Memadatkan teks panjang di tabel audit/maintenance dengan ellipsis dan tooltip agar field penting tetap bisa dibaca.
 
 Dipakai oleh:
-- ResetMaintenanceData.jsx pada tabel audit produksi, stok, schema log, legacy, payroll, variant, preview reset, data test, dan audit trail.
+- ResetMaintenanceData.jsx pada tabel audit produksi, stok, schema log, data lama, payroll, variant, preview reset, data test, dan audit trail.
 
 Alasan perubahan:
 - Mengurangi kebutuhan scroll.x besar tanpa menghilangkan informasi audit seperti issue, recommendation, resetScope, action, note, dan error.
@@ -110,7 +110,7 @@ export const AUDIT_SUMMARY_AREAS = [
   { key: "master_code", label: "Kode Master", collection: "master", source: "masterCodeAudit" },
   { key: "stock", label: "Stok Umum", collection: "master stok", source: "stockAudit" },
   { key: "inventory_log", label: "Inventory Log", collection: "inventory_logs", source: "logSchemaAudit" },
-  { key: "legacy", label: "Data Lama", collection: "legacy", source: "legacyDataAudit" },
+  { key: "historical-data", label: "Data Lama", collection: "historical_data", source: "historicalDataAudit" },
   { key: "production", label: "Produksi", collection: "production_*", source: "maintenanceAudit" },
   { key: "payroll", label: "Payroll Snapshot", collection: "production_payrolls", source: "payrollAudit" },
   { key: "transaction_variant", label: "Variant Transaksi", collection: "sales/purchases/returns", source: "transactionVariantAudit" },
@@ -186,7 +186,7 @@ export const RESET_MODULE_OPTIONS = [
   { label: "Produksi (Lengkap)", value: "production" },
   { label: "Produksi + Inventory Log Produksi", value: "production_core_and_logs" },
   { label: "Payroll Produksi Saja", value: "production_payroll_only" },
-  { label: "Produksi Data Lama Saja", value: "productions_legacy_only" },
+  { label: "Produksi Data Lama Saja", value: "productions_archived_only" },
   { label: "Kas & Biaya", value: "cash_and_expenses" },
   { label: "Penyesuaian + Log Adjustment", value: "stock_adjustment_and_logs" },
   { label: "Semua Inventory Log", value: "all_inventory_logs" },

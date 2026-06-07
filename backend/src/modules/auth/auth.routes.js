@@ -209,7 +209,7 @@ router.post("/login", async (req, res, next) => {
       entityType: "user",
       entityId: user.id,
       actor: user.username,
-      description: "Login lokal SQLite berhasil",
+      description: "Login lokal berhasil",
       metadata: { username: user.username, role: user.role },
     });
 
@@ -244,7 +244,7 @@ router.post("/logout", requireLocalAuth, async (req, res, next) => {
       entityType: "user",
       entityId: req.localAuth.user.id,
       actor: req.localAuth.user.username,
-      description: "Logout lokal SQLite berhasil",
+      description: "Logout lokal berhasil",
       metadata: { username: req.localAuth.user.username },
     });
 

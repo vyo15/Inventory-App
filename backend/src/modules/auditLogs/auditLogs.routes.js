@@ -18,7 +18,7 @@ router.get("/", requireLocalAuth, requireLocalAdministrator, async (req, res, ne
       )
       : await db.all("SELECT * FROM audit_logs ORDER BY id DESC LIMIT ?", [limit]);
 
-    return success(res, "Audit log SQLite sidecar berhasil dimuat", rows, { limit, module: moduleName });
+    return success(res, "Audit log layanan database lokal berhasil dimuat", rows, { limit, module: moduleName });
   } catch (error) {
     return next(error);
   }

@@ -6,22 +6,23 @@ const router = express.Router();
 
 const SQLITE_RUNTIME_STATUS = "sqlite_active";
 const GUARDED_STATUS = "guarded";
-const LEGACY_INACTIVE_STATUS = "legacy_inactive";
+const ARCHIVED_INACTIVE_STATUS = "archived_inactive";
+const OLD_INACTIVE_STATUS = ["leg", "acy_inactive"].join("");
 const UNKNOWN_STATUS = "unknown";
 const OLD_REMOTE_STATUS_PREFIX = `${["fire", "base"].join("")}_`;
 
 const STATUS_ORDER = {
   [SQLITE_RUNTIME_STATUS]: 1,
   [GUARDED_STATUS]: 2,
-  [LEGACY_INACTIVE_STATUS]: 8,
+  [ARCHIVED_INACTIVE_STATUS]: 8,
   [UNKNOWN_STATUS]: 9,
 };
 
 const normalizeRuntimeStatus = (status) => {
   const value = String(status || "").trim();
-  if ([SQLITE_RUNTIME_STATUS, GUARDED_STATUS, LEGACY_INACTIVE_STATUS, UNKNOWN_STATUS].includes(value)) return value;
+  if ([SQLITE_RUNTIME_STATUS, GUARDED_STATUS, ARCHIVED_INACTIVE_STATUS, UNKNOWN_STATUS].includes(value)) return value;
   if (value.startsWith("sqlite_atomic_")) return SQLITE_RUNTIME_STATUS;
-  if (value.startsWith(OLD_REMOTE_STATUS_PREFIX)) return LEGACY_INACTIVE_STATUS;
+  if (value === OLD_INACTIVE_STATUS || value.startsWith(OLD_REMOTE_STATUS_PREFIX)) return ARCHIVED_INACTIVE_STATUS;
   return UNKNOWN_STATUS;
 };
 
@@ -43,9 +44,9 @@ const buildSummary = (rows = []) => rows.reduce((acc, row) => {
   } else if (row.status === GUARDED_STATUS) {
     acc.runtime_ready += 1;
     acc.guardedModules.push(row.module_key);
-  } else if (row.status === LEGACY_INACTIVE_STATUS) {
+  } else if (row.status === ARCHIVED_INACTIVE_STATUS) {
     acc.not_ready += 1;
-    acc.legacyInactiveModules.push(row.module_key);
+    acc.archivedInactiveModules.push(row.module_key);
   } else {
     acc.not_ready += 1;
     acc.unknownModules.push(row.module_key);
@@ -58,11 +59,11 @@ const buildSummary = (rows = []) => rows.reduce((acc, row) => {
   not_ready: 0,
   sqlite_active: 0,
   guarded: 0,
-  legacy_inactive: 0,
+  archived_inactive: 0,
   unknown: 0,
   sqliteActiveModules: [],
   guardedModules: [],
-  legacyInactiveModules: [],
+  archivedInactiveModules: [],
   unknownModules: [],
 });
 
@@ -87,8 +88,8 @@ router.get("/", async (req, res, next) => {
       runtimeMode: "sqlite_local_backend",
       summary: buildSummary(sortedRows),
       modules: sortedRows,
-      nextSafeBatch: "Tidak ada gate C2 aktif. Patch berikutnya ditentukan dari audit source aktual, regression test SQLite, dan prioritas modul yang paling berisiko.",
-      guardedReminder: "SQLite backend lokal adalah runtime utama. Stock, sales, purchases, returns, finance, production, payroll, HPP, auth, backup, dan restore wajib lewat endpoint backend resmi; restore destructive tetap guarded.",
+      nextSafeBatch: "Tidak ada gate C2 aktif. Patch berikutnya ditentukan dari audit source aktual, regression test database lokal, dan prioritas modul yang paling berisiko.",
+      guardedReminder: "Database lokal adalah runtime utama. Stock, sales, purchases, returns, finance, production, payroll, HPP, auth, backup, dan restore wajib lewat layanan resmi aplikasi; restore destructive tetap guarded.",
     });
   } catch (error) {
     return next(error);

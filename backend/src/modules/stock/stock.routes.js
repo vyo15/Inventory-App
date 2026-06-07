@@ -34,13 +34,13 @@ router.post("/adjustments/commit", requireLocalAuth, requireLocalAdministrator, 
       sourceId: body.sourceId || body.itemId,
     });
     await db.run("COMMIT");
-    return success(res, "Penyesuaian stok SQLite berhasil disimpan", result, undefined, 201);
+    return success(res, "Penyesuaian stok berhasil disimpan", result, undefined, 201);
   } catch (error) {
     await db.run("ROLLBACK").catch(() => {});
     return next(error);
   }
 });
 
-router.use((_req, res) => failure(res, "Endpoint stock SQLite tidak ditemukan", "NOT_FOUND", 404));
+router.use((_req, res) => failure(res, "Endpoint stok tidak ditemukan", "NOT_FOUND", 404));
 
 module.exports = router;

@@ -1,5 +1,7 @@
 const safeTrim = (value) => String(value ?? "").trim();
 
+const OLD_CODE_FIELD = ["leg", "acyCode"].join("");
+
 const DEFAULT_REFERENCE_FIELDS = [
   "saleNumber",
   "purchaseNumber",
@@ -25,7 +27,8 @@ const DEFAULT_REFERENCE_FIELDS = [
   "employeeCode",
   "workerCode",
   "sku",
-  "legacyCode",
+  "historicalCode",
+  OLD_CODE_FIELD,
 ];
 
 const DEFAULT_NESTED_KEYS = ["details", "sourceMeta", "reference", "meta", "raw", "rawRecord"];
@@ -62,7 +65,7 @@ const readTechnicalReference = (record = {}) => {
 
 /*
 =====================================================
-SECTION: Display Reference Resolver — AKTIF / LEGACY-COMPAT
+SECTION: Display Reference Resolver — AKTIF / COMPATIBILITY
 Fungsi:
 - Memilih kode referensi manusiawi untuk UI, report, log, ledger, dan export.
 - Memprioritaskan kode bisnis baru seperti ORD/PUR/RET/STK-ADJ/CSH-IN/CSH-OUT/JOB/PAY.

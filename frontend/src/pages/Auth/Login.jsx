@@ -26,7 +26,7 @@ const { Text, Title } = Typography;
 // Fungsi:
 // - menerjemahkan status profile auth menjadi pesan yang mudah dipahami user.
 // Hubungan flow aplikasi:
-// - dipakai ketika user valid local auth SQLite tetapi belum boleh masuk karena profile/role/status belum valid.
+// - dipakai ketika user valid local auth database lokal tetapi belum boleh masuk karena profile/role/status belum valid.
 // Alasan logic dipakai:
 // - menjaga user yang profile internalnya belum valid tetap tertahan di halaman login.
 // Status logic:
@@ -156,7 +156,7 @@ const BrandLogoShowcase = () => (
 // Fungsi:
 // - menambah pemanis pill/dot biru-kuning yang ditempatkan di pinggir panel brand.
 // Hubungan flow aplikasi:
-// - dekorasi murni; tidak menyentuh input, submit, local auth SQLite, role, route, atau data bisnis.
+// - dekorasi murni; tidak menyentuh input, submit, local auth database lokal, role, route, atau data bisnis.
 // Alasan logic dipakai:
 // - membuat halaman tidak terlalu polos tanpa memakai garis keras/shape besar yang terlihat seperti bug.
 // Status logic:
@@ -184,7 +184,7 @@ const BrandMotif = () => (
 // Fungsi:
 // - menampilkan badge IMS, logo resmi, motif ringan, dan note internal dalam area kiri.
 // Hubungan flow aplikasi:
-// - mendampingi form login tanpa mengubah input, submit, local auth SQLite, profile validation, role, atau route.
+// - mendampingi form login tanpa mengubah input, submit, local auth database lokal, profile validation, role, atau route.
 // Alasan logic dipakai:
 // - desain final menekankan logo sebagai focal point dan menghapus headline/deskripsi lama agar lebih clean.
 // Status logic:
@@ -231,8 +231,8 @@ const LoginShell = ({ children, variant = "default" }) => (
 // Fungsi:
 // - halaman login internal IMS memakai Username + Password.
 // Hubungan flow aplikasi:
-// - username dikirim ke AuthProvider untuk login lokal SQLite;
-// - password tetap divalidasi backend local auth SQLite, bukan frontend manual.
+// - username dikirim ke AuthProvider untuk login lokal database lokal;
+// - password tetap divalidasi backend local auth database lokal, bukan frontend manual.
 // Alasan logic dipakai:
 // - frontend hanya mengirim credential ke flow auth existing, bukan membuat auth baru.
 // Status logic:
@@ -284,7 +284,7 @@ const Login = () => {
         console.error("[Login] Gagal membaca status auth lokal.", error);
         if (!disposed) {
           setBootstrapStatus(null);
-          setBootstrapError("Backend belum bisa dibaca. Pastikan backend berjalan sebelum membuat admin lokal.");
+          setBootstrapError("Layanan lokal belum bisa dibaca. Pastikan layanan aplikasi berjalan sebelum membuat admin pertama.");
         }
       }
     };
@@ -301,7 +301,7 @@ const Login = () => {
   // Fungsi:
   // - meneruskan username dan password ke AuthProvider tanpa mengubah format input.
   // Hubungan flow aplikasi:
-  // - AuthProvider tetap bertanggung jawab menjalankan login lokal SQLite.
+  // - AuthProvider tetap bertanggung jawab menjalankan login lokal database lokal.
   // Alasan logic dipakai:
   // - menjaga flow login existing tetap menjadi satu-satunya entry submit credential.
   // Status logic:
@@ -339,7 +339,7 @@ const Login = () => {
       await loginWithUsername(values.username, values.password);
     } catch (error) {
       console.error("[Login] Gagal membuat admin lokal.", error);
-      setBootstrapError(error.message || "Gagal membuat administrator lokal SQLite.");
+      setBootstrapError(error.message || "Gagal membuat administrator pertama.");
     } finally {
       setIsBootstrapping(false);
     }
@@ -364,7 +364,7 @@ const Login = () => {
   // =====================================================
   // SECTION: Login Auth/Profile Loading — AKTIF / GUARDED
   // Fungsi:
-  // - Menampilkan loading saat session lokal SQLite atau profile internal user sedang diverifikasi.
+  // - Menampilkan loading saat session lokal database lokal atau profile internal user sedang diverifikasi.
   //
   // Dipakai oleh:
   // - Login sebelum form, blocked access, atau redirect AppContent ditentukan oleh state auth existing.
@@ -406,12 +406,12 @@ const Login = () => {
       <LoginShell>
         <Card className="ims-login-card">
           <Space direction="vertical" size={6} className="ims-login-heading">
-            <Text className="ims-login-eyebrow">Setup SQLite Lokal</Text>
+            <Text className="ims-login-eyebrow">Setup Database Lokal</Text>
             <Title level={3} className="ims-login-title">
               Buat Administrator Pertama
             </Title>
             <Text className="ims-login-muted-text">
-              Database SQLite belum punya administrator aktif. Buat akun pertama untuk membuka IMS.
+              Database lokal belum punya administrator aktif. Buat akun pertama untuk membuka IMS.
             </Text>
           </Space>
 

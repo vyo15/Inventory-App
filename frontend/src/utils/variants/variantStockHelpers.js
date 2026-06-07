@@ -206,7 +206,7 @@ export const buildVariantDisplayInfo = ({
   masterSourceLabel = 'Master',
   masterVariantLabel = '',
   missingVariantLabel = 'Varian belum terbaca',
-  missingVariantDescription = 'Cek data lama / legacy master',
+  missingVariantDescription = 'Cek data lama / master lama',
 } = {}) => {
   const normalizedStockSource = safeTrim(stockSourceType).toLowerCase();
   const normalizedVariantKey = safeTrim(variantKey || fallbackVariantKey);
@@ -261,7 +261,7 @@ export const buildVariantDisplayInfo = ({
 // ACTIVE / FINAL untuk flow PO variant:
 // - caller final wajib mengirim allowMasterFallback=false supaya varian
 //   yang gagal resolve tidak diam-diam kembali ke master;
-// - fallback master hanya tersisa untuk flow manual/legacy yang memang
+// - fallback master hanya tersisa untuk flow manual/data lama yang memang
 //   belum punya contract PO variant.
 // Prioritas resolve:
 // 1. key exact match

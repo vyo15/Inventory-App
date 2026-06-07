@@ -15,8 +15,8 @@ const { Text } = Typography;
 // Status:
 // - AKTIF untuk Fase C/D.
 // - GUARDED: halaman ini hanya UX guard; backend auth dan role guard final tetap diperlukan untuk keamanan data.
-// Legacy / cleanup:
-// - tidak ada legacy.
+// Compatibility / cleanup:
+// - tidak ada data lama.
 // =========================
 const Unauthorized = () => {
   const location = useLocation();

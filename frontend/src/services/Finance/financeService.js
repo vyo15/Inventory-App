@@ -12,7 +12,7 @@ export const listenCashInRecords = (onNext, onError) => {
   (async () => {
     try {
       if (!(await shouldUseSqliteFinance())) {
-        throw new Error("Mode finance SQLite belum aktif. Pastikan backend lokal berjalan dan env finance memakai SQLite.");
+        throw new Error("Mode finance belum aktif. Pastikan layanan lokal berjalan dan konfigurasi finance sudah benar.");
       }
       const sync = async () => {
         const [incomes] = await Promise.all([sqliteFinanceAdapter.listIncomes({ limit: 1000 })]);
@@ -34,7 +34,7 @@ export const listenCashOutRecords = (onNext, onError) => {
   (async () => {
     try {
       if (!(await shouldUseSqliteFinance())) {
-        throw new Error("Mode finance SQLite belum aktif. Pastikan backend lokal berjalan dan env finance memakai SQLite.");
+        throw new Error("Mode finance belum aktif. Pastikan layanan lokal berjalan dan konfigurasi finance sudah benar.");
       }
       const sync = async () => {
         const expenses = await sqliteFinanceAdapter.listExpenses({ limit: 1000 });

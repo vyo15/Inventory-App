@@ -234,7 +234,7 @@ router.post("/purchases/commit", requireLocalAuth, requireLocalAdministrator, (r
   tableName: "purchases",
   transactionType: "purchase",
   stockDirection: "in",
-  successMessage: "Purchase SQLite berhasil disimpan dan stok masuk.",
+  successMessage: "Purchase database lokal berhasil disimpan dan stok masuk.",
 }));
 
 router.post("/sales/commit", requireLocalAuth, requireLocalAdministrator, (req, res, next) => commitStockTransaction({
@@ -244,7 +244,7 @@ router.post("/sales/commit", requireLocalAuth, requireLocalAdministrator, (req, 
   tableName: "sales",
   transactionType: "sale",
   stockDirection: "out",
-  successMessage: "Sales SQLite berhasil disimpan dan stok keluar.",
+  successMessage: "Sales database lokal berhasil disimpan dan stok keluar.",
 }));
 
 router.put("/sales/:id/status", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
@@ -254,7 +254,7 @@ router.put("/sales/:id/status", requireLocalAuth, requireLocalAdministrator, asy
     const row = await db.get("SELECT * FROM sales WHERE id = ? AND status != 'deleted'", [req.params.id]);
     if (!row) {
       await db.run("ROLLBACK").catch(() => {});
-      return failure(res, "Sales SQLite tidak ditemukan", "NOT_FOUND", 404);
+      return failure(res, "Sales database lokal tidak ditemukan", "NOT_FOUND", 404);
     }
     const payload = JSON.parse(row.payload_json || "{}");
     const previousStatus = payload.status || row.status;
@@ -280,7 +280,7 @@ router.put("/sales/:id/status", requireLocalAuth, requireLocalAdministrator, asy
     }
 
     await db.run("COMMIT");
-    return success(res, "Status sales SQLite berhasil diubah", { ...nextPayload, financeResult });
+    return success(res, "Status sales database lokal berhasil diubah", { ...nextPayload, financeResult });
   } catch (error) {
     await db.run("ROLLBACK").catch(() => {});
     return next(error);
@@ -294,7 +294,7 @@ router.post("/returns/commit", requireLocalAuth, requireLocalAdministrator, (req
   tableName: "returns",
   transactionType: "return",
   stockDirection: "in",
-  successMessage: "Return SQLite berhasil disimpan dan stok dipulihkan.",
+  successMessage: "Return database lokal berhasil disimpan dan stok dipulihkan.",
 }));
 
 router.use("/purchases", createSqliteJsonRecordRouter({
@@ -304,7 +304,7 @@ router.use("/purchases", createSqliteJsonRecordRouter({
   codePrefix: "PUR",
   requiredName: false,
   orderBy: "transaction_date DESC, updated_at DESC",
-  protectedWriteNote: "Purchase SQLite atomic aktif untuk Product/Raw stock-in. Direct write generic diblokir agar stok/finance tidak dobel.",
+  protectedWriteNote: "Purchase database lokal atomic aktif untuk Product/Raw stock-in. Direct write generic diblokir agar stok/finance tidak dobel.",
   allowDirectCreate: false,
   allowDirectUpdate: false,
   allowDirectDelete: false,
@@ -318,7 +318,7 @@ router.use("/sales", createSqliteJsonRecordRouter({
   codePrefix: "ORD",
   requiredName: false,
   orderBy: "transaction_date DESC, updated_at DESC",
-  protectedWriteNote: "Sales SQLite atomic aktif untuk Product/Raw stock-out. Direct write/delete diblokir; status aktif hanya Diproses, Dikirim, Selesai.",
+  protectedWriteNote: "Sales database lokal atomic aktif untuk Product/Raw stock-out. Direct write/delete diblokir; status aktif hanya Diproses, Dikirim, Selesai.",
   allowDirectCreate: false,
   allowDirectUpdate: false,
   allowDirectDelete: false,
@@ -332,7 +332,7 @@ router.use("/returns", createSqliteJsonRecordRouter({
   codePrefix: "RET",
   requiredName: false,
   orderBy: "transaction_date DESC, updated_at DESC",
-  protectedWriteNote: "Returns SQLite atomic aktif untuk Product/Raw stock restore. Direct write generic diblokir agar jalur barang kembali tetap resmi.",
+  protectedWriteNote: "Returns database lokal atomic aktif untuk Product/Raw stock restore. Direct write generic diblokir agar jalur barang kembali tetap resmi.",
   allowDirectCreate: false,
   allowDirectUpdate: false,
   allowDirectDelete: false,

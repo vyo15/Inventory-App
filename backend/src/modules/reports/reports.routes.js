@@ -7,5 +7,5 @@ module.exports = createSqliteJsonRecordRouter({
   codePrefix: "RPT",
   requiredName: false,
   orderBy: "source_type ASC, updated_at DESC",
-  protectedWriteNote: "Report SQLite C7 adalah snapshot read/storage foundation; laporan final belum boleh menghitung draft lokal yang belum committed.",
+  protectedWriteNote: "Report database lokal C7 adalah snapshot read/storage foundation; laporan final belum boleh menghitung draft lokal yang belum committed.",
 });

@@ -18,8 +18,8 @@ const pickVariantLabel = (item = {}, keyField = 'name') => {
   const directValue = String(item?.[keyField] || '').trim();
   if (directValue) return directValue;
 
-  const legacyColorValue = String(item?.color || '').trim().toLowerCase();
-  if (legacyColorValue) return legacyColorValue;
+  const historicalColorValue = String(item?.color || '').trim().toLowerCase();
+  if (historicalColorValue) return historicalColorValue;
 
   return '';
 };
@@ -37,7 +37,7 @@ export const normalizeVariants = (variants = [], options = {}) => {
     includeReserved = true,
     includeMinStock = true,
     includeAverageCost = true,
-    includeLegacyColorAlias = true,
+    includeHistoricalColorAlias = true,
   } = options;
 
   return variants
@@ -85,7 +85,7 @@ export const normalizeVariants = (variants = [], options = {}) => {
         normalized[averageCostField] = normalizeNumberStock(item?.[averageCostField] || 0);
       }
 
-      if (includeLegacyColorAlias) {
+      if (includeHistoricalColorAlias) {
         normalized.color = variantName;
       }
 
@@ -105,7 +105,7 @@ export const normalizeColorVariants = (variants = [], options = {}) =>
     includeReserved: true,
     includeMinStock: true,
     includeAverageCost: true,
-    includeLegacyColorAlias: true,
+    includeHistoricalColorAlias: true,
     ...options,
   }).map((item) => ({
     ...item,
@@ -139,7 +139,7 @@ export const calculateVariantTotals = (variants = [], options = {}) => {
     includeReserved,
     includeMinStock,
     includeAverageCost,
-    includeLegacyColorAlias: true,
+    includeHistoricalColorAlias: true,
   });
 
   // ACTIVE: total produk/semi memakai helper pusat supaya master stock/currentStock
@@ -226,7 +226,7 @@ export const validateDuplicateVariantValues = (variants = [], options = {}) => {
 export const validateDuplicateVariantColors = (variants = []) =>
   validateDuplicateVariantValues(variants, {
     keyField: 'color',
-    // IMS NOTE [AKTIF | generic-variant]: helper legacy color kini memakai
+    // IMS NOTE [AKTIF | generic-variant]: helper color data lama kini memakai
     // pesan generic karena Product/Semi dapat memakai label varian fleksibel.
     duplicateMessage: 'Nama varian tidak boleh duplikat',
   });

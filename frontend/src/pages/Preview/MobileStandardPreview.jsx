@@ -211,7 +211,7 @@ const MobileStandardPreview = () => {
               <button type="button">☰</button>
               <div>
                 <strong>IMS Bunga Flanel</strong>
-                <span>Offline SQLite · LAN</span>
+                <span>Database Lokal</span>
               </div>
               <b>D</b>
             </div>

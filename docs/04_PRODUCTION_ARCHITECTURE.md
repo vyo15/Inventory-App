@@ -96,13 +96,13 @@ Organisasi UI aktif:
 
 Alur source cost aktif:
 - Raw Material master cost / Semi Finished master HPP terbaru → BOM estimate aktif → PO requirement qty → Work Log baru.
-- Work Log baru wajib mengambil cost dari master aktif saat Start Production. Saat Complete, material yang sudah `stockDeducted=true` wajib memakai snapshot Start Production agar HPP tidak berubah karena master cost berubah setelah bahan keluar. Fallback baca master hanya untuk data legacy yang belum punya snapshot valid.
+- Work Log baru wajib mengambil cost dari master aktif saat Start Production. Saat Complete, material yang sudah `stockDeducted=true` wajib memakai snapshot Start Production agar HPP tidak berubah karena master cost berubah setelah bahan keluar. Fallback baca master hanya untuk data lama yang belum punya snapshot valid.
 - Saat Complete Work Log, `laborCostActual` langsung di-accrue dari rule Tahapan Produksi dan jumlah operator agar HPP output tidak menunggu user klik Paid payroll. Payroll `paid/confirmed` hanya menjadi final adjustment/reconcile jika nominal final berbeda dari accrued labor.
 - Weighted average cost/HPP memakai zero-cost baseline protection: jika stok lama masih ada tetapi cost/HPP master 0 karena reset/data lama, stok lama tidak boleh dihitung sebagai modal 0 saat ada pembelian/produksi baru; cost masuk pertama yang valid menjadi baseline.
 - Snapshot BOM/PO hanya cache requirement; snapshot Work Log yang sudah dipotong menjadi histori costing material untuk completed Work Log, inventory log, payroll/final HPP history, dan transaksi yang sudah final.
 - Start Production material out wajib menulis master stock, `inventory_logs`, dan `stock_item_read_models` dalam transaction yang sama.
 - Complete Work Log output in wajib menulis master stock, `inventory_logs`, dan `stock_item_read_models` dalam transaction yang sama.
-- Complete Work Log legacy fallback material out wajib menulis `inventory_logs` saat stok material benar-benar dipotong dan sync `stock_item_read_models`, supaya histori audit dan Dashboard/Stock Report tidak stale.
+- Complete Work Log fallback data lama material out wajib menulis `inventory_logs` saat stok material benar-benar dipotong dan sync `stock_item_read_models`, supaya histori audit dan Dashboard/Stock Report tidak stale.
 - Jika ada beberapa line material/output yang mengarah ke item/varian yang sama, mutasi wajib diakumulasi dari state stok progresif sebelum write final agar tidak ada overwrite antar-line.
 - Reset Modal/HPP wajib merefresh BOM estimate dari master cost pasca-reset, menjaga `laborCostEstimate` dari step dan `overheadCostEstimate` existing.
 
@@ -186,7 +186,7 @@ Sumber HPP yang terlihat:
 - data work log completed
 - ringkasan biaya aktual, total good qty, dan rata-rata HPP per unit
 
-## 10. Legacy Flow yang Masih Ada
+## 10. Flow Data Lama yang Masih Ada
 ## 9A. Boundary Logic Produksi yang Harus Dijaga
 Boundary produksi aktif yang sekarang harus dianggap final/guarded:
 - query dan fallback load Work Log
@@ -200,9 +200,9 @@ Catatan penting:
 - bila ada task produksi baru, cek selalu boundary ini sebelum mengubah page/component apa pun
 - jangan mengembalikan tombol tambah Work Log manual dari halaman Work Log tanpa review stock/payroll/HPP karena flow aktif harus lewat Production Order
 
-Status legacy aktual hasil verifikasi source 2026-05-06:
+Status data lama aktual hasil verifikasi source 2026-05-06:
 - file `src/services/Produksi/productionService.js` **tidak ditemukan** pada ZIP aktual; jangan menjadikannya target patch aktif;
-- collection `productions` masih diperlakukan sebagai legacy data layer pada maintenance/reset/audit, terutama melalui reset scoped dan legacy data audit;
+- collection `productions` masih diperlakukan sebagai data lama layer pada maintenance/reset/audit, terutama melalui reset scoped dan data lama audit;
 - flow operasional utama tetap memakai service granular `productionBomsService.js`, `productionOrdersService.js`, `productionWorkLogsService.js`, `productionPayrollsService.js`, `productionPlanningService.js`, dan service master produksi terkait.
 
 Catatan penting:
@@ -229,14 +229,14 @@ Setiap perubahan di modul produksi sebaiknya selalu diuji terhadap:
 - Cleanup stok umum tidak memindahkan logic posting stok produksi ke helper page.
 - Flow produksi final tetap guarded: BOM → Production Order → Work Log → Payroll → HPP Analysis.
 - `productionWorkLogsService` tetap boleh melakukan transaction sendiri untuk start/complete Work Log karena proses tersebut harus memotong material, menambah output, menutup status, dan mencatat log secara atomic.
-- Collection `productions` tetap dianggap legacy data layer yang hanya disentuh maintenance/reset/audit scoped. File service legacy `src/services/Produksi/productionService.js` tidak ditemukan di source `Inventory-App.zip` terbaru, sehingga docs lama yang menyebut file tersebut sebagai file aktif harus dianggap outdated.
+- Collection `productions` tetap dianggap data lama layer yang hanya disentuh maintenance/reset/audit scoped. File service data lama `src/services/Produksi/productionService.js` tidak ditemukan di source `Inventory-App.zip` terbaru, sehingga docs lama yang menyebut file tersebut sebagai file aktif harus dianggap outdated.
 
 ## Update Guarded Integration Stok & Log — 2026-04-25
 - Produksi tetap dianggap guarded area.
 - `productionWorkLogsService.js` tetap melakukan mutasi bahan keluar dan output masuk di dalam `runTransaction`.
 - Mutasi stok produksi memakai `applyStockMutationToItem()` supaya field master dan varian tetap sinkron.
 - Inventory log produksi memakai `buildInventoryLogPayload()` dari inventory log service final sehingga format log produksi sama dengan transaksi umum.
-- Reserve/release Production Order masih dicatat sebagai flow legacy/guarded; jika dipakai, variant key hasil resolve helper final harus dipakai agar reserved stock tidak jatuh ke master/default.
+- Reserve/release Production Order masih dicatat sebagai flow data lama/guarded; jika dipakai, variant key hasil resolve helper final harus dipakai agar reserved stock tidak jatuh ke master/default.
 - Business rules BOM, lifecycle Production Order, completed Work Log, HPP, dan payroll tidak diubah oleh cleanup ini.
 
 ## Update Auto Payroll Setelah Complete Work Log — 2026-04-25
@@ -271,7 +271,7 @@ Catatan boundary:
 - **Actual cost aktif:** completed Work Log wajib menyimpan ringkasan material/labor accrued/total/cost per good unit untuk HPP Analysis. Payroll final boleh merevisi selisih, tetapi HPP output tidak boleh material-only hanya karena payroll belum paid.
 - **Payroll otomatis aktif:** Work Log completed membuat payroll line per operator berdasarkan rule Tahapan Produksi.
 - **Cash Out otomatis aktif:** payroll `paid` membuat expense otomatis dengan source reference dan guard idempotent.
-- **Legacy:** custom payroll preference di master karyawan tetap dibaca sebagai compatibility/info lama, bukan rule utama payroll baru.
+- **Data lama:** custom payroll preference di master karyawan tetap dibaca sebagai compatibility/info lama, bukan rule utama payroll baru.
 - **Rollback guarded:** membatalkan payroll paid tidak boleh otomatis menghapus expense sebelum business rule rollback disepakati.
 
 ## Production Planning Architecture — 2026-04-25
@@ -374,13 +374,13 @@ Rule aktif:
 - BOM estimasi membaca Raw Material `averageActualUnitCost` fallback `restockReferencePrice`.
 - BOM estimasi membaca Semi Finished `averageCostPerUnit` fallback `lastProductionCostPerUnit`.
 - Semi Finished bervarian harus memakai weighted average berdasarkan stok varian aktif agar BOM bertingkat tidak memakai HPP rata-rata sederhana yang miss.
-- Complete Work Log memakai material snapshot yang sudah dibekukan saat Start Production. Fallback ke master hanya untuk data legacy yang belum punya snapshot cost.
+- Complete Work Log memakai material snapshot yang sudah dibekukan saat Start Production. Fallback ke master hanya untuk data lama yang belum punya snapshot cost.
 - Complete Work Log wajib menghitung accrued labor dari master Tahapan Produksi (`payrollMode`, `payrollRate`, `payrollQtyBase`, `payrollOutputBasis`, `includePayrollInHpp`) dan operator. Jika step direct labor rate 0/operator kosong, complete harus ditolak agar HPP tidak material-only.
 - Payroll final mengubah `laborCostActual`, `totalCostActual`, dan `costPerGoodUnit` hanya saat ada final line yang masuk HPP, lalu menjalankan reconcile output HPP/master cost.
 - Pembelian/produksi masuk memakai weighted average dengan guard cost 0: stok lama yang cost/HPP-nya 0 tidak boleh menurunkan average cost saat incoming cost valid tersedia.
 - Reconcile HPP tidak boleh menambah/mengurangi stock qty, tidak boleh membuat inventory log baru, dan tidak boleh mengubah status Work Log/PO.
 
-Boundary legacy:
+Boundary data lama:
 - Work Log lama yang tidak pernah tersentuh payroll sync tetap perlu Data Quality Audit/backfill guarded terpisah.
 - Jika data sudah pernah dijual/dipakai sebelum reconcile, patch ini menjaga master cost ke depan tetapi tidak merekonstruksi COGS histori lama.
 

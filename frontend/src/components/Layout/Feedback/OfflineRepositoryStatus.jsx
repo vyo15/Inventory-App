@@ -5,7 +5,7 @@ import "./OfflineRepositoryStatus.css";
 const { Text } = Typography;
 
 // =====================================================
-// SECTION: RepositoryStatus — LEGACY-COMPAT / UI-ONLY
+// SECTION: RepositoryStatus — COMPATIBILITY / UI-ONLY
 // Fungsi:
 // - Komponen status mode data lama dipertahankan sebagai no-op agar halaman lama
 //   yang masih mengimpor komponen ini tidak menampilkan banner teknis di UI.

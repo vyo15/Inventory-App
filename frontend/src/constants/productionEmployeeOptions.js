@@ -21,7 +21,7 @@ export const PRODUCTION_EMPLOYEE_EMPLOYMENT_TYPES = [
 
 // ACTIVE ROLE OPTIONS
 // Role quality/reject lama tidak ditawarkan untuk data baru karena belum menjadi workflow aktif.
-// Label legacy tetap disimpan di map agar data lama masih bisa dibaca tanpa migrasi schema.
+// Label lama tetap disimpan di map agar data lama masih bisa dibaca tanpa migrasi schema.
 export const PRODUCTION_EMPLOYEE_ROLES = [
   { value: "operator", label: "Operator" },
   { value: "perakit", label: "Perakit" },
@@ -32,7 +32,7 @@ export const PRODUCTION_EMPLOYEE_ROLES = [
 
 const PRODUCTION_EMPLOYEE_ROLE_LABELS = [
   ...PRODUCTION_EMPLOYEE_ROLES,
-  { value: "qc", label: "Legacy role" },
+  { value: "qc", label: "Role lama" },
 ];
 
 export const PRODUCTION_EMPLOYEE_CUSTOM_PAYROLL_MODES = [
@@ -90,5 +90,5 @@ export const formatEmployeePayrollPreview = (employee = {}) => {
     return "Aktif: mengikuti rule payroll Tahapan Produksi";
   }
 
-  return "Legacy/deprecated: custom payroll karyawan tidak lagi dipakai dalam flow payroll final. Nilai ini hanya dipertahankan untuk referensi historis.";
+  return "Deprecated: custom payroll karyawan tidak lagi dipakai dalam flow payroll final. Nilai ini hanya dipertahankan untuk referensi historis.";
 };

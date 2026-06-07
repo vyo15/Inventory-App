@@ -95,7 +95,7 @@ const pickFinancePrimaryItem = (items, highlightKey) => {
   );
 };
 
-const renderLegacyCards = (normalizedItems, columns, gutter, className) => (
+const renderClassicCards = (normalizedItems, columns, gutter, className) => (
   <Row gutter={gutter} className={className}>
     {normalizedItems.map((item) => (
       <Col key={item.key} {...(item.columns || columns)}>
@@ -202,7 +202,7 @@ const renderFinanceDock = (normalizedItems, highlightKey, className) => {
 // =========================
 // SECTION: Shared Summary Stat Grid
 // Fungsi:
-// - membungkus summary lintas halaman dengan varian Executive Dock / Finance Dock / legacy cards
+// - membungkus summary lintas halaman dengan varian Executive Dock / Finance Dock / classic cards
 // - menjaga KPI tetap compact, modern, dan konsisten tanpa mengubah perhitungan pemanggil
 // Catatan:
 // - columns/gutter tetap dipertahankan untuk kompatibilitas saat variant="cards"
@@ -221,7 +221,7 @@ const SummaryStatGrid = ({
   const normalizedItems = normalizeItems(items);
 
   if (variant === "cards") {
-    return renderLegacyCards(normalizedItems, columns, gutter, className);
+    return renderClassicCards(normalizedItems, columns, gutter, className);
   }
 
   if (variant === "finance") {

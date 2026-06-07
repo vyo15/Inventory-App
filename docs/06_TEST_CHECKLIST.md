@@ -126,7 +126,7 @@ Target default:
 - [ ] Restore execute wajib keyword confirm.
 - [ ] Restore membuat pre-restore backup.
 - [ ] Restore gagal aman jika backup tidak valid.
-- [ ] Reset testing lama tetap nonaktif/legacy redirect.
+- [ ] Reset testing lama tetap nonaktif/redirect lama.
 
 ## 12. UI/UX regression
 

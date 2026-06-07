@@ -59,7 +59,7 @@ import { listenProducts } from "../../services/MasterData/productsService";
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules tetap sama di runtime SQLite.
+// Behavior: input baru no-decimal; business rules tetap sama di runtime database lokal.
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -372,7 +372,7 @@ const PricingRules = () => {
     }
 
     if (isSqlitePricingRulesMode) {
-      message.warning("Apply harga massal belum diaktifkan di SQLite D1.");
+      message.warning("Fitur apply harga massal belum tersedia.");
       return;
     }
 

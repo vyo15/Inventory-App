@@ -122,7 +122,7 @@ const CashOut = () => {
         setLoading(false);
       },
       (error) => {
-        console.error("Gagal sinkronisasi data kas keluar SQLite:", error);
+        console.error("Gagal sinkronisasi data kas keluar lokal:", error);
         message.error("Gagal memuat data kas keluar.");
         setCashOuts([]);
         setLoading(false);

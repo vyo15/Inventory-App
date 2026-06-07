@@ -67,7 +67,7 @@ const ensureCustomerCodeAvailable = async (db, code, excludeId = null) => {
   );
 
   if (existing) {
-    const error = new Error("Kode customer sudah digunakan di SQLite.");
+    const error = new Error("Kode customer sudah digunakan di database lokal.");
     error.code = "DUPLICATE_CODE";
     throw error;
   }
@@ -89,7 +89,7 @@ router.get("/generate-code", requireLocalAuth, async (req, res, next) => {
   try {
     const db = await getDb();
     const code = await generateNextCustomerCode(db);
-    return success(res, "Kode customer SQLite berhasil dibuat", { code, customerCode: code });
+    return success(res, "Kode customer database lokal berhasil dibuat", { code, customerCode: code });
   } catch (error) {
     return next(error);
   }
@@ -101,7 +101,7 @@ router.get("/", requireLocalAuth, async (req, res, next) => {
     const rows = await db.all(
       "SELECT * FROM customers WHERE status != 'deleted' ORDER BY name ASC, id DESC LIMIT 500"
     );
-    return success(res, "Data customer SQLite berhasil dimuat", rows.map(toCustomerRecord));
+    return success(res, "Data customer database lokal berhasil dimuat", rows.map(toCustomerRecord));
   } catch (error) {
     return next(error);
   }
@@ -116,10 +116,10 @@ router.get("/:id", requireLocalAuth, async (req, res, next) => {
     );
 
     if (!row) {
-      return failure(res, "Customer SQLite tidak ditemukan", "NOT_FOUND", 404);
+      return failure(res, "Customer database lokal tidak ditemukan", "NOT_FOUND", 404);
     }
 
-    return success(res, "Detail customer SQLite berhasil dimuat", toCustomerRecord(row));
+    return success(res, "Detail customer database lokal berhasil dimuat", toCustomerRecord(row));
   } catch (error) {
     return next(error);
   }
@@ -141,7 +141,7 @@ router.post("/", requireLocalAuth, requireLocalAdministrator, async (req, res, n
     const finalCode = payload.customerCode || await generateNextCustomerCode(db);
 
     if (!CUSTOMER_CODE_PATTERN.test(finalCode)) {
-      return failure(res, "Kode customer SQLite belum valid", "VALIDATION_ERROR", 400);
+      return failure(res, "Kode customer database lokal belum valid", "VALIDATION_ERROR", 400);
     }
 
     await ensureCustomerCodeAvailable(db, finalCode);
@@ -162,14 +162,14 @@ router.post("/", requireLocalAuth, requireLocalAdministrator, async (req, res, n
       entityType: "customer",
       entityId: result.lastID,
       actor: req.localAuth.user.username,
-      description: `Customer ${payload.name} dibuat di SQLite local`,
+      description: `Customer ${payload.name} dibuat di database lokal`,
       metadata: { customerCode: finalCode, name: payload.name, phone: payload.phone, address: payload.address },
     });
 
-    return success(res, "Customer berhasil ditambahkan ke SQLite local", toCustomerRecord(customer), undefined, 201);
+    return success(res, "Customer berhasil ditambahkan ke database lokal", toCustomerRecord(customer), undefined, 201);
   } catch (error) {
     if (error?.code === "DUPLICATE_CODE" || String(error?.message || "").includes("UNIQUE")) {
-      return failure(res, "Kode customer sudah ada di SQLite local", "DUPLICATE_CODE", 409);
+      return failure(res, "Kode customer sudah ada di database lokal", "DUPLICATE_CODE", 409);
     }
     return next(error);
   }
@@ -184,7 +184,7 @@ router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res,
     );
 
     if (!current) {
-      return failure(res, "Customer SQLite tidak ditemukan", "NOT_FOUND", 404);
+      return failure(res, "Customer database lokal tidak ditemukan", "NOT_FOUND", 404);
     }
 
     const payload = buildCustomerPayload(req.body);
@@ -199,7 +199,7 @@ router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res,
     }
 
     if (!CUSTOMER_CODE_PATTERN.test(immutableCode)) {
-      return failure(res, "Kode customer SQLite belum valid", "VALIDATION_ERROR", 400);
+      return failure(res, "Kode customer database lokal belum valid", "VALIDATION_ERROR", 400);
     }
 
     await ensureCustomerCodeAvailable(db, immutableCode, current.id);
@@ -221,14 +221,14 @@ router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res,
       entityType: "customer",
       entityId: current.id,
       actor: req.localAuth.user.username,
-      description: `Customer ${payload.name} diubah di SQLite local`,
+      description: `Customer ${payload.name} diubah di database lokal`,
       metadata: { customerCode: immutableCode, name: payload.name, phone: payload.phone },
     });
 
-    return success(res, "Customer SQLite berhasil diubah", toCustomerRecord(updated));
+    return success(res, "Customer database lokal berhasil diubah", toCustomerRecord(updated));
   } catch (error) {
     if (error?.code === "DUPLICATE_CODE" || String(error?.message || "").includes("UNIQUE")) {
-      return failure(res, "Kode customer sudah ada di SQLite local", "DUPLICATE_CODE", 409);
+      return failure(res, "Kode customer sudah ada di database lokal", "DUPLICATE_CODE", 409);
     }
     return next(error);
   }
@@ -243,7 +243,7 @@ router.delete("/:id", requireLocalAuth, requireLocalAdministrator, async (req, r
     );
 
     if (!current) {
-      return failure(res, "Customer SQLite tidak ditemukan", "NOT_FOUND", 404);
+      return failure(res, "Customer database lokal tidak ditemukan", "NOT_FOUND", 404);
     }
 
     await db.run(
@@ -257,11 +257,11 @@ router.delete("/:id", requireLocalAuth, requireLocalAdministrator, async (req, r
       entityType: "customer",
       entityId: current.id,
       actor: req.localAuth.user.username,
-      description: `Customer ${current.name} dinonaktifkan di SQLite local`,
+      description: `Customer ${current.name} dinonaktifkan di database lokal`,
       metadata: { customerCode: current.customer_code, name: current.name },
     });
 
-    return success(res, "Customer SQLite berhasil dinonaktifkan", {
+    return success(res, "Customer database lokal berhasil dinonaktifkan", {
       id: current.id,
       deleted: true,
       softDeleted: true,

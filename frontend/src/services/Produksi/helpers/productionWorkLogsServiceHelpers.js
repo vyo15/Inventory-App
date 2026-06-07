@@ -979,7 +979,7 @@ export const getOutputTargetCostState = ({
   const stockData = normalizeStockSnapshot(stockDataRaw || {});
   return {
     hasTarget: true,
-    // ACTIVE / GUARDED: currentStock diprioritaskan atas legacy stock agar reconcile cost tidak memakai stok lama yang sudah tidak sinkron.
+    // ACTIVE / GUARDED: currentStock diprioritaskan atas stok lama agar reconcile cost tidak memakai stok lama yang sudah tidak sinkron.
     currentStock: toNumber(stockDataRaw?.currentStock ?? stockDataRaw?.stock ?? stockData.currentStock ?? 0),
     currentUnitCost: toNumber(stockDataRaw?.[costField] || 0),
     costField,

@@ -166,10 +166,10 @@ const formatDashboardLoadWarning = (failedReads = []) => {
   const hasStockReadModelFallback = uniqueFailedReads.some((key) => STOCK_READ_MODEL_WARNING_KEYS.has(key));
 
   if (hasStockReadModelFallback) {
-    return "Read model stok SQLite belum siap atau backend lokal belum mengembalikan data stok lengkap. Dashboard tetap memakai fallback aman agar monitoring tidak blank. Jika warning berulang, cek backend SQLite dan rebuild/read model stok dari Maintenance & Backup Center.";
+    return "Data stok lokal belum siap atau layanan lokal belum mengembalikan data stok lengkap. Dashboard tetap memakai data aman agar monitoring tidak kosong. Jika warning berulang, buka Database Center lalu jalankan audit/perbaikan stok.";
   }
 
-  return "Sebagian data Dashboard belum siap. Data lain tetap ditampilkan untuk monitoring; cek backend SQLite lokal, koneksi LAN, atau status migrasi modul bila warning berulang.";
+  return "Sebagian data Dashboard belum siap. Data lain tetap ditampilkan untuk monitoring; cek layanan lokal, koneksi jaringan, atau status runtime modul bila warning berulang.";
 };
 
 const getSafeExternalHttpUrl = (value) => {
@@ -202,7 +202,7 @@ const Dashboard = () => {
   // Hubungan flow:
   // - membaca stok, PO, Work Log, Payroll, Income/Expense, Inventory Log, dan Planning sebagai ringkasan operasional.
   // Status:
-  // - aktif dipakai; tidak ada legacy write/backfill di blok ini.
+  // - aktif dipakai; tidak ada write/backfill lama di blok ini.
   // =========================
   const loadDashboardData = useCallback(async () => {
     if (dashboardReadInFlightRef.current) {
@@ -234,7 +234,7 @@ const Dashboard = () => {
     } catch (error) {
       console.error("Gagal memuat dashboard:", error);
       setDashboardData((currentDashboardData) => normalizeDashboardData(currentDashboardData));
-      setLoadWarning("Sebagian data Dashboard gagal dimuat. Cek backend SQLite lokal atau koneksi LAN, lalu refresh.");
+      setLoadWarning("Sebagian data Dashboard gagal dimuat. Cek layanan lokal atau koneksi jaringan, lalu refresh.");
     } finally {
       dashboardReadInFlightRef.current = false;
       setLoading(false);
@@ -567,7 +567,7 @@ const Dashboard = () => {
   // Hubungan flow:
   // - menggabungkan sinyal stok, PO, planning, Work Log, dan Payroll sebagai control center harian.
   // Status:
-  // - aktif dipakai; bukan legacy.
+  // - aktif dipakai; bukan data lama.
   // =========================
   const priorityItems = useMemo(() => {
     const items = [
@@ -665,7 +665,7 @@ const Dashboard = () => {
   // - membuka link produk terakhir, prefill halaman Purchases, dan membuka Supplier terfilter;
   // - semua action aman untuk HashRouter karena route internal memakai useNavigate.
   // Hubungan flow:
-  // - action Dashboard hanya navigasi/prefill, tidak menulis SQLite dan tidak membuat transaksi otomatis.
+  // - action Dashboard hanya navigasi/prefill, tidak menulis database lokal dan tidak membuat transaksi otomatis.
   // Status:
   // - aktif dipakai oleh Stok Kritis; bukan kandidat cleanup selama Restock Assistant aktif.
   // =========================
@@ -856,7 +856,7 @@ const Dashboard = () => {
           Fungsi:
           - menampilkan action card paling penting saja;
           - seluruh action hanya Link navigasi, bukan write data.
-          Status: aktif dipakai untuk Dashboard read-only; bukan legacy.
+          Status: aktif dipakai untuk Dashboard read-only; bukan data lama.
       ========================= */}
       <PageSection
         title="Prioritas Hari Ini"

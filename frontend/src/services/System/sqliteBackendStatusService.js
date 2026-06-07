@@ -37,7 +37,7 @@ export const fetchSqliteJson = async (path, options = {}) => {
     });
   } catch (requestError) {
     const error = new Error(
-      `Backend tidak bisa dihubungi di ${baseUrl}. Pastikan backend lokal berjalan dan HP/PC berada di jaringan yang sama.`
+      `Layanan lokal tidak bisa dihubungi di ${baseUrl}. Pastikan layanan aplikasi berjalan dan HP/PC berada di jaringan yang sama.`
     );
     error.code = "SQLITE_BACKEND_UNAVAILABLE";
     error.errorCode = "SQLITE_BACKEND_UNAVAILABLE";
@@ -48,7 +48,7 @@ export const fetchSqliteJson = async (path, options = {}) => {
   const payload = await response.json().catch(() => null);
 
   if (!response.ok || payload?.ok === false) {
-    const error = new Error(payload?.message || `Request backend gagal (${response.status})`);
+    const error = new Error(payload?.message || `Request layanan lokal gagal (${response.status})`);
     error.status = response.status;
     error.code = payload?.code || payload?.errorCode || "";
     error.errorCode = payload?.code || payload?.errorCode || "";

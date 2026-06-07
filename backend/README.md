@@ -74,7 +74,7 @@ Folder/file runtime tidak boleh masuk git atau patch.
 ## Guardrail
 
 - Jangan arahkan stock/sales/purchase/finance/production/payroll/HPP ke SQLite sebelum audit khusus.
-- Jangan hapus legacy compatibility total sebelum semua migrasi terbukti aman dan tidak ada adapter runtime aktif.
+- Jangan hapus compatibility data lama total sebelum semua migrasi terbukti aman dan tidak ada adapter runtime lama aktif.
 - Jangan React langsung akses file SQLite.
 - Jangan restore destructive tanpa preview, confirm guard, backup otomatis, dan audit log.
 - Semua akses SQLite wajib lewat backend ini.

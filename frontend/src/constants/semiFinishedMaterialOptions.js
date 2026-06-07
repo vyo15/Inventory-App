@@ -36,7 +36,7 @@ export const DEFAULT_SEMI_FINISHED_VARIANT = {
   ...DEFAULT_COLOR_VARIANT,
   // IMS NOTE [AKTIF | generic-variant]: default Semi Product tidak lagi memaksa
   // Merah. Hubungan flow: user boleh memakai label varian fleksibel seperti
-  // Ukuran, Tipe, Motif, atau Spesifikasi; color tetap alias legacy kompatibel.
+  // Ukuran, Tipe, Motif, atau Spesifikasi; color tetap alias data lama kompatibel.
   color: '',
   name: '',
   variantLabel: '',

@@ -1,6 +1,6 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, legacy_sync_queue, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, sync queue lama, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # Offline Purchases & Sales Guarded Preparation — Batch 34–37
@@ -356,7 +356,7 @@ Catatan: field ini adalah **kontrak konsep**, belum dibuat table pada batch ini.
 | `draftStatus` | `local_draft`, `needs_review`, `ready_to_commit`, `committing`, `committed`, `failed`, `discarded` |
 | `createdAt`, `updatedAt`, `localUpdatedAt` | Audit lokal draft |
 | `createdBy`, `deviceId` | Trace lokal jika multi-device nanti aktif |
-| `customerId`, `customerNameSnapshot`, `customerSource` | `customerSource` harus `legacy_primary` jika dipakai untuk commit final |
+| `customerId`, `customerNameSnapshot`, `customerSource` | `customerSource` harus `primary lama` jika dipakai untuk commit final |
 | `salesChannel` | Channel transaksi; jangan disamakan dengan offline DB mode |
 | `requestedStatus` | `Diproses`/`Dikirim`/`Selesai` request user; final divalidasi saat commit |
 | `items[]` | Snapshot line item draft |
@@ -375,7 +375,7 @@ Catatan: field ini adalah **kontrak konsep**, belum dibuat table pada batch ini.
 Sebelum draft menjadi sales final, sistem harus:
 
 1. Re-fetch customer dari runtime lama-primary jika customer dipilih.
-2. Menolak customer dengan `customerSource !== legacy_primary` untuk commit final.
+2. Menolak customer dengan `customerSource !== primary lama` untuk commit final.
 3. Re-fetch product/raw material dan variant dari runtime lama transaction snapshot.
 4. Revalidasi stock availability untuk semua line.
 5. Rehitung total sale value dari payload final.
@@ -400,7 +400,7 @@ Risiko utama bila Purchases/Sales final dipaksa offline:
 Guard wajib sebelum runtime draft diimplementasikan:
 
 - Draft lokal harus punya namespace/table terpisah dari collection final.
-- Draft tidak boleh masuk `legacy_sync_queue` final otomatis.
+- Draft tidak boleh masuk `sync queue lama` final otomatis.
 - Commit harus user-reviewed dan online-only.
 - Commit harus punya idempotency key bila nanti dibuat queue commit.
 - Untuk V1, lebih aman draft tidak auto-sync; user klik commit satu per satu.

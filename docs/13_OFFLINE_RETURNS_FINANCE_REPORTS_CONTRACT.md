@@ -1,6 +1,6 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, legacy_sync_queue, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, sync queue lama, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # 13 Offline Returns, Finance, dan Reports Contract
@@ -151,7 +151,7 @@ Keputusan: Finance tetap **runtime lama-primary**. Offline untuk finance hanya b
 
 #### `revenues`
 
-Sumber: Cash In manual / legacy income.
+Sumber: Cash In manual / data lama income.
 
 Field penting yang terlihat dari source:
 
@@ -206,7 +206,7 @@ Risiko utama:
 Guard:
 
 - Finance offline **tidak boleh** menulis `revenues`, `incomes`, atau `expenses`.
-- Finance offline **tidak boleh** masuk `legacy_sync_queue`.
+- Finance offline **tidak boleh** masuk `sync queue lama`.
 - Offline report snapshot **tidak boleh** dipakai sebagai sumber posting ledger baru.
 - Report snapshot hanya cache baca, bukan sumber truth.
 
@@ -221,7 +221,7 @@ Jika nanti dibuat runtime snapshot offline, minimal field snapshot:
 | `periodStart` | Awal periode snapshot |
 | `periodEndExclusive` | Akhir periode eksklusif |
 | `sourceCollections` | Contoh: `revenues,incomes,expenses` |
-| `generatedFrom` | `legacy_primary` |
+| `generatedFrom` | `primary lama` |
 | `pulledAt` | Waktu snapshot ditarik ke local |
 | `isReadOnly` | Harus `true` |
 | `summary` | Total pemasukan, pengeluaran, laba/rugi sesuai sumber final runtime lama |
@@ -287,7 +287,7 @@ Snapshot boleh digunakan untuk melihat data terakhir saat offline, tetapi harus 
 | `sourceCollections` | Collection runtime lama yang dibaca |
 | `sourceReadModel` | Contoh: `stock_item_read_models` untuk Stock Report |
 | `pulledAt` | Waktu snapshot dibuat/ditarik |
-| `generatedFrom` | Harus `legacy_primary` untuk fase ini |
+| `generatedFrom` | Harus `primary lama` untuk fase ini |
 | `isFinalReport` | Harus `false` jika hanya cache offline |
 | `isReadOnly` | Harus `true` |
 | `summary` | Ringkasan KPI yang tampil |

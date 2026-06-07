@@ -73,7 +73,7 @@ const CashIn = () => {
         setLoading(false);
       },
       (error) => {
-        console.error("Gagal sinkronisasi data cash-in SQLite:", error);
+        console.error("Gagal sinkronisasi data cash-in lokal:", error);
         setCashIns([]);
         setLoading(false);
       },

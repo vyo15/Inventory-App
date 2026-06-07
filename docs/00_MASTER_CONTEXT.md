@@ -7,11 +7,11 @@ Update verifikasi source aktual — 2026-06-07:
 - runtime utama source aktual adalah React/Vite frontend + Node.js Express backend + SQLite file lokal/LAN;
 - `backend/src/server.js` mendaftarkan endpoint `/api/**` untuk Auth, master data, stock, transaksi, finance, production, reports, maintenance, dan audit log;
 - `frontend/src/context/AuthContext.jsx` memakai `localAuthService` dan `authMode: "sqlite"`; nama state auth lama yang masih tersisa hanya compatibility internal untuk actor label lama, bukan runtime auth lama;
-- `frontend/src/data/repositories/repositoryMode.js` memetakan alias legacy `legacy_primary`, `offline_local`, dan `hybrid_sync` ke `sqlite_sidecar`; alias ini tidak boleh dianggap fallback runtime lama;
+- `frontend/src/data/repositories/repositoryMode.js` memetakan alias lama `primary lama`, `offline_local`, dan `hybrid_sync` ke `sqlite_sidecar`; alias ini tidak boleh dianggap fallback runtime lama;
 - `frontend/package.json` source aktual tidak memiliki dependency `runtime-lama` atau `database-browser-lama`.
 
 Catatan arsip:
-- semua instruksi lama tentang auth lama, rules database lama, transaksi database lama, database browser lama sync queue, atau runtime lama fallback harus dibaca sebagai **LEGACY / ARSIP MIGRASI**, kecuali ada validasi source baru yang membuktikan runtime tersebut aktif kembali dan owner menyetujuinya eksplisit.
+- semua instruksi lama tentang auth lama, rules database lama, transaksi database lama, database browser lama sync queue, atau fallback runtime lama harus dibaca sebagai **ARSIP MIGRASI**, kecuali ada validasi source baru yang membuktikan runtime tersebut aktif kembali dan owner menyetujuinya eksplisit.
 
 =====================================================
 SECTION: Current repository boundary — AKTIF / GUARDED / SQLITE SOURCE OF TRUTH
@@ -19,13 +19,13 @@ Fungsi:
 - Mengunci batas source aktual setelah migrasi SQLite: frontend React/Vite, backend Node.js Express, dan SQLite file lokal/LAN sebagai runtime utama.
 
 Dipakai oleh:
-- Semua task patch docs/source, terutama Auth lokal, repository mode, maintenance/backup-restore, transaksi, stock, finance, production, report, dan cleanup legacy.
+- Semua task patch docs/source, terutama Auth lokal, repository mode, maintenance/backup-restore, transaksi, stock, finance, production, report, dan cleanup data lama.
 
 Alasan perubahan:
 - Source aktual sudah tidak menjalankan runtime lama sebagai runtime utama. Backend adalah satu-satunya akses resmi ke SQLite; frontend tidak boleh akses file SQLite langsung.
 
 Catatan cleanup:
-- Referensi runtime/database/browser-local lama yang tersisa di docs/source comments harus diperlakukan sebagai legacy compatibility atau arsip migrasi sampai dibuktikan sebaliknya lewat grep/import/route/service aktual.
+- Referensi runtime/database/browser-local lama yang tersisa di docs/source comments harus diperlakukan sebagai compatibility data lama atau arsip migrasi sampai dibuktikan sebaliknya lewat grep/import/route/service aktual.
 
 Risiko:
 - Mengikuti docs lama yang masih menyebut auth/rules database lama dapat membuat patch baru salah arah, menghidupkan fallback lama, atau melewati backend SQLite resmi.
@@ -53,7 +53,7 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
 - Database aktif: SQLite file lokal/LAN melalui backend resmi
 - Auth aktif: local auth SQLite melalui `frontend/src/services/System/localAuthService.js` dan endpoint `/api/auth/**`
 - Hosting/deploy frontend: Vite/GitHub Pages masih tersedia untuk build frontend, tetapi data runtime tetap membutuhkan backend SQLite lokal/LAN.
-- runtime/database/browser-local lama: tidak ada sebagai runtime aktif pada source aktual. Sebutan lama hanya legacy/arsip kecuali source baru membuktikan sebaliknya.
+- runtime/database/browser-local lama: tidak ada sebagai runtime aktif pada source aktual. Sebutan lama hanya data lama/arsip kecuali source baru membuktikan sebaliknya.
 
 ## Struktur Teknis Utama yang Terverifikasi
 - `src/main.jsx` memakai `HashRouter`
@@ -82,7 +82,7 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
 - `/produksi/payroll-produksi`
 - `/produksi/analisis-hpp`
 - `/stock-management`
-- `/stock-adjustment` sekarang legacy redirect ke `/stock-management`
+- `/stock-adjustment` sekarang redirect lama ke `/stock-management`
 - `/purchases`
 - `/returns`
 - `/sales`
@@ -95,7 +95,7 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
 - `/payroll-report`
 - `/system/user-management`
 - `/utilities/reset-maintenance-data`
-- `/utilities/reset-test-data` sekarang legacy redirect ke `/utilities/reset-maintenance-data`
+- `/utilities/reset-test-data` sekarang redirect lama ke `/utilities/reset-maintenance-data`
 
 ## Prinsip Stok Aktif yang Terlihat di Kode
 Aplikasi saat ini memakai pendekatan transisi antara field lama dan field baru:
@@ -114,7 +114,7 @@ Saat membuat perubahan baru, selalu cek apakah perubahan menyentuh salah satu ar
 - sinkronisasi `stock` vs `currentStock`
 - item dengan varian
 - flow kas dari penjualan dan pembelian
-- modul produksi final vs flow legacy `productions`
+- modul produksi final vs flow data lama `productions`
 - laporan yang membaca collection lain, bukan collection transaksi mentah
 
 ## Aturan Aman untuk Task Berikutnya
@@ -141,7 +141,7 @@ Saat membuat perubahan baru, selalu cek apakah perubahan menyentuh salah satu ar
 ## Update Integrasi Manajemen Stok — 2026-04-25
 - Sidebar Inventaris sekarang hanya menampilkan **Manajemen Stok** sebagai entry point utama.
 - Area Penyesuaian Stok aktif berada di halaman Manajemen Stok supaya user bisa melihat audit log dan melakukan koreksi stok dalam satu konteks.
-- Route lama `/stock-adjustment` dipertahankan sebagai legacy redirect ke `/stock-management`, bukan halaman adjustment aktif.
+- Route lama `/stock-adjustment` dipertahankan sebagai redirect lama ke `/stock-management`, bukan halaman adjustment aktif.
 - File lama `src/pages/Inventory/StockAdjustment.jsx` dihapus dari source patch karena logic submit adjustment sudah dipindahkan ke `src/pages/Inventory/components/StockAdjustmentPanel.jsx`.
 
 ## Update Integrasi IMS Otomatis — 2026-04-25
@@ -159,7 +159,7 @@ Status cleanup bertahap yang dikunci di docs:
 - **Aktif:** Production Order create drawer memakai preview compact read-only untuk stok target, varian target, qty batch, estimasi output, kebutuhan material, stok material, dan status cukup/kurang.
 - **Guarded:** Completed Work Log harus menjaga material cost, labor cost, total cost, cost per good unit, output stock posting, dan auto payroll agar tidak diproses dua kali.
 - **Aktif:** Work Log completed membuat payroll line otomatis; payroll `paid` membuat Cash Out/Expense otomatis dengan guard idempotent.
-- **Legacy/compatibility:** payroll preference custom di master karyawan hanya data lama/compatibility; payroll final mengikuti rule Tahapan Produksi dan Work Log completed.
+- **Data lama/compatibility:** payroll preference custom di master karyawan hanya data lama/compatibility; payroll final mengikuti rule Tahapan Produksi dan Work Log completed.
 - **Aktif:** Profit Loss membaca biaya payroll dari `expenses`, bukan dari `production_payrolls`, agar tidak double counting.
 - **Aktif:** Export laporan final memakai XLSX rapi, bukan data mentah.
 
@@ -191,7 +191,7 @@ Status cleanup bertahap yang dikunci di docs:
 - **Guarded:** mode `hasVariants` tetap dikunci untuk edit biasa, tetapi data lama non-varian boleh mulai memakai varian lewat flow aman hanya jika `stock/currentStock`, `reservedStock`, dan `availableStock` semuanya 0.
 - **Guarded:** varian baru pada item existing wajib mulai dari stok 0; stok fisik tetap harus masuk lewat Stock Management / Stock Adjustment / transaksi resmi.
 - **Guarded:** item lama yang masih punya stok master atau reserved stock tidak boleh dikonversi otomatis ke varian karena itu akan memindahkan bucket stok tanpa audit.
-- **Legacy:** field `stock` tetap disimpan sebagai alias/compatibility dan tidak boleh dihapus dari dokumen.
+- **Data lama:** field `stock` tetap disimpan sebagai alias/compatibility dan tidak boleh dihapus dari dokumen.
 - **Aktif:** Stock Adjustment resmi mendukung `raw_materials`, `semi_finished_materials`, dan `products`. Semi Finished non-varian/bervarian dapat dikoreksi lewat Stock Management dengan transaction, `stock_adjustments`, dan `inventory_logs`.
 - **Docs lock:** task berikutnya tidak boleh membuka kembali direct edit stok master kecuali ada business rule baru, audit trail baru, dan approval eksplisit.
 
@@ -261,11 +261,11 @@ Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah 
 
 Catatan lock:
 - Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
-- Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
+- Sales tetap boleh memakai nama field data lama `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
 - Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
 - Master item/config produksi memakai sequence internal sederhana `PREFIX-001`. Kode ini disimpan untuk relasi/backstage dan tidak menjadi fokus UI.
 - Internal database ID teknis/random tidak boleh tampil sebagai kode audit/user-facing.
-- Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
+- Data lama dengan prefix lama tetap compatibility, tetapi bukan standar data baru.
 
 
 ### Guard final reference code
@@ -275,8 +275,8 @@ Catatan lock:
 - Kode tidak boleh berubah saat edit nama, kontak, katalog, harga, atau status.
 - Untuk data baru yang satu dokumen mewakili satu reference utama, document ID idealnya sama dengan kode bisnis.
 - Data lama tidak boleh di-rename document ID tanpa preview/repair plan terpisah.
-- Generator readable semantic lama sudah tidak menjadi flow aktif; data legacy readable tetap dibaca sebagai data existing, sedangkan data baru Product, Raw Material, Semi Finished, BOM, dan Production Step memakai sequence internal `PREFIX-001`.
-- Prefix legacy `SAL`, `RM`, `CIN`, `COUT`, `WL`, `ADJ`, dan `STEP` hanya boleh muncul sebagai catatan legacy compatibility/audit, bukan generator data baru.
+- Generator readable semantic lama sudah tidak menjadi flow aktif; data lama readable tetap dibaca sebagai data existing, sedangkan data baru Product, Raw Material, Semi Finished, BOM, dan Production Step memakai sequence internal `PREFIX-001`.
+- Prefix lama `SAL`, `RM`, `CIN`, `COUT`, `WL`, `ADJ`, dan `STEP` hanya boleh muncul sebagai catatan compatibility data lama/audit, bukan generator data baru.
 
 
 ### UI rule final: master item/config code internal
@@ -297,11 +297,11 @@ Catatan lock:
 ## Update Produksi/HPP — 2026-05-17
 - Detail Work Log dan HPP Analysis memakai resolver labor yang sama: payroll final, draft payroll, lalu estimasi Step sebagai read-only preview.
 - Overhead aktif berasal dari BOM untuk listrik/glue gun. Field hasil selain Good Qty adalah compatibility data lama dan tidak ditampilkan sebagai workflow aktif.
-- Data Quality Audit produksi read-only mendeteksi Work Log legacy status, payroll pending/mismatch, output HPP yang butuh reconcile, dan Semi Finished tanpa `flowerGroup`; audit hasil selain Good Qty sengaja tidak diaktifkan.
+- Data Quality Audit produksi read-only mendeteksi Work Log data lama status, payroll pending/mismatch, output HPP yang butuh reconcile, dan Semi Finished tanpa `flowerGroup`; audit hasil selain Good Qty sengaja tidak diaktifkan.
 
 ## Update SQLite Local Runtime Pilot
 
-Status terbaru: source aktual sudah SQLite-first untuk runtime utama. `frontend/.env.example` mengaktifkan `VITE_AUTH_MODE=sqlite` dan semua repository mode utama diarahkan ke SQLite. Alias legacy seperti `legacy_primary`, `offline_local`, dan `hybrid_sync` dinormalisasi ke `sqlite_sidecar`, bukan menghidupkan runtime lama. database browser lama tidak lagi dipakai sebagai runtime aktif Offline Database Center. Supplier, Product, Raw Material, Semi Finished, Stock, Transactions, Finance, Production, dan Reports harus melalui backend SQLite sesuai service/endpoint aktual.
+Status terbaru: source aktual sudah SQLite-first untuk runtime utama. `frontend/.env.example` mengaktifkan `VITE_AUTH_MODE=sqlite` dan semua repository mode utama diarahkan ke SQLite. Alias data lama seperti `primary lama`, `offline_local`, dan `hybrid_sync` dinormalisasi ke `sqlite_sidecar`, bukan menghidupkan runtime lama. database browser lama tidak lagi dipakai sebagai runtime aktif Offline Database Center. Supplier, Product, Raw Material, Semi Finished, Stock, Transactions, Finance, Production, dan Reports harus melalui backend SQLite sesuai service/endpoint aktual.
 
 ## Mobile UI Standard v1.0 — Keputusan Aktif
 

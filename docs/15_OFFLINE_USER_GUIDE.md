@@ -64,7 +64,7 @@ Menu `Maintenance & Backup` adalah pusat perawatan data SQLite offline. Urutan p
 5. Gunakan `Data Tools` untuk preview/hapus data test bermarker dan export master.
 6. Gunakan `Checklist` sebelum update, restore, atau maintenance besar.
 7. Buka `Riwayat` untuk melihat backup/restore resmi.
-8. `Reset Testing` hanya catatan legacy nonaktif pada mode full SQLite; pemulihan data utama harus lewat Backup & Restore.
+8. `Reset Testing` hanya catatan data lama nonaktif pada mode full SQLite; pemulihan data utama harus lewat Backup & Restore.
 
 ## Backup harian otomatis
 

@@ -211,7 +211,7 @@ Restore wajib:
 module_migration_status
 → GET /api/module-runtime-status
 → Database Center / Maintenance Checklist
-→ summary modul aktif/guarded/legacy/unknown
+→ summary modul aktif/guarded/data lama/unknown
 ```
 
 Status modul adalah alat bantu audit. Patch fitur tetap wajib membaca file source aktual yang menangani modul tersebut.

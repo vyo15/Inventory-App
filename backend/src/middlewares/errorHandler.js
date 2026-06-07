@@ -7,7 +7,7 @@ function notFoundHandler(req, res) {
 
 function errorHandler(error, req, res, next) {
   void req;
-  console.error("IMS SQLite sidecar error:", error);
+  console.error("IMS layanan database lokal error:", error);
 
   if (res.headersSent) {
     return next(error);
@@ -15,7 +15,7 @@ function errorHandler(error, req, res, next) {
 
   return failure(
     res,
-    error?.publicMessage || "Terjadi error pada server SQLite sidecar",
+    error?.publicMessage || "Terjadi error pada server layanan database lokal",
     error?.errorCode || "INTERNAL_SERVER_ERROR",
     error?.statusCode || 500
   );

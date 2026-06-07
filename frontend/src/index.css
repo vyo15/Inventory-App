@@ -38,7 +38,7 @@ Alasan perubahan:
 - standar baru memakai flat surface dan tidak memakai gradient aktif pada token global.
 
 Catatan cleanup:
-- `--ims-brand-gradient` dipertahankan sebagai legacy alias flat agar CSS lama tidak crash; jangan dipakai untuk dekorasi baru.
+- `--ims-brand-gradient` dipertahankan sebagai compatibility alias flat agar CSS lama tidak crash; jangan dipakai untuk dekorasi baru.
 
 Risiko:
 - perubahan token ini berdampak lintas aplikasi; salah kontras dapat membuat table, form, modal, drawer, atau status bisnis sulit dibaca.
@@ -210,7 +210,7 @@ Alasan perubahan:
 - semantic warning tetap dipisahkan dari gold brand agar status operasional tidak ambigu.
 
 Catatan cleanup:
-- `--ims-brand-gradient` tetap legacy alias flat sampai semua pemakaian lama selesai diaudit.
+- `--ims-brand-gradient` tetap compatibility alias flat sampai semua pemakaian lama selesai diaudit.
 
 Risiko:
 - perubahan token dark mode yang terlalu terang dapat menurunkan kenyamanan baca jangka panjang dan membuat status warning/success/error sulit dibedakan.

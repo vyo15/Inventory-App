@@ -21,10 +21,10 @@ Dipakai oleh:
 - ProductionWorkLogs.jsx filter status dan form Work Log.
 
 Alasan perubahan:
-- Work Log produksi sekarang merepresentasikan eksekusi kerja; Draft BOM/PO hanya legacy helper pembentuk template data, bukan status operasional baru.
+- Work Log produksi sekarang merepresentasikan eksekusi kerja; Draft BOM/PO hanya helper lama pembentuk template data, bukan status operasional baru.
 
 Catatan cleanup:
-- PRODUCTION_WORK_LOG_LEGACY_STATUSES hanya untuk membaca data lama yang masih tersimpan sebagai draft/cancelled.
+- PRODUCTION_WORK_LOG_ARCHIVED_STATUSES hanya untuk membaca data lama yang masih tersimpan sebagai draft/cancelled.
 
 Risiko:
 - Jika Draft/Cancelled dikembalikan ke opsi aktif, user bisa membuat Work Log non-eksekusi yang tidak mengikuti flow PO/start production.
@@ -34,9 +34,9 @@ export const PRODUCTION_WORK_LOG_STATUSES = [
   { value: "completed", label: "Completed" },
 ];
 
-export const PRODUCTION_WORK_LOG_LEGACY_STATUSES = [
-  { value: "draft", label: "Draft (Legacy)" },
-  { value: "cancelled", label: "Cancelled (Legacy)" },
+export const PRODUCTION_WORK_LOG_ARCHIVED_STATUSES = [
+  { value: "draft", label: "Draft (Data Lama)" },
+  { value: "cancelled", label: "Cancelled (Data Lama)" },
 ];
 
 export const PRODUCTION_WORK_LOG_TARGET_TYPES = [
@@ -61,7 +61,7 @@ export const WORK_LOG_SOURCE_TYPE_MAP = toOptionMap(
   PRODUCTION_WORK_LOG_SOURCE_TYPES,
 );
 export const WORK_LOG_STATUS_MAP = toOptionMap([
-  ...PRODUCTION_WORK_LOG_LEGACY_STATUSES,
+  ...PRODUCTION_WORK_LOG_ARCHIVED_STATUSES,
   ...PRODUCTION_WORK_LOG_STATUSES,
 ]);
 export const WORK_LOG_TARGET_TYPE_MAP = toOptionMap(

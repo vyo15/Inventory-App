@@ -1,6 +1,6 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, legacy_sync_queue, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, sync queue lama, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # Offline Supplier Flow Audit — Batch 18/19 + Decision Batch 28
@@ -29,7 +29,7 @@ Pilihan yang disetujui: **Supplier offline read-only snapshot**. Supplier tidak 
 - Supplier boleh dibaca melalui repository pilot untuk audit/dev preview.
 - Supplier boleh dipull dari runtime lama ke local DB sebagai snapshot read-only.
 - Offline Database Center wajib menampilkan supplier sebagai read-only snapshot, bukan data write pilot.
-- Supplier **belum boleh** masuk `legacy_sync_queue` atau disync otomatis/manual ke runtime lama.
+- Supplier **belum boleh** masuk `sync queue lama` atau disync otomatis/manual ke runtime lama.
 - Supplier runtime lama dan database browser lama adapter tetap read-only/write blocked sampai flow supplier diekstrak dan diverifikasi.
 - Page `SupplierPurchases.jsx` belum boleh dipindahkan ke offline runtime.
 - Tidak boleh ada tombol create/edit/delete supplier offline.

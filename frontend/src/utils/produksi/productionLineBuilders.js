@@ -63,7 +63,7 @@ export const buildBomStepFormLine = ({ values, selectedStep }) => ({
 });
 
 // =====================================================
-// MANUAL / LEGACY EDITOR HELPER.
+// MANUAL / COMPATIBILITY EDITOR HELPER.
 // Flow final PO variant tidak memakai helper ini untuk requirement PO;
 // requirement PO sudah resolved di productionOrdersService lalu dikunci di
 // productionWorkLogsService. Helper ini tetap untuk input manual/planned.
@@ -98,7 +98,7 @@ export const buildWorkLogMaterialUsageFormLine = ({ values, selectedItem }) => {
 };
 
 // =====================================================
-// MANUAL / LEGACY EDITOR HELPER.
+// MANUAL / COMPATIBILITY EDITOR HELPER.
 // Flow final PO variant mengunci output dari targetVariantKey PO. Helper ini
 // hanya untuk output manual/planned; jika item bervarian tetapi varian kosong,
 // complete service akan memblok agar tidak masuk master/default.
