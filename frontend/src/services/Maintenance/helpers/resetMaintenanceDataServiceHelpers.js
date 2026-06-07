@@ -3,7 +3,7 @@
 //
 // Behavior-preserving extraction dari resetMaintenanceDataService.js.
 // Helper di file ini hanya pure formatter/validator/builder dan tidak boleh
-// melakukan Firestore read/write, delete/reset, route/menu change, atau schema change.
+// melakukan database read/write, delete/reset, route/menu change, atau schema change.
 // =====================================================
 
 import { calculateAvailableStock, toNumber } from "../../../utils/stock/stockHelpers";
@@ -192,7 +192,7 @@ export const buildOpeningStockRowsFromExportData = (collections = []) => collect
 // =====================================================
 // Modal/HPP + stock reset pure builders — GUARDED
 // Phase 2 extraction: helper ini hanya validasi/builder payload pure.
-// Firestore read/write, reset destructive, dan baseline restore tetap di service utama.
+// database read/write, reset destructive, dan baseline restore tetap di service utama.
 // =====================================================
 
 export const getHppCostResetOption = (resetMode) => HPP_COST_RESET_OPTIONS.find((item) => item.value === resetMode) || null;

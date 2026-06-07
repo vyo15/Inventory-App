@@ -472,7 +472,7 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 - Banner harus menjelaskan source aktif dengan bahasa user-facing: `SQLite Server` untuk `sqlite`, dan `SQLite Lokal`/`Backend Lokal` untuk `sqlite_sidecar`. Nilai lama `offline_local` dinormalisasi ke `sqlite_sidecar` agar setting browser lama tidak membuat UI crash.
 - Copy harus menjelaskan bahwa data dibaca/ditulis lewat backend Node.js lokal dan file SQLite di laptop/server lokal.
 - Empty state SQLite tidak boleh hanya menulis `Belum ada data`; harus menjelaskan kemungkinan backend SQLite belum jalan atau database SQLite masih kosong, serta memberi shortcut ke `SQLite Local DB Center`.
-- Banner harus compact, responsive, dan tidak menggantikan table/action utama. Detail backup SQLite, migration status, dan restore plan tetap berada di `SQLite Local DB Center`.
+- Banner harus compact, responsive, dan tidak menggantikan table/action utama. Detail backup SQLite, Module Runtime Status, dan restore plan tetap berada di `SQLite Local DB Center`.
 - Perubahan banner adalah UI-only. Jangan menyisipkan write/sync otomatis, schema change, route/menu baru, atau business flow transaksi di komponen status.
 
 ## Standar Action Result Popup — Success/Error Only
@@ -575,7 +575,7 @@ Aturan visual mobile:
 
 ## Update 2026-06-05 - Database Mode Banner Cleanup
 
-Halaman operasional tidak boleh lagi menampilkan banner teknis seperti "Mode SQLite lokal aktif", "SQLite LAN", instruksi port, atau penjelasan runtime Firebase/Dexie. Runtime IMS sudah dianggap database lokal utama, sehingga informasi teknis tersebut hanya boleh muncul di Maintenance/Database Center bila benar-benar diperlukan untuk troubleshooting.
+Halaman operasional tidak boleh lagi menampilkan banner teknis seperti "Mode SQLite lokal aktif", "SQLite LAN", instruksi port, atau penjelasan runtime lama. Runtime IMS sudah dianggap database lokal utama, sehingga informasi teknis tersebut hanya boleh muncul di Maintenance/Database Center bila benar-benar diperlukan untuk troubleshooting.
 
 Standar UI baru:
 - Page header master data memakai bahasa bisnis, bukan bahasa runtime.

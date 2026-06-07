@@ -38,7 +38,7 @@ import { getActiveSemiFinishedMaterials } from '../../../services/Produksi/semiF
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -47,7 +47,7 @@ const { Text } = Typography;
 // =========================
 // SECTION: Konfigurasi sumber item Stock Adjustment
 // Fungsi blok:
-// - menyatukan mapping itemType UI ke collection Firestore dan label riwayat adjustment.
+// - menyatukan mapping itemType UI ke target modul backend SQLite dan label riwayat adjustment.
 // Hubungan flow aplikasi:
 // - Stock Adjustment resmi sekarang mendukung Bahan Baku, Semi Finished, dan Produk Jadi tanpa mengubah flow produksi/HPP/transaksi lain.
 // Alasan logic dipakai:
@@ -299,7 +299,7 @@ const renderAdjustmentReasonNote = (_, record = {}) => {
 // - memindahkan form dan riwayat Penyesuaian Stok ke dalam halaman Manajemen Stok
 // Hubungan flow:
 // - menjadi satu-satunya UI aktif untuk adjustment manual setelah menu / halaman lama dihapus
-// - mutasi stok sekarang memakai Firestore transaction dan applyStockMutationToItem agar stock/currentStock/availableStock/variants[] sinkron
+// - mutasi stok sekarang memakai backend SQLite transaction dan helper stock mutation agar stock/currentStock/availableStock/variants[] sinkron
 // Status:
 // - aktif/final untuk adjustment stok manual
 // - bukan halaman route mandiri; route lama /stock-adjustment hanya redirect ke /stock-management
@@ -310,7 +310,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // Fungsi:
   // - menyimpan riwayat stock_adjustments, master item, dan status modal form
   // Hubungan flow:
-  // - master item hanya dipakai sebagai pilihan form; source of truth mutasi final ada di Firestore transaction dan helper stok varian aktif
+  // - master item hanya dipakai sebagai pilihan form; source of truth mutasi final ada di backend SQLite transaction dan helper stok varian aktif
   // - isSubmittingRef menjadi guard teknis agar submit dobel tidak membuat double stock/log sebelum state React sempat update
   // Status:
   // - AKTIF dipakai di halaman Manajemen Stok.
@@ -534,7 +534,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // =========================
   // SECTION: Submit penyesuaian stok atomik
   // Fungsi:
-  // - menyimpan stock_adjustments, mutasi stok master/varian, dan inventory_logs dalam satu Firestore transaction.
+  // - menyimpan stock_adjustments, mutasi stok master/varian, dan inventory_logs dalam satu backend SQLite transaction.
   // Hubungan flow aplikasi:
   // - Stock Management adalah audit log + adjustment resmi; stok tidak boleh berubah tanpa record adjustment dan log audit.
   // Status:
@@ -603,7 +603,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         return;
       }
 
-      throw new Error("Mode Firebase Stock Adjustment sudah dihapus. Gunakan SQLite Stock Adjustment.");
+      throw new Error("Mode legacy Stock Adjustment sudah dihapus. Gunakan SQLite Stock Adjustment.");
 
     } catch (error) {
       console.error(error);
@@ -960,7 +960,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               - hanya mengganti tampilan snapshot sebelum submit; validasi availableStock, variantKey, transaction, stock_adjustments, dan inventory_logs tetap memakai logic existing.
               Alasan logic:
               - info stok bukan warning/error, sehingga lebih aman secara UX ditampilkan sebagai panel clean seperti Purchases.
-              Status: AKTIF untuk UI Stock Adjustment, GUARDED terhadap mutasi stok dan payload Firestore.
+              Status: AKTIF untuk UI Stock Adjustment, GUARDED terhadap mutasi stok dan payload backend SQLite.
           ===================================================== */}
           {selectedItem ? (
             <div className="ims-readonly-panel">

@@ -63,7 +63,7 @@ import { showFormValidationFeedback } from '../../utils/forms/formValidationFeed
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const getStepEmployeeCount = (stepId, employees = []) =>
   employees.filter((item) => Array.isArray(item.assignedStepIds) && item.assignedStepIds.includes(stepId)).length;

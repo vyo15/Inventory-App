@@ -87,7 +87,7 @@ import {
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const getProductionPayrollsForWorkLogDisplaySafely = async () => {
   try {
@@ -99,7 +99,7 @@ const getProductionPayrollsForWorkLogDisplaySafely = async () => {
 };
 
 const ProductionWorkLogs = () => {
-  const { profile, firebaseUser } = useAuth();
+  const { profile, authSessionUser } = useAuth();
 
   // =====================================================
   // IMS NOTE [AKTIF/GUARDED] - Actor audit Work Log.
@@ -108,10 +108,10 @@ const ProductionWorkLogs = () => {
   // Alasan logic: Work Log completed sudah menyimpan operator produksi, tetapi actor aplikasi tetap perlu tercatat dari Auth session.
   // =====================================================
   const currentUser = useMemo(() => ({
-    email: profile?.email || firebaseUser?.email || "",
-    displayName: profile?.displayName || profile?.name || firebaseUser?.displayName || "",
-    uid: profile?.authUid || profile?.uid || profile?.id || firebaseUser?.uid || "",
-  }), [firebaseUser, profile]);
+    email: profile?.email || authSessionUser?.email || "",
+    displayName: profile?.displayName || profile?.name || authSessionUser?.displayName || "",
+    uid: profile?.authUid || profile?.uid || profile?.id || authSessionUser?.uid || "",
+  }), [authSessionUser, profile]);
 
   // SECTION: state utama
   const [loading, setLoading] = useState(false);

@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 // AKTIF + GUARDED:
 // Konfigurasi utama Vite untuk build dan deploy IMS Bunga Flanel.
 // File ini hanya mengatur proses build/deploy, tidak menyentuh flow bisnis,
-// stok, kas, produksi, laporan, maupun data Firebase.
+// stok, kas, produksi, laporan, maupun akses database runtime.
 export default defineConfig({
   // AKTIF:
   // Plugin React tetap dipakai agar Vite bisa memproses JSX/React refresh

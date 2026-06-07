@@ -60,7 +60,7 @@ import {
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -302,7 +302,7 @@ const Products = () => {
   - Belum ada. Helper kalkulasi tetap memakai pricingService existing.
 
   Risiko:
-  - Jangan menulis langsung ke Firestore dari effect ini; harga hanya tersimpan saat user klik Simpan.
+  - Jangan menulis langsung ke database dari effect ini; harga hanya tersimpan saat user klik Simpan.
   ===================================================== */
   useEffect(() => {
     if (pricingModeValue !== 'rule') {

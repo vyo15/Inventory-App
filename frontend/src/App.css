@@ -949,7 +949,7 @@ Risiko:
    Fungsi:
    - menyatukan panel snapshot/read-only pasif agar tidak memakai Alert besar yang terasa seperti warning.
    Hubungan flow aplikasi:
-   - presentational only untuk info stok/summary; tidak mengubah value form, validasi, payload, atau transaksi Firestore.
+   - presentational only untuk info stok/summary; tidak mengubah value form, validasi, payload, atau transaksi backend SQLite.
    Alasan logic dipakai:
    - panel ini memisahkan informasi pasif dari warning/error/destructive Alert agar semantik guard tetap jelas.
    Status:
@@ -1449,7 +1449,7 @@ Risiko:
    Fungsi:
    - memastikan Modal, Drawer, Popover, Dropdown, Select, dan Date Picker portal tetap solid ketika dirender di luar .app-shell.
    Hubungan flow aplikasi:
-   - styling portal Ant Design saja; tidak mengubah submit flow, action handler, query Firestore, atau business rules.
+   - styling portal Ant Design saja; tidak mengubah submit flow, action handler, query service/backend, atau business rules.
    Alasan logic dipakai:
    - portal AntD sering keluar dari hierarchy .app-shell, jadi selector body.app-theme-* wajib dipertahankan agar light/dark tetap aman.
    Status:

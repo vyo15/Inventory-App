@@ -71,7 +71,7 @@ import {
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const { Option } = Select;
 const { Search } = Input;
@@ -143,7 +143,7 @@ const SupplierPurchases = () => {
   // ---------------------------------------------------------------------------
   // Load master supplier, bahan baku, dan purchases.
   // FUNGSI: C1 memindahkan master Supplier ke repository boundary agar mode
-  // SQLite tidak lagi melakukan write langsung ke Firestore supplierPurchases.
+  // UI tidak melakukan write langsung ke database; perubahan berjalan lewat service/backend SQLite.
   // BATASAN: raw material dan histori purchase tetap legacy read-only untuk
   // pembanding; tidak menulis purchase, stok, kas, raw material, atau finance.
   // STATUS: aktif dipakai.

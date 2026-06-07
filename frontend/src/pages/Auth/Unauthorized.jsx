@@ -14,7 +14,7 @@ const { Text } = Typography;
 // - dipakai oleh ProtectedRoute agar akses ditolak tidak berubah menjadi white screen.
 // Status:
 // - AKTIF untuk Fase C/D.
-// - GUARDED: halaman ini hanya UX guard; Firestore Rules final tetap diperlukan untuk keamanan data.
+// - GUARDED: halaman ini hanya UX guard; backend auth dan role guard final tetap diperlukan untuk keamanan data.
 // Legacy / cleanup:
 // - tidak ada legacy.
 // =========================

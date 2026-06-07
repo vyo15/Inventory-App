@@ -173,7 +173,7 @@ export const calculateVariantStockTotals = (variants = [], options = {}) => {
 
 // =====================================================
 // Normalisasi master item dari daftar varian.
-// ACTIVE: helper ini tidak menulis Firestore langsung; hanya membentuk payload
+// ACTIVE: helper ini tidak menulis database langsung; hanya membentuk payload
 // final agar service/transaksi bisa menyimpan master stock yang konsisten.
 // =====================================================
 export const normalizeVariantMasterStock = (item = {}, variants = [], options = {}) => {

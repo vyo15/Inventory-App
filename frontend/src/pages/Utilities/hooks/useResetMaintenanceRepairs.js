@@ -44,7 +44,7 @@ const STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD = "CLEANUP READ MODEL";
 const useResetMaintenanceRepairs = ({
   createPageMaintenanceLog,
   loadPreview,
-  firebaseUser,
+  authSessionUser,
   profile,
   maintenanceActor,
   setMasterCodeAudit,
@@ -288,7 +288,7 @@ const useResetMaintenanceRepairs = ({
   const handleRepairHppReconcileAudit = useCallback(async () => {
     try {
       setLoadingHppReconcileRepair(true);
-      const result = await repairHppReconcileMaintenance(firebaseUser || profile || maintenanceActor);
+      const result = await repairHppReconcileMaintenance(authSessionUser || profile || maintenanceActor);
       await createPageMaintenanceLog({
         actionType: "hpp_output_reconcile_repair",
         mode: "repair",
@@ -319,7 +319,7 @@ const useResetMaintenanceRepairs = ({
     } finally {
       setLoadingHppReconcileRepair(false);
     }
-  }, [createPageMaintenanceLog, firebaseUser, loadPreview, maintenanceActor, profile, setHppReconcileAudit]);
+  }, [createPageMaintenanceLog, authSessionUser, loadPreview, maintenanceActor, profile, setHppReconcileAudit]);
 
   const handleRepairPayrollAudit = useCallback(async () => {
     try {

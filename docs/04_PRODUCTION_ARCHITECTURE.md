@@ -396,9 +396,9 @@ Rule aktif:
 
 ## Offline Read-Only Snapshot Boundary — Batch 41-44
 
-Status: **GUARDED / FIREBASE PRIMARY / READ-ONLY**.
+Status: **ARSIP HISTORIS / DIGANTIKAN OLEH SQLITE RUNTIME**.
 
-Production architecture tetap online-first. Offline database hanya boleh membaca snapshot:
+Section ini berasal dari boundary lama sebelum runtime SQLite aktif. Untuk source terbaru, Production/Payroll/HPP berjalan lewat backend SQLite dan tetap guarded. Snapshot read-only lama hanya catatan sejarah:
 
 - Planning snapshot.
 - Production Order snapshot.

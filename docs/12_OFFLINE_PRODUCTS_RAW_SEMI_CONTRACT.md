@@ -1,13 +1,13 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline Dexie/IndexedDB. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime Dexie/IndexedDB, sync_queue, conflict resolver, atau backup JSON IndexedDB dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, legacy_sync_queue, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # Offline Product / Raw Material / Semi Finished Contract — Batch 29–30
 
-Status: **FIELD CONTRACT + READ-ONLY SNAPSHOT / BELUM RUNTIME WRITE MIGRATION**
+Status: **ARSIP HISTORIS / SUPERSEDED BY SQLITE RUNTIME / JANGAN DIPAKAI SEBAGAI INSTRUKSI AKTIF**.
 
-Dokumen ini menggantikan kontrak Batch 20 yang masih audit-only. Batch 29 memetakan kontrak field dari source aktual, sedangkan Batch 30 hanya mengizinkan **Firebase → Local pull read-only** untuk Product, Raw Material, dan Semi Finished. Tidak ada edit local, tidak ada stock mutation, tidak ada purchase/production mutation, dan tidak ada HPP recalculation dari data local.
+Dokumen ini menggantikan kontrak Batch 20 yang masih audit-only. Batch 29 memetakan kontrak field dari source aktual, sedangkan Batch 30 hanya mengizinkan **runtime lama ke local pull read-only** untuk Product, Raw Material, dan Semi Finished. Tidak ada edit local, tidak ada stock mutation, tidak ada purchase/production mutation, dan tidak ada HPP recalculation dari data local.
 
 ## Validasi source aktual
 
@@ -26,8 +26,8 @@ File source yang dicek:
 - `src/pages/Produksi/ProductionWorkLogs.jsx`
 - `src/pages/Transaksi/Purchases.jsx`
 - `src/data/local/localDbSchema.js`
-- `src/data/sync/firebaseToLocalMasterDataSyncService.js`
-- `src/data/sync/firebaseMasterDataSyncService.js`
+- `src/data/sync/runtime-lamaToLocalMasterDataSyncService.js`
+- `src/data/sync/runtime-lamaMasterDataSyncService.js`
 - `src/pages/Utilities/components/OfflineDatabaseCenter.jsx`
 
 File relevan yang tidak ditemukan pada ZIP ini:
@@ -38,21 +38,21 @@ File relevan yang tidak ditemukan pada ZIP ini:
 Batasan validasi:
 
 - Audit ini static source audit, bukan dump database runtime.
-- Firestore Rules/index tetap harus dicek manual di Firebase Console.
+- rules database lama/index tetap harus dicek manual di runtime lama Console.
 - Snapshot local tidak membuktikan data lama sudah bersih; legacy data shape tetap harus diasumsikan ada.
 
 ## Keputusan Batch 29–30
 
 | Area | Keputusan |
 |---|---|
-| Product | Boleh pull Firebase → Local sebagai snapshot read-only. |
-| Raw Material | Boleh pull Firebase → Local sebagai snapshot read-only. |
-| Semi Finished | Boleh pull Firebase → Local sebagai snapshot read-only. |
+| Product | Boleh pull runtime lama ke local sebagai snapshot read-only. |
+| Raw Material | Boleh pull runtime lama ke local sebagai snapshot read-only. |
+| Semi Finished | Boleh pull runtime lama ke local sebagai snapshot read-only. |
 | Offline write | Tetap blocked. Tidak ada create/edit/delete offline. |
-| `sync_queue` | Tetap hanya `categories` dan `customers`. Product/raw/semi tidak masuk queue. |
-| Offline → Firebase | Tetap hanya `categories` dan `customers`. Product/raw/semi diblokir. |
-| Runtime page | `Products`, `RawMaterials`, `SemiFinishedMaterials`, `Purchases`, `ProductionBoms`, dan `ProductionWorkLogs` tetap Firebase/service aktif. |
-| Stock/HPP | Tidak dihitung ulang dari IndexedDB local. |
+| `legacy_sync_queue` | Tetap hanya `categories` dan `customers`. Product/raw/semi tidak masuk queue. |
+| Offline → runtime lama | Tetap hanya `categories` dan `customers`. Product/raw/semi diblokir. |
+| Runtime page | `Products`, `RawMaterials`, `SemiFinishedMaterials`, `Purchases`, `ProductionBoms`, dan `ProductionWorkLogs` tetap runtime lama/service aktif. |
+| Stock/HPP | Tidak dihitung ulang dari storage browser lama local. |
 
 ## Kontrak field Product
 
@@ -71,7 +71,7 @@ Source utama: `src/services/MasterData/productsService.js`.
 | `currentStock`, `stock`, `reservedStock`, `availableStock` | stock guarded | `stock` masih alias legacy `currentStock`. Tidak boleh diubah dari offline snapshot. |
 | `minStockAlert` | alert master | Threshold master, bukan agregat variant. |
 | `variantCount`, `activeVariantCount` | derived | Hasil perhitungan helper, bukan field input utama. |
-| `createdAt`, `updatedAt` | audit timestamp | Firebase timestamp; saat snapshot local disimpan sebagai data remote apa adanya. |
+| `createdAt`, `updatedAt` | audit timestamp | runtime lama timestamp; saat snapshot local disimpan sebagai data remote apa adanya. |
 
 Guard penting Product:
 
@@ -164,30 +164,30 @@ Hal yang terdeteksi dari source:
 Keputusan:
 
 - Tidak ada unit conversion baru di Batch 30.
-- Snapshot local menyimpan data sebagaimana Firebase, tidak melakukan konversi unit.
+- Snapshot local menyimpan data sebagaimana runtime lama, tidak melakukan konversi unit.
 - Semua konversi/normalisasi stock harus tetap lewat service aktif sampai ada kontrak stock offline.
 
 ## Local DB Batch 30
 
 Local table yang aktif sebagai read-only snapshot:
 
-| Local table | Firebase collection | Arah yang boleh | Arah yang blocked |
+| Local table | runtime lama collection | Arah yang boleh | Arah yang blocked |
 |---|---|---|---|
-| `products` | `products` | Firebase → Local | Local → Firebase, sync queue, local write |
-| `raw_materials` | `raw_materials` | Firebase → Local | Local → Firebase, sync queue, local write |
-| `semi_finished_materials` | `semi_finished_materials` | Firebase → Local | Local → Firebase, sync queue, local write |
+| `products` | `products` | runtime lama ke local | Local → runtime lama, sync queue, local write |
+| `raw_materials` | `raw_materials` | runtime lama ke local | Local → runtime lama, sync queue, local write |
+| `semi_finished_materials` | `semi_finished_materials` | runtime lama ke local | Local → runtime lama, sync queue, local write |
 
 Metadata snapshot local:
 
 - `syncStatus: synced`
-- `source: firebase_pull`
+- `source: runtime-lama_pull`
 - `syncMetadata.scope: read_only_snapshot`
 - `syncMetadata.readOnlySnapshot: true`
 
 Batasan runtime:
 
 - Table ini hanya bisa dilihat di tab `Data Local` pada Offline Database Center.
-- Pull tidak membuat `sync_queue` baru.
+- Pull tidak membuat `legacy_sync_queue` baru.
 - Push UI tetap hanya Categories/Customers.
 - Guard push service tetap menolak Product/Raw/Semi jika suatu saat ada queue nyasar.
 
@@ -195,19 +195,19 @@ Batasan runtime:
 
 1. Data lama mungkin punya shape field berbeda (`stock`, `currentStock`, `variantOptions`, random ID). Snapshot harus tetap compatibility.
 2. Product/raw/semi menyentuh `stock_item_read_models`; offline write tanpa kontrak read model akan berisiko beda stok.
-3. Purchase/Production/HPP bisa memakai cost/stock terbaru; snapshot local bisa stale jika Firebase berubah setelah pull.
+3. Purchase/Production/HPP bisa memakai cost/stock terbaru; snapshot local bisa stale jika runtime lama berubah setelah pull.
 4. Supplier linkage di raw material memakai snapshot supplier. Karena itu supplier tetap read-only.
 5. Semi Finished `averageCostPerUnit` terkait HPP produksi; local snapshot tidak boleh menjadi sumber final valuation.
 
 ## Test checklist Batch 29–30
 
 - [ ] Jalankan `Siapkan Local DB`, pastikan schema version menjadi `2`.
-- [ ] Preview Firebase → Offline untuk `Products (read-only)`.
+- [ ] Preview runtime lama → Offline untuk `Products (read-only)`.
 - [ ] Pull `Products (read-only)`, lalu cek tab `Data Local > Products (read-only)`.
 - [ ] Preview dan pull `Raw Materials (read-only)`.
 - [ ] Preview dan pull `Semi Finished (read-only)`.
-- [ ] Pastikan `Offline → Firebase` hanya menampilkan Categories dan Customers.
-- [ ] Pastikan tidak ada `sync_queue` untuk suppliers/products/raw_materials/semi_finished_materials.
+- [ ] Pastikan `Offline → runtime lama` hanya menampilkan Categories dan Customers.
+- [ ] Pastikan tidak ada `legacy_sync_queue` untuk suppliers/products/raw_materials/semi_finished_materials.
 - [ ] Pastikan halaman `Products`, `RawMaterials`, `SemiFinishedMaterials`, `Purchases`, `ProductionBoms`, dan `ProductionWorkLogs` tetap membaca source aktif seperti sebelumnya.
 - [ ] Pastikan tidak ada perubahan stok, inventory logs, purchase, production work log, payroll, atau HPP setelah pull snapshot.
 
@@ -216,7 +216,7 @@ Batasan runtime:
 Stock read model snapshot telah dipisahkan dari master item mutation:
 - `stock_item_read_models` boleh dipull ke local `stock_snapshots` sebagai read-only display.
 - Products/Raw/Semi tetap tidak boleh masuk offline write runtime hanya karena snapshot stok sudah tersedia.
-- Mutation yang menyentuh `currentStock`, `reservedStock`, `availableStock`, variant stock, cost/HPP, purchase, sales, returns, production, dan adjustment tetap Firebase-only.
+- Mutation yang menyentuh `currentStock`, `reservedStock`, `availableStock`, variant stock, cost/HPP, purchase, sales, returns, production, dan adjustment tetap runtime lama-only.
 - Detail kontrak stok: `docs/13_OFFLINE_STOCK_READ_MODEL_CONTRACT.md`.
 
 ## Update C2-C4 SQLite Foundation

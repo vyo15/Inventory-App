@@ -87,7 +87,7 @@ import {
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const ProductionEmployees = () => {
   const [loading, setLoading] = useState(false);
@@ -123,7 +123,7 @@ const ProductionEmployees = () => {
       // - langsung mengisi state `employees` ketika berhasil.
       // Alasan blok ini dipakai:
       // - data employee adalah data utama halaman, sehingga tidak boleh ikut kosong
-      //   hanya karena query pendukung steps/payroll/worklogs terkena index Firestore.
+      //   hanya karena query pendukung steps/payroll/worklogs terkena query/index database.
       // Status:
       // - aktif dipakai; bukan legacy dan bukan kandidat cleanup.
       // =====================================================
@@ -135,7 +135,7 @@ const ProductionEmployees = () => {
       // Fungsi blok:
       // - memuat tahapan, payroll, dan work log untuk filter/summary read-only;
       // - memakai Promise.allSettled agar satu query pendukung yang gagal karena
-      //   composite index Firestore tidak menjatuhkan tabel karyawan.
+      //   composite index database tidak menjatuhkan tabel karyawan.
       // Alasan blok ini dipakai:
       // - bug lama muncul karena Promise.all membuat `setEmployees()` tidak jalan
       //   saat salah satu query pendukung reject.
@@ -178,7 +178,7 @@ const ProductionEmployees = () => {
       // ACTIVE / FINAL - WARNING PENDUKUNG
       // Fungsi blok:
       // - memberi tahu user/dev bahwa tabel karyawan tetap tampil, tetapi summary
-      //   pendukung bisa belum lengkap karena query/index Firestore.
+      //   pendukung bisa belum lengkap karena query/index database.
       // Alasan blok ini dipakai:
       // - pesan error lama membuat user mengira data employee hilang, padahal hanya
       //   data pendukung yang gagal dimuat.
@@ -190,7 +190,7 @@ const ProductionEmployees = () => {
         message.warning(
           `Data karyawan tampil, tetapi data pendukung ${failedSupportingData.join(
             ", ",
-          )} belum lengkap. Cek index Firestore atau fallback query.`,
+          )} belum lengkap. Cek index database atau fallback query.`,
         );
       }
     } catch (error) {
@@ -1400,7 +1400,7 @@ const ProductionEmployees = () => {
                       LEGACY / COMPATIBILITY ONLY
                       Fungsi blok:
                       - tetap menyediakan audit field payroll legacy tanpa menjadikannya fitur utama;
-                      - tidak menghapus field lama dari Firestore.
+                      - tidak menghapus field lama dari database.
                       Alasan blok ini dipakai:
                       - source payroll baru mengikuti Tahapan Produksi dan Work Log completed.
                       Status:

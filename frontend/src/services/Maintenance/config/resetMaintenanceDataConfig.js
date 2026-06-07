@@ -250,7 +250,7 @@ export const MASTER_DATA_OPENING_STOCK_COLLECTIONS = new Set([
 // -----------------------------------------------------------------------------
 // Reset target collections.
 // IMS NOTE [AKTIF/GUARDED] — daftar ini dipakai sebagai kontrak lokal dengan
-// Firestore Rules staged-final. Collection baru wajib ditambahkan eksplisit
+// Reset/maintenance staged-final. Target data baru wajib ditambahkan eksplisit
 // setelah diaudit agar reset tidak menyentuh scope yang tidak dikenal.
 // Behavior-preserving cleanup: hanya merapikan grouping allowlist, bukan mengubah
 // target reset, role, schema, atau business rules.

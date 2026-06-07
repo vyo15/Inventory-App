@@ -53,7 +53,7 @@ import { showFormValidationFeedback } from '../../utils/forms/formValidationFeed
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -226,9 +226,9 @@ const Sales = () => {
   // =========================
   // SECTION: Ambil customer
   // Fungsi:
-  // - membaca customer lewat salesCustomerReferenceService agar Sales tetap Firebase-primary
+  // - membaca customer lewat salesCustomerReferenceService agar Sales tetap lewat service/backend SQLite
   // Hubungan flow:
-  // - dropdown Sales tidak boleh memakai customer offline-local yang belum tersync ke Firebase
+  // - dropdown Sales tidak boleh memakai customer draft lokal yang belum tersimpan di backend SQLite
   // Status:
   // - aktif/final
   // - tetap menyimpan snapshot customerName saat sale dibuat agar transaksi lama aman
@@ -337,7 +337,7 @@ const Sales = () => {
   // Hubungan flow Sales/stok:
   // - sale line menyimpan collectionName + variantKey supaya mutasi stok keluar selalu memakai sumber stok yang sama
   // Status:
-  // - aktif/final; validasi preflight Firestore dipanggil dari salesService, dan validasi final tetap diulang dalam createSaleTransaction
+  // - aktif/final; validasi preflight dipanggil dari salesService/backend SQLite, dan validasi final tetap diulang dalam createSaleTransaction
   // - bukan legacy dan bukan kandidat cleanup
   // =========================
   const buildSaleLine = (item) => {
@@ -491,7 +491,7 @@ const Sales = () => {
     const searchKeyword = receiptSearch.trim().toLowerCase();
 
     // IMS NOTE [AKTIF/GUARDED] - Client-side guard tab status Sales.
-    // Fungsi blok: menjaga tabel selalu sesuai activeTabKey walaupun query Firestore gagal, loading ulang, atau state lama masih tersisa.
+    // Fungsi blok: menjaga tabel selalu sesuai activeTabKey walaupun query service gagal, loading ulang, atau state lama masih tersisa.
     // Hubungan flow Sales: hanya filter tampilan tabel; status transition, stock mutation, income timing, dan alur Return tidak diubah.
     // Alasan logic: owner tidak boleh membaca status Selesai di tab Dikirim atau status lain yang tidak sesuai tab aktif.
     const statusMatchedRecords =
@@ -681,7 +681,7 @@ const Sales = () => {
   // IMS NOTE [AKTIF] - Urutan kolom Sales dibuat mengikuti alur baca transaksi.
   // Fungsi blok: menampilkan tanggal lebih dulu, lalu pelanggan, item, channel, referensi, total, status, dan aksi.
   // Hubungan flow: hanya mengubah presentasi tabel; filter tab, pending income, status transition, stok, income, dan alur Return tidak berubah.
-  // Alasan logic: owner lebih mudah membaca kronologi penjualan tanpa mengubah data transaksi atau payload Firestore.
+  // Alasan logic: owner lebih mudah membaca kronologi penjualan tanpa mengubah data transaksi atau payload backend SQLite.
   // =========================
   /* =====================================================
      SECTION: Compact Sales Table Columns — AKTIF/GUARDED
@@ -1446,7 +1446,7 @@ const Sales = () => {
 
                             {/* IMS NOTE [AKTIF/GUARDED] - Snapshot stok Sales.
                                 Fungsi blok: menampilkan stok current/reserved/available item terpilih sebagai panel read-only pasif.
-                                Hubungan flow: hanya mengganti tampilan Alert lama; validasi stok, create sale, stock reduction, income timing, alur Return, dan payload Firestore tetap memakai logic existing.
+                                Hubungan flow: hanya mengganti tampilan Alert lama; validasi stok, create sale, stock reduction, income timing, alur Return, dan payload backend SQLite tetap memakai logic existing.
                                 Alasan logic: stok tersedia sebelum penjualan adalah info snapshot, bukan warning/error, sehingga mengikuti pola clean panel seperti Purchases/Stock Adjustment.
                                 Status: AKTIF untuk UI Sales, GUARDED terhadap business rule stok dan transaksi. */}
                             <div className="ims-readonly-panel">

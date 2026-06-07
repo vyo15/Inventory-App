@@ -1,30 +1,34 @@
 # MASTER CONTEXT — IMS Bunga Flanel
 
-Dokumen ini dibuat berdasarkan audit langsung terhadap source code aplikasi pada ZIP `Inventory-App.zip` yang diunggah, bukan template umum.
+Dokumen ini dibuat berdasarkan audit langsung terhadap source code aplikasi. Update terbaru 2026-06-07 memakai ZIP `Inventory-App-clean.zip` sebagai sumber kebenaran utama, bukan template umum atau docs lama.
 
-Update verifikasi source aktual — 2026-05-06:
-- folder custom `functions/` tidak ditemukan pada ZIP aktual; jangan menganggap ada Firebase Functions custom aktif tanpa bukti source baru;
-- file legacy `src/services/Produksi/productionService.js` tidak ditemukan pada ZIP aktual; produksi aktif memakai service granular di `src/services/Produksi/`;
-- collection `productions` masih muncul sebagai legacy data layer pada maintenance/reset/audit, bukan flow operasional utama;
-- Firestore Rules wajib aktif dan aman di backend Firebase, tetapi repo ZIP saat ini tidak menyertakan file rules source-controlled karena rules dikelola manual/external di Firebase Console;
-- root `assets/` yang berisi build artifact lama bukan source aktif dan boleh dibersihkan jika tidak ada referensi runtime aktif.
+Update verifikasi source aktual — 2026-06-07:
+- source yang divalidasi: ZIP `Inventory-App-clean.zip` dengan root project `Inventory-App-test`;
+- runtime utama source aktual adalah React/Vite frontend + Node.js Express backend + SQLite file lokal/LAN;
+- `backend/src/server.js` mendaftarkan endpoint `/api/**` untuk Auth, master data, stock, transaksi, finance, production, reports, maintenance, dan audit log;
+- `frontend/src/context/AuthContext.jsx` memakai `localAuthService` dan `authMode: "sqlite"`; nama state auth lama yang masih tersisa hanya compatibility internal untuk actor label lama, bukan runtime auth lama;
+- `frontend/src/data/repositories/repositoryMode.js` memetakan alias legacy `legacy_primary`, `offline_local`, dan `hybrid_sync` ke `sqlite_sidecar`; alias ini tidak boleh dianggap fallback runtime lama;
+- `frontend/package.json` source aktual tidak memiliki dependency `runtime-lama` atau `database-browser-lama`.
+
+Catatan arsip:
+- semua instruksi lama tentang auth lama, rules database lama, transaksi database lama, database browser lama sync queue, atau runtime lama fallback harus dibaca sebagai **LEGACY / ARSIP MIGRASI**, kecuali ada validasi source baru yang membuktikan runtime tersebut aktif kembali dan owner menyetujuinya eksplisit.
 
 =====================================================
-SECTION: Current repository boundary — AKTIF / GUARDED / CLEANUP CANDIDATE
+SECTION: Current repository boundary — AKTIF / GUARDED / SQLITE SOURCE OF TRUTH
 Fungsi:
-- Mengunci batas source aktual: frontend React/Vite, Firestore client layer, rules backend external, dan cleanup root artifact.
+- Mengunci batas source aktual setelah migrasi SQLite: frontend React/Vite, backend Node.js Express, dan SQLite file lokal/LAN sebagai runtime utama.
 
 Dipakai oleh:
-- Semua task patch docs/source, terutama Auth/User Management, Firestore Rules, dan cleanup repository.
+- Semua task patch docs/source, terutama Auth lokal, repository mode, maintenance/backup-restore, transaksi, stock, finance, production, report, dan cleanup legacy.
 
 Alasan perubahan:
-- Owner mengonfirmasi Firestore Rules dikelola langsung di Firebase Console dan root assets/ adalah sisa build yang lupa terhapus.
+- Source aktual sudah tidak menjalankan runtime lama sebagai runtime utama. Backend adalah satu-satunya akses resmi ke SQLite; frontend tidak boleh akses file SQLite langsung.
 
 Catatan cleanup:
-- Source-controlled rules boleh menjadi task terpisah jika owner ingin rules dimasukkan ke repo.
+- Referensi runtime/database/browser-local lama yang tersisa di docs/source comments harus diperlakukan sebagai legacy compatibility atau arsip migrasi sampai dibuktikan sebaliknya lewat grep/import/route/service aktual.
 
 Risiko:
-- Menganggap rules tidak wajib karena tidak ada file repo akan membuka risiko security; menghapus `src/assets` keliru akan merusak logo/branding aktif.
+- Mengikuti docs lama yang masih menyebut auth/rules database lama dapat membuat patch baru salah arah, menghidupkan fallback lama, atau melewati backend SQLite resmi.
 =====================================================
 
 ## Ringkasan Aplikasi
@@ -45,9 +49,11 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
 - Build tool: Vite 7
 - UI library: Ant Design 5
 - Routing: `HashRouter`
-- Database: Firebase Firestore
-- Hosting/deploy frontend: GitHub Pages (`gh-pages`)
-- Backend custom: tidak ada folder `functions/` pada ZIP aktual. Aplikasi berjalan sebagai frontend React/Vite + Firestore client/service layer. Dependency Firebase tetap dapat membawa package internal `@firebase/functions`, tetapi itu bukan bukti adanya Cloud Functions custom project.
+- Runtime data aktif: Node.js Express backend di `backend/`
+- Database aktif: SQLite file lokal/LAN melalui backend resmi
+- Auth aktif: local auth SQLite melalui `frontend/src/services/System/localAuthService.js` dan endpoint `/api/auth/**`
+- Hosting/deploy frontend: Vite/GitHub Pages masih tersedia untuk build frontend, tetapi data runtime tetap membutuhkan backend SQLite lokal/LAN.
+- runtime/database/browser-local lama: tidak ada sebagai runtime aktif pada source aktual. Sebutan lama hanya legacy/arsip kecuali source baru membuktikan sebaliknya.
 
 ## Struktur Teknis Utama yang Terverifikasi
 - `src/main.jsx` memakai `HashRouter`
@@ -163,7 +169,7 @@ Status cleanup bertahap yang dikunci di docs:
 - **Aktif:** drawer Buat Production Order memakai pemilihan target yang lebih natural, tetapi submit tetap wajib memakai `bomId` sebagai source of truth internal.
 - **Aktif:** untuk `Produk Jadi`, drawer PO cukup menampilkan **Jenis Produksi → Produk yang dibuat → Resep Produksi jika lebih dari satu → Qty → Preview Kebutuhan**. Filter **Jenis Bunga / Product Family** dan **Kategori Bahan** tidak ditampilkan untuk produk jadi bila source product tidak memakai field itu.
 - **Aktif:** untuk `Bahan / Semi Produk`, drawer PO menampilkan filter UI-only **Jenis Bunga / Product Family** dan **Kategori Bahan** sebelum field **Bahan yang dibuat**, agar user tidak memilih dari flat list panjang.
-- **Guarded:** filter UI-only seperti selected family/category/target key tidak boleh disimpan ke Firestore dan tidak boleh membuat schema/collection baru.
+- **Guarded:** filter UI-only seperti selected family/category/target key tidak boleh disimpan ke database lama dan tidak boleh membuat schema/collection baru.
 - **Guarded:** istilah/kode internal seperti kode BOM atau kode target master boleh disembunyikan dari label pilihan user-facing, tetapi `bomId`, kode transaksi Production Order, dan referensi audit internal tetap wajib dipertahankan.
 - **Guarded:** perubahan ini hanya UX/listing/selection; tidak boleh mengubah stok, requirement calculation, Work Log, Payroll, HPP Analysis, report, atau lifecycle Production Order.
 
@@ -197,21 +203,21 @@ Status cleanup bertahap yang dikunci di docs:
 - **Guarded:** edit nama/label varian Product, Raw Material, dan Semi Finished hanya mengganti metadata tampilan; `variantKey` tetap menjadi identitas bucket stok/reference dan stok varian tidak boleh reset.
 - **Aktif:** Pricing Rules opsional saat create Product/Raw Material. Mode default create adalah Manual; `pricingRuleId` hanya wajib saat user memilih mode Rule.
 - **Aktif:** sidebar memakai nested accordion agar sibling submenu otomatis tertutup tanpa mengubah route, role access, atau business flow.
-- **Aktif:** login normal tidak lagi menampilkan copy teknis internal Firebase/Auth/Firestore, tanpa mengubah flow Auth dan `system_users`.
+- **Aktif:** login normal tidak lagi menampilkan copy teknis internal runtime/auth/database lama, tanpa mengubah flow Auth dan `system_users`.
 
 ## Update Pricing Mode Shared UI — 2026-05-11
 - **Aktif:** Pricing Mode Product dan Raw Material sekarang memakai shared UI `src/components/Pricing/PricingModeSwitch.jsx` untuk pilihan Manual/Rule.
 - **Scope component:** `PricingModeSwitch` hanya mengatur switch UI Manual/Rule dan meneruskan perubahan mode ke pemakai. Kontrak pemakaiannya wajib membersihkan `pricingRuleId` saat user kembali ke Manual.
-- **Guarded:** `PricingModeSwitch` tidak boleh berisi formula pricing, service validation, query Firestore, atau auto-preview harga.
-- **Guarded:** shared UI ini tidak mengubah schema/collection Firestore, tidak mengubah validasi service Product/Raw Material, dan tidak menjadi source perhitungan harga.
+- **Guarded:** `PricingModeSwitch` tidak boleh berisi formula pricing, service validation, query database lama, atau auto-preview harga.
+- **Guarded:** shared UI ini tidak mengubah schema/collection database lama, tidak mengubah validasi service Product/Raw Material, dan tidak menjadi source perhitungan harga.
 - **Aktif:** formula preview pricing tetap bersumber dari `buildSinglePricingPreview` di `pricingService`; auto-preview Product/Raw Material tetap local di halaman masing-masing karena base cost dan target price berbeda.
 
 ## Update Standar Referensi Audit dan Kode Manusiawi — 2026-05-11
-- **Guarded:** Technical ID adalah Firestore document ID random, auto ID, internal generated ID, atau ID teknis lain yang tidak manusiawi. Technical ID bukan referensi audit bisnis.
+- **Guarded:** Technical ID adalah internal database ID random, auto ID, internal generated ID, atau ID teknis lain yang tidak manusiawi. Technical ID bukan referensi audit bisnis.
 - **Aktif:** Referensi ID bisnis manusiawi adalah acuan utama untuk audit, pencarian, relasi operasional, table, detail, drawer, report UI, dan export yang dibaca user.
-- **Guarded:** Technical ID tidak boleh tampil di UI, tooltip, table, detail, drawer, report UI, atau fallback text. Jika referensi bisnis belum tersedia, UI wajib menampilkan fallback manusiawi seperti `-` atau `Referensi belum tersedia`, bukan Firestore random ID.
+- **Guarded:** Technical ID tidak boleh tampil di UI, tooltip, table, detail, drawer, report UI, atau fallback text. Jika referensi bisnis belum tersedia, UI wajib menampilkan fallback manusiawi seperti `-` atau `Referensi belum tersedia`, bukan ID database teknis.
 - **Guarded:** Prioritas referensi audit adalah kode bisnis transaksi/master/produksi yang manusiawi, lalu `sourceRef` / `referenceNumber` readable, lalu fallback manusiawi. Jangan fallback ke Technical ID.
-- **Target setelah reset data:** untuk collection bisnis baru dengan pola 1 dokumen = 1 referensi, Firestore document ID boleh dan sebaiknya sama dengan Referensi ID bisnis, misalnya `purchases/PUR-DDMMYYYY-001` atau `sales/ORD-DDMMYYYY-001`.
+- **Target setelah reset data:** untuk collection bisnis baru dengan pola 1 dokumen = 1 referensi, internal database ID boleh dan sebaiknya sama dengan Referensi ID bisnis, misalnya `purchases/PUR-DDMMYYYY-001` atau `sales/ORD-DDMMYYYY-001`.
 - **Target setelah reset data:** untuk collection log yang bisa memiliki banyak dokumen per referensi, gunakan ID turunan readable seperti `LOG-PUR-DDMMYYYY-001-001`, bukan random ID.
 - **Guarded:** kode audit yang sudah dipakai harus immutable. Edit nama/ref tidak boleh otomatis mengubah kode audit lama tanpa approval migrasi.
 - **Standar kode manusiawi:** jangan pakai mapping manual kata-per-kata atau dictionary singkatan per modul. Gunakan prefix modul yang disetujui + sequence shared; jangan membuat dictionary singkatan kata per modul di page/service.
@@ -258,7 +264,7 @@ Catatan lock:
 - Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
 - Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
 - Master item/config produksi memakai sequence internal sederhana `PREFIX-001`. Kode ini disimpan untuk relasi/backstage dan tidak menjadi fokus UI.
-- Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
+- Internal database ID teknis/random tidak boleh tampil sebagai kode audit/user-facing.
 - Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
 
 
@@ -295,7 +301,7 @@ Catatan lock:
 
 ## Update SQLite Local Runtime Pilot
 
-Status terbaru: Categories dan Customers diarahkan ke mode `sqlite_sidecar` melalui backend Node.js lokal dan SQLite file lokal. `frontend/.env.example` sudah SQLite-first (`VITE_AUTH_MODE=sqlite`) untuk pilot lokal. Firebase tetap dipertahankan sebagai fallback dan untuk modul yang belum dimigrasi. Dexie/IndexedDB tidak lagi dipakai sebagai runtime aktif Offline Database Center, dan file/panel legacy Dexie yang tidak diimpor route aktif sudah dihapus pada Patch A-B. Supplier master-only sudah memakai repository SQLite untuk pilot lokal; purchase/raw/history tetap guarded dan tidak ikut dimutasi. Raw Materials membaca histori pembelian dari purchasesService aktif agar tidak mismatch dengan adapter transaksi SQLite placeholder.
+Status terbaru: source aktual sudah SQLite-first untuk runtime utama. `frontend/.env.example` mengaktifkan `VITE_AUTH_MODE=sqlite` dan semua repository mode utama diarahkan ke SQLite. Alias legacy seperti `legacy_primary`, `offline_local`, dan `hybrid_sync` dinormalisasi ke `sqlite_sidecar`, bukan menghidupkan runtime lama. database browser lama tidak lagi dipakai sebagai runtime aktif Offline Database Center. Supplier, Product, Raw Material, Semi Finished, Stock, Transactions, Finance, Production, dan Reports harus melalui backend SQLite sesuai service/endpoint aktual.
 
 ## Mobile UI Standard v1.0 — Keputusan Aktif
 

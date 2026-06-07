@@ -97,6 +97,7 @@ app.get("/api", (req, res) => success(res, "IMS SQLite sidecar API aktif", {
     "POST /api/maintenance/restore-plan",
     "POST /api/maintenance/restore-execute",
     "GET /api/maintenance/restore-logs",
+    "GET /api/module-runtime-status",
     "GET /api/migration-status",
     "GET /api/audit-logs",
   ],
@@ -122,6 +123,7 @@ app.use("/api/production", productionRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/audit-logs", auditLogsRoutes);
+app.use("/api/module-runtime-status", migrationStatusRoutes);
 app.use("/api/migration-status", migrationStatusRoutes);
 
 app.use(notFoundHandler);

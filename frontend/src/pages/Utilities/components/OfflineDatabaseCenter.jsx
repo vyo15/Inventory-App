@@ -40,7 +40,7 @@ import {
   executeSqliteRestore,
   getSqliteBackendBackups,
   getSqliteBackendStatus,
-  getSqliteMigrationStatus,
+  getSqliteModuleRuntimeStatus,
 } from "../../../services/System/sqliteBackendStatusService";
 import SqliteBackendStatusPanel from "./SqliteBackendStatusPanel";
 import "./OfflineDatabaseCenter.css";
@@ -133,7 +133,7 @@ const OfflineDatabaseCenter = () => {
   const [restorePlanLoading, setRestorePlanLoading] = useState(false);
   const [restoreExecuteLoading, setRestoreExecuteLoading] = useState(false);
   const [status, setStatus] = useState(null);
-  const [migrationStatus, setMigrationStatus] = useState(null);
+  const [moduleRuntimeStatus, setModuleRuntimeStatus] = useState(null);
   const [restorePlan, setRestorePlan] = useState(null);
   const [backups, setBackups] = useState([]);
   const [selectedBackupFilename, setSelectedBackupFilename] = useState("");
@@ -144,9 +144,9 @@ const OfflineDatabaseCenter = () => {
   });
 
   const statusData = status?.data || {};
-  const migrationData = migrationStatus?.data || {};
-  const migrationModules = migrationData.modules || [];
-  const migrationSummary = migrationData.summary || {};
+  const moduleRuntimeData = moduleRuntimeStatus?.data || {};
+  const moduleRuntimeModules = moduleRuntimeData.modules || [];
+  const moduleRuntimeSummary = moduleRuntimeData.summary || {};
   const modeTag = useMemo(() => <Tag color="green">Aktif</Tag>, []);
   const latestBackup = backups[0] || statusData.latestBackup || null;
   const backupTone = getBackupStatusTone(latestBackup);
@@ -158,18 +158,18 @@ const OfflineDatabaseCenter = () => {
   const loadCenterData = useCallback(async ({ showSuccess = false } = {}) => {
     setLoading(true);
     try {
-      const [modeStatus, nextStatus, nextBackups, nextMigrationStatus] = await Promise.all([
+      const [modeStatus, nextStatus, nextBackups, nextModuleRuntimeStatus] = await Promise.all([
         getRepositoryModeStatus(),
         getSqliteBackendStatus(),
         getSqliteBackendBackups(),
-        getSqliteMigrationStatus(),
+        getSqliteModuleRuntimeStatus(),
       ]);
       const backupRows = nextBackups?.data || [];
       void modeStatus;
       setStatus(nextStatus);
       setBackups(backupRows);
       setSelectedBackupFilename((previous) => previous || backupRows[0]?.filename || "");
-      setMigrationStatus(nextMigrationStatus);
+      setModuleRuntimeStatus(nextModuleRuntimeStatus);
       if (showSuccess) message.success("Status Database Center diperbarui.");
     } catch (error) {
       console.error("Gagal memuat Database Center:", error);
@@ -291,7 +291,7 @@ const OfflineDatabaseCenter = () => {
         </Col>
         <Col xs={12} md={6}>
           <Card size="small" className="offline-db-status-card">
-            <Statistic title="Modul Terdaftar" value={formatNumber(statusData.migrationStatusCount)} prefix={<SwapOutlined />} />
+            <Statistic title="Runtime Modul" value={formatNumber(statusData.moduleRuntimeStatusCount ?? statusData.migrationStatusCount)} prefix={<SwapOutlined />} />
           </Card>
         </Col>
       </Row>
@@ -423,45 +423,47 @@ const OfflineDatabaseCenter = () => {
     </Space>
   );
 
-  const migrationTab = (
+  const runtimeTab = (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       <Alert
-        type="warning"
+        type="success"
         showIcon
-        message="Status modul SQLite"
-        description="Semua modul utama berada pada status sqlite_active. Modul restore destructive tetap memakai guard konfirmasi."
+        message="Status runtime modul"
+        description="Semua modul utama berjalan melalui backend SQLite lokal. Modul restore destructive tetap memakai guard konfirmasi."
       />
 
       <Row gutter={[12, 12]}>
         <Col xs={12} md={6}>
           <Card size="small" className="offline-db-status-card">
-            <Statistic title="SQLite Aktif" value={formatNumber(migrationSummary.sqlite_active)} prefix={<CheckCircleOutlined />} />
+            <Statistic title="SQLite Aktif" value={formatNumber(moduleRuntimeSummary.sqlite_active)} prefix={<CheckCircleOutlined />} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card size="small" className="offline-db-status-card">
-            <Statistic title="SQLite" value={formatNumber(migrationSummary.sqlite_active || 0)} prefix={<DatabaseOutlined />} />
+            <Statistic title="Runtime Ready" value={formatNumber(moduleRuntimeSummary.runtime_ready || 0)} prefix={<DatabaseOutlined />} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card size="small" className="offline-db-status-card">
-            <Statistic title="Guarded" value={formatNumber(migrationSummary.guarded)} prefix={<SafetyOutlined />} />
+            <Statistic title="Guarded" value={formatNumber(moduleRuntimeSummary.guarded)} prefix={<SafetyOutlined />} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card size="small" className="offline-db-status-card">
-            <Statistic title="Total Modul" value={formatNumber(migrationSummary.total)} prefix={<SwapOutlined />} />
+            <Statistic title="Total Modul" value={formatNumber(moduleRuntimeSummary.total)} prefix={<SwapOutlined />} />
           </Card>
         </Col>
       </Row>
 
       <Row gutter={[12, 12]}>
-        {migrationModules.map((item) => {
+        {moduleRuntimeModules.map((item) => {
           const statusColor = item.status === "sqlite_active"
             ? "green"
             : item.status === "guarded"
               ? "red"
-              : "blue";
+              : item.status === "legacy_inactive"
+                ? "orange"
+                : "blue";
 
           return (
             <Col xs={24} md={12} xl={8} key={item.module_key}>
@@ -616,7 +618,7 @@ const OfflineDatabaseCenter = () => {
     { key: "mode", label: "Mode", children: modeTab },
     { key: "backup", label: "Backup", children: backupTab },
     { key: "restore", label: "Restore", children: restoreTab },
-    { key: "migration", label: "Migrasi Modul", children: migrationTab },
+    { key: "runtime", label: "Runtime Modul", children: runtimeTab },
     { key: "qa", label: "Checklist", children: qaTab },
   ];
 

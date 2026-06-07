@@ -78,10 +78,10 @@ import {
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const ProductionOrders = () => {
-  const { profile, firebaseUser } = useAuth();
+  const { profile, authSessionUser } = useAuth();
 
   // =====================================================
   // IMS NOTE [AKTIF/GUARDED] - Actor audit Start Production dari PO.
@@ -90,10 +90,10 @@ const ProductionOrders = () => {
   // Alasan logic: Start Production dari halaman PO adalah jalur resmi yang membuat Work Log dan memotong material.
   // =====================================================
   const currentUser = useMemo(() => ({
-    email: profile?.email || firebaseUser?.email || "",
-    displayName: profile?.displayName || profile?.name || firebaseUser?.displayName || "",
-    uid: profile?.authUid || profile?.uid || profile?.id || firebaseUser?.uid || "",
-  }), [firebaseUser, profile]);
+    email: profile?.email || authSessionUser?.email || "",
+    displayName: profile?.displayName || profile?.name || authSessionUser?.displayName || "",
+    uid: profile?.authUid || profile?.uid || profile?.id || authSessionUser?.uid || "",
+  }), [authSessionUser, profile]);
 
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
@@ -401,7 +401,7 @@ const ProductionOrders = () => {
   /* =====================================================
   SECTION: Guided Production Order target filters — AKTIF / GUARDED
   Fungsi:
-  - Membuat pilihan PO bertahap dari BOM aktif existing tanpa menyimpan filter UI ke Firestore.
+  - Membuat pilihan PO bertahap dari BOM aktif existing tanpa menyimpan filter UI ke database.
   - Produk Jadi langsung memilih produk yang dibuat.
   - Bahan / Semi Produk memakai filter Product Family dan kategori agar tidak menjadi flat list panjang.
 
@@ -415,7 +415,7 @@ const ProductionOrders = () => {
   - Belum ada. Jika nanti family/category menjadi kebutuhan produk jadi, review schema terpisah diperlukan.
 
   Risiko:
-  - Jangan menyimpan selectedProductionTargetKey, semiFamilyFilter, atau semiCategoryFilter ke Firestore karena semuanya hanya state UI.
+  - Jangan menyimpan selectedProductionTargetKey, semiFamilyFilter, atau semiCategoryFilter ke database karena semuanya hanya state UI.
   ===================================================== */
   const semiReferenceLookup = useMemo(() => {
     const lookup = new Map();
@@ -1320,7 +1320,7 @@ const ProductionOrders = () => {
               - drawer PO sebelumnya terlalu penuh oleh summary agregat.
               Status:
               - aktif dipakai sebagai preview read-only;
-              - tidak menyimpan Firestore, tidak mengubah stok, dan tidak mengubah status PO.
+              - tidak menyimpan ke database, tidak mengubah stok, dan tidak mengubah status PO.
           ===================================================== */}
           {bomIdValue && Number(orderQtyValue || 0) > 0 ? (
             <div style={{ marginBottom: 16 }}>

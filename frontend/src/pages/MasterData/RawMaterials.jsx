@@ -140,7 +140,7 @@ const RawMaterials = () => {
 
   // ---------------------------------------------------------------------------
   // Loader data master.
-  // Semua source of truth tetap datang dari service dan Firestore listener.
+  // Semua source of truth tetap datang dari service/backend SQLite.
   // ---------------------------------------------------------------------------
   useEffect(() => {
     setLoading(true);
@@ -222,7 +222,7 @@ const RawMaterials = () => {
   - Mode pricing memakai Switch yang konsisten dengan Product dan tetap memakai helper pricingService.
 
   Catatan cleanup:
-  - Belum ada. Harga hanya masuk form, bukan auto-save Firestore.
+  - Belum ada. Harga hanya masuk form, bukan auto-save database.
 
   Risiko:
   - Jangan mengubah sumber cost raw material; averageActualUnitCost/restockReferencePrice tetap mengikuti rule existing.

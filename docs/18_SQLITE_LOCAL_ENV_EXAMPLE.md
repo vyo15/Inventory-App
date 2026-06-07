@@ -16,7 +16,7 @@ VITE_STOCK_ADJUSTMENTS_REPOSITORY_MODE=sqlite
 VITE_TRANSACTIONS_REPOSITORY_MODE=sqlite
 VITE_SEMI_FINISHED_REPOSITORY_MODE=sqlite
 VITE_FINANCE_REPOSITORY_MODE=sqlite
-VITE_PRODUCTION_REPOSITORY_MODE=firebase_primary
+VITE_PRODUCTION_REPOSITORY_MODE=sqlite
 VITE_REPORTS_REPOSITORY_MODE=sqlite
 ```
 
@@ -36,8 +36,8 @@ VITE_STOCK_ADJUSTMENTS_REPOSITORY_MODE=sqlite
 VITE_TRANSACTIONS_REPOSITORY_MODE=sqlite
 VITE_SEMI_FINISHED_REPOSITORY_MODE=sqlite
 VITE_FINANCE_REPOSITORY_MODE=sqlite
-VITE_PRODUCTION_REPOSITORY_MODE=firebase_primary
+VITE_PRODUCTION_REPOSITORY_MODE=sqlite
 VITE_REPORTS_REPOSITORY_MODE=sqlite
 ```
 
-Catatan: Semi Finished, Finance, dan Reports aktif SQLite untuk data baru. Production/Payroll/HPP tetap guarded sampai audit khusus selesai.
+Catatan: Runtime aktif source saat ini memakai SQLite. Production/Payroll/HPP tetap guarded secara business flow, tetapi repository mode tidak boleh diarahkan kembali ke runtime lama.

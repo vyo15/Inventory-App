@@ -561,7 +561,7 @@ export const applyPricingRuleToItems = async ({
   // SECTION: buat preview dulu supaya hasil apply konsisten
   const previewData = buildPricingPreview(items, normalizedRule);
 
-  // SECTION: jalur SQLite tidak boleh menulis Firebase.
+  // SECTION: jalur SQLite tidak boleh menulis runtime lama.
   // Pricing Rules sudah menjadi pilot SQLite, sehingga apply harga ke Product/Raw
   // harus memakai adapter SQLite agar tidak membuat data harga pecah.
   if (isSqlitePricingRulesRepositoryMode()) {

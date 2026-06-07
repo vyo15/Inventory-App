@@ -25,7 +25,7 @@ import {
 import {
   getSqliteBackendBackups,
   getSqliteBackendStatus,
-  getSqliteMigrationStatus,
+  getSqliteModuleRuntimeStatus,
 } from "../../../services/System/sqliteBackendStatusService";
 
 const { Text } = Typography;
@@ -108,7 +108,7 @@ const MaintenanceChecklistPanel = () => {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [backups, setBackups] = useState([]);
-  const [migrationStatus, setMigrationStatus] = useState(null);
+  const [moduleRuntimeStatus, setModuleRuntimeStatus] = useState(null);
   const [externalCopyConfirmedAt, setExternalCopyConfirmedAt] = useState(() => {
     if (typeof window === "undefined") return "";
     return window.localStorage.getItem(EXTERNAL_COPY_STORAGE_KEY) || "";
@@ -125,21 +125,21 @@ const MaintenanceChecklistPanel = () => {
   const loadChecklist = useCallback(async ({ showSuccess = false } = {}) => {
     setLoading(true);
     try {
-      const [nextStatus, nextBackups, nextMigrationStatus] = await Promise.all([
+      const [nextStatus, nextBackups, nextModuleRuntimeStatus] = await Promise.all([
         getSqliteBackendStatus(),
         getSqliteBackendBackups(),
-        getSqliteMigrationStatus(),
+        getSqliteModuleRuntimeStatus(),
       ]);
       setStatus(nextStatus);
       setBackups(nextBackups?.data || []);
-      setMigrationStatus(nextMigrationStatus);
+      setModuleRuntimeStatus(nextModuleRuntimeStatus);
       if (showSuccess) message.success("Checklist maintenance berhasil diperbarui.");
     } catch (error) {
       console.error("Gagal memuat checklist maintenance:", error);
       message.error(error?.message || "Checklist maintenance belum bisa dimuat dari backend SQLite.");
       setStatus(null);
       setBackups([]);
-      setMigrationStatus(null);
+      setModuleRuntimeStatus(null);
     } finally {
       setLoading(false);
     }
@@ -165,10 +165,11 @@ const MaintenanceChecklistPanel = () => {
   const externalCopyAgeDays = externalCopyConfirmedAt ? getAgeDays(externalCopyConfirmedAt) : null;
   const otherUsersPausedAgeDays = otherUsersPausedAt ? getAgeDays(otherUsersPausedAt) : null;
   const restoreUnderstoodAgeDays = restoreUnderstoodAt ? getAgeDays(restoreUnderstoodAt) : null;
-  const migrationSummary = migrationStatus?.data?.summary || {};
-  const migrationTotal = Number(migrationSummary.total || 0);
-  const migrationKnown = migrationTotal > 0;
-  const sqliteActiveOrGuarded = Number(migrationSummary.sqlite_active || 0) + Number(migrationSummary.guarded || 0);
+  const moduleRuntimeSummary = moduleRuntimeStatus?.data?.summary || {};
+  const moduleRuntimeTotal = Number(moduleRuntimeSummary.total || 0);
+  const moduleRuntimeKnown = moduleRuntimeTotal > 0;
+  const moduleRuntimeReady = Number(moduleRuntimeSummary.runtime_ready ?? (Number(moduleRuntimeSummary.sqlite_active || 0) + Number(moduleRuntimeSummary.guarded || 0)));
+  const moduleRuntimeNotReady = Number(moduleRuntimeSummary.not_ready || 0);
 
   const autoItems = useMemo(() => [
     {
@@ -226,15 +227,15 @@ const MaintenanceChecklistPanel = () => {
       extra: statusData.restoreConfirmKeyword ? `Keyword: ${statusData.restoreConfirmKeyword}` : "Keyword restore belum terbaca.",
     },
     {
-      key: "migration-known",
+      key: "module-runtime-known",
       kind: "auto",
-      status: migrationKnown && sqliteActiveOrGuarded === migrationTotal ? "done" : "pending",
-      statusLabel: migrationKnown && sqliteActiveOrGuarded === migrationTotal ? "Sesuai" : "Perlu cek",
-      title: "Status modul SQLite terbaca",
-      description: "Checklist otomatis dari tabel module_migration_status.",
-      extra: migrationKnown ? `${sqliteActiveOrGuarded}/${migrationTotal} modul aktif/guarded` : "Status migrasi modul belum terbaca.",
+      status: moduleRuntimeKnown && moduleRuntimeNotReady === 0 && moduleRuntimeReady === moduleRuntimeTotal ? "done" : "pending",
+      statusLabel: moduleRuntimeKnown && moduleRuntimeNotReady === 0 && moduleRuntimeReady === moduleRuntimeTotal ? "Sesuai" : "Perlu cek",
+      title: "Status runtime modul SQLite terbaca",
+      description: "Checklist otomatis dari tabel module_migration_status yang dinormalisasi backend sebagai Module Runtime Status.",
+      extra: moduleRuntimeKnown ? `${moduleRuntimeReady}/${moduleRuntimeTotal} modul runtime ready` : "Status runtime modul belum terbaca.",
     },
-  ], [backupPolicy.verifyChecksum, backupPolicy.verifyIntegrityCheck, dailyBackupToday, latestVerifiedBackup, migrationKnown, migrationTotal, sqliteActiveOrGuarded, statusData, verifiedBackupToday]);
+  ], [backupPolicy.verifyChecksum, backupPolicy.verifyIntegrityCheck, dailyBackupToday, latestVerifiedBackup, moduleRuntimeKnown, moduleRuntimeTotal, moduleRuntimeNotReady, moduleRuntimeReady, statusData, verifiedBackupToday]);
 
   const manualItems = useMemo(() => [
     {

@@ -65,7 +65,7 @@ Guard aktif:
 - OCR tidak boleh auto-set tanggal pembelian dari tanggal pengiriman/diterima; tanggal transaksi tetap input manual sampai ada rule tanggal order/pembayaran yang disetujui.
 - Jika OCR mendeteksi kemungkinan multi-item dalam 1 screenshot, auto-apply diblokir. User harus input manual atau memecah pembelian per item agar modal, stok, expense, dan HPP tidak tercampur.
 - Jika total pesanan tidak cocok dengan rumus sistem atau marker Shopee kurang kuat, user wajib melihat warning/konfirmasi sebelum hasil OCR boleh diterapkan.
-- Catatan transaksi menyimpan ringkasan OCR teks saja; bukti screenshot tidak disimpan di Firestore/Storage maupun folder project.
+- Catatan transaksi menyimpan ringkasan OCR teks saja; bukti screenshot tidak disimpan di database/storage lama maupun folder project.
 - Popup detail OCR bersifat tampilan audit/read-only. Tombol Print hanya mencetak struk OCR tanpa mengubah data transaksi.
 
 ## 2. Rule Penjualan
@@ -234,7 +234,7 @@ Catatan service bahkan menyebut:
 - Untuk target `semi_finished_material`, UI create PO boleh menampilkan filter UI-only `Jenis Bunga / Product Family` dan `Kategori Bahan` sebelum `Bahan yang dibuat`, supaya user tidak memilih dari daftar bahan yang terlalu panjang.
 - Field `Resep Produksi` hanya perlu tampil jika target punya lebih dari satu resep aktif; jika hanya satu resep aktif, `bomId` boleh dipilih otomatis secara internal.
 - Label user-facing target produksi tidak perlu menampilkan kode internal master item atau jumlah BOM; kode internal tetap disimpan pada data untuk relasi/backstage.
-- Filter UI-only production order tidak boleh disimpan ke Firestore, tidak boleh membuat schema baru, dan tidak boleh mengubah payload bisnis selain memastikan `bomId` valid.
+- Filter UI-only production order tidak boleh disimpan ke database, tidak boleh membuat schema baru, dan tidak boleh mengubah payload bisnis selain memastikan `bomId` valid.
 
 ## 12. Rule Work Log
 Work Log adalah realisasi kerja produksi dari Production Order. Flow aktif yang dipakai UI adalah **BOM → Production Order → Mulai Produksi → Work Log → Complete**.
@@ -316,7 +316,7 @@ Pengecualian yang dijaga adalah flow produksi final karena `productionWorkLogsSe
 
 ### 8.5 Stock Adjustment
 Stock Adjustment tidak boleh lagi update field `stock` secara langsung dari page. Adjustment harus:
-- memakai Firestore transaction agar update stok, record `stock_adjustments`, dan `inventory_logs` tidak commit setengah jalan;
+- memakai backend SQLite transaction/atomic commit agar update stok, record `stock_adjustments`, dan `inventory_logs` tidak commit setengah jalan;
 - memakai helper stok varian aktif seperti `applyStockMutationToItem()` agar `stock/currentStock/reservedStock/availableStock/variants[]` tetap sinkron;
 - memilih item dari `raw_materials`, `semi_finished_materials`, atau `products`;
 - memilih varian jika item bervarian, termasuk Semi Finished bervarian agar stok masuk ke bucket `variantKey` dan tidak fallback ke master/default;
@@ -339,7 +339,7 @@ Collection customer final adalah `customers` lowercase. Modul Master Customer da
 ## Standar Referensi ID Bisnis dan Larangan Technical ID
 
 Definisi:
-- **Technical ID** adalah Firestore document ID random, auto ID, internal generated ID, atau ID teknis lain yang tidak manusiawi.
+- **Technical ID** adalah internal database ID random, auto ID, internal generated ID, atau ID teknis lain yang tidak manusiawi.
 - **Referensi ID bisnis** adalah kode manusiawi yang dipakai user untuk audit, pencarian, dan relasi operasional.
 
 Aturan audit UI:
@@ -347,7 +347,7 @@ Aturan audit UI:
 - Technical ID tidak boleh tampil di UI, tooltip, table, detail, drawer, report UI, export user-facing, atau fallback text.
 - Technical ID tidak boleh menjadi search utama user.
 - Jika referensi bisnis tidak tersedia, tampilkan fallback manusiawi seperti `-` atau `Referensi belum tersedia`.
-- Firestore tetap membutuhkan document ID internal, tetapi document ID internal bukan acuan audit UI bila nilainya random/technical.
+- Database tetap membutuhkan ID internal, tetapi ID internal bukan acuan audit UI bila nilainya random/technical.
 
 Prioritas referensi audit:
 1. Kode bisnis transaksi/master/produksi yang manusiawi.
@@ -366,7 +366,7 @@ Contoh Referensi ID bisnis:
 - Work Log: `JOB-DDMMYYYY-001`
 - Production Order: `PO-YYYYMMDD-0001`
 
-Policy Firestore document ID setelah reset data:
+Policy internal database ID setelah reset data:
 - Untuk collection transaksi dengan pola 1 dokumen = 1 referensi, document ID boleh dan sebaiknya sama dengan Referensi ID bisnis, misalnya `purchases/PUR-20260511-0001`, `sales/ORDE-20260511-0001`, atau `returns/RET-20260511-0001`.
 - Untuk collection log yang bisa memiliki banyak baris per referensi, jangan pakai random ID. Pakai ID turunan readable seperti `LOG-PUR-20260511-0001-001`, `LOG-PUR-20260511-0001-002`, atau `LOG-STK-ADJ-12052026-001-001`.
 - `sourceRef`, `referenceNumber`, `purchaseNumber`, `saleNumber`, `returnNumber`, dan field bisnis readable tetap menjadi acuan audit utama.
@@ -408,9 +408,9 @@ Catatan current state:
 Status: **GUARDED / AKTIF TERBATAS**.
 
 - Collection counter yang disetujui untuk kode transaksi adalah `business_code_counters`.
-- Sales (`ORD-*`), Purchases (`PUR-*`), dan Returns (`RET-*`) reserve sequence counter di dalam Firestore transaction yang sama dengan create dokumen bisnis.
+- Sales (`ORD-*`), Purchases (`PUR-*`), dan Returns (`RET-*`) reserve sequence counter di dalam backend SQLite transaction/atomic commit yang sama dengan create dokumen bisnis.
 - Sebelum transaction, service tetap membaca prefix query lama sebagai baseline sequence legacy agar counter baru tidak mulai dari `001` saat data lama sudah ada.
-- Counter commit dilakukan setelah semua transaction read/validasi selesai dan sebelum write dokumen bisnis, sehingga tidak ada read-after-write di Firestore transaction.
+- Counter commit dilakukan setelah semua transaction read/validasi selesai dan sebelum write dokumen bisnis, sehingga tidak ada read-after-write di backend SQLite transaction/atomic commit.
 - Format kode, document ID readable, inventory log payload, income/expense, stock mutation, purchase average cost, OCR, Return transaction, route/menu/role guard, production, payroll, HPP, dan reset tidak berubah.
 - Batch 16C: Customer/Supplier, Product/Raw Material, BOM/Semi Finished, Cash In/Out manual, Stock Adjustment, Production Order, Work Log, dan Payroll manual juga reserve business code melalui `business_code_counters` di dalam transaction create masing-masing. Batch 16D melengkapi Production Planning `PP-*` dan Karyawan Produksi lewat counter bersama yang sama.
 
@@ -443,7 +443,7 @@ Status: **GUARDED / AKTIF TERBATAS**.
 - Nomor urut `XXX` selalu 3 digit dan naik per tanggal pembuatan.
 - User tidak boleh mengetik kode karyawan manual saat tambah data baru.
 - Service karyawan produksi wajib generate ulang kode saat submit agar preview di form tidak menjadi source final bila ada input paralel.
-- Field `code` tetap dipakai sebagai display reference di Work Log/Payroll. Firestore document ID boleh tetap dipakai sebagai relasi internal teknis, tetapi bukan referensi audit UI dan tidak boleh menjadi fallback display.
+- Field `code` tetap dipakai sebagai display reference di Work Log/Payroll. internal database ID boleh tetap dipakai sebagai relasi internal teknis, tetapi bukan referensi audit UI dan tidak boleh menjadi fallback display.
 - Kode lama seperti `EMP-...` dianggap legacy data dan tidak dimigrasi otomatis saat edit.
 
 ## Update Rule Auto Payroll Work Log Completed — 2026-04-25
@@ -758,7 +758,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Product memakai basis cost `hppPerUnit` untuk preview Pricing Rule.
 - Raw Material memakai `averageActualUnitCost` sebagai basis utama dengan fallback `restockReferencePrice`.
 - Semua preview harga wajib lewat `buildSinglePricingPreview` dari `pricingService`; jangan membuat formula pricing baru di page/component.
-- `PricingModeSwitch` hanya shared UI switch Manual/Rule, bukan source formula pricing, bukan validation service, bukan query Firestore, dan bukan tempat auto-preview.
+- `PricingModeSwitch` hanya shared UI switch Manual/Rule, bukan source formula pricing, bukan validation service, bukan query backend/database, dan bukan tempat auto-preview.
 - Auto-preview Product dan Raw Material tetap local di halaman masing-masing kecuali ada audit patch terpisah yang membuktikan shared hook lebih aman.
 - PricingRules preview/apply tetap skip item Manual dan hanya memproses item yang memang berada pada mode Rule/valid.
 
@@ -858,24 +858,24 @@ Status: **AKTIF + GUARDED**.
 - Submit Penyesuaian Stok wajib menjaga stock adjustment, mutasi stok, dan inventory log sebagai satu rangkaian konsisten.
 - Area ini tidak boleh dipakai untuk hitung ulang stok dari semua transaksi saat halaman dibuka.
 
-## 24. Rule Final Auth, Role, dan Manajemen User — 2026-05-01
+## 24. Rule Final Auth, Role, dan Manajemen User — SQLite Runtime — 2026-06-07
 
-Status: **AKTIF + GUARDED**. Section ini menggantikan catatan desain/migrasi lama setelah login internal stabil di domain `@ziyocraft.com`.
+Status: **AKTIF + GUARDED + SOURCE-VERIFIED SQLITE**. Section ini menggantikan catatan lama Auth runtime lama/database lama setelah source aktual memakai local auth SQLite.
 
 ### 24.1 Prinsip Auth final
 
-- Firebase Authentication adalah source of truth untuk password dan session.
-- Firestore `system_users/{uid}` adalah source of truth untuk profile internal, role, status, dan metadata user IMS.
-- Auth email internal aktif wajib memakai format `username@ziyocraft.com`.
-- Login IMS tetap memakai username di UI; mapping ke email internal dilakukan oleh Auth layer.
-- User tanpa dokumen `system_users/{firebaseAuthUid}` wajib ditolak masuk aplikasi utama.
+- SQLite local auth adalah source of truth untuk password hash, session/token lokal, profile internal, role, status, dan metadata user IMS.
+- Login IMS memakai username di UI; backend `/api/auth/login` memvalidasi username + password ke tabel SQLite, bukan auth lama.
+- `AuthContext.jsx` masih memiliki nama state auth lama sebagai compatibility actor label lama, tetapi object tersebut dibentuk dari user SQLite lokal dan `providerId: sqlite_local`.
+- User tanpa session/token lokal valid wajib ditolak masuk aplikasi utama.
 - User dengan `status = inactive` wajib ditolak masuk aplikasi utama.
 - Role tidak dikenal wajib default deny.
+- Password plaintext, token rahasia, service account, credential Admin SDK, atau secret tidak boleh disimpan di frontend/source.
 
 ### 24.2 Role aktif final
 
 | Role | Status | Akses utama | Batasan wajib |
-|---|---|---|---|
+|---|---:|---|---|
 | `administrator` | **AKTIF / GUARDED** | Admin utama aplikasi. Mengakses menu sistem, Manajemen User, Reset & Maintenance, dan menu operasional sesuai route guard. | Tetap wajib mengikuti business rules stok, kas, pembelian, penjualan, produksi, payroll, HPP, dan laporan. Tidak boleh mengubah role/status dirinya sendiri dari Manajemen User. |
 | `user` | **AKTIF / GUARDED** | User operasional terbatas sesuai access matrix. | Tidak boleh membuka Manajemen User, Reset & Maintenance, route sistem sensitif, atau melakukan manajemen role/profile user lain. |
 
@@ -901,99 +901,74 @@ Status: **AKTIF / GUARDED**. Matrix ini menyelaraskan `roleAccess.js`, `sidebarM
 
 User biasa tidak boleh melihat menu sensitif di sidebar dan tidak boleh membuka route sensitif lewat URL langsung. Route guard tetap wajib selaras dengan sidebar guard.
 
-### 24.3 Flow create profile user aktif
+### 24.3 Flow create user aktif
 
 ```text
-Firebase Console > Authentication
--> administrator membuat Auth user manual
--> email Auth wajib username@ziyocraft.com
--> administrator copy UID Firebase Auth
--> IMS > Sistem > Manajemen User > Tambah Profile User
--> administrator tempel UID ke field Auth UID
-
-Mode SQLite lokal:
-Login pertama dapat membuat administrator lokal jika belum ada admin aktif. Administrator kemudian membuat akun lokal dari Manajemen User dengan username + password melalui backend SQLite.
--> userService.createManualUserProfile()
--> Firestore membuat system_users/{authUid}
+Administrator login SQLite
+-> Sistem > Manajemen User > Tambah User
+-> input username + displayName + role + status + password
+-> userService / localAuthService
+-> backend /api/auth/users
+-> validasi actor administrator, username unik, role/status allowlist, self/last-admin guard
+-> simpan user lokal SQLite + password hash backend
+-> audit log backend bila tersedia
 -> tabel Manajemen User reload
--> AuthProvider membaca system_users/{uid} saat user login
 ```
 
-Halaman Manajemen User hanya membuat/mengelola profile Firestore. Frontend tidak membuat Firebase Auth user, tidak mengubah password Firebase Auth, dan tidak menghapus Firebase Auth user.
+Login pertama boleh bootstrap administrator lokal hanya melalui flow backend yang guarded saat belum ada admin aktif. Setelah itu, pembuatan user wajib melalui administrator.
 
-### 24.4 Field profile user aktif
+### 24.4 Field user aktif
 
-Field profile yang disimpan di `system_users/{uid}`:
+Field user yang dikelola backend SQLite:
 
-- `authUid`
+- `id` / `authUid` internal lokal
 - `username`
 - `usernameLower`
 - `displayName`
 - `role`: hanya `administrator` atau `user`
 - `status`: `active` atau `inactive`
+- `passwordHash` hanya di backend/database, tidak pernah dikirim ke UI
 - `createdAt`
 - `updatedAt`
 - `createdBy`
 - `updatedBy`
 - `lastLoginAt` bila tersedia
 
-Field yang tidak boleh disimpan di Firestore:
+Field yang tidak boleh disimpan di frontend/source:
 
-- password sementara
 - password plaintext
-- password hash buatan frontend
+- password sementara jangka panjang
 - token rahasia
 - credential Admin SDK
 - service account
+- API key/secret non-public
 
 ### 24.5 Guard Manajemen User
 
 - Username wajib unik melalui `usernameLower`.
-- Auth UID wajib unik karena path profile adalah `system_users/{authUid}`.
-- `administrator` boleh membuat/mengelola profile role aktif `administrator` dan `user`.
-- `user` tidak boleh membuka Manajemen User dan tidak boleh membuat/mengelola profile user.
+- `administrator` boleh membuat/mengelola role aktif `administrator` dan `user`.
+- `user` tidak boleh membuka Manajemen User dan tidak boleh membuat/mengelola user lain.
 - User tidak boleh mengubah role/status dirinya sendiri dari Manajemen User.
-- Tombol **Hapus Profile** hanya menghapus dokumen Firestore `system_users/{uid}`.
-- Tombol **Hapus Profile** tidak menghapus Firebase Authentication user.
-- Hapus profile diri sendiri wajib ditolak.
-- Hapus administrator aktif terakhir wajib ditolak oleh service/UI.
-- Jika profile Firestore dihapus tetapi Firebase Auth user masih ada, user tersebut tidak bisa masuk IMS sampai profile dibuat lagi.
+- Hapus/nonaktifkan user diri sendiri wajib ditolak.
+- Hapus/nonaktifkan administrator aktif terakhir wajib ditolak oleh backend/service/UI.
+- Reset password atau perubahan credential wajib lewat backend resmi; jangan membuat hash password di frontend.
 
-### 24.6 Firestore Rules final/staged-final
+### 24.6 Legacy / arsip migrasi runtime lama
 
-- Firestore Rules wajib aktif di backend Firebase dan berbasis `request.auth != null`.
-- Pada ZIP source aktual yang divalidasi, file `firestore.rules` dan `firebase.json` tidak disertakan; rules backend dikelola manual/external di Firebase Console sampai ada task source-controlled rules yang disetujui.
-- Publish/deploy rules tetap wajib dilakukan dari Firebase tooling/Console; keberadaan file di repo belum otomatis mengubah backend.
-- Actor profile wajib dibaca dari `system_users/{request.auth.uid}`.
-- Role aktif Rules hanya `administrator` dan `user`.
-- `system_users` wajib guarded:
-  - user login boleh membaca profile sendiri;
-  - administrator boleh membaca daftar user;
-  - administrator boleh create/update/delete profile user lain;
-  - user biasa tidak boleh mengelola profile user lain;
-  - delete profile sendiri diblok oleh rules dan service.
-- Collection bisnis utama boleh diakses oleh profile aktif sesuai staged-final rules agar modul utama tidak langsung permission denied.
-- `lastLoginAt` boleh di-update oleh user pada profile sendiri sebagai audit login best-effort; role/status/profile field lain tetap guarded.
-- Fallback untuk collection tidak dikenal harus deny.
-- Rules tidak boleh memakai cleanup sementara seperti `allow read, write: if true` atau expiry date sementara sebagai rules final.
+- auth lama, database lama `system_users/{uid}`, rules database lama, dan domain `username@ziyocraft.com` adalah **LEGACY / ARSIP MIGRASI** untuk source saat ini.
+- Jangan membuat user runtime lama, menempel UID Auth, mengubah rules database lama, atau menghidupkan fallback runtime lama untuk task Auth/User Management tanpa approval eksplisit dan validasi source baru.
+- Jika menemukan komentar/source variable bernama lama, audit import/usage dulu. Nama compatibility tidak otomatis berarti runtime lama aktif.
 
-### 24.7 Legacy dan cleanup final
+### 24.7 Boundary yang tidak berubah
 
-- Domain lama `@ims-bunga-flanel.local` adalah **LEGACY** dan tidak boleh menjadi flow aktif baru.
-- Profile lama/orphan seperti `admin_legacy` dan `user_legacy` adalah data cleanup lama yang seharusnya sudah tidak ada setelah migrasi selesai.
-- Role lama `super_admin` adalah **LEGACY / REMOVED FROM ACTIVE FLOW** dan tidak boleh diaktifkan kembali tanpa task migrasi khusus.
-- Flow migrasi UID/domain lama adalah **CLEANUP CANDIDATE** dan tidak boleh menjadi jalur utama setelah akun `admin@ziyocraft.com` dan `user@ziyocraft.com` stabil.
-
-### 24.8 Boundary yang tidak berubah
-
-Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases, Returns, Sales, Stock Management / Stock Adjustment, Supplier sebagai katalog restock, Production, Payroll, HPP, Reports/export, Dashboard read-only, Pricing Rules, atau Reset & Maintenance business flow.
+Patch Auth/User Management tidak boleh mengubah rumus stok, Purchases, Returns, Sales, Stock Management / Stock Adjustment, Supplier sebagai katalog restock, Production, Payroll, HPP, Reports/export, Dashboard read-only, Pricing Rules, atau Reset & Maintenance business flow.
 
 ## 11. Rule Batch Fix Bug Merge — 2026-05-03
 
 ### 11.1 Format angka tanpa desimal
 - Tampilan angka, qty, stok, Rupiah, summary, report, dan input UI aktif diarahkan tanpa decimal.
 - `formatNumberId`, `formatQuantityId`, `formatPercentId`, dan parser input integer menjadi standar UI.
-- Perubahan ini tidak mengubah rumus transaksi, schema Firestore, atau migrasi/backfill data lama.
+- Perubahan ini tidak mengubah rumus transaksi, schema SQLite/backend, atau migrasi/backfill data lama.
 - Jika suatu hari ada satuan yang wajib decimal secara bisnis, pengecualian harus dibahas eksplisit sebagai business rule baru.
 
 ### 11.2 Production Order dan material variant strict
@@ -1014,7 +989,7 @@ Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases,
 - Rename nama/label varian tidak membuat inventory log palsu, tidak memigrasi PO/Work Log lama, dan tidak membuka edit stok langsung dari master.
 
 ### 11.5 UI non-business-flow cleanup
-- Sidebar nested accordion dan Login UI copy cleanup adalah perubahan UI; keduanya tidak mengubah stok, transaksi, produksi, laporan, AuthContext, role access, Firestore rules, atau schema.
+- Sidebar nested accordion dan Login UI copy cleanup adalah perubahan UI; keduanya tidak mengubah stok, transaksi, produksi, laporan, AuthContext, role access, rules database lama, atau schema.
 
 ## Update Business Rules — Cash In delete lock dan Sales status tab — 2026-05-03
 
@@ -1061,7 +1036,7 @@ Patch Auth/User Management dan Rules tidak boleh mengubah rumus stok, Purchases,
 - Untuk item bervarian, status low-stock utama wajib membaca setiap varian terhadap threshold master (`minStock` untuk Raw Material, `minStockAlert` untuk Product/Semi Finished). Aggregate master tetap boleh tampil sebagai total, tetapi tidak boleh membuat item terlihat aman jika ada varian kosong/di bawah minimum.
 - Rule ini berlaku untuk tampilan saldo stok item seperti Products, Raw Materials, Semi Finished Materials, Dashboard Stok Kritis, dan Stock Report.
 - Rule ini tidak berlaku untuk Qty transaksi, Stok Masuk Purchases, Stock Adjustment quantity, inventory log delta, atau field audit lain yang bukan saldo stok master. Untuk inventory log delta, Qty boleh menampilkan satuan dari `stockUnit`/`unit`, tetapi tidak boleh berubah menjadi komponen saldo stok master.
-- Perubahan tampilan compact table tidak boleh mengubah rumus stok, mutation, reserved stock, available stock, HPP, pricing, export mapping, atau schema Firestore.
+- Perubahan tampilan compact table tidak boleh mengubah rumus stok, mutation, reserved stock, available stock, HPP, pricing, export mapping, atau schema SQLite/backend.
 
 ## Update Business Rules — Buku Besar Kas / Log Pergerakan Uang — 2026-05-09
 
@@ -1132,7 +1107,7 @@ Catatan lock:
 - Sales tetap boleh memakai nama field legacy `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
 - Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
 - Master item/config produksi memakai sequence internal sederhana `PREFIX-001`. Kode ini disimpan untuk relasi/backstage dan tidak menjadi fokus UI.
-- Firestore random ID tidak boleh tampil sebagai kode audit/user-facing.
+- internal database ID teknis/random tidak boleh tampil sebagai kode audit/user-facing.
 - Data lama dengan prefix legacy tetap compatibility, tetapi bukan standar data baru.
 
 
@@ -1166,7 +1141,7 @@ Catatan lock:
 - Pembatalan Sales tetap tidak disediakan sebagai status update langsung; barang kembali harus lewat Return.
 
 ### Returns
-- Return tetap menulis dokumen return, update stok, dan inventory log dalam satu Firestore transaction.
+- Return tetap menulis dokumen return, update stok, dan inventory log dalam satu backend SQLite transaction/atomic commit.
 - Return aktif adalah stock-only correction: tidak membuat `incomes`, `revenues`, `expenses`, atau ledger finance otomatis.
 - Orkestrasi transaksi Return dipindah ke `src/services/Transaksi/returnsService.js`.
 - Collection dan field Return tidak diubah.
@@ -1206,27 +1181,27 @@ Status: **AKTIF / GUARDED**.
 
 ## SQLite Local DB runtime pilot — Patch A-B — 2026-06-02
 
-Status: **AKTIF / SQLITE-FIRST PILOT / DEXIE LEGACY CLEANUP SELESAI**.
+Status: **AKTIF / SQLITE-FIRST PILOT / BROWSER-LOCAL LEGACY CLEANUP SELESAI**.
 
 Rule aktif:
-- Runtime offline/local web sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN, bukan Dexie/IndexedDB browser.
+- Runtime offline/local web sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN, bukan database browser lama.
 - `frontend/.env.example` dibuat SQLite-first: `VITE_AUTH_MODE=sqlite`.
 - `.env.local` tidak boleh di-commit.
-- `VITE_SUPPLIERS_REPOSITORY_MODE=sqlite` aktif untuk Supplier master-only. Relasi purchase/raw/history tetap guarded; tidak boleh menganggap transaksi purchase sudah full SQLite.
+- `VITE_SUPPLIERS_REPOSITORY_MODE=sqlite` aktif untuk Supplier. Relasi purchase/raw/history tetap wajib mengikuti service/endpoint SQLite aktual dan tidak boleh direct write dari UI.
 - Categories dan Customers boleh CRUD lewat repository SQLite/backend.
-- Firebase tetap dipertahankan sebagai fallback/legacy dan untuk modul yang belum dimigrasi.
-- Nilai legacy `offline_local` dan `hybrid_sync` hanya compatibility alias di `repositoryMode.js`; nilainya dinormalisasi ke `sqlite_sidecar` dan tidak mengaktifkan Dexie.
+- runtime lama tidak dipertahankan sebagai fallback runtime aktif; alias legacy hanya compatibility dan dinormalisasi ke `sqlite_sidecar`.
+- Nilai legacy `offline_local` dan `hybrid_sync` hanya compatibility alias di `repositoryMode.js`; nilainya dinormalisasi ke `sqlite_sidecar` dan tidak mengaktifkan database browser lama.
 
 Cleanup yang sudah dilakukan:
-- Folder legacy `src/data/adapters/dexie/`, `src/data/local/`, dan `src/data/sync/` dihapus dari source aktif.
-- Panel legacy Dexie/IndexedDB yang tidak masuk route aktif dihapus: `OfflineLocalDbBackupPanel`, `OfflineMasterDataPilotPanel`, `OfflineQaExecutionPanel`, dan `OfflineSyncDevPanel`.
+- Folder legacy `src/data/adapters/database-browser-lama/`, `src/data/local/`, dan `src/data/sync/` dihapus dari source aktif.
+- Panel legacy database browser lama yang tidak masuk route aktif dihapus: `OfflineLocalDbBackupPanel`, `OfflineMasterDataPilotPanel`, `OfflineQaExecutionPanel`, dan `OfflineSyncDevPanel`.
 - UI aktif untuk database lokal hanya `OfflineDatabaseCenter.jsx` / SQLite Local DB Center.
 
 Guard tetap berlaku:
-- Tidak ada `sync_queue` IndexedDB runtime.
-- Tidak ada backup/restore JSON IndexedDB runtime.
-- Tidak ada auto-sync Firebase ↔ SQLite untuk transaksi.
-- Stock, purchase, sales, returns, finance, reports, production, payroll, HPP, reset destructive, route/menu/role guard, dan Firestore rules/index tidak berubah.
+- Tidak ada `legacy_sync_queue` storage browser lama runtime.
+- Tidak ada backup/restore JSON storage browser lama runtime.
+- Tidak ada auto-sync runtime lama ke SQLite untuk transaksi.
+- Stock, purchase, sales, returns, finance, reports, production, payroll, HPP, reset destructive, route/menu/role guard, dan rules database lama/index tidak berubah.
 - Restore SQLite destructive tetap wajib admin lokal, preview/plan, file backup eksplisit, keyword guard, dan backup otomatis.
 
 Kontrak resmi: `docs/10_OFFLINE_DATABASE_CONTRACT.md`.

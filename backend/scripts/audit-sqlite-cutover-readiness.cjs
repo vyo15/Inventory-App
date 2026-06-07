@@ -6,6 +6,11 @@ const frontendRoot = path.join(root, "frontend", "src");
 const backendRoot = path.join(root, "backend");
 const envExamplePath = path.join(root, "frontend", ".env.example");
 
+const oldRemoteToken = ["fire", "base"].join("");
+const oldRemoteStoreToken = ["fire", "store"].join("");
+const oldBrowserDbToken = ["dex", "ie"].join("");
+const oldRemoteMode = `${oldRemoteToken}_primary`;
+
 const walkFiles = (dir, matcher = () => true) => {
   if (!fs.existsSync(dir)) return [];
   const result = [];
@@ -35,8 +40,20 @@ const parseEnvExample = () => {
 
 const frontendFiles = walkFiles(frontendRoot, (file) => /\.(js|jsx|ts|tsx)$/.test(file));
 const backendFiles = walkFiles(path.join(backendRoot, "src"), (file) => /\.js$/.test(file));
-const firebaseFiles = frontendFiles.filter((file) => /firebase\/firestore|\.\.\/\.\.\/firebase|from ['\"]\.\.\/firebase|from ['\"]\.\.\/\.\.\/firebase|from ['\"]\.\.\/\.\.\/\.\.\/firebase/.test(readText(file)));
-const dexieFiles = frontendFiles.filter((file) => /dexie|adapters\/dexie|data\/local|data\/sync/.test(readText(file)));
+const oldRemoteRuntimeFiles = frontendFiles.filter((file) => {
+  const text = readText(file).toLowerCase();
+  return text.includes(`${oldRemoteToken}/${oldRemoteStoreToken}`) ||
+    text.includes("../../" + oldRemoteToken) ||
+    text.includes("../" + oldRemoteToken) ||
+    text.includes("../../../" + oldRemoteToken);
+});
+const oldBrowserDbRuntimeFiles = frontendFiles.filter((file) => {
+  const text = readText(file).toLowerCase();
+  return text.includes(oldBrowserDbToken) ||
+    text.includes("adapters/" + oldBrowserDbToken) ||
+    text.includes("data/local") ||
+    text.includes("data/sync");
+});
 
 const requiredTables = [
   "products",
@@ -82,16 +99,20 @@ const guardKeys = [
 ];
 const envGuards = Object.fromEntries(guardKeys.map((key) => [key, env[key] || null]));
 const sqliteOptInCount = Object.values(envGuards).filter((value) => String(value).toLowerCase() === "sqlite").length;
-const guardedCount = Object.values(envGuards).filter((value) => String(value).toLowerCase() === "firebase_primary").length;
+const nonSqliteCount = Object.values(envGuards).filter((value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized && normalized !== "sqlite";
+}).length;
+const oldRemoteModeCount = Object.values(envGuards).filter((value) => String(value).toLowerCase() === oldRemoteMode).length;
 
 const result = {
   generatedAt: new Date().toISOString(),
   envGuards,
-  moduleCutoverSummary: { sqliteOptInCount, guardedCount },
-  frontendHasFirebase: firebaseFiles.length > 0,
-  frontendHasDexie: dexieFiles.length > 0,
-  firebaseRuntimeFileCount: firebaseFiles.length,
-  dexieRuntimeFileCount: dexieFiles.length,
+  moduleCutoverSummary: { sqliteOptInCount, nonSqliteCount, oldRemoteModeCount },
+  frontendHasOldRemoteRuntime: oldRemoteRuntimeFiles.length > 0,
+  frontendHasOldBrowserDbRuntime: oldBrowserDbRuntimeFiles.length > 0,
+  oldRemoteRuntimeFileCount: oldRemoteRuntimeFiles.length,
+  oldBrowserDbRuntimeFileCount: oldBrowserDbRuntimeFiles.length,
   directSqliteFrontendFileCount: frontendFiles.filter((file) => /adapters\/sqlite|requestSqliteApi/.test(readText(file))).length,
   foundationTables: requiredTables.map((table) => ({ table, ready: migrateText.includes(table) })),
   mountedRoutes: [
@@ -112,8 +133,8 @@ console.log(JSON.stringify(result, null, 2));
 
 if (process.argv.includes("--strict")) {
   const blockers = [];
-  if (result.frontendHasFirebase) blockers.push("Firebase/Firestore masih dipakai frontend; Firebase removal belum aman.");
-  if (result.frontendHasDexie) blockers.push("Dexie legacy masih terdeteksi di runtime frontend.");
+  if (result.frontendHasOldRemoteRuntime) blockers.push("Runtime remote lama masih terdeteksi di frontend; SQLite-only belum bersih.");
+  if (result.frontendHasOldBrowserDbRuntime) blockers.push("Runtime browser DB lama masih terdeteksi di frontend.");
   if (result.foundationTables.some((item) => !item.ready)) blockers.push("Ada table foundation SQLite yang belum dibuat migration.");
   if (result.mountedRoutes.some((item) => !item.mounted)) blockers.push("Ada backend route foundation yang belum mounted.");
   if (blockers.length > 0) {

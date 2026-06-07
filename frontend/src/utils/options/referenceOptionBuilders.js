@@ -17,7 +17,7 @@ export const buildReferenceLabel = (item = {}) => {
   - Fallback label dipertahankan untuk data lama yang belum lengkap namanya.
 
   Risiko:
-  - Value option tetap item.id; label ini hanya presentasi dan tidak boleh dipakai sebagai relasi Firestore.
+  - Value option tetap item.id; label ini hanya presentasi dan tidak boleh dipakai sebagai relasi database.
   =====================================================
   */
   return (

@@ -20,7 +20,7 @@ export const unitOptions = ['pcs', 'meter', 'yard', 'kg', 'gram', 'liter', 'ml',
 // LEGACY: purchase yang sangat tua di luar jendela lookup tidak dipakai sebagai
 // pembanding ringkas; source of truth histori tetap laporan pembelian.
 // CLEANUP CANDIDATE: ganti ke service latest purchase per material jika index
-// Firestore final sudah dibuat.
+// Payload final sudah dibuat oleh service/backend.
 // -----------------------------------------------------------------------------
 export const RAW_MATERIAL_PURCHASE_LOOKUP_LIMIT = 500;
 

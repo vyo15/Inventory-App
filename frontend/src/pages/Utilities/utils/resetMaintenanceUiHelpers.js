@@ -117,12 +117,12 @@ export const AUDIT_SUMMARY_AREAS = [
   { key: "transaction_side_effect", label: "Side-effect Transaksi", collection: "incomes/expenses/inventory_logs", source: "transactionSideEffectAudit" },
 ];
 
-export const buildActorLabel = ({ profile, firebaseUser } = {}) => (
+export const buildActorLabel = ({ profile, authSessionUser } = {}) => (
   profile?.displayName
   || profile?.username
   || profile?.email
-  || firebaseUser?.email
-  || firebaseUser?.uid
+  || authSessionUser?.email
+  || authSessionUser?.uid
   || "client-ui"
 );
 
@@ -175,7 +175,7 @@ export const resetStatisticValueStyle = {
 
 // IMS NOTE [AKTIF/GUARDED] - Reset Maintenance page option helpers.
 // Fungsi: memusatkan opsi/guard UI reset agar halaman utama tidak menumpuk logic presentasi.
-// Batasan: helper ini tidak menjalankan reset, delete, baseline restore, atau Firestore write.
+// Batasan: helper ini tidak menjalankan reset, delete, baseline restore, atau database write.
 export const TRANSACTION_SIDE_EFFECT_CONFIRM_KEYWORD = "REPAIR TRANSAKSI";
 
 export const RESET_MODULE_OPTIONS = [

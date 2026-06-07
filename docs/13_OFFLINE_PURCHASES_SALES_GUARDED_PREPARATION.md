@@ -1,15 +1,15 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline Dexie/IndexedDB. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime Dexie/IndexedDB, sync_queue, conflict resolver, atau backup JSON IndexedDB dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, legacy_sync_queue, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # Offline Purchases & Sales Guarded Preparation — Batch 34–37
 
-Status: **AUDIT / CONTRACT / GUARDED / TIDAK MIGRASI RUNTIME**
+Status: **ARSIP HISTORIS / SUPERSEDED BY SQLITE RUNTIME / JANGAN DIPAKAI SEBAGAI INSTRUKSI AKTIF**.
 
 Tanggal validasi: 2026-05-30
 
-Dokumen ini menutup Fase 4 persiapan Purchases dan Sales untuk offline database. Scope batch ini hanya audit, kontrak field, dan konsep Draft Offline yang aman. Tidak ada runtime migration, tidak ada perubahan schema Firestore/IndexedDB, tidak ada table draft baru, tidak ada stock/finance mutation offline, dan tidak ada perubahan route/menu/role guard.
+Dokumen ini menutup Fase 4 persiapan Purchases dan Sales untuk offline database. Scope batch ini hanya audit, kontrak field, dan konsep Draft Offline yang aman. Tidak ada runtime migration, tidak ada perubahan schema database lama/storage browser lama, tidak ada table draft baru, tidak ada stock/finance mutation offline, dan tidak ada perubahan route/menu/role guard.
 
 ## 1. Validasi source aktual
 
@@ -41,7 +41,7 @@ File source yang benar-benar dicek:
 File relevan yang tidak ditemukan pada source aktual:
 
 - Tidak ditemukan `purchasesRepository.js` / `salesRepository.js` runtime.
-- Tidak ditemukan Dexie adapter khusus `purchases` atau `sales`.
+- Tidak ditemukan database browser lama adapter khusus `purchases` atau `sales`.
 - Tidak ditemukan table lokal `purchase_drafts`, `sales_drafts`, `purchases`, atau `sales` di `LOCAL_DB_TABLES`.
 - Tidak ditemukan allowlist `purchases` atau `sales` di `LOCAL_SYNC_COLLECTIONS`.
 - Tidak ditemukan flow edit/delete Purchase aktif dari service transaksi.
@@ -49,8 +49,8 @@ File relevan yang tidak ditemukan pada source aktual:
 
 Batasan validasi:
 
-- Audit ini static source review dari ZIP frontend, bukan inspeksi data Firestore production.
-- Firestore Rules/index tidak ada di ZIP dan harus dicek manual di Firebase Console jika nanti Purchases/Sales draft atau commit online diubah.
+- Audit ini static source review dari ZIP frontend, bukan inspeksi data database lama production.
+- rules database lama/index tidak ada di ZIP dan harus dicek manual di runtime lama Console jika nanti Purchases/Sales draft atau commit online diubah.
 - Tidak ada test runtime browser karena batch ini docs/contract only.
 
 ## 2. Validasi docs vs source
@@ -66,12 +66,12 @@ Docs existing yang dicek:
 Keselarasan source dengan docs existing:
 
 - Docs sudah menyatakan transaksi/stock/finance belum boleh masuk sync offline awal. Source menguatkan ini karena `LOCAL_SYNC_COLLECTIONS` hanya berisi `categories` dan `customers`, sementara supplier hanya snapshot read-only.
-- Docs sudah menyatakan supplier belum boleh dipakai write offline. Source Sales sudah punya guard lebih ketat: Sales customer reference dibaca dari Firebase-primary lewat `salesCustomerReferenceService`, bukan dari customer local-only.
+- Docs sudah menyatakan supplier belum boleh dipakai write offline. Source Sales sudah punya guard lebih ketat: Sales customer reference dibaca dari runtime lama-primary lewat `salesCustomerReferenceService`, bukan dari customer local-only.
 - Docs belum punya kontrak detail khusus Purchases/Sales Draft Offline; dokumen ini menambahkan kontrak Batch 34–37 tanpa mengubah runtime.
 
 Konflik docs vs source yang perlu dicatat:
 
-- Istilah `Offline` di Sales saat ini adalah `salesChannel: "Offline"` untuk transaksi toko/offline channel, bukan offline database mode. Jangan disamakan dengan `offline_local` Dexie.
+- Istilah `Offline` di Sales saat ini adalah `salesChannel: "Offline"` untuk transaksi toko/offline channel, bukan offline database mode. Jangan disamakan dengan `offline_local` database browser lama.
 - Istilah `purchaseType: "offline"` di Purchases saat ini berarti pembelian non-marketplace/tanpa ongkir-voucher online, bukan local/offline database draft.
 
 ## 3. Batch 34 — Purchases Audit
@@ -82,10 +82,10 @@ Konflik docs vs source yang perlu dicatat:
 Purchases.jsx
 -> user isi form / OCR apply ke form saja
 -> createPurchaseTransaction(values, products, materials, suppliers)
--> Firestore runTransaction
+-> database lama runTransaction
    -> reserve/generate PUR-DDMMYYYY-001
    -> validate supplier dari daftar supplier aktif
-   -> validate item product/raw material dari Firestore transaction snapshot
+   -> validate item product/raw material dari transaksi database lama snapshot
    -> validate varian bila item bervarian
    -> calculate subtotal/ongkir/diskon/voucher/service fee/actual unit cost
    -> update stock product/raw material
@@ -100,8 +100,8 @@ Purchases.jsx
 
 | Area | Source of truth aktual | Catatan offline |
 |---|---|---|
-| Purchase final | `purchases/{PUR-*}` | Firebase-only sampai commit online dirancang |
-| Stock masuk | `products` / `raw_materials` via Firestore transaction | Tidak boleh offline mutation |
+| Purchase final | `purchases/{PUR-*}` | runtime lama-only sampai commit online dirancang |
+| Stock masuk | `products` / `raw_materials` via transaksi database lama | Tidak boleh offline mutation |
 | Stock audit | `inventory_logs` type `purchase_in` | Wajib dibuat bersama purchase final |
 | Stock read model | `stock_item_read_models` | Derived/cache, bukan source of truth |
 | Finance cash out | `expenses/{purchases__PUR-*}` | Tidak boleh dibuat dari draft offline |
@@ -113,15 +113,15 @@ Purchases.jsx
 
 ### 3.3 Field contract Purchase final yang tidak boleh dipalsukan offline
 
-Purchase final wajib menjaga field berikut saat commit Firebase:
+Purchase final wajib menjaga field berikut saat commit runtime lama:
 
 | Field | Wajib | Keterangan |
 |---|---|---|
 | `purchaseNumber` / `code` / `referenceNumber` / `sourceRef` | Ya | Kode bisnis `PUR-DDMMYYYY-001`, sebaiknya document ID final |
 | `type` | Ya | `product` atau `material` |
-| `itemId`, `itemName` | Ya | Snapshot item final yang divalidasi ulang dari Firebase |
+| `itemId`, `itemName` | Ya | Snapshot item final yang divalidasi ulang dari runtime lama |
 | `variantKey`, `variantLabel`, `stockSourceType` | Wajib jika item bervarian | Mencegah stok masuk ke master/default yang salah |
-| `supplierId`, `supplierName` | Ya | Harus berasal dari supplier Firebase/resolved supplier aktif |
+| `supplierId`, `supplierName` | Ya | Harus berasal dari supplier runtime lama/resolved supplier aktif |
 | `quantity` | Ya | Qty beli sebelum konversi |
 | `totalStockIn` | Ya | Qty stok masuk setelah konversi |
 | `purchaseUnit`, `stockUnit`, `conversionValue` | Wajib untuk material | Konversi supplier → stok |
@@ -148,7 +148,7 @@ Alasan:
 
 1. Purchase final menulis minimal empat area sekaligus: `purchases`, stock item master, `inventory_logs`, dan `expenses`.
 2. Supplier relation belum write-safe offline dan supplier local hanya snapshot read-only.
-3. Raw material/product bervarian membutuhkan validasi stok/variant shape dari Firebase saat commit.
+3. Raw material/product bervarian membutuhkan validasi stok/variant shape dari runtime lama saat commit.
 4. Actual unit cost mempengaruhi average cost/HPP; retry sync yang tidak idempotent bisa membuat modal dan expense dobel.
 5. OCR dapat salah baca multi-item, voucher, ongkir, atau total; source saat ini benar karena OCR hanya mengisi form dan tetap butuh Simpan Pembelian.
 6. Report pembelian dan cash ledger membaca `expenses`, sehingga draft offline tidak boleh ikut report final.
@@ -185,10 +185,10 @@ User offline
 
 Saat online
 -> user buka review draft
--> system re-fetch supplier + item + variant + stock/cost terbaru dari Firebase
+-> system re-fetch supplier + item + variant + stock/cost terbaru dari runtime lama
 -> user review perbedaan
 -> user klik Commit Purchase
--> createPurchaseTransaction existing berjalan Firebase transaction
+-> createPurchaseTransaction existing berjalan runtime lama transaction
 -> draft ditandai committed setelah sukses
 ```
 
@@ -220,13 +220,13 @@ Catatan: field ini adalah **kontrak konsep**, belum dibuat table pada batch ini.
 
 Sebelum draft menjadi purchase final, sistem harus:
 
-1. Re-fetch supplier dari Firebase dan pastikan supplier masih aktif/valid.
-2. Re-fetch product/raw material dari Firebase transaction snapshot.
+1. Re-fetch supplier dari runtime lama dan pastikan supplier masih aktif/valid.
+2. Re-fetch product/raw material dari runtime lama transaction snapshot.
 3. Revalidasi variant key/label dan stock source type.
 4. Rehitung conversion value, total stock in, total aktual, actual unit cost, saving metadata.
 5. Generate `PUR-*` hanya saat commit online, bukan saat draft dibuat.
 6. Menjalankan `createPurchaseTransaction()` existing atau service commit yang mempertahankan atomic write setara.
-7. Menandai draft committed hanya setelah transaction Firebase sukses.
+7. Menandai draft committed hanya setelah transaction runtime lama sukses.
 
 ## 5. Batch 36 — Sales Audit
 
@@ -235,12 +235,12 @@ Sebelum draft menjadi purchase final, sistem harus:
 ```text
 Sales.jsx
 -> load products/raw_materials for sellable items
--> load customer via salesCustomerReferenceService (Firebase-primary)
+-> load customer via salesCustomerReferenceService (runtime lama-primary)
 -> user isi form
 -> buildSaleLine dengan guard availableStock UI cache
--> validateSaleStockAvailability dari Firebase
+-> validateSaleStockAvailability dari runtime lama
 -> createSaleTransaction
-   -> Firestore runTransaction
+   -> database lama runTransaction
    -> reserve/generate ORD-DDMMYYYY-001
    -> revalidate stock item/variant dari transaction snapshot
    -> set sales/{ORD-*}
@@ -256,8 +256,8 @@ Sales.jsx
 
 | Area | Source of truth aktual | Catatan offline |
 |---|---|---|
-| Sales final | `sales/{ORD-*}` | Firebase-only sampai commit online dirancang |
-| Customer reference | `salesCustomerReferenceService` → `customersService` Firebase-primary | Customer local-only tidak boleh dipakai transaksi |
+| Sales final | `sales/{ORD-*}` | runtime lama-only sampai commit online dirancang |
+| Customer reference | `salesCustomerReferenceService` → `customersService` runtime lama-primary | Customer local-only tidak boleh dipakai transaksi |
 | Sellable item | `products` / `raw_materials` | Harus revalidate saat commit |
 | Stock keluar | master stock product/raw material via transaction | Tidak boleh offline mutation |
 | Stock audit | `inventory_logs` type `sale` | Wajib dibuat bersama sale final |
@@ -277,9 +277,9 @@ Sales.jsx
 | `items[].collectionName` | Ya | `products` atau `raw_materials` |
 | `items[].variantKey`, `variantLabel`, `stockSourceType` | Wajib jika bervarian | Mencegah stok keluar dari bucket salah |
 | `items[].unit` | Ya | Tampilan dan audit stok |
-| `salesChannel` | Ya | Channel transaksi; `Offline` di sini berarti channel toko, bukan Dexie mode |
+| `salesChannel` | Ya | Channel transaksi; `Offline` di sini berarti channel toko, bukan database browser lama mode |
 | `status` | Ya | `Diproses`, `Dikirim`, atau `Selesai` |
-| `customerId`, `customerName`, customer snapshot | Opsional/bersyarat | Harus dari Firebase-primary bila dipilih |
+| `customerId`, `customerName`, customer snapshot | Opsional/bersyarat | Harus dari runtime lama-primary bila dipilih |
 | `totalAmount` / nilai total penjualan | Ya | Dasar monitoring/income |
 | `referenceNumber` marketplace/resi | Opsional | Hanya untuk channel yang mendukung reference |
 | `note` | Opsional | Catatan transaksi |
@@ -302,7 +302,7 @@ Alasan:
 
 1. Sales final langsung mengurangi stock dan dapat membuat income final.
 2. Stock availability harus divalidasi dari data terbaru agar tidak oversell.
-3. Customer local-only belum boleh dipakai sebagai foreign reference transaksi Firebase.
+3. Customer local-only belum boleh dipakai sebagai foreign reference transaksi runtime lama.
 4. Status flow aktif punya efek finance saat masuk `Selesai`; retry sync bisa membuat income dobel bila tidak idempotent.
 5. Return adalah koreksi stock resmi; offline final/cancel sales bisa membuka jalur bypass Return.
 6. Dashboard dan report membaca sales/incomes terpisah; draft offline tidak boleh bercampur dengan angka final.
@@ -319,7 +319,7 @@ Yang tidak boleh:
 - Sales final offline.
 - Stock out offline.
 - Income offline final.
-- Menggunakan customer local-only untuk sales final Firebase.
+- Menggunakan customer local-only untuk sales final runtime lama.
 - Masuk Sales Report/Cash In/Profit Loss/Dashboard cash sebagai transaksi final.
 
 ## 6. Batch 37 — Sales Draft Offline Concept
@@ -336,12 +336,12 @@ User offline
 -> tidak masuk report final
 
 Saat online
--> re-fetch customer Firebase-primary jika customerId terisi
+-> re-fetch customer runtime lama-primary jika customerId terisi
 -> re-fetch product/raw material + variant terbaru
 -> revalidate availableStock terbaru
 -> user review perbedaan harga/stok/customer
 -> user klik Commit Sales
--> createSaleTransaction existing berjalan Firebase transaction
+-> createSaleTransaction existing berjalan runtime lama transaction
 -> draft ditandai committed setelah sukses
 ```
 
@@ -356,7 +356,7 @@ Catatan: field ini adalah **kontrak konsep**, belum dibuat table pada batch ini.
 | `draftStatus` | `local_draft`, `needs_review`, `ready_to_commit`, `committing`, `committed`, `failed`, `discarded` |
 | `createdAt`, `updatedAt`, `localUpdatedAt` | Audit lokal draft |
 | `createdBy`, `deviceId` | Trace lokal jika multi-device nanti aktif |
-| `customerId`, `customerNameSnapshot`, `customerSource` | `customerSource` harus `firebase_primary` jika dipakai untuk commit final |
+| `customerId`, `customerNameSnapshot`, `customerSource` | `customerSource` harus `legacy_primary` jika dipakai untuk commit final |
 | `salesChannel` | Channel transaksi; jangan disamakan dengan offline DB mode |
 | `requestedStatus` | `Diproses`/`Dikirim`/`Selesai` request user; final divalidasi saat commit |
 | `items[]` | Snapshot line item draft |
@@ -374,14 +374,14 @@ Catatan: field ini adalah **kontrak konsep**, belum dibuat table pada batch ini.
 
 Sebelum draft menjadi sales final, sistem harus:
 
-1. Re-fetch customer dari Firebase-primary jika customer dipilih.
-2. Menolak customer dengan `customerSource !== firebase_primary` untuk commit final.
-3. Re-fetch product/raw material dan variant dari Firebase transaction snapshot.
+1. Re-fetch customer dari runtime lama-primary jika customer dipilih.
+2. Menolak customer dengan `customerSource !== legacy_primary` untuk commit final.
+3. Re-fetch product/raw material dan variant dari runtime lama transaction snapshot.
 4. Revalidasi stock availability untuk semua line.
 5. Rehitung total sale value dari payload final.
 6. Generate `ORD-*` hanya saat commit online.
 7. Menjalankan `createSaleTransaction()` existing atau service commit yang menjaga atomic write setara.
-8. Menandai draft committed hanya setelah transaction Firebase sukses.
+8. Menandai draft committed hanya setelah transaction runtime lama sukses.
 
 ## 7. Risiko double mutation dan guard idempotency
 
@@ -392,7 +392,7 @@ Risiko utama bila Purchases/Sales final dipaksa offline:
 | Retry purchase commit tanpa idempotency | Stock masuk dobel, expense dobel, inventory log dobel |
 | Retry sales commit tanpa idempotency | Stock keluar dobel, income dobel, inventory log dobel |
 | Draft memakai ID final terlalu awal | Bentrok sequence/kode bisnis saat online |
-| Customer/supplier local-only dipakai transaksi | Foreign reference Firebase putus |
+| Customer/supplier local-only dipakai transaksi | Foreign reference runtime lama putus |
 | Variant berubah saat offline | Stock masuk/keluar ke bucket salah |
 | Report membaca draft | Omzet, cash, HPP, dan stock report salah |
 | Auto conflict resolver untuk transaksi | Data final bisa overwrite tanpa audit manual |
@@ -400,7 +400,7 @@ Risiko utama bila Purchases/Sales final dipaksa offline:
 Guard wajib sebelum runtime draft diimplementasikan:
 
 - Draft lokal harus punya namespace/table terpisah dari collection final.
-- Draft tidak boleh masuk `sync_queue` final otomatis.
+- Draft tidak boleh masuk `legacy_sync_queue` final otomatis.
 - Commit harus user-reviewed dan online-only.
 - Commit harus punya idempotency key bila nanti dibuat queue commit.
 - Untuk V1, lebih aman draft tidak auto-sync; user klik commit satu per satu.
@@ -415,17 +415,17 @@ Guard wajib sebelum runtime draft diimplementasikan:
 - Batch 36 Sales Audit: **selesai sebagai audit/contract**.
 - Batch 37 Sales Draft Offline Concept: **selesai sebagai konsep guarded**.
 - Tidak ada runtime migration.
-- Tidak ada schema IndexedDB/Firestore baru.
+- Tidak ada schema storage browser lama/database lama baru.
 - Tidak ada route/menu/role guard baru.
 - Tidak ada mutasi stock/finance/report offline.
-- Keputusan awal tetap: **Purchases/Sales final mutation tetap Firebase-only**.
+- Keputusan awal tetap: **Purchases/Sales final mutation tetap runtime lama-only**.
 
 ## 9. Gate sebelum implementasi draft runtime berikutnya
 
 Sebelum batch runtime draft dibuat, wajib ada approval terpisah untuk:
 
 1. Nama table lokal draft, misalnya `purchase_drafts` dan `sales_drafts`.
-2. Upgrade Dexie schema version dan backup/restore scope baru.
+2. Upgrade database browser lama schema version dan backup/restore scope baru.
 3. UI lokasi draft review: apakah di Offline Database Center atau page transaksi masing-masing.
 4. Permission/role guard draft bila nanti user non-admin boleh memakai.
 5. Commit service design: direct commit from draft vs queue manual commit.
@@ -441,7 +441,7 @@ Sebelum batch runtime draft dibuat, wajib ada approval terpisah untuk:
 - [ ] Cash ledger tetap membaca `expenses` untuk pembelian, bukan `purchases` mentah.
 - [ ] Buat Sales `Diproses`; pastikan stock keluar dan income belum masuk jika status belum `Selesai` sesuai rule service aktual.
 - [ ] Ubah Sales `Diproses -> Dikirim -> Selesai`; pastikan income dibuat satu kali.
-- [ ] Sales customer dropdown tetap Firebase-primary; customer local-only tidak muncul/dipakai transaksi.
+- [ ] Sales customer dropdown tetap runtime lama-primary; customer local-only tidak muncul/dipakai transaksi.
 - [ ] Return tetap jalur resmi stock correction, bukan cancel Sales.
 - [ ] `LOCAL_SYNC_COLLECTIONS` tetap hanya pilot master data; tidak ada `purchases`, `sales`, `inventory_logs`, `expenses`, atau `incomes`.
 - [ ] Offline Database Center tidak menawarkan push/pull transaksi final.

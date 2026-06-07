@@ -71,13 +71,13 @@ Dipakai oleh:
 - Stock Management, laporan, production pages, dan helper opsi referensi.
 
 Alasan perubahan:
-- Firestore document ID tetap dipakai sebagai relasi internal, tetapi user tidak perlu melihat ID random jika ada kode bisnis.
+- ID teknis database tetap dipakai sebagai relasi internal, tetapi user tidak perlu melihat ID random jika ada kode bisnis.
 
 Catatan cleanup:
 - Setelah data test dibuat ulang dan seluruh transaksi baru punya kode manusiawi, fallback ID teknis bisa makin disembunyikan.
 
 Risiko:
-- Hasil resolver ini hanya untuk display/search/export. Jangan dipakai sebagai ID relasi/write Firestore.
+- Hasil resolver ini hanya untuk display/search/export. Jangan dipakai sebagai ID relasi/write database.
 =====================================================
 */
 export const resolveDisplayReference = (record = {}, options = {}) => {

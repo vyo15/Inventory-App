@@ -88,7 +88,7 @@ import {
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const SemiFinishedMaterials = () => {
   const [loading, setLoading] = useState(false);
@@ -251,7 +251,7 @@ const SemiFinishedMaterials = () => {
   - Mengelompokkan list Semi Product secara read-only berdasarkan Product Family / Jenis Bunga lalu kategori.
 
   Dipakai oleh:
-  - Halaman SemiFinishedMaterials untuk mode tampilan grouped tanpa mengubah service, payload, stok, atau schema Firestore.
+  - Halaman SemiFinishedMaterials untuk mode tampilan grouped tanpa mengubah service, payload, stok, atau schema/database runtime.
 
   Alasan perubahan:
   - Daftar semi product global tetap reusable, tetapi user tidak lagi membaca satu daftar campur panjang saat data bertambah.

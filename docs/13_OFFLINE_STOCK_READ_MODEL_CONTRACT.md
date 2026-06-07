@@ -1,11 +1,11 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline Dexie/IndexedDB. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime Dexie/IndexedDB, sync_queue, conflict resolver, atau backup JSON IndexedDB dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, legacy_sync_queue, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # OFFLINE STOCK READ MODEL CONTRACT — BATCH 31–33
 
-Status: **AKTIF SEBAGAI AUDIT + KONTRAK / READ-ONLY SNAPSHOT ONLY / MUTATION TETAP FIREBASE-ONLY**
+Status: **ARSIP HISTORIS / SUPERSEDED BY SQLITE RUNTIME / JANGAN DIPAKAI SEBAGAI INSTRUKSI AKTIF**.
 
 Tujuan batch:
 1. Mengaudit arsitektur stok sebagai read model, bukan mutation offline.
@@ -32,33 +32,33 @@ File source yang benar-benar dicek:
 - `src/services/Dashboard/dashboardService.js`
 - `src/services/Laporan/stockReportService.js`
 - `src/data/local/localDbSchema.js`
-- `src/data/sync/firebaseToLocalMasterDataSyncService.js`
+- `src/data/sync/runtime-lamaToLocalMasterDataSyncService.js`
 - `src/pages/Utilities/components/OfflineDatabaseCenter.jsx`
 - `docs/10_OFFLINE_DATABASE_CONTRACT.md`
 - `docs/12_OFFLINE_PRODUCTS_RAW_SEMI_CONTRACT.md`
 - `docs/08_INTEGRATION_MAP.md`
 
 File/area relevan yang tidak ditemukan sebagai komponen terpisah:
-- Tidak ditemukan `src/data/adapters/dexie/dexieStockAdapter.js` atau repository stock offline yang aktif.
+- Tidak ditemukan `src/data/adapters/database-browser-lama/database-browser-lamaStockAdapter.js` atau repository stock offline yang aktif.
 - Tidak ditemukan local stock mutation service/offline stock queue khusus; ini memang harus tetap tidak ada untuk batch ini.
-- Firestore Rules/index runtime di Firebase Console tidak bisa divalidasi dari ZIP selain file repo `firestore.rules` dan `firestore.indexes.json`.
+- rules database lama/index runtime di runtime lama Console tidak bisa divalidasi dari ZIP selain file repo `legacy-db.rules` dan `legacy-db.indexes.json`.
 
 Batasan validasi:
-- Audit ini static source review dari ZIP, bukan dump data Firestore production.
-- Tidak mengubah Firestore schema/collection/rules.
+- Audit ini static source review dari ZIP, bukan dump data database lama production.
+- Tidak mengubah schema database lama/collection/rules.
 - Tidak mengaktifkan stock mutation offline.
 
 ## 2. Source of truth stok
 
 | Lapisan | Status | Fungsi | Keputusan |
 |---|---|---|---|
-| `products`, `raw_materials`, `semi_finished_materials` | Source dokumen stok operasional | Menyimpan `stock/currentStock/reservedStock/availableStock`, variant stock, cost/HPP tertentu | Tetap Firebase-only untuk mutation |
-| `inventory_logs` | Histori mutasi stok | Audit movement: purchase in, sales out, return in, production material out/output in, adjustment | Tetap Firebase-only; wajib ada untuk mutation |
-| `stock_adjustments` | Dokumen koreksi stok | Koreksi manual guarded | Tetap Firebase-only; tidak boleh offline |
+| `products`, `raw_materials`, `semi_finished_materials` | Source dokumen stok operasional | Menyimpan `stock/currentStock/reservedStock/availableStock`, variant stock, cost/HPP tertentu | Tetap runtime lama-only untuk mutation |
+| `inventory_logs` | Histori mutasi stok | Audit movement: purchase in, sales out, return in, production material out/output in, adjustment | Tetap runtime lama-only; wajib ada untuk mutation |
+| `stock_adjustments` | Dokumen koreksi stok | Koreksi manual guarded | Tetap runtime lama-only; tidak boleh offline |
 | `stock_item_read_models` | Read model/cache | Dashboard/Stock Report cepat dan konsisten | Boleh dipull local read-only sebagai `stock_snapshots` |
-| `stock_snapshots` local Dexie | Snapshot baca | Melihat stok terakhir saat offline | Tidak boleh edit, adjustment, transaksi, atau push |
+| `stock_snapshots` local database browser lama | Snapshot baca | Melihat stok terakhir saat offline | Tidak boleh edit, adjustment, transaksi, atau push |
 
-Keputusan awal/final batch ini: **stock mutation tetap Firebase-only**. Offline hanya boleh membaca snapshot terakhir.
+Keputusan awal/final batch ini: **stock mutation tetap runtime lama-only**. Offline hanya boleh membaca snapshot terakhir.
 
 ## 3. Stock integration map aktual
 
@@ -87,8 +87,8 @@ Field minimum yang harus dijaga pada source stok dan read model:
 | `sourceId` | ID dokumen source | Wajib, tetapi bukan primary key local snapshot tunggal |
 | `readModelId` / local `id` | Document ID `stock_item_read_models` | Primary key local snapshot |
 | `name`, `code`, `displayReference` | Identitas bisnis | Untuk UI/audit, jangan tampilkan technical ID sebagai label utama |
-| `currentStock` | Stok fisik/current | Mutation hanya online/Firebase |
-| `reservedStock` | Stok tertahan/reserved | Mutation hanya online/Firebase |
+| `currentStock` | Stok fisik/current | Mutation hanya online/runtime lama |
+| `reservedStock` | Stok tertahan/reserved | Mutation hanya online/runtime lama |
 | `availableStock` | Stok tersedia | Harus konsisten dengan current - reserved |
 | `stock` | Legacy alias/master stock | Jangan dihapus tanpa audit legacy |
 | `minStock` | Minimum stok | Dipakai status stock issue |
@@ -97,9 +97,9 @@ Field minimum yang harus dijaga pada source stok dan read model:
 | `inventory_logs.*` | Histori mutasi | Wajib ada untuk semua mutation stock |
 | `stock_adjustments.*` | Koreksi manual | Guarded, tidak boleh offline |
 
-Local `stock_snapshots` menyalin read model Firebase apa adanya dan menambah metadata pull:
+Local `stock_snapshots` menyalin read model runtime lama apa adanya dan menambah metadata pull:
 - `syncStatus = synced`
-- `source = firebase_pull`
+- `source = runtime-lama_pull`
 - `lastSyncedAt`
 - `remoteUpdatedAt`
 - `localUpdatedAt`
@@ -143,20 +143,20 @@ Tidak boleh dijalankan offline sampai ada approval kontrak mutation, idempotency
 
 ### Boleh offline
 
-- Pull `stock_item_read_models` Firebase ke local `stock_snapshots`.
+- Pull `stock_item_read_models` runtime lama ke local `stock_snapshots`.
 - Preview `stock_snapshots` di Offline Database Center.
-- Export/import local backup yang mencakup snapshot, hanya sebagai backup local IndexedDB.
+- Export/import local backup yang mencakup snapshot, hanya sebagai backup local storage browser lama.
 
 ### Tidak boleh offline
 
 - Membuat/mengubah/menghapus stok dari local.
-- Menulis `sync_queue` untuk stock.
-- Push `stock_snapshots` ke Firebase.
+- Menulis `legacy_sync_queue` untuk stock.
+- Push `stock_snapshots` ke runtime lama.
 - Menjalankan adjustment/transaksi/produksi dari snapshot local.
 
 ### Audit log wajib
 
-- Pull snapshot menulis audit local `module = local_db_sync`, `action = firebase_to_local_pull`, dan `metadata.scope = stock_read_only_snapshot`.
+- Pull snapshot menulis audit local `module = local_db_sync`, `action = runtime-lama_to_local_pull`, dan `metadata.scope = stock_read_only_snapshot`.
 - Mutation stock online tetap wajib punya `inventory_logs` dan dokumen transaksi/koreksi terkait.
 
 ### Idempotency
@@ -183,23 +183,23 @@ Rollback stok tidak boleh menghitung dari snapshot. Rollback harus:
 
 - Conflict stock tidak boleh auto overwrite.
 - Jika dua perubahan menyentuh item/variant sama, harus manual review.
-- Local snapshot yang lebih lama tidak boleh menimpa Firebase.
+- Local snapshot yang lebih lama tidak boleh menimpa runtime lama.
 - Resolve harus mempertahankan `inventory_logs` sebagai histori, bukan hanya angka akhir.
 
 ### Double mutation prevention
 
 - `stock_snapshots` tidak masuk `LOCAL_SYNC_COLLECTIONS`.
 - UI Offline Database Center hanya menampilkan snapshot sebagai read-only.
-- Tidak ada Dexie stock mutation adapter.
-- Tidak ada Offline → Firebase untuk stock.
-- Semua stock mutation tetap melalui Firebase transaction/service aktif.
+- Tidak ada database browser lama stock mutation adapter.
+- Tidak ada Offline → runtime lama untuk stock.
+- Semua stock mutation tetap melalui runtime lama transaction/service aktif.
 
 ## 8. Patch Batch 32 yang diizinkan
 
 Patch aman batch ini hanya:
-- Menambah Dexie table `stock_snapshots` di Dexie schema v4.
-- Menambah Firebase adapter read-only untuk `stock_item_read_models`.
-- Menambah opsi pull Firebase → Offline untuk Stock Snapshot read-only.
+- Menambah database browser lama table `stock_snapshots` di database browser lama schema v4.
+- Menambah runtime lama adapter read-only untuk `stock_item_read_models`.
+- Menambah opsi pull runtime lama → Offline untuk Stock Snapshot read-only.
 - Menampilkan preview local snapshot read-only di Offline Database Center.
 - Menulis kontrak docs ini dan update kontrak offline utama.
 
@@ -209,7 +209,7 @@ Patch ini sengaja tidak mengubah:
 - `stock_adjustments` writer.
 - Purchase/sales/returns/production/payroll/HPP runtime.
 - Route/menu/role guard.
-- Firestore rules/index.
+- database lama rules/index.
 
 ## Update C5 SQLite Stock Read Model Foundation
 

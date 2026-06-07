@@ -370,7 +370,7 @@ const Purchases = () => {
   // =========================
   // SECTION: Sinkron data utama pembelian
   // AKTIF + GUARDED:
-  // - listener Firestore read-only dipusatkan di purchasesService agar page tetap fokus ke UI/form;
+  // - data read-only dipusatkan di purchasesService agar page tetap fokus ke UI/form;
   // - tidak mengubah create purchase transaction, stock in, average cost, expense, OCR, atau inventory log.
   // =========================
   useEffect(() => {
@@ -1099,7 +1099,7 @@ const Purchases = () => {
   // SECTION: Submit pembelian atomik + sinkron ke stok + sinkron ke pengeluaran
   // Fungsi blok:
   // - memvalidasi seluruh input penting sebelum write pertama;
-  // - menyimpan purchase, mutasi stok, inventory log, dan expense dalam 1 Firestore transaction;
+  // - menyimpan purchase, mutasi stok, inventory log, dan expense dalam 1 backend SQLite transaction;
   // - memakai reference deterministic untuk expense agar purchase yang sama tidak membuat cash out dobel.
   // Hubungan flow aplikasi:
   // - Supplier tetap hanya katalog/prefill; perubahan stok/kas/laporan baru terjadi setelah user klik Simpan;

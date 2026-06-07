@@ -3,7 +3,7 @@
 //
 // Behavior-preserving extraction dari productionWorkLogsService.js.
 // Helper di file ini murni resolver/normalizer lokal service dan tidak boleh
-// melakukan Firestore write, route/menu change, schema change, atau stock mutation.
+// melakukan database write, route/menu change, schema change, atau stock mutation.
 // =====================================================
 
 import { calculatePayrollAmounts } from "../../../constants/productionPayrollOptions";
@@ -36,7 +36,7 @@ export const PRODUCTION_STEPS_COLLECTION_NAME = "production_steps";
 // SECTION: Work Log payload normalizer — GUARDED / behavior-preserving extraction
 // Fungsi:
 // - menormalisasi material usage, output, monitoring, cost summary, dan audit field payload Work Log;
-// - tidak melakukan Firestore write, route/menu change, schema change, atau stock mutation.
+// - tidak melakukan database write, route/menu change, schema change, atau stock mutation.
 // Catatan teknis:
 // - serverTimestamp hanya dipakai sebagai value payload agar behavior sama dengan service lama.
 // =====================================================
@@ -668,7 +668,7 @@ export const buildWorkLogCostSummary = ({ materialUsages = [], laborCostActual =
 /* =====================================================
 SECTION: Work Log draft template builders — GUARDED / behavior-preserving extraction
 Fungsi:
-- Membentuk template Work Log dari BOM atau Production Order tanpa Firestore write;
+- Membentuk template Work Log dari BOM atau Production Order tanpa database write;
 - lifecycle aktif tetap diatur service/caller.
 Risiko:
 - Jangan mengisi status Draft aktif dari helper ini karena flow final Work Log adalah In Progress/Completed/Cancelled.
@@ -890,7 +890,7 @@ export const buildWorkLogDraftFromProductionOrderData = (
 // =====================================================
 // Output HPP reconcile pure helpers — GUARDED
 // Phase 3 extraction: hanya menghitung payload/cost state.
-// Firestore transaction, stock posting, inventory log, dan payroll sync tetap di service utama.
+// Backend transaction, stock posting, inventory log, dan payroll sync tetap di service utama.
 // =====================================================
 
 export const COST_RECONCILE_TOLERANCE = 0.0001;

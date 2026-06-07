@@ -26,7 +26,7 @@ const { Text, Title } = Typography;
 // Fungsi:
 // - menerjemahkan status profile auth menjadi pesan yang mudah dipahami user.
 // Hubungan flow aplikasi:
-// - dipakai ketika user valid Firebase Auth tetapi belum boleh masuk karena profile/role/status belum valid.
+// - dipakai ketika user valid local auth SQLite tetapi belum boleh masuk karena profile/role/status belum valid.
 // Alasan logic dipakai:
 // - menjaga user yang profile internalnya belum valid tetap tertahan di halaman login.
 // Status logic:
@@ -73,7 +73,7 @@ const getBlockedAccessMessage = (profileStatus) => {
 // Fungsi:
 // - memasang title tab dan favicon Flanel pada halaman login.
 // Hubungan flow aplikasi:
-// - hanya menyentuh metadata browser saat Login dirender; tidak menyentuh AuthContext, route guard, role, atau Firestore.
+// - hanya menyentuh metadata browser saat Login dirender; tidak menyentuh AuthContext, route guard, role, atau database runtime.
 // Alasan logic dipakai:
 // - memenuhi kebutuhan logo tab tanpa mengubah index.html atau dependency baru.
 // Status logic:
@@ -125,7 +125,7 @@ const useLoginBrowserBranding = () => {
 // Fungsi:
 // - menampilkan logo resmi Flanel Karawang Industries sebagai focal point utama panel kiri.
 // Hubungan flow aplikasi:
-// - visual non-interaktif; tidak terhubung ke auth, Firestore, role, route, stok, kas, atau modul bisnis.
+// - visual non-interaktif; tidak terhubung ke auth, database runtime, role, route, stok, kas, atau modul bisnis.
 // Alasan logic dipakai:
 // - menjaga brand tampil clean tanpa membuat teks brand dobel di luar asset logo.
 // Status logic:
@@ -156,7 +156,7 @@ const BrandLogoShowcase = () => (
 // Fungsi:
 // - menambah pemanis pill/dot biru-kuning yang ditempatkan di pinggir panel brand.
 // Hubungan flow aplikasi:
-// - dekorasi murni; tidak menyentuh input, submit, Firebase Auth, role, route, atau data bisnis.
+// - dekorasi murni; tidak menyentuh input, submit, local auth SQLite, role, route, atau data bisnis.
 // Alasan logic dipakai:
 // - membuat halaman tidak terlalu polos tanpa memakai garis keras/shape besar yang terlihat seperti bug.
 // Status logic:
@@ -184,7 +184,7 @@ const BrandMotif = () => (
 // Fungsi:
 // - menampilkan badge IMS, logo resmi, motif ringan, dan note internal dalam area kiri.
 // Hubungan flow aplikasi:
-// - mendampingi form login tanpa mengubah input, submit, Firebase Auth, profile validation, role, atau route.
+// - mendampingi form login tanpa mengubah input, submit, local auth SQLite, profile validation, role, atau route.
 // Alasan logic dipakai:
 // - desain final menekankan logo sebagai focal point dan menghapus headline/deskripsi lama agar lebih clean.
 // Status logic:
@@ -231,8 +231,8 @@ const LoginShell = ({ children, variant = "default" }) => (
 // Fungsi:
 // - halaman login internal IMS memakai Username + Password.
 // Hubungan flow aplikasi:
-// - username dikonversi menjadi email internal Firebase Auth di AuthProvider;
-// - password tetap divalidasi Firebase Auth, bukan Firestore/frontend manual.
+// - username dikirim ke AuthProvider untuk login lokal SQLite;
+// - password tetap divalidasi backend local auth SQLite, bukan frontend manual.
 // Alasan logic dipakai:
 // - frontend hanya mengirim credential ke flow auth existing, bukan membuat auth baru.
 // Status logic:
@@ -245,7 +245,7 @@ const Login = () => {
   const {
     authLoading,
     authMode,
-    firebaseUser,
+    authSessionUser,
     loginWithUsername,
     logout,
     profileStatus,
@@ -301,7 +301,7 @@ const Login = () => {
   // Fungsi:
   // - meneruskan username dan password ke AuthProvider tanpa mengubah format input.
   // Hubungan flow aplikasi:
-  // - AuthProvider tetap bertanggung jawab mengubah username menjadi email internal Firebase Auth.
+  // - AuthProvider tetap bertanggung jawab menjalankan login lokal SQLite.
   // Alasan logic dipakai:
   // - menjaga flow login existing tetap menjadi satu-satunya entry submit credential.
   // Status logic:
@@ -348,7 +348,7 @@ const Login = () => {
   // =========================
   // SECTION: Logout Blocked User — AKTIF / GUARDED
   // Fungsi:
-  // - mengeluarkan akun Firebase Auth yang valid tetapi profile internalnya belum boleh masuk.
+  // - mengeluarkan session lokal yang valid tetapi profile internalnya belum boleh masuk.
   // Hubungan flow aplikasi:
   // - menjaga user blocked tidak tersangkut di state login dan tidak masuk AppLayout.
   // Alasan logic dipakai:
@@ -364,7 +364,7 @@ const Login = () => {
   // =====================================================
   // SECTION: Login Auth/Profile Loading — AKTIF / GUARDED
   // Fungsi:
-  // - Menampilkan loading saat Firebase Auth atau profile internal user sedang diverifikasi.
+  // - Menampilkan loading saat session lokal SQLite atau profile internal user sedang diverifikasi.
   //
   // Dipakai oleh:
   // - Login sebelum form, blocked access, atau redirect AppContent ditentukan oleh state auth existing.
@@ -382,7 +382,7 @@ const Login = () => {
     return <LogoLoadingScreen message="Memeriksa session dan profile user..." />;
   }
 
-  if (firebaseUser && blockedAccessMessage) {
+  if (authSessionUser && blockedAccessMessage) {
     return (
       <LoginShell variant="blocked">
         <Card className="ims-login-card ims-login-card--blocked">

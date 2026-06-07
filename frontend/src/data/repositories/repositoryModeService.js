@@ -17,8 +17,6 @@ export const getRepositoryModuleMode = (envKey, fallbackMode = "sqlite") =>
   String(import.meta.env?.[envKey] || fallbackMode || "").trim().toLowerCase();
 
 export const SQLITE_REPOSITORY_CONFIRMATION = "ENABLE SQLITE LOCAL MODE";
-export const FIREBASE_REPOSITORY_CONFIRMATION = "FIREBASE RUNTIME DISABLED";
-
 const safeGetLocalStorage = () => {
   if (typeof window === "undefined") return null;
   return window.localStorage;
@@ -46,7 +44,6 @@ export const getRepositoryModeStatus = async () => {
 
   return {
     mode,
-    isFirebasePrimary: false,
     isOfflineLocal: mode === REPOSITORY_MODES.SQLITE_SIDECAR,
     isSqliteSidecar: mode === REPOSITORY_MODES.SQLITE_SIDECAR,
     isHybridSync: false,
@@ -74,10 +71,6 @@ export const setRepositoryModeForDevelopment = async (
     reason,
     updatedAt: new Date().toISOString(),
   };
-};
-
-export const resetRepositoryModeToFirebasePrimary = async () => {
-  throw new Error("Mode Firebase runtime sudah dinonaktifkan. Gunakan SQLite backend lokal.");
 };
 
 export const resetRepositoryModeToSqliteLocal = async () => {

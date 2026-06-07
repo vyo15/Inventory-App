@@ -3,7 +3,7 @@
    Fungsi blok:
    - reset dasar agar sizing seluruh aplikasi konsisten.
    Hubungan blok dengan flow aplikasi:
-   - styling global saja; tidak menyentuh auth, router, roleAccess, service, stok, kas, produksi, payroll, HPP, laporan, atau schema Firestore.
+   - styling global saja; tidak menyentuh auth, router, roleAccess, service, stok, kas, produksi, payroll, HPP, laporan, atau schema/database runtime.
    Alasan logic dipakai:
    - box sizing dan root sizing global menjadi pondasi layout sebelum AppLayout dan Ant Design dirender.
    Status logic:

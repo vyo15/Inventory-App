@@ -136,7 +136,7 @@
    Fungsi:
    - menempatkan logo sebagai focal point dengan pemanis pill/dot biru-kuning di pinggir.
    Hubungan flow aplikasi:
-   - dekorasi murni; tidak menyentuh input, submit, Firebase Auth, role, route, atau data bisnis.
+   - dekorasi murni; tidak menyentuh input, submit, local auth SQLite, role, route, atau data bisnis.
    Alasan logic dipakai:
    - menghindari garis/shape besar yang terlihat seperti bug dan menjaga logo tidak tertimpa hiasan.
    Status logic:
@@ -273,7 +273,7 @@
    Fungsi:
    - menampilkan logo resmi Flanel Karawang Industries besar, bersih, dan sedikit turun dari center.
    Hubungan flow aplikasi:
-   - visual non-interaktif; tidak terhubung ke auth, route, role, Firestore, stok, kas, atau modul bisnis.
+   - visual non-interaktif; tidak terhubung ke auth, route, role, database runtime, stok, kas, atau modul bisnis.
    Alasan logic dipakai:
    - logo menjadi focal point utama, sementara motif tetap berada di pinggir.
    Status logic:
@@ -354,7 +354,7 @@
    Hubungan flow aplikasi:
    - form di dalamnya tetap memanggil handleLogin existing di Login.jsx.
    Alasan logic dipakai:
-   - memperbaiki presentasi login tanpa mengubah validasi, submit, AuthContext, Firebase Auth, atau profile gate.
+   - memperbaiki presentasi login tanpa mengubah validasi, submit, AuthContext, local auth SQLite, atau profile gate.
    Status logic:
    - AKTIF untuk semua state login.
    - GUARDED: jangan ubah validation/auth logic dari CSS refinement.
@@ -435,7 +435,7 @@
    Fungsi:
    - menjaga jarak heading, error, input, dan tombol tetap nyaman.
    Hubungan flow aplikasi:
-   - presentational only; tidak mengubah handleLogin, validation, AuthContext, Firebase Auth, atau profile gate.
+   - presentational only; tidak mengubah handleLogin, validation, AuthContext, local auth SQLite, atau profile gate.
    Alasan logic dipakai:
    - membuat form kanan lebih readable dan konsisten dengan visual modern.
    Status logic:

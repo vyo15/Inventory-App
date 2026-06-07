@@ -1,7 +1,7 @@
 /* =====================================================
 SECTION: Variant Archive/Restore Helpers — GUARDED
 Fungsi:
-- Menormalisasi lifecycle archive, restore, duplicate guard, dan audit history varian tanpa menulis Firestore langsung.
+- Menormalisasi lifecycle archive, restore, duplicate guard, dan audit history varian tanpa menulis database langsung.
 
 Dipakai oleh:
 - productsService, rawMaterialsService, semiFinishedMaterialsService, dan UI guard Product/Raw/Semi.

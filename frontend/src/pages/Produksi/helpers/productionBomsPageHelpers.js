@@ -29,7 +29,7 @@ export const EMPTY_REFERENCE_DATA = {
   productionSteps: [],
 };
 
-// IMS NOTE [AKTIF/GUARDED]: Refresh live BOM cost snapshot untuk list/detail/edit tanpa menulis balik ke Firestore.
+// IMS NOTE [AKTIF/GUARDED]: Refresh live BOM cost snapshot untuk list/detail/edit tanpa menulis balik ke database.
 export const hydrateBomRecordWithLiveCosts = (record = {}, refs = EMPTY_REFERENCE_DATA) => {
   const materialLines = hydrateBomMaterialLinesWithLiveCost({
     materialLines: record.materialLines || [],

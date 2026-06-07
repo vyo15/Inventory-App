@@ -8,7 +8,7 @@ const toDate = (value) => {
 
 export const normalizeReportDateValue = (value) => toDate(value);
 export const toReportDate = (value) => toDate(value);
-export const toFirestoreTimestampRange = ({ startDate, endDateExclusive } = {}) => ({
+export const toReportTimestampRange = ({ startDate, endDateExclusive } = {}) => ({
   startTimestamp: toDate(startDate),
   endTimestamp: toDate(endDateExclusive),
 });

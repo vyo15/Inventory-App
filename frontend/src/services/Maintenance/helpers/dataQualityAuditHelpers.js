@@ -2,7 +2,7 @@
 // Data Quality Audit Helpers — GUARDED / READ-ONLY
 //
 // Helper ini hanya berisi normalizer, reference detector, accumulator,
-// dan formatter sample yang pure. Jangan menaruh Firestore read/write,
+// dan formatter sample yang pure. Jangan menaruh database read/write,
 // repair mutation, reset destructive, atau business side-effect di file ini.
 // =====================================================
 
@@ -40,7 +40,7 @@ export const KNOWN_BUSINESS_PREFIXES = [
 =====================================================
 SECTION: Helper audit data lama — LEGACY-COMPAT
 Fungsi:
-- Membaca collection lama secara read-only, mengenali kode bisnis manusiawi, dan membedakan reference teknis Firestore ID random dari reference operasional.
+- Membaca collection lama secara read-only, mengenali kode bisnis manusiawi, dan membedakan reference teknis legacy random ID dari reference operasional.
 
 Dipakai oleh:
 - getDataQualityAudit di dataQualityAuditService.js dan section Data Quality Audit di ResetMaintenanceData.jsx.
@@ -91,7 +91,7 @@ export const hasPrefix = (data = {}, prefixes = [], fields = []) => {
   });
 };
 
-export const looksLikeFirestoreId = (value) => {
+export const looksLikeTechnicalId = (value) => {
   const ref = safeTrim(value);
   if (!ref || hasKnownBusinessPrefix(ref)) return false;
   if (ref.includes("-") || ref.includes("/")) return false;
@@ -102,7 +102,7 @@ export const isHumanReference = (value) => {
   const ref = safeTrim(value);
   if (!ref) return false;
   if (hasKnownBusinessPrefix(ref)) return true;
-  if (looksLikeFirestoreId(ref)) return false;
+  if (looksLikeTechnicalId(ref)) return false;
   return /[A-Za-z]/.test(ref) && /[-_/\s]/.test(ref) && ref.length >= 4;
 };
 

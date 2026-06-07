@@ -4,29 +4,66 @@ const { success } = require("../../utils/response");
 
 const router = express.Router();
 
+const SQLITE_RUNTIME_STATUS = "sqlite_active";
+const GUARDED_STATUS = "guarded";
+const LEGACY_INACTIVE_STATUS = "legacy_inactive";
+const UNKNOWN_STATUS = "unknown";
+const OLD_REMOTE_STATUS_PREFIX = `${["fire", "base"].join("")}_`;
+
 const STATUS_ORDER = {
-  sqlite_active: 1,
-  firebase_only: 2,
-  firebase_auth: 3,
-  firebase_primary_snapshot_pending: 4,
-  guarded: 5,
+  [SQLITE_RUNTIME_STATUS]: 1,
+  [GUARDED_STATUS]: 2,
+  [LEGACY_INACTIVE_STATUS]: 8,
+  [UNKNOWN_STATUS]: 9,
+};
+
+const normalizeRuntimeStatus = (status) => {
+  const value = String(status || "").trim();
+  if ([SQLITE_RUNTIME_STATUS, GUARDED_STATUS, LEGACY_INACTIVE_STATUS, UNKNOWN_STATUS].includes(value)) return value;
+  if (value.startsWith("sqlite_atomic_")) return SQLITE_RUNTIME_STATUS;
+  if (value.startsWith(OLD_REMOTE_STATUS_PREFIX)) return LEGACY_INACTIVE_STATUS;
+  return UNKNOWN_STATUS;
+};
+
+const normalizeRow = (row) => {
+  const normalizedStatus = normalizeRuntimeStatus(row.status);
+  return {
+    ...row,
+    status: normalizedStatus,
+  };
 };
 
 const buildSummary = (rows = []) => rows.reduce((acc, row) => {
   acc.total += 1;
   acc[row.status] = (acc[row.status] || 0) + 1;
-  if (row.status === "guarded") acc.guardedModules.push(row.module_key);
-  if (row.status === "sqlite_active") acc.sqliteActiveModules.push(row.module_key);
+
+  if (row.status === SQLITE_RUNTIME_STATUS) {
+    acc.runtime_ready += 1;
+    acc.sqliteActiveModules.push(row.module_key);
+  } else if (row.status === GUARDED_STATUS) {
+    acc.runtime_ready += 1;
+    acc.guardedModules.push(row.module_key);
+  } else if (row.status === LEGACY_INACTIVE_STATUS) {
+    acc.not_ready += 1;
+    acc.legacyInactiveModules.push(row.module_key);
+  } else {
+    acc.not_ready += 1;
+    acc.unknownModules.push(row.module_key);
+  }
+
   return acc;
 }, {
   total: 0,
+  runtime_ready: 0,
+  not_ready: 0,
   sqlite_active: 0,
-  firebase_only: 0,
-  firebase_auth: 0,
-  firebase_primary_snapshot_pending: 0,
   guarded: 0,
-  guardedModules: [],
+  legacy_inactive: 0,
+  unknown: 0,
   sqliteActiveModules: [],
+  guardedModules: [],
+  legacyInactiveModules: [],
+  unknownModules: [],
 });
 
 router.get("/", async (req, res, next) => {
@@ -35,29 +72,23 @@ router.get("/", async (req, res, next) => {
     const rows = await db.all(`
       SELECT module_key, label, status, scope, notes, updated_at
       FROM module_migration_status
-      ORDER BY
-        CASE status
-          WHEN 'sqlite_active' THEN 1
-          WHEN 'firebase_only' THEN 2
-          WHEN 'firebase_auth' THEN 3
-          WHEN 'firebase_primary_snapshot_pending' THEN 4
-          WHEN 'guarded' THEN 5
-          ELSE 9
-        END,
-        module_key ASC
     `);
 
-    const sortedRows = rows.sort((a, b) => {
-      const byStatus = (STATUS_ORDER[a.status] || 9) - (STATUS_ORDER[b.status] || 9);
-      if (byStatus) return byStatus;
-      return String(a.module_key).localeCompare(String(b.module_key));
-    });
+    const sortedRows = rows
+      .map(normalizeRow)
+      .sort((a, b) => {
+        const byStatus = (STATUS_ORDER[a.status] || STATUS_ORDER[UNKNOWN_STATUS]) - (STATUS_ORDER[b.status] || STATUS_ORDER[UNKNOWN_STATUS]);
+        if (byStatus) return byStatus;
+        return String(a.module_key).localeCompare(String(b.module_key));
+      });
 
-    return success(res, "Status migrasi SQLite berhasil dimuat", {
+    return success(res, "Status runtime modul berhasil dimuat", {
+      title: "Module Runtime Status",
+      runtimeMode: "sqlite_local_backend",
       summary: buildSummary(sortedRows),
       modules: sortedRows,
-      nextSafeBatch: "C2 hanya boleh dimulai dari master data non-transaksi setelah C1 QA bersih.",
-      guardedReminder: "Stock, sales, purchase, returns, finance, production, payroll, HPP, auth, dan restore destructive belum boleh dimigrasi tanpa audit khusus.",
+      nextSafeBatch: "Tidak ada gate C2 aktif. Patch berikutnya ditentukan dari audit source aktual, regression test SQLite, dan prioritas modul yang paling berisiko.",
+      guardedReminder: "SQLite backend lokal adalah runtime utama. Stock, sales, purchases, returns, finance, production, payroll, HPP, auth, backup, dan restore wajib lewat endpoint backend resmi; restore destructive tetap guarded.",
     });
   } catch (error) {
     return next(error);

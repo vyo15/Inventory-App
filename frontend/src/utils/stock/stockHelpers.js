@@ -452,11 +452,11 @@ const buildStockReadModelSearchText = ({
   .join(' ');
 
 // =====================================================
-// ACTIVE / PURE BUILDER - Firestore stock_item_read_models payload.
+// ACTIVE / PURE BUILDER - SQLite stock read model payload.
 // Fungsi:
 // - membangun payload read model stok dari buildStockReadModelRow() agar comparator Dashboard/Stock Report tetap satu sumber;
 // - menyiapkan field queryable untuk status stok, issue flag, source collection, dan export/report;
-// - tidak melakukan read/write Firestore dan tidak membuat side-effect stok.
+// - tidak melakukan read/write database dan tidak membuat side-effect stok.
 // Guard:
 // - Jangan jadikan read model ini source of truth mutasi stok. Source of truth tetap master item + inventory_logs.
 // - Writer sync/backfill wajib batch terpisah dan harus menjaga semua jalur stock mutation.

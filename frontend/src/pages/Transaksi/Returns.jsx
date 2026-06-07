@@ -37,7 +37,7 @@ import {
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema Firestore tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const { Option } = Select;
 
@@ -165,7 +165,7 @@ const Returns = () => {
   // SECTION: Submit Return
   // AKTIF + GUARDED:
   // - flow ini adalah jalur resmi retur yang menambah stok kembali;
-  // - dokumen retur, update stok, dan inventory log wajib commit bersama dalam Firestore transaction;
+  // - dokumen retur, update stok, dan inventory log wajib commit bersama dalam backend SQLite transaction;
   // - tidak memakai addInventoryLog/updateInventoryStock langsung agar tidak ada stok berubah tanpa audit log.
   // LEGACY:
   // - flow lama melakukan update stok lebih dulu, lalu addDoc returns, lalu addInventoryLog; jika addDoc/log gagal, stok bisa sudah berubah.
@@ -459,7 +459,7 @@ const Returns = () => {
           {selectedItem ? (
             /* IMS NOTE [AKTIF/GUARDED] - Snapshot stok Returns.
                Fungsi blok: menampilkan stok current/reserved/available item retur sebagai panel read-only pasif.
-               Hubungan flow: hanya mengganti tampilan Alert lama; transaction retur, stock revert, inventory log, validasi, dan payload Firestore tidak berubah.
+               Hubungan flow: hanya mengganti tampilan Alert lama; transaction retur, stock revert, inventory log, validasi, dan payload backend SQLite tidak berubah.
                Alasan logic: stok sebelum retur adalah info kontekstual, bukan warning/error, sehingga mengikuti panel clean seperti Purchases/Stock Adjustment.
                Status: AKTIF untuk UI Returns, GUARDED terhadap business rule retur dan stok. */
             <div className="ims-readonly-panel">

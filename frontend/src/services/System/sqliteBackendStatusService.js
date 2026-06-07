@@ -74,7 +74,9 @@ export const getSqliteBackendBackups = async () => fetchSqliteJson("/api/mainten
 });
 
 
-export const getSqliteMigrationStatus = async () => fetchSqliteJson("/api/migration-status");
+export const getSqliteModuleRuntimeStatus = async () => fetchSqliteJson("/api/module-runtime-status");
+
+export const getSqliteMigrationStatus = getSqliteModuleRuntimeStatus;
 
 export const createSqliteRestorePlan = async (values = {}) => fetchSqliteJson("/api/maintenance/restore-plan", {
   method: "POST",

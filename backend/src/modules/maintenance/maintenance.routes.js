@@ -22,7 +22,7 @@ const router = express.Router();
 router.get("/status", async (req, res, next) => {
   try {
     const db = await getDb();
-    const [schemaVersion, userCount, activeAdminCount, customerCount, categoryCount, supplierCount, auditCount, backupCount, restorePlanCount, migrationStatusCount, latestBackup] = await Promise.all([
+    const [schemaVersion, userCount, activeAdminCount, customerCount, categoryCount, supplierCount, auditCount, backupCount, restorePlanCount, moduleRuntimeStatusCount, latestBackup] = await Promise.all([
       db.get("SELECT value FROM schema_meta WHERE key = 'schema_version'"),
       db.get("SELECT COUNT(*) AS count FROM users"),
       db.get("SELECT COUNT(*) AS count FROM users WHERE role = 'administrator' AND status = 'active'"),
@@ -48,7 +48,8 @@ router.get("/status", async (req, res, next) => {
       auditCount: auditCount?.count || 0,
       backupCount: backupCount?.count || 0,
       restorePlanCount: restorePlanCount?.count || 0,
-      migrationStatusCount: migrationStatusCount?.count || 0,
+      moduleRuntimeStatusCount: moduleRuntimeStatusCount?.count || 0,
+      migrationStatusCount: moduleRuntimeStatusCount?.count || 0,
       latestBackup: enrichBackupLog(latestBackup),
       backupFormat: "imsbak_zip_manifest_checksum",
       backupPolicy: {

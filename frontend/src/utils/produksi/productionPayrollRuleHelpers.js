@@ -517,7 +517,7 @@ export const buildPayrollEligibilityNotes = ({
 // - Menyatukan resolver biaya labor display untuk Detail Work Log dan HPP Analysis;
 // - payroll final tetap prioritas dan satu-satunya biaya labor final HPP;
 // - payroll draft / estimasi Step hanya read-only agar UI tidak menampilkan labor 0 yang menyesatkan;
-// - tidak menulis estimasi ke Firestore.
+// - tidak menulis estimasi ke database.
 // Risiko:
 // - Jangan pakai displayAmount sebagai final HPP tanpa mengecek isFinal.
 // =====================================================
