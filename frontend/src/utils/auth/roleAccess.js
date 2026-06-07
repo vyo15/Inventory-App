@@ -2,7 +2,7 @@
 // SECTION: Auth Role Constants — AKTIF / GUARDED
 // Fungsi:
 // - menjadi single source of truth role aktif IMS setelah cleanup migrasi @ziyocraft.com;
-// - mengunci role runtime hanya `administrator` dan `user`.
+// - mengunci role aplikasi hanya `administrator` dan `user`.
 // Hubungan flow aplikasi:
 // - dipakai AuthProvider, Route Guard, Sidebar/Menu Guard, dan Manajemen User.
 // Status:

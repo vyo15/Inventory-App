@@ -1,5 +1,5 @@
 /* =========================
-   SECTION: Dashboard Runtime Surface
+   SECTION: Dashboard Application Surface
    Fungsi blok:
    - menjaga Dashboard sebagai operational control center yang compact, clean, dan tidak memicu horizontal scroll.
    - menyediakan token lokal berbasis theme blue/yellow/white/navy dari src/index.css.

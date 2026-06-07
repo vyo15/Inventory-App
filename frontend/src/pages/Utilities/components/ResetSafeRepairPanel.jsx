@@ -7,7 +7,7 @@ import { formatQuantityId } from "../../../utils/formatters/numberId";
 
 const { Text } = Typography;
 
-const STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD = "CLEANUP READ MODEL";
+const STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD = "BERSIHKAN DATA STOK";
 
 const HPP_RECONCILE_CATEGORY_LABELS = {
   safe_repair: "Siap repair",

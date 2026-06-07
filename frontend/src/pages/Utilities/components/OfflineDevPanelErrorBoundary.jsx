@@ -33,7 +33,7 @@ class OfflineDevPanelErrorBoundary extends React.Component {
             type="warning"
             showIcon
             message="Panel offline dinonaktifkan sementara agar halaman Reset Maintenance tidak white screen."
-            description={error?.message || "Terjadi error runtime pada panel offline."}
+            description={error?.message || "Terjadi error aplikasi pada panel maintenance."}
           />
           <Button icon={<ReloadOutlined />} onClick={this.handleReset}>
             Coba tampilkan lagi

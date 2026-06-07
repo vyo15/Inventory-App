@@ -561,7 +561,7 @@ export const applyPricingRuleToItems = async ({
   // SECTION: buat preview dulu supaya hasil apply konsisten
   const previewData = buildPricingPreview(items, normalizedRule);
 
-  // SECTION: jalur database lokal tidak boleh menulis runtime arsip.
+  // SECTION: jalur database lokal tidak boleh menulis arsip lama.
   // Apply harga ke Product/Raw harus memakai adapter database lokal agar data harga tetap konsisten.
   if (isSqlitePricingRulesRepositoryMode()) {
     let updatedCount = 0;

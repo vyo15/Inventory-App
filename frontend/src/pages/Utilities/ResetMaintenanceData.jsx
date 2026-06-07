@@ -167,6 +167,105 @@ const ResetMaintenanceData = () => {
     [buildPageAuditNote, maintenanceActor],
   );
 
+  const {
+    maintenanceAudit,
+    setMaintenanceAudit,
+    stockAudit,
+    setStockAudit,
+    logSchemaAudit,
+    setLogSchemaAudit,
+    hppReconcileAudit,
+    setHppReconcileAudit,
+    masterCodeAudit,
+    setMasterCodeAudit,
+    payrollAudit,
+    setPayrollAudit,
+    transactionVariantAudit,
+    setTransactionVariantAudit,
+    transactionSideEffectAudit,
+    setTransactionSideEffectAudit,
+    loadingStockAudit,
+    loadingDataQualityAudit,
+    loadingHppReconcileAudit,
+    loadingMasterCodeAudit,
+    loadingTransactionVariantAudit,
+    loadingTransactionSideEffectAudit,
+    handleLoadMasterCodeAudit,
+    handleLoadStockAudit,
+    handleLoadDataQualityAudit,
+    handleLoadHppReconcileAudit,
+    handleLoadTransactionVariantAudit,
+    handleLoadTransactionSideEffectAudit,
+    handleRunAllAudits,
+    masterCodeRows,
+    masterCodeSummary,
+    auditOverviewRows,
+    auditIssueRows,
+    dataQualityCategoryRows,
+    autoBugSummary,
+    loadingAutoDetect,
+  } = useResetMaintenanceAudits({ createPageMaintenanceLog });
+
+  const refreshAfterSafeRepair = useCallback(async () => {
+    // Setiap handler repair sudah memuat ulang audit area terkait.
+    // Hook repair tetap menerima callback ini agar tidak ada wiring undefined
+    // tanpa menjalankan ulang semua audit dan membuat log audit berlebih.
+  }, []);
+
+  const {
+    loadingMasterCodeRepair,
+    loadingMaintenanceRepair,
+    loadingStockRepair,
+    loadingLogSchemaRepair,
+    loadingHppReconcileRepair,
+    loadingPayrollRepair,
+    loadingTransactionVariantRepair,
+    loadingTransactionSideEffectRepair,
+    loadingStockReadModelAudit,
+    loadingStockReadModelRepair,
+    loadingStockReadModelRestockBackfill,
+    loadingStockReadModelCleanup,
+    handleRepairMasterCodeAudit,
+    handleRepairProductionMaintenance,
+    handleRepairStockAudit,
+    handleRepairLogSchema,
+    handleRepairHppReconcileAudit,
+    handleRepairPayrollAudit,
+    handleRepairTransactionVariantAudit,
+    handleRepairTransactionSideEffects,
+    handleLoadStockReadModelAudit,
+    handleRepairStockReadModelAudit,
+    handleBackfillStockReadModelRestockMetadata,
+    handleCleanupStockReadModelOrphans,
+  } = useResetMaintenanceRepairs({
+    createPageMaintenanceLog,
+    loadPreview: refreshAfterSafeRepair,
+    authUser,
+    profile,
+    maintenanceActor,
+    setMasterCodeAudit,
+    setMaintenanceAudit,
+    setStockAudit,
+    setLogSchemaAudit,
+    setHppReconcileAudit,
+    setPayrollAudit,
+    setTransactionVariantAudit,
+    setTransactionSideEffectAudit,
+    setStockReadModelAudit,
+  });
+
+  const transactionSideEffectSummary = transactionSideEffectAudit?.summary || {};
+  const transactionSideEffectRows = transactionSideEffectAudit?.rows || [];
+
+  const handleSyncStocks = useCallback(async () => {
+    try {
+      setLoadingSync(true);
+      await handleRepairStockAudit();
+    } finally {
+      setLoadingSync(false);
+    }
+  }, [handleRepairStockAudit]);
+
 
   const loadHppCostBaselineSummary = useCallback(async () => {
     try {

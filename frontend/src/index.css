@@ -3,7 +3,7 @@
    Fungsi blok:
    - reset dasar agar sizing seluruh aplikasi konsisten.
    Hubungan blok dengan flow aplikasi:
-   - styling global saja; tidak menyentuh auth, router, roleAccess, service, stok, kas, produksi, payroll, HPP, laporan, atau schema/database runtime.
+   - styling global saja; tidak menyentuh auth, router, roleAccess, service, stok, kas, produksi, payroll, HPP, laporan, atau schema/alur data utama.
    Alasan logic dipakai:
    - box sizing dan root sizing global menjadi pondasi layout sebelum AppLayout dan Ant Design dirender.
    Status logic:
@@ -292,7 +292,7 @@ body[data-app-theme="dark"] {
 }
 
 /* =========================
-   SECTION: Body Runtime Surface - AKTIF
+   SECTION: Body Application Surface - AKTIF
    Fungsi blok:
    - menerapkan background dan text default dari token aktif.
    Hubungan blok dengan flow aplikasi:
@@ -301,7 +301,7 @@ body[data-app-theme="dark"] {
    Alasan logic dipakai:
    - menjaga transisi light/dark halus tanpa menambah state baru.
    Status logic:
-   - AKTIF sebagai runtime surface global.
+   - AKTIF sebagai permukaan aplikasi global.
 ========================= */
 body {
   font-family: var(--ims-font-family-base, Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);

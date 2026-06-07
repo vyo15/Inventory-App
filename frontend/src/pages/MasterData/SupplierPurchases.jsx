@@ -5,7 +5,6 @@ import {
   Card,
   Col,
   Descriptions,
-  Drawer,
   Empty,
   Form,
   Input,
@@ -42,6 +41,7 @@ import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
+import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
 import { DataRefreshIndicator, getDataTableEmptyText } from '../../components/Layout/Feedback/DataLoadingState';
 import { listenRawMaterials } from '../../services/MasterData/rawMaterialsService';
 import { listenPurchaseRecords } from '../../services/Transaksi/purchasesService';
@@ -71,7 +71,7 @@ import {
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
 const { Option } = Select;
 const { Search } = Input;
@@ -479,6 +479,39 @@ const SupplierPurchases = () => {
   const openSupplierDrawer = (record) => {
     setSelectedSupplier(record);
     setDrawerVisible(true);
+  };
+
+  const handleEditSupplier = (record) => {
+    if (!isManagedSupplierRecord(record)) {
+      message.warning('Supplier ini bukan record master yang bisa diedit dari halaman ini.');
+      return;
+    }
+
+    const normalizedCode = normalizeSupplierCode(record.code || record.supplierCode);
+
+    setSelectedSupplier(record);
+    setIsEditing(true);
+    setEditingId(record.id);
+    setSaving(false);
+    setSupplierCodeLoading(false);
+    setEditingSupplierNeedsCodeRepair(!isValidSupplierCodeFormat(normalizedCode));
+    form.resetFields();
+    form.setFieldsValue({
+      code: normalizedCode,
+      storeName: record.storeName || record.name || '',
+      storeLink: record.storeLink || '',
+      materialDetails: (record.materialDetails || []).map((detail) => ({
+        ...detail,
+        purchaseType: detail.purchaseType === 'offline' ? 'offline' : 'online',
+        purchaseQty: Number(detail.purchaseQty || 1),
+        conversionValue: Number(detail.conversionValue || 0),
+        supplierItemPrice: Math.round(Number(detail.supplierItemPrice || 0)),
+        estimatedShippingCost: Math.round(Number(detail.estimatedShippingCost || 0)),
+        serviceFee: Math.round(Number(detail.serviceFee || 0)),
+        discount: Math.round(Number(detail.discount || 0)),
+      })),
+    });
+    setModalVisible(true);
   };
 
   // ---------------------------------------------------------------------------
@@ -1230,7 +1263,7 @@ const SupplierPurchases = () => {
           Risiko:
           - Jangan ubah mapping katalog supplier, cascade snapshot Raw Material, prefill Purchases, atau handler detail dari section presentasi ini.
       ===================================================== */}
-      <Drawer
+      <MobileDetailDrawer
         title={`Detail Supplier: ${getSupplierDisplayName(selectedSupplier || {}) || '-'}`}
         open={drawerVisible}
         onClose={() => {
@@ -1323,7 +1356,7 @@ const SupplierPurchases = () => {
             </Card>
           </Space>
         )}
-      </Drawer>
+      </MobileDetailDrawer>
     </div>
   );
 };

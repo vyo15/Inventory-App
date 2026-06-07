@@ -13,7 +13,6 @@ import {
   InputNumber,
   Popconfirm,
   Tooltip,
-  Drawer,
   Empty,
   Progress,
   Typography,
@@ -24,6 +23,7 @@ import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import { SALES_CHANNEL_OPTIONS, buildSalesChannelSummary } from "../../constants/salesChannelOptions";
 import {
   getSalesCustomerReferences,
@@ -53,7 +53,7 @@ import { showFormValidationFeedback } from '../../utils/forms/formValidationFeed
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -1199,7 +1199,7 @@ const Sales = () => {
         />
       </PageSection>
 
-      <Drawer
+      <MobileDetailDrawer
         title="Detail Penjualan"
         open={Boolean(selectedSaleDetail)}
         onClose={closeSaleDetail}
@@ -1248,9 +1248,9 @@ const Sales = () => {
             </div>
           </Space>
         ) : null}
-      </Drawer>
+      </MobileDetailDrawer>
 
-      <Drawer
+      <MobileDetailDrawer
         title={selectedSalesChannelSummary ? `Detail Channel — ${selectedSalesChannelSummary.channel}` : "Detail Channel"}
         placement="right"
         width="min(100vw, 720px)"
@@ -1322,7 +1322,7 @@ const Sales = () => {
             />
           </>
         ) : null}
-      </Drawer>
+      </MobileDetailDrawer>
 
       <Modal
         title="Tambah Penjualan"

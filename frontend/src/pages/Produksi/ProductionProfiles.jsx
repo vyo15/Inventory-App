@@ -40,6 +40,7 @@ import ProductionFilterCard from '../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from '../../components/Produksi/shared/ProductionPageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
+import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ProductionSummaryCards from '../../components/Produksi/shared/ProductionSummaryCards';
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 
@@ -438,7 +439,7 @@ const ProductionProfiles = () => {
         />
       </PageSection>
 
-      <Drawer
+      <MobileDetailDrawer
         title="Detail Profil Produksi"
         open={detailVisible}
         onClose={closeDetail}
@@ -550,7 +551,7 @@ Risiko:
             </Card>
           </Space>
         ) : null}
-      </Drawer>
+      </MobileDetailDrawer>
 
       <Drawer
         title={editingProfile?.id ? 'Edit Profil Produksi' : 'Tambah Profil Produksi'}

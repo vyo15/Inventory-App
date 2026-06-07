@@ -98,6 +98,8 @@ const createSqliteJsonRecordRouter = ({
   allowDirectUpdate = true,
   allowDirectDelete = true,
   blockedWriteMessage = "",
+  writeGuard = requireLocalAdministrator,
+  deleteGuard = requireLocalAdministrator,
 } = {}) => {
   if (!tableName || !moduleKey || !entityType) {
     throw new Error("Konfigurasi database lokal JSON record route tidak lengkap.");
@@ -165,7 +167,7 @@ const createSqliteJsonRecordRouter = ({
   });
 
   if (allowDirectCreate) {
-  router.post("/", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
+    router.post("/", requireLocalAuth, writeGuard, async (req, res, next) => {
       try {
         const db = await getDb();
         const now = new Date().toISOString();
@@ -244,11 +246,11 @@ const createSqliteJsonRecordRouter = ({
       }
     });
   } else {
-    router.post("/", requireLocalAuth, requireLocalAdministrator, rejectDirectWrite("dibuat"));
+    router.post("/", requireLocalAuth, writeGuard, rejectDirectWrite("dibuat"));
   }
 
   if (allowDirectUpdate) {
-  router.put("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
+    router.put("/:id", requireLocalAuth, writeGuard, async (req, res, next) => {
       try {
         const db = await getDb();
         const current = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [req.params.id]);
@@ -314,11 +316,11 @@ const createSqliteJsonRecordRouter = ({
       }
     });
   } else {
-    router.put("/:id", requireLocalAuth, requireLocalAdministrator, rejectDirectWrite("diubah"));
+    router.put("/:id", requireLocalAuth, writeGuard, rejectDirectWrite("diubah"));
   }
 
   if (allowDirectDelete) {
-  router.delete("/:id", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
+    router.delete("/:id", requireLocalAuth, deleteGuard, async (req, res, next) => {
       try {
         const db = await getDb();
         const current = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [req.params.id]);
@@ -346,7 +348,7 @@ const createSqliteJsonRecordRouter = ({
       }
     });
   } else {
-    router.delete("/:id", requireLocalAuth, requireLocalAdministrator, rejectDirectWrite("dihapus/dinonaktifkan"));
+    router.delete("/:id", requireLocalAuth, deleteGuard, rejectDirectWrite("dihapus/dinonaktifkan"));
   }
 
   return router;

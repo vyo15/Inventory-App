@@ -32,6 +32,12 @@
   color: var(--ims-text-secondary);
 }
 
+.ims-mobile-detail-drawer__actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  max-width: 45%;
+}
+
 .ims-mobile-detail-drawer__status {
   flex: 0 0 auto;
 }
@@ -60,6 +66,16 @@
 @media (max-width: 768px) {
   .ims-mobile-detail-drawer-root .ant-drawer-content-wrapper {
     width: 100vw !important;
+  }
+
+  .ims-mobile-detail-drawer__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ims-mobile-detail-drawer__actions {
+    justify-content: flex-start;
+    max-width: 100%;
   }
 
   .ims-mobile-detail-drawer .ant-drawer-body {

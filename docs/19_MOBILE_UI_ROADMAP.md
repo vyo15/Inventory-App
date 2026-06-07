@@ -251,3 +251,29 @@ Checklist QA tambahan M7:
 - [ ] Detail Purchases dan Stock Management nyaman dibaca di drawer mobile.
 - [ ] Form Cash In/Cash Out/Purchases/Returns tetap validasi seperti sebelumnya dan tidak terpotong.
 - [ ] Work Logs, Payroll, dan HPP tetap memakai filter state lama dan hasil filter sama seperti desktop.
+
+## Update 2026-06-07 - Phase M8: Standardize Mobile Detail Drawer
+
+Status: **diterapkan untuk drawer detail read-only di real pages**.
+
+Perubahan standar:
+
+- `MobileDetailDrawer` dipakai sebagai wrapper detail untuk Purchases, Sales, Stock History, Stock Adjustment, Products, Raw Materials, Suppliers, dan detail produksi read-only.
+- Drawer form tambah/edit/create order tetap memakai `Drawer` Ant Design biasa agar footer submit, validation, dan handler form tidak berubah.
+- `MobileDetailDrawer` sekarang mendukung `width`, `placement`, `destroyOnClose`, `extra`, `footer`, `className`, dan `rootClassName` agar bisa menggantikan drawer detail existing tanpa mengubah business logic.
+- Pada mobile, header detail dibuat konsisten, body tetap scroll vertikal, dan footer close tetap sticky agar detail panjang tetap mudah ditutup.
+
+Halaman detail yang distandardisasi:
+
+- Purchases detail.
+- Sales detail dan sales channel detail.
+- Stock history detail.
+- Stock adjustment detail.
+- Products, Raw Materials, dan Suppliers detail.
+- Production BOM, Employees, Orders, Payrolls, Planning, Profiles, Steps, Semi Finished Materials, dan Work Log detail.
+
+Guardrail:
+
+- Perubahan ini UI-only/read-only.
+- Tidak mengubah schema SQLite, query service, mutation stok, purchase/sales/return commit, finance ledger, production material usage, payroll final, HPP, route, role guard, reset, backup/restore, atau audit log.
+- Drawer form operasional tidak ikut distandardisasi pada phase ini karena masih membawa flow submit/create/edit.

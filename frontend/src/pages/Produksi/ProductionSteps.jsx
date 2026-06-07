@@ -55,6 +55,7 @@ import ProductionFilterCard from "../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
@@ -63,7 +64,7 @@ import { showFormValidationFeedback } from '../../utils/forms/formValidationFeed
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
 const getStepEmployeeCount = (stepId, employees = []) =>
   employees.filter((item) => Array.isArray(item.assignedStepIds) && item.assignedStepIds.includes(stepId)).length;
@@ -644,7 +645,7 @@ const ProductionSteps = () => {
         />
       </PageSection>
 
-      <Drawer
+      <MobileDetailDrawer
         title={`Detail Step Produksi: ${selectedStep?.name || "-"}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
@@ -732,7 +733,7 @@ Risiko:
             ) : null}
           </Space>
         )}
-      </Drawer>
+      </MobileDetailDrawer>
 
       <Drawer
         title={editingStep?.id ? "Edit Step Produksi" : "Tambah Step Produksi"}
@@ -834,7 +835,7 @@ Risiko:
         </Form>
       </Drawer>
 
-      <Drawer
+      <MobileDetailDrawer
         title={`Karyawan pada Step: ${selectedStep?.name || "-"}`}
         open={employeeDrawerVisible}
         onClose={() => setEmployeeDrawerVisible(false)}
@@ -858,9 +859,9 @@ Risiko:
             locale={{ emptyText: <Empty description="Belum ada karyawan terkait step ini" /> }}
           />
         </Space>
-      </Drawer>
+      </MobileDetailDrawer>
 
-      <Drawer
+      <MobileDetailDrawer
         title={`BOM yang menggunakan Step: ${selectedStep?.name || "-"}`}
         open={bomDrawerVisible}
         onClose={() => setBomDrawerVisible(false)}
@@ -884,7 +885,7 @@ Risiko:
             locale={{ emptyText: <Empty description="Step ini belum dipakai di BOM mana pun" /> }}
           />
         </Space>
-      </Drawer>
+      </MobileDetailDrawer>
     </div>
   );
 };

@@ -36,6 +36,7 @@ import ProductionFilterCard from "../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import {
   DEFAULT_PRODUCTION_PAYROLL_FORM,
@@ -75,7 +76,7 @@ import { resolveDisplayReference } from "../../utils/references/displayReference
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
 const PAYROLL_STATUS_HELP = {
   draft: "Payroll belum final dan masih perlu dicek sebelum dibayar.",
@@ -862,7 +863,7 @@ const ProductionPayrolls = () => {
         </Form>
       </Drawer>
 
-      <Drawer
+      <MobileDetailDrawer
         title="Detail Payroll Produksi"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
@@ -970,7 +971,7 @@ const ProductionPayrolls = () => {
             </Descriptions>
           </>
         )}
-      </Drawer>
+      </MobileDetailDrawer>
     </div>
   );
 };

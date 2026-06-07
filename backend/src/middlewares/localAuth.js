@@ -87,6 +87,7 @@ const requireLocalRole = (allowedRoles = []) => (req, res, next) => {
 };
 
 const requireLocalAdministrator = requireLocalRole(["administrator"]);
+const requireLocalOperationalUser = requireLocalRole(["administrator", "user"]);
 
 module.exports = {
   getBearerToken,
@@ -94,4 +95,5 @@ module.exports = {
   requireLocalAuth,
   requireLocalRole,
   requireLocalAdministrator,
+  requireLocalOperationalUser,
 };

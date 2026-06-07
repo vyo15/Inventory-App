@@ -154,7 +154,7 @@ const readStockReportCategories = async () => ({
 });
 
 // =====================================================
-// SECTION: Stock Report data loader — AKTIF / READ MODEL PRIMARY + PAGING
+// SECTION: Stock Report data loader — AKTIF / DATA STOK UTAMA + PAGING
 // Fungsi:
 // - membaca stok dari stock_item_read_models dengan cursor page agar laporan tidak perlu memuat semua row sekaligus;
 // - tetap mengambil kategori untuk filter UI dan fallback master ketika data stok turunan belum lengkap.

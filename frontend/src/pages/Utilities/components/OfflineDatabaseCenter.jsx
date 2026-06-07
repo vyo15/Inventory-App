@@ -315,13 +315,13 @@ const OfflineDatabaseCenter = () => {
         </Col>
         <Col xs={12} md={6}>
           <Card size="small" className="offline-db-status-card">
-            <Statistic title="Runtime Modul" value={formatNumber(statusData.moduleRuntimeStatusCount ?? statusData.migrationStatusCount)} prefix={<SwapOutlined />} />
+            <Statistic title="Modul Aplikasi" value={formatNumber(statusData.moduleRuntimeStatusCount ?? statusData.migrationStatusCount)} prefix={<SwapOutlined />} />
           </Card>
         </Col>
       </Row>
 
       <Descriptions size="small" bordered column={{ xs: 1, lg: 2 }}>
-        <Descriptions.Item label="Status Runtime">{modeTag}</Descriptions.Item>
+        <Descriptions.Item label="Status Layanan">{modeTag}</Descriptions.Item>
         <Descriptions.Item label="Schema DB">{statusData.schemaVersion || "-"}</Descriptions.Item>
         <Descriptions.Item label="Restore Mode"><Tag color="orange">{statusData.restoreMode || "preview_only"}</Tag></Descriptions.Item>
         <Descriptions.Item label="Format Backup"><Tag color="blue">{statusData.backupFormat || "imsbak"}</Tag></Descriptions.Item>
@@ -340,11 +340,11 @@ const OfflineDatabaseCenter = () => {
       <Alert
         type="success"
         showIcon
-        message="Runtime database aktif"
+        message="Database aplikasi aktif"
         description="Semua modul berjalan melalui layanan lokal dan database utama aplikasi."
       />
 
-      <Card size="small" title="Status runtime" className="offline-db-action-card">
+      <Card size="small" title="Status layanan" className="offline-db-action-card">
         <Space direction="vertical" size={8}>
           <Tag color="green">Aktif</Tag>
           <Text type="secondary">Mode database lokal aktif.</Text>
@@ -452,7 +452,7 @@ const OfflineDatabaseCenter = () => {
       <Alert
         type="success"
         showIcon
-        message="Status runtime modul"
+        message="Status layanan modul"
         description="Semua modul utama berjalan melalui layanan database lokal. Restore tetap memakai guard konfirmasi."
       />
 
@@ -642,7 +642,7 @@ const OfflineDatabaseCenter = () => {
     { key: "mode", label: "Mode", children: modeTab },
     { key: "backup", label: "Backup", children: backupTab },
     { key: "restore", label: "Restore", children: restoreTab },
-    { key: "runtime", label: "Runtime Modul", children: runtimeTab },
+    { key: "runtime", label: "Modul Aplikasi", children: runtimeTab },
     { key: "qa", label: "Checklist", children: qaTab },
   ];
 
@@ -685,7 +685,7 @@ const OfflineDatabaseCenter = () => {
           </div>
           <Space direction="vertical" size={4} align="end">
             {modeTag}
-            <Text type="secondary">Runtime: semua modul aktif</Text>
+            <Text type="secondary">Modul aplikasi: semua aktif</Text>
             <Text type="secondary">Backup: {backupTone.text}</Text>
           </Space>
         </div>

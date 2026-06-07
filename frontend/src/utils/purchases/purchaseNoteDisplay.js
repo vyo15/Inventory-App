@@ -6,7 +6,7 @@
 // - menyediakan parser display OCR yang sama untuk Purchases dan Stock Management.
 // Hubungan flow:
 // - helper ini hanya membaca/merapikan teks catatan untuk UI; tidak mengubah payload transaksi,
-//   stok, kas, expense, inventory log writer, parser OCR, atau schema/database runtime.
+//   stok, kas, expense, inventory log writer, parser OCR, atau schema/alur data utama.
 // =========================
 export const normalizePurchaseNoteText = (value = "") =>
   String(value || "")

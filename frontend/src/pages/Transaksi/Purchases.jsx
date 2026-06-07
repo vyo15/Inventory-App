@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { Button, Drawer, Form, message, Modal, Space, Tag, Upload, Typography } from "antd";
+import { Button, Form, message, Modal, Space, Tag, Upload, Typography } from "antd";
 import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useSearchParams } from "react-router-dom";
@@ -16,6 +16,7 @@ import {
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatNumberId } from "../../utils/formatters/numberId";
@@ -1253,7 +1254,7 @@ const Purchases = () => {
         />
       </PageSection>
 
-      <Drawer
+      <MobileDetailDrawer
         title="Detail Pembelian"
         open={Boolean(selectedPurchaseDetail)}
         onClose={closePurchaseDetail}
@@ -1312,7 +1313,7 @@ const Purchases = () => {
             </Space>
           );
         })() : null}
-      </Drawer>
+      </MobileDetailDrawer>
 
       <PurchaseOcrReceiptModal
         open={shopeeOcrDetailModal.open}

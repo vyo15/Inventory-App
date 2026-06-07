@@ -39,7 +39,7 @@ import {
 } from "../../../services/Maintenance/stockReadModelMaintenanceService";
 import { mergeAuditNote } from "../utils/resetMaintenanceUiHelpers";
 
-const STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD = "CLEANUP READ MODEL";
+const STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD = "BERSIHKAN DATA STOK";
 
 const useResetMaintenanceRepairs = ({
   createPageMaintenanceLog,

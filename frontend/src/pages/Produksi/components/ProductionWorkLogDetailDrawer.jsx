@@ -4,7 +4,6 @@ import {
   Col,
   Descriptions,
   Divider,
-  Drawer,
   Empty,
   Row,
   Space,
@@ -22,6 +21,7 @@ import formatNumber from "../../../utils/formatters/numberId";
 import { resolveWorkLogLaborCostDisplay } from "../../../utils/produksi/productionPayrollRuleHelpers";
 import { resolveDisplayReference } from "../../../utils/references/displayReferenceResolver";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
+import MobileDetailDrawer from "../../../components/Layout/Mobile/MobileDetailDrawer";
 
 const safeNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -343,7 +343,7 @@ const ProductionWorkLogDetailDrawer = ({
   );
 
   return (
-    <Drawer
+    <MobileDetailDrawer
       title="Detail Work Log Produksi"
       open={open}
       onClose={onClose}
@@ -568,7 +568,7 @@ const ProductionWorkLogDetailDrawer = ({
           </Card>
         </>
       )}
-    </Drawer>
+    </MobileDetailDrawer>
   );
 };
 

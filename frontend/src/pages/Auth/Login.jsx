@@ -73,7 +73,7 @@ const getBlockedAccessMessage = (profileStatus) => {
 // Fungsi:
 // - memasang title tab dan favicon Flanel pada halaman login.
 // Hubungan flow aplikasi:
-// - hanya menyentuh metadata browser saat Login dirender; tidak menyentuh AuthContext, route guard, role, atau database runtime.
+// - hanya menyentuh metadata browser saat Login dirender; tidak menyentuh AuthContext, route guard, role, atau alur data utama.
 // Alasan logic dipakai:
 // - memenuhi kebutuhan logo tab tanpa mengubah index.html atau dependency baru.
 // Status logic:
@@ -125,7 +125,7 @@ const useLoginBrowserBranding = () => {
 // Fungsi:
 // - menampilkan logo resmi Flanel Karawang Industries sebagai focal point utama panel kiri.
 // Hubungan flow aplikasi:
-// - visual non-interaktif; tidak terhubung ke auth, database runtime, role, route, stok, kas, atau modul bisnis.
+// - visual non-interaktif; tidak terhubung ke auth, alur data utama, role, route, stok, kas, atau modul bisnis.
 // Alasan logic dipakai:
 // - menjaga brand tampil clean tanpa membuat teks brand dobel di luar asset logo.
 // Status logic:

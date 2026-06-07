@@ -169,7 +169,7 @@ const formatDashboardLoadWarning = (failedReads = []) => {
     return "Data stok lokal belum siap atau layanan lokal belum mengembalikan data stok lengkap. Dashboard tetap memakai data aman agar monitoring tidak kosong. Jika warning berulang, buka Database Center lalu jalankan audit/perbaikan stok.";
   }
 
-  return "Sebagian data Dashboard belum siap. Data lain tetap ditampilkan untuk monitoring; cek layanan lokal, koneksi jaringan, atau status runtime modul bila warning berulang.";
+  return "Sebagian data Dashboard belum siap. Data lain tetap ditampilkan untuk monitoring; cek layanan lokal, koneksi jaringan, atau status modul aplikasi bila warning berulang.";
 };
 
 const getSafeExternalHttpUrl = (value) => {

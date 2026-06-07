@@ -3,7 +3,6 @@ import {
   Alert,
   Button,
   DatePicker,
-  Drawer,
   Form,
   Input,
   InputNumber,
@@ -17,6 +16,7 @@ import {
 } from "antd";
 import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
+import MobileDetailDrawer from "../../../components/Layout/Mobile/MobileDetailDrawer";
 import dayjs from "dayjs";
 import { formatNumberId, parseIntegerIdInput } from "../../../utils/formatters/numberId";
 import {
@@ -38,7 +38,7 @@ import { getActiveSemiFinishedMaterials } from '../../../services/Produksi/semiF
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -786,7 +786,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
         mobileCardConfig={stockAdjustmentMobileCardConfig}
       />
 
-      <Drawer
+      <MobileDetailDrawer
         title="Detail Penyesuaian Stok"
         open={Boolean(selectedAdjustmentDetail)}
         onClose={closeAdjustmentDetail}
@@ -839,7 +839,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
             </Space>
           );
         })() : null}
-      </Drawer>
+      </MobileDetailDrawer>
 
       {/* =====================================================
           SECTION: Stock Adjustment Form Renderer — GUARDED

@@ -36,6 +36,7 @@ import PageSection from '../../components/Layout/Page/PageSection';
 import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import StockDisplayBlock from '../../components/Layout/Table/StockDisplayBlock';
 import DataTableView from '../../components/Layout/Table/DataTableView';
+import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
 import { listCategories } from '../../data/repositories/categoriesRepository';
 
 import {
@@ -60,7 +61,7 @@ import {
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -1078,7 +1079,7 @@ const Products = () => {
           Risiko:
           - Jangan ubah mapping stok, varian, pricing, HPP, atau handler detail dari section presentasi ini.
       ===================================================== */}
-      <Drawer title="Detail Produk" open={detailVisible} onClose={() => setDetailVisible(false)} width={900} destroyOnClose>
+      <MobileDetailDrawer title="Detail Produk" open={detailVisible} onClose={() => setDetailVisible(false)} width={900} destroyOnClose>
         {selectedProduct ? (() => {
           const stockSummary = getProductStockSummary(selectedProduct);
           const statusMeta = getProductStatusMeta(selectedProduct);
@@ -1185,7 +1186,7 @@ const Products = () => {
             </Space>
           );
         })() : null}
-      </Drawer>
+      </MobileDetailDrawer>
     </div>
   );
 };

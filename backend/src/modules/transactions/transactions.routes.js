@@ -1,7 +1,7 @@
 const express = require("express");
 const { createSqliteJsonRecordRouter } = require("../../shared/sqliteJsonRecordRoutes");
 const { getDb } = require("../../db/connection");
-const { requireLocalAuth, requireLocalAdministrator } = require("../../middlewares/localAuth");
+const { requireLocalAuth, requireLocalAdministrator, requireLocalOperationalUser } = require("../../middlewares/localAuth");
 const { failure, success } = require("../../utils/response");
 const { commitStockMutation, insertEventRecord, nowIso, toInteger } = require("../../utils/sqliteStockEngine");
 const { createFinanceMovement } = require("../../utils/sqliteFinanceEngine");
@@ -423,7 +423,7 @@ const commitStockTransaction = async ({ req, res, next, tableName, transactionTy
   }
 };
 
-router.post("/purchases/commit", requireLocalAuth, requireLocalAdministrator, (req, res, next) => commitStockTransaction({
+router.post("/purchases/commit", requireLocalAuth, requireLocalOperationalUser, (req, res, next) => commitStockTransaction({
   req,
   res,
   next,
@@ -433,7 +433,7 @@ router.post("/purchases/commit", requireLocalAuth, requireLocalAdministrator, (r
   successMessage: "Purchase database lokal berhasil disimpan dan stok masuk.",
 }));
 
-router.post("/sales/commit", requireLocalAuth, requireLocalAdministrator, (req, res, next) => commitStockTransaction({
+router.post("/sales/commit", requireLocalAuth, requireLocalOperationalUser, (req, res, next) => commitStockTransaction({
   req,
   res,
   next,
@@ -443,7 +443,7 @@ router.post("/sales/commit", requireLocalAuth, requireLocalAdministrator, (req, 
   successMessage: "Sales database lokal berhasil disimpan dan stok keluar.",
 }));
 
-router.put("/sales/:id/status", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
+router.put("/sales/:id/status", requireLocalAuth, requireLocalOperationalUser, async (req, res, next) => {
   const db = await getDb();
   try {
     await db.run("BEGIN IMMEDIATE TRANSACTION");
@@ -483,7 +483,7 @@ router.put("/sales/:id/status", requireLocalAuth, requireLocalAdministrator, asy
   }
 });
 
-router.post("/returns/commit", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
+router.post("/returns/commit", requireLocalAuth, requireLocalOperationalUser, async (req, res, next) => {
   const db = await getDb();
   try {
     await db.run("BEGIN IMMEDIATE TRANSACTION");

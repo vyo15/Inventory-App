@@ -864,7 +864,7 @@ Status: **AKTIF + GUARDED + SOURCE-VERIFIED SQLITE**. Section ini menggantikan c
 
 - SQLite local auth adalah source of truth untuk password hash, session/token lokal, profile internal, role, status, dan metadata user IMS.
 - Login IMS memakai username di UI; backend `/api/auth/login` memvalidasi username + password ke tabel SQLite, bukan auth lama.
-- `AuthContext.jsx` masih memiliki nama state auth lama sebagai compatibility actor label lama, tetapi object tersebut dibentuk dari user SQLite lokal dan `providerId: sqlite_local`.
+- `AuthContext.jsx` memakai `authUser` sebagai nama state utama. Nama lama terkait auth provider lama tidak boleh dihidupkan ulang.
 - User tanpa session/token lokal valid wajib ditolak masuk aplikasi utama.
 - User dengan `status = inactive` wajib ditolak masuk aplikasi utama.
 - Role tidak dikenal wajib default deny.
@@ -875,7 +875,7 @@ Status: **AKTIF + GUARDED + SOURCE-VERIFIED SQLITE**. Section ini menggantikan c
 | Role | Status | Akses utama | Batasan wajib |
 |---|---:|---|---|
 | `administrator` | **AKTIF / GUARDED** | Admin utama aplikasi. Mengakses menu sistem, Manajemen User, Reset & Maintenance, dan menu operasional sesuai route guard. | Tetap wajib mengikuti business rules stok, kas, pembelian, penjualan, produksi, payroll, HPP, dan laporan. Tidak boleh mengubah role/status dirinya sendiri dari Manajemen User. |
-| `user` | **AKTIF / GUARDED** | User operasional terbatas sesuai access matrix. | Tidak boleh membuka Manajemen User, Reset & Maintenance, route sistem sensitif, atau melakukan manajemen role/profile user lain. |
+| `user` | **AKTIF / GUARDED** | Operator harian untuk stock adjustment, purchases, sales, returns, production planning, production orders, dan production work logs sesuai access matrix. | Tidak boleh membuka Manajemen User, Reset & Maintenance, route sistem sensitif, master/setup, finance manual, payroll, HPP, reports, atau melakukan manajemen role/profile user lain. |
 
 Role `super_admin` adalah **REMOVED FROM ACTIVE FLOW**. Role ini tidak boleh dibuat, dipilih, disimpan sebagai target profile baru, atau dipakai sebagai compatibility aktif setelah cleanup data selesai.
 
@@ -888,16 +888,38 @@ Status: **AKTIF / GUARDED**. Matrix ini menyelaraskan `roleAccess.js`, `sidebarM
 | Dashboard | Ya | Ya | Shared read/summary sesuai route aktif. |
 | Master Data | Ya | Tidak | Admin-only karena dapat mengubah referensi bisnis seperti produk, raw materials, kategori, supplier, customer, dan pricing. |
 | Pricing Rules | Ya | Tidak | Admin-only karena memengaruhi harga/margin. |
-| Stock Control | Ya | Ya | Operasional harian untuk cek/kelola stok sesuai flow aktif. |
-| Production Operation | Ya | Ya | Meliputi Production Planning, Order Produksi, dan Work Log Produksi. |
+| Stock Control | Ya | Ya | Operasional harian. Backend boleh membuka commit stock adjustment untuk `administrator` dan `user`; validasi stok dan audit log tetap wajib backend. |
+| Production Operation | Ya | Ya | Meliputi create/update Production Planning, Order Produksi, dan Work Log Produksi. Delete/cleanup dan setup produksi tetap admin-only. |
 | Production Setup | Ya | Tidak | Admin-only karena mengubah setup produksi, BOM, semi product, karyawan, dan template. |
 | Cost & Analysis | Ya | Tidak | Admin-only karena berhubungan dengan payroll, HPP, dan analisis biaya. |
-| Transaksi | Ya | Ya | Operasional harian Purchases, Sales, dan Returns. |
+| Transaksi | Ya | Ya | Backend commit Purchases, Sales, update status Sales, dan Returns boleh untuk `administrator` dan `user`; finance side effect tetap idempotent di backend. |
 | Kas & Biaya | Ya | Tidak | Admin-only karena data finance sensitif. |
 | Sistem | Ya | Tidak | Manajemen User dan Reset & Maintenance selalu admin-only. |
 | Laporan | Ya | Tidak | Admin-only karena laporan dapat memuat finance, payroll, HPP, dan laba/rugi. |
 
 User biasa tidak boleh melihat menu sensitif di sidebar dan tidak boleh membuka route sensitif lewat URL langsung. Route guard tetap wajib selaras dengan sidebar guard.
+
+### 24.2.2 Backend guard operasional harian
+
+Status: **AKTIF / GUARDED**. Frontend route/menu guard dan backend write guard wajib selaras agar role `user` tidak bisa membuka halaman operasional tetapi gagal saat menyimpan.
+
+Backend boleh memakai guard operasional `administrator + user` hanya untuk endpoint harian berikut:
+
+- `POST /api/transactions/purchases/commit`
+- `POST /api/transactions/sales/commit`
+- `PUT /api/transactions/sales/:id/status`
+- `POST /api/transactions/returns/commit`
+- `POST /api/stock/adjustments/commit`
+- Create/update `production/planning`, `production/orders`, dan `production/work-logs` lewat router produksi SQLite.
+
+Backend tetap wajib `administrator` untuk area berikut:
+
+- User Management, Maintenance, Backup/Restore, dan Module Runtime Status.
+- Master/setup data, pricing rules, production steps, employees, profiles, BOM, semi product setup.
+- Cash In/Cash Out manual, ledger, reports sensitif, payroll final/paid, dan HPP analysis.
+- Delete/cleanup data produksi/transaksi kecuali flow resmi yang sudah memiliki guard bisnis eksplisit.
+
+Guard operasional tidak boleh memindahkan business rule ke UI. Validasi stok, side effect finance, audit log, idempotency, dan atomic transaction tetap harus berada di backend.
 
 ### 24.3 Flow create user aktif
 

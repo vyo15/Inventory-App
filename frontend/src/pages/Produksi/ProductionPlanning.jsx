@@ -46,6 +46,7 @@ import {
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import {
   cancelProductionPlan,
@@ -72,7 +73,7 @@ import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
 const { Text } = Typography;
 
@@ -1057,7 +1058,7 @@ const ProductionPlanning = () => {
         </Form>
       </Drawer>
 
-      <Drawer
+      <MobileDetailDrawer
         title="Detail Production Planning"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
@@ -1116,7 +1117,7 @@ const ProductionPlanning = () => {
             </Card>
           </Space>
         )}
-      </Drawer>
+      </MobileDetailDrawer>
 
       <Drawer
         title="Buat Production Order dari Planning"

@@ -273,7 +273,7 @@
    Fungsi:
    - menampilkan logo resmi Flanel Karawang Industries besar, bersih, dan sedikit turun dari center.
    Hubungan flow aplikasi:
-   - visual non-interaktif; tidak terhubung ke auth, route, role, database runtime, stok, kas, atau modul bisnis.
+   - visual non-interaktif; tidak terhubung ke auth, route, role, alur data utama, stok, kas, atau modul bisnis.
    Alasan logic dipakai:
    - logo menjadi focal point utama, sementara motif tetap berada di pinggir.
    Status logic:

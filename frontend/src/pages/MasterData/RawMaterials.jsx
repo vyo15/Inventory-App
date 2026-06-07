@@ -1199,7 +1199,7 @@ const RawMaterials = () => {
           Risiko:
           - Jangan ubah mapping stok, average cost, supplier snapshot, varian, purchase linkage, atau handler detail dari section presentasi ini.
       ===================================================== */}
-      <Drawer
+      <MobileDetailDrawer
         title="Detail Bahan Baku"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
@@ -1383,7 +1383,7 @@ const RawMaterials = () => {
             </Space>
           );
         })() : null}
-      </Drawer>
+      </MobileDetailDrawer>
     </div>
   );
 };

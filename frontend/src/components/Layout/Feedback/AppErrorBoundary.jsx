@@ -64,7 +64,7 @@ class AppErrorBoundary extends React.Component {
       return this.props.children;
     }
 
-    const errorMessage = error?.message || "Error runtime tidak dikenal.";
+    const errorMessage = error?.message || "Error aplikasi tidak dikenal.";
     const componentStack = errorInfo?.componentStack || "";
 
     return (

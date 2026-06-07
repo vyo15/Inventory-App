@@ -146,7 +146,7 @@ const getUserManagementActionErrorMessage = (error = {}) => {
 // - AKTIF untuk database lokal user management.
 // - GUARDED: password lokal hanya dikirim ke layanan auth database lokal dan tidak disimpan di UI.
 // Cleanup:
-// - flow migrasi UID/domain lama dan indikator data historis/orphan sudah dihapus dari runtime aktif.
+// - flow migrasi UID/domain lama dan indikator data historis/orphan sudah dihapus dari alur aktif.
 // =========================
 const UserManagement = () => {
   const { profile, reloadProfile } = useAuth();

@@ -61,6 +61,7 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import SemiFinishedMaterialsListView from "./components/SemiFinishedMaterialsListView";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import {
@@ -88,7 +89,7 @@ import {
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
 const SemiFinishedMaterials = () => {
   const [loading, setLoading] = useState(false);
@@ -251,7 +252,7 @@ const SemiFinishedMaterials = () => {
   - Mengelompokkan list Semi Product secara read-only berdasarkan Product Family / Jenis Bunga lalu kategori.
 
   Dipakai oleh:
-  - Halaman SemiFinishedMaterials untuk mode tampilan grouped tanpa mengubah service, payload, stok, atau schema/database runtime.
+  - Halaman SemiFinishedMaterials untuk mode tampilan grouped tanpa mengubah service, payload, stok, atau schema/alur data utama.
 
   Alasan perubahan:
   - Daftar semi product global tetap reusable, tetapi user tidak lagi membaca satu daftar campur panjang saat data bertambah.
@@ -1331,7 +1332,7 @@ const SemiFinishedMaterials = () => {
       {/* Drawer detail. Dipakai aktif untuk audit item, stok total, dan rincian */}
       {/* varian tanpa menambah kepadatan informasi pada list utama. */}
       {/* ------------------------------------------------------------------ */}
-      <Drawer
+      <MobileDetailDrawer
         title="Detail Semi Finished Material"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
@@ -1520,7 +1521,7 @@ Risiko:
             />
           </Space>
         )}
-      </Drawer>
+      </MobileDetailDrawer>
     </div>
   );
 };

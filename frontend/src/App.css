@@ -1,7 +1,7 @@
 /* =========================
    SECTION: App Shell - AKTIF / THEME CENTER / GUARDED
    Fungsi:
-   - menyediakan shell global full-screen dengan background dan teks dari token runtime light/dark.
+   - menyediakan shell global full-screen dengan background dan teks dari token tema light/dark.
    Hubungan flow aplikasi:
    - dipakai AppLayout sebagai pembungkus semua route operasional; styling container saja dan tidak menyentuh route, auth, stok, kas, produksi, payroll, HPP, atau laporan.
    Alasan logic dipakai:
@@ -1303,7 +1303,7 @@ Risiko:
    Hubungan flow aplikasi:
    - styling display stok varian saja; tidak mengubah stock/currentStock/reservedStock/availableStock, variantKey, atau variantLabel.
    Alasan logic dipakai:
-   - class ini dipusatkan di App.css karena dipakai lintas halaman stok dan membaca token runtime agar light/dark tidak butuh override duplicate.
+   - class ini dipusatkan di App.css karena dipakai lintas halaman stok dan membaca token tema agar light/dark tidak butuh override duplicate.
    Status:
    - AKTIF dipakai oleh render stok varian.
    - GUARDED: jangan dihapus atau diganti ke inline style lagi agar tiga halaman stok tidak saling merusak.

@@ -27,6 +27,12 @@ Alasan perubahan:
 Catatan cleanup:
 - Referensi runtime/database/browser-local lama yang tersisa di docs/source comments harus diperlakukan sebagai compatibility data historis atau arsip migrasi sampai dibuktikan sebaliknya lewat grep/import/route/service aktual.
 
+Catatan role guard alignment:
+- Role `user` adalah operator harian, bukan admin sistem. Frontend boleh membuka halaman operasional harian hanya jika backend endpoint write untuk flow yang sama juga menerima guard operasional `administrator + user`.
+- Endpoint commit Purchases, Sales, update status Sales, Returns, Stock Adjustment, serta create/update Production Planning/Orders/Work Logs boleh memakai guard operasional.
+- Area admin/setup/finance sensitif/payroll/HPP/report/maintenance/user management tetap administrator-only.
+- Perubahan role guard wajib tetap menjaga atomic transaction, audit log, idempotency, dan business rule backend; UI tidak boleh menjadi satu-satunya guard.
+
 Risiko:
 - Mengikuti docs lama yang masih menyebut auth/rules database arsip dapat membuat patch baru salah arah, menghidupkan fallback lama, atau melewati backend SQLite resmi.
 =====================================================

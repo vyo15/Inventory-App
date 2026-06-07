@@ -43,6 +43,7 @@ import ProductionFilterCard from "../../components/Produksi/shared/ProductionFil
 import ProductionPageHeader from "../../components/Produksi/shared/ProductionPageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import {
@@ -78,7 +79,7 @@ import {
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
 // Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
-// Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
+// Behavior: input baru no-decimal; business rules dan schema/alur data utama tetap sama.
 
 const ProductionOrders = () => {
   const { profile, authUser } = useAuth();
@@ -1445,7 +1446,7 @@ const ProductionOrders = () => {
           </Form.Item>
         </Form>
       </Drawer>
-      <Drawer
+      <MobileDetailDrawer
         title="Detail Production Order"
         open={detailVisible}
         onClose={() => setDetailVisible(false)}
@@ -1601,7 +1602,7 @@ const ProductionOrders = () => {
             />
           </Space>
         )}
-      </Drawer>
+      </MobileDetailDrawer>
     </div>
   );
 };

@@ -192,7 +192,7 @@ Prioritas cleanup halaman bila masih terasa ramai:
 
 ## Standar Detail Drawer
 
-Detail drawer dipakai untuk membaca data, bukan untuk menggantikan dokumentasi flow. Struktur standar:
+Detail drawer dipakai untuk membaca data, bukan untuk menggantikan dokumentasi flow. Real page detail read-only harus memakai `MobileDetailDrawer` agar header, body scroll, dan footer close konsisten di mobile. Drawer form tambah/edit/create tetap boleh memakai `Drawer` Ant Design biasa karena membawa submit/validation/extra action operasional. Struktur standar:
 
 1. **Header ringkas**
    - Tampilkan nama/kode utama.

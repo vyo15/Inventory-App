@@ -51,6 +51,17 @@ Target default:
 - [ ] User non-admin tidak bisa mengelola user lain.
 - [ ] Logout membersihkan session/token lokal di frontend.
 
+## 3A. Role alignment operasional harian
+
+- [ ] Login sebagai `user` bisa membuka Stock Management, Purchases, Sales, Returns, Production Planning, Production Orders, dan Production Work Logs.
+- [ ] `user` bisa commit Purchase dan stok bertambah dengan inventory log/audit tetap tercatat.
+- [ ] `user` bisa commit Sales dan stok berkurang; update status Sales ke selesai tetap membuat income idempotent sesuai rule backend.
+- [ ] `user` bisa commit Return terkait Sales dan stok kembali sesuai item yang valid.
+- [ ] `user` bisa commit Stock Adjustment lewat endpoint resmi; adjustment keluar tetap ditolak jika melebihi available stock.
+- [ ] `user` bisa create/update Production Planning, Production Orders, dan Production Work Logs.
+- [ ] `user` tetap ditolak untuk User Management, Maintenance/Reset, Backup/Restore, Module Runtime Status, master/setup, Pricing Rules, Cash In/Out manual, ledger, reports sensitif, Payroll, dan HPP Analysis.
+- [ ] Role frontend `roleAccess.js` dan backend guard endpoint operasional harian tetap selaras.
+
 ## 4. Master data
 
 - [ ] Categories CRUD berjalan lewat backend.

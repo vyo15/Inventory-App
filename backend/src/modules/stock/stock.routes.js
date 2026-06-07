@@ -1,12 +1,12 @@
 const express = require("express");
 const { getDb } = require("../../db/connection");
-const { requireLocalAuth, requireLocalAdministrator } = require("../../middlewares/localAuth");
+const { requireLocalAuth, requireLocalOperationalUser } = require("../../middlewares/localAuth");
 const { failure, success } = require("../../utils/response");
 const { commitStockMutation, insertEventRecord } = require("../../utils/sqliteStockEngine");
 
 const router = express.Router();
 
-router.post("/adjustments/commit", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
+router.post("/adjustments/commit", requireLocalAuth, requireLocalOperationalUser, async (req, res, next) => {
   const db = await getDb();
   try {
     await db.run("BEGIN IMMEDIATE TRANSACTION");

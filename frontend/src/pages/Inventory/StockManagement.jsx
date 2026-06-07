@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Col, Drawer, Input, Select, Space, Tag, Tooltip, Typography, message } from "antd";
+import { Button, Col, Input, Select, Space, Tag, Tooltip, Typography, message } from "antd";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
@@ -7,6 +7,7 @@ import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
 import StockAdjustmentPanel from "./components/StockAdjustmentPanel";
 import { getInventoryLogs } from "../../services/Inventory/inventoryService";
 import { formatNumberId } from "../../utils/formatters/numberId";
@@ -933,7 +934,7 @@ const StockManagement = () => {
         <StockAdjustmentPanel onAdjustmentSaved={fetchHistory} />
       </PageSection>
 
-      <Drawer
+      <MobileDetailDrawer
         title="Detail Riwayat Stok"
         open={Boolean(selectedStockLogDetail)}
         onClose={closeStockLogDetail}
@@ -991,7 +992,7 @@ const StockManagement = () => {
             </div>
           </Space>
         ) : null}
-      </Drawer>
+      </MobileDetailDrawer>
     </>
   );
 };
