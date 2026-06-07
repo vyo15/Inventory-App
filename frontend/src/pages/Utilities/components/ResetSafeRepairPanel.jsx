@@ -387,7 +387,7 @@ const ResetSafeRepairPanel = ({
 
         <Divider orientation="left" plain>Repair Side-Effect Transaksi</Divider>
         <Text type="secondary">
-          Memperbaiki side-effect aktual transaksi yang hilang: income Sales selesai, expense Purchases, dan inventory log Sales/Purchases/Returns. Repair ini tidak mengubah stok master, tidak menghapus data lama, dan tidak mengubah dokumen transaksi utama.
+          Memperbaiki side-effect aktual transaksi yang hilang: income Sales selesai, expense Purchases, dan inventory log Sales/Purchases/Returns. Repair ini tidak mengubah stok master, tidak menghapus data historis, dan tidak mengubah dokumen transaksi utama.
         </Text>
         <Alert
           type="warning"

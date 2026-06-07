@@ -34,74 +34,16 @@ app.use(cors({ origin: env.corsOrigin === "*" ? true : env.corsOrigin }));
 app.use(express.json({ limit: "1mb" }));
 app.use(requestLogger);
 
-app.get("/api", (req, res) => success(res, "IMS layanan lokal API aktif", {
-  endpoints: [
+app.get("/api", (_req, res) => success(res, "IMS layanan lokal API aktif", {
+  service: "IMS local API",
+  active: true,
+  publicEndpoints: [
     "GET /health",
-    "GET /api/settings",
     "GET /api/auth/status",
-    "POST /api/auth/bootstrap-admin",
     "POST /api/auth/login",
-    "GET /api/auth/me",
-    "POST /api/auth/logout",
-    "GET /api/auth/users",
-    "POST /api/auth/users",
-    "PUT /api/auth/users/:id",
-    "GET /api/customers",
-    "GET /api/customers/generate-code",
-    "GET /api/customers/:id",
-    "POST /api/customers",
-    "PUT /api/customers/:id",
-    "DELETE /api/customers/:id",
-    "GET /api/categories",
-    "GET /api/categories/:id",
-    "POST /api/categories",
-    "PUT /api/categories/:id",
-    "DELETE /api/categories/:id",
-    "GET /api/suppliers",
-    "GET /api/suppliers/generate-code",
-    "GET /api/suppliers/:id",
-    "POST /api/suppliers",
-    "PUT /api/suppliers/:id",
-    "DELETE /api/suppliers/:id",
-    "GET /api/pricing-rules",
-    "GET /api/pricing-rules/generate-code",
-    "GET /api/pricing-rules/:id",
-    "POST /api/pricing-rules",
-    "PUT /api/pricing-rules/:id",
-    "DELETE /api/pricing-rules/:id",
-    "GET /api/products",
-    "POST /api/products",
-    "PUT /api/products/:id",
-    "DELETE /api/products/:id",
-    "GET /api/raw-materials",
-    "POST /api/raw-materials",
-    "PUT /api/raw-materials/:id",
-    "DELETE /api/raw-materials/:id",
-    "GET /api/semi-finished-materials",
-    "GET /api/stock-read-models",
-    "POST /api/stock/adjustments/commit",
-    "GET /api/stock-adjustments",
-    "GET /api/transactions/purchases",
-    "POST /api/transactions/purchases/commit",
-    "GET /api/transactions/sales",
-    "POST /api/transactions/sales/commit",
-    "PUT /api/transactions/sales/:id/status",
-    "GET /api/transactions/returns",
-    "POST /api/transactions/returns/commit",
-    "GET /api/finance/incomes",
-    "GET /api/production/steps",
-    "GET /api/reports",
-    "GET /api/maintenance/status",
-    "POST /api/maintenance/backup",
-    "GET /api/maintenance/backups",
-    "POST /api/maintenance/restore-plan",
-    "POST /api/maintenance/restore-execute",
-    "GET /api/maintenance/restore-logs",
-    "GET /api/module-runtime-status",
-    "GET /api/migration-status",
-    "GET /api/audit-logs",
   ],
-  guardedReminder: "database lokal menjadi runtime utama. Modul guarded wajib lewat endpoint backend resmi dan tidak boleh direct write.",
+  note: "Detail operasional hanya tersedia setelah login melalui aplikasi.",
+  serverTime: new Date().toISOString(),
 }));
 
 app.use("/health", healthRoutes);
@@ -143,8 +85,8 @@ async function startServer() {
 
   app.listen(env.port, env.host, () => {
     console.log(`IMS layanan lokal jalan di http://localhost:${env.port}`);
-    console.log(`Database database lokal: ${getDbPath()}`);
-    console.log("Mode: database lokal primary. Modul guarded wajib lewat endpoint backend resmi.");
+    console.log(`Lokasi database lokal: ${getDbPath()}`);
+    console.log("Mode: database lokal primary. Modul guarded wajib lewat endpoint layanan resmi.");
   });
 }
 

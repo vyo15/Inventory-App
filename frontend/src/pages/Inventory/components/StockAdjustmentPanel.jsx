@@ -37,7 +37,7 @@ import { getActiveSemiFinishedMaterials } from '../../../services/Produksi/semiF
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
-// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const { Option } = Select;
@@ -47,7 +47,7 @@ const { Text } = Typography;
 // =========================
 // SECTION: Konfigurasi sumber item Stock Adjustment
 // Fungsi blok:
-// - menyatukan mapping itemType UI ke target modul backend database lokal dan label riwayat adjustment.
+// - menyatukan mapping itemType UI ke target modul database lokal dan label riwayat adjustment.
 // Hubungan flow aplikasi:
 // - Stock Adjustment resmi sekarang mendukung Bahan Baku, Semi Finished, dan Produk Jadi tanpa mengubah flow produksi/HPP/transaksi lain.
 // Alasan logic dipakai:
@@ -142,7 +142,7 @@ const formatQuantityId = (value, unit = "") => {
   // Fungsi blok: menampilkan qty adjustment sebagai angka bulat di Manajemen Stok.
   // Hubungan flow: hanya display/input panel; transaction stock dan inventory log tetap di handler existing.
   // Alasan logic: rule IMS tahap ini tidak membuka input decimal baru, termasuk unit lama non-discrete.
-  // Behavior: tampilan/input berubah ke no-decimal; data lama pecahan tidak dimigrasi.
+  // Behavior: tampilan/input berubah ke no-decimal; data historis pecahan tidak dimigrasi.
   // =========================
   const formatted = formatNumberId(numericValue);
 
@@ -242,7 +242,7 @@ const buildStockAdjustmentCostGuardPayload = ({
 // Status:
 // - AKTIF untuk UI Stock Adjustment Panel.
 // - GUARDED karena field reason/note tetap tersimpan terpisah dan catatan lengkap tetap tersedia di tooltip.
-// - COMPATIBILITY: tidak ada logic data lama yang dipakai di blok ini.
+// - COMPATIBILITY: tidak ada logic data historis yang dipakai di blok ini.
 // - CLEANUP CANDIDATE: tidak perlu dibersihkan selama tabel masih menampilkan catatan bebas.
 // =========================
 const NOTE_PREVIEW_STYLE = {
@@ -299,7 +299,7 @@ const renderAdjustmentReasonNote = (_, record = {}) => {
 // - memindahkan form dan riwayat Penyesuaian Stok ke dalam halaman Manajemen Stok
 // Hubungan flow:
 // - menjadi satu-satunya UI aktif untuk adjustment manual setelah menu / halaman lama dihapus
-// - mutasi stok sekarang memakai backend database lokal transaction dan helper stock mutation agar stock/currentStock/availableStock/variants[] sinkron
+// - mutasi stok memakai transaksi layanan database lokal dan helper stock mutation agar stock/currentStock/availableStock/variants[] sinkron
 // Status:
 // - aktif/final untuk adjustment stok manual
 // - bukan halaman route mandiri; route lama /stock-adjustment hanya redirect ke /stock-management
@@ -310,12 +310,12 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // Fungsi:
   // - menyimpan riwayat stock_adjustments, master item, dan status modal form
   // Hubungan flow:
-  // - master item hanya dipakai sebagai pilihan form; source of truth mutasi final ada di backend database lokal transaction dan helper stok varian aktif
+  // - master item hanya dipakai sebagai pilihan form; source of truth mutasi final ada di transaksi layanan database lokal dan helper stok varian aktif
   // - isSubmittingRef menjadi guard teknis agar submit dobel tidak membuat double stock/log sebelum state React sempat update
   // Status:
   // - AKTIF dipakai di halaman Manajemen Stok.
   // - GUARDED karena submit state/ref mencegah double submit.
-  // - COMPATIBILITY: tidak ada state data lama yang dipakai untuk mutasi stok.
+  // - COMPATIBILITY: tidak ada state data historis yang dipakai untuk mutasi stok.
   // - CLEANUP CANDIDATE jika orkestrasi adjustment dipindah ke service khusus.
   // =========================
   const [stockAdjustmentRecords, setStockAdjustmentRecords] = useState([]);
@@ -342,7 +342,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // Hubungan flow:
   // - panel adjustment selalu memakai data master terbaru yang juga dipakai audit Manajemen Stok
   // Status:
-  // - aktif dipakai; bukan data lama
+  // - aktif dipakai; bukan data historis
   // =========================
   useEffect(() => {
     let disposed = false;
@@ -441,7 +441,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // Hubungan flow:
   // - variantKey yang dipilih dipakai transaction untuk update stok varian dan total master tetap sinkron
   // Status:
-  // - aktif dipakai; bukan data lama
+  // - aktif dipakai; bukan data historis
   // =========================
   const stockSourceItemsByType = useMemo(
     () => ({
@@ -534,7 +534,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // =========================
   // SECTION: Submit penyesuaian stok atomik
   // Fungsi:
-  // - menyimpan stock_adjustments, mutasi stok master/varian, dan inventory_logs dalam satu backend database lokal transaction.
+  // - menyimpan stock_adjustments, mutasi stok master/varian, dan inventory_logs dalam satu transaksi layanan database lokal.
   // Hubungan flow aplikasi:
   // - Stock Management adalah audit log + adjustment resmi; stok tidak boleh berubah tanpa record adjustment dan log audit.
   // Status:
@@ -694,7 +694,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // Alasan:
   // - createdAt adalah waktu input sebenarnya, sedangkan date adalah tanggal bisnis yang bisa diisi mundur/maju oleh user
   // Hubungan flow:
-  // - fallback ke date menjaga data lama yang belum punya createdAt tetap tampil wajar
+  // - fallback ke date menjaga data historis yang belum punya createdAt tetap tampil wajar
   // Status:
   // - aktif dipakai; kandidat cleanup hanya bila sorting dipindah ke service layer
   // =========================
@@ -960,7 +960,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               - hanya mengganti tampilan snapshot sebelum submit; validasi availableStock, variantKey, transaction, stock_adjustments, dan inventory_logs tetap memakai logic existing.
               Alasan logic:
               - info stok bukan warning/error, sehingga lebih aman secara UX ditampilkan sebagai panel clean seperti Purchases.
-              Status: AKTIF untuk UI Stock Adjustment, GUARDED terhadap mutasi stok dan payload backend database lokal.
+              Status: AKTIF untuk UI Stock Adjustment, GUARDED terhadap mutasi stok dan payload layanan database lokal.
           ===================================================== */}
           {selectedItem ? (
             <div className="ims-readonly-panel">
@@ -1104,7 +1104,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
               extra={
                 selectedCurrentUnitCost > 0
                   ? "Cost/HPP master sudah ada, field ini opsional dan tidak mengubah cost lama."
-                  : "Wajib untuk stok masuk pertama atau data lama yang cost/HPP-nya masih 0."
+                  : "Wajib untuk stok masuk pertama atau data arsip yang cost/HPP-nya masih 0."
               }
             >
               <InputNumber

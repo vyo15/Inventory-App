@@ -6,20 +6,20 @@ const toSalesCustomerReference = (customer = {}) => ({
   name: customer.name || "",
   code: customer.code || customer.customerCode || customer.id || "",
   customerCode: customer.customerCode || customer.code || customer.id || "",
-  source: "sqlite_backend",
+  source: "local_database_service",
 });
 
 /* =====================================================
 SECTION: Sales customer references — AKTIF / GUARDED
 Fungsi:
-- Dropdown Customer di Sales membaca customer dari service master data SQLite.
+- Dropdown Customer di Sales membaca customer dari service master data lokal.
 
 Alasan:
-- Sales transaction write sudah diarahkan ke backend SQLite commit flow.
+- Sales transaction write sudah diarahkan ke commit flow layanan database lokal.
 - Reference customer tetap read-only di halaman Sales dan tidak boleh membuat mutasi stok/finance dari UI.
 
 Risiko:
-- Jangan mengganti service ini menjadi akses langsung file SQLite; semua data wajib lewat backend service.
+- Jangan mengganti service ini menjadi akses langsung file database; semua data wajib lewat service resmi.
 ===================================================== */
 export const getSalesCustomerReferences = async () => {
   const customers = await getCustomers();

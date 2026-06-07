@@ -59,7 +59,7 @@ import {
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
-// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const { Text } = Typography;
@@ -67,7 +67,7 @@ const { TextArea } = Input;
 
 // -----------------------------------------------------------------------------
 // Builder nilai awal form produk.
-// Menjaga form create/edit tetap satu pola dan kompatibel dengan data lama.
+// Menjaga form create/edit tetap satu pola dan kompatibel dengan data historis.
 // -----------------------------------------------------------------------------
 const buildFormValues = (record = {}) => {
   const hasVariants = record?.hasVariants === true || (record?.variants || []).length > 0;
@@ -930,10 +930,10 @@ const Products = () => {
               - Products.jsx create/edit drawer dan productsService master payload.
 
               Alasan perubahan:
-              - `variants[].minStockAlert` adalah compatibility data lama; user tidak lagi mengisi min stock per varian.
+              - `variants[].minStockAlert` adalah compatibility data historis; user tidak lagi mengisi min stock per varian.
 
               Catatan cleanup:
-              - field data lama varian dapat diaudit pada batch maintenance terpisah tanpa migrasi otomatis di UI ini.
+              - field data historis varian dapat diaudit pada batch maintenance terpisah tanpa migrasi otomatis di UI ini.
 
               Risiko:
               - mengembalikan input min stock per varian akan membuat threshold low stock Product tidak konsisten dengan source master.

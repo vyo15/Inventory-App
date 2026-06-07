@@ -18,7 +18,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
   // ---------------------------------------------------------------------------
   // IMS NOTE [AKTIF] — orchestration audit read-only Reset Maintenance.
   // Hook ini hanya memindahkan state/handler audit dari page jumbo agar page tetap
-  // fokus ke destructive reset confirmation. Service audit tetap source of truth.
+  // fokus ke flow maintenance lama. Service audit tetap source of truth.
   // ---------------------------------------------------------------------------
   const [maintenanceAudit, setMaintenanceAudit] = useState(null);
   const [stockAudit, setStockAudit] = useState(null);
@@ -146,13 +146,13 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
       =====================================================
       SECTION: Data Quality Audit handler — COMPATIBILITY
       Fungsi:
-      - Memanggil audit data lama secara read-only, menampilkan ringkasan area, dan mencatat audit log metadata.
+      - Memanggil audit arsip data secara read-only, menampilkan ringkasan area, dan mencatat audit log metadata.
 
       Dipakai oleh:
-      - Tombol Cek Data Lama di panel Auto Detect Bug Data.
+      - Tombol Cek Arsip Data di panel Auto Detect Bug Data.
 
       Alasan perubahan:
-      - Project masih development sehingga data lama cukup dipetakan untuk reset/recreate manual, bukan dimigrasi otomatis.
+      - Project masih development sehingga arsip data cukup dipetakan untuk reset/recreate manual, bukan dimigrasi otomatis.
 
       Catatan cleanup:
       - Jika nanti audit ini dipakai di halaman lain, handler bisa dipindah ke hook maintenance khusus.
@@ -172,9 +172,9 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
         affectedCount: result?.summary?.checkedRecords || 0,
         dryRun: true,
         status: "success",
-        note: "Data Quality Audit hanya membaca data lama/testing dan menampilkan rekomendasi; tidak ada migration, backfill, delete, stok, kas, payroll, HPP, atau transaksi yang diubah.",
+        note: "Data Quality Audit hanya membaca data historis/testing dan menampilkan rekomendasi; tidak ada migrasi massal, backfill, delete, stok, kas, payroll, HPP, atau transaksi yang diubah.",
       });
-      showActionSuccess(showProblemPreview ? "Preview data bermasalah berhasil dimuat. Tidak ada data yang diubah." : "Audit data lama selesai. Tidak ada data yang diubah.");
+      showActionSuccess(showProblemPreview ? "Preview data bermasalah berhasil dimuat. Tidak ada data yang diubah." : "Audit data historis selesai. Tidak ada data yang diubah.");
     } catch (error) {
       console.error(error);
       showActionError(error?.message || "Gagal menjalankan Data Quality Audit.");
@@ -233,12 +233,12 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
         affectedCount: result?.summary?.checkedRecords || 0,
         dryRun: true,
         status: "success",
-        note: "Audit data lama hanya membaca data dan memberi rekomendasi reset/repair terarah.",
+        note: "Audit data historis hanya membaca data dan memberi rekomendasi reset/repair terarah.",
       });
-      showActionSuccess("Dry run data lama selesai. Belum ada data yang diubah.");
+      showActionSuccess("Dry run data historis selesai. Belum ada data yang diubah.");
     } catch (error) {
       console.error(error);
-      showActionError(error?.message || "Gagal menjalankan audit data lama.");
+      showActionError(error?.message || "Gagal menjalankan audit data historis.");
     } finally {
       setLoadingHistoricalDataAudit(false);
     }
@@ -285,7 +285,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
         affectedCount: result?.summary?.checkedRecords || 0,
         dryRun: true,
         status: "success",
-        note: "Audit variant lintas modul memetakan transaksi lama yang masih memakai field data lama tanpa membuat fallback baru ke master.",
+        note: "Audit variant lintas modul memetakan transaksi lama yang masih memakai field data historis tanpa membuat fallback baru ke master.",
       });
       showActionSuccess("Dry run variant lintas modul selesai. Belum ada data yang diubah.");
     } catch (error) {

@@ -70,9 +70,9 @@ Restore resmi harus:
 
 ## Test minimum
 
-- [ ] `GET /health` sukses.
-- [ ] `GET /api/maintenance/status` sukses.
-- [ ] `GET /api/module-runtime-status` sukses.
+- [ ] `GET /health` sukses dan hanya menampilkan status minimal.
+- [ ] `GET /api/maintenance/status` tanpa token ditolak; token administrator sukses.
+- [ ] `GET /api/module-runtime-status` tanpa token ditolak; token administrator sukses.
 - [ ] Login lokal sukses.
 - [ ] CRUD master data pilot sukses.
 - [ ] Stock adjustment commit sukses dan audit log tercatat.

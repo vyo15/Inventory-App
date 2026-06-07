@@ -11,7 +11,7 @@ Gunakan file ini sebagai aturan kerja saat membantu project IMS Bunga Flanel.
 3. Runtime utama saat ini adalah frontend React/Vite + backend Node.js Express + SQLite lokal/LAN.
 4. Backend adalah satu-satunya akses database.
 5. Frontend tidak boleh membaca file SQLite langsung.
-6. Jangan menghidupkan runtime lama tanpa approval eksplisit dan validasi source baru.
+6. Jangan menghidupkan runtime arsip tanpa approval eksplisit dan validasi source baru.
 7. Jangan coding sebelum review teknis dan plan disetujui, kecuali user sudah jelas meminta patch berdasarkan plan.
 8. Jangan membuat logic duplikat jika helper/service existing sudah ada.
 9. Jangan formatting massal file yang tidak terkait.
@@ -49,7 +49,7 @@ Jangan ubah tanpa approval eksplisit:
 
 - Auth aktif memakai local auth SQLite melalui `/api/auth/**`.
 - Repository frontend harus memakai service/adapter backend SQLite.
-- Alias repository lama hanya compatibility; jangan jadikan alasan mengaktifkan runtime lama.
+- Alias repository lama hanya compatibility; jangan jadikan alasan mengaktifkan runtime arsip.
 - Module Runtime Status hanya indikator bantu; keputusan patch tetap berdasarkan source aktual.
 - Direct write generic ke tabel guarded dilarang.
 - Semua mutation guarded harus lewat endpoint/service resmi yang menjaga audit log dan idempotency.
@@ -72,7 +72,7 @@ Dilarang menambahkan:
 - command execution dari input user.
 - unsafe HTML rendering.
 - secret/API key di source.
-- destructive reset tanpa confirm guard.
+- reset testing/destructive tanpa confirm guard.
 - akses database langsung dari frontend.
 - perubahan access/security tanpa approval.
 

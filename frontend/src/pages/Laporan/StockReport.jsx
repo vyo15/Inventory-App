@@ -103,7 +103,7 @@ const StockReport = () => {
   // - menjaga kategori semi-finished tetap bisa dipilih walaupun tidak ada di collection categories lama;
   // - tidak mengubah data kategori, hanya memperkaya pilihan filter UI/export.
   // Hubungan dengan flow laporan/export: filter aktif ikut tercatat di XLSX.
-  // Status: aktif dipakai; bukan data lama dan bukan kandidat cleanup.
+  // Status: aktif dipakai; bukan data historis dan bukan kandidat cleanup.
   // =========================
   const categoryOptions = useMemo(() => {
     const mergedCategories = new Set([
@@ -213,7 +213,7 @@ const StockReport = () => {
   // =========================
   // SECTION: Export laporan stok ke XLSX
   // Fungsi:
-  // - memakai full export loop read model agar export tidak hanya bergantung pada rows UI yang termuat;
+  // - memakai full export loop data stok agar export tidak hanya bergantung pada rows UI yang termuat;
   // - tetap memakai filter aktif di client agar behavior filter UI dan export konsisten.
   // Status:
   // - aktif dipakai di laporan stok;

@@ -112,21 +112,13 @@ const createSession = async (db, user, req) => {
 router.get("/status", async (req, res, next) => {
   try {
     const db = await getDb();
-    const [userCount, activeAdminCount, roleCount, sessionCount] = await Promise.all([
-      db.get("SELECT COUNT(*) AS count FROM users"),
-      db.get("SELECT COUNT(*) AS count FROM users WHERE role = 'administrator' AND status = 'active'"),
-      db.get("SELECT COUNT(*) AS count FROM roles"),
-      db.get("SELECT COUNT(*) AS count FROM local_user_sessions WHERE revoked_at IS NULL"),
-    ]);
+    const activeAdminCount = await db.get("SELECT COUNT(*) AS count FROM users WHERE role = 'administrator' AND status = 'active'");
+    const bootstrapRequired = (activeAdminCount?.count || 0) === 0;
 
-    return success(res, "Status auth lokal berhasil dimuat", {
-      authProvider: "sqlite_local",
-      userCount: userCount?.count || 0,
-      activeAdministratorCount: activeAdminCount?.count || 0,
-      roleCount: roleCount?.count || 0,
-      activeSessionCount: sessionCount?.count || 0,
-      bootstrapRequired: (activeAdminCount?.count || 0) === 0,
-      bootstrapConfirmKeyword: BOOTSTRAP_CONFIRM_KEYWORD,
+    return success(res, "Status akses lokal berhasil dimuat", {
+      authProvider: "local",
+      bootstrapRequired,
+      ...(bootstrapRequired ? { bootstrapConfirmKeyword: BOOTSTRAP_CONFIRM_KEYWORD } : {}),
     });
   } catch (error) {
     return next(error);

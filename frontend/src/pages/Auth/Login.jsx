@@ -232,7 +232,7 @@ const LoginShell = ({ children, variant = "default" }) => (
 // - halaman login internal IMS memakai Username + Password.
 // Hubungan flow aplikasi:
 // - username dikirim ke AuthProvider untuk login lokal database lokal;
-// - password tetap divalidasi backend local auth database lokal, bukan frontend manual.
+// - password tetap divalidasi layanan auth database lokal, bukan frontend manual.
 // Alasan logic dipakai:
 // - frontend hanya mengirim credential ke flow auth existing, bukan membuat auth baru.
 // Status logic:
@@ -245,7 +245,7 @@ const Login = () => {
   const {
     authLoading,
     authMode,
-    authSessionUser,
+    authUser,
     loginWithUsername,
     logout,
     profileStatus,
@@ -382,7 +382,7 @@ const Login = () => {
     return <LogoLoadingScreen message="Memeriksa session dan profile user..." />;
   }
 
-  if (authSessionUser && blockedAccessMessage) {
+  if (authUser && blockedAccessMessage) {
     return (
       <LoginShell variant="blocked">
         <Card className="ims-login-card ims-login-card--blocked">

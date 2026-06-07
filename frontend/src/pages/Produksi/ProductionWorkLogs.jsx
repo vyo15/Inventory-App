@@ -86,7 +86,7 @@ import {
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
-// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const getProductionPayrollsForWorkLogDisplaySafely = async () => {
@@ -99,7 +99,7 @@ const getProductionPayrollsForWorkLogDisplaySafely = async () => {
 };
 
 const ProductionWorkLogs = () => {
-  const { profile, authSessionUser } = useAuth();
+  const { profile, authUser } = useAuth();
 
   // =====================================================
   // IMS NOTE [AKTIF/GUARDED] - Actor audit Work Log.
@@ -108,10 +108,10 @@ const ProductionWorkLogs = () => {
   // Alasan logic: Work Log completed sudah menyimpan operator produksi, tetapi actor aplikasi tetap perlu tercatat dari Auth session.
   // =====================================================
   const currentUser = useMemo(() => ({
-    email: profile?.email || authSessionUser?.email || "",
-    displayName: profile?.displayName || profile?.name || authSessionUser?.displayName || "",
-    uid: profile?.authUid || profile?.uid || profile?.id || authSessionUser?.uid || "",
-  }), [authSessionUser, profile]);
+    email: profile?.email || authUser?.email || "",
+    displayName: profile?.displayName || profile?.name || authUser?.displayName || "",
+    uid: profile?.authUid || profile?.uid || profile?.id || authUser?.uid || "",
+  }), [authUser, profile]);
 
   // SECTION: state utama
   const [loading, setLoading] = useState(false);
@@ -722,7 +722,7 @@ const ProductionWorkLogs = () => {
   // =====================================================
   // Popup selesai produksi
   // Catatan maintainability:
-  // - User isi Good Qty, operator, dan catatan dari popup ini; field hasil selain good hanya compatibility data lama.
+  // - User isi Good Qty, operator, dan catatan dari popup ini; field hasil selain good hanya compatibility arsip.
   // - Setelah update work log, baru service complete menambah stok output dan menutup PO
   // =====================================================
   const handleOpenComplete = (record) => {
@@ -770,7 +770,7 @@ const ProductionWorkLogs = () => {
       // Alasan blok ini dipakai:
       // - regression sebelumnya Work Log selesai tetapi Payroll Produksi tetap kosong.
       // Status:
-      // - aktif dipakai; bukan data lama dan tidak mengubah business rule stok/HPP.
+      // - aktif dipakai; bukan data historis dan tidak mengubah business rule stok/HPP.
       // =====================================================
       let payrollMessageHandled = false;
       try {
@@ -794,7 +794,7 @@ const ProductionWorkLogs = () => {
         // Alasan blok ini dipakai:
         // - complete Work Log adalah guarded stock flow, sedangkan payroll bisa diperbaiki via task terpisah/manual.
         // Status:
-        // - aktif sebagai guard; bukan data lama.
+        // - aktif sebagai guard; bukan data historis.
         // =====================================================
         console.error(payrollError);
         payrollMessageHandled = true;
@@ -1130,7 +1130,7 @@ const ProductionWorkLogs = () => {
               <Form.Item
                 label="Sumber Work Log"
                 name="sourceType"
-                tooltip="Work Log baru dibuat dari order produksi. Manual/Planned hanya pembacaan data lama."
+                tooltip="Work Log baru dibuat dari order produksi. Manual/Planned hanya pembacaan arsip."
               >
                 <Select options={PRODUCTION_WORK_LOG_SOURCE_TYPES} disabled />
               </Form.Item>

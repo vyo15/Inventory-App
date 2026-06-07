@@ -12,7 +12,7 @@ Source aktual `Inventory-App-clean.zip` menunjukkan IMS berjalan dengan arsitekt
 - Auth lokal SQLite melalui endpoint `/api/auth/**`.
 - Semua flow guarded wajib lewat endpoint/service resmi backend.
 
-Dokumen ini menggantikan catatan lama yang masih mengarah ke runtime lama. Jika ada arsip historis lain yang bertentangan dengan dokumen ini, gunakan source aktual dan dokumen ini sebagai acuan.
+Dokumen ini menggantikan catatan lama yang masih mengarah ke runtime arsip. Jika ada arsip historis lain yang bertentangan dengan dokumen ini, gunakan source aktual dan dokumen ini sebagai acuan.
 
 ## Patch runtime status modul — digabung
 
@@ -48,7 +48,7 @@ Berdasarkan `backend/src/db/migrate.js`, modul berikut berstatus `sqlite_active`
 
 Konsekuensi:
 
-- Patch baru tidak boleh mengarahkan modul di atas ke runtime lama.
+- Patch baru tidak boleh mengarahkan modul di atas ke runtime arsip.
 - Frontend tidak boleh membaca file `.sqlite` langsung.
 - Data transaction/stock/finance/production/payroll/HPP tidak boleh ditulis lewat helper generic yang melewati service resmi.
 - Status modul di Database Center adalah indikator bantu; keputusan patch tetap harus validasi source aktual.
@@ -68,11 +68,11 @@ Konsekuensi:
 
 ### 1. Nama compatibility lama di source
 
-Masih ada kemungkinan nama variable/comment lama yang tersisa untuk compatibility, misalnya nama actor/session lama. Jangan menyimpulkan runtime lama aktif hanya dari nama variable. Audit import, package dependency, endpoint, dan service aktual terlebih dahulu.
+Masih ada kemungkinan nama variable/comment lama yang tersisa untuk compatibility, misalnya nama actor/session lama. Jangan menyimpulkan runtime arsip aktif hanya dari nama variable. Audit import, package dependency, endpoint, dan service aktual terlebih dahulu.
 
-### 2. Data lama dan referensi teknis
+### 2. Data historis dan referensi teknis
 
-Data lama bisa masih membawa field/ID teknis. UI tetap wajib menampilkan referensi manusiawi:
+Data historis bisa masih membawa field/ID teknis. UI tetap wajib menampilkan referensi manusiawi:
 
 1. Kode bisnis transaksi/master/produksi.
 2. `sourceRef` / `referenceNumber` yang readable.
@@ -132,7 +132,7 @@ Jangan membuat perhitungan stok baru di UI.
 - Mengubah route/menu/role guard.
 - Mengubah status flow sales/purchase/return/production/payroll.
 - Mengubah stock mutation, finance ledger, HPP final, atau payroll paid flow.
-- Menghidupkan runtime lama.
+- Menghidupkan runtime arsip.
 - Membuat direct database access dari frontend.
 - Menghapus compatibility helper sebelum audit usage.
 - Membuat service/helper baru jika helper existing sudah tersedia.
@@ -148,4 +148,4 @@ Jangan membuat perhitungan stok baru di UI.
 - [ ] Cek audit log dan histori transaksi untuk area guarded.
 - [ ] Cek backup/restore/reset guard jika menyentuh maintenance.
 - [ ] Cek docs terkait dan update bila source berubah.
-- [ ] Pastikan docs tidak mengarahkan kembali ke runtime lama.
+- [ ] Pastikan docs tidak mengarahkan kembali ke runtime arsip.

@@ -77,11 +77,11 @@ import {
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
-// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const ProductionOrders = () => {
-  const { profile, authSessionUser } = useAuth();
+  const { profile, authUser } = useAuth();
 
   // =====================================================
   // IMS NOTE [AKTIF/GUARDED] - Actor audit Start Production dari PO.
@@ -90,10 +90,10 @@ const ProductionOrders = () => {
   // Alasan logic: Start Production dari halaman PO adalah jalur resmi yang membuat Work Log dan memotong material.
   // =====================================================
   const currentUser = useMemo(() => ({
-    email: profile?.email || authSessionUser?.email || "",
-    displayName: profile?.displayName || profile?.name || authSessionUser?.displayName || "",
-    uid: profile?.authUid || profile?.uid || profile?.id || authSessionUser?.uid || "",
-  }), [authSessionUser, profile]);
+    email: profile?.email || authUser?.email || "",
+    displayName: profile?.displayName || profile?.name || authUser?.displayName || "",
+    uid: profile?.authUid || profile?.uid || profile?.id || authUser?.uid || "",
+  }), [authUser, profile]);
 
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);

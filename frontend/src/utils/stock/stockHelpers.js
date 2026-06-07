@@ -43,7 +43,7 @@ export const calculateWeightedAverage = (previousQty, previousCost, incomingQty,
   //   dihitung sebagai modal 0 saat ada pembelian/produksi baru.
   // - Cost masuk pertama yang valid menjadi baseline untuk stok lama + stok masuk.
   // Risiko:
-  // - Jangan ubah menjadi average biasa tanpa migration cost lama, karena bisa membuat
+  // - Jangan ubah menjadi average biasa tanpa audit biaya lama, karena bisa membuat
   //   modal turun tidak realistis dan laporan laba tampak terlalu besar.
   // =====================================================
   const previousCostBasis = prevQty > 0 && prevCost <= 0 && inCost > 0 ? inCost : prevCost;
@@ -452,13 +452,13 @@ const buildStockReadModelSearchText = ({
   .join(' ');
 
 // =====================================================
-// ACTIVE / PURE BUILDER - SQLite stock read model payload.
+// ACTIVE / PURE BUILDER - payload data stok turunan.
 // Fungsi:
-// - membangun payload read model stok dari buildStockReadModelRow() agar comparator Dashboard/Stock Report tetap satu sumber;
+// - membangun payload data stok dari buildStockReadModelRow() agar comparator Dashboard/Stock Report tetap satu sumber;
 // - menyiapkan field queryable untuk status stok, issue flag, source collection, dan export/report;
 // - tidak melakukan read/write database dan tidak membuat side-effect stok.
 // Guard:
-// - Jangan jadikan read model ini source of truth mutasi stok. Source of truth tetap master item + inventory_logs.
+// - Jangan jadikan data turunan ini source of truth mutasi stok. Source of truth tetap master item + inventory_logs.
 // - Writer sync/backfill wajib batch terpisah dan harus menjaga semua jalur stock mutation.
 // =====================================================
 export const buildStockItemReadModelPayload = (

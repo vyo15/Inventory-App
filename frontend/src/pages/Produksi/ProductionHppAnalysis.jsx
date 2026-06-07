@@ -677,7 +677,7 @@ const ProductionHppAnalysis = () => {
             ACTIVE / GUARDED - compact warning global HPP.
             Fungsi blok:
             - memberi konteks bahwa row dengan cost 0 perlu dicek sumber datanya;
-            - tidak mengubah rumus HPP dan tidak melakukan backfill data lama.
+            - tidak mengubah rumus HPP dan tidak melakukan backfill data historis.
             Hubungan dengan flow HPP/Work Log: hanya membaca hasil validasi row Work Log completed.
             Status: aktif dipakai; bukan kandidat cleanup.
         ===================================================== */}

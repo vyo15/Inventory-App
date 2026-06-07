@@ -81,7 +81,7 @@ const normalizeShopeeOcrDetailValue = (value = "", { isDiscount = false } = {}) 
 
   if (!trimmedValue) return "-";
 
-  // Diskon/potongan harus terbaca sebagai pengurang biaya walau data lama tidak menyimpan minus.
+  // Diskon/potongan harus terbaca sebagai pengurang biaya walau data historis tidak menyimpan minus.
   if (isDiscount && !trimmedValue.startsWith("-")) {
     return `-${trimmedValue}`;
   }

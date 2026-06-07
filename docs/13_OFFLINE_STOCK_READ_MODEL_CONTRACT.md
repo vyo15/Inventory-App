@@ -1,6 +1,6 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, sync queue lama, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser arsip. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser arsip, sync queue arsip, conflict resolver, atau backup JSON storage browser arsip dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # OFFLINE STOCK READ MODEL CONTRACT — BATCH 31–33
@@ -32,33 +32,33 @@ File source yang benar-benar dicek:
 - `src/services/Dashboard/dashboardService.js`
 - `src/services/Laporan/stockReportService.js`
 - `src/data/local/localDbSchema.js`
-- `src/data/sync/runtime-lamaToLocalMasterDataSyncService.js`
+- `src/data/sync/runtime-arsipToLocalMasterDataSyncService.js`
 - `src/pages/Utilities/components/OfflineDatabaseCenter.jsx`
 - `docs/10_OFFLINE_DATABASE_CONTRACT.md`
 - `docs/12_OFFLINE_PRODUCTS_RAW_SEMI_CONTRACT.md`
 - `docs/08_INTEGRATION_MAP.md`
 
 File/area relevan yang tidak ditemukan sebagai komponen terpisah:
-- Tidak ditemukan `src/data/adapters/database-browser-lama/database-browser-lamaStockAdapter.js` atau repository stock offline yang aktif.
+- Tidak ditemukan `src/data/adapters/database-browser-arsip/database-browser-arsipStockAdapter.js` atau repository stock offline yang aktif.
 - Tidak ditemukan local stock mutation service/offline stock queue khusus; ini memang harus tetap tidak ada untuk batch ini.
-- rules database lama/index runtime di runtime lama Console tidak bisa divalidasi dari ZIP selain file repo `rules database lama` dan `data lama-db.indexes.json`.
+- rules database arsip/index runtime di runtime arsip Console tidak bisa divalidasi dari ZIP selain file repo `rules database arsip` dan `data historis-db.indexes.json`.
 
 Batasan validasi:
-- Audit ini static source review dari ZIP, bukan dump data database lama production.
-- Tidak mengubah schema database lama/collection/rules.
+- Audit ini static source review dari ZIP, bukan dump data database arsip production.
+- Tidak mengubah schema database arsip/collection/rules.
 - Tidak mengaktifkan stock mutation offline.
 
 ## 2. Source of truth stok
 
 | Lapisan | Status | Fungsi | Keputusan |
 |---|---|---|---|
-| `products`, `raw_materials`, `semi_finished_materials` | Source dokumen stok operasional | Menyimpan `stock/currentStock/reservedStock/availableStock`, variant stock, cost/HPP tertentu | Tetap runtime lama-only untuk mutation |
-| `inventory_logs` | Histori mutasi stok | Audit movement: purchase in, sales out, return in, production material out/output in, adjustment | Tetap runtime lama-only; wajib ada untuk mutation |
-| `stock_adjustments` | Dokumen koreksi stok | Koreksi manual guarded | Tetap runtime lama-only; tidak boleh offline |
+| `products`, `raw_materials`, `semi_finished_materials` | Source dokumen stok operasional | Menyimpan `stock/currentStock/reservedStock/availableStock`, variant stock, cost/HPP tertentu | Tetap runtime arsip-only untuk mutation |
+| `inventory_logs` | Histori mutasi stok | Audit movement: purchase in, sales out, return in, production material out/output in, adjustment | Tetap runtime arsip-only; wajib ada untuk mutation |
+| `stock_adjustments` | Dokumen koreksi stok | Koreksi manual guarded | Tetap runtime arsip-only; tidak boleh offline |
 | `stock_item_read_models` | Read model/cache | Dashboard/Stock Report cepat dan konsisten | Boleh dipull local read-only sebagai `stock_snapshots` |
-| `stock_snapshots` local database browser lama | Snapshot baca | Melihat stok terakhir saat offline | Tidak boleh edit, adjustment, transaksi, atau push |
+| `stock_snapshots` local database browser arsip | Snapshot baca | Melihat stok terakhir saat offline | Tidak boleh edit, adjustment, transaksi, atau push |
 
-Keputusan awal/final batch ini: **stock mutation tetap runtime lama-only**. Offline hanya boleh membaca snapshot terakhir.
+Keputusan awal/final batch ini: **stock mutation tetap runtime arsip-only**. Offline hanya boleh membaca snapshot terakhir.
 
 ## 3. Stock integration map aktual
 
@@ -69,7 +69,7 @@ Keputusan awal/final batch ini: **stock mutation tetap runtime lama-only**. Offl
 | Purchase receive | `purchasesService.js` | Stok barang/bahan masuk saat purchase disimpan/diterima | Tulis purchase, expense/side effect, inventory log, stock read model | Tidak boleh offline |
 | Sales stock out | `salesService.js` | Stok produk keluar dalam transaction | Tulis sale, income/revenue side effect, inventory log, stock read model | Tidak boleh offline |
 | Return stock in | `returnsService.js` | Stok produk/bahan masuk untuk koreksi return | Tulis return, inventory log, stock read model | Tidak boleh offline |
-| Production reserve/release data lama | `productionOrdersService.js` | Update `reservedStock/availableStock` | Tulis stock read model | Tidak boleh offline |
+| Production reserve/release data historis | `productionOrdersService.js` | Update `reservedStock/availableStock` | Tulis stock read model | Tidak boleh offline |
 | Production material usage saat Start/Complete Work Log | `productionWorkLogsService.js` | Mengurangi stok bahan/komponen dan release reserved | Tulis inventory log produksi dan `stock_item_read_models` dalam transaction yang sama | Tidak boleh offline |
 | Production output stock in | `productionWorkLogsService.js` | Menambah stok output product/semi-finished dan update cost/HPP | Tulis inventory log produksi dan `stock_item_read_models` dalam transaction yang sama | Tidak boleh offline |
 | Semi-finished master create/update/toggle | `semiFinishedMaterialsService.js` | Metadata semi-finished; beberapa flow production mengubah stoknya | Tulis stock read model saat metadata master berubah | Tidak boleh offline mutation |
@@ -87,19 +87,19 @@ Field minimum yang harus dijaga pada source stok dan read model:
 | `sourceId` | ID dokumen source | Wajib, tetapi bukan primary key local snapshot tunggal |
 | `readModelId` / local `id` | Document ID `stock_item_read_models` | Primary key local snapshot |
 | `name`, `code`, `displayReference` | Identitas bisnis | Untuk UI/audit, jangan tampilkan technical ID sebagai label utama |
-| `currentStock` | Stok fisik/current | Mutation hanya online/runtime lama |
-| `reservedStock` | Stok tertahan/reserved | Mutation hanya online/runtime lama |
+| `currentStock` | Stok fisik/current | Mutation hanya online/runtime arsip |
+| `reservedStock` | Stok tertahan/reserved | Mutation hanya online/runtime arsip |
 | `availableStock` | Stok tersedia | Harus konsisten dengan current - reserved |
-| `stock` | Data lama alias/master stock | Jangan dihapus tanpa audit data lama |
+| `stock` | Data historis alias/master stock | Jangan dihapus tanpa audit data historis |
 | `minStock` | Minimum stok | Dipakai status stock issue |
 | `stockStatus`, `hasStockIssue` | Status read model | Dipakai dashboard/report/snapshot |
 | `variants[]` | Stok varian | Wajib dijaga, jangan fallback ke master jika item punya varian |
 | `inventory_logs.*` | Histori mutasi | Wajib ada untuk semua mutation stock |
 | `stock_adjustments.*` | Koreksi manual | Guarded, tidak boleh offline |
 
-Local `stock_snapshots` menyalin read model runtime lama apa adanya dan menambah metadata pull:
+Local `stock_snapshots` menyalin read model runtime arsip apa adanya dan menambah metadata pull:
 - `syncStatus = synced`
-- `source = runtime-lama_pull`
+- `source = runtime-arsip_pull`
 - `lastSyncedAt`
 - `remoteUpdatedAt`
 - `localUpdatedAt`
@@ -119,8 +119,8 @@ Risiko terbesar jika stock mutation diaktifkan offline terlalu cepat:
 
 Catatan audit penting dari source aktual:
 - Writer purchase, sales, returns, stock adjustment, production reserve/release, semi-finished metadata, dan Production Work Log sudah memanggil stock read model writer.
-- `productionWorkLogsService.js` sekarang menyinkronkan `stock_item_read_models` di transaction yang sama saat Start Production material out, Complete Work Log material out fallback data lama, dan Complete Work Log output in.
-- Flow complete fallback data lama juga menulis `inventory_logs` `production_material_out` saat benar-benar memotong stok material, sehingga stok tidak berkurang tanpa histori audit baru.
+- `productionWorkLogsService.js` sekarang menyinkronkan `stock_item_read_models` di transaction yang sama saat Start Production material out, Complete Work Log material out fallback data historis, dan Complete Work Log output in.
+- Flow complete fallback data historis juga menulis `inventory_logs` `production_material_out` saat benar-benar memotong stok material, sehingga stok tidak berkurang tanpa histori audit baru.
 - `stock_item_read_models` tetap derived/cache. Source of truth stok tetap dokumen master `products`/`raw_materials`/`semi_finished_materials` dan histori tetap `inventory_logs`.
 
 ## 6. Daftar flow yang tidak boleh offline
@@ -143,20 +143,20 @@ Tidak boleh dijalankan offline sampai ada approval kontrak mutation, idempotency
 
 ### Boleh offline
 
-- Pull `stock_item_read_models` runtime lama ke local `stock_snapshots`.
+- Pull `stock_item_read_models` runtime arsip ke local `stock_snapshots`.
 - Preview `stock_snapshots` di Offline Database Center.
-- Export/import local backup yang mencakup snapshot, hanya sebagai backup local storage browser lama.
+- Export/import local backup yang mencakup snapshot, hanya sebagai backup local storage browser arsip.
 
 ### Tidak boleh offline
 
 - Membuat/mengubah/menghapus stok dari local.
-- Menulis `sync queue lama` untuk stock.
-- Push `stock_snapshots` ke runtime lama.
+- Menulis `sync queue arsip` untuk stock.
+- Push `stock_snapshots` ke runtime arsip.
 - Menjalankan adjustment/transaksi/produksi dari snapshot local.
 
 ### Audit log wajib
 
-- Pull snapshot menulis audit local `module = local_db_sync`, `action = runtime-lama_to_local_pull`, dan `metadata.scope = stock_read_only_snapshot`.
+- Pull snapshot menulis audit local `module = local_db_sync`, `action = runtime-arsip_to_local_pull`, dan `metadata.scope = stock_read_only_snapshot`.
 - Mutation stock online tetap wajib punya `inventory_logs` dan dokumen transaksi/koreksi terkait.
 
 ### Idempotency
@@ -183,23 +183,23 @@ Rollback stok tidak boleh menghitung dari snapshot. Rollback harus:
 
 - Conflict stock tidak boleh auto overwrite.
 - Jika dua perubahan menyentuh item/variant sama, harus manual review.
-- Local snapshot yang lebih lama tidak boleh menimpa runtime lama.
+- Local snapshot yang lebih lama tidak boleh menimpa runtime arsip.
 - Resolve harus mempertahankan `inventory_logs` sebagai histori, bukan hanya angka akhir.
 
 ### Double mutation prevention
 
 - `stock_snapshots` tidak masuk `LOCAL_SYNC_COLLECTIONS`.
 - UI Offline Database Center hanya menampilkan snapshot sebagai read-only.
-- Tidak ada database browser lama stock mutation adapter.
-- Tidak ada Offline → runtime lama untuk stock.
-- Semua stock mutation tetap melalui runtime lama transaction/service aktif.
+- Tidak ada database browser arsip stock mutation adapter.
+- Tidak ada Offline → runtime arsip untuk stock.
+- Semua stock mutation tetap melalui runtime arsip transaction/service aktif.
 
 ## 8. Patch Batch 32 yang diizinkan
 
 Patch aman batch ini hanya:
-- Menambah database browser lama table `stock_snapshots` di database browser lama schema v4.
-- Menambah runtime lama adapter read-only untuk `stock_item_read_models`.
-- Menambah opsi pull runtime lama → Offline untuk Stock Snapshot read-only.
+- Menambah database browser arsip table `stock_snapshots` di database browser arsip schema v4.
+- Menambah runtime arsip adapter read-only untuk `stock_item_read_models`.
+- Menambah opsi pull runtime arsip → Offline untuk Stock Snapshot read-only.
 - Menampilkan preview local snapshot read-only di Offline Database Center.
 - Menulis kontrak docs ini dan update kontrak offline utama.
 
@@ -209,7 +209,7 @@ Patch ini sengaja tidak mengubah:
 - `stock_adjustments` writer.
 - Purchase/sales/returns/production/payroll/HPP runtime.
 - Route/menu/role guard.
-- database lama rules/index.
+- database arsip rules/index.
 
 ## Update C5 SQLite Stock Read Model Foundation
 

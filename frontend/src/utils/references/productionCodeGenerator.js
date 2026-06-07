@@ -18,7 +18,7 @@ Alasan perubahan:
 - Standar IMS melarang generator/dictionary duplikat lintas modul produksi.
 
 Catatan cleanup:
-- Generator readable lama sudah dihapus dari flow aktif; data lama tetap dibaca sebagai data biasa.
+- Generator readable lama sudah dihapus dari flow aktif; data historis tetap dibaca sebagai data biasa.
 
 Risiko:
 - Menambah logic baru di wrapper ini akan membuat standar kode produksi kembali bercabang.

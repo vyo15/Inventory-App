@@ -171,7 +171,7 @@ const buildAntdMenuItems = (menuItems, level = 0) => {
 // - matrix role berasal dari roleAccess.js dan metadata sidebarMenu.js.
 // Status:
 // - AKTIF untuk Fase D Sidebar/Menu Guard.
-// - GUARDED: hide menu bukan security final; ProtectedRoute, backend auth, dan role guard tetap wajib.
+// - GUARDED: hide menu bukan security final; ProtectedRoute, auth, dan role guard layanan lokal tetap wajib.
 // Compatibility / cleanup:
 // - tidak ada flow lama aktif; menu User Management sudah mengikuti route aktif.
 // =========================

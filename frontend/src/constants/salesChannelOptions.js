@@ -1,7 +1,7 @@
 // IMS NOTE [AKTIF] - Single source of truth channel penjualan.
 // Fungsi file: menyatukan opsi Sales, ringkasan channel, dan marketplace report agar label/urutan tidak dobel di page.
 // Hubungan flow: hanya helper read/display; schema salesChannel, stok keluar, income timing, dan report source tidak berubah.
-// Catatan: `Belum Dikategorikan` hanya fallback audit untuk data lama/unknown, bukan opsi input user baru.
+// Catatan: `Belum Dikategorikan` hanya fallback audit untuk data historis/unknown, bukan opsi input user baru.
 
 export const SALES_CHANNEL_UNCATEGORIZED_KEY = "__uncategorized__";
 export const SALES_CHANNEL_UNCATEGORIZED_LABEL = "Belum Dikategorikan";

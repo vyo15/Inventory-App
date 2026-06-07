@@ -19,7 +19,7 @@ const {
 
 const router = express.Router();
 
-router.get("/status", async (req, res, next) => {
+router.get("/status", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
   try {
     const db = await getDb();
     const [schemaVersion, userCount, activeAdminCount, customerCount, categoryCount, supplierCount, auditCount, backupCount, restorePlanCount, moduleRuntimeStatusCount, latestBackup] = await Promise.all([
@@ -256,7 +256,7 @@ router.post("/restore-plan", requireLocalAuth, requireLocalAdministrator, async 
       validationError: preview?.validationError || null,
       blockedActions: [
         "Tidak overwrite database aktif.",
-        "Tidak stop backend otomatis.",
+        "Tidak menghentikan layanan lokal otomatis.",
         "Tidak menghapus file database lokal aktif.",
         "Restore destructive hanya lewat /api/maintenance/restore-execute dengan session administrator lokal dan keyword konfirmasi.",
       ],
@@ -268,9 +268,9 @@ router.post("/restore-plan", requireLocalAuth, requireLocalAdministrator, async 
       ],
       manualSafeSteps: [
         "Buat backup terbaru terlebih dahulu.",
-        "Jangan copy file database lokal aktif saat backend berjalan.",
-        "Gunakan restore guarded dari UI/backend agar sistem membuat pre-restore backup otomatis.",
-        "Setelah restore, refresh aplikasi dan cek /health serta /api/maintenance/status.",
+        "Jangan copy file database lokal aktif saat layanan berjalan.",
+        "Gunakan restore guarded dari UI agar sistem membuat pre-restore backup otomatis.",
+        "Setelah restore, refresh aplikasi dan cek status layanan dari Maintenance Center.",
       ],
     };
 

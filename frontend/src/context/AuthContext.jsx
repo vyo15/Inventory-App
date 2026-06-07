@@ -26,7 +26,7 @@ export const normalizeInternalUsername = (username = "") => username.trim().toLo
 export const buildInternalAuthEmail = (username = "") => `${normalizeInternalUsername(username)}@sqlite.local`;
 
 export const AuthProvider = ({ children }) => {
-  const [authSessionUser, setAuthSessionUser] = useState(null);
+  const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [profileStatus, setProfileStatus] = useState(AUTH_PROFILE_STATUS.SIGNED_OUT);
@@ -34,19 +34,19 @@ export const AuthProvider = ({ children }) => {
 
   const applyLocalAuthUser = useCallback((localUser) => {
     if (!localUser) {
-      setAuthSessionUser(null);
+      setAuthUser(null);
       setProfile(null);
       setProfileStatus(AUTH_PROFILE_STATUS.SIGNED_OUT);
       return;
     }
 
-    const authUser = {
+    const nextAuthUser = {
       uid: localUser.authUid || `local-${localUser.id}`,
       email: `${localUser.username || "local"}@sqlite.local`,
       providerId: LOCAL_AUTH_PROVIDER,
     };
 
-    setAuthSessionUser(authUser);
+    setAuthUser(nextAuthUser);
     setProfile(localUser);
 
     if (localUser.status !== ACTIVE_STATUS) {
@@ -71,7 +71,7 @@ export const AuthProvider = ({ children }) => {
       const localUser = await getCurrentLocalAuthUser();
       applyLocalAuthUser(localUser);
     } catch (error) {
-      setAuthSessionUser(null);
+      setAuthUser(null);
       setProfile(null);
       setProfileError(error);
       setProfileStatus(AUTH_PROFILE_STATUS.SIGNED_OUT);
@@ -91,16 +91,16 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(async () => {
     await logoutLocalAuth();
-    setAuthSessionUser(null);
+    setAuthUser(null);
     setProfile(null);
     setProfileStatus(AUTH_PROFILE_STATUS.SIGNED_OUT);
   }, []);
 
-  const isAuthenticated = Boolean(authSessionUser || profile);
+  const isAuthenticated = Boolean(authUser || profile);
   const isAccessReady = isAuthenticated && profileStatus === AUTH_PROFILE_STATUS.READY;
 
   const value = useMemo(() => ({
-    authSessionUser,
+    authUser,
     profile,
     authMode: "sqlite",
     activeRole: profile?.role || null,
@@ -112,7 +112,7 @@ export const AuthProvider = ({ children }) => {
     loginWithUsername,
     logout,
     reloadProfile: loadLocalAuthProfile,
-  }), [authSessionUser, profile, authLoading, profileStatus, profileError, isAuthenticated, isAccessReady, loginWithUsername, logout, loadLocalAuthProfile]);
+  }), [authUser, profile, authLoading, profileStatus, profileError, isAuthenticated, isAccessReady, loginWithUsername, logout, loadLocalAuthProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

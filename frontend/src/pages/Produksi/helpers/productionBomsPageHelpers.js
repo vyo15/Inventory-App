@@ -3,7 +3,7 @@ import { hydrateBomMaterialLinesWithLiveCost } from "../../../utils/produksi/pro
 
 // IMS NOTE [AKTIF/BATCH 19/GUARDED] — helper UI/read-only halaman ProductionBoms.
 // Fungsi blok: memusatkan style compact dan hydrator live cost yang hanya membaca reference data.
-// Hubungan flow: tidak menulis BOM, stok, HPP, payroll, purchase, atau read model.
+// Hubungan flow: tidak menulis BOM, stok, HPP, payroll, purchase, atau data stok turunan.
 // Alasan logic: halaman ProductionBoms tetap besar, sehingga helper pure dipisah tanpa memindahkan submit/validasi service.
 export const compactTagStyle = {
   display: "inline-flex",

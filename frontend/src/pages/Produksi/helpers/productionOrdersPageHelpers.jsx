@@ -5,7 +5,7 @@ import formatNumber from "../../../utils/formatters/numberId";
 
 // IMS NOTE [AKTIF/BATCH 19/GUARDED] — helper UI/read-only halaman ProductionOrders.
 // Fungsi blok: memusatkan opsi, formatter, dan resolver display requirement/target PO.
-// Hubungan flow: hanya presentasi/preview; tidak mengubah submit PO, refresh need, Start Production, stok, Work Log, HPP, payroll, atau read model.
+// Hubungan flow: hanya presentasi/preview; tidak mengubah submit PO, refresh need, Start Production, stok, Work Log, HPP, payroll, atau data stok turunan.
 // Alasan logic: halaman ProductionOrders masih besar dan sensitive, sehingga yang dipisah hanya helper pure tanpa side-effect.
 export const PRODUCTION_ORDER_TARGET_TYPES = [
   {

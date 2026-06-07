@@ -61,7 +61,7 @@ export const setRepositoryModeForDevelopment = async (
   const nextMode = normalizeRepositoryMode(mode);
 
   if (confirmation !== SQLITE_REPOSITORY_CONFIRMATION) {
-    throw new Error(`Runtime utama IMS memakai database lokal. Isi confirmation: ${SQLITE_REPOSITORY_CONFIRMATION}`);
+    throw new Error(`IMS memakai database lokal sebagai penyimpanan utama. Isi confirmation: ${SQLITE_REPOSITORY_CONFIRMATION}`);
   }
 
   persistMode(nextMode);

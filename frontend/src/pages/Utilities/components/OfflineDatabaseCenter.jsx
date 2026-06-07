@@ -84,7 +84,7 @@ const getBackupTypeLabel = (backupType) => {
     "pre-restore": "Sebelum Restore",
     "pre-reset": "Sebelum Reset",
     "pre-import": "Sebelum Import",
-    archived: "Data Lama",
+    archived: "Arsip",
   };
   return map[backupType] || backupType || "Backup";
 };
@@ -106,9 +106,9 @@ const RUNTIME_SCOPE_LABELS = {
   atomic_stock_finance: "Stok dan keuangan",
   product_raw_stock_restore_guarded_refund: "Retur barang dan pemulihan stok",
   cash_in_cash_out_ledger: "Kas masuk, kas keluar, dan ledger",
-  production_sqlite_runtime: "Alur produksi",
-  payroll_paid_hpp_sqlite: "Payroll final dan HPP",
-  sqlite_transactions_finance_stock: "Laporan transaksi, keuangan, dan stok",
+  production_runtime: "Alur produksi",
+  payroll_paid_hpp: "Payroll final dan HPP",
+  transactions_finance_stock: "Laporan transaksi, keuangan, dan stok",
   local_auth_only: "Login dan role user",
   confirm_keyword_required: "Aksi wajib konfirmasi",
 };
@@ -144,9 +144,9 @@ const renderSelectedBackupSummary = (backup) => {
 };
 
 // =====================================================
-// SECTION: OfflineDatabaseCenter — AKTIF / SQLITE LOCAL CENTER
+// SECTION: OfflineDatabaseCenter — AKTIF / DATABASE CENTER
 // Fungsi:
-// - Menggantikan UI penyimpanan browser lama dengan pusat kontrol database lokal LAN.
+// - Menggantikan UI penyimpanan browser lama dengan pusat kontrol database lokal.
 // - Tidak menjalankan sinkronisasi lama, conflict resolver, atau backup penyimpanan browser.
 // - Modul guarded stock/purchase/sales/finance/production tetap tidak dimutasi offline.
 // =====================================================
@@ -624,9 +624,9 @@ const OfflineDatabaseCenter = () => {
       <Card size="small" title="Manual QA" className="offline-db-action-card">
         <Timeline
           items={[
-            { color: "green", children: "Layanan lokal: jalankan npm install dan npm run dev dari folder backend, lalu cek status aplikasi." },
-            { color: "green", children: "Frontend laptop: npm run dev -- --host 0.0.0.0; buka halaman Kategori dan Customer." },
-            { color: "green", children: "HP: buka aplikasi dari alamat lokal laptop/PC server dan tambah/edit customer test." },
+            { color: "green", children: "Layanan lokal: jalankan aplikasi dari komputer utama, lalu cek status aplikasi." },
+            { color: "green", children: "Laptop/PC utama: buka halaman Kategori dan Customer." },
+            { color: "green", children: "HP: buka aplikasi dari alamat lokal komputer utama dan tambah/edit customer test." },
             { color: "green", children: "Restart layanan lokal; pastikan auto backup harian tidak dobel di hari yang sama." },
             { color: "blue", children: "Buat backup manual; pastikan paket .imsbak.zip, manifest, checksum, dan audit log maintenance tercatat." },
             { color: "orange", children: "Jalankan Preview Restore pada backup terbaru; pastikan status valid sebelum tombol restore aktif." },

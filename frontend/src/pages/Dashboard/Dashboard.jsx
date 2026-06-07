@@ -469,7 +469,7 @@ const Dashboard = () => {
   - Card KPI dibuat netral agar dashboard terlihat lebih profesional; penanda kondisi cukup memakai badge kecil.
 
   Catatan cleanup:
-  - Sales dan cash masih dibaca dari collection operasional existing; standardisasi read model bisa menjadi task terpisah jika data membesar.
+  - Sales dan cash masih dibaca dari data operasional existing; standardisasi data ringkasan bisa menjadi task terpisah jika data membesar.
 
   Risiko:
   - Menjumlahkan sales dengan incomes/revenues sebagai angka kas yang sama akan double count dan membuat Profit Loss tidak sinkron.
@@ -567,7 +567,7 @@ const Dashboard = () => {
   // Hubungan flow:
   // - menggabungkan sinyal stok, PO, planning, Work Log, dan Payroll sebagai control center harian.
   // Status:
-  // - aktif dipakai; bukan data lama.
+  // - aktif dipakai; bukan data historis.
   // =========================
   const priorityItems = useMemo(() => {
     const items = [
@@ -743,7 +743,7 @@ const Dashboard = () => {
           - Owner perlu membaca kondisi bisnis utama dalam sekali lihat tanpa membuka report penuh.
 
           Catatan cleanup:
-          - Sales dan cash dapat dipindahkan ke read model jika volume data makin besar.
+          - Sales dan cash dapat dipindahkan ke data ringkasan jika volume data makin besar.
 
           Risiko:
           - Jika KPI dianggap laporan final, angka bisa disalahartikan karena Dashboard hanya monitoring read-only.
@@ -856,7 +856,7 @@ const Dashboard = () => {
           Fungsi:
           - menampilkan action card paling penting saja;
           - seluruh action hanya Link navigasi, bukan write data.
-          Status: aktif dipakai untuk Dashboard read-only; bukan data lama.
+          Status: aktif dipakai untuk Dashboard read-only; bukan data historis.
       ========================= */}
       <PageSection
         title="Prioritas Hari Ini"

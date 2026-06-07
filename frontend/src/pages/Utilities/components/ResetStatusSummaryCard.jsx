@@ -6,7 +6,6 @@ const ResetStatusSummaryCard = ({
   hppCostBaselineSummary,
   maintenanceActor,
   onActionNoteChange,
-  preview,
 }) => (
   <Card title="Status Ringkas" size="small" extra={<Tag color="green">Actor: {maintenanceActor}</Tag>}>
     <Space direction="vertical" size={12} style={{ width: "100%" }}>
@@ -16,9 +15,6 @@ const ResetStatusSummaryCard = ({
         </Col>
         <Col xs={12} md={6}>
           <Statistic title="Repair Aman" value={autoBugSummary.safeRepairCount} />
-        </Col>
-        <Col xs={12} md={6}>
-          <Statistic title="Preview Reset" value={preview ? preview.totalRecords || 0 : "Belum"} />
         </Col>
         <Col xs={12} md={6}>
           <Statistic title="Baseline Modal/HPP" value={hppCostBaselineSummary?.exists ? "Ada" : "Belum"} />

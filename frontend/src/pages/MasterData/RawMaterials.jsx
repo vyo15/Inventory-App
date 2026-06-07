@@ -140,7 +140,7 @@ const RawMaterials = () => {
 
   // ---------------------------------------------------------------------------
   // Loader data master.
-  // Semua source of truth tetap datang dari service/backend database lokal.
+  // Semua source of truth tetap datang dari service database lokal.
   // ---------------------------------------------------------------------------
   useEffect(() => {
     setLoading(true);
@@ -758,7 +758,7 @@ const RawMaterials = () => {
                     Supplier dropdown filter.
                     FUNGSI: menampilkan supplier yang menyediakan bahan ini pada
                     mode edit, tetap menampilkan semua supplier pada mode create,
-                    dan tetap menyertakan supplier tersimpan untuk data lama.
+                    dan tetap menyertakan supplier tersimpan untuk data historis.
                     ALASAN: kebutuhan bug hanya filter opsi read-only; blok ini
                     tidak mengembalikan auto-sync Supplier ke Raw Material.
                     STATUS: aktif dipakai oleh form Raw Material.

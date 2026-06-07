@@ -8,15 +8,15 @@ const STOCK_REPORT_DEFAULT_PAGE_SIZE = 500;
 const STOCK_REPORT_DEFAULT_EXPORT_LIMIT = 20000;
 
 // =====================================================
-// SECTION: Stock Report read service — AKTIF / READ-ONLY
+// SECTION: Stock Report service — AKTIF / READ-ONLY
 // Fungsi:
-// - memakai collection turunan stock_item_read_models sebagai read path utama Stock Report;
+// - memakai data stok turunan sebagai sumber utama Stock Report;
 // - mendukung paging cursor dan full-export loop agar laporan tidak hanya bergantung pada rows UI yang termuat;
-// - fallback ke source master hanya jika read model kosong/gagal agar data lama tidak blank sebelum rebuild maintenance.
+// - fallback ke source master hanya jika data stok turunan kosong/gagal agar data historis tidak blank sebelum perbaikan maintenance.
 // Hubungan flow:
 // - read-only; tidak menulis stok, inventory log, transaksi, produksi, atau schema.
 // Risiko:
-// - stock_item_read_models tetap derived. Mutasi stok wajib tetap terjadi di master stock dan inventory_logs.
+// - data stok laporan tetap turunan. Mutasi stok wajib tetap terjadi di master stock dan inventory_logs.
 // =====================================================
 const mapInventorySnapshotToReportRows = (snapshot, typeLabel) =>
   snapshot.docs.map((documentItem) => buildStockReadModelRow(documentItem.data(), {
@@ -157,7 +157,7 @@ const readStockReportCategories = async () => ({
 // SECTION: Stock Report data loader — AKTIF / READ MODEL PRIMARY + PAGING
 // Fungsi:
 // - membaca stok dari stock_item_read_models dengan cursor page agar laporan tidak perlu memuat semua row sekaligus;
-// - tetap mengambil categories untuk filter UI dan fallback master ketika read model belum dibackfill.
+// - tetap mengambil kategori untuk filter UI dan fallback master ketika data stok turunan belum lengkap.
 // Risiko:
 // - Paging ordered membutuhkan index sourceType + name. Jika index/rules belum siap, fallback master tetap dijaga.
 // =====================================================

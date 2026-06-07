@@ -17,10 +17,10 @@ export const unitOptions = ['pcs', 'meter', 'yard', 'kg', 'gram', 'liter', 'ml',
 // membuka seluruh collection purchases saat data real membesar.
 // HUBUNGAN FLOW: read-only; tidak mengubah Raw Material, Supplier, Purchases,
 // stok, kas, expense, harga, saving, atau laporan.
-// DATA LAMA: purchase yang sangat tua di luar jendela lookup tidak dipakai sebagai
+// DATA HISTORIS: purchase yang sangat tua di luar jendela lookup tidak dipakai sebagai
 // pembanding ringkas; source of truth histori tetap laporan pembelian.
 // CLEANUP CANDIDATE: ganti ke service latest purchase per material jika index
-// Payload final sudah dibuat oleh service/backend.
+// Payload final sudah dibuat oleh service resmi.
 // -----------------------------------------------------------------------------
 export const RAW_MATERIAL_PURCHASE_LOOKUP_LIMIT = 500;
 
@@ -78,7 +78,7 @@ export const compactCellStyles = {
 // Helper filter supplier untuk form Raw Material.
 // FUNGSI: membatasi opsi supplier secara read-only berdasarkan katalog material
 // yang dijual supplier, lalu tetap menyertakan supplier yang sudah tersimpan di
-// Raw Material agar data lama tidak terlihat hilang dari form.
+// Raw Material agar data historis tidak terlihat hilang dari form.
 // ALASAN: user perlu melihat supplier yang relevan dengan bahan tersebut tanpa
 // mengembalikan auto-sync Supplier ke Raw Material.
 // STATUS: aktif dipakai oleh dropdown Supplier pada drawer create/edit; bukan
@@ -290,7 +290,7 @@ export const resolvePrimarySupplierForMaterial = (supplierList = [], materialRec
    * Guard anti-white-screen supplier snapshot.
    * Fungsi: helper display supplier hanya dipanggil saat master Supplier aktif ditemukan.
    * Alasan: raw material lama bisa punya supplierId orphan sehingga harus fallback ke snapshot lama.
-   * Status: aktif dipakai; read-only dan bukan kandidat cleanup selama data lama masih ada.
+   * Status: aktif dipakai; read-only dan bukan kandidat cleanup selama data historis masih ada.
    */
   return {
     id: supplierId,
@@ -358,7 +358,7 @@ Alasan perubahan:
 - Status Raw Material harus konsisten dengan Dashboard/Stock Report: `availableStock ?? currentStock ?? stock ?? 0` dibandingkan dengan master `minStock`.
 
 Catatan cleanup:
-- Fallback `currentStock`/`stock` bisa diaudit lagi setelah semua data lama punya `availableStock`.
+- Fallback `currentStock`/`stock` bisa diaudit lagi setelah semua data historis punya `availableStock`.
 
 Risiko:
 - Jika helper ini kembali memakai currentStock langsung, item dengan reserved stock bisa terlihat aman padahal available stock sudah di bawah minimum.

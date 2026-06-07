@@ -12,7 +12,7 @@ import { getVariantAwareStockStatusMeta } from "../../../utils/stock/stockHelper
 
 // IMS NOTE [AKTIF/BATCH 19/GUARDED] — helper UI/read-only halaman SemiFinishedMaterials.
 // Fungsi blok: memusatkan normalizer form, label grup/varian, dan status stok semi finished.
-// Hubungan flow: helper ini tidak menulis master stok, Work Log, HPP, payroll, atau read model.
+// Hubungan flow: helper ini tidak menulis master stok, Work Log, HPP, payroll, atau data stok turunan.
 // Alasan logic: halaman semi finished masih besar; extraction dibatasi ke helper pure tanpa mengubah service payload.
 export const normalizeFormVariants = (variants = [], hasVariants = true) => {
   if (!hasVariants) {

@@ -93,8 +93,8 @@ const spawnDevProcess = (command) => {
   });
 };
 
-console.log("[dev] Menjalankan backend dan frontend IMS...");
-console.log("[dev] Backend : http://localhost:3001");
+console.log("[dev] Menjalankan layanan lokal dan frontend IMS...");
+console.log("[dev] Layanan lokal : http://localhost:3001");
 console.log("[dev] Frontend: http://localhost:5173/Inventory-App/");
 console.log("[dev] Tekan Ctrl+C untuk menghentikan keduanya.\n");
 

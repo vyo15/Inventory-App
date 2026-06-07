@@ -71,7 +71,7 @@ import { buildDisplayReferenceSearchText, resolveDisplayReference } from "../../
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
-// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const { Text } = Typography;
@@ -223,7 +223,7 @@ const getCancelActionLabel = (plan = {}) => {
 // - action Cancel harus mengikuti guard service, bukan guard Buat PO, agar Planning yang sudah punya PO tidak membuka modal cancel palsu.
 //
 // Catatan cleanup:
-// - helper lokal bisa disederhanakan jika seluruh data lama sudah memakai status canonical.
+// - helper lokal bisa disederhanakan jika seluruh data historis sudah memakai status canonical.
 //
 // Risiko:
 // - guard UI harus tetap sejalan dengan service agar tidak membuka flow PO atau cancel untuk status/relasi final.

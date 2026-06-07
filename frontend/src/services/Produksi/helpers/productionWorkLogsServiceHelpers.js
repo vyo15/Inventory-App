@@ -16,7 +16,7 @@ import { normalizeStockSnapshot, toNumber } from "../../../utils/stock/stockHelp
 import { inferHasVariants } from "../../../utils/variants/variantStockHelpers";
 
 // =====================================================
-// Helper filter aktif yang toleran data lama
+// Helper filter aktif yang toleran data historis
 // - true -> tampil
 // - undefined -> tampil
 // - false -> tidak tampil
@@ -570,7 +570,7 @@ Alasan perubahan:
 - Tanpa fallback ini Work Log bisa menyimpan biaya material 0 padahal master average cost valid.
 
 Catatan cleanup:
-- Jika semua varian kelak punya field cost resmi, fallback master tetap aman sebagai kompatibilitas data lama.
+- Jika semua varian kelak punya field cost resmi, fallback master tetap aman sebagai kompatibilitas data historis.
 
 Risiko:
 - Mengubah prioritas field cost sembarangan dapat membuat HPP memakai reference price/harga jual, bukan modal aktual.
@@ -639,7 +639,7 @@ Catatan cleanup:
 - Bisa dipindah ke constants/shared helper jika nanti dibutuhkan oleh report lain.
 
 Risiko:
-- Jangan panggil helper ini untuk write back data lama secara massal; helper hanya dipakai di flow aktif yang memang sedang membuat/menyelesaikan Work Log.
+- Jangan panggil helper ini untuk write back data historis secara massal; helper hanya dipakai di flow aktif yang memang sedang membuat/menyelesaikan Work Log.
 =====================================================
 */
 const calculateMaterialCostFromUsages = (materialUsages = []) =>
@@ -890,7 +890,7 @@ export const buildWorkLogDraftFromProductionOrderData = (
 // =====================================================
 // Output HPP reconcile pure helpers — GUARDED
 // Phase 3 extraction: hanya menghitung payload/cost state.
-// Backend transaction, stock posting, inventory log, dan payroll sync tetap di service utama.
+// Transaksi layanan, stock posting, inventory log, dan payroll sync tetap di service utama.
 // =====================================================
 
 export const COST_RECONCILE_TOLERANCE = 0.0001;

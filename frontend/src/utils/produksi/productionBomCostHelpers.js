@@ -96,7 +96,7 @@ Alasan perubahan:
 - BOM aktif tidak boleh lagi memakai snapshot lama ketika average cost/HPP master sudah berubah atau direset ke 0.
 
 Catatan cleanup:
-- Nama field snapshot masih dipertahankan untuk compatibility data lama; rename schema perlu approval terpisah.
+- Nama field snapshot masih dipertahankan untuk compatibility data historis; rename schema perlu approval terpisah.
 
 Risiko:
 - Jika fallback snapshot lama dikembalikan, estimasi BOM dan Work Log baru bisa memakai modal stale.

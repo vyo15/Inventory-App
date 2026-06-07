@@ -2,7 +2,7 @@
 
 Status: **AKTIF / SOURCE-VERIFIED / SQLITE-FIRST**.
 
-Checklist ini adalah checklist aktif untuk source terbaru. Checklist lama yang mengarah ke runtime lama tidak dipakai lagi untuk QA aktif.
+Checklist ini adalah checklist aktif untuk source terbaru. Checklist lama yang mengarah ke runtime arsip tidak dipakai lagi untuk QA aktif.
 
 ## 1. Setup dan run
 
@@ -35,10 +35,10 @@ Target default:
 ## 2. Backend health dan status
 
 - [ ] `GET /health` sukses.
-- [ ] `GET /api` menampilkan endpoint resmi.
-- [ ] `GET /api/maintenance/status` menampilkan path database, schema version, backup policy, dan jumlah module runtime status.
-- [ ] `GET /api/module-runtime-status` sukses dan menampilkan summary modul.
-- [ ] `GET /api/migration-status` tetap berfungsi sebagai alias compatibility.
+- [ ] `GET /api` hanya menampilkan info public minimal, bukan daftar endpoint penuh/detail lokal.
+- [ ] `GET /api/maintenance/status` tanpa token ditolak; dengan token administrator menampilkan path database, schema version, backup policy, dan jumlah status modul.
+- [ ] `GET /api/module-runtime-status` tanpa token ditolak; dengan token administrator sukses dan menampilkan summary modul.
+- [ ] `GET /api/migration-status` tetap berfungsi sebagai alias compatibility dengan proteksi administrator yang sama.
 - [ ] Backend log tidak menunjukkan error migrasi.
 
 ## 3. Auth dan user management
@@ -89,7 +89,11 @@ Target default:
 
 ## 8. Returns
 
-- [ ] Return terkait sale yang valid.
+- [ ] Form Return wajib memilih transaksi Sales.
+- [ ] Dropdown item Return hanya berisi item dari Sales yang dipilih.
+- [ ] Backend menolak Return tanpa `relatedSaleId`.
+- [ ] Backend menolak item Return yang tidak ada di Sales terkait.
+- [ ] Backend menolak qty Return yang melebihi qty terjual dikurangi qty yang sudah pernah diretur.
 - [ ] Return stock restore berjalan lewat endpoint resmi.
 - [ ] Audit log return tercatat.
 - [ ] Refund/finance tetap mengikuti guard backend.
@@ -142,6 +146,6 @@ Target default:
 ## 13. Docs anti-regression
 
 - [ ] Docs menyatakan SQLite/backend sebagai runtime utama.
-- [ ] Docs tidak mengarahkan patch baru ke runtime lama.
+- [ ] Docs tidak mengarahkan patch baru ke runtime arsip.
 - [ ] Docs guarded area tetap melindungi stock, sales, purchases, returns, finance, production, payroll, HPP, auth, backup/restore, reset, route/menu, role guard, dan audit log.
 - [ ] Jika source berubah, docs terkait ikut diperbarui dalam patch yang sama.

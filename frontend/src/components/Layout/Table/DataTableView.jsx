@@ -312,7 +312,7 @@ const renderMobileCards = ({
 
 // IMS NOTE [AKTIF] - Shared wrapper tabel data operasional.
 // Fungsi blok: menyatukan pola DataRefreshIndicator + empty state tabel tanpa mengubah dataSource, columns, pagination, atau handler page.
-// Guardrail: komponen ini presentational-only; jangan masukkan query service/backend, mutation, stock, payroll, purchase, reset, atau business rule di sini.
+// Guardrail: komponen ini presentational-only; jangan masukkan query service, mutation, stock, payroll, purchase, reset, atau business rule di sini.
 const DataTableView = ({
   loading = false,
   dataSource = [],

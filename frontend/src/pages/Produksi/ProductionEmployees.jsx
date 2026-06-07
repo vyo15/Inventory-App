@@ -86,7 +86,7 @@ import {
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
-// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const ProductionEmployees = () => {
@@ -125,7 +125,7 @@ const ProductionEmployees = () => {
       // - data employee adalah data utama halaman, sehingga tidak boleh ikut kosong
       //   hanya karena query pendukung steps/payroll/worklogs terkena query/index database.
       // Status:
-      // - aktif dipakai; bukan data lama dan bukan kandidat cleanup.
+      // - aktif dipakai; bukan data historis dan bukan kandidat cleanup.
       // =====================================================
       const employeeResult = await getAllProductionEmployees();
       setEmployees(Array.isArray(employeeResult) ? employeeResult : []);
@@ -140,7 +140,7 @@ const ProductionEmployees = () => {
       // - bug lama muncul karena Promise.all membuat `setEmployees()` tidak jalan
       //   saat salah satu query pendukung reject.
       // Status:
-      // - aktif dipakai sebagai guard; bukan data lama.
+      // - aktif dipakai sebagai guard; bukan data historis.
       // =====================================================
       const [stepResult, payrollResult, workLogResult] = await Promise.allSettled([
         getActiveProductionSteps(),
@@ -202,7 +202,7 @@ const ProductionEmployees = () => {
       // Alasan blok ini dipakai:
       // - menjaga pesan error sesuai sumber masalah sebenarnya.
       // Status:
-      // - aktif dipakai; bukan data lama.
+      // - aktif dipakai; bukan data historis.
       // =====================================================
       console.error("Gagal memuat data utama karyawan produksi", error);
       setEmployees([]);
@@ -421,7 +421,7 @@ const ProductionEmployees = () => {
   // Alasan blok ini dipakai:
   // - bug UI terjadi karena detail lama terlalu penuh dan menampilkan tabel/help text panjang.
   // Status:
-  // - aktif dipakai sebagai ringkasan operasional; bukan data lama dan bukan kandidat cleanup.
+  // - aktif dipakai sebagai ringkasan operasional; bukan data historis dan bukan kandidat cleanup.
   // =====================================================
   const selectedEmployeeActivitySummary = useMemo(
     () => buildEmployeeActivitySummary(selectedEmployeeSummary),
@@ -431,19 +431,19 @@ const ProductionEmployees = () => {
   // =====================================================
   // ACTIVE / UI DETAIL OPTIONAL SECTIONS
   // Fungsi blok:
-  // - mendeteksi apakah info tambahan dan field data lama perlu ditampilkan di Collapse;
-  // - field data lama tetap dibaca untuk audit, tetapi tidak ditampilkan sebagai fitur utama.
+  // - mendeteksi apakah info tambahan dan field arsip payroll perlu ditampilkan di Collapse;
+  // - field arsip payroll tetap dibaca untuk audit, tetapi tidak ditampilkan sebagai fitur utama.
   // Alasan blok ini dipakai:
   // - payroll baru mengikuti Tahapan Produksi + Work Log completed, bukan custom payroll employee.
   // Status:
-  // - aktif dipakai untuk UI detail; bagian payroll data lama adalah compatibility dan kandidat cleanup
-  //   hanya jika data lama sudah diputuskan tidak dibutuhkan lagi.
+  // - aktif dipakai untuk UI detail; bagian arsip payroll adalah compatibility dan kandidat cleanup
+  //   hanya jika data historis sudah diputuskan tidak dibutuhkan lagi.
   // =====================================================
   // =====================================================
   // SECTION: Main table compact columns — AKTIF
   // Fungsi:
   // - Menampilkan ringkasan karyawan, role, jenis kerja, assignment step, status, dan aksi tanpa scroll x besar.
-  // - Menjaga payroll summary, work log recent, additional info, dan payroll data lama tetap di drawer detail existing.
+  // - Menjaga payroll summary, work log recent, additional info, dan arsip payroll tetap di drawer detail existing.
   //
   // Dipakai oleh:
   // - ProductionEmployees main table.
@@ -455,7 +455,7 @@ const ProductionEmployees = () => {
   // - Pola compact assignment tag dapat distandarkan ke shared component bila dipakai ulang di halaman produksi lain.
   //
   // Risiko:
-  // - Jangan mengubah employeeSummaryMap, query payroll/worklog, atau payroll data lama dari section presentasi ini.
+  // - Jangan mengubah employeeSummaryMap, query payroll/worklog, atau arsip payroll dari section presentasi ini.
   // =====================================================
   const columns = [
     {
@@ -966,10 +966,10 @@ const ProductionEmployees = () => {
             </Col>
           </Row>
 
-          <Divider orientation="left">Payroll Preference (Deprecated / Data Lama)</Divider>
+          <Divider orientation="left">Preferensi Payroll Arsip</Divider>
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-            Payroll final sekarang mengikuti rule pada menu Tahapan Produksi. Pengaturan custom payroll karyawan di bawah ini dipertahankan hanya untuk kompatibilitas data lama dan tidak lagi dipakai untuk generate payroll baru.
+            Payroll final sekarang mengikuti rule pada menu Tahapan Produksi. Pengaturan custom payroll karyawan di bawah ini hanya dipertahankan sebagai arsip audit dan tidak dipakai untuk generate payroll baru.
           </Typography.Paragraph>
 
           <Row gutter={16}>
@@ -994,7 +994,7 @@ const ProductionEmployees = () => {
                 <Row gutter={16}>
                   <Col xs={24} md={8}>
                     <Form.Item
-                      label="Mode Payroll Custom (Data Lama)"
+                      label="Mode Payroll Custom (Arsip)"
                       name="customPayrollMode"
                       rules={
                         useCustomPayrollRate
@@ -1015,7 +1015,7 @@ const ProductionEmployees = () => {
                   </Col>
 
                   <Col xs={24} md={8}>
-                    <Form.Item label="Tarif Custom (Data Lama)" name="customPayrollRate">
+                    <Form.Item label="Tarif Custom (Arsip)" name="customPayrollRate">
                       <InputNumber
                         min={0} step={1} precision={0} parser={parseIntegerIdInput}
                         style={{ width: "100%" }}
@@ -1040,7 +1040,7 @@ const ProductionEmployees = () => {
 
                         return (
                           <Form.Item
-                            label="Basis Qty Custom (Data Lama)"
+                            label="Basis Qty Custom (Arsip)"
                             name="customPayrollQtyBase"
                             rules={
                               disabled
@@ -1080,7 +1080,7 @@ const ProductionEmployees = () => {
 
                         return (
                           <Form.Item
-                            label="Basis Output Payroll Custom (Data Lama)"
+                            label="Basis Output Payroll Custom (Arsip)"
                             name="customPayrollOutputBasis"
                             rules={
                               disabled
@@ -1121,7 +1121,7 @@ const ProductionEmployees = () => {
                   </Col>
 
                   <Col xs={24}>
-                    <Form.Item label="Catatan Payroll (Data Lama)" name="payrollNotes">
+                    <Form.Item label="Catatan Payroll (Arsip)" name="payrollNotes">
                       <Input.TextArea
                         rows={2}
                         placeholder="Catatan payroll khusus karyawan..."
@@ -1161,10 +1161,10 @@ const ProductionEmployees = () => {
                 Fungsi blok:
                 - merapikan drawer Detail Karyawan Produksi menjadi ringkasan operasional;
                 - hanya menampilkan info utama, assignment, ringkasan aktivitas, histori singkat,
-                  info tambahan, dan payroll data lama dalam Collapse.
+                  info tambahan, dan arsip payroll dalam Collapse.
                 Alasan blok ini dipakai:
                 - detail lama terlalu panjang karena help text per field, tabel besar, dan payroll
-                  data lama tampil terbuka seperti fitur utama.
+                  arsip payroll tampil terbuka seperti fitur utama.
                 Status:
                 - aktif dipakai untuk UI detail; tidak menulis data dan bukan refactor flow bisnis.
             ===================================================== */}
@@ -1215,7 +1215,7 @@ const ProductionEmployees = () => {
                 Alasan blok ini dipakai:
                 - assignment adalah info penting produksi, tetapi detail lama terlalu ramai dengan help text.
                 Status:
-                - aktif dipakai; bukan data lama.
+                - aktif dipakai; bukan data historis.
             ===================================================== */}
             <Card size="small" title="Assignment Produksi" style={{ marginBottom: 16 }}>
               {Array.isArray(selectedEmployee.assignedStepNames) &&
@@ -1241,7 +1241,7 @@ const ProductionEmployees = () => {
                 Alasan blok ini dipakai:
                 - user butuh ringkasan cepat, bukan tabel panjang di drawer detail.
                 Status:
-                - aktif dipakai; bukan data lama.
+                - aktif dipakai; bukan data historis.
             ===================================================== */}
             <Card size="small" title="Ringkasan Work Log & Payroll" style={{ marginBottom: 16 }}>
               <Row gutter={[12, 12]}>
@@ -1286,7 +1286,7 @@ const ProductionEmployees = () => {
                 Alasan blok ini dipakai:
                 - histori lengkap tetap ada di menu Work Log Produksi dan Payroll Produksi.
                 Status:
-                - aktif dipakai; bukan data lama.
+                - aktif dipakai; bukan data historis.
             ===================================================== */}
             <Card size="small" title="Histori Singkat" style={{ marginBottom: 16 }}>
               <Row gutter={[16, 16]}>
@@ -1395,22 +1395,22 @@ const ProductionEmployees = () => {
 
             {hasArchivedPayrollInfo(selectedEmployee) ? (
               <Collapse size="small">
-                <Collapse.Panel header="Data Lama / Kompatibilitas" key="archived-payroll">
+                <Collapse.Panel header="Arsip Payroll" key="archived-payroll">
                   {/* =====================================================
-                      COMPATIBILITY DATA LAMA ONLY
+                      ARSIP PAYROLL ONLY
                       Fungsi blok:
-                      - tetap menyediakan audit field payroll data lama tanpa menjadikannya fitur utama;
+                      - tetap menyediakan audit field payroll arsip tanpa menjadikannya fitur utama;
                       - tidak menghapus field lama dari database.
                       Alasan blok ini dipakai:
                       - source payroll baru mengikuti Tahapan Produksi dan Work Log completed.
                       Status:
-                      - data lama/compatibility; kandidat cleanup hanya setelah keputusan migrasi data lama.
+                      - arsip payroll/compatibility; kandidat cleanup hanya setelah keputusan migrasi data historis.
                   ===================================================== */}
                   <Alert
                     showIcon
                     type="warning"
                     style={{ marginBottom: 12 }}
-                    message="Data lama untuk audit."
+                    message="Arsip payroll untuk audit."
                     description="Payroll baru mengikuti Tahapan Produksi dan Work Log completed."
                   />
                   <Descriptions column={1} size="small">
@@ -1435,10 +1435,10 @@ const ProductionEmployees = () => {
                         selectedEmployee.customPayrollOutputBasis
                       ] || "-"}
                     </Descriptions.Item>
-                    <Descriptions.Item label="Preview / Status Data Lama">
+                    <Descriptions.Item label="Preview / Status Arsip">
                       {formatEmployeePayrollPreview(selectedEmployee)}
                     </Descriptions.Item>
-                    <Descriptions.Item label="Catatan Payroll Data Lama">
+                    <Descriptions.Item label="Catatan Payroll Arsip">
                       {selectedEmployee.payrollNotes || "-"}
                     </Descriptions.Item>
                   </Descriptions>

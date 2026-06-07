@@ -1,10 +1,11 @@
 const express = require("express");
 const { getDb } = require("../../db/connection");
+const { requireLocalAuth, requireLocalAdministrator } = require("../../middlewares/localAuth");
 const { success } = require("../../utils/response");
 
 const router = express.Router();
 
-router.get("/", async (req, res, next) => {
+router.get("/", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
   try {
     const db = await getDb();
     const rows = await db.all("SELECT key, value, updated_at FROM app_settings ORDER BY key ASC");

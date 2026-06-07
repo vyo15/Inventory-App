@@ -101,7 +101,7 @@ const ProductionWorkLogDetailDrawer = ({
 
   // =====================================================
   // IMS NOTE [AKTIF/UI-ONLY] - Detail drawer Work Log.
-  // Fungsi blok: memusatkan read model detail Work Log agar page utama tidak terlalu besar.
+  // Fungsi blok: memusatkan data detail Work Log agar page utama tidak terlalu besar.
   // Hubungan flow: hanya presentasi read-only; create/update/complete Work Log, stok, payroll, dan HPP tetap di service/page lama.
   // =====================================================
   const detailWorkerNames = useMemo(() => {
@@ -163,7 +163,7 @@ const ProductionWorkLogDetailDrawer = ({
         amount: overheadEstimate,
         label: "Estimasi Resep",
         tagColor: "default",
-        helper: "Info data lama; belum disimpan sebagai overhead aktual.",
+        helper: "Info arsip; belum disimpan sebagai overhead aktual.",
       };
     }
 

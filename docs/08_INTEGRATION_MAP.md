@@ -128,15 +128,19 @@ Aturan terkunci:
 
 ```text
 Return form
+→ pilih Sales
+→ item Return hanya dari item Sales tersebut
 → POST /api/transactions/returns/commit
-→ validasi sale/item/qty
+→ backend validasi relatedSaleId
+→ backend validasi item ada pada Sales
+→ backend validasi qty <= qty terjual - qty sudah diretur
 → stock restore
 → refund/finance guard sesuai backend
 → audit log
 → return/report update
 ```
 
-Return bukan sales cancel tersembunyi. Return adalah jalur resmi barang kembali.
+Return bukan sales cancel tersembunyi. Return adalah jalur resmi barang kembali dan wajib memiliki relasi Sales.
 
 ## Finance
 
@@ -190,6 +194,7 @@ Dashboard/report harus read-only. Jika satu section gagal, tampilkan partial war
 
 ```text
 Database Center UI
+→ login administrator
 → /api/maintenance/status
 → /api/module-runtime-status
 → backup/restore endpoint guarded
@@ -209,18 +214,18 @@ Restore wajib:
 
 ```text
 module_migration_status
-→ GET /api/module-runtime-status
+→ GET /api/module-runtime-status dengan token administrator
 → Database Center / Maintenance Checklist
-→ summary modul aktif/guarded/data lama/unknown
+→ summary modul aktif/guarded/data historis/unknown
 ```
 
-Status modul adalah alat bantu audit. Patch fitur tetap wajib membaca file source aktual yang menangani modul tersebut.
+Status modul adalah alat bantu audit administrator. Patch fitur tetap wajib membaca file source aktual yang menangani modul tersebut.
 
 ## Anti-regression
 
 Dilarang:
 
-- Menghidupkan runtime lama.
+- Menghidupkan runtime arsip.
 - Direct database access dari frontend.
 - Direct write generic ke tabel guarded.
 - Menampilkan technical database ID sebagai referensi audit UI.

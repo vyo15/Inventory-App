@@ -42,7 +42,7 @@ const getBackupTypeLabel = (backupType) => {
     "pre-restore": "Sebelum Restore",
     "pre-reset": "Sebelum Reset",
     "pre-import": "Sebelum Import",
-    compatibility: "Data Lama",
+    compatibility: "Arsip",
   };
   return labels[backupType] || backupType || "Backup";
 };

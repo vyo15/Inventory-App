@@ -1,6 +1,6 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, sync queue lama, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser arsip. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser arsip, sync queue arsip, conflict resolver, atau backup JSON storage browser arsip dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # Offline Production, Payroll, dan HPP Contract
@@ -24,7 +24,7 @@ File aktual yang dicek untuk Batch 41-44:
 - `src/utils/produksi/productionPayrollRuleHelpers.js`
 - `src/pages/Produksi/ProductionHppAnalysis.jsx`
 - `src/data/local/localDbSchema.js`
-- `src/data/sync/runtime-lamaToLocalMasterDataSyncService.js`
+- `src/data/sync/runtime-arsipToLocalMasterDataSyncService.js`
 - `src/pages/Utilities/components/OfflineDatabaseCenter.jsx`
 - `docs/03_BUSINESS_RULES.md`
 - `docs/04_PRODUCTION_ARCHITECTURE.md`
@@ -38,8 +38,8 @@ File relevan yang tidak ditemukan sebagai service terpisah:
 
 Batasan validasi:
 
-- database lama rules/index di repo dicek sebagai file repo, tetapi konfigurasi produksi runtime lama Console tetap perlu diverifikasi manual.
-- Patch ini tidak membaca data runtime lama live; validasi hanya dari source ZIP.
+- database arsip rules/index di repo dicek sebagai file repo, tetapi konfigurasi produksi runtime arsip Console tetap perlu diverifikasi manual.
+- Patch ini tidak membaca data runtime arsip live; validasi hanya dari source ZIP.
 
 ## 2. Business rule produksi yang harus tetap
 
@@ -58,13 +58,13 @@ Rule domain yang tidak boleh berubah saat persiapan offline:
 
 | Area | Source utama | Offline Batch 41-44 |
 |---|---|---|
-| Production Planning | runtime lama `production_plans` via `productionPlanningService` | Snapshot read-only |
-| Production Orders | runtime lama `production_orders` via `productionOrdersService` | Snapshot read-only |
-| Work Logs | runtime lama `production_work_logs` via `productionWorkLogsService` | Snapshot read-only |
-| BOM | runtime lama `production_boms` via `productionBomsService` | Snapshot read-only |
-| Semi Finished | runtime lama `semiFinishedMaterials` via service produksi | Tidak dimutasi offline |
+| Production Planning | runtime arsip `production_plans` via `productionPlanningService` | Snapshot read-only |
+| Production Orders | runtime arsip `production_orders` via `productionOrdersService` | Snapshot read-only |
+| Work Logs | runtime arsip `production_work_logs` via `productionWorkLogsService` | Snapshot read-only |
+| BOM | runtime arsip `production_boms` via `productionBomsService` | Snapshot read-only |
+| Semi Finished | runtime arsip `semiFinishedMaterials` via service produksi | Tidak dimutasi offline |
 | Raw Material usage | Ditentukan saat Work Log/consume material online | Tidak boleh consume offline |
-| Payroll | runtime lama `production_payrolls` via `productionPayrollsService` | Snapshot read-only |
+| Payroll | runtime arsip `production_payrolls` via `productionPayrollsService` | Snapshot read-only |
 | HPP | Derived dari Work Log completed + Payroll + helper HPP | Snapshot derived read-only |
 | Overhead | Work Log actual/estimation sesuai source aktif | Snapshot read-only |
 | Glue usage | Material usage, bukan overhead | Tidak boleh consume offline |
@@ -92,8 +92,8 @@ Risiko utama bila production dibuat offline write terlalu cepat:
 
 Implementasi yang disetujui untuk batch ini:
 
-- Local storage browser lama schema naik ke versi 2 untuk menambahkan table snapshot produksi.
-- Snapshot production bersifat read-only dan tidak masuk `sync queue lama`.
+- Local storage browser arsip schema naik ke versi 2 untuk menambahkan table snapshot produksi.
+- Snapshot production bersifat read-only dan tidak masuk `sync queue arsip`.
 - Pull snapshot membutuhkan keyword:
 
 ```txt
@@ -128,7 +128,7 @@ Yang tetap tidak boleh:
 - Create payroll offline.
 - Mark payroll paid offline.
 - Finalize HPP offline.
-- Push production snapshot ke runtime lama.
+- Push production snapshot ke runtime arsip.
 
 ## 6. Batch 43 — Production Draft Concept
 
@@ -136,7 +136,7 @@ Konsep aman, belum runtime aktif:
 
 - Offline production note/draft hanya boleh menjadi catatan lokal untuk persiapan input saat online.
 - Draft tidak boleh mengubah stock, reserved stock, available stock, inventory log, production order status, work log status, payroll, finance, atau HPP.
-- Saat online, user wajib review ulang lalu commit lewat flow runtime lama resmi.
+- Saat online, user wajib review ulang lalu commit lewat flow runtime arsip resmi.
 
 Field contract draft yang disarankan bila nanti dibuat batch terpisah:
 
@@ -144,9 +144,9 @@ Field contract draft yang disarankan bila nanti dibuat batch terpisah:
 |---|---|
 | `id` | Local draft id |
 | `draftType` | `production_note`, `planning_note`, atau `work_log_note` |
-| `relatedPlanId` | Opsional, referensi planning runtime lama jika ada |
-| `relatedOrderId` | Opsional, referensi order runtime lama jika ada |
-| `relatedWorkLogId` | Opsional, referensi Work Log runtime lama jika ada |
+| `relatedPlanId` | Opsional, referensi planning runtime arsip jika ada |
+| `relatedOrderId` | Opsional, referensi order runtime arsip jika ada |
+| `relatedWorkLogId` | Opsional, referensi Work Log runtime arsip jika ada |
 | `title` | Judul catatan user |
 | `notes` | Isi draft/note |
 | `attachmentsLocalOnly` | Opsional, metadata attachment lokal bila nanti disetujui |
@@ -159,12 +159,12 @@ Batch ini belum menambahkan table draft runtime untuk menghindari persepsi bahwa
 
 ## 7. Batch 44 — Payroll & HPP Guard Contract
 
-Payroll/HPP tetap online/runtime lama-primary.
+Payroll/HPP tetap online/runtime arsip-primary.
 
 Rule guard:
 
 - Draft payroll boleh muncul sebagai preview UI/read-only, tetapi tidak boleh menjadi HPP final.
-- Payroll final untuk HPP hanya status `confirmed`, `paid`, atau `paymentStatus = paid`, dengan compatibility data lama untuk data lama yang sudah punya final amount valid.
+- Payroll final untuk HPP hanya status `confirmed`, `paid`, atau `paymentStatus = paid`, dengan compatibility data historis untuk data historis yang sudah punya final amount valid.
 - Payroll paid tetap membuat cash out/expense dari service online dengan idempotency guard.
 - Work Log relation wajib memakai `workLogId` dan/atau `workNumber`.
 - HPP final per unit hanya valid jika goodQty > 0 dan labor source final siap.
@@ -182,7 +182,7 @@ Offline yang tidak boleh:
 - Confirm payroll.
 - Mark payroll paid.
 - Membuat expense payroll.
-- Menulis `laborCostActual`, `totalCostActual`, `costPerGoodUnit`, atau output HPP ke runtime lama.
+- Menulis `laborCostActual`, `totalCostActual`, `costPerGoodUnit`, atau output HPP ke runtime arsip.
 
 ## 8. UI contract
 
@@ -193,7 +193,7 @@ Offline yang tidak boleh:
 3. Menampilkan daftar action yang diblokir.
 4. Membaca data local snapshot melalui tab `Data Local`.
 
-UX harus jelas bahwa ini bukan production offline runtime. Label yang dipakai: **read-only**, **runtime lama-primary**, dan **tidak bisa push balik ke runtime lama**.
+UX harus jelas bahwa ini bukan production offline runtime. Label yang dipakai: **read-only**, **runtime arsip-primary**, dan **tidak bisa push balik ke runtime arsip**.
 
 ## 9. Test checklist
 
@@ -206,10 +206,10 @@ Manual test minimal:
 5. Buka tab `Snapshot Produksi`.
 6. Preview `Planning snapshot`.
 7. Isi keyword `PULL PRODUCTION SNAPSHOT READ ONLY`.
-8. Pull snapshot dan pastikan berhasil tanpa membuat `sync queue lama`.
+8. Pull snapshot dan pastikan berhasil tanpa membuat `sync queue arsip`.
 9. Ulangi untuk `Production Order`, `Work Log`, `BOM`, `Payroll`, dan `HPP` snapshot.
 10. Buka tab `Data Local`, pilih table production, pastikan data tampil read-only.
-11. Pastikan tab Offline → runtime lama tetap hanya berisi Categories/Customers.
+11. Pastikan tab Offline → runtime arsip tetap hanya berisi Categories/Customers.
 12. Pastikan tidak ada tombol start/finish production, consume material, create payroll, atau finalize HPP di offline center.
 13. Jalankan lint/build.
 

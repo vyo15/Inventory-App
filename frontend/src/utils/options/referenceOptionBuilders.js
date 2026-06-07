@@ -14,7 +14,7 @@ export const buildReferenceLabel = (item = {}) => {
   - Kode PRD/RAW/SFP/BOM/STP dipakai sebagai ID/backstage; user memilih dari nama dan konteks varian.
 
   Catatan cleanup:
-  - Fallback label dipertahankan untuk data lama yang belum lengkap namanya.
+  - Fallback label dipertahankan untuk data historis yang belum lengkap namanya.
 
   Risiko:
   - Value option tetap item.id; label ini hanya presentasi dan tidak boleh dipakai sebagai relasi database.

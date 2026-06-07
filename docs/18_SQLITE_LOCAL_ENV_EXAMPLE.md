@@ -40,4 +40,4 @@ VITE_PRODUCTION_REPOSITORY_MODE=sqlite
 VITE_REPORTS_REPOSITORY_MODE=sqlite
 ```
 
-Catatan: Runtime aktif source saat ini memakai SQLite. Production/Payroll/HPP tetap guarded secara business flow, tetapi repository mode tidak boleh diarahkan kembali ke runtime lama.
+Catatan: Runtime aktif source saat ini memakai SQLite. Production/Payroll/HPP tetap guarded secara business flow, tetapi repository mode tidak boleh diarahkan kembali ke runtime arsip.

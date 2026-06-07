@@ -10,6 +10,7 @@ import {
   Switch,
 } from "antd";
 import { formatNumberId, parseIntegerIdInput } from "../../../utils/formatters/numberId";
+import ResponsiveFormSection from "../../../components/Layout/Mobile/ResponsiveFormSection";
 import { showFormValidationFeedback } from "../../../utils/forms/formValidationFeedback";
 import {
   getSupplierOptionLabel,
@@ -75,6 +76,10 @@ const PurchaseFormModal = ({
           onFinish={handleSubmitPurchase}
           onFinishFailed={(errorInfo) => showFormValidationFeedback(errorInfo, { form })}
         >
+          <ResponsiveFormSection
+            title="Detail Pembelian"
+            subtitle="Data item, supplier, stok masuk, dan biaya aktual dibuat ringkas untuk mobile."
+          >
           <Form.Item
             name="date"
             label="Tanggal"
@@ -517,6 +522,7 @@ const PurchaseFormModal = ({
               style={{ lineHeight: 1.6 }}
             />
           </Form.Item>
+          </ResponsiveFormSection>
         </Form>
       </Modal>
 );

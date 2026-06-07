@@ -226,7 +226,7 @@ export const validateDuplicateVariantValues = (variants = [], options = {}) => {
 export const validateDuplicateVariantColors = (variants = []) =>
   validateDuplicateVariantValues(variants, {
     keyField: 'color',
-    // IMS NOTE [AKTIF | generic-variant]: helper color data lama kini memakai
+    // IMS NOTE [AKTIF | generic-variant]: helper color data historis kini memakai
     // pesan generic karena Product/Semi dapat memakai label varian fleksibel.
     duplicateMessage: 'Nama varian tidak boleh duplikat',
   });

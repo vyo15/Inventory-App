@@ -1,6 +1,6 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, sync queue lama, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser arsip. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser arsip, sync queue arsip, conflict resolver, atau backup JSON storage browser arsip dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # Offline QA Regression — Batch 51
@@ -17,7 +17,7 @@ Offline Database Center sekarang memiliki tab `QA RC` untuk membantu mencatat pr
 Aturan:
 - Checklist di tab `QA RC` hanya penanda manual di `localStorage` browser, bukan bukti otomatis.
 - Centang hanya setelah test benar-benar dilakukan di environment test.
-- Status QA tidak disimpan ke runtime lama dan tidak mempengaruhi business data.
+- Status QA tidak disimpan ke runtime arsip dan tidak mempengaruhi business data.
 - Jika hasil test berbeda dengan source/docs, prioritaskan source aktual dan bugfix kecil terpisah.
 
 ## 1. Smoke test build
@@ -37,16 +37,16 @@ Aturan:
 - [ ] Tab `Status` menampilkan mode aktif, Local DB, pending queue, dan conflict.
 - [ ] Tombol `Siapkan Local DB` membuat foundation tanpa error.
 - [ ] Offline Mode tidak bisa aktif tanpa keyword `ENABLE OFFLINE REPOSITORY PILOT`.
-- [ ] Kembali ke runtime lama Mode berjalan tanpa menghapus data local.
+- [ ] Kembali ke runtime arsip Mode berjalan tanpa menghapus data local.
 
 ## 3. Master data write pilot
 
-- [ ] runtime lama → Offline Categories berhasil preview dan pull.
-- [ ] runtime lama → Offline Customers berhasil preview dan pull.
+- [ ] runtime arsip → Offline Categories berhasil preview dan pull.
+- [ ] runtime arsip → Offline Customers berhasil preview dan pull.
 - [ ] Offline Mode: Categories create/edit membuat data local + queue pending.
 - [ ] Offline Mode: Customers create/edit membuat data local + queue pending.
-- [ ] Offline → runtime lama hanya menampilkan pilihan Categories dan Customers.
-- [ ] Delete runtime lama dari offline queue tetap diblokir default.
+- [ ] Offline → runtime arsip hanya menampilkan pilihan Categories dan Customers.
+- [ ] Delete runtime arsip dari offline queue tetap diblokir default.
 
 ## 4. Snapshot read-only
 
@@ -66,7 +66,7 @@ Aturan:
 - [ ] Detail queue menampilkan payload/metadata untuk review manual.
 - [ ] Retry failed hanya aktif dengan keyword `RETRY FAILED OFFLINE QUEUE`.
 - [ ] Clear failed hanya aktif dengan keyword `CLEAR FAILED OFFLINE QUEUE`.
-- [ ] Conflict tab menampilkan diff Local vs runtime lama.
+- [ ] Conflict tab menampilkan diff Local vs runtime arsip.
 - [ ] Resolve conflict hanya aktif dengan keyword `RESOLVE MASTER DATA CONFLICT`.
 - [ ] Default resolusi aman adalah skip/manual review.
 
@@ -74,7 +74,7 @@ Aturan:
 
 - [ ] Export backup menghasilkan JSON dengan app, appVersion, schemaVersion, sourceMode, exportedAt, recordCounts, dan tables.
 - [ ] Preview restore menampilkan valid/error/warning dan restore plan.
-- [ ] Dry-run restore tidak mengubah storage browser lama.
+- [ ] Dry-run restore tidak mengubah storage browser arsip.
 - [ ] Restore hanya berjalan dengan keyword `RESTORE LOCAL DB BACKUP`.
 - [ ] Restore hanya menyentuh table allowlist local.
 - [ ] Backup yang mengandung field credential/secret ditolak.
@@ -87,7 +87,7 @@ Aturan:
 - [ ] Purchases Report snapshot berhasil preview dan pull.
 - [ ] Finance Summary snapshot berhasil preview dan pull.
 - [ ] Semua pull memakai keyword `PULL REPORT SNAPSHOT READ ONLY`.
-- [ ] Profit/Loss final tetap runtime lama-primary dan tidak memakai local draft/queue pending.
+- [ ] Profit/Loss final tetap runtime arsip-primary dan tidak memakai local draft/queue pending.
 - [ ] Tidak ada dokumen baru/ubah/hapus di `revenues`, `incomes`, atau `expenses` dari proses snapshot.
 
 ## 8. Modul bisnis guarded regression
@@ -95,10 +95,10 @@ Aturan:
 - [ ] Purchase online tetap membuat purchase, stock in, inventory log, expense, dan history sesuai flow existing.
 - [ ] Sales online tetap membuat stock out dan income sesuai status existing.
 - [ ] Return online tetap mengikuti flow existing dan tidak menjadi offline mutation.
-- [ ] Stock adjustment tetap online/runtime lama-primary dan tidak bisa dilakukan dari snapshot.
-- [ ] Finance Cash In/Out tetap runtime lama-primary.
-- [ ] Dashboard/Report final tetap runtime lama-primary.
-- [ ] Production Planning/Order/Work Log/BOM/Payroll/HPP tetap runtime lama-primary.
+- [ ] Stock adjustment tetap online/runtime arsip-primary dan tidak bisa dilakukan dari snapshot.
+- [ ] Finance Cash In/Out tetap runtime arsip-primary.
+- [ ] Dashboard/Report final tetap runtime arsip-primary.
+- [ ] Production Planning/Order/Work Log/BOM/Payroll/HPP tetap runtime arsip-primary.
 - [ ] Reset destructive tetap butuh preview + keyword.
 
 ## 9. Keputusan QA

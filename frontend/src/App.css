@@ -949,7 +949,7 @@ Risiko:
    Fungsi:
    - menyatukan panel snapshot/read-only pasif agar tidak memakai Alert besar yang terasa seperti warning.
    Hubungan flow aplikasi:
-   - presentational only untuk info stok/summary; tidak mengubah value form, validasi, payload, atau transaksi backend SQLite.
+   - presentational only untuk info stok/summary; tidak mengubah value form, validasi, payload, atau transaksi layanan database.
    Alasan logic dipakai:
    - panel ini memisahkan informasi pasif dari warning/error/destructive Alert agar semantik guard tetap jelas.
    Status:
@@ -1449,7 +1449,7 @@ Risiko:
    Fungsi:
    - memastikan Modal, Drawer, Popover, Dropdown, Select, dan Date Picker portal tetap solid ketika dirender di luar .app-shell.
    Hubungan flow aplikasi:
-   - styling portal Ant Design saja; tidak mengubah submit flow, action handler, query service/backend, atau business rules.
+   - styling portal Ant Design saja; tidak mengubah submit flow, action handler, query service, atau business rules.
    Alasan logic dipakai:
    - portal AntD sering keluar dari hierarchy .app-shell, jadi selector body.app-theme-* wajib dipertahankan agar light/dark tetap aman.
    Status:
@@ -1877,7 +1877,7 @@ Fungsi:
 - Mengunci standar portrait-first lintas Phase M1-M5 agar halaman mobile tidak kembali menjadi desktop table yang dipaksa kecil.
 - Desktop tetap table; mobile memakai DataTableView card/list bila mobileCardConfig tersedia.
 Guardrail:
-- CSS only. Tidak mengubah auth, SQLite, stock mutation, purchase, sales, return, finance, production, payroll, HPP, backup/restore, atau schema.
+- CSS only. Tidak mengubah auth, database lokal, stock mutation, purchase, sales, return, finance, production, payroll, HPP, backup/restore, atau schema.
 ===================================================== */
 html,
 body,
@@ -2070,7 +2070,7 @@ body,
    - menyederhanakan card mobile agar halaman HP portrait terasa seperti operational list, bukan tabel desktop yang dipadatkan.
    - detail tetap tersedia melalui drawer/page/detail handler existing.
    Guardrail:
-   - presentational-only; tidak mengubah auth, schema, SQLite, stock mutation, finance, sales, purchase, return, production, payroll, HPP, reset, restore, atau audit log.
+   - presentational-only; tidak mengubah auth, schema, database lokal, stock mutation, finance, sales, purchase, return, production, payroll, HPP, reset, restore, atau audit log.
 ===================================================== */
 @media (max-width: 768px) {
   .ims-mobile-card-list {

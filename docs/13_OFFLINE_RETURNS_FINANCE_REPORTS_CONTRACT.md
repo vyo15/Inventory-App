@@ -1,13 +1,13 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, sync queue lama, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser arsip. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser arsip, sync queue arsip, conflict resolver, atau backup JSON storage browser arsip dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # 13 Offline Returns, Finance, dan Reports Contract
 
 Status: **ARSIP HISTORIS / SUPERSEDED BY SQLITE RUNTIME / JANGAN DIPAKAI SEBAGAI INSTRUKSI AKTIF**.
 
-Dokumen ini mengunci hasil Fase 5 Batch 38–40 untuk persiapan offline database. Tidak ada runtime migration, tidak ada perubahan schema database lama, tidak ada perubahan database browser lama schema, dan tidak ada offline mutation untuk Return, Finance, atau Report final.
+Dokumen ini mengunci hasil Fase 5 Batch 38–40 untuk persiapan offline database. Tidak ada runtime migration, tidak ada perubahan schema database arsip, tidak ada perubahan database browser arsip schema, dan tidak ada offline mutation untuk Return, Finance, atau Report final.
 
 ## 1. Validasi source aktual
 
@@ -32,7 +32,7 @@ File source yang dicek:
 - `src/pages/Laporan/PayrollReport.jsx`
 - `src/data/local/localDbSchema.js`
 - `src/data/local/imsLocalDb.js`
-- `src/data/sync/runtime-lamaToLocalMasterDataSyncService.js`
+- `src/data/sync/runtime-arsipToLocalMasterDataSyncService.js`
 - `src/pages/Utilities/components/OfflineDatabaseCenter.jsx`
 - `docs/03_BUSINESS_RULES.md`
 - `docs/08_INTEGRATION_MAP.md`
@@ -48,8 +48,8 @@ File relevan yang tidak ditemukan:
 Batasan validasi:
 
 - Validasi hanya berdasarkan source dan docs di ZIP ini.
-- database lama rules, composite index, dan data produksi tidak tersedia di ZIP, sehingga kontrak ini tidak mengklaim validasi security rules di runtime lama Console.
-- Tidak ada pengujian runtime browser/runtime lama karena patch ini docs-only.
+- database arsip rules, composite index, dan data produksi tidak tersedia di ZIP, sehingga kontrak ini tidak mengklaim validasi security rules di runtime arsip Console.
+- Tidak ada pengujian runtime browser/runtime arsip karena patch ini docs-only.
 
 ## 2. Batch 38 — Returns Audit
 
@@ -59,7 +59,7 @@ Batasan validasi:
 Returns.jsx
 -> createReturnTransaction(values, allItems)
 -> returnsService.js
--> transaksi database lama
+-> transaksi database arsip
    -> reserve/generate RET-DDMMYYYY-001
    -> read latest item from products/raw_materials
    -> validate item + variant
@@ -145,13 +145,13 @@ ProfitLossReport
 -> reads revenues + incomes + expenses only
 ```
 
-Keputusan: Finance tetap **runtime lama-primary**. Offline untuk finance hanya boleh read-only report snapshot, bukan ledger final yang bisa ditulis dari local.
+Keputusan: Finance tetap **runtime arsip-primary**. Offline untuk finance hanya boleh read-only report snapshot, bukan ledger final yang bisa ditulis dari local.
 
 ### 3.2 Collection dan kontrak field finance
 
 #### `revenues`
 
-Sumber: Cash In manual / data lama income.
+Sumber: Cash In manual / data historis income.
 
 Field penting yang terlihat dari source:
 
@@ -206,7 +206,7 @@ Risiko utama:
 Guard:
 
 - Finance offline **tidak boleh** menulis `revenues`, `incomes`, atau `expenses`.
-- Finance offline **tidak boleh** masuk `sync queue lama`.
+- Finance offline **tidak boleh** masuk `sync queue arsip`.
 - Offline report snapshot **tidak boleh** dipakai sebagai sumber posting ledger baru.
 - Report snapshot hanya cache baca, bukan sumber truth.
 
@@ -221,10 +221,10 @@ Jika nanti dibuat runtime snapshot offline, minimal field snapshot:
 | `periodStart` | Awal periode snapshot |
 | `periodEndExclusive` | Akhir periode eksklusif |
 | `sourceCollections` | Contoh: `revenues,incomes,expenses` |
-| `generatedFrom` | `primary lama` |
+| `generatedFrom` | `primary arsip` |
 | `pulledAt` | Waktu snapshot ditarik ke local |
 | `isReadOnly` | Harus `true` |
-| `summary` | Total pemasukan, pengeluaran, laba/rugi sesuai sumber final runtime lama |
+| `summary` | Total pemasukan, pengeluaran, laba/rugi sesuai sumber final runtime arsip |
 | `rows` | Optional row cache yang sudah dinormalisasi untuk display |
 | `failedReads` | Collection yang gagal dibaca saat snapshot dibuat |
 
@@ -284,10 +284,10 @@ Snapshot boleh digunakan untuk melihat data terakhir saat offline, tetapi harus 
 | `periodStart` | Awal periode jika report periodik |
 | `periodEndExclusive` | Akhir periode eksklusif jika report periodik |
 | `filters` | Filter report saat snapshot dibuat |
-| `sourceCollections` | Collection runtime lama yang dibaca |
+| `sourceCollections` | Collection runtime arsip yang dibaca |
 | `sourceReadModel` | Contoh: `stock_item_read_models` untuk Stock Report |
 | `pulledAt` | Waktu snapshot dibuat/ditarik |
-| `generatedFrom` | Harus `primary lama` untuk fase ini |
+| `generatedFrom` | Harus `primary arsip` untuk fase ini |
 | `isFinalReport` | Harus `false` jika hanya cache offline |
 | `isReadOnly` | Harus `true` |
 | `summary` | Ringkasan KPI yang tampil |
@@ -299,7 +299,7 @@ Snapshot boleh digunakan untuk melihat data terakhir saat offline, tetapi harus 
 
 UI snapshot offline harus jelas membedakan:
 
-- **Data runtime lama terbaru**: ketika online dan read langsung dari runtime lama.
+- **Data runtime arsip terbaru**: ketika online dan read langsung dari runtime arsip.
 - **Snapshot offline**: ketika offline/cache, tampilkan badge `Snapshot Offline`, `pulledAt`, dan warning bahwa data tidak mencakup draft lokal yang belum tersync.
 
 Report snapshot tidak boleh menampilkan tombol `Simpan`, `Posting`, `Sync ke Ledger`, `Ubah Stok`, atau aksi destructive.
@@ -309,9 +309,9 @@ Report snapshot tidak boleh menampilkan tombol `Simpan`, `Posting`, `Sync ke Led
 Keputusan resmi setelah audit source:
 
 1. Returns belum aman untuk offline mutation karena belum punya relasi sale-line/idempotency/refund rule.
-2. Finance tetap runtime lama-primary; offline hanya read-only snapshot.
+2. Finance tetap runtime arsip-primary; offline hanya read-only snapshot.
 3. Report offline boleh dirancang sebagai snapshot read-only, bukan report final baru.
-4. Tidak ada perubahan runtime, schema, route, menu, role guard, collection lama, database browser lama schema, atau sync queue pada batch ini.
+4. Tidak ada perubahan runtime, schema, route, menu, role guard, collection lama, database browser arsip schema, atau sync queue pada batch ini.
 5. Fase berikutnya yang aman adalah desain table snapshot lokal secara eksplisit, tetapi itu termasuk schema local baru dan perlu approval terpisah.
 
 ## Update C7 SQLite Finance/Report Foundation

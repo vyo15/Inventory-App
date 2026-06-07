@@ -24,7 +24,7 @@ Alasan perubahan:
 - Work Log produksi sekarang merepresentasikan eksekusi kerja; Draft BOM/PO hanya helper lama pembentuk template data, bukan status operasional baru.
 
 Catatan cleanup:
-- PRODUCTION_WORK_LOG_ARCHIVED_STATUSES hanya untuk membaca data lama yang masih tersimpan sebagai draft/cancelled.
+- PRODUCTION_WORK_LOG_ARCHIVED_STATUSES hanya untuk membaca arsip yang masih tersimpan sebagai draft/cancelled.
 
 Risiko:
 - Jika Draft/Cancelled dikembalikan ke opsi aktif, user bisa membuat Work Log non-eksekusi yang tidak mengikuti flow PO/start production.
@@ -35,8 +35,8 @@ export const PRODUCTION_WORK_LOG_STATUSES = [
 ];
 
 export const PRODUCTION_WORK_LOG_ARCHIVED_STATUSES = [
-  { value: "draft", label: "Draft (Data Lama)" },
-  { value: "cancelled", label: "Cancelled (Data Lama)" },
+  { value: "draft", label: "Draft (Arsip)" },
+  { value: "cancelled", label: "Cancelled (Arsip)" },
 ];
 
 export const PRODUCTION_WORK_LOG_TARGET_TYPES = [

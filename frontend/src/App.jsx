@@ -9,7 +9,7 @@ import LogoLoadingScreen from "./components/Layout/Feedback/LogoLoadingScreen";
 // =====================================================
 // SECTION: App Loading State — AKTIF / GUARDED
 // Fungsi:
-// - Menampilkan state aman saat session SQLite lokal dan profile user sedang diverifikasi.
+// - Menampilkan state aman saat session database lokal dan profil user sedang diverifikasi.
 //
 // Dipakai oleh:
 // - AppContent ketika authLoading aktif sebelum Login/AppLayout dipilih.
@@ -36,7 +36,7 @@ const AppLoadingScreen = () => <LogoLoadingScreen />;
 // - AKTIF.
 // - GUARDED: salah guard bisa membuat seluruh app terkunci, jadi fallback Login tetap jelas.
 // Compatibility / cleanup:
-// - belum ada data lama; ProtectedRoute detail akan menjadi fase C/D.
+// - belum ada data historis; ProtectedRoute detail akan menjadi fase C/D.
 // =========================
 const AppContent = () => {
   const { authLoading, isAccessReady } = useAuth();

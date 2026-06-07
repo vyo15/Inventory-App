@@ -1,4 +1,4 @@
-# Panduan Pengguna SQLite Lokal — IMS Bunga Flanel
+# Panduan Pengguna Database Lokal — IMS Bunga Flanel
 
 IMS berjalan dengan database SQLite lokal melalui backend Node.js. Semua data utama disimpan di laptop/server lokal, lalu HP/laptop lain mengakses aplikasi lewat jaringan LAN.
 
@@ -55,16 +55,16 @@ README_RESTORE.txt
 
 ## Maintenance & Backup Center
 
-Menu `Maintenance & Backup` adalah pusat perawatan data SQLite offline. Urutan pakainya:
+Menu `Maintenance & Backup` adalah pusat perawatan data lokal. Urutan pakainya:
 
 1. Buka `Ringkasan` untuk melihat status aman/tidak.
 2. Gunakan `Backup & Restore` untuk backup resmi dan restore guarded.
 3. Gunakan `Audit Data` sebelum menjalankan repair.
 4. Gunakan `Repair Aman` hanya untuk perbaikan turunan/display yang sudah dipreview.
-5. Gunakan `Data Tools` untuk preview/hapus data test bermarker dan export master.
+5. Gunakan `Data Tools` untuk export master dan checklist data pokok.
 6. Gunakan `Checklist` sebelum update, restore, atau maintenance besar.
 7. Buka `Riwayat` untuk melihat backup/restore resmi.
-8. `Reset Testing` hanya catatan data lama nonaktif pada mode full SQLite; pemulihan data utama harus lewat Backup & Restore.
+8. `Reset Testing` hanya catatan arsip nonaktif pada mode database lokal; pemulihan data utama harus lewat Backup & Restore.
 
 ## Backup harian otomatis
 
@@ -73,7 +73,7 @@ Saat backend start, sistem mengecek apakah hari itu sudah ada backup harian. Jik
 Aturan:
 
 1. Auto backup harian hanya dibuat satu kali per hari.
-2. Backup manual tetap bisa dibuat kapan saja dari SQLite Local DB Center.
+2. Backup manual tetap bisa dibuat kapan saja dari `Maintenance & Backup Center`.
 3. Sistem otomatis membuat backup `pre-restore` sebelum restore berjalan.
 4. Backup harus berstatus `verified` sebelum dianggap aman.
 
@@ -181,7 +181,7 @@ Prinsipnya: yang bisa dibuktikan sistem akan auto terisi, yang hanya diketahui u
 4. Copy backup terbaru ke flashdisk/harddisk.
 5. Jalankan update aplikasi.
 6. Start backend/frontend.
-7. Cek `/health` dan SQLite Local DB Center.
+7. Cek `/health`, login sebagai administrator, lalu buka Database Center.
 8. Buat backup manual setelah update bila aplikasi sudah normal.
 
 ## Test restore berkala
@@ -218,4 +218,4 @@ Kemungkinan file backup dipindah/dihapus dari folder `backups/sqlite/`. Kembalik
 
 ### Setelah restore tampilan belum berubah
 
-Refresh browser, logout-login ulang, lalu cek `SQLite Local DB Center` dan `/health`.
+Refresh browser, logout-login ulang, lalu cek Database Center dan `/health`.

@@ -28,7 +28,7 @@ export const formatNumberId = (value, options = {}) => {
 // =========================
 // AKTIF / GUARDED
 // Alias khusus qty/stok agar page tidak membuat formatter sendiri.
-// Semua tampilan qty/stok diarahkan tanpa desimal; data lama pecahan tidak dimigrasi,
+// Semua tampilan qty/stok diarahkan tanpa desimal; data historis pecahan tidak dimigrasi,
 // hanya dibulatkan pada display agar tidak mengubah service calculation.
 export const formatQuantityId = (value, options = {}) =>
   formatNumberId(value, { maximumFractionDigits: 0, ...options });
@@ -54,7 +54,7 @@ export const formatPercentId = (value, options = {}) =>
 // Alasan logic:
 // - titik tetap dianggap pemisah ribuan Indonesia; koma dianggap awal pecahan dan
 //   dipotong agar input pasted seperti "1.000,5" tetap menjadi 1000, bukan 10005.
-// Status: AKTIF untuk input baru, GUARDED terhadap data lama decimal.
+// Status: AKTIF untuk input baru, GUARDED terhadap data historis decimal.
 export const parseIntegerIdInput = (value) => {
   const rawValue = String(value ?? "").trim();
   if (!rawValue) return "";

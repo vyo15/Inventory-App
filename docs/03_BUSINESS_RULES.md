@@ -20,7 +20,7 @@ Rule satuan stok aktif:
 - Jangan menambahkan satuan `cm` untuk flow stok saat ini karena operasional IMS memakai pembelian/produksi per `meter`.
 - Inventory log baru dari purchase, sales, return, stock adjustment, dan production wajib membawa snapshot `stockUnit`/`unit` jika tersedia agar Qty di Stock Management terbaca sebagai `10 pcs` atau `10 meter`, bukan angka polos.
 - Untuk log produksi, metadata `productionOrderCode`, `workNumber`, dan `stepName` wajib menjadi sumber kolom **Referensi Audit**. Kolom **Catatan** tidak boleh mengulang PO/Work Log/Step; catatan cukup menampilkan operator atau catatan manual produksi.
-- Data lama yang belum punya satuan tetap boleh tampil tanpa satuan; jangan backfill/migrasi otomatis hanya untuk display.
+- Data historis yang belum punya satuan tetap boleh tampil tanpa satuan; jangan backfill/migrasi otomatis hanya untuk display.
 
 ### 1.3 Actual purchase dan actual unit cost
 Total pembelian aktual dihitung dari:
@@ -133,12 +133,15 @@ Rule aktif:
 
 ## 3. Rule Retur
 Saat retur disimpan:
-- transaksi masuk ke `returns`
-- stok item bertambah
+- user wajib memilih transaksi Sales yang valid
+- item retur wajib berasal dari item pada Sales tersebut
+- qty retur tidak boleh melebihi qty terjual dikurangi qty yang sudah pernah diretur
+- transaksi masuk ke `returns` dengan `relatedSaleId` dan `saleReference`
+- stok item/varian bertambah lewat endpoint resmi
 - catat `inventory_logs` dengan type `return_in`
 - tidak membuat `incomes`, `revenues`, atau `expenses`
 
-Rule aktif Return adalah **stock-only correction**. Return dipakai untuk barang kembali/koreksi stok setelah Sales tercatat, bukan untuk refund/finance otomatis. Jika suatu hari refund, potongan pembayaran, atau koreksi kas atas Return diperlukan, itu wajib menjadi rule finance Return terpisah dengan review guarded, idempotency, dan update ledger/report.
+Rule aktif Return adalah **stock-only correction yang terkait Sales**. Return dipakai untuk barang kembali/koreksi stok setelah Sales tercatat, bukan untuk refund/finance otomatis. Jika suatu hari refund, potongan pembayaran, atau koreksi kas atas Return diperlukan, itu wajib menjadi rule finance Return terpisah dengan review guarded, idempotency, dan update ledger/report.
 
 ## 4. Rule Kas Masuk
 Modul Cash In membaca dua sumber:
@@ -272,21 +275,20 @@ Implikasi:
 ## 13. Rule Payroll Produksi
 Payroll produksi dibangun dari work log completed.
 
-## 14. Rule Reset Data Uji
-Reset utilitas mendukung mode:
-- reset transaksi saja
-- reset + nolkan semua stok
-- reset + restore baseline testing
+## 14. Rule Maintenance Data
+Reset destructive/testing lama sudah tidak tersedia di UI operasional. Jalur maintenance aktif adalah:
+- Backup & Restore resmi.
+- Audit Data read-only.
+- Repair Aman untuk field turunan/snapshot/display yang sudah punya guard.
+- Export Master/Checklist untuk review dan backup manual.
 
-Utilitas ini juga menyinkronkan kembali field stok agar konsisten.
-
-Preset `Reset Semua Testing` adalah shortcut guarded untuk development/testing: memilih semua modul non-protected, menghapus transaksi/log stok/planning/pricing yang diizinkan, menolkan stok master/variant, dan menolkan field modal/HPP allowlist dalam satu flow preview + keyword `RESET SEMUA`. Protected master seperti Supplier, Customer, Produk, Raw Material, Semi Finished, BOM, Step, dan Employee tidak dihapus.
+Tab Reset Testing hanya menampilkan status nonaktif. Jangan mengaktifkan ulang reset testing tanpa desain guard baru, backup otomatis, preview dampak, keyword, dan audit log.
 
 
 ## Tambahan Rule Terkini (Batch Prioritas)
 
 ### Work Log Costing saat Complete
-- saat Work Log diselesaikan, summary costing final dihitung dari snapshot material actual yang dibekukan saat Start Production; data lama tanpa snapshot boleh fallback ke master cost aktif
+- saat Work Log diselesaikan, summary costing final dihitung dari snapshot material actual yang dibekukan saat Start Production; data historis tanpa snapshot boleh fallback ke master cost aktif
 - `materialCostActual`, `totalCostActual`, dan `costPerGoodUnit` tidak boleh memakai snapshot BOM/PO lama; source actual material adalah Work Log material usage setelah Start Production
 - sinkronisasi payroll ke Work Log boleh memperbarui `laborCostActual` sebagai ringkasan display, tetapi tidak mengubah source of truth payroll line
 - setelah payroll final berubah, output HPP/average cost master wajib direconcile lewat service tanpa menambah qty stok ulang
@@ -387,7 +389,7 @@ Algoritma sequence internal master/config:
 1. Query dokumen kandidat memakai prefix kode (`PREFIX-`) dari document ID dan field kode bisnis terkait.
 2. Hitung nomor terbesar yang cocok dengan format `PREFIX-001` dari kandidat tersebut.
 3. Buat nomor berikutnya dengan padding 3 digit.
-4. Data lama readable tetap dibaca untuk compatibility melalui fallback full scan hanya jika prefix query gagal.
+4. Data historis readable tetap dibaca untuk compatibility melalui fallback full scan hanya jika prefix query gagal.
 5. Kode master/config tidak ditampilkan sebagai informasi utama UI; user memilih dari nama, varian, target, step, dan satuan.
 
 Contoh final:
@@ -401,7 +403,7 @@ Contoh final:
 Catatan current state:
 - Source terbaru memakai `generateUniqueSequentialCode` untuk Product/Raw Material dan wrapper `generateUniqueProductionSequentialCode` untuk Semi Finished/BOM.
 - Production Step sudah memakai generator `STP-001` lokal di service step.
-- Collision kode harian memakai prefix query pada document ID dan field kode bisnis terkait untuk baseline data lama. Batch 16B menambahkan counter atomic `business_code_counters` untuk Sales/Purchases/Returns agar create paralel tidak memakai nomor yang sama.
+- Collision kode harian memakai prefix query pada document ID dan field kode bisnis terkait untuk baseline data historis. Batch 16B menambahkan counter atomic `business_code_counters` untuk Sales/Purchases/Returns agar create paralel tidak memakai nomor yang sama.
 
 ### Batch 16B — Atomic Counter Transaksi Utama
 
@@ -409,7 +411,7 @@ Status: **GUARDED / AKTIF TERBATAS**.
 
 - Collection counter yang disetujui untuk kode transaksi adalah `business_code_counters`.
 - Sales (`ORD-*`), Purchases (`PUR-*`), dan Returns (`RET-*`) reserve sequence counter di dalam backend SQLite transaction/atomic commit yang sama dengan create dokumen bisnis.
-- Sebelum transaction, service tetap membaca prefix query lama sebagai baseline sequence data lama agar counter baru tidak mulai dari `001` saat data lama sudah ada.
+- Sebelum transaction, service tetap membaca prefix query lama sebagai baseline sequence data historis agar counter baru tidak mulai dari `001` saat data historis sudah ada.
 - Counter commit dilakukan setelah semua transaction read/validasi selesai dan sebelum write dokumen bisnis, sehingga tidak ada read-after-write di backend SQLite transaction/atomic commit.
 - Format kode, document ID readable, inventory log payload, income/expense, stock mutation, purchase average cost, OCR, Return transaction, route/menu/role guard, production, payroll, HPP, dan reset tidak berubah.
 - Batch 16C: Customer/Supplier, Product/Raw Material, BOM/Semi Finished, Cash In/Out manual, Stock Adjustment, Production Order, Work Log, dan Payroll manual juga reserve business code melalui `business_code_counters` di dalam transaction create masing-masing. Batch 16D melengkapi Production Planning `PP-*` dan Karyawan Produksi lewat counter bersama yang sama.
@@ -421,8 +423,8 @@ Status: **GUARDED / AKTIF TERBATAS**.
 - Daily code yang ikut dimigrasi di Batch 16C: `CUS`, `SUP`, `CSH-IN`, `CSH-OUT`, `STK-ADJ`, `PO-PRD`, `PO-SFP`, `JOB`, dan `PAY`.
 - Sequential internal code yang ikut dimigrasi: `PRD`, `RAW`, `BOM`, dan `SFP`.
 - Production Planning `PP` dan counter internal Karyawan Produksi `EMP` bukan scope Batch 16C; keduanya diselesaikan di Batch 16D agar audit counter tetap jelas per tahap.
-- Preview kode di UI tetap boleh memakai prefix-query data lama, tetapi final create service/page wajib reserve kode ulang di transaction agar dua create paralel tidak overwrite document ID.
-- Fallback data lama prefix-query tetap dipakai sebagai baseline sequence agar counter baru tidak mulai dari `001` saat data lama sudah ada.
+- Preview kode di UI tetap boleh memakai prefix-query data historis, tetapi final create service/page wajib reserve kode ulang di transaction agar dua create paralel tidak overwrite document ID.
+- Fallback data historis prefix-query tetap dipakai sebagai baseline sequence agar counter baru tidak mulai dari `001` saat data historis sudah ada.
 
 
 ## Update Rule Tahapan Produksi — 2026-05-16
@@ -444,7 +446,7 @@ Status: **GUARDED / AKTIF TERBATAS**.
 - User tidak boleh mengetik kode karyawan manual saat tambah data baru.
 - Service karyawan produksi wajib generate ulang kode saat submit agar preview di form tidak menjadi source final bila ada input paralel.
 - Field `code` tetap dipakai sebagai display reference di Work Log/Payroll. internal database ID boleh tetap dipakai sebagai relasi internal teknis, tetapi bukan referensi audit UI dan tidak boleh menjadi fallback display.
-- Kode lama seperti `EMP-...` dianggap data lama dan tidak dimigrasi otomatis saat edit.
+- Kode lama seperti `EMP-...` dianggap data historis dan tidak dimigrasi otomatis saat edit.
 
 ## Update Rule Auto Payroll Work Log Completed — 2026-04-25
 
@@ -476,7 +478,7 @@ Status: **GUARDED / AKTIF TERBATAS**.
 - Referensi harus tampil manusiawi; ID teknis/random ID tidak boleh tampil sebagai teks utama, detail kecil, tooltip, drawer/detail, report UI, atau fallback display.
 - Stock Adjustment aktif hanya melalui halaman Manajemen Stok; route lama bila ada hanya redirect lama.
 - Angka pada Stock Adjustment wajib memakai format Indonesia tanpa trailing `.00` dan input aktif memakai angka bulat (`precision=0`), termasuk untuk stok berbasis meter.
-- Riwayat adjustment harus terbaru di atas, prioritas `createdAt` lalu fallback `date` untuk data lama.
+- Riwayat adjustment harus terbaru di atas, prioritas `createdAt` lalu fallback `date` untuk data historis.
 
 ### Production Order Preview
 - Drawer Buat Production Order wajib menampilkan preview compact read-only: stok target, varian target jika ada, qty batch, estimasi output, kebutuhan material, stok material, dan status cukup/kurang.
@@ -504,7 +506,7 @@ Status: **GUARDED / AKTIF TERBATAS**.
 - Guard payroll wajib mencegah duplikasi per kombinasi Work Log + Step + Operator.
 - Status payroll yang dipakai: `draft`, `confirmed` jika flow approval dipakai, dan `paid`.
 - `paymentStatus` menjelaskan status pembayaran internal line payroll; saat paid, sistem membuat expense otomatis dengan guard.
-- Payroll preference/custom payroll di master karyawan adalah data lama/compatibility, bukan source utama payroll baru.
+- Payroll preference/custom payroll di master karyawan adalah data historis/compatibility, bukan source utama payroll baru.
 
 ### Cash Out / Expense Payroll
 - Payroll paid otomatis membuat expense di Cash Out dengan `sourceModule=production_payroll`, `sourceId=payrollId`, dan `sourceRef=payrollNumber`.
@@ -554,7 +556,7 @@ PO manual tanpa planning tetap valid.
 Progress planning wajib dihitung dari data aktual:
 - sumber utama: Work Log `completed` milik PO yang terhubung ke planning;
 - jika Work Log punya output line, gunakan `outputs[].goodQty` yang cocok dengan target item;
-- fallback hanya untuk data lama: `workLog.goodQty` jika target Work Log cocok;
+- fallback hanya untuk data historis: `workLog.goodQty` jika target Work Log cocok;
 - Work Log `draft`, `in_progress`, `cancelled`, atau status lain tidak dihitung.
 
 Jika target punya varian, progress wajib cocok dengan `targetVariantKey`. Jika target tidak punya varian, progress cukup cocok dengan item master.
@@ -662,14 +664,14 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Jika Stock Report hanya berhasil membaca sebagian source stok, UI dan export XLSX wajib menandai laporan sebagai parsial; export tidak boleh terlihat seperti full database lengkap.
 - HPP Analysis boleh diekspor ke XLSX tanpa mengubah rumus HPP.
 - Export HPP wajib membawa kolom validasi cost agar warning cost 0 tetap terlihat saat file dibuka.
-- Payroll Report boleh mempertahankan CSV data lama untuk compatibility, tetapi XLSX adalah output final yang lebih rapi. Query laporan Payroll harus membaca periode aktif bila tersedia, bukan selalu `getAllProductionPayrolls`.
+- Payroll Report boleh mempertahankan CSV data historis untuk compatibility, tetapi XLSX adalah output final yang lebih rapi. Query laporan Payroll harus membaca periode aktif bila tersedia, bukan selalu `getAllProductionPayrolls`.
 
-### Fase F - Duplicate Cleanup Data Lama
+### Fase F - Duplicate Cleanup Data Historis
 - Folder/file duplicate seperti `src/src/**` tidak boleh diedit untuk patch baru.
-- File duplicate data lama hanya boleh dihapus setelah grep/import/route check membuktikan tidak dipakai runtime.
+- File duplicate data historis hanya boleh dihapus setelah grep/import/route check membuktikan tidak dipakai runtime.
 - Route aktif Dashboard harus tetap memakai `src/pages/Dashboard/*`.
 - Service aktif Planning harus tetap memakai `src/services/Produksi/productionPlanningService.js`.
-- Jika ada penghapusan data lama, wajib ada catatan `DELETE_LIST.md` atau dokumentasi setara yang menjelaskan bukti dan file yang dihapus.
+- Jika ada penghapusan data historis, wajib ada catatan `DELETE_LIST.md` atau dokumentasi setara yang menjelaskan bukti dan file yang dihapus.
 
 ### Final Guard Anti Double Payroll / Expense
 - Work Log completed wajib membuat payroll line secara idempotent per Work Log + Step + Operator.
@@ -696,7 +698,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
   - `supplierId`
   - `supplierName`
   - `supplierLink`
-- Data lama dengan snapshot supplier tetap aman dibaca; snapshot boleh ikut diperbarui/dibersihkan hanya melalui cascade berdasarkan `supplierId` yang sudah dipilih manual.
+- Data historis dengan snapshot supplier tetap aman dibaca; snapshot boleh ikut diperbarui/dibersihkan hanya melalui cascade berdasarkan `supplierId` yang sudah dipilih manual.
 
 ### 15.3 Batas ke Purchases
 - Purchases boleh memakai supplier sebagai referensi vendor.
@@ -726,7 +728,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Semua writer varian wajib memakai helper pusat `variantStockNormalizer` atau helper lama yang sudah delegasi ke helper pusat.
 - Master item bervarian wajib menyimpan `currentStock`, `stock`, `reservedStock`, dan `availableStock` berdasarkan total varian.
 - Untuk Product dan Semi Finished, minimum stok final adalah field master: `products.minStockAlert` dan `semi_finished_materials.minStockAlert`, berlaku untuk item non-varian maupun bervarian.
-- `variants[].minStockAlert` pada Product/Semi Finished hanya data lama/compatibility field jika masih ada di data lama/helper generic; UI dan service master tidak boleh menjadikannya source utama threshold low-stock.
+- `variants[].minStockAlert` pada Product/Semi Finished hanya data historis/compatibility field jika masih ada di data historis/helper generic; UI dan service master tidak boleh menjadikannya source utama threshold low-stock.
 - Saat Product/Semi Finished bervarian dibuat atau di-edit, total stok master tetap dihitung dari varian, tetapi `minStockAlert` master wajib berasal dari input master `values.minStockAlert`, bukan penjumlahan varian.
 - Untuk modal/HPP Semi Finished bervarian: jika stok varian ada, master `averageCostPerUnit` wajib weighted by stock; jika semua stok 0, read-model cost tidak boleh dirata-ratakan dengan varian yang cost-nya 0. Gunakan rata-rata varian aktif yang punya cost > 0, lalu fallback `lastProductionCostPerUnit` untuk tampilan/BOM cost source.
 - Reset/Maintenance hanya alat audit/repair/development, bukan flow harian user untuk menjaga stok tetap sinkron.
@@ -734,7 +736,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 ### 15.1 Variant conversion aman
 
 - Edit master biasa tetap tidak boleh menjadi jalur mutasi stok.
-- Data lama non-varian boleh mulai memakai varian hanya jika `stock/currentStock`, `reservedStock`, dan `availableStock` semuanya 0.
+- Data historis non-varian boleh mulai memakai varian hanya jika `stock/currentStock`, `reservedStock`, dan `availableStock` semuanya 0.
 - Varian baru pada item existing wajib dibuat dengan `stock/currentStock/reservedStock/availableStock = 0`.
 - Item lama yang masih punya stok master atau reserved stock tidak boleh dikonversi otomatis ke varian; user harus memakai Stock Management / Stock Adjustment / transaksi resmi bila stok perlu dialihkan.
 - `variantKey` existing tidak boleh berubah saat nama/label varian diganti karena itu adalah identitas bucket stok/reference transaksi.
@@ -762,20 +764,16 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Auto-preview Product dan Raw Material tetap local di halaman masing-masing kecuali ada audit patch terpisah yang membuktikan shared hook lebih aman.
 - PricingRules preview/apply tetap skip item Manual dan hanya memproses item yang memang berada pada mode Rule/valid.
 
-## 17. Rule Reset & Maintenance Data Aman
+## 17. Rule Maintenance & Backup Data Aman
 
-- Supplier adalah protected master data dan collection `supplierPurchases` tidak boleh ikut reset default.
-- Reset/Maintenance hanya untuk admin/development/testing, bukan flow harian user.
-- Reset transaksi boleh menghapus data transaksi/testing sesuai scope, tetapi tidak boleh menghapus Supplier, Raw Material, Product, Customer, BOM/setup, atau master penting lain secara default.
-- Reset Supplier hanya boleh dibuat sebagai opsi destructive developer terpisah dengan preview, warning, dan konfirmasi eksplisit; tidak boleh menjadi bagian dari reset default.
-- Preview reset wajib menampilkan collection yang akan dihapus dan master yang dilindungi.
-- Data test wajib memakai marker `isTestData: true`, `sourceModule: "dev_test_seed"`, dan `createdBy: "dev_seed"`.
-- Hapus Data Test hanya boleh menghapus dokumen bermarker test; data normal tanpa marker tidak boleh ikut terhapus.
+- Supplier adalah protected master data dan collection `supplierPurchases` tidak boleh ikut aksi maintenance default.
+- Maintenance hanya untuk admin, bukan flow harian user operasional.
+- Jalur utama pemulihan data adalah Backup & Restore resmi, bukan tombol reset transaksi/testing lama.
 - Repair stok tetap hanya menyamakan field turunan dan tidak boleh membuat inventory log palsu.
-- Reset destructive wajib membuat audit log awal sebelum delete; jika log awal gagal karena rules/permission, reset tidak boleh dijalankan.
-- Reset destructive wajib melakukan preflight sebelum write pertama: validasi mode, module, allowlist collection rules, protected master data, baseline restore, keberadaan item baseline, dan estimasi jumlah operasi.
-- Reset destructive dari client hanya boleh berjalan jika seluruh delete transaksi dan update stok bisa masuk satu batch aman; jika melebihi batas aman client, reset wajib diblokir agar tidak partial delete.
-- Jika reset berhasil tetapi update audit log akhir gagal, UI harus memisahkan error audit dari hasil reset dan tidak boleh menampilkan reset seolah gagal.
+- Repair aman wajib memakai audit/preview area terkait dan audit log jika aksi membuat perubahan data.
+- Export Master/Checklist bersifat backup/review manual, bukan import atau restore otomatis.
+- Tab Reset Testing hanya menampilkan status nonaktif agar developer tidak mengira reset testing masih aktif.
+- Reset destructive baru hanya boleh dibuat setelah desain guard baru disetujui: backup otomatis, preview dampak, protected master, keyword, audit log awal/akhir, dan batas operasi aman.
 
 ## 19. Rule Purchases Supplier Restock Prefill
 
@@ -792,7 +790,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 ## 20. Rule Katalog Restock Supplier
 
 - Supplier adalah katalog vendor/restock, bukan transaksi pembelian.
-- Field kategori/keterangan supplier lama hanya data lama read-only dan bukan input utama flow restock.
+- Field kategori/keterangan supplier lama hanya data historis read-only dan bukan input utama flow restock.
 - Setiap `materialDetails` supplier boleh menyimpan konteks restock: link produk, tipe pembelian, satuan beli, qty per pembelian, konversi ke satuan stok, satuan stok, harga barang supplier, ongkir estimasi, biaya admin, diskon, dan catatan.
 - Harga Estimasi Supplier / Satuan Stok dihitung dari katalog supplier sebagai pembanding: `(harga barang + ongkir + biaya admin - diskon) / total stok hasil konversi`.
 - Harga Estimasi Supplier bukan harga aktual pembelian, bukan `actualUnitCost`, dan tidak boleh membuat kas/expense/laporan berubah.
@@ -837,7 +835,7 @@ Ketentuan wajib:
 - inventory log pembelian wajib punya `referenceType: purchase` dan `referenceId` dari purchase yang sama;
 - jika transaksi gagal sebelum commit, data tidak boleh tersimpan sebagian.
 
-Catatan data lama:
+Catatan data historis:
 - flow lama yang menyimpan purchase terlebih dahulu lalu update stok/log/expense satu per satu dianggap rawan partial write;
 - flow tersebut tidak boleh dihidupkan kembali tanpa alasan teknis kuat dan test regression.
 
@@ -860,7 +858,7 @@ Status: **AKTIF + GUARDED**.
 
 ## 24. Rule Final Auth, Role, dan Manajemen User — SQLite Runtime — 2026-06-07
 
-Status: **AKTIF + GUARDED + SOURCE-VERIFIED SQLITE**. Section ini menggantikan catatan lama Auth runtime lama/database lama setelah source aktual memakai local auth SQLite.
+Status: **AKTIF + GUARDED + SOURCE-VERIFIED SQLITE**. Section ini menggantikan catatan lama Auth runtime arsip/database arsip setelah source aktual memakai local auth SQLite.
 
 ### 24.1 Prinsip Auth final
 
@@ -953,11 +951,11 @@ Field yang tidak boleh disimpan di frontend/source:
 - Hapus/nonaktifkan administrator aktif terakhir wajib ditolak oleh backend/service/UI.
 - Reset password atau perubahan credential wajib lewat backend resmi; jangan membuat hash password di frontend.
 
-### 24.6 Data lama / arsip migrasi runtime lama
+### 24.6 Data historis / arsip migrasi runtime arsip
 
-- auth lama, database lama `system_users/{uid}`, rules database lama, dan domain `username@ziyocraft.com` adalah **ARSIP MIGRASI** untuk source saat ini.
-- Jangan membuat user runtime lama, menempel UID Auth, mengubah rules database lama, atau menghidupkan fallback runtime lama untuk task Auth/User Management tanpa approval eksplisit dan validasi source baru.
-- Jika menemukan komentar/source variable bernama lama, audit import/usage dulu. Nama compatibility tidak otomatis berarti runtime lama aktif.
+- auth lama, database arsip `system_users/{uid}`, rules database arsip, dan domain `username@ziyocraft.com` adalah **ARSIP MIGRASI** untuk source saat ini.
+- Jangan membuat user runtime arsip, menempel UID Auth, mengubah rules database arsip, atau menghidupkan fallback runtime arsip untuk task Auth/User Management tanpa approval eksplisit dan validasi source baru.
+- Jika menemukan komentar/source variable bernama lama, audit import/usage dulu. Nama compatibility tidak otomatis berarti runtime arsip aktif.
 
 ### 24.7 Boundary yang tidak berubah
 
@@ -968,7 +966,7 @@ Patch Auth/User Management tidak boleh mengubah rumus stok, Purchases, Returns, 
 ### 11.1 Format angka tanpa desimal
 - Tampilan angka, qty, stok, Rupiah, summary, report, dan input UI aktif diarahkan tanpa decimal.
 - `formatNumberId`, `formatQuantityId`, `formatPercentId`, dan parser input integer menjadi standar UI.
-- Perubahan ini tidak mengubah rumus transaksi, schema SQLite/backend, atau migrasi/backfill data lama.
+- Perubahan ini tidak mengubah rumus transaksi, schema SQLite/backend, atau migrasi/backfill data historis.
 - Jika suatu hari ada satuan yang wajib decimal secara bisnis, pengecualian harus dibahas eksplisit sebagai business rule baru.
 
 ### 11.2 Production Order dan material variant strict
@@ -989,7 +987,7 @@ Patch Auth/User Management tidak boleh mengubah rumus stok, Purchases, Returns, 
 - Rename nama/label varian tidak membuat inventory log palsu, tidak memigrasi PO/Work Log lama, dan tidak membuka edit stok langsung dari master.
 
 ### 11.5 UI non-business-flow cleanup
-- Sidebar nested accordion dan Login UI copy cleanup adalah perubahan UI; keduanya tidak mengubah stok, transaksi, produksi, laporan, AuthContext, role access, rules database lama, atau schema.
+- Sidebar nested accordion dan Login UI copy cleanup adalah perubahan UI; keduanya tidak mengubah stok, transaksi, produksi, laporan, AuthContext, role access, rules database arsip, atau schema.
 
 ## Update Business Rules — Cash In delete lock dan Sales status tab — 2026-05-03
 
@@ -998,7 +996,7 @@ Patch Auth/User Management tidak boleh mengubah rumus stok, Purchases, Returns, 
 - `revenues` tetap menjadi sumber pemasukan manual/lama, sedangkan `incomes` tetap menjadi pemasukan otomatis dari Sales berstatus `Selesai`.
 - Menu Pemasukan tidak menyediakan tombol Hapus untuk mengurangi risiko penyalahgunaan dan menjaga audit kas.
 - Penghapusan pemasukan tidak boleh dilakukan dari UI Pemasukan biasa tanpa task khusus, audit, dan approval eksplisit.
-- Perubahan ini tidak menghapus data lama, tidak mengubah `revenues`, tidak mengubah `incomes`, dan tidak mengubah Profit Loss yang membaca `revenues + incomes + expenses`.
+- Perubahan ini tidak menghapus data historis, tidak mengubah `revenues`, tidak mengubah `incomes`, dan tidak mengubah Profit Loss yang membaca `revenues + incomes + expenses`.
 
 ### Sales status tab
 - Tabel Sales wajib menampilkan row sesuai tab status aktif.
@@ -1044,7 +1042,7 @@ Buku Besar Kas adalah halaman audit read-only untuk melihat uang masuk dan uang 
 
 Source of truth nominal utama:
 - `incomes` untuk uang masuk resmi dari Sales berstatus `Selesai`.
-- `revenues` untuk uang masuk manual / data lama dari Cash In.
+- `revenues` untuk uang masuk manual / data historis dari Cash In.
 - `expenses` untuk uang keluar dari Cash Out manual, purchase expense, payroll paid, dan expense lain.
 
 Collection yang tidak boleh dipakai sebagai nominal utama ledger kas:
@@ -1064,16 +1062,15 @@ Guard wajib:
 ## Reset & Maintenance Development Rules
 - **Audit:** read-only terhadap data bisnis. Audit boleh membuat maintenance log metadata admin, tetapi tidak boleh mengubah stok, transaksi, kas, payroll, HPP, report, atau schema bisnis.
 - **Repair:** hanya untuk field turunan/snapshot/display yang aman sesuai service existing. Repair tidak boleh membuat transaksi baru, posting stok ulang, atau menghapus data utama.
-- **Reset:** destructive, wajib preview, warning, confirmation keyword existing, result summary, dan audit/error trail.
-- **Export data pokok:** wajib direkomendasikan sebelum reset total/master. Export bersifat backup/checklist, bukan import atau restore otomatis.
-- **Reset transaksi + nolkan stok:** cocok untuk data development yang belum real saat master masih dipakai tetapi stok lama tidak dipercaya.
+- **Reset:** reset testing lama nonaktif. Jika reset baru dibutuhkan, wajib desain guard baru dan approval khusus.
+- **Export data pokok:** direkomendasikan sebelum maintenance besar. Export bersifat backup/checklist, bukan import atau restore otomatis.
 - **Protected master:** tidak ikut reset default dan tidak boleh dilepas dari guard tanpa approval khusus.
-- **Data real:** jangan reset data real/semi real tanpa backup/export dan audit dampak.
+- **Data real:** jangan lakukan maintenance besar pada data real/semi real tanpa backup/export dan audit dampak.
 - **Import normalized:** belum masuk patch ini; export dipakai untuk review/manual input/normalization task berikutnya.
 - **Normalisasi kode master:** tersedia di Reset & Maintenance Data untuk Product, Raw Material, Semi Finished, BOM, Production Step, dan Supplier. Aksi ini hanya update field `code` dan alias kode aktif; tidak rename document ID, tidak menghapus data, dan tidak menyentuh transaksi/history.
-- **Supplier data lama repair:** tidak lagi dijalankan dari halaman Supplier. Semua repair kode lama harus lewat Reset & Maintenance Data agar audit/preview terpusat.
+- **Supplier data historis repair:** tidak lagi dijalankan dari halaman Supplier. Semua repair kode lama harus lewat Reset & Maintenance Data agar audit/preview terpusat.
 - **Reset Modal/HPP:** menu Reset & Maintenance menyediakan mode `Reset Semua Modal & HPP` untuk menolkan field cost/HPP master aktif dalam satu aksi guarded setelah preview dan keyword khusus. Aksi ini tidak menghapus transaksi, stok, PO, Work Log, Payroll, Sales, Purchases, Returns, atau Cash.
-- **Reset Semua Testing:** tombol gabungan di Reset & Maintenance menjalankan scope non-protected + zero stock + reset modal/HPP allowlist dengan keyword `RESET SEMUA`. Update stok dan HPP pada dokumen master yang sama harus digabung dalam satu write agar batch tetap aman dan tidak double-write document ref.
+- **Reset Testing lama:** tombol gabungan reset transaksi/testing tidak tersedia di UI operasional.
 - **Allowlist Reset Modal/HPP:** Raw Material: `averageActualUnitCost`, `restockReferencePrice`; Product: `hppPerUnit`, `averageCostPerUnit`, `costPerUnit`; Semi Finished: `averageCostPerUnit`, `lastProductionCostPerUnit`, `referenceCostPerUnit`, `costPerUnit` termasuk variant fields jika ada.
 
 
@@ -1104,11 +1101,11 @@ Status: **LOCKED / GUARDED**. Prefix dan format di bawah ini tidak boleh diubah 
 
 Catatan lock:
 - Gunakan **`CSH-OUT`**, bukan `CSH-OT`, `COUT`, atau variasi lain.
-- Sales tetap boleh memakai nama field data lama `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
+- Sales tetap boleh memakai nama field data historis `saleNumber`, tetapi value data baru wajib ber-prefix `ORD`.
 - Date sequence wajib memakai `DDMMYYYY` dan sequence 3 digit (`001`, `002`, `003`).
 - Master item/config produksi memakai sequence internal sederhana `PREFIX-001`. Kode ini disimpan untuk relasi/backstage dan tidak menjadi fokus UI.
 - internal database ID teknis/random tidak boleh tampil sebagai kode audit/user-facing.
-- Data lama dengan prefix lama tetap compatibility, tetapi bukan standar data baru.
+- Data historis dengan prefix lama tetap compatibility, tetapi bukan standar data baru.
 
 
 ### Business rule final untuk generator
@@ -1141,10 +1138,12 @@ Catatan lock:
 - Pembatalan Sales tetap tidak disediakan sebagai status update langsung; barang kembali harus lewat Return.
 
 ### Returns
-- Return tetap menulis dokumen return, update stok, dan inventory log dalam satu backend SQLite transaction/atomic commit.
+- Return menulis dokumen return, update stok, dan inventory log dalam satu backend transaction/atomic commit.
+- Return wajib terkait Sales melalui `relatedSaleId` dan menyimpan `saleReference`.
+- Item Return hanya boleh berasal dari item Sales yang dipilih.
+- Qty Return maksimal = qty item pada Sales - qty item yang sudah pernah diretur.
 - Return aktif adalah stock-only correction: tidak membuat `incomes`, `revenues`, `expenses`, atau ledger finance otomatis.
-- Orkestrasi transaksi Return dipindah ke `src/services/Transaksi/returnsService.js`.
-- Collection dan field Return tidak diubah.
+- Orkestrasi transaksi Return dipindah ke `src/services/Transaksi/returnsService.js` dan validasi final tetap diulang di backend.
 
 ### Purchases
 - Pembuatan Purchase sekarang diorkestrasi melalui `src/services/Transaksi/purchasesService.js`.
@@ -1162,10 +1161,10 @@ Catatan lock:
 ### Batch 16D — Production Planning dan Karyawan Produksi Counter
 
 - Production Planning baru memakai document ID sama dengan `planCode` berformat `PP-YYYYMMDD-0001`.
-- Production Planning tidak lagi memakai full scan + `addDoc` sebagai jalur create utama; prefix query tetap menjadi baseline data lama sebelum counter transaction-level.
+- Production Planning tidak lagi memakai full scan + `addDoc` sebagai jalur create utama; prefix query tetap menjadi baseline data historis sebelum counter transaction-level.
 - Karyawan Produksi tetap memakai kode tampilan `DDMMYYYY-XXX`, tetapi sequence final disimpan pada `business_code_counters` dengan prefix internal `EMP`.
-- Collection lama `production_employee_code_sequences` hanya dibaca sebagai baseline data lama dan tidak menjadi counter aktif create baru.
-- Tidak ada migration/rename data lama; relasi Work Log, Payroll, dan PO existing wajib tetap aman.
+- Collection lama `production_employee_code_sequences` hanya dibaca sebagai baseline data historis dan tidak menjadi counter aktif create baru.
+- Tidak ada migration/rename data historis; relasi Work Log, Payroll, dan PO existing wajib tetap aman.
 
 
 ## Update Business Rules — Transaction Side-Effect Repair guarded — 2026-05-23
@@ -1181,27 +1180,27 @@ Status: **AKTIF / GUARDED**.
 
 ## SQLite Local DB runtime pilot — Patch A-B — 2026-06-02
 
-Status: **AKTIF / SQLITE-FIRST PILOT / BROWSER-LOCAL DATA LAMA CLEANUP SELESAI**.
+Status: **AKTIF / SQLITE-FIRST PILOT / BROWSER-LOCAL DATA HISTORIS CLEANUP SELESAI**.
 
 Rule aktif:
-- Runtime offline/local web sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN, bukan database browser lama.
+- Runtime offline/local web sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN, bukan database browser arsip.
 - `frontend/.env.example` dibuat SQLite-first: `VITE_AUTH_MODE=sqlite`.
 - `.env.local` tidak boleh di-commit.
 - `VITE_SUPPLIERS_REPOSITORY_MODE=sqlite` aktif untuk Supplier. Relasi purchase/raw/history tetap wajib mengikuti service/endpoint SQLite aktual dan tidak boleh direct write dari UI.
 - Categories dan Customers boleh CRUD lewat repository SQLite/backend.
-- runtime lama tidak dipertahankan sebagai fallback runtime aktif; alias lama hanya compatibility dan dinormalisasi ke `sqlite_sidecar`.
-- Nilai data lama `offline_local` dan `hybrid_sync` hanya compatibility alias di `repositoryMode.js`; nilainya dinormalisasi ke `sqlite_sidecar` dan tidak mengaktifkan database browser lama.
+- runtime arsip tidak dipertahankan sebagai fallback runtime aktif; alias lama hanya compatibility dan dinormalisasi ke `sqlite_sidecar`.
+- Nilai data historis `offline_local` dan `hybrid_sync` hanya compatibility alias di `repositoryMode.js`; nilainya dinormalisasi ke `sqlite_sidecar` dan tidak mengaktifkan database browser arsip.
 
 Cleanup yang sudah dilakukan:
-- Folder data lama `src/data/adapters/database-browser-lama/`, `src/data/local/`, dan `src/data/sync/` dihapus dari source aktif.
-- Panel data lamabase browser lama yang tidak masuk route aktif dihapus: `OfflineLocalDbBackupPanel`, `OfflineMasterDataPilotPanel`, `OfflineQaExecutionPanel`, dan `OfflineSyncDevPanel`.
-- UI aktif untuk database lokal hanya `OfflineDatabaseCenter.jsx` / SQLite Local DB Center.
+- Folder data historis `src/data/adapters/database-browser-arsip/`, `src/data/local/`, dan `src/data/sync/` dihapus dari source aktif.
+- Panel database browser arsip yang tidak masuk route aktif dihapus: `OfflineLocalDbBackupPanel`, `OfflineMasterDataPilotPanel`, `OfflineQaExecutionPanel`, dan `OfflineSyncDevPanel`.
+- UI aktif untuk database lokal hanya `OfflineDatabaseCenter.jsx` / Database Center di area Maintenance.
 
 Guard tetap berlaku:
-- Tidak ada `sync queue lama` storage browser lama runtime.
-- Tidak ada backup/restore JSON storage browser lama runtime.
-- Tidak ada auto-sync runtime lama ke SQLite untuk transaksi.
-- Stock, purchase, sales, returns, finance, reports, production, payroll, HPP, reset destructive, route/menu/role guard, dan rules database lama/index tidak berubah.
+- Tidak ada `sync queue arsip` storage browser arsip runtime.
+- Tidak ada backup/restore JSON storage browser arsip runtime.
+- Tidak ada auto-sync runtime arsip ke SQLite untuk transaksi.
+- Stock, purchase, sales, returns, finance, reports, production, payroll, HPP, reset testing, route/menu/role guard, dan rules database arsip/index tidak berubah.
 - Restore SQLite destructive tetap wajib admin lokal, preview/plan, file backup eksplisit, keyword guard, dan backup otomatis.
 
 Kontrak resmi: `docs/10_OFFLINE_DATABASE_CONTRACT.md`.

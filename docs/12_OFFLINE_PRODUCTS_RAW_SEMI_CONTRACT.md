@@ -1,13 +1,13 @@
 <!--
 PATCH A-B NOTE — 2026-06-02:
-Dokumen ini adalah arsip historis Batch offline database browser lama. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser lama, sync queue lama, conflict resolver, atau backup JSON storage browser lama dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
+Dokumen ini adalah arsip historis Batch offline database browser arsip. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser arsip, sync queue arsip, conflict resolver, atau backup JSON storage browser arsip dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
 # Offline Product / Raw Material / Semi Finished Contract — Batch 29–30
 
 Status: **ARSIP HISTORIS / SUPERSEDED BY SQLITE RUNTIME / JANGAN DIPAKAI SEBAGAI INSTRUKSI AKTIF**.
 
-Dokumen ini menggantikan kontrak Batch 20 yang masih audit-only. Batch 29 memetakan kontrak field dari source aktual, sedangkan Batch 30 hanya mengizinkan **runtime lama ke local pull read-only** untuk Product, Raw Material, dan Semi Finished. Tidak ada edit local, tidak ada stock mutation, tidak ada purchase/production mutation, dan tidak ada HPP recalculation dari data local.
+Dokumen ini menggantikan kontrak Batch 20 yang masih audit-only. Batch 29 memetakan kontrak field dari source aktual, sedangkan Batch 30 hanya mengizinkan **runtime arsip ke local pull read-only** untuk Product, Raw Material, dan Semi Finished. Tidak ada edit local, tidak ada stock mutation, tidak ada purchase/production mutation, dan tidak ada HPP recalculation dari data local.
 
 ## Validasi source aktual
 
@@ -26,8 +26,8 @@ File source yang dicek:
 - `src/pages/Produksi/ProductionWorkLogs.jsx`
 - `src/pages/Transaksi/Purchases.jsx`
 - `src/data/local/localDbSchema.js`
-- `src/data/sync/runtime-lamaToLocalMasterDataSyncService.js`
-- `src/data/sync/runtime-lamaMasterDataSyncService.js`
+- `src/data/sync/runtime-arsipToLocalMasterDataSyncService.js`
+- `src/data/sync/runtime-arsipMasterDataSyncService.js`
 - `src/pages/Utilities/components/OfflineDatabaseCenter.jsx`
 
 File relevan yang tidak ditemukan pada ZIP ini:
@@ -38,21 +38,21 @@ File relevan yang tidak ditemukan pada ZIP ini:
 Batasan validasi:
 
 - Audit ini static source audit, bukan dump database runtime.
-- rules database lama/index tetap harus dicek manual di runtime lama Console.
-- Snapshot local tidak membuktikan data lama sudah bersih; data lama shape tetap harus diasumsikan ada.
+- rules database arsip/index tetap harus dicek manual di runtime arsip Console.
+- Snapshot local tidak membuktikan data historis sudah bersih; data historis shape tetap harus diasumsikan ada.
 
 ## Keputusan Batch 29–30
 
 | Area | Keputusan |
 |---|---|
-| Product | Boleh pull runtime lama ke local sebagai snapshot read-only. |
-| Raw Material | Boleh pull runtime lama ke local sebagai snapshot read-only. |
-| Semi Finished | Boleh pull runtime lama ke local sebagai snapshot read-only. |
+| Product | Boleh pull runtime arsip ke local sebagai snapshot read-only. |
+| Raw Material | Boleh pull runtime arsip ke local sebagai snapshot read-only. |
+| Semi Finished | Boleh pull runtime arsip ke local sebagai snapshot read-only. |
 | Offline write | Tetap blocked. Tidak ada create/edit/delete offline. |
-| `sync queue lama` | Tetap hanya `categories` dan `customers`. Product/raw/semi tidak masuk queue. |
-| Offline → runtime lama | Tetap hanya `categories` dan `customers`. Product/raw/semi diblokir. |
-| Runtime page | `Products`, `RawMaterials`, `SemiFinishedMaterials`, `Purchases`, `ProductionBoms`, dan `ProductionWorkLogs` tetap runtime lama/service aktif. |
-| Stock/HPP | Tidak dihitung ulang dari storage browser lama local. |
+| `sync queue arsip` | Tetap hanya `categories` dan `customers`. Product/raw/semi tidak masuk queue. |
+| Offline → runtime arsip | Tetap hanya `categories` dan `customers`. Product/raw/semi diblokir. |
+| Runtime page | `Products`, `RawMaterials`, `SemiFinishedMaterials`, `Purchases`, `ProductionBoms`, dan `ProductionWorkLogs` tetap runtime arsip/service aktif. |
+| Stock/HPP | Tidak dihitung ulang dari storage browser arsip local. |
 
 ## Kontrak field Product
 
@@ -60,18 +60,18 @@ Source utama: `src/services/MasterData/productsService.js`.
 
 | Field | Status | Catatan |
 |---|---|---|
-| `id` | identity | Data baru memakai document ID = kode `PRD-xxx`; data lama random ID tetap data-lama-compatible. |
+| `id` | identity | Data baru memakai document ID = kode `PRD-xxx`; data historis random ID tetap historical-compatible. |
 | `code`, `productCode` | identity internal | Service auto-generate dan menjaga immutable saat update. UI utama tidak boleh bergantung pada input manual. |
 | `name` | wajib | Duplicate name dicek di service. |
 | `categoryId`, `category` | metadata | `category` disnapshot dari selected category, fallback `Produk Jadi`. |
 | `price`, `hppPerUnit` | finance/valuation | Tidak boleh negatif; HPP product output bisa dipengaruhi flow produksi, bukan snapshot local. |
 | `pricingMode`, `pricingRuleId`, `lastPricingUpdatedAt` | pricing | Mode default manual. Rule wajib hanya saat mode `rule`. |
 | `description`, `isActive` | metadata | `isActive` default true kecuali false eksplisit. |
-| `hasVariants`, `variantLabel`, `variants`, `archivedVariants`, `variantModeHistory` | variant | Variant aktif dihitung lewat helper; archive/history dipertahankan untuk guard data lama. |
+| `hasVariants`, `variantLabel`, `variants`, `archivedVariants`, `variantModeHistory` | variant | Variant aktif dihitung lewat helper; archive/history dipertahankan untuk guard data historis. |
 | `currentStock`, `stock`, `reservedStock`, `availableStock` | stock guarded | `stock` masih alias lama `currentStock`. Tidak boleh diubah dari offline snapshot. |
 | `minStockAlert` | alert master | Threshold master, bukan agregat variant. |
 | `variantCount`, `activeVariantCount` | derived | Hasil perhitungan helper, bukan field input utama. |
-| `createdAt`, `updatedAt` | audit timestamp | runtime lama timestamp; saat snapshot local disimpan sebagai data remote apa adanya. |
+| `createdAt`, `updatedAt` | audit timestamp | runtime arsip timestamp; saat snapshot local disimpan sebagai data remote apa adanya. |
 
 Guard penting Product:
 
@@ -86,7 +86,7 @@ Source utama: `src/services/MasterData/rawMaterialsService.js`.
 
 | Field | Status | Catatan |
 |---|---|---|
-| `id` | identity | Data baru memakai document ID = kode `RAW-xxx`; data lama `RM`/random ID tetap data-lama-compatible. |
+| `id` | identity | Data baru memakai document ID = kode `RAW-xxx`; data historis `RM`/random ID tetap historical-compatible. |
 | `code`, `materialCode` | identity internal | Auto-generated, immutable saat update. |
 | `name` | wajib | Duplicate name dicek di service. |
 | `supplierId`, `supplierName`, `supplierLink` | supplier snapshot | Di-resolve dari supplier aktif lewat helper supplier. Inilah alasan supplier tidak boleh offline write dulu. |
@@ -112,7 +112,7 @@ Source utama: `src/services/Produksi/semiFinishedMaterialsService.js` dan `src/c
 
 | Field | Status | Catatan |
 |---|---|---|
-| `id` | identity | Data baru memakai document ID = kode `SFP-xxx`; data lama/manual code tetap data-lama-compatible. |
+| `id` | identity | Data baru memakai document ID = kode `SFP-xxx`; data historis/manual code tetap historical-compatible. |
 | `code`, `itemCode` | identity internal | Service membuat kode final saat create; update menjaga kode existing. |
 | `name` | wajib | Nama semi finished wajib ada. |
 | `description` | metadata | Teks bebas. |
@@ -121,7 +121,7 @@ Source utama: `src/services/Produksi/semiFinishedMaterialsService.js` dan `src/c
 | `type` | fixed | `semi_finished`. |
 | `unit` | unit | Default `pcs`. |
 | `relatedProductIds`, `relatedProductNames` | relation snapshot | Snapshot relasi ke product. |
-| `stock`, `currentStock`, `reservedStock`, `availableStock` | stock guarded | Alias data lama tetap dipertahankan. Tidak boleh dimutasi dari snapshot local. |
+| `stock`, `currentStock`, `reservedStock`, `availableStock` | stock guarded | Alias data historis tetap dipertahankan. Tidak boleh dimutasi dari snapshot local. |
 | `minStockAlert` | alert master | Threshold master, bukan agregat variant. |
 | `averageCostPerUnit` | HPP/valuation | Bisa dipengaruhi production output/payroll/HPP; tidak boleh recalculation dari local snapshot. |
 | `isActive`, `isSellable` | metadata | `isSellable` false. |
@@ -143,7 +143,7 @@ Source: `src/constants/variantOptions.js` dan `src/constants/semiFinishedMateria
 - `FLOWER_GROUP_OPTIONS` masih menyediakan opsi `mawar`, `tulip`, `lily`, `daisy`, `universal`, dan `lainnya`.
 - `DEFAULT_SEMI_FINISHED_FORM.flowerGroup` sudah kosong, bukan `mawar`.
 - `semiFinishedMaterialsService` memvalidasi `flowerGroup` wajib dan memberi catatan `no-silent-mawar-default`.
-- Batch ini tidak mengubah opsi bunga dan tidak membuat migrasi data lama.
+- Batch ini tidak mengubah opsi bunga dan tidak membuat migrasi data historis.
 
 Keputusan:
 
@@ -164,50 +164,50 @@ Hal yang terdeteksi dari source:
 Keputusan:
 
 - Tidak ada unit conversion baru di Batch 30.
-- Snapshot local menyimpan data sebagaimana runtime lama, tidak melakukan konversi unit.
+- Snapshot local menyimpan data sebagaimana runtime arsip, tidak melakukan konversi unit.
 - Semua konversi/normalisasi stock harus tetap lewat service aktif sampai ada kontrak stock offline.
 
 ## Local DB Batch 30
 
 Local table yang aktif sebagai read-only snapshot:
 
-| Local table | runtime lama collection | Arah yang boleh | Arah yang blocked |
+| Local table | runtime arsip collection | Arah yang boleh | Arah yang blocked |
 |---|---|---|---|
-| `products` | `products` | runtime lama ke local | Local → runtime lama, sync queue, local write |
-| `raw_materials` | `raw_materials` | runtime lama ke local | Local → runtime lama, sync queue, local write |
-| `semi_finished_materials` | `semi_finished_materials` | runtime lama ke local | Local → runtime lama, sync queue, local write |
+| `products` | `products` | runtime arsip ke local | Local → runtime arsip, sync queue, local write |
+| `raw_materials` | `raw_materials` | runtime arsip ke local | Local → runtime arsip, sync queue, local write |
+| `semi_finished_materials` | `semi_finished_materials` | runtime arsip ke local | Local → runtime arsip, sync queue, local write |
 
 Metadata snapshot local:
 
 - `syncStatus: synced`
-- `source: runtime-lama_pull`
+- `source: runtime-arsip_pull`
 - `syncMetadata.scope: read_only_snapshot`
 - `syncMetadata.readOnlySnapshot: true`
 
 Batasan runtime:
 
 - Table ini hanya bisa dilihat di tab `Data Local` pada Offline Database Center.
-- Pull tidak membuat `sync queue lama` baru.
+- Pull tidak membuat `sync queue arsip` baru.
 - Push UI tetap hanya Categories/Customers.
 - Guard push service tetap menolak Product/Raw/Semi jika suatu saat ada queue nyasar.
 
 ## Risiko yang masih ada
 
-1. Data lama mungkin punya shape field berbeda (`stock`, `currentStock`, `variantOptions`, random ID). Snapshot harus tetap compatibility.
+1. Data historis mungkin punya shape field berbeda (`stock`, `currentStock`, `variantOptions`, random ID). Snapshot harus tetap compatibility.
 2. Product/raw/semi menyentuh `stock_item_read_models`; offline write tanpa kontrak read model akan berisiko beda stok.
-3. Purchase/Production/HPP bisa memakai cost/stock terbaru; snapshot local bisa stale jika runtime lama berubah setelah pull.
+3. Purchase/Production/HPP bisa memakai cost/stock terbaru; snapshot local bisa stale jika runtime arsip berubah setelah pull.
 4. Supplier linkage di raw material memakai snapshot supplier. Karena itu supplier tetap read-only.
 5. Semi Finished `averageCostPerUnit` terkait HPP produksi; local snapshot tidak boleh menjadi sumber final valuation.
 
 ## Test checklist Batch 29–30
 
 - [ ] Jalankan `Siapkan Local DB`, pastikan schema version menjadi `2`.
-- [ ] Preview runtime lama → Offline untuk `Products (read-only)`.
+- [ ] Preview runtime arsip → Offline untuk `Products (read-only)`.
 - [ ] Pull `Products (read-only)`, lalu cek tab `Data Local > Products (read-only)`.
 - [ ] Preview dan pull `Raw Materials (read-only)`.
 - [ ] Preview dan pull `Semi Finished (read-only)`.
-- [ ] Pastikan `Offline → runtime lama` hanya menampilkan Categories dan Customers.
-- [ ] Pastikan tidak ada `sync queue lama` untuk suppliers/products/raw_materials/semi_finished_materials.
+- [ ] Pastikan `Offline → runtime arsip` hanya menampilkan Categories dan Customers.
+- [ ] Pastikan tidak ada `sync queue arsip` untuk suppliers/products/raw_materials/semi_finished_materials.
 - [ ] Pastikan halaman `Products`, `RawMaterials`, `SemiFinishedMaterials`, `Purchases`, `ProductionBoms`, dan `ProductionWorkLogs` tetap membaca source aktif seperti sebelumnya.
 - [ ] Pastikan tidak ada perubahan stok, inventory logs, purchase, production work log, payroll, atau HPP setelah pull snapshot.
 
@@ -216,7 +216,7 @@ Batasan runtime:
 Stock read model snapshot telah dipisahkan dari master item mutation:
 - `stock_item_read_models` boleh dipull ke local `stock_snapshots` sebagai read-only display.
 - Products/Raw/Semi tetap tidak boleh masuk offline write runtime hanya karena snapshot stok sudah tersedia.
-- Mutation yang menyentuh `currentStock`, `reservedStock`, `availableStock`, variant stock, cost/HPP, purchase, sales, returns, production, dan adjustment tetap runtime lama-only.
+- Mutation yang menyentuh `currentStock`, `reservedStock`, `availableStock`, variant stock, cost/HPP, purchase, sales, returns, production, dan adjustment tetap runtime arsip-only.
 - Detail kontrak stok: `docs/13_OFFLINE_STOCK_READ_MODEL_CONTRACT.md`.
 
 ## Update C2-C4 SQLite Foundation

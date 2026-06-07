@@ -101,7 +101,7 @@ router.use("/ledger", createSqliteJsonRecordRouter({
   codePrefix: "LGR",
   requiredName: false,
   orderBy: "transaction_date DESC, updated_at DESC",
-  protectedWriteNote: "Ledger database lokal final untuk transaksi baru; data lama perlu migrasi/backfill terpisah.",
+  protectedWriteNote: "Ledger database lokal final untuk transaksi baru; data historis perlu migrasi/backfill terpisah.",
   allowDirectCreate: false,
   allowDirectUpdate: false,
   allowDirectDelete: false,

@@ -87,7 +87,7 @@ import {
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
-// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const SemiFinishedMaterials = () => {
@@ -1049,10 +1049,10 @@ const SemiFinishedMaterials = () => {
             - SemiFinishedMaterials.jsx create/edit drawer dan semiFinishedMaterialsService payload.
 
             Alasan perubahan:
-            - `variants[].minStockAlert` adalah compatibility data lama; minimum stock Semi Finished tidak lagi diisi per varian.
+            - `variants[].minStockAlert` adalah compatibility data historis; minimum stock Semi Finished tidak lagi diisi per varian.
 
             Catatan cleanup:
-            - field data lama varian dapat diaudit pada batch maintenance terpisah.
+            - field data historis varian dapat diaudit pada batch maintenance terpisah.
 
             Risiko:
             - input min stock per varian yang diaktifkan lagi akan membuat status Perlu Dicek tidak konsisten dengan source master.

@@ -1,8 +1,8 @@
-# IMS SQLite Local Backend
+# IMS Database Lokal
 
-Backend ini adalah perantara lokal untuk IMS web full-offline LAN berbasis SQLite. React tidak boleh mengakses file SQLite langsung; semua akses harus lewat HTTP API backend ini.
+Layanan ini menjadi perantara database lokal untuk IMS web full-offline. Frontend tidak boleh mengakses file database langsung; semua akses harus lewat HTTP API layanan lokal.
 
-Status saat ini: runtime pilot aktif untuk auth lokal, user management lokal, `customers`, `categories`, dan Supplier master-only. Modul guarded seperti stock mutation, purchase/sales final, returns, finance, production, payroll, HPP, dan reset destructive belum boleh diarahkan ke SQLite tanpa audit khusus.
+Status saat ini: database lokal menjadi runtime utama untuk modul operasional. Modul guarded seperti stock mutation, purchase/sales final, returns, finance, production, payroll, HPP, backup, dan restore tetap wajib lewat service resmi dan audit source aktual.
 
 ## Jalankan
 
@@ -12,7 +12,7 @@ npm install
 npm run dev
 ```
 
-Backend default berjalan di:
+Layanan lokal default berjalan di:
 
 ```txt
 http://localhost:3001
@@ -33,33 +33,34 @@ http://IP-LAPTOP:5173/Inventory-App/
 ## Endpoint aktif
 
 ```txt
-GET    /health
-GET    /api
-GET    /api/settings
-GET    /api/auth/status
-POST   /api/auth/bootstrap-admin
+GET    /health                         # public minimal
+GET    /api                            # public minimal
+GET    /api/auth/status                # public minimal untuk bootstrap/login
+POST   /api/auth/bootstrap-admin       # hanya jika belum ada administrator aktif
 POST   /api/auth/login
-GET    /api/auth/me
-POST   /api/auth/logout
-GET    /api/auth/users
-POST   /api/auth/users
-PUT    /api/auth/users/:id
-DELETE /api/auth/users/:id
-GET    /api/customers
-GET    /api/customers/generate-code
-GET    /api/customers/:id
-POST   /api/customers
-PUT    /api/customers/:id
-DELETE /api/customers/:id
-GET    /api/categories
-GET    /api/categories/:id
-POST   /api/categories
-PUT    /api/categories/:id
-DELETE /api/categories/:id
-POST   /api/maintenance/backup
-GET    /api/maintenance/backups
-GET    /api/maintenance/status
-GET    /api/audit-logs
+GET    /api/settings                   # administrator
+GET    /api/auth/me                    # login
+POST   /api/auth/logout                # login
+GET    /api/auth/users                 # administrator
+POST   /api/auth/users                 # administrator
+PUT    /api/auth/users/:id             # administrator
+DELETE /api/auth/users/:id             # administrator
+GET    /api/customers                  # login
+GET    /api/customers/generate-code    # login
+GET    /api/customers/:id              # login
+POST   /api/customers                  # administrator
+PUT    /api/customers/:id              # administrator
+DELETE /api/customers/:id              # administrator
+GET    /api/categories                 # login
+GET    /api/categories/:id             # login
+POST   /api/categories                 # administrator
+PUT    /api/categories/:id             # administrator
+DELETE /api/categories/:id             # administrator
+GET    /api/module-runtime-status      # administrator
+GET    /api/maintenance/status         # administrator
+POST   /api/maintenance/backup         # administrator
+GET    /api/maintenance/backups        # administrator
+GET    /api/audit-logs                 # administrator
 ```
 
 ## Runtime data
@@ -73,8 +74,12 @@ Folder/file runtime tidak boleh masuk git atau patch.
 
 ## Guardrail
 
-- Jangan arahkan stock/sales/purchase/finance/production/payroll/HPP ke SQLite sebelum audit khusus.
-- Jangan hapus compatibility data lama total sebelum semua migrasi terbukti aman dan tidak ada adapter runtime lama aktif.
-- Jangan React langsung akses file SQLite.
+- Jangan mengubah jalur stock/sales/purchase/finance/production/payroll/HPP tanpa audit khusus.
+- Jangan hapus compatibility data historis total sebelum semua migrasi terbukti aman dan tidak ada runtime arsip aktif.
+- Jangan frontend langsung akses file database.
 - Jangan restore destructive tanpa preview, confirm guard, backup otomatis, dan audit log.
-- Semua akses SQLite wajib lewat backend ini.
+- Semua akses database wajib lewat layanan lokal ini.
+
+## Public endpoint hardening
+
+Endpoint public hanya boleh menampilkan status minimal untuk cek layanan dan kebutuhan login/bootstrap. Detail operasional seperti path database, folder backup, jumlah data, backup policy, audit count, dan status modul aplikasi hanya boleh dibuka setelah login administrator.

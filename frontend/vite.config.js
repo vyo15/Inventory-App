@@ -2,8 +2,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 // AKTIF + GUARDED:
-// Konfigurasi utama Vite untuk build dan deploy IMS Bunga Flanel.
-// File ini hanya mengatur proses build/deploy, tidak menyentuh flow bisnis,
+// Konfigurasi utama Vite untuk build IMS Bunga Flanel.
+// File ini hanya mengatur proses build frontend, tidak menyentuh flow bisnis,
 // stok, kas, produksi, laporan, maupun akses database runtime.
 export default defineConfig({
   // AKTIF:
@@ -12,9 +12,9 @@ export default defineConfig({
   plugins: [react()],
 
   // AKTIF + GUARDED:
-  // Base path wajib dipertahankan untuk GitHub Pages karena aplikasi dibuka dari
-  // https://vyo15.github.io/Inventory-App/.
-  // Jangan diganti ke "/" kecuali target deploy sudah bukan GitHub Pages subpath.
+  // Base path dipertahankan agar URL lokal/LAN tetap konsisten dengan dev runner:
+  // http://localhost:5173/Inventory-App/ dan http://IP-LAPTOP:5173/Inventory-App/.
+  // Jangan diganti ke "/" kecuali route/base app ikut disesuaikan dan diuji ulang.
   base: "/Inventory-App/",
 
   build: {

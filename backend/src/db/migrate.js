@@ -129,10 +129,10 @@ async function ensureFoundationJsonTables(db) {
 }
 
 async function ensurePricingRulesSchema(db) {
-  // D1-SQLITE-COMPAT:
-  // Database pilot yang sudah pernah dibuat bisa memiliki table pricing_rules lama
+  // Pricing rules compatibility:
+  // Database yang sudah pernah dibuat bisa memiliki table pricing_rules lama
   // tanpa kolom target_type/is_active. CREATE TABLE IF NOT EXISTS tidak menambah
-  // kolom pada table existing, jadi kolom wajib D1 ditambahkan secara idempotent.
+  // kolom pada table existing, jadi kolom wajib ditambahkan secara idempotent.
   await ensureColumn(db, "pricing_rules", "code", "code TEXT");
   await ensureColumn(db, "pricing_rules", "name", "name TEXT");
   await ensureColumn(db, "pricing_rules", "target_type", "target_type TEXT NOT NULL DEFAULT 'raw_materials'");
@@ -212,10 +212,10 @@ async function seedMigrationStatus(db) {
     ["sales", "Sales", "sqlite_active", "atomic_stock_finance", "Penjualan aktif untuk stok keluar Produk/Bahan Baku dan posting pemasukan saat selesai."],
     ["returns", "Returns", "sqlite_active", "product_raw_stock_restore_guarded_refund", "Retur aktif untuk pemulihan stok Produk/Bahan Baku. Refund/finance tetap guarded melalui aturan resmi."],
     ["finance", "Finance Ledger", "sqlite_active", "cash_in_cash_out_ledger", "Finance aktif untuk cash-in/cash-out manual dan ledger transaksi baru."],
-    ["production", "Production", "sqlite_active", "production_sqlite_runtime", "Production steps, employees, profiles, BOM, planning, orders, dan work logs memakai database lokal."],
-    ["payroll_hpp", "Payroll & HPP", "sqlite_active", "payroll_paid_hpp_sqlite", "Payroll final/paid dan HPP memakai data lokal; payroll paid memposting biaya finance."],
-    ["reports", "Reports & Dashboard", "sqlite_active", "sqlite_transactions_finance_stock", "Report service membaca transaksi, finance, dan snapshot stok dari database lokal."],
-    ["auth", "Auth & Role Guard", "sqlite_active", "local_auth_only", "Auth lokal menjadi runtime final; dependency auth runtime lama dihapus."],
+    ["production", "Production", "sqlite_active", "production_runtime", "Production steps, employees, profiles, BOM, planning, orders, dan work logs memakai database lokal."],
+    ["payroll_hpp", "Payroll & HPP", "sqlite_active", "payroll_paid_hpp", "Payroll final/paid dan HPP memakai data lokal; payroll paid memposting biaya finance."],
+    ["reports", "Reports & Dashboard", "sqlite_active", "transactions_finance_stock", "Report service membaca transaksi, finance, dan snapshot stok dari database lokal."],
+    ["auth", "Auth & Role Guard", "sqlite_active", "local_auth_only", "Auth lokal menjadi runtime final; dependency auth runtime arsip dihapus."],
     ["reset_restore", "Reset & Restore", "guarded", "confirm_keyword_required", "Restore guarded tersedia untuk administrator dengan backup otomatis dan keyword konfirmasi."],
   ];
 

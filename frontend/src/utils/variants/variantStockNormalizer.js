@@ -16,7 +16,7 @@ export const normalizeNumberStock = (value = 0) => {
 
 // =====================================================
 // Helper trim/compare ringan untuk key dan label varian.
-// ACTIVE: dipakai oleh semua normalizer agar data lama null/undefined tetap aman.
+// ACTIVE: dipakai oleh semua normalizer agar data historis null/undefined tetap aman.
 // =====================================================
 export const trimVariantText = (value) => String(value || '').trim();
 
@@ -70,7 +70,7 @@ export const calculateVariantAvailableStock = (currentStock = 0, reservedStock =
 // =====================================================
 // Build key stabil untuk varian.
 // ACTIVE: mempertahankan key lama jika ada, lalu fallback ke kode/nama/warna.
-// ALASAN: data lama IMS tidak selalu punya `variantKey`, jadi audit dan mutasi
+// ALASAN: data historis IMS tidak selalu punya `variantKey`, jadi audit dan mutasi
 // varian harus tetap bisa membaca identitas lama secara aman.
 // =====================================================
 export const buildVariantKey = (variant = {}, fallbackIndex = 0, keyFields = DEFAULT_KEY_FIELDS) => {

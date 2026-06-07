@@ -2,7 +2,7 @@
 
 Status: **AKTIF / SQLITE-FIRST / SOURCE-VERIFIED**.
 
-Runtime utama source aktual adalah backend Node.js Express + SQLite lokal/LAN. Roadmap ini menggantikan roadmap offline lama.
+Runtime utama source aktual adalah backend Node.js Express + SQLite lokal/LAN. Roadmap ini menggantikan roadmap offline arsip.
 
 ## Guard sebelum merge patch berikutnya
 

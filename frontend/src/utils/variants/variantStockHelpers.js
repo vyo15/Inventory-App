@@ -8,7 +8,7 @@ import {
 // =====================================================
 // Helper trim aman untuk semua field identitas.
 // Dipakai supaya perbandingan key / label / nama varian konsisten
-// walaupun data lama masih campur null / undefined / string kosong.
+// walaupun data historis masih campur null / undefined / string kosong.
 // =====================================================
 const safeTrim = (value) => String(value || '').trim();
 
@@ -27,7 +27,7 @@ const normalizeCompareToken = (value) =>
 // =====================================================
 // Ambil key utama varian.
 // Prioritas tetap mempertahankan key eksplisit jika ada,
-// lalu fallback ke field identitas lain untuk kompatibilitas data lama.
+// lalu fallback ke field identitas lain untuk kompatibilitas data historis.
 // =====================================================
 export const getVariantKey = (variant = {}) =>
   safeTrim(
@@ -192,7 +192,7 @@ export const getItemStockSnapshot = (item = {}) => {
 // - stockSourceType tetap dibaca sebagai metadata, tetapi tidak boleh
 //   membuat UI menampilkan Master jika key/label varian sebenarnya ada.
 // - Jika item bervarian tetapi tidak punya key/label, UI diberi status
-//   warning agar data lama/mismatch terlihat jelas dan tidak tampak benar.
+//   warning agar data historis/mismatch terlihat jelas dan tidak tampak benar.
 // =====================================================
 export const buildVariantDisplayInfo = ({
   stockSourceType = '',
@@ -206,7 +206,7 @@ export const buildVariantDisplayInfo = ({
   masterSourceLabel = 'Master',
   masterVariantLabel = '',
   missingVariantLabel = 'Varian belum terbaca',
-  missingVariantDescription = 'Cek data lama / master lama',
+  missingVariantDescription = 'Cek data arsip / master arsip',
 } = {}) => {
   const normalizedStockSource = safeTrim(stockSourceType).toLowerCase();
   const normalizedVariantKey = safeTrim(variantKey || fallbackVariantKey);
@@ -261,7 +261,7 @@ export const buildVariantDisplayInfo = ({
 // ACTIVE / FINAL untuk flow PO variant:
 // - caller final wajib mengirim allowMasterFallback=false supaya varian
 //   yang gagal resolve tidak diam-diam kembali ke master;
-// - fallback master hanya tersisa untuk flow manual/data lama yang memang
+// - fallback master hanya tersisa untuk flow manual/data historis yang memang
 //   belum punya contract PO variant.
 // Prioritas resolve:
 // 1. key exact match

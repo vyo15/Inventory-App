@@ -29,7 +29,7 @@ import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/La
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
-// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const { Option } = Select;
@@ -63,7 +63,7 @@ const CashIn = () => {
   const [selectedMonth, setSelectedMonth] = useState("all");
 
   // =========================
-  // SECTION: Sinkronisasi data pemasukan SQLite
+  // SECTION: Sinkronisasi data pemasukan
   // =========================
   useEffect(() => {
     setLoading(true);
@@ -231,7 +231,7 @@ const CashIn = () => {
           const sourceTag = record.sourceCollection === "incomes"
             ? <Tag color="green">Penjualan Selesai</Tag>
             : record.sourceCollection === "revenues"
-              ? <Tag color="blue">Manual / Data Lama</Tag>
+              ? <Tag color="blue">Manual / Arsip</Tag>
               : <Tag>-</Tag>;
 
           return (
@@ -250,7 +250,7 @@ const CashIn = () => {
       {
         // IMS NOTE [AKTIF/GUARDED] - Cash In adalah ledger read page tanpa aksi delete.
         // Fungsi blok: menampilkan deskripsi transaksi dari revenues + incomes tanpa tombol destructive.
-        // Hubungan flow: Auto Penjualan dari incomes dan Manual/Lama dari revenues tetap dibaca seperti sebelumnya.
+        // Hubungan flow: Auto Penjualan dari incomes dan Manual/arsip dari revenues tetap dibaca seperti sebelumnya.
         // Alasan logic: penghapusan pemasukan tidak disediakan di UI Pemasukan agar audit kas tidak mudah disalahgunakan.
         title: "Deskripsi",
         dataIndex: "description",
@@ -284,7 +284,7 @@ const CashIn = () => {
       record.sourceCollection === 'incomes' ? (
         <Tag key="source" color="green">Penjualan Selesai</Tag>
       ) : record.sourceCollection === 'revenues' ? (
-        <Tag key="source" color="blue">Manual / Data Lama</Tag>
+        <Tag key="source" color="blue">Manual / Arsip</Tag>
       ) : (
         <Tag key="source">-</Tag>
       ),

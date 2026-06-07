@@ -52,7 +52,7 @@ import { showFormValidationFeedback } from '../../utils/forms/formValidationFeed
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
-// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const { Option } = Select;
@@ -226,9 +226,9 @@ const Sales = () => {
   // =========================
   // SECTION: Ambil customer
   // Fungsi:
-  // - membaca customer lewat salesCustomerReferenceService agar Sales tetap lewat service/backend SQLite
+  // - membaca customer lewat salesCustomerReferenceService agar Sales tetap lewat service database lokal
   // Hubungan flow:
-  // - dropdown Sales tidak boleh memakai customer draft lokal yang belum tersimpan di backend SQLite
+  // - dropdown Sales tidak boleh memakai customer draft lokal yang belum tersimpan di database lokal
   // Status:
   // - aktif/final
   // - tetap menyimpan snapshot customerName saat sale dibuat agar transaksi lama aman
@@ -337,8 +337,8 @@ const Sales = () => {
   // Hubungan flow Sales/stok:
   // - sale line menyimpan collectionName + variantKey supaya mutasi stok keluar selalu memakai sumber stok yang sama
   // Status:
-  // - aktif/final; validasi preflight dipanggil dari salesService/backend SQLite, dan validasi final tetap diulang dalam createSaleTransaction
-  // - bukan data lama dan bukan kandidat cleanup
+  // - aktif/final; validasi preflight dipanggil dari salesService, dan validasi final tetap diulang dalam createSaleTransaction
+  // - bukan data historis dan bukan kandidat cleanup
   // =========================
   const buildSaleLine = (item) => {
     const selectedItem = findSellableItem(item.itemId);
@@ -681,7 +681,7 @@ const Sales = () => {
   // IMS NOTE [AKTIF] - Urutan kolom Sales dibuat mengikuti alur baca transaksi.
   // Fungsi blok: menampilkan tanggal lebih dulu, lalu pelanggan, item, channel, referensi, total, status, dan aksi.
   // Hubungan flow: hanya mengubah presentasi tabel; filter tab, pending income, status transition, stok, income, dan alur Return tidak berubah.
-  // Alasan logic: owner lebih mudah membaca kronologi penjualan tanpa mengubah data transaksi atau payload backend SQLite.
+  // Alasan logic: owner lebih mudah membaca kronologi penjualan tanpa mengubah data transaksi atau payload layanan database.
   // =========================
   /* =====================================================
      SECTION: Compact Sales Table Columns — AKTIF/GUARDED
@@ -1446,7 +1446,7 @@ const Sales = () => {
 
                             {/* IMS NOTE [AKTIF/GUARDED] - Snapshot stok Sales.
                                 Fungsi blok: menampilkan stok current/reserved/available item terpilih sebagai panel read-only pasif.
-                                Hubungan flow: hanya mengganti tampilan Alert lama; validasi stok, create sale, stock reduction, income timing, alur Return, dan payload backend SQLite tetap memakai logic existing.
+                                Hubungan flow: hanya mengganti tampilan Alert lama; validasi stok, create sale, stock reduction, income timing, alur Return, dan payload layanan database tetap memakai logic existing.
                                 Alasan logic: stok tersedia sebelum penjualan adalah info snapshot, bukan warning/error, sehingga mengikuti pola clean panel seperti Purchases/Stock Adjustment.
                                 Status: AKTIF untuk UI Sales, GUARDED terhadap business rule stok dan transaksi. */}
                             <div className="ims-readonly-panel">

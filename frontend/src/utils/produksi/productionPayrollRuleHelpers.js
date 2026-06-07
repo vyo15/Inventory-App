@@ -10,8 +10,8 @@ import { calculatePayrollAmounts } from "../../constants/productionPayrollOption
 // - ACTIVE / GUARDED:
 //   semua draft payroll baru wajib membaca rule dari snapshot step di Work Log
 //   atau, bila snapshot lama belum ada, fallback sekali ke master step.
-// - DEPRECATED / DATA LAMA:
-//   custom payroll di master karyawan tidak lagi menjadi sumber hitung aktif.
+// - ARSIP / KOMPATIBILITAS:
+//   custom payroll di master karyawan hanya menjadi referensi audit nonaktif.
 //
 // Catatan maintainability:
 // - Helper ini sengaja dipisah agar contract payroll tidak tersebar di page,
@@ -316,7 +316,7 @@ export const formatPayrollRuleSourceLabel = (source = "") => {
   }
 
   if (source === "production_step_master_historical_fallback") {
-    return "Fallback data lama ke master step";
+    return "Fallback data historis ke master step";
   }
 
   return "Rule payroll tidak lengkap";
@@ -406,7 +406,7 @@ export const resolveWorkLogPayrollDraft = ({
 
   if (resolvedRule.historicalFallbackUsed) {
     warningReasons.push(
-      "Draft payroll memakai fallback data lama/deprecated ke master step karena snapshot rule payroll lama belum ada di Work Log.",
+      "Draft payroll memakai fallback arsip ke master step karena snapshot rule payroll belum ada di Work Log.",
     );
   }
 
@@ -471,7 +471,7 @@ export const buildPayrollCalculationNotes = ({
 
   if (historicalFallbackUsed) {
     baseText.push(
-      "Fallback data lama/deprecated terpakai karena snapshot payroll rule lama belum tersimpan di Work Log. Setelah work log baru diposting, fallback ini seharusnya tidak dipakai lagi.",
+      "Fallback arsip terpakai karena snapshot payroll rule belum tersimpan di Work Log. Setelah work log baru diposting, fallback ini seharusnya tidak dipakai lagi.",
     );
   }
 

@@ -36,7 +36,7 @@ const ProtectedRouteLoader = () => (
 // - AKTIF untuk Fase C/D.
 // - GUARDED: hide menu bukan security; route tetap wajib dicek di sini.
 // Compatibility / cleanup:
-// - tidak ada data lama aktif; backend localAuth/RBAC tetap menjadi guard data, route guard ini untuk UX dan URL langsung.
+// - tidak ada data historis aktif; auth/RBAC layanan lokal tetap menjadi guard data, route guard ini untuk UX dan URL langsung.
 // =========================
 const ProtectedRoute = ({ routeKey, children }) => {
   const location = useLocation();

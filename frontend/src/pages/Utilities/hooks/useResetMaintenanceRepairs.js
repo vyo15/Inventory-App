@@ -44,7 +44,7 @@ const STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD = "CLEANUP READ MODEL";
 const useResetMaintenanceRepairs = ({
   createPageMaintenanceLog,
   loadPreview,
-  authSessionUser,
+  authUser,
   profile,
   maintenanceActor,
   setMasterCodeAudit,
@@ -288,7 +288,7 @@ const useResetMaintenanceRepairs = ({
   const handleRepairHppReconcileAudit = useCallback(async () => {
     try {
       setLoadingHppReconcileRepair(true);
-      const result = await repairHppReconcileMaintenance(authSessionUser || profile || maintenanceActor);
+      const result = await repairHppReconcileMaintenance(authUser || profile || maintenanceActor);
       await createPageMaintenanceLog({
         actionType: "hpp_output_reconcile_repair",
         mode: "repair",
@@ -319,7 +319,7 @@ const useResetMaintenanceRepairs = ({
     } finally {
       setLoadingHppReconcileRepair(false);
     }
-  }, [createPageMaintenanceLog, authSessionUser, loadPreview, maintenanceActor, profile, setHppReconcileAudit]);
+  }, [createPageMaintenanceLog, authUser, loadPreview, maintenanceActor, profile, setHppReconcileAudit]);
 
   const handleRepairPayrollAudit = useCallback(async () => {
     try {
@@ -366,7 +366,7 @@ const useResetMaintenanceRepairs = ({
         affectedCount: result?.updatedCount || 0,
         dryRun: false,
         status: "success",
-        note: "Repair variant lintas modul hanya mengisi snapshot/field turunan yang asal data lamanya jelas; qty dan kas tidak berubah.",
+        note: "Repair variant lintas modul hanya mengisi snapshot/field turunan yang asal data historisnya jelas; qty dan kas tidak berubah.",
       });
       showActionSuccess(result?.message || "Repair variant lintas modul selesai.");
       const nextAudit = await getTransactionVariantMaintenanceAudit();
@@ -398,7 +398,7 @@ const useResetMaintenanceRepairs = ({
         dryRun: false,
         status: "success",
         note: mergeAuditNote(
-          "Repair side-effect transaksi hanya membuat income/expense/inventory log yang hilang dari flow aktif. Tidak mengubah stok master, tidak menghapus data lama, dan tidak mengubah transaksi utama.",
+          "Repair side-effect transaksi hanya membuat income/expense/inventory log yang hilang dari flow aktif. Tidak mengubah stok master, tidak menghapus data historis, dan tidak mengubah transaksi utama.",
           actionNote,
         ),
       });

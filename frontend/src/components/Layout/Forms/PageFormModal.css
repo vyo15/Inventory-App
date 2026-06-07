@@ -101,3 +101,18 @@ Fungsi:
     margin-inline-start: 0 !important;
   }
 }
+
+/* =====================================================
+SECTION: Mobile Clean v2 Modal Form Section — AKTIF / UI-ONLY
+Fungsi:
+- PageFormModal real pages memakai ResponsiveFormSection, bukan hanya preview.
+- Form modal finance/master data tetap memakai validation dan submit handler lama.
+===================================================== */
+.page-form-modal-responsive-section {
+  border-color: var(--ims-border-color-soft);
+  background: var(--ims-bg-card);
+}
+
+.page-form-modal-responsive-section .ant-card-body {
+  padding: 16px;
+}

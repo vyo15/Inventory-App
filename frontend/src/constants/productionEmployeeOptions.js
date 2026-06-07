@@ -21,7 +21,7 @@ export const PRODUCTION_EMPLOYEE_EMPLOYMENT_TYPES = [
 
 // ACTIVE ROLE OPTIONS
 // Role quality/reject lama tidak ditawarkan untuk data baru karena belum menjadi workflow aktif.
-// Label lama tetap disimpan di map agar data lama masih bisa dibaca tanpa migrasi schema.
+// Label arsip tetap disimpan di map agar data historis masih bisa dibaca tanpa migrasi schema.
 export const PRODUCTION_EMPLOYEE_ROLES = [
   { value: "operator", label: "Operator" },
   { value: "perakit", label: "Perakit" },
@@ -90,5 +90,5 @@ export const formatEmployeePayrollPreview = (employee = {}) => {
     return "Aktif: mengikuti rule payroll Tahapan Produksi";
   }
 
-  return "Deprecated: custom payroll karyawan tidak lagi dipakai dalam flow payroll final. Nilai ini hanya dipertahankan untuk referensi historis.";
+  return "Arsip: custom payroll karyawan tidak lagi dipakai dalam flow payroll final. Nilai ini hanya dipertahankan untuk referensi audit.";
 };

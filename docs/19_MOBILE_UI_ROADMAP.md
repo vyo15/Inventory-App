@@ -171,15 +171,9 @@ Patch tidak dianggap selesai jika source berubah tetapi docs tidak ikut diperbar
 - Desktop tidak rusak.
 - Build tetap berhasil.
 
-## 7. Live preview route
+## 7. Preview mobile operasional
 
-Route preview standar mobile:
-
-```text
-/mobile-standard-preview
-```
-
-Route ini UI-only dan memakai akses dashboard. Route ini boleh dipakai untuk menilai arah mobile sebelum standar diterapkan ke halaman bisnis asli.
+Route preview mobile lama sudah dihapus dari aplikasi operasional. Evaluasi mobile sekarang dilakukan melalui halaman bisnis asli, komponen foundation, dan screenshot QA desktop/mobile/dark mode sebelum merge visual.
 
 ## 8. Status Eksekusi Mobile Standard — 2026-06-05
 
@@ -198,7 +192,7 @@ Yang sudah dikunci:
 
 Guardrail yang tetap berlaku:
 
-- Patch mobile ini tidak mengubah schema SQLite, auth, route guard, stock mutation, purchase/sales/return commit, finance ledger, production material usage, payroll final, HPP, backup/restore, atau reset destructive.
+- Patch mobile ini tidak mengubah schema SQLite, auth, route guard, stock mutation, purchase/sales/return commit, finance ledger, production material usage, payroll final, HPP, backup/restore, atau reset testing.
 - Sales tetap tidak boleh memiliki cancel/delete.
 - Restore/reset tetap harus guarded dan tidak boleh dibuat shortcut mobile tanpa confirm keyword.
 - Setiap phase berikutnya wajib update dokumen ini, `docs/09_UI_THEME_GUIDE.md`, dan `docs/06_TEST_CHECKLIST.md` bila ada perubahan standar/QA.
@@ -219,4 +213,41 @@ Guardrail yang tetap berlaku:
 
 ## Update 2026-06-05 - Mobile Clean v2: Hilangkan Banner Runtime Teknis
 
-Bagian dari Mobile Clean v2 adalah mengurangi visual noise dari halaman operasional. Banner runtime database, badge mode SQLite, tombol SQLite Center, dan instruksi port/firewall tidak boleh tampil di halaman kerja harian. Mobile harus fokus pada data dan aksi utama; troubleshooting backend/database dipusatkan di Maintenance/Database Center.
+Bagian dari Mobile Clean v2 adalah mengurangi visual noise dari halaman operasional. Banner mode database, badge teknis, tombol cepat ke pusat database, dan instruksi port/firewall tidak boleh tampil di halaman kerja harian. Mobile harus fokus pada data dan aksi utama; troubleshooting koneksi/data dipusatkan di Maintenance/Database Center.
+
+## Update 2026-06-07 - Phase M7: Mobile Clean Real Pages
+
+Status: **mulai diterapkan pada halaman nyata**, bukan hanya preview.
+
+Perubahan standar:
+
+- `FilterBar` sekarang dapat memindahkan filter lanjutan ke `MobileFilterDrawer` pada mobile. Search/filter utama tetap tampil inline, sementara filter tambahan masuk drawer bottom.
+- `ProductionFilterCard` mengikuti pola yang sama untuk halaman produksi, payroll, dan HPP.
+- `PageFormModal` memakai `ResponsiveFormSection` secara default agar form modal real pages ikut standar 1 kolom mobile.
+- Form pembelian dan retur diberi `ResponsiveFormSection` agar input panjang lebih rapi di HP.
+- Detail Pembelian dan Detail Riwayat Stok memakai `MobileDetailDrawer`, sehingga mobile tidak lagi memakai drawer desktop mentah.
+
+Halaman yang ikut terdampak secara UI-only:
+
+- Purchases.
+- Returns.
+- Stock Management.
+- Cash In / Cash Out / Ledger.
+- Production Work Logs.
+- Production Payrolls.
+- Production HPP Analysis.
+- Maintenance Center dan halaman lain yang memakai `FilterBar` / `PageFormModal` shared.
+
+Guardrail:
+
+- Perubahan ini hanya presentational/responsive.
+- Tidak mengubah schema SQLite, query service, stock mutation, purchase/sales/return commit, finance ledger, production material usage, payroll final, HPP, backup/restore, reset testing, route, atau role guard.
+- Filter tetap memakai state halaman existing; tombol Terapkan di drawer hanya menutup panel karena value sudah controlled oleh halaman.
+
+Checklist QA tambahan M7:
+
+- [ ] Di mobile, search tetap terlihat tanpa membuka drawer.
+- [ ] Filter lanjutan bisa dibuka dari tombol Filter dan tidak memenuhi layar utama.
+- [ ] Detail Purchases dan Stock Management nyaman dibaca di drawer mobile.
+- [ ] Form Cash In/Cash Out/Purchases/Returns tetap validasi seperti sebelumnya dan tidak terpotong.
+- [ ] Work Logs, Payroll, dan HPP tetap memakai filter state lama dan hasil filter sama seperti desktop.

@@ -110,34 +110,34 @@ const SqliteBackendStatusPanel = () => {
           message={isOnline ? "Layanan lokal aktif" : "Layanan lokal belum tersambung"}
           description={isOnline
             ? "Panel ini memantau koneksi layanan lokal dan status database aplikasi."
-            : "Jalankan layanan lokal dari folder backend dengan npm install lalu npm run dev. Untuk akses HP, gunakan jaringan yang sama dan pastikan firewall mengizinkan aplikasi."
+            : "Jalankan aplikasi lokal dari komputer utama. Untuk akses HP, gunakan jaringan yang sama dan pastikan firewall mengizinkan aplikasi."
           }
         />
 
         <Row gutter={[12, 12]}>
           <Col xs={12} md={4}>
             <Card size="small" className="offline-db-status-card">
-              <Statistic title="Schema" value={statusData.schemaVersion || "-"} prefix={<DatabaseOutlined />} />
+              <Statistic title="Versi DB" value={statusData.schemaVersion || "-"} prefix={<DatabaseOutlined />} />
             </Card>
           </Col>
           <Col xs={12} md={4}>
             <Card size="small" className="offline-db-status-card">
-              <Statistic title="Users" value={formatNumber(statusData.userCount)} />
+              <Statistic title="User" value={formatNumber(statusData.userCount)} />
             </Card>
           </Col>
           <Col xs={12} md={4}>
             <Card size="small" className="offline-db-status-card">
-              <Statistic title="Customers" value={formatNumber(statusData.customerCount)} />
+              <Statistic title="Customer" value={formatNumber(statusData.customerCount)} />
             </Card>
           </Col>
           <Col xs={12} md={4}>
             <Card size="small" className="offline-db-status-card">
-              <Statistic title="Categories" value={formatNumber(statusData.categoryCount)} />
+              <Statistic title="Kategori" value={formatNumber(statusData.categoryCount)} />
             </Card>
           </Col>
           <Col xs={12} md={4}>
             <Card size="small" className="offline-db-status-card">
-              <Statistic title="Suppliers" value={formatNumber(statusData.supplierCount)} />
+              <Statistic title="Supplier" value={formatNumber(statusData.supplierCount)} />
             </Card>
           </Col>
           <Col xs={12} md={4}>
@@ -148,12 +148,12 @@ const SqliteBackendStatusPanel = () => {
         </Row>
 
         <Descriptions size="small" bordered column={{ xs: 1, md: 2 }}>
-          <Descriptions.Item label="Alamat Layanan">{baseUrl}</Descriptions.Item>
-          <Descriptions.Item label="Layanan">{healthData.service || healthData.phase || "layanan lokal"}</Descriptions.Item>
-          <Descriptions.Item label="Lokasi Database" span={2}>
+          <Descriptions.Item label="Alamat Aplikasi">{baseUrl}</Descriptions.Item>
+          <Descriptions.Item label="Status Layanan">{healthData.service || healthData.phase || "layanan lokal"}</Descriptions.Item>
+          <Descriptions.Item label="Lokasi Data" span={2}>
             <Text copyable ellipsis style={{ maxWidth: "100%" }}>{statusData.dbPath || healthData.dbPath || "-"}</Text>
           </Descriptions.Item>
-          <Descriptions.Item label="Folder Backup" span={2}>
+          <Descriptions.Item label="Lokasi Backup" span={2}>
             <Text copyable ellipsis style={{ maxWidth: "100%" }}>{statusData.backupDir || "-"}</Text>
           </Descriptions.Item>
         </Descriptions>

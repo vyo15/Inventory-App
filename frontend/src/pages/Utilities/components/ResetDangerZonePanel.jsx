@@ -15,7 +15,7 @@ const ResetDangerZonePanel = ({ loadingAutoDetect, onRunAllAudits }) => (
         type="warning"
         showIcon
         message="Reset testing lama dinonaktifkan pada mode database lokal"
-        description="Pemulihan data utama sekarang wajib lewat Backup & Restore resmi. Reset destructive belum tersedia dan tidak akan diaktifkan tanpa guard layanan lokal, preview, backup otomatis, keyword, serta audit log."
+        description="Pemulihan data utama sekarang wajib lewat Backup & Restore resmi. Reset penghapusan data belum tersedia dan tidak akan diaktifkan tanpa guard layanan lokal, preview, backup otomatis, keyword, serta audit log."
       />
 
       <Row gutter={[12, 12]}>
@@ -23,7 +23,7 @@ const ResetDangerZonePanel = ({ loadingAutoDetect, onRunAllAudits }) => (
           <Card size="small" title="Status Reset Lama" className="reset-maintenance-status-card">
             <Space direction="vertical" size={8} style={{ width: "100%" }}>
               <Tag icon={<LockOutlined />} color="red">Nonaktif</Tag>
-              <Text type="secondary">Service reset lama sudah nonaktif dan tidak menjalankan destructive reset.</Text>
+              <Text type="secondary">Service reset lama sudah nonaktif dan tidak menjalankan penghapusan data.</Text>
             </Space>
           </Card>
         </Col>
@@ -36,10 +36,10 @@ const ResetDangerZonePanel = ({ loadingAutoDetect, onRunAllAudits }) => (
           </Card>
         </Col>
         <Col xs={24} md={12} xl={6}>
-          <Card size="small" title="Data Test" className="reset-maintenance-status-card">
+          <Card size="small" title="Data Tools" className="reset-maintenance-status-card">
             <Space direction="vertical" size={8} style={{ width: "100%" }}>
               <Tag icon={<SafetyOutlined />} color="blue">Pindah ke Data Tools</Tag>
-              <Text type="secondary">Preview/hapus data test bermarker dan export master dipisah dari area reset.</Text>
+              <Text type="secondary">Export master/checklist dipisah dari area reset agar aman untuk operasional.</Text>
             </Space>
           </Card>
         </Col>

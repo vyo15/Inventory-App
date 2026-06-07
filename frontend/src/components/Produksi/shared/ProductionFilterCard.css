@@ -1,0 +1,45 @@
+/* =====================================================
+SECTION: Mobile Clean v2 Production Filter — AKTIF / UI-ONLY
+Fungsi:
+- Menjaga search produksi tetap inline di HP.
+- Memindahkan filter lanjutan produksi ke MobileFilterDrawer agar halaman Work Log/Payroll/HPP tidak terlalu ramai.
+Guardrail:
+- Presentational-only; tidak mengubah filter state, query, atau service produksi.
+===================================================== */
+.ims-production-filter-card__trigger {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .ims-production-filter-card__advanced {
+    display: none !important;
+  }
+
+  .ims-production-filter-card__trigger {
+    display: block;
+  }
+
+  .ims-production-filter-card__trigger .ant-btn {
+    min-height: 40px;
+    font-weight: 700;
+  }
+
+  .ims-mobile-filter-drawer__body .ims-production-filter-card__advanced {
+    display: block !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .ims-mobile-filter-drawer__body .ant-col {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+  }
+
+  .ims-mobile-filter-drawer__body .ant-input,
+  .ims-mobile-filter-drawer__body .ant-input-affix-wrapper,
+  .ims-mobile-filter-drawer__body .ant-select,
+  .ims-mobile-filter-drawer__body .ant-picker,
+  .ims-mobile-filter-drawer__body .ant-input-number {
+    width: 100%;
+  }
+}

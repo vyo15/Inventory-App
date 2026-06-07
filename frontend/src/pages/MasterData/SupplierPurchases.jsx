@@ -70,7 +70,7 @@ import {
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
 // Hubungan flow: hanya membatasi input/display UI; service calculation stok, kas, HPP, payroll, dan report tidak diubah.
-// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data lama decimal tidak dimigrasi otomatis.
+// Alasan logic: IMS operasional memakai angka tanpa desimal, sementara data historis decimal tidak dimigrasi otomatis.
 // Behavior: input baru no-decimal; business rules dan schema/database runtime tetap sama.
 
 const { Option } = Select;
@@ -143,8 +143,8 @@ const SupplierPurchases = () => {
   // ---------------------------------------------------------------------------
   // Load master supplier, bahan baku, dan purchases.
   // FUNGSI: C1 memindahkan master Supplier ke repository boundary agar mode
-  // UI tidak melakukan write langsung ke database; perubahan berjalan lewat service/backend database lokal.
-  // BATASAN: raw material dan histori purchase tetap read-only data lama untuk
+  // UI tidak melakukan write langsung ke database; perubahan berjalan lewat service database lokal.
+  // BATASAN: raw material dan histori purchase tetap read-only data historis untuk
   // pembanding; tidak menulis purchase, stok, kas, raw material, atau finance.
   // STATUS: aktif dipakai.
   // ---------------------------------------------------------------------------
@@ -412,8 +412,8 @@ const SupplierPurchases = () => {
       ...codeFields,
       storeName: values.storeName,
       storeLink: values.storeLink || '',
-      // Field kategori lama tidak lagi disimpan dari UI aktif. Jika ada data lama,
-      // service tetap membacanya sebagai read-only data lama.
+      // Field kategori lama tidak lagi disimpan dari UI aktif. Jika ada data historis,
+      // service tetap membacanya sebagai read-only data historis.
       supportedMaterialIds: materialDetails.map((item) => item.materialId),
       supportedMaterialNames: materialDetails.map((item) => item.materialName),
       materialDetails,
@@ -584,7 +584,7 @@ const SupplierPurchases = () => {
       // scroll kanan yang berlebihan dan tanpa efek transparan/menumpuk.
       // HUBUNGAN FLOW: hanya UI; handler lama tetap dipakai dan tidak mengubah
       // Supplier schema, Purchases prefill, stok, kas, expense, atau Raw Material.
-      // DATA LAMA: fixed action column lama tidak dipakai karena rawan overlap.
+      // DATA HISTORIS: fixed action column lama tidak dipakai karena rawan overlap.
       // CLEANUP CANDIDATE: pindahkan styling ke CSS khusus jika nanti ada file
       // style Supplier yang terpisah.
       // ---------------------------------------------------------------------
@@ -947,7 +947,7 @@ const SupplierPurchases = () => {
               FUNGSI: field kategori/keterangan supplier lama sengaja tidak lagi
               ditampilkan di UI aktif karena flow restock sekarang fokus pada
               katalog material, satuan, konversi, dan estimasi harga.
-              STATUS: read-only data lama; data lama tetap dibaca service tetapi
+              STATUS: read-only data historis; data historis tetap dibaca service tetapi
               bukan input utama.
           ----------------------------------------------------------------- */}
 

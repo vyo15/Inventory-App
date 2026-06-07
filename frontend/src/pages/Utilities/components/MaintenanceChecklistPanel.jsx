@@ -136,7 +136,7 @@ const MaintenanceChecklistPanel = () => {
       if (showSuccess) message.success("Checklist maintenance berhasil diperbarui.");
     } catch (error) {
       console.error("Gagal memuat checklist maintenance:", error);
-      message.error(error?.message || "Checklist maintenance belum bisa dimuat dari backend database lokal.");
+      message.error(error?.message || "Checklist maintenance belum bisa dimuat dari layanan database lokal.");
       setStatus(null);
       setBackups([]);
       setModuleRuntimeStatus(null);
@@ -173,13 +173,13 @@ const MaintenanceChecklistPanel = () => {
 
   const autoItems = useMemo(() => [
     {
-      key: "backend-active",
+      key: "local-service-active",
       kind: "auto",
       status: statusData.dbPath ? "done" : "failed",
       statusLabel: statusData.dbPath ? "Sesuai" : "Belum sesuai",
-      title: "Backend aktif",
-      description: "Status dibaca dari endpoint maintenance backend.",
-      extra: statusData.dbPath ? `Schema v${statusData.schemaVersion || "unknown"}` : "Backend/status database lokal belum terbaca.",
+      title: "Layanan lokal aktif",
+      description: "Status dibaca dari layanan maintenance aplikasi.",
+      extra: statusData.dbPath ? `Versi DB ${statusData.schemaVersion || "unknown"}` : "Status database lokal belum terbaca.",
     },
     {
       key: "backup-format",
@@ -188,7 +188,7 @@ const MaintenanceChecklistPanel = () => {
       statusLabel: statusData.backupFormat && backupPolicy.verifyChecksum && backupPolicy.verifyIntegrityCheck ? "Sesuai" : "Perlu cek",
       title: "Format backup resmi aktif",
       description: "Backup memakai paket .imsbak.zip dengan manifest, checksum, dan integrity check.",
-      extra: statusData.backupFormat || "Format backup belum terbaca dari backend.",
+      extra: statusData.backupFormat || "Format backup belum terbaca dari layanan lokal.",
     },
     {
       key: "backup-today",
@@ -197,7 +197,7 @@ const MaintenanceChecklistPanel = () => {
       statusLabel: verifiedBackupToday ? "Sesuai" : "Perlu backup",
       title: "Backup verified hari ini tersedia",
       description: "Checklist otomatis terisi jika ada backup hari ini yang file-nya ada dan statusnya verified/success.",
-      extra: verifiedBackupToday ? verifiedBackupToday.filename : "Buat backup manual atau restart backend agar auto daily berjalan.",
+      extra: verifiedBackupToday ? verifiedBackupToday.filename : "Buat backup manual atau restart layanan lokal agar auto daily berjalan.",
     },
     {
       key: "daily-backup",
@@ -205,7 +205,7 @@ const MaintenanceChecklistPanel = () => {
       status: dailyBackupToday ? "done" : "pending",
       statusLabel: dailyBackupToday ? "Sesuai" : "Menunggu auto daily",
       title: "Auto backup harian hari ini tersedia",
-      description: "Auto daily dibuat saat backend start dan tidak dibuat dobel pada hari yang sama.",
+      description: "Auto daily dibuat saat layanan lokal start dan tidak dibuat dobel pada hari yang sama.",
       extra: dailyBackupToday ? formatDateTime(dailyBackupToday.created_at) : "Belum ada backup type daily yang verified hari ini.",
     },
     {
@@ -231,9 +231,9 @@ const MaintenanceChecklistPanel = () => {
       kind: "auto",
       status: moduleRuntimeKnown && moduleRuntimeNotReady === 0 && moduleRuntimeReady === moduleRuntimeTotal ? "done" : "pending",
       statusLabel: moduleRuntimeKnown && moduleRuntimeNotReady === 0 && moduleRuntimeReady === moduleRuntimeTotal ? "Sesuai" : "Perlu cek",
-      title: "Status runtime modul database lokal terbaca",
-      description: "Checklist otomatis dari tabel module_migration_status yang dinormalisasi backend sebagai Module Runtime Status.",
-      extra: moduleRuntimeKnown ? `${moduleRuntimeReady}/${moduleRuntimeTotal} modul runtime ready` : "Status runtime modul belum terbaca.",
+      title: "Status modul aplikasi terbaca",
+      description: "Checklist otomatis dari status modul aplikasi yang dinormalisasi layanan lokal.",
+      extra: moduleRuntimeKnown ? `${moduleRuntimeReady}/${moduleRuntimeTotal} modul siap` : "Status modul aplikasi belum terbaca.",
     },
   ], [backupPolicy.verifyChecksum, backupPolicy.verifyIntegrityCheck, dailyBackupToday, latestVerifiedBackup, moduleRuntimeKnown, moduleRuntimeTotal, moduleRuntimeNotReady, moduleRuntimeReady, statusData, verifiedBackupToday]);
 

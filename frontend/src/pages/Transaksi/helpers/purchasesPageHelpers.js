@@ -1,7 +1,7 @@
 import dayjs from 'dayjs';
 
 // IMS NOTE [AKTIF/UI ONLY] - Helper Purchases page ini hanya menghitung preview/form display.
-// Tidak menulis purchase, stok, expense, inventory log, atau read model.
+// Tidak menulis purchase, stok, expense, inventory log, atau data stok turunan.
 export const calculateSupplierSubtotal = (qty, supplierItemPrice) => {
   return Math.round(Math.max(Number(qty || 0), 0) * Math.max(Number(supplierItemPrice || 0), 0));
 };

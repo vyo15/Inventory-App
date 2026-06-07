@@ -1,5 +1,6 @@
 import React from "react";
 import { Form, Modal } from "antd";
+import ResponsiveFormSection from "../Mobile/ResponsiveFormSection";
 import { showFormValidationFeedback } from "../../../utils/forms/formValidationFeedback";
 import "./PageFormModal.css";
 
@@ -40,6 +41,9 @@ const PageFormModal = ({
   children,
   confirmLoading = false,
   modalClassName = "",
+  responsiveSection = true,
+  responsiveSectionTitle,
+  responsiveSectionSubtitle,
   formProps = {},
   modalProps = {},
 }) => {
@@ -85,7 +89,15 @@ const PageFormModal = ({
         className="page-form-modal-form"
         {...safeFormProps}
       >
-        {children}
+        {responsiveSection ? (
+          <ResponsiveFormSection
+            title={responsiveSectionTitle}
+            subtitle={responsiveSectionSubtitle}
+            className="page-form-modal-responsive-section"
+          >
+            {children}
+          </ResponsiveFormSection>
+        ) : children}
       </Form>
     </Modal>
   );

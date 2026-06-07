@@ -74,7 +74,7 @@ const validateLocalPasswordField = (_, value) => {
 // - mode create membuat profile `system_users/{authUid}` dari UID Auth yang ditempel manual;
 // - mode edit hanya mengubah profile role/status/display name yang sudah ada.
 // Status:
-// - AKTIF untuk halaman Manajemen User final setelah cleanup data lama.
+// - AKTIF untuk halaman Manajemen User final setelah cleanup data historis.
 // =========================
 const FORM_MODE = {
   CREATE: "create",
@@ -141,12 +141,12 @@ const getUserManagementActionErrorMessage = (error = {}) => {
 // Hubungan flow aplikasi:
 // - AuthProvider memakai profile lokal ini untuk memutuskan user boleh masuk aplikasi;
 // - Route/Menu Guard membatasi halaman ini untuk Administrator;
-// - database lokal menyimpan password lewat backend Node/database lokal, bukan di frontend.
+// - database lokal menyimpan password lewat layanan aplikasi, bukan di frontend.
 // Status:
 // - AKTIF untuk database lokal user management.
-// - GUARDED: password lokal hanya dikirim ke backend auth database lokal dan tidak disimpan di UI.
+// - GUARDED: password lokal hanya dikirim ke layanan auth database lokal dan tidak disimpan di UI.
 // Cleanup:
-// - flow migrasi UID/domain lama dan indikator data lama/orphan sudah dihapus dari runtime aktif.
+// - flow migrasi UID/domain lama dan indikator data historis/orphan sudah dihapus dari runtime aktif.
 // =========================
 const UserManagement = () => {
   const { profile, reloadProfile } = useAuth();
@@ -200,7 +200,7 @@ const UserManagement = () => {
   // Hubungan flow aplikasi:
   // - Manajemen User tidak boleh menghapus administrator aktif terakhir agar akses pemulihan tetap ada.
   // Status:
-  // - AKTIF untuk UI guard; service/backend tetap melakukan validasi ulang sebelum delete user database lokal.
+  // - AKTIF untuk UI guard; service database lokal tetap melakukan validasi ulang sebelum delete user.
   // =========================
   const activeAdministratorCount = useMemo(() => {
     return users.filter(
@@ -286,11 +286,11 @@ const UserManagement = () => {
   // - create: mode database lokal membuat akun lokal;
   // - edit: mengubah profile, role, status, dan opsional password baru untuk akun lokal database lokal.
   // Hubungan flow aplikasi:
-  // - AuthProvider membaca user dari backend database lokalAuth;
+  // - AuthProvider membaca user dari layanan auth database lokal;
   // - Auth UID hanya ditampilkan sebagai compatibility internal, bukan input user.
   // Status:
   // - AKTIF.
-  // - GUARDED: password lokal hanya dikirim ke backend database lokal dan tidak disimpan di state.
+  // - GUARDED: password lokal hanya dikirim ke layanan database lokal dan tidak disimpan di state.
   // =========================
   const handleSaveProfile = async (values) => {
     setIsSaving(true);
@@ -326,7 +326,7 @@ const UserManagement = () => {
   // Fungsi:
   // - menghitung alasan aksi Edit/Nonaktifkan/Hapus Profile diblokir dari data terbaru tabel.
   // Hubungan flow aplikasi:
-  // - UI memberi feedback cepat, tetapi service dan backend tetap memvalidasi ulang sebelum write/delete user database lokal.
+  // - UI memberi feedback cepat, tetapi service tetap memvalidasi ulang sebelum write/delete user.
   // Status:
   // - AKTIF untuk Manajemen User final.
   // - GUARDED: self-profile dan administrator aktif terakhir tetap tidak boleh dihapus.
@@ -356,7 +356,7 @@ const UserManagement = () => {
   // Fungsi:
   // - memakai modal berbasis state agar kompatibel dengan theme AntD v5.
   // Hubungan flow aplikasi:
-  // - toggle status mengubah akun lokal database lokal dan backend otomatis mencabut session user nonaktif.
+  // - toggle status mengubah akun database lokal dan layanan otomatis mencabut session user nonaktif.
   // Status:
   // - AKTIF untuk aksi Aktifkan/Nonaktifkan.
   // =========================
@@ -419,7 +419,7 @@ const UserManagement = () => {
   // - membuka modal konfirmasi berbasis state sebelum delete user lokal database lokal;
   // - memastikan tombol Hapus Profile memanggil handler dan reload data setelah sukses.
   // Hubungan flow aplikasi:
-  // - tombol ini menghapus user lokal lewat backend guarded; session user target ikut dicabut.
+  // - tombol ini menghapus user lewat layanan guarded; session user target ikut dicabut.
   // Status:
   // - AKTIF untuk delete profile target aman.
   // - GUARDED: service tetap menolak self-delete dan administrator aktif terakhir.

@@ -88,7 +88,7 @@ const resolveDirectionMeta = (record) => {
 // Hubungan flow:
 // - dipakai semua resolver tampilan Stock Management agar audit trail tidak putus setelah schema log dirapikan
 // Status:
-// - aktif/final untuk UI reader; fallback top-level adalah kompatibilitas data lama
+// - aktif/final untuk UI reader; fallback top-level adalah kompatibilitas data historis
 // =========================
 const readLogField = (record, fieldName, fallback = "") => {
   if (record?.details && record.details[fieldName] !== undefined && record.details[fieldName] !== null) {
@@ -109,7 +109,7 @@ const resolveVariantLabel = (record) =>
 // SECTION: Helper satuan qty inventory log
 // Fungsi:
 // - menampilkan Qty riwayat stok bersama satuan stok yang dikirim writer baru
-// - fallback produk/semi finished tetap pcs, sedangkan bahan baku data lama tanpa satuan tidak dipaksa menjadi pcs
+// - fallback produk/semi finished tetap pcs, sedangkan bahan baku data historis tanpa satuan tidak dipaksa menjadi pcs
 // Hubungan flow:
 // - hanya reader UI Stock Management; tidak mengubah quantityChange, stok, HPP, purchase, sales, return, atau produksi
 // Status:
@@ -145,7 +145,7 @@ const formatLogQuantityWithUnit = (value, record = {}) => {
 // SECTION: Helper audit worker produksi
 // Fungsi:
 // - membaca snapshot worker/operator dari inventory log produksi baru;
-// - memberi fallback aman untuk log data lama yang belum punya metadata worker.
+// - memberi fallback aman untuk log data historis yang belum punya metadata worker.
 // Hubungan flow:
 // - Stock Management hanya reader audit, tidak fetch Work Log per row dan tidak melakukan write.
 // Alasan logic dipakai:
@@ -153,7 +153,7 @@ const formatLogQuantityWithUnit = (value, record = {}) => {
 //   bisa menampilkan operator tanpa mengubah stock mutation, payroll, atau HPP.
 // Status:
 // - AKTIF untuk log produksi baru.
-// - DATA LAMA fallback: log lama tanpa worker metadata tetap tampil `-`.
+// - DATA HISTORIS fallback: log lama tanpa worker metadata tetap tampil `-`.
 // =========================
 const normalizeLogStringArray = (value = []) =>
   Array.isArray(value) ? value.map((item) => String(item || "").trim()).filter(Boolean) : [];
@@ -275,7 +275,7 @@ const buildReferenceItem = ({ label, referenceId = "", businessReference = "", d
     businessReference: displayReference,
     detail: detailText,
     tooltipText: detailText || label,
-    // ID teknis tetap masuk searchText agar audit/search data lama masih bisa menemukan log, tetapi tidak ditampilkan di teks utama/tooltip.
+    // ID teknis tetap masuk searchText agar audit/search data historis masih bisa menemukan log, tetapi tidak ditampilkan di teks utama/tooltip.
     searchText: [label, displayReference, normalizedBusinessReference, normalizedReferenceId, normalizedDetail]
       .filter(Boolean)
       .join(" "),
@@ -299,7 +299,7 @@ const resolveReferenceItems = (record) => {
   // - kolom Referensi masih berguna untuk audit, tetapi user lebih mudah membaca label seperti Penjualan/Pembelian/Penyesuaian Stok
   // Status:
   // - aktif dipakai di UI Stock Management
-  // - fallback top-level dipertahankan sebagai kompatibilitas log data lama
+  // - fallback top-level dipertahankan sebagai kompatibilitas log data historis
   // =========================
   const saleId = readLogField(record, "saleId");
   const returnId = readLogField(record, "returnId");
@@ -450,7 +450,7 @@ const resolveNoteText = (record) => {
 };
 
 // =========================
-// SECTION: Keputusan kolom stok snapshot data lama
+// SECTION: Keputusan kolom stok snapshot data historis
 // Fungsi:
 // - mendokumentasikan kenapa tabel riwayat tidak lagi menampilkan kolom "Stok" generik
 // Hubungan flow:
@@ -459,7 +459,7 @@ const resolveNoteText = (record) => {
 // Status:
 // - AKTIF sebagai guard UI agar kolom "Stok" generik tidak menyesatkan audit.
 // - GUARDED karena snapshot lama belum reliable untuk semua writer inventory log.
-// - DATA LAMA: sebagian log lama belum punya before/after sehingga tidak boleh dipaksa tampil sebagai stok historis.
+// - DATA HISTORIS: sebagian log lama belum punya before/after sehingga tidak boleh dipaksa tampil sebagai stok historis.
 // - CLEANUP CANDIDATE jika semua writer inventory log sudah menyimpan snapshot stok reliable.
 // =========================
 const STOCK_SNAPSHOT_COLUMN_NOTE =
@@ -538,7 +538,7 @@ const StockManagement = () => {
   // Status:
   // - AKTIF dipakai untuk memastikan riwayat terbaru di atas.
   // - GUARDED karena sorting UI hanya tampilan, bukan hitung ulang stok.
-  // - DATA LAMA: fallback sorting tetap menjaga log lama yang timestamp-nya belum seragam.
+  // - DATA HISTORIS: fallback sorting tetap menjaga log lama yang timestamp-nya belum seragam.
   // - CLEANUP CANDIDATE jika service sudah punya pagination server-side final.
   // =========================
   const normalizedHistory = useMemo(() => {
@@ -707,7 +707,7 @@ const StockManagement = () => {
         ),
       },
       // =========================
-      // SECTION: Kolom stok snapshot data lama dinonaktifkan
+      // SECTION: Kolom stok snapshot data historis dinonaktifkan
       // Fungsi:
       // - tabel tidak lagi menampilkan kolom "Stok" generik yang sering kosong/"-"
       // Alasan:
@@ -715,7 +715,7 @@ const StockManagement = () => {
       // Status:
       // - AKTIF sebagai keputusan UI untuk menghapus kolom stok generic/kosong.
       // - GUARDED karena tabel tidak boleh mengisi stok historis dengan stok saat ini.
-      // - DATA LAMA: inventory log lama belum selalu punya snapshot stok reliable.
+      // - DATA HISTORIS: inventory log lama belum selalu punya snapshot stok reliable.
       // - CLEANUP CANDIDATE jika semua writer log sudah konsisten dan kolom bisa dibuat ulang sebagai "Stok Setelah".
       // =========================
       {

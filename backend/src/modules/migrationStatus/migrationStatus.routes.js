@@ -1,5 +1,6 @@
 const express = require("express");
 const { getDb } = require("../../db/connection");
+const { requireLocalAuth, requireLocalAdministrator } = require("../../middlewares/localAuth");
 const { success } = require("../../utils/response");
 
 const router = express.Router();
@@ -67,7 +68,7 @@ const buildSummary = (rows = []) => rows.reduce((acc, row) => {
   unknownModules: [],
 });
 
-router.get("/", async (req, res, next) => {
+router.get("/", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
   try {
     const db = await getDb();
     const rows = await db.all(`
@@ -83,13 +84,13 @@ router.get("/", async (req, res, next) => {
         return String(a.module_key).localeCompare(String(b.module_key));
       });
 
-    return success(res, "Status runtime modul berhasil dimuat", {
-      title: "Module Runtime Status",
-      runtimeMode: "sqlite_local_backend",
+    return success(res, "Status modul aplikasi berhasil dimuat", {
+      title: "Status Modul Aplikasi",
+      runtimeMode: "local_database_service",
       summary: buildSummary(sortedRows),
       modules: sortedRows,
-      nextSafeBatch: "Tidak ada gate C2 aktif. Patch berikutnya ditentukan dari audit source aktual, regression test database lokal, dan prioritas modul yang paling berisiko.",
-      guardedReminder: "Database lokal adalah runtime utama. Stock, sales, purchases, returns, finance, production, payroll, HPP, auth, backup, dan restore wajib lewat layanan resmi aplikasi; restore destructive tetap guarded.",
+      nextSafeBatch: "Tidak ada gate batch lama yang aktif. Patch berikutnya ditentukan dari audit source aktual, regression test database lokal, dan prioritas modul yang paling berisiko.",
+      guardedReminder: "Database lokal adalah penyimpanan utama. Stock, sales, purchases, returns, finance, production, payroll, HPP, auth, backup, dan restore wajib lewat layanan resmi aplikasi; restore destructive tetap guarded.",
     });
   } catch (error) {
     return next(error);

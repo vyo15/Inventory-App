@@ -130,3 +130,43 @@ Risiko:
     width: 100%;
   }
 }
+
+/* =====================================================
+SECTION: Mobile Clean v2 Filter Drawer — AKTIF / UI-ONLY
+Fungsi:
+- Pada mobile, search/filter utama tetap terlihat, sedangkan filter lanjutan masuk ke MobileFilterDrawer.
+- Desktop tetap memakai semua filter inline agar workflow operator tidak berubah.
+Guardrail:
+- CSS dan wrapper ini tidak mengubah state, query, service, atau handler filter halaman.
+===================================================== */
+.filter-bar-mobile-trigger {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .filter-bar--mobile-compact .filter-bar-mobile-advanced {
+    display: none !important;
+  }
+
+  .filter-bar--mobile-compact .filter-bar-mobile-trigger {
+    display: block;
+  }
+
+  .filter-bar--mobile-compact .filter-bar-mobile-trigger .ant-btn {
+    min-height: 40px;
+    font-weight: 700;
+  }
+
+  .ims-mobile-filter-drawer__body .ant-col {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+  }
+
+  .ims-mobile-filter-drawer__body .ant-input,
+  .ims-mobile-filter-drawer__body .ant-input-affix-wrapper,
+  .ims-mobile-filter-drawer__body .ant-select,
+  .ims-mobile-filter-drawer__body .ant-picker,
+  .ims-mobile-filter-drawer__body .ant-input-number {
+    width: 100%;
+  }
+}

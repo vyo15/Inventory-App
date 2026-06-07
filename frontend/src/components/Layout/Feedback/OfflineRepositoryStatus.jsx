@@ -7,7 +7,7 @@ const { Text } = Typography;
 // =====================================================
 // SECTION: RepositoryStatus — COMPATIBILITY / UI-ONLY
 // Fungsi:
-// - Komponen status mode data lama dipertahankan sebagai no-op agar halaman lama
+// - Komponen status mode data historis dipertahankan sebagai no-op agar halaman lama
 //   yang masih mengimpor komponen ini tidak menampilkan banner teknis di UI.
 // - Karena runtime IMS sudah menggunakan database lokal utama, halaman operasional
 //   tidak perlu lagi menampilkan label mode database kepada user.

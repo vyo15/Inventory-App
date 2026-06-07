@@ -242,7 +242,7 @@ const buildReadme = (manifest) => [
   `Schema version: ${manifest.schemaVersion}`,
   "",
   "Restore hanya boleh dilakukan lewat UI resmi IMS.",
-  "Jangan copy database.sqlite langsung ke folder data saat aplikasi aktif.",
+  "Jangan copy file database langsung ke folder data saat aplikasi aktif.",
   "Sebelum restore, aplikasi akan membuat pre-restore backup otomatis.",
   "",
 ].join("\n");
@@ -290,7 +290,7 @@ const createOfficialSqliteBackup = async (db, options = {}) => {
       createdBy: actor,
       sourceMachine: os.hostname(),
       sourceDbPath: getDbPath(),
-      notes: options.notes || "Backup resmi dibuat dari backend IMS.",
+      notes: options.notes || "Backup resmi dibuat dari layanan IMS.",
       tables: validation.tables,
     };
 
@@ -404,7 +404,7 @@ const extractBackupDatabaseToTemp = async (backup, tempDir) => {
   }
 
   const databaseBuffer = readStoredZipEntry(backup.path, SQLITE_PACKAGE_DATABASE_FILE);
-  if (!databaseBuffer) throw new Error("database.sqlite tidak ditemukan di paket backup.");
+  if (!databaseBuffer) throw new Error("File database tidak ditemukan di paket backup.");
   fs.writeFileSync(extractedDbPath, databaseBuffer);
 
   const checksum = await sha256File(extractedDbPath);
@@ -454,7 +454,7 @@ const ensureDailyBackupForToday = async () => {
     type: "daily",
     actor: "system",
     action: "backup_daily_auto_create",
-    notes: "Backup harian otomatis saat backend IMS start.",
+    notes: "Backup harian otomatis saat layanan IMS start.",
   });
   return { created: true, backup };
 };

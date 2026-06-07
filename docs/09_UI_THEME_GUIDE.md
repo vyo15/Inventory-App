@@ -216,7 +216,7 @@ Detail drawer dipakai untuk membaca data, bukan untuk menggantikan dokumentasi f
    - Style detail/receipt OCR harus page/component scoped; jangan menaruh CSS receipt dan print guard OCR kembali ke `src/App.css`.
 
 5. **Section `Info Tambahan`**
-   - Data optional, audit, kompatibilitas data lama, atau informasi teknis panjang masuk `Collapse` bila tidak perlu dibaca setiap kali.
+   - Data optional, audit, kompatibilitas data historis, atau informasi teknis panjang masuk `Collapse` bila tidak perlu dibaca setiap kali.
    - Jangan memakai istilah internal sebagai label utama bila user tidak membutuhkannya.
 
 6. **Warning penting**
@@ -239,7 +239,7 @@ Detail drawer dipakai untuk membaca data, bukan untuk menggantikan dokumentasi f
 
 - Hapus teks yang hanya mengulang nama menu, nama card, atau nama tabel.
 - Hapus subtitle section seperti `Daftar produk jadi` bila tabel dan title sudah cukup jelas.
-- Hindari istilah internal yang tampil ke user, seperti `data lama`, `guard`, `bucket`, `source`, `read-only`, `metadata tampilan`, atau prefix `AKTIF` sebagai penjelasan.
+- Hindari istilah internal yang tampil ke user, seperti `data historis`, `guard`, `bucket`, `source`, `read-only`, `metadata tampilan`, atau prefix `AKTIF` sebagai penjelasan.
 - Jika istilah teknis masih dibutuhkan, ubah ke bahasa operasional. Contoh: `source` menjadi `asal data`, `read-only` menjadi `hanya ditampilkan`, dan `bucket varian` menjadi `stok per varian`.
 - Gunakan kalimat pendek dan langsung pada kebutuhan user.
 - Jangan membuat UI penuh hanya karena ingin menjelaskan semua flow. Detail flow bisnis tetap berada di docs dan checklist.
@@ -287,7 +287,7 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 - Detail cost harus compact dan tidak memakai alert besar untuk status normal seperti payroll masih draft atau estimasi step.
 - Material cost, overhead cost, labor cost, total cost, dan output qty harus tetap bisa ditelusuri.
 - Labor boleh menampilkan tag compact `Payroll Final`, `Draft Payroll`, atau `Estimasi Step`; draft/estimasi wajib read-only dan tidak ditulis sebagai HPP final.
-- Overhead Work Log berasal dari overhead BOM untuk listrik/glue gun. Field hasil selain Good Qty adalah compatibility data lama dan tidak ditampilkan sebagai workflow aktif.
+- Overhead Work Log berasal dari overhead BOM untuk listrik/glue gun. Field hasil selain Good Qty adalah compatibility data historis dan tidak ditampilkan sebagai workflow aktif.
 
 ### Payroll
 - Final amount, status payroll, payment status, dan include HPP harus jelas.
@@ -308,7 +308,7 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 ### Sales, Purchases, dan Returns
 - Item, qty, harga, subtotal, total, payment/status, dan dampak stok/kas harus jelas.
 - Jangan mengubah makna field lewat copy yang terlalu bebas.
-- UI retur tidak boleh runtime ke SQLite/Technical ID pada kolom referensi atau tooltip; gunakan referensi bisnis readable atau runtime manusiawi.
+- UI retur tidak boleh memakai ID teknis pada kolom referensi atau tooltip; gunakan referensi bisnis yang mudah dibaca.
 - OCR receipt harus flat token-based, tanpa gradient dekoratif dan tanpa `font-weight: 900` hardcoded.
 
 ### Cash In dan Cash Out
@@ -318,14 +318,14 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 
 ### Maintenance & Backup Center
 - Gunakan workspace berbasis tab untuk halaman maintenance yang kompleks: Ringkasan, Backup & Restore, Audit Data, Repair Aman, Data Tools, Checklist, Riwayat, Reset Testing.
-- Backup & Restore harus tampil sebagai area utama pada mode SQLite offline, bukan tersembunyi di tab teknis.
-- Data Tools menampung preview/hapus data test bermarker dan export master agar tidak bercampur dengan area reset destructive.
+- Backup & Restore harus tampil sebagai area utama pada mode database lokal, bukan tersembunyi di tab teknis.
+- Data Tools menampung export master/checklist agar tidak bercampur dengan area repair/restore.
 - Checklist memakai status auto/manual: auto untuk kondisi yang bisa dibuktikan sistem, manual untuk konfirmasi user seperti copy backup eksternal dan user lain berhenti input.
-- Riwayat menampilkan backup dan restore resmi dari backend SQLite.
-- Reset destructive diposisikan paling akhir sebagai Reset Testing/Development dan nonaktif pada mode full SQLite sampai ada backend reset resmi.
+- Riwayat menampilkan backup dan restore resmi dari layanan lokal.
+- Reset Testing diposisikan paling akhir dan hanya menampilkan status nonaktif sampai ada desain reset resmi yang aman.
 - Jangan menampilkan semua panel maintenance panjang sekaligus jika bisa dipisah per area.
-- Tab boleh membuat tampilan lebih ringkas, tetapi warning destructive wajib tegas.
-- Preview wajib sebelum reset.
+- Tab boleh membuat tampilan lebih ringkas, tetapi warning aksi berisiko wajib tegas.
+- Preview wajib untuk restore/repair berisiko sesuai konteks.
 - Confirmation keyword tidak boleh disamarkan.
 - Jangan membuat reset terdengar aman tanpa risiko.
 - Scope reset, protected data, jumlah dokumen terdampak, status proses, dan hasil/audit harus tetap jelas.
@@ -333,9 +333,9 @@ Alert tidak boleh membuat aksi berisiko terdengar aman tanpa konsekuensi. Khusus
 - Dark mode harus tetap aman; hindari background hardcoded yang terlalu putih/terang.
 
 ### User Management
-- Role, status, email, dan Auth UID/profile binding harus jelas.
+- Role, status, email, dan relasi akun harus jelas.
 - Security warning tidak boleh dihapus.
-- Copy harus membedakan profile SQLite dari akun Auth bila konteks itu relevan untuk admin.
+- Copy harus membedakan profil pengguna dari akun login bila konteks itu relevan untuk admin.
 
 ## Standar drawer width
 
@@ -431,7 +431,7 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
    - Metric pendukung tampil sebagai mini card tanpa flow strip/bar bawah agar angka tidak tampil dobel.
    - Nominal uang wajib tampil penuh; bila ruang sempit, layout yang turun/wrap, bukan nominal yang dipotong.
 
-3. **Data lama Cards**
+3. **Data historis Cards**
    - `variant="cards"` boleh dipakai hanya bila ada kebutuhan khusus mempertahankan grid kartu lama.
    - Jangan jadikan default baru kecuali ada alasan layout spesifik.
 
@@ -466,21 +466,22 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 - Informasi cost/modal/HPP aktif lebih prioritas daripada caption restock berulang pada tabel utama. Caption restock detail boleh dipakai di drawer, report, audit, atau halaman analisis bila konteksnya memang troubleshooting.
 - Ringkasan harus dibatasi agar aman untuk data banyak, mobile, dan table compact. Detail varian lengkap tetap berada pada daftar pill/detail drawer.
 
-## Standar Offline Repository Status Banner
+## Standar Status Database Lokal di UI Operasional
 
-- Page master data yang memakai SQLite wajib menampilkan status data singkat di bawah `PageHeader` bila perlu.
-- Banner harus menjelaskan source aktif dengan bahasa user-facing: `SQLite Server` untuk `sqlite`, dan `SQLite Lokal`/`Backend Lokal` untuk `sqlite_sidecar`. Nilai lama `offline_local` dinormalisasi ke `sqlite_sidecar` agar setting browser lama tidak membuat UI crash.
-- Copy harus menjelaskan bahwa data dibaca/ditulis lewat backend Node.js lokal dan file SQLite di laptop/server lokal.
-- Empty state SQLite tidak boleh hanya menulis `Belum ada data`; harus menjelaskan kemungkinan backend SQLite belum jalan atau database SQLite masih kosong, serta memberi shortcut ke `SQLite Local DB Center`.
-- Banner harus compact, responsive, dan tidak menggantikan table/action utama. Detail backup SQLite, Module Runtime Status, dan restore plan tetap berada di `SQLite Local DB Center`.
-- Perubahan banner adalah UI-only. Jangan menyisipkan write/sync otomatis, schema change, route/menu baru, atau business flow transaksi di komponen status.
+- Halaman operasional dan master data **tidak boleh** menampilkan banner teknis mode database di bawah `PageHeader`.
+- Jangan menampilkan istilah teknis mode database, layanan internal, path file, IP, port, atau instruksi koneksi pada halaman kerja harian.
+- Empty state harus memakai bahasa bisnis: `Belum ada kategori`, `Belum ada produk`, atau `Tambahkan data dari halaman ini`. Jangan mengarahkan user operasional ke pusat database hanya karena data masih kosong.
+- Jika layanan lokal bermasalah, tampilkan error singkat yang bisa dipahami user, misalnya `Layanan lokal belum tersambung`, lalu arahkan detail teknis hanya ke Maintenance/Database Center untuk admin.
+- Detail backup, restore, status layanan, dan troubleshooting koneksi hanya boleh berada di Maintenance/Database Center, bukan di Kategori, Customer, Supplier, Produk, atau transaksi harian.
+- Komponen status lama boleh dipertahankan sebagai no-op/compatibility, tetapi tidak boleh menghidupkan ulang banner teknis di UI aktif.
+- Perubahan status database adalah UI-only. Jangan menyisipkan write/sync otomatis, schema change, route/menu baru, atau business flow transaksi di komponen status.
 
 ## Standar Action Result Popup — Success/Error Only
 
 - Popup hasil proses hanya dipakai untuk status sukses dan error/gagal.
 - Warning/info cukup memakai toast ringan Ant Design; jangan dijadikan popup modal agar user tidak terganggu untuk preview, dry-run, filter, dan status ringan.
 - Popup sukses/error harus tetap muncul setelah modal konfirmasi tertutup, terutama pada Reset Maintenance dan Offline Database Center.
-- Error popup boleh menyediakan tombol salin detail, tetapi isi detail harus user-facing dan tidak boleh menampilkan SQLite technical ID, stack trace panjang, secret, credential, atau payload mentah.
+- Error popup boleh menyediakan tombol salin detail, tetapi isi detail harus user-facing dan tidak boleh menampilkan ID teknis database, stack trace panjang, secret, credential, atau payload mentah.
 - Popup tidak menggantikan confirm guard. Aksi destructive tetap wajib preview + keyword confirmation sebelum proses berjalan.
 
 ## Standar DataTableView Mobile Card
@@ -494,7 +495,7 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
   - `meta`: maksimal informasi kunci seperti nominal, stok, qty, role, atau status.
   - `content`: ringkasan item/stock bila memang penting.
   - `actions`: gunakan handler existing; jangan membuat handler baru di mobile card.
-- Jangan menampilkan SQLite technical ID sebagai judul/subtitle kartu. Gunakan referensi bisnis manusiawi seperti kode transaksi, kode customer/supplier, atau nama item.
+- Jangan menampilkan ID teknis database sebagai judul/subtitle kartu. Gunakan referensi bisnis manusiawi seperti kode transaksi, kode customer/supplier, atau nama item.
 - Mobile card adalah presentational-only. Jangan memasukkan query, mutation, stock update, cash ledger update, purchase/sales/return commit, payroll/HPP, reset, route guard, atau role guard ke `DataTableView`.
 - Area produksi yang sudah memakai mobile card UI-only: `ProductionEmployees`, `ProductionOrders`, `ProductionWorkLogs`, `ProductionBoms`, dan `SemiFinishedMaterials`. Semua action mobile harus tetap memanggil handler existing pada page, bukan membuat flow baru untuk stok/material usage/payroll/HPP.
 - Jika halaman report/utility kompleks masih membutuhkan tabel scroll, boleh dibiarkan sampai ada audit mobile khusus.
@@ -505,7 +506,7 @@ Summary statistik lintas halaman memakai pola compact agar tidak memakan ruang b
 - Drawer detail wajib memakai data record yang sudah ada di tabel/page state; jangan membuat mutation, re-query besar, atau workflow baru dari tombol detail mobile.
 - Untuk stok dan penyesuaian stok, drawer detail hanya boleh menampilkan audit read-only: tanggal, item, arah, qty, referensi, alasan, dan catatan.
 - Untuk Sales/Purchases, drawer detail hanya boleh menampilkan ringkasan transaksi dan item. Jangan menambahkan cancel/delete/edit/commit baru dari drawer mobile.
-- Label mode data di kartu master data harus user-facing. Hindari enum teknis seperti `SQLITE_SIDECAR` sebagai teks utama; gunakan copy seperti `Data Lokal`, `SQLite Lokal`, atau `SQLite Runtime`.
+- Label mode data di kartu master data harus user-facing. Hindari enum teknis mode database sebagai teks utama; gunakan copy seperti `Data Lokal` atau `Layanan lokal` bila benar-benar perlu.
 
 ### Standar tabel detail/report setelah patch mobile detail
 
@@ -550,7 +551,7 @@ Komponen foundation yang menjadi acuan:
 - `ResponsiveFormSection`.
 - `MobileStateBlock`.
 
-Route preview UI-only: `/mobile-standard-preview`.
+Route preview UI-only lama sudah dihapus dari aplikasi operasional. Standar mobile sekarang mengacu ke komponen foundation dan screenshot QA, bukan route preview runtime.
 
 ## Update Mobile Standard M1-M5 — 2026-06-05
 
@@ -573,12 +574,12 @@ Aturan visual mobile:
 - Action destructive tidak boleh tampil terlalu dekat dengan action normal dan tetap wajib confirm.
 - Patch UI mobile tidak boleh menambah workflow bisnis baru.
 
-## Update 2026-06-05 - Database Mode Banner Cleanup
+## Update 2026-06-05 - Cleanup Banner Mode Database
 
-Halaman operasional tidak boleh lagi menampilkan banner teknis seperti "Mode SQLite lokal aktif", "SQLite LAN", instruksi port, atau penjelasan runtime lama. Runtime IMS sudah dianggap database lokal utama, sehingga informasi teknis tersebut hanya boleh muncul di Maintenance/Database Center bila benar-benar diperlukan untuk troubleshooting.
+Halaman operasional tidak boleh lagi menampilkan banner teknis seperti mode database lokal, mode jaringan, instruksi port, atau penjelasan teknis lama. IMS sudah dianggap memakai database lokal utama, sehingga informasi teknis tersebut hanya boleh muncul di Maintenance/Database Center bila benar-benar diperlukan untuk troubleshooting.
 
 Standar UI baru:
-- Page header master data memakai bahasa bisnis, bukan bahasa runtime.
+- Page header master data memakai bahasa bisnis, bukan bahasa teknis database.
 - Empty state memakai pesan user-friendly seperti "Belum ada kategori" atau "Tambahkan data dari halaman ini".
-- Tombol cepat "SQLite Center" tidak boleh muncul di halaman operasional seperti Kategori/Customer/Supplier.
-- Label "Mode: SQLite Lokal" tidak perlu tampil di list/card/page header.
+- Tombol cepat ke pusat database tidak boleh muncul di halaman operasional seperti Kategori/Customer/Supplier.
+- Label mode database tidak perlu tampil di list/card/page header.

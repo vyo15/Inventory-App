@@ -3,7 +3,7 @@
 //
 // Helper ini hanya berisi normalizer, reference detector, accumulator,
 // dan formatter sample yang pure. Jangan menaruh database read/write,
-// repair mutation, reset destructive, atau business side-effect di file ini.
+// repair mutation atau business side-effect di file ini.
 // =====================================================
 
 export const SAMPLE_LIMIT = 10;
@@ -38,21 +38,21 @@ export const KNOWN_BUSINESS_PREFIXES = [
 
 /*
 =====================================================
-SECTION: Helper audit data lama — COMPATIBILITY
+SECTION: Helper audit arsip data — COMPATIBILITY
 Fungsi:
-- Membaca collection lama secara read-only, mengenali kode bisnis manusiawi, dan membedakan reference teknis data lama random ID dari reference operasional.
+- Membaca collection lama secara read-only, mengenali kode bisnis manusiawi, dan membedakan reference teknis arsip random ID dari reference operasional.
 
 Dipakai oleh:
 - getDataQualityAudit di dataQualityAuditService.js dan section Data Quality Audit di ResetMaintenanceData.jsx.
 
 Alasan perubahan:
-- Project masih tahap membangun sehingga data lama perlu dipetakan dulu sebelum reset/recreate, tanpa migration, backfill, delete, atau write otomatis.
+- Project masih tahap membangun sehingga data historis perlu dipetakan dulu sebelum reset/recreate, tanpa migrasi massal, backfill, delete, atau write otomatis.
 
 Catatan cleanup:
 - Jika standar kode bisnis sudah stabil penuh, daftar prefix bisa dipindah ke shared reference helper agar sama dengan generator kode baru.
 
 Risiko:
-- Jika helper ini dibuat terlalu longgar, data random ID bisa dianggap aman; jika terlalu ketat, data lama valid bisa masuk daftar perlu cek manual.
+- Jika helper ini dibuat terlalu longgar, data random ID bisa dianggap aman; jika terlalu ketat, arsip valid bisa masuk daftar perlu cek manual.
 =====================================================
 */
 export const safeTrim = (value) => String(value ?? "").trim();
@@ -306,16 +306,16 @@ export const toSample = ({ collectionName, itemDoc, issue, recommendation }) => 
 =====================================================
 SECTION: Kategori masalah data — COMPATIBILITY
 Fungsi:
-- Menetapkan kategori audit, label summary, rekomendasi, dan batas sample yang tampil untuk data lama yang belum sesuai standar kode/reference baru.
+- Menetapkan kategori audit, label summary, rekomendasi, dan batas sample yang tampil untuk arsip yang belum sesuai standar kode/reference baru.
 
 Dipakai oleh:
 - getDataQualityAudit dan tabel Data Quality Audit di ResetMaintenanceData.jsx.
 
 Alasan perubahan:
-- Admin butuh daftar data yang perlu dibuat ulang setelah reset testing, bukan migration/backfill massal yang berisiko menumpuk data lama.
+- Admin butuh daftar data yang perlu dibuat ulang setelah reset testing, bukan migrasi/backfill massal yang berisiko menumpuk data historis.
 
 Catatan cleanup:
-- Kategori bisa dipisah menjadi config docs jika standar audit data lama makin banyak.
+- Kategori bisa dipisah menjadi config docs jika standar audit data historis makin banyak.
 
 Risiko:
 - Salah rekomendasi kategori dapat membuat data asli dianggap aman direset; karena itu label tetap memakai “jika data test” dan “perlu cek manual”.
@@ -389,7 +389,7 @@ export const CATEGORY_CONFIGS = [
   },
   {
     key: "work_logs_archived_status",
-    label: "Work Log status data lama",
+    label: "Work Log status arsip",
     recommendation: "Perlu cek manual; flow aktif hanya in_progress/completed",
   },
   {
@@ -405,7 +405,7 @@ export const CATEGORY_CONFIGS = [
   {
     key: "work_logs_output_hpp_reconcile_needed",
     label: "Output HPP perlu reconcile",
-    recommendation: "Payroll sync baru sudah auto reconcile; untuk data lama jalankan review/backfill guarded dengan preview terlebih dahulu",
+    recommendation: "Payroll sync baru sudah auto reconcile; untuk arsip jalankan review/backfill guarded dengan preview terlebih dahulu",
   },
   {
     key: "work_logs_output_cost_stale",
