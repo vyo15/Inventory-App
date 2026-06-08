@@ -77,7 +77,7 @@ Aturan:
 1. Auto backup harian hanya dibuat satu kali per hari.
 2. Backup manual tetap bisa dibuat kapan saja dari `Maintenance & Backup Center`.
 3. Sistem otomatis membuat backup `pre-restore` sebelum restore berjalan.
-4. Setelah restore selesai, backup `pre-restore` otomatis didaftarkan ulang agar tetap muncul di daftar backup untuk rollback jika restore ternyata salah.
+4. Setelah restore selesai, backup `pre-restore` otomatis didaftarkan ulang agar tetap muncul di daftar backup untuk rollback jika restore ternyata salah. Backup sumber restore juga dipastikan tetap tercatat agar riwayat restore mudah dilacak.
 5. Backup harus berstatus `verified` sebelum dianggap aman.
 
 ## Backup manual dari UI

@@ -23,13 +23,13 @@ const ResetExportPanel = ({
         <Text type="secondary">Export membaca master data SQLite secara read-only untuk arsip/audit manual. Restore penuh tetap memakai File Backup IMS.</Text>
       </div>
       <Space wrap>
-        <Button icon={<EyeOutlined />} loading={loadingMasterExportPreview} onClick={onLoadMasterExportPreview}>
+        <Button icon={<EyeOutlined />} loading={loadingMasterExportPreview} onClick={() => onLoadMasterExportPreview?.()}>
           Preview
         </Button>
-        <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={onDownloadMasterExport}>
+        <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={() => onDownloadMasterExport?.(true)}>
           Export Master
         </Button>
-        <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={onDownloadMasterExportChecklist}>
+        <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={() => onDownloadMasterExportChecklist?.()}>
           Checklist
         </Button>
       </Space>

@@ -62,6 +62,7 @@ Restore resmi harus:
 - Memvalidasi integrity/checksum.
 - Membuat pre-restore backup.
 - Mendaftarkan ulang pre-restore backup ke database hasil restore agar file rollback tetap muncul di daftar backup setelah database aktif diganti.
+- Memastikan backup sumber restore juga tercatat di database hasil restore, terutama jika sumber restore berasal dari import file luar.
 - Meminta keyword confirm `RESTORE DATABASE`.
 - Mencatat restore log.
 - Menolak restore jika backup tidak valid.
@@ -95,3 +96,10 @@ Restore resmi harus:
 - [ ] Restore preview sukses.
 - [ ] Restore execute butuh keyword confirm.
 - [ ] Dashboard/report tidak white screen.
+
+## Source/archive hygiene
+
+- File runtime database dan backup aktual tidak boleh ikut ZIP source, patch, atau repo.
+- Folder `data/` dan `backups/` hanya boleh membawa `.gitkeep` untuk struktur folder.
+- File `.sqlite`, `.sqlite-wal`, `.sqlite-shm`, `.imsbackup`, `.imsbak.zip`, dan `*.manifest.json` adalah artifact lokal dan harus disimpan di lokasi backup operasional, bukan di source.
+- `.gitignore` dan `.gitattributes` dipakai bersama: `.gitignore` mencegah artifact baru ikut track, sedangkan `.gitattributes` menjaga `git archive` tetap bersih jika artifact pernah ter-track sebelumnya.

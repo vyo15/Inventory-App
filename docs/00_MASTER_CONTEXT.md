@@ -236,7 +236,7 @@ Status cleanup bertahap yang dikunci di docs:
 - **Reset testing lama:** route/tab hanya menampilkan status nonaktif. Handler reset testing lama tidak tersedia di UI operasional.
 - **Auto detect:** audit data historis/stok/log/produksi/payroll/variant transaksi bersifat read-only terhadap data bisnis dan hanya boleh membuat maintenance log metadata.
 - **Export data pokok:** tersedia sebagai export master SQLite read-only/checklist manual, bukan restore otomatis dan bukan merge transaksi.
-- Backup resmi SQLite memakai `.imsbackup` compact dengan manifest/checksum; restore adalah full replace guarded, bukan merge. Backup legacy `.imsbak.zip` tetap dibaca sebagai kompatibilitas. Backup `pre-restore` didaftarkan ulang setelah restore agar rollback tetap terlihat di daftar backup.
+- Backup resmi SQLite memakai `.imsbackup` compact dengan manifest/checksum; restore adalah full replace guarded, bukan merge. Backup legacy `.imsbak.zip` tetap dibaca sebagai kompatibilitas. Backup `pre-restore` dan backup sumber restore dipastikan tercatat ulang setelah restore agar rollback dan traceability tetap terlihat di daftar backup.
 - **Guarded:** log/transaksi lama tidak direkomendasikan dibawa ulang sebagai default jika logic berubah; transaksi baru sebaiknya dibuat ulang lewat flow terbaru agar log baru mengikuti logic terbaru.
 - **Opening stock:** setelah restore/reset manual di luar aplikasi, stok awal sebaiknya dibuat ulang lewat purchase/opening adjustment resmi, bukan menempel stok mentah tanpa audit.
 

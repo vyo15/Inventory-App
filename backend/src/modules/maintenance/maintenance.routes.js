@@ -386,7 +386,7 @@ const registerRestoredBackupLog = async (db, backup, { status = "verified" } = {
     ?? backup.size_bytes
     ?? (fs.existsSync(backup.path) ? fs.statSync(backup.path).size : 0)
   );
-  const createdAt = backup.manifest?.createdAt || backup.createdAt || new Date().toISOString();
+  const createdAt = backup.manifest?.createdAt || backup.createdAt || backup.created_at || new Date().toISOString();
   const result = await db.run(
     `
       INSERT INTO backup_logs (filename, path, size_bytes, status, created_at)
@@ -470,6 +470,7 @@ router.post("/restore-execute", requireLocalAuth, requireLocalAdministrator, asy
     const restoredDb = await getDb();
     const activeValidation = await getActiveDbValidation(restoredDb);
     const registeredPreRestoreBackup = await registerRestoredBackupLog(restoredDb, preRestoreBackup, { status: "verified" });
+    const registeredRestoreSourceBackup = await registerRestoredBackupLog(restoredDb, backup, { status: backup.status || "verified" });
 
     const summary = {
       mode: "executed_guarded",
@@ -486,8 +487,9 @@ router.post("/restore-execute", requireLocalAuth, requireLocalAdministrator, asy
       activeDatabaseValidation: activeValidation,
       preRestoreBackup,
       registeredPreRestoreBackup,
+      registeredRestoreSourceBackup,
       actor,
-      note: "Database aktif dioverwrite dari backup setelah backup otomatis dibuat, checksum/integrity valid, keyword konfirmasi valid, dan backup pre-restore didaftarkan ulang ke database hasil restore.",
+      note: "Database aktif dioverwrite dari backup setelah backup otomatis dibuat, checksum/integrity valid, keyword konfirmasi valid, backup pre-restore didaftarkan ulang, dan backup sumber restore dipastikan tercatat di database hasil restore.",
     };
 
     const result = await restoredDb.run(
@@ -521,6 +523,24 @@ router.post("/restore-execute", requireLocalAuth, requireLocalAdministrator, asy
           path: registeredPreRestoreBackup.path,
           sizeBytes: registeredPreRestoreBackup.size_bytes,
           backupType: registeredPreRestoreBackup.backupType,
+          restoreSource: backup.filename,
+        },
+      });
+    }
+
+    if (registeredRestoreSourceBackup?.id) {
+      await createAuditLog({
+        module: "maintenance",
+        action: "restore_source_backup_re_register",
+        entityType: "backup_log",
+        entityId: registeredRestoreSourceBackup.id,
+        actor,
+        description: "Backup sumber restore dipastikan tercatat ulang setelah database aktif selesai direstore",
+        metadata: {
+          filename: registeredRestoreSourceBackup.filename,
+          path: registeredRestoreSourceBackup.path,
+          sizeBytes: registeredRestoreSourceBackup.size_bytes,
+          backupType: registeredRestoreSourceBackup.backupType,
           restoreSource: backup.filename,
         },
       });
