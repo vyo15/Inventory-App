@@ -1,0 +1,11 @@
+# IMS runtime data must never be included in release/source archives.
+# .gitignore protects untracked files; export-ignore also protects git archive
+# if a runtime artifact was accidentally tracked before cleanup.
+/data/*.sqlite export-ignore
+/data/*.sqlite-* export-ignore
+/backups/**/*.imsbackup export-ignore
+/backups/**/*.imsbak.zip export-ignore
+/backups/**/*.manifest.json export-ignore
+/backups/**/*.sqlite export-ignore
+/backups/**/*.sqlite-* export-ignore
+/backups/**/*.db export-ignore
