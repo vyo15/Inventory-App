@@ -12,9 +12,8 @@ import {
   Tabs,
   Tag,
   Typography,
-  message,
 } from "antd";
-import { showActionError, showActionSuccess } from "../../utils/feedback/actionResultFeedback";
+import { showActionError, showActionInfo, showActionSuccess } from "../../utils/feedback/actionResultFeedback";
 import { WarningOutlined } from "@ant-design/icons";
 import {
   createMaintenanceLog,
@@ -46,7 +45,7 @@ import ResetStatusSummaryCard from "./components/ResetStatusSummaryCard";
 import HppCostConfirmModal from "./components/HppCostConfirmModal";
 import "./ResetMaintenanceData.css";
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 // =====================================================
 // SECTION: Lazy Maintenance Panels — AKTIF / PERFORMANCE
@@ -435,7 +434,7 @@ const ResetMaintenanceData = () => {
           });
             } catch (auditError) {
           console.error(auditError);
-          message.warning("Aksi modal/HPP gagal, dan update audit log gagal. Cek akses maintenance_logs.");
+          showActionInfo("Aksi modal/HPP gagal, dan update audit log gagal. Cek akses maintenance_logs.");
         }
       }
 
@@ -455,7 +454,7 @@ const ResetMaintenanceData = () => {
     }
 
     if (planCount <= 0) {
-      message.info("Tidak ada kandidat repair side-effect transaksi dari audit terakhir.");
+      showActionInfo("Tidak ada kandidat repair side-effect transaksi dari audit terakhir.");
       return;
     }
 
@@ -668,44 +667,30 @@ const ResetMaintenanceData = () => {
             description="Mulai dari Backup & Restore, Audit Data, dan Repair Aman. Reset testing lama tetap nonaktif dan tidak menjalankan aksi destructive."
           />
 
-          <Card
-            size="small"
-            className="reset-maintenance-workspace"
-            title={(
-              <Space size={10}>
-                <span>Maintenance Workspace</span>
-                <Tag color="blue">Guarded</Tag>
-              </Space>
-            )}
-            extra={(
-              <Space size={8} wrap>
+          <div className="reset-maintenance-workspace reset-maintenance-workspace-flat">
+            <div className="reset-maintenance-toolbar">
+              <div className="reset-maintenance-toolbar-main">
+                <Space size={8} wrap>
+                  <Text strong>Maintenance Workspace</Text>
+                  <Tag color="blue">Guarded</Tag>
+                </Space>
+                <Text type="secondary">
+                  Backup dan audit menjadi flow utama. Reset testing hanya menampilkan status nonaktif.
+                </Text>
+              </div>
+              <Space size={8} wrap className="reset-maintenance-toolbar-status">
                 <Tag color={autoBugSummary.issueCount ? "orange" : "green"}>Issue: {autoBugSummary.issueCount || 0}</Tag>
                 <Tag color={autoBugSummary.safeRepairCount ? "green" : "default"}>Repair: {autoBugSummary.safeRepairCount || 0}</Tag>
+                <Tag color="purple">Checklist auto</Tag>
               </Space>
-            )}
-          >
-            <Space direction="vertical" size={16} style={{ width: "100%" }}>
-              <div className="reset-maintenance-hero">
-                <div>
-                  <Text type="secondary">Maintenance database lokal</Text>
-                  <Title level={4} style={{ margin: "2px 0 4px" }}>Backup dulu, audit data, lalu repair atau restore bila perlu</Title>
-                  <Text type="secondary">
-                    Tab dipisah agar user tidak bingung: Backup/restore dan audit menjadi flow utama; reset testing hanya menampilkan status nonaktif.
-                  </Text>
-                </div>
-                <Space direction="vertical" size={4} align="end" className="reset-maintenance-hero-status">
-                  <Tag color="purple">Checklist auto</Tag>
-                  <Text type="secondary">Keyword konfirmasi tetap wajib</Text>
-                </Space>
-              </div>
+            </div>
 
-              <Tabs
-                className="reset-maintenance-tabs"
-                defaultActiveKey="overview"
-                items={resetWorkspaceTabs}
-              />
-            </Space>
-          </Card>
+            <Tabs
+              className="reset-maintenance-tabs"
+              defaultActiveKey="overview"
+              items={resetWorkspaceTabs}
+            />
+          </div>
 
         </Space>
       </Card>

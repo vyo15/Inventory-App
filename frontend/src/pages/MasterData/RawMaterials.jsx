@@ -52,6 +52,8 @@ import {
   ensureAtLeastOneRawMaterialVariant,
 } from '../../utils/variants/rawMaterialVariantHelpers';
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
+import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
 
 import { listenPurchaseRecords } from '../../services/Transaksi/purchasesService';
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
@@ -721,6 +723,10 @@ const RawMaterials = () => {
         }
       >
         <Form form={form} layout="vertical" initialValues={buildFormValues(RAW_MATERIAL_DEFAULT_FORM)}>
+          <ResponsiveFormSection
+            title="Data Bahan Baku"
+            subtitle="Atur identitas, supplier, satuan, pricing, stok, dan varian dalam satu pola form mobile."
+          >
           {/* -----------------------------------------------------------------
               Section identitas utama bahan baku.
           ----------------------------------------------------------------- */}
@@ -1179,6 +1185,7 @@ const RawMaterials = () => {
             showIcon
             message="Pakai varian hanya jika bahan punya turunan stok nyata."
           />
+          </ResponsiveFormSection>
         </Form>
       </Drawer>
 

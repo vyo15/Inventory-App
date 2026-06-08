@@ -24,6 +24,7 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
+import ResponsiveFormSection from "../../components/Layout/Mobile/ResponsiveFormSection";
 import { SALES_CHANNEL_OPTIONS, buildSalesChannelSummary } from "../../constants/salesChannelOptions";
 import {
   getSalesCustomerReferences,
@@ -1346,6 +1347,10 @@ const Sales = () => {
           onFinish={handleAddSale}
           onFinishFailed={(errorInfo) => showFormValidationFeedback(errorInfo, { form })}
         >
+          <ResponsiveFormSection
+            title="Data Penjualan"
+            subtitle="Isi pelanggan, item, channel, status, tanggal, dan catatan tanpa mengubah flow stok keluar."
+          >
           <Form.Item label="Pelanggan" name="customerId" extra="Opsional untuk pembeli umum.">
             <Select placeholder="Pilih pelanggan" allowClear showSearch optionFilterProp="children">
               {customers.map((customer) => (
@@ -1598,6 +1603,7 @@ const Sales = () => {
           <Form.Item label="Catatan" name="note">
             <Input.TextArea rows={3} placeholder="Catatan tambahan" />
           </Form.Item>
+          </ResponsiveFormSection>
         </Form>
       </Modal>
     </>

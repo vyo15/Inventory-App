@@ -17,6 +17,7 @@ import {
 import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../../components/Layout/Mobile/MobileDetailDrawer";
+import ResponsiveFormSection from "../../../components/Layout/Mobile/ResponsiveFormSection";
 import dayjs from "dayjs";
 import { formatNumberId, parseIntegerIdInput } from "../../../utils/formatters/numberId";
 import {
@@ -874,6 +875,10 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           onFinish={handleSubmitStockAdjustment}
           onFinishFailed={(errorInfo) => showFormValidationFeedback(errorInfo, { form })}
         >
+          <ResponsiveFormSection
+            title="Data Penyesuaian Stok"
+            subtitle="Cek item, arah penyesuaian, qty, modal, alasan, dan catatan sebelum simpan."
+          >
           <Alert
             type="warning"
             showIcon
@@ -1135,6 +1140,7 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
           <Form.Item name="note" label="Catatan">
             <Input.TextArea rows={3} placeholder="Opsional" />
           </Form.Item>
+          </ResponsiveFormSection>
         </Form>
       </Modal>
     </>

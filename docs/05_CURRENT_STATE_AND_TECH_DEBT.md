@@ -114,8 +114,9 @@ Jangan membuat perhitungan stok baru di UI.
 
 ### 7. Backup, restore, dan reset
 
-- Backup resmi memakai format SQLite backup resmi dari backend.
-- Restore wajib preview, validasi, pre-restore backup, dan keyword confirm.
+- Backup resmi memakai satu file compact `.imsbackup` dari backend; backup legacy `.imsbak.zip` tetap didukung untuk restore.
+- Restore wajib import/daftar backup resmi, preview, validasi, pre-restore backup, keyword `RESTORE DATABASE`, dan audit log. Backup `pre-restore` harus didaftarkan ulang ke database hasil restore agar rollback tetap terlihat di daftar backup.
+- Export Master aktif membaca data master SQLite secara read-only dari backend untuk arsip/review; export ini bukan paket restore dan tidak boleh menggantikan `.imsbackup`.
 - Reset testing lama tetap nonaktif/redirect lama.
 - Destructive action wajib punya scope jelas, confirm guard, dan audit log.
 

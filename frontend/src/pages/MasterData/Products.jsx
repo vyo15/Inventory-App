@@ -37,6 +37,7 @@ import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import StockDisplayBlock from '../../components/Layout/Table/StockDisplayBlock';
 import DataTableView from '../../components/Layout/Table/DataTableView';
 import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
+import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
 import { listCategories } from '../../data/repositories/categoriesRepository';
 
 import {
@@ -737,6 +738,10 @@ const Products = () => {
         }
       >
         <Form form={form} layout="vertical" initialValues={buildFormValues(PRODUCT_DEFAULT_FORM)}>
+          <ResponsiveFormSection
+            title="Data Produk"
+            subtitle="Atur identitas, pricing, stok, dan varian produk dalam satu pola form mobile."
+          >
           <Divider orientation="left">Informasi Utama</Divider>
           {/* =====================================================
           SECTION: Product internal code hidden from main UI — AKTIF
@@ -1059,6 +1064,7 @@ const Products = () => {
               </Col>
             </Row>
           </Card>
+          </ResponsiveFormSection>
         </Form>
       </Drawer>
 

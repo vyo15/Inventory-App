@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
-import { message } from "antd";
-import { showActionError, showActionSuccess } from "../../../utils/feedback/actionResultFeedback";
+import { showActionError, showActionInfo, showActionSuccess } from "../../../utils/feedback/actionResultFeedback";
 import {
   getProductionVariantMaintenanceAudit,
   repairProductionVariantMaintenance,
@@ -306,7 +305,7 @@ const useResetMaintenanceRepairs = ({
         note: "Repair HPP output hanya menjalankan reconcile cost snapshot/master HPP. Tidak menambah qty stok, tidak membuat inventory log, tidak membuat transaksi finance, dan tidak mengubah status Work Log/Payroll.",
       });
       if (result?.errorCount) {
-        message.warning(result?.message || "Repair HPP output selesai dengan sebagian error.");
+        showActionInfo(result?.message || "Repair HPP output selesai dengan sebagian error.");
       } else {
         showActionSuccess(result?.message || "Repair HPP output selesai.");
       }

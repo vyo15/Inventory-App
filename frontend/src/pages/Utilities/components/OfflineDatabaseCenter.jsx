@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  App as AntdApp,
   Button,
   Card,
   Col,
   Descriptions,
-  Divider,
   Input,
-  Modal,
   Row,
   Select,
   Space,
@@ -15,18 +14,19 @@ import {
   Tabs,
   Tag,
   Timeline,
+  Upload,
   Typography,
-  message,
-  theme,
 } from "antd";
 import {
   CheckCircleOutlined,
   DatabaseOutlined,
+  DownloadOutlined,
   ExclamationCircleOutlined,
   HddOutlined,
   ReloadOutlined,
   SafetyOutlined,
   SwapOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 
 import { REPOSITORY_MODES } from "../../../data/repositories/repositoryMode";
@@ -34,16 +34,19 @@ import { getRepositoryModeStatus } from "../../../data/repositories/repositoryMo
 import {
   createSqliteBackendBackup,
   createSqliteRestorePlan,
+  downloadSqliteBackendBackup,
   executeSqliteRestore,
   getSqliteBackendBackups,
   getSqliteBackendStatus,
   getSqliteModuleRuntimeStatus,
+  importSqliteBackendBackup,
 } from "../../../services/System/sqliteBackendStatusService";
 import SqliteBackendStatusPanel from "./SqliteBackendStatusPanel";
 import "./OfflineDatabaseCenter.css";
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 const EXTERNAL_COPY_STORAGE_KEY = "ims.sqlite.externalBackupCopyConfirmedAt";
+const IMS_BACKUP_ACCEPT = ".imsbackup,.imsbak.zip";
 
 const formatNumber = (value) => Number(value || 0).toLocaleString("id-ID");
 const formatBytes = (value) => {
@@ -136,7 +139,7 @@ const renderSelectedBackupSummary = (backup) => {
       <Descriptions.Item label="Ukuran Paket">{formatBytes(backup.size_bytes || backup.sizeBytes)}</Descriptions.Item>
       <Descriptions.Item label="Schema">{manifest.schemaVersion || "-"}</Descriptions.Item>
       <Descriptions.Item label="Integrity">{manifest.integrityCheck || "-"}</Descriptions.Item>
-      <Descriptions.Item label="File" span={2}>
+      <Descriptions.Item label="File" span={{ xs: 1, md: 2 }}>
         <Text copyable ellipsis style={{ maxWidth: "100%" }}>{backup.filename}</Text>
       </Descriptions.Item>
     </Descriptions>
@@ -151,9 +154,11 @@ const renderSelectedBackupSummary = (backup) => {
 // - Modul guarded stock/purchase/sales/finance/production tetap tidak dimutasi offline.
 // =====================================================
 const OfflineDatabaseCenter = () => {
-  const { token } = theme.useToken();
+  const { message: appMessage, modal } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
+  const [backupImportLoading, setBackupImportLoading] = useState(false);
+  const [downloadingBackupFilename, setDownloadingBackupFilename] = useState("");
   const [restorePlanLoading, setRestorePlanLoading] = useState(false);
   const [restoreExecuteLoading, setRestoreExecuteLoading] = useState(false);
   const [status, setStatus] = useState(null);
@@ -162,6 +167,7 @@ const OfflineDatabaseCenter = () => {
   const [backups, setBackups] = useState([]);
   const [selectedBackupFilename, setSelectedBackupFilename] = useState("");
   const [restoreKeyword, setRestoreKeyword] = useState("");
+  const [selectedImportBackupFile, setSelectedImportBackupFile] = useState(null);
   const [externalCopyConfirmedAt, setExternalCopyConfirmedAt] = useState(() => {
     if (typeof window === "undefined") return "";
     return window.localStorage.getItem(EXTERNAL_COPY_STORAGE_KEY) || "";
@@ -194,16 +200,16 @@ const OfflineDatabaseCenter = () => {
       setBackups(backupRows);
       setSelectedBackupFilename((previous) => previous || backupRows[0]?.filename || "");
       setModuleRuntimeStatus(nextModuleRuntimeStatus);
-      if (showSuccess) message.success("Status Database Center diperbarui.");
+      if (showSuccess) appMessage.success("Status Database Center diperbarui.");
     } catch (error) {
       console.error("Gagal memuat Database Center:", error);
-      message.error(error?.message || "Layanan database belum bisa diakses.");
+      appMessage.error(error?.message || "Layanan database belum bisa diakses.");
       const modeStatus = await getRepositoryModeStatus().catch(() => ({ mode: REPOSITORY_MODES.SQLITE_SIDECAR }));
       void modeStatus;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [appMessage]);
 
   useEffect(() => {
     loadCenterData();
@@ -213,10 +219,10 @@ const OfflineDatabaseCenter = () => {
     setBackupLoading(true);
     try {
       const result = await createSqliteBackendBackup({ backupType: "manual" });
-      message.success(result?.message || "Backup database berhasil dibuat dan diverifikasi.");
+      appMessage.success(result?.message || "Backup database berhasil dibuat dan diverifikasi.");
       await loadCenterData();
     } catch (error) {
-      message.error(error?.message || "Backup database gagal.");
+      appMessage.error(error?.message || "Backup database gagal.");
     } finally {
       setBackupLoading(false);
     }
@@ -226,7 +232,51 @@ const OfflineDatabaseCenter = () => {
     const now = new Date().toISOString();
     if (typeof window !== "undefined") window.localStorage.setItem(EXTERNAL_COPY_STORAGE_KEY, now);
     setExternalCopyConfirmedAt(now);
-    message.success("Checklist copy backup eksternal ditandai selesai untuk minggu ini.");
+    appMessage.success("Checklist copy backup eksternal ditandai selesai untuk minggu ini.");
+  };
+
+  const handleDownloadBackup = async (backup) => {
+    if (!backup?.filename) return;
+    setDownloadingBackupFilename(backup.filename);
+    try {
+      const { blob, filename } = await downloadSqliteBackendBackup(backup.filename);
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename || backup.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(url);
+      appMessage.success("File Backup IMS siap disimpan.");
+    } catch (error) {
+      appMessage.error(error?.message || "Download backup gagal.");
+    } finally {
+      setDownloadingBackupFilename("");
+    }
+  };
+
+  const handleImportBackup = async () => {
+    if (!selectedImportBackupFile) {
+      appMessage.warning("Pilih file backup .imsbackup terlebih dahulu.");
+      return;
+    }
+
+    setBackupImportLoading(true);
+    try {
+      const result = await importSqliteBackendBackup(selectedImportBackupFile);
+      const importedFilename = result?.data?.filename || "";
+      appMessage.success(result?.message || "File Backup IMS berhasil diimport dan diverifikasi.");
+      setSelectedImportBackupFile(null);
+      setRestorePlan(null);
+      setRestoreKeyword("");
+      await loadCenterData();
+      if (importedFilename) setSelectedBackupFilename(importedFilename);
+    } catch (error) {
+      appMessage.error(error?.message || "Import File Backup IMS gagal.");
+    } finally {
+      setBackupImportLoading(false);
+    }
   };
 
   const handleCreateRestorePlan = async () => {
@@ -235,10 +285,10 @@ const OfflineDatabaseCenter = () => {
       const filename = selectedBackupFilename || selectedBackup?.filename || "";
       const result = await createSqliteRestorePlan(filename ? { filename } : {});
       setRestorePlan(result?.data || null);
-      message.success(result?.message || "Restore preview berhasil dibuat.");
+      appMessage.success(result?.message || "Restore preview berhasil dibuat.");
       await loadCenterData();
     } catch (error) {
-      message.error(error?.message || "Restore preview gagal dibuat.");
+      appMessage.error(error?.message || "Restore preview gagal dibuat.");
     } finally {
       setRestorePlanLoading(false);
     }
@@ -246,11 +296,11 @@ const OfflineDatabaseCenter = () => {
 
   const handleExecuteRestore = async () => {
     if (!restoreReady) {
-      message.warning("Pilih backup, buat preview valid, lalu ketik keyword konfirmasi dengan benar.");
+      appMessage.warning("Pilih backup, buat preview valid, lalu ketik keyword konfirmasi dengan benar.");
       return;
     }
 
-    Modal.confirm({
+    modal.confirm({
       title: "Jalankan restore database?",
       icon: <ExclamationCircleOutlined />,
       content: (
@@ -270,12 +320,12 @@ const OfflineDatabaseCenter = () => {
             filename: selectedBackupFilename,
             confirmKeyword: restoreKeyword,
           });
-          message.success(result?.message || "Restore database berhasil dijalankan. Refresh aplikasi bila diperlukan.");
+          appMessage.success(result?.message || "Restore database berhasil dijalankan. Refresh aplikasi bila diperlukan.");
           setRestoreKeyword("");
           setRestorePlan(null);
           await loadCenterData();
         } catch (error) {
-          message.error(error?.message || "Restore database gagal dijalankan.");
+          appMessage.error(error?.message || "Restore database gagal dijalankan.");
         } finally {
           setRestoreExecuteLoading(false);
         }
@@ -324,11 +374,11 @@ const OfflineDatabaseCenter = () => {
         <Descriptions.Item label="Status Layanan">{modeTag}</Descriptions.Item>
         <Descriptions.Item label="Schema DB">{statusData.schemaVersion || "-"}</Descriptions.Item>
         <Descriptions.Item label="Restore Mode"><Tag color="orange">{statusData.restoreMode || "preview_only"}</Tag></Descriptions.Item>
-        <Descriptions.Item label="Format Backup"><Tag color="blue">{statusData.backupFormat || "imsbak"}</Tag></Descriptions.Item>
-        <Descriptions.Item label="Database" span={2}>
+        <Descriptions.Item label="Format Backup"><Tag color="blue">{statusData.backupFormat || "imsbackup"}</Tag></Descriptions.Item>
+        <Descriptions.Item label="Database" span={{ xs: 1, lg: 2 }}>
           <Text copyable ellipsis style={{ maxWidth: "100%" }}>{statusData.dbPath || "-"}</Text>
         </Descriptions.Item>
-        <Descriptions.Item label="Backup Folder" span={2}>
+        <Descriptions.Item label="Backup Folder" span={{ xs: 1, lg: 2 }}>
           <Text copyable ellipsis style={{ maxWidth: "100%" }}>{statusData.backupDir || "-"}</Text>
         </Descriptions.Item>
       </Descriptions>
@@ -366,7 +416,7 @@ const OfflineDatabaseCenter = () => {
           {
             color: "green",
             dot: <SafetyOutlined />,
-            children: "Backup resmi dibuat sistem dalam paket .imsbak.zip dengan manifest, checksum, dan integrity check.",
+            children: "Backup resmi dibuat sistem dalam paket .imsbackup dengan manifest, checksum, dan integrity check.",
           },
         ]}
       />
@@ -374,76 +424,79 @@ const OfflineDatabaseCenter = () => {
   );
 
   const backupTab = (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Alert
-        type={backupTone.color === "green" ? "success" : backupTone.color === "orange" ? "warning" : "error"}
-        showIcon
-        message={backupTone.text}
-        description="Backup resmi dibuat dalam format .imsbak.zip. Copy backup yang sudah verified ke flashdisk atau harddisk eksternal secara rutin."
-      />
-
-      <Row gutter={[12, 12]}>
-        <Col xs={24} md={12}>
-          <Card size="small" className="offline-db-action-card" title="Status Backup Terakhir">
-            {latestBackup ? renderSelectedBackupSummary(latestBackup) : (
-              <Alert type="warning" showIcon message="Belum ada backup database." />
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} md={12}>
-          <Card size="small" className="offline-db-action-card" title="Checklist Backup Eksternal">
-            <Space direction="vertical" size={10} style={{ width: "100%" }}>
-              <Text type="secondary">
-                Backup lokal masih berada di laptop server. Minimal seminggu sekali, copy backup terbaru ke flashdisk/harddisk eksternal.
-              </Text>
-              <Tag color={externalCopyAgeDays !== null && externalCopyAgeDays <= 7 ? "green" : "orange"}>
-                {externalCopyConfirmedAt
-                  ? `Terakhir ditandai: ${formatDateTime(externalCopyConfirmedAt)}`
-                  : "Belum pernah ditandai"}
-              </Tag>
-              <Button onClick={handleMarkExternalCopy}>Saya sudah copy ke flashdisk</Button>
-            </Space>
-          </Card>
-        </Col>
-      </Row>
-
-      <Card
-        size="small"
-        className="offline-db-action-card"
-        title="Backup Database"
-        extra={(
-          <Space wrap>
-            <Button icon={<ReloadOutlined />} loading={loading} onClick={() => loadCenterData({ showSuccess: true })}>
-              Refresh
-            </Button>
-            <Button type="primary" icon={<HddOutlined />} loading={backupLoading} onClick={handleBackup}>
-              Buat Backup Sekarang
-            </Button>
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      <div className="offline-db-status-strip offline-db-status-strip-backup">
+        <div className="offline-db-status-strip-main">
+          <Space size={8} wrap>
+            <Tag color={backupTone.color}>{backupTone.text}</Tag>
+            <Tag color="blue">.imsbackup</Tag>
           </Space>
+          <Text type="secondary">
+            Backup resmi berisi database, manifest, checksum, dan integrity check. Copy backup verified ke media eksternal secara rutin.
+          </Text>
+        </div>
+        <Space wrap className="offline-db-status-strip-actions">
+          <Button icon={<ReloadOutlined />} loading={loading} onClick={() => loadCenterData({ showSuccess: true })}>
+            Refresh
+          </Button>
+          <Button type="primary" icon={<HddOutlined />} loading={backupLoading} onClick={handleBackup}>
+            Buat Backup
+          </Button>
+        </Space>
+      </div>
+
+      <div className="offline-db-compact-section">
+        <div className="offline-db-section-heading">
+          <Text strong>Backup terakhir</Text>
+          <Tag color={externalCopyAgeDays !== null && externalCopyAgeDays <= 7 ? "green" : "orange"}>
+            {externalCopyConfirmedAt
+              ? `Copy eksternal: ${formatDateTime(externalCopyConfirmedAt)}`
+              : "Copy eksternal belum ditandai"}
+          </Tag>
+        </div>
+        {latestBackup ? renderSelectedBackupSummary(latestBackup) : (
+          <Alert type="warning" showIcon message="Belum ada backup database." />
         )}
-      >
-        <Row gutter={[12, 12]}>
+        <div className="offline-db-inline-note">
+          <Text type="secondary">
+            Backup lokal masih berada di laptop server. Minimal seminggu sekali, copy backup terbaru ke flashdisk/harddisk eksternal.
+          </Text>
+          <Button size="small" onClick={handleMarkExternalCopy}>Saya sudah copy ke flashdisk</Button>
+        </div>
+      </div>
+
+      <div className="offline-db-compact-section">
+        <div className="offline-db-section-heading">
+          <Text strong>Daftar backup terbaru</Text>
+          <Text type="secondary">Menampilkan maksimal 6 file terbaru.</Text>
+        </div>
+        <Space direction="vertical" size={8} style={{ width: "100%" }}>
           {backups.slice(0, 6).map((backup) => (
-            <Col xs={24} md={12} xl={8} key={backup.id || backup.filename}>
-              <Card size="small" className="offline-db-status-card">
-                <Space direction="vertical" size={4} style={{ width: "100%" }}>
-                  <Space wrap size={6}>
-                    <Tag color={backup.status === "verified" || backup.status === "success" ? "green" : "orange"}>{backup.status || "unknown"}</Tag>
-                    <Tag color="blue">{getBackupTypeLabel(backup.backupType)}</Tag>
-                  </Space>
-                  <Text strong ellipsis>{backup.filename}</Text>
+            <div className="offline-db-backup-list-item" key={backup.id || backup.filename}>
+              <div className="offline-db-backup-list-main">
+                <Space wrap size={6}>
+                  <Tag color={backup.status === "verified" || backup.status === "success" ? "green" : "orange"}>{backup.status || "unknown"}</Tag>
+                  <Tag color="blue">{getBackupTypeLabel(backup.backupType)}</Tag>
                   <Text type="secondary">{formatBytes(backup.size_bytes || backup.sizeBytes)}</Text>
-                  <Text type="secondary">{formatDateTime(backup.created_at)}</Text>
-                  <Text type="secondary">Schema: {backup.manifest?.schemaVersion || "-"}</Text>
                 </Space>
-              </Card>
-            </Col>
+                <Text strong ellipsis>{backup.filename}</Text>
+                <Text type="secondary">{formatDateTime(backup.created_at)} · Schema {backup.manifest?.schemaVersion || "-"}</Text>
+              </div>
+              <Button
+                size="small"
+                icon={<DownloadOutlined />}
+                loading={downloadingBackupFilename === backup.filename}
+                onClick={() => handleDownloadBackup(backup)}
+              >
+                Download
+              </Button>
+            </div>
           ))}
-        </Row>
+        </Space>
         {!backups.length ? (
-          <Alert style={{ marginTop: 12 }} type="warning" showIcon message="Belum ada backup database." />
+          <Alert type="warning" showIcon message="Belum ada backup database." />
         ) : null}
-      </Card>
+      </div>
     </Space>
   );
 
@@ -509,89 +562,127 @@ const OfflineDatabaseCenter = () => {
   );
 
   const restoreTab = (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Alert
-        type="warning"
-        showIcon
-        message="Restore database memakai alur aman"
-        description="Restore wajib pilih backup resmi, preview valid, keyword konfirmasi, dan sistem otomatis membuat backup pre-restore sebelum mengganti database aktif."
-      />
-      <Card
-        size="small"
-        title="Pilih Backup"
-        className="offline-db-action-card"
-        extra={(
-          <Button type="primary" icon={<SafetyOutlined />} loading={restorePlanLoading} onClick={handleCreateRestorePlan} disabled={!backups.length}>
-            Preview Restore
-          </Button>
-        )}
-      >
-        <Space direction="vertical" size={12} style={{ width: "100%" }}>
-          <Select
-            showSearch
-            style={{ width: "100%" }}
-            placeholder="Pilih backup resmi"
-            value={selectedBackupFilename || undefined}
-            onChange={(value) => {
-              setSelectedBackupFilename(value);
-              setRestorePlan(null);
-              setRestoreKeyword("");
-            }}
-            options={backups.map((backup) => ({
-              value: backup.filename,
-              label: `${getBackupTypeLabel(backup.backupType)} - ${formatDateTime(backup.created_at)} - ${backup.status || "unknown"}`,
-            }))}
-          />
-          {renderSelectedBackupSummary(selectedBackup)}
-        </Space>
-      </Card>
+    <Space direction="vertical" size={12} style={{ width: "100%" }}>
+      <div className="offline-db-status-strip offline-db-status-strip-restore">
+        <div className="offline-db-status-strip-main">
+          <Space size={8} wrap>
+            <Tag color="orange">Guarded restore</Tag>
+            <Tag color="red">Full replace</Tag>
+          </Space>
+          <Text type="secondary">
+            Restore mengganti database aktif. Alur tetap wajib import/pilih backup, preview valid, keyword konfirmasi, dan backup pre-restore otomatis.
+          </Text>
+        </div>
+      </div>
 
-      <Card size="small" title="Restore Preview" className="offline-db-action-card">
-        {restorePlan ? (
+      <div className="offline-db-restore-step">
+        <div className="offline-db-step-marker">1</div>
+        <div className="offline-db-step-content">
+          <div className="offline-db-section-heading">
+            <Text strong>Import File Backup IMS</Text>
+            <Text type="secondary">Opsional jika backup berasal dari flashdisk/komputer lama.</Text>
+          </div>
+          <Text type="secondary">
+            Import hanya mendaftarkan dan memvalidasi file. Data belum berubah sampai tombol Restore Database dijalankan.
+          </Text>
+          <Space wrap className="offline-db-step-actions">
+            <Upload
+              accept={IMS_BACKUP_ACCEPT}
+              maxCount={1}
+              beforeUpload={(file) => {
+                setSelectedImportBackupFile(file);
+                return false;
+              }}
+              onRemove={() => setSelectedImportBackupFile(null)}
+              fileList={selectedImportBackupFile ? [selectedImportBackupFile] : []}
+            >
+              <Button icon={<UploadOutlined />}>Pilih File Backup IMS</Button>
+            </Upload>
+            <Button
+              type="primary"
+              icon={<UploadOutlined />}
+              loading={backupImportLoading}
+              disabled={!selectedImportBackupFile}
+              onClick={handleImportBackup}
+            >
+              Import & Validasi
+            </Button>
+          </Space>
+        </div>
+      </div>
+
+      <div className="offline-db-restore-step">
+        <div className="offline-db-step-marker">2</div>
+        <div className="offline-db-step-content">
+          <div className="offline-db-section-heading">
+            <Text strong>Pilih backup & preview</Text>
+            <Button type="primary" icon={<SafetyOutlined />} loading={restorePlanLoading} onClick={handleCreateRestorePlan} disabled={!backups.length}>
+              Preview Restore
+            </Button>
+          </div>
           <Space direction="vertical" size={10} style={{ width: "100%" }}>
-            <Descriptions size="small" bordered column={{ xs: 1, md: 2 }}>
-              <Descriptions.Item label="Mode"><Tag color="orange">{restorePlan.mode}</Tag></Descriptions.Item>
-              <Descriptions.Item label="Destructive"><Tag color="green">Tidak aktif saat preview</Tag></Descriptions.Item>
-              <Descriptions.Item label="Backup ditemukan">{restorePlan.backupFound ? "Ya" : "Tidak"}</Descriptions.Item>
-              <Descriptions.Item label="File backup ada">{restorePlan.backupFileExists ? "Ya" : "Tidak"}</Descriptions.Item>
-              <Descriptions.Item label="Valid untuk restore">
-                <Tag color={restorePlan.validForRestore ? "green" : "red"}>{restorePlan.validForRestore ? "Valid" : "Tidak valid"}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Integrity">{restorePlan.validation?.integrityCheck || restorePlan.manifest?.integrityCheck || "-"}</Descriptions.Item>
-            </Descriptions>
+            <Select
+              showSearch
+              style={{ width: "100%" }}
+              placeholder="Pilih backup resmi"
+              value={selectedBackupFilename || undefined}
+              onChange={(value) => {
+                setSelectedBackupFilename(value);
+                setRestorePlan(null);
+                setRestoreKeyword("");
+              }}
+              options={backups.map((backup) => ({
+                value: backup.filename,
+                label: `${getBackupTypeLabel(backup.backupType)} - ${formatDateTime(backup.created_at)} - ${backup.status || "unknown"}`,
+              }))}
+            />
+            {renderSelectedBackupSummary(selectedBackup)}
 
-            {restorePlan.manifest?.tables ? (
-              <Card size="small" className="offline-db-status-card" title="Ringkasan Isi Backup">
-                <Row gutter={[8, 8]}>
-                  {Object.entries(restorePlan.manifest.tables).slice(0, 12).map(([tableName, count]) => (
-                    <Col xs={12} md={8} xl={6} key={tableName}>
-                      <Text type="secondary">{tableName}</Text>
-                      <br />
-                      <Text strong>{formatNumber(count)}</Text>
-                    </Col>
-                  ))}
-                </Row>
-              </Card>
-            ) : null}
+            {restorePlan ? (
+              <div className="offline-db-restore-preview">
+                <Descriptions size="small" bordered column={{ xs: 1, md: 2 }}>
+                  <Descriptions.Item label="Mode"><Tag color="orange">{restorePlan.mode}</Tag></Descriptions.Item>
+                  <Descriptions.Item label="Destructive"><Tag color="green">Tidak aktif saat preview</Tag></Descriptions.Item>
+                  <Descriptions.Item label="Backup ditemukan">{restorePlan.backupFound ? "Ya" : "Tidak"}</Descriptions.Item>
+                  <Descriptions.Item label="File backup ada">{restorePlan.backupFileExists ? "Ya" : "Tidak"}</Descriptions.Item>
+                  <Descriptions.Item label="Valid untuk restore">
+                    <Tag color={restorePlan.validForRestore ? "green" : "red"}>{restorePlan.validForRestore ? "Valid" : "Tidak valid"}</Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Integrity">{restorePlan.validation?.integrityCheck || restorePlan.manifest?.integrityCheck || "-"}</Descriptions.Item>
+                </Descriptions>
 
-            {restorePlan.validationError ? (
-              <Alert type="error" showIcon message="Backup tidak lolos validasi" description={restorePlan.validationError} />
+                {restorePlan.manifest?.tables ? (
+                  <div className="offline-db-table-counts">
+                    {Object.entries(restorePlan.manifest.tables).slice(0, 12).map(([tableName, count]) => (
+                      <div className="offline-db-table-count" key={tableName}>
+                        <Text type="secondary">{tableName}</Text>
+                        <Text strong>{formatNumber(count)}</Text>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {restorePlan.validationError ? (
+                  <Alert type="error" showIcon message="Backup tidak lolos validasi" description={restorePlan.validationError} />
+                ) : (
+                  <Alert
+                    type="info"
+                    showIcon
+                    message="Preview tidak mengubah data."
+                    description={(restorePlan.blockedActions || []).join(" ")}
+                  />
+                )}
+              </div>
             ) : (
-              <Alert
-                type="info"
-                showIcon
-                message="Preview tidak mengubah data."
-                description={(restorePlan.blockedActions || []).join(" ")}
-              />
+              <Text type="secondary">Pilih backup lalu klik Preview Restore untuk validasi checksum, integrity check, dan ringkasan data.</Text>
             )}
           </Space>
-        ) : (
-          <Text type="secondary">Pilih backup lalu klik Preview Restore untuk validasi checksum, integrity check, dan ringkasan data.</Text>
-        )}
-      </Card>
+        </div>
+      </div>
 
-      <Card size="small" title="Eksekusi Restore" className="offline-db-action-card offline-db-danger-card">
-        <Space direction="vertical" size={10} style={{ width: "100%" }}>
+      <div className="offline-db-restore-step offline-db-restore-step-danger">
+        <div className="offline-db-step-marker">3</div>
+        <div className="offline-db-step-content">
           <Alert
             type="error"
             showIcon
@@ -608,8 +699,8 @@ const OfflineDatabaseCenter = () => {
           <Button danger type="primary" loading={restoreExecuteLoading} disabled={!restoreReady} onClick={handleExecuteRestore}>
             Restore Database
           </Button>
-        </Space>
-      </Card>
+        </div>
+      </div>
     </Space>
   );
 
@@ -628,7 +719,7 @@ const OfflineDatabaseCenter = () => {
             { color: "green", children: "Laptop/PC utama: buka halaman Kategori dan Customer." },
             { color: "green", children: "HP: buka aplikasi dari alamat lokal komputer utama dan tambah/edit customer test." },
             { color: "green", children: "Restart layanan lokal; pastikan auto backup harian tidak dobel di hari yang sama." },
-            { color: "blue", children: "Buat backup manual; pastikan paket .imsbak.zip, manifest, checksum, dan audit log maintenance tercatat." },
+            { color: "blue", children: "Buat backup manual; pastikan File Backup IMS .imsbackup compact, manifest, checksum, dan audit log maintenance tercatat." },
             { color: "orange", children: "Jalankan Preview Restore pada backup terbaru; pastikan status valid sebelum tombol restore aktif." },
             { color: "orange", children: "Copy backup verified ke flashdisk/harddisk eksternal dan tandai checklist eksternal." },
           ]}
@@ -647,52 +738,29 @@ const OfflineDatabaseCenter = () => {
   ];
 
   return (
-    <Card
-      size="small"
-      className="offline-db-center"
-      title={(
-        <Space size={10}>
-          <SwapOutlined />
-          <span>Database Center</span>
-          {modeTag}
-        </Space>
-      )}
-      extra={(
-        <Space size={8} wrap>
+    <div className="offline-db-center">
+      <div className="offline-db-toolbar">
+        <div className="offline-db-toolbar-main">
+          <Space size={10} wrap>
+            <SwapOutlined />
+            <Text strong>Database Center</Text>
+            {modeTag}
+          </Space>
+          <Text type="secondary">
+            Database lokal, backup .imsbackup, import, preview restore, dan status modul dalam satu panel compact.
+          </Text>
+        </div>
+        <Space size={8} wrap className="offline-db-toolbar-actions">
           <Button size="small" icon={<ReloadOutlined />} loading={loading} onClick={() => loadCenterData({ showSuccess: true })}>
             Refresh
           </Button>
           <Tag color={backupTone.color}>{backupTone.text}</Tag>
-          <Tag color="green">Layanan lokal aktif</Tag>
-          <Tag color="blue">Database lokal aktif</Tag>
+          <Tag color="green">Layanan aktif</Tag>
         </Space>
-      )}
-      styles={{
-        header: {
-          background: token.colorBgContainer,
-          borderBottomColor: token.colorBorderSecondary,
-        },
-      }}
-    >
-      <Space direction="vertical" size={16} style={{ width: "100%" }}>
-        <div className="offline-db-hero" style={{ background: token.colorBgElevated, borderColor: token.colorBorderSecondary }}>
-          <div>
-            <Text type="secondary">Database lokal</Text>
-            <Title level={4} style={{ margin: "2px 0 4px" }}>Satu database untuk laptop dan HP</Title>
-            <Text type="secondary">
-              Aplikasi tetap berbasis web. Data disimpan di database lokal melalui layanan aplikasi. Backup resmi tersedia dalam format .imsbak.zip agar bisa dipreview, dicek checksum, dan direstore dengan aman.
-            </Text>
-          </div>
-          <Space direction="vertical" size={4} align="end">
-            {modeTag}
-            <Text type="secondary">Modul aplikasi: semua aktif</Text>
-            <Text type="secondary">Backup: {backupTone.text}</Text>
-          </Space>
-        </div>
-        <Divider style={{ margin: 0 }} />
-        <Tabs className="offline-db-tabs" items={tabs} />
-      </Space>
-    </Card>
+      </div>
+
+      <Tabs className="offline-db-tabs" items={tabs} />
+    </div>
   );
 };
 

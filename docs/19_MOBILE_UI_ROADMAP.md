@@ -277,3 +277,30 @@ Guardrail:
 - Perubahan ini UI-only/read-only.
 - Tidak mengubah schema SQLite, query service, mutation stok, purchase/sales/return commit, finance ledger, production material usage, payroll final, HPP, route, role guard, reset, backup/restore, atau audit log.
 - Drawer form operasional tidak ikut distandardisasi pada phase ini karena masih membawa flow submit/create/edit.
+
+## Update 2026-06-08 - Phase M9: Standardize Mobile Form Sections
+
+Status: **diterapkan terbatas untuk form operasional prioritas non-production**.
+
+Perubahan standar:
+
+- Form Returns, Sales, Stock Adjustment, Products, Raw Materials, dan Suppliers memakai `ResponsiveFormSection` agar field panjang mengikuti pola mobile satu kolom yang konsisten.
+- Blocker M8 pada Raw Materials diperbaiki dengan import `MobileDetailDrawer` yang sesuai source aktual.
+- Struktur submit, validation, payload, service, stock mutation, purchase/sales/return commit, dan katalog supplier tidak diubah.
+- Form production/payroll/HPP tetap tidak diubah pada M9 karena termasuk guarded production flow dan perlu audit terpisah sebelum standardisasi form.
+
+Guardrail:
+
+- Perubahan ini UI-only/presentational.
+- Jangan memindahkan business logic ke form section.
+- Jangan mengubah status flow, schema, repository, stock engine, finance ledger, production order, work log, payroll final, HPP, audit log, route, atau role guard.
+- Form yang memakai `Drawer` atau `Modal` langsung masih boleh dipertahankan jika membawa footer/submit custom. Yang distandardisasi pada M9 hanya layout section di dalam form.
+
+Checklist QA tambahan M9:
+
+- [ ] Raw Materials bisa dibuka tanpa error import dan detail drawer tetap muncul.
+- [ ] Form Returns tetap membuat retur dan stok kembali sesuai flow existing.
+- [ ] Form Sales tetap membuat transaksi dan stok keluar sesuai flow existing.
+- [ ] Form Stock Adjustment tetap validasi stok keluar, unit cost, alasan, dan catatan.
+- [ ] Form Products/Raw Materials/Suppliers tetap menyimpan create/edit tanpa perubahan payload.
+- [ ] Di mobile, field form prioritas turun menjadi satu kolom dan footer tombol tetap mudah ditekan.

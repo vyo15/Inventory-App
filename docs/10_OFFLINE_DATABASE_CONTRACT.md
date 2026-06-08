@@ -43,22 +43,36 @@ Mutation berikut wajib atomic/guarded di backend:
 Backup resmi harus:
 
 - Dibuat dari backend.
+- Berformat satu file khusus IMS `.imsbackup`.
+- Menggunakan paket compact berisi `database.sqlite`, `manifest.json`, `checksum.sha256`, dan `README_RESTORE.txt`.
 - Memiliki manifest/checksum.
 - Dicatat di backup logs.
+- Bisa didownload dari Database Center.
 - Bisa diverifikasi sebelum restore.
 - Disalin keluar laptop/server secara berkala oleh user.
+
+Backup legacy `.imsbak.zip` tetap boleh dibaca untuk restore agar file lama tidak terputus kompatibilitasnya.
 
 ## Restore contract
 
 Restore resmi harus:
 
-- Memakai backup yang terdaftar.
+- Memakai backup yang terdaftar atau file `.imsbackup` yang diimport dan valid.
 - Menampilkan preview.
 - Memvalidasi integrity/checksum.
 - Membuat pre-restore backup.
-- Meminta keyword confirm.
+- Mendaftarkan ulang pre-restore backup ke database hasil restore agar file rollback tetap muncul di daftar backup setelah database aktif diganti.
+- Meminta keyword confirm `RESTORE DATABASE`.
 - Mencatat restore log.
 - Menolak restore jika backup tidak valid.
+- Bersifat full restore/replace database aktif, bukan merge data.
+
+## Export Master contract
+
+- Export Master membaca master data SQLite dari backend secara read-only.
+- Export Master boleh dipakai untuk arsip, review, atau checklist input ulang manual.
+- Export Master bukan file restore penuh dan tidak boleh dipakai untuk merge transaksi/stok/finance/produksi.
+- Restore penuh tetap hanya melalui File Backup IMS `.imsbackup` yang valid checksum/integrity.
 
 ## Dashboard/report contract
 
@@ -76,7 +90,8 @@ Restore resmi harus:
 - [ ] Login lokal sukses.
 - [ ] CRUD master data pilot sukses.
 - [ ] Stock adjustment commit sukses dan audit log tercatat.
-- [ ] Backup manual sukses.
+- [ ] Backup manual sukses dan menghasilkan `.imsbackup` compact.
+- [ ] Download backup dan import `.imsbackup` sukses.
 - [ ] Restore preview sukses.
 - [ ] Restore execute butuh keyword confirm.
 - [ ] Dashboard/report tidak white screen.

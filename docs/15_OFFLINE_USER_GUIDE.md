@@ -27,21 +27,21 @@ Jangan copy database runtime saat backend masih aktif. Backup harus dibuat lewat
 
 ## Format backup resmi
 
-Backup IMS memakai format:
+Backup IMS memakai satu file khusus:
 
 ```text
-IMS-BF-BACKUP-YYYYMMDD-HHMMSS-SV{schemaVersion}-{type}.imsbak.zip
+IMS-BF-BACKUP-YYYYMMDD-HHMMSS-SV{schemaVersion}-{type}.imsbackup
 ```
 
 Contoh:
 
 ```text
-IMS-BF-BACKUP-20260604-223015-SV4-manual.imsbak.zip
-IMS-BF-BACKUP-20260604-080000-SV4-daily.imsbak.zip
-IMS-BF-BACKUP-20260604-225000-SV4-pre-restore.imsbak.zip
+IMS-BF-BACKUP-20260604-223015-SV4-manual.imsbackup
+IMS-BF-BACKUP-20260604-080000-SV4-daily.imsbackup
+IMS-BF-BACKUP-20260604-225000-SV4-pre-restore.imsbackup
 ```
 
-Isi paket backup:
+File `.imsbackup` adalah paket compact resmi IMS. Secara internal isinya:
 
 ```text
 database.sqlite
@@ -51,6 +51,8 @@ README_RESTORE.txt
 ```
 
 `manifest.json` berisi schema version, ukuran database, checksum, hasil integrity check, jenis backup, dan ringkasan jumlah data per tabel. Restore hanya boleh menerima backup yang lolos validasi.
+
+Backup lama `.imsbak.zip` tetap didukung sebagai legacy restore agar backup yang sudah pernah dibuat tetap bisa dipakai.
 
 
 ## Maintenance & Backup Center
@@ -75,7 +77,8 @@ Aturan:
 1. Auto backup harian hanya dibuat satu kali per hari.
 2. Backup manual tetap bisa dibuat kapan saja dari `Maintenance & Backup Center`.
 3. Sistem otomatis membuat backup `pre-restore` sebelum restore berjalan.
-4. Backup harus berstatus `verified` sebelum dianggap aman.
+4. Setelah restore selesai, backup `pre-restore` otomatis didaftarkan ulang agar tetap muncul di daftar backup untuk rollback jika restore ternyata salah.
+5. Backup harus berstatus `verified` sebelum dianggap aman.
 
 ## Backup manual dari UI
 
@@ -94,9 +97,11 @@ Buat Backup Sekarang
 Setelah berhasil, cek:
 
 - status backup: `verified`
+- nama file berakhir `.imsbackup`
 - ukuran file tidak 0 B
 - schema version muncul
 - integrity check: `ok`
+- tombol `Download` bisa menyimpan file backup ke folder pilihan user
 
 ## Backup eksternal
 
@@ -133,14 +138,29 @@ Alur restore:
 4. Ketik keyword:
 
 ```text
-RESTORE SQLITE
+RESTORE DATABASE
 ```
 
-5. Klik `Restore Database SQLite`.
+5. Klik `Restore Database`.
 6. Sistem otomatis membuat backup `pre-restore` sebelum overwrite database aktif.
 7. Setelah restore berhasil, refresh aplikasi dan login ulang bila perlu.
 
 Jangan restore dengan cara copy manual `database.sqlite` ke folder `data/` saat backend aktif.
+
+## Import backup dari flashdisk
+
+Jika backup berasal dari komputer lama, flashdisk, harddisk eksternal, atau folder download:
+
+1. Buka tab `Restore`.
+2. Klik `Pilih File Backup IMS`.
+3. Pilih file `.imsbackup`.
+4. Klik `Import & Validasi Backup`.
+5. Setelah import berhasil, file akan masuk daftar backup resmi.
+6. Klik `Preview Restore`.
+7. Jika preview valid, ketik `RESTORE DATABASE`, lalu jalankan restore.
+
+Import backup belum mengubah data. Data baru berubah setelah `Restore Database` dijalankan dan berhasil. Restore adalah full replace database aktif, bukan merge/tambah data.
+
 
 ## Checklist auto/manual Maintenance Center
 
@@ -153,6 +173,7 @@ Checklist otomatis terisi jika sistem bisa membuktikan kondisinya, misalnya:
 - backup verified hari ini tersedia;
 - auto backup harian tersedia;
 - backup terakhir valid untuk pemulihan;
+- file backup hasil import sudah lolos validasi;
 - restore guarded dan keyword aktif;
 - status modul SQLite terbaca.
 
@@ -191,6 +212,7 @@ Sesekali lakukan preview restore pada backup terbaru. Jangan langsung restore da
 Minimal cek:
 
 - file backup ditemukan;
+- file `.imsbackup` bisa didownload/import;
 - manifest tersedia;
 - checksum valid;
 - integrity check `ok`;
@@ -214,7 +236,7 @@ Jangan lanjut restore. Buat backup baru atau pilih backup lain yang statusnya `v
 
 ### File backup tidak ditemukan
 
-Kemungkinan file backup dipindah/dihapus dari folder `backups/sqlite/`. Kembalikan file backup ke folder semula atau buat backup baru.
+Kemungkinan file backup dipindah/dihapus dari folder `backups/sqlite/`. Gunakan tombol Import File Backup IMS untuk mendaftarkan file `.imsbackup` dari luar folder, kembalikan file backup ke folder semula, atau buat backup baru.
 
 ### Setelah restore tampilan belum berubah
 

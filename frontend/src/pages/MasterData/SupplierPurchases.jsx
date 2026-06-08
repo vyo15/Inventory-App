@@ -42,6 +42,7 @@ import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
 import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
+import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
 import { DataRefreshIndicator, getDataTableEmptyText } from '../../components/Layout/Feedback/DataLoadingState';
 import { listenRawMaterials } from '../../services/MasterData/rawMaterialsService';
 import { listenPurchaseRecords } from '../../services/Transaksi/purchasesService';
@@ -919,6 +920,10 @@ const SupplierPurchases = () => {
         width={980}
       >
         <Form form={form} layout="vertical" onFinish={handleSaveSupplier}>
+          <ResponsiveFormSection
+            title="Data Supplier"
+            subtitle="Atur identitas supplier dan katalog restock tanpa mengubah relasi pembelian."
+          >
           {/* =====================================================
               SECTION: Supplier code disabled/read-only field — AKTIF / GUARDED
               Fungsi:
@@ -1243,6 +1248,7 @@ const SupplierPurchases = () => {
             )}
             </Form.List>
           ) : null}
+          </ResponsiveFormSection>
         </Form>
       </Modal>
 

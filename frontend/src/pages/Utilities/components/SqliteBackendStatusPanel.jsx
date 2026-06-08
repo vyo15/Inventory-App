@@ -1,16 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  App as AntdApp,
   Button,
   Card,
-  Col,
   Descriptions,
-  Row,
   Space,
-  Statistic,
   Tag,
   Typography,
-  message,
 } from "antd";
 import {
   ApiOutlined,
@@ -32,6 +29,7 @@ const { Text } = Typography;
 const formatNumber = (value) => Number(value || 0).toLocaleString("id-ID");
 
 const SqliteBackendStatusPanel = () => {
+  const { message: appMessage } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
   const [health, setHealth] = useState(null);
@@ -42,6 +40,14 @@ const SqliteBackendStatusPanel = () => {
   const isOnline = Boolean(health?.ok && status?.ok && !errorMessage);
   const statusData = status?.data || {};
   const healthData = health?.data || {};
+  const statusStats = useMemo(() => [
+    { key: "schema", label: "Versi DB", value: statusData.schemaVersion || "-", icon: <DatabaseOutlined /> },
+    { key: "users", label: "User", value: formatNumber(statusData.userCount) },
+    { key: "customers", label: "Customer", value: formatNumber(statusData.customerCount) },
+    { key: "categories", label: "Kategori", value: formatNumber(statusData.categoryCount) },
+    { key: "suppliers", label: "Supplier", value: formatNumber(statusData.supplierCount) },
+    { key: "backups", label: "Backup", value: formatNumber(statusData.backupCount), icon: <HddOutlined /> },
+  ], [statusData]);
 
   const refreshStatus = useCallback(async ({ showSuccess = false } = {}) => {
     setLoading(true);
@@ -53,16 +59,16 @@ const SqliteBackendStatusPanel = () => {
       ]);
       setHealth(nextHealth);
       setStatus(nextStatus);
-      if (showSuccess) message.success("Status layanan lokal diperbarui.");
+      if (showSuccess) appMessage.success("Status layanan lokal diperbarui.");
     } catch (error) {
       setHealth(null);
       setStatus(null);
       setErrorMessage(error?.message || "Layanan lokal belum bisa diakses.");
-      if (showSuccess) message.error(error?.message || "Layanan lokal belum bisa diakses.");
+      if (showSuccess) appMessage.error(error?.message || "Layanan lokal belum bisa diakses.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [appMessage]);
 
   useEffect(() => {
     refreshStatus();
@@ -72,10 +78,10 @@ const SqliteBackendStatusPanel = () => {
     setBackupLoading(true);
     try {
       const result = await createSqliteBackendBackup();
-      message.success(result?.message || "Backup database berhasil dibuat.");
+      appMessage.success(result?.message || "Backup database berhasil dibuat.");
       await refreshStatus();
     } catch (error) {
-      message.error(error?.message || "Backup database gagal.");
+      appMessage.error(error?.message || "Backup database gagal.");
     } finally {
       setBackupLoading(false);
     }
@@ -114,46 +120,22 @@ const SqliteBackendStatusPanel = () => {
           }
         />
 
-        <Row gutter={[12, 12]}>
-          <Col xs={12} md={4}>
-            <Card size="small" className="offline-db-status-card">
-              <Statistic title="Versi DB" value={statusData.schemaVersion || "-"} prefix={<DatabaseOutlined />} />
-            </Card>
-          </Col>
-          <Col xs={12} md={4}>
-            <Card size="small" className="offline-db-status-card">
-              <Statistic title="User" value={formatNumber(statusData.userCount)} />
-            </Card>
-          </Col>
-          <Col xs={12} md={4}>
-            <Card size="small" className="offline-db-status-card">
-              <Statistic title="Customer" value={formatNumber(statusData.customerCount)} />
-            </Card>
-          </Col>
-          <Col xs={12} md={4}>
-            <Card size="small" className="offline-db-status-card">
-              <Statistic title="Kategori" value={formatNumber(statusData.categoryCount)} />
-            </Card>
-          </Col>
-          <Col xs={12} md={4}>
-            <Card size="small" className="offline-db-status-card">
-              <Statistic title="Supplier" value={formatNumber(statusData.supplierCount)} />
-            </Card>
-          </Col>
-          <Col xs={12} md={4}>
-            <Card size="small" className="offline-db-status-card">
-              <Statistic title="Backup" value={formatNumber(statusData.backupCount)} prefix={<HddOutlined />} />
-            </Card>
-          </Col>
-        </Row>
+        <div className="offline-db-mini-stat-grid">
+          {statusStats.map((item) => (
+            <div key={item.key} className="offline-db-mini-stat">
+              <Text type="secondary">{item.label}</Text>
+              <Text strong>{item.icon ? <Space size={6}>{item.icon}<span>{item.value}</span></Space> : item.value}</Text>
+            </div>
+          ))}
+        </div>
 
         <Descriptions size="small" bordered column={{ xs: 1, md: 2 }}>
           <Descriptions.Item label="Alamat Aplikasi">{baseUrl}</Descriptions.Item>
           <Descriptions.Item label="Status Layanan">{healthData.service || healthData.phase || "layanan lokal"}</Descriptions.Item>
-          <Descriptions.Item label="Lokasi Data" span={2}>
+          <Descriptions.Item label="Lokasi Data" span={{ xs: 1, md: 2 }}>
             <Text copyable ellipsis style={{ maxWidth: "100%" }}>{statusData.dbPath || healthData.dbPath || "-"}</Text>
           </Descriptions.Item>
-          <Descriptions.Item label="Lokasi Backup" span={2}>
+          <Descriptions.Item label="Lokasi Backup" span={{ xs: 1, md: 2 }}>
             <Text copyable ellipsis style={{ maxWidth: "100%" }}>{statusData.backupDir || "-"}</Text>
           </Descriptions.Item>
         </Descriptions>

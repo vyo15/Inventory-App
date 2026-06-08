@@ -2,21 +2,28 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
+const zlib = require("zlib");
 const sqlite3 = require("sqlite3");
 const { open } = require("sqlite");
 const env = require("../config/env");
 const { getDb, getDbPath } = require("../db/connection");
 const { createAuditLog } = require("./auditLog");
 
-const BACKUP_FORMAT = "imsbak";
-const BACKUP_FORMAT_VERSION = 1;
-const BACKUP_FILE_SUFFIX = ".imsbak.zip";
+const BACKUP_FORMAT = "imsbackup";
+const LEGACY_BACKUP_FORMAT = "imsbak";
+const SUPPORTED_BACKUP_FORMATS = new Set([BACKUP_FORMAT, LEGACY_BACKUP_FORMAT]);
+const BACKUP_FORMAT_VERSION = 2;
+const BACKUP_FILE_SUFFIX = ".imsbackup";
+const LEGACY_BACKUP_FILE_SUFFIX = ".imsbak.zip";
+const SUPPORTED_BACKUP_FILE_SUFFIXES = [BACKUP_FILE_SUFFIX, LEGACY_BACKUP_FILE_SUFFIX];
 const BACKUP_TYPES = new Set(["manual", "daily", "pre-update", "pre-restore", "pre-reset", "pre-import", "test"]);
 const RESTORE_CONFIRM_KEYWORD = "RESTORE DATABASE";
 const SQLITE_PACKAGE_DATABASE_FILE = "database.sqlite";
 const SQLITE_PACKAGE_MANIFEST_FILE = "manifest.json";
 const SQLITE_PACKAGE_CHECKSUM_FILE = "checksum.sha256";
 const SQLITE_PACKAGE_README_FILE = "README_RESTORE.txt";
+const ZIP_COMPRESSION_STORE = 0;
+const ZIP_COMPRESSION_DEFLATE = 8;
 
 const crcTable = (() => {
   const table = new Array(256);
@@ -54,6 +61,16 @@ const normalizeBackupType = (value) => {
 
 const normalizeBackupFilename = (filename) => path.basename(String(filename || "").trim());
 
+const sanitizeImportedBackupFilename = (filename) => {
+  const baseName = normalizeBackupFilename(filename).replace(/[^A-Za-z0-9._() -]/g, "-");
+  return baseName.replace(/\s+/g, " ").trim();
+};
+
+const isSupportedBackupPackageName = (filename = "") => {
+  const normalized = String(filename || "").toLowerCase();
+  return SUPPORTED_BACKUP_FILE_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
+};
+
 const getBackupTypeDir = (type) => {
   const backupType = normalizeBackupType(type);
   const targetDir = path.join(env.backupDir, backupType);
@@ -76,7 +93,27 @@ const getDosDateTime = (date = new Date()) => {
   return { dosTime, dosDate };
 };
 
-const createStoredZip = (entries, outputPath) => {
+const getZipEntryBuffers = (entry, compressionMethod) => {
+  const dataBuffer = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(String(entry.data || ""), "utf8");
+  const compressedBuffer = compressionMethod === ZIP_COMPRESSION_DEFLATE
+    ? zlib.deflateRawSync(dataBuffer, { level: 9 })
+    : dataBuffer;
+
+  return {
+    dataBuffer,
+    compressedBuffer,
+    crc: crc32(dataBuffer),
+    uncompressedSize: dataBuffer.length,
+    compressedSize: compressedBuffer.length,
+  };
+};
+
+const createBackupPackage = (entries, outputPath, options = {}) => {
+  const compressionMethod = options.compressionMethod ?? ZIP_COMPRESSION_DEFLATE;
+  if (![ZIP_COMPRESSION_STORE, ZIP_COMPRESSION_DEFLATE].includes(compressionMethod)) {
+    throw new Error("Metode kompresi backup tidak didukung.");
+  }
+
   const localParts = [];
   const centralParts = [];
   let offset = 0;
@@ -84,35 +121,34 @@ const createStoredZip = (entries, outputPath) => {
 
   for (const entry of entries) {
     const nameBuffer = Buffer.from(entry.name, "utf8");
-    const dataBuffer = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(String(entry.data || ""), "utf8");
-    const crc = crc32(dataBuffer);
+    const { compressedBuffer, crc, uncompressedSize, compressedSize } = getZipEntryBuffers(entry, compressionMethod);
 
     const localHeader = Buffer.alloc(30);
     localHeader.writeUInt32LE(0x04034b50, 0);
     localHeader.writeUInt16LE(20, 4);
     localHeader.writeUInt16LE(0, 6);
-    localHeader.writeUInt16LE(0, 8);
+    localHeader.writeUInt16LE(compressionMethod, 8);
     localHeader.writeUInt16LE(dosTime, 10);
     localHeader.writeUInt16LE(dosDate, 12);
     localHeader.writeUInt32LE(crc, 14);
-    localHeader.writeUInt32LE(dataBuffer.length, 18);
-    localHeader.writeUInt32LE(dataBuffer.length, 22);
+    localHeader.writeUInt32LE(compressedSize, 18);
+    localHeader.writeUInt32LE(uncompressedSize, 22);
     localHeader.writeUInt16LE(nameBuffer.length, 26);
     localHeader.writeUInt16LE(0, 28);
 
-    localParts.push(localHeader, nameBuffer, dataBuffer);
+    localParts.push(localHeader, nameBuffer, compressedBuffer);
 
     const centralHeader = Buffer.alloc(46);
     centralHeader.writeUInt32LE(0x02014b50, 0);
     centralHeader.writeUInt16LE(20, 4);
     centralHeader.writeUInt16LE(20, 6);
     centralHeader.writeUInt16LE(0, 8);
-    centralHeader.writeUInt16LE(0, 10);
+    centralHeader.writeUInt16LE(compressionMethod, 10);
     centralHeader.writeUInt16LE(dosTime, 12);
     centralHeader.writeUInt16LE(dosDate, 14);
     centralHeader.writeUInt32LE(crc, 16);
-    centralHeader.writeUInt32LE(dataBuffer.length, 20);
-    centralHeader.writeUInt32LE(dataBuffer.length, 24);
+    centralHeader.writeUInt32LE(compressedSize, 20);
+    centralHeader.writeUInt32LE(uncompressedSize, 24);
     centralHeader.writeUInt16LE(nameBuffer.length, 28);
     centralHeader.writeUInt16LE(0, 30);
     centralHeader.writeUInt16LE(0, 32);
@@ -122,7 +158,7 @@ const createStoredZip = (entries, outputPath) => {
     centralHeader.writeUInt32LE(offset, 42);
 
     centralParts.push(centralHeader, nameBuffer);
-    offset += localHeader.length + nameBuffer.length + dataBuffer.length;
+    offset += localHeader.length + nameBuffer.length + compressedBuffer.length;
   }
 
   const centralOffset = offset;
@@ -140,7 +176,7 @@ const createStoredZip = (entries, outputPath) => {
   fs.writeFileSync(outputPath, Buffer.concat([...localParts, centralBuffer, endHeader]));
 };
 
-const readStoredZipEntry = (zipPath, targetName) => {
+const readBackupPackageEntry = (zipPath, targetName) => {
   const buffer = fs.readFileSync(zipPath);
   const minEndOffset = Math.max(0, buffer.length - 22 - 65535);
   let endOffset = -1;
@@ -150,7 +186,7 @@ const readStoredZipEntry = (zipPath, targetName) => {
       break;
     }
   }
-  if (endOffset < 0) throw new Error("Format backup tidak valid: EOCD ZIP tidak ditemukan.");
+  if (endOffset < 0) throw new Error("Format backup tidak valid: EOCD package tidak ditemukan.");
 
   const entryCount = buffer.readUInt16LE(endOffset + 10);
   const centralOffset = buffer.readUInt32LE(endOffset + 16);
@@ -159,7 +195,9 @@ const readStoredZipEntry = (zipPath, targetName) => {
   for (let i = 0; i < entryCount; i += 1) {
     if (buffer.readUInt32LE(pointer) !== 0x02014b50) throw new Error("Format backup tidak valid: central directory rusak.");
     const compression = buffer.readUInt16LE(pointer + 10);
+    const expectedCrc = buffer.readUInt32LE(pointer + 16);
     const compressedSize = buffer.readUInt32LE(pointer + 20);
+    const uncompressedSize = buffer.readUInt32LE(pointer + 24);
     const fileNameLength = buffer.readUInt16LE(pointer + 28);
     const extraLength = buffer.readUInt16LE(pointer + 30);
     const commentLength = buffer.readUInt16LE(pointer + 32);
@@ -167,12 +205,25 @@ const readStoredZipEntry = (zipPath, targetName) => {
     const entryName = buffer.slice(pointer + 46, pointer + 46 + fileNameLength).toString("utf8");
 
     if (entryName === targetName) {
-      if (compression !== 0) throw new Error("Format backup tidak didukung: entry ZIP terkompresi.");
+      if (![ZIP_COMPRESSION_STORE, ZIP_COMPRESSION_DEFLATE].includes(compression)) {
+        throw new Error("Format backup tidak didukung: metode kompresi package belum didukung.");
+      }
       if (buffer.readUInt32LE(localOffset) !== 0x04034b50) throw new Error("Format backup tidak valid: local header rusak.");
       const localNameLength = buffer.readUInt16LE(localOffset + 26);
       const localExtraLength = buffer.readUInt16LE(localOffset + 28);
       const dataOffset = localOffset + 30 + localNameLength + localExtraLength;
-      return buffer.slice(dataOffset, dataOffset + compressedSize);
+      const compressedBuffer = buffer.slice(dataOffset, dataOffset + compressedSize);
+      const dataBuffer = compression === ZIP_COMPRESSION_DEFLATE
+        ? zlib.inflateRawSync(compressedBuffer)
+        : compressedBuffer;
+
+      if (dataBuffer.length !== uncompressedSize) {
+        throw new Error("Format backup tidak valid: ukuran entry tidak sesuai.");
+      }
+      if (crc32(dataBuffer) !== expectedCrc) {
+        throw new Error("Format backup tidak valid: CRC entry tidak sesuai.");
+      }
+      return dataBuffer;
     }
 
     pointer += 46 + fileNameLength + extraLength + commentLength;
@@ -240,6 +291,8 @@ const buildReadme = (manifest) => [
   `Tanggal backup: ${manifest.createdAt}`,
   `Jenis backup: ${manifest.backupType}`,
   `Schema version: ${manifest.schemaVersion}`,
+  `Format backup: ${manifest.backupFormat} v${manifest.backupFormatVersion}`,
+  `Kompresi: ${manifest.compression || "deflate"}`,
   "",
   "Restore hanya boleh dilakukan lewat UI resmi IMS.",
   "Jangan copy file database langsung ke folder data saat aplikasi aktif.",
@@ -285,6 +338,9 @@ const createOfficialSqliteBackup = async (db, options = {}) => {
       checksumAlgorithm: "sha256",
       databaseSha256,
       checksumFile: SQLITE_PACKAGE_CHECKSUM_FILE,
+      compression: "deflate",
+      packageExtension: BACKUP_FILE_SUFFIX,
+      legacyRestoreSupported: LEGACY_BACKUP_FILE_SUFFIX,
       integrityCheck: validation.integrityCheck,
       foreignKeyCheck: validation.foreignKeyCheck,
       createdBy: actor,
@@ -294,12 +350,12 @@ const createOfficialSqliteBackup = async (db, options = {}) => {
       tables: validation.tables,
     };
 
-    createStoredZip([
+    createBackupPackage([
       { name: SQLITE_PACKAGE_DATABASE_FILE, data: fs.readFileSync(backupDbPath) },
       { name: SQLITE_PACKAGE_MANIFEST_FILE, data: JSON.stringify(manifest, null, 2) },
       { name: SQLITE_PACKAGE_CHECKSUM_FILE, data: `${databaseSha256}  ${SQLITE_PACKAGE_DATABASE_FILE}\n` },
       { name: SQLITE_PACKAGE_README_FILE, data: buildReadme(manifest) },
-    ], packagePath);
+    ], packagePath, { compressionMethod: ZIP_COMPRESSION_DEFLATE });
 
     fs.writeFileSync(`${packagePath}.manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
 
@@ -330,6 +386,9 @@ const createOfficialSqliteBackup = async (db, options = {}) => {
         foreignKeyCheck: manifest.foreignKeyCheck,
         checksumAlgorithm: manifest.checksumAlgorithm,
         databaseSha256: manifest.databaseSha256,
+        backupFormat: manifest.backupFormat,
+        backupFormatVersion: manifest.backupFormatVersion,
+        compression: manifest.compression,
       },
     });
 
@@ -353,8 +412,8 @@ const readBackupManifest = (backupPath) => {
   if (fs.existsSync(sidecarPath)) {
     return JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
   }
-  if (backupPath.endsWith(BACKUP_FILE_SUFFIX) && fs.existsSync(backupPath)) {
-    const manifestBuffer = readStoredZipEntry(backupPath, SQLITE_PACKAGE_MANIFEST_FILE);
+  if (isSupportedBackupPackageName(backupPath) && fs.existsSync(backupPath)) {
+    const manifestBuffer = readBackupPackageEntry(backupPath, SQLITE_PACKAGE_MANIFEST_FILE);
     return manifestBuffer ? JSON.parse(manifestBuffer.toString("utf8")) : null;
   }
   return null;
@@ -390,7 +449,7 @@ const extractBackupDatabaseToTemp = async (backup, tempDir) => {
 
   ensureDir(tempDir);
   const extractedDbPath = path.join(tempDir, SQLITE_PACKAGE_DATABASE_FILE);
-  const isPackage = String(backup.filename || backup.path).endsWith(BACKUP_FILE_SUFFIX);
+  const isPackage = isSupportedBackupPackageName(backup.filename || backup.path);
 
   if (!isPackage) {
     fs.copyFileSync(backup.path, extractedDbPath);
@@ -399,11 +458,11 @@ const extractBackupDatabaseToTemp = async (backup, tempDir) => {
   }
 
   const manifest = readBackupManifest(backup.path);
-  if (!manifest || manifest.backupFormat !== BACKUP_FORMAT) {
+  if (!manifest || !SUPPORTED_BACKUP_FORMATS.has(manifest.backupFormat)) {
     throw new Error("Manifest backup IMS tidak valid atau tidak ditemukan.");
   }
 
-  const databaseBuffer = readStoredZipEntry(backup.path, SQLITE_PACKAGE_DATABASE_FILE);
+  const databaseBuffer = readBackupPackageEntry(backup.path, SQLITE_PACKAGE_DATABASE_FILE);
   if (!databaseBuffer) throw new Error("File database tidak ditemukan di paket backup.");
   fs.writeFileSync(extractedDbPath, databaseBuffer);
 
@@ -417,7 +476,7 @@ const extractBackupDatabaseToTemp = async (backup, tempDir) => {
     throw new Error(`Backup tidak lolos validasi: integrity=${validation.integrityCheck}; foreignKey=${validation.foreignKeyCheck}`);
   }
 
-  return { dbPath: extractedDbPath, manifest, validation, compatibilityPackage: false };
+  return { dbPath: extractedDbPath, manifest, validation, compatibilityPackage: manifest.backupFormat === LEGACY_BACKUP_FORMAT };
 };
 
 const getBackupPreview = async (backup) => {
@@ -445,8 +504,8 @@ const ensureDailyBackupForToday = async () => {
   const db = await getDb();
   const today = safeCompactTimestamp(new Date()).slice(0, 8);
   const existing = await db.get(
-    "SELECT id, filename FROM backup_logs WHERE filename LIKE ? ORDER BY id DESC LIMIT 1",
-    [`IMS-BF-BACKUP-${today}-%-daily${BACKUP_FILE_SUFFIX}`]
+    "SELECT id, filename FROM backup_logs WHERE (filename LIKE ? OR filename LIKE ?) ORDER BY id DESC LIMIT 1",
+    [`IMS-BF-BACKUP-${today}-%-daily${BACKUP_FILE_SUFFIX}`, `IMS-BF-BACKUP-${today}-%-daily${LEGACY_BACKUP_FILE_SUFFIX}`]
   );
   if (existing) return { created: false, existing };
 
@@ -461,14 +520,18 @@ const ensureDailyBackupForToday = async () => {
 
 module.exports = {
   BACKUP_FILE_SUFFIX,
+  LEGACY_BACKUP_FILE_SUFFIX,
   RESTORE_CONFIRM_KEYWORD,
+  SUPPORTED_BACKUP_FILE_SUFFIXES,
   createOfficialSqliteBackup,
   ensureDailyBackupForToday,
   enrichBackupLog,
   enrichBackupLogs,
   extractBackupDatabaseToTemp,
   getBackupPreview,
+  isSupportedBackupPackageName,
   normalizeBackupFilename,
   readBackupManifest,
+  sanitizeImportedBackupFilename,
   validateSqliteFile,
 };

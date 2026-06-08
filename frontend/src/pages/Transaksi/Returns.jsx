@@ -16,6 +16,7 @@ import dayjs from "dayjs";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
+import ResponsiveFormSection from "../../components/Layout/Mobile/ResponsiveFormSection";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
 import {
   buildVariantOptionsFromItem,
@@ -398,6 +399,10 @@ const Returns = () => {
           onFinish={handleSubmitReturn}
           onFinishFailed={(errorInfo) => showFormValidationFeedback(errorInfo, { form })}
         >
+          <ResponsiveFormSection
+            title="Data Retur"
+            subtitle="Pilih item, varian bila ada, lalu isi jumlah barang kembali."
+          >
           <Form.Item
             name="date"
             label="Tanggal"
@@ -542,6 +547,7 @@ const Returns = () => {
           <Form.Item name="note" label="Catatan">
             <Input.TextArea rows={2} />
           </Form.Item>
+          </ResponsiveFormSection>
         </Form>
       </Modal>
     </>

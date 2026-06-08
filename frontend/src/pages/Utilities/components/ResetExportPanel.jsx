@@ -1,6 +1,8 @@
 import React from "react";
-import { Button, Card, Col, Row, Space, Statistic, Tag } from "antd";
+import { Button, Space, Statistic, Tag, Typography } from "antd";
 import { DownloadOutlined, EyeOutlined } from "@ant-design/icons";
+
+const { Text } = Typography;
 
 const ResetExportPanel = ({
   loadingMasterExportPreview,
@@ -11,33 +13,34 @@ const ResetExportPanel = ({
   masterExportPreview,
   lastMasterExport,
 }) => (
-  <Row gutter={[12, 12]}>
-    <Col xs={24}>
-      <Card title="Data Tools: Export Master" size="small" extra={<Tag color="green">Non-destructive</Tag>}>
-        <Space direction="vertical" size={12} style={{ width: "100%" }}>
-          <Space wrap>
-            <Button icon={<EyeOutlined />} loading={loadingMasterExportPreview} onClick={onLoadMasterExportPreview}>
-              Preview Download Export Master
-            </Button>
-            <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={onDownloadMasterExport}>
-              Download Export Master
-            </Button>
-            <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={onDownloadMasterExportChecklist}>
-              Download Checklist
-            </Button>
-          </Space>
-          <Row gutter={[8, 8]}>
-            <Col xs={12} md={8}>
-              <Statistic title="Master" value={masterExportPreview?.summary?.totalRecords || lastMasterExport?.totalRecords || 0} />
-            </Col>
-            <Col xs={12} md={8}>
-              <Statistic title="Warning" value={masterExportPreview?.summary?.warnings || lastMasterExport?.warnings?.length || 0} />
-            </Col>
-          </Row>
+  <div className="reset-export-flat-panel">
+    <div className="reset-export-heading">
+      <div>
+        <Space size={8} wrap>
+          <Text strong>Data Tools: Export Master</Text>
+          <Tag color="green">Non-destructive</Tag>
         </Space>
-      </Card>
-    </Col>
-  </Row>
+        <Text type="secondary">Export membaca master data SQLite secara read-only untuk arsip/audit manual. Restore penuh tetap memakai File Backup IMS.</Text>
+      </div>
+      <Space wrap>
+        <Button icon={<EyeOutlined />} loading={loadingMasterExportPreview} onClick={onLoadMasterExportPreview}>
+          Preview
+        </Button>
+        <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={onDownloadMasterExport}>
+          Export Master
+        </Button>
+        <Button icon={<DownloadOutlined />} loading={loadingMasterExport} onClick={onDownloadMasterExportChecklist}>
+          Checklist
+        </Button>
+      </Space>
+    </div>
+
+    <div className="reset-export-metrics">
+      <Statistic title="Master" value={masterExportPreview?.summary?.totalRecords || lastMasterExport?.totalRecords || 0} />
+      <Statistic title="Opening Stock" value={masterExportPreview?.summary?.openingStockRows || lastMasterExport?.openingStockRows || 0} />
+      <Statistic title="Warning" value={masterExportPreview?.summary?.warnings || lastMasterExport?.warnings?.length || 0} />
+    </div>
+  </div>
 );
 
 export default ResetExportPanel;

@@ -1,61 +1,67 @@
 import React from "react";
-import { Alert, Button, Card, Col, Row, Space, Tag, Typography } from "antd";
+import { Alert, Button, Space, Tag, Typography } from "antd";
 import { DatabaseOutlined, FileSearchOutlined, LockOutlined, SafetyOutlined } from "@ant-design/icons";
 
 const { Text } = Typography;
 
-const ResetDangerZonePanel = ({ loadingAutoDetect, onRunAllAudits }) => (
-  <Card
-    title="Reset Testing / Development"
-    size="small"
-    extra={<Tag color="red">Reset lama nonaktif</Tag>}
-  >
-    <Space direction="vertical" size={12} style={{ width: "100%" }}>
-      <Alert
-        type="warning"
-        showIcon
-        message="Reset testing lama dinonaktifkan pada mode database lokal"
-        description="Pemulihan data utama sekarang wajib lewat Backup & Restore resmi. Reset penghapusan data belum tersedia dan tidak akan diaktifkan tanpa guard layanan lokal, preview, backup otomatis, keyword, serta audit log."
-      />
+const statusItems = [
+  {
+    key: "legacy-reset",
+    title: "Status reset lama",
+    icon: <LockOutlined />,
+    tag: "Nonaktif",
+    color: "red",
+    description: "Service reset lama tidak menjalankan penghapusan data.",
+  },
+  {
+    key: "backup-restore",
+    title: "Recovery utama",
+    icon: <DatabaseOutlined />,
+    tag: "Backup & Restore",
+    color: "green",
+    description: "Gunakan File Backup IMS .imsbackup, preview restore, dan keyword konfirmasi.",
+  },
+  {
+    key: "data-tools",
+    title: "Data tools",
+    icon: <SafetyOutlined />,
+    tag: "Terpisah",
+    color: "blue",
+    description: "Export master/checklist dipisah dari area reset agar aman untuk operasional.",
+  },
+];
 
-      <Row gutter={[12, 12]}>
-        <Col xs={24} md={12} xl={6}>
-          <Card size="small" title="Status Reset Lama" className="reset-maintenance-status-card">
-            <Space direction="vertical" size={8} style={{ width: "100%" }}>
-              <Tag icon={<LockOutlined />} color="red">Nonaktif</Tag>
-              <Text type="secondary">Service reset lama sudah nonaktif dan tidak menjalankan penghapusan data.</Text>
-            </Space>
-          </Card>
-        </Col>
-        <Col xs={24} md={12} xl={6}>
-          <Card size="small" title="Recovery Utama" className="reset-maintenance-status-card">
-            <Space direction="vertical" size={8} style={{ width: "100%" }}>
-              <Tag icon={<DatabaseOutlined />} color="green">Backup & Restore</Tag>
-              <Text type="secondary">Gunakan backup resmi .imsbak.zip, preview restore, dan keyword konfirmasi.</Text>
-            </Space>
-          </Card>
-        </Col>
-        <Col xs={24} md={12} xl={6}>
-          <Card size="small" title="Data Tools" className="reset-maintenance-status-card">
-            <Space direction="vertical" size={8} style={{ width: "100%" }}>
-              <Tag icon={<SafetyOutlined />} color="blue">Pindah ke Data Tools</Tag>
-              <Text type="secondary">Export master/checklist dipisah dari area reset agar aman untuk operasional.</Text>
-            </Space>
-          </Card>
-        </Col>
-        <Col xs={24} md={12} xl={6}>
-          <Card size="small" title="Langkah Aman" className="reset-maintenance-status-card">
-            <Space direction="vertical" size={8} style={{ width: "100%" }}>
-              <Text type="secondary">Audit data terlebih dahulu sebelum repair atau restore.</Text>
-              <Button block icon={<FileSearchOutlined />} loading={loadingAutoDetect} onClick={onRunAllAudits}>
-                Jalankan Audit Data
-              </Button>
-            </Space>
-          </Card>
-        </Col>
-      </Row>
-    </Space>
-  </Card>
+const ResetDangerZonePanel = ({ loadingAutoDetect, onRunAllAudits }) => (
+  <div className="reset-danger-flat-panel">
+    <div className="reset-danger-heading">
+      <Space size={8} wrap>
+        <Text strong>Reset Testing / Development</Text>
+        <Tag color="red">Reset lama nonaktif</Tag>
+      </Space>
+      <Button icon={<FileSearchOutlined />} loading={loadingAutoDetect} onClick={onRunAllAudits}>
+        Jalankan Audit Data
+      </Button>
+    </div>
+
+    <Alert
+      type="warning"
+      showIcon
+      message="Reset testing lama dinonaktifkan pada mode database lokal"
+      description="Pemulihan data utama sekarang wajib lewat Backup & Restore resmi. Reset penghapusan data belum tersedia dan tidak akan diaktifkan tanpa guard layanan lokal, preview, backup otomatis, keyword, serta audit log."
+    />
+
+    <div className="reset-danger-status-grid">
+      {statusItems.map((item) => (
+        <div className="reset-danger-status-item" key={item.key}>
+          <Space size={8} wrap>
+            <Text strong>{item.title}</Text>
+            <Tag icon={item.icon} color={item.color}>{item.tag}</Tag>
+          </Space>
+          <Text type="secondary">{item.description}</Text>
+        </div>
+      ))}
+    </div>
+  </div>
 );
 
 export default ResetDangerZonePanel;

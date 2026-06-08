@@ -1,3 +1,5 @@
+import { getSqliteMasterDataExport } from "../System/sqliteBackendStatusService";
+
 export {
   HPP_COST_BASELINE_DOC_ID,
   HPP_COST_RESET_OPTIONS,
@@ -13,23 +15,27 @@ const maintenanceOnly = (label = "maintenance") => ({
   note: "Maintenance aktif dibatasi ke backup/restore, audit data, repair aman, dan export master.",
 });
 
-export const buildMasterDataExportPayload = async ({ includeOpeningStock = true } = {}) => ({
-  exportMeta: {
-    project: "IMS Bunga Flanel",
-    exportType: "master-data-json",
-    exportedAt: new Date().toISOString(),
-    includeOpeningStock,
-  },
-  summary: {
-    totalCollections: 0,
-    totalRecords: 0,
-    openingStockRows: 0,
-    warnings: 0,
-  },
-  collections: [],
-  openingStockReference: [],
-  warnings: [],
-});
+export const buildMasterDataExportPayload = async ({ includeOpeningStock = true } = {}) => {
+  const response = await getSqliteMasterDataExport({ includeOpeningStock });
+  return response?.data || {
+    exportMeta: {
+      project: "IMS Bunga Flanel",
+      exportType: "master-data-json",
+      dataSource: "sqlite_backend_unavailable",
+      exportedAt: new Date().toISOString(),
+      includeOpeningStock,
+    },
+    summary: {
+      totalCollections: 0,
+      totalRecords: 0,
+      openingStockRows: 0,
+      warnings: 1,
+    },
+    collections: [],
+    openingStockReference: [],
+    warnings: [{ message: "Export data master belum menerima payload dari layanan lokal." }],
+  };
+};
 
 export const getMasterDataExportPreview = async () => ({
   ...maintenanceOnly("export_preview"),

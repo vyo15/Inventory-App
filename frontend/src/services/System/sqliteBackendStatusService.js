@@ -75,6 +75,47 @@ export const getSqliteBackendBackups = async () => fetchSqliteJson("/api/mainten
   headers: getStoredSqliteAuthHeaders(),
 });
 
+export const getSqliteMasterDataExport = async ({ includeOpeningStock = true } = {}) => fetchSqliteJson(
+  `/api/maintenance/master-data-export?includeOpeningStock=${includeOpeningStock ? "true" : "false"}`,
+  { headers: getStoredSqliteAuthHeaders() },
+);
+
+export const downloadSqliteBackendBackup = async (filename) => {
+  const baseUrl = getSqliteBackendBaseUrl();
+  const response = await fetch(`${baseUrl}/api/maintenance/backups/${encodeURIComponent(filename)}/download`, {
+    headers: getStoredSqliteAuthHeaders(),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.message || `Download backup gagal (${response.status})`);
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: decodeURIComponent(response.headers.get("X-IMS-Backup-Filename") || encodeURIComponent(filename)),
+  };
+};
+
+export const importSqliteBackendBackup = async (file) => {
+  const baseUrl = getSqliteBackendBaseUrl();
+  const response = await fetch(`${baseUrl}/api/maintenance/backups/import`, {
+    method: "POST",
+    headers: {
+      ...getStoredSqliteAuthHeaders(),
+      "Content-Type": "application/octet-stream",
+      "X-IMS-Backup-Filename": encodeURIComponent(file?.name || "backup.imsbackup"),
+    },
+    body: file,
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.ok === false) {
+    throw new Error(payload?.message || `Import backup gagal (${response.status})`);
+  }
+
+  return payload;
+};
 
 export const getSqliteModuleRuntimeStatus = async () => fetchSqliteJson("/api/module-runtime-status", {
   headers: getStoredSqliteAuthHeaders(),

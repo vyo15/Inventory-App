@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { MenuOutlined } from "@ant-design/icons";
-import { Button, ConfigProvider, Drawer, Layout } from "antd";
+import { App as AntdApp, Button, ConfigProvider, Drawer, Layout } from "antd";
 import { useLocation } from "react-router-dom";
 import SidebarMenu from "../components/Layout/Sidebar/SidebarMenu";
 import SidebarLogo from "../components/Layout/Sidebar/SidebarLogo";
@@ -146,6 +146,7 @@ const AppLayout = () => {
 
   return (
     <ConfigProvider theme={antdThemeConfig}>
+      <AntdApp component={false}>
       <div className={`app-shell ${isDarkTheme ? "dark" : "light"}`}>
         <Layout className="app-layout">
           <Sider
@@ -231,6 +232,7 @@ const AppLayout = () => {
 
         <ActionResultModalHost />
       </div>
+      </AntdApp>
     </ConfigProvider>
   );
 };

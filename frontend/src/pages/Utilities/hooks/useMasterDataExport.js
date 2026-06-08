@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
-import { message } from "antd";
-import { showActionError, showActionSuccess } from "../../../utils/feedback/actionResultFeedback";
+import { showActionError, showActionInfo, showActionSuccess } from "../../../utils/feedback/actionResultFeedback";
 import {
   buildMasterDataExportPayload,
   getMasterDataExportPreview,
@@ -46,7 +45,7 @@ const useMasterDataExport = () => {
     try {
       setLoadingMasterExportPreview(true);
       const result = await getMasterDataExportPreview();
-      setMasterExportPreview(result);
+      setMasterExportPreview(result?.payload || result);
       showActionSuccess("Preview export data pokok berhasil dimuat.");
     } catch (error) {
       console.error(error);
@@ -75,7 +74,7 @@ const useMasterDataExport = () => {
         warnings: payload.warnings,
       });
       if (payload.warnings?.length) {
-        message.warning("Export berhasil, tetapi ada collection yang gagal dibaca. Cek warning di section Export.");
+        showActionInfo("Export berhasil, tetapi ada collection yang gagal dibaca. Cek warning di section Export.");
       } else {
         showActionSuccess("Export data pokok JSON berhasil diunduh.");
       }
@@ -91,6 +90,7 @@ const useMasterDataExport = () => {
     try {
       setLoadingMasterExport(true);
       const previewPayload = await getMasterDataExportPreview();
+      const payload = previewPayload?.payload || previewPayload;
       const checklistPayload = {
         exportMeta: {
           project: "IMS Bunga Flanel",
@@ -99,8 +99,8 @@ const useMasterDataExport = () => {
           source: "ResetMaintenanceData",
           notes: "Ringkasan checklist export data pokok; tidak berisi transaksi/log dan tidak bisa direstore otomatis.",
         },
-        summary: previewPayload.summary,
-        warnings: previewPayload.warnings || [],
+        summary: payload.summary,
+        warnings: payload.warnings || [],
         nextSteps: [
           "Review master product/raw material/semi finished/supplier/customer/BOM/step.",
           "Jangan import transaksi/log lama sebagai default jika logic baru berubah.",
@@ -109,13 +109,13 @@ const useMasterDataExport = () => {
         ],
       };
       downloadJsonPayload(checklistPayload, buildMasterExportFilename());
-      setMasterExportPreview(previewPayload);
+      setMasterExportPreview(payload);
       setLastMasterExport({
         exportedAt: checklistPayload.exportMeta.exportedAt,
-        totalCollections: previewPayload.summary?.totalCollections || 0,
-        totalRecords: previewPayload.summary?.totalRecords || 0,
+        totalCollections: payload.summary?.totalCollections || 0,
+        totalRecords: payload.summary?.totalRecords || 0,
         openingStockRows: 0,
-        warnings: previewPayload.warnings || [],
+        warnings: payload.warnings || [],
         includeOpeningStock: false,
       });
       showActionSuccess("Export Ringkasan Checklist JSON berhasil diunduh.");

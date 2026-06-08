@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Col, Descriptions, Empty, Row, Space, Tag, Timeline, Typography, message } from "antd";
+import { Alert, App as AntdApp, Button, Card, Col, Descriptions, Empty, Row, Space, Tag, Timeline, Typography } from "antd";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
 import { DatabaseOutlined, ReloadOutlined, SafetyOutlined, SwapOutlined } from "@ant-design/icons";
 
@@ -66,6 +66,7 @@ const parseSummary = (value) => {
 };
 
 const MaintenanceHistoryPanel = () => {
+  const { message: appMessage } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
   const [backups, setBackups] = useState([]);
   const [restoreLogs, setRestoreLogs] = useState([]);
@@ -79,16 +80,16 @@ const MaintenanceHistoryPanel = () => {
       ]);
       setBackups(backupResult?.data || []);
       setRestoreLogs(restoreLogResult?.data || []);
-      if (showSuccess) message.success("Riwayat maintenance berhasil diperbarui.");
+      if (showSuccess) appMessage.success("Riwayat maintenance berhasil diperbarui.");
     } catch (error) {
       console.error("Gagal memuat riwayat maintenance:", error);
-      message.error(error?.message || "Riwayat maintenance belum bisa dimuat dari layanan lokal.");
+      appMessage.error(error?.message || "Riwayat maintenance belum bisa dimuat dari layanan lokal.");
       setBackups([]);
       setRestoreLogs([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [appMessage]);
 
   useEffect(() => {
     loadHistory();
@@ -100,6 +101,11 @@ const MaintenanceHistoryPanel = () => {
     () => backups.filter((backup) => ["verified", "success"].includes(String(backup.status || "").toLowerCase())).length,
     [backups],
   );
+  const historySummaryItems = [
+    { key: "backup", label: "Backup", value: backups.length, note: "Total backup resmi", icon: <DatabaseOutlined />, color: "green" },
+    { key: "verified", label: "Verified", value: successfulBackups, note: "Status verified/success", icon: <SafetyOutlined />, color: "blue" },
+    { key: "restore", label: "Restore", value: restoreLogs.length, note: "Preview/restore tercatat", icon: <SwapOutlined />, color: "purple" },
+  ];
 
   const restoreTimelineItems = useMemo(() => restoreLogs.slice(0, 8).map((log) => {
     const summary = parseSummary(log.summary_json);
@@ -128,35 +134,15 @@ const MaintenanceHistoryPanel = () => {
         description="Tab ini menampilkan backup dan restore resmi dari layanan lokal. Riwayat reset lama tidak dijadikan sumber utama karena fitur reset lama sudah nonaktif."
       />
 
-      <Row gutter={[12, 12]}>
-        <Col xs={24} md={8}>
-          <Card size="small" className="reset-maintenance-status-card">
-            <Space direction="vertical" size={6}>
-              <Tag icon={<DatabaseOutlined />} color="green">Backup</Tag>
-              <Text strong>{backups.length}</Text>
-              <Text type="secondary">Total backup resmi terbaca</Text>
-            </Space>
-          </Card>
-        </Col>
-        <Col xs={24} md={8}>
-          <Card size="small" className="reset-maintenance-status-card">
-            <Space direction="vertical" size={6}>
-              <Tag icon={<SafetyOutlined />} color="blue">Verified</Tag>
-              <Text strong>{successfulBackups}</Text>
-              <Text type="secondary">Backup dengan status verified/success</Text>
-            </Space>
-          </Card>
-        </Col>
-        <Col xs={24} md={8}>
-          <Card size="small" className="reset-maintenance-status-card">
-            <Space direction="vertical" size={6}>
-              <Tag icon={<SwapOutlined />} color="purple">Restore</Tag>
-              <Text strong>{restoreLogs.length}</Text>
-              <Text type="secondary">Preview/restore tercatat</Text>
-            </Space>
-          </Card>
-        </Col>
-      </Row>
+      <div className="maintenance-history-summary-grid">
+        {historySummaryItems.map((item) => (
+          <div key={item.key} className="maintenance-history-summary-item">
+            <Tag icon={item.icon} color={item.color}>{item.label}</Tag>
+            <Text strong>{item.value}</Text>
+            <Text type="secondary">{item.note}</Text>
+          </div>
+        ))}
+      </div>
 
       <Card
         title="Ringkasan Terakhir"

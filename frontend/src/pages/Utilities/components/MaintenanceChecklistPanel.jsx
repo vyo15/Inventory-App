@@ -1,17 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  App as AntdApp,
   Button,
-  Card,
-  Col,
   Divider,
-  Row,
   Space,
-  Statistic,
   Tag,
   Timeline,
   Typography,
-  message,
 } from "antd";
 import {
   CheckCircleOutlined,
@@ -88,7 +84,7 @@ const getStatusColor = (status) => {
 };
 
 const ChecklistItemCard = ({ item }) => (
-  <Card size="small" className="maintenance-checklist-item">
+  <div className="maintenance-checklist-item">
     <Space direction="vertical" size={6} style={{ width: "100%" }}>
       <Space size={8} wrap>
         <Tag icon={getStatusIcon(item.status)} color={getStatusColor(item.status)}>
@@ -101,10 +97,11 @@ const ChecklistItemCard = ({ item }) => (
       {item.extra ? <Text type="secondary">{item.extra}</Text> : null}
       {item.action ? item.action : null}
     </Space>
-  </Card>
+  </div>
 );
 
 const MaintenanceChecklistPanel = () => {
+  const { message: appMessage } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [backups, setBackups] = useState([]);
@@ -133,17 +130,17 @@ const MaintenanceChecklistPanel = () => {
       setStatus(nextStatus);
       setBackups(nextBackups?.data || []);
       setModuleRuntimeStatus(nextModuleRuntimeStatus);
-      if (showSuccess) message.success("Checklist maintenance berhasil diperbarui.");
+      if (showSuccess) appMessage.success("Checklist maintenance berhasil diperbarui.");
     } catch (error) {
       console.error("Gagal memuat checklist maintenance:", error);
-      message.error(error?.message || "Checklist maintenance belum bisa dimuat dari layanan database lokal.");
+      appMessage.error(error?.message || "Checklist maintenance belum bisa dimuat dari layanan database lokal.");
       setStatus(null);
       setBackups([]);
       setModuleRuntimeStatus(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [appMessage]);
 
   useEffect(() => {
     loadChecklist();
@@ -153,7 +150,7 @@ const MaintenanceChecklistPanel = () => {
     const now = new Date().toISOString();
     if (typeof window !== "undefined") window.localStorage.setItem(storageKey, now);
     setter(now);
-    message.success(successMessage);
+    appMessage.success(successMessage);
   };
 
   const statusData = useMemo(() => status?.data || {}, [status]);
@@ -187,7 +184,7 @@ const MaintenanceChecklistPanel = () => {
       status: statusData.backupFormat && backupPolicy.verifyChecksum && backupPolicy.verifyIntegrityCheck ? "done" : "pending",
       statusLabel: statusData.backupFormat && backupPolicy.verifyChecksum && backupPolicy.verifyIntegrityCheck ? "Sesuai" : "Perlu cek",
       title: "Format backup resmi aktif",
-      description: "Backup memakai paket .imsbak.zip dengan manifest, checksum, dan integrity check.",
+      description: "Backup memakai File Backup IMS .imsbackup compact dengan manifest, checksum, dan integrity check.",
       extra: statusData.backupFormat || "Format backup belum terbaca dari layanan lokal.",
     },
     {
@@ -279,6 +276,12 @@ const MaintenanceChecklistPanel = () => {
   const autoDoneCount = autoItems.filter((item) => item.status === "done").length;
   const manualDoneCount = manualItems.filter((item) => item.status === "done").length;
   const criticalIssues = autoItems.filter((item) => item.status === "failed").length;
+  const summaryItems = [
+    { key: "auto", label: "Auto Sesuai", value: `${autoDoneCount} / ${autoItems.length}`, icon: <SafetyOutlined /> },
+    { key: "manual", label: "Manual Selesai", value: `${manualDoneCount} / ${manualItems.length}`, icon: <CheckCircleOutlined /> },
+    { key: "backup", label: "Backup Verified", value: backups.filter(isVerifiedBackup).length, icon: <HddOutlined /> },
+    { key: "critical", label: "Issue Kritis", value: criticalIssues, icon: <CloseCircleOutlined /> },
+  ];
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -289,54 +292,44 @@ const MaintenanceChecklistPanel = () => {
         description="Item auto akan terisi sendiri jika layanan lokal, backup, manifest, checksum, restore guard, dan status modul sudah sesuai. Item manual tetap perlu konfirmasi user karena tidak bisa dibuktikan sistem."
       />
 
-      <Row gutter={[12, 12]}>
-        <Col xs={12} md={6}>
-          <Card size="small">
-            <Statistic title="Auto Sesuai" value={autoDoneCount} suffix={`/ ${autoItems.length}`} prefix={<SafetyOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card size="small">
-            <Statistic title="Manual Selesai" value={manualDoneCount} suffix={`/ ${manualItems.length}`} prefix={<CheckCircleOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card size="small">
-            <Statistic title="Backup Verified" value={backups.filter(isVerifiedBackup).length} prefix={<HddOutlined />} />
-          </Card>
-        </Col>
-        <Col xs={12} md={6}>
-          <Card size="small">
-            <Statistic title="Issue Kritis" value={criticalIssues} prefix={<CloseCircleOutlined />} />
-          </Card>
-        </Col>
-      </Row>
+      <div className="maintenance-checklist-summary-grid">
+        {summaryItems.map((item) => (
+          <div key={item.key} className="maintenance-checklist-summary-item">
+            <Text type="secondary">{item.label}</Text>
+            <Text strong><Space size={6}>{item.icon}<span>{item.value}</span></Space></Text>
+          </div>
+        ))}
+      </div>
 
-      <Card
-        size="small"
-        title="Checklist Auto"
-        extra={<Button size="small" icon={<ReloadOutlined />} loading={loading} onClick={() => loadChecklist({ showSuccess: true })}>Refresh</Button>}
-      >
-        <Row gutter={[12, 12]}>
+      <div className="maintenance-checklist-section">
+        <div className="maintenance-checklist-section-heading">
+          <Text strong>Checklist Auto</Text>
+          <Button size="small" icon={<ReloadOutlined />} loading={loading} onClick={() => loadChecklist({ showSuccess: true })}>Refresh</Button>
+        </div>
+        <div className="maintenance-checklist-grid">
           {autoItems.map((item) => (
-            <Col xs={24} md={12} xl={8} key={item.key}>
+            <div key={item.key}>
               <ChecklistItemCard item={item} />
-            </Col>
+            </div>
           ))}
-        </Row>
-      </Card>
+        </div>
+      </div>
 
-      <Card size="small" title="Checklist Manual">
-        <Row gutter={[12, 12]}>
+      <div className="maintenance-checklist-section">
+        <div className="maintenance-checklist-section-heading">
+          <Text strong>Checklist Manual</Text>
+        </div>
+        <div className="maintenance-checklist-grid">
           {manualItems.map((item) => (
-            <Col xs={24} md={12} xl={8} key={item.key}>
+            <div key={item.key}>
               <ChecklistItemCard item={item} />
-            </Col>
+            </div>
           ))}
-        </Row>
-      </Card>
+        </div>
+      </div>
 
-      <Card size="small" title="Urutan Aman Saat Restore / Maintenance Besar">
+      <div className="maintenance-checklist-section">
+        <Text strong>Urutan Aman Saat Restore / Maintenance Besar</Text>
         <Timeline
           items={[
             { color: latestVerifiedBackup ? "green" : "red", children: "Pastikan ada backup verified terbaru." },
@@ -346,7 +339,7 @@ const MaintenanceChecklistPanel = () => {
             { color: restoreUnderstoodAgeDays !== null && restoreUnderstoodAgeDays <= 1 ? "green" : "orange", children: "Pahami dampak restore, lalu ketik keyword konfirmasi hanya jika benar-benar diperlukan." },
           ]}
         />
-      </Card>
+      </div>
 
       <Divider style={{ margin: 0 }} />
       <Text type="secondary">

@@ -226,6 +226,8 @@ Detail drawer dipakai untuk membaca data, bukan untuk menggantikan dokumentasi f
 ## Standar Form Drawer dan Modal
 
 - Form harus fokus ke input dan keputusan user.
+- Form operasional panjang yang belum memakai `PageFormModal` harus minimal membungkus field utama dengan `ResponsiveFormSection` agar mobile menjadi satu kolom tanpa mengubah submit handler.
+- `ResponsiveFormSection` boleh dipakai di dalam `Drawer` atau `Modal` existing untuk UI-only standardization. Jangan mengganti `Drawer`/`Modal` custom jika footer, extra action, atau validation flow masih spesifik halaman.
 - Helper text maksimal satu kalimat pendek per field/section.
 - Jangan menaruh penjelasan fungsi menu atau flow panjang di dalam form.
 - Label field harus cukup jelas tanpa paragraf tambahan.
