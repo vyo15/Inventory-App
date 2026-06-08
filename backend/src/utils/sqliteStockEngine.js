@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { createAuditLog } = require("./auditLog");
+const { safeJsonParse } = require("./jsonUtils");
 
 const SOURCE_TABLES = Object.freeze({
   product: "products",
@@ -27,14 +28,6 @@ const toInteger = (value = 0) => {
 const normalizeText = (value) => String(value ?? "").trim();
 const nowIso = () => new Date().toISOString();
 
-const safeJsonParse = (value, fallback = {}) => {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value);
-  } catch (_error) {
-    return fallback;
-  }
-};
 
 const getTableForSourceType = (sourceType = "") => {
   const tableName = SOURCE_TABLES[String(sourceType || "").trim().toLowerCase()];

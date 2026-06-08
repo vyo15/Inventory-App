@@ -3,6 +3,11 @@ PATCH A-B NOTE — 2026-06-02:
 Dokumen ini adalah arsip historis Batch offline database browser arsip. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser arsip, sync queue arsip, conflict resolver, atau backup JSON storage browser arsip dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
+<!--
+PATCH CLEANUP NOTE — 2026-06-08:
+Referensi source aktif diselaraskan ke arsitektur SQLite sidecar. Path storage browser lama dihapus dari daftar validasi agar tidak dianggap runtime aktif.
+-->
+
 # Offline Product / Raw Material / Semi Finished Contract — Batch 29–30
 
 Status: **ARSIP HISTORIS / SUPERSEDED BY SQLITE RUNTIME / JANGAN DIPAKAI SEBAGAI INSTRUKSI AKTIF**.
@@ -25,7 +30,8 @@ File source yang dicek:
 - `src/pages/Produksi/ProductionBoms.jsx`
 - `src/pages/Produksi/ProductionWorkLogs.jsx`
 - `src/pages/Transaksi/Purchases.jsx`
-- `src/data/local/localDbSchema.js`
+- `backend/src/db/schema.js`
+- `backend/src/db/migrate.js`
 - `src/data/sync/runtime-arsipToLocalMasterDataSyncService.js`
 - `src/data/sync/runtime-arsipMasterDataSyncService.js`
 - `src/pages/Utilities/components/OfflineDatabaseCenter.jsx`

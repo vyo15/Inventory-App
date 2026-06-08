@@ -3,11 +3,16 @@ PATCH A-B NOTE — 2026-06-02:
 Dokumen ini adalah arsip historis Batch offline database browser arsip. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser arsip, sync queue arsip, conflict resolver, atau backup JSON storage browser arsip dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
+<!--
+PATCH CLEANUP NOTE — 2026-06-08:
+Referensi source aktif diselaraskan ke arsitektur SQLite sidecar. Path storage browser lama dihapus dari daftar validasi agar tidak dianggap runtime aktif.
+-->
+
 # 13 Offline Returns, Finance, dan Reports Contract
 
 Status: **ARSIP HISTORIS / SUPERSEDED BY SQLITE RUNTIME / JANGAN DIPAKAI SEBAGAI INSTRUKSI AKTIF**.
 
-Dokumen ini mengunci hasil Fase 5 Batch 38–40 untuk persiapan offline database. Tidak ada runtime migration, tidak ada perubahan schema database arsip, tidak ada perubahan database browser arsip schema, dan tidak ada offline mutation untuk Return, Finance, atau Report final.
+Dokumen ini mengunci hasil Fase 5 Batch 38–40 untuk persiapan offline database. Tidak ada runtime migration, tidak ada perubahan schema database arsip, tidak ada perubahan schema SQLite sidecar, dan tidak ada offline mutation untuk Return, Finance, atau Report final.
 
 ## 1. Validasi source aktual
 
@@ -30,8 +35,9 @@ File source yang dicek:
 - `src/pages/Laporan/ProfitLossReport.jsx`
 - `src/pages/Laporan/StockReport.jsx`
 - `src/pages/Laporan/PayrollReport.jsx`
-- `src/data/local/localDbSchema.js`
-- `src/data/local/imsLocalDb.js`
+- `backend/src/db/schema.js`
+- `backend/src/db/migrate.js`
+- `frontend/src/data/adapters/sqlite/sqliteApiClient.js`
 - `src/data/sync/runtime-arsipToLocalMasterDataSyncService.js`
 - `src/pages/Utilities/components/OfflineDatabaseCenter.jsx`
 - `docs/03_BUSINESS_RULES.md`
@@ -221,7 +227,7 @@ Jika nanti dibuat runtime snapshot offline, minimal field snapshot:
 | `periodStart` | Awal periode snapshot |
 | `periodEndExclusive` | Akhir periode eksklusif |
 | `sourceCollections` | Contoh: `revenues,incomes,expenses` |
-| `generatedFrom` | `primary arsip` |
+| `generatedFrom` | `sqlite_backend` |
 | `pulledAt` | Waktu snapshot ditarik ke local |
 | `isReadOnly` | Harus `true` |
 | `summary` | Total pemasukan, pengeluaran, laba/rugi sesuai sumber final runtime arsip |
@@ -284,10 +290,10 @@ Snapshot boleh digunakan untuk melihat data terakhir saat offline, tetapi harus 
 | `periodStart` | Awal periode jika report periodik |
 | `periodEndExclusive` | Akhir periode eksklusif jika report periodik |
 | `filters` | Filter report saat snapshot dibuat |
-| `sourceCollections` | Collection runtime arsip yang dibaca |
+| `sourceCollections` | Table/view SQLite backend yang dibaca |
 | `sourceReadModel` | Contoh: `stock_item_read_models` untuk Stock Report |
 | `pulledAt` | Waktu snapshot dibuat/ditarik |
-| `generatedFrom` | Harus `primary arsip` untuk fase ini |
+| `generatedFrom` | Harus `sqlite_backend` untuk fase ini |
 | `isFinalReport` | Harus `false` jika hanya cache offline |
 | `isReadOnly` | Harus `true` |
 | `summary` | Ringkasan KPI yang tampil |
@@ -311,7 +317,7 @@ Keputusan resmi setelah audit source:
 1. Returns belum aman untuk offline mutation karena belum punya relasi sale-line/idempotency/refund rule.
 2. Finance tetap runtime arsip-primary; offline hanya read-only snapshot.
 3. Report offline boleh dirancang sebagai snapshot read-only, bukan report final baru.
-4. Tidak ada perubahan runtime, schema, route, menu, role guard, collection lama, database browser arsip schema, atau sync queue pada batch ini.
+4. Tidak ada perubahan runtime, schema, route, menu, role guard, collection lama, schema SQLite sidecar, atau sync queue pada batch ini.
 5. Fase berikutnya yang aman adalah desain table snapshot lokal secara eksplisit, tetapi itu termasuk schema local baru dan perlu approval terpisah.
 
 ## Update C7 SQLite Finance/Report Foundation

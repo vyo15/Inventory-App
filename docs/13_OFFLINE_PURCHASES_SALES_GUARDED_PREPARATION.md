@@ -3,6 +3,11 @@ PATCH A-B NOTE — 2026-06-02:
 Dokumen ini adalah arsip historis Batch offline database browser arsip. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser arsip, sync queue arsip, conflict resolver, atau backup JSON storage browser arsip dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
+<!--
+PATCH CLEANUP NOTE — 2026-06-08:
+Referensi source aktif diselaraskan ke arsitektur SQLite sidecar. Path storage browser lama dihapus dari daftar validasi agar tidak dianggap runtime aktif.
+-->
+
 # Offline Purchases & Sales Guarded Preparation — Batch 34–37
 
 Status: **ARSIP HISTORIS / SUPERSEDED BY SQLITE RUNTIME / JANGAN DIPAKAI SEBAGAI INSTRUKSI AKTIF**.
@@ -33,8 +38,9 @@ File source yang benar-benar dicek:
 - `src/pages/Laporan/SalesReport.jsx`
 - `src/services/Dashboard/dashboardService.js`
 - `src/pages/Dashboard/Dashboard.jsx`
-- `src/data/local/localDbSchema.js`
-- `src/data/local/imsLocalDb.js`
+- `backend/src/db/schema.js`
+- `backend/src/db/migrate.js`
+- `frontend/src/data/adapters/sqlite/sqliteApiClient.js`
 - `src/data/sync/syncQueueService.js`
 - `src/pages/Utilities/components/OfflineDatabaseCenter.jsx`
 
@@ -71,7 +77,7 @@ Keselarasan source dengan docs existing:
 
 Konflik docs vs source yang perlu dicatat:
 
-- Istilah `Offline` di Sales saat ini adalah `salesChannel: "Offline"` untuk transaksi toko/offline channel, bukan offline database mode. Jangan disamakan dengan `offline_local` database browser arsip.
+- Istilah `Offline` di Sales saat ini adalah `salesChannel: "Offline"` untuk transaksi toko/offline channel, bukan repository mode. Runtime data utama tetap backend SQLite lokal.
 - Istilah `purchaseType: "offline"` di Purchases saat ini berarti pembelian non-marketplace/tanpa ongkir-voucher online, bukan local/offline database draft.
 
 ## 3. Batch 34 — Purchases Audit
@@ -356,7 +362,7 @@ Catatan: field ini adalah **kontrak konsep**, belum dibuat table pada batch ini.
 | `draftStatus` | `local_draft`, `needs_review`, `ready_to_commit`, `committing`, `committed`, `failed`, `discarded` |
 | `createdAt`, `updatedAt`, `localUpdatedAt` | Audit lokal draft |
 | `createdBy`, `deviceId` | Trace lokal jika multi-device nanti aktif |
-| `customerId`, `customerNameSnapshot`, `customerSource` | `customerSource` harus `primary arsip` jika dipakai untuk commit final |
+| `customerId`, `customerNameSnapshot`, `customerSource` | `customerSource` harus mengarah ke data Customer backend SQLite lokal jika dipakai untuk commit final |
 | `salesChannel` | Channel transaksi; jangan disamakan dengan offline DB mode |
 | `requestedStatus` | `Diproses`/`Dikirim`/`Selesai` request user; final divalidasi saat commit |
 | `items[]` | Snapshot line item draft |
@@ -374,14 +380,14 @@ Catatan: field ini adalah **kontrak konsep**, belum dibuat table pada batch ini.
 
 Sebelum draft menjadi sales final, sistem harus:
 
-1. Re-fetch customer dari runtime arsip-primary jika customer dipilih.
-2. Menolak customer dengan `customerSource !== primary arsip` untuk commit final.
-3. Re-fetch product/raw material dan variant dari runtime arsip transaction snapshot.
+1. Re-fetch customer dari backend SQLite lokal jika customer dipilih.
+2. Menolak customer yang tidak berasal dari sumber data Customer backend SQLite lokal untuk commit final.
+3. Re-fetch product/raw material dan variant dari backend SQLite lokal sebelum commit final.
 4. Revalidasi stock availability untuk semua line.
 5. Rehitung total sale value dari payload final.
 6. Generate `ORD-*` hanya saat commit online.
 7. Menjalankan `createSaleTransaction()` existing atau service commit yang menjaga atomic write setara.
-8. Menandai draft committed hanya setelah transaction runtime arsip sukses.
+8. Menandai draft committed hanya setelah commit transaksi backend SQLite lokal sukses.
 
 ## 7. Risiko double mutation dan guard idempotency
 
@@ -425,7 +431,7 @@ Guard wajib sebelum runtime draft diimplementasikan:
 Sebelum batch runtime draft dibuat, wajib ada approval terpisah untuk:
 
 1. Nama table lokal draft, misalnya `purchase_drafts` dan `sales_drafts`.
-2. Upgrade database browser arsip schema version dan backup/restore scope baru.
+2. Upgrade schema SQLite sidecar version dan backup/restore scope baru.
 3. UI lokasi draft review: apakah di Offline Database Center atau page transaksi masing-masing.
 4. Permission/role guard draft bila nanti user non-admin boleh memakai.
 5. Commit service design: direct commit from draft vs queue manual commit.

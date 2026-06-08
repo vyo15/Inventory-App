@@ -3,6 +3,11 @@ PATCH A-B NOTE — 2026-06-02:
 Dokumen ini adalah arsip historis Batch offline database browser arsip. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser arsip, sync queue arsip, conflict resolver, atau backup JSON storage browser arsip dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
+<!--
+PATCH CLEANUP NOTE — 2026-06-08:
+Referensi source aktif diselaraskan ke arsitektur SQLite sidecar. Path storage browser lama dihapus dari daftar validasi agar tidak dianggap runtime aktif.
+-->
+
 # Offline Release Candidate Closure
 
 Status: **ARSIP HISTORIS / SUPERSEDED BY SQLITE RUNTIME / JANGAN DIPAKAI SEBAGAI INSTRUKSI AKTIF**.
@@ -11,7 +16,7 @@ Dokumen ini menutup roadmap offline Batch 23–52 pada level source. Setelah dok
 
 ## Source state
 
-- `src/data/local/localDbSchema.js` menggunakan `LOCAL_DB_SCHEMA_VERSION = 4`.
+- `backend/src/db/schema.js` dan `backend/src/db/migrate.js` menjadi sumber schema SQLite aktif.
 - Write offline pilot hanya untuk `categories` dan `customers`.
 - Supplier/Product/Raw/Semi/Stock/Production/Report/Finance hanya read-only snapshot.
 - `sync queue arsip` hanya boleh untuk `categories` dan `customers`.

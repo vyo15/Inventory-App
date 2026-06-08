@@ -1,13 +1,26 @@
-import { createProductionRecord, generateProductionCode, getProductionRecordById, listProductionRecords, updateProductionRecord } from "../../data/adapters/sqlite/sqliteProductionAdapter";
+import {
+  createProductionRecord,
+  generateProductionCode,
+  getProductionRecordById,
+  listProductionRecords,
+  updateProductionRecord,
+} from "../../data/adapters/sqlite/sqliteProductionAdapter";
 
 const safeTrim = (value) => String(value || "").trim();
 const nowIso = () => new Date().toISOString();
+const getActorName = (currentUser = null) => currentUser?.email
+  || currentUser?.displayName
+  || currentUser?.username
+  || currentUser?.uid
+  || "system";
 
 export const formatProductionEmployeeCodePrefix = () => "EMP";
 export const getNextProductionEmployeeCodePreview = async () => generateProductionCode("employees");
 
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
   const code = safeTrim(values.code || values.employeeCode).toUpperCase();
+  const actorName = getActorName(currentUser);
+
   return {
     ...values,
     code,
@@ -18,8 +31,8 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     role: safeTrim(values.role || values.position),
     isActive: values.isActive !== false,
     updatedAt: nowIso(),
-    updatedBy: currentUser?.email || currentUser?.displayName || currentUser?.username || currentUser?.uid || "system",
-    ...(!isEdit ? { createdAt: nowIso(), createdBy: currentUser?.email || currentUser?.displayName || currentUser?.username || currentUser?.uid || "system" } : {}),
+    updatedBy: actorName,
+    ...(!isEdit ? { createdAt: nowIso(), createdBy: actorName } : {}),
   };
 };
 
@@ -29,13 +42,44 @@ export const validateProductionEmployee = (values = {}) => {
   if (!safeTrim(values.code || values.employeeCode)) errors.code = "Kode karyawan wajib diisi";
   return errors;
 };
+
 export const getAllProductionEmployees = async () => listProductionRecords("employees");
-export const getActiveProductionEmployees = async () => (await getAllProductionEmployees()).filter((item) => item.isActive !== false);
+
+export const getActiveProductionEmployees = async () => {
+  const rows = await getAllProductionEmployees();
+  return rows.filter((item) => item.isActive !== false);
+};
+
 export const getProductionEmployeeById = async (id) => getProductionRecordById("employees", id);
+
 export const isProductionEmployeeCodeExists = async (code, excludeId = null) => {
   const normalized = safeTrim(code).toUpperCase();
-  return (await getAllProductionEmployees()).some((item) => safeTrim(item.code || item.employeeCode).toUpperCase() === normalized && String(item.id) !== String(excludeId || ""));
+  const rows = await getAllProductionEmployees();
+
+  return rows.some(
+    (item) => safeTrim(item.code || item.employeeCode).toUpperCase() === normalized
+      && String(item.id) !== String(excludeId || "")
+  );
 };
-export const createProductionEmployee = async (values, currentUser = null) => createProductionRecord("employees", normalizePayload(values, currentUser, false));
-export const updateProductionEmployee = async (id, values, currentUser = null) => updateProductionRecord("employees", id, normalizePayload(values, currentUser, true));
-export const toggleProductionEmployeeActive = async (id, isActive, currentUser = null, record = null) => updateProductionEmployee(id, { ...(record || await getProductionEmployeeById(id)), isActive }, currentUser);
+
+export const createProductionEmployee = async (values, currentUser = null) => createProductionRecord(
+  "employees",
+  normalizePayload(values, currentUser, false)
+);
+
+export const updateProductionEmployee = async (id, values, currentUser = null) => updateProductionRecord(
+  "employees",
+  id,
+  normalizePayload(values, currentUser, true)
+);
+
+export const toggleProductionEmployeeActive = async (
+  id,
+  isActive,
+  currentUser = null,
+  record = null
+) => updateProductionEmployee(
+  id,
+  { ...(record || await getProductionEmployeeById(id)), isActive },
+  currentUser
+);

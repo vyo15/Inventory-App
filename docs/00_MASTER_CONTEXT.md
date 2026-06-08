@@ -7,7 +7,7 @@ Update verifikasi source aktual — 2026-06-07:
 - runtime utama source aktual adalah React/Vite frontend + Node.js Express backend + SQLite file lokal/LAN;
 - `backend/src/server.js` mendaftarkan endpoint `/api/**` untuk Auth, master data, stock, transaksi, finance, production, reports, maintenance, dan audit log;
 - `frontend/src/context/AuthContext.jsx` memakai `localAuthService` dan `authMode: "sqlite"`; nama state auth lama yang masih tersisa hanya compatibility internal untuk actor label lama, bukan runtime auth lama;
-- `frontend/src/data/repositories/repositoryMode.js` memetakan alias lama `primary arsip`, `offline_local`, dan `hybrid_sync` ke `sqlite_sidecar`; alias ini tidak boleh dianggap fallback runtime arsip;
+- `frontend/src/data/repositories/repositoryMode.js` hanya menetapkan `sqlite_sidecar`; konstanta mode lama `offline_local` dan `hybrid_sync` sudah dihapus dari source aktif;
 - `frontend/package.json` source aktual tidak memiliki dependency `runtime-arsip` atau `database-browser-arsip`.
 
 Catatan arsip:
@@ -308,7 +308,7 @@ Catatan lock:
 
 ## Update SQLite Local Runtime Pilot
 
-Status terbaru: source aktual sudah SQLite-first untuk runtime utama. `frontend/.env.example` mengaktifkan `VITE_AUTH_MODE=sqlite` dan semua repository mode utama diarahkan ke SQLite. Alias data historis seperti `primary arsip`, `offline_local`, dan `hybrid_sync` dinormalisasi ke `sqlite_sidecar`, bukan menghidupkan runtime arsip. database browser arsip tidak lagi dipakai sebagai runtime aktif Offline Database Center. Supplier, Product, Raw Material, Semi Finished, Stock, Transactions, Finance, Production, dan Reports harus melalui backend SQLite sesuai service/endpoint aktual.
+Status terbaru: source aktual sudah SQLite-first untuk runtime utama. `frontend/.env.example` mengaktifkan `VITE_AUTH_MODE=sqlite` dan repository mode aktif hanya `sqlite_sidecar`. Konstanta mode lama `offline_local` dan `hybrid_sync` sudah dihapus agar tidak terlihat sebagai opsi runtime. Database browser arsip tidak lagi dipakai sebagai runtime aktif Offline Database Center. Supplier, Product, Raw Material, Semi Finished, Stock, Transactions, Finance, Production, dan Reports harus melalui backend SQLite sesuai service/endpoint aktual.
 
 ## Mobile UI Standard v1.0 — Keputusan Aktif
 

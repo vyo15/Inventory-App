@@ -1,18 +1,51 @@
-import { getProductionStepPayrollClassification, shouldIncludeProductionStepPayrollInHpp } from "../../constants/productionStepOptions";
-import { createProductionRecord, generateProductionCode, getProductionRecordById, listProductionRecords, updateProductionRecord } from "../../data/adapters/sqlite/sqliteProductionAdapter";
+import {
+  getProductionStepPayrollClassification,
+  shouldIncludeProductionStepPayrollInHpp,
+} from "../../constants/productionStepOptions";
+import {
+  createProductionRecord,
+  generateProductionCode,
+  getProductionRecordById,
+  listProductionRecords,
+  updateProductionRecord,
+} from "../../data/adapters/sqlite/sqliteProductionAdapter";
 
 const safeTrim = (value) => String(value || "").trim();
 const nowIso = () => new Date().toISOString();
+const getActorName = (currentUser = null) => currentUser?.email
+  || currentUser?.displayName
+  || currentUser?.username
+  || currentUser?.uid
+  || "system";
+
+const isSupportedProcessType = (processType = "") => [
+  "raw_to_semi",
+  "semi_to_semi",
+  "semi_to_product",
+  "support_process",
+].includes(processType);
+
+const resolveInputPolicy = (processType = "") => {
+  if (processType === "raw_to_semi") return "raw_only";
+  if (processType === "support_process") return "mixed";
+  return "semi_only";
+};
+
+const resolveOutputType = (processType = "") => {
+  if (processType === "semi_to_product") return "product";
+  if (processType === "support_process") return "none";
+  return "semi_finished_material";
+};
 
 export const generateProductionStepCode = async () => generateProductionCode("steps");
 
 const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
-  const processType = ["raw_to_semi", "semi_to_semi", "semi_to_product", "support_process"].includes(values.processType)
-    ? values.processType
-    : "raw_to_semi";
+  const processType = isSupportedProcessType(values.processType) ? values.processType : "raw_to_semi";
   const payrollMode = values.payrollMode === "per_batch" ? "per_batch" : "per_qty";
   const payrollClassification = getProductionStepPayrollClassification(processType);
   const code = safeTrim(values.code).toUpperCase();
+  const actorName = getActorName(currentUser);
+
   return {
     ...values,
     code,
@@ -21,8 +54,8 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     description: safeTrim(values.description),
     processType,
     sequenceNo: Number(values.sequenceNo || 1),
-    inputPolicy: values.inputPolicy || (processType === "raw_to_semi" ? "raw_only" : processType === "support_process" ? "mixed" : "semi_only"),
-    outputType: values.outputType || (processType === "semi_to_product" ? "product" : processType === "support_process" ? "none" : "semi_finished_material"),
+    inputPolicy: values.inputPolicy || resolveInputPolicy(processType),
+    outputType: values.outputType || resolveOutputType(processType),
     outputUnit: values.outputType === "none" ? "" : safeTrim(values.outputUnit) || "pcs",
     payrollMode,
     payrollRate: Number(values.payrollRate || 0),
@@ -31,8 +64,8 @@ const normalizePayload = (values = {}, currentUser = null, isEdit = false) => {
     includePayrollInHpp: shouldIncludeProductionStepPayrollInHpp(processType),
     isActive: values.isActive !== false,
     updatedAt: nowIso(),
-    updatedBy: currentUser?.email || currentUser?.displayName || currentUser?.username || currentUser?.uid || "system",
-    ...(!isEdit ? { createdAt: nowIso(), createdBy: currentUser?.email || currentUser?.displayName || currentUser?.username || currentUser?.uid || "system" } : {}),
+    updatedBy: actorName,
+    ...(!isEdit ? { createdAt: nowIso(), createdBy: actorName } : {}),
   };
 };
 
@@ -45,15 +78,36 @@ export const validateProductionStep = (values = {}) => {
 };
 
 export const getAllProductionSteps = async () => listProductionRecords("steps");
-export const getActiveProductionSteps = async () => (await getAllProductionSteps()).filter((item) => item.isActive !== false);
+
+export const getActiveProductionSteps = async () => {
+  const rows = await getAllProductionSteps();
+  return rows.filter((item) => item.isActive !== false);
+};
+
 export const getProductionStepById = async (id) => getProductionRecordById("steps", id);
+
 export const isProductionStepCodeExists = async (code, excludeId = null) => {
   const normalized = safeTrim(code).toUpperCase();
   if (!normalized) return false;
-  return (await getAllProductionSteps()).some((item) => safeTrim(item.code).toUpperCase() === normalized && String(item.id) !== String(excludeId || ""));
+
+  const rows = await getAllProductionSteps();
+  return rows.some(
+    (item) => safeTrim(item.code).toUpperCase() === normalized
+      && String(item.id) !== String(excludeId || "")
+  );
 };
-export const createProductionStep = async (values, currentUser = null) => createProductionRecord("steps", normalizePayload(values, currentUser, false));
-export const updateProductionStep = async (id, values, currentUser = null) => updateProductionRecord("steps", id, normalizePayload(values, currentUser, true));
+
+export const createProductionStep = async (values, currentUser = null) => createProductionRecord(
+  "steps",
+  normalizePayload(values, currentUser, false)
+);
+
+export const updateProductionStep = async (id, values, currentUser = null) => updateProductionRecord(
+  "steps",
+  id,
+  normalizePayload(values, currentUser, true)
+);
+
 export const toggleProductionStepActive = async (id, isActive, currentUser = null, record = null) => {
   const current = record || await getProductionStepById(id);
   return updateProductionStep(id, { ...current, isActive }, currentUser);

@@ -1,0 +1,144 @@
+const { success } = require("../../utils/response");
+const {
+  buildMasterDataExportPayload,
+  createBackup,
+  createRestorePlan,
+  executeRestore,
+  getBackupDownload,
+  getMaintenanceStatus,
+  importBackupFile,
+  listBackups,
+  listRestoreLogs,
+} = require("./maintenance.service");
+
+const getActor = (req) => req.localAuth?.user?.username || "system";
+
+const getMaintenanceStatusController = async (_req, res, next) => {
+  try {
+    const status = await getMaintenanceStatus();
+    return success(res, "Status layanan database lokal berhasil dimuat", status);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const exportMasterDataController = async (req, res, next) => {
+  try {
+    const includeOpeningStock = String(req.query?.includeOpeningStock ?? "true") !== "false";
+    const payload = await buildMasterDataExportPayload({ includeOpeningStock });
+    return success(res, "Export data master SQLite berhasil dimuat", payload);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const createBackupController = async (req, res, next) => {
+  try {
+    const backup = await createBackup({
+      type: req.body?.backupType || req.body?.type || "manual",
+      actor: getActor(req),
+      notes: req.body?.notes || "Backup manual resmi dari UI IMS.",
+    });
+    return success(res, "Backup database berhasil dibuat dan diverifikasi", backup);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const downloadBackupController = async (req, res, next) => {
+  try {
+    const backup = await getBackupDownload(req.params.filename || "");
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("X-IMS-Backup-Filename", encodeURIComponent(backup.filename));
+    return res.download(backup.path, backup.filename);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const importBackupController = async (req, res, next) => {
+  try {
+    const summary = await importBackupFile({
+      body: req.body,
+      headers: req.headers,
+      query: req.query,
+      actor: getActor(req),
+    });
+    return success(res, "File Backup IMS berhasil diimport dan valid untuk restore.", summary);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const executeRestoreController = async (req, res, next) => {
+  try {
+    const result = await executeRestore({
+      confirmKeyword: req.body?.confirmKeyword,
+      filename: req.body?.filename,
+      backupFileName: req.body?.backupFileName,
+      actor: getActor(req),
+    });
+
+    if (!result.restored) {
+      const message = result.backupRequired
+        ? "Restore dibatalkan karena filename backup wajib dipilih secara eksplisit."
+        : result.backupFileExists === false
+          ? "Restore dibatalkan karena file backup tidak ditemukan."
+          : result.preview
+            ? "Restore dibatalkan karena backup tidak lolos validasi."
+            : "Restore belum dijalankan. Keyword konfirmasi belum sesuai.";
+      return success(res, message, result);
+    }
+
+    return success(
+      res,
+      "Restore database lokal guarded berhasil dijalankan. Refresh aplikasi dan login ulang bila diperlukan.",
+      result,
+    );
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const createRestorePlanController = async (req, res, next) => {
+  try {
+    const result = await createRestorePlan({
+      filename: req.body?.filename,
+      backupFileName: req.body?.backupFileName,
+      actor: getActor(req),
+    });
+    return success(res, "Restore plan dibuat sebagai preview-only. Tidak ada data yang diubah.", result);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const listRestoreLogsController = async (_req, res, next) => {
+  try {
+    const rows = await listRestoreLogs();
+    return success(res, "Daftar restore plan database lokal berhasil dimuat", rows);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const listBackupsController = async (_req, res, next) => {
+  try {
+    const rows = await listBackups();
+    return success(res, "Daftar backup database lokal berhasil dimuat", rows);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+module.exports = {
+  createBackupController,
+  createRestorePlanController,
+  downloadBackupController,
+  executeRestoreController,
+  exportMasterDataController,
+  getMaintenanceStatusController,
+  importBackupController,
+  listBackupsController,
+  listRestoreLogsController,
+};

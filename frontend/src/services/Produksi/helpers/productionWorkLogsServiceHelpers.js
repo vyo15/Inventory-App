@@ -391,8 +391,10 @@ export const resolveCompletedWorkLogAccruedLaborCost = ({
   }
 
   if (payrollRule.payrollRate <= 0) {
+    const stepName = payrollRule.stepName || payrollRule.stepCode || "produksi";
     throw new Error(
-      `Tarif labor tahapan ${payrollRule.stepName || payrollRule.stepCode || "produksi"} masih 0. Isi rate di master Tahapan Produksi sebelum Work Log diselesaikan.`,
+      `Tarif labor tahapan ${stepName} masih 0. `
+        + "Isi rate di master Tahapan Produksi sebelum Work Log diselesaikan.",
     );
   }
 
@@ -500,7 +502,9 @@ export const assertResolvedVariantContract = ({ line = {}, stockItem = {}, stock
 
   const itemName = safeTrim(line.itemName || stockItem?.name || stockItem?.code) || "material";
   throw new Error(
-    `Material ${itemName} pada Production Order wajib memakai varian tersimpan, tetapi varian tidak ditemukan. Refresh Need/perbaiki BOM sebelum Start Production agar stok tidak fallback ke master/default.`,
+    `Material ${itemName} pada Production Order wajib memakai varian tersimpan, `
+      + "tetapi varian tidak ditemukan. Refresh Need/perbaiki BOM sebelum Start Production "
+      + "agar stok tidak fallback ke master/default.",
   );
 };
 

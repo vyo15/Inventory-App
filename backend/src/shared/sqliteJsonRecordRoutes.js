@@ -4,6 +4,7 @@ const { getDb } = require("../db/connection");
 const { createAuditLog } = require("../utils/auditLog");
 const { failure, success } = require("../utils/response");
 const { requireLocalAuth, requireLocalAdministrator } = require("../middlewares/localAuth");
+const { safeJsonParse } = require("../utils/jsonUtils");
 
 const normalizeText = (value) => String(value ?? "").trim();
 const normalizeCode = (value) => normalizeText(value).toUpperCase();
@@ -12,14 +13,6 @@ const toInteger = (value = 0) => {
   return Number.isFinite(parsed) ? Math.round(parsed) : 0;
 };
 
-const safeJsonParse = (value, fallback = {}) => {
-  if (!value) return fallback;
-  try {
-    return JSON.parse(value);
-  } catch (_error) {
-    return fallback;
-  }
-};
 
 const getNumericSequenceFromCode = (code = "", prefix = "") => {
   const normalizedCode = normalizeCode(code);

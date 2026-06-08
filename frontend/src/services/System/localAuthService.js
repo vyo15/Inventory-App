@@ -1,3 +1,4 @@
+import { getPasswordPolicyHint, validatePasswordStrength } from "../../../../shared/passwordPolicy.js";
 import { fetchSqliteJson } from "./sqliteBackendStatusService";
 
 const LOCAL_AUTH_TOKEN_KEY = "ims.sqlite.authToken";
@@ -8,12 +9,8 @@ const normalizeAuthMode = () => "sqlite";
 export const AUTH_MODE = normalizeAuthMode(import.meta.env.VITE_AUTH_MODE);
 export const isSqliteAuthMode = () => AUTH_MODE === "sqlite";
 
-export const validateLocalPasswordPolicy = (password = "") => {
-  const value = String(password || "");
-  if (value.length < 8) return "Password minimal 8 karakter.";
-  if (!/[A-Za-z]/.test(value) || !/\d/.test(value)) return "Password wajib memakai huruf dan angka.";
-  return "";
-};
+export const validateLocalPasswordPolicy = validatePasswordStrength;
+export const getLocalPasswordPolicyHint = getPasswordPolicyHint;
 
 export const getStoredLocalAuthToken = () => {
   if (typeof window === "undefined") return "";

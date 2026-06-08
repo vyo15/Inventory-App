@@ -3,6 +3,11 @@ PATCH A-B NOTE — 2026-06-02:
 Dokumen ini adalah arsip historis Batch offline database browser arsip. Source aktif sekarang memakai SQLite sidecar lewat backend Node.js lokal/LAN. Jangan mengikuti instruksi runtime database browser arsip, sync queue arsip, conflict resolver, atau backup JSON storage browser arsip dari dokumen arsip ini. Kontrak terbaru ada di docs/10_OFFLINE_DATABASE_CONTRACT.md dan docs/17_SQLITE_OFFLINE_WEB_ROADMAP.md.
 -->
 
+<!--
+PATCH CLEANUP NOTE — 2026-06-08:
+Referensi source aktif diselaraskan ke arsitektur SQLite sidecar. Path storage browser lama dihapus dari daftar validasi agar tidak dianggap runtime aktif.
+-->
+
 # OFFLINE STOCK READ MODEL CONTRACT — BATCH 31–33
 
 Status: **ARSIP HISTORIS / SUPERSEDED BY SQLITE RUNTIME / JANGAN DIPAKAI SEBAGAI INSTRUKSI AKTIF**.
@@ -31,7 +36,8 @@ File source yang benar-benar dicek:
 - `src/services/Produksi/semiFinishedMaterialsService.js`
 - `src/services/Dashboard/dashboardService.js`
 - `src/services/Laporan/stockReportService.js`
-- `src/data/local/localDbSchema.js`
+- `backend/src/db/schema.js`
+- `backend/src/db/migrate.js`
 - `src/data/sync/runtime-arsipToLocalMasterDataSyncService.js`
 - `src/pages/Utilities/components/OfflineDatabaseCenter.jsx`
 - `docs/10_OFFLINE_DATABASE_CONTRACT.md`
@@ -197,7 +203,7 @@ Rollback stok tidak boleh menghitung dari snapshot. Rollback harus:
 ## 8. Patch Batch 32 yang diizinkan
 
 Patch aman batch ini hanya:
-- Menambah database browser arsip table `stock_snapshots` di database browser arsip schema v4.
+- Menambah database browser arsip table `stock_snapshots` di schema SQLite sidecar v4.
 - Menambah runtime arsip adapter read-only untuk `stock_item_read_models`.
 - Menambah opsi pull runtime arsip → Offline untuk Stock Snapshot read-only.
 - Menampilkan preview local snapshot read-only di Offline Database Center.

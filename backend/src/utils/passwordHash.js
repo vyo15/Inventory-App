@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { validatePasswordStrength } = require("../../../shared/passwordPolicy.cjs");
 
 const PBKDF2_ITERATIONS = 210000;
 const PBKDF2_KEY_LENGTH = 64;
@@ -31,17 +32,6 @@ const verifyPasswordHash = (password = "", storedHash = "") => {
 
   if (actualBuffer.length !== expectedBuffer.length) return false;
   return crypto.timingSafeEqual(actualBuffer, expectedBuffer);
-};
-
-const validatePasswordStrength = (password = "") => {
-  const value = String(password || "");
-  if (value.length < 8) {
-    return "Password minimal 8 karakter.";
-  }
-  if (!/[A-Za-z]/.test(value) || !/\d/.test(value)) {
-    return "Password wajib memakai huruf dan angka.";
-  }
-  return "";
 };
 
 module.exports = {

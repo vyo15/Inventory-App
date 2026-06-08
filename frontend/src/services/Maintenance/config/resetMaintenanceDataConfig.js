@@ -68,16 +68,52 @@ export const HPP_COST_RESET_MODE_CONFIG = {
     collections: [{ key: "raw_materials", fields: ["restockReferencePrice"], variantFields: ["restockReferencePrice"] }],
   },
   product_hpp_only: {
-    collections: [{ key: "products", fields: ["hppPerUnit", "averageCostPerUnit", "costPerUnit"], variantFields: ["hppPerUnit", "averageCostPerUnit", "costPerUnit"] }],
+    collections: [
+      {
+        key: "products",
+        fields: ["hppPerUnit", "averageCostPerUnit", "costPerUnit"],
+        variantFields: ["hppPerUnit", "averageCostPerUnit", "costPerUnit"],
+      },
+    ],
   },
   semi_finished_average_cost_only: {
-    collections: [{ key: "semi_finished_materials", fields: ["averageCostPerUnit", "lastProductionCostPerUnit", "referenceCostPerUnit", "costPerUnit"], variantFields: ["averageCostPerUnit", "lastProductionCostPerUnit", "referenceCostPerUnit", "costPerUnit"] }],
+    collections: [
+      {
+        key: "semi_finished_materials",
+        fields: [
+          "averageCostPerUnit",
+          "lastProductionCostPerUnit",
+          "referenceCostPerUnit",
+          "costPerUnit",
+        ],
+        variantFields: [
+          "averageCostPerUnit",
+          "lastProductionCostPerUnit",
+          "referenceCostPerUnit",
+          "costPerUnit",
+        ],
+      },
+    ],
   },
   all_hpp_cost_sources: {
     collections: [
       { key: "raw_materials", fields: ["averageActualUnitCost", "restockReferencePrice"], variantFields: ["averageActualUnitCost", "restockReferencePrice"] },
       { key: "products", fields: ["hppPerUnit", "averageCostPerUnit", "costPerUnit"], variantFields: ["hppPerUnit", "averageCostPerUnit", "costPerUnit"] },
-      { key: "semi_finished_materials", fields: ["averageCostPerUnit", "lastProductionCostPerUnit", "referenceCostPerUnit", "costPerUnit"], variantFields: ["averageCostPerUnit", "lastProductionCostPerUnit", "referenceCostPerUnit", "costPerUnit"] },
+      {
+        key: "semi_finished_materials",
+        fields: [
+          "averageCostPerUnit",
+          "lastProductionCostPerUnit",
+          "referenceCostPerUnit",
+          "costPerUnit",
+        ],
+        variantFields: [
+          "averageCostPerUnit",
+          "lastProductionCostPerUnit",
+          "referenceCostPerUnit",
+          "costPerUnit",
+        ],
+      },
     ],
   },
 };

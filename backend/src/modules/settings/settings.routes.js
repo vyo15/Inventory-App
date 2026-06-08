@@ -1,22 +1,9 @@
 const express = require("express");
-const { getDb } = require("../../db/connection");
 const { requireLocalAuth, requireLocalAdministrator } = require("../../middlewares/localAuth");
-const { success } = require("../../utils/response");
+const { getAppSettingsController } = require("./settings.controller");
 
 const router = express.Router();
 
-router.get("/", requireLocalAuth, requireLocalAdministrator, async (req, res, next) => {
-  try {
-    const db = await getDb();
-    const rows = await db.all("SELECT key, value, updated_at FROM app_settings ORDER BY key ASC");
-    const settings = rows.reduce((acc, row) => {
-      acc[row.key] = row.value;
-      return acc;
-    }, {});
-    return success(res, "Settings layanan database lokal berhasil dimuat", settings, { rows });
-  } catch (error) {
-    return next(error);
-  }
-});
+router.get("/", requireLocalAuth, requireLocalAdministrator, getAppSettingsController);
 
 module.exports = router;

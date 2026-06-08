@@ -45,9 +45,10 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
-import { validateLocalPasswordPolicy } from "../../services/System/localAuthService";
+import { getLocalPasswordPolicyHint, validateLocalPasswordPolicy } from "../../services/System/localAuthService";
 
 const { Text } = Typography;
+const PASSWORD_POLICY_HINT = getLocalPasswordPolicyHint();
 
 const normalizeUsernameValue = (value = "") => String(value || "").trim().toLowerCase();
 
@@ -66,16 +67,7 @@ const validateLocalPasswordField = (_, value) => {
   return Promise.resolve();
 };
 
-// =========================
-// SECTION: Form Mode Constants - AKTIF
-// Fungsi:
-// - membedakan modal tambah profile manual UID dan edit profile.
-// Hubungan flow aplikasi:
-// - mode create membuat profile `system_users/{authUid}` dari UID Auth yang ditempel manual;
-// - mode edit hanya mengubah profile role/status/display name yang sudah ada.
-// Status:
-// - AKTIF untuk halaman Manajemen User final setelah cleanup data historis.
-// =========================
+// Mode modal user: create untuk akun baru, edit untuk profile existing.
 const FORM_MODE = {
   CREATE: "create",
   EDIT: "edit",
@@ -90,16 +82,7 @@ const getStatusColor = (status) => {
   return status === USER_STATUS.ACTIVE ? "green" : "default";
 };
 
-// =========================
-// SECTION: Delete Guard UI Reason — AKTIF / GUARDED
-// Fungsi:
-// - menjelaskan kenapa tombol Hapus Profile disabled sebelum service dipanggil.
-// Hubungan flow aplikasi:
-// - service delete tetap menjadi guard utama; helper ini hanya feedback UI.
-// Status:
-// - AKTIF untuk tombol Hapus Profile.
-// - GUARDED: self-delete dan administrator aktif terakhir tetap divalidasi ulang di service.
-// =========================
+// Alasan disable aksi hapus; service tetap menjadi guard utama.
 const getDeleteGuardReason = ({ canManage, isLastActiveAdministrator, isSelfProfile }) => {
   if (isSelfProfile) {
     return "Profile yang sedang dipakai login tidak boleh dihapus.";
@@ -134,20 +117,7 @@ const getUserManagementActionErrorMessage = (error = {}) => {
   return error.message || "Aksi User Management gagal.";
 };
 
-// =========================
-// SECTION: User Management Page - AKTIF / GUARDED
-// Fungsi:
-// - menampilkan dan mengelola akun IMS lokal database lokal.
-// Hubungan flow aplikasi:
-// - AuthProvider memakai profile lokal ini untuk memutuskan user boleh masuk aplikasi;
-// - Route/Menu Guard membatasi halaman ini untuk Administrator;
-// - database lokal menyimpan password lewat layanan aplikasi, bukan di frontend.
-// Status:
-// - AKTIF untuk database lokal user management.
-// - GUARDED: password lokal hanya dikirim ke layanan auth database lokal dan tidak disimpan di UI.
-// Cleanup:
-// - flow migrasi UID/domain lama dan indikator data historis/orphan sudah dihapus dari alur aktif.
-// =========================
+// Halaman guarded untuk mengelola akun lokal IMS.
 const UserManagement = () => {
   const { profile, reloadProfile } = useAuth();
   const [form] = Form.useForm();
@@ -193,15 +163,7 @@ const UserManagement = () => {
     return Promise.reject(new Error("Username sudah terdaftar."));
   };
 
-  // =========================
-  // SECTION: Active Administrator Count - AKTIF / GUARDED
-  // Fungsi:
-  // - menghitung profile administrator aktif untuk guard tombol Hapus Profile.
-  // Hubungan flow aplikasi:
-  // - Manajemen User tidak boleh menghapus administrator aktif terakhir agar akses pemulihan tetap ada.
-  // Status:
-  // - AKTIF untuk UI guard; service database lokal tetap melakukan validasi ulang sebelum delete user.
-  // =========================
+  // UI guard: jangan hapus administrator aktif terakhir.
   const activeAdministratorCount = useMemo(() => {
     return users.filter(
       (userProfile) =>
@@ -210,15 +172,6 @@ const UserManagement = () => {
     ).length;
   }, [users]);
 
-  // =========================
-  // SECTION: Load Users - AKTIF / GUARDED
-  // Fungsi:
-  // - mengambil daftar user sesuai hak role aktif.
-  // Hubungan flow aplikasi:
-  // - hanya Administrator yang boleh melihat/manajemen profile user.
-  // Status:
-  // - AKTIF.
-  // =========================
   const loadUsers = async () => {
     setIsLoading(true);
 
@@ -280,18 +233,7 @@ const UserManagement = () => {
     form.resetFields();
   };
 
-  // =========================
-  // SECTION: Save User - AKTIF / GUARDED
-  // Fungsi:
-  // - create: mode database lokal membuat akun lokal;
-  // - edit: mengubah profile, role, status, dan opsional password baru untuk akun lokal database lokal.
-  // Hubungan flow aplikasi:
-  // - AuthProvider membaca user dari layanan auth database lokal;
-  // - Auth UID hanya ditampilkan sebagai compatibility internal, bukan input user.
-  // Status:
-  // - AKTIF.
-  // - GUARDED: password lokal hanya dikirim ke layanan database lokal dan tidak disimpan di state.
-  // =========================
+  // Password hanya dikirim ke layanan auth lokal, tidak disimpan di state.
   const handleSaveProfile = async (values) => {
     setIsSaving(true);
 
@@ -311,7 +253,10 @@ const UserManagement = () => {
       console.error("[UserManagement] Gagal menyimpan user.", error);
 
       if (formMode === FORM_MODE.CREATE && isUsernameAlreadyUsedError(error)) {
-        message.error("Username sudah dipakai profile user lain. Gunakan username unik atau bersihkan profile lama secara manual sebelum membuat profile baru.");
+        message.error(
+          "Username sudah dipakai profile user lain. "
+            + "Gunakan username unik atau bersihkan profile lama secara manual sebelum membuat profile baru."
+        );
         return;
       }
 
@@ -321,16 +266,7 @@ const UserManagement = () => {
     }
   };
 
-  // =========================
-  // SECTION: Row Action Guard Helpers - AKTIF / GUARDED
-  // Fungsi:
-  // - menghitung alasan aksi Edit/Nonaktifkan/Hapus Profile diblokir dari data terbaru tabel.
-  // Hubungan flow aplikasi:
-  // - UI memberi feedback cepat, tetapi service tetap memvalidasi ulang sebelum write/delete user.
-  // Status:
-  // - AKTIF untuk Manajemen User final.
-  // - GUARDED: self-profile dan administrator aktif terakhir tetap tidak boleh dihapus.
-  // =========================
+  // Alasan guard per baris untuk feedback UI; service tetap validasi ulang.
   const getDeleteGuardReasonForRecord = (userRecord = {}) => {
     const canManage = canManageUserProfile({
       actorRole,
@@ -351,15 +287,6 @@ const UserManagement = () => {
     });
   };
 
-  // =========================
-  // SECTION: Controlled Status Modal - AKTIF / GUARDED
-  // Fungsi:
-  // - memakai modal berbasis state agar kompatibel dengan theme AntD v5.
-  // Hubungan flow aplikasi:
-  // - toggle status mengubah akun database lokal dan layanan otomatis mencabut session user nonaktif.
-  // Status:
-  // - AKTIF untuk aksi Aktifkan/Nonaktifkan.
-  // =========================
   const handleOpenStatusModal = (userRecord) => {
     const canManage = canManageUserProfile({
       actorRole,
@@ -413,17 +340,7 @@ const UserManagement = () => {
     }
   };
 
-  // =========================
-  // SECTION: Controlled Delete Profile Modal - AKTIF / GUARDED
-  // Fungsi:
-  // - membuka modal konfirmasi berbasis state sebelum delete user lokal database lokal;
-  // - memastikan tombol Hapus Profile memanggil handler dan reload data setelah sukses.
-  // Hubungan flow aplikasi:
-  // - tombol ini menghapus user lewat layanan guarded; session user target ikut dicabut.
-  // Status:
-  // - AKTIF untuk delete profile target aman.
-  // - GUARDED: service tetap menolak self-delete dan administrator aktif terakhir.
-  // =========================
+  // Modal konfirmasi sebelum hapus akun lokal; guard utama tetap di service.
   const handleOpenDeleteModal = (userRecord) => {
     const deleteGuardReason = getDeleteGuardReasonForRecord(userRecord);
 
@@ -462,23 +379,7 @@ const UserManagement = () => {
     }
   };
 
-  // =====================================================
-  // SECTION: Compact User Management Table Columns — AKTIF / GUARDED
-  // Fungsi:
-  // - memadatkan tabel utama menjadi User / UID, Role / Status, dan Aksi tanpa horizontal scroll besar.
-  //
-  // Dipakai oleh:
-  // - Halaman Manajemen User pada section Daftar Profile User.
-  //
-  // Alasan perubahan:
-  // - tabel lama memakai scroll x besar dan fixed right sehingga kurang nyaman di layout utama.
-  //
-  // Catatan cleanup:
-  // - belum ada.
-  //
-  // Risiko:
-  // - jangan mengubah guard RBAC, modal konfirmasi, atau handler aksi saat merapikan render kolom.
-  // =====================================================
+  // Kolom ringkas; jangan ubah guard RBAC dan handler aksi.
   const columns = [
     {
       title: "User",
@@ -692,23 +593,6 @@ const UserManagement = () => {
     },
   };
 
-  /* =====================================================
-  SECTION: User Management Renderer — GUARDED
-  Fungsi:
-  - Menampilkan summary, tabel profile, form tambah/edit, dan modal konfirmasi status/hapus profile.
-
-  Dipakai oleh:
-  - Administrator untuk mengelola akun lokal database lokal.
-
-  Alasan perubahan:
-  - Copy dibuat ringkas: tidak menonjolkan UID teknis dan fokus ke akun lokal.
-
-  Catatan cleanup:
-  - Detail user khusus bisa dibuat nanti bila audit login/createdAt sudah stabil di data.
-
-  Risiko:
-  - Jangan mengubah role mapping, status mapping, auth provider binding, atau guard administrator aktif terakhir.
-  ===================================================== */
   return (
     <div className="page-container">
       <PageHeader
@@ -799,7 +683,7 @@ const UserManagement = () => {
               <Input.Password
                 autoComplete="new-password"
                 prefix={<LockOutlined />}
-                placeholder={formMode === FORM_MODE.CREATE ? "Minimal 8 karakter, huruf dan angka" : "Isi jika ingin ganti password"}
+                placeholder={formMode === FORM_MODE.CREATE ? PASSWORD_POLICY_HINT : "Isi jika ingin ganti password"}
               />
             </Form.Item>
 

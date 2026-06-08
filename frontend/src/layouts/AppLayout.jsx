@@ -9,125 +9,43 @@ import AppHeader from "../components/Layout/Header/AppHeader";
 import ThemeToggleButton from "../components/Layout/Header/ThemeToggleButton";
 import AppRoutes from "../router/AppRoutes";
 import { getAntdTheme } from "../theme/antdTheme";
+import {
+  applyDocumentThemeMode,
+  getInitialThemeMode,
+  persistThemeMode,
+  THEME_DARK_VALUE,
+  THEME_LIGHT_VALUE,
+} from "../theme/themeMode";
 import { ActionResultModalHost } from "../utils/feedback/actionResultFeedback";
 import "../App.css";
 
 const { Header, Sider, Content } = Layout;
 
-// =========================
-// SECTION: Constants
-// =========================
-const THEME_STORAGE_KEY = "ims-bunga-flanel-theme";
-const THEME_LIGHT_VALUE = "light";
-const THEME_DARK_VALUE = "dark";
-
-const normalizeThemeMode = (themeMode) => {
-  return themeMode === THEME_DARK_VALUE ? THEME_DARK_VALUE : THEME_LIGHT_VALUE;
-};
-
-const readStoredThemeMode = () => {
-  if (typeof window === "undefined") {
-    return THEME_LIGHT_VALUE;
-  }
-
-  try {
-    return normalizeThemeMode(window.localStorage.getItem(THEME_STORAGE_KEY));
-  } catch {
-    return THEME_LIGHT_VALUE;
-  }
-};
-
-const getInitialThemeMode = () => {
-  if (typeof window !== "undefined") {
-    const bootstrappedTheme = normalizeThemeMode(window.__IMS_INITIAL_THEME_MODE__);
-
-    if (bootstrappedTheme === THEME_DARK_VALUE) {
-      return THEME_DARK_VALUE;
-    }
-  }
-
-  return readStoredThemeMode();
-};
-
-const applyDocumentThemeMode = (themeMode) => {
-  if (typeof document === "undefined") {
-    return;
-  }
-
-  const normalizedThemeMode = normalizeThemeMode(themeMode);
-  const rootElement = document.documentElement;
-  const bodyElement = document.body;
-  const nextThemeClass = normalizedThemeMode === THEME_DARK_VALUE ? "app-theme-dark" : "app-theme-light";
-  const staleThemeClass = normalizedThemeMode === THEME_DARK_VALUE ? "app-theme-light" : "app-theme-dark";
-
-  rootElement.classList.remove(staleThemeClass);
-  rootElement.classList.add(nextThemeClass);
-  rootElement.setAttribute("data-app-theme", normalizedThemeMode);
-
-  if (bodyElement) {
-    bodyElement.classList.remove(staleThemeClass);
-    bodyElement.classList.add(nextThemeClass);
-    bodyElement.setAttribute("data-app-theme", normalizedThemeMode);
-  }
-};
-
-// =========================
-// SECTION: Main App Layout
-// =========================
 const AppLayout = () => {
-  // =========================
-  // SECTION: UI State
-  // =========================
   const [isDarkTheme, setIsDarkTheme] = useState(() => getInitialThemeMode() === THEME_DARK_VALUE);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const location = useLocation();
 
-  // =========================
-  // SECTION: Persist Theme
-  // =========================
+  // Persist theme agar refresh tidak kembali ke mode default.
   useEffect(() => {
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, isDarkTheme ? THEME_DARK_VALUE : THEME_LIGHT_VALUE);
-    } catch {
-      // Theme persistence is best-effort only. UI state still follows the active React state.
-    }
+    persistThemeMode(isDarkTheme ? THEME_DARK_VALUE : THEME_LIGHT_VALUE);
   }, [isDarkTheme]);
 
-  // =========================
-  // SECTION: Sync Theme Class To html/body
-  // Fungsi:
-  // - memastikan portal Ant Design ikut membaca mode aktif
-  // - membantu dark mode terlihat menyatu pada dropdown, modal, drawer, dan area global
-  // Catatan:
-  // - class ini masih dipakai aktif oleh CSS global di index.css dan App.css
-  // - class disinkronkan tanpa cleanup unmount agar StrictMode dev tidak membuat flash light/dark palsu
-  // =========================
+  // Sinkronkan class global supaya portal AntD ikut mode aktif.
   useEffect(() => {
     applyDocumentThemeMode(isDarkTheme ? THEME_DARK_VALUE : THEME_LIGHT_VALUE);
   }, [isDarkTheme]);
 
-  // =========================
-  // SECTION: Close Mobile Sidebar On Navigation
-  // Fungsi:
-  // - menutup drawer menu HP setelah route berubah agar layar langsung fokus ke halaman tujuan.
-  // Catatan:
-  // - hanya UI state, tidak mengubah route, role guard, atau config menu.
-  // =========================
+  // Tutup drawer mobile setelah pindah halaman.
   useEffect(() => {
     setIsMobileSidebarOpen(false);
   }, [location.pathname]);
 
-  // =========================
-  // SECTION: Theme Config
-  // =========================
   const antdThemeConfig = useMemo(() => {
     return getAntdTheme(isDarkTheme);
   }, [isDarkTheme]);
 
-  // =========================
-  // SECTION: Action Handlers
-  // =========================
   const handleToggleTheme = () => {
     setIsDarkTheme((previousTheme) => !previousTheme);
   };
@@ -184,7 +102,6 @@ const AppLayout = () => {
                   aria-label="Buka menu navigasi"
                 />
 
-                {/* AKTIF / CLEANUP CANDIDATE RESOLVED: AppHeader membaca token CSS global, jadi prop darkTheme yang tidak dipakai dihapus tanpa mengubah flow AppLayout. */}
                 <AppHeader />
               </div>
             </Header>
