@@ -1,0 +1,800 @@
+/* =========================
+   SECTION: Shared UI Foundation - AKTIF / GUARDED
+   Fungsi:
+   - merapikan konsistensi drawer, modal, table, filter bar, form control, dan action button.
+   Hubungan flow aplikasi:
+   - dipakai lintas halaman yang memakai Ant Design; hanya presentational dan tidak mengubah submit, query, kalkulasi, atau mutasi data.
+   Alasan logic dipakai:
+   - foundation global mencegah setiap page membuat override sendiri yang sulit diaudit.
+   Status:
+   - AKTIF untuk baseline komponen bersama.
+   - GUARDED karena selector table/modal/drawer/form masih menjadi pelindung UI operasional besar.
+========================= */
+
+/* ---------- Filter / Search / Select ---------- */
+.app-content-card .ant-input,
+.app-content-card .ant-input-affix-wrapper,
+.app-content-card .ant-select-selector,
+.app-content-card .ant-picker,
+.app-content-card .ant-input-number {
+  min-height: 42px;
+  border-radius: 12px !important;
+}
+
+.app-content-card .ant-input-affix-wrapper .ant-input {
+  min-height: auto;
+}
+
+.app-content-card .ant-select-single .ant-select-selector {
+  display: flex;
+  align-items: center;
+}
+
+.app-content-card .ant-select-single .ant-select-selection-item,
+.app-content-card .ant-select-single .ant-select-selection-placeholder {
+  line-height: 40px !important;
+}
+
+/* ---------- Action Buttons ---------- */
+.app-content-card .ant-btn {
+  min-height: 38px;
+  border-radius: 12px;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.app-content-card .ant-btn.ant-btn-sm {
+  min-height: 32px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.app-content-card .ant-btn + .ant-btn {
+  margin-inline-start: 0;
+}
+
+/* ---------- Table ---------- */
+.app-content-card .ant-table-wrapper {
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.app-content-card .ant-table-thead > tr > th {
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
+  font-weight: 700;
+  border-bottom-width: 1px !important;
+}
+
+.app-content-card .ant-table-tbody > tr > td {
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
+  vertical-align: top;
+}
+
+.app-content-card .ant-pagination {
+  margin-top: 14px !important;
+}
+
+/* ---------- Drawer ---------- */
+.app-shell .ant-drawer-header {
+  padding: 18px 20px !important;
+  border-bottom: 1px solid var(--ims-border-color-soft) !important;
+}
+
+.app-shell .ant-drawer-title {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.app-shell .ant-drawer-body {
+  padding: 18px 20px 20px !important;
+}
+
+.app-shell .ant-drawer-footer {
+  padding: 14px 20px !important;
+  border-top: 1px solid var(--ims-border-color-soft) !important;
+}
+
+/* ---------- Modal ---------- */
+.app-shell .ant-modal-header {
+  padding-bottom: 14px !important;
+  margin-bottom: 0 !important;
+  border-bottom: 1px solid var(--ims-border-color-soft);
+}
+
+.app-shell .ant-modal-title {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.app-shell .ant-modal-body {
+  padding-top: 18px !important;
+}
+
+.app-shell .ant-modal-footer {
+  margin-top: 18px !important;
+  padding-top: 14px;
+  border-top: 1px solid var(--ims-border-color-soft);
+}
+
+/* ---------- Form ---------- */
+.app-shell .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.app-shell .ant-form-item-label > label {
+  font-weight: 600;
+}
+
+.app-shell .ant-form-item-explain,
+.app-shell .ant-form-item-extra {
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* ---------- Descriptions / Detail Drawer ---------- */
+.app-shell .ant-descriptions .ant-descriptions-header {
+  margin-bottom: 12px;
+}
+
+.app-shell .ant-descriptions .ant-descriptions-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* AKTIF / UI ONLY:
+   Primary button text color mengikuti token kontras light/dark agar warna primary tetap readable.
+   Tidak mengubah callback, disabled state, atau semantic action. */
+.app-shell .ant-btn-primary:not(:disabled):not(.ant-btn-disabled),
+.app-shell .ims-action-button.ant-btn-primary:not(:disabled):not(.ant-btn-disabled) {
+  color: var(--ims-color-on-primary) !important;
+}
+
+/* ---------- Dark mode specific polish ---------- */
+.app-shell.dark .ant-table-wrapper,
+.app-shell.dark .ant-table {
+  box-shadow: none;
+}
+
+.app-shell.dark .ant-btn-primary {
+  box-shadow: none !important;
+}
+
+.app-shell.dark .ant-btn-primary:hover {
+  filter: brightness(1.02);
+}
+
+@media (max-width: 768px) {
+  .app-shell .ant-drawer-header,
+  .app-shell .ant-drawer-body,
+  .app-shell .ant-drawer-footer,
+  .app-theme-light .ant-drawer-header,
+  .app-theme-light .ant-drawer-body,
+  .app-theme-light .ant-drawer-footer,
+  .app-theme-dark .ant-drawer-header,
+  .app-theme-dark .ant-drawer-body,
+  .app-theme-dark .ant-drawer-footer {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .app-theme-light .ant-drawer-content-wrapper,
+  .app-theme-dark .ant-drawer-content-wrapper {
+    max-width: 100vw !important;
+  }
+
+  .app-shell .ant-modal,
+  .app-theme-light .ant-modal,
+  .app-theme-dark .ant-modal {
+    max-width: calc(100vw - 20px) !important;
+    margin: 10px auto !important;
+  }
+
+  .app-shell .ant-modal-content,
+  .app-theme-light .ant-modal-content,
+  .app-theme-dark .ant-modal-content {
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .app-shell .ant-modal-body,
+  .app-theme-light .ant-modal-body,
+  .app-theme-dark .ant-modal-body {
+    padding-top: 16px !important;
+    overflow-y: auto;
+  }
+
+  /* AKTIF / UI ONLY:
+     Mobile shell tetap portrait-first: viewport/page tidak ikut horizontal scroll.
+     Scroll horizontal hanya dibuka secara lokal pada wrapper table agar halaman mobile
+     terasa seperti app, bukan desktop lebar yang harus dimiringkan. */
+  .app-content-scroll {
+    overflow-x: hidden;
+  }
+
+  .app-content-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+    box-sizing: border-box;
+  }
+
+  .app-content-card .ant-table-wrapper,
+  .app-data-table.ant-table-wrapper,
+  .ims-table.ant-table-wrapper,
+  .ims-page .ant-table-wrapper {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .app-content-card .ant-table-content,
+  .app-data-table .ant-table-content,
+  .ims-table .ant-table-content,
+  .ims-page .ant-table-content {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-content-card .ant-table-container,
+  .app-content-card .ant-table {
+    min-width: 680px;
+  }
+
+  .app-content-card .ant-table-thead > tr > th,
+  .app-content-card .ant-table-tbody > tr > td {
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+    white-space: nowrap;
+  }
+
+  .app-content-card .ant-table-tbody .ims-note-preview,
+  .app-content-card .ant-table-tbody .ims-note-inline {
+    white-space: normal;
+  }
+
+  .app-content-card .ant-pagination {
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+}
+
+@media (max-width: 576px) {
+  .app-theme-light .ant-drawer-content-wrapper,
+  .app-theme-dark .ant-drawer-content-wrapper {
+    width: 100vw !important;
+  }
+
+  .app-content-card .ant-table-container,
+  .app-content-card .ant-table {
+    min-width: 620px;
+  }
+}
+
+
+/* =========================
+   SECTION: Batch 1 Shared Page Foundation - AKTIF / CLEANUP CANDIDATE
+   Fungsi:
+   - menyediakan alias surface untuk halaman batch lama agar tetap membaca token global tanpa hardcoded color lama.
+   Hubungan flow aplikasi:
+   - class ini hanya mengatur spacing/surface table/action; tidak mengubah handler, query, kalkulasi, atau mutasi data.
+   Alasan logic dipakai:
+   - alias menjaga compatibility sambil menunggu halaman lama berpindah ke token final langsung.
+   Status:
+   - AKTIF karena masih dipakai halaman migrasi awal.
+   - CLEANUP CANDIDATE: setelah semua halaman sudah memakai token global langsung, alias ini bisa dirapikan bertahap.
+========================= */
+.app-shell {
+  --ims-surface-card: var(--ims-bg-card);
+  --ims-surface-soft: var(--ims-bg-card-soft);
+  --ims-surface-muted: var(--ims-bg-elevated);
+  --ims-sticky-shadow: var(--ims-table-fixed-shadow);
+}
+
+.ims-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ims-page-alert {
+  margin-bottom: 0 !important;
+}
+
+.ims-page > .ant-card,
+.ims-page .ims-section-card.ant-card {
+  margin-bottom: 0 !important;
+  border-radius: 20px;
+  border-color: var(--ims-border-strong);
+  background: var(--ims-surface-card);
+  box-shadow: none;
+}
+
+/* AKTIF / GUARDED UI: wrapper halaman tidak boleh diberi shadow agar Enterprise Clean tidak kembali jadi card bertumpuk. */
+.ims-page > .ant-card > .ant-card-body,
+.ims-page .ims-section-card.ant-card > .ant-card-body {
+  padding: 20px;
+}
+
+.ims-page .ims-summary-row {
+  margin-bottom: 0 !important;
+}
+
+.ims-page .ims-summary-row .ant-card,
+.ims-page .ims-summary-card.ant-card {
+  border-radius: 18px;
+}
+
+.ims-page .ims-summary-row .ant-card .ant-card-body,
+.ims-page .ims-summary-card.ant-card .ant-card-body {
+  padding: 18px 20px;
+}
+
+.ims-page .ims-page-title.ant-typography {
+  margin: 0 !important;
+}
+
+.ims-page .ims-page-description.ant-typography {
+  display: block;
+  margin: 8px 0 0 !important;
+  max-width: 980px;
+}
+
+.ims-page .ims-page-toolbar {
+  align-items: center;
+}
+
+.ims-page .ims-page-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ims-page .ims-filter-row {
+  row-gap: 12px;
+}
+
+.ims-page .ims-filter-control {
+  width: 100%;
+}
+
+/* =========================
+   SECTION: Shared Utility Spacing - AKTIF / GUARDED
+   Fungsi:
+   - utilitas spacing dan cell text ringan untuk mengurangi inline style berulang pada halaman operasional.
+   Hubungan flow aplikasi:
+   - hanya presentational; tidak mengubah event handler, payload, atau alur data.
+   Alasan logic dipakai:
+   - class kecil dipusatkan di App.css agar halaman table/report tidak membuat variasi spacing sendiri.
+   Status:
+   - AKTIF untuk batch cleanup UI consistency.
+   - GUARDED karena banyak halaman data memakai class ini untuk readability table.
+========================= */
+.ims-mb-16 {
+  margin-bottom: 16px !important;
+}
+
+.ims-cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ims-cell-stack-tight {
+  gap: 2px;
+}
+
+.ims-cell-title {
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ims-text-primary);
+}
+
+.ims-cell-meta {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ims-text-secondary) !important;
+}
+
+.ims-cell-caption {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ims-text-secondary) !important;
+}
+
+.ims-detail-value {
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ims-text-primary);
+}
+
+/* =========================
+   SECTION: Shared Readonly Field Surface - AKTIF / GUARDED
+   Fungsi:
+   - menyatukan style tampilan read-only info field pada form operasional (purchases/produksi/finance).
+   Hubungan flow aplikasi:
+   - presentational only; tidak mengubah value form, validasi, ataupun payload transaksi.
+   Alasan logic dipakai:
+   - readonly field membedakan snapshot informasi dari input editable tanpa mengubah contract form.
+   Status:
+   - AKTIF untuk cleanup inline style berulang batch-1.
+   - GUARDED: jangan dipakai untuk mengganti status bisnis/warna semantik.
+========================= */
+.ims-readonly-field {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 8px;
+  padding: 6px 11px;
+  background: var(--ims-surface-muted);
+}
+
+.ims-readonly-field--compact {
+  min-height: 32px;
+  padding: 4px 11px;
+  font-weight: 600;
+}
+
+
+/* =========================
+   SECTION: Shared Readonly Panel Surface - AKTIF / GUARDED
+   Fungsi:
+   - menyatukan panel snapshot/read-only pasif agar tidak memakai Alert besar yang terasa seperti warning.
+   Hubungan flow aplikasi:
+   - presentational only untuk info stok/summary; tidak mengubah value form, validasi, payload, atau transaksi layanan database.
+   Alasan logic dipakai:
+   - panel ini memisahkan informasi pasif dari warning/error/destructive Alert agar semantik guard tetap jelas.
+   Status:
+   - AKTIF untuk snapshot stok dan info read-only.
+   - GUARDED: jangan dipakai untuk warning/error/destructive/security alert.
+========================= */
+.ims-readonly-panel {
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 16px;
+  background: var(--ims-surface-muted);
+}
+
+.ims-readonly-panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ims-readonly-panel-title {
+  font-weight: 600;
+  color: var(--ims-text-primary);
+  line-height: 1.35;
+}
+
+.ims-readonly-panel-description {
+  margin-top: 4px;
+  color: var(--ims-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ims-readonly-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ims-readonly-stat-field {
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--ims-bg-card);
+}
+
+.ims-readonly-stat-label {
+  color: var(--ims-text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ims-readonly-stat-value {
+  margin-top: 2px;
+  font-weight: 700;
+  color: var(--ims-text-primary);
+  line-height: 1.35;
+}
+
+.ims-readonly-panel-note {
+  margin-top: 10px;
+  color: var(--ims-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@media (max-width: 575px) {
+  .ims-readonly-stat-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ims-cell-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ims-badge-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ims-badge-inline .ant-badge-status-text {
+  color: var(--ims-text-primary);
+  font-weight: 500;
+}
+
+.ims-status-tag.ant-tag {
+  margin-inline-end: 0;
+  border-radius: 999px;
+  padding-inline: 10px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+/* =========================
+   SECTION: Shared Table Action Utilities — AKTIF / GUARDED
+   Fungsi:
+   - menyamakan layout tombol aksi table/list tanpa mengubah handler action.
+   Hubungan flow aplikasi:
+   - dipakai halaman master/transaksi/produksi yang memiliki kolom Aksi; perubahan ini hanya visual dan behavior-preserving.
+   Alasan logic dipakai:
+   - kolom aksi operasional harus tetap terbaca dan rapi tanpa refactor JSX pada fase CSS-only.
+   Status:
+   - AKTIF untuk baseline action button table.
+   - GUARDED: jangan ubah handler/data/business rules dari class CSS ini.
+========================= */
+.ims-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ims-action-group--vertical {
+  width: 100%;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.ims-action-group--vertical > .ant-space-item,
+.ims-action-group--vertical > * {
+  /* AKTIF / GUARDED:
+     Fungsi: memastikan setiap item Ant Design Space/div di kolom Aksi vertical mengambil lebar penuh.
+     Hubungan flow: hanya mengunci layout tombol table agar 3 baris rapi; handler dan data flow tetap milik halaman masing-masing.
+     Alasan: beberapa halaman memakai Space, sebagian memakai div; keduanya perlu width penuh agar tombol sejajar.
+  */
+  width: 100%;
+}
+
+.ims-action-group--vertical .ant-btn {
+  /* AKTIF / GUARDED:
+     Fungsi: membuat tombol aksi di layout vertical otomatis block tanpa perlu mengubah handler tiap tombol.
+     Hubungan flow: purely visual; tidak mengubah disabled/loading/onClick/Popconfirm.
+     Alasan: action button global harus konsisten 3 baris dan sejajar lintas halaman.
+  */
+  width: 100%;
+  justify-content: center;
+}
+
+
+.ims-action-button.ant-btn,
+.ims-action-button.ant-btn.ant-btn-sm {
+  min-height: 32px;
+  height: 32px;
+  padding-inline: 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.ims-action-button--block.ant-btn {
+  width: 100%;
+}
+
+.ims-action-button.ant-btn-primary {
+  box-shadow: none !important;
+}
+
+/* ---------- Table Action / Sticky Column Baseline ----------
+   Fungsi:
+   - memberi marker resmi untuk kolom status dan aksi pada main table yang sudah migrasi baseline
+   - menjaga action group tetap rapat, tidak pecah liar, dan siap dipakai dengan fixed/sticky right
+   Catatan:
+   - blok ini aktif dipakai oleh halaman yang sudah dimigrasikan ke baseline final table/action
+   - nested/subtable sengaja tidak dipaksa ikut kecuali memang ada bug horizontal scroll nyata
+*/
+.app-data-table .app-table-action-column,
+.ims-table .app-table-action-column,
+.ims-page .app-table-action-column,
+.app-data-table .app-table-status-column,
+.ims-table .app-table-status-column,
+.ims-page .app-table-status-column {
+  white-space: nowrap;
+}
+
+.app-data-table td.app-table-action-column .ims-action-group,
+.ims-table td.app-table-action-column .ims-action-group,
+.ims-page td.app-table-action-column .ims-action-group {
+  justify-content: flex-start;
+}
+
+/* =========================
+   SECTION: Shared Table Surface Foundation - AKTIF / GUARDED
+   Fungsi:
+   - mengunci background table agar selalu solid di class resmi app-data-table, ims-table, dan ims-page.
+   - menyamakan hover, selected row, sticky/fixed cell, empty row, dan summary row lintas halaman.
+   Hubungan flow aplikasi:
+   - styling table operasional saja; tidak mengubah dataSource, columns, pagination, sort, filter, rowSelection, atau handler aksi.
+   Alasan logic dipakai:
+   - fixed column wajib memakai warna solid agar isi kolom di belakang tidak tembus, terutama di halaman data besar.
+   Status:
+   - AKTIF untuk baseline table surface.
+   - GUARDED: jangan override background table ke transparent di CSS per halaman.
+========================= */
+.app-data-table.ant-table-wrapper,
+.ims-table.ant-table-wrapper,
+.ims-page .ant-table-wrapper {
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.app-data-table .ant-table,
+.ims-table .ant-table,
+.ims-page .ant-table {
+  background: var(--ims-bg-card) !important;
+}
+
+.app-data-table .ant-table-container,
+.ims-table .ant-table-container,
+.ims-page .ant-table-container {
+  overflow: hidden;
+  border: 1px solid var(--ims-border-strong);
+  border-radius: 18px;
+  background: var(--ims-bg-card) !important;
+}
+
+.app-data-table .ant-table-content,
+.app-data-table table,
+.ims-table .ant-table-content,
+.ims-table table,
+.ims-page .ant-table-content,
+.ims-page table {
+  background: var(--ims-bg-card) !important;
+}
+
+.app-data-table .ant-table-thead > tr > th,
+.ims-table .ant-table-thead > tr > th,
+.ims-page .ant-table-thead > tr > th {
+  background: var(--ims-bg-table-header) !important;
+  color: var(--ims-text-primary) !important;
+  border-bottom: 1px solid var(--ims-border-strong) !important;
+}
+
+.app-data-table .ant-table-tbody > tr,
+.ims-table .ant-table-tbody > tr,
+.ims-page .ant-table-tbody > tr {
+  background: var(--ims-table-row) !important;
+}
+
+.app-data-table .ant-table-tbody > tr > td,
+.app-data-table .ant-table-placeholder > td,
+.ims-table .ant-table-tbody > tr > td,
+.ims-table .ant-table-placeholder > td,
+.ims-page .ant-table-tbody > tr > td,
+.ims-page .ant-table-placeholder > td {
+  background: var(--ims-table-row) !important;
+}
+
+.app-data-table .ant-table-tbody > tr:hover > td,
+.ims-table .ant-table-tbody > tr:hover > td,
+.ims-page .ant-table-tbody > tr:hover > td {
+  background: var(--ims-table-hover) !important;
+}
+
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected > td,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected > td,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected > td {
+  background: var(--ims-table-selected) !important;
+}
+
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected:hover > td,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected:hover > td,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected:hover > td {
+  background: var(--ims-table-selected-hover) !important;
+}
+
+.app-data-table .ant-table-cell-fix-left,
+.app-data-table .ant-table-cell-fix-right,
+.ims-table .ant-table-cell-fix-left,
+.ims-table .ant-table-cell-fix-right,
+.ims-page .ant-table-cell-fix-left,
+.ims-page .ant-table-cell-fix-right {
+  background: var(--ims-table-row) !important;
+}
+
+.app-data-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
+.app-data-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-right,
+.ims-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
+.ims-table .ant-table-tbody > tr:hover > .ant-table-cell-fix-right,
+.ims-page .ant-table-tbody > tr:hover > .ant-table-cell-fix-left,
+.ims-page .ant-table-tbody > tr:hover > .ant-table-cell-fix-right {
+  background: var(--ims-table-hover) !important;
+}
+
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-left,
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-right,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-left,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-right,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-left,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected > .ant-table-cell-fix-right {
+  background: var(--ims-table-selected) !important;
+}
+
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected:hover > .ant-table-cell-fix-left,
+.app-data-table .ant-table-tbody > tr.ant-table-row-selected:hover > .ant-table-cell-fix-right,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected:hover > .ant-table-cell-fix-left,
+.ims-table .ant-table-tbody > tr.ant-table-row-selected:hover > .ant-table-cell-fix-right,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected:hover > .ant-table-cell-fix-left,
+.ims-page .ant-table-tbody > tr.ant-table-row-selected:hover > .ant-table-cell-fix-right {
+  background: var(--ims-table-selected-hover) !important;
+}
+
+.app-data-table .ant-table-thead > tr > .ant-table-cell-fix-left,
+.app-data-table .ant-table-thead > tr > .ant-table-cell-fix-right,
+.ims-table .ant-table-thead > tr > .ant-table-cell-fix-left,
+.ims-table .ant-table-thead > tr > .ant-table-cell-fix-right,
+.ims-page .ant-table-thead > tr > .ant-table-cell-fix-left,
+.ims-page .ant-table-thead > tr > .ant-table-cell-fix-right {
+  background: var(--ims-bg-table-header) !important;
+}
+
+.app-data-table .ant-table-expanded-row > td,
+.app-data-table .ant-table-summary > tr > td,
+.ims-table .ant-table-expanded-row > td,
+.ims-table .ant-table-summary > tr > td,
+.ims-page .ant-table-expanded-row > td,
+.ims-page .ant-table-summary > tr > td {
+  background: var(--ims-bg-card-soft) !important;
+}
+
+.app-data-table .ant-table-ping-right .ant-table-cell-fix-right-first::after,
+.ims-table .ant-table-ping-right .ant-table-cell-fix-right-first::after,
+.ims-page .ant-table-ping-right .ant-table-cell-fix-right-first::after {
+  box-shadow: var(--ims-table-fixed-shadow);
+}
+
+.app-data-table .ant-table-ping-left .ant-table-cell-fix-left-last::after,
+.ims-table .ant-table-ping-left .ant-table-cell-fix-left-last::after,
+.ims-page .ant-table-ping-left .ant-table-cell-fix-left-last::after {
+  box-shadow: inset 12px 0 12px -12px color-mix(in srgb, var(--ims-table-fixed-shadow) 80%, transparent);
+}
+
+
+

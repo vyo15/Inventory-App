@@ -10,8 +10,8 @@
 
 .reset-maintenance-toolbar {
   align-items: flex-start;
-  background: var(--ant-color-bg-elevated, rgba(127, 127, 127, 0.04));
-  border: 1px solid var(--ant-color-border-secondary, rgba(127, 127, 127, 0.18));
+  background: var(--ims-bg-card-soft);
+  border: 1px solid var(--ims-border-color-soft);
   border-radius: 14px;
   display: flex;
   gap: 12px;
@@ -84,8 +84,8 @@
 
 .reset-danger-flat-panel,
 .reset-export-flat-panel {
-  background: var(--ant-color-bg-elevated, rgba(127, 127, 127, 0.04));
-  border: 1px solid var(--ant-color-border-secondary, rgba(127, 127, 127, 0.18));
+  background: var(--ims-bg-card-soft);
+  border: 1px solid var(--ims-border-color-soft);
   border-radius: 14px;
   display: flex;
   flex-direction: column;
@@ -116,8 +116,8 @@
 }
 
 .reset-danger-status-item {
-  background: var(--ant-color-bg-container, #fff);
-  border: 1px solid var(--ant-color-border-secondary, rgba(127, 127, 127, 0.18));
+  background: var(--ims-bg-card);
+  border: 1px solid var(--ims-border-color-soft);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -132,8 +132,8 @@
 }
 
 .reset-export-metrics .ant-statistic {
-  background: var(--ant-color-bg-container, #fff);
-  border: 1px solid var(--ant-color-border-secondary, rgba(127, 127, 127, 0.18));
+  background: var(--ims-bg-card);
+  border: 1px solid var(--ims-border-color-soft);
   border-radius: 12px;
   padding: 10px 12px;
 }
@@ -162,8 +162,8 @@
 .maintenance-history-summary-item,
 .maintenance-checklist-item,
 .maintenance-checklist-section {
-  background: var(--ant-color-bg-elevated, rgba(127, 127, 127, 0.04));
-  border: 1px solid var(--ant-color-border-secondary, rgba(127, 127, 127, 0.18));
+  background: var(--ims-bg-card-soft);
+  border: 1px solid var(--ims-border-color-soft);
   border-radius: 12px;
 }
 

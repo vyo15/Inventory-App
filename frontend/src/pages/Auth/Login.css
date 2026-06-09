@@ -1,14 +1,4 @@
-/* =========================
-   SECTION: Login Page Scope — AKTIF / UI ONLY
-   Fungsi:
-   - membatasi redesign hanya pada halaman login agar tidak bocor ke layout aplikasi utama.
-   Hubungan flow aplikasi:
-   - dipakai oleh src/pages/Auth/Login.jsx dan tidak menyentuh AppLayout, Sidebar, AuthContext, Dashboard, atau modul bisnis.
-   Alasan logic dipakai:
-   - menjaga tampilan login modern tetap scoped dengan prefix .ims-login-*.
-   Status logic:
-   - AKTIF untuk UI Login IMS Bunga Flanel.
-   ========================= */
+/* Scoped login surface. Style-only; auth flow stays in Login.jsx. */
 .ims-login-page {
   position: relative;
   min-height: 100vh;
@@ -21,17 +11,6 @@
   color: var(--ims-text-primary);
 }
 
-/* =========================
-   SECTION: Main Login Canvas — AKTIF / UI ONLY
-   Fungsi:
-   - membangun container utama dua panel: brand kiri dan form kanan.
-   Hubungan flow aplikasi:
-   - hanya membungkus BrandPanel dan form login; tidak mengubah AuthContext, route guard, role, atau data.
-   Alasan logic dipakai:
-   - container putih dengan shadow soft membuat login terasa lebih proper tanpa gradient berat.
-   Status logic:
-   - AKTIF untuk desktop dan mobile.
-   ========================= */
 .ims-login-layout {
   position: relative;
   z-index: 1;
@@ -70,17 +49,6 @@
   pointer-events: none;
 }
 
-/* =========================
-   SECTION: Brand Panel Surface — AKTIF / UI ONLY
-   Fungsi:
-   - membuat area kiri berwarna cream rata, soft, dan tidak membentuk warp/garis tengah.
-   Hubungan flow aplikasi:
-   - panel brand hanya visual; tidak menyentuh username, password, handleLogin, profile gate, atau route guard.
-   Alasan logic dipakai:
-   - warna cream dipasang langsung pada panel kiri agar hasilnya merata seperti preview, bukan pseudo layer setengah container.
-   Status logic:
-   - AKTIF untuk visual Login.
-   ========================= */
 .ims-login-brand-panel {
   position: relative;
   z-index: 1;
@@ -92,8 +60,8 @@
   padding: clamp(32px, 3.6vw, 46px);
   border: 1px solid color-mix(in srgb, var(--ims-color-accent-yellow) 8%, transparent);
   border-radius: 30px;
-  background: #fffdf6;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+  background: color-mix(in srgb, var(--ims-bg-card) 90%, var(--ims-color-accent-yellow-soft) 10%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ims-bg-card) 82%, transparent);
 }
 
 .ims-login-brand-panel::before {
@@ -102,21 +70,10 @@
   inset: 12px;
   z-index: -1;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.34);
+  background: color-mix(in srgb, var(--ims-bg-card) 34%, transparent);
   pointer-events: none;
 }
 
-/* =========================
-   SECTION: Brand Badge — AKTIF / UI ONLY
-   Fungsi:
-   - menampilkan label kecil Inventory Management System di panel kiri.
-   Hubungan flow aplikasi:
-   - copy visual saja; tidak mengubah auth, role, route, stok, kas, atau modul bisnis.
-   Alasan logic dipakai:
-   - badge dibuat sedikit lebih besar dari note agar hierarchy jelas.
-   Status logic:
-   - AKTIF untuk branding login.
-   ========================= */
 .ims-login-badge {
   width: fit-content;
   padding: 9px 18px;
@@ -131,17 +88,6 @@
   text-transform: uppercase;
 }
 
-/* =========================
-   SECTION: Brand Stage and Motif — AKTIF / UI ONLY
-   Fungsi:
-   - menempatkan logo sebagai focal point dengan pemanis pill/dot biru-kuning di pinggir.
-   Hubungan flow aplikasi:
-   - dekorasi murni; tidak menyentuh input, submit, local auth database lokal, role, route, atau data bisnis.
-   Alasan logic dipakai:
-   - menghindari garis/shape besar yang terlihat seperti bug dan menjaga logo tidak tertimpa hiasan.
-   Status logic:
-   - AKTIF untuk visual Login modern.
-   ========================= */
 .ims-login-brand-stage {
   position: relative;
   min-height: 380px;
@@ -268,17 +214,6 @@
   background: color-mix(in srgb, var(--ims-color-primary) 68%, transparent);
 }
 
-/* =========================
-   SECTION: Main Brand Logo — AKTIF / UI ONLY
-   Fungsi:
-   - menampilkan logo resmi Flanel Karawang Industries besar, bersih, dan sedikit turun dari center.
-   Hubungan flow aplikasi:
-   - visual non-interaktif; tidak terhubung ke auth, route, role, alur data utama, stok, kas, atau modul bisnis.
-   Alasan logic dipakai:
-   - logo menjadi focal point utama, sementara motif tetap berada di pinggir.
-   Status logic:
-   - AKTIF untuk branding utama Login.
-   ========================= */
 .ims-login-logo-showcase {
   width: min(600px, 92%);
   display: flex;
@@ -304,17 +239,6 @@
   filter: drop-shadow(0 20px 24px rgba(16, 32, 51, 0.07));
 }
 
-/* =========================
-   SECTION: Internal Login Note — AKTIF / UI ONLY
-   Fungsi:
-   - menampilkan catatan kecil bahwa login hanya untuk user internal.
-   Hubungan flow aplikasi:
-   - microcopy visual saja; tidak mengubah flow login, role, permission, atau route.
-   Alasan logic dipakai:
-   - note dibuat lebih kecil daripada badge agar tidak mengambil fokus dari logo.
-   Status logic:
-   - AKTIF sebagai helper text login.
-   ========================= */
 .ims-login-brand-note {
   width: fit-content;
   max-width: min(390px, 100%);
@@ -347,18 +271,6 @@
   flex: 0 0 auto;
 }
 
-/* =========================
-   SECTION: Form Panel and Card — AKTIF / GUARDED UI
-   Fungsi:
-   - menjaga form login tetap fokus di dalam card modern kanan.
-   Hubungan flow aplikasi:
-   - form di dalamnya tetap memanggil handleLogin existing di Login.jsx.
-   Alasan logic dipakai:
-   - memperbaiki presentasi login tanpa mengubah validasi, submit, AuthContext, local auth database lokal, atau profile gate.
-   Status logic:
-   - AKTIF untuk semua state login.
-   - GUARDED: jangan ubah validation/auth logic dari CSS refinement.
-   ========================= */
 .ims-login-form-panel {
   position: relative;
   z-index: 1;
@@ -430,17 +342,6 @@
   line-height: 1.7;
 }
 
-/* =========================
-   SECTION: Login Form Spacing — AKTIF / GUARDED UI
-   Fungsi:
-   - menjaga jarak heading, error, input, dan tombol tetap nyaman.
-   Hubungan flow aplikasi:
-   - presentational only; tidak mengubah handleLogin, validation, AuthContext, local auth database lokal, atau profile gate.
-   Alasan logic dipakai:
-   - membuat form kanan lebih readable dan konsisten dengan visual modern.
-   Status logic:
-   - AKTIF untuk Login UI normal.
-   ========================= */
 .ims-login-error-box.ant-alert {
   margin-top: 24px;
   margin-bottom: 18px;
@@ -503,17 +404,6 @@
   background: var(--ims-color-primary-hover);
 }
 
-/* =========================
-   SECTION: Compatibility Class Guard — CLEANUP CANDIDATE / UI ONLY
-   Fungsi:
-   - menjaga class lama tidak memunculkan dekorasi/card logo lama jika masih tersisa dari cache atau branch lain.
-   Hubungan flow aplikasi:
-   - visual guard saja; tidak menyentuh auth, route, role, data, atau modul bisnis.
-   Alasan logic dipakai:
-   - transisi aman dari desain lama ke desain final tanpa harus refactor besar.
-   Status logic:
-   - CLEANUP CANDIDATE: bisa dihapus setelah tidak ada class lama di Login.jsx.
-   ========================= */
 .ims-login-background-glow,
 .ims-login-card-brand,
 .ims-login-brand-header,
@@ -523,17 +413,87 @@
   display: none;
 }
 
-/* =========================
-   SECTION: Responsive Layout — AKTIF / UI ONLY
-   Fungsi:
-   - memastikan halaman login nyaman di tablet dan mobile dengan brand-first mobile card yang menyatu.
-   Hubungan flow aplikasi:
-   - hanya mengubah susunan visual, bukan logic auth.
-   Alasan logic dipakai:
-   - mobile mengikuti preview final: badge kiri, logo besar tanpa frame, form langsung di bawah logo, dan heading login tengah disembunyikan agar tidak ramai.
-   Status logic:
-   - AKTIF untuk menjaga usability mobile.
-   ========================= */
+
+/* Dark mode login polish: keep logo readable without a full light panel. */
+html[data-app-theme="dark"] .ims-login-layout,
+html.app-theme-dark .ims-login-layout,
+body.app-theme-dark .ims-login-layout {
+  background: color-mix(in srgb, var(--ims-bg-card) 86%, var(--ims-bg-page) 14%);
+  box-shadow: var(--ims-shadow-elevated);
+}
+
+html[data-app-theme="dark"] .ims-login-layout::after,
+html.app-theme-dark .ims-login-layout::after,
+body.app-theme-dark .ims-login-layout::after {
+  opacity: 0.36;
+}
+
+html[data-app-theme="dark"] .ims-login-brand-panel,
+html.app-theme-dark .ims-login-brand-panel,
+body.app-theme-dark .ims-login-brand-panel {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-app-theme="dark"] .ims-login-brand-panel::before,
+html.app-theme-dark .ims-login-brand-panel::before,
+body.app-theme-dark .ims-login-brand-panel::before {
+  content: none;
+}
+
+html[data-app-theme="dark"] .ims-login-brand-logo,
+html.app-theme-dark .ims-login-brand-logo,
+body.app-theme-dark .ims-login-brand-logo {
+  filter:
+    drop-shadow(0 22px 28px rgba(0, 0, 0, 0.32))
+    drop-shadow(0 0 28px color-mix(in srgb, var(--ims-color-primary) 14%, transparent))
+    saturate(1.08)
+    brightness(1.08);
+}
+
+html[data-app-theme="dark"] .ims-login-card.ant-card,
+html.app-theme-dark .ims-login-card.ant-card,
+body.app-theme-dark .ims-login-card.ant-card {
+  border-color: color-mix(in srgb, var(--ims-color-primary) 24%, var(--ims-border-color));
+  background: color-mix(in srgb, var(--ims-bg-card) 88%, var(--ims-bg-elevated) 12%);
+  box-shadow: 0 26px 64px rgba(0, 0, 0, 0.34);
+}
+
+.ims-login-form .ant-input-affix-wrapper,
+.ims-login-form .ant-input,
+.ims-login-form .ant-input-password {
+  color: var(--ims-text-primary);
+  background: var(--ims-bg-field);
+}
+
+.ims-login-form .ant-input::placeholder {
+  color: var(--ims-text-muted);
+}
+
+.ims-login-form .ant-input-prefix,
+.ims-login-form .ant-input-suffix,
+.ims-login-form .ant-input-password-icon {
+  color: var(--ims-text-muted);
+}
+
+html[data-app-theme="dark"] .ims-login-submit.ant-btn-primary,
+html.app-theme-dark .ims-login-submit.ant-btn-primary,
+body.app-theme-dark .ims-login-submit.ant-btn-primary {
+  color: #ffffff;
+  background: var(--ims-color-primary-active);
+}
+
+html[data-app-theme="dark"] .ims-login-submit.ant-btn-primary:hover,
+html[data-app-theme="dark"] .ims-login-submit.ant-btn-primary:focus,
+html.app-theme-dark .ims-login-submit.ant-btn-primary:hover,
+html.app-theme-dark .ims-login-submit.ant-btn-primary:focus,
+body.app-theme-dark .ims-login-submit.ant-btn-primary:hover,
+body.app-theme-dark .ims-login-submit.ant-btn-primary:focus {
+  color: #ffffff;
+  background: var(--ims-color-primary-hover);
+}
+
 @media (max-width: 960px) {
   .ims-login-page {
     min-height: 100dvh;

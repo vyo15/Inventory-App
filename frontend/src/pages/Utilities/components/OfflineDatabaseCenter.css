@@ -6,8 +6,8 @@
 .offline-db-status-strip,
 .offline-db-compact-section,
 .offline-db-restore-step {
-  background: var(--ant-color-bg-elevated, rgba(127, 127, 127, 0.04));
-  border: 1px solid var(--ant-color-border-secondary, rgba(127, 127, 127, 0.18));
+  background: var(--ims-bg-card-soft);
+  border: 1px solid var(--ims-border-color-soft);
   border-radius: 14px;
 }
 
@@ -80,8 +80,8 @@
 
 .offline-db-backup-list-item {
   align-items: center;
-  background: var(--ant-color-bg-container, #fff);
-  border: 1px solid var(--ant-color-border-secondary, rgba(127, 127, 127, 0.18));
+  background: var(--ims-bg-card);
+  border: 1px solid var(--ims-border-color-soft);
   border-radius: 12px;
   display: flex;
   gap: 12px;
@@ -105,15 +105,15 @@
 }
 
 .offline-db-restore-step-danger {
-  border-color: color-mix(in srgb, var(--ant-color-error, #ff4d4f) 35%, transparent);
+  border-color: color-mix(in srgb, var(--ims-color-danger) 35%, transparent);
 }
 
 .offline-db-step-marker {
   align-items: center;
-  background: var(--ant-color-primary-bg, rgba(22, 119, 255, 0.1));
-  border: 1px solid var(--ant-color-primary-border, rgba(22, 119, 255, 0.2));
+  background: var(--ims-color-primary-softer);
+  border: 1px solid var(--ims-color-primary-muted);
   border-radius: 999px;
-  color: var(--ant-color-primary, #1677ff);
+  color: var(--ims-color-primary);
   display: inline-flex;
   font-weight: 700;
   height: 28px;
@@ -122,9 +122,9 @@
 }
 
 .offline-db-restore-step-danger .offline-db-step-marker {
-  background: var(--ant-color-error-bg, rgba(255, 77, 79, 0.08));
-  border-color: var(--ant-color-error-border, rgba(255, 77, 79, 0.24));
-  color: var(--ant-color-error, #ff4d4f);
+  background: var(--ims-color-danger-soft);
+  border-color: var(--ims-color-danger-muted);
+  color: var(--ims-color-danger-text);
 }
 
 .offline-db-step-content,
@@ -146,8 +146,8 @@
 }
 
 .offline-db-table-count {
-  background: var(--ant-color-bg-container, #fff);
-  border: 1px solid var(--ant-color-border-secondary, rgba(127, 127, 127, 0.18));
+  background: var(--ims-bg-card);
+  border: 1px solid var(--ims-border-color-soft);
   border-radius: 10px;
   display: flex;
   flex-direction: column;
@@ -174,11 +174,11 @@
 }
 
 .offline-db-danger-card {
-  border-color: color-mix(in srgb, var(--ant-color-error, #ff4d4f) 35%, transparent);
+  border-color: color-mix(in srgb, var(--ims-color-danger) 35%, transparent);
 }
 
 .offline-db-danger-card .ant-card-head {
-  color: var(--ant-color-error, #ff4d4f);
+  color: var(--ims-color-danger-text);
 }
 
 .offline-db-status-card .ant-tag,
@@ -235,8 +235,8 @@
 }
 
 .offline-db-mini-stat {
-  background: var(--ant-color-bg-container, #fff);
-  border: 1px solid var(--ant-color-border-secondary, rgba(127, 127, 127, 0.18));
+  background: var(--ims-bg-card);
+  border: 1px solid var(--ims-border-color-soft);
   border-radius: 12px;
   display: flex;
   flex-direction: column;

@@ -1,16 +1,4 @@
-/* =========================
-   SECTION: Dashboard Application Surface
-   Fungsi blok:
-   - menjaga Dashboard sebagai operational control center yang compact, clean, dan tidak memicu horizontal scroll.
-   - menyediakan token lokal berbasis theme blue/yellow/white/navy dari src/index.css.
-   Hubungan blok dengan flow aplikasi:
-   - CSS ini hanya mengatur presentasi Dashboard read-only; tidak menyentuh query, kalkulasi, formatter, route, stok, kas, produksi, payroll, HPP, atau laporan.
-   Alasan logic dipakai:
-   - token lokal membuat warna card/list konsisten dengan brand tanpa membawa hardcoded style lama ke tiap selector.
-   Status logic:
-   - AKTIF untuk Dashboard summary, priority cards, metric cards, list cards, empty state, dan dark/light mode.
-   - GUARDED karena perubahan visual Dashboard tidak boleh berubah menjadi write flow atau laporan besar.
-========================= */
+/* Dashboard control-center surface. Style-only; data stays read-only in Dashboard.jsx. */
 .dashboard-page {
   --dashboard-card-radius: 16px;
   --dashboard-card-radius-sm: 14px;
@@ -51,17 +39,6 @@
   overflow-wrap: anywhere;
 }
 
-/* =========================
-   SECTION: Dashboard Text Helpers
-   Fungsi blok:
-   - menyatukan teks pendukung, tanggal, icon section, dan arrow action dengan token theme.
-   Hubungan blok dengan flow aplikasi:
-   - helper ini dipakai lintas section Dashboard, tetapi tidak mengubah data atau navigasi.
-   Alasan logic dipakai:
-   - warna text memakai token agar light mode tetap putih/navy dan dark mode tetap navy/blue tanpa selector duplikatif.
-   Status logic:
-   - AKTIF sebagai helper visual read-only.
-========================= */
 .dashboard-section-extra,
 .dashboard-section-icon,
 .dashboard-muted-text,
@@ -96,19 +73,6 @@
   transition: color 0.18s ease, transform 0.18s ease;
 }
 
-/* =========================
-   SECTION: Priority Cards and List Cards
-   Fungsi blok:
-   - membentuk card actionable dan list compact tanpa table besar.
-   - seluruh card action tetap berupa Link/navigasi yang sudah dikontrol Dashboard.jsx.
-   Hubungan blok dengan flow aplikasi:
-   - dipakai Prioritas Hari Ini, Planning priority, Stok Kritis, Restock Assistant, dan Aktivitas Terbaru.
-   Alasan logic dipakai:
-   - border, background, dan hover memakai token brand agar dashboard tidak membawa warna hardcoded lama.
-   Status logic:
-   - AKTIF untuk layout control center.
-   - GUARDED karena card tidak boleh menjadi tombol write langsung.
-========================= */
 .dashboard-priority-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -211,24 +175,6 @@
 }
 
 
-/* =====================================================
-SECTION: Dashboard KPI, Quick Actions, and Alerts — AKTIF / GUARDED
-Fungsi:
-- Menata KPI strip, shortcut navigasi, dan exception cards agar Dashboard menjadi control center compact.
-- Menjaga card KPI tetap netral; status hanya ditampilkan sebagai badge kecil bila diperlukan.
-
-Dipakai oleh:
-- Ringkasan Hari Ini, Aksi Cepat, dan Data Perlu Dicek di Dashboard.jsx.
-
-Alasan perubahan:
-- Aksen border kiri biru/oranye dan background warning penuh pada KPI membuat dashboard terlihat ramai, sehingga diganti surface netral.
-
-Catatan cleanup:
-- Tone visual bisa dipindahkan ke shared card component jika Dashboard bertambah modul.
-
-Risiko:
-- Jika style ini dibuat terlalu lebar/tinggi, Dashboard kembali terasa seperti report penuh dan berpotensi horizontal scroll.
-===================================================== */
 .dashboard-kpi-grid,
 .dashboard-quick-action-grid,
 .dashboard-alert-grid {
@@ -354,18 +300,6 @@ Risiko:
   font-size: 17px;
 }
 
-/* =========================
-   SECTION: Summary Metrics and Production Cards
-   Fungsi blok:
-   - menampilkan ringkasan produksi dan keuangan dengan card kecil, bukan laporan final.
-   Hubungan blok dengan flow aplikasi:
-   - dipakai Fokus Produksi dan Keuangan Ringkas; source final tetap Production, HPP, Cashflow, dan Profit Loss.
-   Alasan logic dipakai:
-   - surface solid memakai token white/navy supaya informasi operasional mudah dibaca di light dan dark mode.
-   Status logic:
-   - AKTIF sebagai styling read-only.
-   - GUARDED karena angka Dashboard tidak boleh diperlakukan sebagai mutasi data atau Profit Loss final.
-========================= */
 .dashboard-compact-card {
   height: 100%;
   box-shadow: var(--dashboard-card-shadow);
@@ -406,6 +340,38 @@ Risiko:
   border-radius: 999px;
 }
 
+.dashboard-page .ant-tag-red {
+  background: var(--ims-color-danger-soft);
+  border-color: var(--ims-color-danger-muted);
+  color: var(--ims-color-danger-text);
+}
+
+.dashboard-page .ant-tag-orange,
+.dashboard-page .ant-tag-gold {
+  background: var(--ims-color-warning-soft);
+  border-color: var(--ims-color-warning-muted);
+  color: var(--ims-color-warning-text);
+}
+
+.dashboard-page .ant-tag-blue {
+  background: var(--ims-color-primary-softer);
+  border-color: var(--ims-color-primary-muted);
+  color: var(--ims-color-primary-active);
+}
+
+.dashboard-page .ant-tag-purple,
+.dashboard-page .ant-tag-cyan {
+  background: var(--ims-bg-card-soft);
+  border-color: var(--ims-border-strong);
+  color: var(--ims-color-primary);
+}
+
+.dashboard-page .ant-tag-green {
+  background: var(--ims-color-success-soft);
+  border-color: var(--ims-color-success-muted);
+  color: var(--ims-color-success-text);
+}
+
 .dashboard-metric-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -424,18 +390,6 @@ Risiko:
   margin-top: 12px;
 }
 
-/* =========================
-   SECTION: Restock Assistant Actions
-   Fungsi blok:
-   - menjaga tombol shortcut restock tetap compact dan tidak melebar keluar card.
-   Hubungan blok dengan flow aplikasi:
-   - tombol tetap menjalankan action Dashboard.jsx yang hanya buka link eksternal atau navigasi prefill ke modul terkait.
-   Alasan logic dipakai:
-   - action group memakai wrap agar layout aman tanpa horizontal scroll pada data nama/link panjang.
-   Status logic:
-   - AKTIF untuk Restock Assistant read-only.
-   - GUARDED karena Dashboard tidak boleh membuat purchase, expense, atau mutasi stok otomatis.
-========================= */
 .dashboard-restock-card {
   align-items: flex-start;
 }
@@ -455,17 +409,6 @@ Risiko:
   color: var(--ims-text-muted);
 }
 
-/* =========================
-   SECTION: Empty State and Ant Design Fit
-   Fungsi blok:
-   - menjaga empty state dan komponen Ant Design di Dashboard tetap ringan dan konsisten dengan token theme.
-   Hubungan blok dengan flow aplikasi:
-   - hanya memengaruhi state kosong/loading visual; fallback data tetap dikontrol Dashboard.jsx.
-   Alasan logic dipakai:
-   - state kosong harus terbaca tanpa mengambil tinggi berlebihan pada control center.
-   Status logic:
-   - AKTIF untuk Dashboard empty state dan component fit.
-========================= */
 .dashboard-empty-wrap {
   display: flex;
   align-items: center;
@@ -482,18 +425,6 @@ Risiko:
   color: var(--ims-text-muted);
 }
 
-/* =========================
-   SECTION: Responsive Dashboard Layout
-   Fungsi blok:
-   - menjaga priority grid, metric grid, dan list card tetap compact di desktop, laptop, tablet, dan mobile.
-   Hubungan blok dengan flow aplikasi:
-   - responsive hanya mengubah jumlah kolom visual, tidak mengubah jumlah data, route, atau query.
-   Alasan logic dipakai:
-   - Dashboard tidak boleh memakai horizontal scroll sebagai layout utama.
-   Status logic:
-   - AKTIF untuk anti horizontal scroll.
-   - GUARDED karena perubahan breakpoint tidak boleh membuat Dashboard berubah menjadi table/report penuh.
-========================= */
 @media (max-width: 1400px) {
   .dashboard-priority-grid,
   .dashboard-quick-action-grid {

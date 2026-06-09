@@ -66,23 +66,16 @@ import "./Dashboard.css";
 
 const { Text, Title } = Typography;
 
-/* =====================================================
-SECTION: Dashboard Quick Actions — AKTIF / GUARDED
-Fungsi:
-- Menyediakan shortcut navigasi ke route existing agar user cepat berpindah menu tanpa membuat/mengubah data.
+const DASHBOARD_TAG_COLORS = Object.freeze({
+  danger: "red",
+  warning: "gold",
+  attention: "orange",
+  info: "blue",
+  production: "purple",
+  payroll: "cyan",
+  success: "green",
+});
 
-Dipakai oleh:
-- Section Aksi Cepat pada Dashboard.
-
-Alasan perubahan:
-- Dashboard diarahkan menjadi business control center yang membantu navigasi lintas modul ERP IMS.
-
-Catatan cleanup:
-- Jika role/action matrix makin detail, daftar ini bisa dibaca dari config route yang sudah ter-guard, bukan ditulis manual.
-
-Risiko:
-- Jika quick action berubah menjadi submit/create otomatis, Dashboard melanggar prinsip read-only dan bisa membuat transaksi/stok/kas dobel.
-===================================================== */
 const buildDashboardQuickActions = () => [
   {
     key: "sales",
@@ -163,13 +156,23 @@ const formatDashboardLoadWarning = (failedReads = []) => {
   if (!Array.isArray(failedReads) || failedReads.length === 0) return "";
 
   const uniqueFailedReads = [...new Set(failedReads.filter(Boolean))];
-  const hasStockReadModelFallback = uniqueFailedReads.some((key) => STOCK_READ_MODEL_WARNING_KEYS.has(key));
+  const hasStockReadModelFallback = uniqueFailedReads.some((key) =>
+    STOCK_READ_MODEL_WARNING_KEYS.has(key),
+  );
 
   if (hasStockReadModelFallback) {
-    return "Data stok lokal belum siap atau layanan lokal belum mengembalikan data stok lengkap. Dashboard tetap memakai data aman agar monitoring tidak kosong. Jika warning berulang, buka Database Center lalu jalankan audit/perbaikan stok.";
+    return [
+      "Data stok lokal belum siap atau layanan lokal belum mengembalikan data stok lengkap.",
+      "Dashboard tetap memakai data aman agar monitoring tidak kosong.",
+      "Jika warning berulang, buka Database Center lalu jalankan audit/perbaikan stok.",
+    ].join(" ");
   }
 
-  return "Sebagian data Dashboard belum siap. Data lain tetap ditampilkan untuk monitoring; cek layanan lokal, koneksi jaringan, atau status modul aplikasi bila warning berulang.";
+  return [
+    "Sebagian data Dashboard belum siap.",
+    "Data lain tetap ditampilkan untuk monitoring; cek layanan lokal, koneksi jaringan,",
+    "atau status modul aplikasi bila warning berulang.",
+  ].join(" ");
 };
 
 const getSafeExternalHttpUrl = (value) => {
@@ -193,17 +196,6 @@ const Dashboard = () => {
   const [loadWarning, setLoadWarning] = useState("");
   const dashboardReadInFlightRef = useRef(false);
   const [dashboardData, setDashboardData] = useState(() => createEmptyDashboardData());
-
-  // =========================
-  // SECTION: Load Dashboard data
-  // Fungsi:
-  // - meminta dashboardData final dari dashboardService agar page fokus ke rendering UI;
-  // - tombol refresh memanggil fungsi yang sama tanpa melakukan write ke collection mana pun.
-  // Hubungan flow:
-  // - membaca stok, PO, Work Log, Payroll, Income/Expense, Inventory Log, dan Planning sebagai ringkasan operasional.
-  // Status:
-  // - aktif dipakai; tidak ada write/backfill lama di blok ini.
-  // =========================
   const loadDashboardData = useCallback(async () => {
     if (dashboardReadInFlightRef.current) {
       return;
@@ -336,24 +328,7 @@ const Dashboard = () => {
     };
   }, [expenses, incomes, revenues]);
 
-  /* =====================================================
-  SECTION: Dashboard Business Alerts — AKTIF / GUARDED
-  Fungsi:
-  - Merangkum exception lintas stok, produksi, payroll, dan HPP agar Dashboard menjadi control center read-only.
-
-  Dipakai oleh:
-  - KPI Data Perlu Dicek dan section Data Perlu Dicek.
-
-  Alasan perubahan:
-  - User perlu tahu data/flow yang bermasalah tanpa membuka semua menu IMS satu per satu.
-
-  Catatan cleanup:
-  - Alert yang membutuhkan source belum stabil harus tetap menjadi cleanup candidate, bukan dibuat sebagai angka final.
-
-  Risiko:
-  - Jika alert dipakai sebagai dasar write otomatis, stok, payroll, HPP, atau report bisa tidak sinkron.
-  ===================================================== */
-  const businessAlertItems = useMemo(() => {
+    const businessAlertItems = useMemo(() => {
     const negativeStockRows = stockAuditRows.filter((item) => item.isNegativeStock);
     const reservedOverrunRows = stockAuditRows.filter((item) => item.isReservedOverrun);
     const items = [];
@@ -364,7 +339,7 @@ const Dashboard = () => {
         label: "Stok minus",
         count: negativeStockRows.length,
         description: `${negativeStockRows[0].name} perlu dicek di Stock Management.`,
-        color: "red",
+        color: DASHBOARD_TAG_COLORS.danger,
         type: "Stock",
         to: negativeStockRows[0].to,
       });
@@ -375,8 +350,10 @@ const Dashboard = () => {
         key: "reserved-overrun",
         label: "Reserved tidak wajar",
         count: reservedOverrunRows.length,
-        description: `${reservedOverrunRows[0].name}: reserved ${formatNumberId(reservedOverrunRows[0].reservedStock)} ${reservedOverrunRows[0].unit}.`,
-        color: "orange",
+        description: `${reservedOverrunRows[0].name}: reserved ${formatNumberId(
+          reservedOverrunRows[0].reservedStock,
+        )} ${reservedOverrunRows[0].unit}.`,
+        color: DASHBOARD_TAG_COLORS.attention,
         type: "Stock",
         to: reservedOverrunRows[0].to,
       });
@@ -388,7 +365,7 @@ const Dashboard = () => {
         label: "Stok kritis",
         count: lowStockTotal,
         description: "Ada item kosong/menipis berdasarkan threshold master.",
-        color: "gold",
+        color: DASHBOARD_TAG_COLORS.warning,
         type: "Stock",
         to: "/stock-management",
       });
@@ -400,7 +377,7 @@ const Dashboard = () => {
         label: "PO shortage",
         count: productionSummary.shortageOrders,
         description: "Material/BOM perlu dicek sebelum produksi berjalan.",
-        color: "red",
+        color: DASHBOARD_TAG_COLORS.danger,
         type: "Production",
         to: "/produksi/production-orders",
       });
@@ -412,7 +389,7 @@ const Dashboard = () => {
         label: "Planning perlu dicek",
         count: planningSummary.overdueCount + planningSummary.behindTargetCount,
         description: "Ada planning overdue atau tertinggal target.",
-        color: planningSummary.overdueCount > 0 ? "red" : "gold",
+        color: planningSummary.overdueCount > 0 ? DASHBOARD_TAG_COLORS.danger : DASHBOARD_TAG_COLORS.warning,
         type: "Production",
         to: "/produksi/production-planning",
       });
@@ -424,7 +401,7 @@ const Dashboard = () => {
         label: "Cost/HPP kosong",
         count: productionSummary.costIssueCount,
         description: "Work Log completed punya cost actual 0.",
-        color: "purple",
+        color: DASHBOARD_TAG_COLORS.production,
         type: "HPP",
         to: "/produksi/analisis-hpp",
       });
@@ -436,7 +413,7 @@ const Dashboard = () => {
         label: "Payroll pending",
         count: payrollSummary.pendingCount,
         description: `${formatCurrency(payrollSummary.pendingAmount)} masih perlu review/pembayaran.`,
-        color: "cyan",
+        color: DASHBOARD_TAG_COLORS.payroll,
         type: "Payroll",
         to: "/produksi/payroll-produksi",
       });
@@ -456,25 +433,7 @@ const Dashboard = () => {
 
   const businessAlertTotal = businessAlertItems.reduce((total, item) => total + getNumericValue(item.count), 0);
 
-  /* =====================================================
-  SECTION: Dashboard KPI Strip — AKTIF
-  Fungsi:
-  - Mengumpulkan KPI ringkas sales, kas, stok, produksi, payroll, dan alert tanpa menulis data.
-  - Menyediakan status kecil per KPI yang membutuhkan perhatian tanpa memakai aksen warna besar pada card.
-
-  Dipakai oleh:
-  - Section Ringkasan Hari Ini pada Dashboard.
-
-  Alasan perubahan:
-  - Card KPI dibuat netral agar dashboard terlihat lebih profesional; penanda kondisi cukup memakai badge kecil.
-
-  Catatan cleanup:
-  - Sales dan cash masih dibaca dari data operasional existing; standardisasi data ringkasan bisa menjadi task terpisah jika data membesar.
-
-  Risiko:
-  - Menjumlahkan sales dengan incomes/revenues sebagai angka kas yang sama akan double count dan membuat Profit Loss tidak sinkron.
-  ===================================================== */
-  const kpiItems = useMemo(() => [
+    const kpiItems = useMemo(() => [
     {
       key: "sales-month",
       label: "Sales Bulan Ini",
@@ -558,17 +517,6 @@ const Dashboard = () => {
     salesSummary.monthCount,
     salesSummary.todayAmount,
   ]);
-
-  // =========================
-  // SECTION: Prioritas Hari Ini
-  // Fungsi:
-  // - menyusun maksimal 5 prioritas actionable tanpa menampilkan info dobel;
-  // - setiap item hanya navigasi ke menu terkait dan tidak melakukan update data.
-  // Hubungan flow:
-  // - menggabungkan sinyal stok, PO, planning, Work Log, dan Payroll sebagai control center harian.
-  // Status:
-  // - aktif dipakai; bukan data historis.
-  // =========================
   const priorityItems = useMemo(() => {
     const items = [
       {
@@ -576,7 +524,7 @@ const Dashboard = () => {
         label: "Stok kritis perlu dicek",
         count: lowStockTotal,
         description: "Gunakan available stock agar stok reserved tidak terlihat aman palsu.",
-        color: "gold",
+        color: DASHBOARD_TAG_COLORS.warning,
         icon: <WarningOutlined />,
         to: "/stock-management",
       },
@@ -585,7 +533,7 @@ const Dashboard = () => {
         label: "PO shortage",
         count: productionSummary.shortageOrders,
         description: "Cek kebutuhan material/BOM sebelum produksi dimulai.",
-        color: "red",
+        color: DASHBOARD_TAG_COLORS.danger,
         icon: <ToolOutlined />,
         to: "/produksi/production-orders",
       },
@@ -594,7 +542,7 @@ const Dashboard = () => {
         label: "Planning perlu dikejar",
         count: planningSummary.overdueCount || planningSummary.behindTargetCount,
         description: "Overdue atau target belum tercapai berdasarkan Work Log completed.",
-        color: planningSummary.overdueCount > 0 ? "red" : "gold",
+        color: planningSummary.overdueCount > 0 ? DASHBOARD_TAG_COLORS.danger : DASHBOARD_TAG_COLORS.warning,
         icon: <ClockCircleOutlined />,
         to: "/produksi/production-planning",
       },
@@ -603,7 +551,7 @@ const Dashboard = () => {
         label: "PO siap produksi",
         count: productionSummary.readyOrders,
         description: "Antrian ini sudah siap diproses ke Work Log.",
-        color: "blue",
+        color: DASHBOARD_TAG_COLORS.info,
         icon: <CheckCircleOutlined />,
         to: "/produksi/production-orders",
       },
@@ -612,7 +560,7 @@ const Dashboard = () => {
         label: "Work Log berjalan",
         count: productionSummary.runningWorkLogs,
         description: "Review pekerjaan yang belum ditutup agar biaya dan output final jelas.",
-        color: "purple",
+        color: DASHBOARD_TAG_COLORS.production,
         icon: <BuildOutlined />,
         to: "/produksi/work-log-produksi",
       },
@@ -621,7 +569,7 @@ const Dashboard = () => {
         label: "Payroll pending",
         count: payrollSummary.pendingCount,
         description: "Cek payroll draft/confirmed/unpaid sebelum pembayaran final.",
-        color: "cyan",
+        color: DASHBOARD_TAG_COLORS.payroll,
         icon: <DollarCircleOutlined />,
         to: "/produksi/payroll-produksi",
       },
@@ -639,11 +587,11 @@ const Dashboard = () => {
   ]);
 
   const productionStatusItems = [
-    { key: "shortage", label: "PO Shortage", value: productionSummary.shortageOrders, color: "red" },
-    { key: "ready", label: "PO Siap", value: productionSummary.readyOrders, color: "blue" },
-    { key: "running", label: "Work Log Jalan", value: productionSummary.runningWorkLogs, color: "purple" },
-    { key: "completed", label: "Completed Minggu Ini", value: productionSummary.completedWorkLogs, color: "green" },
-    { key: "payroll", label: "Payroll Pending", value: payrollSummary.pendingCount, color: "cyan" },
+    { key: "shortage", label: "PO Shortage", value: productionSummary.shortageOrders, color: DASHBOARD_TAG_COLORS.danger },
+    { key: "ready", label: "PO Siap", value: productionSummary.readyOrders, color: DASHBOARD_TAG_COLORS.info },
+    { key: "running", label: "Work Log Jalan", value: productionSummary.runningWorkLogs, color: DASHBOARD_TAG_COLORS.production },
+    { key: "completed", label: "Completed Minggu Ini", value: productionSummary.completedWorkLogs, color: DASHBOARD_TAG_COLORS.success },
+    { key: "payroll", label: "Payroll Pending", value: payrollSummary.pendingCount, color: DASHBOARD_TAG_COLORS.payroll },
   ];
 
   const lastUpdatedText = loading
@@ -658,17 +606,6 @@ const Dashboard = () => {
         })
       : "Belum dimuat";
   const isInitialDashboardLoading = loading && !lastUpdated;
-
-  // =========================
-  // SECTION: Restock Assistant Actions
-  // Fungsi:
-  // - membuka link produk terakhir, prefill halaman Purchases, dan membuka Supplier terfilter;
-  // - semua action aman untuk HashRouter karena route internal memakai useNavigate.
-  // Hubungan flow:
-  // - action Dashboard hanya navigasi/prefill, tidak menulis database lokal dan tidak membuat transaksi otomatis.
-  // Status:
-  // - aktif dipakai oleh Stok Kritis; bukan kandidat cleanup selama Restock Assistant aktif.
-  // =========================
   const openRestockProductLink = (productLink) => {
     const safeProductLink = getSafeExternalHttpUrl(productLink);
 
@@ -731,23 +668,7 @@ const Dashboard = () => {
         </PageSection>
       ) : (
         <>
-      {/* =====================================================
-          SECTION: Ringkasan Hari Ini — AKTIF
-          Fungsi:
-          - Menampilkan KPI compact sales, kas, stok, produksi, payroll, dan data perlu dicek.
-
-          Dipakai oleh:
-          - Dashboard control center.
-
-          Alasan perubahan:
-          - Owner perlu membaca kondisi bisnis utama dalam sekali lihat tanpa membuka report penuh.
-
-          Catatan cleanup:
-          - Sales dan cash dapat dipindahkan ke data ringkasan jika volume data makin besar.
-
-          Risiko:
-          - Jika KPI dianggap laporan final, angka bisa disalahartikan karena Dashboard hanya monitoring read-only.
-      ===================================================== */}
+      {}
       <PageSection
         title="Ringkasan Hari Ini"
         subtitle="KPI utama harian."
@@ -772,23 +693,7 @@ const Dashboard = () => {
         </div>
       </PageSection>
 
-      {/* =====================================================
-          SECTION: Aksi Cepat — AKTIF / GUARDED
-          Fungsi:
-          - Menyediakan shortcut navigasi ke route existing tanpa create/update/delete data.
-
-          Dipakai oleh:
-          - User Dashboard untuk berpindah ke Sales, Purchases, Stock, Produksi, Payroll, dan Cash.
-
-          Alasan perubahan:
-          - Dashboard sebagai control center perlu mempercepat perpindahan menu ERP IMS.
-
-          Catatan cleanup:
-          - Daftar route bisa disatukan dengan config navigasi jika nanti role-aware quick action dibutuhkan.
-
-          Risiko:
-          - Jika action diubah menjadi auto-submit, Dashboard akan melanggar read-only dan bisa membuat data dobel.
-      ===================================================== */}
+      {}
       <PageSection
         title="Aksi Cepat"
         subtitle="Akses menu utama."
@@ -807,23 +712,7 @@ const Dashboard = () => {
         </div>
       </PageSection>
 
-      {/* =====================================================
-          SECTION: Data Perlu Dicek — AKTIF / GUARDED
-          Fungsi:
-          - Menampilkan exception lintas modul secara compact dan read-only.
-
-          Dipakai oleh:
-          - Owner/admin untuk audit cepat stok, produksi, payroll, dan HPP.
-
-          Alasan perubahan:
-          - Dashboard perlu menunjukkan masalah operasional yang butuh perhatian sebelum menjadi bug laporan.
-
-          Catatan cleanup:
-          - Alert tambahan seperti return/cash anomaly hanya ditambahkan jika source datanya sudah jelas.
-
-          Risiko:
-          - Alert yang terlalu banyak atau tidak akurat bisa membuat Dashboard terlihat seperti report besar dan membingungkan user.
-      ===================================================== */}
+      {}
       <PageSection
         title="Data Perlu Dicek"
         subtitle="Prioritas operasional."
@@ -850,14 +739,6 @@ const Dashboard = () => {
           </div>
         )}
       </PageSection>
-
-      {/* =========================
-          SECTION 1: Prioritas Hari Ini
-          Fungsi:
-          - menampilkan action card paling penting saja;
-          - seluruh action hanya Link navigasi, bukan write data.
-          Status: aktif dipakai untuk Dashboard read-only; bukan data historis.
-      ========================= */}
       <PageSection
         title="Prioritas Hari Ini"
         subtitle="Fokus harian."
@@ -884,14 +765,6 @@ const Dashboard = () => {
           </div>
         )}
       </PageSection>
-
-      {/* =========================
-          SECTION 2: Fokus Produksi
-          Fungsi:
-          - merangkum progress planning dan status produksi tanpa tabel besar;
-          - planning priority dibatasi 3 item sesuai guard docs.
-          Status: aktif read-only; tidak mengubah Planning, PO, Work Log, Payroll, atau HPP.
-      ========================= */}
       <PageSection
         title="Fokus Produksi"
         subtitle="Target dan risiko produksi."
@@ -962,7 +835,9 @@ const Dashboard = () => {
                       <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
                     </Space>
                     <Text className="dashboard-muted-text">
-                      Sisa {formatNumberId(plan.remainingQty)} {plan.targetUnit || "pcs"} - Progress {formatNumberId(Math.round(plan.progressPercent || 0))}% - Deadline {formatDashboardDate(plan.dueDate)}
+                      Sisa {formatNumberId(plan.remainingQty)} {plan.targetUnit || "pcs"} - Progress{" "}
+                      {formatNumberId(Math.round(plan.progressPercent || 0))}% - Deadline{" "}
+                      {formatDashboardDate(plan.dueDate)}
                     </Text>
                   </div>
                   <ArrowRightOutlined className="dashboard-action-arrow" />
@@ -978,13 +853,6 @@ const Dashboard = () => {
       </PageSection>
 
       <Row gutter={[16, 16]}>
-        {/* =========================
-            SECTION 3: Stok Kritis
-            Fungsi:
-            - mengganti tabel stok menjadi compact list maksimal 5 item;
-            - memakai availableStock agar tidak misleading saat ada reserved stock.
-            Status: aktif read-only; tidak mengubah Stock Management atau Inventory helper.
-        ========================= */}
         <Col xs={24} xl={12}>
           <PageSection
             title="Stok Kritis"
@@ -1036,15 +904,10 @@ const Dashboard = () => {
                             {item.restockSupplierName ? `Supplier terakhir: ${item.restockSupplierName}` : "Belum ada supplier terakhir"}
                           </Text>
                           {item.lastPurchasePrice > 0 ? (
-                            <Tag color="blue">Harga terakhir {formatCurrency(item.lastPurchasePrice)}</Tag>
+                            <Tag color={DASHBOARD_TAG_COLORS.info}>Harga terakhir {formatCurrency(item.lastPurchasePrice)}</Tag>
                           ) : null}
                         </Space>
-                        {/* =========================
-                            SECTION: Restock Assistant Actions per bahan
-                            Fungsi: memberi shortcut buka link produk, buat pembelian, dan bandingkan supplier.
-                            Hubungan flow: tombol hanya membuka link/navigasi; transaksi baru tetap dibuat manual di Purchases.
-                            Status: aktif dipakai; bukan auto-purchase dan bukan mutasi stok.
-                        ========================= */}
+                        {}
                         <Space size={8} wrap className="dashboard-restock-actions">
                           <Button
                             size="small"
@@ -1077,14 +940,6 @@ const Dashboard = () => {
             )}
           </PageSection>
         </Col>
-
-        {/* =========================
-            SECTION 4: Keuangan Ringkas
-            Fungsi:
-            - menampilkan angka kas/expense yang sudah diakui secara ringkas;
-            - memberi catatan agar Dashboard tidak dianggap pengganti Profit Loss final.
-            Status: aktif read-only; tidak mengubah Profit Loss, Cash In, Cash Out, atau payroll expense.
-        ========================= */}
         <Col xs={24} xl={12}>
           <PageSection
             title="Keuangan Ringkas"
@@ -1119,7 +974,9 @@ const Dashboard = () => {
                 <Alert
                   type="info"
                   showIcon
-                  message={`${formatNumberId(payrollSummary.pendingCount)} payroll masih pending (${formatCurrency(payrollSummary.pendingAmount)}).`}
+                  message={`${formatNumberId(
+                    payrollSummary.pendingCount,
+                  )} payroll masih pending (${formatCurrency(payrollSummary.pendingAmount)}).`}
                 />
               ) : null}
 
@@ -1129,7 +986,13 @@ const Dashboard = () => {
                   showIcon
                   message={
                     payrollSummary.payrollExpenseCount > 0
-                      ? `Payroll paid bulan ini tercatat ${formatNumberId(payrollSummary.payrollExpenseCount)} kali di Cash Out: ${formatCurrency(payrollSummary.payrollExpenseThisMonth)}. Hindari input ulang manual.`
+                      ? [
+                          `Payroll paid bulan ini tercatat ${formatNumberId(
+                            payrollSummary.payrollExpenseCount,
+                          )} kali di Cash Out:`,
+                          `${formatCurrency(payrollSummary.payrollExpenseThisMonth)}.`,
+                          "Hindari input ulang manual.",
+                        ].join(" ")
                       : "Ada payroll paid bulan ini, tetapi expense payroll belum terlihat. Cek Cash Out sebelum membaca Profit Loss."
                   }
                 />
@@ -1139,21 +1002,15 @@ const Dashboard = () => {
                 <Alert
                   type="warning"
                   showIcon
-                  message={`${formatNumberId(productionSummary.costIssueCount)} Work Log completed punya cost 0. Cek HPP/cost material sebelum analisis.`}
+                  message={`${formatNumberId(
+                    productionSummary.costIssueCount,
+                  )} Work Log completed punya cost 0. Cek HPP/cost material sebelum analisis.`}
                 />
               ) : null}
             </div>
           </PageSection>
         </Col>
       </Row>
-
-      {/* =========================
-          SECTION 5: Aktivitas Terbaru
-          Fungsi:
-          - menampilkan feed inventory log terbaru tanpa tabel besar dan tanpa horizontal scroll;
-          - maksimal 5 item agar Dashboard tetap compact.
-          Status: aktif read-only; tidak mengubah inventory_logs.
-      ========================= */}
       <PageSection
         title="Aktivitas Terbaru"
         subtitle="Mutasi stok terakhir."

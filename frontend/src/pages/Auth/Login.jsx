@@ -16,23 +16,15 @@ import flanelKarawangMark from "../../assets/branding/flanel-karawang-mark.png";
 import useAuth from "../../hooks/useAuth";
 import LogoLoadingScreen from "../../components/Layout/Feedback/LogoLoadingScreen";
 import { AUTH_PROFILE_STATUS } from "../../context/AuthContext";
-import { createLocalBootstrapAdmin, getLocalAuthStatus } from "../../services/System/localAuthService";
+import {
+  createLocalBootstrapAdmin,
+  getLocalAuthStatus,
+} from "../../services/System/localAuthService";
 import "./Login.css";
 
 const { Text, Title } = Typography;
 
-// =========================
-// SECTION: Status Message Mapper — AKTIF / GUARDED
-// Fungsi:
-// - menerjemahkan status profile auth menjadi pesan yang mudah dipahami user.
-// Hubungan flow aplikasi:
-// - dipakai ketika user valid local auth database lokal tetapi belum boleh masuk karena profile/role/status belum valid.
-// Alasan logic dipakai:
-// - menjaga user yang profile internalnya belum valid tetap tertahan di halaman login.
-// Status logic:
-// - AKTIF untuk login internal IMS.
-// - GUARDED: jangan melewatkan user missing profile/inactive ke AppLayout.
-// =========================
+// Guarded: blocked profile statuses must not enter AppLayout.
 const getBlockedAccessMessage = (profileStatus) => {
   switch (profileStatus) {
     case AUTH_PROFILE_STATUS.MISSING_PROFILE:
@@ -68,18 +60,6 @@ const getBlockedAccessMessage = (profileStatus) => {
   }
 };
 
-// =========================
-// SECTION: Browser Branding — AKTIF / UI ONLY
-// Fungsi:
-// - memasang title tab dan favicon Flanel pada halaman login.
-// Hubungan flow aplikasi:
-// - hanya menyentuh metadata browser saat Login dirender; tidak menyentuh AuthContext, route guard, role, atau alur data utama.
-// Alasan logic dipakai:
-// - memenuhi kebutuhan logo tab tanpa mengubah index.html atau dependency baru.
-// Status logic:
-// - AKTIF untuk branding Login.
-// - CLEANUP CANDIDATE: jika nanti ingin title/favicon global seluruh aplikasi, pindahkan ke level App/index.html.
-// =========================
 const useLoginBrowserBranding = () => {
   useEffect(() => {
     const previousTitle = document.title;
@@ -120,17 +100,6 @@ const useLoginBrowserBranding = () => {
   }, []);
 };
 
-// =========================
-// SECTION: Brand Logo Lockup — AKTIF / UI ONLY
-// Fungsi:
-// - menampilkan logo resmi Flanel Karawang Industries sebagai focal point utama panel kiri.
-// Hubungan flow aplikasi:
-// - visual non-interaktif; tidak terhubung ke auth, alur data utama, role, route, stok, kas, atau modul bisnis.
-// Alasan logic dipakai:
-// - menjaga brand tampil clean tanpa membuat teks brand dobel di luar asset logo.
-// Status logic:
-// - AKTIF untuk branding utama Login.
-// =========================
 const BrandLogoShowcase = () => (
   <div
     className="ims-login-logo-showcase"
@@ -151,17 +120,6 @@ const BrandLogoShowcase = () => (
   </div>
 );
 
-// =========================
-// SECTION: Brand Motif — AKTIF / UI ONLY
-// Fungsi:
-// - menambah pemanis pill/dot biru-kuning yang ditempatkan di pinggir panel brand.
-// Hubungan flow aplikasi:
-// - dekorasi murni; tidak menyentuh input, submit, local auth database lokal, role, route, atau data bisnis.
-// Alasan logic dipakai:
-// - membuat halaman tidak terlalu polos tanpa memakai garis keras/shape besar yang terlihat seperti bug.
-// Status logic:
-// - AKTIF untuk visual Login.
-// =========================
 const BrandMotif = () => (
   <div className="ims-login-brand-motif" aria-hidden="true">
     <span className="ims-login-motif-pill ims-login-motif-pill--blue-one" />
@@ -179,17 +137,6 @@ const BrandMotif = () => (
   </div>
 );
 
-// =========================
-// SECTION: Brand Panel — AKTIF / UI ONLY
-// Fungsi:
-// - menampilkan badge IMS, logo resmi, motif ringan, dan note internal dalam area kiri.
-// Hubungan flow aplikasi:
-// - mendampingi form login tanpa mengubah input, submit, local auth database lokal, profile validation, role, atau route.
-// Alasan logic dipakai:
-// - desain final menekankan logo sebagai focal point dan menghapus headline/deskripsi lama agar lebih clean.
-// Status logic:
-// - AKTIF untuk halaman Login.
-// =========================
 const BrandPanel = () => (
   <section className="ims-login-brand-panel">
     <div className="ims-login-badge">Inventory Management System</div>
@@ -206,17 +153,6 @@ const BrandPanel = () => (
   </section>
 );
 
-// =========================
-// SECTION: Login Shell — AKTIF / UI ONLY
-// Fungsi:
-// - wrapper visual halaman login untuk state loading, blocked access, dan form normal.
-// Hubungan flow aplikasi:
-// - tidak menjalankan logic auth; hanya menyediakan layout agar semua state login konsisten.
-// Alasan logic dipakai:
-// - menjaga redesign tetap scoped di halaman Login tanpa menyentuh AppLayout, Sidebar, Dashboard, atau modul bisnis.
-// Status logic:
-// - AKTIF untuk login internal IMS.
-// =========================
 const LoginShell = ({ children, variant = "default" }) => (
   <main className={`ims-login-page ims-login-page--${variant}`}>
     <div className="ims-login-layout">
@@ -226,19 +162,7 @@ const LoginShell = ({ children, variant = "default" }) => (
   </main>
 );
 
-// =========================
-// SECTION: Login Page — AKTIF / GUARDED
-// Fungsi:
-// - halaman login internal IMS memakai Username + Password.
-// Hubungan flow aplikasi:
-// - username dikirim ke AuthProvider untuk login lokal database lokal;
-// - password tetap divalidasi layanan auth database lokal, bukan frontend manual.
-// Alasan logic dipakai:
-// - frontend hanya mengirim credential ke flow auth existing, bukan membuat auth baru.
-// Status logic:
-// - AKTIF untuk login internal IMS.
-// - GUARDED: jangan ubah handleLogin/loginWithUsername/profileStatus/logout tanpa task auth khusus.
-// =========================
+// UI-only page shell; submit still delegates to AuthContext/local auth service.
 const Login = () => {
   useLoginBrowserBranding();
 
@@ -284,7 +208,9 @@ const Login = () => {
         console.error("[Login] Gagal membaca status auth lokal.", error);
         if (!disposed) {
           setBootstrapStatus(null);
-          setBootstrapError("Layanan lokal belum bisa dibaca. Pastikan layanan aplikasi berjalan sebelum membuat admin pertama.");
+          setBootstrapError(
+            "Layanan lokal belum bisa dibaca. Pastikan layanan aplikasi berjalan sebelum membuat admin pertama.",
+          );
         }
       }
     };
@@ -296,17 +222,6 @@ const Login = () => {
     };
   }, [isSqliteAuth]);
 
-  // =========================
-  // SECTION: Submit Login — AKTIF / GUARDED
-  // Fungsi:
-  // - meneruskan username dan password ke AuthProvider tanpa mengubah format input.
-  // Hubungan flow aplikasi:
-  // - AuthProvider tetap bertanggung jawab menjalankan login lokal database lokal.
-  // Alasan logic dipakai:
-  // - menjaga flow login existing tetap menjadi satu-satunya entry submit credential.
-  // Status logic:
-  // - AKTIF dan GUARDED.
-  // =========================
   const handleLogin = async (values) => {
     setIsSubmitting(true);
     setLoginError("");
@@ -332,7 +247,8 @@ const Login = () => {
         username: values.username,
         displayName: values.displayName,
         password: values.password,
-        confirmKeyword: bootstrapStatus?.bootstrapConfirmKeyword || "CREATE LOCAL ADMIN",
+        confirmKeyword:
+          bootstrapStatus?.bootstrapConfirmKeyword || "CREATE LOCAL ADMIN",
       };
 
       await createLocalBootstrapAdmin(payload);
@@ -345,39 +261,11 @@ const Login = () => {
     }
   };
 
-  // =========================
-  // SECTION: Logout Blocked User — AKTIF / GUARDED
-  // Fungsi:
-  // - mengeluarkan session lokal yang valid tetapi profile internalnya belum boleh masuk.
-  // Hubungan flow aplikasi:
-  // - menjaga user blocked tidak tersangkut di state login dan tidak masuk AppLayout.
-  // Alasan logic dipakai:
-  // - blocked state harus bisa dikembalikan ke form login normal tanpa bypass role/profile guard.
-  // Status logic:
-  // - AKTIF dan GUARDED.
-  // =========================
   const handleLogoutBlockedUser = async () => {
     setLoginError("");
     await logout();
   };
 
-  // =====================================================
-  // SECTION: Login Auth/Profile Loading — AKTIF / GUARDED
-  // Fungsi:
-  // - Menampilkan loading saat session lokal database lokal atau profile internal user sedang diverifikasi.
-  //
-  // Dipakai oleh:
-  // - Login sebelum form, blocked access, atau redirect AppContent ditentukan oleh state auth existing.
-  //
-  // Alasan perubahan:
-  // - Visual loader disatukan ke LogoLoadingScreen full viewport sebagai UI-only; login submit, validation, blocked profile, dan AuthContext tidak berubah.
-  //
-  // Catatan cleanup:
-  // - belum ada.
-  //
-  // Risiko:
-  // - Jika kondisi authLoading/profileStatus diubah sembarangan, user bisa melihat form atau AppLayout saat profile belum valid.
-  // =====================================================
   if (authLoading || profileStatus === AUTH_PROFILE_STATUS.LOADING_PROFILE) {
     return <LogoLoadingScreen message="Memeriksa session dan profile user..." />;
   }
@@ -486,9 +374,6 @@ const Login = () => {
   return (
     <LoginShell>
       <Card className="ims-login-card">
-        {/* AKTIF / UI ONLY:
-            Header form hanya mengubah copy dan hierarchy visual login.
-            Tidak terkait submit login, AuthContext, role, route, atau profile gate. */}
         <Space direction="vertical" size={6} className="ims-login-heading">
           <Text className="ims-login-eyebrow">Akses Internal</Text>
           <Title level={3} className="ims-login-title">
@@ -499,9 +384,6 @@ const Login = () => {
           </Text>
         </Space>
 
-        {/* AKTIF / GUARDED:
-            Login normal hanya menampilkan copy user-facing, form, dan error login.
-            Info teknis internal tidak ditampilkan di DOM tanpa mengubah handleLogin, AuthContext, atau profile gate. */}
         {loginError ? (
           <Alert
             className="ims-login-error-box"

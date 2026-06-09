@@ -1,0 +1,498 @@
+/* =========================
+   SECTION: App Shell - AKTIF / THEME CENTER / GUARDED
+   Fungsi:
+   - menyediakan shell global full-screen dengan background dan teks dari token tema light/dark.
+   Hubungan flow aplikasi:
+   - dipakai AppLayout sebagai pembungkus semua route operasional; styling container saja dan tidak menyentuh route, auth, stok, kas, produksi, payroll, HPP, atau laporan.
+   Alasan logic dipakai:
+   - warna shell membaca token global body/html agar tidak perlu override manual per mode dan tetap memakai token brand aktif.
+   Status:
+   - AKTIF sebagai baseline visual global.
+   - GUARDED karena semua halaman operasional dirender di dalam shell ini.
+========================= */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--ims-bg-shell);
+  color: var(--ims-text-primary);
+  transition:
+    background-color 0.22s ease,
+    color 0.22s ease;
+}
+
+/* =========================
+   SECTION: App Loading Screen - AKTIF / GUARDED
+   Fungsi:
+   - menampilkan state loading auth/profile dengan visual logo brand yang mengikuti token aktif.
+   Hubungan flow aplikasi:
+   - dipakai App.jsx sebelum AppLayout dan route bisnis tampil, sehingga user tidak melihat halaman operasional sebelum session siap.
+   Alasan logic dipakai:
+   - styling wrapper/card tetap di App.css agar loading global konsisten dengan theme foundation tanpa mengubah AuthProvider/useAuth.
+   Status:
+   - AKTIF sebagai auth loading gate.
+   - GUARDED: jangan ubah kondisi render loading di App.jsx ketika cleanup visual.
+========================= */
+.app-loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(24px, 5vw, 48px);
+  background: var(--ims-bg-shell);
+  color: var(--ims-text-primary);
+}
+
+.app-loading-card {
+  width: auto;
+  max-width: min(100%, 420px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 0 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  position: relative;
+  text-align: center;
+  backdrop-filter: none;
+}
+
+/* =====================================================
+SECTION: Global Loading Brand Accent — AKTIF
+Fungsi:
+- memberi aksen gold kecil pada auth/session loading tanpa gradient dan tanpa ornament besar.
+
+Dipakai oleh:
+- App.jsx loading gate sebelum AppLayout dan route operasional tampil.
+
+Alasan perubahan:
+- standar theme baru memakai flat surface; brand gold cukup muncul sebagai marker kecil agar tetap corporate.
+
+Catatan cleanup:
+- belum ada.
+
+Risiko:
+- ornament yang terlalu besar dapat membuat loading terasa ramai atau mengganggu fokus logo.
+===================================================== */
+.app-loading-card::after {
+  content: "";
+  width: 34px;
+  height: 3px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: var(--ims-color-brand-gold);
+  opacity: 0.78;
+}
+
+.app-loading-text {
+  max-width: 320px;
+  margin: 0;
+  color: var(--ims-text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* =========================
+   SECTION: Main Layout - AKTIF / GUARDED
+   Fungsi:
+   - menjaga Ant Design Layout tetap full-height dan transparan supaya shell background token tidak tertutup layer default.
+   Hubungan flow aplikasi:
+   - dipakai langsung oleh AppLayout untuk membungkus Sidebar, Header, dan Content; tidak mengubah routing atau business logic.
+   Alasan logic dipakai:
+   - override background/height mencegah layout AntD membuat permukaan putih/gelap sendiri di atas shell.
+   Status:
+   - AKTIF untuk struktur visual aplikasi.
+   - GUARDED karena salah height/overflow bisa memotong halaman operasional besar.
+========================= */
+.app-layout,
+.app-main-layout {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  background: transparent !important;
+}
+
+.app-main-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+/* =====================================================
+SECTION: Sidebar Layout Shell — GUARDED
+Fungsi:
+- Menyiapkan area sidebar transparan, fixed height, dan scroll wrapper internal untuk logo serta menu besar.
+
+Dipakai oleh:
+- AppLayout bersama SidebarLogo dan SidebarMenu.
+
+Alasan perubahan:
+- Padding area logo diringkas agar brand block menyatu dengan sidebar dan tidak terasa seperti card besar terpisah.
+
+Catatan cleanup:
+- Belum ada.
+
+Risiko:
+- Jika spacing sidebar diubah sembarangan, menu bisa bergeser, collapsed sidebar bisa tidak center, atau muncul horizontal overflow.
+===================================================== */
+.app-sider {
+  height: 100vh;
+  background: transparent !important;
+  border-right: 0 !important;
+  overflow: hidden;
+}
+
+.app-sider .ant-layout-sider-children {
+  height: 100%;
+  background: transparent !important;
+}
+
+.app-sider-inner {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-logo-wrap {
+  flex: 0 0 auto;
+  padding: 12px 14px 8px;
+}
+
+.app-menu-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 12px 16px;
+}
+
+/* AKTIF / GUARDED: menetralkan garis default AntD Sider agar border sidebar tetap dikontrol token shell. */
+.ant-layout-sider {
+  border-right: 0 !important;
+  box-shadow: none !important;
+}
+
+/* =========================
+   SECTION: Header - AKTIF / GUARDED
+   Fungsi:
+   - mengunci tinggi, padding, dan surface header agar menyatu dengan AppHeader token global.
+   Hubungan flow aplikasi:
+   - dipakai AppLayout untuk AppHeader; tidak mengubah user session, theme state, atau navigasi.
+   Alasan logic dipakai:
+   - header AntD punya background/border default yang bisa menumpuk di atas shell jika tidak dinetralkan.
+   Status:
+   - AKTIF untuk struktur atas aplikasi.
+   - GUARDED karena header menjadi area kontrol user dan konteks halaman.
+========================= */
+.app-header {
+  height: 92px;
+  flex: 0 0 auto;
+  line-height: normal;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  background: transparent !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+  z-index: 5;
+  transition:
+    background-color 0.22s ease,
+    color 0.22s ease;
+}
+
+.ant-layout-header {
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+.app-header-inner {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.app-mobile-menu-button.ant-btn {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ims-border-color-soft);
+  border-radius: 14px;
+  color: var(--ims-color-primary-active);
+  background: color-mix(in srgb, var(--ims-bg-card) 92%, transparent);
+  box-shadow: none;
+}
+
+.app-mobile-menu-button.ant-btn:hover,
+.app-mobile-menu-button.ant-btn:focus-visible {
+  color: var(--ims-color-primary-active);
+  border-color: var(--ims-color-primary);
+  background: var(--ims-color-primary-soft);
+}
+
+
+/* =========================
+   SECTION: Content Area - AKTIF / GUARDED UI
+   Fungsi:
+   - menyediakan scroll container dan canvas utama untuk semua route bisnis.
+   Hubungan flow aplikasi:
+   - AppRoutes dirender di dalam .app-content-card; styling ini tidak mengubah route, form submit, query, atau mutasi data.
+   Alasan logic dipakai:
+   - satu scroll container mencegah page besar membuat body scroll ganda, sementara .app-content-card hanya menjadi canvas transparan, bukan card/wrapper visual besar.
+   Status:
+   - AKTIF sebagai canvas halaman operasional Enterprise Clean.
+   - GUARDED: jangan mengembalikan border/shadow/background besar pada wrapper global karena akan membuat halaman terasa card bertumpuk.
+========================= */
+.app-main-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  padding: 0;
+  background: transparent !important;
+  overflow: hidden;
+}
+
+.app-content-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 20px 20px;
+  background: transparent;
+}
+
+.app-content-card {
+  min-height: 100%;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 28px 24px 24px;
+  box-shadow: none;
+  backdrop-filter: none;
+  transition:
+    background-color 0.22s ease,
+    color 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+
+
+/* =====================================================
+SECTION: Mobile Sidebar Drawer — AKTIF / GUARDED
+Fungsi:
+- mengganti sidebar collapsed desktop menjadi drawer navigasi di tablet/HP.
+
+Dipakai oleh:
+- AppLayout.jsx melalui Drawer mobile yang memakai SidebarLogo dan SidebarMenu existing.
+
+Alasan perubahan:
+- collapsedWidth desktop tetap memakan ruang di HP; drawer membuat content memakai full width tanpa mengubah route/menu/role guard.
+
+Risiko:
+- jangan ubah role-aware SidebarMenu atau sidebarMenuItems dari styling drawer ini.
+===================================================== */
+.app-mobile-sidebar-drawer .ant-drawer-content-wrapper {
+  max-width: min(304px, 88vw) !important;
+}
+
+.app-mobile-sidebar-drawer .ant-drawer-content,
+.app-mobile-sidebar-drawer-content.ant-drawer-content {
+  background: var(--ims-bg-shell) !important;
+}
+
+.app-mobile-sidebar-drawer .ant-drawer-body {
+  height: 100%;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+.app-mobile-sidebar-surface {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--ims-bg-shell);
+  color: var(--ims-text-primary);
+}
+
+.app-logo-wrap--mobile {
+  padding: 14px 14px 10px;
+}
+
+.app-menu-wrap--mobile {
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 0 12px 18px;
+  overflow: hidden;
+}
+
+
+/* =========================
+   SECTION: Theme Toggle Button - AKTIF / GUARDED
+   Fungsi:
+   - memoles FloatButton theme toggle agar mengikuti token shell brand dan tidak menyimpan posisi lewat inline style.
+   Hubungan flow aplikasi:
+   - class ini dipakai ThemeToggleButton.jsx; state dan persistence tetap dikontrol AppLayout.
+   Alasan logic dipakai:
+   - selector .light/.dark dari JSX tetap boleh ada sebagai marker, tetapi warna cukup dibaca dari token body agar tidak ada duplicate override per mode.
+   Status:
+   - AKTIF untuk UI control light/dark.
+   - GUARDED: jangan gabungkan dengan guard table/modal/drawer pada fase ini.
+========================= */
+.theme-toggle-button {
+  inset-inline-end: 24px !important;
+  bottom: 24px !important;
+}
+
+.theme-toggle-button .ant-float-btn-body {
+  background: var(--ims-bg-elevated) !important;
+  border: 1px solid var(--ims-border-color);
+  border-radius: 14px !important;
+  color: var(--ims-text-primary) !important;
+  box-shadow: var(--ims-shadow-soft);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.18s ease !important;
+}
+
+.theme-toggle-button:hover .ant-float-btn-body {
+  background: var(--ims-bg-card-soft) !important;
+  box-shadow: var(--ims-shadow-elevated);
+  transform: translateY(-1px);
+}
+
+/* =========================
+   SECTION: Generic Surface Helper - AKTIF / CLEANUP CANDIDATE
+   Fungsi:
+   - memberi radius dasar pada komponen AntD umum di dalam shell sebelum override spesifik table/modal/drawer bekerja.
+   Hubungan flow aplikasi:
+   - styling surface lintas halaman saja; tidak mengubah data table, action, form, atau portal render.
+   Alasan logic dipakai:
+   - helper ini menjaga tampilan komponen lama tetap rapi sambil menunggu semua halaman memakai class foundation final.
+   Status:
+   - AKTIF sebagai compatibility visual.
+   - CLEANUP CANDIDATE setelah seluruh halaman berpindah ke helper/component surface yang lebih spesifik.
+========================= */
+.app-shell .ant-card,
+.app-shell .ant-table-wrapper,
+.app-shell .ant-statistic,
+.app-shell .ant-tabs-content-holder {
+  border-radius: 16px;
+}
+
+/* =========================
+   SECTION: Scrollbar - AKTIF / GUARDED
+   Fungsi:
+   - menyatukan scrollbar content dan sidebar agar mengikuti token aktif.
+   Hubungan flow aplikasi:
+   - dipakai area scroll AppLayout dan SidebarMenu; tidak mengubah jumlah data, pagination, atau filter.
+   Alasan logic dipakai:
+   - satu token thumb cukup untuk light/dark karena nilai token diganti oleh class body/html.
+   Status:
+   - AKTIF untuk affordance scroll halaman operasional.
+   - GUARDED karena content besar memakai scroll container ini sebagai akses utama.
+========================= */
+.app-content-scroll::-webkit-scrollbar,
+.sidebar-menu-scroll::-webkit-scrollbar,
+.sidebar-menu::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-content-scroll::-webkit-scrollbar-thumb,
+.sidebar-menu-scroll::-webkit-scrollbar-thumb,
+.sidebar-menu::-webkit-scrollbar-thumb {
+  background: var(--ims-scrollbar-thumb);
+  border-radius: 999px;
+}
+
+
+/* =========================
+   SECTION: Responsive Layout Guard - AKTIF / GUARDED
+   Fungsi:
+   - menjaga padding shell, content card, loading card, dan posisi theme toggle tetap usable di tablet/mobile.
+   Hubungan flow aplikasi:
+   - styling breakpoint saja; tidak mengubah render route, data, atau handler bisnis.
+   Alasan logic dipakai:
+   - halaman operasional besar tetap butuh ruang baca tanpa memaksa scroll horizontal di viewport kecil.
+   Status:
+   - AKTIF untuk baseline responsive.
+   - GUARDED karena perubahan berlebih bisa membuat tabel/modal/drawer tidak nyaman digunakan.
+========================= */
+@media (max-width: 992px) {
+  .app-sider {
+    display: none;
+  }
+
+  .app-header {
+    height: auto;
+    min-height: 74px;
+    padding: 14px 14px 10px;
+  }
+
+  .app-header-inner {
+    align-items: center;
+  }
+
+  .app-mobile-menu-button.ant-btn {
+    display: inline-flex;
+  }
+
+  .app-content-scroll {
+    padding: 0 14px 14px;
+  }
+
+  .app-content-card {
+    padding: 20px 18px 18px;
+    border-radius: 0;
+  }
+}
+
+@media (max-width: 576px) {
+  .theme-toggle-button {
+    inset-inline-end: 16px !important;
+    bottom: 16px !important;
+  }
+
+  .app-loading-card {
+    padding: 0 10px;
+    border-radius: 0;
+  }
+
+  .app-header {
+    min-height: 66px;
+    padding: 10px 10px 8px;
+  }
+
+  .app-header-inner {
+    gap: 8px;
+  }
+
+  .app-mobile-menu-button.ant-btn {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+    border-radius: 13px;
+  }
+
+  .app-content-scroll {
+    padding: 0 8px 10px;
+  }
+
+  .app-content-card {
+    padding: 14px 12px 14px;
+    border-radius: 0;
+  }
+}

@@ -1,0 +1,310 @@
+/* =========================
+   SECTION: Shared Stock Variant Pills - AKTIF / GUARDED
+   Fungsi:
+   - menjaga tampilan stok varian di Products, Raw Materials, dan Semi Finished tetap seragam.
+   Hubungan flow aplikasi:
+   - styling display stok varian saja; tidak mengubah stock/currentStock/reservedStock/availableStock, variantKey, atau variantLabel.
+   Alasan logic dipakai:
+   - class ini dipusatkan di App.css karena dipakai lintas halaman stok dan membaca token tema agar light/dark tidak butuh override duplicate.
+   Status:
+   - AKTIF dipakai oleh render stok varian.
+   - GUARDED: jangan dihapus atau diganti ke inline style lagi agar tiga halaman stok tidak saling merusak.
+========================= */
+.stock-variant-pill-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.stock-variant-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--ims-border-color);
+  border-radius: 999px;
+  background: var(--ims-bg-card-soft);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.stock-variant-pill-label,
+.stock-variant-pill-value {
+  margin: 0 !important;
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+}
+
+.stock-variant-pill-label {
+  color: var(--ims-text-secondary) !important;
+}
+
+.stock-variant-pill-value {
+  color: var(--ims-text-primary) !important;
+  font-weight: 700 !important;
+}
+
+.stock-variant-pill--danger {
+  border-color: color-mix(in srgb, var(--ims-color-danger) 42%, var(--ims-border-color));
+  background: color-mix(in srgb, var(--ims-color-danger) 8%, var(--ims-bg-card-soft));
+}
+
+.stock-variant-pill--warning {
+  border-color: color-mix(in srgb, var(--ims-color-warning) 46%, var(--ims-border-color));
+  background: color-mix(in srgb, var(--ims-color-warning) 10%, var(--ims-bg-card-soft));
+}
+
+@media (max-width: 768px) {
+  .ims-page {
+    gap: 12px;
+  }
+
+  .ims-page > .ant-card > .ant-card-body,
+  .ims-page .ims-section-card.ant-card > .ant-card-body {
+    padding: 16px;
+  }
+}
+
+/* =========================
+   SECTION: IMS Shared Component Surface Overrides - AKTIF / GUARDED UI
+   Fungsi:
+   - menjaga Ant Design Card, Modal, Drawer, Popover, Dropdown, Form, dan Typography di dalam shell tetap memakai token surface aktif.
+   Hubungan flow aplikasi:
+   - berdampak ke halaman operasional yang memakai Ant Design di dalam AppLayout; tidak mengubah submit, query, handler, atau business rules.
+   Alasan logic dipakai:
+   - sebagian komponen AntD dirender di dalam shell, sedangkan portal punya guard body terpisah; dua lapisan ini mencegah surface tembus di light/dark.
+   Status:
+   - AKTIF untuk shared component surface.
+   - GUARDED karena berhubungan dengan modal/drawer/dropdown/form yang dipakai transaksi, produksi, laporan, dan sistem.
+========================= */
+.app-shell .ant-card,
+.app-shell .ant-modal-content,
+.app-shell .ant-drawer-content,
+.app-shell .ant-popover-inner,
+.app-shell .ant-dropdown-menu {
+  background: var(--ims-bg-card) !important;
+  color: var(--ims-text-primary);
+  border-color: var(--ims-border-color-soft) !important;
+}
+
+.app-shell .ant-card {
+  box-shadow: none;
+}
+
+/* AKTIF / GUARDED UI:
+   PageSection, table, modal, dan drawer tetap punya border/surface masing-masing.
+   Jangan memberi shadow global ke semua AntD Card karena memunculkan efek wrapper/card bertingkat di halaman utama. */
+
+.app-shell .ant-drawer-header,
+.app-shell .ant-drawer-footer,
+.app-shell .ant-modal-header,
+.app-shell .ant-modal-footer {
+  border-color: var(--ims-border-color-soft) !important;
+}
+
+.app-shell .ant-form-item-label > label,
+.app-shell .ant-modal-title,
+.app-shell .ant-drawer-title,
+.app-shell .ant-typography {
+  color: var(--ims-text-primary);
+}
+
+.app-shell .ant-typography-secondary,
+.app-shell .ant-form-item-explain,
+.app-shell .ant-form-item-extra {
+  color: var(--ims-text-secondary) !important;
+}
+
+.app-content-card .ant-input,
+.app-content-card .ant-input-affix-wrapper,
+.app-content-card .ant-select-selector,
+.app-content-card .ant-picker,
+.app-content-card .ant-input-number {
+  background: var(--ims-bg-field) !important;
+  border-color: var(--ims-border-color) !important;
+  color: var(--ims-text-primary) !important;
+}
+
+.app-content-card .ant-input:hover,
+.app-content-card .ant-input-affix-wrapper:hover,
+.app-content-card .ant-select-selector:hover,
+.app-content-card .ant-picker:hover,
+.app-content-card .ant-input-number:hover,
+.app-content-card .ant-input-affix-wrapper-focused,
+.app-content-card .ant-picker-focused {
+  border-color: var(--ims-color-primary) !important;
+  box-shadow: var(--ims-focus-ring) !important;
+}
+
+.app-content-card .ant-input::placeholder,
+.app-content-card .ant-input-number input::placeholder,
+.app-content-card .ant-select-selection-placeholder,
+.app-content-card .ant-picker-input > input::placeholder,
+.app-content-card .ant-input-affix-wrapper input::placeholder {
+  color: var(--ims-text-muted) !important;
+}
+
+
+/* =========================
+   SECTION: AntD Portal Surface Baseline - AKTIF / GUARDED UI
+   Fungsi:
+   - memastikan Modal, Drawer, Popover, Dropdown, Select, dan Date Picker portal tetap solid ketika dirender di luar .app-shell.
+   Hubungan flow aplikasi:
+   - styling portal Ant Design saja; tidak mengubah submit flow, action handler, query service, atau business rules.
+   Alasan logic dipakai:
+   - portal AntD sering keluar dari hierarchy .app-shell, jadi selector body.app-theme-* wajib dipertahankan agar light/dark tetap aman.
+   Status:
+   - AKTIF untuk konsistensi light/dark.
+   - GUARDED karena dipakai halaman transaksi, produksi, laporan, auth, dan reset.
+========================= */
+body.app-theme-light .ant-modal-content,
+body.app-theme-light .ant-modal-header,
+body.app-theme-light .ant-modal-footer,
+body.app-theme-light .ant-modal-body,
+body.app-theme-light .ant-drawer-content,
+body.app-theme-light .ant-drawer-header,
+body.app-theme-light .ant-drawer-footer,
+body.app-theme-light .ant-drawer-body,
+body.app-theme-light .ant-popover-inner,
+body.app-theme-light .ant-dropdown-menu,
+body.app-theme-light .ant-select-dropdown,
+body.app-theme-light .ant-picker-dropdown .ant-picker-panel-container,
+body.app-theme-dark .ant-modal-content,
+body.app-theme-dark .ant-modal-header,
+body.app-theme-dark .ant-modal-footer,
+body.app-theme-dark .ant-modal-body,
+body.app-theme-dark .ant-drawer-content,
+body.app-theme-dark .ant-drawer-header,
+body.app-theme-dark .ant-drawer-footer,
+body.app-theme-dark .ant-drawer-body,
+body.app-theme-dark .ant-popover-inner,
+body.app-theme-dark .ant-dropdown-menu,
+body.app-theme-dark .ant-select-dropdown,
+body.app-theme-dark .ant-picker-dropdown .ant-picker-panel-container {
+  background: var(--ims-bg-elevated) !important;
+  color: var(--ims-text-primary) !important;
+  border-color: var(--ims-border-color-soft) !important;
+}
+
+body.app-theme-light .ant-modal-mask,
+body.app-theme-light .ant-drawer-mask,
+body.app-theme-dark .ant-modal-mask,
+body.app-theme-dark .ant-drawer-mask {
+  background: var(--ims-bg-overlay-mask) !important;
+}
+
+body.app-theme-light .ant-modal-title,
+body.app-theme-light .ant-drawer-title,
+body.app-theme-light .ant-select-item,
+body.app-theme-light .ant-dropdown-menu-title-content,
+body.app-theme-light .ant-picker-header,
+body.app-theme-light .ant-picker-content th,
+body.app-theme-dark .ant-modal-title,
+body.app-theme-dark .ant-drawer-title,
+body.app-theme-dark .ant-select-item,
+body.app-theme-dark .ant-dropdown-menu-title-content,
+body.app-theme-dark .ant-picker-header,
+body.app-theme-dark .ant-picker-content th {
+  color: var(--ims-text-primary) !important;
+}
+
+body.app-theme-light .ant-select-item-option-active:not(.ant-select-item-option-disabled),
+body.app-theme-light .ant-dropdown-menu-item:hover,
+body.app-theme-light .ant-dropdown-menu-submenu-title:hover,
+body.app-theme-light .ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-cell-inner::before,
+body.app-theme-dark .ant-select-item-option-active:not(.ant-select-item-option-disabled),
+body.app-theme-dark .ant-dropdown-menu-item:hover,
+body.app-theme-dark .ant-dropdown-menu-submenu-title:hover,
+body.app-theme-dark .ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-cell-inner::before {
+  background: var(--ims-bg-card-soft) !important;
+}
+
+body.app-theme-light .ant-select-item-option-selected:not(.ant-select-item-option-disabled),
+body.app-theme-dark .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+  background: var(--ims-table-selected) !important;
+}
+
+body.app-theme-light .ant-modal-header,
+body.app-theme-light .ant-modal-footer,
+body.app-theme-light .ant-drawer-header,
+body.app-theme-light .ant-drawer-footer,
+body.app-theme-dark .ant-modal-header,
+body.app-theme-dark .ant-modal-footer,
+body.app-theme-dark .ant-drawer-header,
+body.app-theme-dark .ant-drawer-footer {
+  border-color: var(--ims-border-color-soft) !important;
+}
+
+body.app-theme-light .ant-modal .ant-input,
+body.app-theme-light .ant-modal .ant-input-affix-wrapper,
+body.app-theme-light .ant-modal .ant-select-selector,
+body.app-theme-light .ant-modal .ant-picker,
+body.app-theme-light .ant-modal .ant-input-number,
+body.app-theme-light .ant-drawer .ant-input,
+body.app-theme-light .ant-drawer .ant-input-affix-wrapper,
+body.app-theme-light .ant-drawer .ant-select-selector,
+body.app-theme-light .ant-drawer .ant-picker,
+body.app-theme-light .ant-drawer .ant-input-number,
+body.app-theme-dark .ant-modal .ant-input,
+body.app-theme-dark .ant-modal .ant-input-affix-wrapper,
+body.app-theme-dark .ant-modal .ant-select-selector,
+body.app-theme-dark .ant-modal .ant-picker,
+body.app-theme-dark .ant-modal .ant-input-number,
+body.app-theme-dark .ant-drawer .ant-input,
+body.app-theme-dark .ant-drawer .ant-input-affix-wrapper,
+body.app-theme-dark .ant-drawer .ant-select-selector,
+body.app-theme-dark .ant-drawer .ant-picker,
+body.app-theme-dark .ant-drawer .ant-input-number {
+  background: var(--ims-bg-field) !important;
+  border-color: var(--ims-border-color) !important;
+  color: var(--ims-text-primary) !important;
+}
+
+body.app-theme-light .ant-modal .ant-input::placeholder,
+body.app-theme-light .ant-modal .ant-select-selection-placeholder,
+body.app-theme-light .ant-modal .ant-picker-input > input::placeholder,
+body.app-theme-light .ant-drawer .ant-input::placeholder,
+body.app-theme-light .ant-drawer .ant-select-selection-placeholder,
+body.app-theme-light .ant-drawer .ant-picker-input > input::placeholder,
+body.app-theme-dark .ant-modal .ant-input::placeholder,
+body.app-theme-dark .ant-modal .ant-select-selection-placeholder,
+body.app-theme-dark .ant-modal .ant-picker-input > input::placeholder,
+body.app-theme-dark .ant-drawer .ant-input::placeholder,
+body.app-theme-dark .ant-drawer .ant-select-selection-placeholder,
+body.app-theme-dark .ant-drawer .ant-picker-input > input::placeholder {
+  color: var(--ims-text-muted) !important;
+}
+
+body.app-theme-light .ant-modal .ant-input:hover,
+body.app-theme-light .ant-modal .ant-input-affix-wrapper:hover,
+body.app-theme-light .ant-modal .ant-select-selector:hover,
+body.app-theme-light .ant-modal .ant-picker:hover,
+body.app-theme-light .ant-modal .ant-input-number:hover,
+body.app-theme-light .ant-drawer .ant-input:hover,
+body.app-theme-light .ant-drawer .ant-input-affix-wrapper:hover,
+body.app-theme-light .ant-drawer .ant-select-selector:hover,
+body.app-theme-light .ant-drawer .ant-picker:hover,
+body.app-theme-light .ant-drawer .ant-input-number:hover,
+body.app-theme-dark .ant-modal .ant-input:hover,
+body.app-theme-dark .ant-modal .ant-input-affix-wrapper:hover,
+body.app-theme-dark .ant-modal .ant-select-selector:hover,
+body.app-theme-dark .ant-modal .ant-picker:hover,
+body.app-theme-dark .ant-modal .ant-input-number:hover,
+body.app-theme-dark .ant-drawer .ant-input:hover,
+body.app-theme-dark .ant-drawer .ant-input-affix-wrapper:hover,
+body.app-theme-dark .ant-drawer .ant-select-selector:hover,
+body.app-theme-dark .ant-drawer .ant-picker:hover,
+body.app-theme-dark .ant-drawer .ant-input-number:hover,
+body.app-theme-light .ant-modal .ant-input-affix-wrapper-focused,
+body.app-theme-light .ant-modal .ant-picker-focused,
+body.app-theme-light .ant-drawer .ant-input-affix-wrapper-focused,
+body.app-theme-light .ant-drawer .ant-picker-focused,
+body.app-theme-dark .ant-modal .ant-input-affix-wrapper-focused,
+body.app-theme-dark .ant-modal .ant-picker-focused,
+body.app-theme-dark .ant-drawer .ant-input-affix-wrapper-focused,
+body.app-theme-dark .ant-drawer .ant-picker-focused {
+  border-color: var(--ims-color-primary) !important;
+  box-shadow: var(--ims-focus-ring) !important;
+}
+
