@@ -1,14 +1,32 @@
 const { spawnSync } = require("node:child_process");
 
+const WINDOWS_COMMAND_ALIASES = Object.freeze({
+  npm: "npm.cmd",
+  npx: "npx.cmd",
+});
+
+function resolveCommand(command) {
+  if (process.platform !== "win32") {
+    return command;
+  }
+
+  return WINDOWS_COMMAND_ALIASES[command] || command;
+}
+
+function formatCommand(command, args = []) {
+  return [command, ...args].join(" ").trim();
+}
+
 function run(command, args = [], options = {}) {
-  const result = spawnSync(command, args, {
+  const resolvedCommand = resolveCommand(command);
+  const result = spawnSync(resolvedCommand, args, {
     stdio: "inherit",
     shell: false,
     ...options,
   });
 
   if (result.error) {
-    console.error(`[command] Gagal menjalankan: ${command} ${args.join(" ")}`);
+    console.error(`[command] Gagal menjalankan: ${formatCommand(command, args)}`);
     console.error(result.error.message);
     process.exit(1);
   }
@@ -19,7 +37,8 @@ function run(command, args = [], options = {}) {
 }
 
 function capture(command, args = [], options = {}) {
-  const result = spawnSync(command, args, {
+  const resolvedCommand = resolveCommand(command);
+  const result = spawnSync(resolvedCommand, args, {
     encoding: "utf8",
     shell: false,
     ...options,
@@ -35,4 +54,5 @@ function capture(command, args = [], options = {}) {
 module.exports = {
   run,
   capture,
+  resolveCommand,
 };
