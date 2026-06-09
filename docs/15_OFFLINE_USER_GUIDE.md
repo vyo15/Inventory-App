@@ -241,3 +241,115 @@ Kemungkinan file backup dipindah/dihapus dari folder `backups/sqlite/`. Gunakan 
 ### Setelah restore tampilan belum berubah
 
 Refresh browser, logout-login ulang, lalu cek Database Center dan `/health`.
+
+## Sinkron source lewat GitHub saat pindah PC
+
+Source code IMS dipindahkan lewat GitHub. Database transaksi tidak ikut GitHub dan harus dipindahkan lewat backup `.imsbackup`.
+
+### Setup pertama di PC baru
+
+```bash
+npm install
+npm run install:all
+npm run git:setup
+```
+
+`npm run git:setup` memasang shortcut lokal untuk repository ini:
+
+```bash
+git check
+git check --full
+git savepush "Pesan commit"
+git zipclean
+```
+
+Catatan: `git push` tetap command bawaan Git, tetapi setelah setup, push akan melewati pre-push hook IMS agar perubahan yang belum commit tidak diam-diam tertinggal.
+
+### Cek sebelum push
+
+Gunakan:
+
+```bash
+git check
+```
+
+Command ini mengecek:
+
+- branch aktif;
+- commit terakhir;
+- upstream branch;
+- working tree harus bersih;
+- backend syntax check.
+
+Untuk cek lengkap sampai frontend build:
+
+```bash
+git check --full
+```
+
+atau:
+
+```bash
+npm run git:check:full
+```
+
+### Commit dan push cepat
+
+Jika ada perubahan dan ingin langsung commit + push dari folder project:
+
+```bash
+git savepush "Update IMS"
+```
+
+Alternatif tanpa Git alias:
+
+```bash
+npm run git:push -- "Update IMS"
+```
+
+Command ini akan:
+
+1. menjalankan check;
+2. `git add -A`;
+3. membuat commit dengan pesan yang diberikan;
+4. menjalankan `git push` ke branch aktif.
+
+Jika belum ada upstream, command akan memakai:
+
+```bash
+git push -u origin <branch>
+```
+
+### Membuat ZIP bersih
+
+Gunakan:
+
+```bash
+git zipclean
+```
+
+atau:
+
+```bash
+npm run clean:zip
+```
+
+ZIP bersih dibuat dari commit `HEAD`. Karena itu script akan menolak berjalan jika masih ada perubahan belum commit. Ini mencegah patch/source terbaru tidak ikut ZIP.
+
+### Data aplikasi saat pindah PC
+
+Yang ikut GitHub:
+
+- source frontend/backend;
+- docs;
+- scripts;
+- file konfigurasi contoh seperti `.env.example`.
+
+Yang tidak ikut GitHub:
+
+- `data/*.sqlite`;
+- `backups/*`;
+- `.env`, `backend/.env`, `frontend/.env`, `.env.local`;
+- `node_modules`, `dist`, cache build.
+
+Untuk pindah data transaksi ke PC baru, gunakan Backup & Restore resmi dari file `.imsbackup`, bukan GitHub.

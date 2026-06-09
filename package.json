@@ -12,6 +12,12 @@
     "check:backend": "npm --prefix backend run check",
     "build:frontend": "npm --prefix frontend run build",
     "clean:zip": "bash scripts/create-clean-zip.sh",
-    "clean:zip:ps": "powershell -ExecutionPolicy Bypass -File scripts/create-clean-zip.ps1"
+    "clean:zip:ps": "powershell -ExecutionPolicy Bypass -File scripts/create-clean-zip.ps1",
+    "verify:source": "node scripts/verify-source-ready.cjs",
+    "verify:before-push": "node scripts/git-check.cjs --full",
+    "git:setup": "node scripts/install-git-shortcuts.cjs",
+    "git:check": "node scripts/git-check.cjs",
+    "git:check:full": "node scripts/git-check.cjs --full",
+    "git:push": "node scripts/git-push-safe.cjs"
   }
 }

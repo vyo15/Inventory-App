@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ "${IMS_SKIP_PRE_PUSH_CHECK:-}" = "1" ]; then
+  echo "[pre-push] IMS pre-push check dilewati karena IMS_SKIP_PRE_PUSH_CHECK=1."
+  exit 0
+fi
+
+echo "[pre-push] Menjalankan IMS git check sebelum push..."
+node scripts/git-check.cjs

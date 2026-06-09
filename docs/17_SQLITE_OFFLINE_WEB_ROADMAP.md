@@ -38,3 +38,29 @@ Runtime utama source aktual adalah backend Node.js Express + SQLite lokal/LAN. R
 - Audit technical ID agar tidak tampil user-facing.
 - Dokumentasi user guide singkat untuk backup/restore dan pindah PC.
 - Hardening LAN: IP statis, firewall allowlist, sleep off, startup script.
+
+## Workflow GitHub dan pindah PC
+
+Source code harus selalu melewati Git commit/push sebelum pindah PC. Clean ZIP dibuat dari `git archive HEAD`, sehingga perubahan yang belum commit tidak akan ikut.
+
+Command standar:
+
+```bash
+npm run git:setup
+npm run git:check
+npm run git:push -- "Update IMS"
+npm run clean:zip
+```
+
+Shortcut Git lokal setelah setup:
+
+```bash
+git check
+git check --full
+git savepush "Update IMS"
+git zipclean
+```
+
+Pre-push hook IMS akan menolak `git push` jika working tree belum bersih. Tujuannya agar patch tidak tertinggal saat push ke GitHub atau saat pindah PC.
+
+Database SQLite runtime, backup lokal, dan file `.env` tetap tidak masuk GitHub. Data operasional dipindahkan lewat backup `.imsbackup` dan restore resmi.

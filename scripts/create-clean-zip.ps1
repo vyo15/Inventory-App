@@ -1,6 +1,7 @@
 param(
   [string]$OutputPath = "../Inventory-App-clean.zip",
-  [string]$Prefix = "Inventory-App/"
+  [string]$Prefix = "Inventory-App/",
+  [switch]$AllowDirty
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,8 +10,24 @@ $Root = git rev-parse --show-toplevel
 Set-Location $Root
 
 $Status = git status --porcelain
-if ($Status) {
-  Write-Warning "Working tree belum bersih. ZIP akan dibuat dari commit HEAD, bukan perubahan yang belum di-commit."
+if ($Status -and -not $AllowDirty) {
+  Write-Error @"
+Working tree belum bersih.
+ZIP bersih dibuat dari commit HEAD, jadi perubahan yang belum di-commit tidak akan ikut.
+
+$Status
+
+Selesaikan dulu:
+  git add .
+  git commit -m "pesan perubahan"
+  git push origin $(git branch --show-current)
+
+Atau pakai shortcut aman:
+  npm run git:push -- "pesan perubahan"
+
+Override sadar risiko:
+  powershell -ExecutionPolicy Bypass -File scripts/create-clean-zip.ps1 -AllowDirty
+"@
 }
 
 git archive --format=zip --prefix=$Prefix --output=$OutputPath HEAD

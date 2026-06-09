@@ -1,0 +1,34 @@
+Cara pakai harian
+
+Setelah coding:
+
+git savepush "Update fitur IMS"
+
+Sebelum pindah PC:
+
+git check --full
+git push
+
+Buat ZIP bersih:
+
+git zipclean
+
+
+
+Setelah patch diterapkan, jalankan sekali:
+
+npm run git:setup
+
+Setelah itu kamu bisa pakai shortcut:
+
+git check
+git check --full
+git savepush "Update IMS"
+git zipclean
+
+Atau versi npm:
+
+npm run git:check
+npm run git:check:full
+npm run git:push -- "Update IMS"
+npm run clean:zip

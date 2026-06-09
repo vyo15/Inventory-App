@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "check": "node --check src/server.js && node --check src/db/connection.js && node --check src/db/migrate.js && node --check src/middlewares/localAuth.js && node --check src/modules/auth/auth.routes.js && node --check src/modules/customers/customers.routes.js && node --check src/modules/categories/categories.routes.js && node --check src/modules/suppliers/suppliers.routes.js && node --check src/modules/pricingRules/pricingRules.routes.js && node --check src/modules/maintenance/maintenance.routes.js && node --check src/modules/migrationStatus/migrationStatus.routes.js && node --check src/shared/sqliteJsonRecordRoutes.js && node --check src/utils/sqliteStockEngine.js && node --check src/utils/sqliteBackup.js && node --check src/modules/products/products.routes.js && node --check src/modules/rawMaterials/rawMaterials.routes.js && node --check src/modules/semiFinishedMaterials/semiFinishedMaterials.routes.js && node --check src/modules/stockReadModels/stockReadModels.routes.js && node --check src/modules/stockAdjustments/stockAdjustments.routes.js && node --check src/modules/stock/stock.routes.js && node --check src/modules/transactions/transactions.routes.js && node --check src/modules/finance/finance.routes.js && node --check src/modules/production/production.routes.js && node --check src/modules/reports/reports.routes.js",
+    "check": "node scripts/check-all-js.cjs",
     "audit:sqlite-cutover": "node scripts/audit-sqlite-cutover-readiness.cjs"
   },
   "dependencies": {
