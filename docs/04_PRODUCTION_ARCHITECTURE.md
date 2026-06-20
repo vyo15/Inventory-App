@@ -228,14 +228,14 @@ Setiap perubahan di modul produksi sebaiknya selalu diuji terhadap:
 ## Update Boundary Produksi Setelah Cleanup Stok — 2026-04-25
 - Cleanup stok umum tidak memindahkan logic posting stok produksi ke helper page.
 - Flow produksi final tetap guarded: BOM → Production Order → Work Log → Payroll → HPP Analysis.
-- `productionWorkLogsService` tetap boleh melakukan transaction sendiri untuk start/complete Work Log karena proses tersebut harus memotong material, menambah output, menutup status, dan mencatat log secara atomic.
+- Backend `backend/src/modules/production/production.service.js` menjadi transaction boundary untuk start/complete Work Log karena proses tersebut harus memotong material, menambah output, menutup status, membuat payroll, mereconcile HPP, dan mencatat audit secara atomic.
 - Collection `productions` tetap dianggap data historis layer yang hanya disentuh maintenance/reset/audit scoped. File service data historis `src/services/Produksi/productionService.js` tidak ditemukan di source `Inventory-App.zip` terbaru, sehingga docs lama yang menyebut file tersebut sebagai file aktif harus dianggap outdated.
 
 ## Update Guarded Integration Stok & Log — 2026-04-25
 - Produksi tetap dianggap guarded area.
-- `productionWorkLogsService.js` tetap melakukan mutasi bahan keluar dan output masuk di dalam `runTransaction`.
-- Mutasi stok produksi memakai `applyStockMutationToItem()` supaya field master dan varian tetap sinkron.
-- Inventory log produksi memakai `buildInventoryLogPayload()` dari inventory log service final sehingga format log produksi sama dengan transaksi umum.
+- Frontend `productionWorkLogsService.js` hanya memanggil endpoint commit; mutasi bahan keluar dan output masuk dijalankan backend dalam SQLite transaction.
+- Mutasi stok produksi memakai `commitStockMutation()` existing supaya master, varian, stock read model, inventory log, dan audit tetap sinkron.
+- Inventory log produksi dibuat oleh stock engine existing di transaction yang sama dengan status Production Order/Work Log.
 - Reserve/release Production Order masih dicatat sebagai flow data historis/guarded; jika dipakai, variant key hasil resolve helper final harus dipakai agar reserved stock tidak jatuh ke master/default.
 - Business rules BOM, lifecycle Production Order, completed Work Log, HPP, dan payroll tidak diubah oleh cleanup ini.
 
@@ -246,10 +246,10 @@ Flow aktif produksi setelah patch ini:
 `Production Order -> Work Log -> Complete Work Log -> Auto Payroll Line -> Payroll Produksi -> HPP Analysis`
 
 Catatan boundary:
-- `productionWorkLogsService` tetap menangani complete Work Log dan posting stok/output secara guarded.
-- Auto payroll dijalankan setelah Work Log sukses completed, memakai `generatePayrollLinesFromCompletedWorkLog()`.
+- Backend production service menangani complete Work Log, posting output, pembuatan payroll, HPP accrued, status PO, inventory log, dan audit dalam satu transaction.
+- Endpoint `generate-payrolls` tetap tersedia sebagai compatibility/idempotent repair untuk Work Log completed; endpoint tersebut tidak membuat line dobel.
 - Payroll line dibuat per operator yang tersimpan di Work Log.
-- Id dokumen payroll dibuat deterministik dari Work Log + Step + Operator untuk mencegah duplikasi.
+- Guard idempotent payroll memakai kombinasi Work Log + Step + Operator di dalam transaction serial SQLite.
 - Rule payroll diambil dari master Tahapan Produksi, bukan dari custom payroll karyawan.
 - Sinkronisasi labor cost ke Work Log hanya ringkasan display untuk HPP/read model, bukan pengganti source of truth line payroll.
 
@@ -273,6 +273,36 @@ Catatan boundary:
 - **Cash Out otomatis aktif:** payroll `paid` membuat expense otomatis dengan source reference dan guard idempotent.
 - **Data historis:** custom payroll preference di master karyawan tetap dibaca sebagai compatibility/info lama, bukan rule utama payroll baru.
 - **Rollback guarded:** membatalkan payroll paid tidak boleh otomatis menghapus expense sebelum business rule rollback disepakati.
+
+## P4 — Backend Atomic Production Boundary — 2026-06-20
+
+Source aktual memusatkan lifecycle transaksi produksi pada endpoint backend berikut:
+
+```text
+POST /api/production/orders/commit
+POST /api/production/planning/:id/create-order
+POST /api/production/planning/:id/cancel
+POST /api/production/orders/:id/refresh-requirements
+POST /api/production/orders/:id/start
+POST /api/production/work-logs/:id/complete
+POST /api/production/work-logs/:id/generate-payrolls
+POST /api/production/payrolls/:id/finalize
+POST /api/production/payrolls/:id/mark-paid
+```
+
+Kontrak transaction aktif:
+
+- Create PO dari Planning menyimpan PO dan relasi/status Planning dalam satu transaction; kegagalan salah satu write me-rollback keduanya.
+- Target, jenis target, dan requirement PO berasal dari BOM. Payload client tidak boleh mengganti target BOM.
+- Start Production memvalidasi satu PO hanya punya satu Work Log, memotong seluruh material, menyimpan snapshot biaya, membuat Work Log, dan mengubah PO menjadi `in_production` dalam satu transaction.
+- Step yang dipilih harus merupakan step pada BOM.
+- Complete Work Log hanya menerima field penyelesaian operasional seperti Good Qty, operator, hasil compatibility, dan catatan. Snapshot material/output/biaya dari client diabaikan agar stok dan HPP tidak dapat dioverride.
+- Complete Work Log menambah output, membuat payroll draft per operator, menghitung accrued HPP, menutup PO, dan menulis audit dalam satu transaction.
+- Payroll finalize/paid mereconcile HPP tanpa menambah qty output lagi.
+- Payroll paid membuat Cash Out + ledger secara atomic dan mengenali expense legacy berdasarkan source payroll agar tidak double posting.
+- Generic CRUD tetap tersedia untuk draft/master yang aman, tetapi direct create/update/delete yang mencoba melewati lifecycle Planning/PO/Work Log/Payroll ditolak backend.
+
+Tidak ada perubahan schema SQLite pada P4. Frontend tetap tidak mengakses file database dan tidak menjalankan mutasi stok/finance sendiri.
 
 ## Production Planning Architecture — 2026-04-25
 

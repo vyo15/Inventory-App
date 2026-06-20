@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Button,
   DatePicker,
   Form,
@@ -18,14 +17,14 @@ import { EyeOutlined, PlusOutlined } from "@ant-design/icons";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../../components/Layout/Mobile/MobileDetailDrawer";
 import ResponsiveFormSection from "../../../components/Layout/Mobile/ResponsiveFormSection";
+import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
+import InfoPopoverButton from "../../../components/Layout/Feedback/InfoPopoverButton";
 import dayjs from "dayjs";
 import { formatNumberId, parseIntegerIdInput } from "../../../utils/formatters/numberId";
 import {
   buildVariantOptionsFromItem,
-  findVariantByKey,
   getItemStockSnapshot,
   inferHasVariants,
-  applyStockMutationToItem,
 } from "../../../utils/variants/variantStockHelpers";
 import { showFormValidationFeedback } from '../../../utils/forms/formValidationFeedback';
 import { getRepositoryModeStatus, isSqliteRepositoryModuleEnabled } from '../../../data/repositories/repositoryModeService';
@@ -166,72 +165,6 @@ const resolveAdjustmentCurrentUnitCost = ({ item = {}, collectionName = "", vari
   }
 
   return Number(item?.[costField] || 0);
-};
-
-const calculateVariantAverageCost = (variants = [], costField = "") => {
-  let stockTotal = 0;
-  let costTotal = 0;
-
-  variants.forEach((variant) => {
-    const variantStock = Number(variant.currentStock ?? variant.stock ?? 0);
-    const variantCost = Number(variant?.[costField] || 0);
-    if (variantStock > 0 && variantCost > 0) {
-      stockTotal += variantStock;
-      costTotal += variantStock * variantCost;
-    }
-  });
-
-  return stockTotal > 0 ? costTotal / stockTotal : 0;
-};
-
-const buildStockAdjustmentCostGuardPayload = ({
-  collectionName = "",
-  latestSourceItem = {},
-  selectedSourceVariant = null,
-  stockUpdatePayload = {},
-  adjustmentType = "",
-  unitCost = 0,
-} = {}) => {
-  if (adjustmentType !== "in") return {};
-
-  const costField = getAdjustmentCostField(collectionName);
-  if (!costField) return {};
-
-  const currentUnitCost = resolveAdjustmentCurrentUnitCost({
-    item: latestSourceItem,
-    collectionName,
-    variant: selectedSourceVariant,
-  });
-
-  if (currentUnitCost > 0) return {};
-
-  const normalizedUnitCost = Number(unitCost || 0);
-  if (!Number.isFinite(normalizedUnitCost) || normalizedUnitCost <= 0) {
-    throw new Error("Modal per unit wajib diisi untuk stok masuk ketika cost/HPP master masih 0.");
-  }
-
-  if (selectedSourceVariant && collectionName !== "raw_materials") {
-    const targetVariantKey = selectedSourceVariant.variantKey || "";
-    const nextVariants = (stockUpdatePayload.variants || latestSourceItem.variants || []).map((variant) => {
-      if ((variant.variantKey || "") !== targetVariantKey) return variant;
-      return {
-        ...variant,
-        [costField]: normalizedUnitCost,
-      };
-    });
-
-    return {
-      variants: nextVariants,
-      [costField]: calculateVariantAverageCost(nextVariants, costField) || normalizedUnitCost,
-    };
-  }
-
-  return {
-    [costField]: normalizedUnitCost,
-    ...(collectionName === "raw_materials"
-      ? { restockReferencePrice: Math.round(normalizedUnitCost) }
-      : {}),
-  };
 };
 
 // =========================
@@ -761,16 +694,19 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
 
   return (
     <>
-      {isSqliteStockAdjustmentMode ? (
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="Penyesuaian stok aktif untuk Produk Jadi, Bahan Baku, dan Semi Finished. Mutasi produksi/HPP final tetap lewat modul Production."
-        />
-      ) : null}
-
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        {isSqliteStockAdjustmentMode ? (
+          <InfoPopoverButton
+            label="Aturan Penyesuaian"
+            title="Aturan penyesuaian stok"
+            description="Penyesuaian stok aktif untuk Produk Jadi, Bahan Baku, dan Semi Finished. Gunakan hanya untuk koreksi stok yang jelas alasannya."
+            items={[
+              { label: 'Wajib alasan', value: 'Setiap adjustment perlu catatan.' },
+              { label: 'Audit', value: 'Perubahan tercatat di histori stok.' },
+              { label: 'Bukan retur', value: 'Barang kembali tetap lewat flow return.' },
+            ]}
+          />
+        ) : null}
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreateAdjustmentModal}>
           Tambah Penyesuaian
         </Button>
@@ -879,11 +815,11 @@ const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
             title="Data Penyesuaian Stok"
             subtitle="Cek item, arah penyesuaian, qty, modal, alasan, dan catatan sebelum simpan."
           >
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message="Penyesuaian akan mengubah stok"
+          <ImsNotice
+            variant="guard"
+            compact
+            className="ims-mb-16"
+            title="Penyesuaian akan mengubah stok"
             description="Cek item, varian, qty, dan alasan sebelum simpan."
           />
 

@@ -28,9 +28,13 @@ Catatan cleanup:
 - Referensi runtime/database/browser-local lama yang tersisa di docs/source comments harus diperlakukan sebagai compatibility data historis atau arsip migrasi sampai dibuktikan sebaliknya lewat grep/import/route/service aktual.
 
 Catatan role guard alignment:
-- Role `user` adalah operator harian, bukan admin sistem. Frontend boleh membuka halaman operasional harian hanya jika backend endpoint write untuk flow yang sama juga menerima guard operasional `administrator + user`.
-- Endpoint commit Purchases, Sales, update status Sales, Returns, Stock Adjustment, serta create/update Production Planning/Orders/Work Logs boleh memakai guard operasional.
-- Area admin/setup/finance sensitif/payroll/HPP/report/maintenance/user management tetap administrator-only.
+- Role `user` adalah operator harian, bukan admin sistem. Frontend boleh membuka halaman operasional harian hanya jika backend endpoint untuk flow yang sama juga menerima guard operasional `administrator + user`.
+- Endpoint commit Purchases, Sales, update status Sales, Returns, Stock Adjustment, serta create/update Production Planning/Orders/Work Logs memakai guard operasional.
+- Halaman admin/setup, finance sensitif, Payroll, HPP Analysis, reports, maintenance, dan user management tetap administrator-only.
+- Read reference yang memang dibutuhkan flow operasional dapat tetap tersedia melalui service backend, tetapi halaman pengelolaan dan mutation setup tetap administrator-only. Jangan menyamakan kebutuhan membaca referensi operasional dengan izin mengelola master.
+- Router JSON SQLite mendukung `readGuard`. Source aktual menerapkan read guard administrator pada `/api/finance/incomes`, `/api/finance/expenses`, `/api/finance/ledger`, `/api/reports`, dan `/api/production/payrolls`.
+- Dashboard wajib mengikuti matrix `roleAccess.js`: role `user` tidak meminta dataset finance/payroll, tidak menampilkan KPI/aksi sensitif, dan link stok yang menuju halaman master dialihkan ke Stock Management yang memang boleh diakses.
+- HPP Analysis tidak memiliki endpoint HPP terpisah; analisisnya derived dari Work Log dan Payroll. Route HPP Analysis dan dataset Payroll tetap administrator-only, sedangkan Planning/Orders/Work Logs tetap operasional sesuai contract produksi.
 - Perubahan role guard wajib tetap menjaga atomic transaction, audit log, idempotency, dan business rule backend; UI tidak boleh menjadi satu-satunya guard.
 
 Risiko:

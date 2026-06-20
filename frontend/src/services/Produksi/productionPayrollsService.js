@@ -1,6 +1,8 @@
 import { calculatePayrollAmounts } from "../../constants/productionPayrollOptions";
 import {
-  commitProductionPayrollPaidExpense,
+  commitProductionPayrollFinalize,
+  commitProductionPayrollGeneration,
+  commitProductionPayrollPaid,
   createProductionRecord,
   generateProductionCode,
   getProductionRecordById,
@@ -9,7 +11,7 @@ import {
 } from "../../data/adapters/sqlite/sqliteProductionAdapter";
 import { getActiveProductionEmployees } from "./productionEmployeesService";
 import { getActiveProductionSteps } from "./productionStepsService";
-import { getCompletedProductionWorkLogs, getProductionWorkLogById } from "./productionWorkLogsService";
+import { getCompletedProductionWorkLogs } from "./productionWorkLogsService";
 
 const safeTrim = (value) => String(value || "").trim();
 const nowIso = () => new Date().toISOString();
@@ -75,23 +77,8 @@ export const buildPayrollDraftFromWorkLog = (workLog = {}, employee = null, prod
   };
 };
 
-export const generatePayrollLinesFromCompletedWorkLog = async (workLogId, currentUser = null) => {
-  const workLog = await getProductionWorkLogById(workLogId);
-  const refs = await getPayrollReferenceData();
-  const workers = (Array.isArray(workLog.workerIds) && workLog.workerIds.length > 0)
-    ? refs.employees.filter((employee) => workLog.workerIds.includes(employee.id))
-    : refs.employees.slice(0, 1);
-  const step = refs.productionSteps.find((item) => item.id === workLog.stepId) || null;
-  const created = [];
-
-  for (const employee of workers) {
-    const draft = buildPayrollDraftFromWorkLog(workLog, employee, step);
-    draft.payrollNumber = await generateProductionPayrollNumber(draft);
-    created.push(await createProductionPayroll(draft, currentUser));
-  }
-
-  return created;
-};
+export const generatePayrollLinesFromCompletedWorkLog = async (workLogId) =>
+  commitProductionPayrollGeneration(workLogId);
 
 export const getAllProductionPayrolls = async () => listProductionRecords("payrolls");
 
@@ -154,21 +141,41 @@ export const updateProductionPayroll = async (id, values, currentUser = null) =>
   normalizePayload(values, currentUser, true)
 );
 
-export const updatePayrollStatus = async (id, statusOrPayload, currentUser = null) => {
+export const updatePayrollStatus = async (
+  id,
+  statusOrPayload,
+  paymentStatusOrUser = null,
+  optionsOrUser = null,
+) => {
   const current = await getProductionPayrollById(id);
   const nextValues = typeof statusOrPayload === "string"
     ? { status: statusOrPayload }
     : { ...(statusOrPayload || {}) };
+
+  if (typeof paymentStatusOrUser === "string") {
+    nextValues.paymentStatus = paymentStatusOrUser;
+  }
+  if (optionsOrUser && typeof optionsOrUser === "object") {
+    Object.assign(nextValues, optionsOrUser);
+  }
+
   const next = { ...current, ...nextValues };
   const normalizedStatus = String(next.status || "").toLowerCase();
   const normalizedPaymentStatus = String(next.paymentStatus || "").toLowerCase();
 
-  if (["paid", "confirmed"].includes(normalizedStatus) || normalizedPaymentStatus === "paid") {
-    next.status = next.status || "paid";
-    next.paymentStatus = "paid";
-    next.paidAt = next.paidAt || nowIso();
-    next.financeResult = await commitProductionPayrollPaidExpense({ ...next, id });
+  if (normalizedStatus === "paid" || normalizedPaymentStatus === "paid") {
+    const result = await commitProductionPayrollPaid(id, next);
+    return {
+      ...(result?.payroll || result || {}),
+      expenseSyncStatus: result?.expenseSyncStatus || result?.payroll?.expenseSyncStatus || "",
+      financeResult: result?.financeResult || result?.payroll?.financeResult || null,
+    };
   }
 
-  return updateProductionPayroll(id, next, currentUser);
+  if (normalizedStatus === "confirmed") {
+    const result = await commitProductionPayrollFinalize(id, next);
+    return result?.payroll || result;
+  }
+
+  return updateProductionPayroll(id, next, null);
 };

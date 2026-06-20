@@ -1,4 +1,9 @@
 import { formatCurrencyId } from '../../../utils/formatters/currencyId';
+import { canAccessRoute } from '../../../utils/auth/roleAccess';
+
+
+export const filterDashboardQuickActionsByRole = (actions = [], role) =>
+  actions.filter(({ routeKey }) => canAccessRoute(routeKey, role));
 
 export const MAX_DASHBOARD_LIST_ITEMS = 5;
 export const MAX_DASHBOARD_ALERT_ITEMS = 6;

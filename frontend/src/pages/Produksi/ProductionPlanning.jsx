@@ -13,7 +13,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import {
-  Alert,
   Badge,
   Button,
   Card,
@@ -47,6 +46,8 @@ import ProductionPageHeader from "../../components/Produksi/shared/ProductionPag
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
+import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
+import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import {
   cancelProductionPlan,
@@ -871,12 +872,6 @@ const ProductionPlanning = () => {
         addLabel="Tambah Planning"
       />
 
-      <Alert
-        type="info"
-        showIcon
-        className="ims-page-alert"
-        message="Planning hanya target; stok berubah lewat PO/Work Log."
-      />
 
       {/* =====================================================
           ACTIVE - summary cards planning standar IMS.
@@ -893,6 +888,16 @@ const ProductionPlanning = () => {
         subtitle="Filter target produksi."
         extra={
           <Space wrap>
+            <InfoPopoverButton
+              label="Aturan Planning"
+              title="Planning bukan mutasi stok"
+              description="Planning hanya target. Stok berubah melalui Production Order dan Work Log completed, bukan saat planning dibuat."
+              items={[
+                { label: 'Planning', value: 'Menyimpan target.' },
+                { label: 'Production Order', value: 'Mengunci proses produksi.' },
+                { label: 'Work Log', value: 'Mencatat realisasi dan hasil.' },
+              ]}
+            />
             <Input.Search
               allowClear
               placeholder="Cari kode, item, varian..."
@@ -948,11 +953,11 @@ const ProductionPlanning = () => {
           </Space>
         }
       >
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="Form ini tidak mengubah stok; progress dari Work Log completed."
+        <ImsNotice
+          variant="guard"
+          compact
+          className="ims-mb-16"
+          title="Form ini tidak mengubah stok; progress dari Work Log completed."
         />
 
         {/* =====================================================
@@ -1137,10 +1142,10 @@ const ProductionPlanning = () => {
           <Empty description="Pilih planning lebih dulu" />
         ) : (
           <Space direction="vertical" size={16} style={{ width: "100%" }}>
-            <Alert
-              type="info"
-              showIcon
-              message="PO tetap memakai BOM; planning hanya referensi target."
+            <ImsNotice
+              variant="info"
+              compact
+              title="PO tetap memakai BOM; planning hanya referensi target."
             />
 
             <Card size="small">

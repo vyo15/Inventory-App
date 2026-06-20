@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Alert,
   Button,
   message,
   Card,
@@ -30,9 +29,12 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import useAuth from "../../hooks/useAuth";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataLoadingState from "../../components/Layout/Feedback/DataLoadingState";
+import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import { formatNumberId } from "../../utils/formatters/numberId";
+import { canAccessRoute, ROUTE_ACCESS_KEYS } from "../../utils/auth/roleAccess";
 import {
   createEmptyDashboardData,
   normalizeDashboardData,
@@ -61,6 +63,7 @@ import {
   isSameMonth,
   isSameWeek,
   normalizeStatus,
+  filterDashboardQuickActionsByRole,
 } from "./helpers/dashboardPageHelpers";
 import "./Dashboard.css";
 
@@ -76,9 +79,10 @@ const DASHBOARD_TAG_COLORS = Object.freeze({
   success: "green",
 });
 
-const buildDashboardQuickActions = () => [
+const buildDashboardQuickActions = (role) => filterDashboardQuickActionsByRole([
   {
     key: "sales",
+    routeKey: ROUTE_ACCESS_KEYS.SALES,
     label: "Tambah Penjualan",
     description: "Buka halaman Sales untuk input transaksi manual.",
     to: "/sales",
@@ -86,6 +90,7 @@ const buildDashboardQuickActions = () => [
   },
   {
     key: "purchases",
+    routeKey: ROUTE_ACCESS_KEYS.PURCHASES,
     label: "Pembelian",
     description: "Buka Purchases untuk restock bahan/barang.",
     to: "/purchases",
@@ -93,6 +98,7 @@ const buildDashboardQuickActions = () => [
   },
   {
     key: "stock",
+    routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
     label: "Cek Stok",
     description: "Buka Stock Management dan audit stok.",
     to: "/stock-management",
@@ -100,6 +106,7 @@ const buildDashboardQuickActions = () => [
   },
   {
     key: "stock-report",
+    routeKey: ROUTE_ACCESS_KEYS.STOCK_REPORT,
     label: "Laporan Stok",
     description: "Buka laporan stok final.",
     to: "/report-stock",
@@ -107,6 +114,7 @@ const buildDashboardQuickActions = () => [
   },
   {
     key: "planning",
+    routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PLANNING,
     label: "Production Planning",
     description: "Pantau target mingguan/bulanan produksi.",
     to: "/produksi/production-planning",
@@ -114,6 +122,7 @@ const buildDashboardQuickActions = () => [
   },
   {
     key: "worklog",
+    routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS,
     label: "Work Log Produksi",
     description: "Cek pekerjaan produksi berjalan.",
     to: "/produksi/work-log-produksi",
@@ -121,6 +130,7 @@ const buildDashboardQuickActions = () => [
   },
   {
     key: "payroll",
+    routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS,
     label: "Payroll Produksi",
     description: "Review payroll draft/unpaid.",
     to: "/produksi/payroll-produksi",
@@ -128,6 +138,7 @@ const buildDashboardQuickActions = () => [
   },
   {
     key: "cash-in",
+    routeKey: ROUTE_ACCESS_KEYS.CASH_IN,
     label: "Kas Masuk",
     description: "Buka pencatatan kas masuk operasional.",
     to: "/cash-in",
@@ -135,12 +146,13 @@ const buildDashboardQuickActions = () => [
   },
   {
     key: "cash-out",
+    routeKey: ROUTE_ACCESS_KEYS.CASH_OUT,
     label: "Kas Keluar",
     description: "Buka pencatatan kas keluar/biaya.",
     to: "/cash-out",
     icon: <WalletOutlined />,
   },
-];
+], role);
 
 // IMS NOTE [AKTIF] - Helper Dashboard activity/planning/cost sudah dipusatkan di helpers/dashboardPageHelpers.js
 // agar label/status tidak dobel antara page dan helper.
@@ -191,6 +203,10 @@ const hasSafeExternalHttpUrl = (value) => Boolean(getSafeExternalHttpUrl(value))
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const activeRole = profile?.role;
+  const canViewFinanceDashboard = canAccessRoute(ROUTE_ACCESS_KEYS.MONEY_MOVEMENT_LEDGER, activeRole);
+  const canViewSupplierMaster = canAccessRoute(ROUTE_ACCESS_KEYS.SUPPLIERS, activeRole);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [loadWarning, setLoadWarning] = useState("");
@@ -212,6 +228,7 @@ const Dashboard = () => {
         failedReads = [],
       } = await readDashboardData({
         maxListItems: MAX_DASHBOARD_LIST_ITEMS,
+        role: activeRole,
       });
       const safeFailedReads = Array.isArray(failedReads) ? failedReads : [];
 
@@ -231,7 +248,7 @@ const Dashboard = () => {
       dashboardReadInFlightRef.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [activeRole]);
 
   useEffect(() => {
     loadDashboardData();
@@ -257,7 +274,7 @@ const Dashboard = () => {
   const lowStockTotal = lowStockRows.length;
   const stockIssueHasMore = Boolean(stockIssueMeta?.hasMore || stockIssueMeta?.isLimited);
   const lowStockTotalLabel = stockIssueHasMore ? `${formatNumberId(lowStockTotal)}+` : formatNumberId(lowStockTotal);
-  const quickActions = useMemo(() => buildDashboardQuickActions(), []);
+  const quickActions = useMemo(() => buildDashboardQuickActions(activeRole), [activeRole]);
 
   const planningPriorityItems = planningSummary.priorityPlans
     .filter((plan) => !isCompletedStatus(plan.status) && !isCancelledStatus(plan.status))
@@ -328,7 +345,7 @@ const Dashboard = () => {
     };
   }, [expenses, incomes, revenues]);
 
-    const businessAlertItems = useMemo(() => {
+  const businessAlertItems = useMemo(() => {
     const negativeStockRows = stockAuditRows.filter((item) => item.isNegativeStock);
     const reservedOverrunRows = stockAuditRows.filter((item) => item.isReservedOverrun);
     const items = [];
@@ -336,6 +353,7 @@ const Dashboard = () => {
     if (negativeStockRows.length > 0) {
       items.push({
         key: "negative-stock",
+        routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
         label: "Stok minus",
         count: negativeStockRows.length,
         description: `${negativeStockRows[0].name} perlu dicek di Stock Management.`,
@@ -348,6 +366,7 @@ const Dashboard = () => {
     if (reservedOverrunRows.length > 0) {
       items.push({
         key: "reserved-overrun",
+        routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
         label: "Reserved tidak wajar",
         count: reservedOverrunRows.length,
         description: `${reservedOverrunRows[0].name}: reserved ${formatNumberId(
@@ -362,6 +381,7 @@ const Dashboard = () => {
     if (lowStockTotal > 0) {
       items.push({
         key: "low-stock",
+        routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
         label: "Stok kritis",
         count: lowStockTotal,
         description: "Ada item kosong/menipis berdasarkan threshold master.",
@@ -374,6 +394,7 @@ const Dashboard = () => {
     if (productionSummary.shortageOrders > 0) {
       items.push({
         key: "po-shortage-alert",
+        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS,
         label: "PO shortage",
         count: productionSummary.shortageOrders,
         description: "Material/BOM perlu dicek sebelum produksi berjalan.",
@@ -386,6 +407,7 @@ const Dashboard = () => {
     if (planningSummary.overdueCount > 0 || planningSummary.behindTargetCount > 0) {
       items.push({
         key: "planning-alert",
+        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PLANNING,
         label: "Planning perlu dicek",
         count: planningSummary.overdueCount + planningSummary.behindTargetCount,
         description: "Ada planning overdue atau tertinggal target.",
@@ -398,6 +420,7 @@ const Dashboard = () => {
     if (productionSummary.costIssueCount > 0) {
       items.push({
         key: "hpp-cost-alert",
+        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_HPP_ANALYSIS,
         label: "Cost/HPP kosong",
         count: productionSummary.costIssueCount,
         description: "Work Log completed punya cost actual 0.",
@@ -410,6 +433,7 @@ const Dashboard = () => {
     if (payrollSummary.pendingCount > 0) {
       items.push({
         key: "payroll-pending-alert",
+        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS,
         label: "Payroll pending",
         count: payrollSummary.pendingCount,
         description: `${formatCurrency(payrollSummary.pendingAmount)} masih perlu review/pembayaran.`,
@@ -419,8 +443,11 @@ const Dashboard = () => {
       });
     }
 
-    return items.slice(0, MAX_DASHBOARD_ALERT_ITEMS);
+    return items
+      .filter(({ routeKey }) => canAccessRoute(routeKey, activeRole))
+      .slice(0, MAX_DASHBOARD_ALERT_ITEMS);
   }, [
+    activeRole,
     lowStockTotal,
     payrollSummary.pendingAmount,
     payrollSummary.pendingCount,
@@ -433,9 +460,10 @@ const Dashboard = () => {
 
   const businessAlertTotal = businessAlertItems.reduce((total, item) => total + getNumericValue(item.count), 0);
 
-    const kpiItems = useMemo(() => [
+  const kpiItems = useMemo(() => [
     {
       key: "sales-month",
+      routeKey: ROUTE_ACCESS_KEYS.SALES,
       label: "Sales Bulan Ini",
       value: formatCurrency(salesSummary.monthAmount),
       detail: `${formatNumberId(salesSummary.monthCount)} bulan ini · ${formatCurrency(salesSummary.todayAmount)} hari ini`,
@@ -443,6 +471,7 @@ const Dashboard = () => {
     },
     {
       key: "cash-in",
+      routeKey: ROUTE_ACCESS_KEYS.CASH_IN,
       label: "Kas Masuk",
       value: formatCurrency(financeSummary.recognizedIncome),
       detail: "revenues + incomes bulan ini",
@@ -450,6 +479,7 @@ const Dashboard = () => {
     },
     {
       key: "cash-out",
+      routeKey: ROUTE_ACCESS_KEYS.CASH_OUT,
       label: "Kas Keluar",
       value: formatCurrency(financeSummary.expenseThisMonth),
       detail: "expenses bulan ini",
@@ -457,6 +487,7 @@ const Dashboard = () => {
     },
     {
       key: "net-cash",
+      routeKey: ROUTE_ACCESS_KEYS.MONEY_MOVEMENT_LEDGER,
       label: "Net Kas Operasional",
       value: formatCurrency(financeSummary.netOperational),
       detail: "monitoring, bukan laba final",
@@ -466,6 +497,7 @@ const Dashboard = () => {
     },
     {
       key: "stock-critical",
+      routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
       label: "Stok Kritis",
       value: lowStockTotalLabel,
       detail: stockIssueHasMore ? "minimal item issue termuat" : "produk, bahan, semi finished",
@@ -475,6 +507,7 @@ const Dashboard = () => {
     },
     {
       key: "production-watch",
+      routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS,
       label: "Produksi Dicek",
       value: formatNumberId(productionSummary.shortageOrders + planningSummary.overdueCount + planningSummary.behindTargetCount),
       detail: "shortage/overdue/behind target",
@@ -484,6 +517,7 @@ const Dashboard = () => {
     },
     {
       key: "payroll-pending",
+      routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS,
       label: "Payroll Pending",
       value: formatNumberId(payrollSummary.pendingCount),
       detail: formatCurrency(payrollSummary.pendingAmount),
@@ -493,6 +527,7 @@ const Dashboard = () => {
     },
     {
       key: "data-watch",
+      routeKey: ROUTE_ACCESS_KEYS.DASHBOARD,
       label: "Data Perlu Dicek",
       value: formatNumberId(businessAlertTotal),
       detail: "exception lintas modul",
@@ -500,7 +535,8 @@ const Dashboard = () => {
       statusLabel: businessAlertTotal > 0 ? "Perlu Dicek" : null,
       statusTone: "warning",
     },
-  ], [
+  ].filter(({ routeKey }) => canAccessRoute(routeKey, activeRole)), [
+    activeRole,
     businessAlertTotal,
     financeSummary.expenseThisMonth,
     financeSummary.netOperational,
@@ -521,6 +557,7 @@ const Dashboard = () => {
     const items = [
       {
         key: "stock-critical",
+        routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
         label: "Stok kritis perlu dicek",
         count: lowStockTotal,
         description: "Gunakan available stock agar stok reserved tidak terlihat aman palsu.",
@@ -530,6 +567,7 @@ const Dashboard = () => {
       },
       {
         key: "po-shortage",
+        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS,
         label: "PO shortage",
         count: productionSummary.shortageOrders,
         description: "Cek kebutuhan material/BOM sebelum produksi dimulai.",
@@ -539,6 +577,7 @@ const Dashboard = () => {
       },
       {
         key: "planning-risk",
+        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PLANNING,
         label: "Planning perlu dikejar",
         count: planningSummary.overdueCount || planningSummary.behindTargetCount,
         description: "Overdue atau target belum tercapai berdasarkan Work Log completed.",
@@ -548,6 +587,7 @@ const Dashboard = () => {
       },
       {
         key: "po-ready",
+        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS,
         label: "PO siap produksi",
         count: productionSummary.readyOrders,
         description: "Antrian ini sudah siap diproses ke Work Log.",
@@ -557,6 +597,7 @@ const Dashboard = () => {
       },
       {
         key: "worklog-running",
+        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS,
         label: "Work Log berjalan",
         count: productionSummary.runningWorkLogs,
         description: "Review pekerjaan yang belum ditutup agar biaya dan output final jelas.",
@@ -566,6 +607,7 @@ const Dashboard = () => {
       },
       {
         key: "payroll-pending",
+        routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS,
         label: "Payroll pending",
         count: payrollSummary.pendingCount,
         description: "Cek payroll draft/confirmed/unpaid sebelum pembayaran final.",
@@ -575,8 +617,11 @@ const Dashboard = () => {
       },
     ];
 
-    return items.filter((item) => item.count > 0).slice(0, MAX_DASHBOARD_LIST_ITEMS);
+    return items
+      .filter((item) => item.count > 0 && canAccessRoute(item.routeKey, activeRole))
+      .slice(0, MAX_DASHBOARD_LIST_ITEMS);
   }, [
+    activeRole,
     lowStockTotal,
     payrollSummary.pendingCount,
     planningSummary.behindTargetCount,
@@ -587,12 +632,12 @@ const Dashboard = () => {
   ]);
 
   const productionStatusItems = [
-    { key: "shortage", label: "PO Shortage", value: productionSummary.shortageOrders, color: DASHBOARD_TAG_COLORS.danger },
-    { key: "ready", label: "PO Siap", value: productionSummary.readyOrders, color: DASHBOARD_TAG_COLORS.info },
-    { key: "running", label: "Work Log Jalan", value: productionSummary.runningWorkLogs, color: DASHBOARD_TAG_COLORS.production },
-    { key: "completed", label: "Completed Minggu Ini", value: productionSummary.completedWorkLogs, color: DASHBOARD_TAG_COLORS.success },
-    { key: "payroll", label: "Payroll Pending", value: payrollSummary.pendingCount, color: DASHBOARD_TAG_COLORS.payroll },
-  ];
+    { key: "shortage", routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS, label: "PO Shortage", value: productionSummary.shortageOrders, color: DASHBOARD_TAG_COLORS.danger },
+    { key: "ready", routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS, label: "PO Siap", value: productionSummary.readyOrders, color: DASHBOARD_TAG_COLORS.info },
+    { key: "running", routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS, label: "Work Log Jalan", value: productionSummary.runningWorkLogs, color: DASHBOARD_TAG_COLORS.production },
+    { key: "completed", routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS, label: "Completed Minggu Ini", value: productionSummary.completedWorkLogs, color: DASHBOARD_TAG_COLORS.success },
+    { key: "payroll", routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS, label: "Payroll Pending", value: payrollSummary.pendingCount, color: DASHBOARD_TAG_COLORS.payroll },
+  ].filter(({ routeKey }) => canAccessRoute(routeKey, activeRole));
 
   const lastUpdatedText = loading
     ? "Memuat..."
@@ -654,7 +699,7 @@ const Dashboard = () => {
         }
       />
 
-      {loadWarning ? <Alert type="warning" showIcon message={loadWarning} /> : null}
+      {loadWarning ? <ImsNotice variant="data-quality" compact title={loadWarning} /> : null}
 
       {isInitialDashboardLoading ? (
         <PageSection title="Menyiapkan Dashboard" subtitle="Memuat ringkasan operasional terbaru.">
@@ -853,7 +898,7 @@ const Dashboard = () => {
       </PageSection>
 
       <Row gutter={[16, 16]}>
-        <Col xs={24} xl={12}>
+        <Col xs={24} xl={canViewFinanceDashboard ? 12 : 24}>
           <PageSection
             title="Stok Kritis"
             subtitle="Stok paling urgent."
@@ -907,7 +952,6 @@ const Dashboard = () => {
                             <Tag color={DASHBOARD_TAG_COLORS.info}>Harga terakhir {formatCurrency(item.lastPurchasePrice)}</Tag>
                           ) : null}
                         </Space>
-                        {}
                         <Space size={8} wrap className="dashboard-restock-actions">
                           <Button
                             size="small"
@@ -924,9 +968,11 @@ const Dashboard = () => {
                           >
                             Buat Pembelian
                           </Button>
-                          <Button size="small" onClick={() => goToSupplierComparison(item)}>
-                            Bandingkan Supplier
-                          </Button>
+                          {canViewSupplierMaster ? (
+                            <Button size="small" onClick={() => goToSupplierComparison(item)}>
+                              Bandingkan Supplier
+                            </Button>
+                          ) : null}
                         </Space>
                       </div>
                     </div>
@@ -940,76 +986,78 @@ const Dashboard = () => {
             )}
           </PageSection>
         </Col>
-        <Col xs={24} xl={12}>
-          <PageSection
-            title="Keuangan Ringkas"
-            subtitle="Kas bulan berjalan."
-          >
-            <div className="dashboard-metric-grid">
-              <div className="dashboard-metric-card">
-                <Text className="dashboard-card-label">Pemasukan Diakui</Text>
-                <Title level={4} className="dashboard-card-value">
-                  {formatCurrency(financeSummary.recognizedIncome)}
-                </Title>
-                <Text className="dashboard-muted-text">Kas masuk bulan ini.</Text>
+        {canViewFinanceDashboard ? (
+          <Col xs={24} xl={12}>
+            <PageSection
+              title="Keuangan Ringkas"
+              subtitle="Kas bulan berjalan."
+            >
+              <div className="dashboard-metric-grid">
+                <div className="dashboard-metric-card">
+                  <Text className="dashboard-card-label">Pemasukan Diakui</Text>
+                  <Title level={4} className="dashboard-card-value">
+                    {formatCurrency(financeSummary.recognizedIncome)}
+                  </Title>
+                  <Text className="dashboard-muted-text">Kas masuk bulan ini.</Text>
+                </div>
+                <div className="dashboard-metric-card">
+                  <Text className="dashboard-card-label">Pengeluaran</Text>
+                  <Title level={4} className="dashboard-card-value">
+                    {formatCurrency(financeSummary.expenseThisMonth)}
+                  </Title>
+                  <Text className="dashboard-muted-text">Kas keluar bulan ini.</Text>
+                </div>
+                <div className="dashboard-metric-card">
+                  <Text className="dashboard-card-label">Selisih Ringkas</Text>
+                  <Title level={4} className="dashboard-card-value">
+                    {formatCurrency(financeSummary.netOperational)}
+                  </Title>
+                  <Text className="dashboard-muted-text">Ringkasan cepat.</Text>
+                </div>
               </div>
-              <div className="dashboard-metric-card">
-                <Text className="dashboard-card-label">Pengeluaran</Text>
-                <Title level={4} className="dashboard-card-value">
-                  {formatCurrency(financeSummary.expenseThisMonth)}
-                </Title>
-                <Text className="dashboard-muted-text">Kas keluar bulan ini.</Text>
+
+              <div className="dashboard-note-stack">
+                {payrollSummary.pendingCount > 0 ? (
+                  <ImsNotice
+                    variant="info"
+                    compact
+                    title={`${formatNumberId(
+                      payrollSummary.pendingCount,
+                    )} payroll masih pending (${formatCurrency(payrollSummary.pendingAmount)}).`}
+                  />
+                ) : null}
+
+                {payrollSummary.paidCount > 0 ? (
+                  <ImsNotice
+                    variant={payrollSummary.payrollExpenseCount > 0 ? "status" : "guard"}
+                    compact
+                    title={
+                      payrollSummary.payrollExpenseCount > 0
+                        ? [
+                            `Payroll paid bulan ini tercatat ${formatNumberId(
+                              payrollSummary.payrollExpenseCount,
+                            )} kali di Cash Out:`,
+                            `${formatCurrency(payrollSummary.payrollExpenseThisMonth)}.`,
+                            "Hindari input ulang manual.",
+                          ].join(" ")
+                        : "Ada payroll paid bulan ini, tetapi expense payroll belum terlihat. Cek Cash Out sebelum membaca Profit Loss."
+                    }
+                  />
+                ) : null}
+
+                {productionSummary.costIssueCount > 0 ? (
+                  <ImsNotice
+                    variant="guard"
+                    compact
+                    title={`${formatNumberId(
+                      productionSummary.costIssueCount,
+                    )} Work Log completed punya cost 0. Cek HPP/cost material sebelum analisis.`}
+                  />
+                ) : null}
               </div>
-              <div className="dashboard-metric-card">
-                <Text className="dashboard-card-label">Selisih Ringkas</Text>
-                <Title level={4} className="dashboard-card-value">
-                  {formatCurrency(financeSummary.netOperational)}
-                </Title>
-                <Text className="dashboard-muted-text">Ringkasan cepat.</Text>
-              </div>
-            </div>
-
-            <div className="dashboard-note-stack">
-              {payrollSummary.pendingCount > 0 ? (
-                <Alert
-                  type="info"
-                  showIcon
-                  message={`${formatNumberId(
-                    payrollSummary.pendingCount,
-                  )} payroll masih pending (${formatCurrency(payrollSummary.pendingAmount)}).`}
-                />
-              ) : null}
-
-              {payrollSummary.paidCount > 0 ? (
-                <Alert
-                  type={payrollSummary.payrollExpenseCount > 0 ? "success" : "warning"}
-                  showIcon
-                  message={
-                    payrollSummary.payrollExpenseCount > 0
-                      ? [
-                          `Payroll paid bulan ini tercatat ${formatNumberId(
-                            payrollSummary.payrollExpenseCount,
-                          )} kali di Cash Out:`,
-                          `${formatCurrency(payrollSummary.payrollExpenseThisMonth)}.`,
-                          "Hindari input ulang manual.",
-                        ].join(" ")
-                      : "Ada payroll paid bulan ini, tetapi expense payroll belum terlihat. Cek Cash Out sebelum membaca Profit Loss."
-                  }
-                />
-              ) : null}
-
-              {productionSummary.costIssueCount > 0 ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message={`${formatNumberId(
-                    productionSummary.costIssueCount,
-                  )} Work Log completed punya cost 0. Cek HPP/cost material sebelum analisis.`}
-                />
-              ) : null}
-            </div>
-          </PageSection>
-        </Col>
+            </PageSection>
+          </Col>
+        ) : null}
       </Row>
       <PageSection
         title="Aktivitas Terbaru"

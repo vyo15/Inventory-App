@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Button,
   Card,
   Col,
@@ -43,6 +42,7 @@ import PageSection from '../../components/Layout/Page/PageSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
 import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
 import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
+import ImsNotice from '../../components/Layout/Feedback/ImsNotice';
 import { DataRefreshIndicator, getDataTableEmptyText } from '../../components/Layout/Feedback/DataLoadingState';
 import { listenRawMaterials } from '../../services/MasterData/rawMaterialsService';
 import { listenPurchaseRecords } from '../../services/Transaksi/purchasesService';
@@ -960,11 +960,11 @@ const SupplierPurchases = () => {
           </Form.Item>
 
           {isEditing && editingSupplierNeedsCodeRepair ? (
-            <Alert
-              type="warning"
-              showIcon
-              style={{ marginBottom: 16 }}
-              message="Supplier lama ini belum punya kode bisnis. Normalisasi lewat menu Reset & Maintenance Data agar audit rapi."
+            <ImsNotice
+              variant="data-quality"
+              compact
+              className="ims-mb-16"
+              title="Supplier lama ini belum punya kode bisnis. Normalisasi lewat menu Reset & Maintenance Data agar audit rapi."
             />
           ) : null}
 
@@ -1133,11 +1133,10 @@ const SupplierPurchases = () => {
                             const detail = getFieldValue(['materialDetails', name]) || {};
 
                             return (
-                              <Alert
-                                type={detail.stockUnit ? 'info' : 'warning'}
-                                showIcon
-                                message={detail.stockUnit ? `Satuan stok: ${detail.stockUnit}` : 'Satuan stok belum diisi di Raw Material.'}
-                                description={null}
+                              <ImsNotice
+                                variant={detail.stockUnit ? 'info' : 'guard'}
+                                compact
+                                title={detail.stockUnit ? `Satuan stok: ${detail.stockUnit}` : 'Satuan stok belum diisi di Raw Material.'}
                               />
                             );
                           }}
@@ -1201,10 +1200,10 @@ const SupplierPurchases = () => {
                         const metrics = calculateSupplierMaterialRestockMetrics(detail);
 
                         return (
-                          <Alert
-                            type="success"
-                            showIcon
-                            message="Estimasi Restock"
+                          <ImsNotice
+                            variant="status"
+                            compact
+                            title="Estimasi Restock"
                             description={
                               <Space direction="vertical" size={2}>
                                 <span>Total estimasi: <strong>{formatCurrencyIDR(metrics.totalEstimatedSupplier || 0)}</strong></span>

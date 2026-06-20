@@ -1,6 +1,7 @@
 import { FileSearchOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Row, Space, Tag } from "antd";
+import { Button, Card, Col, Row, Space, Tag } from "antd";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
+import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 import { buildAutoDetectIssueSummaryMessage, getAuditIssueCountColor } from "../utils/resetMaintenanceUiHelpers";
 
 const ResetAutoDetectPanel = ({
@@ -91,10 +92,10 @@ const ResetAutoDetectPanel = ({
         />
       )}
       {auditIssueRows.length > 0 && (
-        <Alert
-          type="warning"
-          showIcon
-          message={buildAutoDetectIssueSummaryMessage(autoBugSummary)}
+        <ImsNotice
+          variant="data-quality"
+          compact
+          title={buildAutoDetectIssueSummaryMessage(autoBugSummary)}
           description="Gunakan ringkasan area, detail kategori Data Quality, dan Repair Turunan sebagai langkah aman. Sample audit hanya read-only dan tidak melakukan backfill otomatis."
         />
       )}

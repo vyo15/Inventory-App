@@ -25,6 +25,12 @@ if [[ -n "$(git status --porcelain)" && "${IMS_ALLOW_DIRTY_ARCHIVE:-}" != "1" ]]
   exit 1
 fi
 
+VERIFY_ARGS=(scripts/verify-source-ready.cjs)
+if [[ "${IMS_ALLOW_DIRTY_ARCHIVE:-}" == "1" ]]; then
+  VERIFY_ARGS+=(--allow-dirty)
+fi
+node "${VERIFY_ARGS[@]}"
+
 git archive --format=zip --prefix="$PREFIX" --output="$OUTPUT_PATH" HEAD
 
 echo "ZIP bersih dibuat: $OUTPUT_PATH"

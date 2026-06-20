@@ -1,4 +1,5 @@
 const { success } = require("../../utils/response");
+const { requireLocalAdministrator } = require("../../middlewares/localAuth");
 const { createSqliteJsonRecordRouter } = require("../../shared/sqliteJsonRecordRoutes");
 const {
   commitCashIn,
@@ -12,7 +13,10 @@ const getActor = (req) => req.localAuth?.user?.username || "system";
 
 const attachFinanceRecordRouters = (router) => {
   getFinanceRecordRouterDefinitions().forEach(({ path, config }) => {
-    router.use(path, createSqliteJsonRecordRouter(config));
+    router.use(path, createSqliteJsonRecordRouter({
+      ...config,
+      readGuard: requireLocalAdministrator,
+    }));
   });
 };
 

@@ -544,8 +544,6 @@ export const applyPricingRuleToItems = async ({
   items = [],
   rule = {},
   targetType = "",
-  changeSource = "pricing_rule_apply",
-  notes = "",
 }) => {
   const normalizedRule = normalizePricingRule(rule);
 

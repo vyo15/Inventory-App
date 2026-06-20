@@ -333,6 +333,12 @@ Endpoint foundation baru:
 
 Status: storage/snapshot foundation.
 
+Access guard source aktual:
+
+- `/api/finance/incomes`, `/api/finance/expenses`, dan `/api/finance/ledger` memakai authenticated session + Administrator read guard.
+- `/api/reports` memakai authenticated session + Administrator read guard.
+- Role `user` tidak boleh menggunakan endpoint tersebut untuk membangun finance/report Dashboard.
+
 Batasan:
 
 - Ledger/profit-loss final belum boleh dihitung ulang dari draft lokal.

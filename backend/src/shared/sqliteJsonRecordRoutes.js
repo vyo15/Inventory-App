@@ -13,6 +13,7 @@ const toInteger = (value = 0) => {
   return Number.isFinite(parsed) ? Math.round(parsed) : 0;
 };
 
+const allowAuthenticatedRead = (_req, _res, next) => next();
 
 const getNumericSequenceFromCode = (code = "", prefix = "") => {
   const normalizedCode = normalizeCode(code);
@@ -91,8 +92,11 @@ const createSqliteJsonRecordRouter = ({
   allowDirectUpdate = true,
   allowDirectDelete = true,
   blockedWriteMessage = "",
+  readGuard = allowAuthenticatedRead,
   writeGuard = requireLocalAdministrator,
   deleteGuard = requireLocalAdministrator,
+  validateDirectCreate = null,
+  validateDirectUpdate = null,
 } = {}) => {
   if (!tableName || !moduleKey || !entityType) {
     throw new Error("Konfigurasi database lokal JSON record route tidak lengkap.");
@@ -106,7 +110,7 @@ const createSqliteJsonRecordRouter = ({
     405,
   );
 
-  router.get("/generate-code", requireLocalAuth, async (_req, res, next) => {
+  router.get("/generate-code", requireLocalAuth, readGuard, async (_req, res, next) => {
     try {
       const db = await getDb();
       const code = await generateNextCode(db, tableName, codePrefix);
@@ -116,7 +120,7 @@ const createSqliteJsonRecordRouter = ({
     }
   });
 
-  router.get("/", requireLocalAuth, async (req, res, next) => {
+  router.get("/", requireLocalAuth, readGuard, async (req, res, next) => {
     try {
       const db = await getDb();
       const limit = Math.min(Math.max(Number(req.query.limit || 500), 1), 2000);
@@ -148,7 +152,7 @@ const createSqliteJsonRecordRouter = ({
     }
   });
 
-  router.get("/:id", requireLocalAuth, async (req, res, next) => {
+  router.get("/:id", requireLocalAuth, readGuard, async (req, res, next) => {
     try {
       const db = await getDb();
       const row = await db.get(`SELECT * FROM ${tableName} WHERE id = ? AND status != 'deleted'`, [req.params.id]);
@@ -189,6 +193,17 @@ const createSqliteJsonRecordRouter = ({
           createdAt: incomingPayload.createdAt || now,
           updatedAt: now,
         };
+
+        if (typeof validateDirectCreate === "function") {
+          await validateDirectCreate({
+            db,
+            entityType,
+            incomingPayload,
+            payload,
+            req,
+          });
+        }
+
         const normalizedColumns = extractColumns(payload);
   
         await db.run(
@@ -259,6 +274,17 @@ const createSqliteJsonRecordRouter = ({
         };
         const columns = extractColumns(mergedPayload);
         const finalName = normalizeText(columns.name || mergedPayload.name || current.name || current.code);
+
+        if (typeof validateDirectUpdate === "function") {
+          await validateDirectUpdate({
+            entityType,
+            current: toRecord(current),
+            currentPayload,
+            incomingPayload: { ...(req.body || {}) },
+            mergedPayload,
+            req,
+          });
+        }
   
         if (requiredName && !finalName) {
           return failure(res, `Nama ${entityType} wajib diisi`, "VALIDATION_ERROR", 400);

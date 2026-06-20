@@ -1,6 +1,5 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Card,
   Col,
   Form,
@@ -27,6 +26,7 @@ import {
   runHppCostReset,
 } from "../../services/Maintenance/resetMaintenanceDataService";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import useAuth from "../../hooks/useAuth";
 import useResetMaintenanceAudits from "./hooks/useResetMaintenanceAudits";
 import useResetMaintenanceRepairs from "./hooks/useResetMaintenanceRepairs";
@@ -95,7 +95,6 @@ const ResetMaintenanceData = () => {
   // Halaman ini tidak lagi menyimpan state reset testing lama; aksi utama
   // dibatasi ke backup/restore, audit data, repair aman, dan export master.
   // ---------------------------------------------------------------------------
-  const [loadingBaseline, setLoadingBaseline] = useState(false);
   const [loadingSync, setLoadingSync] = useState(false);
   const [transactionSideEffectConfirmOpen, setTransactionSideEffectConfirmOpen] = useState(false);
 
@@ -138,11 +137,10 @@ const ResetMaintenanceData = () => {
   const [hppCostResetMode, setHppCostResetMode] = useState("all_hpp_cost_sources");
   const [hppCostPreview, setHppCostPreview] = useState(null);
   const [hppCostBaselineSummary, setHppCostBaselineSummary] = useState(null);
-  const [loadingHppCostPreview, setLoadingHppCostPreview] = useState(false);
   const [loadingRestoreHppCostBaseline, setLoadingRestoreHppCostBaseline] = useState(false);
   const [loadingRunHppCostReset, setLoadingRunHppCostReset] = useState(false);
   const [hppCostConfirmOpen, setHppCostConfirmOpen] = useState(false);
-  const [hppCostConfirmAction, setHppCostConfirmAction] = useState("reset");
+  const hppCostConfirmAction = "reset";
 
   const maintenanceActor = useMemo(
     () => buildActorLabel({ profile, authUser }),
@@ -284,7 +282,6 @@ const ResetMaintenanceData = () => {
     const modeToPreview = resetModeOverride || hppCostResetMode;
 
     try {
-      setLoadingHppCostPreview(true);
       const result = await getHppCostResetPreview({ resetMode: modeToPreview });
       setHppCostPreview(result);
       if (resetModeOverride && resetModeOverride !== hppCostResetMode) {
@@ -298,8 +295,6 @@ const ResetMaintenanceData = () => {
       console.error(error);
       showActionError(error?.message || "Gagal memuat preview reset modal/HPP.");
       return null;
-    } finally {
-      setLoadingHppCostPreview(false);
     }
   }, [hppCostResetMode]);
 
@@ -308,26 +303,6 @@ const ResetMaintenanceData = () => {
       currentPreview?.resetMode === hppCostResetMode ? currentPreview : null
     ));
   }, [hppCostResetMode]);
-
-  const openHppCostResetAllConfirmation = async () => {
-    const resetAllMode = "all_hpp_cost_sources";
-    const previewToUse = hppCostPreview?.resetMode === resetAllMode
-      ? hppCostPreview
-      : await loadHppCostPreview(true, resetAllMode);
-
-    if (!previewToUse) return;
-
-    if (previewToUse.isClientBatchSafe === false) {
-      showActionError(`Reset semua diblokir karena estimasi ${previewToUse.estimatedWriteOperations} operasi melebihi batas aman ${previewToUse.safeClientLimit}.`);
-      return;
-    }
-
-    setHppCostResetMode(resetAllMode);
-    setHppCostPreview(previewToUse);
-    setHppCostConfirmAction("reset");
-    hppConfirmForm.setFieldsValue({ confirmationText: "", actionNote });
-    setHppCostConfirmOpen(true);
-  };
 
   const handleHppCostConfirmAction = async () => {
     const actionType = hppCostConfirmAction;
@@ -660,11 +635,22 @@ const ResetMaintenanceData = () => {
             subtitle="Pusat backup, restore, audit data, repair aman, checklist operasional, dan reset testing terbatas."
           />
 
-          <Alert
-            type="warning"
-            showIcon
-            message="Backup dan audit menjadi langkah utama; reset hanya untuk testing/development."
-            description="Mulai dari Backup & Restore, Audit Data, dan Repair Aman. Reset testing lama tetap nonaktif dan tidak menjalankan aksi destructive."
+          <ImsNotice
+            variant="guidance"
+            kicker="Operational guidance"
+            title="Backup dan audit menjadi langkah utama. Reset hanya untuk testing/development."
+            description={(
+              <>
+                Mulai dari <strong>Backup &amp; Restore</strong>, <strong>Audit Data</strong>, dan <strong>Repair Aman</strong>.
+                Reset testing lama tetap nonaktif dan tidak menjalankan aksi destructive.
+              </>
+            )}
+            sideLayout="inline"
+            sideItems={[
+              { label: "Flow", value: "Backup → Audit → Repair", tone: "success" },
+              { label: "Reset", value: "Nonaktif", tone: "warning" },
+              { label: "Aksi", value: "Tidak destructive", tone: "success" },
+            ]}
           />
 
           <div className="reset-maintenance-workspace reset-maintenance-workspace-flat">
@@ -732,11 +718,10 @@ const ResetMaintenanceData = () => {
         }}
       >
         <Space direction="vertical" size={14} style={{ width: "100%" }}>
-          <Alert
-            type="warning"
-            showIcon
-            icon={<WarningOutlined />}
-            message="Repair ini membuat side-effect transaksi yang hilang"
+          <ImsNotice
+            variant="guard"
+            compact
+            title="Repair ini membuat side-effect transaksi yang hilang"
             description="Aksi hanya membuat dokumen incomes, expenses, atau inventory_logs yang benar-benar hilang dari Sales/Purchases/Returns aktif. Stok master, dokumen transaksi utama, payroll, HPP, dan reset data tidak diubah. Income/expense/log lama tidak dihapus."
           />
 
@@ -753,10 +738,10 @@ const ResetMaintenanceData = () => {
             </Col>
           </Row>
 
-          <Alert
-            type="info"
-            showIcon
-            message="Guard idempotent"
+          <ImsNotice
+            variant="info"
+            compact
+            title="Guard idempotent"
             description="Service melakukan audit ulang sebelum write dan memakai document ID deterministik untuk repair agar klik ulang tidak membuat side-effect dobel. Tetap jalankan audit ulang setelah repair."
           />
 

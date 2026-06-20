@@ -1,11 +1,19 @@
 import React from "react";
-import { Alert, Button, Progress, Tag, Upload } from "antd";
-import { CheckCircleOutlined, UploadOutlined } from "@ant-design/icons";
+import { Button, Progress, Tag, Upload } from "antd";
+import { UploadOutlined } from "@ant-design/icons";
+import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 import "./PurchaseOcrDraftPanel.css";
 
 // IMS NOTE [AKTIF/GUARDED] - Panel draft OCR Shopee
 // Fungsi blok: preview hasil OCR dan feedback lokal setelah user menerapkan qty/biaya ke form.
 // Hubungan flow: UI-only; handler upload/apply tetap dari Purchases parent agar purchase payload, stock, expense, dan inventory log tidak berubah.
+const NOTICE_VARIANT_MAP = {
+  info: "info",
+  warning: "guard",
+  error: "critical",
+  success: "status",
+};
+
 const PurchaseOcrDraftPanel = ({
   shopeeOcrState,
   applyFeedback,
@@ -42,11 +50,11 @@ const PurchaseOcrDraftPanel = ({
         </Upload>
       </div>
 
-      <Alert
+      <ImsNotice
         className="purchase-ocr-draft-panel__guard"
-        type="info"
-        showIcon
-        message="OCR hanya membuat draft qty & biaya. Supplier, item, satuan, konversi, stok masuk, dan Simpan Pembelian tetap dikonfirmasi manual."
+        variant="guidance"
+        compact
+        title="OCR hanya membuat draft qty & biaya. Supplier, item, satuan, konversi, stok masuk, dan Simpan Pembelian tetap dikonfirmasi manual."
       />
 
       {isReading ? (
@@ -59,11 +67,11 @@ const PurchaseOcrDraftPanel = ({
       ) : null}
 
       {shopeeOcrState?.status === "error" || shopeeOcrState?.status === "needs_review" ? (
-        <Alert
+        <ImsNotice
           className="purchase-ocr-draft-panel__status"
-          type={shopeeOcrState.status === "error" ? "error" : "warning"}
-          showIcon
-          message={shopeeOcrState.error}
+          variant={shopeeOcrState.status === "error" ? "critical" : "guard"}
+          compact
+          title={shopeeOcrState.error}
         />
       ) : null}
 
@@ -81,10 +89,10 @@ const PurchaseOcrDraftPanel = ({
             </Tag>
           </div>
 
-          <Alert
-            type={reviewAlertTypeMap?.[parsed.reviewSeverity] || "info"}
-            showIcon
-            message={parsed.reviewStatusLabel || "Status OCR"}
+          <ImsNotice
+            variant={NOTICE_VARIANT_MAP[reviewAlertTypeMap?.[parsed.reviewSeverity]] || "info"}
+            compact
+            title={parsed.reviewStatusLabel || "Status OCR"}
             description={(
               <div>
                 <div>{parsed.reviewMessage || "Cek ulang hasil OCR sebelum diterapkan."}</div>
@@ -119,22 +127,21 @@ const PurchaseOcrDraftPanel = ({
           </div>
 
           {!parsed.totalMatches && parsed.totalOrder > 0 ? (
-            <Alert
+            <ImsNotice
               className="purchase-ocr-preview__warning"
-              type="warning"
-              showIcon
-              message="Rumus OCR belum cocok"
+              variant="guard"
+              compact
+              title="Rumus OCR belum cocok"
               description={`Hasil hitung sistem ${formatMoney(parsed.calculatedTotal)}, total pesanan ${formatMoney(parsed.totalOrder)}. Selisih ${formatMoney(Math.abs(parsed.totalDifference || 0))}.`}
             />
           ) : null}
 
           {hasApplyFeedback ? (
-            <Alert
+            <ImsNotice
               className="purchase-ocr-apply-feedback"
-              type="success"
-              showIcon
-              icon={<CheckCircleOutlined />}
-              message="Qty & biaya sudah diterapkan ke form"
+              variant="status"
+              compact
+              title="Qty & biaya sudah diterapkan ke form"
               description={applyFeedback.description || "Cek ulang field pembelian sebelum klik Simpan."}
             />
           ) : null}

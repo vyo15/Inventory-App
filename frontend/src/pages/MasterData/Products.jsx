@@ -37,6 +37,7 @@ import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import StockDisplayBlock from '../../components/Layout/Table/StockDisplayBlock';
 import DataTableView from '../../components/Layout/Table/DataTableView';
 import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
+import InfoPopoverButton from '../../components/Layout/Feedback/InfoPopoverButton';
 import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
 import { listCategories } from '../../data/repositories/categoriesRepository';
 
@@ -643,18 +644,12 @@ const Products = () => {
       --------------------------------------------------------------------- */}
       <PageHeader
         title="Produk Jadi"
-        subtitle="Master produk jadi dan stok varian."
+        subtitle="Master produk jadi, harga, kategori, dan status."
         actions={[
           { key: 'create-product', type: 'primary', icon: <PlusOutlined />, label: 'Tambah Produk', onClick: openCreateDrawer },
         ]}
       />
 
-      <Alert
-        showIcon
-        type="info"
-        className="ims-page-alert"
-        message="Stok varian dikelola per varian produk."
-      />
 
       {/* ---------------------------------------------------------------------
           Summary cards produk.
@@ -705,6 +700,17 @@ const Products = () => {
       <PageSection
         title="Daftar Produk Jadi"
         subtitle="Harga, stok, dan varian produk."
+        extra={(
+          <InfoPopoverButton
+            label="Aturan Stok"
+            title="Aturan stok produk varian"
+            description="Produk yang memiliki varian memakai stok di level varian agar pergerakan stok dan histori tetap akurat."
+            items={[
+              { label: 'Produk varian', value: 'Stok dihitung dari total varian.' },
+              { label: 'Update stok', value: 'Lewat detail varian atau Stock Adjustment.' },
+            ]}
+          />
+        )}
       >
         <DataTableView
           loading={loading}

@@ -5,7 +5,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Badge,
   Button,
   Card,
@@ -66,6 +65,8 @@ import PageSection from "../../components/Layout/Page/PageSection";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
+import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
+import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import {
   buildEmployeeActivitySummary,
@@ -700,13 +701,6 @@ const ProductionEmployees = () => {
         addLabel="Tambah Karyawan"
       />
 
-      <Alert
-        showIcon
-        type="info"
-        style={{ marginBottom: 16 }}
-        message="Operator produksi dan payroll read-only"
-        description="Ringkasan payroll dari data final."
-      />
 
       {/* AKTIF / GUARDED: summary hanya ganti wrapper presentational, nilai tetap dari kalkulasi existing. */}
       <ProductionSummaryCards items={summaryItems} />
@@ -776,6 +770,18 @@ const ProductionEmployees = () => {
       <PageSection
         title="Daftar Karyawan Produksi"
         subtitle="Master operator produksi."
+        extra={(
+          <InfoPopoverButton
+            label="Aturan Operator"
+            title="Operator produksi dan payroll"
+            description="Master operator dipakai sebagai referensi produksi. Ringkasan payroll bersifat read-only dari data final."
+            items={[
+              { label: 'Operator', value: 'Referensi untuk Work Log dan payroll.' },
+              { label: 'Payroll', value: 'Ringkasan berasal dari data final.' },
+              { label: 'Histori', value: 'Data lama tetap disimpan untuk audit.' },
+            ]}
+          />
+        )}
       >
         {/* =====================================================
             SECTION: Main table render — AKTIF
@@ -1169,11 +1175,11 @@ const ProductionEmployees = () => {
                 Status:
                 - aktif dipakai untuk UI detail; tidak menulis data dan bukan refactor flow bisnis.
             ===================================================== */}
-            <Alert
-              showIcon
-              type="info"
-              style={{ marginBottom: 16 }}
-              message="Operator untuk Work Log dan payroll."
+            <ImsNotice
+              variant="info"
+              compact
+              className="ims-mb-16"
+              title="Operator untuk Work Log dan payroll."
             />
 
             <Card size="small" title="Ringkasan Karyawan" style={{ marginBottom: 16 }}>
@@ -1407,11 +1413,11 @@ const ProductionEmployees = () => {
                       Status:
                       - arsip payroll/compatibility; kandidat cleanup hanya setelah keputusan migrasi data historis.
                   ===================================================== */}
-                  <Alert
-                    showIcon
-                    type="warning"
-                    style={{ marginBottom: 12 }}
-                    message="Arsip payroll untuk audit."
+                  <ImsNotice
+                    variant="guard"
+                    compact
+                    className="ims-mb-16"
+                    title="Arsip payroll untuk audit."
                     description="Payroll baru mengikuti Tahapan Produksi dan Work Log completed."
                   />
                   <Descriptions column={1} size="small">

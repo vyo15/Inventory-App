@@ -15,8 +15,9 @@ import EditableLineSection from '../../components/Produksi/shared/EditableLineSe
 import ReadonlyLineSection from '../../components/Produksi/shared/ReadonlyLineSection';
 import DataTableView from '../../components/Layout/Table/DataTableView';
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
+import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
+import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import {
-  Alert,
   Badge,
   Button,
   Col,
@@ -925,20 +926,19 @@ const ProductionBoms = () => {
       />
 
       {/* SECTION: info referensi */}
-      <Alert
-        style={{ marginBottom: 16 }}
-        type="info"
-        showIcon
-        message={`Referensi aktif: Product ${formatNumber(
-          referenceData.products.length,
-        )}, Semi Finished ${formatNumber(
-          referenceData.semiFinishedMaterials.length,
-        )}, Raw Material ${formatNumber(
-          referenceData.rawMaterials.length,
-        )}, Production Step ${formatNumber(
-          referenceData.productionSteps.length,
-        )}`}
-      />
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        <InfoPopoverButton
+          label="Referensi Aktif"
+          title="Referensi aktif untuk BOM"
+          description="BOM memakai referensi aktif dari Product, Semi Finished, Raw Material, dan Production Step. Data nonaktif disimpan untuk histori."
+          items={[
+            { label: 'Product', value: `${formatNumber(referenceData.products.length)} aktif` },
+            { label: 'Semi Finished', value: `${formatNumber(referenceData.semiFinishedMaterials.length)} aktif` },
+            { label: 'Raw Material', value: `${formatNumber(referenceData.rawMaterials.length)} aktif` },
+            { label: 'Step', value: `${formatNumber(referenceData.productionSteps.length)} aktif` },
+          ]}
+        />
+      </div>
 
       {/* SECTION: filter */}
       <ProductionFilterCard>
@@ -1035,11 +1035,11 @@ const ProductionBoms = () => {
           }}
         >
           {formErrorSummary ? (
-            <Alert
-              style={{ marginBottom: 16 }}
-              type="error"
-              showIcon
-              message={formErrorSummary}
+            <ImsNotice
+              variant="critical"
+              compact
+              className="ims-mb-16"
+              title={formErrorSummary}
             />
           ) : null}
           <Divider orientation="left">Informasi Dasar</Divider>
@@ -1089,21 +1089,21 @@ const ProductionBoms = () => {
               return (
                 <>
                   {targetType === "product" && targetOptions.length === 0 ? (
-                    <Alert
-                      style={{ marginBottom: 16 }}
-                      type="warning"
-                      showIcon
-                      message="Target product belum terbaca. Pastikan master Produk Jadi sudah ada dan halaman BOM sudah refresh."
+                    <ImsNotice
+                      variant="guard"
+                      compact
+                      className="ims-mb-16"
+                      title="Target product belum terbaca. Pastikan master Produk Jadi sudah ada dan halaman BOM sudah refresh."
                     />
                   ) : null}
 
                   {targetType === "semi_finished_material" &&
                   targetOptions.length === 0 ? (
-                    <Alert
-                      style={{ marginBottom: 16 }}
-                      type="warning"
-                      showIcon
-                      message="Target semi finished belum tersedia. Tambahkan Semi Finished Materials terlebih dahulu."
+                    <ImsNotice
+                      variant="guard"
+                      compact
+                      className="ims-mb-16"
+                      title="Target semi finished belum tersedia. Tambahkan Semi Finished Materials terlebih dahulu."
                     />
                   ) : null}
 
@@ -1687,11 +1687,11 @@ const ProductionBoms = () => {
                     <Input />
                   </Form.Item>
 
-                  <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                    message={
+                  <ImsNotice
+                    variant="info"
+                    compact
+                    className="ims-mb-16"
+                    title={
                       hasVariants
                         ? "Item bahan ini punya varian. Variant tidak dipilih di BOM dan akan otomatis mengikuti variant target saat Production Order dibuat."
                         : "Item bahan ini tidak memakai varian. Saat Production Order dibuat, stok akan dibaca dari master item."

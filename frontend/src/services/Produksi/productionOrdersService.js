@@ -1,5 +1,6 @@
 import {
-  createProductionRecord,
+  commitProductionOrder,
+  commitProductionOrderRequirementRefresh,
   generateProductionCode,
   getProductionRecordById,
   listProductionRecords,
@@ -82,29 +83,17 @@ export const createProductionOrder = async (values = {}, currentUser = null) => 
         ...payload,
         requirementLines: await buildProductionOrderRequirementLines({
           bom,
-          targetQty: payload.targetQty,
+          targetQty: payload.targetQty || payload.orderQty,
         }),
       };
     }
   }
 
-  return createProductionRecord("orders", payload);
+  return commitProductionOrder(payload);
 };
 
-export const refreshProductionOrderRequirements = async (orderId, currentUser = null) => {
-  const order = await getProductionOrderById(orderId);
-  const bom = order.bomId ? await getProductionBomById(order.bomId).catch(() => null) : null;
-  const requirementLines = bom
-    ? await buildProductionOrderRequirementLines({ bom, targetQty: order.targetQty })
-    : order.requirementLines || [];
-
-  return updateProductionRecord("orders", orderId, {
-    ...order,
-    requirementLines,
-    updatedAt: nowIso(),
-    updatedBy: getActorName(currentUser),
-  });
-};
+export const refreshProductionOrderRequirements = async (orderId) =>
+  commitProductionOrderRequirementRefresh(orderId);
 
 export const reserveProductionOrder = async (orderId, currentUser = null) => updateProductionRecord(
   "orders",

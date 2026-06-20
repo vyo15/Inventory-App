@@ -1,5 +1,5 @@
 const DEFAULT_SQLITE_BACKEND_PORT = "3001";
-const LOCAL_AUTH_TOKEN_KEY = "ims.sqlite.authToken";
+const LEGACY_AUTH_TOKEN_KEY = "ims.sqlite.authToken";
 
 const normalizeBaseUrl = (value) => String(value || "").replace(/\/$/, "");
 
@@ -17,9 +17,19 @@ export const getSqliteBackendBaseUrl = () => normalizeBaseUrl(
   import.meta.env.VITE_SQLITE_API_BASE_URL || getRuntimeHostBaseUrl(),
 );
 
+export const getStoredSqliteAuthToken = () => {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(LEGACY_AUTH_TOKEN_KEY) || "";
+};
+
+export const clearStoredSqliteAuthToken = () => {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(LEGACY_AUTH_TOKEN_KEY);
+};
+
+// Temporary compatibility for sessions created before HttpOnly cookie migration.
 export const getStoredSqliteAuthHeaders = () => {
-  if (typeof window === "undefined") return {};
-  const token = window.localStorage.getItem(LOCAL_AUTH_TOKEN_KEY) || "";
+  const token = getStoredSqliteAuthToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
@@ -29,6 +39,7 @@ export const fetchSqliteJson = async (path, options = {}) => {
 
   try {
     response = await fetch(`${baseUrl}${path}`, {
+      credentials: "include",
       ...options,
       headers: {
         "Content-Type": "application/json",
@@ -83,6 +94,7 @@ export const getSqliteMasterDataExport = async ({ includeOpeningStock = true } =
 export const downloadSqliteBackendBackup = async (filename) => {
   const baseUrl = getSqliteBackendBaseUrl();
   const response = await fetch(`${baseUrl}/api/maintenance/backups/${encodeURIComponent(filename)}/download`, {
+    credentials: "include",
     headers: getStoredSqliteAuthHeaders(),
   });
 
@@ -101,6 +113,7 @@ export const importSqliteBackendBackup = async (file) => {
   const baseUrl = getSqliteBackendBaseUrl();
   const response = await fetch(`${baseUrl}/api/maintenance/backups/import`, {
     method: "POST",
+    credentials: "include",
     headers: {
       ...getStoredSqliteAuthHeaders(),
       "Content-Type": "application/octet-stream",

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Button,
   Col,
   DatePicker,
@@ -17,6 +16,7 @@ import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
+import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageFormModal from "../../components/Layout/Forms/PageFormModal";
 import PageHeader from "../../components/Layout/Page/PageHeader";
@@ -465,17 +465,22 @@ const CashOut = () => {
         ]}
       />
 
-      <Alert
-        className="ims-mb-16"
-        type="info"
-        showIcon
-        message="Payroll paid masuk Cash Out."
-        description="Payroll paid tercatat satu kali."
-      />
 
       <PageSection
         title="Ringkasan Periode"
         subtitle="KPI periode aktif."
+        extra={(
+          <InfoPopoverButton
+            label="Payroll Otomatis"
+            title="Payroll paid masuk Cash Out"
+            description="Payroll produksi yang sudah paid akan tercatat sebagai Cash Out otomatis. Jangan input manual lagi agar tidak dobel biaya."
+            items={[
+              { label: 'Payroll paid', value: 'Masuk otomatis.' },
+              { label: 'Manual input', value: 'Untuk biaya non-payroll.' },
+              { label: 'Anti dobel', value: 'Cek referensi sebelum simpan.' },
+            ]}
+          />
+        )}
       >
         <SummaryStatGrid
           items={summaryItems}

@@ -1,6 +1,6 @@
 # CURRENT STATE & TECH DEBT — IMS Bunga Flanel
 
-## Status source aktual — 2026-06-07
+## Status source aktual — 2026-06-20
 
 Status: **AKTIF / SOURCE-VERIFIED / SQLITE-FIRST**.
 
@@ -63,6 +63,15 @@ Konsekuensi:
 - Repository mode frontend diarahkan ke SQLite sidecar.
 - Sales cancel/delete tetap dilarang; return menjadi jalur resmi barang kembali.
 - Stock mutation utama sudah diarahkan ke stock engine/backend commit.
+- Endpoint `POST /api/auth/login` dilindungi rate limit per IP: default 5 login gagal per 60 detik; login berhasil tidak menghabiskan kuota kegagalan.
+- Backend memiliki automated regression test berbasis `node:test` untuk auth route aktual, cookie session, CORS, bootstrap guard, rate limit, stock engine, transaction atomicity, finance ledger, return, production, payroll/HPP, backup/restore, dan source hygiene.
+- Session browser memakai cookie host-only `HttpOnly; SameSite=Lax`; response login tidak mengirim raw token ke JavaScript, endpoint auth memakai `Cache-Control: no-store`, dan header identitas Express dinonaktifkan.
+- Session Bearer lama tetap diterima sementara dan dimigrasikan menjadi cookie melalui `/api/auth/me`, lalu token lama dibersihkan dari `localStorage` frontend.
+- Bootstrap administrator pertama memakai kode setup acak yang hanya tampil di terminal backend; endpoint status tidak mengirim kode tersebut.
+- `npm run check`, `git check`, dan pre-push menjalankan automated test backend serta frontend sebagai quality gate.
+- Production P4 memusatkan create PO dari Planning, Start Production, Complete Work Log, auto payroll, Payroll Paid, finance posting, dan HPP reconcile pada transaction backend SQLite.
+- Generic production CRUD tidak lagi dapat dipakai untuk melewati lifecycle sensitif Planning, Production Order, Work Log, atau Payroll.
+- Automated regression aktif setelah P5-P7 berjumlah 59 test backend dan 17 test frontend. Coverage backend mencakup rollback/idempotency produksi, backup/restore guarded, serta source ZIP hygiene; coverage frontend mencakup auth, role guard, ProtectedRoute, Dashboard, dan error login.
 
 ## Tech debt aktif yang masih perlu dijaga
 
@@ -107,10 +116,14 @@ Jangan membuat perhitungan stok baru di UI.
 
 ### 6. Production, payroll, dan HPP
 
-- Work Log completed menjadi dasar material actual.
-- Payroll final/paid menjadi dasar labor actual.
-- HPP final tidak boleh mengambil payroll draft sebagai angka final.
-- Production order/work log/payroll tidak boleh diproses dua kali.
+- Target dan requirement Production Order wajib berasal dari BOM; payload client tidak boleh mengganti target BOM.
+- Create PO dari Planning wajib atomic dengan update relasi/status Planning.
+- Start Production wajib memotong seluruh material, membuat satu Work Log, dan mengubah PO menjadi `in_production` dalam satu transaction.
+- Complete Work Log wajib memakai snapshot material dari Start, menambah output, membuat payroll draft, menghitung accrued HPP, dan menutup PO dalam satu transaction.
+- Payroll final/paid tetap menjadi source final adjustment labor actual; HPP reconcile tidak boleh menambah qty output ulang.
+- Payroll paid wajib atomic dengan expense/ledger dan idempotent terhadap expense current maupun compatibility legacy.
+- Direct write generic ke relasi/status/flag stok/payroll/HPP yang guarded harus ditolak backend.
+- Production Order, Work Log, dan Payroll tidak boleh diproses dua kali.
 
 ### 7. Backup, restore, dan reset
 
@@ -126,6 +139,17 @@ Jangan membuat perhitungan stok baru di UI.
 - Mobile tidak boleh memaksa tabel desktop penuh bila data utama panjang.
 - Empty/loading/error state wajib jelas.
 - Dark mode dan light mode harus tetap terbaca.
+
+### 9. Auth hardening dan automated test
+
+- Cookie `HttpOnly` mengurangi risiko pencurian token melalui JavaScript, tetapi tidak membuat XSS aman sepenuhnya; dependency frontend dan sink HTML tetap harus diaudit.
+- Cookie `Secure` default `false` karena runtime IMS memakai HTTP lokal/LAN. Aktifkan `IMS_AUTH_COOKIE_SECURE=true` hanya saat frontend dan backend benar-benar tersedia melalui HTTPS.
+- CORS default hanya menerima origin dengan hostname yang sama seperti backend atau pasangan loopback `localhost`/`127.0.0.1`. Origin tambahan harus didaftarkan eksplisit melalui `IMS_SQLITE_CORS_ORIGIN` dipisahkan koma; wildcard tidak dipakai untuk credentialed cookie.
+- Bearer fallback dipertahankan sementara untuk compatibility session lama dan dikontrol melalui `IMS_AUTH_ALLOW_LEGACY_BEARER=true`. Setelah seluruh perangkat login ulang serta checklist Database Center menyatakan aman, ubah ke `false`; flow baru dilarang menulis token ke `localStorage`.
+- Login dan bootstrap rate limiting memakai in-memory store karena IMS berjalan single-process di LAN. Counter akan reset saat backend restart; gunakan store eksternal hanya jika arsitektur berubah menjadi multi-process/multi-instance.
+- Automated test sudah mencakup atomic core Production, backup/restore guarded, source hygiene, auth frontend, role guard, ProtectedRoute, Dashboard, dan error login. Coverage belum mencakup seluruh variasi halaman transaksi/report/produksi dan interaksi maintenance kompleks; area tersebut tetap wajib menjalani checklist manual.
+- Test runner menemukan seluruh file `*.test.js` secara otomatis. `npm run check`, `git check`, dan pre-push wajib gagal jika automated test gagal.
+- Source readiness menolak file runtime di `data/` atau `backups/` yang ter-track; script clean ZIP menjalankan guard ini sebelum `git archive`. Hapus dari Git index dengan `git rm --cached` tanpa menghapus backup lokal yang masih diperlukan.
 
 ## Jangan dilakukan tanpa approval eksplisit
 

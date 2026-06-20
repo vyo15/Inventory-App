@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Col, Input, Select, Tag, message } from "antd";
+import { Button, Col, Input, Select, Tag, message } from "antd";
 import { CheckCircleOutlined, FileExcelOutlined, WarningOutlined } from "@ant-design/icons";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
+import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import FilterBar from "../../components/Layout/Filters/FilterBar";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
@@ -517,18 +518,18 @@ const StockReport = () => {
         extra={<Tag color="blue">{formatNumberId(filteredData.length)} baris</Tag>}
       >
         {isPartialStockReport && (
-          <Alert
-            type="warning"
-            showIcon
-            message="Sebagian sumber laporan stok gagal dimuat."
+          <ImsNotice
+            variant="data-quality"
+            compact
+            title="Sebagian sumber laporan stok gagal dimuat."
             description={`Area gagal: ${failedReadsLabel}. Data yang berhasil dibaca tetap ditampilkan agar laporan tidak kosong total. Export XLSX akan ditandai sebagai data parsial.`}
           />
         )}
         {isLimitedStockReport && (
-          <Alert
-            type="warning"
-            showIcon
-            message="Data laporan stok dibatasi oleh batas pemuatan."
+          <ImsNotice
+            variant="data-quality"
+            compact
+            title="Data laporan stok dibatasi oleh batas pemuatan."
             description={`Saat ini termuat ${stockReportLoadedLabel} dari batas ${stockReportLimitLabel} row. Gunakan tombol Muat data lanjutan untuk menambah rows tabel; Export XLSX akan mencoba mengambil data lengkap secara bertahap.`}
           />
         )}

@@ -585,3 +585,44 @@ Standar UI baru:
 - Empty state memakai pesan user-friendly seperti "Belum ada kategori" atau "Tambahkan data dari halaman ini".
 - Tombol cepat ke pusat database tidak boleh muncul di halaman operasional seperti Kategori/Customer/Supplier.
 - Label mode database tidak perlu tampil di list/card/page header.
+
+## Standar info kecil dan anti double-info — 2026-06-10
+
+Untuk info statis/kontekstual yang tidak membutuhkan perhatian langsung, gunakan `InfoPopoverButton` dan jangan memakai banner/alert besar.
+
+Contoh yang harus memakai `InfoPopoverButton`:
+- aturan stok produk atau varian;
+- aturan varian bahan baku;
+- aturan planning produksi;
+- referensi aktif BOM;
+- aturan payroll line;
+- payroll otomatis ke Cash Out.
+
+Aturan anti double-info:
+- Satu konteks hanya boleh punya satu sumber informasi utama.
+- Jika informasi sudah dipindah ke `InfoPopoverButton`, hapus banner/notice lama dan jangan ulangi di subtitle.
+- Letakkan tombol info di area paling relevan, biasanya `PageSection.extra`, header tabel, atau area action section.
+- `InfoPopoverButton` hanya untuk informasi kecil/statis; jangan dipakai untuk error, validasi form, data quality dynamic, restore/repair guard, stock mutation guard, payroll payment guard, atau aksi destructive.
+- Warning/error/guard yang mempengaruhi data tetap memakai `ImsNotice`, `Alert`, modal confirm, atau guard box yang terlihat jelas.
+
+Komponen terkait:
+- `src/components/Layout/Feedback/InfoPopoverButton.jsx`
+- `src/components/Layout/Feedback/InfoPopoverButton.css`
+
+### Standar side summary notice
+
+Untuk `ImsNotice` yang memiliki `sideItems` berisi status ringkas, gunakan `sideLayout="inline"` agar notice tetap compact dan tidak membuat ruang kosong besar. Layout stack hanya dipakai jika side item memang berupa informasi panjang yang perlu dibaca sebagai card.
+
+Contoh yang tepat:
+
+```jsx
+<ImsNotice
+  variant="guidance"
+  sideLayout="inline"
+  sideItems={[
+    { label: "Flow", value: "Backup → Audit → Repair", tone: "success" },
+    { label: "Reset", value: "Nonaktif", tone: "warning" },
+    { label: "Aksi", value: "Tidak destructive", tone: "success" },
+  ]}
+/>
+```

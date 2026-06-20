@@ -36,7 +36,7 @@ http://IP-LAPTOP:5173/Inventory-App/
 GET    /health                         # public minimal
 GET    /api                            # public minimal
 GET    /api/auth/status                # public minimal untuk bootstrap/login
-POST   /api/auth/bootstrap-admin       # hanya jika belum ada administrator aktif
+POST   /api/auth/bootstrap-admin       # hanya jika belum ada admin + kode setup terminal
 POST   /api/auth/login
 GET    /api/settings                   # administrator
 GET    /api/auth/me                    # login
@@ -62,6 +62,25 @@ POST   /api/maintenance/backup         # administrator
 GET    /api/maintenance/backups        # administrator
 GET    /api/audit-logs                 # administrator
 ```
+
+## Auth lokal
+
+- Login browser memakai cookie `ims_session` dengan `HttpOnly` dan `SameSite=Lax`; raw token tidak dikirim di JSON, endpoint auth tidak boleh di-cache, dan header `X-Powered-By` dinonaktifkan.
+- Frontend harus mengirim request dengan `credentials: "include"`.
+- Bearer token lama diterima sementara untuk migrasi melalui `/api/auth/me`.
+- Origin frontend dengan hostname yang sama seperti backend otomatis diizinkan. Origin tambahan dapat diisi lewat `IMS_SQLITE_CORS_ORIGIN` sebagai daftar dipisahkan koma; jangan gunakan wildcard.
+- Pada database baru, kode setup administrator pertama dicetak di terminal backend. Endpoint `/api/auth/status` hanya menyatakan bahwa bootstrap diperlukan dan tidak mengirim kodenya.
+- `IMS_AUTH_BOOTSTRAP_CODE` boleh diisi untuk kode setup stabil minimal 8 karakter. Jika kosong, kode acak berubah setiap backend restart.
+- `IMS_AUTH_COOKIE_SECURE` tetap `false` untuk HTTP LAN dan hanya boleh `true` pada HTTPS.
+
+## Quality gate
+
+```bash
+npm test
+npm run check
+```
+
+Runner test menemukan seluruh file `backend/test/**/*.test.js`. Root check menjalankan test, syntax check backend, dan production build frontend. `git check`/pre-push juga menjalankan automated test.
 
 ## Runtime data
 

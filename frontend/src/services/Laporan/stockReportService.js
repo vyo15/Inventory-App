@@ -18,12 +18,6 @@ const STOCK_REPORT_DEFAULT_EXPORT_LIMIT = 20000;
 // Risiko:
 // - data stok laporan tetap turunan. Mutasi stok wajib tetap terjadi di master stock dan inventory_logs.
 // =====================================================
-const mapInventorySnapshotToReportRows = (snapshot, typeLabel) =>
-  snapshot.docs.map((documentItem) => buildStockReadModelRow(documentItem.data(), {
-    id: documentItem.id,
-    typeLabel,
-  }));
-
 const readStockReportSnapshot = async (key, requestPromise) => {
   try {
     return { key, snapshot: await requestPromise, error: null };

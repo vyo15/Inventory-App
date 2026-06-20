@@ -9,3 +9,9 @@
 /backups/**/*.sqlite export-ignore
 /backups/**/*.sqlite-* export-ignore
 /backups/**/*.db export-ignore
+
+# Exclude the complete runtime directories from git archive, including unexpected extensions.
+/data export-ignore
+/backups export-ignore
+
+*.sh text eol=lf

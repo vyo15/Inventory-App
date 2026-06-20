@@ -1,4 +1,5 @@
 const { failure, success } = require("../../utils/response");
+const { clearSessionCookie, setSessionCookie } = require("../../utils/authSessionCookie");
 const authService = require("./auth.service");
 
 const handleAuthError = (res, next, error) => {
@@ -32,13 +33,20 @@ const login = async (req, res, next) => {
       userAgent: req.get("user-agent") || "",
       ipAddress: req.ip || "",
     });
-    return success(res, "Login lokal berhasil", result);
+    setSessionCookie(res, result.token, result.expiresAt);
+    return success(res, "Login lokal berhasil", {
+      expiresAt: result.expiresAt,
+      user: result.user,
+    });
   } catch (error) {
     return handleAuthError(res, next, error);
   }
 };
 
-const me = async (req, res) => success(res, "Session lokal aktif", { user: req.localAuth.user });
+const me = async (req, res) => {
+  setSessionCookie(res, req.localAuth.sessionToken, req.localAuth.expiresAt);
+  return success(res, "Session lokal aktif", { user: req.localAuth.user });
+};
 
 const logout = async (req, res, next) => {
   try {
@@ -46,8 +54,10 @@ const logout = async (req, res, next) => {
       sessionId: req.localAuth.sessionId,
       user: req.localAuth.user,
     });
+    clearSessionCookie(res);
     return success(res, "Logout lokal berhasil", result);
   } catch (error) {
+    clearSessionCookie(res);
     return next(error);
   }
 };

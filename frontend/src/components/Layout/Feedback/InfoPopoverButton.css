@@ -1,0 +1,96 @@
+.ims-info-popover-button.ant-btn {
+  align-items: center;
+  border-color: var(--ims-border-color-secondary, var(--ant-color-border-secondary, rgba(127, 127, 127, 0.18)));
+  border-radius: 999px;
+  color: var(--ims-text-secondary, var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65)));
+  display: inline-flex;
+  font-weight: 650;
+  gap: 6px;
+  min-height: 32px;
+  padding-inline: 10px;
+}
+
+.ims-info-popover-button.ant-btn:hover,
+.ims-info-popover-button.ant-btn:focus-visible {
+  background: var(--ims-color-primary-soft, #e9f2fb);
+  border-color: var(--ims-border-strong, rgba(36, 95, 157, 0.22));
+  color: var(--ims-color-primary, #245f9d);
+}
+
+.ims-info-popover-overlay {
+  max-width: calc(100vw - 32px);
+}
+
+.ims-info-popover-overlay .ant-popover-inner {
+  background: var(--ims-bg-elevated, var(--ant-color-bg-elevated, #fff));
+  border: 1px solid var(--ims-border-color-secondary, var(--ant-color-border-secondary, rgba(127, 127, 127, 0.18)));
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(16, 32, 51, 0.14);
+}
+
+.ims-info-popover-overlay .ant-popover-arrow::before {
+  background: var(--ims-bg-elevated, var(--ant-color-bg-elevated, #fff));
+}
+
+.ims-info-popover-overlay .ant-popover-title {
+  color: var(--ims-text-primary, var(--ant-color-text, #102033));
+  font-size: 13px;
+  font-weight: 760;
+  margin-bottom: 4px;
+}
+
+.ims-info-popover-content {
+  max-width: 360px;
+}
+
+.ims-info-popover-description.ant-typography {
+  color: var(--ims-text-secondary, var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65)));
+  display: block;
+  font-size: 12px;
+  line-height: 1.48;
+  margin: 0;
+}
+
+.ims-info-popover-meta {
+  border-top: 1px solid var(--ims-border-color-secondary, var(--ant-color-border-secondary, rgba(127, 127, 127, 0.18)));
+  display: grid;
+  gap: 7px;
+  padding-top: 9px;
+}
+
+.ims-info-popover-meta-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(92px, 0.42fr) minmax(0, 1fr);
+}
+
+.ims-info-popover-meta-label.ant-typography,
+.ims-info-popover-meta-value.ant-typography {
+  font-size: 12px;
+  line-height: 1.42;
+  margin: 0;
+}
+
+.ims-info-popover-meta-label.ant-typography {
+  color: var(--ims-text-secondary, var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65)));
+}
+
+.ims-info-popover-meta-value.ant-typography {
+  color: var(--ims-text-primary, var(--ant-color-text, #102033));
+  font-weight: 620;
+}
+
+@media (max-width: 640px) {
+  .ims-info-popover-overlay {
+    max-width: calc(100vw - 20px);
+  }
+
+  .ims-info-popover-content {
+    max-width: calc(100vw - 64px);
+  }
+
+  .ims-info-popover-meta-row {
+    gap: 3px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

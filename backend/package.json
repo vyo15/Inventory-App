@@ -8,11 +8,13 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "check": "node scripts/check-all-js.cjs",
+    "test": "node scripts/run-tests.cjs",
     "audit:sqlite-cutover": "node scripts/audit-sqlite-cutover-readiness.cjs"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.5.2",
     "sqlite": "^5.1.1",
     "sqlite3": "^6.0.1"
   },

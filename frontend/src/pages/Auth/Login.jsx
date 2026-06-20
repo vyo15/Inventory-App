@@ -9,7 +9,7 @@ import {
   Space,
   Typography,
 } from "antd";
-import { LockOutlined, UserOutlined } from "@ant-design/icons";
+import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from "@ant-design/icons";
 import flanelKarawangLogo from "../../assets/branding/flanel-karawang-logo.png";
 import flanelKarawangLogoWebp from "../../assets/branding/flanel-karawang-logo.webp";
 import flanelKarawangMark from "../../assets/branding/flanel-karawang-mark.png";
@@ -58,6 +58,21 @@ const getBlockedAccessMessage = (profileStatus) => {
     default:
       return null;
   }
+};
+
+
+const getLoginErrorMessage = (error = {}) => {
+  const errorCode = error?.errorCode || error?.code || "";
+
+  if (errorCode === "SQLITE_BACKEND_UNAVAILABLE") {
+    return error?.message || "Layanan lokal belum bisa dihubungi. Pastikan backend IMS sedang berjalan.";
+  }
+
+  if (errorCode === "AUTH_RATE_LIMITED") {
+    return error?.message || "Terlalu banyak percobaan login. Tunggu sebentar lalu coba lagi.";
+  }
+
+  return "Username atau password tidak sesuai. Pastikan akun internal sudah dibuat oleh Administrator.";
 };
 
 const useLoginBrowserBranding = () => {
@@ -230,9 +245,7 @@ const Login = () => {
       await loginWithUsername(values.username, values.password);
     } catch (error) {
       console.error("[Login] Gagal login.", error);
-      setLoginError(
-        "Username atau password tidak sesuai. Pastikan akun internal sudah dibuat oleh Administrator.",
-      );
+      setLoginError(getLoginErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }
@@ -247,8 +260,7 @@ const Login = () => {
         username: values.username,
         displayName: values.displayName,
         password: values.password,
-        confirmKeyword:
-          bootstrapStatus?.bootstrapConfirmKeyword || "CREATE LOCAL ADMIN",
+        bootstrapCode: values.bootstrapCode,
       };
 
       await createLocalBootstrapAdmin(payload);
@@ -319,6 +331,30 @@ const Login = () => {
             requiredMark={false}
             className="ims-login-form"
           >
+            <Alert
+              className="ims-login-setup-note"
+              type="info"
+              showIcon
+              message="Kode setup tersedia di terminal backend"
+              description="Salin kode yang tampil saat layanan lokal dijalankan. Kode ini tidak dikirim melalui browser."
+            />
+
+            <Form.Item
+              label="Kode Setup Lokal"
+              name="bootstrapCode"
+              rules={[
+                { required: true, message: "Kode setup lokal wajib diisi." },
+                { min: 8, message: "Kode setup lokal minimal 8 karakter." },
+              ]}
+            >
+              <Input.Password
+                autoComplete="one-time-code"
+                prefix={<SafetyCertificateOutlined />}
+                placeholder="Masukkan kode dari terminal backend"
+                size="large"
+              />
+            </Form.Item>
+
             <Form.Item
               label="Username Admin"
               name="username"

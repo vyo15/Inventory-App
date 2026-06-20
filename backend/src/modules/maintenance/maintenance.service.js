@@ -205,6 +205,11 @@ const getMaintenanceStatus = async () => {
     },
     restoreMode: "guarded_confirm_keyword",
     restoreConfirmKeyword: RESTORE_CONFIRM_KEYWORD,
+    authCompatibility: {
+      legacyBearerEnabled: env.authAllowLegacyBearer,
+      cookieSessionActive: true,
+      removalReady: env.authAllowLegacyBearer === false,
+    },
   };
 };
 

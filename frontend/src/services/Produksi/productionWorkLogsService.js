@@ -1,11 +1,11 @@
 import {
-  createProductionRecord,
+  commitProductionOrderStart,
+  commitProductionWorkLogComplete,
   generateProductionCode,
   getProductionRecordById,
   listProductionRecords,
   updateProductionRecord,
 } from "../../data/adapters/sqlite/sqliteProductionAdapter";
-import { commitStockAdjustment } from "../../data/adapters/sqlite/sqliteStockAdjustmentsAdapter";
 import { getProductionOrderById } from "./productionOrdersService";
 import {
   buildWorkLogDraftFromBom as buildWorkLogDraftFromBomPayload,
@@ -14,7 +14,6 @@ import {
 } from "./helpers/productionWorkLogsServiceHelpers";
 
 const safeTrim = (value) => String(value || "").trim();
-const nowIso = () => new Date().toISOString();
 
 export const validateProductionWorkLog = validateProductionWorkLogPayload;
 export const getWorkLogReferenceData = async () => ({ productionOrders: [], boms: [], employees: [], steps: [] });
@@ -34,7 +33,7 @@ export const buildWorkLogDraftFromProductionOrder = async (orderIdOrOrder = {}) 
     targetId: order.targetId || "",
     targetCode: order.targetCode || "",
     targetName: order.targetName || "",
-    plannedQty: Number(order.targetQty || order.quantity || 0),
+    plannedQty: Number(order.targetQty || order.orderQty || order.quantity || 0),
     status: "in_progress",
     sourceType: "production_order",
   };
@@ -56,81 +55,58 @@ export const isProductionWorkLogNumberExists = async (workNumber, excludeId = nu
 
   return rows.some(
     (row) => safeTrim(row.workNumber || row.code).toUpperCase() === normalized
-      && String(row.id) !== String(excludeId || "")
+      && String(row.id) !== String(excludeId || ""),
   );
 };
 
-export const createProductionWorkLog = async (values, currentUser = null) => createProductionRecord(
-  "workLogs",
-  normalizeProductionWorkLogPayload(values, currentUser, false)
-);
+export const createProductionWorkLog = async (values = {}) => {
+  const orderId = values.productionOrderId || values.orderId || "";
+  if (!orderId) {
+    throw new Error("Work Log baru wajib dibuat dari Production Order melalui aksi Mulai Produksi.");
+  }
+  const result = await commitProductionOrderStart(orderId, values);
+  return result?.workLog || result;
+};
 
-export const createProductionWorkLogFromOrder = async (orderIdOrOrder, currentUser = null) => {
-  const draft = await buildWorkLogDraftFromProductionOrder(orderIdOrOrder);
-  draft.workNumber = draft.workNumber || await generateProductionWorkLogNumber();
-  return createProductionWorkLog(draft, currentUser);
+export const createProductionWorkLogFromOrder = async (
+  orderIdOrOrder,
+  values = {},
+  currentUser = null,
+) => {
+  const orderId = typeof orderIdOrOrder === "string" ? orderIdOrOrder : orderIdOrOrder?.id;
+  if (!orderId) throw new Error("Production Order tidak valid.");
+  void currentUser;
+  const result = await commitProductionOrderStart(orderId, values || {});
+  return result?.workLog || result;
 };
 
 export const updateProductionWorkLog = async (id, values, currentUser = null) => updateProductionRecord(
   "workLogs",
   id,
-  normalizeProductionWorkLogPayload(values, currentUser, true)
+  normalizeProductionWorkLogPayload(values, currentUser, true),
 );
 
 export const reconcileCompletedWorkLogOutputHpp = async (workLogId) => getProductionWorkLogById(workLogId);
 
-const commitWorkLogStockSideEffects = async (workLog = {}) => {
-  const results = [];
-
-  for (const line of Array.isArray(workLog.materialUsages) ? workLog.materialUsages : []) {
-    const qty = Number(line.actualQty || line.qty || 0);
-    if (!line.itemId || qty <= 0) continue;
-    results.push(await commitStockAdjustment({
-      sourceType: line.itemType || line.sourceType || "raw_material",
-      sourceId: line.itemId,
-      variantKey: line.resolvedVariantKey || line.variantKey || "",
-      quantity: -Math.abs(qty),
-      deltaCurrent: -Math.abs(qty),
-      reason: "production_material_usage",
-      notes: workLog.workNumber || workLog.code || "Work log production usage",
-      referenceNumber: `${workLog.workNumber || workLog.code || workLog.id}_${line.itemId}_usage`,
-    }));
-  }
-
-  for (const line of Array.isArray(workLog.outputs) ? workLog.outputs : []) {
-    const qty = Number(line.goodQty || line.actualQty || 0);
-    if (!line.outputIdRef && !line.itemId) continue;
-    if (qty <= 0) continue;
-    results.push(await commitStockAdjustment({
-      sourceType: line.outputType || line.sourceType || workLog.targetType || "semi_finished",
-      sourceId: line.outputIdRef || line.itemId,
-      variantKey: line.outputVariantKey || line.variantKey || "",
-      quantity: Math.abs(qty),
-      deltaCurrent: Math.abs(qty),
-      reason: "production_output",
-      notes: workLog.workNumber || workLog.code || "Work log production output",
-      referenceNumber: `${workLog.workNumber || workLog.code || workLog.id}_${line.outputIdRef || line.itemId}_output`,
-    }));
-  }
-
-  return results;
-};
-
-export const completeProductionWorkLog = async (id, currentUser = null) => {
-  const current = await getProductionWorkLogById(id);
-  const next = {
-    ...current,
-    status: "completed",
-    completedAt: nowIso(),
-    stockConsumptionStatus: "completed",
-    stockOutputStatus: "completed",
-  };
-  const stockResults = await commitWorkLogStockSideEffects(next);
-  return updateProductionWorkLog(id, { ...next, stockResults }, currentUser);
+export const completeProductionWorkLog = async (id, payloadOrUser = {}, currentUser = null) => {
+  const looksLikeUser = payloadOrUser && (
+    payloadOrUser.email
+    || payloadOrUser.displayName
+    || payloadOrUser.username
+    || payloadOrUser.uid
+  ) && !(
+    Object.prototype.hasOwnProperty.call(payloadOrUser, "goodQty")
+    || Object.prototype.hasOwnProperty.call(payloadOrUser, "outputs")
+    || Object.prototype.hasOwnProperty.call(payloadOrUser, "workerIds")
+  );
+  void currentUser;
+  const payload = looksLikeUser ? {} : (payloadOrUser || {});
+  const result = await commitProductionWorkLogComplete(id, payload);
+  return result?.workLog || result;
 };
 
 export const updateWorkLogStatus = async (id, status, currentUser = null) => updateProductionWorkLog(
   id,
   { ...(await getProductionWorkLogById(id)), status },
-  currentUser
+  currentUser,
 );

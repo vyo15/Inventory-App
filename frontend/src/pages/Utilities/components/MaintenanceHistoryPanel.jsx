@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, App as AntdApp, Button, Card, Col, Descriptions, Empty, Row, Space, Tag, Timeline, Typography } from "antd";
+import { App as AntdApp, Button, Card, Col, Descriptions, Empty, Row, Space, Tag, Timeline, Typography } from "antd";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
+import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 import { DatabaseOutlined, ReloadOutlined, SafetyOutlined, SwapOutlined } from "@ant-design/icons";
 
 import {
@@ -127,10 +128,10 @@ const MaintenanceHistoryPanel = () => {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Alert
-        type="info"
-        showIcon
-        message="Riwayat maintenance resmi"
+      <ImsNotice
+        variant="guidance"
+        compact
+        title="Riwayat maintenance resmi"
         description="Tab ini menampilkan backup dan restore resmi dari layanan lokal. Riwayat reset lama tidak dijadikan sumber utama karena fitur reset lama sudah nonaktif."
       />
 

@@ -5,7 +5,6 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Badge,
   Button,
   Card,
@@ -37,6 +36,8 @@ import ProductionPageHeader from "../../components/Produksi/shared/ProductionPag
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
+import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
+import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import {
   DEFAULT_PRODUCTION_PAYROLL_FORM,
@@ -592,13 +593,6 @@ const ProductionPayrolls = () => {
         addLabel="Tambah Payroll"
       />
 
-      <Alert
-        style={{ marginBottom: 16 }}
-        type="info"
-        showIcon
-        message="Satu line mewakili satu operator pada satu Work Log/tahap."
-        description="Status Paid membuat Cash Out otomatis dengan guard anti dobel."
-      />
 
       {/* AKTIF / GUARDED: summary cards shared hanya ubah presentasi, nominal payroll tetap dari data existing. */}
       <ProductionSummaryCards items={summaryItems} variant="finance" highlightKey="payroll-total-amount" />
@@ -631,6 +625,18 @@ const ProductionPayrolls = () => {
       <PageSection
         title="Daftar Payroll Produksi"
         subtitle="Rekap line payroll dan status pembayaran."
+        extra={(
+          <InfoPopoverButton
+            label="Aturan Payroll"
+            title="Aturan line payroll"
+            description="Satu line mewakili satu operator pada satu Work Log/tahap. Status paid menjadi dasar pencatatan ke Cash Out."
+            items={[
+              { label: 'Satu line', value: 'Satu operator + satu tahap.' },
+              { label: 'Paid', value: 'Membuat Cash Out otomatis bila nominal > 0.' },
+              { label: 'HPP', value: 'Mengikuti payroll final.' },
+            ]}
+          />
+        )}
       >
         {/* ===============================================================
             Tabel payroll produksi compact guarded: layout utama tidak lagi
@@ -883,11 +889,11 @@ const ProductionPayrolls = () => {
                 Status:
                 - aktif dipakai; bukan kandidat cleanup.
             ===================================================== */}
-            <Alert
-              showIcon
-              type="info"
-              style={{ marginBottom: 16 }}
-              message="Detail payroll operator"
+            <ImsNotice
+              variant="info"
+              compact
+              className="ims-mb-16"
+              title="Detail payroll operator"
               description="Payroll final berasal dari Work Log completed dan rule tahapan."
             />
 

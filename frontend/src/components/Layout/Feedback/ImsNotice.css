@@ -1,0 +1,372 @@
+/* =====================================================
+SECTION: IMS Notice System — AKTIF / UI ONLY
+Fungsi:
+- standar visual notice/alert IMS yang lebih profesional untuk guidance permanen, status rail, guard box, critical panel, dan data quality notice.
+- memakai token theme light/dark IMS; tidak mengubah business logic, route, role guard, schema, database, stock, production, payroll, finance, backup, restore, atau audit flow.
+Status:
+- AKTIF sebagai shared UI component.
+===================================================== */
+.ims-notice {
+  --ims-notice-accent: var(--ims-color-primary, #245f9d);
+  --ims-notice-soft: var(--ims-color-primary-soft, #e9f2fb);
+  --ims-notice-muted: var(--ims-border-strong, rgba(36, 95, 157, 0.22));
+  background: var(--ims-bg-card-soft, #f8fbfe);
+  border: 1px solid var(--ims-border-color, #d9e5f2);
+  border-radius: 16px;
+  overflow: hidden;
+  position: relative;
+}
+
+.ims-notice::before {
+  background: var(--ims-notice-accent);
+  border-radius: 999px;
+  bottom: 14px;
+  content: "";
+  left: 0;
+  position: absolute;
+  top: 14px;
+  width: 4px;
+}
+
+.ims-notice--guidance {
+  --ims-notice-accent: var(--ims-color-brand-gold, #c9951a);
+  --ims-notice-soft: var(--ims-color-brand-gold-soft, #fff7e3);
+  --ims-notice-muted: var(--ims-color-brand-gold-muted, rgba(201, 149, 26, 0.22));
+}
+
+.ims-notice--status,
+.ims-notice--success {
+  --ims-notice-accent: var(--ims-color-success, #16a34a);
+  --ims-notice-soft: var(--ims-color-success-soft, #ecfdf5);
+  --ims-notice-muted: var(--ims-color-success-muted, rgba(22, 163, 74, 0.18));
+  background: color-mix(in srgb, var(--ims-color-success-soft, #ecfdf5) 44%, var(--ims-bg-card, #fff));
+}
+
+.ims-notice--guard,
+.ims-notice--warning {
+  --ims-notice-accent: var(--ims-color-warning, #d97706);
+  --ims-notice-soft: var(--ims-color-warning-soft, #fff7ed);
+  --ims-notice-muted: var(--ims-color-warning-muted, rgba(217, 119, 6, 0.18));
+  background: color-mix(in srgb, var(--ims-color-warning-soft, #fff7ed) 48%, var(--ims-bg-card, #fff));
+}
+
+.ims-notice--critical,
+.ims-notice--danger {
+  --ims-notice-accent: var(--ims-color-danger, #dc2626);
+  --ims-notice-soft: var(--ims-color-danger-soft, #fef2f2);
+  --ims-notice-muted: var(--ims-color-danger-muted, rgba(220, 38, 38, 0.18));
+  background: color-mix(in srgb, var(--ims-color-danger-soft, #fef2f2) 54%, var(--ims-bg-card, #fff));
+}
+
+.ims-notice--data-quality {
+  --ims-notice-accent: var(--ims-color-primary, #245f9d);
+  --ims-notice-soft: var(--ims-color-primary-soft, #e9f2fb);
+  --ims-notice-muted: var(--ims-border-strong, rgba(36, 95, 157, 0.22));
+}
+
+.ims-notice__body {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
+  padding: 14px 14px 14px 18px;
+}
+
+.ims-notice--single .ims-notice__body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ims-notice__main {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ims-notice__icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--ims-notice-soft) 78%, var(--ims-bg-elevated, #fff));
+  border: 1px solid var(--ims-notice-muted);
+  border-radius: 13px;
+  color: var(--ims-notice-accent);
+  display: inline-flex;
+  flex: 0 0 40px;
+  font-size: var(--ims-font-size-lg, 16px);
+  font-weight: var(--ims-font-weight-display, 760);
+  height: 40px;
+  justify-content: center;
+  line-height: 1;
+  width: 40px;
+}
+
+.ims-notice__content {
+  min-width: 0;
+}
+
+.ims-notice__kicker {
+  color: var(--ims-color-primary, #245f9d);
+  font-size: var(--ims-font-size-caption, 11px);
+  font-weight: var(--ims-font-weight-display, 760);
+  letter-spacing: 0.08em;
+  line-height: var(--ims-line-height-tight, 1.2);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.ims-notice--guard .ims-notice__kicker,
+.ims-notice--warning .ims-notice__kicker {
+  color: var(--ims-color-warning-text, #92400e);
+}
+
+.ims-notice--critical .ims-notice__kicker,
+.ims-notice--danger .ims-notice__kicker {
+  color: var(--ims-color-danger-text, #991b1b);
+}
+
+.ims-notice__title {
+  color: var(--ims-text-primary, #102033);
+  font-size: var(--ims-font-size-lg, 16px);
+  font-weight: var(--ims-font-weight-display, 760);
+  letter-spacing: -0.01em;
+  line-height: var(--ims-line-height-title, 1.35);
+}
+
+.ims-notice__description {
+  color: var(--ims-text-secondary, #5b6f84);
+  font-size: var(--ims-font-size-meta-plus, 12.5px);
+  line-height: var(--ims-line-height-readable, 1.55);
+  margin-top: 5px;
+  max-width: 860px;
+}
+
+.ims-notice__description strong {
+  color: var(--ims-text-primary, #102033);
+  font-weight: var(--ims-font-weight-display, 760);
+}
+
+.ims-notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ims-notice__button {
+  align-items: center;
+  background: var(--ims-bg-card, #fff);
+  border: 1px solid var(--ims-border-color, #d9e5f2);
+  border-radius: 10px;
+  color: var(--ims-text-primary, #102033);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: var(--ims-font-size-meta, 12px);
+  font-weight: var(--ims-font-weight-strong, 700);
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ims-notice__button--primary {
+  background: var(--ims-color-primary, #245f9d);
+  border-color: var(--ims-color-primary, #245f9d);
+  color: var(--ims-color-on-primary, #fff);
+}
+
+.ims-notice__button--danger {
+  border-color: var(--ims-color-danger-muted, rgba(220, 38, 38, 0.18));
+  color: var(--ims-color-danger-text, #991b1b);
+}
+
+.ims-notice__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.ims-notice__side {
+  align-content: start;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ims-notice__side-item {
+  background: color-mix(in srgb, var(--ims-bg-card, #fff) 92%, transparent);
+  border: 1px solid var(--ims-border-color, #d9e5f2);
+  border-radius: 13px;
+  min-width: 0;
+  padding: 10px 11px;
+}
+
+.ims-notice__side-label {
+  color: var(--ims-text-secondary, #5b6f84);
+  display: block;
+  font-size: var(--ims-font-size-caption, 11px);
+  line-height: var(--ims-line-height-compact, 1.3);
+  margin-bottom: 5px;
+}
+
+.ims-notice__side-value {
+  align-items: center;
+  color: var(--ims-text-primary, #102033);
+  display: inline-flex;
+  font-size: var(--ims-font-size-helper, 13px);
+  font-weight: var(--ims-font-weight-display, 760);
+  gap: 6px;
+  line-height: var(--ims-line-height-compact, 1.3);
+  min-width: 0;
+}
+
+.ims-notice__side-value--success {
+  color: var(--ims-color-success-text, #047857);
+}
+
+.ims-notice__side-value--warning {
+  color: var(--ims-color-warning-text, #92400e);
+}
+
+.ims-notice__side-value--danger {
+  color: var(--ims-color-danger-text, #991b1b);
+}
+
+.ims-notice__side-value--primary {
+  color: var(--ims-color-primary, #245f9d);
+}
+
+/* Inline side summary — untuk status ringkas agar notice tidak menjadi tinggi dan kosong. */
+.ims-notice--side-inline::before {
+  bottom: 12px;
+  top: 12px;
+}
+
+.ims-notice--side-inline .ims-notice__body {
+  align-items: start;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  padding-bottom: 12px;
+  padding-top: 12px;
+}
+
+.ims-notice--side-inline .ims-notice__icon {
+  border-radius: 12px;
+  flex-basis: 36px;
+  height: 36px;
+  width: 36px;
+}
+
+.ims-notice--side-inline .ims-notice__side {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-left: 48px;
+}
+
+.ims-notice--side-inline .ims-notice__side-item {
+  align-items: center;
+  background: color-mix(in srgb, var(--ims-bg-card, #fff) 88%, transparent);
+  border-color: var(--ims-border-color-secondary, var(--ims-border-color, #d9e5f2));
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 6px;
+  min-height: 26px;
+  padding: 3px 10px;
+}
+
+.ims-notice--side-inline .ims-notice__side-label {
+  display: inline;
+  font-size: var(--ims-font-size-caption, 11px);
+  line-height: 1.2;
+  margin: 0;
+}
+
+.ims-notice--side-inline .ims-notice__side-label::after {
+  content: ":";
+}
+
+.ims-notice--side-inline .ims-notice__side-value {
+  font-size: var(--ims-font-size-meta, 12px);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.ims-notice--side-inline .ims-notice__description {
+  max-width: 980px;
+}
+
+.ims-notice--compact::before {
+  bottom: 12px;
+  top: 12px;
+  width: 3px;
+}
+
+.ims-notice--compact .ims-notice__body {
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 11px 12px 11px 15px;
+}
+
+.ims-notice--compact .ims-notice__main {
+  gap: 10px;
+}
+
+.ims-notice--compact .ims-notice__icon {
+  border-radius: 11px;
+  flex-basis: 32px;
+  font-size: var(--ims-font-size-helper, 13px);
+  height: 32px;
+  width: 32px;
+}
+
+.ims-notice--compact .ims-notice__title {
+  font-size: var(--ims-font-size-helper, 13px);
+}
+
+.ims-notice--compact .ims-notice__description {
+  font-size: var(--ims-font-size-meta, 12px);
+  line-height: var(--ims-line-height-body, 1.45);
+}
+
+@media (max-width: 900px) {
+  .ims-notice__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .ims-notice::before {
+    bottom: 13px;
+    top: 13px;
+  }
+
+  .ims-notice__body {
+    padding: 13px 13px 13px 16px;
+  }
+
+  .ims-notice__main {
+    gap: 10px;
+  }
+
+  .ims-notice__icon {
+    border-radius: 11px;
+    flex-basis: 34px;
+    height: 34px;
+    width: 34px;
+  }
+
+  .ims-notice__actions .ims-notice__button {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .ims-notice--side-inline .ims-notice__side {
+    margin-left: 0;
+  }
+
+  .ims-notice--side-inline .ims-notice__side-item {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    border-radius: 12px;
+  }
+}

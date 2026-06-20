@@ -1,7 +1,11 @@
 import { getPasswordPolicyHint, validatePasswordStrength } from "../../../../shared/passwordPolicy.js";
-import { fetchSqliteJson } from "./sqliteBackendStatusService";
+import {
+  clearStoredSqliteAuthToken,
+  fetchSqliteJson,
+  getStoredSqliteAuthHeaders,
+  getStoredSqliteAuthToken,
+} from "./sqliteBackendStatusService";
 
-const LOCAL_AUTH_TOKEN_KEY = "ims.sqlite.authToken";
 const LOCAL_AUTH_USER_KEY = "ims.sqlite.authUser";
 
 const normalizeAuthMode = () => "sqlite";
@@ -11,21 +15,17 @@ export const isSqliteAuthMode = () => AUTH_MODE === "sqlite";
 
 export const validateLocalPasswordPolicy = validatePasswordStrength;
 export const getLocalPasswordPolicyHint = getPasswordPolicyHint;
+export const getStoredLocalAuthToken = getStoredSqliteAuthToken;
 
-export const getStoredLocalAuthToken = () => {
-  if (typeof window === "undefined") return "";
-  return window.localStorage.getItem(LOCAL_AUTH_TOKEN_KEY) || "";
-};
-
-const storeLocalAuth = ({ token, user }) => {
+const storeLocalAuthUser = (user) => {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(LOCAL_AUTH_TOKEN_KEY, token || "");
   window.localStorage.setItem(LOCAL_AUTH_USER_KEY, JSON.stringify(user || null));
+  clearStoredSqliteAuthToken();
 };
 
 const clearLocalAuth = () => {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(LOCAL_AUTH_TOKEN_KEY);
+  clearStoredSqliteAuthToken();
   window.localStorage.removeItem(LOCAL_AUTH_USER_KEY);
 };
 
@@ -38,10 +38,7 @@ export const getStoredLocalAuthUser = () => {
   }
 };
 
-const authHeaders = () => {
-  const token = getStoredLocalAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+const authHeaders = () => getStoredSqliteAuthHeaders();
 
 export const loginWithLocalUsername = async (username, password) => {
   const result = await fetchSqliteJson("/api/auth/login", {
@@ -49,27 +46,22 @@ export const loginWithLocalUsername = async (username, password) => {
     body: JSON.stringify({ username, password }),
   });
 
-  const token = result?.data?.token || "";
   const user = result?.data?.user || null;
-
-  if (!token || !user) {
+  if (!user) {
     throw new Error("Login lokal tidak mengembalikan session yang valid.");
   }
 
-  storeLocalAuth({ token, user });
-  return { token, user, expiresAt: result?.data?.expiresAt || null };
+  storeLocalAuthUser(user);
+  return { user, expiresAt: result?.data?.expiresAt || null };
 };
 
 export const getCurrentLocalAuthUser = async () => {
-  const token = getStoredLocalAuthToken();
-  if (!token) return null;
-
   try {
     const result = await fetchSqliteJson("/api/auth/me", {
       headers: authHeaders(),
     });
     const user = result?.data?.user || null;
-    if (user) storeLocalAuth({ token, user });
+    if (user) storeLocalAuthUser(user);
     return user;
   } catch (error) {
     clearLocalAuth();
@@ -78,13 +70,14 @@ export const getCurrentLocalAuthUser = async () => {
 };
 
 export const logoutLocalAuth = async () => {
-  const token = getStoredLocalAuthToken();
   try {
-    if (token) {
-      await fetchSqliteJson("/api/auth/logout", {
-        method: "POST",
-        headers: authHeaders(),
-      });
+    await fetchSqliteJson("/api/auth/logout", {
+      method: "POST",
+      headers: authHeaders(),
+    });
+  } catch (error) {
+    if (!["UNAUTHENTICATED", "SESSION_EXPIRED"].includes(error?.errorCode)) {
+      throw error;
     }
   } finally {
     clearLocalAuth();
@@ -103,7 +96,6 @@ export const getLocalAuthStatus = async () => {
   const result = await fetchSqliteJson("/api/auth/status");
   return result?.data || null;
 };
-
 
 export const listLocalUsers = async () => {
   const result = await fetchSqliteJson("/api/auth/users", {

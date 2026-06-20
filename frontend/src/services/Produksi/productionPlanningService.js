@@ -1,4 +1,6 @@
 import {
+  commitProductionOrderFromPlan,
+  commitProductionPlanCancel,
   createProductionRecord,
   generateProductionCode,
   getProductionRecordById,
@@ -6,7 +8,6 @@ import {
   updateProductionRecord,
 } from "../../data/adapters/sqlite/sqliteProductionAdapter";
 import { getActiveProductionBoms } from "./productionBomsService";
-import { createProductionOrder } from "./productionOrdersService";
 
 const safeTrim = (value) => String(value || "").trim();
 const nowIso = () => new Date().toISOString();
@@ -74,31 +75,24 @@ export const updateProductionPlan = async (id, values = {}, currentUser = null) 
   normalizePayload(values, currentUser, true)
 );
 
-export const cancelProductionPlan = async (id, currentUser = null) => {
+export const cancelProductionPlan = async (id) => {
   const current = await getProductionPlanById(id);
   if (!isProductionPlanCancelable(current)) throw new Error(getProductionPlanCancelBlockReason(current));
-  return updateProductionPlan(id, { ...current, status: "cancelled", cancelledAt: nowIso() }, currentUser);
+  return commitProductionPlanCancel(id);
 };
 
-export const createProductionOrderFromPlan = async ({
-  planId = "",
-  plan = null,
-  currentUser = null,
-  values = {},
-} = {}) => {
-  const sourcePlan = plan || await getProductionPlanById(planId);
-  const order = await createProductionOrder(
-    { ...sourcePlan, ...values, sourcePlanId: sourcePlan.id, status: "draft" },
-    currentUser
-  );
+export const createProductionOrderFromPlan = async (input = {}) => {
+  const planId = input.planId || input.plan?.id || "";
+  if (!planId) throw new Error("Planning produksi tidak valid.");
 
-  await updateProductionPlan(
-    sourcePlan.id,
-    { ...sourcePlan, productionOrderId: order.id, orderId: order.id, status: "ordered" },
-    currentUser
-  );
-
-  return order;
+  const { plan, currentUser, values, ...directValues } = input;
+  void plan;
+  void currentUser;
+  const result = await commitProductionOrderFromPlan(planId, {
+    ...(values || {}),
+    ...directValues,
+  });
+  return result?.order || result;
 };
 
 export const getProductionPlanningDashboardSummary = async () => {

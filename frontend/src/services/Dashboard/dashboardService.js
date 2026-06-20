@@ -8,6 +8,7 @@ import { getAllProductionPayrolls } from "../Produksi/productionPayrollsService"
 import { getAllProductionPlans } from "../Produksi/productionPlanningService";
 import { getAllProductionWorkLogs } from "../Produksi/productionWorkLogsService";
 import { fetchSalesRecords } from "../Transaksi/salesService";
+import { canAccessRoute, ROUTE_ACCESS_KEYS } from "../../utils/auth/roleAccess";
 
 const LISTENER_TIMEOUT_MS = 7000;
 const DASHBOARD_SCAN_LIMIT = 1000;
@@ -159,11 +160,23 @@ const readDashboardSection = async (key, loader, fallback) => {
   }
 };
 
-const getStockRoute = (row = {}) => {
+const getStockRoute = (row = {}, role) => {
   const sourceType = normalizeStatus(row.sourceType);
-  if (sourceType === "product") return "/products";
-  if (sourceType === "semi_finished") return "/produksi/semi-finished-materials";
-  return "/raw-materials";
+  const routeConfig = sourceType === "product"
+    ? { routeKey: ROUTE_ACCESS_KEYS.PRODUCTS, to: "/products" }
+    : sourceType === "semi_finished"
+      ? { routeKey: ROUTE_ACCESS_KEYS.SEMI_FINISHED_MATERIALS, to: "/produksi/semi-finished-materials" }
+      : { routeKey: ROUTE_ACCESS_KEYS.RAW_MATERIALS, to: "/raw-materials" };
+
+  if (canAccessRoute(routeConfig.routeKey, role)) {
+    return routeConfig.to;
+  }
+
+  if (canAccessRoute(ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT, role)) {
+    return "/stock-management";
+  }
+
+  return "/dashboard";
 };
 
 const getStockTypeLabel = (row = {}) => {
@@ -185,7 +198,7 @@ const getStockSeverity = ({ stock = 0, minStock = 0 } = {}) => {
   return { label: "Menipis", color: "gold" };
 };
 
-const mapLowStockRow = (row = {}) => {
+const mapLowStockRow = (row = {}, role) => {
   const stock = toNumber(row.availableStock ?? row.currentStock ?? row.stock);
   const minStock = toNumber(row.minStockAlert ?? row.minStock);
   const sourceId = row.sourceId || row.itemId || row.id || row.code || row.readModelId || "";
@@ -201,7 +214,7 @@ const mapLowStockRow = (row = {}) => {
     stock,
     minStock,
     unit: row.stockUnit || row.unit || "pcs",
-    to: getStockRoute(row),
+    to: getStockRoute(row, role),
     severity: getStockSeverity({ stock, minStock }),
     affectedVariantSummary: row.affectedVariantSummary || row.variantSummary || row.variantLabel || "",
     restockSupplierId: row.restockSupplierId || row.lastSupplierId || row.supplierId || "",
@@ -211,7 +224,7 @@ const mapLowStockRow = (row = {}) => {
   };
 };
 
-const mapStockAuditRow = (row = {}) => {
+const mapStockAuditRow = (row = {}, role) => {
   const currentStock = toNumber(row.currentStock ?? row.stock);
   const reservedStock = toNumber(row.reservedStock);
   const availableStock = toNumber(row.availableStock ?? Math.max(currentStock - reservedStock, 0));
@@ -229,7 +242,7 @@ const mapStockAuditRow = (row = {}) => {
     availableStock,
     minStock,
     unit: row.stockUnit || row.unit || "pcs",
-    to: getStockRoute(row),
+    to: getStockRoute(row, role),
     isNegativeStock: currentStock < 0 || availableStock < 0,
     isReservedOverrun: reservedStock > currentStock && reservedStock > 0,
   };
@@ -378,21 +391,87 @@ const mergeDashboardData = (data = {}) => {
 
 export const normalizeDashboardData = mergeDashboardData;
 
-export const readDashboardData = async ({ maxListItems = 5 } = {}) => {
-  const reads = await Promise.all([
-    readDashboardSection("products", () => onceFromListener(listenProducts), toArray),
-    readDashboardSection("raw_materials", () => onceFromListener(listenRawMaterials), toArray),
-    readDashboardSection("stock_issues", () => getStockIssueReadModels({ maxResults: DASHBOARD_SCAN_LIMIT, includeMeta: true }), normalizeLowStockReadResult),
-    readDashboardSection("stock_read_models", () => getStockReadModelRows({ limit: DASHBOARD_SCAN_LIMIT }), toArray),
-    readDashboardSection("sales", () => fetchSalesRecords(), toArray),
-    readDashboardSection("incomes", () => listFinanceIncomes({ limit: DASHBOARD_SCAN_LIMIT }), toArray),
-    readDashboardSection("expenses", () => listFinanceExpenses({ limit: DASHBOARD_SCAN_LIMIT }), toArray),
-    readDashboardSection("production_orders", () => getAllProductionOrders(), toArray),
-    readDashboardSection("production_work_logs", () => getAllProductionWorkLogs(), toArray),
-    readDashboardSection("production_payrolls", () => getAllProductionPayrolls(), toArray),
-    readDashboardSection("production_planning", () => getAllProductionPlans(), toArray),
-    readDashboardSection("inventory_logs", () => getInventoryLogs({ limit: DASHBOARD_SCAN_LIMIT }), toArray),
-  ]);
+export const readDashboardData = async ({ maxListItems = 5, role } = {}) => {
+  const readDefinitions = [
+    {
+      key: "products",
+      routeKey: ROUTE_ACCESS_KEYS.PRODUCTS,
+      loader: () => onceFromListener(listenProducts),
+      fallback: toArray,
+    },
+    {
+      key: "raw_materials",
+      routeKey: ROUTE_ACCESS_KEYS.RAW_MATERIALS,
+      loader: () => onceFromListener(listenRawMaterials),
+      fallback: toArray,
+    },
+    {
+      key: "stock_issues",
+      routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
+      loader: () => getStockIssueReadModels({ maxResults: DASHBOARD_SCAN_LIMIT, includeMeta: true }),
+      fallback: normalizeLowStockReadResult,
+    },
+    {
+      key: "stock_read_models",
+      routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
+      loader: () => getStockReadModelRows({ limit: DASHBOARD_SCAN_LIMIT }),
+      fallback: toArray,
+    },
+    {
+      key: "sales",
+      routeKey: ROUTE_ACCESS_KEYS.SALES,
+      loader: () => fetchSalesRecords(),
+      fallback: toArray,
+    },
+    {
+      key: "incomes",
+      routeKey: ROUTE_ACCESS_KEYS.CASH_IN,
+      loader: () => listFinanceIncomes({ limit: DASHBOARD_SCAN_LIMIT }),
+      fallback: toArray,
+    },
+    {
+      key: "expenses",
+      routeKey: ROUTE_ACCESS_KEYS.CASH_OUT,
+      loader: () => listFinanceExpenses({ limit: DASHBOARD_SCAN_LIMIT }),
+      fallback: toArray,
+    },
+    {
+      key: "production_orders",
+      routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS,
+      loader: () => getAllProductionOrders(),
+      fallback: toArray,
+    },
+    {
+      key: "production_work_logs",
+      routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS,
+      loader: () => getAllProductionWorkLogs(),
+      fallback: toArray,
+    },
+    {
+      key: "production_payrolls",
+      routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS,
+      loader: () => getAllProductionPayrolls(),
+      fallback: toArray,
+    },
+    {
+      key: "production_planning",
+      routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PLANNING,
+      loader: () => getAllProductionPlans(),
+      fallback: toArray,
+    },
+    {
+      key: "inventory_logs",
+      routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
+      loader: () => getInventoryLogs({ limit: DASHBOARD_SCAN_LIMIT }),
+      fallback: toArray,
+    },
+  ];
+
+  const reads = await Promise.all(
+    readDefinitions
+      .filter(({ routeKey }) => canAccessRoute(routeKey, role))
+      .map(({ key, loader, fallback }) => readDashboardSection(key, loader, fallback)),
+  );
 
   const byKey = reads.reduce((accumulator, read) => ({
     ...accumulator,
@@ -401,8 +480,8 @@ export const readDashboardData = async ({ maxListItems = 5 } = {}) => {
   const failedReads = reads.filter((read) => read.failed).map((read) => read.key);
 
   const lowStockResult = byKey.stock_issues || { rows: [], meta: {} };
-  const lowStockRows = toArray(lowStockResult.rows).map(mapLowStockRow);
-  const stockAuditRows = toArray(byKey.stock_read_models).map(mapStockAuditRow);
+  const lowStockRows = toArray(lowStockResult.rows).map((row) => mapLowStockRow(row, role));
+  const stockAuditRows = toArray(byKey.stock_read_models).map((row) => mapStockAuditRow(row, role));
   const recentActivities = normalizeActivityRows(byKey.inventory_logs, maxListItems);
   const sales = sortByLatestDate(byKey.sales);
   const incomes = sortByLatestDate(byKey.incomes);

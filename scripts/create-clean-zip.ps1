@@ -30,6 +30,12 @@ Override sadar risiko:
 "@
 }
 
+$VerifyArgs = @("scripts/verify-source-ready.cjs")
+if ($AllowDirty) {
+  $VerifyArgs += "--allow-dirty"
+}
+& node @VerifyArgs
+
 git archive --format=zip --prefix=$Prefix --output=$OutputPath HEAD
 
 Write-Host "ZIP bersih dibuat: $OutputPath"

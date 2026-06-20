@@ -42,6 +42,7 @@ import {
   importSqliteBackendBackup,
 } from "../../../services/System/sqliteBackendStatusService";
 import SqliteBackendStatusPanel from "./SqliteBackendStatusPanel";
+import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 import "./OfflineDatabaseCenter.css";
 
 const { Text } = Typography;
@@ -387,10 +388,10 @@ const OfflineDatabaseCenter = () => {
 
   const modeTab = (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Alert
-        type="success"
-        showIcon
-        message="Database aplikasi aktif"
+      <ImsNotice
+        variant="status"
+        compact
+        title="Database aplikasi aktif"
         description="Semua modul berjalan melalui layanan lokal dan database utama aplikasi."
       />
 
@@ -455,7 +456,7 @@ const OfflineDatabaseCenter = () => {
           </Tag>
         </div>
         {latestBackup ? renderSelectedBackupSummary(latestBackup) : (
-          <Alert type="warning" showIcon message="Belum ada backup database." />
+          <ImsNotice variant="guard" compact title="Belum ada backup database." />
         )}
         <div className="offline-db-inline-note">
           <Text type="secondary">
@@ -494,7 +495,7 @@ const OfflineDatabaseCenter = () => {
           ))}
         </Space>
         {!backups.length ? (
-          <Alert type="warning" showIcon message="Belum ada backup database." />
+          <ImsNotice variant="guard" compact title="Belum ada backup database." />
         ) : null}
       </div>
     </Space>
@@ -502,10 +503,10 @@ const OfflineDatabaseCenter = () => {
 
   const runtimeTab = (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Alert
-        type="success"
-        showIcon
-        message="Status layanan modul"
+      <ImsNotice
+        variant="status"
+        compact
+        title="Status layanan modul"
         description="Semua modul utama berjalan melalui layanan database lokal. Restore tetap memakai guard konfirmasi."
       />
 
@@ -665,10 +666,10 @@ const OfflineDatabaseCenter = () => {
                 {restorePlan.validationError ? (
                   <Alert type="error" showIcon message="Backup tidak lolos validasi" description={restorePlan.validationError} />
                 ) : (
-                  <Alert
-                    type="info"
-                    showIcon
-                    message="Preview tidak mengubah data."
+                  <ImsNotice
+                    variant="info"
+                    compact
+                    title="Preview tidak mengubah data."
                     description={(restorePlan.blockedActions || []).join(" ")}
                   />
                 )}
@@ -683,10 +684,10 @@ const OfflineDatabaseCenter = () => {
       <div className="offline-db-restore-step offline-db-restore-step-danger">
         <div className="offline-db-step-marker">3</div>
         <div className="offline-db-step-content">
-          <Alert
-            type="error"
-            showIcon
-            message="Restore akan mengganti database aktif."
+          <ImsNotice
+            variant="critical"
+            compact
+            title="Restore akan mengganti database aktif."
             description="Gunakan hanya jika yakin. Sistem akan membuat backup pre-restore otomatis sebelum overwrite. Setelah berhasil, refresh aplikasi dan login ulang bila perlu."
           />
           <Text>Ketik keyword konfirmasi:</Text>
@@ -706,10 +707,10 @@ const OfflineDatabaseCenter = () => {
 
   const qaTab = (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Alert
-        type="warning"
-        showIcon
-        message="Checklist wajib setelah update database"
+      <ImsNotice
+        variant="guidance"
+        compact
+        title="Checklist wajib setelah update database"
         description="Jalankan checklist ini sebelum dipakai produksi. Pastikan layanan lokal, build frontend, backup manual, restore preview, dan copy eksternal sudah diuji."
       />
       <Card size="small" title="Manual QA" className="offline-db-action-card">

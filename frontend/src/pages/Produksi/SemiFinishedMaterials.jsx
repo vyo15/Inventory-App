@@ -10,7 +10,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   AutoComplete,
   Button,
   Card,
@@ -62,6 +61,8 @@ import ProductionSummaryCards from "../../components/Produksi/shared/ProductionS
 import StockDisplayBlock from "../../components/Layout/Table/StockDisplayBlock";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
+import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
+import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import SemiFinishedMaterialsListView from "./components/SemiFinishedMaterialsListView";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import {
@@ -863,6 +864,18 @@ const SemiFinishedMaterials = () => {
       <PageSection
         title="Daftar Semi Finished Materials"
         subtitle="Tabel ini merangkum stok master dan varian fleksibel untuk kebutuhan produksi internal."
+        extra={(
+          <InfoPopoverButton
+            label="Aturan Stok"
+            title="Aturan stok semi finished"
+            description="Semi Finished adalah stok internal produksi. Stok master dapat diringkas dari varian fleksibel untuk kebutuhan produksi internal."
+            items={[
+              { label: 'Internal', value: 'Tidak dijual langsung ke customer.' },
+              { label: 'Varian', value: 'Dipakai jika turunan stok perlu dilacak.' },
+              { label: 'Produksi', value: 'Mutasi tetap lewat flow produksi/stok resmi.' },
+            ]}
+          />
+        )}
       >
         <SemiFinishedMaterialsListView
           loading={loading}
@@ -1023,11 +1036,11 @@ const SemiFinishedMaterials = () => {
 
           <Divider orientation="left">{hasVariantsValue ? "Varian & Stok" : "Stok Master"}</Divider>
 
-          <Alert
-            style={{ marginBottom: 16 }}
-            type="info"
-            showIcon
-            message={isEditingMaterial
+          <ImsNotice
+            variant="info"
+            compact
+            className="ims-mb-16"
+            title={isEditingMaterial
               ? canActivateVariantsForEditing
                 ? 'Semi Product lama ini stoknya 0, jadi boleh mulai memakai varian. Stok tiap varian baru tetap 0 sampai diubah lewat Stock Adjustment/produksi/transaksi resmi.'
                 : stockEditHelpText
@@ -1361,10 +1374,10 @@ Risiko:
 - Jika current/available/reserved stock atau average cost salah dirender, HPP produk jadi bisa salah dibaca user.
 =====================================================
 */}
-            <Alert
-              type={selectedMaterialStatusMeta?.alertType || "info"}
-              showIcon
-              message={`Status item: ${selectedMaterialStatusMeta?.label || "-"}`}
+            <ImsNotice
+              variant={selectedMaterialStatusMeta?.alertType === "warning" ? "guard" : selectedMaterialStatusMeta?.alertType === "error" ? "critical" : selectedMaterialStatusMeta?.alertType === "success" ? "status" : "info"}
+              compact
+              title={`Status item: ${selectedMaterialStatusMeta?.label || "-"}`}
               description={
                 selectedMaterial.isActive !== false
                   ? `Total stok ${formatStockWithUnit(

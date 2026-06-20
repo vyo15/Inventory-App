@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Button,
   Card,
   Col,
@@ -35,6 +34,8 @@ import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
 import SummaryStatGrid from '../../components/Layout/Display/SummaryStatGrid';
 import StockDisplayBlock from '../../components/Layout/Table/StockDisplayBlock';
+import ImsNotice from '../../components/Layout/Feedback/ImsNotice';
+import InfoPopoverButton from '../../components/Layout/Feedback/InfoPopoverButton';
 import {
   createRawMaterial,
   listenRawMaterials,
@@ -619,18 +620,12 @@ const RawMaterials = () => {
       --------------------------------------------------------------------- */}
       <PageHeader
         title="Bahan Baku"
-        subtitle="Master bahan baku dan stok varian."
+        subtitle="Master bahan baku, supplier, dan status pemakaian."
         actions={[
           { key: 'create-raw-material', type: 'primary', icon: <PlusOutlined />, label: 'Tambah Bahan Baku', onClick: openCreateDrawer },
         ]}
       />
 
-      <Alert
-        style={{ marginBottom: 16 }}
-        type="info"
-        showIcon
-        message="Gunakan varian hanya untuk bahan dengan turunan stok nyata."
-      />
 
       {/* ---------------------------------------------------------------------
           Summary cards atas halaman.
@@ -688,6 +683,18 @@ const RawMaterials = () => {
       <PageSection
         title="Daftar Bahan Baku"
         subtitle="Stok, supplier, dan varian bahan."
+        extra={(
+          <InfoPopoverButton
+            label="Aturan Varian"
+            title="Aturan varian bahan baku"
+            description="Gunakan varian hanya untuk bahan yang memang memiliki turunan stok nyata, misalnya warna, ukuran, atau tipe yang perlu dilacak terpisah."
+            items={[
+              { label: 'Pakai varian', value: 'Jika stok tiap turunan harus dipantau.' },
+              { label: 'Tanpa varian', value: 'Jika bahan cukup dicatat sebagai stok master.' },
+              { label: 'Update stok', value: 'Tetap melalui flow stok resmi.' },
+            ]}
+          />
+        )}
       >
         <DataTableView
           loading={loading}
@@ -869,10 +876,10 @@ const RawMaterials = () => {
           </Row>
 
           <Card size="small" style={{ marginBottom: 16 }}>
-            <Alert
-              type="info"
-              showIcon
-              message="Jika memakai varian, stok ada di varian; minimum stok dan harga tetap di master."
+            <ImsNotice
+              variant="info"
+              compact
+              title="Jika memakai varian, stok ada di varian; minimum stok dan harga tetap di master."
             />
           </Card>
 
@@ -994,11 +1001,11 @@ const RawMaterials = () => {
           </Row>
 
           {pricingPreviewWarning ? (
-            <Alert
-              type="warning"
-              showIcon
-              message={pricingPreviewWarning}
-              style={{ marginBottom: 16 }}
+            <ImsNotice
+              variant="guard"
+              compact
+              className="ims-mb-16"
+              title={pricingPreviewWarning}
             />
           ) : null}
 
@@ -1049,11 +1056,11 @@ const RawMaterials = () => {
           {hasVariantsValue ? (
             <>
               <Divider orientation="left">Varian Bahan</Divider>
-              <Alert
-                style={{ marginBottom: 16 }}
-                type="info"
-                showIcon
-                message={isEditingMaterial
+              <ImsNotice
+                variant="info"
+                compact
+                className="ims-mb-16"
+                title={isEditingMaterial
                   ? canActivateVariantsForEditing
                     ? 'Bahan lama ini stoknya 0, jadi boleh mulai memakai varian. Stok tiap varian baru tetap 0 sampai diubah lewat Purchase/Stock Adjustment/transaksi resmi.'
                     : stockEditHelpText
@@ -1179,11 +1186,11 @@ const RawMaterials = () => {
             </>
           ) : null}
 
-          <Alert
+          <ImsNotice
+            variant="guard"
+            compact
             style={{ marginTop: 16 }}
-            type="warning"
-            showIcon
-            message="Pakai varian hanya jika bahan punya turunan stok nyata."
+            title="Pakai varian hanya jika bahan punya turunan stok nyata."
           />
           </ResponsiveFormSection>
         </Form>

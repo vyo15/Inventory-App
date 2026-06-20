@@ -23,6 +23,7 @@ import {
   getSqliteBackendHealth,
   getSqliteBackendStatus,
 } from "../../../services/System/sqliteBackendStatusService";
+import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 
 const { Text } = Typography;
 
@@ -38,7 +39,7 @@ const SqliteBackendStatusPanel = () => {
 
   const baseUrl = useMemo(() => getSqliteBackendBaseUrl(), []);
   const isOnline = Boolean(health?.ok && status?.ok && !errorMessage);
-  const statusData = status?.data || {};
+  const statusData = useMemo(() => status?.data || {}, [status]);
   const healthData = health?.data || {};
   const statusStats = useMemo(() => [
     { key: "schema", label: "Versi DB", value: statusData.schemaVersion || "-", icon: <DatabaseOutlined /> },
@@ -110,12 +111,12 @@ const SqliteBackendStatusPanel = () => {
       )}
     >
       <Space direction="vertical" size={12} style={{ width: "100%" }}>
-        <Alert
-          type={isOnline ? "success" : "warning"}
-          showIcon
-          message={isOnline ? "Layanan lokal aktif" : "Layanan lokal belum tersambung"}
+        <ImsNotice
+          variant={isOnline ? "status" : "guard"}
+          compact
+          title={isOnline ? "Layanan lokal aktif" : "Layanan lokal belum tersambung"}
           description={isOnline
-            ? "Panel ini memantau koneksi layanan lokal dan status database aplikasi."
+            ? "Koneksi backend lokal dan status database aplikasi terpantau normal."
             : "Jalankan aplikasi lokal dari komputer utama. Untuk akses HP, gunakan jaringan yang sama dan pastikan firewall mengizinkan aplikasi."
           }
         />

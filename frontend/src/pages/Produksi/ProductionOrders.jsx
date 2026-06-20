@@ -12,7 +12,6 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Badge,
   Button,
   Card,
@@ -44,6 +43,7 @@ import ProductionPageHeader from "../../components/Produksi/shared/ProductionPag
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from "../../components/Layout/Mobile/MobileDetailDrawer";
+import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import ProductionSummaryCards from "../../components/Produksi/shared/ProductionSummaryCards";
 import formatNumber, { parseIntegerIdInput } from "../../utils/formatters/numberId";
 import {
@@ -1326,19 +1326,19 @@ const ProductionOrders = () => {
           {bomIdValue && Number(orderQtyValue || 0) > 0 ? (
             <div style={{ marginBottom: 16 }}>
               {requirementPreviewError ? (
-                <Alert
-                  type="error"
-                  showIcon
-                  style={{ marginBottom: 12 }}
-                  message="Preview kebutuhan material tidak valid"
+                <ImsNotice
+                  variant="critical"
+                  compact
+                  className="ims-mb-16"
+                  title="Preview kebutuhan material tidak valid"
                   description={requirementPreviewError}
                 />
               ) : requirementPreview?.targetHasVariants === true && !targetVariantKeyValue ? (
-                <Alert
-                  type="info"
-                  showIcon
-                  style={{ marginBottom: 12 }}
-                  message="Pilih varian target untuk preview kebutuhan."
+                <ImsNotice
+                  variant="info"
+                  compact
+                  className="ims-mb-16"
+                  title="Pilih varian target untuk preview kebutuhan."
                 />
               ) : requirementPreview ? (
                 <Space direction="vertical" size={12} style={{ width: "100%" }}>
@@ -1550,19 +1550,19 @@ const ProductionOrders = () => {
             </Descriptions>
 
             {(selectedOrder.reservationSummary?.shortageLines || 0) > 0 ? (
-              <Alert
-                type="error"
-                showIcon
-                message={`Ada ${formatNumber(
+              <ImsNotice
+                variant="critical"
+                compact
+                title={`Ada ${formatNumber(
                   selectedOrder.reservationSummary?.shortageLines,
                 )} item yang stoknya masih kurang.`}
                 description="Cek requirement yang perlu disiapkan."
               />
             ) : (
-              <Alert
-                type="success"
-                showIcon
-                message="Semua kebutuhan material cukup dan siap untuk mulai produksi."
+              <ImsNotice
+                variant="status"
+                compact
+                title="Semua kebutuhan material cukup dan siap untuk mulai produksi."
                 description="PO siap masuk antrian produksi."
               />
             )}

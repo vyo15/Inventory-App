@@ -1,10 +1,10 @@
 const crypto = require("crypto");
 const { getDb } = require("../../db/connection");
 const { hashSessionToken } = require("../../middlewares/localAuth");
+const { isBootstrapCodeValid } = require("./authBootstrapGuard");
 const { createAuditLog } = require("../../utils/auditLog");
 const { createPasswordHash, validatePasswordStrength, verifyPasswordHash } = require("../../utils/passwordHash");
 const {
-  BOOTSTRAP_CONFIRM_KEYWORD,
   ROLES,
   SESSION_DURATION_HOURS,
   USERNAME_PATTERN,
@@ -121,7 +121,7 @@ async function getAuthStatus() {
   return {
     authProvider: "local",
     bootstrapRequired,
-    ...(bootstrapRequired ? { bootstrapConfirmKeyword: BOOTSTRAP_CONFIRM_KEYWORD } : {}),
+    bootstrapCodeRequired: bootstrapRequired,
   };
 }
 
@@ -136,9 +136,13 @@ async function bootstrapAdmin(payload = {}) {
     );
   }
 
-  const confirmKeyword = normalizeText(payload.confirmKeyword);
-  if (confirmKeyword !== BOOTSTRAP_CONFIRM_KEYWORD) {
-    throw createAuthError(`Ketik confirmKeyword: ${BOOTSTRAP_CONFIRM_KEYWORD}`, "CONFIRMATION_REQUIRED");
+  const bootstrapCode = normalizeText(payload.bootstrapCode || payload.setupCode);
+  if (!isBootstrapCodeValid(bootstrapCode)) {
+    throw createAuthError(
+      "Kode setup administrator tidak valid. Gunakan kode yang tampil di terminal backend.",
+      "BOOTSTRAP_CODE_INVALID",
+      403
+    );
   }
 
   const username = normalizeUsername(payload.username || "admin");

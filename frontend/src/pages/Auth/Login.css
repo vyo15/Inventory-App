@@ -356,6 +356,16 @@
   margin-top: 0;
 }
 
+.ims-login-setup-note.ant-alert {
+  margin-bottom: 18px;
+  border-radius: 14px;
+}
+
+.ims-login-setup-note .ant-alert-description {
+  font-size: var(--ims-font-size-helper);
+  line-height: 1.55;
+}
+
 .ims-login-form .ant-form-item {
   margin-bottom: 22px;
 }

@@ -1,5 +1,6 @@
 import { ReloadOutlined, WarningOutlined } from "@ant-design/icons";
-import { Alert, Card, Col, Form, Input, Modal, Row, Space, Statistic, Tag, Typography } from "antd";
+import { Card, Col, Form, Input, Modal, Row, Space, Statistic, Tag, Typography } from "antd";
+import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 
 const { Text } = Typography;
 
@@ -30,11 +31,10 @@ const HppCostConfirmModal = ({
     }}
   >
     <Space direction="vertical" size={14} style={{ width: "100%" }}>
-      <Alert
-        type="error"
-        showIcon
-        icon={<WarningOutlined />}
-        message={hppCostConfirmAction === "restore" ? "Restore akan menimpa field modal/HPP master" : "Reset akan menolkan field modal/HPP master"}
+      <ImsNotice
+        variant="critical"
+        compact
+        title={hppCostConfirmAction === "restore" ? "Restore akan menimpa field modal/HPP master" : "Reset akan menolkan field modal/HPP master"}
         description="Tidak menghapus transaksi, mengubah stok, membuat payroll/cash, atau memproses ulang Work Log."
       />
 
@@ -77,10 +77,10 @@ const HppCostConfirmModal = ({
         </div>
       )}
 
-      <Alert
-        type="warning"
-        showIcon
-        message="Gunakan hanya untuk testing HPP"
+      <ImsNotice
+        variant="guard"
+        compact
+        title="Gunakan hanya untuk testing HPP"
         description="Tidak memperbaiki Work Log lama bernilai cost 0; ulangi flow testing untuk HPP baru."
       />
 

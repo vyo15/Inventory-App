@@ -1,6 +1,7 @@
 import React from "react";
-import { Alert, Button, Space, Tag, Typography } from "antd";
+import { Button, Space, Tag, Typography } from "antd";
 import { DatabaseOutlined, FileSearchOutlined, LockOutlined, SafetyOutlined } from "@ant-design/icons";
+import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 
 const { Text } = Typography;
 
@@ -43,10 +44,10 @@ const ResetDangerZonePanel = ({ loadingAutoDetect, onRunAllAudits }) => (
       </Button>
     </div>
 
-    <Alert
-      type="warning"
-      showIcon
-      message="Reset testing lama dinonaktifkan pada mode database lokal"
+    <ImsNotice
+      variant="guard"
+      compact
+      title="Reset testing lama dinonaktifkan pada mode database lokal"
       description="Pemulihan data utama sekarang wajib lewat Backup & Restore resmi. Reset penghapusan data belum tersedia dan tidak akan diaktifkan tanpa guard layanan lokal, preview, backup otomatis, keyword, serta audit log."
     />
 

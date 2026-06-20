@@ -935,7 +935,7 @@ Administrator login SQLite
 -> tabel Manajemen User reload
 ```
 
-Login pertama boleh bootstrap administrator lokal hanya melalui flow backend yang guarded saat belum ada admin aktif. Setelah itu, pembuatan user wajib melalui administrator.
+Login pertama boleh bootstrap administrator lokal hanya melalui flow backend yang guarded saat belum ada admin aktif. Bootstrap wajib memakai kode setup acak yang tampil di terminal backend dan tidak boleh dikirim melalui endpoint status/browser. Setelah administrator aktif tersedia, endpoint bootstrap terkunci dan pembuatan user berikutnya wajib melalui administrator.
 
 ### 24.4 Field user aktif
 

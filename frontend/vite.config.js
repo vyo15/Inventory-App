@@ -25,6 +25,14 @@ export default defineConfig({
     },
   },
 
+  test: {
+    environment: "jsdom",
+    setupFiles: "./src/test/setup.js",
+    restoreMocks: true,
+    clearMocks: true,
+    css: true,
+  },
+
   build: {
     // AKTIF + GUARDED:
     // Batas warning saja, bukan business rule. Nilai ini dipertahankan agar build

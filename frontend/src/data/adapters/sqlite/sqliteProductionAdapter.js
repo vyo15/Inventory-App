@@ -36,6 +36,54 @@ const orders = makeAdapter("/api/production/orders");
 const workLogs = makeAdapter("/api/production/work-logs");
 const payrolls = makeAdapter("/api/production/payrolls");
 
+
+const unwrapData = (result = {}) => result?.data ?? result ?? null;
+
+export const commitProductionOrder = async (payload = {}) => unwrapData(await requestSqliteApi("/api/production/orders/commit", {
+  method: "POST",
+  body: JSON.stringify(payload),
+}));
+
+export const commitProductionOrderFromPlan = async (planId, payload = {}) => unwrapData(await requestSqliteApi(
+  `/api/production/planning/${encodeURIComponent(planId)}/create-order`,
+  { method: "POST", body: JSON.stringify(payload) },
+));
+
+export const commitProductionPlanCancel = async (planId) => unwrapData(await requestSqliteApi(
+  `/api/production/planning/${encodeURIComponent(planId)}/cancel`,
+  { method: "POST", body: JSON.stringify({}) },
+));
+
+export const commitProductionOrderRequirementRefresh = async (orderId) => unwrapData(await requestSqliteApi(
+  `/api/production/orders/${encodeURIComponent(orderId)}/refresh-requirements`,
+  { method: "POST", body: JSON.stringify({}) },
+));
+
+export const commitProductionOrderStart = async (orderId, payload = {}) => unwrapData(await requestSqliteApi(
+  `/api/production/orders/${encodeURIComponent(orderId)}/start`,
+  { method: "POST", body: JSON.stringify(payload) },
+));
+
+export const commitProductionWorkLogComplete = async (workLogId, payload = {}) => unwrapData(await requestSqliteApi(
+  `/api/production/work-logs/${encodeURIComponent(workLogId)}/complete`,
+  { method: "POST", body: JSON.stringify(payload) },
+));
+
+export const commitProductionPayrollGeneration = async (workLogId) => unwrapData(await requestSqliteApi(
+  `/api/production/work-logs/${encodeURIComponent(workLogId)}/generate-payrolls`,
+  { method: "POST", body: JSON.stringify({}) },
+));
+
+export const commitProductionPayrollFinalize = async (payrollId, payload = {}) => unwrapData(await requestSqliteApi(
+  `/api/production/payrolls/${encodeURIComponent(payrollId)}/finalize`,
+  { method: "POST", body: JSON.stringify(payload) },
+));
+
+export const commitProductionPayrollPaid = async (payrollId, payload = {}) => unwrapData(await requestSqliteApi(
+  `/api/production/payrolls/${encodeURIComponent(payrollId)}/mark-paid`,
+  { method: "POST", body: JSON.stringify(payload) },
+));
+
 export const productionAdapters = {
   steps,
   employees,
@@ -55,25 +103,7 @@ export const updateProductionRecord = (type, id, values = {}) => productionAdapt
 export const deleteProductionRecord = (type, id) => productionAdapters[type].remove(id);
 
 export const commitProductionPayrollPaidExpense = async (payload = {}) => {
-  const amount = Math.round(Number(payload.finalAmount ?? payload.amount ?? payload.totalAmount ?? 0));
-  if (amount <= 0) return null;
-  const result = await requestSqliteApi("/api/finance/cash-out/commit", {
-    method: "POST",
-    body: JSON.stringify({
-      id: `production_payroll_expense_${payload.id || payload.payrollNumber || Date.now()}`,
-      referenceNumber: `CSH-OUT-${payload.payrollNumber || payload.referenceNumber || payload.id || Date.now()}`,
-      type: "Payroll Produksi",
-      amount,
-      totalAmount: amount,
-      transactionDate: payload.paidAt || payload.payrollDate || payload.date || new Date().toISOString(),
-      sourceModule: "production_payrolls",
-      sourceType: "auto_production_payroll",
-      sourceId: payload.id || payload.payrollNumber || "",
-      sourceRef: payload.payrollNumber || payload.referenceNumber || payload.id || "",
-      relatedPayrollId: payload.id || "",
-      status: "Tercatat",
-      description: `Payroll produksi ${payload.payrollNumber || payload.referenceNumber || payload.id || ""}`.trim(),
-    }),
-  });
-  return result?.data || null;
+  const payrollId = payload.id || payload.payrollId || payload.payrollNumber || payload.referenceNumber;
+  if (!payrollId) throw new Error("ID payroll produksi tidak valid.");
+  return commitProductionPayrollPaid(payrollId, payload);
 };

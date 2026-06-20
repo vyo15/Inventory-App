@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { DeleteOutlined, FileSearchOutlined, SyncOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Col, Divider, Input, Popconfirm, Row, Space, Statistic, Tag, Typography } from "antd";
+import { Button, Card, Col, Divider, Input, Popconfirm, Row, Space, Statistic, Tag, Typography } from "antd";
 import DataTableView from "../../../components/Layout/Table/DataTableView";
+import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 import { formatHppUnitCurrencyId } from "../../../utils/formatters/currencyId";
 import { formatQuantityId } from "../../../utils/formatters/numberId";
 
@@ -168,10 +169,10 @@ const ResetSafeRepairPanel = ({
         <Text type="secondary">
           Repair hanya menyamakan field turunan/display/snapshot. Tidak membuat transaksi baru, tidak posting stok ulang, dan tidak menghapus data utama.
         </Text>
-        <Alert
-          type="info"
-          showIcon
-          message="Repair wajib berdasarkan hasil audit terakhir."
+        <ImsNotice
+          variant="guidance"
+          compact
+          title="Repair wajib berdasarkan hasil audit terakhir."
           description="Jalankan Cek Semua Area atau audit terkait dulu, lihat jumlah kandidat repair, lalu konfirmasi aksi. Tombol repair dikunci jika audit belum ada atau tidak ada kandidat."
         />
 
@@ -258,10 +259,10 @@ const ResetSafeRepairPanel = ({
           </Col>
         </Row>
         {stockReadModelAudit && (
-          <Alert
-            type={stockReadModelSummary.executablePlanCount || stockReadModelSummary.manualReviewCount ? "warning" : "success"}
-            showIcon
-            message={stockReadModelSummary.executablePlanCount
+          <ImsNotice
+            variant={stockReadModelSummary.executablePlanCount || stockReadModelSummary.manualReviewCount ? "data-quality" : "status"}
+            compact
+            title={stockReadModelSummary.executablePlanCount
               ? `${stockReadModelSummary.executablePlanCount} data stok perlu diperbaiki.`
               : stockReadModelSummary.manualReviewCount
                 ? `${stockReadModelSummary.manualReviewCount} data stok yatim perlu review manual.`
@@ -333,10 +334,10 @@ const ResetSafeRepairPanel = ({
           </Col>
         </Row>
         {hppReconcileAudit && (
-          <Alert
-            type={hppReconcileSummary.executablePlanCount || hppReconcileSummary.manualReviewCount ? "warning" : "success"}
-            showIcon
-            message={hppReconcileSummary.executablePlanCount
+          <ImsNotice
+            variant={hppReconcileSummary.executablePlanCount || hppReconcileSummary.manualReviewCount ? "data-quality" : "status"}
+            compact
+            title={hppReconcileSummary.executablePlanCount
               ? `${hppReconcileSummary.executablePlanCount} Work Log perlu reconcile HPP output.`
               : hppReconcileSummary.manualReviewCount
                 ? `${hppReconcileSummary.manualReviewCount} Work Log perlu review manual sebelum repair HPP.`
@@ -389,10 +390,10 @@ const ResetSafeRepairPanel = ({
         <Text type="secondary">
           Memperbaiki side-effect aktual transaksi yang hilang: income Sales selesai, expense Purchases, dan inventory log Sales/Purchases/Returns. Repair ini tidak mengubah stok master, tidak menghapus data historis, dan tidak mengubah dokumen transaksi utama.
         </Text>
-        <Alert
-          type="warning"
-          showIcon
-          message="Gunakan untuk repair data transaksi yang sudah terlanjur partial."
+        <ImsNotice
+          variant="guard"
+          compact
+          title="Gunakan untuk repair data transaksi yang sudah terlanjur partial."
           description="Klik Cek Side-Effect dulu, review kandidat dan manual review, lalu repair dengan keyword konfirmasi. Data dengan konflik seperti Sales belum selesai tetapi sudah punya income tetap manual dan tidak dihapus otomatis."
         />
         <Row gutter={[8, 8]}>
@@ -415,10 +416,10 @@ const ResetSafeRepairPanel = ({
           </Col>
         </Row>
         {transactionSideEffectAudit && (
-          <Alert
-            type={transactionSideEffectSummary.executablePlanCount || transactionSideEffectSummary.manualReviewCount ? "warning" : "success"}
-            showIcon
-            message={transactionSideEffectSummary.executablePlanCount
+          <ImsNotice
+            variant={transactionSideEffectSummary.executablePlanCount || transactionSideEffectSummary.manualReviewCount ? "data-quality" : "status"}
+            compact
+            title={transactionSideEffectSummary.executablePlanCount
               ? `${transactionSideEffectSummary.executablePlanCount} side-effect transaksi bisa direpair aman.`
               : transactionSideEffectSummary.manualReviewCount
                 ? `${transactionSideEffectSummary.manualReviewCount} side-effect transaksi perlu review manual.`
@@ -563,10 +564,10 @@ const ResetSafeRepairPanel = ({
           </Col>
         </Row>
         {masterCodeAudit && (
-          <Alert
-            type={masterCodeSummary.executablePlanCount ? "warning" : "success"}
-            showIcon
-            message={masterCodeSummary.executablePlanCount ? `${masterCodeSummary.executablePlanCount} kode master perlu dinormalisasi.` : "Kode master sudah sesuai standar aktif."}
+          <ImsNotice
+            variant={masterCodeSummary.executablePlanCount ? "data-quality" : "status"}
+            compact
+            title={masterCodeSummary.executablePlanCount ? `${masterCodeSummary.executablePlanCount} kode master perlu dinormalisasi.` : "Kode master sudah sesuai standar aktif."}
             description="Field yang disentuh hanya kode internal/alias. Data history seperti purchase, stock log, work log, payroll, dan transaksi tidak ikut diubah."
           />
         )}
@@ -586,7 +587,7 @@ const ResetSafeRepairPanel = ({
             mobileCardConfig={{
               title: (record) => record.itemName || "Kode Master",
               subtitle: (record) => record.area || "Normalisasi kode",
-              tags: (record) => <Tag color="blue">Kode</Tag>,
+              tags: () => <Tag color="blue">Kode</Tag>,
               meta: [
                 { label: "Saat Ini", value: (record) => record.currentCode || "-" },
                 { label: "Kode Baru", value: (record) => record.proposedCode || "-" },

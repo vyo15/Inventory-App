@@ -7,7 +7,8 @@ Checklist ini adalah checklist aktif untuk source terbaru. Checklist lama yang m
 ## 1. Setup dan run
 
 ```bash
-npm install
+npm run install:all
+npm test
 npm run dev
 ```
 
@@ -16,6 +17,7 @@ Jika menjalankan terpisah:
 ```bash
 cd backend
 npm install
+npm test
 npm run dev
 ```
 
@@ -32,6 +34,45 @@ Target default:
 - Backend: `http://localhost:3001`
 - Frontend: `http://localhost:5173/Inventory-App/`
 
+## 1A. Automated backend dan frontend regression
+
+Jalankan dari root:
+
+```bash
+npm test
+```
+
+Atau jalankan terpisah:
+
+```bash
+npm --prefix backend test
+npm --prefix frontend test
+```
+
+Coverage aktif saat ini:
+
+- Rate limit login: percobaan gagal keenam per IP ditolak `429`; login sukses tidak menghabiskan kuota kegagalan.
+- Auth route aktual: login mengirim cookie `HttpOnly`, JSON tidak membawa raw token, `/me` menerima cookie, logout revoke session, Bearer lama termigrasi menjadi cookie, dan compatibility dapat dinonaktifkan tanpa memutus cookie session.
+- Bootstrap guard: endpoint status tidak membocorkan kode; setup admin pertama wajib kode dari terminal backend.
+- CORS: hostname frontend/backend yang sama di port berbeda diizinkan; origin asing ditolak.
+- Auth service: login/session, password salah, user nonaktif, dan last active administrator guard.
+- Stock engine: stok minus ditolak, varian wajib valid, serta sinkronisasi master/read model/inventory log/audit log.
+- Transaction atomicity: purchase + expense/ledger, rollback seluruh sale jika salah satu item gagal, dan income sale idempotent saat status menjadi `Selesai`.
+- Finance ledger: cash-in, invalid cash-out rollback, serta soft-delete cash-out dan ledger pasangannya.
+- Return guard: `relatedSaleId` wajib dan qty retur kumulatif tidak boleh melebihi sisa qty sales.
+- Role access guard: role `user` ditolak membaca finance, report, dan Payroll; Planning, Production Orders, dan Work Logs tetap operasional; Administrator tetap dapat membaca endpoint sensitif.
+- Production Planning atomic: create PO + update Planning satu transaction, rollback bila update Planning gagal, cancel guard, dan target PO tidak dapat dioverride dari payload client.
+- Production Work Log atomic: Start memotong seluruh material dan membuat satu Work Log; material kedua gagal me-rollback semua; step harus berasal dari BOM; Complete menambah output, membuat payroll, menghitung HPP, dan menutup PO satu kali.
+- Production payload/lifecycle guard: snapshot material, output, cost, relasi, status, serta field finance tidak dapat ditulis langsung melalui generic CRUD atau payload Complete.
+- Production Payroll atomic: Paid membuat expense + ledger satu kali, mengenali expense compatibility legacy, mereconcile HPP, dan me-rollback payroll/HPP bila finance gagal.
+- Backup/restore: package + manifest + checksum, daily idempotency, preview-only plan, confirm guard, pre-restore backup, restore log/audit, corrupt backup rejection, dan import filename sanitization.
+- Source hygiene: runtime artifact ter-track ditolak, `data/` dan `backups/` benar-benar hilang dari `git archive`, serta script clean ZIP wajib menjalankan source readiness sebelum `git archive HEAD`.
+- Frontend auth dan role: cookie-first service, migrasi Bearer lama, ProtectedRoute, route access matrix, Dashboard role-aware, bootstrap UI, serta perbedaan error backend mati dan credential invalid.
+
+Baseline automated test setelah P5-P7: **15 file / 59 test backend** dan **5 file / 17 test frontend**, seluruhnya lulus.
+
+Test backend memakai database SQLite temporary di folder sistem dan tidak menunjuk ke database operasional `data/`. Test frontend memakai environment `jsdom` dan tidak mengakses backend/database nyata.
+
 ## 2. Backend health dan status
 
 - [ ] `GET /health` sukses.
@@ -43,13 +84,22 @@ Target default:
 
 ## 3. Auth dan user management
 
-- [ ] Login admin lokal berhasil.
+- [ ] Saat database belum memiliki admin, kode setup hanya tampil di terminal backend dan tidak muncul pada `GET /api/auth/status`.
+- [ ] Bootstrap dengan kode salah ditolak; kode terminal yang benar hanya dapat dipakai sebelum admin aktif tersedia.
+- [ ] Login admin lokal berhasil dan response JSON tidak membawa raw session token.
+- [ ] Browser menerima cookie `ims_session` dengan atribut `HttpOnly`, `SameSite=Lax`, dan `Path=/`.
+- [ ] Key legacy `ims.sqlite.authToken` dibersihkan dari `localStorage` setelah login atau migrasi `/api/auth/me` berhasil.
 - [ ] Login password salah ditolak.
-- [ ] `/api/auth/me` mengembalikan user lokal aktif.
+- [ ] Setelah 5 login gagal dari IP yang sama dalam 60 detik, percobaan berikutnya ditolak `429 AUTH_RATE_LIMITED`.
+- [ ] Login berhasil tidak menghabiskan kuota kegagalan rate limit.
+- [ ] `/api/auth/me` mengembalikan user lokal aktif menggunakan cookie.
+- [ ] Session Bearer lama masih diterima sementara dan response `/api/auth/me` membuat cookie migrasi.
+- [ ] Setelah semua perangkat login ulang, set `IMS_AUTH_ALLOW_LEGACY_BEARER=false`, restart backend, lalu pastikan cookie login tetap sukses dan Bearer lama ditolak `401`.
+- [ ] Origin frontend dengan hostname yang sama seperti backend diterima; origin asing mendapat `403 CORS_ORIGIN_FORBIDDEN`.
 - [ ] Tambah user lokal berhasil sesuai role yang diizinkan.
 - [ ] Update status user tidak boleh melewati role guard.
 - [ ] User non-admin tidak bisa mengelola user lain.
-- [ ] Logout membersihkan session/token lokal di frontend.
+- [ ] Logout revoke session SQLite, menghapus cookie, dan membersihkan cache user/token legacy frontend.
 
 ## 3A. Role alignment operasional harian
 
@@ -59,7 +109,12 @@ Target default:
 - [ ] `user` bisa commit Return terkait Sales dan stok kembali sesuai item yang valid.
 - [ ] `user` bisa commit Stock Adjustment lewat endpoint resmi; adjustment keluar tetap ditolak jika melebihi available stock.
 - [ ] `user` bisa create/update Production Planning, Production Orders, dan Production Work Logs.
-- [ ] `user` tetap ditolak untuk User Management, Maintenance/Reset, Backup/Restore, Module Runtime Status, master/setup, Pricing Rules, Cash In/Out manual, ledger, reports sensitif, Payroll, dan HPP Analysis.
+- [ ] `user` tetap ditolak untuk User Management, Maintenance/Reset, Backup/Restore, Module Runtime Status, halaman master/setup, Pricing Rules, Cash In/Out manual, ledger, reports sensitif, Payroll, dan HPP Analysis.
+- [ ] Dashboard `user` tidak memanggil endpoint finance/payroll, tidak menampilkan KPI/aksi Administrator-only, dan tidak memiliki link kartu yang berakhir di Unauthorized.
+- [ ] Link stok Dashboard untuk `user` menuju Stock Management; tombol `Bandingkan Supplier` hanya terlihat bila route Supplier diizinkan.
+- [ ] GET `/api/finance/incomes`, `/api/finance/expenses`, `/api/finance/ledger`, `/api/reports`, dan `/api/production/payrolls` mengembalikan `403 FORBIDDEN` untuk role `user`.
+- [ ] GET `/api/production/planning`, `/api/production/orders`, dan `/api/production/work-logs` tetap `200` untuk role `user`.
+- [ ] Administrator tetap dapat membaca endpoint sensitif tersebut.
 - [ ] Role frontend `roleAccess.js` dan backend guard endpoint operasional harian tetap selaras.
 
 ## 4. Master data
@@ -125,13 +180,29 @@ Target default:
 - [ ] Production Employees CRUD aman.
 - [ ] Production Profiles/BOM membaca kebutuhan material benar.
 - [ ] Planning tidak mengubah stok/payroll/HPP langsung.
-- [ ] Production Order start menghitung kebutuhan material dengan guard stok.
-- [ ] Work Log completed mencatat material actual.
-- [ ] Payroll final/paid menjadi dasar labor actual.
-- [ ] HPP final tidak memakai payroll draft sebagai final.
-- [ ] Posting payroll paid ke finance tidak dobel.
+- [ ] Create PO dari Planning menyimpan PO dan relasi/status Planning secara atomic; kegagalan salah satu write tidak meninggalkan PO parsial.
+- [ ] Target, target type, target item, dan requirement PO selalu mengikuti BOM; payload client yang berbeda ditolak.
+- [ ] Planning yang sudah punya PO tidak dapat dibatalkan atau diubah relasi PO-nya melalui generic update.
+- [ ] Production Order start menghitung kebutuhan material dengan guard stok, memotong seluruh line dalam satu transaction, membuat satu Work Log, dan menolak start kedua.
+- [ ] Step Start Production wajib merupakan step yang terdaftar pada BOM.
+- [ ] Jika salah satu material tidak valid/kurang, material sebelumnya, inventory log, Work Log, audit, dan status PO seluruhnya rollback.
+- [ ] Generic update tidak dapat menulis `workLogId`, timestamp lifecycle, atau mengubah status PO menjadi `in_production/completed`.
+- [ ] Work Log dari PO mengunci snapshot material, output, target, step, dan cost setelah Start; edit operator/catatan tetap berjalan.
+- [ ] Work Log Complete hanya menerima Good Qty/operator/catatan dan mengabaikan payload client yang mencoba mengganti snapshot material/output/HPP.
+- [ ] Work Log completed menambah output, membuat payroll draft per operator, mencatat material actual/accrued labor/overhead, menutup PO, dan menulis audit satu kali.
+- [ ] Complete kedua ditolak dan tidak menambah stok/payroll/inventory log ulang.
+- [ ] Kegagalan output me-rollback payroll dan status Complete tanpa mengulang material yang sudah sah dipotong saat Start.
+- [ ] Payroll baru melalui generic create hanya boleh `draft` + `unpaid` dan tidak boleh membawa field finance/paid.
+- [ ] Manual payroll dengan kombinasi Work Log + Step + Operator yang sudah memiliki payroll ditolak agar tidak membuat line dobel.
+- [ ] Payroll confirmed/paid hanya lewat endpoint finalize/mark-paid Administrator.
+- [ ] Payroll final/paid mereconcile labor/HPP tanpa menambah qty output ulang.
+- [ ] Posting payroll paid membuat expense + ledger satu kali dan mengenali expense legacy dengan source payroll yang sama.
+- [ ] Kegagalan expense/ledger me-rollback status payroll, HPP Work Log, dan cost master output.
+- [ ] HPP output accrued tidak material-only saat payroll draft otomatis sudah terbentuk; payroll final menjadi adjustment akhir bila nominal berubah.
 
 ## 11. Maintenance, backup, restore
+
+Automated coverage aktif untuk pembuatan/validasi backup, daily idempotency, restore preview/confirm/pre-restore/rollback safety, corrupt backup, import sanitization, dan source ZIP hygiene. Checklist manual berikut tetap wajib untuk UI serta perangkat operasional:
 
 - [ ] Database Center menampilkan status backend SQLite.
 - [ ] Module Runtime Status tampil dan summary masuk akal.
@@ -160,3 +231,6 @@ Target default:
 - [ ] Docs tidak mengarahkan patch baru ke runtime arsip.
 - [ ] Docs guarded area tetap melindungi stock, sales, purchases, returns, finance, production, payroll, HPP, auth, backup/restore, reset, route/menu, role guard, dan audit log.
 - [ ] Jika source berubah, docs terkait ikut diperbarui dalam patch yang sama.
+- [ ] `npm test` lulus sebelum merge; coverage yang belum otomatis tetap diuji manual.
+- [ ] `npm run check` menjalankan test backend + frontend, backend syntax check, frontend lint, dan frontend production build.
+- [ ] `git check`/pre-push menjalankan automated test backend + frontend dan menolak runtime backup/database yang ter-track.

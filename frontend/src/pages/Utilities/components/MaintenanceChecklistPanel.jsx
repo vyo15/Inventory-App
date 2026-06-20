@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   App as AntdApp,
   Button,
   Divider,
@@ -23,6 +22,7 @@ import {
   getSqliteBackendStatus,
   getSqliteModuleRuntimeStatus,
 } from "../../../services/System/sqliteBackendStatusService";
+import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 
 const { Text } = Typography;
 
@@ -146,12 +146,12 @@ const MaintenanceChecklistPanel = () => {
     loadChecklist();
   }, [loadChecklist]);
 
-  const markManual = (storageKey, setter, successMessage) => {
+  const markManual = useCallback((storageKey, setter, successMessage) => {
     const now = new Date().toISOString();
     if (typeof window !== "undefined") window.localStorage.setItem(storageKey, now);
     setter(now);
     appMessage.success(successMessage);
-  };
+  }, [appMessage]);
 
   const statusData = useMemo(() => status?.data || {}, [status]);
   const backupPolicy = useMemo(() => statusData.backupPolicy || {}, [statusData.backupPolicy]);
@@ -224,6 +224,17 @@ const MaintenanceChecklistPanel = () => {
       extra: statusData.restoreConfirmKeyword ? `Keyword: ${statusData.restoreConfirmKeyword}` : "Keyword restore belum terbaca.",
     },
     {
+      key: "legacy-bearer-retired",
+      kind: "auto",
+      status: statusData.authCompatibility?.legacyBearerEnabled === false ? "done" : "pending",
+      statusLabel: statusData.authCompatibility?.legacyBearerEnabled === false ? "Sesuai" : "Masa transisi",
+      title: "Compatibility Bearer lama sudah dinonaktifkan",
+      description: "Cookie HttpOnly menjadi jalur session utama. Bearer lama baru boleh dimatikan setelah seluruh perangkat login ulang.",
+      extra: statusData.authCompatibility?.legacyBearerEnabled === false
+        ? "Bearer lama sudah ditolak backend."
+        : "Masih aktif melalui IMS_AUTH_ALLOW_LEGACY_BEARER=true.",
+    },
+    {
       key: "module-runtime-known",
       kind: "auto",
       status: moduleRuntimeKnown && moduleRuntimeNotReady === 0 && moduleRuntimeReady === moduleRuntimeTotal ? "done" : "pending",
@@ -271,7 +282,7 @@ const MaintenanceChecklistPanel = () => {
         <Button size="small" danger onClick={() => markManual(RESTORE_UNDERSTOOD_STORAGE_KEY, setRestoreUnderstoodAt, "Pemahaman dampak restore ditandai.")}>Saya paham dampak restore</Button>
       ),
     },
-  ], [externalCopyAgeDays, externalCopyConfirmedAt, otherUsersPausedAgeDays, otherUsersPausedAt, restoreUnderstoodAgeDays, restoreUnderstoodAt]);
+  ], [externalCopyAgeDays, externalCopyConfirmedAt, markManual, otherUsersPausedAgeDays, otherUsersPausedAt, restoreUnderstoodAgeDays, restoreUnderstoodAt]);
 
   const autoDoneCount = autoItems.filter((item) => item.status === "done").length;
   const manualDoneCount = manualItems.filter((item) => item.status === "done").length;
@@ -285,10 +296,10 @@ const MaintenanceChecklistPanel = () => {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Alert
-        type={criticalIssues ? "error" : autoDoneCount === autoItems.length ? "success" : "warning"}
-        showIcon
-        message={criticalIssues ? "Ada checklist backup/maintenance yang belum aman" : "Checklist otomatis membaca kondisi database saat ini"}
+      <ImsNotice
+        variant={criticalIssues ? "critical" : autoDoneCount === autoItems.length ? "status" : "guidance"}
+        compact
+        title={criticalIssues ? "Ada checklist backup/maintenance yang belum aman" : "Checklist otomatis membaca kondisi database saat ini"}
         description="Item auto akan terisi sendiri jika layanan lokal, backup, manifest, checksum, restore guard, dan status modul sudah sesuai. Item manual tetap perlu konfirmasi user karena tidak bisa dibuktikan sistem."
       />
 

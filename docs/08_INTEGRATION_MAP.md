@@ -57,6 +57,14 @@ Login UI
 
 Guard aktif berada di backend SQLite route/service dan protected UI route. Jangan membuat flow auth baru tanpa audit source.
 
+Alignment source aktual:
+
+- `roleAccess.js` menjadi matrix route/menu/Dashboard frontend.
+- Generic JSON router menerima `readGuard`; default tetap authenticated read untuk data referensi yang memang dibutuhkan operasi.
+- Finance (`incomes`, `expenses`, `ledger`), report snapshots, dan production payroll memakai administrator read guard.
+- Planning, Production Orders, dan Work Logs tetap menerima role `administrator + user` untuk flow operasional harian.
+- Hidden menu bukan security control; request backend tetap harus lolos guard endpoint.
+
 ## Master data
 
 ```text
@@ -157,6 +165,7 @@ Aturan:
 - Posting otomatis harus idempotent.
 - Profit/Loss membaca data final.
 - Draft/preview tidak boleh dihitung sebagai final.
+- Read `/api/finance/incomes`, `/api/finance/expenses`, dan `/api/finance/ledger` hanya untuk Administrator; role `user` tidak boleh mendapat ringkasan finance dari Dashboard.
 
 ## Production, payroll, dan HPP
 
@@ -178,6 +187,8 @@ Aturan:
 - Work Log completed harus menjaga material actual.
 - Payroll paid harus idempotent saat posting expense.
 - HPP final tidak boleh memakai payroll draft.
+- `/api/production/payrolls` hanya boleh dibaca Administrator.
+- HPP Analysis adalah halaman derived, bukan endpoint HPP terpisah. Route HPP Analysis tetap Administrator-only; Planning/Orders/Work Logs tetap operasional.
 
 ## Reports dan dashboard
 
@@ -189,6 +200,8 @@ Backend report service
 ```
 
 Dashboard/report harus read-only. Jika satu section gagal, tampilkan partial warning/empty state, bukan white screen total.
+
+Dashboard juga harus role-aware: loader hanya memanggil dataset yang diizinkan, kartu/aksi menggunakan route key yang sama dengan ProtectedRoute, dan role `user` tidak boleh diarahkan ke halaman Administrator-only.
 
 ## Maintenance, backup, restore
 
