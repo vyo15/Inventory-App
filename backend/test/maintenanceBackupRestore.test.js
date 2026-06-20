@@ -9,6 +9,7 @@ const {
   createBackup,
   createRestorePlan,
   executeRestore,
+  getMaintenanceStatus,
   importBackupFile,
   listBackups,
 } = require("../src/modules/maintenance/maintenance.service");
@@ -207,4 +208,22 @@ test("import backup menormalkan filename dan hanya menerima package valid", asyn
     }),
     (error) => error?.errorCode === "BACKUP_IMPORT_UNSUPPORTED_FORMAT",
   );
+});
+
+
+test("status maintenance menampilkan evidence migrasi Bearer tanpa menyimpulkan semua perangkat siap", async () => {
+  const db = await testDatabase.getDb();
+  await db.run(
+    `INSERT INTO audit_logs (module, action, entity_type, entity_id, description, actor)
+     VALUES ('auth', 'legacy_bearer_migrated', 'local_user_session', '101', 'Migrasi test', 'admin')`
+  );
+
+  const status = await getMaintenanceStatus();
+
+  assert.equal(status.authCompatibility.legacyBearerEnabled, true);
+  assert.equal(status.authCompatibility.removalReady, false);
+  assert.equal(status.authCompatibility.manualConfirmationRequired, true);
+  assert.equal(status.authCompatibility.migrationEvidence.totalMigrations, 1);
+  assert.equal(status.authCompatibility.migrationEvidence.recentMigrations7d, 1);
+  assert.ok(status.authCompatibility.migrationEvidence.latestMigrationAt);
 });

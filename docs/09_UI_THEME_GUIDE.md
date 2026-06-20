@@ -119,7 +119,7 @@ Aturan penting:
 - Untuk receipt/modal transaksi, gunakan `--ims-font-weight-display` atau `--ims-font-weight-strong`, bukan angka weight 900 hardcoded.
 - Jangan memakai ukuran unik berulang tanpa token. Jika angka dipakai lintas shared component, jadikan token.
 - Header dan sidebar tidak boleh memakai display weight berlebihan; keduanya harus terasa calm, readable, dan corporate.
-- Jangan mengubah route/menu/role guard hanya untuk memperbaiki visual sidebar. Sidebar typography adalah CSS-only.
+- Jangan mengubah route bisnis/menu/role guard hanya untuk memperbaiki visual sidebar. Module Hub boleh menjadi landing navigasi role-aware, tetapi route bisnis existing dan compatibility path wajib dipertahankan.
 - Jika font `Inter` belum dimuat sebagai asset/dependency, runtime `system-ui/Segoe UI` tetap harus terlihat rapi.
 
 ## Area guarded
@@ -130,6 +130,9 @@ Aturan penting:
 - Selector CSS global boleh menjadi guard Ant Design, tetapi tidak boleh ada duplicate top-level selector dengan nilai token final yang saling menimpa.
 - `PageFormModal.jsx` `rootClassName="page-form-modal-root"` dan `getContainer`.
 - `SidebarMenu.jsx` role-aware logic, nested accordion, `selectedKeys`, `openMenuKeys`, dan `onOpenChange`.
+- `DesktopModuleDock.jsx` dan `MobileBottomNavigation.jsx` wajib membaca `sidebarMenuItems` yang sudah difilter role; jangan membuat access matrix kedua.
+- `ModuleHub.jsx` hanya menavigasikan child route yang sudah lolos `filterSidebarMenuItemsByRole`; komponen ini tidak boleh berisi query atau mutation bisnis.
+- Canonical Module Hub adalah `/inventory` dan `/production`; `/stock` serta `/produksi` tetap dipertahankan sebagai redirect role-guarded agar bookmark lama tidak putus.
 - `Login.jsx` auth flow, profile status, blocked user, dan logout blocked user.
 - `Dashboard.jsx` query, calculation, source data, dan read-only flow.
 
@@ -175,20 +178,37 @@ Prioritas cleanup halaman bila masih terasa ramai:
 - Header tidak boleh dipakai untuk menjelaskan seluruh flow bisnis. Penjelasan panjang tetap di docs, bukan di UI harian.
 
 
-## Standar Mobile App Shell
+## Standar Responsive App Shell dan Navigasi
 
-- Pada viewport tablet/HP, sidebar tidak boleh memakai collapsed sidebar desktop yang tetap memakan lebar content. App shell harus memakai drawer navigasi dari tombol menu di header.
-- Drawer navigasi mobile tetap memakai `SidebarLogo` dan `SidebarMenu` existing agar role-aware menu, selected route, dan nested accordion tidak berubah.
-- Drawer mobile harus tertutup setelah route berubah agar layar kembali fokus ke halaman tujuan.
-- Header mobile harus compact: tombol menu di kiri, greeting tetap ringkas, subtitle global boleh disembunyikan, dan action user tidak boleh membuat horizontal overflow.
+**Source of truth detail:** `docs/21_RESPONSIVE_UI_UX_STANDARD.md`. Dokumen ini merangkum aturan theme dan shell; matrix viewport, orientation fallback, visual density, safe area, overlay, rundown implementasi, dan QA lintas perangkat dikunci pada dokumen 21.
+
+- Desktop `>= 1200px` memakai floating module dock top-level. Dock hanya membuka Dashboard atau Module Hub; child route tetap dibuka dari card di content area.
+- Desktop compact `993-1199px` dan viewport dengan tinggi pendek memakai ukuran dock/icon yang lebih kecil agar seluruh icon tetap berada di dalam asset rail tanpa overlap.
+- Tablet `768-992px` memakai Drawer kiri dari tombol menu header. Drawer tetap memakai `SidebarLogo` dan `SidebarMenu` existing agar nested accordion serta role-aware menu tetap konsisten.
+- Telepon `<= 767px` memakai bottom navigation lima slot: Dashboard, Stock, tombol tengah Menu IMS, Transaksi, dan Produksi.
+- Tombol tengah hanya membuka bottom sheet navigasi. Tombol ini tidak boleh menjadi shortcut create, stock adjustment, production completion, cash posting, reset, restore, atau destructive flow.
+- Bottom sheet wajib membaca `sidebarMenuItems` melalui `filterSidebarMenuItemsByRole`; jangan membuat daftar akses mobile kedua yang hardcoded.
+- Bottom sheet dan Drawer tablet harus tertutup otomatis setelah route berubah.
+- Light/dark toggle telepon berada di bottom sheet. Floating theme button desktop/tablet harus disembunyikan pada telepon agar tidak bertabrakan dengan bottom navigation.
+- Content telepon wajib memiliki `padding-bottom` yang memperhitungkan tinggi bottom navigation dan `env(safe-area-inset-bottom)` agar tombol submit, pagination, serta baris terakhir tidak tertutup.
+- Modal, form Drawer, detail Drawer, Select, DatePicker, dan confirm dialog harus berada di atas bottom navigation; z-index bottom navigation tidak boleh menutupi overlay operasional.
+- Header mobile harus compact: greeting tetap ringkas, subtitle global boleh disembunyikan, dan action user tidak boleh membuat horizontal overflow.
 - Content card mobile harus memakai full width dengan padding lebih kecil; jangan memakai fixed height content yang bergantung pada asumsi tinggi header desktop.
 - Table pada mobile boleh memakai horizontal scroll lokal di dalam card/table wrapper. Jangan membuat body/shell ikut horizontal scroll.
 - Drawer dan modal pada mobile harus dibatasi `100vw`/viewport dan body-nya boleh scroll vertikal agar form/detail panjang tetap bisa diakses.
 - Filter mobile memakai prinsip portrait-first: HP kecil boleh full-width, tetapi tablet/HP besar tidak boleh dipaksa 1 kolom jika masih aman memakai 2 kolom compact.
 - Filter dan PageHeader action boleh wrap atau turun ke bawah, tetapi jangan memaksa semua tombol menjadi full-width bila membuat header terlalu tinggi. Tombol utama tetap harus jelas, tidak overlap, dan callback/action tidak berubah.
 - Summary/KPI mobile boleh memakai 2 kolom compact untuk metric pendek agar dashboard/report tidak terlalu panjang; nilai Rupiah panjang tetap harus readable dengan wrap aman.
-- Top header button wajib punya focus outline yang jelas untuk keyboard navigation.
-- Perubahan mobile shell harus UI-only; tidak boleh mengubah route config, sidebar menu config, role guard, auth, schema, service, stock, purchase, sales, production, payroll, HPP, finance, report, reset, atau audit log.
+- Semua control navigasi wajib punya `aria-label`, active state, dan focus outline yang jelas.
+- Canonical hub `/inventory`, `/production`, dan landing modul lain hanya menjadi entry point UI; `/stock` serta `/produksi` adalah compatibility redirect. Child route bisnis, schema, service, stock, purchase, sales, production, payroll, HPP, finance, report, reset, dan audit log tidak boleh berubah karena visual shell.
+
+### Lock konsistensi device
+
+- Jangan mendeteksi perangkat melalui user-agent untuk menentukan layout. Gunakan breakpoint lebar/tinggi viewport aktual.
+- Layar ultra-wide tetap membatasi canvas utama maksimum `1560px`; jangan meregangkan table/form tanpa batas.
+- Telepon landscape yang melewati `768px` boleh memakai fallback tablet Drawer sesuai CSS viewport.
+- Telepon `<= 374px` memakai bottom navigation compact dan Module Hub 1 kolom.
+- Setiap patch visual wajib mengikuti rundown implementasi dan test matrix pada `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
 
 ## Standar Detail Drawer
 

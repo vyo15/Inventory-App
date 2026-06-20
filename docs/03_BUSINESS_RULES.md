@@ -401,7 +401,7 @@ Contoh final:
 - Production Step: `STP-001`
 
 Catatan current state:
-- Source terbaru memakai `generateUniqueSequentialCode` untuk Product/Raw Material dan wrapper `generateUniqueProductionSequentialCode` untuk Semi Finished/BOM.
+- Source terbaru memakai helper `businessCodeGenerator.js` untuk generator kode. Wrapper produksi lama sudah dihapus setelah audit usage membuktikan tidak ada pemanggil aktif.
 - Production Step sudah memakai generator `STP-001` lokal di service step.
 - Collision kode harian memakai prefix query pada document ID dan field kode bisnis terkait untuk baseline data historis. Batch 16B menambahkan counter atomic `business_code_counters` untuk Sales/Purchases/Returns agar create paralel tidak memakai nomor yang sama.
 

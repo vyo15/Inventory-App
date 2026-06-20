@@ -131,5 +131,5 @@ Restore resmi harus:
 - Folder `data/` dan `backups/` hanya boleh membawa `.gitkeep` untuk struktur folder.
 - File `.sqlite`, `.sqlite-wal`, `.sqlite-shm`, `.imsbackup`, `.imsbak.zip`, dan `*.manifest.json` adalah artifact lokal dan harus disimpan di lokasi backup operasional, bukan di source.
 - `.gitignore` dan `.gitattributes` dipakai bersama: `.gitignore` mencegah artifact baru ikut track, sedangkan `.gitattributes` mengecualikan seluruh folder runtime dari `git archive`.
-- `scripts/verify-source-ready.cjs` wajib gagal bila ada file selain `.gitkeep` di `data/` atau `backups/` yang masih ter-track; script clean ZIP wajib menjalankan guard tersebut sebelum `git archive`.
+- `scripts/verify-source-ready.cjs` wajib gagal bila ada file selain `.gitkeep` di `data/` atau `backups/` yang masih ter-track. Script clean ZIP wajib menjalankan guard sebelum `git archive`, lalu memverifikasi central directory ZIP aktual dan menghapus artifact bila ditemukan runtime/generated output, path backslash, atau struktur source tidak lengkap.
 - Guard source hanya menghapus artifact dari Git index; backup lokal yang masih dibutuhkan tidak boleh dihapus secara destructive.

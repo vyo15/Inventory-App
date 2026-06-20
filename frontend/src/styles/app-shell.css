@@ -123,42 +123,19 @@ Risiko:
 .app-main-layout {
   display: flex;
   flex-direction: column;
+  transition: margin-inline-start 0.2s ease;
 }
 
 /* =====================================================
-SECTION: Sidebar Layout Shell — GUARDED
+SECTION: Desktop Floating Navigation Offset — AKTIF / UI ONLY
 Fungsi:
-- Menyiapkan area sidebar transparan, fixed height, dan scroll wrapper internal untuk logo serta menu besar.
-
-Dipakai oleh:
-- AppLayout bersama SidebarLogo dan SidebarMenu.
-
-Alasan perubahan:
-- Padding area logo diringkas agar brand block menyatu dengan sidebar dan tidak terasa seperti card besar terpisah.
-
-Catatan cleanup:
-- Belum ada.
-
-Risiko:
-- Jika spacing sidebar diubah sembarangan, menu bisa bergeser, collapsed sidebar bisa tidak center, atau muncul horizontal overflow.
+- memberi ruang content untuk `DesktopModuleDock` yang fixed di sisi kiri;
+- visual rail dan icon dikontrol oleh `DesktopModuleDock.css`.
+Guard:
+- hanya spacing shell; route, role filter, dan business flow tetap di komponen navigasi resmi.
 ===================================================== */
-.app-sider {
-  height: 100vh;
-  background: transparent !important;
-  border-right: 0 !important;
-  overflow: hidden;
-}
-
-.app-sider .ant-layout-sider-children {
-  height: 100%;
-  background: transparent !important;
-}
-
-.app-sider-inner {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+.app-main-layout {
+  margin-inline-start: 112px;
 }
 
 .app-logo-wrap {
@@ -171,12 +148,6 @@ Risiko:
   min-height: 0;
   overflow: hidden;
   padding: 0 12px 16px;
-}
-
-/* AKTIF / GUARDED: menetralkan garis default AntD Sider agar border sidebar tetap dikontrol token shell. */
-.ant-layout-sider {
-  border-right: 0 !important;
-  box-shadow: none !important;
 }
 
 /* =========================
@@ -192,16 +163,21 @@ Risiko:
    - GUARDED karena header menjadi area kontrol user dan konteks halaman.
 ========================= */
 .app-header {
-  height: 92px;
+  height: 84px;
   flex: 0 0 auto;
   line-height: normal;
-  padding: 0 28px;
+  padding: 0 28px 0 18px;
   display: flex;
   align-items: center;
-  background: transparent !important;
-  border-bottom: 0 !important;
+  background: color-mix(
+    in srgb,
+    var(--ims-bg-shell) 88%,
+    transparent
+  ) !important;
+  border-bottom: 1px solid var(--ims-border-color-soft) !important;
   box-shadow: none !important;
-  z-index: 5;
+  backdrop-filter: blur(14px);
+  z-index: 20;
   transition:
     background-color 0.22s ease,
     color 0.22s ease;
@@ -212,11 +188,34 @@ Risiko:
   box-shadow: none !important;
 }
 .app-header-inner {
-  width: 100%;
+  width: min(100%, 1560px);
   min-width: 0;
+  margin: 0 auto;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 20px;
+}
+
+.app-header-brand-lockup {
+  width: 250px;
+  min-width: 0;
+  flex: 0 0 250px;
+}
+
+.app-header-brand-lockup .sidebar-logo {
+  min-height: 48px;
+  padding: 4px 0;
+  border-radius: 0;
+}
+
+.app-header-brand-lockup .sidebar-logo:hover {
+  background: transparent;
+}
+
+.app-header-brand-lockup .sidebar-logo-icon {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
 }
 
 .app-mobile-menu-button.ant-btn {
@@ -266,16 +265,23 @@ Risiko:
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 0 20px 20px;
-  background: transparent;
+  padding: 0 28px 24px 18px;
+  background:
+    radial-gradient(
+      circle at 86% 0%,
+      color-mix(in srgb, var(--ims-color-primary) 6%, transparent),
+      transparent 30%
+    );
 }
 
 .app-content-card {
+  width: min(100%, 1560px);
   min-height: 100%;
+  margin: 0 auto;
   background: transparent;
   border: 0;
   border-radius: 0;
-  padding: 28px 24px 24px;
+  padding: 28px 0 24px;
   box-shadow: none;
   backdrop-filter: none;
   transition:
@@ -432,8 +438,8 @@ Risiko:
    - GUARDED karena perubahan berlebih bisa membuat tabel/modal/drawer tidak nyaman digunakan.
 ========================= */
 @media (max-width: 992px) {
-  .app-sider {
-    display: none;
+  .app-main-layout {
+    margin-inline-start: 0;
   }
 
   .app-header {
@@ -444,6 +450,11 @@ Risiko:
 
   .app-header-inner {
     align-items: center;
+    gap: 12px;
+  }
+
+  .app-header-brand-lockup {
+    display: none;
   }
 
   .app-mobile-menu-button.ant-btn {
@@ -455,6 +466,7 @@ Risiko:
   }
 
   .app-content-card {
+    width: 100%;
     padding: 20px 18px 18px;
     border-radius: 0;
   }
@@ -494,5 +506,99 @@ Risiko:
   .app-content-card {
     padding: 14px 12px 14px;
     border-radius: 0;
+  }
+}
+
+/* =====================================================
+SECTION: Responsive Module Navigation Shell — AKTIF / GUARDED
+Fungsi:
+- mempertahankan offset floating dock desktop;
+- memakai Drawer kiri pada tablet;
+- menyediakan brand compact dan safe bottom space untuk bottom navigation telepon.
+Guardrail:
+- layout/spacing saja; canonical hub `/inventory` dan `/production`, redirect compatibility `/stock` dan `/produksi`, role guard, serta business flow tetap dipertahankan.
+===================================================== */
+.app-header-brand {
+  min-width: 0;
+  flex: 0 0 auto;
+}
+
+.app-header-brand--phone {
+  display: none;
+}
+
+@media (max-width: 1199px) and (min-width: 993px) {
+  .app-main-layout {
+    margin-inline-start: 100px;
+  }
+
+  .app-header {
+    padding-inline-end: 20px;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-header {
+    min-height: 66px;
+    padding: 10px 10px 8px;
+  }
+
+  .app-header-inner {
+    gap: 7px;
+  }
+
+  .app-mobile-menu-button.ant-btn {
+    display: none;
+  }
+
+  .app-header-brand--phone {
+    width: 38px;
+    flex: 0 0 38px;
+    display: block;
+  }
+
+  .app-header-brand--phone .sidebar-logo {
+    width: 38px;
+    min-height: 38px;
+    padding: 0;
+  }
+
+  .app-header-brand--phone .sidebar-logo-icon,
+  .app-header-brand--phone .sidebar-logo.collapsed .sidebar-logo-icon {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+  }
+
+  .app-content-scroll {
+    padding: 0 8px calc(104px + env(safe-area-inset-bottom));
+  }
+
+  .app-content-card {
+    padding: 14px 12px 18px;
+  }
+
+  .theme-toggle-button {
+    display: none !important;
+  }
+}
+
+@media (max-width: 374px) {
+  .app-header-brand--phone {
+    width: 34px;
+    flex-basis: 34px;
+  }
+
+  .app-header-brand--phone .sidebar-logo,
+  .app-header-brand--phone .sidebar-logo-icon,
+  .app-header-brand--phone .sidebar-logo.collapsed .sidebar-logo-icon {
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+    flex-basis: 34px;
+  }
+
+  .app-content-card {
+    padding-inline: 8px;
   }
 }

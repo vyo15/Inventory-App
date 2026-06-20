@@ -70,7 +70,7 @@ export const exportJsonToExcel = async ({
   subtitle = "",
   filters = [],
 }) => {
-  const XLSX = await import("xlsx");
+  const { createWorkbookBuffer } = await import("./sheetJsWriteAdapter");
   const { saveAs } = await import("file-saver");
 
   const normalizedColumns = normalizeColumns(data, columns);
@@ -101,11 +101,13 @@ export const exportJsonToExcel = async ({
     sheetRows.push(normalizedColumns.map((column) => row[column.label]));
   });
 
-  const worksheet = XLSX.utils.aoa_to_sheet(sheetRows);
-  const workbook = XLSX.utils.book_new();
   const lastColumnIndex = Math.max(normalizedColumns.length - 1, 0);
 
-  worksheet["!merges"] = [
+  const excelBuffer = createWorkbookBuffer({
+    rows: sheetRows,
+    sheetName: toSafeSheetName(sheetName),
+    configureWorksheet: (worksheet, XLSXUtils) => {
+      worksheet["!merges"] = [
     {
       s: { r: 0, c: 0 },
       e: { r: 0, c: lastColumnIndex },
@@ -139,7 +141,7 @@ export const exportJsonToExcel = async ({
   });
 
   worksheet["!autofilter"] = {
-    ref: XLSX.utils.encode_range({
+    ref: XLSXUtils.encode_range({
       s: { r: headerRowIndex, c: 0 },
       e: { r: Math.max(sheetRows.length - 1, headerRowIndex), c: lastColumnIndex },
     }),
@@ -149,16 +151,12 @@ export const exportJsonToExcel = async ({
   worksheet["!freeze"] = {
     xSplit: 0,
     ySplit: headerRowIndex + 1,
-    topLeftCell: XLSX.utils.encode_cell({ r: headerRowIndex + 1, c: 0 }),
+    topLeftCell: XLSXUtils.encode_cell({ r: headerRowIndex + 1, c: 0 }),
     activePane: "bottomLeft",
     state: "frozen",
   };
 
-  XLSX.utils.book_append_sheet(workbook, worksheet, toSafeSheetName(sheetName));
-
-  const excelBuffer = XLSX.write(workbook, {
-    bookType: "xlsx",
-    type: "array",
+    },
   });
 
   const blob = new Blob([excelBuffer], {

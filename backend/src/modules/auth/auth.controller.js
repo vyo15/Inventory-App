@@ -43,9 +43,23 @@ const login = async (req, res, next) => {
   }
 };
 
-const me = async (req, res) => {
-  setSessionCookie(res, req.localAuth.sessionToken, req.localAuth.expiresAt);
-  return success(res, "Session lokal aktif", { user: req.localAuth.user });
+const me = async (req, res, next) => {
+  try {
+    setSessionCookie(res, req.localAuth.sessionToken, req.localAuth.expiresAt);
+
+    if (req.localAuth.authSource === "bearer") {
+      await authService.recordLegacyBearerMigration({
+        sessionId: req.localAuth.sessionId,
+        user: req.localAuth.user,
+        userAgent: req.get("user-agent") || "",
+        ipAddress: req.ip || "",
+      });
+    }
+
+    return success(res, "Session lokal aktif", { user: req.localAuth.user });
+  } catch (error) {
+    return next(error);
+  }
 };
 
 const logout = async (req, res, next) => {

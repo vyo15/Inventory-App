@@ -247,7 +247,7 @@ Endpoint foundation baru:
 /api/production/payrolls
 ```
 
-Status awal: storage/foundation guarded. Bagian P4 di bawah menggantikan batasan runtime yang sudah selesai diaudit dan dipindahkan ke backend atomic.
+Status: storage/foundation guarded.
 
 Access guard source aktual:
 
@@ -255,57 +255,9 @@ Access guard source aktual:
 - `/api/production/payrolls` memakai authenticated session + Administrator read guard.
 - Tidak ada endpoint HPP terpisah. HPP Analysis di frontend derived dari Work Log completed dan Payroll; route analisis tetap Administrator-only.
 
-Batasan yang tetap berlaku:
+Batasan:
 
-- Draft/generic CRUD tidak boleh melakukan material consume, output posting, payroll paid, finance posting, atau HPP reconcile.
-- Work log final, payroll final/paid, dan HPP final tetap mengikuti rule material actual + accrued labor saat Complete + final payroll adjustment.
+- Material consume final belum boleh terjadi dari draft SQLite.
+- Work log final, payroll final/paid, dan HPP final masih harus mengikuti rule existing: material actual + payroll final/paid.
+- BOM SQLite foundation tidak boleh membuat HPP final otomatis sampai audit produksi selesai.
 - Jangan memblokir read Work Log operasional hanya karena payload membawa snapshot biaya; pembatasan halaman Payroll/HPP dan dataset Payroll tetap guard utama tanpa merusak flow produksi harian.
-
-## P4 SQLite Production Atomic Contract — 2026-06-20
-
-Source aktual menetapkan backend sebagai satu-satunya writer lifecycle produksi. Frontend hanya mengirim perintah/payload operasional ke endpoint commit berikut:
-
-```text
-POST /api/production/orders/commit
-POST /api/production/planning/:id/create-order
-POST /api/production/planning/:id/cancel
-POST /api/production/orders/:id/refresh-requirements
-POST /api/production/orders/:id/start
-POST /api/production/work-logs/:id/complete
-POST /api/production/work-logs/:id/generate-payrolls
-POST /api/production/payrolls/:id/finalize
-POST /api/production/payrolls/:id/mark-paid
-```
-
-### Atomic boundary
-
-- Planning → PO: insert PO, update `productionOrderId/orderId`, status `ordered`, dan audit berada dalam satu SQLite transaction.
-- Start Production: semua material-out, master stock, stock read model, inventory log, snapshot cost, Work Log, status PO, dan audit berada dalam satu transaction.
-- Complete Work Log: legacy material fallback bila diperlukan, output-in, payroll draft per operator, accrued HPP, status Work Log/PO, master output cost, dan audit berada dalam satu transaction.
-- Payroll Paid: expense, money movement ledger, status/payment status payroll, HPP reconcile, output master cost reconcile, dan audit berada dalam satu transaction.
-- Jika salah satu write gagal, seluruh write dalam boundary tersebut rollback. Material yang sudah sah dipotong pada transaction Start sebelumnya tidak dipotong ulang saat retry Complete.
-
-### Source of truth dan anti-tamper
-
-- `bomId` adalah source of truth target dan requirement PO. Payload frontend tidak boleh mengganti target item/type dari BOM.
-- Step Start Production harus ada pada `stepLines` BOM.
-- Material usages, outputs, target, cost snapshot, stock flags, payroll flags, dan relation IDs yang sudah terbentuk dari Start tidak boleh dioverride melalui payload Complete atau generic update.
-- Complete hanya menerima field penyelesaian operasional seperti Good Qty, actual output compatibility, operator, reject/rework/scrap compatibility, dan catatan.
-- Payroll generic create hanya boleh `draft/unpaid`; confirmed/paid dan field finance wajib lewat endpoint resmi Administrator.
-- Manual payroll tetap wajib terkait Work Log completed dan kombinasi Work Log + Step + Operator yang sama tidak boleh dibuat dua kali.
-- Expense Payroll memakai source payroll dan deterministic current ID; compatibility expense legacy dengan source payroll yang sama juga dianggap sudah ada.
-
-### HPP
-
-- Complete Work Log memakai material snapshot actual dari Start dan accrued labor dari rule Tahapan Produksi agar output master siap dipakai produksi bertingkat.
-- Payroll draft otomatis bukan source final approval, tetapi accrued amount-nya menjadi HPP sementara/operasional sesuai rule Tahapan Produksi.
-- Payroll `confirmed/paid` menjadi final adjustment bila `finalAmount` berbeda; reconcile HPP tidak menambah qty output ulang.
-- Work Log completed menyimpan `materialCostActual`, `laborCostActual`, `overheadCostActual`, `totalCostActual`, dan `costPerGoodUnit`.
-
-### Access dan compatibility
-
-- Planning, Orders, dan Work Logs tetap dapat ditulis role operasional melalui endpoint resmi.
-- Payroll read/finalize/paid tetap Administrator-only sesuai role guard aktif.
-- Endpoint `generate-payrolls` dipertahankan sebagai compatibility/idempotent repair; Work Log Complete sudah membuat payroll dalam transaction yang sama.
-- Generic CRUD master produksi tetap tersedia, tetapi direct lifecycle write Planning/PO/Work Log/Payroll ditolak backend.
-- Tidak ada perubahan schema/collection/database pada P4.

@@ -229,10 +229,14 @@ const MaintenanceChecklistPanel = () => {
       status: statusData.authCompatibility?.legacyBearerEnabled === false ? "done" : "pending",
       statusLabel: statusData.authCompatibility?.legacyBearerEnabled === false ? "Sesuai" : "Masa transisi",
       title: "Compatibility Bearer lama sudah dinonaktifkan",
-      description: "Cookie HttpOnly menjadi jalur session utama. Bearer lama baru boleh dimatikan setelah seluruh perangkat login ulang.",
+      description: "Cookie HttpOnly menjadi jalur session utama. Bearer lama baru boleh dimatikan setelah seluruh perangkat login ulang dan dikonfirmasi manual.",
       extra: statusData.authCompatibility?.legacyBearerEnabled === false
-        ? "Bearer lama sudah ditolak backend."
-        : "Masih aktif melalui IMS_AUTH_ALLOW_LEGACY_BEARER=true.",
+        ? "Bearer lama sudah ditolak backend; session cookie tetap aktif."
+        : (() => {
+          const evidence = statusData.authCompatibility?.migrationEvidence || {};
+          const latest = evidence.latestMigrationAt ? formatDateTime(evidence.latestMigrationAt) : "belum tercatat";
+          return `Migrasi terdeteksi: ${Number(evidence.totalMigrations || 0)} kali; 7 hari terakhir: ${Number(evidence.recentMigrations7d || 0)}; terakhir: ${latest}. Tetap konfirmasi semua laptop/HP sebelum mematikan flag.`;
+        })(),
     },
     {
       key: "module-runtime-known",

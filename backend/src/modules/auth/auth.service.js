@@ -214,6 +214,44 @@ async function login(payload = {}, requestMeta = {}) {
   };
 }
 
+async function recordLegacyBearerMigration({
+  sessionId,
+  user = {},
+  userAgent = "",
+  ipAddress = "",
+} = {}) {
+  if (!sessionId || !user?.id) return null;
+
+  const db = await getDb();
+  const existingAudit = await db.get(
+    `SELECT id
+     FROM audit_logs
+     WHERE module = 'auth'
+       AND action = 'legacy_bearer_migrated'
+       AND entity_type = 'local_user_session'
+       AND entity_id = ?
+     ORDER BY id ASC
+     LIMIT 1`,
+    [String(sessionId)],
+  );
+  if (existingAudit?.id) return existingAudit.id;
+
+  return createAuditLog({
+    module: "auth",
+    action: "legacy_bearer_migrated",
+    entityType: "local_user_session",
+    entityId: sessionId,
+    actor: user.username || "system",
+    description: "Session Bearer legacy dimigrasikan ke cookie HttpOnly.",
+    metadata: {
+      userId: user.id,
+      username: user.username || "",
+      userAgent: normalizeText(userAgent),
+      ipAddress: normalizeText(ipAddress),
+    },
+  });
+}
+
 async function logout({ sessionId, user } = {}) {
   const db = await getDb();
   await db.run(
@@ -378,6 +416,7 @@ module.exports = {
   listUsers,
   login,
   logout,
+  recordLegacyBearerMigration,
   createUser,
   toSafeUser,
   updateUser,

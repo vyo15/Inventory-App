@@ -18,6 +18,7 @@ import {
   UserSwitchOutlined,
 } from "@ant-design/icons";
 import { ROLE_GROUPS } from "../utils/auth/roleAccess";
+import { MODULE_HUB_PATHS } from "../utils/navigation/sidebarNavigation";
 
 // IMS NOTE [AKTIF / GUARDED]:
 // Sidebar memakai ROLE_GROUPS.ADMIN_ONLY untuk menu sensitif Administrator dan ROLE_GROUPS.OPERATIONAL_DAILY untuk menu operasional harian.
@@ -64,6 +65,7 @@ export const sidebarMenuItems = [
     key: "master-data",
     icon: DatabaseOutlined,
     label: "Master Data",
+    hubPath: "/master-data",
     allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
     children: [
       {
@@ -117,6 +119,7 @@ export const sidebarMenuItems = [
     key: "inventory",
     icon: AppstoreOutlined,
     label: "Stock Control",
+    hubPath: MODULE_HUB_PATHS.INVENTORY,
     allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
     children: [
       {
@@ -140,6 +143,7 @@ export const sidebarMenuItems = [
     key: "productions",
     icon: BuildOutlined,
     label: "Produksi",
+    hubPath: MODULE_HUB_PATHS.PRODUCTION,
     allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
     children: [
       {
@@ -250,6 +254,7 @@ export const sidebarMenuItems = [
     key: "transactions",
     icon: ShoppingCartOutlined,
     label: "Transaksi",
+    hubPath: "/transactions",
     allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
     children: [
       {
@@ -284,6 +289,7 @@ export const sidebarMenuItems = [
     key: "finance",
     icon: WalletOutlined,
     label: "Kas & Biaya",
+    hubPath: "/finance",
     allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
     children: [
       {
@@ -321,6 +327,7 @@ export const sidebarMenuItems = [
     key: "utilities",
     icon: ToolOutlined,
     label: "Sistem",
+    hubPath: "/system",
     allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
     children: [
       {
@@ -350,6 +357,7 @@ export const sidebarMenuItems = [
     key: "reports",
     icon: PrinterOutlined,
     label: "Laporan",
+    hubPath: "/reports",
     allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
     children: [
       {

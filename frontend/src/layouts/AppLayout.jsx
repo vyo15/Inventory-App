@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { MenuOutlined } from "@ant-design/icons";
 import { App as AntdApp, Button, ConfigProvider, Drawer, Layout } from "antd";
 import { useLocation } from "react-router-dom";
+import DesktopModuleDock from "../components/Layout/Navigation/DesktopModuleDock";
+import MobileBottomNavigation from "../components/Layout/Navigation/MobileBottomNavigation";
 import SidebarMenu from "../components/Layout/Sidebar/SidebarMenu";
 import SidebarLogo from "../components/Layout/Sidebar/SidebarLogo";
 import AppErrorBoundary from "../components/Layout/Feedback/AppErrorBoundary";
@@ -19,27 +21,36 @@ import {
 import { ActionResultModalHost } from "../utils/feedback/actionResultFeedback";
 import "../App.css";
 
-const { Header, Sider, Content } = Layout;
+const { Header, Content } = Layout;
 
+// =========================
+// SECTION: Responsive Application Shell — AKTIF / GUARDED
+// Fungsi:
+// - desktop memakai floating module dock;
+// - tablet memakai Drawer kiri existing;
+// - telepon memakai bottom navigation + bottom sheet role-aware.
+// Guardrail:
+// - route bisnis, ProtectedRoute, role guard, dan business pages tidak dipindahkan ke layout.
+// =========================
 const AppLayout = () => {
-  const [isDarkTheme, setIsDarkTheme] = useState(() => getInitialThemeMode() === THEME_DARK_VALUE);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isDarkTheme, setIsDarkTheme] = useState(
+    () => getInitialThemeMode() === THEME_DARK_VALUE,
+  );
+  const [isTabletSidebarOpen, setIsTabletSidebarOpen] = useState(false);
   const location = useLocation();
 
-  // Persist theme agar refresh tidak kembali ke mode default.
   useEffect(() => {
     persistThemeMode(isDarkTheme ? THEME_DARK_VALUE : THEME_LIGHT_VALUE);
   }, [isDarkTheme]);
 
-  // Sinkronkan class global supaya portal AntD ikut mode aktif.
   useEffect(() => {
-    applyDocumentThemeMode(isDarkTheme ? THEME_DARK_VALUE : THEME_LIGHT_VALUE);
+    applyDocumentThemeMode(
+      isDarkTheme ? THEME_DARK_VALUE : THEME_LIGHT_VALUE,
+    );
   }, [isDarkTheme]);
 
-  // Tutup drawer mobile setelah pindah halaman.
   useEffect(() => {
-    setIsMobileSidebarOpen(false);
+    setIsTabletSidebarOpen(false);
   }, [location.pathname]);
 
   const antdThemeConfig = useMemo(() => {
@@ -50,105 +61,83 @@ const AppLayout = () => {
     setIsDarkTheme((previousTheme) => !previousTheme);
   };
 
-  const handleSidebarCollapse = (nextCollapsedState) => {
-    setIsSidebarCollapsed(nextCollapsedState);
-  };
-
-  const handleOpenMobileSidebar = () => {
-    setIsMobileSidebarOpen(true);
-  };
-
-  const handleCloseMobileSidebar = () => {
-    setIsMobileSidebarOpen(false);
-  };
-
   return (
     <ConfigProvider theme={antdThemeConfig}>
       <AntdApp component={false}>
-      <div className={`app-shell ${isDarkTheme ? "dark" : "light"}`}>
-        <Layout className="app-layout">
-          <Sider
-            collapsible
-            collapsed={isSidebarCollapsed}
-            onCollapse={handleSidebarCollapse}
-            width={280}
-            collapsedWidth={88}
-            theme={isDarkTheme ? "dark" : "light"}
-            className="app-sider"
-            breakpoint="lg"
+        <div className={`app-shell ${isDarkTheme ? "dark" : "light"}`}>
+          <DesktopModuleDock darkTheme={isDarkTheme} />
+
+          <Layout className="app-layout">
+            <Layout className="app-main-layout">
+              <Header className="app-header">
+                <div className="app-header-inner">
+                  <Button
+                    type="text"
+                    className="app-mobile-menu-button"
+                    icon={<MenuOutlined />}
+                    onClick={() => setIsTabletSidebarOpen(true)}
+                    aria-label="Buka menu navigasi"
+                  />
+
+                  <div className="app-header-brand-lockup app-header-brand--desktop">
+                    <SidebarLogo darkTheme={isDarkTheme} collapsed={false} />
+                  </div>
+
+                  <div className="app-header-brand app-header-brand--phone">
+                    <SidebarLogo darkTheme={isDarkTheme} collapsed />
+                  </div>
+
+                  <AppHeader />
+                </div>
+              </Header>
+
+              <Content className="app-main-content">
+                <div className="app-content-scroll">
+                  <div className="app-content-card">
+                    <AppErrorBoundary
+                      resetKey={`${location.pathname}${location.search}${location.hash}`}
+                    >
+                      <AppRoutes darkTheme={isDarkTheme} />
+                    </AppErrorBoundary>
+                  </div>
+                </div>
+              </Content>
+            </Layout>
+          </Layout>
+
+          <Drawer
+            open={isTabletSidebarOpen}
+            onClose={() => setIsTabletSidebarOpen(false)}
+            placement="left"
+            width={304}
+            title={null}
+            closable={false}
+            className="app-mobile-sidebar-drawer-content"
+            rootClassName="app-mobile-sidebar-drawer"
           >
-            <div className="app-sider-inner">
-              <div className="app-logo-wrap">
-                <SidebarLogo
-                  darkTheme={isDarkTheme}
-                  collapsed={isSidebarCollapsed}
-                />
+            <div className="app-mobile-sidebar-surface">
+              <div className="app-logo-wrap app-logo-wrap--mobile">
+                <SidebarLogo darkTheme={isDarkTheme} collapsed={false} />
               </div>
 
-              <div className="app-menu-wrap">
+              <div className="app-menu-wrap app-menu-wrap--mobile">
                 <SidebarMenu darkTheme={isDarkTheme} />
               </div>
             </div>
-          </Sider>
+          </Drawer>
 
-          <Layout className="app-main-layout">
-            <Header className="app-header">
-              <div className="app-header-inner">
-                <Button
-                  type="text"
-                  className="app-mobile-menu-button"
-                  icon={<MenuOutlined />}
-                  onClick={handleOpenMobileSidebar}
-                  aria-label="Buka menu navigasi"
-                />
+          <MobileBottomNavigation
+            darkTheme={isDarkTheme}
+            toggleTheme={handleToggleTheme}
+          />
 
-                <AppHeader />
-              </div>
-            </Header>
+          <ThemeToggleButton
+            darkTheme={isDarkTheme}
+            toggleTheme={handleToggleTheme}
+          />
 
-            <Content className="app-main-content">
-              <div className="app-content-scroll">
-                <div className="app-content-card">
-                  <AppErrorBoundary resetKey={`${location.pathname}${location.search}${location.hash}`}>
-                    <AppRoutes darkTheme={isDarkTheme} />
-                  </AppErrorBoundary>
-                </div>
-              </div>
-            </Content>
-          </Layout>
-        </Layout>
-
-        <Drawer
-          open={isMobileSidebarOpen}
-          onClose={handleCloseMobileSidebar}
-          placement="left"
-          width={304}
-          title={null}
-          closable={false}
-          className="app-mobile-sidebar-drawer-content"
-          rootClassName="app-mobile-sidebar-drawer"
-        >
-          <div className="app-mobile-sidebar-surface">
-            <div className="app-logo-wrap app-logo-wrap--mobile">
-              <SidebarLogo
-                darkTheme={isDarkTheme}
-                collapsed={false}
-              />
-            </div>
-
-            <div className="app-menu-wrap app-menu-wrap--mobile">
-              <SidebarMenu darkTheme={isDarkTheme} />
-            </div>
-          </div>
-        </Drawer>
-
-        <ThemeToggleButton
-          darkTheme={isDarkTheme}
-          toggleTheme={handleToggleTheme}
-        />
-
-        <ActionResultModalHost />
-      </div>
+          <ActionResultModalHost />
+        </div>
       </AntdApp>
     </ConfigProvider>
   );

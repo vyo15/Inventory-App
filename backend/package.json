@@ -20,5 +20,9 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.4"
+  },
+  "overrides": {
+    "tar": "7.5.16",
+    "undici": "6.27.0"
   }
 }

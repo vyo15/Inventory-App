@@ -136,6 +136,7 @@ test("Bearer session lama dimigrasikan menjadi cookie oleh endpoint me", async (
     headers: {
       Authorization: `Bearer ${legacySession.token}`,
       cookie: "ims_session=stale-cookie",
+      "user-agent": "IMS-Legacy-Test",
     },
   });
   const cookie = meResponse.headers.get("set-cookie") || "";
@@ -143,6 +144,28 @@ test("Bearer session lama dimigrasikan menjadi cookie oleh endpoint me", async (
   assert.equal(meResponse.status, 200);
   assert.match(cookie, /^ims_session=/);
   assert.match(cookie, /HttpOnly/i);
+
+  const secondMeResponse = await request("/api/auth/me", {
+    headers: {
+      Authorization: `Bearer ${legacySession.token}`,
+      "user-agent": "IMS-Legacy-Test-Repeat",
+    },
+  });
+  assert.equal(secondMeResponse.status, 200);
+
+  const db = await testDatabase.getDb();
+  const migrationAudits = await db.all(
+    `SELECT * FROM audit_logs
+     WHERE module = 'auth'
+       AND action = 'legacy_bearer_migrated'
+       AND entity_type = 'local_user_session'
+     ORDER BY id ASC`
+  );
+  const metadata = JSON.parse(migrationAudits[0]?.metadata_json || "{}");
+
+  assert.equal(migrationAudits.length, 1);
+  assert.equal(migrationAudits[0]?.actor, "admin");
+  assert.equal(metadata.userAgent, "IMS-Legacy-Test");
 });
 
 test("logout menghapus cookie dan mencabut session aktif", async () => {

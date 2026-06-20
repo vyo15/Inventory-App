@@ -165,6 +165,8 @@ const getMaintenanceStatus = async () => {
     restorePlanCount,
     moduleRuntimeStatusCount,
     latestBackup,
+    legacyBearerMigrationSummary,
+    recentLegacyBearerMigrationCount,
   ] = await Promise.all([
     db.get("SELECT value FROM schema_meta WHERE key = 'schema_version'"),
     db.get("SELECT COUNT(*) AS count FROM users"),
@@ -177,6 +179,18 @@ const getMaintenanceStatus = async () => {
     db.get("SELECT COUNT(*) AS count FROM restore_logs"),
     db.get("SELECT COUNT(*) AS count FROM module_migration_status"),
     db.get("SELECT * FROM backup_logs ORDER BY id DESC LIMIT 1"),
+    db.get(
+      `SELECT COUNT(*) AS count, MAX(created_at) AS latest_at
+       FROM audit_logs
+       WHERE module = 'auth' AND action = 'legacy_bearer_migrated'`
+    ),
+    db.get(
+      `SELECT COUNT(*) AS count
+       FROM audit_logs
+       WHERE module = 'auth'
+         AND action = 'legacy_bearer_migrated'
+         AND created_at >= datetime('now', '-7 days')`
+    ),
   ]);
 
   return {
@@ -209,6 +223,13 @@ const getMaintenanceStatus = async () => {
       legacyBearerEnabled: env.authAllowLegacyBearer,
       cookieSessionActive: true,
       removalReady: env.authAllowLegacyBearer === false,
+      manualConfirmationRequired: env.authAllowLegacyBearer === true,
+      migrationEvidence: {
+        totalMigrations: Number(legacyBearerMigrationSummary?.count || 0),
+        recentMigrations7d: Number(recentLegacyBearerMigrationCount?.count || 0),
+        latestMigrationAt: legacyBearerMigrationSummary?.latest_at || null,
+        quietWindowDays: 7,
+      },
     },
   };
 };

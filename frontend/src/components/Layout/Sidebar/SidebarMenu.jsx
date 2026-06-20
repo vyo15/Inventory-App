@@ -4,43 +4,11 @@ import { Link, useLocation } from "react-router-dom";
 import { sidebarMenuItems } from "../../../config/sidebarMenu";
 import useAuth from "../../../hooks/useAuth";
 import { filterSidebarMenuItemsByRole } from "../../../utils/auth/roleAccess";
+import {
+  findOpenParentKeysByPath,
+  findTopLevelMenuItemByPath,
+} from "../../../utils/navigation/sidebarNavigation";
 import "./SidebarMenu.css";
-
-// =========================
-// SECTION: Helper - Find open parent keys by current path — AKTIF
-// Fungsi:
-// - mencari parent menu aktif berdasarkan pathname saat ini;
-// - dipakai agar saat user pindah halaman, grup menu yang relevan tetap terbuka.
-// Hubungan flow aplikasi:
-// - bekerja pada menu yang sudah difilter role sehingga parent kosong tidak terbuka.
-// Status:
-// - AKTIF untuk sidebar role-aware.
-// =========================
-const findOpenParentKeysByPath = (
-  menuItems,
-  currentPath,
-  parentKeyTrail = [],
-) => {
-  for (const menuItem of menuItems) {
-    if (menuItem.path === currentPath) {
-      return parentKeyTrail;
-    }
-
-    if (menuItem.children?.length) {
-      const matchedParentKeys = findOpenParentKeysByPath(
-        menuItem.children,
-        currentPath,
-        [...parentKeyTrail, menuItem.key],
-      );
-
-      if (matchedParentKeys.length > 0) {
-        return matchedParentKeys;
-      }
-    }
-  }
-
-  return [];
-};
 
 // =========================
 // SECTION: Helper - Sidebar submenu relation map — AKTIF / GUARDED
@@ -197,8 +165,17 @@ const SidebarMenu = ({ darkTheme }) => {
   // - GUARDED: roleAwareMenuItems tetap menjadi basis kalkulasi, bukan sidebarMenuItems mentah.
   // =========================
   const selectedMenuKeys = useMemo(() => {
+    const activeTopLevelMenu = findTopLevelMenuItemByPath(
+      roleAwareMenuItems,
+      location.pathname,
+    );
+
+    if (activeTopLevelMenu?.hubPath === location.pathname) {
+      return [activeTopLevelMenu.key];
+    }
+
     return [location.pathname];
-  }, [location.pathname]);
+  }, [roleAwareMenuItems, location.pathname]);
 
   const defaultOpenParentKeys = useMemo(() => {
     return findOpenParentKeysByPath(roleAwareMenuItems, location.pathname);

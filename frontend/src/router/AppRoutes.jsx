@@ -3,6 +3,10 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "../components/Auth/ProtectedRoute";
 import DataLoadingState from "../components/Layout/Feedback/DataLoadingState";
 import { ROUTE_ACCESS_KEYS } from "../utils/auth/roleAccess";
+import {
+  LEGACY_MODULE_HUB_REDIRECTS,
+  MODULE_HUB_PATHS,
+} from "../utils/navigation/sidebarNavigation";
 
 // =========================
 // SECTION: Lazy Loaded Pages — AKTIF
@@ -17,6 +21,7 @@ import { ROUTE_ACCESS_KEYS } from "../utils/auth/roleAccess";
 const Dashboard = lazy(() => import("../pages/Dashboard/Dashboard"));
 const WeLost = lazy(() => import("../pages/ErrorPage/WeLost"));
 const Unauthorized = lazy(() => import("../pages/Auth/Unauthorized"));
+const ModuleHub = lazy(() => import("../pages/Navigation/ModuleHub"));
 
 const Categories = lazy(() => import("../pages/MasterData/Categories"));
 const Customers = lazy(() => import("../pages/MasterData/Customers"));
@@ -138,6 +143,79 @@ const AppRoutes = ({ darkTheme }) => {
           element={guardRoute(
             ROUTE_ACCESS_KEYS.DASHBOARD,
             <Dashboard darkTheme={darkTheme} />,
+          )}
+        />
+
+        <Route
+          path="/master-data"
+          element={guardRoute(
+            ROUTE_ACCESS_KEYS.MASTER_DATA_HUB,
+            <ModuleHub moduleKey="master-data" />,
+          )}
+        />
+        {/* Hub lama tetap dipertahankan sebagai redirect role-guarded.
+            Canonical route responsive navigation adalah /inventory dan /production. */}
+        <Route
+          path="/stock"
+          element={guardRoute(
+            ROUTE_ACCESS_KEYS.INVENTORY_HUB,
+            <Navigate
+              to={LEGACY_MODULE_HUB_REDIRECTS["/stock"]}
+              replace
+            />,
+          )}
+        />
+        <Route
+          path="/produksi"
+          element={guardRoute(
+            ROUTE_ACCESS_KEYS.PRODUCTION_HUB,
+            <Navigate
+              to={LEGACY_MODULE_HUB_REDIRECTS["/produksi"]}
+              replace
+            />,
+          )}
+        />
+
+        <Route
+          path={MODULE_HUB_PATHS.INVENTORY}
+          element={guardRoute(
+            ROUTE_ACCESS_KEYS.INVENTORY_HUB,
+            <ModuleHub moduleKey="inventory" />,
+          )}
+        />
+        <Route
+          path={MODULE_HUB_PATHS.PRODUCTION}
+          element={guardRoute(
+            ROUTE_ACCESS_KEYS.PRODUCTION_HUB,
+            <ModuleHub moduleKey="productions" />,
+          )}
+        />
+        <Route
+          path="/transactions"
+          element={guardRoute(
+            ROUTE_ACCESS_KEYS.TRANSACTIONS_HUB,
+            <ModuleHub moduleKey="transactions" />,
+          )}
+        />
+        <Route
+          path="/finance"
+          element={guardRoute(
+            ROUTE_ACCESS_KEYS.FINANCE_HUB,
+            <ModuleHub moduleKey="finance" />,
+          )}
+        />
+        <Route
+          path="/system"
+          element={guardRoute(
+            ROUTE_ACCESS_KEYS.SYSTEM_HUB,
+            <ModuleHub moduleKey="utilities" />,
+          )}
+        />
+        <Route
+          path="/reports"
+          element={guardRoute(
+            ROUTE_ACCESS_KEYS.REPORTS_HUB,
+            <ModuleHub moduleKey="reports" />,
           )}
         />
 

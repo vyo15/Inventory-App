@@ -26,6 +26,8 @@ function main() {
   if (runFull) {
     console.log("\n[git:check] Build frontend...");
     run("npm", ["--prefix", "frontend", "run", "build"]);
+    console.log("\n[git:check] Cek budget bundle frontend...");
+    run("npm", ["run", "check:bundle"]);
   } else {
     console.log("\n[git:check] Frontend build dilewati. Pakai: git check --full atau npm run git:check:full");
   }

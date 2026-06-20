@@ -63,7 +63,6 @@ import {
   isSameMonth,
   isSameWeek,
   normalizeStatus,
-  filterDashboardQuickActionsByRole,
 } from "./helpers/dashboardPageHelpers";
 import "./Dashboard.css";
 
@@ -79,7 +78,7 @@ const DASHBOARD_TAG_COLORS = Object.freeze({
   success: "green",
 });
 
-const buildDashboardQuickActions = (role) => filterDashboardQuickActionsByRole([
+const buildDashboardQuickActions = (role) => [
   {
     key: "sales",
     routeKey: ROUTE_ACCESS_KEYS.SALES,
@@ -152,7 +151,7 @@ const buildDashboardQuickActions = (role) => filterDashboardQuickActionsByRole([
     to: "/cash-out",
     icon: <WalletOutlined />,
   },
-], role);
+].filter(({ routeKey }) => canAccessRoute(routeKey, role));
 
 // IMS NOTE [AKTIF] - Helper Dashboard activity/planning/cost sudah dipusatkan di helpers/dashboardPageHelpers.js
 // agar label/status tidak dobel antara page dan helper.

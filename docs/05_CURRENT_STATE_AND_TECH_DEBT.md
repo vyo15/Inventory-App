@@ -72,7 +72,7 @@ Konsekuensi:
 - Runner command Windows menjalankan `npm.cmd`/`npx.cmd` melalui `cmd.exe`, sehingga shortcut quality gate tidak gagal dengan `spawnSync ... EINVAL` pada Node.js Windows.
 - Production P4 memusatkan create PO dari Planning, Start Production, Complete Work Log, auto payroll, Payroll Paid, finance posting, dan HPP reconcile pada transaction backend SQLite.
 - Generic production CRUD tidak lagi dapat dipakai untuk melewati lifecycle sensitif Planning, Production Order, Work Log, atau Payroll.
-- Automated regression aktif setelah P5-P7 berjumlah 59 test backend dan 17 test frontend. Coverage backend mencakup rollback/idempotency produksi, backup/restore guarded, serta source ZIP hygiene; coverage frontend mencakup auth, role guard, ProtectedRoute, Dashboard, dan error login.
+- Automated regression aktif saat ini mencakup 63 test backend, 37 test frontend, dan 7 test tooling. Coverage backend mencakup rollback/idempotency produksi, backup/restore guarded, auth migration, serta source ZIP hygiene; coverage frontend mencakup auth, role guard, transaksi, endpoint atomic produksi, restore guarded, export XLSX, Dashboard, dan error login.
 
 ## Tech debt aktif yang masih perlu dijaga
 
@@ -150,7 +150,7 @@ Jangan membuat perhitungan stok baru di UI.
 - Login dan bootstrap rate limiting memakai in-memory store karena IMS berjalan single-process di LAN. Counter akan reset saat backend restart; gunakan store eksternal hanya jika arsitektur berubah menjadi multi-process/multi-instance.
 - Automated test sudah mencakup atomic core Production, backup/restore guarded, source hygiene, auth frontend, role guard, ProtectedRoute, Dashboard, dan error login. Coverage belum mencakup seluruh variasi halaman transaksi/report/produksi dan interaksi maintenance kompleks; area tersebut tetap wajib menjalani checklist manual.
 - Test runner menemukan seluruh file `*.test.js` secara otomatis. `npm run check`, `git check`, dan pre-push wajib gagal jika automated test gagal.
-- Source readiness menolak file runtime di `data/` atau `backups/` yang ter-track; script clean ZIP menjalankan guard ini sebelum `git archive`. Hapus dari Git index dengan `git rm --cached` tanpa menghapus backup lokal yang masih diperlukan.
+- Source readiness menolak file runtime di `data/` atau `backups/` yang ter-track; script clean ZIP menjalankan guard sebelum `git archive` lalu memverifikasi artifact ZIP aktual. ZIP dengan path backslash, folder runtime/generated, database, backup, atau struktur source tidak lengkap akan ditolak dan dihapus. Hapus artifact dari Git index dengan `git rm --cached` tanpa menghapus backup lokal yang masih diperlukan.
 
 ## Jangan dilakukan tanpa approval eksplisit
 
@@ -175,3 +175,50 @@ Jangan membuat perhitungan stok baru di UI.
 - [ ] Cek backup/restore/reset guard jika menyentuh maintenance.
 - [ ] Cek docs terkait dan update bila source berubah.
 - [ ] Pastikan docs tidak mengarahkan kembali ke runtime arsip.
+
+## Update P8A–P12 — 2026-06-20
+
+### P8A — evidence migrasi session legacy
+
+- Endpoint `/api/auth/me` mencatat audit `legacy_bearer_migrated` hanya ketika session lama benar-benar datang melalui Bearer dan kemudian diberi cookie HttpOnly.
+- Audit migrasi dibuat idempotent per `local_user_session`; request Bearer berulang dari session yang sama tidak menambah audit duplikat.
+- Maintenance Center menampilkan jumlah migrasi, migrasi tujuh hari terakhir, dan waktu migrasi terakhir.
+- Evidence tersebut tidak otomatis membuktikan semua perangkat sudah selesai. Konfirmasi manual laptop/HP tetap wajib sebelum `IMS_AUTH_ALLOW_LEGACY_BEARER=false`.
+- Parser Bearer belum dihapus permanen karena cutover operasional seluruh perangkat belum dapat dibuktikan dari source.
+
+### P9 — dependency hardening selektif
+
+- Backend lockfile memakai `tar 7.5.16` dan `undici 6.27.0`; audit lockfile backend bersih.
+- Frontend tetap pada Vite major 7 dan memakai `7.3.5`; `@babel/core` dan `js-yaml` dipin ke versi perbaikan.
+- `@ant-design/charts` dihapus setelah audit usage membuktikan tidak dipakai.
+- Residual `xlsx` dan `esbuild` didokumentasikan di `docs/20_DEPENDENCY_SECURITY_AUDIT.md`; tidak dilakukan major/override paksa yang belum teruji.
+
+### P10 — frontend critical-flow regression
+
+Automated test frontend sekarang juga menjaga:
+
+- Purchase/Sales/Return hanya memakai commit service resmi dan memblokir input invalid sebelum request.
+- Sales cancel tetap ditolak.
+- Return tetap wajib terkait Sales dan qty tidak melebihi sisa.
+- Production lifecycle memanggil endpoint commit atomic yang benar.
+- Responsive navigation memakai canonical hub `/inventory` dan `/production`, mempertahankan `/stock` serta `/produksi` sebagai redirect role-guarded, dan menjaga active descendant route, nested parent key, serta role-aware module visibility.
+- Penyelesaian Work Log mengirim Good Qty, operator, dan catatan langsung ke endpoint complete atomic tanpa direct update pendahuluan.
+- Restore memakai preview/execute endpoint guarded dengan cookie credentials.
+- Export XLSX tetap write-only.
+
+### P11 — bundle budget
+
+- Full check menjalankan budget asset JavaScript setelah build.
+- Default budget per asset adalah 1.100.000 byte dan dapat diubah sementara melalui `IMS_FRONTEND_MAX_JS_BYTES` untuk investigasi, bukan untuk menyembunyikan regresi.
+- Nilai override bundle budget wajib integer positif; nilai kosong, nol, pecahan, atau non-numerik ditolak agar quality gate tidak lolos secara palsu.
+- Route lazy dan dynamic import tetap dipertahankan; manual chunk tidak ditambahkan secara spekulatif.
+
+### P12 — cleanup terverifikasi
+
+- Wrapper `productionCodeGenerator.js` dihapus setelah audit import/usage tidak menemukan pemanggil aktif.
+- Export compatibility `getStoredLocalAuthToken` dihapus setelah audit usage membuktikan tidak memiliki pemanggil; pembacaan token legacy tetap terpusat internal di `sqliteBackendStatusService.js` selama P8A.
+- Redirect route lama, format backup legacy, repository mode, dan Bearer compatibility tetap dipertahankan karena masih memiliki fungsi compatibility atau belum terbukti aman untuk dihapus.
+
+### Temuan merge P4 yang dikoreksi
+
+Test discovery otomatis menemukan bahwa empat file regression Production P4 sudah ada, tetapi implementasi atomic pada `production.service.js`, `production.controller.js`, dan validator generic route belum ikut dalam source ZIP terbaru. Kondisi tersebut sebelumnya tersembunyi karena script backend hanya menjalankan daftar test lama secara manual. Patch ini mengembalikan endpoint/service atomic P4 dan validator lifecycle; seluruh test Production kembali lulus. Ini menjadi alasan test discovery tidak boleh kembali diganti dengan daftar file manual.

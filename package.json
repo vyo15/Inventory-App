@@ -9,17 +9,19 @@
     "dev:backend": "npm --prefix backend run dev",
     "install:all": "npm --prefix backend install && npm --prefix frontend install",
     "check": "node scripts/git-check.cjs --full --skip-source",
-    "test:scripts": "node --test scripts/run-command.test.cjs",
+    "test:scripts": "node --test scripts/run-command.test.cjs scripts/check-frontend-bundle.test.cjs",
     "test": "npm run test:scripts && npm --prefix backend test && npm --prefix frontend test",
     "check:backend": "npm --prefix backend run check",
     "build:frontend": "npm --prefix frontend run build",
     "clean:zip": "bash scripts/create-clean-zip.sh",
     "clean:zip:ps": "powershell -ExecutionPolicy Bypass -File scripts/create-clean-zip.ps1",
     "verify:source": "node scripts/verify-source-ready.cjs",
+    "verify:zip": "node scripts/verify-source-ready.cjs --archive-only",
     "verify:before-push": "node scripts/git-check.cjs --full",
     "git:setup": "node scripts/install-git-shortcuts.cjs",
     "git:check": "node scripts/git-check.cjs",
     "git:check:full": "node scripts/git-check.cjs --full",
-    "git:push": "node scripts/git-push-safe.cjs"
+    "git:push": "node scripts/git-push-safe.cjs",
+    "check:bundle": "node scripts/check-frontend-bundle.cjs"
   }
 }

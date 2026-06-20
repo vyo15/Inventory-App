@@ -33,6 +33,12 @@ node "${VERIFY_ARGS[@]}"
 
 git archive --format=zip --prefix="$PREFIX" --output="$OUTPUT_PATH" HEAD
 
-echo "ZIP bersih dibuat: $OUTPUT_PATH"
+if ! node scripts/verify-source-ready.cjs --archive-only "$OUTPUT_PATH"; then
+  rm -f "$OUTPUT_PATH"
+  echo "ERROR: validasi isi ZIP gagal. Artifact yang tidak aman sudah dihapus." >&2
+  exit 1
+fi
+
+echo "ZIP bersih dibuat dan diverifikasi: $OUTPUT_PATH"
 echo "Sumber: git archive HEAD"
 echo "Runtime database lokal, backup, node_modules, dan dist tidak ikut. .gitattributes juga menjaga artifact backup/data yang ter-track tidak masuk git archive."

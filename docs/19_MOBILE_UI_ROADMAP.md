@@ -54,7 +54,7 @@ Output:
 ### Phase M1 — Mobile Foundation
 
 Scope:
-- `AppLayout`: sidebar mobile menjadi drawer dan auto close setelah pilih menu.
+- `AppLayout`: desktop memakai floating module dock, tablet memakai Drawer kiri, dan telepon memakai bottom navigation + bottom sheet role-aware.
 - `AppHeader`: header ringkas dan tidak terlalu tinggi.
 - `PageHeader`: action responsif.
 - `FilterBar`: search tetap tampil, filter lanjutan collapse/drawer.
@@ -63,7 +63,7 @@ Scope:
 - CSS global mencegah overflow body tanpa menyembunyikan bug layout.
 
 Definition of Done:
-- Mobile tidak menampilkan sidebar permanen.
+- Mobile tidak menampilkan sidebar permanen; telepon memakai bottom navigation dan tablet memakai Drawer kiri.
 - Tidak perlu landscape di HP portrait.
 - Desktop tetap table.
 - Empty/loading/error state rapi.
@@ -181,7 +181,7 @@ Status: **M1-M5 baseline diterapkan secara UI-only** pada source aktual.
 
 Yang sudah dikunci:
 
-- `AppLayout` memakai mobile sidebar drawer dan auto-close setelah route berubah.
+- `AppLayout` memakai responsive navigation matrix: floating dock desktop, Drawer kiri tablet, dan bottom navigation + bottom sheet pada telepon; overlay navigasi auto-close setelah route berubah.
 - `AppHeader`, `PageHeader`, `FilterBar`, modal, drawer, form, dan content shell diperkuat untuk portrait-first.
 - `DataTableView` menjadi `ResponsiveDataView` aktif: desktop tetap table, mobile memakai card/list bila `mobileCardConfig` tersedia.
 - `DataTableView` mendukung `MobileStateBlock` untuk loading/empty mobile dan siap memakai `MobileActionMenu` lewat `primaryActions` / `moreActions` untuk page baru.
@@ -304,3 +304,64 @@ Checklist QA tambahan M9:
 - [ ] Form Stock Adjustment tetap validasi stok keluar, unit cost, alasan, dan catatan.
 - [ ] Form Products/Raw Materials/Suppliers tetap menyimpan create/edit tanpa perubahan payload.
 - [ ] Di mobile, field form prioritas turun menjadi satu kolom dan footer tombol tetap mudah ditekan.
+
+
+## Update 2026-06-20 — Responsive Dock + Mobile Bottom Navigation
+
+Status: **AKTIF / ROLE-AWARE / UI NAVIGATION ONLY**.
+
+Implementasi source aktual:
+
+- Desktop `>= 993px` memakai floating module dock top-level dengan varian asset light/dark.
+- Desktop compact dan layar pendek mengecilkan rail serta icon agar seluruh icon tetap berada di dalam shape.
+- Tablet `768-992px` mempertahankan Drawer kiri berisi `SidebarMenu` nested.
+- Telepon `<= 767px` memakai bottom navigation: Dashboard, Stock, Menu IMS, Transaksi, dan Produksi.
+- Tombol Menu IMS membuka bottom sheet role-aware yang membaca `sidebarMenuItems` melalui `filterSidebarMenuItemsByRole`.
+- Module Hub menampilkan child route sebagai card; role `user` hanya menerima card operasional yang memang diizinkan.
+- Canonical hub responsive adalah `/inventory` dan `/production`; `/stock` serta `/produksi` dipertahankan sebagai redirect role-guarded agar route bisnis dan bookmark lama tetap aman.
+- Floating theme button disembunyikan pada telepon; theme toggle tersedia di bottom sheet.
+- Content telepon memakai safe bottom padding agar action/footer/page end tidak tertutup navigasi.
+
+Guardrail:
+
+- Bottom navigation tidak menjalankan create, commit, stock adjustment, production completion, payroll, finance posting, reset, restore, atau mutation lain.
+- Hidden menu bukan security control; seluruh hub route tetap dibungkus `ProtectedRoute` dan child route existing tidak diubah.
+- Drawer/modal operasional harus tetap berada di atas bottom navigation.
+
+QA minimum:
+
+- [ ] Desktop 1366x768, 1440x900, dan tinggi viewport 600-720: semua icon berada di dalam rail.
+- [ ] Tablet 768x1024 dan 820x1180: hamburger membuka Drawer kiri; bottom navigation tidak tampil.
+- [ ] Telepon 360x640, 390x844, dan 430x932: bottom navigation tampil tanpa horizontal overflow.
+- [ ] Tombol Menu membuka bottom sheet; pilih modul menutup sheet dan membuka Module Hub.
+- [ ] Administrator melihat seluruh modul; role `user` tidak melihat Master Data, Finance, Reports, Sistem, Payroll, HPP, atau Production Setup.
+- [ ] Light/dark mode tidak menggeser dock, bottom navigation, atau safe padding.
+- [ ] Tombol terakhir, pagination, sticky footer, dan baris terakhir tidak tertutup bottom navigation.
+
+
+## Update 2026-06-21 — Cross-device UI/UX Consistency Lock
+
+Status: **AKTIF / DOCS SOURCE OF TRUTH = `docs/21_RESPONSIVE_UI_UX_STANDARD.md`**.
+
+Rundown konsistensi final:
+
+1. Desktop lebar `>= 1200px`: floating dock normal, content maksimum `1560px`, Module Hub sampai 3 kolom.
+2. Desktop compact `993-1199px`: dock dan offset content diperkecil; tidak boleh ada icon keluar dari rail.
+3. Viewport desktop tinggi `<= 720px`: dock low-height dan gap icon compact.
+4. Tablet `768-992px`: hamburger + Drawer kiri; bottom navigation tidak tampil.
+5. Telepon `375-767px`: bottom navigation lima slot + bottom sheet role-aware; content memakai safe bottom padding.
+6. Telepon `<= 374px`: label dan center slot dipadatkan; Module Hub turun menjadi 1 kolom.
+7. Ultra-wide: content tidak melewati `1560px`.
+8. Mobile landscape/foldable mengikuti lebar viewport aktual; tidak ada device sniffing.
+9. Semua breakpoint wajib menjaga light/dark, role, overlay, loading, empty, error, data banyak, dan teks panjang.
+10. Patch responsive tetap UI-only dan tidak boleh membuat handler bisnis baru.
+
+Komponen foundation yang wajib dipakai ulang:
+
+- `DesktopModuleDock` untuk desktop.
+- `SidebarMenu` di Drawer tablet.
+- `MobileBottomNavigation` untuk telepon.
+- `ModuleHub` untuk child route.
+- `DataTableView`/`ResponsiveDataView`, `MobileDetailDrawer`, `MobileFilterDrawer`, `MobileActionMenu`, dan `ResponsiveFormSection` untuk real pages.
+
+QA detail dan Definition of Done tidak diduplikasi di sini; gunakan `docs/21_RESPONSIVE_UI_UX_STANDARD.md` dan `docs/06_TEST_CHECKLIST.md`.

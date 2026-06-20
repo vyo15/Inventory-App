@@ -740,28 +740,24 @@ const ProductionWorkLogs = () => {
       const values = await completeForm.validateFields();
       if (!completingRecord?.id) return;
 
-      await updateProductionWorkLog(
+      const selectedWorkers = (referenceData.employees || [])
+        .filter((item) => (values.workerIds || []).includes(item.id));
+
+      await completeProductionWorkLog(
         completingRecord.id,
         {
-          ...completingRecord,
           goodQty: values.goodQty,
           rejectQty: 0,
           reworkQty: 0,
           scrapQty: 0,
           workerIds: values.workerIds || [],
-          workerNames: (referenceData.employees || [])
-            .filter((item) => (values.workerIds || []).includes(item.id))
-            .map((item) => item.name || ''),
-          workerCodes: (referenceData.employees || [])
-            .filter((item) => (values.workerIds || []).includes(item.id))
-            .map((item) => item.code || ''),
-          workerCount: Array.isArray(values.workerIds) ? values.workerIds.length : 0,
+          workerNames: selectedWorkers.map((item) => item.name || ''),
+          workerCodes: selectedWorkers.map((item) => item.code || ''),
+          workerCount: selectedWorkers.length,
           notes: values.notes || '',
         },
         currentUser,
       );
-
-      await completeProductionWorkLog(completingRecord.id, currentUser);
       // =====================================================
       // ACTIVE / GUARDED - auto payroll setelah Work Log selesai
       // Fungsi blok:

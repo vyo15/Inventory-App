@@ -16,8 +16,9 @@ Risiko:
 - perubahan spacing/flex yang terlalu agresif bisa membuat action logout turun baris atau menciptakan horizontal overflow di viewport kecil.
 ===================================================== */
 .app-header-content {
-  width: 100%;
+  width: auto;
   min-width: 0;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;

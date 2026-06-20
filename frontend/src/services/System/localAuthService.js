@@ -3,7 +3,6 @@ import {
   clearStoredSqliteAuthToken,
   fetchSqliteJson,
   getStoredSqliteAuthHeaders,
-  getStoredSqliteAuthToken,
 } from "./sqliteBackendStatusService";
 
 const LOCAL_AUTH_USER_KEY = "ims.sqlite.authUser";
@@ -15,7 +14,6 @@ export const isSqliteAuthMode = () => AUTH_MODE === "sqlite";
 
 export const validateLocalPasswordPolicy = validatePasswordStrength;
 export const getLocalPasswordPolicyHint = getPasswordPolicyHint;
-export const getStoredLocalAuthToken = getStoredSqliteAuthToken;
 
 const storeLocalAuthUser = (user) => {
   if (typeof window === "undefined") return;

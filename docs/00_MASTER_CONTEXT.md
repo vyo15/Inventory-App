@@ -232,7 +232,7 @@ Status cleanup bertahap yang dikunci di docs:
 - **Guarded:** kode audit yang sudah dipakai harus immutable. Edit nama/ref tidak boleh otomatis mengubah kode audit lama tanpa approval migrasi.
 - **Standar kode manusiawi:** jangan pakai mapping manual kata-per-kata atau dictionary singkatan per modul. Gunakan prefix modul yang disetujui + sequence shared; jangan membuat dictionary singkatan kata per modul di page/service.
 - **Source of truth:** satu shared generator yang disetujui harus menjadi sumber kode manusiawi lintas modul. Page/service tidak boleh membuat generator baru atau duplicate logic.
-- **Current state note:** source terbaru sudah memakai `businessCodeGenerator.js` sebagai source of truth utama dan `productionCodeGenerator.js` hanya wrapper compatibility. Cleanup lanjutan tetap guarded untuk strategi counter/ID log readable, bukan untuk membuat generator baru.
+- **Current state note:** source terbaru memakai `businessCodeGenerator.js` sebagai satu-satunya source of truth generator kode. Wrapper `productionCodeGenerator.js` sudah dihapus setelah audit import/usage membuktikan tidak ada pemanggil aktif.
 
 ## Maintenance & Backup Center — 2026-06-07
 - **Aktif:** Reset & Maintenance Data menjadi Maintenance & Backup Center, bukan daftar tombol reset teknis.
@@ -340,3 +340,16 @@ Keputusan aktif tambahan:
 ## Update 2026-06-05 - UI Runtime Database Tidak Ditampilkan di Halaman Operasional
 
 Karena IMS sudah memakai database lokal utama, halaman operasional tidak perlu menampilkan banner teknis mode database. Label mode database, instruksi IP/port/firewall, dan tombol cepat ke pusat database harus dihapus dari halaman kerja harian seperti Kategori, Customer, dan Supplier. Informasi teknis koneksi hanya boleh berada di Maintenance/Database Center.
+
+
+## Responsive UI/UX Standard v2 — 2026-06-21
+
+Status: **AKTIF / SOURCE-ALIGNED / GUARDED**.
+
+- Source aktual memakai floating module dock untuk desktop, Drawer kiri untuk tablet, serta bottom navigation + bottom sheet role-aware untuk telepon.
+- Matrix aktif: desktop lebar `>= 1200px`, desktop compact `993-1199px`, tablet `768-992px`, telepon `<= 767px`, dan penyesuaian telepon kecil `<= 374px`.
+- Viewport desktop dengan tinggi `<= 720px` memakai dock low-height agar seluruh icon tetap berada di dalam rail.
+- Module Hub menjadi landing child menu; child route bisnis, compatibility path, role guard, dan service existing tetap dipertahankan.
+- Source menu lintas desktop/tablet/mobile tetap `sidebarMenuItems + filterSidebarMenuItemsByRole`; hidden menu bukan security control.
+- Rundown lintas perangkat, visual density, safe area, overlay, test matrix, dan Definition of Done resmi berada di `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
+- Perubahan responsive tetap UI-only kecuali ada approval eksplisit; jangan mengubah schema, stock, transaksi, production, payroll, HPP, finance, reset, atau audit log hanya untuk layout.

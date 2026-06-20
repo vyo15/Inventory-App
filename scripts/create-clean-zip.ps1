@@ -54,6 +54,12 @@ if (-not (Test-Path -LiteralPath $OutputPath -PathType Leaf)) {
   throw "Git archive selesai tanpa menghasilkan file ZIP: $OutputPath"
 }
 
-Write-Host "ZIP bersih dibuat: $OutputPath"
+& node scripts/verify-source-ready.cjs --archive-only $OutputPath
+if ($LASTEXITCODE -ne 0) {
+  Remove-Item -LiteralPath $OutputPath -Force -ErrorAction SilentlyContinue
+  throw "Validasi isi ZIP gagal. Artifact yang tidak aman sudah dihapus."
+}
+
+Write-Host "ZIP bersih dibuat dan diverifikasi: $OutputPath"
 Write-Host "Sumber: git archive HEAD"
 Write-Host "Runtime database lokal, backup, node_modules, dan dist tidak ikut. .gitattributes juga menjaga artifact backup/data yang ter-track tidak masuk git archive."

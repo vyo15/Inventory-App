@@ -331,3 +331,110 @@ Risiko:
     bottom: 10px;
   }
 }
+
+/* =====================================================
+SECTION: Desktop Floating Rail Menu — AKTIF / UI ONLY / ROLE-AWARE
+Fungsi:
+- Menampilkan hanya top-level module sebagai icon pada floating dock desktop.
+- Klik top-level module membuka Module Hub di content; tidak menampilkan submenu pop-up.
+
+Guard:
+- Item tetap berasal dari filterSidebarMenuItemsByRole.
+- Drawer mobile tetap memakai Ant Design Menu lengkap dan nested accordion existing.
+===================================================== */
+.sidebar-rail-menu {
+  width: 52px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.sidebar-rail-button {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 13px;
+  color: rgba(255, 255, 255, 0.88);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.sidebar-rail-button .anticon {
+  font-size: 18px;
+}
+
+.sidebar-rail-button:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.sidebar-rail-button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.92);
+  outline-offset: 2px;
+}
+
+.sidebar-rail-button.active {
+  color: var(--ims-color-primary-active);
+  background: #ffffff;
+  box-shadow: 0 9px 20px rgba(9, 37, 67, 0.2);
+}
+
+.sidebar-rail-button.active::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -8px;
+  width: 3px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--ims-color-brand-gold);
+  transform: translateY(-50%);
+}
+
+/* =====================================================
+SECTION: Desktop Floating Rail Dark State — AKTIF / UI ONLY
+Fungsi:
+- Menjaga icon, hover, focus, active pill, dan gold marker tetap readable pada rail dark.
+
+Guard:
+- Selector hanya berlaku pada variant rail dark; Drawer mobile dan Ant Design Menu tidak berubah.
+===================================================== */
+.sidebar-rail-menu.dark .sidebar-rail-button {
+  color: rgba(234, 242, 251, 0.84);
+}
+
+.sidebar-rail-menu.dark .sidebar-rail-button:hover {
+  color: #ffffff;
+  background: rgba(94, 163, 230, 0.14);
+}
+
+.sidebar-rail-menu.dark .sidebar-rail-button:focus-visible {
+  outline-color: rgba(123, 183, 240, 0.92);
+}
+
+.app-shell.dark .sidebar-rail-button.active {
+  color: #173f6b;
+  background: #eaf2fb;
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.34),
+    inset 0 0 0 1px rgba(94, 163, 230, 0.22);
+}
+
+.app-shell.dark .sidebar-rail-button.active::after {
+  background: #f1c75b;
+  box-shadow: 0 0 0 1px rgba(241, 199, 91, 0.16);
+}

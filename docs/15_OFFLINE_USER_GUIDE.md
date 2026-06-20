@@ -302,7 +302,13 @@ Untuk membuat ZIP source, gunakan command resmi berikut dan jangan memakai `Comp
 npm run clean:zip:ps
 ```
 
-Script resmi memvalidasi source readiness dan membuat ZIP dari commit `HEAD`. Jika validasi atau `git archive` gagal, proses berhenti dan ZIP tidak dianggap berhasil.
+Script resmi memvalidasi source readiness, membuat ZIP dari commit `HEAD`, lalu membaca kembali central directory ZIP. Artifact otomatis ditolak dan dihapus bila membawa `data/`, `backups/`, database, backup, `node_modules`, `dist`, path backslash, atau struktur source yang tidak lengkap.
+
+Validasi ulang ZIP yang sudah dibuat:
+
+```bash
+npm run verify:zip -- ../Inventory-App-clean.zip
+```
 
 ### Commit dan push cepat
 
