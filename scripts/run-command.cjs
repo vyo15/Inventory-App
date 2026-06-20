@@ -5,12 +5,34 @@ const WINDOWS_COMMAND_ALIASES = Object.freeze({
   npx: "npx.cmd",
 });
 
-function resolveCommand(command) {
-  if (process.platform !== "win32") {
+function resolveCommand(command, platform = process.platform) {
+  if (platform !== "win32") {
     return command;
   }
 
   return WINDOWS_COMMAND_ALIASES[command] || command;
+}
+
+function buildSpawnInvocation(
+  command,
+  args = [],
+  { platform = process.platform, env = process.env } = {},
+) {
+  const resolvedCommand = resolveCommand(command, platform);
+
+  if (platform === "win32" && WINDOWS_COMMAND_ALIASES[command]) {
+    return {
+      command: env.ComSpec || env.COMSPEC || "cmd.exe",
+      args: ["/d", "/s", "/c", resolvedCommand, ...args],
+      shell: false,
+    };
+  }
+
+  return {
+    command: resolvedCommand,
+    args,
+    shell: false,
+  };
 }
 
 function formatCommand(command, args = []) {
@@ -18,11 +40,11 @@ function formatCommand(command, args = []) {
 }
 
 function run(command, args = [], options = {}) {
-  const resolvedCommand = resolveCommand(command);
-  const result = spawnSync(resolvedCommand, args, {
+  const invocation = buildSpawnInvocation(command, args);
+  const result = spawnSync(invocation.command, invocation.args, {
     stdio: "inherit",
-    shell: false,
     ...options,
+    shell: invocation.shell,
   });
 
   if (result.error) {
@@ -37,11 +59,11 @@ function run(command, args = [], options = {}) {
 }
 
 function capture(command, args = [], options = {}) {
-  const resolvedCommand = resolveCommand(command);
-  const result = spawnSync(resolvedCommand, args, {
+  const invocation = buildSpawnInvocation(command, args);
+  const result = spawnSync(invocation.command, invocation.args, {
     encoding: "utf8",
-    shell: false,
     ...options,
+    shell: invocation.shell,
   });
 
   if (result.error || result.status !== 0) {
@@ -52,7 +74,8 @@ function capture(command, args = [], options = {}) {
 }
 
 module.exports = {
-  run,
+  buildSpawnInvocation,
   capture,
   resolveCommand,
+  run,
 };

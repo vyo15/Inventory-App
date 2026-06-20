@@ -47,6 +47,9 @@ test("script clean ZIP selalu memakai git archive HEAD", () => {
   assert.match(shellScript, /git archive --format=zip[\s\S]*HEAD/);
   assert.doesNotMatch(powershellScript, /Compress-Archive/i);
   assert.doesNotMatch(shellScript, /zip\s+-r/i);
+  assert.match(powershellScript, /Assert-NativeCommandSucceeded/);
+  assert.match(powershellScript, /Validasi source readiness/);
+  assert.match(powershellScript, /Membuat ZIP dari commit HEAD/);
 });
 
 

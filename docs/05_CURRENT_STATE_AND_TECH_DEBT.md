@@ -69,6 +69,7 @@ Konsekuensi:
 - Session Bearer lama tetap diterima sementara dan dimigrasikan menjadi cookie melalui `/api/auth/me`, lalu token lama dibersihkan dari `localStorage` frontend.
 - Bootstrap administrator pertama memakai kode setup acak yang hanya tampil di terminal backend; endpoint status tidak mengirim kode tersebut.
 - `npm run check`, `git check`, dan pre-push menjalankan automated test backend serta frontend sebagai quality gate.
+- Runner command Windows menjalankan `npm.cmd`/`npx.cmd` melalui `cmd.exe`, sehingga shortcut quality gate tidak gagal dengan `spawnSync ... EINVAL` pada Node.js Windows.
 - Production P4 memusatkan create PO dari Planning, Start Production, Complete Work Log, auto payroll, Payroll Paid, finance posting, dan HPP reconcile pada transaction backend SQLite.
 - Generic production CRUD tidak lagi dapat dipakai untuk melewati lifecycle sensitif Planning, Production Order, Work Log, atau Payroll.
 - Automated regression aktif setelah P5-P7 berjumlah 59 test backend dan 17 test frontend. Coverage backend mencakup rollback/idempotency produksi, backup/restore guarded, serta source ZIP hygiene; coverage frontend mencakup auth, role guard, ProtectedRoute, Dashboard, dan error login.

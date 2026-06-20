@@ -6,10 +6,20 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$Root = git rev-parse --show-toplevel
+function Assert-NativeCommandSucceeded {
+  param([string]$Step)
+
+  if ($LASTEXITCODE -ne 0) {
+    throw "$Step gagal dengan exit code $LASTEXITCODE. ZIP tidak dibuat."
+  }
+}
+
+$Root = (& git rev-parse --show-toplevel).Trim()
+Assert-NativeCommandSucceeded "Membaca root repository Git"
 Set-Location $Root
 
-$Status = git status --porcelain
+$Status = & git status --porcelain
+Assert-NativeCommandSucceeded "Membaca status repository Git"
 if ($Status -and -not $AllowDirty) {
   Write-Error @"
 Working tree belum bersih.
@@ -35,8 +45,14 @@ if ($AllowDirty) {
   $VerifyArgs += "--allow-dirty"
 }
 & node @VerifyArgs
+Assert-NativeCommandSucceeded "Validasi source readiness"
 
-git archive --format=zip --prefix=$Prefix --output=$OutputPath HEAD
+& git archive --format=zip --prefix=$Prefix --output=$OutputPath HEAD
+Assert-NativeCommandSucceeded "Membuat ZIP dari commit HEAD"
+
+if (-not (Test-Path -LiteralPath $OutputPath -PathType Leaf)) {
+  throw "Git archive selesai tanpa menghasilkan file ZIP: $OutputPath"
+}
 
 Write-Host "ZIP bersih dibuat: $OutputPath"
 Write-Host "Sumber: git archive HEAD"

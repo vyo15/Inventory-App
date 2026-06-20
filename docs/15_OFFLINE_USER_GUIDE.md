@@ -263,6 +263,8 @@ git savepush "Pesan commit"
 git zipclean
 ```
 
+Shortcut Git bersifat lokal per clone/repository. Jika `git check` belum dikenal setelah clone baru, jalankan kembali `npm run git:setup` atau gunakan fallback yang selalu tersedia: `npm run git:check` dan `npm run git:check:full`.
+
 Catatan: `git push` tetap command bawaan Git, tetapi setelah setup, push akan melewati pre-push hook IMS agar perubahan yang belum commit tidak diam-diam tertinggal.
 
 ### Cek sebelum push
@@ -275,13 +277,14 @@ git check
 
 Command ini mengecek:
 
-- branch aktif;
-- commit terakhir;
-- upstream branch;
+- branch aktif, commit terakhir, dan upstream branch;
 - working tree harus bersih;
-- backend syntax check.
+- runtime database/backup tidak boleh ter-track;
+- backend syntax check;
+- lint frontend;
+- automated test script, backend, dan frontend.
 
-Untuk cek lengkap sampai frontend build:
+Untuk cek lengkap termasuk frontend production build:
 
 ```bash
 git check --full
@@ -292,6 +295,14 @@ atau:
 ```bash
 npm run git:check:full
 ```
+
+Untuk membuat ZIP source, gunakan command resmi berikut dan jangan memakai `Compress-Archive` manual:
+
+```bash
+npm run clean:zip:ps
+```
+
+Script resmi memvalidasi source readiness dan membuat ZIP dari commit `HEAD`. Jika validasi atau `git archive` gagal, proses berhenti dan ZIP tidak dianggap berhasil.
 
 ### Commit dan push cepat
 
