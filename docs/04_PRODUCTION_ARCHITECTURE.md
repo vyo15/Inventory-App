@@ -383,7 +383,7 @@ Status final tetap guarded: Planning `cancelled` dan `completed` tidak boleh dib
 ## Update HPP Analysis Final/Preview — 2026-05-17
 - `ProductionHppAnalysis.jsx` memisahkan `finalLaborCost`, `finalTotalCost`, dan `finalHppPerUnit` dari `displayLaborCost`, `previewTotalCost`, dan `previewHppPerUnit`.
 - Resolver labor yang sama dipakai oleh detail Work Log dan HPP Analysis agar tidak ada drift antara payroll final, payroll draft, dan estimasi Step.
-- Data Quality Audit produksi bersifat read-only dan sekarang mendeteksi payroll final pending/mismatch, output line HPP stale, master Product/Semi Finished HPP stale, variant output HPP stale, stale BOM cost estimate, serta Semi Finished aktif tanpa `flowerGroup`. Audit hasil selain Good Qty tidak diaktifkan.
+- Audit produksi dan HPP aktif tetap bersifat read-only melalui maintenance service khusus: Production Variant Audit, Payroll Snapshot Audit, dan HPP Reconcile Audit. Data Quality Audit legacy frontend yang tidak lagi membaca data nyata sudah dipensiunkan dan tidak boleh diklaim sebagai audit aktif.
 - Flow payroll final baru menjalankan reconcile output HPP/master cost tanpa mutasi qty stok ulang. Data historis yang tidak tersentuh payroll sync tetap tidak dibackfill massal otomatis dan harus lewat audit/repair guarded terpisah.
 
 ## Guarded HPP Reconcile Payroll Final — 2026-05-18
@@ -411,7 +411,7 @@ Rule aktif:
 - Reconcile HPP tidak boleh menambah/mengurangi stock qty, tidak boleh membuat inventory log baru, dan tidak boleh mengubah status Work Log/PO.
 
 Boundary data historis:
-- Work Log lama yang tidak pernah tersentuh payroll sync tetap perlu Data Quality Audit/backfill guarded terpisah.
+- Work Log lama yang tidak pernah tersentuh payroll sync tetap memerlukan audit produksi/HPP read-only lalu repair atau backfill guarded terpisah; tidak ada backfill massal otomatis.
 - Jika data sudah pernah dijual/dipakai sebelum reconcile, patch ini menjaga master cost ke depan tetapi tidak merekonstruksi COGS histori lama.
 
 ## Guard Modal/HPP Stok Awal dan Reset Cost — 2026-05-18

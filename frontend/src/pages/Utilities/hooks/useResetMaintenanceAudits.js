@@ -6,7 +6,6 @@ import {
   getInventoryStockMaintenanceAudit,
 } from "../../../services/Maintenance/inventoryMaintenanceService";
 import { getHistoricalDataMaintenanceAudit } from "../../../services/Maintenance/historicalDataMaintenanceService";
-import { getDataQualityAudit } from "../../../services/Maintenance/dataQualityAuditService";
 import { getHppReconcileMaintenanceAudit } from "../../../services/Maintenance/hppReconcileMaintenanceService";
 import { getMasterCodeMaintenanceAudit } from "../../../services/Maintenance/masterCodeMaintenanceService";
 import { getPayrollSnapshotMaintenanceAudit } from "../../../services/Maintenance/payrollMaintenanceService";
@@ -24,7 +23,6 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
   const [stockAudit, setStockAudit] = useState(null);
   const [logSchemaAudit, setLogSchemaAudit] = useState(null);
   const [historicalDataAudit, setHistoricalDataAudit] = useState(null);
-  const [dataQualityAudit, setDataQualityAudit] = useState(null);
   const [hppReconcileAudit, setHppReconcileAudit] = useState(null);
   const [masterCodeAudit, setMasterCodeAudit] = useState(null);
   const [payrollAudit, setPayrollAudit] = useState(null);
@@ -35,7 +33,6 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
   const [loadingStockAudit, setLoadingStockAudit] = useState(false);
   const [loadingLogSchemaAudit, setLoadingLogSchemaAudit] = useState(false);
   const [loadingHistoricalDataAudit, setLoadingHistoricalDataAudit] = useState(false);
-  const [loadingDataQualityAudit, setLoadingDataQualityAudit] = useState(false);
   const [loadingHppReconcileAudit, setLoadingHppReconcileAudit] = useState(false);
   const [loadingMasterCodeAudit, setLoadingMasterCodeAudit] = useState(false);
   const [loadingPayrollAudit, setLoadingPayrollAudit] = useState(false);
@@ -136,50 +133,6 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
       showActionError(error?.message || "Gagal menjalankan audit schema inventory log.");
     } finally {
       setLoadingLogSchemaAudit(false);
-    }
-  }, [createPageMaintenanceLog]);
-
-  const handleLoadDataQualityAudit = useCallback(async ({ showProblemPreview = false } = {}) => {
-    try {
-      setLoadingDataQualityAudit(true);
-      /*
-      =====================================================
-      SECTION: Data Quality Audit handler — COMPATIBILITY
-      Fungsi:
-      - Memanggil audit arsip data secara read-only, menampilkan ringkasan area, dan mencatat audit log metadata.
-
-      Dipakai oleh:
-      - Tombol Cek Arsip Data di panel Auto Detect Bug Data.
-
-      Alasan perubahan:
-      - Project masih development sehingga arsip data cukup dipetakan untuk reset/recreate manual, bukan dimigrasi otomatis.
-
-      Catatan cleanup:
-      - Jika nanti audit ini dipakai di halaman lain, handler bisa dipindah ke hook maintenance khusus.
-
-      Risiko:
-      - Jangan tambahkan write/delete data bisnis di handler ini; audit log hanya metadata agar tidak mengubah stok, kas, payroll, HPP, atau transaksi.
-      =====================================================
-      */
-      const result = await getDataQualityAudit();
-      setDataQualityAudit(result);
-      await createPageMaintenanceLog({
-        actionType: showProblemPreview ? "data_quality_problem_preview" : "data_quality_audit",
-        mode: "dry_run",
-        modules: ["data_quality", "historical_data"],
-        summary: result?.summary || {},
-        affectedCollections: (result?.categories || []).map((item) => item.collection || item.key).filter(Boolean),
-        affectedCount: result?.summary?.checkedRecords || 0,
-        dryRun: true,
-        status: "success",
-        note: "Data Quality Audit hanya membaca data historis/testing dan menampilkan rekomendasi; tidak ada migrasi massal, backfill, delete, stok, kas, payroll, HPP, atau transaksi yang diubah.",
-      });
-      showActionSuccess(showProblemPreview ? "Preview data bermasalah berhasil dimuat. Tidak ada data yang diubah." : "Audit data historis selesai. Tidak ada data yang diubah.");
-    } catch (error) {
-      console.error(error);
-      showActionError(error?.message || "Gagal menjalankan Data Quality Audit.");
-    } finally {
-      setLoadingDataQualityAudit(false);
     }
   }, [createPageMaintenanceLog]);
 
@@ -324,7 +277,6 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
 
   const handleRunAllAudits = useCallback(async () => {
     try {
-      await handleLoadDataQualityAudit({ showProblemPreview: false });
       await handleLoadHppReconcileAudit();
       await handleLoadMasterCodeAudit();
       await handleLoadStockAudit();
@@ -340,7 +292,6 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
       showActionError(error?.message || "Cek Semua berhenti karena ada audit yang gagal.");
     }
   }, [
-    handleLoadDataQualityAudit,
     handleLoadHppReconcileAudit,
     handleLoadHistoricalDataAudit,
     handleLoadLogSchemaAudit,
@@ -356,7 +307,6 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
   const masterCodeSummary = masterCodeAudit?.summary || {};
 
   const auditSourceMap = useMemo(() => ({
-    dataQualityAudit,
     hppReconcileAudit,
     masterCodeAudit,
     stockAudit,
@@ -367,7 +317,6 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
     transactionVariantAudit,
     transactionSideEffectAudit,
   }), [
-    dataQualityAudit,
     hppReconcileAudit,
     masterCodeAudit,
     historicalDataAudit,
@@ -421,24 +370,6 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
             : "Perlu dilihat detail sebelum reset atau repair.",
     })), [auditOverviewRows]);
 
-  const dataQualityCategoryRows = useMemo(() => (dataQualityAudit?.categories || [])
-    .filter((item) => Number(item.count || 0) > 0)
-    .map((item) => {
-      const samplePreview = (item.samples || []).slice(0, 3).map((sample) => {
-        const collectionLabel = sample.collectionName || "data";
-        const referenceLabel = sample.reference || sample.name || sample.id || "-";
-        return `${collectionLabel} • ${referenceLabel}: ${sample.issue || item.label}`;
-      }).join(" | ");
-
-      return {
-        key: item.key,
-        categoryLabel: item.label,
-        count: Number(item.count || 0),
-        samplePreview: samplePreview || "Tidak ada sample detail.",
-        recommendation: item.recommendation || "Cek manual sebelum repair/reset.",
-      };
-    }), [dataQualityAudit]);
-
   const autoBugSummary = useMemo(() => {
     const checkedAreas = auditOverviewRows.filter((item) => item.checkedRecords > 0 || item.issueCount > 0 || item.safeRepairCount > 0).length;
     const issueCount = auditOverviewRows.reduce((total, item) => total + (Number(item.issueCount) || 0), 0);
@@ -455,8 +386,7 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
     };
   }, [auditOverviewRows]);
 
-  const loadingAutoDetect = loadingDataQualityAudit
-    || loadingHppReconcileAudit
+  const loadingAutoDetect = loadingHppReconcileAudit
     || loadingStockAudit
     || loadingLogSchemaAudit
     || loadingHistoricalDataAudit
@@ -473,7 +403,6 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
     logSchemaAudit,
     setLogSchemaAudit,
     historicalDataAudit,
-    dataQualityAudit,
     hppReconcileAudit,
     setHppReconcileAudit,
     masterCodeAudit,
@@ -488,7 +417,6 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
     loadingStockAudit,
     loadingLogSchemaAudit,
     loadingHistoricalDataAudit,
-    loadingDataQualityAudit,
     loadingHppReconcileAudit,
     loadingMasterCodeAudit,
     loadingPayrollAudit,
@@ -498,7 +426,6 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
     handleLoadProductionMaintenanceAudit,
     handleLoadStockAudit,
     handleLoadLogSchemaAudit,
-    handleLoadDataQualityAudit,
     handleLoadHppReconcileAudit,
     handleLoadHistoricalDataAudit,
     handleLoadPayrollAudit,
@@ -509,7 +436,6 @@ const useResetMaintenanceAudits = ({ createPageMaintenanceLog }) => {
     masterCodeSummary,
     auditOverviewRows,
     auditIssueRows,
-    dataQualityCategoryRows,
     autoBugSummary,
     loadingAutoDetect,
   };

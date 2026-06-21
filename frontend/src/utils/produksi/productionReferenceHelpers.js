@@ -1,20 +1,15 @@
 import { buildReferenceOptions } from '../options/referenceOptionBuilders';
+import {
+  inferVariantMode,
+  resolveVariantSourceList,
+} from '../variants/variantStockNormalizer';
 
 export const safeTrim = (value) => String(value || '').trim();
 export const toVariantKey = (value) => safeTrim(value).toLowerCase();
 
-export const hasVariantSupport = (item = {}) => {
-  if (item?.hasVariants === true || item?.hasVariantOptions === true) return true;
-  if (Array.isArray(item?.variants) && item.variants.length > 0) return true;
-  if (Array.isArray(item?.variantOptions) && item.variantOptions.length > 0) return true;
-  return false;
-};
+export const hasVariantSupport = (item = {}) => inferVariantMode(item);
 
-export const getItemVariantList = (item = {}) => {
-  if (Array.isArray(item?.variants) && item.variants.length > 0) return item.variants;
-  if (Array.isArray(item?.variantOptions) && item.variantOptions.length > 0) return item.variantOptions;
-  return [];
-};
+export const getItemVariantList = (item = {}) => resolveVariantSourceList(item);
 
 export const findMatchingVariant = (item = {}, targetVariantKey = '') => {
   const wanted = toVariantKey(targetVariantKey);

@@ -1,7 +1,14 @@
 const crypto = require("crypto");
 const { getDb } = require("../../db/connection");
+const {
+  sanitizeInventoryMasterUpdate,
+  upsertJsonRecord,
+  upsertStockReadModel,
+} = require("../../utils/sqliteStockEngine");
 const { createAuditLog } = require("../../utils/auditLog");
 const { safeJsonParse } = require("../../utils/jsonUtils");
+const { PRODUCT_VALUATION_FIELDS } = require("../products/products.service");
+const { RAW_MATERIAL_VALUATION_FIELDS } = require("../rawMaterials/rawMaterials.service");
 
 const normalizeText = (value) => String(value ?? "").trim();
 const normalizeBool = (value, fallback = true) => {
@@ -25,6 +32,23 @@ const normalizeTargetType = (value = "") => {
   const targetType = normalizeText(value || "raw_materials");
   return targetType === "products" ? "products" : "raw_materials";
 };
+
+const PRICING_TARGET_CONFIG = Object.freeze({
+  products: Object.freeze({
+    tableName: "products",
+    sourceType: "product",
+    priceField: "price",
+    preserveVariantOptions: false,
+    protectedFields: PRODUCT_VALUATION_FIELDS,
+  }),
+  raw_materials: Object.freeze({
+    tableName: "raw_materials",
+    sourceType: "raw_material",
+    priceField: "sellingPrice",
+    preserveVariantOptions: true,
+    protectedFields: RAW_MATERIAL_VALUATION_FIELDS,
+  }),
+});
 
 const normalizeRulePayload = (body = {}, current = {}) => {
   const targetType = normalizeTargetType(
@@ -265,7 +289,204 @@ const softDeletePricingRule = async (id, actor = "system") => {
   return { id: current.id, deleted: true, softDeleted: true };
 };
 
+const toInventoryRecord = (row = {}) => {
+  const payload = safeJsonParse(row.payload_json, {});
+  const versionToken = payload.updatedAt || row.updated_at || null;
+  return {
+    ...payload,
+    id: row.id,
+    code: row.code || payload.code || "",
+    name: row.name || payload.name || "",
+    status: row.status || payload.status || "active",
+    isActive: row.is_active === 0 ? false : payload.isActive !== false,
+    currentStock: row.current_stock ?? payload.currentStock ?? payload.stock ?? 0,
+    stock: row.current_stock ?? payload.stock ?? payload.currentStock ?? 0,
+    reservedStock: row.reserved_stock ?? payload.reservedStock ?? 0,
+    availableStock: row.available_stock ?? payload.availableStock ?? 0,
+    updatedAt: row.updated_at || payload.updatedAt || null,
+    versionToken,
+  };
+};
+
+const normalizePricingBatchUpdates = (updates = []) => {
+  if (!Array.isArray(updates) || updates.length === 0) {
+    throw createServiceError(
+      "Tidak ada perubahan harga yang perlu diterapkan.",
+      "PRICING_BATCH_EMPTY",
+      400,
+    );
+  }
+  if (updates.length > 2000) {
+    throw createServiceError(
+      "Apply pricing maksimal 2000 item per proses.",
+      "PRICING_BATCH_TOO_LARGE",
+      400,
+    );
+  }
+
+  const seenIds = new Set();
+  return updates.map((update = {}, index) => {
+    const itemId = normalizeText(update.itemId || update.id);
+    const expectedVersion = normalizeText(update.expectedVersion);
+    const parsedPrice = Number(update.newPrice);
+    if (!itemId) {
+      throw createServiceError(`Item pricing ke-${index + 1} tidak memiliki ID.`, "PRICING_ITEM_INVALID", 400);
+    }
+    if (seenIds.has(itemId)) {
+      throw createServiceError(`Item pricing ${itemId} dikirim lebih dari sekali.`, "PRICING_ITEM_DUPLICATE", 400);
+    }
+    if (!expectedVersion) {
+      throw createServiceError(
+        `Versi data item ${itemId} tidak tersedia. Muat ulang preview pricing.`,
+        "INVENTORY_VERSION_REQUIRED",
+        428,
+      );
+    }
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+      throw createServiceError(`Harga baru item ${itemId} tidak valid.`, "PRICING_PRICE_INVALID", 400);
+    }
+    seenIds.add(itemId);
+    return {
+      itemId,
+      expectedVersion,
+      newPrice: Math.round(parsedPrice),
+    };
+  });
+};
+
+const applyPricingRuleBatch = async (id, body = {}, actor = "system") => {
+  const updates = normalizePricingBatchUpdates(body.updates);
+  const db = await getDb();
+  await db.run("BEGIN IMMEDIATE TRANSACTION");
+  try {
+    const ruleRow = await db.get(
+      "SELECT * FROM pricing_rules WHERE id = ? AND status != 'deleted'",
+      [id],
+    );
+    if (!ruleRow) {
+      throw createServiceError("Pricing rule database lokal tidak ditemukan.", "NOT_FOUND", 404);
+    }
+
+    const rule = toPricingRuleRecord(ruleRow);
+    if (rule.isActive === false || rule.status === "inactive") {
+      throw createServiceError("Pricing rule nonaktif tidak dapat diterapkan.", "PRICING_RULE_INACTIVE", 409);
+    }
+    const requestedTargetType = normalizeText(body.targetType || "");
+    if (requestedTargetType && !Object.prototype.hasOwnProperty.call(PRICING_TARGET_CONFIG, requestedTargetType)) {
+      throw createServiceError("Target apply pricing tidak valid.", "PRICING_TARGET_INVALID", 400);
+    }
+    const targetType = normalizeTargetType(requestedTargetType || rule.targetType);
+    if (targetType !== rule.targetType) {
+      throw createServiceError(
+        "Target apply pricing tidak sesuai dengan target pricing rule.",
+        "PRICING_TARGET_MISMATCH",
+        409,
+      );
+    }
+    const config = PRICING_TARGET_CONFIG[targetType];
+    const updatedItems = [];
+
+    for (const update of updates) {
+      const row = await db.get(
+        `SELECT * FROM ${config.tableName} WHERE id = ? AND status != 'deleted'`,
+        [update.itemId],
+      );
+      if (!row) {
+        throw createServiceError(
+          `Item pricing ${update.itemId} tidak ditemukan. Tidak ada harga yang diubah.`,
+          "PRICING_ITEM_NOT_FOUND",
+          404,
+        );
+      }
+
+      const currentPayload = safeJsonParse(row.payload_json, {});
+      const current = toInventoryRecord(row);
+      const now = new Date().toISOString();
+      const incomingPayload = {
+        expectedVersion: update.expectedVersion,
+        [config.priceField]: update.newPrice,
+        pricingMode: "rule",
+        pricingRuleId: rule.id,
+        lastPricingUpdatedAt: now,
+      };
+      const sanitizedPayload = sanitizeInventoryMasterUpdate({
+        current,
+        currentPayload,
+        incomingPayload,
+        mergedPayload: {
+          ...currentPayload,
+          ...incomingPayload,
+          id: row.id,
+          code: row.code || currentPayload.code || "",
+          name: row.name || currentPayload.name || "",
+          updatedAt: now,
+        },
+        req: { localAuth: { user: { username: actor } } },
+        preserveVariantOptions: config.preserveVariantOptions,
+        protectedFields: config.protectedFields,
+        protectedVariantFields: config.protectedFields,
+      });
+
+      const oldPrice = toNumber(currentPayload[config.priceField]);
+      const saved = await upsertJsonRecord(db, config.tableName, sanitizedPayload);
+      await upsertStockReadModel(db, saved, {
+        sourceType: config.sourceType,
+        sourceCollection: config.tableName,
+        lastSyncedFrom: "pricing_rules.batch_apply",
+      });
+      await createAuditLog({
+        module: "pricing_rules",
+        action: "apply_price",
+        entityType: config.sourceType,
+        entityId: row.id,
+        actor,
+        description: `Pricing rule ${rule.name} diterapkan ke ${row.name || row.code || row.id}`,
+        metadata: {
+          pricingRuleId: rule.id,
+          pricingRuleCode: rule.code,
+          targetType,
+          oldPrice,
+          newPrice: update.newPrice,
+        },
+      });
+      updatedItems.push({
+        id: row.id,
+        name: saved.name || row.name || "",
+        oldPrice,
+        newPrice: update.newPrice,
+        versionToken: saved.updatedAt || null,
+      });
+    }
+
+    await createAuditLog({
+      module: "pricing_rules",
+      action: "apply_batch",
+      entityType: "pricing_rule",
+      entityId: rule.id,
+      actor,
+      description: `Pricing rule ${rule.name} diterapkan secara atomic ke ${updatedItems.length} item`,
+      metadata: {
+        targetType,
+        updatedCount: updatedItems.length,
+        itemIds: updatedItems.map((item) => item.id),
+      },
+    });
+
+    await db.run("COMMIT");
+    return {
+      ruleId: rule.id,
+      targetType,
+      updatedCount: updatedItems.length,
+      updatedItems,
+    };
+  } catch (error) {
+    await db.run("ROLLBACK").catch(() => {});
+    throw error;
+  }
+};
+
 module.exports = {
+  applyPricingRuleBatch,
   createPricingRule,
   generatePricingRuleCode,
   getPricingRuleById,

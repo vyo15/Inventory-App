@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button, Col, Input, Select, Tag, Typography, message } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
 import SummaryStatGrid from "../../components/Layout/Display/SummaryStatGrid";
 import EmptyStateBlock from "../../components/Layout/Feedback/EmptyStateBlock";
 import { getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
@@ -16,17 +15,16 @@ import {
 import { formatCurrencyId } from "../../utils/formatters/currencyId";
 import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId } from "../../utils/formatters/numberId";
+import {
+  buildFinanceMonthOptions,
+  buildFinanceYearSelectOptions,
+  getCurrentFinanceYear,
+} from "./helpers/financePeriodHelpers";
 
 const { Search } = Input;
 const { Text } = Typography;
 
-const MONTH_OPTIONS = [
-  { label: "Semua Bulan", value: "all" },
-  ...Array.from({ length: 12 }).map((_, index) => ({
-    label: dayjs().month(index).format("MMMM"),
-    value: index,
-  })),
-];
+const MONTH_OPTIONS = buildFinanceMonthOptions({ includeAll: true });
 
 const DIRECTION_OPTIONS = [
   { label: "Semua Arah", value: "all" },
@@ -64,25 +62,17 @@ const getSourceTagColor = (sourceModule) => {
   return "default";
 };
 
-const buildYearOptions = () => {
-  const currentYear = dayjs().year();
-  return Array.from({ length: 8 }).map((_, index) => {
-    const year = currentYear + 1 - index;
-    return { label: String(year), value: year };
-  });
-};
-
 const MoneyMovementLedger = () => {
   const [ledgerRows, setLedgerRows] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedYear, setSelectedYear] = useState(dayjs().year());
+  const [selectedYear, setSelectedYear] = useState(getCurrentFinanceYear());
   const [selectedMonth, setSelectedMonth] = useState("all");
   const [selectedDirection, setSelectedDirection] = useState("all");
   const [selectedSource, setSelectedSource] = useState("all");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [selectedLimit, setSelectedLimit] = useState(MONEY_MOVEMENT_LEDGER_DEFAULT_LIMIT);
 
-  const yearOptions = useMemo(() => buildYearOptions(), []);
+  const yearOptions = useMemo(() => buildFinanceYearSelectOptions(), []);
 
   const fetchLedgerRows = async () => {
     setLoading(true);

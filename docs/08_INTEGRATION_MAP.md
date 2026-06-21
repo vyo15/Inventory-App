@@ -95,6 +95,8 @@ Aturan:
 - Stock mutation tidak boleh dibuat di UI.
 - Item bervarian wajib membawa `variantKey`.
 - Adjustment keluar wajib validasi available stock.
+- Deteksi mode varian tidak boleh memakai keberadaan array kosong; resolver memilih `variants` non-empty lalu `variantOptions` non-empty.
+- Master/varian nonaktif ditolak untuk mutation normal. Return historis memakai override internal ter-audit, bukan flag dari request client.
 - Inventory log wajib memakai referensi bisnis manusiawi.
 - Technical database ID tidak boleh menjadi display audit utama.
 
@@ -149,6 +151,21 @@ Return form
 ```
 
 Return bukan sales cancel tersembunyi. Return adalah jalur resmi barang kembali dan wajib memiliki relasi Sales.
+
+## Pricing Rule batch
+
+```text
+Pricing Rules preview
+→ POST /api/pricing-rules/:id/apply
+→ validasi rule + target + expectedVersion seluruh item
+→ BEGIN IMMEDIATE TRANSACTION
+→ update harga minimal Product/Raw Material
+→ preserve stok/HPP + sync stock read model
+→ audit item + audit batch
+→ COMMIT seluruh batch atau ROLLBACK seluruhnya
+```
+
+Frontend tidak boleh menerapkan Pricing Rule massal melalui loop direct update master. Satu item stale/gagal harus membatalkan seluruh batch agar harga tidak berubah sebagian.
 
 ## Finance
 

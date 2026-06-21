@@ -401,7 +401,7 @@ Contoh final:
 - Production Step: `STP-001`
 
 Catatan current state:
-- Source terbaru memakai helper `businessCodeGenerator.js` untuk generator kode. Wrapper produksi lama sudah dihapus setelah audit usage membuktikan tidak ada pemanggil aktif.
+- Source aktual menghasilkan kode melalui endpoint/backend SQLite `*/generate-code` dan generator service domain terkait. Helper frontend `businessCodeGenerator.js` serta wrapper counter lamanya sudah dihapus setelah audit import membuktikan tidak ada pemanggil aktif.
 - Production Step sudah memakai generator `STP-001` lokal di service step.
 - Collision kode harian memakai prefix query pada document ID dan field kode bisnis terkait untuk baseline data historis. Batch 16B menambahkan counter atomic `business_code_counters` untuk Sales/Purchases/Returns agar create paralel tidak memakai nomor yang sama.
 
@@ -725,7 +725,10 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - `stock` tetap wajib disimpan sebagai alias kompatibilitas dan nilainya harus sama dengan `currentStock`.
 - `reservedStock` wajib angka aman dan tidak boleh membuat available negatif.
 - `availableStock` wajib dihitung dari `currentStock - reservedStock` dengan batas minimum 0.
+- Stock-out wajib dibandingkan dengan `availableStock` terbaru di Stock Engine dalam transaction yang sama; validasi UI/service pemanggil tidak cukup.
+- `reservedStock` tidak boleh melebihi `currentStock`. Mutation yang akan membuat invariant tersebut rusak wajib ditolak tanpa partial write.
 - Semua writer varian wajib memakai helper pusat `variantStockNormalizer` atau helper lama yang sudah delegasi ke helper pusat.
+- Resolver compatibility wajib memilih `variants` yang non-empty, lalu fallback ke `variantOptions` yang non-empty. Array `variants: []` tidak boleh menutupi data legacy dan tidak boleh otomatis dianggap sebagai mode varian.
 - Master item bervarian wajib menyimpan `currentStock`, `stock`, `reservedStock`, dan `availableStock` berdasarkan total varian.
 - Untuk Product dan Semi Finished, minimum stok final adalah field master: `products.minStockAlert` dan `semi_finished_materials.minStockAlert`, berlaku untuk item non-varian maupun bervarian.
 - `variants[].minStockAlert` pada Product/Semi Finished hanya data historis/compatibility field jika masih ada di data historis/helper generic; UI dan service master tidak boleh menjadikannya source utama threshold low-stock.
@@ -746,7 +749,11 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - `archivedVariants[]` wajib menyimpan `variantKey`, label/nama/kode varian, snapshot stok terakhir, `isArchived=true`, `isActive=false`, `archivedAt`, `archivedBy`, dan `archiveReason`.
 - Varian arsip tidak boleh muncul sebagai pilihan transaksi baru, tetapi boleh ditampilkan di detail master sebagai audit/history.
 - Jika user membuat lagi varian dengan nama/struktur yang sama seperti arsip, service wajib restore `variantKey` lama dari `archivedVariants[]`, menghapusnya dari arsip aktif, dan menulis `restoredAt/restoredBy/restoreReason`.
-- Duplicate active variant tetap wajib ditolak; hanya satu varian aktif yang boleh memakai nama/struktur/`variantKey` yang sama.
+- Duplicate varian aktif maupun nonaktif dalam payload master wajib ditolak; satu bucket existing tidak boleh direferensikan oleh dua baris edit.
+- Referensi transaksi/produksi historis boleh dicocokkan melalui `variantKey`, label, kode, atau SKU, tetapi bucket final tetap mempertahankan `variantKey` immutable.
+- Create master bervarian wajib memiliki minimal satu varian aktif.
+- Mutation normal pada master/varian nonaktif atau archived wajib ditolak. Override hanya boleh berasal dari backend flow historis resmi, memiliki alasan internal, dan tercatat di audit metadata.
+- Return historis yang valid boleh memulihkan varian archived zero-stock dengan `variantKey` lama. Stock mutation biasa tidak boleh melakukan restore tersebut.
 - `variantModeHistory[]` adalah audit ringkas untuk event `variant_mode_enabled`, `variant_mode_disabled`, `variant_archived`, dan `variant_restored`; history ini tidak menggantikan inventory log stok.
 
 ### 15.1.1 Guard backend edit master inventory
@@ -776,6 +783,8 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - `PricingModeSwitch` hanya shared UI switch Manual/Rule, bukan source formula pricing, bukan validation service, bukan query backend/database, dan bukan tempat auto-preview.
 - Auto-preview Product dan Raw Material tetap local di halaman masing-masing kecuali ada audit patch terpisah yang membuktikan shared hook lebih aman.
 - PricingRules preview/apply tetap skip item Manual dan hanya memproses item yang memang berada pada mode Rule/valid.
+- Apply Pricing Rule SQLite wajib memakai endpoint batch atomic. Seluruh item membawa `expectedVersion`; satu conflict atau item invalid menyebabkan seluruh batch rollback.
+- Frontend tidak boleh melakukan loop direct `PUT` Product/Raw Material untuk apply massal karena dapat menghasilkan partial apply.
 
 ## 17. Rule Maintenance & Backup Data Aman
 

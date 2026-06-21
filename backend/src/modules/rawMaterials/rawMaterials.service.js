@@ -24,5 +24,6 @@ const getRawMaterialsRouterConfig = () => ({
 });
 
 module.exports = {
+  RAW_MATERIAL_VALUATION_FIELDS,
   getRawMaterialsRouterConfig,
 };

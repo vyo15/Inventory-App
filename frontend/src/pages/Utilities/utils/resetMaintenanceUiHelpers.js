@@ -94,7 +94,6 @@ export const ACTION_RISK_META = {
 };
 
 export const AUDIT_SUMMARY_AREAS = [
-  { key: "data_quality", label: "Data Quality", collection: "mixed", source: "dataQualityAudit" },
   { key: "hpp_reconcile", label: "HPP Reconcile", collection: "production_work_logs", source: "hppReconcileAudit" },
   { key: "master_code", label: "Kode Master", collection: "master", source: "masterCodeAudit" },
   { key: "stock", label: "Stok Umum", collection: "master stok", source: "stockAudit" },
@@ -167,7 +166,7 @@ export const resetStatisticValueStyle = {
 export const TRANSACTION_SIDE_EFFECT_CONFIRM_KEYWORD = "REPAIR TRANSAKSI";
 
 // -----------------------------------------------------------------------------
-// IMS NOTE [AKTIF/UI ONLY] — helper presentasi Data Quality Audit.
+// IMS NOTE [AKTIF/UI ONLY] — helper presentasi ringkasan audit maintenance.
 // Fungsi: menyamakan warna issue dan wording summary tanpa mengubah logic audit,
 // repair, atau kategori business rule.
 // -----------------------------------------------------------------------------

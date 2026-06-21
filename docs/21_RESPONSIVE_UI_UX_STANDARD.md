@@ -102,7 +102,7 @@ Docs tidak boleh mengalahkan source aktual. Jika dokumen ini berbeda dengan file
 
 ### Telepon
 
-- Daftar operasional memakai `DataTableView`/`ResponsiveDataView` dengan `mobileCardConfig` bila tersedia.
+- Daftar operasional memakai `DataTableView` dengan `mobileCardConfig` bila tersedia.
 - Mobile card menampilkan judul, subtitle, status, metadata utama, dan maksimal dua action utama.
 - Detail panjang masuk `MobileDetailDrawer`; jangan memenuhi card utama.
 - Form panjang memakai `ResponsiveFormSection` dan turun menjadi 1 kolom.

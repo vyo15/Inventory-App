@@ -499,6 +499,10 @@ const commitReturn = async ({ payload = {}, actor = "system" } = {}) => {
         actor,
         transactionType: "return",
         transactionPayload: { ...body, item },
+        allowInactiveSource: true,
+        allowInactiveVariant: true,
+        allowArchivedVariantRestore: true,
+        inactiveOverrideReason: "Retur historis yang terhubung ke penjualan sah.",
       });
       mutationResults.push(result);
     }

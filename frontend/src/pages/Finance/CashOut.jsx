@@ -27,6 +27,12 @@ import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { createCashOutTransaction, deleteCashOutTransaction, listenCashOutRecords } from "../../services/Finance/financeService";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
+import {
+  buildFinanceMonthOptions,
+  buildFinanceRecordYearOptions,
+  filterFinanceRecordsByPeriod,
+  getCurrentFinanceYear,
+} from "./helpers/financePeriodHelpers";
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -37,10 +43,7 @@ import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/La
 
 const { Option } = Select;
 
-const MONTH_OPTIONS = Array.from({ length: 12 }).map((_, index) => ({
-  label: dayjs().month(index).format("MMMM"),
-  value: index,
-}));
+const MONTH_OPTIONS = buildFinanceMonthOptions();
 
 // =========================
 // SECTION: Sumber expense
@@ -107,7 +110,7 @@ const CashOut = () => {
   const [loading, setLoading] = useState(true);
   const [form] = Form.useForm();
 
-  const currentYear = dayjs().year();
+  const currentYear = getCurrentFinanceYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState("all");
 
@@ -135,26 +138,18 @@ const CashOut = () => {
   // =========================
   // SECTION: Derived data filter & summary
   // =========================
-  const yearOptions = useMemo(() => {
-    const availableYears = cashOuts
-      .map((item) => (item.date?.toDate ? dayjs(item.date.toDate()).year() : null))
-      .filter(Boolean);
+  const yearOptions = useMemo(
+    () => buildFinanceRecordYearOptions(cashOuts, currentYear),
+    [cashOuts, currentYear],
+  );
 
-    return [...new Set([currentYear, ...availableYears])].sort((left, right) => right - left);
-  }, [cashOuts, currentYear]);
-
-  const filteredCashOuts = useMemo(() => {
-    return cashOuts.filter((item) => {
-      if (!item.date?.toDate) return false;
-
-      const itemDate = dayjs(item.date.toDate());
-      const matchesYear = itemDate.year() === selectedYear;
-      const matchesMonth =
-        selectedMonth === "all" ? true : itemDate.month() === Number(selectedMonth);
-
-      return matchesYear && matchesMonth;
-    });
-  }, [cashOuts, selectedMonth, selectedYear]);
+  const filteredCashOuts = useMemo(
+    () => filterFinanceRecordsByPeriod(cashOuts, {
+      year: selectedYear,
+      month: selectedMonth,
+    }),
+    [cashOuts, selectedMonth, selectedYear],
+  );
 
   const summary = useMemo(() => {
     return filteredCashOuts.reduce(

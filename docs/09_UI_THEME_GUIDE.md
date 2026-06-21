@@ -580,7 +580,7 @@ Route preview UI-only lama sudah dihapus dari aplikasi operasional. Standar mobi
 Standar mobile sekarang bersifat aktif untuk seluruh project IMS:
 
 - `DataTableView` adalah implementasi utama untuk pola **desktop table + mobile card/list**.
-- `ResponsiveDataView` hanya alias penamaan standar yang mengarah ke `DataTableView`, supaya page baru tidak membuat implementasi table/card kedua.
+- `DataTableView` adalah nama dan implementasi canonical untuk desktop table + mobile card/list. Page baru tidak boleh membuat alias atau implementasi table/card kedua.
 - `MobileActionMenu` dipakai untuk desain action card baru: maksimal dua action utama, sisanya titik tiga.
 - `MobileFilterDrawer` dipakai untuk filter lanjutan mobile; search boleh tetap di halaman, filter detail masuk drawer bawah.
 - `MobileDetailDrawer` dipakai untuk detail panjang card mobile; detail tidak boleh dipaksa masuk list utama.

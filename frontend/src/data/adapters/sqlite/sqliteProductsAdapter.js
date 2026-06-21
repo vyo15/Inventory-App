@@ -1,3 +1,7 @@
+import {
+  inferVariantMode,
+  resolveVariantSourceList,
+} from "../../../utils/variants/variantStockNormalizer";
 import { createSqliteJsonRecordAdapter } from "./sqliteJsonRecordAdapterFactory";
 
 const toNumber = (value = 0) => {
@@ -9,13 +13,14 @@ export const normalizeProductRecord = (record = {}) => {
   const currentStock = toNumber(record.currentStock ?? record.stock ?? 0);
   const reservedStock = toNumber(record.reservedStock || 0);
   const minStockAlert = toNumber(record.minStockAlert || 0);
+  const variants = resolveVariantSourceList(record);
   return {
     ...record,
     code: record.code || record.productCode || "",
     productCode: record.productCode || record.code || "",
     name: record.name || "",
-    hasVariants: record.hasVariants === true || (Array.isArray(record.variants) && record.variants.length > 0),
-    variants: Array.isArray(record.variants) ? record.variants : [],
+    hasVariants: inferVariantMode(record),
+    variants,
     currentStock,
     stock: currentStock,
     reservedStock,

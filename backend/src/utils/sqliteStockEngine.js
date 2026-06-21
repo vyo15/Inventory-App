@@ -28,6 +28,25 @@ const toInteger = (value = 0) => {
 const normalizeText = (value) => String(value ?? "").trim();
 const nowIso = () => new Date().toISOString();
 
+const resolveInventoryVariantCollection = (payload = {}) => {
+  const variants = Array.isArray(payload.variants) ? payload.variants : [];
+  const variantOptions = Array.isArray(payload.variantOptions) ? payload.variantOptions : [];
+  const sourceVariants = variants.length > 0
+    ? variants
+    : variantOptions.length > 0
+      ? variantOptions
+      : [];
+
+  return {
+    variants: sourceVariants,
+    hasVariants: payload.hasVariants === true
+      || payload.hasVariantOptions === true
+      || sourceVariants.length > 0,
+    mirrorVariantOptions: payload.hasVariantOptions === true
+      || Array.isArray(payload.variantOptions),
+  };
+};
+
 
 const getTableForSourceType = (sourceType = "") => {
   const tableName = SOURCE_TABLES[String(sourceType || "").trim().toLowerCase()];
@@ -53,60 +72,195 @@ const toRowPayload = (row = {}) => ({
   minStockAlert: row.min_stock_alert ?? 0,
 });
 
-const getVariantKey = (variant = {}) => normalizeText(variant.variantKey || variant.key || variant.id || variant.color || variant.name).toLowerCase();
+const getVariantKey = (variant = {}) => normalizeText(
+  variant.variantKey
+    || variant.key
+    || variant.id
+    || variant.variantId
+    || variant.variantCode
+    || variant.sku
+    || variant.variantLabel
+    || variant.color
+    || variant.name,
+).toLowerCase();
 
-const applyStockDeltaToPayload = (payload = {}, { deltaCurrent = 0, variantKey = "" } = {}) => {
+const getVariantReferenceTokens = (variant = {}) => Array.from(new Set([
+  variant.variantKey,
+  variant.key,
+  variant.id,
+  variant.variantId,
+  variant.variantCode,
+  variant.code,
+  variant.sku,
+  variant.variantLabel,
+  variant.label,
+  variant.variantName,
+  variant.color,
+  variant.name,
+].map((value) => normalizeText(value).toLowerCase()).filter(Boolean)));
+
+const matchesVariantReference = (variant = {}, reference = "") => {
+  const normalizedReference = normalizeText(reference).toLowerCase();
+  return Boolean(normalizedReference) && getVariantReferenceTokens(variant).includes(normalizedReference);
+};
+
+const applyStockDeltaToPayload = (payload = {}, {
+  deltaCurrent = 0,
+  variantKey = "",
+  allowInactiveVariant = false,
+  allowArchivedVariantRestore = false,
+  actor = "system",
+  overrideReason = "",
+} = {}) => {
   const delta = toInteger(deltaCurrent);
-  const hasVariants = payload.hasVariants === true || payload.hasVariantOptions === true || Array.isArray(payload.variants) || Array.isArray(payload.variantOptions);
+  const resolvedVariants = resolveInventoryVariantCollection(payload);
   const normalizedVariantKey = normalizeText(variantKey).toLowerCase();
+  const archivedVariants = Array.isArray(payload.archivedVariants) ? payload.archivedVariants : [];
+  const archivedVariantMatch = normalizedVariantKey
+    ? archivedVariants.find((variant) => matchesVariantReference(variant, normalizedVariantKey))
+    : null;
+  const restoresDisabledVariantMode = !resolvedVariants.hasVariants
+    && Boolean(archivedVariantMatch)
+    && allowArchivedVariantRestore;
+  const hasVariants = resolvedVariants.hasVariants || restoresDisabledVariantMode;
   let nextPayload = { ...payload };
+
+  if (restoresDisabledVariantMode && !isStockSnapshotEmpty(payload)) {
+    throw createInventoryGuardError(
+      "Varian arsip tidak dapat dipulihkan karena stok master non-varian sudah terisi. Kosongkan stok melalui flow resmi lebih dulu.",
+      "INVENTORY_VARIANT_MODE_RESTORE_BLOCKED",
+      409,
+    );
+  }
 
   if (hasVariants && !normalizedVariantKey) {
     throw new Error("Item memiliki varian. Pilih varian agar mutasi stok masuk ke sumber yang benar.");
   }
 
   if (hasVariants && normalizedVariantKey) {
-    const sourceVariants = Array.isArray(payload.variants)
-      ? payload.variants
-      : Array.isArray(payload.variantOptions)
-        ? payload.variantOptions
-        : [];
+    const sourceVariants = resolvedVariants.variants;
     let found = false;
+    let reactivatedVariant = null;
     const nextVariants = sourceVariants.map((variant) => {
-      if (getVariantKey(variant) !== normalizedVariantKey) return variant;
+      if (!matchesVariantReference(variant, normalizedVariantKey)) return variant;
       found = true;
-      const currentStock = toInteger(variant.currentStock ?? variant.stock ?? 0) + delta;
-      const reservedStock = toInteger(variant.reservedStock ?? 0);
-      if (currentStock < 0) {
-        throw new Error(`Stok varian ${variant.variantLabel || variant.color || normalizedVariantKey} tidak boleh minus.`);
+      if ((variant.isActive === false || variant.isArchived === true) && !allowInactiveVariant) {
+        throw createInventoryGuardError(
+          `Varian ${getVariantDisplayName(variant)} tidak aktif dan tidak boleh dimutasi lewat transaksi normal.`,
+          "INVENTORY_VARIANT_INACTIVE",
+          409,
+        );
       }
-      return {
+      const before = assertStockSnapshotValid(variant, `Stok varian ${getVariantDisplayName(variant)}`);
+      if (delta < 0 && Math.abs(delta) > before.availableStock) {
+        throw createInventoryGuardError(
+          `Stok tersedia varian ${getVariantDisplayName(variant)} tidak mencukupi. Tersedia ${before.availableStock}.`,
+          "INVENTORY_AVAILABLE_STOCK_INSUFFICIENT",
+          409,
+        );
+      }
+      const currentStock = before.currentStock + delta;
+      const reservedStock = before.reservedStock;
+      const after = assertStockSnapshotValid(
+        { currentStock, reservedStock },
+        `Stok varian ${getVariantDisplayName(variant)}`,
+      );
+      const nextVariant = {
         ...variant,
-        currentStock,
-        stock: currentStock,
-        reservedStock,
-        availableStock: Math.max(currentStock - reservedStock, 0),
+        ...after,
+        isActive: allowInactiveVariant ? true : variant.isActive !== false,
+        isArchived: false,
         updatedAt: nowIso(),
       };
+      if ((variant.isActive === false || variant.isArchived === true) && allowInactiveVariant) {
+        nextVariant.restoredAt = nowIso();
+        nextVariant.restoredBy = actor;
+        nextVariant.restoreReason = overrideReason || "Varian dipulihkan oleh transaksi historis yang sah.";
+        reactivatedVariant = nextVariant;
+      }
+      return nextVariant;
     });
 
-    if (!found) {
-      throw new Error("Varian stok tidak ditemukan. Mutasi dibatalkan agar stok tidak masuk ke master/default.");
+    if (reactivatedVariant) {
+      nextPayload.variantModeHistory = [
+        ...(Array.isArray(payload.variantModeHistory) ? payload.variantModeHistory : []),
+        buildVariantHistoryEntry("variant_reactivated_by_stock_mutation", {
+          actor,
+          now: nowIso(),
+          reason: reactivatedVariant.restoreReason,
+          variant: reactivatedVariant,
+        }),
+      ].slice(-50);
     }
 
-    const totals = nextVariants.reduce((acc, variant) => {
-      const currentStock = toInteger(variant.currentStock ?? variant.stock ?? 0);
-      const reservedStock = toInteger(variant.reservedStock ?? 0);
-      acc.currentStock += currentStock;
-      acc.reservedStock += reservedStock;
-      acc.availableStock += Math.max(currentStock - reservedStock, 0);
+    if (!found) {
+      const archivedVariant = archivedVariantMatch;
+      if (
+        archivedVariant
+        && allowArchivedVariantRestore
+        && delta > 0
+        && isStockSnapshotEmpty(archivedVariant)
+      ) {
+        const restoredBase = removeArchiveMetadata(archivedVariant);
+        const restoredStock = assertStockSnapshotValid(
+          { currentStock: delta, reservedStock: 0 },
+          `Stok varian ${getVariantDisplayName(archivedVariant)}`,
+        );
+        const restoredVariant = {
+          ...restoredBase,
+          ...restoredStock,
+          isActive: true,
+          isArchived: false,
+          restoredAt: nowIso(),
+          restoredBy: actor,
+          restoreReason: overrideReason || "Varian dipulihkan oleh transaksi historis yang sah.",
+          updatedAt: nowIso(),
+        };
+        nextVariants.push(restoredVariant);
+        nextPayload.archivedVariants = removeArchivedVariant(archivedVariants, archivedVariant);
+        nextPayload.variantModeHistory = [
+          ...(Array.isArray(payload.variantModeHistory) ? payload.variantModeHistory : []),
+          buildVariantHistoryEntry("variant_restored_by_stock_mutation", {
+            actor,
+            now: nowIso(),
+            reason: restoredVariant.restoreReason,
+            variant: restoredVariant,
+          }),
+        ].slice(-50);
+        found = true;
+      }
+    }
+
+    if (!found) {
+      throw createInventoryGuardError(
+        "Varian stok tidak ditemukan. Mutasi dibatalkan agar stok tidak masuk ke master/default.",
+        "INVENTORY_VARIANT_NOT_FOUND",
+        409,
+      );
+    }
+
+    const normalizedNextVariants = nextVariants.map((variant) => ({
+      ...variant,
+      ...assertStockSnapshotValid(variant, `Stok varian ${getVariantDisplayName(variant)}`),
+    }));
+    const totals = normalizedNextVariants.reduce((acc, variant) => {
+      const stock = getStockSnapshot(variant);
+      acc.currentStock += stock.currentStock;
+      acc.reservedStock += stock.reservedStock;
+      acc.availableStock += stock.availableStock;
       return acc;
     }, { currentStock: 0, reservedStock: 0, availableStock: 0 });
 
     nextPayload = {
       ...nextPayload,
-      variants: nextVariants,
-      variantOptions: Array.isArray(payload.variantOptions) ? nextVariants : payload.variantOptions,
+      variants: normalizedNextVariants,
+      variantOptions: resolvedVariants.mirrorVariantOptions ? normalizedNextVariants : payload.variantOptions,
+      hasVariants: true,
+      hasVariantOptions: resolvedVariants.mirrorVariantOptions ? true : payload.hasVariantOptions,
+      variantCount: normalizedNextVariants.length,
+      activeVariantCount: normalizedNextVariants.filter(
+        (variant) => variant.isActive !== false && variant.isArchived !== true,
+      ).length,
       currentStock: totals.currentStock,
       stock: totals.currentStock,
       reservedStock: totals.reservedStock,
@@ -114,17 +268,28 @@ const applyStockDeltaToPayload = (payload = {}, { deltaCurrent = 0, variantKey =
       updatedAt: nowIso(),
     };
   } else {
-    const currentStock = toInteger(payload.currentStock ?? payload.stock ?? 0) + delta;
-    const reservedStock = toInteger(payload.reservedStock ?? 0);
-    if (currentStock < 0) {
-      throw new Error("Stok tidak boleh minus. Mutasi dibatalkan.");
+    if (normalizedVariantKey) {
+      throw createInventoryGuardError(
+        "Item tidak memiliki varian. Hapus pilihan varian sebelum memproses transaksi.",
+        "INVENTORY_VARIANT_UNEXPECTED",
+        409,
+      );
     }
+    const before = assertStockSnapshotValid(payload, "Stok master");
+    if (delta < 0 && Math.abs(delta) > before.availableStock) {
+      throw createInventoryGuardError(
+        `Stok tersedia tidak mencukupi. Tersedia ${before.availableStock}.`,
+        "INVENTORY_AVAILABLE_STOCK_INSUFFICIENT",
+        409,
+      );
+    }
+    const after = assertStockSnapshotValid(
+      { currentStock: before.currentStock + delta, reservedStock: before.reservedStock },
+      "Stok master",
+    );
     nextPayload = {
       ...nextPayload,
-      currentStock,
-      stock: currentStock,
-      reservedStock,
-      availableStock: Math.max(currentStock - reservedStock, 0),
+      ...after,
       updatedAt: nowIso(),
     };
   }
@@ -142,7 +307,7 @@ const extractColumns = (payload = {}) => {
     isActive: payload.isActive === false || payload.status === "inactive" || payload.status === "deleted" ? 0 : 1,
     currentStock,
     reservedStock,
-    availableStock: toInteger(payload.availableStock ?? Math.max(currentStock - reservedStock, 0)),
+    availableStock: Math.max(currentStock - reservedStock, 0),
     minStockAlert: toInteger(payload.minStockAlert ?? payload.minStock ?? 0),
   };
 };
@@ -151,7 +316,15 @@ const upsertJsonRecord = async (db, tableName, payload = {}) => {
   const id = normalizeText(payload.id || payload.code || crypto.randomUUID());
   const columns = extractColumns({ ...payload, id });
   const existing = await db.get(`SELECT id FROM ${tableName} WHERE id = ?`, [id]);
-  const finalPayload = { ...payload, id, updatedAt: payload.updatedAt || nowIso() };
+  const finalPayload = {
+    ...payload,
+    id,
+    currentStock: columns.currentStock,
+    stock: columns.currentStock,
+    reservedStock: columns.reservedStock,
+    availableStock: columns.availableStock,
+    updatedAt: payload.updatedAt || nowIso(),
+  };
 
   if (existing) {
     await db.run(
@@ -178,6 +351,11 @@ const upsertStockReadModel = async (db, itemPayload = {}, { sourceType, sourceCo
   const id = `${resolvedSourceType}__${sourceId}`;
   const currentStock = toInteger(itemPayload.currentStock ?? itemPayload.stock ?? 0);
   const reservedStock = toInteger(itemPayload.reservedStock ?? 0);
+  const resolvedVariants = resolveInventoryVariantCollection(itemPayload);
+  const normalizedVariants = resolvedVariants.variants.map((variant) => ({
+    ...variant,
+    ...assertStockSnapshotValid(variant, `Stok varian ${getVariantDisplayName(variant)}`),
+  }));
   const payload = {
     id,
     code: itemPayload.code || itemPayload.productCode || itemPayload.materialCode || id,
@@ -188,9 +366,10 @@ const upsertStockReadModel = async (db, itemPayload = {}, { sourceType, sourceCo
     currentStock,
     stock: currentStock,
     reservedStock,
-    availableStock: toInteger(itemPayload.availableStock ?? Math.max(currentStock - reservedStock, 0)),
+    availableStock: Math.max(currentStock - reservedStock, 0),
     minStockAlert: toInteger(itemPayload.minStockAlert ?? itemPayload.minStock ?? 0),
-    variants: Array.isArray(itemPayload.variants) ? itemPayload.variants : [],
+    variants: normalizedVariants,
+    hasVariants: resolvedVariants.hasVariants,
     status: itemPayload.status || "active",
     isActive: itemPayload.isActive !== false,
     lastSyncedFrom,
@@ -360,12 +539,12 @@ const assertNoDuplicateVariants = (variants = []) => {
   const keys = new Set();
   const signatures = new Set();
   for (const variant of variants) {
-    if (variant?.isArchived === true || variant?.isActive === false) continue;
+    if (variant?.isArchived === true) continue;
     const key = normalizeVariantToken(variant.variantKey || "");
     const signature = getCanonicalVariantSignature(variant);
     if ((key && keys.has(key)) || (signature && signatures.has(signature))) {
       throw createInventoryGuardError(
-        `Varian aktif ${getVariantDisplayName(variant)} duplikat. Gunakan nama/kode varian yang berbeda.`,
+        `Varian ${getVariantDisplayName(variant)} duplikat. Gunakan nama/kode varian yang berbeda.`,
         "INVENTORY_VARIANT_DUPLICATE",
         409,
       );
@@ -499,6 +678,13 @@ const reconcileInventoryVariants = ({
     const existing = findMatchingVariant(incoming, activeLookup);
     if (existing) {
       const existingKey = normalizeVariantToken(existing.variantKey || getVariantDisplayName(existing));
+      if (matchedExistingKeys.has(existingKey)) {
+        throw createInventoryGuardError(
+          `Varian ${getVariantDisplayName(existing)} dikirim lebih dari sekali. Gunakan satu baris untuk setiap variantKey.`,
+          "INVENTORY_VARIANT_DUPLICATE",
+          409,
+        );
+      }
       matchedExistingKeys.add(existingKey);
       const merged = mergeExistingVariant(incoming, existing, protectedVariantFields);
 
@@ -576,12 +762,9 @@ const reconcileInventoryVariants = ({
 };
 
 const normalizeInventoryMasterCreate = (payload = {}, { preserveVariantOptions = false } = {}) => {
-  const sourceVariants = Array.isArray(payload.variants)
-    ? payload.variants
-    : Array.isArray(payload.variantOptions)
-      ? payload.variantOptions
-      : [];
-  const hasVariants = payload.hasVariants === true || payload.hasVariantOptions === true || sourceVariants.length > 0;
+  const resolvedVariants = resolveInventoryVariantCollection(payload);
+  const sourceVariants = resolvedVariants.variants;
+  const { hasVariants } = resolvedVariants;
   const next = { ...payload };
 
   if (hasVariants) {
@@ -589,6 +772,13 @@ const normalizeInventoryMasterCreate = (payload = {}, { preserveVariantOptions =
     const variants = sourceVariants.map((variant, index) => normalizeVariantForCreate(variant, index, usedKeys));
     if (variants.length === 0) {
       throw createInventoryGuardError("Minimal satu varian wajib diisi.", "INVENTORY_VARIANT_REQUIRED", 400);
+    }
+    if (variants.every((variant) => variant.isActive === false || variant.isArchived === true)) {
+      throw createInventoryGuardError(
+        "Minimal satu varian aktif wajib tersedia saat membuat master bervarian.",
+        "INVENTORY_ACTIVE_VARIANT_REQUIRED",
+        400,
+      );
     }
     assertNoDuplicateVariants(variants);
     const totals = calculateVariantTotals(variants);
@@ -654,17 +844,12 @@ const sanitizeInventoryMasterUpdate = ({
 
   const actor = req?.localAuth?.user?.username || "system";
   const now = nowIso();
-  const existingVariants = Array.isArray(currentPayload.variants)
-    ? currentPayload.variants
-    : Array.isArray(currentPayload.variantOptions)
-      ? currentPayload.variantOptions
-      : [];
+  const currentResolvedVariants = resolveInventoryVariantCollection(currentPayload);
+  const existingVariants = currentResolvedVariants.variants;
   const archivedVariants = Array.isArray(currentPayload.archivedVariants)
     ? currentPayload.archivedVariants
     : [];
-  const currentHasVariants = currentPayload.hasVariants === true
-    || currentPayload.hasVariantOptions === true
-    || existingVariants.length > 0;
+  const currentHasVariants = currentResolvedVariants.hasVariants;
   const hasIncomingMode = Object.prototype.hasOwnProperty.call(incomingPayload, "hasVariants")
     || Object.prototype.hasOwnProperty.call(incomingPayload, "hasVariantOptions");
   const nextHasVariants = hasIncomingMode
@@ -672,11 +857,10 @@ const sanitizeInventoryMasterUpdate = ({
     : currentHasVariants;
   const hasIncomingVariants = Object.prototype.hasOwnProperty.call(incomingPayload, "variants")
     || Object.prototype.hasOwnProperty.call(incomingPayload, "variantOptions");
-  const incomingVariants = Array.isArray(incomingPayload.variants)
-    ? incomingPayload.variants
-    : Array.isArray(incomingPayload.variantOptions)
-      ? incomingPayload.variantOptions
-      : existingVariants;
+  const incomingResolvedVariants = resolveInventoryVariantCollection(incomingPayload);
+  const incomingVariants = hasIncomingVariants
+    ? incomingResolvedVariants.variants
+    : existingVariants;
   let next = { ...mergedPayload };
   let activeVariants = existingVariants;
   let nextArchived = archivedVariants;
@@ -755,6 +939,19 @@ const sanitizeInventoryMasterUpdate = ({
   }
 
   if (nextHasVariants) {
+    activeVariants = activeVariants.map((variant) => ({
+      ...variant,
+      ...assertStockSnapshotValid(variant, `Stok varian ${getVariantDisplayName(variant)}`),
+    }));
+    if (activeVariants.filter(
+      (variant) => variant.isActive !== false && variant.isArchived !== true,
+    ).length === 0) {
+      throw createInventoryGuardError(
+        "Minimal satu varian aktif wajib dipertahankan. Matikan mode varian hanya melalui flow stok 0.",
+        "INVENTORY_ACTIVE_VARIANT_REQUIRED",
+        409,
+      );
+    }
     const totals = calculateVariantTotals(activeVariants);
     Object.assign(next, {
       hasVariants: true,
@@ -840,11 +1037,7 @@ const createInventoryMasterRouteGuards = ({
       protectedVariantFields,
     }),
     validateDirectDelete: async ({ current, currentPayload }) => {
-      const variants = Array.isArray(currentPayload.variants)
-        ? currentPayload.variants
-        : Array.isArray(currentPayload.variantOptions)
-          ? currentPayload.variantOptions
-          : [];
+      const variants = resolveInventoryVariantCollection(currentPayload).variants;
       const archivedVariants = Array.isArray(currentPayload.archivedVariants)
         ? currentPayload.archivedVariants
         : [];
@@ -909,14 +1102,59 @@ const commitStockMutation = async (db, {
   actor = "system",
   transactionType = "stock_adjustment",
   transactionPayload = {},
+  allowInactiveSource = false,
+  allowInactiveVariant = false,
+  allowArchivedVariantRestore = false,
+  inactiveOverrideReason = "",
 } = {}) => {
   if (!sourceId) throw new Error("Source ID stok wajib tersedia.");
   const delta = toInteger(deltaCurrent);
   if (delta === 0) throw new Error("Qty mutasi stok tidak boleh 0.");
 
   const { tableName, payload } = await loadSourceItem(db, sourceType, sourceId);
+  const sourceInactive = payload.isActive === false
+    || ["inactive", "archived"].includes(normalizeText(payload.status).toLowerCase());
+  if (sourceInactive && !allowInactiveSource) {
+    throw createInventoryGuardError(
+      "Master inventory tidak aktif dan tidak boleh dimutasi lewat transaksi normal.",
+      "INVENTORY_SOURCE_INACTIVE",
+      409,
+    );
+  }
+  if (sourceInactive && allowInactiveSource && !normalizeText(inactiveOverrideReason)) {
+    throw createInventoryGuardError(
+      "Override mutasi master nonaktif wajib memiliki alasan internal.",
+      "INVENTORY_INACTIVE_OVERRIDE_REASON_REQUIRED",
+      500,
+    );
+  }
+  const normalizedVariantReference = normalizeText(variantKey).toLowerCase();
+  const variantsBeforeMutation = resolveInventoryVariantCollection(payload).variants;
+  const targetVariantBeforeMutation = normalizedVariantReference
+    ? variantsBeforeMutation.find((variant) => matchesVariantReference(variant, normalizedVariantReference))
+    : null;
+  const archivedVariantBeforeMutation = normalizedVariantReference
+    ? (Array.isArray(payload.archivedVariants) ? payload.archivedVariants : []).find(
+      (variant) => matchesVariantReference(variant, normalizedVariantReference),
+    )
+    : null;
+  const variantOverrideApplied = Boolean(
+    (targetVariantBeforeMutation
+      && (targetVariantBeforeMutation.isActive === false || targetVariantBeforeMutation.isArchived === true))
+    || (!targetVariantBeforeMutation && archivedVariantBeforeMutation && allowArchivedVariantRestore),
+  );
+  const inactiveOverrideApplied = sourceInactive || variantOverrideApplied;
+  const appliedOverrideReason = inactiveOverrideApplied ? inactiveOverrideReason : "";
+
   const beforeStock = toInteger(payload.currentStock ?? payload.stock ?? 0);
-  const nextPayload = applyStockDeltaToPayload(payload, { deltaCurrent: delta, variantKey });
+  const nextPayload = applyStockDeltaToPayload(payload, {
+    deltaCurrent: delta,
+    variantKey,
+    allowInactiveVariant,
+    allowArchivedVariantRestore,
+    actor,
+    overrideReason: appliedOverrideReason,
+  });
   const afterStock = toInteger(nextPayload.currentStock ?? nextPayload.stock ?? 0);
   await upsertJsonRecord(db, tableName, nextPayload);
   const stockReadModel = await upsertStockReadModel(db, nextPayload, {
@@ -942,6 +1180,8 @@ const commitStockMutation = async (db, {
     reason,
     notes,
     transactionType,
+    inactiveOverride: inactiveOverrideApplied,
+    inactiveOverrideReason: appliedOverrideReason,
     ...transactionPayload,
   };
 
@@ -959,7 +1199,16 @@ const commitStockMutation = async (db, {
     entityId: sourceId,
     actor,
     description: `Stock ${nextPayload.name || sourceId} berubah ${delta}`,
-    metadata: { referenceNumber: ref, beforeStock, afterStock, deltaCurrent: delta, variantKey, reason },
+    metadata: {
+      referenceNumber: ref,
+      beforeStock,
+      afterStock,
+      deltaCurrent: delta,
+      variantKey,
+      reason,
+      inactiveOverride: inactiveOverrideApplied,
+      inactiveOverrideReason: appliedOverrideReason,
+    },
   });
 
   return {
@@ -969,10 +1218,12 @@ const commitStockMutation = async (db, {
     beforeStock,
     afterStock,
     deltaCurrent: delta,
+    inactiveOverrideApplied,
   };
 };
 
 module.exports = {
+  applyStockDeltaToPayload,
   commitStockMutation,
   createInventoryMasterRouteGuards,
   insertEventRecord,
@@ -984,4 +1235,6 @@ module.exports = {
   toInteger,
   nowIso,
   getTableForSourceType,
+  matchesVariantReference,
+  resolveInventoryVariantCollection,
 };

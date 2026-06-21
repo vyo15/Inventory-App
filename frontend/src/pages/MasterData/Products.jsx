@@ -29,7 +29,6 @@ import {
 import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import { formatDateId } from '../../utils/formatters/dateId';
-import { formatStockWithUnitId } from '../../utils/formatters/stockUnit';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
 import PageSection from '../../components/Layout/Page/PageSection';
@@ -41,10 +40,7 @@ import InfoPopoverButton from '../../components/Layout/Feedback/InfoPopoverButto
 import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
 import { listCategories } from '../../data/repositories/categoriesRepository';
 
-import {
-  COLOR_VARIANT_MAP,
-  ensureAtLeastOneVariant,
-} from '../../utils/variants/variantHelpers';
+import { ensureAtLeastOneVariant } from '../../utils/variants/variantHelpers';
 import {
   createProduct,
   listenProducts,
@@ -55,10 +51,18 @@ import {
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
 import { buildSinglePricingPreview, listPricingRulesByTargetType } from '../../services/Pricing/pricingService';
 import PricingModeSwitch from '../../components/Pricing/PricingModeSwitch';
-import {
-  getVariantAwareStockStatusMeta,
-} from '../../utils/stock/stockHelpers';
 import { isVariantStockEmpty } from '../../utils/variants/variantArchiveHelpers';
+import {
+  buildFormValues,
+  compactCellClassNames,
+  DEFAULT_PRODUCT_VARIANT,
+  formatStockWithUnit,
+  getProductStatusMeta,
+  getProductStockSummary,
+  getRuleModeLabel,
+  getVariantDisplayLabel,
+  hasSafeZeroMasterStock,
+} from './helpers/productsPageHelpers';
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -70,119 +74,9 @@ const { Text } = Typography;
 const { TextArea } = Input;
 
 // -----------------------------------------------------------------------------
-// Builder nilai awal form produk.
-// Menjaga form create/edit tetap satu pola dan kompatibel dengan data historis.
+// Pure presentation/form helpers live in helpers/productsPageHelpers.js so this
+// page remains focused on data loading, guarded mutations, and drawer rendering.
 // -----------------------------------------------------------------------------
-const buildFormValues = (record = {}) => {
-  const hasVariants = record?.hasVariants === true || (record?.variants || []).length > 0;
-
-  return {
-    ...PRODUCT_DEFAULT_FORM,
-    ...record,
-    hasVariants,
-    variantLabel: record.variantLabel || 'Varian',
-    variants: hasVariants ? ensureAtLeastOneVariant(record.variants || []) : [],
-    currentStock: Number(record.currentStock || record.stock || 0),
-    reservedStock: Number(record.reservedStock || 0),
-    minStockAlert: Number(record.minStockAlert || 0),
-  };
-};
-
-// Helper detail drawer memakai formatter shared agar format stok + unit konsisten lintas master data.
-const formatStockWithUnit = formatStockWithUnitId;
-
-const getRuleModeLabel = (mode, ruleId, pricingRuleMap = {}) => {
-  if (mode !== 'rule') return 'Manual';
-  return `Pricing Rule${pricingRuleMap[ruleId] ? ` | ${pricingRuleMap[ruleId]}` : ''}`;
-};
-
-
-
-const DEFAULT_PRODUCT_VARIANT = {
-  color: '',
-  sku: '',
-  currentStock: 0,
-  reservedStock: 0,
-  averageCostPerUnit: 0,
-  isActive: true,
-};
-
-const getVariantDisplayLabel = (variant = {}, index = 0) =>
-  variant.variantLabel || variant.label || variant.name || COLOR_VARIANT_MAP[variant.color] || variant.color || `Varian ${index + 1}`;
-
-const hasSafeZeroMasterStock = (record = {}) => {
-  const currentStock = Number(record.currentStock ?? record.stock ?? 0);
-  const reservedStock = Number(record.reservedStock || 0);
-  const availableStock = Number(record.availableStock ?? Math.max(currentStock - reservedStock, 0));
-
-  return currentStock <= 0 && reservedStock <= 0 && availableStock <= 0;
-};
-
-// -----------------------------------------------------------------------------
-// Class helper presentasi tabel batch 1.
-// Semua metadata tabel diarahkan ke class global agar spacing dan dark mode
-// seragam, tanpa menulis inline style berulang.
-// -----------------------------------------------------------------------------
-const compactCellClassNames = {
-  stack: 'ims-cell-stack ims-cell-stack-tight',
-  meta: 'ims-cell-meta',
-};
-
-
-
-
-// -----------------------------------------------------------------------------
-// Status stok produk.
-// Disamakan dengan bahasa visual halaman master lain: nonaktif, kosong, rendah, aman.
-// -----------------------------------------------------------------------------
-const getProductStockSummary = (record = {}) => {
-  if (record?.hasVariants) {
-    const variants = Array.isArray(record.variants) ? record.variants : [];
-    const currentStock = variants.reduce((sum, item) => sum + Number(item?.currentStock || 0), 0);
-    const reservedStock = variants.reduce((sum, item) => sum + Number(item?.reservedStock || 0), 0);
-
-    return {
-      currentStock,
-      reservedStock,
-      availableStock: Math.max(currentStock - reservedStock, 0),
-    };
-  }
-
-  const currentStock = Number(record.currentStock ?? record.stock ?? 0);
-  const reservedStock = Number(record.reservedStock || 0);
-
-  return {
-    currentStock,
-    reservedStock,
-    availableStock: Number(record.availableStock ?? Math.max(currentStock - reservedStock, 0)),
-  };
-};
-
-const getProductStatusMeta = (record = {}) => {
-  const availableStock = Number(record.availableStock ?? record.currentStock ?? record.stock ?? 0);
-  const minStockAlert = Number(record.minStockAlert || 0);
-
-  if (record.isActive === false) {
-    return { color: 'default', label: 'Nonaktif' };
-  }
-
-  const variantStatusMeta = getVariantAwareStockStatusMeta(record, {
-    sourceType: 'product',
-    threshold: minStockAlert,
-  });
-
-  if (variantStatusMeta) return variantStatusMeta;
-
-  if (availableStock <= 0) {
-    return { color: 'red', label: 'Kosong' };
-  }
-
-  if (minStockAlert > 0 && availableStock <= minStockAlert) {
-    return { color: 'orange', label: 'Stok Rendah' };
-  }
-
-  return { color: 'green', label: 'Aman' };
-};
 
 const Products = () => {
   // ---------------------------------------------------------------------------

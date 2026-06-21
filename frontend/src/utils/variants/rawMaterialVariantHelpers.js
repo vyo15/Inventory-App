@@ -2,6 +2,7 @@ import { calculateAvailableStock, calculateWeightedAverage, toNumber } from '../
 import {
   calculateVariantStockTotals,
   normalizeVariantStockShape,
+  resolveVariantSourceList,
 } from './variantStockNormalizer';
 
 export const DEFAULT_RAW_MATERIAL_VARIANT = {
@@ -75,7 +76,7 @@ export const calculateRawMaterialVariantTotals = (variants = []) => {
 };
 
 export const buildRawMaterialVariantSummary = (item = {}) => {
-  const totals = calculateRawMaterialVariantTotals(item.variants || item.variantOptions || []);
+  const totals = calculateRawMaterialVariantTotals(resolveVariantSourceList(item));
 
   return {
     variantCount: totals.variantCount,
@@ -96,8 +97,11 @@ export const normalizeRawMaterialVariantReferences = (variants = []) =>
   }));
 
 export const enrichRawMaterialWithVariantTotals = (item = {}) => {
-  const hasVariants = item?.hasVariants === true || item?.hasVariantOptions === true;
-  const totals = calculateRawMaterialVariantTotals(item.variants || item.variantOptions || []);
+  const sourceVariants = resolveVariantSourceList(item);
+  const hasVariants = item?.hasVariants === true
+    || item?.hasVariantOptions === true
+    || sourceVariants.length > 0;
+  const totals = calculateRawMaterialVariantTotals(sourceVariants);
 
   if (!hasVariants) {
     const currentStock = toNumber(item?.currentStock ?? item?.stock ?? 0);
@@ -143,7 +147,7 @@ export const applyPurchaseToRawMaterial = (
   const currentAverage = toNumber(material?.averageActualUnitCost || 0);
 
   if (material?.hasVariants === true || material?.hasVariantOptions === true) {
-    const variants = normalizeRawMaterialVariants(material.variants || material.variantOptions || []);
+    const variants = normalizeRawMaterialVariants(resolveVariantSourceList(material));
     const targetKey = toVariantKey(variantKey || variantCode || variantName);
     const targetIndex = variants.findIndex((item) => item.variantKey === targetKey);
 

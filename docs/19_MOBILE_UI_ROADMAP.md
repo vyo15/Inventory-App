@@ -18,7 +18,7 @@ Dokumen ini menjadi standar kerja mobile untuk IMS Bunga Flanel. Setiap patch mo
 
 | Komponen | Fungsi | Catatan |
 | --- | --- | --- |
-| `DataTableView` / `ResponsiveDataView` | Desktop table, mobile card/list | Gunakan `mobileCardConfig` untuk list utama. |
+| `DataTableView` | Desktop table, mobile card/list | Gunakan `mobileCardConfig` untuk list utama. |
 | `MobileActionMenu` | Action card mobile | Maksimal 2 action utama, sisanya titik tiga. |
 | `MobileDetailDrawer` | Detail lengkap mobile | Full-screen/drawer untuk detail panjang. |
 | `ResponsiveFormSection` | Form mobile 1 kolom | Form panjang dipisah per section. |
@@ -183,7 +183,7 @@ Yang sudah dikunci:
 
 - `AppLayout` memakai responsive navigation matrix: floating dock desktop, Drawer kiri tablet, dan bottom navigation + bottom sheet pada telepon; overlay navigasi auto-close setelah route berubah.
 - `AppHeader`, `PageHeader`, `FilterBar`, modal, drawer, form, dan content shell diperkuat untuk portrait-first.
-- `DataTableView` menjadi `ResponsiveDataView` aktif: desktop tetap table, mobile memakai card/list bila `mobileCardConfig` tersedia.
+- `DataTableView` menjadi implementasi aktif: desktop tetap table, mobile memakai card/list bila `mobileCardConfig` tersedia.
 - `DataTableView` mendukung `MobileStateBlock` untuk loading/empty mobile dan siap memakai `MobileActionMenu` lewat `primaryActions` / `moreActions` untuk page baru.
 - `MobileFilterDrawer` ditambahkan sebagai standar filter lanjutan mobile untuk patch berikutnya.
 - Master Data, Inventory, Transactions, Production, Payroll/HPP, Finance, Reports, dan Maintenance yang sudah memakai `DataTableView + mobileCardConfig` mengikuti mode card/list di mobile.
@@ -362,6 +362,6 @@ Komponen foundation yang wajib dipakai ulang:
 - `SidebarMenu` di Drawer tablet.
 - `MobileBottomNavigation` untuk telepon.
 - `ModuleHub` untuk child route.
-- `DataTableView`/`ResponsiveDataView`, `MobileDetailDrawer`, `MobileFilterDrawer`, `MobileActionMenu`, dan `ResponsiveFormSection` untuk real pages.
+- `DataTableView`, `MobileDetailDrawer`, `MobileFilterDrawer`, `MobileActionMenu`, dan `ResponsiveFormSection` untuk real pages.
 
 QA detail dan Definition of Done tidak diduplikasi di sini; gunakan `docs/21_RESPONSIVE_UI_UX_STANDARD.md` dan `docs/06_TEST_CHECKLIST.md`.

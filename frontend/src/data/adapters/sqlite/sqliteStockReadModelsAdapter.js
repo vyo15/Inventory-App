@@ -1,20 +1,29 @@
 import { createSqliteJsonRecordAdapter } from "./sqliteJsonRecordAdapterFactory";
+import {
+  inferVariantMode,
+  resolveVariantSourceList,
+} from "../../../utils/variants/variantStockNormalizer";
 
-const normalizeRecord = (record = {}) => ({
-  ...record,
-  id: record.id || `${record.sourceType || "stock"}__${record.sourceId || record.code || ""}`,
-  sourceType: record.sourceType || "product",
-  sourceId: record.sourceId || record.id || "",
-  name: record.name || record.itemName || "",
-  currentStock: Math.round(Number(record.currentStock ?? record.stock ?? 0)),
-  stock: Math.round(Number(record.currentStock ?? record.stock ?? 0)),
-  reservedStock: Math.round(Number(record.reservedStock ?? 0)),
-  availableStock: Math.round(Number(record.availableStock ?? Math.max(Number(record.currentStock ?? record.stock ?? 0) - Number(record.reservedStock ?? 0), 0))),
-});
+export const normalizeStockReadModelRecord = (record = {}) => {
+  const variants = resolveVariantSourceList(record);
+  return {
+    ...record,
+    id: record.id || `${record.sourceType || "stock"}__${record.sourceId || record.code || ""}`,
+    sourceType: record.sourceType || "product",
+    sourceId: record.sourceId || record.id || "",
+    name: record.name || record.itemName || "",
+    currentStock: Math.round(Number(record.currentStock ?? record.stock ?? 0)),
+    stock: Math.round(Number(record.currentStock ?? record.stock ?? 0)),
+    reservedStock: Math.round(Number(record.reservedStock ?? 0)),
+    availableStock: Math.round(Number(record.availableStock ?? Math.max(Number(record.currentStock ?? record.stock ?? 0) - Number(record.reservedStock ?? 0), 0))),
+    hasVariants: inferVariantMode(record),
+    variants,
+  };
+};
 
 const adapter = createSqliteJsonRecordAdapter({
   endpoint: "/api/stock-read-models",
-  normalizeRecord,
+  normalizeRecord: normalizeStockReadModelRecord,
 });
 
 export const listStockReadModels = adapter.list;

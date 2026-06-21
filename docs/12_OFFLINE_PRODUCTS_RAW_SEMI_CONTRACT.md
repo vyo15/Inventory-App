@@ -250,3 +250,15 @@ Kontrak aman:
 - Relasi sales, purchase, BOM, production usage, HPP, dan report final belum boleh dianggap selesai hanya karena table foundation sudah ada.
 - Pricing rule SQLite boleh dibaca UI sebagai data pendamping; data kosong harus graceful dan tidak memblok master form.
 - Semi Finished masih foundation/snapshot; production flow final tetap guarded.
+
+## Addendum 2026-06-21 — Stock Engine P0–P1 dan Pricing Atomic
+
+- Resolver varian canonical membaca `variants` bila non-empty, lalu fallback ke `variantOptions` bila non-empty. `variants: []` tidak boleh menutupi data legacy pada master, produksi, maupun stock read model.
+- Reference historis melalui label/kode/SKU boleh ditemukan untuk compatibility, tetapi `variantKey` existing tetap immutable dan satu bucket tidak boleh dipetakan oleh dua baris payload.
+- Item non-varian dengan `variants: []` tetap memakai bucket stok master dan tidak membutuhkan `variantKey`.
+- Stock-out master/varian divalidasi terhadap `availableStock` terbaru di dalam transaction backend; mutation tidak boleh menghasilkan `reservedStock > currentStock`.
+- Nested stock varian dinormalisasi sebelum persist dan sebelum stock read model disinkronkan.
+- Mutation normal menolak source/varian nonaktif. Return historis resmi boleh memakai override internal ter-audit dan memulihkan archived variant zero-stock dengan key lama.
+- Create item bervarian wajib memiliki minimal satu varian aktif.
+- Apply Pricing Rule SQLite memakai endpoint batch atomic `/api/pricing-rules/:id/apply`; seluruh operasi wajib membawa `expectedVersion` dan rollback bersama bila satu item conflict.
+- Clean source ZIP tetap wajib dibuat melalui `npm run clean:zip` atau `npm run clean:zip:ps`; ZIP manual yang membawa `backups/`, `data/`, atau path backslash bukan artifact source yang valid.

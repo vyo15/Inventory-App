@@ -60,6 +60,23 @@ const DEFAULT_LABEL_FIELDS = [
 ];
 
 // =====================================================
+// Pilih sumber daftar varian secara compatibility-safe.
+// Array `variants: []` tidak boleh menutupi `variantOptions` legacy yang berisi data.
+// =====================================================
+export const resolveVariantSourceList = (item = {}) => {
+  const variants = Array.isArray(item?.variants) ? item.variants : [];
+  const variantOptions = Array.isArray(item?.variantOptions) ? item.variantOptions : [];
+  if (variants.length > 0) return variants;
+  if (variantOptions.length > 0) return variantOptions;
+  return [];
+};
+
+export const inferVariantMode = (item = {}) =>
+  item?.hasVariants === true
+  || item?.hasVariantOptions === true
+  || resolveVariantSourceList(item).length > 0;
+
+// =====================================================
 // Hitung available stock final.
 // ACTIVE: wrapper ini memastikan semua helper memakai rumus sama:
 // availableStock = max(currentStock - reservedStock, 0).

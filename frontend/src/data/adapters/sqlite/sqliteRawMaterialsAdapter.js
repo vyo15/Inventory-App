@@ -1,4 +1,8 @@
 import { createSqliteJsonRecordAdapter } from "./sqliteJsonRecordAdapterFactory";
+import {
+  inferVariantMode,
+  resolveVariantSourceList,
+} from "../../../utils/variants/variantStockNormalizer";
 
 const toNumber = (value = 0) => {
   const parsed = Number(value ?? 0);
@@ -8,11 +12,8 @@ const toNumber = (value = 0) => {
 export const normalizeRawMaterialRecord = (record = {}) => {
   const stock = toNumber(record.currentStock ?? record.stock ?? 0);
   const reservedStock = toNumber(record.reservedStock || 0);
-  const hasVariants = record.hasVariants === true
-    || record.hasVariantOptions === true
-    || (Array.isArray(record.variants) && record.variants.length > 0)
-    || (Array.isArray(record.variantOptions) && record.variantOptions.length > 0);
-  const variants = Array.isArray(record.variants) ? record.variants : Array.isArray(record.variantOptions) ? record.variantOptions : [];
+  const hasVariants = inferVariantMode(record);
+  const variants = resolveVariantSourceList(record);
 
   return {
     ...record,

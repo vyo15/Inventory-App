@@ -2,8 +2,6 @@
 
 // SECTION: database lokal pricing adapters
 import * as sqlitePricingRulesAdapter from "../../data/adapters/sqlite/sqlitePricingRulesAdapter";
-import * as sqliteProductsAdapter from "../../data/adapters/sqlite/sqliteProductsAdapter";
-import * as sqliteRawMaterialsAdapter from "../../data/adapters/sqlite/sqliteRawMaterialsAdapter";
 
 
 
@@ -490,54 +488,6 @@ export const createPricingLogPayload = ({
   };
 };
 
-const createSqlitePricingUpdatePayload = ({
-  targetType = "",
-  originalItem = {},
-  newPrice = 0,
-  rule = {},
-}) => {
-  const normalizedRule = normalizePricingRule(rule);
-  const now = new Date().toISOString();
-  const basePayload = {
-    pricingMode: originalItem?.pricingMode || "rule",
-    pricingRuleId: normalizedRule.id || null,
-    lastPricingUpdatedAt: now,
-    expectedVersion: originalItem?.versionToken || originalItem?.updatedAt || "",
-  };
-
-  if (targetType === "products") {
-    return {
-      ...basePayload,
-      price: toInteger(newPrice),
-    };
-  }
-
-  if (targetType === "raw_materials") {
-    return {
-      ...basePayload,
-      sellingPrice: toInteger(newPrice),
-    };
-  }
-
-  return basePayload;
-};
-
-const updateSqlitePricedItem = async ({ targetType = "", itemId = "", payload = {} } = {}) => {
-  if (!itemId) {
-    throw new Error("Item pricing tidak valid karena ID kosong.");
-  }
-
-  if (targetType === "products") {
-    return sqliteProductsAdapter.updateProduct(itemId, payload);
-  }
-
-  if (targetType === "raw_materials") {
-    return sqliteRawMaterialsAdapter.updateRawMaterial(itemId, payload);
-  }
-
-  throw new Error(`Target pricing tidak didukung: ${targetType || "-"}`);
-};
-
 // SECTION: apply pricing rule ke semua item target
 export const applyPricingRuleToItems = async ({
   items = [],
@@ -559,13 +509,13 @@ export const applyPricingRuleToItems = async ({
   const previewData = buildPricingPreview(items, normalizedRule);
 
   // SECTION: jalur database lokal tidak boleh menulis arsip lama.
-  // Apply harga ke Product/Raw harus memakai adapter database lokal agar data harga tetap konsisten.
+  // Seluruh harga dikirim dalam satu batch transaction backend agar tidak ada partial apply.
   if (isSqlitePricingRulesRepositoryMode()) {
-    let updatedCount = 0;
     let skippedManualCount = 0;
     let invalidBaseCostCount = 0;
     let invalidMarketplaceBufferCount = 0;
     let unchangedCount = 0;
+    const updates = [];
 
     for (const previewItem of previewData) {
       const originalItem = (items || []).find(
@@ -599,25 +549,25 @@ export const applyPricingRuleToItems = async ({
         continue;
       }
 
-      await updateSqlitePricedItem({
-        targetType,
+      updates.push({
         itemId: previewItem.itemId,
-        payload: createSqlitePricingUpdatePayload({
-          targetType,
-          originalItem,
-          newPrice,
-          rule: normalizedRule,
-        }),
+        expectedVersion: originalItem?.versionToken || originalItem?.updatedAt || "",
+        newPrice,
       });
-
-      updatedCount += 1;
     }
+
+    const batchResult = updates.length > 0
+      ? await sqlitePricingRulesAdapter.applyPricingRuleBatch(normalizedRule.id, {
+        targetType,
+        updates,
+      })
+      : { updatedCount: 0 };
 
     return {
       previewData,
       summary: {
         totalItems: previewData.length,
-        updatedCount,
+        updatedCount: Number(batchResult?.updatedCount || 0),
         skippedManualCount,
         invalidBaseCostCount,
         invalidMarketplaceBufferCount,

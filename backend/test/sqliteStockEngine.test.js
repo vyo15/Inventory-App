@@ -39,13 +39,107 @@ test("mutasi stok ditolak bila membuat stok minus tanpa partial write", async ()
       referenceNumber: "STK-NEGATIVE-001",
       actor: "tester",
     }),
-    /Stok tidak boleh minus/
+    /Stok tersedia tidak mencukupi/
   );
 
   const product = await db.get("SELECT current_stock FROM products WHERE id = 'product-1'");
   const inventoryLogCount = await db.get("SELECT COUNT(*) AS count FROM inventory_logs");
   assert.equal(product.current_stock, 5);
   assert.equal(inventoryLogCount.count, 0);
+});
+
+test("item non-varian dengan variants kosong tetap dapat dimutasi di master", async () => {
+  await seedProduct({
+    hasVariants: false,
+    variants: [],
+  });
+  const db = await testDatabase.getDb();
+
+  const result = await commitStockMutation(db, {
+    sourceType: "product",
+    sourceId: "product-1",
+    deltaCurrent: -2,
+    referenceNumber: "STK-NON-VARIANT-001",
+    actor: "tester",
+  });
+
+  assert.equal(result.item.currentStock, 3);
+  assert.equal(result.item.availableStock, 3);
+});
+
+test("stock-out memakai availableStock dan menjaga reserved tidak melebihi current", async () => {
+  await seedProduct({
+    currentStock: 5,
+    reservedStock: 4,
+    availableStock: 1,
+  });
+  const db = await testDatabase.getDb();
+
+  await assert.rejects(
+    commitStockMutation(db, {
+      sourceType: "product",
+      sourceId: "product-1",
+      deltaCurrent: -2,
+      referenceNumber: "STK-RESERVED-001",
+      actor: "tester",
+    }),
+    (error) => error.errorCode === "INVENTORY_AVAILABLE_STOCK_INSUFFICIENT",
+  );
+
+  const product = await db.get(
+    "SELECT current_stock, reserved_stock, available_stock FROM products WHERE id = 'product-1'",
+  );
+  assert.deepEqual(product, {
+    current_stock: 5,
+    reserved_stock: 4,
+    available_stock: 1,
+  });
+});
+
+test("legacy variantOptions tetap dipakai ketika variants kosong", async () => {
+  await seedProduct({
+    hasVariants: false,
+    variants: [],
+    variantOptions: [{
+      variantKey: "red",
+      variantLabel: "Merah",
+      currentStock: 5,
+      reservedStock: 0,
+      availableStock: 99,
+      isActive: true,
+    }],
+  });
+  const db = await testDatabase.getDb();
+
+  const result = await commitStockMutation(db, {
+    sourceType: "product",
+    sourceId: "product-1",
+    variantKey: "red",
+    deltaCurrent: -2,
+    referenceNumber: "STK-LEGACY-VARIANT-001",
+    actor: "tester",
+  });
+
+  assert.equal(result.item.currentStock, 3);
+  assert.equal(result.item.variants[0].currentStock, 3);
+  assert.equal(result.item.variants[0].availableStock, 3);
+  assert.equal(result.item.variantOptions[0].availableStock, 3);
+});
+
+test("mutasi normal menolak master nonaktif", async () => {
+  await seedProduct({ status: "inactive", isActive: false });
+  const db = await testDatabase.getDb();
+
+  await assert.rejects(
+    commitStockMutation(db, {
+      sourceType: "product",
+      sourceId: "product-1",
+      deltaCurrent: 1,
+      referenceNumber: "STK-INACTIVE-001",
+      actor: "tester",
+    }),
+    (error) => error.errorCode === "INVENTORY_SOURCE_INACTIVE",
+  );
 });
 
 test("item bervarian wajib memakai variantKey yang valid", async () => {

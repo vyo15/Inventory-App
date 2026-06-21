@@ -5,6 +5,8 @@ const { safeJsonParse } = require("../../utils/jsonUtils");
 const {
   commitStockMutation,
   loadSourceItem,
+  matchesVariantReference,
+  resolveInventoryVariantCollection,
   upsertJsonRecord,
   upsertStockReadModel,
 } = require("../../utils/sqliteStockEngine");
@@ -120,14 +122,8 @@ const getSourceTable = (sourceType = "") => {
 const findVariant = (item = {}, variantKey = "") => {
   const normalizedKey = normalizeLower(variantKey);
   if (!normalizedKey) return null;
-  const variants = Array.isArray(item.variants)
-    ? item.variants
-    : Array.isArray(item.variantOptions)
-      ? item.variantOptions
-      : [];
-  return variants.find((variant) => normalizeLower(
-    variant.variantKey || variant.key || variant.id || variant.variantId || variant.name || variant.color || variant.code || variant.sku,
-  ) === normalizedKey) || null;
+  const variants = resolveInventoryVariantCollection(item).variants;
+  return variants.find((variant) => matchesVariantReference(variant, normalizedKey)) || null;
 };
 
 const getMaterialUnitCost = ({ sourceType, item, variantKey = "" } = {}) => {
@@ -774,7 +770,7 @@ const reconcileOutputCost = async (db, {
 
   if (variantKey) {
     if (!variant) fail("Varian output produksi tidak ditemukan.", "PRODUCTION_OUTPUT_VARIANT_NOT_FOUND", 409);
-    const variants = (Array.isArray(item.variants) ? item.variants : []).map((row) => {
+    const variants = resolveInventoryVariantCollection(item).variants.map((row) => {
       if (row !== variant) return row;
       return {
         ...row,
@@ -790,6 +786,7 @@ const reconcileOutputCost = async (db, {
     nextItem = {
       ...nextItem,
       variants,
+      variantOptions: Array.isArray(item.variantOptions) ? variants : item.variantOptions,
       [field]: calculateWeightedVariantCost(variants, field),
     };
   } else {

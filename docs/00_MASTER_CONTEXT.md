@@ -218,7 +218,12 @@ Status cleanup bertahap yang dikunci di docs:
 - **Aktif/P1:** Pricing Rule hanya mengirim payload harga minimal dan `expectedVersion`; snapshot item penuh tidak lagi ikut dikirim sehingga tidak dapat membawa stok/HPP stale.
 - **Aktif/P1:** field valuation transaction-derived dibuat read-only pada UI edit master agar user tidak menerima kesan perubahan HPP/modal berhasil padahal backend wajib mempreserve nilai transaksi terbaru.
 - **Aktif/P1:** response sukses generic write baru dikirim setelah transaction SQLite selesai `COMMIT`; kegagalan commit tidak boleh terlihat sebagai sukses di client.
-- **Compatibility:** alias `stock`, `variantOptions`, archive/history varian, dan data lama tetap dipertahankan; delete master juga memeriksa snapshot stok pada `archivedVariants[]`. Tidak ada perubahan schema/collection/route/role guard.
+- **Compatibility:** alias `stock`, `variantOptions`, archive/history varian, dan data lama tetap dipertahankan; delete master juga memeriksa snapshot stok pada `archivedVariants[]`. Tidak ada perubahan schema/collection/role guard. Route baru hanya `POST /api/pricing-rules/:id/apply` untuk batch pricing atomic yang sudah disetujui.
+- **Aktif/P0 lanjutan:** resolver varian backend/frontend memilih `variants` hanya jika berisi data, lalu fallback ke `variantOptions` legacy. `variants: []` tidak boleh menutupi bucket stok legacy dan tidak boleh membuat item non-varian dianggap bervarian.
+- **Aktif/P0 lanjutan:** setiap stock-out master/varian divalidasi terhadap saldo `availableStock` terbaru di dalam transaction Stock Engine. `reservedStock > currentStock` tidak boleh dihasilkan oleh mutation resmi.
+- **Aktif/P1 lanjutan:** mutation normal menolak master/varian nonaktif. Return historis yang sudah lolos guard Sales boleh memakai override internal ter-audit dan dapat memulihkan varian arsip zero-stock; flag override tidak berasal dari payload client.
+- **Aktif/P1 lanjutan:** create item bervarian wajib memiliki minimal satu varian aktif dan seluruh nested `availableStock` dinormalisasi sebelum persist/read-model sync.
+- **Aktif/P1 lanjutan:** apply Pricing Rule SQLite memakai `POST /api/pricing-rules/:id/apply` dan satu transaction batch. Satu item stale/gagal menyebabkan seluruh batch rollback; tidak ada partial apply.
 
 ## Update Batch Fix Bug Merge — 2026-05-03
 - **Aktif:** patch gabungan ini menggabungkan perbaikan no-decimal number format, sidebar nested accordion, login UI copy cleanup, Production Order strict variant requirement, Work Log worker stock audit, dan Semi Finished variant color rename ke baseline source/docs terbaru yang diunggah. Pada audit 2026-05-06, baseline yang diverifikasi adalah `Inventory-App.zip` + `docs.zip`.
@@ -247,13 +252,13 @@ Status cleanup bertahap yang dikunci di docs:
 - **Guarded:** kode audit yang sudah dipakai harus immutable. Edit nama/ref tidak boleh otomatis mengubah kode audit lama tanpa approval migrasi.
 - **Standar kode manusiawi:** jangan pakai mapping manual kata-per-kata atau dictionary singkatan per modul. Gunakan prefix modul yang disetujui + sequence shared; jangan membuat dictionary singkatan kata per modul di page/service.
 - **Source of truth:** satu shared generator yang disetujui harus menjadi sumber kode manusiawi lintas modul. Page/service tidak boleh membuat generator baru atau duplicate logic.
-- **Current state note:** source terbaru memakai `businessCodeGenerator.js` sebagai satu-satunya source of truth generator kode. Wrapper `productionCodeGenerator.js` sudah dihapus setelah audit import/usage membuktikan tidak ada pemanggil aktif.
+- **Current state note:** source aktual menghasilkan kode master/transaksi melalui endpoint backend SQLite `*/generate-code` dan generator pada service/backend terkait. Helper frontend `businessCodeGenerator.js` dan counter wrapper lamanya sudah dihapus setelah audit import membuktikan tidak ada pemanggil aktif.
 
 ## Maintenance & Backup Center — 2026-06-07
 - **Aktif:** Reset & Maintenance Data menjadi Maintenance & Backup Center, bukan daftar tombol reset teknis.
 - **Flow standar:** Backup & Restore → Audit Data → Repair Aman → Export Master/Checklist → Audit ulang.
 - **Reset testing lama:** route/tab hanya menampilkan status nonaktif. Handler reset testing lama tidak tersedia di UI operasional.
-- **Auto detect:** audit data historis/stok/log/produksi/payroll/variant transaksi bersifat read-only terhadap data bisnis dan hanya boleh membuat maintenance log metadata.
+- **Auto detect:** audit stok, schema inventory log, arsip data, produksi, payroll, variant transaksi, side-effect transaksi, HPP reconcile, dan kode master bersifat read-only terhadap data bisnis dan hanya boleh membuat maintenance log metadata. Data Quality Audit legacy yang tidak lagi membaca data nyata sudah dipensiunkan dari UI.
 - **Export data pokok:** tersedia sebagai export master SQLite read-only/checklist manual, bukan restore otomatis dan bukan merge transaksi.
 - Backup resmi SQLite memakai satu file `.imsbackup` self-contained berisi database, manifest, checksum, dan README internal; file `.manifest.json` terpisah tidak dibuat lagi. Struktur folder aktif hanya `daily/`, `monthly/`, dan `manual/`. Daily dibuat otomatis maksimal satu per hari dan disimpan 60 hari. Monthly dibuat otomatis dari daily verified terakhir setiap bulan dan disimpan maksimal 12 bulan. Backup manual, import, pre-update, pre-reset, dan pre-restore disimpan pada folder `manual/` serta tidak dihapus otomatis. Restore tetap full replace guarded, bukan merge; backup legacy `.imsbak.zip` dan sidecar manifest lama tetap dibaca sebagai kompatibilitas. Backup `pre-restore` dan backup sumber restore dipastikan tercatat ulang setelah restore agar rollback dan traceability tetap terlihat di daftar backup.
 - **Guarded:** log/transaksi lama tidak direkomendasikan dibawa ulang sebagai default jika logic berubah; transaksi baru sebaiknya dibuat ulang lewat flow terbaru agar log baru mengikuti logic terbaru.
@@ -323,7 +328,7 @@ Catatan lock:
 ## Update Produksi/HPP — 2026-05-17
 - Detail Work Log dan HPP Analysis memakai resolver labor yang sama: payroll final, draft payroll, lalu estimasi Step sebagai read-only preview.
 - Overhead aktif berasal dari BOM untuk listrik/glue gun. Field hasil selain Good Qty adalah compatibility data historis dan tidak ditampilkan sebagai workflow aktif.
-- Data Quality Audit produksi read-only mendeteksi Work Log data historis status, payroll pending/mismatch, output HPP yang butuh reconcile, dan Semi Finished tanpa `flowerGroup`; audit hasil selain Good Qty sengaja tidak diaktifkan.
+- Audit produksi/HPP read-only aktif memakai Production Variant Audit, Payroll Snapshot Audit, dan HPP Reconcile Audit untuk memetakan Work Log historis, payroll pending/mismatch, output HPP yang perlu reconcile, dan masalah setup produksi; audit hasil selain Good Qty sengaja tidak diaktifkan.
 
 ## Update SQLite Local Runtime Pilot
 
@@ -347,7 +352,7 @@ Keputusan aktif tambahan:
 
 - Mobile IMS memakai standar portrait-first untuk semua phase M1-M5.
 - `DataTableView + mobileCardConfig` menjadi pola wajib untuk daftar operasional lintas modul.
-- `ResponsiveDataView` adalah alias standar untuk `DataTableView`; tidak boleh membuat komponen table/card baru yang menduplikasi behavior.
+- `DataTableView` adalah komponen canonical untuk pola desktop table + mobile card/list; jangan membuat alias atau implementasi table/card kedua yang menduplikasi behavior.
 - Foundation mobile aktif: `MobileActionMenu`, `MobileFilterDrawer`, `MobileDetailDrawer`, `ResponsiveFormSection`, dan `MobileStateBlock`.
 - Patch mobile harus UI-only kecuali ada persetujuan khusus. Jangan mengubah stock mutation, sales/purchase/return commit, finance ledger, production material usage, payroll final, HPP, backup/restore, reset testing, auth, schema, atau role guard.
 - Dokumentasi wajib ikut diperbarui setiap patch mobile agar standar tidak kembali ke tampilan desktop table di HP.

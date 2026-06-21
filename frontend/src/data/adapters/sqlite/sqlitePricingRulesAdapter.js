@@ -69,6 +69,21 @@ export const deletePricingRule = async (ruleId) => {
   return result?.data || { id: ruleId, deleted: true };
 };
 
+export const applyPricingRuleBatch = async (ruleId, payload = {}) => {
+  if (!ruleId) {
+    throw new Error("Pricing rule yang akan diterapkan tidak valid.");
+  }
+
+  const result = await requestSqliteApi(`/api/pricing-rules/${encodeURIComponent(ruleId)}/apply`, {
+    method: "POST",
+    body: JSON.stringify({
+      targetType: payload.targetType || "",
+      updates: Array.isArray(payload.updates) ? payload.updates : [],
+    }),
+  });
+  return result?.data || null;
+};
+
 export const subscribePricingRules = (callback, onError, options = {}) => {
   let disposed = false;
   let timer = null;

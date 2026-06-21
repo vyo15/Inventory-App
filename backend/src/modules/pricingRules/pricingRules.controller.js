@@ -1,5 +1,6 @@
 const { failure, success } = require("../../utils/response");
 const {
+  applyPricingRuleBatch,
   createPricingRule,
   generatePricingRuleCode,
   getPricingRuleById,
@@ -76,6 +77,21 @@ const updatePricingRuleController = async (req, res, next) => {
   }
 };
 
+const applyPricingRuleBatchController = async (req, res, next) => {
+  try {
+    const result = await applyPricingRuleBatch(req.params.id, req.body, getActor(req));
+    return success(
+      res,
+      `Pricing rule berhasil diterapkan secara atomic ke ${result.updatedCount} item`,
+      result,
+    );
+  } catch (error) {
+    const handled = handlePricingRuleError(res, error);
+    if (handled) return handled;
+    return next(error);
+  }
+};
+
 const deletePricingRuleController = async (req, res, next) => {
   try {
     const result = await softDeletePricingRule(req.params.id, getActor(req));
@@ -88,6 +104,7 @@ const deletePricingRuleController = async (req, res, next) => {
 };
 
 module.exports = {
+  applyPricingRuleBatchController,
   createPricingRuleController,
   deletePricingRuleController,
   generatePricingRuleCodeController,

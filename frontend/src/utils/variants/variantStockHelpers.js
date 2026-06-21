@@ -1,8 +1,10 @@
 import { calculateAvailableStock, toNumber } from '../stock/stockHelpers';
 import {
   calculateVariantStockTotals,
+  inferVariantMode,
   normalizeVariantStockList,
   normalizeVariantStockShape,
+  resolveVariantSourceList,
 } from './variantStockNormalizer';
 
 // =====================================================
@@ -63,11 +65,7 @@ export const getVariantLabel = (variant = {}) =>
 // Ini dipakai sebagai sumber kebenaran utama agar flow BOM lama
 // tidak lagi hanya bergantung pada snapshot line yang stale.
 // =====================================================
-export const inferHasVariants = (item = {}) =>
-  item?.hasVariants === true ||
-  item?.hasVariantOptions === true ||
-  (Array.isArray(item?.variants) && item.variants.length > 0) ||
-  (Array.isArray(item?.variantOptions) && item.variantOptions.length > 0);
+export const inferHasVariants = (item = {}) => inferVariantMode(item);
 
 // =====================================================
 // Kumpulkan semua token pencarian yang relevan untuk 1 varian.
@@ -104,11 +102,7 @@ const buildVariantLookupTokens = (variant = {}) => {
 // variantStockNormalizer agar stock/currentStock tidak bercabang.
 // =====================================================
 export const normalizeItemVariants = (item = {}) => {
-  const rawVariants = Array.isArray(item?.variants)
-    ? item.variants
-    : Array.isArray(item?.variantOptions)
-      ? item.variantOptions
-      : [];
+  const rawVariants = resolveVariantSourceList(item);
 
   if (!Array.isArray(rawVariants)) return [];
 

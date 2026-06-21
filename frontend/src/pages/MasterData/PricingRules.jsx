@@ -45,7 +45,6 @@ import {
   buildPricingPreview,
   buildPricingPreviewSummary,
   applyPricingRuleToItems,
-  isSqlitePricingRulesRepositoryMode,
   subscribePricingRulesFromRepository,
   savePricingRuleInRepository,
   removePricingRuleFromRepository,
@@ -133,11 +132,6 @@ const PricingRules = () => {
   const [previewData, setPreviewData] = useState([]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [applyLoading, setApplyLoading] = useState(false);
-
-  const isSqlitePricingRulesMode = useMemo(
-    () => isSqlitePricingRulesRepositoryMode(),
-    [],
-  );
 
   // SECTION: sinkron data pricing rules, bahan baku, dan produk
   useEffect(() => {
@@ -368,11 +362,6 @@ const PricingRules = () => {
   const handleApplyRule = async () => {
     if (!previewRule?.id) {
       message.warning("Rule preview belum valid atau belum dipilih.");
-      return;
-    }
-
-    if (isSqlitePricingRulesMode) {
-      message.warning("Fitur apply harga massal belum tersedia.");
       return;
     }
 

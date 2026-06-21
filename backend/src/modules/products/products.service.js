@@ -23,5 +23,6 @@ const getProductsRouterConfig = () => ({
 });
 
 module.exports = {
+  PRODUCT_VALUATION_FIELDS,
   getProductsRouterConfig,
 };

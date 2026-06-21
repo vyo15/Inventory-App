@@ -114,6 +114,14 @@ Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke da
 - [ ] Manual UI: HPP Product, modal aktual Raw Material, dan average/last production cost Semi Finished read-only saat edit tetapi tetap dapat diisi saat create.
 - [ ] Manual concurrency: buka drawer edit di perangkat A, lakukan transaksi stok di perangkat B, lalu pastikan Simpan di A menampilkan konflik data dan tidak menutup/mengubah stok.
 - [ ] Manual Pricing Rule: apply harga setelah item berubah di proses lain harus berhenti dengan pesan conflict dan tidak mengirim field stok/HPP.
+- [x] Automated Stock Engine: `variants: []` pada item non-varian tetap memakai bucket master.
+- [x] Automated compatibility: `variants: []` tidak menutupi `variantOptions` legacy yang berisi data pada Product, Raw Material, Semi Finished, dan Stock Read Model.
+- [x] Automated variant identity: payload create/update yang mereferensikan bucket varian sama lebih dari sekali ditolak.
+- [x] Automated Stock Engine: stock-out master dan varian ditolak bila melebihi `availableStock` meskipun `currentStock` masih cukup.
+- [x] Automated variant invariant: nested `availableStock` dinormalisasi dan create bervarian tanpa varian aktif ditolak.
+- [x] Automated inactive policy: mutation normal menolak master/varian nonaktif; restore archived variant hanya melalui override internal return historis.
+- [x] Automated Pricing Rule: batch apply atomic rollback seluruh perubahan bila satu item stale.
+- [ ] Manual Pricing Rule SQLite: apply dua atau lebih item berhasil sekaligus dan audit `apply_batch` tercatat satu kali.
 
 ## 5. Stock
 
