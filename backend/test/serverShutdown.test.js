@@ -50,6 +50,31 @@ const waitForExit = async (child, timeoutMs = 15_000) => {
   }
 };
 
+const waitForChildMessage = (child, expectedType, timeoutMs = 15_000) => new Promise((resolve, reject) => {
+  const timer = setTimeout(() => {
+    cleanup();
+    reject(new Error(`Backend tidak mengirim pesan ${expectedType} dalam ${timeoutMs} ms.`));
+  }, timeoutMs);
+
+  const handleMessage = (message) => {
+    if (message?.type !== expectedType) return;
+    cleanup();
+    resolve(message);
+  };
+  const handleExit = (code, signal) => {
+    cleanup();
+    reject(new Error(`Backend berhenti sebelum pesan ${expectedType} (code=${code}, signal=${signal}).`));
+  };
+  const cleanup = () => {
+    clearTimeout(timer);
+    child.off("message", handleMessage);
+    child.off("exit", handleExit);
+  };
+
+  child.on("message", handleMessage);
+  child.once("exit", handleExit);
+});
+
 const verifySignalShutdown = async (t, signal) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `ims-server-${signal.toLowerCase()}-`));
   const dbPath = path.join(tempDir, "data", "ims-test.sqlite");
@@ -90,9 +115,89 @@ const verifySignalShutdown = async (t, signal) => {
   assert.equal(fs.existsSync(`${dbPath}-shm`), false);
 };
 
+const verifyRequestedShutdown = async (t, reason) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `ims-server-${reason.toLowerCase()}-`));
+  const dbPath = path.join(tempDir, "data", "ims-test.sqlite");
+  const backupDir = path.join(tempDir, "backups");
+  const backendRoot = path.resolve(__dirname, "..");
+  const serverPath = path.join(backendRoot, "src", "server.js");
+  const script = `
+    const { startServer, shutdownServer } = require(${JSON.stringify(serverPath)});
+
+    process.on("message", async (message) => {
+      if (message?.type !== "shutdown") return;
+      try {
+        const result = await shutdownServer({
+          reason: message.reason,
+          exitCode: 0,
+          exitProcess: false,
+        });
+        const finish = () => process.exit(result.exitCode);
+        if (process.send) {
+          process.send({ type: "shutdown-complete", exitCode: result.exitCode }, finish);
+        } else {
+          finish();
+        }
+      } catch (error) {
+        console.error(error);
+        process.exit(1);
+      }
+    });
+
+    startServer()
+      .then(() => process.send?.({ type: "ready" }))
+      .catch((error) => {
+        console.error(error);
+        process.exit(1);
+      });
+  `;
+  const child = spawn(process.execPath, ["-e", script], {
+    cwd: backendRoot,
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      HOST: "127.0.0.1",
+      PORT: "0",
+      IMS_AUTH_BOOTSTRAP_CODE: "SHUTDOWNTEST8421",
+      IMS_LOG_TO_FILE: "false",
+      IMS_SQLITE_DB_PATH: dbPath,
+      IMS_SQLITE_BACKUP_DIR: backupDir,
+    },
+    stdio: ["ignore", "pipe", "pipe", "ipc"],
+  });
+
+  t.after(() => {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  await waitForChildMessage(child, "ready");
+  assert.equal(fs.existsSync(dbPath), true);
+  assert.equal(fs.existsSync(`${dbPath}-wal`), true);
+  assert.equal(fs.existsSync(`${dbPath}-shm`), true);
+
+  child.send({ type: "shutdown", reason });
+  const completed = await waitForChildMessage(child, "shutdown-complete");
+  const [code, exitSignal] = await waitForExit(child);
+
+  assert.equal(completed.exitCode, 0);
+  assert.equal(code, 0);
+  assert.equal(exitSignal, null);
+  assert.equal(fs.existsSync(dbPath), true);
+  assert.equal(fs.existsSync(`${dbPath}-wal`), false);
+  assert.equal(fs.existsSync(`${dbPath}-shm`), false);
+};
+
+const verifyPlatformShutdown = process.platform === "win32"
+  ? verifyRequestedShutdown
+  : verifySignalShutdown;
+const shutdownTransport = process.platform === "win32"
+  ? "permintaan shutdown terkontrol karena child.kill mematikan paksa proses Windows"
+  : "sinyal proses";
+
 for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
-  test(`${signal} melakukan checkpoint WAL dan menutup database sebelum backend keluar`, async (t) => {
-    await verifySignalShutdown(t, signal);
+  test(`${signal} melakukan checkpoint WAL dan menutup database sebelum backend keluar melalui ${shutdownTransport}`, async (t) => {
+    await verifyPlatformShutdown(t, signal);
   });
 }
 
