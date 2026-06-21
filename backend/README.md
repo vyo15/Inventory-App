@@ -67,7 +67,7 @@ GET    /api/audit-logs                 # administrator
 
 - Login browser memakai cookie `ims_session` dengan `HttpOnly` dan `SameSite=Lax`; raw token tidak dikirim di JSON, endpoint auth tidak boleh di-cache, dan header `X-Powered-By` dinonaktifkan.
 - Frontend harus mengirim request dengan `credentials: "include"`.
-- Bearer token lama diterima sementara untuk migrasi melalui `/api/auth/me`.
+- Bearer token lama ditolak secara default. Aktifkan sementara `IMS_AUTH_ALLOW_LEGACY_BEARER=true` hanya jika perangkat lama perlu dimigrasikan melalui `/api/auth/me`, lalu kembalikan ke `false`.
 - Origin frontend dengan hostname yang sama seperti backend otomatis diizinkan. Origin tambahan dapat diisi lewat `IMS_SQLITE_CORS_ORIGIN` sebagai daftar dipisahkan koma; jangan gunakan wildcard.
 - Pada database baru, kode setup administrator pertama dicetak di terminal backend. Endpoint `/api/auth/status` hanya menyatakan bahwa bootstrap diperlukan dan tidak mengirim kodenya.
 - `IMS_AUTH_BOOTSTRAP_CODE` boleh diisi untuk kode setup stabil minimal 8 karakter. Jika kosong, kode acak berubah setiap backend restart.
@@ -88,6 +88,8 @@ Runner test menemukan seluruh file `backend/test/**/*.test.js`. Root check menja
 data/ims-sqlite-sidecar.sqlite
 backups/sqlite/
 ```
+
+Saat backend aktif dalam mode WAL, SQLite dapat membuat `ims-sqlite-sidecar.sqlite-wal` dan `ims-sqlite-sidecar.sqlite-shm`. Ketiga file tersebut adalah satu database logis. Shutdown melalui `SIGINT`/`SIGTERM`/`SIGHUP` (serta `SIGBREAK` di Windows) menjalankan checkpoint WAL, menutup HTTP server, lalu menutup koneksi database. Setelah shutdown normal, WAL/SHM harus dilepas. Jangan menghapus sidecar secara manual ketika layanan masih aktif.
 
 Folder/file runtime tidak boleh masuk git atau patch.
 

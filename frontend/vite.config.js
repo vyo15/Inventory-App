@@ -60,6 +60,7 @@ export default defineConfig(({ mode }) => {
           "src/pages/Auth/Login.jsx",
           "src/pages/Finance/helpers/financePeriodHelpers.js",
           "src/services/Maintenance/maintenanceLogService.js",
+          "src/services/Finance/*.js",
           "src/services/Pricing/pricingService.js",
           "src/services/Produksi/productionWorkLogsService.js",
           "src/services/System/*.js",

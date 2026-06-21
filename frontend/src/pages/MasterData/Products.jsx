@@ -26,7 +26,7 @@ import {
   EyeOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
-import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
+import { formatNumberId, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import { formatDateId } from '../../utils/formatters/dateId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
@@ -431,7 +431,7 @@ const Products = () => {
               {record.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
             </Tag>
             {record.hasVariants ? (
-              <Tag color="purple">{formatNumberID(record.variantCount || 0)} varian</Tag>
+              <Tag color="purple">{formatNumberId(record.variantCount || 0)} varian</Tag>
             ) : null}
           </Space>
         </div>
@@ -527,7 +527,7 @@ const Products = () => {
     },
     meta: [
       { label: 'Min', value: (record) => formatStockWithUnit(record.minStockAlert || 0) },
-      { label: 'Varian', value: (record) => (record.hasVariants ? `${formatNumberID(record.variantCount || 0)} varian` : 'Tidak') },
+      { label: 'Varian', value: (record) => (record.hasVariants ? `${formatNumberId(record.variantCount || 0)} varian` : 'Tidak') },
     ],
     onCardClick: (record) => handleViewDetail(record),
     primaryActions: [
@@ -703,7 +703,7 @@ const Products = () => {
                   min={0}
                   step={1}
                   precision={0}
-                  formatter={(value) => formatNumberID(value)}
+                  formatter={(value) => formatNumberId(value)}
                   parser={parseIntegerIdInput}
                   disabled={isEditingProduct}
                 />
@@ -751,7 +751,7 @@ const Products = () => {
                   min={0}
                   step={1}
                   precision={0}
-                  formatter={(value) => formatNumberID(value)}
+                  formatter={(value) => formatNumberId(value)}
                   parser={parseIntegerIdInput}
                 />
               </Form.Item>
@@ -964,16 +964,16 @@ const Products = () => {
                 <Statistic
                   title="Stok Total"
                   value={hasVariantsValue ? watchedVariants.reduce((sum, item) => sum + Number(item?.currentStock || 0), 0) : watchedCurrentStock}
-                  formatter={(value) => formatNumberID(value)}
+                  formatter={(value) => formatNumberId(value)}
                 />
               </Col>
               <Col xs={24} md={8}>
                 <Statistic
-                  title={hasVariantsValue ? 'Reserved Total | Min Master' : `Min Stok | Reserved ${formatNumberID(watchedReservedStock)}`}
+                  title={hasVariantsValue ? 'Reserved Total | Min Master' : `Min Stok | Reserved ${formatNumberId(watchedReservedStock)}`}
                   value={hasVariantsValue
-                    ? `${formatNumberID(watchedVariants.reduce((sum, item) => sum + Number(item?.reservedStock || 0), 0))} | ${formatNumberID(watchedMinStockAlert)}`
+                    ? `${formatNumberId(watchedVariants.reduce((sum, item) => sum + Number(item?.reservedStock || 0), 0))} | ${formatNumberId(watchedMinStockAlert)}`
                     : watchedMinStockAlert}
-                  formatter={(value) => hasVariantsValue ? value : formatNumberID(value)}
+                  formatter={(value) => hasVariantsValue ? value : formatNumberId(value)}
                 />
               </Col>
             </Row>
@@ -1025,7 +1025,7 @@ const Products = () => {
                   <Card size="small"><Statistic title="HPP / Unit" value={formatCurrencyId(selectedProduct.hppPerUnit)} formatter={(value) => value} /></Card>
                 </Col>
                 <Col xs={24} md={8}>
-                  <Card size="small"><Statistic title="Stok Tersedia" value={`${formatNumberID(stockSummary.availableStock)} pcs`} formatter={(value) => value} /></Card>
+                  <Card size="small"><Statistic title="Stok Tersedia" value={`${formatNumberId(stockSummary.availableStock)} pcs`} formatter={(value) => value} /></Card>
                 </Col>
               </Row>
 

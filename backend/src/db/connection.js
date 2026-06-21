@@ -222,9 +222,29 @@ async function closeDb() {
   await enqueueDbAccess(async (context) => {
     if (!rawDbPromise) return;
     const rawDb = context.rawDb || await rawDbPromise;
-    await rawDb.close();
-    rawDbPromise = null;
-    context.rawDb = null;
+    let checkpointError = null;
+
+    try {
+      const checkpoint = await rawDb.get("PRAGMA wal_checkpoint(TRUNCATE);");
+      if (Number(checkpoint?.busy || 0) > 0) {
+        const error = new Error("Checkpoint WAL masih sibuk saat database akan ditutup.");
+        error.code = "SQLITE_WAL_CHECKPOINT_BUSY";
+        error.checkpoint = checkpoint;
+        throw error;
+      }
+    } catch (error) {
+      checkpointError = error;
+      logger.warn("sqlite_wal_checkpoint_before_close_failed", { error });
+    }
+
+    try {
+      await rawDb.close();
+    } finally {
+      rawDbPromise = null;
+      context.rawDb = null;
+    }
+
+    if (checkpointError) throw checkpointError;
   }, { label: "database_close" });
 }
 

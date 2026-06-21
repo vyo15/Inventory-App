@@ -26,7 +26,7 @@ import {
   PlusOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { formatNumberID } from '../../utils/formatters/numberId';
+import { formatNumberId } from '../../utils/formatters/numberId';
 import { formatCurrencyId } from '../../utils/formatters/currencyId';
 import { formatDateId } from '../../utils/formatters/dateId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
@@ -519,7 +519,7 @@ const RawMaterials = () => {
                 {record.hasVariants ? 'Pakai Varian' : 'Tanpa Varian'}
               </Tag>
               {record.hasVariants ? (
-                <Tag color="purple">{formatNumberID(record.variantCount || 0)} varian</Tag>
+                <Tag color="purple">{formatNumberId(record.variantCount || 0)} varian</Tag>
               ) : null}
               <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
             </Space>
@@ -608,7 +608,7 @@ const RawMaterials = () => {
     },
     meta: [
       { label: 'Jual', value: (record) => `${formatCurrencyId(record.sellingPrice || 0)} / ${record.stockUnit || '-'}` },
-      { label: 'Varian', value: (record) => (record.hasVariants ? `${formatNumberID(record.variantCount || 0)} varian` : 'Tidak') },
+      { label: 'Varian', value: (record) => (record.hasVariants ? `${formatNumberId(record.variantCount || 0)} varian` : 'Tidak') },
     ],
     onCardClick: (record) => handleViewDetail(record),
     primaryActions: [
@@ -915,7 +915,7 @@ const RawMaterials = () => {
                   style={{ width: '100%' }}
                   min={0}
                   precision={0}
-                  formatter={(value) => formatNumberID(value)}
+                  formatter={(value) => formatNumberId(value)}
                   parser={integerParser}
                 />
               </Form.Item>
@@ -931,7 +931,7 @@ const RawMaterials = () => {
                   style={{ width: '100%' }}
                   min={0}
                   precision={0}
-                  formatter={(value) => formatNumberID(value)}
+                  formatter={(value) => formatNumberId(value)}
                   parser={integerParser}
                 />
               </Form.Item>
@@ -985,7 +985,7 @@ const RawMaterials = () => {
                   style={{ width: '100%' }}
                   min={0}
                   precision={0}
-                  formatter={(value) => formatNumberID(value)}
+                  formatter={(value) => formatNumberId(value)}
                   parser={integerParser}
                 />
               </Form.Item>
@@ -1003,7 +1003,7 @@ const RawMaterials = () => {
                   style={{ width: '100%' }}
                   min={0}
                   precision={0}
-                  formatter={(value) => formatNumberID(value)}
+                  formatter={(value) => formatNumberId(value)}
                   parser={integerParser}
                   disabled={isEditingMaterial}
                 />
@@ -1053,7 +1053,7 @@ const RawMaterials = () => {
                   style={{ width: '100%' }}
                   min={0}
                   precision={0}
-                  formatter={(value) => formatNumberID(value)}
+                  formatter={(value) => formatNumberId(value)}
                   parser={integerParser}
                 />
               </Form.Item>
@@ -1130,7 +1130,7 @@ const RawMaterials = () => {
                                 style={{ width: '100%' }}
                                 min={0}
                                 precision={0}
-                                formatter={(value) => formatNumberID(value)}
+                                formatter={(value) => formatNumberId(value)}
                                 parser={integerParser}
                               />
                             </Form.Item>
@@ -1187,13 +1187,13 @@ const RawMaterials = () => {
                   <div className="ims-readonly-stat-field">
                     <div className="ims-readonly-stat-label">Jumlah Varian</div>
                     <div className="ims-readonly-stat-value">
-                      {formatNumberID(variantStats.count)}
+                      {formatNumberId(variantStats.count)}
                     </div>
                   </div>
                   <div className="ims-readonly-stat-field">
                     <div className="ims-readonly-stat-label">Total Stok</div>
                     <div className="ims-readonly-stat-value">
-                      {formatNumberID(variantStats.stock)}
+                      {formatNumberId(variantStats.stock)}
                     </div>
                   </div>
                 </div>

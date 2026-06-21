@@ -862,7 +862,7 @@ const importBackupFile = async ({ body, headers = {}, query = {}, actor = "syste
       }
 
       const manifest = preview.manifest || null;
-      return runInTransaction(async (db) => {
+      return await runInTransaction(async (db) => {
         const result = await db.run(
           `
             INSERT INTO backup_logs (filename, path, size_bytes, status)

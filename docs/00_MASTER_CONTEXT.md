@@ -1,14 +1,16 @@
 # MASTER CONTEXT — IMS Bunga Flanel
 
-Dokumen ini dibuat berdasarkan audit langsung terhadap source code aplikasi. Update terbaru 2026-06-21 memakai ZIP `Inventory-App-20260621-223301409-main-9e6581f4-dirty.zip` sebagai sumber kebenaran utama, bukan template umum atau docs lama.
+Dokumen ini dibuat berdasarkan audit langsung terhadap source code aplikasi. Update terbaru 2026-06-21 memakai ZIP `Inventory-App-20260621-231755191-main-9e6581f4-dirty.zip` sebagai sumber kebenaran utama, bukan template umum atau docs lama.
 
 Update verifikasi source aktual — 2026-06-21:
-- source yang divalidasi: ZIP `Inventory-App-20260621-223301409-main-9e6581f4-dirty.zip` dengan root project source pada arsip;
+- source yang divalidasi: ZIP `Inventory-App-20260621-231755191-main-9e6581f4-dirty.zip` dengan root project source pada arsip;
 - runtime utama source aktual adalah React/Vite frontend + Node.js Express backend + SQLite file lokal/LAN;
 - `backend/src/server.js` mendaftarkan endpoint `/api/**` untuk Auth, master data, stock, transaksi, finance, production, reports, maintenance, dan audit log;
 - `frontend/src/context/AuthContext.jsx` memakai `localAuthService` dan `authMode: "sqlite"`; nama state auth lama yang masih tersisa hanya compatibility internal untuk actor label lama, bukan runtime auth lama;
 - `frontend/src/data/repositories/repositoryMode.js` hanya menetapkan `sqlite_sidecar`; konstanta mode lama `offline_local` dan `hybrid_sync` sudah dihapus dari source aktif;
 - `frontend/package.json` source aktual tidak memiliki dependency `runtime-arsip` atau `database-browser-arsip`.
+- `backend/src/server.js` menangani `SIGINT`, `SIGTERM`, `SIGHUP`, `SIGBREAK` pada Windows, dan reload `SIGUSR2`; shutdown menutup HTTP server, checkpoint WAL, lalu menutup koneksi SQLite sebelum process keluar.
+- `dayjs` dan `@ant-design/icons` dideklarasikan langsung di `frontend/package.json` karena dipakai langsung oleh source, bukan lagi mengandalkan hoisting dependency Ant Design.
 
 Catatan arsip:
 - semua instruksi lama tentang auth lama, rules database arsip, transaksi database arsip, database browser arsip sync queue, atau fallback runtime arsip harus dibaca sebagai **ARSIP MIGRASI**, kecuali ada validasi source baru yang membuktikan runtime tersebut aktif kembali dan owner menyetujuinya eksplisit.

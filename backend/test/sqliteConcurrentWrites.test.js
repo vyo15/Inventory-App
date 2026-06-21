@@ -281,14 +281,14 @@ test("dua perubahan admin paralel tidak dapat menurunkan administrator aktif ter
   const firstAdmin = await createUser({
     username: "admin.concurrent.a",
     displayName: "Admin Concurrent A",
-    password: "Password123",
+    password: "ConcurrentAdmin8421",
     role: "administrator",
     status: "active",
   }, { id: 999, username: "test-root" });
   const secondAdmin = await createUser({
     username: "admin.concurrent.b",
     displayName: "Admin Concurrent B",
-    password: "Password123",
+    password: "ConcurrentAdmin8421",
     role: "administrator",
     status: "active",
   }, { id: 999, username: "test-root" });

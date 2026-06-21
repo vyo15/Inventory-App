@@ -10,7 +10,7 @@
     "dev:backend": "npm --prefix backend run dev",
     "install:all": "npm --prefix backend install && npm --prefix frontend install",
     "check": "node scripts/git-check.cjs --full --skip-source",
-    "test:scripts": "node --test scripts/run-command.test.cjs scripts/check-frontend-bundle.test.cjs scripts/check-node-version.test.cjs",
+    "test:scripts": "node --test scripts/run-command.test.cjs scripts/check-frontend-bundle.test.cjs scripts/check-node-version.test.cjs scripts/dev-all.test.cjs",
     "test": "npm run test:scripts && npm --prefix backend test && npm --prefix frontend test",
     "check:backend": "npm --prefix backend run check",
     "build:frontend": "npm --prefix frontend run build",

@@ -7,6 +7,9 @@ const isWindows = process.platform === "win32";
 const npmCmd = "npm";
 const children = new Map();
 let shuttingDown = false;
+let shutdownExitCode = 0;
+let shutdownTimer = null;
+const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 const commands = [
   {
@@ -47,18 +50,44 @@ const prefixStream = (name, stream, output) => {
   });
 };
 
-const stopAll = (exitCode = 0) => {
+const finishShutdownIfReady = () => {
+  if (!shuttingDown || children.size > 0) return;
+  if (shutdownTimer) clearTimeout(shutdownTimer);
+  process.exit(shutdownExitCode);
+};
+
+const stopAll = (exitCode = 0, signal = "SIGTERM") => {
+  shutdownExitCode = Math.max(shutdownExitCode, exitCode);
   if (shuttingDown) return;
   shuttingDown = true;
 
   for (const [name, child] of children) {
-    if (!child.killed) {
-      console.log(`[dev] stop ${name}`);
-      child.kill("SIGTERM");
+    if (child.killed) continue;
+    console.log(`[dev] stop ${name}`);
+
+    // Ctrl+C pada Windows dikirim oleh console ke seluruh process group.
+    // Memanggil child.kill() justru melakukan terminate paksa dan melewati
+    // graceful shutdown SQLite pada backend.
+    if (!(isWindows && ["SIGINT", "SIGHUP", "SIGBREAK"].includes(signal))) {
+      child.kill(signal);
     }
   }
 
-  setTimeout(() => process.exit(exitCode), 300).unref();
+  finishShutdownIfReady();
+  shutdownTimer = setTimeout(() => {
+    const remaining = [...children.entries()];
+    if (remaining.length === 0) return finishShutdownIfReady();
+
+    console.error(`[dev] ${remaining.length} proses belum berhenti setelah ${SHUTDOWN_TIMEOUT_MS} ms. Force stop dijalankan.`);
+    shutdownExitCode = Math.max(shutdownExitCode, 1);
+    for (const [name, child] of remaining) {
+      console.error(`[dev] force stop ${name}`);
+      if (!child.killed) child.kill("SIGKILL");
+    }
+
+    setTimeout(() => process.exit(shutdownExitCode), 1_000).unref();
+  }, SHUTDOWN_TIMEOUT_MS);
+  shutdownTimer.unref();
 };
 
 const spawnDevProcess = (command) => {
@@ -81,7 +110,10 @@ const spawnDevProcess = (command) => {
 
   child.on("exit", (code, signal) => {
     children.delete(command.name);
-    if (shuttingDown) return;
+    if (shuttingDown) {
+      finishShutdownIfReady();
+      return;
+    }
 
     if (code === 0 || signal) {
       console.log(`[${command.name}] selesai.`);
@@ -102,5 +134,7 @@ for (const command of commands) {
   spawnDevProcess(command);
 }
 
-process.on("SIGINT", () => stopAll(0));
-process.on("SIGTERM", () => stopAll(0));
+process.on("SIGINT", () => stopAll(0, "SIGINT"));
+process.on("SIGTERM", () => stopAll(0, "SIGTERM"));
+process.on("SIGHUP", () => stopAll(0, "SIGHUP"));
+if (isWindows) process.on("SIGBREAK", () => stopAll(0, "SIGBREAK"));

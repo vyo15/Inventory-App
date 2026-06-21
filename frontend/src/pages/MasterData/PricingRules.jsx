@@ -32,7 +32,7 @@ import {
   CheckOutlined,
 } from "@ant-design/icons";
 
-import { formatNumberID, parseIntegerIdInput } from "../../utils/formatters/numberId";
+import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { formatCurrencyIDR } from "../../utils/formatters/currencyId";
 import PageHeader from "../../components/Layout/Page/PageHeader";
 import PageSection from "../../components/Layout/Page/PageSection";
@@ -383,15 +383,15 @@ const PricingRules = () => {
       const summary = result?.summary || {};
 
       message.success(
-        `Apply selesai. Updated: ${formatNumberID(
+        `Apply selesai. Updated: ${formatNumberId(
           summary.updatedCount || 0,
-        )}, Manual dilewati: ${formatNumberID(
+        )}, Manual dilewati: ${formatNumberId(
           summary.skippedManualCount || 0,
-        )}, Base cost kosong: ${formatNumberID(
+        )}, Base cost kosong: ${formatNumberId(
           summary.invalidBaseCostCount || 0,
-        )}, Buffer invalid: ${formatNumberID(
+        )}, Buffer invalid: ${formatNumberId(
           summary.invalidMarketplaceBufferCount || 0,
-        )}, Tidak berubah: ${formatNumberID(summary.unchangedCount || 0)}`,
+        )}, Tidak berubah: ${formatNumberId(summary.unchangedCount || 0)}`,
       );
     } catch (error) {
       console.error("Gagal menerapkan pricing rule:", error);
@@ -455,19 +455,19 @@ const PricingRules = () => {
       render: (_, record) => {
         const marginText = record?.marginType === "nominal"
           ? formatCurrencyIDR(record?.marginValue || 0)
-          : `${formatNumberID(record?.marginValue || 0)}%`;
+          : `${formatNumberId(record?.marginValue || 0)}%`;
         const bufferText = !record?.includeMarketplaceBuffer
           ? "Buffer tidak dipakai"
           : record?.marketplaceBufferType === "nominal"
             ? `Buffer ${formatCurrencyIDR(record?.marketplaceBufferValue || 0)}`
-            : `Buffer ${formatNumberID(record?.marketplaceBufferValue || 0)}%`;
+            : `Buffer ${formatNumberId(record?.marketplaceBufferValue || 0)}%`;
 
         return (
           <div className="ims-cell-stack ims-cell-stack-tight">
             <Text>{`Margin ${marginText}`}</Text>
             <Text type="secondary" className="ims-cell-meta">{bufferText}</Text>
             <Text type="secondary" className="ims-cell-meta">
-              {`Pembulatan ${String(record?.roundingType || "up").toUpperCase()} / ${formatNumberID(record?.roundingUnit || 0)}`}
+              {`Pembulatan ${String(record?.roundingType || "up").toUpperCase()} / ${formatNumberId(record?.roundingUnit || 0)}`}
             </Text>
           </div>
         );
@@ -611,9 +611,9 @@ const PricingRules = () => {
       { label: 'Margin', value: (record) => (
         record?.marginType === 'nominal'
           ? formatCurrencyIDR(record?.marginValue || 0)
-          : `${formatNumberID(record?.marginValue || 0)}%`
+          : `${formatNumberId(record?.marginValue || 0)}%`
       ) },
-      { label: 'Pembulatan', value: (record) => `${String(record?.roundingType || 'up').toUpperCase()} / ${formatNumberID(record?.roundingUnit || 0)}` },
+      { label: 'Pembulatan', value: (record) => `${String(record?.roundingType || 'up').toUpperCase()} / ${formatNumberId(record?.roundingUnit || 0)}` },
     ],
     actions: (record) => (
       <div className="ims-action-group ims-action-group--vertical">
@@ -812,7 +812,7 @@ const PricingRules = () => {
                   min={0}
                   step={1}
                   precision={0}
-                  formatter={(value) => formatNumberID(value)}
+                  formatter={(value) => formatNumberId(value)}
                   parser={parseIntegerIdInput}
                 />
               </Form.Item>
@@ -864,7 +864,7 @@ const PricingRules = () => {
                     min={0}
                     step={1}
                     precision={0}
-                    formatter={(value) => formatNumberID(value)}
+                    formatter={(value) => formatNumberId(value)}
                     parser={parseIntegerIdInput}
                   />
                 </Form.Item>
@@ -903,7 +903,7 @@ const PricingRules = () => {
                   min={1}
                   step={1}
                   precision={0}
-                  formatter={(value) => formatNumberID(value)}
+                  formatter={(value) => formatNumberId(value)}
                   parser={parseIntegerIdInput}
                 />
               </Form.Item>

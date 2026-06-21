@@ -66,7 +66,4 @@ export const parseIntegerIdInput = (value) => {
   return normalized ? Number(normalized) : "";
 };
 
-export const formatNumberID = formatNumberId;
-export const formatQuantityID = formatQuantityId;
-export const formatPercentID = formatPercentId;
 export default formatNumberId;

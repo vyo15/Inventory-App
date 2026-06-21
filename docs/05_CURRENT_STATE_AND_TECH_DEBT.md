@@ -4,7 +4,7 @@
 
 Status: **AKTIF / SOURCE-VERIFIED / SQLITE-FIRST**.
 
-Source aktual ZIP `Inventory-App-20260621-223301409-main-9e6581f4-dirty.zip` menunjukkan IMS berjalan dengan arsitektur:
+Source aktual ZIP `Inventory-App-20260621-231755191-main-9e6581f4-dirty.zip` menunjukkan IMS berjalan dengan arsitektur:
 
 - Frontend React/Vite.
 - Backend Node.js Express sebagai satu-satunya akses database.
@@ -75,6 +75,8 @@ Konsekuensi:
 - Soft-delete kas hanya menonaktifkan ledger dengan ID deterministik atau pasangan `source_id` + `source_type`; ledger legacy lain dengan ID sumber sama tidak ikut tersentuh. Audit pasangan kas-ledger memakai kriteria yang sama.
 - `business_code_counters` existing sudah aktif untuk managed code lintas generic master/config, customer/supplier/pricing, transaksi, stock adjustment, finance, dan production. Baseline historis diverifikasi sekali per generasi koneksi database dan diverifikasi ulang setelah close/reopen seperti restore; preview tidak mereservasi dan server response final menjadi authority.
 - Backup lifecycle dan restore full-replace memegang akses database eksklusif sehingga snapshot/file swap tidak berjalan bersama request operasional.
+- Backend memiliki graceful shutdown: HTTP server ditutup, WAL di-checkpoint `TRUNCATE`, dan koneksi SQLite ditutup sebelum exit pada `SIGINT`/`SIGTERM`; dev runner menunggu child exit dan tidak lagi memotong cleanup setelah 300 ms.
+- Import backup sekarang menunggu transaction/audit commit di dalam blok cleanup; jika audit gagal, row `backup_logs` di-rollback dan file import ikut dihapus.
 - Session browser memakai cookie host-only `HttpOnly; SameSite=Lax`; response login tidak mengirim raw token ke JavaScript, endpoint auth memakai `Cache-Control: no-store`, dan header identitas Express dinonaktifkan.
 - Bearer legacy ditolak secara default. Compatibility hanya dapat diaktifkan sementara melalui `IMS_AUTH_ALLOW_LEGACY_BEARER=true` untuk migrasi perangkat lama; flow baru tetap memakai cookie HttpOnly dan tidak menulis token ke `localStorage`.
 - Bootstrap administrator pertama memakai kode setup acak yang hanya tampil di terminal backend; endpoint status tidak mengirim kode tersebut.
@@ -82,7 +84,7 @@ Konsekuensi:
 - Runner command Windows menjalankan `npm.cmd`/`npx.cmd` melalui `cmd.exe`, sehingga shortcut quality gate tidak gagal dengan `spawnSync ... EINVAL` pada Node.js Windows.
 - Production P4 memusatkan create PO dari Planning, Start Production, Complete Work Log, auto payroll, Payroll Paid, finance posting, dan HPP reconcile pada transaction backend SQLite.
 - Generic production CRUD tidak lagi dapat dipakai untuk melewati lifecycle sensitif Planning, Production Order, Work Log, atau Payroll.
-- Test discovery source saat ini mencakup 127 deklarasi test backend pada 28 file, 66 test frontend pada 19 file, dan 8 test tooling. Tambahan backend melindungi FIFO database coordinator, transaction/read concurrency, runtime counter code, password maksimum, serta compatibility backup mock. Coverage backend mencakup rollback/idempotency produksi, backup/restore guarded, auth migration, serta source ZIP hygiene; coverage frontend mencakup auth, role guard, transaksi, endpoint atomic produksi, restore guarded, export XLSX, Dashboard, dan error login.
+- Test discovery source saat ini mencakup 131 test backend pada 29 file, 82 test frontend pada 23 file, dan 9 test tooling. Tambahan backend melindungi FIFO database coordinator, transaction/read concurrency, runtime counter code, password maksimum, serta compatibility backup mock. Coverage backend mencakup rollback/idempotency produksi, backup/restore guarded, auth migration, serta source ZIP hygiene; coverage frontend mencakup auth, role guard, transaksi, endpoint atomic produksi, restore guarded, export XLSX, Dashboard, dan error login.
 
 ## Tech debt aktif yang masih perlu dijaga
 
@@ -143,6 +145,7 @@ Jangan membuat perhitungan stok baru di UI.
 - Repair otomatis untuk stok utama, transaksi, finance, production, payroll, HPP, dan historical migration tetap tidak tersedia.
 
 - Backup resmi memakai satu file compact `.imsbackup` dari backend; backup legacy `.imsbak.zip` tetap didukung untuk restore.
+- File runtime `.sqlite`, `.sqlite-wal`, dan `.sqlite-shm` adalah satu database logis. Sidecar boleh muncul saat backend aktif dan wajib dilepas melalui graceful shutdown; user tidak boleh menghapusnya manual.
 - Restore wajib import/daftar backup resmi, preview, validasi, pre-restore backup, keyword `RESTORE DATABASE`, dan audit log. Backup `pre-restore` dan backup sumber restore harus dipastikan tercatat ulang ke database hasil restore agar rollback serta traceability tetap terlihat di daftar backup.
 - Export Master aktif membaca data master SQLite secara read-only dari backend untuk arsip/review; export ini bukan paket restore dan tidak boleh menggantikan `.imsbackup`.
 - Reset testing lama tetap nonaktif/redirect lama.
@@ -170,7 +173,7 @@ Jangan membuat perhitungan stok baru di UI.
 
 ## Status temuan P0–P3 setelah hardening 2026-06-21
 
-- **Selesai di source:** application-level serialization untuk singleton SQLite, central transaction helper, concurrency regression, runtime business counter, Date.now reference fallback pada flow resmi, backup/restore exclusivity, dan password maksimum 128 karakter.
+- **Selesai di source:** application-level serialization untuk singleton SQLite, central transaction helper, concurrency regression, runtime business counter, Date.now reference fallback pada flow resmi, backup/restore exclusivity, password maksimum 128 karakter, graceful shutdown WAL/SHM, atomic cleanup import backup, direct dependency declaration, serta standardisasi formatter `formatNumberId`.
 - **Masih proses release:** ZIP review terbaru berlabel `dirty` dan tidak membawa metadata `.git`; working tree clean, commit lengkap, dan kesamaan upstream hanya dapat dibuktikan pada mesin project melalui `npm run git:check:full` dan `npm run verify:source` setelah seluruh patch di-commit.
 - **Masih residual:** chunk terbesar setelah vendor split stabil sekitar 706.6 KiB dari budget 1074.2 KiB. React/React Router dan Day.js dipisahkan tanpa circular chunk; business/page modules tetap mengikuti route lazy.
 - **Masih residual dependency:** `xlsx@0.18.5` dan `esbuild@0.27.7` tetap terdokumentasi; tidak ada force upgrade/override major.
@@ -209,7 +212,7 @@ Jangan membuat perhitungan stok baru di UI.
 - Endpoint `/api/auth/me` mencatat audit `legacy_bearer_migrated` hanya ketika session lama benar-benar datang melalui Bearer dan kemudian diberi cookie HttpOnly.
 - Audit migrasi dibuat idempotent per `local_user_session`; request Bearer berulang dari session yang sama tidak menambah audit duplikat.
 - Maintenance Center menampilkan jumlah migrasi, migrasi tujuh hari terakhir, dan waktu migrasi terakhir.
-- Evidence tersebut tidak otomatis membuktikan semua perangkat sudah selesai. Konfirmasi manual laptop/HP tetap wajib sebelum `IMS_AUTH_ALLOW_LEGACY_BEARER=false`.
+- Evidence tersebut tidak otomatis membuktikan semua perangkat sudah selesai. Default sekarang tetap `false`; jika compatibility pernah diaktifkan kembali untuk migrasi perangkat lama, konfirmasi laptop/HP wajib dilakukan sebelum flag dikembalikan ke `false`.
 - Parser Bearer belum dihapus permanen karena cutover operasional seluruh perangkat belum dapat dibuktikan dari source.
 
 ### P9 — dependency hardening selektif

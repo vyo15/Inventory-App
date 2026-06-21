@@ -13,7 +13,9 @@
     "test:coverage": "vitest run --coverage --pool=vmThreads --no-file-parallelism --maxWorkers=1"
   },
   "dependencies": {
+    "@ant-design/icons": "^5.6.1",
     "antd": "^5.27.4",
+    "dayjs": "^1.11.20",
     "file-saver": "^2.0.5",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

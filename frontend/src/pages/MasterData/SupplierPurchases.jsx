@@ -34,7 +34,7 @@ import {
   listSuppliers as listSupplierRepository,
   updateSupplier as updateSupplierRepository,
 } from '../../data/repositories/suppliersRepository';
-import { formatNumberID, parseIntegerIdInput } from '../../utils/formatters/numberId';
+import { formatNumberId, parseIntegerIdInput } from '../../utils/formatters/numberId';
 import { formatCurrencyIDR } from '../../utils/formatters/currencyId';
 import FilterBar from '../../components/Layout/Filters/FilterBar';
 import PageHeader from '../../components/Layout/Page/PageHeader';
@@ -577,7 +577,7 @@ const SupplierPurchases = () => {
             </Space>
             {detail ? (
               <span className="ims-cell-meta">
-                Qty Beli {formatNumberID(detail.purchaseQty || 1)} {detail.purchaseUnit || 'satuan'} · Konversi Supplier {formatNumberID(detail.conversionValue || 0)} {detail.stockUnit || 'stok'}
+                Qty Beli {formatNumberId(detail.purchaseQty || 1)} {detail.purchaseUnit || 'satuan'} · Konversi Supplier {formatNumberId(detail.conversionValue || 0)} {detail.stockUnit || 'stok'}
               </span>
             ) : null}
           </Space>
@@ -692,10 +692,10 @@ const SupplierPurchases = () => {
       render: (_, record) => (
         <Space direction="vertical" size={2}>
           <span>
-            {formatNumberID(record.purchaseQty || 1)} {record.purchaseUnit || 'satuan beli'}
+            {formatNumberId(record.purchaseQty || 1)} {record.purchaseUnit || 'satuan beli'}
           </span>
           <span className="ims-cell-meta">
-            = {formatNumberID(record.conversionValue || 0)} {record.stockUnit || 'satuan stok'}
+            = {formatNumberId(record.conversionValue || 0)} {record.stockUnit || 'satuan stok'}
           </span>
         </Space>
       ),
@@ -1109,7 +1109,7 @@ const SupplierPurchases = () => {
                           initialValue={1}
                           extra="Contoh: pack, roll, atau dus."
                         >
-                          <InputNumber min={1} step={1} precision={0} style={{ width: '100%' }} formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
+                          <InputNumber min={1} step={1} precision={0} style={{ width: '100%' }} formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
                         </Form.Item>
                       </Col>
 
@@ -1120,7 +1120,7 @@ const SupplierPurchases = () => {
                           label="Konversi Supplier"
                           extra="Contoh: 1 pack = 6 pcs."
                         >
-                          <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
+                          <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
                         </Form.Item>
                       </Col>
 
@@ -1145,7 +1145,7 @@ const SupplierPurchases = () => {
 
                       <Col xs={24} md={12}>
                         <Form.Item {...restField} name={[name, 'supplierItemPrice']} label="Harga Barang Supplier">
-                          <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
+                          <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
                         </Form.Item>
                       </Col>
 
@@ -1167,19 +1167,19 @@ const SupplierPurchases = () => {
                               --------------------------------------------------------- */}
                               <Col xs={24} md={12}>
                                 <Form.Item {...restField} name={[name, 'estimatedShippingCost']} label="Ongkir Default">
-                                  <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
+                                  <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
                                 </Form.Item>
                               </Col>
 
                               <Col xs={24} md={12}>
                                 <Form.Item {...restField} name={[name, 'serviceFee']} label="Biaya Layanan Default">
-                                  <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
+                                  <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
                                 </Form.Item>
                               </Col>
 
                               <Col xs={24} md={12}>
                                 <Form.Item {...restField} name={[name, 'discount']} label="Voucher Default">
-                                  <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberID(value)} parser={parseIntegerIdInput} />
+                                  <InputNumber min={0} step={1} precision={0} style={{ width: '100%' }} addonBefore="Rp" formatter={(value) => formatNumberId(value)} parser={parseIntegerIdInput} />
                                 </Form.Item>
                               </Col>
                             </>
@@ -1207,7 +1207,7 @@ const SupplierPurchases = () => {
                             description={
                               <Space direction="vertical" size={2}>
                                 <span>Total estimasi: <strong>{formatCurrencyIDR(metrics.totalEstimatedSupplier || 0)}</strong></span>
-                                <span>Total stok: <strong>{formatNumberID(metrics.totalStockQty || 0)} {detail.stockUnit || 'satuan stok'}</strong></span>
+                                <span>Total stok: <strong>{formatNumberId(metrics.totalStockQty || 0)} {detail.stockUnit || 'satuan stok'}</strong></span>
                                 <span>Harga / satuan stok: <strong>{formatCurrencyIDR(metrics.estimatedUnitPrice || 0)}</strong></span>
                               </Space>
                             }
@@ -1342,8 +1342,8 @@ const SupplierPurchases = () => {
                     </Tag>
                   ),
                   meta: [
-                    { label: 'Qty Beli', value: (record) => `${formatNumberID(record.purchaseQty || 1)} ${record.purchaseUnit || 'satuan beli'}` },
-                    { label: 'Konversi', value: (record) => `${formatNumberID(record.conversionValue || 0)} ${record.stockUnit || 'satuan stok'}` },
+                    { label: 'Qty Beli', value: (record) => `${formatNumberId(record.purchaseQty || 1)} ${record.purchaseUnit || 'satuan beli'}` },
+                    { label: 'Konversi', value: (record) => `${formatNumberId(record.conversionValue || 0)} ${record.stockUnit || 'satuan stok'}` },
                     {
                       label: 'Estimasi/Unit',
                       value: (record) => {

@@ -419,6 +419,13 @@ const OfflineDatabaseCenter = () => {
         </Col>
       </Row>
 
+      <ImsNotice
+        variant="info"
+        compact
+        title="Satu database logis, beberapa file runtime"
+        description="Saat layanan aktif, SQLite mode WAL dapat menampilkan file .sqlite, .sqlite-wal, dan .sqlite-shm di folder data. Ketiganya adalah satu database yang sama. Setelah layanan dihentikan normal, backend melakukan checkpoint dan menutup koneksi agar file WAL/SHM dilepas. Jangan menghapus file tersebut secara manual."
+      />
+
       <Descriptions size="small" bordered column={{ xs: 1, lg: 2 }}>
         <Descriptions.Item label="Status Layanan">{modeTag}</Descriptions.Item>
         <Descriptions.Item label="Schema DB">{statusData.schemaVersion || "-"}</Descriptions.Item>

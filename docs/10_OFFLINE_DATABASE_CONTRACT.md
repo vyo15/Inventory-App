@@ -26,6 +26,15 @@ Source aktual memakai backend Node.js + SQLite sebagai runtime utama. Dokumen in
 - Maintenance, backup, restore.
 - Module Runtime Status.
 
+## Runtime file dan shutdown contract
+
+- Database aktif tetap satu database logis walaupun mode WAL dapat membuat tiga file fisik di folder `data/`: `.sqlite`, `.sqlite-wal`, dan `.sqlite-shm`.
+- File WAL/SHM wajib berada di folder yang sama dengan file utama dan dikelola SQLite. User dilarang menghapus, memindahkan, atau menyalinnya secara parsial saat backend aktif.
+- Backend wajib menangani `SIGINT`, `SIGTERM`, dan `SIGHUP` serta `SIGBREAK` pada Windows, berhenti menerima request baru, menunggu HTTP server close, menjalankan `PRAGMA wal_checkpoint(TRUNCATE)`, lalu menutup koneksi SQLite.
+- Dev runner wajib menunggu child backend/frontend berhenti. Parent tidak boleh memotong cleanup database dengan fixed timeout sangat pendek; force-stop hanya menjadi fallback setelah timeout shutdown yang wajar.
+- Setelah shutdown normal, file WAL/SHM harus dilepas. Jika proses mati paksa, sidecar dapat tertinggal dan harus dibiarkan agar SQLite melakukan recovery saat backend dibuka kembali.
+- Backup portable tetap satu file `.imsbackup`; database runtime tidak boleh dijalankan langsung dari package backup.
+
 ## Guard mutation
 
 Mutation berikut wajib atomic/guarded di backend:

@@ -29,6 +29,7 @@ Perbaikan lockfile:
 - `@babel/core` dipaksa ke `7.29.7`.
 - `js-yaml` dipaksa ke `4.2.0`.
 - Dependency `@ant-design/charts` dihapus karena audit import/usage tidak menemukan pemanggil aktif.
+- `dayjs@^1.11.20` dan `@ant-design/icons@^5.6.1` sekarang dideklarasikan langsung karena source mengimpornya secara langsung; project tidak lagi bergantung pada hoisting transitif dari Ant Design.
 - Seluruh URL resolved lockfile memakai registry npm publik.
 
 Residual yang belum diubah secara paksa. Patch concurrent-write/runtime-counter tidak mengubah dependency atau lockfile:

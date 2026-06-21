@@ -50,6 +50,8 @@ Gunakan menu **Maintenance & Backup Center**. Restore penuh hanya menerima File 
 
 Jangan menyalin file SQLite aktif secara manual saat backend berjalan.
 
+Database runtime memakai mode WAL. Saat backend aktif, folder `data/` dapat berisi file utama `.sqlite` beserta `.sqlite-wal` dan `.sqlite-shm`; ketiganya adalah satu database logis. Hentikan layanan dengan `Ctrl+C` dan tunggu log shutdown selesai agar backend melakukan checkpoint serta menutup database. Jangan menghapus WAL/SHM secara manual. Backup portable tetap satu file `.imsbackup`.
+
 ## Source ZIP untuk review
 
 ZIP review harus berisi source working tree terbaru, tanpa:

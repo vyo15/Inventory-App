@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const env = require("./config/env");
 const { runMigrations } = require("./db/migrate");
-const { getDbPath } = require("./db/connection");
+const { closeDb, getDbPath } = require("./db/connection");
 const { ensureDailyBackupForToday } = require("./utils/sqliteBackup");
 const requestLogger = require("./middlewares/requestLogger");
 const securityHeaders = require("./middlewares/securityHeaders");
@@ -82,10 +82,69 @@ app.use("/api/migration-status", migrationStatusRoutes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-async function startServer() {
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+let httpServer = null;
+let startupPromise = null;
+let shutdownPromise = null;
+let shutdownRequested = false;
+
+const listenForRequests = () => new Promise((resolve, reject) => {
+  const server = app.listen(env.port, env.host);
+  httpServer = server;
+
+  const handleError = (error) => {
+    server.off("listening", handleListening);
+    if (httpServer === server) httpServer = null;
+    reject(error);
+  };
+  const handleListening = () => {
+    server.off("error", handleError);
+    resolve(server);
+  };
+
+  server.once("error", handleError);
+  server.once("listening", handleListening);
+});
+
+const closeHttpServer = () => new Promise((resolve, reject) => {
+  if (!httpServer) return resolve();
+  const server = httpServer;
+
+  const closeListeningServer = () => {
+    server.close((error) => {
+      httpServer = null;
+      if (error) reject(error);
+      else resolve();
+    });
+    server.closeIdleConnections?.();
+  };
+
+  if (server.listening) {
+    closeListeningServer();
+    return;
+  }
+
+  const handleListening = () => {
+    server.off("error", handleError);
+    closeListeningServer();
+  };
+  const handleError = (error) => {
+    server.off("listening", handleListening);
+    httpServer = null;
+    reject(error);
+  };
+
+  server.once("listening", handleListening);
+  server.once("error", handleError);
+});
+
+const performStartup = async () => {
   await runMigrations();
+  if (shutdownRequested) return null;
 
   const authStatus = await authService.getAuthStatus();
+  if (shutdownRequested) return null;
+
   if (authStatus.bootstrapRequired) {
     console.warn("============================================================");
     console.warn("SETUP ADMIN PERTAMA IMS");
@@ -104,16 +163,130 @@ async function startServer() {
     logger.warn("daily_backup_failed", { error });
   }
 
-  app.listen(env.port, env.host, () => {
-    logger.info("ims_local_server_started", {
-      address: `http://localhost:${env.port}`,
-      databasePath: getDbPath(),
-      mode: "sqlite_primary_guarded",
+  if (shutdownRequested) return null;
+
+  const server = await listenForRequests();
+  const address = server.address();
+  const activePort = typeof address === "object" && address ? address.port : env.port;
+  logger.info("ims_local_server_started", {
+    address: `http://localhost:${activePort}`,
+    databasePath: getDbPath(),
+    mode: "sqlite_primary_guarded",
+  });
+  return server;
+};
+
+function startServer() {
+  if (httpServer?.listening) return Promise.resolve(httpServer);
+  if (startupPromise) return startupPromise;
+  if (shutdownRequested) return Promise.resolve(null);
+
+  const pendingStartup = performStartup();
+  startupPromise = pendingStartup;
+  const clearStartupPromise = () => {
+    if (startupPromise === pendingStartup) startupPromise = null;
+  };
+  pendingStartup.then(clearStartupPromise, clearStartupPromise);
+  return pendingStartup;
+}
+
+const shutdownServer = ({ reason = "manual", exitCode = 0, exitProcess = false } = {}) => {
+  if (shutdownPromise) return shutdownPromise;
+  shutdownRequested = true;
+
+  shutdownPromise = (async () => {
+    logger.info("ims_local_server_shutdown_started", { reason });
+    let finalExitCode = exitCode;
+    let forceTimer = null;
+
+    if (exitProcess) {
+      forceTimer = setTimeout(() => {
+        logger.error("ims_local_server_shutdown_timeout", {
+          reason,
+          timeoutMs: SHUTDOWN_TIMEOUT_MS,
+        });
+        httpServer?.closeAllConnections?.();
+        process.exit(1);
+      }, SHUTDOWN_TIMEOUT_MS);
+      forceTimer.unref();
+    }
+
+    if (startupPromise) {
+      try {
+        await startupPromise;
+      } catch (error) {
+        logger.warn("ims_local_startup_settled_during_shutdown", { reason, error });
+      }
+    }
+
+    try {
+      await closeHttpServer();
+    } catch (error) {
+      finalExitCode = 1;
+      logger.error("ims_local_http_server_close_failed", { reason, error });
+      httpServer?.closeAllConnections?.();
+      httpServer = null;
+    }
+
+    try {
+      await closeDb();
+    } catch (error) {
+      finalExitCode = 1;
+      logger.error("ims_local_database_close_failed", { reason, error });
+    }
+
+    if (forceTimer) clearTimeout(forceTimer);
+    logger.info("ims_local_server_shutdown_completed", {
+      reason,
+      exitCode: finalExitCode,
     });
+
+    if (exitProcess) process.exit(finalExitCode);
+    return { exitCode: finalExitCode };
+  })();
+
+  return shutdownPromise;
+};
+
+const installProcessShutdownHandlers = () => {
+  process.once("SIGINT", () => {
+    void shutdownServer({ reason: "SIGINT", exitCode: 0, exitProcess: true });
+  });
+  process.once("SIGTERM", () => {
+    void shutdownServer({ reason: "SIGTERM", exitCode: 0, exitProcess: true });
+  });
+  process.once("SIGHUP", () => {
+    void shutdownServer({ reason: "SIGHUP", exitCode: 0, exitProcess: true });
+  });
+  if (process.platform === "win32") {
+    process.once("SIGBREAK", () => {
+      void shutdownServer({ reason: "SIGBREAK", exitCode: 0, exitProcess: true });
+    });
+  }
+  process.once("uncaughtException", (error) => {
+    logger.error("ims_local_server_uncaught_exception", { error });
+    void shutdownServer({ reason: "uncaughtException", exitCode: 1, exitProcess: true });
+  });
+  process.once("unhandledRejection", (reason) => {
+    logger.error("ims_local_server_unhandled_rejection", { reason });
+    void shutdownServer({ reason: "unhandledRejection", exitCode: 1, exitProcess: true });
+  });
+  process.once("SIGUSR2", () => {
+    void shutdownServer({ reason: "SIGUSR2", exitCode: 0, exitProcess: false })
+      .finally(() => process.kill(process.pid, "SIGUSR2"));
+  });
+};
+
+if (require.main === module) {
+  installProcessShutdownHandlers();
+  startServer().catch((error) => {
+    logger.error("ims_local_server_start_failed", { error });
+    void shutdownServer({ reason: "startup_failure", exitCode: 1, exitProcess: true });
   });
 }
 
-startServer().catch((error) => {
-  logger.error("ims_local_server_start_failed", { error });
-  process.exit(1);
-});
+module.exports = {
+  app,
+  shutdownServer,
+  startServer,
+};
