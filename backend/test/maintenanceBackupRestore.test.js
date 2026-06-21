@@ -15,10 +15,15 @@ const {
 } = require("../src/modules/maintenance/maintenance.service");
 const {
   RESTORE_CONFIRM_KEYWORD,
+  applyBackupRetention,
+  createOfficialSqliteBackup,
   ensureDailyBackupForToday,
+  ensureMonthlyBackups,
   getBackupPreview,
   readBackupManifest,
 } = require("../src/utils/sqliteBackup");
+
+const createLocalDate = (year, monthIndex, day, hour = 12) => new Date(year, monthIndex, day, hour, 0, 0, 0);
 
 const resetBackupDirectory = () => {
   fs.rmSync(testDatabase.backupDir, { recursive: true, force: true });
@@ -61,7 +66,8 @@ test("backup resmi membuat package, manifest, checksum validation, log, dan audi
   assert.equal(backup.status, "verified");
   assert.equal(backup.backupType, "test");
   assert.equal(fs.existsSync(backup.path), true);
-  assert.equal(fs.existsSync(`${backup.path}.manifest.json`), true);
+  assert.equal(fs.existsSync(`${backup.path}.manifest.json`), false);
+  assert.equal(path.basename(path.dirname(backup.path)), "manual");
 
   const manifest = readBackupManifest(backup.path);
   assert.equal(manifest.backupFormat, "imsbackup");
@@ -93,6 +99,75 @@ test("auto daily backup idempotent untuk hari yang sama", async () => {
 
   const backups = await listBackups();
   assert.equal(backups.filter((item) => item.backupType === "daily").length, 1);
+});
+
+
+
+test("monthly dipromosikan dari daily terakhir bulan sebelumnya dan idempotent", async () => {
+  const db = await testDatabase.getDb();
+  const januaryEarly = await createOfficialSqliteBackup(db, {
+    type: "daily",
+    actor: "monthly-tester",
+    createdAt: createLocalDate(2026, 0, 10),
+  });
+  const januaryLatest = await createOfficialSqliteBackup(db, {
+    type: "daily",
+    actor: "monthly-tester",
+    createdAt: createLocalDate(2026, 0, 31, 23),
+  });
+
+  const first = await ensureMonthlyBackups({
+    actor: "monthly-tester",
+    referenceDate: createLocalDate(2026, 1, 1, 2),
+  });
+  const second = await ensureMonthlyBackups({
+    actor: "monthly-tester",
+    referenceDate: createLocalDate(2026, 1, 1, 3),
+  });
+
+  assert.equal(first.created.length, 1);
+  assert.equal(second.created.length, 0);
+  assert.equal(first.created[0].backupType, "monthly");
+  assert.equal(first.created[0].manifest.promotedFrom, januaryLatest.filename);
+  assert.equal(new Date(first.created[0].manifest.createdAt).getMonth(), 0);
+  assert.notEqual(first.created[0].manifest.promotedFrom, januaryEarly.filename);
+  assert.equal(path.basename(path.dirname(first.created[0].path)), "monthly");
+  assert.equal(fs.existsSync(`${first.created[0].path}.manifest.json`), false);
+});
+
+test("retention menghapus daily lebih dari 60 hari hanya jika monthly tersedia", async () => {
+  const db = await testDatabase.getDb();
+  const oldDaily = await createOfficialSqliteBackup(db, {
+    type: "daily",
+    actor: "retention-tester",
+    createdAt: "2026-01-15T03:00:00.000Z",
+  });
+  const protectedDaily = await createOfficialSqliteBackup(db, {
+    type: "daily",
+    actor: "retention-tester",
+    createdAt: "2025-12-15T03:00:00.000Z",
+  });
+
+  await ensureMonthlyBackups({
+    actor: "retention-tester",
+    referenceDate: new Date("2026-02-01T03:00:00.000Z"),
+  });
+
+  const monthlyRows = await db.all("SELECT * FROM backup_logs WHERE filename LIKE '%-monthly.imsbackup'");
+  const decemberMonthly = monthlyRows.find((row) => row.filename.includes("202512"));
+  if (decemberMonthly?.path) {
+    fs.rmSync(decemberMonthly.path, { force: true });
+    await db.run("UPDATE backup_logs SET status = 'retention_deleted' WHERE id = ?", [decemberMonthly.id]);
+  }
+
+  const result = await applyBackupRetention({
+    actor: "retention-tester",
+    referenceDate: new Date("2026-04-01T03:00:00.000Z"),
+  });
+
+  assert.equal(result.deleted.some((item) => item.filename === oldDaily.filename), true);
+  assert.equal(fs.existsSync(oldDaily.path), false);
+  assert.equal(fs.existsSync(protectedDaily.path), true);
 });
 
 test("restore plan dan keyword salah tidak mengubah database aktif", async () => {
@@ -197,7 +272,7 @@ test("import backup menormalkan filename dan hanya menerima package valid", asyn
 
   assert.equal(imported.validForRestore, true);
   assert.equal(imported.originalFilename, "unsafe backup.imsbackup");
-  assert.equal(path.dirname(imported.path), path.join(testDatabase.backupDir, "imported"));
+  assert.equal(path.dirname(imported.path), path.join(testDatabase.backupDir, "manual"));
   assert.equal(fs.existsSync(imported.path), true);
 
   await assert.rejects(

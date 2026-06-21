@@ -65,6 +65,7 @@ import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import InfoPopoverButton from "../../components/Layout/Feedback/InfoPopoverButton";
 import SemiFinishedMaterialsListView from "./components/SemiFinishedMaterialsListView";
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
+import { isVariantStockEmpty } from '../../utils/variants/variantArchiveHelpers';
 import {
   buildFormValues,
   buildSemiFinishedGroupOptions,
@@ -124,6 +125,11 @@ const SemiFinishedMaterials = () => {
     && Number(editingMaterial?.reservedStock || 0) <= 0
     && Number(editingMaterial?.availableStock ?? 0) <= 0;
   const hasVariantModeSwitchLocked = isEditingMaterial && !canActivateVariantsForEditing;
+  const isGuardedVariantStock = (fieldName) => {
+    if (!isEditingMaterial) return false;
+    const variant = form.getFieldValue(['variants', fieldName]) || {};
+    return Boolean(variant.variantKey) && !isVariantStockEmpty(variant);
+  };
   const stockEditHelpText = 'Ubah stok lewat Stock Management / Stock Adjustment / transaksi resmi.';
   const flowerGroupFormOptions = useMemo(() => buildSemiFinishedGroupOptions(materials), [materials]);
   const flowerGroupFilterOptions = useMemo(
@@ -392,7 +398,9 @@ const SemiFinishedMaterials = () => {
       setSubmitting(true);
 
       if (editingMaterial?.id) {
-        await updateSemiFinishedMaterial(editingMaterial.id, payload, [], null);
+        await updateSemiFinishedMaterial(editingMaterial.id, payload, {
+          expectedVersion: editingMaterial.versionToken || editingMaterial.updatedAt || '',
+        });
         message.success("Semi finished material berhasil diperbarui");
       } else {
         await createSemiFinishedMaterial(payload, [], null);
@@ -415,7 +423,7 @@ const SemiFinishedMaterials = () => {
       }
 
       console.error(error);
-      message.error("Gagal menyimpan semi finished material");
+      message.error(error?.message || "Gagal menyimpan semi finished material");
     } finally {
       setSubmitting(false);
     }
@@ -430,7 +438,7 @@ const SemiFinishedMaterials = () => {
     const isCurrentlyActive = record.isActive !== false;
 
     try {
-      await toggleSemiFinishedMaterialActive(record.id, !isCurrentlyActive, null);
+      await toggleSemiFinishedMaterialActive(record.id, !isCurrentlyActive);
       message.success(
         `Semi finished material berhasil ${
           isCurrentlyActive ? "dinonaktifkan" : "diaktifkan"
@@ -439,7 +447,7 @@ const SemiFinishedMaterials = () => {
       await loadData();
     } catch (error) {
       console.error(error);
-      message.error("Gagal mengubah status semi finished material");
+      message.error(error?.message || "Gagal mengubah status semi finished material");
     }
   };
 
@@ -1093,7 +1101,7 @@ const SemiFinishedMaterials = () => {
                           danger
                           size="small"
                           icon={<DeleteOutlined />}
-                          disabled={fields.length === 1}
+                          disabled={fields.length === 1 || isGuardedVariantStock(field.name)}
                           onClick={() => remove(field.name)}
                         >
                           Hapus Varian
@@ -1131,7 +1139,7 @@ const SemiFinishedMaterials = () => {
                           name={[field.name, "isActive"]}
                           valuePropName="checked"
                         >
-                          <Switch />
+                          <Switch disabled={isGuardedVariantStock(field.name)} />
                         </Form.Item>
                       </Col>
 
@@ -1162,8 +1170,16 @@ const SemiFinishedMaterials = () => {
                           {...field}
                           label="Average Cost / Unit"
                           name={[field.name, "averageCostPerUnit"]}
+                          extra={isEditingMaterial ? 'Average cost varian berasal dari produksi dan dikunci saat edit master.' : undefined}
                         >
-                          <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
+                          <InputNumber
+                            min={0}
+                            step={1}
+                            precision={0}
+                            parser={parseIntegerIdInput}
+                            style={{ width: "100%" }}
+                            disabled={isEditingMaterial}
+                          />
                         </Form.Item>
                       </Col>
                     </Row>
@@ -1200,8 +1216,19 @@ const SemiFinishedMaterials = () => {
                 </Form.Item>
               </Col>
               <Col xs={24} md={6}>
-                <Form.Item label="Average Cost / Unit" name="averageCostPerUnit">
-                  <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
+                <Form.Item
+                  label="Average Cost / Unit"
+                  name="averageCostPerUnit"
+                  extra={isEditingMaterial ? 'Average cost berasal dari produksi dan dikunci saat edit master.' : undefined}
+                >
+                  <InputNumber
+                    min={0}
+                    step={1}
+                    precision={0}
+                    parser={parseIntegerIdInput}
+                    style={{ width: "100%" }}
+                    disabled={isEditingMaterial}
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -1311,8 +1338,16 @@ const SemiFinishedMaterials = () => {
               <Form.Item
                 label="Last Production Cost / Unit"
                 name="lastProductionCostPerUnit"
+                extra={isEditingMaterial ? 'Nilai ini berasal dari production completion dan dikunci saat edit master.' : undefined}
               >
-                <InputNumber min={0} step={1} precision={0} parser={parseIntegerIdInput} style={{ width: "100%" }} />
+                <InputNumber
+                  min={0}
+                  step={1}
+                  precision={0}
+                  parser={parseIntegerIdInput}
+                  style={{ width: "100%" }}
+                  disabled={isEditingMaterial}
+                />
               </Form.Item>
             </Col>
 

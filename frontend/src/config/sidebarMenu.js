@@ -17,8 +17,8 @@ import {
   CalendarOutlined,
   UserSwitchOutlined,
 } from "@ant-design/icons";
+import { APP_ROUTES } from "./appRoutes";
 import { ROLE_GROUPS } from "../utils/auth/roleAccess";
-import { MODULE_HUB_PATHS } from "../utils/navigation/sidebarNavigation";
 
 // IMS NOTE [AKTIF / GUARDED]:
 // Sidebar memakai ROLE_GROUPS.ADMIN_ONLY untuk menu sensitif Administrator dan ROLE_GROUPS.OPERATIONAL_DAILY untuk menu operasional harian.
@@ -119,13 +119,13 @@ export const sidebarMenuItems = [
     key: "inventory",
     icon: AppstoreOutlined,
     label: "Stock Control",
-    hubPath: MODULE_HUB_PATHS.INVENTORY,
+    hubPath: APP_ROUTES.INVENTORY.HUB,
     allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
     children: [
       {
         key: "stock-management",
         label: "Stock Management",
-        path: "/stock-management",
+        path: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
         allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
       },
     ],
@@ -143,7 +143,7 @@ export const sidebarMenuItems = [
     key: "productions",
     icon: BuildOutlined,
     label: "Produksi",
-    hubPath: MODULE_HUB_PATHS.PRODUCTION,
+    hubPath: APP_ROUTES.PRODUCTION.HUB,
     allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
     children: [
       {
@@ -155,21 +155,21 @@ export const sidebarMenuItems = [
           {
             key: "production-planning",
             label: "Production Planning",
-            path: "/produksi/production-planning",
+            path: APP_ROUTES.PRODUCTION.PLANNING,
             icon: CalendarOutlined,
             allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
           },
           {
             key: "production-orders",
             label: "Order Produksi",
-            path: "/produksi/production-orders",
+            path: APP_ROUTES.PRODUCTION.ORDERS,
             icon: FileTextOutlined,
             allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
           },
           {
             key: "production-work-logs",
             label: "Work Log Produksi",
-            path: "/produksi/work-log-produksi",
+            path: APP_ROUTES.PRODUCTION.WORK_LOGS,
             icon: FileTextOutlined,
             allowedRoles: ROLE_GROUPS.OPERATIONAL_DAILY,
           },
@@ -184,35 +184,35 @@ export const sidebarMenuItems = [
           {
             key: "production-steps",
             label: "Tahapan Produksi",
-            path: "/produksi/tahapan-produksi",
+            path: APP_ROUTES.PRODUCTION.STEPS,
             icon: ApartmentOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "production-employees",
             label: "Karyawan Produksi",
-            path: "/produksi/karyawan-produksi",
+            path: APP_ROUTES.PRODUCTION.EMPLOYEES,
             icon: TeamOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "production-profiles",
             label: "Production Profile / Template",
-            path: "/produksi/profil-produksi",
+            path: APP_ROUTES.PRODUCTION.PROFILES,
             icon: FileTextOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "semi-finished-materials",
             label: "Semi Product",
-            path: "/produksi/semi-finished-materials",
+            path: APP_ROUTES.PRODUCTION.SEMI_FINISHED_MATERIALS,
             icon: ClusterOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "production-boms",
             label: "BOM / Resep Produksi",
-            path: "/produksi/bom-produksi",
+            path: APP_ROUTES.PRODUCTION.BOMS,
             icon: DeploymentUnitOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
@@ -227,14 +227,14 @@ export const sidebarMenuItems = [
           {
             key: "production-payrolls",
             label: "Payroll Produksi",
-            path: "/produksi/payroll-produksi",
+            path: APP_ROUTES.PRODUCTION.PAYROLLS,
             icon: MoneyCollectOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },
           {
             key: "production-hpp-analysis",
             label: "Analisis HPP Produksi",
-            path: "/produksi/analisis-hpp",
+            path: APP_ROUTES.PRODUCTION.HPP_ANALYSIS,
             icon: AppstoreOutlined,
             allowedRoles: ROLE_GROUPS.ADMIN_ONLY,
           },

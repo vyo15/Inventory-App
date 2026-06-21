@@ -499,11 +499,10 @@ const createSqlitePricingUpdatePayload = ({
   const normalizedRule = normalizePricingRule(rule);
   const now = new Date().toISOString();
   const basePayload = {
-    ...originalItem,
     pricingMode: originalItem?.pricingMode || "rule",
     pricingRuleId: normalizedRule.id || null,
     lastPricingUpdatedAt: now,
-    updatedAt: now,
+    expectedVersion: originalItem?.versionToken || originalItem?.updatedAt || "",
   };
 
   if (targetType === "products") {

@@ -236,7 +236,7 @@ const renderAdjustmentReasonNote = (_, record = {}) => {
 // - mutasi stok memakai transaksi layanan database lokal dan helper stock mutation agar stock/currentStock/availableStock/variants[] sinkron
 // Status:
 // - aktif/final untuk adjustment stok manual
-// - bukan halaman route mandiri; route lama /stock-adjustment hanya redirect ke /stock-management
+// - bukan halaman route mandiri; /stock-adjustment hanya compatibility redirect ke /inventory/stock-management
 // =========================
 const StockAdjustmentPanel = ({ onAdjustmentSaved }) => {
   // =========================

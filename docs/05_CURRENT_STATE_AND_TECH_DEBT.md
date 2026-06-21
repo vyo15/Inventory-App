@@ -128,7 +128,9 @@ Jangan membuat perhitungan stok baru di UI.
 
 ### 7. Backup, restore, dan reset
 
-- Backup resmi memakai satu file compact `.imsbackup` dari backend; backup legacy `.imsbak.zip` tetap didukung untuk restore.
+- Backup resmi memakai satu file compact `.imsbackup` dari backend; manifest/checksum berada di dalam package dan sidecar `.manifest.json` baru tidak dibuat lagi. Backup legacy `.imsbak.zip` serta sidecar lama tetap didukung untuk restore.
+- Struktur backup aktif hanya `daily/`, `monthly/`, dan `manual/`. Daily maksimal satu per hari dengan retensi 60 hari. Monthly dipromosikan otomatis dari daily verified terakhir per bulan dan dipertahankan maksimal 12 bulan. Manual tidak dihapus otomatis; backup import dan pre-restore juga disimpan dalam folder manual dengan jenis backup tetap tercatat di manifest.
+- Siklus backup dijalankan saat backend start dan diperiksa ulang berkala selama layanan hidup, sehingga pergantian hari tetap mendapat daily tanpa wajib restart. Cleanup hanya berjalan setelah backup baru/arsip monthly lolos verifikasi dan setiap penghapusan dicatat ke audit log.
 - Restore wajib import/daftar backup resmi, preview, validasi, pre-restore backup, keyword `RESTORE DATABASE`, dan audit log. Backup `pre-restore` dan backup sumber restore harus dipastikan tercatat ulang ke database hasil restore agar rollback serta traceability tetap terlihat di daftar backup.
 - Export Master aktif membaca data master SQLite secara read-only dari backend untuk arsip/review; export ini bukan paket restore dan tidak boleh menggantikan `.imsbackup`.
 - Reset testing lama tetap nonaktif/redirect lama.
@@ -201,7 +203,7 @@ Automated test frontend sekarang juga menjaga:
 - Sales cancel tetap ditolak.
 - Return tetap wajib terkait Sales dan qty tidak melebihi sisa.
 - Production lifecycle memanggil endpoint commit atomic yang benar.
-- Responsive navigation memakai canonical hub `/inventory` dan `/production`, mempertahankan `/stock` serta `/produksi` sebagai redirect role-guarded, dan menjaga active descendant route, nested parent key, serta role-aware module visibility.
+- Responsive navigation memakai satu pola canonical `/inventory/...` dan `/production/...`, memensiunkan exact hub `/stock` serta `/produksi`, dan mengisolasi compatibility redirect hanya untuk child route yang sebelumnya aktif. Active descendant route, nested parent key, route guard, serta role-aware module visibility tetap diuji.
 - Penyelesaian Work Log mengirim Good Qty, operator, dan catatan langsung ke endpoint complete atomic tanpa direct update pendahuluan.
 - Restore memakai preview/execute endpoint guarded dengan cookie credentials.
 - Export XLSX tetap write-only.

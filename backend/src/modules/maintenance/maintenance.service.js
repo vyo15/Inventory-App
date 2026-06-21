@@ -175,10 +175,10 @@ const getMaintenanceStatus = async () => {
     db.get("SELECT COUNT(*) AS count FROM categories WHERE status != 'deleted'"),
     db.get("SELECT COUNT(*) AS count FROM suppliers WHERE status != 'deleted'"),
     db.get("SELECT COUNT(*) AS count FROM audit_logs"),
-    db.get("SELECT COUNT(*) AS count FROM backup_logs"),
+    db.get("SELECT COUNT(*) AS count FROM backup_logs WHERE status != 'retention_deleted'"),
     db.get("SELECT COUNT(*) AS count FROM restore_logs"),
     db.get("SELECT COUNT(*) AS count FROM module_migration_status"),
-    db.get("SELECT * FROM backup_logs ORDER BY id DESC LIMIT 1"),
+    db.get("SELECT * FROM backup_logs WHERE status != 'retention_deleted' ORDER BY id DESC LIMIT 1"),
     db.get(
       `SELECT COUNT(*) AS count, MAX(created_at) AS latest_at
        FROM audit_logs
@@ -208,11 +208,17 @@ const getMaintenanceStatus = async () => {
     moduleRuntimeStatusCount: moduleRuntimeStatusCount?.count || 0,
     migrationStatusCount: moduleRuntimeStatusCount?.count || 0,
     latestBackup: enrichBackupLog(latestBackup),
-    backupFormat: "imsbackup_compact_manifest_checksum",
+    backupFormat: "imsbackup_single_file_manifest_checksum",
     backupPolicy: {
+      folders: ["daily", "monthly", "manual"],
       manual: true,
-      autoDailyOnBackendStart: true,
-      preRestoreBackup: true,
+      autoDaily: true,
+      dailyRetentionDays: 60,
+      autoMonthlyPromotion: true,
+      monthlyRetentionCount: 12,
+      manualAutoDelete: false,
+      preRestoreStoredAsManual: true,
+      singleFilePackage: true,
       verifyChecksum: true,
       verifyIntegrityCheck: true,
       externalCopyReminderDays: 7,
@@ -287,7 +293,7 @@ const importBackupFile = async ({ body, headers = {}, query = {}, actor = "syste
       );
     }
 
-    const importedDir = path.join(env.backupDir, "imported");
+    const importedDir = path.join(env.backupDir, "manual");
     fs.mkdirSync(importedDir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
     const uniqueBackup = getUniqueBackupPath(importedDir, `IMPORT-${timestamp}-${safeSourceName}`);
@@ -306,9 +312,6 @@ const importBackupFile = async ({ body, headers = {}, query = {}, actor = "syste
     }
 
     const manifest = preview.manifest || null;
-    if (manifest) {
-      fs.writeFileSync(`${importedPath}.manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
-    }
 
     const db = await getDb();
     const result = await db.run(
@@ -327,6 +330,8 @@ const importBackupFile = async ({ body, headers = {}, query = {}, actor = "syste
       sizeBytes: backupBuffer.length,
       status: "verified",
       backupType: manifest?.backupType || "manual-import",
+      storageClass: "manual",
+      sourceBackupType: manifest?.backupType || null,
       manifest,
       validation: preview.validation,
       validForRestore: true,
@@ -646,7 +651,9 @@ const listRestoreLogs = async () => {
 
 const listBackups = async () => {
   const db = await getDb();
-  const rows = await db.all("SELECT * FROM backup_logs ORDER BY id DESC LIMIT 100");
+  const rows = await db.all(
+    "SELECT * FROM backup_logs WHERE status != 'retention_deleted' ORDER BY created_at DESC, id DESC LIMIT 500"
+  );
   return enrichBackupLogs(rows);
 };
 

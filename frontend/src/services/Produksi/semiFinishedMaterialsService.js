@@ -1,7 +1,12 @@
 import * as sqliteSemiFinishedAdapter from "../../data/adapters/sqlite/sqliteSemiFinishedMaterialsAdapter";
-import { upsertStockItemReadModel, deleteStockItemReadModel } from "../Inventory/stockReadModelService";
+import { stripGuardedInventoryUpdateFields } from "../../utils/variants/variantStockNormalizer";
 
 const safeTrim = (value) => String(value || "").trim();
+const SEMI_FINISHED_PROTECTED_FIELDS = [
+  "averageCostPerUnit",
+  "lastProductionCostPerUnit",
+  "costPerUnit",
+];
 
 export const generateSemiFinishedMaterialCode = async () => sqliteSemiFinishedAdapter
   .generateSemiFinishedMaterialCode();
@@ -45,45 +50,33 @@ const normalizePayload = (values = {}) => {
   };
 };
 
-const syncStock = async (record) => upsertStockItemReadModel(
-  {
-    ...record,
-    sourceType: "semi_finished",
-    sourceCollection: "semi_finished_materials",
-    sourceId: record.id,
-  },
-  {
-    sourceType: "semi_finished",
-    sourceCollection: "semi_finished_materials",
-  }
-).catch(() => null);
+const buildGuardedUpdatePayload = (values = {}, expectedVersion = "") => ({
+  ...stripGuardedInventoryUpdateFields(normalizePayload(values), {
+    protectedFields: SEMI_FINISHED_PROTECTED_FIELDS,
+  }),
+  expectedVersion,
+});
 
-export const createSemiFinishedMaterial = async (values = {}) => {
-  const record = await sqliteSemiFinishedAdapter.createSemiFinishedMaterial(normalizePayload(values));
-  await syncStock(record);
-  return record;
-};
+export const createSemiFinishedMaterial = async (values = {}) => sqliteSemiFinishedAdapter
+  .createSemiFinishedMaterial(normalizePayload(values));
 
-export const updateSemiFinishedMaterial = async (id, values = {}) => {
-  const record = await sqliteSemiFinishedAdapter.updateSemiFinishedMaterial(
-    id,
-    normalizePayload(values)
-  );
-  await syncStock(record);
-  return record;
-};
+export const updateSemiFinishedMaterial = async (
+  id,
+  values = {},
+  { expectedVersion = "" } = {}
+) => sqliteSemiFinishedAdapter.updateSemiFinishedMaterial(
+  id,
+  buildGuardedUpdatePayload(values, expectedVersion)
+);
 
 export const toggleSemiFinishedMaterialActive = async (id, isActive) => {
   const current = await getSemiFinishedMaterialById(id);
-  const record = await sqliteSemiFinishedAdapter.updateSemiFinishedMaterial(id, {
-    ...current,
+  if (!current) throw new Error("Semi finished tidak ditemukan atau sudah berubah.");
+  return sqliteSemiFinishedAdapter.updateSemiFinishedMaterial(id, {
     isActive,
+    expectedVersion: current.versionToken || current.updatedAt || "",
   });
-  await syncStock(record);
-  return record;
 };
 
-export const deleteSemiFinishedMaterial = async (id) => {
-  await deleteStockItemReadModel({ sourceType: "semi_finished", sourceId: id }).catch(() => null);
-  return sqliteSemiFinishedAdapter.deleteSemiFinishedMaterial(id);
-};
+export const deleteSemiFinishedMaterial = async (id) => sqliteSemiFinishedAdapter
+  .deleteSemiFinishedMaterial(id);

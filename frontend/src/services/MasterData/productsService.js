@@ -1,7 +1,8 @@
 import * as sqliteProductsAdapter from "../../data/adapters/sqlite/sqliteProductsAdapter";
-import { upsertStockItemReadModel, deleteStockItemReadModel } from "../Inventory/stockReadModelService";
+import { stripGuardedInventoryUpdateFields } from "../../utils/variants/variantStockNormalizer";
 
 const safeTrim = (value) => String(value || "").trim();
+const PRODUCT_PROTECTED_FIELDS = ["hppPerUnit", "averageCostPerUnit", "costPerUnit"];
 
 export const PRODUCT_DEFAULT_FORM = {
   name: "",
@@ -51,39 +52,33 @@ const normalizePayload = (values = {}, categories = []) => {
   };
 };
 
-const syncStock = async (record) => upsertStockItemReadModel(
-  {
-    ...record,
-    sourceType: "product",
-    sourceCollection: "products",
-    sourceId: record.id,
-  },
-  {
-    sourceType: "product",
-    sourceCollection: "products",
-  }
-).catch(() => null);
+const buildGuardedUpdatePayload = (values = {}, categories = [], expectedVersion = "") => ({
+  ...stripGuardedInventoryUpdateFields(normalizePayload(values, categories), {
+    protectedFields: PRODUCT_PROTECTED_FIELDS,
+  }),
+  expectedVersion,
+});
 
-export const createProduct = async (values = {}, categories = []) => {
-  const record = await sqliteProductsAdapter.createProduct(normalizePayload(values, categories));
-  await syncStock(record);
-  return record;
-};
+export const createProduct = async (values = {}, categories = []) => sqliteProductsAdapter
+  .createProduct(normalizePayload(values, categories));
 
-export const updateProduct = async (id, values = {}, categories = []) => {
-  const record = await sqliteProductsAdapter.updateProduct(id, normalizePayload(values, categories));
-  await syncStock(record);
-  return record;
-};
+export const updateProduct = async (
+  id,
+  values = {},
+  categories = [],
+  { expectedVersion = "" } = {}
+) => sqliteProductsAdapter.updateProduct(
+  id,
+  buildGuardedUpdatePayload(values, categories, expectedVersion)
+);
 
 export const toggleProductActive = async (id, isActive) => {
   const current = await sqliteProductsAdapter.getProductById(id);
-  const record = await sqliteProductsAdapter.updateProduct(id, { ...current, isActive });
-  await syncStock(record);
-  return record;
+  if (!current) throw new Error("Produk tidak ditemukan atau sudah berubah.");
+  return sqliteProductsAdapter.updateProduct(id, {
+    isActive,
+    expectedVersion: current.versionToken || current.updatedAt || "",
+  });
 };
 
-export const deleteProduct = async (id) => {
-  await deleteStockItemReadModel({ sourceType: "product", sourceId: id }).catch(() => null);
-  return sqliteProductsAdapter.deleteProduct(id);
-};
+export const deleteProduct = async (id) => sqliteProductsAdapter.deleteProduct(id);

@@ -516,7 +516,7 @@ Fungsi:
 - memakai Drawer kiri pada tablet;
 - menyediakan brand compact dan safe bottom space untuk bottom navigation telepon.
 Guardrail:
-- layout/spacing saja; canonical hub `/inventory` dan `/production`, redirect compatibility `/stock` dan `/produksi`, role guard, serta business flow tetap dipertahankan.
+- layout/spacing saja; canonical route Inventory memakai `/inventory/...`, Production memakai `/production/...`, role guard serta business flow tetap dipertahankan.
 ===================================================== */
 .app-header-brand {
   min-width: 0;

@@ -749,6 +749,19 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Duplicate active variant tetap wajib ditolak; hanya satu varian aktif yang boleh memakai nama/struktur/`variantKey` yang sama.
 - `variantModeHistory[]` adalah audit ringkas untuk event `variant_mode_enabled`, `variant_mode_disabled`, `variant_archived`, dan `variant_restored`; history ini tidak menggantikan inventory log stok.
 
+### 15.1.1 Guard backend edit master inventory
+
+- UI `disabled` bukan boundary data integrity. Backend wajib menghapus/mengabaikan semua stock field dari direct master update dan mengambil saldo terbaru dari database.
+- Sanitasi wajib berjalan sebelum payload diubah menjadi kolom SQL; hook validasi yang hanya berjalan setelah `extractColumns()` tidak cukup untuk mode preserve/ignore.
+- Direct update Product, Raw Material, dan Semi Finished wajib membawa `expectedVersion` dari `versionToken` record yang dibuka user. Konflik versi harus ditolak, bukan last-write-wins.
+- Stock top-level dan stock varian wajib dipreserve berdasarkan `variantKey`, bukan berdasarkan urutan array. Array varian dari client tidak boleh mengganti seluruh bucket stok secara buta.
+- Field valuation transaction-derived wajib dipreserve dari database terbaru. Edit metadata tidak boleh mengembalikan HPP/modal sebelum purchase/production terakhir.
+- Create/update/delete master dan sinkronisasi `stock_read_models` wajib satu transaction backend. Frontend tidak boleh melakukan request sync read model kedua atau menelan kegagalannya.
+- Endpoint client untuk direct create/update/delete `stock_read_models` wajib diblokir karena read model adalah data turunan, bukan source of truth.
+- Delete master inventory yang masih memiliki current/reserved/variant stock wajib ditolak, termasuk stok tersembunyi pada `archivedVariants[]` data legacy.
+- Field valuation transaction-derived harus read-only pada form edit master; backend tetap authority walaupun client dimodifikasi.
+- Response sukses write transactional hanya boleh dikirim setelah `COMMIT` selesai.
+
 ### 15.2 Pricing Rules optional
 
 - Pricing Rules adalah fitur harga opsional, bukan blocker create master Product/Raw Material.

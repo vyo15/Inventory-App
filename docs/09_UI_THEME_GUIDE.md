@@ -132,7 +132,7 @@ Aturan penting:
 - `SidebarMenu.jsx` role-aware logic, nested accordion, `selectedKeys`, `openMenuKeys`, dan `onOpenChange`.
 - `DesktopModuleDock.jsx` dan `MobileBottomNavigation.jsx` wajib membaca `sidebarMenuItems` yang sudah difilter role; jangan membuat access matrix kedua.
 - `ModuleHub.jsx` hanya menavigasikan child route yang sudah lolos `filterSidebarMenuItemsByRole`; komponen ini tidak boleh berisi query atau mutation bisnis.
-- Canonical Module Hub adalah `/inventory` dan `/production`; `/stock` serta `/produksi` tetap dipertahankan sebagai redirect role-guarded agar bookmark lama tidak putus.
+- Canonical Module Hub adalah `/inventory` dan `/production`; seluruh child route mengikuti namespace `/inventory/...` atau `/production/...`. Exact hub `/stock` serta `/produksi` sudah dipensiunkan, sedangkan compatibility child route lama diisolasi dalam route registry dan tetap role-guarded.
 - `Login.jsx` auth flow, profile status, blocked user, dan logout blocked user.
 - `Dashboard.jsx` query, calculation, source data, dan read-only flow.
 
@@ -200,7 +200,7 @@ Prioritas cleanup halaman bila masih terasa ramai:
 - Filter dan PageHeader action boleh wrap atau turun ke bawah, tetapi jangan memaksa semua tombol menjadi full-width bila membuat header terlalu tinggi. Tombol utama tetap harus jelas, tidak overlap, dan callback/action tidak berubah.
 - Summary/KPI mobile boleh memakai 2 kolom compact untuk metric pendek agar dashboard/report tidak terlalu panjang; nilai Rupiah panjang tetap harus readable dengan wrap aman.
 - Semua control navigasi wajib punya `aria-label`, active state, dan focus outline yang jelas.
-- Canonical hub `/inventory`, `/production`, dan landing modul lain hanya menjadi entry point UI; `/stock` serta `/produksi` adalah compatibility redirect. Child route bisnis, schema, service, stock, purchase, sales, production, payroll, HPP, finance, report, reset, dan audit log tidak boleh berubah karena visual shell.
+- Canonical hub `/inventory`, `/production`, dan landing modul lain hanya menjadi entry point UI. Canonical child route memakai namespace modul yang sama; compatibility child route lama hanya redirect terisolasi. Schema, service, stock, purchase, sales, production, payroll, HPP, finance, report, reset, dan audit log tidak boleh berubah karena visual shell.
 
 ### Lock konsistensi device
 

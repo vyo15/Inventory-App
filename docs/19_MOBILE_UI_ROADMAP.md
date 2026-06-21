@@ -318,7 +318,7 @@ Implementasi source aktual:
 - Telepon `<= 767px` memakai bottom navigation: Dashboard, Stock, Menu IMS, Transaksi, dan Produksi.
 - Tombol Menu IMS membuka bottom sheet role-aware yang membaca `sidebarMenuItems` melalui `filterSidebarMenuItemsByRole`.
 - Module Hub menampilkan child route sebagai card; role `user` hanya menerima card operasional yang memang diizinkan.
-- Canonical hub responsive adalah `/inventory` dan `/production`; `/stock` serta `/produksi` dipertahankan sebagai redirect role-guarded agar route bisnis dan bookmark lama tetap aman.
+- Canonical responsive route memakai pola `/inventory/...` dan `/production/...`. Exact hub `/stock` serta `/produksi` dipensiunkan; compatibility hanya dipertahankan sementara untuk child route lama yang sebelumnya aktif dan tetap role-guarded.
 - Floating theme button disembunyikan pada telepon; theme toggle tersedia di bottom sheet.
 - Content telepon memakai safe bottom padding agar action/footer/page end tidak tertutup navigasi.
 

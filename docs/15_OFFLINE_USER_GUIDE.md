@@ -20,8 +20,8 @@ Untuk HP/laptop lain satu jaringan, buka frontend lewat IP laptop server.
 - Database runtime: `data/ims-sqlite-sidecar.sqlite`
 - Backup resmi: `backups/sqlite/`
 - Backup harian: `backups/sqlite/daily/`
-- Backup manual: `backups/sqlite/manual/`
-- Backup sebelum restore: `backups/sqlite/pre-restore/`
+- Backup bulanan: `backups/sqlite/monthly/`
+- Backup manual/import/sebelum restore: `backups/sqlite/manual/`
 
 Jangan copy database runtime saat backend masih aktif. Backup harus dibuat lewat backend/UI resmi agar konsisten.
 
@@ -41,7 +41,7 @@ IMS-BF-BACKUP-20260604-080000-SV4-daily.imsbackup
 IMS-BF-BACKUP-20260604-225000-SV4-pre-restore.imsbackup
 ```
 
-File `.imsbackup` adalah paket compact resmi IMS. Secara internal isinya:
+File `.imsbackup` adalah satu-satunya file yang perlu dipindahkan atau didownload. Manifest dan checksum tidak lagi dibuat sebagai file terpisah. Secara internal package berisi:
 
 ```text
 database.sqlite
@@ -68,17 +68,22 @@ Menu `Maintenance & Backup` adalah pusat perawatan data lokal. Urutan pakainya:
 7. Buka `Riwayat` untuk melihat backup/restore resmi.
 8. `Reset Testing` hanya catatan arsip nonaktif pada mode database lokal; pemulihan data utama harus lewat Backup & Restore.
 
-## Backup harian otomatis
+## Backup otomatis dan retensi
 
-Saat backend start, sistem mengecek apakah hari itu sudah ada backup harian. Jika belum ada, backend membuat backup `daily` otomatis.
+Backend menjalankan siklus backup saat start dan memeriksa ulang secara berkala selama layanan hidup. Karena itu daily berikutnya tetap dapat dibuat ketika aplikasi melewati pergantian hari tanpa restart.
 
 Aturan:
 
-1. Auto backup harian hanya dibuat satu kali per hari.
-2. Backup manual tetap bisa dibuat kapan saja dari `Maintenance & Backup Center`.
-3. Sistem otomatis membuat backup `pre-restore` sebelum restore berjalan.
-4. Setelah restore selesai, backup `pre-restore` otomatis didaftarkan ulang agar tetap muncul di daftar backup untuk rollback jika restore ternyata salah. Backup sumber restore juga dipastikan tetap tercatat agar riwayat restore mudah dilacak.
-5. Backup harus berstatus `verified` sebelum dianggap aman.
+1. Auto backup `daily` hanya dibuat satu kali per hari dan disimpan di `backups/sqlite/daily/`.
+2. Daily disimpan selama 60 hari. Daily yang lebih tua hanya dihapus jika monthly verified untuk bulan yang sama sudah tersedia.
+3. Pada awal bulan berikutnya, sistem mengambil daily verified terakhir bulan sebelumnya berdasarkan kalender lokal komputer utama, lalu membuat satu backup `monthly` di `backups/sqlite/monthly/`. Sumber daily disalin, diverifikasi, lalu dipromosikan; bukan dipindahkan sebelum validasi.
+4. Monthly dipertahankan maksimal 12 bulan.
+5. Backup manual tetap bisa dibuat kapan saja dan tidak dihapus otomatis.
+6. Sistem otomatis membuat backup `pre-restore` sebelum restore berjalan; file ini disimpan di folder `manual/` dengan jenis `pre-restore` tetap tercatat pada manifest.
+7. Import backup dari flashdisk juga disimpan pada folder `manual/`.
+8. Setelah restore selesai, backup `pre-restore` otomatis didaftarkan ulang agar tetap muncul di daftar backup untuk rollback jika restore ternyata salah. Backup sumber restore juga dipastikan tetap tercatat agar riwayat restore mudah dilacak.
+9. Backup harus berstatus `verified` sebelum dianggap aman.
+10. Setiap promosi monthly dan cleanup retention dicatat pada audit log maintenance.
 
 ## Backup manual dari UI
 
@@ -103,14 +108,25 @@ Setelah berhasil, cek:
 - integrity check: `ok`
 - tombol `Download` bisa menyimpan file backup ke folder pilihan user
 
+
+## Filter dan download backup
+
+Pada tab Backup, daftar dapat difilter tanpa membuat folder weekly tambahan:
+
+- Jenis: Semua, Harian, Bulanan, Manual.
+- Periode: Semua periode, Hari ini, Minggu ini, Bulan ini, Bulan lalu.
+
+Filter hanya mengubah daftar yang terlihat. File tetap berada pada tiga folder `daily`, `monthly`, dan `manual`. Klik `Download` pada backup yang dipilih untuk menyimpan satu file `.imsbackup`.
+
 ## Backup eksternal
 
 Backup lokal masih berada di laptop yang sama dengan database utama. Agar aman dari laptop rusak/hilang, copy backup verified ke flashdisk atau harddisk eksternal.
 
 Rekomendasi operasional:
 
-- Harian: pastikan backup hari ini sudah dibuat.
-- Mingguan: copy backup terbaru ke flashdisk/harddisk eksternal.
+- Harian: pastikan backup daily hari ini sudah dibuat.
+- Mingguan: gunakan filter `Minggu ini`, lalu copy backup verified terbaru ke flashdisk/harddisk eksternal.
+- Bulanan: pastikan satu backup monthly bulan sebelumnya tersedia.
 - Sebelum update aplikasi: buat backup manual lalu copy ke media eksternal.
 - Setelah banyak transaksi penting: buat backup manual tambahan.
 

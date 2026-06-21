@@ -6,17 +6,8 @@
 // Guardrail:
 // - helper hanya membaca config menu yang sudah difilter role;
 // - tidak menentukan role baru, tidak mengubah route bisnis, dan tidak menjalankan mutation.
-// =========================
-
-export const MODULE_HUB_PATHS = Object.freeze({
-  INVENTORY: "/inventory",
-  PRODUCTION: "/production",
-});
-
-export const LEGACY_MODULE_HUB_REDIRECTS = Object.freeze({
-  "/stock": MODULE_HUB_PATHS.INVENTORY,
-  "/produksi": MODULE_HUB_PATHS.PRODUCTION,
-});
+// Route canonical dipusatkan di config/appRoutes.js agar helper ini tidak
+// menduplikasi kontrak URL aplikasi.
 
 export const getFirstLeafPath = (menuItem) => {
   if (!menuItem) {

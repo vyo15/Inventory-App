@@ -42,16 +42,34 @@ Mutation berikut wajib atomic/guarded di backend:
 
 Backup resmi harus:
 
-- Dibuat dari backend.
+- Dibuat dari backend dengan snapshot SQLite-aware, bukan copy file runtime saat aplikasi aktif.
 - Berformat satu file khusus IMS `.imsbackup`.
-- Menggunakan paket compact berisi `database.sqlite`, `manifest.json`, `checksum.sha256`, dan `README_RESTORE.txt`.
-- Memiliki manifest/checksum.
-- Dicatat di backup logs.
+- Menggunakan paket compact berisi `database.sqlite`, `manifest.json`, `checksum.sha256`, dan `README_RESTORE.txt` secara internal.
+- Tidak membuat file `.manifest.json` baru di samping package; sidecar lama hanya dibaca untuk kompatibilitas.
+- Memiliki manifest/checksum dan lolos integrity serta foreign-key check sebelum nama final dipasang secara atomik.
+- Dicatat di backup logs dan audit log.
 - Bisa didownload dari Database Center.
 - Bisa diverifikasi sebelum restore.
 - Disalin keluar laptop/server secara berkala oleh user.
 
-Backup legacy `.imsbak.zip` tetap boleh dibaca untuk restore agar file lama tidak terputus kompatibilitasnya.
+Struktur folder aktif wajib sederhana:
+
+```text
+backups/sqlite/
+├── daily/
+├── monthly/
+└── manual/
+```
+
+Kebijakan retensi:
+
+- `daily`: maksimal satu verified per hari, simpan 60 hari.
+- `monthly`: satu snapshot per bulan dari daily verified terakhir, simpan maksimal 12 bulan. Batas hari/bulan mengikuti kalender lokal komputer backend agar konsisten dengan waktu operasional IMS.
+- `manual`: tidak dihapus otomatis; import, pre-update, pre-reset, dan pre-restore memakai storage class manual.
+- Cleanup daily hanya boleh dilakukan jika monthly verified untuk bulan terkait sudah tersedia.
+- Setiap promosi monthly dan penghapusan retention wajib memiliki audit log.
+
+Backup legacy `.imsbak.zip`, folder lama, dan sidecar manifest lama tetap boleh dibaca untuk restore agar file lama tidak terputus kompatibilitasnya, tetapi source baru tidak membuat struktur lama lagi.
 
 ## Restore contract
 
@@ -129,7 +147,9 @@ Restore resmi harus:
 
 - File runtime database dan backup aktual tidak boleh ikut ZIP source, patch, atau repo.
 - Folder `data/` dan `backups/` hanya boleh membawa `.gitkeep` untuk struktur folder.
-- File `.sqlite`, `.sqlite-wal`, `.sqlite-shm`, `.imsbackup`, `.imsbak.zip`, dan `*.manifest.json` adalah artifact lokal dan harus disimpan di lokasi backup operasional, bukan di source.
+- File `.sqlite`, `.sqlite-wal`, `.sqlite-shm`, `.imsbackup`, `.imsbak.zip`, dan sidecar `*.manifest.json` legacy adalah artifact lokal dan harus disimpan di lokasi backup operasional, bukan di source.
 - `.gitignore` dan `.gitattributes` dipakai bersama: `.gitignore` mencegah artifact baru ikut track, sedangkan `.gitattributes` mengecualikan seluruh folder runtime dari `git archive`.
-- `scripts/verify-source-ready.cjs` wajib gagal bila ada file selain `.gitkeep` di `data/` atau `backups/` yang masih ter-track. Script clean ZIP wajib menjalankan guard sebelum `git archive`, lalu memverifikasi central directory ZIP aktual dan menghapus artifact bila ditemukan runtime/generated output, path backslash, atau struktur source tidak lengkap.
+- `scripts/verify-source-ready.cjs` wajib gagal bila ada file selain `.gitkeep` di `data/` atau `backups/` yang masih ter-track.
+- Script clean ZIP wajib menjalankan guard sebelum `git archive`, lalu memverifikasi central directory ZIP aktual dan menolak runtime/generated output, path backslash, entry duplikat, atau struktur source yang tidak lengkap.
+- Verifier archive wajib tersedia melalui mode `--archive-only` agar ZIP hasil build dapat dicek terpisah sebelum dibagikan atau di-merge.
 - Guard source hanya menghapus artifact dari Git index; backup lokal yang masih dibutuhkan tidak boleh dihapus secara destructive.

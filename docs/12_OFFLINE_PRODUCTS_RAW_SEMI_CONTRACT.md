@@ -81,9 +81,12 @@ Source utama: `src/services/MasterData/productsService.js`.
 
 Guard penting Product:
 
-- Create/update memakai transaction dan menyentuh `stock_item_read_models`.
+- Create/update memakai transaction backend dan menyinkronkan `stock_read_models`.
 - Rename/edit metadata tidak boleh menimpa stock hasil transaksi lain.
 - Variant dengan stock/reserved tidak boleh hilang diam-diam.
+- Runtime SQLite aktual memakai `versionToken` + `expectedVersion`; edit stale ditolak sebelum penyimpanan.
+- Stock/HPP top-level dan per-varian dipreserve server-side berdasarkan record/`variantKey` terbaru.
+- Sinkronisasi `stock_read_models` berlangsung dalam transaction backend yang sama; direct writer client diblokir. Response sukses baru dikirim setelah `COMMIT`.
 - Karena terkait Sales, Return, Stock Report, Dashboard, dan HPP, Product belum boleh offline write.
 
 ## Kontrak field Raw Material
@@ -107,10 +110,12 @@ Source utama: `src/services/MasterData/rawMaterialsService.js`.
 
 Guard penting Raw Material:
 
-- Create/update memakai transaction dan menyentuh `stock_item_read_models`.
+- Create/update memakai transaction backend dan menyinkronkan `stock_read_models`.
 - Purchase stock-in memakai raw material, variant key, dan `stockUnit`.
 - Production BOM/work log memakai bahan dan bisa memotong stock.
 - Remove raw material masih ada di service dan menyentuh read model; offline write/delete raw material belum aman.
+- Runtime SQLite aktual memblokir delete Raw Material yang masih memiliki stock/reserved dan memindahkan sinkronisasi read model ke transaction backend.
+- `averageActualUnitCost` adalah transaction-derived dan tidak boleh ditulis ulang dari snapshot edit; `restockReferencePrice` tetap reference/manual sesuai business rule.
 
 ## Kontrak field Semi Finished
 
@@ -138,9 +143,11 @@ Source utama: `src/services/Produksi/semiFinishedMaterialsService.js` dan `src/c
 Guard penting Semi Finished:
 
 - `flowerGroup` wajib eksplisit; hardcoded/silent default `mawar` tidak boleh kembali.
-- Create/update memakai transaction dan menyentuh `stock_item_read_models`.
+- Create/update memakai transaction backend dan menyinkronkan `stock_read_models`.
 - Production Work Log dapat memengaruhi `averageCostPerUnit` dan HPP output.
 - Semi Finished terkait BOM bertingkat dan output produksi, sehingga offline write belum aman.
+- Runtime SQLite aktual mempreserve `averageCostPerUnit`, `lastProductionCostPerUnit`, dan cost alias dari record terbaru saat edit metadata.
+- Delete Semi Finished yang masih memiliki stock/reserved, termasuk snapshot legacy di `archivedVariants[]`, ditolak dan read model disinkronkan backend secara atomic.
 
 ## Variant dan hardcoded mawar
 

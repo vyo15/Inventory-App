@@ -81,18 +81,21 @@ IMS Bunga Flanel adalah aplikasi inventory dan operasional usaha yang mencakup:
 - `/products`
 - `/raw-materials`
 - `/suppliers`
-- `/produksi/tahapan-produksi`
-- `/produksi/karyawan-produksi`
-- `/produksi/profil-produksi`
-- `/produksi/semi-finished-materials`
-- `/produksi/production-planning`
-- `/produksi/bom-produksi`
-- `/produksi/production-orders`
-- `/produksi/work-log-produksi`
-- `/produksi/payroll-produksi`
-- `/produksi/analisis-hpp`
-- `/stock-management`
-- `/stock-adjustment` sekarang redirect lama ke `/stock-management`
+- `/inventory`
+- `/inventory/stock-management`
+- `/production`
+- `/production/planning`
+- `/production/orders`
+- `/production/work-logs`
+- `/production/steps`
+- `/production/employees`
+- `/production/profiles`
+- `/production/semi-finished-materials`
+- `/production/boms`
+- `/production/payrolls`
+- `/production/hpp-analysis`
+- `/stock-adjustment` dan `/stock-management` menjadi compatibility redirect ke `/inventory/stock-management`
+- Child route lama `/produksi/...` menjadi compatibility redirect terisolasi ke `/production/...`; exact hub `/stock` dan `/produksi` sudah dipensiunkan.
 - `/purchases`
 - `/returns`
 - `/sales`
@@ -151,7 +154,7 @@ Saat membuat perubahan baru, selalu cek apakah perubahan menyentuh salah satu ar
 ## Update Integrasi Manajemen Stok — 2026-04-25
 - Sidebar Inventaris sekarang hanya menampilkan **Manajemen Stok** sebagai entry point utama.
 - Area Penyesuaian Stok aktif berada di halaman Manajemen Stok supaya user bisa melihat audit log dan melakukan koreksi stok dalam satu konteks.
-- Route lama `/stock-adjustment` dipertahankan sebagai redirect lama ke `/stock-management`, bukan halaman adjustment aktif.
+- Route lama `/stock-adjustment` dan `/stock-management` dipertahankan sementara sebagai compatibility redirect ke `/inventory/stock-management`, bukan halaman adjustment aktif terpisah.
 - File lama `src/pages/Inventory/StockAdjustment.jsx` dihapus dari source patch karena logic submit adjustment sudah dipindahkan ke `src/pages/Inventory/components/StockAdjustmentPanel.jsx`.
 
 ## Update Integrasi IMS Otomatis — 2026-04-25
@@ -184,7 +187,7 @@ Status cleanup bertahap yang dikunci di docs:
 - **Guarded:** perubahan ini hanya UX/listing/selection; tidak boleh mengubah stok, requirement calculation, Work Log, Payroll, HPP Analysis, report, atau lifecycle Production Order.
 
 ## Update Production Planning / Planning Schedule — 2026-04-25
-- **Aktif:** Production Planning ditambahkan sebagai layer target sebelum Production Order dengan route `/produksi/production-planning` dan collection `production_plans`.
+- **Aktif:** Production Planning ditambahkan sebagai layer target sebelum Production Order dengan canonical route `/production/planning` dan collection `production_plans`.
 - **Aktif:** Flow final menjadi **Planning → Production Order → Work Log completed → Payroll/HPP → Dashboard**.
 - **Business rule terkunci:** planning hanya menyimpan target, periode, deadline, prioritas, catatan, target item/varian, dan link PO; planning **tidak mengubah stok**, tidak membuat payroll, tidak membuat expense, dan tidak masuk HPP langsung.
 - **Guarded:** Production Order yang dibuat dari planning tetap diproses oleh service PO existing sehingga kebutuhan material tetap dihitung dari BOM dan helper requirement final.
@@ -204,6 +207,18 @@ Status cleanup bertahap yang dikunci di docs:
 - **Data historis:** field `stock` tetap disimpan sebagai alias/compatibility dan tidak boleh dihapus dari dokumen.
 - **Aktif:** Stock Adjustment resmi mendukung `raw_materials`, `semi_finished_materials`, dan `products`. Semi Finished non-varian/bervarian dapat dikoreksi lewat Stock Management dengan transaction, `stock_adjustments`, dan `inventory_logs`.
 - **Docs lock:** task berikutnya tidak boleh membuka kembali direct edit stok master kecuali ada business rule baru, audit trail baru, dan approval eksplisit.
+
+### Hardening Edit Master Inventory — 2026-06-21
+- **Aktif/P0:** backend Product, Raw Material, dan Semi Finished sekarang menjadi authority final untuk edit metadata. Payload client tidak boleh menentukan `stock`, `currentStock`, `reservedStock`, `availableStock`, atau field stok varian.
+- **Aktif/P0:** generic SQLite JSON route menjalankan sanitizer inventory **sebelum** ekstraksi kolom SQL. Nilai stok final selalu diambil dari record database terbaru dan invariant `availableStock = max(currentStock - reservedStock, 0)` dihitung ulang.
+- **Aktif/P0:** edit master memakai `expectedVersion`/`versionToken`. Snapshot form yang stale ditolak `409 INVENTORY_STALE_UPDATE`; update tanpa versi ditolak `428 INVENTORY_VERSION_REQUIRED`.
+- **Aktif/P0:** `variantKey` existing immutable. Hapus/nonaktif varian berstok ditolak; varian zero-stock yang dihapus dipindahkan ke `archivedVariants[]`; varian baru pada item existing selalu mulai stok 0.
+- **Aktif/P0:** valuation hasil transaksi/produksi dipertahankan dari database terbaru: Product `hppPerUnit`/cost alias, Raw Material `averageActualUnitCost`, dan Semi Finished `averageCostPerUnit`/`lastProductionCostPerUnit`/cost alias. Field reference/manual tetap dapat diedit sesuai rule modul.
+- **Aktif/P1:** sinkronisasi `stock_read_models` dipindahkan ke backend dalam transaction SQLite yang sama dengan create/update/delete master. Direct create/update/delete read model dari client diblokir.
+- **Aktif/P1:** Pricing Rule hanya mengirim payload harga minimal dan `expectedVersion`; snapshot item penuh tidak lagi ikut dikirim sehingga tidak dapat membawa stok/HPP stale.
+- **Aktif/P1:** field valuation transaction-derived dibuat read-only pada UI edit master agar user tidak menerima kesan perubahan HPP/modal berhasil padahal backend wajib mempreserve nilai transaksi terbaru.
+- **Aktif/P1:** response sukses generic write baru dikirim setelah transaction SQLite selesai `COMMIT`; kegagalan commit tidak boleh terlihat sebagai sukses di client.
+- **Compatibility:** alias `stock`, `variantOptions`, archive/history varian, dan data lama tetap dipertahankan; delete master juga memeriksa snapshot stok pada `archivedVariants[]`. Tidak ada perubahan schema/collection/route/role guard.
 
 ## Update Batch Fix Bug Merge — 2026-05-03
 - **Aktif:** patch gabungan ini menggabungkan perbaikan no-decimal number format, sidebar nested accordion, login UI copy cleanup, Production Order strict variant requirement, Work Log worker stock audit, dan Semi Finished variant color rename ke baseline source/docs terbaru yang diunggah. Pada audit 2026-05-06, baseline yang diverifikasi adalah `Inventory-App.zip` + `docs.zip`.
@@ -240,7 +255,7 @@ Status cleanup bertahap yang dikunci di docs:
 - **Reset testing lama:** route/tab hanya menampilkan status nonaktif. Handler reset testing lama tidak tersedia di UI operasional.
 - **Auto detect:** audit data historis/stok/log/produksi/payroll/variant transaksi bersifat read-only terhadap data bisnis dan hanya boleh membuat maintenance log metadata.
 - **Export data pokok:** tersedia sebagai export master SQLite read-only/checklist manual, bukan restore otomatis dan bukan merge transaksi.
-- Backup resmi SQLite memakai `.imsbackup` compact dengan manifest/checksum; restore adalah full replace guarded, bukan merge. Backup legacy `.imsbak.zip` tetap dibaca sebagai kompatibilitas. Backup `pre-restore` dan backup sumber restore dipastikan tercatat ulang setelah restore agar rollback dan traceability tetap terlihat di daftar backup.
+- Backup resmi SQLite memakai satu file `.imsbackup` self-contained berisi database, manifest, checksum, dan README internal; file `.manifest.json` terpisah tidak dibuat lagi. Struktur folder aktif hanya `daily/`, `monthly/`, dan `manual/`. Daily dibuat otomatis maksimal satu per hari dan disimpan 60 hari. Monthly dibuat otomatis dari daily verified terakhir setiap bulan dan disimpan maksimal 12 bulan. Backup manual, import, pre-update, pre-reset, dan pre-restore disimpan pada folder `manual/` serta tidak dihapus otomatis. Restore tetap full replace guarded, bukan merge; backup legacy `.imsbak.zip` dan sidecar manifest lama tetap dibaca sebagai kompatibilitas. Backup `pre-restore` dan backup sumber restore dipastikan tercatat ulang setelah restore agar rollback dan traceability tetap terlihat di daftar backup.
 - **Guarded:** log/transaksi lama tidak direkomendasikan dibawa ulang sebagai default jika logic berubah; transaksi baru sebaiknya dibuat ulang lewat flow terbaru agar log baru mengikuti logic terbaru.
 - **Opening stock:** setelah restore/reset manual di luar aplikasi, stok awal sebaiknya dibuat ulang lewat purchase/opening adjustment resmi, bukan menempel stok mentah tanpa audit.
 

@@ -105,6 +105,15 @@ Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke da
 - [ ] Raw Materials CRUD menjaga unit, modal, dan relasi supplier.
 - [ ] Semi Finished CRUD menjaga varian dan stok produksi.
 - [ ] Pricing Rules tidak memindahkan formula ke UI component.
+- [x] Automated guard: stale edit Product ditolak dan tidak mengembalikan stok/HPP lama.
+- [x] Automated guard: payload edit dengan top-level/variant stock palsu dipreserve dari database terbaru.
+- [x] Automated guard: hapus/nonaktif varian berstok ditolak; zero-stock diarsipkan; varian baru mulai stok 0.
+- [x] Automated guard: Raw Material `averageActualUnitCost` dan Semi Finished production cost tidak dapat ditimpa dari edit metadata.
+- [x] Automated guard: update tanpa `expectedVersion`, delete master berstok/archived stock legacy, dan direct write `stock_read_models` ditolak.
+- [x] Static/backend guard: response sukses create/update/delete transactional dikirim setelah `COMMIT`, bukan dari dalam callback transaction.
+- [ ] Manual UI: HPP Product, modal aktual Raw Material, dan average/last production cost Semi Finished read-only saat edit tetapi tetap dapat diisi saat create.
+- [ ] Manual concurrency: buka drawer edit di perangkat A, lakukan transaksi stok di perangkat B, lalu pastikan Simpan di A menampilkan konflik data dan tidak menutup/mengubah stok.
+- [ ] Manual Pricing Rule: apply harga setelah item berubah di proses lain harus berhenti dengan pesan conflict dan tidak mengirim field stok/HPP.
 
 ## 5. Stock
 
@@ -169,8 +178,13 @@ Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke da
 
 - [ ] Database Center menampilkan status backend SQLite.
 - [ ] Module Runtime Status tampil dan summary masuk akal.
-- [ ] Backup manual berhasil dan masuk riwayat.
-- [ ] Backup otomatis harian tidak membuat error startup.
+- [ ] Backup manual berhasil, tersimpan di `backups/sqlite/manual/`, masuk riwayat, dan hanya menghasilkan satu file `.imsbackup` tanpa sidecar manifest baru.
+- [ ] Backup daily tersimpan di `backups/sqlite/daily/`, maksimal satu verified per hari, dan tetap dibuat ketika layanan hidup melewati pergantian hari.
+- [ ] Daily lebih dari 60 hari hanya dihapus bila monthly verified untuk bulan yang sama tersedia.
+- [ ] Backup monthly tersimpan di `backups/sqlite/monthly/`, berasal dari daily verified terakhir bulan tersebut, idempotent satu per bulan, dan maksimal 12 bulan.
+- [ ] Backup manual/import/pre-restore tidak ikut cleanup otomatis.
+- [ ] Filter backup `Semua/Harian/Bulanan/Manual` dan periode `Hari ini/Minggu ini/Bulan ini/Bulan lalu` bekerja sebelum download.
+- [ ] Setiap promosi monthly dan cleanup retention tercatat di audit log maintenance.
 - [ ] Restore plan menampilkan preview sebelum execute.
 - [ ] Restore execute wajib keyword confirm.
 - [ ] Restore membuat pre-restore backup.
@@ -186,7 +200,9 @@ Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke da
 - [ ] Klik top-level module membuka Module Hub tanpa submenu pop-up.
 - [ ] Module Hub hanya menampilkan child route yang diizinkan role aktif.
 - [ ] Active state dock tetap benar saat berada di hub route maupun halaman child.
-- [ ] Canonical hub `/inventory` dan `/production` dapat dibuka; compatibility `/stock` dan `/produksi` wajib redirect ke canonical hub tanpa melewati `ProtectedRoute` atau mengubah role access.
+- [ ] Canonical hub dan child route memakai pola `/inventory/...` serta `/production/...`; `/inventory/stock-management` dan seluruh child Production dapat dibuka melalui `ProtectedRoute` yang sesuai.
+- [ ] Exact hub lama `/stock` dan `/produksi` sudah tidak aktif dan masuk halaman not found.
+- [ ] Compatibility child route lama seperti `/stock-management`, `/stock-adjustment`, dan `/produksi/work-log-produksi` redirect ke canonical route tanpa melewati atau mengubah role access.
 - [ ] Role `user` tidak melihat Module Hub Master Data, Finance, Sistem, Laporan, Production Setup, Payroll, atau HPP.
 - [ ] Tablet `768-992px` menampilkan tombol menu + Drawer kiri; bottom navigation tidak tampil.
 - [ ] Mobile `<= 767px` menampilkan bottom navigation Dashboard, Stock, Menu, Transaksi, dan Produksi.

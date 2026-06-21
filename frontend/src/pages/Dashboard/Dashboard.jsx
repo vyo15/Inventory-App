@@ -29,6 +29,7 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import PageHeader from "../../components/Layout/Page/PageHeader";
+import { APP_ROUTES } from "../../config/appRoutes";
 import useAuth from "../../hooks/useAuth";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataLoadingState from "../../components/Layout/Feedback/DataLoadingState";
@@ -100,7 +101,7 @@ const buildDashboardQuickActions = (role) => [
     routeKey: ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
     label: "Cek Stok",
     description: "Buka Stock Management dan audit stok.",
-    to: "/stock-management",
+    to: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
     icon: <AppstoreOutlined />,
   },
   {
@@ -116,7 +117,7 @@ const buildDashboardQuickActions = (role) => [
     routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PLANNING,
     label: "Production Planning",
     description: "Pantau target mingguan/bulanan produksi.",
-    to: "/produksi/production-planning",
+    to: APP_ROUTES.PRODUCTION.PLANNING,
     icon: <ClockCircleOutlined />,
   },
   {
@@ -124,7 +125,7 @@ const buildDashboardQuickActions = (role) => [
     routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS,
     label: "Work Log Produksi",
     description: "Cek pekerjaan produksi berjalan.",
-    to: "/produksi/work-log-produksi",
+    to: APP_ROUTES.PRODUCTION.WORK_LOGS,
     icon: <BuildOutlined />,
   },
   {
@@ -132,7 +133,7 @@ const buildDashboardQuickActions = (role) => [
     routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS,
     label: "Payroll Produksi",
     description: "Review payroll draft/unpaid.",
-    to: "/produksi/payroll-produksi",
+    to: APP_ROUTES.PRODUCTION.PAYROLLS,
     icon: <DollarCircleOutlined />,
   },
   {
@@ -386,7 +387,7 @@ const Dashboard = () => {
         description: "Ada item kosong/menipis berdasarkan threshold master.",
         color: DASHBOARD_TAG_COLORS.warning,
         type: "Stock",
-        to: "/stock-management",
+        to: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
       });
     }
 
@@ -399,7 +400,7 @@ const Dashboard = () => {
         description: "Material/BOM perlu dicek sebelum produksi berjalan.",
         color: DASHBOARD_TAG_COLORS.danger,
         type: "Production",
-        to: "/produksi/production-orders",
+        to: APP_ROUTES.PRODUCTION.ORDERS,
       });
     }
 
@@ -412,7 +413,7 @@ const Dashboard = () => {
         description: "Ada planning overdue atau tertinggal target.",
         color: planningSummary.overdueCount > 0 ? DASHBOARD_TAG_COLORS.danger : DASHBOARD_TAG_COLORS.warning,
         type: "Production",
-        to: "/produksi/production-planning",
+        to: APP_ROUTES.PRODUCTION.PLANNING,
       });
     }
 
@@ -425,7 +426,7 @@ const Dashboard = () => {
         description: "Work Log completed punya cost actual 0.",
         color: DASHBOARD_TAG_COLORS.production,
         type: "HPP",
-        to: "/produksi/analisis-hpp",
+        to: APP_ROUTES.PRODUCTION.HPP_ANALYSIS,
       });
     }
 
@@ -438,7 +439,7 @@ const Dashboard = () => {
         description: `${formatCurrency(payrollSummary.pendingAmount)} masih perlu review/pembayaran.`,
         color: DASHBOARD_TAG_COLORS.payroll,
         type: "Payroll",
-        to: "/produksi/payroll-produksi",
+        to: APP_ROUTES.PRODUCTION.PAYROLLS,
       });
     }
 
@@ -562,7 +563,7 @@ const Dashboard = () => {
         description: "Gunakan available stock agar stok reserved tidak terlihat aman palsu.",
         color: DASHBOARD_TAG_COLORS.warning,
         icon: <WarningOutlined />,
-        to: "/stock-management",
+        to: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
       },
       {
         key: "po-shortage",
@@ -572,7 +573,7 @@ const Dashboard = () => {
         description: "Cek kebutuhan material/BOM sebelum produksi dimulai.",
         color: DASHBOARD_TAG_COLORS.danger,
         icon: <ToolOutlined />,
-        to: "/produksi/production-orders",
+        to: APP_ROUTES.PRODUCTION.ORDERS,
       },
       {
         key: "planning-risk",
@@ -582,7 +583,7 @@ const Dashboard = () => {
         description: "Overdue atau target belum tercapai berdasarkan Work Log completed.",
         color: planningSummary.overdueCount > 0 ? DASHBOARD_TAG_COLORS.danger : DASHBOARD_TAG_COLORS.warning,
         icon: <ClockCircleOutlined />,
-        to: "/produksi/production-planning",
+        to: APP_ROUTES.PRODUCTION.PLANNING,
       },
       {
         key: "po-ready",
@@ -592,7 +593,7 @@ const Dashboard = () => {
         description: "Antrian ini sudah siap diproses ke Work Log.",
         color: DASHBOARD_TAG_COLORS.info,
         icon: <CheckCircleOutlined />,
-        to: "/produksi/production-orders",
+        to: APP_ROUTES.PRODUCTION.ORDERS,
       },
       {
         key: "worklog-running",
@@ -602,7 +603,7 @@ const Dashboard = () => {
         description: "Review pekerjaan yang belum ditutup agar biaya dan output final jelas.",
         color: DASHBOARD_TAG_COLORS.production,
         icon: <BuildOutlined />,
-        to: "/produksi/work-log-produksi",
+        to: APP_ROUTES.PRODUCTION.WORK_LOGS,
       },
       {
         key: "payroll-pending",
@@ -612,7 +613,7 @@ const Dashboard = () => {
         description: "Cek payroll draft/confirmed/unpaid sebelum pembayaran final.",
         color: DASHBOARD_TAG_COLORS.payroll,
         icon: <DollarCircleOutlined />,
-        to: "/produksi/payroll-produksi",
+        to: APP_ROUTES.PRODUCTION.PAYROLLS,
       },
     ];
 
@@ -813,7 +814,10 @@ const Dashboard = () => {
         title="Fokus Produksi"
         subtitle="Target dan risiko produksi."
         extra={
-          <Link to="/produksi/production-planning" className="dashboard-section-extra">
+          <Link
+            to={APP_ROUTES.PRODUCTION.PLANNING}
+            className="dashboard-section-extra"
+          >
             Buka Planning <ArrowRightOutlined />
           </Link>
         }
@@ -869,7 +873,7 @@ const Dashboard = () => {
               return (
                 <Link
                   key={plan.id || plan.planCode}
-                  to="/produksi/production-planning"
+                  to={APP_ROUTES.PRODUCTION.PLANNING}
                   className="dashboard-list-card"
                 >
                   <div className="dashboard-list-card-content">

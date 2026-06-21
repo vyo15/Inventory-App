@@ -1,7 +1,8 @@
 import * as sqliteRawMaterialsAdapter from "../../data/adapters/sqlite/sqliteRawMaterialsAdapter";
-import { upsertStockItemReadModel, deleteStockItemReadModel } from "../Inventory/stockReadModelService";
+import { stripGuardedInventoryUpdateFields } from "../../utils/variants/variantStockNormalizer";
 
 const safeTrim = (value) => String(value || "").trim();
+const RAW_MATERIAL_PROTECTED_FIELDS = ["averageActualUnitCost"];
 
 export const RAW_MATERIAL_DEFAULT_FORM = {
   name: "",
@@ -52,39 +53,33 @@ const normalizePayload = (values = {}, suppliers = []) => {
   };
 };
 
-const syncStock = async (record) => upsertStockItemReadModel(
-  {
-    ...record,
-    sourceType: "raw_material",
-    sourceCollection: "raw_materials",
-    sourceId: record.id,
-  },
-  {
-    sourceType: "raw_material",
-    sourceCollection: "raw_materials",
-  }
-).catch(() => null);
+const buildGuardedUpdatePayload = (values = {}, suppliers = [], expectedVersion = "") => ({
+  ...stripGuardedInventoryUpdateFields(normalizePayload(values, suppliers), {
+    protectedFields: RAW_MATERIAL_PROTECTED_FIELDS,
+  }),
+  expectedVersion,
+});
 
-export const createRawMaterial = async (values = {}, suppliers = []) => {
-  const record = await sqliteRawMaterialsAdapter.createRawMaterial(normalizePayload(values, suppliers));
-  await syncStock(record);
-  return record;
-};
+export const createRawMaterial = async (values = {}, suppliers = []) => sqliteRawMaterialsAdapter
+  .createRawMaterial(normalizePayload(values, suppliers));
 
-export const updateRawMaterial = async (id, values = {}, suppliers = []) => {
-  const record = await sqliteRawMaterialsAdapter.updateRawMaterial(id, normalizePayload(values, suppliers));
-  await syncStock(record);
-  return record;
-};
+export const updateRawMaterial = async (
+  id,
+  values = {},
+  suppliers = [],
+  { expectedVersion = "" } = {}
+) => sqliteRawMaterialsAdapter.updateRawMaterial(
+  id,
+  buildGuardedUpdatePayload(values, suppliers, expectedVersion)
+);
 
-export const removeRawMaterial = async (id) => {
-  await deleteStockItemReadModel({ sourceType: "raw_material", sourceId: id }).catch(() => null);
-  return sqliteRawMaterialsAdapter.deleteRawMaterial(id);
-};
+export const removeRawMaterial = async (id) => sqliteRawMaterialsAdapter.deleteRawMaterial(id);
 
 export const toggleRawMaterialActive = async (id, isActive) => {
   const current = await sqliteRawMaterialsAdapter.getRawMaterialById(id);
-  const record = await sqliteRawMaterialsAdapter.updateRawMaterial(id, { ...current, isActive });
-  await syncStock(record);
-  return record;
+  if (!current) throw new Error("Raw material tidak ditemukan atau sudah berubah.");
+  return sqliteRawMaterialsAdapter.updateRawMaterial(id, {
+    isActive,
+    expectedVersion: current.versionToken || current.updatedAt || "",
+  });
 };

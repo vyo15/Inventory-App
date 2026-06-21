@@ -58,6 +58,7 @@ import PricingModeSwitch from '../../components/Pricing/PricingModeSwitch';
 import {
   getVariantAwareStockStatusMeta,
 } from '../../utils/stock/stockHelpers';
+import { isVariantStockEmpty } from '../../utils/variants/variantArchiveHelpers';
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
 // Fungsi blok: mengarahkan InputNumber aktif ke step 1, precision 0, dan parser integer Indonesia.
@@ -230,6 +231,11 @@ const Products = () => {
   const editingProductHasVariants = Boolean(editingProduct?.hasVariants || (editingProduct?.variants || []).length > 0);
   const canActivateVariantsForEditing = isEditingProduct && !editingProductHasVariants && hasSafeZeroMasterStock(editingProduct);
   const hasVariantModeSwitchLocked = isEditingProduct && !canActivateVariantsForEditing;
+  const isGuardedVariantStock = (fieldName) => {
+    if (!isEditingProduct) return false;
+    const variant = form.getFieldValue(['variants', fieldName]) || {};
+    return Boolean(variant.variantKey) && !isVariantStockEmpty(variant);
+  };
   const stockEditHelpText = 'Ubah stok lewat Stock Management / Stock Adjustment / transaksi resmi.';
 
   // ---------------------------------------------------------------------------
@@ -437,7 +443,9 @@ const Products = () => {
       setSubmitting(true);
 
       if (editingProduct?.id) {
-        await updateProduct(editingProduct.id, values, categories);
+        await updateProduct(editingProduct.id, values, categories, {
+          expectedVersion: editingProduct.versionToken || editingProduct.updatedAt || '',
+        });
         message.success('Produk berhasil diupdate.');
       } else {
         await createProduct(values, categories);
@@ -492,7 +500,7 @@ const Products = () => {
       message.success(record.isActive !== false ? 'Produk dinonaktifkan.' : 'Produk diaktifkan kembali.');
     } catch (error) {
       console.error(error);
-      message.error('Gagal mengubah status produk.');
+      message.error(error?.message || 'Gagal mengubah status produk.');
     }
   };
 
@@ -790,7 +798,12 @@ const Products = () => {
           <Divider orientation="left">Pricing Master</Divider>
           <Row gutter={16}>
             <Col xs={24} md={8}>
-              <Form.Item name="hppPerUnit" label="HPP / Unit" rules={[{ required: true, message: 'HPP wajib diisi.' }]}> 
+              <Form.Item
+                name="hppPerUnit"
+                label="HPP / Unit"
+                rules={[{ required: true, message: 'HPP wajib diisi.' }]}
+                extra={isEditingProduct ? 'HPP hasil produksi dikunci saat edit master agar nilai terbaru tidak tertimpa.' : undefined}
+              >
                 <InputNumber
                   style={{ width: '100%' }}
                   min={0}
@@ -798,6 +811,7 @@ const Products = () => {
                   precision={0}
                   formatter={(value) => formatNumberID(value)}
                   parser={parseIntegerIdInput}
+                  disabled={isEditingProduct}
                 />
               </Form.Item>
             </Col>
@@ -1000,14 +1014,14 @@ const Products = () => {
                           </Col>
                           <Col xs={24} md={3}>
                             <Form.Item {...field} name={[field.name, 'isActive']} label="Aktif" valuePropName="checked" initialValue>
-                              <Switch />
+                              <Switch disabled={isGuardedVariantStock(field.name)} />
                             </Form.Item>
                           </Col>
                         </Row>
                         <Button
                           danger
                           size="small"
-                          disabled={fields.length === 1}
+                          disabled={fields.length === 1 || isGuardedVariantStock(field.name)}
                           onClick={() => remove(field.name)}
                         >
                           Hapus Varian

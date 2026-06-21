@@ -39,6 +39,8 @@ const getBackupTypeLabel = (backupType) => {
   const labels = {
     manual: "Manual",
     daily: "Harian",
+    monthly: "Bulanan",
+    "manual-import": "Import Manual",
     "pre-update": "Sebelum Update",
     "pre-restore": "Sebelum Restore",
     "pre-reset": "Sebelum Reset",

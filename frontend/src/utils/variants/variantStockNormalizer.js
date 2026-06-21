@@ -191,3 +191,43 @@ export const normalizeVariantMasterStock = (item = {}, variants = [], options = 
     availableStock: totals.availableStock,
   };
 };
+
+const GUARDED_STOCK_FIELDS = [
+  'stock',
+  'currentStock',
+  'reservedStock',
+  'availableStock',
+];
+
+const omitFields = (value = {}, fields = []) => {
+  const next = { ...value };
+  fields.forEach((field) => {
+    delete next[field];
+  });
+  return next;
+};
+
+// =====================================================
+// Sanitasi payload edit master inventory.
+// ACTIVE/GUARDED: defense-in-depth frontend saja; backend tetap authority final.
+// Stok dan valuation hasil transaksi tidak ikut dikirim dari snapshot form lama.
+// =====================================================
+export const stripGuardedInventoryUpdateFields = (payload = {}, options = {}) => {
+  const protectedFields = Array.isArray(options.protectedFields) ? options.protectedFields : [];
+  const protectedVariantFields = Array.isArray(options.protectedVariantFields)
+    ? options.protectedVariantFields
+    : protectedFields;
+  const topLevelFields = [...GUARDED_STOCK_FIELDS, ...protectedFields];
+  const variantFields = [...GUARDED_STOCK_FIELDS, ...protectedVariantFields];
+  const next = omitFields(payload, topLevelFields);
+
+  if (Array.isArray(payload.variants)) {
+    next.variants = payload.variants.map((variant) => omitFields(variant, variantFields));
+  }
+
+  if (Array.isArray(payload.variantOptions)) {
+    next.variantOptions = payload.variantOptions.map((variant) => omitFields(variant, variantFields));
+  }
+
+  return next;
+};

@@ -53,7 +53,7 @@ Docs tidak boleh mengalahkan source aktual. Jika dokumen ini berbeda dengan file
 - Floating dock hanya menampilkan top-level module.
 - Klik top-level module membuka Dashboard atau Module Hub.
 - Tidak ada submenu pop-up di dock desktop.
-- Active state wajib benar pada canonical hub `/inventory` dan `/production` serta seluruh child route. Compatibility `/stock` dan `/produksi` hanya melakukan redirect role-guarded ke canonical hub.
+- Active state wajib benar pada canonical hub dan seluruh child route `/inventory/...` serta `/production/...`. Exact hub `/stock` dan `/produksi` tidak aktif; compatibility child route lama hanya melakukan redirect role-guarded ke canonical destination.
 - Seluruh icon, active pill, focus outline, dan marker gold harus berada di dalam shape rail.
 - Light dan dark mode memakai asset rail terpisah; jangan mengganti warna rail dengan filter CSS acak.
 

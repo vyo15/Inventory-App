@@ -84,6 +84,8 @@ const getBackupTypeLabel = (backupType) => {
   const map = {
     manual: "Manual",
     daily: "Harian",
+    monthly: "Bulanan",
+    "manual-import": "Import Manual",
     "pre-update": "Sebelum Update",
     "pre-restore": "Sebelum Restore",
     "pre-reset": "Sebelum Reset",
@@ -93,6 +95,46 @@ const getBackupTypeLabel = (backupType) => {
   return map[backupType] || backupType || "Backup";
 };
 
+const getBackupStorageClass = (backup = {}) => {
+  if (["daily", "monthly", "manual"].includes(backup.storageClass)) return backup.storageClass;
+  if (backup.backupType === "daily") return "daily";
+  if (backup.backupType === "monthly") return "monthly";
+  return "manual";
+};
+
+const isBackupInPeriod = (backup, period) => {
+  if (period === "all") return true;
+  const date = parseBackupDate(backup.created_at || backup.manifest?.createdAt);
+  if (!date) return false;
+
+  const now = new Date();
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startTomorrow = new Date(startToday);
+  startTomorrow.setDate(startTomorrow.getDate() + 1);
+
+  if (period === "today") return date >= startToday && date < startTomorrow;
+
+  if (period === "this-week") {
+    const startWeek = new Date(startToday);
+    const day = startWeek.getDay() || 7;
+    startWeek.setDate(startWeek.getDate() - day + 1);
+    return date >= startWeek && date < startTomorrow;
+  }
+
+  if (period === "this-month") {
+    const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return date >= startMonth && date < nextMonth;
+  }
+
+  if (period === "last-month") {
+    const startMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    return date >= startMonth && date < endMonth;
+  }
+
+  return true;
+};
 
 const RUNTIME_STATUS_LABELS = {
   sqlite_active: "Database aktif",
@@ -167,6 +209,8 @@ const OfflineDatabaseCenter = () => {
   const [restorePlan, setRestorePlan] = useState(null);
   const [backups, setBackups] = useState([]);
   const [selectedBackupFilename, setSelectedBackupFilename] = useState("");
+  const [backupTypeFilter, setBackupTypeFilter] = useState("all");
+  const [backupPeriodFilter, setBackupPeriodFilter] = useState("all");
   const [restoreKeyword, setRestoreKeyword] = useState("");
   const [selectedImportBackupFile, setSelectedImportBackupFile] = useState(null);
   const [externalCopyConfirmedAt, setExternalCopyConfirmedAt] = useState(() => {
@@ -180,6 +224,10 @@ const OfflineDatabaseCenter = () => {
   const moduleRuntimeSummary = moduleRuntimeData.summary || {};
   const modeTag = useMemo(() => <Tag color="green">Aktif</Tag>, []);
   const latestBackup = backups[0] || statusData.latestBackup || null;
+  const filteredBackups = useMemo(() => backups.filter((backup) => {
+    const matchesType = backupTypeFilter === "all" || getBackupStorageClass(backup) === backupTypeFilter;
+    return matchesType && isBackupInPeriod(backup, backupPeriodFilter);
+  }), [backupPeriodFilter, backupTypeFilter, backups]);
   const backupTone = getBackupStatusTone(latestBackup);
   const selectedBackup = backups.find((backup) => backup.filename === selectedBackupFilename) || latestBackup;
   const restoreKeywordRequired = statusData.restoreConfirmKeyword || restorePlan?.requiredConfirmKeyword || "RESTORE DATABASE";
@@ -433,7 +481,7 @@ const OfflineDatabaseCenter = () => {
             <Tag color="blue">.imsbackup</Tag>
           </Space>
           <Text type="secondary">
-            Backup resmi berisi database, manifest, checksum, dan integrity check. Copy backup verified ke media eksternal secara rutin.
+            Setiap backup resmi adalah satu file .imsbackup. Sistem menyimpan daily 60 hari, monthly 12 bulan, dan manual tanpa hapus otomatis.
           </Text>
         </div>
         <Space wrap className="offline-db-status-strip-actions">
@@ -468,11 +516,39 @@ const OfflineDatabaseCenter = () => {
 
       <div className="offline-db-compact-section">
         <div className="offline-db-section-heading">
-          <Text strong>Daftar backup terbaru</Text>
-          <Text type="secondary">Menampilkan maksimal 6 file terbaru.</Text>
+          <div>
+            <Text strong>Daftar backup</Text>
+            <br />
+            <Text type="secondary">Filter mingguan atau bulanan tanpa membuat folder tambahan.</Text>
+          </div>
+          <Space wrap size={8}>
+            <Select
+              value={backupTypeFilter}
+              onChange={setBackupTypeFilter}
+              style={{ minWidth: 140 }}
+              options={[
+                { value: "all", label: "Semua jenis" },
+                { value: "daily", label: "Harian" },
+                { value: "monthly", label: "Bulanan" },
+                { value: "manual", label: "Manual" },
+              ]}
+            />
+            <Select
+              value={backupPeriodFilter}
+              onChange={setBackupPeriodFilter}
+              style={{ minWidth: 150 }}
+              options={[
+                { value: "all", label: "Semua periode" },
+                { value: "today", label: "Hari ini" },
+                { value: "this-week", label: "Minggu ini" },
+                { value: "this-month", label: "Bulan ini" },
+                { value: "last-month", label: "Bulan lalu" },
+              ]}
+            />
+          </Space>
         </div>
         <Space direction="vertical" size={8} style={{ width: "100%" }}>
-          {backups.slice(0, 6).map((backup) => (
+          {filteredBackups.slice(0, 50).map((backup) => (
             <div className="offline-db-backup-list-item" key={backup.id || backup.filename}>
               <div className="offline-db-backup-list-main">
                 <Space wrap size={6}>
@@ -494,8 +570,12 @@ const OfflineDatabaseCenter = () => {
             </div>
           ))}
         </Space>
-        {!backups.length ? (
-          <ImsNotice variant="guard" compact title="Belum ada backup database." />
+        {!filteredBackups.length ? (
+          <ImsNotice
+            variant="guard"
+            compact
+            title={backups.length ? "Tidak ada backup yang cocok dengan filter." : "Belum ada backup database."}
+          />
         ) : null}
       </div>
     </Space>
@@ -719,8 +799,10 @@ const OfflineDatabaseCenter = () => {
             { color: "green", children: "Layanan lokal: jalankan aplikasi dari komputer utama, lalu cek status aplikasi." },
             { color: "green", children: "Laptop/PC utama: buka halaman Kategori dan Customer." },
             { color: "green", children: "HP: buka aplikasi dari alamat lokal komputer utama dan tambah/edit customer test." },
-            { color: "green", children: "Restart layanan lokal; pastikan auto backup harian tidak dobel di hari yang sama." },
-            { color: "blue", children: "Buat backup manual; pastikan File Backup IMS .imsbackup compact, manifest, checksum, dan audit log maintenance tercatat." },
+            { color: "green", children: "Pastikan auto backup daily tidak dobel dan tetap dibuat meskipun layanan menyala melewati pergantian hari." },
+            { color: "blue", children: "Pastikan daily lebih dari 60 hari hanya dibersihkan setelah monthly bulan terkait tersedia dan verified." },
+            { color: "blue", children: "Pastikan satu monthly per bulan dipertahankan maksimal 12 bulan dan backup manual tidak dihapus otomatis." },
+            { color: "blue", children: "Buat backup manual; pastikan hanya satu file .imsbackup tanpa manifest sidecar terpisah." },
             { color: "orange", children: "Jalankan Preview Restore pada backup terbaru; pastikan status valid sebelum tombol restore aktif." },
             { color: "orange", children: "Copy backup verified ke flashdisk/harddisk eksternal dan tandai checklist eksternal." },
           ]}

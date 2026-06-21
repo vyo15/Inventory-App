@@ -55,6 +55,7 @@ import {
 import DataTableView from "../../components/Layout/Table/DataTableView";
 import MobileDetailDrawer from '../../components/Layout/Mobile/MobileDetailDrawer';
 import ResponsiveFormSection from '../../components/Layout/Mobile/ResponsiveFormSection';
+import { isVariantStockEmpty } from '../../utils/variants/variantArchiveHelpers';
 
 import { listenPurchaseRecords } from '../../services/Transaksi/purchasesService';
 import { showFormValidationFeedback } from '../../utils/forms/formValidationFeedback';
@@ -120,6 +121,11 @@ const RawMaterials = () => {
   const editingMaterialHasVariants = Boolean(editingRecord?.hasVariants || (editingRecord?.variants || []).length > 0);
   const canActivateVariantsForEditing = isEditingMaterial && !editingMaterialHasVariants && hasSafeZeroMasterStock(editingRecord);
   const hasVariantModeSwitchLocked = isEditingMaterial && !canActivateVariantsForEditing;
+  const isGuardedVariantStock = (fieldName) => {
+    if (!isEditingMaterial) return false;
+    const variant = form.getFieldValue(['variants', fieldName]) || {};
+    return Boolean(variant.variantKey) && !isVariantStockEmpty(variant);
+  };
   const stockEditHelpText = 'Ubah stok lewat Stock Management / Stock Adjustment / transaksi resmi.';
 
   // ---------------------------------------------------------------------------
@@ -441,7 +447,7 @@ const RawMaterials = () => {
       message.success(`Bahan baku berhasil ${record.isActive === false ? 'diaktifkan' : 'dinonaktifkan'}.`);
     } catch (error) {
       console.error(error);
-      message.error('Gagal mengubah status bahan baku.');
+      message.error(error?.message || 'Gagal mengubah status bahan baku.');
     }
   };
 
@@ -456,7 +462,9 @@ const RawMaterials = () => {
       setSubmitting(true);
 
       if (editingRecord?.id) {
-        await updateRawMaterial(editingRecord.id, values, formSupplierOptions);
+        await updateRawMaterial(editingRecord.id, values, formSupplierOptions, {
+          expectedVersion: editingRecord.versionToken || editingRecord.updatedAt || '',
+        });
         message.success('Bahan baku berhasil diupdate.');
       } else {
         await createRawMaterial(values, formSupplierOptions);
@@ -987,7 +995,9 @@ const RawMaterials = () => {
                 name="averageActualUnitCost"
                 label="Modal Aktual Rata-rata / Satuan"
                 rules={[{ required: true, message: 'Modal aktual rata-rata wajib diisi.' }]}
-                extra="Dipakai sebagai base cost utama untuk pricing raw materials."
+                extra={isEditingMaterial
+                  ? 'Modal aktual dihitung dari transaksi Purchase dan dikunci saat edit master.'
+                  : 'Dipakai sebagai base cost utama untuk pricing raw materials.'}
               >
                 <InputNumber
                   style={{ width: '100%' }}
@@ -995,6 +1005,7 @@ const RawMaterials = () => {
                   precision={0}
                   formatter={(value) => formatNumberID(value)}
                   parser={integerParser}
+                  disabled={isEditingMaterial}
                 />
               </Form.Item>
             </Col>
@@ -1080,7 +1091,7 @@ const RawMaterials = () => {
                             danger
                             type="text"
                             icon={<DeleteOutlined />}
-                            disabled={fields.length === 1}
+                            disabled={fields.length === 1 || isGuardedVariantStock(field.name)}
                             onClick={() => remove(field.name)}
                           >
                             Hapus
@@ -1126,7 +1137,11 @@ const RawMaterials = () => {
                           </Col>
                           <Col xs={24} md={5}>
                             <Form.Item {...field} name={[field.name, 'isActive']} label="Aktif" valuePropName="checked">
-                              <Switch checkedChildren="Aktif" unCheckedChildren="Nonaktif" />
+                              <Switch
+                                checkedChildren="Aktif"
+                                unCheckedChildren="Nonaktif"
+                                disabled={isGuardedVariantStock(field.name)}
+                              />
                             </Form.Item>
                           </Col>
                         </Row>

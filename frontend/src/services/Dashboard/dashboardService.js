@@ -8,6 +8,7 @@ import { getAllProductionPayrolls } from "../Produksi/productionPayrollsService"
 import { getAllProductionPlans } from "../Produksi/productionPlanningService";
 import { getAllProductionWorkLogs } from "../Produksi/productionWorkLogsService";
 import { fetchSalesRecords } from "../Transaksi/salesService";
+import { APP_ROUTES } from "../../config/appRoutes";
 import { canAccessRoute, ROUTE_ACCESS_KEYS } from "../../utils/auth/roleAccess";
 
 const LISTENER_TIMEOUT_MS = 7000;
@@ -165,7 +166,7 @@ const getStockRoute = (row = {}, role) => {
   const routeConfig = sourceType === "product"
     ? { routeKey: ROUTE_ACCESS_KEYS.PRODUCTS, to: "/products" }
     : sourceType === "semi_finished"
-      ? { routeKey: ROUTE_ACCESS_KEYS.SEMI_FINISHED_MATERIALS, to: "/produksi/semi-finished-materials" }
+      ? { routeKey: ROUTE_ACCESS_KEYS.SEMI_FINISHED_MATERIALS, to: APP_ROUTES.PRODUCTION.SEMI_FINISHED_MATERIALS }
       : { routeKey: ROUTE_ACCESS_KEYS.RAW_MATERIALS, to: "/raw-materials" };
 
   if (canAccessRoute(routeConfig.routeKey, role)) {
@@ -173,7 +174,7 @@ const getStockRoute = (row = {}, role) => {
   }
 
   if (canAccessRoute(ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT, role)) {
-    return "/stock-management";
+    return APP_ROUTES.INVENTORY.STOCK_MANAGEMENT;
   }
 
   return "/dashboard";

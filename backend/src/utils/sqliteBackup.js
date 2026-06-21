@@ -16,7 +16,7 @@ const BACKUP_FORMAT_VERSION = 2;
 const BACKUP_FILE_SUFFIX = ".imsbackup";
 const LEGACY_BACKUP_FILE_SUFFIX = ".imsbak.zip";
 const SUPPORTED_BACKUP_FILE_SUFFIXES = [BACKUP_FILE_SUFFIX, LEGACY_BACKUP_FILE_SUFFIX];
-const BACKUP_TYPES = new Set(["manual", "daily", "pre-update", "pre-restore", "pre-reset", "pre-import", "test"]);
+const BACKUP_TYPES = new Set(["manual", "daily", "monthly", "pre-update", "pre-restore", "pre-reset", "pre-import", "manual-import", "test"]);
 const RESTORE_CONFIRM_KEYWORD = "RESTORE DATABASE";
 const SQLITE_PACKAGE_DATABASE_FILE = "database.sqlite";
 const SQLITE_PACKAGE_MANIFEST_FILE = "manifest.json";
@@ -24,6 +24,10 @@ const SQLITE_PACKAGE_CHECKSUM_FILE = "checksum.sha256";
 const SQLITE_PACKAGE_README_FILE = "README_RESTORE.txt";
 const ZIP_COMPRESSION_STORE = 0;
 const ZIP_COMPRESSION_DEFLATE = 8;
+const DAILY_RETENTION_DAYS = 60;
+const MONTHLY_RETENTION_COUNT = 12;
+const BACKUP_LIFECYCLE_INTERVAL_MS = 60 * 60 * 1000;
+let backupLifecyclePromise = null;
 
 const crcTable = (() => {
   const table = new Array(256);
@@ -71,12 +75,53 @@ const isSupportedBackupPackageName = (filename = "") => {
   return SUPPORTED_BACKUP_FILE_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
 };
 
-const getBackupTypeDir = (type) => {
+const getBackupStorageClass = (type) => {
   const backupType = normalizeBackupType(type);
-  const targetDir = path.join(env.backupDir, backupType);
+  if (backupType === "daily") return "daily";
+  if (backupType === "monthly") return "monthly";
+  return "manual";
+};
+
+const getBackupTypeDir = (type) => {
+  const storageClass = getBackupStorageClass(type);
+  const targetDir = path.join(env.backupDir, storageClass);
   ensureDir(targetDir);
   return targetDir;
 };
+
+const getUniquePackagePath = (targetDir, filename) => {
+  let candidateFilename = filename;
+  let candidatePath = path.join(targetDir, candidateFilename);
+  const suffix = SUPPORTED_BACKUP_FILE_SUFFIXES.find((item) => candidateFilename.toLowerCase().endsWith(item)) || path.extname(candidateFilename);
+  const basename = suffix ? candidateFilename.slice(0, -suffix.length) : candidateFilename;
+  let index = 1;
+
+  while (fs.existsSync(candidatePath)) {
+    candidateFilename = `${basename}-${index}${suffix}`;
+    candidatePath = path.join(targetDir, candidateFilename);
+    index += 1;
+  }
+
+  return { filename: candidateFilename, path: candidatePath };
+};
+
+const parseBackupDate = (value) => {
+  if (!value) return null;
+  const raw = String(value);
+  const normalized = raw.includes("T") ? raw : `${raw.replace(" ", "T")}Z`;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getBackupCreatedAt = (backup) => parseBackupDate(backup?.manifest?.createdAt || backup?.created_at);
+
+const getMonthKey = (value) => {
+  const date = value instanceof Date ? value : parseBackupDate(value);
+  if (!date) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+};
+
+const isVerifiedBackup = (backup) => ["verified", "success"].includes(String(backup?.status || "").toLowerCase());
 
 const sha256File = (filePath) => new Promise((resolve, reject) => {
   const hash = crypto.createHash("sha256");
@@ -304,15 +349,19 @@ const createOfficialSqliteBackup = async (db, options = {}) => {
   const backupType = normalizeBackupType(options.type || options.backupType || "manual");
   const actor = options.actor || "system";
   const action = options.action || "backup_create";
-  const createdAt = new Date();
+  const createdAt = options.createdAt ? new Date(options.createdAt) : new Date();
+  if (Number.isNaN(createdAt.getTime())) throw new Error("Tanggal backup tidak valid.");
   const schemaVersion = await getSchemaVersion(db);
   const timestamp = safeCompactTimestamp(createdAt);
   const targetDir = getBackupTypeDir(backupType);
   const tmpDir = path.join(env.backupDir, ".tmp", `${timestamp}-${backupType}-${crypto.randomBytes(4).toString("hex")}`);
   ensureDir(tmpDir);
 
-  const packageFilename = `IMS-BF-BACKUP-${timestamp}-SV${schemaVersion}-${backupType}${BACKUP_FILE_SUFFIX}`;
-  const packagePath = path.join(targetDir, packageFilename);
+  const requestedFilename = `IMS-BF-BACKUP-${timestamp}-SV${schemaVersion}-${backupType}${BACKUP_FILE_SUFFIX}`;
+  const uniquePackage = getUniquePackagePath(targetDir, requestedFilename);
+  const packageFilename = uniquePackage.filename;
+  const packagePath = uniquePackage.path;
+  const tmpPackagePath = path.join(tmpDir, packageFilename);
   const backupDbPath = path.join(tmpDir, SQLITE_PACKAGE_DATABASE_FILE);
 
   try {
@@ -331,6 +380,7 @@ const createOfficialSqliteBackup = async (db, options = {}) => {
       backupFormat: BACKUP_FORMAT,
       backupFormatVersion: BACKUP_FORMAT_VERSION,
       backupType,
+      storageClass: getBackupStorageClass(backupType),
       createdAt: createdAt.toISOString(),
       schemaVersion: validation.schemaVersion || schemaVersion,
       databaseFile: SQLITE_PACKAGE_DATABASE_FILE,
@@ -355,10 +405,18 @@ const createOfficialSqliteBackup = async (db, options = {}) => {
       { name: SQLITE_PACKAGE_MANIFEST_FILE, data: JSON.stringify(manifest, null, 2) },
       { name: SQLITE_PACKAGE_CHECKSUM_FILE, data: `${databaseSha256}  ${SQLITE_PACKAGE_DATABASE_FILE}\n` },
       { name: SQLITE_PACKAGE_README_FILE, data: buildReadme(manifest) },
-    ], packagePath, { compressionMethod: ZIP_COMPRESSION_DEFLATE });
+    ], tmpPackagePath, { compressionMethod: ZIP_COMPRESSION_DEFLATE });
 
-    fs.writeFileSync(`${packagePath}.manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
+    const packagePreview = await getBackupPreview({
+      filename: packageFilename,
+      path: tmpPackagePath,
+      status: "verified",
+    });
+    if (!packagePreview.validForRestore) {
+      throw new Error("Paket backup selesai dibuat tetapi gagal diverifikasi ulang.");
+    }
 
+    fs.renameSync(tmpPackagePath, packagePath);
     const packageStat = fs.statSync(packagePath);
     const result = await db.run(
       `
@@ -435,6 +493,9 @@ const enrichBackupLog = (backup) => {
     ...backup,
     fileExists,
     backupType: manifest?.backupType || (String(backup.filename || "").includes("pre-restore") ? "pre-restore" : "manual-import"),
+    storageClass: ["daily", "monthly", "manual"].includes(path.basename(path.dirname(backup.path || "")))
+      ? path.basename(path.dirname(backup.path || ""))
+      : getBackupStorageClass(manifest?.backupType || backup.backupType),
     manifestStatus,
     manifest,
   };
@@ -500,38 +561,300 @@ const getBackupPreview = async (backup) => {
   }
 };
 
-const ensureDailyBackupForToday = async () => {
+const ensureDailyBackupForToday = async ({ actor = "system", referenceDate = new Date() } = {}) => {
   const db = await getDb();
-  const today = safeCompactTimestamp(new Date()).slice(0, 8);
-  const existing = await db.get(
-    "SELECT id, filename FROM backup_logs WHERE (filename LIKE ? OR filename LIKE ?) ORDER BY id DESC LIMIT 1",
+  const today = safeCompactTimestamp(referenceDate).slice(0, 8);
+  const existingRows = await db.all(
+    "SELECT * FROM backup_logs WHERE status != 'retention_deleted' AND (filename LIKE ? OR filename LIKE ?) ORDER BY id DESC",
     [`IMS-BF-BACKUP-${today}-%-daily${BACKUP_FILE_SUFFIX}`, `IMS-BF-BACKUP-${today}-%-daily${LEGACY_BACKUP_FILE_SUFFIX}`]
   );
+  const existing = enrichBackupLogs(existingRows).find((backup) => backup.fileExists && isVerifiedBackup(backup));
   if (existing) return { created: false, existing };
 
   const backup = await createOfficialSqliteBackup(db, {
     type: "daily",
-    actor: "system",
+    actor,
     action: "backup_daily_auto_create",
-    notes: "Backup harian otomatis saat layanan IMS start.",
+    notes: "Backup harian otomatis IMS. Maksimal satu backup verified per hari.",
   });
   return { created: true, backup };
 };
 
+const createMonthlyBackupFromDaily = async (db, sourceBackup, { actor = "system" } = {}) => {
+  const enrichedSource = enrichBackupLog(sourceBackup);
+  if (!enrichedSource?.fileExists || enrichedSource.backupType !== "daily" || !isVerifiedBackup(enrichedSource)) {
+    throw new Error("Backup daily sumber monthly tidak tersedia atau belum verified.");
+  }
+
+  const sourceCreatedAt = getBackupCreatedAt(enrichedSource);
+  if (!sourceCreatedAt) throw new Error("Tanggal backup daily sumber monthly tidak valid.");
+
+  const tmpDir = path.join(env.backupDir, ".tmp", `monthly-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`);
+  ensureDir(tmpDir);
+
+  try {
+    const extracted = await extractBackupDatabaseToTemp(enrichedSource, tmpDir);
+    if (!extracted.validation?.valid) throw new Error("Backup daily sumber monthly gagal integrity check.");
+
+    const baseManifest = extracted.manifest || enrichedSource.manifest || {};
+    const schemaVersion = extracted.validation.schemaVersion || baseManifest.schemaVersion || "unknown";
+    const timestamp = safeCompactTimestamp(sourceCreatedAt);
+    const targetDir = getBackupTypeDir("monthly");
+    const requestedFilename = `IMS-BF-BACKUP-${timestamp}-SV${schemaVersion}-monthly${BACKUP_FILE_SUFFIX}`;
+    const uniquePackage = getUniquePackagePath(targetDir, requestedFilename);
+    const tmpPackagePath = path.join(tmpDir, uniquePackage.filename);
+    const dbStat = fs.statSync(extracted.dbPath);
+    const databaseSha256 = await sha256File(extracted.dbPath);
+    const promotedAt = new Date().toISOString();
+    const manifest = {
+      ...baseManifest,
+      appName: "IMS Bunga Flanel",
+      backupFormat: BACKUP_FORMAT,
+      backupFormatVersion: BACKUP_FORMAT_VERSION,
+      backupType: "monthly",
+      storageClass: "monthly",
+      createdAt: sourceCreatedAt.toISOString(),
+      promotedAt,
+      promotedFrom: enrichedSource.filename,
+      schemaVersion,
+      databaseFile: SQLITE_PACKAGE_DATABASE_FILE,
+      databaseSizeBytes: dbStat.size,
+      checksumAlgorithm: "sha256",
+      databaseSha256,
+      checksumFile: SQLITE_PACKAGE_CHECKSUM_FILE,
+      compression: "deflate",
+      packageExtension: BACKUP_FILE_SUFFIX,
+      integrityCheck: extracted.validation.integrityCheck,
+      foreignKeyCheck: extracted.validation.foreignKeyCheck,
+      createdBy: actor,
+      notes: `Arsip bulanan otomatis dari backup daily terakhir bulan ${getMonthKey(sourceCreatedAt)}.`,
+      tables: extracted.validation.tables,
+    };
+
+    createBackupPackage([
+      { name: SQLITE_PACKAGE_DATABASE_FILE, data: fs.readFileSync(extracted.dbPath) },
+      { name: SQLITE_PACKAGE_MANIFEST_FILE, data: JSON.stringify(manifest, null, 2) },
+      { name: SQLITE_PACKAGE_CHECKSUM_FILE, data: `${databaseSha256}  ${SQLITE_PACKAGE_DATABASE_FILE}\n` },
+      { name: SQLITE_PACKAGE_README_FILE, data: buildReadme(manifest) },
+    ], tmpPackagePath, { compressionMethod: ZIP_COMPRESSION_DEFLATE });
+
+    const packagePreview = await getBackupPreview({
+      filename: uniquePackage.filename,
+      path: tmpPackagePath,
+      status: "verified",
+    });
+    if (!packagePreview.validForRestore) throw new Error("Paket monthly gagal diverifikasi ulang.");
+
+    fs.renameSync(tmpPackagePath, uniquePackage.path);
+    const packageStat = fs.statSync(uniquePackage.path);
+    const result = await db.run(
+      `INSERT INTO backup_logs (filename, path, size_bytes, status, created_at)
+       VALUES (?, ?, ?, 'verified', ?)`,
+      [uniquePackage.filename, uniquePackage.path, packageStat.size, sourceCreatedAt.toISOString()]
+    );
+
+    const summary = {
+      id: result.lastID,
+      filename: uniquePackage.filename,
+      path: uniquePackage.path,
+      sizeBytes: packageStat.size,
+      status: "verified",
+      backupType: "monthly",
+      storageClass: "monthly",
+      manifest,
+    };
+
+    await createAuditLog({
+      module: "maintenance",
+      action: "backup_monthly_promote",
+      entityType: "backup_log",
+      entityId: result.lastID,
+      actor,
+      description: "Backup monthly otomatis dibuat dari daily terakhir yang verified",
+      metadata: {
+        ...summary,
+        sourceBackupId: enrichedSource.id,
+        sourceBackupFilename: enrichedSource.filename,
+      },
+    });
+
+    return summary;
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+};
+
+const ensureMonthlyBackups = async ({ actor = "system", referenceDate = new Date() } = {}) => {
+  const db = await getDb();
+  const rows = await db.all(
+    "SELECT * FROM backup_logs WHERE status IN ('verified', 'success') ORDER BY created_at DESC, id DESC"
+  );
+  const backups = enrichBackupLogs(rows).filter((backup) => backup.fileExists && isVerifiedBackup(backup));
+  const currentMonth = getMonthKey(referenceDate);
+  const existingMonths = new Set(
+    backups.filter((backup) => backup.backupType === "monthly").map((backup) => getMonthKey(getBackupCreatedAt(backup))).filter(Boolean)
+  );
+  const latestDailyByMonth = new Map();
+
+  for (const backup of backups) {
+    if (backup.backupType !== "daily") continue;
+    const createdAt = getBackupCreatedAt(backup);
+    const monthKey = getMonthKey(createdAt);
+    if (!createdAt || !monthKey || monthKey >= currentMonth) continue;
+    const existing = latestDailyByMonth.get(monthKey);
+    if (!existing || createdAt > existing.createdAt) latestDailyByMonth.set(monthKey, { backup, createdAt });
+  }
+
+  const candidates = [...latestDailyByMonth.entries()]
+    .sort(([monthA], [monthB]) => monthB.localeCompare(monthA))
+    .slice(0, MONTHLY_RETENTION_COUNT);
+  const created = [];
+  const errors = [];
+
+  for (const [monthKey, candidate] of candidates) {
+    if (existingMonths.has(monthKey)) continue;
+    try {
+      const monthly = await createMonthlyBackupFromDaily(db, candidate.backup, { actor });
+      created.push(monthly);
+      existingMonths.add(monthKey);
+    } catch (error) {
+      errors.push({
+        monthKey,
+        sourceBackupFilename: candidate.backup?.filename || null,
+        message: error?.message || "Promosi monthly gagal.",
+      });
+    }
+  }
+
+  return { created, errors };
+};
+
+const removeBackupByRetention = async (db, backup, { actor = "system", reason } = {}) => {
+  if (backup?.path && fs.existsSync(backup.path)) fs.rmSync(backup.path, { force: true });
+  if (backup?.path) fs.rmSync(`${backup.path}.manifest.json`, { force: true });
+  if (backup?.id) await db.run("UPDATE backup_logs SET status = 'retention_deleted' WHERE id = ?", [backup.id]);
+
+  await createAuditLog({
+    module: "maintenance",
+    action: "backup_retention_delete",
+    entityType: "backup_log",
+    entityId: backup?.id || backup?.filename,
+    actor,
+    description: "File backup dihapus otomatis sesuai kebijakan retensi",
+    metadata: {
+      filename: backup?.filename,
+      path: backup?.path,
+      backupType: backup?.backupType,
+      storageClass: backup?.storageClass,
+      createdAt: backup?.manifest?.createdAt || backup?.created_at,
+      reason,
+    },
+  });
+
+  return { id: backup?.id, filename: backup?.filename, reason };
+};
+
+const applyBackupRetention = async ({ actor = "system", referenceDate = new Date() } = {}) => {
+  const db = await getDb();
+  const rows = await db.all(
+    "SELECT * FROM backup_logs WHERE status IN ('verified', 'success') ORDER BY created_at DESC, id DESC"
+  );
+  const backups = enrichBackupLogs(rows).filter((backup) => backup.fileExists && isVerifiedBackup(backup));
+  const deleted = [];
+
+  const monthlyByMonth = new Map();
+  for (const backup of backups.filter((item) => item.backupType === "monthly")) {
+    const monthKey = getMonthKey(getBackupCreatedAt(backup));
+    if (!monthKey) continue;
+    const list = monthlyByMonth.get(monthKey) || [];
+    list.push(backup);
+    monthlyByMonth.set(monthKey, list);
+  }
+
+  const monthlyKeys = [...monthlyByMonth.keys()].sort((a, b) => b.localeCompare(a));
+  const keptMonthlyKeys = new Set(monthlyKeys.slice(0, MONTHLY_RETENTION_COUNT));
+
+  for (const [monthKey, monthBackups] of monthlyByMonth.entries()) {
+    monthBackups.sort((a, b) => (getBackupCreatedAt(b)?.getTime() || 0) - (getBackupCreatedAt(a)?.getTime() || 0));
+    const keepFirst = keptMonthlyKeys.has(monthKey);
+    for (let index = keepFirst ? 1 : 0; index < monthBackups.length; index += 1) {
+      deleted.push(await removeBackupByRetention(db, monthBackups[index], {
+        actor,
+        reason: keepFirst ? "monthly_duplicate" : "monthly_retention_over_12",
+      }));
+    }
+  }
+
+  const verifiedMonthlyMonths = new Set(monthlyKeys);
+  const retentionCutoff = referenceDate.getTime() - DAILY_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  for (const backup of backups.filter((item) => item.backupType === "daily")) {
+    const createdAt = getBackupCreatedAt(backup);
+    if (!createdAt || createdAt.getTime() >= retentionCutoff) continue;
+    const monthKey = getMonthKey(createdAt);
+    if (!verifiedMonthlyMonths.has(monthKey)) continue;
+    deleted.push(await removeBackupByRetention(db, backup, {
+      actor,
+      reason: `daily_older_than_${DAILY_RETENTION_DAYS}_days_monthly_available`,
+    }));
+  }
+
+  return { deleted };
+};
+
+const runBackupLifecycleMaintenance = async ({ actor = "system", referenceDate = new Date() } = {}) => {
+  if (backupLifecyclePromise) return backupLifecyclePromise;
+
+  backupLifecyclePromise = (async () => {
+    const daily = await ensureDailyBackupForToday({ actor, referenceDate });
+    const monthly = await ensureMonthlyBackups({ actor, referenceDate });
+    let retention = { deleted: [], errors: [] };
+
+    try {
+      retention = { ...(await applyBackupRetention({ actor, referenceDate })), errors: [] };
+    } catch (error) {
+      retention = {
+        deleted: [],
+        errors: [{ message: error?.message || "Cleanup retention gagal." }],
+      };
+    }
+
+    return {
+      monthly,
+      daily,
+      retention,
+      errors: [...(monthly.errors || []), ...(retention.errors || [])],
+    };
+  })();
+
+  try {
+    return await backupLifecyclePromise;
+  } finally {
+    backupLifecyclePromise = null;
+  }
+};
+
 module.exports = {
   BACKUP_FILE_SUFFIX,
+  BACKUP_LIFECYCLE_INTERVAL_MS,
+  DAILY_RETENTION_DAYS,
   LEGACY_BACKUP_FILE_SUFFIX,
+  MONTHLY_RETENTION_COUNT,
   RESTORE_CONFIRM_KEYWORD,
   SUPPORTED_BACKUP_FILE_SUFFIXES,
+  applyBackupRetention,
+  createMonthlyBackupFromDaily,
   createOfficialSqliteBackup,
   ensureDailyBackupForToday,
+  ensureMonthlyBackups,
   enrichBackupLog,
   enrichBackupLogs,
   extractBackupDatabaseToTemp,
   getBackupPreview,
+  getBackupStorageClass,
   isSupportedBackupPackageName,
   normalizeBackupFilename,
   readBackupManifest,
+  runBackupLifecycleMaintenance,
   sanitizeImportedBackupFilename,
   validateSqliteFile,
 };

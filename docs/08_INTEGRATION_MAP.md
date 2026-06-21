@@ -214,12 +214,26 @@ Database Center UI
 → audit log maintenance
 ```
 
+Backup lifecycle:
+
+```text
+backend start / hourly lifecycle check
+→ ensure daily verified maksimal satu per hari
+→ promote daily terakhir bulan sebelumnya menjadi monthly
+→ verify package/checksum/integrity
+→ cleanup daily > 60 hari jika monthly bulan terkait tersedia
+→ simpan maksimal 12 monthly
+→ audit log setiap promosi/cleanup
+```
+
+Folder aktif hanya `daily`, `monthly`, dan `manual`. Backup manual, import, serta pre-restore masuk storage class `manual`; jenis aslinya tetap dicatat di manifest.
+
 Restore wajib:
 
 - pilih backup eksplisit,
 - preview,
 - validasi checksum/integrity,
-- pre-restore backup,
+- pre-restore backup yang disimpan di folder manual,
 - keyword confirm,
 - audit log.
 

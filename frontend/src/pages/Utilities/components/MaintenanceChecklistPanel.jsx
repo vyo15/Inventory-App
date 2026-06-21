@@ -184,7 +184,7 @@ const MaintenanceChecklistPanel = () => {
       status: statusData.backupFormat && backupPolicy.verifyChecksum && backupPolicy.verifyIntegrityCheck ? "done" : "pending",
       statusLabel: statusData.backupFormat && backupPolicy.verifyChecksum && backupPolicy.verifyIntegrityCheck ? "Sesuai" : "Perlu cek",
       title: "Format backup resmi aktif",
-      description: "Backup memakai File Backup IMS .imsbackup compact dengan manifest, checksum, dan integrity check.",
+      description: "Backup memakai satu file .imsbackup self-contained dengan manifest, checksum, dan integrity check internal.",
       extra: statusData.backupFormat || "Format backup belum terbaca dari layanan lokal.",
     },
     {
@@ -194,7 +194,7 @@ const MaintenanceChecklistPanel = () => {
       statusLabel: verifiedBackupToday ? "Sesuai" : "Perlu backup",
       title: "Backup verified hari ini tersedia",
       description: "Checklist otomatis terisi jika ada backup hari ini yang file-nya ada dan statusnya verified/success.",
-      extra: verifiedBackupToday ? verifiedBackupToday.filename : "Buat backup manual atau restart layanan lokal agar auto daily berjalan.",
+      extra: verifiedBackupToday ? verifiedBackupToday.filename : "Buat backup manual atau tunggu pemeriksaan siklus backup otomatis berikutnya.",
     },
     {
       key: "daily-backup",
@@ -202,8 +202,31 @@ const MaintenanceChecklistPanel = () => {
       status: dailyBackupToday ? "done" : "pending",
       statusLabel: dailyBackupToday ? "Sesuai" : "Menunggu auto daily",
       title: "Auto backup harian hari ini tersedia",
-      description: "Auto daily dibuat saat layanan lokal start dan tidak dibuat dobel pada hari yang sama.",
+      description: "Auto daily diperiksa saat layanan start dan berkala selama layanan hidup, tanpa membuat backup dobel pada hari yang sama.",
       extra: dailyBackupToday ? formatDateTime(dailyBackupToday.created_at) : "Belum ada backup type daily yang verified hari ini.",
+    },
+    {
+      key: "backup-retention-policy",
+      kind: "auto",
+      status: backupPolicy.autoDaily
+        && backupPolicy.autoMonthlyPromotion
+        && Number(backupPolicy.dailyRetentionDays) === 60
+        && Number(backupPolicy.monthlyRetentionCount) === 12
+        && backupPolicy.manualAutoDelete === false
+        ? "done"
+        : "pending",
+      statusLabel: backupPolicy.autoDaily
+        && backupPolicy.autoMonthlyPromotion
+        && Number(backupPolicy.dailyRetentionDays) === 60
+        && Number(backupPolicy.monthlyRetentionCount) === 12
+        && backupPolicy.manualAutoDelete === false
+        ? "Sesuai"
+        : "Perlu cek",
+      title: "Retensi daily, monthly, dan manual aktif",
+      description: "Daily disimpan 60 hari, monthly maksimal 12 bulan, dan manual tidak dihapus otomatis.",
+      extra: Array.isArray(backupPolicy.folders)
+        ? `Folder aktif: ${backupPolicy.folders.join(", ")}`
+        : "Kebijakan folder backup belum terbaca.",
     },
     {
       key: "latest-backup-verified",
@@ -247,7 +270,7 @@ const MaintenanceChecklistPanel = () => {
       description: "Checklist otomatis dari status modul aplikasi yang dinormalisasi layanan lokal.",
       extra: moduleRuntimeKnown ? `${moduleRuntimeReady}/${moduleRuntimeTotal} modul siap` : "Status modul aplikasi belum terbaca.",
     },
-  ], [backupPolicy.verifyChecksum, backupPolicy.verifyIntegrityCheck, dailyBackupToday, latestVerifiedBackup, moduleRuntimeKnown, moduleRuntimeTotal, moduleRuntimeNotReady, moduleRuntimeReady, statusData, verifiedBackupToday]);
+  ], [backupPolicy, dailyBackupToday, latestVerifiedBackup, moduleRuntimeKnown, moduleRuntimeTotal, moduleRuntimeNotReady, moduleRuntimeReady, statusData, verifiedBackupToday]);
 
   const manualItems = useMemo(() => [
     {

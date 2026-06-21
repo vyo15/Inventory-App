@@ -2,11 +2,11 @@ import React, { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "../components/Auth/ProtectedRoute";
 import DataLoadingState from "../components/Layout/Feedback/DataLoadingState";
-import { ROUTE_ACCESS_KEYS } from "../utils/auth/roleAccess";
 import {
-  LEGACY_MODULE_HUB_REDIRECTS,
-  MODULE_HUB_PATHS,
-} from "../utils/navigation/sidebarNavigation";
+  APP_ROUTES,
+  LEGACY_ROUTE_REDIRECTS,
+} from "../config/appRoutes";
+import { ROUTE_ACCESS_KEYS } from "../utils/auth/roleAccess";
 
 // =========================
 // SECTION: Lazy Loaded Pages — AKTIF
@@ -125,7 +125,8 @@ const RouteFallback = (
 // - AKTIF.
 // - GUARDED: jangan mengubah business page di sini; hanya route access wrapper.
 // Compatibility / cleanup:
-// - redirect route lama di bawah dipertahankan sementara untuk bookmark/link lama.
+// - exact hub lama /stock dan /produksi sudah dipensiunkan;
+// - legacy child route diisolasi lewat LEGACY_ROUTE_REDIRECTS.
 // =========================
 const AppRoutes = ({ darkTheme }) => {
   const guardRoute = (routeKey, element) => (
@@ -153,38 +154,15 @@ const AppRoutes = ({ darkTheme }) => {
             <ModuleHub moduleKey="master-data" />,
           )}
         />
-        {/* Hub lama tetap dipertahankan sebagai redirect role-guarded.
-            Canonical route responsive navigation adalah /inventory dan /production. */}
         <Route
-          path="/stock"
-          element={guardRoute(
-            ROUTE_ACCESS_KEYS.INVENTORY_HUB,
-            <Navigate
-              to={LEGACY_MODULE_HUB_REDIRECTS["/stock"]}
-              replace
-            />,
-          )}
-        />
-        <Route
-          path="/produksi"
-          element={guardRoute(
-            ROUTE_ACCESS_KEYS.PRODUCTION_HUB,
-            <Navigate
-              to={LEGACY_MODULE_HUB_REDIRECTS["/produksi"]}
-              replace
-            />,
-          )}
-        />
-
-        <Route
-          path={MODULE_HUB_PATHS.INVENTORY}
+          path={APP_ROUTES.INVENTORY.HUB}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.INVENTORY_HUB,
             <ModuleHub moduleKey="inventory" />,
           )}
         />
         <Route
-          path={MODULE_HUB_PATHS.PRODUCTION}
+          path={APP_ROUTES.PRODUCTION.HUB}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.PRODUCTION_HUB,
             <ModuleHub moduleKey="productions" />,
@@ -254,99 +232,93 @@ const AppRoutes = ({ darkTheme }) => {
         />
 
         <Route
-          path="/produksi/tahapan-produksi"
+          path={APP_ROUTES.PRODUCTION.STEPS}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.PRODUCTION_STEPS,
             <ProductionSteps />,
           )}
         />
         <Route
-          path="/produksi/karyawan-produksi"
+          path={APP_ROUTES.PRODUCTION.EMPLOYEES}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.PRODUCTION_EMPLOYEES,
             <ProductionEmployees />,
           )}
         />
         <Route
-          path="/produksi/profil-produksi"
+          path={APP_ROUTES.PRODUCTION.PROFILES}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.PRODUCTION_PROFILES,
             <ProductionProfiles />,
           )}
         />
         <Route
-          path="/produksi/semi-finished-materials"
+          path={APP_ROUTES.PRODUCTION.SEMI_FINISHED_MATERIALS}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.SEMI_FINISHED_MATERIALS,
             <SemiFinishedMaterials />,
           )}
         />
         <Route
-          path="/produksi/production-planning"
+          path={APP_ROUTES.PRODUCTION.PLANNING}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.PRODUCTION_PLANNING,
             <ProductionPlanning />,
           )}
         />
         <Route
-          path="/produksi/production-orders"
+          path={APP_ROUTES.PRODUCTION.ORDERS}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.PRODUCTION_ORDERS,
             <ProductionOrders />,
           )}
         />
         <Route
-          path="/produksi/bom-produksi"
+          path={APP_ROUTES.PRODUCTION.BOMS}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.PRODUCTION_BOMS,
             <ProductionBoms />,
           )}
         />
         <Route
-          path="/produksi/work-log-produksi"
+          path={APP_ROUTES.PRODUCTION.WORK_LOGS}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.PRODUCTION_WORK_LOGS,
             <ProductionWorkLogs />,
           )}
         />
         <Route
-          path="/produksi/payroll-produksi"
+          path={APP_ROUTES.PRODUCTION.PAYROLLS}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS,
             <ProductionPayrolls />,
           )}
         />
         <Route
-          path="/produksi/analisis-hpp"
+          path={APP_ROUTES.PRODUCTION.HPP_ANALYSIS}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.PRODUCTION_HPP_ANALYSIS,
             <ProductionHppAnalysis />,
           )}
         />
 
-        {/* =========================
-            SECTION: Redirect Inventory Lama — COMPATIBILITY / CLEANUP CANDIDATE
-            Fungsi:
-            - menjaga bookmark lama /stock-adjustment tidak error.
-            Hubungan flow:
-            - Penyesuaian Stok sudah digabung ke Stock Management sebagai satu entry point inventory.
-            Status:
-            - Compatibility bridge; route tetap diproteksi memakai akses Stock Management.
-        ========================= */}
         <Route
-          path="/stock-adjustment"
-          element={guardRoute(
-            ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
-            <Navigate to="/stock-management" replace />,
-          )}
-        />
-        <Route
-          path="/stock-management"
+          path={APP_ROUTES.INVENTORY.STOCK_MANAGEMENT}
           element={guardRoute(
             ROUTE_ACCESS_KEYS.STOCK_MANAGEMENT,
             <StockManagement />,
           )}
         />
+
+        {/* Legacy child route hanya menjadi compatibility bridge terisolasi.
+            Seluruh target tetap melewati route guard yang sama dengan canonical page. */}
+        {LEGACY_ROUTE_REDIRECTS.map(({ from, to, routeKey }) => (
+          <Route
+            key={from}
+            path={from}
+            element={guardRoute(routeKey, <Navigate to={to} replace />)}
+          />
+        ))}
 
         <Route
           path="/purchases"

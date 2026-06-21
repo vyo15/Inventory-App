@@ -1,3 +1,4 @@
+import { APP_ROUTES } from '../../config/appRoutes';
 import { formatNumberId } from '../formatters/numberId';
 import { resolveDisplayReference } from '../references/displayReferenceResolver';
 
@@ -221,15 +222,15 @@ export const STOCK_READ_MODEL_STATUS_RANK = {
 const STOCK_READ_MODEL_SOURCE_CONFIG = {
   material: {
     typeLabel: 'Bahan Baku',
-    route: '/stock-management',
+    route: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
   },
   product: {
     typeLabel: 'Produk Jadi',
-    route: '/stock-management',
+    route: APP_ROUTES.INVENTORY.STOCK_MANAGEMENT,
   },
   semi_finished: {
     typeLabel: 'Semi Finished',
-    route: '/produksi/semi-finished-materials',
+    route: APP_ROUTES.PRODUCTION.SEMI_FINISHED_MATERIALS,
   },
 };
 
