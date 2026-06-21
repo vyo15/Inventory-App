@@ -1,6 +1,10 @@
-const { getDb } = require("../../db/connection");
+const { getDb, runInTransaction } = require("../../db/connection");
 const { createAuditLog } = require("../../utils/auditLog");
 const { safeJsonParse } = require("../../utils/jsonUtils");
+const {
+  getBusinessCodePreview,
+  resolveBusinessCode,
+} = require("../../utils/businessCodeCounter");
 
 const SUPPLIER_CODE_PREFIX = "SUP";
 const SUPPLIER_CODE_PATTERN = /^SUP-\d{8}-\d{3,}$/;
@@ -23,16 +27,34 @@ const getDateStamp = (date = new Date()) => {
   return `${day}${month}${year}`;
 };
 
-const buildSupplierCode = (sequence = 1, date = new Date()) =>
-  `${SUPPLIER_CODE_PREFIX}-${getDateStamp(date)}-${String(sequence).padStart(3, "0")}`;
 
-const getSupplierSequence = (code = "", date = new Date()) => {
-  const normalizedCode = normalizeCode(code);
-  const expectedPrefix = `${SUPPLIER_CODE_PREFIX}-${getDateStamp(date)}-`;
-  if (!normalizedCode.startsWith(expectedPrefix)) return 0;
+const getSupplierCounterOptions = (dateStamp = getDateStamp()) => ({
+  counterKey: `suppliers:${SUPPLIER_CODE_PREFIX}:${dateStamp}`,
+  prefix: `${SUPPLIER_CODE_PREFIX}-${dateStamp}`,
+  tableName: "suppliers",
+  columnName: "supplier_code",
+  minWidth: 3,
+  notes: "Runtime counter supplier per tanggal",
+});
 
-  const sequence = Number(normalizedCode.slice(expectedPrefix.length));
-  return Number.isFinite(sequence) ? sequence : 0;
+const generateNextSupplierCode = (db) => getBusinessCodePreview(
+  db,
+  getSupplierCounterOptions(),
+);
+
+const resolveSupplierCreateCode = async (db, requestedCode = "") => {
+  const normalizedCode = normalizeCode(requestedCode);
+  if (!normalizedCode) {
+    return resolveBusinessCode(db, "", getSupplierCounterOptions());
+  }
+
+  validateSupplierCode(normalizedCode);
+  const dateStamp = normalizedCode.split("-")[1];
+  return resolveBusinessCode(
+    db,
+    normalizedCode,
+    getSupplierCounterOptions(dateStamp),
+  );
 };
 
 const toSupplierRecord = (row = {}) => {
@@ -87,7 +109,7 @@ const ensureSupplierCodeAvailable = async (db, code, excludeId = null) => {
   if (!code) return;
 
   const existing = await db.get(
-    "SELECT id FROM suppliers WHERE supplier_code = ? AND id != ? AND status != 'deleted'",
+    "SELECT id FROM suppliers WHERE supplier_code = ? AND id != ?",
     [code, excludeId || 0]
   );
 
@@ -98,18 +120,6 @@ const ensureSupplierCodeAvailable = async (db, code, excludeId = null) => {
       409
     );
   }
-};
-
-const generateNextSupplierCode = async (db) => {
-  const rows = await db.all(
-    "SELECT supplier_code FROM suppliers WHERE supplier_code LIKE ?",
-    [`${SUPPLIER_CODE_PREFIX}-${getDateStamp()}-%`]
-  );
-  const maxSequence = rows.reduce(
-    (max, row) => Math.max(max, getSupplierSequence(row.supplier_code)),
-    0
-  );
-  return buildSupplierCode(maxSequence + 1);
 };
 
 const generateSupplierCode = async () => {
@@ -150,13 +160,12 @@ const validateSupplierCode = (code) => {
   }
 };
 
-const createSupplier = async (body = {}, actor = "system") => {
-  const db = await getDb();
+const createSupplier = async (body = {}, actor = "system") => runInTransaction(async (db) => {
   const payload = buildSupplierPayload(body);
 
   validateSupplierPayload(payload);
 
-  const finalCode = payload.supplierCode || await generateNextSupplierCode(db);
+  const finalCode = await resolveSupplierCreateCode(db, payload.supplierCode);
 
   validateSupplierCode(finalCode);
   await ensureSupplierCodeAvailable(db, finalCode);
@@ -190,10 +199,9 @@ const createSupplier = async (body = {}, actor = "system") => {
   });
 
   return toSupplierRecord(supplier);
-};
+});
 
-const updateSupplier = async (id, body = {}, actor = "system") => {
-  const db = await getDb();
+const updateSupplier = async (id, body = {}, actor = "system") => runInTransaction(async (db) => {
   const current = await db.get(
     "SELECT * FROM suppliers WHERE id = ? AND status != 'deleted'",
     [id]
@@ -240,10 +248,9 @@ const updateSupplier = async (id, body = {}, actor = "system") => {
   });
 
   return toSupplierRecord(updated);
-};
+});
 
-const softDeleteSupplier = async (id, actor = "system") => {
-  const db = await getDb();
+const softDeleteSupplier = async (id, actor = "system") => runInTransaction(async (db) => {
   const current = await db.get(
     "SELECT * FROM suppliers WHERE id = ? AND status != 'deleted'",
     [id]
@@ -273,7 +280,7 @@ const softDeleteSupplier = async (id, actor = "system") => {
     deleted: true,
     softDeleted: true,
   };
-};
+});
 
 module.exports = {
   createSupplier,

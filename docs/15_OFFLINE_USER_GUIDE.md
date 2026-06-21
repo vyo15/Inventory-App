@@ -61,8 +61,8 @@ Menu `Maintenance & Backup` adalah pusat perawatan data lokal. Urutan pakainya:
 
 1. Buka `Ringkasan` untuk melihat status aman/tidak.
 2. Gunakan `Backup & Restore` untuk backup resmi dan restore guarded.
-3. Gunakan `Audit Data` sebelum menjalankan repair.
-4. Gunakan `Repair Aman` hanya untuk perbaikan turunan/display yang sudah dipreview.
+3. Tab `Audit Data` dan `Repair Aman` otomatis saat ini ditandai belum tersedia sampai backend SQLite menyediakan implementasi nyata.
+4. Gunakan checklist manual dan export master untuk review; jangan menganggap stub/no-op sebagai hasil audit.
 5. Gunakan `Data Tools` untuk export master dan checklist data pokok.
 6. Gunakan `Checklist` sebelum update, restore, atau maintenance besar.
 7. Buka `Riwayat` untuk melihat backup/restore resmi.
@@ -158,8 +158,8 @@ RESTORE DATABASE
 ```
 
 5. Klik `Restore Database`.
-6. Sistem otomatis membuat backup `pre-restore` sebelum overwrite database aktif.
-7. Setelah restore berhasil, refresh aplikasi dan login ulang bila perlu.
+6. Sistem otomatis membuat backup `pre-restore` lalu mengganti database melalui file candidate/swap.
+7. Jika migrasi, validasi, atau audit restore gagal, database sebelum restore dikembalikan otomatis. Setelah restore berhasil, refresh aplikasi dan login ulang bila perlu.
 
 Jangan restore dengan cara copy manual `database.sqlite` ke folder `data/` saat backend aktif.
 

@@ -1,4 +1,13 @@
-export const getInventoryStockMaintenanceAudit = async () => ({ summary: { status: "database_local_active", findings: 0 }, findings: [] });
-export const repairInventoryStockMaintenance = async () => ({ repaired: 0, skipped: true });
-export const getInventoryLogSchemaAudit = async () => ({ summary: { status: "database_local_active", findings: 0 }, findings: [] });
-export const repairInventoryLogSchema = async () => ({ repaired: 0, skipped: true });
+import { throwUnavailableMaintenanceTool } from "./resetMaintenanceDataService";
+
+export const getInventoryStockMaintenanceAudit = async () =>
+  throwUnavailableMaintenanceTool("Audit stok inventory");
+
+export const repairInventoryStockMaintenance = async () =>
+  throwUnavailableMaintenanceTool("Repair stok inventory");
+
+export const getInventoryLogSchemaAudit = async () =>
+  throwUnavailableMaintenanceTool("Audit schema inventory log");
+
+export const repairInventoryLogSchema = async () =>
+  throwUnavailableMaintenanceTool("Repair schema inventory log");

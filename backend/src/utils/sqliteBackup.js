@@ -6,7 +6,7 @@ const zlib = require("zlib");
 const sqlite3 = require("sqlite3");
 const { open } = require("sqlite");
 const env = require("../config/env");
-const { getDb, getDbPath } = require("../db/connection");
+const { getDb, getDbPath, runSerializedDbOperation } = require("../db/connection");
 const { createAuditLog } = require("./auditLog");
 
 const BACKUP_FORMAT = "imsbackup";
@@ -345,7 +345,7 @@ const buildReadme = (manifest) => [
   "",
 ].join("\n");
 
-const createOfficialSqliteBackup = async (db, options = {}) => {
+const createOfficialSqliteBackupUnsafe = async (db, options = {}) => {
   const backupType = normalizeBackupType(options.type || options.backupType || "manual");
   const actor = options.actor || "system";
   const action = options.action || "backup_create";
@@ -464,6 +464,10 @@ const createOfficialSqliteBackup = async (db, options = {}) => {
   }
 };
 
+const createOfficialSqliteBackup = (db, options = {}) => runSerializedDbOperation(
+  () => createOfficialSqliteBackupUnsafe(db, options),
+);
+
 const readBackupManifest = (backupPath) => {
   if (!backupPath) return null;
   const sidecarPath = `${backupPath}.manifest.json`;
@@ -485,7 +489,7 @@ const enrichBackupLog = (backup) => {
   try {
     manifest = fileExists ? readBackupManifest(backup.path) : null;
     manifestStatus = manifest ? "available" : "missing";
-  } catch (error) {
+  } catch {
     manifestStatus = "invalid";
   }
 
@@ -561,7 +565,7 @@ const getBackupPreview = async (backup) => {
   }
 };
 
-const ensureDailyBackupForToday = async ({ actor = "system", referenceDate = new Date() } = {}) => {
+const ensureDailyBackupForTodayUnsafe = async ({ actor = "system", referenceDate = new Date() } = {}) => {
   const db = await getDb();
   const today = safeCompactTimestamp(referenceDate).slice(0, 8);
   const existingRows = await db.all(
@@ -579,6 +583,10 @@ const ensureDailyBackupForToday = async ({ actor = "system", referenceDate = new
   });
   return { created: true, backup };
 };
+
+const ensureDailyBackupForToday = (options = {}) => runSerializedDbOperation(
+  () => ensureDailyBackupForTodayUnsafe(options),
+);
 
 const createMonthlyBackupFromDaily = async (db, sourceBackup, { actor = "system" } = {}) => {
   const enrichedSource = enrichBackupLog(sourceBackup);
@@ -684,7 +692,7 @@ const createMonthlyBackupFromDaily = async (db, sourceBackup, { actor = "system"
   }
 };
 
-const ensureMonthlyBackups = async ({ actor = "system", referenceDate = new Date() } = {}) => {
+const ensureMonthlyBackupsUnsafe = async ({ actor = "system", referenceDate = new Date() } = {}) => {
   const db = await getDb();
   const rows = await db.all(
     "SELECT * FROM backup_logs WHERE status IN ('verified', 'success') ORDER BY created_at DESC, id DESC"
@@ -729,6 +737,10 @@ const ensureMonthlyBackups = async ({ actor = "system", referenceDate = new Date
   return { created, errors };
 };
 
+const ensureMonthlyBackups = (options = {}) => runSerializedDbOperation(
+  () => ensureMonthlyBackupsUnsafe(options),
+);
+
 const removeBackupByRetention = async (db, backup, { actor = "system", reason } = {}) => {
   if (backup?.path && fs.existsSync(backup.path)) fs.rmSync(backup.path, { force: true });
   if (backup?.path) fs.rmSync(`${backup.path}.manifest.json`, { force: true });
@@ -754,7 +766,7 @@ const removeBackupByRetention = async (db, backup, { actor = "system", reason } 
   return { id: backup?.id, filename: backup?.filename, reason };
 };
 
-const applyBackupRetention = async ({ actor = "system", referenceDate = new Date() } = {}) => {
+const applyBackupRetentionUnsafe = async ({ actor = "system", referenceDate = new Date() } = {}) => {
   const db = await getDb();
   const rows = await db.all(
     "SELECT * FROM backup_logs WHERE status IN ('verified', 'success') ORDER BY created_at DESC, id DESC"
@@ -800,6 +812,10 @@ const applyBackupRetention = async ({ actor = "system", referenceDate = new Date
 
   return { deleted };
 };
+
+const applyBackupRetention = (options = {}) => runSerializedDbOperation(
+  () => applyBackupRetentionUnsafe(options),
+);
 
 const runBackupLifecycleMaintenance = async ({ actor = "system", referenceDate = new Date() } = {}) => {
   if (backupLifecyclePromise) return backupLifecyclePromise;

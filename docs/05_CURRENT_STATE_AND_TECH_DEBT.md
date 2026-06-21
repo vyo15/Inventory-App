@@ -1,10 +1,10 @@
 # CURRENT STATE & TECH DEBT — IMS Bunga Flanel
 
-## Status source aktual — 2026-06-20
+## Status source aktual — 2026-06-21
 
 Status: **AKTIF / SOURCE-VERIFIED / SQLITE-FIRST**.
 
-Source aktual `Inventory-App-clean.zip` menunjukkan IMS berjalan dengan arsitektur:
+Source aktual ZIP `Inventory-App-20260621-154649189-main-ff92ccb1-dirty.zip` menunjukkan IMS berjalan dengan arsitektur:
 
 - Frontend React/Vite.
 - Backend Node.js Express sebagai satu-satunya akses database.
@@ -65,6 +65,9 @@ Konsekuensi:
 - Stock mutation utama sudah diarahkan ke stock engine/backend commit.
 - Endpoint `POST /api/auth/login` dilindungi rate limit per IP: default 5 login gagal per 60 detik; login berhasil tidak menghabiskan kuota kegagalan.
 - Backend memiliki automated regression test berbasis `node:test` untuk auth route aktual, cookie session, CORS, bootstrap guard, rate limit, stock engine, transaction atomicity, finance ledger, return, production, payroll/HPP, backup/restore, dan source hygiene.
+- Satu koneksi SQLite tetap dipakai, tetapi seluruh aksesnya sudah berada di bawah FIFO coordinator application-level. Transaction memegang queue sampai commit/rollback, read menunggu transaction aktif, dan callback nested memakai context reentrant.
+- `business_code_counters` existing sudah aktif untuk managed code lintas generic master/config, customer/supplier/pricing, transaksi, stock adjustment, finance, dan production. Preview tidak mereservasi; server response final menjadi authority.
+- Backup lifecycle dan restore full-replace memegang akses database eksklusif sehingga snapshot/file swap tidak berjalan bersama request operasional.
 - Session browser memakai cookie host-only `HttpOnly; SameSite=Lax`; response login tidak mengirim raw token ke JavaScript, endpoint auth memakai `Cache-Control: no-store`, dan header identitas Express dinonaktifkan.
 - Session Bearer lama tetap diterima sementara dan dimigrasikan menjadi cookie melalui `/api/auth/me`, lalu token lama dibersihkan dari `localStorage` frontend.
 - Bootstrap administrator pertama memakai kode setup acak yang hanya tampil di terminal backend; endpoint status tidak mengirim kode tersebut.
@@ -72,7 +75,7 @@ Konsekuensi:
 - Runner command Windows menjalankan `npm.cmd`/`npx.cmd` melalui `cmd.exe`, sehingga shortcut quality gate tidak gagal dengan `spawnSync ... EINVAL` pada Node.js Windows.
 - Production P4 memusatkan create PO dari Planning, Start Production, Complete Work Log, auto payroll, Payroll Paid, finance posting, dan HPP reconcile pada transaction backend SQLite.
 - Generic production CRUD tidak lagi dapat dipakai untuk melewati lifecycle sensitif Planning, Production Order, Work Log, atau Payroll.
-- Automated regression aktif saat ini mencakup 63 test backend, 37 test frontend, dan 7 test tooling. Coverage backend mencakup rollback/idempotency produksi, backup/restore guarded, auth migration, serta source ZIP hygiene; coverage frontend mencakup auth, role guard, transaksi, endpoint atomic produksi, restore guarded, export XLSX, Dashboard, dan error login.
+- Test discovery source saat ini mencakup 113 test backend pada 23 file, 60 test frontend pada 17 file, dan 7 test tooling. Tambahan backend melindungi FIFO database coordinator, transaction/read concurrency, runtime counter code, password maksimum, serta compatibility backup mock. Coverage backend mencakup rollback/idempotency produksi, backup/restore guarded, auth migration, serta source ZIP hygiene; coverage frontend mencakup auth, role guard, transaksi, endpoint atomic produksi, restore guarded, export XLSX, Dashboard, dan error login.
 
 ## Tech debt aktif yang masih perlu dijaga
 
@@ -128,9 +131,7 @@ Jangan membuat perhitungan stok baru di UI.
 
 ### 7. Backup, restore, dan reset
 
-- Backup resmi memakai satu file compact `.imsbackup` dari backend; manifest/checksum berada di dalam package dan sidecar `.manifest.json` baru tidak dibuat lagi. Backup legacy `.imsbak.zip` serta sidecar lama tetap didukung untuk restore.
-- Struktur backup aktif hanya `daily/`, `monthly/`, dan `manual/`. Daily maksimal satu per hari dengan retensi 60 hari. Monthly dipromosikan otomatis dari daily verified terakhir per bulan dan dipertahankan maksimal 12 bulan. Manual tidak dihapus otomatis; backup import dan pre-restore juga disimpan dalam folder manual dengan jenis backup tetap tercatat di manifest.
-- Siklus backup dijalankan saat backend start dan diperiksa ulang berkala selama layanan hidup, sehingga pergantian hari tetap mendapat daily tanpa wajib restart. Cleanup hanya berjalan setelah backup baru/arsip monthly lolos verifikasi dan setiap penghapusan dicatat ke audit log.
+- Backup resmi memakai satu file compact `.imsbackup` dari backend; backup legacy `.imsbak.zip` tetap didukung untuk restore.
 - Restore wajib import/daftar backup resmi, preview, validasi, pre-restore backup, keyword `RESTORE DATABASE`, dan audit log. Backup `pre-restore` dan backup sumber restore harus dipastikan tercatat ulang ke database hasil restore agar rollback serta traceability tetap terlihat di daftar backup.
 - Export Master aktif membaca data master SQLite secara read-only dari backend untuk arsip/review; export ini bukan paket restore dan tidak boleh menggantikan `.imsbackup`.
 - Reset testing lama tetap nonaktif/redirect lama.
@@ -153,6 +154,17 @@ Jangan membuat perhitungan stok baru di UI.
 - Automated test sudah mencakup atomic core Production, backup/restore guarded, source hygiene, auth frontend, role guard, ProtectedRoute, Dashboard, dan error login. Coverage belum mencakup seluruh variasi halaman transaksi/report/produksi dan interaksi maintenance kompleks; area tersebut tetap wajib menjalani checklist manual.
 - Test runner menemukan seluruh file `*.test.js` secara otomatis. `npm run check`, `git check`, dan pre-push wajib gagal jika automated test gagal.
 - Source readiness menolak file runtime di `data/` atau `backups/` yang ter-track; script clean ZIP menjalankan guard sebelum `git archive` lalu memverifikasi artifact ZIP aktual. ZIP dengan path backslash, folder runtime/generated, database, backup, atau struktur source tidak lengkap akan ditolak dan dihapus. Hapus artifact dari Git index dengan `git rm --cached` tanpa menghapus backup lokal yang masih diperlukan.
+- Backend quality gate menjalankan syntax check untuk `src/`, `test/`, dan `scripts/`, lalu ESLint correctness baseline (`js.configs.recommended`, `no-unused-vars`, dan `no-duplicate-imports`). Rule style/formatter belum dipaksakan agar tidak mencampur cleanup massal dengan perubahan business logic.
+- `.gitattributes` dan `.editorconfig` mengunci file `*.js`, `*.jsx`, `*.cjs`, dan `*.mjs` ke LF. Normalisasi EOL massal wajib tetap menjadi cleanup tersendiri dan tidak boleh digabung dengan perubahan stock, production, finance, auth, route, atau flow guarded lain.
+
+## Status temuan P0–P3 setelah hardening 2026-06-21
+
+- **Selesai di source:** application-level serialization untuk singleton SQLite, central transaction helper, concurrency regression, runtime business counter, Date.now reference fallback pada flow resmi, backup/restore exclusivity, dan password maksimum 128 karakter.
+- **Masih proses release:** ZIP masih berlabel `dirty` dan tidak membawa metadata `.git`; working tree clean, commit lengkap, dan kesamaan upstream hanya dapat dibuktikan pada mesin project melalui `npm run git:check:full` dan `npm run verify:source` setelah seluruh patch di-commit.
+- **Masih residual:** chunk utama sekitar 934.4 KiB dari budget 1074.2 KiB. Route lazy tetap aktif; manualChunks spekulatif tidak ditambahkan.
+- **Masih residual dependency:** `xlsx@0.18.5` dan `esbuild@0.27.7` tetap terdokumentasi; tidak ada force upgrade/override major.
+- **Masih cleanup terpisah:** `production.service.js` tetap besar dan repository-mode compatibility masih memiliki importer aktif. Keduanya tidak dihapus/refactor dalam patch transaction karena risiko regression.
+- **Masih hardening non-blocker:** OpenAPI, TypeScript source, Helmet/structured logger/rotation, breached-password screening, dan coverage provider belum ditambahkan. Perubahan dependency/arsitektur tersebut memerlukan patch sendiri.
 
 ## Jangan dilakukan tanpa approval eksplisit
 
@@ -203,7 +215,7 @@ Automated test frontend sekarang juga menjaga:
 - Sales cancel tetap ditolak.
 - Return tetap wajib terkait Sales dan qty tidak melebihi sisa.
 - Production lifecycle memanggil endpoint commit atomic yang benar.
-- Responsive navigation memakai satu pola canonical `/inventory/...` dan `/production/...`, memensiunkan exact hub `/stock` serta `/produksi`, dan mengisolasi compatibility redirect hanya untuk child route yang sebelumnya aktif. Active descendant route, nested parent key, route guard, serta role-aware module visibility tetap diuji.
+- Responsive navigation memakai canonical hub `/inventory` dan `/production`. Exact legacy hub `/stock` serta `/produksi` tidak dihidupkan kembali; hanya child route legacy yang terdaftar eksplisit tetap diarahkan ke canonical route dengan guard yang sama.
 - Penyelesaian Work Log mengirim Good Qty, operator, dan catatan langsung ke endpoint complete atomic tanpa direct update pendahuluan.
 - Restore memakai preview/execute endpoint guarded dengan cookie credentials.
 - Export XLSX tetap write-only.
@@ -224,3 +236,16 @@ Automated test frontend sekarang juga menjaga:
 ### Temuan merge P4 yang dikoreksi
 
 Test discovery otomatis menemukan bahwa empat file regression Production P4 sudah ada, tetapi implementasi atomic pada `production.service.js`, `production.controller.js`, dan validator generic route belum ikut dalam source ZIP terbaru. Kondisi tersebut sebelumnya tersembunyi karena script backend hanya menjalankan daftar test lama secara manual. Patch ini mengembalikan endpoint/service atomic P4 dan validator lifecycle; seluruh test Production kembali lulus. Ini menjadi alasan test discovery tidak boleh kembali diganti dengan daftar file manual.
+
+
+## Update P0-P3 — Restore rollback, maintenance honesty, route, CI
+
+- P0 inventory master/variant guard, Stock Read Model write block, dan Pricing Rule batch atomic sudah tersedia di source aktual dan dilindungi regression test.
+- Restore sekarang memakai staged candidate + swap database dan automatic rollback jika migrasi, post-validation, atau audit restore gagal.
+- Audit/repair maintenance frontend yang sebelumnya no-op tidak lagi ditampilkan sebagai berhasil; UI menandainya belum tersedia sampai backend nyata tersedia.
+- Internal link Dashboard/stock helper memakai `APP_ROUTES`; child route lama tetap hanya compatibility redirect.
+- Dead compatibility files yang tidak mempunyai importer dihapus setelah usage scan.
+- GitHub Actions quality gate dan README root ditambahkan.
+- Legacy Bearer tetap compatibility flag sampai seluruh perangkat dikonfirmasi sudah login ulang.
+- Refactor besar `production.service.js`, coverage provider, dan penghapusan repository-mode compatibility tetap pekerjaan terpisah karena menyentuh architecture/dependency dan tidak aman dicampur dengan hardening ini.
+- Placeholder frontend `businessCodeGenerator.js` dan `businessCodeCounterService.js` tetap dihapus karena tidak mempunyai importer. Tabel existing `business_code_counters` sekarang dipakai runtime melalui helper backend bersama; concurrency code allocation dilindungi transaction dan regression test.

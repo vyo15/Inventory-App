@@ -1,2 +1,7 @@
-export const getMasterCodeMaintenanceAudit = async () => ({ summary: { status: "database_local_active", findings: 0 }, findings: [] });
-export const repairMasterCodeMaintenance = async () => ({ repaired: 0, skipped: true });
+import { throwUnavailableMaintenanceTool } from "./resetMaintenanceDataService";
+
+export const getMasterCodeMaintenanceAudit = async () =>
+  throwUnavailableMaintenanceTool("Audit kode master");
+
+export const repairMasterCodeMaintenance = async () =>
+  throwUnavailableMaintenanceTool("Repair kode master");

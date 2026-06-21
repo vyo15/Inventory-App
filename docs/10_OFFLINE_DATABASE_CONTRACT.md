@@ -83,6 +83,9 @@ Restore resmi harus:
 - Memastikan backup sumber restore juga tercatat di database hasil restore, terutama jika sumber restore berasal dari import file luar.
 - Meminta keyword confirm `RESTORE DATABASE`.
 - Mencatat restore log.
+- Mengganti database melalui candidate file dan swap lokal, bukan copy overwrite langsung.
+- Mengembalikan database sebelum restore secara otomatis jika migrasi, post-validation, atau audit restore gagal.
+- Mencatat `restore_rollback` pada database yang berhasil dipulihkan.
 - Menolak restore jika backup tidak valid.
 - Bersifat full restore/replace database aktif, bukan merge data.
 
@@ -100,6 +103,17 @@ Restore resmi harus:
 - Tidak boleh white screen total karena satu data gagal.
 - Tidak boleh melakukan repair/reset/mutation otomatis.
 - Tidak boleh menampilkan technical ID sebagai data utama user-facing.
+
+## Concurrent access contract
+
+- Backend tetap memakai satu koneksi SQLite singleton, tetapi semua method database wajib melewati FIFO coordinator `backend/src/db/connection.js`.
+- `runInTransaction()` adalah satu-satunya boundary `BEGIN/COMMIT/ROLLBACK` aplikasi. Service dilarang membuat transaction manual sendiri.
+- Transaction memegang akses eksklusif sampai commit/rollback. Read dan write lain wajib menunggu agar tidak melihat state belum commit atau ikut masuk ke transaction request lain.
+- Helper stock, finance, dan audit yang dipanggil dari transaction wajib reentrant; helper tersebut tidak boleh memasang mutex/transaction sendiri.
+- WAL dan `busy_timeout` tetap dipakai sebagai locking database, tetapi bukan pengganti serialization JavaScript.
+- Backup snapshot, retention lifecycle, close/reopen connection, dan restore file swap wajib berjalan di dalam serialized database operation.
+- Managed business code wajib direservasi melalui `business_code_counters` di transaction create/commit. Preview code tidak menjamin nomor final; response server adalah source of truth.
+- Kode historis dan custom reference tetap compatibility. Kode soft-deleted tidak boleh dipakai ulang.
 
 ## Automated regression contract
 

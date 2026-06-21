@@ -1,10 +1,14 @@
 const crypto = require("crypto");
 const express = require("express");
-const { getDb } = require("../db/connection");
+const { getDb, runInTransaction, runSerializedDbOperation } = require("../db/connection");
 const { createAuditLog } = require("../utils/auditLog");
 const { failure, success } = require("../utils/response");
 const { requireLocalAuth, requireLocalAdministrator } = require("../middlewares/localAuth");
 const { safeJsonParse } = require("../utils/jsonUtils");
+const {
+  getBusinessCodePreview,
+  resolveBusinessCode,
+} = require("../utils/businessCodeCounter");
 
 const normalizeText = (value) => String(value ?? "").trim();
 const normalizeCode = (value) => normalizeText(value).toUpperCase();
@@ -15,19 +19,11 @@ const toInteger = (value = 0) => {
 
 const allowAuthenticatedRead = (_req, _res, next) => next();
 
-const runWriteOperation = async (db, useWriteTransaction, callback) => {
-  if (!useWriteTransaction) return callback();
-
-  await db.run("BEGIN IMMEDIATE TRANSACTION");
-  try {
-    const result = await callback();
-    await db.run("COMMIT");
-    return result;
-  } catch (error) {
-    await db.run("ROLLBACK").catch(() => {});
-    throw error;
-  }
-};
+const runWriteOperation = async (_db, useWriteTransaction, callback) => (
+  useWriteTransaction
+    ? runInTransaction(callback)
+    : runSerializedDbOperation(callback)
+);
 
 const operationSuccess = (message, data = null, meta = undefined, statusCode = 200) => ({
   ok: true,
@@ -49,24 +45,25 @@ const sendOperationResult = (res, result = {}) => (result.ok
   ? success(res, result.message, result.data, result.meta, result.statusCode)
   : failure(res, result.message, result.errorCode, result.statusCode, result.details));
 
-const getNumericSequenceFromCode = (code = "", prefix = "") => {
-  const normalizedCode = normalizeCode(code);
-  const normalizedPrefix = normalizeCode(prefix);
-  const match = normalizedCode.match(new RegExp(`^${normalizedPrefix}-(\\d+)$`));
-  return match ? Number(match[1]) : 0;
-};
+const getCodeCounterOptions = (tableName, prefix = "REF") => ({
+  counterKey: `${tableName}:${normalizeCode(prefix)}`,
+  prefix: normalizeCode(prefix),
+  tableName,
+  columnName: "code",
+  minWidth: 3,
+  notes: `Runtime counter untuk ${tableName}`,
+});
 
-const buildSequentialCode = (prefix = "REF", sequence = 1) =>
-  `${normalizeCode(prefix)}-${String(sequence).padStart(3, "0")}`;
+const generateNextCode = (db, tableName, prefix = "REF") => getBusinessCodePreview(
+  db,
+  getCodeCounterOptions(tableName, prefix),
+);
 
-const generateNextCode = async (db, tableName, prefix = "REF") => {
-  const rows = await db.all(`SELECT code FROM ${tableName} WHERE code LIKE ?`, [`${normalizeCode(prefix)}-%`]);
-  const maxSequence = rows.reduce(
-    (max, row) => Math.max(max, getNumericSequenceFromCode(row.code, prefix)),
-    0
-  );
-  return buildSequentialCode(prefix, maxSequence + 1);
-};
+const resolveCreateCode = (db, tableName, prefix, requestedCode = "") => resolveBusinessCode(
+  db,
+  requestedCode,
+  getCodeCounterOptions(tableName, prefix),
+);
 
 const defaultExtractColumns = (payload = {}) => {
   const currentStock = toInteger(payload.currentStock ?? payload.stock ?? 0);
@@ -131,7 +128,7 @@ const createSqliteJsonRecordRouter = ({
   readGuard = allowAuthenticatedRead,
   writeGuard = requireLocalAdministrator,
   deleteGuard = requireLocalAdministrator,
-  useWriteTransaction = false,
+  useWriteTransaction = true,
   sanitizeDirectCreate = null,
   sanitizeDirectUpdate = null,
   validateDirectCreate = null,
@@ -214,15 +211,29 @@ const createSqliteJsonRecordRouter = ({
           const now = new Date().toISOString();
           const incomingPayload = { ...(req.body || {}) };
           const columns = extractColumns(incomingPayload);
-          const finalCode = normalizeCode(columns.code || incomingPayload.code || incomingPayload.referenceNumber || "") || await generateNextCode(db, tableName, codePrefix);
-          const finalId = normalizeText(incomingPayload.id || finalCode || crypto.randomUUID());
+          const requestedCode = normalizeCode(
+            columns.code || incomingPayload.code || incomingPayload.referenceNumber || "",
+          );
+          const finalCode = await resolveCreateCode(db, tableName, codePrefix, requestedCode);
+          if (!finalCode) {
+            return operationFailure(`Kode ${entityType} sudah pernah digunakan di database lokal`, "DUPLICATE_CODE", 409);
+          }
+          const incomingId = normalizeText(incomingPayload.id || "");
+          const requestedCodeUsedAsId = incomingId
+            && requestedCode
+            && incomingId === normalizeText(requestedCode);
+          const finalId = normalizeText(
+            !incomingId || requestedCodeUsedAsId
+              ? finalCode
+              : incomingId,
+          ) || crypto.randomUUID();
           const finalName = normalizeText(columns.name || incomingPayload.name || incomingPayload.title || finalCode);
 
           if (requiredName && !finalName) {
             return operationFailure(`Nama ${entityType} wajib diisi`, "VALIDATION_ERROR", 400);
           }
 
-          const duplicate = await db.get(`SELECT id FROM ${tableName} WHERE code = ? AND status != 'deleted'`, [finalCode]);
+          const duplicate = await db.get(`SELECT id FROM ${tableName} WHERE code = ?`, [finalCode]);
           if (duplicate) {
             return operationFailure(`Kode ${entityType} sudah ada di database lokal`, "DUPLICATE_CODE", 409);
           }

@@ -2,6 +2,7 @@ import React from "react";
 import { Button, Space, Tag, Typography } from "antd";
 import { DatabaseOutlined, FileSearchOutlined, LockOutlined, SafetyOutlined } from "@ant-design/icons";
 import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
+import { MAINTENANCE_DATA_TOOLS_AVAILABLE } from "../../../services/Maintenance/resetMaintenanceDataService";
 
 const { Text } = Typography;
 
@@ -39,8 +40,8 @@ const ResetDangerZonePanel = ({ loadingAutoDetect, onRunAllAudits }) => (
         <Text strong>Reset Testing / Development</Text>
         <Tag color="red">Reset lama nonaktif</Tag>
       </Space>
-      <Button icon={<FileSearchOutlined />} loading={loadingAutoDetect} onClick={onRunAllAudits}>
-        Jalankan Audit Data
+      <Button icon={<FileSearchOutlined />} loading={loadingAutoDetect} onClick={onRunAllAudits} disabled={!MAINTENANCE_DATA_TOOLS_AVAILABLE}>
+        Audit Otomatis Belum Tersedia
       </Button>
     </div>
 

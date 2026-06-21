@@ -1,4 +1,4 @@
-const { getDb } = require("../../db/connection");
+const { getDb, runInTransaction } = require("../../db/connection");
 const { createAuditLog } = require("../../utils/auditLog");
 
 const normalizeText = (value) => (value || "").toString().trim();
@@ -35,7 +35,7 @@ const ensureCategoryCodeAvailable = async (db, code, excludeId = null) => {
   if (!code) return;
 
   const existing = await db.get(
-    "SELECT id FROM categories WHERE code = ? AND id != ? AND status != 'deleted'",
+    "SELECT id FROM categories WHERE code = ? AND id != ?",
     [code, excludeId || 0]
   );
 
@@ -65,8 +65,7 @@ const getCategoryById = async (id) => {
   return row ? toCategoryRecord(row) : null;
 };
 
-const createCategory = async (body = {}, actor = "system") => {
-  const db = await getDb();
+const createCategory = async (body = {}, actor = "system") => runInTransaction(async (db) => {
   const payload = buildCategoryPayload(body);
 
   if (!payload.name) {
@@ -96,10 +95,9 @@ const createCategory = async (body = {}, actor = "system") => {
   });
 
   return toCategoryRecord(category);
-};
+});
 
-const updateCategory = async (id, body = {}, actor = "system") => {
-  const db = await getDb();
+const updateCategory = async (id, body = {}, actor = "system") => runInTransaction(async (db) => {
   const current = await db.get(
     "SELECT * FROM categories WHERE id = ? AND status != 'deleted'",
     [id]
@@ -140,10 +138,9 @@ const updateCategory = async (id, body = {}, actor = "system") => {
   });
 
   return toCategoryRecord(updated);
-};
+});
 
-const softDeleteCategory = async (id, actor = "system") => {
-  const db = await getDb();
+const softDeleteCategory = async (id, actor = "system") => runInTransaction(async (db) => {
   const current = await db.get(
     "SELECT * FROM categories WHERE id = ? AND status != 'deleted'",
     [id]
@@ -173,7 +170,7 @@ const softDeleteCategory = async (id, actor = "system") => {
     deleted: true,
     softDeleted: true,
   };
-};
+});
 
 module.exports = {
   createCategory,

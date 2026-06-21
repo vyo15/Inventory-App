@@ -100,7 +100,11 @@ Module._load = function patchedLoad(request, parent, isMain) {
   if (request === "sqlite3") return { Database: function Database() {}, OPEN_READONLY: 1 };
   if (request === "sqlite") return { open: async () => fakeReadonlyDb };
   if (request === "../db/connection" && parent?.filename?.endsWith("sqliteBackup.js")) {
-    return { getDb: async () => fakeDb, getDbPath: () => dbPath };
+    return {
+      getDb: async () => fakeDb,
+      getDbPath: () => dbPath,
+      runSerializedDbOperation: async (callback) => callback(fakeDb),
+    };
   }
   if (request === "./auditLog" && parent?.filename?.endsWith("sqliteBackup.js")) {
     return { createAuditLog: async () => ({}) };

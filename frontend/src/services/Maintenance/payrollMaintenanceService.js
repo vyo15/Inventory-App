@@ -1,2 +1,7 @@
-export const getPayrollSnapshotMaintenanceAudit = async () => ({ summary: { status: "database_local_active", findings: 0 }, findings: [] });
-export const repairPayrollSnapshotMaintenance = async () => ({ repaired: 0, skipped: true });
+import { throwUnavailableMaintenanceTool } from "./resetMaintenanceDataService";
+
+export const getPayrollSnapshotMaintenanceAudit = async () =>
+  throwUnavailableMaintenanceTool("Audit snapshot payroll");
+
+export const repairPayrollSnapshotMaintenance = async () =>
+  throwUnavailableMaintenanceTool("Repair snapshot payroll");

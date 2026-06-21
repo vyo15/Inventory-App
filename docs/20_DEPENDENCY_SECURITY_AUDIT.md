@@ -1,6 +1,6 @@
 # IMS Dependency Security Audit
 
-Tanggal audit source: 2026-06-20
+Tanggal audit source: 2026-06-21
 
 ## Scope
 
@@ -31,7 +31,7 @@ Perbaikan lockfile:
 - Dependency `@ant-design/charts` dihapus karena audit import/usage tidak menemukan pemanggil aktif.
 - Seluruh URL resolved lockfile memakai registry npm publik.
 
-Residual yang belum diubah secara paksa:
+Residual yang belum diubah secara paksa. Patch concurrent-write/runtime-counter tidak mengubah dependency atau lockfile:
 
 ### `xlsx@0.18.5`
 

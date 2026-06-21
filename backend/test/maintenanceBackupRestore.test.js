@@ -212,6 +212,10 @@ test("restore guarded membuat pre-restore backup dan memulihkan snapshot secara 
   assert.equal(restored.activeDatabaseValidation.valid, true);
   assert.equal(restored.preRestoreBackup.backupType, "pre-restore");
   assert.equal(fs.existsSync(restored.preRestoreBackup.path), true);
+  assert.equal(
+    fs.readdirSync(path.dirname(testDatabase.dbPath)).some((name) => name.includes(".restore-candidate-") || name.includes(".restore-rollback-")),
+    false,
+  );
 
   assert.equal((await getCategory("CAT-RESTORE")).name, "Nama Snapshot");
   assert.equal(await getCategory("CAT-EXTRA"), undefined);
@@ -231,6 +235,53 @@ test("restore guarded membuat pre-restore backup dan memulihkan snapshot secara 
   assert.equal(restoreLog.destructive_allowed, 1);
   assert.equal(restoreAudit.actor, "restore-tester");
   assert.equal(preRestoreLog.status, "verified");
+});
+
+test("restore gagal setelah swap mengembalikan database aktif secara otomatis", async () => {
+  const db = await testDatabase.getDb();
+  await db.exec(`
+    CREATE TRIGGER force_restore_log_failure
+    BEFORE INSERT ON restore_logs
+    WHEN NEW.plan_status = 'executed_guarded'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced restore log failure');
+    END;
+  `);
+
+  await upsertCategory({ code: "CAT-ROLLBACK", name: "Nama Snapshot Restore" });
+  const backup = await createBackup({ type: "test", actor: "rollback-tester" });
+  await upsertCategory({ code: "CAT-ROLLBACK", name: "Nama Aktif Sebelum Restore" });
+
+  await assert.rejects(
+    executeRestore({
+      filename: backup.filename,
+      confirmKeyword: RESTORE_CONFIRM_KEYWORD,
+      actor: "rollback-tester",
+    }),
+    (error) => error?.errorCode === "RESTORE_ROLLED_BACK"
+      && error?.rollback?.rollbackSucceeded === true,
+  );
+
+  assert.equal((await getCategory("CAT-ROLLBACK")).name, "Nama Aktif Sebelum Restore");
+
+  const rollbackDb = await testDatabase.getDb();
+  const rollbackLog = await rollbackDb.get(
+    "SELECT * FROM restore_logs WHERE plan_status = 'rolled_back_guarded' ORDER BY id DESC LIMIT 1",
+  );
+  const rollbackAudit = await rollbackDb.get(
+    "SELECT * FROM audit_logs WHERE action = 'restore_rollback' ORDER BY id DESC LIMIT 1",
+  );
+
+  assert.equal(rollbackLog.destructive_allowed, 0);
+  assert.equal(rollbackAudit.actor, "rollback-tester");
+  assert.equal(
+    fs.readdirSync(path.dirname(testDatabase.dbPath)).some((name) => (
+      name.includes(".restore-candidate-")
+      || name.includes(".restore-rollback-")
+      || name.includes(".automatic-rollback-candidate-")
+    )),
+    false,
+  );
 });
 
 test("backup rusak diblokir pada preview tanpa mengubah database aktif", async () => {

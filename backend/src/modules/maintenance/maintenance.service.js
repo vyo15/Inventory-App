@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { closeDb, getDb, getDbPath } = require("../../db/connection");
+const { closeDb, getDb, getDbPath, runSerializedDbOperation } = require("../../db/connection");
 const env = require("../../config/env");
 const { createAuditLog } = require("../../utils/auditLog");
 const { safeJsonParse } = require("../../utils/jsonUtils");
@@ -362,6 +362,42 @@ const removeSqliteRuntimeSidecars = (dbPath) => {
   }
 };
 
+const createRestoreSiblingPath = (activeDbPath, label) => {
+  const suffix = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  return `${activeDbPath}.${label}-${suffix}`;
+};
+
+const replaceActiveDatabaseWithCandidate = ({ activeDbPath, candidatePath, swapPath }) => {
+  const hadActiveDb = fs.existsSync(activeDbPath);
+
+  if (hadActiveDb) {
+    fs.renameSync(activeDbPath, swapPath);
+  }
+
+  try {
+    fs.renameSync(candidatePath, activeDbPath);
+  } catch (error) {
+    if (hadActiveDb && fs.existsSync(swapPath) && !fs.existsSync(activeDbPath)) {
+      fs.renameSync(swapPath, activeDbPath);
+    }
+    throw error;
+  }
+
+  return { hadActiveDb };
+};
+
+const restoreActiveDatabaseFromSwap = ({ activeDbPath, swapPath, hadActiveDb }) => {
+  if (!hadActiveDb || !fs.existsSync(swapPath)) {
+    return false;
+  }
+
+  fs.rmSync(activeDbPath, { force: true });
+  removeSqliteRuntimeSidecars(activeDbPath);
+  fs.renameSync(swapPath, activeDbPath);
+  removeSqliteRuntimeSidecars(activeDbPath);
+  return true;
+};
+
 const getActiveDbValidation = async (db) => {
   const integrityRows = await db.all("PRAGMA integrity_check;");
   const foreignKeyRows = await db.all("PRAGMA foreign_key_check;");
@@ -412,8 +448,17 @@ const registerRestoredBackupLog = async (db, backup, { status = "verified" } = {
   });
 };
 
-const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor = "system" } = {}) => {
+const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor = "system" } = {}) => runSerializedDbOperation(async () => {
   const tempDir = path.join(env.backupDir, ".tmp", `restore-${Date.now()}`);
+  const activeDbPath = getDbPath();
+  let requestedFilename = "";
+  let backup = null;
+  let preRestoreBackup = null;
+  let candidatePath = "";
+  let swapPath = "";
+  let activeDatabaseReplaced = false;
+  let hadActiveDb = false;
+  let restoreSucceeded = false;
 
   try {
     const normalizedConfirmKeyword = String(confirmKeyword || "").trim();
@@ -426,7 +471,7 @@ const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor 
     }
 
     const db = await getDb();
-    const requestedFilename = normalizeBackupFilename(filename || backupFileName || "");
+    requestedFilename = normalizeBackupFilename(filename || backupFileName || "");
     if (!requestedFilename) {
       return {
         restored: false,
@@ -435,7 +480,7 @@ const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor 
       };
     }
 
-    const backup = await db.get(
+    backup = await db.get(
       "SELECT * FROM backup_logs WHERE filename = ? ORDER BY id DESC LIMIT 1",
       [requestedFilename]
     );
@@ -459,7 +504,7 @@ const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor 
       };
     }
 
-    const preRestoreBackup = await createOfficialSqliteBackup(db, {
+    preRestoreBackup = await createOfficialSqliteBackup(db, {
       type: "pre-restore",
       actor,
       action: "pre_restore_backup_create",
@@ -467,20 +512,41 @@ const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor 
     });
 
     const extractedBackup = await extractBackupDatabaseToTemp(backup, tempDir);
-    const activeDbPath = getDbPath();
+    candidatePath = createRestoreSiblingPath(activeDbPath, "restore-candidate");
+    swapPath = createRestoreSiblingPath(activeDbPath, "restore-rollback");
+    fs.copyFileSync(extractedBackup.dbPath, candidatePath, fs.constants.COPYFILE_EXCL);
+
     await closeDb();
-    fs.copyFileSync(extractedBackup.dbPath, activeDbPath);
     removeSqliteRuntimeSidecars(activeDbPath);
+
+    const replacement = replaceActiveDatabaseWithCandidate({
+      activeDbPath,
+      candidatePath,
+      swapPath,
+    });
+    hadActiveDb = replacement.hadActiveDb;
+    activeDatabaseReplaced = true;
+    candidatePath = "";
 
     await runMigrations();
     const restoredDb = await getDb();
     const activeValidation = await getActiveDbValidation(restoredDb);
+
+    if (!activeValidation.valid) {
+      throw createHttpError(
+        "Database hasil restore gagal validasi integrity/foreign key.",
+        500,
+        "RESTORE_POST_VALIDATION_FAILED"
+      );
+    }
+
     const registeredPreRestoreBackup = await registerRestoredBackupLog(restoredDb, preRestoreBackup, { status: "verified" });
     const registeredRestoreSourceBackup = await registerRestoredBackupLog(restoredDb, backup, { status: backup.status || "verified" });
 
     const summary = {
       mode: "executed_guarded",
       restored: true,
+      rollbackAvailable: Boolean(hadActiveDb && swapPath),
       selectedBackup: {
         id: backup.id,
         filename: backup.filename,
@@ -496,9 +562,9 @@ const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor 
       registeredRestoreSourceBackup,
       actor,
       note: [
-        "Database aktif dioverwrite dari backup setelah backup otomatis dibuat,",
-        "checksum/integrity valid, keyword konfirmasi valid, backup pre-restore didaftarkan ulang,",
-        "dan backup sumber restore dipastikan tercatat di database hasil restore.",
+        "Database aktif diganti secara staged setelah backup otomatis dibuat,",
+        "checksum/integrity valid, keyword konfirmasi valid, dan validasi database aktif lulus.",
+        "Jika migrasi, validasi, atau audit gagal, database sebelum restore dikembalikan otomatis.",
       ].join(" "),
     };
 
@@ -516,7 +582,7 @@ const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor 
       entityType: "restore_log",
       entityId: result.lastID,
       actor,
-      description: "Restore database lokal guarded berhasil dijalankan setelah validasi backup",
+      description: "Restore database lokal guarded berhasil dijalankan setelah validasi backup dan database aktif",
       metadata: summary,
     });
 
@@ -556,14 +622,122 @@ const executeRestore = async ({ confirmKeyword, filename, backupFileName, actor 
       });
     }
 
+    restoreSucceeded = true;
+    fs.rmSync(swapPath, { force: true });
+    swapPath = "";
+
     return {
       id: result.lastID,
       ...summary,
     };
+  } catch (error) {
+    if (!activeDatabaseReplaced) {
+      throw error;
+    }
+
+    const rollbackSummary = {
+      mode: "automatic_restore_rollback",
+      restored: false,
+      rollbackAttempted: true,
+      rollbackSucceeded: false,
+      selectedBackup: requestedFilename || backup?.filename || null,
+      preRestoreBackup: preRestoreBackup?.filename || null,
+      originalErrorCode: error?.errorCode || error?.code || "RESTORE_EXECUTION_FAILED",
+      originalErrorMessage: error?.message || "Restore gagal setelah database aktif diganti.",
+      actor,
+    };
+
+    try {
+      await closeDb().catch(() => {});
+
+      let restoredFromSwap = restoreActiveDatabaseFromSwap({
+        activeDbPath,
+        swapPath,
+        hadActiveDb,
+      });
+
+      if (!restoredFromSwap && preRestoreBackup) {
+        const rollbackTempDir = path.join(tempDir, "automatic-rollback");
+        const rollbackBackup = await extractBackupDatabaseToTemp(preRestoreBackup, rollbackTempDir);
+        const rollbackCandidatePath = createRestoreSiblingPath(activeDbPath, "automatic-rollback-candidate");
+
+        try {
+          fs.copyFileSync(rollbackBackup.dbPath, rollbackCandidatePath, fs.constants.COPYFILE_EXCL);
+          fs.rmSync(activeDbPath, { force: true });
+          removeSqliteRuntimeSidecars(activeDbPath);
+          fs.renameSync(rollbackCandidatePath, activeDbPath);
+          restoredFromSwap = true;
+        } finally {
+          fs.rmSync(rollbackCandidatePath, { force: true });
+        }
+      }
+
+      if (!restoredFromSwap) {
+        throw new Error("Snapshot database sebelum restore tidak tersedia untuk rollback otomatis.");
+      }
+
+      const rollbackDb = await getDb();
+      const rollbackValidation = await getActiveDbValidation(rollbackDb);
+      if (!rollbackValidation.valid) {
+        throw new Error(
+          `Database hasil rollback tidak valid: integrity=${rollbackValidation.integrityCheck}, foreignKey=${rollbackValidation.foreignKeyCheck}`
+        );
+      }
+
+      rollbackSummary.rollbackSucceeded = true;
+      rollbackSummary.activeDatabaseValidation = rollbackValidation;
+
+      const rollbackLog = await rollbackDb.run(
+        `
+          INSERT INTO restore_logs (filename, backup_path, plan_status, destructive_allowed, summary_json, actor)
+          VALUES (?, ?, 'rolled_back_guarded', 0, ?, ?)
+        `,
+        [
+          backup?.filename || requestedFilename || "unknown",
+          backup?.path || "",
+          JSON.stringify(rollbackSummary),
+          actor,
+        ]
+      );
+
+      await createAuditLog({
+        module: "maintenance",
+        action: "restore_rollback",
+        entityType: "restore_log",
+        entityId: rollbackLog.lastID,
+        actor,
+        description: "Restore gagal dan database aktif sebelum restore berhasil dikembalikan otomatis",
+        metadata: rollbackSummary,
+      });
+    } catch (rollbackError) {
+      const fatalError = createHttpError(
+        "Restore gagal dan rollback otomatis juga gagal. Hentikan layanan lokal dan pulihkan backup pre-restore secara manual.",
+        500,
+        "RESTORE_ROLLBACK_FAILED"
+      );
+      fatalError.cause = error;
+      fatalError.rollbackError = rollbackError;
+      throw fatalError;
+    }
+
+    const safeError = createHttpError(
+      "Restore gagal. Database aktif berhasil dikembalikan otomatis ke kondisi sebelum restore.",
+      500,
+      "RESTORE_ROLLED_BACK"
+    );
+    safeError.cause = error;
+    safeError.rollback = rollbackSummary;
+    throw safeError;
   } finally {
+    if (!restoreSucceeded && candidatePath) {
+      fs.rmSync(candidatePath, { force: true });
+    }
+    if (restoreSucceeded && swapPath) {
+      fs.rmSync(swapPath, { force: true });
+    }
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
-};
+});
 
 const createRestorePlan = async ({ filename, backupFileName, actor = "system" } = {}) => {
   const db = await getDb();

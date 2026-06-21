@@ -15,3 +15,9 @@
 /backups export-ignore
 
 *.sh text eol=lf
+
+# Keep JavaScript tooling and application source portable across Windows/Linux.
+*.js text eol=lf
+*.jsx text eol=lf
+*.cjs text eol=lf
+*.mjs text eol=lf

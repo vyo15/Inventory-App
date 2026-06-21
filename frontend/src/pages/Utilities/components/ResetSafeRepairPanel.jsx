@@ -5,6 +5,7 @@ import DataTableView from "../../../components/Layout/Table/DataTableView";
 import ImsNotice from "../../../components/Layout/Feedback/ImsNotice";
 import { formatHppUnitCurrencyId } from "../../../utils/formatters/currencyId";
 import { formatQuantityId } from "../../../utils/formatters/numberId";
+import { MAINTENANCE_DATA_TOOLS_AVAILABLE, MAINTENANCE_DATA_TOOLS_UNAVAILABLE_MESSAGE } from "../../../services/Maintenance/resetMaintenanceDataService";
 
 const { Text } = Typography;
 
@@ -129,6 +130,19 @@ const ResetSafeRepairPanel = ({
   renderCompactTag,
 }) => {
   const [stockReadModelCleanupKeyword, setStockReadModelCleanupKeyword] = useState("");
+
+  if (!MAINTENANCE_DATA_TOOLS_AVAILABLE) {
+    return (
+      <Card title="Repair Turunan Aman" size="small" extra={<Tag color="orange">Belum tersedia</Tag>}>
+        <ImsNotice
+          variant="guidance"
+          compact
+          title="Repair otomatis belum diaktifkan"
+          description={MAINTENANCE_DATA_TOOLS_UNAVAILABLE_MESSAGE}
+        />
+      </Card>
+    );
+  }
   const isStockReadModelCleanupKeywordValid = stockReadModelCleanupKeyword.trim() === STOCK_READ_MODEL_ORPHAN_CLEANUP_CONFIRM_KEYWORD;
 
   const renderGuardedRepairButton = ({

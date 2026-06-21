@@ -1,4 +1,38 @@
-const logs = [];
+const STORAGE_KEY = "ims.maintenance.session-log.v1";
+const EVIDENCE_SCOPE = "client_session_only";
+const memoryFallbackLogs = [];
+
+const getSessionStorage = () => {
+  try {
+    return typeof window !== "undefined" ? window.sessionStorage : null;
+  } catch {
+    return null;
+  }
+};
+
+const readLogs = () => {
+  const storage = getSessionStorage();
+  if (!storage) return [...memoryFallbackLogs];
+
+  try {
+    const parsed = JSON.parse(storage.getItem(STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeLogs = (logs) => {
+  const normalizedLogs = Array.isArray(logs) ? logs : [];
+  const storage = getSessionStorage();
+
+  if (storage) {
+    storage.setItem(STORAGE_KEY, JSON.stringify(normalizedLogs));
+    return;
+  }
+
+  memoryFallbackLogs.splice(0, memoryFallbackLogs.length, ...normalizedLogs);
+};
 
 export const createMaintenanceLog = async ({
   actionType = "maintenance",
@@ -12,7 +46,10 @@ export const createMaintenanceLog = async ({
   note = "",
   executedBy = "client-ui",
 } = {}) => {
-  const id = `maintenance_${Date.now()}`;
+  const now = new Date().toISOString();
+  const id = `maintenance_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const logs = readLogs();
+
   logs.unshift({
     id,
     actionType,
@@ -25,17 +62,30 @@ export const createMaintenanceLog = async ({
     status,
     note,
     executedBy,
-    executedAt: new Date().toISOString(),
+    evidenceScope: EVIDENCE_SCOPE,
+    executedAt: now,
   });
+
+  writeLogs(logs.slice(0, 100));
   return id;
 };
 
 export const updateMaintenanceLogStatus = async (logId, payload = {}) => {
+  const logs = readLogs();
   const row = logs.find((item) => item.id === logId);
+
   if (row) {
-    Object.assign(row, payload, { updatedAt: new Date().toISOString() });
+    Object.assign(row, payload, {
+      evidenceScope: EVIDENCE_SCOPE,
+      updatedAt: new Date().toISOString(),
+    });
+    writeLogs(logs);
   }
+
   return logId;
 };
 
-export const getLatestMaintenanceLogs = async (maxItems = 20) => logs.slice(0, maxItems);
+export const getLatestMaintenanceLogs = async (maxItems = 20) =>
+  readLogs().slice(0, Math.max(0, Number(maxItems) || 0));
+
+export const MAINTENANCE_LOG_EVIDENCE_SCOPE = EVIDENCE_SCOPE;

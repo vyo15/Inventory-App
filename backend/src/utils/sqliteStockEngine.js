@@ -72,18 +72,6 @@ const toRowPayload = (row = {}) => ({
   minStockAlert: row.min_stock_alert ?? 0,
 });
 
-const getVariantKey = (variant = {}) => normalizeText(
-  variant.variantKey
-    || variant.key
-    || variant.id
-    || variant.variantId
-    || variant.variantCode
-    || variant.sku
-    || variant.variantLabel
-    || variant.color
-    || variant.name,
-).toLowerCase();
-
 const getVariantReferenceTokens = (variant = {}) => Array.from(new Set([
   variant.variantKey,
   variant.key,
@@ -1163,7 +1151,14 @@ const commitStockMutation = async (db, {
     lastSyncedFrom: `sqlite_stock_engine.${transactionType}`,
   });
 
-  const ref = referenceNumber || `${transactionType.toUpperCase()}-${Date.now()}`;
+  const ref = normalizeText(referenceNumber);
+  if (!ref) {
+    throw createInventoryGuardError(
+      "Referensi mutasi stok wajib dibuat oleh service transaksi resmi.",
+      "INVENTORY_REFERENCE_REQUIRED",
+      500,
+    );
+  }
   const eventBase = {
     referenceNumber: ref,
     code: ref,

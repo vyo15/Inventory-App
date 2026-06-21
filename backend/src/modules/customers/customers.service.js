@@ -1,5 +1,9 @@
-const { getDb } = require("../../db/connection");
+const { getDb, runInTransaction } = require("../../db/connection");
 const { createAuditLog } = require("../../utils/auditLog");
+const {
+  getBusinessCodePreview,
+  resolveBusinessCode,
+} = require("../../utils/businessCodeCounter");
 
 const CUSTOMER_CODE_PREFIX = "CUS";
 const CUSTOMER_CODE_PATTERN = /^CUS-\d{8}-\d{3,}$/;
@@ -22,16 +26,34 @@ const getDateStamp = (date = new Date()) => {
   return `${day}${month}${year}`;
 };
 
-const buildCustomerCode = (sequence = 1, date = new Date()) =>
-  `${CUSTOMER_CODE_PREFIX}-${getDateStamp(date)}-${String(sequence).padStart(3, "0")}`;
 
-const getCustomerSequence = (code = "", date = new Date()) => {
-  const normalizedCode = normalizeCode(code);
-  const expectedPrefix = `${CUSTOMER_CODE_PREFIX}-${getDateStamp(date)}-`;
-  if (!normalizedCode.startsWith(expectedPrefix)) return 0;
+const getCustomerCounterOptions = (dateStamp = getDateStamp()) => ({
+  counterKey: `customers:${CUSTOMER_CODE_PREFIX}:${dateStamp}`,
+  prefix: `${CUSTOMER_CODE_PREFIX}-${dateStamp}`,
+  tableName: "customers",
+  columnName: "customer_code",
+  minWidth: 3,
+  notes: "Runtime counter customer per tanggal",
+});
 
-  const sequence = Number(normalizedCode.slice(expectedPrefix.length));
-  return Number.isFinite(sequence) ? sequence : 0;
+const generateNextCustomerCode = (db) => getBusinessCodePreview(
+  db,
+  getCustomerCounterOptions(),
+);
+
+const resolveCustomerCreateCode = async (db, requestedCode = "") => {
+  const normalizedCode = normalizeCode(requestedCode);
+  if (!normalizedCode) {
+    return resolveBusinessCode(db, "", getCustomerCounterOptions());
+  }
+
+  validateCustomerCode(normalizedCode);
+  const dateStamp = normalizedCode.split("-")[1];
+  return resolveBusinessCode(
+    db,
+    normalizedCode,
+    getCustomerCounterOptions(dateStamp),
+  );
 };
 
 const toCustomerRecord = (row = {}) => ({
@@ -65,7 +87,7 @@ const ensureCustomerCodeAvailable = async (db, code, excludeId = null) => {
   if (!code) return;
 
   const existing = await db.get(
-    "SELECT id FROM customers WHERE customer_code = ? AND id != ? AND status != 'deleted'",
+    "SELECT id FROM customers WHERE customer_code = ? AND id != ?",
     [code, excludeId || 0]
   );
 
@@ -76,18 +98,6 @@ const ensureCustomerCodeAvailable = async (db, code, excludeId = null) => {
       409
     );
   }
-};
-
-const generateNextCustomerCode = async (db) => {
-  const rows = await db.all(
-    "SELECT customer_code FROM customers WHERE customer_code LIKE ?",
-    [`${CUSTOMER_CODE_PREFIX}-${getDateStamp()}-%`]
-  );
-  const maxSequence = rows.reduce(
-    (max, row) => Math.max(max, getCustomerSequence(row.customer_code)),
-    0
-  );
-  return buildCustomerCode(maxSequence + 1);
 };
 
 const generateCustomerCode = async () => {
@@ -128,13 +138,12 @@ const validateCustomerCode = (code) => {
   }
 };
 
-const createCustomer = async (body = {}, actor = "system") => {
-  const db = await getDb();
+const createCustomer = async (body = {}, actor = "system") => runInTransaction(async (db) => {
   const payload = buildCustomerPayload(body);
 
   validateCustomerPayload(payload);
 
-  const finalCode = payload.customerCode || await generateNextCustomerCode(db);
+  const finalCode = await resolveCustomerCreateCode(db, payload.customerCode);
 
   validateCustomerCode(finalCode);
   await ensureCustomerCodeAvailable(db, finalCode);
@@ -165,10 +174,9 @@ const createCustomer = async (body = {}, actor = "system") => {
   });
 
   return toCustomerRecord(customer);
-};
+});
 
-const updateCustomer = async (id, body = {}, actor = "system") => {
-  const db = await getDb();
+const updateCustomer = async (id, body = {}, actor = "system") => runInTransaction(async (db) => {
   const current = await db.get(
     "SELECT * FROM customers WHERE id = ? AND status != 'deleted'",
     [id]
@@ -207,10 +215,9 @@ const updateCustomer = async (id, body = {}, actor = "system") => {
   });
 
   return toCustomerRecord(updated);
-};
+});
 
-const softDeleteCustomer = async (id, actor = "system") => {
-  const db = await getDb();
+const softDeleteCustomer = async (id, actor = "system") => runInTransaction(async (db) => {
   const current = await db.get(
     "SELECT * FROM customers WHERE id = ? AND status != 'deleted'",
     [id]
@@ -240,7 +247,7 @@ const softDeleteCustomer = async (id, actor = "system") => {
     deleted: true,
     softDeleted: true,
   };
-};
+});
 
 module.exports = {
   createCustomer,

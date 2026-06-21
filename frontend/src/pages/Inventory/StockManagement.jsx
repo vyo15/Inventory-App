@@ -929,7 +929,7 @@ const StockManagement = () => {
             Hubungan flow:
             - menggantikan halaman/menu Penyesuaian Stok lama agar tidak ada dua entry point inventory
             Status:
-            - aktif/final; /stock-adjustment hanya compatibility redirect ke /inventory/stock-management
+            - aktif/final; route lama /stock-adjustment hanya redirect ke halaman ini
         ========================= */}
         <StockAdjustmentPanel onAdjustmentSaved={fetchHistory} />
       </PageSection>

@@ -1,13 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   Button,
-  message,
-  Card,
-  Col,
   Empty,
   Progress,
-  Row,
   Space,
   Tag,
   Typography,
@@ -29,13 +25,13 @@ import {
   WarningOutlined,
 } from "@ant-design/icons";
 import PageHeader from "../../components/Layout/Page/PageHeader";
-import { APP_ROUTES } from "../../config/appRoutes";
 import useAuth from "../../hooks/useAuth";
 import PageSection from "../../components/Layout/Page/PageSection";
 import DataLoadingState from "../../components/Layout/Feedback/DataLoadingState";
 import ImsNotice from "../../components/Layout/Feedback/ImsNotice";
 import { formatNumberId } from "../../utils/formatters/numberId";
 import { canAccessRoute, ROUTE_ACCESS_KEYS } from "../../utils/auth/roleAccess";
+import { APP_ROUTES } from "../../config/appRoutes";
 import {
   createEmptyDashboardData,
   normalizeDashboardData,
@@ -45,15 +41,11 @@ import {
   EMPTY_PLANNING_SUMMARY,
   MAX_DASHBOARD_ALERT_ITEMS,
   MAX_DASHBOARD_LIST_ITEMS,
-  MAX_PLANNING_PRIORITY_ITEMS,
-  buildRestockRoute,
   formatActivityType,
   formatCurrency,
   formatDashboardDate,
   getFinancialAmount,
   getNumericValue,
-  getPlanningItemName,
-  getPlanningStatusMeta,
   getTransactionDate,
   hasWorkLogCostIssue,
   isCancelledStatus,
@@ -187,26 +179,9 @@ const formatDashboardLoadWarning = (failedReads = []) => {
   ].join(" ");
 };
 
-const getSafeExternalHttpUrl = (value) => {
-  const rawValue = String(value || "").trim();
-  if (!rawValue) return "";
-
-  try {
-    const parsedUrl = new URL(rawValue);
-    return ["http:", "https:"].includes(parsedUrl.protocol) ? parsedUrl.href : "";
-  } catch {
-    return "";
-  }
-};
-
-const hasSafeExternalHttpUrl = (value) => Boolean(getSafeExternalHttpUrl(value));
-
 const Dashboard = () => {
-  const navigate = useNavigate();
   const { profile } = useAuth();
   const activeRole = profile?.role;
-  const canViewFinanceDashboard = canAccessRoute(ROUTE_ACCESS_KEYS.MONEY_MOVEMENT_LEDGER, activeRole);
-  const canViewSupplierMaster = canAccessRoute(ROUTE_ACCESS_KEYS.SUPPLIERS, activeRole);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [loadWarning, setLoadWarning] = useState("");
@@ -276,9 +251,6 @@ const Dashboard = () => {
   const lowStockTotalLabel = stockIssueHasMore ? `${formatNumberId(lowStockTotal)}+` : formatNumberId(lowStockTotal);
   const quickActions = useMemo(() => buildDashboardQuickActions(activeRole), [activeRole]);
 
-  const planningPriorityItems = planningSummary.priorityPlans
-    .filter((plan) => !isCompletedStatus(plan.status) && !isCancelledStatus(plan.status))
-    .slice(0, MAX_PLANNING_PRIORITY_ITEMS);
 
   const productionSummary = useMemo(() => {
     const shortageOrders = productionOrders.filter((item) => normalizeStatus(item.status) === "shortage").length;
@@ -639,6 +611,15 @@ const Dashboard = () => {
     { key: "payroll", routeKey: ROUTE_ACCESS_KEYS.PRODUCTION_PAYROLLS, label: "Payroll Pending", value: payrollSummary.pendingCount, color: DASHBOARD_TAG_COLORS.payroll },
   ].filter(({ routeKey }) => canAccessRoute(routeKey, activeRole));
 
+  const heroKpiKeys = new Set(["sales-month", "stock-critical", "production-watch", "payroll-pending"]);
+  const heroKpiItems = kpiItems.filter((item) => heroKpiKeys.has(item.key));
+  const denseQuickActionKeys = ["sales", "purchases", "stock", "worklog"];
+  const denseQuickActions = denseQuickActionKeys
+    .map((key) => quickActions.find((item) => item.key === key))
+    .filter(Boolean);
+  const denseActivityRows = recentActivities.slice(0, MAX_DASHBOARD_LIST_ITEMS);
+  const compactExceptionItems = businessAlertItems.slice(0, 3);
+
   const lastUpdatedText = loading
     ? "Memuat..."
     : lastUpdated
@@ -651,35 +632,10 @@ const Dashboard = () => {
         })
       : "Belum dimuat";
   const isInitialDashboardLoading = loading && !lastUpdated;
-  const openRestockProductLink = (productLink) => {
-    const safeProductLink = getSafeExternalHttpUrl(productLink);
 
-    if (!safeProductLink) {
-      message.warning("Link produk tidak valid. Hanya URL http/https yang bisa dibuka dari Dashboard.");
-      return;
-    }
-
-    window.open(safeProductLink, "_blank", "noopener,noreferrer");
-  };
-
-  const goToRestockPurchase = (item) => {
-    navigate(buildRestockRoute("/purchases", {
-      materialId: item.id,
-      supplierId: item.restockSupplierId,
-      productLink: getSafeExternalHttpUrl(item.restockProductLink),
-      source: "dashboard-restock",
-    }));
-  };
-
-  const goToSupplierComparison = (item) => {
-    navigate(buildRestockRoute("/suppliers", {
-      materialId: item.id,
-      supplierId: item.restockSupplierId,
-    }));
-  };
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page dashboard-bento-page">
       <PageHeader
         title="Dashboard"
         subtitle="Ringkasan operasional harian."
@@ -713,399 +669,244 @@ const Dashboard = () => {
         </PageSection>
       ) : (
         <>
-      {}
-      <PageSection
-        title="Ringkasan Hari Ini"
-        subtitle="KPI utama harian."
-      >
-        <div className="dashboard-kpi-grid">
-          {kpiItems.map((item) => (
-            <div key={item.key} className={`dashboard-kpi-card dashboard-kpi-card-${item.tone}`}>
-              <div className="dashboard-kpi-card-heading">
-                <Text className="dashboard-card-label">{item.label}</Text>
-                {item.statusLabel ? (
-                  <Tag className={`dashboard-kpi-status dashboard-kpi-status-${item.statusTone || "neutral"}`}>
-                    {item.statusLabel}
-                  </Tag>
+          <section className="dashboard-bento-overview" aria-label="Ringkasan utama dashboard">
+            <div className="dashboard-bento-cash-card">
+              <div className="dashboard-bento-card-topline">
+                <Text className="dashboard-bento-eyebrow">NET KAS OPERASIONAL</Text>
+                <Tag className="dashboard-bento-period-tag">
+                  {new Date().toLocaleDateString("id-ID", { month: "long", year: "numeric" })}
+                </Tag>
+              </div>
+              <Title level={2} className="dashboard-bento-cash-value">
+                {formatCurrency(financeSummary.netOperational)}
+              </Title>
+              <Text className="dashboard-bento-cash-note">Monitoring bulan berjalan, bukan laba final.</Text>
+              <div className="dashboard-bento-mini-stats">
+                <div>
+                  <Text>Kas masuk</Text>
+                  <strong>{formatCurrency(financeSummary.recognizedIncome)}</strong>
+                </div>
+                <div>
+                  <Text>Kas keluar</Text>
+                  <strong>{formatCurrency(financeSummary.expenseThisMonth)}</strong>
+                </div>
+                <div>
+                  <Text>Sales hari ini</Text>
+                  <strong>{formatCurrency(salesSummary.todayAmount)}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="dashboard-bento-kpi-grid">
+              {heroKpiItems.map((item) => (
+                <div key={item.key} className={`dashboard-bento-kpi dashboard-bento-kpi-${item.tone}`}>
+                  <div className="dashboard-bento-kpi-heading">
+                    <Text>{item.label}</Text>
+                    {item.statusLabel ? <Tag>{item.statusLabel}</Tag> : null}
+                  </div>
+                  <Title level={3}>{item.value}</Title>
+                  <Text>{item.detail}</Text>
+                </div>
+              ))}
+            </div>
+
+            <div className="dashboard-bento-priority-card">
+              <div className="dashboard-bento-section-heading">
+                <div>
+                  <Title level={4}>Prioritas Hari Ini</Title>
+                  <Text>Exception paling penting.</Text>
+                </div>
+                <Tag color={businessAlertTotal > 0 ? "orange" : "green"}>
+                  {formatNumberId(priorityItems.length)} aktif
+                </Tag>
+              </div>
+
+              <div className="dashboard-bento-priority-list">
+                {priorityItems.slice(0, 3).map((item, index) => (
+                  <Link key={item.key} to={item.to} className="dashboard-bento-priority-row">
+                    <span className="dashboard-bento-priority-icon">{item.icon}</span>
+                    <span className="dashboard-bento-priority-copy">
+                      <strong>{item.label}</strong>
+                      <small>{item.description}</small>
+                    </span>
+                    <Tag color={item.color}>{index === 0 ? "P0" : "P1"}</Tag>
+                  </Link>
+                ))}
+                {priorityItems.length === 0 ? (
+                  <div className="dashboard-empty-wrap dashboard-empty-compact">
+                    <Empty description="Tidak ada prioritas kritis hari ini." />
+                  </div>
                 ) : null}
               </div>
-              <Title level={4} className="dashboard-card-value">
-                {item.value}
-              </Title>
-              <Text className="dashboard-muted-text">{item.detail}</Text>
             </div>
-          ))}
-        </div>
-      </PageSection>
+          </section>
 
-      {}
-      <PageSection
-        title="Aksi Cepat"
-        subtitle="Akses menu utama."
-      >
-        <div className="dashboard-quick-action-grid">
-          {quickActions.map((action) => (
-            <Link key={action.key} to={action.to} className="dashboard-quick-action-card">
-              <div className="dashboard-quick-action-icon">{action.icon}</div>
-              <div className="dashboard-list-card-content">
-                <Text strong>{action.label}</Text>
-                <Text className="dashboard-muted-text">{action.description}</Text>
+          <section className="dashboard-bento-main-grid" aria-label="Aktivitas dan aksi cepat">
+            <div className="dashboard-bento-activity-card">
+              <div className="dashboard-bento-section-heading">
+                <div>
+                  <Title level={4}>Transaksi dan Aktivitas Terbaru</Title>
+                  <Text>Informasi utama dibuat lebih dominan untuk scanning cepat.</Text>
+                </div>
+                <Tag color="blue">{formatNumberId(denseActivityRows.length)} aktivitas</Tag>
               </div>
-              <ArrowRightOutlined className="dashboard-action-arrow" />
-            </Link>
-          ))}
-        </div>
-      </PageSection>
 
-      {}
-      <PageSection
-        title="Data Perlu Dicek"
-        subtitle="Prioritas operasional."
-      >
-        {businessAlertItems.length > 0 ? (
-          <div className="dashboard-alert-grid">
-            {businessAlertItems.map((item) => (
-              <Link key={item.key} to={item.to} className="dashboard-alert-card">
-                <div className="dashboard-list-card-content">
-                  <Space size={8} wrap>
-                    <Tag color={item.color}>{item.type}</Tag>
-                    <Tag color={item.color}>{formatNumberId(item.count)}</Tag>
-                    <Text strong>{item.label}</Text>
-                  </Space>
-                  <Text className="dashboard-muted-text">{item.description}</Text>
-                </div>
-                <ArrowRightOutlined className="dashboard-action-arrow" />
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <div className="dashboard-empty-wrap dashboard-empty-compact">
-            <Empty description="Belum ada data kritis yang perlu dicek." />
-          </div>
-        )}
-      </PageSection>
-      <PageSection
-        title="Prioritas Hari Ini"
-        subtitle="Fokus harian."
-      >
-        {priorityItems.length > 0 ? (
-          <div className="dashboard-priority-grid">
-            {priorityItems.map((item) => (
-              <Link key={item.key} to={item.to} className="dashboard-priority-card">
-                <div className="dashboard-priority-icon">{item.icon}</div>
-                <div className="dashboard-priority-content">
-                  <Space size={8} wrap>
-                    <Tag color={item.color}>{formatNumberId(item.count)}</Tag>
-                    <Text strong>{item.label}</Text>
-                  </Space>
-                  <Text className="dashboard-muted-text">{item.description}</Text>
-                </div>
-                <ArrowRightOutlined className="dashboard-action-arrow" />
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <div className="dashboard-empty-wrap dashboard-empty-compact">
-            <Empty description="Belum ada prioritas harian yang perlu ditindak." />
-          </div>
-        )}
-      </PageSection>
-      <PageSection
-        title="Fokus Produksi"
-        subtitle="Target dan risiko produksi."
-        extra={
-          <Link
-            to={APP_ROUTES.PRODUCTION.PLANNING}
-            className="dashboard-section-extra"
-          >
-            Buka Planning <ArrowRightOutlined />
-          </Link>
-        }
-      >
-        <Row gutter={[14, 14]}>
-          {[
-            { key: "weekly", label: "Target Minggu Ini", data: planningSummary.weekly },
-            { key: "monthly", label: "Target Bulan Ini", data: planningSummary.monthly },
-          ].map((item) => (
-            <Col xs={24} lg={8} key={item.key}>
-              <Card className="dashboard-compact-card" bordered={false}>
-                <Space direction="vertical" size={8} className="dashboard-full-width">
-                  <Text className="dashboard-card-label">{item.label}</Text>
-                  <Title level={4} className="dashboard-card-value">
-                    {formatNumberId(item.data.actualCompletedQty)} / {formatNumberId(item.data.targetQty)} pcs
-                  </Title>
-                  <Progress
-                    percent={Math.min(Math.round(item.data.progressPercent || 0), 100)}
-                    size="small"
-                    status={item.data.progressPercent >= 100 ? "success" : "active"}
-                  />
-                  <Text className="dashboard-muted-text">
-                    Sisa {formatNumberId(item.data.remainingQty)} pcs dari {formatNumberId(item.data.count)} planning.
-                  </Text>
-                </Space>
-              </Card>
-            </Col>
-          ))}
-
-          <Col xs={24} lg={8}>
-            <Card className="dashboard-compact-card dashboard-risk-card" bordered={false}>
-              <Space direction="vertical" size={8} className="dashboard-full-width">
-                <Text className="dashboard-card-label">Status Produksi</Text>
-                <div className="dashboard-chip-list">
-                  {productionStatusItems.map((item) => (
-                    <Tag key={item.key} color={item.color} className="dashboard-status-chip">
-                      {item.label}: {formatNumberId(item.value)}
-                    </Tag>
-                  ))}
-                </div>
-                <Text className="dashboard-muted-text">
-                  Ringkasan ini hanya monitoring. Proses tetap dilakukan dari menu produksi terkait.
-                </Text>
-              </Space>
-            </Card>
-          </Col>
-        </Row>
-
-        <div className="dashboard-card-list dashboard-section-gap">
-          {planningPriorityItems.length > 0 ? (
-            planningPriorityItems.map((plan) => {
-              const statusMeta = getPlanningStatusMeta(plan.status);
-              return (
-                <Link
-                  key={plan.id || plan.planCode}
-                  to={APP_ROUTES.PRODUCTION.PLANNING}
-                  className="dashboard-list-card"
-                >
-                  <div className="dashboard-list-card-content">
-                    <Space size={8} wrap>
-                      <Text strong>{getPlanningItemName(plan)}</Text>
-                      {plan.targetVariantLabel ? <Tag>{plan.targetVariantLabel}</Tag> : null}
-                      <Tag color={statusMeta.color}>{statusMeta.label}</Tag>
-                    </Space>
-                    <Text className="dashboard-muted-text">
-                      Sisa {formatNumberId(plan.remainingQty)} {plan.targetUnit || "pcs"} - Progress{" "}
-                      {formatNumberId(Math.round(plan.progressPercent || 0))}% - Deadline{" "}
-                      {formatDashboardDate(plan.dueDate)}
-                    </Text>
+              {denseActivityRows.length > 0 ? (
+                <div className="dashboard-dense-table-wrap">
+                  <div className="dashboard-dense-table dashboard-dense-table-head" role="row">
+                    <span>Aktivitas</span>
+                    <span>Modul</span>
+                    <span>Perubahan</span>
+                    <span>Nilai</span>
+                    <span>Status</span>
+                    <span>Waktu</span>
                   </div>
-                  <ArrowRightOutlined className="dashboard-action-arrow" />
-                </Link>
-              );
-            })
-          ) : (
-            <div className="dashboard-empty-wrap dashboard-empty-compact">
-              <Empty description="Belum ada planning produksi yang perlu dikejar." />
-            </div>
-          )}
-        </div>
-      </PageSection>
-
-      <Row gutter={[16, 16]}>
-        <Col xs={24} xl={canViewFinanceDashboard ? 12 : 24}>
-          <PageSection
-            title="Stok Kritis"
-            subtitle="Stok paling urgent."
-            extra={<Text className="dashboard-section-extra">{lowStockTotalLabel} total</Text>}
-          >
-            {criticalStockPreview.length > 0 ? (
-              <div className="dashboard-card-list">
-                {criticalStockPreview.map((item) => {
-                  const isMaterialRestock = item.sourceType === "material";
-
-                  if (!isMaterialRestock) {
+                  {denseActivityRows.map((item) => {
+                    const activity = formatActivityType(item.type);
+                    const activityDate = getTransactionDate(item);
+                    const quantityChange = getNumericValue(item.quantityChange ?? item.quantity ?? 0);
+                    const absoluteQuantity = Math.abs(quantityChange);
+                    const activityName = item.itemName || item.name || item.productName || item.materialName || "Aktivitas stok";
+                    const activityModule = activity.label || "Stok";
+                    const changePrefix = quantityChange > 0 ? "+" : quantityChange < 0 ? "-" : "";
+                    const activityValue = getFinancialAmount(item);
                     return (
-                      <Link key={item.key} to={item.to} className="dashboard-list-card">
-                        <div className="dashboard-list-card-content">
-                          <Space size={8} wrap>
-                            <Text strong>{item.name}</Text>
-                            <Tag color={item.severity.color}>{item.severity.label}</Tag>
-                            <Tag>{item.type}</Tag>
-                          </Space>
-                          <Text className="dashboard-muted-text">
-                            Available {formatNumberId(item.stock)} {item.unit} - Min {formatNumberId(item.minStock)} {item.unit}
-                          </Text>
-                          {item.affectedVariantSummary ? (
-                            <Text className="dashboard-muted-text">{item.affectedVariantSummary}</Text>
-                          ) : null}
-                        </div>
-                        <ArrowRightOutlined className="dashboard-action-arrow" />
+                      <div key={item.id || `${activityName}-${activityDate || "unknown"}`} className="dashboard-dense-table" role="row">
+                        <span className="dashboard-dense-activity-name">
+                          <span className="dashboard-dense-activity-icon"><HistoryOutlined /></span>
+                          <strong>{activityName}</strong>
+                        </span>
+                        <span>{activityModule}</span>
+                        <span>{absoluteQuantity > 0 ? `${changePrefix}${formatNumberId(absoluteQuantity)} ${item.unit || "unit"}` : "-"}</span>
+                        <span>{activityValue > 0 ? formatCurrency(activityValue) : "-"}</span>
+                        <span><Tag color={activity.color}>{activity.label}</Tag></span>
+                        <span>{activityDate ? formatDashboardDate(activityDate) : "-"}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="dashboard-empty-wrap">
+                  <Empty description="Belum ada aktivitas yang bisa ditampilkan." />
+                </div>
+              )}
+            </div>
+
+            <aside className="dashboard-bento-side-stack">
+              <div className="dashboard-bento-side-card">
+                <div className="dashboard-bento-section-heading">
+                  <div>
+                    <Title level={4}>Aksi Cepat</Title>
+                    <Text>Shortcut sesuai role.</Text>
+                  </div>
+                </div>
+                <div className="dashboard-bento-action-list">
+                  {denseQuickActions.map((action) => {
+                    const shortDescriptions = {
+                      sales: "Input transaksi",
+                      purchases: "Restock barang",
+                      stock: "Audit stok",
+                      worklog: "Produksi berjalan",
+                    };
+                    return (
+                      <Link key={action.key} to={action.to} className="dashboard-bento-action-row">
+                        <span className="dashboard-bento-action-icon">{action.icon}</span>
+                        <span>
+                          <strong>{action.key === "worklog" ? "Work Log" : action.label}</strong>
+                          <small>{shortDescriptions[action.key]}</small>
+                        </span>
+                        <ArrowRightOutlined />
                       </Link>
                     );
-                  }
-
-                  return (
-                    <div key={item.key} className="dashboard-list-card dashboard-readonly-card dashboard-restock-card">
-                      <div className="dashboard-list-card-content">
-                        <Space size={8} wrap>
-                          <Text strong>{item.name}</Text>
-                          <Tag color={item.severity.color}>{item.severity.label}</Tag>
-                          <Tag>{item.type}</Tag>
-                        </Space>
-                        <Text className="dashboard-muted-text">
-                          Available {formatNumberId(item.stock)} {item.unit} - Min {formatNumberId(item.minStock)} {item.unit}
-                        </Text>
-                        {item.affectedVariantSummary ? (
-                          <Text className="dashboard-muted-text">{item.affectedVariantSummary}</Text>
-                        ) : null}
-                        <Space size={8} wrap>
-                          <Text className="dashboard-muted-text">
-                            {item.restockSupplierName ? `Supplier terakhir: ${item.restockSupplierName}` : "Belum ada supplier terakhir"}
-                          </Text>
-                          {item.lastPurchasePrice > 0 ? (
-                            <Tag color={DASHBOARD_TAG_COLORS.info}>Harga terakhir {formatCurrency(item.lastPurchasePrice)}</Tag>
-                          ) : null}
-                        </Space>
-                        <Space size={8} wrap className="dashboard-restock-actions">
-                          <Button
-                            size="small"
-                            disabled={!hasSafeExternalHttpUrl(item.restockProductLink)}
-                            onClick={() => openRestockProductLink(item.restockProductLink)}
-                          >
-                            Buka Link Produk
-                          </Button>
-                          <Button
-                            size="small"
-                            type="primary"
-                            icon={<ShoppingCartOutlined />}
-                            onClick={() => goToRestockPurchase(item)}
-                          >
-                            Buat Pembelian
-                          </Button>
-                          {canViewSupplierMaster ? (
-                            <Button size="small" onClick={() => goToSupplierComparison(item)}>
-                              Bandingkan Supplier
-                            </Button>
-                          ) : null}
-                        </Space>
-                      </div>
+                  })}
+                  {denseQuickActions.length === 0 ? (
+                    <div className="dashboard-empty-wrap dashboard-empty-compact">
+                      <Empty description="Tidak ada shortcut untuk role ini." />
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="dashboard-empty-wrap dashboard-empty-compact">
-                <Empty description="Belum ada stok kritis." />
-              </div>
-            )}
-          </PageSection>
-        </Col>
-        {canViewFinanceDashboard ? (
-          <Col xs={24} xl={12}>
-            <PageSection
-              title="Keuangan Ringkas"
-              subtitle="Kas bulan berjalan."
-            >
-              <div className="dashboard-metric-grid">
-                <div className="dashboard-metric-card">
-                  <Text className="dashboard-card-label">Pemasukan Diakui</Text>
-                  <Title level={4} className="dashboard-card-value">
-                    {formatCurrency(financeSummary.recognizedIncome)}
-                  </Title>
-                  <Text className="dashboard-muted-text">Kas masuk bulan ini.</Text>
-                </div>
-                <div className="dashboard-metric-card">
-                  <Text className="dashboard-card-label">Pengeluaran</Text>
-                  <Title level={4} className="dashboard-card-value">
-                    {formatCurrency(financeSummary.expenseThisMonth)}
-                  </Title>
-                  <Text className="dashboard-muted-text">Kas keluar bulan ini.</Text>
-                </div>
-                <div className="dashboard-metric-card">
-                  <Text className="dashboard-card-label">Selisih Ringkas</Text>
-                  <Title level={4} className="dashboard-card-value">
-                    {formatCurrency(financeSummary.netOperational)}
-                  </Title>
-                  <Text className="dashboard-muted-text">Ringkasan cepat.</Text>
+                  ) : null}
                 </div>
               </div>
 
-              <div className="dashboard-note-stack">
-                {payrollSummary.pendingCount > 0 ? (
-                  <ImsNotice
-                    variant="info"
-                    compact
-                    title={`${formatNumberId(
-                      payrollSummary.pendingCount,
-                    )} payroll masih pending (${formatCurrency(payrollSummary.pendingAmount)}).`}
-                  />
-                ) : null}
-
-                {payrollSummary.paidCount > 0 ? (
-                  <ImsNotice
-                    variant={payrollSummary.payrollExpenseCount > 0 ? "status" : "guard"}
-                    compact
-                    title={
-                      payrollSummary.payrollExpenseCount > 0
-                        ? [
-                            `Payroll paid bulan ini tercatat ${formatNumberId(
-                              payrollSummary.payrollExpenseCount,
-                            )} kali di Cash Out:`,
-                            `${formatCurrency(payrollSummary.payrollExpenseThisMonth)}.`,
-                            "Hindari input ulang manual.",
-                          ].join(" ")
-                        : "Ada payroll paid bulan ini, tetapi expense payroll belum terlihat. Cek Cash Out sebelum membaca Profit Loss."
-                    }
-                  />
-                ) : null}
-
-                {productionSummary.costIssueCount > 0 ? (
-                  <ImsNotice
-                    variant="guard"
-                    compact
-                    title={`${formatNumberId(
-                      productionSummary.costIssueCount,
-                    )} Work Log completed punya cost 0. Cek HPP/cost material sebelum analisis.`}
-                  />
-                ) : null}
-              </div>
-            </PageSection>
-          </Col>
-        ) : null}
-      </Row>
-      <PageSection
-        title="Aktivitas Terbaru"
-        subtitle="Mutasi stok terakhir."
-        extra={
-          <Space size={8}>
-            <HistoryOutlined className="dashboard-section-icon" />
-            <Text className="dashboard-section-extra">
-              {formatNumberId(recentActivities.length)} aktivitas
-            </Text>
-          </Space>
-        }
-      >
-        {recentActivities.length > 0 ? (
-          <div className="dashboard-card-list">
-            {recentActivities.slice(0, MAX_DASHBOARD_LIST_ITEMS).map((item) => {
-              const activity = formatActivityType(item.type);
-              const activityDate = getTransactionDate(item);
-              const quantity = Math.abs(getNumericValue(item.quantityChange ?? item.quantity ?? 0));
-              return (
-                <div key={item.id} className="dashboard-list-card dashboard-readonly-card">
-                  <div className="dashboard-list-card-content">
-                    <Space size={8} wrap>
-                      <Tag color={activity.color}>{activity.label}</Tag>
-                      <Text strong>
-                        {item.itemName || item.name || item.productName || item.materialName || "Item"}
-                      </Text>
-                    </Space>
-                    <Text className="dashboard-muted-text">
-                      Qty {formatNumberId(quantity)} - {item.note || item.reference || "Tidak ada catatan"}
-                    </Text>
+              <div className="dashboard-bento-side-card">
+                <div className="dashboard-bento-section-heading">
+                  <div>
+                    <Title level={4}>Exception Aktif</Title>
+                    <Text>Ringkasan cepat.</Text>
                   </div>
-                  <Text className="dashboard-date-text">
-                    {activityDate ? formatDashboardDate(activityDate) : "-"}
-                  </Text>
+                  <Tag color={businessAlertTotal > 0 ? "red" : "green"}>{formatNumberId(businessAlertTotal)}</Tag>
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="dashboard-empty-wrap dashboard-empty-compact">
-            <Empty description="Belum ada aktivitas yang bisa ditampilkan." />
-          </div>
-        )}
-      </PageSection>
+                <div className="dashboard-bento-exception-list">
+                  {compactExceptionItems.map((item, index) => (
+                    <Link key={item.key} to={item.to}>
+                      <strong>{item.label}</strong>
+                      <span>{formatNumberId(item.count)} item</span>
+                      <Tag color={item.color}>{index === 0 ? "P0" : "P1"}</Tag>
+                    </Link>
+                  ))}
+                  {compactExceptionItems.length === 0 ? (
+                    <Text className="dashboard-muted-text">Tidak ada exception aktif.</Text>
+                  ) : null}
+                </div>
+              </div>
+            </aside>
+          </section>
+
+          <section className="dashboard-bento-secondary-grid" aria-label="Ringkasan lanjutan">
+            <div className="dashboard-bento-secondary-card">
+              <div className="dashboard-bento-section-heading">
+                <div>
+                  <Title level={4}>Fokus Produksi</Title>
+                  <Text>Target dan risiko produksi.</Text>
+                </div>
+                <Link to={APP_ROUTES.PRODUCTION.PLANNING}>Buka Planning <ArrowRightOutlined /></Link>
+              </div>
+              <div className="dashboard-bento-production-grid">
+                {[
+                  { key: "weekly", label: "Target Minggu Ini", data: planningSummary.weekly },
+                  { key: "monthly", label: "Target Bulan Ini", data: planningSummary.monthly },
+                ].map((item) => (
+                  <div key={item.key} className="dashboard-bento-production-item">
+                    <Text>{item.label}</Text>
+                    <strong>{formatNumberId(item.data.actualCompletedQty)} / {formatNumberId(item.data.targetQty)} pcs</strong>
+                    <Progress percent={Math.min(Math.round(item.data.progressPercent || 0), 100)} size="small" />
+                  </div>
+                ))}
+                <div className="dashboard-bento-production-item">
+                  <Text>Status Produksi</Text>
+                  <div className="dashboard-chip-list">
+                    {productionStatusItems.slice(0, 4).map((item) => (
+                      <Tag key={item.key} color={item.color}>{item.label}: {formatNumberId(item.value)}</Tag>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="dashboard-bento-secondary-card">
+              <div className="dashboard-bento-section-heading">
+                <div>
+                  <Title level={4}>Stok Kritis</Title>
+                  <Text>Item paling urgent.</Text>
+                </div>
+                <Tag color={lowStockTotal > 0 ? "red" : "green"}>{lowStockTotalLabel} total</Tag>
+              </div>
+              <div className="dashboard-bento-stock-list">
+                {criticalStockPreview.slice(0, 4).map((item) => (
+                  <Link key={item.key} to={item.to} className="dashboard-bento-stock-row">
+                    <span className="dashboard-bento-action-icon"><AppstoreOutlined /></span>
+                    <span>
+                      <strong>{item.name}</strong>
+                      <small>Available {formatNumberId(item.stock)} {item.unit} · minimum {formatNumberId(item.minStock)} {item.unit}</small>
+                    </span>
+                    <Tag color={item.severity.color}>{item.severity.label}</Tag>
+                  </Link>
+                ))}
+                {criticalStockPreview.length === 0 ? (
+                  <Text className="dashboard-muted-text">Belum ada stok kritis.</Text>
+                ) : null}
+              </div>
+            </div>
+          </section>
         </>
       )}
     </div>

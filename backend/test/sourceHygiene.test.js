@@ -14,6 +14,27 @@ const ROOT_DIR = path.resolve(__dirname, "../..");
 
 const readRootFile = (relativePath) => fs.readFileSync(path.join(ROOT_DIR, relativePath), "utf8");
 
+test("source engineering minimum tersedia dan dead compatibility files tidak kembali", () => {
+  const requiredFiles = [
+    "README.md",
+    ".github/workflows/quality-gate.yml",
+  ];
+  const removedFiles = [
+    "frontend/src/components/Layout/Feedback/OfflineRepositoryStatus.jsx",
+    "frontend/src/components/Layout/Mobile/ResponsiveDataView.jsx",
+    "frontend/src/services/Maintenance/helpers/dataQualityAuditHelpers.js",
+    "frontend/src/utils/references/businessCodeCounterService.js",
+    "frontend/src/utils/references/businessCodeGenerator.js",
+  ];
+
+  requiredFiles.forEach((relativePath) => {
+    assert.equal(fs.existsSync(path.join(ROOT_DIR, relativePath)), true, `${relativePath} wajib tersedia`);
+  });
+  removedFiles.forEach((relativePath) => {
+    assert.equal(fs.existsSync(path.join(ROOT_DIR, relativePath)), false, `${relativePath} tidak boleh kembali tanpa usage audit`);
+  });
+});
+
 test("source readiness menolak runtime database dan backup yang ter-track", () => {
   const trackedFiles = [
     "data/.gitkeep",
@@ -51,6 +72,62 @@ test("git archive mengecualikan seluruh folder data dan backups", () => {
 
   assert.match(attributes, /^\/data export-ignore$/m);
   assert.match(attributes, /^\/backups export-ignore$/m);
+});
+
+test("JavaScript source memakai kebijakan LF yang konsisten", () => {
+  const attributes = readRootFile(".gitattributes");
+  const editorConfig = readRootFile(".editorconfig");
+
+  for (const extension of ["js", "jsx", "cjs", "mjs"]) {
+    assert.match(attributes, new RegExp(`^\\*\\.${extension} text eol=lf$`, "m"));
+  }
+
+  assert.match(editorConfig, /^root = true$/m);
+  assert.match(editorConfig, /^\[\*\.\{js,jsx,cjs,mjs\}\]$/m);
+  assert.match(editorConfig, /^end_of_line = lf$/m);
+
+  const ignoredDirectoryNames = new Set([
+    ".git",
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+  ]);
+  const ignoredRootDirectories = new Set(["data", "backups"]);
+  const supportedExtensions = new Set([".js", ".jsx", ".cjs", ".mjs"]);
+  const pendingDirectories = [ROOT_DIR];
+  const invalidFiles = [];
+
+  while (pendingDirectories.length > 0) {
+    const currentDirectory = pendingDirectories.pop();
+    for (const entry of fs.readdirSync(currentDirectory, { withFileTypes: true })) {
+      const fullPath = path.join(currentDirectory, entry.name);
+      const relativeParts = path.relative(ROOT_DIR, fullPath).split(path.sep);
+
+      if (
+        entry.isDirectory()
+        && (
+          ignoredDirectoryNames.has(entry.name)
+          || ignoredRootDirectories.has(relativeParts[0])
+        )
+      ) {
+        continue;
+      }
+
+      if (entry.isDirectory()) {
+        pendingDirectories.push(fullPath);
+        continue;
+      }
+
+      if (!entry.isFile() || !supportedExtensions.has(path.extname(entry.name))) continue;
+      const buffer = fs.readFileSync(fullPath);
+      if (buffer.includes(13)) {
+        invalidFiles.push(path.relative(ROOT_DIR, fullPath).replaceAll("\\", "/"));
+      }
+    }
+  }
+
+  assert.deepEqual(invalidFiles.sort(), []);
 });
 
 test("script clean ZIP selalu memakai git archive HEAD", () => {

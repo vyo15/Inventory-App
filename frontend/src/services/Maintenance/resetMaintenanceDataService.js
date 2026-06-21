@@ -1,5 +1,15 @@
 import { getSqliteMasterDataExport } from "../System/sqliteBackendStatusService";
 
+export const MAINTENANCE_DATA_TOOLS_AVAILABLE = false;
+export const MAINTENANCE_DATA_TOOLS_UNAVAILABLE_MESSAGE =
+  "Audit dan repair otomatis belum tersedia pada backend SQLite aktif. Gunakan Backup & Restore resmi serta checklist manual; tidak ada data yang diubah.";
+
+export const throwUnavailableMaintenanceTool = (label = "Maintenance tool") => {
+  const error = new Error(`${label} belum tersedia pada backend SQLite aktif.`);
+  error.code = "MAINTENANCE_TOOL_UNAVAILABLE";
+  throw error;
+};
+
 export {
   HPP_COST_BASELINE_DOC_ID,
   HPP_COST_RESET_OPTIONS,
@@ -42,12 +52,20 @@ export const getMasterDataExportPreview = async () => ({
   payload: await buildMasterDataExportPayload(),
 });
 
-export const getHppCostResetPreview = async ({ resetMode } = {}) => ({
-  ...maintenanceOnly("hpp_cost_reset"),
-  resetMode,
+export const getHppCostResetPreview = async () =>
+  throwUnavailableMaintenanceTool("Preview reset modal/HPP");
+
+export const saveCurrentHppCostBaseline = async () =>
+  throwUnavailableMaintenanceTool("Simpan baseline modal/HPP");
+
+export const getHppCostBaselineSummary = async () => ({
+  exists: false,
+  available: MAINTENANCE_DATA_TOOLS_AVAILABLE,
+  ...maintenanceOnly("hpp_baseline_summary"),
 });
 
-export const saveCurrentHppCostBaseline = async () => ({ saved: false, ...maintenanceOnly("hpp_baseline") });
-export const getHppCostBaselineSummary = async () => ({ exists: false, ...maintenanceOnly("hpp_baseline_summary") });
-export const restoreHppCostBaseline = async () => ({ restored: 0, ...maintenanceOnly("hpp_baseline_restore") });
-export const runHppCostReset = async ({ resetMode } = {}) => ({ updated: 0, resetMode, ...maintenanceOnly("hpp_cost_reset") });
+export const restoreHppCostBaseline = async () =>
+  throwUnavailableMaintenanceTool("Restore baseline modal/HPP");
+
+export const runHppCostReset = async () =>
+  throwUnavailableMaintenanceTool("Reset modal/HPP");

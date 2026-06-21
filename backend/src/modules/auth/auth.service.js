@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { getDb } = require("../../db/connection");
+const { getDb, runInTransaction } = require("../../db/connection");
 const { hashSessionToken } = require("../../middlewares/localAuth");
 const { isBootstrapCodeValid } = require("./authBootstrapGuard");
 const { createAuditLog } = require("../../utils/auditLog");
@@ -126,7 +126,7 @@ async function getAuthStatus() {
 }
 
 async function bootstrapAdmin(payload = {}) {
-  const db = await getDb();
+  return runInTransaction(async (db) => {
   const activeAdminCount = await countActiveAdministrators(db);
   if (activeAdminCount > 0) {
     throw createAuthError(
@@ -172,11 +172,12 @@ async function bootstrapAdmin(payload = {}) {
     metadata: { username, role: "administrator" },
   });
 
-  return toSafeUser(user);
+    return toSafeUser(user);
+  });
 }
 
 async function login(payload = {}, requestMeta = {}) {
-  const db = await getDb();
+  return runInTransaction(async (db) => {
   const username = normalizeUsername(payload.username);
   const password = String(payload.password || "");
 
@@ -207,11 +208,12 @@ async function login(payload = {}, requestMeta = {}) {
     metadata: { username: user.username, role: user.role },
   });
 
-  return {
-    token: session.token,
-    expiresAt: session.expiresAt,
-    user: toSafeUser(user),
-  };
+    return {
+      token: session.token,
+      expiresAt: session.expiresAt,
+      user: toSafeUser(user),
+    };
+  });
 }
 
 async function recordLegacyBearerMigration({
@@ -222,7 +224,7 @@ async function recordLegacyBearerMigration({
 } = {}) {
   if (!sessionId || !user?.id) return null;
 
-  const db = await getDb();
+  return runInTransaction(async (db) => {
   const existingAudit = await db.get(
     `SELECT id
      FROM audit_logs
@@ -236,24 +238,25 @@ async function recordLegacyBearerMigration({
   );
   if (existingAudit?.id) return existingAudit.id;
 
-  return createAuditLog({
-    module: "auth",
-    action: "legacy_bearer_migrated",
-    entityType: "local_user_session",
-    entityId: sessionId,
-    actor: user.username || "system",
-    description: "Session Bearer legacy dimigrasikan ke cookie HttpOnly.",
-    metadata: {
-      userId: user.id,
-      username: user.username || "",
-      userAgent: normalizeText(userAgent),
-      ipAddress: normalizeText(ipAddress),
-    },
+    return createAuditLog({
+      module: "auth",
+      action: "legacy_bearer_migrated",
+      entityType: "local_user_session",
+      entityId: sessionId,
+      actor: user.username || "system",
+      description: "Session Bearer legacy dimigrasikan ke cookie HttpOnly.",
+      metadata: {
+        userId: user.id,
+        username: user.username || "",
+        userAgent: normalizeText(userAgent),
+        ipAddress: normalizeText(ipAddress),
+      },
+    });
   });
 }
 
 async function logout({ sessionId, user } = {}) {
-  const db = await getDb();
+  return runInTransaction(async (db) => {
   await db.run(
     "UPDATE local_user_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE id = ?",
     [sessionId]
@@ -269,7 +272,8 @@ async function logout({ sessionId, user } = {}) {
     metadata: { username: user.username },
   });
 
-  return { loggedOut: true };
+    return { loggedOut: true };
+  });
 }
 
 async function listUsers() {
@@ -279,7 +283,7 @@ async function listUsers() {
 }
 
 async function createUser(payload = {}, actorUser = {}) {
-  const db = await getDb();
+  return runInTransaction(async (db) => {
   const username = normalizeUsername(payload.username);
   const displayName = normalizeText(payload.displayName || username);
   const role = normalizeText(payload.role || "user");
@@ -312,11 +316,12 @@ async function createUser(payload = {}, actorUser = {}) {
     metadata: { username, role, status },
   });
 
-  return toSafeUser(user);
+    return toSafeUser(user);
+  });
 }
 
 async function updateUser(userId, payload = {}, actorUser = {}) {
-  const db = await getDb();
+  return runInTransaction(async (db) => {
   const current = await db.get("SELECT * FROM users WHERE id = ?", [userId]);
   if (!current) throw createAuthError("User lokal tidak ditemukan.", "NOT_FOUND", 404);
 
@@ -376,11 +381,12 @@ async function updateUser(userId, payload = {}, actorUser = {}) {
     metadata: { username, role, status, passwordChanged: Boolean(password) },
   });
 
-  return toSafeUser(updated);
+    return toSafeUser(updated);
+  });
 }
 
 async function deleteUser(userId, actorUser = {}) {
-  const db = await getDb();
+  return runInTransaction(async (db) => {
   const current = await db.get("SELECT * FROM users WHERE id = ?", [userId]);
   if (!current) throw createAuthError("User lokal tidak ditemukan.", "NOT_FOUND", 404);
 
@@ -406,7 +412,8 @@ async function deleteUser(userId, actorUser = {}) {
     metadata: { username: current.username, role: current.role, status: current.status },
   });
 
-  return { id: current.id, deleted: true };
+    return { id: current.id, deleted: true };
+  });
 }
 
 module.exports = {

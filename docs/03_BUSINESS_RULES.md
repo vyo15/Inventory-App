@@ -278,8 +278,10 @@ Payroll produksi dibangun dari work log completed.
 ## 14. Rule Maintenance Data
 Reset destructive/testing lama sudah tidak tersedia di UI operasional. Jalur maintenance aktif adalah:
 - Backup & Restore resmi.
-- Audit Data read-only.
-- Repair Aman untuk field turunan/snapshot/display yang sudah punya guard.
+- Export Master/Checklist read-only.
+- Checklist manual sebelum maintenance besar.
+
+Audit Data dan Repair Aman otomatis belum diaktifkan pada backend SQLite aktif. UI wajib menampilkan status belum tersedia dan tidak boleh mencatat hasil sukses palsu dari service no-op.
 - Export Master/Checklist untuk review dan backup manual.
 
 Tab Reset Testing hanya menampilkan status nonaktif. Jangan mengaktifkan ulang reset testing tanpa desain guard baru, backup otomatis, preview dampak, keyword, dan audit log.
@@ -386,11 +388,12 @@ Aturan:
 - Jangan fallback ke Technical ID/random ID untuk menyelesaikan duplicate.
 
 Algoritma sequence internal master/config:
-1. Query dokumen kandidat memakai prefix kode (`PREFIX-`) dari document ID dan field kode bisnis terkait.
-2. Hitung nomor terbesar yang cocok dengan format `PREFIX-001` dari kandidat tersebut.
-3. Buat nomor berikutnya dengan padding 3 digit.
-4. Data historis readable tetap dibaca untuk compatibility melalui fallback full scan hanya jika prefix query gagal.
-5. Kode master/config tidak ditampilkan sebagai informasi utama UI; user memilih dari nama, varian, target, step, dan satuan.
+1. Preview membaca nilai counter dan baseline `MAX(sequence)` kode historis langsung di SQLite; source tidak memuat seluruh daftar kode ke memory JavaScript.
+2. Preview tidak mereservasi nomor dan boleh sama pada dua form yang terbuka bersamaan.
+3. Create/commit final menjalankan reservasi counter dan insert dalam transaction yang sama. Jika preview managed sudah dipakai request lebih dulu, server mengalokasikan nomor berikutnya dan response final menjadi source of truth.
+4. Unique code mencakup data soft-deleted; kode audit lama tidak boleh dipakai ulang.
+5. Rollback boleh meninggalkan gap sequence hanya bila reservasi sudah menjadi bagian operasi yang kemudian dibatalkan/ditolak; nomor tidak boleh dipaksa mundur karena berisiko duplicate.
+6. Kode master/config tidak ditampilkan sebagai informasi utama UI; user memilih dari nama, varian, target, step, dan satuan.
 
 Contoh final:
 - Product: `PRD-001`
@@ -400,31 +403,21 @@ Contoh final:
 - BOM Semi Finished: `BOM-002`
 - Production Step: `STP-001`
 
-Catatan current state:
-- Source aktual menghasilkan kode melalui endpoint/backend SQLite `*/generate-code` dan generator service domain terkait. Helper frontend `businessCodeGenerator.js` serta wrapper counter lamanya sudah dihapus setelah audit import membuktikan tidak ada pemanggil aktif.
-- Production Step sudah memakai generator `STP-001` lokal di service step.
-- Collision kode harian memakai prefix query pada document ID dan field kode bisnis terkait untuk baseline data historis. Batch 16B menambahkan counter atomic `business_code_counters` untuk Sales/Purchases/Returns agar create paralel tidak memakai nomor yang sama.
+Catatan current state source aktual:
+- Generator kode aktif berada pada backend SQLite dan dipusatkan pada `businessCodeCounter.js`; page/frontend tidak menghitung sequence final.
+- Placeholder frontend `businessCodeGenerator.js` dan `businessCodeCounterService.js` tetap tidak dipakai dan tidak dihidupkan kembali.
+- Production Step dan generic master/config memakai runtime counter `PREFIX-001`; Customer/Supplier serta transaksi harian memakai counter per tanggal bila service tidak menerima reference custom.
+- Data historis readable dan reference marketplace/custom tetap dipertahankan. Collision reference custom ditolak; collision preview managed dialihkan ke nomor berikutnya di server.
 
-### Batch 16B — Atomic Counter Transaksi Utama
+### Atomic Counter Kode Bisnis — Status Aktual
 
-Status: **GUARDED / AKTIF TERBATAS**.
+Status: **AKTIF / GUARDED / TRANSACTIONAL**.
 
-- Collection counter yang disetujui untuk kode transaksi adalah `business_code_counters`.
-- Sales (`ORD-*`), Purchases (`PUR-*`), dan Returns (`RET-*`) reserve sequence counter di dalam backend SQLite transaction/atomic commit yang sama dengan create dokumen bisnis.
-- Sebelum transaction, service tetap membaca prefix query lama sebagai baseline sequence data historis agar counter baru tidak mulai dari `001` saat data historis sudah ada.
-- Counter commit dilakukan setelah semua transaction read/validasi selesai dan sebelum write dokumen bisnis, sehingga tidak ada read-after-write di backend SQLite transaction/atomic commit.
-- Format kode, document ID readable, inventory log payload, income/expense, stock mutation, purchase average cost, OCR, Return transaction, route/menu/role guard, production, payroll, HPP, dan reset tidak berubah.
-- Batch 16C: Customer/Supplier, Product/Raw Material, BOM/Semi Finished, Cash In/Out manual, Stock Adjustment, Production Order, Work Log, dan Payroll manual juga reserve business code melalui `business_code_counters` di dalam transaction create masing-masing. Batch 16D melengkapi Production Planning `PP-*` dan Karyawan Produksi lewat counter bersama yang sama.
-
-
-### Batch 16C — Atomic Counter Master, Finance, Stock Adjustment, dan Produksi
-
-- `business_code_counters` menjadi counter teknis bersama untuk kode harian dan sequence internal non-transaksi.
-- Daily code yang ikut dimigrasi di Batch 16C: `CUS`, `SUP`, `CSH-IN`, `CSH-OUT`, `STK-ADJ`, `PO-PRD`, `PO-SFP`, `JOB`, dan `PAY`.
-- Sequential internal code yang ikut dimigrasi: `PRD`, `RAW`, `BOM`, dan `SFP`.
-- Production Planning `PP` dan counter internal Karyawan Produksi `EMP` bukan scope Batch 16C; keduanya diselesaikan di Batch 16D agar audit counter tetap jelas per tahap.
-- Preview kode di UI tetap boleh memakai prefix-query data historis, tetapi final create service/page wajib reserve kode ulang di transaction agar dua create paralel tidak overwrite document ID.
-- Fallback data historis prefix-query tetap dipakai sebagai baseline sequence agar counter baru tidak mulai dari `001` saat data historis sudah ada.
+- Tabel existing `business_code_counters` menjadi runtime source counter tanpa perubahan schema.
+- Counter baseline memakai `MAX(CAST(SUBSTR(...)))` di SQLite dan tidak memakai reduce/full scan sequence di JavaScript.
+- Reservasi managed code dilakukan di dalam transaction create/commit yang juga menyimpan record, stock mutation, finance side effect, dan audit terkait.
+- Test concurrency wajib menjaga dua request dengan preview sama tetap menghasilkan code/ID unik, counter mengikuti baseline historis, dan rollback tidak merusak queue berikutnya.
+- Preview tidak boleh dianggap reservation. UI wajib memakai code final dari response server.
 
 
 ## Update Rule Tahapan Produksi — 2026-05-16
@@ -792,7 +785,7 @@ Bagian ini mengunci hasil hardening bertahap Fase A sampai F dan menjadi acuan u
 - Maintenance hanya untuk admin, bukan flow harian user operasional.
 - Jalur utama pemulihan data adalah Backup & Restore resmi, bukan tombol reset transaksi/testing lama.
 - Repair stok tetap hanya menyamakan field turunan dan tidak boleh membuat inventory log palsu.
-- Repair aman wajib memakai audit/preview area terkait dan audit log jika aksi membuat perubahan data.
+- Repair otomatis hanya boleh diaktifkan setelah backend SQLite menyediakan audit/preview nyata, guard, transaction, dan audit log resmi. Service no-op tidak boleh ditampilkan sebagai sukses.
 - Export Master/Checklist bersifat backup/review manual, bukan import atau restore otomatis.
 - Tab Reset Testing hanya menampilkan status nonaktif agar developer tidak mengira reset testing masih aktif.
 - Reset destructive baru hanya boleh dibuat setelah desain guard baru disetujui: backup otomatis, preview dampak, protected master, keyword, audit log awal/akhir, dan batas operasi aman.
@@ -1104,8 +1097,8 @@ Guard wajib:
 - Akses menu dan route Buku Besar Kas mengikuti finance sensitive area: Administrator only.
 
 ## Reset & Maintenance Development Rules
-- **Audit:** read-only terhadap data bisnis. Audit boleh membuat maintenance log metadata admin, tetapi tidak boleh mengubah stok, transaksi, kas, payroll, HPP, report, atau schema bisnis.
-- **Repair:** hanya untuk field turunan/snapshot/display yang aman sesuai service existing. Repair tidak boleh membuat transaksi baru, posting stok ulang, atau menghapus data utama.
+- **Audit otomatis:** belum aktif sampai backend SQLite menyediakan implementasi read-only nyata. Stub/no-op tidak boleh menghasilkan status sukses atau evidence resmi.
+- **Repair otomatis:** belum aktif sampai audit nyata, preview, guard, transaction, dan audit log backend tersedia. Repair tidak boleh dibuat hanya di frontend.
 - **Reset:** reset testing lama nonaktif. Jika reset baru dibutuhkan, wajib desain guard baru dan approval khusus.
 - **Export data pokok:** direkomendasikan sebelum maintenance besar. Export bersifat backup/checklist, bukan import atau restore otomatis.
 - **Protected master:** tidak ikut reset default dan tidak boleh dilepas dari guard tanpa approval khusus.
@@ -1204,10 +1197,10 @@ Catatan lock:
 
 ### Batch 16D — Production Planning dan Karyawan Produksi Counter
 
-- Production Planning baru memakai document ID sama dengan `planCode` berformat `PP-YYYYMMDD-0001`.
-- Production Planning tidak lagi memakai full scan + `addDoc` sebagai jalur create utama; prefix query tetap menjadi baseline data historis sebelum counter transaction-level.
-- Karyawan Produksi tetap memakai kode tampilan `DDMMYYYY-XXX`, tetapi sequence final disimpan pada `business_code_counters` dengan prefix internal `EMP`.
-- Collection lama `production_employee_code_sequences` hanya dibaca sebagai baseline data historis dan tidak menjadi counter aktif create baru.
+- Production Planning baru memakai managed code backend `PLN-001`; ID dapat mengikuti code final untuk record baru bila client memakai preview code sebagai ID.
+- Sequence Planning memakai runtime `business_code_counters` dan baseline tabel SQLite aktif; flow `addDoc`/collection sequence lama tidak dipakai runtime.
+- Karyawan Produksi baru memakai managed code backend `EMP-001` melalui runtime `business_code_counters`; kode historis dengan format lama tetap compatibility dan tidak di-rename.
+- Tidak ada collection sequence terpisah yang dihidupkan kembali; baseline dibaca dari field `code` pada tabel SQLite aktif.
 - Tidak ada migration/rename data historis; relasi Work Log, Payroll, dan PO existing wajib tetap aman.
 
 

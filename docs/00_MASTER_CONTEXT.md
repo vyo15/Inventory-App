@@ -252,15 +252,23 @@ Status cleanup bertahap yang dikunci di docs:
 - **Guarded:** kode audit yang sudah dipakai harus immutable. Edit nama/ref tidak boleh otomatis mengubah kode audit lama tanpa approval migrasi.
 - **Standar kode manusiawi:** jangan pakai mapping manual kata-per-kata atau dictionary singkatan per modul. Gunakan prefix modul yang disetujui + sequence shared; jangan membuat dictionary singkatan kata per modul di page/service.
 - **Source of truth:** satu shared generator yang disetujui harus menjadi sumber kode manusiawi lintas modul. Page/service tidak boleh membuat generator baru atau duplicate logic.
-- **Current state note:** source aktual menghasilkan kode master/transaksi melalui endpoint backend SQLite `*/generate-code` dan generator pada service/backend terkait. Helper frontend `businessCodeGenerator.js` dan counter wrapper lamanya sudah dihapus setelah audit import membuktikan tidak ada pemanggil aktif.
+- **Current state source aktual:** generator kode aktif berada pada backend SQLite dan memakai helper bersama `backend/src/utils/businessCodeCounter.js`. Tabel existing `business_code_counters` sudah menjadi runtime counter untuk kode managed pada generic master/config, Customer, Supplier, Pricing Rule, Purchase, Sales, Return, Stock Adjustment, Cash In/Out, Production Order, Work Log, dan Payroll. Preview kode tidak melakukan reservasi; create/commit final melakukan reservasi dalam transaction yang sama, mengambil baseline kode historis langsung di SQLite, tidak memakai full scan sequence di JavaScript, dan tidak memakai ulang kode soft-deleted.
+
+## SQLite Concurrent Write & Runtime Counter — 2026-06-21
+- **Aktif/P0:** seluruh akses koneksi SQLite singleton diproses melalui FIFO coordinator di `backend/src/db/connection.js`. Transaction `BEGIN IMMEDIATE` memegang akses eksklusif sampai `COMMIT`/`ROLLBACK`; read dan write request lain menunggu agar tidak ikut masuk ke transaction request lain.
+- **Aktif/P0:** service finance, stock, transactions, pricing, production, auth, customer, supplier, category, generic JSON write, backup, dan restore memakai boundary bersama. Nested stock/finance/audit helper tetap reentrant dan tidak membuat nested transaction.
+- **Aktif/P0:** queue tetap bergerak setelah callback gagal; rollback satu request tidak boleh membatalkan request lain. Context async yang sudah selesai tidak boleh terus melewati queue.
+- **Aktif/P1:** backup lifecycle dan restore file swap berjalan eksklusif terhadap request database operasional. Restore tetap mempertahankan preview, confirm keyword, pre-restore backup, candidate validation, rollback file, dan audit yang sudah ada.
+- **Aktif/P1:** automated regression mencakup transaction paralel, read menunggu commit, queue setelah rollback, counter code paralel, baseline data historis, finance/ledger, purchase/stock, dan last-admin guard.
+- **Compatibility:** satu koneksi SQLite, WAL, `busy_timeout=5000`, schema, route, role guard, dan format data historis tetap dipertahankan. Serialization application-level ditambahkan di atas locking SQLite; bukan pengganti transaction database.
 
 ## Maintenance & Backup Center — 2026-06-07
 - **Aktif:** Reset & Maintenance Data menjadi Maintenance & Backup Center, bukan daftar tombol reset teknis.
 - **Flow standar:** Backup & Restore → Audit Data → Repair Aman → Export Master/Checklist → Audit ulang.
 - **Reset testing lama:** route/tab hanya menampilkan status nonaktif. Handler reset testing lama tidak tersedia di UI operasional.
-- **Auto detect:** audit stok, schema inventory log, arsip data, produksi, payroll, variant transaksi, side-effect transaksi, HPP reconcile, dan kode master bersifat read-only terhadap data bisnis dan hanya boleh membuat maintenance log metadata. Data Quality Audit legacy yang tidak lagi membaca data nyata sudah dipensiunkan dari UI.
+- **Auto detect:** audit data historis/stok/log/produksi/payroll/variant transaksi bersifat read-only terhadap data bisnis dan hanya boleh membuat maintenance log metadata.
 - **Export data pokok:** tersedia sebagai export master SQLite read-only/checklist manual, bukan restore otomatis dan bukan merge transaksi.
-- Backup resmi SQLite memakai satu file `.imsbackup` self-contained berisi database, manifest, checksum, dan README internal; file `.manifest.json` terpisah tidak dibuat lagi. Struktur folder aktif hanya `daily/`, `monthly/`, dan `manual/`. Daily dibuat otomatis maksimal satu per hari dan disimpan 60 hari. Monthly dibuat otomatis dari daily verified terakhir setiap bulan dan disimpan maksimal 12 bulan. Backup manual, import, pre-update, pre-reset, dan pre-restore disimpan pada folder `manual/` serta tidak dihapus otomatis. Restore tetap full replace guarded, bukan merge; backup legacy `.imsbak.zip` dan sidecar manifest lama tetap dibaca sebagai kompatibilitas. Backup `pre-restore` dan backup sumber restore dipastikan tercatat ulang setelah restore agar rollback dan traceability tetap terlihat di daftar backup.
+- Backup resmi SQLite memakai satu file `.imsbackup` self-contained berisi database, manifest, checksum, dan README internal; file `.manifest.json` terpisah tidak dibuat lagi. Snapshot, lifecycle daily/monthly/retention, dan restore file swap memegang database coordinator eksklusif agar tidak berjalan bersamaan dengan request operasional. Struktur folder aktif hanya `daily/`, `monthly/`, dan `manual/`. Daily dibuat otomatis maksimal satu per hari dan disimpan 60 hari. Monthly dibuat otomatis dari daily verified terakhir setiap bulan dan disimpan maksimal 12 bulan. Backup manual, import, pre-update, pre-reset, dan pre-restore disimpan pada folder `manual/` serta tidak dihapus otomatis. Restore tetap full replace guarded, bukan merge; backup legacy `.imsbak.zip` dan sidecar manifest lama tetap dibaca sebagai kompatibilitas. Backup `pre-restore` dan backup sumber restore dipastikan tercatat ulang setelah restore agar rollback dan traceability tetap terlihat di daftar backup.
 - **Guarded:** log/transaksi lama tidak direkomendasikan dibawa ulang sebagai default jika logic berubah; transaksi baru sebaiknya dibuat ulang lewat flow terbaru agar log baru mengikuti logic terbaru.
 - **Opening stock:** setelah restore/reset manual di luar aplikasi, stok awal sebaiknya dibuat ulang lewat purchase/opening adjustment resmi, bukan menempel stok mentah tanpa audit.
 
@@ -328,7 +336,7 @@ Catatan lock:
 ## Update Produksi/HPP — 2026-05-17
 - Detail Work Log dan HPP Analysis memakai resolver labor yang sama: payroll final, draft payroll, lalu estimasi Step sebagai read-only preview.
 - Overhead aktif berasal dari BOM untuk listrik/glue gun. Field hasil selain Good Qty adalah compatibility data historis dan tidak ditampilkan sebagai workflow aktif.
-- Audit produksi/HPP read-only aktif memakai Production Variant Audit, Payroll Snapshot Audit, dan HPP Reconcile Audit untuk memetakan Work Log historis, payroll pending/mismatch, output HPP yang perlu reconcile, dan masalah setup produksi; audit hasil selain Good Qty sengaja tidak diaktifkan.
+- Data Quality Audit produksi read-only mendeteksi Work Log data historis status, payroll pending/mismatch, output HPP yang butuh reconcile, dan Semi Finished tanpa `flowerGroup`; audit hasil selain Good Qty sengaja tidak diaktifkan.
 
 ## Update SQLite Local Runtime Pilot
 
@@ -352,7 +360,7 @@ Keputusan aktif tambahan:
 
 - Mobile IMS memakai standar portrait-first untuk semua phase M1-M5.
 - `DataTableView + mobileCardConfig` menjadi pola wajib untuk daftar operasional lintas modul.
-- `DataTableView` adalah komponen canonical untuk pola desktop table + mobile card/list; jangan membuat alias atau implementasi table/card kedua yang menduplikasi behavior.
+- `ResponsiveDataView` adalah alias standar untuk `DataTableView`; tidak boleh membuat komponen table/card baru yang menduplikasi behavior.
 - Foundation mobile aktif: `MobileActionMenu`, `MobileFilterDrawer`, `MobileDetailDrawer`, `ResponsiveFormSection`, dan `MobileStateBlock`.
 - Patch mobile harus UI-only kecuali ada persetujuan khusus. Jangan mengubah stock mutation, sales/purchase/return commit, finance ledger, production material usage, payroll final, HPP, backup/restore, reset testing, auth, schema, atau role guard.
 - Dokumentasi wajib ikut diperbarui setiap patch mobile agar standar tidak kembali ke tampilan desktop table di HP.

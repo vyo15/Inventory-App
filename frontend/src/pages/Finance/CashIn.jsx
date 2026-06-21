@@ -24,12 +24,6 @@ import { formatDateId } from "../../utils/formatters/dateId";
 import { formatNumberId, parseIntegerIdInput } from "../../utils/formatters/numberId";
 import { createCashInTransaction, listenCashInRecords } from "../../services/Finance/financeService";
 import { DataRefreshIndicator, getDataTableEmptyText } from "../../components/Layout/Feedback/DataLoadingState";
-import {
-  buildFinanceMonthOptions,
-  buildFinanceRecordYearOptions,
-  filterFinanceRecordsByPeriod,
-  getCurrentFinanceYear,
-} from "./helpers/financePeriodHelpers";
 
 
 // IMS NOTE [AKTIF/GUARDED] - Standar input angka bulat
@@ -47,7 +41,10 @@ const { Text } = Typography;
 // - menjaga filter bulan dan label bulan tetap konsisten
 // - menghindari penulisan ulang array bulan di beberapa halaman finance
 // =========================
-const MONTH_OPTIONS = buildFinanceMonthOptions();
+const MONTH_OPTIONS = Array.from({ length: 12 }).map((_, index) => ({
+  label: dayjs().month(index).format("MMMM"),
+  value: index,
+}));
 
 const CashIn = () => {
   // =========================
@@ -61,7 +58,7 @@ const CashIn = () => {
   // =========================
   // SECTION: Filter periode
   // =========================
-  const currentYear = getCurrentFinanceYear();
+  const currentYear = dayjs().year();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState("all");
 
@@ -88,18 +85,26 @@ const CashIn = () => {
   // =========================
   // SECTION: Derived data filter & summary
   // =========================
-  const yearOptions = useMemo(
-    () => buildFinanceRecordYearOptions(cashIns, currentYear),
-    [cashIns, currentYear],
-  );
+  const yearOptions = useMemo(() => {
+    const availableYears = cashIns
+      .map((item) => (item.date?.toDate ? dayjs(item.date.toDate()).year() : null))
+      .filter(Boolean);
 
-  const filteredCashIns = useMemo(
-    () => filterFinanceRecordsByPeriod(cashIns, {
-      year: selectedYear,
-      month: selectedMonth,
-    }),
-    [cashIns, selectedMonth, selectedYear],
-  );
+    return [...new Set([currentYear, ...availableYears])].sort((left, right) => right - left);
+  }, [cashIns, currentYear]);
+
+  const filteredCashIns = useMemo(() => {
+    return cashIns.filter((item) => {
+      if (!item.date?.toDate) return false;
+
+      const itemDate = dayjs(item.date.toDate());
+      const matchesYear = itemDate.year() === selectedYear;
+      const matchesMonth =
+        selectedMonth === "all" ? true : itemDate.month() === Number(selectedMonth);
+
+      return matchesYear && matchesMonth;
+    });
+  }, [cashIns, selectedMonth, selectedYear]);
 
   const summary = useMemo(() => {
     return filteredCashIns.reduce(

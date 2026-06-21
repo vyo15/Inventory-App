@@ -17,7 +17,7 @@ export default defineConfig([
   // =========================
   globalIgnores(["dist", "build", "assets"]),
   {
-    files: ["**/*.{js,jsx}"],
+    files: ["src/**/*.{js,jsx}"],
     extends: [
       js.configs.recommended,
       reactHooks.configs["recommended-latest"],
@@ -27,7 +27,6 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: {
         ...globals.browser,
-        ...globals.node,
       },
       parserOptions: {
         ecmaVersion: "latest",
@@ -53,6 +52,19 @@ export default defineConfig([
     files: ["src/context/AuthContext.jsx"],
     rules: {
       "react-refresh/only-export-components": "off",
+    },
+  },
+  {
+    files: ["*.config.js", "vite.config.js", "eslint.config.js"],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: "latest",
+      globals: {
+        ...globals.node,
+      },
+      parserOptions: {
+        sourceType: "module",
+      },
     },
   },
 ]);

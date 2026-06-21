@@ -1,6 +1,6 @@
-import { APP_ROUTES } from '../../config/appRoutes';
 import { formatNumberId } from '../formatters/numberId';
 import { resolveDisplayReference } from '../references/displayReferenceResolver';
+import { APP_ROUTES } from '../../config/appRoutes';
 
 export const toNumber = (value, fallback = 0) => {
   const parsedValue = Number(value ?? fallback);

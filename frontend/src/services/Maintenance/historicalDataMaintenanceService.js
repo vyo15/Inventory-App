@@ -1,1 +1,4 @@
-export const getHistoricalDataMaintenanceAudit = async () => ({ summary: { status: "historical_archive_removed", findings: 0 }, findings: [] });
+import { throwUnavailableMaintenanceTool } from "./resetMaintenanceDataService";
+
+export const getHistoricalDataMaintenanceAudit = async () =>
+  throwUnavailableMaintenanceTool("Audit data historis");

@@ -1,7 +1,11 @@
-const { getDb } = require("../../db/connection");
+const { runInTransaction } = require("../../db/connection");
 const { commitStockMutation, insertEventRecord, nowIso, toInteger } = require("../../utils/sqliteStockEngine");
 const { createFinanceMovement } = require("../../utils/sqliteFinanceEngine");
 const { safeJsonParse } = require("../../utils/jsonUtils");
+const {
+  formatBusinessDateStamp,
+  resolveBusinessCode,
+} = require("../../utils/businessCodeCounter");
 
 const normalizeSourceType = (value = "") => {
   const normalized = String(value || "").trim().toLowerCase();
@@ -31,6 +35,59 @@ const normalizeTransactionItems = (body = {}) => {
 };
 
 const normalizeText = (value) => String(value ?? "").trim();
+
+const TRANSACTION_CODE_PREFIX = Object.freeze({
+  purchase: "PUR",
+  sale: "ORD",
+  return: "RET",
+});
+
+const getTransactionCounterOptions = ({ tableName, transactionType, dateValue, requestedCode = "" }) => {
+  const basePrefix = TRANSACTION_CODE_PREFIX[transactionType];
+  const normalizedRequestedCode = normalizeText(requestedCode).toUpperCase();
+  const requestedMatch = normalizedRequestedCode.match(new RegExp(`^${basePrefix}-(\\d{8})-\\d+$`));
+  const dateStamp = requestedMatch?.[1] || formatBusinessDateStamp(dateValue);
+  const prefix = `${basePrefix}-${dateStamp}`;
+  return {
+    counterKey: `${tableName}:${prefix}`,
+    prefix,
+    tableName,
+    columnName: "code",
+    minWidth: 3,
+    notes: `Runtime counter ${transactionType} per tanggal`,
+  };
+};
+
+const resolveTransactionReference = async (db, {
+  body,
+  tableName,
+  transactionType,
+}) => {
+  const requestedCode = body.referenceNumber
+    || body.code
+    || body.purchaseNumber
+    || body.saleNumber
+    || body.returnNumber
+    || "";
+  const code = await resolveBusinessCode(
+    db,
+    requestedCode,
+    getTransactionCounterOptions({
+      tableName,
+      transactionType,
+      dateValue: body.transactionDate || body.date || body.createdAt,
+      requestedCode,
+    }),
+  );
+  if (!code) {
+    throw createRequestError(
+      "Nomor referensi transaksi sudah pernah digunakan.",
+      "DUPLICATE_REFERENCE",
+      409,
+    );
+  }
+  return code;
+};
 
 const createRequestError = (message, code = "VALIDATION_ERROR", statusCode = 400) => {
   const error = new Error(message);
@@ -253,7 +310,7 @@ const prepareTransactionBody = (transactionType, body = {}) => {
   };
 };
 
-const createFinanceSideEffect = async (db, { tableName, transactionType, transactionRecord, body, actor }) => {
+const createFinanceSideEffect = async (db, { transactionType, transactionRecord, body, actor }) => {
   const amount = toInteger(body.totalAmount ?? body.total ?? body.grandTotal ?? body.amount ?? 0);
   if (amount <= 0) return null;
 
@@ -354,19 +411,15 @@ const validateTransactionItems = (items = []) => {
 
 const commitStockTransaction = async ({ payload = {}, actor = "system", tableName, transactionType, stockDirection } = {}) => {
   const body = prepareTransactionBody(transactionType, payload || {});
-  const referenceNumber = body.referenceNumber
-    || body.code
-    || body.purchaseNumber
-    || body.saleNumber
-    || body.returnNumber
-    || `${transactionType.toUpperCase()}-${Date.now()}`;
   const items = normalizeTransactionItems(body);
   validateTransactionItems(items);
 
-  const db = await getDb();
-  try {
-    await db.run("BEGIN IMMEDIATE TRANSACTION");
-
+  return runInTransaction(async (db) => {
+    const referenceNumber = await resolveTransactionReference(db, {
+      body,
+      tableName,
+      transactionType,
+    });
     const mutationResults = [];
     for (const item of items) {
       const deltaCurrent = stockDirection === "out" ? -Math.abs(item.quantity) : Math.abs(item.quantity);
@@ -407,12 +460,8 @@ const commitStockTransaction = async ({ payload = {}, actor = "system", tableNam
       actor,
     });
 
-    await db.run("COMMIT");
     return { ...transactionRecord, mutationResults, financeResult };
-  } catch (error) {
-    await db.run("ROLLBACK").catch(() => {});
-    throw error;
-  }
+  });
 };
 
 const commitPurchase = ({ payload = {}, actor = "system" } = {}) => commitStockTransaction({
@@ -431,13 +480,9 @@ const commitSale = ({ payload = {}, actor = "system" } = {}) => commitStockTrans
   stockDirection: "out",
 });
 
-const updateSaleStatus = async ({ id, status, actor = "system" } = {}) => {
-  const db = await getDb();
-  try {
-    await db.run("BEGIN IMMEDIATE TRANSACTION");
+const updateSaleStatus = async ({ id, status, actor = "system" } = {}) => runInTransaction(async (db) => {
     const row = await db.get("SELECT * FROM sales WHERE id = ? AND status != 'deleted'", [id]);
     if (!row) {
-      await db.run("ROLLBACK").catch(() => {});
       throw createRequestError("Sales database lokal tidak ditemukan", "NOT_FOUND", 404);
     }
 
@@ -469,21 +514,16 @@ const updateSaleStatus = async ({ id, status, actor = "system" } = {}) => {
       });
     }
 
-    await db.run("COMMIT");
     return { ...nextPayload, financeResult };
-  } catch (error) {
-    await db.run("ROLLBACK").catch(() => {});
-    throw error;
-  }
-};
+});
 
-const commitReturn = async ({ payload = {}, actor = "system" } = {}) => {
-  const db = await getDb();
-  try {
-    await db.run("BEGIN IMMEDIATE TRANSACTION");
-
+const commitReturn = async ({ payload = {}, actor = "system" } = {}) => runInTransaction(async (db) => {
     const body = await buildSaleReturnValidation(db, payload || {});
-    const referenceNumber = body.referenceNumber || body.code || body.returnNumber || `RET-${Date.now()}`;
+    const referenceNumber = await resolveTransactionReference(db, {
+      body,
+      tableName: "returns",
+      transactionType: "return",
+    });
     const items = normalizeTransactionItems(body);
 
     const mutationResults = [];
@@ -531,13 +571,8 @@ const commitReturn = async ({ payload = {}, actor = "system" } = {}) => {
       actor,
     });
 
-    await db.run("COMMIT");
     return { ...transactionRecord, mutationResults, financeResult };
-  } catch (error) {
-    await db.run("ROLLBACK").catch(() => {});
-    throw error;
-  }
-};
+});
 
 
 const getTransactionRecordRouterDefinitions = () => [

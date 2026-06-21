@@ -1,18 +1,7 @@
-const { getDb } = require("../../db/connection");
+const { runInTransaction } = require("../../db/connection");
 const { createFinanceMovement, markFinanceMovementDeleted } = require("../../utils/sqliteFinanceEngine");
 
-const runFinanceTransaction = async (callback) => {
-  const db = await getDb();
-  try {
-    await db.run("BEGIN IMMEDIATE TRANSACTION");
-    const result = await callback(db);
-    await db.run("COMMIT");
-    return result;
-  } catch (error) {
-    await db.run("ROLLBACK").catch(() => {});
-    throw error;
-  }
-};
+const runFinanceTransaction = (callback) => runInTransaction(callback);
 
 const commitCashIn = async ({ payload = {}, actor = "system" } = {}) => runFinanceTransaction((db) => createFinanceMovement(db, {
   direction: "in",

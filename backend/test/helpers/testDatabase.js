@@ -8,6 +8,10 @@ const RESET_TABLES = [
   "audit_logs",
   "backup_logs",
   "restore_logs",
+  "business_code_counters",
+  "customers",
+  "categories",
+  "suppliers",
   "stock_read_models",
   "stock_adjustments",
   "inventory_logs",
@@ -28,6 +32,7 @@ const RESET_TABLES = [
   "production_orders",
   "production_work_logs",
   "production_payrolls",
+  "pricing_rules",
   "report_snapshots",
 ];
 

@@ -1,6 +1,10 @@
 const crypto = require("crypto");
 const { createAuditLog } = require("./auditLog");
 const { safeJsonParse } = require("./jsonUtils");
+const {
+  formatBusinessDateStamp,
+  reserveBusinessCode,
+} = require("./businessCodeCounter");
 
 const toInteger = (value = 0) => {
   const parsed = Number(value ?? 0);
@@ -19,9 +23,25 @@ const normalizeDate = (value) => {
   return Number.isNaN(parsed.getTime()) ? nowIso() : parsed.toISOString();
 };
 
-const buildFinanceCode = (prefix, payload = {}) =>
-  normalizeText(payload.referenceNumber || payload.code || payload.cashInNumber || payload.cashOutNumber || `${prefix}-${Date.now()}`)
-    .toUpperCase();
+const buildFinanceCode = async (db, tableName, prefix, payload = {}) => {
+  const explicitCode = normalizeText(
+    payload.referenceNumber || payload.code || payload.cashInNumber || payload.cashOutNumber || "",
+  ).toUpperCase();
+  if (explicitCode) return explicitCode;
+
+  const dateStamp = formatBusinessDateStamp(
+    payload.transactionDate || payload.date || payload.createdAt,
+  );
+  const datedPrefix = `${prefix}-${dateStamp}`;
+  return reserveBusinessCode(db, {
+    counterKey: `${tableName}:${datedPrefix}`,
+    prefix: datedPrefix,
+    tableName,
+    columnName: "code",
+    minWidth: 3,
+    notes: `Runtime counter ${tableName} per tanggal`,
+  });
+};
 
 const toRecordPayload = (row = {}) => ({
   ...safeJsonParse(row.payload_json, {}),
@@ -93,7 +113,7 @@ const createFinanceMovement = async (db, {
   const normalizedDirection = direction === "out" ? "out" : "in";
   const tableName = normalizedDirection === "out" ? "expenses" : "incomes";
   const prefix = normalizedDirection === "out" ? "CSH-OUT" : "CSH-IN";
-  const referenceNumber = buildFinanceCode(prefix, payload);
+  const referenceNumber = await buildFinanceCode(db, tableName, prefix, payload);
   const movementId = normalizeText(payload.id || referenceNumber);
   const amount = Math.abs(toInteger(payload.amount ?? payload.totalAmount ?? payload.total ?? 0));
 

@@ -1,4 +1,5 @@
 import { Card, Col, Input, Row, Space, Statistic, Tag } from "antd";
+import { MAINTENANCE_DATA_TOOLS_AVAILABLE } from "../../../services/Maintenance/resetMaintenanceDataService";
 
 const ResetStatusSummaryCard = ({
   actionNote,
@@ -11,13 +12,13 @@ const ResetStatusSummaryCard = ({
     <Space direction="vertical" size={12} style={{ width: "100%" }}>
       <Row gutter={[12, 12]}>
         <Col xs={12} md={6}>
-          <Statistic title="Bug/Data Issue" value={autoBugSummary.issueCount} />
+          <Statistic title="Audit Otomatis" value={MAINTENANCE_DATA_TOOLS_AVAILABLE ? autoBugSummary.issueCount : "Belum tersedia"} />
         </Col>
         <Col xs={12} md={6}>
-          <Statistic title="Repair Aman" value={autoBugSummary.safeRepairCount} />
+          <Statistic title="Repair Otomatis" value={MAINTENANCE_DATA_TOOLS_AVAILABLE ? autoBugSummary.safeRepairCount : "Belum tersedia"} />
         </Col>
         <Col xs={12} md={6}>
-          <Statistic title="Baseline Modal/HPP" value={hppCostBaselineSummary?.exists ? "Ada" : "Belum"} />
+          <Statistic title="Baseline Modal/HPP" value={hppCostBaselineSummary?.available && hppCostBaselineSummary?.exists ? "Ada" : "Belum tersedia"} />
         </Col>
       </Row>
       <Input.TextArea

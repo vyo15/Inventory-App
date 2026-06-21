@@ -14,8 +14,8 @@ const getSemiFinishedMaterialsRouterConfig = () => ({
   requiredName: true,
   orderBy: "name ASC, updated_at DESC",
   protectedWriteNote: [
-    "Edit master Semi Finished hanya boleh mengubah metadata dan reference cost manual.",
-    "Stok, stok varian, serta average/last production cost dipertahankan dari database terbaru.",
+    "Edit master Semi Finished hanya boleh mengubah metadata dan nilai reference/manual yang diizinkan.",
+    "Stok, stok varian, dan valuation hasil produksi dipertahankan dari database terbaru.",
     "Stock read model disinkronkan backend dalam transaction yang sama.",
   ].join(" "),
   ...createInventoryMasterRouteGuards({
@@ -27,5 +27,6 @@ const getSemiFinishedMaterialsRouterConfig = () => ({
 });
 
 module.exports = {
+  SEMI_FINISHED_VALUATION_FIELDS,
   getSemiFinishedMaterialsRouterConfig,
 };

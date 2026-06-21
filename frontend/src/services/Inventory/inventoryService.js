@@ -46,6 +46,5 @@ export const updateInventoryStock = async ({
     deltaCurrent: quantityDelta,
     preventNegative,
     reason: "inventory_service_update",
-    referenceNumber: `INV-${Date.now()}`,
   });
 };

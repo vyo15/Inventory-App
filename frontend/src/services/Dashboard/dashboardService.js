@@ -8,8 +8,8 @@ import { getAllProductionPayrolls } from "../Produksi/productionPayrollsService"
 import { getAllProductionPlans } from "../Produksi/productionPlanningService";
 import { getAllProductionWorkLogs } from "../Produksi/productionWorkLogsService";
 import { fetchSalesRecords } from "../Transaksi/salesService";
-import { APP_ROUTES } from "../../config/appRoutes";
 import { canAccessRoute, ROUTE_ACCESS_KEYS } from "../../utils/auth/roleAccess";
+import { APP_ROUTES } from "../../config/appRoutes";
 
 const LISTENER_TIMEOUT_MS = 7000;
 const DASHBOARD_SCAN_LIMIT = 1000;

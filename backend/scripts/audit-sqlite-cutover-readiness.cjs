@@ -39,7 +39,6 @@ const parseEnvExample = () => {
 };
 
 const frontendFiles = walkFiles(frontendRoot, (file) => /\.(js|jsx|ts|tsx)$/.test(file));
-const backendFiles = walkFiles(path.join(backendRoot, "src"), (file) => /\.js$/.test(file));
 const oldRemoteRuntimeFiles = frontendFiles.filter((file) => {
   const text = readText(file).toLowerCase();
   return text.includes(`${oldRemoteToken}/${oldRemoteStoreToken}`) ||

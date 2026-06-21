@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { getDb } = require("../../db/connection");
+const { getDb, runInTransaction } = require("../../db/connection");
 const {
   sanitizeInventoryMasterUpdate,
   upsertJsonRecord,
@@ -7,6 +7,10 @@ const {
 } = require("../../utils/sqliteStockEngine");
 const { createAuditLog } = require("../../utils/auditLog");
 const { safeJsonParse } = require("../../utils/jsonUtils");
+const {
+  getBusinessCodePreview,
+  resolveBusinessCode,
+} = require("../../utils/businessCodeCounter");
 const { PRODUCT_VALUATION_FIELDS } = require("../products/products.service");
 const { RAW_MATERIAL_VALUATION_FIELDS } = require("../rawMaterials/rawMaterials.service");
 
@@ -114,18 +118,23 @@ const toPricingRuleRecord = (row = {}) => {
   };
 };
 
-const getNumericSequenceFromCode = (code = "") => {
-  const match = String(code || "").match(/^PRC-(\d+)$/i);
-  return match ? Number(match[1]) : 0;
-};
+const PRICING_CODE_OPTIONS = Object.freeze({
+  counterKey: "pricing_rules:PRC",
+  prefix: "PRC",
+  tableName: "pricing_rules",
+  columnName: "code",
+  minWidth: 3,
+  notes: "Runtime counter pricing rules",
+});
 
-const generateNextCode = async (db) => {
-  const rows = await db.all("SELECT code FROM pricing_rules WHERE code LIKE 'PRC-%'");
-  const maxSequence = rows.reduce(
-    (max, row) => Math.max(max, getNumericSequenceFromCode(row.code)),
-    0
-  );
-  return `PRC-${String(maxSequence + 1).padStart(3, "0")}`;
+const generateNextCode = (db) => getBusinessCodePreview(db, PRICING_CODE_OPTIONS);
+
+const resolvePricingCreateCode = async (db, requestedCode = "") => {
+  const code = await resolveBusinessCode(db, requestedCode, PRICING_CODE_OPTIONS);
+  if (!code) {
+    throw createServiceError("Kode pricing rule sudah pernah digunakan.", "DUPLICATE_CODE", 409);
+  }
+  return code;
 };
 
 const generatePricingRuleCode = async () => {
@@ -167,10 +176,16 @@ const validatePricingRulePayload = (payload) => {
   }
 };
 
-const createPricingRule = async (body = {}, actor = "system") => {
-  const db = await getDb();
-  const code = normalizeText(body?.code || "") || await generateNextCode(db);
-  const payload = normalizeRulePayload({ ...body, code });
+const createPricingRule = async (body = {}, actor = "system") => runInTransaction(async (db) => {
+  const code = await resolvePricingCreateCode(db, body?.code);
+  const requestedCode = normalizeText(body?.code || "").toUpperCase();
+  const requestedId = normalizeText(body?.id || "");
+  const normalizedBody = {
+    ...body,
+    id: !requestedId || requestedId.toUpperCase() === requestedCode ? code : requestedId,
+    code,
+  };
+  const payload = normalizeRulePayload(normalizedBody);
 
   validatePricingRulePayload(payload);
 
@@ -202,10 +217,9 @@ const createPricingRule = async (body = {}, actor = "system") => {
 
   const row = await db.get("SELECT * FROM pricing_rules WHERE id = ?", [payload.id]);
   return toPricingRuleRecord(row);
-};
+});
 
-const updatePricingRule = async (id, body = {}, actor = "system") => {
-  const db = await getDb();
+const updatePricingRule = async (id, body = {}, actor = "system") => runInTransaction(async (db) => {
   const current = await db.get(
     "SELECT * FROM pricing_rules WHERE id = ? AND status != 'deleted'",
     [id]
@@ -251,10 +265,9 @@ const updatePricingRule = async (id, body = {}, actor = "system") => {
 
   const row = await db.get("SELECT * FROM pricing_rules WHERE id = ?", [current.id]);
   return toPricingRuleRecord(row);
-};
+});
 
-const softDeletePricingRule = async (id, actor = "system") => {
-  const db = await getDb();
+const softDeletePricingRule = async (id, actor = "system") => runInTransaction(async (db) => {
   const current = await db.get(
     "SELECT * FROM pricing_rules WHERE id = ? AND status != 'deleted'",
     [id]
@@ -287,7 +300,7 @@ const softDeletePricingRule = async (id, actor = "system") => {
   });
 
   return { id: current.id, deleted: true, softDeleted: true };
-};
+});
 
 const toInventoryRecord = (row = {}) => {
   const payload = safeJsonParse(row.payload_json, {});
@@ -356,9 +369,7 @@ const normalizePricingBatchUpdates = (updates = []) => {
 
 const applyPricingRuleBatch = async (id, body = {}, actor = "system") => {
   const updates = normalizePricingBatchUpdates(body.updates);
-  const db = await getDb();
-  await db.run("BEGIN IMMEDIATE TRANSACTION");
-  try {
+  return runInTransaction(async (db) => {
     const ruleRow = await db.get(
       "SELECT * FROM pricing_rules WHERE id = ? AND status != 'deleted'",
       [id],
@@ -472,17 +483,13 @@ const applyPricingRuleBatch = async (id, body = {}, actor = "system") => {
       },
     });
 
-    await db.run("COMMIT");
     return {
       ruleId: rule.id,
       targetType,
       updatedCount: updatedItems.length,
       updatedItems,
     };
-  } catch (error) {
-    await db.run("ROLLBACK").catch(() => {});
-    throw error;
-  }
+  });
 };
 
 module.exports = {

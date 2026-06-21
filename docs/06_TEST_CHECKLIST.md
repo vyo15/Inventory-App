@@ -17,6 +17,7 @@ Jika menjalankan terpisah:
 ```bash
 cd backend
 npm install
+npm run check
 npm test
 npm run dev
 ```
@@ -56,8 +57,34 @@ Coverage aktif saat ini:
 - Transaction atomicity: purchase + expense/ledger, rollback seluruh sale jika salah satu item gagal, dan income sale idempotent saat status menjadi `Selesai`.
 - Finance ledger: cash-in, invalid cash-out rollback, serta soft-delete cash-out dan ledger pasangannya.
 - Return guard: `relatedSaleId` wajib dan qty retur kumulatif tidak boleh melebihi sisa qty sales.
+- SQLite concurrency: dua transaction paralel diproses FIFO, read menunggu commit, rollback tidak meracuni queue, dan context selesai tidak melewati serialisasi.
+- Business code counter: dua preview yang sama tetap menghasilkan code/ID unik saat create final, baseline historis dihormati, serta Purchase/Cash In tanpa kode memakai sequence tanggal yang aman.
+- Auth concurrency: dua perubahan admin paralel tetap menyisakan satu administrator aktif.
+- Password policy: maksimum 128 karakter aktif pada backend dan frontend shared policy.
 
 Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke database operasional `data/`.
+
+## 1A.1 Concurrent write dan runtime counter
+
+- [ ] `backend/test/dbConnectionQueue.mock.test.js` lulus tanpa native SQLite: FIFO transaction, blocked read, dan queue recovery.
+- [ ] `backend/test/sqliteConcurrentWrites.test.js` lulus pada PC project dengan native `sqlite3` terpasang.
+- [ ] Dua Cash In paralel tanpa kode menghasilkan dua `CSH-IN-DDMMYYYY-xxx` unik dan dua ledger.
+- [ ] Dua Purchase paralel tanpa kode menghasilkan dua `PUR-DDMMYYYY-xxx`, stok bertambah tepat, expense/ledger tidak duplikat.
+- [ ] Dua Customer/Pricing Rule dengan preview sama mendapat code/ID final berbeda dari response server.
+- [ ] Read request yang datang saat transaction aktif baru selesai setelah commit/rollback.
+- [ ] Satu callback gagal/rollback tidak membatalkan transaction lain dan operasi berikutnya tetap dapat commit.
+- [ ] Backup/restore tidak dijalankan bersamaan dengan write operasional; restore guard dan rollback file tetap lulus.
+
+## 1B. Tooling dan line-ending regression
+
+- [ ] `npm --prefix backend run check:syntax` memeriksa `backend/src`, `backend/test`, dan `backend/scripts`.
+- [ ] `npm --prefix backend run lint` lulus tanpa unused variable/import atau duplicate import.
+- [ ] `npm --prefix backend run check` menjalankan syntax check lalu ESLint.
+- [ ] `npm --prefix frontend run lint` lulus dengan browser globals hanya untuk `frontend/src`.
+- [ ] File `*.js`, `*.jsx`, `*.cjs`, dan `*.mjs` memakai LF tanpa CRLF/mixed EOL.
+- [ ] `.gitattributes` dan `.editorconfig` tetap memiliki aturan LF untuk empat ekstensi JavaScript tersebut.
+- [ ] Normalisasi EOL tidak membawa perubahan logic; verifikasi diff dengan mengabaikan whitespace sebelum merge.
+- [ ] `git ls-files --eol` menunjukkan index `i/lf` untuk file JavaScript yang ter-track.
 
 ## 2. Backend health dan status
 
@@ -186,17 +213,13 @@ Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke da
 
 - [ ] Database Center menampilkan status backend SQLite.
 - [ ] Module Runtime Status tampil dan summary masuk akal.
-- [ ] Backup manual berhasil, tersimpan di `backups/sqlite/manual/`, masuk riwayat, dan hanya menghasilkan satu file `.imsbackup` tanpa sidecar manifest baru.
-- [ ] Backup daily tersimpan di `backups/sqlite/daily/`, maksimal satu verified per hari, dan tetap dibuat ketika layanan hidup melewati pergantian hari.
-- [ ] Daily lebih dari 60 hari hanya dihapus bila monthly verified untuk bulan yang sama tersedia.
-- [ ] Backup monthly tersimpan di `backups/sqlite/monthly/`, berasal dari daily verified terakhir bulan tersebut, idempotent satu per bulan, dan maksimal 12 bulan.
-- [ ] Backup manual/import/pre-restore tidak ikut cleanup otomatis.
-- [ ] Filter backup `Semua/Harian/Bulanan/Manual` dan periode `Hari ini/Minggu ini/Bulan ini/Bulan lalu` bekerja sebelum download.
-- [ ] Setiap promosi monthly dan cleanup retention tercatat di audit log maintenance.
+- [ ] Backup manual berhasil dan masuk riwayat.
+- [ ] Backup otomatis harian tidak membuat error startup.
 - [ ] Restore plan menampilkan preview sebelum execute.
 - [ ] Restore execute wajib keyword confirm.
 - [ ] Restore membuat pre-restore backup.
 - [ ] Restore gagal aman jika backup tidak valid.
+- [ ] Jika migrasi, validasi database aktif, atau pencatatan restore gagal setelah swap, database sebelum restore otomatis dikembalikan dan audit `restore_rollback` tercatat.
 - [ ] Reset testing lama tetap nonaktif/redirect lama.
 
 ## 12. UI/UX regression
@@ -208,9 +231,7 @@ Test memakai database SQLite temporary di folder sistem dan tidak menunjuk ke da
 - [ ] Klik top-level module membuka Module Hub tanpa submenu pop-up.
 - [ ] Module Hub hanya menampilkan child route yang diizinkan role aktif.
 - [ ] Active state dock tetap benar saat berada di hub route maupun halaman child.
-- [ ] Canonical hub dan child route memakai pola `/inventory/...` serta `/production/...`; `/inventory/stock-management` dan seluruh child Production dapat dibuka melalui `ProtectedRoute` yang sesuai.
-- [ ] Exact hub lama `/stock` dan `/produksi` sudah tidak aktif dan masuk halaman not found.
-- [ ] Compatibility child route lama seperti `/stock-management`, `/stock-adjustment`, dan `/produksi/work-log-produksi` redirect ke canonical route tanpa melewati atau mengubah role access.
+- [ ] Canonical hub `/inventory` dan `/production` dapat dibuka. Exact hub lama `/stock` dan `/produksi` tidak dihidupkan kembali; hanya child route legacy terdaftar yang redirect melalui guard yang sama.
 - [ ] Role `user` tidak melihat Module Hub Master Data, Finance, Sistem, Laporan, Production Setup, Payroll, atau HPP.
 - [ ] Tablet `768-992px` menampilkan tombol menu + Drawer kiri; bottom navigation tidak tampil.
 - [ ] Mobile `<= 767px` menampilkan bottom navigation Dashboard, Stock, Menu, Transaksi, dan Produksi.
@@ -256,6 +277,7 @@ Referensi detail: `docs/21_RESPONSIVE_UI_UX_STANDARD.md`.
 - [ ] Docs tidak mengarahkan patch baru ke runtime arsip.
 - [ ] Docs guarded area tetap melindungi stock, sales, purchases, returns, finance, production, payroll, HPP, auth, backup/restore, reset, route/menu, role guard, dan audit log.
 - [ ] Jika source berubah, docs terkait ikut diperbarui dalam patch yang sama.
+- [ ] GitHub Actions menjalankan source hygiene, backend check/test, frontend test/lint/build, dan bundle budget pada push/PR.
 - [ ] `npm test` lulus sebelum merge; coverage yang belum otomatis tetap diuji manual.
 
 ## 14. P8A–P12 regression

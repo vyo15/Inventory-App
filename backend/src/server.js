@@ -3,7 +3,7 @@ const cors = require("cors");
 const env = require("./config/env");
 const { runMigrations } = require("./db/migrate");
 const { getDbPath } = require("./db/connection");
-const { BACKUP_LIFECYCLE_INTERVAL_MS, runBackupLifecycleMaintenance } = require("./utils/sqliteBackup");
+const { ensureDailyBackupForToday } = require("./utils/sqliteBackup");
 const requestLogger = require("./middlewares/requestLogger");
 const { createCorsOptionsDelegate, enforceTrustedOrigin } = require("./middlewares/corsOptions");
 const { errorHandler, notFoundHandler } = require("./middlewares/errorHandler");
@@ -90,29 +90,14 @@ async function startServer() {
     console.warn("============================================================");
   }
 
-  const runBackupLifecycle = async () => {
-    try {
-      const lifecycle = await runBackupLifecycleMaintenance({ actor: "system" });
-      if (lifecycle.daily.created) {
-        console.log(`Auto backup harian dibuat: ${lifecycle.daily.backup.filename}`);
-      }
-      for (const monthlyBackup of lifecycle.monthly.created) {
-        console.log(`Arsip backup bulanan dibuat: ${monthlyBackup.filename}`);
-      }
-      if (lifecycle.retention.deleted.length) {
-        console.log(`${lifecycle.retention.deleted.length} backup lama dibersihkan sesuai retensi.`);
-      }
-      for (const lifecycleError of lifecycle.errors || []) {
-        console.warn("Siklus backup selesai dengan peringatan:", lifecycleError.message);
-      }
-    } catch (error) {
-      console.warn("Siklus backup otomatis gagal. Jalankan backup manual dari UI.", error.message);
+  try {
+    const dailyBackup = await ensureDailyBackupForToday();
+    if (dailyBackup.created) {
+      console.log(`Auto backup harian dibuat: ${dailyBackup.backup.filename}`);
     }
-  };
-
-  await runBackupLifecycle();
-  const backupLifecycleTimer = setInterval(runBackupLifecycle, BACKUP_LIFECYCLE_INTERVAL_MS);
-  backupLifecycleTimer.unref?.();
+  } catch (error) {
+    console.warn("Auto backup harian gagal dibuat. Jalankan backup manual dari UI.", error.message);
+  }
 
   app.listen(env.port, env.host, () => {
     console.log(`IMS layanan lokal jalan di http://localhost:${env.port}`);

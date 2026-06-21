@@ -1,7 +1,10 @@
 const crypto = require("crypto");
-const { getDb } = require("../../db/connection");
+const { runInTransaction } = require("../../db/connection");
 const { createAuditLog } = require("../../utils/auditLog");
 const { safeJsonParse } = require("../../utils/jsonUtils");
+const {
+  resolveBusinessCode,
+} = require("../../utils/businessCodeCounter");
 const {
   commitStockMutation,
   loadSourceItem,
@@ -42,18 +45,7 @@ const fail = (message, code = "PRODUCTION_VALIDATION_ERROR", status = 400) => {
   throw new ProductionError(message, code, status);
 };
 
-const runProductionTransaction = async (callback) => {
-  const db = await getDb();
-  try {
-    await db.run("BEGIN IMMEDIATE TRANSACTION");
-    const result = await callback(db);
-    await db.run("COMMIT");
-    return result;
-  } catch (error) {
-    await db.run("ROLLBACK").catch(() => {});
-    throw error;
-  }
-};
+const runProductionTransaction = (callback) => runInTransaction(callback);
 
 const toRecord = (row = {}) => ({
   ...safeJsonParse(row.payload_json, {}),
@@ -88,19 +80,25 @@ const listRecords = async (db, tableName) => {
   return rows.map(toRecord);
 };
 
-const getNumericSequenceFromCode = (code = "", prefix = "") => {
-  const normalizedCode = normalizeUpper(code);
-  const match = normalizedCode.match(new RegExp(`^${normalizeUpper(prefix)}-(\\d+)$`));
-  return match ? Number(match[1]) : 0;
-};
+const getProductionCodeCounterOptions = (tableName, prefix) => ({
+  counterKey: `${tableName}:${normalizeUpper(prefix)}`,
+  prefix: normalizeUpper(prefix),
+  tableName,
+  columnName: "code",
+  minWidth: 3,
+  notes: `Runtime counter untuk ${tableName}`,
+});
 
-const generateNextCode = async (db, tableName, prefix) => {
-  const rows = await db.all(`SELECT code FROM ${tableName} WHERE code LIKE ?`, [`${normalizeUpper(prefix)}-%`]);
-  const maxSequence = rows.reduce(
-    (max, row) => Math.max(max, getNumericSequenceFromCode(row.code, prefix)),
-    0,
+const resolveProductionCode = async (db, tableName, prefix, requestedCode = "") => {
+  const code = await resolveBusinessCode(
+    db,
+    requestedCode,
+    getProductionCodeCounterOptions(tableName, prefix),
   );
-  return `${normalizeUpper(prefix)}-${String(maxSequence + 1).padStart(3, "0")}`;
+  if (!code) {
+    fail("Kode produksi sudah pernah digunakan.", "PRODUCTION_DUPLICATE_CODE", 409);
+  }
+  return code;
 };
 
 const normalizeSourceType = (value = "") => {
@@ -109,14 +107,6 @@ const normalizeSourceType = (value = "") => {
   if (["semi_finished", "semi_finished_material", "semi_finished_materials"].includes(normalized)) return "semi_finished";
   if (["product", "products"].includes(normalized)) return "product";
   return normalized || "raw_material";
-};
-
-const getSourceTable = (sourceType = "") => {
-  const normalized = normalizeSourceType(sourceType);
-  if (normalized === "raw_material") return "raw_materials";
-  if (normalized === "semi_finished") return "semi_finished_materials";
-  if (normalized === "product") return "products";
-  fail("Tipe item produksi tidak didukung oleh stock engine.", "PRODUCTION_SOURCE_TYPE_INVALID");
 };
 
 const findVariant = (item = {}, variantKey = "") => {
@@ -203,9 +193,21 @@ const buildOrderPayload = async (db, {
   );
   if (orderQty <= 0) fail("Qty Production Order wajib lebih dari 0.", "PRODUCTION_ORDER_QTY_INVALID");
 
-  const code = normalizeUpper(values.code || values.orderCode || values.referenceNumber)
-    || await generateNextCode(db, "production_orders", "PO");
-  const id = normalizeText(values.id || code || crypto.randomUUID());
+  const code = await resolveProductionCode(
+    db,
+    "production_orders",
+    "PO",
+    values.code || values.orderCode || values.referenceNumber,
+  );
+  const requestedOrderCode = normalizeUpper(
+    values.code || values.orderCode || values.referenceNumber,
+  );
+  const requestedOrderId = normalizeText(values.id || "");
+  const id = normalizeText(
+    !requestedOrderId || normalizeUpper(requestedOrderId) === requestedOrderCode
+      ? code
+      : requestedOrderId,
+  ) || crypto.randomUUID();
   const requirementLines = calculateRequirementLines(bom, orderQty);
   const transactionDate = values.orderDate || values.transactionDate || values.date || nowIso();
 
@@ -433,8 +435,12 @@ const startProductionOrder = async ({ orderId, payload = {}, actor = "system" } 
   }
 
   const bom = await getRecord(db, "production_boms", order.bomId, "BOM produksi");
-  const workNumber = normalizeUpper(payload.workNumber || payload.code || payload.referenceNumber)
-    || await generateNextCode(db, "production_work_logs", "JOB");
+  const workNumber = await resolveProductionCode(
+    db,
+    "production_work_logs",
+    "JOB",
+    payload.workNumber || payload.code || payload.referenceNumber,
+  );
   const stepLines = Array.isArray(bom.stepLines) ? bom.stepLines : [];
   const requestedStepId = normalizeText(payload.stepId || "");
   const requestedStep = requestedStepId
@@ -450,7 +456,15 @@ const startProductionOrder = async ({ orderId, payload = {}, actor = "system" } 
   const overheadCostActual = toPositiveNumber(
     payload.overheadCostActual ?? order.overheadCostActual ?? (toPositiveNumber(bom.overheadCostEstimate) * Math.max(1, plannedQty)),
   );
-  const workLogId = normalizeText(payload.id || workNumber || crypto.randomUUID());
+  const requestedWorkCode = normalizeUpper(
+    payload.workNumber || payload.code || payload.referenceNumber,
+  );
+  const requestedWorkId = normalizeText(payload.id || "");
+  const workLogId = normalizeText(
+    !requestedWorkId || normalizeUpper(requestedWorkId) === requestedWorkCode
+      ? workNumber
+      : requestedWorkId,
+  ) || crypto.randomUUID();
   const startedAt = nowIso();
   const output = {
     id: `output-${workLogId}-1`,
@@ -661,7 +675,7 @@ const generatePayrollLinesInTransaction = async (db, {
       continue;
     }
 
-    const payrollNumber = await generateNextCode(db, "production_payrolls", "PAY");
+    const payrollNumber = await resolveProductionCode(db, "production_payrolls", "PAY");
     const payroll = {
       id: payrollNumber,
       code: payrollNumber,

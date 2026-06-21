@@ -14,6 +14,10 @@ export const validatePasswordStrength = (password = "") => {
     return PASSWORD_POLICY.messages.minLength;
   }
 
+  if (value.length > PASSWORD_POLICY.maxLength) {
+    return PASSWORD_POLICY.messages.maxLength;
+  }
+
   const letterInvalid = PASSWORD_POLICY.requireLetter && !hasLetter(value);
   const numberInvalid = PASSWORD_POLICY.requireNumber && !hasNumber(value);
 
